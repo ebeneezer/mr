@@ -270,6 +270,10 @@ class MRFileEditor : public TScroller {
 
 	MRTextBufferModel &bufferModel() noexcept;
 
+	void shareContentStateFrom(const MRFileEditor &source);
+
+	void detachContentStateCopy();
+
 	void syncFromEditorState(bool = true);
 
 	void syncIndicatorVisualSettings();

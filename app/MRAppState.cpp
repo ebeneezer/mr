@@ -41,6 +41,7 @@ void setCommandEnabled(ushort command, bool enabled) {
 AppCommandState appCommandState() {
 	AppCommandState state;
 	MREditWindow *win = currentEditWindow();
+	MREditWindow *editorWin = currentEditorCommandWindow();
 
 	state.window = win;
 	state.windowCount = allEditWindowsInZOrder().size();
@@ -52,17 +53,17 @@ AppCommandState appCommandState() {
 	if (win == nullptr) return state;
 
 	state.isMinimizedWindow = win->isMinimized();
-	state.hasReadOnlyWindow = win->isReadOnly();
+	state.hasReadOnlyWindow = editorWin == nullptr || editorWin->isReadOnly();
 	state.hasEditableWindow = !state.hasReadOnlyWindow;
-	state.hasDirtyWindow = win->isFileChanged();
-	state.hasPersistentFileName = win->hasPersistentFileName();
-	state.canSaveInPlace = win->canSaveInPlace();
-	state.hasBlock = win->hasBlock();
-	state.blockMarking = win->isBlockMarking();
-	state.hasSelection = win->hasSelection();
-	state.hasUndo = win->hasUndoHistory();
-	state.hasRedo = win->hasRedoHistory();
-	state.hasMacroTasks = win->hasTrackedMacroTasks();
+	state.hasDirtyWindow = editorWin != nullptr && editorWin->isFileChanged();
+	state.hasPersistentFileName = editorWin != nullptr && editorWin->hasPersistentFileName();
+	state.canSaveInPlace = editorWin != nullptr && editorWin->canSaveInPlace();
+	state.hasBlock = editorWin != nullptr && editorWin->hasBlock();
+	state.blockMarking = editorWin != nullptr && editorWin->isBlockMarking();
+	state.hasSelection = editorWin != nullptr && editorWin->hasSelection();
+	state.hasUndo = editorWin != nullptr && editorWin->hasUndoHistory();
+	state.hasRedo = editorWin != nullptr && editorWin->hasRedoHistory();
+	state.hasMacroTasks = editorWin != nullptr && editorWin->hasTrackedMacroTasks();
 	state.hasExternalIoTasks = win->hasTrackedExternalIoTasks();
 	state.isCommunicationWindow = win->isCommunicationWindow();
 	state.isCommunicationCommandWindow = win->windowRole() == MREditWindow::wrCommunicationCommand;
@@ -112,6 +113,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrWindowRestore, hasWindow && state.isMinimizedWindow);
 	setCommandEnabled(cmMrWindowCascade, hasWindow);
 	setCommandEnabled(cmMrWindowTile, hasWindow);
+	setCommandEnabled(cmMrWindowSplitHorizontal, hasWindow);
+	setCommandEnabled(cmMrWindowSplitVertical, hasWindow);
 	{
 		const int desktopCount = configuredVirtualDesktops();
 		const int currentDesktop = currentVirtualDesktop();

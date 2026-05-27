@@ -357,13 +357,6 @@ class MREditWindow : public TWindow {
 			TWindow::handleEvent(event);
 			return;
 		}
-		if (event.what == evCommand && event.message.command == cmClose && mWindowRole == wrLog) {
-			setWindowManuallyHidden(this, true);
-			hide();
-			static_cast<void>(mrEnsureUsableWorkWindow());
-			clearEvent(event);
-			return;
-		}
 		if (handleEditorScrollBarArrowHold(event)) return;
 		const ushort originalEvent = event.what;
 		const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
@@ -540,6 +533,18 @@ class MREditWindow : public TWindow {
 		return editor;
 	}
 
+	virtual MREditWindow *editorCommandTarget() noexcept {
+		return this;
+	}
+
+	virtual const MREditWindow *editorCommandTarget() const noexcept {
+		return this;
+	}
+
+	virtual bool showsFrameGrowHandle() const noexcept {
+		return true;
+	}
+
 	MRTextBuffer buffer() const {
 		return MRTextBuffer(editor);
 	}
@@ -703,8 +708,12 @@ class MREditWindow : public TWindow {
 		return mWindowRoleDetail;
 	}
 
-	bool isCommunicationWindow() const noexcept {
+	virtual bool isCommunicationWindow() const noexcept {
 		return mWindowRole == wrCommunicationCommand || mWindowRole == wrCommunicationPipe || mWindowRole == wrCommunicationDevice;
+	}
+
+	virtual bool allowsDocumentViewportSplit() const noexcept {
+		return !isCommunicationWindow() && mWindowRole != wrLog && mWindowRole != wrHelp;
 	}
 
 	bool isTemporaryFile() const {
@@ -1480,7 +1489,7 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) {
 			editor->setBlockOverlayState(0, 0, 0, false);
 			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
-			editor->revealCursor(True);
+			editor->revealCursor(False);
 			editor->update(ufView);
 		}
 	}
@@ -2263,6 +2272,72 @@ class MREditWindow : public TWindow {
 	TRect mRestoreBounds;
 	TRect mLastMinimizedBounds;
 	char displayTitle[MAXPATH];
+};
+
+class MRHelpWindow : public MREditWindow {
+  public:
+	MRHelpWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MRHelpWindow::initFrame), MREditWindow(bounds, title, aNumber) {
+		setWindowRole(wrHelp);
+		setReadOnly(true);
+	}
+
+	virtual bool allowsDocumentViewportSplit() const noexcept override {
+		return false;
+	}
+
+  private:
+	static TFrame *initFrame(TRect r) {
+		return new MRFrame(r);
+	}
+};
+
+class MRLogWindow : public MREditWindow {
+  public:
+	MRLogWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MRLogWindow::initFrame), MREditWindow(bounds, title, aNumber) {
+		setWindowRole(wrLog);
+		setReadOnly(true);
+	}
+
+	virtual void handleEvent(TEvent &event) override {
+		if (event.what == evCommand && event.message.command == cmClose) {
+			setWindowManuallyHidden(this, true);
+			hide();
+			static_cast<void>(mrEnsureUsableWorkWindow());
+			clearEvent(event);
+			return;
+		}
+		MREditWindow::handleEvent(event);
+	}
+
+	virtual bool allowsDocumentViewportSplit() const noexcept override {
+		return false;
+	}
+
+  private:
+	static TFrame *initFrame(TRect r) {
+		return new MRFrame(r);
+	}
+};
+
+class MRCommunicationWindow : public MREditWindow {
+  public:
+	MRCommunicationWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MRCommunicationWindow::initFrame), MREditWindow(bounds, title, aNumber) {
+		setWindowRole(wrCommunicationCommand);
+		setReadOnly(true);
+	}
+
+	virtual bool isCommunicationWindow() const noexcept override {
+		return true;
+	}
+
+	virtual bool allowsDocumentViewportSplit() const noexcept override {
+		return false;
+	}
+
+  private:
+	static TFrame *initFrame(TRect r) {
+		return new MRFrame(r);
+	}
 };
 
 #endif

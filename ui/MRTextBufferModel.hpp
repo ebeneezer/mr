@@ -6,8 +6,11 @@
 #include <cstddef>
 #include <ctime>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "../app/utils/MRStringUtils.hpp"
 #include "MRSyntax.hpp"
@@ -68,95 +71,122 @@ class MRTextBufferModel {
 		bool blockMarkingOn = false;
 	};
 
-	MRTextBufferModel() noexcept : mDocument(), mCursor(), mSelection(), mModified(false), mLanguage(MRSyntaxLanguage::PlainText), mLanguageAutomatic(false), mLanguageConfidence(0), mSyntaxPathHint(), mSyntaxTitleHint(), mUndoStack(), mRedoStack() {
+  private:
+	struct SharedState {
+		SharedState() noexcept : document(), modified(false), language(MRSyntaxLanguage::PlainText), languageAutomatic(false), languageConfidence(0), syntaxPathHint(), syntaxTitleHint(), undoStack(), redoStack() {
+		}
+
+		Document document;
+		bool modified;
+		MRSyntaxLanguage language;
+		bool languageAutomatic;
+		std::uint16_t languageConfidence;
+		std::string syntaxPathHint;
+		std::string syntaxTitleHint;
+		std::vector<CustomUndoRecord> undoStack;
+		std::vector<CustomUndoRecord> redoStack;
+	};
+
+  public:
+	MRTextBufferModel() noexcept : mShared(std::make_shared<SharedState>()), mCursor(), mSelection() {
+	}
+
+	void shareContentStateFrom(const MRTextBufferModel &source) noexcept {
+		mShared = source.mShared;
+		clampState();
+	}
+
+	void detachContentStateCopy() {
+		mShared = std::make_shared<SharedState>(*mShared);
+		clampState();
 	}
 
 	void setText(const char *data, std::size_t length) {
-		if (data == nullptr || length == 0) mDocument.setText(std::string());
+		if (data == nullptr || length == 0) mShared->document.setText(std::string());
 		else
-			mDocument.setText(std::string(data, length));
+			mShared->document.setText(std::string(data, length));
 		clampState();
 	}
 
 	void setText(const std::string &text) {
-		mDocument.setText(text);
+		mShared->document.setText(text);
 		clampState();
 	}
 
 	const std::string &text() const noexcept {
-		return mDocument.text();
+		return mShared->document.text();
 	}
 
 	std::size_t length() const noexcept {
-		return mDocument.length();
+		return mShared->document.length();
 	}
 
 	bool isEmpty() const noexcept {
-		return mDocument.empty();
+		return mShared->document.empty();
 	}
 
 	char charAt(std::size_t pos) const noexcept {
-		return mDocument.charAt(pos);
+		return mShared->document.charAt(pos);
 	}
 
 	std::size_t lineCount() const noexcept {
-		return mDocument.lineCount();
+		return mShared->document.lineCount();
 	}
 
 	const Document &document() const noexcept {
-		return mDocument;
+		return mShared->document;
 	}
 
 	Document &document() noexcept {
-		return mDocument;
+		return mShared->document;
 	}
 
 	Snapshot snapshot() const {
-		return mDocument.snapshot();
+		return mShared->document.snapshot();
 	}
 
 	ReadSnapshot readSnapshot() const {
-		return mDocument.readSnapshot();
+		return mShared->document.readSnapshot();
 	}
 
 	std::size_t version() const noexcept {
-		return mDocument.version();
+		return mShared->document.version();
 	}
 
 	std::size_t documentId() const noexcept {
-		return mDocument.documentId();
+		return mShared->document.documentId();
 	}
 
 	bool matchesSnapshot(const Snapshot &snapshot) const noexcept {
-		return mDocument.matchesSnapshot(snapshot);
+		return mShared->document.matchesSnapshot(snapshot);
 	}
 
 	void applyEditTransaction(const EditTransaction &transaction) {
-		mDocument.apply(transaction);
-		mModified = true;
+		mShared->document.apply(transaction);
+		mShared->modified = true;
 		clampState();
 	}
 
 	CommitResult tryApplyEditTransaction(const EditTransaction &transaction, std::size_t expectedVersion) {
-		CommitResult result = mDocument.tryApply(transaction, expectedVersion);
+		CommitResult result = mShared->document.tryApply(transaction, expectedVersion);
 		if (result.applied()) {
-			mModified = true;
+			mShared->modified = true;
 			clampState();
 		}
 		return result;
 	}
 
 	CommitResult tryApplyStagedTransaction(const StagedTransaction &transaction) {
-		CommitResult result = mDocument.tryApply(transaction);
+		CommitResult result = mShared->document.tryApply(transaction);
 		if (result.applied()) {
-			mModified = true;
+			mShared->modified = true;
 			clampState();
 		}
 		return result;
 	}
 
 	bool adoptLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept {
-		return mDocument.adoptLineIndexWarmup(warmup, expectedVersion);
+		return mShared->document.adoptLineIndexWarmup(warmup, expectedVersion);
 	}
 
 	std::size_t cursor() const noexcept {
@@ -194,85 +224,85 @@ class MRTextBufferModel {
 	}
 
 	bool isModified() const noexcept {
-		return mModified;
+		return mShared->modified;
 	}
 
 	void setModified(bool changed) noexcept {
-		mModified = changed;
+		mShared->modified = changed;
 	}
 
 	std::size_t undoStackDepth() const noexcept {
-		return mUndoStack.size();
+		return mShared->undoStack.size();
 	}
 
 	std::size_t redoStackDepth() const noexcept {
-		return mRedoStack.size();
+		return mShared->redoStack.size();
 	}
 
 	void clearUndoRedo() noexcept {
 		const auto startedAt = std::chrono::steady_clock::now();
-		const std::size_t undoBefore = mUndoStack.size();
-		const std::size_t redoBefore = mRedoStack.size();
-		mUndoStack.clear();
-		mRedoStack.clear();
+		const std::size_t undoBefore = mShared->undoStack.size();
+		const std::size_t redoBefore = mShared->redoStack.size();
+		mShared->undoStack.clear();
+		mShared->redoStack.clear();
 		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
 		if (totalElapsed >= kSlowUndoTraceThreshold) {
 			std::ostringstream line;
-			line << "Phase1 undo clearUndoRedo total_us=" << undoTraceMicros(totalElapsed) << " undo_before=" << undoBefore << " redo_before=" << redoBefore << " len=" << mDocument.length()
-			     << " add=" << mDocument.addBufferLength() << " pieces=" << mDocument.pieceCount();
+			line << "Phase1 undo clearUndoRedo total_us=" << undoTraceMicros(totalElapsed) << " undo_before=" << undoBefore << " redo_before=" << redoBefore << " len=" << mShared->document.length()
+			     << " add=" << mShared->document.addBufferLength() << " pieces=" << mShared->document.pieceCount();
 			appendUndoTrace(line.str());
 		}
 	}
 
 	void pushUndoSnapshot(CustomUndoRecord &&record) {
 		const auto startedAt = std::chrono::steady_clock::now();
-		mUndoStack.push_back(std::move(record));
-		mRedoStack.clear();
+		mShared->undoStack.push_back(std::move(record));
+		mShared->redoStack.clear();
 		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
 		if (totalElapsed >= kSlowUndoTraceThreshold) {
 			std::ostringstream line;
-			line << "Phase1 undo pushUndoSnapshot total_us=" << undoTraceMicros(totalElapsed) << " undo=" << mUndoStack.size() << " redo=" << mRedoStack.size() << " len=" << mDocument.length()
-			     << " add=" << mDocument.addBufferLength() << " pieces=" << mDocument.pieceCount();
+			line << "Phase1 undo pushUndoSnapshot total_us=" << undoTraceMicros(totalElapsed) << " undo=" << mShared->undoStack.size() << " redo=" << mShared->redoStack.size() << " len=" << mShared->document.length()
+			     << " add=" << mShared->document.addBufferLength() << " pieces=" << mShared->document.pieceCount();
 			appendUndoTrace(line.str());
 		}
 	}
 
 	void popUndoSnapshot() {
-		if (!mUndoStack.empty()) mUndoStack.pop_back();
+		if (!mShared->undoStack.empty()) mShared->undoStack.pop_back();
 	}
 
 	bool undo(CustomUndoRecord *outRecord = nullptr) {
 		const auto startedAt = std::chrono::steady_clock::now();
-		if (mUndoStack.empty()) return false;
+		if (mShared->undoStack.empty()) return false;
 
 		CustomUndoRecord redoRecord;
 		const auto redoSnapshotStartedAt = std::chrono::steady_clock::now();
-		redoRecord.preSnapshot = mDocument.readSnapshot();
+		redoRecord.preSnapshot = mShared->document.readSnapshot();
 		redoRecord.preSnapshot.dropExactLineStartIndex();
 		const auto redoSnapshotElapsed = std::chrono::steady_clock::now() - redoSnapshotStartedAt;
 		redoRecord.cursor = mCursor.offset;
 		redoRecord.selAnchor = mSelection.anchor;
 		redoRecord.selCursor = mSelection.cursor;
-		redoRecord.modifiedState = mModified;
-		mRedoStack.push_back(std::move(redoRecord));
+		redoRecord.modifiedState = mShared->modified;
+		mShared->redoStack.push_back(std::move(redoRecord));
 
-		const CustomUndoRecord &undoRecord = mUndoStack.back();
+		const CustomUndoRecord &undoRecord = mShared->undoStack.back();
 		const auto restoreStartedAt = std::chrono::steady_clock::now();
-		mDocument.restoreFromSnapshot(undoRecord.preSnapshot);
+		mShared->document.restoreFromSnapshot(undoRecord.preSnapshot);
 		const auto restoreElapsed = std::chrono::steady_clock::now() - restoreStartedAt;
 		mCursor.offset = undoRecord.cursor;
 		mSelection.anchor = undoRecord.selAnchor;
 		mSelection.cursor = undoRecord.selCursor;
-		mModified = undoRecord.modifiedState;
+		mShared->modified = undoRecord.modifiedState;
 		if (outRecord) *outRecord = undoRecord;
 
-		mUndoStack.pop_back();
+		mShared->undoStack.pop_back();
 		clampState();
 		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
 		if (totalElapsed >= kSlowUndoTraceThreshold) {
 			std::ostringstream line;
 			line << "Phase1 undo undo total_us=" << undoTraceMicros(totalElapsed) << " snapshot_us=" << undoTraceMicros(redoSnapshotElapsed) << " restore_us=" << undoTraceMicros(restoreElapsed)
-			     << " undo=" << mUndoStack.size() << " redo=" << mRedoStack.size() << " len=" << mDocument.length() << " add=" << mDocument.addBufferLength() << " pieces=" << mDocument.pieceCount();
+			     << " undo=" << mShared->undoStack.size() << " redo=" << mShared->redoStack.size() << " len=" << mShared->document.length() << " add=" << mShared->document.addBufferLength() << " pieces=" << mShared->document.pieceCount();
 			appendUndoTrace(line.str());
 		}
 		return true;
@@ -280,36 +310,36 @@ class MRTextBufferModel {
 
 	bool redo(CustomUndoRecord *outRecord = nullptr) {
 		const auto startedAt = std::chrono::steady_clock::now();
-		if (mRedoStack.empty()) return false;
+		if (mShared->redoStack.empty()) return false;
 
 		CustomUndoRecord undoRecord;
 		const auto undoSnapshotStartedAt = std::chrono::steady_clock::now();
-		undoRecord.preSnapshot = mDocument.readSnapshot();
+		undoRecord.preSnapshot = mShared->document.readSnapshot();
 		undoRecord.preSnapshot.dropExactLineStartIndex();
 		const auto undoSnapshotElapsed = std::chrono::steady_clock::now() - undoSnapshotStartedAt;
 		undoRecord.cursor = mCursor.offset;
 		undoRecord.selAnchor = mSelection.anchor;
 		undoRecord.selCursor = mSelection.cursor;
-		undoRecord.modifiedState = mModified;
-		mUndoStack.push_back(std::move(undoRecord));
+		undoRecord.modifiedState = mShared->modified;
+		mShared->undoStack.push_back(std::move(undoRecord));
 
-		const CustomUndoRecord &redoRecord = mRedoStack.back();
+		const CustomUndoRecord &redoRecord = mShared->redoStack.back();
 		const auto restoreStartedAt = std::chrono::steady_clock::now();
-		mDocument.restoreFromSnapshot(redoRecord.preSnapshot);
+		mShared->document.restoreFromSnapshot(redoRecord.preSnapshot);
 		const auto restoreElapsed = std::chrono::steady_clock::now() - restoreStartedAt;
 		mCursor.offset = redoRecord.cursor;
 		mSelection.anchor = redoRecord.selAnchor;
 		mSelection.cursor = redoRecord.selCursor;
-		mModified = redoRecord.modifiedState;
+		mShared->modified = redoRecord.modifiedState;
 		if (outRecord) *outRecord = redoRecord;
 
-		mRedoStack.pop_back();
+		mShared->redoStack.pop_back();
 		clampState();
 		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
 		if (totalElapsed >= kSlowUndoTraceThreshold) {
 			std::ostringstream line;
 			line << "Phase1 undo redo total_us=" << undoTraceMicros(totalElapsed) << " snapshot_us=" << undoTraceMicros(undoSnapshotElapsed) << " restore_us=" << undoTraceMicros(restoreElapsed)
-			     << " undo=" << mUndoStack.size() << " redo=" << mRedoStack.size() << " len=" << mDocument.length() << " add=" << mDocument.addBufferLength() << " pieces=" << mDocument.pieceCount();
+			     << " undo=" << mShared->undoStack.size() << " redo=" << mShared->redoStack.size() << " len=" << mShared->document.length() << " add=" << mShared->document.addBufferLength() << " pieces=" << mShared->document.pieceCount();
 			appendUndoTrace(line.str());
 		}
 		return true;
@@ -319,172 +349,164 @@ class MRTextBufferModel {
 		const std::string normalizedCodeLanguage = upperAscii(trimAscii(codeLanguage));
 		const MRSyntaxLanguage detectedByPath = tmrDetectSyntaxLanguage(path, title);
 
-		mSyntaxPathHint = path;
-		mSyntaxTitleHint = title;
-		mLanguageAutomatic = normalizedCodeLanguage == "AUTO";
-		mLanguageConfidence = 0;
+		mShared->syntaxPathHint = path;
+		mShared->syntaxTitleHint = title;
+		mShared->languageAutomatic = normalizedCodeLanguage == "AUTO";
+		mShared->languageConfidence = 0;
 		if (normalizedCodeLanguage.empty() || normalizedCodeLanguage == "NONE") {
-			mLanguage = detectedByPath;
+			mShared->language = detectedByPath;
 			return;
 		}
 		if (normalizedCodeLanguage == "AUTO") {
-			const MRSyntaxClassification classification = tmrClassifySyntaxLanguage(mSyntaxPathHint, mSyntaxTitleHint, text());
-			mLanguageConfidence = classification.confidence;
-			mLanguage = classification.language != MRSyntaxLanguage::PlainText ? classification.language : detectedByPath;
+			const MRSyntaxClassification classification = tmrClassifySyntaxLanguage(mShared->syntaxPathHint, mShared->syntaxTitleHint, text());
+			mShared->languageConfidence = classification.confidence;
+			mShared->language = classification.language != MRSyntaxLanguage::PlainText ? classification.language : detectedByPath;
 			return;
 		}
 		if (normalizedCodeLanguage == "C") {
-			mLanguage = MRSyntaxLanguage::C;
+			mShared->language = MRSyntaxLanguage::C;
 			return;
 		}
 		if (normalizedCodeLanguage == "CPP") {
-			mLanguage = MRSyntaxLanguage::Cpp;
+			mShared->language = MRSyntaxLanguage::Cpp;
 			return;
 		}
 		if (normalizedCodeLanguage == "PYTHON") {
-			mLanguage = MRSyntaxLanguage::Python;
+			mShared->language = MRSyntaxLanguage::Python;
 			return;
 		}
 		if (normalizedCodeLanguage == "JAVASCRIPT" || normalizedCodeLanguage == "TYPESCRIPT" || normalizedCodeLanguage == "TSX") {
-			mLanguage = MRSyntaxLanguage::JavaScript;
+			mShared->language = MRSyntaxLanguage::JavaScript;
 			return;
 		}
 		if (normalizedCodeLanguage == "BASH") {
-			mLanguage = MRSyntaxLanguage::Bash;
+			mShared->language = MRSyntaxLanguage::Bash;
 			return;
 		}
 		if (normalizedCodeLanguage == "ZSH") {
-			mLanguage = MRSyntaxLanguage::Zsh;
+			mShared->language = MRSyntaxLanguage::Zsh;
 			return;
 		}
 		if (normalizedCodeLanguage == "FISH") {
-			mLanguage = MRSyntaxLanguage::Fish;
+			mShared->language = MRSyntaxLanguage::Fish;
 			return;
 		}
 		if (normalizedCodeLanguage == "JSON") {
-			mLanguage = MRSyntaxLanguage::Json;
+			mShared->language = MRSyntaxLanguage::Json;
 			return;
 		}
 		if (normalizedCodeLanguage == "YAML") {
-			mLanguage = MRSyntaxLanguage::Yaml;
+			mShared->language = MRSyntaxLanguage::Yaml;
 			return;
 		}
 		if (normalizedCodeLanguage == "XML") {
-			mLanguage = MRSyntaxLanguage::Xml;
+			mShared->language = MRSyntaxLanguage::Xml;
 			return;
 		}
 		if (normalizedCodeLanguage == "PERL") {
-			mLanguage = MRSyntaxLanguage::Perl;
+			mShared->language = MRSyntaxLanguage::Perl;
 			return;
 		}
 		if (normalizedCodeLanguage == "SWIFT") {
-			mLanguage = MRSyntaxLanguage::Swift;
+			mShared->language = MRSyntaxLanguage::Swift;
 			return;
 		}
 		if (normalizedCodeLanguage == "RUST") {
-			mLanguage = MRSyntaxLanguage::Rust;
+			mShared->language = MRSyntaxLanguage::Rust;
 			return;
 		}
 		if (normalizedCodeLanguage == "GO") {
-			mLanguage = MRSyntaxLanguage::Go;
+			mShared->language = MRSyntaxLanguage::Go;
 			return;
 		}
 		if (normalizedCodeLanguage == "KOTLIN" || normalizedCodeLanguage == "KT" || normalizedCodeLanguage == "KTS") {
-			mLanguage = MRSyntaxLanguage::Kotlin;
+			mShared->language = MRSyntaxLanguage::Kotlin;
 			return;
 		}
 		if (normalizedCodeLanguage == "CSHARP" || normalizedCodeLanguage == "C#" || normalizedCodeLanguage == "CS") {
-			mLanguage = MRSyntaxLanguage::CSharp;
+			mShared->language = MRSyntaxLanguage::CSharp;
 			return;
 		}
 		if (normalizedCodeLanguage == "PASCAL") {
-			mLanguage = MRSyntaxLanguage::Pascal;
+			mShared->language = MRSyntaxLanguage::Pascal;
 			return;
 		}
 		if (normalizedCodeLanguage == "SYSTEMD") {
-			mLanguage = MRSyntaxLanguage::Systemd;
+			mShared->language = MRSyntaxLanguage::Systemd;
 			return;
 		}
-		mLanguage = MRSyntaxLanguage::PlainText;
+		mShared->language = MRSyntaxLanguage::PlainText;
 	}
 
 	MRSyntaxLanguage language() const noexcept {
-		return mLanguage;
+		return mShared->language;
 	}
 
 	bool languageAutomatic() const noexcept {
-		return mLanguageAutomatic;
+		return mShared->languageAutomatic;
 	}
 
 	std::uint16_t languageConfidence() const noexcept {
-		return mLanguageConfidence;
+		return mShared->languageConfidence;
 	}
 
 	const char *languageName() const noexcept {
-		return tmrSyntaxLanguageName(mLanguage);
+		return tmrSyntaxLanguageName(mShared->language);
 	}
 
 	std::size_t lineStart(std::size_t pos) const noexcept {
-		return mDocument.lineStart(pos);
+		return mShared->document.lineStart(pos);
 	}
 
 	std::size_t lineEnd(std::size_t pos) const noexcept {
-		return mDocument.lineEnd(pos);
+		return mShared->document.lineEnd(pos);
 	}
 
 	std::size_t nextLine(std::size_t pos) const noexcept {
-		return mDocument.nextLine(pos);
+		return mShared->document.nextLine(pos);
 	}
 
 	std::size_t prevLine(std::size_t pos) const noexcept {
-		return mDocument.prevLine(pos);
+		return mShared->document.prevLine(pos);
 	}
 
 	std::size_t lineIndex(std::size_t pos) const noexcept {
-		return mDocument.lineIndex(pos);
+		return mShared->document.lineIndex(pos);
 	}
 
 	std::size_t lineStartByIndex(std::size_t index) const noexcept {
-		return mDocument.lineStartByIndex(index);
+		return mShared->document.lineStartByIndex(index);
 	}
 
 	std::size_t estimatedLineCount() const noexcept {
-		return mDocument.estimatedLineCount();
+		return mShared->document.estimatedLineCount();
 	}
 
 	bool exactLineCountKnown() const noexcept {
-		return mDocument.exactLineCountKnown();
+		return mShared->document.exactLineCountKnown();
 	}
 
 	std::size_t column(std::size_t pos) const noexcept {
-		return mDocument.column(pos);
+		return mShared->document.column(pos);
 	}
 
 	std::string lineText(std::size_t pos) const {
-		return mDocument.lineText(pos);
+		return mShared->document.lineText(pos);
 	}
 
   private:
 	std::size_t clampOffset(std::size_t pos) const noexcept {
-		return mDocument.clampOffset(pos);
+		return mShared->document.clampOffset(pos);
 	}
 
 	void clampState() noexcept {
-		mCursor.clamp(mDocument.length());
-		mSelection.clamp(mDocument.length());
+		mCursor.clamp(mShared->document.length());
+		mSelection.clamp(mShared->document.length());
 	}
 
-	Document mDocument;
+	std::shared_ptr<SharedState> mShared;
 	Cursor mCursor;
 	Selection mSelection;
-	bool mModified;
-	MRSyntaxLanguage mLanguage;
-	bool mLanguageAutomatic;
-	std::uint16_t mLanguageConfidence;
-	std::string mSyntaxPathHint;
-	std::string mSyntaxTitleHint;
-	std::vector<CustomUndoRecord> mUndoStack;
-	std::vector<CustomUndoRecord> mRedoStack;
 };
 
 #endif

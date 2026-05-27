@@ -426,7 +426,8 @@ void MRFrame::draw() {
 		writeLine(0, i, size.x, 1, b);
 	}
 	drawFrameLine(b, size.y - 1, f + 6, cFrame);
-	if (isFocused && window != nullptr && (window->flags & wfGrow) != 0) {
+	const bool showGrowHandle = editWindow == nullptr || editWindow->showsFrameGrowHandle();
+	if (isFocused && window != nullptr && (window->flags & wfGrow) != 0 && showGrowHandle) {
 		b.moveCStr(0, f == 9 ? kFocusedDragLeftIcon : kDragLeftIcon, cFrame);
 		b.moveCStr(width - 2, f == 9 ? kFocusedDragIcon : kDragIcon, cFrame);
 	}

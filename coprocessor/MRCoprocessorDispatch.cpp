@@ -869,7 +869,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 
 		const mr::coprocessor::LineIndexWarmupPayload *warmup = dynamic_cast<const mr::coprocessor::LineIndexWarmupPayload *>(result.payload.get());
 		if (warmup != nullptr) {
-			std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+				std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 			bool recorded = false;
 			for (auto &window : windows) {
 				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -893,7 +893,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 
 		const mr::coprocessor::SyntaxWarmupPayload *syntax = dynamic_cast<const mr::coprocessor::SyntaxWarmupPayload *>(result.payload.get());
 		if (syntax != nullptr) {
-			std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+				std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 			bool recorded = false;
 			for (auto &window : windows) {
 				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -916,7 +916,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		}
 
 		if (result.task.kind == mr::coprocessor::TaskKind::FoldWarmup && result.payload != nullptr) {
-			std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+				std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 			bool recorded = false;
 			for (auto &window : windows) {
 				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -939,7 +939,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 
 		const mr::coprocessor::MiniMapWarmupPayload *miniMap = dynamic_cast<const mr::coprocessor::MiniMapWarmupPayload *>(result.payload.get());
 		if (miniMap != nullptr) {
-			std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+				std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 			bool recorded = false;
 			bool postedHero = false;
 			for (auto &window : windows) {
@@ -971,7 +971,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 
 		const mr::coprocessor::SaveNormalizationWarmupPayload *saveNormalization = dynamic_cast<const mr::coprocessor::SaveNormalizationWarmupPayload *>(result.payload.get());
 		if (saveNormalization != nullptr) {
-			std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 			bool recorded = false;
 			for (auto &window : windows) {
 				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -1180,7 +1180,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::LineIndexWarmup) {
-		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 		bool recorded = false;
 		for (auto &window : windows) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -1195,7 +1195,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::SyntaxWarmup) {
-		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 		bool recorded = false;
 		for (auto &window : windows) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -1210,7 +1210,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::FoldWarmup) {
-		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 		bool recorded = false;
 		for (auto &window : windows) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -1225,7 +1225,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::MiniMapWarmup) {
-		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 		bool recorded = false;
 		for (auto &window : windows) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;

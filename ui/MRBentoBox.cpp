@@ -3,6 +3,7 @@
 #include "MRFrame.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <iterator>
 #include <string>
 
@@ -22,6 +23,7 @@ static const char *kPaneRestoreIcon = "[▾]";
 static const char *kBentoPaneActionReplace = "replace";
 static const char *kBentoPaneActionSplitRight = "split \xC4";
 static const char *kBentoPaneActionSplitDown = "split \xB3";
+static const MRBentoPaneTitleMenuSpec kBentoRoleTitleMenu{"role"};
 
 struct BentoFrameGlyphs {
 	char singleHorizontal = '\xC4';
@@ -39,10 +41,6 @@ struct BentoFrameGlyphs {
 };
 
 constexpr BentoFrameGlyphs kBentoFrameGlyphs;
-
-bool bentoPaneRoleUsesToolPolicy(MRBentoPaneRole role) noexcept {
-	return role != bprSource;
-}
 
 class MRPaneFrame : public MRFrame {
   public:
@@ -72,7 +70,7 @@ bool splitCommandTargetsSecondaryPane(ushort command) noexcept {
 }
 
 bool splitEventTargetsSecondaryPane(const TEvent &event) noexcept {
-	if ((event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evKeyDown)) != 0) return true;
+	if ((event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel | evKeyDown)) != 0) return true;
 	if (event.what == evCommand) return splitCommandTargetsSecondaryPane(event.message.command);
 	return false;
 }
@@ -145,7 +143,7 @@ class MRBentoPaneFrameView : public TView {
 					buffer.moveChar(0, kBentoFrameGlyphs.singleHorizontal, frameColor, size.x);
 					buffer.putChar(0, y == 0 ? '\xDA' : '\xC0');
 					if (size.x > 1) buffer.putChar(static_cast<ushort>(size.x - 1), y == 0 ? '\xBF' : '\xD9');
-					if (y == 0) drawPaneChrome(buffer, layout, frameColor, frameColor, !source, maximized);
+					if (y == 0) drawPaneChrome(buffer, layout, frameColor, frameColor, focused && !source, maximized);
 					writeBuf(0, y, size.x, 1, buffer);
 				} else {
 					buffer.moveChar(0, kBentoFrameGlyphs.singleVertical, frameColor, 1);
@@ -184,7 +182,7 @@ class MRBentoPaneFrameView : public TView {
 		const int right = std::max(0, size.x);
 		const int closeLeftX = left + kPaneChromeFrameRest;
 		const int maximizeRightX = right - kPaneChromeFrameRest;
-		const bool withControls = !source;
+		const bool withControls = focused && !source;
 		const int leftContentX = closeLeftX + (withControls ? kPaneCloseButtonWidth + kPaneChromeGap : 0);
 
 		layout.title = "[" + title + "]";
@@ -224,9 +222,18 @@ class MRBentoPaneFrameView : public TView {
 	std::string title;
 };
 
-MRPaneEditWindow::MRPaneEditWindow(const TRect &bounds, const char *title, int number) : TWindowInit(&MRPaneEditWindow::initFrame), MREditWindow(bounds, title, number), mPaneRole(bprSource), mPaneFocused(false) {
+MRBentoPaneSpec::MRBentoPaneSpec() noexcept : role(bprCompilerOutput), bufferPolicy(bpbOwnBuffer), readOnly(true), suppressMiniMap(true), suppressWordWrap(true), scrollBarsAlwaysVisible(true), titleMenu(&kBentoRoleTitleMenu) {
+}
+
+MRBentoPaneSpec::MRBentoPaneSpec(MRBentoPaneRole aRole, MRBentoPaneBufferPolicy aBufferPolicy, bool aReadOnly, bool aSuppressMiniMap, bool aSuppressWordWrap, bool aScrollBarsAlwaysVisible, const MRBentoPaneTitleMenuSpec *aTitleMenu) noexcept
+    : role(aRole), bufferPolicy(aBufferPolicy), readOnly(aReadOnly), suppressMiniMap(aSuppressMiniMap), suppressWordWrap(aSuppressWordWrap), scrollBarsAlwaysVisible(aScrollBarsAlwaysVisible), titleMenu(aTitleMenu) {
+}
+
+MRPaneEditWindow::MRPaneEditWindow(const TRect &bounds, const char *title, int number) : TWindowInit(&MRPaneEditWindow::initFrame), MREditWindow(bounds, title, number), mPaneSpec(), mPaneFocused(false) {
 	flags = 0;
+	state &= static_cast<ushort>(~sfShadow);
 	options &= static_cast<ushort>(~(ofTileable | ofTopSelect));
+	eventMask = 0;
 	layoutPaneChrome();
 }
 
@@ -238,7 +245,7 @@ bool MRPaneEditWindow::paneOwned() const noexcept {
 }
 
 MRBentoPaneRole MRPaneEditWindow::paneRole() const noexcept {
-	return mPaneRole;
+	return mPaneSpec.role;
 }
 
 void MRPaneEditWindow::changeBounds(const TRect &bounds) {
@@ -251,10 +258,13 @@ TColorAttr MRPaneEditWindow::mapColor(uchar index) {
 	return MREditWindow::mapColor(index);
 }
 
-void MRPaneEditWindow::setPaneRole(MRBentoPaneRole role) noexcept {
-	if (mPaneRole == role) return;
-	mPaneRole = role;
-	applyPanePolicy();
+void MRPaneEditWindow::setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept {
+	const bool sameSpec = mPaneSpec.role == spec.role && mPaneSpec.bufferPolicy == spec.bufferPolicy && mPaneSpec.readOnly == spec.readOnly && mPaneSpec.suppressMiniMap == spec.suppressMiniMap && mPaneSpec.suppressWordWrap == spec.suppressWordWrap && mPaneSpec.scrollBarsAlwaysVisible == spec.scrollBarsAlwaysVisible && mPaneSpec.titleMenu == spec.titleMenu;
+	const MRBentoPaneBufferPolicy oldBufferPolicy = mPaneSpec.bufferPolicy;
+	mPaneSpec = spec;
+	if (oldBufferPolicy == bpbSharedSourceBuffer && spec.bufferPolicy == bpbOwnBuffer && getEditor() != nullptr) getEditor()->detachContentStateCopy();
+	applyPanePolicy(spec.bufferPolicy == bpbSharedSourceBuffer ? sourceEditor : nullptr);
+	if (sameSpec) return;
 	layoutPaneChrome();
 }
 
@@ -264,20 +274,19 @@ void MRPaneEditWindow::setPaneFocused(bool focused) noexcept {
 	drawPaneScrollBars();
 }
 
-void MRPaneEditWindow::applyPanePolicy() noexcept {
+void MRPaneEditWindow::applyPanePolicy(const MRFileEditor *sourceEditor) noexcept {
 	MRFileEditor *paneEditor = getEditor();
-	const bool toolPane = bentoPaneRoleUsesToolPolicy(mPaneRole);
 
-	if (toolPane) setReadOnly(true);
 	if (paneEditor == nullptr) return;
-	paneEditor->setCommunicationViewerMode(toolPane, true);
-	paneEditor->setMiniMapSuppressed(toolPane);
-	paneEditor->setWordWrapSuppressed(toolPane);
-	paneEditor->setScrollBarsAlwaysVisible(toolPane);
+	if (mPaneSpec.bufferPolicy == bpbSharedSourceBuffer && sourceEditor != nullptr) paneEditor->shareContentStateFrom(*sourceEditor);
+	setReadOnly(mPaneSpec.readOnly);
+	paneEditor->setCommunicationViewerMode(mPaneSpec.readOnly, true);
+	paneEditor->setMiniMapSuppressed(mPaneSpec.suppressMiniMap);
+	paneEditor->setWordWrapSuppressed(mPaneSpec.suppressWordWrap);
+	paneEditor->setScrollBarsAlwaysVisible(mPaneSpec.scrollBarsAlwaysVisible);
 }
 
 void MRPaneEditWindow::layoutPaneChrome() noexcept {
-	const bool toolPane = bentoPaneRoleUsesToolPolicy(mPaneRole);
 	TRect editorBounds(getExtent());
 	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
 	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
@@ -286,8 +295,8 @@ void MRPaneEditWindow::layoutPaneChrome() noexcept {
 	if (frame != nullptr) frame->hide();
 	MRFileEditor *paneEditor = getEditor();
 	if (paneEditor != nullptr) {
-		applyPanePolicy();
-		if (toolPane) {
+		applyPanePolicy(nullptr);
+		if (mPaneSpec.scrollBarsAlwaysVisible) {
 			if (horizontalScrollBar != nullptr) {
 				TRect horizontalRect(0, std::max(0, size.y - 1), std::max(1, size.x - 1), size.y);
 				horizontalScrollBar->locate(horizontalRect);
@@ -313,6 +322,15 @@ void MRPaneEditWindow::drawPaneScrollBars() noexcept {
 
 	if (horizontalScrollBar != nullptr) horizontalScrollBar->drawView();
 	if (verticalScrollBar != nullptr) verticalScrollBar->drawView();
+	if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr && (horizontalScrollBar->state & sfVisible) != 0 && (verticalScrollBar->state & sfVisible) != 0) {
+		const TRect horizontalBounds = horizontalScrollBar->getBounds();
+		const TRect verticalBounds = verticalScrollBar->getBounds();
+		if (horizontalBounds.a.y < horizontalBounds.b.y && verticalBounds.a.x < verticalBounds.b.x) {
+			TDrawBuffer buffer;
+			buffer.moveChar(0, ' ', TAttrPair(mapColor(4)), 1);
+			writeBuf(verticalBounds.a.x, horizontalBounds.a.y, 1, 1, buffer);
+		}
+	}
 }
 
 TFrame *MRPaneEditWindow::initFrame(TRect bounds) {
@@ -323,11 +341,11 @@ TFrame *MRPaneEditWindow::initFrame(TRect bounds) {
 MRBentoBox::BentoLayoutNode::BentoLayoutNode() noexcept : kind(blnPane), orientation(bsoHorizontal), dividerPosition(0), firstChild(-1), secondChild(-1), leafId(-1) {
 }
 
-MRBentoBox::BentoLeaf::BentoLeaf() noexcept : id(-1), role(bprCompilerOutput), pane(nullptr), bounds(0, 0, 0, 0), visible(false) {
+MRBentoBox::BentoLeaf::BentoLeaf() noexcept : id(-1), role(bprCompilerOutput), spec(), title(), pane(nullptr), bounds(0, 0, 0, 0), visible(false) {
 }
 
-MRBentoBox::MRBentoBox(const TRect &bounds, const char *title, int number)
-    : TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), paneRoleDropList(), paneActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0) {
+MRBentoBox::MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode)
+    : TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), paneRoleDropList(), paneActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0) {
 	initializeLayoutTree();
 	layoutSplitPanes();
 }
@@ -344,6 +362,11 @@ MREditWindow *MRBentoBox::paneForBufferId(int bufferId) const noexcept {
 	for (const BentoLeaf &leaf : leaves)
 		if (leaf.visible && leaf.pane != nullptr && leaf.pane->bufferId() == bufferId) return leaf.pane;
 	return nullptr;
+}
+
+void MRBentoBox::collectVisiblePaneWindows(std::vector<MREditWindow *> &windows) const noexcept {
+	for (const BentoLeaf &leaf : leaves)
+		if (leaf.visible && leaf.pane != nullptr) windows.push_back(leaf.pane);
 }
 
 void MRBentoBox::showSecondaryPane() noexcept {
@@ -391,21 +414,61 @@ TColorAttr MRBentoBox::mapColor(uchar index) {
 	return MREditWindow::mapColor(index);
 }
 
+bool MRBentoBox::allowsDocumentViewportSplit() const noexcept {
+	return bentoMode == bbmDocumentViewports;
+}
+
+MREditWindow *MRBentoBox::editorCommandTarget() noexcept {
+	MRPaneEditWindow *pane = activeLeafId != 0 ? paneWindowForLeaf(activeLeafId) : nullptr;
+
+	return pane != nullptr ? static_cast<MREditWindow *>(pane) : static_cast<MREditWindow *>(this);
+}
+
+const MREditWindow *MRBentoBox::editorCommandTarget() const noexcept {
+	const MRPaneEditWindow *pane = activeLeafId != 0 ? paneWindowForLeaf(activeLeafId) : nullptr;
+
+	return pane != nullptr ? static_cast<const MREditWindow *>(pane) : static_cast<const MREditWindow *>(this);
+}
+
+bool MRBentoBox::showsFrameGrowHandle() const noexcept {
+	return false;
+}
+
 bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlacement placement, int targetLeafId) {
 	MRPaneEditWindow *targetPane = paneWindowForLeaf(targetLeafId);
+	const MRBentoPaneSpec spec = paneSpecForRole(role);
 
 	if (targetLeafId == 0 && placement == bppReplace) return false;
 	switch (placement) {
 		case bppReplace:
 			if (targetPane == nullptr) return false;
-			targetPane->setPaneRole(role);
+			targetPane->setPaneSpec(spec, getEditor());
+			for (BentoLeaf &leaf : leaves)
+				if (leaf.id == targetLeafId) {
+					leaf.role = role;
+					leaf.spec = spec;
+					leaf.title = paneRoleTitle(role);
+				}
 			setActivePane(targetLeafId);
 			layoutSplitPanes();
 			return true;
 		case bppSplitRight:
-			return splitLeafNode(targetLeafId, bsoVertical, role) >= 0;
+			return splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
 		case bppSplitDown:
-			return splitLeafNode(targetLeafId, bsoHorizontal, role) >= 0;
+			return splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
+		default:
+			return false;
+	}
+}
+
+bool MRBentoBox::splitActiveEditorPane(MRBentoPanePlacement placement) {
+	MRBentoPaneSpec spec = paneSpecForRole(bprSplitEditor);
+
+	switch (placement) {
+		case bppSplitRight:
+			return splitLeafNode(activeLeafId, bsoVertical, spec) >= 0;
+		case bppSplitDown:
+			return splitLeafNode(activeLeafId, bsoHorizontal, spec) >= 0;
 		default:
 			return false;
 	}
@@ -414,7 +477,7 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 void MRBentoBox::draw() {
 	refreshEditorTaskMarkers();
 	MREditWindow::draw();
-	drawPaneFrames();
+	if (hasPaneSplit()) drawPaneFrames();
 }
 
 void MRBentoBox::changeBounds(const TRect &bounds) {
@@ -422,16 +485,20 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 	paneActionDropList.hide();
 	updatePaneRoleListChrome();
 	MREditWindow::changeBounds(bounds);
-	layoutSplitPanes();
+	if (hasPaneSplit()) layoutSplitPanes();
 }
 
 void MRBentoBox::handleEvent(TEvent &event) {
-	const bool mouseEvent = (event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto)) != 0;
+	const bool mouseEvent = (event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0;
 	const TPoint localMouse = mouseEvent ? makeLocal(event.mouse.where) : TPoint();
 	const auto redrawChrome = [this]() {
 		drawPaneFrames();
 	};
 
+	if (!hasPaneSplit()) {
+		MREditWindow::handleEvent(event);
+		return;
+	}
 	if (event.what == evCommand && event.message.command == cmMrBentoPaneRoleAccepted) {
 		acceptPaneRoleChoice();
 		clearEvent(event);
@@ -478,20 +545,23 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		TRect targetBounds = paneBoundsForLeaf(activeLeafId);
 		if (mouseEvent && !pointInRect(localMouse, contentBounds(targetBounds))) {
 			MREditWindow::handleEvent(event);
+			drawSharedEditorPanes();
 			redrawChrome();
 			return;
 		}
 		if (targetPane != nullptr) targetPane->handleEvent(event);
+		drawSharedEditorPanes();
 		redrawChrome();
 		return;
 	}
 	MREditWindow::handleEvent(event);
+	drawSharedEditorPanes();
 	redrawChrome();
 }
 
 void MRBentoBox::setState(ushort aState, Boolean enable) {
 	MREditWindow::setState(aState, enable);
-	if ((aState & (sfFocused | sfSelected | sfActive)) != 0) {
+	if (hasPaneSplit() && (aState & (sfFocused | sfSelected | sfActive)) != 0) {
 		updateActivePaneFrame();
 		drawPaneFrames();
 	}
@@ -505,6 +575,8 @@ void MRBentoBox::initializeLayoutTree() noexcept {
 	BentoLeaf source;
 	source.id = nextLeafId++;
 	source.role = bprSource;
+	source.spec = paneSpecForRole(bprSource);
+	source.title = bentoMode == bbmDocumentViewports ? "" : paneRoleTitle(bprSource);
 	source.pane = nullptr;
 	source.visible = true;
 	leaves.push_back(source);
@@ -526,6 +598,22 @@ void MRBentoBox::layoutSplitPanes() {
 	MRFileEditor *primaryEditor = getEditor();
 	TRect inner = getExtent();
 	inner.grow(-1, -1);
+	if (!hasPaneSplit()) {
+		for (BentoLeaf &leaf : leaves) {
+			leaf.visible = leaf.id == 0;
+			if (leaf.id == 0) leaf.bounds = inner;
+			if (leaf.pane != nullptr) leaf.pane->hide();
+		}
+		activeLeafId = 0;
+		maximizedLeafId = -1;
+		secondaryPaneVisible = false;
+		sourceScrollBarPaletteActive = false;
+		paneRoleDropList.hide();
+		paneActionDropList.hide();
+		MREditWindow::changeBounds(getBounds());
+		if (primaryEditor != nullptr) primaryEditor->drawView();
+		return;
+	}
 	ensurePaneFrameViews();
 	for (BentoLeaf &leaf : leaves) leaf.visible = false;
 	if (maximizedLeafId >= 0 && nodeIndexForLeaf(maximizedLeafId) >= 0) {
@@ -556,7 +644,7 @@ void MRBentoBox::layoutSplitPanes() {
 			}
 			if (view != nullptr) {
 				view->changeBounds(leaf.bounds);
-				view->setPane(leaf.id, paneRoleTitle(leaf.role), leaf.id == 0, leaf.id == activeLeafId && (state & sfFocused) != 0, leaf.id == maximizedLeafId);
+				view->setPane(leaf.id, paneTitleForLeaf(leaf).c_str(), leaf.id == 0 && bentoMode != bbmDocumentViewports, leaf.id == activeLeafId && (state & sfFocused) != 0, leaf.id == maximizedLeafId);
 			}
 		} else {
 			if (leaf.id == 0) hideSourcePaneChrome();
@@ -614,10 +702,31 @@ void MRBentoBox::drawSourcePaneScrollBars() noexcept {
 	sourceScrollBarPaletteActive = true;
 	if (horizontalScrollBar != nullptr) horizontalScrollBar->drawView();
 	if (verticalScrollBar != nullptr) verticalScrollBar->drawView();
+	if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr && (horizontalScrollBar->state & sfVisible) != 0 && (verticalScrollBar->state & sfVisible) != 0) {
+		const TRect horizontalBounds = horizontalScrollBar->getBounds();
+		const TRect verticalBounds = verticalScrollBar->getBounds();
+		if (horizontalBounds.a.y < horizontalBounds.b.y && verticalBounds.a.x < verticalBounds.b.x) {
+			TDrawBuffer buffer;
+			buffer.moveChar(0, ' ', TAttrPair(mapColor(4)), 1);
+			writeBuf(verticalBounds.a.x, horizontalBounds.a.y, 1, 1, buffer);
+		}
+	}
 	sourceScrollBarPaletteActive = false;
 }
 
+void MRBentoBox::drawSharedEditorPanes() noexcept {
+	bool hasSharedPane = false;
+
+	for (const BentoLeaf &leaf : leaves)
+		if (leaf.visible && leaf.spec.bufferPolicy == bpbSharedSourceBuffer && leaf.id != 0) hasSharedPane = true;
+	if (!hasSharedPane) return;
+	if (getEditor() != nullptr) getEditor()->drawView();
+	for (BentoLeaf &leaf : leaves)
+		if (leaf.visible && leaf.pane != nullptr && leaf.spec.bufferPolicy == bpbSharedSourceBuffer) leaf.pane->drawView();
+}
+
 void MRBentoBox::drawPaneFrames() noexcept {
+	if (!hasPaneSplit()) return;
 	drawSourcePaneScrollBars();
 	for (BentoLeaf &leaf : leaves)
 		if (leaf.visible && leaf.pane != nullptr) leaf.pane->drawPaneScrollBars();
@@ -636,7 +745,7 @@ void MRBentoBox::drawPaneFrame(std::size_t leafIndex) noexcept {
 	const bool source = leaf.id == 0;
 	const bool focused = leaf.id == activeLeafId && (state & sfFocused) != 0;
 	const bool maximized = leaf.id == maximizedLeafId;
-	const bool withControls = !source;
+	const bool withControls = focused && (!source || bentoMode == bbmDocumentViewports);
 	const TAttrPair frameColor = TAttrPair(mapColor(focused ? 13 : 1));
 	TDrawBuffer buffer;
 
@@ -654,7 +763,7 @@ void MRBentoBox::drawPaneFrame(std::size_t leafIndex) noexcept {
 	const int titleRightX = maximizeWidth > 0 ? maximizeX - kPaneChromeGap : std::max(0, width - kPaneChromeFrameRest);
 	const int boundedTitleRightX = std::min(titleRightX, std::max(0, width - kPaneChromeFrameRest));
 	int titleAvailable = std::max(0, boundedTitleRightX - leftContentX);
-	std::string title = std::string("[") + paneRoleTitle(leaf.role) + "]";
+	std::string title = std::string("[") + paneTitleForLeaf(leaf) + "]";
 	int titleWidth = std::min(static_cast<int>(title.size()), titleAvailable);
 	int titleX = boundedTitleRightX - titleWidth;
 
@@ -714,13 +823,24 @@ void MRBentoBox::layoutNode(int nodeIndex, const TRect &bounds) {
 	}
 }
 
+void MRBentoBox::postCloseCommand() noexcept {
+	TEvent event;
+
+	std::memset(&event, 0, sizeof(event));
+	event.what = evCommand;
+	event.message.command = cmClose;
+	event.message.infoPtr = this;
+	putEvent(event);
+}
+
 void MRBentoBox::closePane(int leafId) noexcept {
 	if (leafId == 0) {
-		message(this, evCommand, cmClose, nullptr);
+		postCloseCommand();
 		return;
 	}
 	if (maximizedLeafId == leafId) maximizedLeafId = -1;
 	collapseLeafNode(leafId);
+	if (activeLeafId == leafId || nodeIndexForLeaf(activeLeafId) < 0) setActivePane(0);
 	layoutSplitPanes();
 }
 
@@ -740,6 +860,8 @@ void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
 	const bool openingRoleList = !paneRoleDropList.visible();
 	TRect paneRect = paneBoundsForLeaf(targetLeafId);
 	MRBentoPaneFrameView *chromeView = nullptr;
+
+	if (!titleMenuEnabledForLeaf(targetLeafId)) return;
 	for (MRBentoPaneFrameView *view : paneFrameViews)
 		if (view != nullptr && view->paneLeafId() == targetLeafId) chromeView = view;
 	TRect localAnchor = chromeView != nullptr ? chromeView->paneRoleListAnchor(listWidth) : TRect(1, 0, 1 + listWidth, 0);
@@ -836,7 +958,7 @@ bool MRBentoBox::handleOuterFrameCloseMouse(TEvent &event) {
 	while (mouseEvent(event, evMouse))
 		;
 	mouse = makeLocal(event.mouse.where);
-	if (mouse.y == 0 && mouse.x >= 2 && mouse.x <= 4) message(this, evCommand, cmClose, nullptr);
+	if (mouse.y == 0 && mouse.x >= 2 && mouse.x <= 4) postCloseCommand();
 	clearEvent(event);
 	return true;
 }
@@ -898,7 +1020,7 @@ void MRBentoBox::updateActivePaneFrame() noexcept {
 		MRBentoPaneFrameView *view = paneFrameViews[i];
 		if (view == nullptr || !leaves[i].visible) continue;
 		if (leaves[i].pane != nullptr) leaves[i].pane->setPaneFocused(leaves[i].id == activeLeafId && (state & sfFocused) != 0);
-		view->setPane(leaves[i].id, paneRoleTitle(leaves[i].role), leaves[i].id == 0, leaves[i].id == activeLeafId && (state & sfFocused) != 0, leaves[i].id == maximizedLeafId);
+		view->setPane(leaves[i].id, paneTitleForLeaf(leaves[i]).c_str(), leaves[i].id == 0 && bentoMode != bbmDocumentViewports, leaves[i].id == activeLeafId && (state & sfFocused) != 0, leaves[i].id == maximizedLeafId);
 	}
 	drawSourcePaneScrollBars();
 }
@@ -909,7 +1031,7 @@ void MRBentoBox::setActivePaneForMouse(TPoint globalMouse) noexcept {
 }
 
 void MRBentoBox::toggleLeafMaximized(int leafId) noexcept {
-	if (leafId <= 0 || nodeIndexForLeaf(leafId) < 0) return;
+	if (leafId < 0 || (leafId == 0 && bentoMode != bbmDocumentViewports) || nodeIndexForLeaf(leafId) < 0) return;
 	maximizedLeafId = maximizedLeafId == leafId ? -1 : leafId;
 	setActivePane(leafId);
 	layoutSplitPanes();
@@ -930,13 +1052,13 @@ bool MRBentoBox::handleDividerChromeMouse(TEvent &event) {
 		const int leafId = view->paneLeafId();
 		if ((event.mouse.buttons & mbRightButton) != 0 && hit == MRBentoPaneFrameView::hitTitle) {
 			setActivePane(leafId);
-			showPaneRoleList(event.mouse.where, leafId);
+			if (titleMenuEnabledForLeaf(leafId)) showPaneRoleList(event.mouse.where, leafId);
 			return true;
 		}
 		if ((event.mouse.buttons & mbLeftButton) == 0 || hit == MRBentoPaneFrameView::hitNone) return false;
 		if (hit == MRBentoPaneFrameView::hitTitle) {
 			setActivePane(leafId);
-			showPaneRoleList(event.mouse.where, leafId);
+			if (titleMenuEnabledForLeaf(leafId)) showPaneRoleList(event.mouse.where, leafId);
 			return true;
 		}
 		if (hit == MRBentoPaneFrameView::hitClose) {
@@ -1062,6 +1184,10 @@ bool MRBentoBox::verticalToolSplit() const noexcept {
 	return false;
 }
 
+bool MRBentoBox::hasPaneSplit() const noexcept {
+	return rootNode >= 0 && rootNode < static_cast<int>(layoutTree.size()) && layoutTree[rootNode].kind == blnSplit;
+}
+
 bool MRBentoBox::pointInRect(TPoint point, const TRect &rect) const noexcept {
 	return point.x >= rect.a.x && point.x < rect.b.x && point.y >= rect.a.y && point.y < rect.b.y;
 }
@@ -1099,6 +1225,12 @@ MRBentoPaneRole MRBentoBox::roleForLeaf(int leafId) const noexcept {
 	return bprCompilerOutput;
 }
 
+bool MRBentoBox::titleMenuEnabledForLeaf(int leafId) const noexcept {
+	for (const BentoLeaf &leaf : leaves)
+		if (leaf.id == leafId) return leaf.spec.titleMenu != nullptr;
+	return false;
+}
+
 int MRBentoBox::firstToolLeafId() const noexcept {
 	for (const BentoLeaf &leaf : leaves)
 		if (leaf.id != 0 && leaf.visible) return leaf.id;
@@ -1129,6 +1261,55 @@ int MRBentoBox::parentNodeOf(int childNodeIndex) const noexcept {
 	return -1;
 }
 
+int MRBentoBox::viewportNumberForLeaf(int leafId) const noexcept {
+	if (bentoMode != bbmDocumentViewports || rootNode < 0) return 0;
+
+	int number = 0;
+	std::vector<int> stack;
+	stack.push_back(rootNode);
+	while (!stack.empty()) {
+		const int nodeIndex = stack.back();
+		stack.pop_back();
+		if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) continue;
+		const BentoLayoutNode &node = layoutTree[nodeIndex];
+		if (node.kind == blnPane) {
+			++number;
+			if (node.leafId == leafId) return number;
+		} else if (node.kind == blnSplit) {
+			stack.push_back(node.secondChild);
+			stack.push_back(node.firstChild);
+		}
+	}
+	return 0;
+}
+
+MRBentoPaneSpec MRBentoBox::paneSpecForRole(MRBentoPaneRole role) const noexcept {
+	const MRBentoPaneTitleMenuSpec *titleMenu = bentoMode == bbmDocumentViewports ? nullptr : &kBentoRoleTitleMenu;
+	switch (role) {
+		case bprSource:
+			return MRBentoPaneSpec(bprSource, bpbSharedSourceBuffer, false, false, false, false, titleMenu);
+		case bprSplitEditor:
+			return MRBentoPaneSpec(bprSplitEditor, bpbSharedSourceBuffer, false, false, false, bentoMode == bbmDocumentViewports, titleMenu);
+		case bprCompilerOutput:
+		case bprAppOutput:
+		case bprProblems:
+		case bprDebuggerOutput:
+		case bprWatches:
+		case bprVariables:
+		default:
+			return MRBentoPaneSpec(role, bpbOwnBuffer, true, true, true, true, titleMenu);
+	}
+}
+
+std::string MRBentoBox::paneTitleForLeaf(const BentoLeaf &leaf) const {
+	if (bentoMode == bbmDocumentViewports) {
+		const int viewportNumber = viewportNumberForLeaf(leaf.id);
+		return "Viewport #" + std::to_string(std::max(1, viewportNumber));
+	}
+	if (!leaf.title.empty()) return leaf.title;
+	return paneRoleTitle(leaf.role);
+}
+
 TRect MRBentoBox::nodeBounds(int nodeIndex) const noexcept {
 	TRect inner = getExtent();
 	inner.grow(-1, -1);
@@ -1154,11 +1335,18 @@ TRect MRBentoBox::contentBounds(const TRect &paneBounds) const noexcept {
 }
 
 int MRBentoBox::createToolLeaf(MRBentoPaneRole role) {
+	return createPaneLeaf(paneSpecForRole(role));
+}
+
+int MRBentoBox::createPaneLeaf(const MRBentoPaneSpec &spec) {
 	BentoLeaf leaf;
 	leaf.id = nextLeafId++;
-	leaf.role = role;
-	leaf.pane = new MRPaneEditWindow(TRect(0, 0, 1, 1), paneRoleTitle(role), number);
-	leaf.pane->setPaneRole(role);
+	leaf.role = spec.role;
+	leaf.spec = spec;
+	leaf.title = bentoMode == bbmDocumentViewports ? "" : paneRoleTitle(spec.role);
+	const std::string initialTitle = bentoMode == bbmDocumentViewports ? "Viewport" : leaf.title;
+	leaf.pane = new MRPaneEditWindow(TRect(0, 0, 1, 1), initialTitle.c_str(), number);
+	leaf.pane->setPaneSpec(spec, getEditor());
 	leaf.visible = true;
 	if (secondaryPane == nullptr) secondaryPane = leaf.pane;
 	leaves.push_back(leaf);
@@ -1175,9 +1363,13 @@ int MRBentoBox::createLeafNode(int leafId) {
 }
 
 int MRBentoBox::splitLeafNode(int leafId, BentoSplitOrientation orientation, MRBentoPaneRole newRole) {
+	return splitLeafNode(leafId, orientation, paneSpecForRole(newRole));
+}
+
+int MRBentoBox::splitLeafNode(int leafId, BentoSplitOrientation orientation, const MRBentoPaneSpec &spec) {
 	int targetNode = nodeIndexForLeaf(leafId);
 	if (targetNode < 0) return -1;
-	int newLeaf = createToolLeaf(newRole);
+	int newLeaf = createPaneLeaf(spec);
 	int existingLeafNode = createLeafNode(leafId);
 	int newLeafNode = createLeafNode(newLeaf);
 	BentoLayoutNode &target = layoutTree[targetNode];
@@ -1216,7 +1408,7 @@ void MRBentoBox::collapseLeafNode(int leafId) noexcept {
 }
 
 std::vector<std::string> MRBentoBox::paneRoleChoices() const {
-	return {paneRoleTitle(bprCompilerOutput), paneRoleTitle(bprAppOutput), paneRoleTitle(bprProblems), paneRoleTitle(bprDebuggerOutput), paneRoleTitle(bprWatches), paneRoleTitle(bprVariables)};
+	return {paneRoleTitle(bprCompilerOutput), paneRoleTitle(bprAppOutput), paneRoleTitle(bprProblems), paneRoleTitle(bprDebuggerOutput), paneRoleTitle(bprWatches), paneRoleTitle(bprVariables), paneRoleTitle(bprSplitEditor)};
 }
 
 std::vector<std::string> MRBentoBox::paneActionChoices() const {
@@ -1230,6 +1422,7 @@ MRBentoPaneRole MRBentoBox::paneRoleForTitle(const std::string &title) const noe
 	if (title == paneRoleTitle(bprDebuggerOutput)) return bprDebuggerOutput;
 	if (title == paneRoleTitle(bprWatches)) return bprWatches;
 	if (title == paneRoleTitle(bprVariables)) return bprVariables;
+	if (title == paneRoleTitle(bprSplitEditor)) return bprSplitEditor;
 	return bprCompilerOutput;
 }
 
@@ -1255,6 +1448,8 @@ const char *MRBentoBox::paneRoleTitle(MRBentoPaneRole role) const noexcept {
 			return "Watches";
 		case bprVariables:
 			return "Variables";
+		case bprSplitEditor:
+			return "Split editor";
 		default:
 			return "Pane";
 	}

@@ -292,7 +292,7 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 	if (TProgram::deskTop == nullptr) return nullptr;
 
 	previous = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
-	win = createEditorWindow(title);
+	win = createLogWindow(title);
 	if (win == nullptr) return nullptr;
 	if (!win->loadTextBuffer(text, title)) {
 		message(win, evCommand, cmClose, nullptr);
@@ -419,7 +419,7 @@ bool mrShowProjectHelp() {
 
 	win = findWindowByTitle(kHelpWindowTitle);
 	if (win == nullptr) {
-		win = createEditorWindow(kHelpWindowTitle.data());
+		win = createHelpWindow(kHelpWindowTitle.data());
 		if (win == nullptr) return false;
 
 		if (!win->loadFromFile(helpPath.c_str())) {

@@ -9,9 +9,15 @@ class MRBentoBox;
 struct MRSetupPaths;
 
 [[nodiscard]] MREditWindow *createEditorWindow(const char *title);
+[[nodiscard]] MREditWindow *createHelpWindow(const char *title);
+[[nodiscard]] MREditWindow *createLogWindow(const char *title);
+[[nodiscard]] MREditWindow *createCommunicationWindow(const char *title);
 [[nodiscard]] MRBentoBox *createBentoBoxWindow(const char *title);
+[[nodiscard]] MRBentoBox *convertEditWindowToBentoBox(MREditWindow *source);
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsInZOrder();
+[[nodiscard]] std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder();
 [[nodiscard]] MREditWindow *currentEditWindow();
+[[nodiscard]] MREditWindow *currentEditorCommandWindow();
 [[nodiscard]] MREditWindow *findEditWindowByBufferId(int bufferId);
 [[nodiscard]] bool isEmptyUntitledEditableWindow(MREditWindow *win);
 [[nodiscard]] MREditWindow *findReusableEmptyWindow(MREditWindow *preferred);

@@ -16,7 +16,7 @@
 
 namespace {
 TMenuItem *createOrganizeMenuItem() {
-	return new TMenuItem("or~G~anize", kbNoKey, new TMenu(*new TMenuItem("~C~ascade windows", cmMrWindowCascade, kbNoKey, hcNoContext) + *new TMenuItem("~T~ile windows", cmMrWindowTile, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("Move viewport ~R~ight", cmMrWindowNextDesktop, TKey(kbRight, kbCtrlShift | kbAltShift), hcNoContext, "CtrlMetaRight") + *new TMenuItem("Move viewport ~L~eft", cmMrWindowPrevDesktop, TKey(kbLeft, kbCtrlShift | kbAltShift), hcNoContext, "CtrlMetaLeft") + *new TMenuItem("Move window to ~R~ight desktop", cmMrWindowMoveToNextDesktop, kbAltRight, hcNoContext, "MetaRight") + *new TMenuItem("Move window to ~L~eft desktop", cmMrWindowMoveToPrevDesktop, kbAltLeft, hcNoContext, "MetaLeft")), hcNoContext);
+	return new TMenuItem("or~G~anize", kbNoKey, new TMenu(*new TMenuItem("~C~ascade windows", cmMrWindowCascade, kbNoKey, hcNoContext) + *new TMenuItem("~T~ile windows", cmMrWindowTile, kbNoKey, hcNoContext) + *new TMenuItem("Split window \xC4", cmMrWindowSplitHorizontal, kbNoKey, hcNoContext) + *new TMenuItem("Split window \xB3", cmMrWindowSplitVertical, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("Move viewport ~R~ight", cmMrWindowNextDesktop, TKey(kbRight, kbCtrlShift | kbAltShift), hcNoContext, "CtrlMetaRight") + *new TMenuItem("Move viewport ~L~eft", cmMrWindowPrevDesktop, TKey(kbLeft, kbCtrlShift | kbAltShift), hcNoContext, "CtrlMetaLeft") + *new TMenuItem("Move window to ~R~ight desktop", cmMrWindowMoveToNextDesktop, kbAltRight, hcNoContext, "MetaRight") + *new TMenuItem("Move window to ~L~eft desktop", cmMrWindowMoveToPrevDesktop, kbAltLeft, hcNoContext, "MetaLeft")), hcNoContext);
 }
 
 TMenuItem *createUpperCaseItem() {

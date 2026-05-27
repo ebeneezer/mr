@@ -60,6 +60,18 @@ std::vector<MREditWindow *> allEditWindowsInZOrder() {
 	return windows;
 }
 
+std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder() {
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	std::vector<MREditWindow *> expanded;
+
+	expanded.reserve(windows.size());
+	for (MREditWindow *window : windows) {
+		expanded.push_back(window);
+		if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window)) bentoBox->collectVisiblePaneWindows(expanded);
+	}
+	return expanded;
+}
+
 namespace {
 short nextEditorWindowNumber() {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
@@ -75,6 +87,15 @@ short nextEditorWindowNumber() {
 		++candidate;
 	}
 	return candidate;
+}
+
+void finishNewEditWindow(MREditWindow *win) {
+	if (win == nullptr || TProgram::deskTop == nullptr) return;
+	TProgram::deskTop->insert(win);
+	win->mVirtualDesktop = currentVirtualDesktop();
+	win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
+	if (win->getEditor() != nullptr) win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
+	mrNotifyWindowTopologyChanged();
 }
 } // namespace
 
@@ -437,14 +458,44 @@ MREditWindow *createEditorWindow(const char *title) {
 	if (TProgram::deskTop == nullptr) return nullptr;
 	bounds = MRWindowManager::usableDesktopBounds();
 	bounds.grow(-2, -1);
-	win = new MREditWindow(bounds, title, nextEditorWindowNumber());
-	TProgram::deskTop->insert(win);
-	if (win != nullptr) {
-		win->mVirtualDesktop = currentVirtualDesktop();
-		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
-	}
-	if (win != nullptr && win->getEditor() != nullptr) win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
-	mrNotifyWindowTopologyChanged();
+	win = new MRBentoBox(bounds, title, nextEditorWindowNumber(), bbmDocumentViewports);
+	finishNewEditWindow(win);
+	return win;
+}
+
+MREditWindow *createHelpWindow(const char *title) {
+	TRect bounds;
+	MREditWindow *win;
+
+	if (TProgram::deskTop == nullptr) return nullptr;
+	bounds = MRWindowManager::usableDesktopBounds();
+	bounds.grow(-2, -1);
+	win = new MRHelpWindow(bounds, title, nextEditorWindowNumber());
+	finishNewEditWindow(win);
+	return win;
+}
+
+MREditWindow *createLogWindow(const char *title) {
+	TRect bounds;
+	MREditWindow *win;
+
+	if (TProgram::deskTop == nullptr) return nullptr;
+	bounds = MRWindowManager::usableDesktopBounds();
+	bounds.grow(-2, -1);
+	win = new MRLogWindow(bounds, title, nextEditorWindowNumber());
+	finishNewEditWindow(win);
+	return win;
+}
+
+MREditWindow *createCommunicationWindow(const char *title) {
+	TRect bounds;
+	MREditWindow *win;
+
+	if (TProgram::deskTop == nullptr) return nullptr;
+	bounds = MRWindowManager::usableDesktopBounds();
+	bounds.grow(-2, -1);
+	win = new MRCommunicationWindow(bounds, title, nextEditorWindowNumber());
+	finishNewEditWindow(win);
 	return win;
 }
 
@@ -456,12 +507,59 @@ MRBentoBox *createBentoBoxWindow(const char *title) {
 	bounds = MRWindowManager::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRBentoBox(bounds, title, nextEditorWindowNumber());
+	finishNewEditWindow(win);
+	return win;
+}
+
+MRBentoBox *convertEditWindowToBentoBox(MREditWindow *source) {
+	MRBentoBox *existingBento;
+	MRBentoBox *win;
+	TRect bounds;
+	const char *title;
+	MREditWindow::WindowRole role;
+	std::string roleDetail;
+	bool readOnly;
+	bool changed;
+	bool insertMode;
+	int virtualDesktop;
+	short windowNumber;
+
+	if (source == nullptr || TProgram::deskTop == nullptr || source->getEditor() == nullptr) return nullptr;
+	existingBento = dynamic_cast<MRBentoBox *>(source);
+	if (existingBento != nullptr) return existingBento;
+	if (!source->allowsDocumentViewportSplit()) return nullptr;
+	if (source->hasTrackedExternalIoTasks()) return nullptr;
+
+	bounds = source->getBounds();
+	title = source->getTitle(0);
+	role = source->windowRole();
+	roleDetail = source->windowRoleDetail();
+	readOnly = source->isReadOnly();
+	changed = source->isFileChanged();
+	insertMode = source->insertModeEnabled();
+	virtualDesktop = source->mVirtualDesktop;
+	windowNumber = source->number;
+
+	win = new MRBentoBox(bounds, title != nullptr && *title != '\0' ? title : "Untitled", windowNumber, bbmDocumentViewports);
 	TProgram::deskTop->insert(win);
-	if (win != nullptr) {
-		win->mVirtualDesktop = currentVirtualDesktop();
-		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
+	if (win == nullptr) return nullptr;
+	win->mVirtualDesktop = virtualDesktop;
+	win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
+	if (win->getEditor() != nullptr) {
+		win->getEditor()->shareContentStateFrom(*source->getEditor());
+		win->getEditor()->setInsertModeEnabled(insertMode);
 	}
-	if (win != nullptr && win->getEditor() != nullptr) win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
+	win->setWindowRole(role, roleDetail);
+	win->setReadOnly(readOnly);
+	if (source->currentFileName()[0] == '\0') win->setDisplayTitle(title);
+	win->setFileChanged(changed);
+	win->activatePrimaryPane();
+
+	source->getEditor()->detachContentStateCopy();
+	source->setFileChanged(false);
+	setWindowManuallyHidden(source, false);
+	message(source, evCommand, cmClose, nullptr);
+	static_cast<void>(mrActivateEditWindow(win));
 	mrNotifyWindowTopologyChanged();
 	return win;
 }
@@ -469,6 +567,12 @@ MRBentoBox *createBentoBoxWindow(const char *title) {
 MREditWindow *currentEditWindow() {
 	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr) return nullptr;
 	return dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
+}
+
+MREditWindow *currentEditorCommandWindow() {
+	MREditWindow *window = currentEditWindow();
+
+	return window != nullptr ? window->editorCommandTarget() : nullptr;
 }
 
 MREditWindow *findEditWindowByBufferId(int bufferId) {

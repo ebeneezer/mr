@@ -16,13 +16,41 @@ enum MRBentoPaneRole {
 	bprProblems,
 	bprDebuggerOutput,
 	bprWatches,
-	bprVariables
+	bprVariables,
+	bprSplitEditor
 };
 
 enum MRBentoPanePlacement {
 	bppReplace = 0,
 	bppSplitRight,
 	bppSplitDown
+};
+
+enum MRBentoPaneBufferPolicy {
+	bpbOwnBuffer = 0,
+	bpbSharedSourceBuffer
+};
+
+struct MRBentoPaneTitleMenuSpec {
+	const char *name;
+};
+
+enum MRBentoBoxMode {
+	bbmToolWorkspace = 0,
+	bbmDocumentViewports
+};
+
+struct MRBentoPaneSpec {
+	MRBentoPaneSpec() noexcept;
+	MRBentoPaneSpec(MRBentoPaneRole aRole, MRBentoPaneBufferPolicy aBufferPolicy, bool aReadOnly, bool aSuppressMiniMap, bool aSuppressWordWrap, bool aScrollBarsAlwaysVisible, const MRBentoPaneTitleMenuSpec *aTitleMenu) noexcept;
+
+	MRBentoPaneRole role;
+	MRBentoPaneBufferPolicy bufferPolicy;
+	bool readOnly;
+	bool suppressMiniMap;
+	bool suppressWordWrap;
+	bool scrollBarsAlwaysVisible;
+	const MRBentoPaneTitleMenuSpec *titleMenu;
 };
 
 class MRPaneEditWindow : public MREditWindow {
@@ -39,36 +67,42 @@ class MRPaneEditWindow : public MREditWindow {
 	virtual void changeBounds(const TRect &bounds) override;
 	virtual TColorAttr mapColor(uchar index) override;
 
-	void setPaneRole(MRBentoPaneRole role) noexcept;
+	void setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept;
 	void setPaneFocused(bool focused) noexcept;
-	void applyPanePolicy() noexcept;
+	void applyPanePolicy(const MRFileEditor *sourceEditor) noexcept;
 	void layoutPaneChrome() noexcept;
 	void drawPaneScrollBars() noexcept;
 	static TFrame *initFrame(TRect bounds);
 
-	MRBentoPaneRole mPaneRole;
+	MRBentoPaneSpec mPaneSpec;
 	bool mPaneFocused;
 };
 
 class MRBentoBox : public MREditWindow {
   public:
-	MRBentoBox(const TRect &bounds, const char *title, int number);
+	MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode = bbmToolWorkspace);
 	virtual ~MRBentoBox() override;
 
 	[[nodiscard]] MREditWindow *secondaryEditWindow() const noexcept;
 	[[nodiscard]] MREditWindow *paneForBufferId(int bufferId) const noexcept;
+	void collectVisiblePaneWindows(std::vector<MREditWindow *> &windows) const noexcept;
 	void showSecondaryPane() noexcept;
 	void activatePrimaryPane() noexcept;
 	void activateSecondaryPane() noexcept;
 	void toggleActivePane() noexcept;
 	void setDiagnosticsStatus(const char *status);
 	[[nodiscard]] bool placePaneRole(MRBentoPaneRole role, MRBentoPanePlacement placement);
+	[[nodiscard]] bool splitActiveEditorPane(MRBentoPanePlacement placement);
 
 	virtual void draw() override;
 	virtual void changeBounds(const TRect &bounds) override;
 	virtual void handleEvent(TEvent &event) override;
 	virtual void setState(ushort aState, Boolean enable) override;
 	virtual TColorAttr mapColor(uchar index) override;
+	virtual bool allowsDocumentViewportSplit() const noexcept override;
+	virtual MREditWindow *editorCommandTarget() noexcept override;
+	virtual const MREditWindow *editorCommandTarget() const noexcept override;
+	virtual bool showsFrameGrowHandle() const noexcept override;
 
   private:
 	enum ActivePane {
@@ -86,6 +120,8 @@ class MRBentoBox : public MREditWindow {
 		bsoVertical
 	};
 
+	struct BentoLeaf;
+
 	struct BentoLayoutNode {
 		BentoLayoutNode() noexcept;
 
@@ -102,8 +138,10 @@ class MRBentoBox : public MREditWindow {
 	void layoutSourcePaneChrome(const TRect &content) noexcept;
 	void hideSourcePaneChrome() noexcept;
 	void drawSourcePaneScrollBars() noexcept;
+	void drawSharedEditorPanes() noexcept;
 	void drawPaneFrames() noexcept;
 	void drawPaneFrame(std::size_t leafIndex) noexcept;
+	void postCloseCommand() noexcept;
 	void closePane(int leafId) noexcept;
 	void closeSecondaryPane() noexcept;
 	void showPaneRoleList(TPoint globalMouse, int targetLeafId);
@@ -147,22 +185,29 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool verticalRootSplit() const noexcept;
 	[[nodiscard]] bool tertiaryPaneVisible() const noexcept;
 	[[nodiscard]] bool verticalToolSplit() const noexcept;
+	[[nodiscard]] bool hasPaneSplit() const noexcept;
 	[[nodiscard]] bool pointInRect(TPoint point, const TRect &rect) const noexcept;
 	[[nodiscard]] int leafAt(TPoint point) const noexcept;
 	[[nodiscard]] int nodeAtDivider(TPoint point) const noexcept;
 	[[nodiscard]] MRPaneEditWindow *paneWindowForLeaf(int leafId) const noexcept;
 	[[nodiscard]] MRBentoPaneRole roleForLeaf(int leafId) const noexcept;
+	[[nodiscard]] bool titleMenuEnabledForLeaf(int leafId) const noexcept;
 	[[nodiscard]] int firstToolLeafId() const noexcept;
 	[[nodiscard]] int nodeIndexForLeaf(int leafId) const noexcept;
 	[[nodiscard]] int parentNodeOf(int childNodeIndex) const noexcept;
+	[[nodiscard]] int viewportNumberForLeaf(int leafId) const noexcept;
 	[[nodiscard]] TRect nodeBounds(int nodeIndex) const noexcept;
 	[[nodiscard]] TRect contentBounds(const TRect &paneBounds) const noexcept;
 	[[nodiscard]] int createToolLeaf(MRBentoPaneRole role);
+	[[nodiscard]] int createPaneLeaf(const MRBentoPaneSpec &spec);
 	[[nodiscard]] int createLeafNode(int leafId);
 	[[nodiscard]] int splitLeafNode(int leafId, BentoSplitOrientation orientation, MRBentoPaneRole newRole);
+	[[nodiscard]] int splitLeafNode(int leafId, BentoSplitOrientation orientation, const MRBentoPaneSpec &spec);
 	void collapseLeafNode(int leafId) noexcept;
 	void layoutNode(int nodeIndex, const TRect &bounds);
 	void ensurePaneFrameViews();
+	[[nodiscard]] MRBentoPaneSpec paneSpecForRole(MRBentoPaneRole role) const noexcept;
+	[[nodiscard]] std::string paneTitleForLeaf(const BentoLeaf &leaf) const;
 	[[nodiscard]] std::vector<std::string> paneRoleChoices() const;
 	[[nodiscard]] std::vector<std::string> paneActionChoices() const;
 	[[nodiscard]] MRBentoPaneRole paneRoleForTitle(const std::string &title) const noexcept;
@@ -176,6 +221,8 @@ class MRBentoBox : public MREditWindow {
 
 		int id;
 		MRBentoPaneRole role;
+		MRBentoPaneSpec spec;
+		std::string title;
 		MRPaneEditWindow *pane;
 		TRect bounds;
 		bool visible;
@@ -189,6 +236,7 @@ class MRBentoBox : public MREditWindow {
 	int activeLeafId;
 	int nextLeafId;
 	int maximizedLeafId;
+	MRBentoBoxMode bentoMode;
 	bool sourceScrollBarPaletteActive;
 	bool secondaryPaneVisible;
 	MRDropList paneRoleDropList;

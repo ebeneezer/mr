@@ -118,6 +118,10 @@
             {
               "id": "684e96a2-aff5-4f5d-b492-b388ce36d8d9",
               "comment": "LSP-Integration für Diagnose, Navigation und Autocomplete bedeutet im Kern, dass der Editor mit einem externen Language Server spricht, statt Sprachintelligenz selbst ad hoc zu implementieren.\n\nWas der Nutzer davon konkret merkt\n\nFehler und Warnungen direkt im Editor, möglichst schon beim Tippen\nGo to Definition, Find References, Hover-Infos\nkontextabhängige Autovervollständigung statt nur wortbasierter Vorschläge\noptional später: Rename Symbol, Signature Help, Code Actions\nSinnvoller Zuschnitt für eine erste Ausbaustufe\n\nDiagnose\n\nServer starten\nDokument öffnen/ändern/speichern an den Server melden\nDiagnosen empfangen und im UI anzeigen\nNavigation\n\nDefinition anspringen\nReferenzen in einer Liste anzeigen\neinfache Positionssprünge zwischen Datei/Zeile/Spalte\nAutocomplete\n\nCompletion an Cursorposition anfragen\nTrefferliste anzeigen\nausgewählten Vorschlag einfügen\nDas wäre ein brauchbares erstes Thema. Rename, Code Actions, Formatting, Semantic Tokens würde ich bewusst nicht in denselben ersten Schnitt ziehen.\n\nWarum das ein gutes Thema ist\n\nhoher sichtbarer Nutzwert\nnicht auf eine einzelne Sprache begrenzt\nstrategisch stärker als eine isolierte Editorfunktion\nschafft eine technische Grundlage für mehrere spätere Features\nTechnische Teilprobleme\n\nProzessmanagement: Server starten, neu starten, beenden\nProtokolltransport: meist JSON-RPC über stdin/stdout\nDokument-Synchronisation: Full Sync oder Incremental Sync\nCapability-Handling: jeder Server kann etwas anderes\nUI-Anbindung: Listen, Status, Fehleranzeige, Sprungziele\nKonfiguration: welcher Server für welche Dateitypen, Startkommando, Root-Erkennung\nWichtige Produktentscheidungen\n\nNur lokale Serverprozesse oder später auch Remote?\nErst nur eine Sprache gut unterstützen oder Infrastruktur generisch bauen?\nDiagnosen live bei jeder Änderung oder nur bei Save?\nCompletion minimalistisch halten oder direkt mit Dokumentation/Hinweisen?\nRisiken im bestehenden System\n\nFalls Sie das später wirklich umsetzen lassen wollen, ist das kein “reines Feature ohne Architekturwirkung”. Typisch berührt es:\n\nUI-Dialoge und Listenansichten\nasynchrone/deferred UI\nRuntime-Settings\nDateipfad- und Projektwurzel-Logik\nvorhandene Syntax-/Sprachfunktionen, falls es Überschneidungen gibt\nGerade deshalb ist es ein gutes größeres Thema, aber kein kleiner Nebenpunkt.\n\nEmpfohlene Formulierung für die Karte\n\nLSP-Integration: Diagnosen, Definitionen, Referenzen und Autocomplete\n\nDas ist präziser als die Kurzform und setzt den Umfang sauberer. Wenn Sie möchten, formuliere ich daraus auch noch eine kompakte Board-Karte plus 3 bis 5 konkrete Unteraufgaben."
+            },
+            {
+              "id": "7d051a72-2b90-436e-b073-ba82410522d0",
+              "comment": "BentoBox erhölt Subfenster \"Klassen und Methodenhierarchy\" und \"Variablendefinition\""
             }
           ]
         },
@@ -139,6 +143,15 @@
           "id": "d6f74a92-19b9-4e59-97ce-0fd2f415aebd",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "File Compare",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "cf2f9483-7d3b-4d48-b36c-f55edb96ee21",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Git support",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -170,24 +183,6 @@
           ]
         },
         {
-          "id": "4cbc5016-abd9-4330-8668-f9ffbc6455ae",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "alle Methoden die noch SplitEdit enthalten müssen auf MRBentoBox umbenannt werden",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "64057b06-7cd2-4335-ac89-b328d6c7c8ee",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Regression: Wenn ich für Sources mit Extension die Sprache festlege wird diese nicht als Marker angezeigt. Das geschieht nur im Automatic Modus. Die Zuordnung zum C Profile scheint aber zu funktionieren - insofern wahrscheinlich nur ein Anzeigefehler.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "40285382-e934-4b32-bd16-3acffa7645ef",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
           "title": "mrmac VM Befehlssatz komplettieren",
@@ -206,24 +201,6 @@
           ]
         },
         {
-          "id": "b6c866e1-49fc-4c16-b987-626b8d0a53fc",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Automatic Setup Button für Compiler Profiles: Fragt nach binary des Compilers ohne Pfad und stellt danach alles automatisch ein. Wenn bereits etwas in Compiler binary steht wird nicht gefragt.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "6c1518d3-c3ad-4303-9fc4-9511e7c64a27",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Wenn ein FE Profile erstellt wird sollte beim Verlassen des FE Dialogs geprüft werden welche EditorWindows diesem Profil zugeordnet werden müssen.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "4837d859-b453-4072-a9a2-f473b9a8342a",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
           "title": "Compiler Profiles",
@@ -236,15 +213,6 @@
               "comment": "\nerror parsing? \nfolding einblendung des errors and der error stelle?\nVerbindung via FE Profile"
             }
           ]
-        },
-        {
-          "id": "05832f3b-4ca2-419a-9d52-72c23dc5ea48",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Split Editor: Horizontal/vertikal: Mehrere Editoren in einem Editor Fenster Rahmen. Grössen durch Ziehen mit der Maus veränderbar. Saubere grafische rahmenabzweigungen. Split Editoren haben im Parent Rahmen nur einzeilige Rahmen, Der Doppelrahmen umschliesst alles und gruppiert so optisch. Wir brauchen so etwas für Compiler fehler, später den Makro Debugger und viele weitere Einsatzmöglichkeiten. Das muss eine eigene von MRFileEditor abgeleitete Klasse werden.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
         }
       ]
     },
@@ -256,6 +224,60 @@
           "id": "a9b47629-56da-4931-9276-646a378f7582",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Snippet Macros für weitere Sprachen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "4cbc5016-abd9-4330-8668-f9ffbc6455ae",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "alle Methoden die noch SplitEdit enthalten müssen auf MRBentoBox umbenannt werden",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ae3b388a-6a42-4b01-aff2-c9a1195f2e54",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Das markieren mit der Maus sollte Scroll Events auslösen.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "05832f3b-4ca2-419a-9d52-72c23dc5ea48",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Split Editor: Horizontal/vertikal: Mehrere Editoren in einem Editor Fenster Rahmen. Grössen durch Ziehen mit der Maus veränderbar. Saubere grafische rahmenabzweigungen. Split Editoren haben im Parent Rahmen nur einzeilige Rahmen, Der Doppelrahmen umschliesst alles und gruppiert so optisch. Wir brauchen so etwas für Compiler fehler, später den Makro Debugger und viele weitere Einsatzmöglichkeiten. Das muss eine eigene von MRFileEditor abgeleitete Klasse werden.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "6c1518d3-c3ad-4303-9fc4-9511e7c64a27",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Wenn ein FE Profile erstellt wird sollte beim Verlassen des FE Dialogs geprüft werden welche EditorWindows diesem Profil zugeordnet werden müssen.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "b6c866e1-49fc-4c16-b987-626b8d0a53fc",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Automatic Setup Button für Compiler Profiles: Fragt nach binary des Compilers ohne Pfad und stellt danach alles automatisch ein. Wenn bereits etwas in Compiler binary steht wird nicht gefragt.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "64057b06-7cd2-4335-ac89-b328d6c7c8ee",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Regression: Wenn ich für Sources mit Extension die Sprache festlege wird diese nicht als Marker angezeigt. Das geschieht nur im Automatic Modus. Die Zuordnung zum C Profile scheint aber zu funktionieren - insofern wahrscheinlich nur ein Anzeigefehler.",
           "description": "",
           "labels": [],
           "checkboxes": [],

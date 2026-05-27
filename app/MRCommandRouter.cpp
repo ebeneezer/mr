@@ -61,6 +61,7 @@
 #include "../keymap/MRKeymapSequence.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/MRVM.hpp"
+#include "../mrmac/vm/MRVMEditor.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 #include "../app/commands/MRLogViewer.hpp"
@@ -310,6 +311,10 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Window / Close";
 		case cmMrWindowSplit:
 			return "Window / Split";
+		case cmMrWindowSplitHorizontal:
+			return "Window / Split horizontal";
+		case cmMrWindowSplitVertical:
+			return "Window / Split vertical";
 		case cmMrWindowList:
 			return "Window / List";
 		case cmMrWindowNext:
@@ -1356,7 +1361,7 @@ bool handleExecuteProgram() {
 		return true;
 	}
 
-	win = createEditorWindow(shortenCommandTitle(commandLine).c_str());
+	win = createCommunicationWindow(shortenCommandTitle(commandLine).c_str());
 	if (win == nullptr) {
 		postSearchError("Unable to create communication window.");
 		return true;
@@ -1772,7 +1777,7 @@ bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandL
 }
 
 bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
-	MREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
 	if (win == nullptr || editor == nullptr) return true;
@@ -1797,6 +1802,14 @@ bool handleBlockAction(bool ok, const char *failureText) {
 	return true;
 }
 
+MREditWindow *currentBlockCommandWindow() {
+	return currentEditorCommandWindow();
+}
+
+MRFileEditor *editorForBlockCommand(MREditWindow *win) {
+	return win != nullptr ? win->getEditor() : nullptr;
+}
+
 bool hasMarkedTextForBlockOperation(MREditWindow *win) {
 	if (win == nullptr || !win->hasBlock()) return false;
 	if (win->blockStatus() == MREditWindow::bmStream && win->blockAnchorPtr() == win->blockEffectiveEndPtr()) return false;
@@ -1806,7 +1819,7 @@ bool hasMarkedTextForBlockOperation(MREditWindow *win) {
 bool promptBlockSavePath(std::string &outPath) {
 	char buffer[MAXPATH] = {0};
 	ushort result = cmCancel;
-	MREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentBlockCommandWindow();
 
 	outPath.clear();
 	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockSave, buffer, sizeof(buffer), "*.*");
@@ -1850,10 +1863,12 @@ void writeSystemClipboardText(std::string_view text) {
 }
 
 bool copyCurrentBlockToSystemClipboard(bool append, bool cut, const char *failureText) {
+	MREditWindow *win = currentBlockCommandWindow();
+	MRFileEditor *editor = editorForBlockCommand(win);
 	std::string blockText;
 	std::string clipboardText;
 
-	if (!mrvmUiExtractCurrentBlockText(blockText)) return handleBlockAction(false, failureText);
+	if (!mrvmEditorExtractCurrentBlockText(win, editor, blockText)) return handleBlockAction(false, failureText);
 	if (append) {
 		if (!readSystemClipboardText(clipboardText)) {
 			postDialogWarning("Unable to read system clipboard.");
@@ -1863,7 +1878,7 @@ bool copyCurrentBlockToSystemClipboard(bool append, bool cut, const char *failur
 	} else
 		clipboardText = blockText;
 	writeSystemClipboardText(clipboardText);
-	if (cut) return handleBlockAction(mrvmUiDeleteBlock(), failureText);
+	if (cut) return handleBlockAction(mrvmEditorDeleteCurrentBlock(win, editor, mrvmEditorShouldLeaveColumnSpaceForDelete(win)), failureText);
 	return true;
 }
 
@@ -1933,7 +1948,7 @@ std::string formatBlockMathResult(double value) {
 }
 
 bool runBlockMathOperation() {
-	MREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentBlockCommandWindow();
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	std::string blockText;
 	std::vector<double> values;
@@ -1942,7 +1957,7 @@ bool runBlockMathOperation() {
 
 	if (editor == nullptr) return true;
 	if (!promptBlockMathOperation(operation)) return true;
-	if (!mrvmUiExtractCurrentBlockText(blockText)) {
+	if (!mrvmEditorExtractCurrentBlockText(win, editor, blockText)) {
 		postDialogWarning("No block marked.");
 		return true;
 	}
@@ -2441,26 +2456,37 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrSearchGotoLineNumber:
 			return handleSearchGotoLineNumber();
 
-		case cmMrBlockCopy:
-			return handleBlockAction(mrvmUiCopyBlock(), "No block marked.");
+		case cmMrBlockCopy: {
+			MREditWindow *win = currentBlockCommandWindow();
+			return handleBlockAction(mrvmEditorCopyCurrentBlock(win, editorForBlockCommand(win)), "No block marked.");
+		}
 
-		case cmMrBlockMove:
-			return handleBlockAction(mrvmUiMoveBlock(), "Unable to move block.");
+		case cmMrBlockMove: {
+			MREditWindow *win = currentBlockCommandWindow();
+			return handleBlockAction(mrvmEditorMoveCurrentBlock(win, editorForBlockCommand(win)), "Unable to move block.");
+		}
 
-		case cmMrBlockDelete:
-			return handleBlockAction(mrvmUiDeleteBlock(), "Unable to delete block.");
+		case cmMrBlockDelete: {
+			MREditWindow *win = currentBlockCommandWindow();
+			return handleBlockAction(mrvmEditorDeleteCurrentBlock(win, editorForBlockCommand(win), mrvmEditorShouldLeaveColumnSpaceForDelete(win)), "Unable to delete block.");
+		}
 
 		case cmMrBlockSaveToDisk: {
 			std::string savePath;
+			MREditWindow *win = currentBlockCommandWindow();
 			if (!promptBlockSavePath(savePath)) return true;
-			return handleBlockAction(mrvmUiSaveBlockToFile(savePath), "Unable to save block.");
+			return handleBlockAction(mrvmEditorSaveCurrentBlockToFile(win, editorForBlockCommand(win), savePath), "Unable to save block.");
 		}
 
-		case cmMrBlockIndent:
-			return handleBlockAction(mrvmUiIndentBlock(), "Unable to indent block.");
+		case cmMrBlockIndent: {
+			MREditWindow *win = currentBlockCommandWindow();
+			return handleBlockAction(mrvmEditorIndentBlock(win, editorForBlockCommand(win)), "Unable to indent block.");
+		}
 
-		case cmMrBlockUndent:
-			return handleBlockAction(mrvmUiUndentBlock(), "Unable to undent block.");
+		case cmMrBlockUndent: {
+			MREditWindow *win = currentBlockCommandWindow();
+			return handleBlockAction(mrvmEditorUndentBlock(win, editorForBlockCommand(win)), "Unable to undent block.");
+		}
 
 		case cmMrBlockWindowCopy: {
 			bool ok = false;
@@ -2478,20 +2504,37 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return handleBlockAction(ok, "Inter-window block move failed.");
 		}
 
-		case cmMrBlockMarkLines:
-			return handleBlockAction(mrvmUiBlockBeginLine(), "Unable to start line block marking.");
+		case cmMrBlockMarkLines: {
+			MREditWindow *win = currentBlockCommandWindow();
+			if (win != nullptr) win->beginLineBlock();
+			return handleBlockAction(win != nullptr, "Unable to start line block marking.");
+		}
 
-		case cmMrBlockMarkColumns:
-			return handleBlockAction(mrvmUiBlockBeginColumn(), "Unable to start column block marking.");
+		case cmMrBlockMarkColumns: {
+			MREditWindow *win = currentBlockCommandWindow();
+			if (win != nullptr) win->beginColumnBlock();
+			return handleBlockAction(win != nullptr, "Unable to start column block marking.");
+		}
 
-		case cmMrBlockMarkStream:
-			return handleBlockAction(mrvmUiBlockBeginStream(), "Unable to start stream block marking.");
+		case cmMrBlockMarkStream: {
+			MREditWindow *win = currentBlockCommandWindow();
+			if (win != nullptr) win->beginStreamBlock();
+			return handleBlockAction(win != nullptr, "Unable to start stream block marking.");
+		}
 
-		case cmMrBlockEndMarking:
-			return handleBlockAction(mrvmUiBlockEndMarking(), "No active block marking.");
+		case cmMrBlockEndMarking: {
+			MREditWindow *win = currentBlockCommandWindow();
+			const bool ok = win != nullptr && win->isBlockMarking();
+			if (ok) win->endBlock();
+			return handleBlockAction(ok, "No active block marking.");
+		}
 
-		case cmMrBlockTurnMarkingOff:
-			return handleBlockAction(mrvmUiBlockTurnMarkingOff(), "No block marked.");
+		case cmMrBlockTurnMarkingOff: {
+			MREditWindow *win = currentBlockCommandWindow();
+			const bool ok = win != nullptr && win->hasBlock();
+			if (ok) win->clearBlock();
+			return handleBlockAction(ok, "No block marked.");
+		}
 
 		case cmMrBlockPersistent:
 			return togglePersistentBlocksSetting();
@@ -2540,6 +2583,40 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrWindowTile:
 			return handleWindowTile();
+
+		case cmMrWindowSplitHorizontal: {
+			MREditWindow *window = currentEditWindow();
+			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+			if (window == nullptr || !window->allowsDocumentViewportSplit()) {
+				postDialogWarning("Split window requires a document editor window.");
+				return true;
+			}
+			if (bentoBox == nullptr) {
+				bentoBox = convertEditWindowToBentoBox(window);
+			}
+			if (bentoBox == nullptr) {
+				postDialogWarning("Split window requires an editable window without running external I/O.");
+				return true;
+			}
+			return bentoBox->splitActiveEditorPane(bppSplitDown);
+		}
+
+		case cmMrWindowSplitVertical: {
+			MREditWindow *window = currentEditWindow();
+			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+			if (window == nullptr || !window->allowsDocumentViewportSplit()) {
+				postDialogWarning("Split window requires a document editor window.");
+				return true;
+			}
+			if (bentoBox == nullptr) {
+				bentoBox = convertEditWindowToBentoBox(window);
+			}
+			if (bentoBox == nullptr) {
+				postDialogWarning("Split window requires an editable window without running external I/O.");
+				return true;
+			}
+			return bentoBox->splitActiveEditorPane(bppSplitRight);
+		}
 
 		case cmMrWindowNextDesktop:
 			return viewportRight();

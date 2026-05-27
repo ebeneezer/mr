@@ -500,7 +500,7 @@ bool openLiveLogViewer() {
 	currentSearchPatternSnapshot(search.pattern, search.options);
 
 	title = "LIVELOG: " + baseNameOf(resolvedPath);
-	win = createEditorWindow(title.c_str());
+	win = createCommunicationWindow(title.c_str());
 	if (win == nullptr) {
 		postLogViewerError("Unable to create live log window.");
 		return true;
@@ -546,7 +546,7 @@ bool openJournalViewer() {
 	currentSearchPatternSnapshot(search.pattern, search.options);
 
 	title = "JOURNAL: " + appTag;
-	win = createEditorWindow(title.c_str());
+	win = createCommunicationWindow(title.c_str());
 	if (win == nullptr) {
 		postLogViewerError("Unable to create journal window.");
 		return true;

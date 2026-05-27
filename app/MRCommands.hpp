@@ -42,6 +42,8 @@ enum : ushort {
 	cmMrWindowUnlink,
 	cmMrWindowCascade,
 	cmMrWindowTile,
+	cmMrWindowSplitHorizontal,
+	cmMrWindowSplitVertical,
 	cmMrWindowNextDesktop,
 	cmMrWindowPrevDesktop,
 	cmMrWindowMoveToNextDesktop,

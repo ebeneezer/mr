@@ -35,3 +35,12 @@ Do not collapse distinct roles into generic helpers:
 - runtime execution.
 
 When these roles interact, the contract for the relevant area must be read before changing code.
+
+## Foundation reuse invariant
+
+MR extends existing foundation through specialization, composition, configuration and dispatch.
+MR does not duplicate existing contracts in parallel special-case paths.
+
+New infrastructure is allowed only when no existing contract can carry the required behavior.
+New types and code paths must own a distinct contract; they must not rebuild behavior already
+provided by an existing layer or by a controlled specialization of that layer.

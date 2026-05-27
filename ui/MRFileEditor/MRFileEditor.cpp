@@ -2445,6 +2445,23 @@ MRTextBufferModel &MRFileEditor::bufferModel() noexcept {
 	return mBufferModel;
 }
 
+void MRFileEditor::shareContentStateFrom(const MRFileEditor &source) {
+	mBufferModel.shareContentStateFrom(source.bufferModel());
+	if (source.hasPersistentFileName()) setPersistentFileName(source.persistentFileName());
+	else
+		clearPersistentFileName();
+	clearFindMarkerRanges();
+	clearDirtyRanges();
+	syncFromEditorState(false);
+}
+
+void MRFileEditor::detachContentStateCopy() {
+	mBufferModel.detachContentStateCopy();
+	clearFindMarkerRanges();
+	clearDirtyRanges();
+	syncFromEditorState(false);
+}
+
 std::string MRFileEditor::snapshotText() const {
 	return mBufferModel.text();
 }
@@ -4040,18 +4057,21 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	updateIndicator();
 	drawView();
 
-	while (mouseEvent(event, evMouseMove | evMouseAuto)) {
-		if (event.what == evMouseAuto) {
-			TPoint mouse = makeLocal(event.mouse.where);
+	while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseWheel)) {
+		if (event.what == evMouseMove || event.what == evMouseAuto) {
+			const TPoint mouse = makeLocal(event.mouse.where);
 			int dx = delta.x;
 			int dy = delta.y;
-			if (mouse.x < 0) --dx;
-			else if (mouse.x >= size.x)
+			if (mouse.x < viewport.textLeft) --dx;
+			else if (mouse.x >= viewport.textRight)
 				++dx;
 			if (mouse.y < viewport.topInset) --dy;
 			else if (mouse.y >= viewport.topInset + std::max(0, visibleTextRows()))
 				++dy;
-			scrollTo(std::max(dx, 0), std::max(dy, 0));
+			if (dx != delta.x || dy != delta.y) scrollTo(std::max(dx, 0), std::max(dy, 0));
+		} else if (event.what == evMouseWheel) {
+			if (vScrollBar != nullptr) vScrollBar->handleEvent(event);
+			if (event.what != evNothing && hScrollBar != nullptr) hScrollBar->handleEvent(event);
 		}
 		int dragColumn = 0;
 		std::size_t target = mouseOffset(makeLocal(event.mouse.where), &dragColumn);

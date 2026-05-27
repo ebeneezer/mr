@@ -2482,6 +2482,10 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		failureReason = "Changed-text must be applied per character via dedicated dirty-range lookup.";
 		return false;
 	}
+	if (sourceContent.find("if (overlayMode == 3) currentLineInBlock = false;") == std::string::npos || sourceContent.find("if (overlayMode == 3) selected = overlayStart <= documentPos && documentPos < overlayEnd;") == std::string::npos) {
+		failureReason = "Stream block overlay must remain character-precise and must not color the full active line.";
+		return false;
+	}
 	if (headerContent.find("std::vector<MRTextBufferModel::Range> mDirtyRanges;") == std::string::npos || headerContent.find("void addDirtyRange(") == std::string::npos || headerContent.find("bool isDirtyOffset(std::size_t pos) const noexcept;") == std::string::npos || editorContent.find("bool MRFileEditor::isDirtyOffset(") == std::string::npos) {
 		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in MRFileEditor.";
 		return false;
@@ -3818,6 +3822,14 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	std::string source;
 	std::string header;
 	std::string frameSource;
+	std::string editWindowHeader;
+	std::string editorHeader;
+	std::string editorSource;
+	std::string bufferModelHeader;
+	std::string windowCommandsHeader;
+	std::string windowCommandsSource;
+	std::string commandRouterSource;
+	std::string coprocessorDispatchSource;
 	std::string ioError;
 	std::string missingNeedle;
 	std::size_t commandRouterPos = std::string::npos;
@@ -3840,6 +3852,38 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFrame.cpp: " + ioError;
 		return false;
 	}
+	if (!readTextFile(absolutePathFromCwd("ui/MREditWindow.hpp"), editWindowHeader, ioError)) {
+		failureReason = "Unable to read MREditWindow.hpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp"), editorHeader, ioError)) {
+		failureReason = "Unable to read MRFileEditor.hpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp"), editorSource, ioError)) {
+		failureReason = "Unable to read MRFileEditor.cpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRTextBufferModel.hpp"), bufferModelHeader, ioError)) {
+		failureReason = "Unable to read MRTextBufferModel.hpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("app/commands/MRWindowCommands.hpp"), windowCommandsHeader, ioError)) {
+		failureReason = "Unable to read MRWindowCommands.hpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("app/commands/MRWindowCommands.cpp"), windowCommandsSource, ioError)) {
+		failureReason = "Unable to read MRWindowCommands.cpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("app/MRCommandRouter.cpp"), commandRouterSource, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp"), coprocessorDispatchSource, ioError)) {
+		failureReason = "Unable to read MRCoprocessorDispatch.cpp: " + ioError;
+		return false;
+	}
 	commandRouterPos = source.find("bool splitCommandTargetsSecondaryPane(ushort command) noexcept");
 	cmClosePos = commandRouterPos != std::string::npos ? source.find("case cmClose:", commandRouterPos) : std::string::npos;
 	commandDefaultPos = commandRouterPos != std::string::npos ? source.find("default:", commandRouterPos) : std::string::npos;
@@ -3847,10 +3891,18 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento command routing must keep window-close commands out of secondary panes.";
 		return false;
 	}
+	if (!containsAllSubstrings(source, {"evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel | evKeyDown", "const bool mouseEvent = (event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0;", "if (mouseEvent) setActivePaneForMouse(event.mouse.where);"}, missingNeedle)) {
+		failureReason = "Bento mouse-wheel routing must target the pane under the pointer: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(editWindowHeader, {"class MRHelpWindow : public MREditWindow", "class MRLogWindow : public MREditWindow", "class MRCommunicationWindow : public MREditWindow", "virtual bool allowsDocumentViewportSplit() const noexcept", "virtual bool isCommunicationWindow() const noexcept override"}, missingNeedle)) {
+		failureReason = "Special editor windows must be modeled as MREditWindow subtypes: missing " + missingNeedle + ".";
+		return false;
+	}
 	splitRightPos = source.find("case bppSplitRight:");
 	splitDownPos = source.find("case bppSplitDown:");
-	verticalOrientationPos = splitRightPos != std::string::npos ? source.find("return splitLeafNode(targetLeafId, bsoVertical, role) >= 0;", splitRightPos) : std::string::npos;
-	horizontalOrientationPos = splitDownPos != std::string::npos ? source.find("return splitLeafNode(targetLeafId, bsoHorizontal, role) >= 0;", splitDownPos) : std::string::npos;
+	verticalOrientationPos = splitRightPos != std::string::npos ? source.find("return splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;", splitRightPos) : std::string::npos;
+	horizontalOrientationPos = splitDownPos != std::string::npos ? source.find("return splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;", splitDownPos) : std::string::npos;
 	if (splitRightPos == std::string::npos || splitDownPos == std::string::npos || verticalOrientationPos == std::string::npos || horizontalOrientationPos == std::string::npos || verticalOrientationPos > splitDownPos) {
 		failureReason = "Bento split placement mapping changed.";
 		return false;
@@ -3859,7 +3911,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento frame glyph table and split action mapping changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"int MRBentoBox::splitLeafNode(int leafId, BentoSplitOrientation orientation, MRBentoPaneRole newRole)", "target.kind = blnSplit;", "target.firstChild = existingLeafNode;", "target.secondChild = newLeafNode;", "layoutTree.push_back(node);"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"int MRBentoBox::splitLeafNode(int leafId, BentoSplitOrientation orientation, const MRBentoPaneSpec &spec)", "target.kind = blnSplit;", "target.firstChild = existingLeafNode;", "target.secondChild = newLeafNode;", "layoutTree.push_back(node);"}, missingNeedle)) {
 		failureReason = "Bento recursive split foundation changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -3867,8 +3919,72 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento dynamic pane members changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"paneEditor->setMiniMapSuppressed(toolPane);", "paneEditor->setWordWrapSuppressed(toolPane);", "paneEditor->setScrollBarsAlwaysVisible(toolPane);"}, missingNeedle)) {
-		failureReason = "Bento tool-pane editor policy changed: missing " + missingNeedle + ".";
+	if (!containsAllSubstrings(header, {"struct MRBentoPaneTitleMenuSpec", "enum MRBentoBoxMode", "bbmDocumentViewports", "struct MRBentoPaneSpec", "MRBentoPaneBufferPolicy bufferPolicy;", "bool readOnly;", "bool suppressMiniMap;", "bool suppressWordWrap;", "bool scrollBarsAlwaysVisible;", "const MRBentoPaneTitleMenuSpec *titleMenu;"}, missingNeedle)) {
+		failureReason = "Bento pane spec contract changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"MRBentoPaneSpec MRBentoBox::paneSpecForRole(MRBentoPaneRole role) const noexcept", "const MRBentoPaneTitleMenuSpec *titleMenu = bentoMode == bbmDocumentViewports ? nullptr : &kBentoRoleTitleMenu;", "return MRBentoPaneSpec(bprSplitEditor, bpbSharedSourceBuffer, false, false, false, bentoMode == bbmDocumentViewports, titleMenu);", "return MRBentoPaneSpec(role, bpbOwnBuffer, true, true, true, true, titleMenu);"}, missingNeedle)) {
+		failureReason = "Bento role-to-spec mapping changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"source.title = bentoMode == bbmDocumentViewports ? \"\" : paneRoleTitle(bprSource);", "leaf.title = bentoMode == bbmDocumentViewports ? \"\" : paneRoleTitle(spec.role);", "int MRBentoBox::viewportNumberForLeaf(int leafId) const noexcept", "stack.push_back(node.secondChild);", "stack.push_back(node.firstChild);", "return \"Viewport #\" + std::to_string(std::max(1, viewportNumber));", "if (!titleMenuEnabledForLeaf(targetLeafId)) return;"}, missingNeedle)) {
+		failureReason = "Document viewport mode must use current layout-derived viewport titles and suppress pane title menus: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (header.find("nextViewportNumber") != std::string::npos || source.find("nextViewportTitle") != std::string::npos) {
+		failureReason = "Document viewport titles must not use a monotonic historical counter.";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"paneEditor->setMiniMapSuppressed(mPaneSpec.suppressMiniMap);", "paneEditor->setWordWrapSuppressed(mPaneSpec.suppressWordWrap);", "paneEditor->setScrollBarsAlwaysVisible(mPaneSpec.scrollBarsAlwaysVisible);"}, missingNeedle)) {
+		failureReason = "Bento spec-driven editor policy changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"MRPaneEditWindow::MRPaneEditWindow", "state &= static_cast<ushort>(~sfShadow);", "eventMask = 0;", "const bool withControls = focused && !source;", "const bool withControls = focused && (!source || bentoMode == bbmDocumentViewports);", "toggleLeafMaximized(int leafId) noexcept", "leafId == 0 && bentoMode != bbmDocumentViewports"}, missingNeedle)) {
+		failureReason = "Document viewport pane chrome and dispatcher ownership changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"void MRBentoBox::drawSharedEditorPanes() noexcept", "leaf.spec.bufferPolicy == bpbSharedSourceBuffer", "targetPane->handleEvent(event);", "drawSharedEditorPanes();"}, missingNeedle)) {
+		failureReason = "Bento shared editor pane redraw changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(bufferModelHeader, {"std::shared_ptr<SharedState> mShared;", "void shareContentStateFrom(const MRTextBufferModel &source) noexcept", "void detachContentStateCopy()", "Cursor mCursor;", "Selection mSelection;"}, missingNeedle)) {
+		failureReason = "Shared content state must keep per-view cursor and selection: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(editorHeader, {"void shareContentStateFrom(const MRFileEditor &source);", "void detachContentStateCopy();"}, missingNeedle)) {
+		failureReason = "MRFileEditor shared content API changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(editorSource, {"mBufferModel.shareContentStateFrom(source.bufferModel());", "mBufferModel.detachContentStateCopy();", "clearFindMarkerRanges();", "clearDirtyRanges();"}, missingNeedle)) {
+		failureReason = "MRFileEditor shared content behavior changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowCommandsHeader, {"MREditWindow *createHelpWindow(const char *title);", "MREditWindow *createLogWindow(const char *title);", "MREditWindow *createCommunicationWindow(const char *title);", "MRBentoBox *convertEditWindowToBentoBox(MREditWindow *source);", "std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder();"}, missingNeedle)) {
+		failureReason = "Window split must expose normal-editor to Bento conversion: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(header, {"void collectVisiblePaneWindows(std::vector<MREditWindow *> &windows) const noexcept;"}, missingNeedle)) {
+		failureReason = "Bento visible pane collection API changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowCommandsSource, {"std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder()", "if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window)) bentoBox->collectVisiblePaneWindows(expanded);"}, missingNeedle)) {
+		failureReason = "Bento pane-aware window enumeration changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowCommandsSource, {"MREditWindow *createEditorWindow(const char *title)", "win = new MRBentoBox(bounds, title, nextEditorWindowNumber(), bbmDocumentViewports);", "MREditWindow *createHelpWindow(const char *title)", "win = new MRHelpWindow(bounds, title, nextEditorWindowNumber());", "MREditWindow *createLogWindow(const char *title)", "win = new MRLogWindow(bounds, title, nextEditorWindowNumber());", "MREditWindow *createCommunicationWindow(const char *title)", "win = new MRCommunicationWindow(bounds, title, nextEditorWindowNumber());"}, missingNeedle)) {
+		failureReason = "Document windows must default to Bento while special windows use explicit subtypes: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(coprocessorDispatchSource, {"std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();", "editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id)", "editor->applyFoldWarmup(*result.payload, result.task.baseVersion, result.task.id)", "editor->applyMiniMapWarmup(*miniMap, result.task.baseVersion, result.task.id)"}, missingNeedle)) {
+		failureReason = "Derived-state warmup dispatch must include Bento split panes: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowCommandsSource, {"MRBentoBox *convertEditWindowToBentoBox(MREditWindow *source)", "bbmDocumentViewports", "win->getEditor()->shareContentStateFrom(*source->getEditor());", "source->getEditor()->detachContentStateCopy();", "source->setFileChanged(false);", "message(source, evCommand, cmClose, nullptr);"}, missingNeedle)) {
+		failureReason = "Window split conversion must preserve shared source content without dirty-gating the old shell: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(commandRouterSource, {"case cmMrWindowSplitHorizontal:", "!window->allowsDocumentViewportSplit()", "bentoBox = convertEditWindowToBentoBox(window);", "return bentoBox->splitActiveEditorPane(bppSplitDown);", "case cmMrWindowSplitVertical:", "return bentoBox->splitActiveEditorPane(bppSplitRight);"}, missingNeedle)) {
+		failureReason = "Window split commands must route through Bento conversion and the shared split API: missing " + missingNeedle + ".";
 		return false;
 	}
 	if (!containsAllSubstrings(source, {"class MRBentoPaneFrameView : public TView", "const TAttrPair frameColor = TAttrPair(owner != nullptr ? owner->mapColor(focused ? 13 : 1) : mapColor(1));"}, missingNeedle)) {
@@ -3887,11 +4003,11 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento tool-pane scrollbar focus color guard changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"TColorAttr MRBentoBox::mapColor(uchar index)", "sourceScrollBarPaletteActive && (index == 4 || index == 5)", "void MRBentoBox::drawSourcePaneScrollBars() noexcept", "sourceScrollBarPaletteActive = true;", "sourceScrollBarPaletteActive = false;", "drawSourcePaneScrollBars();"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"TColorAttr MRBentoBox::mapColor(uchar index)", "sourceScrollBarPaletteActive && (index == 4 || index == 5)", "void MRBentoBox::drawSourcePaneScrollBars() noexcept", "sourceScrollBarPaletteActive = true;", "sourceScrollBarPaletteActive = false;", "writeBuf(verticalBounds.a.x, horizontalBounds.a.y, 1, 1, buffer);", "drawSourcePaneScrollBars();"}, missingNeedle)) {
 		failureReason = "Bento source-pane scrollbar focus color guard changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(header, {"virtual TColorAttr mapColor(uchar index) override;", "void setPaneFocused(bool focused) noexcept;", "void drawPaneScrollBars() noexcept;", "void drawSourcePaneScrollBars() noexcept;", "bool sourceScrollBarPaletteActive;"}, missingNeedle)) {
+	if (!containsAllSubstrings(header, {"virtual TColorAttr mapColor(uchar index) override;", "void setPaneFocused(bool focused) noexcept;", "void drawPaneScrollBars() noexcept;", "void drawSourcePaneScrollBars() noexcept;", "void postCloseCommand() noexcept;", "bool sourceScrollBarPaletteActive;"}, missingNeedle)) {
 		failureReason = "Bento scrollbar focus API guard changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -3899,8 +4015,12 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Focused double-frame resize corner guard changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"bool MRBentoBox::handleOuterFrameCloseMouse(TEvent &event)", "message(this, evCommand, cmClose, nullptr);"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"void MRBentoBox::postCloseCommand() noexcept", "event.message.command = cmClose;", "event.message.infoPtr = this;", "putEvent(event);", "bool MRBentoBox::handleOuterFrameCloseMouse(TEvent &event)", "postCloseCommand();"}, missingNeedle)) {
 		failureReason = "Bento outer frame close routing changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (source.find("message(this, evCommand, cmClose") != std::string::npos) {
+		failureReason = "Bento close routing must not synchronously close the BentoBox from a mouse handler.";
 		return false;
 	}
 	failureReason.clear();
