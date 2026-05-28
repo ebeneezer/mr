@@ -4,6 +4,7 @@
 #include "MRDropList.hpp"
 #include "MREditWindow.hpp"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,19 @@ struct MRBentoPaneSpec {
 	const MRBentoPaneTitleMenuSpec *titleMenu;
 };
 
+struct MRCompilerDiagnostic {
+	MRCompilerDiagnostic() noexcept;
+
+	std::string sourcePath;
+	std::size_t sourceLine;
+	std::size_t sourceColumn;
+	std::string severity;
+	std::string text;
+	std::size_t sourceOffset;
+	std::size_t outputOffset;
+	std::size_t problemOffset;
+};
+
 class MRPaneEditWindow : public MREditWindow {
 	friend class MRBentoBox;
 
@@ -65,6 +79,7 @@ class MRPaneEditWindow : public MREditWindow {
 	virtual ~MRPaneEditWindow() override;
 
 	virtual void changeBounds(const TRect &bounds) override;
+	virtual void draw() override;
 	virtual TColorAttr mapColor(uchar index) override;
 
 	void setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept;
@@ -84,13 +99,22 @@ class MRBentoBox : public MREditWindow {
 	virtual ~MRBentoBox() override;
 
 	[[nodiscard]] MREditWindow *secondaryEditWindow() const noexcept;
+	[[nodiscard]] MREditWindow *buildOutputPane() const noexcept;
+	[[nodiscard]] MREditWindow *problemsPane() const noexcept;
 	[[nodiscard]] MREditWindow *paneForBufferId(int bufferId) const noexcept;
 	void collectVisiblePaneWindows(std::vector<MREditWindow *> &windows) const noexcept;
 	void showSecondaryPane() noexcept;
+	[[nodiscard]] bool ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREditWindow *&problemsWindow);
 	void activatePrimaryPane() noexcept;
 	void activateSecondaryPane() noexcept;
 	void toggleActivePane() noexcept;
 	void setDiagnosticsStatus(const char *status);
+	void clearCompilerDiagnostics();
+	[[nodiscard]] bool hasCompilerProblems() const noexcept;
+	[[nodiscard]] bool refreshCompilerDiagnosticsFromOutput();
+	[[nodiscard]] bool jumpToProblemAtCursor();
+	[[nodiscard]] bool jumpToNextProblem();
+	[[nodiscard]] bool jumpToPreviousProblem();
 	[[nodiscard]] bool placePaneRole(MRBentoPaneRole role, MRBentoPanePlacement placement);
 	[[nodiscard]] bool splitActiveEditorPane(MRBentoPanePlacement placement);
 
@@ -148,6 +172,9 @@ class MRBentoBox : public MREditWindow {
 	void showPaneActionList();
 	void acceptPaneRoleChoice();
 	void acceptPaneActionChoice();
+	void refreshCompilerProblemsPane();
+	void refreshSourceCompilerDiagnosticRanges();
+	void syncCompilerDiagnosticsAfterSourceMutation(const MRTextBufferModel::ReadSnapshot &oldSnapshot, const MRTextBufferModel::DocumentChangeSet &changeSet);
 	[[nodiscard]] bool placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlacement placement, int targetLeafId);
 	[[nodiscard]] bool handlePaneDropListEvent(TEvent &event);
 	[[nodiscard]] bool handleOuterFrameCloseMouse(TEvent &event);
@@ -193,6 +220,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] MRBentoPaneRole roleForLeaf(int leafId) const noexcept;
 	[[nodiscard]] bool titleMenuEnabledForLeaf(int leafId) const noexcept;
 	[[nodiscard]] int firstToolLeafId() const noexcept;
+	[[nodiscard]] int leafIdForRole(MRBentoPaneRole role) const noexcept;
 	[[nodiscard]] int nodeIndexForLeaf(int leafId) const noexcept;
 	[[nodiscard]] int parentNodeOf(int childNodeIndex) const noexcept;
 	[[nodiscard]] int viewportNumberForLeaf(int leafId) const noexcept;
@@ -244,6 +272,8 @@ class MRBentoBox : public MREditWindow {
 	TRect paneRoleListAnchor;
 	MRBentoPaneRole pendingPaneRole;
 	int pendingPaneRoleTargetLeafId;
+	std::string diagnosticsStatus;
+	std::vector<MRCompilerDiagnostic> compilerDiagnostics;
 };
 
 #endif

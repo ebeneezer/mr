@@ -366,6 +366,7 @@ class MREditWindow : public TWindow {
 		const std::size_t cursorBefore = editor != nullptr ? editor->cursorOffset() : 0;
 		const std::size_t selectionStartBefore = editor != nullptr ? editor->selectionStartOffset() : 0;
 		const std::size_t selectionEndBefore = editor != nullptr ? editor->selectionEndOffset() : 0;
+		bool selectionCollapsedBeforeEditorInput = false;
 		maybeTraceTtyCollisionKeyEvent("window-pre", event);
 		traceCalculatorHotkeyEvent("window-pre", event);
 
@@ -414,6 +415,7 @@ class MREditWindow : public TWindow {
 		if (shouldCollapseSelectionBeforeEditorInput(event)) {
 			const std::size_t cursor = editor->cursorOffset();
 			editor->setSelectionOffsets(cursor, cursor, False);
+			selectionCollapsedBeforeEditorInput = true;
 		}
 		if (frame != nullptr) {
 			MRFrame *mrFrame = static_cast<MRFrame *>(frame);
@@ -429,7 +431,7 @@ class MREditWindow : public TWindow {
 			std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=window-post event=0x%04X cursor=%zu", static_cast<unsigned>(event.what), editor != nullptr ? editor->cursorOffset() : 0);
 			mrLogMessage(line);
 		}
-		if ((originalEvent & (evKeyDown | evMouseDown | evMouseMove | evMouseUp)) != 0) applyPostInputBlockPolicy(markingBefore, originalEvent, selectionStartBefore, selectionEndBefore, bufferLengthBefore, cursorBefore, keyCodeBefore, keyModifiersBefore);
+		if ((originalEvent & (evKeyDown | evMouseDown | evMouseMove | evMouseUp)) != 0) applyPostInputBlockPolicy(markingBefore, originalEvent, selectionStartBefore, selectionEndBefore, bufferLengthBefore, cursorBefore, keyCodeBefore, keyModifiersBefore, selectionCollapsedBeforeEditorInput);
 		if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
 			updateTaskMarkers();
 			if (frame != nullptr) frame->drawView();
@@ -1877,7 +1879,7 @@ class MREditWindow : public TWindow {
 		}
 	}
 
-	void applyPostInputBlockPolicy(bool markingBefore, ushort originalEvent, std::size_t selectionStartBefore, std::size_t selectionEndBefore, std::size_t bufferLengthBefore, std::size_t cursorBefore, ushort keyCodeBefore, ushort keyModifiersBefore) {
+	void applyPostInputBlockPolicy(bool markingBefore, ushort originalEvent, std::size_t selectionStartBefore, std::size_t selectionEndBefore, std::size_t bufferLengthBefore, std::size_t cursorBefore, ushort keyCodeBefore, ushort keyModifiersBefore, bool selectionCollapsedBeforeEditorInput) {
 		if (editor == nullptr) return;
 		if (originalEvent == evKeyDown && isBlockShiftNavigationKey(keyCodeBefore, keyModifiersBefore)) {
 			const std::size_t currentCursor = std::min(editor->cursorOffset(), editor->bufferLength());
@@ -1909,7 +1911,7 @@ class MREditWindow : public TWindow {
 		if (originalEvent == evKeyDown && mBlockMode != bmNone && !mBlockMarkingOn && bufferLengthBefore != editor->bufferLength()) {
 			const std::size_t currentLength = editor->bufferLength();
 			const std::size_t normalizedCursorBefore = std::min(cursorBefore, bufferLengthBefore);
-			std::size_t changePos = selectionStartBefore;
+			std::size_t changePos = selectionCollapsedBeforeEditorInput ? normalizedCursorBefore : selectionStartBefore;
 			long delta = static_cast<long>(currentLength) - static_cast<long>(bufferLengthBefore);
 			uint startPtr = 0;
 			uint endPtr = 0;
@@ -1922,7 +1924,7 @@ class MREditWindow : public TWindow {
 				ptr = static_cast<uint>(shifted);
 			};
 
-			if (selectionStartBefore == selectionEndBefore) {
+			if (selectionCollapsedBeforeEditorInput || selectionStartBefore == selectionEndBefore) {
 				changePos = normalizedCursorBefore;
 				if (keyCodeBefore == kbBack && normalizedCursorBefore > 0) changePos = normalizedCursorBefore - 1;
 			}

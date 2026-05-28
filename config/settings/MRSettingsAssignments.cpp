@@ -251,6 +251,10 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
+    {"COMPILER_ERROR_MESSAGE_PLACEMENT", MRSettingsKeyClass::Global, true},
+    {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
+    {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
+    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
     {"UI_INDENT_STYLE", MRSettingsKeyClass::Global, true},
     {"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
     {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
@@ -336,6 +340,38 @@ bool parseCursorBehaviourLiteral(const std::string &value, MRCursorBehaviour &ou
 		return true;
 	}
 	return setError(errorMessage, "CURSOR_BEHAVIOUR must be BOUND_TO_TEXT or FREE_MOVEMENT.");
+}
+
+bool parseCompilerErrorMessagePlacementLiteral(const std::string &value, MRCompilerErrorMessagePlacement &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == "UNDER_CODE" || upper == "UNDER") {
+		outValue = MRCompilerErrorMessagePlacement::UnderCode;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "RIGHT_MARGIN" || upper == "RIGHT") {
+		outValue = MRCompilerErrorMessagePlacement::RightMargin;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "COMPILER_ERROR_MESSAGE_PLACEMENT must be UNDER_CODE or RIGHT_MARGIN.");
+}
+
+bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibility &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == "SMART") {
+		outValue = MRScrollbarVisibility::Smart;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "ALWAYS") {
+		outValue = MRScrollbarVisibility::Always;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "SCROLLBAR_VISIBILITY must be SMART or ALWAYS.");
 }
 
 bool parseUiIndentStyleLiteral(const std::string &value, MRUiIndentStyle &outValue, std::string *errorMessage) {
@@ -551,6 +587,10 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredAcquireSettings(MRAcquireSettings(), errorMessage)) return false;
 	if (!setConfiguredLiveLogSettings(MRLiveLogSettings(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
+	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
+	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
+	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
+	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
 	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
 	if (!setConfiguredLogHandling(MRLogHandling::Volatile, errorMessage)) return false;
@@ -959,6 +999,26 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				MRCursorBehaviour behaviour = MRCursorBehaviour::BoundToText;
 				if (!parseCursorBehaviourLiteral(value, behaviour, errorMessage)) return false;
 				return setConfiguredCursorBehaviour(behaviour, errorMessage);
+			}
+			if (upper == "COMPILER_ERROR_MESSAGE_PLACEMENT") {
+				MRCompilerErrorMessagePlacement placement = MRCompilerErrorMessagePlacement::RightMargin;
+				if (!parseCompilerErrorMessagePlacementLiteral(value, placement, errorMessage)) return false;
+				return setConfiguredCompilerErrorMessagePlacement(placement, errorMessage);
+			}
+			if (upper == "SCROLLBAR_VISIBILITY") {
+				MRScrollbarVisibility visibility = MRScrollbarVisibility::Smart;
+				if (!parseScrollbarVisibilityLiteral(value, visibility, errorMessage)) return false;
+				return setConfiguredScrollbarVisibility(visibility, errorMessage);
+			}
+			if (upper == "TRACK_COMPILER_WARNINGS") {
+				bool parsed = false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredTrackCompilerWarnings(parsed, errorMessage);
+			}
+			if (upper == "TRACK_COMPILER_NOTES") {
+				bool parsed = false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredTrackCompilerNotes(parsed, errorMessage);
 			}
 			if (upper == "UI_INDENT_STYLE") {
 				MRUiIndentStyle style = MRUiIndentStyle::KandR;
@@ -1440,6 +1500,22 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "CURSOR_BEHAVIOUR") {
 				if (!parseCursorBehaviourLiteral(value, snapshot.cursorBehaviour, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "COMPILER_ERROR_MESSAGE_PLACEMENT") {
+				if (!parseCompilerErrorMessagePlacementLiteral(value, snapshot.compilerErrorMessagePlacement, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SCROLLBAR_VISIBILITY") {
+				if (!parseScrollbarVisibilityLiteral(value, snapshot.scrollbarVisibility, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "TRACK_COMPILER_WARNINGS") {
+				if (!parseBooleanLiteral(value, snapshot.trackCompilerWarnings, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "TRACK_COMPILER_NOTES") {
+				if (!parseBooleanLiteral(value, snapshot.trackCompilerNotes, errorMessage)) return false;
 				return true;
 			}
 			if (upper == "UI_INDENT_STYLE") {

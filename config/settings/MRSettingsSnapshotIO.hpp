@@ -33,6 +33,10 @@ struct MRSettingsSnapshot {
 	int virtualDesktops{1};
 	bool cyclicVirtualDesktops{false};
 	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};
+	MRCompilerErrorMessagePlacement compilerErrorMessagePlacement{MRCompilerErrorMessagePlacement::RightMargin};
+	MRScrollbarVisibility scrollbarVisibility{MRScrollbarVisibility::Smart};
+	bool trackCompilerWarnings{false};
+	bool trackCompilerNotes{false};
 	MRUiIndentStyle uiIndentStyle{MRUiIndentStyle::KandR};
 	std::string cursorPositionMarker{"R:C"};
 	bool autoloadWorkspace{false};

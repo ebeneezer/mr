@@ -132,7 +132,7 @@ std::string communicationDividerStatus(const mr::coprocessor::ExternalIoFinished
 void setSplitDiagnosticsStatusForOutput(MREditWindow *outputWindow, const char *status) {
 	MRBentoBox *split = outputWindow != nullptr ? dynamic_cast<MRBentoBox *>(outputWindow->owner) : nullptr;
 
-	if (split != nullptr && split->secondaryEditWindow() == outputWindow) split->setDiagnosticsStatus(status);
+	if (split != nullptr && split->buildOutputPane() == outputWindow) split->setDiagnosticsStatus(status);
 }
 
 std::string macroDisplayName(const mr::coprocessor::TaskInfo &task, const char *payloadName = nullptr) {
@@ -1011,6 +1011,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					win->appendLogViewerText(chunk->text.c_str(), &findRanges);
 				win->setReadOnly(true);
 				win->setFileChanged(false);
+				if (MRBentoBox *split = dynamic_cast<MRBentoBox *>(win->owner); split != nullptr && split->buildOutputPane() == win) static_cast<void>(split->refreshCompilerDiagnosticsFromOutput());
 				reportLiveLogSearchHits(searchMatches, win, chunk->text);
 			}
 			return;
@@ -1030,6 +1031,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				targetWindow->releaseCoprocessorTask(result.task.id);
 				const std::string dividerStatus = communicationDividerStatus(*finished);
 				setSplitDiagnosticsStatusForOutput(targetWindow, dividerStatus.c_str());
+				if (MRBentoBox *split = dynamic_cast<MRBentoBox *>(targetWindow->owner); split != nullptr && split->buildOutputPane() == targetWindow) static_cast<void>(split->refreshCompilerDiagnosticsFromOutput());
 			} else {
 				recordTaskPerformance(result, "External command", nullptr, 0, 0, externalIoDisplayName(result.task));
 			}

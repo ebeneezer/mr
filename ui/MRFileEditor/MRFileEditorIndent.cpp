@@ -1377,6 +1377,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	const bool pieceTableOnly = pieceTableOnlyPhaseActive();
 	const bool miniMapEnabled = miniMapPipelineEnabled();
 
+	mLastDocumentChangeSet = changeSet != nullptr ? *changeSet : MRTextBufferModel::DocumentChangeSet();
 	cursorPos = std::min(cursorPos, document.length());
 	selStart = std::min(selStart, document.length());
 	selEnd = std::min(selEnd, document.length());

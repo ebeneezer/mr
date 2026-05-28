@@ -29,6 +29,10 @@ MRLiveLogSettings g_liveLogSettings;
 int g_virtualDesktops = 1;
 bool g_cyclicVirtualDesktops = false;
 MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
+MRCompilerErrorMessagePlacement g_compilerErrorMessagePlacement = MRCompilerErrorMessagePlacement::RightMargin;
+MRScrollbarVisibility g_scrollbarVisibility = MRScrollbarVisibility::Smart;
+bool g_trackCompilerWarnings = false;
+bool g_trackCompilerNotes = false;
 MRUiIndentStyle g_uiIndentStyle = MRUiIndentStyle::KandR;
 std::string g_cursorPositionMarker = "R:C";
 bool g_autoloadWorkspace = false;
@@ -636,6 +640,50 @@ bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *erro
 
 MRCursorBehaviour configuredCursorBehaviour() {
 	return g_cursorBehaviour;
+}
+
+bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement placement, std::string *errorMessage) {
+	if (g_compilerErrorMessagePlacement != placement) markConfiguredSettingsDirty();
+	g_compilerErrorMessagePlacement = placement;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement() {
+	return g_compilerErrorMessagePlacement;
+}
+
+bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage) {
+	if (g_scrollbarVisibility != visibility) markConfiguredSettingsDirty();
+	g_scrollbarVisibility = visibility;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRScrollbarVisibility configuredScrollbarVisibility() {
+	return g_scrollbarVisibility;
+}
+
+bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage) {
+	if (g_trackCompilerWarnings != enabled) markConfiguredSettingsDirty();
+	g_trackCompilerWarnings = enabled;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool configuredTrackCompilerWarnings() {
+	return g_trackCompilerWarnings;
+}
+
+bool setConfiguredTrackCompilerNotes(bool enabled, std::string *errorMessage) {
+	if (g_trackCompilerNotes != enabled) markConfiguredSettingsDirty();
+	g_trackCompilerNotes = enabled;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool configuredTrackCompilerNotes() {
+	return g_trackCompilerNotes;
 }
 
 bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage) {

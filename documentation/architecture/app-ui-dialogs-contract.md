@@ -50,6 +50,22 @@ Dialogs may trigger:
 - Dirty state must be set only for real changes.
 - Dialogs whose fixed layout may exceed the current terminal size must use the MR scrollable dialog path (`MRScrollableDialog` / `MRDialogFoundation`) or provide an explicit local proof that all controls remain reachable at smaller terminal sizes.
 
+## Dialog layout design rules
+
+These rules apply to new dialogs and to layout changes in existing dialogs.
+
+- Radio-button clusters must have a left-aligned heading ending with a colon.
+- Checkbox options that belong together must be grouped into one checkbox cluster with a left-aligned heading ending with a colon.
+- Dialog content must keep equal visual distance to the left and right dialog borders.
+- Dialog button rows must be horizontally centered.
+- Dialogs must not add a Cancel button by default. Closing without applying changes is handled by the dialog close action.
+- Dialogs that can change settings must use clean dirty gating. Applying unchanged data must not mark settings dirty or trigger save prompts.
+- Dialogs whose fixed layout may not fit the current terminal must switch cleanly into the scrollable dialog path so that all controls remain reachable.
+- Options inside radio-button and checkbox clusters must leave at least one trailing space inside the highlighted cluster area after the longest visible option text.
+- Neighboring clusters must keep two columns of horizontal spacing.
+- Stacked widgets must keep one empty row of vertical spacing unless they form one logical multi-line control.
+- Button rows must keep one empty row of spacing to the dialog frame.
+
 ## Allowed
 
 - Local UI layout fixes.

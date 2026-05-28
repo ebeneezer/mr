@@ -15,15 +15,22 @@ struct MRSidekickSpan {
 	std::size_t end;
 };
 
+enum class MRReadOnlySidekickPlacement : unsigned char {
+	UnderCode,
+	RightMargin
+};
+
 class MRSidekickEditor : public TView {
   public:
-	MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders);
+	MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly = false);
 	~MRSidekickEditor() override;
 
 	void draw() override;
 	void handleEvent(TEvent &event) override;
 
 	[[nodiscard]] int parentBufferId() const noexcept;
+	[[nodiscard]] bool isReadOnly() const noexcept;
+	void updateReadOnlyText(std::string text, std::string title, const TRect &bounds);
 
   private:
 	int mParentBufferId;
@@ -35,6 +42,7 @@ class MRSidekickEditor : public TView {
 	int mPlaceholderIndex;
 	int mCursorRow;
 	int mCursorCol;
+	bool mReadOnly;
 
 	void setText(std::string text);
 	[[nodiscard]] std::string text() const;
@@ -58,6 +66,7 @@ class MRSidekickEditor : public TView {
 };
 
 bool mrOpenSnippetSidekick(MREditWindow *parent, std::size_t replaceStart, std::size_t replaceEnd, const std::string &text, const std::string &title, const std::vector<MRSidekickSpan> &placeholders = std::vector<MRSidekickSpan>());
+bool mrOpenReadOnlySidekick(MREditWindow *parent, const std::string &text, const std::string &title, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);
 void mrDropSidekickForParent(const MREditWindow *parent);
 void mrDropActiveSidekick();
 

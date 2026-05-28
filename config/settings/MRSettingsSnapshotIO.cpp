@@ -42,6 +42,10 @@ static const char *const kLogHandlingPersist = "PERSIST";
 static const char *const kLogHandlingJournalctl = "JOURNALCTL";
 static const char *const kCursorBehaviourBoundToText = "BOUND_TO_TEXT";
 static const char *const kCursorBehaviourFreeMovement = "FREE_MOVEMENT";
+static const char *const kCompilerErrorMessageUnderCode = "UNDER_CODE";
+static const char *const kCompilerErrorMessageRightMargin = "RIGHT_MARGIN";
+static const char *const kScrollbarVisibilitySmart = "SMART";
+static const char *const kScrollbarVisibilityAlways = "ALWAYS";
 static const char *const kDialogLastPathKey = "DIALOG_LAST_PATH";
 static const char *const kDialogPathHistoryKey = "DIALOG_PATH_HISTORY";
 static const char *const kDialogFileHistoryKey = "DIALOG_FILE_HISTORY";
@@ -75,6 +79,14 @@ std::string formatLiveLogScrollDirectionLiteral(MRLiveLogScrollDirection directi
 
 std::string formatCursorBehaviourLiteral(MRCursorBehaviour behaviour) {
 	return behaviour == MRCursorBehaviour::FreeMovement ? kCursorBehaviourFreeMovement : kCursorBehaviourBoundToText;
+}
+
+std::string formatCompilerErrorMessagePlacementLiteral(MRCompilerErrorMessagePlacement placement) {
+	return placement == MRCompilerErrorMessagePlacement::UnderCode ? kCompilerErrorMessageUnderCode : kCompilerErrorMessageRightMargin;
+}
+
+std::string formatScrollbarVisibilityLiteral(MRScrollbarVisibility visibility) {
+	return visibility == MRScrollbarVisibility::Always ? kScrollbarVisibilityAlways : kScrollbarVisibilitySmart;
 }
 
 std::string formatUiIndentStyleLiteral(MRUiIndentStyle style) {
@@ -385,6 +397,10 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.virtualDesktops = configuredVirtualDesktops();
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
+	snapshot.compilerErrorMessagePlacement = configuredCompilerErrorMessagePlacement();
+	snapshot.scrollbarVisibility = configuredScrollbarVisibility();
+	snapshot.trackCompilerWarnings = configuredTrackCompilerWarnings();
+	snapshot.trackCompilerNotes = configuredTrackCompilerNotes();
 	snapshot.uiIndentStyle = configuredUiIndentStyle();
 	snapshot.cursorPositionMarker = configuredCursorPositionMarker();
 	snapshot.autoloadWorkspace = configuredAutoloadWorkspace();
@@ -558,6 +574,10 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
+	source += "MRSETUP('COMPILER_ERROR_MESSAGE_PLACEMENT', '" + escapeMrmacSingleQuotedLiteral(formatCompilerErrorMessagePlacementLiteral(snapshot.compilerErrorMessagePlacement)) + "');\n";
+	source += "MRSETUP('SCROLLBAR_VISIBILITY', '" + escapeMrmacSingleQuotedLiteral(formatScrollbarVisibilityLiteral(snapshot.scrollbarVisibility)) + "');\n";
+	source += "MRSETUP('TRACK_COMPILER_WARNINGS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerWarnings)) + "');\n";
+	source += "MRSETUP('TRACK_COMPILER_NOTES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerNotes)) + "');\n";
 	source += "MRSETUP('UI_INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(formatUiIndentStyleLiteral(snapshot.uiIndentStyle)) + "');\n";
 	source += "MRSETUP('CURSOR_POSITION_MARKER', '" + escapeMrmacSingleQuotedLiteral(snapshot.cursorPositionMarker) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoloadWorkspace)) + "');\n";

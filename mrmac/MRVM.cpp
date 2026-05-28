@@ -476,6 +476,7 @@ static bool replaceEditorLine(MRFileEditor *editor, const std::string &text);
 static bool deleteEditorChars(MRFileEditor *editor, int count);
 static bool deleteEditorLine(MRFileEditor *editor);
 static int currentEditorColumn(MRFileEditor *editor);
+static int currentEditorPasteColumn(MRFileEditor *editor);
 static int currentEditorLineNumber(MRFileEditor *editor);
 static bool moveEditorLeft(MRFileEditor *editor);
 static bool moveEditorRight(MRFileEditor *editor);
@@ -505,6 +506,8 @@ static bool moveEditorPageDown(MRFileEditor *editor);
 bool moveEditorNextPageBreak(MRFileEditor *editor);
 bool moveEditorLastPageBreak(MRFileEditor *editor);
 static bool replaceEditorBuffer(MRFileEditor *editor, const std::string &text, std::size_t cursorPos);
+struct BlockPasteTarget;
+static BlockPasteTarget materializeEditorPasteTarget(MRFileEditor *editor, std::string &text);
 static SplitTextBuffer splitBufferLines(const std::string &text);
 static std::string joinBufferLines(const SplitTextBuffer &buffer);
 static std::size_t bufferOffsetForLine(const SplitTextBuffer &buffer, int lineIndex);
@@ -1971,6 +1974,11 @@ static int currentEditorColumn(MRFileEditor *editor) {
 	return editor->charColumn(lineStart, editor->cursorOffset()) + 1;
 }
 
+static int currentEditorPasteColumn(MRFileEditor *editor) {
+	if (editor != nullptr && editor->freeCursorMovementEnabled()) return editor->displayedCursorColumn() + 1;
+	return currentEditorColumn(editor);
+}
+
 static int currentEditorLineNumber(MRFileEditor *editor) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr) return session != nullptr ? static_cast<int>(session->document.lineIndex(session->cursorOffset) + 1) : 1;
@@ -2358,6 +2366,33 @@ static bool replaceEditorBuffer(MRFileEditor *editor, const std::string &text, s
 	if (session == nullptr) return false;
 	return backgroundReplaceRange(mr::editor::Range(0, session->document.length()), text, cursorPos);
 }
+
+struct BlockPasteTarget {
+	std::size_t offset = 0;
+	std::size_t paddingStart = 0;
+	std::size_t paddingLength = 0;
+	bool padded = false;
+};
+
+static BlockPasteTarget materializeEditorPasteTarget(MRFileEditor *editor, std::string &text) {
+	BlockPasteTarget target;
+
+	target.offset = std::min<std::size_t>(currentEditorCursorOffset(editor), text.size());
+	if (editor == nullptr || !editor->freeCursorMovementEnabled()) return target;
+	if (target.offset != std::min<std::size_t>(editor->lineEndOffset(target.offset), text.size())) return target;
+
+	const int actualColumn = editor->actualCursorVisualColumn(target.offset);
+	const int visualColumn = editor->displayedCursorColumn();
+	if (visualColumn <= actualColumn) return target;
+
+	target.paddingStart = target.offset;
+	target.paddingLength = static_cast<std::size_t>(visualColumn - actualColumn);
+	text.insert(target.offset, target.paddingLength, ' ');
+	target.offset += target.paddingLength;
+	target.padded = true;
+	return target;
+}
+
 static SplitTextBuffer splitBufferLines(const std::string &text) {
 	SplitTextBuffer out;
 	std::string current;
@@ -3317,9 +3352,10 @@ bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWi
 	if (mode == MREditWindow::bmStream) {
 		std::size_t start = std::min<std::size_t>(anchor, end);
 		std::size_t finish = std::max<std::size_t>(anchor, end);
-		std::size_t dest = std::min<std::size_t>(destEditor->cursorOffset(), destEditor->bufferLength());
 		std::string destText = snapshotEditorText(destEditor);
 		std::string blockText = sourceText.substr(start, finish - start);
+		BlockPasteTarget target = materializeEditorPasteTarget(destEditor, destText);
+		std::size_t dest = target.offset;
 		bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
 		std::size_t cursorTarget = applyStreamPaste(destText, dest, blockText, insertMode);
 		if (!replaceEditorBuffer(destEditor, destText, cursorTarget)) return false;
@@ -3361,7 +3397,7 @@ bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWi
 		int col2 = std::max(srcWin->blockCol1(), srcWin->blockCol2());
 		int width = std::max(1, col2 - col1);
 		int destRow = lineIndexForPtr(destEditor, destEditor->cursorOffset());
-		int destCol = std::max(0, currentEditorColumn(destEditor) - 1);
+		int destCol = std::max(0, currentEditorPasteColumn(destEditor) - 1);
 		std::vector<std::string> slices;
 		bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
 		uint targetAnchor = 0;
@@ -3479,8 +3515,9 @@ bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 	if (mode == MREditWindow::bmStream) {
 		std::size_t start = std::min<std::size_t>(anchor, end);
 		std::size_t finish = std::max<std::size_t>(anchor, end);
-		std::size_t dest = std::min<std::size_t>(currentEditorCursorOffset(editor), text.size());
 		std::string blockText = text.substr(start, finish - start);
+		BlockPasteTarget target = materializeEditorPasteTarget(editor, text);
+		std::size_t dest = target.offset;
 		std::size_t cursorTarget = applyStreamPaste(text, dest, blockText, insertMode);
 		if (!replaceEditorBuffer(editor, text, cursorTarget)) return false;
 		if (keepTarget) return setCurrentBlockState(mode, false, static_cast<uint>(dest), static_cast<uint>(dest + blockText.size()));
@@ -3512,7 +3549,7 @@ bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
 		int width = std::max(1, col2 - col1);
 		int destRow = lineIndexForPtr(editor, static_cast<uint>(currentEditorCursorOffset(editor)));
-		int destCol = std::max(0, currentEditorColumn(editor) - 1);
+		int destCol = std::max(0, currentEditorPasteColumn(editor) - 1);
 		std::vector<std::string> slices;
 		if (buf.lines.empty()) return false;
 		row1 = std::max(0, std::min(row1, static_cast<int>(buf.lines.size()) - 1));
@@ -3551,6 +3588,12 @@ bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 		std::size_t dest = std::min<std::size_t>(currentEditorCursorOffset(editor), text.size());
 		std::string blockText = text.substr(start, finish - start);
 		if (dest >= start && dest <= finish) return true;
+		BlockPasteTarget target = materializeEditorPasteTarget(editor, text);
+		if (target.padded && target.paddingStart <= start) {
+			start += target.paddingLength;
+			finish += target.paddingLength;
+		}
+		dest = target.offset;
 		text.erase(start, finish - start);
 		if (dest > finish) dest -= (finish - start);
 		std::size_t cursorTarget = applyStreamPaste(text, dest, blockText, insertMode);
@@ -3590,7 +3633,7 @@ bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
 		int width = std::max(1, col2 - col1);
 		int destRow = lineIndexForPtr(editor, static_cast<uint>(currentEditorCursorOffset(editor)));
-		int destCol = std::max(0, currentEditorColumn(editor) - 1);
+		int destCol = std::max(0, currentEditorPasteColumn(editor) - 1);
 		bool leaveColumnSpace = configuredColumnBlockMoveLeavesSpace();
 		std::vector<std::string> slices;
 		int height;
@@ -7773,7 +7816,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 									                         "LIVE_LOG_SCROLL_DIRECTION, LIVE_LOG_LINE_NUMBERS, LIVE_LOG_TIMESTAMPS, "
 									                         "LIVE_LOG_SYNTAX_HIGHLIGHTING, LIVE_LOG_AUDIO_URI, LIVE_LOG_JOURNAL_TAG_HISTORY, "
 									                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
-									                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
+									                         "COMPILER_ERROR_MESSAGE_PLACEMENT, SCROLLBAR_VISIBILITY, TRACK_COMPILER_WARNINGS, TRACK_COMPILER_NOTES, "
+									                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, "
+									                         "AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
 									                         "LASTFILEDIALOGPATH, "
 									                         "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 									                         "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "

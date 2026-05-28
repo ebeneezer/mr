@@ -251,6 +251,10 @@ class MRFileEditor : public TScroller {
 
 	void clearFindMarkerRanges();
 
+	void setCompilerDiagnosticRanges(const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges, const std::vector<std::pair<std::size_t, std::size_t>> &warningRanges);
+
+	void clearCompilerDiagnosticRanges();
+
 	void revealCursor(Boolean centerCursor = True);
 
 	void refreshViewState();
@@ -265,6 +269,8 @@ class MRFileEditor : public TScroller {
 	int currentViewColumn() const noexcept;
 
 	int visibleViewportRows() const noexcept;
+
+	TRect visibleTextViewportBounds() const noexcept;
 
 	const MRTextBufferModel &bufferModel() const noexcept;
 
@@ -290,6 +296,8 @@ class MRFileEditor : public TScroller {
 	std::size_t documentId() const noexcept;
 
 	std::size_t documentVersion() const noexcept;
+
+	const MRTextBufferModel::DocumentChangeSet &lastDocumentChangeSet() const noexcept;
 
 	LoadTiming lastLoadTiming() const noexcept;
 
@@ -650,6 +658,7 @@ class MRFileEditor : public TScroller {
 		std::string mSyntaxTitleHint;
 		DestructionProbe mDestructionProbe;
 		MRTextBufferModel mBufferModel;
+	MRTextBufferModel::DocumentChangeSet mLastDocumentChangeSet;
 	std::size_t mSelectionAnchor;
 	int mCursorVisualColumn;
 	bool mIndicatorUpdateInProgress;
@@ -677,6 +686,8 @@ class MRFileEditor : public TScroller {
 	int mPreferredIndentColumn;
 	std::vector<MRTextBufferModel::Range> mFindMarkerRanges;
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
+	std::vector<MRTextBufferModel::Range> mCompilerErrorRanges;
+	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;
 	LoadTiming mLastLoadTiming;
 	mutable std::size_t mCachedCursorLineDocumentId;
 	mutable std::size_t mCachedCursorLineVersion;

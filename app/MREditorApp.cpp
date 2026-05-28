@@ -92,6 +92,13 @@ bool isCalculatorHotkeyEvent(const TEvent &event) noexcept {
 	return (normalized.mods & kbAltShift) != 0 && normalized.code == 'C';
 }
 
+bool isBuildCurrentFileDefaultKey(const TEvent &event) noexcept {
+	if (event.what != evKeyDown) return false;
+	const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+
+	return normalized == TKey(kbF9);
+}
+
 void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event) {
 	if (!isCalculatorHotkeyEvent(event)) return;
 	const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
@@ -1312,6 +1319,10 @@ void MREditorApp::handleEvent(TEvent &event) {
 	}
 
 	if (event.what == evCommand && event.message.command == cmQuit) prepareForQuit();
+	if (isBuildCurrentFileDefaultKey(event) && TView::commandEnabled(cmMrOtherBuildCurrentFile) && handleMRCommand(cmMrOtherBuildCurrentFile)) {
+		clearEvent(event);
+		return;
+	}
 	TApplication::handleEvent(event);
 	traceCalculatorHotkeyEvent("app-post", event);
 	if (shouldInvalidateScreenBaseForEvent(originalWhat)) mrvmUiInvalidateScreenBase();

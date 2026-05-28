@@ -512,16 +512,20 @@ void MRFileEditor::draw() {
 		};
 		const std::uint64_t findSignature = rangeSignature(mFindMarkerRanges);
 		const std::uint64_t dirtySignature = rangeSignature(mDirtyRanges);
+		const std::uint64_t errorSignature = rangeSignature(mCompilerErrorRanges);
+		const std::uint64_t warningSignature = rangeSignature(mCompilerWarningRanges);
 		const bool miniMapOverlayCacheCompatible = mMiniMapState.overlayCache().documentId == mBufferModel.documentId() &&
 		                                           mMiniMapState.overlayCache().documentVersion == mBufferModel.version() && mMiniMapState.overlayCache().totalLines == totalLines &&
 		                                           mMiniMapState.overlayCache().viewportWidth == viewport.width && mMiniMapState.overlayCache().bodyWidth == viewport.miniMapBodyWidth &&
 		                                           mMiniMapState.overlayCache().braille == miniMapUseBraille && mMiniMapState.overlayCache().selectionStart == selection.start &&
 		                                           mMiniMapState.overlayCache().selectionEnd == selection.end && mMiniMapState.overlayCache().findSignature == findSignature &&
-		                                           mMiniMapState.overlayCache().dirtySignature == dirtySignature;
+		                                           mMiniMapState.overlayCache().dirtySignature == dirtySignature && mMiniMapState.overlayCache().errorSignature == errorSignature &&
+		                                           mMiniMapState.overlayCache().warningSignature == warningSignature;
 
 		if (miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
 		else {
-			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings);
+			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, mCompilerErrorRanges, mCompilerWarningRanges, totalLines,
+			                                                              viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings);
 			mMiniMapState.overlayCache().documentId = mBufferModel.documentId();
 			mMiniMapState.overlayCache().documentVersion = mBufferModel.version();
 			mMiniMapState.overlayCache().totalLines = totalLines;
@@ -532,6 +536,8 @@ void MRFileEditor::draw() {
 			mMiniMapState.overlayCache().selectionEnd = selection.end;
 			mMiniMapState.overlayCache().findSignature = findSignature;
 			mMiniMapState.overlayCache().dirtySignature = dirtySignature;
+			mMiniMapState.overlayCache().errorSignature = errorSignature;
+			mMiniMapState.overlayCache().warningSignature = warningSignature;
 			mMiniMapState.overlayCache().overlay = miniMapOverlay;
 		}
 	}
@@ -734,7 +740,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 		else
 			currentLineInBlock = currentLine && overlayLine1 <= lineIndex && lineIndex <= overlayLine2;
 	} else
-		currentLineInBlock = currentLine && selection.start < selection.end && selection.start < lineEnd && selection.end > lineStart;
+		currentLineInBlock = false;
 	if (currentLineInBlock) basePair = getColor(0x0204);
 	else if (currentLine)
 		basePair = getColor(0x0303);
@@ -859,6 +865,7 @@ void MRFileEditor::updateMetrics() {
 
 	setLimit(limitX + gutterWidth + rightInset, limitY + viewport.topInset);
 	if (newDeltaX != delta.x || newDeltaY != delta.y) scrollTo(newDeltaX, newDeltaY);
+	syncScrollBarsToState();
 }
 
 void MRFileEditor::updateIndicator() {
