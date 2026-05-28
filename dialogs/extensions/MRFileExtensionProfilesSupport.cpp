@@ -371,7 +371,8 @@ enum : unsigned long long {
 		errorText = "Profile ID may not be empty.";
 		return false;
 	}
-	if (id.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.") != std::string::npos) {
+	auto isAllowed = [](unsigned char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.'; };
+	if (!std::all_of(id.begin(), id.end(), isAllowed)) {
 		errorText = "Profile ID allows only letters, digits, '_', '-' and '.'.";
 		return false;
 	}
