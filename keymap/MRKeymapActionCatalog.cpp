@@ -94,7 +94,10 @@ constexpr std::array catalogDefinitions{
     mr("MR_SORT_COLUMN_BLOCK_TOGGLE", "Sort marked column block"),
     mr("MR_FILE_FORCE_SAVE", "Force save"),
     mr("MR_EXIT_DIRTY_SAVE_ALL", "Exit with save-all dialog"),
+    mr("MR_BUILD_CURRENT_FILE", "Build current file"),
     mr("MR_SEARCH_RESULTS_NEXT", "Next search result"),
+    mr("MR_COMPILER_PROBLEMS_NEXT", "Next compiler problem"),
+    mr("MR_COMPILER_PROBLEMS_PREVIOUS", "Previous compiler problem"),
 };
 } // namespace
 

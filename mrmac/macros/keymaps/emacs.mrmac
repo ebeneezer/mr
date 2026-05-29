@@ -27,6 +27,7 @@ KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_COPY_TO_C
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_UNDO" sequence="<Ctrl+X> <Ctrl+U>" description="Undo"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_VIEW_CENTER_LINE" sequence="<Ctrl+L>" description="Recenter line"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_FILE_SAVE" sequence="<Ctrl+X> <Ctrl+S>" description="Save file"');
+KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_BUILD_CURRENT_FILE" sequence="<F9>" description="Build current file"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+X> <Ctrl+C>" description="Exit with save-all dialog"');
 ACTIVE_KEYMAP_PROFILE('name="EMACS"');
 END_MACRO;

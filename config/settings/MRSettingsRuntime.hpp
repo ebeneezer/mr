@@ -207,6 +207,16 @@ enum class MRCursorBehaviour : unsigned char {
 	FreeMovement = 1
 };
 
+enum class MRCompilerErrorMessagePlacement : unsigned char {
+	UnderCode = 0,
+	RightMargin = 1
+};
+
+enum class MRScrollbarVisibility : unsigned char {
+	Smart = 0,
+	Always = 1
+};
+
 enum class MRUiIndentStyle : unsigned char {
 	KandR = 0,
 	KandR4 = 1,
@@ -579,6 +589,14 @@ bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage 
 [[nodiscard]] bool configuredCyclicVirtualDesktops();
 bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *errorMessage = nullptr);
 [[nodiscard]] MRCursorBehaviour configuredCursorBehaviour();
+bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement placement, std::string *errorMessage = nullptr);
+[[nodiscard]] MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement();
+bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage = nullptr);
+[[nodiscard]] MRScrollbarVisibility configuredScrollbarVisibility();
+bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredTrackCompilerWarnings();
+bool setConfiguredTrackCompilerNotes(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredTrackCompilerNotes();
 bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage = nullptr);
 [[nodiscard]] MRUiIndentStyle configuredUiIndentStyle();
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage = nullptr);

@@ -25,6 +25,7 @@ class MRMiniMapRenderer {
 		TColorAttr changed = 0;
 		TColorAttr findMarker = 0;
 		TColorAttr errorMarker = 0;
+		TColorAttr warningMarker = 0;
 	};
 
 	struct OverlayState {
@@ -32,6 +33,8 @@ class MRMiniMapRenderer {
 			std::size_t lineIndex = 0;
 			std::uint64_t dotColumnBits = 0;
 		};
+		std::vector<LineMask> errorLineMasks;
+		std::vector<LineMask> warningLineMasks;
 		std::vector<LineMask> findLineMasks;
 		std::vector<LineMask> dirtyLineMasks;
 	};
@@ -75,7 +78,9 @@ class MRMiniMapRenderer {
 	ApplyWarmupResult applyWarmup(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId, std::size_t documentId, std::size_t version) noexcept;
 	Signals scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version, const mr::editor::ReadSnapshot &snapshot,
 	                              const MREditSetupSettings &settings, bool preservePendingTaskForSameDocument = false);
-	OverlayState computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings) const;
+	OverlayState computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges,
+	                                 const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth,
+	                                 bool useBraille, const MREditSetupSettings &settings) const;
 	void drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, int viewWidth, const Viewport &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const Palette &palette, const OverlayState &overlay) const;
 
   private:

@@ -1,11 +1,19 @@
+#define Uses_TDeskTop
 #include "MRBentoBox.hpp"
 
 #include "MRFrame.hpp"
+#include "MRSidekickEditor.hpp"
+#include "MRWindowSupport.hpp"
+
+#include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
-#include <iterator>
+#include <filesystem>
+#include <sstream>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -25,6 +33,46 @@ static const char *kBentoPaneActionSplitRight = "split \xC4";
 static const char *kBentoPaneActionSplitDown = "split \xB3";
 static const MRBentoPaneTitleMenuSpec kBentoRoleTitleMenu{"role"};
 
+struct BentoPaneActionDescriptor {
+	const char *action;
+	MRBentoPanePlacement placement;
+};
+
+static const BentoPaneActionDescriptor kBentoPaneActions[] = {
+	{kBentoPaneActionReplace, bppReplace},
+	{kBentoPaneActionSplitRight, bppSplitDown},
+	{kBentoPaneActionSplitDown, bppSplitRight},
+};
+
+struct BentoPaneRoleDescriptor {
+	MRBentoPaneRole role;
+	const char *title;
+	bool listed;
+};
+
+static const BentoPaneRoleDescriptor kBentoPaneRoles[] = {
+	{bprSource, "Source", false},
+	{bprCompilerOutput, "Compiler Output", true},
+	{bprAppOutput, "App Output", true},
+	{bprProblems, "Problems", true},
+	{bprDebuggerOutput, "Debugger Output", true},
+	{bprWatches, "Watches", true},
+	{bprVariables, "Variables", true},
+	{bprSplitEditor, "Split editor", true},
+};
+
+const char *bentoPaneRoleTitle(MRBentoPaneRole role) noexcept {
+	for (const BentoPaneRoleDescriptor &descriptor : kBentoPaneRoles)
+		if (descriptor.role == role) return descriptor.title;
+	return "Pane";
+}
+
+MRBentoPaneRole bentoPaneRoleForTitle(const std::string &title) {
+	for (const BentoPaneRoleDescriptor &descriptor : kBentoPaneRoles)
+		if (descriptor.listed && title == descriptor.title) return descriptor.role;
+	return bprCompilerOutput;
+}
+
 struct BentoFrameGlyphs {
 	char singleHorizontal = '\xC4';
 	char singleVertical = '\xB3';
@@ -41,6 +89,11 @@ struct BentoFrameGlyphs {
 };
 
 constexpr BentoFrameGlyphs kBentoFrameGlyphs;
+
+void normalizeScrollBarTrackGlyph(TScrollBar *scrollBar) noexcept {
+	if (scrollBar == nullptr) return;
+	scrollBar->chars[4] = scrollBar->chars[2];
+}
 
 class MRPaneFrame : public MRFrame {
   public:
@@ -63,6 +116,7 @@ bool splitCommandTargetsSecondaryPane(ushort command) noexcept {
 		case cmMrOtherRestartProgram:
 		case cmMrOtherClearOutput:
 		case cmMrOtherFindNextCompilerError:
+		case cmMrOtherFindPreviousCompilerError:
 			return false;
 		default:
 			return true;
@@ -73,6 +127,205 @@ bool splitEventTargetsSecondaryPane(const TEvent &event) noexcept {
 	if ((event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel | evKeyDown)) != 0) return true;
 	if (event.what == evCommand) return splitCommandTargetsSecondaryPane(event.message.command);
 	return false;
+}
+
+std::string pathBaseName(const std::string &path) {
+	std::filesystem::path fsPath(path);
+	std::string base = fsPath.filename().string();
+
+	return base.empty() ? path : base;
+}
+
+std::string normalizedDiagnosticPath(const std::string &path) {
+	std::string normalized = path;
+
+	for (char &ch : normalized)
+		if (ch == '\\') ch = '/';
+	normalized = std::filesystem::path(normalized).lexically_normal().generic_string();
+	if (normalized.rfind("./", 0) == 0) normalized.erase(0, 2);
+	return normalized;
+}
+
+bool pathSuffixMatches(const std::string &candidatePath, const std::string &sourcePath) {
+	if (candidatePath.size() > sourcePath.size()) return false;
+	if (candidatePath == sourcePath) return true;
+	if (sourcePath.size() <= candidatePath.size()) return false;
+	if (sourcePath.compare(sourcePath.size() - candidatePath.size(), candidatePath.size(), candidatePath) != 0) return false;
+	return sourcePath[sourcePath.size() - candidatePath.size() - 1] == '/';
+}
+
+bool compilerDiagnosticPathMatches(const std::string &candidatePath, const std::string &sourcePath) {
+	const std::string candidate = normalizedDiagnosticPath(candidatePath);
+	const std::string source = normalizedDiagnosticPath(sourcePath);
+
+	if (candidatePath.empty() || sourcePath.empty()) return false;
+	if (candidate == source || pathSuffixMatches(candidate, source)) return true;
+	return pathBaseName(candidate) == pathBaseName(source);
+}
+
+bool parseUnsignedField(const std::string &text, std::size_t start, std::size_t end, std::size_t &value) {
+	std::size_t parsed = 0;
+
+	if (start >= end || std::isdigit(static_cast<unsigned char>(text[start])) == 0) return false;
+	value = 0;
+	while (start + parsed < end && std::isdigit(static_cast<unsigned char>(text[start + parsed])) != 0) {
+		value = value * 10 + static_cast<std::size_t>(text[start + parsed] - '0');
+		++parsed;
+	}
+	return parsed != 0 && start + parsed == end;
+}
+
+struct DiagnosticSeverityMarker {
+	const char *marker;
+	const char *severity;
+};
+
+bool parseCompilerDiagnosticLine(const std::string &line, const std::string &sourcePath, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
+	static const DiagnosticSeverityMarker markers[] = {{": fatal error:", "fatal error"}, {": error:", "error"}, {": warning:", "warning"}, {": note:", "note"}};
+	std::size_t markerPos = std::string::npos;
+	const DiagnosticSeverityMarker *matchedMarker = nullptr;
+
+	for (const DiagnosticSeverityMarker &marker : markers) {
+		const std::size_t pos = line.find(marker.marker);
+		if (pos != std::string::npos && (matchedMarker == nullptr || pos < markerPos)) {
+			markerPos = pos;
+			matchedMarker = &marker;
+		}
+	}
+	if (matchedMarker == nullptr) return false;
+
+	const std::string location = line.substr(0, markerPos);
+	const std::size_t lastColon = location.rfind(':');
+	std::size_t lineColon = std::string::npos;
+	std::size_t sourceLine = 0;
+	std::size_t sourceColumn = 1;
+
+	if (lastColon == std::string::npos) return false;
+	if (parseUnsignedField(location, lastColon + 1, location.size(), sourceColumn)) {
+		lineColon = location.rfind(':', lastColon - 1);
+		if (lineColon == std::string::npos) return false;
+		if (!parseUnsignedField(location, lineColon + 1, lastColon, sourceLine)) return false;
+	} else {
+		lineColon = lastColon;
+		if (!parseUnsignedField(location, lineColon + 1, location.size(), sourceLine)) return false;
+		sourceColumn = 1;
+	}
+	if (sourceLine == 0 || sourceColumn == 0) return false;
+	const std::string diagnosticPath = location.substr(0, lineColon);
+
+	diagnostic.sourcePath = diagnosticPath;
+	diagnostic.sourceLine = sourceLine;
+	diagnostic.sourceColumn = sourceColumn;
+	diagnostic.severity = matchedMarker->severity;
+	diagnostic.text = line.substr(markerPos + std::strlen(matchedMarker->marker));
+	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
+		diagnostic.text.erase(diagnostic.text.begin());
+	diagnostic.sourceOffset = 0;
+	diagnostic.outputOffset = outputOffset;
+	diagnostic.problemOffset = 0;
+	diagnostic.sourceAvailable = compilerDiagnosticPathMatches(diagnosticPath, sourcePath);
+	return true;
+}
+
+bool parseCompilerDriverDiagnosticLine(const std::string &line, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
+	static const DiagnosticSeverityMarker markers[] = {{"warning:", "warning"}, {"note:", "note"}};
+	std::size_t markerPos = std::string::npos;
+	const DiagnosticSeverityMarker *matchedMarker = nullptr;
+
+	for (const DiagnosticSeverityMarker &marker : markers) {
+		const std::size_t pos = line.find(marker.marker);
+		if (pos != std::string::npos && (matchedMarker == nullptr || pos < markerPos)) {
+			markerPos = pos;
+			matchedMarker = &marker;
+		}
+	}
+	if (matchedMarker == nullptr || markerPos == 0) return false;
+
+	diagnostic.sourcePath = line.substr(0, markerPos);
+	while (!diagnostic.sourcePath.empty() && diagnostic.sourcePath.back() == ' ')
+		diagnostic.sourcePath.pop_back();
+	if (!diagnostic.sourcePath.empty() && diagnostic.sourcePath.back() == ':') diagnostic.sourcePath.pop_back();
+	while (!diagnostic.sourcePath.empty() && diagnostic.sourcePath.back() == ' ')
+		diagnostic.sourcePath.pop_back();
+	diagnostic.sourceLine = 0;
+	diagnostic.sourceColumn = 0;
+	diagnostic.severity = matchedMarker->severity;
+	diagnostic.text = line.substr(markerPos + std::strlen(matchedMarker->marker));
+	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
+		diagnostic.text.erase(diagnostic.text.begin());
+	diagnostic.sourceOffset = 0;
+	diagnostic.outputOffset = outputOffset;
+	diagnostic.problemOffset = 0;
+	diagnostic.sourceAvailable = false;
+	return true;
+}
+
+bool compilerDiagnosticSeverityEnabled(const MRCompilerDiagnostic &diagnostic) {
+	if (diagnostic.severity == "error" || diagnostic.severity == "fatal error") return true;
+	if (diagnostic.severity == "warning") return configuredTrackCompilerWarnings();
+	if (diagnostic.severity == "note") return configuredTrackCompilerNotes();
+	return false;
+}
+
+std::size_t sourceOffsetForCompilerColumn(MRFileEditor *editor, std::size_t lineStart, std::size_t lineEnd, std::size_t column) {
+	std::size_t offset = lineStart;
+
+	for (std::size_t currentColumn = 1; currentColumn < column && offset < lineEnd; ++currentColumn)
+		offset = editor->nextCharOffset(offset);
+	return offset;
+}
+
+std::size_t lineColumnForOffset(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t lineStart, std::size_t offset) {
+	return offset >= lineStart ? offset - lineStart + 1 : 1;
+}
+
+bool editTouchesDiagnosticLine(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t diagnosticOffset, std::size_t editStart, std::size_t editEnd) {
+	const std::size_t lineStart = snapshot.lineStart(diagnosticOffset);
+	const std::size_t lineEnd = snapshot.lineEnd(diagnosticOffset);
+
+	if (editEnd > editStart) return editStart < lineEnd && editEnd > lineStart;
+	return editStart >= lineStart && editStart <= lineEnd;
+}
+
+std::vector<MRCompilerDiagnostic> parseCompilerDiagnostics(const std::string &text, const std::string &sourcePath) {
+	std::vector<MRCompilerDiagnostic> diagnostics;
+	const std::size_t textLength = text.size();
+	std::size_t lineStart = 0;
+
+	while (lineStart < textLength) {
+		std::size_t lineEnd = text.find('\n', lineStart);
+		MRCompilerDiagnostic diagnostic;
+
+		if (lineEnd == std::string::npos) lineEnd = textLength;
+		const std::string line = text.substr(lineStart, lineEnd - lineStart);
+		if (parseCompilerDiagnosticLine(line, sourcePath, lineStart, diagnostic) || parseCompilerDriverDiagnosticLine(line, lineStart, diagnostic)) diagnostics.push_back(std::move(diagnostic));
+		if (lineEnd == textLength) break;
+		lineStart = lineEnd + 1;
+	}
+	return diagnostics;
+}
+
+std::string compilerDiagnosticProblemLine(const MRCompilerDiagnostic &diagnostic) {
+	std::ostringstream line;
+
+	line << diagnostic.severity << " ";
+	if (diagnostic.sourceLine == 0)
+		line << (diagnostic.sourcePath.empty() ? "build" : diagnostic.sourcePath);
+	else
+		line << pathBaseName(diagnostic.sourcePath) << ":" << diagnostic.sourceLine << ":" << diagnostic.sourceColumn;
+	if (!diagnostic.text.empty()) line << " " << diagnostic.text;
+	return line.str();
+}
+
+std::string compilerDiagnosticDetailText(const MRCompilerDiagnostic &diagnostic) {
+	std::ostringstream text;
+
+	if (diagnostic.sourceLine == 0)
+		text << diagnostic.severity << " from " << (diagnostic.sourcePath.empty() ? "build" : diagnostic.sourcePath) << "\n";
+	else
+		text << diagnostic.severity << " at " << diagnostic.sourcePath << ":" << diagnostic.sourceLine << ":" << diagnostic.sourceColumn << "\n";
+	text << diagnostic.text;
+	return text.str();
 }
 
 }
@@ -143,7 +396,7 @@ class MRBentoPaneFrameView : public TView {
 					buffer.moveChar(0, kBentoFrameGlyphs.singleHorizontal, frameColor, size.x);
 					buffer.putChar(0, y == 0 ? '\xDA' : '\xC0');
 					if (size.x > 1) buffer.putChar(static_cast<ushort>(size.x - 1), y == 0 ? '\xBF' : '\xD9');
-					if (y == 0) drawPaneChrome(buffer, layout, frameColor, frameColor, focused && !source, maximized);
+					if (y == 0) drawPaneChrome(buffer, layout, frameColor, frameColor, focused, maximized);
 					writeBuf(0, y, size.x, 1, buffer);
 				} else {
 					buffer.moveChar(0, kBentoFrameGlyphs.singleVertical, frameColor, 1);
@@ -182,7 +435,7 @@ class MRBentoPaneFrameView : public TView {
 		const int right = std::max(0, size.x);
 		const int closeLeftX = left + kPaneChromeFrameRest;
 		const int maximizeRightX = right - kPaneChromeFrameRest;
-		const bool withControls = focused && !source;
+		const bool withControls = focused;
 		const int leftContentX = closeLeftX + (withControls ? kPaneCloseButtonWidth + kPaneChromeGap : 0);
 
 		layout.title = "[" + title + "]";
@@ -229,6 +482,9 @@ MRBentoPaneSpec::MRBentoPaneSpec(MRBentoPaneRole aRole, MRBentoPaneBufferPolicy 
     : role(aRole), bufferPolicy(aBufferPolicy), readOnly(aReadOnly), suppressMiniMap(aSuppressMiniMap), suppressWordWrap(aSuppressWordWrap), scrollBarsAlwaysVisible(aScrollBarsAlwaysVisible), titleMenu(aTitleMenu) {
 }
 
+MRCompilerDiagnostic::MRCompilerDiagnostic() noexcept : sourcePath(), sourceLine(1), sourceColumn(1), severity(), text(), sourceOffset(0), outputOffset(0), problemOffset(0), sourceAvailable(false) {
+}
+
 MRPaneEditWindow::MRPaneEditWindow(const TRect &bounds, const char *title, int number) : TWindowInit(&MRPaneEditWindow::initFrame), MREditWindow(bounds, title, number), mPaneSpec(), mPaneFocused(false) {
 	flags = 0;
 	state &= static_cast<ushort>(~sfShadow);
@@ -253,9 +509,19 @@ void MRPaneEditWindow::changeBounds(const TRect &bounds) {
 	layoutPaneChrome();
 }
 
+void MRPaneEditWindow::draw() {
+	MREditWindow::draw();
+	drawPaneScrollBars();
+}
+
 TColorAttr MRPaneEditWindow::mapColor(uchar index) {
 	if (index == 4 || index == 5) return MREditWindow::mapColor(mPaneFocused ? 13 : 1);
 	return MREditWindow::mapColor(index);
+}
+
+Boolean MRPaneEditWindow::valid(ushort command) {
+	if (command == cmClose) return True;
+	return MREditWindow::valid(command);
 }
 
 void MRPaneEditWindow::setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept {
@@ -280,7 +546,7 @@ void MRPaneEditWindow::applyPanePolicy(const MRFileEditor *sourceEditor) noexcep
 	if (paneEditor == nullptr) return;
 	if (mPaneSpec.bufferPolicy == bpbSharedSourceBuffer && sourceEditor != nullptr) paneEditor->shareContentStateFrom(*sourceEditor);
 	setReadOnly(mPaneSpec.readOnly);
-	paneEditor->setCommunicationViewerMode(mPaneSpec.readOnly, true);
+	paneEditor->setCommunicationViewerMode(mPaneSpec.readOnly, mPaneSpec.role != bprProblems);
 	paneEditor->setMiniMapSuppressed(mPaneSpec.suppressMiniMap);
 	paneEditor->setWordWrapSuppressed(mPaneSpec.suppressWordWrap);
 	paneEditor->setScrollBarsAlwaysVisible(mPaneSpec.scrollBarsAlwaysVisible);
@@ -297,21 +563,67 @@ void MRPaneEditWindow::layoutPaneChrome() noexcept {
 	if (paneEditor != nullptr) {
 		applyPanePolicy(nullptr);
 		if (mPaneSpec.scrollBarsAlwaysVisible) {
+			const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
+			bool reserveHorizontal = showWithoutRange;
+			bool reserveVertical = showWithoutRange;
+			if (paneIndicator != nullptr) paneIndicator->hide();
+			if (!showWithoutRange) {
+				paneEditor->changeBounds(editorBounds);
+				paneEditor->updateMetrics();
+				reserveHorizontal = horizontalScrollBar != nullptr && horizontalScrollBar->maxVal > horizontalScrollBar->minVal;
+				reserveVertical = verticalScrollBar != nullptr && verticalScrollBar->maxVal > verticalScrollBar->minVal;
+			}
+			for (int pass = 0; pass < 3; ++pass) {
+				editorBounds = getExtent();
+				if (reserveVertical && editorBounds.b.x - editorBounds.a.x > 1) editorBounds.b.x = std::max<short>(editorBounds.a.x + 1, editorBounds.b.x - 1);
+				if (reserveHorizontal && editorBounds.b.y - editorBounds.a.y > 1) editorBounds.b.y = std::max<short>(editorBounds.a.y + 1, editorBounds.b.y - 1);
+				if (horizontalScrollBar != nullptr) {
+					if (reserveHorizontal) {
+						const short right = reserveVertical ? std::max<short>(1, size.x - 1) : std::max<short>(1, size.x);
+						TRect horizontalRect(0, std::max(0, size.y - 1), right, size.y);
+						horizontalScrollBar->locate(horizontalRect);
+						if (showWithoutRange) horizontalScrollBar->show();
+					} else {
+						TRect horizontalRect(0, size.y, 0, size.y);
+						horizontalScrollBar->locate(horizontalRect);
+					}
+				}
+				if (verticalScrollBar != nullptr) {
+					if (reserveVertical) {
+						const short bottom = reserveHorizontal ? std::max<short>(1, size.y - 1) : std::max<short>(1, size.y);
+						TRect verticalRect(std::max(0, size.x - 1), 0, size.x, bottom);
+						verticalScrollBar->locate(verticalRect);
+						if (showWithoutRange) verticalScrollBar->show();
+					} else {
+						TRect verticalRect(size.x, 0, size.x, 0);
+						verticalScrollBar->locate(verticalRect);
+					}
+				}
+				paneEditor->changeBounds(editorBounds);
+				paneEditor->updateMetrics();
+				if (showWithoutRange) break;
+				const bool nextReserveHorizontal = horizontalScrollBar != nullptr && horizontalScrollBar->maxVal > horizontalScrollBar->minVal;
+				const bool nextReserveVertical = verticalScrollBar != nullptr && verticalScrollBar->maxVal > verticalScrollBar->minVal;
+				if (nextReserveHorizontal == reserveHorizontal && nextReserveVertical == reserveVertical) break;
+				reserveHorizontal = nextReserveHorizontal;
+				reserveVertical = nextReserveVertical;
+			}
 			if (horizontalScrollBar != nullptr) {
-				TRect horizontalRect(0, std::max(0, size.y - 1), std::max(1, size.x - 1), size.y);
-				horizontalScrollBar->locate(horizontalRect);
-				horizontalScrollBar->show();
+				if (reserveHorizontal) horizontalScrollBar->show();
+				else
+					horizontalScrollBar->hide();
 			}
 			if (verticalScrollBar != nullptr) {
-				TRect verticalRect(std::max(0, size.x - 1), 0, size.x, std::max(1, size.y - 1));
-				verticalScrollBar->locate(verticalRect);
-				verticalScrollBar->show();
+				if (reserveVertical) verticalScrollBar->show();
+				else
+					verticalScrollBar->hide();
 			}
-			if (paneIndicator != nullptr) paneIndicator->hide();
-			editorBounds.b.x = std::max<short>(editorBounds.a.x + 1, editorBounds.b.x - 1);
-			editorBounds.b.y = std::max<short>(editorBounds.a.y + 1, editorBounds.b.y - 1);
+		} else {
+			if (horizontalScrollBar != nullptr) horizontalScrollBar->hide();
+			if (verticalScrollBar != nullptr) verticalScrollBar->hide();
+			paneEditor->changeBounds(editorBounds);
+			paneEditor->updateMetrics();
 		}
-		paneEditor->changeBounds(editorBounds);
 		drawPaneScrollBars();
 	}
 }
@@ -319,9 +631,26 @@ void MRPaneEditWindow::layoutPaneChrome() noexcept {
 void MRPaneEditWindow::drawPaneScrollBars() noexcept {
 	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
 	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
+	auto fillRect = [this](const TRect &rect) {
+		const short left = std::max<short>(0, rect.a.x);
+		const short top = std::max<short>(0, rect.a.y);
+		const short right = std::min<short>(size.x, rect.b.x);
+		const short bottom = std::min<short>(size.y, rect.b.y);
+		const int width = right - left;
 
+		if (width <= 0 || bottom <= top) return;
+		TDrawBuffer buffer;
+		buffer.moveChar(0, ' ', TAttrPair(mapColor(1)), width);
+		for (short y = top; y < bottom; ++y)
+			writeLine(left, y, width, 1, buffer);
+	};
+
+	normalizeScrollBarTrackGlyph(horizontalScrollBar);
+	normalizeScrollBarTrackGlyph(verticalScrollBar);
 	if (horizontalScrollBar != nullptr) horizontalScrollBar->drawView();
 	if (verticalScrollBar != nullptr) verticalScrollBar->drawView();
+	if (horizontalScrollBar != nullptr && (horizontalScrollBar->state & sfVisible) == 0) fillRect(horizontalScrollBar->getBounds());
+	if (verticalScrollBar != nullptr && (verticalScrollBar->state & sfVisible) == 0) fillRect(verticalScrollBar->getBounds());
 	if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr && (horizontalScrollBar->state & sfVisible) != 0 && (verticalScrollBar->state & sfVisible) != 0) {
 		const TRect horizontalBounds = horizontalScrollBar->getBounds();
 		const TRect verticalBounds = verticalScrollBar->getBounds();
@@ -329,6 +658,13 @@ void MRPaneEditWindow::drawPaneScrollBars() noexcept {
 			TDrawBuffer buffer;
 			buffer.moveChar(0, ' ', TAttrPair(mapColor(4)), 1);
 			writeBuf(verticalBounds.a.x, horizontalBounds.a.y, 1, 1, buffer);
+		}
+	} else if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr) {
+		const TRect horizontalBounds = horizontalScrollBar->getBounds();
+		const TRect verticalBounds = verticalScrollBar->getBounds();
+		if (horizontalBounds.a.y < horizontalBounds.b.y && verticalBounds.a.x < verticalBounds.b.x) {
+			TRect corner(verticalBounds.a.x, horizontalBounds.a.y, static_cast<short>(verticalBounds.a.x + 1), static_cast<short>(horizontalBounds.a.y + 1));
+			fillRect(corner);
 		}
 	}
 }
@@ -345,7 +681,7 @@ MRBentoBox::BentoLeaf::BentoLeaf() noexcept : id(-1), role(bprCompilerOutput), s
 }
 
 MRBentoBox::MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode)
-    : TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), paneRoleDropList(), paneActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0) {
+    : TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), windowCloseInProgress(false), paneRoleDropList(), paneActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0), compilerOutputStatus(), compilerProblemsStatus(), compilerDiagnostics(), compilerSidekickTracked(false), compilerSidekickUpdating(false), compilerSidekickDiagnosticIndex(0) {
 	initializeLayoutTree();
 	layoutSplitPanes();
 }
@@ -355,6 +691,14 @@ MRBentoBox::~MRBentoBox() {
 
 MREditWindow *MRBentoBox::secondaryEditWindow() const noexcept {
 	return paneWindowForLeaf(firstToolLeafId());
+}
+
+MREditWindow *MRBentoBox::buildOutputPane() const noexcept {
+	return paneWindowForLeaf(leafIdForRole(bprCompilerOutput));
+}
+
+MREditWindow *MRBentoBox::problemsPane() const noexcept {
+	return paneWindowForLeaf(leafIdForRole(bprProblems));
 }
 
 MREditWindow *MRBentoBox::paneForBufferId(int bufferId) const noexcept {
@@ -376,6 +720,33 @@ void MRBentoBox::showSecondaryPane() noexcept {
 	}
 	secondaryPaneVisible = firstToolLeafId() >= 0;
 	layoutSplitPanes();
+}
+
+bool MRBentoBox::ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREditWindow *&problemsWindow) {
+	const int previousActiveLeaf = activeLeafId;
+	int outputLeaf = leafIdForRole(bprCompilerOutput);
+
+	if (bentoMode == bbmDocumentViewports) {
+		bentoMode = bbmToolWorkspace;
+		for (BentoLeaf &leaf : leaves) {
+			leaf.spec = paneSpecForRole(leaf.role);
+			leaf.title = bentoPaneRoleTitle(leaf.role);
+			if (leaf.pane != nullptr) leaf.pane->setPaneSpec(leaf.spec, getEditor());
+		}
+	}
+	if (outputLeaf < 0) {
+		if (!hasPaneSplit()) showSecondaryPane();
+		outputLeaf = leafIdForRole(bprCompilerOutput);
+		if (outputLeaf < 0) outputLeaf = splitLeafNode(0, bsoHorizontal, bprCompilerOutput);
+	}
+	if (outputLeaf < 0) return false;
+
+	int problemsLeaf = leafIdForRole(bprProblems);
+	if (problemsLeaf < 0) problemsLeaf = splitLeafNode(outputLeaf, bsoVertical, bprProblems);
+	if (previousActiveLeaf >= 0 && nodeIndexForLeaf(previousActiveLeaf) >= 0) setActivePane(previousActiveLeaf);
+	outputWindow = buildOutputPane();
+	problemsWindow = problemsPane();
+	return outputWindow != nullptr && problemsWindow != nullptr;
 }
 
 void MRBentoBox::activatePrimaryPane() noexcept {
@@ -402,7 +773,309 @@ void MRBentoBox::toggleActivePane() noexcept {
 	}
 }
 
-void MRBentoBox::setDiagnosticsStatus(const char *) {
+void MRBentoBox::setCompilerOutputStatus(const char *status) {
+	const std::string nextStatus = status != nullptr ? status : "";
+
+	if (compilerOutputStatus == nextStatus) return;
+	compilerOutputStatus = nextStatus;
+	updateActivePaneFrame();
+	drawPaneFrames();
+}
+
+void MRBentoBox::clearCompilerDiagnostics() {
+	MREditWindow *problemsWindow = problemsPane();
+	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
+
+	compilerDiagnostics.clear();
+	compilerProblemsStatus.clear();
+	clearTrackedCompilerSidekick(true);
+	if (problemsEditor != nullptr) problemsEditor->clearFindMarkerRanges();
+	if (getEditor() != nullptr) getEditor()->clearCompilerDiagnosticRanges();
+	if (problemsWindow != nullptr) {
+		static_cast<void>(problemsWindow->replaceTextBuffer("", bentoPaneRoleTitle(bprProblems)));
+		problemsWindow->setReadOnly(true);
+		problemsWindow->setFileChanged(false);
+	}
+	if (hasPaneSplit()) layoutSplitPanes();
+}
+
+bool MRBentoBox::hasCompilerProblems() const noexcept {
+	return !compilerDiagnostics.empty();
+}
+
+void MRBentoBox::refreshCompilerProblemsPane() {
+	MREditWindow *problemsWindow = problemsPane();
+	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
+	std::ostringstream problemText;
+	std::ostringstream statusText;
+	std::size_t problemOffset = 0;
+	int errorCount = 0;
+	int warningCount = 0;
+	int noteCount = 0;
+
+	for (MRCompilerDiagnostic &diagnostic : compilerDiagnostics) {
+		const std::string line = compilerDiagnosticProblemLine(diagnostic);
+		if (diagnostic.severity == "error" || diagnostic.severity == "fatal error")
+			++errorCount;
+		else if (diagnostic.severity == "warning")
+			++warningCount;
+		else if (diagnostic.severity == "note")
+			++noteCount;
+		diagnostic.problemOffset = problemOffset;
+		problemText << line << '\n';
+		problemOffset += line.size() + 1;
+	}
+	if (errorCount > 0) statusText << errorCount << " error" << (errorCount == 1 ? "" : "s");
+	if (warningCount > 0) {
+		if (statusText.tellp() > 0) statusText << ", ";
+		statusText << warningCount << " warning" << (warningCount == 1 ? "" : "s");
+	}
+	if (noteCount > 0) {
+		if (statusText.tellp() > 0) statusText << ", ";
+		statusText << noteCount << " note" << (noteCount == 1 ? "" : "s");
+	}
+	compilerProblemsStatus = statusText.str();
+	if (problemsWindow != nullptr) {
+		static_cast<void>(problemsWindow->replaceTextBuffer(problemText.str().c_str(), bentoPaneRoleTitle(bprProblems)));
+		problemsWindow->setReadOnly(true);
+		problemsWindow->setFileChanged(false);
+	}
+	if (problemsEditor != nullptr) problemsEditor->clearFindMarkerRanges();
+	refreshSourceCompilerDiagnosticRanges();
+	updateActivePaneFrame();
+	drawPaneFrames();
+	if (hasPaneSplit()) layoutSplitPanes();
+}
+
+void MRBentoBox::refreshSourceCompilerDiagnosticRanges() {
+	MRFileEditor *sourceEditor = getEditor();
+	std::vector<std::pair<std::size_t, std::size_t>> errorRanges;
+	std::vector<std::pair<std::size_t, std::size_t>> warningRanges;
+
+	if (sourceEditor == nullptr) return;
+	for (const MRCompilerDiagnostic &diagnostic : compilerDiagnostics) {
+		if (!diagnostic.sourceAvailable) continue;
+		const std::size_t start = diagnostic.sourceOffset;
+		const std::size_t end = sourceEditor->nextCharOffset(start);
+		if (diagnostic.severity == "warning" || diagnostic.severity == "note") warningRanges.push_back(std::make_pair(start, end));
+		else if (diagnostic.severity == "error" || diagnostic.severity == "fatal error")
+			errorRanges.push_back(std::make_pair(start, end));
+	}
+	sourceEditor->setCompilerDiagnosticRanges(errorRanges, warningRanges);
+}
+
+void MRBentoBox::clearTrackedCompilerSidekick(bool dropSidekick) noexcept {
+	compilerSidekickTracked = false;
+	compilerSidekickDiagnosticIndex = 0;
+	if (dropSidekick) mrDropSidekickForParent(this);
+}
+
+void MRBentoBox::trackCompilerSidekick(std::size_t diagnosticIndex) noexcept {
+	static_cast<void>(mrConsumeReadOnlySidekickDismissedForParent(this));
+	compilerSidekickTracked = true;
+	compilerSidekickDiagnosticIndex = diagnosticIndex;
+}
+
+void MRBentoBox::updateTrackedCompilerSidekick() {
+	MRFileEditor *sourceEditor = getEditor();
+
+	if (!compilerSidekickTracked) return;
+	if (compilerSidekickUpdating) return;
+	if (TProgram::deskTop == nullptr || TProgram::deskTop->current != this) {
+		if (mrHasReadOnlySidekickForParent(this)) mrDropSidekickForParent(this);
+		return;
+	}
+	if (mrConsumeReadOnlySidekickDismissedForParent(this)) {
+		clearTrackedCompilerSidekick(false);
+		return;
+	}
+	if (sourceEditor == nullptr || compilerSidekickDiagnosticIndex >= compilerDiagnostics.size()) {
+		clearTrackedCompilerSidekick(true);
+		return;
+	}
+
+	const MRCompilerDiagnostic &diagnostic = compilerDiagnostics[compilerSidekickDiagnosticIndex];
+	if (!diagnostic.sourceAvailable || !compilerDiagnosticPathMatches(diagnostic.sourcePath, currentFileName())) {
+		clearTrackedCompilerSidekick(true);
+		return;
+	}
+
+	MRTextBufferModel::ReadSnapshot sourceSnapshot = buffer().readSnapshot();
+	const std::size_t sourceOffset = sourceSnapshot.clampOffset(diagnostic.sourceOffset);
+	const std::size_t lineIndex = sourceSnapshot.lineIndex(sourceOffset);
+	const std::size_t lineStart = sourceSnapshot.lineStartByIndex(lineIndex);
+	const std::size_t sourceLineEnd = sourceEditor->lineEndOffset(sourceOffset);
+	const int diagnosticViewColumn = sourceEditor->charColumn(lineStart, sourceOffset) - sourceEditor->delta.x + 1;
+	const int diagnosticViewRow = static_cast<int>(lineIndex) - sourceEditor->delta.y + 1;
+	const TRect textViewport = sourceEditor->visibleTextViewportBounds();
+	const int viewportWidth = std::max(1, textViewport.b.x - textViewport.a.x);
+	const int viewportRows = sourceEditor->visibleViewportRows();
+
+	if (diagnosticViewRow < 1 || diagnosticViewRow > viewportRows || diagnosticViewColumn < 1 || diagnosticViewColumn > viewportWidth) {
+		if (mrHasReadOnlySidekickForParent(this)) mrDropSidekickForParent(this);
+		return;
+	}
+
+	const int lineEndViewColumn = sourceEditor->charColumn(lineStart, sourceLineEnd) - sourceEditor->delta.x + 1;
+	const int sidekickViewColumn = std::max(diagnosticViewColumn, lineEndViewColumn + 2);
+	const bool rightMarginSidekick = configuredCompilerErrorMessagePlacement() == MRCompilerErrorMessagePlacement::RightMargin;
+	compilerSidekickUpdating = true;
+	static_cast<void>(mrOpenReadOnlySidekickAt(this, compilerDiagnosticDetailText(diagnostic), "Compiler diagnostic", diagnosticViewColumn, diagnosticViewRow, rightMarginSidekick ? sidekickViewColumn : diagnosticViewColumn,
+	                                          rightMarginSidekick ? MRReadOnlySidekickPlacement::RightMargin : MRReadOnlySidekickPlacement::UnderCode));
+	compilerSidekickUpdating = false;
+}
+
+bool MRBentoBox::refreshCompilerDiagnosticsFromOutput() {
+	MREditWindow *outputWindow = buildOutputPane();
+	MREditWindow *problemsWindow = problemsPane();
+	std::vector<MRCompilerDiagnostic> diagnostics;
+	std::vector<MRCompilerDiagnostic> filteredDiagnostics;
+	MRFileEditor *sourceEditor = getEditor();
+	MRTextBufferModel::ReadSnapshot sourceSnapshot;
+
+	if (outputWindow == nullptr || problemsWindow == nullptr || sourceEditor == nullptr) return false;
+	sourceSnapshot = buffer().readSnapshot();
+	diagnostics = parseCompilerDiagnostics(outputWindow->buffer().readSnapshot().text(), currentFileName());
+	for (MRCompilerDiagnostic &diagnostic : diagnostics) {
+		if (!compilerDiagnosticSeverityEnabled(diagnostic)) continue;
+		if (!diagnostic.sourceAvailable) continue;
+		const std::size_t lineStart = sourceSnapshot.lineStartByIndex(diagnostic.sourceLine > 0 ? diagnostic.sourceLine - 1 : 0);
+		const std::size_t lineEnd = sourceSnapshot.lineEnd(lineStart);
+		diagnostic.sourceOffset = sourceOffsetForCompilerColumn(sourceEditor, lineStart, lineEnd, diagnostic.sourceColumn);
+		filteredDiagnostics.push_back(std::move(diagnostic));
+	}
+	compilerDiagnostics = std::move(filteredDiagnostics);
+	clearTrackedCompilerSidekick(true);
+	refreshCompilerProblemsPane();
+	return true;
+}
+
+void MRBentoBox::syncCompilerDiagnosticsAfterSourceMutation(const MRTextBufferModel::ReadSnapshot &oldSnapshot, const MRTextBufferModel::DocumentChangeSet &changeSet) {
+	MRTextBufferModel::ReadSnapshot newSnapshot;
+	std::size_t newLength = 0;
+	const std::size_t editStart = changeSet.touchedRange.start;
+	std::size_t oldEditEnd = std::min(changeSet.touchedRange.end, changeSet.oldLength);
+
+	if (compilerDiagnostics.empty() || !changeSet.changed || changeSet.oldVersion != oldSnapshot.version()) return;
+	clearTrackedCompilerSidekick(true);
+	newSnapshot = buffer().readSnapshot();
+	if (changeSet.newVersion != newSnapshot.version()) return;
+	newLength = newSnapshot.length();
+	const long long delta = static_cast<long long>(changeSet.newLength) - static_cast<long long>(changeSet.oldLength);
+	if (delta > 0 && changeSet.touchedRange.end - editStart == static_cast<std::size_t>(delta)) oldEditEnd = editStart;
+
+	std::vector<MRCompilerDiagnostic> remapped;
+	for (MRCompilerDiagnostic diagnostic : compilerDiagnostics) {
+		if (!diagnostic.sourceAvailable) {
+			remapped.push_back(std::move(diagnostic));
+			continue;
+		}
+		if (editTouchesDiagnosticLine(oldSnapshot, diagnostic.sourceOffset, editStart, oldEditEnd)) continue;
+		if (diagnostic.sourceOffset >= oldEditEnd) {
+			const long long shifted = static_cast<long long>(diagnostic.sourceOffset) + delta;
+			if (shifted < 0 || static_cast<std::size_t>(shifted) > newLength) continue;
+			diagnostic.sourceOffset = static_cast<std::size_t>(shifted);
+		}
+		const std::size_t lineIndex = newSnapshot.lineIndex(diagnostic.sourceOffset);
+		const std::size_t lineStart = newSnapshot.lineStartByIndex(lineIndex);
+		diagnostic.sourceLine = lineIndex + 1;
+		diagnostic.sourceColumn = lineColumnForOffset(newSnapshot, lineStart, diagnostic.sourceOffset);
+		remapped.push_back(std::move(diagnostic));
+	}
+	compilerDiagnostics = std::move(remapped);
+	refreshCompilerProblemsPane();
+}
+
+bool MRBentoBox::jumpToProblemAtCursor() {
+	MREditWindow *problemsWindow = problemsPane();
+	MREditWindow *outputWindow = buildOutputPane();
+	MRFileEditor *sourceEditor = getEditor();
+	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
+	MRFileEditor *outputEditor = outputWindow != nullptr ? outputWindow->getEditor() : nullptr;
+	MRTextBufferModel::ReadSnapshot sourceSnapshot;
+	std::size_t cursorOffset;
+	const MRCompilerDiagnostic *selected = nullptr;
+	std::size_t selectedIndex = 0;
+
+	if (sourceEditor == nullptr || problemsEditor == nullptr || outputEditor == nullptr) return false;
+	cursorOffset = problemsEditor->cursorOffset();
+	for (std::size_t i = 0; i < compilerDiagnostics.size(); ++i) {
+		const MRCompilerDiagnostic &diagnostic = compilerDiagnostics[i];
+		const std::size_t lineEnd = problemsEditor->lineEndOffset(diagnostic.problemOffset);
+		if (cursorOffset >= diagnostic.problemOffset && cursorOffset <= lineEnd) {
+			selected = &diagnostic;
+			selectedIndex = i;
+			break;
+		}
+	}
+	if (selected == nullptr) return false;
+	if (selected->sourceAvailable && !compilerDiagnosticPathMatches(selected->sourcePath, currentFileName())) return false;
+
+	const std::size_t outputLineEnd = outputEditor->lineEndOffset(selected->outputOffset);
+	outputEditor->setCursorOffset(selected->outputOffset);
+	outputEditor->setSelectionOffsets(selected->outputOffset, outputLineEnd);
+
+	problemsEditor->setCursorOffset(selected->problemOffset);
+	problemsEditor->setSelectionOffsets(selected->problemOffset, problemsEditor->lineEndOffset(selected->problemOffset));
+	problemsEditor->setFindMarkerRanges({std::make_pair(selected->problemOffset, problemsEditor->lineEndOffset(selected->problemOffset))});
+	if (!selected->sourceAvailable) {
+		const int outputLeaf = leafIdForRole(bprCompilerOutput);
+		clearTrackedCompilerSidekick(true);
+		if (outputLeaf >= 0) setActivePane(outputLeaf);
+		return true;
+	}
+
+	sourceSnapshot = buffer().readSnapshot();
+	const std::size_t sourceOffset = sourceSnapshot.clampOffset(selected->sourceOffset);
+	const std::size_t lineStart = sourceSnapshot.lineStart(sourceOffset);
+	const std::size_t sourceLineEnd = sourceEditor->lineEndOffset(sourceOffset);
+	std::size_t sourceSelectionEnd = sourceOffset < sourceLineEnd ? sourceEditor->nextCharOffset(sourceOffset) : sourceOffset;
+	if (sourceSelectionEnd == sourceOffset && lineStart < sourceLineEnd) sourceSelectionEnd = sourceLineEnd;
+	sourceEditor->setCursorOffset(sourceOffset);
+	sourceEditor->setSelectionOffsets(sourceOffset, sourceSelectionEnd);
+	sourceEditor->revealCursor(True);
+
+	activatePrimaryPane();
+	trackCompilerSidekick(selectedIndex);
+	updateTrackedCompilerSidekick();
+	return true;
+}
+
+bool MRBentoBox::jumpToNextProblem() {
+	MREditWindow *problemsWindow = problemsPane();
+	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
+	std::size_t cursorOffset;
+	const MRCompilerDiagnostic *next = nullptr;
+
+	if (problemsEditor == nullptr || compilerDiagnostics.empty()) return false;
+	cursorOffset = problemsEditor->cursorOffset();
+	for (const MRCompilerDiagnostic &diagnostic : compilerDiagnostics)
+		if (diagnostic.problemOffset > cursorOffset) {
+			next = &diagnostic;
+			break;
+		}
+	if (next == nullptr) next = &compilerDiagnostics.front();
+	problemsEditor->setCursorOffset(next->problemOffset);
+	problemsEditor->setSelectionOffsets(next->problemOffset, problemsEditor->lineEndOffset(next->problemOffset));
+	return jumpToProblemAtCursor();
+}
+
+bool MRBentoBox::jumpToPreviousProblem() {
+	MREditWindow *problemsWindow = problemsPane();
+	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
+	std::size_t cursorOffset;
+	const MRCompilerDiagnostic *previous = nullptr;
+
+	if (problemsEditor == nullptr || compilerDiagnostics.empty()) return false;
+	cursorOffset = problemsEditor->cursorOffset();
+	for (const MRCompilerDiagnostic &diagnostic : compilerDiagnostics) {
+		if (diagnostic.problemOffset >= cursorOffset) break;
+		previous = &diagnostic;
+	}
+	if (previous == nullptr) previous = &compilerDiagnostics.back();
+	problemsEditor->setCursorOffset(previous->problemOffset);
+	problemsEditor->setSelectionOffsets(previous->problemOffset, problemsEditor->lineEndOffset(previous->problemOffset));
+	return jumpToProblemAtCursor();
 }
 
 bool MRBentoBox::placePaneRole(MRBentoPaneRole role, MRBentoPanePlacement placement) {
@@ -447,7 +1120,7 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 				if (leaf.id == targetLeafId) {
 					leaf.role = role;
 					leaf.spec = spec;
-					leaf.title = paneRoleTitle(role);
+					leaf.title = bentoPaneRoleTitle(role);
 				}
 			setActivePane(targetLeafId);
 			layoutSplitPanes();
@@ -477,7 +1150,10 @@ bool MRBentoBox::splitActiveEditorPane(MRBentoPanePlacement placement) {
 void MRBentoBox::draw() {
 	refreshEditorTaskMarkers();
 	MREditWindow::draw();
-	if (hasPaneSplit()) drawPaneFrames();
+	if (hasPaneSplit()) {
+		drawSourcePaneScrollBars();
+		drawPaneFrames();
+	}
 }
 
 void MRBentoBox::changeBounds(const TRect &bounds) {
@@ -488,54 +1164,100 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 	if (hasPaneSplit()) layoutSplitPanes();
 }
 
+void MRBentoBox::close() {
+	windowCloseInProgress = true;
+	MREditWindow::close();
+}
+
+void MRBentoBox::shutDown() {
+	windowCloseInProgress = true;
+	MREditWindow::shutDown();
+}
+
 void MRBentoBox::handleEvent(TEvent &event) {
 	const bool mouseEvent = (event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0;
 	const TPoint localMouse = mouseEvent ? makeLocal(event.mouse.where) : TPoint();
-	const auto redrawChrome = [this]() {
-		drawPaneFrames();
-	};
 
 	if (!hasPaneSplit()) {
+		MRFileEditor *sourceEditor = getEditor();
+		const bool trackSourceMutation = !compilerDiagnostics.empty() && sourceEditor != nullptr;
+		MRTextBufferModel::ReadSnapshot oldSnapshot;
+		if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
 		MREditWindow::handleEvent(event);
+		if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
 		return;
 	}
 	if (event.what == evCommand && event.message.command == cmMrBentoPaneRoleAccepted) {
 		acceptPaneRoleChoice();
 		clearEvent(event);
-		redrawChrome();
+		drawPaneFrames();
 		return;
 	}
 	if (event.what == evCommand && event.message.command == cmMrBentoPaneActionAccepted) {
 		acceptPaneActionChoice();
 		clearEvent(event);
-		redrawChrome();
+		drawPaneFrames();
+		return;
+	}
+	if (event.what == evCommand && event.message.command == cmClose) {
+		if ((flags & wfClose) != 0 && (event.message.infoPtr == nullptr || event.message.infoPtr == this)) {
+			clearEvent(event);
+			if ((state & sfModal) == 0)
+				close();
+			else {
+				event.what = evCommand;
+				event.message.command = cmCancel;
+				putEvent(event);
+				clearEvent(event);
+			}
+		}
 		return;
 	}
 	if (handleOuterFrameCloseMouse(event)) {
-		redrawChrome();
+		drawPaneFrames();
 		return;
 	}
 	if (handlePaneDropListEvent(event)) {
-		redrawChrome();
+		drawPaneFrames();
 		return;
 	}
 	if (event.what == evKeyDown && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbCtrlTab)) {
 		toggleActivePane();
 		clearEvent(event);
-		redrawChrome();
+		drawPaneFrames();
 		return;
+	}
+	if (event.what == evKeyDown && compilerSidekickTracked && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
+		clearTrackedCompilerSidekick(true);
+		clearEvent(event);
+		drawSharedEditorPanes();
+		drawPaneFrames();
+		return;
+	}
+	if (event.what == evKeyDown && !compilerDiagnostics.empty()) {
+		const bool nextProblemKey = event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) == 0;
+		const bool previousProblemKey = event.keyDown.keyCode == kbShiftF8 || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0);
+		if (nextProblemKey || previousProblemKey) {
+			MREditWindow *targetWindow = editorCommandTarget();
+			if (mrHandleRuntimeKeymapEvent(event, targetWindow != nullptr && targetWindow->isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, targetWindow)) return;
+			static_cast<void>(nextProblemKey ? jumpToNextProblem() : jumpToPreviousProblem());
+			clearEvent(event);
+			drawSharedEditorPanes();
+			drawPaneFrames();
+			return;
+		}
 	}
 	if (event.what == evMouseDown) {
 		if (handleDividerChromeMouse(event)) {
 			clearEvent(event);
-			redrawChrome();
+			drawPaneFrames();
 			return;
 		}
 		const int dividerNode = nodeAtDivider(localMouse);
 		if (dividerNode >= 0 && (event.mouse.buttons & mbLeftButton) != 0) {
 			dragDivider(event, dividerNode);
 			clearEvent(event);
-			redrawChrome();
+			drawPaneFrames();
 			return;
 		}
 	}
@@ -543,24 +1265,101 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	if (activeLeafId != 0 && splitEventTargetsSecondaryPane(event)) {
 		MRPaneEditWindow *targetPane = paneWindowForLeaf(activeLeafId);
 		TRect targetBounds = paneBoundsForLeaf(activeLeafId);
+		const bool problemsPaneActive = roleForLeaf(activeLeafId) == bprProblems;
+		const bool enterProblem = problemsPaneActive && event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter;
+		const bool clickProblem = problemsPaneActive && event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0;
 		if (mouseEvent && !pointInRect(localMouse, contentBounds(targetBounds))) {
 			MREditWindow::handleEvent(event);
 			drawSharedEditorPanes();
-			redrawChrome();
+			drawPaneFrames();
 			return;
 		}
-		if (targetPane != nullptr) targetPane->handleEvent(event);
+		if (enterProblem) {
+			static_cast<void>(jumpToProblemAtCursor());
+			clearEvent(event);
+			drawSharedEditorPanes();
+			drawPaneFrames();
+			return;
+		}
+		MRFileEditor *sourceEditor = getEditor();
+		const bool trackSourceMutation = !compilerDiagnostics.empty() && sourceEditor != nullptr;
+		MRTextBufferModel::ReadSnapshot oldSnapshot;
+		TScrollBar *targetHorizontalScrollBar = targetPane != nullptr ? targetPane->horizontalEditorScrollBar() : nullptr;
+		TScrollBar *targetVerticalScrollBar = targetPane != nullptr ? targetPane->verticalEditorScrollBar() : nullptr;
+		const std::pair<bool, bool> targetRangeBefore = std::make_pair(targetHorizontalScrollBar != nullptr && targetHorizontalScrollBar->maxVal > targetHorizontalScrollBar->minVal, targetVerticalScrollBar != nullptr && targetVerticalScrollBar->maxVal > targetVerticalScrollBar->minVal);
+		if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
+		if (targetPane != nullptr) {
+			MRFileEditor *targetEditor = targetPane->getEditor();
+			if (event.what == evMouseWheel && targetEditor != nullptr) {
+				const int wheelStep = event.mouse.wheel == mwRight || event.mouse.wheel == mwDown ? 3 : -3;
+				if (event.mouse.wheel == mwLeft || event.mouse.wheel == mwRight)
+					targetEditor->scrollTo(std::max(0, targetEditor->delta.x + wheelStep), targetEditor->delta.y);
+				else
+					targetEditor->scrollTo(targetEditor->delta.x, std::max(0, targetEditor->delta.y + wheelStep));
+				clearEvent(event);
+				targetPane->drawPaneScrollBars();
+			} else
+				targetPane->handleEvent(event);
+		}
+		if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
+		if (clickProblem) {
+			static_cast<void>(jumpToProblemAtCursor());
+			clearEvent(event);
+			drawSharedEditorPanes();
+			drawPaneFrames();
+			return;
+		}
+		targetHorizontalScrollBar = targetPane != nullptr ? targetPane->horizontalEditorScrollBar() : nullptr;
+		targetVerticalScrollBar = targetPane != nullptr ? targetPane->verticalEditorScrollBar() : nullptr;
+		const std::pair<bool, bool> targetRangeAfter = std::make_pair(targetHorizontalScrollBar != nullptr && targetHorizontalScrollBar->maxVal > targetHorizontalScrollBar->minVal, targetVerticalScrollBar != nullptr && targetVerticalScrollBar->maxVal > targetVerticalScrollBar->minVal);
+		if (targetPane != nullptr && targetRangeAfter != targetRangeBefore) targetPane->layoutPaneChrome();
 		drawSharedEditorPanes();
-		redrawChrome();
+		drawPaneFrames();
 		return;
 	}
+	if (event.what == evMouseWheel && activeLeafId == 0 && getEditor() != nullptr && pointInRect(localMouse, contentBounds(paneBoundsForLeaf(0)))) {
+		MRFileEditor *sourceEditor = getEditor();
+		const int wheelStep = event.mouse.wheel == mwRight || event.mouse.wheel == mwDown ? 3 : -3;
+		if (event.mouse.wheel == mwLeft || event.mouse.wheel == mwRight)
+			sourceEditor->scrollTo(std::max(0, sourceEditor->delta.x + wheelStep), sourceEditor->delta.y);
+		else
+			sourceEditor->scrollTo(sourceEditor->delta.x, std::max(0, sourceEditor->delta.y + wheelStep));
+		clearEvent(event);
+		drawSourcePaneScrollBars();
+		updateTrackedCompilerSidekick();
+		drawPaneFrames();
+		return;
+	}
+	MRFileEditor *sourceEditor = getEditor();
+	const bool trackSourceMutation = !compilerDiagnostics.empty() && sourceEditor != nullptr;
+	TScrollBar *sourceHorizontalScrollBar = horizontalEditorScrollBar();
+	TScrollBar *sourceVerticalScrollBar = verticalEditorScrollBar();
+	const std::pair<bool, bool> sourceRangeBefore = std::make_pair(sourceHorizontalScrollBar != nullptr && sourceHorizontalScrollBar->maxVal > sourceHorizontalScrollBar->minVal, sourceVerticalScrollBar != nullptr && sourceVerticalScrollBar->maxVal > sourceVerticalScrollBar->minVal);
+	MRTextBufferModel::ReadSnapshot oldSnapshot;
+	if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
 	MREditWindow::handleEvent(event);
-	drawSharedEditorPanes();
-	redrawChrome();
+	if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
+	sourceHorizontalScrollBar = horizontalEditorScrollBar();
+	sourceVerticalScrollBar = verticalEditorScrollBar();
+	const std::pair<bool, bool> sourceRangeAfter = std::make_pair(sourceHorizontalScrollBar != nullptr && sourceHorizontalScrollBar->maxVal > sourceHorizontalScrollBar->minVal, sourceVerticalScrollBar != nullptr && sourceVerticalScrollBar->maxVal > sourceVerticalScrollBar->minVal);
+	if (sourceRangeAfter != sourceRangeBefore) {
+		layoutSplitPanes();
+		updateTrackedCompilerSidekick();
+	}
+	else {
+		drawSharedEditorPanes();
+		updateTrackedCompilerSidekick();
+		drawPaneFrames();
+	}
 }
 
 void MRBentoBox::setState(ushort aState, Boolean enable) {
+	if (windowCloseInProgress) {
+		TWindow::setState(aState, enable);
+		return;
+	}
 	MREditWindow::setState(aState, enable);
+	if ((aState & (sfActive | sfSelected)) != 0 && enable == False) mrDropSidekickForParent(this);
 	if (hasPaneSplit() && (aState & (sfFocused | sfSelected | sfActive)) != 0) {
 		updateActivePaneFrame();
 		drawPaneFrames();
@@ -576,7 +1375,7 @@ void MRBentoBox::initializeLayoutTree() noexcept {
 	source.id = nextLeafId++;
 	source.role = bprSource;
 	source.spec = paneSpecForRole(bprSource);
-	source.title = bentoMode == bbmDocumentViewports ? "" : paneRoleTitle(bprSource);
+	source.title = bentoMode == bbmDocumentViewports ? "" : bentoPaneRoleTitle(bprSource);
 	source.pane = nullptr;
 	source.visible = true;
 	leaves.push_back(source);
@@ -610,6 +1409,7 @@ void MRBentoBox::layoutSplitPanes() {
 		sourceScrollBarPaletteActive = false;
 		paneRoleDropList.hide();
 		paneActionDropList.hide();
+		if (primaryEditor != nullptr) primaryEditor->setScrollBarsAlwaysVisible(false);
 		MREditWindow::changeBounds(getBounds());
 		if (primaryEditor != nullptr) primaryEditor->drawView();
 		return;
@@ -652,7 +1452,10 @@ void MRBentoBox::layoutSplitPanes() {
 		}
 	}
 	if (frame != nullptr) frame->drawView();
-	if (primaryEditor != nullptr) primaryEditor->drawView();
+	if (primaryEditor != nullptr) {
+		primaryEditor->drawView();
+		if (leaves.front().visible) drawSourcePaneScrollBars();
+	}
 	for (BentoLeaf &leaf : leaves)
 		if (leaf.visible && leaf.pane != nullptr) leaf.pane->drawView();
 	drawPaneFrames();
@@ -664,44 +1467,161 @@ void MRBentoBox::layoutSourcePaneChrome(const TRect &content) noexcept {
 	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
 	MRIndicator *sourceIndicator = editorIndicator();
 	TRect editorBounds = content;
+	const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
+	bool reserveHorizontal = showWithoutRange;
+	bool reserveVertical = showWithoutRange;
 
 	if (primaryEditor != nullptr && (primaryEditor->state & sfVisible) == 0) primaryEditor->show();
-	if (content.b.x - content.a.x > 1) editorBounds.b.x = std::max<short>(editorBounds.a.x + 1, editorBounds.b.x - 1);
-	if (content.b.y - content.a.y > 1) editorBounds.b.y = std::max<short>(editorBounds.a.y + 1, editorBounds.b.y - 1);
+	if (primaryEditor != nullptr) primaryEditor->setScrollBarsAlwaysVisible(true);
+	if (primaryEditor != nullptr && !showWithoutRange) {
+		primaryEditor->changeBounds(editorBounds);
+		primaryEditor->updateMetrics();
+		reserveHorizontal = horizontalScrollBar != nullptr && horizontalScrollBar->maxVal > horizontalScrollBar->minVal;
+		reserveVertical = verticalScrollBar != nullptr && verticalScrollBar->maxVal > verticalScrollBar->minVal;
+	}
+	for (int pass = 0; pass < 3; ++pass) {
+		editorBounds = content;
+		if (reserveVertical && content.b.x - content.a.x > 1) editorBounds.b.x = std::max<short>(editorBounds.a.x + 1, editorBounds.b.x - 1);
+		if (reserveHorizontal && content.b.y - content.a.y > 1) editorBounds.b.y = std::max<short>(editorBounds.a.y + 1, editorBounds.b.y - 1);
+		if (horizontalScrollBar != nullptr) {
+			if (reserveHorizontal) {
+				const short right = reserveVertical ? std::max<short>(content.a.x + 1, content.b.x - 1) : std::max<short>(content.a.x + 1, content.b.x);
+				TRect horizontalRect(content.a.x, std::max<short>(content.a.y, content.b.y - 1), right, content.b.y);
+				horizontalScrollBar->locate(horizontalRect);
+			} else {
+				TRect horizontalRect(content.a.x, content.b.y, content.a.x, content.b.y);
+				horizontalScrollBar->locate(horizontalRect);
+			}
+		}
+		if (verticalScrollBar != nullptr) {
+			if (reserveVertical) {
+				const short bottom = reserveHorizontal ? std::max<short>(content.a.y + 1, content.b.y - 1) : std::max<short>(content.a.y + 1, content.b.y);
+				TRect verticalRect(std::max<short>(content.a.x, content.b.x - 1), content.a.y, content.b.x, bottom);
+				verticalScrollBar->locate(verticalRect);
+			} else {
+				TRect verticalRect(content.b.x, content.a.y, content.b.x, content.a.y);
+				verticalScrollBar->locate(verticalRect);
+			}
+		}
+		if (sourceIndicator != nullptr) {
+			if (reserveHorizontal) {
+				const short indicatorLeft = std::min<short>(content.b.x, content.a.x + 1);
+				const short indicatorRight = std::max<short>(indicatorLeft, std::min<short>(static_cast<short>(indicatorLeft + 36), static_cast<short>(reserveVertical ? content.b.x - 1 : content.b.x)));
+				TRect indicatorRect(indicatorLeft, std::max<short>(content.a.y, content.b.y - 1), indicatorRight, content.b.y);
+				sourceIndicator->show();
+				sourceIndicator->locate(indicatorRect);
+			} else
+				sourceIndicator->hide();
+		}
+		if (primaryEditor != nullptr) primaryEditor->changeBounds(editorBounds);
+		if (primaryEditor != nullptr) primaryEditor->updateMetrics();
+		if (showWithoutRange) break;
+		const bool nextReserveHorizontal = horizontalScrollBar != nullptr && horizontalScrollBar->maxVal > horizontalScrollBar->minVal;
+		const bool nextReserveVertical = verticalScrollBar != nullptr && verticalScrollBar->maxVal > verticalScrollBar->minVal;
+		if (nextReserveHorizontal == reserveHorizontal && nextReserveVertical == reserveVertical) break;
+		reserveHorizontal = nextReserveHorizontal;
+		reserveVertical = nextReserveVertical;
+	}
 	if (horizontalScrollBar != nullptr) {
-		TRect horizontalRect(content.a.x, std::max<short>(content.a.y, content.b.y - 1), std::max<short>(content.a.x + 1, content.b.x - 1), content.b.y);
-		horizontalScrollBar->locate(horizontalRect);
+		if (reserveHorizontal) horizontalScrollBar->show();
+		else
+			horizontalScrollBar->hide();
 	}
 	if (verticalScrollBar != nullptr) {
-		TRect verticalRect(std::max<short>(content.a.x, content.b.x - 1), content.a.y, content.b.x, std::max<short>(content.a.y + 1, content.b.y - 1));
-		verticalScrollBar->locate(verticalRect);
+		if (reserveVertical) verticalScrollBar->show();
+		else
+			verticalScrollBar->hide();
 	}
-	if (sourceIndicator != nullptr) {
-		const short indicatorLeft = std::min<short>(content.b.x, content.a.x + 1);
-		const short indicatorRight = std::max<short>(indicatorLeft, std::min<short>(static_cast<short>(indicatorLeft + 36), static_cast<short>(content.b.x - 1)));
-		TRect indicatorRect(indicatorLeft, std::max<short>(content.a.y, content.b.y - 1), indicatorRight, content.b.y);
-		sourceIndicator->locate(indicatorRect);
-	}
-	if (primaryEditor != nullptr) primaryEditor->changeBounds(editorBounds);
-	drawSourcePaneScrollBars();
-	if (sourceIndicator != nullptr) sourceIndicator->drawView();
+	if (sourceIndicator != nullptr && reserveHorizontal) sourceIndicator->drawView();
 }
 
 void MRBentoBox::hideSourcePaneChrome() noexcept {
 	MRFileEditor *primaryEditor = getEditor();
-	if (primaryEditor != nullptr) primaryEditor->hide();
+	if (primaryEditor != nullptr) {
+		primaryEditor->setScrollBarsAlwaysVisible(false);
+		primaryEditor->hide();
+	}
 	if (horizontalEditorScrollBar() != nullptr) horizontalEditorScrollBar()->hide();
 	if (verticalEditorScrollBar() != nullptr) verticalEditorScrollBar()->hide();
 	if (editorIndicator() != nullptr) editorIndicator()->hide();
 }
 
 void MRBentoBox::drawSourcePaneScrollBars() noexcept {
+	if (windowCloseInProgress) return;
 	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
 	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
+	const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
+	auto fillRect = [this](const TRect &rect) {
+		const short left = std::max<short>(0, rect.a.x);
+		const short top = std::max<short>(0, rect.a.y);
+		const short right = std::min<short>(size.x, rect.b.x);
+		const short bottom = std::min<short>(size.y, rect.b.y);
+		const int width = right - left;
 
+		if (width <= 0 || bottom <= top) return;
+		TDrawBuffer buffer;
+		buffer.moveChar(0, ' ', TAttrPair(MREditWindow::mapColor(1)), width);
+		for (short y = top; y < bottom; ++y)
+			writeLine(left, y, width, 1, buffer);
+	};
+	auto scrollBarRequired = [showWithoutRange](TScrollBar *scrollBar) {
+		if (scrollBar == nullptr) return false;
+		if ((scrollBar->state & sfVisible) == 0) return false;
+		if (scrollBar->size.x <= 0 || scrollBar->size.y <= 0) return false;
+		if (!showWithoutRange && scrollBar->maxVal <= scrollBar->minVal) return false;
+		return true;
+	};
+	auto drawCell = [this](short x, short y, char ch, TColorAttr attr) {
+		TDrawBuffer buffer;
+		buffer.moveChar(0, ch, attr, 1);
+		writeBuf(x, y, 1, 1, buffer);
+	};
+	auto drawScrollBar = [&](TScrollBar *scrollBar) {
+		if (!scrollBarRequired(scrollBar)) return false;
+		const TRect bounds = scrollBar->getBounds();
+		const TColorAttr baseAttr = MREditWindow::mapColor(activeLeafId == 0 ? 13 : 1);
+		const int logicalSize = std::max(3, scrollBar->size.x == 1 ? scrollBar->size.y : scrollBar->size.x);
+		const int markerPos = scrollBar->getPos();
+
+		if (scrollBar->size.x == 1) {
+			for (int row = 0; row < logicalSize; ++row) {
+				char ch = scrollBar->chars[2];
+				if (row == 0) ch = scrollBar->chars[0];
+				else if (row == logicalSize - 1)
+					ch = scrollBar->chars[1];
+				else if (scrollBar->maxVal == scrollBar->minVal)
+					ch = scrollBar->chars[4];
+				else if (row == markerPos)
+					ch = scrollBar->chars[3];
+				drawCell(bounds.a.x, static_cast<short>(bounds.a.y + row), ch, baseAttr);
+			}
+		} else {
+			const int width = std::max(0, bounds.b.x - bounds.a.x);
+			if (width <= 0) return false;
+			TDrawBuffer buffer;
+			for (int column = 0; column < std::min(width, logicalSize); ++column) {
+				char ch = scrollBar->chars[2];
+				if (column == 0) ch = scrollBar->chars[0];
+				else if (column == logicalSize - 1)
+					ch = scrollBar->chars[1];
+				else if (scrollBar->maxVal == scrollBar->minVal)
+					ch = scrollBar->chars[4];
+				else if (column == markerPos)
+					ch = scrollBar->chars[3];
+				buffer.moveChar(static_cast<ushort>(column), ch, baseAttr, 1);
+			}
+			writeLine(bounds.a.x, bounds.a.y, width, 1, buffer);
+		}
+		return true;
+	};
+
+	normalizeScrollBarTrackGlyph(horizontalScrollBar);
+	normalizeScrollBarTrackGlyph(verticalScrollBar);
 	sourceScrollBarPaletteActive = true;
-	if (horizontalScrollBar != nullptr) horizontalScrollBar->drawView();
-	if (verticalScrollBar != nullptr) verticalScrollBar->drawView();
+	const bool drewHorizontal = drawScrollBar(horizontalScrollBar);
+	const bool drewVertical = drawScrollBar(verticalScrollBar);
+	if (horizontalScrollBar != nullptr && !drewHorizontal) fillRect(horizontalScrollBar->getBounds());
+	if (verticalScrollBar != nullptr && !drewVertical) fillRect(verticalScrollBar->getBounds());
 	if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr && (horizontalScrollBar->state & sfVisible) != 0 && (verticalScrollBar->state & sfVisible) != 0) {
 		const TRect horizontalBounds = horizontalScrollBar->getBounds();
 		const TRect verticalBounds = verticalScrollBar->getBounds();
@@ -709,6 +1629,13 @@ void MRBentoBox::drawSourcePaneScrollBars() noexcept {
 			TDrawBuffer buffer;
 			buffer.moveChar(0, ' ', TAttrPair(mapColor(4)), 1);
 			writeBuf(verticalBounds.a.x, horizontalBounds.a.y, 1, 1, buffer);
+		}
+	} else if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr) {
+		const TRect horizontalBounds = horizontalScrollBar->getBounds();
+		const TRect verticalBounds = verticalScrollBar->getBounds();
+		if (horizontalBounds.a.y < horizontalBounds.b.y && verticalBounds.a.x < verticalBounds.b.x) {
+			TRect corner(verticalBounds.a.x, horizontalBounds.a.y, static_cast<short>(verticalBounds.a.x + 1), static_cast<short>(horizontalBounds.a.y + 1));
+			fillRect(corner);
 		}
 	}
 	sourceScrollBarPaletteActive = false;
@@ -726,8 +1653,7 @@ void MRBentoBox::drawSharedEditorPanes() noexcept {
 }
 
 void MRBentoBox::drawPaneFrames() noexcept {
-	if (!hasPaneSplit()) return;
-	drawSourcePaneScrollBars();
+	if (windowCloseInProgress || !hasPaneSplit()) return;
 	for (BentoLeaf &leaf : leaves)
 		if (leaf.visible && leaf.pane != nullptr) leaf.pane->drawPaneScrollBars();
 	for (std::size_t i = 0; i < leaves.size(); ++i)
@@ -742,10 +1668,9 @@ void MRBentoBox::drawPaneFrame(std::size_t leafIndex) noexcept {
 	const int height = bounds.b.y - bounds.a.y;
 	if (width <= 0 || height <= 0) return;
 
-	const bool source = leaf.id == 0;
 	const bool focused = leaf.id == activeLeafId && (state & sfFocused) != 0;
 	const bool maximized = leaf.id == maximizedLeafId;
-	const bool withControls = focused && (!source || bentoMode == bbmDocumentViewports);
+	const bool withControls = focused;
 	const TAttrPair frameColor = TAttrPair(mapColor(focused ? 13 : 1));
 	TDrawBuffer buffer;
 
@@ -826,6 +1751,7 @@ void MRBentoBox::layoutNode(int nodeIndex, const TRect &bounds) {
 void MRBentoBox::postCloseCommand() noexcept {
 	TEvent event;
 
+	windowCloseInProgress = true;
 	std::memset(&event, 0, sizeof(event));
 	event.what = evCommand;
 	event.message.command = cmClose;
@@ -872,7 +1798,7 @@ void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
 	pendingPaneRoleTargetLeafId = targetLeafId;
 	paneRoleListAnchor = TRect(left, top, left + listWidth, top);
 	if (openingRoleList && chromeView != nullptr) chromeView->setPaneRoleListTitleOpen(true, paneRoleListAnchor);
-	paneRoleDropList.toggle(*this, paneRoleListAnchor, paneRoleChoices(), paneRoleTitle(roleForLeaf(targetLeafId)), this, cmMrBentoPaneRoleAccepted, listHeight);
+	paneRoleDropList.toggle(*this, paneRoleListAnchor, paneRoleChoices(), bentoPaneRoleTitle(roleForLeaf(targetLeafId)), this, cmMrBentoPaneRoleAccepted, listHeight);
 	if (!openingRoleList) updatePaneRoleListChrome();
 }
 
@@ -892,7 +1818,7 @@ void MRBentoBox::showPaneActionList() {
 void MRBentoBox::acceptPaneRoleChoice() {
 	std::string roleTitle;
 	if (!paneRoleDropList.selectedValue(roleTitle)) return;
-	pendingPaneRole = paneRoleForTitle(roleTitle);
+	pendingPaneRole = bentoPaneRoleForTitle(roleTitle);
 	showPaneActionList();
 }
 
@@ -1010,8 +1936,17 @@ void MRBentoBox::setDividerPosition(int nodeIndex, int position) noexcept {
 }
 
 void MRBentoBox::setActivePane(int leafId) noexcept {
-	if (activeLeafId == leafId) return;
+	if (nodeIndexForLeaf(leafId) < 0) return;
 	activeLeafId = leafId;
+	if (leafId == 0) {
+		MRFileEditor *sourceEditor = getEditor();
+		if (sourceEditor != nullptr && sourceEditor->getState(sfVisible)) sourceEditor->select();
+	} else {
+		MRPaneEditWindow *pane = paneWindowForLeaf(leafId);
+		MRFileEditor *paneEditor = pane != nullptr ? pane->getEditor() : nullptr;
+		if (pane != nullptr && pane->getState(sfVisible)) pane->select();
+		if (paneEditor != nullptr && paneEditor->getState(sfVisible)) paneEditor->select();
+	}
 	updateActivePaneFrame();
 }
 
@@ -1022,7 +1957,6 @@ void MRBentoBox::updateActivePaneFrame() noexcept {
 		if (leaves[i].pane != nullptr) leaves[i].pane->setPaneFocused(leaves[i].id == activeLeafId && (state & sfFocused) != 0);
 		view->setPane(leaves[i].id, paneTitleForLeaf(leaves[i]).c_str(), leaves[i].id == 0 && bentoMode != bbmDocumentViewports, leaves[i].id == activeLeafId && (state & sfFocused) != 0, leaves[i].id == maximizedLeafId);
 	}
-	drawSourcePaneScrollBars();
 }
 
 void MRBentoBox::setActivePaneForMouse(TPoint globalMouse) noexcept {
@@ -1050,85 +1984,31 @@ bool MRBentoBox::handleDividerChromeMouse(TEvent &event) {
 		paneMouse.y = localMouse.y - bounds.a.y;
 		MRBentoPaneFrameView::HitKind hit = view->hitTest(paneMouse);
 		const int leafId = view->paneLeafId();
-		if ((event.mouse.buttons & mbRightButton) != 0 && hit == MRBentoPaneFrameView::hitTitle) {
-			setActivePane(leafId);
-			if (titleMenuEnabledForLeaf(leafId)) showPaneRoleList(event.mouse.where, leafId);
-			return true;
-		}
-		if ((event.mouse.buttons & mbLeftButton) == 0 || hit == MRBentoPaneFrameView::hitNone) return false;
-		if (hit == MRBentoPaneFrameView::hitTitle) {
-			setActivePane(leafId);
-			if (titleMenuEnabledForLeaf(leafId)) showPaneRoleList(event.mouse.where, leafId);
-			return true;
-		}
-		if (hit == MRBentoPaneFrameView::hitClose) {
-			closePane(leafId);
-			return true;
-		}
-		if (hit == MRBentoPaneFrameView::hitMaximize) {
-			toggleLeafMaximized(leafId);
-			return true;
+		switch (hit) {
+			case MRBentoPaneFrameView::hitTitle:
+				if ((event.mouse.buttons & (mbLeftButton | mbRightButton)) == 0) return false;
+				setActivePane(leafId);
+				if (titleMenuEnabledForLeaf(leafId)) showPaneRoleList(event.mouse.where, leafId);
+				return true;
+			case MRBentoPaneFrameView::hitClose:
+				if ((event.mouse.buttons & mbLeftButton) == 0) return false;
+				closePane(leafId);
+				return true;
+			case MRBentoPaneFrameView::hitMaximize:
+				if ((event.mouse.buttons & mbLeftButton) == 0) return false;
+				toggleLeafMaximized(leafId);
+				return true;
+			case MRBentoPaneFrameView::hitNone:
+				return false;
 		}
 	}
 	return false;
-}
-
-TRect MRBentoBox::primaryPaneBounds() const noexcept {
-	return paneBoundsForLeaf(0);
-}
-
-TRect MRBentoBox::topChromeBounds() const noexcept {
-	return TRect(0, 0, 0, 0);
-}
-
-TRect MRBentoBox::dividerBounds() const noexcept {
-	return nodeBounds(rootNode);
-}
-
-TRect MRBentoBox::toolAreaBounds() const noexcept {
-	return paneBoundsForLeaf(firstToolLeafId());
-}
-
-TRect MRBentoBox::nestedTopChromeBounds() const noexcept {
-	return TRect(0, 0, 0, 0);
-}
-
-TRect MRBentoBox::nestedDividerBounds() const noexcept {
-	return TRect(0, 0, 0, 0);
-}
-
-TRect MRBentoBox::dividerDragBounds() const noexcept {
-	return dividerBounds();
-}
-
-TRect MRBentoBox::secondaryPaneBounds() const noexcept {
-	return paneBoundsForLeaf(firstToolLeafId());
-}
-
-TRect MRBentoBox::tertiaryPaneBounds() const noexcept {
-	return TRect(0, 0, 0, 0);
-}
-
-TRect MRBentoBox::paneBounds(ActivePane pane) const noexcept {
-	return pane == apPrimary ? paneBoundsForLeaf(0) : paneBoundsForLeaf(firstToolLeafId());
 }
 
 TRect MRBentoBox::paneBoundsForLeaf(int leafId) const noexcept {
 	for (const BentoLeaf &leaf : leaves)
 		if (leaf.id == leafId) return leaf.bounds;
 	return TRect(0, 0, 0, 0);
-}
-
-int MRBentoBox::defaultDividerY() const noexcept {
-	return defaultDividerPosition();
-}
-
-int MRBentoBox::clampedDividerY(int y) const noexcept {
-	return clampedDividerPosition(y);
-}
-
-int MRBentoBox::currentDividerY() const noexcept {
-	return currentDividerPosition();
 }
 
 int MRBentoBox::defaultDividerPosition() const noexcept {
@@ -1167,21 +2047,6 @@ int MRBentoBox::currentDividerPosition(int nodeIndex) const noexcept {
 	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return 0;
 	const int value = layoutTree[nodeIndex].dividerPosition;
 	return clampedDividerPosition(nodeIndex, value > 0 ? value : defaultDividerPosition(nodeIndex));
-}
-
-bool MRBentoBox::verticalRootSplit() const noexcept {
-	return rootNode >= 0 && rootNode < static_cast<int>(layoutTree.size()) && layoutTree[rootNode].kind == blnSplit && layoutTree[rootNode].orientation == bsoVertical;
-}
-
-bool MRBentoBox::tertiaryPaneVisible() const noexcept {
-	int count = 0;
-	for (const BentoLeaf &leaf : leaves)
-		if (leaf.visible && leaf.id != 0) ++count;
-	return count > 1;
-}
-
-bool MRBentoBox::verticalToolSplit() const noexcept {
-	return false;
 }
 
 bool MRBentoBox::hasPaneSplit() const noexcept {
@@ -1234,6 +2099,12 @@ bool MRBentoBox::titleMenuEnabledForLeaf(int leafId) const noexcept {
 int MRBentoBox::firstToolLeafId() const noexcept {
 	for (const BentoLeaf &leaf : leaves)
 		if (leaf.id != 0 && leaf.visible) return leaf.id;
+	return -1;
+}
+
+int MRBentoBox::leafIdForRole(MRBentoPaneRole role) const noexcept {
+	for (const BentoLeaf &leaf : leaves)
+		if (leaf.visible && leaf.role == role) return leaf.id;
 	return -1;
 }
 
@@ -1306,8 +2177,10 @@ std::string MRBentoBox::paneTitleForLeaf(const BentoLeaf &leaf) const {
 		const int viewportNumber = viewportNumberForLeaf(leaf.id);
 		return "Viewport #" + std::to_string(std::max(1, viewportNumber));
 	}
+	if (leaf.role == bprCompilerOutput && !compilerOutputStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + compilerOutputStatus + "]";
+	if (leaf.role == bprProblems && !compilerProblemsStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + compilerProblemsStatus + "]";
 	if (!leaf.title.empty()) return leaf.title;
-	return paneRoleTitle(leaf.role);
+	return bentoPaneRoleTitle(leaf.role);
 }
 
 TRect MRBentoBox::nodeBounds(int nodeIndex) const noexcept {
@@ -1343,7 +2216,7 @@ int MRBentoBox::createPaneLeaf(const MRBentoPaneSpec &spec) {
 	leaf.id = nextLeafId++;
 	leaf.role = spec.role;
 	leaf.spec = spec;
-	leaf.title = bentoMode == bbmDocumentViewports ? "" : paneRoleTitle(spec.role);
+	leaf.title = bentoMode == bbmDocumentViewports ? "" : bentoPaneRoleTitle(spec.role);
 	const std::string initialTitle = bentoMode == bbmDocumentViewports ? "Viewport" : leaf.title;
 	leaf.pane = new MRPaneEditWindow(TRect(0, 0, 1, 1), initialTitle.c_str(), number);
 	leaf.pane->setPaneSpec(spec, getEditor());
@@ -1408,51 +2281,25 @@ void MRBentoBox::collapseLeafNode(int leafId) noexcept {
 }
 
 std::vector<std::string> MRBentoBox::paneRoleChoices() const {
-	return {paneRoleTitle(bprCompilerOutput), paneRoleTitle(bprAppOutput), paneRoleTitle(bprProblems), paneRoleTitle(bprDebuggerOutput), paneRoleTitle(bprWatches), paneRoleTitle(bprVariables), paneRoleTitle(bprSplitEditor)};
+	std::vector<std::string> choices;
+
+	for (const BentoPaneRoleDescriptor &descriptor : kBentoPaneRoles)
+		if (descriptor.listed) choices.push_back(descriptor.title);
+	return choices;
 }
 
 std::vector<std::string> MRBentoBox::paneActionChoices() const {
-	return {kBentoPaneActionReplace, kBentoPaneActionSplitRight, kBentoPaneActionSplitDown};
-}
+	std::vector<std::string> choices;
 
-MRBentoPaneRole MRBentoBox::paneRoleForTitle(const std::string &title) const noexcept {
-	if (title == paneRoleTitle(bprCompilerOutput)) return bprCompilerOutput;
-	if (title == paneRoleTitle(bprAppOutput)) return bprAppOutput;
-	if (title == paneRoleTitle(bprProblems)) return bprProblems;
-	if (title == paneRoleTitle(bprDebuggerOutput)) return bprDebuggerOutput;
-	if (title == paneRoleTitle(bprWatches)) return bprWatches;
-	if (title == paneRoleTitle(bprVariables)) return bprVariables;
-	if (title == paneRoleTitle(bprSplitEditor)) return bprSplitEditor;
-	return bprCompilerOutput;
+	for (const BentoPaneActionDescriptor &descriptor : kBentoPaneActions)
+		choices.push_back(descriptor.action);
+	return choices;
 }
 
 MRBentoPanePlacement MRBentoBox::panePlacementForAction(const std::string &action) const noexcept {
-	if (action == kBentoPaneActionSplitRight) return bppSplitDown;
-	if (action == kBentoPaneActionSplitDown) return bppSplitRight;
+	for (const BentoPaneActionDescriptor &descriptor : kBentoPaneActions)
+		if (action == descriptor.action) return descriptor.placement;
 	return bppReplace;
-}
-
-const char *MRBentoBox::paneRoleTitle(MRBentoPaneRole role) const noexcept {
-	switch (role) {
-		case bprSource:
-			return "Source";
-		case bprCompilerOutput:
-			return "Compiler Output";
-		case bprAppOutput:
-			return "App Output";
-		case bprProblems:
-			return "Problems";
-		case bprDebuggerOutput:
-			return "Debugger Output";
-		case bprWatches:
-			return "Watches";
-		case bprVariables:
-			return "Variables";
-		case bprSplitEditor:
-			return "Split editor";
-		default:
-			return "Pane";
-	}
 }
 
 TFrame *MRBentoBox::initFrame(TRect bounds) {

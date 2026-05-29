@@ -476,7 +476,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	return signals;
 }
 
-MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings) const {
+MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings) const {
 	OverlayState overlay;
 	const int dotColumns = useBraille ? std::max(1, miniMapBodyWidth * 2) : std::max(1, miniMapBodyWidth);
 	const int normalizedViewportWidth = std::max(1, viewportWidth);
@@ -508,7 +508,7 @@ MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr:
 		return mask;
 	};
 
-	auto appendRangeMasks = [&](std::vector<OverlayState::LineMask> &target, mr::editor::Range range) {
+	auto appendRangeMasks = [&](std::vector<OverlayState::LineMask> &target, mr::editor::Range range, bool markTouchedBlankLines) {
 		range = range.clamped(length);
 		if (range.end <= range.start) return;
 
@@ -519,18 +519,25 @@ MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr:
 			const std::size_t lineEnd = std::min(nextLineStart, length);
 			const std::size_t sliceStart = range.start > lineStart ? range.start - lineStart : 0;
 			const std::size_t sliceEnd = range.end < lineEnd ? range.end - lineStart : lineEnd - lineStart;
-			const std::uint64_t mask = rangeMaskForLineSlice(snapshot.lineText(lineStart), sliceStart, sliceEnd);
+			std::uint64_t mask = rangeMaskForLineSlice(snapshot.lineText(lineStart), sliceStart, sliceEnd);
+			if (mask == 0 && markTouchedBlankLines) mask = 1ULL;
 			if (mask != 0) target.push_back({lineIndex, mask});
 			if (nextLineStart <= lineStart) break;
 			lineStart = nextLineStart;
 		}
 	};
 
-	if (selection.end > selection.start) appendRangeMasks(overlay.findLineMasks, selection.normalized());
+	if (selection.end > selection.start) appendRangeMasks(overlay.findLineMasks, selection.normalized(), false);
 	for (const mr::editor::Range &range : findRanges)
-		appendRangeMasks(overlay.findLineMasks, range);
+		appendRangeMasks(overlay.findLineMasks, range, false);
 	for (const mr::editor::Range &range : dirtyRanges)
-		appendRangeMasks(overlay.dirtyLineMasks, range);
+		appendRangeMasks(overlay.dirtyLineMasks, range, true);
+	for (const mr::editor::Range &range : errorRanges)
+		appendRangeMasks(overlay.errorLineMasks, range, true);
+	for (const mr::editor::Range &range : warningRanges)
+		appendRangeMasks(overlay.warningLineMasks, range, true);
+	Impl::normalizeLineMasks(overlay.errorLineMasks);
+	Impl::normalizeLineMasks(overlay.warningLineMasks);
 	Impl::normalizeLineMasks(overlay.findLineMasks);
 	Impl::normalizeLineMasks(overlay.dirtyLineMasks);
 	return overlay;
@@ -566,30 +573,41 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 		bool cellFind = false;
 		bool cellChanged = false;
 		bool cellError = false;
+		bool cellWarning = false;
 		if (useBraille) {
 			for (int py = 0; py < 4; ++py) {
 				const std::size_t sampleOffset = static_cast<std::size_t>(y) * 4 + static_cast<std::size_t>(py);
 				if (sampleOffset >= samplingWindow.lineCount) break;
 				const std::size_t lineIndex = samplingWindow.startLine + sampleOffset;
+				const std::uint64_t errorBits = Impl::lineMaskBits(overlay.errorLineMasks, lineIndex);
+				const std::uint64_t warningBits = Impl::lineMaskBits(overlay.warningLineMasks, lineIndex);
 				const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
 				const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
+				if (!cellError && miniMapCellHasOverlayBits(errorBits, x, true)) cellError = true;
+				if (!cellWarning && miniMapCellHasOverlayBits(warningBits, x, true)) cellWarning = true;
 				if (!cellFind && miniMapCellHasOverlayBits(findBits, x, true)) cellFind = true;
 				if (!cellChanged && miniMapCellHasOverlayBits(dirtyBits, x, true)) cellChanged = true;
 			}
 		} else {
 			std::size_t lineIndex = samplingWindow.startLine + static_cast<std::size_t>(y);
+			const std::uint64_t errorBits = Impl::lineMaskBits(overlay.errorLineMasks, lineIndex);
+			const std::uint64_t warningBits = Impl::lineMaskBits(overlay.warningLineMasks, lineIndex);
 			const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
 			const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
+			cellError = miniMapCellHasOverlayBits(errorBits, x, false);
+			cellWarning = miniMapCellHasOverlayBits(warningBits, x, false);
 			cellFind = miniMapCellHasOverlayBits(findBits, x, false);
 			cellChanged = miniMapCellHasOverlayBits(dirtyBits, x, false);
 		}
 		TColorAttr rowPriorityColor = palette.normal;
-		if (cellFind) rowPriorityColor = palette.findMarker;
-		else if (cellError)
-			rowPriorityColor = palette.errorMarker;
+		if (cellError) rowPriorityColor = palette.errorMarker;
+		else if (cellWarning)
+			rowPriorityColor = palette.warningMarker;
+		else if (cellFind)
+			rowPriorityColor = palette.findMarker;
 		else if (cellChanged)
 			rowPriorityColor = palette.changed;
-		const bool cellOverlayActive = cellFind || cellError || cellChanged;
+		const bool cellOverlayActive = cellError || cellWarning || cellFind || cellChanged;
 		TColorAttr cellColor = (pattern != 0 || cellOverlayActive) ? rowPriorityColor : palette.normal;
 		if (useBraille) buffer.moveStr(static_cast<ushort>(bodyX + x), glyphTable[pattern], cellColor, 1);
 		else if (pattern != 0)
@@ -609,19 +627,13 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 	const std::size_t markerWindowEnd = std::min(totalLines, markerWindowStart + markerWindowLineCount);
 	const std::size_t markerViewportStart = std::min(std::max(clampedTopLine, markerWindowStart), markerWindowEnd);
 	const std::size_t markerViewportEnd = std::min(std::max(viewportLineEnd, markerViewportStart), markerWindowEnd);
-	std::size_t markerStart = (markerViewportStart - markerWindowStart) * markerRowCount / markerWindowLineCount;
-	std::size_t markerEnd = ((markerViewportEnd - markerWindowStart) * markerRowCount + markerWindowLineCount - 1) / markerWindowLineCount;
+	const std::size_t markerSamplesPerRow = useBraille ? 4 : 1;
+	std::size_t markerStart = (markerViewportStart - markerWindowStart) / markerSamplesPerRow;
+	std::size_t markerEnd = ((markerViewportEnd - markerWindowStart) + markerSamplesPerRow - 1) / markerSamplesPerRow;
 	const std::size_t minMarkerRows = std::min<std::size_t>(3, markerRowCount);
-	const std::size_t maxMarkerRows = std::min<std::size_t>(6, markerRowCount);
 
 	if (markerStart >= markerRowCount) markerStart = markerRowCount - 1;
 	if (markerEnd <= markerStart) markerEnd = markerStart + 1;
-	if (markerEnd - markerStart > maxMarkerRows) {
-		const std::size_t center = markerStart + (markerEnd - markerStart) / 2;
-		markerStart = center > maxMarkerRows / 2 ? center - maxMarkerRows / 2 : 0;
-		markerEnd = std::min(markerRowCount, markerStart + maxMarkerRows);
-		if (markerEnd - markerStart < maxMarkerRows) markerStart = markerEnd > maxMarkerRows ? markerEnd - maxMarkerRows : 0;
-	}
 	if (markerEnd - markerStart < minMarkerRows) {
 		const std::size_t grow = minMarkerRows - (markerEnd - markerStart);
 		const std::size_t growDown = std::min(grow, markerRowCount - markerEnd);

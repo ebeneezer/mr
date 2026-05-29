@@ -3,6 +3,7 @@
 #include "router/MRCommandRouterSearchMultiFile.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../ui/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "MRCommands.hpp"
 
@@ -16,6 +17,7 @@ struct AppCommandState {
 	bool hasDirtyWindow;
 	bool hasAnyDirtyWindow;
 	bool hasPersistentFileName;
+	bool hasBuildSourceFile;
 	bool canSaveInPlace;
 	bool hasSelection;
 	bool hasUndo;
@@ -27,8 +29,10 @@ struct AppCommandState {
 	bool isCommunicationWindow;
 	bool isCommunicationCommandWindow;
 	bool isLogWindow;
+	bool hasExternalCommandDetail;
+	bool hasCompilerProblems;
 
-	AppCommandState() : window(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
+	AppCommandState() : window(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false) {
 	}
 };
 
@@ -51,12 +55,18 @@ AppCommandState appCommandState() {
 			break;
 		}
 	if (win == nullptr) return state;
+	MREditWindow *externalWin = win;
+	if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win); bentoBox != nullptr) {
+		state.hasCompilerProblems = bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
+		if (bentoBox->buildOutputPane() != nullptr) externalWin = bentoBox->buildOutputPane();
+	}
 
 	state.isMinimizedWindow = win->isMinimized();
 	state.hasReadOnlyWindow = editorWin == nullptr || editorWin->isReadOnly();
 	state.hasEditableWindow = !state.hasReadOnlyWindow;
 	state.hasDirtyWindow = editorWin != nullptr && editorWin->isFileChanged();
 	state.hasPersistentFileName = editorWin != nullptr && editorWin->hasPersistentFileName();
+	state.hasBuildSourceFile = win->hasPersistentFileName();
 	state.canSaveInPlace = editorWin != nullptr && editorWin->canSaveInPlace();
 	state.hasBlock = editorWin != nullptr && editorWin->hasBlock();
 	state.blockMarking = editorWin != nullptr && editorWin->isBlockMarking();
@@ -64,10 +74,11 @@ AppCommandState appCommandState() {
 	state.hasUndo = editorWin != nullptr && editorWin->hasUndoHistory();
 	state.hasRedo = editorWin != nullptr && editorWin->hasRedoHistory();
 	state.hasMacroTasks = editorWin != nullptr && editorWin->hasTrackedMacroTasks();
-	state.hasExternalIoTasks = win->hasTrackedExternalIoTasks();
-	state.isCommunicationWindow = win->isCommunicationWindow();
-	state.isCommunicationCommandWindow = win->windowRole() == MREditWindow::wrCommunicationCommand;
-	state.isLogWindow = win->windowRole() == MREditWindow::wrLog;
+	state.hasExternalIoTasks = externalWin->hasTrackedExternalIoTasks();
+	state.isCommunicationWindow = externalWin->isCommunicationWindow();
+	state.isCommunicationCommandWindow = externalWin->windowRole() == MREditWindow::wrCommunicationCommand;
+	state.isLogWindow = externalWin->windowRole() == MREditWindow::wrLog;
+	state.hasExternalCommandDetail = !externalWin->windowRoleDetail().empty();
 	return state;
 }
 } // namespace
@@ -163,10 +174,12 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrTextCenterLine, canModify);
 	setCommandEnabled(cmMrTextTimeDateStamp, canModify);
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
-	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasPersistentFileName);
+	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasBuildSourceFile);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
-	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && !state.window->windowRoleDetail().empty());
+	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail);
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
+	setCommandEnabled(cmMrOtherFindNextCompilerError, state.hasCompilerProblems);
+	setCommandEnabled(cmMrOtherFindPreviousCompilerError, state.hasCompilerProblems);
 	setCommandEnabled(cmMrOtherAsciiTable, canModify);
 	setCommandEnabled(cmMrOtherEmojiTable, canModify);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);

@@ -25,6 +25,7 @@
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../ui/MRFrame.hpp"
+#include "../../ui/MRBentoBox.hpp"
 #include "../../ui/MRMenuBar.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
@@ -1445,6 +1446,9 @@ struct UserInterfaceSettingsDialogData {
 	ushort flags = 0;
 	ushort virtualDesktops = 1;
 	ushort cursorBehaviourChoice = 1;
+	ushort compilerErrorMessageChoice = 1;
+	ushort compilerDiagnosticFlags = 0;
+	ushort scrollbarVisibilityChoice = 0;
 	ushort uiIndentStyleChoice = 0;
 	char cursorPositionMarker[12] = {0};
 };
@@ -1488,7 +1492,8 @@ bool validateCursorPositionMarkerInput(std::string_view value, std::string &erro
 }
 
 bool userInterfaceSettingsDialogDataEqual(const UserInterfaceSettingsDialogData &lhs, const UserInterfaceSettingsDialogData &rhs) {
-	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && lhs.uiIndentStyleChoice == rhs.uiIndentStyleChoice &&
+	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && lhs.compilerErrorMessageChoice == rhs.compilerErrorMessageChoice &&
+	       lhs.compilerDiagnosticFlags == rhs.compilerDiagnosticFlags && lhs.scrollbarVisibilityChoice == rhs.scrollbarVisibilityChoice && lhs.uiIndentStyleChoice == rhs.uiIndentStyleChoice &&
 	       readRecordField(lhs.cursorPositionMarker) == readRecordField(rhs.cursorPositionMarker);
 }
 
@@ -1557,41 +1562,55 @@ class TIndentStylePreview : public TView {
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
   public:
 	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour,
+	                            MRCompilerErrorMessagePlacement initialCompilerErrorMessagePlacement, MRScrollbarVisibility initialScrollbarVisibility, bool initialTrackCompilerWarnings, bool initialTrackCompilerNotes,
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker)
-	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(68, 24), "User interface settings", 66, 22, initSetupDialogFrame) {
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(77, 29), "User interface settings", 77, 29, initSetupDialogFrame) {
 
 		int const yStart = 2;
 
-		TCheckBoxes *cb = new TCheckBoxes(TRect(3, yStart, 34, yStart + 4), new TSItem("~W~indow Manager", new TSItem("~M~enuline messages", new TSItem("~A~uto load workspace", new TSItem("~C~ycle virtual desktops", nullptr)))));
+		TCheckBoxes *cb = new TCheckBoxes(TRect(3, yStart, 36, yStart + 6),
+		                                   new TSItem("~W~indow Manager",
+		                                              new TSItem("~M~enuline messages", new TSItem("~A~uto load workspace", new TSItem("~C~ycle virtual desktops", new TSItem("Track compiler ~w~arnings", new TSItem("Track compiler ~n~otes", nullptr)))))));
 
 		mOptionsField = cb;
 		addManaged(mOptionsField, mOptionsField->getBounds());
 
-		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 7, 61, 8), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(mVirtualDesktopsSlider, TRect(24, 7, 61, 8));
-		addManaged(new TLabel(TRect(2, 7, 23, 8), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 7, 23, 8));
+		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 12, 70, 13), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mVirtualDesktopsSlider, TRect(24, 12, 70, 13));
+		addManaged(new TLabel(TRect(2, 12, 23, 13), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 12, 23, 13));
 
-		mCursorPositionMarkerField = new TInputLine(TRect(28, 8, 42, 9), 11);
-		addManaged(mCursorPositionMarkerField, TRect(28, 8, 42, 9));
-		addManaged(new TLabel(TRect(2, 8, 27, 9), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 8, 27, 9));
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 13, 42, 14), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 13, 42, 14));
+		addManaged(new TLabel(TRect(2, 13, 27, 14), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 13, 27, 14));
 
-		addManaged(new TStaticText(TRect(36, 2, 56, 3), "Cursor behaviour:"), TRect(36, 2, 56, 3));
-		mCursorBehaviourField = new TRadioButtons(TRect(36, 3, 58, 6), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
-		addManaged(mCursorBehaviourField, TRect(36, 3, 58, 6));
+		addManaged(new TStaticText(TRect(38, 2, 57, 3), "Cursor behaviour:"), TRect(38, 2, 57, 3));
+		mCursorBehaviourField = new TRadioButtons(TRect(38, 3, 57, 6), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
+		addManaged(mCursorBehaviourField, TRect(38, 3, 57, 6));
 
-		addManaged(new TStaticText(TRect(3, 10, 20, 11), "Indent style:"), TRect(3, 10, 20, 11));
-		mIndentStyleField = new TRadioButtons(TRect(3, 11, 23, 20), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
-		addManaged(mIndentStyleField, TRect(3, 11, 23, 20));
-		mIndentStylePreview = new TIndentStylePreview(TRect(25, 11, 65, 20));
-		addManaged(mIndentStylePreview, TRect(25, 11, 65, 20));
+		addManaged(new TStaticText(TRect(59, 2, 71, 3), "Scrollbars:"), TRect(59, 2, 71, 3));
+		mScrollbarVisibilityField = new TRadioButtons(TRect(59, 3, 74, 6), new TSItem("~S~mart", new TSItem("~A~lways", nullptr)));
+		addManaged(mScrollbarVisibilityField, TRect(59, 3, 74, 6));
 
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
-		int buttonRow = 21;
-		int buttonLeft = (66 - metrics.rowWidth) / 2;
-		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonRow, 2, buttons);
+		addManaged(new TStaticText(TRect(38, 7, 55, 8), "Compiler errors:"), TRect(38, 7, 55, 8));
+		mCompilerErrorMessageField = new TRadioButtons(TRect(38, 8, 56, 11), new TSItem("~U~nder code", new TSItem("~R~ight margin", nullptr)));
+		addManaged(mCompilerErrorMessageField, TRect(38, 8, 56, 11));
+
+		addManaged(new TStaticText(TRect(3, 15, 20, 16), "Indent style:"), TRect(3, 15, 20, 16));
+		mIndentStyleField = new TRadioButtons(TRect(3, 16, 23, 25), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
+		addManaged(mIndentStyleField, TRect(3, 16, 23, 25));
+		mIndentStylePreview = new TIndentStylePreview(TRect(25, 16, 47, 25));
+		addManaged(mIndentStylePreview, TRect(25, 16, 47, 25));
+
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
+		int buttonRow = 26;
+		int buttonLeft = (75 - metrics.rowWidth) / 2;
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonRow, 0, buttons);
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
+		mInitialCompilerErrorMessageChoice = initialCompilerErrorMessagePlacement == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
+		mInitialScrollbarVisibilityChoice = initialScrollbarVisibility == MRScrollbarVisibility::Always ? 1 : 0;
+		mInitialCompilerDiagnosticFlags = (initialTrackCompilerWarnings ? 1 : 0) | (initialTrackCompilerNotes ? 2 : 0);
 		writeRecordField(mDataCursorMarker, sizeof(mDataCursorMarker), initialCursorPositionMarker);
 		if (mIndentStyleField != nullptr) {
 			ushort styleChoice = 0;
@@ -1632,20 +1651,31 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 	void getData(void *rec) override {
 		UserInterfaceSettingsDialogData *data = static_cast<UserInterfaceSettingsDialogData *>(rec);
-		if (mOptionsField != nullptr) mOptionsField->getData(&data->flags);
+		if (mOptionsField != nullptr) {
+			ushort visualFlags = 0;
+			mOptionsField->getData(&visualFlags);
+			data->flags = visualFlags & 0x000F;
+			data->compilerDiagnosticFlags = static_cast<ushort>((visualFlags >> 4) & 0x0003);
+		}
 		if (mVirtualDesktopsSlider != nullptr) {
 			int32_t val = 1;
 			mVirtualDesktopsSlider->getData(&val);
 			data->virtualDesktops = static_cast<ushort>(val);
 		}
 		if (mCursorBehaviourField != nullptr) mCursorBehaviourField->getData(&data->cursorBehaviourChoice);
+		if (mCompilerErrorMessageField != nullptr) mCompilerErrorMessageField->getData(&data->compilerErrorMessageChoice);
+		if (mCompilerDiagnosticsField != nullptr) mCompilerDiagnosticsField->getData(&data->compilerDiagnosticFlags);
+		if (mScrollbarVisibilityField != nullptr) mScrollbarVisibilityField->getData(&data->scrollbarVisibilityChoice);
 		if (mIndentStyleField != nullptr) mIndentStyleField->getData(&data->uiIndentStyleChoice);
 		if (mCursorPositionMarkerField != nullptr) mCursorPositionMarkerField->getData(data->cursorPositionMarker);
 	}
 
 	void setData(void *rec) override {
 		UserInterfaceSettingsDialogData *data = static_cast<UserInterfaceSettingsDialogData *>(rec);
-		if (mOptionsField != nullptr) mOptionsField->setData(&data->flags);
+		if (mOptionsField != nullptr) {
+			ushort visualFlags = static_cast<ushort>((data->flags & 0x000F) | ((data->compilerDiagnosticFlags & 0x0003) << 4));
+			mOptionsField->setData(&visualFlags);
+		}
 		if (mVirtualDesktopsSlider != nullptr) {
 			int32_t val = data->virtualDesktops;
 			mVirtualDesktopsSlider->setData(&val);
@@ -1653,6 +1683,19 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		if (mCursorBehaviourField != nullptr) {
 			if (data->cursorBehaviourChoice > 1) data->cursorBehaviourChoice = mInitialCursorBehaviourChoice;
 			mCursorBehaviourField->setData(&data->cursorBehaviourChoice);
+		}
+		if (mCompilerErrorMessageField != nullptr) {
+			if (data->compilerErrorMessageChoice > 1) data->compilerErrorMessageChoice = mInitialCompilerErrorMessageChoice;
+			mCompilerErrorMessageField->setData(&data->compilerErrorMessageChoice);
+		}
+		if (mCompilerDiagnosticsField != nullptr) {
+			data->compilerDiagnosticFlags &= 3;
+			if (data->compilerDiagnosticFlags > 3) data->compilerDiagnosticFlags = mInitialCompilerDiagnosticFlags;
+			mCompilerDiagnosticsField->setData(&data->compilerDiagnosticFlags);
+		}
+		if (mScrollbarVisibilityField != nullptr) {
+			if (data->scrollbarVisibilityChoice > 1) data->scrollbarVisibilityChoice = mInitialScrollbarVisibilityChoice;
+			mScrollbarVisibilityField->setData(&data->scrollbarVisibilityChoice);
 		}
 		if (mIndentStyleField != nullptr) {
 			if (data->uiIndentStyleChoice > 5) data->uiIndentStyleChoice = 0;
@@ -1695,10 +1738,16 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	TCheckBoxes *mOptionsField = nullptr;
 	MRNumericSlider *mVirtualDesktopsSlider = nullptr;
 	TRadioButtons *mCursorBehaviourField = nullptr;
+	TRadioButtons *mCompilerErrorMessageField = nullptr;
+	TCheckBoxes *mCompilerDiagnosticsField = nullptr;
+	TRadioButtons *mScrollbarVisibilityField = nullptr;
 	TInputLine *mCursorPositionMarkerField = nullptr;
 	TRadioButtons *mIndentStyleField = nullptr;
 	TIndentStylePreview *mIndentStylePreview = nullptr;
 	ushort mInitialCursorBehaviourChoice = 1;
+	ushort mInitialCompilerErrorMessageChoice = 1;
+	ushort mInitialScrollbarVisibilityChoice = 0;
+	ushort mInitialCompilerDiagnosticFlags = 0;
 	ushort mLastIndentStyleChoice = 0;
 	char mDataCursorMarker[12] = {0};
 };
@@ -1990,10 +2039,14 @@ void runUserInterfaceSettingsDialogFlow() {
 		bool currentAw = configuredAutoloadWorkspace();
 		bool currentCv = configuredCyclicVirtualDesktops();
 		MRCursorBehaviour currentCb = configuredCursorBehaviour();
+		MRCompilerErrorMessagePlacement currentCemp = configuredCompilerErrorMessagePlacement();
+		MRScrollbarVisibility currentScrollbarVisibility = configuredScrollbarVisibility();
+		bool currentTrackWarnings = configuredTrackCompilerWarnings();
+		bool currentTrackNotes = configuredTrackCompilerNotes();
 		MRUiIndentStyle currentUiIndentStyle = configuredUiIndentStyle();
 		std::string currentCp = configuredCursorPositionMarker();
 
-		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw, currentCv, currentCb, currentUiIndentStyle, currentCp);
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw, currentCv, currentCb, currentCemp, currentScrollbarVisibility, currentTrackWarnings, currentTrackNotes, currentUiIndentStyle, currentCp);
 		UserInterfaceSettingsDialogData dialogData;
 		if (currentWm) dialogData.flags |= 1;
 		if (currentMm) dialogData.flags |= 2;
@@ -2002,6 +2055,10 @@ void runUserInterfaceSettingsDialogFlow() {
 
 		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
 		dialogData.cursorBehaviourChoice = currentCb == MRCursorBehaviour::FreeMovement ? 0 : 1;
+		dialogData.compilerErrorMessageChoice = currentCemp == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
+		dialogData.scrollbarVisibilityChoice = currentScrollbarVisibility == MRScrollbarVisibility::Always ? 1 : 0;
+		if (currentTrackWarnings) dialogData.compilerDiagnosticFlags |= 1;
+		if (currentTrackNotes) dialogData.compilerDiagnosticFlags |= 2;
 		dialogData.uiIndentStyleChoice = static_cast<ushort>(currentUiIndentStyle);
 		writeRecordField(dialogData.cursorPositionMarker, sizeof(dialogData.cursorPositionMarker), currentCp);
 
@@ -2013,12 +2070,33 @@ void runUserInterfaceSettingsDialogFlow() {
 		bool newCv = (dialogData.flags & 8) != 0;
 		int newVd = static_cast<int>(dialogData.virtualDesktops);
 		MRCursorBehaviour newCb = dialogData.cursorBehaviourChoice == 0 ? MRCursorBehaviour::FreeMovement : MRCursorBehaviour::BoundToText;
+		MRCompilerErrorMessagePlacement newCemp = dialogData.compilerErrorMessageChoice == 0 ? MRCompilerErrorMessagePlacement::UnderCode : MRCompilerErrorMessagePlacement::RightMargin;
+		MRScrollbarVisibility newScrollbarVisibility = dialogData.scrollbarVisibilityChoice == 1 ? MRScrollbarVisibility::Always : MRScrollbarVisibility::Smart;
+		bool newTrackWarnings = (dialogData.compilerDiagnosticFlags & 1) != 0;
+		bool newTrackNotes = (dialogData.compilerDiagnosticFlags & 2) != 0;
 		MRUiIndentStyle newUiIndentStyle = static_cast<MRUiIndentStyle>(dialogData.uiIndentStyleChoice);
 		std::string newCp = readRecordField(dialogData.cursorPositionMarker);
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineData, dialogData, userInterfaceSettingsDialogDataEqual);
+		const bool compilerDiagnosticFilterChanged = currentTrackWarnings != newTrackWarnings || currentTrackNotes != newTrackNotes;
 		auto applyAndPersistUiSettings = [&]() -> bool {
 			std::string errorText;
 			if (!setConfiguredCursorBehaviour(newCb, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredCompilerErrorMessagePlacement(newCemp, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredScrollbarVisibility(newScrollbarVisibility, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredTrackCompilerWarnings(newTrackWarnings, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredTrackCompilerNotes(newTrackNotes, &errorText)) {
 				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
 				return false;
 			}
@@ -2037,6 +2115,10 @@ void runUserInterfaceSettingsDialogFlow() {
 			applyVirtualDesktopConfigurationChange(newVd);
 			for (MREditWindow *window : allEditWindowsInZOrder())
 				if (window != nullptr && window->getEditor() != nullptr) window->getEditor()->refreshConfiguredVisualSettings();
+			if (compilerDiagnosticFilterChanged)
+				for (MREditWindow *window : allEditWindowsInZOrder())
+					if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window); bentoBox != nullptr && bentoBox->buildOutputPane() != nullptr && bentoBox->problemsPane() != nullptr)
+						static_cast<void>(bentoBox->refreshCompilerDiagnosticsFromOutput());
 			if (!persistConfiguredSettingsSnapshot(&errorText)) postSetupFlowError("Installation / User interface settings", errorText);
 			return true;
 		};

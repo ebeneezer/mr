@@ -54,6 +54,15 @@ bool quitTailTraceActive() noexcept {
 	return app != nullptr && app->quitPrepared();
 }
 
+void normalizeScrollBarTrackGlyph(TScrollBar *scrollBar) noexcept {
+	if (scrollBar == nullptr) return;
+	scrollBar->chars[4] = scrollBar->chars[2];
+}
+
+bool scrollBarHasRange(const TScrollBar *scrollBar) noexcept {
+	return scrollBar != nullptr && scrollBar->maxVal > scrollBar->minVal;
+}
+
 template <class Duration> long long traceMicros(Duration duration) {
 	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
 }
@@ -2437,6 +2446,11 @@ int MRFileEditor::visibleViewportRows() const noexcept {
 	return std::max(1, visibleTextRows());
 }
 
+TRect MRFileEditor::visibleTextViewportBounds() const noexcept {
+	const TextViewportGeometry viewport = textViewportGeometry();
+	return TRect(viewport.textLeft, viewport.topInset, viewport.textRight, viewport.topInset + std::max(1, visibleTextRows()));
+}
+
 const MRTextBufferModel &MRFileEditor::bufferModel() const noexcept {
 	return mBufferModel;
 }
@@ -2482,6 +2496,10 @@ std::size_t MRFileEditor::documentVersion() const noexcept {
 	return mBufferModel.version();
 }
 
+const MRTextBufferModel::DocumentChangeSet &MRFileEditor::lastDocumentChangeSet() const noexcept {
+	return mLastDocumentChangeSet;
+}
+
 MRFileEditor::LoadTiming MRFileEditor::lastLoadTiming() const noexcept {
 	return mLastLoadTiming;
 }
@@ -2508,6 +2526,7 @@ MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 	palette.changed = configuredColorSlotOverride(kMrPaletteMiniMapChanged, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.findMarker = configuredColorSlotOverride(kMrPaletteMiniMapFindMarker, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.errorMarker = configuredColorSlotOverride(kMrPaletteMiniMapErrorMarker, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
+	palette.warningMarker = configuredColorSlotOverride(kMrPaletteMessageWarning, configured) ? static_cast<TColorAttr>(configured) : palette.changed;
 	return palette;
 }
 
@@ -2548,6 +2567,42 @@ void MRFileEditor::setFindMarkerRanges(const std::vector<std::pair<std::size_t, 
 void MRFileEditor::clearFindMarkerRanges() {
 	if (mFindMarkerRanges.empty()) return;
 	mFindMarkerRanges.clear();
+	drawView();
+}
+
+void MRFileEditor::setCompilerDiagnosticRanges(const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges, const std::vector<std::pair<std::size_t, std::size_t>> &warningRanges) {
+	std::vector<MRTextBufferModel::Range> normalizedErrors;
+	std::vector<MRTextBufferModel::Range> normalizedWarnings;
+	const std::size_t length = mBufferModel.length();
+	auto appendRanges = [length](const std::vector<std::pair<std::size_t, std::size_t>> &source, std::vector<MRTextBufferModel::Range> &target) {
+		target.reserve(source.size());
+		if (length == 0) return;
+		for (const auto &rangePair : source) {
+			std::size_t start = std::min(rangePair.first, length);
+			std::size_t end = std::min(rangePair.second, length);
+			if (end < start) std::swap(start, end);
+			if (end == start) {
+				if (end < length) ++end;
+				else if (start > 0)
+					--start;
+			}
+			if (end > start) target.push_back(MRTextBufferModel::Range(start, end));
+		}
+	};
+
+	appendRanges(errorRanges, normalizedErrors);
+	appendRanges(warningRanges, normalizedWarnings);
+	normalizeRangeList(normalizedErrors);
+	normalizeRangeList(normalizedWarnings);
+	mCompilerErrorRanges.swap(normalizedErrors);
+	mCompilerWarningRanges.swap(normalizedWarnings);
+	drawView();
+}
+
+void MRFileEditor::clearCompilerDiagnosticRanges() {
+	if (mCompilerErrorRanges.empty() && mCompilerWarningRanges.empty()) return;
+	mCompilerErrorRanges.clear();
+	mCompilerWarningRanges.clear();
 	drawView();
 }
 
@@ -2721,16 +2776,19 @@ int MRFileEditor::visibleTextRows() const noexcept {
 }
 
 void MRFileEditor::syncScrollBarsToState() noexcept {
-	bool show = mScrollBarsAlwaysVisible || (state & (sfActive | sfSelected)) != 0;
+	normalizeScrollBarTrackGlyph(hScrollBar);
+	normalizeScrollBarTrackGlyph(vScrollBar);
+	bool showBase = mScrollBarsAlwaysVisible || (state & (sfActive | sfSelected)) != 0;
+	const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
 	MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
-	if (window != nullptr && window->isMinimized()) show = false;
+	if (window != nullptr && window->isMinimized()) showBase = false;
 	if (hScrollBar != nullptr) {
-		if (show) hScrollBar->show();
+		if (showBase && (showWithoutRange || scrollBarHasRange(hScrollBar))) hScrollBar->show();
 		else
 			hScrollBar->hide();
 	}
 	if (vScrollBar != nullptr) {
-		if (show) vScrollBar->show();
+		if (showBase && (showWithoutRange || scrollBarHasRange(vScrollBar))) vScrollBar->show();
 		else
 			vScrollBar->hide();
 	}

@@ -132,7 +132,8 @@ enum : ushort {
 	cmMrWindowTopologyChanged,
 	cmMrFileSaveAll,
 	cmMrFileRevert,
-	cmMrOtherBuildCurrentFile
+	cmMrOtherBuildCurrentFile,
+	cmMrOtherFindPreviousCompilerError
 };
 
 #endif

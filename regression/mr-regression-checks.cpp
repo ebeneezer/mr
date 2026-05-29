@@ -505,6 +505,10 @@ bool validateMrsetupGlobalSettings(std::string &failureReason) {
 		failureReason = "Startup context should apply CURSOR_BEHAVIOUR='FREE_MOVEMENT'.";
 		return false;
 	}
+	if (configuredScrollbarVisibility() != MRScrollbarVisibility::Always) {
+		failureReason = "Startup context should apply SCROLLBAR_VISIBILITY='ALWAYS'.";
+		return false;
+	}
 	return true;
 }
 
@@ -568,6 +572,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');\n"
 	                           "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
 	                           "MRSETUP('CURSOR_BEHAVIOUR', 'FREE_MOVEMENT');\n"
+	                           "MRSETUP('SCROLLBAR_VISIBILITY', 'ALWAYS');\n"
 	                           "MRSETUP('COLUMN_BLOCK_MOVE', 'LEAVE_SPACE');\n"
 	                           "MRSETUP('DEFAULT_MODE', 'OVERWRITE');\n"
 	                           "WINDOWCOLORS('v1:10,11,12,13,14,15,16,17');\n"
@@ -740,6 +745,10 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 	}
 	if (content.find("MRSETUP('CURSOR_BEHAVIOUR', '") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac is missing CURSOR_BEHAVIOUR.";
+		return false;
+	}
+	if (content.find("MRSETUP('SCROLLBAR_VISIBILITY', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing SCROLLBAR_VISIBILITY.";
 		return false;
 	}
 	if (content.find("MRSETUP('AUTOLOAD_WORKSPACE', '") == std::string::npos) {
@@ -2482,7 +2491,7 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		failureReason = "Changed-text must be applied per character via dedicated dirty-range lookup.";
 		return false;
 	}
-	if (sourceContent.find("if (overlayMode == 3) currentLineInBlock = false;") == std::string::npos || sourceContent.find("if (overlayMode == 3) selected = overlayStart <= documentPos && documentPos < overlayEnd;") == std::string::npos) {
+	if (sourceContent.find("if (overlayMode == 3) currentLineInBlock = false;") == std::string::npos || sourceContent.find("if (overlayMode == 3) selected = overlayStart <= documentPos && documentPos < overlayEnd;") == std::string::npos || sourceContent.find("} else\n\t\tcurrentLineInBlock = false;\n\tif (currentLineInBlock)") == std::string::npos) {
 		failureReason = "Stream block overlay must remain character-precise and must not color the full active line.";
 		return false;
 	}
@@ -2745,6 +2754,10 @@ bool testBlockHotkeyModifierRoutingGuard(std::string &failureReason) {
 		failureReason = "Mouse-drag block selection must let the latest selection replace the previous committed block.";
 		return false;
 	}
+	if (content.find("if (shouldCollapseSelectionBeforeEditorInput(event))") == std::string::npos || content.find("selectionCollapsedBeforeEditorInput = true;") == std::string::npos || content.find("std::size_t changePos = selectionCollapsedBeforeEditorInput ? normalizedCursorBefore : selectionStartBefore;") == std::string::npos || content.find("if (changePos <= normalizedStart)") == std::string::npos || content.find("else if (changePos < normalizedEnd && mBlockMode == bmStream)") == std::string::npos) {
+		failureReason = "Text input around a committed block must preserve persistent block state and remap offsets.";
+		return false;
+	}
 	failureReason.clear();
 	return true;
 }
@@ -2760,6 +2773,23 @@ bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
 	}
 	if (content.find("bool chooseInterWindowBlockTarget(int &sourceWindowIndex)") == std::string::npos || content.find("MREditWindow *targetWin = currentEditWindow();") == std::string::npos || content.find("sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);") == std::string::npos || content.find("No block marked in the selected source window.") == std::string::npos || content.find("mrActivateEditWindow(targetWin)") == std::string::npos) {
 		failureReason = "Inter-window block copy/move must keep the current window as target and select source from window list.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testBlockPasteFreeCursorTargetGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("mrmac/MRVM.cpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read MRVM.cpp for block-paste free-cursor target guard: " + ioError;
+		return false;
+	}
+	if (content.find("static int currentEditorPasteColumn(MRFileEditor *editor)") == std::string::npos || content.find("return editor->displayedCursorColumn() + 1;") == std::string::npos || content.find("struct BlockPasteTarget") == std::string::npos || content.find("static BlockPasteTarget materializeEditorPasteTarget(MRFileEditor *editor, std::string &text)") == std::string::npos || content.find("text.insert(target.offset, target.paddingLength, ' ');") == std::string::npos || content.find("BlockPasteTarget target = materializeEditorPasteTarget(editor, text);") == std::string::npos || content.find("BlockPasteTarget target = materializeEditorPasteTarget(destEditor, destText);") == std::string::npos) {
+		failureReason = "Stream/column block copy/move must honor the free-cursor visual target instead of falling back to POS1.";
 		return false;
 	}
 	failureReason.clear();
@@ -3907,7 +3937,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento split placement mapping changed.";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"constexpr BentoFrameGlyphs kBentoFrameGlyphs;", "if (action == kBentoPaneActionSplitRight) return bppSplitDown;", "if (action == kBentoPaneActionSplitDown) return bppSplitRight;"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"constexpr BentoFrameGlyphs kBentoFrameGlyphs;", "static const BentoPaneActionDescriptor kBentoPaneActions[]", "{kBentoPaneActionSplitRight, bppSplitDown}", "{kBentoPaneActionSplitDown, bppSplitRight}", "for (const BentoPaneActionDescriptor &descriptor : kBentoPaneActions)"}, missingNeedle)) {
 		failureReason = "Bento frame glyph table and split action mapping changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -3927,7 +3957,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento role-to-spec mapping changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"source.title = bentoMode == bbmDocumentViewports ? \"\" : paneRoleTitle(bprSource);", "leaf.title = bentoMode == bbmDocumentViewports ? \"\" : paneRoleTitle(spec.role);", "int MRBentoBox::viewportNumberForLeaf(int leafId) const noexcept", "stack.push_back(node.secondChild);", "stack.push_back(node.firstChild);", "return \"Viewport #\" + std::to_string(std::max(1, viewportNumber));", "if (!titleMenuEnabledForLeaf(targetLeafId)) return;"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"source.title = bentoMode == bbmDocumentViewports ? \"\" : bentoPaneRoleTitle(bprSource);", "leaf.title = bentoMode == bbmDocumentViewports ? \"\" : bentoPaneRoleTitle(spec.role);", "int MRBentoBox::viewportNumberForLeaf(int leafId) const noexcept", "stack.push_back(node.secondChild);", "stack.push_back(node.firstChild);", "return \"Viewport #\" + std::to_string(std::max(1, viewportNumber));", "if (!titleMenuEnabledForLeaf(targetLeafId)) return;"}, missingNeedle)) {
 		failureReason = "Document viewport mode must use current layout-derived viewport titles and suppress pane title menus: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -3939,7 +3969,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento spec-driven editor policy changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"MRPaneEditWindow::MRPaneEditWindow", "state &= static_cast<ushort>(~sfShadow);", "eventMask = 0;", "const bool withControls = focused && !source;", "const bool withControls = focused && (!source || bentoMode == bbmDocumentViewports);", "toggleLeafMaximized(int leafId) noexcept", "leafId == 0 && bentoMode != bbmDocumentViewports"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"MRPaneEditWindow::MRPaneEditWindow", "state &= static_cast<ushort>(~sfShadow);", "eventMask = 0;", "const bool withControls = focused;", "leaf.id == 0 && bentoMode != bbmDocumentViewports", "toggleLeafMaximized(int leafId) noexcept", "leafId == 0 && bentoMode != bbmDocumentViewports"}, missingNeedle)) {
 		failureReason = "Document viewport pane chrome and dispatcher ownership changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -3995,7 +4025,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento pane chrome must not be inserted as a child overlay view.";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"void MRBentoBox::draw()", "MREditWindow::draw();", "drawPaneFrames();", "void MRBentoBox::handleEvent(TEvent &event)", "const auto redrawChrome = [this]()", "drawPaneFrames();"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"void MRBentoBox::draw()", "MREditWindow::draw();", "drawSourcePaneScrollBars();", "drawPaneFrames();", "void MRBentoBox::handleEvent(TEvent &event)", "updateTrackedCompilerSidekick();", "drawPaneFrames();"}, missingNeedle)) {
 		failureReason = "Bento pane chrome redraw guard changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -4067,6 +4097,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
+	runTest(ctx, "Block paste free-cursor target guard", testBlockPasteFreeCursorTargetGuard);
 	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
 	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
@@ -4123,6 +4154,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
+	runTest(ctx, "Block paste free-cursor target guard", testBlockPasteFreeCursorTargetGuard);
 	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
 	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
