@@ -681,7 +681,7 @@ MRBentoBox::BentoLeaf::BentoLeaf() noexcept : id(-1), role(bprCompilerOutput), s
 }
 
 MRBentoBox::MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode)
-    : TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), windowCloseInProgress(false), paneRoleDropList(), paneActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0), compilerOutputStatus(), compilerProblemsStatus(), compilerDiagnostics(), compilerSidekickTracked(false), compilerSidekickUpdating(false), compilerSidekickDiagnosticIndex(0) {
+    : TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), windowCloseInProgress(false), bentoProjectionDirty(bpdNone), paneRoleDropList(), paneActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0), compilerOutputStatus(), compilerProblemsStatus(), compilerDiagnostics(), compilerSidekickTracked(false), compilerSidekickUpdating(false), compilerSidekickDiagnosticIndex(0) {
 	initializeLayoutTree();
 	layoutSplitPanes();
 }
@@ -779,7 +779,8 @@ void MRBentoBox::setCompilerOutputStatus(const char *status) {
 	if (compilerOutputStatus == nextStatus) return;
 	compilerOutputStatus = nextStatus;
 	updateActivePaneFrame();
-	drawPaneFrames();
+	bentoProjectionDirty |= bpdChrome;
+	flushBentoProjection();
 }
 
 void MRBentoBox::clearCompilerDiagnostics() {
@@ -796,7 +797,10 @@ void MRBentoBox::clearCompilerDiagnostics() {
 		problemsWindow->setReadOnly(true);
 		problemsWindow->setFileChanged(false);
 	}
-	if (hasPaneSplit()) layoutSplitPanes();
+	if (hasPaneSplit()) {
+		bentoProjectionDirty |= bpdLayout;
+		flushBentoProjection();
+	}
 }
 
 bool MRBentoBox::hasCompilerProblems() const noexcept {
@@ -843,8 +847,10 @@ void MRBentoBox::refreshCompilerProblemsPane() {
 	if (problemsEditor != nullptr) problemsEditor->clearFindMarkerRanges();
 	refreshSourceCompilerDiagnosticRanges();
 	updateActivePaneFrame();
-	drawPaneFrames();
-	if (hasPaneSplit()) layoutSplitPanes();
+	if (hasPaneSplit()) {
+		bentoProjectionDirty |= bpdLayout;
+		flushBentoProjection();
+	}
 }
 
 void MRBentoBox::refreshSourceCompilerDiagnosticRanges() {
@@ -1190,13 +1196,15 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	if (event.what == evCommand && event.message.command == cmMrBentoPaneRoleAccepted) {
 		acceptPaneRoleChoice();
 		clearEvent(event);
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdChrome;
+		flushBentoProjection();
 		return;
 	}
 	if (event.what == evCommand && event.message.command == cmMrBentoPaneActionAccepted) {
 		acceptPaneActionChoice();
 		clearEvent(event);
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdChrome;
+		flushBentoProjection();
 		return;
 	}
 	if (event.what == evCommand && event.message.command == cmClose) {
@@ -1214,24 +1222,27 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		return;
 	}
 	if (handleOuterFrameCloseMouse(event)) {
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdChrome;
+		flushBentoProjection();
 		return;
 	}
 	if (handlePaneDropListEvent(event)) {
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdChrome;
+		flushBentoProjection();
 		return;
 	}
 	if (event.what == evKeyDown && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbCtrlTab)) {
 		toggleActivePane();
 		clearEvent(event);
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdChrome;
+		flushBentoProjection();
 		return;
 	}
 	if (event.what == evKeyDown && compilerSidekickTracked && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
 		clearTrackedCompilerSidekick(true);
 		clearEvent(event);
-		drawSharedEditorPanes();
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdContent | bpdChrome;
+		flushBentoProjection();
 		return;
 	}
 	if (event.what == evKeyDown && !compilerDiagnostics.empty()) {
@@ -1242,22 +1253,24 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			if (mrHandleRuntimeKeymapEvent(event, targetWindow != nullptr && targetWindow->isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, targetWindow)) return;
 			static_cast<void>(nextProblemKey ? jumpToNextProblem() : jumpToPreviousProblem());
 			clearEvent(event);
-			drawSharedEditorPanes();
-			drawPaneFrames();
+			bentoProjectionDirty |= bpdContent | bpdChrome | bpdOverlay;
+			flushBentoProjection();
 			return;
 		}
 	}
 	if (event.what == evMouseDown) {
 		if (handleDividerChromeMouse(event)) {
 			clearEvent(event);
-			drawPaneFrames();
+			bentoProjectionDirty |= bpdChrome;
+			flushBentoProjection();
 			return;
 		}
 		const int dividerNode = nodeAtDivider(localMouse);
 		if (dividerNode >= 0 && (event.mouse.buttons & mbLeftButton) != 0) {
 			dragDivider(event, dividerNode);
 			clearEvent(event);
-			drawPaneFrames();
+			bentoProjectionDirty |= bpdLayout;
+			flushBentoProjection();
 			return;
 		}
 	}
@@ -1270,15 +1283,15 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		const bool clickProblem = problemsPaneActive && event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0;
 		if (mouseEvent && !pointInRect(localMouse, contentBounds(targetBounds))) {
 			MREditWindow::handleEvent(event);
-			drawSharedEditorPanes();
-			drawPaneFrames();
+			bentoProjectionDirty |= bpdContent | bpdChrome;
+			flushBentoProjection();
 			return;
 		}
 		if (enterProblem) {
 			static_cast<void>(jumpToProblemAtCursor());
 			clearEvent(event);
-			drawSharedEditorPanes();
-			drawPaneFrames();
+			bentoProjectionDirty |= bpdContent | bpdChrome | bpdOverlay;
+			flushBentoProjection();
 			return;
 		}
 		MRFileEditor *sourceEditor = getEditor();
@@ -1297,7 +1310,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 				else
 					targetEditor->scrollTo(targetEditor->delta.x, std::max(0, targetEditor->delta.y + wheelStep));
 				clearEvent(event);
-				targetPane->drawPaneScrollBars();
+				bentoProjectionDirty |= bpdScrollBar;
 			} else
 				targetPane->handleEvent(event);
 		}
@@ -1305,16 +1318,16 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		if (clickProblem) {
 			static_cast<void>(jumpToProblemAtCursor());
 			clearEvent(event);
-			drawSharedEditorPanes();
-			drawPaneFrames();
+			bentoProjectionDirty |= bpdContent | bpdChrome | bpdOverlay;
+			flushBentoProjection();
 			return;
 		}
 		targetHorizontalScrollBar = targetPane != nullptr ? targetPane->horizontalEditorScrollBar() : nullptr;
 		targetVerticalScrollBar = targetPane != nullptr ? targetPane->verticalEditorScrollBar() : nullptr;
 		const std::pair<bool, bool> targetRangeAfter = std::make_pair(targetHorizontalScrollBar != nullptr && targetHorizontalScrollBar->maxVal > targetHorizontalScrollBar->minVal, targetVerticalScrollBar != nullptr && targetVerticalScrollBar->maxVal > targetVerticalScrollBar->minVal);
 		if (targetPane != nullptr && targetRangeAfter != targetRangeBefore) targetPane->layoutPaneChrome();
-		drawSharedEditorPanes();
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdContent | bpdChrome;
+		flushBentoProjection();
 		return;
 	}
 	if (event.what == evMouseWheel && activeLeafId == 0 && getEditor() != nullptr && pointInRect(localMouse, contentBounds(paneBoundsForLeaf(0)))) {
@@ -1325,9 +1338,8 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		else
 			sourceEditor->scrollTo(sourceEditor->delta.x, std::max(0, sourceEditor->delta.y + wheelStep));
 		clearEvent(event);
-		drawSourcePaneScrollBars();
-		updateTrackedCompilerSidekick();
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdScrollBar | bpdChrome | bpdOverlay;
+		flushBentoProjection();
 		return;
 	}
 	MRFileEditor *sourceEditor = getEditor();
@@ -1343,14 +1355,12 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	sourceVerticalScrollBar = verticalEditorScrollBar();
 	const std::pair<bool, bool> sourceRangeAfter = std::make_pair(sourceHorizontalScrollBar != nullptr && sourceHorizontalScrollBar->maxVal > sourceHorizontalScrollBar->minVal, sourceVerticalScrollBar != nullptr && sourceVerticalScrollBar->maxVal > sourceVerticalScrollBar->minVal);
 	if (sourceRangeAfter != sourceRangeBefore) {
-		layoutSplitPanes();
-		updateTrackedCompilerSidekick();
+		bentoProjectionDirty |= bpdLayout | bpdOverlay;
 	}
 	else {
-		drawSharedEditorPanes();
-		updateTrackedCompilerSidekick();
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdContent | bpdChrome | bpdOverlay;
 	}
+	flushBentoProjection();
 }
 
 void MRBentoBox::setState(ushort aState, Boolean enable) {
@@ -1362,7 +1372,8 @@ void MRBentoBox::setState(ushort aState, Boolean enable) {
 	if ((aState & (sfActive | sfSelected)) != 0 && enable == False) mrDropSidekickForParent(this);
 	if (hasPaneSplit() && (aState & (sfFocused | sfSelected | sfActive)) != 0) {
 		updateActivePaneFrame();
-		drawPaneFrames();
+		bentoProjectionDirty |= bpdChrome;
+		flushBentoProjection();
 	}
 }
 
@@ -1412,6 +1423,7 @@ void MRBentoBox::layoutSplitPanes() {
 		if (primaryEditor != nullptr) primaryEditor->setScrollBarsAlwaysVisible(false);
 		MREditWindow::changeBounds(getBounds());
 		if (primaryEditor != nullptr) primaryEditor->drawView();
+		bentoProjectionDirty = bpdNone;
 		return;
 	}
 	ensurePaneFrameViews();
@@ -1459,6 +1471,28 @@ void MRBentoBox::layoutSplitPanes() {
 	for (BentoLeaf &leaf : leaves)
 		if (leaf.visible && leaf.pane != nullptr) leaf.pane->drawView();
 	drawPaneFrames();
+	bentoProjectionDirty = bpdNone;
+}
+
+void MRBentoBox::flushBentoProjection() noexcept {
+	if (windowCloseInProgress || bentoProjectionDirty == bpdNone) return;
+	const unsigned dirty = bentoProjectionDirty;
+	bentoProjectionDirty = bpdNone;
+
+	if (!hasPaneSplit()) return;
+	if ((dirty & bpdLayout) != 0) {
+		layoutSplitPanes();
+		if ((dirty & bpdOverlay) != 0) updateTrackedCompilerSidekick();
+		paneRoleDropList.drawOpenList();
+		paneActionDropList.drawOpenList();
+		return;
+	}
+	if ((dirty & bpdContent) != 0) drawSharedEditorPanes();
+	if ((dirty & bpdScrollBar) != 0) drawSourcePaneScrollBars();
+	if ((dirty & bpdOverlay) != 0) updateTrackedCompilerSidekick();
+	if ((dirty & (bpdChrome | bpdScrollBar)) != 0) drawPaneFrames();
+	paneRoleDropList.drawOpenList();
+	paneActionDropList.drawOpenList();
 }
 
 void MRBentoBox::layoutSourcePaneChrome(const TRect &content) noexcept {
@@ -1894,7 +1928,7 @@ void MRBentoBox::updatePaneRoleListChrome() noexcept {
 		if (view != nullptr) view->setPaneRoleListTitleOpen(false, paneRoleListAnchor);
 	for (MRBentoPaneFrameView *view : paneFrameViews)
 		if (view != nullptr && view->paneLeafId() == pendingPaneRoleTargetLeafId) view->setPaneRoleListTitleOpen(paneRoleDropList.visible(), paneRoleListAnchor);
-	drawPaneFrames();
+	bentoProjectionDirty |= bpdChrome;
 }
 
 short MRBentoBox::paneRoleIndexAt(TPoint globalMouse) {
@@ -1965,7 +1999,7 @@ void MRBentoBox::setActivePaneForMouse(TPoint globalMouse) noexcept {
 }
 
 void MRBentoBox::toggleLeafMaximized(int leafId) noexcept {
-	if (leafId < 0 || (leafId == 0 && bentoMode != bbmDocumentViewports) || nodeIndexForLeaf(leafId) < 0) return;
+	if (leafId < 0 || (leafId == 0 && bentoMode != bbmDocumentViewports && !hasPaneSplit()) || nodeIndexForLeaf(leafId) < 0) return;
 	maximizedLeafId = maximizedLeafId == leafId ? -1 : leafId;
 	setActivePane(leafId);
 	layoutSplitPanes();

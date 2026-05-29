@@ -143,6 +143,15 @@ class MRBentoBox : public MREditWindow {
 		bsoVertical
 	};
 
+	enum BentoProjectionDirty {
+		bpdNone = 0,
+		bpdContent = 1 << 0,
+		bpdChrome = 1 << 1,
+		bpdScrollBar = 1 << 2,
+		bpdLayout = 1 << 3,
+		bpdOverlay = 1 << 4
+	};
+
 	struct BentoLeaf;
 
 	struct BentoLayoutNode {
@@ -158,6 +167,7 @@ class MRBentoBox : public MREditWindow {
 
 	void initializeLayoutTree() noexcept;
 	void layoutSplitPanes();
+	void flushBentoProjection() noexcept;
 	void layoutSourcePaneChrome(const TRect &content) noexcept;
 	void hideSourcePaneChrome() noexcept;
 	void drawSourcePaneScrollBars() noexcept;
@@ -252,6 +262,7 @@ class MRBentoBox : public MREditWindow {
 	bool sourceScrollBarPaletteActive;
 	bool secondaryPaneVisible;
 	bool windowCloseInProgress;
+	unsigned bentoProjectionDirty;
 	MRDropList paneRoleDropList;
 	MRDropList paneActionDropList;
 	TRect paneRoleListAnchor;

@@ -57,6 +57,30 @@ For TVision-related changes, test:
 - disabled/ghosted controls,
 - scroll behavior where relevant.
 
+## Dirty Projection Pump Contract
+
+Dirty projection is an explicit UI redraw scheduling mechanism for compound
+TVision views such as BentoBox. It is not model state.
+
+Rules:
+
+1. Dirty bits describe pending projection work only: content, chrome,
+   scrollbar, layout and overlay.
+2. Event handlers set dirty bits and flush them at controlled exit points.
+3. Full-layout paths may draw directly, but must consume all dirty bits before
+   returning.
+4. A layout dirty bit dominates narrower projection work. Layout is allowed to
+   re-project content, chrome and scrollbars as part of its normal TVision
+   layout path.
+5. Dirty projection must not change TVision ownership, focus routing, Z-order
+   or view lifetime.
+6. Dirty bits must not be used as hidden state transitions. If a semantic state
+   changes, store it in the owning model first and mark projection dirty after
+   that.
+7. Do not introduce a shared dirty-pump base class until at least two widgets
+   have the same proven projection contract. Local explicit code is preferred
+   over a premature framework.
+
 ## Window minimize/restore rendering contract
 
 Minimize/restore is a visual-form transition, not ordinary move/resize.
