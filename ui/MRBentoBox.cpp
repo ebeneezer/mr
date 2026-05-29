@@ -1995,7 +1995,7 @@ void MRBentoBox::setActivePaneForMouse(TPoint globalMouse) noexcept {
 }
 
 void MRBentoBox::toggleLeafMaximized(int leafId) noexcept {
-	if (leafId < 0 || (leafId == 0 && bentoMode != bbmDocumentViewports) || nodeIndexForLeaf(leafId) < 0) return;
+	if (leafId < 0 || (leafId == 0 && bentoMode != bbmDocumentViewports && !hasPaneSplit()) || nodeIndexForLeaf(leafId) < 0) return;
 	maximizedLeafId = maximizedLeafId == leafId ? -1 : leafId;
 	setActivePane(leafId);
 	layoutSplitPanes();
