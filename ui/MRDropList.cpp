@@ -414,6 +414,10 @@ void MRDropList::focusIndex(short index) {
 	if (listView != nullptr) listView->focusItemNum(index);
 }
 
+void MRDropList::drawOpenList() noexcept {
+	if (listView != nullptr) listView->drawView();
+}
+
 bool MRDropList::acceptSelection(std::string &selectedValue) {
 	if (!this->selectedValue(selectedValue)) {
 		hide();

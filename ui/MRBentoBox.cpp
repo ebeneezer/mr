@@ -1483,12 +1483,16 @@ void MRBentoBox::flushBentoProjection() noexcept {
 	if ((dirty & bpdLayout) != 0) {
 		layoutSplitPanes();
 		if ((dirty & bpdOverlay) != 0) updateTrackedCompilerSidekick();
+		paneRoleDropList.drawOpenList();
+		paneActionDropList.drawOpenList();
 		return;
 	}
 	if ((dirty & bpdContent) != 0) drawSharedEditorPanes();
 	if ((dirty & bpdScrollBar) != 0) drawSourcePaneScrollBars();
 	if ((dirty & bpdOverlay) != 0) updateTrackedCompilerSidekick();
 	if ((dirty & (bpdChrome | bpdScrollBar)) != 0) drawPaneFrames();
+	paneRoleDropList.drawOpenList();
+	paneActionDropList.drawOpenList();
 }
 
 void MRBentoBox::layoutSourcePaneChrome(const TRect &content) noexcept {

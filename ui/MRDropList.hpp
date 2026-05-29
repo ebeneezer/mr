@@ -29,6 +29,7 @@ class MRDropList {
 	[[nodiscard]] bool selectedValue(std::string &selectedValue) const;
 	[[nodiscard]] short selectedIndex() const;
 	void focusIndex(short index);
+	void drawOpenList() noexcept;
 	[[nodiscard]] bool containsPoint(TPoint where) const noexcept;
 	[[nodiscard]] bool buttonContainsPoint(TPoint where) const noexcept;
 
