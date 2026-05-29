@@ -1423,6 +1423,7 @@ void MRBentoBox::layoutSplitPanes() {
 		if (primaryEditor != nullptr) primaryEditor->setScrollBarsAlwaysVisible(false);
 		MREditWindow::changeBounds(getBounds());
 		if (primaryEditor != nullptr) primaryEditor->drawView();
+		bentoProjectionDirty = bpdNone;
 		return;
 	}
 	ensurePaneFrameViews();
@@ -1470,6 +1471,7 @@ void MRBentoBox::layoutSplitPanes() {
 	for (BentoLeaf &leaf : leaves)
 		if (leaf.visible && leaf.pane != nullptr) leaf.pane->drawView();
 	drawPaneFrames();
+	bentoProjectionDirty = bpdNone;
 }
 
 void MRBentoBox::flushBentoProjection() noexcept {
