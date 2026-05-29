@@ -1922,7 +1922,7 @@ void MRBentoBox::updatePaneRoleListChrome() noexcept {
 		if (view != nullptr) view->setPaneRoleListTitleOpen(false, paneRoleListAnchor);
 	for (MRBentoPaneFrameView *view : paneFrameViews)
 		if (view != nullptr && view->paneLeafId() == pendingPaneRoleTargetLeafId) view->setPaneRoleListTitleOpen(paneRoleDropList.visible(), paneRoleListAnchor);
-	drawPaneFrames();
+	bentoProjectionDirty |= bpdChrome;
 }
 
 short MRBentoBox::paneRoleIndexAt(TPoint globalMouse) {
