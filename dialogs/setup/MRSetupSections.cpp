@@ -25,6 +25,7 @@
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../ui/MRFrame.hpp"
+#include "../../ui/MRBentoBox.hpp"
 #include "../../ui/MRMenuBar.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
@@ -2076,6 +2077,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		MRUiIndentStyle newUiIndentStyle = static_cast<MRUiIndentStyle>(dialogData.uiIndentStyleChoice);
 		std::string newCp = readRecordField(dialogData.cursorPositionMarker);
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineData, dialogData, userInterfaceSettingsDialogDataEqual);
+		const bool compilerDiagnosticFilterChanged = currentTrackWarnings != newTrackWarnings || currentTrackNotes != newTrackNotes;
 		auto applyAndPersistUiSettings = [&]() -> bool {
 			std::string errorText;
 			if (!setConfiguredCursorBehaviour(newCb, &errorText)) {
@@ -2113,6 +2115,10 @@ void runUserInterfaceSettingsDialogFlow() {
 			applyVirtualDesktopConfigurationChange(newVd);
 			for (MREditWindow *window : allEditWindowsInZOrder())
 				if (window != nullptr && window->getEditor() != nullptr) window->getEditor()->refreshConfiguredVisualSettings();
+			if (compilerDiagnosticFilterChanged)
+				for (MREditWindow *window : allEditWindowsInZOrder())
+					if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window); bentoBox != nullptr && bentoBox->buildOutputPane() != nullptr && bentoBox->problemsPane() != nullptr)
+						static_cast<void>(bentoBox->refreshCompilerDiagnosticsFromOutput());
 			if (!persistConfiguredSettingsSnapshot(&errorText)) postSetupFlowError("Installation / User interface settings", errorText);
 			return true;
 		};

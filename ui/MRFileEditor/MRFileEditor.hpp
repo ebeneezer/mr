@@ -194,6 +194,7 @@ class MRFileEditor : public TScroller {
 	void setMiniMapSuppressed(bool suppressed) noexcept;
 	void setWordWrapSuppressed(bool suppressed) noexcept;
 	void setScrollBarsAlwaysVisible(bool visible) noexcept;
+	void updateMetrics();
 
 	std::size_t cursorOffset() const noexcept;
 
@@ -539,8 +540,6 @@ class MRFileEditor : public TScroller {
 	void noteSaveNormalizationThroughput(std::size_t sourceBytes, double runMicros) noexcept;
 
 	void scheduleSaveNormalizationWarmupIfNeeded();
-
-	void updateMetrics();
 
 	void updateIndicator();
 

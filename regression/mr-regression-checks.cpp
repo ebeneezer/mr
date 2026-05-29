@@ -3937,7 +3937,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento split placement mapping changed.";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"constexpr BentoFrameGlyphs kBentoFrameGlyphs;", "if (action == kBentoPaneActionSplitRight) return bppSplitDown;", "if (action == kBentoPaneActionSplitDown) return bppSplitRight;"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"constexpr BentoFrameGlyphs kBentoFrameGlyphs;", "static const BentoPaneActionDescriptor kBentoPaneActions[]", "{kBentoPaneActionSplitRight, bppSplitDown}", "{kBentoPaneActionSplitDown, bppSplitRight}", "for (const BentoPaneActionDescriptor &descriptor : kBentoPaneActions)"}, missingNeedle)) {
 		failureReason = "Bento frame glyph table and split action mapping changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -3957,7 +3957,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento role-to-spec mapping changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"source.title = bentoMode == bbmDocumentViewports ? \"\" : paneRoleTitle(bprSource);", "leaf.title = bentoMode == bbmDocumentViewports ? \"\" : paneRoleTitle(spec.role);", "int MRBentoBox::viewportNumberForLeaf(int leafId) const noexcept", "stack.push_back(node.secondChild);", "stack.push_back(node.firstChild);", "return \"Viewport #\" + std::to_string(std::max(1, viewportNumber));", "if (!titleMenuEnabledForLeaf(targetLeafId)) return;"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"source.title = bentoMode == bbmDocumentViewports ? \"\" : bentoPaneRoleTitle(bprSource);", "leaf.title = bentoMode == bbmDocumentViewports ? \"\" : bentoPaneRoleTitle(spec.role);", "int MRBentoBox::viewportNumberForLeaf(int leafId) const noexcept", "stack.push_back(node.secondChild);", "stack.push_back(node.firstChild);", "return \"Viewport #\" + std::to_string(std::max(1, viewportNumber));", "if (!titleMenuEnabledForLeaf(targetLeafId)) return;"}, missingNeedle)) {
 		failureReason = "Document viewport mode must use current layout-derived viewport titles and suppress pane title menus: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -3969,7 +3969,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento spec-driven editor policy changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"MRPaneEditWindow::MRPaneEditWindow", "state &= static_cast<ushort>(~sfShadow);", "eventMask = 0;", "const bool withControls = focused && !source;", "const bool withControls = focused && (!source || bentoMode == bbmDocumentViewports);", "toggleLeafMaximized(int leafId) noexcept", "leafId == 0 && bentoMode != bbmDocumentViewports"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"MRPaneEditWindow::MRPaneEditWindow", "state &= static_cast<ushort>(~sfShadow);", "eventMask = 0;", "const bool withControls = focused;", "leaf.id == 0 && bentoMode != bbmDocumentViewports", "toggleLeafMaximized(int leafId) noexcept", "leafId == 0 && bentoMode != bbmDocumentViewports"}, missingNeedle)) {
 		failureReason = "Document viewport pane chrome and dispatcher ownership changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -4025,7 +4025,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento pane chrome must not be inserted as a child overlay view.";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"void MRBentoBox::draw()", "MREditWindow::draw();", "drawPaneFrames();", "void MRBentoBox::handleEvent(TEvent &event)", "const auto redrawChrome = [this]()", "drawPaneFrames();"}, missingNeedle)) {
+	if (!containsAllSubstrings(source, {"void MRBentoBox::draw()", "MREditWindow::draw();", "drawSourcePaneScrollBars();", "drawPaneFrames();", "void MRBentoBox::handleEvent(TEvent &event)", "updateTrackedCompilerSidekick();", "drawPaneFrames();"}, missingNeedle)) {
 		failureReason = "Bento pane chrome redraw guard changed: missing " + missingNeedle + ".";
 		return false;
 	}

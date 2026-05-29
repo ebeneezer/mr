@@ -65,6 +65,7 @@ struct MRCompilerDiagnostic {
 	std::size_t sourceOffset;
 	std::size_t outputOffset;
 	std::size_t problemOffset;
+	bool sourceAvailable;
 };
 
 class MRPaneEditWindow : public MREditWindow {
@@ -81,6 +82,7 @@ class MRPaneEditWindow : public MREditWindow {
 	virtual void changeBounds(const TRect &bounds) override;
 	virtual void draw() override;
 	virtual TColorAttr mapColor(uchar index) override;
+	virtual Boolean valid(ushort command) override;
 
 	void setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept;
 	void setPaneFocused(bool focused) noexcept;
@@ -108,7 +110,7 @@ class MRBentoBox : public MREditWindow {
 	void activatePrimaryPane() noexcept;
 	void activateSecondaryPane() noexcept;
 	void toggleActivePane() noexcept;
-	void setDiagnosticsStatus(const char *status);
+	void setCompilerOutputStatus(const char *status);
 	void clearCompilerDiagnostics();
 	[[nodiscard]] bool hasCompilerProblems() const noexcept;
 	[[nodiscard]] bool refreshCompilerDiagnosticsFromOutput();
@@ -120,8 +122,10 @@ class MRBentoBox : public MREditWindow {
 
 	virtual void draw() override;
 	virtual void changeBounds(const TRect &bounds) override;
+	virtual void close() override;
 	virtual void handleEvent(TEvent &event) override;
 	virtual void setState(ushort aState, Boolean enable) override;
+	virtual void shutDown() override;
 	virtual TColorAttr mapColor(uchar index) override;
 	virtual bool allowsDocumentViewportSplit() const noexcept override;
 	virtual MREditWindow *editorCommandTarget() noexcept override;
@@ -129,11 +133,6 @@ class MRBentoBox : public MREditWindow {
 	virtual bool showsFrameGrowHandle() const noexcept override;
 
   private:
-	enum ActivePane {
-		apPrimary = 0,
-		apSecondary
-	};
-
 	enum BentoLayoutNodeKind {
 		blnPane = 0,
 		blnSplit
@@ -175,6 +174,9 @@ class MRBentoBox : public MREditWindow {
 	void refreshCompilerProblemsPane();
 	void refreshSourceCompilerDiagnosticRanges();
 	void syncCompilerDiagnosticsAfterSourceMutation(const MRTextBufferModel::ReadSnapshot &oldSnapshot, const MRTextBufferModel::DocumentChangeSet &changeSet);
+	void clearTrackedCompilerSidekick(bool dropSidekick) noexcept;
+	void trackCompilerSidekick(std::size_t diagnosticIndex) noexcept;
+	void updateTrackedCompilerSidekick();
 	[[nodiscard]] bool placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlacement placement, int targetLeafId);
 	[[nodiscard]] bool handlePaneDropListEvent(TEvent &event);
 	[[nodiscard]] bool handleOuterFrameCloseMouse(TEvent &event);
@@ -189,29 +191,13 @@ class MRBentoBox : public MREditWindow {
 	void setActivePaneForMouse(TPoint globalMouse) noexcept;
 	void toggleLeafMaximized(int leafId) noexcept;
 	[[nodiscard]] bool handleDividerChromeMouse(TEvent &event);
-	[[nodiscard]] TRect primaryPaneBounds() const noexcept;
-	[[nodiscard]] TRect topChromeBounds() const noexcept;
-	[[nodiscard]] TRect dividerBounds() const noexcept;
-	[[nodiscard]] TRect toolAreaBounds() const noexcept;
-	[[nodiscard]] TRect nestedTopChromeBounds() const noexcept;
-	[[nodiscard]] TRect nestedDividerBounds() const noexcept;
-	[[nodiscard]] TRect dividerDragBounds() const noexcept;
-	[[nodiscard]] TRect secondaryPaneBounds() const noexcept;
-	[[nodiscard]] TRect tertiaryPaneBounds() const noexcept;
-	[[nodiscard]] TRect paneBounds(ActivePane pane) const noexcept;
 	[[nodiscard]] TRect paneBoundsForLeaf(int leafId) const noexcept;
-	[[nodiscard]] int defaultDividerY() const noexcept;
-	[[nodiscard]] int clampedDividerY(int y) const noexcept;
-	[[nodiscard]] int currentDividerY() const noexcept;
 	[[nodiscard]] int defaultDividerPosition() const noexcept;
 	[[nodiscard]] int defaultDividerPosition(int nodeIndex) const noexcept;
 	[[nodiscard]] int clampedDividerPosition(int position) const noexcept;
 	[[nodiscard]] int clampedDividerPosition(int nodeIndex, int position) const noexcept;
 	[[nodiscard]] int currentDividerPosition() const noexcept;
 	[[nodiscard]] int currentDividerPosition(int nodeIndex) const noexcept;
-	[[nodiscard]] bool verticalRootSplit() const noexcept;
-	[[nodiscard]] bool tertiaryPaneVisible() const noexcept;
-	[[nodiscard]] bool verticalToolSplit() const noexcept;
 	[[nodiscard]] bool hasPaneSplit() const noexcept;
 	[[nodiscard]] bool pointInRect(TPoint point, const TRect &rect) const noexcept;
 	[[nodiscard]] int leafAt(TPoint point) const noexcept;
@@ -238,9 +224,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] std::string paneTitleForLeaf(const BentoLeaf &leaf) const;
 	[[nodiscard]] std::vector<std::string> paneRoleChoices() const;
 	[[nodiscard]] std::vector<std::string> paneActionChoices() const;
-	[[nodiscard]] MRBentoPaneRole paneRoleForTitle(const std::string &title) const noexcept;
 	[[nodiscard]] MRBentoPanePlacement panePlacementForAction(const std::string &action) const noexcept;
-	[[nodiscard]] const char *paneRoleTitle(MRBentoPaneRole role) const noexcept;
 
 	static TFrame *initFrame(TRect bounds);
 
@@ -267,13 +251,18 @@ class MRBentoBox : public MREditWindow {
 	MRBentoBoxMode bentoMode;
 	bool sourceScrollBarPaletteActive;
 	bool secondaryPaneVisible;
+	bool windowCloseInProgress;
 	MRDropList paneRoleDropList;
 	MRDropList paneActionDropList;
 	TRect paneRoleListAnchor;
 	MRBentoPaneRole pendingPaneRole;
 	int pendingPaneRoleTargetLeafId;
-	std::string diagnosticsStatus;
+	std::string compilerOutputStatus;
+	std::string compilerProblemsStatus;
 	std::vector<MRCompilerDiagnostic> compilerDiagnostics;
+	bool compilerSidekickTracked;
+	bool compilerSidekickUpdating;
+	std::size_t compilerSidekickDiagnosticIndex;
 };
 
 #endif

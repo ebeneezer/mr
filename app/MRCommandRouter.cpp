@@ -1404,7 +1404,7 @@ MREditWindow *currentExternalOutputWindow() {
 void setSplitDiagnosticsStatusForOutput(MREditWindow *outputWindow, const char *status) {
 	MRBentoBox *split = outputWindow != nullptr ? dynamic_cast<MRBentoBox *>(outputWindow->owner) : nullptr;
 
-	if (split != nullptr && split->buildOutputPane() == outputWindow) split->setDiagnosticsStatus(status);
+	if (split != nullptr && split->buildOutputPane() == outputWindow) split->setCompilerOutputStatus(status);
 }
 
 std::string pathBaseName(const std::string &path) {
@@ -1480,7 +1480,7 @@ bool handleBuildCurrentFile() {
 	}
 	outputTitle = buildCompilerOutputTitle(compilerProfile, matchedProfileName, sourcePath);
 
-	bentoBox = findBuildBentoBoxForSource(sourcePath);
+	bentoBox = sourceBentoBox != nullptr ? sourceBentoBox : findBuildBentoBoxForSource(sourcePath);
 	if (bentoBox == nullptr) {
 		bentoBox = createBentoBoxWindow(sourcePath.c_str());
 		createdBentoBox = true;
@@ -1495,7 +1495,7 @@ bool handleBuildCurrentFile() {
 		return true;
 	}
 	if (outputWindow->hasTrackedExternalIoTasks()) {
-		bentoBox->setDiagnosticsStatus("busy");
+		bentoBox->setCompilerOutputStatus("busy");
 		postDialogWarning("Build output is still running; stop it before rebuilding.");
 		static_cast<void>(mrActivateEditWindow(bentoBox));
 		return true;

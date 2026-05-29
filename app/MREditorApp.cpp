@@ -477,29 +477,51 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	std::string source;
 	MRSettingsLoadReport report;
 	std::string canonicalSource;
+	const auto settingsStartedAt = std::chrono::steady_clock::now();
+	auto phaseStartedAt = settingsStartedAt;
+	auto logSettingsBootstrapPhase = [&phaseStartedAt](const char *phase) {
+		const auto now = std::chrono::steady_clock::now();
+		std::ostringstream line;
+
+		line << "Bootstrap settings phase " << phase << " took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(now - phaseStartedAt).count() << ".";
+		mrLogMessage(line.str().c_str());
+		phaseStartedAt = now;
+	};
 
 	if (settingsPath.empty()) {
 		if (errorMessage != nullptr) *errorMessage = "Settings path is empty.";
 		return false;
 	}
 	if (!ensureSettingsMacroFileExists(settingsPath, errorMessage)) {
+		logSettingsBootstrapPhase("ensure_file");
 		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings bootstrap failed (create defaults).");
 		return false;
 	}
+	logSettingsBootstrapPhase("ensure_file");
 	if (!readTextFile(settingsPath, source)) {
 		source.clear();
 	}
+	logSettingsBootstrapPhase("read_file");
 	if (!prepareStartupSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) {
+		logSettingsBootstrapPhase("prepare_canonical_source");
 		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonicalization failed.");
 		return false;
 	}
+	logSettingsBootstrapPhase("prepare_canonical_source");
 	if (!applySettingsSourceViaVm(settingsPath, canonicalSource, errorMessage)) {
+		logSettingsBootstrapPhase("vm_apply");
 		mrLogMessage((errorMessage != nullptr && !errorMessage->empty()) ? errorMessage->c_str() : "Settings VM apply failed.");
 		return false;
 	}
+	logSettingsBootstrapPhase("vm_apply");
 
-	mrLogMessage(("Settings loaded via VM: " + settingsPath).c_str());
-	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
+	mrLogMessage(("Bootstrap settings loaded path=" + settingsPath + " macropath=" + defaultMacroDirectoryPath()).c_str());
+	logSettingsBootstrapPhase("post_apply_log");
+	{
+		std::ostringstream line;
+		line << "Bootstrap settings total took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - settingsStartedAt).count() << ".";
+		mrLogMessage(line.str().c_str());
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -798,23 +820,49 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 }
 
 MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()) {
+	const auto startupStartedAt = std::chrono::steady_clock::now();
+	auto phaseStartedAt = startupStartedAt;
+	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
+		const auto now = std::chrono::steady_clock::now();
+		std::ostringstream line;
+
+		line << "Bootstrap phase " << phase << " took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(now - phaseStartedAt).count() << ".";
+		mrLogMessage(line.str().c_str());
+		phaseStartedAt = now;
+	};
 	TEditor::editorDialog = mrEditorDialog;
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 	initializePerformancePanel();
 	loadStartupSettingsMacro(std::string(), nullptr);
+	logStartupPhase("settings_bootstrap");
 	applyConfiguredDisplayLayout();
+	logStartupPhase("display_layout_initial");
 	bootstrapIndexedMacroBindings();
+	logStartupPhase("autoexec_macros");
 	static_cast<void>(loadStartupFilesFromCommandLine());
+	logStartupPhase("startup_files");
 	applyConfiguredDisplayLayout();
+	logStartupPhase("display_layout_final");
 	static_cast<void>(mrEnsureLogWindow(false));
+	logStartupPhase("log_window");
 	syncRecordingUiState();
+	logStartupPhase("recording_ui");
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+	logStartupPhase("menu_state");
 
 	if (configuredAutoloadWorkspace()) {
 		mrLoadWorkspace("");
 	}
+	logStartupPhase("workspace_autoload");
 	mrLogMessage("Editor session started.");
 	updateAppCommandState();
+	logStartupPhase("command_state");
+	{
+		std::ostringstream line;
+
+		line << "Bootstrap total took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startupStartedAt).count() << ".";
+		mrLogMessage(line.str().c_str());
+	}
 }
 
 bool MREditorApp::quitPrepared() const noexcept {

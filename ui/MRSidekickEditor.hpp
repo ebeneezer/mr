@@ -67,6 +67,9 @@ class MRSidekickEditor : public TView {
 
 bool mrOpenSnippetSidekick(MREditWindow *parent, std::size_t replaceStart, std::size_t replaceEnd, const std::string &text, const std::string &title, const std::vector<MRSidekickSpan> &placeholders = std::vector<MRSidekickSpan>());
 bool mrOpenReadOnlySidekick(MREditWindow *parent, const std::string &text, const std::string &title, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);
+bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);
+bool mrHasReadOnlySidekickForParent(const MREditWindow *parent);
+bool mrConsumeReadOnlySidekickDismissedForParent(const MREditWindow *parent);
 void mrDropSidekickForParent(const MREditWindow *parent);
 void mrDropActiveSidekick();
 

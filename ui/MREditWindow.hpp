@@ -159,6 +159,11 @@ class MREditWindow : public TWindow {
 		TWindow::close();
 	}
 
+	virtual void shutDown() override {
+		prepareForClose();
+		TWindow::shutDown();
+	}
+
 	virtual Boolean valid(ushort command) override {
 		if (command != cmClose) return TWindow::valid(command);
 		const auto closeValidStartedAt = std::chrono::steady_clock::now();
@@ -1739,11 +1744,12 @@ class MREditWindow : public TWindow {
 		clearBlock();
 	}
 
-	void prepareForClose() {
-		std::ostringstream line;
-		const char *title = getTitle(0);
-		std::size_t cancelledCount = 0;
-		const auto startedAt = std::chrono::steady_clock::now();
+		void prepareForClose() {
+			std::ostringstream line;
+			const char *title = getTitle(0);
+			const std::string titleForLog = title != nullptr ? title : "?";
+			std::size_t cancelledCount = 0;
+			const auto startedAt = std::chrono::steady_clock::now();
 		long long clearUndoRedoMs = 0;
 		long long destroyEditorMs = 0;
 		std::size_t undoBefore = 0;
@@ -1772,7 +1778,7 @@ class MREditWindow : public TWindow {
 			editor = nullptr;
 			destroyEditorMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - destroyStartedAt).count();
 		}
-		line << "Preparing close for window #" << mBufferId << " title='" << (title != nullptr ? title : "?") << "'"
+			line << "Preparing close for window #" << mBufferId << " title='" << titleForLog << "'"
 		     << " cancelled_tasks=" << cancelledCount << " modified=" << (modified ? 1 : 0) << " len=" << lengthBeforeClose << " add=" << addBeforeClose << " pieces=" << piecesBeforeClose
 		     << " undo_before=" << undoBefore << " redo_before=" << redoBefore << " undo_after=" << undoAfter << " redo_after=" << redoAfter << " clear_undo_redo_ms=" << clearUndoRedoMs
 		     << " destroy_editor_ms=" << destroyEditorMs << " took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt).count() << ".";

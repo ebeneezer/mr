@@ -23,6 +23,7 @@
 namespace {
 
 MRSidekickEditor *gActiveSidekick = nullptr;
+int gDismissedReadOnlySidekickParentBufferId = 0;
 
 constexpr TColorAttr kSidekickCursor = 0x70;
 
@@ -63,9 +64,30 @@ int maxLineLength(const std::vector<std::string> &lines) {
 }
 
 std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marker) {
-	if (marker == romAbove) return text + "\nv";
-	if (marker == romLeft) return std::string("< ") + text;
-	return std::string("^ ") + text;
+	switch (marker) {
+		case romAbove: {
+			const std::vector<std::string> lines = splitLines(text);
+			std::ostringstream marked;
+			for (std::size_t i = 0; i < lines.size(); ++i) {
+				if (i != 0) marked << '\n';
+				marked << (i == lines.size() - 1 ? "v " : "  ");
+				marked << lines[i];
+			}
+			return marked.str();
+		}
+		case romLeft:
+			return std::string("< ") + text;
+		case romBelow:
+			break;
+	}
+	const std::vector<std::string> lines = splitLines(text);
+	std::ostringstream marked;
+	for (std::size_t i = 0; i < lines.size(); ++i) {
+		if (i != 0) marked << '\n';
+		marked << (i == 0 ? "^ " : "  ");
+		marked << lines[i];
+	}
+	return marked.str();
 }
 
 TRect sidekickBoundsFor(MREditWindow *parent, const std::string &text) {
@@ -91,7 +113,7 @@ TRect sidekickBoundsFor(MREditWindow *parent, const std::string &text) {
 	return TRect(x, y, x + wantedWidth, y + wantedHeight);
 }
 
-TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, ReadOnlyMarker &marker, int preferredViewColumn, MRReadOnlySidekickPlacement placement) {
+TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, ReadOnlyMarker &marker, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement) {
 	MRFileEditor *editor = parent != nullptr ? parent->getEditor() : nullptr;
 	TRect desktop = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, 80, 25);
 	if (editor == nullptr) {
@@ -111,8 +133,8 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 		return sidekickBoundsFor(parent, readOnlyTextWithMarker(text, marker));
 	}
 
-	const int cursorX = std::clamp(editorGlobal.x + textViewport.a.x + std::max(0, editor->currentViewColumn() - 1), viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1));
-	const int cursorY = std::clamp(editorGlobal.y + textViewport.a.y + std::max(0, editor->currentViewRow() - 1), viewport.a.y, std::max(viewport.a.y, viewport.b.y - 1));
+	const int cursorX = std::clamp(editorGlobal.x + textViewport.a.x + std::max(0, anchorViewColumn - 1), viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1));
+	const int cursorY = std::clamp(editorGlobal.y + textViewport.a.y + std::max(0, anchorViewRow - 1), viewport.a.y, std::max(viewport.a.y, viewport.b.y - 1));
 	const int belowCodeSpace = std::max(0, viewport.b.y - cursorY);
 	const int aboveSpace = std::max(0, cursorY - viewport.a.y);
 	const int targetX = preferredViewColumn > 0 ? std::clamp(editorGlobal.x + textViewport.a.x + preferredViewColumn - 1, viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1)) : cursorX;
@@ -168,7 +190,7 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 
 MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly)
     : TView(bounds), mParentBufferId(parentBufferId), mReplaceStart(replaceStart), mReplaceEnd(replaceEnd), mTitle(std::move(title)), mLines(), mPlaceholders(std::move(placeholders)), mPlaceholderIndex(-1), mCursorRow(0), mCursorCol(0), mReadOnly(readOnly) {
-	options |= ofSelectable;
+	if (!mReadOnly) options |= ofSelectable;
 	eventMask |= evKeyDown | evMouseDown;
 	setText(std::move(text));
 	if (!mPlaceholders.empty()) moveToPlaceholder(1);
@@ -351,6 +373,7 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 
 void MRSidekickEditor::closeSidekick() {
 	TGroup *group = owner;
+	if (mReadOnly) gDismissedReadOnlySidekickParentBufferId = mParentBufferId;
 	if (group != nullptr) group->remove(this);
 	TObject::destroy(this);
 }
@@ -534,9 +557,16 @@ bool mrOpenSnippetSidekick(MREditWindow *parent, std::size_t replaceStart, std::
 }
 
 bool mrOpenReadOnlySidekick(MREditWindow *parent, const std::string &text, const std::string &title, int preferredViewColumn, MRReadOnlySidekickPlacement placement) {
+	MRFileEditor *editor = parent != nullptr ? parent->getEditor() : nullptr;
+	const int anchorViewColumn = editor != nullptr ? editor->currentViewColumn() : 1;
+	const int anchorViewRow = editor != nullptr ? editor->currentViewRow() : 1;
+	return mrOpenReadOnlySidekickAt(parent, text, title, anchorViewColumn, anchorViewRow, preferredViewColumn, placement);
+}
+
+bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement) {
 	if (parent == nullptr || parent->getEditor() == nullptr || TProgram::deskTop == nullptr) return false;
 	ReadOnlyMarker marker = romBelow;
-	const TRect bounds = readOnlySidekickBoundsFor(parent, text, marker, preferredViewColumn, placement);
+	const TRect bounds = readOnlySidekickBoundsFor(parent, text, marker, anchorViewColumn, anchorViewRow, preferredViewColumn, placement);
 	const std::string markedText = readOnlyTextWithMarker(text, marker);
 	if (gActiveSidekick != nullptr && gActiveSidekick->parentBufferId() == parent->bufferId() && gActiveSidekick->isReadOnly()) {
 		gActiveSidekick->updateReadOnlyText(markedText, title, bounds);
@@ -556,6 +586,16 @@ bool mrOpenReadOnlySidekick(MREditWindow *parent, const std::string &text, const
 	gActiveSidekick = sidekick;
 	TProgram::deskTop->insert(sidekick);
 	sidekick->drawView();
+	return true;
+}
+
+bool mrHasReadOnlySidekickForParent(const MREditWindow *parent) {
+	return parent != nullptr && gActiveSidekick != nullptr && gActiveSidekick->parentBufferId() == parent->bufferId() && gActiveSidekick->isReadOnly();
+}
+
+bool mrConsumeReadOnlySidekickDismissedForParent(const MREditWindow *parent) {
+	if (parent == nullptr || gDismissedReadOnlySidekickParentBufferId != parent->bufferId()) return false;
+	gDismissedReadOnlySidekickParentBufferId = 0;
 	return true;
 }
 

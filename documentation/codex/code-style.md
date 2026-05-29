@@ -100,14 +100,22 @@ Longer names are acceptable when they are more precise.
 
 - Prefer obvious `if`/`switch` logic.
 - Do not replace readable branching with table-driven code unless the table is a real domain model.
+- Use `switch` for closed enum-like decision axes when it makes the alternatives explicit.
+- Use descriptor tables when several operations read the same stable domain mapping.
+- Do not use table-driven code to disguise incidental branching or geometry checks.
 - Explicit loops are preferred over clever transformations.
 - Small one-line `if` statements are acceptable when they are clearer.
 
 ## Headers and sources
 
-- Headers contain declarations.
-- Implementations belong in `.cpp` files.
-- Inline code in headers requires a technical reason.
+- Header files describe the public contract of a translation unit.
+- Source files contain implementation details.
+- Do not use the old C rule “headers contain everything that does not allocate storage”.
+- A declaration belongs in a header only when another translation unit must name it.
+- Local descriptor structs, mapping tables, private constants and file-local helper functions belong in `.cpp` files, preferably in an anonymous namespace.
+- Public enums and structs belong in headers only when they are part of the callable API.
+- Private class members may be unavoidable in headers because they define object layout; do not add more private surface than the class needs.
+- Inline code in headers requires a technical reason, such as templates or required trivial inline definitions.
 - New source files require explicit approval.
 
 ## Comments

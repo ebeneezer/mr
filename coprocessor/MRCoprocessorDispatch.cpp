@@ -125,14 +125,14 @@ std::string communicationDividerStatus(const mr::coprocessor::ExternalIoFinished
 
 	if (payload.signaled) out << "signal " << payload.signalNumber;
 	else
-		out << "exit " << payload.exitCode;
+		out << "exit code: " << payload.exitCode;
 	return out.str();
 }
 
 void setSplitDiagnosticsStatusForOutput(MREditWindow *outputWindow, const char *status) {
 	MRBentoBox *split = outputWindow != nullptr ? dynamic_cast<MRBentoBox *>(outputWindow->owner) : nullptr;
 
-	if (split != nullptr && split->buildOutputPane() == outputWindow) split->setDiagnosticsStatus(status);
+	if (split != nullptr && split->buildOutputPane() == outputWindow) split->setCompilerOutputStatus(status);
 }
 
 std::string macroDisplayName(const mr::coprocessor::TaskInfo &task, const char *payloadName = nullptr) {
