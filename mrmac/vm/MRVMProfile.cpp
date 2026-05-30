@@ -507,7 +507,7 @@ MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::
 				break;
 			default: {
 				char unknownOp[32];
-				std::snprintf(unknownOp, sizeof(unknownOp), "UNKNOWN_OPCODE_%02X", opcode);
+				std::snprintf(unknownOp, sizeof(unknownOp), "UNKNOWN_OPCODE%02X", opcode);
 				noteExecutionFlags(profile, mrefUiAffinity, unknownOp);
 				return profile;
 			}

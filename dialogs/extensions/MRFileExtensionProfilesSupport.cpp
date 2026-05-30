@@ -799,7 +799,7 @@ EditProfileDraft makeNewDraft(const std::vector<EditProfileDraft> &existingDraft
 EditProfileDraft makeCopiedDraft(const EditProfileDraft &source, const std::vector<EditProfileDraft> &existingDrafts) {
 	EditProfileDraft draft = source;
 	std::string sourceId = trimAscii(source.id);
-	std::string baseId = sourceId.empty() ? std::string("profile") : sourceId + "_copy";
+	std::string baseId = sourceId.empty() ? std::string("profile") : sourceId + "copy";
 
 	draft.isDefault = false;
 	draft.id = nextUniqueProfileId(existingDrafts, baseId);

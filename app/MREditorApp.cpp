@@ -192,7 +192,7 @@ std::string makeRecordedMacroName(unsigned long counter) {
 #else
 	tmNow = *std::localtime(&now);
 #endif
-	std::strftime(timePart.data(), timePart.size(), "Recorded_%Y%m%d_%H%M%S", &tmNow);
+	std::strftime(timePart.data(), timePart.size(), "Recorded%Y%m%d_%H%M%S", &tmNow);
 	return std::string(timePart.data()) + "_" + std::to_string(counter);
 }
 
@@ -1193,7 +1193,7 @@ void MREditorApp::finalizeKeystrokeRecording() {
 	if (!keySpec.empty()) {
 		if (!savePath.empty()) sessionPath = savePath;
 		else {
-			sessionPath = configuredTempDirectoryPath() + "/mr_recorded_" + std::to_string(static_cast<long>(::getpid())) + "_" + std::to_string(recordedMacroCounter) + ".mrmac";
+			sessionPath = configuredTempDirectoryPath() + "/mr_recorded" + std::to_string(static_cast<long>(::getpid())) + "_" + std::to_string(recordedMacroCounter) + ".mrmac";
 			if (!writeTextFileWithConfiguredSaveOptions(sessionPath, macroSource)) {
 				postAppError("Could not create session macro file.");
 				return;

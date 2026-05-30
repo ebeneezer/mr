@@ -682,7 +682,7 @@ bool testPathDefaultsFromEnvironment(std::string &failureReason) {
 }
 
 bool testSettingsMacroAutoCreate(std::string &failureReason) {
-	const std::string root = "/tmp/mr_regression_settings_bootstrap_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_settings_bootstrap" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/mr/settings.mrmac";
 	const std::string expectedSettingLine = "MRSETUP('SETTINGSPATH', '" + settingsPath + "');";
 	std::string content;
@@ -982,7 +982,7 @@ bool testToFromDispatch(std::string &failureReason) {
 
 bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_settings_migration_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_settings_migration" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string legacyThemePath = root + "/cfg/legacy-theme.mrmac";
 	const std::string legacySource = "$MACRO LegacySettings FROM EDIT;\n"
@@ -1419,7 +1419,7 @@ bool testTruncateSpacesSaveOnlyGuard(std::string &failureReason) {
 
 bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_edit_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_edit_roundtrip" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	MREditSetupSettings probe = resolveEditSetupDefaults();
 	MREditSetupSettings loaded;
@@ -1568,7 +1568,7 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 
 bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_extended_settings_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_extended_settings" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	MREditSetupSettings probe = resolveEditSetupDefaults();
 	MRSetupPaths paths = resolveSetupPathDefaults();
@@ -2085,7 +2085,7 @@ bool testEditProfileDuplicateExactExtensionMacroGuard(std::string &failureReason
 
 bool testPathsBrowseEventGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_paths_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_paths_roundtrip" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string macroPath = root + "/macros";
 	const std::string tempPath = root + "/tmp";
@@ -2155,7 +2155,7 @@ bool testPathsBrowseEventGuard(std::string &failureReason) {
 
 bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_color_save_theme_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_color_save_theme" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string themePath = root + "/cfg/probe-theme.mrmac";
 	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap};
@@ -3571,7 +3571,7 @@ bool testClearScreenSnapshotResetGuard(std::string &failureReason) {
 		}
 		const std::string scrollBoxBlock = screenContent.substr(scrollBoxStart, scrollBoxEnd - scrollBoxStart);
 		if (scrollBoxBlock.find("boxStack.clear();") != std::string::npos) {
-			failureReason = "SCROLL_BOX_* must not discard PUT_BOX snapshots.";
+			failureReason = "SCROLL_BOX* must not discard PUT_BOX snapshots.";
 			return false;
 		}
 	}

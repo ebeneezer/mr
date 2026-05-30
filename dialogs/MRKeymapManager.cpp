@@ -225,8 +225,8 @@ std::string buildSerializedKeymapFileSource(const KeymapManagerDraft &draft) {
 std::string stripTargetPrefix(std::string_view target) {
 	std::string stripped(target);
 
-	if (stripped.rfind("MRMAC_", 0) == 0) return stripped.substr(6);
-	if (stripped.rfind("MR_", 0) == 0) return stripped.substr(3);
+	if (stripped.rfind("MRMAC", 0) == 0) return stripped.substr(6);
+	if (stripped.rfind("MR", 0) == 0) return stripped.substr(3);
 	return stripped;
 }
 
