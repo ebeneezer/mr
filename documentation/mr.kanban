@@ -156,6 +156,15 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "cc91d272-cfcd-4727-baec-60e5a0c7b702",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "App weiter, ergonomischer Einsatz von F-Tasten und Rendering der dazu gehörenden Label",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -209,24 +218,6 @@
               "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
-        },
-        {
-          "id": "6e870b09-9ebc-4dcb-8e6f-0960e04d4c13",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Centralized dirty projection for UI pump",
-          "description": "Zentrale Dirty-State-/Projection-Optimierung fuer die UI-Pumpe. Views markieren content, chrome, scrollbar, layout oder overlay als dirty; die UI-Pumpe loest diese Bits deterministisch und gezielt auf. Pilot zuerst an BentoBox/Pane-Chrome/Scrollbars.",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
-            {
-              "id": "577ad013-35b8-4c4a-a96e-1c021541cb5f",
-              "comment": "Geschuetzte Architektur: TVision Drawing/Event Mechanics. Umsetzung erst nach akzeptierter Zugplanung. Nicht-Ziele: keine zweite Eventloop, kein asynchrones Zeichnen, keine neue View-Ownership, keine generische Render-Monolith-Basisklasse."
-            },
-            {
-              "id": "d61cfb48-24e9-4b80-a55c-51b130c6af68",
-              "comment": "Akzeptanz: BentoBox zeichnet Content/Chrome/Scrollbars/SideKick nur bei relevanter Aenderung; Close-, Fokus-, Split-, Mousewheel- und SideKick-Pfade bleiben regressionsfrei."
-            }
-          ]
         }
       ]
     },
@@ -251,6 +242,24 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "6e870b09-9ebc-4dcb-8e6f-0960e04d4c13",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Centralized dirty projection for UI pump",
+          "description": "Zentrale Dirty-State-/Projection-Optimierung fuer die UI-Pumpe. Views markieren content, chrome, scrollbar, layout oder overlay als dirty; die UI-Pumpe loest diese Bits deterministisch und gezielt auf. Pilot zuerst an BentoBox/Pane-Chrome/Scrollbars.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "577ad013-35b8-4c4a-a96e-1c021541cb5f",
+              "comment": "Geschuetzte Architektur: TVision Drawing/Event Mechanics. Umsetzung erst nach akzeptierter Zugplanung. Nicht-Ziele: keine zweite Eventloop, kein asynchrones Zeichnen, keine neue View-Ownership, keine generische Render-Monolith-Basisklasse."
+            },
+            {
+              "id": "d61cfb48-24e9-4b80-a55c-51b130c6af68",
+              "comment": "Akzeptanz: BentoBox zeichnet Content/Chrome/Scrollbars/SideKick nur bei relevanter Aenderung; Close-, Fokus-, Split-, Mousewheel- und SideKick-Pfade bleiben regressionsfrei."
+            }
+          ]
         },
         {
           "id": "4837d859-b453-4072-a9a2-f473b9a8342a",
