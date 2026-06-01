@@ -54,6 +54,7 @@
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../dialogs/setup/MRSetupCommon.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsRuntimeState.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
@@ -243,7 +244,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_FILE_SAVE_ALL", KeymapDispatchKind::AppCommand, cmMrFileSaveAll, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_FILE_REVERT", KeymapDispatchKind::AppCommand, cmMrFileRevert, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SAVE_BLOCK_TO_FILE", KeymapDispatchKind::AppCommand, cmMrBlockSaveToDisk, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
+    KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
@@ -1658,6 +1659,89 @@ bool handleBlockAction(bool ok, const char *failureText) {
 	return true;
 }
 
+bool promptBlockSavePath(std::string &outPath) {
+	char fileName[MAXPATH] = {0};
+	ushort result = cmCancel;
+
+	outPath.clear();
+	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockSave, fileName, sizeof(fileName), "*.*");
+	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::BlockSave, "*.*", "SAVE BLOCK", "~N~ame", fdOKButton, fileName);
+	if (result == cmCancel) return false;
+	outPath = expandUserPath(fileName);
+	if (outPath.empty()) {
+		postDialogWarning("No file name specified.");
+		return false;
+	}
+	return true;
+}
+
+bool handleLoadBlockFromFile(MREditWindow *window) {
+	char fileName[MAXPATH] = {0};
+	std::string resolvedPath;
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (window->isReadOnly()) {
+		postDialogWarning(kWindowReadOnlyMessage);
+		return true;
+	}
+	if (!promptForPath(MRDialogHistoryScope::BlockLoad, "LOAD BLOCK", fileName, sizeof(fileName))) return true;
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::BlockLoad, fileName, resolvedPath)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::BlockLoad, fileName);
+		return true;
+	}
+	if (!window->loadStreamBlockFromFile(resolvedPath, &errorText)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::BlockLoad, resolvedPath.c_str());
+		postDialogWarning(errorText.empty() ? "Unable to load block." : errorText);
+		return true;
+	}
+	rememberLoadDialogPath(MRDialogHistoryScope::BlockLoad, resolvedPath.c_str());
+	return true;
+}
+
+bool handleSaveBlockToFile(MREditWindow *window) {
+	std::string savePath;
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (!promptBlockSavePath(savePath)) return true;
+	if (!window->saveStreamBlockToFile(savePath, &errorText)) {
+		postDialogWarning(errorText.empty() ? "Unable to save stream block." : errorText);
+		return true;
+	}
+	rememberLoadDialogPath(MRDialogHistoryScope::BlockSave, savePath.c_str());
+	return true;
+}
+
+bool handleCopyBlock(MREditWindow *window) {
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (!window->copyBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to copy block." : errorText);
+	return true;
+}
+
+bool handleWindowCopyBlock(MREditWindow *window) {
+	MREditWindow *selected = nullptr;
+	MREditWindow *target = nullptr;
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	selected = mrShowWindowListDialog(mrwlSelectLinkTarget, window);
+	if (selected == nullptr) return true;
+	target = selected->editorCommandTarget();
+	if (target == nullptr || target == window) {
+		postDialogWarning("Select a different target window.");
+		return true;
+	}
+	if (target->isReadOnly()) {
+		postDialogWarning(kWindowReadOnlyMessage);
+		return true;
+	}
+	if (!window->copyBlockTo(*target, &errorText)) postDialogWarning(errorText.empty() ? "Unable to copy block to target window." : errorText);
+	return true;
+}
+
 bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix);
 
 bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix) {
@@ -1911,7 +1995,7 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 				case KeymapCustomAction::DeleteForwardCharOrBlock:
 					return dispatchEditorCommandEvent(window, cmDelChar);
 				case KeymapCustomAction::LoadBlockFromFile:
-					return runDisabledBlockAction();
+					return handleLoadBlockFromFile(window);
 				case KeymapCustomAction::SetRandomAccessMark:
 					return markIndex && mrvmUiSetRandomAccessMark(*markIndex);
 				case KeymapCustomAction::GetRandomAccessMark:
@@ -2061,7 +2145,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return handleSearchGotoLineNumber();
 
 		case cmMrBlockCopy: {
-			return runDisabledBlockAction();
+			return handleCopyBlock(currentEditWindow());
 		}
 
 		case cmMrBlockMove: {
@@ -2069,14 +2153,18 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		}
 
 		case cmMrBlockDelete: {
-			return runDisabledBlockAction();
+			MREditWindow *win = currentEditWindow();
+			std::string errorText;
+
+			if (win != nullptr && !win->deleteBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to delete block." : errorText);
+			return true;
 		}
 
 		case cmMrBlockLoadFromDisk:
-			return runDisabledBlockAction();
+			return handleLoadBlockFromFile(currentEditWindow());
 
 		case cmMrBlockSaveToDisk: {
-			return runDisabledBlockAction();
+			return handleSaveBlockToFile(currentEditWindow());
 		}
 
 		case cmMrBlockIndent: {
@@ -2088,7 +2176,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		}
 
 		case cmMrBlockWindowCopy: {
-			return runDisabledBlockAction();
+			return handleWindowCopyBlock(currentEditWindow());
 		}
 
 		case cmMrBlockWindowMove: {

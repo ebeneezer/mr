@@ -39,6 +39,7 @@ MREditWindow *mrvmEditorWindowByIndex(int index);
 bool mrvmEditorCopyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor);
 bool mrvmEditorMoveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor);
 bool mrvmEditorShouldLeaveColumnSpaceForDelete(MREditWindow *win);
+bool mrvmEditorLoadBlockFromFile(MREditWindow *win, const std::string &path);
 bool mrvmEditorSaveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path);
 
 bool mrvmEditorLinkCurrentWindow();

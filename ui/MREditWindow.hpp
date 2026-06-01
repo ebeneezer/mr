@@ -1312,6 +1312,26 @@ class MREditWindow : public TWindow {
 		return editor != nullptr && mBlockOps.moveCursorToEnd(*editor);
 	}
 
+	bool loadStreamBlockFromFile(const std::string &path, std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.loadStreamBlockFromFile(*editor, path, errorText);
+	}
+
+	bool saveStreamBlockToFile(const std::string &path, std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.saveStreamBlockToFile(*editor, path, errorText);
+	}
+
+	bool copyBlock(std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.copyCurrentBlockToCursor(*editor, errorText);
+	}
+
+	bool copyBlockTo(MREditWindow &target, std::string *errorText = nullptr) {
+		return editor != nullptr && target.editor != nullptr && mBlockOps.copyCurrentBlockToEditor(*editor, target.mBlockOps, *target.editor, mBufferId, target.mBufferId, errorText);
+	}
+
+	bool deleteBlock(std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.deleteCurrentBlock(*editor, errorText);
+	}
+
 	bool centerCursorInView() {
 		if (editor == nullptr) return false;
 		editor->revealCursor(True);
@@ -1341,7 +1361,10 @@ class MREditWindow : public TWindow {
 	}
 
 	void applyCommittedBlockState(int mode, bool markingOn, uint anchor, uint end, int anchorColumn = -1, int endColumn = -1) {
-		(void)mode;
+		if (editor != nullptr && mode == bmStream && !markingOn) {
+			static_cast<void>(mBlockOps.setCommittedStream(*editor, anchor, end));
+			return;
+		}
 		(void)markingOn;
 		(void)anchor;
 		(void)end;

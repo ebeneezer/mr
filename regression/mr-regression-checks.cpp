@@ -2149,6 +2149,9 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 	std::string compilerContent;
 	std::string windowContent;
 	std::string editorContent;
+	std::string blockOpsContent;
+	std::string blockOpsSourceContent;
+	std::string setupCommonContent;
 	std::string ioError;
 
 	if (!readTextFile(absolutePathFromCwd("app/MRCommandRouter.cpp"), routerContent, ioError)) {
@@ -2187,6 +2190,18 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 		failureReason = "Unable to read MRFileEditor.cpp for block marking harness: " + ioError;
 		return false;
 	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFEBlockOps.hpp"), blockOpsContent, ioError)) {
+		failureReason = "Unable to read MRFEBlockOps.hpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFEBlockOps.cpp"), blockOpsSourceContent, ioError)) {
+		failureReason = "Unable to read MRFEBlockOps.cpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("dialogs/setup/MRSetupCommon.cpp"), setupCommonContent, ioError)) {
+		failureReason = "Unable to read MRSetupCommon.cpp for block marking harness: " + ioError;
+		return false;
+	}
 	if (!mrfeBlockOpsRegressionHarness(failureReason)) return false;
 	if (!testBlockMarkingWindowInputHarness(failureReason)) return false;
 	if (!testWordStarBlockKeybindingsHarness(defaultKeymapContent, failureReason)) return false;
@@ -2212,6 +2227,18 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 	}
 	if (vmContent.find("mrvmUiBlockBeginLine()") == std::string::npos || vmContent.find("mrvmUiBlockBeginColumn()") == std::string::npos || vmContent.find("mrvmUiBlockBeginStream()") == std::string::npos || vmContent.find("mrvmUiBlockEndMarking()") == std::string::npos || vmContent.find("mrvmUiBlockTurnMarkingOff()") == std::string::npos || vmContent.find("mrvmUiBlockToggleVisibility()") == std::string::npos || compilerContent.find("BLOCK_BEGIN") == std::string::npos || compilerContent.find("COL_BLOCK_BEGIN") == std::string::npos || compilerContent.find("STR_BLOCK_BEGIN") == std::string::npos || compilerContent.find("BLOCK_END") == std::string::npos || compilerContent.find("BLOCK_OFF") == std::string::npos || compilerContent.find("BLOCK_TOGGLE_VISIBILITY") == std::string::npos) {
 		failureReason = "Line, column, stream, end, clear and visibility marking must be wired through MRMAC compiler/runtime surfaces.";
+		return false;
+	}
+	if (routerContent.find("handleLoadBlockFromFile") == std::string::npos || routerContent.find("saveStreamBlockToFile") == std::string::npos || blockOpsContent.find("captureCurrentBlockPayload") == std::string::npos || blockOpsContent.find("insertPayloadAsStreamBlock") == std::string::npos || blockOpsContent.find("std::vector<char> release() noexcept") == std::string::npos || blockOpsContent.find("prepareTransferMessage") == std::string::npos || vmContent.find("name == \"LOAD_BLOCK\"") == std::string::npos || vmContent.find("mrvmEditorLoadBlockFromFile") == std::string::npos || vmContent.find("mrvmEditorSaveCurrentBlockToFile") == std::string::npos || compilerContent.find("PROC_SIG1(\"LOAD_BLOCK\"") == std::string::npos || compilerContent.find("PROC_SIG1(\"SAVE_BLOCK\"") == std::string::npos) {
+		failureReason = "Stream-only load/save block must be wired through menu, keymap and MRMAC surfaces.";
+		return false;
+	}
+	if (routerContent.find("case cmMrBlockDelete:") == std::string::npos || routerContent.find("win->deleteBlock(&errorText)") == std::string::npos || blockOpsContent.find("deleteCurrentBlock") == std::string::npos || blockOpsSourceContent.find("\"delete-block\"") == std::string::npos) {
+		failureReason = "Block delete must route to MRFEBlockOps and use one staged transaction.";
+		return false;
+	}
+	if (setupCommonContent.find("case MRDialogHistoryScope::BlockSave:") == std::string::npos || routerContent.find("rememberLoadDialogPath(MRDialogHistoryScope::BlockSave, savePath.c_str());") == std::string::npos) {
+		failureReason = "Block save history must be deferred by the file dialog and remembered only after a successful save.";
 		return false;
 	}
 		if (windowContent.find("mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers())") == std::string::npos || windowContent.find("mBlockOps.updateFromEditor(*editor)") == std::string::npos) {
@@ -3610,8 +3637,8 @@ bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCommandRouter.cpp for inter-window block guard: " + ioError;
 		return false;
 	}
-	if (content.find("case cmMrBlockWindowCopy:") == std::string::npos || content.find("case cmMrBlockWindowMove:") == std::string::npos || content.find("return runDisabledBlockAction();") == std::string::npos || content.find("chooseInterWindowBlockTarget(") != std::string::npos || content.find("mrvmUiCopyBlockFromWindow(") != std::string::npos || content.find("mrvmUiMoveBlockFromWindow(") != std::string::npos) {
-		failureReason = "Inter-window block commands must stay disabled and must not select source/target windows.";
+	if (content.find("case cmMrBlockWindowCopy:") == std::string::npos || content.find("return handleWindowCopyBlock(currentEditWindow());") == std::string::npos || content.find("mrShowWindowListDialog(mrwlSelectLinkTarget, window)") == std::string::npos || content.find("case cmMrBlockWindowMove:") == std::string::npos || content.find("mrvmUiCopyBlockFromWindow(") != std::string::npos || content.find("mrvmUiMoveBlockFromWindow(") != std::string::npos) {
+		failureReason = "Inter-window copy must route through the command router target selection while inter-window move remains disabled.";
 		return false;
 	}
 	failureReason.clear();

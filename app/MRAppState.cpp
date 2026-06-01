@@ -150,7 +150,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrBlockSaveToDisk, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockIndent, canModify && state.hasBlock);
 	setCommandEnabled(cmMrBlockUndent, canModify && state.hasBlock);
-	setCommandEnabled(cmMrBlockWindowCopy, hasEditor && hasMultipleWindows);
+	setCommandEnabled(cmMrBlockWindowCopy, hasEditor && state.hasBlock && hasMultipleWindows);
 	setCommandEnabled(cmMrBlockWindowMove, canModify && hasMultipleWindows);
 	setCommandEnabled(cmMrBlockMarkLines, canModify && !state.blockMarking);
 	setCommandEnabled(cmMrBlockMarkColumns, canModify);

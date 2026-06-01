@@ -65,6 +65,7 @@ bool deferRememberingLoadDialogPath(MRDialogHistoryScope scope) {
 	switch (scope) {
 		case MRDialogHistoryScope::OpenFile:
 		case MRDialogHistoryScope::LoadFile:
+		case MRDialogHistoryScope::BlockSave:
 		case MRDialogHistoryScope::BlockLoad:
 		case MRDialogHistoryScope::MacroFile:
 		case MRDialogHistoryScope::KeymapProfileLoad:

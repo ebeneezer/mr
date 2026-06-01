@@ -4150,7 +4150,8 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	const bool liveColumnBlock = !liveLineBlock && (mouseAlt || (rightButton && !leftButton));
 	const bool liveStreamBlock = !liveLineBlock && !liveColumnBlock && (leftButton || rightButton || mouseCtrl);
 	const int liveBlockMode = liveColumnBlock ? 2 : liveLineBlock ? 1 : liveStreamBlock ? 3 : 0;
-	mMouseSelectionModifiers = liveLineBlock ? static_cast<unsigned short>(kbCtrlShift | kbAltShift) : liveColumnBlock ? kbAltShift : liveStreamBlock ? kbCtrlShift : 0;
+	const unsigned short liveSelectionModifiers = liveLineBlock ? static_cast<unsigned short>(kbCtrlShift | kbAltShift) : liveColumnBlock ? kbAltShift : liveStreamBlock ? kbCtrlShift : 0;
+	mMouseSelectionModifiers = 0;
 	auto updateLiveMouseBlockOverlay = [this, liveBlockMode](std::size_t current) {
 		if (liveBlockMode == 0) return;
 		setBlockOverlayState(liveBlockMode, mSelectionAnchor, current, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
@@ -4163,10 +4164,10 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(anchor), targetColumn);
 	else
 		mCursorVisualColumn = actualCursorVisualColumn(anchor);
-	updateLiveMouseBlockOverlay(anchor);
 	updateIndicator();
 	drawView();
 
+	bool dragged = false;
 	while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseWheel)) {
 		if (event.what == evMouseMove || event.what == evMouseAuto) {
 			const TPoint mouse = makeLocal(event.mouse.where);
@@ -4185,14 +4186,22 @@ void MRFileEditor::handleMouse(TEvent &event) {
 		}
 		int dragColumn = 0;
 		std::size_t target = mouseOffset(makeLocal(event.mouse.where), &dragColumn);
+		if (target != anchor || dragColumn != targetColumn) {
+			dragged = true;
+			mMouseSelectionModifiers = liveSelectionModifiers;
+		}
 		mMouseSelectionCursorColumn = dragColumn;
 		mBufferModel.setCursorAndSelection(target, mSelectionAnchor, target);
 		if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), dragColumn);
 		else
 			mCursorVisualColumn = actualCursorVisualColumn(target);
-		updateLiveMouseBlockOverlay(target);
+		if (dragged) updateLiveMouseBlockOverlay(target);
 		updateIndicator();
 		drawView();
+	}
+	if (!dragged) {
+		mMouseSelectionModifiers = 0;
+		mMouseSelectionColumnsValid = false;
 	}
 	clearEvent(event);
 }

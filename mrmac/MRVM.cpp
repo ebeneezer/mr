@@ -6240,11 +6240,13 @@ bool mrvmEditorShouldLeaveColumnSpaceForDelete(MREditWindow *win) {
 	return false;
 }
 
+bool mrvmEditorLoadBlockFromFile(MREditWindow *win, const std::string &path) {
+	return win != nullptr && win->loadStreamBlockFromFile(path);
+}
+
 bool mrvmEditorSaveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path) {
-	(void)win;
 	(void)editor;
-	(void)path;
-	return true;
+	return win != nullptr && win->saveStreamBlockToFile(path);
 }
 
 bool mrvmEditorLinkCurrentWindow() {
@@ -7503,6 +7505,29 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					}
 					g_runtimeEnv.lastFileName = win->currentFileName();
 					runtimeErrorLevel() = 0;
+				} else if (name == "LOAD_BLOCK") {
+					MREditWindow *win = activeMacroEditWindow();
+					std::string path;
+					if (args.empty()) {
+						if (currentBackgroundEditSession() != nullptr) {
+							runtimeErrorLevel() = 1001;
+							continue;
+						}
+						runtimeErrorLevel() = dispatchMRKeymapAction("MR_LOAD_BLOCK_FROM_FILE") ? 0 : 1001;
+						continue;
+					}
+					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("LOAD_BLOCK expects zero or one string argument.");
+					if (win == nullptr) {
+						runtimeErrorLevel() = 1001;
+						continue;
+					}
+					path = expandUserPath(valueAsString(args[0]));
+					if (!fileExistsPath(path) || !mrvmEditorLoadBlockFromFile(win, path)) {
+						runtimeErrorLevel() = 3002;
+						continue;
+					}
+					g_runtimeEnv.lastFileName = path;
+					runtimeErrorLevel() = 0;
 				} else if (name == "SAVE_FILE") {
 					MREditWindow *win = activeMacroEditWindow();
 					if (!args.empty()) throw std::runtime_error("SAVE_FILE expects no arguments.");
@@ -7517,7 +7542,28 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					g_runtimeEnv.lastFileName = win->currentFileName();
 					runtimeErrorLevel() = 0;
 				} else if (name == "SAVE_BLOCK") {
-					if (args.size() > 1 || (!args.empty() && !isStringLike(args[0]))) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
+					MREditWindow *win = activeMacroEditWindow();
+					MRFileEditor *editor = currentEditor();
+					std::string path;
+					if (args.empty()) {
+						if (currentBackgroundEditSession() != nullptr) {
+							runtimeErrorLevel() = 1001;
+							continue;
+						}
+						runtimeErrorLevel() = dispatchMRKeymapAction("MR_SAVE_BLOCK_TO_FILE") ? 0 : 1001;
+						continue;
+					}
+					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
+					if (win == nullptr || editor == nullptr) {
+						runtimeErrorLevel() = 1001;
+						continue;
+					}
+					path = expandUserPath(valueAsString(args[0]));
+					if (!mrvmEditorSaveCurrentBlockToFile(win, editor, path)) {
+						runtimeErrorLevel() = errno != 0 ? errno : 1010;
+						continue;
+					}
+					g_runtimeEnv.lastFileName = path;
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_INDENT_LEVEL") {
 					if (!args.empty()) throw std::runtime_error("SET_INDENT_LEVEL expects no arguments.");
