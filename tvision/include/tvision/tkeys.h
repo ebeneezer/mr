@@ -128,6 +128,9 @@ const ushort
     kbLeftAlt     = 0x0008,
     kbRightAlt    = 0x0008,
     kbAltShift    = kbLeftAlt | kbRightAlt,
+    kbLeftSuper   = 0x0800,
+    kbRightSuper  = 0x1000,
+    kbSuperShift  = kbLeftSuper | kbRightSuper,
     kbScrollState = 0x0010,
     kbNumState    = 0x0020,
     kbCapsState   = 0x0040,
@@ -143,6 +146,9 @@ const ushort
     kbLeftAlt     = LEFT_ALT_PRESSED,
     kbRightAlt    = RIGHT_ALT_PRESSED,
     kbAltShift    = kbLeftAlt | kbRightAlt,
+    kbLeftSuper   = 0x0800,
+    kbRightSuper  = 0x1000,
+    kbSuperShift  = kbLeftSuper | kbRightSuper,
     kbScrollState = SCROLLLOCK_ON,
     kbNumState    = NUMLOCK_ON,
     kbCapsState   = CAPSLOCK_ON,
@@ -163,7 +169,7 @@ const ushort
 // can then be used to define menu hotkeys and examine 'evKeyDown' event
 // records.
 //
-// The only modifiers taken into account are Shift, Ctrl and Alt, making no
+// The only modifiers taken into account are Shift, Ctrl, Alt and Super, making no
 // distinction between the left and right key on platforms that support it.
 //
 // Given that some key code constants already imply the presence of a key

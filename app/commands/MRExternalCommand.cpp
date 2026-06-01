@@ -1,6 +1,3 @@
-#define Uses_MsgBox
-#include <tvision/tv.h>
-
 #include "MRExternalCommand.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 
@@ -69,18 +66,6 @@ bool pathIsDirectory(const std::string &path) {
 	return std::filesystem::is_directory(path, error);
 }
 } // namespace
-
-bool promptForCommandLine(std::string &commandLine) {
-	constexpr std::size_t CommandBufferSize = 256;
-	std::array<char, CommandBufferSize> command{};
-	uchar limit;
-
-	commandLine.clear();
-	limit = static_cast<uchar>(command.size() - 1);
-	if (inputBox("EXECUTE PROGRAM", "~C~ommand", command.data(), limit) == cmCancel) return false;
-	commandLine = trimPathInput(command.data());
-	return true;
-}
 
 std::string shortenCommandTitle(std::string_view command) {
 	std::string trimmed = trimPathInput(command);

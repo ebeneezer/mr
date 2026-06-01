@@ -497,9 +497,9 @@ ELSE
             StartLine := BLOCK_LINE1;
             EndLine := BLOCK_LINE2;
             StartCol := BLOCK_COL1;
-            GOTO_LINE(EndLine + 1);
-            IF C_LINE <> EndLine THEN
-                IF BlockState = 1 THEN
+            IF BlockState = 1 THEN
+                GOTO_LINE(EndLine + 1);
+                IF C_LINE <> EndLine THEN
                     BLOCK_BEGIN;
                     BLOCK_END;
                     GOTO_LINE(StartLine);
@@ -507,11 +507,25 @@ ELSE
                     MOVE_BLOCK;
                     GOTO_LINE(StartLine + 1);
                     GOTO_COL(1);
+                END;
+            ELSE
+                IF BlockState = 2 THEN
+                    GOTO_LINE(EndLine + 1);
+                    IF C_LINE <> EndLine THEN
+                        GOTO_LINE(StartLine + 1);
+                        GOTO_COL(StartCol);
+                        MOVE_BLOCK;
+                        GOTO_LINE(StartLine + 1);
+                        GOTO_COL(StartCol);
+                    END;
                 ELSE
-                    GOTO_COL(StartCol);
-                    MOVE_BLOCK;
-                    GOTO_LINE(StartLine + 1);
-                    GOTO_COL(StartCol);
+                    GOTO_LINE(EndLine + 1);
+                    IF C_LINE <> EndLine THEN
+                        GOTO_COL(StartCol);
+                        MOVE_BLOCK;
+                        GOTO_LINE(StartLine + 1);
+                        GOTO_COL(StartCol);
+                    END;
                 END;
             END;
         END;

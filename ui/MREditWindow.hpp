@@ -34,6 +34,7 @@
 #include "MRWindowManager.hpp"
 #include "MRWindowManager.hpp"
 #include "MRWindowSupport.hpp"
+#include "MRFileEditor/MRFEBlockOps.hpp"
 #include "../app/MRCommands.hpp"
 #include "../keymap/MRKeymapContext.hpp"
 #include "../keymap/MRKeymapToken.hpp"
@@ -73,7 +74,7 @@ class MREditWindow : public TWindow {
 		wrHelp
 	};
 
-	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
+	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -366,21 +367,10 @@ class MREditWindow : public TWindow {
 		const ushort originalEvent = event.what;
 		const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
 		const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
-		const bool markingBefore = mBlockMarkingOn;
-		const std::size_t bufferLengthBefore = editor != nullptr ? editor->bufferLength() : 0;
-		const std::size_t cursorBefore = editor != nullptr ? editor->cursorOffset() : 0;
-		const std::size_t selectionStartBefore = editor != nullptr ? editor->selectionStartOffset() : 0;
-		const std::size_t selectionEndBefore = editor != nullptr ? editor->selectionEndOffset() : 0;
-		bool selectionCollapsedBeforeEditorInput = false;
-		maybeTraceTtyCollisionKeyEvent("window-pre", event);
-		traceCalculatorHotkeyEvent("window-pre", event);
+			maybeTraceTtyCollisionKeyEvent("window-pre", event);
+			traceCalculatorHotkeyEvent("window-pre", event);
 
-		if (event.what == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && mBlockMode != bmNone && !mBlockMarkingOn) {
-			// Keep state, but hide committed block overlay while the mouse selection loop runs,
-			// so the live growing selection is visible.
-			editor->setBlockOverlayState(0, 0, 0, false, false);
-		}
-		if (event.what == evKeyDown && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab)) {
+			if (event.what == evKeyDown && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab)) {
 			event.keyDown.keyCode = kbShiftTab;
 			event.keyDown.controlKeyState |= kbShift;
 		}
@@ -390,8 +380,9 @@ class MREditWindow : public TWindow {
 				std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=window-pre keyCode=0x%04X mods=0x%04X cursor=%zu", static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), editor != nullptr ? editor->cursorOffset() : 0);
 				mrLogMessage(line);
 			}
-			if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) return;
+				if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) return;
 			if (handleBuiltInBlockHotkeys(event)) return;
+			if (handleShiftCursorBlockMarking(event)) return;
 			std::string executedMacroName;
 			if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {
 				if (isCalculatorHotkeyEvent(event)) {
@@ -417,12 +408,7 @@ class MREditWindow : public TWindow {
 				}
 			}
 		}
-		if (shouldCollapseSelectionBeforeEditorInput(event)) {
-			const std::size_t cursor = editor->cursorOffset();
-			editor->setSelectionOffsets(cursor, cursor, False);
-			selectionCollapsedBeforeEditorInput = true;
-		}
-		if (frame != nullptr) {
+			if (frame != nullptr) {
 			MRFrame *mrFrame = static_cast<MRFrame *>(frame);
 			if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0) mrFrame->updateTaskHover(event.mouse.where, false);
 			else if ((event.what & (evKeyDown | evCommand)) != 0)
@@ -430,13 +416,16 @@ class MREditWindow : public TWindow {
 		}
 
 		TWindow::handleEvent(event);
+		if (editor != nullptr) {
+			if (originalEvent == evMouseDown) static_cast<void>(mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers()));
+			else if (mBlockOps.isMarking() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.updateFromEditor(*editor));
+		}
 		traceCalculatorHotkeyEvent("window-post", event);
 		if (keyDebugEnabled() && originalEvent == evKeyDown && TKey(keyCodeBefore, keyModifiersBefore) == TKey(kbShiftTab)) {
 			char line[192];
 			std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=window-post event=0x%04X cursor=%zu", static_cast<unsigned>(event.what), editor != nullptr ? editor->cursorOffset() : 0);
 			mrLogMessage(line);
 		}
-		if ((originalEvent & (evKeyDown | evMouseDown | evMouseMove | evMouseUp)) != 0) applyPostInputBlockPolicy(markingBefore, originalEvent, selectionStartBefore, selectionEndBefore, bufferLengthBefore, cursorBefore, keyCodeBefore, keyModifiersBefore, selectionCollapsedBeforeEditorInput);
 		if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
 			updateTaskMarkers();
 			if (frame != nullptr) frame->drawView();
@@ -1215,87 +1204,89 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) editor->setPreferredIndentColumn(level);
 	}
 
-	enum BlockMode {
-		bmNone = 0,
-		bmLine = 1,
-		bmColumn = 2,
-		bmStream = 3
-	};
-
-	void beginLineBlock() {
-		beginBlock(bmLine);
-	}
+		void beginLineBlock() {
+		if (editor != nullptr) static_cast<void>(mBlockOps.beginLine(*editor));
+		}
 
 	void beginColumnBlock() {
-		beginBlock(bmColumn);
+		if (editor != nullptr) static_cast<void>(mBlockOps.beginColumn(*editor));
 	}
 
 	void beginStreamBlock() {
-		beginBlock(bmStream);
+		if (editor != nullptr) static_cast<void>(mBlockOps.beginStream(*editor));
 	}
 
 	void endBlock() {
-		if (editor == nullptr || mBlockMode == bmNone) return;
-		mBlockEnd = static_cast<uint>(editor->cursorOffset());
-		mBlockMarkingOn = false;
-		syncBlockVisual();
+		if (editor != nullptr) static_cast<void>(mBlockOps.end(*editor));
 	}
 
 	void clearBlock() {
-		clearBlockState(false);
+		if (editor != nullptr) static_cast<void>(mBlockOps.clear(*editor));
 	}
 
 	bool toggleBlockVisibility() {
-		if (mBlockMode != bmNone) {
-			storeHiddenBlockState();
-			clearBlockState(true);
-			return true;
-		}
-		if (!mHiddenBlockValid || editor == nullptr) return false;
-		applyCommittedBlockState(static_cast<int>(mHiddenBlockMode), mHiddenBlockMarkingOn, mHiddenBlockAnchor, mHiddenBlockEnd);
-		mHiddenBlockValid = false;
-		return true;
+		return editor != nullptr && mBlockOps.toggleVisibility(*editor);
 	}
 
 	bool hasBlock() const {
-		return mBlockMode != bmNone;
+		return mBlockOps.hasVisibleBlock();
 	}
 
 	bool isBlockMarking() const {
-		return mBlockMode != bmNone && mBlockMarkingOn;
+		return mBlockOps.isMarking();
 	}
 
-	int blockStatus() const {
-		return static_cast<int>(mBlockMode);
-	}
+		int blockStatus() const {
+			if (!mBlockOps.hasVisibleBlock()) return 0;
+			return static_cast<int>(mBlockOps.mode());
+		}
 
-	uint blockAnchorPtr() const {
-		return mBlockAnchor;
-	}
+		enum BlockMode {
+			bmNone = 0,
+			bmLine = 1,
+			bmColumn = 2,
+			bmStream = 3
+		};
 
-	uint blockEffectiveEndPtr() const {
-		return effectiveBlockEnd();
-	}
+		uint blockAnchorPtr() const {
+			return static_cast<uint>(mBlockOps.geometry().anchor);
+		}
 
-	int blockLine1() const {
-		return normalizedBlockLine1();
-	}
+		uint blockEffectiveEndPtr() const {
+			return static_cast<uint>(mBlockOps.geometry().cursor);
+		}
 
-	int blockLine2() const {
-		return normalizedBlockLine2();
-	}
+		int blockLine1() const {
+			if (!mBlockOps.hasVisibleBlock()) return 0;
+			return static_cast<int>(mBlockOps.geometry().line1 + 1);
+		}
 
-	int blockCol1() const {
-		return normalizedBlockCol1();
-	}
+		int blockLine2() const {
+			if (!mBlockOps.hasVisibleBlock()) return 0;
+			return static_cast<int>(mBlockOps.geometry().line2 + 1);
+		}
 
-	int blockCol2() const {
-		return normalizedBlockCol2();
-	}
+		int blockCol1() const {
+			if (!mBlockOps.hasVisibleBlock()) return 0;
+			return mBlockOps.geometry().col1 + 1;
+		}
 
-	void refreshBlockVisual() {
-		syncBlockVisual();
-	}
+		int blockCol2() const {
+			if (!mBlockOps.hasVisibleBlock()) return 0;
+			return mBlockOps.geometry().col2 + 1;
+		}
+
+		int blockAnchorColumn() const {
+			return mBlockOps.geometry().anchorColumn + 1;
+		}
+
+		int blockEndColumn() const {
+			return mBlockOps.geometry().cursorColumn + 1;
+		}
+
+		void refreshBlockVisual() {
+			if (editor != nullptr) static_cast<void>(mBlockOps.refreshVisual(*editor));
+		}
 
 	bool moveCursorToTopOfView() {
 		if (editor == nullptr) return false;
@@ -1310,21 +1301,11 @@ class MREditWindow : public TWindow {
 	}
 
 	bool moveCursorToBlockStart() {
-		uint a = 0;
-		uint b = 0;
-		if (editor == nullptr || mBlockMode == bmNone) return false;
-		blockPtrRange(a, b);
-		editor->setCursorOffset(a);
-		return true;
+		return editor != nullptr && mBlockOps.moveCursorToStart(*editor);
 	}
 
 	bool moveCursorToBlockEnd() {
-		uint a = 0;
-		uint b = 0;
-		if (editor == nullptr || mBlockMode == bmNone) return false;
-		blockPtrRange(a, b);
-		editor->setCursorOffset(b);
-		return true;
+		return editor != nullptr && mBlockOps.moveCursorToEnd(*editor);
 	}
 
 	bool centerCursorInView() {
@@ -1334,189 +1315,47 @@ class MREditWindow : public TWindow {
 	}
 
 	bool shiftCursorBlockMark(const MRKeymapToken &token) {
-		std::size_t target = 0;
-
-		if (editor == nullptr) return false;
-		target = editor->cursorOffset();
-		switch (token.baseKey()) {
-			case MRKeymapBaseKey::Left:
-				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->prevWordOffset(target) : editor->prevCharOffset(target);
-				break;
-			case MRKeymapBaseKey::Right:
-				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->nextWordOffset(target) : editor->nextCharOffset(target);
-				break;
-			case MRKeymapBaseKey::Up:
-				target = editor->lineMoveOffset(target, -1);
-				break;
-			case MRKeymapBaseKey::Down:
-				target = editor->lineMoveOffset(target, 1);
-				break;
-			case MRKeymapBaseKey::Home:
-				target = token.hasModifier(MRKeymapModifier::Ctrl) ? 0 : editor->lineStartOffset(target);
-				break;
-			case MRKeymapBaseKey::End:
-				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->bufferLength() : editor->lineEndOffset(target);
-				break;
-			case MRKeymapBaseKey::PageUp:
-				target = editor->lineMoveOffset(target, -(std::max(2, editor->visibleViewportRows()) - 1));
-				break;
-			case MRKeymapBaseKey::PageDown:
-				target = editor->lineMoveOffset(target, std::max(2, editor->visibleViewportRows()) - 1);
-				break;
-			default:
-				return false;
-		}
-		if (mBlockMode == bmNone) mBlockMode = bmStream;
-		if (!mBlockMarkingOn) {
-			discardHiddenBlockState();
-			mBlockMarkingOn = true;
-			mBlockAnchor = static_cast<uint>(editor->cursorOffset());
-			mBlockEnd = static_cast<uint>(editor->cursorOffset());
-		}
-		editor->setCursorOffset(target);
-		mBlockEnd = static_cast<uint>(editor->cursorOffset());
-		syncBlockVisual();
-		return true;
+		(void)token;
+		return false;
 	}
 
 	bool markWordRight() {
-		auto isWordByte = [](char ch) noexcept {
-			const unsigned char uch = static_cast<unsigned char>(ch);
-			return std::isalnum(uch) != 0 || ch == '_';
-		};
-		std::size_t start = 0;
-		std::size_t end = 0;
-
 		if (editor == nullptr) return false;
-		start = editor->cursorOffset();
-		if (start >= editor->bufferLength()) return false;
-		if (!isWordByte(editor->charAtOffset(start))) {
-			start = editor->nextWordOffset(start);
-			if (start >= editor->bufferLength()) return false;
-		}
-		while (start > 0 && isWordByte(editor->charAtOffset(start - 1)))
-			--start;
-		end = start;
-		while (end < editor->bufferLength() && isWordByte(editor->charAtOffset(end)))
-			end = editor->nextCharOffset(end);
-		if (end <= start) return false;
-		applyCommittedBlockState(static_cast<int>(bmStream), false, static_cast<uint>(start), static_cast<uint>(end));
+		beginStreamBlock();
+		editor->setCursorOffset(editor->nextWordOffset(editor->cursorOffset()));
+		endBlock();
 		return true;
 	}
 
 	bool sortColumnBlock(bool ascending) {
-		struct ColumnRow {
-			std::string text;
-			std::string lineEnding;
-			std::string key;
-		};
-
-		if (editor == nullptr || mBlockMode != bmColumn) return false;
-
-		uint blockStart = 0;
-		uint blockEnd = 0;
-		const int line1 = normalizedBlockLine1();
-		const int line2 = normalizedBlockLine2();
-		const int col1 = normalizedBlockCol1();
-		const int col2 = normalizedBlockCol2();
-		const std::size_t regionStart = editor->lineStartOffset(std::min(mBlockAnchor, effectiveBlockEnd()));
-		const std::size_t regionEnd = std::min(editor->bufferLength(), editor->nextLineOffset(std::max(mBlockAnchor, effectiveBlockEnd())));
-		const std::string snapshot = editor->snapshotText();
-		std::vector<ColumnRow> rows;
-		std::string sortedText;
-		auto lineStartByNumber = [this](int lineNumber) {
-			std::size_t lineStart = 0;
-			for (int currentLine = 1; currentLine < lineNumber; ++currentLine) {
-				std::size_t next = editor->nextLineOffset(lineStart);
-				if (next <= lineStart) break;
-				lineStart = next;
-			}
-			return lineStart;
-		};
-
-		blockPtrRange(blockStart, blockEnd);
-		for (std::size_t lineStart = regionStart; lineStart < regionEnd; lineStart = editor->nextLineOffset(lineStart)) {
-			const std::size_t lineEnd = editor->lineEndOffset(lineStart);
-			const std::size_t nextLine = std::min(editor->bufferLength(), editor->nextLineOffset(lineStart));
-			const std::size_t keyStart = editor->charPtrOffset(lineStart, std::max(0, col1 - 1));
-			const std::size_t keyEnd = std::min(lineEnd, editor->charPtrOffset(lineStart, col2));
-			ColumnRow row;
-
-			row.text = snapshot.substr(lineStart, lineEnd - lineStart);
-			row.lineEnding = snapshot.substr(lineEnd, nextLine - lineEnd);
-			row.key = snapshot.substr(keyStart, keyEnd - keyStart);
-			rows.push_back(std::move(row));
-			if (nextLine <= lineStart) break;
-		}
-		if (rows.size() < 2) return true;
-		std::stable_sort(rows.begin(), rows.end(), [ascending](const ColumnRow &left, const ColumnRow &right) { return ascending ? left.key < right.key : right.key < left.key; });
-		for (const ColumnRow &row : rows)
-			sortedText += row.text + row.lineEnding;
-		if (!editor->replaceRangeAndSelect(static_cast<uint>(regionStart), static_cast<uint>(regionEnd), sortedText.data(), static_cast<uint>(sortedText.size()))) return false;
-		{
-			const std::size_t sortedStart = editor->charPtrOffset(lineStartByNumber(line1), std::max(0, col1 - 1));
-			const std::size_t sortedEnd = editor->charPtrOffset(lineStartByNumber(line2), std::max(0, col2 - 1));
-			applyCommittedBlockState(static_cast<int>(bmColumn), false, static_cast<uint>(sortedStart), static_cast<uint>(sortedEnd));
-		}
-		mColumnSortAscending = !ascending;
-		return true;
+		(void)ascending;
+		return false;
 	}
 
 	bool sortColumnBlockToggleOrder() {
 		return sortColumnBlock(mColumnSortAscending);
 	}
 
-	void applyCommittedBlockState(int mode, bool markingOn, uint anchor, uint end) {
-		discardHiddenBlockState();
-		if (editor == nullptr) return;
-		if (mode < bmNone || mode > bmStream) mode = bmNone;
-		mBlockMode = static_cast<BlockMode>(mode);
-		mBlockMarkingOn = mBlockMode != bmNone && markingOn;
-		mBlockAnchor = std::min<uint>(anchor, static_cast<uint>(editor->bufferLength()));
-		mBlockEnd = std::min<uint>(end, static_cast<uint>(editor->bufferLength()));
-		if (mBlockMode == bmNone) {
-			mBlockMarkingOn = false;
-			mBlockAnchor = 0;
-			mBlockEnd = 0;
-			editor->setBlockOverlayState(0, 0, 0, false, false);
-			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
-			editor->update(ufView);
-			return;
-		}
-		syncBlockVisual();
+	void applyCommittedBlockState(int mode, bool markingOn, uint anchor, uint end, int anchorColumn = -1, int endColumn = -1) {
+		(void)mode;
+		(void)markingOn;
+		(void)anchor;
+		(void)end;
+		(void)anchorColumn;
+		(void)endColumn;
+		clearBlockState(false);
 	}
 
-  private:
-	void clearBlockState(bool preserveHiddenState) {
-		if (!preserveHiddenState) discardHiddenBlockState();
-		mBlockMode = bmNone;
-		mBlockMarkingOn = false;
-		mBlockAnchor = 0;
-		mBlockEnd = 0;
-		if (editor != nullptr) {
-			editor->setBlockOverlayState(0, 0, 0, false);
-			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
+	  private:
+		void clearBlockState(bool preserveHiddenState) {
+			(void)preserveHiddenState;
+			if (editor != nullptr) {
+				editor->setBlockOverlayState(0, 0, 0, false);
+				editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
 			editor->revealCursor(False);
 			editor->update(ufView);
+			}
 		}
-	}
-
-	void storeHiddenBlockState() {
-		if (mBlockMode == bmNone) return;
-		mHiddenBlockMode = mBlockMode;
-		mHiddenBlockMarkingOn = mBlockMarkingOn;
-		mHiddenBlockAnchor = mBlockAnchor;
-		mHiddenBlockEnd = effectiveBlockEnd();
-		mHiddenBlockValid = true;
-	}
-
-	void discardHiddenBlockState() {
-		mHiddenBlockValid = false;
-		mHiddenBlockMode = bmNone;
-		mHiddenBlockMarkingOn = false;
-		mHiddenBlockAnchor = 0;
-		mHiddenBlockEnd = 0;
-	}
 	void resetWindowColorsToConfiguredDefaults() {
 		mWindowPaletteData = defaultWindowPaletteData();
 		rebuildWindowPalette();
@@ -1820,43 +1659,40 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) editor->setSyntaxTitleHint(displayTitle);
 	}
 
-	bool shouldCollapseSelectionBeforeEditorInput(const TEvent &event) const {
-		ushort key = 0;
-		unsigned char ch = 0;
-
-		if (editor == nullptr || mBlockMode == bmNone || mBlockMarkingOn || event.what != evKeyDown) return false;
-		key = ctrlToArrow(event.keyDown.keyCode);
-		ch = static_cast<unsigned char>(event.keyDown.charScan.charCode);
-		if ((event.keyDown.controlKeyState & kbPaste) != 0 || event.keyDown.textLength > 0) return true;
-		if (key == kbBack || key == kbDel || key == kbEnter || key == kbTab) return true;
-		return ch >= 32 && ch < 255;
-	}
+		bool shouldCollapseSelectionBeforeEditorInput(const TEvent &event) const {
+			(void)event;
+			return false;
+		}
 
 	bool handleBuiltInBlockHotkeys(TEvent &event) {
-		ushort keyCode = event.keyDown.keyCode;
-		ushort mods = event.keyDown.controlKeyState;
-		bool shift = (mods & kbShift) != 0;
-		bool ctrl = (mods & kbCtrlShift) != 0;
-
-		if (editor == nullptr || event.what != evKeyDown) return false;
-		if (keyCode == kbCtrlF7 || (keyCode == kbF7 && ctrl && !shift)) {
-			beginStreamBlock();
-			clearEvent(event);
-			return true;
-		}
-		if (keyCode == kbShiftF7 || (keyCode == kbF7 && shift && !ctrl)) {
-			beginColumnBlock();
-			clearEvent(event);
-			return true;
-		}
+		if (event.what != evKeyDown || editor == nullptr) return false;
+		const ushort keyCode = ctrlToArrow(event.keyDown.keyCode);
+		const ushort mods = event.keyDown.controlKeyState;
+		const bool ctrl = (mods & kbCtrlShift) != 0;
+		const bool shift = (mods & kbShift) != 0;
 		if (keyCode == kbF7 && !shift && !ctrl) {
-			if (mBlockMode != bmNone && mBlockMarkingOn) endBlock();
+			if (isBlockMarking()) endBlock();
 			else
 				beginLineBlock();
 			clearEvent(event);
 			return true;
 		}
-		if (keyCode == kbCtrlF9 || (keyCode == kbF9 && ctrl && !shift)) {
+		if (keyCode == kbF7 && shift && !ctrl) {
+			beginColumnBlock();
+			clearEvent(event);
+			return true;
+		}
+		if (keyCode == kbF7 && ctrl && !shift) {
+			beginStreamBlock();
+			clearEvent(event);
+			return true;
+		}
+		if (keyCode == kbF9 && shift && !ctrl) {
+			static_cast<void>(toggleBlockVisibility());
+			clearEvent(event);
+			return true;
+		}
+		if (keyCode == kbF9 && ctrl && !shift) {
 			clearBlock();
 			clearEvent(event);
 			return true;
@@ -1864,8 +1700,69 @@ class MREditWindow : public TWindow {
 		return false;
 	}
 
-	static bool isBlockShiftNavigationKey(ushort keyCode, ushort keyModifiers) {
-		if ((keyModifiers & kbShift) == 0 || (keyModifiers & kbPaste) != 0) return false;
+	bool handleShiftCursorBlockMarking(TEvent &event) {
+		if (event.what != evKeyDown || editor == nullptr) return false;
+		const ushort keyCode = normalizedBlockCursorNavigationKey(ctrlToArrow(event.keyDown.keyCode));
+		const ushort mods = event.keyDown.controlKeyState;
+		if (!isBlockCursorNavigationKey(keyCode)) return false;
+		if (!isBlockCursorMarkingModifier(mods)) {
+			if (mBlockOps.isMarking()) static_cast<void>(mBlockOps.end(*editor));
+			return false;
+		}
+
+		const bool ctrl = (mods & kbCtrlShift) != 0;
+		const bool alt = (mods & kbAltShift) != 0;
+		const MRFEBlockMode targetMode = ctrl && alt ? MRFEBlockMode::Line : alt ? MRFEBlockMode::Column : MRFEBlockMode::Stream;
+		if (!mBlockOps.isMarking() || mBlockOps.mode() != targetMode) {
+			if (targetMode == MRFEBlockMode::Column) static_cast<void>(mBlockOps.beginColumn(*editor));
+			else if (targetMode == MRFEBlockMode::Line)
+				static_cast<void>(mBlockOps.beginLine(*editor));
+			else
+				static_cast<void>(mBlockOps.beginStream(*editor));
+		}
+		event.keyDown.keyCode = keyCode;
+		editor->handleEvent(event);
+		static_cast<void>(mBlockOps.updateFromEditor(*editor));
+		return true;
+	}
+
+	static bool isBlockCursorMarkingModifier(ushort keyModifiers) {
+		if ((keyModifiers & kbPaste) != 0) return false;
+		return (keyModifiers & (kbShift | kbCtrlShift | kbAltShift)) != 0;
+	}
+
+	static ushort normalizedBlockCursorNavigationKey(ushort keyCode) {
+		switch (keyCode) {
+			case kbCtrlLeft:
+			case kbAltLeft:
+				return kbLeft;
+			case kbCtrlRight:
+			case kbAltRight:
+				return kbRight;
+			case kbCtrlUp:
+			case kbAltUp:
+				return kbUp;
+			case kbCtrlDown:
+			case kbAltDown:
+				return kbDown;
+			case kbCtrlHome:
+			case kbAltHome:
+				return kbHome;
+			case kbCtrlEnd:
+			case kbAltEnd:
+				return kbEnd;
+			case kbCtrlPgUp:
+			case kbAltPgUp:
+				return kbPgUp;
+			case kbCtrlPgDn:
+			case kbAltPgDn:
+				return kbPgDn;
+			default:
+				return keyCode;
+		}
+	}
+
+	static bool isBlockCursorNavigationKey(ushort keyCode) {
 		switch (keyCode) {
 			case kbLeft:
 			case kbRight:
@@ -1875,86 +1772,23 @@ class MREditWindow : public TWindow {
 			case kbEnd:
 			case kbPgUp:
 			case kbPgDn:
-			case kbCtrlLeft:
-			case kbCtrlRight:
-			case kbCtrlHome:
-			case kbCtrlEnd:
 				return true;
 			default:
 				return false;
 		}
 	}
 
-	void applyPostInputBlockPolicy(bool markingBefore, ushort originalEvent, std::size_t selectionStartBefore, std::size_t selectionEndBefore, std::size_t bufferLengthBefore, std::size_t cursorBefore, ushort keyCodeBefore, ushort keyModifiersBefore, bool selectionCollapsedBeforeEditorInput) {
-		if (editor == nullptr) return;
-		if (originalEvent == evKeyDown && isBlockShiftNavigationKey(keyCodeBefore, keyModifiersBefore)) {
-			const std::size_t currentCursor = std::min(editor->cursorOffset(), editor->bufferLength());
-			const std::size_t anchorCursor = std::min(cursorBefore, bufferLengthBefore);
-
-			if (mBlockMode == bmNone) mBlockMode = bmStream;
-			if (!markingBefore) {
-				mBlockMarkingOn = true;
-				mBlockAnchor = static_cast<uint>(anchorCursor);
-			}
-			mBlockEnd = static_cast<uint>(currentCursor);
-			syncBlockVisual();
-			return;
-		}
-		if (originalEvent == evMouseDown && !markingBefore) {
-			const std::size_t selectionStartNow = editor->selectionStartOffset();
-			const std::size_t selectionEndNow = editor->selectionEndOffset();
-
-			// Mouse drag selection is authoritative for the next committed stream block.
-			if (selectionStartNow != selectionEndNow && (selectionStartNow != selectionStartBefore || selectionEndNow != selectionEndBefore)) {
-				mBlockMode = bmStream;
-				mBlockMarkingOn = false;
-				mBlockAnchor = static_cast<uint>(selectionStartNow);
-				mBlockEnd = static_cast<uint>(selectionEndNow);
-				syncBlockVisual();
-				return;
-			}
-		}
-		if (originalEvent == evKeyDown && mBlockMode != bmNone && !mBlockMarkingOn && bufferLengthBefore != editor->bufferLength()) {
-			const std::size_t currentLength = editor->bufferLength();
-			const std::size_t normalizedCursorBefore = std::min(cursorBefore, bufferLengthBefore);
-			std::size_t changePos = selectionCollapsedBeforeEditorInput ? normalizedCursorBefore : selectionStartBefore;
-			long delta = static_cast<long>(currentLength) - static_cast<long>(bufferLengthBefore);
-			uint startPtr = 0;
-			uint endPtr = 0;
-			uint normalizedStart = 0;
-			uint normalizedEnd = 0;
-			auto shiftPtr = [&](uint &ptr) {
-				long shifted = static_cast<long>(ptr) + delta;
-				if (shifted < 0) shifted = 0;
-				if (shifted > static_cast<long>(currentLength)) shifted = static_cast<long>(currentLength);
-				ptr = static_cast<uint>(shifted);
-			};
-
-			if (selectionCollapsedBeforeEditorInput || selectionStartBefore == selectionEndBefore) {
-				changePos = normalizedCursorBefore;
-				if (keyCodeBefore == kbBack && normalizedCursorBefore > 0) changePos = normalizedCursorBefore - 1;
-			}
-
-			startPtr = std::min(mBlockAnchor, mBlockEnd);
-			endPtr = std::max(mBlockAnchor, mBlockEnd);
-			normalizedStart = startPtr;
-			normalizedEnd = endPtr;
-
-			if (changePos <= normalizedStart) {
-				shiftPtr(mBlockAnchor);
-				shiftPtr(mBlockEnd);
-			} else if (changePos < normalizedEnd && mBlockMode == bmStream) {
-				if (mBlockAnchor <= mBlockEnd) shiftPtr(mBlockEnd);
-				else
-					shiftPtr(mBlockAnchor);
-			}
-		}
-		// Drag-release with the mouse finalizes marking in the active block mode.
-		if (markingBefore && originalEvent == evMouseDown && mBlockMarkingOn) {
-			endBlock();
-			return;
-		}
-		if (mBlockMode != bmNone) syncBlockVisual();
+	void applyPostInputBlockPolicy(bool markingBefore, ushort originalEvent, std::size_t selectionStartBefore, std::size_t selectionEndBefore, std::size_t bufferLengthBefore, std::size_t cursorBefore, ushort keyCodeBefore, ushort keyModifiersBefore, ushort mouseModifiersBefore, bool selectionCollapsedBeforeEditorInput) {
+		(void)markingBefore;
+		(void)originalEvent;
+		(void)selectionStartBefore;
+		(void)selectionEndBefore;
+		(void)bufferLengthBefore;
+		(void)cursorBefore;
+		(void)keyCodeBefore;
+		(void)keyModifiersBefore;
+		(void)mouseModifiersBefore;
+		(void)selectionCollapsedBeforeEditorInput;
 	}
 
 	void updateTaskMarkers() {
@@ -1978,50 +1812,7 @@ class MREditWindow : public TWindow {
 		updateTaskMarkers();
 	}
 
-	void beginBlock(BlockMode mode) {
-		if (editor == nullptr) return;
-		discardHiddenBlockState();
-		mBlockMode = mode;
-		mBlockMarkingOn = true;
-		mBlockAnchor = static_cast<uint>(editor->cursorOffset());
-		mBlockEnd = static_cast<uint>(editor->cursorOffset());
-		syncBlockVisual();
-	}
-
-	uint effectiveBlockEnd() const {
-		if (editor != nullptr && mBlockMarkingOn) return static_cast<uint>(editor->cursorOffset());
-		return mBlockEnd;
-	}
-
-	void blockPtrRange(uint &a, uint &b) const {
-		a = mBlockAnchor;
-		b = effectiveBlockEnd();
-		if (a > b) std::swap(a, b);
-	}
-
-	int lineNumberForPtr(uint ptr) const {
-		uint pos = 0;
-		int line = 1;
-		if (editor == nullptr) return 0;
-		if (ptr > editor->bufferLength()) ptr = static_cast<uint>(editor->bufferLength());
-		while (pos < ptr && pos < editor->bufferLength()) {
-			uint next = static_cast<uint>(editor->nextLineOffset(pos));
-			if (next <= pos || next > ptr) break;
-			pos = next;
-			++line;
-		}
-		return line;
-	}
-
-	int columnForPtr(uint ptr) const {
-		uint start;
-		if (editor == nullptr) return 0;
-		if (ptr > editor->bufferLength()) ptr = static_cast<uint>(editor->bufferLength());
-		start = static_cast<uint>(editor->lineStartOffset(ptr));
-		return editor->charColumn(start, ptr) + 1;
-	}
-
-  public:
+	  public:
 	static std::string baseNameOf(const std::string &path) {
 		std::size_t pos = path.find_last_of("\\/");
 		return pos == std::string::npos ? path : path.substr(pos + 1);
@@ -2160,41 +1951,7 @@ class MREditWindow : public TWindow {
 		return "Save cache warming";
 	}
 
-	int normalizedBlockLine1() const {
-		uint a, b;
-		if (mBlockMode == bmNone) return 0;
-		blockPtrRange(a, b);
-		return lineNumberForPtr(a);
-	}
-
-	int normalizedBlockLine2() const {
-		uint a, b;
-		if (mBlockMode == bmNone) return 0;
-		blockPtrRange(a, b);
-		return lineNumberForPtr(b);
-	}
-
-	int normalizedBlockCol1() const {
-		int aCol;
-		int bCol;
-		if (mBlockMode == bmNone) return 0;
-		if (mBlockMode == bmLine) return 1;
-		aCol = columnForPtr(mBlockAnchor);
-		bCol = columnForPtr(effectiveBlockEnd());
-		return std::min(aCol, bCol);
-	}
-
-	int normalizedBlockCol2() const {
-		int aCol;
-		int bCol;
-		if (mBlockMode == bmNone) return 0;
-		if (mBlockMode == bmLine) return 1000;
-		aCol = columnForPtr(mBlockAnchor);
-		bCol = columnForPtr(effectiveBlockEnd());
-		return std::max(aCol, bCol);
-	}
-
-  public:
+	  public:
 	int mVirtualDesktop = 1;
 
   protected:
@@ -2215,34 +1972,7 @@ class MREditWindow : public TWindow {
 	}
 
   private:
-	void syncBlockVisual() {
-		uint a;
-		uint b;
-		if (editor == nullptr) return;
-		if (mBlockMode == bmStream) {
-			blockPtrRange(a, b);
-			editor->setBlockOverlayState(static_cast<int>(mBlockMode), a, b, true, mBlockMarkingOn);
-			editor->setSelectionOffsets(a, b, False);
-		} else if (mBlockMode == bmLine) {
-			blockPtrRange(a, b);
-			editor->setBlockOverlayState(static_cast<int>(mBlockMode), a, b, true, mBlockMarkingOn);
-			a = static_cast<uint>(editor->lineStartOffset(a));
-			b = static_cast<uint>(editor->nextLineOffset(b));
-			if (b > editor->bufferLength()) b = static_cast<uint>(editor->bufferLength());
-			editor->setSelectionOffsets(a, b, False);
-		} else if (mBlockMode == bmColumn) {
-			blockPtrRange(a, b);
-			editor->setBlockOverlayState(static_cast<int>(mBlockMode), a, b, true, mBlockMarkingOn);
-			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
-		} else {
-			editor->setBlockOverlayState(0, 0, 0, false, false);
-			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
-		}
-		editor->revealCursor(False);
-		editor->update(ufView);
-	}
-
-	TScrollBar *vScrollBar;
+		TScrollBar *vScrollBar;
 	TScrollBar *hScrollBar;
 	MRIndicator *indicator;
 	MRFileEditor *editor;
@@ -2251,16 +1981,8 @@ class MREditWindow : public TWindow {
 	bool mTemporaryFileUsed;
 	std::string mTemporaryFileName;
 	int mIndentLevel;
-	BlockMode mBlockMode;
-	bool mBlockMarkingOn;
-	uint mBlockAnchor;
-	uint mBlockEnd;
-	bool mHiddenBlockValid;
-	BlockMode mHiddenBlockMode;
-	bool mHiddenBlockMarkingOn;
-	uint mHiddenBlockAnchor;
-	uint mHiddenBlockEnd;
-	bool mColumnSortAscending;
+		bool mColumnSortAscending;
+	MRFEBlockOps mBlockOps;
 	std::vector<TrackedTask> mTrackedCoprocessorTasks;
 	WindowRole mWindowRole;
 	std::string mWindowRoleDetail;

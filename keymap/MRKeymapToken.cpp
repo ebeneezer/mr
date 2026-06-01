@@ -24,6 +24,7 @@ struct CombinedModifierSpec {
 constexpr std::uint8_t kCtrlBit = static_cast<std::uint8_t>(MRKeymapModifier::Ctrl);
 constexpr std::uint8_t kAltBit = static_cast<std::uint8_t>(MRKeymapModifier::Alt);
 constexpr std::uint8_t kShiftBit = static_cast<std::uint8_t>(MRKeymapModifier::Shift);
+constexpr std::uint8_t kSuperBit = static_cast<std::uint8_t>(MRKeymapModifier::Super);
 
 constexpr std::array namedKeys{
     NamedKeySpec{"F1", MRKeymapBaseKey::F1},
@@ -70,7 +71,7 @@ constexpr std::array aliasKeys{
 };
 
 constexpr std::array combinedModifiers{
-    CombinedModifierSpec{"CTRLALTSHFT", kCtrlBit | kAltBit | kShiftBit}, CombinedModifierSpec{"CTRLSHIFT", kCtrlBit | kShiftBit}, CombinedModifierSpec{"CTRLSHFT", kCtrlBit | kShiftBit}, CombinedModifierSpec{"ALTSHIFT", kAltBit | kShiftBit}, CombinedModifierSpec{"ALTSHFT", kAltBit | kShiftBit}, CombinedModifierSpec{"CTRLALT", kCtrlBit | kAltBit}, CombinedModifierSpec{"CTRL", kCtrlBit}, CombinedModifierSpec{"ALT", kAltBit}, CombinedModifierSpec{"SHIFT", kShiftBit}, CombinedModifierSpec{"SHFT", kShiftBit},
+    CombinedModifierSpec{"SUPERCTRLALTSHIFT", kSuperBit | kCtrlBit | kAltBit | kShiftBit}, CombinedModifierSpec{"SUPERCTRLALTSHFT", kSuperBit | kCtrlBit | kAltBit | kShiftBit}, CombinedModifierSpec{"SUPERCTRLSHIFT", kSuperBit | kCtrlBit | kShiftBit}, CombinedModifierSpec{"SUPERCTRLSHFT", kSuperBit | kCtrlBit | kShiftBit}, CombinedModifierSpec{"SUPERALTSHIFT", kSuperBit | kAltBit | kShiftBit}, CombinedModifierSpec{"SUPERALTSHFT", kSuperBit | kAltBit | kShiftBit}, CombinedModifierSpec{"SUPERCTRLALT", kSuperBit | kCtrlBit | kAltBit}, CombinedModifierSpec{"SUPERCTRL", kSuperBit | kCtrlBit}, CombinedModifierSpec{"SUPERALT", kSuperBit | kAltBit}, CombinedModifierSpec{"SUPERSHIFT", kSuperBit | kShiftBit}, CombinedModifierSpec{"SUPERSHFT", kSuperBit | kShiftBit}, CombinedModifierSpec{"SUPER", kSuperBit}, CombinedModifierSpec{"CTRLALTSHFT", kCtrlBit | kAltBit | kShiftBit}, CombinedModifierSpec{"CTRLSHIFT", kCtrlBit | kShiftBit}, CombinedModifierSpec{"CTRLSHFT", kCtrlBit | kShiftBit}, CombinedModifierSpec{"ALTSHIFT", kAltBit | kShiftBit}, CombinedModifierSpec{"ALTSHFT", kAltBit | kShiftBit}, CombinedModifierSpec{"CTRLALT", kCtrlBit | kAltBit}, CombinedModifierSpec{"CTRL", kCtrlBit}, CombinedModifierSpec{"ALT", kAltBit}, CombinedModifierSpec{"SHIFT", kShiftBit}, CombinedModifierSpec{"SHFT", kShiftBit},
 };
 
 std::string trimAscii(std::string_view text) {
@@ -126,6 +127,8 @@ std::optional<MRKeymapToken> parsePlusSeparated(std::string_view inner) {
 				modifiers |= kAltBit;
 			else if (upper == "SHIFT" || upper == "SHFT")
 				modifiers |= kShiftBit;
+			else if (upper == "SUPER")
+				modifiers |= kSuperBit;
 			else
 				return std::nullopt;
 			partStart = i + 1;
@@ -167,7 +170,12 @@ std::optional<MRKeymapToken> MRKeymapToken::parse(std::string_view text) {
 std::string MRKeymapToken::toString() const {
 	std::string text = "<";
 	bool needPlus = false;
+	if (hasModifier(MRKeymapModifier::Super)) {
+		text += "Super";
+		needPlus = true;
+	}
 	if (hasModifier(MRKeymapModifier::Ctrl)) {
+		if (needPlus) text += '+';
 		text += "Ctrl";
 		needPlus = true;
 	}

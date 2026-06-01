@@ -4,43 +4,7 @@ int main() {
 
 	int unused;
          
-   pus("Hello world");
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   puts("Hello world");
 
    puts("Hello world");
 	

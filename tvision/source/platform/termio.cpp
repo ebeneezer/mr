@@ -72,6 +72,7 @@ static KeyDownEvent keyWithXTermMods(ushort keyCode, uint mods) noexcept
           (kbShift & -(mods & 1))
         | (kbLeftAlt & -(mods & 2))
         | (kbLeftCtrl & -(mods & 4))
+        | (kbLeftSuper & -(mods & 8))
         ;
     KeyDownEvent keyDown {{keyCode}, tvMods};
     TermIO::normalizeKey(keyDown);
@@ -353,9 +354,10 @@ void TermIO::keyModsOff(ConsoleCtl &con) noexcept
 void TermIO::normalizeKey(KeyDownEvent &keyDown) noexcept
 {
     TKey tKey(keyDown);
-    ushort newMods = tKey.mods & (kbShift | kbLeftCtrl | kbLeftAlt);
-    if (newMods != 0)
-        if (ushort keyCode = getModdedKeyCode(tKey.code, newMods))
+    ushort newMods = tKey.mods & (kbShift | kbLeftCtrl | kbLeftAlt | kbLeftSuper);
+    ushort keyCodeMods = newMods & (kbShift | kbLeftCtrl | kbLeftAlt);
+    if (keyCodeMods != 0)
+        if (ushort keyCode = getModdedKeyCode(tKey.code, keyCodeMods))
         {
             keyDown.keyCode = keyCode;
             if (keyDown.charScan.charCode < ' ')
@@ -365,9 +367,10 @@ void TermIO::normalizeKey(KeyDownEvent &keyDown) noexcept
     // when available.
     ushort origMods = keyDown.controlKeyState;
     keyDown.controlKeyState =
-        ((origMods | newMods) & ~(kbCtrlShift | kbAltShift))
+        ((origMods | newMods) & ~(kbCtrlShift | kbAltShift | kbSuperShift))
       | ((origMods & kbCtrlShift ? origMods : newMods) & kbCtrlShift)
       | ((origMods & kbAltShift ? origMods : newMods) & kbAltShift)
+      | ((origMods & kbSuperShift ? origMods : newMods) & kbSuperShift)
         ;
 }
 

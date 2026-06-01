@@ -1384,8 +1384,9 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	if (selEnd < selStart) std::swap(selStart, selEnd);
 
 	invalidateSaveNormalizationCache();
-	resetSyntaxWarmupState(changeSet == nullptr || !changeSet->changed);
-	if (changeSet != nullptr && changeSet->changed) invalidateSyntaxCacheFromLineStart(mBufferModel.lineStart(changeSet->touchedRange.start));
+	const bool preserveSyntaxCacheDuringEdit = changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics();
+	resetSyntaxWarmupState(!preserveSyntaxCacheDuringEdit);
+	if (preserveSyntaxCacheDuringEdit) invalidateSyntaxCacheFromLineStart(mBufferModel.lineStart(changeSet->touchedRange.start));
 	if (mFoldState.warmupState().taskId != 0) {
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
 		clearFoldWarmupTask(mFoldState.warmupState().taskId);

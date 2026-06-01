@@ -41,17 +41,21 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
+#include <fcntl.h>
 #include <fstream>
 #include <glob.h>
 #include <limits>
 #include <map>
 #include <optional>
 #include <mutex>
+#include <poll.h>
+#include <signal.h>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
 #include <utility>
@@ -273,14 +277,6 @@ struct RuntimeEnvironment {
 	}
 };
 
-struct SplitTextBuffer {
-	std::vector<std::string> lines;
-	bool trailingNewline;
-
-	SplitTextBuffer() : trailingNewline(false) {
-	}
-};
-
 struct BackgroundEditSession {
 	mr::editor::TextDocument document;
 	mr::editor::StagedEditTransaction transaction;
@@ -476,7 +472,7 @@ static bool replaceEditorLine(MRFileEditor *editor, const std::string &text);
 static bool deleteEditorChars(MRFileEditor *editor, int count);
 static bool deleteEditorLine(MRFileEditor *editor);
 static int currentEditorColumn(MRFileEditor *editor);
-static int currentEditorPasteColumn(MRFileEditor *editor);
+static bool currentUiCursorPosition(int &x, int &y);
 static int currentEditorLineNumber(MRFileEditor *editor);
 static bool moveEditorLeft(MRFileEditor *editor);
 static bool moveEditorRight(MRFileEditor *editor);
@@ -506,23 +502,7 @@ static bool moveEditorPageDown(MRFileEditor *editor);
 bool moveEditorNextPageBreak(MRFileEditor *editor);
 bool moveEditorLastPageBreak(MRFileEditor *editor);
 static bool replaceEditorBuffer(MRFileEditor *editor, const std::string &text, std::size_t cursorPos);
-struct BlockPasteTarget;
-static BlockPasteTarget materializeEditorPasteTarget(MRFileEditor *editor, std::string &text);
-static SplitTextBuffer splitBufferLines(const std::string &text);
-static std::string joinBufferLines(const SplitTextBuffer &buffer);
-static std::size_t bufferOffsetForLine(const SplitTextBuffer &buffer, int lineIndex);
-static std::size_t bufferOffsetForLineColumn(const SplitTextBuffer &buffer, int lineIndex, int colIndex);
 static int lineIndexForPtr(MRFileEditor *editor, uint ptr);
-static bool currentBlockInfo(MREditWindow *win, MRFileEditor *editor, int &mode, uint &anchor, uint &end);
-bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor);
-bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor);
-bool deleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace = false);
-bool indentCurrentBlock(MREditWindow *win, MRFileEditor *editor);
-bool undentCurrentBlock(MREditWindow *win, MRFileEditor *editor);
-bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor);
-bool moveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor);
-bool extractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out);
-bool saveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path);
 static int countEditWindows();
 static int currentEditWindowIndex();
 static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2);
@@ -571,7 +551,9 @@ static const char *keymapActionIdForMacroCommand(const std::string &name) noexce
 	    MacroKeymapActionCommand{"APPEND_BLOCK", "MRMAC_BLOCK_APPEND_TO_BUFFER"},
 	    MacroKeymapActionCommand{"BACK_HOME", "MRMAC_DELETE_BACKWARD_TO_HOME"},
 	    MacroKeymapActionCommand{"BACK_WORD", "MRMAC_DELETE_BACKWARD_WORD"},
-	    MacroKeymapActionCommand{"BLOCK_MATH", "MRMAC_BLOCK_MATH"},
+	    MacroKeymapActionCommand{"BLOCK_MARK_LINES", "MR_BLOCK_MARK_LINES"},
+	    MacroKeymapActionCommand{"BLOCK_TOGGLE_MARKING", "MR_BLOCK_TOGGLE_MARKING"},
+	    MacroKeymapActionCommand{"BLOCK_TOGGLE_VISIBILITY", "MRMAC_BLOCK_TOGGLE_VISIBILITY"},
 	    MacroKeymapActionCommand{"BOTTOM_OF_WINDOW", "MRMAC_CURSOR_BOTTOM_OF_WINDOW"},
 	    MacroKeymapActionCommand{"CENTER_LINE", "MR_TEXT_CENTER_LINE"},
 	    MacroKeymapActionCommand{"CENTER_LINE_ON_SCREEN", "MRMAC_VIEW_CENTER_LINE"},
@@ -581,6 +563,10 @@ static const char *keymapActionIdForMacroCommand(const std::string &name) noexce
 	    MacroKeymapActionCommand{"DEL_CHAR_OR_BLOCK", "MRMAC_DELETE_FORWARD_CHAR_OR_BLOCK"},
 	    MacroKeymapActionCommand{"DEL_EOL", "MRMAC_DELETE_TO_EOL"},
 	    MacroKeymapActionCommand{"DEL_WORD", "MRMAC_DELETE_FORWARD_WORD"},
+	    MacroKeymapActionCommand{"DESKTOP_MOVE_WINDOW_LEFT", "MR_DESKTOP_MOVE_WINDOW_LEFT"},
+	    MacroKeymapActionCommand{"DESKTOP_MOVE_WINDOW_RIGHT", "MR_DESKTOP_MOVE_WINDOW_RIGHT"},
+	    MacroKeymapActionCommand{"DESKTOP_VIEWPORT_LEFT", "MR_DESKTOP_VIEWPORT_LEFT"},
+	    MacroKeymapActionCommand{"DESKTOP_VIEWPORT_RIGHT", "MR_DESKTOP_VIEWPORT_RIGHT"},
 	    MacroKeymapActionCommand{"END_OF_BLOCK", "MRMAC_CURSOR_END_OF_BLOCK"},
 	    MacroKeymapActionCommand{"FORCE_SAVE", "MR_FILE_FORCE_SAVE"},
 	    MacroKeymapActionCommand{"INDENT_BLOCK", "MRMAC_BLOCK_INDENT"},
@@ -589,6 +575,7 @@ static const char *keymapActionIdForMacroCommand(const std::string &name) noexce
 	    MacroKeymapActionCommand{"LOAD_BLOCK", "MR_LOAD_BLOCK_FROM_FILE"},
 	    MacroKeymapActionCommand{"MARK_WORD_RIGHT", "MRMAC_BLOCK_MARK_WORD_RIGHT"},
 	    MacroKeymapActionCommand{"MULTI_FILE_SEARCH", "MRMAC_SEARCH_MULTI_FILE"},
+	    MacroKeymapActionCommand{"MULTI_FILE_SEARCH_REPLACE", "MR_SEARCH_MULTI_FILE_REPLACE"},
 	    MacroKeymapActionCommand{"NEXT_SEARCH_RESULT", "MR_SEARCH_RESULTS_NEXT"},
 	    MacroKeymapActionCommand{"PASTE_BLOCK", "MRMAC_BLOCK_COPY_FROM_BUFFER"},
 	    MacroKeymapActionCommand{"PASTE_FROM_CLIPBOARD", "MRMAC_BLOCK_PASTE_FROM_CLIPBOARD"},
@@ -611,8 +598,31 @@ static const char *keymapActionIdForMacroCommand(const std::string &name) noexce
 	    MacroKeymapActionCommand{"TOP_OF_WINDOW", "MRMAC_CURSOR_TOP_OF_WINDOW"},
 	    MacroKeymapActionCommand{"UNDO", "MRMAC_UNDO"},
 	    MacroKeymapActionCommand{"UNDENT_BLOCK", "MRMAC_BLOCK_UNDENT"},
+	    MacroKeymapActionCommand{"WINDOW_CASCADE", "MR_WINDOW_CASCADE"},
+	    MacroKeymapActionCommand{"WINDOW_CLOSE", "MR_WINDOW_CLOSE"},
 	    MacroKeymapActionCommand{"WINDOW_COPY_BLOCK", "MRMAC_BLOCK_COPY_INTERWINDOW"},
+	    MacroKeymapActionCommand{"WINDOW_LIST", "MR_WINDOW_LIST"},
 	    MacroKeymapActionCommand{"WINDOW_MOVE_BLOCK", "MRMAC_BLOCK_MOVE_INTERWINDOW"},
+	    MacroKeymapActionCommand{"WINDOW_OPEN", "MR_WINDOW_OPEN"},
+	    MacroKeymapActionCommand{"WINDOW_NEXT", "MR_WINDOW_NEXT"},
+	    MacroKeymapActionCommand{"WINDOW_PREVIOUS", "MR_WINDOW_PREVIOUS"},
+	    MacroKeymapActionCommand{"WINDOW_SPLIT_HORIZONTAL", "MR_WINDOW_SPLIT_HORIZONTAL"},
+	    MacroKeymapActionCommand{"WINDOW_SPLIT_VERTICAL", "MR_WINDOW_SPLIT_VERTICAL"},
+	    MacroKeymapActionCommand{"WINDOW_TILE", "MR_WINDOW_TILE"},
+	    MacroKeymapActionCommand{"WINDOW_ZOOM", "MR_WINDOW_ZOOM"},
+	    MacroKeymapActionCommand{"MATCH_PARENTHESIS", "MR_MATCH_PARENTHESIS"},
+	    MacroKeymapActionCommand{"MACRO_TOGGLE_RECORDING", "MR_MACRO_TOGGLE_RECORDING"},
+	    MacroKeymapActionCommand{"SETUP_EDIT_SETTINGS", "MR_SETUP_EDIT_SETTINGS"},
+	    MacroKeymapActionCommand{"SETUP_COLOR", "MR_SETUP_COLOR"},
+	    MacroKeymapActionCommand{"SETUP_KEYMAP", "MR_SETUP_KEYMAP"},
+	    MacroKeymapActionCommand{"SETUP_MOUSE_KEY_REPEAT", "MR_SETUP_MOUSE_KEY_REPEAT"},
+	    MacroKeymapActionCommand{"SETUP_FILENAME_EXTENSIONS", "MR_SETUP_FILENAME_EXTENSIONS"},
+	    MacroKeymapActionCommand{"SETUP_COMPILER_PROFILES", "MR_SETUP_COMPILER_PROFILES"},
+	    MacroKeymapActionCommand{"SETUP_PATHS", "MR_SETUP_PATHS"},
+	    MacroKeymapActionCommand{"SETUP_BACKUPS_AUTOSAVE", "MR_SETUP_BACKUPS_AUTOSAVE"},
+	    MacroKeymapActionCommand{"SETUP_SEARCH_REPLACE_DEFAULTS", "MR_SETUP_SEARCH_REPLACE_DEFAULTS"},
+	    MacroKeymapActionCommand{"SETUP_USER_INTERFACE", "MR_SETUP_USER_INTERFACE"},
+	    MacroKeymapActionCommand{"SETUP_LIVE_LOGS", "MR_SETUP_LIVE_LOGS"},
 	    MacroKeymapActionCommand{"EXIT_SAVE_ALL", "MR_EXIT_DIRTY_SAVE_ALL"}};
 
 	for (const MacroKeymapActionCommand &command : commands)
@@ -1190,6 +1200,123 @@ static std::string &runtimeReturnStr() noexcept {
 static int &runtimeErrorLevel() noexcept {
 	ExecutionState *state = currentExecutionState();
 	return state != nullptr ? state->errorLevel : g_runtimeEnv.errorLevel;
+}
+
+struct SubshellResult {
+	std::string output;
+	int errorLevel;
+};
+
+static SubshellResult runSubshellCapture(const std::string &command, int timeoutMs) {
+	SubshellResult result;
+	int pipeFds[2] = {-1, -1};
+	pid_t childPid = -1;
+	int waitStatus = 0;
+	bool pipeOpen = true;
+	bool childExited = false;
+	bool timedOut = false;
+	int timeoutPolls = 0;
+	std::array<char, 4096> buffer{};
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+
+	result.errorLevel = 0;
+	if (timeoutMs <= 0) {
+		result.errorLevel = EINVAL;
+		return result;
+	}
+	if (::pipe(pipeFds) != 0) {
+		result.errorLevel = errno != 0 ? errno : 1;
+		return result;
+	}
+	childPid = ::fork();
+	if (childPid < 0) {
+		result.errorLevel = errno != 0 ? errno : 1;
+		::close(pipeFds[0]);
+		::close(pipeFds[1]);
+		return result;
+	}
+	if (childPid == 0) {
+		std::string shellPath = configuredShellExecutablePath();
+		::setpgid(0, 0);
+		::dup2(pipeFds[1], STDOUT_FILENO);
+		::dup2(pipeFds[1], STDERR_FILENO);
+		::close(pipeFds[0]);
+		::close(pipeFds[1]);
+		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(nullptr));
+		::_exit(127);
+	}
+	::close(pipeFds[1]);
+	::setpgid(childPid, childPid);
+	{
+		const int flags = ::fcntl(pipeFds[0], F_GETFL, 0);
+		if (flags >= 0) ::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK);
+	}
+	while (pipeOpen || !childExited) {
+		struct pollfd pfd;
+		int pollResult = 0;
+
+		if (!childExited && !timedOut && std::chrono::steady_clock::now() >= deadline) {
+			timedOut = true;
+			::kill(-childPid, SIGTERM);
+		}
+		if (!childExited && timedOut) {
+			if (timeoutPolls > 10) ::kill(-childPid, SIGKILL);
+			++timeoutPolls;
+		}
+		pfd.fd = pipeFds[0];
+		pfd.events = POLLIN | POLLHUP;
+		pfd.revents = 0;
+		pollResult = pipeOpen ? ::poll(&pfd, 1, 50) : 0;
+		if (pollResult < 0 && errno != EINTR) {
+			result.errorLevel = errno != 0 ? errno : 1;
+			break;
+		}
+		if (pipeOpen && pollResult > 0) {
+			for (;;) {
+				const ssize_t count = ::read(pipeFds[0], buffer.data(), buffer.size());
+				if (count > 0) {
+					result.output.append(buffer.data(), static_cast<std::size_t>(count));
+					continue;
+				}
+				if (count == 0) {
+					pipeOpen = false;
+					break;
+				}
+				if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) break;
+				result.errorLevel = errno != 0 ? errno : 1;
+				pipeOpen = false;
+				break;
+			}
+		}
+		if (!pipeOpen && !childExited) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		if (!childExited) {
+			const pid_t waited = ::waitpid(childPid, &waitStatus, WNOHANG);
+			if (waited == childPid) childExited = true;
+			else if (waited < 0 && errno != EINTR) {
+				result.errorLevel = errno != 0 ? errno : 1;
+				break;
+			}
+		}
+		if (childExited && pipeOpen && pollResult == 0) pipeOpen = false;
+	}
+	if (pipeFds[0] >= 0) ::close(pipeFds[0]);
+	if (!childExited && childPid > 0) {
+		::kill(-childPid, SIGKILL);
+		while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
+			;
+		childExited = true;
+	}
+	if (result.errorLevel != 0) return result;
+	if (timedOut) {
+		result.errorLevel = 124;
+		return result;
+	}
+	if (WIFEXITED(waitStatus)) result.errorLevel = WEXITSTATUS(waitStatus);
+	else if (WIFSIGNALED(waitStatus))
+		result.errorLevel = 128 + WTERMSIG(waitStatus);
+	else
+		result.errorLevel = 1;
+	return result;
 }
 
 static char normalizeSearchChar(char c, bool ignoreCase) noexcept {
@@ -1970,13 +2097,29 @@ static int currentEditorColumn(MRFileEditor *editor) {
 	uint lineStart;
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr) return session != nullptr ? static_cast<int>(session->document.column(session->cursorOffset) + 1) : 1;
+	if (editor->freeCursorMovementEnabled()) return editor->currentColumnNumber();
 	lineStart = editor->lineStartOffset(editor->cursorOffset());
 	return editor->charColumn(lineStart, editor->cursorOffset()) + 1;
 }
 
-static int currentEditorPasteColumn(MRFileEditor *editor) {
-	if (editor != nullptr && editor->freeCursorMovementEnabled()) return editor->displayedCursorColumn() + 1;
-	return currentEditorColumn(editor);
+static bool currentUiCursorPosition(int &x, int &y) {
+	MRFileEditor *editor = currentEditor();
+	if (editor != nullptr) {
+		TRect viewport = editor->visibleTextViewportBounds();
+		TPoint local = {static_cast<short>(viewport.a.x + editor->currentViewColumn() - 1), static_cast<short>(viewport.a.y + editor->currentViewRow() - 1)};
+		TPoint point = editor->makeGlobal(local);
+		x = point.x + 1;
+		y = point.y + 1;
+		return true;
+	}
+	if (TApplication *app = dynamic_cast<TApplication *>(TProgram::application); app != nullptr) {
+		x = app->cursor.x + 1;
+		y = app->cursor.y + 1;
+		return true;
+	}
+	x = 0;
+	y = 0;
+	return false;
 }
 
 static int currentEditorLineNumber(MRFileEditor *editor) {
@@ -1991,11 +2134,13 @@ static std::size_t currentEditorCursorOffset(MRFileEditor *editor) {
 	return session != nullptr ? session->cursorOffset : 0;
 }
 
-static bool setEditorCursor(MRFileEditor *editor, uint target) {
+static bool setEditorCursor(MRFileEditor *editor, uint target, int requestedVisualColumn = -1) {
 	MREditWindow *win;
 	if (editor == nullptr) return backgroundSetCursor(target);
 	if (target > editor->bufferLength()) target = editor->bufferLength();
-	editor->setCursorOffset(target, 0);
+	if (requestedVisualColumn >= 0) editor->setCursorOffsetAtVisualColumn(target, requestedVisualColumn);
+	else
+		editor->setCursorOffset(target, 0);
 	win = activeMacroEditWindow();
 	if (win != nullptr && win->isBlockMarking()) win->refreshBlockVisual();
 	else
@@ -2018,6 +2163,8 @@ static bool moveEditorLeft(MRFileEditor *editor) {
 		return setEditorCursor(nullptr, target);
 	}
 	start = editor->lineStartOffset(editor->cursorOffset());
+	if (editor->freeCursorMovementEnabled() && !editor->hasTextSelection() && editor->displayedCursorColumn() > editor->actualCursorVisualColumn(editor->cursorOffset()))
+		return setEditorCursor(editor, editor->cursorOffset(), editor->displayedCursorColumn() - 1);
 	if (editor->cursorOffset() > start) target = editor->prevCharOffset(editor->cursorOffset());
 	else if (start > 0)
 		target = editor->lineEndOffset(editor->prevLineOffset(start));
@@ -2039,6 +2186,8 @@ static bool moveEditorRight(MRFileEditor *editor) {
 		return setEditorCursor(nullptr, target);
 	}
 	lineEnd = editor->lineEndOffset(editor->cursorOffset());
+	if (editor->freeCursorMovementEnabled() && !editor->hasTextSelection() && editor->cursorOffset() == lineEnd)
+		return setEditorCursor(editor, editor->cursorOffset(), editor->displayedCursorColumn() + 1);
 	if (editor->cursorOffset() < lineEnd) target = editor->nextCharOffset(editor->cursorOffset());
 	else
 		target = editor->cursorOffset();
@@ -2153,7 +2302,7 @@ static bool gotoEditorCol(MRFileEditor *editor, int colNum) {
 		return setEditorCursor(nullptr, static_cast<uint>(backgroundCharPtrOffset(start, colNum - 1)));
 	}
 	start = editor->lineStartOffset(editor->cursorOffset());
-	return setEditorCursor(editor, editor->charPtrOffset(start, colNum - 1));
+	return setEditorCursor(editor, editor->charPtrOffset(start, colNum - 1), colNum - 1);
 }
 
 static bool currentEditorAtEof(MRFileEditor *editor) {
@@ -2367,125 +2516,6 @@ static bool replaceEditorBuffer(MRFileEditor *editor, const std::string &text, s
 	return backgroundReplaceRange(mr::editor::Range(0, session->document.length()), text, cursorPos);
 }
 
-struct BlockPasteTarget {
-	std::size_t offset = 0;
-	std::size_t paddingStart = 0;
-	std::size_t paddingLength = 0;
-	bool padded = false;
-};
-
-static BlockPasteTarget materializeEditorPasteTarget(MRFileEditor *editor, std::string &text) {
-	BlockPasteTarget target;
-
-	target.offset = std::min<std::size_t>(currentEditorCursorOffset(editor), text.size());
-	if (editor == nullptr || !editor->freeCursorMovementEnabled()) return target;
-	if (target.offset != std::min<std::size_t>(editor->lineEndOffset(target.offset), text.size())) return target;
-
-	const int actualColumn = editor->actualCursorVisualColumn(target.offset);
-	const int visualColumn = editor->displayedCursorColumn();
-	if (visualColumn <= actualColumn) return target;
-
-	target.paddingStart = target.offset;
-	target.paddingLength = static_cast<std::size_t>(visualColumn - actualColumn);
-	text.insert(target.offset, target.paddingLength, ' ');
-	target.offset += target.paddingLength;
-	target.padded = true;
-	return target;
-}
-
-static SplitTextBuffer splitBufferLines(const std::string &text) {
-	SplitTextBuffer out;
-	std::string current;
-	for (std::size_t i = 0; i < text.size(); ++i) {
-		char c = text[i];
-		if (c == '\r' || c == '\n') {
-			out.lines.push_back(current);
-			current.clear();
-			out.trailingNewline = true;
-			if (c == '\r' && i + 1 < text.size() && text[i + 1] == '\n') ++i;
-		} else {
-			current.push_back(c);
-			out.trailingNewline = false;
-		}
-	}
-	if (!current.empty() || !out.trailingNewline || out.lines.empty()) out.lines.push_back(current);
-	return out;
-}
-
-static std::string joinBufferLines(const SplitTextBuffer &buffer) {
-	std::string out;
-	for (std::size_t i = 0; i < buffer.lines.size(); ++i) {
-		if (i > 0) out.push_back('\n');
-		out += buffer.lines[i];
-	}
-	if (buffer.trailingNewline && !buffer.lines.empty()) out.push_back('\n');
-	return out;
-}
-
-static std::size_t bufferOffsetForLine(const SplitTextBuffer &buffer, int lineIndex) {
-	std::size_t offset = 0;
-	int limit = std::max(0, std::min(lineIndex, static_cast<int>(buffer.lines.size())));
-	for (int i = 0; i < limit; ++i) {
-		offset += buffer.lines[static_cast<std::size_t>(i)].size();
-		if (static_cast<std::size_t>(i + 1) < buffer.lines.size() || buffer.trailingNewline) ++offset;
-	}
-	return offset;
-}
-
-static std::size_t bufferOffsetForLineColumn(const SplitTextBuffer &buffer, int lineIndex, int colIndex) {
-	std::size_t offset;
-	std::size_t col;
-	if (buffer.lines.empty()) return 0;
-	lineIndex = std::max(0, std::min(lineIndex, static_cast<int>(buffer.lines.size()) - 1));
-	col = static_cast<std::size_t>(std::max(0, colIndex));
-	offset = bufferOffsetForLine(buffer, lineIndex);
-	if (col > buffer.lines[static_cast<std::size_t>(lineIndex)].size()) col = buffer.lines[static_cast<std::size_t>(lineIndex)].size();
-	return offset + col;
-}
-
-static std::size_t applyStreamPaste(std::string &text, std::size_t dest, const std::string &blockText, bool insertMode) {
-	dest = std::min(dest, text.size());
-	if (insertMode) text.insert(dest, blockText);
-	else {
-		std::size_t replaceLen = std::min(blockText.size(), text.size() - dest);
-		text.replace(dest, replaceLen, blockText);
-	}
-	return dest + blockText.size();
-}
-
-static void applyLinePaste(SplitTextBuffer &buffer, int destLine, const std::vector<std::string> &blockLines, bool insertMode) {
-	if (blockLines.empty()) return;
-	if (insertMode) {
-		destLine = std::max(0, std::min(destLine, static_cast<int>(buffer.lines.size())));
-		buffer.lines.insert(buffer.lines.begin() + destLine, blockLines.begin(), blockLines.end());
-		return;
-	}
-
-	destLine = std::max(0, destLine);
-	while (static_cast<int>(buffer.lines.size()) < destLine + static_cast<int>(blockLines.size()))
-		buffer.lines.emplace_back();
-	for (std::size_t i = 0; i < blockLines.size(); ++i)
-		buffer.lines[static_cast<std::size_t>(destLine) + i] = blockLines[i];
-}
-
-static void applyColumnPaste(SplitTextBuffer &buffer, int destRow, int destCol, const std::vector<std::string> &slices, bool insertMode) {
-	destRow = std::max(0, destRow);
-	destCol = std::max(0, destCol);
-	while (static_cast<int>(buffer.lines.size()) < destRow + static_cast<int>(slices.size()))
-		buffer.lines.emplace_back();
-	for (std::size_t i = 0; i < slices.size(); ++i) {
-		std::string &line = buffer.lines[static_cast<std::size_t>(destRow) + i];
-		std::size_t startCol = static_cast<std::size_t>(destCol);
-		if (line.size() < startCol) line.append(startCol - line.size(), ' ');
-		if (insertMode) {
-			line.insert(startCol, slices[i]);
-			continue;
-		}
-		if (line.size() < startCol + slices[i].size()) line.append(startCol + slices[i].size() - line.size(), ' ');
-		line.replace(startCol, slices[i].size(), slices[i]);
-	}
-}
-
 static int lineIndexForPtr(MRFileEditor *editor, uint ptr) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	uint pos = 0;
@@ -2504,181 +2534,58 @@ static int lineIndexForPtr(MRFileEditor *editor, uint ptr) {
 	return line;
 }
 
-static int columnIndexForPtr(MRFileEditor *editor, uint ptr) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (editor == nullptr) {
-		if (session == nullptr) return 0;
-		ptr = std::min<std::size_t>(ptr, session->document.length());
-		return static_cast<int>(session->document.column(ptr));
-	}
-	if (ptr > editor->bufferLength()) ptr = editor->bufferLength();
-	return editor->charColumn(editor->lineStartOffset(ptr), ptr);
-}
-
 static int blockStatusValue(MREditWindow *win) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) return win->blockStatus();
-	return session != nullptr ? session->blockMode : 0;
+	return win != nullptr ? win->blockStatus() : 0;
 }
 
 static bool blockMarkingValue(MREditWindow *win) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) return win->isBlockMarking();
-	return session != nullptr ? session->blockMode != 0 && session->blockMarkingOn : false;
-}
-
-static uint blockAnchorValue(MREditWindow *win) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) return win->blockAnchorPtr();
-	return session != nullptr ? static_cast<uint>(session->blockAnchor) : 0;
-}
-
-static uint blockEffectiveEndValue(MREditWindow *win) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) return win->blockEffectiveEndPtr();
-	if (session == nullptr) return 0;
-	return static_cast<uint>(session->blockMarkingOn ? session->cursorOffset : session->blockEnd);
+	return win != nullptr && win->isBlockMarking();
 }
 
 static int blockLine1Value(MREditWindow *win, MRFileEditor *editor) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	uint a;
-	uint b;
-	if (win != nullptr) return win->blockLine1();
-	if (session == nullptr || session->blockMode == 0) return 0;
-	a = blockAnchorValue(nullptr);
-	b = blockEffectiveEndValue(nullptr);
-	if (a > b) std::swap(a, b);
-	return lineIndexForPtr(editor, a) + 1;
+	(void)editor;
+	return win != nullptr ? win->blockLine1() : 0;
 }
 
 static int blockLine2Value(MREditWindow *win, MRFileEditor *editor) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	uint a;
-	uint b;
-	if (win != nullptr) return win->blockLine2();
-	if (session == nullptr || session->blockMode == 0) return 0;
-	a = blockAnchorValue(nullptr);
-	b = blockEffectiveEndValue(nullptr);
-	if (a > b) std::swap(a, b);
-	return lineIndexForPtr(editor, b) + 1;
+	(void)editor;
+	return win != nullptr ? win->blockLine2() : 0;
 }
 
 static int blockCol1Value(MREditWindow *win, MRFileEditor *editor) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	int aCol;
-	int bCol;
 	(void)editor;
-	if (win != nullptr) return win->blockCol1();
-	if (session == nullptr || session->blockMode == 0) return 0;
-	if (session->blockMode == 1) return 1;
-	aCol = static_cast<int>(session->document.column(blockAnchorValue(nullptr)) + 1);
-	bCol = static_cast<int>(session->document.column(blockEffectiveEndValue(nullptr)) + 1);
-	return std::min(aCol, bCol);
+	return win != nullptr ? win->blockCol1() : 0;
 }
 
 static int blockCol2Value(MREditWindow *win, MRFileEditor *editor) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	int aCol;
-	int bCol;
 	(void)editor;
-	if (win != nullptr) return win->blockCol2();
-	if (session == nullptr || session->blockMode == 0) return 0;
-	if (session->blockMode == 1) return 1000;
-	aCol = static_cast<int>(session->document.column(blockAnchorValue(nullptr)) + 1);
-	bCol = static_cast<int>(session->document.column(blockEffectiveEndValue(nullptr)) + 1);
-	return std::max(aCol, bCol);
+	return win != nullptr ? win->blockCol2() : 0;
 }
 
 bool beginCurrentBlockMode(int mode) {
 	MREditWindow *win = activeMacroEditWindow();
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) {
-		if (mode == MREditWindow::bmLine) win->beginLineBlock();
-		else if (mode == MREditWindow::bmColumn)
-			win->beginColumnBlock();
-		else if (mode == MREditWindow::bmStream)
-			win->beginStreamBlock();
-		else
-			return false;
-		return true;
-	}
-	if (session == nullptr) return false;
-	session->blockMode = mode;
-	session->blockMarkingOn = true;
-	session->blockAnchor = session->cursorOffset;
-	session->blockEnd = session->cursorOffset;
+	if (win == nullptr) return false;
+	if (mode == MREditWindow::bmColumn) win->beginColumnBlock();
+	else if (mode == MREditWindow::bmStream)
+		win->beginStreamBlock();
+	else
+		win->beginLineBlock();
 	return true;
 }
 
 bool endCurrentBlockMode() {
 	MREditWindow *win = activeMacroEditWindow();
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) {
-		win->endBlock();
-		return true;
-	}
-	if (session == nullptr || session->blockMode == 0) return false;
-	session->blockEnd = session->cursorOffset;
-	session->blockMarkingOn = false;
+	if (win == nullptr) return false;
+	win->endBlock();
 	return true;
 }
 
 bool clearCurrentBlockMode() {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (session != nullptr) session->clearSelection();
 	MREditWindow *win = activeMacroEditWindow();
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) {
-		win->clearBlock();
-		return true;
-	}
-	if (session == nullptr) return false;
-	session->blockMode = 0;
-	session->blockMarkingOn = false;
-	session->blockAnchor = 0;
-	session->blockEnd = 0;
-	session->clearSelection();
+	if (win != nullptr) win->clearBlock();
 	return true;
-}
-
-static bool setCurrentBlockState(int mode, bool markingOn, uint anchor, uint end) {
-	MREditWindow *win = activeMacroEditWindow();
-	BackgroundEditSession *session = currentBackgroundEditSession();
-
-	if (mode <= 0) return clearCurrentBlockMode();
-	if (win != nullptr) {
-		win->applyCommittedBlockState(mode, markingOn, anchor, end);
-		return true;
-	}
-	if (session == nullptr) return false;
-	session->blockMode = mode;
-	session->blockMarkingOn = markingOn;
-	session->blockAnchor = std::min<std::size_t>(anchor, session->document.length());
-	session->blockEnd = std::min<std::size_t>(end, session->document.length());
-	return true;
-}
-
-static bool shouldKeepTargetBlockAfterCopyMove() {
-	return configuredPersistentBlocksSetting();
-}
-
-static bool currentBlockInfo(MREditWindow *win, MRFileEditor *editor, int &mode, uint &anchor, uint &end) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) {
-		if (editor == nullptr || !win->hasBlock()) return false;
-		mode = win->blockStatus();
-		anchor = win->blockAnchorPtr();
-		end = win->blockEffectiveEndPtr();
-		if (anchor > editor->bufferLength()) anchor = editor->bufferLength();
-		if (end > editor->bufferLength()) end = editor->bufferLength();
-		return mode != 0;
-	}
-	if (session == nullptr || session->blockMode == 0) return false;
-	mode = session->blockMode;
-	anchor = static_cast<uint>(session->blockAnchor);
-	end = static_cast<uint>(session->blockMarkingOn ? session->cursorOffset : session->blockEnd);
-	if (anchor > session->document.length()) anchor = static_cast<uint>(session->document.length());
-	if (end > session->document.length()) end = static_cast<uint>(session->document.length());
-	return mode != 0;
 }
 
 struct EditWindowLookup {
@@ -3328,555 +3235,6 @@ static bool enqueueDeferredUiCommandImpl(const MRMacroDeferredUiCommand &command
 	return true;
 }
 
-
-static bool configuredColumnBlockMoveLeavesSpace() {
-	std::string mode = upperKey(configuredEditSetupSettings().columnBlockMove);
-	return mode == "LEAVE_SPACE" || mode == "LEAVE";
-}
-
-bool shouldLeaveColumnSpaceForDelete(MREditWindow *win) {
-	return blockStatusValue(win) == MREditWindow::bmColumn && configuredColumnBlockMoveLeavesSpace();
-}
-
-bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
-	int mode;
-	uint anchor;
-	uint end;
-	std::string sourceText;
-	bool insertMode;
-	if (srcWin == nullptr || srcEditor == nullptr || destWin == nullptr || destEditor == nullptr) return false;
-	insertMode = destEditor->insertModeEnabled();
-	if (srcWin == destWin) return copyCurrentBlock(srcWin, destEditor);
-	if (!currentBlockInfo(srcWin, srcEditor, mode, anchor, end)) return false;
-	sourceText = snapshotEditorText(srcEditor);
-	if (mode == MREditWindow::bmStream) {
-		std::size_t start = std::min<std::size_t>(anchor, end);
-		std::size_t finish = std::max<std::size_t>(anchor, end);
-		std::string destText = snapshotEditorText(destEditor);
-		std::string blockText = sourceText.substr(start, finish - start);
-		BlockPasteTarget target = materializeEditorPasteTarget(destEditor, destText);
-		std::size_t dest = target.offset;
-		bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
-		std::size_t cursorTarget = applyStreamPaste(destText, dest, blockText, insertMode);
-		if (!replaceEditorBuffer(destEditor, destText, cursorTarget)) return false;
-		if (keepTarget) destWin->applyCommittedBlockState(mode, false, static_cast<uint>(dest), static_cast<uint>(dest + blockText.size()));
-		else
-			destWin->clearBlock();
-		return true;
-	}
-	if (mode == MREditWindow::bmLine) {
-		SplitTextBuffer srcBuf = splitBufferLines(sourceText);
-		SplitTextBuffer destBuf = splitBufferLines(snapshotEditorText(destEditor));
-		int line1 = std::min(lineIndexForPtr(srcEditor, anchor), lineIndexForPtr(srcEditor, end));
-		int line2 = std::max(lineIndexForPtr(srcEditor, anchor), lineIndexForPtr(srcEditor, end));
-		int destLine = lineIndexForPtr(destEditor, destEditor->cursorOffset());
-		std::vector<std::string> blockLines;
-		bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
-		uint targetAnchor = 0;
-		uint targetEnd = 0;
-		if (srcBuf.lines.empty()) return false;
-		line1 = std::max(0, std::min(line1, static_cast<int>(srcBuf.lines.size()) - 1));
-		line2 = std::max(line1, std::min(line2, static_cast<int>(srcBuf.lines.size()) - 1));
-		destLine = std::max(0, std::min(destLine, static_cast<int>(destBuf.lines.size())));
-		blockLines.assign(srcBuf.lines.begin() + line1, srcBuf.lines.begin() + line2 + 1);
-		applyLinePaste(destBuf, destLine, blockLines, insertMode);
-		targetAnchor = static_cast<uint>(bufferOffsetForLine(destBuf, destLine));
-		targetEnd = static_cast<uint>(bufferOffsetForLine(destBuf, destLine + static_cast<int>(blockLines.size()) - 1));
-		if (!replaceEditorBuffer(destEditor, joinBufferLines(destBuf), bufferOffsetForLine(destBuf, destLine))) return false;
-		if (keepTarget) destWin->applyCommittedBlockState(mode, false, targetAnchor, targetEnd);
-		else
-			destWin->clearBlock();
-		return true;
-	}
-	if (mode == MREditWindow::bmColumn) {
-		SplitTextBuffer srcBuf = splitBufferLines(sourceText);
-		SplitTextBuffer destBuf = splitBufferLines(snapshotEditorText(destEditor));
-		int row1 = std::min(lineIndexForPtr(srcEditor, anchor), lineIndexForPtr(srcEditor, end));
-		int row2 = std::max(lineIndexForPtr(srcEditor, anchor), lineIndexForPtr(srcEditor, end));
-		int col1 = std::min(srcWin->blockCol1(), srcWin->blockCol2());
-		int col2 = std::max(srcWin->blockCol1(), srcWin->blockCol2());
-		int width = std::max(1, col2 - col1);
-		int destRow = lineIndexForPtr(destEditor, destEditor->cursorOffset());
-		int destCol = std::max(0, currentEditorPasteColumn(destEditor) - 1);
-		std::vector<std::string> slices;
-		bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
-		uint targetAnchor = 0;
-		uint targetEnd = 0;
-		if (srcBuf.lines.empty()) return false;
-		row1 = std::max(0, std::min(row1, static_cast<int>(srcBuf.lines.size()) - 1));
-		row2 = std::max(row1, std::min(row2, static_cast<int>(srcBuf.lines.size()) - 1));
-		for (int row = row1; row <= row2; ++row) {
-			const std::string &line = srcBuf.lines[static_cast<std::size_t>(row)];
-			std::string slice(static_cast<std::size_t>(width), ' ');
-			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
-			if (startCol < line.size()) {
-				std::size_t avail = std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
-				slice.replace(0, avail, line.substr(startCol, avail));
-			}
-			slices.push_back(slice);
-		}
-		if (slices.empty()) return false;
-		applyColumnPaste(destBuf, destRow, destCol, slices, insertMode);
-		targetAnchor = static_cast<uint>(bufferOffsetForLineColumn(destBuf, destRow, destCol));
-		targetEnd = static_cast<uint>(bufferOffsetForLineColumn(destBuf, destRow + static_cast<int>(slices.size()) - 1, destCol + width));
-		if (!replaceEditorBuffer(destEditor, joinBufferLines(destBuf), bufferOffsetForLineColumn(destBuf, destRow, destCol))) return false;
-		if (keepTarget) destWin->applyCommittedBlockState(mode, false, targetAnchor, targetEnd);
-		else
-			destWin->clearBlock();
-		return true;
-	}
-	return false;
-}
-
-bool moveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
-	bool leaveColumnSpace = false;
-	if (srcWin == nullptr || srcEditor == nullptr || destWin == nullptr || destEditor == nullptr) return false;
-	if (srcWin == destWin) return moveCurrentBlock(srcWin, destEditor);
-	if (!copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor)) return false;
-	leaveColumnSpace = srcWin->blockStatus() == MREditWindow::bmColumn && configuredColumnBlockMoveLeavesSpace();
-	if (!deleteCurrentBlock(srcWin, srcEditor, leaveColumnSpace)) return false;
-	srcWin->clearBlock();
-	return true;
-}
-
-bool extractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out) {
-	int mode;
-	uint anchor;
-	uint end;
-	std::string text;
-	out.clear();
-	if (!currentBlockInfo(win, editor, mode, anchor, end)) return false;
-	text = snapshotEditorText(editor);
-	if (mode == MREditWindow::bmStream) {
-		std::size_t start = std::min<std::size_t>(anchor, end);
-		std::size_t finish = std::max<std::size_t>(anchor, end);
-		out = text.substr(start, finish - start);
-		return true;
-	}
-	if (mode == MREditWindow::bmLine) {
-		SplitTextBuffer buf = splitBufferLines(text);
-		int line1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int line2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		if (buf.lines.empty()) return false;
-		line1 = std::max(0, std::min(line1, static_cast<int>(buf.lines.size()) - 1));
-		line2 = std::max(line1, std::min(line2, static_cast<int>(buf.lines.size()) - 1));
-		for (int line = line1; line <= line2; ++line) {
-			if (!out.empty()) out.push_back('\n');
-			out += buf.lines[static_cast<std::size_t>(line)];
-		}
-		return true;
-	}
-	if (mode == MREditWindow::bmColumn) {
-		SplitTextBuffer buf = splitBufferLines(text);
-		int row1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int row2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int col1 = std::min(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int width = std::max(1, col2 - col1);
-		if (buf.lines.empty()) return false;
-		row1 = std::max(0, std::min(row1, static_cast<int>(buf.lines.size()) - 1));
-		row2 = std::max(row1, std::min(row2, static_cast<int>(buf.lines.size()) - 1));
-		for (int row = row1; row <= row2; ++row) {
-			const std::string &line = buf.lines[static_cast<std::size_t>(row)];
-			std::string slice(static_cast<std::size_t>(width), ' ');
-			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
-			if (startCol < line.size()) {
-				std::size_t avail = std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
-				slice.replace(0, avail, line.substr(startCol, avail));
-			}
-			if (!out.empty()) out.push_back('\n');
-			out += slice;
-		}
-		return true;
-	}
-	return false;
-}
-
-bool saveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path) {
-	std::ofstream outFile;
-	std::string blockText;
-	if (!extractCurrentBlockText(win, editor, blockText)) return false;
-	outFile.open(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-	if (!outFile.is_open()) return false;
-	outFile.write(blockText.data(), static_cast<std::streamsize>(blockText.size()));
-	outFile.close();
-	return outFile.good();
-}
-
-bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
-	int mode;
-	uint anchor;
-	uint end;
-	std::string text;
-	bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
-	bool insertMode = currentEditorInsertMode();
-	if (!currentBlockInfo(win, editor, mode, anchor, end)) return false;
-	text = snapshotEditorText(editor);
-	if (mode == MREditWindow::bmStream) {
-		std::size_t start = std::min<std::size_t>(anchor, end);
-		std::size_t finish = std::max<std::size_t>(anchor, end);
-		std::string blockText = text.substr(start, finish - start);
-		BlockPasteTarget target = materializeEditorPasteTarget(editor, text);
-		std::size_t dest = target.offset;
-		std::size_t cursorTarget = applyStreamPaste(text, dest, blockText, insertMode);
-		if (!replaceEditorBuffer(editor, text, cursorTarget)) return false;
-		if (keepTarget) return setCurrentBlockState(mode, false, static_cast<uint>(dest), static_cast<uint>(dest + blockText.size()));
-		clearCurrentBlockMode();
-		return true;
-	}
-	if (mode == MREditWindow::bmLine) {
-		SplitTextBuffer buf = splitBufferLines(text);
-		int line1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int line2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int destLine = lineIndexForPtr(editor, static_cast<uint>(currentEditorCursorOffset(editor)));
-		std::vector<std::string> blockLines;
-		if (buf.lines.empty()) return false;
-		line1 = std::max(0, std::min(line1, static_cast<int>(buf.lines.size()) - 1));
-		line2 = std::max(line1, std::min(line2, static_cast<int>(buf.lines.size()) - 1));
-		destLine = std::max(0, std::min(destLine, static_cast<int>(buf.lines.size())));
-		blockLines.assign(buf.lines.begin() + line1, buf.lines.begin() + line2 + 1);
-		applyLinePaste(buf, destLine, blockLines, insertMode);
-		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLine(buf, destLine))) return false;
-		if (keepTarget) return setCurrentBlockState(mode, false, static_cast<uint>(bufferOffsetForLine(buf, destLine)), static_cast<uint>(bufferOffsetForLine(buf, destLine + static_cast<int>(blockLines.size()) - 1)));
-		clearCurrentBlockMode();
-		return true;
-	}
-	if (mode == MREditWindow::bmColumn) {
-		SplitTextBuffer buf = splitBufferLines(text);
-		int row1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int row2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int col1 = std::min(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int width = std::max(1, col2 - col1);
-		int destRow = lineIndexForPtr(editor, static_cast<uint>(currentEditorCursorOffset(editor)));
-		int destCol = std::max(0, currentEditorPasteColumn(editor) - 1);
-		std::vector<std::string> slices;
-		if (buf.lines.empty()) return false;
-		row1 = std::max(0, std::min(row1, static_cast<int>(buf.lines.size()) - 1));
-		row2 = std::max(row1, std::min(row2, static_cast<int>(buf.lines.size()) - 1));
-		for (int row = row1; row <= row2; ++row) {
-			const std::string &line = buf.lines[static_cast<std::size_t>(row)];
-			std::string slice(static_cast<std::size_t>(width), ' ');
-			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
-			if (startCol < line.size()) {
-				std::size_t avail = std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
-				slice.replace(0, avail, line.substr(startCol, avail));
-			}
-			slices.push_back(slice);
-		}
-		applyColumnPaste(buf, destRow, destCol, slices, insertMode);
-		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLineColumn(buf, destRow, destCol))) return false;
-		if (keepTarget) return setCurrentBlockState(mode, false, static_cast<uint>(bufferOffsetForLineColumn(buf, destRow, destCol)), static_cast<uint>(bufferOffsetForLineColumn(buf, destRow + static_cast<int>(slices.size()) - 1, destCol + width)));
-		clearCurrentBlockMode();
-		return true;
-	}
-	return false;
-}
-
-bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
-	int mode;
-	uint anchor;
-	uint end;
-	std::string text;
-	bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
-	bool insertMode = currentEditorInsertMode();
-	if (!currentBlockInfo(win, editor, mode, anchor, end)) return false;
-	text = snapshotEditorText(editor);
-	if (mode == MREditWindow::bmStream) {
-		std::size_t start = std::min<std::size_t>(anchor, end);
-		std::size_t finish = std::max<std::size_t>(anchor, end);
-		std::size_t dest = std::min<std::size_t>(currentEditorCursorOffset(editor), text.size());
-		std::string blockText = text.substr(start, finish - start);
-		if (dest >= start && dest <= finish) return true;
-		BlockPasteTarget target = materializeEditorPasteTarget(editor, text);
-		if (target.padded && target.paddingStart <= start) {
-			start += target.paddingLength;
-			finish += target.paddingLength;
-		}
-		dest = target.offset;
-		text.erase(start, finish - start);
-		if (dest > finish) dest -= (finish - start);
-		std::size_t cursorTarget = applyStreamPaste(text, dest, blockText, insertMode);
-		if (!replaceEditorBuffer(editor, text, cursorTarget)) return false;
-		if (keepTarget) return setCurrentBlockState(mode, false, static_cast<uint>(dest), static_cast<uint>(dest + blockText.size()));
-		clearCurrentBlockMode();
-		return true;
-	}
-	if (mode == MREditWindow::bmLine) {
-		SplitTextBuffer buf = splitBufferLines(text);
-		int line1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int line2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int destLine = lineIndexForPtr(editor, static_cast<uint>(currentEditorCursorOffset(editor)));
-		int count;
-		std::vector<std::string> blockLines;
-		if (buf.lines.empty()) return false;
-		line1 = std::max(0, std::min(line1, static_cast<int>(buf.lines.size()) - 1));
-		line2 = std::max(line1, std::min(line2, static_cast<int>(buf.lines.size()) - 1));
-		count = line2 - line1 + 1;
-		if (destLine >= line1 && destLine <= line2 + 1) return true;
-		blockLines.assign(buf.lines.begin() + line1, buf.lines.begin() + line2 + 1);
-		buf.lines.erase(buf.lines.begin() + line1, buf.lines.begin() + line2 + 1);
-		if (buf.lines.empty()) buf.lines.emplace_back();
-		if (destLine > line2) destLine -= count;
-		destLine = std::max(0, std::min(destLine, static_cast<int>(buf.lines.size())));
-		applyLinePaste(buf, destLine, blockLines, insertMode);
-		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLine(buf, destLine))) return false;
-		if (keepTarget) return setCurrentBlockState(mode, false, static_cast<uint>(bufferOffsetForLine(buf, destLine)), static_cast<uint>(bufferOffsetForLine(buf, destLine + static_cast<int>(blockLines.size()) - 1)));
-		clearCurrentBlockMode();
-		return true;
-	}
-	if (mode == MREditWindow::bmColumn) {
-		SplitTextBuffer buf = splitBufferLines(text);
-		int row1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int row2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int col1 = std::min(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int width = std::max(1, col2 - col1);
-		int destRow = lineIndexForPtr(editor, static_cast<uint>(currentEditorCursorOffset(editor)));
-		int destCol = std::max(0, currentEditorPasteColumn(editor) - 1);
-		bool leaveColumnSpace = configuredColumnBlockMoveLeavesSpace();
-		std::vector<std::string> slices;
-		int height;
-		if (buf.lines.empty()) return false;
-		row1 = std::max(0, std::min(row1, static_cast<int>(buf.lines.size()) - 1));
-		row2 = std::max(row1, std::min(row2, static_cast<int>(buf.lines.size()) - 1));
-		height = row2 - row1 + 1;
-		if (destRow >= row1 && destRow <= row2 && destCol >= col1 - 1 && destCol <= col1 - 1 + width) return true;
-		for (int row = row1; row <= row2; ++row) {
-			std::string &line = buf.lines[static_cast<std::size_t>(row)];
-			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
-			std::string slice(static_cast<std::size_t>(width), ' ');
-			if (leaveColumnSpace) {
-				if (line.size() < startCol) line.append(startCol - line.size(), ' ');
-				if (line.size() < startCol + static_cast<std::size_t>(width)) line.append(startCol + static_cast<std::size_t>(width) - line.size(), ' ');
-			}
-			if (startCol < line.size()) {
-				std::size_t avail = std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
-				slice.replace(0, avail, line.substr(startCol, avail));
-				if (leaveColumnSpace) line.replace(startCol, static_cast<std::size_t>(width), static_cast<std::size_t>(width), ' ');
-				else
-					line.erase(startCol, avail);
-			}
-			slices.push_back(slice);
-		}
-		if (!leaveColumnSpace && destRow + height - 1 >= row1 && destRow <= row2 && destCol > col1 - 1) destCol = std::max(0, destCol - width);
-		applyColumnPaste(buf, destRow, destCol, slices, insertMode);
-		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLineColumn(buf, destRow, destCol))) return false;
-		if (keepTarget) return setCurrentBlockState(mode, false, static_cast<uint>(bufferOffsetForLineColumn(buf, destRow, destCol)), static_cast<uint>(bufferOffsetForLineColumn(buf, destRow + static_cast<int>(slices.size()) - 1, destCol + width)));
-		clearCurrentBlockMode();
-		return true;
-	}
-	return false;
-}
-
-bool deleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace) {
-	int mode;
-	uint anchor;
-	uint end;
-	if (!currentBlockInfo(win, editor, mode, anchor, end)) return false;
-	if (mode == MREditWindow::bmStream) {
-		std::size_t start = std::min<std::size_t>(anchor, end);
-		std::size_t finish = std::max<std::size_t>(anchor, end);
-		MRTextBufferModel::StagedTransaction transaction(editor->readSnapshot(), "delete-current-block-stream");
-		transaction.erase(MRTextBufferModel::Range(start, finish));
-		if (!editor->applyStagedTransaction(transaction, start, start, start, true).applied()) return false;
-		clearCurrentBlockMode();
-		return true;
-	}
-	if (mode == MREditWindow::bmLine) {
-		const int anchorLine = lineIndexForPtr(editor, anchor);
-		const int endLine = lineIndexForPtr(editor, end);
-		const std::size_t line1Seed = anchorLine <= endLine ? static_cast<std::size_t>(anchor) : static_cast<std::size_t>(end);
-		const std::size_t line2Seed = anchorLine >= endLine ? static_cast<std::size_t>(anchor) : static_cast<std::size_t>(end);
-		const std::size_t start = editor->lineStartOffset(line1Seed);
-		const std::size_t line2Start = editor->lineStartOffset(line2Seed);
-		const std::size_t finish = editor->nextLineOffset(line2Start);
-		MRTextBufferModel::StagedTransaction transaction(editor->readSnapshot(), "delete-current-block-line");
-		transaction.erase(MRTextBufferModel::Range(start, finish));
-		if (!editor->applyStagedTransaction(transaction, start, start, start, true).applied()) return false;
-		clearCurrentBlockMode();
-		return true;
-	}
-	if (mode == MREditWindow::bmColumn) {
-		int row1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int row2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int col1 = std::min(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int width = std::max(1, col2 - col1);
-		const int anchorLine = lineIndexForPtr(editor, anchor);
-		const int endLine = lineIndexForPtr(editor, end);
-		const std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
-		const std::size_t row1Seed = anchorLine <= endLine ? static_cast<std::size_t>(anchor) : static_cast<std::size_t>(end);
-		std::vector<std::size_t> lineStarts;
-		std::vector<std::string> lineTexts;
-		MRTextBufferModel::StagedTransaction transaction(editor->readSnapshot(), "delete-current-block-column");
-		std::size_t currentLineStart = editor->lineStartOffset(row1Seed);
-
-		lineStarts.reserve(static_cast<std::size_t>(std::max(0, row2 - row1 + 1)));
-		lineTexts.reserve(static_cast<std::size_t>(std::max(0, row2 - row1 + 1)));
-		for (int row = row1; row <= row2; ++row) {
-			lineStarts.push_back(currentLineStart);
-			lineTexts.push_back(editor->lineTextAtOffset(currentLineStart));
-			currentLineStart = editor->nextLineOffset(currentLineStart);
-		}
-
-		for (int row = row2; row >= row1; --row) {
-			const std::size_t idx = static_cast<std::size_t>(row - row1);
-			const std::size_t lineStart = lineStarts[idx];
-			const std::string &line = lineTexts[idx];
-
-			if (leaveColumnSpace) {
-				const std::size_t targetLength = std::max(line.size(), startCol + static_cast<std::size_t>(width));
-				if (targetLength > line.size()) transaction.insert(lineStart + line.size(), std::string(targetLength - line.size(), ' '));
-				transaction.replace(MRTextBufferModel::Range(lineStart + startCol, lineStart + startCol + static_cast<std::size_t>(width)),
-				                    std::string(static_cast<std::size_t>(width), ' '));
-			} else if (startCol < line.size()) {
-				const std::size_t eraseWidth = std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
-				transaction.erase(MRTextBufferModel::Range(lineStart + startCol, lineStart + startCol + eraseWidth));
-			}
-		}
-
-		std::size_t finalCursor = lineStarts.empty() ? 0 : lineStarts.front() + std::min(startCol, lineTexts.front().size());
-		if (leaveColumnSpace) finalCursor = lineStarts.empty() ? 0 : lineStarts.front() + startCol;
-		if (!editor->applyStagedTransaction(transaction, finalCursor, finalCursor, finalCursor, true).applied()) return false;
-		clearCurrentBlockMode();
-		return true;
-	}
-	return false;
-}
-
-static bool shiftCurrentBlockIndent(MREditWindow *win, MRFileEditor *editor, bool undent) {
-	int mode;
-	uint anchor;
-	uint end;
-	std::string text;
-	SplitTextBuffer buf;
-	int line1;
-	int line2;
-	int anchorLine;
-	int endLine;
-	int anchorCol;
-	int endCol;
-	std::string indentUnit;
-	int indentWidth;
-	std::vector<int> columnDelta;
-
-	if (!currentBlockInfo(win, editor, mode, anchor, end)) return false;
-	text = snapshotEditorText(editor);
-	buf = splitBufferLines(text);
-	if (buf.lines.empty()) return false;
-
-	anchorLine = lineIndexForPtr(editor, anchor);
-	endLine = lineIndexForPtr(editor, end);
-	anchorCol = columnIndexForPtr(editor, anchor);
-	endCol = columnIndexForPtr(editor, end);
-	anchorLine = std::max(0, std::min(anchorLine, static_cast<int>(buf.lines.size()) - 1));
-	endLine = std::max(0, std::min(endLine, static_cast<int>(buf.lines.size()) - 1));
-
-	line1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-	line2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-	line1 = std::max(0, std::min(line1, static_cast<int>(buf.lines.size()) - 1));
-	line2 = std::max(line1, std::min(line2, static_cast<int>(buf.lines.size()) - 1));
-
-	indentWidth = std::max(1, configuredTabSizeSetting());
-	if (configuredTabExpandSetting()) indentUnit = "\t";
-	else
-		indentUnit.assign(static_cast<std::size_t>(indentWidth), ' ');
-	columnDelta.assign(static_cast<std::size_t>(line2 - line1 + 1), 0);
-
-	if (mode == MREditWindow::bmColumn) {
-		int col1 = std::min(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
-		int startCol = std::max(0, col1 - 1);
-		bool leaveColumnSpace = undent && configuredColumnBlockMoveLeavesSpace();
-
-		(void)col2;
-		for (int lineIndex = line1; lineIndex <= line2; ++lineIndex) {
-			std::string &line = buf.lines[static_cast<std::size_t>(lineIndex)];
-			int deltaIndex = lineIndex - line1;
-			std::size_t start = static_cast<std::size_t>(startCol);
-
-			if (!undent) {
-				if (line.size() < start) line.append(start - line.size(), ' ');
-				line.insert(start, indentUnit);
-				columnDelta[static_cast<std::size_t>(deltaIndex)] = indentWidth;
-				continue;
-			}
-
-			if (start >= line.size()) continue;
-
-			if (line[start] == '\t') {
-				if (leaveColumnSpace) line.replace(start, 1, 1, ' ');
-				else {
-					line.erase(start, 1);
-					columnDelta[static_cast<std::size_t>(deltaIndex)] = -indentWidth;
-				}
-				continue;
-			}
-
-			int removeCount = 0;
-			while (removeCount < indentWidth && start + static_cast<std::size_t>(removeCount) < line.size() && line[start + static_cast<std::size_t>(removeCount)] == ' ')
-				++removeCount;
-			if (removeCount <= 0) continue;
-			if (leaveColumnSpace) line.replace(start, static_cast<std::size_t>(removeCount), static_cast<std::size_t>(removeCount), ' ');
-			else {
-				line.erase(start, static_cast<std::size_t>(removeCount));
-				columnDelta[static_cast<std::size_t>(deltaIndex)] = -removeCount;
-			}
-		}
-
-		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLineColumn(buf, line1, startCol))) return false;
-		auto adjustedColumn = [&](int lineIndex, int originalCol) {
-			int adjusted = std::max(0, originalCol);
-			if (lineIndex < line1 || lineIndex > line2 || adjusted < startCol) return adjusted;
-			adjusted += columnDelta[static_cast<std::size_t>(lineIndex - line1)];
-			return std::max(startCol, adjusted);
-		};
-		return setCurrentBlockState(mode, false, static_cast<uint>(bufferOffsetForLineColumn(buf, anchorLine, adjustedColumn(anchorLine, anchorCol))), static_cast<uint>(bufferOffsetForLineColumn(buf, endLine, adjustedColumn(endLine, endCol))));
-	}
-
-	for (int lineIndex = line1; lineIndex <= line2; ++lineIndex) {
-		std::string &line = buf.lines[static_cast<std::size_t>(lineIndex)];
-		int deltaIndex = lineIndex - line1;
-
-		if (!undent) {
-			line.insert(0, indentUnit);
-			columnDelta[static_cast<std::size_t>(deltaIndex)] = indentWidth;
-			continue;
-		}
-		if (line.empty()) continue;
-		if (line[0] == '\t') {
-			line.erase(0, 1);
-			columnDelta[static_cast<std::size_t>(deltaIndex)] = -indentWidth;
-			continue;
-		}
-		int removeCount = 0;
-		while (removeCount < indentWidth && removeCount < static_cast<int>(line.size()) && line[static_cast<std::size_t>(removeCount)] == ' ')
-			++removeCount;
-		if (removeCount > 0) {
-			line.erase(0, static_cast<std::size_t>(removeCount));
-			columnDelta[static_cast<std::size_t>(deltaIndex)] = -removeCount;
-		}
-	}
-
-	if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLine(buf, line1))) return false;
-	auto adjustedColumn = [&](int lineIndex, int originalCol) {
-		int adjusted = std::max(0, originalCol);
-		if (lineIndex < line1 || lineIndex > line2) return adjusted;
-		adjusted += columnDelta[static_cast<std::size_t>(lineIndex - line1)];
-		return std::max(0, adjusted);
-	};
-
-	return setCurrentBlockState(mode, false, static_cast<uint>(bufferOffsetForLineColumn(buf, anchorLine, adjustedColumn(anchorLine, anchorCol))), static_cast<uint>(bufferOffsetForLineColumn(buf, endLine, adjustedColumn(endLine, endCol))));
-}
-
-bool indentCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
-	return shiftCurrentBlockIndent(win, editor, false);
-}
-
-bool undentCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
-	return shiftCurrentBlockIndent(win, editor, true);
-}
 
 bool moveEditorTabRight(MRFileEditor *editor) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
@@ -4604,6 +3962,7 @@ static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey) {
 	bool wantShift = false;
 	bool wantCtrl = false;
 	bool wantAlt = false;
+	bool wantSuper = false;
 	bool changed = true;
 	ushort baseCode = 0;
 	ushort modifiers = 0;
@@ -4633,6 +3992,12 @@ static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey) {
 		if (token.rfind("ALT", 0) == 0) {
 			wantAlt = true;
 			token.erase(0, 3);
+			changed = true;
+			continue;
+		}
+		if (token.rfind("SUPER", 0) == 0) {
+			wantSuper = true;
+			token.erase(0, 5);
 			changed = true;
 			continue;
 		}
@@ -4699,6 +4064,7 @@ static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey) {
 	if (wantShift) modifiers |= kbShift;
 	if (wantCtrl) modifiers |= kbCtrlShift;
 	if (wantAlt) modifiers |= kbAltShift;
+	if (wantSuper) modifiers |= kbSuperShift;
 
 	outKey = TKey(baseCode, modifiers);
 	return true;
@@ -5892,7 +5258,7 @@ static std::string menuLabelFromBindingKey(const TKey &key) {
 		const char *token;
 		ushort code;
 	};
-	static const ComboSpec combos[] = {{"", 0}, {"Shft", kbShift}, {"Ctrl", kbCtrlShift}, {"Alt", kbAltShift}, {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)}, {"AltShft", static_cast<ushort>(kbAltShift | kbShift)}, {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)}, {"CtrlAltShft", static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
+	static const ComboSpec combos[] = {{"", 0}, {"Shft", kbShift}, {"Ctrl", kbCtrlShift}, {"Alt", kbAltShift}, {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)}, {"AltShft", static_cast<ushort>(kbAltShift | kbShift)}, {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)}, {"CtrlAltShft", static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}, {"Super", kbSuperShift}, {"SuperShft", static_cast<ushort>(kbSuperShift | kbShift)}, {"SuperCtrl", static_cast<ushort>(kbSuperShift | kbCtrlShift)}, {"SuperAlt", static_cast<ushort>(kbSuperShift | kbAltShift)}, {"SuperCtrlShft", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbShift)}, {"SuperAltShft", static_cast<ushort>(kbSuperShift | kbAltShift | kbShift)}, {"SuperCtrlAlt", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbAltShift)}, {"SuperCtrlAltShft", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbAltShift | kbShift)}};
 	static const NamedKeySpec named[] = {{"Enter", kbEnter}, {"Tab", kbTab}, {"Esc", kbEsc}, {"Backspace", kbBack}, {"Up", kbUp}, {"Down", kbDown}, {"Left", kbLeft}, {"Right", kbRight}, {"PgUp", kbPgUp}, {"PgDn", kbPgDn}, {"Home", kbHome}, {"End", kbEnd}, {"Ins", kbIns}, {"Del", kbDel}, {"Grey-", kbGrayMinus}, {"Grey+", kbGrayPlus}, {"Grey*", static_cast<ushort>('*')}, {"Space", static_cast<ushort>(' ')}, {"Minus", static_cast<ushort>('-')}, {"Equal", static_cast<ushort>('=')}, {"F1", kbF1}, {"F2", kbF2}, {"F3", kbF3}, {"F4", kbF4}, {"F5", kbF5}, {"F6", kbF6}, {"F7", kbF7}, {"F8", kbF8}, {"F9", kbF9}, {"F10", kbF10}, {"F11", kbF11}, {"F12", kbF12}};
 	for (const ComboSpec &combo : combos)
 		for (const NamedKeySpec &entry : named)
@@ -5951,20 +5317,16 @@ static bool executeBoundCommand(int commandId) {
 			backspaceEditor(editor);
 			return true;
 		case macdBlockBegin:
-			return beginCurrentBlockMode(MREditWindow::bmLine);
 		case macdBlockEnd:
-			return endCurrentBlockMode();
 		case macdBlockOff:
-			return clearCurrentBlockMode();
 		case macdColBlockBegin:
-			return beginCurrentBlockMode(MREditWindow::bmColumn);
 		case macdCopyBlock:
-			return copyCurrentBlock(activeMacroEditWindow(), editor);
+			return true;
 		case macdCr:
 			carriageReturnEditor(editor);
 			return true;
 		case macdDeleteBlock:
-			return deleteCurrentBlock(activeMacroEditWindow(), editor, shouldLeaveColumnSpaceForDelete(activeMacroEditWindow()));
+			return true;
 		case macdDelChar:
 			deleteEditorChars(editor, 1);
 			return true;
@@ -5994,7 +5356,7 @@ static bool executeBoundCommand(int commandId) {
 		case macdMarkPos:
 			return markEditorPosition(activeMacroEditWindow(), editor);
 		case macdMoveBlock:
-			return moveCurrentBlock(activeMacroEditWindow(), editor);
+			return true;
 		case macdNextPageBreak:
 			return moveEditorNextPageBreak(editor);
 		case macdPageDown:
@@ -6006,7 +5368,7 @@ static bool executeBoundCommand(int commandId) {
 		case macdSaveFile:
 			return activeMacroEditWindow() != nullptr && activeMacroEditWindow()->saveCurrentFile();
 		case macdStrBlockBegin:
-			return beginCurrentBlockMode(MREditWindow::bmStream);
+			return true;
 		case macdTabLeft:
 			return moveEditorTabLeft(editor);
 		case macdTabRight:
@@ -6473,6 +5835,13 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 		if (!args.empty()) throw std::runtime_error("NEXT_FILE expects no arguments.");
 		return makeInt(findNextFileMatch());
 	}
+	if (name == "SUBSHELL") {
+		SubshellResult subshell;
+		if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SUBSHELL expects (string, int).");
+		subshell = runSubshellCapture(valueAsString(args[0]), valueAsInt(args[1]));
+		runtimeErrorLevel() = subshell.errorLevel;
+		return makeString(subshell.output);
+	}
 	if (name == "SEARCH_FWD") {
 		MRFileEditor *editor;
 		std::size_t matchStart = 0;
@@ -6692,19 +6061,23 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 	if (name == "SCREEN_WIDTH") return makeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->screenWidth : static_cast<int>(TDisplay::getCols()));
 	if (name == "WHEREX") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
+		int x = 0;
+		int y = 0;
+		MRFileEditor *editor = currentEditor();
+		if (editor != nullptr && currentUiCursorPosition(x, y)) return makeInt(x);
 		if (session != nullptr) return makeInt(session->screenCursorX);
-		TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-		return makeInt(app != nullptr ? app->cursor.x + 1 : 0);
+		return makeInt(currentUiCursorPosition(x, y) ? x : 0);
 	}
 	if (name == "WHEREY") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
+		int x = 0;
+		int y = 0;
+		if (currentEditor() != nullptr && currentUiCursorPosition(x, y)) return makeInt(y);
 		if (session != nullptr) return makeInt(session->screenCursorY);
-		TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-		return makeInt(app != nullptr ? app->cursor.y + 1 : 0);
+		return makeInt(currentUiCursorPosition(x, y) ? y : 0);
 	}
 	if (name == "BLOCK_TEXT") {
-		std::string blockText;
-		return makeString(extractCurrentBlockText(activeMacroEditWindow(), currentEditor(), blockText) ? blockText : std::string());
+		return makeString(std::string());
 	}
 	if (name == "BAR_MENU" || name == "V_MENU") {
 		if (currentBackgroundEditSession() != nullptr) throw std::runtime_error(name + " is not available in background mode.");
@@ -6805,27 +6178,41 @@ bool mrvmEditorUndentCursor(MRFileEditor *editor) {
 }
 
 bool mrvmEditorCopyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
-	return copyCurrentBlock(win, editor);
+	(void)win;
+	(void)editor;
+	return true;
 }
 
 bool mrvmEditorMoveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
-	return moveCurrentBlock(win, editor);
+	(void)win;
+	(void)editor;
+	return true;
 }
 
 bool mrvmEditorDeleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace) {
-	return deleteCurrentBlock(win, editor, leaveColumnSpace);
+	(void)win;
+	(void)editor;
+	(void)leaveColumnSpace;
+	return true;
 }
 
 bool mrvmEditorExtractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out) {
-	return extractCurrentBlockText(win, editor, out);
+	(void)win;
+	(void)editor;
+	out.clear();
+	return false;
 }
 
 bool mrvmEditorIndentBlock(MREditWindow *win, MRFileEditor *editor) {
-	return indentCurrentBlock(win, editor);
+	(void)win;
+	(void)editor;
+	return true;
 }
 
 bool mrvmEditorUndentBlock(MREditWindow *win, MRFileEditor *editor) {
-	return undentCurrentBlock(win, editor);
+	(void)win;
+	(void)editor;
+	return true;
 }
 
 MREditWindow *mrvmEditorWindowByIndex(int index) {
@@ -6833,19 +6220,31 @@ MREditWindow *mrvmEditorWindowByIndex(int index) {
 }
 
 bool mrvmEditorCopyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
-	return copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+	(void)srcWin;
+	(void)srcEditor;
+	(void)destWin;
+	(void)destEditor;
+	return true;
 }
 
 bool mrvmEditorMoveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
-	return moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+	(void)srcWin;
+	(void)srcEditor;
+	(void)destWin;
+	(void)destEditor;
+	return true;
 }
 
 bool mrvmEditorShouldLeaveColumnSpaceForDelete(MREditWindow *win) {
-	return shouldLeaveColumnSpaceForDelete(win);
+	(void)win;
+	return false;
 }
 
 bool mrvmEditorSaveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path) {
-	return saveCurrentBlockToFile(win, editor, path);
+	(void)win;
+	(void)editor;
+	(void)path;
+	return true;
 }
 
 bool mrvmEditorLinkCurrentWindow() {
@@ -8118,28 +7517,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					g_runtimeEnv.lastFileName = win->currentFileName();
 					runtimeErrorLevel() = 0;
 				} else if (name == "SAVE_BLOCK") {
-					MREditWindow *win = activeMacroEditWindow();
-					MRFileEditor *editor = currentEditor();
-					std::string path;
-					if (args.empty()) {
-						if (currentBackgroundEditSession() != nullptr) {
-							runtimeErrorLevel() = 1001;
-							continue;
-						}
-						runtimeErrorLevel() = dispatchMRKeymapAction("MR_SAVE_BLOCK_TO_FILE") ? 0 : 1001;
-						continue;
-					}
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
-					if (win == nullptr || editor == nullptr) {
-						runtimeErrorLevel() = 1001;
-						continue;
-					}
-					path = expandUserPath(valueAsString(args[0]));
-					if (!saveCurrentBlockToFile(win, editor, path)) {
-						runtimeErrorLevel() = errno != 0 ? errno : 1010;
-						continue;
-					}
-					g_runtimeEnv.lastFileName = path;
+					if (args.size() > 1 || (!args.empty() && !isStringLike(args[0]))) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_INDENT_LEVEL") {
 					if (!args.empty()) throw std::runtime_error("SET_INDENT_LEVEL expects no arguments.");
@@ -8405,7 +7783,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						continue;
 					}
 					runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_BLOCK_EXTEND_BY_MOTION", valueAsString(args[0])) ? 0 : 1001;
-				} else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "INDENT" || name == "UNDENT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "BLOCK_STAT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
+				} else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "INDENT" || name == "UNDENT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "BLOCK_TOGGLE_VISIBILITY" || name == "BLOCK_STAT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
 				           name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS") {
 					MRFileEditor *editor = currentEditor();
 					bool ok = false;
@@ -8463,24 +7841,26 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					else if (name == "UNDENT")
 						ok = undentEditor(editor);
 					else if (name == "BLOCK_BEGIN" || name == "BLOCK_LINE") {
-						ok = beginCurrentBlockMode(MREditWindow::bmLine);
+						ok = mrvmUiBlockBeginLine();
 					} else if (name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL") {
-						ok = beginCurrentBlockMode(MREditWindow::bmColumn);
+						ok = mrvmUiBlockBeginColumn();
 					} else if (name == "STR_BLOCK_BEGIN") {
-						ok = beginCurrentBlockMode(MREditWindow::bmStream);
+						ok = mrvmUiBlockBeginStream();
 					} else if (name == "BLOCK_END") {
-						ok = endCurrentBlockMode();
+						ok = mrvmUiBlockEndMarking();
 					} else if (name == "BLOCK_OFF") {
-						ok = clearCurrentBlockMode();
+						ok = mrvmUiBlockTurnMarkingOff();
+					} else if (name == "BLOCK_TOGGLE_VISIBILITY") {
+						ok = mrvmUiBlockToggleVisibility();
 					} else if (name == "BLOCK_STAT") {
 						ok = true;
 						runtimeReturnInt() = blockStatusValue(activeMacroEditWindow());
 					} else if (name == "COPY_BLOCK")
-						ok = copyCurrentBlock(activeMacroEditWindow(), editor);
+						ok = true;
 					else if (name == "MOVE_BLOCK")
-						ok = moveCurrentBlock(activeMacroEditWindow(), editor);
+						ok = true;
 					else if (name == "DELETE_BLOCK")
-						ok = deleteCurrentBlock(activeMacroEditWindow(), editor, shouldLeaveColumnSpaceForDelete(activeMacroEditWindow()));
+						ok = true;
 					else if (name == "CREATE_WINDOW")
 						ok = mrvmUiCreateWindow();
 					else if (name == "DELETE_WINDOW")
@@ -8560,26 +7940,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT) throw std::runtime_error("SIZE_WINDOW expects four integer arguments.");
 					runtimeErrorLevel() = mrvmUiSizeCurrentWindow(valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3])) ? 0 : 1010;
 				} else if (name == "WINDOW_COPY" || name == "WINDOW_MOVE") {
-					MREditWindow *destWin = activeMacroEditWindow();
-					MRFileEditor *destEditor = currentEditor();
-					MREditWindow *srcWin;
-					MRFileEditor *srcEditor;
-					int windowNum;
-					bool ok;
 					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error((name + " expects one integer argument.").c_str());
-					if (destWin == nullptr || destEditor == nullptr) {
-						runtimeErrorLevel() = 1001;
-						continue;
-					}
-					windowNum = valueAsInt(args[0]);
-					srcWin = editWindowByIndex(windowNum);
-					srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-					if (srcWin == nullptr || srcEditor == nullptr) {
-						runtimeErrorLevel() = 1010;
-						continue;
-					}
-					ok = (name == "WINDOW_COPY") ? copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor) : moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
-					runtimeErrorLevel() = ok ? 0 : 1001;
+					runtimeErrorLevel() = 0;
 				} else if (name == "RUN_MACRO") {
 					std::string spec;
 					std::string filePart;
@@ -8837,11 +8199,7 @@ int mrvmUiScreenHeight() {
 }
 
 bool mrvmUiCursorPosition(int &x, int &y) {
-	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-	if (app == nullptr) return false;
-	x = app->cursor.x + 1;
-	y = app->cursor.y + 1;
-	return true;
+	return currentUiCursorPosition(x, y);
 }
 
 void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets) {
@@ -9233,7 +8591,7 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	TKey pressed(keyCode, controlKeyState);
 	int mode = currentUiMacroMode();
-	const bool rawCtrlSpace = keyCode == kbNoKey && (controlKeyState & kbCtrlShift) != 0 && (controlKeyState & (kbAltShift | kbPaste)) == 0;
+	const bool rawCtrlSpace = keyCode == kbNoKey && (controlKeyState & kbCtrlShift) != 0 && (controlKeyState & (kbAltShift | kbSuperShift | kbPaste)) == 0;
 	bool traceSnippetKey = false;
 	auto dispatchLoadedBinding = [&]() -> bool {
 		for (std::size_t i = g_runtimeEnv.macroOrder.size(); i > 0; --i) {

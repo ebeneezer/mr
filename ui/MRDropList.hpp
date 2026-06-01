@@ -38,6 +38,7 @@ class MRDropList {
 	void showValues(TGroup &owner, const TRect &anchor, const std::vector<std::string> &sourceValues, const std::vector<std::string> &visibleValues, const std::string &currentValue, TView *relay, ushort acceptCommand, short maxVisibleRows);
 	[[nodiscard]] bool updateLinkedInputFromKey(TEvent &event, TInputLine *link, std::string &inputValue);
 	[[nodiscard]] bool showFilteredValues(const std::string &inputValue, bool restoreLinkFocusOnNoMatch);
+	void restoreLinkedInputFocus();
 	[[nodiscard]] bool handleSpeedSearchText(const std::string &text);
 	[[nodiscard]] short firstMatchingIndex(const std::string &prefix) const;
 	void dispatchAcceptCommand();

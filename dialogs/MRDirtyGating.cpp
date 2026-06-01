@@ -151,7 +151,7 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
 	const int height = std::max(hasDetail ? 10 : 8, static_cast<int>(textLines.size()) + 6);
-	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), "Confirm", width, height);
+	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), "CONFIRM", width, height);
 	int y = 2;
 
 	for (const std::string &line : textLines)
@@ -191,7 +191,7 @@ bool runDialogConfirm(const char *headline, const char *confirmLabel, const char
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
 	const int height = std::max(8, static_cast<int>(textLines.size()) + 6);
-	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), dialogTitle != nullptr ? dialogTitle : "Confirm", width, height);
+	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), dialogTitle != nullptr ? dialogTitle : "CONFIRM", width, height);
 	int y = 2;
 
 	for (const std::string &line : textLines)

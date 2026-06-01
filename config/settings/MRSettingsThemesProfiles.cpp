@@ -140,9 +140,17 @@ static const unsigned char kPaletteGrayDialogFrame = 33;
 static const unsigned char kPaletteGrayDialogFrameAccent = 34;
 static const unsigned char kPaletteGrayDialogText = 37;
 static const unsigned char kPaletteDialogButtonDescription = 41;
+static const unsigned char kPaletteDialogButtonDefault = 42;
+static const unsigned char kPaletteDialogButtonSelected = 43;
+static const unsigned char kPaletteDialogButtonDisabled = 44;
 static const unsigned char kPaletteDialogButtonHotkey = 45;
 static const unsigned char kPaletteDialogButtonShadow = 46;
 static const unsigned char kPaletteDialogClusterHotkey = 49;
+static const unsigned char kPaletteDialogInputLineNormal = 50;
+static const unsigned char kPaletteDialogInputLineSelected = 51;
+static const unsigned char kPaletteDialogInputLineArrows = 52;
+static const unsigned char kPaletteDialogHistoryArrow = 53;
+static const unsigned char kPaletteDialogHistorySides = 54;
 static const unsigned char kPaletteDialogListFrameLegacyPrimary = 24;
 static const unsigned char kPaletteDialogListFrameLegacySecondary = 25;
 static const unsigned char kPaletteDialogListNormalLegacy = 26;
@@ -159,10 +167,20 @@ static const unsigned char kPaletteBlueDialogBackground = 64;
 static const unsigned char kPaletteBlueDialogFrame = 65;
 static const unsigned char kPaletteBlueDialogFrameAccent = 66;
 static const unsigned char kPaletteBlueDialogText = 69;
+static const unsigned char kPaletteBlueDialogInputLineNormal = 82;
+static const unsigned char kPaletteBlueDialogInputLineSelected = 83;
+static const unsigned char kPaletteBlueDialogInputLineArrows = 84;
+static const unsigned char kPaletteBlueDialogHistoryArrow = 85;
+static const unsigned char kPaletteBlueDialogHistorySides = 86;
 static const unsigned char kPaletteCyanDialogBackground = 96;
 static const unsigned char kPaletteCyanDialogFrame = 97;
 static const unsigned char kPaletteCyanDialogFrameAccent = 98;
 static const unsigned char kPaletteCyanDialogText = 101;
+static const unsigned char kPaletteCyanDialogInputLineNormal = 114;
+static const unsigned char kPaletteCyanDialogInputLineSelected = 115;
+static const unsigned char kPaletteCyanDialogInputLineArrows = 116;
+static const unsigned char kPaletteCyanDialogHistoryArrow = 117;
+static const unsigned char kPaletteCyanDialogHistorySides = 118;
 static const unsigned char kPaletteDialogInactiveClusterGray = 62;
 static const unsigned char kPaletteDialogInactiveClusterBlue = 94;
 static const unsigned char kPaletteDialogInactiveClusterCyan = 126;
@@ -172,6 +190,7 @@ static const unsigned char kPaletteHelpHighlight = 134;
 static const unsigned char kPaletteHelpChapter = 135;
 
 enum : std::size_t {
+	kMenuDialogIndexButtonDescription = 5,
 	kMenuDialogIndexListboxSelector = 11,
 	kMenuDialogIndexInactiveCluster = 12,
 	kMenuDialogIndexInactiveElements = 13,
@@ -179,7 +198,15 @@ enum : std::size_t {
 	kMenuDialogIndexDialogText = 15,
 	kMenuDialogIndexDialogBackground = 16,
 	kMenuDialogIndexDropListDescription = 17,
-	kMenuDialogIndexDropListSelectedInactive = 18
+	kMenuDialogIndexDropListSelectedInactive = 18,
+	kMenuDialogIndexButtonDefault = 19,
+	kMenuDialogIndexButtonSelected = 20,
+	kMenuDialogIndexButtonDisabled = 21,
+	kMenuDialogIndexInputLineNormal = 22,
+	kMenuDialogIndexInputLineSelected = 23,
+	kMenuDialogIndexInputLineArrows = 24,
+	kMenuDialogIndexHistoryArrow = 25,
+	kMenuDialogIndexHistorySides = 26
 };
 
 struct ColorGroupDefinition {
@@ -195,7 +222,7 @@ static const MRColorSetupItem kWindowColorItems[] = {
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
-    {"description of selectable menu element", kPaletteMenuDescription}, {"description of ghosted menu element", kPaletteMenuGhostedDescription}, {"hotkey of menu element", kPaletteMenuHotkey}, {"menu selector on selectable menu element", kPaletteMenuSelector}, {"menu selector on ghosted menu element", kPaletteMenuGhostedSelector}, {"description of buttons", kPaletteDialogButtonDescription}, {"hotkey on buttons", kPaletteDialogButtonHotkey}, {"button shadow", kPaletteDialogButtonShadow}, {"selected element in unfocussed listbox", kPaletteDialogListSelectedInactive}, {"element description in listbox", kPaletteDialogListNormal}, {"hotkeys on radio buttons & check boxes", kPaletteDialogClusterHotkey}, {"dialog selector", kPaletteDialogListFocused}, {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray}, {"inactive dialog elements", kMrPaletteDialogInactiveElements}, {"dialog frame", kPaletteGrayDialogFrame}, {"dialog text", kPaletteGrayDialogText}, {"dialog background", kPaletteGrayDialogBackground}, {"element description in droplists", kMrPaletteDropListDescription}, {"selected element in unfocussed droplist", kMrPaletteDropListSelectedInactive},
+    {"description of selectable menu element", kPaletteMenuDescription}, {"description of ghosted menu element", kPaletteMenuGhostedDescription}, {"hotkey of menu element", kPaletteMenuHotkey}, {"menu selector on selectable menu element", kPaletteMenuSelector}, {"menu selector on ghosted menu element", kPaletteMenuGhostedSelector}, {"description of buttons", kPaletteDialogButtonDescription}, {"hotkey on buttons", kPaletteDialogButtonHotkey}, {"button shadow", kPaletteDialogButtonShadow}, {"selected element in unfocussed listbox", kPaletteDialogListSelectedInactive}, {"element description in listbox", kPaletteDialogListNormal}, {"hotkeys on radio buttons & check boxes", kPaletteDialogClusterHotkey}, {"dialog selector", kPaletteDialogListFocused}, {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray}, {"inactive dialog elements", kMrPaletteDialogInactiveElements}, {"dialog frame", kPaletteGrayDialogFrame}, {"dialog text", kPaletteGrayDialogText}, {"dialog background", kPaletteGrayDialogBackground}, {"element description in droplists", kMrPaletteDropListDescription}, {"selected element in unfocussed droplist", kMrPaletteDropListSelectedInactive}, {"default button", kPaletteDialogButtonDefault}, {"selected button", kPaletteDialogButtonSelected}, {"disabled button", kPaletteDialogButtonDisabled}, {"input line text", kPaletteDialogInputLineNormal}, {"selected text in input line", kPaletteDialogInputLineSelected}, {"input line arrows", kPaletteDialogInputLineArrows}, {"history arrow", kPaletteDialogHistoryArrow}, {"history sides", kPaletteDialogHistorySides},
 };
 
 static const MRColorSetupItem kHelpColorItems[] = {
@@ -203,7 +230,7 @@ static const MRColorSetupItem kHelpColorItems[] = {
 };
 
 static const MRColorSetupItem kOtherColorItems[] = {
-    {"statusline", kPaletteMenuDescription}, {"statusline bold", kPaletteMenuGhostedDescription}, {"function descriptions on statusline", kPaletteMenuHotkey}, {"function keys on statusline", kPaletteMenuSelector}, {"error message", kMrPaletteMessageError}, {"message", kMrPaletteMessage}, {"warning message", kMrPaletteMessageWarning}, {"hero events", kMrPaletteMessageHero}, {"cursor position marker", kMrPaletteCursorPositionMarker}, {"desktop background", kMrPaletteDesktop}, {"virtual desktop marker", kMrPaletteVirtualDesktopMarker},
+    {"statusline", kMrPaletteStatusLine}, {"statusline bold", kMrPaletteStatusLineBold}, {"function descriptions on statusline", kMrPaletteStatusLineFunctionDescription}, {"function keys on statusline", kMrPaletteStatusLineFunctionKey}, {"error message", kMrPaletteMessageError}, {"message", kMrPaletteMessage}, {"warning message", kMrPaletteMessageWarning}, {"hero events", kMrPaletteMessageHero}, {"cursor position marker", kMrPaletteCursorPositionMarker}, {"desktop background", kMrPaletteDesktop}, {"virtual desktop marker", kMrPaletteVirtualDesktopMarker},
 };
 
 static const MRColorSetupItem kMiniMapColorItems[] = {
@@ -275,6 +302,18 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteSidekickEditorText) return 0x30;
 	if (paletteIndex == kMrPaletteSidekickEditorHighlight) return 0xE0;
 	if (paletteIndex == kMrPaletteFocusedPaneBorder) return defaults[kPaletteBlueWindowBold];
+	if (paletteIndex == kMrPaletteStatusLine) return defaults[kPaletteMenuDescription];
+	if (paletteIndex == kMrPaletteStatusLineBold) return defaults[kPaletteMenuGhostedDescription];
+	if (paletteIndex == kMrPaletteStatusLineFunctionDescription) return defaults[kPaletteMenuHotkey];
+	if (paletteIndex == kMrPaletteStatusLineFunctionKey) return defaults[kPaletteMenuSelector];
+	if (paletteIndex == kPaletteDialogButtonDefault) return defaults[kPaletteDialogButtonDescription];
+	if (paletteIndex == kPaletteDialogButtonSelected) return defaults[kPaletteDialogButtonDescription];
+	if (paletteIndex == kPaletteDialogButtonDisabled) return defaults[kPaletteDialogInactiveClusterGray];
+	if (paletteIndex == kPaletteDialogInputLineNormal) return defaults[kPaletteDialogInputLineNormal];
+	if (paletteIndex == kPaletteDialogInputLineSelected) return defaults[kPaletteDialogInputLineSelected];
+	if (paletteIndex == kPaletteDialogInputLineArrows) return defaults[kPaletteDialogInputLineArrows];
+	if (paletteIndex == kPaletteDialogHistoryArrow) return defaults[kPaletteDialogHistoryArrow];
+	if (paletteIndex == kPaletteDialogHistorySides) return defaults[kPaletteDialogHistorySides];
 	if (paletteIndex == kMrPaletteDropListDescription) return defaults[57];
 	if (paletteIndex == kMrPaletteDropListSelectedInactive) return defaults[59];
 	if (paletteIndex == kMrPaletteDialogInactiveElements) return defaults[kPaletteDialogInactiveClusterGray];
@@ -545,45 +584,47 @@ bool parseMenuDialogColorListLiteral(const std::string &literal, std::array<unsi
 	}
 
 	outValues = defaultsFromColorGroups().menuDialogColors;
-	if (parsed.size() == MRColorSetupSettings::kMenuDialogCount) {
-		for (std::size_t i = 0; i < outValues.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 1) {
+	if (parsed.size() >= 17 && parsed.size() <= MRColorSetupSettings::kMenuDialogCount) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 2) {
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 3) {
+	} else if (parsed.size() == 16) {
 		for (std::size_t i = 0; i <= kMenuDialogIndexInactiveCluster; ++i)
 			outValues[i] = parsed[i];
 		outValues[kMenuDialogIndexDialogFrame] = parsed[13];
 		outValues[kMenuDialogIndexDialogText] = parsed[14];
 		outValues[kMenuDialogIndexDialogBackground] = parsed[15];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 4) {
+	} else if (parsed.size() == 15) {
 		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
 			outValues[i] = parsed[i];
 		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
 		outValues[kMenuDialogIndexDialogText] = parsed[13];
 		outValues[kMenuDialogIndexDialogBackground] = parsed[12];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 5) {
+	} else if (parsed.size() == 14) {
 		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
 			outValues[i] = parsed[i];
 		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
 		outValues[kMenuDialogIndexDialogText] = parsed[13];
 		outValues[kMenuDialogIndexDialogBackground] = parsed[12];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 6) {
+	} else if (parsed.size() == 13) {
 		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
 			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 7) {
+	} else if (parsed.size() == 12) {
 		for (std::size_t i = 0; i < 11; ++i)
 			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 8) {
+	} else if (parsed.size() == 11) {
 		for (std::size_t i = 0; i < 11; ++i)
 			outValues[i] = parsed[i];
 	} else {
 		return setError(errorMessage, "Unexpected MENUDIALOGCOLORS list size.");
 	}
+	if (parsed.size() <= kMenuDialogIndexButtonDefault) outValues[kMenuDialogIndexButtonDefault] = outValues[kMenuDialogIndexButtonDescription];
+	if (parsed.size() <= kMenuDialogIndexButtonSelected) outValues[kMenuDialogIndexButtonSelected] = outValues[kMenuDialogIndexButtonDescription];
+	if (parsed.size() <= kMenuDialogIndexButtonDisabled) outValues[kMenuDialogIndexButtonDisabled] = outValues[kMenuDialogIndexInactiveElements];
+	if (parsed.size() <= kMenuDialogIndexInputLineNormal) outValues[kMenuDialogIndexInputLineNormal] = defaultColorForSlot(kPaletteDialogInputLineNormal);
+	if (parsed.size() <= kMenuDialogIndexInputLineSelected) outValues[kMenuDialogIndexInputLineSelected] = outValues[kMenuDialogIndexListboxSelector];
+	if (parsed.size() <= kMenuDialogIndexInputLineArrows) outValues[kMenuDialogIndexInputLineArrows] = outValues[kMenuDialogIndexDialogFrame];
+	if (parsed.size() <= kMenuDialogIndexHistoryArrow) outValues[kMenuDialogIndexHistoryArrow] = outValues[kMenuDialogIndexDialogFrame];
+	if (parsed.size() <= kMenuDialogIndexHistorySides) outValues[kMenuDialogIndexHistorySides] = outValues[kMenuDialogIndexDialogFrame];
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -842,6 +883,11 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	unsigned char dialogListSelected = 0;
 	unsigned char dropListNormal = 0;
 	unsigned char dropListSelected = 0;
+	unsigned char inputLineNormal = 0;
+	unsigned char inputLineSelected = 0;
+	unsigned char inputLineArrows = 0;
+	unsigned char historyArrow = 0;
+	unsigned char historySides = 0;
 
 	if (paletteIndex == kPaletteMenuSelectedHotkey) {
 		for (std::size_t i = 0; i < std::size(kMenuDialogColorItems); ++i)
@@ -862,6 +908,11 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDropListSelectedInactive) dropListSelected = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInactiveClusterGray) dialogInactiveCluster = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDialogInactiveElements) dialogInactiveElements = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInputLineNormal) inputLineNormal = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInputLineSelected) inputLineSelected = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInputLineArrows) inputLineArrows = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogHistoryArrow) historyArrow = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogHistorySides) historySides = configured.menuDialogColors[i];
 	}
 
 	switch (paletteIndex) {
@@ -918,6 +969,31 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 			return true;
 		case kMrPaletteDialogInactiveElements:
 			value = dialogInactiveElements;
+			return true;
+		case kPaletteDialogInputLineNormal:
+		case kPaletteBlueDialogInputLineNormal:
+		case kPaletteCyanDialogInputLineNormal:
+			value = inputLineNormal;
+			return true;
+		case kPaletteDialogInputLineSelected:
+		case kPaletteBlueDialogInputLineSelected:
+		case kPaletteCyanDialogInputLineSelected:
+			value = inputLineSelected;
+			return true;
+		case kPaletteDialogInputLineArrows:
+		case kPaletteBlueDialogInputLineArrows:
+		case kPaletteCyanDialogInputLineArrows:
+			value = inputLineArrows;
+			return true;
+		case kPaletteDialogHistoryArrow:
+		case kPaletteBlueDialogHistoryArrow:
+		case kPaletteCyanDialogHistoryArrow:
+			value = historyArrow;
+			return true;
+		case kPaletteDialogHistorySides:
+		case kPaletteBlueDialogHistorySides:
+		case kPaletteCyanDialogHistorySides:
+			value = historySides;
 			return true;
 		case kMrPaletteDesktop:
 			value = configured.otherColors[MRColorSetupSettings::kOtherCount - 2];
@@ -982,7 +1058,6 @@ bool setConfiguredColorThemeFilePath(const std::string &path, std::string *error
 	if (!validateColorThemeFilePath(path, errorMessage)) return false;
 	configuredColorThemeFile() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeLoad, configuredColorThemeFile(), nullptr));
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeSave, configuredColorThemeFile(), nullptr));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

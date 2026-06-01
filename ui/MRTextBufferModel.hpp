@@ -68,6 +68,8 @@ class MRTextBufferModel {
 		int blockMode = 0;
 		std::size_t blockAnchor = 0;
 		std::size_t blockEnd = 0;
+		int blockAnchorColumn = -1;
+		int blockEndColumn = -1;
 		bool blockMarkingOn = false;
 	};
 

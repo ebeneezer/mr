@@ -119,7 +119,7 @@ class TInlineGlyphButton final : public TView {
 
 class TPdfExportDialog final : public MRDialogFoundation {
   public:
-	TPdfExportDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, kDialogHeight), "Export to PDF", kDialogWidth, kDialogHeight, initMrDialogFrame) {
+	TPdfExportDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, kDialogHeight), "EXPORT TO PDF", kDialogWidth, kDialogHeight, initMrDialogFrame) {
 		static constexpr std::array buttons{
 		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
 		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
@@ -326,7 +326,7 @@ class TPdfExportDialog final : public MRDialogFoundation {
 		if (mOutputPath == nullptr) return;
 		mOutputPath->getData(buffer);
 		if (trimAscii(buffer).empty()) mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::PdfExport, buffer, sizeof(buffer), "*.pdf");
-		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::PdfExport, "*.pdf", "Export to PDF", "~N~ame", fdOKButton, buffer) != cmCancel) {
+		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::PdfExport, "*.pdf", "EXPORT TO PDF", "~N~ame", fdOKButton, buffer) != cmCancel) {
 			mOutputPath->setData(buffer);
 			mOutputPath->selectAll(True);
 			mOutputPath->drawView();

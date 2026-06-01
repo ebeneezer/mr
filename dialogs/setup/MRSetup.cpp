@@ -48,6 +48,8 @@ bool runSetupDialogCommand(unsigned short command) {
 			runBackupsAutosaveDialogFlow();
 			return true;
 
+		case cmMrSetupMouseKeyRepeat:
+		case cmMrSetupSearchAndReplaceDefaults:
 		case cmMrSetupUserInterfaceSettings:
 			runUserInterfaceSettingsDialogFlow();
 			return true;

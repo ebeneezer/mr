@@ -335,6 +335,7 @@ bool mrvmUiBlockBeginColumn();
 bool mrvmUiBlockBeginStream();
 bool mrvmUiBlockEndMarking();
 bool mrvmUiBlockTurnMarkingOff();
+bool mrvmUiBlockToggleVisibility();
 bool mrvmUiCopyBlock();
 bool mrvmUiMoveBlock();
 bool mrvmUiDeleteBlock();

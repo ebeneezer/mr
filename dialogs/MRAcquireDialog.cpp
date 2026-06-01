@@ -214,7 +214,7 @@ class TAcquireDialog final : public MRDialogFoundation {
  public:
 	explicit TAcquireDialog(MRAcquireMode mode, MREditWindow *backgroundRestoreWindow)
 	    : TWindowInit(initMrDialogFrame),
-	      MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, computeDialogHeight()), "Acquire", kDialogWidth, computeDialogHeight(), initMrDialogFrame),
+	      MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, computeDialogHeight()), "ACQUIRE", kDialogWidth, computeDialogHeight(), initMrDialogFrame),
 	      mode(mode),
 	      backgroundRestoreWindow(backgroundRestoreWindow) {
 		static constexpr std::array buttons{

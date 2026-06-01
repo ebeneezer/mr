@@ -346,12 +346,17 @@ bool browseDirectoryPath(MRDialogHistoryScope scope, std::string &selectedPath) 
 	return !selectedPath.empty();
 }
 
-bool browseColorThemeUri(MRDialogHistoryScope scope, std::string &selectedUri) {
+bool browseColorThemeUri(MRDialogHistoryScope scope, const std::string &currentUri, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result = cmCancel;
+	const std::string normalizedCurrent = normalizeConfiguredPathInput(currentUri);
 
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac");
-	if (configuredLastFileDialogPath(scope).empty() && configuredLastFileDialogFilePath(scope).empty()) {
+	if (!normalizedCurrent.empty())
+		writeRecordField(fileName, sizeof(fileName), normalizedCurrent);
+	else {
+		mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac");
+	}
+	if (normalizedCurrent.empty() && configuredLastFileDialogPath(scope).empty() && configuredLastFileDialogFilePath(scope).empty()) {
 		std::string macroPath = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
 		if (!macroPath.empty()) {
 			if (macroPath.back() != '/') macroPath += '/';
@@ -359,7 +364,7 @@ bool browseColorThemeUri(MRDialogHistoryScope scope, std::string &selectedUri) {
 			writeRecordField(fileName, sizeof(fileName), macroPath);
 		}
 	}
-	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Color theme file", "~N~ame", fdOKButton, fileName);
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "COLOR THEME FILE", "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) return false;
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return true;
@@ -823,7 +828,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	void browseCurrentColorTheme() {
 		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size())) return;
 		std::string selectedUri;
-		if (!browseColorThemeUri(MRDialogHistoryScope::ExtensionThemeFile, selectedUri)) return;
+		if (!browseColorThemeUri(MRDialogHistoryScope::ExtensionThemeFile, readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize), selectedUri)) return;
 		writeInputLineString(mProfileColorThemeField, selectedUri, kProfileColorThemeFieldSize);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -831,7 +836,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentPostLoadMacro() {
 		std::string selectedUri;
-		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPostLoadMacro, "Select post-load macro", selectedUri)) return;
+		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPostLoadMacro, "SELECT POST-LOAD MACRO", selectedUri)) return;
 		editorSettingsPanel.setPostLoadMacroValue(selectedUri);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -839,7 +844,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentPreSaveMacro() {
 		std::string selectedUri;
-		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPreSaveMacro, "Select pre-save macro", selectedUri)) return;
+		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPreSaveMacro, "SELECT PRE-SAVE MACRO", selectedUri)) return;
 		editorSettingsPanel.setPreSaveMacroValue(selectedUri);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();

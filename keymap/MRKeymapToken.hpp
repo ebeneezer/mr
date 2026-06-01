@@ -9,7 +9,8 @@
 enum class MRKeymapModifier : std::uint8_t {
 	Ctrl = 1 << 0,
 	Alt = 1 << 1,
-	Shift = 1 << 2
+	Shift = 1 << 2,
+	Super = 1 << 3
 };
 
 enum class MRKeymapBaseKey : std::uint8_t {

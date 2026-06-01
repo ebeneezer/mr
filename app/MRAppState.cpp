@@ -93,6 +93,9 @@ void updateAppCommandState() {
 
 	setCommandEnabled(cmMrFileOpen, true);
 	setCommandEnabled(cmMrFileLoad, true);
+	setCommandEnabled(cmMrFileAcquire, true);
+	setCommandEnabled(cmMrFileOpenLiveLog, true);
+	setCommandEnabled(cmMrFileOpenJournal, true);
 	setCommandEnabled(cmMrFileSave, canModify && state.hasDirtyWindow);
 	setCommandEnabled(cmMrFileSaveAs, canSaveAs);
 	setCommandEnabled(cmMrFileSaveAll, state.hasAnyDirtyWindow);
@@ -109,8 +112,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrEditAppendToBuffer, canModify && state.hasSelection);
 	setCommandEnabled(cmMrEditCutAndAppendToBuffer, canModify && state.hasSelection);
 	setCommandEnabled(cmMrEditPasteFromBuffer, canModify);
-	setCommandEnabled(cmMrEditRepeatCommand, hasEditor);
 
+	setCommandEnabled(cmMrWindowOpen, true);
 	setCommandEnabled(cmMrWindowClose, hasWindow);
 	setCommandEnabled(cmMrWindowSplit, false);
 	setCommandEnabled(cmMrWindowList, state.windowCount > 0);
@@ -118,7 +121,6 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrWindowPrevious, hasMultipleWindows);
 	setCommandEnabled(cmMrWindowAdjacent, false);
 	setCommandEnabled(cmMrWindowHide, hasWindow);
-	setCommandEnabled(cmMrWindowModifySize, hasWindow);
 	setCommandEnabled(cmMrWindowZoom, hasWindow);
 	setCommandEnabled(cmMrWindowMinimize, hasWindow);
 	setCommandEnabled(cmMrWindowRestore, hasWindow && state.isMinimizedWindow);
@@ -144,6 +146,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrBlockCopy, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockMove, canModify && state.hasBlock);
 	setCommandEnabled(cmMrBlockDelete, canModify && state.hasBlock);
+	setCommandEnabled(cmMrBlockLoadFromDisk, canModify);
 	setCommandEnabled(cmMrBlockSaveToDisk, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockIndent, canModify && state.hasBlock);
 	setCommandEnabled(cmMrBlockUndent, canModify && state.hasBlock);
@@ -152,6 +155,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrBlockMarkLines, canModify && !state.blockMarking);
 	setCommandEnabled(cmMrBlockMarkColumns, canModify);
 	setCommandEnabled(cmMrBlockMarkStream, canModify);
+	setCommandEnabled(cmMrBlockToggleMarking, (canModify && !state.blockMarking) || (hasEditor && state.blockMarking));
 	setCommandEnabled(cmMrBlockEndMarking, hasEditor && state.blockMarking);
 	setCommandEnabled(cmMrBlockTurnMarkingOff, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockPersistent, hasEditor);
@@ -168,7 +172,6 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrSearchRetrieveRandomAccessMark, hasEditor);
 	setCommandEnabled(cmMrSearchGotoLineNumber, hasEditor);
 
-	setCommandEnabled(cmMrTextLayout, hasEditor);
 	setCommandEnabled(cmMrTextUpperCaseMenu, canModify && state.hasSelection);
 	setCommandEnabled(cmMrTextLowerCaseMenu, canModify && state.hasSelection);
 	setCommandEnabled(cmMrTextCenterLine, canModify);
@@ -180,8 +183,11 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
 	setCommandEnabled(cmMrOtherFindNextCompilerError, state.hasCompilerProblems);
 	setCommandEnabled(cmMrOtherFindPreviousCompilerError, state.hasCompilerProblems);
+	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
 	setCommandEnabled(cmMrOtherAsciiTable, canModify);
 	setCommandEnabled(cmMrOtherEmojiTable, canModify);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
+	setCommandEnabled(cmMrHelpContents, true);
+	setCommandEnabled(cmMrSetupUserInterfaceSettings, true);
 	setCommandEnabled(cmMrHelpPerformancePanel, true);
 }

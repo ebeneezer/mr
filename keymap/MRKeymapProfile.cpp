@@ -69,7 +69,7 @@ std::string displayBindingTarget(std::string_view target) {
 }
 
 bool isPhase1CtrlAsciiCollision(const MRKeymapToken &token) noexcept {
-	if (!token.hasModifier(MRKeymapModifier::Ctrl) || token.hasModifier(MRKeymapModifier::Alt) || token.hasModifier(MRKeymapModifier::Shift)) return false;
+	if (!token.hasModifier(MRKeymapModifier::Ctrl) || token.hasModifier(MRKeymapModifier::Alt) || token.hasModifier(MRKeymapModifier::Shift) || token.hasModifier(MRKeymapModifier::Super)) return false;
 	if (token.baseKey() == MRKeymapBaseKey::Backspace || token.baseKey() == MRKeymapBaseKey::Tab || token.baseKey() == MRKeymapBaseKey::Enter) return true;
 	if (token.baseKey() != MRKeymapBaseKey::Printable) return false;
 	switch (std::toupper(static_cast<unsigned char>(token.printableKey()))) {
@@ -84,9 +84,8 @@ bool isPhase1CtrlAsciiCollision(const MRKeymapToken &token) noexcept {
 }
 
 bool sequenceHasPhase1CtrlAsciiCollision(const MRKeymapSequence &sequence) noexcept {
-	for (const MRKeymapToken &token : sequence.tokens())
-		if (isPhase1CtrlAsciiCollision(token)) return true;
-	return false;
+	const std::span<const MRKeymapToken> tokens = sequence.tokens();
+	return !tokens.empty() && isPhase1CtrlAsciiCollision(tokens.front());
 }
 
 std::string macroSpecFilePart(std::string_view target) {

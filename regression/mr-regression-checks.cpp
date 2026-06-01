@@ -26,11 +26,14 @@
 #include "../mrmac/mrmac.h"
 #include "../mrmac/MRVM.hpp"
 #include "../app/MREditorApp.hpp"
+#include "../app/MRCommandRouter.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../piecetable/MRTextDocument.hpp"
+#include "../ui/MREditWindow.hpp"
+#include "../ui/MRFileEditor/MRFEBlockOps.hpp"
 
 namespace {
 
@@ -191,7 +194,15 @@ enum : std::size_t {
 	kMenuDialogIndexInactiveElements = 13,
 	kMenuDialogIndexDialogFrame = 14,
 	kMenuDialogIndexDialogText = 15,
-	kMenuDialogIndexDialogBackground = 16
+	kMenuDialogIndexDialogBackground = 16,
+	kMenuDialogIndexButtonDefault = 19,
+	kMenuDialogIndexButtonSelected = 20,
+	kMenuDialogIndexButtonDisabled = 21,
+	kMenuDialogIndexInputLineNormal = 22,
+	kMenuDialogIndexInputLineSelected = 23,
+	kMenuDialogIndexInputLineArrows = 24,
+	kMenuDialogIndexHistoryArrow = 25,
+	kMenuDialogIndexHistorySides = 26
 };
 
 enum : unsigned char {
@@ -1142,7 +1153,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 }
 
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73};
+	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
@@ -1237,7 +1248,7 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 }
 
 bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0x70, 0x71, 0x72, 0x73, 0x74};
+	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string errorText;
 	unsigned char normalHotkey = 0;
@@ -1389,6 +1400,817 @@ bool testTouchedRangeMidInsertGuard(std::string &failureReason) {
 	}
 	if (result.change.touchedRange.start != 6 || result.change.touchedRange.end != 7) {
 		failureReason = "Touched range for mid-insert must stay local and must not extend to EOF.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+enum class PieceTableHarnessOperationKind : unsigned char {
+	SetText,
+	Insert,
+	Erase,
+	Replace
+};
+
+struct PieceTableHarnessOperation {
+	PieceTableHarnessOperationKind kind;
+	mr::editor::Range range;
+	std::string text;
+
+	PieceTableHarnessOperation() : kind(PieceTableHarnessOperationKind::Insert), range(), text() {
+	}
+};
+
+struct PieceTableHarnessRng {
+	unsigned int state;
+
+	explicit PieceTableHarnessRng(unsigned int seed) : state(seed) {
+	}
+
+	unsigned int next() {
+		state = state * 1664525u + 1013904223u;
+		return state;
+	}
+
+	std::size_t nextBound(std::size_t limit) {
+		if (limit == 0) return 0;
+		return static_cast<std::size_t>(next() % static_cast<unsigned int>(limit));
+	}
+};
+
+std::vector<mr::editor::Offset> pieceTableHarnessLineStarts(const std::string &text) {
+	std::vector<mr::editor::Offset> starts;
+	starts.push_back(0);
+	for (std::size_t i = 0; i < text.size(); ++i)
+		if (text[i] == '\n') starts.push_back(i + 1);
+	return starts;
+}
+
+std::size_t pieceTableHarnessLineIndex(const std::vector<mr::editor::Offset> &starts, mr::editor::Offset pos) {
+	std::size_t line = 0;
+	for (std::size_t i = 0; i < starts.size(); ++i) {
+		if (starts[i] <= pos) line = i;
+		else
+			break;
+	}
+	return line;
+}
+
+std::string pieceTableHarnessFragment(PieceTableHarnessRng &rng, std::size_t maxLength) {
+	static const char alphabet[] = "abc XYZ\t012345";
+	const std::size_t length = rng.nextBound(maxLength + 1);
+	std::string text;
+	text.reserve(length);
+	for (std::size_t i = 0; i < length; ++i) {
+		const unsigned int choice = rng.next() % 12u;
+		if (choice == 0u) text.push_back('\n');
+		else
+			text.push_back(alphabet[rng.nextBound(sizeof(alphabet) - 1)]);
+	}
+	return text;
+}
+
+PieceTableHarnessOperation pieceTableHarnessRandomOperation(PieceTableHarnessRng &rng, const std::string &model, bool allowSetText) {
+	PieceTableHarnessOperation op;
+	const std::size_t length = model.size();
+	unsigned int selector = rng.next() % (allowSetText ? 4u : 3u);
+	if (!allowSetText) ++selector;
+
+	if (selector == 0u) {
+		op.kind = PieceTableHarnessOperationKind::SetText;
+		op.range = mr::editor::Range(0, length);
+		op.text = pieceTableHarnessFragment(rng, 48);
+		return op;
+	}
+
+	std::size_t start = rng.nextBound(length + 1);
+	std::size_t end = rng.nextBound(length + 1);
+	if (start > end) std::swap(start, end);
+
+	if (selector == 1u) {
+		op.kind = PieceTableHarnessOperationKind::Insert;
+		op.range = mr::editor::Range(start, start);
+		op.text = pieceTableHarnessFragment(rng, 16);
+	} else if (selector == 2u) {
+		op.kind = PieceTableHarnessOperationKind::Erase;
+		op.range = mr::editor::Range(start, end);
+	} else {
+		op.kind = PieceTableHarnessOperationKind::Replace;
+		op.range = mr::editor::Range(start, end);
+		op.text = pieceTableHarnessFragment(rng, 18);
+	}
+	return op;
+}
+
+bool pieceTableHarnessApplyModel(std::string &model, const PieceTableHarnessOperation &op) {
+	std::size_t start = std::min<std::size_t>(op.range.start, model.size());
+	std::size_t end = std::min<std::size_t>(op.range.end, model.size());
+	if (start > end) std::swap(start, end);
+
+	if (op.kind == PieceTableHarnessOperationKind::SetText) {
+		if (model == op.text) return false;
+		model = op.text;
+		return true;
+	}
+	if (op.kind == PieceTableHarnessOperationKind::Insert) {
+		if (op.text.empty()) return false;
+		model.insert(start, op.text);
+		return true;
+	}
+	if (op.kind == PieceTableHarnessOperationKind::Erase) {
+		if (start == end) return false;
+		model.erase(start, end - start);
+		return true;
+	}
+	if (start == end && op.text.empty()) return false;
+	model.replace(start, end - start, op.text);
+	return true;
+}
+
+void pieceTableHarnessAppendOperation(mr::editor::EditTransaction &tx, const PieceTableHarnessOperation &op) {
+	if (op.kind == PieceTableHarnessOperationKind::SetText) tx.setText(op.text);
+	else if (op.kind == PieceTableHarnessOperationKind::Insert)
+		tx.insert(op.range.start, op.text);
+	else if (op.kind == PieceTableHarnessOperationKind::Erase)
+		tx.erase(op.range);
+	else
+		tx.replace(op.range, op.text);
+}
+
+void pieceTableHarnessAppendOperation(mr::editor::StagedEditTransaction &tx, const PieceTableHarnessOperation &op) {
+	if (op.kind == PieceTableHarnessOperationKind::SetText) tx.setText(op.text);
+	else if (op.kind == PieceTableHarnessOperationKind::Insert)
+		tx.insert(op.range.start, op.text);
+	else if (op.kind == PieceTableHarnessOperationKind::Erase)
+		tx.erase(op.range);
+	else
+		tx.replace(op.range, op.text);
+}
+
+bool pieceTableHarnessCheckDocument(const mr::editor::TextDocument &document, const std::string &model, const char *phase, std::string &failureReason) {
+	if (document.length() != model.size()) {
+		failureReason = std::string(phase) + ": document length mismatch.";
+		return false;
+	}
+	if (document.text() != model) {
+		failureReason = std::string(phase) + ": materialized text mismatch.";
+		return false;
+	}
+
+	std::string pieceText;
+	for (std::size_t i = 0; i < document.pieceCount(); ++i) {
+		mr::editor::PieceChunkView chunk = document.pieceChunk(i);
+		if (chunk.length != 0) pieceText.append(chunk.data, chunk.length);
+	}
+	if (pieceText != model) {
+		failureReason = std::string(phase) + ": piece chunk concatenation mismatch.";
+		return false;
+	}
+
+	const std::vector<mr::editor::Offset> starts = pieceTableHarnessLineStarts(model);
+	if (document.lineCount() != starts.size()) {
+		failureReason = std::string(phase) + ": line count mismatch.";
+		return false;
+	}
+	for (std::size_t i = 0; i < starts.size(); ++i) {
+		if (document.lineStartByIndex(i) != starts[i]) {
+			failureReason = std::string(phase) + ": lineStartByIndex mismatch.";
+			return false;
+		}
+	}
+	for (std::size_t pos = 0; pos <= model.size(); ++pos) {
+		const std::size_t expectedLine = pieceTableHarnessLineIndex(starts, pos);
+		const mr::editor::Offset expectedStart = starts[expectedLine];
+		if (document.lineIndex(pos) != expectedLine) {
+			failureReason = std::string(phase) + ": lineIndex mismatch at offset " + std::to_string(pos) + ".";
+			return false;
+		}
+		if (document.lineStart(pos) != expectedStart) {
+			failureReason = std::string(phase) + ": lineStart mismatch at offset " + std::to_string(pos) + ".";
+			return false;
+		}
+		if (document.column(pos) != pos - expectedStart) {
+			failureReason = std::string(phase) + ": column mismatch at offset " + std::to_string(pos) + ".";
+			return false;
+		}
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool pieceTableHarnessApplySingle(mr::editor::TextDocument &document, std::string &model, const PieceTableHarnessOperation &op, bool staged, const char *phase, std::string &failureReason) {
+	std::string expected = model;
+	const bool expectedChanged = pieceTableHarnessApplyModel(expected, op);
+	const mr::editor::Offset oldLength = document.length();
+	const std::size_t oldVersion = document.version();
+	mr::editor::CommitResult result;
+
+	if (staged) {
+		mr::editor::StagedEditTransaction tx(document.readSnapshot(), phase);
+		pieceTableHarnessAppendOperation(tx, op);
+		result = document.tryApply(tx);
+	} else {
+		mr::editor::EditTransaction tx(phase);
+		pieceTableHarnessAppendOperation(tx, op);
+		result = document.tryApply(tx, document.version());
+	}
+
+	if (expectedChanged) {
+		if (!result.applied() || !result.changed()) {
+			failureReason = std::string(phase) + ": expected applied change.";
+			return false;
+		}
+		if (result.change.oldLength != oldLength || result.change.newLength != expected.size()) {
+			failureReason = std::string(phase) + ": change length metadata mismatch.";
+			return false;
+		}
+		if (result.change.oldVersion != oldVersion || result.change.newVersion != document.version()) {
+			failureReason = std::string(phase) + ": change version metadata mismatch.";
+			return false;
+		}
+	} else {
+		if (result.status != mr::editor::CommitStatus::NoOp || result.changed()) {
+			failureReason = std::string(phase) + ": expected no-op result.";
+			return false;
+		}
+	}
+
+	model = expected;
+	return pieceTableHarnessCheckDocument(document, model, phase, failureReason);
+}
+
+bool pieceTableHarnessApplyBatch(mr::editor::TextDocument &document, std::string &model, PieceTableHarnessRng &rng, bool staged, const char *phase, std::string &failureReason) {
+	std::string expected = model;
+	bool expectedChanged = false;
+	const std::size_t operationCount = 2 + rng.nextBound(4);
+	mr::editor::CommitResult result;
+
+	if (staged) {
+		mr::editor::StagedEditTransaction tx(document.readSnapshot(), phase);
+		for (std::size_t i = 0; i < operationCount; ++i) {
+			PieceTableHarnessOperation op = pieceTableHarnessRandomOperation(rng, expected, false);
+			pieceTableHarnessAppendOperation(tx, op);
+			expectedChanged = pieceTableHarnessApplyModel(expected, op) || expectedChanged;
+		}
+		result = document.tryApply(tx);
+	} else {
+		mr::editor::EditTransaction tx(phase);
+		for (std::size_t i = 0; i < operationCount; ++i) {
+			PieceTableHarnessOperation op = pieceTableHarnessRandomOperation(rng, expected, false);
+			pieceTableHarnessAppendOperation(tx, op);
+			expectedChanged = pieceTableHarnessApplyModel(expected, op) || expectedChanged;
+		}
+		result = document.tryApply(tx, document.version());
+	}
+
+	if (expectedChanged) {
+		if (!result.applied() || !result.changed()) {
+			failureReason = std::string(phase) + ": expected applied batch change.";
+			return false;
+		}
+	} else if (result.status != mr::editor::CommitStatus::NoOp) {
+		failureReason = std::string(phase) + ": expected no-op batch result.";
+		return false;
+	}
+
+	model = expected;
+	return pieceTableHarnessCheckDocument(document, model, phase, failureReason);
+}
+
+bool sendWindowKey(MREditWindow &window, ushort keyCode, ushort modifiers = 0) {
+	TEvent event{};
+	event.what = evKeyDown;
+	event.keyDown.keyCode = keyCode;
+	event.keyDown.controlKeyState = modifiers;
+	window.handleEvent(event);
+	return true;
+}
+
+bool expectWindowBlock(const MREditWindow &window, int status, bool marking, int line1, int line2, int col1, int col2, const char *phase, std::string &failureReason) {
+	if (window.blockStatus() != status || window.isBlockMarking() != marking || window.blockLine1() != line1 || window.blockLine2() != line2 || window.blockCol1() != col1 || window.blockCol2() != col2) {
+		failureReason = std::string("Window block path mismatch in ") + phase + ": got status=" + std::to_string(window.blockStatus()) + " marking=" + std::to_string(window.isBlockMarking() ? 1 : 0) +
+		                " line1=" + std::to_string(window.blockLine1()) + " line2=" + std::to_string(window.blockLine2()) + " col1=" + std::to_string(window.blockCol1()) + " col2=" +
+		                std::to_string(window.blockCol2()) + ".";
+		return false;
+	}
+	return true;
+}
+
+bool expectWindowBlockOverlay(const MREditWindow &window, int status, const char *phase, std::string &failureReason) {
+	const MRFileEditor *editor = window.getEditor();
+	if (editor == nullptr) {
+		failureReason = std::string("Window block overlay check has no editor in ") + phase + ".";
+		return false;
+	}
+	const MRFileEditor::BlockOverlayState overlay = editor->blockOverlayState();
+	if (!overlay.active || overlay.mode != status) {
+		failureReason = std::string("Window block overlay mismatch in ") + phase + ": active=" + std::to_string(overlay.active ? 1 : 0) + " mode=" + std::to_string(overlay.mode) + ".";
+		return false;
+	}
+	return true;
+}
+
+ushort rawCtrlKey(char upperLetter) {
+	return static_cast<ushort>(upperLetter - 'A' + 1);
+}
+
+bool sendWindowRawCtrl(MREditWindow &window, char upperLetter) {
+	return sendWindowKey(window, rawCtrlKey(upperLetter));
+}
+
+bool diagnosticsContainError(const std::vector<MRKeymapDiagnostic> &diagnostics) {
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return true;
+	return false;
+}
+
+class ScopedRegressionKeymap {
+  public:
+	ScopedRegressionKeymap() : mProfiles(configuredKeymapProfiles()), mActive(configuredActiveKeymapProfile()) {
+	}
+
+	~ScopedRegressionKeymap() {
+		static_cast<void>(setConfiguredKeymapProfiles(mProfiles, nullptr));
+		static_cast<void>(setConfiguredActiveKeymapProfile(mActive, nullptr));
+	}
+
+  private:
+	std::vector<MRKeymapProfile> mProfiles;
+	std::string mActive;
+};
+
+class ScopedRegressionCursorBehaviour {
+  public:
+	explicit ScopedRegressionCursorBehaviour(MRCursorBehaviour behaviour) : mPrevious(configuredCursorBehaviour()) {
+		static_cast<void>(setConfiguredCursorBehaviour(behaviour));
+	}
+
+	~ScopedRegressionCursorBehaviour() {
+		static_cast<void>(setConfiguredCursorBehaviour(mPrevious));
+	}
+
+  private:
+	MRCursorBehaviour mPrevious;
+};
+
+class ScopedRegressionPersistentBlocks {
+  public:
+	explicit ScopedRegressionPersistentBlocks(bool persistentBlocks) : mPrevious(configuredEditSetupSettings()) {
+		MREditSetupSettings settings = mPrevious;
+		settings.persistentBlocks = persistentBlocks;
+		static_cast<void>(setConfiguredEditSetupSettings(settings, nullptr));
+	}
+
+	~ScopedRegressionPersistentBlocks() {
+		static_cast<void>(setConfiguredEditSetupSettings(mPrevious, nullptr));
+	}
+
+  private:
+	MREditSetupSettings mPrevious;
+};
+
+bool installRegressionKeymap(std::string_view source, std::string &failureReason) {
+	MRKeymapLoadResult loaded = loadKeymapProfilesFromSettingsSource(source);
+	std::string errorMessage;
+
+	if (diagnosticsContainError(loaded.diagnostics)) {
+		failureReason = "WordStar keymap must load without error diagnostics.";
+		for (const MRKeymapDiagnostic &diagnostic : loaded.diagnostics)
+			if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) {
+				failureReason += " ";
+				failureReason += diagnostic.message;
+				break;
+			}
+		return false;
+	}
+	if (!setConfiguredKeymapProfiles(loaded.profiles, &errorMessage)) {
+		failureReason = "Unable to install regression keymap profiles: " + errorMessage;
+		return false;
+	}
+	if (!setConfiguredActiveKeymapProfile(loaded.activeProfileName, &errorMessage)) {
+		failureReason = "Unable to activate regression keymap profile: " + errorMessage;
+		return false;
+	}
+	return true;
+}
+
+bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent, std::string &failureReason) {
+	ScopedRegressionKeymap restoreKeymap;
+	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	ScopedRegressionPersistentBlocks persistentBlocks(true);
+
+	if (!installRegressionKeymap(defaultKeymapContent, failureReason)) return false;
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-block", 1010);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "wordstar-block")) {
+			failureReason = "Unable to seed window editor for Ctrl-Y key path.";
+			return false;
+		}
+		if (!sendWindowRawCtrl(window, 'Y')) return false;
+		if (window.getEditor() == nullptr || window.getEditor()->snapshotText() != "beta\ngamma\n") {
+			failureReason = "Ctrl-Y must delete the current line through the WordStar keymap.";
+			return false;
+		}
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-stream-block", 1011);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "wordstar-block")) {
+			failureReason = "Unable to seed window editor for Ctrl-K stream block path.";
+			return false;
+		}
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowRawCtrl(window, 'B')) return false;
+		if (!sendWindowRawCtrl(window, 'D')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 1, "WordStar Ctrl-K Ctrl-B must not live-grow stream", failureReason)) return false;
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K Ctrl-B/Ctrl-K Ctrl-K stream", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar committed stream overlay", failureReason)) return false;
+		if (!sendWindowRawCtrl(window, 'D')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar persistent stream after cursor move", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar persistent stream overlay after cursor move", failureReason)) return false;
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowKey(window, static_cast<ushort>('H'))) return false;
+		if (window.blockStatus() != MREditWindow::bmNone || window.hasBlock()) {
+			failureReason = "WordStar Ctrl-K H must hide the visible block.";
+			return false;
+		}
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowRawCtrl(window, 'H')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K Ctrl-H show", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-column-block", 1013);
+		if (!window.replaceTextBuffer("alpha\n\nbeta\ngamma\n", "wordstar-column-block")) {
+			failureReason = "Unable to seed window editor for Ctrl-K N column block path.";
+			return false;
+		}
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowRawCtrl(window, 'N')) return false;
+		if (!sendWindowRawCtrl(window, 'D')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "WordStar Ctrl-K Ctrl-N must not live-grow column right", failureReason)) return false;
+		if (!sendWindowRawCtrl(window, 'X')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "WordStar Ctrl-K Ctrl-N must not live-grow column down over empty line", failureReason)) return false;
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 2, 1, 2, "WordStar Ctrl-K Ctrl-N/Ctrl-K Ctrl-K column", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "WordStar committed column overlay", failureReason)) return false;
+		if (!sendWindowRawCtrl(window, 'D')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 2, 1, 2, "WordStar persistent column after cursor move", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "WordStar persistent column overlay after cursor move", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "mrmac-action-nonlive-column", 1014);
+		if (!window.replaceTextBuffer("alpha\n\nbeta\ngamma\n", "mrmac-action-live-column")) {
+			failureReason = "Unable to seed window editor for direct MRMAC action non-live column path.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_BLOCK_SET_COLUMN_BEGIN", "", &window)) {
+			failureReason = "MRMAC_BLOCK_SET_COLUMN_BEGIN action dispatch failed.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_CURSOR_RIGHT", "", &window)) {
+			failureReason = "MRMAC_CURSOR_RIGHT action dispatch failed.";
+			return false;
+		}
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "direct MRMAC action must not live-grow column right", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "direct MRMAC action non-live column overlay", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-free-cursor", 1012);
+		if (!window.replaceTextBuffer("abc", "wordstar-free-cursor")) {
+			failureReason = "Unable to seed window editor for WordStar free-cursor path.";
+			return false;
+		}
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "WordStar free-cursor path must have an editor.";
+			return false;
+		}
+		const std::size_t lineEnd = editor->lineEndOffset(0);
+		editor->setCursorOffsetAtVisualColumn(lineEnd, static_cast<int>(editor->columnOfOffset(lineEnd)));
+		const int before = editor->displayedCursorColumn();
+		const int cursorXBefore = editor->cursor.x;
+		if (!sendWindowRawCtrl(window, 'D')) return false;
+		if (editor->cursorOffset() != lineEnd || editor->displayedCursorColumn() != before + 1) {
+			failureReason = "WordStar Ctrl-D must honor free cursor movement beyond EOL.";
+			return false;
+		}
+		if (editor->cursor.x != cursorXBefore + 1) {
+			failureReason = "WordStar Ctrl-D must advance the visible editor caret beyond EOL.";
+			return false;
+		}
+		if (window.cursorColumnNumber() != static_cast<unsigned long>(before + 2)) {
+			failureReason = "Window cursor column must report the free cursor column beyond EOL.";
+			return false;
+		}
+		if (!sendWindowRawCtrl(window, 'S')) return false;
+		if (editor->cursorOffset() != lineEnd || editor->displayedCursorColumn() != before) {
+			failureReason = "WordStar Ctrl-S must step back through free cursor columns.";
+			return false;
+		}
+	}
+	return true;
+}
+
+bool expectWindowFreeCursorRightPastEol(MREditWindow &window, const char *phase, std::string &failureReason) {
+	MRFileEditor *editor = window.getEditor();
+	if (editor == nullptr) {
+		failureReason = std::string("Window editor missing in ") + phase + ".";
+		return false;
+	}
+	const std::size_t lineEnd = editor->lineEndOffset(0);
+	editor->setCursorOffsetAtVisualColumn(lineEnd, static_cast<int>(editor->columnOfOffset(lineEnd)));
+	const int before = editor->displayedCursorColumn();
+	const int cursorXBefore = editor->cursor.x;
+	if (!sendWindowKey(window, kbRight)) return false;
+	if (editor->cursorOffset() != lineEnd || editor->displayedCursorColumn() != before + 1) {
+		failureReason = std::string("Window free cursor must advance past EOL in ") + phase + ".";
+		return false;
+	}
+	if (editor->cursor.x != cursorXBefore + 1) {
+		failureReason = std::string("Window visible editor caret must advance past EOL in ") + phase + ".";
+		return false;
+	}
+	if (window.cursorColumnNumber() != static_cast<unsigned long>(before + 2)) {
+		failureReason = std::string("Window cursor column must report the free cursor column in ") + phase + ".";
+		return false;
+	}
+	return true;
+}
+
+bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
+	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	ScopedRegressionPersistentBlocks persistentBlocks(true);
+	static const char text[] = "alpha\n\nbeta\nomega";
+
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1001);
+		if (!window.replaceTextBuffer(text, "block-input")) {
+			failureReason = "Unable to seed window editor for stream cursor path.";
+			return false;
+		}
+		if (!sendWindowKey(window, kbRight, kbCtrlShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "cursor Ctrl+Right stream", failureReason)) return false;
+		if (!sendWindowKey(window, kbRight)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "plain cursor commits stream marking", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1002);
+		if (!window.replaceTextBuffer(text, "block-input")) {
+			failureReason = "Unable to seed window editor for column cursor path.";
+			return false;
+		}
+		if (!sendWindowKey(window, kbRight, kbAltShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 2, "cursor Alt+Right column", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1003);
+		if (!window.replaceTextBuffer(text, "block-input")) {
+			failureReason = "Unable to seed window editor for line cursor path.";
+			return false;
+		}
+		if (!sendWindowKey(window, kbDown, kbCtrlShift | kbAltShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmLine, true, 1, 2, 1, 1, "cursor Ctrl+Alt+Down line", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1007);
+		if (!window.replaceTextBuffer(text, "block-input")) {
+			failureReason = "Unable to seed window editor for terminal scan-code cursor path.";
+			return false;
+		}
+		if (!sendWindowKey(window, kbCtrlRight, kbCtrlShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "terminal CtrlRight scan stream", failureReason)) return false;
+		window.clearBlock();
+		if (window.getEditor() == nullptr) {
+			failureReason = "Terminal scan-code cursor path must have an editor.";
+			return false;
+		}
+		window.getEditor()->setCursorOffset(0);
+		if (!sendWindowKey(window, kbAltRight, kbAltShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 2, "terminal AltRight scan column", failureReason)) return false;
+		window.clearBlock();
+		window.getEditor()->setCursorOffset(0);
+		if (!sendWindowKey(window, kbAltDown, kbCtrlShift | kbAltShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmLine, true, 1, 2, 1, 1, "terminal CtrlAltDown scan line", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1004);
+		if (!window.replaceTextBuffer(text, "block-input")) {
+			failureReason = "Unable to seed window editor for menu stream path.";
+			return false;
+		}
+			window.beginStreamBlock();
+			if (!sendWindowKey(window, kbRight)) return false;
+			window.endBlock();
+			if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "menu/window stream begin-end", failureReason)) return false;
+			if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "menu/window stream overlay", failureReason)) return false;
+			if (!expectWindowFreeCursorRightPastEol(window, "window free cursor after stream block", failureReason)) return false;
+			if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "menu/window persistent stream after cursor move", failureReason)) return false;
+			if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "menu/window persistent stream overlay", failureReason)) return false;
+		}
+		{
+			MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1005);
+		if (!window.replaceTextBuffer(text, "block-input")) {
+			failureReason = "Unable to seed window editor for menu line path.";
+			return false;
+		}
+		window.beginLineBlock();
+			if (!sendWindowKey(window, kbDown)) return false;
+			window.endBlock();
+			if (!expectWindowBlock(window, MREditWindow::bmLine, false, 1, 2, 1, 1, "menu/window line begin-end", failureReason)) return false;
+			if (!expectWindowBlockOverlay(window, MREditWindow::bmLine, "menu/window line overlay", failureReason)) return false;
+			if (!expectWindowFreeCursorRightPastEol(window, "window free cursor after line block", failureReason)) return false;
+			if (!expectWindowBlock(window, MREditWindow::bmLine, false, 1, 2, 1, 1, "menu/window persistent line after cursor move", failureReason)) return false;
+			if (!expectWindowBlockOverlay(window, MREditWindow::bmLine, "menu/window persistent line overlay", failureReason)) return false;
+		}
+		{
+			MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1006);
+		if (!window.replaceTextBuffer(text, "block-input")) {
+			failureReason = "Unable to seed window editor for menu column path.";
+			return false;
+		}
+		window.beginColumnBlock();
+			if (!sendWindowKey(window, kbRight)) return false;
+			window.endBlock();
+			if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 1, 1, 2, "menu/window column begin-end", failureReason)) return false;
+			if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "menu/window column overlay", failureReason)) return false;
+			if (!window.toggleBlockVisibility()) {
+				failureReason = "Window block visibility toggle should hide a marked column block.";
+				return false;
+		}
+		if (window.blockStatus() != MREditWindow::bmNone || window.hasBlock()) {
+			failureReason = "Hidden window block must not remain visible or operative.";
+			return false;
+		}
+		if (!window.toggleBlockVisibility()) {
+			failureReason = "Window block visibility toggle should show a stored column block.";
+			return false;
+			}
+			if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 1, 1, 2, "menu/window column toggle show", failureReason)) return false;
+			if (!expectWindowFreeCursorRightPastEol(window, "window free cursor after column block", failureReason)) return false;
+			if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 1, 1, 2, "menu/window persistent column after cursor move", failureReason)) return false;
+			if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "menu/window persistent column overlay", failureReason)) return false;
+		}
+	return true;
+}
+
+bool testTextDocumentPieceTableMutationHarness(std::string &failureReason) {
+	mr::editor::TextDocument document("alpha\nbeta\n");
+	std::string model = "alpha\nbeta\n";
+
+	if (!pieceTableHarnessCheckDocument(document, model, "initial", failureReason)) return false;
+
+	PieceTableHarnessOperation op;
+	op.kind = PieceTableHarnessOperationKind::Insert;
+	op.range = mr::editor::Range(0, 0);
+	op.text = "HEAD\n";
+	if (!pieceTableHarnessApplySingle(document, model, op, false, "edge insert front", failureReason)) return false;
+
+	op.kind = PieceTableHarnessOperationKind::Replace;
+	op.range = mr::editor::Range(2, 9);
+	op.text = "middle\nblock";
+	if (!pieceTableHarnessApplySingle(document, model, op, true, "edge staged replace middle", failureReason)) return false;
+
+	op.kind = PieceTableHarnessOperationKind::Erase;
+	op.range = mr::editor::Range(3, 3);
+	op.text.clear();
+	if (!pieceTableHarnessApplySingle(document, model, op, false, "edge empty erase", failureReason)) return false;
+
+	op.kind = PieceTableHarnessOperationKind::SetText;
+	op.range = mr::editor::Range(0, model.size());
+	op.text = model;
+	if (!pieceTableHarnessApplySingle(document, model, op, true, "edge same setText", failureReason)) return false;
+
+	{
+		mr::editor::StagedEditTransaction stale(document.readSnapshot(), "stale staged conflict");
+		stale.insert(1, "!");
+		document.insert(0, "v");
+		model.insert(0, "v");
+		mr::editor::CommitResult conflict = document.tryApply(stale);
+		if (!conflict.conflicted()) {
+			failureReason = "stale staged transaction must report version conflict.";
+			return false;
+		}
+		if (!pieceTableHarnessCheckDocument(document, model, "stale conflict", failureReason)) return false;
+	}
+
+	PieceTableHarnessRng rng(0x4d524645u);
+	for (std::size_t i = 0; i < 240; ++i) {
+		if (model.size() > 320) {
+			op.kind = PieceTableHarnessOperationKind::Erase;
+			op.range = mr::editor::Range(0, model.size() / 2);
+			op.text.clear();
+		} else
+			op = pieceTableHarnessRandomOperation(rng, model, true);
+		if (!pieceTableHarnessApplySingle(document, model, op, (i % 2) == 0, "deterministic single-op", failureReason)) return false;
+	}
+
+	for (std::size_t i = 0; i < 80; ++i) {
+		if (model.size() > 320) {
+			op.kind = PieceTableHarnessOperationKind::SetText;
+			op.range = mr::editor::Range(0, model.size());
+			op.text = "compact\nseed\n";
+			if (!pieceTableHarnessApplySingle(document, model, op, (i % 2) == 0, "batch size reset", failureReason)) return false;
+		}
+		if (!pieceTableHarnessApplyBatch(document, model, rng, (i % 2) != 0, "deterministic multi-op", failureReason)) return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testBlockMarkingHarness(std::string &failureReason) {
+	std::string routerContent;
+	std::string menuContent;
+	std::string keymapContent;
+	std::string defaultKeymapContent;
+	std::string wordstarKeymapContent;
+	std::string vmContent;
+	std::string compilerContent;
+	std::string windowContent;
+	std::string editorContent;
+	std::string ioError;
+
+	if (!readTextFile(absolutePathFromCwd("app/MRCommandRouter.cpp"), routerContent, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("app/MRMenuFactory.cpp"), menuContent, ioError)) {
+		failureReason = "Unable to read MRMenuFactory.cpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("keymap/MRKeymapActionCatalog.cpp"), keymapContent, ioError)) {
+		failureReason = "Unable to read MRKeymapActionCatalog.cpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/macros/keymaps/MRDefaultKeymaps.mrmac"), defaultKeymapContent, ioError)) {
+		failureReason = "Unable to read MRDefaultKeymaps.mrmac for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/macros/keymaps/wordstar.mrmac"), wordstarKeymapContent, ioError)) {
+		failureReason = "Unable to read wordstar.mrmac for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/MRVM.cpp"), vmContent, ioError)) {
+		failureReason = "Unable to read MRVM.cpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/mrmac.c"), compilerContent, ioError)) {
+		failureReason = "Unable to read mrmac.c for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MREditWindow.hpp"), windowContent, ioError)) {
+		failureReason = "Unable to read MREditWindow.hpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp"), editorContent, ioError)) {
+		failureReason = "Unable to read MRFileEditor.cpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!mrfeBlockOpsRegressionHarness(failureReason)) return false;
+	if (!testBlockMarkingWindowInputHarness(failureReason)) return false;
+	if (!testWordStarBlockKeybindingsHarness(defaultKeymapContent, failureReason)) return false;
+	if (routerContent.find("win->beginLineBlock();") == std::string::npos || routerContent.find("win->beginColumnBlock();") == std::string::npos || routerContent.find("win->beginStreamBlock();") == std::string::npos || routerContent.find("cmMrBlockToggleVisibility") == std::string::npos) {
+		failureReason = "Block marking commands must route to marking methods and visibility toggle.";
+		return false;
+	}
+	if (menuContent.find("cmMrBlockMarkLines, kbF7") == std::string::npos || menuContent.find("cmMrBlockMarkColumns, kbShiftF7") == std::string::npos || menuContent.find("cmMrBlockMarkStream, kbCtrlF7") == std::string::npos || menuContent.find("~H~ide/show block mark") == std::string::npos || menuContent.find("TKey(kbF9, kbShift)") == std::string::npos) {
+		failureReason = "Line, column, stream and visibility marking must be present in the Block menu with default hotkeys.";
+		return false;
+	}
+	if (keymapContent.find("MRMAC_BLOCK_SET_BEGIN") == std::string::npos || keymapContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN") == std::string::npos || keymapContent.find("MRMAC_BLOCK_MARK_STREAM") == std::string::npos || keymapContent.find("MRMAC_BLOCK_SET_END") == std::string::npos || keymapContent.find("MRMAC_BLOCK_CLEAR") == std::string::npos || keymapContent.find("MRMAC_BLOCK_TOGGLE_VISIBILITY") == std::string::npos || keymapContent.find("MR_BLOCK_TOGGLE_VISIBILITY") == std::string::npos) {
+		failureReason = "Line, column, stream, end, clear and visibility targets must be present in the keymap action catalog.";
+		return false;
+	}
+	if (defaultKeymapContent.find("MRMAC_BLOCK_SET_BEGIN") == std::string::npos || defaultKeymapContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN") == std::string::npos || defaultKeymapContent.find("MRMAC_BLOCK_TOGGLE_VISIBILITY") == std::string::npos) {
+		failureReason = "Default keymaps must expose line, column and visibility block marking targets.";
+		return false;
+	}
+	if (wordstarKeymapContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN\" sequence=\"<Ctrl+K> <Ctrl+N>") == std::string::npos || wordstarKeymapContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN\" sequence=\"<Ctrl+K> <N>") == std::string::npos) {
+		failureReason = "WordStar keymap must expose Ctrl-K Ctrl-N and Ctrl-K N column block begins.";
+		return false;
+	}
+	if (vmContent.find("mrvmUiBlockBeginLine()") == std::string::npos || vmContent.find("mrvmUiBlockBeginColumn()") == std::string::npos || vmContent.find("mrvmUiBlockBeginStream()") == std::string::npos || vmContent.find("mrvmUiBlockEndMarking()") == std::string::npos || vmContent.find("mrvmUiBlockTurnMarkingOff()") == std::string::npos || vmContent.find("mrvmUiBlockToggleVisibility()") == std::string::npos || compilerContent.find("BLOCK_BEGIN") == std::string::npos || compilerContent.find("COL_BLOCK_BEGIN") == std::string::npos || compilerContent.find("STR_BLOCK_BEGIN") == std::string::npos || compilerContent.find("BLOCK_END") == std::string::npos || compilerContent.find("BLOCK_OFF") == std::string::npos || compilerContent.find("BLOCK_TOGGLE_VISIBILITY") == std::string::npos) {
+		failureReason = "Line, column, stream, end, clear and visibility marking must be wired through MRMAC compiler/runtime surfaces.";
+		return false;
+	}
+		if (windowContent.find("mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers())") == std::string::npos || windowContent.find("mBlockOps.updateFromEditor(*editor)") == std::string::npos) {
+			failureReason = "Mouse button selection and active marking updates must be wired in MREditWindow.";
+			return false;
+		}
+		if (routerContent.find("window->updateBlockFromEditor()") != std::string::npos || windowContent.find("if (editor != nullptr && mBlockOps.isMarking()) static_cast<void>(mBlockOps.updateFromEditor(*editor));") != std::string::npos) {
+			failureReason = "MRMAC keymap editor commands must not live-update active block marking.";
+			return false;
+		}
+		if (windowContent.find("handleShiftCursorBlockMarking(event)") == std::string::npos || windowContent.find("normalizedBlockCursorNavigationKey") == std::string::npos || windowContent.find("isBlockCursorMarkingModifier") == std::string::npos || windowContent.find("MRFEBlockMode::Column") == std::string::npos || windowContent.find("MRFEBlockMode::Line") == std::string::npos || windowContent.find("MRFEBlockMode::Stream") == std::string::npos) {
+		failureReason = "Cursor block marking must route Ctrl, Alt and Ctrl-Alt navigation through stream, column and line modes and normalize terminal scan codes.";
+		return false;
+	}
+	if (editorContent.find("updateLiveMouseBlockOverlay") == std::string::npos || editorContent.find("setBlockOverlayState(liveBlockMode") == std::string::npos) {
+		failureReason = "Mouse block marking must update the overlay while dragging, before mouse release.";
 		return false;
 	}
 	failureReason.clear();
@@ -2448,8 +3270,8 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 		failureReason = "MRFileEditor palette must expose current-line, changed-text and line-number slots.";
 		return false;
 	}
-	if (viewportContent.find("basePair = getColor(0x0303);") == std::string::npos || viewportContent.find("basePair = getColor(0x0204);") == std::string::npos) {
-		failureReason = "Current-line and current-line-in-block must be wired to dedicated palette pairs.";
+	if (viewportContent.find("basePair = getColor(0x0303);") == std::string::npos || viewportContent.find("currentLineInBlock = false;") == std::string::npos || viewportContent.find("overlayActive = mBlockOverlayActive;") == std::string::npos) {
+		failureReason = "Current-line rendering must stay wired with block overlay state.";
 		return false;
 	}
 	if (viewportContent.find("lineStart <= cursorPos && cursorPos < lineEnd") == std::string::npos) {
@@ -2491,8 +3313,8 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		failureReason = "Changed-text must be applied per character via dedicated dirty-range lookup.";
 		return false;
 	}
-	if (sourceContent.find("if (overlayMode == 3) currentLineInBlock = false;") == std::string::npos || sourceContent.find("if (overlayMode == 3) selected = overlayStart <= documentPos && documentPos < overlayEnd;") == std::string::npos || sourceContent.find("} else\n\t\tcurrentLineInBlock = false;\n\tif (currentLineInBlock)") == std::string::npos) {
-		failureReason = "Stream block overlay must remain character-precise and must not color the full active line.";
+	if (sourceContent.find("overlayActive = mBlockOverlayActive;") == std::string::npos || sourceContent.find("mBlockOverlayMode") == std::string::npos) {
+		failureReason = "Changed-text rendering must account for the restored block overlay state.";
 		return false;
 	}
 	if (headerContent.find("std::vector<MRTextBufferModel::Range> mDirtyRanges;") == std::string::npos || headerContent.find("void addDirtyRange(") == std::string::npos || headerContent.find("bool isDirtyOffset(std::size_t pos) const noexcept;") == std::string::npos || editorContent.find("bool MRFileEditor::isDirtyOffset(") == std::string::npos) {
@@ -2702,8 +3524,8 @@ bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCommandRouter.cpp for clipboard routing guard: " + ioError;
 		return false;
 	}
-	if (content.find("case cmMrEditCutToBuffer:") == std::string::npos || content.find("copyCurrentBlockToSystemClipboard(false, true, \"Unable to move block to buffer.\")") == std::string::npos || content.find("case cmMrEditCopyToBuffer:") == std::string::npos || content.find("copyCurrentBlockToSystemClipboard(false, false, \"No block marked.\")") == std::string::npos || content.find("case cmMrEditPasteFromBuffer:") == std::string::npos || content.find("dispatchEditorClipboardCommand(cmPaste, true)") == std::string::npos) {
-		failureReason = "Edit Cut/Copy/Paste commands must route to editor clipboard commands.";
+	if (content.find("case cmMrEditCutToBuffer:") == std::string::npos || content.find("case cmMrEditCopyToBuffer:") == std::string::npos || content.find("case cmMrEditPasteFromBuffer:") == std::string::npos || content.find("return runDisabledBlockAction();") == std::string::npos || content.find("copyCurrentBlockToSystemClipboard(") != std::string::npos) {
+		failureReason = "Block-buffer edit commands must stay on the disabled block-command surface.";
 		return false;
 	}
 	failureReason.clear();
@@ -2746,16 +3568,16 @@ bool testBlockHotkeyModifierRoutingGuard(std::string &failureReason) {
 		failureReason = "Unable to read MREditWindow.hpp for block-hotkey guard: " + ioError;
 		return false;
 	}
-	if (content.find("bool handleBuiltInBlockHotkeys(TEvent &event)") == std::string::npos || content.find("keyCode == kbCtrlF7 || (keyCode == kbF7 && ctrl && !shift)") == std::string::npos || content.find("keyCode == kbShiftF7 || (keyCode == kbF7 && shift && !ctrl)") == std::string::npos || content.find("keyCode == kbF7 && !shift && !ctrl") == std::string::npos || content.find("keyCode == kbCtrlF9 || (keyCode == kbF9 && ctrl && !shift)") == std::string::npos) {
-		failureReason = "Block hotkey routing must distinguish F7/Shift+F7/Ctrl+F7 and Ctrl+F9 by modifier state.";
+	if (content.find("bool handleBuiltInBlockHotkeys(TEvent &event)") == std::string::npos || content.find("beginLineBlock();") == std::string::npos || content.find("beginColumnBlock();") == std::string::npos || content.find("beginStreamBlock();") == std::string::npos || content.find("toggleBlockVisibility()") == std::string::npos || content.find("clearBlock();") == std::string::npos) {
+		failureReason = "Built-in block hotkeys must route to line/column/stream marking, visibility toggle and clear.";
 		return false;
 	}
-	if (content.find("if (originalEvent == evMouseDown && !markingBefore)") == std::string::npos || content.find("// Mouse drag selection is authoritative for the next committed stream block.") == std::string::npos) {
-		failureReason = "Mouse-drag block selection must let the latest selection replace the previous committed block.";
+	if (content.find("keyCode == kbF7 && !shift && !ctrl") == std::string::npos || content.find("keyCode == kbF7 && shift && !ctrl") == std::string::npos || content.find("keyCode == kbF7 && ctrl && !shift") == std::string::npos || content.find("keyCode == kbF9 && shift && !ctrl") == std::string::npos || content.find("keyCode == kbF9 && ctrl && !shift") == std::string::npos) {
+		failureReason = "Block hotkey modifier distinctions must remain explicit.";
 		return false;
 	}
-	if (content.find("if (shouldCollapseSelectionBeforeEditorInput(event))") == std::string::npos || content.find("selectionCollapsedBeforeEditorInput = true;") == std::string::npos || content.find("std::size_t changePos = selectionCollapsedBeforeEditorInput ? normalizedCursorBefore : selectionStartBefore;") == std::string::npos || content.find("if (changePos <= normalizedStart)") == std::string::npos || content.find("else if (changePos < normalizedEnd && mBlockMode == bmStream)") == std::string::npos) {
-		failureReason = "Text input around a committed block must preserve persistent block state and remap offsets.";
+	if (content.find("void applyPostInputBlockPolicy(") == std::string::npos || content.find("(void)selectionCollapsedBeforeEditorInput;") == std::string::npos) {
+		failureReason = "Post-input block policy must remain a dummy surface.";
 		return false;
 	}
 	failureReason.clear();
@@ -2771,8 +3593,8 @@ bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCommandRouter.cpp for inter-window block guard: " + ioError;
 		return false;
 	}
-	if (content.find("bool chooseInterWindowBlockTarget(int &sourceWindowIndex)") == std::string::npos || content.find("MREditWindow *targetWin = currentEditWindow();") == std::string::npos || content.find("sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);") == std::string::npos || content.find("No block marked in the selected source window.") == std::string::npos || content.find("mrActivateEditWindow(targetWin)") == std::string::npos) {
-		failureReason = "Inter-window block copy/move must keep the current window as target and select source from window list.";
+	if (content.find("case cmMrBlockWindowCopy:") == std::string::npos || content.find("case cmMrBlockWindowMove:") == std::string::npos || content.find("return runDisabledBlockAction();") == std::string::npos || content.find("chooseInterWindowBlockTarget(") != std::string::npos || content.find("mrvmUiCopyBlockFromWindow(") != std::string::npos || content.find("mrvmUiMoveBlockFromWindow(") != std::string::npos) {
+		failureReason = "Inter-window block commands must stay disabled and must not select source/target windows.";
 		return false;
 	}
 	failureReason.clear();
@@ -2788,8 +3610,8 @@ bool testBlockPasteFreeCursorTargetGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRVM.cpp for block-paste free-cursor target guard: " + ioError;
 		return false;
 	}
-	if (content.find("static int currentEditorPasteColumn(MRFileEditor *editor)") == std::string::npos || content.find("return editor->displayedCursorColumn() + 1;") == std::string::npos || content.find("struct BlockPasteTarget") == std::string::npos || content.find("static BlockPasteTarget materializeEditorPasteTarget(MRFileEditor *editor, std::string &text)") == std::string::npos || content.find("text.insert(target.offset, target.paddingLength, ' ');") == std::string::npos || content.find("BlockPasteTarget target = materializeEditorPasteTarget(editor, text);") == std::string::npos || content.find("BlockPasteTarget target = materializeEditorPasteTarget(destEditor, destText);") == std::string::npos) {
-		failureReason = "Stream/column block copy/move must honor the free-cursor visual target instead of falling back to POS1.";
+	if (content.find("struct BlockPasteTarget") != std::string::npos || content.find("materializeEditorPasteTarget(") != std::string::npos || content.find("MRBlockMutation") != std::string::npos || content.find("MRBlockSnapshot") != std::string::npos || content.find("MRBlockSelection") != std::string::npos) {
+		failureReason = "Old block paste and column geometry helpers must remain removed.";
 		return false;
 	}
 	failureReason.clear();
@@ -2805,8 +3627,8 @@ bool testColumnUndentPolicyGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRVM.cpp for column-undent policy guard: " + ioError;
 		return false;
 	}
-	if (content.find("if (mode == MREditWindow::bmColumn)") == std::string::npos || content.find("bool leaveColumnSpace = undent && configuredColumnBlockMoveLeavesSpace();") == std::string::npos || content.find("if (leaveColumnSpace)") == std::string::npos || content.find("line.replace(start, static_cast<std::size_t>(removeCount),") == std::string::npos || content.find("line.erase(start, static_cast<std::size_t>(removeCount));") == std::string::npos) {
-		failureReason = "Column UNDENT must honor COLUMN_BLOCK_MOVE policy (leave-space vs remove) in block indent logic.";
+	if (content.find("configuredColumnBlockMoveLeavesSpace(") != std::string::npos || content.find("shiftCurrentBlockIndent(") != std::string::npos || content.find("line.replace(start, static_cast<std::size_t>(removeCount),") != std::string::npos) {
+		failureReason = "Column block indent/undent implementation must remain removed.";
 		return false;
 	}
 	failureReason.clear();
@@ -4089,6 +4911,8 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
+	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
+	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
 	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
@@ -4127,6 +4951,8 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "MENUDIALOGCOLORS hotkey selection alias guard", testMenuEntryHotkeySelectionAliasGuard);
 	runTest(ctx, "MENUDIALOGCOLORS dialog frame/background propagation guard", testDialogFrameAndBackgroundPropagationGuard);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
+	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
+	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
 	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
 	runTest(ctx, "Extended settings roundtrip behavior", testExtendedSettingsRoundtripGuard);
 	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);

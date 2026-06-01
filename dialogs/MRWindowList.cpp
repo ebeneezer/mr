@@ -292,10 +292,12 @@ class WindowListDialog : public MRDialogFoundation {
 		char fileName[MAXPATH];
 
 		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceSave, fileName, sizeof(fileName), "*.mrmac");
-		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceSave, "*.mrmac", "Save workspace as...", "~N~ame", fdOKButton, fileName) != cmCancel) {
+		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceSave, "*.mrmac", "SAVE WORKSPACE AS", "~N~ame", fdOKButton, fileName) != cmCancel) {
 			std::string name(fileName);
 			if (name.find(".mrmac") == std::string::npos) name += ".mrmac";
 			mrSaveWorkspace(name);
+			rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceSave, name.c_str());
+			rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, name.c_str());
 		}
 	}
 
@@ -305,7 +307,7 @@ class WindowListDialog : public MRDialogFoundation {
 		bool readable = false;
 
 		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceLoad, fileName, sizeof(fileName), "*.mrmac");
-		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceLoad, "*.mrmac", "Load workspace from...", "~N~ame", fdOpenButton, fileName) != cmCancel) {
+		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceLoad, "*.mrmac", "LOAD WORKSPACE FROM", "~N~ame", fdOpenButton, fileName) != cmCancel) {
 			selectedPath = normalizeConfiguredPathInput(fileName);
 			if (selectedPath.empty()) return;
 			readable = !selectedPath.empty() && ::access(selectedPath.c_str(), F_OK) == 0 && ::access(selectedPath.c_str(), R_OK) == 0;

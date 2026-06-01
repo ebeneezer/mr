@@ -22,7 +22,7 @@ template <typename Draft, typename EqualFn> [[nodiscard]] bool isDialogDraftDirt
 
 [[nodiscard]] UnsavedChangesChoice runDialogDirtyGating(const char *headline, const char *primaryLabel = "Save", const char *detail = nullptr);
 
-[[nodiscard]] bool runDialogConfirm(const char *headline, const char *confirmLabel = "OK", const char *detail = nullptr, const char *dialogTitle = "Confirm");
+[[nodiscard]] bool runDialogConfirm(const char *headline, const char *confirmLabel = "OK", const char *detail = nullptr, const char *dialogTitle = "CONFIRM");
 
 [[nodiscard]] UnsavedChangesChoice runDialogDirtyListGating(const char *dialogTitle, const char *headline, const char *itemsLabel, const std::vector<std::string> &dirtyItems, const char *primaryLabel = "Save");
 

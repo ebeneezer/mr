@@ -99,6 +99,7 @@ static const TConstant controlKeyStateFlags[] =
     NM(kbRightShift),
     NM(kbCtrlShift),
     NM(kbAltShift),
+    NM(kbSuperShift),
 #else
     NM(kbShift),
     NM(kbScrollState),
@@ -106,6 +107,8 @@ static const TConstant controlKeyStateFlags[] =
     NM(kbRightCtrl),
     NM(kbLeftAlt),
     NM(kbRightAlt),
+    NM(kbLeftSuper),
+    NM(kbRightSuper),
 #endif
     NM(kbNumState),
     NM(kbCapsState),

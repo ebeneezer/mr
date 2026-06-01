@@ -355,7 +355,7 @@ std::string rebuildMacroHeader(const std::string &macroName, const std::string &
 }
 
 bool captureBindingKeySpec(std::string &keySpec) {
-	return mrCaptureBindingKeySpec("Bind Macro Key", "Press key to bind macro.\nEsc = cancel.", keySpec);
+	return mrCaptureBindingKeySpec("BIND MACRO KEY", "Press key to bind macro.\nEsc = cancel.", keySpec);
 }
 
 bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec, std::string &errorText) {
@@ -1008,7 +1008,7 @@ bool runMacroFileDialog() {
 	ushort dialogResult;
 
 	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::MacroFile, fileName, sizeof(fileName), "*.mrmac");
-	dialogResult = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::MacroFile, "*.mrmac", "Load Macro File", "~N~ame", fdOpenButton, fileName);
+	dialogResult = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::MacroFile, "*.mrmac", "LOAD MACRO FILE", "~N~ame", fdOpenButton, fileName);
 	if (dialogResult == cmCancel) return false;
 	if (!runMacroFileByPathWithColorRefresh(fileName)) {
 		forgetLoadDialogPath(MRDialogHistoryScope::MacroFile, fileName);

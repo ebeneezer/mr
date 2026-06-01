@@ -310,7 +310,7 @@ void MRFrame::draw() {
 
 	bool controlsVisible = isFocused;
 	const bool hasZoomButton = window != nullptr && (window->flags & wfZoom) != 0;
-	const bool hasMinimizeButton = window != nullptr;
+	const bool hasMinimizeButton = editWindow != nullptr;
 	const int minimizeStart = hasMinimizeButton ? normalRightControlStart(width, kMinimizeIcon) : width;
 	const int zoomStart = hasZoomButton ? normalZoomStart(width, hasMinimizeButton) : width;
 	const int controlClusterStart = hasZoomButton ? zoomStart : minimizeStart;
@@ -482,11 +482,11 @@ void MRFrame::handleEvent(TEvent &event) {
 				} else if ((window->flags & wfMove) != 0)
 					dragWindow(event, dmDragMove);
 				return;
-		}
+			}
 			bool controlsVisible = isFrameFocused(this);
 			const bool hasZoomButton = (window->flags & wfZoom) != 0;
-			const bool hasMinimizeButton = true;
-			const int minimizeStart = normalRightControlStart(size.x, kMinimizeIcon);
+			const bool hasMinimizeButton = editWindow != nullptr;
+			const int minimizeStart = hasMinimizeButton ? normalRightControlStart(size.x, kMinimizeIcon) : size.x;
 			const int zoomStart = normalZoomStart(size.x, hasMinimizeButton);
 			MarkerState state = markerState();
 			if (taskMarkerHit(mouse, state) && mTaskOverviewProvider) {

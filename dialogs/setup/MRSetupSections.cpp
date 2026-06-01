@@ -142,10 +142,18 @@ bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, con
 bool chooseThemeFileForLoad(MRDialogHistoryScope scope, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
+	std::string seed = configuredLastFileDialogFilePath(scope);
 
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac");
-	mr::dialogs::suggestFileDialogName(fileName, sizeof(fileName), configuredColorThemeFilePath());
-	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Load color theme", "~N~ame", fdOKButton, fileName);
+	if (seed.empty()) {
+		seed = configuredLastFileDialogPath(scope);
+		if (!seed.empty()) {
+			if (seed.back() != '/') seed += '/';
+			seed += "*.mrmac";
+		}
+	}
+	if (seed.empty()) seed = configuredColorThemeFilePath();
+	writeRecordField(fileName, sizeof(fileName), seed);
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "LOAD COLOR THEME", "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) {
 		discardQueuedCancelEvent();
 		return false;
@@ -157,10 +165,16 @@ bool chooseThemeFileForLoad(MRDialogHistoryScope scope, std::string &selectedUri
 bool chooseThemeFileForSave(MRDialogHistoryScope scope, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
+	std::string seed = configuredLastFileDialogPath(scope);
 
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac");
-	mr::dialogs::suggestFileDialogName(fileName, sizeof(fileName), configuredColorThemeFilePath());
-	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Save color theme as", "~N~ame", fdOKButton, fileName);
+	if (!seed.empty()) {
+		if (seed.back() != '/') seed += '/';
+		seed += "*.mrmac";
+	}
+	if (seed.empty()) seed = configuredLastFileDialogFilePath(scope);
+	if (seed.empty()) seed = configuredColorThemeFilePath();
+	writeRecordField(fileName, sizeof(fileName), seed);
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "SAVE COLOR THEME AS", "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) {
 		discardQueuedCancelEvent();
 		return false;
@@ -307,6 +321,10 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
 		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
 		data[kMrPaletteCodeFoldingMarker - 1] = data[9 - 1];
+		data[kMrPaletteStatusLine - 1] = data[2 - 1];
+		data[kMrPaletteStatusLineBold - 1] = data[3 - 1];
+		data[kMrPaletteStatusLineFunctionDescription - 1] = data[4 - 1];
+		data[kMrPaletteStatusLineFunctionKey - 1] = data[5 - 1];
 		data[kMrPaletteDesktop - 1] = 0x90;
 		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
@@ -846,7 +864,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void browseSettingsMacroUri() {
 		std::string selected;
-		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupSettingsMacro, "Select settings macro URI", selected)) setInputValue(mSettingsMacroPathField, selected);
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupSettingsMacro, "SELECT SETTINGS MACRO URI", selected)) setInputValue(mSettingsMacroPathField, selected);
 	}
 
 	void browseMacroPath() {
@@ -856,7 +874,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void browseHelpUri() {
 		std::string selected;
-		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupHelpFile, "Select help file URI", selected)) setInputValue(mHelpFilePathField, selected);
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupHelpFile, "SELECT HELP FILE URI", selected)) setInputValue(mHelpFilePathField, selected);
 	}
 
 	void browseTempPath() {
@@ -866,12 +884,12 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void browseShellUri() {
 		std::string selected;
-		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupShellExecutable, "Select shell executable URI", selected)) setInputValue(mShellExecutablePathField, selected);
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupShellExecutable, "SELECT SHELL EXECUTABLE URI", selected)) setInputValue(mShellExecutablePathField, selected);
 	}
 
 	void browseLogUri() {
 		std::string selected;
-		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupLogFile, "Select logfile URI", selected)) setInputValue(mLogFilePathField, selected);
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupLogFile, "SELECT LOGFILE URI", selected)) setInputValue(mLogFilePathField, selected);
 	}
 
 	DialogValidationResult validateDialogValues() {
@@ -1564,7 +1582,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour,
 	                            MRCompilerErrorMessagePlacement initialCompilerErrorMessagePlacement, MRScrollbarVisibility initialScrollbarVisibility, bool initialTrackCompilerWarnings, bool initialTrackCompilerNotes,
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker)
-	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(77, 29), "User interface settings", 77, 29, initSetupDialogFrame) {
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(77, 29), "USER INTERFACE SETTINGS", 77, 29, initSetupDialogFrame) {
 
 		int const yStart = 2;
 
@@ -1823,13 +1841,10 @@ void runColorSetupDialogFlow() {
 
 			case cmMrColorSaveTheme: {
 				std::string themeUri;
-				std::string activeThemeUri = normalizeConfiguredPathInput(configuredColorThemeFilePath());
 				std::string activeThemeDisplayName = configuredColorThemeDisplayName();
-				bool overwriteActiveTheme = false;
 
 				if (!chooseThemeFileForSave(MRDialogHistoryScope::SetupThemeSave, themeUri)) break;
 				if (!confirmOverwriteForPath("Overwrite", "Theme file exists. Overwrite?", themeUri)) break;
-				overwriteActiveTheme = normalizeConfiguredPathInput(themeUri) == activeThemeUri;
 				if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
 					postSetupFlowError("Color Setup / Save Theme", errorText);
 					break;
@@ -1842,14 +1857,12 @@ void runColorSetupDialogFlow() {
 					postSetupFlowError("Color Setup / Save Theme", errorText);
 					break;
 				}
-				if (overwriteActiveTheme) {
-					if (!persistSettingsFileOnly(errorText)) {
-						postSetupFlowError("Color Setup / Save settings", errorText);
-						break;
-					}
-					TProgram::application->redraw();
-					mrUpdateAllWindowsColorTheme();
+				if (!persistSettingsFileOnly(errorText)) {
+					postSetupFlowError("Color Setup / Save settings", errorText);
+					break;
 				}
+				TProgram::application->redraw();
+				mrUpdateAllWindowsColorTheme();
 				pendingPalette = workingPalette;
 				havePendingPalette = true;
 				break;
@@ -2205,7 +2218,7 @@ bool paplayAvailable() {
 
 class LiveLogsSetupDialog : public MRScrollableDialog {
   public:
-	LiveLogsSetupDialog() : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(66, 19), "Live Logs", 64, 17, initSetupDialogFrame), messageLineField(nullptr), audioField(nullptr), scrollDirectionField(nullptr), lineNumbersField(nullptr), audioUriField(nullptr), audioAvailable(paplayAvailable()) {
+	LiveLogsSetupDialog() : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(66, 19), "LIVE LOGS", 64, 17, initSetupDialogFrame), messageLineField(nullptr), audioField(nullptr), scrollDirectionField(nullptr), lineNumbersField(nullptr), audioUriField(nullptr), audioAvailable(paplayAvailable()) {
 		addManaged(new TStaticText(TRect(3, 2, 35, 3), "Search hits:"), TRect(3, 2, 35, 3));
 		messageLineField = new TCheckBoxes(TRect(3, 3, 34, 5), new TSItem("report on message line", new TSItem("system beep", nullptr)));
 		addManaged(messageLineField, TRect(3, 3, 34, 5));

@@ -207,8 +207,6 @@ class TWheelFileDialog final : public TFileDialog {
 	}
 
 	Boolean valid(ushort command) override {
-		char rememberedPath[MAXPATH] = {0};
-		char previousWildCard[MAXPATH] = {0};
 		const std::string previousDirectory = directory != nullptr ? directory : "";
 
 		if ((dialogOptions & fdOpenButton) != 0 && command == cmFileOpen && fileName != nullptr) {
@@ -234,14 +232,12 @@ class TWheelFileDialog final : public TFileDialog {
 				}
 			}
 		}
-		if ((dialogOptions & fdOpenButton) != 0 && command == cmFileOpen) getFileName(rememberedPath);
-		strnzcpy(previousWildCard, wildCard, sizeof(previousWildCard));
 
 		const Boolean result = TFileDialog::valid(command);
-		if ((dialogOptions & fdOpenButton) != 0 && command == cmFileOpen && result == False && rememberedPath[0] != '\0') {
+		if ((dialogOptions & fdOpenButton) != 0 && command == cmFileOpen && result == False) {
 			const std::string currentDirectory = directory != nullptr ? directory : "";
 
-			if (previousDirectory != currentDirectory || std::strcmp(previousWildCard, wildCard) != 0) rememberLoadDialogPath(scope, rememberedPath);
+			if (!currentDirectory.empty() && previousDirectory != currentDirectory) rememberLoadDialogPath(scope, currentDirectory.c_str());
 		}
 		return result;
 	}
@@ -327,6 +323,10 @@ class TWheelChDirDialog final : public TChDirDialog {
  public:
 	TWheelChDirDialog(MRDialogHistoryScope aScope, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TChDirDialog(options, 0), scope(aScope) {
 		replaceHistoryView(findInputLine(TRect(3, 3, 42, 4)));
+	}
+
+	const char *getTitle(short) override {
+		return "CHANGE DIRECTORY";
 	}
 
 	void handleEvent(TEvent &event) override {

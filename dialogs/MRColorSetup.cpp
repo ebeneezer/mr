@@ -265,5 +265,5 @@ TDialog *createColorSetupDialog() {
 	TColorGroup *groupsHead = buildAllColorGroups();
 
 	if (groupsHead == nullptr) return nullptr;
-	return new TUnifiedColorSetupDialog("Colors", groupsHead);
+	return new TUnifiedColorSetupDialog("COLORS", groupsHead);
 }

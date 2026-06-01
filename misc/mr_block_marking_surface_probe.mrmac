@@ -1,0 +1,380 @@
+$MACRO BlockMarkingSurfaceProbe FROM EDIT;
+DEF_INT(Fail);
+DEF_STR(Result);
+
+Fail := 0;
+Result := 'PASS block-marking-surface';
+
+BLOCK_OFF;
+GOTO_LINE(3);
+GOTO_COL(4);
+BLOCK_BEGIN;
+BLOCK_END;
+IF (BLOCK_STAT = 1) AND (MARKING = 0) AND (BLOCK_LINE1 = 3) AND (BLOCK_LINE2 = 3) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL line-single mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(1);
+BLOCK_BEGIN;
+GOTO_LINE(4);
+GOTO_COL(1);
+BLOCK_END;
+IF (BLOCK_STAT = 1) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 4) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL line-down mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(4);
+GOTO_COL(5);
+BLOCK_BEGIN;
+GOTO_LINE(1);
+GOTO_COL(2);
+BLOCK_END;
+IF (BLOCK_STAT = 1) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 4) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL line-up mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(2);
+GOTO_COL(1);
+BLOCK_BEGIN;
+BLOCK_END;
+IF (BLOCK_STAT = 1) AND (MARKING = 0) AND (BLOCK_LINE1 = 2) AND (BLOCK_LINE2 = 2) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL line-empty mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(1);
+STR_BLOCK_BEGIN;
+GOTO_LINE(1);
+GOTO_COL(6);
+BLOCK_END;
+IF (BLOCK_STAT = 3) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 1) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 6) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL stream-right mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(6);
+STR_BLOCK_BEGIN;
+GOTO_LINE(1);
+GOTO_COL(1);
+BLOCK_END;
+IF (BLOCK_STAT = 3) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 1) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 6) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL stream-left mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(7);
+STR_BLOCK_BEGIN;
+GOTO_LINE(3);
+GOTO_COL(6);
+BLOCK_END;
+IF (BLOCK_STAT = 3) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 6) AND (BLOCK_COL2 = 7) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL stream-down mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(3);
+GOTO_COL(6);
+STR_BLOCK_BEGIN;
+GOTO_LINE(1);
+GOTO_COL(7);
+BLOCK_END;
+IF (BLOCK_STAT = 3) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 6) AND (BLOCK_COL2 = 7) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL stream-up mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(7);
+STR_BLOCK_BEGIN;
+GOTO_LINE(2);
+GOTO_COL(1);
+BLOCK_END;
+IF (BLOCK_STAT = 3) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 2) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 7) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL stream-down-empty-line mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(2);
+GOTO_COL(1);
+STR_BLOCK_BEGIN;
+GOTO_LINE(1);
+GOTO_COL(7);
+BLOCK_END;
+IF (BLOCK_STAT = 3) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 2) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 7) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL stream-up-empty-line mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(3);
+GOTO_COL(12);
+COL_BLOCK_BEGIN;
+IF (BLOCK_STAT = 2) AND (MARKING = 1) AND (BLOCK_LINE1 = 3) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 12) AND (BLOCK_COL2 = 12) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-start mismatch';
+    END;
+END;
+
+GOTO_LINE(1);
+GOTO_COL(1);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 12) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-up-left mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(1);
+COL_BLOCK_BEGIN;
+GOTO_LINE(3);
+GOTO_COL(12);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 12) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-down-right mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(3);
+GOTO_COL(1);
+COL_BLOCK_BEGIN;
+GOTO_LINE(1);
+GOTO_COL(12);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 12) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-up-right mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(12);
+COL_BLOCK_BEGIN;
+GOTO_LINE(3);
+GOTO_COL(1);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 12) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-down-left mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(4);
+GOTO_COL(5);
+COL_BLOCK_BEGIN;
+GOTO_LINE(4);
+GOTO_COL(9);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 4) AND (BLOCK_LINE2 = 4) AND (BLOCK_COL1 = 5) AND (BLOCK_COL2 = 9) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-same-line-right mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(4);
+GOTO_COL(9);
+COL_BLOCK_BEGIN;
+GOTO_LINE(4);
+GOTO_COL(5);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 4) AND (BLOCK_LINE2 = 4) AND (BLOCK_COL1 = 5) AND (BLOCK_COL2 = 9) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-same-line-left mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(2);
+GOTO_COL(3);
+COL_BLOCK_BEGIN;
+GOTO_LINE(2);
+GOTO_COL(8);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 2) AND (BLOCK_LINE2 = 2) AND (BLOCK_COL1 = 3) AND (BLOCK_COL2 = 8) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-empty-line mismatch';
+    END;
+END;
+
+BLOCK_TOGGLE_VISIBILITY;
+IF (BLOCK_STAT = 0) AND (MARKING = 0) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-toggle-hide mismatch';
+    END;
+END;
+BLOCK_TOGGLE_VISIBILITY;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 2) AND (BLOCK_LINE2 = 2) AND (BLOCK_COL1 = 3) AND (BLOCK_COL2 = 8) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL column-toggle-show mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(1);
+BLOCK_BEGIN;
+GOTO_LINE(4);
+GOTO_COL(1);
+BLOCK_END;
+GOTO_LINE(1);
+GOTO_COL(1);
+STR_BLOCK_BEGIN;
+GOTO_LINE(1);
+GOTO_COL(6);
+BLOCK_END;
+IF (BLOCK_STAT = 3) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 1) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 6) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL replace-line-with-stream mismatch';
+    END;
+END;
+
+GOTO_LINE(1);
+GOTO_COL(1);
+BLOCK_BEGIN;
+GOTO_LINE(3);
+GOTO_COL(1);
+BLOCK_END;
+IF (BLOCK_STAT = 1) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 3) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL replace-stream-with-line mismatch';
+    END;
+END;
+
+GOTO_LINE(1);
+GOTO_COL(1);
+COL_BLOCK_BEGIN;
+GOTO_LINE(3);
+GOTO_COL(12);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 1) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 1) AND (BLOCK_COL2 = 12) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL replace-line-with-column mismatch';
+    END;
+END;
+
+GOTO_LINE(3);
+GOTO_COL(12);
+STR_BLOCK_BEGIN;
+GOTO_LINE(3);
+GOTO_COL(6);
+BLOCK_END;
+IF (BLOCK_STAT = 3) AND (MARKING = 0) AND (BLOCK_LINE1 = 3) AND (BLOCK_LINE2 = 3) AND (BLOCK_COL1 = 6) AND (BLOCK_COL2 = 12) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL replace-column-with-stream mismatch';
+    END;
+END;
+
+GOTO_LINE(4);
+GOTO_COL(5);
+COL_BLOCK_BEGIN;
+GOTO_LINE(4);
+GOTO_COL(9);
+BLOCK_END;
+IF (BLOCK_STAT = 2) AND (MARKING = 0) AND (BLOCK_LINE1 = 4) AND (BLOCK_LINE2 = 4) AND (BLOCK_COL1 = 5) AND (BLOCK_COL2 = 9) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL replace-stream-with-column mismatch';
+    END;
+END;
+
+GOTO_LINE(4);
+GOTO_COL(1);
+BLOCK_BEGIN;
+BLOCK_END;
+IF (BLOCK_STAT = 1) AND (MARKING = 0) AND (BLOCK_LINE1 = 4) AND (BLOCK_LINE2 = 4) THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL replace-column-with-line mismatch';
+    END;
+END;
+
+BLOCK_OFF;
+GOTO_LINE(1);
+GOTO_COL(1);
+TEXT(Result);
+CR;
+SAVE_FILE;
+QUIT(0);
+END_MACRO;

@@ -258,7 +258,7 @@ bool saveCompilerProfiles(const std::vector<MRCompilerProfile> &profiles, std::s
 class CompilerProfilesDialog : public MRDialogFoundation {
   public:
 	explicit CompilerProfilesDialog(const std::vector<MRCompilerProfile> &initialProfiles)
-	    : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(kDialogWidth, kDialogHeight), "Compiler profiles", kDialogWidth, kDialogHeight, initMrDialogFrame), profiles(initialProfiles) {
+	    : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(kDialogWidth, kDialogHeight), "COMPILER PROFILES", kDialogWidth, kDialogHeight, initMrDialogFrame), profiles(initialProfiles) {
 		const int left = 3;
 		const int listRight = 37;
 		const int scrollRight = 38;
@@ -415,9 +415,18 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		const std::string currentPath = normalizeConfiguredPathInput(readInput(executableField, kExecutableSize));
 		ushort result = cmCancel;
 
-		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::General, fileName, sizeof(fileName), "*.*");
-		if (!currentPath.empty()) mr::dialogs::suggestFileDialogName(fileName, sizeof(fileName), currentPath);
-		result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::General, "*.*", "Select compiler executable", "~N~ame", fdOpenButton, fileName);
+		if (!currentPath.empty()) {
+			const std::size_t slashPos = currentPath.find_last_of('/');
+
+			if (slashPos != std::string::npos) {
+				std::string seed = currentPath.substr(0, slashPos + 1);
+				seed += "*.*";
+				mr::dialogs::writeRecordField(fileName, sizeof(fileName), seed);
+			} else
+				mr::dialogs::writeRecordField(fileName, sizeof(fileName), currentPath);
+		} else
+			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::General, fileName, sizeof(fileName), "*.*");
+		result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::General, "*.*", "SELECT COMPILER EXECUTABLE", "~N~ame", fdOpenButton, fileName);
 		if (result == cmCancel) return;
 		writeInput(executableField, normalizeConfiguredPathInput(fileName), kExecutableSize);
 		saveCurrentProfile();

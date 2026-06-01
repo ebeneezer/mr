@@ -39,6 +39,43 @@ TMenuItem *findMenuItemByCommand(TMenu *menu, ushort command) {
 	return nullptr;
 }
 
+struct MenuShortcutSpec {
+	ushort command;
+	TKey startupKey;
+	const char *startupLabel;
+	TKey editorKey;
+	const char *editorLabel;
+	TKey normalKey;
+	const char *normalLabel;
+};
+
+void setMenuItemShortcut(TMenuItem *item, TKey keyCode, const char *label) {
+	if (item == nullptr || item->command == 0) return;
+	item->keyCode = keyCode;
+	delete[] const_cast<char *>(item->param);
+	if (label == nullptr || label[0] == '\0')
+		item->param = nullptr;
+	else
+		item->param = newStr(label);
+}
+
+void applyMenuShortcutSpec(TMenu *menu, const MenuShortcutSpec &spec, bool startupActive, bool editorActive) {
+	TKey key = spec.normalKey;
+	const char *label = spec.normalLabel;
+
+	if (startupActive) {
+		key = spec.startupKey;
+		label = spec.startupLabel;
+	} else if (editorActive) {
+		key = spec.editorKey;
+		label = spec.editorLabel;
+	}
+	for (TMenuItem *item = menu != nullptr ? menu->items : nullptr; item != nullptr; item = item->next) {
+		if (item->command == spec.command) setMenuItemShortcut(item, key, label);
+		if (item->command == 0) applyMenuShortcutSpec(item->subMenu, spec, startupActive, editorActive);
+	}
+}
+
 std::size_t indexOfMenuItem(const TMenuItem *items, const TMenuItem *target) noexcept {
 	std::size_t index = 0;
 
@@ -166,7 +203,7 @@ std::string menuTitleWithHotkeyMarker(const std::string &title, char hotkey) {
 }
 } // namespace
 
-MRMenuBar::MRMenuBar(const TRect &r, TSubMenu &aMenu) : TMenuBar(r, aMenu), mBaseMenu(nullptr), mRuntimeNodes(), mRightStatus(), mAutoMarqueeStatus(), mManualMarqueeStatus(), mAutoMarqueeKind(MarqueeKind::Info) {
+MRMenuBar::MRMenuBar(const TRect &r, TSubMenu &aMenu) : TMenuBar(r, aMenu), mBaseMenu(nullptr), mRuntimeNodes(), mStartupFunctionKeysActive(false), mEditorFunctionKeysActive(false), mRightStatus(), mAutoMarqueeStatus(), mManualMarqueeStatus(), mAutoMarqueeKind(MarqueeKind::Info) {
 	mBaseMenu = cloneMenu(menu);
 }
 
@@ -302,6 +339,7 @@ bool MRMenuBar::rebuildRuntimeMenu() {
 	current = nullptr;
 	delete menu;
 	menu = rebuilt;
+	applyFunctionKeyMenuShortcuts(menu);
 	return true;
 }
 
@@ -432,6 +470,63 @@ bool MRMenuBar::handleRuntimeCommand(ushort command) {
 	static_cast<void>(runMacroSpecByName(it->macroSpec.c_str(), nullptr, true));
 	mrvmUiInvalidateScreenBase();
 	return true;
+}
+
+void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
+	static const MenuShortcutSpec specs[] = {
+	    {cmMrFileOpen, TKey(kbF3), "F3", TKey(kbNoKey), nullptr, TKey(kbF3), "F3"},
+	    {cmMrFileLoad, TKey(kbF2), "F2", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrFileAcquire, TKey(kbF4), "F4", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrSearchMultiFileSearch, TKey(kbF5), "F5", TKey('F', kbAltShift), "AltShiftF", TKey('F', kbAltShift), "AltShiftF"},
+	    {cmMrWindowOpen, TKey(kbF6), "F6", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrSearchMultiFileSearchReplace, TKey(kbF7), "F7", TKey('R', kbAltShift), "AltShiftR", TKey('R', kbAltShift), "AltShiftR"},
+	    {cmMrFileOpenLiveLog, TKey(kbF8), "F8", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrFileOpenJournal, TKey(kbF9), "F9", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrSetupUserInterfaceSettings, TKey(kbF11), "F11", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmQuit, TKey(kbAltX), "F12/Alt-X", TKey(kbAltX), "Alt-X", TKey(kbAltX), "Alt-X"},
+	    {cmMrMacroToggleRecording, TKey(kbNoKey), nullptr, TKey(kbF1), "F1", TKey(kbAltF10), "AltF10"},
+	    {cmMrFileSave, TKey(kbNoKey), nullptr, TKey(kbF2), "F2", TKey(kbF2), "F2"},
+	    {cmMrBlockLoadFromDisk, TKey(kbNoKey), nullptr, TKey(kbF3), "F3", TKey(kbNoKey), nullptr},
+	    {cmMrBlockSaveToDisk, TKey(kbNoKey), nullptr, TKey(kbF4), "F4", TKey(kbShiftF2), "ShiftF2"},
+	    {cmMrWindowCascade, TKey(kbNoKey), nullptr, TKey(kbF5), "F5", TKey(kbNoKey), nullptr},
+	    {cmMrWindowTile, TKey(kbNoKey), nullptr, TKey(kbF6), "F6", TKey(kbNoKey), nullptr},
+	    {cmMrWindowSplitVertical, TKey(kbNoKey), nullptr, TKey(kbF7), "F7", TKey(kbNoKey), nullptr},
+	    {cmMrWindowSplitHorizontal, TKey(kbNoKey), nullptr, TKey(kbF8), "F8", TKey(kbNoKey), nullptr},
+	    {cmMrWindowPrevDesktop, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF11, kbCtrlShift), "CtrlF11"},
+	    {cmMrWindowNextDesktop, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF12, kbCtrlShift), "CtrlF12"},
+	    {cmMrWindowMoveToPrevDesktop, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF11, kbShift), "ShiftF11"},
+	    {cmMrWindowMoveToNextDesktop, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF12, kbShift), "ShiftF12"},
+	    {cmMrSearchFindText, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF5), "F5"},
+	    {cmMrSearchPushMarker, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF4), "F4"},
+	    {cmMrWindowNext, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF6), "F6"},
+	    {cmMrBlockMarkLines, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF7), "F7"},
+	    {cmMrBlockEndMarking, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF7), "F7"},
+	    {cmMrBlockCopy, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF8), "F8"},
+	    {cmMrOtherBuildCurrentFile, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF9), "F9"},
+	};
+
+	for (const MenuShortcutSpec &spec : specs)
+		applyMenuShortcutSpec(targetMenu, spec, mStartupFunctionKeysActive, mEditorFunctionKeysActive);
+}
+
+void MRMenuBar::setStartupFunctionKeysActive(bool active) {
+	const bool editorActive = active ? false : mEditorFunctionKeysActive;
+	if (mStartupFunctionKeysActive == active && mEditorFunctionKeysActive == editorActive) return;
+	mStartupFunctionKeysActive = active;
+	mEditorFunctionKeysActive = editorActive;
+	applyFunctionKeyMenuShortcuts(mBaseMenu);
+	applyFunctionKeyMenuShortcuts(menu);
+	drawView();
+}
+
+void MRMenuBar::setEditorFunctionKeysActive(bool active) {
+	const bool startupActive = active ? false : mStartupFunctionKeysActive;
+	if (mEditorFunctionKeysActive == active && mStartupFunctionKeysActive == startupActive) return;
+	mEditorFunctionKeysActive = active;
+	mStartupFunctionKeysActive = startupActive;
+	applyFunctionKeyMenuShortcuts(mBaseMenu);
+	applyFunctionKeyMenuShortcuts(menu);
+	drawView();
 }
 
 void MRMenuBar::setPersistentBlocksMenuState(bool enabled) {

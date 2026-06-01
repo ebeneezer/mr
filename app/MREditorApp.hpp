@@ -48,6 +48,7 @@ class MREditorApp : public TApplication {
 	void updatePerformancePanel();
 	void applyConfiguredDisplayLayout();
 	void applyConfiguredWindowFramePolicy();
+	void syncFunctionKeyState();
 
 	bool exitPrepared;
 	bool keystrokeRecording;
@@ -64,6 +65,7 @@ class MREditorApp : public TApplication {
 	MRPerformancePanel *performancePanel;
 	unsigned performancePanelFrame;
 	std::chrono::steady_clock::time_point performancePanelRefreshAt;
+	bool startupQuitPending;
 };
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.

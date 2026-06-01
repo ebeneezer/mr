@@ -40,6 +40,8 @@ class MRMenuBar : public TMenuBar {
 	bool removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool removeRuntimeNodesOwnedByFile(const std::string &fileSpec, std::string *errorMessage = nullptr);
 	bool handleRuntimeCommand(ushort command);
+	void setStartupFunctionKeysActive(bool active);
+	void setEditorFunctionKeysActive(bool active);
 
 	void setRightStatus(const std::string &status) {
 		if (mRightStatus != status) {
@@ -138,6 +140,7 @@ class MRMenuBar : public TMenuBar {
 	static std::string canonicalMenuToken(const std::string &value);
 	static std::string trimAscii(std::string value);
 	static bool ownerSpecMatchesFile(const std::string &ownerSpec, const std::string &fileSpec) noexcept;
+	void applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const;
 	bool allocateRuntimeCommand(ushort &command, std::string *errorMessage);
 	bool rebuildRuntimeMenu();
 	int findRuntimeNodeIndex(const std::string &menuKey, const std::string &itemKey, const std::string &ownerSpec) const noexcept;
@@ -146,6 +149,8 @@ class MRMenuBar : public TMenuBar {
 	std::vector<RuntimeMenuNode> mRuntimeNodes;
 	std::uint32_t mNextRuntimeOrder = 0;
 	ushort mNextRuntimeCommand = 0x7400;
+	bool mStartupFunctionKeysActive = false;
+	bool mEditorFunctionKeysActive = false;
 	std::string mRightStatus;
 	std::string mAutoMarqueeStatus;
 	std::vector<MarqueeSegment> mAutoMarqueeSegments;

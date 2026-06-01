@@ -773,7 +773,7 @@ bool promptForPath(MRDialogHistoryScope scope, const char *title, char *fileName
 }
 
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
-	const MRDialogHistoryScope scope = std::string_view(title != nullptr ? title : "") == "Load File" ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
+	const MRDialogHistoryScope scope = std::string_view(title != nullptr ? title : "") == "LOAD FILE" ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
 	return promptForPath(scope, title, fileName, fileNameSize);
 }
 
@@ -783,7 +783,7 @@ bool promptForSaveAsPath(const char *title, const char *initialPath, std::string
 	MRDialogHistoryScope scope = MRDialogHistoryScope::EditorSaveAs;
 
 	outResolvedPath.clear();
-	if (std::string_view(title != nullptr ? title : "") == "Save log as") scope = MRDialogHistoryScope::SaveLogAs;
+	if (std::string_view(title != nullptr ? title : "") == "SAVE LOG AS") scope = MRDialogHistoryScope::SaveLogAs;
 	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.*");
 	mr::dialogs::suggestFileDialogName(fileName, sizeof(fileName), initialPath != nullptr ? std::string_view(initialPath) : std::string_view());
 	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOKButton, fileName);
@@ -972,7 +972,7 @@ bool saveEditWindowAs(MREditWindow *win) {
 		}
 		initialPath = nullptr;
 		if (!win->windowRoleDetail().empty()) initialPath = win->windowRoleDetail().c_str();
-		if (!promptForSaveAsPath("Save log as", initialPath, resolvedPath)) return false;
+		if (!promptForSaveAsPath("SAVE LOG AS", initialPath, resolvedPath)) return false;
 		auto startedAt = std::chrono::steady_clock::now();
 		if (!saveWindowSnapshotToPath(win, resolvedPath)) {
 			postWindowCommandError("Unable to save log file: " + resolvedPath);

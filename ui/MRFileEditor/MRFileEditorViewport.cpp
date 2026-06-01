@@ -713,27 +713,16 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	lineEnd = mBufferModel.nextLine(lineStart);
 	lineIndex = mBufferModel.lineIndex(lineStart);
 	cursorPos = mBufferModel.cursor();
-	overlayActive = mBlockOverlayActive && mBlockOverlayMode >= 1 && mBlockOverlayMode <= 3;
-	if (overlayActive) {
-		const std::size_t trackedEnd = mBlockOverlayTrackingCursor ? std::min(mBufferModel.cursor(), documentLength) : std::min(mBlockOverlayEnd, documentLength);
-		const std::size_t trackedAnchor = std::min(mBlockOverlayAnchor, documentLength);
-		overlayMode = mBlockOverlayMode;
-		overlayStart = std::min(trackedAnchor, trackedEnd);
-		overlayEnd = std::max(trackedAnchor, trackedEnd);
-		if (overlayMode == 1 || overlayMode == 2) {
-			overlayLine1 = std::min(mBufferModel.lineIndex(trackedAnchor), mBufferModel.lineIndex(trackedEnd));
-			overlayLine2 = std::max(mBufferModel.lineIndex(trackedAnchor), mBufferModel.lineIndex(trackedEnd));
-		}
-		if (overlayMode == 2) {
-			const std::size_t aLineStart = mBufferModel.lineStart(trackedAnchor);
-			const std::size_t bLineStart = mBufferModel.lineStart(trackedEnd);
-			const int aCol = charColumn(aLineStart, trackedAnchor);
-			const int bCol = charColumn(bLineStart, trackedEnd);
-			overlayCol1 = std::min(aCol, bCol);
-			overlayCol2Exclusive = std::max(aCol, bCol);
-			if (overlayCol2Exclusive <= overlayCol1) overlayCol2Exclusive = overlayCol1 + 1;
-		}
-	}
+	overlayActive = mBlockOverlayActive;
+	overlayMode = mBlockOverlayMode;
+	overlayStart = mBlockOverlayAnchor;
+	overlayEnd = mBlockOverlayTrackCursor ? mBufferModel.cursor() : mBlockOverlayEnd;
+	if (overlayStart > overlayEnd) std::swap(overlayStart, overlayEnd);
+	overlayLine1 = mBufferModel.lineIndex(overlayStart);
+	overlayLine2 = mBufferModel.lineIndex(overlayEnd);
+	if (overlayLine1 > overlayLine2) std::swap(overlayLine1, overlayLine2);
+	overlayCol1 = std::min(mBlockOverlayColumnAnchor, mBlockOverlayColumnEnd);
+	overlayCol2Exclusive = std::max(mBlockOverlayColumnAnchor, mBlockOverlayColumnEnd);
 	currentLine = (lineStart <= cursorPos && cursorPos < lineEnd) || (cursorPos == documentLength && lineStart == cursorPos && lineEnd == cursorPos);
 	if (overlayActive) {
 		if (overlayMode == 3) currentLineInBlock = false;
@@ -808,7 +797,46 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 
 	if (x < width) {
 		TColorAttr color = tokenColor(MRSyntaxToken::Text, false, basePair);
-		b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(width - x));
+		TColorAttr selectedColor = tokenColor(MRSyntaxToken::Text, true, selectionPair);
+		int selectedStartX = width;
+		int selectedEndX = width;
+
+		if (overlayActive) {
+			if (overlayMode == 1 && overlayLine1 <= lineIndex && lineIndex <= overlayLine2) {
+				selectedStartX = x;
+				selectedEndX = width;
+			} else if (overlayMode == 2 && overlayLine1 <= lineIndex && lineIndex <= overlayLine2) {
+				selectedStartX = overlayCol1 - hScroll;
+				selectedEndX = overlayCol2Exclusive - hScroll;
+			} else if (overlayMode == 3) {
+				const std::size_t streamLine1 = mBufferModel.lineIndex(overlayStart);
+				const std::size_t streamLine2 = mBufferModel.lineIndex(overlayEnd);
+
+				if (streamLine1 <= lineIndex && lineIndex <= streamLine2) {
+					int selectedStartVisual = hScroll;
+					int selectedEndVisual = hScroll + width;
+
+					if (streamLine1 == streamLine2) {
+						selectedStartVisual = charColumn(mBufferModel.lineStart(overlayStart), overlayStart);
+						selectedEndVisual = charColumn(mBufferModel.lineStart(overlayEnd), overlayEnd);
+					} else if (lineIndex == streamLine1) {
+						selectedStartVisual = charColumn(mBufferModel.lineStart(overlayStart), overlayStart);
+					} else if (lineIndex == streamLine2) {
+						selectedEndVisual = charColumn(mBufferModel.lineStart(overlayEnd), overlayEnd);
+					}
+					selectedStartX = selectedStartVisual - hScroll;
+					selectedEndX = selectedEndVisual - hScroll;
+				}
+			}
+		}
+		selectedStartX = std::max(x, std::min(width, selectedStartX));
+		selectedEndX = std::max(x, std::min(width, selectedEndX));
+		if (selectedStartX < selectedEndX) {
+			if (x < selectedStartX) b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(selectedStartX - x));
+			b.moveChar(static_cast<ushort>(drawX + selectedStartX), ' ', selectedColor, static_cast<ushort>(selectedEndX - selectedStartX));
+			if (selectedEndX < width) b.moveChar(static_cast<ushort>(drawX + selectedEndX), ' ', color, static_cast<ushort>(width - selectedEndX));
+		} else
+			b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(width - x));
 	}
 }
 
@@ -885,8 +913,9 @@ void MRFileEditor::updateIndicator() {
 		}
 	}
 
+	const bool cursorInViewport = viewport.containsTextPoint(localX, localY, visibleTextRows());
+	if (cursorInViewport) setCursor(static_cast<int>(localX), static_cast<int>(localY));
 	if (shouldShowEditorCursor(localX, localY, viewport)) {
-		setCursor(static_cast<int>(localX), static_cast<int>(localY));
 		showCursor();
 	} else
 		hideCursor();

@@ -434,7 +434,7 @@ void cancelForegroundMacroDelays() {
 	g_pendingForegroundMacros.clear();
 }
 
-bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showErrorDialogs) {
+bool runMacroFileByPathRouted(const char *path, bool forceUiThread, std::string *errorMessage, bool showErrorDialogs) {
 	std::string resolvedPath = expandUserPath(path);
 	std::string source;
 	std::string ioError;
@@ -443,6 +443,7 @@ bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showEr
 	std::string runnerSource;
 	std::string macroSpec;
 	MRMacroExecutionProfile targetProfile;
+	MRMacroExecutionProfile uiThreadProfile;
 
 	if (errorMessage != nullptr) errorMessage->clear();
 	if (resolvedPath.empty()) {
@@ -477,12 +478,20 @@ bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showEr
 
 	macroSpec = resolvedPath + "^" + macroName;
 	runnerSource = "$MACRO MacroPlaybackLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(macroSpec) + "');\nEND_MACRO;\n";
-	if (!runMacroSource(macroSpec.c_str(), runnerSource.c_str(), &targetProfile, errorMessage, showErrorDialogs)) {
+	if (!runMacroSource(macroSpec.c_str(), runnerSource.c_str(), forceUiThread ? &uiThreadProfile : &targetProfile, errorMessage, showErrorDialogs)) {
 		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
 		return false;
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
+}
+
+bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showErrorDialogs) {
+	return runMacroFileByPathRouted(path, false, errorMessage, showErrorDialogs);
+}
+
+bool runMacroFileByPathOnUiThread(const char *path, std::string *errorMessage, bool showErrorDialogs) {
+	return runMacroFileByPathRouted(path, true, errorMessage, showErrorDialogs);
 }
 
 bool runMacroSourceText(const char *displayName, const char *source, std::string *errorMessage, bool showErrorDialogs) {

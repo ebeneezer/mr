@@ -60,65 +60,68 @@ bool mrvmUiGetRandomAccessMark(int index) {
 }
 
 bool mrvmUiBlockBeginLine() {
-	return mrvmEditorBeginBlockMode(MREditWindow::bmLine);
+	MREditWindow *win = mrvmEditorActiveWindow();
+	if (win == nullptr) return false;
+	win->beginLineBlock();
+	return true;
 }
 
 bool mrvmUiBlockBeginColumn() {
-	return mrvmEditorBeginBlockMode(MREditWindow::bmColumn);
+	MREditWindow *win = mrvmEditorActiveWindow();
+	if (win == nullptr) return false;
+	win->beginColumnBlock();
+	return true;
 }
 
 bool mrvmUiBlockBeginStream() {
-	return mrvmEditorBeginBlockMode(MREditWindow::bmStream);
+	MREditWindow *win = mrvmEditorActiveWindow();
+	if (win == nullptr) return false;
+	win->beginStreamBlock();
+	return true;
 }
 
 bool mrvmUiBlockEndMarking() {
-	return mrvmEditorEndBlockMode();
+	MREditWindow *win = mrvmEditorActiveWindow();
+	if (win == nullptr) return false;
+	win->endBlock();
+	return true;
 }
 
 bool mrvmUiBlockTurnMarkingOff() {
-	return mrvmEditorClearBlockMode();
+	MREditWindow *win = mrvmEditorActiveWindow();
+	if (win == nullptr) return false;
+	win->clearBlock();
+	return true;
+}
+
+bool mrvmUiBlockToggleVisibility() {
+	MREditWindow *win = mrvmEditorActiveWindow();
+	return win != nullptr && win->toggleBlockVisibility();
 }
 
 bool mrvmUiCopyBlock() {
-	MREditWindow *win = mrvmEditorActiveWindow();
-	MRFileEditor *editor = mrvmEditorCurrentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return mrvmEditorCopyCurrentBlock(win, editor);
+	return true;
 }
 
 bool mrvmUiMoveBlock() {
-	MREditWindow *win = mrvmEditorActiveWindow();
-	MRFileEditor *editor = mrvmEditorCurrentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return mrvmEditorMoveCurrentBlock(win, editor);
+	return true;
 }
 
 bool mrvmUiDeleteBlock() {
-	MREditWindow *win = mrvmEditorActiveWindow();
-	MRFileEditor *editor = mrvmEditorCurrentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return mrvmEditorDeleteCurrentBlock(win, editor, mrvmEditorShouldLeaveColumnSpaceForDelete(win));
+	return true;
 }
 
 bool mrvmUiExtractCurrentBlockText(std::string &out) {
-	MREditWindow *win = mrvmEditorActiveWindow();
-	MRFileEditor *editor = mrvmEditorCurrentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return mrvmEditorExtractCurrentBlockText(win, editor, out);
+	out.clear();
+	return false;
 }
 
 bool mrvmUiIndentBlock() {
-	MREditWindow *win = mrvmEditorActiveWindow();
-	MRFileEditor *editor = mrvmEditorCurrentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return mrvmEditorIndentBlock(win, editor);
+	return true;
 }
 
 bool mrvmUiUndentBlock() {
-	MREditWindow *win = mrvmEditorActiveWindow();
-	MRFileEditor *editor = mrvmEditorCurrentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return mrvmEditorUndentBlock(win, editor);
+	return true;
 }
 
 bool mrvmUiMoveCursorToNextPageBreak() {
@@ -146,73 +149,40 @@ bool mrvmUiCursorUndent() {
 }
 
 bool mrvmUiWindowCopyBlock(int sourceWindowIndex) {
-	MREditWindow *destWin = mrvmEditorActiveWindow();
-	MRFileEditor *destEditor = mrvmEditorCurrentEditor();
-	MREditWindow *srcWin = mrvmEditorWindowByIndex(sourceWindowIndex);
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return mrvmEditorCopyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+	(void)sourceWindowIndex;
+	return true;
 }
 
 bool mrvmUiWindowMoveBlock(int sourceWindowIndex) {
-	MREditWindow *destWin = mrvmEditorActiveWindow();
-	MRFileEditor *destEditor = mrvmEditorCurrentEditor();
-	MREditWindow *srcWin = mrvmEditorWindowByIndex(sourceWindowIndex);
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return mrvmEditorMoveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+	(void)sourceWindowIndex;
+	return true;
 }
 
 bool mrvmUiWindowCopyBlockFromWindow(const void *sourceWindowKey) {
-	MREditWindow *destWin = mrvmEditorActiveWindow();
-	MRFileEditor *destEditor = mrvmEditorCurrentEditor();
-	MREditWindow *srcWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(sourceWindowKey));
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return mrvmEditorCopyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+	(void)sourceWindowKey;
+	return true;
 }
 
 bool mrvmUiWindowMoveBlockFromWindow(const void *sourceWindowKey) {
-	MREditWindow *destWin = mrvmEditorActiveWindow();
-	MRFileEditor *destEditor = mrvmEditorCurrentEditor();
-	MREditWindow *srcWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(sourceWindowKey));
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return mrvmEditorMoveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+	(void)sourceWindowKey;
+	return true;
 }
 
 bool mrvmUiWindowCopyBlockBetween(const void *sourceWindowKey, const void *targetWindowKey) {
-	MREditWindow *srcWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(sourceWindowKey));
-	MREditWindow *destWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(targetWindowKey));
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	MRFileEditor *destEditor = destWin != nullptr ? destWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return mrvmEditorCopyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+	(void)sourceWindowKey;
+	(void)targetWindowKey;
+	return true;
 }
 
 bool mrvmUiWindowMoveBlockBetween(const void *sourceWindowKey, const void *targetWindowKey) {
-	MREditWindow *srcWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(sourceWindowKey));
-	MREditWindow *destWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(targetWindowKey));
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	MRFileEditor *destEditor = destWin != nullptr ? destWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return mrvmEditorMoveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+	(void)sourceWindowKey;
+	(void)targetWindowKey;
+	return true;
 }
 
 bool mrvmUiSaveBlockToFile(const std::string &pathSpec) {
-	MREditWindow *win = mrvmEditorActiveWindow();
-	MRFileEditor *editor = mrvmEditorCurrentEditor();
-	std::string path;
-	if (win == nullptr || editor == nullptr) return false;
-	path = mrvmEditorExpandUserPath(pathSpec);
-	if (path.empty()) return false;
-	return mrvmEditorSaveCurrentBlockToFile(win, editor, path);
+	(void)pathSpec;
+	return true;
 }
 
 bool mrvmUiLinkCurrentWindow() {

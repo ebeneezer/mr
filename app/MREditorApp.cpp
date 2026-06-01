@@ -99,11 +99,96 @@ bool isBuildCurrentFileDefaultKey(const TEvent &event) noexcept {
 	return normalized == TKey(kbF9);
 }
 
+const std::vector<MRStatusLine::FunctionKeyLabel> &startupFunctionKeyLabels() {
+	static const std::vector<MRStatusLine::FunctionKeyLabel> labels{
+	    {TKey(kbF1), cmMrHelpContents, "~F1~ Help"},
+	    {TKey(kbF2), cmMrFileLoad, "~F2~ Load"},
+	    {TKey(kbF3), cmMrFileOpen, "~F3~ Open"},
+	    {TKey(kbF4), cmMrFileAcquire, "~F4~ Acquire"},
+	    {TKey(kbF5), cmMrSearchMultiFileSearch, "~F5~ MFS"},
+	    {TKey(kbF6), cmMrWindowOpen, "~F6~ Win"},
+	    {TKey(kbF7), cmMrSearchMultiFileSearchReplace, "~F7~ MFSAR"},
+	    {TKey(kbF8), cmMrFileOpenLiveLog, "~F8~ Log"},
+	    {TKey(kbF9), cmMrFileOpenJournal, "~F9~ Journal"},
+	    {TKey(kbF10), cmMenu, "~F10~ Menu"},
+	    {TKey(kbF11), cmMrSetupUserInterfaceSettings, "~F11~ Setup"},
+	    {TKey(kbF12), cmQuit, "~F12~ Exit"},
+	};
+	return labels;
+}
+
+const std::vector<MRStatusLine::FunctionKeyLabel> &editorFunctionKeyLabels() {
+	static const std::vector<MRStatusLine::FunctionKeyLabel> labels{
+	    {TKey(kbF1), cmMrMacroToggleRecording, "~F1~ Rec"},
+	    {TKey(kbF2), cmMrFileSave, "~F2~ Save"},
+	    {TKey(kbF3), cmMrBlockLoadFromDisk, "~F3~ LoadBlk"},
+	    {TKey(kbF4), cmMrBlockSaveToDisk, "~F4~ SaveBlk"},
+	    {TKey(kbF5), cmMrWindowCascade, "~F5~ Casc"},
+	    {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"},
+	    {TKey(kbF7), cmMrWindowSplitVertical, "~F7~ SplitV"},
+	    {TKey(kbF8), cmMrWindowSplitHorizontal, "~F8~ SplitH"},
+	};
+	return labels;
+}
+
+bool editorFunctionKeyContextActive() {
+	MREditWindow *editorWindow = currentEditorCommandWindow();
+
+	return currentEditWindow() != nullptr && editorWindow != nullptr;
+}
+
+bool handleStartupFunctionKey(TEvent &event) {
+	const TKey pressed(event.keyDown);
+
+	for (const MRStatusLine::FunctionKeyLabel &label : startupFunctionKeyLabels()) {
+		if (!(pressed == label.keyCode) || !TView::commandEnabled(label.command)) continue;
+		if (label.command == cmMenu) return false;
+		if (label.command == cmQuit) {
+			event.what = evCommand;
+			event.message.command = cmQuit;
+			event.message.infoPtr = nullptr;
+			return false;
+		}
+		return handleMRCommand(label.command);
+	}
+	return false;
+}
+
+bool handleEditorFunctionKey(TEvent &event) {
+	const TKey pressed(event.keyDown);
+
+	for (const MRStatusLine::FunctionKeyLabel &label : editorFunctionKeyLabels()) {
+		if (!(pressed == label.keyCode)) continue;
+		if (TView::commandEnabled(label.command)) static_cast<void>(handleMRCommand(label.command));
+		return true;
+	}
+	return false;
+}
+
 void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event) {
 	if (!isCalculatorHotkeyEvent(event)) return;
 	const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
 	char line[288];
 	std::snprintf(line, sizeof(line), "KEYDBG calc stage=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X", stage, static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods), static_cast<unsigned>(event.keyDown.textLength), static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)));
+	mrLogMessage(line);
+}
+
+bool keyDebugEnabled() noexcept {
+	static int cached = -1;
+
+	if (cached < 0) {
+		const char *value = std::getenv("MR_KEY_DEBUG");
+		cached = (value != nullptr && *value != '\0' && std::strcmp(value, "0") != 0) ? 1 : 0;
+	}
+	return cached == 1;
+}
+
+void traceKeyDebugEvent(const char *stage, const TEvent &event) {
+	if (!keyDebugEnabled() || event.what != evKeyDown) return;
+	const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+	char line[320];
+
+	std::snprintf(line, sizeof(line), "KEYDBG event stage=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X scan=0x%02X", stage, static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods), static_cast<unsigned>(event.keyDown.textLength), static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)), static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.scanCode)));
 	mrLogMessage(line);
 }
 
@@ -113,7 +198,7 @@ void postAppError(std::string_view text) {
 
 class TMacroBindCaptureDialog : public MRDialogFoundation {
   public:
-	TMacroBindCaptureDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), "Bind Recorded Macro Key", 52, 8, initMrDialogFrame), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+	TMacroBindCaptureDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), "BIND RECORDED MACRO KEY", 52, 8, initMrDialogFrame), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
 		insert(new TStaticText(TRect(2, 2, 50, 6), "Press key to bind the recorded macro.\nEsc = no binding."));
 	}
 
@@ -234,11 +319,11 @@ bool keyInTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 		const char *token;
 		ushort code;
 	};
-	static const ComboSpec combos[] = {{"", 0}, {"Shft", kbShift}, {"Ctrl", kbCtrlShift}, {"Alt", kbAltShift}, {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)}, {"AltShft", static_cast<ushort>(kbAltShift | kbShift)}, {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)}, {"CtrlAltShft", static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
+	static const ComboSpec combos[] = {{"", 0}, {"Shft", kbShift}, {"Ctrl", kbCtrlShift}, {"Alt", kbAltShift}, {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)}, {"AltShft", static_cast<ushort>(kbAltShift | kbShift)}, {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)}, {"CtrlAltShft", static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}, {"Super", kbSuperShift}, {"SuperShft", static_cast<ushort>(kbSuperShift | kbShift)}, {"SuperCtrl", static_cast<ushort>(kbSuperShift | kbCtrlShift)}, {"SuperAlt", static_cast<ushort>(kbSuperShift | kbAltShift)}, {"SuperCtrlShft", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbShift)}, {"SuperAltShft", static_cast<ushort>(kbSuperShift | kbAltShift | kbShift)}, {"SuperCtrlAlt", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbAltShift)}, {"SuperCtrlAltShft", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbAltShift | kbShift)}};
 	static const NamedKeySpec named[] = {{"Enter", kbEnter}, {"Tab", kbTab}, {"Esc", kbEsc}, {"Backspace", kbBack}, {"Up", kbUp}, {"Down", kbDown}, {"Left", kbLeft}, {"Right", kbRight}, {"PgUp", kbPgUp}, {"PgDn", kbPgDn}, {"Home", kbHome}, {"End", kbEnd}, {"Ins", kbIns}, {"Del", kbDel}, {"Grey-", kbGrayMinus}, {"Grey+", kbGrayPlus}, {"Grey*", static_cast<ushort>('*')}, {"Space", static_cast<ushort>(' ')}, {"Minus", static_cast<ushort>('-')}, {"Equal", static_cast<ushort>('=')}, {"F1", kbF1}, {"F2", kbF2}, {"F3", kbF3}, {"F4", kbF4}, {"F5", kbF5}, {"F6", kbF6}, {"F7", kbF7}, {"F8", kbF8}, {"F9", kbF9}, {"F10", kbF10}, {"F11", kbF11}, {"F12", kbF12}};
 	TKey pressed(keyCode, controlKeyState);
 
-	if (keyCode == kbNoKey && (controlKeyState & kbCtrlShift) != 0 && (controlKeyState & (kbAltShift | kbPaste)) == 0) {
+	if (keyCode == kbNoKey && (controlKeyState & kbCtrlShift) != 0 && (controlKeyState & (kbAltShift | kbSuperShift | kbPaste)) == 0) {
 		outToken = "<CtrlSpace>";
 		mrLogMessage("KEYDBG record raw Ctrl-Space normalized to <CtrlSpace>");
 		return true;
@@ -461,7 +546,7 @@ ushort mrEditorDialog(int dialog, ...) {
 			std::string suggestedTarget(target);
 			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::EditorSaveAs, target, MAXPATH, "*.*");
 			mr::dialogs::suggestFileDialogName(target, MAXPATH, suggestedTarget);
-			result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::EditorSaveAs, "*.*", "Save file as", "~N~ame", fdOKButton, target);
+			result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::EditorSaveAs, "*.*", "SAVE FILE AS", "~N~ame", fdOKButton, target);
 			return result;
 		}
 		default:
@@ -533,6 +618,22 @@ struct StartupLoadRequest {
 	StartupLoadRequest() : recursive(false), specs() {
 	}
 };
+
+struct StartupAutomationRequest {
+	std::vector<std::string> macroFiles;
+	bool exitAfterRunMacro;
+
+	StartupAutomationRequest() : macroFiles(), exitAfterRunMacro(false) {
+	}
+};
+
+bool parseRunMacroOptionValue(const std::string &arg, std::string &value) {
+	static const std::string prefix = "--run-macro=";
+
+	if (arg.rfind(prefix, 0) != 0) return false;
+	value = arg.substr(prefix.size());
+	return true;
+}
 
 bool hasGlobWildcard(std::string_view pathSpec) {
 	return pathSpec.find_first_of("*?[") != std::string::npos;
@@ -650,15 +751,73 @@ void appendRecursivePathFiles(const std::filesystem::path &path, std::vector<std
 StartupLoadRequest parseStartupLoadRequest() {
 	StartupLoadRequest request;
 	std::vector<std::string> args = mrvmProcessArguments();
+	bool skipNext = false;
 
 	for (const std::string &arg : args) {
+		std::string ignored;
+		if (skipNext) {
+			skipNext = false;
+			continue;
+		}
 		if (arg == "--load-recursive" || arg == "-lr") {
 			request.recursive = true;
 			continue;
 		}
+		if (arg == "--run-macro") {
+			skipNext = true;
+			continue;
+		}
+		if (parseRunMacroOptionValue(arg, ignored)) continue;
+		if (arg == "--exit-after-run-macro") continue;
 		if (!arg.empty()) request.specs.push_back(arg);
 	}
 	return request;
+}
+
+StartupAutomationRequest parseStartupAutomationRequest() {
+	StartupAutomationRequest request;
+	std::vector<std::string> args = mrvmProcessArguments();
+	bool expectRunMacroPath = false;
+
+	for (const std::string &arg : args) {
+		std::string value;
+
+		if (expectRunMacroPath) {
+			if (!arg.empty()) request.macroFiles.push_back(arg);
+			expectRunMacroPath = false;
+			continue;
+		}
+		if (arg == "--run-macro") {
+			expectRunMacroPath = true;
+			continue;
+		}
+		if (parseRunMacroOptionValue(arg, value)) {
+			if (!value.empty()) request.macroFiles.push_back(value);
+			continue;
+		}
+		if (arg == "--exit-after-run-macro") {
+			request.exitAfterRunMacro = true;
+			continue;
+		}
+	}
+	if (expectRunMacroPath) mrLogMessage("Startup automation ignored --run-macro without a macro file.");
+	return request;
+}
+
+bool runStartupAutomationFromCommandLine() {
+	StartupAutomationRequest request = parseStartupAutomationRequest();
+
+	for (const std::string &macroFile : request.macroFiles) {
+		std::string errorText;
+		if (runMacroFileByPathOnUiThread(macroFile.c_str(), &errorText, false)) {
+			mrLogMessage(("Startup automation ran macro: " + macroFile).c_str());
+			continue;
+		}
+		if (errorText.empty()) errorText = "Macro execution failed.";
+		mrLogMessage(("Startup automation macro failed: " + macroFile + ": " + errorText).c_str());
+		mr::messageline::postAutoTimed(mr::messageline::Owner::MacroMessage, "startup macro failed: " + errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+	}
+	return request.exitAfterRunMacro && !request.macroFiles.empty();
 }
 
 std::vector<std::string> collectStartupFilesFromRequest(const StartupLoadRequest &request) {
@@ -796,6 +955,10 @@ const TPalette &extendedAppBasePalette() {
 		data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
 		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
 		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
+		data[kMrPaletteStatusLine - 1] = data[2 - 1];
+		data[kMrPaletteStatusLineBold - 1] = data[3 - 1];
+		data[kMrPaletteStatusLineFunctionDescription - 1] = data[4 - 1];
+		data[kMrPaletteStatusLineFunctionKey - 1] = data[5 - 1];
 		data[kMrPaletteDesktop - 1] = 0x90;
 		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
@@ -819,7 +982,7 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), startupQuitPending(false) {
 	const auto startupStartedAt = std::chrono::steady_clock::now();
 	auto phaseStartedAt = startupStartedAt;
 	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
@@ -841,6 +1004,8 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	logStartupPhase("autoexec_macros");
 	static_cast<void>(loadStartupFilesFromCommandLine());
 	logStartupPhase("startup_files");
+	startupQuitPending = runStartupAutomationFromCommandLine();
+	logStartupPhase("startup_automation");
 	applyConfiguredDisplayLayout();
 	logStartupPhase("display_layout_final");
 	static_cast<void>(mrEnsureLogWindow(false));
@@ -856,6 +1021,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	logStartupPhase("workspace_autoload");
 	mrLogMessage("Editor session started.");
 	updateAppCommandState();
+	syncFunctionKeyState();
 	logStartupPhase("command_state");
 	{
 		std::ostringstream line;
@@ -923,6 +1089,26 @@ void MREditorApp::updatePerformancePanel() {
 	performancePanel->setAnimationFrame(++performancePanelFrame);
 }
 
+void MREditorApp::syncFunctionKeyState() {
+	const bool startupActive = currentEditWindow() == nullptr;
+	const bool editorActive = !startupActive && editorFunctionKeyContextActive();
+
+	if (auto *mrStatus = dynamic_cast<MRStatusLine *>(statusLine)) {
+		if (startupActive) {
+			mrStatus->setContextFunctionKeyLabels(startupFunctionKeyLabels());
+			mrStatus->setContextFunctionKeysActive(true);
+		} else if (editorActive) {
+			mrStatus->setContextFunctionKeyLabels(editorFunctionKeyLabels());
+			mrStatus->setContextFunctionKeysActive(true);
+		} else
+			mrStatus->setContextFunctionKeysActive(false);
+	}
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
+		mrMenuBar->setStartupFunctionKeysActive(startupActive);
+		mrMenuBar->setEditorFunctionKeysActive(editorActive);
+	}
+}
+
 void MREditorApp::applyConfiguredDisplayLayout() {
 	bool statusVisible = true;
 	TRect appRect = getExtent();
@@ -938,6 +1124,7 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 		mrStatus->setShowFunctionKeyLabels(true);
 		mrStatus->show();
 	}
+	syncFunctionKeyState();
 	if (performancePanel != nullptr) {
 		if (panelHeight > 0) {
 			TRect panelRect(0, 1, appRect.b.x - appRect.a.x, 1 + panelHeight);
@@ -1132,7 +1319,7 @@ bool MREditorApp::captureBindingKeySpec(std::string &keySpec) {
 
 	if (modalResult == cmCancel || !captured) return true;
 	if (!keyInTokenFromEvent(keyCode, controlState, keySpec)) {
-		postAppError("Unsupported binding key. Use a function key or a Ctrl/Alt/Shift combination.");
+		postAppError("Unsupported binding key. Use a function key or a Ctrl/Alt/Shift/Super combination.");
 		return false;
 	}
 	return true;
@@ -1311,6 +1498,7 @@ void MREditorApp::warmIndexedMacroBindings() {
 
 void MREditorApp::handleEvent(TEvent &event) {
 	const ushort originalWhat = event.what;
+	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
 	clearTransientSearchSelectionOnUserInput(event);
 	if (isRecorderToggleCommand(event)) {
@@ -1322,6 +1510,14 @@ void MREditorApp::handleEvent(TEvent &event) {
 		return;
 	}
 	if (isRecorderToggleKey(event)) {
+		if (keystrokeRecording) stopKeystrokeRecording();
+		else
+			startKeystrokeRecording();
+		mrvmUiInvalidateScreenBase();
+		clearEvent(event);
+		return;
+	}
+	if (event.what == evKeyDown && editorFunctionKeyContextActive() && TKey(event.keyDown) == TKey(kbF1)) {
 		if (keystrokeRecording) stopKeystrokeRecording();
 		else
 			startKeystrokeRecording();
@@ -1364,6 +1560,16 @@ void MREditorApp::handleEvent(TEvent &event) {
 			clearEvent(event);
 			return;
 		}
+		if (handleStartupFunctionKey(event)) {
+			traceCalculatorHotkeyEvent("app-startup-fkey-consumed", event);
+			clearEvent(event);
+			return;
+		}
+	}
+	if (event.what == evKeyDown && editorFunctionKeyContextActive() && handleEditorFunctionKey(event)) {
+		traceCalculatorHotkeyEvent("app-editor-fkey-consumed", event);
+		clearEvent(event);
+		return;
 	}
 
 	if (event.what == evCommand && event.message.command == cmQuit) prepareForQuit();
@@ -1384,6 +1590,14 @@ void MREditorApp::handleEvent(TEvent &event) {
 }
 
 void MREditorApp::idle() {
+	if (startupQuitPending) {
+		TEvent quitEvent{};
+
+		startupQuitPending = false;
+		quitEvent.what = evCommand;
+		quitEvent.message.command = cmQuit;
+		putEvent(quitEvent);
+	}
 	TApplication::idle();
 	pumpForegroundMacroDelays();
 	updateRecordingBlink();
@@ -1416,6 +1630,7 @@ void MREditorApp::idle() {
 	}
 	MRWindowManager::handleDesktopLayoutChange();
 	updateAppCommandState();
+	syncFunctionKeyState();
 }
 
 TPalette &MREditorApp::getPalette() const {

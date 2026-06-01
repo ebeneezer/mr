@@ -160,6 +160,7 @@ void MRDropList::toggle(TGroup &owner, const TRect &anchor, const std::vector<st
 }
 
 void MRDropList::show(TGroup &owner, const TRect &anchor, const std::vector<std::string> &values, const std::string &currentValue, TView *relay, ushort acceptCommand, short maxVisibleRows) {
+	linkedInputCursor = -1;
 	showValues(owner, anchor, values, values, currentValue, relay, acceptCommand, maxVisibleRows);
 }
 
@@ -233,9 +234,8 @@ bool MRDropList::handleLinkedInputEvent(TEvent &event, TGroup &owner, const TRec
 	std::string inputValue;
 
 	if (handleOpenListEvent(event)) return true;
-	if (link == nullptr || (link->state & sfFocused) == 0 || event.what != evKeyDown) return false;
+	if (!visible() || link == nullptr || (link->state & sfFocused) == 0 || event.what != evKeyDown) return false;
 	linkedInput = link;
-	if (!visible()) linkedInputCursor = -1;
 	activeOwner = &owner;
 	activeRelay = relay;
 	activeAnchor = anchor;
@@ -244,6 +244,7 @@ bool MRDropList::handleLinkedInputEvent(TEvent &event, TGroup &owner, const TRec
 	sourceValues = values;
 	if (!updateLinkedInputFromKey(event, link, inputValue)) return false;
 	static_cast<void>(showFilteredValues(inputValue, true));
+	restoreLinkedInputFocus();
 	event.what = evNothing;
 	return true;
 }
@@ -267,6 +268,7 @@ bool MRDropList::handleOpenListEvent(TEvent &event, bool hideOnOutsideMouseDown)
 
 		if (updateLinkedInputFromKey(event, linkedInput, inputValue)) {
 			static_cast<void>(showFilteredValues(inputValue, true));
+			restoreLinkedInputFocus();
 			event.what = evNothing;
 			return true;
 		}
@@ -350,6 +352,12 @@ bool MRDropList::showFilteredValues(const std::string &inputValue, bool restoreL
 	if (activeOwner == nullptr) return false;
 	showValues(*activeOwner, activeAnchor, fullValues, filteredValues, inputValue, activeRelay, activeAcceptCommand, activeMaxVisibleRows);
 	return true;
+}
+
+void MRDropList::restoreLinkedInputFocus() {
+	if (linkedInput == nullptr) return;
+	linkedInput->select();
+	if (linkedInputCursor >= 0) restoreInputLineCursor(*linkedInput, linkedInputCursor);
 }
 
 bool MRDropList::handleSpeedSearchText(const std::string &text) {

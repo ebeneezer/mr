@@ -107,13 +107,6 @@ struct CharacterTableLayout {
 	int cellWidth;
 };
 
-struct ClipboardFetchState {
-	bool received = false;
-	std::string text;
-};
-
-ClipboardFetchState g_clipboardFetchState;
-
 enum class KeymapDispatchKind : unsigned char {
 	AppCommand = 0,
 	EditorCommand = 1,
@@ -128,11 +121,12 @@ enum class KeymapWindowMethod : unsigned char {
 	BlockSetColumnBegin = 3,
 	BlockClear = 4,
 	BlockMarkWordRight = 5,
-	CursorTopOfWindow = 6,
-	CursorBottomOfWindow = 7,
-	CursorStartOfBlock = 8,
-	CursorEndOfBlock = 9,
-	ViewCenterLine = 10
+	BlockToggleVisibility = 6,
+	CursorTopOfWindow = 7,
+	CursorBottomOfWindow = 8,
+	CursorStartOfBlock = 9,
+	CursorEndOfBlock = 10,
+	ViewCenterLine = 11
 };
 
 enum class KeymapCustomAction : unsigned char {
@@ -161,11 +155,11 @@ enum class KeymapCustomAction : unsigned char {
 	CursorTabLeft = 22,
 	CursorUndent = 23,
 	CopyMarkedBlockToSystemClipboard = 24,
-	BlockMath = 25,
 	ExtendBlockByMotion = 26,
 	SearchResultsNext = 27,
 	CompilerProblemsNext = 28,
-	CompilerProblemsPrevious = 29
+	CompilerProblemsPrevious = 29,
+	DisabledBlockAction = 30
 };
 
 struct KeymapActionDispatchEntry {
@@ -221,14 +215,15 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MRMAC_SEARCH_REPEAT_LAST", KeymapDispatchKind::AppCommand, cmMrSearchRepeatPrevious, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_SEARCH_MULTI_FILE", KeymapDispatchKind::AppCommand, cmMrSearchMultiFileSearch, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_SEARCH_LIST_MATCHED_FILES", KeymapDispatchKind::AppCommand, cmMrSearchListFilesFromLastSearch, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_TO_CLIPBOARD", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CopyMarkedBlockToSystemClipboard},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_PASTE_FROM_CLIPBOARD", KeymapDispatchKind::AppCommand, cmMrEditPasteFromBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_TO_CLIPBOARD", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_PASTE_FROM_CLIPBOARD", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_MARK_STREAM", KeymapDispatchKind::AppCommand, cmMrBlockMarkStream, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_BEGIN", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetBegin, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_END", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetEnd, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_COLUMN_BEGIN", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetColumnBegin, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_MARK_WORD_RIGHT", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockMarkWordRight, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_CLEAR", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockClear, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_TOGGLE_VISIBILITY", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockToggleVisibility, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_UNDENT", KeymapDispatchKind::AppCommand, cmMrBlockUndent, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_INDENT", KeymapDispatchKind::AppCommand, cmMrBlockIndent, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY", KeymapDispatchKind::AppCommand, cmMrBlockCopy, KeymapWindowMethod::None, KeymapCustomAction::None},
@@ -236,17 +231,19 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MRMAC_BLOCK_DELETE", KeymapDispatchKind::AppCommand, cmMrBlockDelete, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_INTERWINDOW", KeymapDispatchKind::AppCommand, cmMrBlockWindowCopy, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_MOVE_INTERWINDOW", KeymapDispatchKind::AppCommand, cmMrBlockWindowMove, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_MOVE_TO_BUFFER", KeymapDispatchKind::AppCommand, cmMrEditCutToBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_APPEND_TO_BUFFER", KeymapDispatchKind::AppCommand, cmMrEditAppendToBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_CUT_APPEND_TO_BUFFER", KeymapDispatchKind::AppCommand, cmMrEditCutAndAppendToBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_FROM_BUFFER", KeymapDispatchKind::AppCommand, cmMrEditPasteFromBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_MATH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::BlockMath},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_EXTEND_BY_MOTION", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ExtendBlockByMotion},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_MOVE_TO_BUFFER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_APPEND_TO_BUFFER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_CUT_APPEND_TO_BUFFER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_FROM_BUFFER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_EXTEND_BY_MOTION", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
     KeymapActionDispatchEntry{"MRMAC_FILE_SAVE", KeymapDispatchKind::AppCommand, cmMrFileSave, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_BLOCK_MARK_LINES", KeymapDispatchKind::AppCommand, cmMrBlockMarkLines, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_BLOCK_TOGGLE_MARKING", KeymapDispatchKind::AppCommand, cmMrBlockToggleMarking, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_BLOCK_TOGGLE_VISIBILITY", KeymapDispatchKind::AppCommand, cmMrBlockToggleVisibility, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_FILE_SAVE_ALL", KeymapDispatchKind::AppCommand, cmMrFileSaveAll, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_FILE_REVERT", KeymapDispatchKind::AppCommand, cmMrFileRevert, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SAVE_BLOCK_TO_FILE", KeymapDispatchKind::AppCommand, cmMrBlockSaveToDisk, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
+    KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
@@ -255,13 +252,41 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SET_LEFT_MARGIN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetLeftMargin},
     KeymapActionDispatchEntry{"MR_SET_RIGHT_MARGIN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetRightMargin},
     KeymapActionDispatchEntry{"MR_JUSTIFY_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::JustifyParagraph},
-    KeymapActionDispatchEntry{"MR_SORT_COLUMN_BLOCK_TOGGLE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SortColumnBlockToggle},
+    KeymapActionDispatchEntry{"MR_SORT_COLUMN_BLOCK_TOGGLE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
     KeymapActionDispatchEntry{"MR_FILE_FORCE_SAVE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ForceSave},
     KeymapActionDispatchEntry{"MR_EXIT_DIRTY_SAVE_ALL", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ExitDirtySaveAll},
+    KeymapActionDispatchEntry{"MR_WINDOW_OPEN", KeymapDispatchKind::AppCommand, cmMrWindowOpen, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_NEXT", KeymapDispatchKind::AppCommand, cmMrWindowNext, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_PREVIOUS", KeymapDispatchKind::AppCommand, cmMrWindowPrevious, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_LIST", KeymapDispatchKind::AppCommand, cmMrWindowList, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_CLOSE", KeymapDispatchKind::AppCommand, cmMrWindowClose, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_ZOOM", KeymapDispatchKind::AppCommand, cmMrWindowZoom, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_CASCADE", KeymapDispatchKind::AppCommand, cmMrWindowCascade, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_TILE", KeymapDispatchKind::AppCommand, cmMrWindowTile, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_SPLIT_VERTICAL", KeymapDispatchKind::AppCommand, cmMrWindowSplitVertical, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_WINDOW_SPLIT_HORIZONTAL", KeymapDispatchKind::AppCommand, cmMrWindowSplitHorizontal, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DESKTOP_VIEWPORT_LEFT", KeymapDispatchKind::AppCommand, cmMrWindowPrevDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DESKTOP_VIEWPORT_RIGHT", KeymapDispatchKind::AppCommand, cmMrWindowNextDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DESKTOP_MOVE_WINDOW_LEFT", KeymapDispatchKind::AppCommand, cmMrWindowMoveToPrevDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DESKTOP_MOVE_WINDOW_RIGHT", KeymapDispatchKind::AppCommand, cmMrWindowMoveToNextDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_BUILD_CURRENT_FILE", KeymapDispatchKind::AppCommand, cmMrOtherBuildCurrentFile, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SEARCH_RESULTS_NEXT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SearchResultsNext},
+    KeymapActionDispatchEntry{"MR_SEARCH_MULTI_FILE_REPLACE", KeymapDispatchKind::AppCommand, cmMrSearchMultiFileSearchReplace, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_COMPILER_PROBLEMS_NEXT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CompilerProblemsNext},
     KeymapActionDispatchEntry{"MR_COMPILER_PROBLEMS_PREVIOUS", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CompilerProblemsPrevious},
+    KeymapActionDispatchEntry{"MR_MATCH_PARENTHESIS", KeymapDispatchKind::AppCommand, cmMrOtherMatchBraceOrParen, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_MACRO_TOGGLE_RECORDING", KeymapDispatchKind::AppCommand, cmMrMacroToggleRecording, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_EDIT_SETTINGS", KeymapDispatchKind::AppCommand, cmMrSetupEditSettings, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_COLOR", KeymapDispatchKind::AppCommand, cmMrSetupColorSetup, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_KEYMAP", KeymapDispatchKind::AppCommand, cmMrSetupKeyMapping, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_MOUSE_KEY_REPEAT", KeymapDispatchKind::AppCommand, cmMrSetupMouseKeyRepeat, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_FILENAME_EXTENSIONS", KeymapDispatchKind::AppCommand, cmMrSetupFilenameExtensions, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_COMPILER_PROFILES", KeymapDispatchKind::AppCommand, cmMrSetupCompilerProfiles, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_PATHS", KeymapDispatchKind::AppCommand, cmMrSetupPaths, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_BACKUPS_AUTOSAVE", KeymapDispatchKind::AppCommand, cmMrSetupBackupsAutosave, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_SEARCH_REPLACE_DEFAULTS", KeymapDispatchKind::AppCommand, cmMrSetupSearchAndReplaceDefaults, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_USER_INTERFACE", KeymapDispatchKind::AppCommand, cmMrSetupUserInterfaceSettings, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_LIVE_LOGS", KeymapDispatchKind::AppCommand, cmMrSetupLiveLogs, KeymapWindowMethod::None, KeymapCustomAction::None},
 };
 
 const char *placeholderCommandTitle(ushort command) {
@@ -309,9 +334,6 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Edit / Cut & append";
 		case cmMrEditPasteFromBuffer:
 			return "Edit / Paste";
-		case cmMrEditRepeatCommand:
-			return "Edit / Repeat";
-
 		case cmMrWindowClose:
 			return "Window / Close";
 		case cmMrWindowSplit:
@@ -330,8 +352,6 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Window / Adjacent";
 		case cmMrWindowHide:
 			return "Window / Hide";
-		case cmMrWindowModifySize:
-			return "Window / Modify size";
 		case cmMrWindowZoom:
 			return "Window / Zoom";
 		case cmMrWindowMinimize:
@@ -363,6 +383,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Block / Mark columns of text";
 		case cmMrBlockMarkStream:
 			return "Block / Mark stream of text";
+		case cmMrBlockToggleVisibility:
+			return "Block / Hide/show block mark";
 		case cmMrBlockEndMarking:
 			return "Block / End marking";
 		case cmMrBlockTurnMarkingOff:
@@ -393,8 +415,6 @@ const char *placeholderCommandTitle(ushort command) {
 		case cmMrSearchGotoLineNumber:
 			return "Search / Goto line number";
 
-		case cmMrTextLayout:
-			return "Text / Layout";
 		case cmMrTextUpperCaseMenu:
 			return "Text / Upper case";
 		case cmMrTextLowerCaseMenu:
@@ -412,8 +432,6 @@ const char *placeholderCommandTitle(ushort command) {
 
 		case cmMrOtherMacroManager:
 			return "Other / Macro manager";
-		case cmMrOtherExecuteProgram:
-			return "Other / Execute program";
 		case cmMrOtherBuildCurrentFile:
 			return "Other / Build current file";
 		case cmMrOtherStopProgram:
@@ -426,9 +444,6 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / Next compiler error";
 		case cmMrOtherFindPreviousCompilerError:
 			return "Other / Previous compiler error";
-		case cmMrOtherMatchBraceOrParen:
-			return "Other / Match brace or paren";
-
 		case cmMrHelpContents:
 			return "Help / Table of contents";
 		case cmMrHelpKeys:
@@ -510,12 +525,14 @@ bool dispatchApplicationCommandEvent(ushort command) {
 	return true;
 }
 
+bool runDisabledBlockAction();
+
 bool dispatchKeymapWindowMethod(MREditWindow *targetWindow, KeymapWindowMethod method) {
 	MREditWindow *window = effectiveKeymapWindow(targetWindow);
 
-	if (window == nullptr) return false;
-	switch (method) {
-		case KeymapWindowMethod::BlockSetBegin:
+		if (window == nullptr) return false;
+		switch (method) {
+			case KeymapWindowMethod::BlockSetBegin:
 			window->beginStreamBlock();
 			return true;
 		case KeymapWindowMethod::BlockSetEnd:
@@ -525,17 +542,20 @@ bool dispatchKeymapWindowMethod(MREditWindow *targetWindow, KeymapWindowMethod m
 			window->beginColumnBlock();
 			return true;
 		case KeymapWindowMethod::BlockClear:
+			window->clearBlock();
+			return true;
+		case KeymapWindowMethod::BlockToggleVisibility:
 			return window->toggleBlockVisibility();
 		case KeymapWindowMethod::BlockMarkWordRight:
 			return window->markWordRight();
-		case KeymapWindowMethod::CursorTopOfWindow:
-			return window->moveCursorToTopOfView();
-		case KeymapWindowMethod::CursorBottomOfWindow:
-			return window->moveCursorToBottomOfView();
 		case KeymapWindowMethod::CursorStartOfBlock:
 			return window->moveCursorToBlockStart();
 		case KeymapWindowMethod::CursorEndOfBlock:
 			return window->moveCursorToBlockEnd();
+		case KeymapWindowMethod::CursorTopOfWindow:
+			return window->moveCursorToTopOfView();
+		case KeymapWindowMethod::CursorBottomOfWindow:
+			return window->moveCursorToBottomOfView();
 		case KeymapWindowMethod::ViewCenterLine:
 			return window->centerCursorInView();
 		case KeymapWindowMethod::None:
@@ -989,10 +1009,7 @@ bool handleCharacterTable(CharacterTableKind kind) {
 	return true;
 }
 
-constexpr const char *kNoCommandSpecifiedMessage = "No command specified.";
 constexpr const char *kWindowReadOnlyMessage = "Window is read-only.";
-constexpr const char *kChooseAnotherWindowForBlockMessage = "Choose another window for inter-window block operation.";
-constexpr const char *kNoMarkedBlockInSourceWindowMessage = "No block marked in the selected source window.";
 constexpr const char *kNoExternalProgramTaskMessage = "No external program task is running in this window.";
 constexpr const char *kStopProgramBeforeRestartMessage = "Stop the current program before restarting it.";
 constexpr const char *kNoRestartableCommandMessage = "No restartable command is associated with this window.";
@@ -1005,8 +1022,99 @@ void postDialogWarning(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string(text), mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
 }
 
+bool runDisabledBlockAction() {
+	postDialogWarning("Block commands are disabled.");
+	return true;
+}
+
 void postDialogError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string(text), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
+
+struct ParenthesisPair {
+	char open;
+	char close;
+};
+
+std::optional<ParenthesisPair> parenthesisPairFor(char ch) noexcept {
+	switch (ch) {
+		case '(':
+		case ')':
+			return ParenthesisPair{'(', ')'};
+		case '[':
+		case ']':
+			return ParenthesisPair{'[', ']'};
+		case '{':
+		case '}':
+			return ParenthesisPair{'{', '}'};
+		default:
+			return std::nullopt;
+	}
+}
+
+bool isOpeningParenthesis(char ch) noexcept {
+	return ch == '(' || ch == '[' || ch == '{';
+}
+
+bool findMatchingParenthesis(MRFileEditor &editor, std::size_t origin, std::size_t &match) noexcept {
+	const std::size_t length = editor.bufferLength();
+	const char originChar = editor.charAtOffset(origin);
+	const std::optional<ParenthesisPair> pair = parenthesisPairFor(originChar);
+	int depth = 1;
+
+	if (!pair) return false;
+	if (isOpeningParenthesis(originChar)) {
+		for (std::size_t pos = origin + 1; pos < length; ++pos) {
+			const char ch = editor.charAtOffset(pos);
+			if (ch == pair->open) ++depth;
+			if (ch == pair->close && --depth == 0) {
+				match = pos;
+				return true;
+			}
+		}
+		return false;
+	}
+	for (std::size_t pos = origin; pos > 0; --pos) {
+		const std::size_t probe = pos - 1;
+		const char ch = editor.charAtOffset(probe);
+		if (ch == pair->close) ++depth;
+		if (ch == pair->open && --depth == 0) {
+			match = probe;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool handleMatchParenthesis() {
+	MREditWindow *win = currentEditWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	std::size_t origin = 0;
+	std::size_t match = 0;
+
+	if (editor == nullptr) return true;
+	const std::size_t length = editor->bufferLength();
+	if (length == 0) {
+		postDialogWarning("No parenthesis at cursor.");
+		return true;
+	}
+	origin = std::min(editor->cursorOffset(), length - 1);
+	if (!parenthesisPairFor(editor->charAtOffset(origin))) {
+		const std::size_t cursor = std::min(editor->cursorOffset(), length);
+		if (cursor == 0 || !parenthesisPairFor(editor->charAtOffset(cursor - 1))) {
+			postDialogWarning("No parenthesis at cursor.");
+			return true;
+		}
+		origin = cursor - 1;
+	}
+	if (!findMatchingParenthesis(*editor, origin, match)) {
+		postDialogWarning("No matching parenthesis found.");
+		return true;
+	}
+	editor->setCursorOffset(match);
+	editor->setSelectionOffsets(match, match);
+	editor->revealCursor(True);
+	return true;
 }
 
 bool parseIntFieldInRange(std::string_view text, int minValue, int maxValue, int &value) {
@@ -1300,7 +1408,7 @@ bool handleFileOpen() {
 	std::string logLine;
 	bool createdTarget = false;
 
-	if (!promptForPath("Open File", fileName, sizeof(fileName))) return true;
+	if (!promptForPath("OPEN FILE", fileName, sizeof(fileName))) return true;
 	if (!resolveReadableExistingPath(MRDialogHistoryScope::OpenFile, fileName, resolvedPath)) {
 		forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, fileName);
 		return true;
@@ -1336,7 +1444,7 @@ bool handleFileLoad() {
 	std::string logLine;
 	bool createdTarget = false;
 
-	if (!promptForPath("Load File", fileName, sizeof(fileName))) return true;
+	if (!promptForPath("LOAD FILE", fileName, sizeof(fileName))) return true;
 	if (!resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, fileName, resolvedPath)) {
 		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, fileName);
 		return true;
@@ -1362,25 +1470,6 @@ bool handleFileLoad() {
 
 bool handleFileAcquire() {
 	static_cast<void>(runAcquireDialog(MRAcquireMode::OpenFile));
-	return true;
-}
-
-bool handleExecuteProgram() {
-	std::string commandLine;
-	MREditWindow *win;
-
-	if (!promptForCommandLine(commandLine)) return true;
-	if (commandLine.empty()) {
-		postDialogWarning(kNoCommandSpecifiedMessage);
-		return true;
-	}
-
-	win = createCommunicationWindow(shortenCommandTitle(commandLine).c_str());
-	if (win == nullptr) {
-		postSearchError("Unable to create communication window.");
-		return true;
-	}
-	startExternalCommandInWindow(win, commandLine, true, true, true);
 	return true;
 }
 
@@ -1563,249 +1652,12 @@ bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
 	return true;
 }
 
-bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable) {
-	return dispatchEditorCommand(editorCommand, requiresWritable);
-}
-
-void syncPersistentBlocksMenuState() {
-	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar)) mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
-}
-
 bool handleBlockAction(bool ok, const char *failureText) {
 	if (!ok && failureText != nullptr && *failureText != '\0') messageBox(mfInformation | mfOKButton, "%s", failureText);
 	return true;
 }
 
-MREditWindow *currentBlockCommandWindow() {
-	return currentEditorCommandWindow();
-}
-
-MRFileEditor *editorForBlockCommand(MREditWindow *win) {
-	return win != nullptr ? win->getEditor() : nullptr;
-}
-
-bool hasMarkedTextForBlockOperation(MREditWindow *win) {
-	if (win == nullptr || !win->hasBlock()) return false;
-	if (win->blockStatus() == MREditWindow::bmStream && win->blockAnchorPtr() == win->blockEffectiveEndPtr()) return false;
-	return true;
-}
-
-bool promptBlockSavePath(std::string &outPath) {
-	char buffer[MAXPATH] = {0};
-	ushort result = cmCancel;
-	MREditWindow *win = currentBlockCommandWindow();
-
-	outPath.clear();
-	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockSave, buffer, sizeof(buffer), "*.*");
-	mr::dialogs::suggestFileDialogName(buffer, sizeof(buffer), win != nullptr && win->currentFileName() != nullptr ? std::string_view(win->currentFileName()) : std::string_view());
-	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::BlockSave, "*.*", "Save block as", "~N~ame", fdOKButton, buffer);
-	if (result == cmCancel) return false;
-	fexpand(buffer);
-	outPath = buffer;
-	if (outPath.find('*') != std::string::npos || outPath.find('?') != std::string::npos) return false;
-	return !outPath.empty();
-}
-
-bool promptBlockLoadPath(std::string &outPath) {
-	char buffer[MAXPATH] = {0};
-	ushort result = cmCancel;
-
-	outPath.clear();
-	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockLoad, buffer, sizeof(buffer), "*.*");
-	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::BlockLoad, "*.*", "Load block from", "~N~ame", fdOpenButton, buffer);
-	if (result == cmCancel) return false;
-	fexpand(buffer);
-	outPath = buffer;
-	if (outPath.find('*') != std::string::npos || outPath.find('?') != std::string::npos) return false;
-	return !outPath.empty();
-}
-
-void acceptFetchedClipboardText(TStringView text) {
-	g_clipboardFetchState.received = true;
-	g_clipboardFetchState.text.assign(text.data(), text.size());
-}
-
-bool readSystemClipboardText(std::string &outText) {
-	g_clipboardFetchState = ClipboardFetchState();
-	if (!THardwareInfo::requestClipboardText(acceptFetchedClipboardText) || !g_clipboardFetchState.received) return false;
-	outText = g_clipboardFetchState.text;
-	return true;
-}
-
-void writeSystemClipboardText(std::string_view text) {
-	TClipboard::setText(TStringView(text.data(), text.size()));
-}
-
-bool copyCurrentBlockToSystemClipboard(bool append, bool cut, const char *failureText) {
-	MREditWindow *win = currentBlockCommandWindow();
-	MRFileEditor *editor = editorForBlockCommand(win);
-	std::string blockText;
-	std::string clipboardText;
-
-	if (!mrvmEditorExtractCurrentBlockText(win, editor, blockText)) return handleBlockAction(false, failureText);
-	if (append) {
-		if (!readSystemClipboardText(clipboardText)) {
-			postDialogWarning("Unable to read system clipboard.");
-			return true;
-		}
-		clipboardText += blockText;
-	} else
-		clipboardText = blockText;
-	writeSystemClipboardText(clipboardText);
-	if (cut) return handleBlockAction(mrvmEditorDeleteCurrentBlock(win, editor, mrvmEditorShouldLeaveColumnSpaceForDelete(win)), failureText);
-	return true;
-}
-
-bool copyCurrentBlockToSystemClipboard() {
-	return copyCurrentBlockToSystemClipboard(false, false, "No block marked.");
-}
-
-bool promptBlockMathOperation(char &operation) {
-	char operationBuffer[8] = {0};
-
-	operation = '\0';
-	if (inputBox("BLOCK MATH", "~O~peration (+,-,*,/)", operationBuffer, static_cast<ushort>(sizeof(operationBuffer) - 1)) == cmCancel) return false;
-	switch (operationBuffer[0]) {
-		case '+':
-		case '-':
-		case '*':
-		case '/':
-			operation = operationBuffer[0];
-			return true;
-		default:
-			postDialogWarning("Operation must be one of: + - * /");
-			return false;
-	}
-}
-
-bool parseBlockMathValues(std::string_view text, std::vector<double> &values) {
-	std::string token;
-	auto flushToken = [&]() {
-		bool sawDigit = false;
-		std::string normalized;
-		char *endPtr = nullptr;
-		double value = 0.0;
-
-		if (token.empty()) return;
-		for (const char ch : token) {
-			if (std::isdigit(static_cast<unsigned char>(ch)) != 0) sawDigit = true;
-			if (ch != ',') normalized.push_back(ch);
-		}
-		token.clear();
-		if (!sawDigit || normalized.empty()) return;
-		value = std::strtod(normalized.c_str(), &endPtr);
-		if (endPtr != nullptr && *endPtr == '\0') values.push_back(value);
-	};
-
-	values.clear();
-	for (const char ch : text) {
-		if (std::isdigit(static_cast<unsigned char>(ch)) != 0 || ch == '.' || ch == ',' || ch == '-') token.push_back(ch);
-		else
-			flushToken();
-	}
-	flushToken();
-	return !values.empty();
-}
-
-std::string formatBlockMathResult(double value) {
-	std::ostringstream out;
-	std::string text;
-
-	out << std::setprecision(15) << value;
-	text = out.str();
-	if (text.find('.') != std::string::npos) {
-		while (!text.empty() && text.back() == '0')
-			text.pop_back();
-		if (!text.empty() && text.back() == '.') text.pop_back();
-	}
-	return text.empty() ? "0" : text;
-}
-
-bool runBlockMathOperation() {
-	MREditWindow *win = currentBlockCommandWindow();
-	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
-	std::string blockText;
-	std::vector<double> values;
-	char operation = '\0';
-	double result = 0.0;
-
-	if (editor == nullptr) return true;
-	if (!promptBlockMathOperation(operation)) return true;
-	if (!mrvmEditorExtractCurrentBlockText(win, editor, blockText)) {
-		postDialogWarning("No block marked.");
-		return true;
-	}
-	if (!parseBlockMathValues(blockText, values)) {
-		postDialogWarning("Marked block contains no numbers.");
-		return true;
-	}
-	result = values.front();
-	for (std::size_t i = 1; i < values.size(); ++i)
-		switch (operation) {
-			case '+':
-				result += values[i];
-				break;
-			case '-':
-				result -= values[i];
-				break;
-			case '*':
-				result *= values[i];
-				break;
-			case '/':
-				if (values[i] == 0.0) {
-					postDialogWarning("Division by zero in marked block.");
-					return true;
-				}
-				result /= values[i];
-				break;
-			default:
-				postDialogWarning("Unsupported math operation.");
-				return true;
-		}
-	if (win->isReadOnly()) {
-		postDialogWarning(kWindowReadOnlyMessage);
-		return true;
-	}
-	return handleBlockAction(editor->insertBufferText(formatBlockMathResult(result)), "Unable to insert block math result.");
-}
-
-
-bool chooseInterWindowBlockTarget(int &sourceWindowIndex) {
-	MREditWindow *targetWin = currentEditWindow();
-	MREditWindow *sourceWin = nullptr;
-
-	sourceWindowIndex = 0;
-	if (targetWin == nullptr) return false;
-	sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);
-	if (sourceWin == nullptr) return false;
-	if (sourceWin == targetWin) {
-		postDialogWarning(kChooseAnotherWindowForBlockMessage);
-		return false;
-	}
-	if (!hasMarkedTextForBlockOperation(sourceWin)) {
-		postDialogWarning(kNoMarkedBlockInSourceWindowMessage);
-		return false;
-	}
-	sourceWindowIndex = mrvmUiCurrentWindowIndex(sourceWin);
-	static_cast<void>(mrActivateEditWindow(targetWin));
-	return true;
-}
-
 bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix);
-
-bool togglePersistentBlocksSetting() {
-	MREditSetupSettings settings = configuredEditSetupSettings();
-	bool enabled;
-
-	settings.persistentBlocks = !settings.persistentBlocks;
-	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Persistent blocks update failed: ")) return true;
-
-	enabled = configuredPersistentBlocksSetting();
-	mrLogMessage(enabled ? "Persistent blocks enabled." : "Persistent blocks disabled.");
-	syncPersistentBlocksMenuState();
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, enabled ? "Persistent blocks: ON" : "Persistent blocks: OFF", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
-	return true;
-}
 
 bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix) {
 	MRSettingsWriteReport writeReport;
@@ -1912,30 +1764,6 @@ bool handleWordstarCenterLine(MREditWindow *window) {
 
 	if (editor == nullptr || window == nullptr || window->isReadOnly()) return false;
 	return editor->centerCurrentLine(settings.leftMargin, settings.rightMargin);
-}
-
-bool handleWordstarLoadBlockFromFile(MREditWindow *window) {
-	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-	std::string path;
-	std::string text;
-	std::string errorText;
-	std::size_t start = 0;
-	std::size_t end = 0;
-
-	if (window == nullptr || editor == nullptr || window->isReadOnly()) return false;
-	if (!promptBlockLoadPath(path)) return true;
-	if (!readTextFile(path, text, errorText)) {
-		forgetLoadDialogPath(MRDialogHistoryScope::BlockLoad, path.c_str());
-		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
-		return true;
-	}
-	start = editor->selectionStartOffset();
-	end = editor->selectionEndOffset();
-	if (end < start) std::swap(start, end);
-	if (!editor->replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), text.data(), static_cast<uint>(text.size()))) return true;
-	window->applyCommittedBlockState(static_cast<int>(MREditWindow::bmStream), false, static_cast<uint>(start), static_cast<uint>(start + text.size()));
-	rememberLoadDialogPath(MRDialogHistoryScope::BlockLoad, path.c_str());
-	return true;
 }
 
 bool handleWordstarForceSave(MREditWindow *window) {
@@ -2080,10 +1908,9 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 		case KeymapDispatchKind::Custom:
 			switch (it->customAction) {
 				case KeymapCustomAction::DeleteForwardCharOrBlock:
-					if (window != nullptr && window->hasBlock()) return dispatchApplicationCommandEvent(cmMrBlockDelete);
 					return dispatchEditorCommandEvent(window, cmDelChar);
 				case KeymapCustomAction::LoadBlockFromFile:
-					return handleWordstarLoadBlockFromFile(window);
+					return runDisabledBlockAction();
 				case KeymapCustomAction::SetRandomAccessMark:
 					return markIndex && mrvmUiSetRandomAccessMark(*markIndex);
 				case KeymapCustomAction::GetRandomAccessMark:
@@ -2105,7 +1932,7 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 				case KeymapCustomAction::JustifyParagraph:
 					return handleWordstarJustifyParagraph(window);
 				case KeymapCustomAction::SortColumnBlockToggle:
-					return window != nullptr && window->sortColumnBlockToggleOrder();
+					return runDisabledBlockAction();
 				case KeymapCustomAction::ForceSave:
 					return handleWordstarForceSave(window);
 				case KeymapCustomAction::ExitDirtySaveAll:
@@ -2127,13 +1954,9 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 				case KeymapCustomAction::CursorUndent:
 					return handleBlockAction(mrvmUiCursorUndent(), "Unable to undent cursor position.");
 				case KeymapCustomAction::CopyMarkedBlockToSystemClipboard:
-					return copyCurrentBlockToSystemClipboard();
-				case KeymapCustomAction::BlockMath:
-					return runBlockMathOperation();
-				case KeymapCustomAction::ExtendBlockByMotion: {
-					const auto sequence = MRKeymapSequence::parse(sequenceText);
-					return window != nullptr && sequence && sequence->size() == 1 && window->shiftCursorBlockMark(sequence->tokens().front());
-				}
+				case KeymapCustomAction::ExtendBlockByMotion:
+				case KeymapCustomAction::DisabledBlockAction:
+					return runDisabledBlockAction();
 				case KeymapCustomAction::SearchResultsNext:
 					return handleSearchResultsNext();
 				case KeymapCustomAction::CompilerProblemsNext:
@@ -2201,19 +2024,13 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return dispatchEditorCommand(cmMrEditRedo, true);
 
 		case cmMrEditCutToBuffer:
-			return copyCurrentBlockToSystemClipboard(false, true, "Unable to move block to buffer.");
-
 		case cmMrEditCopyToBuffer:
-			return copyCurrentBlockToSystemClipboard(false, false, "No block marked.");
-
 		case cmMrEditAppendToBuffer:
-			return copyCurrentBlockToSystemClipboard(true, false, "No block marked.");
-
 		case cmMrEditCutAndAppendToBuffer:
-			return copyCurrentBlockToSystemClipboard(true, true, "Unable to cut and append block.");
+			return runDisabledBlockAction();
 
 		case cmMrEditPasteFromBuffer:
-			return dispatchEditorClipboardCommand(cmPaste, true);
+			return runDisabledBlockAction();
 
 		case cmMrSearchPushMarker:
 			return handleBlockAction(mrvmUiPushMarker(), "Unable to push position onto marker stack.");
@@ -2243,87 +2060,88 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return handleSearchGotoLineNumber();
 
 		case cmMrBlockCopy: {
-			MREditWindow *win = currentBlockCommandWindow();
-			return handleBlockAction(mrvmEditorCopyCurrentBlock(win, editorForBlockCommand(win)), "No block marked.");
+			return runDisabledBlockAction();
 		}
 
 		case cmMrBlockMove: {
-			MREditWindow *win = currentBlockCommandWindow();
-			return handleBlockAction(mrvmEditorMoveCurrentBlock(win, editorForBlockCommand(win)), "Unable to move block.");
+			return runDisabledBlockAction();
 		}
 
 		case cmMrBlockDelete: {
-			MREditWindow *win = currentBlockCommandWindow();
-			return handleBlockAction(mrvmEditorDeleteCurrentBlock(win, editorForBlockCommand(win), mrvmEditorShouldLeaveColumnSpaceForDelete(win)), "Unable to delete block.");
+			return runDisabledBlockAction();
 		}
 
+		case cmMrBlockLoadFromDisk:
+			return runDisabledBlockAction();
+
 		case cmMrBlockSaveToDisk: {
-			std::string savePath;
-			MREditWindow *win = currentBlockCommandWindow();
-			if (!promptBlockSavePath(savePath)) return true;
-			return handleBlockAction(mrvmEditorSaveCurrentBlockToFile(win, editorForBlockCommand(win), savePath), "Unable to save block.");
+			return runDisabledBlockAction();
 		}
 
 		case cmMrBlockIndent: {
-			MREditWindow *win = currentBlockCommandWindow();
-			return handleBlockAction(mrvmEditorIndentBlock(win, editorForBlockCommand(win)), "Unable to indent block.");
+			return runDisabledBlockAction();
 		}
 
 		case cmMrBlockUndent: {
-			MREditWindow *win = currentBlockCommandWindow();
-			return handleBlockAction(mrvmEditorUndentBlock(win, editorForBlockCommand(win)), "Unable to undent block.");
+			return runDisabledBlockAction();
 		}
 
 		case cmMrBlockWindowCopy: {
-			bool ok = false;
-			int sourceWindowIndex = 0;
-			if (!chooseInterWindowBlockTarget(sourceWindowIndex)) return true;
-			if (sourceWindowIndex > 0) ok = mrvmUiWindowCopyBlock(sourceWindowIndex);
-			return handleBlockAction(ok, "Inter-window block copy failed.");
+			return runDisabledBlockAction();
 		}
 
 		case cmMrBlockWindowMove: {
-			bool ok = false;
-			int sourceWindowIndex = 0;
-			if (!chooseInterWindowBlockTarget(sourceWindowIndex)) return true;
-			if (sourceWindowIndex > 0) ok = mrvmUiWindowMoveBlock(sourceWindowIndex);
-			return handleBlockAction(ok, "Inter-window block move failed.");
+			return runDisabledBlockAction();
 		}
 
 		case cmMrBlockMarkLines: {
-			MREditWindow *win = currentBlockCommandWindow();
+			MREditWindow *win = currentEditWindow();
 			if (win != nullptr) win->beginLineBlock();
-			return handleBlockAction(win != nullptr, "Unable to start line block marking.");
+			return true;
 		}
 
 		case cmMrBlockMarkColumns: {
-			MREditWindow *win = currentBlockCommandWindow();
+			MREditWindow *win = currentEditWindow();
 			if (win != nullptr) win->beginColumnBlock();
-			return handleBlockAction(win != nullptr, "Unable to start column block marking.");
+			return true;
 		}
 
 		case cmMrBlockMarkStream: {
-			MREditWindow *win = currentBlockCommandWindow();
+			MREditWindow *win = currentEditWindow();
 			if (win != nullptr) win->beginStreamBlock();
-			return handleBlockAction(win != nullptr, "Unable to start stream block marking.");
+			return true;
+		}
+
+		case cmMrBlockToggleMarking: {
+			MREditWindow *win = currentEditWindow();
+			if (win != nullptr) {
+				if (win->isBlockMarking()) win->endBlock();
+				else
+					win->beginLineBlock();
+			}
+			return true;
+		}
+
+		case cmMrBlockToggleVisibility: {
+			MREditWindow *win = currentEditWindow();
+			if (win != nullptr && !win->toggleBlockVisibility()) postDialogWarning("No block marked.");
+			return true;
 		}
 
 		case cmMrBlockEndMarking: {
-			MREditWindow *win = currentBlockCommandWindow();
-			const bool ok = win != nullptr && win->isBlockMarking();
-			if (ok) win->endBlock();
-			return handleBlockAction(ok, "No active block marking.");
+			MREditWindow *win = currentEditWindow();
+			if (win != nullptr) win->endBlock();
+			return true;
 		}
 
 		case cmMrBlockTurnMarkingOff: {
-			MREditWindow *win = currentBlockCommandWindow();
-			const bool ok = win != nullptr && win->hasBlock();
-			if (ok) win->clearBlock();
-			return handleBlockAction(ok, "No block marked.");
+			MREditWindow *win = currentEditWindow();
+			if (win != nullptr) win->clearBlock();
+			return true;
 		}
 
 		case cmMrBlockPersistent:
-			return togglePersistentBlocksSetting();
+			return runDisabledBlockAction();
 
 		case cmMrWindowOpen:
 			static_cast<void>(createEditorWindow("?No-File?"));
@@ -2468,9 +2286,6 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			showAboutDialog();
 			return true;
 
-		case cmMrOtherExecuteProgram:
-			return handleExecuteProgram();
-
 		case cmMrOtherBuildCurrentFile:
 			return handleBuildCurrentFile();
 
@@ -2491,6 +2306,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherMacroManager:
 			return runMacroManagerDialog();
+
+		case cmMrOtherMatchBraceOrParen:
+			return handleMatchParenthesis();
 
 		case cmMrOtherAsciiTable:
 			return handleCharacterTable(CharacterTableKind::Ascii);

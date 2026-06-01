@@ -122,7 +122,7 @@ std::vector<std::string> collectJournalSyslogIdentifiers() {
 class JournalTagDialog : public TDialog {
   public:
 	JournalTagDialog(const std::vector<std::string> &historyValues, const std::vector<std::string> &identifierValues)
-	    : TWindowInit(initFrame), TDialog(TRect(0, 0, 62, 18), "Open Journal"), tagField(nullptr), history(historyValues), identifiers(identifierValues) {
+	    : TWindowInit(initFrame), TDialog(TRect(0, 0, 62, 18), "OPEN JOURNAL"), tagField(nullptr), history(historyValues), identifiers(identifierValues) {
 		options |= ofCentered;
 		tagField = new TInputLine(TRect(14, 3, 51, 4), 127);
 		insert(new TLabel(TRect(3, 3, 13, 4), "App ~t~ag:", tagField));
@@ -491,7 +491,7 @@ bool openLiveLogViewer() {
 	LogSearchSnapshot search;
 	MRLiveLogSettings liveLogSettings = configuredLiveLogSettings();
 
-	if (!promptForPath(MRDialogHistoryScope::LiveLogOpen, "Open Live Log", fileName, sizeof(fileName))) return true;
+	if (!promptForPath(MRDialogHistoryScope::LiveLogOpen, "OPEN LIVE LOG", fileName, sizeof(fileName))) return true;
 	if (!resolveReadableExistingPath(MRDialogHistoryScope::LiveLogOpen, fileName, resolvedPath)) {
 		forgetLoadDialogPath(MRDialogHistoryScope::LiveLogOpen, fileName);
 		return true;

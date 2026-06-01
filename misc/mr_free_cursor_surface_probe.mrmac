@@ -1,0 +1,35 @@
+$MACRO FreeCursorSurfaceProbe FROM EDIT;
+DEF_INT(Fail);
+DEF_STR(Result);
+
+Fail := 0;
+Result := 'PASS free-cursor-surface';
+
+TOF;
+EOL;
+RIGHT;
+RIGHT;
+IF C_COL = 6 THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL C_COL right-of-eol mismatch';
+    END;
+END;
+
+LEFT;
+IF C_COL = 5 THEN
+ELSE
+    Fail := Fail + 1;
+    IF Fail = 1 THEN
+        Result := 'FAIL C_COL left-free-column mismatch';
+    END;
+END;
+
+TOF;
+GOTO_COL(1);
+TEXT(Result);
+CR;
+SAVE_FILE;
+QUIT(0);
+END_MACRO;

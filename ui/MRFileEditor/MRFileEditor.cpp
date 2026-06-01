@@ -2089,7 +2089,7 @@ MRFileEditor::DestructionProbe::~DestructionProbe() {
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
     : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxState(), mFoldState(), mMiniMapState(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
-      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0) {
+      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMouseSelectionColumnsValid(false), mMouseSelectionAnchorColumn(0), mMouseSelectionCursorColumn(0), mMouseSelectionModifiers(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackCursor(false), mBlockOverlayColumnAnchor(-1), mBlockOverlayColumnEnd(-1), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
 	eventMask |= evMouse | evKeyboard | evCommand;
@@ -2340,6 +2340,14 @@ std::size_t MRFileEditor::selectionEndOffset() const noexcept {
 	return mBufferModel.selectionEnd();
 }
 
+std::size_t MRFileEditor::selectionAnchorOffset() const noexcept {
+	return mSelectionAnchor;
+}
+
+std::size_t MRFileEditor::selectionCursorOffset() const noexcept {
+	return mBufferModel.cursor();
+}
+
 bool MRFileEditor::hasTextSelection() const noexcept {
 	return mBufferModel.hasSelection();
 }
@@ -2407,6 +2415,10 @@ int MRFileEditor::charColumn(std::size_t start, std::size_t pos) const noexcept 
 
 void MRFileEditor::setCursorOffset(std::size_t pos, int) {
 	moveCursor(std::min(pos, mBufferModel.length()), false, false);
+}
+
+void MRFileEditor::setCursorOffsetAtVisualColumn(std::size_t pos, int visualColumn) {
+	moveCursor(std::min(pos, mBufferModel.length()), false, false, visualColumn);
 }
 
 bool MRFileEditor::scrollWindowByLines(int deltaRows) {
@@ -3072,12 +3084,12 @@ void MRFileEditor::pushUndoSnapshot() {
 		record.selAnchor = 0;
 		record.selCursor = 0;
 	}
-	if (owner != nullptr) {
-		record.blockMode = mBlockOverlayMode;
-		record.blockAnchor = mBlockOverlayAnchor;
-		record.blockEnd = mBlockOverlayEnd;
-		record.blockMarkingOn = mBlockOverlayActive;
-	}
+	record.blockMode = 0;
+	record.blockAnchor = 0;
+	record.blockEnd = 0;
+	record.blockAnchorColumn = -1;
+	record.blockEndColumn = -1;
+	record.blockMarkingOn = false;
 	mBufferModel.pushUndoSnapshot(std::move(record));
 }
 
@@ -3312,24 +3324,28 @@ bool MRFileEditor::justifyParagraph(int leftMargin, int rightMargin) {
 	return replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), justifiedText.data(), static_cast<uint>(justifiedText.size()));
 }
 
-void MRFileEditor::setBlockOverlayState(int mode, std::size_t anchor, std::size_t end, bool active, bool trackCursor) {
-	const std::size_t length = mBufferModel.length();
-
-	if (!active || mode < 1 || mode > 3) {
-		mBlockOverlayActive = false;
-		mBlockOverlayMode = 0;
-		mBlockOverlayAnchor = 0;
-		mBlockOverlayEnd = 0;
-		mBlockOverlayTrackingCursor = false;
-		drawView();
-		return;
-	}
-	mBlockOverlayActive = true;
+void MRFileEditor::setBlockOverlayState(int mode, std::size_t anchor, std::size_t end, bool active, bool trackCursor, int columnAnchor, int columnEnd) {
 	mBlockOverlayMode = mode;
-	mBlockOverlayAnchor = std::min(anchor, length);
-	mBlockOverlayEnd = std::min(end, length);
-	mBlockOverlayTrackingCursor = trackCursor;
+	mBlockOverlayAnchor = std::min(anchor, mBufferModel.length());
+	mBlockOverlayEnd = std::min(end, mBufferModel.length());
+	if (mBlockOverlayAnchor > mBlockOverlayEnd) std::swap(mBlockOverlayAnchor, mBlockOverlayEnd);
+	mBlockOverlayActive = active && mode != 0;
+	mBlockOverlayTrackCursor = trackCursor;
+	mBlockOverlayColumnAnchor = columnAnchor;
+	mBlockOverlayColumnEnd = columnEnd;
 	drawView();
+}
+
+MRFileEditor::BlockOverlayState MRFileEditor::blockOverlayState() const noexcept {
+	BlockOverlayState state;
+	state.active = mBlockOverlayActive;
+	state.mode = mBlockOverlayMode;
+	state.anchor = mBlockOverlayAnchor;
+	state.end = mBlockOverlayEnd;
+	state.trackCursor = mBlockOverlayTrackCursor;
+	state.columnAnchor = mBlockOverlayColumnAnchor;
+	state.columnEnd = mBlockOverlayColumnEnd;
+	return state;
 }
 
 void MRFileEditor::setSelectionOffsets(std::size_t start, std::size_t end, Boolean) {
@@ -3338,6 +3354,17 @@ void MRFileEditor::setSelectionOffsets(std::size_t start, std::size_t end, Boole
 	mSelectionAnchor = start;
 	mBufferModel.setSelection(start, end);
 	syncFromEditorState(false);
+}
+
+bool MRFileEditor::lastMouseSelectionColumns(int &anchorColumn, int &cursorColumn) const noexcept {
+	if (!mMouseSelectionColumnsValid) return false;
+	anchorColumn = mMouseSelectionAnchorColumn;
+	cursorColumn = mMouseSelectionCursorColumn;
+	return true;
+}
+
+unsigned short MRFileEditor::lastMouseSelectionModifiers() const noexcept {
+	return mMouseSelectionModifiers;
 }
 
 bool MRFileEditor::replaceRangeAndSelect(uint start, uint end, const char *data, uint length) {
@@ -3872,7 +3899,10 @@ void MRFileEditor::handleCommand(TEvent &event) {
 				changeSet.newVersion = mBufferModel.version();
 				changeSet.touchedRange = MRTextBufferModel::Range(prefix, prefix + touchedLength);
 				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState, &changeSet);
-				if (owner != nullptr) setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false);
+				if (MREditWindow *window = dynamic_cast<MREditWindow *>(owner); window != nullptr)
+					window->applyCommittedBlockState(record.blockMarkingOn ? record.blockMode : 0, false, record.blockAnchor, record.blockEnd, record.blockAnchorColumn, record.blockEndColumn);
+				else if (owner != nullptr)
+					setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false, record.blockAnchorColumn, record.blockEndColumn);
 			}
 			break;
 		}
@@ -3902,7 +3932,10 @@ void MRFileEditor::handleCommand(TEvent &event) {
 				changeSet.newVersion = mBufferModel.version();
 				changeSet.touchedRange = MRTextBufferModel::Range(prefix, prefix + touchedLength);
 				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState, &changeSet);
-				if (owner != nullptr) setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false);
+				if (MREditWindow *window = dynamic_cast<MREditWindow *>(owner); window != nullptr)
+					window->applyCommittedBlockState(record.blockMarkingOn ? record.blockMode : 0, false, record.blockAnchor, record.blockEnd, record.blockAnchorColumn, record.blockEndColumn);
+				else if (owner != nullptr)
+					setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false, record.blockAnchorColumn, record.blockEndColumn);
 			}
 			break;
 		}
@@ -4018,6 +4051,8 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	const TextViewportGeometry viewport = textViewportGeometry();
 	const TPoint local = makeLocal(event.mouse.where);
 	std::size_t foldLineIndex = 0;
+	mMouseSelectionColumnsValid = false;
+	mMouseSelectionModifiers = event.mouse.controlKeyState;
 	auto gutterSpanAtPoint = [this, &local, &viewport](std::size_t lineIndex) noexcept -> const MRFoldSpan * {
 		const std::vector<unsigned short> &displayLevels = mFoldState.visibleState().displayLevels;
 		const std::vector<MRFoldSpan> &visibleSpans = mFoldState.visibleState().spans;
@@ -4107,11 +4142,28 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	select();
 	int targetColumn = 0;
 	std::size_t anchor = mouseOffset(local, &targetColumn);
+	const bool leftButton = (event.mouse.buttons & mbLeftButton) != 0;
+	const bool rightButton = (event.mouse.buttons & mbRightButton) != 0;
+	const bool mouseCtrl = (event.mouse.controlKeyState & kbCtrlShift) != 0;
+	const bool mouseAlt = (event.mouse.controlKeyState & kbAltShift) != 0;
+	const bool liveLineBlock = mouseCtrl && mouseAlt;
+	const bool liveColumnBlock = !liveLineBlock && (mouseAlt || (rightButton && !leftButton));
+	const bool liveStreamBlock = !liveLineBlock && !liveColumnBlock && (leftButton || rightButton || mouseCtrl);
+	const int liveBlockMode = liveColumnBlock ? 2 : liveLineBlock ? 1 : liveStreamBlock ? 3 : 0;
+	mMouseSelectionModifiers = liveLineBlock ? static_cast<unsigned short>(kbCtrlShift | kbAltShift) : liveColumnBlock ? kbAltShift : liveStreamBlock ? kbCtrlShift : 0;
+	auto updateLiveMouseBlockOverlay = [this, liveBlockMode](std::size_t current) {
+		if (liveBlockMode == 0) return;
+		setBlockOverlayState(liveBlockMode, mSelectionAnchor, current, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
+	};
 	mSelectionAnchor = anchor;
+	mMouseSelectionColumnsValid = true;
+	mMouseSelectionAnchorColumn = targetColumn;
+	mMouseSelectionCursorColumn = targetColumn;
 	mBufferModel.setCursorAndSelection(anchor, anchor, anchor);
 	if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(anchor), targetColumn);
 	else
 		mCursorVisualColumn = actualCursorVisualColumn(anchor);
+	updateLiveMouseBlockOverlay(anchor);
 	updateIndicator();
 	drawView();
 
@@ -4133,10 +4185,12 @@ void MRFileEditor::handleMouse(TEvent &event) {
 		}
 		int dragColumn = 0;
 		std::size_t target = mouseOffset(makeLocal(event.mouse.where), &dragColumn);
+		mMouseSelectionCursorColumn = dragColumn;
 		mBufferModel.setCursorAndSelection(target, mSelectionAnchor, target);
 		if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), dragColumn);
 		else
 			mCursorVisualColumn = actualCursorVisualColumn(target);
+		updateLiveMouseBlockOverlay(target);
 		updateIndicator();
 		drawView();
 	}

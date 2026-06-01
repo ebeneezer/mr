@@ -346,7 +346,7 @@ class MRAboutQuoteBox : public TView {
 
 class MRAbout : public MRDialogFoundation {
   public:
-	MRAbout() noexcept : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16, initMrDialogFrame), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false), mSuppressNextDoneCommand(false) {
+	MRAbout() noexcept : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16, initMrDialogFrame), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false) {
 		eventMask |= evBroadcast;
 		insertCenteredStaticLine(this, size.x, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());
 		insertCenteredStaticLine(this, size.x, 3, "Dr. Michael H. Raus & Codex AI");
@@ -380,13 +380,11 @@ class MRAbout : public MRDialogFoundation {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (event.what == evMouseDown || event.what == evMouseUp) trackDonePress(event);
+		if (event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0 && mouseInsideDoneButton(event.mouse.where)) {
+			handleDoneButtonMouseDown(event);
+			return;
+		}
 		if (event.what == evCommand && event.message.command == cmAboutDone) {
-			if (mSuppressNextDoneCommand) {
-				mSuppressNextDoneCommand = false;
-				clearEvent(event);
-				return;
-			}
 			endModal(cmOK);
 			clearEvent(event);
 			return;
@@ -403,22 +401,59 @@ class MRAbout : public MRDialogFoundation {
 		if (mRotationTimer == nullptr && owner != nullptr) mRotationTimer = setTimer(kAnimationTickMs, kAnimationTickMs);
 	}
 
-	void trackDonePress(const TEvent &event) {
-		if (mDoneButton == nullptr) return;
-		TPoint local = makeLocal(event.mouse.where);
-		bool insideDone = mDoneButton->getBounds().contains(local);
-		if (event.what == evMouseDown) {
-			if (insideDone) {
-				mDonePressTracking = true;
-				mDoneLongPressTriggered = false;
-				mDonePressStartedAt = std::chrono::steady_clock::now();
+	bool mouseInsideDoneButton(TPoint where) {
+		return mDoneButton != nullptr && mDoneButton->mouseInView(where);
+	}
+
+	void checkDoneLongPress() {
+		if (!mDonePressTracking || mDoneLongPressTriggered) return;
+		if (std::chrono::steady_clock::now() - mDonePressStartedAt < std::chrono::milliseconds(kDoneLongPressMs)) return;
+		mDoneLongPressTriggered = true;
+		enableQuoteModeFromLongPress();
+	}
+
+	bool handleRotationTimerEvent(TEvent &event) {
+		if (event.what != evBroadcast || event.message.command != cmTimerExpired || event.message.infoPtr != mRotationTimer) return false;
+		tickQuoteRotation();
+		clearEvent(event);
+		return true;
+	}
+
+	void handleDoneButtonMouseDown(TEvent &event) {
+		bool down = false;
+		bool releasedInside = false;
+
+		mDonePressTracking = true;
+		mDoneLongPressTriggered = false;
+		mDonePressStartedAt = std::chrono::steady_clock::now();
+
+		for (;;) {
+			if ((event.what & evMouse) != 0) {
+				const bool inside = mouseInsideDoneButton(event.mouse.where);
+				if (event.what == evMouseUp) releasedInside = inside;
+				if (down != inside) {
+					down = inside;
+					mDoneButton->drawState(down ? True : False);
+				}
 			}
-			return;
+			if (!handleRotationTimerEvent(event)) checkDoneLongPress();
+			if (event.what == evMouseUp) break;
+			if (!mouseEvent(event, evMouseMove | evMouseAuto | evBroadcast)) {
+				if (event.what == evMouseUp) {
+					releasedInside = mouseInsideDoneButton(event.mouse.where);
+					if (down != releasedInside) {
+						down = releasedInside;
+						mDoneButton->drawState(down ? True : False);
+					}
+				}
+				break;
+			}
 		}
-		if (mDonePressTracking) {
-			if (mDoneLongPressTriggered) mSuppressNextDoneCommand = true;
-			mDonePressTracking = false;
-		}
+
+		if (down) mDoneButton->drawState(False);
+		mDonePressTracking = false;
+		if (!mDoneLongPressTriggered && releasedInside) endModal(cmOK);
+		clearEvent(event);
 	}
 
 	void enableQuoteModeFromLongPress() {
@@ -475,7 +510,6 @@ class MRAbout : public MRDialogFoundation {
 		if (mDonePressTracking && !mDoneLongPressTriggered) {
 			if (std::chrono::steady_clock::now() - mDonePressStartedAt >= std::chrono::milliseconds(kDoneLongPressMs)) {
 				mDoneLongPressTriggered = true;
-				mSuppressNextDoneCommand = true;
 				enableQuoteModeFromLongPress();
 			}
 		}
@@ -507,7 +541,6 @@ class MRAbout : public MRDialogFoundation {
 	bool mRearmRotationAfterAnimation;
 	bool mDonePressTracking;
 	bool mDoneLongPressTriggered;
-	bool mSuppressNextDoneCommand;
 	std::chrono::steady_clock::time_point mDonePressStartedAt;
 };
 

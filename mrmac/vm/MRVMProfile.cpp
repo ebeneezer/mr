@@ -100,7 +100,7 @@ unsigned classifyPureOpcode(unsigned char opcode) {
 
 unsigned classifyIntrinsicName(const std::string &name) {
 	if (name == "VERSION") return mrefBackgroundSafe;
-	if (name == "FILE_EXISTS" || name == "FIRST_FILE" || name == "NEXT_FILE" || name == "GET_ENVIRONMENT") return mrefExternalIo;
+	if (name == "FILE_EXISTS" || name == "FIRST_FILE" || name == "NEXT_FILE" || name == "GET_ENVIRONMENT" || name == "SUBSHELL") return mrefExternalIo;
 	if (name == "FILE_ATTR" || name == "COPY_FILE" || name == "RENAME_FILE" || name == "SWITCH_FILE") return mrefUiAffinity | mrefExternalIo;
 	if (name == "GLOBAL_STR" || name == "GLOBAL_INT" || name == "INQ_MACRO") return mrefUiAffinity;
 	if (name == "BLOCK_TEXT") return mrefUiAffinity;
@@ -138,7 +138,8 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 	static constexpr const char *commands[] = {"APPEND_BLOCK",
 	                                           "BACK_HOME",
 	                                           "BACK_WORD",
-	                                           "BLOCK_MATH",
+	                                           "BLOCK_MARK_LINES",
+	                                           "BLOCK_TOGGLE_MARKING",
 	                                           "BOTTOM_OF_WINDOW",
 	                                           "CENTER_LINE",
 	                                           "CENTER_LINE_ON_SCREEN",
@@ -148,6 +149,10 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 	                                           "DEL_CHAR_OR_BLOCK",
 	                                           "DEL_EOL",
 	                                           "DEL_WORD",
+	                                           "DESKTOP_MOVE_WINDOW_LEFT",
+	                                           "DESKTOP_MOVE_WINDOW_RIGHT",
+	                                           "DESKTOP_VIEWPORT_LEFT",
+	                                           "DESKTOP_VIEWPORT_RIGHT",
 	                                           "END_OF_BLOCK",
 	                                           "FORCE_SAVE",
 	                                           "INDENT_BLOCK",
@@ -156,6 +161,7 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 	                                           "LOAD_BLOCK",
 	                                           "MARK_WORD_RIGHT",
 	                                           "MULTI_FILE_SEARCH",
+	                                           "MULTI_FILE_SEARCH_REPLACE",
 	                                           "NEXT_SEARCH_RESULT",
 	                                           "PASTE_BLOCK",
 	                                           "PASTE_FROM_CLIPBOARD",
@@ -178,8 +184,31 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 	                                           "TOP_OF_WINDOW",
 	                                           "UNDO",
 	                                           "UNDENT_BLOCK",
+	                                           "WINDOW_CASCADE",
+	                                           "WINDOW_CLOSE",
 	                                           "WINDOW_COPY_BLOCK",
+	                                           "WINDOW_LIST",
 	                                           "WINDOW_MOVE_BLOCK",
+	                                           "WINDOW_OPEN",
+	                                           "WINDOW_NEXT",
+	                                           "WINDOW_PREVIOUS",
+	                                           "WINDOW_SPLIT_HORIZONTAL",
+	                                           "WINDOW_SPLIT_VERTICAL",
+	                                           "WINDOW_TILE",
+	                                           "WINDOW_ZOOM",
+	                                           "MATCH_PARENTHESIS",
+	                                           "MACRO_TOGGLE_RECORDING",
+	                                           "SETUP_EDIT_SETTINGS",
+	                                           "SETUP_COLOR",
+	                                           "SETUP_KEYMAP",
+	                                           "SETUP_MOUSE_KEY_REPEAT",
+	                                           "SETUP_FILENAME_EXTENSIONS",
+	                                           "SETUP_COMPILER_PROFILES",
+	                                           "SETUP_PATHS",
+	                                           "SETUP_BACKUPS_AUTOSAVE",
+	                                           "SETUP_SEARCH_REPLACE_DEFAULTS",
+	                                           "SETUP_USER_INTERFACE",
+	                                           "SETUP_LIVE_LOGS",
 	                                           "EXIT_SAVE_ALL"};
 
 	for (const char *command : commands)
@@ -194,7 +223,7 @@ unsigned classifyProcName(const std::string &name) {
 	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "SET_GLOBAL_HASH" || name == "UNLOAD_MACRO") return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE" || name == "SET_FILE_ATTR") return mrefExternalIo;
 	if (name == "SHELL_TO_OS") return mrefUiAffinity | mrefExternalIo;
-	if (name == "LOAD_FILE" || name == "SAVE_FILE" || name == "SAVE_BLOCK") return mrefUiAffinity | mrefExternalIo;
+	if (name == "LOAD_FILE" || name == "SAVE_FILE") return mrefUiAffinity | mrefExternalIo;
 	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" || name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX") return mrefUiAffinity;
 	if (name == "SAVE_SETTINGS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "BEEP") return mrefUiAffinity;

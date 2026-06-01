@@ -54,6 +54,8 @@ class MREditWindow;
 std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language);
 
 class MRFileEditor : public TScroller {
+	friend bool mrfeSeedMouseColumnStateForRegression(MRFileEditor &editor, int anchorColumn, int cursorColumn);
+
   public:
 	struct LoadTiming {
 		bool valid;
@@ -203,6 +205,8 @@ class MRFileEditor : public TScroller {
 	std::size_t selectionStartOffset() const noexcept;
 
 	std::size_t selectionEndOffset() const noexcept;
+	std::size_t selectionAnchorOffset() const noexcept;
+	std::size_t selectionCursorOffset() const noexcept;
 
 	bool hasTextSelection() const noexcept;
 
@@ -239,14 +243,29 @@ class MRFileEditor : public TScroller {
 	int charColumn(std::size_t start, std::size_t pos) const noexcept;
 
 	void setCursorOffset(std::size_t pos, int = 0);
+	void setCursorOffsetAtVisualColumn(std::size_t pos, int visualColumn);
 
 	bool scrollWindowByLines(int deltaRows);
 
 	std::size_t offsetForGlobalPoint(TPoint where) noexcept;
 
-		void setBlockOverlayState(int mode, std::size_t anchor, std::size_t end, bool active, bool trackCursor = false);
+	struct BlockOverlayState {
+		bool active = false;
+		int mode = 0;
+		std::size_t anchor = 0;
+		std::size_t end = 0;
+		bool trackCursor = false;
+		int columnAnchor = -1;
+		int columnEnd = -1;
+	};
+
+	void setBlockOverlayState(int mode, std::size_t anchor, std::size_t end, bool active, bool trackCursor = false, int columnAnchor = -1, int columnEnd = -1);
+	BlockOverlayState blockOverlayState() const noexcept;
 
 		void setSelectionOffsets(std::size_t start, std::size_t end, Boolean = False);
+
+	bool lastMouseSelectionColumns(int &anchorColumn, int &cursorColumn) const noexcept;
+	unsigned short lastMouseSelectionModifiers() const noexcept;
 
 	void setFindMarkerRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
 
@@ -677,11 +696,17 @@ class MRFileEditor : public TScroller {
 	std::chrono::steady_clock::time_point mSaveNormalizationWarmupStartedAt;
 	double mSaveNormalizationThroughputBytesPerMicro;
 	std::size_t mSaveNormalizationThroughputSamples;
+	bool mMouseSelectionColumnsValid;
+	int mMouseSelectionAnchorColumn;
+	int mMouseSelectionCursorColumn;
+	unsigned short mMouseSelectionModifiers;
 	bool mBlockOverlayActive;
 	int mBlockOverlayMode;
 	std::size_t mBlockOverlayAnchor;
 	std::size_t mBlockOverlayEnd;
-	bool mBlockOverlayTrackingCursor;
+	bool mBlockOverlayTrackCursor;
+	int mBlockOverlayColumnAnchor;
+	int mBlockOverlayColumnEnd;
 	int mPreferredIndentColumn;
 	std::vector<MRTextBufferModel::Range> mFindMarkerRanges;
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;

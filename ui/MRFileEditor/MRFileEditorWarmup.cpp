@@ -492,20 +492,34 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	std::size_t bottomLine = 0;
 	std::size_t requestTopLine = visibleTopLine;
 	std::size_t trimmedCoveredPrefixCount = 0;
+	std::size_t visibleCoveredBottomLine = 0;
+	auto rememberCachedCoveragePrefix = [&](const std::vector<std::size_t> &lineStarts, std::size_t coveredPrefixCount) -> std::size_t {
+		if (coveredPrefixCount == 0 || lineStarts.empty()) return 0;
+		const std::size_t coveredStartLine = mBufferModel.lineIndex(lineStarts.front());
+		const std::size_t coveredBottomLine = coveredStartLine + std::min(coveredPrefixCount, lineStarts.size());
+		rememberSyntaxWarmedLineRange(coveredStartLine, coveredBottomLine);
+		return coveredBottomLine;
+	};
 	buildSyntaxRequest(visibleTopLine, static_cast<int>(visibleLineStarts.size()), backgroundRowBudget, requiredLineStarts, warmupLineStarts, requiredState, bottomLine);
 	const bool visibleRangeCovered = syntaxWarmedLineRangeCovered(requestTopLine, bottomLine);
 	MRSyntaxLineState visibleCoveredState = requiredState;
 	const std::size_t visibleCoveredPrefixCount = syntaxCachedCoveragePrefix(requiredLineStarts, requiredState, &visibleCoveredState);
-	const bool visibleCacheComplete = visibleRangeCovered && visibleCoveredPrefixCount == requiredLineStarts.size();
+	bool visibleCacheComplete = visibleRangeCovered && visibleCoveredPrefixCount == requiredLineStarts.size();
 
 	if (!visibleCacheComplete && visibleCoveredPrefixCount > 0) {
 		trimmedCoveredPrefixCount = visibleCoveredPrefixCount;
+		const std::size_t coveredBottomLine = rememberCachedCoveragePrefix(requiredLineStarts, visibleCoveredPrefixCount);
+		visibleCoveredBottomLine = coveredBottomLine;
+		if (coveredBottomLine > prefetchState.reachedBottomLine) prefetchState.reachedBottomLine = coveredBottomLine;
+		if (exactLineCountKnown && prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
 		requiredState = visibleCoveredState;
 		requiredLineStarts.erase(requiredLineStarts.begin(), requiredLineStarts.begin() + static_cast<std::ptrdiff_t>(visibleCoveredPrefixCount));
 		if (visibleCoveredPrefixCount >= warmupLineStarts.size()) warmupLineStarts.clear();
 		else
 			warmupLineStarts.erase(warmupLineStarts.begin(), warmupLineStarts.begin() + static_cast<std::ptrdiff_t>(visibleCoveredPrefixCount));
 		if (!requiredLineStarts.empty()) requestTopLine = mBufferModel.lineIndex(requiredLineStarts.front());
+		else
+			visibleCacheComplete = true;
 	}
 
 	if (viewportLocalLargeFileWarmup && visibleCacheComplete) {
@@ -557,6 +571,9 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 			if (!continuationRangeCovered || continuationCoveredPrefixCount != continuationRequiredLineStarts.size()) {
 				trimmedCoveredPrefixCount = continuationCoveredPrefixCount;
 				if (continuationCoveredPrefixCount > 0) {
+					const std::size_t coveredBottomLine = rememberCachedCoveragePrefix(continuationRequiredLineStarts, continuationCoveredPrefixCount);
+					if (coveredBottomLine > prefetchState.reachedBottomLine) prefetchState.reachedBottomLine = coveredBottomLine;
+					if (exactLineCountKnown && prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
 					continuationState = continuationCoveredState;
 					continuationRequiredLineStarts.erase(continuationRequiredLineStarts.begin(),
 					                                     continuationRequiredLineStarts.begin() + static_cast<std::ptrdiff_t>(continuationCoveredPrefixCount));
@@ -606,7 +623,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 			return;
 		}
 	} else
-		prefetchState.reachedBottomLine = visibleTopLine;
+		prefetchState.reachedBottomLine = std::max(visibleCoveredBottomLine, visibleTopLine);
 	if (exactLineCountKnown && prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
 
 	if (warmupState.taskId != 0 && !mr::coprocessor::globalCoprocessor().hasTaskState(warmupState.taskId)) {

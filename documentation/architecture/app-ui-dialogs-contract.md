@@ -57,6 +57,7 @@ These rules apply to new dialogs and to layout changes in existing dialogs.
 - Radio-button clusters must have a left-aligned heading ending with a colon.
 - Checkbox options that belong together must be grouped into one checkbox cluster with a left-aligned heading ending with a colon.
 - Dialog content must keep equal visual distance to the left and right dialog borders.
+- Dialog titles must be uppercase and must not use ellipses.
 - Dialog button rows must be horizontally centered.
 - Dialogs must not add a Cancel button by default. Closing without applying changes is handled by the dialog close action.
 - Dialogs that can change settings must use clean dirty gating. Applying unchanged data must not mark settings dirty or trigger save prompts.

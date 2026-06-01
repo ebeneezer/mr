@@ -537,6 +537,10 @@ bool getWin32Key(const KEY_EVENT_RECORD &KeyEvent, TEvent &ev, InputState &state
         kbShift | kbCtrlShift | kbAltShift |
         kbScrollState | kbNumState | kbCapsState | kbEnhanced
     );
+    if (KeyEvent.wVirtualKeyCode == VK_LWIN)
+        ev.keyDown.controlKeyState |= kbLeftSuper;
+    else if (KeyEvent.wVirtualKeyCode == VK_RWIN)
+        ev.keyDown.controlKeyState |= kbRightSuper;
 
     if (ev.keyDown.textLength != 0)
     {
@@ -691,4 +695,3 @@ void regenerateMissingScanCodeFromVirtualKeyCode(KEY_EVENT_RECORD &KeyEvent) noe
 }
 
 } // namespace tvision
-

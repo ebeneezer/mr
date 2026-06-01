@@ -60,6 +60,8 @@ enum : ushort {
 	cmMrBlockMarkLines,
 	cmMrBlockMarkColumns,
 	cmMrBlockMarkStream,
+	cmMrBlockToggleMarking,
+	cmMrBlockToggleVisibility,
 	cmMrBlockEndMarking,
 	cmMrBlockTurnMarkingOff,
 	cmMrBlockPersistent,
@@ -133,7 +135,8 @@ enum : ushort {
 	cmMrFileSaveAll,
 	cmMrFileRevert,
 	cmMrOtherBuildCurrentFile,
-	cmMrOtherFindPreviousCompilerError
+	cmMrOtherFindPreviousCompilerError,
+	cmMrBlockLoadFromDisk
 };
 
 #endif

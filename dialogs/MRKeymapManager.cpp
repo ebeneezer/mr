@@ -59,6 +59,7 @@ enum : ushort {
 	cmMrSetupKeymapSave,
 	cmMrSetupKeymapSaveAs,
 	cmMrSetupKeymapProfileSelectionChanged,
+	cmMrSetupKeymapProfileUse,
 	cmMrSetupKeymapProfileAdd,
 	cmMrSetupKeymapProfileEdit,
 	cmMrSetupKeymapProfileDelete,
@@ -280,7 +281,7 @@ class TInlineGlyphButton : public TView {
 		TView::handleEvent(event);
 	}
 
-  private:
+ private:
 	void dispatchCommand() {
 		TView *target = owner;
 
@@ -582,7 +583,7 @@ bool chooseKeymapFileForLoad(std::string &selectedUri) {
 	ushort result = cmCancel;
 
 	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::KeymapProfileLoad, fileName, sizeof(fileName), "*.mrmac");
-	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::KeymapProfileLoad, "*.mrmac", "Load keymap profile", "~N~ame", fdOpenButton, fileName);
+	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::KeymapProfileLoad, "*.mrmac", "LOAD KEYMAP PROFILE", "~N~ame", fdOpenButton, fileName);
 	if (result == cmCancel) return false;
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return !selectedUri.empty();
@@ -593,7 +594,7 @@ bool chooseKeymapFileForSave(std::string &selectedUri) {
 	ushort result = cmCancel;
 
 	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::KeymapProfileSave, fileName, sizeof(fileName), "*.mrmac");
-	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::KeymapProfileSave, "*.mrmac", "Save keymap profile as", "~N~ame", fdOKButton, fileName);
+	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::KeymapProfileSave, "*.mrmac", "SAVE KEYMAP PROFILE AS", "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) return false;
 	selectedUri = mr::dialogs::ensureMrmacExtension(normalizeConfiguredPathInput(fileName));
 	return !selectedUri.empty();
@@ -1304,10 +1305,11 @@ void showProfileEditorHelpDialog() {
 }
 
 class TKeymapManagerDialog : public MRScrollableDialog {
-  public:
+ public:
 	TKeymapManagerDialog(const KeymapManagerDraft &baseline, const std::string &initialFileUri) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "KEY MANAGER", kDialogWidth, kVirtualHeight, initMrDialogFrame), persistedBaselineDraft(baseline), workingDraft(baseline), fileUri(initialFileUri), persistedFileUri(initialFileUri) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
+		viewedProfileName = preferredViewedProfileName();
 		refreshAllViews();
 		initScrollIfNeeded();
 		if (mProfileList != nullptr) mProfileList->select();
@@ -1332,9 +1334,14 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		const ushort originalCommand = (event.what == evCommand || event.what == evBroadcast) ? event.message.command : 0;
 		void *originalInfo = event.what == evBroadcast ? event.message.infoPtr : nullptr;
 
+		if (event.what == evMouseWheel) {
+			if (mProfileList != nullptr && mProfileList->handleWheel(event)) return;
+			if (mBindingList != nullptr && mBindingList->handleWheel(event)) return;
+		}
+
 		MRScrollableDialog::handleEvent(event);
 		if (originalWhat == evBroadcast && originalCommand == cmMrSetupKeymapProfileSelectionChanged && originalInfo == mProfileList) {
-			activateSelectedProfile();
+			selectViewedProfile();
 			clearEvent(event);
 			return;
 		}
@@ -1345,6 +1352,10 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		}
 		if (originalWhat != evCommand) return;
 		switch (originalCommand) {
+			case cmMrSetupKeymapProfileUse:
+				useSelectedProfile();
+				clearEvent(event);
+				return;
 			case cmMrSetupKeymapProfileAdd:
 				addProfile();
 				clearEvent(event);
@@ -1412,7 +1423,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	void buildViews() {
 		const int left = 2;
 		const int right = kDialogWidth - 2;
-		const int profilesWidth = 30;
+		const int profilesWidth = 31;
 		const int filterRow = 2;
 		const int profileListTop = 3;
 		const int bindingListTop = 3;
@@ -1425,7 +1436,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		const int activeTop = 21;
 		const int gap = 2;
 		const int profileButtonGap = 1;
-		const std::array profileButtons{mr::dialogs::DialogButtonSpec{"~A~dd", cmMrSetupKeymapProfileAdd, bfNormal}, mr::dialogs::DialogButtonSpec{"~R~ename", cmMrSetupKeymapProfileEdit, bfNormal}, mr::dialogs::DialogButtonSpec{"Remo~v~e", cmMrSetupKeymapProfileDelete, bfNormal}};
+		const std::array profileButtons{mr::dialogs::DialogButtonSpec{"~U~se", cmMrSetupKeymapProfileUse, bfNormal}, mr::dialogs::DialogButtonSpec{"~A~dd", cmMrSetupKeymapProfileAdd, bfNormal}, mr::dialogs::DialogButtonSpec{"~R~en", cmMrSetupKeymapProfileEdit, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~", cmMrSetupKeymapProfileDelete, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics profileMetrics = mr::dialogs::measureUniformButtonRow(profileButtons, profileButtonGap);
 		const int profileButtonLeft = left + std::max(0, (profilesWidth - profileMetrics.rowWidth) / 2);
 		const int bindingButtonGap = 1;
@@ -1471,7 +1482,8 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 
 	void refreshProfileList() {
 		if (mProfileList == nullptr) return;
-		const std::size_t index = activeProfileIndex(workingDraft);
+		normalizeViewedProfileName();
+		const std::size_t index = viewedProfileIndex();
 		const short selection = index == kNoIndex ? 0 : static_cast<short>(index);
 		mProfileList->setRows(buildProfileRows(workingDraft), selection);
 	}
@@ -1482,8 +1494,8 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		short selected = 0;
 
 		if (mBindingList == nullptr) return;
-		const std::size_t index = activeProfileIndex(workingDraft);
-		const MRKeymapProfile *profile = index == kNoIndex ? nullptr : &workingDraft.profiles[index];
+		const std::size_t index = selectedProfileIndex();
+		const MRKeymapProfile *profile = (index == kNoIndex || index >= workingDraft.profiles.size()) ? nullptr : &workingDraft.profiles[index];
 		visibleBindingIndexes.clear();
 		const std::vector<MRColumnListView::Row> rows = buildBindingRows(profile, bindingFilterText(), &visibleBindingIndexes, &rowErrorFlags);
 
@@ -1505,12 +1517,20 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		mActiveProfileField->setText(activeText);
 	}
 
-	void activateSelectedProfile() {
+	void selectViewedProfile() {
 		const short index = mProfileList != nullptr ? mProfileList->selectedIndex() : -1;
 
 		if (index < 0 || index >= static_cast<short>(workingDraft.profiles.size())) return;
-		workingDraft.activeProfileName = workingDraft.profiles[index].name;
+		viewedProfileName = workingDraft.profiles[index].name;
 		refreshBindingList();
+		runDialogValidation();
+	}
+
+	void useSelectedProfile() {
+		const std::size_t index = selectedProfileIndex();
+
+		if (index == kNoIndex || index >= workingDraft.profiles.size()) return;
+		workingDraft.activeProfileName = workingDraft.profiles[index].name;
 		refreshActiveProfile();
 		runDialogValidation();
 	}
@@ -1528,6 +1548,27 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	std::size_t selectedProfileIndex() const {
 		const short index = mProfileList != nullptr ? mProfileList->selectedIndex() : -1;
 		return index < 0 ? kNoIndex : static_cast<std::size_t>(index);
+	}
+
+	std::size_t profileIndexByName(const std::string &name) const {
+		for (std::size_t i = 0; i < workingDraft.profiles.size(); ++i)
+			if (workingDraft.profiles[i].name == name) return i;
+		return kNoIndex;
+	}
+
+	std::string preferredViewedProfileName() const {
+		if (profileIndexByName(workingDraft.activeProfileName) != kNoIndex) return workingDraft.activeProfileName;
+		if (!workingDraft.profiles.empty()) return workingDraft.profiles.front().name;
+		return std::string();
+	}
+
+	void normalizeViewedProfileName() {
+		if (profileIndexByName(viewedProfileName) != kNoIndex) return;
+		viewedProfileName = preferredViewedProfileName();
+	}
+
+	std::size_t viewedProfileIndex() const {
+		return profileIndexByName(viewedProfileName);
 	}
 
 	void suspendVisualFocus() {
@@ -1616,7 +1657,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		profile.description = "Custom keymap profile";
 		if (!editProfileWithDialog(profile, kNoIndex)) return;
 		workingDraft.profiles.push_back(std::move(profile));
-		workingDraft.activeProfileName = workingDraft.profiles.back().name;
+		viewedProfileName = workingDraft.profiles.back().name;
 		refreshAllViews();
 	}
 
@@ -1629,6 +1670,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		if (!editProfileWithDialog(edited, profileIndex)) return;
 		workingDraft.profiles[profileIndex] = std::move(edited);
 		if (workingDraft.activeProfileName == previousName) workingDraft.activeProfileName = workingDraft.profiles[profileIndex].name;
+		if (viewedProfileName == previousName) viewedProfileName = workingDraft.profiles[profileIndex].name;
 		refreshAllViews();
 	}
 
@@ -1636,10 +1678,17 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		const std::size_t profileIndex = selectedProfileIndex();
 		if (profileIndex == kNoIndex || profileIndex >= workingDraft.profiles.size()) return;
 		const MRKeymapProfile &profile = workingDraft.profiles[profileIndex];
+		std::string nextViewedProfileName;
 
 		if (!mr::dialogs::runDialogConfirm("Delete profile?", "Delete", profile.name.c_str())) return;
+		if (workingDraft.profiles.size() > 1) {
+			const std::size_t nextIndex = profileIndex + 1 < workingDraft.profiles.size() ? profileIndex + 1 : profileIndex - 1;
+			nextViewedProfileName = workingDraft.profiles[nextIndex].name;
+		}
 		workingDraft.profiles.erase(workingDraft.profiles.begin() + static_cast<std::ptrdiff_t>(profileIndex));
 		if (activeProfileIndex(workingDraft) == kNoIndex) workingDraft.activeProfileName.clear();
+		viewedProfileName = nextViewedProfileName;
+		normalizeViewedProfileName();
 		refreshAllViews();
 	}
 
@@ -1682,8 +1731,8 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	}
 
 	void addBinding() {
-		const std::size_t profileIndex = activeProfileIndex(workingDraft);
-		if (profileIndex == kNoIndex) return;
+		const std::size_t profileIndex = selectedProfileIndex();
+		if (profileIndex == kNoIndex || profileIndex >= workingDraft.profiles.size()) return;
 
 		MRKeymapBindingRecord binding;
 		binding.profileName = workingDraft.profiles[profileIndex].name;
@@ -1699,9 +1748,9 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	}
 
 	void editSelectedBinding() {
-		const std::size_t profileIndex = activeProfileIndex(workingDraft);
+		const std::size_t profileIndex = selectedProfileIndex();
 		const std::size_t bindingIndex = selectedBindingIndex();
-		if (profileIndex == kNoIndex || bindingIndex == kNoIndex || bindingIndex >= workingDraft.profiles[profileIndex].bindings.size()) return;
+		if (profileIndex == kNoIndex || profileIndex >= workingDraft.profiles.size() || bindingIndex == kNoIndex || bindingIndex >= workingDraft.profiles[profileIndex].bindings.size()) return;
 
 		MRKeymapBindingRecord edited = workingDraft.profiles[profileIndex].bindings[bindingIndex];
 		if (!editBindingWithDialog(edited)) return;
@@ -1711,9 +1760,9 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	}
 
 	void deleteSelectedBinding() {
-		const std::size_t profileIndex = activeProfileIndex(workingDraft);
+		const std::size_t profileIndex = selectedProfileIndex();
 		const std::size_t bindingIndex = selectedBindingIndex();
-		if (profileIndex == kNoIndex || bindingIndex == kNoIndex || bindingIndex >= workingDraft.profiles[profileIndex].bindings.size()) return;
+		if (profileIndex == kNoIndex || profileIndex >= workingDraft.profiles.size() || bindingIndex == kNoIndex || bindingIndex >= workingDraft.profiles[profileIndex].bindings.size()) return;
 
 		const MRKeymapBindingRecord &binding = workingDraft.profiles[profileIndex].bindings[bindingIndex];
 		if (!mr::dialogs::runDialogConfirm("Delete binding?", "Delete", binding.target.target.c_str())) return;
@@ -1747,6 +1796,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		if (const std::string summary = summarizeKeymapDiagnosticsForMessageLine(diagnostics, "Keymap load"); !summary.empty()) postDialogError(summary);
 		fileUri = selectedUri;
 		workingDraft = loadedDraft;
+		viewedProfileName = preferredViewedProfileName();
 		refreshAllViews();
 	}
 
@@ -1798,6 +1848,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	KeymapManagerDraft workingDraft;
 	std::string fileUri;
 	std::string persistedFileUri;
+	std::string viewedProfileName;
 	MRColumnListView *mProfileList = nullptr;
 	TScrollBar *mProfileScrollBar = nullptr;
 	KeymapBindingListView *mBindingList = nullptr;
@@ -1820,7 +1871,8 @@ void showKeymapManagerHelpDialog() {
 
 	lines.push_back("KEY MANAGER HELP");
 	lines.push_back("");
-	lines.push_back("Select the active profile in the left profile list.");
+	lines.push_back("Select a profile in the left list to inspect or edit its bindings.");
+	lines.push_back("Use marks the selected profile as active.");
 	lines.push_back("The right list shows token, translated description and key sequence.");
 	lines.push_back("Load reads an external keymap/profile macro file.");
 	lines.push_back("Save and Save As write the external keymap/profile macro file.");
