@@ -1712,6 +1712,17 @@ bool expectWindowBlockOverlay(const MREditWindow &window, int status, const char
 	return true;
 }
 
+bool expectWindowCommittedBlockRefreshesOverlay(MREditWindow &window, ushort keyCode, ushort modifiers, int status, const char *phase, std::string &failureReason) {
+	MRFileEditor *editor = window.getEditor();
+	if (editor == nullptr) {
+		failureReason = std::string("Window committed block refresh check has no editor in ") + phase + ".";
+		return false;
+	}
+	editor->setBlockOverlayState(0, 0, 0, false);
+	if (!sendWindowKey(window, keyCode, modifiers)) return false;
+	return expectWindowBlockOverlay(window, status, phase, failureReason);
+}
+
 ushort rawCtrlKey(char upperLetter) {
 	return static_cast<ushort>(upperLetter - 'A' + 1);
 }
@@ -1831,6 +1842,7 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		if (!sendWindowRawCtrl(window, 'D')) return false;
 		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar persistent stream after cursor move", failureReason)) return false;
 		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar persistent stream overlay after cursor move", failureReason)) return false;
+		if (!expectWindowCommittedBlockRefreshesOverlay(window, rawCtrlKey('D'), 0, MREditWindow::bmStream, "WordStar committed stream overlay refresh after keybinding cursor move", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowKey(window, static_cast<ushort>('H'))) return false;
 		if (window.blockStatus() != MREditWindow::bmNone || window.hasBlock()) {
@@ -1860,6 +1872,7 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		if (!sendWindowRawCtrl(window, 'D')) return false;
 		if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 2, 1, 2, "WordStar persistent column after cursor move", failureReason)) return false;
 		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "WordStar persistent column overlay after cursor move", failureReason)) return false;
+		if (!expectWindowCommittedBlockRefreshesOverlay(window, rawCtrlKey('D'), 0, MREditWindow::bmColumn, "WordStar committed column overlay refresh after keybinding cursor move", failureReason)) return false;
 	}
 	{
 		MREditWindow window(TRect(0, 0, 80, 16), "mrmac-action-nonlive-column", 1014);
@@ -1956,6 +1969,7 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "cursor Ctrl+Right stream", failureReason)) return false;
 		if (!sendWindowKey(window, kbRight)) return false;
 		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "plain cursor commits stream marking", failureReason)) return false;
+		if (!expectWindowCommittedBlockRefreshesOverlay(window, kbRight, 0, MREditWindow::bmStream, "plain cursor committed stream overlay refresh", failureReason)) return false;
 	}
 	{
 		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1002);
@@ -2010,6 +2024,7 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 			if (!expectWindowFreeCursorRightPastEol(window, "window free cursor after stream block", failureReason)) return false;
 			if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "menu/window persistent stream after cursor move", failureReason)) return false;
 			if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "menu/window persistent stream overlay", failureReason)) return false;
+			if (!expectWindowCommittedBlockRefreshesOverlay(window, kbRight, 0, MREditWindow::bmStream, "menu/window committed stream overlay refresh", failureReason)) return false;
 		}
 		{
 			MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1005);
@@ -2025,6 +2040,7 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 			if (!expectWindowFreeCursorRightPastEol(window, "window free cursor after line block", failureReason)) return false;
 			if (!expectWindowBlock(window, MREditWindow::bmLine, false, 1, 2, 1, 1, "menu/window persistent line after cursor move", failureReason)) return false;
 			if (!expectWindowBlockOverlay(window, MREditWindow::bmLine, "menu/window persistent line overlay", failureReason)) return false;
+			if (!expectWindowCommittedBlockRefreshesOverlay(window, kbRight, 0, MREditWindow::bmLine, "menu/window committed line overlay refresh", failureReason)) return false;
 		}
 		{
 			MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1006);
@@ -2053,6 +2069,7 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 			if (!expectWindowFreeCursorRightPastEol(window, "window free cursor after column block", failureReason)) return false;
 			if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 1, 1, 2, "menu/window persistent column after cursor move", failureReason)) return false;
 			if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "menu/window persistent column overlay", failureReason)) return false;
+			if (!expectWindowCommittedBlockRefreshesOverlay(window, kbRight, 0, MREditWindow::bmColumn, "menu/window committed column overlay refresh", failureReason)) return false;
 		}
 	return true;
 }

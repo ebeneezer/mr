@@ -510,6 +510,7 @@ bool dispatchEditorCommandEvent(MREditWindow *targetWindow, ushort command) {
 	event.what = evCommand;
 	event.message.command = command;
 	editor->handleEvent(event);
+	if (window->hasBlock() && !window->isBlockMarking()) window->refreshBlockVisual();
 	return true;
 }
 

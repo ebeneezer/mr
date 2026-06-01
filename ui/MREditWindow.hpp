@@ -380,7 +380,10 @@ class MREditWindow : public TWindow {
 				std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=window-pre keyCode=0x%04X mods=0x%04X cursor=%zu", static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), editor != nullptr ? editor->cursorOffset() : 0);
 				mrLogMessage(line);
 			}
-				if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) return;
+				if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) {
+					if (editor != nullptr && mBlockOps.hasVisibleBlock() && !mBlockOps.isMarking()) static_cast<void>(mBlockOps.refreshVisual(*editor));
+					return;
+				}
 			if (handleBuiltInBlockHotkeys(event)) return;
 			if (handleShiftCursorBlockMarking(event)) return;
 			std::string executedMacroName;
@@ -419,6 +422,7 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) {
 			if (originalEvent == evMouseDown) static_cast<void>(mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers()));
 			else if (mBlockOps.isMarking() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.updateFromEditor(*editor));
+			else if (mBlockOps.hasVisibleBlock() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.refreshVisual(*editor));
 		}
 		traceCalculatorHotkeyEvent("window-post", event);
 		if (keyDebugEnabled() && originalEvent == evKeyDown && TKey(keyCodeBefore, keyModifiersBefore) == TKey(kbShiftTab)) {
