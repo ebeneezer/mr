@@ -641,7 +641,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('GUTTERS', '" + escapeMrmacSingleQuotedLiteral(edit.gutters) + "');\n";
 	source += "MRSETUP('PERSISTENT_BLOCKS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.persistentBlocks)) + "');\n";
 	source += "MRSETUP('CODE_FOLDING_POSITION', '" + escapeMrmacSingleQuotedLiteral(edit.codeFoldingPosition) + "');\n";
-	source += "MRSETUP('COLUMN_BLOCK_MOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
+	source += "MRSETUP('BLOCK_MOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
 	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
 

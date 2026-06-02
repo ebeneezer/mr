@@ -91,7 +91,7 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"GUTTERS", "Gutter render order", MREditSettingSection::Display, MREditSettingKind::String, true, kOvGutters},
     {"PERSISTENT_BLOCKS", "Persistent blocks", MREditSettingSection::Blocks, MREditSettingKind::Boolean, true, kOvPersistentBlocks},
     {"CODE_FOLDING_POSITION", "Code folding position", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvCodeFoldingPosition},
-    {"COLUMN_BLOCK_MOVE", "Column block move", MREditSettingSection::Blocks, MREditSettingKind::Choice, true, kOvColumnBlockMove},
+    {"BLOCK_MOVE", "Block move", MREditSettingSection::Blocks, MREditSettingKind::Choice, true, kOvColumnBlockMove},
     {"DEFAULT_MODE", "Default mode", MREditSettingSection::Mode, MREditSettingKind::Choice, true, kOvDefaultMode},
     {"CURSOR_STATUS_COLOR", "Cursor status color", MREditSettingSection::Display, MREditSettingKind::String, true, kOvCursorStatusColor},
 };
@@ -991,9 +991,9 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		if (normalized.empty()) return setError(errorMessage, "CODE_FOLDING_POSITION must be OFF, LEADING or TRAILING.");
 		current.codeFoldingPosition = normalized;
 		current.codeFolding = normalized != kCodeFoldingPositionOff;
-	} else if (upperKeyName == "COLUMN_BLOCK_MOVE") {
+	} else if (upperKeyName == "BLOCK_MOVE") {
 		normalized = normalizeColumnBlockMove(value);
-		if (normalized.empty()) return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
+		if (normalized.empty()) return setError(errorMessage, "BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
 		current.columnBlockMove = normalized;
 	} else if (upperKeyName == "DEFAULT_MODE") {
 		normalized = normalizeDefaultMode(value);
@@ -1052,7 +1052,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 	if (upperKey == "GUTTERS") return settings.gutters;
 	if (upperKey == "PERSISTENT_BLOCKS") return formatEditSetupBoolean(settings.persistentBlocks);
 	if (upperKey == "CODE_FOLDING_POSITION") return settings.codeFoldingPosition;
-	if (upperKey == "COLUMN_BLOCK_MOVE") return settings.columnBlockMove;
+	if (upperKey == "BLOCK_MOVE") return settings.columnBlockMove;
 	if (upperKey == "DEFAULT_MODE") return settings.defaultMode;
 	if (upperKey == "CURSOR_STATUS_COLOR") return settings.cursorStatusColor;
 	return std::string();
@@ -1399,7 +1399,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string defaultPath = trimAscii(settings.defaultPath).empty() ? std::string() : normalizeConfiguredPathInput(settings.defaultPath);
 
 	if (wordDelimiters.empty()) return setError(errorMessage, "WORD_DELIMITERS may not be empty.");
-	if (columnStyle.empty()) return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
+	if (columnStyle.empty()) return setError(errorMessage, "BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
 	if (defaultMode.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 	if (indentStyle.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
 	if (codeLanguage.empty()) codeLanguage = "NONE";

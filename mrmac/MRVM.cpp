@@ -7232,7 +7232,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								                         "SHOW_EOF_MARKER_EMOJI, LINE_NUMBERS_POSITION, LINE_NUM_ZERO_FILL, "
 								                         "MINIMAP_POSITION, MINIMAP_WIDTH, MINIMAP_MARKER_GLYPH, GUTTERS, PERSISTENT_BLOCKS, "
 								                         "CODE_FOLDING_POSITION, "
-								                         "COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR.");
+								                         "BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR.");
 							case MRSettingsKeyClass::Version:
 							case MRSettingsKeyClass::Path:
 							case MRSettingsKeyClass::Global:

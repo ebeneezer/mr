@@ -500,7 +500,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	addPanelLabel(dialog, TRect(g.tabExpandLeft, g.tabExpandHeadingY, tabExpandClusterRight, g.tabExpandHeadingY + 1), "Tab expand:");
 	tabExpandField = addPanelRadioGroup(dialog, TRect(g.tabExpandLeft, g.tabExpandBodyY, tabExpandClusterRight, g.tabExpandBodyY + 3), new TSItem("~U~se tabs", new TSItem("Spa~X~es", nullptr)));
 
-	addPanelLabel(dialog, TRect(g.columnBlockMoveLeft, g.columnBlockMoveHeadingY, g.columnBlockMoveLeft + 18, g.columnBlockMoveHeadingY + 1), "Column block move:");
+	addPanelLabel(dialog, TRect(g.columnBlockMoveLeft, g.columnBlockMoveHeadingY, g.columnBlockMoveLeft + 18, g.columnBlockMoveHeadingY + 1), "Block move:");
 	columnBlockMoveField = addPanelRadioGroup(dialog, TRect(g.columnBlockMoveLeft, g.columnBlockMoveBodyY, g.columnBlockMoveRight, g.columnBlockMoveBodyY + 3), new TSItem("Re~M~ove space", new TSItem("~K~eep space", nullptr)));
 
 	addPanelLabel(dialog, TRect(g.indentStyleLeft, g.indentStyleHeadingY, g.indentStyleRight, g.indentStyleHeadingY + 1), "Indent style:");
@@ -697,22 +697,26 @@ void FileExtensionEditorSettingsPanel::syncDynamicStates() {
 	int currentLeftMargin = lastKnownLeftMarginForFormatLine;
 	int currentRightMargin = lastKnownRightMarginForFormatLine;
 	int typedLeftMargin = lastKnownLeftMarginForFormatLine;
+	int typedRightMargin = lastKnownRightMarginForFormatLine;
 	std::string currentFormatLine = readInputFieldValue(formatLineField);
 	std::string normalizedFormatLine;
 	if (tabSizeSlider != nullptr) tabSizeSlider->getData(&currentTabSize);
 	typedLeftMargin = parseIntegerTextOrDefault(readInputFieldValue(leftMarginField), lastKnownLeftMarginForFormatLine, kMinimumLeftMargin, kMaximumLeftMargin);
-	currentRightMargin = parseIntegerTextOrDefault(readInputFieldValue(rightMarginField), lastKnownRightMarginForFormatLine, kMinimumRightMargin, kMaximumRightMargin);
-	if (typedLeftMargin >= currentRightMargin) typedLeftMargin = std::max(kMinimumLeftMargin, currentRightMargin - 1);
-	if (!normalizeEditFormatLine(currentFormatLine, static_cast<int>(currentTabSize), typedLeftMargin, currentRightMargin, normalizedFormatLine, &currentLeftMargin, &currentRightMargin, nullptr)) {
+	typedRightMargin = parseIntegerTextOrDefault(readInputFieldValue(rightMarginField), lastKnownRightMarginForFormatLine, kMinimumRightMargin, kMaximumRightMargin);
+	if (typedLeftMargin >= typedRightMargin) typedLeftMargin = std::max(kMinimumLeftMargin, typedRightMargin - 1);
+	currentRightMargin = typedRightMargin;
+	if (!normalizeEditFormatLine(currentFormatLine, static_cast<int>(currentTabSize), typedLeftMargin, typedRightMargin, normalizedFormatLine, &currentLeftMargin, &currentRightMargin, nullptr)) {
 		currentLeftMargin = typedLeftMargin;
-		currentRightMargin = lastKnownRightMarginForFormatLine;
+		currentRightMargin = typedRightMargin;
 	}
 	if (currentTabSize != lastKnownTabSizeForFormatLine) {
-		writeInputFieldValue(formatLineField, defaultEditFormatLineForTabSize(static_cast<int>(currentTabSize), typedLeftMargin, currentRightMargin));
+		writeInputFieldValue(formatLineField, defaultEditFormatLineForTabSize(static_cast<int>(currentTabSize), typedLeftMargin, typedRightMargin));
 		currentLeftMargin = typedLeftMargin;
-	} else if (typedLeftMargin != lastKnownLeftMarginForFormatLine || currentRightMargin != lastKnownRightMarginForFormatLine) {
-		writeInputFieldValue(formatLineField, synchronizeEditFormatLineMargins(currentFormatLine, typedLeftMargin, currentRightMargin, static_cast<int>(currentTabSize)));
+		currentRightMargin = typedRightMargin;
+	} else if (typedLeftMargin != lastKnownLeftMarginForFormatLine || typedRightMargin != lastKnownRightMarginForFormatLine) {
+		writeInputFieldValue(formatLineField, synchronizeEditFormatLineMargins(currentFormatLine, typedLeftMargin, typedRightMargin, static_cast<int>(currentTabSize)));
 		currentLeftMargin = typedLeftMargin;
+		currentRightMargin = typedRightMargin;
 	} else if (isBlankString(currentFormatLine)) {
 		writeInputFieldValue(formatLineField, defaultEditFormatLineForTabSize(static_cast<int>(currentTabSize), currentLeftMargin, currentRightMargin));
 	} else {

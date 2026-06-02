@@ -55,6 +55,7 @@ std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage l
 
 class MRFileEditor : public TScroller {
 	friend bool mrfeSeedMouseColumnStateForRegression(MRFileEditor &editor, int anchorColumn, int cursorColumn);
+	friend bool mrfeRenderedBlockOverlayLineRangeForRegression(const MRFileEditor &editor, std::size_t &line1, std::size_t &line2);
 
   public:
 	struct LoadTiming {

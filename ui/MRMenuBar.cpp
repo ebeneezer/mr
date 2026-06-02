@@ -172,6 +172,17 @@ char markedHotkeyChar(const char *name) noexcept {
 	return '\0';
 }
 
+int markedHotkeyColumn(const char *name) noexcept {
+	int column = 0;
+
+	if (name == nullptr) return -1;
+	for (const char *pos = name; *pos != '\0'; ++pos) {
+		if (pos[0] == '~' && pos[1] != '\0' && pos[2] == '~') return column;
+		if (*pos != '~') ++column;
+	}
+	return -1;
+}
+
 void markUsedHotkey(std::array<bool, 36> &usedHotkeys, char hotkey) noexcept {
 	const int index = hotkeyIndex(canonicalHotkeyChar(hotkey));
 
@@ -669,6 +680,7 @@ void MRMenuBar::draw() {
 	TAttrPair cSelect = getColor(0x0604);
 	TAttrPair cNormDisabled = getColor(0x0202);
 	TAttrPair cSelDisabled = getColor(0x0505);
+	TColorAttr cMenuBarHotkey = TColorAttr(cNormal);
 	TColorAttr cStatus = TColorAttr(cNormal);
 	TColorAttr cMarquee = TColorAttr(cNormal);
 	MarqueeKind targetMarqueeKind = mManualMarqueeStatus.empty() ? mAutoMarqueeKind : mManualMarqueeKind;
@@ -679,9 +691,13 @@ void MRMenuBar::draw() {
 
 	{
 		const MRColorSetupSettings colors = configuredColorSetupSettings();
-		unsigned char biosAttr = colors.otherColors[8];
-		(void)configuredColorSlotOverride(kMrPaletteCursorPositionMarker, biosAttr);
-		cStatus = TColorAttr(biosAttr);
+		unsigned char statusAttr = colors.otherColors[8];
+		unsigned char menuBarHotkeyAttr = 0;
+
+		(void)configuredColorSlotOverride(kMrPaletteCursorPositionMarker, statusAttr);
+		(void)configuredColorSlotOverride(kMrPaletteMenuBarHotkey, menuBarHotkeyAttr);
+		cMenuBarHotkey = TColorAttr(menuBarHotkeyAttr);
+		cStatus = TColorAttr(statusAttr);
 	}
 	setStyle(cStatus, getStyle(cStatus) | slBold);
 
@@ -709,6 +725,10 @@ void MRMenuBar::draw() {
 
 					b.moveChar(x, ' ', color, 1);
 					b.moveCStr(x + 1, p->name, color);
+					{
+						const int hotkeyColumn = markedHotkeyColumn(p->name);
+						if (hotkeyColumn >= 0) b.putAttribute(static_cast<ushort>(x + 1 + hotkeyColumn), cMenuBarHotkey);
+					}
 					b.moveChar(x + l + 1, ' ', color, 1);
 					menuEnd = x + l + 1;
 				}

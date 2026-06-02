@@ -417,12 +417,13 @@ enum : unsigned char {
 	kMrPaletteStatusLineBold = 176,
 	kMrPaletteStatusLineFunctionDescription = 177,
 	kMrPaletteStatusLineFunctionKey = 178,
-	kMrPaletteMax = kMrPaletteStatusLineFunctionKey
+	kMrPaletteMenuBarHotkey = 179,
+	kMrPaletteMax = kMrPaletteMenuBarHotkey
 };
 
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 13;
-	static const std::size_t kMenuDialogCount = 27;
+	static const std::size_t kMenuDialogCount = 28;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 5;

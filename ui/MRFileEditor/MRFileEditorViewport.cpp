@@ -20,6 +20,25 @@ bool quitTailTraceActive() noexcept {
 	const auto *app = dynamic_cast<const MREditorApp *>(TProgram::application);
 	return app != nullptr && app->quitPrepared();
 }
+
+std::size_t renderedBlockOverlayEndForViewport(const MRTextBufferModel &model, std::size_t overlayStart, std::size_t overlayEnd, int overlayMode) noexcept {
+	if (overlayStart > overlayEnd) std::swap(overlayStart, overlayEnd);
+	if (overlayMode != 3 && overlayEnd > overlayStart && model.lineStart(overlayEnd) == overlayEnd && model.lineEnd(overlayEnd) == overlayEnd) --overlayEnd;
+	return overlayEnd;
+}
+
+} // namespace
+
+bool mrfeRenderedBlockOverlayLineRangeForRegression(const MRFileEditor &editor, std::size_t &line1, std::size_t &line2) {
+	if (!editor.mBlockOverlayActive || editor.mBlockOverlayMode == 0) return false;
+	std::size_t start = editor.mBlockOverlayAnchor;
+	std::size_t end = editor.mBlockOverlayTrackCursor ? editor.mBufferModel.cursor() : editor.mBlockOverlayEnd;
+	if (start > end) std::swap(start, end);
+	end = renderedBlockOverlayEndForViewport(editor.mBufferModel, start, end, editor.mBlockOverlayMode);
+	line1 = editor.mBufferModel.lineIndex(start);
+	line2 = editor.mBufferModel.lineIndex(end);
+	if (line1 > line2) std::swap(line1, line2);
+	return true;
 }
 
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const MREditSetupSettings &settings) const noexcept {
@@ -718,6 +737,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	overlayStart = mBlockOverlayAnchor;
 	overlayEnd = mBlockOverlayTrackCursor ? mBufferModel.cursor() : mBlockOverlayEnd;
 	if (overlayStart > overlayEnd) std::swap(overlayStart, overlayEnd);
+	overlayEnd = renderedBlockOverlayEndForViewport(mBufferModel, overlayStart, overlayEnd, overlayMode);
 	overlayLine1 = mBufferModel.lineIndex(overlayStart);
 	overlayLine2 = mBufferModel.lineIndex(overlayEnd);
 	if (overlayLine1 > overlayLine2) std::swap(overlayLine1, overlayLine2);

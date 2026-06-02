@@ -4185,7 +4185,7 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	const bool rightButton = (event.mouse.buttons & mbRightButton) != 0;
 	const bool mouseCtrl = (event.mouse.controlKeyState & kbCtrlShift) != 0;
 	const bool mouseAlt = (event.mouse.controlKeyState & kbAltShift) != 0;
-	const bool liveLineBlock = mouseCtrl && mouseAlt;
+	const bool liveLineBlock = (mouseCtrl && mouseAlt) || (leftButton && rightButton);
 	const bool liveColumnBlock = !liveLineBlock && (mouseAlt || (rightButton && !leftButton));
 	const bool liveStreamBlock = !liveLineBlock && !liveColumnBlock && (leftButton || rightButton || mouseCtrl);
 	const int liveBlockMode = liveColumnBlock ? 2 : liveLineBlock ? 1 : liveStreamBlock ? 3 : 0;
@@ -4193,7 +4193,9 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	mMouseSelectionModifiers = 0;
 	auto updateLiveMouseBlockOverlay = [this, liveBlockMode](std::size_t current) {
 		if (liveBlockMode == 0) return;
-		setBlockOverlayState(liveBlockMode, mSelectionAnchor, current, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
+		std::size_t visualEnd = current;
+		if (liveBlockMode != 3 && visualEnd > 0 && lineStartOffset(visualEnd) == visualEnd && lineEndOffset(visualEnd) == visualEnd) --visualEnd;
+		setBlockOverlayState(liveBlockMode, mSelectionAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
 	};
 	mSelectionAnchor = anchor;
 	mMouseSelectionColumnsValid = true;

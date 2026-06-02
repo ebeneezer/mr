@@ -206,7 +206,8 @@ enum : std::size_t {
 	kMenuDialogIndexInputLineSelected = 23,
 	kMenuDialogIndexInputLineArrows = 24,
 	kMenuDialogIndexHistoryArrow = 25,
-	kMenuDialogIndexHistorySides = 26
+	kMenuDialogIndexHistorySides = 26,
+	kMenuDialogIndexMenuBarHotkey = 27
 };
 
 struct ColorGroupDefinition {
@@ -222,7 +223,7 @@ static const MRColorSetupItem kWindowColorItems[] = {
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
-    {"description of selectable menu element", kPaletteMenuDescription}, {"description of ghosted menu element", kPaletteMenuGhostedDescription}, {"hotkey of menu element", kPaletteMenuHotkey}, {"menu selector on selectable menu element", kPaletteMenuSelector}, {"menu selector on ghosted menu element", kPaletteMenuGhostedSelector}, {"description of buttons", kPaletteDialogButtonDescription}, {"hotkey on buttons", kPaletteDialogButtonHotkey}, {"button shadow", kPaletteDialogButtonShadow}, {"selected element in unfocussed listbox", kPaletteDialogListSelectedInactive}, {"element description in listbox", kPaletteDialogListNormal}, {"hotkeys on radio buttons & check boxes", kPaletteDialogClusterHotkey}, {"dialog selector", kPaletteDialogListFocused}, {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray}, {"inactive dialog elements", kMrPaletteDialogInactiveElements}, {"dialog frame", kPaletteGrayDialogFrame}, {"dialog text", kPaletteGrayDialogText}, {"dialog background", kPaletteGrayDialogBackground}, {"element description in droplists", kMrPaletteDropListDescription}, {"selected element in unfocussed droplist", kMrPaletteDropListSelectedInactive}, {"default button", kPaletteDialogButtonDefault}, {"selected button", kPaletteDialogButtonSelected}, {"disabled button", kPaletteDialogButtonDisabled}, {"input line text", kPaletteDialogInputLineNormal}, {"selected text in input line", kPaletteDialogInputLineSelected}, {"input line arrows", kPaletteDialogInputLineArrows}, {"history arrow", kPaletteDialogHistoryArrow}, {"history sides", kPaletteDialogHistorySides},
+    {"description of selectable menu element", kPaletteMenuDescription}, {"description of ghosted menu element", kPaletteMenuGhostedDescription}, {"hotkey of menu element", kPaletteMenuHotkey}, {"menu selector on selectable menu element", kPaletteMenuSelector}, {"menu selector on ghosted menu element", kPaletteMenuGhostedSelector}, {"description of buttons", kPaletteDialogButtonDescription}, {"hotkey on buttons", kPaletteDialogButtonHotkey}, {"button shadow", kPaletteDialogButtonShadow}, {"selected element in unfocussed listbox", kPaletteDialogListSelectedInactive}, {"element description in listbox", kPaletteDialogListNormal}, {"hotkeys on radio buttons & check boxes", kPaletteDialogClusterHotkey}, {"dialog selector", kPaletteDialogListFocused}, {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray}, {"inactive dialog elements", kMrPaletteDialogInactiveElements}, {"dialog frame", kPaletteGrayDialogFrame}, {"dialog text", kPaletteGrayDialogText}, {"dialog background", kPaletteGrayDialogBackground}, {"element description in droplists", kMrPaletteDropListDescription}, {"selected element in unfocussed droplist", kMrPaletteDropListSelectedInactive}, {"default button", kPaletteDialogButtonDefault}, {"selected button", kPaletteDialogButtonSelected}, {"disabled button", kPaletteDialogButtonDisabled}, {"input line text", kPaletteDialogInputLineNormal}, {"selected text in input line", kPaletteDialogInputLineSelected}, {"input line arrows", kPaletteDialogInputLineArrows}, {"history arrow", kPaletteDialogHistoryArrow}, {"history sides", kPaletteDialogHistorySides}, {"hotkeys on menu bar", kMrPaletteMenuBarHotkey},
 };
 
 static const MRColorSetupItem kHelpColorItems[] = {
@@ -306,6 +307,7 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteStatusLineBold) return defaults[kPaletteMenuGhostedDescription];
 	if (paletteIndex == kMrPaletteStatusLineFunctionDescription) return defaults[kPaletteMenuHotkey];
 	if (paletteIndex == kMrPaletteStatusLineFunctionKey) return defaults[kPaletteMenuSelector];
+	if (paletteIndex == kMrPaletteMenuBarHotkey) return defaults[kPaletteMenuHotkey];
 	if (paletteIndex == kPaletteDialogButtonDefault) return defaults[kPaletteDialogButtonDescription];
 	if (paletteIndex == kPaletteDialogButtonSelected) return defaults[kPaletteDialogButtonDescription];
 	if (paletteIndex == kPaletteDialogButtonDisabled) return defaults[kPaletteDialogInactiveClusterGray];
@@ -625,6 +627,7 @@ bool parseMenuDialogColorListLiteral(const std::string &literal, std::array<unsi
 	if (parsed.size() <= kMenuDialogIndexInputLineArrows) outValues[kMenuDialogIndexInputLineArrows] = outValues[kMenuDialogIndexDialogFrame];
 	if (parsed.size() <= kMenuDialogIndexHistoryArrow) outValues[kMenuDialogIndexHistoryArrow] = outValues[kMenuDialogIndexDialogFrame];
 	if (parsed.size() <= kMenuDialogIndexHistorySides) outValues[kMenuDialogIndexHistorySides] = outValues[kMenuDialogIndexDialogFrame];
+	if (parsed.size() <= kMenuDialogIndexMenuBarHotkey) outValues[kMenuDialogIndexMenuBarHotkey] = defaultColorForSlot(kMrPaletteMenuBarHotkey);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

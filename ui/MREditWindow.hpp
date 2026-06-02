@@ -380,6 +380,7 @@ class MREditWindow : public TWindow {
 				std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=window-pre keyCode=0x%04X mods=0x%04X cursor=%zu", static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), editor != nullptr ? editor->cursorOffset() : 0);
 				mrLogMessage(line);
 			}
+			if (handleBlockTabIndentKey(event)) return;
 				if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) {
 					if (editor != nullptr && mBlockOps.hasVisibleBlock() && !mBlockOps.isMarking()) static_cast<void>(mBlockOps.refreshVisual(*editor));
 					return;
@@ -1349,11 +1350,21 @@ class MREditWindow : public TWindow {
 	}
 
 	bool indentBlock(std::string *errorText = nullptr) {
-		return editor != nullptr && mBlockOps.indentCurrentColumnBlock(*editor, errorText);
+		if (editor == nullptr) return false;
+		if (mBlockOps.mode() == MRFEBlockMode::Line) return mBlockOps.indentCurrentLineBlock(*editor, errorText);
+		if (mBlockOps.mode() == MRFEBlockMode::Column) return mBlockOps.indentCurrentColumnBlock(*editor, errorText);
+		if (mBlockOps.mode() == MRFEBlockMode::Stream) return mBlockOps.indentCurrentStreamBlock(*editor, errorText);
+		if (errorText != nullptr) *errorText = "Line, column or stream block required.";
+		return false;
 	}
 
 	bool undentBlock(std::string *errorText = nullptr) {
-		return editor != nullptr && mBlockOps.undentCurrentColumnBlock(*editor, errorText);
+		if (editor == nullptr) return false;
+		if (mBlockOps.mode() == MRFEBlockMode::Line) return mBlockOps.undentCurrentLineBlock(*editor, errorText);
+		if (mBlockOps.mode() == MRFEBlockMode::Column) return mBlockOps.undentCurrentColumnBlock(*editor, errorText);
+		if (mBlockOps.mode() == MRFEBlockMode::Stream) return mBlockOps.undentCurrentStreamBlock(*editor, errorText);
+		if (errorText != nullptr) *errorText = "Line, column or stream block required.";
+		return false;
 	}
 
 	bool centerCursorInView() {
@@ -1713,6 +1724,26 @@ class MREditWindow : public TWindow {
 			(void)event;
 			return false;
 		}
+
+	bool handleBlockTabIndentKey(TEvent &event) {
+		if (event.what != evKeyDown || editor == nullptr || !mBlockOps.hasVisibleBlock()) return false;
+		if (mBlockOps.mode() != MRFEBlockMode::Line && mBlockOps.mode() != MRFEBlockMode::Column && mBlockOps.mode() != MRFEBlockMode::Stream) return false;
+		const ushort keyCode = event.keyDown.keyCode;
+		const ushort mods = event.keyDown.controlKeyState;
+		const bool shift = (mods & kbShift) != 0;
+		const bool shiftTab = keyCode == kbShiftTab || ((keyCode == kbTab || keyCode == kbCtrlI || event.keyDown.charScan.charCode == '\t') && shift);
+		const bool tab = !shiftTab && (keyCode == kbTab || keyCode == kbCtrlI || event.keyDown.charScan.charCode == '\t');
+		std::string errorText;
+
+		if (!shiftTab && !tab) return false;
+		if (shiftTab) {
+			if (!undentBlock(&errorText) && !errorText.empty()) mrLogMessage(errorText.c_str());
+		} else if (!indentBlock(&errorText) && !errorText.empty())
+			mrLogMessage(errorText.c_str());
+		static_cast<void>(mBlockOps.refreshVisual(*editor));
+		clearEvent(event);
+		return true;
+	}
 
 	bool handleBuiltInBlockHotkeys(TEvent &event) {
 		if (event.what != evKeyDown || editor == nullptr) return false;

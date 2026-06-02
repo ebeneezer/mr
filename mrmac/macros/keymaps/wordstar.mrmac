@@ -1,6 +1,6 @@
 $MACRO MR_KEYMAP FROM EDIT;
 KEYMAP_RESET();
-KEYMAP_VERSION('1779367641');
+KEYMAP_VERSION('1780418928');
 KEYMAP_PROFILE('name="WORDSTAR" description="WordStar Core"');
 KEYMAP_PROFILE('name="EMACS" description="Emacs core"');
 KEYMAP_PROFILE('name="NANO" description="GNU nano core"');
@@ -27,6 +27,8 @@ KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_SET_BE
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_SET_END" sequence="<Ctrl+K> <Ctrl+K>" description="Block end"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_SET_END" sequence="<Ctrl+K> <K>" description="Block end"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_CLEAR" sequence="<Ctrl+K> <Space>" description="End marking"');
+KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_TOGGLE_VISIBILITY" sequence="<Ctrl+K> <Ctrl+H>" description="Hide/show block mark"');
+KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_TOGGLE_VISIBILITY" sequence="<Ctrl+K> <H>" description="Hide/show block mark"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_MARK_WORD_RIGHT" sequence="<Ctrl+K> <Ctrl+T>" description="Mark word right"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_MARK_WORD_RIGHT" sequence="<Ctrl+K> <T>" description="Mark word right"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_COPY" sequence="<Ctrl+K> <Ctrl+C>" description="Copy block"');
@@ -47,6 +49,7 @@ KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_FILE_SAVE" s
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_FILE_FORCE_SAVE" sequence="<Ctrl+K> <Ctrl+D>" description="Force save"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_FILE_FORCE_SAVE" sequence="<Ctrl+K> <D>" description="Force save"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_BUILD_CURRENT_FILE" sequence="<F9>" description="Build current file"');
+KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_MATCH_PARENTHESIS" sequence="<Alt+P>" description="Match parenthesis"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+K> <Ctrl+X>" description="Exit with save-all dialog"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+K> <X>" description="Exit with save-all dialog"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_TEXT_REFORMAT_PARAGRAPH" sequence="<Ctrl+B>" description="Reformat paragraph"');
@@ -88,7 +91,7 @@ KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_FORWA
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_LINE" sequence="<Ctrl+Y>" description="delete line"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_TO_EOL" sequence="<Ctrl+Q> <Ctrl+L>" description="delete to EOL"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_TO_EOL" sequence="<Ctrl+Q> <L>" description="delete to EOL"');
-KEYMAP_BIND('name="WORDSTAR" context=EDIT type=MACRO target="keymaps/wordstar-extensions.mrmac^smart_backspace" sequence="<Backspace>" description="Smart Backspace"');
+KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_INDENT" sequence="<Ctrl+K> <I>" description="Indent block"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_UP" sequence="<Ctrl+P>" description="Cursor up"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_DOWN" sequence="<Ctrl+N>" description="Cursor down"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_LEFT" sequence="<Ctrl+B>" description="Cursor left"');
@@ -115,6 +118,7 @@ KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_UNDO" sequence=
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_VIEW_CENTER_LINE" sequence="<Ctrl+L>" description="Recenter line"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_FILE_SAVE" sequence="<Ctrl+X> <Ctrl+S>" description="Save file"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_BUILD_CURRENT_FILE" sequence="<F9>" description="Build current file"');
+KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_MATCH_PARENTHESIS" sequence="<Alt+P>" description="Match parenthesis"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+X> <Ctrl+C>" description="Exit with save-all dialog"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_UP" sequence="<Ctrl+P>" description="Previous line"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_DOWN" sequence="<Ctrl+N>" description="Next line"');
@@ -138,6 +142,7 @@ KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_REDO_LAST_UNDO" 
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_TEXT_REFORMAT_PARAGRAPH" sequence="<Alt+J>" description="Justify paragraph"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_FILE_SAVE" sequence="<Ctrl+O>" description="Write out"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_BUILD_CURRENT_FILE" sequence="<F9>" description="Build current file"');
+KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_MATCH_PARENTHESIS" sequence="<Alt+P>" description="Match parenthesis"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+X>" description="Exit with save-all dialog"');
 ACTIVE_KEYMAP_PROFILE('name="WORDSTAR"');
 END_MACRO;

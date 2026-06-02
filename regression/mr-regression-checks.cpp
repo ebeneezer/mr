@@ -203,7 +203,8 @@ enum : std::size_t {
 	kMenuDialogIndexInputLineSelected = 23,
 	kMenuDialogIndexInputLineArrows = 24,
 	kMenuDialogIndexHistoryArrow = 25,
-	kMenuDialogIndexHistorySides = 26
+	kMenuDialogIndexHistorySides = 26,
+	kMenuDialogIndexMenuBarHotkey = 27
 };
 
 enum : unsigned char {
@@ -585,7 +586,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
 	                           "MRSETUP('CURSOR_BEHAVIOUR', 'FREE_MOVEMENT');\n"
 	                           "MRSETUP('SCROLLBAR_VISIBILITY', 'ALWAYS');\n"
-	                           "MRSETUP('COLUMN_BLOCK_MOVE', 'LEAVE_SPACE');\n"
+	                           "MRSETUP('BLOCK_MOVE', 'LEAVE_SPACE');\n"
 	                           "MRSETUP('DEFAULT_MODE', 'OVERWRITE');\n"
 	                           "WINDOWCOLORS('v1:10,11,12,13,14,15,16,17');\n"
 	                           "MENUDIALOGCOLORS('v1:20,21,22,23,24,25,26,27,28,29,2A');\n"
@@ -811,8 +812,8 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac should persist LINE_NUM_ZERO_FILL as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('COLUMN_BLOCK_MOVE', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing COLUMN_BLOCK_MOVE.";
+	if (content.find("MRSETUP('BLOCK_MOVE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing BLOCK_MOVE.";
 		return false;
 	}
 	if (content.find("MRSETUP('DEFAULT_MODE', '") == std::string::npos) {
@@ -1154,7 +1155,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 }
 
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B};
+	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
@@ -1171,6 +1172,10 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 		failureReason = "Unexpected MENUDIALOGCOLORS item mapping.";
 		return false;
 	}
+	if (std::string(items[kMenuDialogIndexMenuBarHotkey].label) != "Hotkeys on menu bar" || items[kMenuDialogIndexMenuBarHotkey].paletteIndex != kMrPaletteMenuBarHotkey) {
+		failureReason = "MENUDIALOGCOLORS must expose a dedicated Hotkeys on menu bar item.";
+		return false;
+	}
 
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
 		failureReason = "Unable to set MENUDIALOGCOLORS probe values: " + errorText;
@@ -1181,7 +1186,7 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 		unsigned char slot = items[i].paletteIndex;
 		bool isMenuSlot = slot >= 2 && slot <= 6;
 		bool isGrayDialogSlot = slot >= 32 && slot <= 63;
-		bool isExtendedDialogSlot = slot == kMrPaletteDialogInactiveElements || slot == kMrPaletteDropListDescription || slot == kMrPaletteDropListSelectedInactive;
+		bool isExtendedDialogSlot = slot == kMrPaletteDialogInactiveElements || slot == kMrPaletteDropListDescription || slot == kMrPaletteDropListSelectedInactive || slot == kMrPaletteMenuBarHotkey;
 		if (!configuredColorSlotOverride(slot, value)) {
 			restore();
 			failureReason = "MENUDIALOGCOLORS item must override its mapped palette slot.";
@@ -1222,9 +1227,9 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 		return false;
 	}
 	configured = configuredColorSetupSettings();
-	if (configured.menuDialogColors[kMenuDialogIndexInactiveControls] != defaults.menuDialogColors[kMenuDialogIndexInactiveControls] || configured.menuDialogColors[kMenuDialogIndexInactiveElements] != defaults.menuDialogColors[kMenuDialogIndexInactiveElements] || configured.menuDialogColors[kMenuDialogIndexDialogFrame] != 0x1C || configured.menuDialogColors[kMenuDialogIndexDialogText] != 0x1D || configured.menuDialogColors[kMenuDialogIndexDialogBackground] != 0x1C) {
+	if (configured.menuDialogColors[kMenuDialogIndexInactiveControls] != defaults.menuDialogColors[kMenuDialogIndexInactiveControls] || configured.menuDialogColors[kMenuDialogIndexInactiveElements] != defaults.menuDialogColors[kMenuDialogIndexInactiveElements] || configured.menuDialogColors[kMenuDialogIndexDialogFrame] != 0x1C || configured.menuDialogColors[kMenuDialogIndexDialogText] != 0x1D || configured.menuDialogColors[kMenuDialogIndexDialogBackground] != 0x1C || configured.menuDialogColors[kMenuDialogIndexMenuBarHotkey] != defaults.menuDialogColors[kMenuDialogIndexMenuBarHotkey]) {
 		restore();
-		failureReason = "14-entry MENUDIALOGCOLORS upgrade must inject inactive-controls default and map dialog background to legacy frame color.";
+		failureReason = "14-entry MENUDIALOGCOLORS upgrade must inject inactive-controls and menu-bar-hotkey defaults and map dialog background to legacy frame color.";
 		return false;
 	}
 
@@ -1234,9 +1239,9 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 		return false;
 	}
 	configured = configuredColorSetupSettings();
-	if (configured.menuDialogColors[kMenuDialogIndexListboxSelector] != defaults.menuDialogColors[kMenuDialogIndexListboxSelector] || configured.menuDialogColors[kMenuDialogIndexInactiveControls] != defaults.menuDialogColors[kMenuDialogIndexInactiveControls] || configured.menuDialogColors[kMenuDialogIndexInactiveElements] != defaults.menuDialogColors[kMenuDialogIndexInactiveElements] || configured.menuDialogColors[kMenuDialogIndexDialogFrame] != defaults.menuDialogColors[kMenuDialogIndexDialogFrame] || configured.menuDialogColors[kMenuDialogIndexDialogText] != defaults.menuDialogColors[kMenuDialogIndexDialogText] || configured.menuDialogColors[kMenuDialogIndexDialogBackground] != defaults.menuDialogColors[kMenuDialogIndexDialogBackground]) {
+	if (configured.menuDialogColors[kMenuDialogIndexListboxSelector] != defaults.menuDialogColors[kMenuDialogIndexListboxSelector] || configured.menuDialogColors[kMenuDialogIndexInactiveControls] != defaults.menuDialogColors[kMenuDialogIndexInactiveControls] || configured.menuDialogColors[kMenuDialogIndexInactiveElements] != defaults.menuDialogColors[kMenuDialogIndexInactiveElements] || configured.menuDialogColors[kMenuDialogIndexDialogFrame] != defaults.menuDialogColors[kMenuDialogIndexDialogFrame] || configured.menuDialogColors[kMenuDialogIndexDialogText] != defaults.menuDialogColors[kMenuDialogIndexDialogText] || configured.menuDialogColors[kMenuDialogIndexDialogBackground] != defaults.menuDialogColors[kMenuDialogIndexDialogBackground] || configured.menuDialogColors[kMenuDialogIndexMenuBarHotkey] != defaults.menuDialogColors[kMenuDialogIndexMenuBarHotkey]) {
 		restore();
-		failureReason = "11-entry MENUDIALOGCOLORS upgrade must fill missing selector/inactive/frame/text/background defaults.";
+		failureReason = "11-entry MENUDIALOGCOLORS upgrade must fill missing selector/inactive/frame/text/background/menu-bar-hotkey defaults.";
 		return false;
 	}
 
@@ -1249,11 +1254,14 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 }
 
 bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C};
+	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x2E};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
+	std::string menuBarContent;
 	std::string errorText;
+	std::string ioError;
 	unsigned char normalHotkey = 0;
 	unsigned char selectedHotkey = 0;
+	unsigned char menuBarHotkey = 0;
 	bool restoreOk = true;
 
 	auto restore = [&]() {
@@ -1263,6 +1271,11 @@ bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
 		failureReason = "Unable to set MENUDIALOGCOLORS probe values: " + errorText;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRMenuBar.cpp"), menuBarContent, ioError)) {
+		restore();
+		failureReason = "Unable to read MRMenuBar.cpp for menu-bar hotkey guard: " + ioError;
 		return false;
 	}
 	if (!configuredColorSlotOverride(4, normalHotkey)) {
@@ -1275,9 +1288,24 @@ bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 		failureReason = "Palette slot 7 (selected entry-hotkey) must mirror entry-hotkey.";
 		return false;
 	}
+	if (!configuredColorSlotOverride(kMrPaletteMenuBarHotkey, menuBarHotkey)) {
+		restore();
+		failureReason = "Menu bar hotkey slot must be overrideable.";
+		return false;
+	}
 	if (normalHotkey != probeValues[2] || selectedHotkey != probeValues[2]) {
 		restore();
 		failureReason = "Entry-hotkey and selected entry-hotkey must resolve to the same configured color.";
+		return false;
+	}
+	if (menuBarHotkey != probeValues[kMenuDialogIndexMenuBarHotkey] || menuBarHotkey == normalHotkey) {
+		restore();
+		failureReason = "Menu bar hotkeys must use their own configured color, independent from menu element hotkeys.";
+		return false;
+	}
+	if (menuBarContent.find("configuredColorSlotOverride(kMrPaletteMenuBarHotkey") == std::string::npos || menuBarContent.find("markedHotkeyColumn(p->name)") == std::string::npos || menuBarContent.find("b.putAttribute(static_cast<ushort>(x + 1 + hotkeyColumn), cMenuBarHotkey)") == std::string::npos) {
+		restore();
+		failureReason = "MRMenuBar must recolor top-level menu hotkeys with the dedicated menu-bar hotkey slot.";
 		return false;
 	}
 
@@ -1791,6 +1819,20 @@ class ScopedRegressionPersistentBlocks {
 	MREditSetupSettings mPrevious;
 };
 
+class ScopedRegressionEditSetupSettings {
+  public:
+	explicit ScopedRegressionEditSetupSettings(const MREditSetupSettings &settings) : mPrevious(configuredEditSetupSettings()) {
+		static_cast<void>(setConfiguredEditSetupSettings(settings, nullptr));
+	}
+
+	~ScopedRegressionEditSetupSettings() {
+		static_cast<void>(setConfiguredEditSetupSettings(mPrevious, nullptr));
+	}
+
+  private:
+	MREditSetupSettings mPrevious;
+};
+
 bool installRegressionKeymap(std::string_view source, std::string &failureReason) {
 	MRKeymapLoadResult loaded = loadKeymapProfilesFromSettingsSource(source);
 	std::string errorMessage;
@@ -1820,6 +1862,10 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 	ScopedRegressionKeymap restoreKeymap;
 	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	ScopedRegressionPersistentBlocks persistentBlocks(true);
+	MREditSetupSettings editSettings = configuredEditSetupSettings();
+
+	editSettings.columnBlockMove = "DELETE_SPACE";
+	ScopedRegressionEditSetupSettings editSetup(editSettings);
 
 	if (!installRegressionKeymap(defaultKeymapContent, failureReason)) return false;
 	{
@@ -2269,7 +2315,17 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 			return false;
 		}
 			window.beginStreamBlock();
-			if (!sendWindowKey(window, kbRight)) return false;
+			window.endBlock();
+			if (window.blockStatus() != MREditWindow::bmNone || window.hasBlock() || window.isBlockMarking()) {
+				failureReason = "Empty menu/window stream begin-end must turn marking off.";
+				return false;
+			}
+			window.beginStreamBlock();
+			if (window.getEditor() == nullptr) {
+				failureReason = "Menu/window stream path must have an editor.";
+				return false;
+			}
+			window.getEditor()->setCursorOffset(1);
 			window.endBlock();
 			if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "menu/window stream begin-end", failureReason)) return false;
 			if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "menu/window stream overlay", failureReason)) return false;
@@ -2301,7 +2357,17 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 			return false;
 		}
 		window.beginColumnBlock();
-			if (!sendWindowKey(window, kbRight)) return false;
+			window.endBlock();
+			if (window.blockStatus() != MREditWindow::bmNone || window.hasBlock() || window.isBlockMarking()) {
+				failureReason = "Empty menu/window column begin-end must turn marking off.";
+				return false;
+			}
+			window.beginColumnBlock();
+			if (window.getEditor() == nullptr) {
+				failureReason = "Menu/window column path must have an editor.";
+				return false;
+			}
+			window.getEditor()->setCursorOffsetAtVisualColumn(1, 1);
 			window.endBlock();
 			if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 1, 1, 2, "menu/window column begin-end", failureReason)) return false;
 			if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "menu/window column overlay", failureReason)) return false;
@@ -2700,7 +2766,7 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	}
 	if (loaded.columnBlockMove != probe.columnBlockMove) {
 		restore();
-		failureReason = "COLUMN_BLOCK_MOVE mismatch after roundtrip.";
+		failureReason = "BLOCK_MOVE mismatch after roundtrip.";
 		return false;
 	}
 	if (loaded.defaultMode != probe.defaultMode) {
@@ -3843,6 +3909,23 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 	}
 	if (panelContent.find("Persistent ~B~locks") == std::string::npos || panelContent.find("kOptionPersistentBlocks") == std::string::npos) {
 		failureReason = "File extension editor settings panel must expose and wire a Persistent blocks option.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testFileExtensionRightMarginSyncGuard(std::string &failureReason) {
+	const std::string panelPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionEditorSettings.cpp");
+	std::string panelContent;
+	std::string ioError;
+
+	if (!readTextFile(panelPath, panelContent, ioError)) {
+		failureReason = "Unable to read MRFileExtensionEditorSettings.cpp for right-margin sync guard: " + ioError;
+		return false;
+	}
+	if (panelContent.find("int typedRightMargin = lastKnownRightMarginForFormatLine;") == std::string::npos || panelContent.find("typedRightMargin = parseIntegerTextOrDefault(readInputFieldValue(rightMarginField)") == std::string::npos || panelContent.find("synchronizeEditFormatLineMargins(currentFormatLine, typedLeftMargin, typedRightMargin") == std::string::npos) {
+		failureReason = "File extension editor settings panel must preserve the typed right margin while synchronizing FORMAT_LINE.";
 		return false;
 	}
 	failureReason.clear();
@@ -5441,6 +5524,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
+	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
@@ -5501,6 +5585,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
+	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
