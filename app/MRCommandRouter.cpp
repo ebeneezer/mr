@@ -1694,7 +1694,7 @@ bool handleLoadBlockFromFile(MREditWindow *window) {
 		forgetLoadDialogPath(MRDialogHistoryScope::BlockLoad, fileName);
 		return true;
 	}
-	if (!window->loadStreamBlockFromFile(resolvedPath, &errorText)) {
+	if (!window->loadBlockFromFile(resolvedPath, &errorText)) {
 		forgetLoadDialogPath(MRDialogHistoryScope::BlockLoad, resolvedPath.c_str());
 		postDialogWarning(errorText.empty() ? "Unable to load block." : errorText);
 		return true;
@@ -1709,7 +1709,7 @@ bool handleSaveBlockToFile(MREditWindow *window) {
 
 	if (window == nullptr) return false;
 	if (!promptBlockSavePath(savePath)) return true;
-	if (!window->saveStreamBlockToFile(savePath, &errorText)) {
+	if (!window->saveBlockToFile(savePath, &errorText)) {
 		postDialogWarning(errorText.empty() ? "Unable to save stream block." : errorText);
 		return true;
 	}

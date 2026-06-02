@@ -7,6 +7,8 @@
 #include <vector>
 
 class MRFileEditor;
+class MREditWindow;
+class MRFEBlockOpsTestPeer;
 
 enum class MRFEBlockMode : int {
 	None = 0,
@@ -48,7 +50,6 @@ class MRFEArenaAllocator {
 	bool loadFile(const std::string &path, std::string *errorText = nullptr);
 	bool writeFile(const std::string &path, std::string *errorText = nullptr) const;
 	std::vector<char> release() noexcept;
-	void logContents(std::string_view label) const;
 
 	const char *data() const noexcept;
 	std::size_t size() const noexcept;
@@ -63,6 +64,9 @@ class MRFEBlockOps {
   public:
 	MRFEBlockOps();
 
+  private:
+	bool hasVisibleBlock() const noexcept;
+	bool isMarking() const noexcept;
 	bool beginLine(MRFileEditor &editor);
 	bool beginColumn(MRFileEditor &editor);
 	bool beginStream(MRFileEditor &editor);
@@ -76,31 +80,11 @@ class MRFEBlockOps {
 	bool moveCursorToEnd(MRFileEditor &editor);
 	bool captureCurrentBlockPayload(MRFileEditor &editor, MRFEArenaAllocator &arena, std::string *errorText = nullptr);
 	bool insertPayloadAsStreamBlock(MRFileEditor &editor, const MRFEArenaAllocator &arena, std::string *errorText = nullptr);
-	bool copyCurrentBlockToCursor(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool copyCurrentBlockToEditor(MRFileEditor &sourceEditor, MRFEBlockOps &targetOps, MRFileEditor &targetEditor, int sourceWindowId, int targetWindowId, std::string *errorText = nullptr);
-	bool moveCurrentBlockToCursor(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool moveCurrentBlockToEditor(MRFileEditor &sourceEditor, MRFEBlockOps &targetOps, MRFileEditor &targetEditor, int sourceWindowId, int targetWindowId, std::string *errorText = nullptr);
-	bool deleteCurrentBlock(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool indentCurrentColumnBlock(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool undentCurrentColumnBlock(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool indentCurrentLineBlock(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool undentCurrentLineBlock(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool indentCurrentStreamBlock(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool undentCurrentStreamBlock(MRFileEditor &editor, std::string *errorText = nullptr);
-	bool loadStreamBlockFromFile(MRFileEditor &editor, const std::string &path, std::string *errorText = nullptr);
-	bool saveStreamBlockToFile(MRFileEditor &editor, const std::string &path, std::string *errorText = nullptr);
+	bool loadBlockFromFile(MRFileEditor &editor, const std::string &path, std::string *errorText = nullptr);
+	bool saveBlockToFile(MRFileEditor &editor, const std::string &path, std::string *errorText = nullptr);
 	bool setCommittedStream(MRFileEditor &editor, std::size_t start, std::size_t end);
 	bool setCommittedBlock(MRFileEditor &editor, MRFEBlockMode mode, std::size_t anchor, std::size_t cursor, int anchorColumn = -1, int cursorColumn = -1);
 
-	bool hasStoredBlock() const noexcept;
-	bool hasVisibleBlock() const noexcept;
-	bool isMarking() const noexcept;
-	bool isHidden() const noexcept;
-	MRFEBlockMode mode() const noexcept;
-	MRFEBlockStatus status() const noexcept;
-	const MRFEBlockGeometry &geometry() const noexcept;
-
-  private:
 	bool begin(MRFileEditor &editor, MRFEBlockMode mode);
 	void normalize(MRFileEditor &editor);
 	void applySelection(MRFileEditor &editor);
@@ -110,6 +94,14 @@ class MRFEBlockOps {
 	enum class TransferMode : int {
 		Copy = 0,
 		Move = 1
+	};
+
+	enum class BlockOperation : int {
+		Copy = 0,
+		Move = 1,
+		Delete = 2,
+		Indent = 3,
+		Undent = 4
 	};
 
 	enum class ColumnHorizontalShiftMode : int {
@@ -133,6 +125,14 @@ class MRFEBlockOps {
 		std::vector<char> payload;
 	};
 
+	bool runBlockOperation(MRFileEditor &editor, BlockOperation operation, std::string *errorText = nullptr);
+	bool runWindowBlockOperation(MRFileEditor &sourceEditor, MRFEBlockOps &targetOps, MRFileEditor &targetEditor, int sourceWindowId, int targetWindowId, BlockOperation operation, std::string *errorText = nullptr);
+	bool executeCursorMove(MRFileEditor &editor, std::string *errorText = nullptr);
+	bool executeDelete(MRFileEditor &editor, std::string *errorText = nullptr);
+	bool shiftCurrentBlockToTab(MRFileEditor &editor, bool indent, std::string *errorText = nullptr);
+	bool shiftCurrentColumnBlockToTab(MRFileEditor &editor, bool indent, std::string *errorText = nullptr);
+	bool shiftCurrentLineBlockToTab(MRFileEditor &editor, bool indent, std::string *errorText = nullptr);
+	bool shiftCurrentStreamBlockToTab(MRFileEditor &editor, bool indent, std::string *errorText = nullptr);
 	bool captureTransferPayload(MRFileEditor &editor, MRFEArenaAllocator &arena, std::string *errorText = nullptr);
 	bool prepareTransferMessage(MRFileEditor &editor, int sourceWindowId, int targetWindowId, TransferMode mode, MRFEArenaAllocator &arena, TransferMessage &message, std::string *errorText = nullptr);
 	bool insertTransferMessage(MRFileEditor &editor, const TransferMessage &message, std::string *errorText = nullptr);
@@ -143,9 +143,9 @@ class MRFEBlockOps {
 	MRFEBlockGeometry mGeometry;
 	MRFEArenaAllocator mArena;
 
+	friend class MREditWindow;
+	friend class MRFEBlockOpsTestPeer;
 	friend bool mrfeBlockOpsRegressionHarness(std::string &failureReason);
 };
-
-bool mrfeBlockOpsRegressionHarness(std::string &failureReason);
 
 #endif

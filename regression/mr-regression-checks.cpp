@@ -35,6 +35,7 @@
 #include "../piecetable/MRTextDocument.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
+#include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
 
 namespace {
 
@@ -2577,11 +2578,11 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 		failureReason = "Line, column, stream, end, clear and visibility marking must be wired through MRMAC compiler/runtime surfaces.";
 		return false;
 	}
-	if (routerContent.find("handleLoadBlockFromFile") == std::string::npos || routerContent.find("saveStreamBlockToFile") == std::string::npos || blockOpsContent.find("captureCurrentBlockPayload") == std::string::npos || blockOpsContent.find("insertPayloadAsStreamBlock") == std::string::npos || blockOpsContent.find("std::vector<char> release() noexcept") == std::string::npos || blockOpsContent.find("prepareTransferMessage") == std::string::npos || vmContent.find("name == \"LOAD_BLOCK\"") == std::string::npos || vmContent.find("mrvmEditorLoadBlockFromFile") == std::string::npos || vmContent.find("mrvmEditorSaveCurrentBlockToFile") == std::string::npos || compilerContent.find("PROC_SIG1(\"LOAD_BLOCK\"") == std::string::npos || compilerContent.find("PROC_SIG1(\"SAVE_BLOCK\"") == std::string::npos) {
+	if (routerContent.find("handleLoadBlockFromFile") == std::string::npos || routerContent.find("saveBlockToFile") == std::string::npos || blockOpsContent.find("loadBlockFromFile") == std::string::npos || blockOpsContent.find("saveBlockToFile") == std::string::npos || blockOpsContent.find("captureCurrentBlockPayload") == std::string::npos || blockOpsContent.find("insertPayloadAsStreamBlock") == std::string::npos || blockOpsContent.find("std::vector<char> release() noexcept") == std::string::npos || blockOpsContent.find("prepareTransferMessage") == std::string::npos || vmContent.find("name == \"LOAD_BLOCK\"") == std::string::npos || vmContent.find("mrvmEditorLoadBlockFromFile") == std::string::npos || vmContent.find("mrvmEditorSaveCurrentBlockToFile") == std::string::npos || compilerContent.find("PROC_SIG1(\"LOAD_BLOCK\"") == std::string::npos || compilerContent.find("PROC_SIG1(\"SAVE_BLOCK\"") == std::string::npos) {
 		failureReason = "Stream-only load/save block must be wired through menu, keymap and MRMAC surfaces.";
 		return false;
 	}
-	if (routerContent.find("case cmMrBlockCopy:") == std::string::npos || routerContent.find("return handleCopyBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockMove:") == std::string::npos || routerContent.find("return handleMoveBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockDelete:") == std::string::npos || routerContent.find("return handleDeleteBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("dispatchTargetedKeymapAppCommand") == std::string::npos || blockOpsContent.find("deleteCurrentBlock") == std::string::npos || blockOpsSourceContent.find("\"delete-block\"") == std::string::npos) {
+	if (routerContent.find("case cmMrBlockCopy:") == std::string::npos || routerContent.find("return handleCopyBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockMove:") == std::string::npos || routerContent.find("return handleMoveBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockDelete:") == std::string::npos || routerContent.find("return handleDeleteBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("dispatchTargetedKeymapAppCommand") == std::string::npos || blockOpsContent.find("runBlockOperation") == std::string::npos || blockOpsContent.find("runWindowBlockOperation") == std::string::npos || blockOpsSourceContent.find("\"delete-block\"") == std::string::npos) {
 		failureReason = "Block copy/move/delete must route to MRFEBlockOps through the active editor command target.";
 		return false;
 	}
@@ -4228,7 +4229,7 @@ bool testColumnIndentUndentWiringGuard(std::string &failureReason) {
 		failureReason = "Column block indent/undent commands must route through MRCommandRouter.";
 		return false;
 	}
-	if (blockOpsHeaderContent.find("indentCurrentColumnBlock") == std::string::npos || blockOpsHeaderContent.find("undentCurrentColumnBlock") == std::string::npos || blockOpsSourceContent.find("\"indent-column-block\"") == std::string::npos || blockOpsSourceContent.find("\"shift-column-block\"") == std::string::npos) {
+	if (blockOpsHeaderContent.find("shiftCurrentBlockToTab") == std::string::npos || blockOpsSourceContent.find("BlockOperation::Indent") == std::string::npos || blockOpsSourceContent.find("BlockOperation::Undent") == std::string::npos || blockOpsSourceContent.find("std::array<ShiftFunction") == std::string::npos || blockOpsSourceContent.find("\"shift-column-block\"") == std::string::npos) {
 		failureReason = "Column block indent/undent must be implemented by MRFEBlockOps.";
 		return false;
 	}

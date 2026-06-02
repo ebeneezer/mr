@@ -1251,7 +1251,7 @@ class MREditWindow : public TWindow {
 
 		int blockStatus() const {
 			if (!mBlockOps.hasVisibleBlock()) return 0;
-			return static_cast<int>(mBlockOps.mode());
+			return static_cast<int>(mBlockOps.mGeometry.mode);
 		}
 
 		enum BlockMode {
@@ -1262,39 +1262,39 @@ class MREditWindow : public TWindow {
 		};
 
 		uint blockAnchorPtr() const {
-			return static_cast<uint>(mBlockOps.geometry().anchor);
+			return static_cast<uint>(mBlockOps.mGeometry.anchor);
 		}
 
 		uint blockEffectiveEndPtr() const {
-			return static_cast<uint>(mBlockOps.geometry().cursor);
+			return static_cast<uint>(mBlockOps.mGeometry.cursor);
 		}
 
 		int blockLine1() const {
 			if (!mBlockOps.hasVisibleBlock()) return 0;
-			return static_cast<int>(mBlockOps.geometry().line1 + 1);
+			return static_cast<int>(mBlockOps.mGeometry.line1 + 1);
 		}
 
 		int blockLine2() const {
 			if (!mBlockOps.hasVisibleBlock()) return 0;
-			return static_cast<int>(mBlockOps.geometry().line2 + 1);
+			return static_cast<int>(mBlockOps.mGeometry.line2 + 1);
 		}
 
 		int blockCol1() const {
 			if (!mBlockOps.hasVisibleBlock()) return 0;
-			return mBlockOps.geometry().col1 + 1;
+			return mBlockOps.mGeometry.col1 + 1;
 		}
 
 		int blockCol2() const {
 			if (!mBlockOps.hasVisibleBlock()) return 0;
-			return mBlockOps.geometry().col2 + 1;
+			return mBlockOps.mGeometry.col2 + 1;
 		}
 
 		int blockAnchorColumn() const {
-			return mBlockOps.geometry().anchorColumn + 1;
+			return mBlockOps.mGeometry.anchorColumn + 1;
 		}
 
 		int blockEndColumn() const {
-			return mBlockOps.geometry().cursorColumn + 1;
+			return mBlockOps.mGeometry.cursorColumn + 1;
 		}
 
 		void refreshBlockVisual() {
@@ -1321,50 +1321,48 @@ class MREditWindow : public TWindow {
 		return editor != nullptr && mBlockOps.moveCursorToEnd(*editor);
 	}
 
+	bool loadBlockFromFile(const std::string &path, std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.loadBlockFromFile(*editor, path, errorText);
+	}
+
+	bool saveBlockToFile(const std::string &path, std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.saveBlockToFile(*editor, path, errorText);
+	}
+
 	bool loadStreamBlockFromFile(const std::string &path, std::string *errorText = nullptr) {
-		return editor != nullptr && mBlockOps.loadStreamBlockFromFile(*editor, path, errorText);
+		return loadBlockFromFile(path, errorText);
 	}
 
 	bool saveStreamBlockToFile(const std::string &path, std::string *errorText = nullptr) {
-		return editor != nullptr && mBlockOps.saveStreamBlockToFile(*editor, path, errorText);
+		return saveBlockToFile(path, errorText);
 	}
 
 	bool copyBlock(std::string *errorText = nullptr) {
-		return editor != nullptr && mBlockOps.copyCurrentBlockToCursor(*editor, errorText);
+		return editor != nullptr && mBlockOps.runBlockOperation(*editor, MRFEBlockOps::BlockOperation::Copy, errorText);
 	}
 
 	bool copyBlockTo(MREditWindow &target, std::string *errorText = nullptr) {
-		return editor != nullptr && target.editor != nullptr && mBlockOps.copyCurrentBlockToEditor(*editor, target.mBlockOps, *target.editor, mBufferId, target.mBufferId, errorText);
+		return editor != nullptr && target.editor != nullptr && mBlockOps.runWindowBlockOperation(*editor, target.mBlockOps, *target.editor, mBufferId, target.mBufferId, MRFEBlockOps::BlockOperation::Copy, errorText);
 	}
 
 	bool moveBlock(std::string *errorText = nullptr) {
-		return editor != nullptr && mBlockOps.moveCurrentBlockToCursor(*editor, errorText);
+		return editor != nullptr && mBlockOps.runBlockOperation(*editor, MRFEBlockOps::BlockOperation::Move, errorText);
 	}
 
 	bool moveBlockTo(MREditWindow &target, std::string *errorText = nullptr) {
-		return editor != nullptr && target.editor != nullptr && mBlockOps.moveCurrentBlockToEditor(*editor, target.mBlockOps, *target.editor, mBufferId, target.mBufferId, errorText);
+		return editor != nullptr && target.editor != nullptr && mBlockOps.runWindowBlockOperation(*editor, target.mBlockOps, *target.editor, mBufferId, target.mBufferId, MRFEBlockOps::BlockOperation::Move, errorText);
 	}
 
 	bool deleteBlock(std::string *errorText = nullptr) {
-		return editor != nullptr && mBlockOps.deleteCurrentBlock(*editor, errorText);
+		return editor != nullptr && mBlockOps.runBlockOperation(*editor, MRFEBlockOps::BlockOperation::Delete, errorText);
 	}
 
 	bool indentBlock(std::string *errorText = nullptr) {
-		if (editor == nullptr) return false;
-		if (mBlockOps.mode() == MRFEBlockMode::Line) return mBlockOps.indentCurrentLineBlock(*editor, errorText);
-		if (mBlockOps.mode() == MRFEBlockMode::Column) return mBlockOps.indentCurrentColumnBlock(*editor, errorText);
-		if (mBlockOps.mode() == MRFEBlockMode::Stream) return mBlockOps.indentCurrentStreamBlock(*editor, errorText);
-		if (errorText != nullptr) *errorText = "Line, column or stream block required.";
-		return false;
+		return editor != nullptr && mBlockOps.runBlockOperation(*editor, MRFEBlockOps::BlockOperation::Indent, errorText);
 	}
 
 	bool undentBlock(std::string *errorText = nullptr) {
-		if (editor == nullptr) return false;
-		if (mBlockOps.mode() == MRFEBlockMode::Line) return mBlockOps.undentCurrentLineBlock(*editor, errorText);
-		if (mBlockOps.mode() == MRFEBlockMode::Column) return mBlockOps.undentCurrentColumnBlock(*editor, errorText);
-		if (mBlockOps.mode() == MRFEBlockMode::Stream) return mBlockOps.undentCurrentStreamBlock(*editor, errorText);
-		if (errorText != nullptr) *errorText = "Line, column or stream block required.";
-		return false;
+		return editor != nullptr && mBlockOps.runBlockOperation(*editor, MRFEBlockOps::BlockOperation::Undent, errorText);
 	}
 
 	bool centerCursorInView() {
@@ -1727,7 +1725,7 @@ class MREditWindow : public TWindow {
 
 	bool handleBlockTabIndentKey(TEvent &event) {
 		if (event.what != evKeyDown || editor == nullptr || !mBlockOps.hasVisibleBlock()) return false;
-		if (mBlockOps.mode() != MRFEBlockMode::Line && mBlockOps.mode() != MRFEBlockMode::Column && mBlockOps.mode() != MRFEBlockMode::Stream) return false;
+		if (mBlockOps.mGeometry.mode != MRFEBlockMode::Line && mBlockOps.mGeometry.mode != MRFEBlockMode::Column && mBlockOps.mGeometry.mode != MRFEBlockMode::Stream) return false;
 		const ushort keyCode = event.keyDown.keyCode;
 		const ushort mods = event.keyDown.controlKeyState;
 		const bool shift = (mods & kbShift) != 0;
@@ -1794,7 +1792,7 @@ class MREditWindow : public TWindow {
 		const bool ctrl = (mods & kbCtrlShift) != 0;
 		const bool alt = (mods & kbAltShift) != 0;
 		const MRFEBlockMode targetMode = ctrl && alt ? MRFEBlockMode::Line : alt ? MRFEBlockMode::Column : MRFEBlockMode::Stream;
-		if (!mBlockOps.isMarking() || mBlockOps.mode() != targetMode) {
+		if (!mBlockOps.isMarking() || mBlockOps.mGeometry.mode != targetMode) {
 			if (targetMode == MRFEBlockMode::Column) static_cast<void>(mBlockOps.beginColumn(*editor));
 			else if (targetMode == MRFEBlockMode::Line)
 				static_cast<void>(mBlockOps.beginLine(*editor));
