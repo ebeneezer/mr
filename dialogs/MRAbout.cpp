@@ -396,6 +396,23 @@ class MRAbout : public MRDialogFoundation {
 		}
 	}
 
+	bool regressionIdleDoesNotStartAnimation() {
+		if (mQuoteBox == nullptr || mQuoteModeEnabled) return false;
+		tickQuoteRotation();
+		return !mQuoteBox->animating();
+	}
+
+	bool regressionLongPressStartsAnimation() {
+		if (mQuoteBox == nullptr) return false;
+		mQuoteBox->setQuoteImmediate(kAboutQuotes[mQuoteIndex]);
+		mDonePressTracking = true;
+		mDoneLongPressTriggered = false;
+		mDonePressStartedAt = std::chrono::steady_clock::now() - std::chrono::milliseconds(kDoneLongPressMs);
+		tickQuoteRotation();
+		mDonePressTracking = false;
+		return mDoneLongPressTriggered && mQuoteBox->animating();
+	}
+
   private:
 	void armRotationTimer() {
 		if (mRotationTimer == nullptr && owner != nullptr) mRotationTimer = setTimer(kAnimationTickMs, kAnimationTickMs);
@@ -457,7 +474,7 @@ class MRAbout : public MRDialogFoundation {
 	}
 
 	void enableQuoteModeFromLongPress() {
-		if (mQuoteModeEnabled || mQuoteBox == nullptr || kAboutQuoteCount <= 1) return;
+		if (mQuoteBox == nullptr) return;
 		mQuoteModeEnabled = true;
 		mQuoteIndex = pickNextQuoteIndex();
 		mQuoteBox->beginQuoteTransition(kAboutQuotes[mQuoteIndex]);
@@ -550,4 +567,19 @@ void showAboutDialog() {
 	if (TProgram::deskTop == nullptr) return;
 	TDialog *dialog = new MRAbout();
 	(void)mr::dialogs::execDialog(dialog);
+}
+
+bool mrAboutAnimationRegressionHarness(std::string &failureReason) {
+	MRAbout dialog;
+
+	if (!dialog.regressionIdleDoesNotStartAnimation()) {
+		failureReason = "About dialog quote animation must not start before long button press.";
+		return false;
+	}
+	if (!dialog.regressionLongPressStartsAnimation()) {
+		failureReason = "About dialog quote animation must restart on long button press.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
 }

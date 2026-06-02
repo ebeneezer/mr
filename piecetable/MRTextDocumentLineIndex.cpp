@@ -602,6 +602,7 @@ bool ReadSnapshot::exactLineCountKnown() const noexcept {
 
 void ReadSnapshot::dropExactLineStartIndex() noexcept {
 	mEditedLineStarts.reset();
+	resetLazyLineIndex();
 }
 
 std::size_t ReadSnapshot::column(Offset pos) const noexcept {
@@ -819,6 +820,13 @@ void TextDocument::restoreFromSnapshot(const ReadSnapshot &snapshot) {
 		mLazyLineIndexComplete = snapshot.mLazyLineIndexComplete;
 		mLazyTotalLineCount = snapshot.mLazyTotalLineCount;
 		mEditedLineStarts = snapshot.mEditedLineStarts != nullptr ? std::const_pointer_cast<std::vector<Offset>>(snapshot.mEditedLineStarts) : std::shared_ptr<std::vector<Offset>>();
+		if (mLength != 0 && (mPieces == nullptr || mPieces->empty())) {
+			const std::size_t documentId = mDocumentId;
+			const std::size_t version = mVersion;
+			initializeFromOriginal(snapshot.text(), false);
+			mDocumentId = documentId;
+			mVersion = version;
+		}
 	}
 }
 

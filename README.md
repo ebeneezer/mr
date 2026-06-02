@@ -2,12 +2,11 @@
 
 ![mr logo](documentation/pngsjpegs/mr.png)
 
-
 > - "I live again." Caleb (Blood)
 > - "It is never enough." Frank Cotton (Hellraiser)
-> - "C makes it easy to shoot yourself in the foot; C++ makes it harder, but when you do it blows your whole leg off.“ Bjarne Stroustrup
-> - "Talk is cheap. Show me the code.“ Linus Torvalds
-> - "My main conclusion after spending ten years of my life working on the TeX project is that software is hard. It's harder than anything else I've ever had to do.“ Donald Knuth
+> - "C makes it easy to shoot yourself in the foot; C++ makes it harder, but when you do it blows your whole leg off." Bjarne Stroustrup
+> - "Talk is cheap. Show me the code." Linus Torvalds
+> - "My main conclusion after spending ten years of my life working on the TeX project is that software is hard. It's harder than anything else I've ever had to do." Donald Knuth
 > - "Coding makes me horny." Michael 'iDoc' Raus
 > - "Software and cathedrals are much the same – first we build them, then we pray." Sam Redwine
 > - "There are only two hard things in Computer Science: cache invalidation and naming things." Phil Karlton
@@ -54,6 +53,8 @@
 - noone needs this - there are many good TUI editors out there
 - everybody needs this - because none of the console editors around are this elegant and feature rich. Mr tries to be around in every situation you're in need of a TUI editor to manage your system, files and codebases or want an editor with IDE features in your terminal
 - why you ask? I always wanted my Multi-Edit back - but only the TUI version inspired me back in the days. I had ideas for this project for years and after i retired in 2024 i found time to export all of these ideas out of my brain and into code. Also I wanted to test what all the fuzz is about with AI and coding assistants - except I was and am not interested in vibe coding, I wanted assistance for the tedious parts. Tried several coding assistants and found Codex to best meet my needs and style of interacting
+
+## Showtime
 
 ![mr running under vscode terminal](documentation/pngsjpegs/screenshot01.png)
 ![mr running in terminal showing menu structure](documentation/pngsjpegs/screenshot02.png)

@@ -16,32 +16,33 @@ function trim(s) {
 	sub(/[[:space:]]+$/, "", s)
 	return s
 }
+function normalize_quotes(s) {
+	gsub(/“/, "\"", s)
+	gsub(/”/, "\"", s)
+	gsub(/„/, "\"", s)
+	return s
+}
 BEGIN {
-	seen_first_note = 0
-	in_note_block = 0
+	in_quote_block = 0
+	quote_block_done = 0
 	count = 0
 }
 {
-	if (!seen_first_note && $0 ~ /^>[[:space:]]*\[!NOTE\][[:space:]]*$/) {
-		seen_first_note = 1
-		in_note_block = 1
-		next
-	}
-	if (!in_note_block)
+	if (quote_block_done)
 		next
 
-	if ($0 ~ /^>/) {
-		if ($0 ~ /^>[[:space:]]*-[[:space:]]*/) {
-			line = $0
-			sub(/^>[[:space:]]*-[[:space:]]*/, "", line)
-			line = trim(line)
-			if (line != "")
-				quotes[++count] = line
-		}
+	if ($0 ~ /^>[[:space:]]*-[[:space:]]*/) {
+		in_quote_block = 1
+		line = $0
+		sub(/^>[[:space:]]*-[[:space:]]*/, "", line)
+		line = normalize_quotes(trim(line))
+		if (line != "")
+			quotes[++count] = line
 		next
 	}
 
-	in_note_block = 0
+	if (in_quote_block)
+		quote_block_done = 1
 }
 END {
 	found_first = 0

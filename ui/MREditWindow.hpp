@@ -386,6 +386,14 @@ class MREditWindow : public TWindow {
 				}
 			if (handleBuiltInBlockHotkeys(event)) return;
 			if (handleShiftCursorBlockMarking(event)) return;
+			if (event.keyDown.keyCode == kbCtrlZ && editor != nullptr && !isReadOnly()) {
+				TEvent undoEvent{};
+				undoEvent.what = evCommand;
+				undoEvent.message.command = cmMrEditUndo;
+				editor->handleEvent(undoEvent);
+				clearEvent(event);
+				return;
+			}
 			std::string executedMacroName;
 			if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {
 				if (isCalculatorHotkeyEvent(event)) {
@@ -1328,6 +1336,14 @@ class MREditWindow : public TWindow {
 		return editor != nullptr && target.editor != nullptr && mBlockOps.copyCurrentBlockToEditor(*editor, target.mBlockOps, *target.editor, mBufferId, target.mBufferId, errorText);
 	}
 
+	bool moveBlock(std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.moveCurrentBlockToCursor(*editor, errorText);
+	}
+
+	bool moveBlockTo(MREditWindow &target, std::string *errorText = nullptr) {
+		return editor != nullptr && target.editor != nullptr && mBlockOps.moveCurrentBlockToEditor(*editor, target.mBlockOps, *target.editor, mBufferId, target.mBufferId, errorText);
+	}
+
 	bool deleteBlock(std::string *errorText = nullptr) {
 		return editor != nullptr && mBlockOps.deleteCurrentBlock(*editor, errorText);
 	}
@@ -1361,8 +1377,8 @@ class MREditWindow : public TWindow {
 	}
 
 	void applyCommittedBlockState(int mode, bool markingOn, uint anchor, uint end, int anchorColumn = -1, int endColumn = -1) {
-		if (editor != nullptr && mode == bmStream && !markingOn) {
-			static_cast<void>(mBlockOps.setCommittedStream(*editor, anchor, end));
+		if (editor != nullptr && mode != bmNone && !markingOn) {
+			static_cast<void>(mBlockOps.setCommittedBlock(*editor, static_cast<MRFEBlockMode>(mode), anchor, end, anchorColumn, endColumn));
 			return;
 		}
 		(void)markingOn;
@@ -1377,10 +1393,9 @@ class MREditWindow : public TWindow {
 		void clearBlockState(bool preserveHiddenState) {
 			(void)preserveHiddenState;
 			if (editor != nullptr) {
-				editor->setBlockOverlayState(0, 0, 0, false);
-				editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
-			editor->revealCursor(False);
-			editor->update(ufView);
+				static_cast<void>(mBlockOps.clear(*editor));
+				editor->revealCursor(False);
+				editor->update(ufView);
 			}
 		}
 	void resetWindowColorsToConfiguredDefaults() {

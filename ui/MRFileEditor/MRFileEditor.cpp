@@ -3025,6 +3025,7 @@ bool MRFileEditor::loadMappedFile(TStringView path, std::string &error) {
 		error = "Unable to adopt mapped document.";
 		return false;
 	}
+	mBufferModel.clearUndoRedo();
 	scheduleLineIndexWarmupIfNeeded();
 	return true;
 }
@@ -3071,6 +3072,46 @@ Boolean MRFileEditor::saveAsWithoutOverwritePrompt() noexcept {
 	return True;
 }
 
+void captureCurrentBlockStateForUndo(TView *owner, MRTextBufferModel::CustomUndoRecord &record) {
+	record.blockMode = 0;
+	record.blockAnchor = 0;
+	record.blockEnd = 0;
+	record.blockAnchorColumn = -1;
+	record.blockEndColumn = -1;
+	record.blockMarkingOn = false;
+	if (MREditWindow *window = dynamic_cast<MREditWindow *>(owner); window != nullptr && window->hasBlock()) {
+		record.blockMode = window->blockStatus();
+		record.blockAnchor = window->blockAnchorPtr();
+		record.blockEnd = window->blockEffectiveEndPtr();
+		if (record.blockMode == MREditWindow::bmColumn) {
+			record.blockAnchorColumn = std::max(0, window->blockCol1() - 1);
+			record.blockEndColumn = std::max(0, window->blockCol2() - 1);
+		}
+		record.blockMarkingOn = true;
+	}
+}
+
+void applyRestoredBlockStateToOwner(MRFileEditor &editor, TView *owner, const MRTextBufferModel::CustomUndoRecord &record) {
+	MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
+
+	if (record.blockMarkingOn && window != nullptr) {
+		window->applyCommittedBlockState(record.blockMode, false, record.blockAnchor, record.blockEnd, record.blockAnchorColumn, record.blockEndColumn);
+		return;
+	}
+	if (record.blockMarkingOn && owner != nullptr) {
+		editor.setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false, record.blockAnchorColumn, record.blockEndColumn);
+		return;
+	}
+	if (owner == nullptr) {
+		editor.setSelectionOffsets(editor.bufferModel().cursor(), editor.bufferModel().cursor(), False);
+		return;
+	}
+	if (window != nullptr) window->clearBlock();
+	else
+		editor.setBlockOverlayState(0, 0, 0, false);
+	editor.setSelectionOffsets(editor.bufferModel().cursor(), editor.bufferModel().cursor(), False);
+}
+
 void MRFileEditor::pushUndoSnapshot() {
 	MRTextBufferModel::CustomUndoRecord record;
 	record.preSnapshot = mBufferModel.readSnapshot();
@@ -3084,12 +3125,7 @@ void MRFileEditor::pushUndoSnapshot() {
 		record.selAnchor = 0;
 		record.selCursor = 0;
 	}
-	record.blockMode = 0;
-	record.blockAnchor = 0;
-	record.blockEnd = 0;
-	record.blockAnchorColumn = -1;
-	record.blockEndColumn = -1;
-	record.blockMarkingOn = false;
+	captureCurrentBlockStateForUndo(owner, record);
 	mBufferModel.pushUndoSnapshot(std::move(record));
 }
 
@@ -3099,7 +3135,9 @@ bool MRFileEditor::replaceBufferData(const char *data, uint length) {
 
 	if (data != nullptr && length != 0) text.assign(data, length);
 	transaction.setText(text);
-	return applyStagedTransaction(transaction, 0, 0, 0, false).applied();
+	MRTextBufferModel::CommitResult result = applyStagedTransaction(transaction, 0, 0, 0, false);
+	if (result.applied()) mBufferModel.clearUndoRedo();
+	return result.applied();
 }
 
 bool MRFileEditor::replaceBufferText(const char *text) {
@@ -3873,12 +3911,16 @@ void MRFileEditor::handleCommand(TEvent &event) {
 		case cmPaste:
 			requestSystemClipboardPaste();
 			break;
+		case cmUndo:
 		case cmMrEditUndo: {
 			MRTextBufferModel::CustomUndoRecord record;
+			MRTextBufferModel::CustomUndoRecord redoBlockState;
 			const MRTextBufferModel::ReadSnapshot oldSnapshot = mBufferModel.readSnapshot();
 			const std::size_t oldLength = mBufferModel.length();
 			const std::size_t oldVersion = mBufferModel.version();
+			captureCurrentBlockStateForUndo(owner, redoBlockState);
 			if (mBufferModel.undo(&record)) {
+				mBufferModel.updateRedoTopBlockState(redoBlockState);
 				const bool modifiedState = mBufferModel.isModified();
 				const std::size_t newLength = mBufferModel.length();
 				std::size_t prefix = 0;
@@ -3899,19 +3941,19 @@ void MRFileEditor::handleCommand(TEvent &event) {
 				changeSet.newVersion = mBufferModel.version();
 				changeSet.touchedRange = MRTextBufferModel::Range(prefix, prefix + touchedLength);
 				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState, &changeSet);
-				if (MREditWindow *window = dynamic_cast<MREditWindow *>(owner); window != nullptr)
-					window->applyCommittedBlockState(record.blockMarkingOn ? record.blockMode : 0, false, record.blockAnchor, record.blockEnd, record.blockAnchorColumn, record.blockEndColumn);
-				else if (owner != nullptr)
-					setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false, record.blockAnchorColumn, record.blockEndColumn);
+				applyRestoredBlockStateToOwner(*this, owner, record);
 			}
 			break;
 		}
 		case cmMrEditRedo: {
 			MRTextBufferModel::CustomUndoRecord record;
+			MRTextBufferModel::CustomUndoRecord undoBlockState;
 			const MRTextBufferModel::ReadSnapshot oldSnapshot = mBufferModel.readSnapshot();
 			const std::size_t oldLength = mBufferModel.length();
 			const std::size_t oldVersion = mBufferModel.version();
+			captureCurrentBlockStateForUndo(owner, undoBlockState);
 			if (mBufferModel.redo(&record)) {
+				mBufferModel.updateUndoTopBlockState(undoBlockState);
 				const bool modifiedState = mBufferModel.isModified();
 				const std::size_t newLength = mBufferModel.length();
 				std::size_t prefix = 0;
@@ -3932,10 +3974,7 @@ void MRFileEditor::handleCommand(TEvent &event) {
 				changeSet.newVersion = mBufferModel.version();
 				changeSet.touchedRange = MRTextBufferModel::Range(prefix, prefix + touchedLength);
 				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState, &changeSet);
-				if (MREditWindow *window = dynamic_cast<MREditWindow *>(owner); window != nullptr)
-					window->applyCommittedBlockState(record.blockMarkingOn ? record.blockMode : 0, false, record.blockAnchor, record.blockEnd, record.blockAnchorColumn, record.blockEndColumn);
-				else if (owner != nullptr)
-					setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false, record.blockAnchorColumn, record.blockEndColumn);
+				applyRestoredBlockStateToOwner(*this, owner, record);
 			}
 			break;
 		}

@@ -1651,6 +1651,7 @@ bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
 		return true;
 	}
 	message(editor, evCommand, editorCommand, nullptr);
+	if (win->hasBlock() && !win->isBlockMarking()) win->refreshBlockVisual();
 	return true;
 }
 
@@ -1721,6 +1722,14 @@ bool handleCopyBlock(MREditWindow *window) {
 	return true;
 }
 
+bool handleDeleteBlock(MREditWindow *window) {
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (!window->deleteBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to delete block." : errorText);
+	return true;
+}
+
 bool handleWindowCopyBlock(MREditWindow *window) {
 	MREditWindow *selected = nullptr;
 	MREditWindow *target = nullptr;
@@ -1740,6 +1749,64 @@ bool handleWindowCopyBlock(MREditWindow *window) {
 	}
 	if (!window->copyBlockTo(*target, &errorText)) postDialogWarning(errorText.empty() ? "Unable to copy block to target window." : errorText);
 	return true;
+}
+
+bool handleMoveBlock(MREditWindow *window) {
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (!window->moveBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to move block." : errorText);
+	return true;
+}
+
+bool handleWindowMoveBlock(MREditWindow *window) {
+	MREditWindow *selected = nullptr;
+	MREditWindow *target = nullptr;
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	selected = mrShowWindowListDialog(mrwlSelectLinkTarget, window);
+	if (selected == nullptr) return true;
+	target = selected->editorCommandTarget();
+	if (target == nullptr || target == window) {
+		postDialogWarning("Select a different target window.");
+		return true;
+	}
+	if (target->isReadOnly()) {
+		postDialogWarning(kWindowReadOnlyMessage);
+		return true;
+	}
+	if (!window->moveBlockTo(*target, &errorText)) postDialogWarning(errorText.empty() ? "Unable to move block to target window." : errorText);
+	return true;
+}
+
+bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
+	switch (command) {
+		case cmMrEditUndo:
+		case cmMrEditRedo:
+			if (window == nullptr) return false;
+			if (window->isReadOnly()) {
+				postDialogWarning(kWindowReadOnlyMessage);
+				return true;
+			}
+			return dispatchEditorCommandEvent(window, command);
+		case cmMrBlockMarkStream:
+			if (window == nullptr) return false;
+			window->beginStreamBlock();
+			return true;
+		case cmMrBlockCopy:
+			return handleCopyBlock(window);
+		case cmMrBlockMove:
+			return handleMoveBlock(window);
+		case cmMrBlockDelete:
+			return handleDeleteBlock(window);
+		case cmMrBlockWindowCopy:
+			return handleWindowCopyBlock(window);
+		case cmMrBlockWindowMove:
+			return handleWindowMoveBlock(window);
+		default:
+			return dispatchApplicationCommandEvent(command);
+	}
 }
 
 bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix);
@@ -1985,7 +2052,7 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 	if (it == kKeymapActionDispatchTable.end()) return false;
 	switch (it->kind) {
 		case KeymapDispatchKind::AppCommand:
-			return dispatchApplicationCommandEvent(it->command);
+			return dispatchTargetedKeymapAppCommand(window, it->command);
 		case KeymapDispatchKind::EditorCommand:
 			return dispatchEditorCommandEvent(window, it->command);
 		case KeymapDispatchKind::WindowMethod:
@@ -2145,26 +2212,22 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return handleSearchGotoLineNumber();
 
 		case cmMrBlockCopy: {
-			return handleCopyBlock(currentEditWindow());
+			return handleCopyBlock(currentEditorCommandWindow());
 		}
 
 		case cmMrBlockMove: {
-			return runDisabledBlockAction();
+			return handleMoveBlock(currentEditorCommandWindow());
 		}
 
 		case cmMrBlockDelete: {
-			MREditWindow *win = currentEditWindow();
-			std::string errorText;
-
-			if (win != nullptr && !win->deleteBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to delete block." : errorText);
-			return true;
+			return handleDeleteBlock(currentEditorCommandWindow());
 		}
 
 		case cmMrBlockLoadFromDisk:
-			return handleLoadBlockFromFile(currentEditWindow());
+			return handleLoadBlockFromFile(currentEditorCommandWindow());
 
 		case cmMrBlockSaveToDisk: {
-			return handleSaveBlockToFile(currentEditWindow());
+			return handleSaveBlockToFile(currentEditorCommandWindow());
 		}
 
 		case cmMrBlockIndent: {
@@ -2176,11 +2239,11 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		}
 
 		case cmMrBlockWindowCopy: {
-			return handleWindowCopyBlock(currentEditWindow());
+			return handleWindowCopyBlock(currentEditorCommandWindow());
 		}
 
 		case cmMrBlockWindowMove: {
-			return runDisabledBlockAction();
+			return handleWindowMoveBlock(currentEditorCommandWindow());
 		}
 
 		case cmMrBlockMarkLines: {

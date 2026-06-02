@@ -273,6 +273,16 @@ class MRTextBufferModel {
 		if (!mShared->undoStack.empty()) mShared->undoStack.pop_back();
 	}
 
+	void updateUndoTopBlockState(const CustomUndoRecord &record) {
+		if (mShared->undoStack.empty()) return;
+		copyBlockState(mShared->undoStack.back(), record);
+	}
+
+	void updateRedoTopBlockState(const CustomUndoRecord &record) {
+		if (mShared->redoStack.empty()) return;
+		copyBlockState(mShared->redoStack.back(), record);
+	}
+
 	bool undo(CustomUndoRecord *outRecord = nullptr) {
 		const auto startedAt = std::chrono::steady_clock::now();
 		if (mShared->undoStack.empty()) return false;
@@ -499,6 +509,15 @@ class MRTextBufferModel {
   private:
 	std::size_t clampOffset(std::size_t pos) const noexcept {
 		return mShared->document.clampOffset(pos);
+	}
+
+	static void copyBlockState(CustomUndoRecord &target, const CustomUndoRecord &source) noexcept {
+		target.blockMode = source.blockMode;
+		target.blockAnchor = source.blockAnchor;
+		target.blockEnd = source.blockEnd;
+		target.blockAnchorColumn = source.blockAnchorColumn;
+		target.blockEndColumn = source.blockEndColumn;
+		target.blockMarkingOn = source.blockMarkingOn;
 	}
 
 	void clampState() noexcept {

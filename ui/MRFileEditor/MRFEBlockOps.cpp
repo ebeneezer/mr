@@ -161,6 +161,20 @@ class ScopedCursorBehaviour {
 	MRCursorBehaviour mPrevious;
 };
 
+class ScopedEditSetupSettings {
+  public:
+	explicit ScopedEditSetupSettings(const MREditSetupSettings &settings) : mPrevious(configuredEditSetupSettings()) {
+		static_cast<void>(setConfiguredEditSetupSettings(settings));
+	}
+
+	~ScopedEditSetupSettings() {
+		static_cast<void>(setConfiguredEditSetupSettings(mPrevious));
+	}
+
+  private:
+	MREditSetupSettings mPrevious;
+};
+
 std::size_t lineContentEndForIndex(const std::string &text, const std::vector<std::size_t> &starts, std::size_t lineIndex) {
 	if (lineIndex + 1 < starts.size()) {
 		std::size_t end = starts[lineIndex + 1];
@@ -286,6 +300,44 @@ std::string eraseVisualColumnsFromLine(std::string_view lineText, int col1, int 
 	return result;
 }
 
+std::string clearVisualColumnsFromLine(std::string_view lineText, int col1, int col2) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+	std::string result;
+	std::string line(lineText);
+	const int fromColumn = std::max(col1, 0);
+	const int toColumn = std::max(col2, 0);
+	std::size_t offset = 0;
+	int visual = 0;
+
+	result.reserve(line.size());
+	while (offset < line.size()) {
+		std::size_t next = offset;
+		std::size_t width = 0;
+
+		if (!nextBlockDisplayChar(line, 0, line.size(), next, width, visual, settings)) break;
+		const int charStart = visual;
+		const int charEnd = visual + static_cast<int>(width);
+		if (charEnd <= fromColumn || charStart >= toColumn)
+			result.append(line.data() + offset, next - offset);
+		else {
+			const int emittedStart = charStart;
+			const int emittedEnd = charEnd;
+
+			result.append(static_cast<std::size_t>(emittedEnd - emittedStart), ' ');
+		}
+		visual = charEnd;
+		offset = next;
+	}
+	if (visual < toColumn) {
+		if (visual < fromColumn) {
+			result.append(static_cast<std::size_t>(fromColumn - visual), ' ');
+			visual = fromColumn;
+		}
+		result.append(static_cast<std::size_t>(toColumn - visual), ' ');
+	}
+	return result;
+}
+
 std::string insertVisualColumnsIntoLine(std::string_view lineText, int destCol, std::string_view payload) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 	std::string result;
@@ -325,6 +377,41 @@ std::string insertVisualColumnsIntoLine(std::string_view lineText, int destCol, 
 	return result;
 }
 
+std::string replaceVisualColumnsInLine(std::string_view lineText, int destCol, std::size_t width, std::string_view payload) {
+	const int targetColumn = std::max(destCol, 0);
+	std::string erased = eraseVisualColumnsFromLine(lineText, targetColumn, targetColumn + static_cast<int>(width));
+	return insertVisualColumnsIntoLine(erased, targetColumn, payload);
+}
+
+std::size_t nextTextCharOffset(const std::string &text, std::size_t pos) noexcept {
+	char bytes[4];
+	std::size_t count = 0;
+
+	if (pos >= text.size()) return text.size();
+	if (text[pos] == '\r' && pos + 1 < text.size() && text[pos + 1] == '\n') return std::min(text.size(), pos + 2);
+	for (; count < sizeof(bytes) && pos + count < text.size(); ++count)
+		bytes[count] = text[pos + count];
+	const std::size_t step = TText::next(TStringView(bytes, count));
+	return std::min(text.size(), pos + std::max<std::size_t>(step, 1));
+}
+
+std::size_t overwriteEndForStreamPayload(const std::string &text, const std::vector<std::size_t> &starts, std::size_t start, std::size_t payloadSize) {
+	const std::size_t line = lineIndexForOffset(starts, start);
+	const std::size_t lineEnd = lineContentEndForIndex(text, starts, line);
+	std::size_t end = std::min(start, text.size());
+
+	for (std::size_t i = 0; i < payloadSize && end < lineEnd; ++i)
+		end = nextTextCharOffset(text, end);
+	return end;
+}
+
+std::size_t overwriteEndForLinePayload(const std::string &text, const std::vector<std::size_t> &starts, std::size_t targetLine, std::size_t rowCount) {
+	if (starts.empty() || targetLine >= starts.size() || rowCount == 0) return text.size();
+	const std::size_t afterLine = targetLine + rowCount;
+	if (afterLine < starts.size()) return starts[afterLine];
+	return text.size();
+}
+
 void collectColumnEraseReplacements(const std::string &text, const std::vector<std::size_t> &starts, const MRFEBlockGeometry &geometry, std::vector<ColumnLineReplacement> &replacements) {
 	const std::size_t firstLine = std::min(geometry.line1, starts.empty() ? 0 : starts.size() - 1);
 	const std::size_t lastLine = std::min(geometry.line2, starts.empty() ? 0 : starts.size() - 1);
@@ -338,6 +425,29 @@ void collectColumnEraseReplacements(const std::string &text, const std::vector<s
 
 		if (replacement.size() != lineEnd - lineStart || replacement != std::string_view(text.data() + lineStart, lineEnd - lineStart))
 			replacements.push_back(ColumnLineReplacement{MRTextBufferModel::Range(lineStart, lineEnd), replacement});
+	}
+}
+
+void collectColumnClearReplacements(const std::string &text, const std::vector<std::size_t> &starts, const MRFEBlockGeometry &geometry, std::vector<ColumnLineReplacement> &replacements) {
+	const std::size_t firstLine = std::min(geometry.line1, starts.empty() ? 0 : starts.size() - 1);
+	const std::size_t lastLine = std::min(geometry.line2, starts.empty() ? 0 : starts.size() - 1);
+
+	replacements.clear();
+	if (starts.empty() || geometry.col2 <= geometry.col1) return;
+	for (std::size_t line = firstLine; line <= lastLine; ++line) {
+		const std::size_t lineStart = starts[line];
+		const std::size_t lineEnd = lineContentEndForIndex(text, starts, line);
+		const std::string replacement = clearVisualColumnsFromLine(std::string_view(text.data() + lineStart, lineEnd - lineStart), geometry.col1, geometry.col2);
+
+		if (replacement.size() != lineEnd - lineStart || replacement != std::string_view(text.data() + lineStart, lineEnd - lineStart))
+			replacements.push_back(ColumnLineReplacement{MRTextBufferModel::Range(lineStart, lineEnd), replacement});
+	}
+}
+
+void stageColumnLineReplacements(MRTextBufferModel::StagedTransaction &transaction, const std::vector<ColumnLineReplacement> &replacements) {
+	for (std::size_t index = replacements.size(); index > 0; --index) {
+		const ColumnLineReplacement &replacement = replacements[index - 1];
+		transaction.replace(replacement.range, replacement.text);
 	}
 }
 
@@ -431,6 +541,24 @@ bool checkEditorBlock(MRFileEditor &editor, const MRFEBlockOps &ops, MRFEBlockMo
 	}
 	if (mode == MRFEBlockMode::Column && (overlay.columnAnchor != col1 || overlay.columnEnd != col2)) {
 		failureReason = std::string("Editor column overlay range mismatch in ") + phase + ".";
+		return false;
+	}
+	return true;
+}
+
+bool checkEditorVisibleBlockMode(MRFileEditor &editor, const MRFEBlockOps &ops, MRFEBlockMode mode, const char *phase, std::string &failureReason) {
+	const MRFileEditor::BlockOverlayState overlay = editor.blockOverlayState();
+
+	if (!ops.hasVisibleBlock() || ops.mode() != mode) {
+		failureReason = std::string("Visible block mode mismatch in ") + phase + ": got visible=" + std::to_string(ops.hasVisibleBlock() ? 1 : 0) + " mode=" + std::to_string(static_cast<int>(ops.mode())) + ".";
+		return false;
+	}
+	if (!overlay.active || overlay.mode != static_cast<int>(mode)) {
+		failureReason = std::string("Visible block overlay mode mismatch in ") + phase + ".";
+		return false;
+	}
+	if (editor.hasTextSelection()) {
+		failureReason = std::string("Visible block must not leave editor text selection active in ") + phase + ".";
 		return false;
 	}
 	return true;
@@ -823,6 +951,31 @@ void sendEditorCommand(MRFileEditor &editor, ushort command) {
 	editor.handleEvent(event);
 }
 
+void sendWindowKeyEvent(MREditWindow &window, ushort keyCode, ushort modifiers = 0) {
+	TEvent event = makeKeyEvent(keyCode, modifiers);
+	window.handleEvent(event);
+}
+
+void sendEditorTextInput(MRFileEditor &editor, char ch) {
+	TEvent event{};
+	event.what = evKeyDown;
+	event.keyDown.keyCode = static_cast<ushort>(ch);
+	event.keyDown.charScan.charCode = ch;
+	event.keyDown.textLength = 1;
+	event.keyDown.text[0] = ch;
+	editor.handleEvent(event);
+}
+
+void sendWindowTextInput(MREditWindow &window, char ch) {
+	TEvent event{};
+	event.what = evKeyDown;
+	event.keyDown.keyCode = static_cast<ushort>(ch);
+	event.keyDown.charScan.charCode = ch;
+	event.keyDown.textLength = 1;
+	event.keyDown.text[0] = ch;
+	window.handleEvent(event);
+}
+
 bool checkBlockDeleteUndoRedo(MRFileEditor &editor, MRFEBlockOps &ops, const std::string &originalText, const std::string &deletedText, const char *phase, std::string &failureReason) {
 	std::string errorText;
 
@@ -831,7 +984,7 @@ bool checkBlockDeleteUndoRedo(MRFileEditor &editor, MRFEBlockOps &ops, const std
 		return false;
 	}
 	if (editor.snapshotText() != deletedText) {
-		failureReason = std::string("Deleted text mismatch in ") + phase + ".";
+		failureReason = std::string("Deleted text mismatch in ") + phase + ": got=\"" + escapedArenaPayload(editor.snapshotText()) + "\" expected=\"" + escapedArenaPayload(deletedText) + "\".";
 		return false;
 	}
 	if (ops.hasVisibleBlock()) {
@@ -862,17 +1015,48 @@ bool checkBlockCopyUndoRedo(MRFileEditor &editor, MRFEBlockOps &ops, MRFEBlockMo
 		failureReason = std::string("Copied text mismatch in ") + phase + ".";
 		return false;
 	}
+	if (!checkEditorVisibleBlockMode(editor, ops, mode, phase, failureReason)) return false;
 	if (mode == MRFEBlockMode::Column && !checkEditorBlock(editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, expectedLine1, expectedLine2, expectedCol1, expectedCol2, phase, failureReason)) return false;
 	sendEditorCommand(editor, cmMrEditUndo);
 	if (editor.snapshotText() != originalText) {
 		failureReason = std::string("Single undo must restore full block copy in ") + phase + ".";
 		return false;
 	}
+	if (!checkEditorVisibleBlockMode(editor, ops, mode, phase, failureReason)) return false;
 	sendEditorCommand(editor, cmMrEditRedo);
 	if (editor.snapshotText() != copiedText) {
 		failureReason = std::string("Single redo must reapply full block copy in ") + phase + ".";
 		return false;
 	}
+	if (!checkEditorVisibleBlockMode(editor, ops, mode, phase, failureReason)) return false;
+	return true;
+}
+
+bool checkBlockMoveUndoRedo(MRFileEditor &editor, MRFEBlockOps &ops, MRFEBlockMode mode, std::size_t expectedLine1, std::size_t expectedLine2, int expectedCol1, int expectedCol2, const std::string &originalText, const std::string &movedText, const char *phase, std::string &failureReason) {
+	std::string errorText;
+
+	if (!ops.moveCurrentBlockToCursor(editor, &errorText)) {
+		failureReason = std::string("Unable to move block in ") + phase + ": " + errorText;
+		return false;
+	}
+	if (editor.snapshotText() != movedText) {
+		failureReason = std::string("Moved text mismatch in ") + phase + ": got=\"" + escapedArenaPayload(editor.snapshotText()) + "\" expected=\"" + escapedArenaPayload(movedText) + "\".";
+		return false;
+	}
+	if (!checkEditorVisibleBlockMode(editor, ops, mode, phase, failureReason)) return false;
+	if (mode == MRFEBlockMode::Column && !checkEditorBlock(editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, expectedLine1, expectedLine2, expectedCol1, expectedCol2, phase, failureReason)) return false;
+	sendEditorCommand(editor, cmMrEditUndo);
+	if (editor.snapshotText() != originalText) {
+		failureReason = std::string("Single undo must restore full block move in ") + phase + ".";
+		return false;
+	}
+	if (!checkEditorVisibleBlockMode(editor, ops, mode, phase, failureReason)) return false;
+	sendEditorCommand(editor, cmMrEditRedo);
+	if (editor.snapshotText() != movedText) {
+		failureReason = std::string("Single redo must reapply full block move in ") + phase + ".";
+		return false;
+	}
+	if (!checkEditorVisibleBlockMode(editor, ops, mode, phase, failureReason)) return false;
 	return true;
 }
 
@@ -900,6 +1084,42 @@ bool checkInterWindowCopyUndoRedo(MREditWindow &source, MREditWindow &target, co
 	sendEditorCommand(*targetEditor, cmMrEditRedo);
 	if (targetEditor->snapshotText() != targetCopiedText) {
 		failureReason = std::string("Single redo must reapply full inter-window block copy in ") + phase + ".";
+		return false;
+	}
+	return true;
+}
+
+bool checkInterWindowMoveUndoRedo(MREditWindow &source, MREditWindow &target, const std::string &sourceOriginalText, const std::string &sourceMovedText, const std::string &targetOriginalText, const std::string &targetMovedText, const char *phase, std::string &failureReason) {
+	std::string errorText;
+	MRFileEditor *sourceEditor = source.getEditor();
+	MRFileEditor *targetEditor = target.getEditor();
+
+	if (sourceEditor == nullptr || targetEditor == nullptr) {
+		failureReason = std::string("Missing editor in ") + phase + ".";
+		return false;
+	}
+	if (!source.moveBlockTo(target, &errorText)) {
+		failureReason = std::string("Unable to move block between windows in ") + phase + ": " + errorText;
+		return false;
+	}
+	if (sourceEditor->snapshotText() != sourceMovedText || targetEditor->snapshotText() != targetMovedText) {
+		failureReason = std::string("Inter-window moved text mismatch in ") + phase + ": source=\"" + escapedArenaPayload(sourceEditor->snapshotText()) + "\" target=\"" + escapedArenaPayload(targetEditor->snapshotText()) + "\".";
+		return false;
+	}
+	sendEditorCommand(*targetEditor, cmMrEditUndo);
+	if (targetEditor->snapshotText() != targetOriginalText) {
+		failureReason = std::string("Single target undo must restore inter-window move target in ") + phase + ".";
+		return false;
+	}
+	sendEditorCommand(*sourceEditor, cmMrEditUndo);
+	if (sourceEditor->snapshotText() != sourceOriginalText) {
+		failureReason = std::string("Single source undo must restore inter-window move source in ") + phase + ".";
+		return false;
+	}
+	sendEditorCommand(*sourceEditor, cmMrEditRedo);
+	sendEditorCommand(*targetEditor, cmMrEditRedo);
+	if (sourceEditor->snapshotText() != sourceMovedText || targetEditor->snapshotText() != targetMovedText) {
+		failureReason = std::string("Single redo per window must reapply inter-window move in ") + phase + ".";
 		return false;
 	}
 	return true;
@@ -948,6 +1168,759 @@ bool runEditorFreeCursorAfterCommittedBlockCase(MRFEBlockMode mode, const char *
 	return true;
 }
 
+bool runWindowCopyUndoPreservesBlockStateCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::string text = "aa COPY zz\nend";
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	MREditWindow window(TRect(0, 0, 80, 16), "window", 2201);
+	MRFileEditor *editor = window.getEditor();
+	std::string errorText;
+
+	if (editor == nullptr) {
+		failureReason = "Unable to create editor in window copy undo block-state case.";
+		return false;
+	}
+	if (!editor->replaceBufferText(text.c_str())) {
+		failureReason = "Unable to seed editor in window copy undo block-state case.";
+		return false;
+	}
+	placeEditorCursor(*editor, text, starts, 0, 3);
+	window.beginStreamBlock();
+	placeEditorCursor(*editor, text, starts, 0, 7);
+	window.endBlock();
+	placeEditorCursor(*editor, text, starts, 1, 3);
+	if (!window.copyBlock(&errorText)) {
+		failureReason = "Unable to copy block in window copy undo block-state case: " + errorText;
+		return false;
+	}
+	if (!window.hasBlock() || !editor->blockOverlayState().active) {
+		failureReason = "Copied block must be visible before undo in window copy undo block-state case.";
+		return false;
+	}
+	sendEditorCommand(*editor, cmMrEditUndo);
+	if (editor->snapshotText() != text) {
+		failureReason = "Undo must restore text after window copy block operation.";
+		return false;
+	}
+	window.refreshBlockVisual();
+	if (!window.hasBlock() || !editor->blockOverlayState().active) {
+		failureReason = "Undo after window copy must preserve stored BlockOps state and overlay.";
+		return false;
+	}
+	return true;
+}
+
+bool runWindowDeleteUndoPreservesBlockStateCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	std::string errorText;
+
+	{
+		const std::string text = "aa DELETE zz\nend";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "window", 2202);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr) {
+			failureReason = "Unable to create editor in window stream delete undo block-state case.";
+			return false;
+		}
+		if (!editor->replaceBufferText(text.c_str())) {
+			failureReason = "Unable to seed editor in window stream delete undo block-state case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 3);
+		window.beginStreamBlock();
+		placeEditorCursor(*editor, text, starts, 0, 9);
+		window.endBlock();
+		if (!window.deleteBlock(&errorText)) {
+			failureReason = "Unable to delete block in window stream delete undo block-state case: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "aa  zz\nend") {
+			failureReason = "Deleted text mismatch in window stream delete undo block-state case.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditUndo);
+		if (editor->snapshotText() != text) {
+			failureReason = "Undo must restore text after window stream delete block operation: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" expected=\"" + escapedArenaPayload(text) + "\".";
+			return false;
+		}
+		window.refreshBlockVisual();
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmStream || !editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Undo after window stream delete must preserve stored BlockOps state and overlay while keeping editor text selection collapsed.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "one\ntwo\nlast";
+		MREditWindow window(TRect(0, 0, 80, 16), "window-line-delete", 2207);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr) {
+			failureReason = "Unable to create editor in window line delete undo block-state case.";
+			return false;
+		}
+		if (!editor->replaceBufferText(text.c_str())) {
+			failureReason = "Unable to seed editor in window line delete undo block-state case.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		window.beginLineBlock();
+		window.endBlock();
+		if (!window.deleteBlock(&errorText)) {
+			failureReason = "Unable to delete line block in window delete undo block-state case: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "two\nlast") {
+			failureReason = "Deleted line text mismatch in window delete undo block-state case.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditUndo);
+		if (editor->snapshotText() != text) {
+			failureReason = "Undo must restore text after window line delete block operation: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" expected=\"" + escapedArenaPayload(text) + "\".";
+			return false;
+		}
+		window.refreshBlockVisual();
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || !editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Undo after window line delete must preserve stored BlockOps state and overlay while keeping editor text selection collapsed.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "012345\nabcdef\nXYZ";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "window-column-delete", 2208);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr) {
+			failureReason = "Unable to create editor in window column delete undo block-state case.";
+			return false;
+		}
+		if (!editor->replaceBufferText(text.c_str())) {
+			failureReason = "Unable to seed editor in window column delete undo block-state case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 1);
+		window.beginColumnBlock();
+		placeEditorCursor(*editor, text, starts, 1, 4);
+		window.endBlock();
+		if (!window.deleteBlock(&errorText)) {
+			failureReason = "Unable to delete column block in window delete undo block-state case: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() == text) {
+			failureReason = "Column delete text did not change in window delete undo block-state case.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditUndo);
+		if (editor->snapshotText() != text) {
+			failureReason = "Undo must restore text after window column delete block operation: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" expected=\"" + escapedArenaPayload(text) + "\".";
+			return false;
+		}
+		window.refreshBlockVisual();
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || !editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Undo after window column delete must preserve stored BlockOps state and overlay while keeping editor text selection collapsed.";
+			return false;
+		}
+	}
+	{
+		const std::string text =
+		    "#include <stdio.h>\n\nint main() {\n\n\tint unused;\n         \n   puts(\"Hello world\");\n\n   puts(\"Hello world\");\n\t\n\t\n\t\n   \n\t\n\ti=\"dumm\";\n\treturn(0);\n}\r\n";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 24), "window-column-delete-ctrlz-testsnippet", 2209);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr) {
+			failureReason = "Unable to create editor in testsnippet column delete Ctrl-Z block-state case.";
+			return false;
+		}
+		if (!window.replaceTextBuffer(text.c_str(), "window-column-delete-ctrlz-testsnippet")) {
+			failureReason = "Unable to seed editor in testsnippet column delete Ctrl-Z block-state case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 2, 4);
+		window.beginColumnBlock();
+		placeEditorCursor(*editor, text, starts, 15, 20);
+		window.endBlock();
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || window.blockLine1() != 3 || window.blockLine2() != 16 || window.blockCol1() != 5 || window.blockCol2() != 21) {
+			failureReason = "Testsnippet column block geometry mismatch before delete.";
+			return false;
+		}
+		if (!window.deleteBlock(&errorText)) {
+			failureReason = "Unable to delete testsnippet column block before Ctrl-Z: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() == text) {
+			failureReason = "Testsnippet column delete must mutate text before Ctrl-Z.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text) {
+			failureReason = "Ctrl-Z must restore testsnippet text after column delete: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" expected=\"" + escapedArenaPayload(text) + "\".";
+			return false;
+		}
+		window.refreshBlockVisual();
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || window.blockLine1() != 3 || window.blockLine2() != 16 || window.blockCol1() != 5 || window.blockCol2() != 21 || !editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after testsnippet column delete must preserve the visible column block without text selection.";
+			return false;
+		}
+	}
+	return true;
+}
+
+bool runWindowCtrlZBlockOpsMatrixCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	settings.columnBlockMove = "DELETE_SPACE";
+	ScopedEditSetupSettings scopedSettings(settings);
+	std::string errorText;
+
+	{
+		const std::string text = "aa COPY zz\nend";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-stream-copy", 2301);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-stream-copy")) {
+			failureReason = "Unable to seed stream copy Ctrl-Z matrix case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 3);
+		window.beginStreamBlock();
+		placeEditorCursor(*editor, text, starts, 0, 7);
+		window.endBlock();
+		placeEditorCursor(*editor, text, starts, 1, 3);
+		if (!window.copyBlock(&errorText)) {
+			failureReason = "Unable to copy stream block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "aa COPY zz\nendCOPY") {
+			failureReason = "Stream copy Ctrl-Z matrix produced wrong pre-undo text.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmStream || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after stream copy must restore text and preserve stream block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "aa COPY zz\nendCOPY" || !window.hasBlock() || window.blockStatus() != MREditWindow::bmStream || editor->hasTextSelection()) {
+			failureReason = "Redo after stream copy undo must restore copied text and preserve stream block.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "one\ntwo\nlast";
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-line-copy", 2302);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-line-copy")) {
+			failureReason = "Unable to seed line copy Ctrl-Z matrix case.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		window.beginLineBlock();
+		window.endBlock();
+		editor->setCursorOffset(editor->nextLineOffset(editor->nextLineOffset(0)));
+		if (!window.copyBlock(&errorText)) {
+			failureReason = "Unable to copy line block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "one\ntwo\none\nlast") {
+			failureReason = "Line copy Ctrl-Z matrix produced wrong pre-undo text.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after line copy must restore text and preserve line block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "one\ntwo\none\nlast" || !window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || editor->hasTextSelection()) {
+			failureReason = "Redo after line copy undo must restore copied text and preserve line block.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "012345\nabcdef\nXYZ";
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-column-copy", 2303);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-column-copy")) {
+			failureReason = "Unable to seed column copy Ctrl-Z matrix case.";
+			return false;
+		}
+		const std::size_t secondLine = editor->nextLineOffset(0);
+		const std::size_t thirdLine = editor->nextLineOffset(secondLine);
+		editor->setCursorOffsetAtVisualColumn(1, 1);
+		window.beginColumnBlock();
+		editor->setCursorOffsetAtVisualColumn(secondLine + 4, 4);
+		window.endBlock();
+		editor->setCursorOffsetAtVisualColumn(thirdLine + 1, 1);
+		if (!window.copyBlock(&errorText)) {
+			failureReason = "Unable to copy column block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "012345\nabcdef\nX123YZ\n bcd") {
+			failureReason = "Column copy Ctrl-Z matrix produced wrong pre-undo text: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after column copy must restore text and preserve column block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "012345\nabcdef\nX123YZ\n bcd" || !window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || editor->hasTextSelection()) {
+			failureReason = "Redo after column copy undo must restore copied text and preserve column block.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "aa MOVE zz\nend";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-stream-move", 2304);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-stream-move")) {
+			failureReason = "Unable to seed stream move Ctrl-Z matrix case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 3);
+		window.beginStreamBlock();
+		placeEditorCursor(*editor, text, starts, 0, 7);
+		window.endBlock();
+		placeEditorCursor(*editor, text, starts, 1, 3);
+		if (!window.moveBlock(&errorText)) {
+			failureReason = "Unable to move stream block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "aa  zz\nendMOVE") {
+			failureReason = "Stream move Ctrl-Z matrix produced wrong pre-undo text.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmStream || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after stream move must restore text and preserve stream block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "aa  zz\nendMOVE" || !window.hasBlock() || window.blockStatus() != MREditWindow::bmStream || editor->hasTextSelection()) {
+			failureReason = "Redo after stream move undo must restore moved text and preserve stream block.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "one\ntwo\nlast";
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-line-move", 2305);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-line-move")) {
+			failureReason = "Unable to seed line move Ctrl-Z matrix case.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		window.beginLineBlock();
+		window.endBlock();
+		editor->setCursorOffset(editor->nextLineOffset(editor->nextLineOffset(0)));
+		if (!window.moveBlock(&errorText)) {
+			failureReason = "Unable to move line block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "two\none\nlast") {
+			failureReason = "Line move Ctrl-Z matrix produced wrong pre-undo text: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after line move must restore text and preserve line block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "two\none\nlast" || !window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || editor->hasTextSelection()) {
+			failureReason = "Redo after line move undo must restore moved text and preserve line block.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "012345\nabcdef\nXYZ";
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-column-move", 2306);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-column-move")) {
+			failureReason = "Unable to seed column move Ctrl-Z matrix case.";
+			return false;
+		}
+		const std::size_t secondLine = editor->nextLineOffset(0);
+		const std::size_t thirdLine = editor->nextLineOffset(secondLine);
+		editor->setCursorOffsetAtVisualColumn(1, 1);
+		window.beginColumnBlock();
+		editor->setCursorOffsetAtVisualColumn(secondLine + 4, 4);
+		window.endBlock();
+		editor->setCursorOffsetAtVisualColumn(thirdLine + 1, 1);
+		if (!window.moveBlock(&errorText)) {
+			failureReason = "Unable to move column block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "045\naef\nX123YZ\n bcd") {
+			failureReason = "Column move Ctrl-Z matrix produced wrong pre-undo text: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after column move must restore text and preserve column block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "045\naef\nX123YZ\n bcd" || !window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || editor->hasTextSelection()) {
+			failureReason = "Redo after column move undo must restore moved text and preserve column block.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "aa DELETE zz\nend";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-stream-delete", 2307);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-stream-delete")) {
+			failureReason = "Unable to seed stream delete Ctrl-Z matrix case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 3);
+		window.beginStreamBlock();
+		placeEditorCursor(*editor, text, starts, 0, 9);
+		window.endBlock();
+		if (!window.deleteBlock(&errorText)) {
+			failureReason = "Unable to delete stream block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "aa  zz\nend") {
+			failureReason = "Stream delete Ctrl-Z matrix produced wrong pre-undo text.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmStream || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after stream delete must restore text and preserve stream block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "aa  zz\nend" || window.hasBlock() || editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Redo after stream delete undo must restore deleted text state and clear the post-delete block visual state.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "one\ntwo\nlast";
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-line-delete", 2308);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-line-delete")) {
+			failureReason = "Unable to seed line delete Ctrl-Z matrix case.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		window.beginLineBlock();
+		window.endBlock();
+		if (!window.deleteBlock(&errorText)) {
+			failureReason = "Unable to delete line block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "two\nlast") {
+			failureReason = "Line delete Ctrl-Z matrix produced wrong pre-undo text.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after line delete must restore text and preserve line block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "two\nlast" || window.hasBlock() || editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Redo after line delete undo must restore deleted text state and clear the post-delete block visual state.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "012345\nabcdef\nXYZ";
+		MREditWindow window(TRect(0, 0, 80, 16), "ctrlz-column-delete", 2309);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "ctrlz-column-delete")) {
+			failureReason = "Unable to seed column delete Ctrl-Z matrix case.";
+			return false;
+		}
+		const std::size_t secondLine = editor->nextLineOffset(0);
+		editor->setCursorOffsetAtVisualColumn(1, 1);
+		window.beginColumnBlock();
+		editor->setCursorOffsetAtVisualColumn(secondLine + 4, 4);
+		window.endBlock();
+		if (!window.deleteBlock(&errorText)) {
+			failureReason = "Unable to delete column block in Ctrl-Z matrix: " + errorText;
+			return false;
+		}
+		if (editor->snapshotText() != "045\naef\nXYZ") {
+			failureReason = "Column delete Ctrl-Z matrix produced wrong pre-undo text: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+		sendWindowKeyEvent(window, kbCtrlZ);
+		if (editor->snapshotText() != text || !window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || editor->hasTextSelection()) {
+			failureReason = "Ctrl-Z after column delete must restore text and preserve column block.";
+			return false;
+		}
+		sendEditorCommand(*editor, cmMrEditRedo);
+		if (editor->snapshotText() != "045\naef\nXYZ" || window.hasBlock() || editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Redo after column delete undo must restore deleted text state and clear the post-delete block visual state.";
+			return false;
+		}
+	}
+	return true;
+}
+
+bool runWindowMoveUndoClearsBlockStateCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::string text = "aa MOVE zz\nend";
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	MREditWindow window(TRect(0, 0, 80, 16), "window", 2203);
+	MRFileEditor *editor = window.getEditor();
+	std::string errorText;
+
+	if (editor == nullptr) {
+		failureReason = "Unable to create editor in window move undo block-state case.";
+		return false;
+	}
+	if (!editor->replaceBufferText(text.c_str())) {
+		failureReason = "Unable to seed editor in window move undo block-state case.";
+		return false;
+	}
+	placeEditorCursor(*editor, text, starts, 0, 3);
+	window.beginStreamBlock();
+	placeEditorCursor(*editor, text, starts, 0, 7);
+	window.endBlock();
+	placeEditorCursor(*editor, text, starts, 1, 3);
+	if (!window.moveBlock(&errorText)) {
+		failureReason = "Unable to move block in window move undo block-state case: " + errorText;
+		return false;
+	}
+	if (editor->snapshotText() != "aa  zz\nendMOVE") {
+		failureReason = "Moved text mismatch in window move undo block-state case: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\".";
+		return false;
+	}
+	sendEditorCommand(*editor, cmMrEditUndo);
+	if (editor->snapshotText() != text) {
+		failureReason = "Undo must restore text after window move block operation: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" expected=\"" + escapedArenaPayload(text) + "\".";
+		return false;
+	}
+	window.refreshBlockVisual();
+	if (!window.hasBlock() || !editor->blockOverlayState().active || editor->hasTextSelection()) {
+		failureReason = "Undo after window move must preserve stored BlockOps state and overlay while keeping editor text selection collapsed.";
+		return false;
+	}
+	return true;
+}
+
+bool runWindowMouseMarkedMoveUndoCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::string text = "aa MOVE zz\nend";
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	QueuedMouseOwner owner(TRect(0, 0, 80, 16));
+	MREditWindow *window = new MREditWindow(TRect(0, 0, 80, 16), "window-mouse-move-undo", 2204);
+	MRFileEditor *editor = nullptr;
+	std::string errorText;
+
+	owner.insert(window);
+	editor = window->getEditor();
+	if (editor == nullptr) {
+		failureReason = "Unable to create editor in window mouse-marked move undo case.";
+		return false;
+	}
+	if (!window->replaceTextBuffer(text.c_str(), "window-mouse-move-undo")) {
+		failureReason = "Unable to seed editor in window mouse-marked move undo case.";
+		return false;
+	}
+
+	owner.queueMouseEvent(makeMouseEvent(evMouseMove, editor->makeGlobal(TPoint(localXForEditorColumn(8), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(8), 0)).y, 0, mbLeftButton));
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, editor->makeGlobal(TPoint(localXForEditorColumn(8), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(8), 0)).y, 0, 0));
+	TEvent mouseDown = makeMouseEvent(evMouseDown, editor->makeGlobal(TPoint(localXForEditorColumn(4), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(4), 0)).y, 0, mbLeftButton);
+	window->handleEvent(mouseDown);
+	if (!window->hasBlock()) {
+		failureReason = "Mouse drag must commit a block before window mouse-marked move undo case.";
+		return false;
+	}
+	placeEditorCursor(*editor, text, starts, 1, 3);
+	if (!window->moveBlock(&errorText)) {
+		failureReason = "Unable to move mouse-marked block in window mouse-marked move undo case: " + errorText;
+		return false;
+	}
+	if (editor->snapshotText() != "aa  zz\nendMOVE") {
+		failureReason = "Moved text mismatch in window mouse-marked move undo case: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\".";
+		return false;
+	}
+	sendEditorCommand(*editor, cmMrEditUndo);
+	if (editor->snapshotText() != text) {
+		failureReason = "Undo must restore text after window mouse-marked move block operation: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" expected=\"" + escapedArenaPayload(text) + "\".";
+		return false;
+	}
+	window->refreshBlockVisual();
+	if (!window->hasBlock() || !editor->blockOverlayState().active || editor->hasTextSelection()) {
+		failureReason = "Undo after window mouse-marked move must preserve stored BlockOps state and overlay while keeping editor text selection collapsed.";
+		return false;
+	}
+	return true;
+}
+
+bool runWindowMoveLegacyUndoCommandCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::string text = "aa MOVE zz\nend";
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	MREditWindow window(TRect(0, 0, 80, 16), "window-legacy-undo", 2205);
+	MRFileEditor *editor = window.getEditor();
+	std::string errorText;
+
+	if (editor == nullptr) {
+		failureReason = "Unable to create editor in window legacy undo command case.";
+		return false;
+	}
+	if (!window.replaceTextBuffer(text.c_str(), "window-legacy-undo")) {
+		failureReason = "Unable to seed editor in window legacy undo command case.";
+		return false;
+	}
+	placeEditorCursor(*editor, text, starts, 0, 3);
+	window.beginStreamBlock();
+	placeEditorCursor(*editor, text, starts, 0, 7);
+	window.endBlock();
+	placeEditorCursor(*editor, text, starts, 1, 3);
+	if (!window.moveBlock(&errorText)) {
+		failureReason = "Unable to move block in window legacy undo command case: " + errorText;
+		return false;
+	}
+	if (editor->snapshotText() != "aa  zz\nendMOVE") {
+		failureReason = "Moved text mismatch in window legacy undo command case: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\".";
+		return false;
+	}
+	sendEditorCommand(*editor, cmUndo);
+	if (editor->snapshotText() != text) {
+		failureReason = "Legacy cmUndo after block move must route to MR undo, got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" expected=\"" + escapedArenaPayload(text) + "\".";
+		return false;
+	}
+	return true;
+}
+
+bool runWindowMoveCtrlZTypingUndoCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::string text = "aa MOVE zz\nend";
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	MREditWindow window(TRect(0, 0, 80, 16), "window-ctrl-z-undo", 2206);
+	MRFileEditor *editor = window.getEditor();
+	std::string errorText;
+
+	if (editor == nullptr) {
+		failureReason = "Unable to create editor in window Ctrl-Z undo typing case.";
+		return false;
+	}
+	if (!window.replaceTextBuffer(text.c_str(), "window-ctrl-z-undo")) {
+		failureReason = "Unable to seed editor in window Ctrl-Z undo typing case.";
+		return false;
+	}
+	placeEditorCursor(*editor, text, starts, 0, 3);
+	window.beginStreamBlock();
+	placeEditorCursor(*editor, text, starts, 0, 7);
+	window.endBlock();
+	placeEditorCursor(*editor, text, starts, 1, 3);
+	if (!window.moveBlock(&errorText)) {
+		failureReason = "Unable to move block in window Ctrl-Z undo typing case: " + errorText;
+		return false;
+	}
+	if (editor->snapshotText() != "aa  zz\nendMOVE") {
+		failureReason = "Moved text mismatch before Ctrl-Z undo typing case: got=\"" + escapedArenaPayload(editor->snapshotText()) + "\".";
+		return false;
+	}
+	sendWindowKeyEvent(window, kbCtrlZ);
+	if (editor->snapshotText() != text) {
+		failureReason = "Ctrl-Z after block move must restore original text, got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" expected=\"" + escapedArenaPayload(text) + "\".";
+		return false;
+	}
+	if (editor->bufferModel().length() != text.size()) {
+		failureReason = "Ctrl-Z after block move must restore document length, got=" + std::to_string(editor->bufferModel().length()) + " expected=" + std::to_string(text.size()) + ".";
+		return false;
+	}
+	if (editor->hasTextSelection()) {
+		failureReason = "Ctrl-Z after block move must clear text selection before further typing, selectionStart=" + std::to_string(editor->bufferModel().selectionStart()) + " selectionEnd=" + std::to_string(editor->bufferModel().selectionEnd()) + ".";
+		return false;
+	}
+	editor->setCursorOffset(0);
+	if (editor->hasTextSelection()) {
+		failureReason = "Cursor placement after Ctrl-Z block undo must not create text selection, selectionStart=" + std::to_string(editor->bufferModel().selectionStart()) + " selectionEnd=" + std::to_string(editor->bufferModel().selectionEnd()) + ".";
+		return false;
+	}
+	sendWindowTextInput(window, 's');
+	if (editor->snapshotText() != "saa MOVE zz\nend") {
+		failureReason = "Typing after Ctrl-Z block undo must mutate only the cursor line, got=\"" + escapedArenaPayload(editor->snapshotText()) + "\" cursor=" + std::to_string(editor->cursorOffset()) +
+		                " lineEnd0=" + std::to_string(editor->lineEndOffset(0)) + " len=" + std::to_string(editor->bufferModel().length()) + " insert=" + std::to_string(editor->insertModeEnabled() ? 1 : 0) + ".";
+		failureReason += " pieces=" + std::to_string(editor->bufferModel().document().pieceCount()) + " add=" + std::to_string(editor->bufferModel().document().addBufferLength()) + ".";
+		return false;
+	}
+	if (editor->bufferModel().lineCount() != 2) {
+		failureReason = "Typing after Ctrl-Z block undo must preserve line geometry, got lineCount=" + std::to_string(editor->bufferModel().lineCount()) + ".";
+		return false;
+	}
+	return true;
+}
+
+bool runWindowLoadClearsUndoStackCase(std::string &failureReason) {
+	static const char *const path = "/tmp/mr-regression-load-clears-undo.txt";
+	const std::string loadedText = "loaded\nfile\ncontent\n";
+	MREditWindow window(TRect(0, 0, 80, 16), "window-load-clears-undo", 2207);
+	MRFileEditor *editor = window.getEditor();
+
+	if (editor == nullptr) {
+		failureReason = "Unable to create editor in load clears undo stack case.";
+		return false;
+	}
+	if (!window.replaceTextBuffer("old\ntext\n", "window-load-clears-undo")) {
+		failureReason = "Unable to seed editor in load clears undo stack case.";
+		return false;
+	}
+	if (editor->bufferModel().undoStackDepth() != 0) {
+		failureReason = "Whole-buffer text load must not leave an undo snapshot.";
+		return false;
+	}
+	editor->setCursorOffset(0);
+	sendEditorTextInput(*editor, 'x');
+	if (editor->bufferModel().undoStackDepth() == 0) {
+		failureReason = "Regular text input must create undo history before load clears undo stack case.";
+		return false;
+	}
+	{
+		std::ofstream out(path, std::ios::out | std::ios::binary | std::ios::trunc);
+		if (!out) {
+			failureReason = "Unable to create temporary load file in load clears undo stack case.";
+			return false;
+		}
+		out << loadedText;
+	}
+	if (!window.loadFromFile(path)) {
+		std::remove(path);
+		failureReason = "Unable to load temporary file in load clears undo stack case.";
+		return false;
+	}
+	std::remove(path);
+	if (editor->snapshotText() != loadedText) {
+		failureReason = "Loaded file content mismatch in load clears undo stack case.";
+		return false;
+	}
+	if (editor->bufferModel().undoStackDepth() != 0 || editor->bufferModel().redoStackDepth() != 0) {
+		failureReason = "File load must clear undo/redo history.";
+		return false;
+	}
+	sendWindowKeyEvent(window, kbCtrlZ);
+	if (editor->snapshotText() != loadedText) {
+		failureReason = "Ctrl-Z after file load must not restore pre-load content, got=\"" + escapedArenaPayload(editor->snapshotText()) + "\".";
+		return false;
+	}
+	return true;
+}
+
 bool runBlockDeleteCase(MRFEBlockMode mode, const std::string &text, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, const std::string &deletedText, const char *phase, std::string &failureReason) {
 	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	const std::vector<std::size_t> starts = lineStartsForText(text);
@@ -971,7 +1944,7 @@ bool runBlockDeleteCase(MRFEBlockMode mode, const std::string &text, std::size_t
 	return checkBlockDeleteUndoRedo(editor, ops, text, deletedText, phase, failureReason);
 }
 
-bool runBlockCopyCase(MRFEBlockMode mode, const std::string &text, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, std::size_t targetLine, int targetColumn, const std::string &copiedText, const char *phase, std::string &failureReason) {
+bool runBlockCopyCase(MRFEBlockMode mode, const std::string &text, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, std::size_t targetLine, int targetColumn, const std::string &copiedText, const char *phase, std::string &failureReason, bool targetInsertMode = true) {
 	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	const std::vector<std::size_t> starts = lineStartsForText(text);
 	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, "");
@@ -981,6 +1954,7 @@ bool runBlockCopyCase(MRFEBlockMode mode, const std::string &text, std::size_t a
 		failureReason = std::string("Unable to seed editor text in ") + phase + ".";
 		return false;
 	}
+	editor.setInsertModeEnabled(targetInsertMode);
 	placeEditorCursor(editor, text, starts, anchorLine, anchorColumn);
 	if (!beginBlockForMode(ops, editor, mode)) {
 		failureReason = std::string("Unable to begin copy block in ") + phase + ".";
@@ -1002,7 +1976,41 @@ bool runBlockCopyCase(MRFEBlockMode mode, const std::string &text, std::size_t a
 	return checkBlockCopyUndoRedo(editor, ops, mode, 0, 0, 0, 0, text, copiedText, phase, failureReason);
 }
 
-bool runInterWindowCopyCase(MRFEBlockMode mode, const std::string &sourceText, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, const std::string &targetText, std::size_t targetLine, int targetColumn, const std::string &copiedText, const char *phase, std::string &failureReason) {
+bool runBlockMoveCase(MRFEBlockMode mode, const std::string &text, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, std::size_t targetLine, int targetColumn, const std::string &movedText, const char *phase, std::string &failureReason, bool targetInsertMode = true) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, "");
+	MRFEBlockOps ops;
+
+	if (!editor.replaceBufferText(text.c_str())) {
+		failureReason = std::string("Unable to seed editor text in ") + phase + ".";
+		return false;
+	}
+	editor.setInsertModeEnabled(targetInsertMode);
+	placeEditorCursor(editor, text, starts, anchorLine, anchorColumn);
+	if (!beginBlockForMode(ops, editor, mode)) {
+		failureReason = std::string("Unable to begin move block in ") + phase + ".";
+		return false;
+	}
+	placeEditorCursor(editor, text, starts, cursorLine, cursorColumn);
+	if (!ops.updateFromEditor(editor) || !ops.end(editor)) {
+		failureReason = std::string("Unable to commit move block in ") + phase + ".";
+		return false;
+	}
+	placeEditorCursor(editor, text, starts, targetLine, targetColumn);
+	if (mode == MRFEBlockMode::Column) {
+		const std::size_t expectedLine2 = targetLine + std::max(cursorLine, anchorLine) - std::min(cursorLine, anchorLine);
+		const int width = std::max(cursorColumn, anchorColumn) - std::min(cursorColumn, anchorColumn);
+		const bool leaveColumnSpace = configuredEditSetupSettings().columnBlockMove == "LEAVE_SPACE";
+		int expectedCol1 = std::max(targetColumn, 0);
+		if (!leaveColumnSpace && targetLine <= std::max(cursorLine, anchorLine) && expectedLine2 >= std::min(cursorLine, anchorLine) && expectedCol1 >= std::max(cursorColumn, anchorColumn)) expectedCol1 -= width;
+
+		return checkBlockMoveUndoRedo(editor, ops, mode, targetLine, expectedLine2, expectedCol1, expectedCol1 + width, text, movedText, phase, failureReason);
+	}
+	return checkBlockMoveUndoRedo(editor, ops, mode, 0, 0, 0, 0, text, movedText, phase, failureReason);
+}
+
+bool runInterWindowCopyCase(MRFEBlockMode mode, const std::string &sourceText, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, const std::string &targetText, std::size_t targetLine, int targetColumn, const std::string &copiedText, const char *phase, std::string &failureReason, bool targetInsertMode = true) {
 	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	const std::vector<std::size_t> sourceStarts = lineStartsForText(sourceText);
 	const std::vector<std::size_t> targetStarts = lineStartsForText(targetText);
@@ -1019,6 +2027,7 @@ bool runInterWindowCopyCase(MRFEBlockMode mode, const std::string &sourceText, s
 		failureReason = std::string("Unable to seed inter-window copy editors in ") + phase + ".";
 		return false;
 	}
+	targetEditor->setInsertModeEnabled(targetInsertMode);
 	placeEditorCursor(*sourceEditor, sourceText, sourceStarts, anchorLine, anchorColumn);
 	if (mode == MRFEBlockMode::Line) sourceWindow.beginLineBlock();
 	else if (mode == MRFEBlockMode::Column)
@@ -1029,6 +2038,36 @@ bool runInterWindowCopyCase(MRFEBlockMode mode, const std::string &sourceText, s
 	sourceWindow.endBlock();
 	placeEditorCursor(*targetEditor, targetText, targetStarts, targetLine, targetColumn);
 	return checkInterWindowCopyUndoRedo(sourceWindow, targetWindow, targetText, copiedText, phase, failureReason);
+}
+
+bool runInterWindowMoveCase(MRFEBlockMode mode, const std::string &sourceText, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, const std::string &targetText, std::size_t targetLine, int targetColumn, const std::string &sourceMovedText, const std::string &targetMovedText, const char *phase, std::string &failureReason, bool targetInsertMode = true) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::vector<std::size_t> sourceStarts = lineStartsForText(sourceText);
+	const std::vector<std::size_t> targetStarts = lineStartsForText(targetText);
+	MREditWindow sourceWindow(TRect(0, 0, 80, 16), "source", 2101);
+	MREditWindow targetWindow(TRect(0, 0, 80, 16), "target", 2102);
+	MRFileEditor *sourceEditor = sourceWindow.getEditor();
+	MRFileEditor *targetEditor = targetWindow.getEditor();
+
+	if (sourceEditor == nullptr || targetEditor == nullptr) {
+		failureReason = std::string("Unable to create editors in ") + phase + ".";
+		return false;
+	}
+	if (!sourceEditor->replaceBufferText(sourceText.c_str()) || (!targetText.empty() && !targetEditor->replaceBufferText(targetText.c_str()))) {
+		failureReason = std::string("Unable to seed inter-window move editors in ") + phase + ".";
+		return false;
+	}
+	targetEditor->setInsertModeEnabled(targetInsertMode);
+	placeEditorCursor(*sourceEditor, sourceText, sourceStarts, anchorLine, anchorColumn);
+	if (mode == MRFEBlockMode::Line) sourceWindow.beginLineBlock();
+	else if (mode == MRFEBlockMode::Column)
+		sourceWindow.beginColumnBlock();
+	else
+		sourceWindow.beginStreamBlock();
+	placeEditorCursor(*sourceEditor, sourceText, sourceStarts, cursorLine, cursorColumn);
+	sourceWindow.endBlock();
+	placeEditorCursor(*targetEditor, targetText, targetStarts, targetLine, targetColumn);
+	return checkInterWindowMoveUndoRedo(sourceWindow, targetWindow, sourceText, sourceMovedText, targetText, targetMovedText, phase, failureReason);
 }
 
 bool runStreamBlockLoadSaveCase(std::string &failureReason) {
@@ -1435,6 +2474,203 @@ bool MRFEBlockOps::copyCurrentBlockToEditor(MRFileEditor &sourceEditor, MRFEBloc
 	return targetOps.insertTransferMessage(targetEditor, message, errorText);
 }
 
+bool MRFEBlockOps::moveCurrentBlockToCursor(MRFileEditor &editor, std::string *errorText) {
+	std::string text;
+	std::string finalText;
+	std::vector<std::size_t> starts;
+	std::vector<ColumnLineReplacement> columnReplacements;
+	MRFEArenaAllocator transferArena;
+	std::vector<char> payloadStorage;
+	MRFEBlockGeometry sourceGeometry;
+	MRFEBlockGeometry targetGeometry;
+	std::size_t targetCursor = 0;
+	std::size_t cursor = 0;
+	MRTextBufferModel::StagedTransaction transaction(editor.readSnapshot(), "move-block");
+
+	if (errorText != nullptr) errorText->clear();
+	if (editor.isReadOnly()) {
+		if (errorText != nullptr) *errorText = "Editor is read-only.";
+		return false;
+	}
+	if (!hasVisibleBlock()) {
+		if (errorText != nullptr) *errorText = "No visible block marked.";
+		return false;
+	}
+	normalize(editor);
+	sourceGeometry = mGeometry;
+	targetCursor = editor.cursorOffset();
+	if (!captureTransferPayload(editor, transferArena, errorText)) return false;
+	payloadStorage = transferArena.release();
+	const std::string_view payload = payloadView(payloadStorage);
+	if (payload.empty()) {
+		if (errorText != nullptr) *errorText = "Block payload is empty.";
+		return false;
+	}
+
+	text = editor.snapshotText();
+	finalText = text;
+	if (sourceGeometry.mode == MRFEBlockMode::Stream) {
+		const std::size_t eraseStart = sourceGeometry.rangeStart;
+		const std::size_t eraseEnd = sourceGeometry.rangeEnd;
+		const std::size_t eraseLength = eraseEnd - eraseStart;
+		const int paddingColumns = editor.paddingColumnsBeforeInsertAtCursor();
+		std::string insertion;
+		std::size_t insertOffset = targetCursor;
+
+		if (targetCursor > eraseStart && targetCursor < eraseEnd) {
+			if (errorText != nullptr) *errorText = "Move target is inside the block.";
+			return false;
+		}
+			if (targetCursor >= eraseEnd) insertOffset = targetCursor - eraseLength;
+			else if (targetCursor >= eraseStart)
+				insertOffset = eraseStart;
+			if (paddingColumns > 0) insertion.append(static_cast<std::size_t>(paddingColumns), ' ');
+			insertion.append(payload.data(), payload.size());
+			finalText.erase(eraseStart, eraseLength);
+			if (editor.insertModeEnabled())
+				finalText.insert(insertOffset, insertion);
+			else {
+				starts = lineStartsForText(finalText);
+				const std::size_t overwriteEnd = overwriteEndForStreamPayload(finalText, starts, insertOffset, insertion.size());
+				finalText.replace(insertOffset, overwriteEnd - insertOffset, insertion);
+			}
+			targetGeometry = MRFEBlockGeometry();
+		targetGeometry.mode = MRFEBlockMode::Stream;
+		targetGeometry.status = MRFEBlockStatus::Committed;
+		targetGeometry.rangeStart = insertOffset + static_cast<std::size_t>(std::max(0, paddingColumns));
+		targetGeometry.rangeEnd = targetGeometry.rangeStart + payload.size();
+		targetGeometry.anchor = targetGeometry.rangeStart;
+		targetGeometry.cursor = targetGeometry.rangeEnd;
+		starts = lineStartsForText(finalText);
+		targetGeometry.line1 = lineIndexForOffset(starts, targetGeometry.rangeStart);
+		targetGeometry.line2 = lineIndexForOffset(starts, targetGeometry.rangeEnd);
+		targetGeometry.anchorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(sourceGeometry.rangeStart)));
+		targetGeometry.cursorColumn = targetGeometry.anchorColumn + static_cast<int>(payload.size());
+		cursor = targetGeometry.rangeStart;
+	} else if (sourceGeometry.mode == MRFEBlockMode::Line) {
+		starts = lineStartsForText(text);
+		const std::size_t targetLine = lineIndexForOffset(starts, targetCursor);
+		const std::size_t insertStart = starts.empty() ? 0 : starts[std::min(targetLine, starts.size() - 1)];
+		const std::size_t eraseStart = sourceGeometry.rangeStart;
+		const std::size_t eraseEnd = sourceGeometry.rangeEnd;
+		const std::size_t eraseLength = eraseEnd - eraseStart;
+		std::size_t insertOffset = insertStart;
+
+		if (insertStart > eraseStart && insertStart < eraseEnd) {
+			if (errorText != nullptr) *errorText = "Move target is inside the block.";
+			return false;
+		}
+		if (insertStart >= eraseEnd) insertOffset = insertStart - eraseLength;
+		else if (insertStart >= eraseStart)
+			insertOffset = eraseStart;
+		finalText.erase(eraseStart, eraseLength);
+		starts = lineStartsForText(finalText);
+		if (editor.insertModeEnabled())
+			finalText.insert(insertOffset, payload);
+		else {
+			const std::size_t overwrittenLine = lineIndexForOffset(starts, insertOffset);
+			const std::size_t overwriteEnd = overwriteEndForLinePayload(finalText, starts, overwrittenLine, sourceGeometry.line2 >= sourceGeometry.line1 ? sourceGeometry.line2 - sourceGeometry.line1 + 1 : 0);
+			finalText.replace(insertOffset, overwriteEnd - insertOffset, payload);
+		}
+		starts = lineStartsForText(finalText);
+		targetGeometry = MRFEBlockGeometry();
+		targetGeometry.mode = MRFEBlockMode::Line;
+		targetGeometry.status = MRFEBlockStatus::Committed;
+		targetGeometry.anchor = insertOffset;
+		targetGeometry.cursor = insertOffset + payload.size();
+		targetGeometry.rangeStart = targetGeometry.anchor;
+		targetGeometry.rangeEnd = targetGeometry.cursor;
+		targetGeometry.line1 = lineIndexForOffset(starts, targetGeometry.rangeStart);
+		targetGeometry.line2 = targetGeometry.line1 + (sourceGeometry.line2 >= sourceGeometry.line1 ? sourceGeometry.line2 - sourceGeometry.line1 : 0);
+		cursor = targetGeometry.rangeStart;
+	} else if (sourceGeometry.mode == MRFEBlockMode::Column) {
+		starts = lineStartsForText(text);
+		const std::size_t targetLine = lineIndexForOffset(starts, targetCursor);
+		const std::size_t rowCount = sourceGeometry.line2 >= sourceGeometry.line1 ? sourceGeometry.line2 - sourceGeometry.line1 + 1 : 0;
+		const std::size_t width = sourceGeometry.col2 > sourceGeometry.col1 ? static_cast<std::size_t>(sourceGeometry.col2 - sourceGeometry.col1) : 0;
+		const bool rowsOverlap = targetLine <= sourceGeometry.line2 && targetLine + (rowCount == 0 ? 0 : rowCount - 1) >= sourceGeometry.line1;
+		const bool leaveColumnSpace = configuredEditSetupSettings().columnBlockMove == "LEAVE_SPACE";
+		int destCol = std::max(0, editor.displayedCursorColumn());
+		const std::string lineSeparator = lineSeparatorForText(finalText);
+
+		if (rowCount == 0 || width == 0 || payloadStorage.size() < rowCount * width) {
+			if (errorText != nullptr) *errorText = "Column block payload geometry is invalid.";
+			return false;
+		}
+		if (rowsOverlap && destCol > sourceGeometry.col1 && destCol < sourceGeometry.col2) {
+			if (errorText != nullptr) *errorText = "Move target overlaps the column block.";
+			return false;
+		}
+		if (!leaveColumnSpace && rowsOverlap && destCol >= sourceGeometry.col2) destCol -= static_cast<int>(width);
+		if (leaveColumnSpace) collectColumnClearReplacements(finalText, starts, sourceGeometry, columnReplacements);
+		else
+			collectColumnEraseReplacements(finalText, starts, sourceGeometry, columnReplacements);
+		for (std::size_t index = columnReplacements.size(); index > 0; --index) {
+			const ColumnLineReplacement &replacement = columnReplacements[index - 1];
+			finalText.replace(replacement.range.start, replacement.range.length(), replacement.text);
+		}
+		for (std::size_t row = 0; row < rowCount; ++row) {
+			const std::size_t line = targetLine + row;
+			starts = lineStartsForText(finalText);
+			while (line >= starts.size()) {
+				finalText.insert(finalText.size(), lineSeparator);
+				starts = lineStartsForText(finalText);
+			}
+
+			const std::size_t lineStart = starts[line];
+			const std::size_t lineEnd = lineContentEndForIndex(finalText, starts, line);
+			const std::string_view rowPayload = payloadRowView(payloadStorage, row, width);
+			const std::string replacement = editor.insertModeEnabled() ? insertVisualColumnsIntoLine(std::string_view(finalText.data() + lineStart, lineEnd - lineStart), destCol, rowPayload) : replaceVisualColumnsInLine(std::string_view(finalText.data() + lineStart, lineEnd - lineStart), destCol, width, rowPayload);
+			finalText.replace(lineStart, lineEnd - lineStart, replacement);
+		}
+		starts = lineStartsForText(finalText);
+		targetGeometry = MRFEBlockGeometry();
+		targetGeometry.mode = MRFEBlockMode::Column;
+		targetGeometry.status = MRFEBlockStatus::Committed;
+		targetGeometry.line1 = targetLine;
+		targetGeometry.line2 = targetLine + rowCount - 1;
+		targetGeometry.col1 = destCol;
+		targetGeometry.col2 = destCol + static_cast<int>(width);
+		targetGeometry.rangeStart = offsetAtLineVisualColumn(finalText, starts, targetGeometry.line1, targetGeometry.col1);
+		targetGeometry.rangeEnd = offsetAtLineVisualColumn(finalText, starts, targetGeometry.line2, targetGeometry.col2);
+		targetGeometry.anchor = targetGeometry.rangeStart;
+		targetGeometry.cursor = targetGeometry.rangeEnd;
+		targetGeometry.anchorColumn = targetGeometry.col1;
+		targetGeometry.cursorColumn = targetGeometry.col2;
+		cursor = targetGeometry.rangeStart;
+	} else {
+		if (errorText != nullptr) *errorText = "No block mode selected.";
+		return false;
+	}
+
+	if (finalText != text) {
+		transaction.replace(MRTextBufferModel::Range(0, text.size()), finalText);
+		if (!editor.applyStagedTransaction(transaction, cursor, cursor, cursor, true).applied()) {
+			if (errorText != nullptr) *errorText = "Unable to move block.";
+			return false;
+		}
+	} else
+		editor.setCursorOffset(cursor);
+	mGeometry = targetGeometry;
+	applySelection(editor);
+	applyOverlay(editor);
+	return true;
+}
+
+bool MRFEBlockOps::moveCurrentBlockToEditor(MRFileEditor &sourceEditor, MRFEBlockOps &targetOps, MRFileEditor &targetEditor, int sourceWindowId, int targetWindowId, std::string *errorText) {
+	MRFEArenaAllocator transferArena;
+	TransferMessage message;
+
+	if (&sourceEditor == &targetEditor) return moveCurrentBlockToCursor(sourceEditor, errorText);
+	if (sourceEditor.isReadOnly()) {
+		if (errorText != nullptr) *errorText = "Source editor is read-only.";
+		return false;
+	}
+	if (!prepareTransferMessage(sourceEditor, sourceWindowId, targetWindowId, TransferMode::Move, transferArena, message, errorText)) return false;
+	if (!targetOps.insertTransferMessage(targetEditor, message, errorText)) return false;
+	return removeCurrentBlockForMove(sourceEditor, errorText);
+}
+
 bool MRFEBlockOps::deleteCurrentBlock(MRFileEditor &editor, std::string *errorText) {
 	std::string text;
 	std::vector<std::size_t> starts;
@@ -1463,7 +2699,9 @@ bool MRFEBlockOps::deleteCurrentBlock(MRFileEditor &editor, std::string *errorTe
 		if (mGeometry.rangeStart < mGeometry.rangeEnd) ranges.push_back(MRTextBufferModel::Range(mGeometry.rangeStart, mGeometry.rangeEnd));
 		cursor = mGeometry.rangeStart;
 	} else if (mGeometry.mode == MRFEBlockMode::Column) {
-		collectColumnEraseReplacements(text, starts, mGeometry, columnReplacements);
+		if (configuredEditSetupSettings().columnBlockMove == "LEAVE_SPACE") collectColumnClearReplacements(text, starts, mGeometry, columnReplacements);
+		else
+			collectColumnEraseReplacements(text, starts, mGeometry, columnReplacements);
 		cursor = mGeometry.rangeStart;
 		if (!columnReplacements.empty()) cursor = columnReplacements.front().range.start;
 	} else {
@@ -1475,14 +2713,72 @@ bool MRFEBlockOps::deleteCurrentBlock(MRFileEditor &editor, std::string *errorTe
 		editor.setCursorOffset(cursor);
 		return true;
 	}
-	for (std::size_t index = ranges.size(); index > 0; --index)
-		transaction.erase(ranges[index - 1]);
-	for (std::size_t index = columnReplacements.size(); index > 0; --index) {
-		const ColumnLineReplacement &replacement = columnReplacements[index - 1];
-		transaction.replace(replacement.range, replacement.text);
+	if (!columnReplacements.empty()) {
+		stageColumnLineReplacements(transaction, columnReplacements);
+	} else {
+		for (std::size_t index = ranges.size(); index > 0; --index)
+			transaction.erase(ranges[index - 1]);
 	}
 	if (!editor.applyStagedTransaction(transaction, cursor, cursor, cursor, true).applied()) {
 		if (errorText != nullptr) *errorText = "Unable to delete block.";
+		return false;
+	}
+	mGeometry = MRFEBlockGeometry();
+	deactivateVisual(editor);
+	editor.setCursorOffset(cursor);
+	return true;
+}
+
+bool MRFEBlockOps::removeCurrentBlockForMove(MRFileEditor &editor, std::string *errorText) {
+	std::string text;
+	std::vector<std::size_t> starts;
+	std::vector<MRTextBufferModel::Range> ranges;
+	std::vector<ColumnLineReplacement> columnReplacements;
+	std::size_t cursor = 0;
+	MRTextBufferModel::StagedTransaction transaction(editor.readSnapshot(), "move-block");
+
+	if (errorText != nullptr) errorText->clear();
+	if (editor.isReadOnly()) {
+		if (errorText != nullptr) *errorText = "Editor is read-only.";
+		return false;
+	}
+	if (!hasVisibleBlock()) {
+		if (errorText != nullptr) *errorText = "No visible block marked.";
+		return false;
+	}
+	normalize(editor);
+	text = editor.snapshotText();
+	starts = lineStartsForText(text);
+	if (mGeometry.rangeStart > text.size() || mGeometry.rangeEnd > text.size() || mGeometry.rangeStart > mGeometry.rangeEnd) {
+		if (errorText != nullptr) *errorText = "Block range is outside the editor buffer.";
+		return false;
+	}
+	if (mGeometry.mode == MRFEBlockMode::Stream || mGeometry.mode == MRFEBlockMode::Line) {
+		if (mGeometry.rangeStart < mGeometry.rangeEnd) ranges.push_back(MRTextBufferModel::Range(mGeometry.rangeStart, mGeometry.rangeEnd));
+		cursor = mGeometry.rangeStart;
+	} else if (mGeometry.mode == MRFEBlockMode::Column) {
+		if (configuredEditSetupSettings().columnBlockMove == "LEAVE_SPACE") collectColumnClearReplacements(text, starts, mGeometry, columnReplacements);
+		else
+			collectColumnEraseReplacements(text, starts, mGeometry, columnReplacements);
+		cursor = mGeometry.rangeStart;
+		if (!columnReplacements.empty()) cursor = columnReplacements.front().range.start;
+	} else {
+		if (errorText != nullptr) *errorText = "No block mode selected.";
+		return false;
+	}
+	if (ranges.empty() && columnReplacements.empty()) {
+		clear(editor);
+		editor.setCursorOffset(cursor);
+		return true;
+	}
+	if (!columnReplacements.empty()) {
+		stageColumnLineReplacements(transaction, columnReplacements);
+	} else {
+		for (std::size_t index = ranges.size(); index > 0; --index)
+			transaction.erase(ranges[index - 1]);
+	}
+	if (!editor.applyStagedTransaction(transaction, cursor, cursor, cursor, true).applied()) {
+		if (errorText != nullptr) *errorText = "Unable to move block.";
 		return false;
 	}
 	mGeometry = MRFEBlockGeometry();
@@ -1505,14 +2801,19 @@ bool MRFEBlockOps::saveStreamBlockToFile(MRFileEditor &editor, const std::string
 }
 
 bool MRFEBlockOps::setCommittedStream(MRFileEditor &editor, std::size_t start, std::size_t end) {
+	return setCommittedBlock(editor, MRFEBlockMode::Stream, start, end);
+}
+
+bool MRFEBlockOps::setCommittedBlock(MRFileEditor &editor, MRFEBlockMode mode, std::size_t anchor, std::size_t cursor, int anchorColumn, int cursorColumn) {
+	if (mode == MRFEBlockMode::None) return false;
 	mGeometry = MRFEBlockGeometry();
-	mGeometry.mode = MRFEBlockMode::Stream;
+	mGeometry.mode = mode;
 	mGeometry.status = MRFEBlockStatus::Committed;
 	mGeometry.hidden = false;
-	mGeometry.anchor = start;
-	mGeometry.cursor = end;
-	mGeometry.anchorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(start)));
-	mGeometry.cursorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(end)));
+	mGeometry.anchor = anchor;
+	mGeometry.cursor = cursor;
+	mGeometry.anchorColumn = anchorColumn >= 0 ? anchorColumn : std::max(0, static_cast<int>(editor.columnOfOffset(anchor)));
+	mGeometry.cursorColumn = cursorColumn >= 0 ? cursorColumn : std::max(0, static_cast<int>(editor.columnOfOffset(cursor)));
 	normalize(editor);
 	applySelection(editor);
 	applyOverlay(editor);
@@ -1569,7 +2870,9 @@ bool MRFEBlockOps::prepareTransferMessage(MRFileEditor &editor, int sourceWindow
 
 bool MRFEBlockOps::insertTransferMessage(MRFileEditor &editor, const TransferMessage &message, std::string *errorText) {
 	const std::string_view payload = payloadView(message.payload);
-	MRTextBufferModel::StagedTransaction transaction(editor.readSnapshot(), "copy-block");
+	const bool isMove = message.mode == TransferMode::Move;
+	const char *operationError = isMove ? "Unable to move block." : "Unable to copy block.";
+	MRTextBufferModel::StagedTransaction transaction(editor.readSnapshot(), isMove ? "move-block" : "copy-block");
 	std::string working;
 	std::vector<std::size_t> starts;
 	std::size_t cursor = editor.cursorOffset();
@@ -1596,10 +2899,17 @@ bool MRFEBlockOps::insertTransferMessage(MRFileEditor &editor, const TransferMes
 		rangeStart = editor.cursorOffset();
 		if (paddingColumns > 0) static_cast<void>(insertArena.appendFill(static_cast<std::size_t>(paddingColumns), ' '));
 		static_cast<void>(insertArena.append(payload));
-		transaction.insert(rangeStart, insertArena.view());
+		if (editor.insertModeEnabled())
+			transaction.insert(rangeStart, insertArena.view());
+		else {
+			working = editor.snapshotText();
+			starts = lineStartsForText(working);
+			rangeEnd = overwriteEndForStreamPayload(working, starts, rangeStart, insertArena.size());
+			transaction.replace(MRTextBufferModel::Range(rangeStart, rangeEnd), insertArena.view());
+		}
 		cursor = rangeStart + insertArena.size();
 		if (!editor.applyStagedTransaction(transaction, cursor, cursor, cursor, true).applied()) {
-			if (errorText != nullptr) *errorText = "Unable to copy block.";
+			if (errorText != nullptr) *errorText = operationError;
 			return false;
 		}
 		rangeStart += static_cast<std::size_t>(std::max(0, paddingColumns));
@@ -1610,11 +2920,16 @@ bool MRFEBlockOps::insertTransferMessage(MRFileEditor &editor, const TransferMes
 		starts = lineStartsForText(working);
 		const std::size_t targetLine = lineIndexForOffset(starts, editor.cursorOffset());
 		rangeStart = starts.empty() ? 0 : starts[std::min(targetLine, starts.size() - 1)];
+		if (editor.insertModeEnabled())
+			transaction.insert(rangeStart, payload);
+		else {
+			rangeEnd = overwriteEndForLinePayload(working, starts, targetLine, message.rowCount);
+			transaction.replace(MRTextBufferModel::Range(rangeStart, rangeEnd), payload);
+		}
 		rangeEnd = rangeStart + payload.size();
-		transaction.insert(rangeStart, payload);
 		cursor = rangeEnd;
 		if (!editor.applyStagedTransaction(transaction, cursor, cursor, cursor, true).applied()) {
-			if (errorText != nullptr) *errorText = "Unable to copy block.";
+			if (errorText != nullptr) *errorText = operationError;
 			return false;
 		}
 		mGeometry = MRFEBlockGeometry();
@@ -1655,7 +2970,7 @@ bool MRFEBlockOps::insertTransferMessage(MRFileEditor &editor, const TransferMes
 			const std::size_t lineStart = starts[line];
 			const std::size_t lineEnd = lineContentEndForIndex(working, starts, line);
 			const std::string_view rowPayload = payloadRowView(message.payload, row, width);
-			const std::string replacement = insertVisualColumnsIntoLine(std::string_view(working.data() + lineStart, lineEnd - lineStart), destCol, rowPayload);
+			const std::string replacement = editor.insertModeEnabled() ? insertVisualColumnsIntoLine(std::string_view(working.data() + lineStart, lineEnd - lineStart), destCol, rowPayload) : replaceVisualColumnsInLine(std::string_view(working.data() + lineStart, lineEnd - lineStart), destCol, width, rowPayload);
 			transaction.replace(MRTextBufferModel::Range(lineStart, lineEnd), replacement);
 			working.replace(lineStart, lineEnd - lineStart, replacement);
 		}
@@ -1665,7 +2980,7 @@ bool MRFEBlockOps::insertTransferMessage(MRFileEditor &editor, const TransferMes
 		rangeEnd = offsetAtLineVisualColumn(working, starts, lastLine, destCol + static_cast<int>(width));
 		cursor = rangeStart;
 		if (!editor.applyStagedTransaction(transaction, cursor, cursor, cursor, true).applied()) {
-			if (errorText != nullptr) *errorText = "Unable to copy block.";
+			if (errorText != nullptr) *errorText = operationError;
 			return false;
 		}
 		mGeometry = MRFEBlockGeometry();
@@ -1802,14 +3117,28 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 	if (!runEditorFreeCursorAfterCommittedBlockCase(MRFEBlockMode::Line, "free cursor after committed line block", failureReason)) return false;
 	if (!runEditorFreeCursorAfterCommittedBlockCase(MRFEBlockMode::Column, "free cursor after committed column block", failureReason)) return false;
 	if (!runEditorFreeCursorAfterCommittedBlockCase(MRFEBlockMode::Stream, "free cursor after committed stream block", failureReason)) return false;
+	if (!runWindowCopyUndoPreservesBlockStateCase(failureReason)) return false;
+	if (!runWindowDeleteUndoPreservesBlockStateCase(failureReason)) return false;
+	if (!runWindowCtrlZBlockOpsMatrixCase(failureReason)) return false;
+	if (!runWindowMoveUndoClearsBlockStateCase(failureReason)) return false;
+	if (!runWindowMouseMarkedMoveUndoCase(failureReason)) return false;
+	if (!runWindowMoveLegacyUndoCommandCase(failureReason)) return false;
+	if (!runWindowMoveCtrlZTypingUndoCase(failureReason)) return false;
+	if (!runWindowLoadClearsUndoStackCase(failureReason)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Stream, "aa DELETE\n\nzz", 0, 3, 2, 0, 2, 2, "aa DELETE\n\nzzDELETE\n\n", "stream copy over empty line", failureReason)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Line, "one\n\ntwo\nlast", 0, 0, 1, 0, 3, 0, "one\n\ntwo\none\n\nlast", "line copy including empty line", failureReason)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Column, "012345\n\nabcdef\nXYZ", 0, 1, 2, 4, 3, 1, "012345\n\nabcdef\nX123YZ\n    \n bcd", "column copy over empty line with target extension", failureReason)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Column, "012345\n\nabcdef", 0, 1, 2, 4, 1, 0, "012345\n123\n   abcdef\nbcd", "column copy into LF target extension", failureReason)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Column, "012345\r\n\r\nabcdef", 0, 1, 2, 4, 1, 0, "012345\r\n123\r\n   abcdef\r\nbcd", "column copy into CRLF target extension", failureReason)) return false;
+	if (!runBlockCopyCase(MRFEBlockMode::Stream, "aa COPY zz\nend!!!!", 0, 3, 0, 7, 1, 0, "aa COPY zz\nCOPY!!!", "stream copy overwrite", failureReason, false)) return false;
+	if (!runBlockCopyCase(MRFEBlockMode::Line, "one\ntwo\nlast\nend", 0, 0, 0, 0, 2, 0, "one\ntwo\none\nend", "line copy overwrite", failureReason, false)) return false;
+	if (!runBlockCopyCase(MRFEBlockMode::Column, "012345\nabcdef\nXaaaaZ\nYbbbbZ", 0, 1, 1, 4, 2, 1, "012345\nabcdef\nX123aZ\nYbcdbZ", "column copy overwrite", failureReason, false)) return false;
 	if (!runInterWindowCopyCase(MRFEBlockMode::Stream, "aa COPY zz", 0, 3, 0, 7, "target:", 0, 7, "target:COPY", "inter-window stream copy", failureReason)) return false;
 	if (!runInterWindowCopyCase(MRFEBlockMode::Line, "one\n\ntwo\nlast", 0, 0, 1, 0, "target\nend", 1, 0, "target\none\n\nend", "inter-window line copy", failureReason)) return false;
 	if (!runInterWindowCopyCase(MRFEBlockMode::Column, "012345\n\nabcdef", 0, 1, 2, 4, "T0\nT1\nT2", 0, 1, "T1230\nT   1\nTbcd2", "inter-window column copy", failureReason)) return false;
+	if (!runInterWindowCopyCase(MRFEBlockMode::Stream, "aa COPY zz", 0, 3, 0, 7, "end!!!!", 0, 0, "COPY!!!", "inter-window stream copy overwrite", failureReason, false)) return false;
+	if (!runInterWindowCopyCase(MRFEBlockMode::Line, "one\ntwo", 0, 0, 0, 0, "target\nend\nfinal", 1, 0, "target\none\nfinal", "inter-window line copy overwrite", failureReason, false)) return false;
+	if (!runInterWindowCopyCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 1, 1, 4, "T000Z\nU111Z", 0, 1, "T123Z\nUbcdZ", "inter-window column copy overwrite", failureReason, false)) return false;
 	if (!runInterWindowCopyCase(MRFEBlockMode::Column, "ABCD\n\n12\nxyz987\n\nQ\nlast", 0, 1, 6, 5, "", 0, 0, "BCD \n    \n2   \nyz98\n    \n    \nast ", "inter-window tall sparse column copy into empty target", failureReason)) return false;
 	if (!runInterWindowCopyCase(MRFEBlockMode::Column,
 	                            "#include <stdio.h>\n\nint main() {\n\n\tint unused;\n         \n   puts(\"Hello world\");\n\n   puts(\"Hello world\");\n\t\n\t\n\t\n   \n\t\n\ti=\"dumm\";\n\treturn(0);\n}\r\n",
@@ -1824,12 +3153,47 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 	                            "inter-window column copy from tabs and mixed line endings",
 	                            failureReason))
 		return false;
-	if (!runBlockDeleteCase(MRFEBlockMode::Stream, "aa DELETE\n\nzz", 0, 3, 2, 0, "aa zz", "stream delete over empty line", failureReason)) return false;
-	if (!runBlockDeleteCase(MRFEBlockMode::Line, "one\n\ntwo\nlast", 0, 0, 1, 0, "two\nlast", "line delete including empty line", failureReason)) return false;
-	if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\n\nabcdef\nXYZ", 0, 1, 2, 4, "045\n\naef\nXYZ", "LF column delete over empty line", failureReason)) return false;
-	if (!runBlockDeleteCase(MRFEBlockMode::Column, "\tint unused;\n\treturn(0);", 0, 4, 1, 20, "    \n    ", "column delete across tab indentation", failureReason)) return false;
-	if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\r\rabcdef\rXYZ", 0, 1, 2, 4, "045\r\raef\rXYZ", "CR-only column delete over empty line", failureReason)) return false;
-	if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\r\n\r\nabcdef\r\nXYZ", 0, 1, 2, 4, "045\r\n\r\naef\r\nXYZ", "CRLF column delete over empty line", failureReason)) return false;
+	{
+		MREditSetupSettings settings = configuredEditSetupSettings();
+		settings.columnBlockMove = "DELETE_SPACE";
+		ScopedEditSetupSettings scopedSettings(settings);
+
+		if (!runBlockMoveCase(MRFEBlockMode::Stream, "aa MOVE zz\nend", 0, 3, 0, 7, 1, 3, "aa  zz\nendMOVE", "stream move", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Line, "one\ntwo\nthree\nfour", 0, 0, 0, 0, 3, 0, "two\nthree\none\nfour", "line move", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef\nXYZ", 0, 1, 1, 4, 2, 1, "045\naef\nX123YZ\n bcd", "column move delete-space", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\r\nabcdef\r\nXYZ", 0, 1, 1, 4, 2, 1, "045\r\naef\r\nX123YZ\r\n bcd", "CRLF column move delete-space", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Stream, "aa MOVE zz\nend!!!!", 0, 3, 0, 7, 1, 0, "aa  zz\nMOVE!!!", "stream move overwrite", failureReason, false)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Line, "one\ntwo\nthree\nfour\nfive", 0, 0, 0, 0, 3, 0, "two\nthree\none\nfive", "line move overwrite", failureReason, false)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef\nXaaaaZ\nYbbbbZ", 0, 1, 1, 4, 2, 1, "045\naef\nX123aZ\nYbcdbZ", "column move overwrite", failureReason, false)) return false;
+		if (!runInterWindowMoveCase(MRFEBlockMode::Stream, "aa MOVE zz", 0, 3, 0, 7, "target:", 0, 7, "aa  zz", "target:MOVE", "inter-window stream move", failureReason)) return false;
+		if (!runInterWindowMoveCase(MRFEBlockMode::Line, "one\ntwo\nlast", 0, 0, 0, 0, "target\nend", 1, 0, "two\nlast", "target\none\nend", "inter-window line move", failureReason)) return false;
+		if (!runInterWindowMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 1, 1, 4, "T0\nT1", 0, 1, "045\naef", "T1230\nTbcd1", "inter-window column move", failureReason)) return false;
+		if (!runInterWindowMoveCase(MRFEBlockMode::Stream, "aa MOVE zz", 0, 3, 0, 7, "end!!!!", 0, 0, "aa  zz", "MOVE!!!", "inter-window stream move overwrite", failureReason, false)) return false;
+		if (!runInterWindowMoveCase(MRFEBlockMode::Line, "one\ntwo", 0, 0, 0, 0, "target\nend\nfinal", 1, 0, "two", "target\none\nfinal", "inter-window line move overwrite", failureReason, false)) return false;
+		if (!runInterWindowMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 1, 1, 4, "T000Z\nU111Z", 0, 1, "045\naef", "T123Z\nUbcdZ", "inter-window column move overwrite", failureReason, false)) return false;
+	}
+	{
+		MREditSetupSettings settings = configuredEditSetupSettings();
+		settings.columnBlockMove = "LEAVE_SPACE";
+		ScopedEditSetupSettings scopedSettings(settings);
+
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef\nXYZ", 0, 1, 1, 4, 2, 1, "0   45\na   ef\nX123YZ\n bcd", "column move leave-space", failureReason)) return false;
+		if (!runInterWindowMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 1, 1, 4, "T0\nT1", 0, 1, "0   45\na   ef", "T1230\nTbcd1", "inter-window column move leave-space", failureReason)) return false;
+		if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\n\nabcdef\nXYZ", 0, 1, 2, 4, "0   45\n    \na   ef\nXYZ", "LF column delete leave-space over empty line", failureReason)) return false;
+		if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\r\n\r\nabcdef\r\nXYZ", 0, 1, 2, 4, "0   45\r\n    \r\na   ef\r\nXYZ", "CRLF column delete leave-space over empty line", failureReason)) return false;
+	}
+	{
+		MREditSetupSettings settings = configuredEditSetupSettings();
+		settings.columnBlockMove = "DELETE_SPACE";
+		ScopedEditSetupSettings scopedSettings(settings);
+
+		if (!runBlockDeleteCase(MRFEBlockMode::Stream, "aa DELETE\n\nzz", 0, 3, 2, 0, "aa zz", "stream delete over empty line", failureReason)) return false;
+		if (!runBlockDeleteCase(MRFEBlockMode::Line, "one\n\ntwo\nlast", 0, 0, 1, 0, "two\nlast", "line delete including empty line", failureReason)) return false;
+		if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\n\nabcdef\nXYZ", 0, 1, 2, 4, "045\n\naef\nXYZ", "LF column delete over empty line", failureReason)) return false;
+		if (!runBlockDeleteCase(MRFEBlockMode::Column, "\tint unused;\n\treturn(0);", 0, 4, 1, 20, "    \n    ", "column delete across tab indentation", failureReason)) return false;
+		if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\r\rabcdef\rXYZ", 0, 1, 2, 4, "045\r\raef\rXYZ", "CR-only column delete over empty line", failureReason)) return false;
+		if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\r\n\r\nabcdef\r\nXYZ", 0, 1, 2, 4, "045\r\n\r\naef\r\nXYZ", "CRLF column delete over empty line", failureReason)) return false;
+	}
 	if (!runStreamBlockLoadSaveCase(failureReason)) return false;
 	{
 		MRFEArenaAllocator releaseArena;

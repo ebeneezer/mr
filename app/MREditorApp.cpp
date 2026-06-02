@@ -1553,6 +1553,10 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
+	if (event.what == evCommand && (event.message.command == cmMrEditUndo || event.message.command == cmMrEditRedo) && handleMRCommand(event.message.command, event.message.infoPtr)) {
+		clearEvent(event);
+		return;
+	}
 	if (event.what == evKeyDown && currentEditWindow() == nullptr) {
 		std::string executedMacroName;
 		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {

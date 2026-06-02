@@ -30,6 +30,7 @@
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
+#include "../dialogs/MRAbout.hpp"
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../piecetable/MRTextDocument.hpp"
 #include "../ui/MREditWindow.hpp"
@@ -1688,6 +1689,14 @@ bool sendWindowKey(MREditWindow &window, ushort keyCode, ushort modifiers = 0) {
 	return true;
 }
 
+bool sendWindowCommand(MREditWindow &window, ushort command) {
+	TEvent event{};
+	event.what = evCommand;
+	event.message.command = command;
+	window.handleEvent(event);
+	return true;
+}
+
 bool expectWindowBlock(const MREditWindow &window, int status, bool marking, int line1, int line2, int col1, int col2, const char *phase, std::string &failureReason) {
 	if (window.blockStatus() != status || window.isBlockMarking() != marking || window.blockLine1() != line1 || window.blockLine2() != line2 || window.blockCol1() != col1 || window.blockCol2() != col2) {
 		failureReason = std::string("Window block path mismatch in ") + phase + ": got status=" + std::to_string(window.blockStatus()) + " marking=" + std::to_string(window.isBlockMarking() ? 1 : 0) +
@@ -1890,6 +1899,249 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		}
 		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "direct MRMAC action must not live-grow column right", failureReason)) return false;
 		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "direct MRMAC action non-live column overlay", failureReason)) return false;
+	}
+	{
+		const std::string text = "aa MOVE zz\nend";
+		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-keymap-move-undo", 1015);
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "Keymap block move undo path must have an editor.";
+			return false;
+		}
+		if (!window.replaceTextBuffer(text.c_str(), "wordstar-keymap-move-undo")) {
+			failureReason = "Unable to seed editor for keymap block move undo path.";
+			return false;
+		}
+		editor->setCursorOffset(3);
+		window.beginStreamBlock();
+		editor->setCursorOffset(7);
+		window.endBlock();
+		if (!window.hasBlock()) {
+			failureReason = "Stream block must be committed before Ctrl-K V.";
+			return false;
+		}
+		editor->setCursorOffset(text.size());
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowRawCtrl(window, 'V')) return false;
+		if (editor->snapshotText() != "aa  zz\nendMOVE") {
+			failureReason = "Ctrl-K V window key path after committed block produced wrong text: " + editor->snapshotText();
+			return false;
+		}
+		if (!sendWindowCommand(window, cmMrEditUndo)) return false;
+		if (editor->snapshotText() != text) {
+			failureReason = "Window undo command after Ctrl-K V block move must restore original text, got: " + editor->snapshotText();
+			return false;
+		}
+		if (editor->snapshotText().empty()) {
+			failureReason = "Window undo command after Ctrl-K V block move must not clear the editor.";
+			return false;
+		}
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmStream) {
+			failureReason = "Window undo command after Ctrl-K V block move must preserve the visible stream block mark.";
+			return false;
+		}
+		editor->setCursorOffset(3);
+		window.beginStreamBlock();
+		editor->setCursorOffset(7);
+		window.endBlock();
+		editor->setCursorOffset(text.size());
+		if (!dispatchMRKeymapAction("MRMAC_BLOCK_MOVE", "<Ctrl+K> <Ctrl+V>", &window)) {
+			failureReason = "MRMAC_BLOCK_MOVE action dispatch failed in keymap block move undo path.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_UNDO", "<Ctrl+Z>", &window)) {
+			failureReason = "MRMAC_UNDO action dispatch failed after keymap block move.";
+			return false;
+		}
+		if (editor->snapshotText() != text) {
+			failureReason = "Ctrl-Z after Ctrl-K V block move must restore original text, got: " + editor->snapshotText();
+			return false;
+		}
+		if (editor->snapshotText().empty()) {
+			failureReason = "Ctrl-Z after Ctrl-K V block move must not clear the editor.";
+			return false;
+		}
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmStream) {
+			failureReason = "Ctrl-Z after Ctrl-K V block move must preserve the visible stream block mark.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "aa COPY zz\nend";
+		MREditWindow window(TRect(0, 0, 80, 16), "window-copy-undo-block", 1016);
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "Window copy undo path must have an editor.";
+			return false;
+		}
+		if (!window.replaceTextBuffer(text.c_str(), "window-copy-undo-block")) {
+			failureReason = "Unable to seed editor for window copy undo path.";
+			return false;
+		}
+		editor->setCursorOffset(3);
+		window.beginStreamBlock();
+		editor->setCursorOffset(7);
+		window.endBlock();
+		editor->setCursorOffset(text.size());
+		if (!window.copyBlock()) {
+			failureReason = "Window copy block path failed before undo.";
+			return false;
+		}
+		if (editor->snapshotText() != "aa COPY zz\nendCOPY") {
+			failureReason = "Window copy block path produced wrong text before undo: " + editor->snapshotText();
+			return false;
+		}
+		if (!sendWindowCommand(window, cmMrEditUndo)) return false;
+		if (editor->snapshotText() != text) {
+			failureReason = "Window undo command after block copy must restore original text, got: " + editor->snapshotText();
+			return false;
+		}
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmStream) {
+			failureReason = "Window undo command after block copy must preserve the visible stream block mark.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "one\ntwo\nlast";
+		MREditWindow window(TRect(0, 0, 80, 16), "window-line-copy-undo-block", 1017);
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "Window line copy undo path must have an editor.";
+			return false;
+		}
+		if (!window.replaceTextBuffer(text.c_str(), "window-line-copy-undo-block")) {
+			failureReason = "Unable to seed editor for window line copy undo path.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		window.beginLineBlock();
+		window.endBlock();
+		editor->setCursorOffset(editor->nextLineOffset(editor->nextLineOffset(0)));
+		if (!window.copyBlock()) {
+			failureReason = "Window line copy block path failed before undo.";
+			return false;
+		}
+		if (editor->snapshotText() != "one\ntwo\none\nlast") {
+			failureReason = "Window line copy block path produced wrong text before undo: " + editor->snapshotText();
+			return false;
+		}
+		if (!sendWindowCommand(window, cmMrEditUndo)) return false;
+		if (editor->snapshotText() != text) {
+			failureReason = "Window undo command after line block copy must restore original text, got: " + editor->snapshotText();
+			return false;
+		}
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || editor->hasTextSelection()) {
+			failureReason = "Window undo command after line block copy must preserve the visible line block mark without text selection.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "012345\nabcdef\nXYZ";
+		MREditWindow window(TRect(0, 0, 80, 16), "window-column-copy-undo-block", 1018);
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "Window column copy undo path must have an editor.";
+			return false;
+		}
+		if (!window.replaceTextBuffer(text.c_str(), "window-column-copy-undo-block")) {
+			failureReason = "Unable to seed editor for window column copy undo path.";
+			return false;
+		}
+		const std::size_t secondLine = editor->nextLineOffset(0);
+		const std::size_t thirdLine = editor->nextLineOffset(secondLine);
+		editor->setCursorOffsetAtVisualColumn(1, 1);
+		window.beginColumnBlock();
+		editor->setCursorOffsetAtVisualColumn(secondLine + 4, 4);
+		window.endBlock();
+		editor->setCursorOffsetAtVisualColumn(thirdLine + 1, 1);
+		if (!window.copyBlock()) {
+			failureReason = "Window column copy block path failed before undo.";
+			return false;
+		}
+		if (editor->snapshotText() != "012345\nabcdef\nX123YZ\n bcd") {
+			failureReason = "Window column copy block path produced wrong text before undo: " + editor->snapshotText();
+			return false;
+		}
+		if (!sendWindowCommand(window, cmMrEditUndo)) return false;
+		if (editor->snapshotText() != text) {
+			failureReason = "Window undo command after column block copy must restore original text, got: " + editor->snapshotText();
+			return false;
+		}
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || editor->hasTextSelection()) {
+			failureReason = "Window undo command after column block copy must preserve the visible column block mark without text selection.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "one\ntwo\nlast";
+		MREditWindow window(TRect(0, 0, 80, 16), "window-line-move-undo-block", 1019);
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "Window line move undo path must have an editor.";
+			return false;
+		}
+		if (!window.replaceTextBuffer(text.c_str(), "window-line-move-undo-block")) {
+			failureReason = "Unable to seed editor for window line move undo path.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		window.beginLineBlock();
+		window.endBlock();
+		editor->setCursorOffset(editor->nextLineOffset(editor->nextLineOffset(0)));
+		if (!window.moveBlock()) {
+			failureReason = "Window line move block path failed before undo.";
+			return false;
+		}
+		if (editor->snapshotText() != "two\none\nlast") {
+			failureReason = "Window line move block path produced wrong text before undo: " + editor->snapshotText();
+			return false;
+		}
+		if (!sendWindowCommand(window, cmMrEditUndo)) return false;
+		if (editor->snapshotText() != text) {
+			failureReason = "Window undo command after line block move must restore original text, got: " + editor->snapshotText();
+			return false;
+		}
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || editor->hasTextSelection()) {
+			failureReason = "Window undo command after line block move must preserve the visible line block mark without text selection.";
+			return false;
+		}
+	}
+	{
+		const std::string text = "012345\nabcdef\nXYZ";
+		MREditWindow window(TRect(0, 0, 80, 16), "window-column-move-undo-block", 1020);
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "Window column move undo path must have an editor.";
+			return false;
+		}
+		if (!window.replaceTextBuffer(text.c_str(), "window-column-move-undo-block")) {
+			failureReason = "Unable to seed editor for window column move undo path.";
+			return false;
+		}
+		const std::size_t secondLine = editor->nextLineOffset(0);
+		const std::size_t thirdLine = editor->nextLineOffset(secondLine);
+		editor->setCursorOffsetAtVisualColumn(1, 1);
+		window.beginColumnBlock();
+		editor->setCursorOffsetAtVisualColumn(secondLine + 4, 4);
+		window.endBlock();
+		editor->setCursorOffsetAtVisualColumn(thirdLine + 1, 1);
+		if (!window.moveBlock()) {
+			failureReason = "Window column move block path failed before undo.";
+			return false;
+		}
+		if (editor->snapshotText() == text) {
+			failureReason = "Window column move block path did not change text before undo.";
+			return false;
+		}
+		if (!sendWindowCommand(window, cmMrEditUndo)) return false;
+		if (editor->snapshotText() != text) {
+			failureReason = "Window undo command after column block move must restore original text, got: " + editor->snapshotText();
+			return false;
+		}
+		if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || editor->hasTextSelection()) {
+			failureReason = "Window undo command after column block move must preserve the visible column block mark without text selection.";
+			return false;
+		}
 	}
 	{
 		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-free-cursor", 1012);
@@ -2135,6 +2387,31 @@ bool testTextDocumentPieceTableMutationHarness(std::string &failureReason) {
 		if (!pieceTableHarnessApplyBatch(document, model, rng, (i % 2) != 0, "deterministic multi-op", failureReason)) return false;
 	}
 
+	{
+		mr::editor::TextDocument restored("line01\nline02\nline03\n");
+		mr::editor::StagedEditTransaction tx(restored.readSnapshot(), "snapshot-restore-seed");
+		std::string expected;
+		tx.insert(6, "X");
+		if (!restored.tryApply(tx).applied()) {
+			failureReason = "Snapshot restore seed edit must apply.";
+			return false;
+		}
+		expected = restored.text();
+		mr::editor::ReadSnapshot snapshot = restored.readSnapshot();
+		snapshot.dropExactLineStartIndex();
+		restored.setText("temporary\n");
+		restored.restoreFromSnapshot(snapshot);
+		if (!pieceTableHarnessCheckDocument(restored, expected, "snapshot restore after dropped exact line index", failureReason)) return false;
+		mr::editor::EditTransaction afterUndo("snapshot-restore-type");
+		afterUndo.insert(0, "s");
+		if (!restored.tryApply(afterUndo, restored.version()).applied()) {
+			failureReason = "Snapshot restore follow-up edit must apply.";
+			return false;
+		}
+		expected.insert(0, "s");
+		if (!pieceTableHarnessCheckDocument(restored, expected, "snapshot restore follow-up typing", failureReason)) return false;
+	}
+
 	failureReason.clear();
 	return true;
 }
@@ -2152,10 +2429,15 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 	std::string blockOpsContent;
 	std::string blockOpsSourceContent;
 	std::string setupCommonContent;
+	std::string appContent;
 	std::string ioError;
 
 	if (!readTextFile(absolutePathFromCwd("app/MRCommandRouter.cpp"), routerContent, ioError)) {
 		failureReason = "Unable to read MRCommandRouter.cpp for block marking harness: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("app/MREditorApp.cpp"), appContent, ioError)) {
+		failureReason = "Unable to read MREditorApp.cpp for block marking harness: " + ioError;
 		return false;
 	}
 	if (!readTextFile(absolutePathFromCwd("app/MRMenuFactory.cpp"), menuContent, ioError)) {
@@ -2233,8 +2515,16 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 		failureReason = "Stream-only load/save block must be wired through menu, keymap and MRMAC surfaces.";
 		return false;
 	}
-	if (routerContent.find("case cmMrBlockDelete:") == std::string::npos || routerContent.find("win->deleteBlock(&errorText)") == std::string::npos || blockOpsContent.find("deleteCurrentBlock") == std::string::npos || blockOpsSourceContent.find("\"delete-block\"") == std::string::npos) {
-		failureReason = "Block delete must route to MRFEBlockOps and use one staged transaction.";
+	if (routerContent.find("case cmMrBlockCopy:") == std::string::npos || routerContent.find("return handleCopyBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockMove:") == std::string::npos || routerContent.find("return handleMoveBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockDelete:") == std::string::npos || routerContent.find("return handleDeleteBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("dispatchTargetedKeymapAppCommand") == std::string::npos || blockOpsContent.find("deleteCurrentBlock") == std::string::npos || blockOpsSourceContent.find("\"delete-block\"") == std::string::npos) {
+		failureReason = "Block copy/move/delete must route to MRFEBlockOps through the active editor command target.";
+		return false;
+	}
+	if (appContent.find("event.message.command == cmMrEditUndo || event.message.command == cmMrEditRedo") == std::string::npos || appContent.find("handleMRCommand(event.message.command, event.message.infoPtr)") == std::string::npos || appContent.find("TApplication::handleEvent(event);") == std::string::npos || appContent.find("event.message.command == cmMrEditUndo || event.message.command == cmMrEditRedo") > appContent.find("TApplication::handleEvent(event);")) {
+		failureReason = "Menu Undo/Redo must route through MRCommandRouter before generic TVision command dispatch.";
+		return false;
+	}
+	if (routerContent.find("message(editor, evCommand, editorCommand, nullptr);") == std::string::npos || routerContent.find("if (win->hasBlock() && !win->isBlockMarking()) win->refreshBlockVisual();") == std::string::npos) {
+		failureReason = "Menu/App editor commands must refresh committed block overlays after dispatch.";
 		return false;
 	}
 	if (setupCommonContent.find("case MRDialogHistoryScope::BlockSave:") == std::string::npos || routerContent.find("rememberLoadDialogPath(MRDialogHistoryScope::BlockSave, savePath.c_str());") == std::string::npos) {
@@ -3637,10 +3927,96 @@ bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCommandRouter.cpp for inter-window block guard: " + ioError;
 		return false;
 	}
-	if (content.find("case cmMrBlockWindowCopy:") == std::string::npos || content.find("return handleWindowCopyBlock(currentEditWindow());") == std::string::npos || content.find("mrShowWindowListDialog(mrwlSelectLinkTarget, window)") == std::string::npos || content.find("case cmMrBlockWindowMove:") == std::string::npos || content.find("mrvmUiCopyBlockFromWindow(") != std::string::npos || content.find("mrvmUiMoveBlockFromWindow(") != std::string::npos) {
-		failureReason = "Inter-window copy must route through the command router target selection while inter-window move remains disabled.";
+	if (content.find("case cmMrBlockWindowCopy:") == std::string::npos || content.find("return handleWindowCopyBlock(currentEditorCommandWindow());") == std::string::npos || content.find("case cmMrBlockWindowMove:") == std::string::npos || content.find("return handleWindowMoveBlock(currentEditorCommandWindow());") == std::string::npos || content.find("mrShowWindowListDialog(mrwlSelectLinkTarget, window)") == std::string::npos || content.find("mrvmUiCopyBlockFromWindow(") != std::string::npos || content.find("mrvmUiMoveBlockFromWindow(") != std::string::npos) {
+		failureReason = "Inter-window copy and move must route through the command router target selection and active editor command target.";
 		return false;
 	}
+	failureReason.clear();
+	return true;
+}
+
+bool testAboutAnimationHarness(std::string &failureReason) {
+	return mrAboutAnimationRegressionHarness(failureReason);
+}
+
+bool testAboutQuoteReadmeExtractionGuard(std::string &failureReason) {
+	const std::string readmePath = absolutePathFromCwd("README.md");
+	const std::string generatedPath = absolutePathFromCwd("app/MRAboutQuotes.generated.hpp");
+	std::string readmeContent;
+	std::string generatedContent;
+	std::string ioError;
+	std::size_t readmeQuoteCount = 0;
+	std::size_t generatedQuoteCount = 0;
+	std::size_t lineStart = 0;
+	bool inQuoteBlock = false;
+	bool quoteBlockDone = false;
+
+	if (!readTextFile(readmePath, readmeContent, ioError)) {
+		failureReason = "Unable to read README.md for about quote guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(generatedPath, generatedContent, ioError)) {
+		failureReason = "Unable to read MRAboutQuotes.generated.hpp for about quote guard: " + ioError;
+		return false;
+	}
+
+	while (lineStart <= readmeContent.size() && !quoteBlockDone) {
+		std::size_t lineEnd = readmeContent.find('\n', lineStart);
+		std::string line = lineEnd == std::string::npos ? readmeContent.substr(lineStart) : readmeContent.substr(lineStart, lineEnd - lineStart);
+		std::size_t pos = 1;
+
+		if (!line.empty() && line[0] == '>') {
+			while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
+				++pos;
+			if (pos < line.size() && line[pos] == '-') {
+				++pos;
+				while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
+					++pos;
+				if (pos < line.size()) {
+					inQuoteBlock = true;
+					++readmeQuoteCount;
+				}
+			} else if (inQuoteBlock) {
+				quoteBlockDone = true;
+			}
+		} else if (inQuoteBlock) {
+			quoteBlockDone = true;
+		}
+
+		if (lineEnd == std::string::npos)
+			break;
+		lineStart = lineEnd + 1;
+	}
+
+	lineStart = 0;
+	while (lineStart <= generatedContent.size()) {
+		std::size_t lineEnd = generatedContent.find('\n', lineStart);
+		std::string line = lineEnd == std::string::npos ? generatedContent.substr(lineStart) : generatedContent.substr(lineStart, lineEnd - lineStart);
+
+		if (line.rfind("    \"", 0) == 0)
+			++generatedQuoteCount;
+		if (lineEnd == std::string::npos)
+			break;
+		lineStart = lineEnd + 1;
+	}
+
+	if (readmeQuoteCount == 0) {
+		failureReason = "README.md about quote block was not detected.";
+		return false;
+	}
+	if (generatedQuoteCount != readmeQuoteCount) {
+		failureReason = "Generated about quote count mismatch: README has " + std::to_string(readmeQuoteCount) + ", generated header has " + std::to_string(generatedQuoteCount) + ".";
+		return false;
+	}
+	if (generatedContent.find("\342\200\234") != std::string::npos || generatedContent.find("\342\200\235") != std::string::npos || generatedContent.find("\342\200\236") != std::string::npos) {
+		failureReason = "Generated about quotes must normalize typographic double quotes.";
+		return false;
+	}
+	if (generatedContent.find("Bjarne Stroustrup") == std::string::npos || generatedContent.find("Linus Torvalds") == std::string::npos || generatedContent.find("Donald Knuth") == std::string::npos) {
+		failureReason = "Generated about quotes lost README entries after the first quote.";
+		return false;
+	}
+
 	failureReason.clear();
 	return true;
 }
@@ -4965,6 +5341,8 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
+	runTest(ctx, "About animation harness", testAboutAnimationHarness);
+	runTest(ctx, "About quote README extraction guard", testAboutQuoteReadmeExtractionGuard);
 	runTest(ctx, "Block paste free-cursor target guard", testBlockPasteFreeCursorTargetGuard);
 	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
 	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
@@ -5024,6 +5402,8 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
+	runTest(ctx, "About animation harness", testAboutAnimationHarness);
+	runTest(ctx, "About quote README extraction guard", testAboutQuoteReadmeExtractionGuard);
 	runTest(ctx, "Block paste free-cursor target guard", testBlockPasteFreeCursorTargetGuard);
 	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
 	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);

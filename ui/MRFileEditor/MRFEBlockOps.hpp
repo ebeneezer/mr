@@ -78,10 +78,13 @@ class MRFEBlockOps {
 	bool insertPayloadAsStreamBlock(MRFileEditor &editor, const MRFEArenaAllocator &arena, std::string *errorText = nullptr);
 	bool copyCurrentBlockToCursor(MRFileEditor &editor, std::string *errorText = nullptr);
 	bool copyCurrentBlockToEditor(MRFileEditor &sourceEditor, MRFEBlockOps &targetOps, MRFileEditor &targetEditor, int sourceWindowId, int targetWindowId, std::string *errorText = nullptr);
+	bool moveCurrentBlockToCursor(MRFileEditor &editor, std::string *errorText = nullptr);
+	bool moveCurrentBlockToEditor(MRFileEditor &sourceEditor, MRFEBlockOps &targetOps, MRFileEditor &targetEditor, int sourceWindowId, int targetWindowId, std::string *errorText = nullptr);
 	bool deleteCurrentBlock(MRFileEditor &editor, std::string *errorText = nullptr);
 	bool loadStreamBlockFromFile(MRFileEditor &editor, const std::string &path, std::string *errorText = nullptr);
 	bool saveStreamBlockToFile(MRFileEditor &editor, const std::string &path, std::string *errorText = nullptr);
 	bool setCommittedStream(MRFileEditor &editor, std::size_t start, std::size_t end);
+	bool setCommittedBlock(MRFileEditor &editor, MRFEBlockMode mode, std::size_t anchor, std::size_t cursor, int anchorColumn = -1, int cursorColumn = -1);
 
 	bool hasStoredBlock() const noexcept;
 	bool hasVisibleBlock() const noexcept;
@@ -117,6 +120,7 @@ class MRFEBlockOps {
 	bool captureTransferPayload(MRFileEditor &editor, MRFEArenaAllocator &arena, std::string *errorText = nullptr);
 	bool prepareTransferMessage(MRFileEditor &editor, int sourceWindowId, int targetWindowId, TransferMode mode, MRFEArenaAllocator &arena, TransferMessage &message, std::string *errorText = nullptr);
 	bool insertTransferMessage(MRFileEditor &editor, const TransferMessage &message, std::string *errorText = nullptr);
+	bool removeCurrentBlockForMove(MRFileEditor &editor, std::string *errorText = nullptr);
 
 	MRFEBlockGeometry mGeometry;
 	MRFEArenaAllocator mArena;
