@@ -32,7 +32,7 @@ TSubMenu *createFileMenu() {
 }
 
 TSubMenu *createEditMenu() {
-	return &(*new TSubMenu("~E~dit", kbAltE) + *new TMenuItem("~U~ndo", cmMrEditUndo, kbCtrlZ, hcNoContext, "CtrlZ") + *new TMenuItem("~R~edo", cmMrEditRedo, TKey('Z', kbCtrlShift | kbAltShift), hcNoContext, "CtrlAltZ") + newLine() + *new TMenuItem("~C~ut", cmMrEditCutToBuffer, kbCtrlIns, hcNoContext, "CtrlIns") + *new TMenuItem("co~P~y", cmMrEditCopyToBuffer, kbNoKey, hcNoContext) + *new TMenuItem("~A~ppend", cmMrEditAppendToBuffer, kbCtrlDel, hcNoContext, "CtrlDel") + *new TMenuItem("cut & ap~P~end", cmMrEditCutAndAppendToBuffer, kbNoKey, hcNoContext) + *new TMenuItem("~P~aste", cmMrEditPasteFromBuffer, kbShiftIns, hcNoContext, "ShiftIns"));
+	return &(*new TSubMenu("~E~dit", kbAltE) + *new TMenuItem("~U~ndo", cmMrEditUndo, kbCtrlZ, hcNoContext, "CtrlZ") + *new TMenuItem("~R~edo", cmMrEditRedo, TKey('Z', kbCtrlShift | kbAltShift), hcNoContext, "CtrlAltZ") + newLine() + *new TMenuItem("~C~ut", cmMrEditCutToBuffer, kbCtrlIns, hcNoContext, "CtrlIns") + *new TMenuItem("co~P~y", cmMrEditCopyToBuffer, kbNoKey, hcNoContext) + *new TMenuItem("~A~ppend", cmMrEditAppendToBuffer, kbCtrlDel, hcNoContext, "CtrlDel") + *new TMenuItem("cut & ap~P~end", cmMrEditCutAndAppendToBuffer, kbNoKey, hcNoContext) + *new TMenuItem("~P~aste", cmMrEditPasteFromBuffer, kbShiftIns, hcNoContext, "ShiftIns") + newLine() + *new TMenuItem("~I~nsert [OFF]", cmMrEditToggleInsertMode, kbIns, hcNoContext, "Ins"));
 }
 
 TSubMenu *buildWindowMenu() {

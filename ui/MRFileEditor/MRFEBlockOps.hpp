@@ -81,6 +81,8 @@ class MRFEBlockOps {
 	bool moveCurrentBlockToCursor(MRFileEditor &editor, std::string *errorText = nullptr);
 	bool moveCurrentBlockToEditor(MRFileEditor &sourceEditor, MRFEBlockOps &targetOps, MRFileEditor &targetEditor, int sourceWindowId, int targetWindowId, std::string *errorText = nullptr);
 	bool deleteCurrentBlock(MRFileEditor &editor, std::string *errorText = nullptr);
+	bool indentCurrentColumnBlock(MRFileEditor &editor, std::string *errorText = nullptr);
+	bool undentCurrentColumnBlock(MRFileEditor &editor, std::string *errorText = nullptr);
 	bool loadStreamBlockFromFile(MRFileEditor &editor, const std::string &path, std::string *errorText = nullptr);
 	bool saveStreamBlockToFile(MRFileEditor &editor, const std::string &path, std::string *errorText = nullptr);
 	bool setCommittedStream(MRFileEditor &editor, std::size_t start, std::size_t end);
@@ -106,6 +108,11 @@ class MRFEBlockOps {
 		Move = 1
 	};
 
+	enum class ColumnHorizontalShiftMode : int {
+		UseEditorInsertMode = 0,
+		ForceOverwritePayload = 1
+	};
+
 	struct TransferMessage {
 		int sourceWindowId = 0;
 		int targetWindowId = 0;
@@ -121,6 +128,7 @@ class MRFEBlockOps {
 	bool prepareTransferMessage(MRFileEditor &editor, int sourceWindowId, int targetWindowId, TransferMode mode, MRFEArenaAllocator &arena, TransferMessage &message, std::string *errorText = nullptr);
 	bool insertTransferMessage(MRFileEditor &editor, const TransferMessage &message, std::string *errorText = nullptr);
 	bool removeCurrentBlockForMove(MRFileEditor &editor, std::string *errorText = nullptr);
+	bool shiftCurrentColumnBlockHorizontally(MRFileEditor &editor, int destCol, ColumnHorizontalShiftMode mode, std::string *errorText = nullptr);
 
 	MRFEBlockGeometry mGeometry;
 	MRFEArenaAllocator mArena;

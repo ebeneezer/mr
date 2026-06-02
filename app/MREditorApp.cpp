@@ -1012,7 +1012,10 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	logStartupPhase("log_window");
 	syncRecordingUiState();
 	logStartupPhase("recording_ui");
-	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
+		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+		if (MREditWindow *win = currentEditWindow(); win != nullptr) mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
+	}
 	logStartupPhase("menu_state");
 
 	if (configuredAutoloadWorkspace()) {
@@ -1615,6 +1618,9 @@ void MREditorApp::idle() {
 		std::string rightStatus = buildTopRightCursorStatus();
 		mrMenuBar->setRightStatus(rightStatus);
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+		if (MREditWindow *win = currentEditWindow(); win != nullptr) mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
+		else
+			mrMenuBar->setInsertModeMenuState(false);
 		if (mr::messageline::currentVisibleMessage(message)) {
 			MRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
 			if (isHeroVisibleMessage(message)) marqueeKind = MRMenuBar::MarqueeKind::Hero;

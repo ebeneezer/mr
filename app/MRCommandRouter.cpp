@@ -246,6 +246,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SAVE_BLOCK_TO_FILE", KeymapDispatchKind::AppCommand, cmMrBlockSaveToDisk, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
+    KeymapActionDispatchEntry{"MR_EDIT_TOGGLE_INSERT_MODE", KeymapDispatchKind::AppCommand, cmMrEditToggleInsertMode, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
     KeymapActionDispatchEntry{"MR_TOGGLE_FORMAT_RULER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleFormatRuler},
@@ -335,6 +336,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Edit / Cut & append";
 		case cmMrEditPasteFromBuffer:
 			return "Edit / Paste";
+		case cmMrEditToggleInsertMode:
+			return "Edit / Insert";
 		case cmMrWindowClose:
 			return "Window / Close";
 		case cmMrWindowSplit:
@@ -1730,6 +1733,22 @@ bool handleDeleteBlock(MREditWindow *window) {
 	return true;
 }
 
+bool handleIndentBlock(MREditWindow *window) {
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (!window->indentBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to indent block." : errorText);
+	return true;
+}
+
+bool handleUndentBlock(MREditWindow *window) {
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (!window->undentBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to undent block." : errorText);
+	return true;
+}
+
 bool handleWindowCopyBlock(MREditWindow *window) {
 	MREditWindow *selected = nullptr;
 	MREditWindow *target = nullptr;
@@ -1800,10 +1819,18 @@ bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 			return handleMoveBlock(window);
 		case cmMrBlockDelete:
 			return handleDeleteBlock(window);
+		case cmMrBlockIndent:
+			return handleIndentBlock(window);
+		case cmMrBlockUndent:
+			return handleUndentBlock(window);
 		case cmMrBlockWindowCopy:
 			return handleWindowCopyBlock(window);
 		case cmMrBlockWindowMove:
 			return handleWindowMoveBlock(window);
+		case cmMrEditToggleInsertMode:
+			if (window == nullptr || window->getEditor() == nullptr) return false;
+			window->getEditor()->setInsertModeEnabled(!window->getEditor()->insertModeEnabled());
+			return true;
 		default:
 			return dispatchApplicationCommandEvent(command);
 	}
@@ -2184,6 +2211,12 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrEditPasteFromBuffer:
 			return runDisabledBlockAction();
 
+		case cmMrEditToggleInsertMode: {
+			MREditWindow *win = currentEditWindow();
+			if (win != nullptr && win->getEditor() != nullptr) win->getEditor()->setInsertModeEnabled(!win->getEditor()->insertModeEnabled());
+			return true;
+		}
+
 		case cmMrSearchPushMarker:
 			return handleBlockAction(mrvmUiPushMarker(), "Unable to push position onto marker stack.");
 
@@ -2231,11 +2264,11 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		}
 
 		case cmMrBlockIndent: {
-			return runDisabledBlockAction();
+			return handleIndentBlock(currentEditorCommandWindow());
 		}
 
 		case cmMrBlockUndent: {
-			return runDisabledBlockAction();
+			return handleUndentBlock(currentEditorCommandWindow());
 		}
 
 		case cmMrBlockWindowCopy: {

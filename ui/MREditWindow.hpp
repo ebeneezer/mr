@@ -1348,6 +1348,14 @@ class MREditWindow : public TWindow {
 		return editor != nullptr && mBlockOps.deleteCurrentBlock(*editor, errorText);
 	}
 
+	bool indentBlock(std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.indentCurrentColumnBlock(*editor, errorText);
+	}
+
+	bool undentBlock(std::string *errorText = nullptr) {
+		return editor != nullptr && mBlockOps.undentCurrentColumnBlock(*editor, errorText);
+	}
+
 	bool centerCursorInView() {
 		if (editor == nullptr) return false;
 		editor->revealCursor(True);

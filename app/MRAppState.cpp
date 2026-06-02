@@ -112,6 +112,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrEditAppendToBuffer, canModify && state.hasSelection);
 	setCommandEnabled(cmMrEditCutAndAppendToBuffer, canModify && state.hasSelection);
 	setCommandEnabled(cmMrEditPasteFromBuffer, canModify);
+	setCommandEnabled(cmMrEditToggleInsertMode, hasEditor);
 
 	setCommandEnabled(cmMrWindowOpen, true);
 	setCommandEnabled(cmMrWindowClose, hasWindow);

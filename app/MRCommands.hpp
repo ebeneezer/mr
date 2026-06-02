@@ -136,7 +136,8 @@ enum : ushort {
 	cmMrFileRevert,
 	cmMrOtherBuildCurrentFile,
 	cmMrOtherFindPreviousCompilerError,
-	cmMrBlockLoadFromDisk
+	cmMrBlockLoadFromDisk,
+	cmMrEditToggleInsertMode
 };
 
 #endif

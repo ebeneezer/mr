@@ -383,6 +383,146 @@ std::string replaceVisualColumnsInLine(std::string_view lineText, int destCol, s
 	return insertVisualColumnsIntoLine(erased, targetColumn, payload);
 }
 
+int visualWidthOfLine(std::string_view lineText) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+	std::string line(lineText);
+	std::size_t offset = 0;
+	int visual = 0;
+
+	while (offset < line.size()) {
+		std::size_t next = offset;
+		std::size_t width = 0;
+
+		if (!nextBlockDisplayChar(line, 0, line.size(), next, width, visual, settings)) break;
+		visual += static_cast<int>(width);
+		offset = next;
+	}
+	return visual;
+}
+
+std::string visualColumnsFromLine(std::string_view lineText, int col1, int col2) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+	std::string result;
+	std::string line(lineText);
+	const int fromColumn = std::max(col1, 0);
+	const int toColumn = std::max(col2, 0);
+	std::size_t offset = 0;
+	int visual = 0;
+	int emitted = fromColumn;
+
+	if (toColumn <= fromColumn) return result;
+	result.reserve(static_cast<std::size_t>(toColumn - fromColumn));
+	while (offset < line.size() && emitted < toColumn) {
+		std::size_t next = offset;
+		std::size_t width = 0;
+
+		if (!nextBlockDisplayChar(line, 0, line.size(), next, width, visual, settings)) break;
+		const int charStart = visual;
+		const int charEnd = visual + static_cast<int>(width);
+		if (charEnd > fromColumn && charStart < toColumn) {
+			if (emitted < std::max(charStart, fromColumn)) {
+				result.append(static_cast<std::size_t>(std::max(charStart, fromColumn) - emitted), ' ');
+				emitted = std::max(charStart, fromColumn);
+			}
+			const int overlapStart = std::max(charStart, fromColumn);
+			const int overlapEnd = std::min(charEnd, toColumn);
+			const std::size_t byteWidth = next - offset;
+			if (width == 1 && byteWidth == 1 && overlapStart == charStart && overlapEnd == charEnd && line[offset] != '\t')
+				result.append(line.data() + offset, 1);
+			else
+				result.append(static_cast<std::size_t>(overlapEnd - overlapStart), ' ');
+			emitted = overlapEnd;
+		}
+		visual = charEnd;
+		offset = next;
+	}
+	if (emitted < toColumn) result.append(static_cast<std::size_t>(toColumn - emitted), ' ');
+	return result;
+}
+
+std::string prefixBeforeVisualColumn(std::string_view lineText, int visualColumn) {
+	const int column = std::max(visualColumn, 0);
+	const int width = visualWidthOfLine(lineText);
+	std::string prefix = eraseVisualColumnsFromLine(lineText, column, std::max(column, width));
+
+	if (width < column) prefix.append(static_cast<std::size_t>(column - width), ' ');
+	return prefix;
+}
+
+std::string suffixFromVisualColumn(std::string_view lineText, int visualColumn) {
+	const int column = std::max(visualColumn, 0);
+	const int width = visualWidthOfLine(lineText);
+
+	if (column >= width) return std::string();
+	return eraseVisualColumnsFromLine(lineText, 0, column);
+}
+
+std::string moveVisualColumnsWithinLine(std::string_view lineText, int sourceCol1, int sourceCol2, int destCol, std::string_view payload, bool insertMode, bool keepSpaces) {
+	const int col1 = std::max(sourceCol1, 0);
+	const int col2 = std::max(sourceCol2, col1);
+	const int targetCol = std::max(destCol, 0);
+	const int width = col2 - col1;
+	const int lineWidth = visualWidthOfLine(lineText);
+	std::string result;
+
+	if (width <= 0 || targetCol == col1) return std::string(lineText);
+	if (lineWidth <= col1 && std::all_of(payload.begin(), payload.end(), [](char ch) { return ch == ' '; })) return std::string(payload);
+	if (targetCol < col1) {
+		const int gapWidth = col1 - targetCol;
+
+		result = prefixBeforeVisualColumn(lineText, targetCol);
+		result.append(payload.data(), payload.size());
+		if (keepSpaces) result.append(static_cast<std::size_t>(gapWidth), ' ');
+		if (insertMode) {
+			const std::string displaced = visualColumnsFromLine(lineText, targetCol, col1);
+			result.append(displaced);
+		}
+		result.append(suffixFromVisualColumn(lineText, col2));
+		return result;
+	}
+
+	if (targetCol < col2) {
+		const int gapWidth = targetCol - col1;
+
+		result = prefixBeforeVisualColumn(lineText, col1);
+		if (insertMode) {
+			if (keepSpaces)
+				result.append(static_cast<std::size_t>(gapWidth), ' ');
+			else
+				result.append(visualColumnsFromLine(lineText, col2, col2 + gapWidth));
+			result.append(payload.data(), payload.size());
+			result.append(suffixFromVisualColumn(lineText, keepSpaces ? col2 : col2 + gapWidth));
+		} else {
+			result.append(static_cast<std::size_t>(gapWidth), ' ');
+			result.append(payload.data(), payload.size());
+			result.append(suffixFromVisualColumn(lineText, targetCol + width));
+		}
+		return result;
+	}
+
+	if (insertMode) {
+		result = prefixBeforeVisualColumn(lineText, col1);
+		if (keepSpaces) {
+			result.append(static_cast<std::size_t>(width), ' ');
+			result.append(visualColumnsFromLine(lineText, col2, targetCol));
+			result.append(payload.data(), payload.size());
+			result.append(suffixFromVisualColumn(lineText, targetCol));
+		} else {
+			result.append(visualColumnsFromLine(lineText, col2, targetCol + width));
+			result.append(payload.data(), payload.size());
+			result.append(suffixFromVisualColumn(lineText, targetCol + width));
+		}
+		return result;
+	}
+
+	result = prefixBeforeVisualColumn(lineText, col1);
+	if (keepSpaces) result.append(static_cast<std::size_t>(width), ' ');
+	result.append(visualColumnsFromLine(lineText, col2, targetCol));
+	result.append(payload.data(), payload.size());
+	result.append(suffixFromVisualColumn(lineText, targetCol + width));
+	return result;
+}
+
 std::size_t nextTextCharOffset(const std::string &text, std::size_t pos) noexcept {
 	char bytes[4];
 	std::size_t count = 0;
@@ -1944,6 +2084,110 @@ bool runBlockDeleteCase(MRFEBlockMode mode, const std::string &text, std::size_t
 	return checkBlockDeleteUndoRedo(editor, ops, text, deletedText, phase, failureReason);
 }
 
+bool runColumnIndentCase(const std::string &text, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, int tabSize, bool initialInsertMode, const std::string &indentedText, int expectedCol1, int expectedCol2, const char *phase, std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	settings.tabSize = tabSize;
+	settings.formatLine = defaultEditFormatLineForTabSize(settings.tabSize, settings.leftMargin, settings.rightMargin);
+	ScopedEditSetupSettings scopedSettings(settings);
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, "");
+	MRFEBlockOps ops;
+	std::string errorText;
+
+	if (!editor.replaceBufferText(text.c_str())) {
+		failureReason = std::string("Unable to seed editor text in ") + phase + ".";
+		return false;
+	}
+	editor.setInsertModeEnabled(initialInsertMode);
+	placeEditorCursor(editor, text, starts, anchorLine, anchorColumn);
+	if (!ops.beginColumn(editor)) {
+		failureReason = std::string("Unable to begin column indent block in ") + phase + ".";
+		return false;
+	}
+	placeEditorCursor(editor, text, starts, cursorLine, cursorColumn);
+	if (!ops.updateFromEditor(editor) || !ops.end(editor)) {
+		failureReason = std::string("Unable to commit column indent block in ") + phase + ".";
+		return false;
+	}
+	if (!ops.indentCurrentColumnBlock(editor, &errorText)) {
+		failureReason = std::string("Unable to indent column block in ") + phase + ": " + errorText;
+		return false;
+	}
+	if (editor.snapshotText() != indentedText) {
+		failureReason = std::string("Column indent text mismatch in ") + phase + ": got=\"" + escapedArenaPayload(editor.snapshotText()) + "\" expected=\"" + escapedArenaPayload(indentedText) + "\".";
+		return false;
+	}
+	if (editor.insertModeEnabled() != initialInsertMode) {
+		failureReason = std::string("Column indent must not mutate insert mode in ") + phase + ".";
+		return false;
+	}
+	if (!checkEditorBlock(editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, std::min(anchorLine, cursorLine), std::max(anchorLine, cursorLine), expectedCol1, expectedCol2, phase, failureReason)) return false;
+	sendEditorCommand(editor, cmMrEditUndo);
+	if (editor.snapshotText() != text || editor.insertModeEnabled() != initialInsertMode || !ops.hasVisibleBlock()) {
+		failureReason = std::string("Undo after column indent must restore text, preserve insert mode and keep block visible in ") + phase + ".";
+		return false;
+	}
+	sendEditorCommand(editor, cmMrEditRedo);
+	if (editor.snapshotText() != indentedText || editor.insertModeEnabled() != initialInsertMode || !ops.hasVisibleBlock()) {
+		failureReason = std::string("Redo after column indent must restore indented text, preserve insert mode and keep block visible in ") + phase + ".";
+		return false;
+	}
+	return true;
+}
+
+bool runColumnUndentCase(const std::string &text, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, int tabSize, bool initialInsertMode, const std::string &undentedText, int expectedCol1, int expectedCol2, const char *phase, std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	settings.tabSize = tabSize;
+	settings.formatLine = defaultEditFormatLineForTabSize(settings.tabSize, settings.leftMargin, settings.rightMargin);
+	ScopedEditSetupSettings scopedSettings(settings);
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, "");
+	MRFEBlockOps ops;
+	std::string errorText;
+
+	if (!editor.replaceBufferText(text.c_str())) {
+		failureReason = std::string("Unable to seed editor text in ") + phase + ".";
+		return false;
+	}
+	editor.setInsertModeEnabled(initialInsertMode);
+	placeEditorCursor(editor, text, starts, anchorLine, anchorColumn);
+	if (!ops.beginColumn(editor)) {
+		failureReason = std::string("Unable to begin column undent block in ") + phase + ".";
+		return false;
+	}
+	placeEditorCursor(editor, text, starts, cursorLine, cursorColumn);
+	if (!ops.updateFromEditor(editor) || !ops.end(editor)) {
+		failureReason = std::string("Unable to commit column undent block in ") + phase + ".";
+		return false;
+	}
+	if (!ops.undentCurrentColumnBlock(editor, &errorText)) {
+		failureReason = std::string("Unable to undent column block in ") + phase + ": " + errorText;
+		return false;
+	}
+	if (editor.snapshotText() != undentedText) {
+		failureReason = std::string("Column undent text mismatch in ") + phase + ": got=\"" + escapedArenaPayload(editor.snapshotText()) + "\" expected=\"" + escapedArenaPayload(undentedText) + "\".";
+		return false;
+	}
+	if (editor.insertModeEnabled() != initialInsertMode) {
+		failureReason = std::string("Column undent must not mutate insert mode in ") + phase + ".";
+		return false;
+	}
+	if (!checkEditorBlock(editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, std::min(anchorLine, cursorLine), std::max(anchorLine, cursorLine), expectedCol1, expectedCol2, phase, failureReason)) return false;
+	sendEditorCommand(editor, cmMrEditUndo);
+	if (editor.snapshotText() != text || editor.insertModeEnabled() != initialInsertMode || !ops.hasVisibleBlock()) {
+		failureReason = std::string("Undo after column undent must restore text, preserve insert mode and keep block visible in ") + phase + ".";
+		return false;
+	}
+	sendEditorCommand(editor, cmMrEditRedo);
+	if (editor.snapshotText() != undentedText || editor.insertModeEnabled() != initialInsertMode || !ops.hasVisibleBlock()) {
+		failureReason = std::string("Redo after column undent must restore undented text, preserve insert mode and keep block visible in ") + phase + ".";
+		return false;
+	}
+	return true;
+}
+
 bool runBlockCopyCase(MRFEBlockMode mode, const std::string &text, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, std::size_t targetLine, int targetColumn, const std::string &copiedText, const char *phase, std::string &failureReason, bool targetInsertMode = true) {
 	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	const std::vector<std::size_t> starts = lineStartsForText(text);
@@ -2499,6 +2743,14 @@ bool MRFEBlockOps::moveCurrentBlockToCursor(MRFileEditor &editor, std::string *e
 	normalize(editor);
 	sourceGeometry = mGeometry;
 	targetCursor = editor.cursorOffset();
+	if (sourceGeometry.mode == MRFEBlockMode::Column) {
+		text = editor.snapshotText();
+		starts = lineStartsForText(text);
+		const std::size_t targetLine = lineIndexForOffset(starts, targetCursor);
+		const int destCol = std::max(0, editor.displayedCursorColumn());
+
+			if (targetLine == sourceGeometry.line1) return shiftCurrentColumnBlockHorizontally(editor, destCol, ColumnHorizontalShiftMode::UseEditorInsertMode, errorText);
+	}
 	if (!captureTransferPayload(editor, transferArena, errorText)) return false;
 	payloadStorage = transferArena.release();
 	const std::string_view payload = payloadView(payloadStorage);
@@ -2726,6 +2978,124 @@ bool MRFEBlockOps::deleteCurrentBlock(MRFileEditor &editor, std::string *errorTe
 	mGeometry = MRFEBlockGeometry();
 	deactivateVisual(editor);
 	editor.setCursorOffset(cursor);
+	return true;
+}
+
+bool MRFEBlockOps::indentCurrentColumnBlock(MRFileEditor &editor, std::string *errorText) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+
+	if (errorText != nullptr) errorText->clear();
+	normalize(editor);
+	if (mGeometry.mode != MRFEBlockMode::Column) {
+		if (errorText != nullptr) *errorText = "Column block required.";
+		return false;
+	}
+	const int targetColumn = resolvedEditFormatTabDisplayColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, mGeometry.col1 + 1);
+	const int destCol = std::max(0, targetColumn - 1);
+	return shiftCurrentColumnBlockHorizontally(editor, destCol, ColumnHorizontalShiftMode::UseEditorInsertMode, errorText);
+}
+
+bool MRFEBlockOps::undentCurrentColumnBlock(MRFileEditor &editor, std::string *errorText) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+
+	if (errorText != nullptr) errorText->clear();
+	normalize(editor);
+	if (mGeometry.mode != MRFEBlockMode::Column) {
+		if (errorText != nullptr) *errorText = "Column block required.";
+		return false;
+	}
+	const int targetColumn = prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, mGeometry.col1 + 1);
+	const int destCol = std::max(0, targetColumn - 1);
+	return shiftCurrentColumnBlockHorizontally(editor, destCol, ColumnHorizontalShiftMode::UseEditorInsertMode, errorText);
+}
+
+bool MRFEBlockOps::shiftCurrentColumnBlockHorizontally(MRFileEditor &editor, int destCol, ColumnHorizontalShiftMode mode, std::string *errorText) {
+	std::string text;
+	std::vector<std::size_t> starts;
+	std::vector<ColumnLineReplacement> columnReplacements;
+	MRFEArenaAllocator payloadArena;
+	std::vector<char> payloadStorage;
+	MRFEBlockGeometry targetGeometry;
+	std::size_t cursor = 0;
+	MRTextBufferModel::StagedTransaction transaction(editor.readSnapshot(), destCol > mGeometry.col1 ? "indent-column-block" : "shift-column-block");
+
+	if (errorText != nullptr) errorText->clear();
+	if (editor.isReadOnly()) {
+		if (errorText != nullptr) *errorText = "Editor is read-only.";
+		return false;
+	}
+	if (!hasVisibleBlock()) {
+		if (errorText != nullptr) *errorText = "No visible block marked.";
+		return false;
+	}
+	normalize(editor);
+	if (mGeometry.mode != MRFEBlockMode::Column) {
+		if (errorText != nullptr) *errorText = "Column block required.";
+		return false;
+	}
+	const std::size_t rowCount = mGeometry.line2 >= mGeometry.line1 ? mGeometry.line2 - mGeometry.line1 + 1 : 0;
+	const std::size_t width = mGeometry.col2 > mGeometry.col1 ? static_cast<std::size_t>(mGeometry.col2 - mGeometry.col1) : 0;
+	const int targetCol = std::max(0, destCol);
+	if (rowCount == 0 || width == 0) {
+		if (errorText != nullptr) *errorText = "Column block geometry is invalid.";
+		return false;
+	}
+	if (targetCol == mGeometry.col1) {
+		applySelection(editor);
+		applyOverlay(editor);
+		editor.setCursorOffset(mGeometry.rangeStart);
+		return true;
+	}
+	if (!captureTransferPayload(editor, payloadArena, errorText)) return false;
+	payloadStorage = payloadArena.release();
+	if (payloadStorage.size() < rowCount * width) {
+		if (errorText != nullptr) *errorText = "Column block payload geometry is invalid.";
+		return false;
+	}
+	text = editor.snapshotText();
+	starts = lineStartsForText(text);
+	if (starts.empty() || mGeometry.line1 >= starts.size()) {
+		if (errorText != nullptr) *errorText = "Column block range is outside the editor buffer.";
+		return false;
+	}
+	const std::size_t firstLine = mGeometry.line1;
+	const std::size_t lastLine = std::min(mGeometry.line2, starts.size() - 1);
+	for (std::size_t line = firstLine; line <= lastLine; ++line) {
+		const std::size_t row = line - firstLine;
+		const std::size_t lineStart = starts[line];
+		const std::size_t lineEnd = lineContentEndForIndex(text, starts, line);
+		const std::string_view rowPayload = payloadRowView(payloadStorage, row, width);
+		const bool insertMode = mode == ColumnHorizontalShiftMode::UseEditorInsertMode && editor.insertModeEnabled();
+		const bool keepSpaces = configuredEditSetupSettings().columnBlockMove == "LEAVE_SPACE";
+		const std::string replacement = moveVisualColumnsWithinLine(std::string_view(text.data() + lineStart, lineEnd - lineStart), mGeometry.col1, mGeometry.col2, targetCol, rowPayload, insertMode, keepSpaces);
+
+		if (replacement.size() != lineEnd - lineStart || replacement != std::string_view(text.data() + lineStart, lineEnd - lineStart))
+			columnReplacements.push_back(ColumnLineReplacement{MRTextBufferModel::Range(lineStart, lineEnd), replacement});
+	}
+	if (!columnReplacements.empty()) {
+		stageColumnLineReplacements(transaction, columnReplacements);
+		cursor = mGeometry.rangeStart;
+		if (!editor.applyStagedTransaction(transaction, cursor, cursor, cursor, true).applied()) {
+			if (errorText != nullptr) *errorText = "Unable to shift column block.";
+			return false;
+		}
+		text = editor.snapshotText();
+		starts = lineStartsForText(text);
+	} else
+		text = editor.snapshotText();
+	targetGeometry = mGeometry;
+	targetGeometry.col1 = targetCol;
+	targetGeometry.col2 = targetCol + static_cast<int>(width);
+	targetGeometry.anchorColumn = targetGeometry.col1;
+	targetGeometry.cursorColumn = targetGeometry.col2;
+	targetGeometry.rangeStart = offsetAtLineVisualColumn(text, starts, targetGeometry.line1, targetGeometry.col1);
+	targetGeometry.rangeEnd = offsetAtLineVisualColumn(text, starts, targetGeometry.line2, targetGeometry.col2);
+	targetGeometry.anchor = targetGeometry.rangeStart;
+	targetGeometry.cursor = targetGeometry.rangeEnd;
+	mGeometry = targetGeometry;
+	applySelection(editor);
+	applyOverlay(editor);
+	editor.setCursorOffset(mGeometry.rangeStart);
 	return true;
 }
 
@@ -3130,6 +3500,19 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 	if (!runBlockCopyCase(MRFEBlockMode::Column, "012345\n\nabcdef\nXYZ", 0, 1, 2, 4, 3, 1, "012345\n\nabcdef\nX123YZ\n    \n bcd", "column copy over empty line with target extension", failureReason)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Column, "012345\n\nabcdef", 0, 1, 2, 4, 1, 0, "012345\n123\n   abcdef\nbcd", "column copy into LF target extension", failureReason)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Column, "012345\r\n\r\nabcdef", 0, 1, 2, 4, 1, 0, "012345\r\n123\r\n   abcdef\r\nbcd", "column copy into CRLF target extension", failureReason)) return false;
+	if (!runColumnIndentCase("012345\n\nabcdef", 0, 2, 2, 5, 4, true, "01 2345\n   \nab cdef", 3, 6, "column indent moves right and inserts over empty line", failureReason)) return false;
+	if (!runColumnIndentCase("012345\nabcdef", 0, 2, 1, 5, 4, false, "01 234\nab cde", 3, 6, "column indent moves right and overwrites in overwrite mode", failureReason)) return false;
+	{
+		MREditSetupSettings settings = configuredEditSetupSettings();
+		settings.columnBlockMove = "DELETE_SPACE";
+		ScopedEditSetupSettings scopedSettings(settings);
+
+		if (!runColumnIndentCase("012345\nabcdef", 0, 1, 1, 2, 4, true, "023145\nacdbef", 3, 4, "column indent moves right and rotates with delete-space", failureReason)) return false;
+		if (!runColumnIndentCase("012345\nabcdef", 0, 1, 1, 2, 4, false, "02145\nacbef", 3, 4, "column indent moves right and overwrites with delete-space", failureReason)) return false;
+		if (!runColumnUndentCase("012345\nabcdef\nXYZ", 0, 2, 1, 5, 4, true, "234015\ncdeabf\nXYZ", 0, 3, "column undent inserts displaced left text with delete-space", failureReason)) return false;
+	}
+	if (!runColumnUndentCase("  ABC\r\n  DEF", 0, 2, 1, 5, 4, false, "ABC  \r\nDEF  ", 0, 3, "CRLF column undent overwrites regardless of overwrite mode", failureReason)) return false;
+	if (!runColumnUndentCase("ABC\n\nDEF", 0, 0, 2, 3, 4, true, "ABC\n\nDEF", 0, 3, "column undent at left edge is no-op", failureReason)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Stream, "aa COPY zz\nend!!!!", 0, 3, 0, 7, 1, 0, "aa COPY zz\nCOPY!!!", "stream copy overwrite", failureReason, false)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Line, "one\ntwo\nlast\nend", 0, 0, 0, 0, 2, 0, "one\ntwo\none\nend", "line copy overwrite", failureReason, false)) return false;
 	if (!runBlockCopyCase(MRFEBlockMode::Column, "012345\nabcdef\nXaaaaZ\nYbbbbZ", 0, 1, 1, 4, 2, 1, "012345\nabcdef\nX123aZ\nYbcdbZ", "column copy overwrite", failureReason, false)) return false;
@@ -3159,7 +3542,15 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 		ScopedEditSetupSettings scopedSettings(settings);
 
 		if (!runBlockMoveCase(MRFEBlockMode::Stream, "aa MOVE zz\nend", 0, 3, 0, 7, 1, 3, "aa  zz\nendMOVE", "stream move", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Stream, "aa MOVE zz", 0, 3, 0, 7, 0, 0, "MOVEaa  zz", "stream partial first line move left insert", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Stream, "aa MOVE zz", 0, 3, 0, 7, 0, 0, "MOVEzz", "stream partial first line move left overwrite", failureReason, false)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Stream, "aa MOVE zz", 0, 3, 0, 7, 0, 10, "aa  zzMOVE", "stream partial last line move right insert", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Stream, "aa MOVE zz", 0, 3, 0, 7, 0, 10, "aa  zzMOVE", "stream partial last line move right overwrite", failureReason, false)) return false;
 		if (!runBlockMoveCase(MRFEBlockMode::Line, "one\ntwo\nthree\nfour", 0, 0, 0, 0, 3, 0, "two\nthree\none\nfour", "line move", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 1, 1, 4, 0, 3, "045123\naefbcd", "column horizontal move right insert", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 1, 1, 4, 0, 3, "0  123\na  bcd", "column horizontal move right overwrite", failureReason, false)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 2, 1, 5, 0, 0, "234015\ncdeabf", "column horizontal move left insert delete-space", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 2, 1, 5, 0, 0, "2345\ncdef", "column horizontal move left overwrite delete-space", failureReason, false)) return false;
 		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef\nXYZ", 0, 1, 1, 4, 2, 1, "045\naef\nX123YZ\n bcd", "column move delete-space", failureReason)) return false;
 		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\r\nabcdef\r\nXYZ", 0, 1, 1, 4, 2, 1, "045\r\naef\r\nX123YZ\r\n bcd", "CRLF column move delete-space", failureReason)) return false;
 		if (!runBlockMoveCase(MRFEBlockMode::Stream, "aa MOVE zz\nend!!!!", 0, 3, 0, 7, 1, 0, "aa  zz\nMOVE!!!", "stream move overwrite", failureReason, false)) return false;
@@ -3177,7 +3568,13 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 		settings.columnBlockMove = "LEAVE_SPACE";
 		ScopedEditSetupSettings scopedSettings(settings);
 
+		if (!runColumnIndentCase("012345\nabcdef", 0, 1, 1, 2, 4, true, "0 21345\na cbdef", 3, 4, "column indent moves right and inserts with leave-space", failureReason)) return false;
+		if (!runColumnIndentCase("012345\nabcdef", 0, 1, 1, 2, 4, false, "0 2145\na cbef", 3, 4, "column indent moves right and overwrites with leave-space", failureReason)) return false;
+		if (!runColumnUndentCase("012345\nabcdef", 0, 2, 1, 5, 4, true, "234  015\ncde  abf", 0, 3, "column undent inserts displaced left text with leave-space", failureReason)) return false;
+		if (!runColumnUndentCase("012345\nabcdef", 0, 2, 1, 5, 4, false, "234  5\ncde  f", 0, 3, "column undent overwrites with leave-space", failureReason)) return false;
 		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef\nXYZ", 0, 1, 1, 4, 2, 1, "0   45\na   ef\nX123YZ\n bcd", "column move leave-space", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 2, 1, 5, 0, 0, "234  015\ncde  abf", "column horizontal move left insert leave-space", failureReason)) return false;
+		if (!runBlockMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 2, 1, 5, 0, 0, "234  5\ncde  f", "column horizontal move left overwrite leave-space", failureReason, false)) return false;
 		if (!runInterWindowMoveCase(MRFEBlockMode::Column, "012345\nabcdef", 0, 1, 1, 4, "T0\nT1", 0, 1, "0   45\na   ef", "T1230\nTbcd1", "inter-window column move leave-space", failureReason)) return false;
 		if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\n\nabcdef\nXYZ", 0, 1, 2, 4, "0   45\n    \na   ef\nXYZ", "LF column delete leave-space over empty line", failureReason)) return false;
 		if (!runBlockDeleteCase(MRFEBlockMode::Column, "012345\r\n\r\nabcdef\r\nXYZ", 0, 1, 2, 4, "0   45\r\n    \r\na   ef\r\nXYZ", "CRLF column delete leave-space over empty line", failureReason)) return false;

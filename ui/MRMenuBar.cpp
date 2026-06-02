@@ -540,6 +540,17 @@ void MRMenuBar::setPersistentBlocksMenuState(bool enabled) {
 	drawView();
 }
 
+void MRMenuBar::setInsertModeMenuState(bool enabled) {
+	const std::string wantedLabel = enabled ? "~I~nsert [ON]" : "~I~nsert [OFF]";
+	TMenuItem *item = findMenuItemByCommand(menu, cmMrEditToggleInsertMode);
+
+	if (item == nullptr || item->command != cmMrEditToggleInsertMode) return;
+	if (item->name != nullptr && wantedLabel == item->name) return;
+	delete[] const_cast<char *>(item->name);
+	item->name = newStr(wantedLabel.c_str());
+	drawView();
+}
+
 void MRMenuBar::tickMarquee() {
 	const int textLen = static_cast<int>(mMarqueeActiveText.size());
 	auto now = std::chrono::steady_clock::now();

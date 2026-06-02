@@ -86,6 +86,7 @@ constexpr std::array catalogDefinitions{
     mr("MR_FILE_REVERT", "Revert file"),
     mr("MR_SAVE_BLOCK_TO_FILE", "Save block to file"),
     mr("MR_LOAD_BLOCK_FROM_FILE", "Load block from file"),
+    mr("MR_EDIT_TOGGLE_INSERT_MODE", "Toggle insert mode"),
     mr("MR_TEXT_CENTER_LINE", "Center current line"),
     mr("MR_TEXT_REFORMAT_PARAGRAPH", "Reformat paragraph"),
     mr("MR_TEXT_REFORMAT_DOCUMENT", "Reformat document"),

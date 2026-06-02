@@ -3866,6 +3866,86 @@ bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testEditInsertModeCommandRoutingGuard(std::string &failureReason) {
+	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	const std::string menuPath = absolutePathFromCwd("app/MRMenuFactory.cpp");
+	const std::string catalogPath = absolutePathFromCwd("keymap/MRKeymapActionCatalog.cpp");
+	const std::string menuBarHeaderPath = absolutePathFromCwd("ui/MRMenuBar.hpp");
+	const std::string menuBarSourcePath = absolutePathFromCwd("ui/MRMenuBar.cpp");
+	const std::string appStatePath = absolutePathFromCwd("app/MRAppState.cpp");
+	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
+	std::string routerContent;
+	std::string menuContent;
+	std::string catalogContent;
+	std::string menuBarHeaderContent;
+	std::string menuBarSourceContent;
+	std::string appStateContent;
+	std::string editorAppContent;
+	std::string ioError;
+
+	if (!readTextFile(routerPath, routerContent, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for insert-mode routing guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(menuPath, menuContent, ioError)) {
+		failureReason = "Unable to read MRMenuFactory.cpp for insert-mode routing guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(catalogPath, catalogContent, ioError)) {
+		failureReason = "Unable to read MRKeymapActionCatalog.cpp for insert-mode routing guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(menuBarHeaderPath, menuBarHeaderContent, ioError)) {
+		failureReason = "Unable to read MRMenuBar.hpp for insert-mode routing guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(menuBarSourcePath, menuBarSourceContent, ioError)) {
+		failureReason = "Unable to read MRMenuBar.cpp for insert-mode routing guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(appStatePath, appStateContent, ioError)) {
+		failureReason = "Unable to read MRAppState.cpp for insert-mode routing guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(editorAppPath, editorAppContent, ioError)) {
+		failureReason = "Unable to read MREditorApp.cpp for insert-mode routing guard: " + ioError;
+		return false;
+	}
+	if (catalogContent.find("MR_EDIT_TOGGLE_INSERT_MODE") == std::string::npos || routerContent.find("MR_EDIT_TOGGLE_INSERT_MODE") == std::string::npos || routerContent.find("cmMrEditToggleInsertMode") == std::string::npos) {
+		failureReason = "Insert/overwrite must have a keymap action target and router command.";
+		return false;
+	}
+	if (menuContent.find("~I~nsert [OFF]") == std::string::npos || menuContent.find("cmMrEditToggleInsertMode, kbIns") == std::string::npos) {
+		failureReason = "Edit menu must expose Insert [ON/OFF] with the Insert key.";
+		return false;
+	}
+	if (menuBarHeaderContent.find("setInsertModeMenuState") == std::string::npos || menuBarSourceContent.find("~I~nsert [ON]") == std::string::npos || menuBarSourceContent.find("~I~nsert [OFF]") == std::string::npos || menuBarSourceContent.find("findMenuItemByCommand(menu, cmMrEditToggleInsertMode)") == std::string::npos) {
+		failureReason = "Menu bar must update the Insert [ON/OFF] menu label from editor state.";
+		return false;
+	}
+	if (appStateContent.find("setCommandEnabled(cmMrEditToggleInsertMode, hasEditor)") == std::string::npos || editorAppContent.find("setInsertModeMenuState(win->insertModeEnabled())") == std::string::npos) {
+		failureReason = "Insert mode command must be enabled for active editors and synced during idle.";
+		return false;
+	}
+
+	MREditWindow window(TRect(0, 0, 80, 16), "insert-mode-keymap-toggle", 1016);
+	if (window.getEditor() == nullptr) {
+		failureReason = "Insert-mode keymap harness must create an editor.";
+		return false;
+	}
+	window.getEditor()->setInsertModeEnabled(false);
+	if (!dispatchMRKeymapAction("MR_EDIT_TOGGLE_INSERT_MODE", "<Insert>", &window) || !window.getEditor()->insertModeEnabled()) {
+		failureReason = "MR_EDIT_TOGGLE_INSERT_MODE must toggle insert mode on.";
+		return false;
+	}
+	if (!dispatchMRKeymapAction("MR_EDIT_TOGGLE_INSERT_MODE", "<Insert>", &window) || window.getEditor()->insertModeEnabled()) {
+		failureReason = "MR_EDIT_TOGGLE_INSERT_MODE must toggle insert mode off.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testSearchMarkerRoutingAndTextMenuGuard(std::string &failureReason) {
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
 	const std::string menuPath = absolutePathFromCwd("app/MRMenuFactory.cpp");
@@ -4038,17 +4118,39 @@ bool testBlockPasteFreeCursorTargetGuard(std::string &failureReason) {
 	return true;
 }
 
-bool testColumnUndentPolicyGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("mrmac/MRVM.cpp");
-	std::string content;
+bool testColumnIndentUndentWiringGuard(std::string &failureReason) {
+	std::string routerContent;
+	std::string blockOpsHeaderContent;
+	std::string blockOpsSourceContent;
+	std::string vmContent;
 	std::string ioError;
 
-	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRVM.cpp for column-undent policy guard: " + ioError;
+	if (!readTextFile(absolutePathFromCwd("app/MRCommandRouter.cpp"), routerContent, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for column indent/undent wiring guard: " + ioError;
 		return false;
 	}
-	if (content.find("configuredColumnBlockMoveLeavesSpace(") != std::string::npos || content.find("shiftCurrentBlockIndent(") != std::string::npos || content.find("line.replace(start, static_cast<std::size_t>(removeCount),") != std::string::npos) {
-		failureReason = "Column block indent/undent implementation must remain removed.";
+	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFEBlockOps.hpp"), blockOpsHeaderContent, ioError)) {
+		failureReason = "Unable to read MRFEBlockOps.hpp for column indent/undent wiring guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFEBlockOps.cpp"), blockOpsSourceContent, ioError)) {
+		failureReason = "Unable to read MRFEBlockOps.cpp for column indent/undent wiring guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/MRVM.cpp"), vmContent, ioError)) {
+		failureReason = "Unable to read MRVM.cpp for column indent/undent wiring guard: " + ioError;
+		return false;
+	}
+	if (routerContent.find("return handleIndentBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("return handleUndentBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockIndent:") == std::string::npos || routerContent.find("case cmMrBlockUndent:") == std::string::npos) {
+		failureReason = "Column block indent/undent commands must route through MRCommandRouter.";
+		return false;
+	}
+	if (blockOpsHeaderContent.find("indentCurrentColumnBlock") == std::string::npos || blockOpsHeaderContent.find("undentCurrentColumnBlock") == std::string::npos || blockOpsSourceContent.find("\"indent-column-block\"") == std::string::npos || blockOpsSourceContent.find("\"shift-column-block\"") == std::string::npos) {
+		failureReason = "Column block indent/undent must be implemented by MRFEBlockOps.";
+		return false;
+	}
+	if (vmContent.find("configuredColumnBlockMoveLeavesSpace(") != std::string::npos || vmContent.find("shiftCurrentBlockIndent(") != std::string::npos || vmContent.find("line.replace(start, static_cast<std::size_t>(removeCount),") != std::string::npos) {
+		failureReason = "Old VM column indent/undent helpers must remain removed.";
 		return false;
 	}
 	failureReason.clear();
@@ -5338,13 +5440,14 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
+	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
 	runTest(ctx, "About animation harness", testAboutAnimationHarness);
 	runTest(ctx, "About quote README extraction guard", testAboutQuoteReadmeExtractionGuard);
 	runTest(ctx, "Block paste free-cursor target guard", testBlockPasteFreeCursorTargetGuard);
-	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
+	runTest(ctx, "Column indent/undent wiring guard", testColumnIndentUndentWiringGuard);
 	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
@@ -5399,13 +5502,14 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
+	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
 	runTest(ctx, "About animation harness", testAboutAnimationHarness);
 	runTest(ctx, "About quote README extraction guard", testAboutQuoteReadmeExtractionGuard);
 	runTest(ctx, "Block paste free-cursor target guard", testBlockPasteFreeCursorTargetGuard);
-	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
+	runTest(ctx, "Column indent/undent wiring guard", testColumnIndentUndentWiringGuard);
 	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
