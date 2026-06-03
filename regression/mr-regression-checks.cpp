@@ -3994,8 +3994,8 @@ bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCommandRouter.cpp for clipboard routing guard: " + ioError;
 		return false;
 	}
-	if (content.find("case cmMrEditCutToBuffer:") == std::string::npos || content.find("case cmMrEditCopyToBuffer:") == std::string::npos || content.find("case cmMrEditPasteFromBuffer:") == std::string::npos || content.find("return runDisabledBlockAction();") == std::string::npos || content.find("copyCurrentBlockToSystemClipboard(") != std::string::npos) {
-		failureReason = "Block-buffer edit commands must stay on the disabled block-command surface.";
+	if (content.find("case cmMrEditCutToBuffer:") == std::string::npos || content.find("return dispatchEditorCommand(cmCut, true);") == std::string::npos || content.find("case cmMrEditCopyToBuffer:") == std::string::npos || content.find("return dispatchEditorCommand(cmCopy, false);") == std::string::npos || content.find("case cmMrEditPasteFromBuffer:") == std::string::npos || content.find("return dispatchEditorCommand(cmPaste, true);") == std::string::npos || content.find("KeymapActionDispatchEntry{\"MRMAC_BLOCK_COPY_TO_CLIPBOARD\", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CopyMarkedBlockToSystemClipboard}") == std::string::npos || content.find("KeymapActionDispatchEntry{\"MRMAC_BLOCK_PASTE_FROM_CLIPBOARD\", KeymapDispatchKind::AppCommand, cmMrEditPasteFromBuffer, KeymapWindowMethod::None, KeymapCustomAction::None}") == std::string::npos || content.find("copyMarkedBlockToSystemClipboard(") == std::string::npos || content.find("TClipboard::setText(") == std::string::npos) {
+		failureReason = "Edit clipboard commands must route through the canonical editor/system clipboard surface.";
 		return false;
 	}
 	failureReason.clear();

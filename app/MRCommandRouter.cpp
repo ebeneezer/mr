@@ -216,8 +216,8 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MRMAC_SEARCH_REPEAT_LAST", KeymapDispatchKind::AppCommand, cmMrSearchRepeatPrevious, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_SEARCH_MULTI_FILE", KeymapDispatchKind::AppCommand, cmMrSearchMultiFileSearch, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_SEARCH_LIST_MATCHED_FILES", KeymapDispatchKind::AppCommand, cmMrSearchListFilesFromLastSearch, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_TO_CLIPBOARD", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
-    KeymapActionDispatchEntry{"MRMAC_BLOCK_PASTE_FROM_CLIPBOARD", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DisabledBlockAction},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_TO_CLIPBOARD", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CopyMarkedBlockToSystemClipboard},
+    KeymapActionDispatchEntry{"MRMAC_BLOCK_PASTE_FROM_CLIPBOARD", KeymapDispatchKind::AppCommand, cmMrEditPasteFromBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_MARK_STREAM", KeymapDispatchKind::AppCommand, cmMrBlockMarkStream, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_BEGIN", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetBegin, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_END", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetEnd, KeymapCustomAction::None},
@@ -1805,6 +1805,23 @@ bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 				return true;
 			}
 			return dispatchEditorCommandEvent(window, command);
+		case cmMrEditCutToBuffer:
+			if (window == nullptr) return false;
+			if (window->isReadOnly()) {
+				postDialogWarning(kWindowReadOnlyMessage);
+				return true;
+			}
+			return dispatchEditorCommandEvent(window, cmCut);
+		case cmMrEditCopyToBuffer:
+			if (window == nullptr) return false;
+			return dispatchEditorCommandEvent(window, cmCopy);
+		case cmMrEditPasteFromBuffer:
+			if (window == nullptr) return false;
+			if (window->isReadOnly()) {
+				postDialogWarning(kWindowReadOnlyMessage);
+				return true;
+			}
+			return dispatchEditorCommandEvent(window, cmPaste);
 		case cmMrBlockMarkStream:
 			if (window == nullptr) return false;
 			window->beginStreamBlock();
@@ -2064,6 +2081,19 @@ bool handleCompilerProblemsNavigation(MREditWindow *targetWindow, bool forward) 
 	return true;
 }
 
+bool copyMarkedBlockToSystemClipboard(MREditWindow *targetWindow) {
+	std::string text;
+	std::string errorText;
+
+	if (targetWindow == nullptr) return false;
+	if (!targetWindow->captureBlockPayload(text, &errorText)) {
+		postDialogWarning(errorText.empty() ? "No block marked." : errorText);
+		return true;
+	}
+	TClipboard::setText(TStringView(text.data(), text.size()));
+	return true;
+}
+
 } // namespace
 
 bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequenceText, MREditWindow *targetWindow) {
@@ -2129,6 +2159,7 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 				case KeymapCustomAction::CursorUndent:
 					return handleBlockAction(mrvmUiCursorUndent(), "Unable to undent cursor position.");
 				case KeymapCustomAction::CopyMarkedBlockToSystemClipboard:
+					return copyMarkedBlockToSystemClipboard(window);
 				case KeymapCustomAction::ExtendBlockByMotion:
 				case KeymapCustomAction::DisabledBlockAction:
 					return runDisabledBlockAction();
@@ -2199,13 +2230,17 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return dispatchEditorCommand(cmMrEditRedo, true);
 
 		case cmMrEditCutToBuffer:
+			return dispatchEditorCommand(cmCut, true);
+
 		case cmMrEditCopyToBuffer:
+			return dispatchEditorCommand(cmCopy, false);
+
 		case cmMrEditAppendToBuffer:
 		case cmMrEditCutAndAppendToBuffer:
 			return runDisabledBlockAction();
 
 		case cmMrEditPasteFromBuffer:
-			return runDisabledBlockAction();
+			return dispatchEditorCommand(cmPaste, true);
 
 		case cmMrEditToggleInsertMode: {
 			MREditWindow *win = currentEditWindow();

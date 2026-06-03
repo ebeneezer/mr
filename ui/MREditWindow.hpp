@@ -1355,6 +1355,17 @@ class MREditWindow : public TWindow {
 		return editor != nullptr && mBlockOps.saveBlockToFile(*editor, path, errorText);
 	}
 
+	bool captureBlockPayload(std::string &outText, std::string *errorText = nullptr) {
+		MRFEArenaAllocator arena;
+
+		outText.clear();
+		if (editor == nullptr) return false;
+		if (!mBlockOps.captureTransferPayload(*editor, arena, errorText)) return false;
+		const std::string_view payload = arena.view();
+		outText.assign(payload.begin(), payload.end());
+		return true;
+	}
+
 	bool loadStreamBlockFromFile(const std::string &path, std::string *errorText = nullptr) {
 		return loadBlockFromFile(path, errorText);
 	}
