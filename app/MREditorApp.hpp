@@ -13,6 +13,7 @@
 #include <vector>
 
 class MRPerformancePanel;
+class MREditWindow;
 
 class MREditorApp : public TApplication {
   public:
@@ -44,11 +45,17 @@ class MREditorApp : public TApplication {
 	void bootstrapIndexedMacroBindings();
 	void warmIndexedMacroBindings();
 	void initializePerformancePanel();
+	void initializeFullscreenHint();
 	void togglePerformancePanel();
 	void updatePerformancePanel();
+	void updateFullscreenHint();
 	void applyConfiguredDisplayLayout();
 	void applyConfiguredWindowFramePolicy();
 	void syncFunctionKeyState();
+	bool fullscreenTargetStillOpen() const;
+	bool enterFullscreenPresentation();
+	void leaveFullscreenPresentation();
+	void toggleFullscreenPresentation();
 
 	bool exitPrepared;
 	bool keystrokeRecording;
@@ -63,9 +70,15 @@ class MREditorApp : public TApplication {
 	std::size_t indexedMacroWarmupLoadedFiles;
 	bool performancePanelVisible;
 	MRPerformancePanel *performancePanel;
+	TView *fullscreenHint;
 	unsigned performancePanelFrame;
 	std::chrono::steady_clock::time_point performancePanelRefreshAt;
+	std::chrono::steady_clock::time_point fullscreenHintVisibleUntil;
 	bool startupQuitPending;
+	bool fullscreenPresentationActive;
+	bool fullscreenMenuBarTransientVisible;
+	MREditWindow *fullscreenWindow;
+	TRect fullscreenRestoreBounds;
 };
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.

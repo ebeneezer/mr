@@ -1910,6 +1910,36 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K Ctrl-H show", failureReason)) return false;
 	}
 	{
+		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-stream-block-plain", 1012);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "wordstar-block-plain")) {
+			failureReason = "Unable to seed window editor for Ctrl-K B stream block path.";
+			return false;
+		}
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowKey(window, static_cast<ushort>('b'))) return false;
+		if (!sendWindowRawCtrl(window, 'D')) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 1, "WordStar Ctrl-K B must not live-grow stream", failureReason)) return false;
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowKey(window, static_cast<ushort>('k'))) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K B/Ctrl-K K stream", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar committed plain stream overlay", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-stream-block-arrow", 1012);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "wordstar-block-arrow")) {
+			failureReason = "Unable to seed window editor for Ctrl-K B arrow stream block path.";
+			return false;
+		}
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowKey(window, static_cast<ushort>('b'))) return false;
+		if (!sendWindowKey(window, kbRight)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "WordStar Ctrl-K B must remain marking after plain Right", failureReason)) return false;
+		if (!sendWindowRawCtrl(window, 'K')) return false;
+		if (!sendWindowKey(window, static_cast<ushort>('k'))) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K B/plain Right/Ctrl-K K stream", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar committed arrow stream overlay", failureReason)) return false;
+	}
+	{
 		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-column-block", 1013);
 		if (!window.replaceTextBuffer("alpha\n\nbeta\ngamma\n", "wordstar-column-block")) {
 			failureReason = "Unable to seed window editor for Ctrl-K N column block path.";
@@ -1946,6 +1976,28 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		}
 		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "direct MRMAC action must not live-grow column right", failureReason)) return false;
 		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "direct MRMAC action non-live column overlay", failureReason)) return false;
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "mrmac-action-stream-begin-end", 1017);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "mrmac-action-stream-begin-end")) {
+			failureReason = "Unable to seed window editor for direct MRMAC stream begin/end path.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_BLOCK_SET_BEGIN", "", &window)) {
+			failureReason = "MRMAC_BLOCK_SET_BEGIN action dispatch failed.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_CURSOR_RIGHT", "", &window)) {
+			failureReason = "MRMAC_CURSOR_RIGHT action dispatch failed after stream begin.";
+			return false;
+		}
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 1, "direct MRMAC stream begin must not live-grow", failureReason)) return false;
+		if (!dispatchMRKeymapAction("MRMAC_BLOCK_SET_END", "", &window)) {
+			failureReason = "MRMAC_BLOCK_SET_END action dispatch failed.";
+			return false;
+		}
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "direct MRMAC stream begin/end", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "direct MRMAC committed stream overlay", failureReason)) return false;
 	}
 	{
 		const std::string text = "aa MOVE zz\nend";

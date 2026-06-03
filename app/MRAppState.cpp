@@ -91,6 +91,8 @@ void updateAppCommandState() {
 	bool canSaveAs = hasEditor && (state.hasEditableWindow || state.isLogWindow);
 	bool hasMultipleWindows = state.windowCount > 1;
 
+	setCommandEnabled(cmMrToggleFullscreen, true);
+
 	setCommandEnabled(cmMrFileOpen, true);
 	setCommandEnabled(cmMrFileLoad, true);
 	setCommandEnabled(cmMrFileAcquire, true);
@@ -116,11 +118,9 @@ void updateAppCommandState() {
 
 	setCommandEnabled(cmMrWindowOpen, true);
 	setCommandEnabled(cmMrWindowClose, hasWindow);
-	setCommandEnabled(cmMrWindowSplit, false);
 	setCommandEnabled(cmMrWindowList, state.windowCount > 0);
 	setCommandEnabled(cmMrWindowNext, hasMultipleWindows);
 	setCommandEnabled(cmMrWindowPrevious, hasMultipleWindows);
-	setCommandEnabled(cmMrWindowAdjacent, false);
 	setCommandEnabled(cmMrWindowHide, hasWindow);
 	setCommandEnabled(cmMrWindowZoom, hasWindow);
 	setCommandEnabled(cmMrWindowMinimize, hasWindow);

@@ -340,8 +340,6 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Edit / Insert";
 		case cmMrWindowClose:
 			return "Window / Close";
-		case cmMrWindowSplit:
-			return "Window / Split";
 		case cmMrWindowSplitHorizontal:
 			return "Window / Split horizontal";
 		case cmMrWindowSplitVertical:
@@ -352,8 +350,6 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Window / Next";
 		case cmMrWindowPrevious:
 			return "Window / Previous";
-		case cmMrWindowAdjacent:
-			return "Window / Adjacent";
 		case cmMrWindowHide:
 			return "Window / Hide";
 		case cmMrWindowZoom:

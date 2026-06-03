@@ -23,6 +23,7 @@
 #include "../keymap/MRKeymapResolver.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/MRVM.hpp"
+#include "MRBentoBox.hpp"
 #include "MRWindowSupport.hpp"
 
 void mrvmUiInvalidateScreenBase() noexcept;
@@ -187,6 +188,26 @@ void markUsedHotkey(std::array<bool, 36> &usedHotkeys, char hotkey) noexcept {
 	const int index = hotkeyIndex(canonicalHotkeyChar(hotkey));
 
 	if (index >= 0) usedHotkeys[static_cast<std::size_t>(index)] = true;
+}
+
+bool compilerDiagnosticsFunctionKeysActive() {
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+
+	return bentoBox != nullptr && bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
+}
+
+bool bentoToolPaneFunctionKeysActive() {
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+
+	return bentoBox != nullptr && bentoBox->secondaryEditWindow() != nullptr && !compilerDiagnosticsFunctionKeysActive();
+}
+
+bool readOnlyFunctionKeysActive() {
+	MREditWindow *window = currentEditWindow();
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+	MREditWindow *target = bentoBox != nullptr ? bentoBox->editorCommandTarget() : window;
+
+	return target != nullptr && target->isReadOnly();
 }
 
 char chooseMenuHotkey(const std::string &title, const std::array<bool, 36> &usedHotkeys) {
@@ -484,40 +505,87 @@ bool MRMenuBar::handleRuntimeCommand(ushort command) {
 }
 
 void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
+	const bool diagnosticsActive = mEditorFunctionKeysActive && compilerDiagnosticsFunctionKeysActive();
+	const bool bentoToolPaneActive = mEditorFunctionKeysActive && bentoToolPaneFunctionKeysActive();
+	const bool readOnlyActive = mEditorFunctionKeysActive && readOnlyFunctionKeysActive();
 	static const MenuShortcutSpec specs[] = {
 	    {cmMrFileOpen, TKey(kbF3), "F3", TKey(kbNoKey), nullptr, TKey(kbF3), "F3"},
 	    {cmMrFileLoad, TKey(kbF2), "F2", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
 	    {cmMrFileAcquire, TKey(kbF4), "F4", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrFileInformation, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrFileSaveAs, TKey(kbNoKey), nullptr, TKey(kbCtrlF2), "CtrlF2", TKey(kbCtrlF2), "CtrlF2"},
 	    {cmMrSearchMultiFileSearch, TKey(kbF5), "F5", TKey('F', kbAltShift), "AltShiftF", TKey('F', kbAltShift), "AltShiftF"},
 	    {cmMrWindowOpen, TKey(kbF6), "F6", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
 	    {cmMrSearchMultiFileSearchReplace, TKey(kbF7), "F7", TKey('R', kbAltShift), "AltShiftR", TKey('R', kbAltShift), "AltShiftR"},
 	    {cmMrFileOpenLiveLog, TKey(kbF8), "F8", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
 	    {cmMrFileOpenJournal, TKey(kbF9), "F9", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
-	    {cmMrSetupUserInterfaceSettings, TKey(kbF11), "F11", TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
-	    {cmQuit, TKey(kbAltX), "F12/Alt-X", TKey(kbAltX), "Alt-X", TKey(kbAltX), "Alt-X"},
-	    {cmMrMacroToggleRecording, TKey(kbNoKey), nullptr, TKey(kbF1), "F1", TKey(kbAltF10), "AltF10"},
+	    {cmMrSetupUserInterfaceSettings, TKey(kbF12), "F12", TKey(kbF12), "F12", TKey(kbNoKey), nullptr},
+	    {cmQuit, TKey(kbAltX), "Alt-X", TKey(kbAltX), "Alt-X", TKey(kbAltX), "Alt-X"},
+	    {cmMrMacroToggleRecording, TKey(kbNoKey), nullptr, TKey(kbAltF10), "AltF10", TKey(kbAltF10), "AltF10"},
 	    {cmMrFileSave, TKey(kbNoKey), nullptr, TKey(kbF2), "F2", TKey(kbF2), "F2"},
 	    {cmMrBlockLoadFromDisk, TKey(kbNoKey), nullptr, TKey(kbF3), "F3", TKey(kbNoKey), nullptr},
 	    {cmMrBlockSaveToDisk, TKey(kbNoKey), nullptr, TKey(kbF4), "F4", TKey(kbShiftF2), "ShiftF2"},
 	    {cmMrWindowCascade, TKey(kbNoKey), nullptr, TKey(kbF5), "F5", TKey(kbNoKey), nullptr},
 	    {cmMrWindowTile, TKey(kbNoKey), nullptr, TKey(kbF6), "F6", TKey(kbNoKey), nullptr},
-	    {cmMrWindowSplitVertical, TKey(kbNoKey), nullptr, TKey(kbF7), "F7", TKey(kbNoKey), nullptr},
-	    {cmMrWindowSplitHorizontal, TKey(kbNoKey), nullptr, TKey(kbF8), "F8", TKey(kbNoKey), nullptr},
+	    {cmMrWindowSplitVertical, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrWindowSplitHorizontal, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
 	    {cmMrWindowPrevDesktop, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF11, kbCtrlShift), "CtrlF11"},
 	    {cmMrWindowNextDesktop, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF12, kbCtrlShift), "CtrlF12"},
 	    {cmMrWindowMoveToPrevDesktop, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF11, kbShift), "ShiftF11"},
 	    {cmMrWindowMoveToNextDesktop, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF12, kbShift), "ShiftF12"},
 	    {cmMrSearchFindText, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF5), "F5"},
+	    {cmMrSearchRepeatPrevious, TKey(kbNoKey), nullptr, TKey(kbCtrlF5), "CtrlF5", TKey(kbCtrlF5), "CtrlF5"},
+	    {cmMrSearchGotoLineNumber, TKey(kbNoKey), nullptr, TKey(kbAltF5), "AltF5", TKey(kbAltF5), "AltF5"},
 	    {cmMrSearchPushMarker, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF4), "F4"},
 	    {cmMrWindowNext, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF6), "F6"},
-	    {cmMrBlockMarkLines, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF7), "F7"},
-	    {cmMrBlockEndMarking, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF7), "F7"},
-	    {cmMrBlockCopy, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF8), "F8"},
-	    {cmMrOtherBuildCurrentFile, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbF9), "F9"},
+	    {cmMrBlockMarkLines, TKey(kbNoKey), nullptr, TKey(kbF7), "F7", TKey(kbF7), "F7"},
+	    {cmMrBlockEndMarking, TKey(kbNoKey), nullptr, TKey(kbF7), "F7", TKey(kbF7), "F7"},
+	    {cmMrBlockCopy, TKey(kbNoKey), nullptr, TKey(kbF8), "F8", TKey(kbF8), "F8"},
+	    {cmMrOtherBuildCurrentFile, TKey(kbNoKey), nullptr, TKey(kbF9), "F9", TKey(kbF9), "F9"},
+	    {cmMrOtherClearOutput, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
 	};
 
 	for (const MenuShortcutSpec &spec : specs)
 		applyMenuShortcutSpec(targetMenu, spec, mStartupFunctionKeysActive, mEditorFunctionKeysActive);
+	if (diagnosticsActive) {
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockLoadFromDisk), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockSaveToDisk), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockMarkLines), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockEndMarking), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockCopy), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowSplitHorizontal), TKey(kbF3), "F3");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowSplitVertical), TKey(kbF4), "F4");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowCascade), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrOtherClearOutput), TKey(kbF5), "F5");
+	}
+	if (bentoToolPaneActive) {
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockLoadFromDisk), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockSaveToDisk), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowCascade), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowSplitHorizontal), TKey(kbF3), "F3");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowSplitVertical), TKey(kbF4), "F4");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrOtherClearOutput), TKey(kbF5), "F5");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockMarkLines), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockEndMarking), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockCopy), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchGotoLineNumber), TKey(kbF7), "F7");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchRepeatPrevious), TKey(kbF8), "F8");
+	}
+	if (readOnlyActive && !bentoToolPaneActive && !diagnosticsActive) {
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockLoadFromDisk), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockSaveToDisk), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockMarkLines), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockEndMarking), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockCopy), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrFileSaveAs), TKey(kbF3), "F3");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchFindText), TKey(kbF4), "F4");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowCascade), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchMultiFileSearch), TKey(kbF5), "F5");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchGotoLineNumber), TKey(kbF7), "F7");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchRepeatPrevious), TKey(kbF8), "F8");
+	}
+	setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrOtherFindPreviousCompilerError), diagnosticsActive ? TKey(kbF7) : TKey(kbNoKey), diagnosticsActive ? "F7" : nullptr);
+	setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrOtherFindNextCompilerError), diagnosticsActive ? TKey(kbF8) : TKey(kbNoKey), diagnosticsActive ? "F8" : nullptr);
 }
 
 void MRMenuBar::setStartupFunctionKeysActive(bool active) {

@@ -9,6 +9,8 @@
 #define Uses_TApplication
 #define Uses_TEvent
 #define Uses_TRect
+#define Uses_TView
+#define Uses_TDrawBuffer
 #define Uses_TStatusLine
 #define Uses_TStatusItem
 #define Uses_TStatusDef
@@ -31,6 +33,7 @@
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 #include "../ui/MRDeskTop.hpp"
+#include "../ui/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRMessageLineController.hpp"
@@ -69,10 +72,30 @@
 namespace {
 static constexpr std::chrono::milliseconds kRecordingBlinkInterval(450);
 static constexpr std::chrono::microseconds kCoprocessorIdlePumpBudget(1000);
+static constexpr std::chrono::seconds kFullscreenHintDuration(3);
+static constexpr const char *kFullscreenHintText = "F11/ESC exit Fullscreen   F10 Menu";
 
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
+
+int fullscreenHintTextWidth() noexcept {
+	return strwidth(kFullscreenHintText);
+}
+
+class MRFullscreenHintView final : public TView {
+  public:
+	explicit MRFullscreenHintView(const TRect &bounds) noexcept : TView(bounds) {
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+		const TColorAttr color = TColorAttr(0x1F);
+
+		buffer.moveStr(0, kFullscreenHintText, color, static_cast<ushort>(size.x));
+		writeLine(0, 0, size.x, 1, buffer);
+	}
+};
 
 bool shouldInvalidateScreenBaseForEvent(ushort eventWhat) noexcept {
 	switch (eventWhat) {
@@ -99,6 +122,18 @@ bool isBuildCurrentFileDefaultKey(const TEvent &event) noexcept {
 	return normalized == TKey(kbF9);
 }
 
+bool compilerDiagnosticsFunctionKeysActive() {
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+
+	return bentoBox != nullptr && bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
+}
+
+bool bentoToolPaneFunctionKeysActive() {
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+
+	return bentoBox != nullptr && bentoBox->secondaryEditWindow() != nullptr && !compilerDiagnosticsFunctionKeysActive();
+}
+
 const std::vector<MRStatusLine::FunctionKeyLabel> &startupFunctionKeyLabels() {
 	static const std::vector<MRStatusLine::FunctionKeyLabel> labels{
 	    {TKey(kbF1), cmMrHelpContents, "~F1~ Help"},
@@ -111,23 +146,67 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &startupFunctionKeyLabels() {
 	    {TKey(kbF8), cmMrFileOpenLiveLog, "~F8~ Log"},
 	    {TKey(kbF9), cmMrFileOpenJournal, "~F9~ Journal"},
 	    {TKey(kbF10), cmMenu, "~F10~ Menu"},
-	    {TKey(kbF11), cmMrSetupUserInterfaceSettings, "~F11~ Setup"},
-	    {TKey(kbF12), cmQuit, "~F12~ Exit"},
+	    {TKey(kbF11), cmMrToggleFullscreen, "~F11~ Flscr"},
+	    {TKey(kbF12), cmMrSetupUserInterfaceSettings, "~F12~ Setup"},
 	};
 	return labels;
 }
 
 const std::vector<MRStatusLine::FunctionKeyLabel> &editorFunctionKeyLabels() {
-	static const std::vector<MRStatusLine::FunctionKeyLabel> labels{
-	    {TKey(kbF1), cmMrMacroToggleRecording, "~F1~ Rec"},
+	static const std::vector<MRStatusLine::FunctionKeyLabel> baseLabels{
+	    {TKey(kbF1), cmMrHelpContents, "~F1~ Help"},
 	    {TKey(kbF2), cmMrFileSave, "~F2~ Save"},
 	    {TKey(kbF3), cmMrBlockLoadFromDisk, "~F3~ LoadBlk"},
 	    {TKey(kbF4), cmMrBlockSaveToDisk, "~F4~ SaveBlk"},
 	    {TKey(kbF5), cmMrWindowCascade, "~F5~ Casc"},
 	    {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"},
-	    {TKey(kbF7), cmMrWindowSplitVertical, "~F7~ SplitV"},
-	    {TKey(kbF8), cmMrWindowSplitHorizontal, "~F8~ SplitH"},
+	    {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"},
+	    {TKey(kbF8), cmMrBlockCopy, "~F8~ CopyBlk"},
+	    {TKey(kbF9), cmMrOtherBuildCurrentFile, "~F9~ Build"},
+	    {TKey(kbF10), cmMenu, "~F10~ Menu"},
+	    {TKey(kbF11), cmMrToggleFullscreen, "~F11~ Flscr"},
+	    {TKey(kbF12), cmMrSetupUserInterfaceSettings, "~F12~ Setup"},
 	};
+	static std::vector<MRStatusLine::FunctionKeyLabel> labels = baseLabels;
+	MREditWindow *window = currentEditorCommandWindow();
+	const bool diagnosticsActive = compilerDiagnosticsFunctionKeysActive();
+	const bool bentoToolPaneActive = bentoToolPaneFunctionKeysActive();
+	const bool readOnlyActive = window != nullptr && window->isReadOnly();
+
+	labels = baseLabels;
+	if (bentoToolPaneActive) {
+		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
+		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
+		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
+		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
+		labels[6] = {TKey(kbF7), cmMrSearchGotoLineNumber, "~F7~ Goto"};
+		labels[7] = {TKey(kbF8), cmMrSearchRepeatPrevious, "~F8~ Repeat"};
+	} else if (readOnlyActive) {
+		labels[2] = {TKey(kbF3), cmMrFileSaveAs, "~F3~ SaveAs"};
+		labels[3] = {TKey(kbF4), cmMrSearchFindText, "~F4~ Find"};
+		labels[4] = {TKey(kbF5), cmMrSearchMultiFileSearch, "~F5~ MFS"};
+		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
+		labels[6] = {TKey(kbF7), cmMrSearchGotoLineNumber, "~F7~ Goto"};
+		labels[7] = {TKey(kbF8), cmMrSearchRepeatPrevious, "~F8~ Repeat"};
+	}
+	if (diagnosticsActive) {
+		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
+		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
+		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
+		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
+		labels[6] = {TKey(kbF7), cmMrOtherFindPreviousCompilerError, "~F7~ PrevErr"};
+		labels[7] = {TKey(kbF8), cmMrOtherFindNextCompilerError, "~F8~ NextErr"};
+	} else if (!bentoToolPaneActive && !readOnlyActive) {
+		labels[2] = {TKey(kbF3), cmMrBlockLoadFromDisk, "~F3~ LoadBlk"};
+		labels[3] = {TKey(kbF4), cmMrBlockSaveToDisk, "~F4~ SaveBlk"};
+		labels[4] = {TKey(kbF5), cmMrWindowCascade, "~F5~ Casc"};
+		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
+		labels[7] = {TKey(kbF8), cmMrBlockCopy, "~F8~ CopyBlk"};
+	}
+	if (!diagnosticsActive && !bentoToolPaneActive && !readOnlyActive && window != nullptr && window->isBlockMarking()) {
+		labels[6] = {TKey(kbF7), cmMrBlockEndMarking, "~F7~ EndMark"};
+	} else if (!diagnosticsActive && !bentoToolPaneActive && !readOnlyActive)
+		labels[6] = {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"};
 	return labels;
 }
 
@@ -159,7 +238,9 @@ bool handleEditorFunctionKey(TEvent &event) {
 
 	for (const MRStatusLine::FunctionKeyLabel &label : editorFunctionKeyLabels()) {
 		if (!(pressed == label.keyCode)) continue;
-		if (TView::commandEnabled(label.command)) static_cast<void>(handleMRCommand(label.command));
+		if (label.command == cmMenu) return false;
+		if (!TView::commandEnabled(label.command)) return false;
+		static_cast<void>(handleMRCommand(label.command));
 		return true;
 	}
 	return false;
@@ -982,7 +1063,7 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), startupQuitPending(false) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0) {
 	const auto startupStartedAt = std::chrono::steady_clock::now();
 	auto phaseStartedAt = startupStartedAt;
 	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
@@ -996,6 +1077,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	TEditor::editorDialog = mrEditorDialog;
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 	initializePerformancePanel();
+	initializeFullscreenHint();
 	loadStartupSettingsMacro(std::string(), nullptr);
 	logStartupPhase("settings_bootstrap");
 	applyConfiguredDisplayLayout();
@@ -1061,6 +1143,7 @@ void MREditorApp::applyConfiguredWindowFramePolicy() {
 	for (auto win : windows) {
 		if (win == nullptr) continue;
 		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
+		if (win->fullscreenPresentation()) continue;
 		if (win->frame != nullptr) win->frame->drawView();
 	}
 }
@@ -1074,6 +1157,22 @@ void MREditorApp::initializePerformancePanel() {
 	performancePanel = new MRPerformancePanel(panelRect);
 	insert(performancePanel);
 	performancePanel->hide();
+}
+
+void MREditorApp::initializeFullscreenHint() {
+	if (fullscreenHint != nullptr) return;
+
+	TRect appRect = getExtent();
+	const int appWidth = std::max(1, static_cast<int>(appRect.b.x - appRect.a.x));
+	const int appHeight = std::max(1, static_cast<int>(appRect.b.y - appRect.a.y));
+	const int hintWidth = std::max(1, std::min(fullscreenHintTextWidth(), appWidth));
+	const int hintLeft = std::max(0, (appWidth - hintWidth) / 2);
+	const int hintTop = appHeight - 1;
+	TRect hintRect(hintLeft, hintTop, hintLeft + hintWidth, hintTop + 1);
+
+	fullscreenHint = new MRFullscreenHintView(hintRect);
+	insert(fullscreenHint);
+	fullscreenHint->hide();
 }
 
 void MREditorApp::togglePerformancePanel() {
@@ -1090,6 +1189,91 @@ void MREditorApp::updatePerformancePanel() {
 	if (now < performancePanelRefreshAt) return;
 	performancePanelRefreshAt = now + kPanelRefreshInterval;
 	performancePanel->setAnimationFrame(++performancePanelFrame);
+}
+
+void MREditorApp::updateFullscreenHint() {
+	if (fullscreenHint == nullptr) initializeFullscreenHint();
+	if (fullscreenHint == nullptr) return;
+
+	const auto now = std::chrono::steady_clock::now();
+	if (fullscreenPresentationActive && fullscreenWindow != nullptr && !fullscreenTargetStillOpen()) fullscreenWindow = nullptr;
+	const bool fullscreenDesktopEmpty = fullscreenPresentationActive && fullscreenWindow == nullptr && currentEditWindow() == nullptr;
+	const bool fullscreenHintTimed = fullscreenPresentationActive && now < fullscreenHintVisibleUntil;
+	const bool hintVisible = fullscreenPresentationActive && (fullscreenDesktopEmpty || fullscreenHintTimed);
+
+	if (!hintVisible) {
+		fullscreenHint->hide();
+		return;
+	}
+
+	TRect appRect = getExtent();
+	const int appWidth = static_cast<int>(appRect.b.x - appRect.a.x);
+	const int appHeight = static_cast<int>(appRect.b.y - appRect.a.y);
+	if (appWidth <= 0 || appHeight <= 0) {
+		fullscreenHint->hide();
+		return;
+	}
+
+	const int hintWidth = std::max(1, std::min(fullscreenHintTextWidth(), appWidth));
+	const int hintLeft = std::max(0, (appWidth - hintWidth) / 2);
+	const int hintTop = appHeight - 1;
+	TRect hintRect(hintLeft, hintTop, hintLeft + hintWidth, hintTop + 1);
+
+	fullscreenHint->locate(hintRect);
+	fullscreenHint->show();
+	fullscreenHint->drawView();
+}
+
+bool MREditorApp::fullscreenTargetStillOpen() const {
+	if (fullscreenWindow == nullptr) return false;
+	for (MREditWindow *window : allEditWindowsInZOrder())
+		if (window == fullscreenWindow) return true;
+	return false;
+}
+
+bool MREditorApp::enterFullscreenPresentation() {
+	MREditWindow *window = currentEditWindow();
+
+	if (fullscreenPresentationActive) return true;
+	fullscreenWindow = window;
+	if (window != nullptr) {
+		if (window->isMinimized()) window->restoreWindow();
+		fullscreenRestoreBounds = window->getBounds();
+	}
+	fullscreenPresentationActive = true;
+	fullscreenMenuBarTransientVisible = false;
+	fullscreenHintVisibleUntil = std::chrono::steady_clock::now() + kFullscreenHintDuration;
+	if (window != nullptr) window->setFullscreenPresentation(true);
+	applyConfiguredDisplayLayout();
+	if (window != nullptr) window->select();
+	mrvmUiInvalidateScreenBase();
+	return true;
+}
+
+void MREditorApp::leaveFullscreenPresentation() {
+	MREditWindow *window = fullscreenTargetStillOpen() ? fullscreenWindow : nullptr;
+	TRect restoreBounds = fullscreenRestoreBounds;
+
+	if (!fullscreenPresentationActive) return;
+	fullscreenPresentationActive = false;
+	fullscreenMenuBarTransientVisible = false;
+	fullscreenHintVisibleUntil = std::chrono::steady_clock::time_point::min();
+	fullscreenWindow = nullptr;
+	if (window != nullptr) window->setFullscreenPresentation(false);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Fullscreen ended - welcome back!", mr::messageline::Kind::Info, mr::messageline::kPriorityHigh);
+	applyConfiguredDisplayLayout();
+	if (window != nullptr) {
+		window->locate(restoreBounds);
+		window->select();
+		window->drawView();
+	}
+	mrvmUiInvalidateScreenBase();
+}
+
+void MREditorApp::toggleFullscreenPresentation() {
+	if (fullscreenPresentationActive) leaveFullscreenPresentation();
+	else
+		static_cast<void>(enterFullscreenPresentation());
 }
 
 void MREditorApp::syncFunctionKeyState() {
@@ -1113,23 +1297,40 @@ void MREditorApp::syncFunctionKeyState() {
 }
 
 void MREditorApp::applyConfiguredDisplayLayout() {
-	bool statusVisible = true;
+	if (fullscreenPresentationActive && !fullscreenTargetStillOpen()) {
+		fullscreenWindow = nullptr;
+	}
+	if (fullscreenPresentationActive && fullscreenWindow == nullptr) {
+		if (MREditWindow *window = currentEditWindow(); window != nullptr) {
+			if (window->isMinimized()) window->restoreWindow();
+			fullscreenWindow = window;
+			fullscreenRestoreBounds = window->getBounds();
+			window->setFullscreenPresentation(true);
+		}
+	}
+	const bool fullscreenActive = fullscreenPresentationActive;
+	const bool fullscreenMenuBarVisible = fullscreenActive && fullscreenMenuBarTransientVisible;
+	bool statusVisible = !fullscreenActive;
 	TRect appRect = getExtent();
 	TRect desktopRect;
 	const int appHeight = appRect.b.y - appRect.a.y;
 	const int maxPanelHeight = std::max(0, appHeight - 2);
-	const int panelHeight = performancePanelVisible ? std::min(MRPerformancePanel::kPreferredHeight, maxPanelHeight) : 0;
+	const int panelHeight = !fullscreenActive && performancePanelVisible ? std::min(MRPerformancePanel::kPreferredHeight, maxPanelHeight) : 0;
 
 	if (menuBar != nullptr) {
-		menuBar->show();
+		if (fullscreenActive && !fullscreenMenuBarVisible) menuBar->hide();
+		else
+			menuBar->show();
 	}
 	if (auto *mrStatus = dynamic_cast<MRStatusLine *>(statusLine)) {
 		mrStatus->setShowFunctionKeyLabels(true);
-		mrStatus->show();
+		if (fullscreenActive) mrStatus->hide();
+		else
+			mrStatus->show();
 	}
 	syncFunctionKeyState();
 	if (performancePanel != nullptr) {
-		if (panelHeight > 0) {
+		if (!fullscreenActive && panelHeight > 0) {
 			TRect panelRect(0, 1, appRect.b.x - appRect.a.x, 1 + panelHeight);
 			performancePanel->locate(panelRect);
 			performancePanel->show();
@@ -1140,15 +1341,22 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 	}
 	desktopRect.a.x = 0;
 	desktopRect.b.x = appRect.b.x - appRect.a.x;
-	desktopRect.a.y = 1 + panelHeight;
+	desktopRect.a.y = fullscreenActive ? (fullscreenMenuBarVisible ? 1 : 0) : 1 + panelHeight;
 	desktopRect.b.y = appRect.b.y - appRect.a.y - (statusVisible ? 1 : 0);
 	if (desktopRect.b.y <= desktopRect.a.y) desktopRect.b.y = desktopRect.a.y + 1;
 	if (deskTop != nullptr) deskTop->locate(desktopRect);
 	applyConfiguredWindowFramePolicy();
 	MRWindowManager::handleDesktopLayoutChange();
+	if (fullscreenActive && fullscreenWindow != nullptr && deskTop != nullptr) {
+		TRect fullscreenBounds = deskTop->getExtent();
+		fullscreenWindow->setFullscreenPresentation(true);
+		fullscreenWindow->locate(fullscreenBounds);
+		fullscreenWindow->select();
+	}
 	if (deskTop != nullptr) deskTop->drawView();
 	if (menuBar != nullptr) menuBar->drawView();
 	if (statusLine != nullptr) statusLine->drawView();
+	updateFullscreenHint();
 }
 
 void MREditorApp::prepareForQuit() {
@@ -1504,6 +1712,21 @@ void MREditorApp::handleEvent(TEvent &event) {
 	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
 	clearTransientSearchSelectionOnUserInput(event);
+	if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbF11)) {
+		toggleFullscreenPresentation();
+		clearEvent(event);
+		return;
+	}
+	if (fullscreenPresentationActive && event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc)) {
+		leaveFullscreenPresentation();
+		clearEvent(event);
+		return;
+	}
+	if (event.what == evCommand && event.message.command == cmMrToggleFullscreen) {
+		toggleFullscreenPresentation();
+		clearEvent(event);
+		return;
+	}
 	if (isRecorderToggleCommand(event)) {
 		if (keystrokeRecording) stopKeystrokeRecording();
 		else
@@ -1513,14 +1736,6 @@ void MREditorApp::handleEvent(TEvent &event) {
 		return;
 	}
 	if (isRecorderToggleKey(event)) {
-		if (keystrokeRecording) stopKeystrokeRecording();
-		else
-			startKeystrokeRecording();
-		mrvmUiInvalidateScreenBase();
-		clearEvent(event);
-		return;
-	}
-	if (event.what == evKeyDown && editorFunctionKeyContextActive() && TKey(event.keyDown) == TKey(kbF1)) {
 		if (keystrokeRecording) stopKeystrokeRecording();
 		else
 			startKeystrokeRecording();
@@ -1584,16 +1799,32 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
+	const bool fullscreenMenuBarActivation = fullscreenPresentationActive && menuBar != nullptr && ((event.what == evKeyDown && TKey(event.keyDown) == TKey(kbF10)) || (event.what == evCommand && event.message.command == cmMenu));
+	if (fullscreenMenuBarActivation) {
+		fullscreenMenuBarTransientVisible = true;
+		applyConfiguredDisplayLayout();
+	}
 	TApplication::handleEvent(event);
 	traceCalculatorHotkeyEvent("app-post", event);
 	if (shouldInvalidateScreenBaseForEvent(originalWhat)) mrvmUiInvalidateScreenBase();
 
-	if (event.what != evCommand) return;
+	auto restoreFullscreenMenuLayout = [this, fullscreenMenuBarActivation]() {
+		if (!fullscreenMenuBarActivation || !fullscreenPresentationActive) return;
+		fullscreenMenuBarTransientVisible = false;
+		applyConfiguredDisplayLayout();
+	};
+
+	if (event.what != evCommand) {
+		restoreFullscreenMenuLayout();
+		return;
+	}
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar); mrMenuBar != nullptr && mrMenuBar->handleRuntimeCommand(event.message.command)) {
 		clearEvent(event);
+		restoreFullscreenMenuLayout();
 		return;
 	}
 	if (handleMRCommand(event.message.command, event.message.infoPtr)) clearEvent(event);
+	restoreFullscreenMenuLayout();
 }
 
 void MREditorApp::idle() {
@@ -1613,6 +1844,7 @@ void MREditorApp::idle() {
 	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
 	pumpDeferredMacroUiPlayback();
 	updatePerformancePanel();
+	updateFullscreenHint();
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
 		mr::messageline::VisibleMessage message;
 		std::string rightStatus = buildTopRightCursorStatus();
