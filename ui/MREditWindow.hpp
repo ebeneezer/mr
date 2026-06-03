@@ -74,7 +74,7 @@ class MREditWindow : public TWindow {
 		wrHelp
 	};
 
-	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
+	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -242,6 +242,10 @@ class MREditWindow : public TWindow {
 
 	void setState(ushort aState, Boolean enable) override {
 		TWindow::setState(aState, enable);
+		if (mFullscreenPresentation) {
+			if (editor != nullptr) editor->drawView();
+			return;
+		}
 		if (MRWindowManager::isWindowMinimized(this)) {
 			layoutEditorChrome();
 			if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr) frame->drawView();
@@ -280,6 +284,7 @@ class MREditWindow : public TWindow {
 		mrDropSidekickForParent(this);
 		TWindow::changeBounds(bounds);
 		layoutEditorChrome();
+		if (mFullscreenPresentation) return;
 		if (MRWindowManager::isWindowMinimized(this)) {
 			if (frame != nullptr) frame->drawView();
 			return;
@@ -640,6 +645,22 @@ class MREditWindow : public TWindow {
 
 	void restoreWindow() {
 		MRWindowManager::restoreWindow(this);
+	}
+
+	void setFullscreenPresentation(bool enabled) {
+		if (mFullscreenPresentation == enabled) return;
+		mFullscreenPresentation = enabled;
+		if (frame != nullptr) {
+			if (enabled) frame->hide();
+			else
+				frame->show();
+		}
+		layoutEditorChrome();
+		drawView();
+	}
+
+	bool fullscreenPresentation() const noexcept {
+		return mFullscreenPresentation;
 	}
 
 	TRect minimizedWorkspaceBounds() const noexcept {
@@ -1218,22 +1239,27 @@ class MREditWindow : public TWindow {
 	}
 
 		void beginLineBlock() {
+		mCursorGestureBlockMarking = false;
 		if (editor != nullptr) static_cast<void>(mBlockOps.beginLine(*editor));
 		}
 
 	void beginColumnBlock() {
+		mCursorGestureBlockMarking = false;
 		if (editor != nullptr) static_cast<void>(mBlockOps.beginColumn(*editor));
 	}
 
 	void beginStreamBlock() {
+		mCursorGestureBlockMarking = false;
 		if (editor != nullptr) static_cast<void>(mBlockOps.beginStream(*editor));
 	}
 
 	void endBlock() {
+		mCursorGestureBlockMarking = false;
 		if (editor != nullptr) static_cast<void>(mBlockOps.end(*editor));
 	}
 
 	void clearBlock() {
+		mCursorGestureBlockMarking = false;
 		if (editor != nullptr) static_cast<void>(mBlockOps.clear(*editor));
 	}
 
@@ -1596,6 +1622,18 @@ class MREditWindow : public TWindow {
 			if (editor != nullptr) editor->hide();
 			return;
 		}
+		if (mFullscreenPresentation) {
+			if (frame != nullptr) frame->hide();
+			if (hScrollBar != nullptr) hScrollBar->hide();
+			if (vScrollBar != nullptr) vScrollBar->hide();
+			if (indicator != nullptr) indicator->hide();
+			if (editor != nullptr) {
+				if ((editor->state & sfVisible) == 0) editor->show();
+				editor->changeBounds(getExtent());
+			}
+			return;
+		}
+		if (frame != nullptr && (frame->state & sfVisible) == 0) frame->show();
 		if (editor != nullptr && (editor->state & sfVisible) == 0) editor->show();
 		if (hScrollBar != nullptr) {
 			TRect hRect(1, size.y - 1, size.x - 1, size.y);
@@ -1785,7 +1823,8 @@ class MREditWindow : public TWindow {
 		const ushort mods = event.keyDown.controlKeyState;
 		if (!isBlockCursorNavigationKey(keyCode)) return false;
 		if (!isBlockCursorMarkingModifier(mods)) {
-			if (mBlockOps.isMarking()) static_cast<void>(mBlockOps.end(*editor));
+			if (mCursorGestureBlockMarking && mBlockOps.isMarking()) static_cast<void>(mBlockOps.end(*editor));
+			mCursorGestureBlockMarking = false;
 			return false;
 		}
 
@@ -1798,6 +1837,7 @@ class MREditWindow : public TWindow {
 				static_cast<void>(mBlockOps.beginLine(*editor));
 			else
 				static_cast<void>(mBlockOps.beginStream(*editor));
+			mCursorGestureBlockMarking = true;
 		}
 		event.keyDown.keyCode = keyCode;
 		editor->handleEvent(event);
@@ -2062,6 +2102,8 @@ class MREditWindow : public TWindow {
 	int mIndentLevel;
 		bool mColumnSortAscending;
 	MRFEBlockOps mBlockOps;
+	bool mCursorGestureBlockMarking;
+	bool mFullscreenPresentation;
 	std::vector<TrackedTask> mTrackedCoprocessorTasks;
 	WindowRole mWindowRole;
 	std::string mWindowRoleDetail;

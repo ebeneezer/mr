@@ -220,6 +220,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] int nodeIndexForLeaf(int leafId) const noexcept;
 	[[nodiscard]] int parentNodeOf(int childNodeIndex) const noexcept;
 	[[nodiscard]] int viewportNumberForLeaf(int leafId) const noexcept;
+	[[nodiscard]] TRect paneLayoutBounds() const noexcept;
 	[[nodiscard]] TRect nodeBounds(int nodeIndex) const noexcept;
 	[[nodiscard]] TRect contentBounds(const TRect &paneBounds) const noexcept;
 	[[nodiscard]] int createToolLeaf(MRBentoPaneRole role);

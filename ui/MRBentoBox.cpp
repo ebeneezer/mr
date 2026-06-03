@@ -1406,8 +1406,7 @@ void MRBentoBox::ensurePaneFrameViews() {
 
 void MRBentoBox::layoutSplitPanes() {
 	MRFileEditor *primaryEditor = getEditor();
-	TRect inner = getExtent();
-	inner.grow(-1, -1);
+	TRect inner = paneLayoutBounds();
 	if (!hasPaneSplit()) {
 		for (BentoLeaf &leaf : leaves) {
 			leaf.visible = leaf.id == 0;
@@ -2217,9 +2216,15 @@ std::string MRBentoBox::paneTitleForLeaf(const BentoLeaf &leaf) const {
 	return bentoPaneRoleTitle(leaf.role);
 }
 
-TRect MRBentoBox::nodeBounds(int nodeIndex) const noexcept {
+TRect MRBentoBox::paneLayoutBounds() const noexcept {
 	TRect inner = getExtent();
-	inner.grow(-1, -1);
+
+	if (!(fullscreenPresentation() && hasPaneSplit())) inner.grow(-1, -1);
+	return inner;
+}
+
+TRect MRBentoBox::nodeBounds(int nodeIndex) const noexcept {
+	TRect inner = paneLayoutBounds();
 	if (nodeIndex == rootNode) return inner;
 	for (const BentoLeaf &leaf : leaves)
 		if (nodeIndexForLeaf(leaf.id) == nodeIndex) return leaf.bounds;
