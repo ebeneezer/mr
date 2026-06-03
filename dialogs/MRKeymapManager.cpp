@@ -402,7 +402,7 @@ struct BindingTargetChoice {
 
 class KeymapBindingListView : public MRColumnListView {
   public:
-	KeymapBindingListView(const TRect &bounds, TScrollBar *scrollBar, TView *relay = nullptr, ushort selectionCommand = 0, ushort activationCommand = 0) noexcept : MRColumnListView(bounds, scrollBar, relay, selectionCommand, activationCommand) {
+	KeymapBindingListView(const TRect &bounds, TScrollBar *verticalScrollBar, TScrollBar *horizontalScrollBar, TView *relay = nullptr, ushort selectionCommand = 0, ushort activationCommand = 0) noexcept : MRColumnListView(bounds, verticalScrollBar, horizontalScrollBar, relay, selectionCommand, activationCommand) {
 	}
 
 	void setRows(const std::vector<Row> &rows, const std::vector<bool> &errorFlags, short selection = 0) {
@@ -1428,6 +1428,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		const int profileListTop = 3;
 		const int bindingListTop = 3;
 		const int listBottom = 15;
+		const int bindingListBottom = listBottom - 1;
 		const int topButtonRow = 16;
 		const int profileScrollLeft = left + profilesWidth;
 		const int bindingLeft = profileScrollLeft + 3;
@@ -1461,9 +1462,10 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		addLabel(TRect(filterLabelLeft, filterRow, filterFieldLeft, filterRow + 1), "Filter:");
 		mBindingFilterField = new TNotifyingInputLine(TRect(filterFieldLeft, filterRow, bindingScrollLeft, filterRow + 1), kBindingFilterFieldSize - 1, cmMrSetupKeymapBindingFilterChanged);
 		addManaged(mBindingFilterField, TRect(filterFieldLeft, filterRow, bindingScrollLeft, filterRow + 1));
-		mBindingScrollBar = addScrollBar(TRect(bindingScrollLeft, bindingListTop, bindingScrollLeft + 1, listBottom));
-		mBindingList = new KeymapBindingListView(TRect(bindingLeft, bindingListTop, bindingScrollLeft, listBottom), mBindingScrollBar, this, 0, cmMrSetupKeymapBindingEdit);
-		addManaged(mBindingList, TRect(bindingLeft, bindingListTop, bindingScrollLeft, listBottom));
+		mBindingScrollBar = addScrollBar(TRect(bindingScrollLeft, bindingListTop, bindingScrollLeft + 1, bindingListBottom));
+		mBindingHorizontalScrollBar = addScrollBar(TRect(bindingLeft, bindingListBottom, bindingScrollLeft, bindingListBottom + 1));
+		mBindingList = new KeymapBindingListView(TRect(bindingLeft, bindingListTop, bindingScrollLeft, bindingListBottom), mBindingScrollBar, mBindingHorizontalScrollBar, this, 0, cmMrSetupKeymapBindingEdit);
+		addManaged(mBindingList, TRect(bindingLeft, bindingListTop, bindingScrollLeft, bindingListBottom));
 		mr::dialogs::addManagedUniformButtonRow(*this, bindingButtonLeft, topButtonRow, bindingButtonGap, bindingButtons);
 
 		buttonLeft = (kDialogWidth - bottomMetrics.rowWidth) / 2;
@@ -1853,6 +1855,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	TScrollBar *mProfileScrollBar = nullptr;
 	KeymapBindingListView *mBindingList = nullptr;
 	TScrollBar *mBindingScrollBar = nullptr;
+	TScrollBar *mBindingHorizontalScrollBar = nullptr;
 	TInputLine *mBindingFilterField = nullptr;
 	TActiveProfileField *mActiveProfileField = nullptr;
 	std::vector<std::size_t> visibleBindingIndexes;

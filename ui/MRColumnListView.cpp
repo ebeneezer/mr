@@ -46,8 +46,13 @@ class TPlainStringCollection : public TCollection {
 MRColumnListView::MRColumnListView(const TRect &bounds, TScrollBar *scrollBar, TView *relay, ushort selectionCommand, ushort activationCommandValue, bool dropListColors) noexcept : TListBox(bounds, 1, scrollBar), relayTarget(relay), relayCommand(selectionCommand), activationCommand(activationCommandValue), useDropListColors(dropListColors) {
 }
 
+MRColumnListView::MRColumnListView(const TRect &bounds, TScrollBar *verticalScrollBar, TScrollBar *horizontalScrollBar, TView *relay, ushort selectionCommand, ushort activationCommandValue, bool dropListColors) noexcept : TListBox(bounds, 1, verticalScrollBar), optionalHorizontalScrollBar(horizontalScrollBar), relayTarget(relay), relayCommand(selectionCommand), activationCommand(activationCommandValue), useDropListColors(dropListColors) {
+	if (optionalHorizontalScrollBar != nullptr) optionalHorizontalScrollBar->hide();
+}
+
 void MRColumnListView::setRows(const std::vector<Row> &rows, short selection) {
 	std::vector<std::size_t> widths;
+	std::vector<std::string> displayRows;
 	TPlainStringCollection *items = new TPlainStringCollection(std::max<short>(1, rows.size()), 8);
 	TListBoxRec data;
 
@@ -58,14 +63,22 @@ void MRColumnListView::setRows(const std::vector<Row> &rows, short selection) {
 		for (std::size_t i = 0; i < row.size(); ++i)
 			widths[i] = std::max(widths[i], row[i].size());
 	}
-	for (const Row &row : rows)
-		items->insert(dupCString(buildDisplayRow(row, widths)));
+	displayRows.reserve(rows.size());
+	maxDisplayRowWidth = 0;
+	for (const Row &row : rows) {
+		std::string displayRow = buildDisplayRow(row, widths);
+		maxDisplayRowWidth = std::max(maxDisplayRowWidth, displayRow.size());
+		displayRows.push_back(std::move(displayRow));
+	}
+	for (const std::string &displayRow : displayRows)
+		items->insert(dupCString(displayRow));
 
 	if (selection < 0) selection = 0;
 	if (!rows.empty() && selection >= static_cast<short>(rows.size())) selection = static_cast<short>(rows.size()) - 1;
 
 	data.items = items;
 	data.selection = static_cast<ushort>(selection);
+	configureHorizontalScrollBar(maxDisplayRowWidth);
 	setData(&data);
 }
 
@@ -105,6 +118,11 @@ TColorAttr MRColumnListView::mapColor(uchar index) {
 	return TListBox::mapColor(index);
 }
 
+void MRColumnListView::changeBounds(const TRect &bounds) {
+	TListBox::changeBounds(bounds);
+	configureHorizontalScrollBar(maxDisplayRowWidth);
+}
+
 void MRColumnListView::focusItemNum(short item) {
 	const short oldFocused = focused;
 	const short oldTopItem = topItem;
@@ -136,6 +154,30 @@ void MRColumnListView::focusItemNum(short item) {
 	}
 	if (focused != oldFocused || topItem != oldTopItem) drawView();
 	if (focused != oldFocused) dispatchSelectionChanged();
+}
+
+void MRColumnListView::configureHorizontalScrollBar(std::size_t displayWidth) {
+	static constexpr int kMaxListViewerIndent = 254;
+	const int visibleTextWidth = std::max<int>(1, size.x - 2);
+	int maxValue = 0;
+
+	if (optionalHorizontalScrollBar == nullptr) return;
+	if (displayWidth > static_cast<std::size_t>(visibleTextWidth)) {
+		const std::size_t overflow = displayWidth - static_cast<std::size_t>(visibleTextWidth);
+		maxValue = static_cast<int>(std::min<std::size_t>(overflow, kMaxListViewerIndent));
+	}
+	if (maxValue <= 0) {
+		hScrollBar = nullptr;
+		optionalHorizontalScrollBar->setParams(0, 0, 0, visibleTextWidth, 1);
+		optionalHorizontalScrollBar->hide();
+		return;
+	}
+
+	hScrollBar = optionalHorizontalScrollBar;
+	optionalHorizontalScrollBar->setParams(std::clamp(optionalHorizontalScrollBar->value, 0, maxValue), 0, maxValue, visibleTextWidth, 1);
+	if (getState(sfVisible) && getState(sfActive)) optionalHorizontalScrollBar->show();
+	else
+		optionalHorizontalScrollBar->hide();
 }
 
 void MRColumnListView::dispatchSelectionChanged() {
