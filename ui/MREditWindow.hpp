@@ -24,6 +24,8 @@
 #include <iterator>
 #include <sstream>
 #include <string>
+
+#include "../app/utils/MRStringUtils.hpp"
 #include <utility>
 #include <unistd.h>
 #include <vector>
@@ -1955,10 +1957,7 @@ class MREditWindow : public TWindow {
 	}
 
 	static std::string trimTaskLabel(const std::string &label) {
-		std::size_t start = label.find_first_not_of(' ');
-		std::size_t end = label.find_last_not_of(' ');
-		if (start == std::string::npos) return std::string();
-		return label.substr(start, end - start + 1);
+		return trimAscii(label);
 	}
 
 	static std::string compactTaskLabel(const TrackedTask &task) {
