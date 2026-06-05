@@ -18,9 +18,9 @@
 #include <vector>
 
 #include "../app/export/MRPdfTextExporter.hpp"
-#include "../ui/MRDropList.hpp"
+#include "../ui/widgets/MRDropList.hpp"
 #include "../ui/MRFrame.hpp"
-#include "../ui/MRNumericSlider.hpp"
+#include "../ui/widgets/MRNumericSlider.hpp"
 #include "setup/MRSetupCommon.hpp"
 
 namespace {

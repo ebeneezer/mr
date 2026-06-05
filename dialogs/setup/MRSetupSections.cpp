@@ -29,7 +29,7 @@
 #include "../../ui/MRMenuBar.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
-#include "../../ui/MRNumericSlider.hpp"
+#include "../../ui/widgets/MRNumericSlider.hpp"
 #include "../../ui/MRPalette.hpp"
 #include "../MRDirtyGating.hpp"
 #include "MRSetupCommon.hpp"

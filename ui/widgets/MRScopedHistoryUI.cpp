@@ -18,10 +18,11 @@
 #include <tvision/compat/borland/io.h>
 
 #include "MRDropList.hpp"
-#include "MRFrame.hpp"
 #include "MRScopedHistoryUI.hpp"
 
-#include "../config/settings/MRSettingsRuntime.hpp"
+#include "../MRFrame.hpp"
+
+#include "../../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
 #include <cstdio>

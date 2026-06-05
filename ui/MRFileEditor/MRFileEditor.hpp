@@ -34,6 +34,7 @@
 
 #include "MRCoprocessor.hpp"
 #include "../../dialogs/MRDirtyGating.hpp"
+#include "../../outline/MROutlineModel.hpp"
 #include "../MRIndicator.hpp"
 #include "MRMiniMap.hpp"
 #include "MRTextFormatting.hpp"
@@ -52,6 +53,7 @@
 class MREditWindow;
 
 std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language);
+std::string mrBuildOutlineTrainingAscii(const std::string &text, MRSyntaxLanguage language);
 
 class MRFileEditor : public TScroller {
 	friend bool mrfeSeedMouseColumnStateForRegression(MRFileEditor &editor, int anchorColumn, int cursorColumn);
@@ -351,6 +353,9 @@ class MRFileEditor : public TScroller {
 	MRSyntaxLanguage syntaxLanguage() const noexcept;
 
 	bool syntaxLanguageAutomatic() const noexcept;
+
+	bool buildFoldOutlineSnapshot(const MROutlineRequest &request, MROutlineSnapshot &snapshot) const;
+	bool requestCompleteFoldOutlineWarmup();
 
 		bool canSaveInPlace() const;
 

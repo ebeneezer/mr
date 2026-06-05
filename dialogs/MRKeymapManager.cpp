@@ -31,7 +31,7 @@
 #include "../keymap/MRKeymapProfile.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/mrmac.h"
-#include "../ui/MRColumnListView.hpp"
+#include "../ui/widgets/MRColumnListView.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"

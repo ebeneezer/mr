@@ -9,7 +9,7 @@ Applies to:
 - `ui/MRFrame.cpp`
 - `ui/MRWindowSupport.cpp`
 - `ui/MRMessageLineController.cpp`
-- `ui/MRColumnListView.cpp`
+- `ui/widgets/MRColumnListView.cpp`
 - all MR classes derived from TVision views.
 
 ## Authority

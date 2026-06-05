@@ -19,7 +19,7 @@
 #include "../app/commands/MRFileCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
-#include "../ui/MRDropList.hpp"
+#include "../ui/widgets/MRDropList.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowSupport.hpp"

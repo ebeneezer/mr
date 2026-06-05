@@ -93,6 +93,9 @@ MRFOLDTRAINER_OBJECT = trainers/foldtrainer/mrfoldtrainer.o
 MRINDENTTRAINER_TARGET = trainers/indenttrainer/mrindenttrainer
 MRINDENTTRAINER_SOURCE = trainers/indenttrainer/mrindenttrainer.cpp
 MRINDENTTRAINER_OBJECT = trainers/indenttrainer/mrindenttrainer.o
+MROUTLINETRAINER_TARGET = trainers/outlinetrainer/mroutlinetrainer
+MROUTLINETRAINER_SOURCE = trainers/outlinetrainer/mroutlinetrainer.cpp
+MROUTLINETRAINER_OBJECT = trainers/outlinetrainer/mroutlinetrainer.o
 STAGE_PROFILE_PROBE_TARGET = regression/mr_stage_profile_probe
 STAGE_PROFILE_PROBE_SOURCE = regression/mr_stage_profile_probe.cpp
 STAGE_PROFILE_PROBE_OBJECT = regression/mr_stage_profile_probe.o
@@ -170,6 +173,7 @@ CXX_SOURCES = \
 	derivedstate/MRFoldingDerivedState.cpp \
 	derivedstate/MRMiniMapDerivedState.cpp \
 	derivedstate/MRSyntaxDerivedState.cpp \
+	outline/MROutlineFoldProducer.cpp \
 	coprocessor/MRPerformance.cpp \
 	coprocessor/MRCoprocessorDispatch.cpp \
 	mrmac/MRVM.cpp \
@@ -183,9 +187,22 @@ CXX_SOURCES = \
 	mrmac/vm/MRVMScreen.cpp \
 	ui/MRFrame.cpp \
 	ui/MRBentoBox.cpp \
-	ui/MRColumnListView.cpp \
-	ui/MRDropList.cpp \
+	ui/MRBentoBoxDiagnostics.cpp \
+	ui/MRBentoBoxOutline.cpp \
+	ui/MRBentoBoxPaneWindow.cpp \
+	ui/MRBentoBoxProjection.cpp \
+	ui/widgets/MRColumnListView.cpp \
+	ui/widgets/MRDropList.cpp \
 	ui/MRFileEditor/MRFileEditor.cpp \
+	ui/MRFileEditor/MRFileEditorClipboard.cpp \
+	ui/MRFileEditor/MRFileEditorSave.cpp \
+	ui/MRFileEditor/MRFileEditorMarkers.cpp \
+	ui/MRFileEditor/MRFileEditorFoldWarmup.cpp \
+	ui/MRFileEditor/MRFileEditorNavigation.cpp \
+	ui/MRFileEditor/MRFileEditorFormatting.cpp \
+	ui/MRFileEditor/MRFileEditorTextEditing.cpp \
+	ui/MRFileEditor/MRFileEditorEvents.cpp \
+	ui/MRFileEditor/MRFileEditorViewState.cpp \
 	ui/MRFileEditor/MRFEBlockOps.cpp \
 	ui/MRFileEditor/MRFileEditorIndent.cpp \
 	ui/MRFileEditor/MRFileEditorWarmup.cpp \
@@ -197,9 +214,9 @@ CXX_SOURCES = \
 	ui/MRMessageLineController.cpp \
 	ui/MRPerformancePanel.cpp \
 	ui/MRSidekickEditor.cpp \
-	ui/MRScopedHistoryUI.cpp \
+	ui/widgets/MRScopedHistoryUI.cpp \
 	ui/MRWindowManager.cpp \
-	ui/MRNumericSlider.cpp \
+	ui/widgets/MRNumericSlider.cpp \
 	ui/MRPalette.cpp \
 	ui/MRWindowSupport.cpp \
 	ui/MRSyntax.cpp \
@@ -222,7 +239,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -236,6 +253,7 @@ endif
 all: $(TARGET)
 mrfoldtrainer: $(MRFOLDTRAINER_TARGET)
 mrindenttrainer: $(MRINDENTTRAINER_TARGET)
+mroutlinetrainer: $(MROUTLINETRAINER_TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
 phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
@@ -438,13 +456,22 @@ dialogs/MRDirtyGating.o: dialogs/MRDirtyGating.cpp dialogs/MRDirtyGating.hpp dia
 dialogs/MRColorSetup.o: dialogs/MRColorSetup.cpp dialogs/setup/MRSetup.hpp dialogs/setup/MRSetupCommon.hpp app/MRCommands.hpp
 dialogs/MRFileInformation.o: dialogs/MRFileInformation.cpp dialogs/MRFileInformation.hpp app/MRCommands.hpp coprocessor/MRPerformance.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRMacroFile.o: dialogs/MRMacroFile.cpp dialogs/MRMacroFile.hpp mrmac/MRMacroRunner.hpp
-dialogs/MRAcquireDialog.o: dialogs/MRAcquireDialog.cpp dialogs/MRAcquireDialog.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp dialogs/setup/MRSetupCommon.hpp ui/MRDropList.hpp
-dialogs/extensions/MRFileExtensionEditorSettings.o: dialogs/extensions/MRFileExtensionEditorSettings.cpp dialogs/extensions/MRFileExtensionEditorSettingsInternal.hpp ui/MRNumericSlider.hpp dialogs/setup/MRSetupCommon.hpp
+dialogs/MRAcquireDialog.o: dialogs/MRAcquireDialog.cpp dialogs/MRAcquireDialog.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp dialogs/setup/MRSetupCommon.hpp ui/widgets/MRDropList.hpp
+dialogs/extensions/MRFileExtensionEditorSettings.o: dialogs/extensions/MRFileExtensionEditorSettings.cpp dialogs/extensions/MRFileExtensionEditorSettingsInternal.hpp ui/widgets/MRNumericSlider.hpp dialogs/setup/MRSetupCommon.hpp
 dialogs/extensions/MRFileExtensionProfilesSupport.o: dialogs/extensions/MRFileExtensionProfilesSupport.cpp dialogs/extensions/MRFileExtensionProfilesSupport.hpp dialogs/extensions/MRFileExtensionEditorSettingsInternal.hpp dialogs/setup/MRSetup.hpp config/settings/MRSettingsRuntime.hpp app/MREditorApp.hpp
-dialogs/setup/MRSetupCommon.o: dialogs/setup/MRSetupCommon.cpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp ui/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp ui/MRFrame.hpp keymap/MRKeymapContext.hpp
-dialogs/setup/MRSetup.o: dialogs/setup/MRSetup.cpp dialogs/setup/MRSetup.hpp dialogs/setup/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/settings/MRSettingsRuntime.hpp ui/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp
+dialogs/setup/MRSetupCommon.o: dialogs/setup/MRSetupCommon.cpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp ui/MRFrame.hpp keymap/MRKeymapContext.hpp
+dialogs/setup/MRSetup.o: dialogs/setup/MRSetup.cpp dialogs/setup/MRSetup.hpp dialogs/setup/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowList.o: dialogs/MRWindowList.cpp dialogs/MRWindowList.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
-ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp
+ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp outline/MROutlineFoldProducer.hpp
+ui/MRFileEditor/MRFileEditorClipboard.o: ui/MRFileEditor/MRFileEditorClipboard.cpp ui/MRFileEditor/MRFileEditor.hpp
+ui/MRFileEditor/MRFileEditorSave.o: ui/MRFileEditor/MRFileEditorSave.cpp ui/MRFileEditor/MRFileEditor.hpp config/settings/MRSettingsStorage.hpp
+ui/MRFileEditor/MRFileEditorMarkers.o: ui/MRFileEditor/MRFileEditorMarkers.cpp ui/MRFileEditor/MRFileEditor.hpp
+ui/MRFileEditor/MRFileEditorFoldWarmup.o: ui/MRFileEditor/MRFileEditorFoldWarmup.cpp ui/MRFileEditor/MRFileEditor.hpp outline/MROutlineFoldProducer.hpp
+ui/MRFileEditor/MRFileEditorNavigation.o: ui/MRFileEditor/MRFileEditorNavigation.cpp ui/MRFileEditor/MRFileEditor.hpp
+ui/MRFileEditor/MRFileEditorFormatting.o: ui/MRFileEditor/MRFileEditorFormatting.cpp ui/MRFileEditor/MRFileEditor.hpp config/settings/MRSettingsStorage.hpp
+ui/MRFileEditor/MRFileEditorTextEditing.o: ui/MRFileEditor/MRFileEditorTextEditing.cpp ui/MRFileEditor/MRFileEditor.hpp
+ui/MRFileEditor/MRFileEditorEvents.o: ui/MRFileEditor/MRFileEditorEvents.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp app/MREditorApp.hpp
+ui/MRFileEditor/MRFileEditorViewState.o: ui/MRFileEditor/MRFileEditorViewState.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp
 ui/MRFileEditor/MRFEBlockOps.o: ui/MRFileEditor/MRFEBlockOps.cpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorIndent.o: ui/MRFileEditor/MRFileEditorIndent.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp
 ui/MRFileEditor/MRFileEditorWarmup.o: ui/MRFileEditor/MRFileEditorWarmup.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp
@@ -452,8 +479,8 @@ ui/MRFileEditor/MRFileEditorViewport.o: ui/MRFileEditor/MRFileEditorViewport.cpp
 ui/MRFileEditor/MRMiniMap.o: ui/MRFileEditor/MRMiniMap.cpp ui/MRFileEditor/MRMiniMap.hpp piecetable/MRTextDocument.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp
 ui/MRFileEditor/MRTextFormatting.o: ui/MRFileEditor/MRTextFormatting.cpp ui/MRFileEditor/MRTextFormatting.hpp config/settings/MRSettingsRuntime.hpp
 ui/MRFileEditor/MRTextViewport.o: ui/MRFileEditor/MRTextViewport.cpp ui/MRFileEditor/MRTextViewport.hpp config/settings/MRSettingsRuntime.hpp
-ui/MRScopedHistoryUI.o: ui/MRScopedHistoryUI.cpp ui/MRScopedHistoryUI.hpp dialogs/MRAcquireDialog.hpp config/settings/MRSettingsRuntime.hpp ui/MRFrame.hpp
-ui/MRNumericSlider.o: ui/MRNumericSlider.cpp ui/MRNumericSlider.hpp
+ui/widgets/MRScopedHistoryUI.o: ui/widgets/MRScopedHistoryUI.cpp ui/widgets/MRScopedHistoryUI.hpp dialogs/MRAcquireDialog.hpp config/settings/MRSettingsRuntime.hpp ui/MRFrame.hpp ui/widgets/MRDropList.hpp
+ui/widgets/MRNumericSlider.o: ui/widgets/MRNumericSlider.cpp ui/widgets/MRNumericSlider.hpp config/settings/MRSettingsRuntime.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/commands/MRWindowCommands.o: app/commands/MRWindowCommands.cpp app/commands/MRWindowCommands.hpp app/commands/MRFileCommands.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRPerformance.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp ui/MRMessageLineController.hpp
 config/settings/MRSettingsRuntimeState.o: config/settings/MRSettingsRuntimeState.cpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsHistory.hpp config/settings/MRSettingsRuntime.hpp
@@ -477,7 +504,14 @@ mrmac/vm/MRVMHash.o: mrmac/vm/MRVMHash.cpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp
 mrmac/vm/MRVMSettings.o: mrmac/vm/MRVMSettings.cpp mrmac/vm/MRVMSettings.hpp mrmac/MRVM.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp keymap/MRKeymapProfile.hpp
 mrmac/vm/MRVMScreen.o: mrmac/vm/MRVMScreen.cpp mrmac/vm/MRVMScreen.hpp mrmac/MRVM.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRWindowSupport.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRPalette.o: ui/MRPalette.cpp ui/MRPalette.hpp
-ui/MRBentoBox.o: ui/MRBentoBox.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRSidekickEditor.hpp
+ui/MRBentoBox.o: ui/MRBentoBox.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/widgets/MRDropList.hpp
+ui/MRBentoBoxDiagnostics.o: ui/MRBentoBoxDiagnostics.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRSidekickEditor.hpp config/settings/MRSettingsRuntime.hpp
+ui/MRBentoBoxOutline.o: ui/MRBentoBoxOutline.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp
+ui/MRBentoBoxPaneWindow.o: ui/MRBentoBoxPaneWindow.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp config/settings/MRSettingsRuntime.hpp
+ui/MRBentoBoxProjection.o: ui/MRBentoBoxProjection.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRSidekickEditor.hpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRDropList.hpp
+ui/widgets/MRColumnListView.o: ui/widgets/MRColumnListView.cpp ui/widgets/MRColumnListView.hpp config/settings/MRSettingsRuntime.hpp
+ui/widgets/MRDropList.o: ui/widgets/MRDropList.cpp ui/widgets/MRDropList.hpp ui/widgets/MRColumnListView.hpp dialogs/setup/MRSetupCommon.hpp
+outline/MROutlineFoldProducer.o: outline/MROutlineFoldProducer.cpp outline/MROutlineFoldProducer.hpp outline/MROutlineModel.hpp derivedstate/MRFoldingDerivedState.hpp ui/MRSyntax.hpp ui/MRTextBufferModel.hpp app/utils/MRStringUtils.hpp
 ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
 ui/MRSidekickEditor.o: ui/MRSidekickEditor.cpp ui/MRSidekickEditor.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp
@@ -486,6 +520,7 @@ piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocu
 piecetable/MRTextDocumentLineIndex.o: piecetable/MRTextDocumentLineIndex.cpp piecetable/MRTextDocumentLineIndex.hpp piecetable/MRTextDocument.hpp
 $(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsRuntime.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
+$(MROUTLINETRAINER_OBJECT): $(MROUTLINETRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 
 # 3. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
@@ -497,6 +532,9 @@ $(MRFOLDTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRFOL
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(MRINDENTTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRINDENTTRAINER_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
+$(MROUTLINETRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MROUTLINETRAINER_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check
@@ -521,6 +559,7 @@ clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \
 		$(MRFOLDTRAINER_OBJECT) $(MRFOLDTRAINER_TARGET) \
 		$(MRINDENTTRAINER_OBJECT) $(MRINDENTTRAINER_TARGET) \
+		$(MROUTLINETRAINER_OBJECT) $(MROUTLINETRAINER_TARGET) \
 		$(STAGE_PROFILE_PROBE_TARGET) \
 		$(REGRESSION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) \
 		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \

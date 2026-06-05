@@ -32,7 +32,7 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRBentoBox.hpp"
-#include "../../ui/MRScopedHistoryUI.hpp"
+#include "../../ui/widgets/MRScopedHistoryUI.hpp"
 #include "../../ui/MRWindowManager.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "../../dialogs/MRWindowList.hpp"

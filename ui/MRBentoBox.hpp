@@ -1,10 +1,12 @@
 #ifndef MRBENTOBOX_HPP
 #define MRBENTOBOX_HPP
 
-#include "MRDropList.hpp"
 #include "MREditWindow.hpp"
+#include "widgets/MRDropList.hpp"
 
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -18,6 +20,8 @@ enum MRBentoPaneRole {
 	bprDebuggerOutput,
 	bprWatches,
 	bprVariables,
+	bprStructure,
+	bprFunctions,
 	bprSplitEditor
 };
 
@@ -68,6 +72,24 @@ struct MRCompilerDiagnostic {
 	bool sourceAvailable;
 };
 
+struct MRBentoOutlineEntry {
+	MRBentoOutlineEntry() noexcept;
+
+	std::size_t paneOffset;
+	std::size_t sourceOffset;
+	std::size_t sourceSelectionEnd;
+};
+
+struct MRBentoOutlinePaneState {
+	MRBentoOutlinePaneState() noexcept;
+
+	std::size_t documentId;
+	std::size_t version;
+	std::uint64_t textHash;
+	bool complete;
+	std::chrono::steady_clock::time_point lastRefresh;
+};
+
 class MRPaneEditWindow : public MREditWindow {
 	friend class MRBentoBox;
 
@@ -103,6 +125,8 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] MREditWindow *secondaryEditWindow() const noexcept;
 	[[nodiscard]] MREditWindow *buildOutputPane() const noexcept;
 	[[nodiscard]] MREditWindow *problemsPane() const noexcept;
+	[[nodiscard]] MREditWindow *structurePane() const noexcept;
+	[[nodiscard]] MREditWindow *functionsPane() const noexcept;
 	[[nodiscard]] MREditWindow *paneForBufferId(int bufferId) const noexcept;
 	void collectVisiblePaneWindows(std::vector<MREditWindow *> &windows) const noexcept;
 	void showSecondaryPane() noexcept;
@@ -182,6 +206,9 @@ class MRBentoBox : public MREditWindow {
 	void acceptPaneRoleChoice();
 	void acceptPaneActionChoice();
 	void refreshCompilerProblemsPane();
+	void refreshOutlinePanes(bool force = false);
+	bool refreshOutlinePane(MRBentoPaneRole role, bool force);
+	[[nodiscard]] bool jumpToOutlineAtCursor(MRBentoPaneRole role);
 	void refreshSourceCompilerDiagnosticRanges();
 	void syncCompilerDiagnosticsAfterSourceMutation(const MRTextBufferModel::ReadSnapshot &oldSnapshot, const MRTextBufferModel::DocumentChangeSet &changeSet);
 	void clearTrackedCompilerSidekick(bool dropSidekick) noexcept;
@@ -271,7 +298,13 @@ class MRBentoBox : public MREditWindow {
 	int pendingPaneRoleTargetLeafId;
 	std::string compilerOutputStatus;
 	std::string compilerProblemsStatus;
+	std::string structureOutlineStatus;
+	std::string functionsOutlineStatus;
 	std::vector<MRCompilerDiagnostic> compilerDiagnostics;
+	MRBentoOutlinePaneState structureOutlineState;
+	MRBentoOutlinePaneState functionsOutlineState;
+	std::vector<MRBentoOutlineEntry> structureOutlineEntries;
+	std::vector<MRBentoOutlineEntry> functionsOutlineEntries;
 	bool compilerSidekickTracked;
 	bool compilerSidekickUpdating;
 	std::size_t compilerSidekickDiagnosticIndex;

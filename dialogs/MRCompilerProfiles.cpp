@@ -24,7 +24,7 @@
 #include "MRDirtyGating.hpp"
 #include "setup/MRSetupCommon.hpp"
 #include "../ui/MRFrame.hpp"
-#include "../ui/MRDropList.hpp"
+#include "../ui/widgets/MRDropList.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
 

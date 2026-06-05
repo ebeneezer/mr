@@ -86,7 +86,7 @@ These rules apply to new dialogs and to layout changes in existing dialogs.
 
 ## Deferred design note
 
-- `ui/MRDropList.*` may become a shared visual primitive for small string-selection popups.
+- `ui/widgets/MRDropList.*` may become a shared visual primitive for small string-selection popups.
 - Reuse for file/path history in load/save dialogs is not implicitly approved by its first use in file-extension settings.
 - A dedicated history tranche is required before reusing it there.
 - That tranche must explicitly review:

@@ -2587,8 +2587,8 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 		failureReason = "Unable to read MREditWindow.hpp for block marking harness: " + ioError;
 		return false;
 	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp"), editorContent, ioError)) {
-		failureReason = "Unable to read MRFileEditor.cpp for block marking harness: " + ioError;
+	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFileEditorEvents.cpp"), editorContent, ioError)) {
+		failureReason = "Unable to read MRFileEditorEvents.cpp for block marking harness: " + ioError;
 		return false;
 	}
 	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFEBlockOps.hpp"), blockOpsContent, ioError)) {
@@ -3705,14 +3705,14 @@ bool testExplicitSyntaxLanguageMarkerGuard(std::string &failureReason) {
 }
 
 bool testCurrentLineColorWiringGuard(std::string &failureReason) {
-	const std::string palettePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string palettePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewState.cpp");
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
 	std::string paletteContent;
 	std::string viewportContent;
 	std::string ioError;
 
 	if (!readTextFile(palettePath, paletteContent, ioError)) {
-		failureReason = "Unable to read MRFileEditor.cpp for current-line color wiring guard: " + ioError;
+		failureReason = "Unable to read MRFileEditorViewState.cpp for current-line color wiring guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(viewportPath, viewportContent, ioError)) {
@@ -3738,7 +3738,7 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 bool testChangedTextColorWiringGuard(std::string &failureReason) {
 	const std::string headerPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
 	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
-	const std::string editorPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string editorPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorMarkers.cpp");
 	const std::string indentPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorIndent.cpp");
 	std::string headerContent;
 	std::string sourceContent;
@@ -3755,7 +3755,7 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(editorPath, editorContent, ioError)) {
-		failureReason = "Unable to read MRFileEditor.cpp for changed-text dirty-range guard: " + ioError;
+		failureReason = "Unable to read MRFileEditorMarkers.cpp for changed-text dirty-range guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(indentPath, indentContent, ioError)) {
@@ -3792,7 +3792,7 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 
 bool testEditorCursorViewportGuard(std::string &failureReason) {
 	const std::string headerPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorNavigation.cpp");
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
 	std::string headerContent;
 	std::string sourceContent;
@@ -3804,7 +3804,7 @@ bool testEditorCursorViewportGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(sourcePath, sourceContent, ioError)) {
-		failureReason = "Unable to read MRFileEditor.cpp for cursor viewport guard: " + ioError;
+		failureReason = "Unable to read MRFileEditorNavigation.cpp for cursor viewport guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(viewportPath, viewportContent, ioError)) {
@@ -3859,14 +3859,14 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 }
 
 bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorSave.cpp");
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
 	std::string content;
 	std::string viewportContent;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRFileEditor.cpp for Save As overwrite/backup guard: " + ioError;
+		failureReason = "Unable to read MRFileEditorSave.cpp for Save As overwrite/backup guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(viewportPath, viewportContent, ioError)) {
@@ -5330,7 +5330,10 @@ bool testCompilerProfileAutomaticSetupGuard(std::string &failureReason) {
 
 bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	std::string source;
+	std::string diagnosticsSource;
 	std::string header;
+	std::string paneWindowSource;
+	std::string projectionSource;
 	std::string frameSource;
 	std::string editWindowHeader;
 	std::string editorHeader;
@@ -5354,6 +5357,24 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRBentoBox.cpp: " + ioError;
 		return false;
 	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxDiagnostics.cpp"), diagnosticsSource, ioError)) {
+		failureReason = "Unable to read MRBentoBoxDiagnostics.cpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxPaneWindow.cpp"), paneWindowSource, ioError)) {
+		failureReason = "Unable to read MRBentoBoxPaneWindow.cpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxProjection.cpp"), projectionSource, ioError)) {
+		failureReason = "Unable to read MRBentoBoxProjection.cpp: " + ioError;
+		return false;
+	}
+	source += "\n";
+	source += diagnosticsSource;
+	source += "\n";
+	source += paneWindowSource;
+	source += "\n";
+	source += projectionSource;
 	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox.hpp"), header, ioError)) {
 		failureReason = "Unable to read MRBentoBox.hpp: " + ioError;
 		return false;

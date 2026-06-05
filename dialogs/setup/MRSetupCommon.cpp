@@ -21,7 +21,7 @@
 #include "../../ui/MRFrame.hpp"
 #include "../../ui/MRMenuBar.hpp"
 #include "../../ui/MRMessageLineController.hpp"
-#include "../../ui/MRScopedHistoryUI.hpp"
+#include "../../ui/widgets/MRScopedHistoryUI.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 
 #include <array>

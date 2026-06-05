@@ -53,6 +53,7 @@ static constexpr char kMarkerRightBracket = ']';
 static constexpr int kMarkerGap = 1;
 static constexpr int kNormalControlGap = 1;
 static constexpr int kNormalRightPadding = 1;
+static constexpr auto kTaskOverviewRefreshInterval = std::chrono::milliseconds(250);
 
 int markerWidth(TStringView icon) noexcept {
 	return std::max(1, strwidth(icon));
@@ -137,15 +138,24 @@ TPalette &MRTaskOverviewView::getPalette() const {
 	return palette;
 }
 
-MRTaskOverviewWindow::MRTaskOverviewWindow(const TRect &bounds) noexcept : TWindowInit(&TWindow::initFrame), TWindow(bounds, "Tasks", wnNoNumber), mContent(nullptr) {
+MRTaskOverviewWindow::MRTaskOverviewWindow(const TRect &bounds, MRFrame *frame) noexcept : TWindowInit(&TWindow::initFrame), TWindow(bounds, "Tasks", wnNoNumber), mContent(nullptr), mFrame(frame) {
 	flags = 0;
 	options &= ~(ofSelectable | ofTopSelect);
-	eventMask = 0;
+	eventMask = evMouseDown;
 	palette = wpGrayWindow;
 	TRect inner = getExtent();
 	inner.grow(-1, -1);
 	mContent = new MRTaskOverviewView(inner);
 	insert(mContent);
+}
+
+void MRTaskOverviewWindow::handleEvent(TEvent &event) {
+	if (event.what == evMouseDown) {
+		MRFrame *frame = mFrame;
+		clearEvent(event);
+		if (frame != nullptr) frame->closeTaskOverview();
+		return;
+	}
 }
 
 void MRTaskOverviewWindow::setLines(const std::vector<std::string> &lines) {
@@ -157,7 +167,7 @@ TPalette &MRTaskOverviewWindow::getPalette() const {
 	return paletteGray;
 }
 
-MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr), mTaskOverviewPinned(false) {
+MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr), mTaskOverviewLastRefresh(std::chrono::steady_clock::time_point()), mTaskOverviewPinned(false) {
 }
 
 MRFrame::~MRFrame() {
@@ -450,6 +460,11 @@ void MRFrame::dragWindow(TEvent &event, uchar mode) {
 void MRFrame::handleEvent(TEvent &event) {
 	TView::handleEvent(event);
 
+	if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEsc && mTaskOverviewPinned) {
+		hideTaskOverview();
+		clearEvent(event);
+		return;
+	}
 	if (event.what == evMouseDown) {
 		TPoint mouse = makeLocal(event.mouse.where);
 		TWindow *window = static_cast<TWindow *>(owner);
@@ -571,10 +586,11 @@ void MRFrame::showTaskOverview() {
 		mTaskOverviewPopup = nullptr;
 		mTaskOverviewPopupOwner = nullptr;
 	}
-	mTaskOverviewPopup = new MRTaskOverviewWindow(bounds);
+	mTaskOverviewPopup = new MRTaskOverviewWindow(bounds, this);
 	mTaskOverviewPopup->setLines(lines);
 	group->insert(mTaskOverviewPopup);
 	mTaskOverviewPopupOwner = group;
+	mTaskOverviewLastRefresh = std::chrono::steady_clock::now();
 	mTaskOverviewPopup->makeFirst();
 	mTaskOverviewPopup->setState(sfActive, False);
 }
@@ -585,6 +601,7 @@ void MRFrame::hideTaskOverview() {
 	TObject::destroy(mTaskOverviewPopup);
 	mTaskOverviewPopup = nullptr;
 	mTaskOverviewPopupOwner = nullptr;
+	mTaskOverviewLastRefresh = std::chrono::steady_clock::time_point();
 	mTaskOverviewPinned = false;
 }
 
@@ -592,8 +609,12 @@ void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
 
+	if (forceHide) {
+		hideTaskOverview();
+		return;
+	}
 	if (mTaskOverviewPinned) return;
-	if (forceHide || taskX < 0 || !mTaskOverviewProvider) {
+	if (taskX < 0 || !mTaskOverviewProvider) {
 		hideTaskOverview();
 		return;
 	}
@@ -611,10 +632,17 @@ void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 
 void MRFrame::tickTaskOverviewAnimation() {
 	if (mTaskOverviewPopup == nullptr || !mTaskOverviewProvider) return;
+	const auto now = std::chrono::steady_clock::now();
+	if (now - mTaskOverviewLastRefresh < kTaskOverviewRefreshInterval) return;
+	mTaskOverviewLastRefresh = now;
 	std::vector<std::string> lines = mTaskOverviewProvider();
 	if (lines.empty()) {
 		hideTaskOverview();
 		return;
 	}
 	mTaskOverviewPopup->setLines(lines);
+}
+
+void MRFrame::closeTaskOverview() {
+	hideTaskOverview();
 }

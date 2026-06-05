@@ -13,7 +13,7 @@ Nicht opportunistisch ändern: Setup-Dialoge, Dirty-Gating, History-Verhalten, H
 Bekannte technische Schulden: einige große Dialoge bündeln viel Verantwortung; Keymap-Dialog enthält lokale Diagnostikformatierung parallel zum Loader; MRSetup.cpp bleibt zentrale Sammeldatei für Dialog-Grundklassen und Setup-Logik.
 2. TVision-Integration
 
-Zentrale Dateien: ￼dialogs/MRSetupCommon.hpp, ￼dialogs/MRSetup.cpp, ￼ui/MRFrame.cpp, ￼ui/MRWindowSupport.cpp, ￼ui/MRMessageLineController.cpp, ￼ui/MRColumnListView.cpp.
+Zentrale Dateien: ￼dialogs/MRSetupCommon.hpp, ￼dialogs/MRSetup.cpp, ￼ui/MRFrame.cpp, ￼ui/MRWindowSupport.cpp, ￼ui/MRMessageLineController.cpp, ￼ui/widgets/MRColumnListView.cpp.
 Zentrale Klassen/Funktionen: MRScrollableDialog, MRDialogFoundation, MRFrame, Message-Line-Posting, dialognahe File-/Window-Support-Funktionen.
 Autoritativer Zustand: TVision hält Fokus, Z-Order, Event-Routing und View-Lifetime; MR ergänzt dialognahe Scroll-/Validation-/Managed-View-Logik.
 Wichtige Datenflüsse: Domainzustand -> TVision-Views -> Draw/HandleEvent; Message-Line als UI-Rückkanal für Fehler/Warnungen.

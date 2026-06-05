@@ -1722,6 +1722,11 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
+	if (performancePanelVisible && event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc)) {
+		togglePerformancePanel();
+		clearEvent(event);
+		return;
+	}
 	if (event.what == evCommand && event.message.command == cmMrToggleFullscreen) {
 		toggleFullscreenPresentation();
 		clearEvent(event);

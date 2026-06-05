@@ -11,7 +11,7 @@
 #include <tvision/tv.h>
 
 #include "MRFileExtensionEditorSettingsInternal.hpp"
-#include "MRNumericSlider.hpp"
+#include "../../ui/widgets/MRNumericSlider.hpp"
 #include "../setup/MRSetupCommon.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../ui/MRWindowSupport.hpp"

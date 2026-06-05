@@ -16,9 +16,9 @@
 #include "../router/MRCommandRouterSearchCore.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../coprocessor/MRCoprocessor.hpp"
-#include "../../ui/MRColumnListView.hpp"
+#include "../../ui/widgets/MRColumnListView.hpp"
 #include "../../ui/MREditWindow.hpp"
-#include "../../ui/MRDropList.hpp"
+#include "../../ui/widgets/MRDropList.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 

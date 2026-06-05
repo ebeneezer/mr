@@ -10,10 +10,13 @@
 #define Uses_TWindow
 #include <tvision/tv.h>
 
+#include <chrono>
 #include <functional>
 #include <cstdint>
 #include <string>
 #include <vector>
+
+class MRFrame;
 
 class MRTaskOverviewView : public TView {
   public:
@@ -28,12 +31,14 @@ class MRTaskOverviewView : public TView {
 
 class MRTaskOverviewWindow : public TWindow {
   public:
-	MRTaskOverviewWindow(const TRect &bounds) noexcept;
+	MRTaskOverviewWindow(const TRect &bounds, MRFrame *frame) noexcept;
 	void setLines(const std::vector<std::string> &lines);
+	virtual void handleEvent(TEvent &event) override;
 	virtual TPalette &getPalette() const override;
 
   private:
 	MRTaskOverviewView *mContent;
+	MRFrame *mFrame;
 };
 
 class MRFrame : public TFrame {
@@ -79,6 +84,7 @@ class MRFrame : public TFrame {
 	void setTaskOverviewProvider(TaskOverviewProvider provider);
 	void updateTaskHover(TPoint globalMouse, bool forceHide = false);
 	void tickTaskOverviewAnimation();
+	void closeTaskOverview();
 
   private:
 	void drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color);
@@ -95,6 +101,7 @@ class MRFrame : public TFrame {
 	TaskOverviewProvider mTaskOverviewProvider;
 	MRTaskOverviewWindow *mTaskOverviewPopup;
 	TGroup *mTaskOverviewPopupOwner;
+	std::chrono::steady_clock::time_point mTaskOverviewLastRefresh;
 	bool mTaskOverviewPinned;
 };
 

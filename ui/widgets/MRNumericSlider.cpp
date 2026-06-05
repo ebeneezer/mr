@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "../config/settings/MRSettingsRuntime.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 
 namespace {
 constexpr unsigned char kPaletteDialogSelector = 58;

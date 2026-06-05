@@ -426,7 +426,9 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	if (viewportLocalLargeFileWarmup) {
 		prefetchState.targetBottomLine = documentTopLine + static_cast<std::size_t>(backgroundRowBudget);
 		prefetchState.reachedBottomLine = documentTopLine;
-	} else
+	} else if (exactLineCountKnown)
+		prefetchState.targetBottomLine = documentTopLine + static_cast<std::size_t>(backgroundRowBudget);
+	else
 		prefetchState.targetBottomLine = std::max(prefetchState.targetBottomLine, documentTopLine + static_cast<std::size_t>(backgroundRowBudget));
 	if (exactLineCountKnown) {
 		if (prefetchState.targetBottomLine > exactLineCount) prefetchState.targetBottomLine = exactLineCount;
