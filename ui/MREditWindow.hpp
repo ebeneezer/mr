@@ -509,6 +509,7 @@ class MREditWindow : public TWindow {
 		const ushort originalEvent = event.what;
 		const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
 		const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
+		const bool originalEditorDoubleClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0 && editor->mouseInView(event.mouse.where);
 			maybeTraceTtyCollisionKeyEvent("window-pre", event);
 			traceCalculatorHotkeyEvent("window-pre", event);
 
@@ -571,7 +572,9 @@ class MREditWindow : public TWindow {
 
 		TWindow::handleEvent(event);
 		if (editor != nullptr) {
-			if (originalEvent == evMouseDown) static_cast<void>(mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers()));
+			if (originalEvent == evMouseDown) {
+				if (!originalEditorDoubleClick || !handleEditorDoubleClickBlockExpansion()) static_cast<void>(mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers()));
+			}
 			else if (mBlockOps.isMarking() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.updateFromEditor(*editor));
 			else if (mBlockOps.hasVisibleBlock() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.refreshVisual(*editor));
 		}
@@ -1589,6 +1592,117 @@ class MREditWindow : public TWindow {
 				editor->update(ufView);
 			}
 		}
+
+	static bool doubleClickWordByte(char ch) noexcept {
+		const unsigned char uch = static_cast<unsigned char>(ch);
+		return std::isalnum(uch) != 0 || ch == '_';
+	}
+
+	bool currentWordRange(std::size_t &start, std::size_t &end) const {
+		if (editor == nullptr || editor->bufferLength() == 0) return false;
+
+		const std::size_t length = editor->bufferLength();
+		std::size_t probe = std::min(editor->cursorOffset(), length);
+
+		if (probe < length && doubleClickWordByte(editor->charAtOffset(probe))) {
+		} else if (probe > 0 && doubleClickWordByte(editor->charAtOffset(probe - 1)))
+			--probe;
+		else
+			return false;
+
+		start = probe;
+		while (start > 0 && doubleClickWordByte(editor->charAtOffset(start - 1)))
+			--start;
+		end = probe + 1;
+		while (end < length && doubleClickWordByte(editor->charAtOffset(end)))
+			++end;
+		return start < end;
+	}
+
+	std::size_t lineBlockEndForStart(std::size_t lineStart) const {
+		if (editor == nullptr) return 0;
+		const std::size_t length = editor->bufferLength();
+		if (lineStart >= length) return length;
+
+		std::size_t next = editor->nextLineOffset(lineStart);
+		if (next <= lineStart) next = length;
+		return std::min(next, length);
+	}
+
+	std::size_t lineBlockCursorEndForStart(std::size_t lineStart) const {
+		if (editor == nullptr) return 0;
+		return editor->lineEndOffset(lineStart);
+	}
+
+	std::size_t wholeFileLineBlockCursorEnd() const {
+		if (editor == nullptr || editor->bufferLength() == 0) return 0;
+
+		std::size_t probe = editor->bufferLength();
+		if (probe > 0 && editor->charAtOffset(probe - 1) == '\n') --probe;
+		return editor->lineEndOffset(probe);
+	}
+
+	bool lineIsBlank(std::size_t lineStart) const {
+		if (editor == nullptr) return true;
+
+		const std::size_t lineEnd = editor->lineEndOffset(lineStart);
+		for (std::size_t pos = lineStart; pos < lineEnd; ++pos) {
+			const unsigned char ch = static_cast<unsigned char>(editor->charAtOffset(pos));
+			if (std::isspace(ch) == 0) return false;
+		}
+		return true;
+	}
+
+	bool currentParagraphRange(std::size_t &start, std::size_t &end, std::size_t &cursorEnd) const {
+		if (editor == nullptr || editor->bufferLength() == 0) return false;
+
+		start = editor->lineStartOffset(editor->cursorOffset());
+		if (lineIsBlank(start)) return false;
+
+		while (start > 0) {
+			const std::size_t previous = editor->lineStartOffset(editor->prevLineOffset(start));
+			if (previous == start || lineIsBlank(previous)) break;
+			start = previous;
+		}
+
+		std::size_t lineStart = editor->lineStartOffset(editor->cursorOffset());
+		std::size_t lastContentLineStart = lineStart;
+		end = lineBlockEndForStart(lastContentLineStart);
+		while (end < editor->bufferLength()) {
+			lineStart = end;
+			if (lineIsBlank(lineStart)) break;
+			lastContentLineStart = lineStart;
+			end = lineBlockEndForStart(lastContentLineStart);
+		}
+		cursorEnd = lineBlockCursorEndForStart(lastContentLineStart);
+		return start < end;
+	}
+
+	bool visibleBlockMatches(MRFEBlockMode mode, std::size_t start, std::size_t end) const {
+		return mBlockOps.hasVisibleBlock() && mBlockOps.mGeometry.mode == mode && mBlockOps.mGeometry.rangeStart == start && mBlockOps.mGeometry.rangeEnd == end;
+	}
+
+	bool handleEditorDoubleClickBlockExpansion() {
+		if (editor == nullptr) return false;
+
+		std::size_t wordStart = 0;
+		std::size_t wordEnd = 0;
+		if (!currentWordRange(wordStart, wordEnd)) return false;
+
+		const std::size_t lineStart = editor->lineStartOffset(editor->cursorOffset());
+		const std::size_t lineRangeEnd = lineBlockEndForStart(lineStart);
+		const std::size_t lineCursorEnd = lineBlockCursorEndForStart(lineStart);
+		std::size_t paragraphStart = 0;
+		std::size_t paragraphEnd = 0;
+		std::size_t paragraphCursorEnd = 0;
+		const bool hasParagraph = currentParagraphRange(paragraphStart, paragraphEnd, paragraphCursorEnd);
+
+		if (hasParagraph && visibleBlockMatches(MRFEBlockMode::Line, paragraphStart, paragraphEnd)) return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Line, 0, wholeFileLineBlockCursorEnd());
+		if (hasParagraph && visibleBlockMatches(MRFEBlockMode::Line, lineStart, lineRangeEnd)) return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Line, paragraphStart, paragraphCursorEnd);
+		if (visibleBlockMatches(MRFEBlockMode::Stream, wordStart, wordEnd)) return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Line, lineStart, lineCursorEnd);
+		return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Stream, wordStart, wordEnd);
+	}
+
 	void resetWindowColorsToConfiguredDefaults() {
 		mWindowPaletteData = defaultWindowPaletteData();
 		rebuildWindowPalette();

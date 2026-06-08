@@ -2,7 +2,7 @@
 
 Diese Notiz spiegelt unsere Architektur gegen die Eigenschaften, die VS Code trotz Electron stabil und schnell machen. Der Punkt ist nicht, Electron zu kopieren, sondern die disziplinierenden Prinzipien auf `mr` zu uebertragen.
 
-## Was bereits gut passt
+## Was bereits gut passt      trallal�
 
 - Deblocking und Background Processing sind von Beginn an Teil der Architektur: Coprocessor, deferred UI, Derived State, Syntax-/Minimap-Ableitungen und externe Kommandos blockieren die UI nicht absichtlich.
 - Fachliche Isolation ist vorhanden: Compiler-Diagnostik ist nicht direkt Editor-Malcode, sondern Build Output, Parser, Problems Pane, Source-Jump und SideKick-Projektion.
@@ -11,6 +11,9 @@ Diese Notiz spiegelt unsere Architektur gegen die Eigenschaften, die VS Code tro
 - Textmodell als zentrale Wahrheit ist angelegt: Piece Table und Editor-State liefern die Datenbasis, UI-Komponenten sollten nur Projektionen daraus sein.
 
 ## Wo wir von VS Code lernen koennen
+                                          
+
+
 
 - Aktivierungsbudgets pro Subsystem einfuehren: unterscheiden, was vor First Paint, vor First Edit, vor First Command oder erst bei echter Nutzung geladen werden muss.
 - Bootstrap-Messung dauerhaft behalten und nur wenige, klare Phasen loggen: total, settings load/apply, first editor open, first paint, first syntax ready, first minimap ready und command latency fuer Build/Search/Open.
@@ -40,7 +43,7 @@ BentoBox hat gezeigt, dass Source, Tool-Panes, Scrollbars, Minimap, SideKick und
 - Layout-Dirty immer vor Content/Chrome/Scrollbars aufloesen.
 - Draw-Pfade nur ausfuehren, wenn ihr Dirty-Bit gesetzt ist oder der relevante Vergleichszustand geaendert wurde.
 - Dirty-Bits erst nach erfolgreichem Zeichnen konsumieren.
-- Pilot zuerst an BentoBox/Pane-Chrome/Scrollbars, nicht sofort an allen Views.          Trullala
+- Pilot zuerst an BentoBox/Pane-Chrome/Scrollbars, nicht sofort an allen Views.
 
 ### Nicht-Ziele
 
@@ -60,14 +63,14 @@ Ja, bei Umsetzung. Die Karte beruehrt TVision Drawing/Event Mechanics und damit 
 - Keine `show()`/`hide()`-Seiteneffekte waehrend Destroy/Close.
 - Views zeichnen nur ihre eigene Projektion.
 - Dirty-State beschreibt UI-Ungueltigkeit, nicht fachliche Wahrheit.
-- Derived State und Compiler-Diagnostik bleiben Snapshot-/Epoch-gebunden.
+- Derived State und Compiler-Diagnostik bleiben Snapshot-/Epoch-gebunden.                 trullala
 
 ### Akzeptanzkriterien
 
 - BentoBox zeichnet Pane-Chrome, Source-Content, Tool-Panes, Scrollbars und SideKick nur bei relevanter Aenderung.
 - Keine Regression bei Fokuswechsel, Pane-Split, Close, Maximize, SideKick-Tracking und Mousewheel.
 - Scrollbars bleiben korrekt sichtbar/versteckt und reclaimen Platz wie bisher.
-- Close-Pfade bleiben crash-frei.
+- Close-Pfade bleiben crash-freix.
 - Build und Regression laufen gruene durch.
 
 ### Pruefplan
@@ -75,4 +78,33 @@ Ja, bei Umsetzung. Die Karte beruehrt TVision Drawing/Event Mechanics und damit 
 - `make clean all CXX=clang++`
 - `make regression-check CXX=clang++`
 - Manueller Smoke-Test: Bento splitten, Build ausfuehren, Problems klicken, SideKick scrollen, Pane close/maximize, Source close, Mousewheel in Source und Tool-Panes.
-<
+
+
+
+
+
+## Kanban-Karte: File Compare Orientierung
+
+### Titel
+
+File Compare semantic navigation and overview
+
+### Erledigt
+
+- Change-Zaehler je Pane mit sichtbarer Change-Range und sichtbaren/totalen Delete-/Insert-Zeilen.
+- FC-Minimap-Farben und FC-spezifische Diff-Projektion.
+- Hunk-Navigation per Next/Previous Difference.
+
+### Offen
+
+- Kompakte Diff-Uebersicht als eigene Hunk-Liste oder Side-Pane.
+- Sync-Anker sichtbarer machen.
+- Kleiner Statusbereich pro Diff-Hunk.
+
+### Invarianten
+
+- Panes bleiben synchron gekoppelt.
+- Diff-Daten bleiben aus `fileCompareHunks`/`fileCompareChangeGroups` abgeleitet.
+- Keine neue Render-Seitenroute neben TVision.
+
+>
