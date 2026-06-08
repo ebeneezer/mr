@@ -122,9 +122,8 @@ class TPdfExportDialog final : public MRDialogFoundation {
 	TPdfExportDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, kDialogHeight), "EXPORT TO PDF", kDialogWidth, kDialogHeight, initMrDialogFrame) {
 		static constexpr std::array buttons{
 		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
-		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
 		};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 		const int outputHistoryLeft = kFieldRight;
 		const int outputBrowseLeft = outputHistoryLeft + kDropButtonWidth;

@@ -238,8 +238,20 @@ static const MRColorSetupItem kMiniMapColorItems[] = {
     {"normal", kMrPaletteMiniMapNormal}, {"viewport cursor", kMrPaletteMiniMapViewport}, {"changed", kMrPaletteMiniMapChanged}, {"find marker", kMrPaletteMiniMapFindMarker}, {"error marker", kMrPaletteMiniMapErrorMarker},
 };
 
+static const MRColorSetupItem kFileCompareMiniMapColorItems[] = {
+    {"normal", kMrPaletteFileCompareMiniMapNormal}, {"viewport cursor", kMrPaletteFileCompareMiniMapViewport}, {"changed", kMrPaletteFileCompareMiniMapChanged}, {"find marker", kMrPaletteFileCompareMiniMapFindMarker}, {"error marker", kMrPaletteFileCompareMiniMapErrorMarker},
+    {"diff equal", kMrPaletteFileCompareMiniMapEqual}, {"diff missing", kMrPaletteFileCompareMiniMapMissing}, {"diff insert", kMrPaletteFileCompareMiniMapInsert}, {"diff offset", kMrPaletteFileCompareMiniMapOffset},
+};
+
 static const MRColorSetupItem kCodeColorItems[] = {
     {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight},
+};
+
+static const MRColorSetupItem kFileCompareColorItems[] = {
+    {"text equal", kMrPaletteFileCompareTextEqual}, {"text missing", kMrPaletteFileCompareTextMissing}, {"text insert", kMrPaletteFileCompareTextInsert}, {"text offset", kMrPaletteFileCompareTextOffset},
+    {"gutter equal", kMrPaletteFileCompareGutterEqual}, {"gutter missing", kMrPaletteFileCompareGutterMissing}, {"gutter insert", kMrPaletteFileCompareGutterInsert}, {"gutter offset", kMrPaletteFileCompareGutterOffset},
+    {"bento border", kMrPaletteFileCompareBentoBorder}, {"pane border", kMrPaletteFileComparePaneBorder}, {"bento border bold", kMrPaletteFileCompareBentoBorderBold}, {"format ruler", kMrPaletteFileCompareFormatRuler},
+    {"line numbers", kMrPaletteFileCompareLineNumbers}, {"focused pane border", kMrPaletteFileCompareFocusedPaneBorder},
 };
 
 static const ColorGroupDefinition kColorGroups[] = {
@@ -248,7 +260,9 @@ static const ColorGroupDefinition kColorGroups[] = {
     {MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems, std::size(kHelpColorItems)},
     {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems, std::size(kOtherColorItems)},
     {MRColorSetupGroup::MiniMap, "MINIMAP COLORS", "MINIMAPCOLORS", kMiniMapColorItems, std::size(kMiniMapColorItems)},
+    {MRColorSetupGroup::FileCompareMiniMap, "FILE COMPARE MINIMAP COLORS", "FILECOMPAREMINIMAPCOLORS", kFileCompareMiniMapColorItems, std::size(kFileCompareMiniMapColorItems)},
     {MRColorSetupGroup::Code, "CODE COLORS", "CODECOLORS", kCodeColorItems, std::size(kCodeColorItems)},
+    {MRColorSetupGroup::FileCompare, "FILE COMPARE COLORS", "FILECOMPARECOLORS", kFileCompareColorItems, std::size(kFileCompareColorItems)},
 };
 
 const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
@@ -302,6 +316,29 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteCodeDelimiters) return defaults[13];
 	if (paletteIndex == kMrPaletteSidekickEditorText) return 0x30;
 	if (paletteIndex == kMrPaletteSidekickEditorHighlight) return 0xE0;
+	if (paletteIndex == kMrPaletteFileCompareTextEqual) return 0x1A;
+	if (paletteIndex == kMrPaletteFileCompareTextMissing) return 0x1C;
+	if (paletteIndex == kMrPaletteFileCompareTextInsert) return 0x1E;
+	if (paletteIndex == kMrPaletteFileCompareTextOffset) return 0x1F;
+	if (paletteIndex == kMrPaletteFileCompareGutterEqual) return 0x1A;
+	if (paletteIndex == kMrPaletteFileCompareGutterMissing) return 0x1C;
+	if (paletteIndex == kMrPaletteFileCompareGutterInsert) return 0x1E;
+	if (paletteIndex == kMrPaletteFileCompareGutterOffset) return 0x1F;
+	if (paletteIndex == kMrPaletteFileCompareMiniMapEqual) return 0x1A;
+	if (paletteIndex == kMrPaletteFileCompareMiniMapMissing) return 0x1C;
+	if (paletteIndex == kMrPaletteFileCompareMiniMapInsert) return 0x1E;
+	if (paletteIndex == kMrPaletteFileCompareMiniMapOffset) return 0x1F;
+	if (paletteIndex == kMrPaletteFileCompareBentoBorder) return defaultColorForSlot(kPaletteBlueWindowFrame);
+	if (paletteIndex == kMrPaletteFileComparePaneBorder) return defaultColorForSlot(kMrPaletteFocusedPaneBorder);
+	if (paletteIndex == kMrPaletteFileCompareBentoBorderBold) return defaultColorForSlot(kPaletteBlueWindowBold);
+	if (paletteIndex == kMrPaletteFileCompareFormatRuler) return defaultColorForSlot(kMrPaletteFormatRuler);
+	if (paletteIndex == kMrPaletteFileCompareLineNumbers) return defaultColorForSlot(kMrPaletteLineNumbers);
+	if (paletteIndex == kMrPaletteFileCompareFocusedPaneBorder) return defaultColorForSlot(kMrPaletteFocusedPaneBorder);
+	if (paletteIndex == kMrPaletteFileCompareMiniMapNormal) return defaultColorForSlot(kMrPaletteMiniMapNormal);
+	if (paletteIndex == kMrPaletteFileCompareMiniMapViewport) return defaultColorForSlot(kMrPaletteMiniMapViewport);
+	if (paletteIndex == kMrPaletteFileCompareMiniMapChanged) return defaultColorForSlot(kMrPaletteMiniMapChanged);
+	if (paletteIndex == kMrPaletteFileCompareMiniMapFindMarker) return defaultColorForSlot(kMrPaletteMiniMapFindMarker);
+	if (paletteIndex == kMrPaletteFileCompareMiniMapErrorMarker) return defaultColorForSlot(kMrPaletteMiniMapErrorMarker);
 	if (paletteIndex == kMrPaletteFocusedPaneBorder) return defaults[kPaletteBlueWindowBold];
 	if (paletteIndex == kMrPaletteStatusLine) return defaults[kPaletteMenuDescription];
 	if (paletteIndex == kMrPaletteStatusLineBold) return defaults[kPaletteMenuGhostedDescription];
@@ -338,8 +375,12 @@ MRColorSetupSettings defaultsFromColorGroups() {
 		settings.otherColors[i] = defaultColorForSlot(kOtherColorItems[i].paletteIndex);
 	for (std::size_t i = 0; i < settings.miniMapColors.size(); ++i)
 		settings.miniMapColors[i] = defaultColorForSlot(kMiniMapColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < settings.fileCompareMiniMapColors.size(); ++i)
+		settings.fileCompareMiniMapColors[i] = defaultColorForSlot(kFileCompareMiniMapColorItems[i].paletteIndex);
 	for (std::size_t i = 0; i < settings.codeColors.size(); ++i)
 		settings.codeColors[i] = defaultColorForSlot(kCodeColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < settings.fileCompareColors.size(); ++i)
+		settings.fileCompareColors[i] = defaultColorForSlot(kFileCompareColorItems[i].paletteIndex);
 	return settings;
 }
 
@@ -369,6 +410,12 @@ template <std::size_t N> std::string formatColorListLiteral(const std::array<uns
 std::string formatWindowColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
 	std::string out = formatColorListLiteral(values);
 	out[1] = '6';
+	return out;
+}
+
+std::string formatFileCompareColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kFileCompareCount> &values) {
+	std::string out = formatColorListLiteral(values);
+	out[1] = '2';
 	return out;
 }
 
@@ -420,6 +467,84 @@ bool parseCodeColorListLiteral(const std::string &literal, std::array<unsigned c
 	if (parsed.size() == outValues.size() - 2) {
 		outValues[outValues.size() - 2] = defaultColorForSlot(kMrPaletteSidekickEditorText);
 		outValues[outValues.size() - 1] = defaultColorForSlot(kMrPaletteSidekickEditorHighlight);
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool parseFileCompareMiniMapColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kFileCompareMiniMapCount> &outValues, std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::vector<unsigned char> parsed;
+	unsigned char value = 0;
+
+	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0) text = text.substr(3);
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
+	while (cursor <= text.size()) {
+		std::size_t comma = text.find(',', cursor);
+		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed.push_back(value);
+		if (comma == std::string::npos) break;
+		cursor = comma + 1;
+	}
+	if (parsed.size() != outValues.size() && parsed.size() != 5) return setError(errorMessage, "Unexpected FILECOMPAREMINIMAPCOLORS list size.");
+	for (std::size_t i = 0; i < outValues.size(); ++i)
+		outValues[i] = defaultColorForSlot(kFileCompareMiniMapColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < parsed.size(); ++i)
+		outValues[i] = parsed[i];
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool parseFileCompareColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kFileCompareCount> &outValues, std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::vector<unsigned char> parsed;
+	unsigned char value = 0;
+	bool v2Format = false;
+	static constexpr std::array<std::size_t, 5> acceptedSizes = {12, MRColorSetupSettings::kFileCompareCount, 15, 16, 18};
+
+	if (text.rfind("v2:", 0) == 0 || text.rfind("V2:", 0) == 0) {
+		text = text.substr(3);
+		v2Format = true;
+	} else if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+		text = text.substr(3);
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
+	while (cursor <= text.size()) {
+		std::size_t comma = text.find(',', cursor);
+		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed.push_back(value);
+		if (comma == std::string::npos) break;
+		cursor = comma + 1;
+	}
+	if (v2Format) {
+		if (parsed.size() != outValues.size()) return setError(errorMessage, "Unexpected FILECOMPARECOLORS v2 list size.");
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	bool accepted = false;
+	for (std::size_t acceptedSize : acceptedSizes)
+		if (parsed.size() == acceptedSize) accepted = true;
+	if (!accepted) return setError(errorMessage, "Unexpected FILECOMPARECOLORS list size.");
+	for (std::size_t i = 0; i < outValues.size(); ++i)
+		outValues[i] = defaultColorForSlot(kFileCompareColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < std::min<std::size_t>(8, parsed.size()); ++i)
+		outValues[i] = parsed[i];
+	if (parsed.size() >= 14) {
+		outValues[8] = parsed[12];
+		outValues[9] = parsed[13];
+	}
+	if (parsed.size() >= 15) outValues[10] = parsed[14];
+	if (parsed.size() >= 16) outValues[11] = parsed[15];
+	if (parsed.size() >= 18) {
+		outValues[12] = parsed[16];
+		outValues[13] = parsed[17];
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -706,8 +831,14 @@ bool applyColorSetupValueInternalImpl(MRColorSetupSettings &configured, const st
 		case MRColorSetupGroup::MiniMap:
 			if (!parseColorListLiteral(value, configured.miniMapColors, errorMessage)) return false;
 			break;
+		case MRColorSetupGroup::FileCompareMiniMap:
+			if (!parseFileCompareMiniMapColorListLiteral(value, configured.fileCompareMiniMapColors, errorMessage)) return false;
+			break;
 		case MRColorSetupGroup::Code:
 			if (!parseCodeColorListLiteral(value, configured.codeColors, errorMessage)) return false;
+			break;
+		case MRColorSetupGroup::FileCompare:
+			if (!parseFileCompareColorListLiteral(value, configured.fileCompareColors, errorMessage)) return false;
 			break;
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
@@ -762,7 +893,9 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 	if (!assignments.contains("HELPCOLORS")) assignments["HELPCOLORS"] = formatColorListLiteral(defaults.helpColors);
 	if (!assignments.contains("OTHERCOLORS")) assignments["OTHERCOLORS"] = formatColorListLiteral(defaults.otherColors);
 	if (!assignments.contains("MINIMAPCOLORS")) assignments["MINIMAPCOLORS"] = formatColorListLiteral(defaults.miniMapColors);
+	if (!assignments.contains("FILECOMPAREMINIMAPCOLORS")) assignments["FILECOMPAREMINIMAPCOLORS"] = formatColorListLiteral(defaults.fileCompareMiniMapColors);
 	if (!assignments.contains("CODECOLORS")) assignments["CODECOLORS"] = formatColorListLiteral(defaults.codeColors);
+	if (!assignments.contains("FILECOMPARECOLORS")) assignments["FILECOMPARECOLORS"] = formatFileCompareColorListLiteral(defaults.fileCompareColors);
 	if (upgradeRequired != nullptr) *upgradeRequired = localUpgradeRequired;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -827,8 +960,14 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 		case MRColorSetupGroup::MiniMap:
 			for (std::size_t i = 0; i < configured.miniMapColors.size(); ++i) configured.miniMapColors[i] = values[i];
 			break;
+		case MRColorSetupGroup::FileCompareMiniMap:
+			for (std::size_t i = 0; i < configured.fileCompareMiniMapColors.size(); ++i) configured.fileCompareMiniMapColors[i] = values[i];
+			break;
 		case MRColorSetupGroup::Code:
 			for (std::size_t i = 0; i < configured.codeColors.size(); ++i) configured.codeColors[i] = values[i];
+			break;
+		case MRColorSetupGroup::FileCompare:
+			for (std::size_t i = 0; i < configured.fileCompareColors.size(); ++i) configured.fileCompareColors[i] = values[i];
 			break;
 	}
 	configuredColorThemeDisplayNameValue().clear();
@@ -857,8 +996,14 @@ void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *val
 		case MRColorSetupGroup::MiniMap:
 			for (std::size_t i = 0; i < configured.miniMapColors.size(); ++i) values[i] = configured.miniMapColors[i];
 			break;
+		case MRColorSetupGroup::FileCompareMiniMap:
+			for (std::size_t i = 0; i < configured.fileCompareMiniMapColors.size(); ++i) values[i] = configured.fileCompareMiniMapColors[i];
+			break;
 		case MRColorSetupGroup::Code:
 			for (std::size_t i = 0; i < configured.codeColors.size(); ++i) values[i] = configured.codeColors[i];
+			break;
+		case MRColorSetupGroup::FileCompare:
+			for (std::size_t i = 0; i < configured.fileCompareColors.size(); ++i) values[i] = configured.fileCompareColors[i];
 			break;
 	}
 }
@@ -1033,9 +1178,19 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 			value = configured.miniMapColors[i];
 			return true;
 		}
+	for (std::size_t i = 0; i < std::size(kFileCompareMiniMapColorItems); ++i)
+		if (kFileCompareMiniMapColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.fileCompareMiniMapColors[i];
+			return true;
+		}
 	for (std::size_t i = 0; i < std::size(kCodeColorItems); ++i)
 		if (kCodeColorItems[i].paletteIndex == paletteIndex) {
 			value = configured.codeColors[i];
+			return true;
+		}
+	for (std::size_t i = 0; i < std::size(kFileCompareColorItems); ++i)
+		if (kFileCompareColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.fileCompareColors[i];
 			return true;
 		}
 	return false;
@@ -1096,7 +1251,9 @@ std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors) {
 	source += "HELPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";
 	source += "OTHERCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) + "');\n";
 	source += "MINIMAPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) + "');\n";
+	source += "FILECOMPAREMINIMAPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.fileCompareMiniMapColors)) + "');\n";
 	source += "CODECOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.codeColors)) + "');\n";
+	source += "FILECOMPARECOLORS('" + escapeMrmacSingleQuotedLiteral(formatFileCompareColorListLiteral(colors.fileCompareColors)) + "');\n";
 	if (!themeName.empty()) source += "THEME_NAME('" + escapeMrmacSingleQuotedLiteral(themeName) + "');\n";
 	source += "END_MACRO;\n";
 	return source;

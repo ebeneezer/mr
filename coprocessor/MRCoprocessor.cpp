@@ -644,6 +644,7 @@ Coprocessor::ComputePriority Coprocessor::computePriorityForTask(TaskKind kind) 
 		case TaskKind::SyntaxWarmup:
 		case TaskKind::FoldWarmup:
 		case TaskKind::SaveNormalizationWarmup:
+		case TaskKind::FileCompare:
 			return ComputePriority::Normal;
 		case TaskKind::Custom:
 		default:

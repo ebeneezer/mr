@@ -28,7 +28,7 @@ TMenuItem *createLowerCaseItem() {
 }
 
 TSubMenu *createFileMenu() {
-	return &(*new TSubMenu("~F~ile", kbAltF) + *new TMenuItem("~O~pen...", cmMrFileOpen, kbF3, hcNoContext, "F3") + *new TMenuItem("~L~oad...", cmMrFileLoad, kbNoKey, hcNoContext) + *new TMenuItem("A~c~quire...", cmMrFileAcquire, kbNoKey, hcNoContext) + *new TMenuItem("Open live lo~G~...", cmMrFileOpenLiveLog, kbNoKey, hcNoContext) + *new TMenuItem("Open ~J~ournal...", cmMrFileOpenJournal, kbNoKey, hcNoContext) + *new TMenuItem("~S~ave", cmMrFileSave, kbF2, hcNoContext, "F2") + *new TMenuItem("save ~A~s...", cmMrFileSaveAs, kbCtrlF2, hcNoContext, "CtrlF2") + *new TMenuItem("Save a~L~l...", cmMrFileSaveAll, kbNoKey, hcNoContext) + *new TMenuItem("~I~nfo...", cmMrFileInformation, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~M~erge...", cmMrFileMerge, kbNoKey, hcNoContext) + *new TMenuItem("E~x~port to PDF...", cmMrFilePrint, kbNoKey, hcNoContext) + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X"));
+	return &(*new TSubMenu("~F~ile", kbAltF) + *new TMenuItem("~O~pen...", cmMrFileOpen, kbF3, hcNoContext, "F3") + *new TMenuItem("~L~oad...", cmMrFileLoad, kbNoKey, hcNoContext) + *new TMenuItem("A~c~quire...", cmMrFileAcquire, kbNoKey, hcNoContext) + *new TMenuItem("Open live lo~G~...", cmMrFileOpenLiveLog, kbNoKey, hcNoContext) + *new TMenuItem("Open ~J~ournal...", cmMrFileOpenJournal, kbNoKey, hcNoContext) + *new TMenuItem("Open ~W~orkspace...", cmMrFileOpenWorkspace, kbNoKey, hcNoContext) + *new TMenuItem("~S~ave", cmMrFileSave, kbF2, hcNoContext, "F2") + *new TMenuItem("save ~A~s...", cmMrFileSaveAs, kbCtrlF2, hcNoContext, "CtrlF2") + *new TMenuItem("Save a~L~l...", cmMrFileSaveAll, kbNoKey, hcNoContext) + *new TMenuItem("~I~nfo...", cmMrFileInformation, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~M~erge...", cmMrFileMerge, kbNoKey, hcNoContext) + *new TMenuItem("E~x~port to PDF...", cmMrFilePrint, kbNoKey, hcNoContext) + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X"));
 }
 
 TSubMenu *createEditMenu() {
@@ -52,7 +52,7 @@ TSubMenu *createSearchMenu() {
 }
 
 TSubMenu *createTextMenu() {
-	return &(*new TSubMenu("~T~ext", kbAltT) + *new TMenuItem("p~U~sh position onto marker stack", cmMrSearchPushMarker, kbF4, hcNoContext, "F4") + *new TMenuItem("~G~et position from marker stack", cmMrSearchGetMarker, kbShiftF4, hcNoContext, "ShiftF4") + newLine() + *createUpperCaseItem() + *createLowerCaseItem() + *new TMenuItem("cen~T~er line", cmMrTextCenterLine, kbNoKey, hcNoContext) + *new TMenuItem("time/~D~ate stamp", cmMrTextTimeDateStamp, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("re-~F~ormat paragraph", cmMrTextReformatParagraph, kbAltR, hcNoContext, "AltR"));
+	return &(*new TSubMenu("~T~ext", kbAltT) + *new TMenuItem("p~U~sh position onto marker stack", cmMrSearchPushMarker, kbF4, hcNoContext, "F4") + *new TMenuItem("~G~et position from marker stack", cmMrSearchGetMarker, kbShiftF4, hcNoContext, "ShiftF4") + newLine() + *createUpperCaseItem() + *createLowerCaseItem() + *new TMenuItem("cen~T~er line", cmMrTextCenterLine, kbNoKey, hcNoContext) + *new TMenuItem("time/~D~ate stamp", cmMrTextTimeDateStamp, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("re-~F~ormat paragraph", cmMrTextReformatParagraph, kbAltR, hcNoContext, "AltR") + *new TMenuItem("file co~M~pare...", cmMrTextFileCompare, kbNoKey, hcNoContext));
 }
 
 TMenuItem *createInstallationAndSetupMenuItem() {

@@ -19,6 +19,7 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <random>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -28,6 +29,7 @@
 #include <vector>
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../coprocessor/MRCoprocessor.hpp"
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
@@ -120,7 +122,44 @@ struct WorkspaceEntry {
 	int line = 1;
 	int vd = 1;
 	bool minimized = false;
+	bool hasBentoSnapshot = false;
+	MRBentoWorkspaceSnapshot bentoSnapshot;
+	bool hasFileCompareSources = false;
+	std::string fileCompareOriginalUrl;
+	std::string fileCompareCompareUrl;
 };
+
+std::string workspaceHexEncode(std::string_view value) {
+	static constexpr char hex[] = "0123456789ABCDEF";
+	std::string encoded;
+
+	encoded.reserve(value.size() * 2);
+	for (unsigned char ch : value) {
+		encoded.push_back(hex[(ch >> 4) & 0x0F]);
+		encoded.push_back(hex[ch & 0x0F]);
+	}
+	return encoded;
+}
+
+int workspaceHexValue(char ch) noexcept {
+	if (ch >= '0' && ch <= '9') return ch - '0';
+	if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+	if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+	return -1;
+}
+
+bool workspaceHexDecode(const std::string &encoded, std::string &decoded) {
+	if ((encoded.size() % 2) != 0) return false;
+	decoded.clear();
+	decoded.reserve(encoded.size() / 2);
+	for (std::size_t i = 0; i < encoded.size(); i += 2) {
+		const int high = workspaceHexValue(encoded[i]);
+		const int low = workspaceHexValue(encoded[i + 1]);
+		if (high < 0 || low < 0) return false;
+		decoded.push_back(static_cast<char>((high << 4) | low));
+	}
+	return true;
+}
 
 std::string escapeMrmacSingleQuotedLiteral(std::string_view value) {
 	std::string escaped;
@@ -167,9 +206,116 @@ void pruneManuallyHiddenWindows(const std::vector<MREditWindow *> &windows) {
 	}
 }
 
+std::vector<std::string> splitWorkspaceToken(const std::string &text, char delimiter) {
+	std::vector<std::string> parts;
+	std::string part;
+	std::istringstream input(text);
+
+	while (std::getline(input, part, delimiter)) parts.push_back(part);
+	return parts;
+}
+
+bool parseWorkspaceInt(const std::string &text, int &value) {
+	char *end = nullptr;
+	const long parsed = std::strtol(text.c_str(), &end, 10);
+
+	if (end == text.c_str() || *end != '\0') return false;
+	if (parsed < std::numeric_limits<int>::min() || parsed > std::numeric_limits<int>::max()) return false;
+	value = static_cast<int>(parsed);
+	return true;
+}
+
+bool parseWorkspacePrefixedInt(const std::string &text, const char *prefix, int &value) {
+	const std::string expected(prefix);
+
+	if (text.rfind(expected, 0) != 0) return false;
+	return parseWorkspaceInt(text.substr(expected.size()), value);
+}
+
+std::string encodeBentoWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapshot) {
+	std::ostringstream out;
+
+	out << "v1";
+	out << ",m:" << static_cast<int>(snapshot.mode);
+	out << ",r:" << snapshot.rootNode;
+	out << ",a:" << snapshot.activeLeafId;
+	out << ",x:" << snapshot.maximizedLeafId;
+	out << ",n:";
+	for (std::size_t i = 0; i < snapshot.nodes.size(); ++i) {
+		const MRBentoWorkspaceNode &node = snapshot.nodes[i];
+		if (i != 0) out << ".";
+		out << node.kind << ":" << node.orientation << ":" << node.dividerPosition << ":" << node.firstChild << ":" << node.secondChild << ":" << node.leafId;
+	}
+	out << ",l:";
+	for (std::size_t i = 0; i < snapshot.leaves.size(); ++i) {
+		const MRBentoWorkspaceLeaf &leaf = snapshot.leaves[i];
+		if (i != 0) out << ".";
+		out << leaf.id << ":" << static_cast<int>(leaf.role) << ":" << (leaf.visible ? 1 : 0);
+	}
+	return out.str();
+}
+
+bool parseBentoWorkspaceSnapshot(const std::string &token, MRBentoWorkspaceSnapshot &snapshot) {
+	std::vector<std::string> fields = splitWorkspaceToken(token, ',');
+	int mode = 0;
+
+	if (fields.size() != 7 || fields[0] != "v1") return false;
+	if (!parseWorkspacePrefixedInt(fields[1], "m:", mode)) return false;
+	if (!parseWorkspacePrefixedInt(fields[2], "r:", snapshot.rootNode)) return false;
+	if (!parseWorkspacePrefixedInt(fields[3], "a:", snapshot.activeLeafId)) return false;
+	if (!parseWorkspacePrefixedInt(fields[4], "x:", snapshot.maximizedLeafId)) return false;
+	if (mode < bbmToolWorkspace || mode > bbmFileCompare) return false;
+	snapshot.mode = static_cast<MRBentoBoxMode>(mode);
+
+	if (fields[5].rfind("n:", 0) != 0 || fields[6].rfind("l:", 0) != 0) return false;
+	snapshot.nodes.clear();
+	snapshot.leaves.clear();
+
+	for (const std::string &nodeText : splitWorkspaceToken(fields[5].substr(2), '.')) {
+		std::vector<std::string> values = splitWorkspaceToken(nodeText, ':');
+		MRBentoWorkspaceNode node;
+
+		if (values.size() != 6) return false;
+		if (!parseWorkspaceInt(values[0], node.kind)) return false;
+		if (!parseWorkspaceInt(values[1], node.orientation)) return false;
+		if (!parseWorkspaceInt(values[2], node.dividerPosition)) return false;
+		if (!parseWorkspaceInt(values[3], node.firstChild)) return false;
+		if (!parseWorkspaceInt(values[4], node.secondChild)) return false;
+		if (!parseWorkspaceInt(values[5], node.leafId)) return false;
+		snapshot.nodes.push_back(node);
+	}
+	for (const std::string &leafText : splitWorkspaceToken(fields[6].substr(2), '.')) {
+		std::vector<std::string> values = splitWorkspaceToken(leafText, ':');
+		MRBentoWorkspaceLeaf leaf;
+		int role = 0;
+		int visible = 0;
+
+		if (values.size() != 3) return false;
+		if (!parseWorkspaceInt(values[0], leaf.id)) return false;
+		if (!parseWorkspaceInt(values[1], role)) return false;
+		if (!parseWorkspaceInt(values[2], visible)) return false;
+		if (role < bprSource || role > bprDiffCompare || (visible != 0 && visible != 1)) return false;
+		leaf.role = static_cast<MRBentoPaneRole>(role);
+		leaf.visible = visible != 0;
+		snapshot.leaves.push_back(leaf);
+	}
+	return !snapshot.nodes.empty() && !snapshot.leaves.empty();
+}
+
+int workspaceVirtualDesktopOrRandom(int savedDesktop) {
+	int maxDesktop = configuredVirtualDesktops();
+
+	if (maxDesktop < 1) maxDesktop = 1;
+	if (savedDesktop >= 1 && savedDesktop <= maxDesktop) return savedDesktop;
+
+	static std::mt19937 generator(std::random_device{}());
+	std::uniform_int_distribution<int> distribution(1, maxDesktop);
+	return distribution(generator);
+}
+
 bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 	static const std::regex linePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
-	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?$)", std::regex_constants::ECMAScript);
+	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?(?: bento=([^ ]+))?(?: fco=([0-9A-Fa-f]+) fcc=([0-9A-Fa-f]+))?$)", std::regex_constants::ECMAScript);
 	std::smatch match;
 	std::smatch payloadMatch;
 	std::string payload;
@@ -198,6 +344,17 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 		entry.restoreX = entry.x;
 		entry.restoreY = entry.y;
 	}
+	if (payloadMatch[14].matched) {
+		entry.hasBentoSnapshot = parseBentoWorkspaceSnapshot(payloadMatch[14].str(), entry.bentoSnapshot);
+		if (!entry.hasBentoSnapshot) return false;
+	}
+	if (payloadMatch[15].matched || payloadMatch[16].matched) {
+		if (!payloadMatch[15].matched || !payloadMatch[16].matched) return false;
+		if (!workspaceHexDecode(payloadMatch[15].str(), entry.fileCompareOriginalUrl)) return false;
+		if (!workspaceHexDecode(payloadMatch[16].str(), entry.fileCompareCompareUrl)) return false;
+		entry.hasFileCompareSources = !entry.fileCompareOriginalUrl.empty() && !entry.fileCompareCompareUrl.empty();
+		if (!entry.hasFileCompareSources) return false;
+	}
 	return !entry.url.empty();
 }
 
@@ -218,25 +375,167 @@ void restoreEditorCursor(MRFileEditor *editor, int line, int column) {
 	editor->revealCursor(True);
 }
 
+std::string workspacePathBaseName(const std::string &path) {
+	const std::size_t pos = path.find_last_of("\\/");
+	return pos == std::string::npos ? path : path.substr(pos + 1);
+}
+
+std::string fileCompareSourceTitle(MREditWindow *window) {
+	if (window == nullptr) return "?No-File";
+	std::string fileName = window->currentFileName();
+	if (!fileName.empty()) return workspacePathBaseName(fileName);
+	const char *title = window->getTitle(0);
+	return title != nullptr && *title != '\0' ? std::string(title) : std::string("?No-File");
+}
+
+MRBentoCompareSource captureWorkspaceFileCompareSource(MREditWindow *window) {
+	MRBentoCompareSource source;
+
+	if (window == nullptr) return source;
+	source.window = window;
+	source.bufferId = window->bufferId();
+	source.documentId = window->documentId();
+	source.version = window->documentVersion();
+	source.wasVisible = (window->state & sfVisible) != 0;
+	source.wasManuallyHidden = isWindowManuallyHidden(window);
+	source.title = fileCompareSourceTitle(window);
+	if (window->getEditor() != nullptr) source.text = window->getEditor()->snapshotText();
+	return source;
+}
+
+std::string fileCompareWorkspaceTitle(const MRBentoCompareSetup &setup) {
+	std::string title = "Compare: " + setup.original.title + " / " + setup.compare.title;
+
+	if (title.size() > 72) title = title.substr(0, 69) + "...";
+	return title;
+}
+
+std::uint64_t submitWorkspaceFileCompareTask(MRBentoBox *bentoBox, const MRBentoCompareSetup &setup) {
+	std::vector<std::string> originalLines;
+	std::vector<std::string> compareLines;
+
+	if (bentoBox == nullptr) return 0;
+	mr::diff::mrSplitTextLinesForDiff(setup.original.text, originalLines);
+	mr::diff::mrSplitTextLinesForDiff(setup.compare.text, compareLines);
+
+	return mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, setup.original.documentId, setup.original.version, "file compare", [originalLines, compareLines, originalDocumentId = setup.original.documentId, originalVersion = setup.original.version, compareDocumentId = setup.compare.documentId, compareVersion = setup.compare.version](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
+		mr::coprocessor::Result result;
+		std::vector<mr::diff::MRDiffHunk> hunks;
+		std::string errorText;
+
+		result.task = task;
+		if (!mr::diff::mrComputeMyersDiff(originalLines, compareLines, hunks, &errorText, stopToken)) {
+			result.status = stopToken.stop_requested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Failed;
+			result.error = errorText;
+			return result;
+		}
+		result.status = mr::coprocessor::TaskStatus::Completed;
+		result.payload = std::make_shared<mr::coprocessor::FileComparePayload>(originalDocumentId, originalVersion, compareDocumentId, compareVersion, originalLines.size(), compareLines.size(), std::move(hunks));
+		return result;
+	});
+}
+
+void closeWorkspaceWindow(MREditWindow *win) {
+	if (win != nullptr) message(win, evCommand, cmClose, nullptr);
+}
+
+bool loadWorkspaceSourceWindow(const std::string &path, int virtualDesktop, MREditWindow *&window) {
+	std::string errorText;
+	MRFileEditor *editor = nullptr;
+
+	window = createEditorWindow(path.c_str());
+	editor = window != nullptr ? window->getEditor() : nullptr;
+	if (window == nullptr || editor == nullptr || !editor->loadMappedFile(path.c_str(), errorText)) {
+		closeWorkspaceWindow(window);
+		window = nullptr;
+		return false;
+	}
+	window->mVirtualDesktop = virtualDesktop;
+	return true;
+}
+
+MRBentoBox *restoreFileCompareWorkspaceEntry(const WorkspaceEntry &entry, int virtualDesktop) {
+	MREditWindow *originalWindow = nullptr;
+	MREditWindow *compareWindow = nullptr;
+	MRBentoBox *bentoBox = nullptr;
+	MRBentoCompareSetup setup;
+	std::uint64_t taskId = 0;
+	std::string title;
+
+	if (!entry.hasBentoSnapshot || entry.bentoSnapshot.mode != bbmFileCompare || !entry.hasFileCompareSources) return nullptr;
+	if (!loadWorkspaceSourceWindow(entry.fileCompareOriginalUrl, virtualDesktop, originalWindow)) return nullptr;
+	if (!loadWorkspaceSourceWindow(entry.fileCompareCompareUrl, virtualDesktop, compareWindow)) {
+		closeWorkspaceWindow(originalWindow);
+		return nullptr;
+	}
+
+	setup.original = captureWorkspaceFileCompareSource(originalWindow);
+	setup.compare = captureWorkspaceFileCompareSource(compareWindow);
+	title = fileCompareWorkspaceTitle(setup);
+	bentoBox = createFileCompareBentoBoxWindow(title.c_str());
+	if (bentoBox == nullptr || !bentoBox->initializeFileCompare(setup) || !bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)) {
+		closeWorkspaceWindow(bentoBox);
+		closeWorkspaceWindow(compareWindow);
+		closeWorkspaceWindow(originalWindow);
+		return nullptr;
+	}
+	bentoBox->mVirtualDesktop = virtualDesktop;
+	bentoBox->refreshFileCompareConfiguration();
+
+	taskId = submitWorkspaceFileCompareTask(bentoBox, setup);
+	if (taskId != 0) {
+		bentoBox->setFileCompareTask(taskId);
+		bentoBox->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::FileCompare, "file compare");
+	}
+	static_cast<void>(mrActivateEditWindow(bentoBox));
+	return bentoBox;
+}
+
+bool isFileCompareSourceWindowForAnyBento(MREditWindow *window, const std::vector<MRBentoBox *> &fileCompareBoxes) {
+	if (window == nullptr) return false;
+	for (MRBentoBox *bentoBox : fileCompareBoxes)
+		if (bentoBox != nullptr && bentoBox->containsFileCompareSourceWindow(window)) return true;
+	return false;
+}
+
 } // namespace
 
 std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 	std::string source = buildSettingsMacroSource(paths);
 	const std::size_t endMacro = source.rfind("END_MACRO;");
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	std::vector<MRBentoBox *> fileCompareBoxes;
 
 	if (endMacro == std::string::npos) return source;
-	for (MREditWindow *win : allEditWindowsInZOrder()) {
+	for (MREditWindow *win : windows) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
+		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) fileCompareBoxes.push_back(bentoBox);
+	}
+	for (MREditWindow *win : windows) {
 		MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 		std::string url;
+		std::string fileCompareOriginalUrl;
+		std::string fileCompareCompareUrl;
 		TRect bounds;
 		TRect restoreBounds;
 		int cursorColumn = 1;
 		int cursorLine = 1;
 		int vd = 1;
 		bool minimized = false;
+		std::string bentoPayload;
+		std::string fileComparePayload;
 
 		if (win == nullptr || editor == nullptr) continue;
-		url = editor->persistentFileName();
+		if (isFileCompareSourceWindowForAnyBento(win, fileCompareBoxes)) continue;
+		if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win)) {
+			bentoPayload = encodeBentoWorkspaceSnapshot(bentoBox->workspaceSnapshot());
+			if (bentoBox->isFileCompareBox()) {
+				if (!bentoBox->fileCompareWorkspaceSourcePaths(fileCompareOriginalUrl, fileCompareCompareUrl)) continue;
+				url = fileCompareOriginalUrl;
+				fileComparePayload = " fco=" + workspaceHexEncode(fileCompareOriginalUrl) + " fcc=" + workspaceHexEncode(fileCompareCompareUrl);
+			}
+		}
+		if (url.empty()) url = editor->persistentFileName();
 		if (url.empty()) continue;
 		bounds = win->isMinimized() ? win->minimizedWorkspaceBounds() : win->getBounds();
 		restoreBounds = win->restoreWorkspaceBounds();
@@ -244,7 +543,7 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		cursorLine = editor->currentLineNumber();
 		vd = win->mVirtualDesktop;
 		minimized = win->isMinimized();
-		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + "');\n");
+		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + (bentoPayload.empty() ? std::string() : " bento=" + bentoPayload) + fileComparePayload + "');\n");
 	}
 	return source;
 }
@@ -395,6 +694,25 @@ void mrSaveWorkspace(const std::string &filename) {
 	writeTextFile(dest, source);
 }
 
+bool mrLoadWorkspaceWithDialog() {
+	char fileName[MAXPATH];
+	std::string selectedPath;
+	bool readable = false;
+
+	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceLoad, fileName, sizeof(fileName), "*.mrmac");
+	if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceLoad, "*.mrmac", "LOAD WORKSPACE FROM", "~N~ame", fdOpenButton, fileName) == cmCancel) return false;
+
+	selectedPath = normalizeConfiguredPathInput(fileName);
+	if (selectedPath.empty()) return false;
+
+	readable = ::access(selectedPath.c_str(), F_OK) == 0 && ::access(selectedPath.c_str(), R_OK) == 0;
+	mrLoadWorkspace(selectedPath);
+	if (readable) rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
+	else
+		forgetLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
+	return true;
+}
+
 void mrLoadWorkspace(const std::string &filename) {
 	std::string settingsPath = filename;
 	if (settingsPath.empty()) {
@@ -414,24 +732,43 @@ void mrLoadWorkspace(const std::string &filename) {
 
 	std::istringstream iss(currentContent);
 	std::string line;
-	std::vector<std::string> failedFiles;
+	bool discardedWorkspaceEntries = false;
 	while (std::getline(iss, line)) {
 		WorkspaceEntry entry;
 		MREditWindow *win = nullptr;
 		MRFileEditor *editor = nullptr;
 		std::string err;
+		int resolvedVirtualDesktop = 1;
 
 		if (!parseWorkspaceEntry(line, entry)) continue;
+		resolvedVirtualDesktop = workspaceVirtualDesktopOrRandom(entry.vd);
 
-		win = createEditorWindow(entry.url.c_str());
-		editor = win != nullptr ? win->getEditor() : nullptr;
-		if (win == nullptr || editor == nullptr || !editor->loadMappedFile(entry.url.c_str(), err)) {
-			if (win != nullptr) message(win, evCommand, cmClose, nullptr);
-			failedFiles.push_back(workspaceDisplayName(entry.url));
-			continue;
+		if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare) {
+			win = restoreFileCompareWorkspaceEntry(entry, resolvedVirtualDesktop);
+			editor = win != nullptr ? win->getEditor() : nullptr;
+			if (win == nullptr || editor == nullptr) {
+				discardedWorkspaceEntries = true;
+				continue;
+			}
+		} else {
+			win = createEditorWindow(entry.url.c_str());
+			editor = win != nullptr ? win->getEditor() : nullptr;
+			if (win == nullptr || editor == nullptr || !editor->loadMappedFile(entry.url.c_str(), err)) {
+				if (win != nullptr) message(win, evCommand, cmClose, nullptr);
+				discardedWorkspaceEntries = true;
+				continue;
+			}
+		}
+		if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode != bbmFileCompare) {
+			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
+			if (bentoBox == nullptr || !bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)) {
+				message(win, evCommand, cmClose, nullptr);
+				discardedWorkspaceEntries = true;
+				continue;
+			}
 		}
 
-		win->mVirtualDesktop = std::min(std::max(entry.vd, 1), configuredVirtualDesktops());
+		win->mVirtualDesktop = resolvedVirtualDesktop;
 		if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0) {
 			const TRect bounds(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height);
 			const TRect restoreBounds(entry.restoreX, entry.restoreY, entry.restoreX + std::max(entry.restoreWidth, 1), entry.restoreY + std::max(entry.restoreHeight, 1));
@@ -439,16 +776,8 @@ void mrLoadWorkspace(const std::string &filename) {
 		}
 		restoreEditorCursor(editor, entry.line, entry.column);
 	}
-	if (!failedFiles.empty()) {
-		std::string failedText;
-
-		for (std::size_t i = 0; i < failedFiles.size(); ++i) {
-			if (i != 0) failedText += ", ";
-			failedText += failedFiles[i];
-		}
-		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Failed to load workspace files; discarded: " + failedText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
-	}
 	syncVirtualDesktopVisibility();
+	if (discardedWorkspaceEntries) mrSaveWorkspace(dest);
 }
 
 MREditWindow *createEditorWindow(const char *title) {
@@ -507,6 +836,18 @@ MRBentoBox *createBentoBoxWindow(const char *title) {
 	bounds = MRWindowManager::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRBentoBox(bounds, title, nextEditorWindowNumber());
+	finishNewEditWindow(win);
+	return win;
+}
+
+MRBentoBox *createFileCompareBentoBoxWindow(const char *title) {
+	TRect bounds;
+	MRBentoBox *win;
+
+	if (TProgram::deskTop == nullptr) return nullptr;
+	bounds = MRWindowManager::usableDesktopBounds();
+	bounds.grow(-2, -1);
+	win = new MRBentoBox(bounds, title, nextEditorWindowNumber(), bbmFileCompare);
 	finishNewEditWindow(win);
 	return win;
 }
@@ -645,6 +986,7 @@ void mrUpdateAllWindowsColorTheme() {
 	for (auto &window : windows) {
 		if (window != nullptr) {
 			window->applyWindowColorThemeForPath(window->currentFileName());
+			if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window); bentoBox != nullptr) bentoBox->refreshBentoColorTheme();
 		}
 	}
 }

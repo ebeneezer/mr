@@ -4,9 +4,11 @@
 #define Uses_TDialog
 #define Uses_TMenuItem
 #include "MRFrame.hpp"
+#include "MRBentoBox.hpp"
 #include "MREditWindow.hpp"
 #include "MRWindowManager.hpp"
 #include "../app/MRMenuFactory.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
 #include <array>
@@ -295,6 +297,16 @@ void MRFrame::draw() {
 
 	cFrame = getColor(cFrame);
 	cTitle = getColor(cTitle);
+	if (window != nullptr) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+		unsigned char fileCompareBentoBorder = 0;
+		unsigned char fileCompareBentoBorderBold = 0;
+
+		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) {
+			if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorder, fileCompareBentoBorder)) cFrame = static_cast<TColorAttr>(fileCompareBentoBorder);
+			if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorderBold, fileCompareBentoBorderBold)) cTitle = static_cast<TColorAttr>(fileCompareBentoBorderBold);
+		}
+	}
 
 	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
 	if (editWindow != nullptr && MRWindowManager::isWindowMinimized(editWindow)) {
@@ -324,18 +336,10 @@ void MRFrame::draw() {
 	const int minimizeStart = hasMinimizeButton ? normalRightControlStart(width, kMinimizeIcon) : width;
 	const int zoomStart = hasZoomButton ? normalZoomStart(width, hasMinimizeButton) : width;
 	const int controlClusterStart = hasZoomButton ? zoomStart : minimizeStart;
-	short numberPos = width - 3;
-	const bool hasWindowNumber = window != nullptr && window->number != wnNoNumber && window->number < 10;
 	short titleReserveRight = width - 2;
-	if (hasWindowNumber) {
-		if (hasMinimizeButton || hasZoomButton) numberPos = static_cast<short>(controlClusterStart - 2);
-		if (numberPos >= 1 && numberPos < width - 1) b.putChar(numberPos, window->number + '0');
-		titleReserveRight = numberPos - 2;
-	}
 
 	if (controlsVisible && window != nullptr) {
 		if ((window->flags & wfClose) != 0) b.moveCStr(2, kCloseIcon, cFrame);
-		if (hasWindowNumber && numberPos >= 1 && numberPos < width - 1) b.putChar(numberPos, window->number + '0');
 		if (hasZoomButton) {
 			TPoint minSize, maxSize;
 			owner->sizeLimits(minSize, maxSize);

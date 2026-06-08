@@ -128,10 +128,25 @@ bool compilerDiagnosticsFunctionKeysActive() {
 	return bentoBox != nullptr && bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
 }
 
+MRBentoBox *currentFileCompareBentoBox() {
+	TView *view = currentEditWindow();
+
+	while (view != nullptr) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
+		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) return bentoBox;
+		view = view->owner;
+	}
+	return nullptr;
+}
+
+bool fileCompareFunctionKeysActive() {
+	return currentFileCompareBentoBox() != nullptr;
+}
+
 bool bentoToolPaneFunctionKeysActive() {
 	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
 
-	return bentoBox != nullptr && bentoBox->secondaryEditWindow() != nullptr && !compilerDiagnosticsFunctionKeysActive();
+	return bentoBox != nullptr && bentoBox->secondaryEditWindow() != nullptr && !compilerDiagnosticsFunctionKeysActive() && !fileCompareFunctionKeysActive();
 }
 
 const std::vector<MRStatusLine::FunctionKeyLabel> &startupFunctionKeyLabels() {
@@ -170,11 +185,19 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &editorFunctionKeyLabels() {
 	static std::vector<MRStatusLine::FunctionKeyLabel> labels = baseLabels;
 	MREditWindow *window = currentEditorCommandWindow();
 	const bool diagnosticsActive = compilerDiagnosticsFunctionKeysActive();
+	const bool fileCompareActive = fileCompareFunctionKeysActive();
 	const bool bentoToolPaneActive = bentoToolPaneFunctionKeysActive();
 	const bool readOnlyActive = window != nullptr && window->isReadOnly();
 
 	labels = baseLabels;
-	if (bentoToolPaneActive) {
+	if (fileCompareActive) {
+		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
+		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
+		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
+		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
+		labels[6] = {TKey(kbShiftF8), cmMrFileComparePreviousChange, "~sF8~ Prev"};
+		labels[7] = {TKey(kbF8), cmMrFileCompareNextChange, "~F8~ Next"};
+	} else if (bentoToolPaneActive) {
 		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
 		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
 		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
@@ -196,16 +219,16 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &editorFunctionKeyLabels() {
 		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
 		labels[6] = {TKey(kbF7), cmMrOtherFindPreviousCompilerError, "~F7~ PrevErr"};
 		labels[7] = {TKey(kbF8), cmMrOtherFindNextCompilerError, "~F8~ NextErr"};
-	} else if (!bentoToolPaneActive && !readOnlyActive) {
+	} else if (!fileCompareActive && !bentoToolPaneActive && !readOnlyActive) {
 		labels[2] = {TKey(kbF3), cmMrBlockLoadFromDisk, "~F3~ LoadBlk"};
 		labels[3] = {TKey(kbF4), cmMrBlockSaveToDisk, "~F4~ SaveBlk"};
 		labels[4] = {TKey(kbF5), cmMrWindowCascade, "~F5~ Casc"};
 		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
 		labels[7] = {TKey(kbF8), cmMrBlockCopy, "~F8~ CopyBlk"};
 	}
-	if (!diagnosticsActive && !bentoToolPaneActive && !readOnlyActive && window != nullptr && window->isBlockMarking()) {
+	if (!diagnosticsActive && !fileCompareActive && !bentoToolPaneActive && !readOnlyActive && window != nullptr && window->isBlockMarking()) {
 		labels[6] = {TKey(kbF7), cmMrBlockEndMarking, "~F7~ EndMark"};
-	} else if (!diagnosticsActive && !bentoToolPaneActive && !readOnlyActive)
+	} else if (!diagnosticsActive && !fileCompareActive && !bentoToolPaneActive && !readOnlyActive)
 		labels[6] = {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"};
 	return labels;
 }
@@ -236,6 +259,7 @@ bool handleStartupFunctionKey(TEvent &event) {
 bool handleEditorFunctionKey(TEvent &event) {
 	const TKey pressed(event.keyDown);
 
+	if (fileCompareFunctionKeysActive() && (pressed == TKey(kbF8) || pressed == TKey(kbShiftF8) || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0))) return false;
 	for (const MRStatusLine::FunctionKeyLabel &label : editorFunctionKeyLabels()) {
 		if (!(pressed == label.keyCode)) continue;
 		if (label.command == cmMenu) return false;
@@ -244,6 +268,33 @@ bool handleEditorFunctionKey(TEvent &event) {
 		return true;
 	}
 	return false;
+}
+
+bool handleFileCompareFunctionKey(TEvent &event) {
+	if (event.what != evKeyDown) return false;
+	const TKey pressed(event.keyDown);
+	const bool fileCompareNavigationKey = pressed == TKey(kbF8) || pressed == TKey(kbShiftF8) || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0);
+	const bool nextChange = event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) == 0;
+
+	if (!fileCompareNavigationKey) return false;
+	MRBentoBox *bentoBox = currentFileCompareBentoBox();
+	if (bentoBox == nullptr) return false;
+	if (!bentoBox->navigateFileCompareChange(nextChange)) return false;
+
+	event.what = evNothing;
+	return true;
+}
+
+bool handleFileCompareCommand(TEvent &event) {
+	if (event.what != evCommand) return false;
+	const bool nextChange = event.message.command == cmMrFileCompareNextChange;
+	const bool previousChange = event.message.command == cmMrFileComparePreviousChange;
+
+	if (!nextChange && !previousChange) return false;
+	MRBentoBox *bentoBox = currentFileCompareBentoBox();
+	if (bentoBox != nullptr) static_cast<void>(bentoBox->navigateFileCompareChange(nextChange));
+	event.what = evNothing;
+	return true;
 }
 
 void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event) {
@@ -1780,6 +1831,7 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
+	if (handleFileCompareCommand(event)) return;
 	if (event.what == evKeyDown && currentEditWindow() == nullptr) {
 		std::string executedMacroName;
 		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {
@@ -1792,6 +1844,10 @@ void MREditorApp::handleEvent(TEvent &event) {
 			clearEvent(event);
 			return;
 		}
+	}
+	if (event.what == evKeyDown && handleFileCompareFunctionKey(event)) {
+		traceCalculatorHotkeyEvent("app-file-compare-fkey-consumed", event);
+		return;
 	}
 	if (event.what == evKeyDown && editorFunctionKeyContextActive() && handleEditorFunctionKey(event)) {
 		traceCalculatorHotkeyEvent("app-editor-fkey-consumed", event);

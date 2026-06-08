@@ -18,13 +18,23 @@ MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 	MRMiniMapRenderer::Palette palette;
 	unsigned char configured = 0;
 	const TColorAttr fallback = static_cast<TColorAttr>(getColor(0x0201));
+	const bool fileComparePalette = mFileCompareGuttersConfigured;
+	const unsigned char normalSlot = fileComparePalette ? kMrPaletteFileCompareMiniMapNormal : kMrPaletteMiniMapNormal;
+	const unsigned char viewportSlot = fileComparePalette ? kMrPaletteFileCompareMiniMapViewport : kMrPaletteMiniMapViewport;
+	const unsigned char changedSlot = fileComparePalette ? kMrPaletteFileCompareMiniMapChanged : kMrPaletteMiniMapChanged;
+	const unsigned char findMarkerSlot = fileComparePalette ? kMrPaletteFileCompareMiniMapFindMarker : kMrPaletteMiniMapFindMarker;
+	const unsigned char errorMarkerSlot = fileComparePalette ? kMrPaletteFileCompareMiniMapErrorMarker : kMrPaletteMiniMapErrorMarker;
 
-	palette.normal = configuredColorSlotOverride(kMrPaletteMiniMapNormal, configured) ? static_cast<TColorAttr>(configured) : fallback;
-	palette.viewport = configuredColorSlotOverride(kMrPaletteMiniMapViewport, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-	palette.changed = configuredColorSlotOverride(kMrPaletteMiniMapChanged, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-	palette.findMarker = configuredColorSlotOverride(kMrPaletteMiniMapFindMarker, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-	palette.errorMarker = configuredColorSlotOverride(kMrPaletteMiniMapErrorMarker, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
+	palette.normal = configuredColorSlotOverride(normalSlot, configured) ? static_cast<TColorAttr>(configured) : fallback;
+	palette.viewport = configuredColorSlotOverride(viewportSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
+	palette.changed = configuredColorSlotOverride(changedSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
+	palette.findMarker = configuredColorSlotOverride(findMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
+	palette.errorMarker = configuredColorSlotOverride(errorMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.warningMarker = configuredColorSlotOverride(kMrPaletteMessageWarning, configured) ? static_cast<TColorAttr>(configured) : palette.changed;
+	palette.diffEqual = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapEqual, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
+	palette.diffMissing = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapMissing, configured) ? static_cast<TColorAttr>(configured) : palette.errorMarker;
+	palette.diffInsert = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapInsert, configured) ? static_cast<TColorAttr>(configured) : palette.warningMarker;
+	palette.diffOffset = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapOffset, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	return palette;
 }
 
@@ -213,5 +223,32 @@ void MRFileEditor::setScrollBarsAlwaysVisible(bool visible) noexcept {
 	if (mScrollBarsAlwaysVisible == visible) return;
 	mScrollBarsAlwaysVisible = visible;
 	syncScrollBarsToState();
+	refreshViewState();
+}
+
+void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds) {
+	mFileCompareLineKinds = lineKinds;
+	mMiniMapState.clearOverlayCache();
+	refreshViewState();
+}
+
+void MRFileEditor::clearFileCompareLineKinds() {
+	if (mFileCompareLineKinds.empty()) return;
+	mFileCompareLineKinds.clear();
+	mMiniMapState.clearOverlayCache();
+	refreshViewState();
+}
+
+void MRFileEditor::setFileCompareGutters(const std::string &leftGutters, const std::string &rightGutters) {
+	if (mFileCompareGuttersConfigured && mFileCompareLeftGutters == leftGutters && mFileCompareRightGutters == rightGutters) return;
+	mFileCompareGuttersConfigured = true;
+	mFileCompareLeftGutters = leftGutters;
+	mFileCompareRightGutters = rightGutters;
+	refreshViewState();
+}
+
+void MRFileEditor::setFileCompareGutterVisible(bool visible) noexcept {
+	if (mFileCompareGutterVisible == visible) return;
+	mFileCompareGutterVisible = visible;
 	refreshViewState();
 }

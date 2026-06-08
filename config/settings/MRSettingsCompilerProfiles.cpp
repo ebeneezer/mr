@@ -406,6 +406,8 @@ bool normalizeCompilerProfileInPlace(MRCompilerProfile &profile, std::string *er
 	profile.includePaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.includePaths));
 	profile.libraryPaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.libraryPaths));
 	profile.runtimePaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.runtimePaths));
+	profile.buildSuccessAudioUri = normalizeConfiguredPathInput(profile.buildSuccessAudioUri);
+	profile.buildFailureAudioUri = normalizeConfiguredPathInput(profile.buildFailureAudioUri);
 
 	if (profile.id.empty()) return setError(errorMessage, "Compiler profile id may not be empty.");
 	if (profile.name.empty()) return setError(errorMessage, "Compiler profile name may not be empty.");
@@ -575,6 +577,10 @@ bool applyConfiguredCompilerProfileDirective(const std::string &operation, const
 			profile->libraryPaths = splitCompilerProfilePathList(arg4);
 		else if (key == "RUNTIME")
 			profile->runtimePaths = splitCompilerProfilePathList(arg4);
+		else if (key == "SUCCESS_AUDIO_URI")
+			profile->buildSuccessAudioUri = arg4;
+		else if (key == "FAILURE_AUDIO_URI")
+			profile->buildFailureAudioUri = arg4;
 		else
 			return setError(errorMessage, "Unknown compiler profile setting key.");
 		return setConfiguredCompilerProfiles(profiles, errorMessage);

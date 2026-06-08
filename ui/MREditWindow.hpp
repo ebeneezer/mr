@@ -47,6 +47,143 @@ class MREditWindow;
 void setWindowManuallyHidden(MREditWindow *win, bool hidden);
 void mrDropSidekickForParent(const MREditWindow *parent);
 
+class MREditScrollBar : public TScrollBar {
+  public:
+	explicit MREditScrollBar(const TRect &bounds) noexcept : TScrollBar(bounds), mColorOverride(false), mPageColor(0), mArrowColor(0), mIndicatorColor(0) {
+	}
+
+	void setColorOverride(bool enabled, TColorAttr pageColor, TColorAttr arrowColor, TColorAttr indicatorColor) noexcept {
+		mColorOverride = enabled;
+		mPageColor = pageColor;
+		mArrowColor = arrowColor;
+		mIndicatorColor = indicatorColor;
+	}
+
+	virtual void draw() override {
+		if (!mColorOverride) {
+			TScrollBar::draw();
+			return;
+		}
+
+		const int logicalSize = getSize();
+		const int last = logicalSize - 1;
+		const int position = getPos();
+
+		if (logicalSize <= 0) return;
+		if (size.x == 1) {
+			for (int index = 0; index < logicalSize; ++index) {
+				TDrawBuffer buffer;
+				char ch = chars[2];
+				TColorAttr attr = mPageColor;
+
+				if (index == 0) {
+					ch = chars[0];
+					attr = mArrowColor;
+				} else if (index == last) {
+					ch = chars[1];
+					attr = mArrowColor;
+				} else if (maxVal == minVal)
+					ch = chars[4];
+				else if (index == position) {
+					ch = chars[3];
+					attr = mIndicatorColor;
+				}
+				buffer.moveChar(0, ch, attr, 1);
+				writeBuf(0, static_cast<short>(index), 1, 1, buffer);
+			}
+			return;
+		}
+
+		TDrawBuffer buffer;
+		buffer.moveChar(0, ' ', mPageColor, static_cast<ushort>(logicalSize));
+		for (int index = 0; index < logicalSize; ++index) {
+			char ch = chars[2];
+			TColorAttr attr = mPageColor;
+
+			if (index == 0) {
+				ch = chars[0];
+				attr = mArrowColor;
+			} else if (index == last) {
+				ch = chars[1];
+				attr = mArrowColor;
+			} else if (maxVal == minVal)
+				ch = chars[4];
+			else if (index == position) {
+				ch = chars[3];
+				attr = mIndicatorColor;
+			}
+			buffer.moveChar(static_cast<ushort>(index), ch, attr, 1);
+		}
+		writeBuf(0, 0, size.x, size.y, buffer);
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (!mColorOverride || event.what != evMouseDown) {
+			TScrollBar::handleEvent(event);
+			return;
+		}
+
+		message(owner, evBroadcast, cmScrollBarClicked, this);
+		TPoint mouse = makeLocal(event.mouse.where);
+		TRect extent = getExtent();
+		extent.grow(1, 1);
+		int position = getPos();
+		const int scrollSize = getSize() - 1;
+		auto partCode = [this, &extent, scrollSize](TPoint localMouse, int currentPosition) {
+			int part = -1;
+
+			if (extent.contains(localMouse)) {
+				const int mark = size.x == 1 ? localMouse.y : localMouse.x;
+
+				if (mark == currentPosition)
+					part = sbIndicator;
+				else {
+					if (mark < 1)
+						part = sbLeftArrow;
+					else if (mark < currentPosition)
+						part = sbPageLeft;
+					else if (mark < scrollSize)
+						part = sbPageRight;
+					else
+						part = sbRightArrow;
+					if (size.x == 1) part += 4;
+				}
+			}
+			return part;
+		};
+		const int clickPart = partCode(mouse, position);
+
+		switch (clickPart) {
+			case sbLeftArrow:
+			case sbRightArrow:
+			case sbUpArrow:
+			case sbDownArrow:
+				do {
+					mouse = makeLocal(event.mouse.where);
+					if (partCode(mouse, getPos()) == clickPart) setValue(value + scrollStep(clickPart));
+				} while (mouseEvent(event, evMouseAuto));
+				break;
+			default:
+				do {
+					mouse = makeLocal(event.mouse.where);
+					position = size.x == 1 ? mouse.y : mouse.x;
+					position = std::max(position, 1);
+					position = std::min(position, scrollSize - 1);
+					if (scrollSize > 2) setValue(int(((long(position - 1) * (maxVal - minVal) + ((scrollSize - 2) >> 1)) / (scrollSize - 2)) + minVal));
+					drawView();
+				} while (mouseEvent(event, evMouseMove));
+				break;
+		}
+		clearEvent(event);
+	}
+
+  private:
+	bool mColorOverride;
+	TColorAttr mPageColor;
+	TColorAttr mArrowColor;
+	TColorAttr mIndicatorColor;
+};
+
 class MREditWindow : public TWindow {
 	friend class MRWindowManager;
 
@@ -80,11 +217,11 @@ class MREditWindow : public TWindow {
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
 
-		hScrollBar = new TScrollBar(TRect(1, size.y - 1, size.x - 1, size.y));
+		hScrollBar = new MREditScrollBar(TRect(1, size.y - 1, size.x - 1, size.y));
 		hScrollBar->hide();
 		insert(hScrollBar);
 
-		vScrollBar = new TScrollBar(TRect(size.x - 1, 1, size.x, size.y - 1));
+		vScrollBar = new MREditScrollBar(TRect(size.x - 1, 1, size.x, size.y - 1));
 		vScrollBar->hide();
 		insert(vScrollBar);
 

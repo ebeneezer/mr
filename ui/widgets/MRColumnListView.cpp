@@ -91,6 +91,10 @@ short MRColumnListView::selectedIndex() const {
 	return static_cast<short>(data.selection);
 }
 
+void MRColumnListView::setActivateOnSingleClick(bool enabled) noexcept {
+	activateOnSingleClick = enabled;
+}
+
 bool MRColumnListView::handleWheel(TEvent &event) {
 	int delta = 0;
 	short next = 0;
@@ -121,6 +125,19 @@ TColorAttr MRColumnListView::mapColor(uchar index) {
 void MRColumnListView::changeBounds(const TRect &bounds) {
 	TListBox::changeBounds(bounds);
 	configureHorizontalScrollBar(maxDisplayRowWidth);
+}
+
+void MRColumnListView::handleEvent(TEvent &event) {
+	bool acceptAfterMouseDown = false;
+
+	if (activateOnSingleClick && event.what == evMouseDown && (event.mouse.eventFlags & meDoubleClick) == 0 && mouseInView(event.mouse.where)) {
+		TPoint mouse = makeLocal(event.mouse.where);
+		const short clickedItem = static_cast<short>(topItem + mouse.y);
+
+		acceptAfterMouseDown = mouse.y >= 0 && mouse.y < size.y && clickedItem >= 0 && clickedItem < range;
+	}
+	TListBox::handleEvent(event);
+	if (acceptAfterMouseDown) dispatchActivation();
 }
 
 void MRColumnListView::focusItemNum(short item) {

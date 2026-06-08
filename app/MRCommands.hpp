@@ -81,6 +81,7 @@ enum : ushort {
 	cmMrTextCenterLine,
 	cmMrTextTimeDateStamp,
 	cmMrTextReformatParagraph,
+	cmMrTextFileCompare,
 	cmMrTextUpperCasePlaceholder,
 	cmMrTextLowerCasePlaceholder,
 
@@ -138,7 +139,10 @@ enum : ushort {
 	cmMrOtherFindPreviousCompilerError,
 	cmMrBlockLoadFromDisk,
 	cmMrEditToggleInsertMode,
-	cmMrToggleFullscreen
+	cmMrToggleFullscreen,
+	cmMrFileOpenWorkspace,
+	cmMrFileCompareNextChange,
+	cmMrFileComparePreviousChange
 };
 
 #endif

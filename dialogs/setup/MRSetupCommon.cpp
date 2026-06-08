@@ -622,15 +622,10 @@ TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height
 		dialog->insert(new TStaticText(TRect(2, y, 2 + std::strlen(it->c_str()) + 1, y + 1), it->c_str()));
 
 	if (showOkCancelHelp) {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 		const int buttonLeft = (width - metrics.rowWidth) / 2;
 		mr::dialogs::insertUniformButtonRow(*dialog, buttonLeft, height - 3, 1, buttons);
-	} else {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		const int buttonLeft = (width - metrics.rowWidth) / 2;
-		mr::dialogs::insertUniformButtonRow(*dialog, buttonLeft, height - 3, 0, buttons);
 	}
 
 	dialog->finalizeLayout();

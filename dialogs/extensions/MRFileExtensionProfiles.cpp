@@ -590,9 +590,9 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void buildViews() {
 		const std::array listButtons{mr::dialogs::DialogButtonSpec{"Ne~w~", cmMrSetupFilenameProfilesAdd, bfNormal}, mr::dialogs::DialogButtonSpec{"Cop~y~", cmMrSetupFilenameProfilesCopy, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMrSetupFilenameProfilesDelete, bfNormal}};
-		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupFilenameProfilesHelp, bfNormal}};
+		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupFilenameProfilesHelp, bfNormal}};
 		std::vector<TButton *> listButtonViews;
-		const mr::dialogs::DialogButtonRowMetrics bottomMetrics = mr::dialogs::measureUniformButtonRow(bottomButtons, 2);
+		const mr::dialogs::DialogButtonRowMetrics bottomMetrics = mr::dialogs::measureUniformButtonRow(bottomButtons, 0);
 		const int listLeft = 2;
 		const int listWidth = 29;
 		const int listBottom = 13;
@@ -634,7 +634,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 		editorSettingsPanel.buildViews(*this);
 
-		mr::dialogs::addManagedUniformButtonRow(*this, bottomButtonLeft, bottomTop, 2, bottomButtons);
+		mr::dialogs::addManagedUniformButtonRow(*this, bottomButtonLeft, bottomTop, 0, bottomButtons);
 	}
 
 	void setLabelInactive(TInactiveStaticText *label, bool inactive) {
@@ -907,8 +907,8 @@ void showEditProfilesHelpDialog() {
 	lines.push_back("Each additional profile has its own ID, description and exact extension list.");
 	lines.push_back("Extension matching is exact and case-sensitive.");
 	lines.push_back("Margins, format ruler, word wrap, macros and default path are profile-specific.");
-	lines.push_back("Done writes settings.mrmac and applies the configured values via the VM.");
-	TDialog *dialog = createSetupSimplePreviewDialog("FILENAME EXTENSIONS HELP", 78, 14, lines, false);
+	lines.push_back("Close or Escape asks for confirmation when fields were modified.");
+	TDialog *dialog = createSetupSimplePreviewDialog("FILENAME EXTENSIONS HELP", 78, 11, lines, false);
 	if (dialog != nullptr) {
 		TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);

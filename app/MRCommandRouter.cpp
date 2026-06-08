@@ -39,6 +39,7 @@
 #include <functional>
 #include <iomanip>
 #include <map>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <set>
@@ -67,6 +68,7 @@
 #include "../app/commands/MRFileCommands.hpp"
 #include "../app/commands/MRLogViewer.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../diff/MRDiff.hpp"
 #include "../dialogs/MRMacroFile.hpp"
 #include "../dialogs/MRWindowList.hpp"
 #include "../ui/MREditWindow.hpp"
@@ -83,7 +85,7 @@
 #include <pcre2.h>
 
 namespace {
-bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride = std::string_view());
+bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride = std::string_view(), const std::string &successAudioUri = std::string(), const std::string &failureAudioUri = std::string());
 
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
@@ -246,6 +248,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SAVE_BLOCK_TO_FILE", KeymapDispatchKind::AppCommand, cmMrBlockSaveToDisk, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
+    KeymapActionDispatchEntry{"MR_TEXT_FILE_COMPARE", KeymapDispatchKind::AppCommand, cmMrTextFileCompare, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_EDIT_TOGGLE_INSERT_MODE", KeymapDispatchKind::AppCommand, cmMrEditToggleInsertMode, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
@@ -297,6 +300,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "File / Open";
 		case cmMrFileLoad:
 			return "File / Load";
+		case cmMrFileOpenWorkspace:
+			return "File / Open Workspace";
 		case cmMrFileAcquire:
 			return "File / Acquire";
 		case cmMrFileOpenLiveLog:
@@ -425,6 +430,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Text / Time/Date stamp";
 		case cmMrTextReformatParagraph:
 			return "Text / Re-format paragraph";
+		case cmMrTextFileCompare:
+			return "Text / File compare";
 		case cmMrTextUpperCasePlaceholder:
 			return "Text / Upper case";
 		case cmMrTextLowerCasePlaceholder:
@@ -1534,6 +1541,122 @@ bool handleCompilerErrorNavigation(void *commandInfo, bool forward) {
 	return true;
 }
 
+bool isFileCompareWindowCandidate(MREditWindow *window) {
+	if (window == nullptr || window->getEditor() == nullptr || window->hasTrackedExternalIoTasks()) return false;
+	switch (window->windowRole()) {
+		case MREditWindow::wrCommunicationCommand:
+		case MREditWindow::wrCommunicationPipe:
+		case MREditWindow::wrCommunicationDevice:
+		case MREditWindow::wrLog:
+		case MREditWindow::wrHelp:
+			return false;
+		default:
+			break;
+	}
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+	return bentoBox == nullptr || bentoBox->allowsDocumentViewportSplit();
+}
+
+std::string fileCompareSourceTitle(MREditWindow *window) {
+	if (window == nullptr) return "?No-File";
+	std::string fileName = window->currentFileName();
+	if (!fileName.empty()) return pathBaseName(fileName);
+	const char *title = window->getTitle(0);
+	return title != nullptr && *title != '\0' ? std::string(title) : std::string("?No-File");
+}
+
+MRBentoCompareSource captureFileCompareSource(MREditWindow *window) {
+	MRBentoCompareSource source;
+
+	if (window == nullptr) return source;
+	source.window = window;
+	source.bufferId = window->bufferId();
+	source.documentId = window->documentId();
+	source.version = window->documentVersion();
+	source.wasVisible = (window->state & sfVisible) != 0;
+	source.wasManuallyHidden = isWindowManuallyHidden(window);
+	source.title = fileCompareSourceTitle(window);
+	if (window->getEditor() != nullptr) source.text = window->getEditor()->snapshotText();
+	return source;
+}
+
+std::string fileCompareWindowTitle(const MRBentoCompareSetup &setup) {
+	std::string title = "Compare: " + setup.original.title + " / " + setup.compare.title;
+
+	if (title.size() > 72) title = title.substr(0, 69) + "...";
+	return title;
+}
+
+std::uint64_t submitFileCompareTask(MRBentoBox *bentoBox, const MRBentoCompareSetup &setup) {
+	std::vector<std::string> originalLines;
+	std::vector<std::string> compareLines;
+
+	if (bentoBox == nullptr) return 0;
+	mr::diff::mrSplitTextLinesForDiff(setup.original.text, originalLines);
+	mr::diff::mrSplitTextLinesForDiff(setup.compare.text, compareLines);
+
+	return mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, setup.original.documentId, setup.original.version, "file compare", [originalLines, compareLines, originalDocumentId = setup.original.documentId, originalVersion = setup.original.version, compareDocumentId = setup.compare.documentId, compareVersion = setup.compare.version](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
+		mr::coprocessor::Result result;
+		std::vector<mr::diff::MRDiffHunk> hunks;
+		std::string errorText;
+
+		result.task = task;
+		if (!mr::diff::mrComputeMyersDiff(originalLines, compareLines, hunks, &errorText, stopToken)) {
+			result.status = stopToken.stop_requested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Failed;
+			result.error = errorText;
+			return result;
+		}
+		result.status = mr::coprocessor::TaskStatus::Completed;
+		result.payload = std::make_shared<mr::coprocessor::FileComparePayload>(originalDocumentId, originalVersion, compareDocumentId, compareVersion, originalLines.size(), compareLines.size(), std::move(hunks));
+		return result;
+	});
+}
+
+bool handleTextFileCompare() {
+	MREditWindow *originalWindow = currentEditWindow();
+	MREditWindow *compareWindow;
+	MRBentoBox *compareBento;
+	MRBentoCompareSetup setup;
+	std::uint64_t taskId;
+	std::string title;
+
+	if (!isFileCompareWindowCandidate(originalWindow)) {
+		postDialogWarning("File compare requires an editor window.");
+		return true;
+	}
+	compareWindow = mrShowWindowListDialog(mrwlSelectFileCompareTarget, originalWindow);
+	if (compareWindow == nullptr) return true;
+	if (compareWindow == originalWindow || !isFileCompareWindowCandidate(compareWindow)) {
+		postDialogWarning("Selected window cannot be used for file compare.");
+		return true;
+	}
+
+	setup.original = captureFileCompareSource(originalWindow);
+	setup.compare = captureFileCompareSource(compareWindow);
+	title = fileCompareWindowTitle(setup);
+	compareBento = createFileCompareBentoBoxWindow(title.c_str());
+	if (compareBento == nullptr) {
+		postDialogWarning("Unable to create file compare BentoBox.");
+		return true;
+	}
+	if (!compareBento->initializeFileCompare(setup)) {
+		message(compareBento, evCommand, cmClose, nullptr);
+		postDialogWarning("Unable to initialize file compare BentoBox.");
+		return true;
+	}
+
+	taskId = submitFileCompareTask(compareBento, setup);
+	if (taskId == 0) {
+		message(compareBento, evCommand, cmClose, nullptr);
+		postDialogWarning("Unable to start file compare worker.");
+		return true;
+	}
+	compareBento->setFileCompareTask(taskId);
+	compareBento->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::FileCompare, "file compare");
+	static_cast<void>(mrActivateEditWindow(compareBento));
+	return true;
+}
+
 bool handleBuildCurrentFile() {
 	MREditWindow *win = currentEditWindow();
 	std::string sourcePath;
@@ -1600,12 +1723,12 @@ bool handleBuildCurrentFile() {
 	static_cast<void>(mrActivateEditWindow(bentoBox));
 	if (sourceWindowToClose != nullptr) message(sourceWindowToClose, evCommand, cmClose, nullptr);
 	bentoBox->clearCompilerDiagnostics();
-	startExternalCommandInWindow(outputWindow, commandLine, true, false, false, outputTitle);
+	startExternalCommandInWindow(outputWindow, commandLine, true, false, false, outputTitle, compilerProfile.buildSuccessAudioUri, compilerProfile.buildFailureAudioUri);
 	bentoBox->activatePrimaryPane();
 	return true;
 }
 
-bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride) {
+bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride, const std::string &successAudioUri, const std::string &failureAudioUri) {
 	std::string title;
 	std::string initialText;
 	std::ostringstream logLine;
@@ -1626,7 +1749,7 @@ bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandL
 	win->setWindowRole(MREditWindow::wrCommunicationCommand, commandLine);
 	if (activate) static_cast<void>(mrActivateEditWindow(win));
 
-	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, static_cast<std::size_t>(win->bufferId()), 0, std::string("external-io: ") + commandLine, [commandLine, channelId = static_cast<std::size_t>(win->bufferId())](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runExternalCommandTask(info, stopToken, channelId, commandLine); });
+	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, static_cast<std::size_t>(win->bufferId()), 0, std::string("external-io: ") + commandLine, [commandLine, channelId = static_cast<std::size_t>(win->bufferId()), successAudioUri, failureAudioUri](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runExternalCommandTask(info, stopToken, channelId, commandLine, successAudioUri, failureAudioUri); });
 	if (taskId == 0) {
 		if (closeOnFailure) message(win, evCommand, cmClose, nullptr);
 		postSearchError("Unable to start external command worker.");
@@ -2191,6 +2314,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrFileLoad:
 			return handleFileLoad();
 
+		case cmMrFileOpenWorkspace:
+			return mrLoadWorkspaceWithDialog();
+
 		case cmMrFileAcquire:
 			return handleFileAcquire();
 
@@ -2481,6 +2607,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrTextReformatParagraph:
 			return dispatchEditorCommand(cmMrTextReformatParagraph, true);
+
+		case cmMrTextFileCompare:
+			return handleTextFileCompare();
 
 		case cmMrWindowLink:
 			mrvmUiLinkCurrentWindow();

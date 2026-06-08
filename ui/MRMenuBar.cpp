@@ -196,10 +196,16 @@ bool compilerDiagnosticsFunctionKeysActive() {
 	return bentoBox != nullptr && bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
 }
 
+bool fileCompareFunctionKeysActive() {
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+
+	return bentoBox != nullptr && bentoBox->isFileCompareBox();
+}
+
 bool bentoToolPaneFunctionKeysActive() {
 	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
 
-	return bentoBox != nullptr && bentoBox->secondaryEditWindow() != nullptr && !compilerDiagnosticsFunctionKeysActive();
+	return bentoBox != nullptr && bentoBox->secondaryEditWindow() != nullptr && !compilerDiagnosticsFunctionKeysActive() && !fileCompareFunctionKeysActive();
 }
 
 bool readOnlyFunctionKeysActive() {
@@ -506,6 +512,7 @@ bool MRMenuBar::handleRuntimeCommand(ushort command) {
 
 void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 	const bool diagnosticsActive = mEditorFunctionKeysActive && compilerDiagnosticsFunctionKeysActive();
+	const bool fileCompareActive = mEditorFunctionKeysActive && fileCompareFunctionKeysActive();
 	const bool bentoToolPaneActive = mEditorFunctionKeysActive && bentoToolPaneFunctionKeysActive();
 	const bool readOnlyActive = mEditorFunctionKeysActive && readOnlyFunctionKeysActive();
 	static const MenuShortcutSpec specs[] = {
@@ -571,7 +578,16 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchGotoLineNumber), TKey(kbF7), "F7");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchRepeatPrevious), TKey(kbF8), "F8");
 	}
-	if (readOnlyActive && !bentoToolPaneActive && !diagnosticsActive) {
+	if (fileCompareActive) {
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockLoadFromDisk), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockSaveToDisk), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockMarkLines), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockEndMarking), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockCopy), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockMove), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchRepeatPrevious), TKey(kbNoKey), nullptr);
+	}
+	if (readOnlyActive && !fileCompareActive && !bentoToolPaneActive && !diagnosticsActive) {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockLoadFromDisk), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockSaveToDisk), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockMarkLines), TKey(kbNoKey), nullptr);

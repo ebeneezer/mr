@@ -1,7 +1,6 @@
 #include "MRTextViewport.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <vector>
 
@@ -42,34 +41,21 @@ int normalizedMiniMapWidth(const MREditSetupSettings &settings) noexcept {
 	return std::max(2, std::min(settings.miniMapWidth, 20));
 }
 
-std::string normalizedGuttersOrder(const std::string &configured) {
+std::string normalizedGuttersOrder(const std::string &configured, const char *fallback) {
 	std::string normalized;
-	std::array<bool, 3> seen = {false, false, false};
 	for (char ch : configured) {
 		switch (static_cast<unsigned char>(std::toupper(static_cast<unsigned char>(ch)))) {
 			case 'L':
-				if (!seen[0]) {
-					normalized.push_back('L');
-					seen[0] = true;
-				}
-				break;
 			case 'C':
-				if (!seen[1]) {
-					normalized.push_back('C');
-					seen[1] = true;
-				}
-				break;
 			case 'M':
-				if (!seen[2]) {
-					normalized.push_back('M');
-					seen[2] = true;
-				}
+			case 'D':
+				normalized.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
 				break;
 			default:
 				break;
 		}
 	}
-	if (normalized.empty()) normalized = "LCM";
+	if (normalized.empty() && fallback != nullptr) normalized = fallback;
 	return normalized;
 }
 
@@ -133,9 +119,11 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 	const int lineNumberWidth = lineNumberWidthFor(inputs, lineNumbersLeading || lineNumbersTrailing);
 	const int codeFoldingWidth = codeFoldingLeading || codeFoldingTrailing ? std::max(1, inputs.codeFoldingColumns) : 0;
 	const int miniMapTotalWidth = normalizedMiniMapWidth(settings);
-	const bool leadingMiniMap = miniMapTotalWidth > 0 && isGutterPositionLeading(settings.miniMapPosition);
-	const bool trailingMiniMap = miniMapTotalWidth > 0 && isGutterPositionTrailing(settings.miniMapPosition);
-	const std::string guttersOrder = normalizedGuttersOrder(settings.gutters);
+	const std::string guttersOrder = normalizedGuttersOrder(settings.gutters, "LCM");
+	const std::string leadingGuttersOrder = inputs.gutterSidesConfigured ? normalizedGuttersOrder(inputs.leadingGutters, nullptr) : guttersOrder;
+	const std::string trailingGuttersOrder = inputs.gutterSidesConfigured ? normalizedGuttersOrder(inputs.trailingGutters, nullptr) : guttersOrder;
+	const bool leadingMiniMap = miniMapTotalWidth > 0 && (inputs.gutterSidesConfigured ? leadingGuttersOrder.find('M') != std::string::npos : isGutterPositionLeading(settings.miniMapPosition));
+	const bool trailingMiniMap = miniMapTotalWidth > 0 && (inputs.gutterSidesConfigured ? trailingGuttersOrder.find('M') != std::string::npos : isGutterPositionTrailing(settings.miniMapPosition));
 	const auto gutterWidthFor = [&](char marker) noexcept -> int {
 		switch (marker) {
 			case 'L':
@@ -144,6 +132,8 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 				return codeFoldingWidth;
 			case 'M':
 				return miniMapTotalWidth;
+			case 'D':
+				return inputs.fileCompareGutterEnabled ? 1 : 0;
 			default:
 				return 0;
 		}
@@ -156,6 +146,8 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 				return codeFoldingLeading;
 			case 'M':
 				return leadingMiniMap;
+			case 'D':
+				return inputs.fileCompareGutterEnabled;
 			default:
 				return false;
 		}
@@ -168,6 +160,8 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 				return codeFoldingTrailing;
 			case 'M':
 				return trailingMiniMap;
+			case 'D':
+				return inputs.fileCompareGutterEnabled;
 			default:
 				return false;
 		}
@@ -186,11 +180,20 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 				viewport.miniMapTotalWidth = miniMapTotalWidth;
 				viewport.miniMapBodyWidth = std::max(1, miniMapTotalWidth - 1);
 				if (leadingSide) {
-					viewport.miniMapBodyX = x;
-					viewport.miniMapInfoX = x + viewport.miniMapBodyWidth;
+					viewport.miniMapLeadingBodyX = x;
+					viewport.miniMapLeadingInfoX = x + viewport.miniMapBodyWidth;
 				} else {
-					viewport.miniMapInfoX = x;
-					viewport.miniMapBodyX = x + 1;
+					viewport.miniMapTrailingInfoX = x;
+					viewport.miniMapTrailingBodyX = x + 1;
+				}
+				break;
+			case 'D':
+				if (leadingSide) {
+					viewport.fileCompareLeadingGutterX = x;
+					viewport.fileCompareLeadingGutterWidth = inputs.fileCompareGutterEnabled ? 1 : 0;
+				} else {
+					viewport.fileCompareTrailingGutterX = x;
+					viewport.fileCompareTrailingGutterWidth = inputs.fileCompareGutterEnabled ? 1 : 0;
 				}
 				break;
 			default:
@@ -199,12 +202,12 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 	};
 	std::vector<char> leadingSequence;
 	std::vector<char> trailingSequence;
-	leadingSequence.reserve(3);
-	trailingSequence.reserve(3);
-	for (char marker : guttersOrder) {
+	leadingSequence.reserve(leadingGuttersOrder.size());
+	trailingSequence.reserve(trailingGuttersOrder.size());
+	for (char marker : leadingGuttersOrder)
 		if (enabledOnLeading(marker)) leadingSequence.push_back(marker);
+	for (char marker : trailingGuttersOrder)
 		if (enabledOnTrailing(marker)) trailingSequence.push_back(marker);
-	}
 	for (char marker : leadingSequence) {
 		int width = gutterWidthFor(marker);
 		int x = -1;
@@ -217,11 +220,11 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 	}
 	if (!leadingSequence.empty() && leadingSequence.back() == 'M') {
 		int separatorX = -1;
-		if (lane.placeLeading(1, separatorX)) viewport.miniMapSeparatorX = separatorX;
+		if (lane.placeLeading(1, separatorX)) viewport.miniMapLeadingSeparatorX = separatorX;
 	}
 	if (!trailingSequence.empty() && trailingSequence.front() == 'M') {
 		int separatorX = -1;
-		if (lane.placeTrailing(1, separatorX)) viewport.miniMapSeparatorX = separatorX;
+		if (lane.placeTrailing(1, separatorX)) viewport.miniMapTrailingSeparatorX = separatorX;
 	}
 	if (lane.right <= lane.left) {
 		lane.left = std::max(0, std::min(lane.left, std::max(0, inputs.viewWidth - 1)));

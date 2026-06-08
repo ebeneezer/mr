@@ -183,6 +183,8 @@ struct MRCompilerProfile {
 	std::vector<std::string> includePaths;
 	std::vector<std::string> libraryPaths;
 	std::vector<std::string> runtimePaths;
+	std::string buildSuccessAudioUri;
+	std::string buildFailureAudioUri;
 
 	auto operator==(const MRCompilerProfile &) const noexcept -> bool = default;
 };
@@ -193,7 +195,9 @@ enum class MRColorSetupGroup : unsigned char {
 	Help,
 	Other,
 	MiniMap,
-	Code
+	FileCompareMiniMap,
+	Code,
+	FileCompare
 };
 
 enum class MRLogHandling : unsigned char {
@@ -224,6 +228,11 @@ enum class MRUiIndentStyle : unsigned char {
 	Gnome = 3,
 	Whitesmiths = 4,
 	Horstmann = 5
+};
+
+enum class MRFileCompareStartConfiguration : unsigned char {
+	OriginalCompare = 0,
+	CompareOriginal = 1
 };
 
 enum class MRSettingsKeyClass : unsigned char {
@@ -418,7 +427,30 @@ enum : unsigned char {
 	kMrPaletteStatusLineFunctionDescription = 177,
 	kMrPaletteStatusLineFunctionKey = 178,
 	kMrPaletteMenuBarHotkey = 179,
-	kMrPaletteMax = kMrPaletteMenuBarHotkey
+	kMrPaletteFileCompareTextEqual = 180,
+	kMrPaletteFileCompareTextMissing = 181,
+	kMrPaletteFileCompareTextInsert = 182,
+	kMrPaletteFileCompareTextOffset = 183,
+	kMrPaletteFileCompareGutterEqual = 184,
+	kMrPaletteFileCompareGutterMissing = 185,
+	kMrPaletteFileCompareGutterInsert = 186,
+	kMrPaletteFileCompareGutterOffset = 187,
+	kMrPaletteFileCompareMiniMapEqual = 188,
+	kMrPaletteFileCompareMiniMapMissing = 189,
+	kMrPaletteFileCompareMiniMapInsert = 190,
+	kMrPaletteFileCompareMiniMapOffset = 191,
+	kMrPaletteFileCompareBentoBorder = 192,
+	kMrPaletteFileComparePaneBorder = 193,
+	kMrPaletteFileCompareBentoBorderBold = 194,
+	kMrPaletteFileCompareFormatRuler = 195,
+	kMrPaletteFileCompareLineNumbers = 196,
+	kMrPaletteFileCompareFocusedPaneBorder = 197,
+	kMrPaletteFileCompareMiniMapNormal = 198,
+	kMrPaletteFileCompareMiniMapViewport = 199,
+	kMrPaletteFileCompareMiniMapChanged = 200,
+	kMrPaletteFileCompareMiniMapFindMarker = 201,
+	kMrPaletteFileCompareMiniMapErrorMarker = 202,
+	kMrPaletteMax = kMrPaletteFileCompareMiniMapErrorMarker
 };
 
 struct MRColorSetupSettings {
@@ -427,16 +459,20 @@ struct MRColorSetupSettings {
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 5;
+	static const std::size_t kFileCompareMiniMapCount = 9;
 	static const std::size_t kCodeCount = 15;
+	static const std::size_t kFileCompareCount = 14;
 
 	std::array<unsigned char, kWindowCount> windowColors;
 	std::array<unsigned char, kMenuDialogCount> menuDialogColors;
 	std::array<unsigned char, kHelpCount> helpColors;
 	std::array<unsigned char, kOtherCount> otherColors;
 	std::array<unsigned char, kMiniMapCount> miniMapColors;
+	std::array<unsigned char, kFileCompareMiniMapCount> fileCompareMiniMapColors;
 	std::array<unsigned char, kCodeCount> codeColors;
+	std::array<unsigned char, kFileCompareCount> fileCompareColors;
 
-	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors(), miniMapColors(), codeColors() {
+	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors(), miniMapColors(), fileCompareMiniMapColors(), codeColors(), fileCompareColors() {
 	}
 
 	auto operator==(const MRColorSetupSettings &) const noexcept -> bool = default;
@@ -606,6 +642,18 @@ bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage
 [[nodiscard]] MRUiIndentStyle configuredUiIndentStyle();
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredCursorPositionMarker();
+bool setConfiguredFileCompareOriginalLeadingGutters(const std::string &value, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredFileCompareOriginalLeadingGutters();
+bool setConfiguredFileCompareOriginalTrailingGutters(const std::string &value, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredFileCompareOriginalTrailingGutters();
+bool setConfiguredFileCompareCompareLeadingGutters(const std::string &value, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredFileCompareCompareLeadingGutters();
+bool setConfiguredFileCompareCompareTrailingGutters(const std::string &value, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredFileCompareCompareTrailingGutters();
+bool setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration configuration, std::string *errorMessage = nullptr);
+[[nodiscard]] MRFileCompareStartConfiguration configuredFileCompareStartConfiguration();
+bool setConfiguredFileCompareComparePanelReadOnly(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredFileCompareComparePanelReadOnly();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredAutoloadWorkspace();
 bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage = nullptr);

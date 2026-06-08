@@ -102,7 +102,7 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	return true;
 }
 
-mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t channelId, const std::string &command) {
+mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t channelId, const std::string &command, const std::string &successAudioUri, const std::string &failureAudioUri) {
 	mr::coprocessor::Result result;
 	int pipeFds[2] = {-1, -1};
 	pid_t childPid = -1;
@@ -217,6 +217,6 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	}
 
 	result.status = mr::coprocessor::TaskStatus::Completed;
-	result.payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(channelId, WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1, WIFSIGNALED(waitStatus) != 0, WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0);
+	result.payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(channelId, WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1, WIFSIGNALED(waitStatus) != 0, WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, 0, successAudioUri, failureAudioUri);
 	return result;
 }

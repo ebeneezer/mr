@@ -199,6 +199,10 @@ class MRFileEditor : public TScroller {
 	void setMiniMapSuppressed(bool suppressed) noexcept;
 	void setWordWrapSuppressed(bool suppressed) noexcept;
 	void setScrollBarsAlwaysVisible(bool visible) noexcept;
+	void setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds);
+	void clearFileCompareLineKinds();
+	void setFileCompareGutters(const std::string &leftGutters, const std::string &rightGutters);
+	void setFileCompareGutterVisible(bool visible) noexcept;
 	void updateMetrics();
 
 	std::size_t cursorOffset() const noexcept;
@@ -437,6 +441,8 @@ class MRFileEditor : public TScroller {
 
 	virtual TPalette &getPalette() const override;
 
+	TColorAttr editorTextFillColor() noexcept;
+
 		virtual void handleEvent(TEvent &event) override;
 
 		virtual void scrollDraw() override;
@@ -506,7 +512,8 @@ class MRFileEditor : public TScroller {
 
 	bool dragFormatRulerAtLocalPoint(TEvent &event, TPoint local);
 
-		void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineNumber, bool showNumber, int drawX, int width, bool zeroFill);
+		void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineNumber, bool showNumber, int drawX, int width, bool zeroFill, std::size_t lineIndex);
+		void drawFileCompareGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineIndex);
 
 		void drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex);
 
@@ -521,6 +528,8 @@ class MRFileEditor : public TScroller {
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept;
 
 	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
+
+	unsigned char fileCompareLineKindAt(std::size_t lineIndex) const noexcept;
 
 	MRMiniMapRenderer::Palette resolveMiniMapPalette();
 
@@ -693,6 +702,11 @@ class MRFileEditor : public TScroller {
 	MRSyntaxDerivedState mSyntaxState;
 	MRFoldingDerivedState mFoldState;
 	MRMiniMapDerivedState mMiniMapState;
+	std::vector<unsigned char> mFileCompareLineKinds;
+	std::string mFileCompareLeftGutters;
+	std::string mFileCompareRightGutters;
+	bool mFileCompareGuttersConfigured = false;
+	bool mFileCompareGutterVisible = true;
 	SaveNormalizationCache mSaveNormalizationCache;
 	std::uint64_t mSaveNormalizationWarmupTaskId;
 	std::size_t mSaveNormalizationWarmupDocumentId;

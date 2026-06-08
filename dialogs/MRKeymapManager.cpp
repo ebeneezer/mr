@@ -868,7 +868,7 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		const int sequenceGlyphLeft = 92;
 		const int buttonTop = 15;
 		const int buttonGap = 2;
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapBindingHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapBindingHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, buttonGap);
 		const int buttonLeft = (96 - metrics.rowWidth) / 2;
 
@@ -1217,7 +1217,7 @@ class TProfileEditorDialog : public MRDialogFoundation {
 		const int fieldRight = 69;
 		const int buttonTop = 7;
 		const int buttonGap = 2;
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapProfileHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapProfileHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, buttonGap);
 		const int buttonLeft = (72 - metrics.rowWidth) / 2;
 
@@ -1283,7 +1283,7 @@ void showBindingEditorHelpDialog() {
 	lines.push_back("Context is one resolved runtime context such as EDIT or DIALOG.");
 	lines.push_back("Sequence is recorded live in canonical keymap syntax.");
 	lines.push_back("ALT-F10 ends recording. ESC aborts recording.");
-	TDialog *dialog = createSetupSimplePreviewDialog("BINDING EDITOR HELP", 78, 12, lines, false);
+	TDialog *dialog = createSetupSimplePreviewDialog("BINDING EDITOR HELP", 78, 10, lines, false);
 	if (dialog != nullptr) {
 		TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);
@@ -1297,7 +1297,7 @@ void showProfileEditorHelpDialog() {
 	lines.push_back("");
 	lines.push_back("Name is the stable keymap profile identifier.");
 	lines.push_back("Description is shown in the profile list.");
-	TDialog *dialog = createSetupSimplePreviewDialog("PROFILE EDITOR HELP", 72, 11, lines, false);
+	TDialog *dialog = createSetupSimplePreviewDialog("PROFILE EDITOR HELP", 72, 8, lines, false);
 	if (dialog != nullptr) {
 		TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);
@@ -1444,7 +1444,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		const std::array bindingButtons{mr::dialogs::DialogButtonSpec{"~N~ew", cmMrSetupKeymapBindingAdd, bfNormal}, mr::dialogs::DialogButtonSpec{"~E~dit", cmMrSetupKeymapBindingEdit, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMrSetupKeymapBindingDelete, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics bindingMetrics = mr::dialogs::measureUniformButtonRow(bindingButtons, bindingButtonGap);
 		const int bindingButtonLeft = bindingLeft + std::max(0, ((bindingScrollLeft - bindingLeft) - bindingMetrics.rowWidth) / 2);
-		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrSetupKeymapLoad, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMrSetupKeymapSave, bfNormal}, mr::dialogs::DialogButtonSpec{"Save ~A~s", cmMrSetupKeymapSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapHelp, bfNormal}};
+		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrSetupKeymapLoad, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMrSetupKeymapSave, bfNormal}, mr::dialogs::DialogButtonSpec{"Save ~A~s", cmMrSetupKeymapSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics bottomMetrics = mr::dialogs::measureUniformButtonRow(bottomButtons, gap);
 		const int filterLabelWidth = 8;
 		const int filterFieldWidth = 28;
@@ -1881,7 +1881,7 @@ void showKeymapManagerHelpDialog() {
 	lines.push_back("Save and Save As write the external keymap/profile macro file.");
 	lines.push_back("Restart persistence for a keymap now comes from AUTOEXEC-marked keymap macros.");
 	lines.push_back("If no active profile is set, built-in key handling remains active.");
-	TDialog *dialog = createSetupSimplePreviewDialog("KEY MANAGER HELP", 82, 14, lines, false);
+	TDialog *dialog = createSetupSimplePreviewDialog("KEY MANAGER HELP", 82, 13, lines, false);
 	if (dialog != nullptr) {
 		TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);

@@ -39,6 +39,12 @@ struct MRSettingsSnapshot {
 	bool trackCompilerNotes{false};
 	MRUiIndentStyle uiIndentStyle{MRUiIndentStyle::KandR};
 	std::string cursorPositionMarker{"R:C"};
+	std::string fileCompareOriginalLeadingGutters{"L"};
+	std::string fileCompareOriginalTrailingGutters{"M"};
+	std::string fileCompareCompareLeadingGutters{"LD"};
+	std::string fileCompareCompareTrailingGutters;
+	MRFileCompareStartConfiguration fileCompareStartConfiguration{MRFileCompareStartConfiguration::OriginalCompare};
+	bool fileCompareComparePanelReadOnly{true};
 	bool autoloadWorkspace{false};
 	MRLogHandling logHandling{MRLogHandling::Volatile};
 	std::string logFilePath;

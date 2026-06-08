@@ -22,6 +22,7 @@
 #include "MRTextDocument.hpp"
 #include "MRSyntax.hpp"
 #include "MRVM.hpp"
+#include "MRDiff.hpp"
 
 namespace mr {
 namespace coprocessor {
@@ -49,6 +50,7 @@ enum class TaskKind : unsigned char {
 	FoldWarmup,
 	MiniMapWarmup,
 	SaveNormalizationWarmup,
+	FileCompare,
 	IndicatorBlink,
 	ExternalIo,
 	MacroJob
@@ -100,6 +102,22 @@ struct IndicatorBlinkPayload final : Payload {
 	}
 
 	IndicatorBlinkPayload(std::size_t aIndicatorId, std::size_t aGeneration, bool aVisible, IndicatorBlinkChannel aChannel = IndicatorBlinkChannel::ReadOnly) noexcept : indicatorId(aIndicatorId), generation(aGeneration), visible(aVisible), channel(aChannel) {
+	}
+};
+
+struct FileComparePayload final : Payload {
+	std::size_t originalDocumentId;
+	std::size_t originalBaseVersion;
+	std::size_t compareDocumentId;
+	std::size_t compareBaseVersion;
+	std::size_t originalLineCount;
+	std::size_t compareLineCount;
+	std::vector<mr::diff::MRDiffHunk> hunks;
+
+	FileComparePayload() noexcept : originalDocumentId(0), originalBaseVersion(0), compareDocumentId(0), compareBaseVersion(0), originalLineCount(0), compareLineCount(0), hunks() {
+	}
+
+	FileComparePayload(std::size_t aOriginalDocumentId, std::size_t aOriginalBaseVersion, std::size_t aCompareDocumentId, std::size_t aCompareBaseVersion, std::size_t aOriginalLineCount, std::size_t aCompareLineCount, std::vector<mr::diff::MRDiffHunk> aHunks) : originalDocumentId(aOriginalDocumentId), originalBaseVersion(aOriginalBaseVersion), compareDocumentId(aCompareDocumentId), compareBaseVersion(aCompareBaseVersion), originalLineCount(aOriginalLineCount), compareLineCount(aCompareLineCount), hunks(std::move(aHunks)) {
 	}
 };
 
@@ -184,11 +202,13 @@ struct ExternalIoFinishedPayload final : Payload {
 	int exitCode;
 	bool signaled;
 	int signalNumber;
+	std::string successAudioUri;
+	std::string failureAudioUri;
 
-	ExternalIoFinishedPayload() noexcept : channelId(0), targetBufferId(0), exitCode(0), signaled(false), signalNumber(0) {
+	ExternalIoFinishedPayload() noexcept : channelId(0), targetBufferId(0), exitCode(0), signaled(false), signalNumber(0), successAudioUri(), failureAudioUri() {
 	}
 
-	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber, std::size_t aTargetBufferId = 0) noexcept : channelId(aChannelId), targetBufferId(aTargetBufferId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber) {
+	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber, std::size_t aTargetBufferId = 0, std::string aSuccessAudioUri = std::string(), std::string aFailureAudioUri = std::string()) : channelId(aChannelId), targetBufferId(aTargetBufferId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber), successAudioUri(std::move(aSuccessAudioUri)), failureAudioUri(std::move(aFailureAudioUri)) {
 	}
 };
 

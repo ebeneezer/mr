@@ -7164,11 +7164,15 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid other colors.") : errorText));
 						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, defaults.miniMapColors.data(), defaults.miniMapColors.size(), &errorText))
 							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid minimap colors.") : errorText));
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompareMiniMap, defaults.fileCompareMiniMapColors.data(), defaults.fileCompareMiniMapColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid file compare minimap colors.") : errorText));
 						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, defaults.codeColors.data(), defaults.codeColors.size(), &errorText))
 							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid code colors.") : errorText));
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompare, defaults.fileCompareColors.data(), defaults.fileCompareColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid file compare colors.") : errorText));
 						if (!setConfiguredColorThemeDisplayName("", &errorText)) throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid theme display name.") : errorText));
 						runtimeErrorLevel() = 0;
-					} else if (name == "THEME_NAME" || name == "WINDOWCOLORS" || name == "MENUDIALOGCOLORS" || name == "HELPCOLORS" || name == "OTHERCOLORS" || name == "MINIMAPCOLORS" || name == "CODECOLORS") {
+					} else if (name == "THEME_NAME" || name == "WINDOWCOLORS" || name == "MENUDIALOGCOLORS" || name == "HELPCOLORS" || name == "OTHERCOLORS" || name == "MINIMAPCOLORS" || name == "FILECOMPAREMINIMAPCOLORS" || name == "CODECOLORS" || name == "FILECOMPARECOLORS") {
 						std::string errorText;
 						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
 						if (name == "THEME_NAME") {
@@ -7183,6 +7187,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 
 						if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("MRSETUP expects (string, string).");
 						setupKey = upperKey(trimAscii(valueAsString(args[0])));
+						if (setupKey == "FILECOMPAREMINIMAPCOLORS" && !mrvmIsStartupSettingsMode()) {
+							if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText, false))
+								throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+							runtimeErrorLevel() = 0;
+							break;
+						}
 						if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRSETUP is only allowed in settings.mrmac during startup.");
 						if (setupKey == "SETTINGS_VERSION") {
 							const std::string versionLiteral = trimAscii(valueAsString(args[1]));
@@ -7217,8 +7227,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 									                         "LIVE_LOG_SCROLL_DIRECTION, LIVE_LOG_LINE_NUMBERS, LIVE_LOG_TIMESTAMPS, "
 									                         "LIVE_LOG_SYNTAX_HIGHLIGHTING, LIVE_LOG_AUDIO_URI, LIVE_LOG_JOURNAL_TAG_HISTORY, "
 									                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
-									                         "COMPILER_ERROR_MESSAGE_PLACEMENT, SCROLLBAR_VISIBILITY, TRACK_COMPILER_WARNINGS, TRACK_COMPILER_NOTES, "
-									                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, "
+										                         "COMPILER_ERROR_MESSAGE_PLACEMENT, SCROLLBAR_VISIBILITY, TRACK_COMPILER_WARNINGS, TRACK_COMPILER_NOTES, "
+										                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, WINDOW_COLORTHEME_URI, "
+									                         "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS, FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS, FILE_COMPARE_COMPARE_LEADING_GUTTERS, FILE_COMPARE_COMPARE_TRAILING_GUTTERS, FILE_COMPARE_START_CONFIGURATION, FILE_COMPARE_COMPARE_PANEL_READ_ONLY, "
 									                         "AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
 									                         "LASTFILEDIALOGPATH, "
 									                         "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "

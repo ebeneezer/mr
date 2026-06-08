@@ -30,8 +30,10 @@
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
+#include "../coprocessor/MRCoprocessor.hpp"
 #include "../dialogs/MRAbout.hpp"
 #include "../dialogs/setup/MRSetup.hpp"
+#include "../diff/MRDiff.hpp"
 #include "../piecetable/MRTextDocument.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
@@ -135,6 +137,78 @@ bool containsAllSubstrings(const std::string &text, std::initializer_list<const 
 			return false;
 		}
 	missingNeedle.clear();
+	return true;
+}
+
+bool validateDiffReconstructsRight(const std::vector<std::string> &leftLines, const std::vector<std::string> &rightLines, const std::vector<mr::diff::MRDiffHunk> &hunks, std::size_t *deleteCount, std::size_t *insertCount, std::size_t *equalCount, std::string &failureReason) {
+	std::vector<std::string> reconstructed;
+	std::size_t leftPos = 0;
+	std::size_t rightPos = 0;
+	std::size_t localDeleteCount = 0;
+	std::size_t localInsertCount = 0;
+	std::size_t localEqualCount = 0;
+
+	for (std::size_t hunkIndex = 0; hunkIndex < hunks.size(); ++hunkIndex) {
+		const mr::diff::MRDiffHunk &hunk = hunks[hunkIndex];
+		if (hunk.leftStart != leftPos || hunk.rightStart != rightPos) {
+			failureReason = "Diff hunk " + std::to_string(hunkIndex) + " is not contiguous.";
+			return false;
+		}
+
+		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				if (leftPos + hunk.count > leftLines.size() || rightPos + hunk.count > rightLines.size()) {
+					failureReason = "Equal diff hunk exceeds input bounds.";
+					return false;
+				}
+				for (std::size_t i = 0; i < hunk.count; ++i) {
+					if (leftLines[leftPos + i] != rightLines[rightPos + i]) {
+						failureReason = "Equal diff hunk contains different lines.";
+						return false;
+					}
+					reconstructed.push_back(leftLines[leftPos + i]);
+				}
+				leftPos += hunk.count;
+				rightPos += hunk.count;
+				localEqualCount += hunk.count;
+				break;
+			case mr::diff::MRDiffOp::Delete:
+				if (leftPos + hunk.count > leftLines.size()) {
+					failureReason = "Delete diff hunk exceeds left input bounds.";
+					return false;
+				}
+				leftPos += hunk.count;
+				localDeleteCount += hunk.count;
+				break;
+			case mr::diff::MRDiffOp::Insert:
+				if (rightPos + hunk.count > rightLines.size()) {
+					failureReason = "Insert diff hunk exceeds right input bounds.";
+					return false;
+				}
+				for (std::size_t i = 0; i < hunk.count; ++i)
+					reconstructed.push_back(rightLines[rightPos + i]);
+				rightPos += hunk.count;
+				localInsertCount += hunk.count;
+				break;
+			default:
+				failureReason = "Unknown diff hunk operation.";
+				return false;
+		}
+	}
+
+	if (leftPos != leftLines.size() || rightPos != rightLines.size()) {
+		failureReason = "Diff hunks did not consume both inputs.";
+		return false;
+	}
+	if (reconstructed != rightLines) {
+		failureReason = "Diff hunks do not reconstruct the right input.";
+		return false;
+	}
+
+	if (deleteCount != nullptr) *deleteCount = localDeleteCount;
+	if (insertCount != nullptr) *insertCount = localInsertCount;
+	if (equalCount != nullptr) *equalCount = localEqualCount;
+	failureReason.clear();
 	return true;
 }
 
@@ -242,6 +316,8 @@ bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, snapshot.colorSettings.helpColors.data(), snapshot.colorSettings.helpColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, snapshot.colorSettings.otherColors.data(), snapshot.colorSettings.otherColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, snapshot.colorSettings.miniMapColors.data(), snapshot.colorSettings.miniMapColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompareMiniMap, snapshot.colorSettings.fileCompareMiniMapColors.data(), snapshot.colorSettings.fileCompareMiniMapColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompare, snapshot.colorSettings.fileCompareColors.data(), snapshot.colorSettings.fileCompareColors.size(), &errorText)) return false;
 	if (!setConfiguredColorThemeFilePath(snapshot.colorThemeFilePath, &errorText)) return false;
 	errorText.clear();
 	return true;
@@ -523,6 +599,18 @@ bool validateMrsetupGlobalSettings(std::string &failureReason) {
 		failureReason = "Startup context should apply SCROLLBAR_VISIBILITY='ALWAYS'.";
 		return false;
 	}
+	if (configuredFileCompareOriginalLeadingGutters() != "L" || configuredFileCompareOriginalTrailingGutters() != "M" || configuredFileCompareCompareLeadingGutters() != "LD" || configuredFileCompareCompareTrailingGutters() != "") {
+		failureReason = "Startup context should apply file compare gutter settings.";
+		return false;
+	}
+	if (configuredFileCompareStartConfiguration() != MRFileCompareStartConfiguration::CompareOriginal) {
+		failureReason = "Startup context should apply FILE_COMPARE_START_CONFIGURATION='COMPARE_ORIGINAL'.";
+		return false;
+	}
+	if (!configuredFileCompareComparePanelReadOnly()) {
+		failureReason = "Startup context should apply FILE_COMPARE_COMPARE_PANEL_READ_ONLY='true'.";
+		return false;
+	}
 	return true;
 }
 
@@ -587,6 +675,12 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
 	                           "MRSETUP('CURSOR_BEHAVIOUR', 'FREE_MOVEMENT');\n"
 	                           "MRSETUP('SCROLLBAR_VISIBILITY', 'ALWAYS');\n"
+	                           "MRSETUP('FILE_COMPARE_ORIGINAL_LEADING_GUTTERS', 'L');\n"
+	                           "MRSETUP('FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS', 'M');\n"
+	                           "MRSETUP('FILE_COMPARE_COMPARE_LEADING_GUTTERS', 'LD');\n"
+	                           "MRSETUP('FILE_COMPARE_COMPARE_TRAILING_GUTTERS', '');\n"
+	                           "MRSETUP('FILE_COMPARE_START_CONFIGURATION', 'COMPARE_ORIGINAL');\n"
+	                           "MRSETUP('FILE_COMPARE_COMPARE_PANEL_READ_ONLY', 'true');\n"
 	                           "MRSETUP('BLOCK_MOVE', 'LEAVE_SPACE');\n"
 	                           "MRSETUP('DEFAULT_MODE', 'OVERWRITE');\n"
 	                           "WINDOWCOLORS('v1:10,11,12,13,14,15,16,17');\n"
@@ -625,6 +719,78 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 
 	if (!validateMrsetupRuntimeRejection(bytecode, entryOffset, macroName, failureReason)) return false;
 
+	failureReason.clear();
+	return true;
+}
+
+bool testMrsetupWindowColorThemeUriStartupLoad(std::string &failureReason) {
+	const std::string themePath = "/tmp/mr-startup-window-colortheme-uri.mrmac";
+	const std::string source = std::string("$MACRO Setup;\n") +
+	                           "MRSETUP('SETTINGSPATH', '/tmp/mr_settings_theme_uri_probe.mrmac');\n" +
+	                           "MRSETUP('WINDOW_COLORTHEME_URI', '" + themePath + "');\n" +
+	                           "END_MACRO;\n";
+	const std::string themeSource = "$MACRO MR_COLOR_THEME FROM EDIT;\n"
+	                                "THEME_RESET();\n"
+	                                "WINDOWCOLORS('v6:21,22,23,24,25,26,27,28,29,2A,2B,2C,2D');\n"
+	                                "END_MACRO;\n";
+	MRColorSetupSettings previousColors = configuredColorSetupSettings();
+	std::string previousThemePath = configuredColorThemeFilePath();
+	std::vector<unsigned char> bytecode;
+	std::string macroName;
+	std::string compileError;
+	std::string restoreError;
+	int entryOffset = -1;
+	bool restored = true;
+
+	auto restore = [&]() {
+		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previousColors.windowColors.data(), previousColors.windowColors.size(), &restoreError)) restored = false;
+		if (!setConfiguredColorThemeFilePath(previousThemePath, &restoreError)) restored = false;
+		mrvmSetStartupSettingsMode(false);
+	};
+
+	if (!writeTextFile(themePath, themeSource)) {
+		failureReason = "Unable to write temporary startup color theme.";
+		return false;
+	}
+	if (!compileSource(source, bytecode, entryOffset, macroName, compileError)) {
+		failureReason = "Compile failed: " + compileError;
+		restore();
+		return false;
+	}
+
+	{
+		VirtualMachine vm;
+		std::string vmError;
+
+		mrvmSetStartupSettingsMode(true);
+		vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName, true, true);
+		mrvmSetStartupSettingsMode(false);
+		if (firstVmError(vm.log, vmError)) {
+			failureReason = "Startup WINDOW_COLORTHEME_URI should load theme, got: " + vmError;
+			restore();
+			return false;
+		}
+	}
+
+	{
+		MRColorSetupSettings colors = configuredColorSetupSettings();
+		if (configuredColorThemeFilePath() != themePath) {
+			failureReason = "Startup WINDOW_COLORTHEME_URI should persist active theme path.";
+			restore();
+			return false;
+		}
+		if (colors.windowColors[0] != 0x21 || colors.windowColors[8] != 0x29 || colors.windowColors[12] != 0x2D) {
+			failureReason = "Startup WINDOW_COLORTHEME_URI should apply external theme colors.";
+			restore();
+			return false;
+		}
+	}
+
+	restore();
+	if (!restored) {
+		failureReason = "Unable to restore color settings after WINDOW_COLORTHEME_URI startup probe.";
+		return false;
+	}
 	failureReason.clear();
 	return true;
 }
@@ -765,6 +931,12 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing SCROLLBAR_VISIBILITY.";
 		return false;
 	}
+	if (content.find("MRSETUP('FILE_COMPARE_ORIGINAL_LEADING_GUTTERS', '") == std::string::npos || content.find("MRSETUP('FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS', '") == std::string::npos ||
+	    content.find("MRSETUP('FILE_COMPARE_COMPARE_LEADING_GUTTERS', '") == std::string::npos || content.find("MRSETUP('FILE_COMPARE_COMPARE_TRAILING_GUTTERS', '") == std::string::npos ||
+	    content.find("MRSETUP('FILE_COMPARE_START_CONFIGURATION', '") == std::string::npos || content.find("MRSETUP('FILE_COMPARE_COMPARE_PANEL_READ_ONLY', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing file compare UI settings.";
+		return false;
+	}
 	if (content.find("MRSETUP('AUTOLOAD_WORKSPACE', '") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac is missing AUTOLOAD_WORKSPACE.";
 		return false;
@@ -819,6 +991,10 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 	}
 	if (content.find("MRSETUP('DEFAULT_MODE', '") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac is missing DEFAULT_MODE.";
+		return false;
+	}
+	if (content.find("MRSETUP('WINDOW_COLORTHEME_URI', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing WINDOW_COLORTHEME_URI.";
 		return false;
 	}
 	if (content.find("MRSETUP('WINDOWCOLORS', '") != std::string::npos || content.find("MRSETUP('MENUDIALOGCOLORS', '") != std::string::npos || content.find("MRSETUP('HELPCOLORS', '") != std::string::npos || content.find("MRSETUP('OTHERCOLORS', '") != std::string::npos) {
@@ -2692,6 +2868,58 @@ bool testTruncateSpacesSaveOnlyGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testEofMarkerDoesNotExtendScrollRange(std::string &failureReason) {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	std::string text;
+	auto maxScrollDeltaFor = [&](bool showEofMarker, int &outDeltaY) {
+		MREditSetupSettings probe = settings;
+
+		probe.showEofMarker = showEofMarker;
+		probe.showEofMarkerEmoji = false;
+		probe.formatRuler = false;
+		probe.showLineNumbers = false;
+		probe.lineNumbersPosition = "OFF";
+		probe.codeFolding = false;
+		probe.codeFoldingPosition = "OFF";
+		probe.miniMapPosition = "OFF";
+		ScopedRegressionEditSetupSettings scopedSettings(probe);
+		MREditWindow window(TRect(0, 0, 80, 10), showEofMarker ? "eof-marker-scroll-on" : "eof-marker-scroll-off", 3050);
+		MRFileEditor *editor = nullptr;
+
+		if (!window.replaceTextBuffer(text.c_str(), "eof-marker-scroll")) {
+			failureReason = "Unable to seed EOF marker scroll-range probe.";
+			return false;
+		}
+		editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "EOF marker scroll-range probe did not create an editor.";
+			return false;
+		}
+		editor->updateMetrics();
+		editor->scrollTo(0, 100000);
+		outDeltaY = editor->delta.y;
+		return true;
+	};
+
+	for (int i = 1; i <= 24; ++i) {
+		if (i > 1) text += '\n';
+		text += "line ";
+		text += std::to_string(i);
+	}
+	text += " >";
+
+	int maxWithoutMarker = 0;
+	int maxWithMarker = 0;
+	if (!maxScrollDeltaFor(false, maxWithoutMarker)) return false;
+	if (!maxScrollDeltaFor(true, maxWithMarker)) return false;
+	if (maxWithMarker != maxWithoutMarker) {
+		failureReason = "SHOW_EOF_MARKER must not extend vertical scroll range past the last document line; off=" + std::to_string(maxWithoutMarker) + " on=" + std::to_string(maxWithMarker) + ".";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	const std::string root = "/tmp/mr_regression_edit_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
@@ -3433,7 +3661,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 	const std::string root = "/tmp/mr_regression_color_save_theme_" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string themePath = root + "/cfg/probe-theme.mrmac";
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap};
+	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::FileCompare};
 	TColorAttr paletteData[kMrPaletteMax];
 	TPalette workingPalette(paletteData, static_cast<ushort>(kMrPaletteMax));
 	MRSetupPaths paths = resolveSetupPathDefaults();
@@ -3490,7 +3718,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 		failureReason = "Unable to read saved theme file after Color Setup save-theme probe: " + errorText;
 		return false;
 	}
-	if (content.find("WINDOWCOLORS('") == std::string::npos || content.find("MENUDIALOGCOLORS('") == std::string::npos || content.find("HELPCOLORS('") == std::string::npos || content.find("OTHERCOLORS('") == std::string::npos || content.find("MINIMAPCOLORS('") == std::string::npos) {
+	if (content.find("WINDOWCOLORS('") == std::string::npos || content.find("MENUDIALOGCOLORS('") == std::string::npos || content.find("HELPCOLORS('") == std::string::npos || content.find("OTHERCOLORS('") == std::string::npos || content.find("MINIMAPCOLORS('") == std::string::npos || content.find("FILECOMPAREMINIMAPCOLORS") == std::string::npos || content.find("FILECOMPARECOLORS('") == std::string::npos) {
 		restore();
 		failureReason = "Saved color theme must contain all color group assignments.";
 		return false;
@@ -3521,9 +3749,15 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 					case MRColorSetupGroup::MiniMap:
 						actual = configured.miniMapColors[i];
 						break;
+					case MRColorSetupGroup::FileCompareMiniMap:
+						actual = configured.fileCompareMiniMapColors[i];
+						break;
 					case MRColorSetupGroup::Code:
 						// Code colors are intentionally outside this guard's scope.
 						actual = expected;
+						break;
+					case MRColorSetupGroup::FileCompare:
+						actual = configured.fileCompareColors[i];
 						break;
 				}
 				if (actual != expected) {
@@ -3629,10 +3863,121 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		restore();
 		return false;
 	}
+	{
+		std::string effectiveThemePath;
+		std::string matchedProfileName;
+
+		if (!effectiveEditWindowColorThemePathForPath("", effectiveThemePath, &matchedProfileName)) {
+			failureReason = "Global color theme fallback lookup failed.";
+			restore();
+			return false;
+		}
+		if (effectiveThemePath != themePath || !matchedProfileName.empty()) {
+			failureReason = "Pathless editors must use the global color theme fallback.";
+			restore();
+			return false;
+		}
+	}
 
 	restore();
 	if (!restored) {
 		failureReason = "Unable to restore WINDOWCOLORS/theme path after roundtrip probe.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason) {
+	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
+	const std::string paneWindowPath = absolutePathFromCwd("ui/MRBentoBoxPaneWindow.cpp");
+	const std::string projectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	std::string viewportContent;
+	std::string paneWindowContent;
+	std::string projectionContent;
+	std::string errorText;
+
+	if (!readTextFile(viewportPath, viewportContent, errorText)) {
+		failureReason = "Unable to read MRFileEditorViewport.cpp for FC text color guard: " + errorText;
+		return false;
+	}
+	if (!readTextFile(paneWindowPath, paneWindowContent, errorText)) {
+		failureReason = "Unable to read MRBentoBoxPaneWindow.cpp for FC text color guard: " + errorText;
+		return false;
+	}
+	if (!readTextFile(projectionPath, projectionContent, errorText)) {
+		failureReason = "Unable to read MRBentoBoxProjection.cpp for FC text color guard: " + errorText;
+		return false;
+	}
+	if (viewportContent.find("diffTextColor = static_cast<TColorAttr>(configured);") == std::string::npos) {
+		failureReason = "File Compare text color must preserve the configured background.";
+		return false;
+	}
+	if (viewportContent.find("mFileCompareGuttersConfigured && configuredColorSlotOverride(kMrPaletteFileCompareTextEqual, configured)") == std::string::npos ||
+	    viewportContent.find("TColorAttr color = editorTextFillColor();") == std::string::npos) {
+		failureReason = "File Compare blank and virtual text rows must use the FC text fill color.";
+		return false;
+	}
+	if (viewportContent.find("diffTextColor = static_cast<TColorAttr>((baseTextColor & 0xF0) | (configured & 0x0F));") != std::string::npos) {
+		failureReason = "File Compare text color must not mask away the configured background.";
+		return false;
+	}
+	if (paneWindowContent.find("markerAttr = fillAttr;") == std::string::npos || projectionContent.find("sourceMarkerAttr = fillAttr;") == std::string::npos) {
+		failureReason = "File Compare scrollbar indicator fallback must not use the normal window frame color.";
+		return false;
+	}
+	const std::size_t paneLayoutStart = paneWindowContent.find("void MRPaneEditWindow::layoutPaneChrome() noexcept");
+	const std::size_t paneLayoutEnd = paneWindowContent.find("\nvoid MRPaneEditWindow::configurePaneScrollBarColors", paneLayoutStart);
+	const std::size_t sourceLayoutStart = projectionContent.find("void MRBentoBox::layoutSourcePaneChrome(const TRect &content) noexcept");
+	const std::size_t sourceLayoutEnd = projectionContent.find("\nvoid MRBentoBox::hideSourcePaneChrome", sourceLayoutStart);
+	if (paneLayoutStart == std::string::npos || paneLayoutEnd == std::string::npos || sourceLayoutStart == std::string::npos || sourceLayoutEnd == std::string::npos) {
+		failureReason = "Unable to isolate File Compare scrollbar layout functions.";
+		return false;
+	}
+	const std::string paneLayoutFunction = paneWindowContent.substr(paneLayoutStart, paneLayoutEnd - paneLayoutStart);
+	const std::string sourceLayoutFunction = projectionContent.substr(sourceLayoutStart, sourceLayoutEnd - sourceLayoutStart);
+	if (paneWindowContent.find("void MRPaneEditWindow::configurePaneScrollBarColors() noexcept") == std::string::npos ||
+	    projectionContent.find("void MRBentoBox::configureSourcePaneScrollBarColors() noexcept") == std::string::npos ||
+	    paneLayoutFunction.find("configurePaneScrollBarColors();") == std::string::npos ||
+	    paneLayoutFunction.find("drawPaneScrollBars();") == std::string::npos ||
+	    sourceLayoutFunction.find("configureSourcePaneScrollBarColors();") == std::string::npos) {
+		failureReason = "File Compare scrollbar overrides must be configured in stable layout/draw paths.";
+		return false;
+	}
+	if (paneWindowContent.find("MREditWindow::setState(aState, enable);") != std::string::npos && paneWindowContent.find("configurePaneScrollBarColors();\n\tMREditWindow::setState(aState, enable);") != std::string::npos) {
+		failureReason = "File Compare pane scrollbar overrides must not run before MREditWindow::setState.";
+		return false;
+	}
+	if (projectionContent.find("configureSourcePaneScrollBarColors();\n\tMREditWindow::setState(aState, enable);") != std::string::npos) {
+		failureReason = "File Compare source scrollbar overrides must not run before MREditWindow::setState.";
+		return false;
+	}
+	if (projectionContent.find("std::size_t displayLineCount = 0;") == std::string::npos || projectionContent.find("if (displayLineCount > 0) text.push_back('\\n');") == std::string::npos ||
+	    projectionContent.find("++displayLineCount;") == std::string::npos) {
+		failureReason = "File Compare display text must not append a synthetic terminal newline after the last projected line.";
+		return false;
+	}
+	if (projectionContent.find("text += line;\n\ttext.push_back('\\n');") != std::string::npos) {
+		failureReason = "File Compare display text must use separators between projected lines, not terminal newline append.";
+		return false;
+	}
+	const std::size_t paneScrollStart = paneWindowContent.find("void MRPaneEditWindow::drawPaneScrollBars() noexcept");
+	const std::size_t paneScrollEnd = paneWindowContent.find("\nTFrame *MRPaneEditWindow::initFrame", paneScrollStart);
+	const std::size_t sourceScrollStart = projectionContent.find("void MRBentoBox::drawSourcePaneScrollBars() noexcept");
+	const std::size_t sourceScrollEnd = projectionContent.find("\nvoid MRBentoBox::drawSharedEditorPanes", sourceScrollStart);
+	if (paneScrollStart == std::string::npos || paneScrollEnd == std::string::npos || sourceScrollStart == std::string::npos || sourceScrollEnd == std::string::npos) {
+		failureReason = "Unable to isolate File Compare scrollbar drawing functions.";
+		return false;
+	}
+	const std::string paneScrollFunction = paneWindowContent.substr(paneScrollStart, paneScrollEnd - paneScrollStart);
+	const std::string sourceScrollFunction = projectionContent.substr(sourceScrollStart, sourceScrollEnd - sourceScrollStart);
+	if (paneScrollFunction.find("configurePaneScrollBarColors();") == std::string::npos || sourceScrollFunction.find("configureSourcePaneScrollBarColors();") == std::string::npos) {
+		failureReason = "File Compare scrollbar overrides must be refreshed in draw paths.";
+		return false;
+	}
+	if (paneScrollFunction.find("kMrPaletteFileComparePaneBorder") != std::string::npos || paneScrollFunction.find("kMrPaletteFileCompareFocusedPaneBorder") != std::string::npos ||
+	    sourceScrollFunction.find("kMrPaletteFileComparePaneBorder") != std::string::npos || sourceScrollFunction.find("kMrPaletteFileCompareFocusedPaneBorder") != std::string::npos) {
+		failureReason = "File Compare scrollbars must not use FC pane-border colors.";
 		return false;
 	}
 	failureReason.clear();
@@ -3832,24 +4177,31 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRFileEditorViewport.cpp for EOF virtual-line color guard: " + ioError;
+		failureReason = "Unable to read MRFileEditorViewport.cpp for post-EOF clear-area guard: " + ioError;
 		return false;
 	}
-	if (content.find("bool isDocumentLine = visibleLineIndex < totalLines;") == std::string::npos ||
-	    content.find("formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarkerAsEmoji);") ==
-	        std::string::npos) {
-		failureReason = "Draw path must pass document-line state into syntax line formatter.";
+	if (content.find("if (visibleLineIndex >= totalLines) break;") == std::string::npos ||
+	    content.find("formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, false, false);") == std::string::npos) {
+		failureReason = "Draw path must stop semantic document rendering at EOF.";
 		return false;
 	}
-	if (content.find("if (!isDocumentLine)") == std::string::npos) {
-		failureReason = "Virtual lines behind EOF must bypass current/changed-line color logic.";
+	if (content.find("backgroundBuffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(size.x));") == std::string::npos ||
+	    content.find("for (int y = 0; y < size.y; ++y)") == std::string::npos ||
+	    content.find("writeBuf(0, y, size.x, 1, backgroundBuffer);") == std::string::npos) {
+		failureReason = "Editor draw target must be cleared before document rendering.";
 		return false;
 	}
-	if (content.find("cursorPos == documentLength && lineStart == cursorPos && lineEnd == cursorPos") == std::string::npos) {
-		failureReason = "EOF current-line condition must be constrained to the actual EOF line.";
+	if (content.find("renderedTextRows") != std::string::npos ||
+	    content.find("for (int y = renderedTextRows; y < textRows; ++y)") != std::string::npos) {
+		failureReason = "Post-EOF editor area must not be rendered after the last document line.";
 		return false;
 	}
-	if (content.find("bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;") == std::string::npos || content.find("if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))") == std::string::npos) {
+	if (content.find("const bool emptyEofDocumentLine = lineStart == documentLength && lineEnd == documentLength;") == std::string::npos ||
+	    content.find("currentLine = !emptyEofDocumentLine && lineStart <= cursorPos && cursorPos < lineEnd;") == std::string::npos) {
+		failureReason = "Empty EOF document lines must keep the text color combination instead of current-line color.";
+		return false;
+	}
+	if (content.find("if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))") == std::string::npos) {
 		failureReason = "EOF marker must support emoji toggle with text-mode color override wiring.";
 		return false;
 	}
@@ -5558,6 +5910,241 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testMyersDiffCoreHarness(std::string &failureReason) {
+	std::vector<mr::diff::MRDiffHunk> hunks;
+	std::string errorText;
+	std::size_t deleteCount = 0;
+	std::size_t insertCount = 0;
+	std::size_t equalCount = 0;
+
+	const std::vector<std::string> leftLines{
+	    "alpha",
+	    "keep",
+	    "old",
+	    "tail",
+	};
+	const std::vector<std::string> rightLines{
+	    "alpha",
+	    "keep",
+	    "new",
+	    "tail",
+	    "extra",
+	};
+	if (!mr::diff::mrComputeMyersDiff(leftLines, rightLines, hunks, &errorText)) {
+		failureReason = "Myers diff failed: " + errorText;
+		return false;
+	}
+	if (!validateDiffReconstructsRight(leftLines, rightLines, hunks, &deleteCount, &insertCount, &equalCount, failureReason)) return false;
+	if (deleteCount != 1 || insertCount != 2 || equalCount != 3) {
+		failureReason = "Unexpected diff counts: delete=" + std::to_string(deleteCount) + " insert=" + std::to_string(insertCount) + " equal=" + std::to_string(equalCount) + ".";
+		return false;
+	}
+	if (hunks.empty() || hunks.front().op != mr::diff::MRDiffOp::Equal || hunks.front().count != 2) {
+		failureReason = "Myers diff did not preserve the leading equal run.";
+		return false;
+	}
+
+	const std::vector<std::string> emptyLines;
+	const std::vector<std::string> singleLine{"solo"};
+	if (!mr::diff::mrComputeMyersDiff(emptyLines, singleLine, hunks, &errorText)) {
+		failureReason = "Myers diff empty-left failed: " + errorText;
+		return false;
+	}
+	if (!validateDiffReconstructsRight(emptyLines, singleLine, hunks, &deleteCount, &insertCount, &equalCount, failureReason)) return false;
+	if (deleteCount != 0 || insertCount != 1 || equalCount != 0) {
+		failureReason = "Unexpected empty-left diff counts.";
+		return false;
+	}
+
+	if (!mr::diff::mrComputeMyersDiff(singleLine, emptyLines, hunks, &errorText)) {
+		failureReason = "Myers diff empty-right failed: " + errorText;
+		return false;
+	}
+	if (!validateDiffReconstructsRight(singleLine, emptyLines, hunks, &deleteCount, &insertCount, &equalCount, failureReason)) return false;
+	if (deleteCount != 1 || insertCount != 0 || equalCount != 0) {
+		failureReason = "Unexpected empty-right diff counts.";
+		return false;
+	}
+
+	if (!mr::diff::mrComputeMyersDiff(singleLine, singleLine, hunks, &errorText)) {
+		failureReason = "Myers diff identical failed: " + errorText;
+		return false;
+	}
+	if (!validateDiffReconstructsRight(singleLine, singleLine, hunks, &deleteCount, &insertCount, &equalCount, failureReason)) return false;
+	if (deleteCount != 0 || insertCount != 0 || equalCount != 1) {
+		failureReason = "Unexpected identical diff counts.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testFileCompareCoprocessorHarness(std::string &failureReason) {
+	const std::vector<std::string> leftLines{
+	    "one",
+	    "two",
+	    "three",
+	    "five",
+	};
+	const std::vector<std::string> rightLines{
+	    "one",
+	    "two",
+	    "four",
+	    "five",
+	};
+	const std::size_t originalDocumentId = 101;
+	const std::size_t originalBaseVersion = 7;
+	const std::size_t compareDocumentId = 202;
+	const std::size_t compareBaseVersion = 9;
+	mr::coprocessor::Coprocessor coprocessor;
+	mr::coprocessor::Result capturedResult;
+	bool captured = false;
+
+	coprocessor.setResultHandler([&capturedResult, &captured](const mr::coprocessor::Result &result) {
+		capturedResult = result;
+		captured = true;
+	});
+
+	const std::uint64_t taskId = coprocessor.submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, originalDocumentId, originalBaseVersion, "file compare regression", [leftLines, rightLines, originalDocumentId, originalBaseVersion, compareDocumentId, compareBaseVersion](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
+		mr::coprocessor::Result result;
+		std::vector<mr::diff::MRDiffHunk> hunks;
+		std::string errorText;
+
+		result.task = task;
+		if (!mr::diff::mrComputeMyersDiff(leftLines, rightLines, hunks, &errorText, stopToken)) {
+			result.status = stopToken.stop_requested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Failed;
+			result.error = errorText;
+			return result;
+		}
+
+		result.status = mr::coprocessor::TaskStatus::Completed;
+		result.payload = std::make_shared<mr::coprocessor::FileComparePayload>(originalDocumentId, originalBaseVersion, compareDocumentId, compareBaseVersion, leftLines.size(), rightLines.size(), std::move(hunks));
+		return result;
+	});
+
+	if (taskId == 0) {
+		coprocessor.shutdown();
+		failureReason = "File compare coprocessor task was not submitted.";
+		return false;
+	}
+
+	const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+	while (!captured && std::chrono::steady_clock::now() < deadline) {
+		coprocessor.pumpFor(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
+	coprocessor.shutdown(true);
+
+	if (!captured) {
+		failureReason = "File compare coprocessor task did not produce a result.";
+		return false;
+	}
+	if (!capturedResult.completed()) {
+		failureReason = "File compare coprocessor task failed: " + capturedResult.error;
+		return false;
+	}
+	if (capturedResult.task.id != taskId || capturedResult.task.kind != mr::coprocessor::TaskKind::FileCompare || capturedResult.task.documentId != originalDocumentId || capturedResult.task.baseVersion != originalBaseVersion) {
+		failureReason = "File compare coprocessor task metadata changed unexpectedly.";
+		return false;
+	}
+
+	const std::shared_ptr<const mr::coprocessor::FileComparePayload> payload = std::dynamic_pointer_cast<const mr::coprocessor::FileComparePayload>(capturedResult.payload);
+	if (payload == nullptr) {
+		failureReason = "File compare coprocessor result did not carry a FileComparePayload.";
+		return false;
+	}
+	if (payload->originalDocumentId != originalDocumentId || payload->originalBaseVersion != originalBaseVersion || payload->compareDocumentId != compareDocumentId || payload->compareBaseVersion != compareBaseVersion) {
+		failureReason = "File compare payload document/version metadata mismatch.";
+		return false;
+	}
+	if (payload->originalLineCount != leftLines.size() || payload->compareLineCount != rightLines.size()) {
+		failureReason = "File compare payload line-count metadata mismatch.";
+		return false;
+	}
+
+	std::size_t deleteCount = 0;
+	std::size_t insertCount = 0;
+	std::size_t equalCount = 0;
+	if (!validateDiffReconstructsRight(leftLines, rightLines, payload->hunks, &deleteCount, &insertCount, &equalCount, failureReason)) return false;
+	if (deleteCount != 1 || insertCount != 1 || equalCount != 3) {
+		failureReason = "Unexpected coprocessor diff counts: delete=" + std::to_string(deleteCount) + " insert=" + std::to_string(insertCount) + " equal=" + std::to_string(equalCount) + ".";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testFileCompareBentoWiringGuard(std::string &failureReason) {
+	const std::string commandsPath = absolutePathFromCwd("app/MRCommands.hpp");
+	const std::string menuPath = absolutePathFromCwd("app/MRMenuFactory.cpp");
+	const std::string appStatePath = absolutePathFromCwd("app/MRAppState.cpp");
+	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	const std::string windowCommandsHeaderPath = absolutePathFromCwd("app/commands/MRWindowCommands.hpp");
+	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
+	const std::string windowListHeaderPath = absolutePathFromCwd("dialogs/MRWindowList.hpp");
+	const std::string windowListPath = absolutePathFromCwd("dialogs/MRWindowList.cpp");
+	const std::string bentoHeaderPath = absolutePathFromCwd("ui/MRBentoBox.hpp");
+	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
+	const std::string catalogPath = absolutePathFromCwd("keymap/MRKeymapActionCatalog.cpp");
+	std::string commands;
+	std::string menu;
+	std::string appState;
+	std::string router;
+	std::string windowCommandsHeader;
+	std::string windowCommands;
+	std::string windowListHeader;
+	std::string windowList;
+	std::string bentoHeader;
+	std::string bentoProjection;
+	std::string dispatch;
+	std::string catalog;
+	std::string ioError;
+	std::string missingNeedle;
+
+	if (!readTextFile(commandsPath, commands, ioError) || !readTextFile(menuPath, menu, ioError) || !readTextFile(appStatePath, appState, ioError) || !readTextFile(routerPath, router, ioError) || !readTextFile(windowCommandsHeaderPath, windowCommandsHeader, ioError) || !readTextFile(windowCommandsPath, windowCommands, ioError) || !readTextFile(windowListHeaderPath, windowListHeader, ioError) || !readTextFile(windowListPath, windowList, ioError) || !readTextFile(bentoHeaderPath, bentoHeader, ioError) || !readTextFile(bentoProjectionPath, bentoProjection, ioError) || !readTextFile(dispatchPath, dispatch, ioError) || !readTextFile(catalogPath, catalog, ioError)) {
+		failureReason = "Unable to read file-compare wiring source: " + ioError;
+		return false;
+	}
+	if (!containsAllSubstrings(commands, {"cmMrTextFileCompare"}, missingNeedle) || !containsAllSubstrings(menu, {"file co~M~pare...", "cmMrTextFileCompare"}, missingNeedle) || !containsAllSubstrings(appState, {"setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows)"}, missingNeedle)) {
+		failureReason = "File compare text-menu command wiring changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(catalog, {"MR_TEXT_FILE_COMPARE"}, missingNeedle) || !containsAllSubstrings(router, {"KeymapActionDispatchEntry{\"MR_TEXT_FILE_COMPARE\", KeymapDispatchKind::AppCommand, cmMrTextFileCompare", "case cmMrTextFileCompare:", "return handleTextFileCompare();"}, missingNeedle)) {
+		failureReason = "File compare keymap/router dispatch wiring changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(router, {"mrShowWindowListDialog(mrwlSelectFileCompareTarget, originalWindow)", "createFileCompareBentoBoxWindow(title.c_str())", "compareBento->initializeFileCompare(setup)", "mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare"}, missingNeedle)) {
+		failureReason = "File compare command flow changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowCommandsHeader, {"MRBentoBox *createFileCompareBentoBoxWindow(const char *title);"}, missingNeedle) || !containsAllSubstrings(windowCommands, {"MRBentoBox *createFileCompareBentoBoxWindow(const char *title)", "bbmFileCompare"}, missingNeedle)) {
+		failureReason = "File compare Bento window factory changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowListHeader, {"mrwlSelectFileCompareTarget"}, missingNeedle) || !containsAllSubstrings(windowList, {"isFileCompareWindowListCandidate", "mode == mrwlSelectFileCompareTarget", "!isFileCompareWindowListCandidate(windows[i], current)"}, missingNeedle)) {
+		failureReason = "Window list file-compare target filtering changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(bentoHeader, {"bprDiffOriginal", "bprDiffCompare", "bbmFileCompare", "MRBentoCompareSetup", "initializeFileCompare", "applyFileCompareResult", "restoreFileCompareSources", "syncFileCompareLinkedPaneFrom", "FileCompareChangeGroup", "rebuildFileCompareChangeGroups", "fileCompareStatusForLeaf", "fileCompareChangeGroups"}, missingNeedle)) {
+		failureReason = "Bento file-compare public surface changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(bentoProjection, {"{bprDiffOriginal, \"Diff Original\", true}", "{bprDiffCompare, \"Diff Compare\", true}", "bentoMode == bbmFileCompare && !bentoRoleIsDiff(role)", "if (bentoMode == bbmFileCompare)", "source.role = bprDiffOriginal", "configuredFileCompareStartConfiguration()", "mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines)", "payload->originalDocumentId != fileCompareSetup.original.documentId", "fileCompareSourceStillMatches(fileCompareSetup.original)", "appendDiffDisplayLine(text, lineKinds", "mrfclkMissing", "mrfclkInsert", "mrfclkOffset", "configuredFileCompareOriginalLeadingGutters()", "configuredFileCompareOriginalTrailingGutters()", "configuredFileCompareCompareLeadingGutters()", "configuredFileCompareCompareTrailingGutters()", "targetEditor->setFileCompareGutters(leadingGutters, trailingGutters)", "targetEditor->setFileCompareLineKinds(lineKinds)", "targetEditor->setMiniMapSuppressed(!miniMapConfigured)", "targetEditor->setFileCompareGutterVisible(true)", "syncFileCompareLinkedPaneFrom(activeLeafId)", "syncFileCompareLinkedPaneFrom(0)", "displayStartLine", "displayLineCount", "deletedLineCount", "insertedLineCount", "rebuildFileCompareChangeGroups();", "std::string MRBentoBox::fileCompareStatusForLeaf", "firstVisibleChange", "lastVisibleChange", "visibleDeletedLines", "visibleInsertedLines", "totalDeletedLines", "totalInsertedLines", "status += \"/\" + std::to_string(fileCompareChangeGroups.size())", "status += \" -\" + std::to_string(totalDeletedLines)"}, missingNeedle)) {
+		failureReason = "Bento file-compare role/display/version wiring changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(dispatch, {"result.task.kind == mr::coprocessor::TaskKind::FileCompare", "handleFileCompareResult(result)", "bentoBox->applyFileCompareResult(result)", "recordTaskPerformance(result, \"File compare\""}, missingNeedle)) {
+		failureReason = "File compare coprocessor dispatch wiring changed: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 	std::string failure;
 
@@ -5573,6 +6160,7 @@ void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 
 void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
+	runTest(ctx, "MRSETUP window color theme URI startup load", testMrsetupWindowColorThemeUriStartupLoad);
 	runTest(ctx, "settings.mrmac auto-create on missing file", testSettingsMacroAutoCreate);
 	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
 	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
@@ -5585,16 +6173,21 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
+	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
+	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
+	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
 	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
 	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
 	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
+	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
 	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
-	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
+	runTest(ctx, "Post-EOF clear-area guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
@@ -5625,6 +6218,7 @@ void runCoreSuite(TestContext &ctx) {
 void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Path defaults from environment/OS", testPathDefaultsFromEnvironment);
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
+	runTest(ctx, "MRSETUP window color theme URI startup load", testMrsetupWindowColorThemeUriStartupLoad);
 	runTest(ctx, "settings.mrmac auto-create on missing file", testSettingsMacroAutoCreate);
 	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
 	runTest(ctx, "Dialog palette guard (no 32..63 overrides)", testDialogPaletteOverridesAbsent);
@@ -5646,16 +6240,21 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
+	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
+	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
+	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
 	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
+	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
 	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);
 	runTest(ctx, "Changed-text color wiring guard", testChangedTextColorWiringGuard);
 	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
-	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
+	runTest(ctx, "Post-EOF clear-area guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);

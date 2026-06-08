@@ -476,7 +476,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	return signals;
 }
 
-MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings) const {
+MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds) const {
 	OverlayState overlay;
 	const int dotColumns = useBraille ? std::max(1, miniMapBodyWidth * 2) : std::max(1, miniMapBodyWidth);
 	const int normalizedViewportWidth = std::max(1, viewportWidth);
@@ -536,10 +536,37 @@ MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr:
 		appendRangeMasks(overlay.errorLineMasks, range, true);
 	for (const mr::editor::Range &range : warningRanges)
 		appendRangeMasks(overlay.warningLineMasks, range, true);
+	if (!fileCompareLineKinds.empty()) {
+		const std::uint64_t fullLineMask = dotColumns >= 64 ? ~0ULL : ((1ULL << static_cast<unsigned>(dotColumns)) - 1ULL);
+		const std::size_t count = std::min(totalLines, fileCompareLineKinds.size());
+
+		for (std::size_t lineIndex = 0; lineIndex < count; ++lineIndex) {
+			switch (fileCompareLineKinds[lineIndex]) {
+				case mrfclkEqual:
+					overlay.diffEqualLineMasks.push_back({lineIndex, fullLineMask});
+					break;
+				case mrfclkMissing:
+					overlay.diffMissingLineMasks.push_back({lineIndex, fullLineMask});
+					break;
+				case mrfclkInsert:
+					overlay.diffInsertLineMasks.push_back({lineIndex, fullLineMask});
+					break;
+				case mrfclkOffset:
+					overlay.diffOffsetLineMasks.push_back({lineIndex, fullLineMask});
+					break;
+				default:
+					break;
+			}
+		}
+	}
 	Impl::normalizeLineMasks(overlay.errorLineMasks);
 	Impl::normalizeLineMasks(overlay.warningLineMasks);
 	Impl::normalizeLineMasks(overlay.findLineMasks);
 	Impl::normalizeLineMasks(overlay.dirtyLineMasks);
+	Impl::normalizeLineMasks(overlay.diffEqualLineMasks);
+	Impl::normalizeLineMasks(overlay.diffMissingLineMasks);
+	Impl::normalizeLineMasks(overlay.diffInsertLineMasks);
+	Impl::normalizeLineMasks(overlay.diffOffsetLineMasks);
 	return overlay;
 }
 
@@ -574,6 +601,10 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 		bool cellChanged = false;
 		bool cellError = false;
 		bool cellWarning = false;
+		bool cellDiffEqual = false;
+		bool cellDiffMissing = false;
+		bool cellDiffInsert = false;
+		bool cellDiffOffset = false;
 		if (useBraille) {
 			for (int py = 0; py < 4; ++py) {
 				const std::size_t sampleOffset = static_cast<std::size_t>(y) * 4 + static_cast<std::size_t>(py);
@@ -583,10 +614,18 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 				const std::uint64_t warningBits = Impl::lineMaskBits(overlay.warningLineMasks, lineIndex);
 				const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
 				const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
+				const std::uint64_t diffEqualBits = Impl::lineMaskBits(overlay.diffEqualLineMasks, lineIndex);
+				const std::uint64_t diffMissingBits = Impl::lineMaskBits(overlay.diffMissingLineMasks, lineIndex);
+				const std::uint64_t diffInsertBits = Impl::lineMaskBits(overlay.diffInsertLineMasks, lineIndex);
+				const std::uint64_t diffOffsetBits = Impl::lineMaskBits(overlay.diffOffsetLineMasks, lineIndex);
 				if (!cellError && miniMapCellHasOverlayBits(errorBits, x, true)) cellError = true;
 				if (!cellWarning && miniMapCellHasOverlayBits(warningBits, x, true)) cellWarning = true;
 				if (!cellFind && miniMapCellHasOverlayBits(findBits, x, true)) cellFind = true;
 				if (!cellChanged && miniMapCellHasOverlayBits(dirtyBits, x, true)) cellChanged = true;
+				if (!cellDiffEqual && miniMapCellHasOverlayBits(diffEqualBits, x, true)) cellDiffEqual = true;
+				if (!cellDiffMissing && miniMapCellHasOverlayBits(diffMissingBits, x, true)) cellDiffMissing = true;
+				if (!cellDiffInsert && miniMapCellHasOverlayBits(diffInsertBits, x, true)) cellDiffInsert = true;
+				if (!cellDiffOffset && miniMapCellHasOverlayBits(diffOffsetBits, x, true)) cellDiffOffset = true;
 			}
 		} else {
 			std::size_t lineIndex = samplingWindow.startLine + static_cast<std::size_t>(y);
@@ -594,20 +633,36 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 			const std::uint64_t warningBits = Impl::lineMaskBits(overlay.warningLineMasks, lineIndex);
 			const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
 			const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
+			const std::uint64_t diffEqualBits = Impl::lineMaskBits(overlay.diffEqualLineMasks, lineIndex);
+			const std::uint64_t diffMissingBits = Impl::lineMaskBits(overlay.diffMissingLineMasks, lineIndex);
+			const std::uint64_t diffInsertBits = Impl::lineMaskBits(overlay.diffInsertLineMasks, lineIndex);
+			const std::uint64_t diffOffsetBits = Impl::lineMaskBits(overlay.diffOffsetLineMasks, lineIndex);
 			cellError = miniMapCellHasOverlayBits(errorBits, x, false);
 			cellWarning = miniMapCellHasOverlayBits(warningBits, x, false);
 			cellFind = miniMapCellHasOverlayBits(findBits, x, false);
 			cellChanged = miniMapCellHasOverlayBits(dirtyBits, x, false);
+			cellDiffEqual = miniMapCellHasOverlayBits(diffEqualBits, x, false);
+			cellDiffMissing = miniMapCellHasOverlayBits(diffMissingBits, x, false);
+			cellDiffInsert = miniMapCellHasOverlayBits(diffInsertBits, x, false);
+			cellDiffOffset = miniMapCellHasOverlayBits(diffOffsetBits, x, false);
 		}
 		TColorAttr rowPriorityColor = palette.normal;
 		if (cellError) rowPriorityColor = palette.errorMarker;
 		else if (cellWarning)
 			rowPriorityColor = palette.warningMarker;
+		else if (cellDiffMissing)
+			rowPriorityColor = palette.diffMissing;
+		else if (cellDiffInsert)
+			rowPriorityColor = palette.diffInsert;
+		else if (cellDiffOffset)
+			rowPriorityColor = palette.diffOffset;
+		else if (cellDiffEqual)
+			rowPriorityColor = palette.diffEqual;
 		else if (cellFind)
 			rowPriorityColor = palette.findMarker;
 		else if (cellChanged)
 			rowPriorityColor = palette.changed;
-		const bool cellOverlayActive = cellError || cellWarning || cellFind || cellChanged;
+		const bool cellOverlayActive = cellError || cellWarning || cellDiffMissing || cellDiffInsert || cellDiffOffset || cellDiffEqual || cellFind || cellChanged;
 		TColorAttr cellColor = (pattern != 0 || cellOverlayActive) ? rowPriorityColor : palette.normal;
 		if (useBraille) buffer.moveStr(static_cast<ushort>(bodyX + x), glyphTable[pattern], cellColor, 1);
 		else if (pattern != 0)

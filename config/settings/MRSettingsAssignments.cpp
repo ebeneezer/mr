@@ -169,6 +169,8 @@ static const char *const kLogHandlingPersist = "PERSIST";
 static const char *const kLogHandlingJournalctl = "JOURNALCTL";
 static const char *const kCursorBehaviourBoundToText = "BOUND_TO_TEXT";
 static const char *const kCursorBehaviourFreeMovement = "FREE_MOVEMENT";
+static const char *const kFileCompareStartOriginalCompare = "ORIGINAL_COMPARE";
+static const char *const kFileCompareStartCompareOriginal = "COMPARE_ORIGINAL";
 static const char *const kDialogLastPathKey = "DIALOG_LAST_PATH";
 static const char *const kDialogPathHistoryKey = "DIALOG_PATH_HISTORY";
 static const char *const kDialogFileHistoryKey = "DIALOG_FILE_HISTORY";
@@ -254,9 +256,18 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"COMPILER_ERROR_MESSAGE_PLACEMENT", MRSettingsKeyClass::Global, true},
     {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
     {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
-    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
-    {"UI_INDENT_STYLE", MRSettingsKeyClass::Global, true},
-    {"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
+	    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
+	    {"UI_INDENT_STYLE", MRSettingsKeyClass::Global, true},
+	    {"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
+	    {kWindowColorThemeProfileKey, MRSettingsKeyClass::Global, true},
+	    {"FILE_COMPARE_LEFT_GUTTERS", MRSettingsKeyClass::Global, true},
+    {"FILE_COMPARE_RIGHT_GUTTERS", MRSettingsKeyClass::Global, true},
+    {"FILE_COMPARE_ORIGINAL_LEADING_GUTTERS", MRSettingsKeyClass::Global, true},
+    {"FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS", MRSettingsKeyClass::Global, true},
+    {"FILE_COMPARE_COMPARE_LEADING_GUTTERS", MRSettingsKeyClass::Global, true},
+    {"FILE_COMPARE_COMPARE_TRAILING_GUTTERS", MRSettingsKeyClass::Global, true},
+    {"FILE_COMPARE_START_CONFIGURATION", MRSettingsKeyClass::Global, true},
+    {"FILE_COMPARE_COMPARE_PANEL_READ_ONLY", MRSettingsKeyClass::Global, true},
     {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"LOG_HANDLING", MRSettingsKeyClass::Global, true},
     {"LOGFILE", MRSettingsKeyClass::Global, true},
@@ -408,6 +419,40 @@ bool parseUiIndentStyleLiteral(const std::string &value, MRUiIndentStyle &outVal
 		return true;
 	}
 	return setError(errorMessage, "UI_INDENT_STYLE must be K_AND_R, K_AND_R4, ALLMAN, GNOME, WHITESMITHS or HORSTMANN.");
+}
+
+bool parseFileCompareStartConfigurationLiteral(const std::string &value, MRFileCompareStartConfiguration &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kFileCompareStartOriginalCompare || upper == "ORIGINAL_COMPARE" || upper == "ORIGINAL<>COMPARE") {
+		outValue = MRFileCompareStartConfiguration::OriginalCompare;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == kFileCompareStartCompareOriginal || upper == "COMPARE_ORIGINAL" || upper == "COMPARE<>ORIGINAL") {
+		outValue = MRFileCompareStartConfiguration::CompareOriginal;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "FILE_COMPARE_START_CONFIGURATION must be ORIGINAL_COMPARE or COMPARE_ORIGINAL.");
+}
+
+bool normalizeFileCompareGutters(const std::string &value, std::string &out, std::string *errorMessage) {
+	out.clear();
+	for (char ch : trimAscii(value)) {
+		switch (static_cast<unsigned char>(std::toupper(static_cast<unsigned char>(ch)))) {
+			case 'M':
+			case 'D':
+			case 'L':
+			case 'C':
+				out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+				break;
+			default:
+				return setError(errorMessage, "FILE_COMPARE_*_GUTTERS may contain only M, D, L or C.");
+		}
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 bool parseSearchTextTypeLiteral(const std::string &value, MRSearchTextType &outValue, std::string *errorMessage) {
@@ -593,6 +638,12 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
 	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
+	if (!setConfiguredFileCompareOriginalLeadingGutters("L", errorMessage)) return false;
+	if (!setConfiguredFileCompareOriginalTrailingGutters("M", errorMessage)) return false;
+	if (!setConfiguredFileCompareCompareLeadingGutters("LD", errorMessage)) return false;
+	if (!setConfiguredFileCompareCompareTrailingGutters("", errorMessage)) return false;
+	if (!setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration::OriginalCompare, errorMessage)) return false;
+	if (!setConfiguredFileCompareComparePanelReadOnly(true, errorMessage)) return false;
 	if (!setConfiguredLogHandling(MRLogHandling::Volatile, errorMessage)) return false;
 	configuredAutoexecMacroStorage().clear();
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage)) return false;
@@ -1020,12 +1071,27 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredTrackCompilerNotes(parsed, errorMessage);
 			}
-			if (upper == "UI_INDENT_STYLE") {
-				MRUiIndentStyle style = MRUiIndentStyle::KandR;
-				if (!parseUiIndentStyleLiteral(value, style, errorMessage)) return false;
-				return setConfiguredUiIndentStyle(style, errorMessage);
+				if (upper == "UI_INDENT_STYLE") {
+					MRUiIndentStyle style = MRUiIndentStyle::KandR;
+					if (!parseUiIndentStyleLiteral(value, style, errorMessage)) return false;
+					return setConfiguredUiIndentStyle(style, errorMessage);
+				}
+				if (upper == "CURSOR_POSITION_MARKER") return setConfiguredCursorPositionMarker(value, errorMessage);
+				if (upper == kWindowColorThemeProfileKey) return loadColorThemeFile(value, errorMessage);
+				if (upper == "FILE_COMPARE_LEFT_GUTTERS" || upper == "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS") return setConfiguredFileCompareOriginalLeadingGutters(value, errorMessage);
+			if (upper == "FILE_COMPARE_RIGHT_GUTTERS" || upper == "FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS") return setConfiguredFileCompareOriginalTrailingGutters(value, errorMessage);
+			if (upper == "FILE_COMPARE_COMPARE_LEADING_GUTTERS") return setConfiguredFileCompareCompareLeadingGutters(value, errorMessage);
+			if (upper == "FILE_COMPARE_COMPARE_TRAILING_GUTTERS") return setConfiguredFileCompareCompareTrailingGutters(value, errorMessage);
+			if (upper == "FILE_COMPARE_START_CONFIGURATION") {
+				MRFileCompareStartConfiguration configuration = MRFileCompareStartConfiguration::OriginalCompare;
+				if (!parseFileCompareStartConfigurationLiteral(value, configuration, errorMessage)) return false;
+				return setConfiguredFileCompareStartConfiguration(configuration, errorMessage);
 			}
-			if (upper == "CURSOR_POSITION_MARKER") return setConfiguredCursorPositionMarker(value, errorMessage);
+			if (upper == "FILE_COMPARE_COMPARE_PANEL_READ_ONLY") {
+				bool parsed = true;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredFileCompareComparePanelReadOnly(parsed, errorMessage);
+			}
 			if (upper == "AUTOLOAD_WORKSPACE") {
 				bool parsed = false;
 				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
@@ -1521,8 +1587,28 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			if (upper == "UI_INDENT_STYLE") {
 				if (!parseUiIndentStyleLiteral(value, snapshot.uiIndentStyle, errorMessage)) return false;
 				return true;
+				}
+				if (upper == "CURSOR_POSITION_MARKER") return normalizeCursorPositionMarker(value, snapshot.cursorPositionMarker, errorMessage);
+				if (upper == kWindowColorThemeProfileKey) {
+					const std::string normalized = normalizeConfiguredPathInput(value);
+
+					if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
+					snapshot.colorThemeFilePath = makeAbsolutePath(normalized);
+					if (errorMessage != nullptr) errorMessage->clear();
+					return true;
+				}
+				if (upper == "FILE_COMPARE_LEFT_GUTTERS" || upper == "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareOriginalLeadingGutters, errorMessage);
+			if (upper == "FILE_COMPARE_RIGHT_GUTTERS" || upper == "FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareOriginalTrailingGutters, errorMessage);
+			if (upper == "FILE_COMPARE_COMPARE_LEADING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareCompareLeadingGutters, errorMessage);
+			if (upper == "FILE_COMPARE_COMPARE_TRAILING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareCompareTrailingGutters, errorMessage);
+			if (upper == "FILE_COMPARE_START_CONFIGURATION") {
+				if (!parseFileCompareStartConfigurationLiteral(value, snapshot.fileCompareStartConfiguration, errorMessage)) return false;
+				return true;
 			}
-			if (upper == "CURSOR_POSITION_MARKER") return normalizeCursorPositionMarker(value, snapshot.cursorPositionMarker, errorMessage);
+			if (upper == "FILE_COMPARE_COMPARE_PANEL_READ_ONLY") {
+				if (!parseBooleanLiteral(value, snapshot.fileCompareComparePanelReadOnly, errorMessage)) return false;
+				return true;
+			}
 			if (upper == "AUTOLOAD_WORKSPACE") {
 				if (!parseBooleanLiteral(value, snapshot.autoloadWorkspace, errorMessage)) return false;
 				return true;
@@ -1755,6 +1841,10 @@ bool applySettingsSnapshotCompilerProfileDirective(MRSettingsSnapshot &snapshot,
 			profile->libraryPaths = splitCompilerProfilePathList(arg4);
 		else if (key == "RUNTIME")
 			profile->runtimePaths = splitCompilerProfilePathList(arg4);
+		else if (key == "SUCCESS_AUDIO_URI")
+			profile->buildSuccessAudioUri = arg4;
+		else if (key == "FAILURE_AUDIO_URI")
+			profile->buildFailureAudioUri = arg4;
 		else
 			return setError(errorMessage, "Unknown compiler profile setting key.");
 		return setSnapshotCompilerProfiles(snapshot, profiles, errorMessage);

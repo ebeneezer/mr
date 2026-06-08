@@ -13,6 +13,7 @@ struct MRSetupPaths;
 [[nodiscard]] MREditWindow *createLogWindow(const char *title);
 [[nodiscard]] MREditWindow *createCommunicationWindow(const char *title);
 [[nodiscard]] MRBentoBox *createBentoBoxWindow(const char *title);
+[[nodiscard]] MRBentoBox *createFileCompareBentoBoxWindow(const char *title);
 [[nodiscard]] MRBentoBox *convertEditWindowToBentoBox(MREditWindow *source);
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsInZOrder();
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder();
@@ -40,6 +41,7 @@ void setCurrentVirtualDesktop(int vd);
 void syncVirtualDesktopVisibility();
 [[nodiscard]] std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths);
 void mrSaveWorkspace(const std::string &filename);
+[[nodiscard]] bool mrLoadWorkspaceWithDialog();
 void mrLoadWorkspace(const std::string &filename);
 
 #endif

@@ -1,5 +1,6 @@
 #define Uses_TGroup
 #define Uses_TDialog
+#define Uses_TDrawBuffer
 #define Uses_TEvent
 #define Uses_THistory
 #define Uses_TInputLine
@@ -12,6 +13,7 @@
 #include "MRDropList.hpp"
 
 #include "MRColumnListView.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
 
 #include <algorithm>
@@ -96,6 +98,17 @@ class TDropListButton final : public THistory {
 	    : THistory(bounds, link, 0), relay(relay), command(command), triggerDownKey(triggerDownKey) {
 		options |= ofSelectable | ofFirstClick;
 		eventMask |= evMouseDown | evKeyDown;
+	}
+
+	void draw() override {
+		const ushort width = static_cast<ushort>(std::max<short>(0, size.x));
+		unsigned char configured = 0;
+		const TAttrPair color = configuredColorSlotOverride(kMrPaletteDropListDescription, configured) ? TAttrPair(configured) : getColor(1);
+		TDrawBuffer buffer;
+
+		buffer.moveChar(0, ' ', color, width);
+		if (width > 0) buffer.moveChar(static_cast<ushort>(width - 1), '\x1F', color, 1);
+		writeLine(0, 0, size.x, 1, buffer);
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -189,6 +202,7 @@ void MRDropList::showValues(TGroup &owner, const TRect &anchor, const std::vecto
 	}
 
 	listView = new MRColumnListView(bounds, nullptr, relay, 0, acceptCommand, true);
+	listView->setActivateOnSingleClick(true);
 	sourceValues = sourceValueList;
 	itemValues = visibleValues;
 	speedSearchPrefix.clear();

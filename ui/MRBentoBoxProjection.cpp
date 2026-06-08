@@ -4,10 +4,14 @@
 #include "MRSidekickEditor.hpp"
 #include "MRWindowSupport.hpp"
 
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../coprocessor/MRCoprocessor.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -57,6 +61,8 @@ static const BentoPaneRoleDescriptor kBentoPaneRoles[] = {
 	{bprStructure, "Structure", true},
 	{bprFunctions, "Functions", true},
 	{bprSplitEditor, "Split editor", true},
+	{bprDiffOriginal, "Diff Original", true},
+	{bprDiffCompare, "Diff Compare", true},
 };
 
 const char *bentoPaneRoleTitle(MRBentoPaneRole role) noexcept {
@@ -75,10 +81,53 @@ bool bentoRoleIsOutline(MRBentoPaneRole role) noexcept {
 	}
 }
 
+bool bentoRoleIsDiff(MRBentoPaneRole role) noexcept {
+	return role == bprDiffOriginal || role == bprDiffCompare;
+}
+
+bool fileCompareGuttersContain(const std::string &gutters, char marker) noexcept {
+	for (char ch : gutters)
+		if (static_cast<char>(std::toupper(static_cast<unsigned char>(ch))) == marker) return true;
+	return false;
+}
+
+bool bentoWorkspaceModeIsValid(int mode) noexcept {
+	return mode == bbmToolWorkspace || mode == bbmDocumentViewports || mode == bbmFileCompare;
+}
+
+bool bentoWorkspaceRoleIsValid(int role) noexcept {
+	return role >= bprSource && role <= bprDiffCompare;
+}
+
 MRBentoPaneRole bentoPaneRoleForTitle(const std::string &title) {
 	for (const BentoPaneRoleDescriptor &descriptor : kBentoPaneRoles)
 		if (descriptor.listed && title == descriptor.title) return descriptor.role;
 	return bprCompilerOutput;
+}
+
+std::string diffDisplayTitle(const MRBentoCompareSource &source, const char *fallback) {
+	return source.title.empty() ? std::string(fallback) : source.title;
+}
+
+void appendDiffDisplayLine(std::string &text, std::vector<unsigned char> *lineKinds, std::size_t &displayLineCount, const std::string &line, unsigned char lineKind) {
+	if (displayLineCount > 0) text.push_back('\n');
+	text += line;
+	if (lineKinds != nullptr) lineKinds->push_back(lineKind);
+	++displayLineCount;
+}
+
+void hideFileCompareSourceWindow(const MRBentoCompareSource &source) {
+	MREditWindow *window = findEditWindowByBufferId(source.bufferId);
+
+	if (window == nullptr) return;
+	setWindowManuallyHidden(window, true);
+	window->hide();
+}
+
+bool fileCompareSourceStillMatches(const MRBentoCompareSource &source) {
+	MREditWindow *window = findEditWindowByBufferId(source.bufferId);
+
+	return window != nullptr && window->documentId() == source.documentId && window->documentVersion() == source.version;
 }
 
 struct BentoFrameGlyphs {
@@ -346,7 +395,24 @@ bool MRBentoBox::placePaneRole(MRBentoPaneRole role, MRBentoPanePlacement placem
 }
 
 TColorAttr MRBentoBox::mapColor(uchar index) {
-	if (sourceScrollBarPaletteActive && (index == 4 || index == 5)) return MREditWindow::mapColor(activeLeafId == 0 ? 13 : 1);
+	if (bentoMode == bbmFileCompare && index == 1) {
+		unsigned char value = 0;
+
+		if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorder, value)) return static_cast<TColorAttr>(value);
+	}
+	if (bentoMode == bbmFileCompare && index == 13) {
+		unsigned char value = 0;
+
+		if (configuredColorSlotOverride(kMrPaletteFileCompareFocusedPaneBorder, value)) return static_cast<TColorAttr>(value);
+	}
+	if (sourceScrollBarPaletteActive && (index == 4 || index == 5)) {
+		if (bentoMode == bbmFileCompare) {
+			MRFileEditor *sourceEditor = getEditor();
+
+			if (sourceEditor != nullptr) return sourceEditor->editorTextFillColor();
+		}
+		return MREditWindow::mapColor(activeLeafId == 0 ? 13 : 1);
+	}
 	return MREditWindow::mapColor(index);
 }
 
@@ -375,11 +441,12 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 	const MRBentoPaneSpec spec = paneSpecForRole(role);
 	const MRBentoPaneRole previousRole = roleForLeaf(targetLeafId);
 
-	if (targetLeafId == 0 && placement == bppReplace) return false;
+	if (bentoMode == bbmFileCompare && !bentoRoleIsDiff(role)) return false;
+	if (targetLeafId == 0 && placement == bppReplace && bentoMode != bbmFileCompare) return false;
 	switch (placement) {
 		case bppReplace:
-			if (targetPane == nullptr) return false;
-			targetPane->setPaneSpec(spec, getEditor());
+			if (targetLeafId != 0 && targetPane == nullptr) return false;
+			if (targetPane != nullptr) targetPane->setPaneSpec(spec, getEditor());
 			for (BentoLeaf &leaf : leaves) {
 				if (leaf.id == targetLeafId) {
 					leaf.role = role;
@@ -387,7 +454,9 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 					leaf.title = bentoPaneRoleTitle(role);
 				}
 			}
-			if (!bentoRoleIsOutline(role)) {
+			if (bentoMode == bbmFileCompare && bentoRoleIsDiff(role)) {
+				refreshFileComparePanes();
+			} else if (!bentoRoleIsOutline(role)) {
 				static_cast<void>(targetPane->replaceTextBuffer("", bentoPaneRoleTitle(role)));
 				targetPane->setReadOnly(spec.readOnly);
 				targetPane->setFileChanged(false);
@@ -411,19 +480,255 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 			setActivePane(targetLeafId);
 			layoutSplitPanes();
 			if (bentoRoleIsOutline(role)) refreshOutlinePanes(true);
+			if (bentoMode == bbmFileCompare) refreshFileComparePanes();
 			return true;
 		case bppSplitRight:
-			if (!bentoRoleIsOutline(role)) return splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
+			if (!bentoRoleIsOutline(role)) {
+				if (bentoMode == bbmFileCompare) {
+					const bool ok = splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
+					if (ok) refreshFileComparePanes();
+					return ok;
+				}
+				return splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
+			}
 			if (splitLeafNode(targetLeafId, bsoVertical, spec) < 0) return false;
 			refreshOutlinePanes(true);
 			return true;
 		case bppSplitDown:
-			if (!bentoRoleIsOutline(role)) return splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
+			if (!bentoRoleIsOutline(role)) {
+				if (bentoMode == bbmFileCompare) {
+					const bool ok = splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
+					if (ok) refreshFileComparePanes();
+					return ok;
+				}
+				return splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
+			}
 			if (splitLeafNode(targetLeafId, bsoHorizontal, spec) < 0) return false;
 			refreshOutlinePanes(true);
 			return true;
 		default:
 			return false;
+	}
+}
+
+bool MRBentoBox::initializeFileCompare(const MRBentoCompareSetup &setup) {
+	if (bentoMode != bbmFileCompare) return false;
+
+	const bool compareFirst = configuredFileCompareStartConfiguration() == MRFileCompareStartConfiguration::CompareOriginal;
+	const MRBentoPaneRole primaryRole = compareFirst ? bprDiffCompare : bprDiffOriginal;
+	const MRBentoPaneRole secondaryRole = compareFirst ? bprDiffOriginal : bprDiffCompare;
+	fileCompareSetup = setup;
+	fileCompareHunks.clear();
+	fileCompareChangeGroups.clear();
+	fileCompareTaskId = 0;
+	fileCompareSourcesRestored = false;
+	fileCompareDiffReady = false;
+	fileCompareStale = false;
+
+	for (BentoLeaf &leaf : leaves) {
+		if (leaf.id == 0) {
+			leaf.role = primaryRole;
+			leaf.spec = paneSpecForRole(primaryRole);
+			leaf.title = bentoPaneRoleTitle(primaryRole);
+		}
+	}
+	if (!loadTextBuffer(fileCompareTextForRole(primaryRole, nullptr).c_str(), bentoPaneRoleTitle(primaryRole))) return false;
+	setReadOnly(true);
+	setFileChanged(false);
+	if (leafIdForRole(secondaryRole) < 0) {
+		if (splitLeafNode(0, bsoVertical, secondaryRole) < 0) return false;
+	}
+	refreshFileComparePanes();
+	hideFileCompareSourceWindow(fileCompareSetup.original);
+	hideFileCompareSourceWindow(fileCompareSetup.compare);
+	static_cast<void>(mrActivateEditWindow(this));
+	return true;
+}
+
+bool MRBentoBox::isFileCompareBox() const noexcept {
+	return bentoMode == bbmFileCompare;
+}
+
+bool MRBentoBox::fileCompareWorkspaceSourcePaths(std::string &originalPath, std::string &comparePath) const {
+	MREditWindow *originalWindow = nullptr;
+	MREditWindow *compareWindow = nullptr;
+	MRFileEditor *originalEditor = nullptr;
+	MRFileEditor *compareEditor = nullptr;
+
+	originalPath.clear();
+	comparePath.clear();
+	if (bentoMode != bbmFileCompare) return false;
+
+	originalWindow = findEditWindowByBufferId(fileCompareSetup.original.bufferId);
+	compareWindow = findEditWindowByBufferId(fileCompareSetup.compare.bufferId);
+	originalEditor = originalWindow != nullptr ? originalWindow->getEditor() : nullptr;
+	compareEditor = compareWindow != nullptr ? compareWindow->getEditor() : nullptr;
+	if (originalEditor == nullptr || compareEditor == nullptr) return false;
+	originalPath = originalEditor->persistentFileName();
+	comparePath = compareEditor->persistentFileName();
+	return !originalPath.empty() && !comparePath.empty();
+}
+
+bool MRBentoBox::containsFileCompareSourceWindow(const MREditWindow *window) const noexcept {
+	if (bentoMode != bbmFileCompare || window == nullptr) return false;
+	return window->bufferId() == fileCompareSetup.original.bufferId || window->bufferId() == fileCompareSetup.compare.bufferId;
+}
+
+void MRBentoBox::refreshFileCompareConfiguration() {
+	if (bentoMode != bbmFileCompare) return;
+	refreshFileComparePanes();
+}
+
+MRBentoWorkspaceSnapshot MRBentoBox::workspaceSnapshot() const {
+	MRBentoWorkspaceSnapshot snapshot;
+
+	snapshot.mode = bentoMode;
+	snapshot.rootNode = rootNode;
+	snapshot.activeLeafId = activeLeafId;
+	snapshot.maximizedLeafId = maximizedLeafId;
+	for (const BentoLayoutNode &node : layoutTree) {
+		MRBentoWorkspaceNode workspaceNode;
+		workspaceNode.kind = static_cast<int>(node.kind);
+		workspaceNode.orientation = static_cast<int>(node.orientation);
+		workspaceNode.dividerPosition = node.dividerPosition;
+		workspaceNode.firstChild = node.firstChild;
+		workspaceNode.secondChild = node.secondChild;
+		workspaceNode.leafId = node.leafId;
+		snapshot.nodes.push_back(workspaceNode);
+	}
+	for (const BentoLeaf &leaf : leaves) {
+		MRBentoWorkspaceLeaf workspaceLeaf;
+		workspaceLeaf.id = leaf.id;
+		workspaceLeaf.role = leaf.role;
+		workspaceLeaf.visible = leaf.visible;
+		snapshot.leaves.push_back(workspaceLeaf);
+	}
+	return snapshot;
+}
+
+bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapshot) {
+	bool hasSourceLeaf = false;
+	int nextId = 0;
+
+	if (!bentoWorkspaceModeIsValid(static_cast<int>(snapshot.mode))) return false;
+	if (snapshot.nodes.empty() || snapshot.leaves.empty()) return false;
+	if (snapshot.rootNode < 0 || snapshot.rootNode >= static_cast<int>(snapshot.nodes.size())) return false;
+
+	for (const MRBentoWorkspaceLeaf &leaf : snapshot.leaves) {
+		if (leaf.id < 0 || !bentoWorkspaceRoleIsValid(static_cast<int>(leaf.role))) return false;
+		if (leaf.id == 0) hasSourceLeaf = true;
+		for (const MRBentoWorkspaceLeaf &other : snapshot.leaves)
+			if (&leaf != &other && leaf.id == other.id) return false;
+		if (snapshot.mode == bbmFileCompare) {
+			if (!bentoRoleIsDiff(leaf.role)) return false;
+		} else if (bentoRoleIsDiff(leaf.role))
+			return false;
+		nextId = std::max(nextId, leaf.id + 1);
+	}
+	if (!hasSourceLeaf) return false;
+
+	for (std::size_t i = 0; i < snapshot.nodes.size(); ++i) {
+		const MRBentoWorkspaceNode &node = snapshot.nodes[i];
+		if (node.kind != blnPane && node.kind != blnSplit) return false;
+		if (node.orientation != bsoHorizontal && node.orientation != bsoVertical) return false;
+		if (node.kind == blnPane) {
+			bool leafFound = false;
+			for (const MRBentoWorkspaceLeaf &leaf : snapshot.leaves)
+				if (leaf.id == node.leafId) leafFound = true;
+			if (!leafFound) return false;
+		} else {
+			if (node.firstChild < 0 || node.firstChild >= static_cast<int>(snapshot.nodes.size())) return false;
+			if (node.secondChild < 0 || node.secondChild >= static_cast<int>(snapshot.nodes.size())) return false;
+			if (node.firstChild == static_cast<int>(i) || node.secondChild == static_cast<int>(i)) return false;
+		}
+	}
+	{
+		std::vector<bool> visited(snapshot.nodes.size(), false);
+		std::vector<int> stack;
+		stack.push_back(snapshot.rootNode);
+		while (!stack.empty()) {
+			const int nodeIndex = stack.back();
+			stack.pop_back();
+			if (nodeIndex < 0 || nodeIndex >= static_cast<int>(snapshot.nodes.size())) return false;
+			if (visited[static_cast<std::size_t>(nodeIndex)]) return false;
+			visited[static_cast<std::size_t>(nodeIndex)] = true;
+			const MRBentoWorkspaceNode &node = snapshot.nodes[static_cast<std::size_t>(nodeIndex)];
+			if (node.kind == blnSplit) {
+				stack.push_back(node.secondChild);
+				stack.push_back(node.firstChild);
+			}
+		}
+	}
+
+	for (BentoLeaf &leaf : leaves) {
+		if (leaf.pane != nullptr) {
+			remove(leaf.pane);
+			TObject::destroy(leaf.pane);
+			leaf.pane = nullptr;
+		}
+	}
+	layoutTree.clear();
+	leaves.clear();
+	secondaryPane = nullptr;
+	bentoMode = snapshot.mode;
+
+	for (const MRBentoWorkspaceNode &workspaceNode : snapshot.nodes) {
+		BentoLayoutNode node;
+		node.kind = static_cast<BentoLayoutNodeKind>(workspaceNode.kind);
+		node.orientation = static_cast<BentoSplitOrientation>(workspaceNode.orientation);
+		node.dividerPosition = workspaceNode.dividerPosition;
+		node.firstChild = workspaceNode.firstChild;
+		node.secondChild = workspaceNode.secondChild;
+		node.leafId = workspaceNode.leafId;
+		layoutTree.push_back(node);
+	}
+	for (const MRBentoWorkspaceLeaf &workspaceLeaf : snapshot.leaves) {
+		BentoLeaf leaf;
+		leaf.id = workspaceLeaf.id;
+		leaf.role = workspaceLeaf.role;
+		leaf.spec = paneSpecForRole(workspaceLeaf.role);
+		leaf.title = bentoMode == bbmDocumentViewports ? "" : bentoPaneRoleTitle(workspaceLeaf.role);
+		leaf.visible = workspaceLeaf.visible;
+		if (leaf.id != 0) {
+			const std::string initialTitle = bentoMode == bbmDocumentViewports ? "Viewport" : leaf.title;
+			leaf.pane = new MRPaneEditWindow(TRect(0, 0, 1, 1), initialTitle.c_str(), number);
+			leaf.pane->setPaneSpec(leaf.spec, getEditor());
+			insert(leaf.pane);
+			if (secondaryPane == nullptr && leaf.visible) secondaryPane = leaf.pane;
+		}
+		leaves.push_back(leaf);
+	}
+
+	rootNode = snapshot.rootNode;
+	nextLeafId = nextId;
+	activeLeafId = nodeIndexForLeaf(snapshot.activeLeafId) >= 0 ? snapshot.activeLeafId : 0;
+	maximizedLeafId = nodeIndexForLeaf(snapshot.maximizedLeafId) >= 0 ? snapshot.maximizedLeafId : -1;
+	sourceScrollBarPaletteActive = false;
+	secondaryPaneVisible = firstToolLeafId() >= 0;
+	paneRoleDropList.hide();
+	paneActionDropList.hide();
+	layoutSplitPanes();
+	refreshOutlinePanes(true);
+	return true;
+}
+
+void MRBentoBox::setFileCompareTask(std::uint64_t taskId) noexcept {
+	fileCompareTaskId = taskId;
+}
+
+void MRBentoBox::restoreFileCompareSources() noexcept {
+	if (bentoMode != bbmFileCompare || fileCompareSourcesRestored) return;
+	fileCompareSourcesRestored = true;
+
+	MREditWindow *originalWindow = findEditWindowByBufferId(fileCompareSetup.original.bufferId);
+	if (originalWindow != nullptr) {
+		setWindowManuallyHidden(originalWindow, fileCompareSetup.original.wasManuallyHidden);
+		if (fileCompareSetup.original.wasVisible && !fileCompareSetup.original.wasManuallyHidden) originalWindow->show();
+	}
+	MREditWindow *compareWindow = findEditWindowByBufferId(fileCompareSetup.compare.bufferId);
+	if (compareWindow != nullptr) {
+		setWindowManuallyHidden(compareWindow, fileCompareSetup.compare.wasManuallyHidden);
+		if (fileCompareSetup.compare.wasVisible && !fileCompareSetup.compare.wasManuallyHidden) compareWindow->show();
 	}
 }
 
@@ -458,11 +763,13 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 }
 
 void MRBentoBox::close() {
+	restoreFileCompareSources();
 	windowCloseInProgress = true;
 	MREditWindow::close();
 }
 
 void MRBentoBox::shutDown() {
+	restoreFileCompareSources();
 	windowCloseInProgress = true;
 	MREditWindow::shutDown();
 }
@@ -532,6 +839,17 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		flushBentoProjection();
 		return;
 	}
+	if (bentoMode == bbmFileCompare && event.what == evKeyDown && bentoRoleIsDiff(roleForLeaf(activeLeafId))) {
+		const bool nextChangeKey = event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) == 0;
+		const bool previousChangeKey = event.keyDown.keyCode == kbShiftF8 || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0);
+
+		if (nextChangeKey || previousChangeKey) {
+			if (navigateFileCompareChange(nextChangeKey)) {
+				clearEvent(event);
+				return;
+			}
+		}
+	}
 	if (event.what == evKeyDown && compilerSidekickTracked && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
 		clearTrackedCompilerSidekick(true);
 		clearEvent(event);
@@ -568,6 +886,31 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			return;
 		}
 	}
+	if (bentoMode == bbmFileCompare && event.what == evMouseWheel) {
+		const int wheelLeafId = leafAt(localMouse);
+		const MRBentoPaneRole wheelRole = roleForLeaf(wheelLeafId);
+
+		if (bentoRoleIsDiff(wheelRole)) {
+			MREditWindow *wheelWindow = wheelLeafId == 0 ? static_cast<MREditWindow *>(this) : static_cast<MREditWindow *>(paneWindowForLeaf(wheelLeafId));
+			MRFileEditor *wheelEditor = wheelWindow != nullptr ? wheelWindow->getEditor() : nullptr;
+
+			if (wheelEditor != nullptr) {
+				const int wheelStep = event.mouse.wheel == mwRight || event.mouse.wheel == mwDown ? 3 : -3;
+
+				setActivePane(wheelLeafId);
+				if (event.mouse.wheel == mwLeft || event.mouse.wheel == mwRight)
+					wheelEditor->scrollTo(std::max(0, wheelEditor->delta.x + wheelStep), wheelEditor->delta.y);
+				else
+					wheelEditor->scrollTo(wheelEditor->delta.x, std::max(0, wheelEditor->delta.y + wheelStep));
+				clearEvent(event);
+				syncFileCompareLinkedPaneFrom(wheelLeafId, false);
+				if (wheelLeafId != 0 && wheelWindow != nullptr) wheelWindow->drawView();
+				bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
+				flushBentoProjection();
+				return;
+			}
+		}
+	}
 	if (mouseEvent) setActivePaneForMouse(event.mouse.where);
 	if (activeLeafId != 0 && splitEventTargetsSecondaryPane(event)) {
 		MRPaneEditWindow *targetPane = paneWindowForLeaf(activeLeafId);
@@ -580,7 +923,8 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		const bool enterOutline = outlinePaneActive && event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter;
 		const bool clickOutline = outlinePaneActive && event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0;
 		if (mouseEvent && !pointInRect(localMouse, contentBounds(targetBounds))) {
-			MREditWindow::handleEvent(event);
+			if (targetPane != nullptr) targetPane->handleEvent(event);
+			if (bentoMode == bbmFileCompare && bentoRoleIsDiff(activeRole)) syncFileCompareLinkedPaneFrom(activeLeafId);
 			bentoProjectionDirty |= bpdContent | bpdChrome;
 			flushBentoProjection();
 			return;
@@ -638,6 +982,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		targetVerticalScrollBar = targetPane != nullptr ? targetPane->verticalEditorScrollBar() : nullptr;
 		const std::pair<bool, bool> targetRangeAfter = std::make_pair(targetHorizontalScrollBar != nullptr && targetHorizontalScrollBar->maxVal > targetHorizontalScrollBar->minVal, targetVerticalScrollBar != nullptr && targetVerticalScrollBar->maxVal > targetVerticalScrollBar->minVal);
 		if (targetPane != nullptr && targetRangeAfter != targetRangeBefore) targetPane->layoutPaneChrome();
+		if (bentoMode == bbmFileCompare && bentoRoleIsDiff(activeRole)) syncFileCompareLinkedPaneFrom(activeLeafId);
 		bentoProjectionDirty |= bpdContent | bpdChrome;
 		flushBentoProjection();
 		return;
@@ -651,6 +996,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			sourceEditor->scrollTo(sourceEditor->delta.x, std::max(0, sourceEditor->delta.y + wheelStep));
 		clearEvent(event);
 		bentoProjectionDirty |= bpdScrollBar | bpdChrome | bpdOverlay;
+		syncFileCompareLinkedPaneFrom(0);
 		flushBentoProjection();
 		return;
 	}
@@ -662,6 +1008,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	MRTextBufferModel::ReadSnapshot oldSnapshot;
 	if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
 	MREditWindow::handleEvent(event);
+	syncFileCompareLinkedPaneFrom(0);
 	if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
 	refreshOutlinePanes(false);
 	sourceHorizontalScrollBar = horizontalEditorScrollBar();
@@ -700,6 +1047,11 @@ void MRBentoBox::initializeLayoutTree() noexcept {
 	source.role = bprSource;
 	source.spec = paneSpecForRole(bprSource);
 	source.title = bentoMode == bbmDocumentViewports ? "" : bentoPaneRoleTitle(bprSource);
+	if (bentoMode == bbmFileCompare) {
+		source.role = bprDiffOriginal;
+		source.spec = paneSpecForRole(bprDiffOriginal);
+		source.title = bentoPaneRoleTitle(bprDiffOriginal);
+	}
 	source.pane = nullptr;
 	source.visible = true;
 	leaves.push_back(source);
@@ -869,6 +1221,7 @@ void MRBentoBox::layoutSourcePaneChrome(const TRect &content) noexcept {
 		else
 			verticalScrollBar->hide();
 	}
+	configureSourcePaneScrollBarColors();
 }
 
 void MRBentoBox::hideSourcePaneChrome() noexcept {
@@ -882,12 +1235,30 @@ void MRBentoBox::hideSourcePaneChrome() noexcept {
 	if (editorIndicator() != nullptr) editorIndicator()->hide();
 }
 
+void MRBentoBox::configureSourcePaneScrollBarColors() noexcept {
+	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
+	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
+	MRFileEditor *sourceEditor = getEditor();
+	const TColorAttr fillAttr = sourceEditor != nullptr ? sourceEditor->editorTextFillColor() : MREditWindow::mapColor(6);
+	TColorAttr sourceMarkerAttr = MREditWindow::mapColor(activeLeafId == 0 ? 13 : 1);
+
+	if (bentoMode == bbmFileCompare) sourceMarkerAttr = fillAttr;
+	if (auto *scrollBar = dynamic_cast<MREditScrollBar *>(horizontalScrollBar)) scrollBar->setColorOverride(true, fillAttr, fillAttr, sourceMarkerAttr);
+	if (auto *scrollBar = dynamic_cast<MREditScrollBar *>(verticalScrollBar)) scrollBar->setColorOverride(true, fillAttr, fillAttr, sourceMarkerAttr);
+}
+
 void MRBentoBox::drawSourcePaneScrollBars() noexcept {
 	if (windowCloseInProgress) return;
 	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
 	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
 	const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
-	auto fillRect = [this](const TRect &rect) {
+	MRFileEditor *sourceEditor = getEditor();
+	const TColorAttr fillAttr = sourceEditor != nullptr ? sourceEditor->editorTextFillColor() : MREditWindow::mapColor(6);
+	TColorAttr sourceMarkerAttr = MREditWindow::mapColor(activeLeafId == 0 ? 13 : 1);
+
+	if (bentoMode == bbmFileCompare) sourceMarkerAttr = fillAttr;
+	configureSourcePaneScrollBarColors();
+	auto fillRect = [this, fillAttr](const TRect &rect) {
 		const short left = std::max<short>(0, rect.a.x);
 		const short top = std::max<short>(0, rect.a.y);
 		const short right = std::min<short>(size.x, rect.b.x);
@@ -896,10 +1267,24 @@ void MRBentoBox::drawSourcePaneScrollBars() noexcept {
 
 		if (width <= 0 || bottom <= top) return;
 		TDrawBuffer buffer;
-		buffer.moveChar(0, ' ', TAttrPair(MREditWindow::mapColor(1)), width);
+		buffer.moveChar(0, ' ', TAttrPair(fillAttr), width);
 		for (short y = top; y < bottom; ++y)
 			writeLine(left, y, width, 1, buffer);
 	};
+	if (sourceEditor != nullptr) {
+		TRect content = sourceEditor->getBounds();
+
+		for (const BentoLeaf &leaf : leaves)
+			if (leaf.visible && leaf.id == 0) {
+				content = contentBounds(leaf.bounds);
+				break;
+			}
+		const TRect editorBounds = sourceEditor->getBounds();
+		if (editorBounds.a.y > content.a.y) fillRect(TRect(content.a.x, content.a.y, content.b.x, editorBounds.a.y));
+		if (editorBounds.b.y < content.b.y) fillRect(TRect(content.a.x, editorBounds.b.y, content.b.x, content.b.y));
+		if (editorBounds.a.x > content.a.x) fillRect(TRect(content.a.x, editorBounds.a.y, editorBounds.a.x, editorBounds.b.y));
+		if (editorBounds.b.x < content.b.x) fillRect(TRect(editorBounds.b.x, editorBounds.a.y, content.b.x, editorBounds.b.y));
+	}
 	auto scrollBarRequired = [showWithoutRange](TScrollBar *scrollBar) {
 		if (scrollBar == nullptr) return false;
 		if ((scrollBar->state & sfVisible) == 0) return false;
@@ -915,36 +1300,43 @@ void MRBentoBox::drawSourcePaneScrollBars() noexcept {
 	auto drawScrollBar = [&](TScrollBar *scrollBar) {
 		if (!scrollBarRequired(scrollBar)) return false;
 		const TRect bounds = scrollBar->getBounds();
-		const TColorAttr baseAttr = MREditWindow::mapColor(activeLeafId == 0 ? 13 : 1);
+		TColorAttr baseAttr = sourceMarkerAttr;
 		const int logicalSize = std::max(3, scrollBar->size.x == 1 ? scrollBar->size.y : scrollBar->size.x);
 		const int markerPos = scrollBar->getPos();
 
 		if (scrollBar->size.x == 1) {
 			for (int row = 0; row < logicalSize; ++row) {
 				char ch = scrollBar->chars[2];
+				TColorAttr attr = fillAttr;
 				if (row == 0) ch = scrollBar->chars[0];
 				else if (row == logicalSize - 1)
 					ch = scrollBar->chars[1];
 				else if (scrollBar->maxVal == scrollBar->minVal)
 					ch = scrollBar->chars[4];
-				else if (row == markerPos)
+				else if (row == markerPos) {
 					ch = scrollBar->chars[3];
-				drawCell(bounds.a.x, static_cast<short>(bounds.a.y + row), ch, baseAttr);
+					attr = baseAttr;
+				}
+				drawCell(bounds.a.x, static_cast<short>(bounds.a.y + row), ch, attr);
 			}
 		} else {
 			const int width = std::max(0, bounds.b.x - bounds.a.x);
 			if (width <= 0) return false;
 			TDrawBuffer buffer;
+			buffer.moveChar(0, ' ', fillAttr, static_cast<ushort>(width));
 			for (int column = 0; column < std::min(width, logicalSize); ++column) {
 				char ch = scrollBar->chars[2];
+				TColorAttr attr = fillAttr;
 				if (column == 0) ch = scrollBar->chars[0];
 				else if (column == logicalSize - 1)
 					ch = scrollBar->chars[1];
 				else if (scrollBar->maxVal == scrollBar->minVal)
 					ch = scrollBar->chars[4];
-				else if (column == markerPos)
+				else if (column == markerPos) {
 					ch = scrollBar->chars[3];
-				buffer.moveChar(static_cast<ushort>(column), ch, baseAttr, 1);
+					attr = baseAttr;
+				}
+				buffer.moveChar(static_cast<ushort>(column), ch, attr, 1);
 			}
 			writeLine(bounds.a.x, bounds.a.y, width, 1, buffer);
 		}
@@ -963,7 +1355,7 @@ void MRBentoBox::drawSourcePaneScrollBars() noexcept {
 		const TRect verticalBounds = verticalScrollBar->getBounds();
 		if (horizontalBounds.a.y < horizontalBounds.b.y && verticalBounds.a.x < verticalBounds.b.x) {
 			TDrawBuffer buffer;
-			buffer.moveChar(0, ' ', TAttrPair(mapColor(4)), 1);
+			buffer.moveChar(0, ' ', TAttrPair(fillAttr), 1);
 			writeBuf(verticalBounds.a.x, horizontalBounds.a.y, 1, 1, buffer);
 		}
 	} else if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr) {
@@ -996,6 +1388,12 @@ void MRBentoBox::drawPaneFrames() noexcept {
 		if (leaves[i].visible) drawPaneFrame(i);
 }
 
+void MRBentoBox::refreshBentoColorTheme() noexcept {
+	if (windowCloseInProgress || (state & sfVisible) == 0) return;
+	drawSourcePaneScrollBars();
+	drawPaneFrames();
+}
+
 void MRBentoBox::drawPaneFrame(std::size_t leafIndex) noexcept {
 	if (leafIndex >= leaves.size()) return;
 	const BentoLeaf &leaf = leaves[leafIndex];
@@ -1007,8 +1405,14 @@ void MRBentoBox::drawPaneFrame(std::size_t leafIndex) noexcept {
 	const bool focused = leaf.id == activeLeafId && (state & sfFocused) != 0;
 	const bool maximized = leaf.id == maximizedLeafId;
 	const bool withControls = focused;
-	const TAttrPair frameColor = TAttrPair(mapColor(focused ? 13 : 1));
+	TColorAttr frameAttr = MREditWindow::mapColor(focused ? 13 : 1);
+	unsigned char fileComparePaneColor = 0;
 	TDrawBuffer buffer;
+
+	if (bentoMode == bbmFileCompare && focused && configuredColorSlotOverride(kMrPaletteFileCompareFocusedPaneBorder, fileComparePaneColor)) frameAttr = static_cast<TColorAttr>(fileComparePaneColor);
+	else if (bentoMode == bbmFileCompare && configuredColorSlotOverride(kMrPaletteFileComparePaneBorder, fileComparePaneColor))
+		frameAttr = static_cast<TColorAttr>(fileComparePaneColor);
+	const TAttrPair frameColor = TAttrPair(frameAttr);
 
 	buffer.moveChar(0, kBentoFrameGlyphs.singleHorizontal, frameColor, static_cast<ushort>(width));
 	buffer.putChar(0, '\xDA');
@@ -1497,6 +1901,10 @@ MRBentoPaneSpec MRBentoBox::paneSpecForRole(MRBentoPaneRole role) const noexcept
 			return MRBentoPaneSpec(bprSource, bpbSharedSourceBuffer, false, false, false, false, titleMenu);
 		case bprSplitEditor:
 			return MRBentoPaneSpec(bprSplitEditor, bpbSharedSourceBuffer, false, false, false, bentoMode == bbmDocumentViewports, titleMenu);
+		case bprDiffCompare:
+			return MRBentoPaneSpec(role, bpbOwnBuffer, true, false, true, true, titleMenu);
+		case bprDiffOriginal:
+			return MRBentoPaneSpec(role, bpbOwnBuffer, true, true, true, true, titleMenu);
 		case bprCompilerOutput:
 		case bprAppOutput:
 		case bprProblems:
@@ -1513,12 +1921,384 @@ std::string MRBentoBox::paneTitleForLeaf(const BentoLeaf &leaf) const {
 		const int viewportNumber = viewportNumberForLeaf(leaf.id);
 		return "Viewport #" + std::to_string(std::max(1, viewportNumber));
 	}
+	if (bentoMode == bbmFileCompare && bentoRoleIsDiff(leaf.role)) {
+		const std::string status = fileCompareStatusForLeaf(leaf);
+		if (!status.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + status + "]";
+	}
 	if (leaf.role == bprCompilerOutput && !compilerOutputStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + compilerOutputStatus + "]";
 	if (leaf.role == bprProblems && !compilerProblemsStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + compilerProblemsStatus + "]";
 	if (leaf.role == bprStructure && !structureOutlineStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + structureOutlineStatus + "]";
 	if (leaf.role == bprFunctions && !functionsOutlineStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + functionsOutlineStatus + "]";
 	if (!leaf.title.empty()) return leaf.title;
 	return bentoPaneRoleTitle(leaf.role);
+}
+
+void MRBentoBox::rebuildFileCompareChangeGroups() {
+	fileCompareChangeGroups.clear();
+	std::size_t displayLine = 0;
+	bool groupOpen = false;
+
+	for (const mr::diff::MRDiffHunk &hunk : fileCompareHunks) {
+		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				displayLine += hunk.count;
+				groupOpen = false;
+				break;
+			case mr::diff::MRDiffOp::Delete:
+				if (!groupOpen) {
+					fileCompareChangeGroups.push_back(FileCompareChangeGroup());
+					fileCompareChangeGroups.back().displayStartLine = displayLine;
+					groupOpen = true;
+				}
+				fileCompareChangeGroups.back().displayLineCount += hunk.count;
+				fileCompareChangeGroups.back().deletedLineCount += hunk.count;
+				displayLine += hunk.count;
+				break;
+			case mr::diff::MRDiffOp::Insert:
+				if (!groupOpen) {
+					fileCompareChangeGroups.push_back(FileCompareChangeGroup());
+					fileCompareChangeGroups.back().displayStartLine = displayLine;
+					groupOpen = true;
+				}
+				fileCompareChangeGroups.back().displayLineCount += hunk.count;
+				fileCompareChangeGroups.back().insertedLineCount += hunk.count;
+				displayLine += hunk.count;
+				break;
+			default:
+				break;
+		}
+	}
+}
+
+std::string MRBentoBox::fileCompareStatusForLeaf(const BentoLeaf &leaf) const {
+	if (bentoMode != bbmFileCompare || !bentoRoleIsDiff(leaf.role)) return std::string();
+	if (fileCompareStale) return "stale";
+	if (!fileCompareDiffReady) return fileCompareTaskId != 0 ? std::string("comparing") : std::string();
+
+	const MREditWindow *targetWindow = leaf.id == 0 ? static_cast<const MREditWindow *>(this) : static_cast<const MREditWindow *>(leaf.pane);
+	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+	if (targetEditor == nullptr || fileCompareChangeGroups.empty()) return std::string();
+
+	const std::size_t visibleStartLine = static_cast<std::size_t>(std::max(0, targetEditor->delta.y));
+	const std::size_t visibleLineCount = static_cast<std::size_t>(std::max(1, targetEditor->visibleViewportRows()));
+	const std::size_t visibleEndLine = visibleStartLine + visibleLineCount;
+	std::size_t firstVisibleChange = 0;
+	std::size_t lastVisibleChange = 0;
+	std::size_t visibleDeletedLines = 0;
+	std::size_t visibleInsertedLines = 0;
+	std::size_t totalDeletedLines = 0;
+	std::size_t totalInsertedLines = 0;
+	std::size_t activeChange = 0;
+	std::size_t activeDeletedLines = 0;
+	std::size_t activeInsertedLines = 0;
+	std::size_t activeDisplayStartLine = 0;
+	bool hasVisibleChange = false;
+	bool hasActiveChange = false;
+
+	std::size_t displayLine = 0;
+	std::size_t currentChange = 0;
+	bool groupOpen = false;
+
+	const std::size_t cursorLine = targetEditor->lineIndexOfOffset(targetEditor->cursorOffset());
+	for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
+		const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
+		const std::size_t groupEndLine = group.displayStartLine + std::max<std::size_t>(1, group.displayLineCount);
+
+		if (cursorLine >= group.displayStartLine && cursorLine < groupEndLine) {
+			activeChange = i + 1;
+			activeDeletedLines = group.deletedLineCount;
+			activeInsertedLines = group.insertedLineCount;
+			activeDisplayStartLine = group.displayStartLine;
+			hasActiveChange = true;
+			break;
+		}
+	}
+	if (!hasActiveChange) {
+		for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
+			const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
+			const std::size_t groupEndLine = group.displayStartLine + std::max<std::size_t>(1, group.displayLineCount);
+
+			if (groupEndLine > visibleStartLine && group.displayStartLine < visibleEndLine) {
+				activeChange = i + 1;
+				activeDeletedLines = group.deletedLineCount;
+				activeInsertedLines = group.insertedLineCount;
+				activeDisplayStartLine = group.displayStartLine;
+				hasActiveChange = true;
+				break;
+			}
+		}
+	}
+
+	for (const mr::diff::MRDiffHunk &hunk : fileCompareHunks) {
+		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				displayLine += hunk.count;
+				groupOpen = false;
+				break;
+			case mr::diff::MRDiffOp::Delete:
+			case mr::diff::MRDiffOp::Insert: {
+				if (!groupOpen) {
+					++currentChange;
+					groupOpen = true;
+				}
+
+				const std::size_t hunkStartLine = displayLine;
+				const std::size_t hunkEndLine = hunkStartLine + hunk.count;
+				const bool hunkVisible = hunkEndLine > visibleStartLine && hunkStartLine < visibleEndLine;
+
+				if (hunk.op == mr::diff::MRDiffOp::Delete)
+					totalDeletedLines += hunk.count;
+				else
+					totalInsertedLines += hunk.count;
+				if (hunkVisible) {
+					const std::size_t visibleHunkStartLine = std::max(hunkStartLine, visibleStartLine);
+					const std::size_t visibleHunkEndLine = std::min(hunkEndLine, visibleEndLine);
+					const std::size_t visibleHunkLineCount = visibleHunkEndLine - visibleHunkStartLine;
+
+					if (!hasVisibleChange) {
+						firstVisibleChange = currentChange;
+						hasVisibleChange = true;
+					}
+					lastVisibleChange = currentChange;
+					if (hunk.op == mr::diff::MRDiffOp::Delete)
+						visibleDeletedLines += visibleHunkLineCount;
+					else
+						visibleInsertedLines += visibleHunkLineCount;
+				}
+				displayLine = hunkEndLine;
+				break;
+			}
+			default:
+				break;
+		}
+	}
+	if (hasVisibleChange || hasActiveChange) {
+		std::string status;
+
+		if (hasVisibleChange) {
+			if (firstVisibleChange == lastVisibleChange)
+				status += std::to_string(firstVisibleChange);
+			else
+				status += std::to_string(firstVisibleChange) + "-" + std::to_string(lastVisibleChange);
+			status += "/" + std::to_string(fileCompareChangeGroups.size());
+			status += " -" + std::to_string(visibleDeletedLines) + "|+" + std::to_string(visibleInsertedLines);
+			status += " -" + std::to_string(totalDeletedLines) + "|+" + std::to_string(totalInsertedLines);
+		}
+		if (hasActiveChange) {
+			if (!status.empty()) status += " ";
+			status += "@" + std::to_string(activeChange) + "/" + std::to_string(fileCompareChangeGroups.size());
+			status += " -" + std::to_string(activeDeletedLines) + "|+" + std::to_string(activeInsertedLines);
+			status += " L" + std::to_string(activeDisplayStartLine + 1);
+		}
+		return status;
+	}
+	return std::string();
+}
+
+bool MRBentoBox::jumpToFileCompareChange(bool next) {
+	if (bentoMode != bbmFileCompare || fileCompareChangeGroups.empty()) return false;
+	const MRBentoPaneRole activeRole = roleForLeaf(activeLeafId);
+	if (!bentoRoleIsDiff(activeRole)) return false;
+
+	MREditWindow *activeWindow = activeLeafId == 0 ? static_cast<MREditWindow *>(this) : static_cast<MREditWindow *>(paneWindowForLeaf(activeLeafId));
+	MRFileEditor *activeEditor = activeWindow != nullptr ? activeWindow->getEditor() : nullptr;
+	if (activeEditor == nullptr) return false;
+
+	const std::size_t currentLine = static_cast<std::size_t>(std::max(0, activeEditor->delta.y));
+	std::size_t targetLine = 0;
+	bool targetFound = false;
+
+	if (next) {
+		for (const FileCompareChangeGroup &group : fileCompareChangeGroups) {
+			if (group.displayStartLine > currentLine) {
+				targetLine = group.displayStartLine;
+				targetFound = true;
+				break;
+			}
+		}
+		if (!targetFound) {
+			targetLine = fileCompareChangeGroups.front().displayStartLine;
+			targetFound = true;
+		}
+	} else {
+		for (std::size_t i = fileCompareChangeGroups.size(); i > 0; --i) {
+			const FileCompareChangeGroup &group = fileCompareChangeGroups[i - 1];
+
+			if (group.displayStartLine < currentLine) {
+				targetLine = group.displayStartLine;
+				targetFound = true;
+				break;
+			}
+		}
+		if (!targetFound) {
+			targetLine = fileCompareChangeGroups.back().displayStartLine;
+			targetFound = true;
+		}
+	}
+	if (!targetFound) return false;
+
+	const int targetLineDelta = static_cast<int>(std::min<std::size_t>(targetLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
+	const std::size_t targetOffset = activeEditor->lineMoveOffset(0, targetLineDelta, 0);
+
+	activeEditor->setCursorOffsetAtVisualColumn(targetOffset, 0);
+	activeEditor->scrollTo(std::max(0, activeEditor->delta.x), std::max(0, targetLineDelta));
+	activeEditor->refreshViewState();
+	if (activeWindow != nullptr) activeWindow->drawView();
+	syncFileCompareLinkedPaneFrom(activeLeafId);
+	return true;
+}
+
+bool MRBentoBox::navigateFileCompareChange(bool next) {
+	if (!jumpToFileCompareChange(next)) return false;
+	bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
+	flushBentoProjection();
+	return true;
+}
+
+std::string MRBentoBox::fileCompareTextForRole(MRBentoPaneRole role, std::vector<unsigned char> *lineKinds) const {
+	if (role != bprDiffOriginal && role != bprDiffCompare) return std::string();
+	if (lineKinds != nullptr) lineKinds->clear();
+	if (!fileCompareDiffReady) {
+		return role == bprDiffOriginal ? fileCompareSetup.original.text : fileCompareSetup.compare.text;
+	}
+
+	std::vector<std::string> originalLines;
+	std::vector<std::string> compareLines;
+	std::string text;
+	std::size_t displayLineCount = 0;
+
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines);
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.compare.text, compareLines);
+	for (const mr::diff::MRDiffHunk &hunk : fileCompareHunks) {
+		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				for (std::size_t i = 0; i < hunk.count; ++i) {
+					const std::size_t originalIndex = hunk.leftStart + i;
+					const std::size_t compareIndex = hunk.rightStart + i;
+					if (role == bprDiffOriginal && originalIndex < originalLines.size()) appendDiffDisplayLine(text, lineKinds, displayLineCount, originalLines[originalIndex], mrfclkEqual);
+					if (role == bprDiffCompare && compareIndex < compareLines.size()) appendDiffDisplayLine(text, lineKinds, displayLineCount, compareLines[compareIndex], mrfclkEqual);
+				}
+				break;
+			case mr::diff::MRDiffOp::Delete:
+				for (std::size_t i = 0; i < hunk.count; ++i) {
+					const std::size_t originalIndex = hunk.leftStart + i;
+					if (role == bprDiffOriginal && originalIndex < originalLines.size()) appendDiffDisplayLine(text, lineKinds, displayLineCount, originalLines[originalIndex], mrfclkMissing);
+					if (role == bprDiffCompare) appendDiffDisplayLine(text, lineKinds, displayLineCount, std::string(), mrfclkOffset);
+				}
+				break;
+			case mr::diff::MRDiffOp::Insert:
+				for (std::size_t i = 0; i < hunk.count; ++i) {
+					const std::size_t compareIndex = hunk.rightStart + i;
+					if (role == bprDiffOriginal) appendDiffDisplayLine(text, lineKinds, displayLineCount, std::string(), mrfclkOffset);
+					if (role == bprDiffCompare && compareIndex < compareLines.size()) appendDiffDisplayLine(text, lineKinds, displayLineCount, compareLines[compareIndex], mrfclkInsert);
+				}
+				break;
+			default:
+				break;
+		}
+	}
+	return text;
+}
+
+void MRBentoBox::refreshFileComparePane(BentoLeaf &leaf) {
+	MREditWindow *targetWindow = leaf.id == 0 ? static_cast<MREditWindow *>(this) : static_cast<MREditWindow *>(leaf.pane);
+	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+	std::string title;
+	std::string text;
+	std::vector<unsigned char> lineKinds;
+
+	if (targetWindow == nullptr || !bentoRoleIsDiff(leaf.role)) return;
+	title = leaf.role == bprDiffOriginal ? diffDisplayTitle(fileCompareSetup.original, "Diff Original") : diffDisplayTitle(fileCompareSetup.compare, "Diff Compare");
+	text = fileCompareTextForRole(leaf.role, &lineKinds);
+	if (fileCompareStale) {
+		text = "[source changed while compare was running]\n\n" + text;
+		lineKinds.insert(lineKinds.begin(), {mrfclkOffset, mrfclkOffset});
+	}
+	static_cast<void>(targetWindow->replaceTextBuffer(text.c_str(), title.c_str()));
+	if (targetEditor != nullptr) {
+		const std::string leadingGutters = leaf.role == bprDiffOriginal ? configuredFileCompareOriginalLeadingGutters() : configuredFileCompareCompareLeadingGutters();
+		const std::string trailingGutters = leaf.role == bprDiffOriginal ? configuredFileCompareOriginalTrailingGutters() : configuredFileCompareCompareTrailingGutters();
+		const bool miniMapConfigured = fileCompareGuttersContain(leadingGutters, 'M') || fileCompareGuttersContain(trailingGutters, 'M');
+
+		targetEditor->setMiniMapSuppressed(!miniMapConfigured);
+		targetEditor->setFileCompareGutters(leadingGutters, trailingGutters);
+		targetEditor->setFileCompareLineKinds(lineKinds);
+		targetEditor->setFileCompareGutterVisible(true);
+		targetEditor->updateMetrics();
+		targetEditor->continueComputeWarmupIfNeeded("file-compare-refresh");
+	}
+	if (leaf.id != 0 && leaf.pane != nullptr) leaf.pane->layoutPaneChrome();
+	targetWindow->setReadOnly(true);
+	targetWindow->setFileChanged(false);
+	leaf.title = bentoPaneRoleTitle(leaf.role);
+}
+
+void MRBentoBox::refreshFileComparePanes() {
+	if (bentoMode != bbmFileCompare) return;
+	for (BentoLeaf &leaf : leaves)
+		if (leaf.visible) refreshFileComparePane(leaf);
+	bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
+	flushBentoProjection();
+}
+
+void MRBentoBox::syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor) {
+	if (bentoMode != bbmFileCompare) return;
+
+	const MRBentoPaneRole sourceRole = roleForLeaf(sourceLeafId);
+	if (!bentoRoleIsDiff(sourceRole)) return;
+	const MRBentoPaneRole targetRole = sourceRole == bprDiffOriginal ? bprDiffCompare : bprDiffOriginal;
+	const int targetLeafId = leafIdForRole(targetRole);
+	if (targetLeafId < 0 || targetLeafId == sourceLeafId) return;
+
+	MREditWindow *sourceWindow = sourceLeafId == 0 ? static_cast<MREditWindow *>(this) : static_cast<MREditWindow *>(paneWindowForLeaf(sourceLeafId));
+	MREditWindow *targetWindow = targetLeafId == 0 ? static_cast<MREditWindow *>(this) : static_cast<MREditWindow *>(paneWindowForLeaf(targetLeafId));
+	MRFileEditor *sourceEditor = sourceWindow != nullptr ? sourceWindow->getEditor() : nullptr;
+	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+	if (sourceEditor == nullptr || targetEditor == nullptr) return;
+
+	if (syncCursor) {
+		const std::size_t sourceLine = sourceEditor->lineIndexOfOffset(sourceEditor->cursorOffset());
+		const int targetLineDelta = static_cast<int>(std::min(sourceLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
+		const int visualColumn = sourceEditor->displayedCursorColumn();
+		const std::size_t targetOffset = targetEditor->lineMoveOffset(0, targetLineDelta, visualColumn);
+
+		targetEditor->setCursorOffsetAtVisualColumn(targetOffset, visualColumn);
+	}
+	targetEditor->scrollTo(std::max(0, sourceEditor->delta.x), std::max(0, sourceEditor->delta.y));
+	targetEditor->refreshViewState();
+	if (targetWindow != nullptr) targetWindow->drawView();
+}
+
+bool MRBentoBox::applyFileCompareResult(const mr::coprocessor::Result &result) {
+	if (bentoMode != bbmFileCompare || fileCompareTaskId == 0 || result.task.id != fileCompareTaskId) return false;
+	releaseCoprocessorTask(result.task.id);
+	fileCompareTaskId = 0;
+
+	if (result.failed()) {
+		mrLogMessage((std::string("File compare failed: ") + result.error).c_str());
+		return true;
+	}
+	if (result.cancelled()) return true;
+
+	const mr::coprocessor::FileComparePayload *payload = dynamic_cast<const mr::coprocessor::FileComparePayload *>(result.payload.get());
+	if (payload == nullptr) {
+		mrLogMessage("File compare result discarded: missing payload.");
+		return true;
+	}
+	if (payload->originalDocumentId != fileCompareSetup.original.documentId || payload->originalBaseVersion != fileCompareSetup.original.version || payload->compareDocumentId != fileCompareSetup.compare.documentId || payload->compareBaseVersion != fileCompareSetup.compare.version || !fileCompareSourceStillMatches(fileCompareSetup.original) || !fileCompareSourceStillMatches(fileCompareSetup.compare)) {
+		fileCompareStale = true;
+		fileCompareChangeGroups.clear();
+		refreshFileComparePanes();
+		mrLogMessage("File compare result discarded: source document changed.");
+		return true;
+	}
+
+	fileCompareHunks = payload->hunks;
+	rebuildFileCompareChangeGroups();
+	fileCompareDiffReady = true;
+	fileCompareStale = false;
+	refreshFileComparePanes();
+	return true;
 }
 
 TRect MRBentoBox::paneLayoutBounds() const noexcept {
@@ -1627,8 +2407,12 @@ void MRBentoBox::collapseLeafNode(int leafId) noexcept {
 std::vector<std::string> MRBentoBox::paneRoleChoices() const {
 	std::vector<std::string> choices;
 
-	for (const BentoPaneRoleDescriptor &descriptor : kBentoPaneRoles)
-		if (descriptor.listed) choices.push_back(descriptor.title);
+	for (const BentoPaneRoleDescriptor &descriptor : kBentoPaneRoles) {
+		if (!descriptor.listed) continue;
+		if (bentoMode == bbmFileCompare && !bentoRoleIsDiff(descriptor.role)) continue;
+		if (bentoMode != bbmFileCompare && bentoRoleIsDiff(descriptor.role)) continue;
+		choices.push_back(descriptor.title);
+	}
 	return choices;
 }
 

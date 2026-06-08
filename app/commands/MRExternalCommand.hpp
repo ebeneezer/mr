@@ -10,6 +10,6 @@ struct MRCompilerProfile;
 
 [[nodiscard]] std::string shortenCommandTitle(std::string_view command);
 [[nodiscard]] bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std::string &sourcePath, std::string &commandLine, std::string *errorMessage = nullptr);
-[[nodiscard]] mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t channelId, const std::string &command);
+[[nodiscard]] mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t channelId, const std::string &command, const std::string &successAudioUri = std::string(), const std::string &failureAudioUri = std::string());
 
 #endif

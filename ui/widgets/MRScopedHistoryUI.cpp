@@ -154,6 +154,7 @@ class TWheelFileDialog final : public TFileDialog {
 		insert(new TFileDialogEnterInterceptor(fileName));
 		replaceHistoryView(static_cast<TInputLine *>(fileName));
 		replaceInfoPane();
+		removeFileMenuCancelButton();
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -308,6 +309,32 @@ class TWheelFileDialog final : public TFileDialog {
 				TView *pane = new TScopedFileInfoPane(childBounds);
 				insert(pane);
 				pane->growMode = childGrowMode;
+				return;
+			}
+			child = next;
+		}
+	}
+
+	void removeFileMenuCancelButton() {
+		switch (scope) {
+			case MRDialogHistoryScope::EditorSaveAs:
+			case MRDialogHistoryScope::OpenFile:
+			case MRDialogHistoryScope::LiveLogOpen:
+			case MRDialogHistoryScope::LoadFile:
+			case MRDialogHistoryScope::SaveLogAs:
+			case MRDialogHistoryScope::WorkspaceLoad:
+			case MRDialogHistoryScope::WorkspaceSave:
+			case MRDialogHistoryScope::PdfExport:
+				break;
+			default:
+				return;
+		}
+		for (TView *child = first(); child != nullptr;) {
+			TView *next = child->nextView();
+			TButton *button = dynamic_cast<TButton *>(child);
+			if (button != nullptr && button->title != nullptr && std::strcmp(button->title, "Cancel") == 0) {
+				remove(child);
+				TObject::destroy(child);
 				return;
 			}
 			child = next;

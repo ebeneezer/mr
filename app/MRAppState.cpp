@@ -31,8 +31,9 @@ struct AppCommandState {
 	bool isLogWindow;
 	bool hasExternalCommandDetail;
 	bool hasCompilerProblems;
+	bool hasFileCompareWindow;
 
-	AppCommandState() : window(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false) {
+	AppCommandState() : window(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false), hasFileCompareWindow(false) {
 	}
 };
 
@@ -56,6 +57,13 @@ AppCommandState appCommandState() {
 		}
 	if (win == nullptr) return state;
 	MREditWindow *externalWin = win;
+	for (TView *view = win; view != nullptr; view = view->owner) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
+		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) {
+			state.hasFileCompareWindow = true;
+			break;
+		}
+	}
 	if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win); bentoBox != nullptr) {
 		state.hasCompilerProblems = bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
 		if (bentoBox->buildOutputPane() != nullptr) externalWin = bentoBox->buildOutputPane();
@@ -95,6 +103,7 @@ void updateAppCommandState() {
 
 	setCommandEnabled(cmMrFileOpen, true);
 	setCommandEnabled(cmMrFileLoad, true);
+	setCommandEnabled(cmMrFileOpenWorkspace, true);
 	setCommandEnabled(cmMrFileAcquire, true);
 	setCommandEnabled(cmMrFileOpenLiveLog, true);
 	setCommandEnabled(cmMrFileOpenJournal, true);
@@ -157,6 +166,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrBlockMarkColumns, canModify);
 	setCommandEnabled(cmMrBlockMarkStream, canModify);
 	setCommandEnabled(cmMrBlockToggleMarking, (canModify && !state.blockMarking) || (hasEditor && state.blockMarking));
+	setCommandEnabled(cmMrBlockToggleVisibility, canModify);
 	setCommandEnabled(cmMrBlockEndMarking, hasEditor && state.blockMarking);
 	setCommandEnabled(cmMrBlockTurnMarkingOff, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockPersistent, hasEditor);
@@ -178,12 +188,15 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrTextCenterLine, canModify);
 	setCommandEnabled(cmMrTextTimeDateStamp, canModify);
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
+	setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows);
 	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasBuildSourceFile);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
 	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail);
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
 	setCommandEnabled(cmMrOtherFindNextCompilerError, state.hasCompilerProblems);
 	setCommandEnabled(cmMrOtherFindPreviousCompilerError, state.hasCompilerProblems);
+	setCommandEnabled(cmMrFileCompareNextChange, state.hasFileCompareWindow);
+	setCommandEnabled(cmMrFileComparePreviousChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
 	setCommandEnabled(cmMrOtherAsciiTable, canModify);
 	setCommandEnabled(cmMrOtherEmojiTable, canModify);

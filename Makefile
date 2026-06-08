@@ -50,7 +50,7 @@ PDF_EXPORT_CFLAGS := $(shell $(PKG_CONFIG) --cflags pangocairo cairo 2>/dev/null
 PDF_EXPORT_LIBS := $(shell $(PKG_CONFIG) --libs pangocairo cairo 2>/dev/null)
 
 # Include paths
-INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config -I./keymap $(PDF_EXPORT_CFLAGS)
+INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./diff -I./app -I./app/commands -I./dialogs -I./config -I./keymap $(PDF_EXPORT_CFLAGS)
 
 # Language/runtime configuration.
 CXXSTD ?= gnu++20
@@ -173,6 +173,7 @@ CXX_SOURCES = \
 	derivedstate/MRFoldingDerivedState.cpp \
 	derivedstate/MRMiniMapDerivedState.cpp \
 	derivedstate/MRSyntaxDerivedState.cpp \
+	diff/MRMyersDiff.cpp \
 	outline/MROutlineFoldProducer.cpp \
 	coprocessor/MRPerformance.cpp \
 	coprocessor/MRCoprocessorDispatch.cpp \
@@ -515,7 +516,8 @@ outline/MROutlineFoldProducer.o: outline/MROutlineFoldProducer.cpp outline/MROut
 ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
 ui/MRSidekickEditor.o: ui/MRSidekickEditor.cpp ui/MRSidekickEditor.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp
-coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp
+coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp diff/MRDiff.hpp
+diff/MRMyersDiff.o: diff/MRMyersDiff.cpp diff/MRDiff.hpp
 piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp piecetable/MRTextDocumentLineIndex.hpp
 piecetable/MRTextDocumentLineIndex.o: piecetable/MRTextDocumentLineIndex.cpp piecetable/MRTextDocumentLineIndex.hpp piecetable/MRTextDocument.hpp
 $(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp

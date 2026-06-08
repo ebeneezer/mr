@@ -58,6 +58,11 @@ void MRPaneEditWindow::draw() {
 }
 
 TColorAttr MRPaneEditWindow::mapColor(uchar index) {
+	if ((mPaneSpec.role == bprDiffOriginal || mPaneSpec.role == bprDiffCompare) && (index == 4 || index == 5)) {
+		MRFileEditor *paneEditor = getEditor();
+
+		if (paneEditor != nullptr) return paneEditor->editorTextFillColor();
+	}
 	if (index == 4 || index == 5) return MREditWindow::mapColor(mPaneFocused ? 13 : 1);
 	return MREditWindow::mapColor(index);
 }
@@ -89,7 +94,7 @@ void MRPaneEditWindow::applyPanePolicy(const MRFileEditor *sourceEditor) noexcep
 	if (paneEditor == nullptr) return;
 	if (mPaneSpec.bufferPolicy == bpbSharedSourceBuffer && sourceEditor != nullptr) paneEditor->shareContentStateFrom(*sourceEditor);
 	setReadOnly(mPaneSpec.readOnly);
-	paneEditor->setCommunicationViewerMode(mPaneSpec.readOnly, mPaneSpec.role != bprProblems);
+	paneEditor->setCommunicationViewerMode(mPaneSpec.readOnly && mPaneSpec.role != bprDiffOriginal && mPaneSpec.role != bprDiffCompare, mPaneSpec.role != bprProblems);
 	paneEditor->setMiniMapSuppressed(mPaneSpec.suppressMiniMap);
 	paneEditor->setWordWrapSuppressed(mPaneSpec.suppressWordWrap);
 	paneEditor->setScrollBarsAlwaysVisible(mPaneSpec.scrollBarsAlwaysVisible);
@@ -161,20 +166,41 @@ void MRPaneEditWindow::layoutPaneChrome() noexcept {
 				else
 					verticalScrollBar->hide();
 			}
+			configurePaneScrollBarColors();
 		} else {
 			if (horizontalScrollBar != nullptr) horizontalScrollBar->hide();
 			if (verticalScrollBar != nullptr) verticalScrollBar->hide();
 			paneEditor->changeBounds(editorBounds);
 			paneEditor->updateMetrics();
+			configurePaneScrollBarColors();
 		}
 		drawPaneScrollBars();
 	}
 }
 
+void MRPaneEditWindow::configurePaneScrollBarColors() noexcept {
+	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
+	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
+	MRFileEditor *paneEditor = getEditor();
+	const TColorAttr fillAttr = paneEditor != nullptr ? paneEditor->editorTextFillColor() : mapColor(6);
+	TColorAttr markerAttr = mapColor(mPaneFocused ? 13 : 1);
+
+	if (mPaneSpec.role == bprDiffOriginal || mPaneSpec.role == bprDiffCompare) markerAttr = fillAttr;
+	if (auto *scrollBar = dynamic_cast<MREditScrollBar *>(horizontalScrollBar)) scrollBar->setColorOverride(true, fillAttr, fillAttr, markerAttr);
+	if (auto *scrollBar = dynamic_cast<MREditScrollBar *>(verticalScrollBar)) scrollBar->setColorOverride(true, fillAttr, fillAttr, markerAttr);
+}
+
 void MRPaneEditWindow::drawPaneScrollBars() noexcept {
 	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
 	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
-	auto fillRect = [this](const TRect &rect) {
+	const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
+	MRFileEditor *paneEditor = getEditor();
+	const TColorAttr fillAttr = paneEditor != nullptr ? paneEditor->editorTextFillColor() : mapColor(6);
+	TColorAttr markerAttr = mapColor(mPaneFocused ? 13 : 1);
+
+	if (mPaneSpec.role == bprDiffOriginal || mPaneSpec.role == bprDiffCompare) markerAttr = fillAttr;
+	configurePaneScrollBarColors();
+	auto fillRect = [this, fillAttr](const TRect &rect) {
 		const short left = std::max<short>(0, rect.a.x);
 		const short top = std::max<short>(0, rect.a.y);
 		const short right = std::min<short>(size.x, rect.b.x);
@@ -183,23 +209,88 @@ void MRPaneEditWindow::drawPaneScrollBars() noexcept {
 
 		if (width <= 0 || bottom <= top) return;
 		TDrawBuffer buffer;
-		buffer.moveChar(0, ' ', TAttrPair(mapColor(1)), width);
+		buffer.moveChar(0, ' ', TAttrPair(fillAttr), width);
 		for (short y = top; y < bottom; ++y)
 			writeLine(left, y, width, 1, buffer);
+	};
+	if (paneEditor != nullptr) {
+		const TRect extent = getExtent();
+		const TRect editorBounds = paneEditor->getBounds();
+
+		if (editorBounds.a.y > extent.a.y) fillRect(TRect(extent.a.x, extent.a.y, extent.b.x, editorBounds.a.y));
+		if (editorBounds.b.y < extent.b.y) fillRect(TRect(extent.a.x, editorBounds.b.y, extent.b.x, extent.b.y));
+		if (editorBounds.a.x > extent.a.x) fillRect(TRect(extent.a.x, editorBounds.a.y, editorBounds.a.x, editorBounds.b.y));
+		if (editorBounds.b.x < extent.b.x) fillRect(TRect(editorBounds.b.x, editorBounds.a.y, extent.b.x, editorBounds.b.y));
+	}
+	auto scrollBarRequired = [showWithoutRange](TScrollBar *scrollBar) {
+		if (scrollBar == nullptr) return false;
+		if ((scrollBar->state & sfVisible) == 0) return false;
+		if (scrollBar->size.x <= 0 || scrollBar->size.y <= 0) return false;
+		if (!showWithoutRange && scrollBar->maxVal <= scrollBar->minVal) return false;
+		return true;
+	};
+	auto drawCell = [this](short x, short y, char ch, TColorAttr attr) {
+		TDrawBuffer buffer;
+		buffer.moveChar(0, ch, attr, 1);
+		writeBuf(x, y, 1, 1, buffer);
+	};
+	auto drawScrollBar = [&](TScrollBar *scrollBar) {
+		if (!scrollBarRequired(scrollBar)) return false;
+		const TRect bounds = scrollBar->getBounds();
+		const int logicalSize = std::max(3, scrollBar->size.x == 1 ? scrollBar->size.y : scrollBar->size.x);
+		const int markerPos = scrollBar->getPos();
+
+		if (scrollBar->size.x == 1) {
+			for (int row = 0; row < logicalSize; ++row) {
+				char ch = scrollBar->chars[2];
+				TColorAttr attr = fillAttr;
+				if (row == 0) ch = scrollBar->chars[0];
+				else if (row == logicalSize - 1)
+					ch = scrollBar->chars[1];
+				else if (scrollBar->maxVal == scrollBar->minVal)
+					ch = scrollBar->chars[4];
+				else if (row == markerPos) {
+					ch = scrollBar->chars[3];
+					attr = markerAttr;
+				}
+				drawCell(bounds.a.x, static_cast<short>(bounds.a.y + row), ch, attr);
+			}
+		} else {
+			const int width = std::max(0, bounds.b.x - bounds.a.x);
+			if (width <= 0) return false;
+			TDrawBuffer buffer;
+			buffer.moveChar(0, ' ', fillAttr, static_cast<ushort>(width));
+			for (int column = 0; column < std::min(width, logicalSize); ++column) {
+				char ch = scrollBar->chars[2];
+				TColorAttr attr = fillAttr;
+				if (column == 0) ch = scrollBar->chars[0];
+				else if (column == logicalSize - 1)
+					ch = scrollBar->chars[1];
+				else if (scrollBar->maxVal == scrollBar->minVal)
+					ch = scrollBar->chars[4];
+				else if (column == markerPos) {
+					ch = scrollBar->chars[3];
+					attr = markerAttr;
+				}
+				buffer.moveChar(static_cast<ushort>(column), ch, attr, 1);
+			}
+			writeLine(bounds.a.x, bounds.a.y, width, 1, buffer);
+		}
+		return true;
 	};
 
 	normalizeScrollBarTrackGlyph(horizontalScrollBar);
 	normalizeScrollBarTrackGlyph(verticalScrollBar);
-	if (horizontalScrollBar != nullptr) horizontalScrollBar->drawView();
-	if (verticalScrollBar != nullptr) verticalScrollBar->drawView();
-	if (horizontalScrollBar != nullptr && (horizontalScrollBar->state & sfVisible) == 0) fillRect(horizontalScrollBar->getBounds());
-	if (verticalScrollBar != nullptr && (verticalScrollBar->state & sfVisible) == 0) fillRect(verticalScrollBar->getBounds());
+	const bool drewHorizontal = drawScrollBar(horizontalScrollBar);
+	const bool drewVertical = drawScrollBar(verticalScrollBar);
+	if (horizontalScrollBar != nullptr && !drewHorizontal) fillRect(horizontalScrollBar->getBounds());
+	if (verticalScrollBar != nullptr && !drewVertical) fillRect(verticalScrollBar->getBounds());
 	if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr && (horizontalScrollBar->state & sfVisible) != 0 && (verticalScrollBar->state & sfVisible) != 0) {
 		const TRect horizontalBounds = horizontalScrollBar->getBounds();
 		const TRect verticalBounds = verticalScrollBar->getBounds();
 		if (horizontalBounds.a.y < horizontalBounds.b.y && verticalBounds.a.x < verticalBounds.b.x) {
 			TDrawBuffer buffer;
-			buffer.moveChar(0, ' ', TAttrPair(mapColor(4)), 1);
+			buffer.moveChar(0, ' ', TAttrPair(fillAttr), 1);
 			writeBuf(verticalBounds.a.x, horizontalBounds.a.y, 1, 1, buffer);
 		}
 	} else if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr) {

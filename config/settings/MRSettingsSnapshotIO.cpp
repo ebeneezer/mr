@@ -107,6 +107,10 @@ std::string formatUiIndentStyleLiteral(MRUiIndentStyle style) {
 	}
 }
 
+std::string formatFileCompareStartConfigurationLiteral(MRFileCompareStartConfiguration configuration) {
+	return configuration == MRFileCompareStartConfiguration::CompareOriginal ? "COMPARE_ORIGINAL" : "ORIGINAL_COMPARE";
+}
+
 std::string formatSearchTextType(MRSearchTextType value) {
 	if (value == MRSearchTextType::Word) return kSearchTextTypeWord;
 	if (value == MRSearchTextType::Pcre) return kSearchTextTypePcre;
@@ -403,6 +407,12 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.trackCompilerNotes = configuredTrackCompilerNotes();
 	snapshot.uiIndentStyle = configuredUiIndentStyle();
 	snapshot.cursorPositionMarker = configuredCursorPositionMarker();
+	snapshot.fileCompareOriginalLeadingGutters = configuredFileCompareOriginalLeadingGutters();
+	snapshot.fileCompareOriginalTrailingGutters = configuredFileCompareOriginalTrailingGutters();
+	snapshot.fileCompareCompareLeadingGutters = configuredFileCompareCompareLeadingGutters();
+	snapshot.fileCompareCompareTrailingGutters = configuredFileCompareCompareTrailingGutters();
+	snapshot.fileCompareStartConfiguration = configuredFileCompareStartConfiguration();
+	snapshot.fileCompareComparePanelReadOnly = configuredFileCompareComparePanelReadOnly();
 	snapshot.autoloadWorkspace = configuredAutoloadWorkspace();
 	snapshot.logHandling = configuredLogHandling();
 	snapshot.logFilePath = configuredLogFilePath();
@@ -412,6 +422,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.defaultProfileDescription = configuredDefaultProfileDescription();
 	snapshot.editSettings = configuredEditSetupSettings();
 	snapshot.colorSettings = configuredColorSetupSettings();
+	snapshot.colorThemeFilePath = configuredColorThemeFilePath();
 	snapshot.compilerProfiles = configuredCompilerProfiles();
 	snapshot.editProfiles = configuredEditExtensionProfiles();
 	snapshot.keymapProfiles = configuredKeymapProfiles();
@@ -580,6 +591,13 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('TRACK_COMPILER_NOTES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerNotes)) + "');\n";
 	source += "MRSETUP('UI_INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(formatUiIndentStyleLiteral(snapshot.uiIndentStyle)) + "');\n";
 	source += "MRSETUP('CURSOR_POSITION_MARKER', '" + escapeMrmacSingleQuotedLiteral(snapshot.cursorPositionMarker) + "');\n";
+	source += "MRSETUP('WINDOW_COLORTHEME_URI', '" + escapeMrmacSingleQuotedLiteral(normalizeConfiguredPathInput(snapshot.colorThemeFilePath)) + "');\n";
+	source += "MRSETUP('FILE_COMPARE_ORIGINAL_LEADING_GUTTERS', '" + escapeMrmacSingleQuotedLiteral(snapshot.fileCompareOriginalLeadingGutters) + "');\n";
+	source += "MRSETUP('FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS', '" + escapeMrmacSingleQuotedLiteral(snapshot.fileCompareOriginalTrailingGutters) + "');\n";
+	source += "MRSETUP('FILE_COMPARE_COMPARE_LEADING_GUTTERS', '" + escapeMrmacSingleQuotedLiteral(snapshot.fileCompareCompareLeadingGutters) + "');\n";
+	source += "MRSETUP('FILE_COMPARE_COMPARE_TRAILING_GUTTERS', '" + escapeMrmacSingleQuotedLiteral(snapshot.fileCompareCompareTrailingGutters) + "');\n";
+	source += "MRSETUP('FILE_COMPARE_START_CONFIGURATION', '" + escapeMrmacSingleQuotedLiteral(formatFileCompareStartConfigurationLiteral(snapshot.fileCompareStartConfiguration)) + "');\n";
+	source += "MRSETUP('FILE_COMPARE_COMPARE_PANEL_READ_ONLY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.fileCompareComparePanelReadOnly)) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoloadWorkspace)) + "');\n";
 	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(snapshot.logHandling)) + "');\n";
 	source += "MRSETUP('LOGFILE', '" + escapeMrmacSingleQuotedLiteral(snapshot.logFilePath) + "');\n";
@@ -654,6 +672,8 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'INCLUDES', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.includePaths)) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LIBRARIES', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.libraryPaths)) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'RUNTIME', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.runtimePaths)) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'SUCCESS_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(profile.buildSuccessAudioUri) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'FAILURE_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(profile.buildFailureAudioUri) + "');\n";
 	}
 
 	for (const auto &profile : snapshot.editProfiles) {

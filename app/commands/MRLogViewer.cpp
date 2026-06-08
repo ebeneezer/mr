@@ -134,8 +134,7 @@ class JournalTagDialog : public TDialog {
 		identifierList = new MRColumnListView(TRect(3, 6, 55, 14), identifierScrollBar, this, cmJournalTagSelectionChanged, cmJournalTagSelectionAccepted);
 		insert(identifierList);
 		setIdentifierRows();
-		insert(new TButton(TRect(18, 15, 28, 17), "~O~K", cmOK, bfDefault));
-		insert(new TButton(TRect(33, 15, 45, 17), "~C~ancel", cmCancel, bfNormal));
+		insert(new TButton(TRect(26, 15, 36, 17), "~O~K", cmOK, bfDefault));
 		selectNext(False);
 	}
 

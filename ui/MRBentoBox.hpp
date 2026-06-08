@@ -3,6 +3,7 @@
 
 #include "MREditWindow.hpp"
 #include "widgets/MRDropList.hpp"
+#include "MRDiff.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -11,6 +12,11 @@
 #include <vector>
 
 class MRBentoPaneFrameView;
+namespace mr {
+namespace coprocessor {
+struct Result;
+}
+}
 
 enum MRBentoPaneRole {
 	bprSource = 0,
@@ -22,7 +28,9 @@ enum MRBentoPaneRole {
 	bprVariables,
 	bprStructure,
 	bprFunctions,
-	bprSplitEditor
+	bprSplitEditor,
+	bprDiffOriginal,
+	bprDiffCompare
 };
 
 enum MRBentoPanePlacement {
@@ -42,7 +50,8 @@ struct MRBentoPaneTitleMenuSpec {
 
 enum MRBentoBoxMode {
 	bbmToolWorkspace = 0,
-	bbmDocumentViewports
+	bbmDocumentViewports,
+	bbmFileCompare
 };
 
 struct MRBentoPaneSpec {
@@ -90,6 +99,56 @@ struct MRBentoOutlinePaneState {
 	std::chrono::steady_clock::time_point lastRefresh;
 };
 
+struct MRBentoCompareSource {
+	MRBentoCompareSource() noexcept;
+
+	MREditWindow *window;
+	int bufferId;
+	std::size_t documentId;
+	std::size_t version;
+	bool wasVisible;
+	bool wasManuallyHidden;
+	std::string title;
+	std::string text;
+};
+
+struct MRBentoCompareSetup {
+	MRBentoCompareSetup() noexcept;
+
+	MRBentoCompareSource original;
+	MRBentoCompareSource compare;
+};
+
+struct MRBentoWorkspaceNode {
+	MRBentoWorkspaceNode() noexcept;
+
+	int kind;
+	int orientation;
+	int dividerPosition;
+	int firstChild;
+	int secondChild;
+	int leafId;
+};
+
+struct MRBentoWorkspaceLeaf {
+	MRBentoWorkspaceLeaf() noexcept;
+
+	int id;
+	MRBentoPaneRole role;
+	bool visible;
+};
+
+struct MRBentoWorkspaceSnapshot {
+	MRBentoWorkspaceSnapshot() noexcept;
+
+	MRBentoBoxMode mode;
+	int rootNode;
+	int activeLeafId;
+	int maximizedLeafId;
+	std::vector<MRBentoWorkspaceNode> nodes;
+	std::vector<MRBentoWorkspaceLeaf> leaves;
+};
+
 class MRPaneEditWindow : public MREditWindow {
 	friend class MRBentoBox;
 
@@ -101,17 +160,18 @@ class MRPaneEditWindow : public MREditWindow {
 	MRPaneEditWindow(const TRect &bounds, const char *title, int number);
 	virtual ~MRPaneEditWindow() override;
 
-	virtual void changeBounds(const TRect &bounds) override;
-	virtual void draw() override;
-	virtual TColorAttr mapColor(uchar index) override;
-	virtual Boolean valid(ushort command) override;
+		virtual void changeBounds(const TRect &bounds) override;
+		virtual void draw() override;
+		virtual TColorAttr mapColor(uchar index) override;
+		virtual Boolean valid(ushort command) override;
 
 	void setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept;
-	void setPaneFocused(bool focused) noexcept;
-	void applyPanePolicy(const MRFileEditor *sourceEditor) noexcept;
-	void layoutPaneChrome() noexcept;
-	void drawPaneScrollBars() noexcept;
-	static TFrame *initFrame(TRect bounds);
+		void setPaneFocused(bool focused) noexcept;
+		void applyPanePolicy(const MRFileEditor *sourceEditor) noexcept;
+		void layoutPaneChrome() noexcept;
+		void configurePaneScrollBarColors() noexcept;
+		void drawPaneScrollBars() noexcept;
+		static TFrame *initFrame(TRect bounds);
 
 	MRBentoPaneSpec mPaneSpec;
 	bool mPaneFocused;
@@ -143,6 +203,18 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool jumpToPreviousProblem();
 	[[nodiscard]] bool placePaneRole(MRBentoPaneRole role, MRBentoPanePlacement placement);
 	[[nodiscard]] bool splitActiveEditorPane(MRBentoPanePlacement placement);
+		[[nodiscard]] bool initializeFileCompare(const MRBentoCompareSetup &setup);
+		[[nodiscard]] bool isFileCompareBox() const noexcept;
+		[[nodiscard]] bool navigateFileCompareChange(bool next);
+		[[nodiscard]] bool fileCompareWorkspaceSourcePaths(std::string &originalPath, std::string &comparePath) const;
+	[[nodiscard]] bool containsFileCompareSourceWindow(const MREditWindow *window) const noexcept;
+	void refreshFileCompareConfiguration();
+	[[nodiscard]] bool applyFileCompareResult(const mr::coprocessor::Result &result);
+	void setFileCompareTask(std::uint64_t taskId) noexcept;
+	void restoreFileCompareSources() noexcept;
+	[[nodiscard]] MRBentoWorkspaceSnapshot workspaceSnapshot() const;
+	[[nodiscard]] bool restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapshot);
+	void refreshBentoColorTheme() noexcept;
 
 	virtual void draw() override;
 	virtual void changeBounds(const TRect &bounds) override;
@@ -189,13 +261,23 @@ class MRBentoBox : public MREditWindow {
 		int leafId;
 	};
 
+	struct FileCompareChangeGroup {
+		FileCompareChangeGroup() noexcept;
+
+		std::size_t displayStartLine;
+		std::size_t displayLineCount;
+		std::size_t deletedLineCount;
+		std::size_t insertedLineCount;
+	};
+
 	void initializeLayoutTree() noexcept;
 	void layoutSplitPanes();
-	void flushBentoProjection() noexcept;
-	void layoutSourcePaneChrome(const TRect &content) noexcept;
-	void hideSourcePaneChrome() noexcept;
-	void drawSourcePaneScrollBars() noexcept;
-	void drawSharedEditorPanes() noexcept;
+		void flushBentoProjection() noexcept;
+		void layoutSourcePaneChrome(const TRect &content) noexcept;
+		void hideSourcePaneChrome() noexcept;
+		void configureSourcePaneScrollBarColors() noexcept;
+		void drawSourcePaneScrollBars() noexcept;
+		void drawSharedEditorPanes() noexcept;
 	void drawPaneFrames() noexcept;
 	void drawPaneFrame(std::size_t leafIndex) noexcept;
 	void postCloseCommand() noexcept;
@@ -210,6 +292,12 @@ class MRBentoBox : public MREditWindow {
 	bool refreshOutlinePane(MRBentoPaneRole role, bool force);
 	[[nodiscard]] bool jumpToOutlineAtCursor(MRBentoPaneRole role);
 	void refreshSourceCompilerDiagnosticRanges();
+	void refreshFileComparePanes();
+	void refreshFileComparePane(BentoLeaf &leaf);
+	void rebuildFileCompareChangeGroups();
+	[[nodiscard]] std::string fileCompareStatusForLeaf(const BentoLeaf &leaf) const;
+	[[nodiscard]] bool jumpToFileCompareChange(bool next);
+	void syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor = true);
 	void syncCompilerDiagnosticsAfterSourceMutation(const MRTextBufferModel::ReadSnapshot &oldSnapshot, const MRTextBufferModel::DocumentChangeSet &changeSet);
 	void clearTrackedCompilerSidekick(bool dropSidekick) noexcept;
 	void trackCompilerSidekick(std::size_t diagnosticIndex) noexcept;
@@ -260,6 +348,7 @@ class MRBentoBox : public MREditWindow {
 	void ensurePaneFrameViews();
 	[[nodiscard]] MRBentoPaneSpec paneSpecForRole(MRBentoPaneRole role) const noexcept;
 	[[nodiscard]] std::string paneTitleForLeaf(const BentoLeaf &leaf) const;
+	[[nodiscard]] std::string fileCompareTextForRole(MRBentoPaneRole role, std::vector<unsigned char> *lineKinds = nullptr) const;
 	[[nodiscard]] std::vector<std::string> paneRoleChoices() const;
 	[[nodiscard]] std::vector<std::string> paneActionChoices() const;
 	[[nodiscard]] MRBentoPanePlacement panePlacementForAction(const std::string &action) const noexcept;
@@ -301,6 +390,13 @@ class MRBentoBox : public MREditWindow {
 	std::string structureOutlineStatus;
 	std::string functionsOutlineStatus;
 	std::vector<MRCompilerDiagnostic> compilerDiagnostics;
+	MRBentoCompareSetup fileCompareSetup;
+	std::vector<mr::diff::MRDiffHunk> fileCompareHunks;
+	std::vector<FileCompareChangeGroup> fileCompareChangeGroups;
+	std::uint64_t fileCompareTaskId;
+	bool fileCompareSourcesRestored;
+	bool fileCompareDiffReady;
+	bool fileCompareStale;
 	MRBentoOutlinePaneState structureOutlineState;
 	MRBentoOutlinePaneState functionsOutlineState;
 	std::vector<MRBentoOutlineEntry> structureOutlineEntries;

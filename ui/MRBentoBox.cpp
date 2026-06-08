@@ -6,8 +6,26 @@ MRBentoOutlineEntry::MRBentoOutlineEntry() noexcept : paneOffset(0), sourceOffse
 MRBentoOutlinePaneState::MRBentoOutlinePaneState() noexcept : documentId(0), version(0), textHash(0), complete(false), lastRefresh(std::chrono::steady_clock::time_point()) {
 }
 
+MRBentoCompareSource::MRBentoCompareSource() noexcept : window(nullptr), bufferId(0), documentId(0), version(0), wasVisible(false), wasManuallyHidden(false), title(), text() {
+}
+
+MRBentoCompareSetup::MRBentoCompareSetup() noexcept : original(), compare() {
+}
+
+MRBentoWorkspaceNode::MRBentoWorkspaceNode() noexcept : kind(0), orientation(0), dividerPosition(0), firstChild(-1), secondChild(-1), leafId(-1) {
+}
+
+MRBentoWorkspaceLeaf::MRBentoWorkspaceLeaf() noexcept : id(-1), role(bprSource), visible(false) {
+}
+
+MRBentoWorkspaceSnapshot::MRBentoWorkspaceSnapshot() noexcept : mode(bbmToolWorkspace), rootNode(-1), activeLeafId(0), maximizedLeafId(-1), nodes(), leaves() {
+}
+
+MRBentoBox::FileCompareChangeGroup::FileCompareChangeGroup() noexcept : displayStartLine(0), displayLineCount(0), deletedLineCount(0), insertedLineCount(0) {
+}
+
 MRBentoBox::MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode)
-    : TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), windowCloseInProgress(false), bentoProjectionDirty(bpdNone), paneRoleDropList(), paneActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0), compilerOutputStatus(), compilerProblemsStatus(), structureOutlineStatus(), functionsOutlineStatus(), compilerDiagnostics(), structureOutlineState(), functionsOutlineState(), structureOutlineEntries(), functionsOutlineEntries(), compilerSidekickTracked(false), compilerSidekickUpdating(false), compilerSidekickDiagnosticIndex(0) {
+    : TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), windowCloseInProgress(false), bentoProjectionDirty(bpdNone), paneRoleDropList(), paneActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0), compilerOutputStatus(), compilerProblemsStatus(), structureOutlineStatus(), functionsOutlineStatus(), compilerDiagnostics(), fileCompareSetup(), fileCompareHunks(), fileCompareChangeGroups(), fileCompareTaskId(0), fileCompareSourcesRestored(false), fileCompareDiffReady(false), fileCompareStale(false), structureOutlineState(), functionsOutlineState(), structureOutlineEntries(), functionsOutlineEntries(), compilerSidekickTracked(false), compilerSidekickUpdating(false), compilerSidekickDiagnosticIndex(0) {
 	initializeLayoutTree();
 	layoutSplitPanes();
 }

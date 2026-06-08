@@ -184,6 +184,29 @@ void recordTaskPerformance(const mr::coprocessor::Result &result, const std::str
 	mr::performance::recordBackgroundEvent(result.task.lane, outcome, result.timing, action, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail, derivedStateApplied);
 }
 
+void handleFileCompareResult(const mr::coprocessor::Result &result) {
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	MRBentoBox *target = nullptr;
+	bool applied = false;
+	std::size_t bytes = 0;
+
+	for (MREditWindow *window : windows) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+		if (bentoBox == nullptr || !bentoBox->isFileCompareBox()) continue;
+		if (bentoBox->applyFileCompareResult(result)) {
+			target = bentoBox;
+			applied = result.completed();
+			break;
+		}
+	}
+	if (result.completed()) {
+		const mr::coprocessor::FileComparePayload *payload = dynamic_cast<const mr::coprocessor::FileComparePayload *>(result.payload.get());
+		if (payload != nullptr) bytes = payload->originalLineCount + payload->compareLineCount;
+	}
+	recordTaskPerformance(result, "File compare", target, result.task.documentId, bytes, result.task.label, applied);
+	if (target == nullptr && result.failed()) mrLogMessage((std::string("File compare failed: ") + result.error).c_str());
+}
+
 void recordMacroPerformance(const mr::coprocessor::Result &result, MREditWindow *win, std::size_t documentId, std::size_t bytes, const std::string &detail, mr::performance::Outcome outcome = mr::performance::Outcome::Completed) {
 	if (outcome == mr::performance::Outcome::Completed) {
 		recordTaskPerformance(result, "Background macro", win, documentId, bytes, detail);
@@ -258,7 +281,7 @@ void postMiniMapHeroEvent(const mr::coprocessor::TaskTiming &timing, const mr::c
 	mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
 }
 
-void playLiveLogAudioSignal(const std::string &uri) {
+void playAudioSignal(const std::string &uri) {
 	pid_t childPid;
 
 	if (uri.empty()) return;
@@ -366,7 +389,7 @@ void reportLiveLogSearchHits(const std::vector<SearchMatchEntry> &matches, MREdi
 		mr::messageline::postTimedSegments(mr::messageline::Owner::HeroEventFollowup, segments, mr::messageline::Kind::Info, std::chrono::seconds(2), mr::messageline::kPriorityMedium);
 	}
 	if (settings.reportSearchHitsWithSystemBeep) emitTerminalBell();
-	if (settings.reportSearchHitsWithAudioSignal) playLiveLogAudioSignal(settings.audioSignalUri);
+	if (settings.reportSearchHitsWithAudioSignal) playAudioSignal(settings.audioSignalUri);
 }
 
 void appendMacroLogLines(const std::vector<std::string> &logLines) {
@@ -860,6 +883,10 @@ void pumpDeferredMacroUiPlayback() {
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	logWarmupCancelFinish(result);
+	if (result.task.kind == mr::coprocessor::TaskKind::FileCompare) {
+		handleFileCompareResult(result);
+		return;
+	}
 	if (result.completed()) {
 		const mr::coprocessor::IndicatorBlinkPayload *blink = dynamic_cast<const mr::coprocessor::IndicatorBlinkPayload *>(result.payload.get());
 		if (blink != nullptr) {
@@ -1035,6 +1062,9 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			} else {
 				recordTaskPerformance(result, "External command", nullptr, 0, 0, externalIoDisplayName(result.task));
 			}
+			if (!finished->signaled && finished->exitCode == 0) playAudioSignal(finished->successAudioUri);
+			else
+				playAudioSignal(finished->failureAudioUri);
 			mrTraceCoprocessorTaskRelease(static_cast<int>(finished->channelId), result.task.id, "finished");
 			if (result.task.lane == mr::coprocessor::Lane::Extern) mr::coprocessor::globalCoprocessor().unregisterExternalSource(result.task.documentId);
 			statusLine << "Communication session #" << finished->channelId << " ";

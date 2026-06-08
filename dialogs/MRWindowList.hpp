@@ -6,7 +6,8 @@ class MREditWindow;
 enum MRWindowListMode {
 	mrwlActivateWindow = 0,
 	mrwlSelectLinkTarget = 1,
-	mrwlManageWindows = 2
+	mrwlManageWindows = 2,
+	mrwlSelectFileCompareTarget = 3
 };
 
 MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *current);

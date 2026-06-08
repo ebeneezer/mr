@@ -35,6 +35,12 @@ bool g_trackCompilerWarnings = false;
 bool g_trackCompilerNotes = false;
 MRUiIndentStyle g_uiIndentStyle = MRUiIndentStyle::KandR;
 std::string g_cursorPositionMarker = "R:C";
+std::string g_fileCompareOriginalLeadingGutters = "L";
+std::string g_fileCompareOriginalTrailingGutters = "M";
+std::string g_fileCompareCompareLeadingGutters = "LD";
+std::string g_fileCompareCompareTrailingGutters;
+MRFileCompareStartConfiguration g_fileCompareStartConfiguration = MRFileCompareStartConfiguration::OriginalCompare;
+bool g_fileCompareComparePanelReadOnly = true;
 bool g_autoloadWorkspace = false;
 MRLogHandling g_logHandling = MRLogHandling::Volatile;
 std::map<std::string, std::string> g_autoexecMacroDiagnostics;
@@ -42,6 +48,24 @@ std::map<std::string, std::string> g_autoexecMacroDiagnostics;
 bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr) *errorMessage = message;
 	return false;
+}
+
+bool normalizeFileCompareGutters(const std::string &value, std::string &out, std::string *errorMessage) {
+	out.clear();
+	for (char ch : trimAscii(value)) {
+		switch (static_cast<unsigned char>(std::toupper(static_cast<unsigned char>(ch)))) {
+			case 'M':
+			case 'D':
+			case 'L':
+			case 'C':
+				out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+				break;
+			default:
+				return setError(errorMessage, "FILE_COMPARE_*_GUTTERS may contain only M, D, L or C.");
+		}
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 void normalizeAcquireCommandHistory(std::vector<std::string> &history) {
@@ -709,6 +733,84 @@ bool setConfiguredCursorPositionMarker(const std::string &value, std::string *er
 
 std::string configuredCursorPositionMarker() {
 	return g_cursorPositionMarker;
+}
+
+bool setConfiguredFileCompareOriginalLeadingGutters(const std::string &value, std::string *errorMessage) {
+	std::string normalized;
+
+	if (!normalizeFileCompareGutters(value, normalized, errorMessage)) return false;
+	if (g_fileCompareOriginalLeadingGutters != normalized) markConfiguredSettingsDirty();
+	g_fileCompareOriginalLeadingGutters = normalized;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+std::string configuredFileCompareOriginalLeadingGutters() {
+	return g_fileCompareOriginalLeadingGutters;
+}
+
+bool setConfiguredFileCompareOriginalTrailingGutters(const std::string &value, std::string *errorMessage) {
+	std::string normalized;
+
+	if (!normalizeFileCompareGutters(value, normalized, errorMessage)) return false;
+	if (g_fileCompareOriginalTrailingGutters != normalized) markConfiguredSettingsDirty();
+	g_fileCompareOriginalTrailingGutters = normalized;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+std::string configuredFileCompareOriginalTrailingGutters() {
+	return g_fileCompareOriginalTrailingGutters;
+}
+
+bool setConfiguredFileCompareCompareLeadingGutters(const std::string &value, std::string *errorMessage) {
+	std::string normalized;
+
+	if (!normalizeFileCompareGutters(value, normalized, errorMessage)) return false;
+	if (g_fileCompareCompareLeadingGutters != normalized) markConfiguredSettingsDirty();
+	g_fileCompareCompareLeadingGutters = normalized;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+std::string configuredFileCompareCompareLeadingGutters() {
+	return g_fileCompareCompareLeadingGutters;
+}
+
+bool setConfiguredFileCompareCompareTrailingGutters(const std::string &value, std::string *errorMessage) {
+	std::string normalized;
+
+	if (!normalizeFileCompareGutters(value, normalized, errorMessage)) return false;
+	if (g_fileCompareCompareTrailingGutters != normalized) markConfiguredSettingsDirty();
+	g_fileCompareCompareTrailingGutters = normalized;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+std::string configuredFileCompareCompareTrailingGutters() {
+	return g_fileCompareCompareTrailingGutters;
+}
+
+bool setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration configuration, std::string *errorMessage) {
+	if (g_fileCompareStartConfiguration != configuration) markConfiguredSettingsDirty();
+	g_fileCompareStartConfiguration = configuration;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRFileCompareStartConfiguration configuredFileCompareStartConfiguration() {
+	return g_fileCompareStartConfiguration;
+}
+
+bool setConfiguredFileCompareComparePanelReadOnly(bool enabled, std::string *errorMessage) {
+	if (g_fileCompareComparePanelReadOnly != enabled) markConfiguredSettingsDirty();
+	g_fileCompareComparePanelReadOnly = enabled;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool configuredFileCompareComparePanelReadOnly() {
+	return g_fileCompareComparePanelReadOnly;
 }
 
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage) {

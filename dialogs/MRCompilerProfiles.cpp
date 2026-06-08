@@ -43,6 +43,12 @@ enum : ushort {
 	cmCompilerProfilesChooseExecutable,
 	cmCompilerProfilesBrowseExecutable,
 	cmCompilerProfilesAcceptExecutable,
+	cmCompilerProfilesChooseSuccessAudio,
+	cmCompilerProfilesBrowseSuccessAudio,
+	cmCompilerProfilesAcceptSuccessAudio,
+	cmCompilerProfilesChooseFailureAudio,
+	cmCompilerProfilesBrowseFailureAudio,
+	cmCompilerProfilesAcceptFailureAudio,
 	cmCompilerProfilesAutomaticSetup,
 	cmCompilerProfilesSelectionChanged
 };
@@ -57,7 +63,8 @@ enum {
 	kVersionSize = 160,
 	kTargetSize = 128,
 	kFlagsSize = 256,
-	kPathListSize = 256
+	kPathListSize = 256,
+	kAudioUriSize = 256
 };
 
 TFrame *initMrDialogFrame(TRect bounds) {
@@ -281,34 +288,45 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 
 		insert(new TStaticText(TRect(labelLeft, 2, fieldLeft - 1, 3), "Profile ID:"));
 		idField = addField(TRect(fieldLeft, 2, right, 3), kIdSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 4, fieldLeft - 1, 5), "Name:"));
-		nameField = addField(TRect(fieldLeft, 4, right, 5), kNameSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 6, fieldLeft - 1, 7), "Toolchain:"));
-		toolchainField = addField(TRect(fieldLeft, 6, 75, 7), kToolchainSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 8, fieldLeft - 1, 9), "Executable:"));
-		executableField = addField(TRect(fieldLeft, 8, fieldWithButtonsRight, 9), kExecutableSize - 1);
-		executableHistoryButton = executableDropList.createButton(*this, TRect(historyLeft, 8, browseLeft, 9), executableField, this, cmCompilerProfilesChooseExecutable, true);
-		executableBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 8, right, 9), "🔎", cmCompilerProfilesBrowseExecutable);
+		insert(new TStaticText(TRect(labelLeft, 3, fieldLeft - 1, 4), "Name:"));
+		nameField = addField(TRect(fieldLeft, 3, right, 4), kNameSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 4, fieldLeft - 1, 5), "Toolchain:"));
+		toolchainField = addField(TRect(fieldLeft, 4, 75, 5), kToolchainSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 5, fieldLeft - 1, 6), "Executable:"));
+		executableField = addField(TRect(fieldLeft, 5, fieldWithButtonsRight, 6), kExecutableSize - 1);
+		executableHistoryButton = executableDropList.createButton(*this, TRect(historyLeft, 5, browseLeft, 6), executableField, this, cmCompilerProfilesChooseExecutable, true);
+		executableBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 5, right, 6), "🔎", cmCompilerProfilesBrowseExecutable);
 		insert(executableBrowseButton);
-		executableListAnchor = TRect(fieldLeft, 9, right, 10);
-		insert(new TStaticText(TRect(labelLeft, 10, fieldLeft - 1, 11), "Version:"));
-		versionField = addField(TRect(fieldLeft, 10, right, 11), kVersionSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 12, fieldLeft - 1, 13), "Target:"));
-		targetField = addField(TRect(fieldLeft, 12, right, 13), kTargetSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 14, fieldLeft - 1, 15), "Build flags:"));
-		flagsField = addField(TRect(fieldLeft, 14, right, 15), kFlagsSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 16, fieldLeft - 1, 17), "Includes:"));
-		includesField = addField(TRect(fieldLeft, 16, right, 17), kPathListSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 18, fieldLeft - 1, 19), "Libraries:"));
-		librariesField = addField(TRect(fieldLeft, 18, right, 19), kPathListSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 20, fieldLeft - 1, 21), "Runtime:"));
-		runtimeField = addField(TRect(fieldLeft, 20, right, 21), kPathListSize - 1);
+		executableListAnchor = TRect(fieldLeft, 6, right, 7);
+		insert(new TStaticText(TRect(labelLeft, 6, fieldLeft - 1, 7), "Version:"));
+		versionField = addField(TRect(fieldLeft, 6, right, 7), kVersionSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 7, fieldLeft - 1, 8), "Target:"));
+		targetField = addField(TRect(fieldLeft, 7, right, 8), kTargetSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 8, fieldLeft - 1, 9), "Build flags:"));
+		flagsField = addField(TRect(fieldLeft, 8, right, 9), kFlagsSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 9, fieldLeft - 1, 10), "Includes:"));
+		includesField = addField(TRect(fieldLeft, 9, right, 10), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 10, fieldLeft - 1, 11), "Libraries:"));
+		librariesField = addField(TRect(fieldLeft, 10, right, 11), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 11, fieldLeft - 1, 12), "Runtime:"));
+		runtimeField = addField(TRect(fieldLeft, 11, right, 12), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 12, fieldLeft, 13), "Success audio:"));
+		successAudioField = addField(TRect(fieldLeft, 12, fieldWithButtonsRight, 13), kAudioUriSize - 1);
+		successAudioHistoryButton = successAudioDropList.createButton(*this, TRect(historyLeft, 12, browseLeft, 13), successAudioField, this, cmCompilerProfilesChooseSuccessAudio, true);
+		successAudioBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 12, right, 13), "🔎", cmCompilerProfilesBrowseSuccessAudio);
+		insert(successAudioBrowseButton);
+		successAudioListAnchor = TRect(fieldLeft, 13, right, 14);
+		insert(new TStaticText(TRect(labelLeft, 13, fieldLeft, 14), "Failure audio:"));
+		failureAudioField = addField(TRect(fieldLeft, 13, fieldWithButtonsRight, 14), kAudioUriSize - 1);
+		failureAudioHistoryButton = failureAudioDropList.createButton(*this, TRect(historyLeft, 13, browseLeft, 14), failureAudioField, this, cmCompilerProfilesChooseFailureAudio, true);
+		failureAudioBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 13, right, 14), "🔎", cmCompilerProfilesBrowseFailureAudio);
+		insert(failureAudioBrowseButton);
+		failureAudioListAnchor = TRect(fieldLeft, 14, right, 15);
 
 		insert(new TButton(TRect(left, buttonTop, left + 10, buttonTop + 2), "~A~dd", cmCompilerProfilesAdd, bfNormal));
 		insert(new TButton(TRect(left + 12, buttonTop, left + 22, buttonTop + 2), "~C~opy", cmCompilerProfilesCopy, bfNormal));
 		insert(new TButton(TRect(left + 24, buttonTop, scrollRight, buttonTop + 2), "De~l~ete", cmCompilerProfilesDelete, bfNormal));
-		insert(new TButton(TRect(51, bottomTop, 61, bottomTop + 2), "~D~one", cmOK, bfDefault));
-		insert(new TButton(TRect(90, bottomTop, right, bottomTop + 2), "Automatic Setup", cmCompilerProfilesAutomaticSetup, bfNormal));
+		insert(new TButton(TRect(46, bottomTop, 65, bottomTop + 2), "Automatic Setup", cmCompilerProfilesAutomaticSetup, bfNormal));
 
 		currentIndex = profiles.empty() ? -1 : 0;
 		refreshList();
@@ -331,6 +349,8 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		ushort originalBroadcast = event.what == evBroadcast ? event.message.command : 0;
 
 		if (executableDropList.handleLinkedInputEvent(event, *this, executableListAnchor, executableChoices(), executableField, this, cmCompilerProfilesAcceptExecutable, 8)) return;
+		if (successAudioDropList.handleLinkedInputEvent(event, *this, successAudioListAnchor, audioUriChoices(), successAudioField, this, cmCompilerProfilesAcceptSuccessAudio, 8)) return;
+		if (failureAudioDropList.handleLinkedInputEvent(event, *this, failureAudioListAnchor, audioUriChoices(), failureAudioField, this, cmCompilerProfilesAcceptFailureAudio, 8)) return;
 		if (originalWhat == evCommand && originalCommand == cmOK) {
 			saveCurrentProfile();
 			if (!saveProfiles()) {
@@ -370,6 +390,30 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 					acceptExecutableSelection();
 					clearEvent(event);
 					return;
+				case cmCompilerProfilesChooseSuccessAudio:
+					successAudioDropList.toggle(*this, successAudioListAnchor, audioUriChoices(), readInput(successAudioField, kAudioUriSize), this, cmCompilerProfilesAcceptSuccessAudio, 8);
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesBrowseSuccessAudio:
+					browseAudioUri(successAudioField);
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesAcceptSuccessAudio:
+					acceptAudioUriSelection(successAudioDropList, successAudioField);
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesChooseFailureAudio:
+					failureAudioDropList.toggle(*this, failureAudioListAnchor, audioUriChoices(), readInput(failureAudioField, kAudioUriSize), this, cmCompilerProfilesAcceptFailureAudio, 8);
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesBrowseFailureAudio:
+					browseAudioUri(failureAudioField);
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesAcceptFailureAudio:
+					acceptAudioUriSelection(failureAudioDropList, failureAudioField);
+					clearEvent(event);
+					return;
 				case cmCompilerProfilesAutomaticSetup:
 					automaticSetup();
 					clearEvent(event);
@@ -402,11 +446,33 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		return choices;
 	}
 
+	std::vector<std::string> audioUriChoices() const {
+		std::vector<std::string> choices;
+
+		for (const MRCompilerProfile &profile : profiles) {
+			const std::string successPath = normalizeConfiguredPathInput(profile.buildSuccessAudioUri);
+			const std::string failurePath = normalizeConfiguredPathInput(profile.buildFailureAudioUri);
+
+			if (!successPath.empty() && std::find(choices.begin(), choices.end(), successPath) == choices.end()) choices.push_back(successPath);
+			if (!failurePath.empty() && std::find(choices.begin(), choices.end(), failurePath) == choices.end()) choices.push_back(failurePath);
+		}
+		std::sort(choices.begin(), choices.end());
+		return choices;
+	}
+
 	void acceptExecutableSelection() {
 		std::string selectedValue;
 
 		if (!executableDropList.acceptSelection(selectedValue)) return;
 		writeInput(executableField, selectedValue, kExecutableSize);
+		saveCurrentProfile();
+	}
+
+	void acceptAudioUriSelection(MRDropList &dropList, TInputLine *field) {
+		std::string selectedValue;
+
+		if (!dropList.acceptSelection(selectedValue)) return;
+		writeInput(field, selectedValue, kAudioUriSize);
 		saveCurrentProfile();
 	}
 
@@ -429,6 +495,29 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::General, "*.*", "SELECT COMPILER EXECUTABLE", "~N~ame", fdOpenButton, fileName);
 		if (result == cmCancel) return;
 		writeInput(executableField, normalizeConfiguredPathInput(fileName), kExecutableSize);
+		saveCurrentProfile();
+	}
+
+	void browseAudioUri(TInputLine *field) {
+		char fileName[MAXPATH] = {0};
+		const std::string currentPath = normalizeConfiguredPathInput(readInput(field, kAudioUriSize));
+		ushort result = cmCancel;
+
+		if (field == nullptr) return;
+		if (!currentPath.empty()) {
+			const std::size_t slashPos = currentPath.find_last_of('/');
+
+			if (slashPos != std::string::npos) {
+				std::string seed = currentPath.substr(0, slashPos + 1);
+				seed += "*.*";
+				mr::dialogs::writeRecordField(fileName, sizeof(fileName), seed);
+			} else
+				mr::dialogs::writeRecordField(fileName, sizeof(fileName), currentPath);
+		} else
+			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::General, fileName, sizeof(fileName), "*.*");
+		result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::General, "*.*", "SELECT AUDIO FILE", "~N~ame", fdOpenButton, fileName);
+		if (result == cmCancel) return;
+		writeInput(field, normalizeConfiguredPathInput(fileName), kAudioUriSize);
 		saveCurrentProfile();
 	}
 
@@ -467,6 +556,8 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		writeInput(includesField, normalizeCompilerProfilePathList(profile.includePaths), kPathListSize);
 		writeInput(librariesField, normalizeCompilerProfilePathList(profile.libraryPaths), kPathListSize);
 		writeInput(runtimeField, normalizeCompilerProfilePathList(profile.runtimePaths), kPathListSize);
+		writeInput(successAudioField, profile.buildSuccessAudioUri, kAudioUriSize);
+		writeInput(failureAudioField, profile.buildFailureAudioUri, kAudioUriSize);
 	}
 
 	void saveCurrentProfile() {
@@ -483,11 +574,15 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		profile.includePaths = splitCompilerProfilePathList(readInput(includesField, kPathListSize));
 		profile.libraryPaths = splitCompilerProfilePathList(readInput(librariesField, kPathListSize));
 		profile.runtimePaths = splitCompilerProfilePathList(readInput(runtimeField, kPathListSize));
+		profile.buildSuccessAudioUri = readInput(successAudioField, kAudioUriSize);
+		profile.buildFailureAudioUri = readInput(failureAudioField, kAudioUriSize);
 	}
 
 	void changeSelection(int index) {
 		if (index == currentIndex || index < 0 || index >= static_cast<int>(profiles.size())) return;
 		executableDropList.hide();
+		successAudioDropList.hide();
+		failureAudioDropList.hide();
 		saveCurrentProfile();
 		currentIndex = index;
 		loadCurrentProfile();
@@ -559,7 +654,11 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	TCompilerProfileListBox *list = nullptr;
 	TScrollBar *scrollBar = nullptr;
 	MRDropList executableDropList;
+	MRDropList successAudioDropList;
+	MRDropList failureAudioDropList;
 	TRect executableListAnchor;
+	TRect successAudioListAnchor;
+	TRect failureAudioListAnchor;
 	TInputLine *idField = nullptr;
 	TInputLine *nameField = nullptr;
 	TInputLine *toolchainField = nullptr;
@@ -572,6 +671,12 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	TInputLine *includesField = nullptr;
 	TInputLine *librariesField = nullptr;
 	TInputLine *runtimeField = nullptr;
+	TInputLine *successAudioField = nullptr;
+	TInputLine *failureAudioField = nullptr;
+	TView *successAudioHistoryButton = nullptr;
+	TInlineGlyphButton *successAudioBrowseButton = nullptr;
+	TView *failureAudioHistoryButton = nullptr;
+	TInlineGlyphButton *failureAudioBrowseButton = nullptr;
 };
 
 } // namespace
