@@ -2209,12 +2209,8 @@ std::size_t MRBentoBox::fileCompareGroupLineCountForRole(const FileCompareChange
 const MRBentoBox::FileCompareChangeGroup *MRBentoBox::fileCompareChangeGroupAtOrVisibleForRole(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept {
 	if (!bentoRoleIsDiff(role)) return nullptr;
 
-	const std::size_t cursorLine = editor.lineIndexOfOffset(editor.cursorOffset());
-	for (const FileCompareChangeGroup &group : fileCompareChangeGroups) {
-		const std::size_t groupStart = fileCompareGroupStartLineForRole(group, role, editablePanes);
-		const std::size_t groupEnd = groupStart + fileCompareGroupLineCountForRole(group, role, editablePanes);
-		if (cursorLine >= groupStart && cursorLine < groupEnd) return &group;
-	}
+	const int cursorGroupIndex = fileCompareChangeGroupIndexAtCursor(role, editor, editablePanes);
+	if (cursorGroupIndex >= 0) return &fileCompareChangeGroups[static_cast<std::size_t>(cursorGroupIndex)];
 
 	const std::size_t visibleStartLine = static_cast<std::size_t>(std::max(0, editor.delta.y));
 	const std::size_t visibleEndLine = visibleStartLine + static_cast<std::size_t>(std::max(1, editor.visibleViewportRows()));
@@ -2224,6 +2220,33 @@ const MRBentoBox::FileCompareChangeGroup *MRBentoBox::fileCompareChangeGroupAtOr
 		if (groupEnd > visibleStartLine && groupStart < visibleEndLine) return &group;
 	}
 	return nullptr;
+}
+
+int MRBentoBox::fileCompareChangeGroupIndexAtCursor(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept {
+	if (!bentoRoleIsDiff(role)) return -1;
+
+	const std::size_t cursorLine = editor.lineIndexOfOffset(editor.cursorOffset());
+	for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
+		const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
+		const std::size_t groupStart = fileCompareGroupStartLineForRole(group, role, editablePanes);
+		const std::size_t groupEnd = groupStart + fileCompareGroupLineCountForRole(group, role, editablePanes);
+		if (cursorLine >= groupStart && cursorLine < groupEnd) return static_cast<int>(i);
+	}
+	return -1;
+}
+
+bool MRBentoBox::moveFileCompareEditorToGroup(MRFileEditor &editor, MRBentoPaneRole role, const FileCompareChangeGroup &group, bool editablePanes) {
+	const std::size_t documentLineCount = std::max<std::size_t>(1, editor.bufferModel().lineCount());
+	std::size_t targetLine = fileCompareGroupStartLineForRole(group, role, editablePanes);
+
+	if (targetLine >= documentLineCount) targetLine = documentLineCount - 1;
+	const int targetLineDelta = static_cast<int>(std::min<std::size_t>(targetLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
+	const std::size_t targetOffset = editor.lineMoveOffset(0, targetLineDelta, 0);
+
+	editor.setCursorOffsetAtVisualColumn(targetOffset, 0);
+	editor.scrollTo(std::max(0, editor.delta.x), std::max(0, targetLineDelta));
+	editor.refreshViewState();
+	return true;
 }
 
 std::string MRBentoBox::fileCompareStatusForLeaf(const BentoLeaf &leaf) const {
@@ -2340,50 +2363,41 @@ bool MRBentoBox::jumpToFileCompareChange(bool next) {
 	MRFileEditor *activeEditor = activeWindow != nullptr ? activeWindow->getEditor() : nullptr;
 	if (activeEditor == nullptr) return false;
 
-	const std::size_t currentLine = static_cast<std::size_t>(std::max(0, activeEditor->delta.y));
 	const bool editablePanes = fileComparePanesEditable();
-	std::size_t targetLine = 0;
-	bool targetFound = false;
+	const int cursorGroupIndex = fileCompareChangeGroupIndexAtCursor(activeRole, *activeEditor, editablePanes);
+	std::size_t targetIndex = 0;
 
-	if (next) {
-		for (const FileCompareChangeGroup &group : fileCompareChangeGroups) {
-			const std::size_t groupLine = fileCompareGroupStartLineForRole(group, activeRole, editablePanes);
-			if (groupLine > currentLine) {
-				targetLine = groupLine;
-				targetFound = true;
-				break;
-			}
-		}
-		if (!targetFound) {
-			const FileCompareChangeGroup &group = fileCompareChangeGroups.front();
-			targetLine = fileCompareGroupStartLineForRole(group, activeRole, editablePanes);
-			targetFound = true;
-		}
+	if (cursorGroupIndex >= 0) {
+		const std::size_t currentIndex = static_cast<std::size_t>(cursorGroupIndex);
+		targetIndex = next ? (currentIndex + 1) % fileCompareChangeGroups.size() : (currentIndex == 0 ? fileCompareChangeGroups.size() - 1 : currentIndex - 1);
 	} else {
-		for (std::size_t i = fileCompareChangeGroups.size(); i > 0; --i) {
-			const FileCompareChangeGroup &group = fileCompareChangeGroups[i - 1];
-			const std::size_t groupLine = fileCompareGroupStartLineForRole(group, activeRole, editablePanes);
+		const std::size_t cursorLine = activeEditor->lineIndexOfOffset(activeEditor->cursorOffset());
+		bool targetFound = false;
 
-			if (groupLine < currentLine) {
-				targetLine = groupLine;
-				targetFound = true;
-				break;
+		if (next) {
+			for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
+				const std::size_t groupLine = fileCompareGroupStartLineForRole(fileCompareChangeGroups[i], activeRole, editablePanes);
+				if (groupLine > cursorLine) {
+					targetIndex = i;
+					targetFound = true;
+					break;
+				}
 			}
-		}
-		if (!targetFound) {
-			const FileCompareChangeGroup &group = fileCompareChangeGroups.back();
-			targetLine = fileCompareGroupStartLineForRole(group, activeRole, editablePanes);
-			targetFound = true;
+			if (!targetFound) targetIndex = 0;
+		} else {
+			for (std::size_t i = fileCompareChangeGroups.size(); i > 0; --i) {
+				const std::size_t groupLine = fileCompareGroupStartLineForRole(fileCompareChangeGroups[i - 1], activeRole, editablePanes);
+				if (groupLine < cursorLine) {
+					targetIndex = i - 1;
+					targetFound = true;
+					break;
+				}
+			}
+			if (!targetFound) targetIndex = fileCompareChangeGroups.size() - 1;
 		}
 	}
-	if (!targetFound) return false;
 
-	const int targetLineDelta = static_cast<int>(std::min<std::size_t>(targetLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
-	const std::size_t targetOffset = activeEditor->lineMoveOffset(0, targetLineDelta, 0);
-
-	activeEditor->setCursorOffsetAtVisualColumn(targetOffset, 0);
-	activeEditor->scrollTo(std::max(0, activeEditor->delta.x), std::max(0, targetLineDelta));
-	activeEditor->refreshViewState();
+	if (!moveFileCompareEditorToGroup(*activeEditor, activeRole, fileCompareChangeGroups[targetIndex], editablePanes)) return false;
 	if (activeWindow != nullptr) activeWindow->drawView();
 	syncFileCompareLinkedPaneFrom(activeLeafId);
 	return true;
