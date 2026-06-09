@@ -101,6 +101,14 @@ void markFileCompareAnchorLine(std::vector<unsigned char> &lineKinds, std::size_
 	lineKinds[std::min(lineIndex, lineKinds.size() - 1)] = lineKind;
 }
 
+std::size_t fileCompareLineTextLength(const std::vector<std::string> &lines, std::size_t startLine, std::size_t lineCount) noexcept {
+	std::size_t length = 0;
+
+	for (std::size_t i = 0; i < lineCount && startLine + i < lines.size(); ++i)
+		length += lines[startLine + i].size();
+	return length;
+}
+
 bool bentoWorkspaceModeIsValid(int mode) noexcept {
 	return mode == bbmToolWorkspace || mode == bbmDocumentViewports || mode == bbmFileCompare;
 }
@@ -1977,9 +1985,9 @@ MRBentoPaneSpec MRBentoBox::paneSpecForRole(MRBentoPaneRole role) const noexcept
 		case bprSplitEditor:
 			return MRBentoPaneSpec(bprSplitEditor, bpbSharedSourceBuffer, false, false, false, bentoMode == bbmDocumentViewports, titleMenu);
 		case bprDiffCompare:
-			return MRBentoPaneSpec(role, bpbOwnBuffer, true, false, true, true, titleMenu);
+			return MRBentoPaneSpec(role, bpbOwnBuffer, !fileComparePanesEditable(), false, true, true, titleMenu);
 		case bprDiffOriginal:
-			return MRBentoPaneSpec(role, bpbOwnBuffer, true, true, true, true, titleMenu);
+			return MRBentoPaneSpec(role, bpbOwnBuffer, !fileComparePanesEditable(), true, true, true, titleMenu);
 		case bprCompilerOutput:
 		case bprAppOutput:
 		case bprProblems:
@@ -2306,12 +2314,17 @@ void MRBentoBox::fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::
 	std::size_t groupInsertedLineCount = 0;
 	auto flushGroup = [&]() {
 		if (!groupOpen) return;
+		const std::size_t originalTextLength = fileCompareLineTextLength(originalLines, groupOriginalStart, groupDeletedLineCount);
+		const std::size_t compareTextLength = fileCompareLineTextLength(compareLines, groupCompareStart, groupInsertedLineCount);
+		const bool replaceGroup = groupDeletedLineCount > 0 && groupInsertedLineCount > 0;
+		const bool compareShorter = replaceGroup && compareTextLength < originalTextLength;
+
 		if (role == bprDiffOriginal) {
 			if (groupDeletedLineCount > 0) markFileCompareLineRange(lineKinds, groupOriginalStart, groupDeletedLineCount, mrfclkMissing);
 			else if (groupInsertedLineCount > 0)
 				markFileCompareAnchorLine(lineKinds, groupOriginalStart, mrfclkInsert);
 		} else {
-			if (groupInsertedLineCount > 0) markFileCompareLineRange(lineKinds, groupCompareStart, groupInsertedLineCount, mrfclkInsert);
+			if (groupInsertedLineCount > 0) markFileCompareLineRange(lineKinds, groupCompareStart, groupInsertedLineCount, compareShorter ? mrfclkMissing : mrfclkInsert);
 			else if (groupDeletedLineCount > 0)
 				markFileCompareAnchorLine(lineKinds, groupCompareStart, mrfclkMissing);
 		}
@@ -2356,6 +2369,8 @@ void MRBentoBox::refreshFileComparePane(BentoLeaf &leaf) {
 	std::vector<unsigned char> lineKinds;
 
 	if (targetWindow == nullptr || !bentoRoleIsDiff(leaf.role)) return;
+	leaf.spec = paneSpecForRole(leaf.role);
+	if (leaf.id != 0 && leaf.pane != nullptr) leaf.pane->setPaneSpec(leaf.spec, getEditor());
 	title = leaf.role == bprDiffOriginal ? diffDisplayTitle(fileCompareSetup.original, "Diff Original") : diffDisplayTitle(fileCompareSetup.compare, "Diff Compare");
 	if (fileComparePanesEditable()) {
 		MREditWindow *sourceWindow = findEditWindowByBufferId(leaf.role == bprDiffOriginal ? fileCompareSetup.original.bufferId : fileCompareSetup.compare.bufferId);
