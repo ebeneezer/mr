@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+class MRBentoBoxFileCompareRegressionHarness;
 class MRBentoPaneFrameView;
 namespace mr {
 namespace coprocessor {
@@ -178,6 +179,8 @@ class MRPaneEditWindow : public MREditWindow {
 };
 
 class MRBentoBox : public MREditWindow {
+	friend class MRBentoBoxFileCompareRegressionHarness;
+
   public:
 	MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode = bbmToolWorkspace);
 	virtual ~MRBentoBox() override;
@@ -205,10 +208,12 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool splitActiveEditorPane(MRBentoPanePlacement placement);
 		[[nodiscard]] bool initializeFileCompare(const MRBentoCompareSetup &setup);
 		[[nodiscard]] bool isFileCompareBox() const noexcept;
-		[[nodiscard]] bool navigateFileCompareChange(bool next);
-		[[nodiscard]] bool fileCompareWorkspaceSourcePaths(std::string &originalPath, std::string &comparePath) const;
+	[[nodiscard]] bool navigateFileCompareChange(bool next);
+	[[nodiscard]] bool applyFileCompareChange(bool originalToCompare);
+	[[nodiscard]] bool fileCompareWorkspaceSourcePaths(std::string &originalPath, std::string &comparePath) const;
 	[[nodiscard]] bool containsFileCompareSourceWindow(const MREditWindow *window) const noexcept;
 	void refreshFileCompareConfiguration();
+	bool refreshFileCompareAfterEditorMutation(const MREditWindow *window);
 	[[nodiscard]] bool applyFileCompareResult(const mr::coprocessor::Result &result);
 	void setFileCompareTask(std::uint64_t taskId) noexcept;
 	void restoreFileCompareSources() noexcept;
@@ -265,6 +270,8 @@ class MRBentoBox : public MREditWindow {
 		FileCompareChangeGroup() noexcept;
 
 		std::size_t displayStartLine;
+		std::size_t originalStartLine;
+		std::size_t compareStartLine;
 		std::size_t displayLineCount;
 		std::size_t deletedLineCount;
 		std::size_t insertedLineCount;
@@ -285,8 +292,10 @@ class MRBentoBox : public MREditWindow {
 	void closeSecondaryPane() noexcept;
 	void showPaneRoleList(TPoint globalMouse, int targetLeafId);
 	void showPaneActionList();
+	void showFileCompareActionList(TPoint globalMouse, int targetLeafId);
 	void acceptPaneRoleChoice();
 	void acceptPaneActionChoice();
+	void acceptFileCompareActionChoice();
 	void refreshCompilerProblemsPane();
 	void refreshOutlinePanes(bool force = false);
 	bool refreshOutlinePane(MRBentoPaneRole role, bool force);
@@ -294,7 +303,19 @@ class MRBentoBox : public MREditWindow {
 	void refreshSourceCompilerDiagnosticRanges();
 	void refreshFileComparePanes();
 	void refreshFileComparePane(BentoLeaf &leaf);
+	void fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::vector<unsigned char> &lineKinds, std::vector<MRFileCompareMiniMapSlice> *miniMapSlices = nullptr) const;
+	void refreshFileCompareAfterSourceMutation();
 	void rebuildFileCompareChangeGroups();
+	[[nodiscard]] bool fileComparePanesEditable() const noexcept;
+	[[nodiscard]] std::size_t fileCompareGroupStartLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept;
+	[[nodiscard]] std::size_t fileCompareGroupLineCountForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept;
+	[[nodiscard]] std::size_t fileCompareGroupNavigationLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const;
+	[[nodiscard]] std::size_t fileCompareMappedLineForRole(MRBentoPaneRole sourceRole, std::size_t sourceLine, const MRFileEditor &targetEditor, bool editablePanes) const noexcept;
+	[[nodiscard]] const FileCompareChangeGroup *fileCompareChangeGroupAtOrVisibleForRole(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept;
+	[[nodiscard]] int fileCompareChangeGroupIndexAtLine(MRBentoPaneRole role, std::size_t line, bool editablePanes) const noexcept;
+	[[nodiscard]] int fileCompareChangeGroupIndexAtCursor(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept;
+	[[nodiscard]] bool moveFileCompareEditorToGroup(MRFileEditor &editor, MRBentoPaneRole role, const FileCompareChangeGroup &group, bool editablePanes);
+	[[nodiscard]] bool applyFileCompareChangeGroup(bool originalToCompare, const FileCompareChangeGroup &group);
 	[[nodiscard]] std::string fileCompareStatusForLeaf(const BentoLeaf &leaf) const;
 	[[nodiscard]] bool jumpToFileCompareChange(bool next);
 	void syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor = true);
@@ -382,9 +403,12 @@ class MRBentoBox : public MREditWindow {
 	unsigned bentoProjectionDirty;
 	MRDropList paneRoleDropList;
 	MRDropList paneActionDropList;
+	MRDropList fileCompareActionDropList;
 	TRect paneRoleListAnchor;
 	MRBentoPaneRole pendingPaneRole;
 	int pendingPaneRoleTargetLeafId;
+	int pendingFileCompareActionLeafId;
+	int pendingFileCompareActionGroupIndex;
 	std::string compilerOutputStatus;
 	std::string compilerProblemsStatus;
 	std::string structureOutlineStatus;

@@ -55,6 +55,18 @@ void MRFileEditor::revealCursor(Boolean centerCursor) {
 	drawView();
 }
 
+void MRFileEditor::moveCursorToDocumentLineTop(std::size_t lineIndex, int visualColumn) {
+	const std::size_t lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+	const std::size_t documentLine = std::min(lineIndex, lineCount - 1);
+	const std::size_t visibleLine = visibleLineForDocumentLine(documentLine);
+	const int targetLine = static_cast<int>(std::min<std::size_t>(visibleLine, static_cast<std::size_t>(INT_MAX)));
+	const std::size_t lineStart = mBufferModel.lineStartByIndex(documentLine);
+	const std::size_t targetOffset = charPtrOffset(lineStart, std::max(0, visualColumn));
+
+	scrollTo(std::max(0, delta.x), std::max(0, targetLine));
+	moveCursor(targetOffset, false, false, std::max(0, visualColumn));
+}
+
 void MRFileEditor::refreshViewState() {
 	updateIndicator();
 	drawView();
@@ -227,14 +239,22 @@ void MRFileEditor::setScrollBarsAlwaysVisible(bool visible) noexcept {
 }
 
 void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds) {
+	static const std::vector<MRFileCompareMiniMapSlice> emptyMiniMapSlices;
+
+	setFileCompareLineKinds(lineKinds, emptyMiniMapSlices);
+}
+
+void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds, const std::vector<MRFileCompareMiniMapSlice> &miniMapSlices) {
 	mFileCompareLineKinds = lineKinds;
+	mFileCompareMiniMapSlices = miniMapSlices;
 	mMiniMapState.clearOverlayCache();
 	refreshViewState();
 }
 
 void MRFileEditor::clearFileCompareLineKinds() {
-	if (mFileCompareLineKinds.empty()) return;
+	if (mFileCompareLineKinds.empty() && mFileCompareMiniMapSlices.empty()) return;
 	mFileCompareLineKinds.clear();
+	mFileCompareMiniMapSlices.clear();
 	mMiniMapState.clearOverlayCache();
 	refreshViewState();
 }

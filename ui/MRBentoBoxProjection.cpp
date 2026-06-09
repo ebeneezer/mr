@@ -25,12 +25,16 @@ constexpr int kPaneMaximizeButtonWidth = 3;
 constexpr int kPaneChromeFrameRest = 2;
 constexpr ushort cmMrBentoPaneRoleAccepted = 0x7A20;
 constexpr ushort cmMrBentoPaneActionAccepted = 0x7A21;
+constexpr ushort cmMrFileComparePaneActionAccepted = 0x7A22;
 static const char *kPaneCloseIcon = "[\xFE]";
 static const char *kPaneMaximizeIcon = "[▴]";
 static const char *kPaneRestoreIcon = "[▾]";
 static const char *kBentoPaneActionReplace = "replace";
 static const char *kBentoPaneActionSplitRight = "split \xC4";
 static const char *kBentoPaneActionSplitDown = "split \xB3";
+static const char *kFileCompareActionNext = "next diff";
+static const char *kFileCompareActionPrevious = "prev diff";
+static const char *kFileCompareActionApply = "apply diff";
 static const MRBentoPaneTitleMenuSpec kBentoRoleTitleMenu{"role"};
 
 struct BentoPaneActionDescriptor {
@@ -91,6 +95,71 @@ bool fileCompareGuttersContain(const std::string &gutters, char marker) noexcept
 	return false;
 }
 
+void markFileCompareLineRange(std::vector<unsigned char> &lineKinds, std::size_t startLine, std::size_t lineCount, unsigned char lineKind) {
+	for (std::size_t i = 0; i < lineCount && startLine + i < lineKinds.size(); ++i)
+		lineKinds[startLine + i] = lineKind;
+}
+
+void markFileCompareAnchorLine(std::vector<unsigned char> &lineKinds, std::size_t lineIndex, unsigned char lineKind) {
+	if (lineKinds.empty()) return;
+	lineKinds[std::min(lineIndex, lineKinds.size() - 1)] = lineKind;
+}
+
+std::size_t fileCompareLineTextLength(const std::vector<std::string> &lines, std::size_t startLine, std::size_t lineCount) noexcept {
+	std::size_t length = 0;
+
+	for (std::size_t i = 0; i < lineCount && startLine + i < lines.size(); ++i)
+		length += lines[startLine + i].size();
+	return length;
+}
+
+std::string fileCompareJoinedLineRange(const std::vector<std::string> &lines, std::size_t startLine, std::size_t lineCount, bool prefixNewline, bool suffixNewline) {
+	std::string text;
+
+	if (lineCount == 0) return text;
+	if (prefixNewline) text.push_back('\n');
+	for (std::size_t i = 0; i < lineCount && startLine + i < lines.size(); ++i) {
+		if (i != 0) text.push_back('\n');
+		text += lines[startLine + i];
+	}
+	if (suffixNewline) text.push_back('\n');
+	return text;
+}
+
+bool fileCompareEditorLineRange(const MRFileEditor &editor, std::size_t startLine, std::size_t lineCount, std::size_t &rangeStart, std::size_t &rangeEnd) noexcept {
+	const MRTextBufferModel &model = editor.bufferModel();
+	const std::size_t editorLineCount = model.lineCount();
+
+	rangeStart = startLine < editorLineCount ? model.lineStartByIndex(startLine) : model.length();
+	if (lineCount == 0) {
+		rangeEnd = rangeStart;
+		return true;
+	}
+	const std::size_t endLine = startLine + lineCount;
+	rangeEnd = endLine < editorLineCount ? model.lineStartByIndex(endLine) : model.length();
+	return rangeEnd >= rangeStart;
+}
+
+std::size_t mappedFileCompareLineForRole(const std::vector<mr::diff::MRDiffHunk> &hunks, MRBentoPaneRole sourceRole, std::size_t sourceLine) noexcept {
+	for (const mr::diff::MRDiffHunk &hunk : hunks) {
+		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				if (sourceRole == bprDiffOriginal && sourceLine >= hunk.leftStart && sourceLine < hunk.leftStart + hunk.count) return hunk.rightStart + (sourceLine - hunk.leftStart);
+				if (sourceRole == bprDiffCompare && sourceLine >= hunk.rightStart && sourceLine < hunk.rightStart + hunk.count) return hunk.leftStart + (sourceLine - hunk.rightStart);
+				break;
+			case mr::diff::MRDiffOp::Delete:
+				if (sourceRole == bprDiffOriginal && sourceLine >= hunk.leftStart && sourceLine < hunk.leftStart + hunk.count) return hunk.rightStart;
+				break;
+			case mr::diff::MRDiffOp::Insert:
+				if (sourceRole == bprDiffCompare && sourceLine >= hunk.rightStart && sourceLine < hunk.rightStart + hunk.count) return hunk.leftStart;
+				break;
+			default:
+				break;
+		}
+	}
+	return sourceLine;
+}
+
 bool bentoWorkspaceModeIsValid(int mode) noexcept {
 	return mode == bbmToolWorkspace || mode == bbmDocumentViewports || mode == bbmFileCompare;
 }
@@ -128,6 +197,114 @@ bool fileCompareSourceStillMatches(const MRBentoCompareSource &source) {
 	MREditWindow *window = findEditWindowByBufferId(source.bufferId);
 
 	return window != nullptr && window->documentId() == source.documentId && window->documentVersion() == source.version;
+}
+
+bool fileCompareHunkCanExtend(const mr::diff::MRDiffHunk &hunk, mr::diff::MRDiffOp op, std::size_t leftStart, std::size_t rightStart) noexcept {
+	if (hunk.op != op) return false;
+	switch (op) {
+		case mr::diff::MRDiffOp::Equal:
+			return leftStart == hunk.leftStart + hunk.count && rightStart == hunk.rightStart + hunk.count;
+		case mr::diff::MRDiffOp::Delete:
+			return leftStart == hunk.leftStart + hunk.count && rightStart == hunk.rightStart;
+		case mr::diff::MRDiffOp::Insert:
+			return leftStart == hunk.leftStart && rightStart == hunk.rightStart + hunk.count;
+		default:
+			break;
+	}
+	return false;
+}
+
+void appendFileCompareHunk(std::vector<mr::diff::MRDiffHunk> &hunks, mr::diff::MRDiffOp op, std::size_t leftStart, std::size_t rightStart, std::size_t count) {
+	if (count == 0) return;
+	if (!hunks.empty() && fileCompareHunkCanExtend(hunks.back(), op, leftStart, rightStart)) {
+		hunks.back().count += count;
+		return;
+	}
+	hunks.push_back(mr::diff::MRDiffHunk(op, leftStart, rightStart, count));
+}
+
+void appendNormalizedFileCompareChangeGroup(std::vector<mr::diff::MRDiffHunk> &hunks, const std::vector<std::string> &originalLines, const std::vector<std::string> &compareLines, std::size_t originalStart, std::size_t compareStart, std::size_t deletedLineCount, std::size_t insertedLineCount) {
+	if (deletedLineCount == 0) {
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Insert, originalStart, compareStart, insertedLineCount);
+		return;
+	}
+	if (insertedLineCount == 0) {
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Delete, originalStart, compareStart, deletedLineCount);
+		return;
+	}
+
+	const std::size_t maxLineCount = std::max(deletedLineCount, insertedLineCount);
+	std::size_t runStart = 0;
+	std::size_t i = 0;
+	while (i < maxLineCount) {
+		const bool equalPair = i < deletedLineCount && i < insertedLineCount && originalStart + i < originalLines.size() && compareStart + i < compareLines.size() && originalLines[originalStart + i] == compareLines[compareStart + i];
+		if (!equalPair) {
+			++i;
+			continue;
+		}
+
+		if (runStart < i) {
+			const std::size_t deletedRunCount = runStart < deletedLineCount ? std::min(i, deletedLineCount) - runStart : 0;
+			const std::size_t insertedRunCount = runStart < insertedLineCount ? std::min(i, insertedLineCount) - runStart : 0;
+			appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Delete, originalStart + runStart, compareStart + std::min(runStart, insertedLineCount), deletedRunCount);
+			appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Insert, originalStart + std::min(runStart + deletedRunCount, deletedLineCount), compareStart + runStart, insertedRunCount);
+		}
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Equal, originalStart + i, compareStart + i, 1);
+		++i;
+		runStart = i;
+	}
+	if (runStart < maxLineCount) {
+		const std::size_t deletedRunCount = runStart < deletedLineCount ? deletedLineCount - runStart : 0;
+		const std::size_t insertedRunCount = runStart < insertedLineCount ? insertedLineCount - runStart : 0;
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Delete, originalStart + runStart, compareStart + std::min(runStart, insertedLineCount), deletedRunCount);
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Insert, originalStart + std::min(runStart + deletedRunCount, deletedLineCount), compareStart + runStart, insertedRunCount);
+	}
+}
+
+void normalizeFileCompareHunks(const std::vector<std::string> &originalLines, const std::vector<std::string> &compareLines, std::vector<mr::diff::MRDiffHunk> &hunks) {
+	std::vector<mr::diff::MRDiffHunk> normalizedHunks;
+	bool groupOpen = false;
+	std::size_t groupOriginalStart = 0;
+	std::size_t groupCompareStart = 0;
+	std::size_t groupDeletedLineCount = 0;
+	std::size_t groupInsertedLineCount = 0;
+	auto flushGroup = [&]() {
+		if (!groupOpen) return;
+		appendNormalizedFileCompareChangeGroup(normalizedHunks, originalLines, compareLines, groupOriginalStart, groupCompareStart, groupDeletedLineCount, groupInsertedLineCount);
+		groupOpen = false;
+		groupDeletedLineCount = 0;
+		groupInsertedLineCount = 0;
+	};
+
+	normalizedHunks.reserve(hunks.size());
+	for (const mr::diff::MRDiffHunk &hunk : hunks) {
+		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				flushGroup();
+				appendFileCompareHunk(normalizedHunks, hunk.op, hunk.leftStart, hunk.rightStart, hunk.count);
+				break;
+			case mr::diff::MRDiffOp::Delete:
+				if (!groupOpen) {
+					groupOpen = true;
+					groupOriginalStart = hunk.leftStart;
+					groupCompareStart = hunk.rightStart;
+				}
+				groupDeletedLineCount += hunk.count;
+				break;
+			case mr::diff::MRDiffOp::Insert:
+				if (!groupOpen) {
+					groupOpen = true;
+					groupOriginalStart = hunk.leftStart;
+					groupCompareStart = hunk.rightStart;
+				}
+				groupInsertedLineCount += hunk.count;
+				break;
+			default:
+				break;
+		}
+	}
+	flushGroup();
+	hunks.swap(normalizedHunks);
 }
 
 struct BentoFrameGlyphs {
@@ -574,6 +751,81 @@ bool MRBentoBox::containsFileCompareSourceWindow(const MREditWindow *window) con
 	return window->bufferId() == fileCompareSetup.original.bufferId || window->bufferId() == fileCompareSetup.compare.bufferId;
 }
 
+bool MRBentoBox::refreshFileCompareAfterEditorMutation(const MREditWindow *window) {
+	if (bentoMode != bbmFileCompare || window == nullptr || !fileComparePanesEditable()) return false;
+	for (const BentoLeaf &leaf : leaves) {
+		if (!leaf.visible || !bentoRoleIsDiff(leaf.role)) continue;
+		if ((leaf.id == 0 && window == this) || (leaf.id != 0 && window == leaf.pane)) {
+			refreshFileCompareAfterSourceMutation();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool MRBentoBox::fileComparePanesEditable() const noexcept {
+	return bentoMode == bbmFileCompare && !configuredFileCompareComparePanelReadOnly();
+}
+
+void MRBentoBox::refreshFileCompareAfterSourceMutation() {
+	if (!fileComparePanesEditable()) return;
+	MREditWindow *originalWindow = findEditWindowByBufferId(fileCompareSetup.original.bufferId);
+	MREditWindow *compareWindow = findEditWindowByBufferId(fileCompareSetup.compare.bufferId);
+	MRFileEditor *originalEditor = originalWindow != nullptr ? originalWindow->getEditor() : nullptr;
+	MRFileEditor *compareEditor = compareWindow != nullptr ? compareWindow->getEditor() : nullptr;
+	std::vector<std::string> originalLines;
+	std::vector<std::string> compareLines;
+	std::uint64_t taskId;
+
+	if (originalWindow == nullptr || compareWindow == nullptr || originalEditor == nullptr || compareEditor == nullptr) return;
+
+	if (fileCompareTaskId != 0) {
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(fileCompareTaskId));
+		releaseCoprocessorTask(fileCompareTaskId);
+		fileCompareTaskId = 0;
+	}
+
+	fileCompareSetup.original.window = originalWindow;
+	fileCompareSetup.original.documentId = originalWindow->documentId();
+	fileCompareSetup.original.version = originalWindow->documentVersion();
+	if (const char *title = originalWindow->getTitle(0); title != nullptr && *title != '\0') fileCompareSetup.original.title = title;
+	fileCompareSetup.original.text = originalEditor->snapshotText();
+
+	fileCompareSetup.compare.window = compareWindow;
+	fileCompareSetup.compare.documentId = compareWindow->documentId();
+	fileCompareSetup.compare.version = compareWindow->documentVersion();
+	if (const char *title = compareWindow->getTitle(0); title != nullptr && *title != '\0') fileCompareSetup.compare.title = title;
+	fileCompareSetup.compare.text = compareEditor->snapshotText();
+
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines);
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.compare.text, compareLines);
+	fileCompareHunks.clear();
+	fileCompareChangeGroups.clear();
+	fileCompareDiffReady = false;
+	fileCompareStale = false;
+	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, fileCompareSetup.original.documentId, fileCompareSetup.original.version, "file compare", [originalLines, compareLines, originalDocumentId = fileCompareSetup.original.documentId, originalVersion = fileCompareSetup.original.version, compareDocumentId = fileCompareSetup.compare.documentId, compareVersion = fileCompareSetup.compare.version](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
+		mr::coprocessor::Result result;
+		std::vector<mr::diff::MRDiffHunk> hunks;
+		std::string errorText;
+
+		result.task = task;
+		if (!mr::diff::mrComputeMyersDiff(originalLines, compareLines, hunks, &errorText, stopToken)) {
+			result.status = stopToken.stop_requested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Failed;
+			result.error = errorText;
+			return result;
+		}
+		result.status = mr::coprocessor::TaskStatus::Completed;
+		result.payload = std::make_shared<mr::coprocessor::FileComparePayload>(originalDocumentId, originalVersion, compareDocumentId, compareVersion, originalLines.size(), compareLines.size(), std::move(hunks));
+		return result;
+	});
+	if (taskId != 0) {
+		setFileCompareTask(taskId);
+		trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::FileCompare, "file compare");
+	}
+	refreshFileComparePanes();
+	bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
+}
+
 void MRBentoBox::refreshFileCompareConfiguration() {
 	if (bentoMode != bbmFileCompare) return;
 	refreshFileComparePanes();
@@ -757,6 +1009,7 @@ void MRBentoBox::draw() {
 void MRBentoBox::changeBounds(const TRect &bounds) {
 	paneRoleDropList.hide();
 	paneActionDropList.hide();
+	fileCompareActionDropList.hide();
 	updatePaneRoleListChrome();
 	MREditWindow::changeBounds(bounds);
 	if (hasPaneSplit()) layoutSplitPanes();
@@ -805,6 +1058,13 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		acceptPaneActionChoice();
 		clearEvent(event);
 		bentoProjectionDirty |= bpdChrome;
+		flushBentoProjection();
+		return;
+	}
+	if (event.what == evCommand && event.message.command == cmMrFileComparePaneActionAccepted) {
+		acceptFileCompareActionChoice();
+		clearEvent(event);
+		bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
 		flushBentoProjection();
 		return;
 	}
@@ -885,6 +1145,16 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			flushBentoProjection();
 			return;
 		}
+		if (bentoMode == bbmFileCompare && (event.mouse.buttons & mbRightButton) != 0) {
+			const int targetLeafId = leafAt(localMouse);
+			if (bentoRoleIsDiff(roleForLeaf(targetLeafId)) && pointInRect(localMouse, contentBounds(paneBoundsForLeaf(targetLeafId)))) {
+				showFileCompareActionList(event.mouse.where, targetLeafId);
+				clearEvent(event);
+				bentoProjectionDirty |= bpdChrome;
+				flushBentoProjection();
+				return;
+			}
+		}
 	}
 	if (bentoMode == bbmFileCompare && event.what == evMouseWheel) {
 		const int wheelLeafId = leafAt(localMouse);
@@ -949,9 +1219,12 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		TScrollBar *targetHorizontalScrollBar = targetPane != nullptr ? targetPane->horizontalEditorScrollBar() : nullptr;
 		TScrollBar *targetVerticalScrollBar = targetPane != nullptr ? targetPane->verticalEditorScrollBar() : nullptr;
 		const std::pair<bool, bool> targetRangeBefore = std::make_pair(targetHorizontalScrollBar != nullptr && targetHorizontalScrollBar->maxVal > targetHorizontalScrollBar->minVal, targetVerticalScrollBar != nullptr && targetVerticalScrollBar->maxVal > targetVerticalScrollBar->minVal);
+		const bool trackFileCompareMutation = bentoMode == bbmFileCompare && fileComparePanesEditable() && bentoRoleIsDiff(activeRole);
+		std::size_t fileCompareVersionBefore = 0;
 		if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
 		if (targetPane != nullptr) {
 			MRFileEditor *targetEditor = targetPane->getEditor();
+			if (trackFileCompareMutation && targetEditor != nullptr) fileCompareVersionBefore = targetEditor->documentVersion();
 			if (event.what == evMouseWheel && targetEditor != nullptr) {
 				const int wheelStep = event.mouse.wheel == mwRight || event.mouse.wheel == mwDown ? 3 : -3;
 				if (event.mouse.wheel == mwLeft || event.mouse.wheel == mwRight)
@@ -982,6 +1255,8 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		targetVerticalScrollBar = targetPane != nullptr ? targetPane->verticalEditorScrollBar() : nullptr;
 		const std::pair<bool, bool> targetRangeAfter = std::make_pair(targetHorizontalScrollBar != nullptr && targetHorizontalScrollBar->maxVal > targetHorizontalScrollBar->minVal, targetVerticalScrollBar != nullptr && targetVerticalScrollBar->maxVal > targetVerticalScrollBar->minVal);
 		if (targetPane != nullptr && targetRangeAfter != targetRangeBefore) targetPane->layoutPaneChrome();
+		if (trackFileCompareMutation && targetPane != nullptr) targetPane->setReadOnly(false);
+		if (trackFileCompareMutation && targetPane != nullptr && targetPane->getEditor() != nullptr && targetPane->getEditor()->documentVersion() != fileCompareVersionBefore) refreshFileCompareAfterSourceMutation();
 		if (bentoMode == bbmFileCompare && bentoRoleIsDiff(activeRole)) syncFileCompareLinkedPaneFrom(activeLeafId);
 		bentoProjectionDirty |= bpdContent | bpdChrome;
 		flushBentoProjection();
@@ -1002,12 +1277,15 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	}
 	MRFileEditor *sourceEditor = getEditor();
 	const bool trackSourceMutation = !compilerDiagnostics.empty() && sourceEditor != nullptr;
+	const bool trackFileCompareMutation = bentoMode == bbmFileCompare && fileComparePanesEditable() && bentoRoleIsDiff(roleForLeaf(0)) && sourceEditor != nullptr;
+	const std::size_t fileCompareVersionBefore = trackFileCompareMutation ? sourceEditor->documentVersion() : 0;
 	TScrollBar *sourceHorizontalScrollBar = horizontalEditorScrollBar();
 	TScrollBar *sourceVerticalScrollBar = verticalEditorScrollBar();
 	const std::pair<bool, bool> sourceRangeBefore = std::make_pair(sourceHorizontalScrollBar != nullptr && sourceHorizontalScrollBar->maxVal > sourceHorizontalScrollBar->minVal, sourceVerticalScrollBar != nullptr && sourceVerticalScrollBar->maxVal > sourceVerticalScrollBar->minVal);
 	MRTextBufferModel::ReadSnapshot oldSnapshot;
 	if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
 	MREditWindow::handleEvent(event);
+	if (trackFileCompareMutation && sourceEditor->documentVersion() != fileCompareVersionBefore) refreshFileCompareAfterSourceMutation();
 	syncFileCompareLinkedPaneFrom(0);
 	if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
 	refreshOutlinePanes(false);
@@ -1535,6 +1813,7 @@ void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
 	int top = std::clamp<int>(paneRect.a.y + localAnchor.a.y, 1, std::max(1, size.y - listHeight - 1));
 
 	paneActionDropList.hide();
+	fileCompareActionDropList.hide();
 	pendingPaneRoleTargetLeafId = targetLeafId;
 	paneRoleListAnchor = TRect(left, top, left + listWidth, top);
 	if (openingRoleList && chromeView != nullptr) chromeView->setPaneRoleListTitleOpen(true, paneRoleListAnchor);
@@ -1551,8 +1830,36 @@ void MRBentoBox::showPaneActionList() {
 	int top = std::clamp<int>(selectedRow, 1, std::max(1, size.y - listHeight - 1));
 	if (left < 1) left = std::clamp<int>(paneRoleListAnchor.b.x, 1, std::max(1, size.x - listWidth - 1));
 	TRect anchor(left, top, left + listWidth, top);
+	fileCompareActionDropList.hide();
 	paneActionDropList.hide();
 	paneActionDropList.toggle(*this, anchor, paneActionChoices(), kBentoPaneActionReplace, this, cmMrBentoPaneActionAccepted, listHeight);
+}
+
+void MRBentoBox::showFileCompareActionList(TPoint globalMouse, int targetLeafId) {
+	const int listWidth = 12;
+	const int listHeight = 3;
+	const TPoint localMouse = makeLocal(globalMouse);
+	const int left = std::clamp<int>(localMouse.x, 1, std::max(1, size.x - listWidth - 1));
+	const int top = std::clamp<int>(localMouse.y, 1, std::max(1, size.y - listHeight - 1));
+	const TRect anchor(left, top, left + listWidth, top);
+	const std::vector<std::string> actions{kFileCompareActionNext, kFileCompareActionPrevious, kFileCompareActionApply};
+
+	if (bentoMode != bbmFileCompare || !bentoRoleIsDiff(roleForLeaf(targetLeafId))) return;
+	paneRoleDropList.hide();
+	paneActionDropList.hide();
+	updatePaneRoleListChrome();
+	pendingFileCompareActionLeafId = targetLeafId;
+	pendingFileCompareActionGroupIndex = -1;
+	const MRBentoPaneRole targetRole = roleForLeaf(targetLeafId);
+	MREditWindow *targetWindow = targetLeafId == 0 ? static_cast<MREditWindow *>(this) : paneWindowForLeaf(targetLeafId);
+	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+	if (targetEditor != nullptr) {
+		const std::size_t clickedOffset = targetEditor->offsetForGlobalPoint(globalMouse);
+		const std::size_t clickedLine = targetEditor->lineIndexOfOffset(clickedOffset);
+		pendingFileCompareActionGroupIndex = fileCompareChangeGroupIndexAtLine(targetRole, clickedLine, fileComparePanesEditable());
+	}
+	setActivePane(targetLeafId);
+	fileCompareActionDropList.toggle(*this, anchor, actions, kFileCompareActionApply, this, cmMrFileComparePaneActionAccepted, listHeight);
 }
 
 void MRBentoBox::acceptPaneRoleChoice() {
@@ -1572,10 +1879,37 @@ void MRBentoBox::acceptPaneActionChoice() {
 	pendingPaneRoleTargetLeafId = activeLeafId;
 }
 
+void MRBentoBox::acceptFileCompareActionChoice() {
+	std::string action;
+	if (!fileCompareActionDropList.acceptSelection(action)) return;
+	if (nodeIndexForLeaf(pendingFileCompareActionLeafId) < 0 || !bentoRoleIsDiff(roleForLeaf(pendingFileCompareActionLeafId))) return;
+	setActivePane(pendingFileCompareActionLeafId);
+	if (action == kFileCompareActionNext) {
+		static_cast<void>(navigateFileCompareChange(true));
+		return;
+	}
+	if (action == kFileCompareActionPrevious) {
+		static_cast<void>(navigateFileCompareChange(false));
+		return;
+	}
+	if (action == kFileCompareActionApply) {
+		const MRBentoPaneRole role = roleForLeaf(pendingFileCompareActionLeafId);
+		const bool originalToCompare = role == bprDiffOriginal;
+		const std::size_t groupIndex = pendingFileCompareActionGroupIndex >= 0 ? static_cast<std::size_t>(pendingFileCompareActionGroupIndex) : fileCompareChangeGroups.size();
+		if (groupIndex < fileCompareChangeGroups.size())
+			static_cast<void>(applyFileCompareChangeGroup(originalToCompare, fileCompareChangeGroups[groupIndex]));
+		else
+			static_cast<void>(applyFileCompareChange(originalToCompare));
+		pendingFileCompareActionGroupIndex = -1;
+	}
+}
+
 bool MRBentoBox::handlePaneDropListEvent(TEvent &event) {
 	const bool roleListVisible = paneRoleDropList.visible();
 	const bool actionListVisible = paneActionDropList.visible();
-	if (!roleListVisible && !actionListVisible) return false;
+	const bool fileCompareActionListVisible = fileCompareActionDropList.visible();
+	if (!roleListVisible && !actionListVisible && !fileCompareActionListVisible) return false;
+	if (fileCompareActionDropList.handleOpenListEvent(event, false)) return true;
 	if (paneActionDropList.handleOpenListEvent(event, false)) {
 		updatePaneRoleListChrome();
 		return true;
@@ -1584,9 +1918,10 @@ bool MRBentoBox::handlePaneDropListEvent(TEvent &event) {
 		updatePaneRoleListChrome();
 		return true;
 	}
-	if (event.what == evMouseDown && !paneRoleDropList.containsPoint(event.mouse.where) && !paneActionDropList.containsPoint(event.mouse.where)) {
+	if (event.what == evMouseDown && !paneRoleDropList.containsPoint(event.mouse.where) && !paneActionDropList.containsPoint(event.mouse.where) && !fileCompareActionDropList.containsPoint(event.mouse.where)) {
 		paneRoleDropList.hide();
 		paneActionDropList.hide();
+		fileCompareActionDropList.hide();
 		updatePaneRoleListChrome();
 		clearEvent(event);
 		return true;
@@ -1606,6 +1941,12 @@ bool MRBentoBox::handlePaneDropListEvent(TEvent &event) {
 	if (event.what == evMouseDown && paneActionDropList.containsPoint(event.mouse.where)) {
 		TWindow::handleEvent(event);
 		acceptPaneActionChoice();
+		clearEvent(event);
+		return true;
+	}
+	if (event.what == evMouseDown && fileCompareActionDropList.containsPoint(event.mouse.where)) {
+		TWindow::handleEvent(event);
+		acceptFileCompareActionChoice();
 		clearEvent(event);
 		return true;
 	}
@@ -1902,9 +2243,9 @@ MRBentoPaneSpec MRBentoBox::paneSpecForRole(MRBentoPaneRole role) const noexcept
 		case bprSplitEditor:
 			return MRBentoPaneSpec(bprSplitEditor, bpbSharedSourceBuffer, false, false, false, bentoMode == bbmDocumentViewports, titleMenu);
 		case bprDiffCompare:
-			return MRBentoPaneSpec(role, bpbOwnBuffer, true, false, true, true, titleMenu);
+			return MRBentoPaneSpec(role, bpbOwnBuffer, !fileComparePanesEditable(), false, true, true, titleMenu);
 		case bprDiffOriginal:
-			return MRBentoPaneSpec(role, bpbOwnBuffer, true, true, true, true, titleMenu);
+			return MRBentoPaneSpec(role, bpbOwnBuffer, !fileComparePanesEditable(), true, true, true, titleMenu);
 		case bprCompilerOutput:
 		case bprAppOutput:
 		case bprProblems:
@@ -1948,6 +2289,8 @@ void MRBentoBox::rebuildFileCompareChangeGroups() {
 				if (!groupOpen) {
 					fileCompareChangeGroups.push_back(FileCompareChangeGroup());
 					fileCompareChangeGroups.back().displayStartLine = displayLine;
+					fileCompareChangeGroups.back().originalStartLine = hunk.leftStart;
+					fileCompareChangeGroups.back().compareStartLine = hunk.rightStart;
 					groupOpen = true;
 				}
 				fileCompareChangeGroups.back().displayLineCount += hunk.count;
@@ -1958,6 +2301,8 @@ void MRBentoBox::rebuildFileCompareChangeGroups() {
 				if (!groupOpen) {
 					fileCompareChangeGroups.push_back(FileCompareChangeGroup());
 					fileCompareChangeGroups.back().displayStartLine = displayLine;
+					fileCompareChangeGroups.back().originalStartLine = hunk.leftStart;
+					fileCompareChangeGroups.back().compareStartLine = hunk.rightStart;
 					groupOpen = true;
 				}
 				fileCompareChangeGroups.back().displayLineCount += hunk.count;
@@ -1968,6 +2313,122 @@ void MRBentoBox::rebuildFileCompareChangeGroups() {
 				break;
 		}
 	}
+}
+
+std::size_t MRBentoBox::fileCompareGroupStartLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept {
+	if (!editablePanes) return group.displayStartLine;
+	if (role == bprDiffOriginal) return group.originalStartLine;
+	if (role == bprDiffCompare) return group.compareStartLine;
+	return group.displayStartLine;
+}
+
+std::size_t MRBentoBox::fileCompareGroupLineCountForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept {
+	if (!editablePanes) return std::max<std::size_t>(1, group.displayLineCount);
+	if (role == bprDiffOriginal) return std::max<std::size_t>(1, group.deletedLineCount);
+	if (role == bprDiffCompare) return std::max<std::size_t>(1, group.insertedLineCount);
+	return std::max<std::size_t>(1, group.displayLineCount);
+}
+
+std::size_t MRBentoBox::fileCompareGroupNavigationLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const {
+	const std::size_t documentLineCount = std::max<std::size_t>(1, editor.bufferModel().lineCount());
+	std::size_t targetLine = fileCompareGroupStartLineForRole(group, role, editablePanes);
+	if (!editablePanes || !bentoRoleIsDiff(role)) return std::min(targetLine, documentLineCount - 1);
+
+	std::vector<unsigned char> lineKinds;
+	fileCompareEditableLineKindsForRole(role, lineKinds, nullptr);
+	if (lineKinds.empty()) return std::min(targetLine, documentLineCount - 1);
+
+	const std::size_t lineLimit = std::min(lineKinds.size(), documentLineCount);
+	if (lineLimit == 0) return 0;
+	if (targetLine >= lineLimit) targetLine = lineLimit - 1;
+
+	std::size_t groupLineCount = fileCompareGroupLineCountForRole(group, role, editablePanes);
+	if (role == bprDiffCompare && group.deletedLineCount > group.insertedLineCount) groupLineCount = std::max<std::size_t>(groupLineCount, group.insertedLineCount + 1);
+	if (role == bprDiffOriginal && group.insertedLineCount > group.deletedLineCount) groupLineCount = std::max<std::size_t>(groupLineCount, group.deletedLineCount + 1);
+
+	const std::size_t scanEndLine = std::min(lineLimit, targetLine + std::max<std::size_t>(1, groupLineCount) + 1);
+	for (std::size_t line = targetLine; line < scanEndLine; ++line)
+		if (lineKinds[line] != mrfclkEqual && lineKinds[line] != mrfclkNone) return line;
+	return targetLine;
+}
+
+std::size_t MRBentoBox::fileCompareMappedLineForRole(MRBentoPaneRole sourceRole, std::size_t sourceLine, const MRFileEditor &targetEditor, bool editablePanes) const noexcept {
+	std::size_t targetLine = sourceLine;
+	if (!bentoRoleIsDiff(sourceRole)) return targetLine;
+	const MRBentoPaneRole targetRole = sourceRole == bprDiffOriginal ? bprDiffCompare : bprDiffOriginal;
+
+	if (editablePanes && fileCompareDiffReady) {
+		bool mappedInChangeGroup = false;
+		for (const FileCompareChangeGroup &group : fileCompareChangeGroups) {
+			const std::size_t sourceStart = fileCompareGroupStartLineForRole(group, sourceRole, true);
+			std::size_t sourceLineCount = fileCompareGroupLineCountForRole(group, sourceRole, true);
+			if (sourceRole == bprDiffCompare && group.deletedLineCount > group.insertedLineCount) sourceLineCount = std::max<std::size_t>(sourceLineCount, group.insertedLineCount + 1);
+			if (sourceRole == bprDiffOriginal && group.insertedLineCount > group.deletedLineCount) sourceLineCount = std::max<std::size_t>(sourceLineCount, group.deletedLineCount + 1);
+			if (sourceLine < sourceStart || sourceLine >= sourceStart + sourceLineCount) continue;
+
+			const std::size_t targetStart = fileCompareGroupStartLineForRole(group, targetRole, true);
+			const std::size_t targetLineCount = targetRole == bprDiffOriginal ? group.deletedLineCount : group.insertedLineCount;
+			mappedInChangeGroup = true;
+			if (targetLineCount == 0) {
+				targetLine = targetStart;
+				break;
+			}
+			const std::size_t relativeLine = sourceLine - sourceStart;
+			targetLine = targetStart + std::min(relativeLine, targetLineCount - 1);
+			break;
+		}
+		if (!mappedInChangeGroup) targetLine = mappedFileCompareLineForRole(fileCompareHunks, sourceRole, sourceLine);
+	}
+	const std::size_t targetDocumentLines = std::max<std::size_t>(1, targetEditor.bufferModel().lineCount());
+	return std::min(targetLine, targetDocumentLines - 1);
+}
+
+const MRBentoBox::FileCompareChangeGroup *MRBentoBox::fileCompareChangeGroupAtOrVisibleForRole(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept {
+	if (!bentoRoleIsDiff(role)) return nullptr;
+
+	const int cursorGroupIndex = fileCompareChangeGroupIndexAtCursor(role, editor, editablePanes);
+	if (cursorGroupIndex >= 0) return &fileCompareChangeGroups[static_cast<std::size_t>(cursorGroupIndex)];
+
+	const std::size_t visibleStartLine = static_cast<std::size_t>(std::max(0, editor.delta.y));
+	const std::size_t visibleEndLine = visibleStartLine + static_cast<std::size_t>(std::max(1, editor.visibleViewportRows()));
+	for (const FileCompareChangeGroup &group : fileCompareChangeGroups) {
+		const std::size_t groupStart = fileCompareGroupStartLineForRole(group, role, editablePanes);
+		const std::size_t groupEnd = groupStart + fileCompareGroupLineCountForRole(group, role, editablePanes);
+		if (groupEnd > visibleStartLine && groupStart < visibleEndLine) return &group;
+	}
+	return nullptr;
+}
+
+int MRBentoBox::fileCompareChangeGroupIndexAtCursor(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept {
+	if (!bentoRoleIsDiff(role)) return -1;
+
+	const std::size_t cursorLine = editor.lineIndexOfOffset(editor.cursorOffset());
+	return fileCompareChangeGroupIndexAtLine(role, cursorLine, editablePanes);
+}
+
+int MRBentoBox::fileCompareChangeGroupIndexAtLine(MRBentoPaneRole role, std::size_t line, bool editablePanes) const noexcept {
+	if (!bentoRoleIsDiff(role)) return -1;
+
+	for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
+		const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
+		const std::size_t groupStart = fileCompareGroupStartLineForRole(group, role, editablePanes);
+		std::size_t groupLineCount = fileCompareGroupLineCountForRole(group, role, editablePanes);
+		if (editablePanes && role == bprDiffCompare && group.deletedLineCount > group.insertedLineCount) groupLineCount = std::max<std::size_t>(groupLineCount, group.insertedLineCount + 1);
+		if (editablePanes && role == bprDiffOriginal && group.insertedLineCount > group.deletedLineCount) groupLineCount = std::max<std::size_t>(groupLineCount, group.deletedLineCount + 1);
+		const std::size_t groupEnd = groupStart + groupLineCount;
+		if (line >= groupStart && line < groupEnd) return static_cast<int>(i);
+	}
+	return -1;
+}
+
+bool MRBentoBox::moveFileCompareEditorToGroup(MRFileEditor &editor, MRBentoPaneRole role, const FileCompareChangeGroup &group, bool editablePanes) {
+	const std::size_t documentLineCount = std::max<std::size_t>(1, editor.bufferModel().lineCount());
+	std::size_t targetLine = fileCompareGroupNavigationLineForRole(group, role, editor, editablePanes);
+
+	if (targetLine >= documentLineCount) targetLine = documentLineCount - 1;
+
+	editor.moveCursorToDocumentLineTop(targetLine, 0);
+	return true;
 }
 
 std::string MRBentoBox::fileCompareStatusForLeaf(const BentoLeaf &leaf) const {
@@ -1999,34 +2460,14 @@ std::string MRBentoBox::fileCompareStatusForLeaf(const BentoLeaf &leaf) const {
 	std::size_t currentChange = 0;
 	bool groupOpen = false;
 
-	const std::size_t cursorLine = targetEditor->lineIndexOfOffset(targetEditor->cursorOffset());
-	for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
-		const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
-		const std::size_t groupEndLine = group.displayStartLine + std::max<std::size_t>(1, group.displayLineCount);
-
-		if (cursorLine >= group.displayStartLine && cursorLine < groupEndLine) {
-			activeChange = i + 1;
-			activeDeletedLines = group.deletedLineCount;
-			activeInsertedLines = group.insertedLineCount;
-			activeDisplayStartLine = group.displayStartLine;
-			hasActiveChange = true;
-			break;
-		}
-	}
-	if (!hasActiveChange) {
-		for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
-			const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
-			const std::size_t groupEndLine = group.displayStartLine + std::max<std::size_t>(1, group.displayLineCount);
-
-			if (groupEndLine > visibleStartLine && group.displayStartLine < visibleEndLine) {
-				activeChange = i + 1;
-				activeDeletedLines = group.deletedLineCount;
-				activeInsertedLines = group.insertedLineCount;
-				activeDisplayStartLine = group.displayStartLine;
-				hasActiveChange = true;
-				break;
-			}
-		}
+	const bool editablePanes = fileComparePanesEditable();
+	const FileCompareChangeGroup *activeGroup = fileCompareChangeGroupAtOrVisibleForRole(leaf.role, *targetEditor, editablePanes);
+	if (activeGroup != nullptr) {
+		activeChange = static_cast<std::size_t>(activeGroup - fileCompareChangeGroups.data()) + 1;
+		activeDeletedLines = activeGroup->deletedLineCount;
+		activeInsertedLines = activeGroup->insertedLineCount;
+		activeDisplayStartLine = fileCompareGroupStartLineForRole(*activeGroup, leaf.role, editablePanes);
+		hasActiveChange = true;
 	}
 
 	for (const mr::diff::MRDiffHunk &hunk : fileCompareHunks) {
@@ -2104,45 +2545,41 @@ bool MRBentoBox::jumpToFileCompareChange(bool next) {
 	MRFileEditor *activeEditor = activeWindow != nullptr ? activeWindow->getEditor() : nullptr;
 	if (activeEditor == nullptr) return false;
 
-	const std::size_t currentLine = static_cast<std::size_t>(std::max(0, activeEditor->delta.y));
-	std::size_t targetLine = 0;
-	bool targetFound = false;
+	const bool editablePanes = fileComparePanesEditable();
+	const int cursorGroupIndex = fileCompareChangeGroupIndexAtCursor(activeRole, *activeEditor, editablePanes);
+	std::size_t targetIndex = 0;
 
-	if (next) {
-		for (const FileCompareChangeGroup &group : fileCompareChangeGroups) {
-			if (group.displayStartLine > currentLine) {
-				targetLine = group.displayStartLine;
-				targetFound = true;
-				break;
-			}
-		}
-		if (!targetFound) {
-			targetLine = fileCompareChangeGroups.front().displayStartLine;
-			targetFound = true;
-		}
+	if (cursorGroupIndex >= 0) {
+		const std::size_t currentIndex = static_cast<std::size_t>(cursorGroupIndex);
+		targetIndex = next ? (currentIndex + 1) % fileCompareChangeGroups.size() : (currentIndex == 0 ? fileCompareChangeGroups.size() - 1 : currentIndex - 1);
 	} else {
-		for (std::size_t i = fileCompareChangeGroups.size(); i > 0; --i) {
-			const FileCompareChangeGroup &group = fileCompareChangeGroups[i - 1];
+		const std::size_t cursorLine = activeEditor->lineIndexOfOffset(activeEditor->cursorOffset());
+		bool targetFound = false;
 
-			if (group.displayStartLine < currentLine) {
-				targetLine = group.displayStartLine;
-				targetFound = true;
-				break;
+		if (next) {
+			for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
+				const std::size_t groupLine = fileCompareGroupNavigationLineForRole(fileCompareChangeGroups[i], activeRole, *activeEditor, editablePanes);
+				if (groupLine > cursorLine) {
+					targetIndex = i;
+					targetFound = true;
+					break;
+				}
 			}
-		}
-		if (!targetFound) {
-			targetLine = fileCompareChangeGroups.back().displayStartLine;
-			targetFound = true;
+			if (!targetFound) targetIndex = 0;
+		} else {
+			for (std::size_t i = fileCompareChangeGroups.size(); i > 0; --i) {
+				const std::size_t groupLine = fileCompareGroupNavigationLineForRole(fileCompareChangeGroups[i - 1], activeRole, *activeEditor, editablePanes);
+				if (groupLine < cursorLine) {
+					targetIndex = i - 1;
+					targetFound = true;
+					break;
+				}
+			}
+			if (!targetFound) targetIndex = fileCompareChangeGroups.size() - 1;
 		}
 	}
-	if (!targetFound) return false;
 
-	const int targetLineDelta = static_cast<int>(std::min<std::size_t>(targetLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
-	const std::size_t targetOffset = activeEditor->lineMoveOffset(0, targetLineDelta, 0);
-
-	activeEditor->setCursorOffsetAtVisualColumn(targetOffset, 0);
-	activeEditor->scrollTo(std::max(0, activeEditor->delta.x), std::max(0, targetLineDelta));
-	activeEditor->refreshViewState();
+	if (!moveFileCompareEditorToGroup(*activeEditor, activeRole, fileCompareChangeGroups[targetIndex], editablePanes)) return false;
 	if (activeWindow != nullptr) activeWindow->drawView();
 	syncFileCompareLinkedPaneFrom(activeLeafId);
 	return true;
@@ -2150,6 +2587,69 @@ bool MRBentoBox::jumpToFileCompareChange(bool next) {
 
 bool MRBentoBox::navigateFileCompareChange(bool next) {
 	if (!jumpToFileCompareChange(next)) return false;
+	bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
+	flushBentoProjection();
+	return true;
+}
+
+bool MRBentoBox::applyFileCompareChange(bool originalToCompare) {
+	if (bentoMode != bbmFileCompare || !fileCompareDiffReady || fileCompareStale || fileCompareChangeGroups.empty() || !fileComparePanesEditable()) return false;
+	const MRBentoPaneRole activeRole = roleForLeaf(activeLeafId);
+	if (!bentoRoleIsDiff(activeRole)) return false;
+
+	MREditWindow *activeWindow = activeLeafId == 0 ? static_cast<MREditWindow *>(this) : static_cast<MREditWindow *>(paneWindowForLeaf(activeLeafId));
+	MRFileEditor *activeEditor = activeWindow != nullptr ? activeWindow->getEditor() : nullptr;
+	if (activeEditor == nullptr) return false;
+
+	const FileCompareChangeGroup *activeGroup = fileCompareChangeGroupAtOrVisibleForRole(activeRole, *activeEditor, true);
+	if (activeGroup == nullptr) return false;
+
+	return applyFileCompareChangeGroup(originalToCompare, *activeGroup);
+}
+
+bool MRBentoBox::applyFileCompareChangeGroup(bool originalToCompare, const FileCompareChangeGroup &group) {
+	if (bentoMode != bbmFileCompare || !fileCompareDiffReady || fileCompareStale || fileCompareChangeGroups.empty() || !fileComparePanesEditable()) return false;
+
+	std::vector<std::string> originalLines;
+	std::vector<std::string> compareLines;
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines);
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.compare.text, compareLines);
+
+	const MRBentoPaneRole targetRole = originalToCompare ? bprDiffCompare : bprDiffOriginal;
+	const int targetLeafId = leafIdForRole(targetRole);
+	MREditWindow *targetWindow = nullptr;
+	if (targetLeafId == 0)
+		targetWindow = this;
+	else if (targetLeafId > 0)
+		targetWindow = paneWindowForLeaf(targetLeafId);
+	if (targetWindow == nullptr) targetWindow = findEditWindowByBufferId(originalToCompare ? fileCompareSetup.compare.bufferId : fileCompareSetup.original.bufferId);
+	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+	if (targetEditor == nullptr) return false;
+
+	const std::vector<std::string> &sourceLines = originalToCompare ? originalLines : compareLines;
+	const std::size_t sourceStartLine = originalToCompare ? group.originalStartLine : group.compareStartLine;
+	const std::size_t sourceLineCount = originalToCompare ? group.deletedLineCount : group.insertedLineCount;
+	const std::size_t targetStartLine = originalToCompare ? group.compareStartLine : group.originalStartLine;
+	const std::size_t targetLineCount = originalToCompare ? group.insertedLineCount : group.deletedLineCount;
+	if (sourceLineCount == 0 && targetLineCount == 0) return false;
+
+	std::size_t rangeStart = 0;
+	std::size_t rangeEnd = 0;
+	if (!fileCompareEditorLineRange(*targetEditor, targetStartLine, targetLineCount, rangeStart, rangeEnd)) return false;
+
+	const MRTextBufferModel &targetModel = targetEditor->bufferModel();
+	const bool prefixNewline = sourceLineCount > 0 && targetLineCount == 0 && rangeStart == targetModel.length() && rangeStart > 0 && targetModel.charAt(rangeStart - 1) != '\n';
+	const bool suffixNewline = sourceLineCount > 0 && rangeEnd < targetModel.length();
+	const std::string replacement = fileCompareJoinedLineRange(sourceLines, sourceStartLine, sourceLineCount, prefixNewline, suffixNewline);
+	const std::size_t uintMax = static_cast<std::size_t>(std::numeric_limits<unsigned int>::max());
+	if (rangeStart > uintMax || rangeEnd > uintMax || replacement.size() > uintMax) return false;
+
+	if (!targetEditor->replaceRangeAndSelect(static_cast<uint>(rangeStart), static_cast<uint>(rangeEnd), replacement.data(), static_cast<uint>(replacement.size()))) return false;
+	const std::size_t selectionEnd = std::min<std::size_t>(rangeStart + replacement.size(), targetEditor->bufferModel().length());
+	targetEditor->setSelectionOffsets(selectionEnd, selectionEnd, False);
+	if (targetWindow != nullptr) targetWindow->setFileChanged(targetEditor->isDocumentModified());
+	refreshFileCompareAfterSourceMutation();
+	if (targetLeafId >= 0) syncFileCompareLinkedPaneFrom(targetLeafId);
 	bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
 	flushBentoProjection();
 	return true;
@@ -2200,21 +2700,167 @@ std::string MRBentoBox::fileCompareTextForRole(MRBentoPaneRole role, std::vector
 	return text;
 }
 
+void MRBentoBox::fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::vector<unsigned char> &lineKinds, std::vector<MRFileCompareMiniMapSlice> *miniMapSlices) const {
+	lineKinds.clear();
+	if (miniMapSlices != nullptr) miniMapSlices->clear();
+	if (role != bprDiffOriginal && role != bprDiffCompare) return;
+
+	std::vector<std::string> originalLines;
+	std::vector<std::string> compareLines;
+
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines);
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.compare.text, compareLines);
+	lineKinds.assign(role == bprDiffOriginal ? originalLines.size() : compareLines.size(), mrfclkEqual);
+	if (!fileCompareDiffReady) return;
+
+	bool groupOpen = false;
+	std::size_t groupOriginalStart = 0;
+	std::size_t groupCompareStart = 0;
+	std::size_t groupDeletedLineCount = 0;
+	std::size_t groupInsertedLineCount = 0;
+	auto appendFullMiniMapSlice = [&](std::size_t lineIndex, unsigned char lineKind) {
+		if (miniMapSlices == nullptr || lineIndex >= lineKinds.size()) return;
+		miniMapSlices->push_back(MRFileCompareMiniMapSlice{lineIndex, 0, 0, lineKind, true});
+	};
+	auto appendChangedMiniMapSlice = [&](std::size_t lineIndex, const std::string &baseLine, const std::string &changedLine, unsigned char lineKind) {
+		if (miniMapSlices == nullptr || lineIndex >= lineKinds.size()) return;
+		std::size_t prefix = 0;
+		const std::size_t commonLimit = std::min(baseLine.size(), changedLine.size());
+		while (prefix < commonLimit && baseLine[prefix] == changedLine[prefix])
+			++prefix;
+		std::size_t suffix = 0;
+		while (suffix < commonLimit - prefix && baseLine[baseLine.size() - 1 - suffix] == changedLine[changedLine.size() - 1 - suffix])
+			++suffix;
+		std::size_t sliceStart = std::min(prefix, changedLine.size());
+		std::size_t sliceEnd = changedLine.size() >= suffix ? changedLine.size() - suffix : changedLine.size();
+		if (sliceEnd <= sliceStart && !changedLine.empty()) {
+			sliceStart = sliceStart >= changedLine.size() ? changedLine.size() - 1 : sliceStart;
+			sliceEnd = sliceStart + 1;
+		}
+		miniMapSlices->push_back(MRFileCompareMiniMapSlice{lineIndex, sliceStart, sliceEnd, lineKind, changedLine.empty()});
+	};
+	auto flushGroup = [&]() {
+		if (!groupOpen) return;
+		const bool replaceGroup = groupDeletedLineCount > 0 && groupInsertedLineCount > 0;
+
+		if (role == bprDiffOriginal) {
+			if (groupDeletedLineCount > 0) {
+				markFileCompareLineRange(lineKinds, groupOriginalStart, groupDeletedLineCount, mrfclkMissing);
+				for (std::size_t i = 0; i < groupDeletedLineCount && groupOriginalStart + i < lineKinds.size(); ++i) {
+					const std::size_t originalIndex = groupOriginalStart + i;
+					if (replaceGroup && i < groupInsertedLineCount && originalIndex < originalLines.size() && groupCompareStart + i < compareLines.size())
+						appendChangedMiniMapSlice(originalIndex, compareLines[groupCompareStart + i], originalLines[originalIndex], mrfclkMissing);
+					else
+						appendFullMiniMapSlice(originalIndex, mrfclkMissing);
+				}
+			} else if (groupInsertedLineCount > 0) {
+				markFileCompareAnchorLine(lineKinds, groupOriginalStart, mrfclkInsert);
+				appendFullMiniMapSlice(std::min(groupOriginalStart, lineKinds.empty() ? 0 : lineKinds.size() - 1), mrfclkInsert);
+			}
+		} else {
+			if (replaceGroup) {
+				for (std::size_t i = 0; i < groupInsertedLineCount && groupCompareStart + i < lineKinds.size(); ++i) {
+					const std::size_t originalLength = fileCompareLineTextLength(originalLines, groupOriginalStart + i, 1);
+					const std::size_t compareLength = fileCompareLineTextLength(compareLines, groupCompareStart + i, 1);
+					const unsigned char lineKind = compareLength < originalLength ? mrfclkMissing : mrfclkInsert;
+					lineKinds[groupCompareStart + i] = lineKind;
+					if (i < groupDeletedLineCount && groupOriginalStart + i < originalLines.size() && groupCompareStart + i < compareLines.size())
+						appendChangedMiniMapSlice(groupCompareStart + i, originalLines[groupOriginalStart + i], compareLines[groupCompareStart + i], lineKind);
+					else
+						appendFullMiniMapSlice(groupCompareStart + i, lineKind);
+				}
+				if (groupDeletedLineCount > groupInsertedLineCount) {
+					const std::size_t anchorLine = std::min(groupCompareStart + groupInsertedLineCount, lineKinds.empty() ? 0 : lineKinds.size() - 1);
+					markFileCompareAnchorLine(lineKinds, groupCompareStart + groupInsertedLineCount, mrfclkMissing);
+					appendFullMiniMapSlice(anchorLine, mrfclkMissing);
+				}
+			} else if (groupInsertedLineCount > 0) {
+				markFileCompareLineRange(lineKinds, groupCompareStart, groupInsertedLineCount, mrfclkInsert);
+				for (std::size_t i = 0; i < groupInsertedLineCount && groupCompareStart + i < lineKinds.size(); ++i)
+					appendFullMiniMapSlice(groupCompareStart + i, mrfclkInsert);
+			} else if (groupDeletedLineCount > 0) {
+				markFileCompareAnchorLine(lineKinds, groupCompareStart, mrfclkMissing);
+				appendFullMiniMapSlice(std::min(groupCompareStart, lineKinds.empty() ? 0 : lineKinds.size() - 1), mrfclkMissing);
+			}
+		}
+		groupOpen = false;
+		groupDeletedLineCount = 0;
+		groupInsertedLineCount = 0;
+	};
+
+	for (const mr::diff::MRDiffHunk &hunk : fileCompareHunks) {
+		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				flushGroup();
+				break;
+			case mr::diff::MRDiffOp::Delete:
+				if (!groupOpen) {
+					groupOpen = true;
+					groupOriginalStart = hunk.leftStart;
+					groupCompareStart = hunk.rightStart;
+				}
+				groupDeletedLineCount += hunk.count;
+				break;
+			case mr::diff::MRDiffOp::Insert:
+				if (!groupOpen) {
+					groupOpen = true;
+					groupOriginalStart = hunk.leftStart;
+					groupCompareStart = hunk.rightStart;
+				}
+				groupInsertedLineCount += hunk.count;
+				break;
+			default:
+				break;
+		}
+	}
+	flushGroup();
+}
+
 void MRBentoBox::refreshFileComparePane(BentoLeaf &leaf) {
 	MREditWindow *targetWindow = leaf.id == 0 ? static_cast<MREditWindow *>(this) : static_cast<MREditWindow *>(leaf.pane);
 	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
 	std::string title;
 	std::string text;
 	std::vector<unsigned char> lineKinds;
+	std::vector<MRFileCompareMiniMapSlice> miniMapSlices;
 
 	if (targetWindow == nullptr || !bentoRoleIsDiff(leaf.role)) return;
+	leaf.spec = paneSpecForRole(leaf.role);
+	if (leaf.id != 0 && leaf.pane != nullptr) leaf.pane->setPaneSpec(leaf.spec, getEditor());
 	title = leaf.role == bprDiffOriginal ? diffDisplayTitle(fileCompareSetup.original, "Diff Original") : diffDisplayTitle(fileCompareSetup.compare, "Diff Compare");
+	if (fileComparePanesEditable()) {
+		MREditWindow *sourceWindow = findEditWindowByBufferId(leaf.role == bprDiffOriginal ? fileCompareSetup.original.bufferId : fileCompareSetup.compare.bufferId);
+		MRFileEditor *sourceEditor = sourceWindow != nullptr ? sourceWindow->getEditor() : nullptr;
+		if (targetEditor != nullptr && sourceEditor != nullptr && targetEditor->documentId() != sourceEditor->documentId()) targetEditor->shareContentStateFrom(*sourceEditor);
+		const std::string leadingGutters = leaf.role == bprDiffOriginal ? configuredFileCompareOriginalLeadingGutters() : configuredFileCompareCompareLeadingGutters();
+		const std::string trailingGutters = leaf.role == bprDiffOriginal ? configuredFileCompareOriginalTrailingGutters() : configuredFileCompareCompareTrailingGutters();
+		const bool miniMapConfigured = fileCompareGuttersContain(leadingGutters, 'M') || fileCompareGuttersContain(trailingGutters, 'M');
+		if (targetEditor != nullptr) fileCompareEditableLineKindsForRole(leaf.role, lineKinds, &miniMapSlices);
+		if (leaf.id != 0 && leaf.pane != nullptr) leaf.pane->layoutPaneChrome();
+		if (targetEditor != nullptr) {
+			targetEditor->setMiniMapSuppressed(!miniMapConfigured);
+			targetEditor->setFileCompareGutters(leadingGutters, trailingGutters);
+			targetEditor->setFileCompareLineKinds(lineKinds, miniMapSlices);
+			targetEditor->setFileCompareGutterVisible(true);
+			targetEditor->updateMetrics();
+			targetEditor->continueComputeWarmupIfNeeded("file-compare-edit-refresh");
+		}
+		targetWindow->setDisplayTitle(title.c_str());
+		targetWindow->setReadOnly(false);
+		leaf.title = bentoPaneRoleTitle(leaf.role);
+		return;
+	}
 	text = fileCompareTextForRole(leaf.role, &lineKinds);
 	if (fileCompareStale) {
 		text = "[source changed while compare was running]\n\n" + text;
 		lineKinds.insert(lineKinds.begin(), {mrfclkOffset, mrfclkOffset});
 	}
+	if (targetEditor != nullptr) {
+		targetEditor->detachContentStateCopy();
+		targetWindow->setCurrentFileName(nullptr);
+	}
 	static_cast<void>(targetWindow->replaceTextBuffer(text.c_str(), title.c_str()));
+	if (leaf.id != 0 && leaf.pane != nullptr) leaf.pane->layoutPaneChrome();
 	if (targetEditor != nullptr) {
 		const std::string leadingGutters = leaf.role == bprDiffOriginal ? configuredFileCompareOriginalLeadingGutters() : configuredFileCompareCompareLeadingGutters();
 		const std::string trailingGutters = leaf.role == bprDiffOriginal ? configuredFileCompareOriginalTrailingGutters() : configuredFileCompareCompareTrailingGutters();
@@ -2227,7 +2873,6 @@ void MRBentoBox::refreshFileComparePane(BentoLeaf &leaf) {
 		targetEditor->updateMetrics();
 		targetEditor->continueComputeWarmupIfNeeded("file-compare-refresh");
 	}
-	if (leaf.id != 0 && leaf.pane != nullptr) leaf.pane->layoutPaneChrome();
 	targetWindow->setReadOnly(true);
 	targetWindow->setFileChanged(false);
 	leaf.title = bentoPaneRoleTitle(leaf.role);
@@ -2255,16 +2900,26 @@ void MRBentoBox::syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor
 	MRFileEditor *sourceEditor = sourceWindow != nullptr ? sourceWindow->getEditor() : nullptr;
 	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
 	if (sourceEditor == nullptr || targetEditor == nullptr) return;
+	auto mappedTargetLine = [this, sourceRole, targetEditor](std::size_t sourceLine) {
+		return fileCompareMappedLineForRole(sourceRole, sourceLine, *targetEditor, fileComparePanesEditable());
+	};
 
 	if (syncCursor) {
 		const std::size_t sourceLine = sourceEditor->lineIndexOfOffset(sourceEditor->cursorOffset());
-		const int targetLineDelta = static_cast<int>(std::min(sourceLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
+		const std::size_t targetLine = mappedTargetLine(sourceLine);
+		const int targetLineDelta = static_cast<int>(std::min(targetLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
 		const int visualColumn = sourceEditor->displayedCursorColumn();
 		const std::size_t targetOffset = targetEditor->lineMoveOffset(0, targetLineDelta, visualColumn);
 
 		targetEditor->setCursorOffsetAtVisualColumn(targetOffset, visualColumn);
 	}
-	targetEditor->scrollTo(std::max(0, sourceEditor->delta.x), std::max(0, sourceEditor->delta.y));
+	{
+		const std::size_t sourceScrollLine = static_cast<std::size_t>(std::max(0, sourceEditor->delta.y));
+		const std::size_t targetScrollLine = mappedTargetLine(sourceScrollLine);
+		const int targetScrollY = static_cast<int>(std::min(targetScrollLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
+
+		targetEditor->scrollTo(std::max(0, sourceEditor->delta.x), targetScrollY);
+	}
 	targetEditor->refreshViewState();
 	if (targetWindow != nullptr) targetWindow->drawView();
 }
@@ -2293,7 +2948,12 @@ bool MRBentoBox::applyFileCompareResult(const mr::coprocessor::Result &result) {
 		return true;
 	}
 
+	std::vector<std::string> originalLines;
+	std::vector<std::string> compareLines;
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines);
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.compare.text, compareLines);
 	fileCompareHunks = payload->hunks;
+	normalizeFileCompareHunks(originalLines, compareLines, fileCompareHunks);
 	rebuildFileCompareChangeGroups();
 	fileCompareDiffReady = true;
 	fileCompareStale = false;

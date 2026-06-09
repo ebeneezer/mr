@@ -64,6 +64,15 @@ AppCommandState appCommandState() {
 			break;
 		}
 	}
+	if (!state.hasFileCompareWindow) {
+		for (MREditWindow *window : allEditWindowsInZOrder()) {
+			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+			if (bentoBox != nullptr && bentoBox->isFileCompareBox() && bentoBox->containsFileCompareSourceWindow(win)) {
+				state.hasFileCompareWindow = true;
+				break;
+			}
+		}
+	}
 	if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win); bentoBox != nullptr) {
 		state.hasCompilerProblems = bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
 		if (bentoBox->buildOutputPane() != nullptr) externalWin = bentoBox->buildOutputPane();
@@ -195,6 +204,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
 	setCommandEnabled(cmMrOtherFindNextCompilerError, state.hasCompilerProblems);
 	setCommandEnabled(cmMrOtherFindPreviousCompilerError, state.hasCompilerProblems);
+	setCommandEnabled(cmMrFileCompareApplyOriginalToCompare, state.hasFileCompareWindow);
+	setCommandEnabled(cmMrFileCompareApplyCompareToOriginal, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrFileCompareNextChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrFileComparePreviousChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);

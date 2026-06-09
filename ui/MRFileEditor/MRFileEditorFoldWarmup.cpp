@@ -1658,6 +1658,20 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			}
 			if (perlSiblingAfterLeadingCloser || javascriptSiblingAfterLeadingCloser || cLikeSiblingAfterLeadingCloser) openSiblingContinuation = true;
 		}
+		if (nonEmpty && lineIndex > baseLineIndex) {
+			const std::size_t splitOffset = trailingSmartDedentSplitOffset(lineText, language);
+			if (splitOffset != std::string_view::npos) {
+				const std::string_view trailingDedent = trimView(std::string_view(lineText).substr(splitOffset));
+				std::size_t closerIndex = 0;
+
+				while (!openBlocks.empty() && closerIndex < trailingDedent.size() && openBlocks.back().sourceKind == MRFoldSourceKind::Delimiter && openBlocks.back().closer != 0 &&
+				       trailingDedent[closerIndex] == openBlocks.back().closer) {
+					appendVisibleSpan(openBlocks.back(), lineIndex);
+					openBlocks.pop_back();
+					++closerIndex;
+				}
+			}
+		}
 
 		if (mrmacMacroStart && lineIndex > baseLineIndex) {
 			while (!openBlocks.empty()) {

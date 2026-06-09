@@ -476,7 +476,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	return signals;
 }
 
-MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds) const {
+MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds, const std::vector<MRFileCompareMiniMapSlice> &fileCompareMiniMapSlices) const {
 	OverlayState overlay;
 	const int dotColumns = useBraille ? std::max(1, miniMapBodyWidth * 2) : std::max(1, miniMapBodyWidth);
 	const int normalizedViewportWidth = std::max(1, viewportWidth);
@@ -536,27 +536,48 @@ MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr:
 		appendRangeMasks(overlay.errorLineMasks, range, true);
 	for (const mr::editor::Range &range : warningRanges)
 		appendRangeMasks(overlay.warningLineMasks, range, true);
+	auto appendDiffMask = [&](unsigned char lineKind, std::size_t lineIndex, std::uint64_t mask) {
+		if (mask == 0) return;
+		switch (lineKind) {
+			case mrfclkEqual:
+				overlay.diffEqualLineMasks.push_back({lineIndex, mask});
+				break;
+			case mrfclkMissing:
+				overlay.diffMissingLineMasks.push_back({lineIndex, mask});
+				break;
+			case mrfclkInsert:
+				overlay.diffInsertLineMasks.push_back({lineIndex, mask});
+				break;
+			case mrfclkOffset:
+				overlay.diffOffsetLineMasks.push_back({lineIndex, mask});
+				break;
+			default:
+				break;
+		}
+	};
 	if (!fileCompareLineKinds.empty()) {
 		const std::uint64_t fullLineMask = dotColumns >= 64 ? ~0ULL : ((1ULL << static_cast<unsigned>(dotColumns)) - 1ULL);
 		const std::size_t count = std::min(totalLines, fileCompareLineKinds.size());
+		std::vector<bool> slicedChangedLines(count, false);
 
+		for (const MRFileCompareMiniMapSlice &slice : fileCompareMiniMapSlices)
+			if (slice.lineIndex < count && slice.lineKind != mrfclkEqual) slicedChangedLines[slice.lineIndex] = true;
 		for (std::size_t lineIndex = 0; lineIndex < count; ++lineIndex) {
-			switch (fileCompareLineKinds[lineIndex]) {
-				case mrfclkEqual:
-					overlay.diffEqualLineMasks.push_back({lineIndex, fullLineMask});
-					break;
-				case mrfclkMissing:
-					overlay.diffMissingLineMasks.push_back({lineIndex, fullLineMask});
-					break;
-				case mrfclkInsert:
-					overlay.diffInsertLineMasks.push_back({lineIndex, fullLineMask});
-					break;
-				case mrfclkOffset:
-					overlay.diffOffsetLineMasks.push_back({lineIndex, fullLineMask});
-					break;
-				default:
-					break;
+			if (fileCompareLineKinds[lineIndex] != mrfclkEqual && slicedChangedLines[lineIndex]) continue;
+			appendDiffMask(fileCompareLineKinds[lineIndex], lineIndex, fullLineMask);
+		}
+		for (const MRFileCompareMiniMapSlice &slice : fileCompareMiniMapSlices) {
+			if (slice.lineIndex >= totalLines) continue;
+			std::uint64_t mask = fullLineMask;
+			if (!slice.fullLine) {
+				const std::size_t lineStart = snapshot.lineStartByIndex(slice.lineIndex);
+				if (lineStart < length)
+					mask = rangeMaskForLineSlice(snapshot.lineText(lineStart), slice.sliceStart, slice.sliceEnd);
+				else
+					mask = 0;
+				if (mask == 0) mask = 1ULL;
 			}
+			appendDiffMask(slice.lineKind, slice.lineIndex, mask);
 		}
 	}
 	Impl::normalizeLineMasks(overlay.errorLineMasks);

@@ -129,13 +129,17 @@ bool compilerDiagnosticsFunctionKeysActive() {
 }
 
 MRBentoBox *currentFileCompareBentoBox() {
-	TView *view = currentEditWindow();
+	MREditWindow *window = currentEditWindow();
 
-	while (view != nullptr) {
+	for (TView *view = window; view != nullptr; view = view->owner) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
 		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) return bentoBox;
-		view = view->owner;
 	}
+	if (window != nullptr)
+		for (MREditWindow *candidate : allEditWindowsInZOrder()) {
+			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(candidate);
+			if (bentoBox != nullptr && bentoBox->isFileCompareBox() && bentoBox->containsFileCompareSourceWindow(window)) return bentoBox;
+		}
 	return nullptr;
 }
 
@@ -289,10 +293,16 @@ bool handleFileCompareCommand(TEvent &event) {
 	if (event.what != evCommand) return false;
 	const bool nextChange = event.message.command == cmMrFileCompareNextChange;
 	const bool previousChange = event.message.command == cmMrFileComparePreviousChange;
+	const bool applyOriginalToCompare = event.message.command == cmMrFileCompareApplyOriginalToCompare;
+	const bool applyCompareToOriginal = event.message.command == cmMrFileCompareApplyCompareToOriginal;
 
-	if (!nextChange && !previousChange) return false;
+	if (!nextChange && !previousChange && !applyOriginalToCompare && !applyCompareToOriginal) return false;
 	MRBentoBox *bentoBox = currentFileCompareBentoBox();
-	if (bentoBox != nullptr) static_cast<void>(bentoBox->navigateFileCompareChange(nextChange));
+	if (bentoBox != nullptr) {
+		if (nextChange || previousChange) static_cast<void>(bentoBox->navigateFileCompareChange(nextChange));
+		else
+			static_cast<void>(bentoBox->applyFileCompareChange(applyOriginalToCompare));
+	}
 	event.what = evNothing;
 	return true;
 }

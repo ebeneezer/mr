@@ -6,6 +6,7 @@
 #include <chrono>
 #include <ctime>
 #include <future>
+#include <limits>
 #include <sstream>
 #include <thread>
 
@@ -562,6 +563,7 @@ void MRFileEditor::draw() {
 		syncScrollBarsToState();
 		return;
 	}
+	if (!mFileCompareLineKinds.empty()) hideCursor();
 	syncScrollBarsToState();
 	MREditSetupSettings editSettings = configuredEditSetupSettings();
 	const bool foldingEnabled = foldingPipelineEnabled();
@@ -631,6 +633,13 @@ void MRFileEditor::draw() {
 		std::uint64_t diffSignature = 1469598103934665603ULL;
 		for (unsigned char kind : mFileCompareLineKinds)
 			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(kind)) * 1099511628211ULL;
+		for (const MRFileCompareMiniMapSlice &slice : mFileCompareMiniMapSlices) {
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.lineIndex)) * 1099511628211ULL;
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.sliceStart)) * 1099511628211ULL;
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.sliceEnd)) * 1099511628211ULL;
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.lineKind)) * 1099511628211ULL;
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.fullLine ? 1 : 0)) * 1099511628211ULL;
+		}
 		const bool miniMapOverlayCacheCompatible = mMiniMapState.overlayCache().documentId == mBufferModel.documentId() &&
 		                                           mMiniMapState.overlayCache().documentVersion == mBufferModel.version() && mMiniMapState.overlayCache().totalLines == totalLines &&
 		                                           mMiniMapState.overlayCache().viewportWidth == viewport.width && mMiniMapState.overlayCache().bodyWidth == viewport.miniMapBodyWidth &&
@@ -642,7 +651,7 @@ void MRFileEditor::draw() {
 		if (miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
 		else {
 			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, mCompilerErrorRanges, mCompilerWarningRanges, totalLines,
-			                                                              viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings, mFileCompareLineKinds);
+			                                                              viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings, mFileCompareLineKinds, mFileCompareMiniMapSlices);
 			mMiniMapState.overlayCache().documentId = mBufferModel.documentId();
 			mMiniMapState.overlayCache().documentVersion = mBufferModel.version();
 			mMiniMapState.overlayCache().totalLines = totalLines;
@@ -665,6 +674,23 @@ void MRFileEditor::draw() {
 		backgroundBuffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(size.x));
 		for (int y = 0; y < size.y; ++y)
 			writeBuf(0, y, size.x, 1, backgroundBuffer);
+	}
+	if (size.x > 0 && size.y > 0 && (showLineNumbers || drawLeadingDiffGutter || drawTrailingDiffGutter || drawCodeFolding || drawMiniMap)) {
+		const std::size_t nonDocumentLineIndex = std::numeric_limits<std::size_t>::max();
+		const int textRows = std::max(0, visibleTextRows());
+
+		for (int y = 0; y < textRows; ++y) {
+			TDrawBuffer gutterBackground;
+
+			gutterBackground.moveChar(0, ' ', editorTextFill, static_cast<ushort>(std::max(0, size.x)));
+			if (showLineNumbers) drawLineNumberGutter(gutterBackground, 0, false, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers, nonDocumentLineIndex);
+			if (drawLeadingDiffGutter) drawFileCompareGutter(gutterBackground, viewport.fileCompareLeadingGutterX, viewport.fileCompareLeadingGutterWidth, nonDocumentLineIndex);
+			if (drawTrailingDiffGutter) drawFileCompareGutter(gutterBackground, viewport.fileCompareTrailingGutterX, viewport.fileCompareTrailingGutterWidth, nonDocumentLineIndex);
+			if (drawCodeFolding) drawCodeFoldingGutter(gutterBackground, viewport.codeFoldingX, viewport.codeFoldingWidth, 0, nonDocumentLineIndex);
+			if (drawLeadingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(true), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
+			if (drawTrailingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(false), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
+			writeBuf(0, y + viewport.topInset, size.x, 1, gutterBackground);
+		}
 	}
 	if (editSettings.formatRuler && viewport.topInset > 0) drawFormatRulerOverlay(viewport, editSettings);
 	const int textRows = std::max(0, visibleTextRows());
@@ -882,10 +908,10 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 			currentLineInBlock = currentLine && overlayLine1 <= lineIndex && lineIndex <= overlayLine2;
 	} else
 		currentLineInBlock = false;
-	if (currentLineInBlock) basePair = getColor(0x0204);
-	else if (currentLine)
-		basePair = getColor(0x0303);
 	diffLineKind = fileCompareLineKindAt(lineIndex);
+	if (currentLineInBlock) basePair = getColor(0x0204);
+	else if (currentLine && diffLineKind == mrfclkNone)
+		basePair = getColor(0x0303);
 	if (diffLineKind != mrfclkNone) {
 		const unsigned char slot = fileCompareTextPaletteSlot(diffLineKind);
 			unsigned char configured = 0;

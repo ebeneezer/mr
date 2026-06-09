@@ -197,9 +197,16 @@ bool compilerDiagnosticsFunctionKeysActive() {
 }
 
 bool fileCompareFunctionKeysActive() {
-	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+	MREditWindow *window = currentEditWindow();
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
 
-	return bentoBox != nullptr && bentoBox->isFileCompareBox();
+	if (bentoBox != nullptr && bentoBox->isFileCompareBox()) return true;
+	if (window != nullptr)
+		for (MREditWindow *candidate : allEditWindowsInZOrder()) {
+			bentoBox = dynamic_cast<MRBentoBox *>(candidate);
+			if (bentoBox != nullptr && bentoBox->isFileCompareBox() && bentoBox->containsFileCompareSourceWindow(window)) return true;
+		}
+	return false;
 }
 
 bool bentoToolPaneFunctionKeysActive() {

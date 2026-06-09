@@ -35,9 +35,75 @@
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../diff/MRDiff.hpp"
 #include "../piecetable/MRTextDocument.hpp"
+#include "../ui/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
+
+class MRBentoBoxFileCompareRegressionHarness {
+  public:
+	static bool seedDiffReadyState(MRBentoBox &bento, const std::vector<mr::diff::MRDiffHunk> &hunks) {
+		bento.fileCompareHunks = hunks;
+		bento.rebuildFileCompareChangeGroups();
+		bento.fileCompareDiffReady = true;
+		bento.fileCompareStale = false;
+		bento.refreshFileComparePanes();
+		return !bento.fileCompareChangeGroups.empty();
+	}
+
+	static bool activateComparePane(MRBentoBox &bento) {
+		const int compareLeaf = bento.leafIdForRole(bprDiffCompare);
+		if (compareLeaf < 0) return false;
+		bento.setActivePane(compareLeaf);
+		return true;
+	}
+
+	static bool attachSourceBuffer(MRBentoBox &bento, MRBentoPaneRole role, MREditWindow &sourceWindow) {
+		const int leafId = bento.leafIdForRole(role);
+		MREditWindow *targetWindow = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		MRFileEditor *sourceEditor = sourceWindow.getEditor();
+		if (targetEditor == nullptr || sourceEditor == nullptr) return false;
+		targetEditor->shareContentStateFrom(*sourceEditor);
+		return true;
+	}
+
+	static MRFileEditor *activeEditor(MRBentoBox &bento) {
+		MREditWindow *window = bento.activeLeafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(bento.activeLeafId));
+		return window != nullptr ? window->getEditor() : nullptr;
+	}
+
+	static MRFileEditor *editorForRole(MRBentoBox &bento, MRBentoPaneRole role) {
+		const int leafId = bento.leafIdForRole(role);
+		MREditWindow *window = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
+		return window != nullptr ? window->getEditor() : nullptr;
+	}
+
+	static unsigned char lineKindAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
+		std::vector<unsigned char> lineKinds;
+		bento.fileCompareEditableLineKindsForRole(role, lineKinds, nullptr);
+		return lineIndex < lineKinds.size() ? lineKinds[lineIndex] : mrfclkNone;
+	}
+
+	static bool markedDiffLineAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
+		const unsigned char lineKind = lineKindAt(bento, role, lineIndex);
+		return lineKind != mrfclkEqual && lineKind != mrfclkNone;
+	}
+
+	static int showContextAtDocumentLine(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
+		const int leafId = bento.leafIdForRole(role);
+		MREditWindow *targetWindow = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		if (leafId < 0 || targetEditor == nullptr) return -2;
+
+		const TRect content = bento.contentBounds(bento.paneBoundsForLeaf(leafId));
+		const TRect viewport = targetEditor->visibleTextViewportBounds();
+		const int localY = viewport.a.y + static_cast<int>(lineIndex) - std::max(0, targetEditor->delta.y);
+		const int localX = viewport.a.x;
+		bento.showFileCompareActionList(TPoint(content.a.x + localX, content.a.y + localY), leafId);
+		return bento.pendingFileCompareActionGroupIndex;
+	}
+};
 
 namespace {
 
@@ -6076,10 +6142,155 @@ bool testFileCompareCoprocessorHarness(std::string &failureReason) {
 	return true;
 }
 
+bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
+	const std::string originalText = "same 0\nold one\nsame 2\nsame 3\nold two\nsame 5";
+	const std::string compareText = "same 0\nnew one\nsame 2\nsame 3\nnew two\nsame 5";
+	const MRFileCompareStartConfiguration oldStartConfiguration = configuredFileCompareStartConfiguration();
+	const bool oldCompareReadOnly = configuredFileCompareComparePanelReadOnly();
+	MREditSetupSettings editSettings = configuredEditSetupSettings();
+	MREditWindow originalWindow(TRect(0, 0, 80, 20), "original", 101);
+	MREditWindow compareWindow(TRect(0, 0, 80, 20), "compare", 102);
+	MRBentoBox bento(TRect(0, 0, 160, 40), "file compare", 103, bbmFileCompare);
+	MRBentoCompareSetup setup;
+	std::vector<mr::diff::MRDiffHunk> hunks;
+	bool ok = true;
+
+	editSettings.formatRuler = true;
+	ScopedRegressionEditSetupSettings scopedEditSettings(editSettings);
+	setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration::OriginalCompare, nullptr);
+	setConfiguredFileCompareComparePanelReadOnly(false, nullptr);
+
+	if (!originalWindow.replaceTextBuffer(originalText.c_str(), "original") || !compareWindow.replaceTextBuffer(compareText.c_str(), "compare")) {
+		failureReason = "File compare navigation harness could not seed source editor buffers.";
+		ok = false;
+	}
+
+	if (ok) {
+		setup.original.window = &originalWindow;
+		setup.original.bufferId = originalWindow.bufferId();
+		setup.original.documentId = originalWindow.documentId();
+		setup.original.version = originalWindow.documentVersion();
+		setup.original.text = originalText;
+		setup.compare.window = &compareWindow;
+		setup.compare.bufferId = compareWindow.bufferId();
+		setup.compare.documentId = compareWindow.documentId();
+		setup.compare.version = compareWindow.documentVersion();
+		setup.compare.text = compareText;
+
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 0, 0, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Delete, 1, 1, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Insert, 2, 1, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 2, 2, 2));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Delete, 4, 4, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Insert, 5, 4, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 5, 5, 1));
+	}
+
+	if (ok && !bento.initializeFileCompare(setup)) {
+		failureReason = "File compare navigation harness could not initialize Bento compare.";
+		ok = false;
+	}
+
+	if (ok && (!MRBentoBoxFileCompareRegressionHarness::attachSourceBuffer(bento, bprDiffOriginal, originalWindow) || !MRBentoBoxFileCompareRegressionHarness::attachSourceBuffer(bento, bprDiffCompare, compareWindow))) {
+		failureReason = "File compare navigation harness could not attach source buffers.";
+		ok = false;
+	}
+
+	if (ok && !MRBentoBoxFileCompareRegressionHarness::seedDiffReadyState(bento, hunks)) {
+		failureReason = "File compare navigation harness did not build change groups.";
+		ok = false;
+	}
+
+	if (ok) {
+		if (!MRBentoBoxFileCompareRegressionHarness::activateComparePane(bento)) {
+			failureReason = "File compare navigation harness could not activate the compare pane.";
+			ok = false;
+		}
+		MRFileEditor *compareEditor = ok ? MRBentoBoxFileCompareRegressionHarness::activeEditor(bento) : nullptr;
+		MRFileEditor *originalEditor = ok ? MRBentoBoxFileCompareRegressionHarness::editorForRole(bento, bprDiffOriginal) : nullptr;
+		if (compareEditor == nullptr) {
+			failureReason = "File compare navigation harness did not expose the compare editor.";
+			ok = false;
+		} else if (originalEditor == nullptr) {
+			failureReason = "File compare navigation harness did not expose the original editor.";
+			ok = false;
+		} else {
+			compareEditor->setCursorOffsetAtVisualColumn(compareEditor->bufferModel().lineStartByIndex(0), 0);
+			if (!bento.navigateFileCompareChange(true)) {
+				failureReason = "File compare next-diff navigation failed.";
+				ok = false;
+			} else {
+				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
+				if (cursorLine != 1) {
+					failureReason = "File compare next-diff compare cursor line mismatch after first jump: expected 1, got " + std::to_string(cursorLine) + ".";
+					ok = false;
+				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
+					failureReason = "File compare next-diff cursor is not on a marked compare diff line after first jump.";
+					ok = false;
+				}
+				const std::size_t originalCursorLine = originalEditor->lineIndexOfOffset(originalEditor->cursorOffset());
+				if (ok && originalCursorLine != 1) {
+					failureReason = "File compare next-diff synced original cursor line mismatch after first compare jump: expected 1, got " + std::to_string(originalCursorLine) + ".";
+					ok = false;
+				}
+			}
+
+			if (ok && !bento.navigateFileCompareChange(true)) {
+				failureReason = "File compare second next-diff navigation failed.";
+				ok = false;
+			} else if (ok) {
+				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
+				if (cursorLine != 4) {
+					failureReason = "File compare next-diff compare cursor line mismatch after second jump: expected 4, got " + std::to_string(cursorLine) + ".";
+					ok = false;
+				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
+					failureReason = "File compare next-diff cursor is not on a marked compare diff line after second jump.";
+					ok = false;
+				}
+				const std::size_t originalCursorLine = originalEditor->lineIndexOfOffset(originalEditor->cursorOffset());
+				if (ok && originalCursorLine != 4) {
+					failureReason = "File compare next-diff synced original cursor line mismatch after second compare jump: expected 4, got " + std::to_string(originalCursorLine) + ".";
+					ok = false;
+				}
+			}
+
+			if (ok && !bento.navigateFileCompareChange(false)) {
+				failureReason = "File compare previous-diff navigation failed.";
+				ok = false;
+			} else if (ok) {
+				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
+				if (cursorLine != 1) {
+					failureReason = "File compare previous-diff compare cursor line mismatch: expected 1, got " + std::to_string(cursorLine) + ".";
+					ok = false;
+				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
+					failureReason = "File compare previous-diff cursor is not on a marked compare diff line.";
+					ok = false;
+				}
+			}
+
+			if (ok) {
+				const int contextGroupIndex = MRBentoBoxFileCompareRegressionHarness::showContextAtDocumentLine(bento, bprDiffCompare, 1);
+				if (contextGroupIndex != 0) {
+					failureReason = "File compare compare-pane context hit-test should select first diff group, got " + std::to_string(contextGroupIndex) + ".";
+					ok = false;
+				}
+			}
+		}
+	}
+
+	bento.restoreFileCompareSources();
+	setConfiguredFileCompareStartConfiguration(oldStartConfiguration, nullptr);
+	setConfiguredFileCompareComparePanelReadOnly(oldCompareReadOnly, nullptr);
+
+	if (ok) failureReason.clear();
+	return ok;
+}
+
 bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	const std::string commandsPath = absolutePathFromCwd("app/MRCommands.hpp");
 	const std::string menuPath = absolutePathFromCwd("app/MRMenuFactory.cpp");
 	const std::string appStatePath = absolutePathFromCwd("app/MRAppState.cpp");
+	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
 	const std::string windowCommandsHeaderPath = absolutePathFromCwd("app/commands/MRWindowCommands.hpp");
 	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
@@ -6092,6 +6303,7 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	std::string commands;
 	std::string menu;
 	std::string appState;
+	std::string editorApp;
 	std::string router;
 	std::string windowCommandsHeader;
 	std::string windowCommands;
@@ -6104,12 +6316,16 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	std::string ioError;
 	std::string missingNeedle;
 
-	if (!readTextFile(commandsPath, commands, ioError) || !readTextFile(menuPath, menu, ioError) || !readTextFile(appStatePath, appState, ioError) || !readTextFile(routerPath, router, ioError) || !readTextFile(windowCommandsHeaderPath, windowCommandsHeader, ioError) || !readTextFile(windowCommandsPath, windowCommands, ioError) || !readTextFile(windowListHeaderPath, windowListHeader, ioError) || !readTextFile(windowListPath, windowList, ioError) || !readTextFile(bentoHeaderPath, bentoHeader, ioError) || !readTextFile(bentoProjectionPath, bentoProjection, ioError) || !readTextFile(dispatchPath, dispatch, ioError) || !readTextFile(catalogPath, catalog, ioError)) {
+	if (!readTextFile(commandsPath, commands, ioError) || !readTextFile(menuPath, menu, ioError) || !readTextFile(appStatePath, appState, ioError) || !readTextFile(editorAppPath, editorApp, ioError) || !readTextFile(routerPath, router, ioError) || !readTextFile(windowCommandsHeaderPath, windowCommandsHeader, ioError) || !readTextFile(windowCommandsPath, windowCommands, ioError) || !readTextFile(windowListHeaderPath, windowListHeader, ioError) || !readTextFile(windowListPath, windowList, ioError) || !readTextFile(bentoHeaderPath, bentoHeader, ioError) || !readTextFile(bentoProjectionPath, bentoProjection, ioError) || !readTextFile(dispatchPath, dispatch, ioError) || !readTextFile(catalogPath, catalog, ioError)) {
 		failureReason = "Unable to read file-compare wiring source: " + ioError;
 		return false;
 	}
-	if (!containsAllSubstrings(commands, {"cmMrTextFileCompare"}, missingNeedle) || !containsAllSubstrings(menu, {"file co~M~pare...", "cmMrTextFileCompare"}, missingNeedle) || !containsAllSubstrings(appState, {"setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows)"}, missingNeedle)) {
+	if (!containsAllSubstrings(commands, {"cmMrTextFileCompare", "cmMrFileCompareApplyOriginalToCompare", "cmMrFileCompareApplyCompareToOriginal"}, missingNeedle) || !containsAllSubstrings(menu, {"file co~M~pare...", "cmMrTextFileCompare", "apply original -> compare", "apply compare -> original"}, missingNeedle) || !containsAllSubstrings(appState, {"setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows)", "setCommandEnabled(cmMrFileCompareApplyOriginalToCompare, state.hasFileCompareWindow)", "setCommandEnabled(cmMrFileCompareApplyCompareToOriginal, state.hasFileCompareWindow)"}, missingNeedle)) {
 		failureReason = "File compare text-menu command wiring changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(editorApp, {"cmMrFileCompareApplyOriginalToCompare", "cmMrFileCompareApplyCompareToOriginal", "bentoBox->applyFileCompareChange(applyOriginalToCompare)"}, missingNeedle)) {
+		failureReason = "File compare edit command routing changed: missing " + missingNeedle + ".";
 		return false;
 	}
 	if (!containsAllSubstrings(catalog, {"MR_TEXT_FILE_COMPARE"}, missingNeedle) || !containsAllSubstrings(router, {"KeymapActionDispatchEntry{\"MR_TEXT_FILE_COMPARE\", KeymapDispatchKind::AppCommand, cmMrTextFileCompare", "case cmMrTextFileCompare:", "return handleTextFileCompare();"}, missingNeedle)) {
@@ -6128,11 +6344,11 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 		failureReason = "Window list file-compare target filtering changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(bentoHeader, {"bprDiffOriginal", "bprDiffCompare", "bbmFileCompare", "MRBentoCompareSetup", "initializeFileCompare", "applyFileCompareResult", "restoreFileCompareSources", "syncFileCompareLinkedPaneFrom", "FileCompareChangeGroup", "rebuildFileCompareChangeGroups", "fileCompareStatusForLeaf", "fileCompareChangeGroups"}, missingNeedle)) {
+	if (!containsAllSubstrings(bentoHeader, {"bprDiffOriginal", "bprDiffCompare", "bbmFileCompare", "MRBentoCompareSetup", "initializeFileCompare", "applyFileCompareResult", "applyFileCompareChange", "restoreFileCompareSources", "syncFileCompareLinkedPaneFrom", "showFileCompareActionList", "acceptFileCompareActionChoice", "fileCompareActionDropList", "FileCompareChangeGroup", "rebuildFileCompareChangeGroups", "fileCompareStatusForLeaf", "fileCompareChangeGroups", "fileCompareChangeGroupIndexAtCursor", "fileCompareChangeGroupIndexAtLine", "fileCompareGroupNavigationLineForRole", "moveFileCompareEditorToGroup", "applyFileCompareChangeGroup", "pendingFileCompareActionGroupIndex"}, missingNeedle)) {
 		failureReason = "Bento file-compare public surface changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(bentoProjection, {"{bprDiffOriginal, \"Diff Original\", true}", "{bprDiffCompare, \"Diff Compare\", true}", "bentoMode == bbmFileCompare && !bentoRoleIsDiff(role)", "if (bentoMode == bbmFileCompare)", "source.role = bprDiffOriginal", "configuredFileCompareStartConfiguration()", "mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines)", "payload->originalDocumentId != fileCompareSetup.original.documentId", "fileCompareSourceStillMatches(fileCompareSetup.original)", "appendDiffDisplayLine(text, lineKinds", "mrfclkMissing", "mrfclkInsert", "mrfclkOffset", "configuredFileCompareOriginalLeadingGutters()", "configuredFileCompareOriginalTrailingGutters()", "configuredFileCompareCompareLeadingGutters()", "configuredFileCompareCompareTrailingGutters()", "targetEditor->setFileCompareGutters(leadingGutters, trailingGutters)", "targetEditor->setFileCompareLineKinds(lineKinds)", "targetEditor->setMiniMapSuppressed(!miniMapConfigured)", "targetEditor->setFileCompareGutterVisible(true)", "syncFileCompareLinkedPaneFrom(activeLeafId)", "syncFileCompareLinkedPaneFrom(0)", "displayStartLine", "displayLineCount", "deletedLineCount", "insertedLineCount", "rebuildFileCompareChangeGroups();", "std::string MRBentoBox::fileCompareStatusForLeaf", "firstVisibleChange", "lastVisibleChange", "visibleDeletedLines", "visibleInsertedLines", "totalDeletedLines", "totalInsertedLines", "status += \"/\" + std::to_string(fileCompareChangeGroups.size())", "status += \" -\" + std::to_string(totalDeletedLines)"}, missingNeedle)) {
+	if (!containsAllSubstrings(bentoProjection, {"{bprDiffOriginal, \"Diff Original\", true}", "{bprDiffCompare, \"Diff Compare\", true}", "bentoMode == bbmFileCompare && !bentoRoleIsDiff(role)", "if (bentoMode == bbmFileCompare)", "source.role = bprDiffOriginal", "configuredFileCompareStartConfiguration()", "mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines)", "payload->originalDocumentId != fileCompareSetup.original.documentId", "fileCompareSourceStillMatches(fileCompareSetup.original)", "appendDiffDisplayLine(text, lineKinds", "mrfclkMissing", "mrfclkInsert", "mrfclkOffset", "configuredFileCompareOriginalLeadingGutters()", "configuredFileCompareOriginalTrailingGutters()", "configuredFileCompareCompareLeadingGutters()", "configuredFileCompareCompareTrailingGutters()", "targetEditor->setFileCompareGutters(leadingGutters, trailingGutters)", "targetEditor->setFileCompareLineKinds(lineKinds)", "targetEditor->setMiniMapSuppressed(!miniMapConfigured)", "targetEditor->setFileCompareGutterVisible(true)", "syncFileCompareLinkedPaneFrom(activeLeafId)", "syncFileCompareLinkedPaneFrom(0)", "displayStartLine", "displayLineCount", "deletedLineCount", "insertedLineCount", "rebuildFileCompareChangeGroups();", "std::string MRBentoBox::fileCompareStatusForLeaf", "firstVisibleChange", "lastVisibleChange", "visibleDeletedLines", "visibleInsertedLines", "totalDeletedLines", "totalInsertedLines", "status += \"/\" + std::to_string(fileCompareChangeGroups.size())", "status += \" -\" + std::to_string(totalDeletedLines)", "bool MRBentoBox::applyFileCompareChange(bool originalToCompare)", "bool MRBentoBox::applyFileCompareChangeGroup(bool originalToCompare, const FileCompareChangeGroup &group)", "normalizeFileCompareHunks(originalLines, compareLines, fileCompareHunks);", "fileCompareJoinedLineRange", "fileCompareEditorLineRange", "targetEditor->replaceRangeAndSelect", "targetEditor->setSelectionOffsets(selectionEnd, selectionEnd, False)", "refreshFileCompareAfterSourceMutation();", "fileCompareHunks.clear();", "fileCompareDiffReady = false;", "kFileCompareActionApply", "apply diff", "cmMrFileComparePaneActionAccepted", "showFileCompareActionList(event.mouse.where, targetLeafId)", "fileCompareChangeGroupIndexAtLine", "fileCompareGroupNavigationLineForRole", "pendingFileCompareActionGroupIndex", "moveFileCompareEditorToGroup", "editor.moveCursorToDocumentLineTop(targetLine, 0)", "cursorGroupIndex", "targetIndex = next ?"}, missingNeedle)) {
 		failureReason = "Bento file-compare role/display/version wiring changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -6175,6 +6391,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
+	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
@@ -6242,6 +6459,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
+	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
