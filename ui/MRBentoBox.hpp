@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+class MRBentoBoxFileCompareRegressionHarness;
 class MRBentoPaneFrameView;
 namespace mr {
 namespace coprocessor {
@@ -178,6 +179,8 @@ class MRPaneEditWindow : public MREditWindow {
 };
 
 class MRBentoBox : public MREditWindow {
+	friend class MRBentoBoxFileCompareRegressionHarness;
+
   public:
 	MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode = bbmToolWorkspace);
 	virtual ~MRBentoBox() override;

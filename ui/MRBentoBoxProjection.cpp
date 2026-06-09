@@ -2376,9 +2376,7 @@ int MRBentoBox::fileCompareChangeGroupIndexAtCursor(MRBentoPaneRole role, const 
 	if (!bentoRoleIsDiff(role)) return -1;
 
 	const std::size_t cursorLine = editor.lineIndexOfOffset(editor.cursorOffset());
-	int groupIndex = fileCompareChangeGroupIndexAtLine(role, cursorLine, editablePanes);
-	if (groupIndex < 0 && editablePanes && role == bprDiffCompare) groupIndex = fileCompareChangeGroupIndexAtLine(role, cursorLine + 1, editablePanes);
-	return groupIndex;
+	return fileCompareChangeGroupIndexAtLine(role, cursorLine, editablePanes);
 }
 
 int MRBentoBox::fileCompareChangeGroupIndexAtLine(MRBentoPaneRole role, std::size_t line, bool editablePanes) const noexcept {

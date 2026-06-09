@@ -35,9 +35,44 @@
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../diff/MRDiff.hpp"
 #include "../piecetable/MRTextDocument.hpp"
+#include "../ui/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
+
+class MRBentoBoxFileCompareRegressionHarness {
+  public:
+	static bool seedDiffReadyState(MRBentoBox &bento, const std::vector<mr::diff::MRDiffHunk> &hunks) {
+		bento.fileCompareHunks = hunks;
+		bento.rebuildFileCompareChangeGroups();
+		bento.fileCompareDiffReady = true;
+		bento.fileCompareStale = false;
+		bento.refreshFileComparePanes();
+		return !bento.fileCompareChangeGroups.empty();
+	}
+
+	static bool activateComparePane(MRBentoBox &bento) {
+		const int compareLeaf = bento.leafIdForRole(bprDiffCompare);
+		if (compareLeaf < 0) return false;
+		bento.setActivePane(compareLeaf);
+		return true;
+	}
+
+	static bool attachSourceBuffer(MRBentoBox &bento, MRBentoPaneRole role, MREditWindow &sourceWindow) {
+		const int leafId = bento.leafIdForRole(role);
+		MREditWindow *targetWindow = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		MRFileEditor *sourceEditor = sourceWindow.getEditor();
+		if (targetEditor == nullptr || sourceEditor == nullptr) return false;
+		targetEditor->shareContentStateFrom(*sourceEditor);
+		return true;
+	}
+
+	static MRFileEditor *activeEditor(MRBentoBox &bento) {
+		MREditWindow *window = bento.activeLeafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(bento.activeLeafId));
+		return window != nullptr ? window->getEditor() : nullptr;
+	}
+};
 
 namespace {
 
@@ -6076,6 +6111,116 @@ bool testFileCompareCoprocessorHarness(std::string &failureReason) {
 	return true;
 }
 
+bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
+	const std::string originalText = "same 0\nold one\nsame 2\nsame 3\nold two\nsame 5";
+	const std::string compareText = "same 0\nnew one\nsame 2\nsame 3\nnew two\nsame 5";
+	const MRFileCompareStartConfiguration oldStartConfiguration = configuredFileCompareStartConfiguration();
+	const bool oldCompareReadOnly = configuredFileCompareComparePanelReadOnly();
+	MREditWindow originalWindow(TRect(0, 0, 80, 20), "original", 101);
+	MREditWindow compareWindow(TRect(0, 0, 80, 20), "compare", 102);
+	MRBentoBox bento(TRect(0, 0, 160, 40), "file compare", 103, bbmFileCompare);
+	MRBentoCompareSetup setup;
+	std::vector<mr::diff::MRDiffHunk> hunks;
+	bool ok = true;
+
+	setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration::OriginalCompare, nullptr);
+	setConfiguredFileCompareComparePanelReadOnly(false, nullptr);
+
+	if (!originalWindow.replaceTextBuffer(originalText.c_str(), "original") || !compareWindow.replaceTextBuffer(compareText.c_str(), "compare")) {
+		failureReason = "File compare navigation harness could not seed source editor buffers.";
+		ok = false;
+	}
+
+	if (ok) {
+		setup.original.window = &originalWindow;
+		setup.original.bufferId = originalWindow.bufferId();
+		setup.original.documentId = originalWindow.documentId();
+		setup.original.version = originalWindow.documentVersion();
+		setup.original.text = originalText;
+		setup.compare.window = &compareWindow;
+		setup.compare.bufferId = compareWindow.bufferId();
+		setup.compare.documentId = compareWindow.documentId();
+		setup.compare.version = compareWindow.documentVersion();
+		setup.compare.text = compareText;
+
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 0, 0, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Delete, 1, 1, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Insert, 2, 1, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 2, 2, 2));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Delete, 4, 4, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Insert, 5, 4, 1));
+		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 5, 5, 1));
+	}
+
+	if (ok && !bento.initializeFileCompare(setup)) {
+		failureReason = "File compare navigation harness could not initialize Bento compare.";
+		ok = false;
+	}
+
+	if (ok && (!MRBentoBoxFileCompareRegressionHarness::attachSourceBuffer(bento, bprDiffOriginal, originalWindow) || !MRBentoBoxFileCompareRegressionHarness::attachSourceBuffer(bento, bprDiffCompare, compareWindow))) {
+		failureReason = "File compare navigation harness could not attach source buffers.";
+		ok = false;
+	}
+
+	if (ok && !MRBentoBoxFileCompareRegressionHarness::seedDiffReadyState(bento, hunks)) {
+		failureReason = "File compare navigation harness did not build change groups.";
+		ok = false;
+	}
+
+	if (ok) {
+		if (!MRBentoBoxFileCompareRegressionHarness::activateComparePane(bento)) {
+			failureReason = "File compare navigation harness could not activate the compare pane.";
+			ok = false;
+		}
+		MRFileEditor *compareEditor = ok ? MRBentoBoxFileCompareRegressionHarness::activeEditor(bento) : nullptr;
+		if (compareEditor == nullptr) {
+			failureReason = "File compare navigation harness did not expose the compare editor.";
+			ok = false;
+		} else {
+			compareEditor->setCursorOffsetAtVisualColumn(compareEditor->bufferModel().lineStartByIndex(0), 0);
+			if (!bento.navigateFileCompareChange(true)) {
+				failureReason = "File compare next-diff navigation failed.";
+				ok = false;
+			} else {
+				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
+				if (cursorLine != 1) {
+					failureReason = "File compare next-diff compare cursor line mismatch after first jump: expected 1, got " + std::to_string(cursorLine) + ".";
+					ok = false;
+				}
+			}
+
+			if (ok && !bento.navigateFileCompareChange(true)) {
+				failureReason = "File compare second next-diff navigation failed.";
+				ok = false;
+			} else if (ok) {
+				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
+				if (cursorLine != 4) {
+					failureReason = "File compare next-diff compare cursor line mismatch after second jump: expected 4, got " + std::to_string(cursorLine) + ".";
+					ok = false;
+				}
+			}
+
+			if (ok && !bento.navigateFileCompareChange(false)) {
+				failureReason = "File compare previous-diff navigation failed.";
+				ok = false;
+			} else if (ok) {
+				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
+				if (cursorLine != 1) {
+					failureReason = "File compare previous-diff compare cursor line mismatch: expected 1, got " + std::to_string(cursorLine) + ".";
+					ok = false;
+				}
+			}
+		}
+	}
+
+	bento.restoreFileCompareSources();
+	setConfiguredFileCompareStartConfiguration(oldStartConfiguration, nullptr);
+	setConfiguredFileCompareComparePanelReadOnly(oldCompareReadOnly, nullptr);
+
+	if (ok) failureReason.clear();
+	return ok;
+}
+
 bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	const std::string commandsPath = absolutePathFromCwd("app/MRCommands.hpp");
 	const std::string menuPath = absolutePathFromCwd("app/MRMenuFactory.cpp");
@@ -6181,6 +6326,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
+	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
@@ -6248,6 +6394,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
+	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
