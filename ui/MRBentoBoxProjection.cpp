@@ -1854,13 +1854,9 @@ void MRBentoBox::showFileCompareActionList(TPoint globalMouse, int targetLeafId)
 	MREditWindow *targetWindow = targetLeafId == 0 ? static_cast<MREditWindow *>(this) : paneWindowForLeaf(targetLeafId);
 	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
 	if (targetEditor != nullptr) {
-		const TRect paneRect = paneBoundsForLeaf(targetLeafId);
-		const TRect content = contentBounds(paneRect);
-		const int mouseRow = localMouse.y - content.a.y;
-		if (mouseRow >= 0) {
-			const std::size_t clickedLine = static_cast<std::size_t>(std::max(0, targetEditor->delta.y)) + static_cast<std::size_t>(mouseRow);
-			pendingFileCompareActionGroupIndex = fileCompareChangeGroupIndexAtLine(targetRole, clickedLine, fileComparePanesEditable());
-		}
+		const std::size_t clickedOffset = targetEditor->offsetForGlobalPoint(globalMouse);
+		const std::size_t clickedLine = targetEditor->lineIndexOfOffset(clickedOffset);
+		pendingFileCompareActionGroupIndex = fileCompareChangeGroupIndexAtLine(targetRole, clickedLine, fileComparePanesEditable());
 	}
 	setActivePane(targetLeafId);
 	fileCompareActionDropList.toggle(*this, anchor, actions, kFileCompareActionApply, this, cmMrFileComparePaneActionAccepted, listHeight);

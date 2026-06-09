@@ -72,6 +72,20 @@ class MRBentoBoxFileCompareRegressionHarness {
 		MREditWindow *window = bento.activeLeafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(bento.activeLeafId));
 		return window != nullptr ? window->getEditor() : nullptr;
 	}
+
+	static int showContextAtDocumentLine(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
+		const int leafId = bento.leafIdForRole(role);
+		MREditWindow *targetWindow = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		if (leafId < 0 || targetEditor == nullptr) return -2;
+
+		const TRect content = bento.contentBounds(bento.paneBoundsForLeaf(leafId));
+		const TRect viewport = targetEditor->visibleTextViewportBounds();
+		const int localY = viewport.a.y + static_cast<int>(lineIndex) - std::max(0, targetEditor->delta.y);
+		const int localX = viewport.a.x;
+		bento.showFileCompareActionList(TPoint(content.a.x + localX, content.a.y + localY), leafId);
+		return bento.pendingFileCompareActionGroupIndex;
+	}
 };
 
 namespace {
@@ -6116,6 +6130,7 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 	const std::string compareText = "same 0\nnew one\nsame 2\nsame 3\nnew two\nsame 5";
 	const MRFileCompareStartConfiguration oldStartConfiguration = configuredFileCompareStartConfiguration();
 	const bool oldCompareReadOnly = configuredFileCompareComparePanelReadOnly();
+	MREditSetupSettings editSettings = configuredEditSetupSettings();
 	MREditWindow originalWindow(TRect(0, 0, 80, 20), "original", 101);
 	MREditWindow compareWindow(TRect(0, 0, 80, 20), "compare", 102);
 	MRBentoBox bento(TRect(0, 0, 160, 40), "file compare", 103, bbmFileCompare);
@@ -6123,6 +6138,8 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 	std::vector<mr::diff::MRDiffHunk> hunks;
 	bool ok = true;
 
+	editSettings.formatRuler = true;
+	ScopedRegressionEditSetupSettings scopedEditSettings(editSettings);
 	setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration::OriginalCompare, nullptr);
 	setConfiguredFileCompareComparePanelReadOnly(false, nullptr);
 
@@ -6207,6 +6224,14 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
 				if (cursorLine != 1) {
 					failureReason = "File compare previous-diff compare cursor line mismatch: expected 1, got " + std::to_string(cursorLine) + ".";
+					ok = false;
+				}
+			}
+
+			if (ok) {
+				const int contextGroupIndex = MRBentoBoxFileCompareRegressionHarness::showContextAtDocumentLine(bento, bprDiffCompare, 1);
+				if (contextGroupIndex != 0) {
+					failureReason = "File compare compare-pane context hit-test should select first diff group, got " + std::to_string(contextGroupIndex) + ".";
 					ok = false;
 				}
 			}
