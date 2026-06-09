@@ -2147,10 +2147,20 @@ std::string MRBentoBox::fileCompareStatusForLeaf(const BentoLeaf &leaf) const {
 
 	const std::size_t cursorLine = targetEditor->lineIndexOfOffset(targetEditor->cursorOffset());
 	const bool editablePanes = fileComparePanesEditable();
+	auto groupStartLineForLeaf = [editablePanes, role = leaf.role](const FileCompareChangeGroup &group) noexcept {
+		if (!editablePanes) return group.displayStartLine;
+		return role == bprDiffOriginal ? group.originalStartLine : group.compareStartLine;
+	};
+	auto groupLineCountForLeaf = [editablePanes, role = leaf.role](const FileCompareChangeGroup &group) noexcept {
+		if (!editablePanes) return std::max<std::size_t>(1, group.displayLineCount);
+		const std::size_t count = role == bprDiffOriginal ? group.deletedLineCount : group.insertedLineCount;
+		return std::max<std::size_t>(1, count);
+	};
+
 	for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
 		const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
-		const std::size_t groupStartLine = editablePanes ? (leaf.role == bprDiffOriginal ? group.originalStartLine : group.compareStartLine) : group.displayStartLine;
-		const std::size_t groupEndLine = groupStartLine + std::max<std::size_t>(1, group.displayLineCount);
+		const std::size_t groupStartLine = groupStartLineForLeaf(group);
+		const std::size_t groupEndLine = groupStartLine + groupLineCountForLeaf(group);
 
 		if (cursorLine >= groupStartLine && cursorLine < groupEndLine) {
 			activeChange = i + 1;
@@ -2164,8 +2174,8 @@ std::string MRBentoBox::fileCompareStatusForLeaf(const BentoLeaf &leaf) const {
 	if (!hasActiveChange) {
 		for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
 			const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
-			const std::size_t groupStartLine = editablePanes ? (leaf.role == bprDiffOriginal ? group.originalStartLine : group.compareStartLine) : group.displayStartLine;
-			const std::size_t groupEndLine = groupStartLine + std::max<std::size_t>(1, group.displayLineCount);
+			const std::size_t groupStartLine = groupStartLineForLeaf(group);
+			const std::size_t groupEndLine = groupStartLine + groupLineCountForLeaf(group);
 
 			if (groupEndLine > visibleStartLine && groupStartLine < visibleEndLine) {
 				activeChange = i + 1;

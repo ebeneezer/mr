@@ -6080,6 +6080,7 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	const std::string commandsPath = absolutePathFromCwd("app/MRCommands.hpp");
 	const std::string menuPath = absolutePathFromCwd("app/MRMenuFactory.cpp");
 	const std::string appStatePath = absolutePathFromCwd("app/MRAppState.cpp");
+	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
 	const std::string windowCommandsHeaderPath = absolutePathFromCwd("app/commands/MRWindowCommands.hpp");
 	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
@@ -6092,6 +6093,7 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	std::string commands;
 	std::string menu;
 	std::string appState;
+	std::string editorApp;
 	std::string router;
 	std::string windowCommandsHeader;
 	std::string windowCommands;
@@ -6104,12 +6106,16 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	std::string ioError;
 	std::string missingNeedle;
 
-	if (!readTextFile(commandsPath, commands, ioError) || !readTextFile(menuPath, menu, ioError) || !readTextFile(appStatePath, appState, ioError) || !readTextFile(routerPath, router, ioError) || !readTextFile(windowCommandsHeaderPath, windowCommandsHeader, ioError) || !readTextFile(windowCommandsPath, windowCommands, ioError) || !readTextFile(windowListHeaderPath, windowListHeader, ioError) || !readTextFile(windowListPath, windowList, ioError) || !readTextFile(bentoHeaderPath, bentoHeader, ioError) || !readTextFile(bentoProjectionPath, bentoProjection, ioError) || !readTextFile(dispatchPath, dispatch, ioError) || !readTextFile(catalogPath, catalog, ioError)) {
+	if (!readTextFile(commandsPath, commands, ioError) || !readTextFile(menuPath, menu, ioError) || !readTextFile(appStatePath, appState, ioError) || !readTextFile(editorAppPath, editorApp, ioError) || !readTextFile(routerPath, router, ioError) || !readTextFile(windowCommandsHeaderPath, windowCommandsHeader, ioError) || !readTextFile(windowCommandsPath, windowCommands, ioError) || !readTextFile(windowListHeaderPath, windowListHeader, ioError) || !readTextFile(windowListPath, windowList, ioError) || !readTextFile(bentoHeaderPath, bentoHeader, ioError) || !readTextFile(bentoProjectionPath, bentoProjection, ioError) || !readTextFile(dispatchPath, dispatch, ioError) || !readTextFile(catalogPath, catalog, ioError)) {
 		failureReason = "Unable to read file-compare wiring source: " + ioError;
 		return false;
 	}
-	if (!containsAllSubstrings(commands, {"cmMrTextFileCompare"}, missingNeedle) || !containsAllSubstrings(menu, {"file co~M~pare...", "cmMrTextFileCompare"}, missingNeedle) || !containsAllSubstrings(appState, {"setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows)"}, missingNeedle)) {
+	if (!containsAllSubstrings(commands, {"cmMrTextFileCompare", "cmMrFileCompareApplyOriginalToCompare", "cmMrFileCompareApplyCompareToOriginal"}, missingNeedle) || !containsAllSubstrings(menu, {"file co~M~pare...", "cmMrTextFileCompare", "apply original -> compare", "apply compare -> original"}, missingNeedle) || !containsAllSubstrings(appState, {"setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows)", "setCommandEnabled(cmMrFileCompareApplyOriginalToCompare, state.hasFileCompareWindow)", "setCommandEnabled(cmMrFileCompareApplyCompareToOriginal, state.hasFileCompareWindow)"}, missingNeedle)) {
 		failureReason = "File compare text-menu command wiring changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(editorApp, {"cmMrFileCompareApplyOriginalToCompare", "cmMrFileCompareApplyCompareToOriginal", "bentoBox->applyFileCompareChange(applyOriginalToCompare)"}, missingNeedle)) {
+		failureReason = "File compare edit command routing changed: missing " + missingNeedle + ".";
 		return false;
 	}
 	if (!containsAllSubstrings(catalog, {"MR_TEXT_FILE_COMPARE"}, missingNeedle) || !containsAllSubstrings(router, {"KeymapActionDispatchEntry{\"MR_TEXT_FILE_COMPARE\", KeymapDispatchKind::AppCommand, cmMrTextFileCompare", "case cmMrTextFileCompare:", "return handleTextFileCompare();"}, missingNeedle)) {
@@ -6128,11 +6134,11 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 		failureReason = "Window list file-compare target filtering changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(bentoHeader, {"bprDiffOriginal", "bprDiffCompare", "bbmFileCompare", "MRBentoCompareSetup", "initializeFileCompare", "applyFileCompareResult", "restoreFileCompareSources", "syncFileCompareLinkedPaneFrom", "FileCompareChangeGroup", "rebuildFileCompareChangeGroups", "fileCompareStatusForLeaf", "fileCompareChangeGroups"}, missingNeedle)) {
+	if (!containsAllSubstrings(bentoHeader, {"bprDiffOriginal", "bprDiffCompare", "bbmFileCompare", "MRBentoCompareSetup", "initializeFileCompare", "applyFileCompareResult", "applyFileCompareChange", "restoreFileCompareSources", "syncFileCompareLinkedPaneFrom", "FileCompareChangeGroup", "rebuildFileCompareChangeGroups", "fileCompareStatusForLeaf", "fileCompareChangeGroups"}, missingNeedle)) {
 		failureReason = "Bento file-compare public surface changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(bentoProjection, {"{bprDiffOriginal, \"Diff Original\", true}", "{bprDiffCompare, \"Diff Compare\", true}", "bentoMode == bbmFileCompare && !bentoRoleIsDiff(role)", "if (bentoMode == bbmFileCompare)", "source.role = bprDiffOriginal", "configuredFileCompareStartConfiguration()", "mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines)", "payload->originalDocumentId != fileCompareSetup.original.documentId", "fileCompareSourceStillMatches(fileCompareSetup.original)", "appendDiffDisplayLine(text, lineKinds", "mrfclkMissing", "mrfclkInsert", "mrfclkOffset", "configuredFileCompareOriginalLeadingGutters()", "configuredFileCompareOriginalTrailingGutters()", "configuredFileCompareCompareLeadingGutters()", "configuredFileCompareCompareTrailingGutters()", "targetEditor->setFileCompareGutters(leadingGutters, trailingGutters)", "targetEditor->setFileCompareLineKinds(lineKinds)", "targetEditor->setMiniMapSuppressed(!miniMapConfigured)", "targetEditor->setFileCompareGutterVisible(true)", "syncFileCompareLinkedPaneFrom(activeLeafId)", "syncFileCompareLinkedPaneFrom(0)", "displayStartLine", "displayLineCount", "deletedLineCount", "insertedLineCount", "rebuildFileCompareChangeGroups();", "std::string MRBentoBox::fileCompareStatusForLeaf", "firstVisibleChange", "lastVisibleChange", "visibleDeletedLines", "visibleInsertedLines", "totalDeletedLines", "totalInsertedLines", "status += \"/\" + std::to_string(fileCompareChangeGroups.size())", "status += \" -\" + std::to_string(totalDeletedLines)"}, missingNeedle)) {
+	if (!containsAllSubstrings(bentoProjection, {"{bprDiffOriginal, \"Diff Original\", true}", "{bprDiffCompare, \"Diff Compare\", true}", "bentoMode == bbmFileCompare && !bentoRoleIsDiff(role)", "if (bentoMode == bbmFileCompare)", "source.role = bprDiffOriginal", "configuredFileCompareStartConfiguration()", "mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines)", "payload->originalDocumentId != fileCompareSetup.original.documentId", "fileCompareSourceStillMatches(fileCompareSetup.original)", "appendDiffDisplayLine(text, lineKinds", "mrfclkMissing", "mrfclkInsert", "mrfclkOffset", "configuredFileCompareOriginalLeadingGutters()", "configuredFileCompareOriginalTrailingGutters()", "configuredFileCompareCompareLeadingGutters()", "configuredFileCompareCompareTrailingGutters()", "targetEditor->setFileCompareGutters(leadingGutters, trailingGutters)", "targetEditor->setFileCompareLineKinds(lineKinds)", "targetEditor->setMiniMapSuppressed(!miniMapConfigured)", "targetEditor->setFileCompareGutterVisible(true)", "syncFileCompareLinkedPaneFrom(activeLeafId)", "syncFileCompareLinkedPaneFrom(0)", "displayStartLine", "displayLineCount", "deletedLineCount", "insertedLineCount", "rebuildFileCompareChangeGroups();", "std::string MRBentoBox::fileCompareStatusForLeaf", "firstVisibleChange", "lastVisibleChange", "visibleDeletedLines", "visibleInsertedLines", "totalDeletedLines", "totalInsertedLines", "status += \"/\" + std::to_string(fileCompareChangeGroups.size())", "status += \" -\" + std::to_string(totalDeletedLines)", "bool MRBentoBox::applyFileCompareChange(bool originalToCompare)", "fileCompareJoinedLineRange", "fileCompareEditorLineRange", "targetEditor->replaceRangeAndSelect", "refreshFileCompareAfterSourceMutation();"}, missingNeedle)) {
 		failureReason = "Bento file-compare role/display/version wiring changed: missing " + missingNeedle + ".";
 		return false;
 	}
