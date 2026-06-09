@@ -289,8 +289,10 @@ class MRBentoBox : public MREditWindow {
 	void closeSecondaryPane() noexcept;
 	void showPaneRoleList(TPoint globalMouse, int targetLeafId);
 	void showPaneActionList();
+	void showFileCompareActionList(TPoint globalMouse, int targetLeafId);
 	void acceptPaneRoleChoice();
 	void acceptPaneActionChoice();
+	void acceptFileCompareActionChoice();
 	void refreshCompilerProblemsPane();
 	void refreshOutlinePanes(bool force = false);
 	bool refreshOutlinePane(MRBentoPaneRole role, bool force);
@@ -392,9 +394,11 @@ class MRBentoBox : public MREditWindow {
 	unsigned bentoProjectionDirty;
 	MRDropList paneRoleDropList;
 	MRDropList paneActionDropList;
+	MRDropList fileCompareActionDropList;
 	TRect paneRoleListAnchor;
 	MRBentoPaneRole pendingPaneRole;
 	int pendingPaneRoleTargetLeafId;
+	int pendingFileCompareActionLeafId;
 	std::string compilerOutputStatus;
 	std::string compilerProblemsStatus;
 	std::string structureOutlineStatus;

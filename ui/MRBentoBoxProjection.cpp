@@ -25,12 +25,16 @@ constexpr int kPaneMaximizeButtonWidth = 3;
 constexpr int kPaneChromeFrameRest = 2;
 constexpr ushort cmMrBentoPaneRoleAccepted = 0x7A20;
 constexpr ushort cmMrBentoPaneActionAccepted = 0x7A21;
+constexpr ushort cmMrFileComparePaneActionAccepted = 0x7A22;
 static const char *kPaneCloseIcon = "[\xFE]";
 static const char *kPaneMaximizeIcon = "[▴]";
 static const char *kPaneRestoreIcon = "[▾]";
 static const char *kBentoPaneActionReplace = "replace";
 static const char *kBentoPaneActionSplitRight = "split \xC4";
 static const char *kBentoPaneActionSplitDown = "split \xB3";
+static const char *kFileCompareActionNext = "next diff";
+static const char *kFileCompareActionPrevious = "prev diff";
+static const char *kFileCompareActionApply = "apply diff";
 static const MRBentoPaneTitleMenuSpec kBentoRoleTitleMenu{"role"};
 
 struct BentoPaneActionDescriptor {
@@ -687,6 +691,10 @@ void MRBentoBox::refreshFileCompareAfterSourceMutation() {
 
 	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines);
 	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.compare.text, compareLines);
+	fileCompareHunks.clear();
+	fileCompareChangeGroups.clear();
+	fileCompareDiffReady = false;
+	fileCompareStale = false;
 	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, fileCompareSetup.original.documentId, fileCompareSetup.original.version, "file compare", [originalLines, compareLines, originalDocumentId = fileCompareSetup.original.documentId, originalVersion = fileCompareSetup.original.version, compareDocumentId = fileCompareSetup.compare.documentId, compareVersion = fileCompareSetup.compare.version](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		std::vector<mr::diff::MRDiffHunk> hunks;
@@ -706,6 +714,8 @@ void MRBentoBox::refreshFileCompareAfterSourceMutation() {
 		setFileCompareTask(taskId);
 		trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::FileCompare, "file compare");
 	}
+	refreshFileComparePanes();
+	bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
 }
 
 void MRBentoBox::refreshFileCompareConfiguration() {
@@ -891,6 +901,7 @@ void MRBentoBox::draw() {
 void MRBentoBox::changeBounds(const TRect &bounds) {
 	paneRoleDropList.hide();
 	paneActionDropList.hide();
+	fileCompareActionDropList.hide();
 	updatePaneRoleListChrome();
 	MREditWindow::changeBounds(bounds);
 	if (hasPaneSplit()) layoutSplitPanes();
@@ -939,6 +950,13 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		acceptPaneActionChoice();
 		clearEvent(event);
 		bentoProjectionDirty |= bpdChrome;
+		flushBentoProjection();
+		return;
+	}
+	if (event.what == evCommand && event.message.command == cmMrFileComparePaneActionAccepted) {
+		acceptFileCompareActionChoice();
+		clearEvent(event);
+		bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar | bpdOverlay;
 		flushBentoProjection();
 		return;
 	}
@@ -1018,6 +1036,16 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			bentoProjectionDirty |= bpdLayout;
 			flushBentoProjection();
 			return;
+		}
+		if (bentoMode == bbmFileCompare && (event.mouse.buttons & mbRightButton) != 0) {
+			const int targetLeafId = leafAt(localMouse);
+			if (bentoRoleIsDiff(roleForLeaf(targetLeafId)) && pointInRect(localMouse, contentBounds(paneBoundsForLeaf(targetLeafId)))) {
+				showFileCompareActionList(event.mouse.where, targetLeafId);
+				clearEvent(event);
+				bentoProjectionDirty |= bpdChrome;
+				flushBentoProjection();
+				return;
+			}
 		}
 	}
 	if (bentoMode == bbmFileCompare && event.what == evMouseWheel) {
@@ -1677,6 +1705,7 @@ void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
 	int top = std::clamp<int>(paneRect.a.y + localAnchor.a.y, 1, std::max(1, size.y - listHeight - 1));
 
 	paneActionDropList.hide();
+	fileCompareActionDropList.hide();
 	pendingPaneRoleTargetLeafId = targetLeafId;
 	paneRoleListAnchor = TRect(left, top, left + listWidth, top);
 	if (openingRoleList && chromeView != nullptr) chromeView->setPaneRoleListTitleOpen(true, paneRoleListAnchor);
@@ -1693,8 +1722,27 @@ void MRBentoBox::showPaneActionList() {
 	int top = std::clamp<int>(selectedRow, 1, std::max(1, size.y - listHeight - 1));
 	if (left < 1) left = std::clamp<int>(paneRoleListAnchor.b.x, 1, std::max(1, size.x - listWidth - 1));
 	TRect anchor(left, top, left + listWidth, top);
+	fileCompareActionDropList.hide();
 	paneActionDropList.hide();
 	paneActionDropList.toggle(*this, anchor, paneActionChoices(), kBentoPaneActionReplace, this, cmMrBentoPaneActionAccepted, listHeight);
+}
+
+void MRBentoBox::showFileCompareActionList(TPoint globalMouse, int targetLeafId) {
+	const int listWidth = 12;
+	const int listHeight = 3;
+	const TPoint localMouse = makeLocal(globalMouse);
+	const int left = std::clamp<int>(localMouse.x, 1, std::max(1, size.x - listWidth - 1));
+	const int top = std::clamp<int>(localMouse.y, 1, std::max(1, size.y - listHeight - 1));
+	const TRect anchor(left, top, left + listWidth, top);
+	const std::vector<std::string> actions{kFileCompareActionNext, kFileCompareActionPrevious, kFileCompareActionApply};
+
+	if (bentoMode != bbmFileCompare || !bentoRoleIsDiff(roleForLeaf(targetLeafId))) return;
+	paneRoleDropList.hide();
+	paneActionDropList.hide();
+	updatePaneRoleListChrome();
+	pendingFileCompareActionLeafId = targetLeafId;
+	setActivePane(targetLeafId);
+	fileCompareActionDropList.toggle(*this, anchor, actions, kFileCompareActionApply, this, cmMrFileComparePaneActionAccepted, listHeight);
 }
 
 void MRBentoBox::acceptPaneRoleChoice() {
@@ -1714,10 +1762,31 @@ void MRBentoBox::acceptPaneActionChoice() {
 	pendingPaneRoleTargetLeafId = activeLeafId;
 }
 
+void MRBentoBox::acceptFileCompareActionChoice() {
+	std::string action;
+	if (!fileCompareActionDropList.acceptSelection(action)) return;
+	if (nodeIndexForLeaf(pendingFileCompareActionLeafId) < 0 || !bentoRoleIsDiff(roleForLeaf(pendingFileCompareActionLeafId))) return;
+	setActivePane(pendingFileCompareActionLeafId);
+	if (action == kFileCompareActionNext) {
+		static_cast<void>(navigateFileCompareChange(true));
+		return;
+	}
+	if (action == kFileCompareActionPrevious) {
+		static_cast<void>(navigateFileCompareChange(false));
+		return;
+	}
+	if (action == kFileCompareActionApply) {
+		const MRBentoPaneRole role = roleForLeaf(pendingFileCompareActionLeafId);
+		static_cast<void>(applyFileCompareChange(role == bprDiffOriginal));
+	}
+}
+
 bool MRBentoBox::handlePaneDropListEvent(TEvent &event) {
 	const bool roleListVisible = paneRoleDropList.visible();
 	const bool actionListVisible = paneActionDropList.visible();
-	if (!roleListVisible && !actionListVisible) return false;
+	const bool fileCompareActionListVisible = fileCompareActionDropList.visible();
+	if (!roleListVisible && !actionListVisible && !fileCompareActionListVisible) return false;
+	if (fileCompareActionDropList.handleOpenListEvent(event, false)) return true;
 	if (paneActionDropList.handleOpenListEvent(event, false)) {
 		updatePaneRoleListChrome();
 		return true;
@@ -1726,9 +1795,10 @@ bool MRBentoBox::handlePaneDropListEvent(TEvent &event) {
 		updatePaneRoleListChrome();
 		return true;
 	}
-	if (event.what == evMouseDown && !paneRoleDropList.containsPoint(event.mouse.where) && !paneActionDropList.containsPoint(event.mouse.where)) {
+	if (event.what == evMouseDown && !paneRoleDropList.containsPoint(event.mouse.where) && !paneActionDropList.containsPoint(event.mouse.where) && !fileCompareActionDropList.containsPoint(event.mouse.where)) {
 		paneRoleDropList.hide();
 		paneActionDropList.hide();
+		fileCompareActionDropList.hide();
 		updatePaneRoleListChrome();
 		clearEvent(event);
 		return true;
@@ -1748,6 +1818,12 @@ bool MRBentoBox::handlePaneDropListEvent(TEvent &event) {
 	if (event.what == evMouseDown && paneActionDropList.containsPoint(event.mouse.where)) {
 		TWindow::handleEvent(event);
 		acceptPaneActionChoice();
+		clearEvent(event);
+		return true;
+	}
+	if (event.what == evMouseDown && fileCompareActionDropList.containsPoint(event.mouse.where)) {
+		TWindow::handleEvent(event);
+		acceptFileCompareActionChoice();
 		clearEvent(event);
 		return true;
 	}
