@@ -612,6 +612,18 @@ bool MRBentoBox::containsFileCompareSourceWindow(const MREditWindow *window) con
 	return window->bufferId() == fileCompareSetup.original.bufferId || window->bufferId() == fileCompareSetup.compare.bufferId;
 }
 
+bool MRBentoBox::refreshFileCompareAfterEditorMutation(const MREditWindow *window) {
+	if (bentoMode != bbmFileCompare || window == nullptr || !fileComparePanesEditable()) return false;
+	for (const BentoLeaf &leaf : leaves) {
+		if (!leaf.visible || !bentoRoleIsDiff(leaf.role)) continue;
+		if ((leaf.id == 0 && window == this) || (leaf.id != 0 && window == leaf.pane)) {
+			refreshFileCompareAfterSourceMutation();
+			return true;
+		}
+	}
+	return false;
+}
+
 bool MRBentoBox::fileComparePanesEditable() const noexcept {
 	return bentoMode == bbmFileCompare && !configuredFileCompareComparePanelReadOnly();
 }

@@ -209,6 +209,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool fileCompareWorkspaceSourcePaths(std::string &originalPath, std::string &comparePath) const;
 	[[nodiscard]] bool containsFileCompareSourceWindow(const MREditWindow *window) const noexcept;
 	void refreshFileCompareConfiguration();
+	bool refreshFileCompareAfterEditorMutation(const MREditWindow *window);
 	[[nodiscard]] bool applyFileCompareResult(const mr::coprocessor::Result &result);
 	void setFileCompareTask(std::uint64_t taskId) noexcept;
 	void restoreFileCompareSources() noexcept;

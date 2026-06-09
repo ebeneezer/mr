@@ -513,10 +513,17 @@ bool dispatchEditorCommandEvent(MREditWindow *targetWindow, ushort command) {
 	TEvent event;
 
 	if (editor == nullptr) return false;
+	const bool trackFileCompareMutation = command == cmUndo || command == cmMrEditUndo || command == cmMrEditRedo;
+	const std::size_t versionBefore = trackFileCompareMutation ? editor->documentVersion() : 0;
 	std::memset(&event, 0, sizeof(event));
 	event.what = evCommand;
 	event.message.command = command;
 	editor->handleEvent(event);
+	if (trackFileCompareMutation && editor->documentVersion() != versionBefore) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+		if (bentoBox == nullptr && window != nullptr) bentoBox = dynamic_cast<MRBentoBox *>(window->owner);
+		if (bentoBox != nullptr) static_cast<void>(bentoBox->refreshFileCompareAfterEditorMutation(window));
+	}
 	if (window->hasBlock() && !window->isBlockMarking()) window->refreshBlockVisual();
 	return true;
 }
@@ -1772,7 +1779,14 @@ bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
 		postDialogWarning(kWindowReadOnlyMessage);
 		return true;
 	}
+	const bool trackFileCompareMutation = editorCommand == cmUndo || editorCommand == cmMrEditUndo || editorCommand == cmMrEditRedo;
+	const std::size_t versionBefore = trackFileCompareMutation ? editor->documentVersion() : 0;
 	message(editor, evCommand, editorCommand, nullptr);
+	if (trackFileCompareMutation && editor->documentVersion() != versionBefore) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
+		if (bentoBox == nullptr) bentoBox = dynamic_cast<MRBentoBox *>(win->owner);
+		if (bentoBox != nullptr) static_cast<void>(bentoBox->refreshFileCompareAfterEditorMutation(win));
+	}
 	if (win->hasBlock() && !win->isBlockMarking()) win->refreshBlockVisual();
 	return true;
 }
