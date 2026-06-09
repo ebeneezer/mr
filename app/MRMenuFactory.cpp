@@ -52,7 +52,7 @@ TSubMenu *createSearchMenu() {
 }
 
 TSubMenu *createTextMenu() {
-	return &(*new TSubMenu("~T~ext", kbAltT) + *new TMenuItem("p~U~sh position onto marker stack", cmMrSearchPushMarker, kbF4, hcNoContext, "F4") + *new TMenuItem("~G~et position from marker stack", cmMrSearchGetMarker, kbShiftF4, hcNoContext, "ShiftF4") + newLine() + *createUpperCaseItem() + *createLowerCaseItem() + *new TMenuItem("cen~T~er line", cmMrTextCenterLine, kbNoKey, hcNoContext) + *new TMenuItem("time/~D~ate stamp", cmMrTextTimeDateStamp, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("re-~F~ormat paragraph", cmMrTextReformatParagraph, kbAltR, hcNoContext, "AltR") + *new TMenuItem("file co~M~pare...", cmMrTextFileCompare, kbNoKey, hcNoContext));
+	return &(*new TSubMenu("~T~ext", kbAltT) + *new TMenuItem("p~U~sh position onto marker stack", cmMrSearchPushMarker, kbF4, hcNoContext, "F4") + *new TMenuItem("~G~et position from marker stack", cmMrSearchGetMarker, kbShiftF4, hcNoContext, "ShiftF4") + newLine() + *createUpperCaseItem() + *createLowerCaseItem() + *new TMenuItem("cen~T~er line", cmMrTextCenterLine, kbNoKey, hcNoContext) + *new TMenuItem("time/~D~ate stamp", cmMrTextTimeDateStamp, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("re-~F~ormat paragraph", cmMrTextReformatParagraph, kbAltR, hcNoContext, "AltR") + *new TMenuItem("file co~M~pare...", cmMrTextFileCompare, kbNoKey, hcNoContext) + *new TMenuItem("file compare ~E~dit sources", cmMrFileCompareEditSources, kbNoKey, hcNoContext) + *new TMenuItem("file compare ~R~efresh", cmMrFileCompareRefresh, kbNoKey, hcNoContext));
 }
 
 TMenuItem *createInstallationAndSetupMenuItem() {

@@ -91,6 +91,8 @@ constexpr std::array catalogDefinitions{
     mr("MR_TEXT_REFORMAT_PARAGRAPH", "Reformat paragraph"),
     mr("MR_TEXT_REFORMAT_DOCUMENT", "Reformat document"),
     mr("MR_TEXT_FILE_COMPARE", "File compare"),
+    mr("MR_FILE_COMPARE_EDIT_SOURCES", "File compare edit sources"),
+    mr("MR_FILE_COMPARE_REFRESH", "File compare refresh"),
     mr("MR_TOGGLE_FORMAT_RULER", "Toggle format ruler"),
     mr("MR_TOGGLE_WORD_WRAP", "Toggle word wrap"),
     mr("MR_SET_LEFT_MARGIN", "Set left margin"),

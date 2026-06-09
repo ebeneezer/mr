@@ -64,6 +64,15 @@ AppCommandState appCommandState() {
 			break;
 		}
 	}
+	if (!state.hasFileCompareWindow) {
+		for (MREditWindow *window : allEditWindowsInZOrder()) {
+			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+			if (bentoBox != nullptr && bentoBox->isFileCompareBox() && bentoBox->containsFileCompareSourceWindow(win)) {
+				state.hasFileCompareWindow = true;
+				break;
+			}
+		}
+	}
 	if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win); bentoBox != nullptr) {
 		state.hasCompilerProblems = bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
 		if (bentoBox->buildOutputPane() != nullptr) externalWin = bentoBox->buildOutputPane();
@@ -197,6 +206,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrOtherFindPreviousCompilerError, state.hasCompilerProblems);
 	setCommandEnabled(cmMrFileCompareNextChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrFileComparePreviousChange, state.hasFileCompareWindow);
+	setCommandEnabled(cmMrFileCompareEditSources, state.hasFileCompareWindow);
+	setCommandEnabled(cmMrFileCompareRefresh, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
 	setCommandEnabled(cmMrOtherAsciiTable, canModify);
 	setCommandEnabled(cmMrOtherEmojiTable, canModify);

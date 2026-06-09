@@ -197,9 +197,16 @@ bool compilerDiagnosticsFunctionKeysActive() {
 }
 
 bool fileCompareFunctionKeysActive() {
-	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+	MREditWindow *window = currentEditWindow();
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
 
-	return bentoBox != nullptr && bentoBox->isFileCompareBox();
+	if (bentoBox != nullptr && bentoBox->isFileCompareBox()) return true;
+	if (window != nullptr)
+		for (MREditWindow *candidate : allEditWindowsInZOrder()) {
+			bentoBox = dynamic_cast<MRBentoBox *>(candidate);
+			if (bentoBox != nullptr && bentoBox->isFileCompareBox() && bentoBox->containsFileCompareSourceWindow(window)) return true;
+		}
+	return false;
 }
 
 bool bentoToolPaneFunctionKeysActive() {
@@ -586,6 +593,8 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockCopy), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockMove), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchRepeatPrevious), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrFileCompareEditSources), TKey(kbF3), "F3");
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrFileCompareRefresh), TKey(kbF5), "F5");
 	}
 	if (readOnlyActive && !fileCompareActive && !bentoToolPaneActive && !diagnosticsActive) {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockLoadFromDisk), TKey(kbNoKey), nullptr);

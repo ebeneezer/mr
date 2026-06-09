@@ -208,6 +208,8 @@ class MRBentoBox : public MREditWindow {
 		[[nodiscard]] bool navigateFileCompareChange(bool next);
 		[[nodiscard]] bool fileCompareWorkspaceSourcePaths(std::string &originalPath, std::string &comparePath) const;
 	[[nodiscard]] bool containsFileCompareSourceWindow(const MREditWindow *window) const noexcept;
+	[[nodiscard]] bool showFileCompareSourcesForEdit() noexcept;
+	[[nodiscard]] bool prepareFileCompareRefresh(MRBentoCompareSetup &setup);
 	void refreshFileCompareConfiguration();
 	[[nodiscard]] bool applyFileCompareResult(const mr::coprocessor::Result &result);
 	void setFileCompareTask(std::uint64_t taskId) noexcept;

@@ -129,13 +129,17 @@ bool compilerDiagnosticsFunctionKeysActive() {
 }
 
 MRBentoBox *currentFileCompareBentoBox() {
-	TView *view = currentEditWindow();
+	MREditWindow *window = currentEditWindow();
 
-	while (view != nullptr) {
+	for (TView *view = window; view != nullptr; view = view->owner) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
 		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) return bentoBox;
-		view = view->owner;
 	}
+	if (window != nullptr)
+		for (MREditWindow *candidate : allEditWindowsInZOrder()) {
+			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(candidate);
+			if (bentoBox != nullptr && bentoBox->isFileCompareBox() && bentoBox->containsFileCompareSourceWindow(window)) return bentoBox;
+		}
 	return nullptr;
 }
 
@@ -191,9 +195,9 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &editorFunctionKeyLabels() {
 
 	labels = baseLabels;
 	if (fileCompareActive) {
-		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
+		labels[2] = {TKey(kbF3), cmMrFileCompareEditSources, "~F3~ Edit"};
 		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
-		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
+		labels[4] = {TKey(kbF5), cmMrFileCompareRefresh, "~F5~ Refresh"};
 		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
 		labels[6] = {TKey(kbShiftF8), cmMrFileComparePreviousChange, "~sF8~ Prev"};
 		labels[7] = {TKey(kbF8), cmMrFileCompareNextChange, "~F8~ Next"};

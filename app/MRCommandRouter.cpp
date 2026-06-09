@@ -249,6 +249,8 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
     KeymapActionDispatchEntry{"MR_TEXT_FILE_COMPARE", KeymapDispatchKind::AppCommand, cmMrTextFileCompare, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_FILE_COMPARE_EDIT_SOURCES", KeymapDispatchKind::AppCommand, cmMrFileCompareEditSources, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_FILE_COMPARE_REFRESH", KeymapDispatchKind::AppCommand, cmMrFileCompareRefresh, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_EDIT_TOGGLE_INSERT_MODE", KeymapDispatchKind::AppCommand, cmMrEditToggleInsertMode, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
@@ -432,6 +434,10 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Text / Re-format paragraph";
 		case cmMrTextFileCompare:
 			return "Text / File compare";
+		case cmMrFileCompareEditSources:
+			return "Text / File compare edit sources";
+		case cmMrFileCompareRefresh:
+			return "Text / File compare refresh";
 		case cmMrTextUpperCasePlaceholder:
 			return "Text / Upper case";
 		case cmMrTextLowerCasePlaceholder:
@@ -1612,6 +1618,60 @@ std::uint64_t submitFileCompareTask(MRBentoBox *bentoBox, const MRBentoCompareSe
 	});
 }
 
+MRBentoBox *currentFileCompareBentoBoxForCommand() {
+	MREditWindow *window = currentEditWindow();
+
+	for (TView *view = window; view != nullptr; view = view->owner) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
+		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) return bentoBox;
+	}
+	if (window == nullptr) return nullptr;
+	for (MREditWindow *candidate : allEditWindowsInZOrder()) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(candidate);
+		if (bentoBox != nullptr && bentoBox->isFileCompareBox() && bentoBox->containsFileCompareSourceWindow(window)) return bentoBox;
+	}
+	return nullptr;
+}
+
+bool handleFileCompareEditSources() {
+	MRBentoBox *bentoBox = currentFileCompareBentoBoxForCommand();
+
+	if (bentoBox == nullptr) {
+		postDialogWarning("File compare edit mode requires an active file compare window.");
+		return true;
+	}
+	if (!bentoBox->showFileCompareSourcesForEdit()) {
+		postDialogWarning("Unable to show file compare source windows.");
+		return true;
+	}
+	return true;
+}
+
+bool handleFileCompareRefresh() {
+	MRBentoBox *bentoBox = currentFileCompareBentoBoxForCommand();
+	MRBentoCompareSetup setup;
+	std::uint64_t taskId;
+
+	if (bentoBox == nullptr) {
+		postDialogWarning("File compare refresh requires an active file compare window.");
+		return true;
+	}
+	if (!bentoBox->prepareFileCompareRefresh(setup)) {
+		postDialogWarning("Unable to capture current file compare sources.");
+		return true;
+	}
+	taskId = submitFileCompareTask(bentoBox, setup);
+	if (taskId == 0) {
+		postDialogWarning("Unable to start file compare refresh worker.");
+		return true;
+	}
+	bentoBox->setFileCompareTask(taskId);
+	bentoBox->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::FileCompare, "file compare");
+	bentoBox->refreshFileCompareConfiguration();
+	static_cast<void>(mrActivateEditWindow(bentoBox));
+	return true;
+}
+
 bool handleTextFileCompare() {
 	MREditWindow *originalWindow = currentEditWindow();
 	MREditWindow *compareWindow;
@@ -2610,6 +2670,12 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrTextFileCompare:
 			return handleTextFileCompare();
+
+		case cmMrFileCompareEditSources:
+			return handleFileCompareEditSources();
+
+		case cmMrFileCompareRefresh:
+			return handleFileCompareRefresh();
 
 		case cmMrWindowLink:
 			mrvmUiLinkCurrentWindow();

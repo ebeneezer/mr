@@ -574,6 +574,58 @@ bool MRBentoBox::containsFileCompareSourceWindow(const MREditWindow *window) con
 	return window->bufferId() == fileCompareSetup.original.bufferId || window->bufferId() == fileCompareSetup.compare.bufferId;
 }
 
+bool MRBentoBox::showFileCompareSourcesForEdit() noexcept {
+	if (bentoMode != bbmFileCompare) return false;
+
+	MREditWindow *originalWindow = findEditWindowByBufferId(fileCompareSetup.original.bufferId);
+	MREditWindow *compareWindow = findEditWindowByBufferId(fileCompareSetup.compare.bufferId);
+	if (originalWindow == nullptr || compareWindow == nullptr || originalWindow->getEditor() == nullptr || compareWindow->getEditor() == nullptr) return false;
+
+	fileCompareSourcesRestored = true;
+	setWindowManuallyHidden(originalWindow, false);
+	setWindowManuallyHidden(compareWindow, false);
+	originalWindow->show();
+	compareWindow->show();
+	static_cast<void>(mrActivateEditWindow(originalWindow));
+	return true;
+}
+
+bool MRBentoBox::prepareFileCompareRefresh(MRBentoCompareSetup &setup) {
+	if (bentoMode != bbmFileCompare) return false;
+
+	MREditWindow *originalWindow = findEditWindowByBufferId(fileCompareSetup.original.bufferId);
+	MREditWindow *compareWindow = findEditWindowByBufferId(fileCompareSetup.compare.bufferId);
+	MRFileEditor *originalEditor = originalWindow != nullptr ? originalWindow->getEditor() : nullptr;
+	MRFileEditor *compareEditor = compareWindow != nullptr ? compareWindow->getEditor() : nullptr;
+	if (originalWindow == nullptr || compareWindow == nullptr || originalEditor == nullptr || compareEditor == nullptr) return false;
+
+	if (fileCompareTaskId != 0) {
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(fileCompareTaskId));
+		releaseCoprocessorTask(fileCompareTaskId);
+		fileCompareTaskId = 0;
+	}
+
+	fileCompareSetup.original.window = originalWindow;
+	fileCompareSetup.original.documentId = originalWindow->documentId();
+	fileCompareSetup.original.version = originalWindow->documentVersion();
+	if (const char *title = originalWindow->getTitle(0); title != nullptr && *title != '\0') fileCompareSetup.original.title = title;
+	fileCompareSetup.original.text = originalEditor->snapshotText();
+
+	fileCompareSetup.compare.window = compareWindow;
+	fileCompareSetup.compare.documentId = compareWindow->documentId();
+	fileCompareSetup.compare.version = compareWindow->documentVersion();
+	if (const char *title = compareWindow->getTitle(0); title != nullptr && *title != '\0') fileCompareSetup.compare.title = title;
+	fileCompareSetup.compare.text = compareEditor->snapshotText();
+
+	fileCompareHunks.clear();
+	fileCompareChangeGroups.clear();
+	fileCompareDiffReady = false;
+	fileCompareStale = false;
+	setup = fileCompareSetup;
+	refreshFileComparePanes();
+	return true;
+}
+
 void MRBentoBox::refreshFileCompareConfiguration() {
 	if (bentoMode != bbmFileCompare) return;
 	refreshFileComparePanes();
