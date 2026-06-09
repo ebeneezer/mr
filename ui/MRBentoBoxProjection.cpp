@@ -2352,7 +2352,7 @@ std::size_t MRBentoBox::fileCompareGroupNavigationLineForRole(const FileCompareC
 
 	const std::size_t scanEndLine = std::min(lineLimit, targetLine + std::max<std::size_t>(1, groupLineCount) + 1);
 	for (std::size_t line = targetLine; line < scanEndLine; ++line)
-		if (lineKinds[line] != mrfclkEqual && lineKinds[line] != mrfclkNone) return line;
+		if (lineKinds[line] != mrfclkEqual && lineKinds[line] != mrfclkNone) return role == bprDiffCompare && line > 0 ? line - 1 : line;
 	return targetLine;
 }
 
@@ -2376,7 +2376,9 @@ int MRBentoBox::fileCompareChangeGroupIndexAtCursor(MRBentoPaneRole role, const 
 	if (!bentoRoleIsDiff(role)) return -1;
 
 	const std::size_t cursorLine = editor.lineIndexOfOffset(editor.cursorOffset());
-	return fileCompareChangeGroupIndexAtLine(role, cursorLine, editablePanes);
+	int groupIndex = fileCompareChangeGroupIndexAtLine(role, cursorLine, editablePanes);
+	if (groupIndex < 0 && editablePanes && role == bprDiffCompare) groupIndex = fileCompareChangeGroupIndexAtLine(role, cursorLine + 1, editablePanes);
+	return groupIndex;
 }
 
 int MRBentoBox::fileCompareChangeGroupIndexAtLine(MRBentoPaneRole role, std::size_t line, bool editablePanes) const noexcept {
