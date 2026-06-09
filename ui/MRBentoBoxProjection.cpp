@@ -2334,17 +2334,22 @@ void MRBentoBox::fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::
 	std::size_t groupInsertedLineCount = 0;
 	auto flushGroup = [&]() {
 		if (!groupOpen) return;
-		const std::size_t originalTextLength = fileCompareLineTextLength(originalLines, groupOriginalStart, groupDeletedLineCount);
-		const std::size_t compareTextLength = fileCompareLineTextLength(compareLines, groupCompareStart, groupInsertedLineCount);
 		const bool replaceGroup = groupDeletedLineCount > 0 && groupInsertedLineCount > 0;
-		const bool compareShorter = replaceGroup && compareTextLength < originalTextLength;
 
 		if (role == bprDiffOriginal) {
 			if (groupDeletedLineCount > 0) markFileCompareLineRange(lineKinds, groupOriginalStart, groupDeletedLineCount, mrfclkMissing);
 			else if (groupInsertedLineCount > 0)
 				markFileCompareAnchorLine(lineKinds, groupOriginalStart, mrfclkInsert);
 		} else {
-			if (groupInsertedLineCount > 0) markFileCompareLineRange(lineKinds, groupCompareStart, groupInsertedLineCount, compareShorter ? mrfclkMissing : mrfclkInsert);
+			if (replaceGroup) {
+				for (std::size_t i = 0; i < groupInsertedLineCount && groupCompareStart + i < lineKinds.size(); ++i) {
+					const std::size_t originalLength = fileCompareLineTextLength(originalLines, groupOriginalStart + i, 1);
+					const std::size_t compareLength = fileCompareLineTextLength(compareLines, groupCompareStart + i, 1);
+					lineKinds[groupCompareStart + i] = compareLength < originalLength ? mrfclkMissing : mrfclkInsert;
+				}
+				if (groupDeletedLineCount > groupInsertedLineCount) markFileCompareAnchorLine(lineKinds, groupCompareStart + groupInsertedLineCount, mrfclkMissing);
+			} else if (groupInsertedLineCount > 0)
+				markFileCompareLineRange(lineKinds, groupCompareStart, groupInsertedLineCount, mrfclkInsert);
 			else if (groupDeletedLineCount > 0)
 				markFileCompareAnchorLine(lineKinds, groupCompareStart, mrfclkMissing);
 		}

@@ -563,6 +563,7 @@ void MRFileEditor::draw() {
 		syncScrollBarsToState();
 		return;
 	}
+	if (!mFileCompareLineKinds.empty()) hideCursor();
 	syncScrollBarsToState();
 	MREditSetupSettings editSettings = configuredEditSetupSettings();
 	const bool foldingEnabled = foldingPipelineEnabled();
