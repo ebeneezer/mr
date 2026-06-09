@@ -142,9 +142,7 @@ enum : ushort {
 	cmMrToggleFullscreen,
 	cmMrFileOpenWorkspace,
 	cmMrFileCompareNextChange,
-	cmMrFileComparePreviousChange,
-	cmMrFileCompareEditSources,
-	cmMrFileCompareRefresh
+	cmMrFileComparePreviousChange
 };
 
 #endif

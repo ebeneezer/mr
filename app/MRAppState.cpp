@@ -206,8 +206,6 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrOtherFindPreviousCompilerError, state.hasCompilerProblems);
 	setCommandEnabled(cmMrFileCompareNextChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrFileComparePreviousChange, state.hasFileCompareWindow);
-	setCommandEnabled(cmMrFileCompareEditSources, state.hasFileCompareWindow);
-	setCommandEnabled(cmMrFileCompareRefresh, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
 	setCommandEnabled(cmMrOtherAsciiTable, canModify);
 	setCommandEnabled(cmMrOtherEmojiTable, canModify);

@@ -21,7 +21,7 @@ MRBentoWorkspaceLeaf::MRBentoWorkspaceLeaf() noexcept : id(-1), role(bprSource),
 MRBentoWorkspaceSnapshot::MRBentoWorkspaceSnapshot() noexcept : mode(bbmToolWorkspace), rootNode(-1), activeLeafId(0), maximizedLeafId(-1), nodes(), leaves() {
 }
 
-MRBentoBox::FileCompareChangeGroup::FileCompareChangeGroup() noexcept : displayStartLine(0), displayLineCount(0), deletedLineCount(0), insertedLineCount(0) {
+MRBentoBox::FileCompareChangeGroup::FileCompareChangeGroup() noexcept : displayStartLine(0), originalStartLine(0), compareStartLine(0), displayLineCount(0), deletedLineCount(0), insertedLineCount(0) {
 }
 
 MRBentoBox::MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode)
