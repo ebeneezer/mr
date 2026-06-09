@@ -302,6 +302,9 @@ class MRBentoBox : public MREditWindow {
 	void refreshFileCompareAfterSourceMutation();
 	void rebuildFileCompareChangeGroups();
 	[[nodiscard]] bool fileComparePanesEditable() const noexcept;
+	[[nodiscard]] std::size_t fileCompareGroupStartLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept;
+	[[nodiscard]] std::size_t fileCompareGroupLineCountForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept;
+	[[nodiscard]] const FileCompareChangeGroup *fileCompareChangeGroupAtOrVisibleForRole(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept;
 	[[nodiscard]] std::string fileCompareStatusForLeaf(const BentoLeaf &leaf) const;
 	[[nodiscard]] bool jumpToFileCompareChange(bool next);
 	void syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor = true);
