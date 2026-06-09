@@ -633,6 +633,13 @@ void MRFileEditor::draw() {
 		std::uint64_t diffSignature = 1469598103934665603ULL;
 		for (unsigned char kind : mFileCompareLineKinds)
 			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(kind)) * 1099511628211ULL;
+		for (const MRFileCompareMiniMapSlice &slice : mFileCompareMiniMapSlices) {
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.lineIndex)) * 1099511628211ULL;
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.sliceStart)) * 1099511628211ULL;
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.sliceEnd)) * 1099511628211ULL;
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.lineKind)) * 1099511628211ULL;
+			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.fullLine ? 1 : 0)) * 1099511628211ULL;
+		}
 		const bool miniMapOverlayCacheCompatible = mMiniMapState.overlayCache().documentId == mBufferModel.documentId() &&
 		                                           mMiniMapState.overlayCache().documentVersion == mBufferModel.version() && mMiniMapState.overlayCache().totalLines == totalLines &&
 		                                           mMiniMapState.overlayCache().viewportWidth == viewport.width && mMiniMapState.overlayCache().bodyWidth == viewport.miniMapBodyWidth &&
@@ -644,7 +651,7 @@ void MRFileEditor::draw() {
 		if (miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
 		else {
 			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, mCompilerErrorRanges, mCompilerWarningRanges, totalLines,
-			                                                              viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings, mFileCompareLineKinds);
+			                                                              viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings, mFileCompareLineKinds, mFileCompareMiniMapSlices);
 			mMiniMapState.overlayCache().documentId = mBufferModel.documentId();
 			mMiniMapState.overlayCache().documentVersion = mBufferModel.version();
 			mMiniMapState.overlayCache().totalLines = totalLines;

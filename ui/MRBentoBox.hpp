@@ -297,7 +297,7 @@ class MRBentoBox : public MREditWindow {
 	void refreshSourceCompilerDiagnosticRanges();
 	void refreshFileComparePanes();
 	void refreshFileComparePane(BentoLeaf &leaf);
-	void fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::vector<unsigned char> &lineKinds) const;
+	void fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::vector<unsigned char> &lineKinds, std::vector<MRFileCompareMiniMapSlice> *miniMapSlices = nullptr) const;
 	void refreshFileCompareAfterSourceMutation();
 	void rebuildFileCompareChangeGroups();
 	[[nodiscard]] bool fileComparePanesEditable() const noexcept;

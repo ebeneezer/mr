@@ -2327,8 +2327,9 @@ std::string MRBentoBox::fileCompareTextForRole(MRBentoPaneRole role, std::vector
 	return text;
 }
 
-void MRBentoBox::fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::vector<unsigned char> &lineKinds) const {
+void MRBentoBox::fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::vector<unsigned char> &lineKinds, std::vector<MRFileCompareMiniMapSlice> *miniMapSlices) const {
 	lineKinds.clear();
+	if (miniMapSlices != nullptr) miniMapSlices->clear();
 	if (role != bprDiffOriginal && role != bprDiffCompare) return;
 
 	std::vector<std::string> originalLines;
@@ -2344,26 +2345,70 @@ void MRBentoBox::fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::
 	std::size_t groupCompareStart = 0;
 	std::size_t groupDeletedLineCount = 0;
 	std::size_t groupInsertedLineCount = 0;
+	auto appendFullMiniMapSlice = [&](std::size_t lineIndex, unsigned char lineKind) {
+		if (miniMapSlices == nullptr || lineIndex >= lineKinds.size()) return;
+		miniMapSlices->push_back(MRFileCompareMiniMapSlice{lineIndex, 0, 0, lineKind, true});
+	};
+	auto appendChangedMiniMapSlice = [&](std::size_t lineIndex, const std::string &baseLine, const std::string &changedLine, unsigned char lineKind) {
+		if (miniMapSlices == nullptr || lineIndex >= lineKinds.size()) return;
+		std::size_t prefix = 0;
+		const std::size_t commonLimit = std::min(baseLine.size(), changedLine.size());
+		while (prefix < commonLimit && baseLine[prefix] == changedLine[prefix])
+			++prefix;
+		std::size_t suffix = 0;
+		while (suffix < commonLimit - prefix && baseLine[baseLine.size() - 1 - suffix] == changedLine[changedLine.size() - 1 - suffix])
+			++suffix;
+		std::size_t sliceStart = std::min(prefix, changedLine.size());
+		std::size_t sliceEnd = changedLine.size() >= suffix ? changedLine.size() - suffix : changedLine.size();
+		if (sliceEnd <= sliceStart && !changedLine.empty()) {
+			sliceStart = sliceStart >= changedLine.size() ? changedLine.size() - 1 : sliceStart;
+			sliceEnd = sliceStart + 1;
+		}
+		miniMapSlices->push_back(MRFileCompareMiniMapSlice{lineIndex, sliceStart, sliceEnd, lineKind, changedLine.empty()});
+	};
 	auto flushGroup = [&]() {
 		if (!groupOpen) return;
 		const bool replaceGroup = groupDeletedLineCount > 0 && groupInsertedLineCount > 0;
 
 		if (role == bprDiffOriginal) {
-			if (groupDeletedLineCount > 0) markFileCompareLineRange(lineKinds, groupOriginalStart, groupDeletedLineCount, mrfclkMissing);
-			else if (groupInsertedLineCount > 0)
+			if (groupDeletedLineCount > 0) {
+				markFileCompareLineRange(lineKinds, groupOriginalStart, groupDeletedLineCount, mrfclkMissing);
+				for (std::size_t i = 0; i < groupDeletedLineCount && groupOriginalStart + i < lineKinds.size(); ++i) {
+					const std::size_t originalIndex = groupOriginalStart + i;
+					if (replaceGroup && i < groupInsertedLineCount && originalIndex < originalLines.size() && groupCompareStart + i < compareLines.size())
+						appendChangedMiniMapSlice(originalIndex, compareLines[groupCompareStart + i], originalLines[originalIndex], mrfclkMissing);
+					else
+						appendFullMiniMapSlice(originalIndex, mrfclkMissing);
+				}
+			} else if (groupInsertedLineCount > 0) {
 				markFileCompareAnchorLine(lineKinds, groupOriginalStart, mrfclkInsert);
+				appendFullMiniMapSlice(std::min(groupOriginalStart, lineKinds.empty() ? 0 : lineKinds.size() - 1), mrfclkInsert);
+			}
 		} else {
 			if (replaceGroup) {
 				for (std::size_t i = 0; i < groupInsertedLineCount && groupCompareStart + i < lineKinds.size(); ++i) {
 					const std::size_t originalLength = fileCompareLineTextLength(originalLines, groupOriginalStart + i, 1);
 					const std::size_t compareLength = fileCompareLineTextLength(compareLines, groupCompareStart + i, 1);
-					lineKinds[groupCompareStart + i] = compareLength < originalLength ? mrfclkMissing : mrfclkInsert;
+					const unsigned char lineKind = compareLength < originalLength ? mrfclkMissing : mrfclkInsert;
+					lineKinds[groupCompareStart + i] = lineKind;
+					if (i < groupDeletedLineCount && groupOriginalStart + i < originalLines.size() && groupCompareStart + i < compareLines.size())
+						appendChangedMiniMapSlice(groupCompareStart + i, originalLines[groupOriginalStart + i], compareLines[groupCompareStart + i], lineKind);
+					else
+						appendFullMiniMapSlice(groupCompareStart + i, lineKind);
 				}
-				if (groupDeletedLineCount > groupInsertedLineCount) markFileCompareAnchorLine(lineKinds, groupCompareStart + groupInsertedLineCount, mrfclkMissing);
-			} else if (groupInsertedLineCount > 0)
+				if (groupDeletedLineCount > groupInsertedLineCount) {
+					const std::size_t anchorLine = std::min(groupCompareStart + groupInsertedLineCount, lineKinds.empty() ? 0 : lineKinds.size() - 1);
+					markFileCompareAnchorLine(lineKinds, groupCompareStart + groupInsertedLineCount, mrfclkMissing);
+					appendFullMiniMapSlice(anchorLine, mrfclkMissing);
+				}
+			} else if (groupInsertedLineCount > 0) {
 				markFileCompareLineRange(lineKinds, groupCompareStart, groupInsertedLineCount, mrfclkInsert);
-			else if (groupDeletedLineCount > 0)
+				for (std::size_t i = 0; i < groupInsertedLineCount && groupCompareStart + i < lineKinds.size(); ++i)
+					appendFullMiniMapSlice(groupCompareStart + i, mrfclkInsert);
+			} else if (groupDeletedLineCount > 0) {
 				markFileCompareAnchorLine(lineKinds, groupCompareStart, mrfclkMissing);
+				appendFullMiniMapSlice(std::min(groupCompareStart, lineKinds.empty() ? 0 : lineKinds.size() - 1), mrfclkMissing);
+			}
 		}
 		groupOpen = false;
 		groupDeletedLineCount = 0;
@@ -2404,6 +2449,7 @@ void MRBentoBox::refreshFileComparePane(BentoLeaf &leaf) {
 	std::string title;
 	std::string text;
 	std::vector<unsigned char> lineKinds;
+	std::vector<MRFileCompareMiniMapSlice> miniMapSlices;
 
 	if (targetWindow == nullptr || !bentoRoleIsDiff(leaf.role)) return;
 	leaf.spec = paneSpecForRole(leaf.role);
@@ -2416,12 +2462,12 @@ void MRBentoBox::refreshFileComparePane(BentoLeaf &leaf) {
 		const std::string leadingGutters = leaf.role == bprDiffOriginal ? configuredFileCompareOriginalLeadingGutters() : configuredFileCompareCompareLeadingGutters();
 		const std::string trailingGutters = leaf.role == bprDiffOriginal ? configuredFileCompareOriginalTrailingGutters() : configuredFileCompareCompareTrailingGutters();
 		const bool miniMapConfigured = fileCompareGuttersContain(leadingGutters, 'M') || fileCompareGuttersContain(trailingGutters, 'M');
-		if (targetEditor != nullptr) fileCompareEditableLineKindsForRole(leaf.role, lineKinds);
+		if (targetEditor != nullptr) fileCompareEditableLineKindsForRole(leaf.role, lineKinds, &miniMapSlices);
 		if (leaf.id != 0 && leaf.pane != nullptr) leaf.pane->layoutPaneChrome();
 		if (targetEditor != nullptr) {
 			targetEditor->setMiniMapSuppressed(!miniMapConfigured);
 			targetEditor->setFileCompareGutters(leadingGutters, trailingGutters);
-			targetEditor->setFileCompareLineKinds(lineKinds);
+			targetEditor->setFileCompareLineKinds(lineKinds, miniMapSlices);
 			targetEditor->setFileCompareGutterVisible(true);
 			targetEditor->updateMetrics();
 			targetEditor->continueComputeWarmupIfNeeded("file-compare-edit-refresh");

@@ -200,6 +200,7 @@ class MRFileEditor : public TScroller {
 	void setWordWrapSuppressed(bool suppressed) noexcept;
 	void setScrollBarsAlwaysVisible(bool visible) noexcept;
 	void setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds);
+	void setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds, const std::vector<MRFileCompareMiniMapSlice> &miniMapSlices);
 	void clearFileCompareLineKinds();
 	void setFileCompareGutters(const std::string &leftGutters, const std::string &rightGutters);
 	void setFileCompareGutterVisible(bool visible) noexcept;
@@ -703,6 +704,7 @@ class MRFileEditor : public TScroller {
 	MRFoldingDerivedState mFoldState;
 	MRMiniMapDerivedState mMiniMapState;
 	std::vector<unsigned char> mFileCompareLineKinds;
+	std::vector<MRFileCompareMiniMapSlice> mFileCompareMiniMapSlices;
 	std::string mFileCompareLeftGutters;
 	std::string mFileCompareRightGutters;
 	bool mFileCompareGuttersConfigured = false;

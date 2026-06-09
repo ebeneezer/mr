@@ -227,14 +227,22 @@ void MRFileEditor::setScrollBarsAlwaysVisible(bool visible) noexcept {
 }
 
 void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds) {
+	static const std::vector<MRFileCompareMiniMapSlice> emptyMiniMapSlices;
+
+	setFileCompareLineKinds(lineKinds, emptyMiniMapSlices);
+}
+
+void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds, const std::vector<MRFileCompareMiniMapSlice> &miniMapSlices) {
 	mFileCompareLineKinds = lineKinds;
+	mFileCompareMiniMapSlices = miniMapSlices;
 	mMiniMapState.clearOverlayCache();
 	refreshViewState();
 }
 
 void MRFileEditor::clearFileCompareLineKinds() {
-	if (mFileCompareLineKinds.empty()) return;
+	if (mFileCompareLineKinds.empty() && mFileCompareMiniMapSlices.empty()) return;
 	mFileCompareLineKinds.clear();
+	mFileCompareMiniMapSlices.clear();
 	mMiniMapState.clearOverlayCache();
 	refreshViewState();
 }

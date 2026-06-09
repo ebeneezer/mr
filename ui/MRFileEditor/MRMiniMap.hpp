@@ -25,6 +25,14 @@ enum MRFileCompareLineKind : unsigned char {
 	mrfclkOffset
 };
 
+struct MRFileCompareMiniMapSlice {
+	std::size_t lineIndex = 0;
+	std::size_t sliceStart = 0;
+	std::size_t sliceEnd = 0;
+	unsigned char lineKind = mrfclkNone;
+	bool fullLine = false;
+};
+
 class MRMiniMapRenderer {
   public:
 	struct Palette {
@@ -96,7 +104,7 @@ class MRMiniMapRenderer {
 	                              const MREditSetupSettings &settings, bool preservePendingTaskForSameDocument = false);
 	OverlayState computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges,
 	                                 const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth,
-	                                 bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds) const;
+	                                 bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds, const std::vector<MRFileCompareMiniMapSlice> &fileCompareMiniMapSlices) const;
 	void drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, int viewWidth, const Viewport &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const Palette &palette, const OverlayState &overlay) const;
 
   private:
