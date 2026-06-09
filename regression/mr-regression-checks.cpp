@@ -73,6 +73,17 @@ class MRBentoBoxFileCompareRegressionHarness {
 		return window != nullptr ? window->getEditor() : nullptr;
 	}
 
+	static unsigned char lineKindAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
+		std::vector<unsigned char> lineKinds;
+		bento.fileCompareEditableLineKindsForRole(role, lineKinds, nullptr);
+		return lineIndex < lineKinds.size() ? lineKinds[lineIndex] : mrfclkNone;
+	}
+
+	static bool markedDiffLineAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
+		const unsigned char lineKind = lineKindAt(bento, role, lineIndex);
+		return lineKind != mrfclkEqual && lineKind != mrfclkNone;
+	}
+
 	static int showContextAtDocumentLine(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
 		const int leafId = bento.leafIdForRole(role);
 		MREditWindow *targetWindow = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
@@ -6203,6 +6214,9 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 				if (cursorLine != 1) {
 					failureReason = "File compare next-diff compare cursor line mismatch after first jump: expected 1, got " + std::to_string(cursorLine) + ".";
 					ok = false;
+				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
+					failureReason = "File compare next-diff cursor is not on a marked compare diff line after first jump.";
+					ok = false;
 				}
 			}
 
@@ -6214,6 +6228,9 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 				if (cursorLine != 4) {
 					failureReason = "File compare next-diff compare cursor line mismatch after second jump: expected 4, got " + std::to_string(cursorLine) + ".";
 					ok = false;
+				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
+					failureReason = "File compare next-diff cursor is not on a marked compare diff line after second jump.";
+					ok = false;
 				}
 			}
 
@@ -6224,6 +6241,9 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
 				if (cursorLine != 1) {
 					failureReason = "File compare previous-diff compare cursor line mismatch: expected 1, got " + std::to_string(cursorLine) + ".";
+					ok = false;
+				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
+					failureReason = "File compare previous-diff cursor is not on a marked compare diff line.";
 					ok = false;
 				}
 			}

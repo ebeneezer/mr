@@ -55,6 +55,13 @@ void MRFileEditor::revealCursor(Boolean centerCursor) {
 	drawView();
 }
 
+void MRFileEditor::scrollDocumentLineToTop(std::size_t lineIndex) {
+	const std::size_t visibleLine = visibleLineForDocumentLine(lineIndex);
+	const int targetLine = static_cast<int>(std::min<std::size_t>(visibleLine, static_cast<std::size_t>(INT_MAX)));
+
+	scrollTo(std::max(0, delta.x), std::max(0, targetLine));
+}
+
 void MRFileEditor::refreshViewState() {
 	updateIndicator();
 	drawView();
