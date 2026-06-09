@@ -2333,6 +2333,30 @@ std::size_t MRBentoBox::fileCompareGroupLineCountForRole(const FileCompareChange
 	return std::max<std::size_t>(1, group.displayLineCount);
 }
 
+std::size_t MRBentoBox::fileCompareGroupNavigationLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const {
+	const std::size_t documentLineCount = std::max<std::size_t>(1, editor.bufferModel().lineCount());
+	std::size_t targetLine = fileCompareGroupStartLineForRole(group, role, editablePanes);
+	if (!editablePanes || !bentoRoleIsDiff(role)) return std::min(targetLine, documentLineCount - 1);
+
+	std::vector<unsigned char> lineKinds;
+	fileCompareEditableLineKindsForRole(role, lineKinds, nullptr);
+	if (lineKinds.empty()) return std::min(targetLine, documentLineCount - 1);
+
+	const std::size_t lineLimit = std::min(lineKinds.size(), documentLineCount);
+	if (lineLimit == 0) return 0;
+	if (targetLine >= lineLimit) targetLine = lineLimit - 1;
+
+	std::size_t groupLineCount = fileCompareGroupLineCountForRole(group, role, editablePanes);
+	if (role == bprDiffCompare && group.deletedLineCount > group.insertedLineCount) groupLineCount = std::max<std::size_t>(groupLineCount, group.insertedLineCount + 1);
+	if (role == bprDiffOriginal && group.insertedLineCount > group.deletedLineCount) groupLineCount = std::max<std::size_t>(groupLineCount, group.deletedLineCount + 1);
+
+	const std::size_t scanStartLine = targetLine > 0 ? targetLine - 1 : targetLine;
+	const std::size_t scanEndLine = std::min(lineLimit, targetLine + std::max<std::size_t>(1, groupLineCount) + 1);
+	for (std::size_t line = scanStartLine; line < scanEndLine; ++line)
+		if (lineKinds[line] != mrfclkEqual && lineKinds[line] != mrfclkNone) return line;
+	return targetLine;
+}
+
 const MRBentoBox::FileCompareChangeGroup *MRBentoBox::fileCompareChangeGroupAtOrVisibleForRole(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept {
 	if (!bentoRoleIsDiff(role)) return nullptr;
 
@@ -2362,15 +2386,19 @@ int MRBentoBox::fileCompareChangeGroupIndexAtLine(MRBentoPaneRole role, std::siz
 	for (std::size_t i = 0; i < fileCompareChangeGroups.size(); ++i) {
 		const FileCompareChangeGroup &group = fileCompareChangeGroups[i];
 		const std::size_t groupStart = fileCompareGroupStartLineForRole(group, role, editablePanes);
-		const std::size_t groupEnd = groupStart + fileCompareGroupLineCountForRole(group, role, editablePanes);
-		if (line >= groupStart && line < groupEnd) return static_cast<int>(i);
+		const std::size_t groupMatchStart = editablePanes && groupStart > 0 ? groupStart - 1 : groupStart;
+		std::size_t groupLineCount = fileCompareGroupLineCountForRole(group, role, editablePanes);
+		if (editablePanes && role == bprDiffCompare && group.deletedLineCount > group.insertedLineCount) groupLineCount = std::max<std::size_t>(groupLineCount, group.insertedLineCount + 1);
+		if (editablePanes && role == bprDiffOriginal && group.insertedLineCount > group.deletedLineCount) groupLineCount = std::max<std::size_t>(groupLineCount, group.deletedLineCount + 1);
+		const std::size_t groupEnd = groupStart + groupLineCount;
+		if (line >= groupMatchStart && line < groupEnd) return static_cast<int>(i);
 	}
 	return -1;
 }
 
 bool MRBentoBox::moveFileCompareEditorToGroup(MRFileEditor &editor, MRBentoPaneRole role, const FileCompareChangeGroup &group, bool editablePanes) {
 	const std::size_t documentLineCount = std::max<std::size_t>(1, editor.bufferModel().lineCount());
-	std::size_t targetLine = fileCompareGroupStartLineForRole(group, role, editablePanes);
+	std::size_t targetLine = fileCompareGroupNavigationLineForRole(group, role, editor, editablePanes);
 
 	if (targetLine >= documentLineCount) targetLine = documentLineCount - 1;
 	const int targetLineDelta = static_cast<int>(std::min<std::size_t>(targetLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
