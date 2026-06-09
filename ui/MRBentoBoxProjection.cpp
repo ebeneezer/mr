@@ -2395,11 +2395,8 @@ bool MRBentoBox::moveFileCompareEditorToGroup(MRFileEditor &editor, MRBentoPaneR
 	std::size_t targetLine = fileCompareGroupNavigationLineForRole(group, role, editor, editablePanes);
 
 	if (targetLine >= documentLineCount) targetLine = documentLineCount - 1;
-	const std::size_t targetOffset = editor.bufferModel().lineStartByIndex(targetLine);
 
-	editor.setCursorOffsetAtVisualColumn(targetOffset, 0);
-	editor.scrollDocumentLineToTop(targetLine);
-	editor.refreshViewState();
+	editor.moveCursorToDocumentLineTop(targetLine, 0);
 	return true;
 }
 

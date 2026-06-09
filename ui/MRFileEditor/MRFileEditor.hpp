@@ -194,7 +194,7 @@ class MRFileEditor : public TScroller {
 	void syncDisplayedCursorColumnFromCursor(bool preserveFreeColumn) noexcept;
 
 	void refreshConfiguredVisualSettings();
-	void scrollDocumentLineToTop(std::size_t lineIndex);
+	void moveCursorToDocumentLineTop(std::size_t lineIndex, int visualColumn);
 	void setCommunicationViewerMode(bool enabled, bool lineNumbers);
 	void setCommunicationViewerOptions(bool lineNumbers);
 	void setMiniMapSuppressed(bool suppressed) noexcept;
