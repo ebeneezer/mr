@@ -2352,7 +2352,7 @@ std::size_t MRBentoBox::fileCompareGroupNavigationLineForRole(const FileCompareC
 
 	const std::size_t scanEndLine = std::min(lineLimit, targetLine + std::max<std::size_t>(1, groupLineCount) + 1);
 	for (std::size_t line = targetLine; line < scanEndLine; ++line)
-		if (lineKinds[line] != mrfclkEqual && lineKinds[line] != mrfclkNone) return role == bprDiffCompare && line > 0 ? line - 1 : line;
+		if (lineKinds[line] != mrfclkEqual && lineKinds[line] != mrfclkNone) return line;
 	return targetLine;
 }
 
