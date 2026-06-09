@@ -141,6 +141,8 @@ enum : ushort {
 	cmMrEditToggleInsertMode,
 	cmMrToggleFullscreen,
 	cmMrFileOpenWorkspace,
+	cmMrFileCompareApplyOriginalToCompare,
+	cmMrFileCompareApplyCompareToOriginal,
 	cmMrFileCompareNextChange,
 	cmMrFileComparePreviousChange
 };

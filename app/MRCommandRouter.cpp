@@ -432,6 +432,10 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Text / Re-format paragraph";
 		case cmMrTextFileCompare:
 			return "Text / File compare";
+		case cmMrFileCompareApplyOriginalToCompare:
+			return "Text / Apply original to compare";
+		case cmMrFileCompareApplyCompareToOriginal:
+			return "Text / Apply compare to original";
 		case cmMrTextUpperCasePlaceholder:
 			return "Text / Upper case";
 		case cmMrTextLowerCasePlaceholder:

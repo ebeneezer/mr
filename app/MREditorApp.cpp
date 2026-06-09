@@ -293,10 +293,16 @@ bool handleFileCompareCommand(TEvent &event) {
 	if (event.what != evCommand) return false;
 	const bool nextChange = event.message.command == cmMrFileCompareNextChange;
 	const bool previousChange = event.message.command == cmMrFileComparePreviousChange;
+	const bool applyOriginalToCompare = event.message.command == cmMrFileCompareApplyOriginalToCompare;
+	const bool applyCompareToOriginal = event.message.command == cmMrFileCompareApplyCompareToOriginal;
 
-	if (!nextChange && !previousChange) return false;
+	if (!nextChange && !previousChange && !applyOriginalToCompare && !applyCompareToOriginal) return false;
 	MRBentoBox *bentoBox = currentFileCompareBentoBox();
-	if (bentoBox != nullptr) static_cast<void>(bentoBox->navigateFileCompareChange(nextChange));
+	if (bentoBox != nullptr) {
+		if (nextChange || previousChange) static_cast<void>(bentoBox->navigateFileCompareChange(nextChange));
+		else
+			static_cast<void>(bentoBox->applyFileCompareChange(applyOriginalToCompare));
+	}
 	event.what = evNothing;
 	return true;
 }
