@@ -6,6 +6,7 @@
 #include <chrono>
 #include <ctime>
 #include <future>
+#include <limits>
 #include <sstream>
 #include <thread>
 
@@ -665,6 +666,23 @@ void MRFileEditor::draw() {
 		backgroundBuffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(size.x));
 		for (int y = 0; y < size.y; ++y)
 			writeBuf(0, y, size.x, 1, backgroundBuffer);
+	}
+	if (size.x > 0 && size.y > 0 && (showLineNumbers || drawLeadingDiffGutter || drawTrailingDiffGutter || drawCodeFolding || drawMiniMap)) {
+		const std::size_t nonDocumentLineIndex = std::numeric_limits<std::size_t>::max();
+		const int textRows = std::max(0, visibleTextRows());
+
+		for (int y = 0; y < textRows; ++y) {
+			TDrawBuffer gutterBackground;
+
+			gutterBackground.moveChar(0, ' ', editorTextFill, static_cast<ushort>(std::max(0, size.x)));
+			if (showLineNumbers) drawLineNumberGutter(gutterBackground, 0, false, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers, nonDocumentLineIndex);
+			if (drawLeadingDiffGutter) drawFileCompareGutter(gutterBackground, viewport.fileCompareLeadingGutterX, viewport.fileCompareLeadingGutterWidth, nonDocumentLineIndex);
+			if (drawTrailingDiffGutter) drawFileCompareGutter(gutterBackground, viewport.fileCompareTrailingGutterX, viewport.fileCompareTrailingGutterWidth, nonDocumentLineIndex);
+			if (drawCodeFolding) drawCodeFoldingGutter(gutterBackground, viewport.codeFoldingX, viewport.codeFoldingWidth, 0, nonDocumentLineIndex);
+			if (drawLeadingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(true), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
+			if (drawTrailingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(false), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
+			writeBuf(0, y + viewport.topInset, size.x, 1, gutterBackground);
+		}
 	}
 	if (editSettings.formatRuler && viewport.topInset > 0) drawFormatRulerOverlay(viewport, editSettings);
 	const int textRows = std::max(0, visibleTextRows());
