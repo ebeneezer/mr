@@ -199,6 +199,114 @@ bool fileCompareSourceStillMatches(const MRBentoCompareSource &source) {
 	return window != nullptr && window->documentId() == source.documentId && window->documentVersion() == source.version;
 }
 
+bool fileCompareHunkCanExtend(const mr::diff::MRDiffHunk &hunk, mr::diff::MRDiffOp op, std::size_t leftStart, std::size_t rightStart) noexcept {
+	if (hunk.op != op) return false;
+	switch (op) {
+		case mr::diff::MRDiffOp::Equal:
+			return leftStart == hunk.leftStart + hunk.count && rightStart == hunk.rightStart + hunk.count;
+		case mr::diff::MRDiffOp::Delete:
+			return leftStart == hunk.leftStart + hunk.count && rightStart == hunk.rightStart;
+		case mr::diff::MRDiffOp::Insert:
+			return leftStart == hunk.leftStart && rightStart == hunk.rightStart + hunk.count;
+		default:
+			break;
+	}
+	return false;
+}
+
+void appendFileCompareHunk(std::vector<mr::diff::MRDiffHunk> &hunks, mr::diff::MRDiffOp op, std::size_t leftStart, std::size_t rightStart, std::size_t count) {
+	if (count == 0) return;
+	if (!hunks.empty() && fileCompareHunkCanExtend(hunks.back(), op, leftStart, rightStart)) {
+		hunks.back().count += count;
+		return;
+	}
+	hunks.push_back(mr::diff::MRDiffHunk(op, leftStart, rightStart, count));
+}
+
+void appendNormalizedFileCompareChangeGroup(std::vector<mr::diff::MRDiffHunk> &hunks, const std::vector<std::string> &originalLines, const std::vector<std::string> &compareLines, std::size_t originalStart, std::size_t compareStart, std::size_t deletedLineCount, std::size_t insertedLineCount) {
+	if (deletedLineCount == 0) {
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Insert, originalStart, compareStart, insertedLineCount);
+		return;
+	}
+	if (insertedLineCount == 0) {
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Delete, originalStart, compareStart, deletedLineCount);
+		return;
+	}
+
+	const std::size_t maxLineCount = std::max(deletedLineCount, insertedLineCount);
+	std::size_t runStart = 0;
+	std::size_t i = 0;
+	while (i < maxLineCount) {
+		const bool equalPair = i < deletedLineCount && i < insertedLineCount && originalStart + i < originalLines.size() && compareStart + i < compareLines.size() && originalLines[originalStart + i] == compareLines[compareStart + i];
+		if (!equalPair) {
+			++i;
+			continue;
+		}
+
+		if (runStart < i) {
+			const std::size_t deletedRunCount = runStart < deletedLineCount ? std::min(i, deletedLineCount) - runStart : 0;
+			const std::size_t insertedRunCount = runStart < insertedLineCount ? std::min(i, insertedLineCount) - runStart : 0;
+			appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Delete, originalStart + runStart, compareStart + std::min(runStart, insertedLineCount), deletedRunCount);
+			appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Insert, originalStart + std::min(runStart + deletedRunCount, deletedLineCount), compareStart + runStart, insertedRunCount);
+		}
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Equal, originalStart + i, compareStart + i, 1);
+		++i;
+		runStart = i;
+	}
+	if (runStart < maxLineCount) {
+		const std::size_t deletedRunCount = runStart < deletedLineCount ? deletedLineCount - runStart : 0;
+		const std::size_t insertedRunCount = runStart < insertedLineCount ? insertedLineCount - runStart : 0;
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Delete, originalStart + runStart, compareStart + std::min(runStart, insertedLineCount), deletedRunCount);
+		appendFileCompareHunk(hunks, mr::diff::MRDiffOp::Insert, originalStart + std::min(runStart + deletedRunCount, deletedLineCount), compareStart + runStart, insertedRunCount);
+	}
+}
+
+void normalizeFileCompareHunks(const std::vector<std::string> &originalLines, const std::vector<std::string> &compareLines, std::vector<mr::diff::MRDiffHunk> &hunks) {
+	std::vector<mr::diff::MRDiffHunk> normalizedHunks;
+	bool groupOpen = false;
+	std::size_t groupOriginalStart = 0;
+	std::size_t groupCompareStart = 0;
+	std::size_t groupDeletedLineCount = 0;
+	std::size_t groupInsertedLineCount = 0;
+	auto flushGroup = [&]() {
+		if (!groupOpen) return;
+		appendNormalizedFileCompareChangeGroup(normalizedHunks, originalLines, compareLines, groupOriginalStart, groupCompareStart, groupDeletedLineCount, groupInsertedLineCount);
+		groupOpen = false;
+		groupDeletedLineCount = 0;
+		groupInsertedLineCount = 0;
+	};
+
+	normalizedHunks.reserve(hunks.size());
+	for (const mr::diff::MRDiffHunk &hunk : hunks) {
+		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				flushGroup();
+				appendFileCompareHunk(normalizedHunks, hunk.op, hunk.leftStart, hunk.rightStart, hunk.count);
+				break;
+			case mr::diff::MRDiffOp::Delete:
+				if (!groupOpen) {
+					groupOpen = true;
+					groupOriginalStart = hunk.leftStart;
+					groupCompareStart = hunk.rightStart;
+				}
+				groupDeletedLineCount += hunk.count;
+				break;
+			case mr::diff::MRDiffOp::Insert:
+				if (!groupOpen) {
+					groupOpen = true;
+					groupOriginalStart = hunk.leftStart;
+					groupCompareStart = hunk.rightStart;
+				}
+				groupInsertedLineCount += hunk.count;
+				break;
+			default:
+				break;
+		}
+	}
+	flushGroup();
+	hunks.swap(normalizedHunks);
+}
+
 struct BentoFrameGlyphs {
 	char singleHorizontal = '\xC4';
 	char singleVertical = '\xB3';
@@ -2795,7 +2903,12 @@ bool MRBentoBox::applyFileCompareResult(const mr::coprocessor::Result &result) {
 		return true;
 	}
 
+	std::vector<std::string> originalLines;
+	std::vector<std::string> compareLines;
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines);
+	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.compare.text, compareLines);
 	fileCompareHunks = payload->hunks;
+	normalizeFileCompareHunks(originalLines, compareLines, fileCompareHunks);
 	rebuildFileCompareChangeGroups();
 	fileCompareDiffReady = true;
 	fileCompareStale = false;
