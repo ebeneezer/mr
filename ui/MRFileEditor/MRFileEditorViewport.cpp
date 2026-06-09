@@ -908,10 +908,10 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 			currentLineInBlock = currentLine && overlayLine1 <= lineIndex && lineIndex <= overlayLine2;
 	} else
 		currentLineInBlock = false;
-	if (currentLineInBlock) basePair = getColor(0x0204);
-	else if (currentLine)
-		basePair = getColor(0x0303);
 	diffLineKind = fileCompareLineKindAt(lineIndex);
+	if (currentLineInBlock) basePair = getColor(0x0204);
+	else if (currentLine && diffLineKind == mrfclkNone)
+		basePair = getColor(0x0303);
 	if (diffLineKind != mrfclkNone) {
 		const unsigned char slot = fileCompareTextPaletteSlot(diffLineKind);
 			unsigned char configured = 0;
