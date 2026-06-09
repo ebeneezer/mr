@@ -91,6 +91,16 @@ bool fileCompareGuttersContain(const std::string &gutters, char marker) noexcept
 	return false;
 }
 
+void markFileCompareLineRange(std::vector<unsigned char> &lineKinds, std::size_t startLine, std::size_t lineCount, unsigned char lineKind) {
+	for (std::size_t i = 0; i < lineCount && startLine + i < lineKinds.size(); ++i)
+		lineKinds[startLine + i] = lineKind;
+}
+
+void markFileCompareAnchorLine(std::vector<unsigned char> &lineKinds, std::size_t lineIndex, unsigned char lineKind) {
+	if (lineKinds.empty()) return;
+	lineKinds[std::min(lineIndex, lineKinds.size() - 1)] = lineKind;
+}
+
 bool bentoWorkspaceModeIsValid(int mode) noexcept {
 	return mode == bbmToolWorkspace || mode == bbmDocumentViewports || mode == bbmFileCompare;
 }
@@ -608,11 +618,6 @@ void MRBentoBox::refreshFileCompareAfterSourceMutation() {
 	if (const char *title = compareWindow->getTitle(0); title != nullptr && *title != '\0') fileCompareSetup.compare.title = title;
 	fileCompareSetup.compare.text = compareEditor->snapshotText();
 
-	fileCompareHunks.clear();
-	fileCompareChangeGroups.clear();
-	fileCompareDiffReady = false;
-	fileCompareStale = false;
-
 	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines);
 	mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.compare.text, compareLines);
 	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, fileCompareSetup.original.documentId, fileCompareSetup.original.version, "file compare", [originalLines, compareLines, originalDocumentId = fileCompareSetup.original.documentId, originalVersion = fileCompareSetup.original.version, compareDocumentId = fileCompareSetup.compare.documentId, compareVersion = fileCompareSetup.compare.version](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
@@ -634,7 +639,6 @@ void MRBentoBox::refreshFileCompareAfterSourceMutation() {
 		setFileCompareTask(taskId);
 		trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::FileCompare, "file compare");
 	}
-	refreshFileComparePanes();
 }
 
 void MRBentoBox::refreshFileCompareConfiguration() {
@@ -2295,22 +2299,53 @@ void MRBentoBox::fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::
 	lineKinds.assign(role == bprDiffOriginal ? originalLines.size() : compareLines.size(), mrfclkEqual);
 	if (!fileCompareDiffReady) return;
 
+	bool groupOpen = false;
+	std::size_t groupOriginalStart = 0;
+	std::size_t groupCompareStart = 0;
+	std::size_t groupDeletedLineCount = 0;
+	std::size_t groupInsertedLineCount = 0;
+	auto flushGroup = [&]() {
+		if (!groupOpen) return;
+		if (role == bprDiffOriginal) {
+			if (groupDeletedLineCount > 0) markFileCompareLineRange(lineKinds, groupOriginalStart, groupDeletedLineCount, mrfclkMissing);
+			else if (groupInsertedLineCount > 0)
+				markFileCompareAnchorLine(lineKinds, groupOriginalStart, mrfclkInsert);
+		} else {
+			if (groupInsertedLineCount > 0) markFileCompareLineRange(lineKinds, groupCompareStart, groupInsertedLineCount, mrfclkInsert);
+			else if (groupDeletedLineCount > 0)
+				markFileCompareAnchorLine(lineKinds, groupCompareStart, mrfclkMissing);
+		}
+		groupOpen = false;
+		groupDeletedLineCount = 0;
+		groupInsertedLineCount = 0;
+	};
+
 	for (const mr::diff::MRDiffHunk &hunk : fileCompareHunks) {
 		switch (hunk.op) {
+			case mr::diff::MRDiffOp::Equal:
+				flushGroup();
+				break;
 			case mr::diff::MRDiffOp::Delete:
-				if (role == bprDiffOriginal)
-					for (std::size_t i = 0; i < hunk.count && hunk.leftStart + i < lineKinds.size(); ++i)
-						lineKinds[hunk.leftStart + i] = mrfclkMissing;
+				if (!groupOpen) {
+					groupOpen = true;
+					groupOriginalStart = hunk.leftStart;
+					groupCompareStart = hunk.rightStart;
+				}
+				groupDeletedLineCount += hunk.count;
 				break;
 			case mr::diff::MRDiffOp::Insert:
-				if (role == bprDiffCompare)
-					for (std::size_t i = 0; i < hunk.count && hunk.rightStart + i < lineKinds.size(); ++i)
-						lineKinds[hunk.rightStart + i] = mrfclkInsert;
+				if (!groupOpen) {
+					groupOpen = true;
+					groupOriginalStart = hunk.leftStart;
+					groupCompareStart = hunk.rightStart;
+				}
+				groupInsertedLineCount += hunk.count;
 				break;
 			default:
 				break;
 		}
 	}
+	flushGroup();
 }
 
 void MRBentoBox::refreshFileComparePane(BentoLeaf &leaf) {
