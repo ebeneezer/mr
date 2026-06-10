@@ -139,7 +139,6 @@ class MRMenuBar : public TMenuBar {
 		mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
 	}
 	static std::string canonicalMenuToken(const std::string &value);
-	static std::string trimAscii(std::string value);
 	static bool ownerSpecMatchesFile(const std::string &ownerSpec, const std::string &fileSpec) noexcept;
 	void applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const;
 	bool allocateRuntimeCommand(ushort &command, std::string *errorMessage);

@@ -19,6 +19,7 @@
 #include "../app/MRCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../app/utils/MRStringUtils.hpp"
 #include "../keymap/MRKeymapContext.hpp"
 #include "../keymap/MRKeymapResolver.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
@@ -276,18 +277,8 @@ void MRMenuBar::handleEvent(TEvent &event) {
 	TMenuBar::handleEvent(event);
 }
 
-std::string MRMenuBar::trimAscii(std::string value) {
-	auto isTrimChar = [](unsigned char ch) noexcept { return std::isspace(ch) != 0 || ch < 32; };
-
-	while (!value.empty() && isTrimChar(static_cast<unsigned char>(value.front())))
-		value.erase(value.begin());
-	while (!value.empty() && isTrimChar(static_cast<unsigned char>(value.back())))
-		value.pop_back();
-	return value;
-}
-
 std::string MRMenuBar::canonicalMenuToken(const std::string &value) {
-	std::string canonical = trimAscii(value);
+	std::string canonical = ::trimAscii(value);
 
 	for (char &ch : canonical)
 		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
@@ -391,12 +382,12 @@ bool MRMenuBar::rebuildRuntimeMenu() {
 bool MRMenuBar::registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage) {
 	RuntimeMenuNode node;
 
-	node.menuTitle = trimAscii(menuTitle);
+	node.menuTitle = ::trimAscii(menuTitle);
 	node.menuKey = canonicalMenuToken(menuTitle);
-	node.itemTitle = trimAscii(itemTitle);
+	node.itemTitle = ::trimAscii(itemTitle);
 	node.itemKey = canonicalMenuToken(itemTitle);
-	node.ownerSpec = trimAscii(ownerSpec);
-	node.macroSpec = trimAscii(macroSpec);
+	node.ownerSpec = ::trimAscii(ownerSpec);
+	node.macroSpec = ::trimAscii(macroSpec);
 	if (node.menuKey.empty()) {
 		if (errorMessage != nullptr) *errorMessage = "REGISTER_MENU_ITEM requires a non-empty menu title.";
 		return false;
@@ -437,7 +428,7 @@ bool MRMenuBar::refreshRuntimeMenus(std::string *errorMessage) {
 bool MRMenuBar::removeRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage) {
 	const std::string menuKey = canonicalMenuToken(menuTitle);
 	const std::string itemKey = canonicalMenuToken(itemTitle);
-	const std::string owner = trimAscii(ownerSpec);
+	const std::string owner = ::trimAscii(ownerSpec);
 	int index = -1;
 	std::vector<RuntimeMenuNode> previousNodes = mRuntimeNodes;
 
@@ -477,7 +468,7 @@ bool MRMenuBar::removeRuntimeMenuItem(const std::string &menuTitle, const std::s
 }
 
 bool MRMenuBar::removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage) {
-	const std::string owner = trimAscii(ownerSpec);
+	const std::string owner = ::trimAscii(ownerSpec);
 	std::vector<RuntimeMenuNode> previousNodes = mRuntimeNodes;
 
 	if (owner.empty()) return true;
@@ -493,7 +484,7 @@ bool MRMenuBar::removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec,
 }
 
 bool MRMenuBar::removeRuntimeNodesOwnedByFile(const std::string &fileSpec, std::string *errorMessage) {
-	const std::string fileId = trimAscii(fileSpec);
+	const std::string fileId = ::trimAscii(fileSpec);
 	std::vector<RuntimeMenuNode> previousNodes = mRuntimeNodes;
 
 	if (fileId.empty()) return true;
