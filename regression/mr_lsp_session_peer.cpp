@@ -95,6 +95,12 @@ std::string diagnosticsNotification(const std::string &uri, int version, const s
 	       ",\"diagnostics\":[{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":4}},\"severity\":2,\"message\":" + jsonString(message) + "}]}}";
 }
 
+std::string definitionResponse(const mr::lsp::JsonRpcEnvelope &envelope, const PeerState &state) {
+	const std::string uri = state.documentUri.empty() ? "file:///tmp/mr.cpp" : state.documentUri;
+
+	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":{\"uri\":" + jsonString(uri) + ",\"range\":{\"start\":{\"line\":4,\"character\":2},\"end\":{\"line\":4,\"character\":9}}}}";
+}
+
 void emitDiagnostics(const std::string &uri, int version, const std::string &message) {
 	std::cout << mr::lsp::buildJsonRpcFrame(diagnosticsNotification(uri, version, message));
 	std::cout.flush();
@@ -135,6 +141,11 @@ bool handlePayload(const std::string &payload, PeerState &state) {
 	recordNotification(envelope, payload, state);
 	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "mr/documentCounts") {
 		std::cout << mr::lsp::buildJsonRpcFrame(documentCountsResponse(envelope, state));
+		std::cout.flush();
+		return true;
+	}
+	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "textDocument/definition") {
+		std::cout << mr::lsp::buildJsonRpcFrame(definitionResponse(envelope, state));
 		std::cout.flush();
 		return true;
 	}
