@@ -105,6 +105,13 @@ std::string hoverResponse(const mr::lsp::JsonRpcEnvelope &envelope) {
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":{\"contents\":{\"kind\":\"markdown\",\"value\":\"**mr hover**\\n\\nDeterministic hover text.\"}}}";
 }
 
+std::string referencesResponse(const mr::lsp::JsonRpcEnvelope &envelope, const PeerState &state) {
+	const std::string uri = state.documentUri.empty() ? "file:///tmp/mr.cpp" : state.documentUri;
+
+	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":[{\"uri\":" + jsonString(uri) +
+	       ",\"range\":{\"start\":{\"line\":1,\"character\":2},\"end\":{\"line\":1,\"character\":5}}},{\"uri\":\"file:///tmp/other.cpp\",\"range\":{\"start\":{\"line\":7,\"character\":1},\"end\":{\"line\":7,\"character\":8}}}]}";
+}
+
 void emitDiagnostics(const std::string &uri, int version, const std::string &message) {
 	std::cout << mr::lsp::buildJsonRpcFrame(diagnosticsNotification(uri, version, message));
 	std::cout.flush();
@@ -155,6 +162,11 @@ bool handlePayload(const std::string &payload, PeerState &state) {
 	}
 	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "textDocument/hover") {
 		std::cout << mr::lsp::buildJsonRpcFrame(hoverResponse(envelope));
+		std::cout.flush();
+		return true;
+	}
+	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "textDocument/references") {
+		std::cout << mr::lsp::buildJsonRpcFrame(referencesResponse(envelope, state));
 		std::cout.flush();
 		return true;
 	}
