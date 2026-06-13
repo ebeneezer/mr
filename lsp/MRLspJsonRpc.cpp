@@ -11,10 +11,12 @@ constexpr std::size_t kMaxHeaderBytes = 64 * 1024;
 
 struct JsonRpcTopLevelMembers {
 	bool validObject = false;
-	bool id = false;
 	bool method = false;
 	bool result = false;
 	bool error = false;
+	JsonRpcIdKind idKind = JsonRpcIdKind::None;
+	std::string idText;
+	std::string methodText;
 };
 
 bool asciiCaseEquals(std::string_view left, std::string_view right) {
@@ -105,6 +107,62 @@ bool skipJsonValue(std::string_view text, std::size_t &pos) {
 	return objectDepth == 0 && arrayDepth == 0;
 }
 
+bool parseJsonNumberValue(std::string_view text, std::size_t &pos) {
+	const std::size_t start = pos;
+
+	if (pos < text.size() && text[pos] == '-') ++pos;
+	if (pos >= text.size() || text[pos] < '0' || text[pos] > '9') return false;
+	if (text[pos] == '0') ++pos;
+	else {
+		while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9')
+			++pos;
+	}
+	if (pos < text.size() && text[pos] == '.') {
+		++pos;
+		if (pos >= text.size() || text[pos] < '0' || text[pos] > '9') return false;
+		while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9')
+			++pos;
+	}
+	if (pos < text.size() && (text[pos] == 'e' || text[pos] == 'E')) {
+		++pos;
+		if (pos < text.size() && (text[pos] == '+' || text[pos] == '-')) ++pos;
+		if (pos >= text.size() || text[pos] < '0' || text[pos] > '9') return false;
+		while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9')
+			++pos;
+	}
+	return pos > start;
+}
+
+bool parseJsonLiteral(std::string_view text, std::size_t &pos, std::string_view literal) {
+	if (pos + literal.size() > text.size()) return false;
+	if (text.substr(pos, literal.size()) != literal) return false;
+	pos += literal.size();
+	return true;
+}
+
+JsonRpcIdKind parseJsonRpcIdValue(std::string_view text, std::size_t &pos, std::string &idText) {
+	const std::size_t start = pos;
+	std::string stringValue;
+
+	if (pos >= text.size()) return JsonRpcIdKind::Invalid;
+	if (text[pos] == '"') {
+		if (!parseJsonString(text, pos, &stringValue)) return JsonRpcIdKind::Invalid;
+		idText = std::string(text.substr(start, pos - start));
+		return JsonRpcIdKind::String;
+	}
+	if (text[pos] == 'n') {
+		if (!parseJsonLiteral(text, pos, "null")) return JsonRpcIdKind::Invalid;
+		idText = std::string(text.substr(start, pos - start));
+		return JsonRpcIdKind::Null;
+	}
+	if (text[pos] == '-' || (text[pos] >= '0' && text[pos] <= '9')) {
+		if (!parseJsonNumberValue(text, pos)) return JsonRpcIdKind::Invalid;
+		idText = std::string(text.substr(start, pos - start));
+		return JsonRpcIdKind::Number;
+	}
+	return JsonRpcIdKind::Invalid;
+}
+
 bool scanJsonRpcTopLevelMembers(std::string_view payload, JsonRpcTopLevelMembers &members) {
 	std::size_t pos = 0;
 
@@ -125,14 +183,22 @@ bool scanJsonRpcTopLevelMembers(std::string_view payload, JsonRpcTopLevelMembers
 		skipJsonWhitespace(payload, pos);
 		if (pos >= payload.size() || payload[pos] != ':') return false;
 		++pos;
-		if (key == "id") members.id = true;
-		else if (key == "method")
+		skipJsonWhitespace(payload, pos);
+		if (key == "id") {
+			members.idKind = parseJsonRpcIdValue(payload, pos, members.idText);
+			if (members.idKind == JsonRpcIdKind::Invalid) return false;
+		} else if (key == "method") {
+			std::string methodValue;
+			if (!parseJsonString(payload, pos, &methodValue)) return false;
 			members.method = true;
-		else if (key == "result")
-			members.result = true;
-		else if (key == "error")
-			members.error = true;
-		if (!skipJsonValue(payload, pos)) return false;
+			members.methodText = methodValue;
+		} else {
+			if (key == "result")
+				members.result = true;
+			else if (key == "error")
+				members.error = true;
+			if (!skipJsonValue(payload, pos)) return false;
+		}
 		skipJsonWhitespace(payload, pos);
 		if (pos >= payload.size()) return false;
 		if (payload[pos] == '}') {
@@ -256,14 +322,27 @@ std::string buildJsonRpcFrame(std::string_view json) {
 }
 
 JsonRpcMessageKind classifyJsonRpcPayload(std::string_view payload) {
-	JsonRpcTopLevelMembers members;
+	return parseJsonRpcEnvelope(payload).kind;
+}
 
-	if (!scanJsonRpcTopLevelMembers(payload, members)) return JsonRpcMessageKind::Unknown;
-	if (!members.validObject) return JsonRpcMessageKind::Unknown;
-	if (members.id && (members.result || members.error) && !members.method) return JsonRpcMessageKind::Response;
-	if (members.id && members.method && !members.result && !members.error) return JsonRpcMessageKind::Request;
-	if (!members.id && members.method && !members.result && !members.error) return JsonRpcMessageKind::Notification;
-	return JsonRpcMessageKind::Unknown;
+JsonRpcEnvelope parseJsonRpcEnvelope(std::string_view payload) {
+	JsonRpcTopLevelMembers members;
+	JsonRpcEnvelope envelope;
+
+	if (!scanJsonRpcTopLevelMembers(payload, members)) {
+		envelope.idKind = JsonRpcIdKind::Invalid;
+		return envelope;
+	}
+	if (!members.validObject) return envelope;
+	envelope.idKind = members.idKind;
+	envelope.idText = members.idText;
+	envelope.method = members.methodText;
+	if (members.idKind != JsonRpcIdKind::None && (members.result || members.error) && !members.method) envelope.kind = JsonRpcMessageKind::Response;
+	else if ((members.idKind == JsonRpcIdKind::Number || members.idKind == JsonRpcIdKind::String) && members.method && !members.result && !members.error)
+		envelope.kind = JsonRpcMessageKind::Request;
+	else if (members.idKind == JsonRpcIdKind::None && members.method && !members.result && !members.error)
+		envelope.kind = JsonRpcMessageKind::Notification;
+	return envelope;
 }
 
 } // namespace mr::lsp

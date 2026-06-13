@@ -18,6 +18,21 @@ enum class JsonRpcMessageKind {
 	Response
 };
 
+enum class JsonRpcIdKind {
+	None,
+	Number,
+	String,
+	Null,
+	Invalid
+};
+
+struct JsonRpcEnvelope {
+	JsonRpcMessageKind kind = JsonRpcMessageKind::Unknown;
+	JsonRpcIdKind idKind = JsonRpcIdKind::None;
+	std::string idText;
+	std::string method;
+};
+
 class JsonRpcFramer {
 public:
 	bool feed(std::string_view bytes);
@@ -38,6 +53,7 @@ private:
 
 [[nodiscard]] std::string buildJsonRpcFrame(std::string_view json);
 [[nodiscard]] JsonRpcMessageKind classifyJsonRpcPayload(std::string_view payload);
+[[nodiscard]] JsonRpcEnvelope parseJsonRpcEnvelope(std::string_view payload);
 
 } // namespace mr::lsp
 

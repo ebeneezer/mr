@@ -23,6 +23,15 @@ bool expectKind(const std::string &payload, mr::lsp::JsonRpcMessageKind expected
 	return expect(actual == expected, name, failureReason);
 }
 
+bool expectEnvelope(const std::string &payload, mr::lsp::JsonRpcMessageKind expectedKind, mr::lsp::JsonRpcIdKind expectedIdKind, const std::string &expectedIdText, const std::string &expectedMethod, const std::string &name, std::string &failureReason) {
+	const mr::lsp::JsonRpcEnvelope envelope = mr::lsp::parseJsonRpcEnvelope(payload);
+
+	if (!expect(envelope.kind == expectedKind, name + ": kind", failureReason)) return false;
+	if (!expect(envelope.idKind == expectedIdKind, name + ": id kind", failureReason)) return false;
+	if (!expect(envelope.idText == expectedIdText, name + ": id text", failureReason)) return false;
+	return expect(envelope.method == expectedMethod, name + ": method", failureReason);
+}
+
 bool testCompleteFrame(std::string &failureReason) {
 	mr::lsp::JsonRpcFramer framer;
 	const std::string payload = "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\"}";
@@ -114,6 +123,18 @@ bool testPayloadClassification(std::string &failureReason) {
 	return expectKind("{\"id\":1,\"method\":\"x\"", mr::lsp::JsonRpcMessageKind::Unknown, "classify malformed", failureReason);
 }
 
+bool testEnvelopeExtraction(std::string &failureReason) {
+	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/definition\",\"params\":{}}", mr::lsp::JsonRpcMessageKind::Request, mr::lsp::JsonRpcIdKind::Number, "1", "textDocument/definition", "envelope numeric request", failureReason)) return false;
+	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":\"abc-1\",\"method\":\"workspace/symbol\"}", mr::lsp::JsonRpcMessageKind::Request, mr::lsp::JsonRpcIdKind::String, "\"abc-1\"", "workspace/symbol", "envelope string request", failureReason)) return false;
+	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}", mr::lsp::JsonRpcMessageKind::Notification, mr::lsp::JsonRpcIdKind::None, "", "initialized", "envelope notification", failureReason)) return false;
+	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"uri\":\"file:///tmp/a.cpp\"}}", mr::lsp::JsonRpcMessageKind::Response, mr::lsp::JsonRpcIdKind::Number, "2", "", "envelope response", failureReason)) return false;
+	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":\"r2\",\"error\":{\"code\":-32601,\"message\":\"missing\"}}", mr::lsp::JsonRpcMessageKind::Response, mr::lsp::JsonRpcIdKind::String, "\"r2\"", "", "envelope error response", failureReason)) return false;
+	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"shutdown\"}", mr::lsp::JsonRpcMessageKind::Unknown, mr::lsp::JsonRpcIdKind::Null, "null", "shutdown", "envelope null id", failureReason)) return false;
+	if (!expectEnvelope("{\"params\":{\"id\":4,\"method\":\"nested\"}}", mr::lsp::JsonRpcMessageKind::Unknown, mr::lsp::JsonRpcIdKind::None, "", "", "envelope nested ignored", failureReason)) return false;
+	if (!expectEnvelope("{\"message\":\"method should not count\",\"id\":3}", mr::lsp::JsonRpcMessageKind::Unknown, mr::lsp::JsonRpcIdKind::Number, "3", "", "envelope string ignored", failureReason)) return false;
+	return expectEnvelope("{\"id\":true,\"method\":\"x\"}", mr::lsp::JsonRpcMessageKind::Unknown, mr::lsp::JsonRpcIdKind::Invalid, "", "", "envelope malformed id", failureReason);
+}
+
 bool runProbe(std::string &failureReason) {
 	if (!testCompleteFrame(failureReason)) return false;
 	if (!testFragmentedFrame(failureReason)) return false;
@@ -125,6 +146,7 @@ bool runProbe(std::string &failureReason) {
 	if (!testMalformedInvalidLength(failureReason)) return false;
 	if (!testDuplicateLength(failureReason)) return false;
 	if (!testPayloadClassification(failureReason)) return false;
+	if (!testEnvelopeExtraction(failureReason)) return false;
 	return true;
 }
 } // namespace
