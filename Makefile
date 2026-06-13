@@ -165,6 +165,11 @@ LSP_REFERENCES_PROBE_SOURCE = regression/mr_lsp_references_probe.cpp
 LSP_REFERENCES_PROBE_OBJECT = regression/mr_lsp_references_probe.o
 LSP_REFERENCES_SOURCE = lsp/MRLspReferences.cpp
 LSP_REFERENCES_OBJECT = lsp/MRLspReferences.o
+LSP_COMPLETION_PROBE_TARGET = regression/mr_lsp_completion_probe
+LSP_COMPLETION_PROBE_SOURCE = regression/mr_lsp_completion_probe.cpp
+LSP_COMPLETION_PROBE_OBJECT = regression/mr_lsp_completion_probe.o
+LSP_COMPLETION_SOURCE = lsp/MRLspCompletion.cpp
+LSP_COMPLETION_OBJECT = lsp/MRLspCompletion.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -298,7 +303,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -327,6 +332,7 @@ lsp-diagnostics-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_DIAGNOSTICS_PROBE_TARGET
 lsp-definition-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_DEFINITION_PROBE_TARGET)
 lsp-hover-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_HOVER_PROBE_TARGET)
 lsp-references-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_REFERENCES_PROBE_TARGET)
+lsp-completion-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_COMPLETION_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -615,6 +621,8 @@ $(LSP_HOVER_OBJECT): $(LSP_HOVER_SOURCE) lsp/MRLspHover.hpp lsp/MRLspDefinition.
 $(LSP_HOVER_PROBE_OBJECT): $(LSP_HOVER_PROBE_SOURCE) lsp/MRLspHover.hpp
 $(LSP_REFERENCES_OBJECT): $(LSP_REFERENCES_SOURCE) lsp/MRLspReferences.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
 $(LSP_REFERENCES_PROBE_OBJECT): $(LSP_REFERENCES_PROBE_SOURCE) lsp/MRLspReferences.hpp
+$(LSP_COMPLETION_OBJECT): $(LSP_COMPLETION_SOURCE) lsp/MRLspCompletion.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
+$(LSP_COMPLETION_PROBE_OBJECT): $(LSP_COMPLETION_PROBE_SOURCE) lsp/MRLspCompletion.hpp
 
 # 3. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
@@ -676,6 +684,9 @@ $(LSP_HOVER_PROBE_TARGET): $(LSP_HOVER_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DO
 $(LSP_REFERENCES_PROBE_TARGET): $(LSP_REFERENCES_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_REFERENCES_PROBE_OBJECT)
 	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
 
+$(LSP_COMPLETION_PROBE_TARGET): $(LSP_COMPLETION_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_COMPLETION_PROBE_OBJECT)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
+
 
 # C++ compilations
 %.o: %.cpp
@@ -705,6 +716,7 @@ clean:
 		$(LSP_DEFINITION_OBJECT) $(LSP_DEFINITION_PROBE_OBJECT) $(LSP_DEFINITION_PROBE_TARGET) \
 		$(LSP_HOVER_OBJECT) $(LSP_HOVER_PROBE_OBJECT) $(LSP_HOVER_PROBE_TARGET) \
 		$(LSP_REFERENCES_OBJECT) $(LSP_REFERENCES_PROBE_OBJECT) $(LSP_REFERENCES_PROBE_TARGET) \
+		$(LSP_COMPLETION_OBJECT) $(LSP_COMPLETION_PROBE_OBJECT) $(LSP_COMPLETION_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe
