@@ -112,6 +112,11 @@ LSP_JSONRPC_PROBE_SOURCE = regression/mr_lsp_jsonrpc_probe.cpp
 LSP_JSONRPC_PROBE_OBJECT = regression/mr_lsp_jsonrpc_probe.o
 LSP_JSONRPC_SOURCE = lsp/MRLspJsonRpc.cpp
 LSP_JSONRPC_OBJECT = lsp/MRLspJsonRpc.o
+EXTERNAL_PROCESS_PROBE_TARGET = regression/mr_external_process_probe
+EXTERNAL_PROCESS_PROBE_SOURCE = regression/mr_external_process_probe.cpp
+EXTERNAL_PROCESS_PROBE_OBJECT = regression/mr_external_process_probe.o
+EXTERNAL_PROCESS_SOURCE = lsp/MRExternalProcess.cpp
+EXTERNAL_PROCESS_OBJECT = lsp/MRExternalProcess.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -245,7 +250,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe external-process-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -264,6 +269,7 @@ stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
 phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
 lsp-jsonrpc-probe: $(LSP_JSONRPC_PROBE_TARGET)
+external-process-probe: $(EXTERNAL_PROCESS_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -531,6 +537,8 @@ $(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsR
 $(MROUTLINETRAINER_OBJECT): $(MROUTLINETRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(LSP_JSONRPC_OBJECT): $(LSP_JSONRPC_SOURCE) lsp/MRLspJsonRpc.hpp
 $(LSP_JSONRPC_PROBE_OBJECT): $(LSP_JSONRPC_PROBE_SOURCE) lsp/MRLspJsonRpc.hpp
+$(EXTERNAL_PROCESS_OBJECT): $(EXTERNAL_PROCESS_SOURCE) lsp/MRExternalProcess.hpp
+$(EXTERNAL_PROCESS_PROBE_OBJECT): $(EXTERNAL_PROCESS_PROBE_SOURCE) lsp/MRExternalProcess.hpp
 
 # 3. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
@@ -559,6 +567,9 @@ $(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(
 $(LSP_JSONRPC_PROBE_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT)
 	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
 
+$(EXTERNAL_PROCESS_PROBE_TARGET): $(EXTERNAL_PROCESS_OBJECT) $(EXTERNAL_PROCESS_PROBE_OBJECT)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
+
 
 # C++ compilations
 %.o: %.cpp
@@ -577,6 +588,7 @@ clean:
 		$(REGRESSION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) \
 		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
 		$(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT) $(LSP_JSONRPC_PROBE_TARGET) \
+		$(EXTERNAL_PROCESS_OBJECT) $(EXTERNAL_PROCESS_PROBE_OBJECT) $(EXTERNAL_PROCESS_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe
