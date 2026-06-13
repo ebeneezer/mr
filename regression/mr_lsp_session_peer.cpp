@@ -9,10 +9,95 @@ struct PeerState {
 	int didOpenCount = 0;
 	int didChangeCount = 0;
 	int didCloseCount = 0;
+	std::string documentUri;
+	int documentVersion = 0;
 };
+
+void skipWhitespace(const std::string &text, std::size_t &pos) noexcept {
+	while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\t' || text[pos] == '\r' || text[pos] == '\n'))
+		++pos;
+}
+
+bool findKeyValueStart(const std::string &text, const std::string &key, std::size_t &valueStart) {
+	const std::string quotedKey = "\"" + key + "\"";
+	const std::size_t keyPos = text.find(quotedKey);
+
+	if (keyPos == std::string::npos) return false;
+	valueStart = keyPos + quotedKey.size();
+	skipWhitespace(text, valueStart);
+	if (valueStart >= text.size() || text[valueStart] != ':') return false;
+	++valueStart;
+	skipWhitespace(text, valueStart);
+	return true;
+}
+
+bool extractStringValue(const std::string &text, const std::string &key, std::string &value) {
+	std::size_t pos = 0;
+
+	value.clear();
+	if (!findKeyValueStart(text, key, pos) || pos >= text.size() || text[pos] != '"') return false;
+	++pos;
+	while (pos < text.size()) {
+		const char ch = text[pos++];
+		if (ch == '"') return true;
+		if (ch == '\\') {
+			if (pos >= text.size()) return false;
+			value.push_back(text[pos++]);
+		} else {
+			value.push_back(ch);
+		}
+	}
+	return false;
+}
+
+bool extractIntValue(const std::string &text, const std::string &key, int &value) {
+	std::size_t pos = 0;
+	bool negative = false;
+	int parsed = 0;
+
+	if (!findKeyValueStart(text, key, pos) || pos >= text.size()) return false;
+	if (text[pos] == '-') {
+		negative = true;
+		++pos;
+	}
+	if (pos >= text.size() || text[pos] < '0' || text[pos] > '9') return false;
+	while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9') {
+		parsed = parsed * 10 + static_cast<int>(text[pos] - '0');
+		++pos;
+	}
+	value = negative ? -parsed : parsed;
+	return true;
+}
+
+std::string jsonString(const std::string &value) {
+	std::string out = "\"";
+
+	for (char ch : value) {
+		if (ch == '"' || ch == '\\') {
+			out.push_back('\\');
+			out.push_back(ch);
+		} else if (ch == '\n') {
+			out += "\\n";
+		} else {
+			out.push_back(ch);
+		}
+	}
+	out.push_back('"');
+	return out;
+}
 
 std::string documentCountsResponse(const mr::lsp::JsonRpcEnvelope &envelope, const PeerState &state) {
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":{\"didOpen\":" + std::to_string(state.didOpenCount) + ",\"didChange\":" + std::to_string(state.didChangeCount) + ",\"didClose\":" + std::to_string(state.didCloseCount) + "}}";
+}
+
+std::string diagnosticsNotification(const std::string &uri, int version, const std::string &message) {
+	return "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":" + jsonString(uri) + ",\"version\":" + std::to_string(version) +
+	       ",\"diagnostics\":[{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":4}},\"severity\":2,\"message\":" + jsonString(message) + "}]}}";
+}
+
+void emitDiagnostics(const std::string &uri, int version, const std::string &message) {
+	std::cout << mr::lsp::buildJsonRpcFrame(diagnosticsNotification(uri, version, message));
+	std::cout.flush();
 }
 
 std::string responseFor(const mr::lsp::JsonRpcEnvelope &envelope) {
@@ -23,18 +108,31 @@ std::string responseFor(const mr::lsp::JsonRpcEnvelope &envelope) {
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"error\":{\"code\":-32601,\"message\":\"method not found\"}}";
 }
 
-void recordNotification(const mr::lsp::JsonRpcEnvelope &envelope, PeerState &state) noexcept {
+void recordNotification(const mr::lsp::JsonRpcEnvelope &envelope, const std::string &payload, PeerState &state) {
 	if (envelope.kind != mr::lsp::JsonRpcMessageKind::Notification) return;
-	if (envelope.method == "textDocument/didOpen") ++state.didOpenCount;
-	else if (envelope.method == "textDocument/didChange") ++state.didChangeCount;
-	else if (envelope.method == "textDocument/didClose") ++state.didCloseCount;
+	if (envelope.method == "textDocument/didOpen") {
+		++state.didOpenCount;
+		static_cast<void>(extractStringValue(payload, "uri", state.documentUri));
+		static_cast<void>(extractIntValue(payload, "version", state.documentVersion));
+		if (!state.documentUri.empty()) emitDiagnostics(state.documentUri, state.documentVersion, "opened diagnostic");
+	} else if (envelope.method == "textDocument/didChange") {
+		++state.didChangeCount;
+		static_cast<void>(extractStringValue(payload, "uri", state.documentUri));
+		static_cast<void>(extractIntValue(payload, "version", state.documentVersion));
+		if (!state.documentUri.empty()) {
+			emitDiagnostics(state.documentUri, state.documentVersion - 1, "stale diagnostic");
+			emitDiagnostics(state.documentUri, state.documentVersion, "changed diagnostic");
+		}
+	} else if (envelope.method == "textDocument/didClose") {
+		++state.didCloseCount;
+	}
 }
 
 bool handlePayload(const std::string &payload, PeerState &state) {
 	const mr::lsp::JsonRpcEnvelope envelope = mr::lsp::parseJsonRpcEnvelope(payload);
 
 	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Notification && envelope.method == "exit") return false;
-	recordNotification(envelope, state);
+	recordNotification(envelope, payload, state);
 	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "mr/documentCounts") {
 		std::cout << mr::lsp::buildJsonRpcFrame(documentCountsResponse(envelope, state));
 		std::cout.flush();

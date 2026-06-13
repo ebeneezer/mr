@@ -145,6 +145,11 @@ LSP_DOCUMENT_SERVICE_PROBE_SOURCE = regression/mr_lsp_document_service_probe.cpp
 LSP_DOCUMENT_SERVICE_PROBE_OBJECT = regression/mr_lsp_document_service_probe.o
 LSP_DOCUMENT_SERVICE_SOURCE = lsp/MRLspDocumentService.cpp
 LSP_DOCUMENT_SERVICE_OBJECT = lsp/MRLspDocumentService.o
+LSP_DIAGNOSTICS_PROBE_TARGET = regression/mr_lsp_diagnostics_probe
+LSP_DIAGNOSTICS_PROBE_SOURCE = regression/mr_lsp_diagnostics_probe.cpp
+LSP_DIAGNOSTICS_PROBE_OBJECT = regression/mr_lsp_diagnostics_probe.o
+LSP_DIAGNOSTICS_SOURCE = lsp/MRLspDiagnostics.cpp
+LSP_DIAGNOSTICS_OBJECT = lsp/MRLspDiagnostics.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -278,7 +283,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -303,6 +308,7 @@ lsp-lifecycle-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_LIFECYCLE_PROBE_TARGET)
 lsp-document-mirror-probe: $(LSP_DOCUMENT_MIRROR_PROBE_TARGET)
 lsp-uri-probe: $(LSP_URI_PROBE_TARGET)
 lsp-document-service-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_DOCUMENT_SERVICE_PROBE_TARGET)
+lsp-diagnostics-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_DIAGNOSTICS_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -583,6 +589,8 @@ $(LSP_URI_OBJECT): $(LSP_URI_SOURCE) lsp/MRLspUri.hpp
 $(LSP_URI_PROBE_OBJECT): $(LSP_URI_PROBE_SOURCE) lsp/MRLspUri.hpp
 $(LSP_DOCUMENT_SERVICE_OBJECT): $(LSP_DOCUMENT_SERVICE_SOURCE) lsp/MRLspDocumentService.hpp lsp/MRLspDocumentMirror.hpp lsp/MRLspLifecycle.hpp lsp/MRLspUri.hpp
 $(LSP_DOCUMENT_SERVICE_PROBE_OBJECT): $(LSP_DOCUMENT_SERVICE_PROBE_SOURCE) lsp/MRLspDocumentService.hpp
+$(LSP_DIAGNOSTICS_OBJECT): $(LSP_DIAGNOSTICS_SOURCE) lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentService.hpp lsp/MRLspSession.hpp
+$(LSP_DIAGNOSTICS_PROBE_OBJECT): $(LSP_DIAGNOSTICS_PROBE_SOURCE) lsp/MRLspDiagnostics.hpp
 
 # 3. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
@@ -632,6 +640,9 @@ $(LSP_URI_PROBE_TARGET): $(LSP_URI_OBJECT) $(LSP_URI_PROBE_OBJECT)
 $(LSP_DOCUMENT_SERVICE_PROBE_TARGET): $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_DOCUMENT_SERVICE_PROBE_OBJECT)
 	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
 
+$(LSP_DIAGNOSTICS_PROBE_TARGET): $(LSP_DIAGNOSTICS_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_DIAGNOSTICS_PROBE_OBJECT)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
+
 
 # C++ compilations
 %.o: %.cpp
@@ -657,6 +668,7 @@ clean:
 		$(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_TARGET) \
 		$(LSP_URI_OBJECT) $(LSP_URI_PROBE_OBJECT) $(LSP_URI_PROBE_TARGET) \
 		$(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_SERVICE_PROBE_OBJECT) $(LSP_DOCUMENT_SERVICE_PROBE_TARGET) \
+		$(LSP_DIAGNOSTICS_OBJECT) $(LSP_DIAGNOSTICS_PROBE_OBJECT) $(LSP_DIAGNOSTICS_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe
