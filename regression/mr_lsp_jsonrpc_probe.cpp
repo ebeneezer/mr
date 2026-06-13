@@ -135,6 +135,40 @@ bool testEnvelopeExtraction(std::string &failureReason) {
 	return expectEnvelope("{\"id\":true,\"method\":\"x\"}", mr::lsp::JsonRpcMessageKind::Unknown, mr::lsp::JsonRpcIdKind::Invalid, "", "", "envelope malformed id", failureReason);
 }
 
+bool testRequestTracker(std::string &failureReason) {
+	mr::lsp::JsonRpcRequestTracker tracker;
+	mr::lsp::JsonRpcPendingRequest completed;
+
+	const mr::lsp::JsonRpcPendingRequest first = tracker.beginRequest("initialize");
+	if (!expect(first.idText == "1", "tracker first id", failureReason)) return false;
+	if (!expect(first.method == "initialize", "tracker first method", failureReason)) return false;
+	if (!expect(tracker.pendingCount() == 1, "tracker first count", failureReason)) return false;
+	if (!expect(tracker.hasPending(first.idText), "tracker first pending", failureReason)) return false;
+
+	const mr::lsp::JsonRpcPendingRequest second = tracker.beginRequest("textDocument/definition");
+	if (!expect(second.idText == "2", "tracker second id", failureReason)) return false;
+	if (!expect(tracker.pendingCount() == 2, "tracker second count", failureReason)) return false;
+
+	if (!expect(tracker.completeResponse(mr::lsp::parseJsonRpcEnvelope("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":null}"), completed), "tracker complete second", failureReason)) return false;
+	if (!expect(completed.idText == second.idText, "tracker completed second id", failureReason)) return false;
+	if (!expect(completed.method == second.method, "tracker completed second method", failureReason)) return false;
+	if (!expect(tracker.pendingCount() == 1, "tracker count after complete", failureReason)) return false;
+	if (!expect(!tracker.completeResponse(mr::lsp::parseJsonRpcEnvelope("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":null}"), completed), "tracker duplicate response", failureReason)) return false;
+	if (!expect(!tracker.completeResponse(mr::lsp::parseJsonRpcEnvelope("{\"jsonrpc\":\"2.0\",\"id\":77,\"result\":null}"), completed), "tracker unknown response", failureReason)) return false;
+	if (!expect(!tracker.completeResponse(mr::lsp::parseJsonRpcEnvelope("{\"jsonrpc\":\"2.0\",\"method\":\"window/logMessage\"}"), completed), "tracker notification response", failureReason)) return false;
+	if (!expect(tracker.cancelRequest(first.idText), "tracker cancel first", failureReason)) return false;
+	if (!expect(!tracker.hasPending(first.idText), "tracker first removed", failureReason)) return false;
+	if (!expect(tracker.pendingCount() == 0, "tracker empty after cancel", failureReason)) return false;
+	if (!expect(!tracker.cancelRequest(first.idText), "tracker duplicate cancel", failureReason)) return false;
+
+	const mr::lsp::JsonRpcPendingRequest afterCancel = tracker.beginRequest("shutdown");
+	if (!expect(afterCancel.idText == "3", "tracker monotone id", failureReason)) return false;
+	tracker.clear();
+	if (!expect(tracker.pendingCount() == 0, "tracker clear count", failureReason)) return false;
+	const mr::lsp::JsonRpcPendingRequest afterClear = tracker.beginRequest("initialize");
+	return expect(afterClear.idText == "1", "tracker clear resets id", failureReason);
+}
+
 bool runProbe(std::string &failureReason) {
 	if (!testCompleteFrame(failureReason)) return false;
 	if (!testFragmentedFrame(failureReason)) return false;
@@ -147,6 +181,7 @@ bool runProbe(std::string &failureReason) {
 	if (!testDuplicateLength(failureReason)) return false;
 	if (!testPayloadClassification(failureReason)) return false;
 	if (!testEnvelopeExtraction(failureReason)) return false;
+	if (!testRequestTracker(failureReason)) return false;
 	return true;
 }
 } // namespace

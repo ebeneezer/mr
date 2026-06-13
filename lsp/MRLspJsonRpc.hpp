@@ -3,6 +3,7 @@
 
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace mr::lsp {
@@ -33,6 +34,11 @@ struct JsonRpcEnvelope {
 	std::string method;
 };
 
+struct JsonRpcPendingRequest {
+	std::string idText;
+	std::string method;
+};
+
 class JsonRpcFramer {
 public:
 	bool feed(std::string_view bytes);
@@ -49,6 +55,20 @@ private:
 	std::string buffer;
 	std::vector<JsonRpcMessage> messages;
 	std::string error;
+};
+
+class JsonRpcRequestTracker {
+public:
+	[[nodiscard]] JsonRpcPendingRequest beginRequest(std::string_view method);
+	[[nodiscard]] bool completeResponse(const JsonRpcEnvelope &envelope, JsonRpcPendingRequest &outRequest);
+	[[nodiscard]] bool cancelRequest(std::string_view idText);
+	[[nodiscard]] bool hasPending(std::string_view idText) const;
+	[[nodiscard]] std::size_t pendingCount() const noexcept;
+	void clear();
+
+private:
+	std::size_t nextRequestId = 1;
+	std::unordered_map<std::string, JsonRpcPendingRequest> pendingRequests;
 };
 
 [[nodiscard]] std::string buildJsonRpcFrame(std::string_view json);

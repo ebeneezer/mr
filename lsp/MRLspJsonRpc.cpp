@@ -314,6 +314,43 @@ bool JsonRpcFramer::fail(const std::string &message) {
 	return false;
 }
 
+JsonRpcPendingRequest JsonRpcRequestTracker::beginRequest(std::string_view method) {
+	JsonRpcPendingRequest request;
+
+	request.idText = std::to_string(nextRequestId);
+	request.method.assign(method.data(), method.size());
+	pendingRequests[request.idText] = request;
+	++nextRequestId;
+	return request;
+}
+
+bool JsonRpcRequestTracker::completeResponse(const JsonRpcEnvelope &envelope, JsonRpcPendingRequest &outRequest) {
+	if (envelope.kind != JsonRpcMessageKind::Response) return false;
+	if (envelope.idKind != JsonRpcIdKind::Number && envelope.idKind != JsonRpcIdKind::String) return false;
+	auto it = pendingRequests.find(envelope.idText);
+	if (it == pendingRequests.end()) return false;
+	outRequest = it->second;
+	pendingRequests.erase(it);
+	return true;
+}
+
+bool JsonRpcRequestTracker::cancelRequest(std::string_view idText) {
+	return pendingRequests.erase(std::string(idText)) != 0;
+}
+
+bool JsonRpcRequestTracker::hasPending(std::string_view idText) const {
+	return pendingRequests.find(std::string(idText)) != pendingRequests.end();
+}
+
+std::size_t JsonRpcRequestTracker::pendingCount() const noexcept {
+	return pendingRequests.size();
+}
+
+void JsonRpcRequestTracker::clear() {
+	nextRequestId = 1;
+	pendingRequests.clear();
+}
+
 std::string buildJsonRpcFrame(std::string_view json) {
 	std::string frame = makeFrameHeader(json.size());
 
