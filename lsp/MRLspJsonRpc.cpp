@@ -9,6 +9,14 @@ namespace mr::lsp {
 namespace {
 constexpr std::size_t kMaxHeaderBytes = 64 * 1024;
 
+struct JsonRpcTopLevelMembers {
+	bool validObject = false;
+	bool id = false;
+	bool method = false;
+	bool result = false;
+	bool error = false;
+};
+
 bool asciiCaseEquals(std::string_view left, std::string_view right) {
 	if (left.size() != right.size()) return false;
 	for (std::size_t i = 0; i < left.size(); ++i) {
@@ -28,6 +36,114 @@ std::string_view trimAscii(std::string_view value) {
 	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
 		--end;
 	return value.substr(start, end - start);
+}
+
+void skipJsonWhitespace(std::string_view text, std::size_t &pos) {
+	while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos])) != 0)
+		++pos;
+}
+
+bool parseJsonString(std::string_view text, std::size_t &pos, std::string *outValue) {
+	std::string value;
+
+	if (pos >= text.size() || text[pos] != '"') return false;
+	++pos;
+	while (pos < text.size()) {
+		const char ch = text[pos++];
+		if (ch == '"') {
+			if (outValue != nullptr) *outValue = value;
+			return true;
+		}
+		if (ch == '\\') {
+			if (pos >= text.size()) return false;
+			value.push_back(text[pos++]);
+			continue;
+		}
+		value.push_back(ch);
+	}
+	return false;
+}
+
+bool skipJsonValue(std::string_view text, std::size_t &pos) {
+	int objectDepth = 0;
+	int arrayDepth = 0;
+
+	skipJsonWhitespace(text, pos);
+	if (pos >= text.size()) return false;
+	if (text[pos] == '"') return parseJsonString(text, pos, nullptr);
+	while (pos < text.size()) {
+		const char ch = text[pos];
+		if (ch == '"') {
+			if (!parseJsonString(text, pos, nullptr)) return false;
+			continue;
+		}
+		if (ch == '{') {
+			++objectDepth;
+			++pos;
+			continue;
+		}
+		if (ch == '[') {
+			++arrayDepth;
+			++pos;
+			continue;
+		}
+		if (ch == '}') {
+			if (objectDepth == 0 && arrayDepth == 0) return true;
+			--objectDepth;
+			++pos;
+			continue;
+		}
+		if (ch == ']') {
+			if (arrayDepth == 0) return false;
+			--arrayDepth;
+			++pos;
+			continue;
+		}
+		if (ch == ',' && objectDepth == 0 && arrayDepth == 0) return true;
+		++pos;
+	}
+	return objectDepth == 0 && arrayDepth == 0;
+}
+
+bool scanJsonRpcTopLevelMembers(std::string_view payload, JsonRpcTopLevelMembers &members) {
+	std::size_t pos = 0;
+
+	skipJsonWhitespace(payload, pos);
+	if (pos >= payload.size() || payload[pos] != '{') return true;
+	++pos;
+	members.validObject = true;
+	skipJsonWhitespace(payload, pos);
+	if (pos < payload.size() && payload[pos] == '}') {
+		++pos;
+		skipJsonWhitespace(payload, pos);
+		return pos == payload.size();
+	}
+	for (;;) {
+		std::string key;
+
+		if (!parseJsonString(payload, pos, &key)) return false;
+		skipJsonWhitespace(payload, pos);
+		if (pos >= payload.size() || payload[pos] != ':') return false;
+		++pos;
+		if (key == "id") members.id = true;
+		else if (key == "method")
+			members.method = true;
+		else if (key == "result")
+			members.result = true;
+		else if (key == "error")
+			members.error = true;
+		if (!skipJsonValue(payload, pos)) return false;
+		skipJsonWhitespace(payload, pos);
+		if (pos >= payload.size()) return false;
+		if (payload[pos] == '}') {
+			++pos;
+			skipJsonWhitespace(payload, pos);
+			return pos == payload.size();
+		}
+		if (payload[pos] != ',') return false;
+		++pos;
+		skipJsonWhitespace(payload, pos);
+	}
 }
 
 bool parseContentLength(std::string_view value, std::size_t &contentLength) {
@@ -137,6 +253,17 @@ std::string buildJsonRpcFrame(std::string_view json) {
 
 	frame.append(json.data(), json.size());
 	return frame;
+}
+
+JsonRpcMessageKind classifyJsonRpcPayload(std::string_view payload) {
+	JsonRpcTopLevelMembers members;
+
+	if (!scanJsonRpcTopLevelMembers(payload, members)) return JsonRpcMessageKind::Unknown;
+	if (!members.validObject) return JsonRpcMessageKind::Unknown;
+	if (members.id && (members.result || members.error) && !members.method) return JsonRpcMessageKind::Response;
+	if (members.id && members.method && !members.result && !members.error) return JsonRpcMessageKind::Request;
+	if (!members.id && members.method && !members.result && !members.error) return JsonRpcMessageKind::Notification;
+	return JsonRpcMessageKind::Unknown;
 }
 
 } // namespace mr::lsp

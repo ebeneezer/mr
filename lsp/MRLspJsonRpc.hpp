@@ -11,6 +11,13 @@ struct JsonRpcMessage {
 	std::string payload;
 };
 
+enum class JsonRpcMessageKind {
+	Unknown,
+	Request,
+	Notification,
+	Response
+};
+
 class JsonRpcFramer {
 public:
 	bool feed(std::string_view bytes);
@@ -30,6 +37,7 @@ private:
 };
 
 [[nodiscard]] std::string buildJsonRpcFrame(std::string_view json);
+[[nodiscard]] JsonRpcMessageKind classifyJsonRpcPayload(std::string_view payload);
 
 } // namespace mr::lsp
 

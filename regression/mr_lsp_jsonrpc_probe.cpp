@@ -17,6 +17,12 @@ bool expectPayload(mr::lsp::JsonRpcFramer &framer, const std::string &payload, c
 	return true;
 }
 
+bool expectKind(const std::string &payload, mr::lsp::JsonRpcMessageKind expected, const std::string &name, std::string &failureReason) {
+	const mr::lsp::JsonRpcMessageKind actual = mr::lsp::classifyJsonRpcPayload(payload);
+
+	return expect(actual == expected, name, failureReason);
+}
+
 bool testCompleteFrame(std::string &failureReason) {
 	mr::lsp::JsonRpcFramer framer;
 	const std::string payload = "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\"}";
@@ -95,6 +101,19 @@ bool testDuplicateLength(std::string &failureReason) {
 	return expect(framer.failed(), "duplicate length not failed", failureReason);
 }
 
+bool testPayloadClassification(std::string &failureReason) {
+	if (!expectKind("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/definition\",\"params\":{}}", mr::lsp::JsonRpcMessageKind::Request, "classify request", failureReason)) return false;
+	if (!expectKind("{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}", mr::lsp::JsonRpcMessageKind::Notification, "classify notification", failureReason)) return false;
+	if (!expectKind("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"uri\":\"file:///tmp/a.cpp\"}}", mr::lsp::JsonRpcMessageKind::Response, "classify response", failureReason)) return false;
+	if (!expectKind("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32601,\"message\":\"missing\"}}", mr::lsp::JsonRpcMessageKind::Response, "classify error response", failureReason)) return false;
+	if (!expectKind("", mr::lsp::JsonRpcMessageKind::Unknown, "classify empty", failureReason)) return false;
+	if (!expectKind("[]", mr::lsp::JsonRpcMessageKind::Unknown, "classify array", failureReason)) return false;
+	if (!expectKind("{\"params\":{\"method\":\"nested\"}}", mr::lsp::JsonRpcMessageKind::Unknown, "classify nested method", failureReason)) return false;
+	if (!expectKind("{\"message\":\"method should not count\"}", mr::lsp::JsonRpcMessageKind::Unknown, "classify string method", failureReason)) return false;
+	if (!expectKind("{\"id\":1,\"method\":\"x\",\"result\":{}}", mr::lsp::JsonRpcMessageKind::Unknown, "classify ambiguous", failureReason)) return false;
+	return expectKind("{\"id\":1,\"method\":\"x\"", mr::lsp::JsonRpcMessageKind::Unknown, "classify malformed", failureReason);
+}
+
 bool runProbe(std::string &failureReason) {
 	if (!testCompleteFrame(failureReason)) return false;
 	if (!testFragmentedFrame(failureReason)) return false;
@@ -105,6 +124,7 @@ bool runProbe(std::string &failureReason) {
 	if (!testMalformedMissingLength(failureReason)) return false;
 	if (!testMalformedInvalidLength(failureReason)) return false;
 	if (!testDuplicateLength(failureReason)) return false;
+	if (!testPayloadClassification(failureReason)) return false;
 	return true;
 }
 } // namespace
