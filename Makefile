@@ -130,6 +130,11 @@ LSP_LIFECYCLE_PROBE_SOURCE = regression/mr_lsp_lifecycle_probe.cpp
 LSP_LIFECYCLE_PROBE_OBJECT = regression/mr_lsp_lifecycle_probe.o
 LSP_LIFECYCLE_SOURCE = lsp/MRLspLifecycle.cpp
 LSP_LIFECYCLE_OBJECT = lsp/MRLspLifecycle.o
+LSP_DOCUMENT_MIRROR_PROBE_TARGET = regression/mr_lsp_document_mirror_probe
+LSP_DOCUMENT_MIRROR_PROBE_SOURCE = regression/mr_lsp_document_mirror_probe.cpp
+LSP_DOCUMENT_MIRROR_PROBE_OBJECT = regression/mr_lsp_document_mirror_probe.o
+LSP_DOCUMENT_MIRROR_SOURCE = lsp/MRLspDocumentMirror.cpp
+LSP_DOCUMENT_MIRROR_OBJECT = lsp/MRLspDocumentMirror.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -263,7 +268,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -285,6 +290,7 @@ lsp-jsonrpc-probe: $(LSP_JSONRPC_PROBE_TARGET)
 external-process-probe: $(EXTERNAL_PROCESS_PROBE_TARGET)
 lsp-session-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_SESSION_PROBE_TARGET)
 lsp-lifecycle-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_LIFECYCLE_PROBE_TARGET)
+lsp-document-mirror-probe: $(LSP_DOCUMENT_MIRROR_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -559,6 +565,8 @@ $(LSP_SESSION_PROBE_OBJECT): $(LSP_SESSION_PROBE_SOURCE) lsp/MRLspSession.hpp
 $(LSP_SESSION_PEER_OBJECT): $(LSP_SESSION_PEER_SOURCE) lsp/MRLspJsonRpc.hpp
 $(LSP_LIFECYCLE_OBJECT): $(LSP_LIFECYCLE_SOURCE) lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
 $(LSP_LIFECYCLE_PROBE_OBJECT): $(LSP_LIFECYCLE_PROBE_SOURCE) lsp/MRLspLifecycle.hpp
+$(LSP_DOCUMENT_MIRROR_OBJECT): $(LSP_DOCUMENT_MIRROR_SOURCE) lsp/MRLspDocumentMirror.hpp
+$(LSP_DOCUMENT_MIRROR_PROBE_OBJECT): $(LSP_DOCUMENT_MIRROR_PROBE_SOURCE) lsp/MRLspDocumentMirror.hpp
 
 # 3. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
@@ -599,6 +607,9 @@ $(LSP_SESSION_PEER_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_SESSION_PEER_OBJECT)
 $(LSP_LIFECYCLE_PROBE_TARGET): $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_LIFECYCLE_PROBE_OBJECT)
 	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
 
+$(LSP_DOCUMENT_MIRROR_PROBE_TARGET): $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_OBJECT)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
+
 
 # C++ compilations
 %.o: %.cpp
@@ -621,6 +632,7 @@ clean:
 		$(LSP_SESSION_OBJECT) $(LSP_SESSION_PROBE_OBJECT) $(LSP_SESSION_PROBE_TARGET) \
 		$(LSP_SESSION_PEER_OBJECT) $(LSP_SESSION_PEER_TARGET) \
 		$(LSP_LIFECYCLE_OBJECT) $(LSP_LIFECYCLE_PROBE_OBJECT) $(LSP_LIFECYCLE_PROBE_TARGET) \
+		$(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe
