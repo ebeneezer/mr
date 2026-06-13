@@ -45,6 +45,12 @@ bool LspLifecycle::sendInitialized(std::string &errorMessage) {
 	return session.sendNotification("initialized", "{}", errorMessage);
 }
 
+bool LspLifecycle::sendInitializedPayload(std::string_view payload, std::string &errorMessage) {
+	if (lifecycleState != LspLifecycleState::Initialized)
+		return fail(errorMessage, "LSP lifecycle is not initialized.");
+	return session.sendRawPayload(payload, errorMessage);
+}
+
 bool LspLifecycle::shutdown(std::string &errorMessage) {
 	JsonRpcPendingRequest request;
 

@@ -31,6 +31,7 @@ public:
 	bool start(const LspSessionSpec &spec, std::string &errorMessage);
 	bool sendNotification(std::string_view method, std::string_view paramsJson, std::string &errorMessage);
 	bool sendRequest(std::string_view method, std::string_view paramsJson, JsonRpcPendingRequest &request, std::string &errorMessage);
+	bool sendRawPayload(std::string_view payload, std::string &errorMessage);
 	bool poll(std::vector<LspInboundMessage> &messages, std::string &errorMessage);
 	void requestStop();
 	bool wait(int timeoutMs, int &exitStatus);
@@ -39,8 +40,6 @@ public:
 	void close();
 
 private:
-	bool sendPayload(std::string_view payload, std::string &errorMessage);
-
 	ExternalProcessSession process;
 	JsonRpcFramer framer;
 	JsonRpcRequestTracker requestTracker;
