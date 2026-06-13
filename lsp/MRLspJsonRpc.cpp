@@ -1,0 +1,142 @@
+#include "MRLspJsonRpc.hpp"
+
+#include <cctype>
+#include <limits>
+#include <sstream>
+#include <utility>
+
+namespace mr::lsp {
+namespace {
+constexpr std::size_t kMaxHeaderBytes = 64 * 1024;
+
+bool asciiCaseEquals(std::string_view left, std::string_view right) {
+	if (left.size() != right.size()) return false;
+	for (std::size_t i = 0; i < left.size(); ++i) {
+		const unsigned char leftChar = static_cast<unsigned char>(left[i]);
+		const unsigned char rightChar = static_cast<unsigned char>(right[i]);
+		if (std::tolower(leftChar) != std::tolower(rightChar)) return false;
+	}
+	return true;
+}
+
+std::string_view trimAscii(std::string_view value) {
+	std::size_t start = 0;
+	std::size_t end = value.size();
+
+	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
+		++start;
+	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
+		--end;
+	return value.substr(start, end - start);
+}
+
+bool parseContentLength(std::string_view value, std::size_t &contentLength) {
+	std::size_t parsed = 0;
+
+	value = trimAscii(value);
+	if (value.empty()) return false;
+	for (char ch : value) {
+		if (ch < '0' || ch > '9') return false;
+		const std::size_t digit = static_cast<std::size_t>(ch - '0');
+		if (parsed > (std::numeric_limits<std::size_t>::max() - digit) / 10) return false;
+		parsed = parsed * 10 + digit;
+	}
+	contentLength = parsed;
+	return true;
+}
+
+std::string makeFrameHeader(std::size_t length) {
+	std::ostringstream out;
+
+	out << "Content-Length: " << length << "\r\n\r\n";
+	return out.str();
+}
+} // namespace
+
+bool JsonRpcFramer::feed(std::string_view bytes) {
+	if (failed()) return false;
+	buffer.append(bytes.data(), bytes.size());
+	return processBuffer();
+}
+
+bool JsonRpcFramer::hasMessage() const noexcept {
+	return !messages.empty();
+}
+
+JsonRpcMessage JsonRpcFramer::popMessage() {
+	JsonRpcMessage message;
+
+	if (messages.empty()) return message;
+	message = std::move(messages.front());
+	messages.erase(messages.begin());
+	return message;
+}
+
+bool JsonRpcFramer::failed() const noexcept {
+	return !error.empty();
+}
+
+const std::string &JsonRpcFramer::errorMessage() const noexcept {
+	return error;
+}
+
+void JsonRpcFramer::clear() {
+	buffer.clear();
+	messages.clear();
+	error.clear();
+}
+
+bool JsonRpcFramer::processBuffer() {
+	for (;;) {
+		const std::size_t headerEnd = buffer.find("\r\n\r\n");
+		std::size_t contentLength = 0;
+		bool sawContentLength = false;
+		std::size_t lineStart = 0;
+
+		if (headerEnd == std::string::npos) {
+			if (buffer.size() > kMaxHeaderBytes) return fail("LSP JSON-RPC header exceeds maximum size.");
+			return true;
+		}
+
+		while (lineStart < headerEnd) {
+			const std::size_t lineEnd = buffer.find("\r\n", lineStart);
+			const std::size_t effectiveLineEnd = lineEnd == std::string::npos || lineEnd > headerEnd ? headerEnd : lineEnd;
+			const std::string_view line(buffer.data() + lineStart, effectiveLineEnd - lineStart);
+			const std::size_t colon = line.find(':');
+
+			if (colon == std::string_view::npos) return fail("LSP JSON-RPC header line is missing ':'.");
+			const std::string_view name = trimAscii(line.substr(0, colon));
+			const std::string_view value = line.substr(colon + 1);
+			if (name.empty()) return fail("LSP JSON-RPC header name is empty.");
+			if (asciiCaseEquals(name, "Content-Length")) {
+				if (sawContentLength) return fail("LSP JSON-RPC header contains duplicate Content-Length.");
+				if (!parseContentLength(value, contentLength)) return fail("LSP JSON-RPC Content-Length is invalid.");
+				sawContentLength = true;
+			}
+			lineStart = effectiveLineEnd + 2;
+		}
+
+		if (!sawContentLength) return fail("LSP JSON-RPC header is missing Content-Length.");
+		const std::size_t bodyStart = headerEnd + 4;
+		if (contentLength > buffer.size() - bodyStart) return true;
+
+		JsonRpcMessage message;
+		message.payload = buffer.substr(bodyStart, contentLength);
+		messages.push_back(std::move(message));
+		buffer.erase(0, bodyStart + contentLength);
+	}
+}
+
+bool JsonRpcFramer::fail(const std::string &message) {
+	error = message;
+	return false;
+}
+
+std::string buildJsonRpcFrame(std::string_view json) {
+	std::string frame = makeFrameHeader(json.size());
+
+	frame.append(json.data(), json.size());
+	return frame;
+}
+
+} // namespace mr::lsp
