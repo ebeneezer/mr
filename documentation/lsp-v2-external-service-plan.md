@@ -1,0 +1,429 @@
+# LSP V2 External Service Plan
+
+## Status
+
+This document is a planning note, not an architecture contract.
+
+It records the current direction for a second LSP attempt and the broader
+external-service foundation that should precede it.
+
+## Retrospective
+
+The first LSP attempt failed because it treated LSP primarily as an editor
+feature. The missing foundation was a controlled external-service layer.
+
+LSP diagnostics, navigation, hover and completion are visible editor features,
+but the hard problem is below that surface:
+
+- external process lifecycle,
+- bidirectional stream handling,
+- protocol framing,
+- JSON-RPC request and notification routing,
+- document versioning,
+- stale response rejection,
+- URI and path mapping,
+- asynchronous result application,
+- service capability projection into MR-native UI.
+
+The first implementation strategy reached too quickly into UI-visible behavior.
+For V2 the foundation must be built first.
+
+## Core Direction
+
+MR should gain a controlled external-service layer.
+
+The layer must support LSP, but it must not be LSP-specific in its lowest
+parts. It should later also carry Git, build tools and possibly debugger
+protocols.
+
+Conceptual stack:
+
+```text
+MR Workspace
+  Benutzerwahrheit
+
+Service Contexts
+  abgeleitete technische Wahrheiten pro Dienst
+
+External Process Foundation
+  wiederverwendbare Prozess-/Stream-/Lifecycle-Schicht
+
+Protocol Adapters
+  LSP JSON-RPC
+  Git CLI
+  Build CLI
+  spaeter DAP
+
+Feature Consumers
+  diagnostics
+  definition
+  references
+  completion
+  hover
+  Git status/diff
+  build output
+```
+
+The architectural question is not which feature is displayed first. The
+architectural question is which layer owns which truth.
+
+## Authority Model
+
+MR owns the editor truth.
+
+Authoritative MR state includes:
+
+- open documents,
+- text buffers,
+- document identity,
+- document dirty state,
+- document version,
+- cursor and selection state,
+- workspace membership,
+- main file selection.
+
+External services may receive mirrors or derived service contexts. They must not
+become authoritative for MR editor state.
+
+For LSP this means:
+
+- MR keeps the canonical document text and version.
+- The LSP layer keeps a `LspDocumentMirror` representing the last state sent to
+  the server.
+- Incoming results are accepted only if they still match the relevant MR
+  document version or an explicitly valid service version.
+- Old diagnostics, completion responses or navigation results must be discarded
+  when they belong to stale document state.
+- Server state must never repair, replace or override MR text state.
+
+This is a protocol mirror, not shared ownership.
+
+## LSP Object Boundaries
+
+An all-owning `LSPManager` must be avoided.
+
+Useful OOP boundaries are narrower:
+
+```text
+MRDocument
+  authoritative editor text and version
+
+LspDocumentMirror
+  last document state sent to the language server
+
+LspSession
+  server lifecycle, initialize/shutdown, request ids, notifications, responses
+
+LspServiceAdapters
+  diagnostics, definition, references, completion and hover as separate consumers
+
+MR UI Consumers
+  context menu, hover projection, diagnostics pane, sidekick, command routing
+```
+
+The LSP layer may own protocol state. It must not own MR document state,
+workspace truth or UI behavior.
+
+## External Process Foundation
+
+The reusable foundation should be below service semantics.
+
+Generic:
+
+- process start and stop,
+- working directory and environment,
+- stdin/stdout/stderr stream ownership,
+- exit status,
+- asynchronous read/write events,
+- bounded shutdown behavior,
+- error reporting suitable for higher layers.
+
+Protocol-specific:
+
+- LSP `Content-Length` framing,
+- JSON-RPC request id tracking,
+- JSON-RPC notifications,
+- Git CLI output parsing,
+- build output parsing,
+- later debugger protocol behavior.
+
+The foundation should not become a generic semantic "external tool manager".
+Process and stream mechanics can be shared. Git, LSP and build semantics should
+remain separate service adapters.
+
+## Deterministic Test Server
+
+V2 needs a deterministic protocol peer.
+
+This can be called a fake LSP, test LSP or deterministic LSP test server. It is
+not a real language server. Its purpose is to test MR's communication layer.
+
+Required behavior:
+
+- parse and emit `Content-Length` framed JSON-RPC,
+- answer `initialize`,
+- accept `initialized`,
+- accept `textDocument/didOpen`,
+- accept `textDocument/didChange`,
+- emit deterministic `textDocument/publishDiagnostics`,
+- answer selected request types with known payloads,
+- deliberately delay selected responses,
+- emit malformed or unexpected messages for error-path tests.
+
+Real servers such as `clangd`, Python LSP or TypeScript LSP are integration
+targets after the communication layer is proven. They are not suitable as the
+primary regression opponent.
+
+## MR Workspace Model
+
+MR should not become a folder-first IDE.
+
+The MR workspace is the user-facing project model:
+
+- all loaded files may belong to the MR workspace,
+- one loaded file can be marked as the main file,
+- workspace membership is MR-owned,
+- service roots are derived from the MR workspace, not the other way around.
+
+Design rule:
+
+```text
+MR Workspace owns membership.
+Main file owns semantic anchor.
+Filesystem roots are derived service contexts, never authoritative workspace membership.
+```
+
+The main file is not just decoration. It is the anchor for project semantics:
+
+- build command selection,
+- compile context,
+- include context,
+- LSP root derivation,
+- header interpretation,
+- future debugger/run context.
+
+The main file should be visible in the icon area. That icon is a projection of
+workspace state; it must not become separate UI-owned state.
+
+## Workspace Adapter
+
+The workspace adapter answers service-context questions without turning the
+filesystem into MR's authority.
+
+It should derive:
+
+- workspace files from loaded MR files,
+- main file from explicit MR workspace state,
+- effective root for protocols that require a root,
+- build working directory,
+- compile context,
+- LSP `rootUri`,
+- LSP `workspaceFolders` when needed,
+- per-file Git repository context.
+
+For LSP, the effective root is adapter data. It is not the user-facing project
+definition.
+
+For build tools, the main file and build profile are the semantic anchor.
+
+For Git, the `.git` repository remains authoritative for Git operations.
+
+## Git Context
+
+Git should remain Git.
+
+MR should not reimplement Git semantics and should not pretend that a Git
+repository is something other than the actual repository on disk.
+
+Likely command style:
+
+```sh
+git -C <repo-root> status
+git -C <repo-root> diff
+git -C <repo-root> log
+```
+
+Repository root detection should be Git-native, for example through `.git`
+search or `git -C <path> rev-parse --show-toplevel`.
+
+If an MR workspace contains files from multiple repositories:
+
+- file-local commands use the repository of the current file,
+- mainfile-local commands use the repository of the main file,
+- workspace-wide commands group output by repository,
+- files outside any repository are reported as not versioned,
+- commands requiring a single repository must ask for an explicit repository
+  choice or report that the workspace spans multiple repositories.
+
+Git repository membership must not redefine MR workspace membership.
+
+## No Visible JSON Control Files
+
+MR must not require visible editor JSON files in the project.
+
+V2 should avoid:
+
+- `.vscode`-style project control,
+- mandatory `settings.json`,
+- mandatory generated `compile_commands.json` in the project,
+- passive behavior changes triggered by hidden interpretation of JSON files.
+
+MR may later support explicit import from existing external files, but it should
+not silently let those files steer editor behavior.
+
+If a language server requires configuration data:
+
+1. Prefer direct server arguments or LSP initialization options.
+2. If a file is unavoidable, generate it in a private MR temp/cache location.
+3. Remove or ignore volatile generated files after the session as appropriate.
+4. If a server cannot operate without visible project control files, it is not a
+   good V2 target.
+
+MR-native configuration belongs in MR-controlled state. Persistent integration
+with settings or workspace serialization requires a separate protected
+architecture tranche.
+
+## Context Menu
+
+The context menu should be a central higher-layer design idea.
+
+It must be MR-native and deterministic. Opening a context menu must not block on
+live external service requests.
+
+Design rule:
+
+```text
+MR offers available capabilities at the current location.
+MR does not ask external services while constructing the context menu.
+```
+
+Menu construction should use:
+
+- local editor context,
+- current file state,
+- current cursor or mouse position,
+- registered service capabilities,
+- cached service results,
+- known active debug/build/LSP/Git contexts.
+
+Examples of capability offers:
+
+- go to definition,
+- find references,
+- show diagnostics,
+- show hover details,
+- show variable value when a runtime/debug context exists,
+- Git blame for a versioned file,
+- Git diff for a versioned file,
+- build diagnostics for the main file context.
+
+The action selected from the menu may use the appropriate service. The menu
+itself should not be a waiting room for LSP, Git or build tools.
+
+## Hover
+
+Hover should be an information channel, not an authority channel.
+
+Staged dwell times are a valid MR interaction idea:
+
+```text
+short dwell:
+  local hints, diagnostic summary, status-level information
+
+medium dwell:
+  symbol hover, type information, Git blame summary
+
+long dwell:
+  documentation, signature details, extended analyzer/build explanation
+```
+
+Hover must not block editing. It should use the same local context and result
+cache model as the context menu, so mouse and keyboard paths do not become
+separate systems.
+
+Context menu is the primary action channel. Hover is the staged information
+channel.
+
+## Service Result Model
+
+External services should produce service results. UI layers consume those
+results.
+
+Examples:
+
+- diagnostics,
+- definition targets,
+- reference lists,
+- completion items,
+- hover text,
+- Git file status,
+- Git hunks,
+- build output diagnostics,
+- debugger variable values.
+
+Service results must carry enough metadata to reject stale or mismatched data:
+
+- document identity,
+- document version or service version,
+- source service,
+- request id where relevant,
+- validity state,
+- error state.
+
+UI consumers should not need to know protocol mechanics.
+
+## First LSP V2 Tranche
+
+The first implementation tranche should be intentionally small.
+
+Recommended scope:
+
+- external process foundation sufficient for one long-lived service,
+- LSP content-length JSON-RPC codec,
+- `initialize` / `initialized` / `shutdown` / `exit`,
+- one document mirror,
+- full document sync only,
+- deterministic test LSP peer,
+- diagnostics-only service result,
+- no completion,
+- no definition,
+- no references,
+- no persistent settings,
+- no visible project JSON,
+- no broad UI integration.
+
+The first visible UI can be minimal diagnostic projection after the transport
+and stale-result rules are proven.
+
+## Later Tranches
+
+Possible later tranches:
+
+1. Workspace adapter with mainfile projection in the icon area.
+2. LSP diagnostics projection into existing diagnostic surfaces.
+3. Context-menu capability registry.
+4. Definition and references.
+5. Completion.
+6. Hover with staged dwell behavior.
+7. Git service context using real `.git` repositories.
+8. Build service context anchored at the main file.
+9. Persistent workspace/LSP profiles through an explicit protected architecture
+   plan.
+10. Debugger/runtime variable value service, likely separate from LSP.
+
+Runtime variable values are not an LSP feature. They require a build and debug
+context, likely through a debugger protocol or MR-specific runtime integration.
+
+## Constraints To Preserve
+
+- MR workspace membership is user-facing truth.
+- Git repository roots are Git truth only.
+- LSP roots are protocol adapter data.
+- Main file is the semantic anchor for build and project context.
+- External services do not own MR document state.
+- Context menus are constructed locally from available capabilities.
+- Hover is informational and staged.
+- Visible project JSON is not required.
+- Persistent settings and workspace serialization changes require separate
+  protected planning.
+
