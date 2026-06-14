@@ -72,6 +72,23 @@ bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &works
 	return true;
 }
 
+bool buildLspInitializeSpecFromServerProfile(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
+	mr::lsp::LspSessionSpec sessionSpec;
+
+	if (profile.executablePath.empty()) {
+		errorMessage = "LSP server profile executable path is empty.";
+		return false;
+	}
+	sessionSpec.process.executablePath = profile.executablePath;
+	sessionSpec.process.arguments = profile.arguments;
+	if (!profile.workingDirectory.empty()) {
+		sessionSpec.process.workingDirectory = normalizeWorkspaceServicePath(profile.workingDirectory);
+	} else if (workspace.root.hasRoot) {
+		sessionSpec.process.workingDirectory = normalizeWorkspaceServicePath(workspace.root.rootPath);
+	}
+	return buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, spec, errorMessage);
+}
+
 bool MRLspServiceSession::start(const mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
 	clearRequests();
 	resultStore.clear();
@@ -80,6 +97,13 @@ bool MRLspServiceSession::start(const mr::lsp::LspInitializeSpec &spec, std::str
 	activeEditorDocumentVersion = 0;
 	activeEditorDocumentPath.clear();
 	return lifecycle.start(spec, errorMessage);
+}
+
+bool MRLspServiceSession::start(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage) {
+	mr::lsp::LspInitializeSpec spec;
+
+	if (!buildLspInitializeSpecFromServerProfile(workspace, profile, spec, errorMessage)) return false;
+	return start(spec, errorMessage);
 }
 
 bool MRLspServiceSession::sendInitialized(std::string &errorMessage) {

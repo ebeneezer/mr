@@ -10,12 +10,21 @@
 #include "../../lsp/MRLspReferences.hpp"
 
 #include <string>
+#include <vector>
 
 class MRFileEditor;
 
 namespace mr::services {
 
+struct MRLspServerProfile {
+	std::string profileName;
+	std::string executablePath;
+	std::vector<std::string> arguments;
+	std::string workingDirectory;
+};
+
 [[nodiscard]] bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspSessionSpec &sessionSpec, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
+[[nodiscard]] bool buildLspInitializeSpecFromServerProfile(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
 
 class MRLspServiceSession {
 public:
@@ -24,6 +33,7 @@ public:
 	MRLspServiceSession &operator=(const MRLspServiceSession &) = delete;
 
 	bool start(const mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
+	bool start(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage);
 	bool sendInitialized(std::string &errorMessage);
 	bool openDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
 	bool changeDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
