@@ -1315,6 +1315,96 @@ bool showLspReferencesDialog(const mr::services::MRServiceLocationResult &result
 	return true;
 }
 
+std::vector<std::string> buildLspHoverDisplayLines(const std::string &text, std::size_t width, std::size_t maxLines) {
+	std::vector<std::string> lines;
+	std::string sanitized;
+	std::size_t paragraphStart = 0;
+	bool truncated = false;
+
+	if (width == 0 || maxLines == 0) return lines;
+	sanitized.reserve(text.size());
+	for (char ch : text) {
+		unsigned char uch = static_cast<unsigned char>(ch);
+
+		if (ch == '\r') continue;
+		if (ch == '\t') sanitized.push_back(' ');
+		else if (ch == '\n')
+			sanitized.push_back('\n');
+		else if (uch < 32)
+			sanitized.push_back(' ');
+		else
+			sanitized.push_back(ch);
+	}
+
+	while (paragraphStart <= sanitized.size() && lines.size() < maxLines) {
+		std::size_t paragraphEnd = sanitized.find('\n', paragraphStart);
+		std::string paragraph;
+
+		if (paragraphEnd == std::string::npos) paragraphEnd = sanitized.size();
+		paragraph = sanitized.substr(paragraphStart, paragraphEnd - paragraphStart);
+		while (!paragraph.empty() && paragraph.front() == ' ')
+			paragraph.erase(paragraph.begin());
+		while (!paragraph.empty() && lines.size() < maxLines) {
+			std::size_t take = std::min(width, paragraph.size());
+			std::size_t breakPos = paragraph.rfind(' ', take);
+
+			if (take < paragraph.size() && breakPos != std::string::npos && breakPos > 0) take = breakPos;
+			lines.push_back(paragraph.substr(0, take));
+			paragraph.erase(0, take);
+			while (!paragraph.empty() && paragraph.front() == ' ')
+				paragraph.erase(paragraph.begin());
+		}
+		if (paragraph.empty() && paragraphStart < sanitized.size() && lines.size() < maxLines && paragraphEnd == paragraphStart) lines.push_back(std::string());
+		if (paragraphEnd == sanitized.size()) break;
+		paragraphStart = paragraphEnd + 1;
+	}
+	if (paragraphStart < sanitized.size() && lines.size() >= maxLines) truncated = true;
+	if (truncated && !lines.empty()) {
+		std::string &last = lines.back();
+
+		if (last.size() + 3 <= width) last += "...";
+		else if (width >= 3)
+			last = last.substr(0, width - 3) + "...";
+	}
+	return lines;
+}
+
+bool showLspHoverDialog(const mr::services::MRServiceHoverResult &result) {
+	MRDialogFoundation *dialog = nullptr;
+	ushort dialogResult = cmCancel;
+	std::vector<std::string> lines;
+	const std::size_t textWidth = 76;
+	const std::size_t maxLines = 16;
+	short width = 82;
+	short height = 0;
+	short buttonY = 0;
+
+	if (TProgram::deskTop == nullptr) return false;
+	lines = buildLspHoverDisplayLines(result.hover.value, textWidth, maxLines);
+	if (lines.empty()) {
+		postLspWarning("LSP hover: empty hover.");
+		return true;
+	}
+
+	height = static_cast<short>(lines.size() + 5);
+	buttonY = static_cast<short>(height - 3);
+	dialog = mr::dialogs::createScrollableDialog("LSP HOVER", width, height);
+	for (std::size_t i = 0; i < lines.size(); ++i) {
+		const std::string &line = lines[i];
+
+		dialog->insert(new TStaticText(TRect(3, static_cast<short>(2 + i), width - 3, static_cast<short>(3 + i)), line.c_str()));
+	}
+	{
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 0, buttons);
+	}
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	TObject::destroy(dialog);
+	return dialogResult == cmOK || dialogResult == cmCancel;
+}
+
 void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnosticResult> &diagnostics) {
 	for (std::size_t i = g_lspReportedDiagnosticCount; i < diagnostics.size(); ++i) {
 		const mr::services::MRServiceDiagnosticResult &result = diagnostics[i];
@@ -1364,6 +1454,12 @@ void reportNewLspHovers(const std::vector<mr::services::MRServiceHoverResult> &h
 
 		if (text.empty()) text = "empty hover";
 		postLspInfo("LSP hover: " + text);
+		if (result.header.state == mr::services::MRServiceResultState::Current) {
+			static_cast<void>(showLspHoverDialog(result));
+		} else if (!result.header.errorMessage.empty())
+			postLspWarning("LSP hover unavailable: " + result.header.errorMessage);
+		else
+			postLspWarning("LSP hover unavailable.");
 	}
 	g_lspReportedHoverCount = hovers.size();
 }
