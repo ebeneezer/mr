@@ -1150,6 +1150,59 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	return true;
 }
 
+MREditWindow *findOpenLspTargetWindow(const std::string &path) {
+	const std::string normalizedTarget = mr::services::normalizeWorkspaceServicePath(path);
+	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+
+	for (MREditWindow *window : windows) {
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+
+		if (editor == nullptr || !editor->hasPersistentFileName()) continue;
+		if (mr::services::normalizeWorkspaceServicePath(editor->persistentFileName()) == normalizedTarget) return window;
+	}
+	return nullptr;
+}
+
+bool navigateToLspLocation(const mr::services::MRServiceLocationTarget &target, std::string &errorMessage) {
+	MREditWindow *window = nullptr;
+	MRFileEditor *editor = nullptr;
+	std::size_t line = 0;
+	int column = 0;
+
+	if (target.path.empty()) {
+		errorMessage = "LSP target path is empty.";
+		return false;
+	}
+
+	window = findOpenLspTargetWindow(target.path);
+	if (window == nullptr) {
+		window = createEditorWindow(target.path.c_str());
+		if (window == nullptr) {
+			errorMessage = "Unable to create editor window.";
+			return false;
+		}
+		if (!loadResolvedFileIntoWindow(window, target.path, "LSP definition load")) {
+			message(window, evCommand, cmClose, nullptr);
+			errorMessage = "Unable to load LSP target: " + target.path;
+			return false;
+		}
+	}
+
+	editor = window->getEditor();
+	if (editor == nullptr) {
+		errorMessage = "LSP target window has no editor.";
+		return false;
+	}
+
+	if (target.range.start.line > 0) line = static_cast<std::size_t>(target.range.start.line);
+	if (target.range.start.character > 0) column = target.range.start.character;
+	editor->moveCursorToDocumentLineTop(line, column);
+	editor->revealCursor(True);
+	static_cast<void>(mrActivateEditWindow(window));
+	errorMessage.clear();
+	return true;
+}
+
 void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnosticResult> &diagnostics) {
 	for (std::size_t i = g_lspReportedDiagnosticCount; i < diagnostics.size(); ++i) {
 		const mr::services::MRServiceDiagnosticResult &result = diagnostics[i];
@@ -1168,6 +1221,7 @@ void reportNewLspLocations(const std::vector<mr::services::MRServiceLocationResu
 		const mr::services::MRServiceLocationResult &result = locations[i];
 		std::ostringstream line;
 		const char *kind = result.header.kind == mr::services::MRServiceResultKind::References ? "references" : "definition";
+		std::string navigationError;
 
 		line << "LSP " << kind << ": " << result.locations.size();
 		if (!result.locations.empty()) {
@@ -1176,6 +1230,9 @@ void reportNewLspLocations(const std::vector<mr::services::MRServiceLocationResu
 			line << ":" << (target.range.start.line + 1) << ":" << (target.range.start.character + 1);
 		}
 		postLspInfo(line.str());
+		if (result.header.state == mr::services::MRServiceResultState::Current && result.header.kind == mr::services::MRServiceResultKind::Definition && result.locations.size() == 1) {
+			if (!navigateToLspLocation(result.locations[0], navigationError)) postLspWarning("LSP definition navigation failed: " + navigationError);
+		}
 	}
 	g_lspReportedLocationCount = locations.size();
 }
