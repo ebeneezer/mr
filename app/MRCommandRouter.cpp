@@ -451,6 +451,12 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / Macro manager";
 		case cmMrOtherBuildCurrentFile:
 			return "Other / Build current file";
+		case cmMrOtherLspDefinition:
+			return "Other / LSP definition";
+		case cmMrOtherLspReferences:
+			return "Other / LSP references";
+		case cmMrOtherLspHover:
+			return "Other / LSP hover";
 		case cmMrOtherStopProgram:
 			return "Other / Stop current program";
 		case cmMrOtherRestartProgram:
@@ -1203,6 +1209,112 @@ bool navigateToLspLocation(const mr::services::MRServiceLocationTarget &target, 
 	return true;
 }
 
+std::string lspLocationDisplayText(const mr::services::MRServiceLocationTarget &target) {
+	std::ostringstream line;
+
+	line << (target.range.start.line + 1) << ":" << (target.range.start.character + 1) << " ";
+	line << (!target.path.empty() ? target.path : target.uri);
+	return line.str();
+}
+
+class LspReferencesListView final : public TListViewer {
+  public:
+	LspReferencesListView(const TRect &bounds, TScrollBar *scrollBar, const std::vector<mr::services::MRServiceLocationTarget> &locations) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), locations(locations) {
+		const std::size_t visibleCount = std::min<std::size_t>(locations.size(), static_cast<std::size_t>(std::numeric_limits<short>::max()));
+
+		setRange(static_cast<short>(visibleCount));
+	}
+
+	void getText(char *dest, short item, short maxLen) override {
+		std::string text;
+
+		if (dest == nullptr || maxLen <= 0) return;
+		if (item < 0 || static_cast<std::size_t>(item) >= locations.size()) {
+			dest[0] = EOS;
+			return;
+		}
+
+		text = firstDisplayLine(lspLocationDisplayText(locations[static_cast<std::size_t>(item)]), static_cast<std::size_t>(std::max<short>(0, maxLen - 1)));
+		std::strncpy(dest, text.c_str(), static_cast<std::size_t>(maxLen - 1));
+		dest[maxLen - 1] = EOS;
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
+			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+			clearEvent(event);
+			return;
+		}
+		TListViewer::handleEvent(event);
+	}
+
+	void selectItem(short item) override {
+		if (item >= 0 && static_cast<std::size_t>(item) < locations.size()) {
+			focusItemNum(item);
+			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+		}
+	}
+
+	[[nodiscard]] bool selectedIndex(std::size_t &index) const noexcept {
+		if (focused < 0 || static_cast<std::size_t>(focused) >= locations.size()) return false;
+		index = static_cast<std::size_t>(focused);
+		return true;
+	}
+
+  private:
+	const std::vector<mr::services::MRServiceLocationTarget> &locations;
+};
+
+bool showLspReferencesDialog(const mr::services::MRServiceLocationResult &result) {
+	MRDialogFoundation *dialog = nullptr;
+	TScrollBar *scrollBar = nullptr;
+	LspReferencesListView *listView = nullptr;
+	ushort dialogResult = cmCancel;
+	std::size_t selectedIndex = 0;
+	mr::services::MRServiceLocationTarget target;
+	std::string navigationError;
+	const int visibleRows = std::max<int>(4, std::min<int>(static_cast<int>(result.locations.size()), 12));
+	const short width = 96;
+	const short height = static_cast<short>(visibleRows + 6);
+	const short buttonY = static_cast<short>(height - 3);
+
+	if (TProgram::deskTop == nullptr) return false;
+	if (result.locations.empty()) {
+		postLspWarning("LSP references: no references found.");
+		return true;
+	}
+
+	dialog = mr::dialogs::createScrollableDialog("LSP REFERENCES", width, height);
+	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select reference:"));
+	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+	dialog->insert(scrollBar);
+	listView = new LspReferencesListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.locations);
+	dialog->insert(listView);
+	{
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
+	}
+	dialog->setDialogValidationHook([listView]() {
+		MRScrollableDialog::DialogValidationResult validation;
+		std::size_t selected = 0;
+
+		validation.valid = listView != nullptr && listView->selectedIndex(selected);
+		if (!validation.valid) validation.warningText = "Select a reference.";
+		return validation;
+	});
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < result.locations.size()) target = result.locations[selectedIndex];
+	else
+		target = mr::services::MRServiceLocationTarget();
+	TObject::destroy(dialog);
+
+	if (target.path.empty() && target.uri.empty()) return true;
+	if (!navigateToLspLocation(target, navigationError)) postLspWarning("LSP references navigation failed: " + navigationError);
+	return true;
+}
+
 void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnosticResult> &diagnostics) {
 	for (std::size_t i = g_lspReportedDiagnosticCount; i < diagnostics.size(); ++i) {
 		const mr::services::MRServiceDiagnosticResult &result = diagnostics[i];
@@ -1232,6 +1344,14 @@ void reportNewLspLocations(const std::vector<mr::services::MRServiceLocationResu
 		postLspInfo(line.str());
 		if (result.header.state == mr::services::MRServiceResultState::Current && result.header.kind == mr::services::MRServiceResultKind::Definition && result.locations.size() == 1) {
 			if (!navigateToLspLocation(result.locations[0], navigationError)) postLspWarning("LSP definition navigation failed: " + navigationError);
+		}
+		if (result.header.kind == mr::services::MRServiceResultKind::References) {
+			if (result.header.state == mr::services::MRServiceResultState::Current) {
+				static_cast<void>(showLspReferencesDialog(result));
+			} else if (!result.header.errorMessage.empty())
+				postLspWarning("LSP references unavailable: " + result.header.errorMessage);
+			else
+				postLspWarning("LSP references unavailable.");
 		}
 	}
 	g_lspReportedLocationCount = locations.size();
@@ -2887,6 +3007,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherLspDefinition:
 			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::GoToDefinition, "LSP definition");
+
+		case cmMrOtherLspReferences:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::FindReferences, "LSP references");
 
 		case cmMrOtherLspHover:
 			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::ShowHover, "LSP hover");

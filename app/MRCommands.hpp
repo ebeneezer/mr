@@ -146,6 +146,7 @@ enum : ushort {
 	cmMrFileCompareNextChange,
 	cmMrFileComparePreviousChange,
 	cmMrOtherLspDefinition,
+	cmMrOtherLspReferences,
 	cmMrOtherLspHover
 };
 
