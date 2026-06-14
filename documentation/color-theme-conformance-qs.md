@@ -40,6 +40,19 @@ Ein Theme-Slot gilt als konform, wenn alle folgenden Stationen konsistent sind:
    Reserve dokumentiert.
 9. Ein identischer Re-Apply erzeugt keinen unnoetigen Dirty- oder Write-Impuls.
 
+Alle benannten Setup-Elemente sind Teil dieses Vertrags. Ein Name darf nicht nur
+im Dialog oder in einer Tabelle existieren. Der Regcheck muss fuer jeden
+benannten Farb- und Theme-Setup-Eintrag nachweisen:
+
+- der Bootstrap-/Load-Pfad kennt den Namen,
+- die VM kann den Namen anwenden,
+- der Runtime-Zustand kann den Wert aufnehmen,
+- der Serializer kann den Namen wieder schreiben,
+- ein Roundtrip erzeugt denselben semantischen Zustand.
+
+Ein benanntes Setup-Element ohne einen dieser Pfade ist ein Defekt, auch wenn
+die aktuelle UI den Wert scheinbar korrekt anzeigt.
+
 ## Relevante Gruppen
 
 - `WINDOWCOLORS`
@@ -202,6 +215,8 @@ Der Regcheck soll daher pruefen:
 - Doppelte Palette-Slots innerhalb einer Gruppe melden.
 - Doppelte Werte nicht melden.
 - Sichtbare Setup-Namen gegen Slots pruefen.
+- Jeden benannten Setup-Eintrag gegen Bootstrap-/Load-Pfad, VM-Apply,
+  Runtime-Modell und Serializer abgleichen.
 
 ### 2. Parser und Altformate
 

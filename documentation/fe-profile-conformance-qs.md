@@ -27,6 +27,20 @@ konsistent sind:
    Werte.
 9. Redraw-relevante Werte werden sichtbar aktualisiert.
 
+Das gilt fuer alle benannten Setup-Elemente, nicht nur fuer bereits auffaellige
+Parameter. Ein Name darf nicht nur im Setup-Dialog, in einer Descriptor-Tabelle
+oder als Profil-Token existieren. Der Regcheck muss fuer jeden benannten
+globalen und profilbasierten Setup-Token nachweisen:
+
+- der Bootstrap-/Load-Pfad kennt den Token,
+- die VM kann den Token anwenden,
+- das Runtime-Modell kann den Wert aufnehmen,
+- der Serializer kann den Token wieder schreiben,
+- ein Roundtrip erzeugt denselben semantischen Zustand.
+
+Fehlt einer dieser Pfade, ist der Token nicht konform. Das gilt ausdruecklich
+auch fuer profilbasierte Tokens wie `MRFEPROFILE('SET', ...)`.
+
 ## Parameter-Inventar
 
 Quelle fuer die Suite ist nicht eine handgeschriebene Sonderliste, sondern das
@@ -40,6 +54,10 @@ Settings-Inventar:
 Die Suite soll rot werden, wenn ein neuer profilfaehiger Parameter eingefuehrt
 wird, aber nicht durch Parse, Merge, Serialisierung und Consumer-Pruefung
 abgedeckt ist.
+
+Zusaetzlich soll die Suite rot werden, wenn ein benannter Setup-Token im
+Inventar auftaucht, aber Bootstrap, VM-Apply oder Serializer ihn nicht kennen.
+Das verhindert sichtbare Dialog-/Profiloptionen, die nur scheinbar existieren.
 
 ## Pruefebenen
 
@@ -78,6 +96,8 @@ Fuer jeden profilfaehigen Parameter:
 - Extension ist normalisiert vorhanden,
 - erwartetes Override-Bit ist gesetzt,
 - Wert ist kanonisch normalisiert.
+- Bootstrap-/Load-Pfad, VM-Apply und Serializer muessen denselben Token-Namen
+  kennen.
 
 ### 4. Serialisierung und Roundtrip
 
