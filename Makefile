@@ -163,6 +163,12 @@ LSP_SESSION_PROBE_OBJECT = regression/mr_lsp_session_probe.o
 LSP_SESSION_PEER_TARGET = regression/mr_lsp_session_peer
 LSP_SESSION_PEER_SOURCE = regression/mr_lsp_session_peer.cpp
 LSP_SESSION_PEER_OBJECT = regression/mr_lsp_session_peer.o
+LSP_PROTOCOL_SHAPER_TARGET = regression/mr_lsp_protocol_shaper
+LSP_PROTOCOL_SHAPER_SOURCE = regression/mr_lsp_protocol_shaper.cpp
+LSP_PROTOCOL_SHAPER_OBJECT = regression/mr_lsp_protocol_shaper.o
+LSP_PROTOCOL_SHAPER_PROBE_TARGET = regression/mr_lsp_protocol_shaper_probe
+LSP_PROTOCOL_SHAPER_PROBE_SOURCE = regression/mr_lsp_protocol_shaper_probe.cpp
+LSP_PROTOCOL_SHAPER_PROBE_OBJECT = regression/mr_lsp_protocol_shaper_probe.o
 LSP_SESSION_SOURCE = lsp/MRLspSession.cpp
 LSP_SESSION_OBJECT = lsp/MRLspSession.o
 LSP_LIFECYCLE_PROBE_TARGET = regression/mr_lsp_lifecycle_probe
@@ -347,7 +353,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-app-service-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-app-service-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-protocol-shaper lsp-protocol-shaper-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -373,6 +379,8 @@ lsp-app-service-probe: $(LSP_SESSION_PEER_TARGET) $(MR_LSP_APP_SERVICE_PROBE_TAR
 lsp-jsonrpc-probe: $(LSP_JSONRPC_PROBE_TARGET)
 external-process-probe: $(EXTERNAL_PROCESS_PROBE_TARGET)
 lsp-session-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_SESSION_PROBE_TARGET)
+lsp-protocol-shaper: $(LSP_PROTOCOL_SHAPER_TARGET)
+lsp-protocol-shaper-probe: $(LSP_PROTOCOL_SHAPER_TARGET) $(LSP_PROTOCOL_SHAPER_PROBE_TARGET)
 lsp-lifecycle-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_LIFECYCLE_PROBE_TARGET)
 lsp-document-mirror-probe: $(LSP_DOCUMENT_MIRROR_PROBE_TARGET)
 lsp-uri-probe: $(LSP_URI_PROBE_TARGET)
@@ -665,6 +673,8 @@ $(EXTERNAL_PROCESS_PROBE_OBJECT): $(EXTERNAL_PROCESS_PROBE_SOURCE) lsp/MRExterna
 $(LSP_SESSION_OBJECT): $(LSP_SESSION_SOURCE) lsp/MRLspSession.hpp lsp/MRLspJsonRpc.hpp lsp/MRExternalProcess.hpp
 $(LSP_SESSION_PROBE_OBJECT): $(LSP_SESSION_PROBE_SOURCE) lsp/MRLspSession.hpp
 $(LSP_SESSION_PEER_OBJECT): $(LSP_SESSION_PEER_SOURCE) lsp/MRLspJsonRpc.hpp
+$(LSP_PROTOCOL_SHAPER_OBJECT): $(LSP_PROTOCOL_SHAPER_SOURCE) lsp/MRLspJsonRpc.hpp
+$(LSP_PROTOCOL_SHAPER_PROBE_OBJECT): $(LSP_PROTOCOL_SHAPER_PROBE_SOURCE) lsp/MRLspSession.hpp
 $(LSP_LIFECYCLE_OBJECT): $(LSP_LIFECYCLE_SOURCE) lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
 $(LSP_LIFECYCLE_PROBE_OBJECT): $(LSP_LIFECYCLE_PROBE_SOURCE) lsp/MRLspLifecycle.hpp
 $(LSP_DOCUMENT_MIRROR_OBJECT): $(LSP_DOCUMENT_MIRROR_SOURCE) lsp/MRLspDocumentMirror.hpp
@@ -736,6 +746,12 @@ $(LSP_SESSION_PROBE_TARGET): $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(
 $(LSP_SESSION_PEER_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_SESSION_PEER_OBJECT)
 	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
 
+$(LSP_PROTOCOL_SHAPER_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_PROTOCOL_SHAPER_OBJECT)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
+
+$(LSP_PROTOCOL_SHAPER_PROBE_TARGET): $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_PROTOCOL_SHAPER_PROBE_OBJECT)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
+
 $(LSP_LIFECYCLE_PROBE_TARGET): $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_LIFECYCLE_PROBE_OBJECT)
 	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
 
@@ -792,6 +808,8 @@ clean:
 		$(EXTERNAL_PROCESS_OBJECT) $(EXTERNAL_PROCESS_PROBE_OBJECT) $(EXTERNAL_PROCESS_PROBE_TARGET) \
 		$(LSP_SESSION_OBJECT) $(LSP_SESSION_PROBE_OBJECT) $(LSP_SESSION_PROBE_TARGET) \
 		$(LSP_SESSION_PEER_OBJECT) $(LSP_SESSION_PEER_TARGET) \
+		$(LSP_PROTOCOL_SHAPER_OBJECT) $(LSP_PROTOCOL_SHAPER_TARGET) \
+		$(LSP_PROTOCOL_SHAPER_PROBE_OBJECT) $(LSP_PROTOCOL_SHAPER_PROBE_TARGET) \
 		$(LSP_LIFECYCLE_OBJECT) $(LSP_LIFECYCLE_PROBE_OBJECT) $(LSP_LIFECYCLE_PROBE_TARGET) \
 		$(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_TARGET) \
 		$(LSP_URI_OBJECT) $(LSP_URI_PROBE_OBJECT) $(LSP_URI_PROBE_TARGET) \
