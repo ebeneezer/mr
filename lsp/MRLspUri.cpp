@@ -4,7 +4,7 @@
 
 namespace mr::lsp {
 namespace {
-constexpr char kHexDigits[] = "0123456789ABCDEF";
+static const char kHexDigits[] = "0123456789ABCDEF";
 
 bool setError(std::string &errorMessage, const std::string &message) {
 	errorMessage = message;
@@ -22,10 +22,11 @@ int hexValue(unsigned char ch) {
 	return -1;
 }
 
-std::string percentEncodePath(std::string_view path) {
+std::string percentEncodePath(const std::string &path) {
 	std::string encoded;
 
-	for (unsigned char ch : path) {
+	for (std::size_t index = 0; index < path.size(); ++index) {
+		const unsigned char ch = static_cast<unsigned char>(path[index]);
 		if (isUnreservedUriByte(ch)) {
 			encoded.push_back(static_cast<char>(ch));
 		} else {
@@ -37,7 +38,7 @@ std::string percentEncodePath(std::string_view path) {
 	return encoded;
 }
 
-bool percentDecodePath(std::string_view encoded, std::string &decoded, std::string &errorMessage) {
+bool percentDecodePath(const std::string &encoded, std::string &decoded, std::string &errorMessage) {
 	decoded.clear();
 	for (std::size_t i = 0; i < encoded.size(); ++i) {
 		const unsigned char ch = static_cast<unsigned char>(encoded[i]);
@@ -57,17 +58,17 @@ bool percentDecodePath(std::string_view encoded, std::string &decoded, std::stri
 	return true;
 }
 
-bool startsWith(std::string_view text, std::string_view prefix) {
+bool startsWith(const std::string &text, const std::string &prefix) {
 	return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
 }
 } // namespace
 
-bool pathToFileUri(std::string_view absolutePath, std::string &uri, std::string &errorMessage) {
+bool pathToFileUri(const std::string &absolutePath, std::string &uri, std::string &errorMessage) {
 	uri.clear();
 	if (absolutePath.empty()) return setError(errorMessage, "Path is empty.");
 	if (absolutePath.front() != '/') return setError(errorMessage, "Path is not absolute.");
-	for (char ch : absolutePath) {
-		if (ch == '\0') return setError(errorMessage, "Path contains a NUL byte.");
+	for (std::size_t index = 0; index < absolutePath.size(); ++index) {
+		if (absolutePath[index] == '\0') return setError(errorMessage, "Path contains a NUL byte.");
 	}
 	uri = "file://";
 	uri += percentEncodePath(absolutePath);
@@ -75,13 +76,13 @@ bool pathToFileUri(std::string_view absolutePath, std::string &uri, std::string 
 	return true;
 }
 
-bool fileUriToPath(std::string_view uri, std::string &path, std::string &errorMessage) {
+bool fileUriToPath(const std::string &uri, std::string &path, std::string &errorMessage) {
 	path.clear();
 	if (!startsWith(uri, "file://")) return setError(errorMessage, "URI is not a file URI.");
-	std::string_view pathPart = uri.substr(7);
-	if (startsWith(pathPart, "localhost/")) pathPart.remove_prefix(9);
+	std::string pathPart = uri.substr(7);
+	if (startsWith(pathPart, "localhost/")) pathPart = pathPart.substr(9);
 	if (pathPart.empty() || pathPart.front() != '/') return setError(errorMessage, "File URI is not local absolute.");
-	if (pathPart.find('?') != std::string_view::npos || pathPart.find('#') != std::string_view::npos)
+	if (pathPart.find('?') != std::string::npos || pathPart.find('#') != std::string::npos)
 		return setError(errorMessage, "File URI contains query or fragment.");
 	if (!percentDecodePath(pathPart, path, errorMessage)) return false;
 	if (path.empty() || path.front() != '/') return setError(errorMessage, "File URI did not decode to an absolute path.");

@@ -45,11 +45,11 @@ bool testFragmentedFrame(std::string &failureReason) {
 	mr::lsp::JsonRpcFramer framer;
 	const std::string frame = mr::lsp::buildJsonRpcFrame("{\"fragmented\":true}");
 
-	if (!expect(framer.feed(std::string_view(frame).substr(0, 7)), "fragmented first feed", failureReason)) return false;
+	if (!expect(framer.feed(frame.substr(0, 7)), "fragmented first feed", failureReason)) return false;
 	if (!expect(!framer.hasMessage(), "fragmented premature message", failureReason)) return false;
-	if (!expect(framer.feed(std::string_view(frame).substr(7, 5)), "fragmented second feed", failureReason)) return false;
+	if (!expect(framer.feed(frame.substr(7, 5)), "fragmented second feed", failureReason)) return false;
 	if (!expect(!framer.hasMessage(), "fragmented second premature message", failureReason)) return false;
-	if (!expect(framer.feed(std::string_view(frame).substr(12)), "fragmented final feed", failureReason)) return false;
+	if (!expect(framer.feed(frame.substr(12)), "fragmented final feed", failureReason)) return false;
 	return expectPayload(framer, "{\"fragmented\":true}", "fragmented final", failureReason);
 }
 

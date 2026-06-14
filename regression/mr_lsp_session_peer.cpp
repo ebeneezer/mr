@@ -197,7 +197,8 @@ int main() {
 	for (;;) {
 		const ssize_t count = ::read(STDIN_FILENO, buffer, sizeof(buffer));
 		if (count <= 0) break;
-		if (!framer.feed(std::string_view(buffer, static_cast<std::size_t>(count)))) return 2;
+		const std::string chunk(buffer, static_cast<std::size_t>(count));
+		if (!framer.feed(chunk)) return 2;
 		while (framer.hasMessage()) {
 			if (!handlePayload(framer.popMessage().payload, state)) return 0;
 		}

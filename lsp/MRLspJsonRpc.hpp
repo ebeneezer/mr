@@ -2,7 +2,6 @@
 #define MRLSPJSONRPC_HPP
 
 #include <string>
-#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -41,7 +40,7 @@ struct JsonRpcPendingRequest {
 
 class JsonRpcFramer {
 public:
-	bool feed(std::string_view bytes);
+	bool feed(const std::string &bytes);
 	[[nodiscard]] bool hasMessage() const noexcept;
 	[[nodiscard]] JsonRpcMessage popMessage();
 	[[nodiscard]] bool failed() const noexcept;
@@ -59,10 +58,10 @@ private:
 
 class JsonRpcRequestTracker {
 public:
-	[[nodiscard]] JsonRpcPendingRequest beginRequest(std::string_view method);
+	[[nodiscard]] JsonRpcPendingRequest beginRequest(const std::string &method);
 	[[nodiscard]] bool completeResponse(const JsonRpcEnvelope &envelope, JsonRpcPendingRequest &outRequest);
-	[[nodiscard]] bool cancelRequest(std::string_view idText);
-	[[nodiscard]] bool hasPending(std::string_view idText) const;
+	[[nodiscard]] bool cancelRequest(const std::string &idText);
+	[[nodiscard]] bool hasPending(const std::string &idText) const;
 	[[nodiscard]] std::size_t pendingCount() const noexcept;
 	void clear();
 
@@ -71,9 +70,9 @@ private:
 	std::unordered_map<std::string, JsonRpcPendingRequest> pendingRequests;
 };
 
-[[nodiscard]] std::string buildJsonRpcFrame(std::string_view json);
-[[nodiscard]] JsonRpcMessageKind classifyJsonRpcPayload(std::string_view payload);
-[[nodiscard]] JsonRpcEnvelope parseJsonRpcEnvelope(std::string_view payload);
+[[nodiscard]] std::string buildJsonRpcFrame(const std::string &json);
+[[nodiscard]] JsonRpcMessageKind classifyJsonRpcPayload(const std::string &payload);
+[[nodiscard]] JsonRpcEnvelope parseJsonRpcEnvelope(const std::string &payload);
 
 } // namespace mr::lsp
 

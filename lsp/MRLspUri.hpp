@@ -2,12 +2,11 @@
 #define MRLSPURI_HPP
 
 #include <string>
-#include <string_view>
 
 namespace mr::lsp {
 
-[[nodiscard]] bool pathToFileUri(std::string_view absolutePath, std::string &uri, std::string &errorMessage);
-[[nodiscard]] bool fileUriToPath(std::string_view uri, std::string &path, std::string &errorMessage);
+[[nodiscard]] bool pathToFileUri(const std::string &absolutePath, std::string &uri, std::string &errorMessage);
+[[nodiscard]] bool fileUriToPath(const std::string &uri, std::string &path, std::string &errorMessage);
 
 } // namespace mr::lsp
 

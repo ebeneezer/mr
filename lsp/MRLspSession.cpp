@@ -48,7 +48,7 @@ bool LspSession::sendNotification(std::string_view method, std::string_view para
 }
 
 bool LspSession::sendRequest(std::string_view method, std::string_view paramsJson, JsonRpcPendingRequest &request, std::string &errorMessage) {
-	request = requestTracker.beginRequest(method);
+	request = requestTracker.beginRequest(std::string(method));
 	if (sendRawPayload(buildJsonRpcRequest(request, paramsJson), errorMessage)) return true;
 	const bool canceled = requestTracker.cancelRequest(request.idText);
 	(void)canceled;
@@ -57,7 +57,7 @@ bool LspSession::sendRequest(std::string_view method, std::string_view paramsJso
 
 bool LspSession::sendRawPayload(std::string_view payload, std::string &errorMessage) {
 	if (!process.running()) return setError(errorMessage, "LSP session process is not running.");
-	return process.writeStdin(buildJsonRpcFrame(payload), errorMessage);
+	return process.writeStdin(buildJsonRpcFrame(std::string(payload)), errorMessage);
 }
 
 bool LspSession::poll(std::vector<LspInboundMessage> &messages, std::string &errorMessage) {

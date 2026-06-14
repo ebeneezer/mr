@@ -3,11 +3,10 @@
 #include <cctype>
 #include <limits>
 #include <sstream>
-#include <utility>
 
 namespace mr::lsp {
 namespace {
-constexpr std::size_t kMaxHeaderBytes = 64 * 1024;
+static const std::size_t kMaxHeaderBytes = 64 * 1024;
 
 struct JsonRpcTopLevelMembers {
 	bool validObject = false;
@@ -19,7 +18,7 @@ struct JsonRpcTopLevelMembers {
 	std::string methodText;
 };
 
-bool asciiCaseEquals(std::string_view left, std::string_view right) {
+bool asciiCaseEquals(const std::string &left, const std::string &right) {
 	if (left.size() != right.size()) return false;
 	for (std::size_t i = 0; i < left.size(); ++i) {
 		const unsigned char leftChar = static_cast<unsigned char>(left[i]);
@@ -29,7 +28,7 @@ bool asciiCaseEquals(std::string_view left, std::string_view right) {
 	return true;
 }
 
-std::string_view trimAscii(std::string_view value) {
+std::string trimAscii(const std::string &value) {
 	std::size_t start = 0;
 	std::size_t end = value.size();
 
@@ -40,12 +39,12 @@ std::string_view trimAscii(std::string_view value) {
 	return value.substr(start, end - start);
 }
 
-void skipJsonWhitespace(std::string_view text, std::size_t &pos) {
+void skipJsonWhitespace(const std::string &text, std::size_t &pos) {
 	while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos])) != 0)
 		++pos;
 }
 
-bool parseJsonString(std::string_view text, std::size_t &pos, std::string *outValue) {
+bool parseJsonString(const std::string &text, std::size_t &pos, std::string *outValue) {
 	std::string value;
 
 	if (pos >= text.size() || text[pos] != '"') return false;
@@ -66,7 +65,7 @@ bool parseJsonString(std::string_view text, std::size_t &pos, std::string *outVa
 	return false;
 }
 
-bool skipJsonValue(std::string_view text, std::size_t &pos) {
+bool skipJsonValue(const std::string &text, std::size_t &pos) {
 	int objectDepth = 0;
 	int arrayDepth = 0;
 
@@ -107,7 +106,7 @@ bool skipJsonValue(std::string_view text, std::size_t &pos) {
 	return objectDepth == 0 && arrayDepth == 0;
 }
 
-bool parseJsonNumberValue(std::string_view text, std::size_t &pos) {
+bool parseJsonNumberValue(const std::string &text, std::size_t &pos) {
 	const std::size_t start = pos;
 
 	if (pos < text.size() && text[pos] == '-') ++pos;
@@ -133,37 +132,37 @@ bool parseJsonNumberValue(std::string_view text, std::size_t &pos) {
 	return pos > start;
 }
 
-bool parseJsonLiteral(std::string_view text, std::size_t &pos, std::string_view literal) {
+bool parseJsonLiteral(const std::string &text, std::size_t &pos, const std::string &literal) {
 	if (pos + literal.size() > text.size()) return false;
 	if (text.substr(pos, literal.size()) != literal) return false;
 	pos += literal.size();
 	return true;
 }
 
-JsonRpcIdKind parseJsonRpcIdValue(std::string_view text, std::size_t &pos, std::string &idText) {
+JsonRpcIdKind parseJsonRpcIdValue(const std::string &text, std::size_t &pos, std::string &idText) {
 	const std::size_t start = pos;
 	std::string stringValue;
 
 	if (pos >= text.size()) return JsonRpcIdKind::Invalid;
 	if (text[pos] == '"') {
 		if (!parseJsonString(text, pos, &stringValue)) return JsonRpcIdKind::Invalid;
-		idText = std::string(text.substr(start, pos - start));
+		idText = text.substr(start, pos - start);
 		return JsonRpcIdKind::String;
 	}
 	if (text[pos] == 'n') {
 		if (!parseJsonLiteral(text, pos, "null")) return JsonRpcIdKind::Invalid;
-		idText = std::string(text.substr(start, pos - start));
+		idText = text.substr(start, pos - start);
 		return JsonRpcIdKind::Null;
 	}
 	if (text[pos] == '-' || (text[pos] >= '0' && text[pos] <= '9')) {
 		if (!parseJsonNumberValue(text, pos)) return JsonRpcIdKind::Invalid;
-		idText = std::string(text.substr(start, pos - start));
+		idText = text.substr(start, pos - start);
 		return JsonRpcIdKind::Number;
 	}
 	return JsonRpcIdKind::Invalid;
 }
 
-bool scanJsonRpcTopLevelMembers(std::string_view payload, JsonRpcTopLevelMembers &members) {
+bool scanJsonRpcTopLevelMembers(const std::string &payload, JsonRpcTopLevelMembers &members) {
 	std::size_t pos = 0;
 
 	skipJsonWhitespace(payload, pos);
@@ -212,12 +211,13 @@ bool scanJsonRpcTopLevelMembers(std::string_view payload, JsonRpcTopLevelMembers
 	}
 }
 
-bool parseContentLength(std::string_view value, std::size_t &contentLength) {
+bool parseContentLength(const std::string &value, std::size_t &contentLength) {
 	std::size_t parsed = 0;
+	const std::string trimmedValue = trimAscii(value);
 
-	value = trimAscii(value);
-	if (value.empty()) return false;
-	for (char ch : value) {
+	if (trimmedValue.empty()) return false;
+	for (std::size_t index = 0; index < trimmedValue.size(); ++index) {
+		const char ch = trimmedValue[index];
 		if (ch < '0' || ch > '9') return false;
 		const std::size_t digit = static_cast<std::size_t>(ch - '0');
 		if (parsed > (std::numeric_limits<std::size_t>::max() - digit) / 10) return false;
@@ -235,9 +235,9 @@ std::string makeFrameHeader(std::size_t length) {
 }
 } // namespace
 
-bool JsonRpcFramer::feed(std::string_view bytes) {
+bool JsonRpcFramer::feed(const std::string &bytes) {
 	if (failed()) return false;
-	buffer.append(bytes.data(), bytes.size());
+	buffer.append(bytes);
 	return processBuffer();
 }
 
@@ -249,7 +249,7 @@ JsonRpcMessage JsonRpcFramer::popMessage() {
 	JsonRpcMessage message;
 
 	if (messages.empty()) return message;
-	message = std::move(messages.front());
+	message = messages.front();
 	messages.erase(messages.begin());
 	return message;
 }
@@ -283,12 +283,12 @@ bool JsonRpcFramer::processBuffer() {
 		while (lineStart < headerEnd) {
 			const std::size_t lineEnd = buffer.find("\r\n", lineStart);
 			const std::size_t effectiveLineEnd = lineEnd == std::string::npos || lineEnd > headerEnd ? headerEnd : lineEnd;
-			const std::string_view line(buffer.data() + lineStart, effectiveLineEnd - lineStart);
+			const std::string line = buffer.substr(lineStart, effectiveLineEnd - lineStart);
 			const std::size_t colon = line.find(':');
 
-			if (colon == std::string_view::npos) return fail("LSP JSON-RPC header line is missing ':'.");
-			const std::string_view name = trimAscii(line.substr(0, colon));
-			const std::string_view value = line.substr(colon + 1);
+			if (colon == std::string::npos) return fail("LSP JSON-RPC header line is missing ':'.");
+			const std::string name = trimAscii(line.substr(0, colon));
+			const std::string value = line.substr(colon + 1);
 			if (name.empty()) return fail("LSP JSON-RPC header name is empty.");
 			if (asciiCaseEquals(name, "Content-Length")) {
 				if (sawContentLength) return fail("LSP JSON-RPC header contains duplicate Content-Length.");
@@ -304,7 +304,7 @@ bool JsonRpcFramer::processBuffer() {
 
 		JsonRpcMessage message;
 		message.payload = buffer.substr(bodyStart, contentLength);
-		messages.push_back(std::move(message));
+		messages.push_back(message);
 		buffer.erase(0, bodyStart + contentLength);
 	}
 }
@@ -314,11 +314,11 @@ bool JsonRpcFramer::fail(const std::string &message) {
 	return false;
 }
 
-JsonRpcPendingRequest JsonRpcRequestTracker::beginRequest(std::string_view method) {
+JsonRpcPendingRequest JsonRpcRequestTracker::beginRequest(const std::string &method) {
 	JsonRpcPendingRequest request;
 
 	request.idText = std::to_string(nextRequestId);
-	request.method.assign(method.data(), method.size());
+	request.method = method;
 	pendingRequests[request.idText] = request;
 	++nextRequestId;
 	return request;
@@ -327,19 +327,19 @@ JsonRpcPendingRequest JsonRpcRequestTracker::beginRequest(std::string_view metho
 bool JsonRpcRequestTracker::completeResponse(const JsonRpcEnvelope &envelope, JsonRpcPendingRequest &outRequest) {
 	if (envelope.kind != JsonRpcMessageKind::Response) return false;
 	if (envelope.idKind != JsonRpcIdKind::Number && envelope.idKind != JsonRpcIdKind::String) return false;
-	auto it = pendingRequests.find(envelope.idText);
+	std::unordered_map<std::string, JsonRpcPendingRequest>::iterator it = pendingRequests.find(envelope.idText);
 	if (it == pendingRequests.end()) return false;
 	outRequest = it->second;
 	pendingRequests.erase(it);
 	return true;
 }
 
-bool JsonRpcRequestTracker::cancelRequest(std::string_view idText) {
-	return pendingRequests.erase(std::string(idText)) != 0;
+bool JsonRpcRequestTracker::cancelRequest(const std::string &idText) {
+	return pendingRequests.erase(idText) != 0;
 }
 
-bool JsonRpcRequestTracker::hasPending(std::string_view idText) const {
-	return pendingRequests.find(std::string(idText)) != pendingRequests.end();
+bool JsonRpcRequestTracker::hasPending(const std::string &idText) const {
+	return pendingRequests.find(idText) != pendingRequests.end();
 }
 
 std::size_t JsonRpcRequestTracker::pendingCount() const noexcept {
@@ -351,18 +351,18 @@ void JsonRpcRequestTracker::clear() {
 	pendingRequests.clear();
 }
 
-std::string buildJsonRpcFrame(std::string_view json) {
+std::string buildJsonRpcFrame(const std::string &json) {
 	std::string frame = makeFrameHeader(json.size());
 
-	frame.append(json.data(), json.size());
+	frame.append(json);
 	return frame;
 }
 
-JsonRpcMessageKind classifyJsonRpcPayload(std::string_view payload) {
+JsonRpcMessageKind classifyJsonRpcPayload(const std::string &payload) {
 	return parseJsonRpcEnvelope(payload).kind;
 }
 
-JsonRpcEnvelope parseJsonRpcEnvelope(std::string_view payload) {
+JsonRpcEnvelope parseJsonRpcEnvelope(const std::string &payload) {
 	JsonRpcTopLevelMembers members;
 	JsonRpcEnvelope envelope;
 
