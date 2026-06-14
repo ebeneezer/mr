@@ -30,8 +30,24 @@ enum class MRLspServiceRequestKind {
 	Completion
 };
 
+enum class MRLspServiceCommandId {
+	GoToDefinition = 0,
+	FindReferences,
+	ShowHover,
+	Complete
+};
+
+struct MRLspServiceCommandSpec {
+	MRLspServiceCommandId command = MRLspServiceCommandId::GoToDefinition;
+	MRLspServiceRequestKind requestKind = MRLspServiceRequestKind::Definition;
+	bool includeDeclaration = false;
+	const char *actionId = "";
+	const char *title = "";
+};
+
 [[nodiscard]] bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspSessionSpec &sessionSpec, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
 [[nodiscard]] bool buildLspInitializeSpecFromServerProfile(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
+[[nodiscard]] bool lspServiceCommandSpec(MRLspServiceCommandId command, MRLspServiceCommandSpec &spec) noexcept;
 
 class MRLspServiceSession {
 public:
@@ -65,6 +81,14 @@ public:
 		MRLspServiceRequestKind requestKind,
 		mr::lsp::LspTextPosition position,
 		bool includeDeclaration,
+		std::string &errorMessage);
+	bool requestEditorDocumentServiceCommand(
+		const MRWorkspaceServiceSnapshot &workspace,
+		const MRLspServerProfile &profile,
+		const MRWorkspaceDocumentSnapshot &document,
+		const MRFileEditor &editor,
+		MRLspServiceCommandId command,
+		mr::lsp::LspTextPosition position,
 		std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool requestDefinition(mr::lsp::LspTextPosition position, std::string &errorMessage);

@@ -183,6 +183,24 @@ bool testSessionGuards(std::string &failureReason) {
 	return true;
 }
 
+bool testServiceCommandSpec(std::string &failureReason) {
+	mr::services::MRLspServiceCommandSpec spec;
+
+	if (!expect(mr::services::lspServiceCommandSpec(mr::services::MRLspServiceCommandId::GoToDefinition, spec), "definition command spec missing", failureReason)) return false;
+	if (!expect(spec.requestKind == mr::services::MRLspServiceRequestKind::Definition, "definition command request kind", failureReason)) return false;
+	if (!expect(std::string(spec.actionId) == "MR_LSP_GOTO_DEFINITION", "definition command action id", failureReason)) return false;
+	if (!expect(!spec.includeDeclaration, "definition command include declaration", failureReason)) return false;
+	if (!expect(mr::services::lspServiceCommandSpec(mr::services::MRLspServiceCommandId::FindReferences, spec), "references command spec missing", failureReason)) return false;
+	if (!expect(spec.requestKind == mr::services::MRLspServiceRequestKind::References, "references command request kind", failureReason)) return false;
+	if (!expect(std::string(spec.actionId) == "MR_LSP_FIND_REFERENCES", "references command action id", failureReason)) return false;
+	if (!expect(spec.includeDeclaration, "references command include declaration", failureReason)) return false;
+	if (!expect(mr::services::lspServiceCommandSpec(mr::services::MRLspServiceCommandId::ShowHover, spec), "hover command spec missing", failureReason)) return false;
+	if (!expect(spec.requestKind == mr::services::MRLspServiceRequestKind::Hover, "hover command request kind", failureReason)) return false;
+	if (!expect(mr::services::lspServiceCommandSpec(mr::services::MRLspServiceCommandId::Complete, spec), "completion command spec missing", failureReason)) return false;
+	if (!expect(spec.requestKind == mr::services::MRLspServiceRequestKind::Completion, "completion command request kind", failureReason)) return false;
+	return expect(!mr::services::lspServiceCommandSpec(static_cast<mr::services::MRLspServiceCommandId>(99), spec), "invalid command spec accepted", failureReason);
+}
+
 bool testEditorSessionPath(std::string &failureReason) {
 	const std::string path = "/tmp/mr/project/src/main.cpp";
 	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, path.c_str());
@@ -322,46 +340,43 @@ bool testEditorDocumentServiceRequestPath(std::string &failureReason) {
 	document = documentForEditor(editor, path);
 	workspace = workspaceForDocument(document);
 	if (!expect(
-			session.requestEditorDocumentService(
+			session.requestEditorDocumentServiceCommand(
 				workspace,
 				profile,
 				document,
 				editor,
-				mr::services::MRLspServiceRequestKind::Definition,
+				mr::services::MRLspServiceCommandId::GoToDefinition,
 				mr::lsp::LspTextPosition{3, 5},
-				true,
 				errorMessage),
-			"editor service definition request: " + errorMessage,
+			"editor service definition command: " + errorMessage,
 			failureReason))
 		return false;
 	if (!expect(session.runtimeActive(), "started runtime is not active", failureReason)) return false;
 	if (!pollUntilCounts(session, 1, 1, 0, 0, failureReason)) return false;
 	if (!expect(
-			session.requestEditorDocumentService(
+			session.requestEditorDocumentServiceCommand(
 				workspace,
 				profile,
 				document,
 				editor,
-				mr::services::MRLspServiceRequestKind::Hover,
+				mr::services::MRLspServiceCommandId::ShowHover,
 				mr::lsp::LspTextPosition{3, 5},
-				false,
 				errorMessage),
-			"editor service hover request: " + errorMessage,
+			"editor service hover command: " + errorMessage,
 			failureReason))
 		return false;
 	if (!pollUntilCounts(session, 1, 1, 1, 0, failureReason)) return false;
 	profile.arguments.push_back("--restart");
 	if (!expect(
-			session.requestEditorDocumentService(
+			session.requestEditorDocumentServiceCommand(
 				workspace,
 				profile,
 				document,
 				editor,
-				mr::services::MRLspServiceRequestKind::Completion,
+				mr::services::MRLspServiceCommandId::Complete,
 				mr::lsp::LspTextPosition{3, 5},
-				false,
 				errorMessage),
-			"editor service completion request after profile change: " + errorMessage,
+			"editor service completion command after profile change: " + errorMessage,
 			failureReason))
 		return false;
 	if (!expect(session.runtimeActive(), "restarted runtime is not active", failureReason)) return false;
@@ -395,6 +410,7 @@ bool testSessionHappyPath(std::string &failureReason) {
 bool runProbe(std::string &failureReason) {
 	if (!testInitializeSpec(failureReason)) return false;
 	if (!testSessionGuards(failureReason)) return false;
+	if (!testServiceCommandSpec(failureReason)) return false;
 	if (!testEditorSessionPath(failureReason)) return false;
 	if (!testSyncEditorSessionPath(failureReason)) return false;
 	if (!testRuntimeFacadePath(failureReason)) return false;

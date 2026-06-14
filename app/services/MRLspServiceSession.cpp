@@ -36,6 +36,13 @@ std::string workspaceFolderNameForRootPath(const std::string &rootPath) {
 	return rootPath;
 }
 
+const mr::services::MRLspServiceCommandSpec lspServiceCommandTable[] = {
+	{ mr::services::MRLspServiceCommandId::GoToDefinition, mr::services::MRLspServiceRequestKind::Definition, false, "MR_LSP_GOTO_DEFINITION", "LSP Go To Definition" },
+	{ mr::services::MRLspServiceCommandId::FindReferences, mr::services::MRLspServiceRequestKind::References, true, "MR_LSP_FIND_REFERENCES", "LSP Find References" },
+	{ mr::services::MRLspServiceCommandId::ShowHover, mr::services::MRLspServiceRequestKind::Hover, false, "MR_LSP_SHOW_HOVER", "LSP Show Hover" },
+	{ mr::services::MRLspServiceCommandId::Complete, mr::services::MRLspServiceRequestKind::Completion, false, "MR_LSP_COMPLETE", "LSP Complete" },
+};
+
 } // namespace
 
 namespace mr::services {
@@ -87,6 +94,18 @@ bool buildLspInitializeSpecFromServerProfile(const MRWorkspaceServiceSnapshot &w
 		sessionSpec.process.workingDirectory = normalizeWorkspaceServicePath(workspace.root.rootPath);
 	}
 	return buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, spec, errorMessage);
+}
+
+bool lspServiceCommandSpec(MRLspServiceCommandId command, MRLspServiceCommandSpec &spec) noexcept {
+	const std::size_t commandCount = sizeof(lspServiceCommandTable) / sizeof(lspServiceCommandTable[0]);
+
+	for (std::size_t index = 0; index < commandCount; ++index) {
+		if (lspServiceCommandTable[index].command != command) continue;
+		spec = lspServiceCommandTable[index];
+		return true;
+	}
+	spec = MRLspServiceCommandSpec();
+	return false;
 }
 
 bool MRLspServiceSession::start(const mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
@@ -243,6 +262,23 @@ bool MRLspServiceSession::requestEditorDocumentService(
 	std::string &errorMessage) {
 	if (!ensureRuntime(workspace, profile, errorMessage)) return false;
 	return syncEditorDocumentAndRequest(workspace, document, editor, requestKind, position, includeDeclaration, errorMessage);
+}
+
+bool MRLspServiceSession::requestEditorDocumentServiceCommand(
+	const MRWorkspaceServiceSnapshot &workspace,
+	const MRLspServerProfile &profile,
+	const MRWorkspaceDocumentSnapshot &document,
+	const MRFileEditor &editor,
+	MRLspServiceCommandId command,
+	mr::lsp::LspTextPosition position,
+	std::string &errorMessage) {
+	MRLspServiceCommandSpec spec;
+
+	if (!lspServiceCommandSpec(command, spec)) {
+		errorMessage = "LSP service command is unknown.";
+		return false;
+	}
+	return requestEditorDocumentService(workspace, profile, document, editor, spec.requestKind, position, spec.includeDeclaration, errorMessage);
 }
 
 bool MRLspServiceSession::poll(std::string &errorMessage) {
