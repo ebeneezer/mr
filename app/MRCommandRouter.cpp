@@ -299,6 +299,18 @@ mr::services::MRLspAppService g_lspAppService;
 std::size_t g_lspReportedDiagnosticCount = 0;
 std::size_t g_lspReportedLocationCount = 0;
 std::size_t g_lspReportedHoverCount = 0;
+std::size_t g_lspRequestCount = 0;
+std::size_t g_lspRequestFailureCount = 0;
+std::size_t g_lspPollFailureCount = 0;
+std::string g_lspLastRequestLabel;
+std::string g_lspLastRequestPath;
+std::string g_lspLastRequestPosition;
+std::string g_lspLastRequestState = "idle";
+std::string g_lspLastServerExecutable;
+std::string g_lspLastServerWorkingDirectory;
+std::string g_lspLastServerArguments;
+std::string g_lspLastError;
+std::string g_lspLastPollError;
 
 const char *placeholderCommandTitle(ushort command) {
 	switch (command) {
@@ -457,6 +469,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / LSP references";
 		case cmMrOtherLspHover:
 			return "Other / LSP hover";
+		case cmMrOtherLspStatus:
+			return "Other / LSP status";
 		case cmMrOtherStopProgram:
 			return "Other / Stop current program";
 		case cmMrOtherRestartProgram:
@@ -1140,19 +1154,52 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	mr::services::MRLspServerProfile profile;
 	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::lsp::LspTextPosition position;
 	std::string errorMessage;
+	std::ostringstream positionText;
+	std::ostringstream argumentText;
 
+	++g_lspRequestCount;
+	g_lspLastRequestLabel = label != nullptr ? label : "LSP request";
+	g_lspLastRequestPath.clear();
+	g_lspLastRequestPosition.clear();
+	g_lspLastRequestState = "preparing";
+	g_lspLastError.clear();
+	g_lspLastPollError.clear();
 	if (!buildLspServerProfileFromEnvironment(profile)) {
-		postLspWarning("LSP server not configured. Set MR_LSP_SERVER.");
+		g_lspLastRequestState = "failed";
+		g_lspLastError = "LSP server not configured. Set MR_LSP_SERVER.";
+		++g_lspRequestFailureCount;
+		postLspWarning(g_lspLastError);
 		return true;
 	}
-	if (!buildCurrentLspDocumentSnapshot(win, document)) return true;
+	g_lspLastServerExecutable = profile.executablePath;
+	g_lspLastServerWorkingDirectory = profile.workingDirectory;
+	for (std::size_t i = 0; i < profile.arguments.size(); ++i) {
+		if (i != 0) argumentText << " ";
+		argumentText << profile.arguments[i];
+	}
+	g_lspLastServerArguments = argumentText.str();
+	if (!buildCurrentLspDocumentSnapshot(win, document)) {
+		g_lspLastRequestState = "failed";
+		g_lspLastError = "LSP request requires a saved editor document.";
+		++g_lspRequestFailureCount;
+		return true;
+	}
+	position = currentLspTextPosition(*editor);
+	positionText << (position.line + 1) << ":" << (position.character + 1);
+	g_lspLastRequestPath = document.path;
+	g_lspLastRequestPosition = positionText.str();
 	g_lspAppService.setMainFileByBufferId(document.bufferId);
-	if (!g_lspAppService.requestCurrentEditorCommand(profile, document, *editor, command, currentLspTextPosition(*editor), errorMessage)) {
-		postLspError(std::string(label != nullptr ? label : "LSP request") + " failed: " + errorMessage);
+	if (!g_lspAppService.requestCurrentEditorCommand(profile, document, *editor, command, position, errorMessage)) {
+		g_lspLastRequestState = "failed";
+		g_lspLastError = errorMessage;
+		++g_lspRequestFailureCount;
+		postLspError(g_lspLastRequestLabel + " failed: " + errorMessage);
 		return true;
 	}
-	postLspInfo(std::string(label != nullptr ? label : "LSP request") + " requested.");
+	g_lspLastRequestState = "requested";
+	postLspInfo(g_lspLastRequestLabel + " requested.");
 	return true;
 }
 
@@ -1405,11 +1452,102 @@ bool showLspHoverDialog(const mr::services::MRServiceHoverResult &result) {
 	return dialogResult == cmOK || dialogResult == cmCancel;
 }
 
+bool showLspStatusDialog() {
+	MRDialogFoundation *dialog = nullptr;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceServiceSnapshot workspace = g_lspAppService.buildCurrentWorkspaceSnapshot();
+	mr::services::MRWorkspaceMainFileState mainFile = g_lspAppService.configuredMainFile();
+	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
+	std::vector<std::string> lines;
+	std::vector<std::string> displayLines;
+	std::ostringstream line;
+	bool configured = buildLspServerProfileFromEnvironment(profile);
+	short width = 96;
+	short height = 0;
+	short buttonY = 0;
+
+	if (TProgram::deskTop == nullptr) return false;
+	lines.push_back(std::string("Runtime: ") + (g_lspAppService.runtimeActive() ? "active" : "inactive"));
+	lines.push_back(std::string("Server configured: ") + (configured ? "yes" : "no"));
+	if (configured) {
+		lines.push_back("Executable: " + profile.executablePath);
+		if (!profile.arguments.empty()) {
+			line.str(std::string());
+			line.clear();
+			line << "Arguments:";
+			for (std::size_t i = 0; i < profile.arguments.size(); ++i)
+				line << " " << profile.arguments[i];
+			lines.push_back(line.str());
+		}
+		lines.push_back("Working directory: " + profile.workingDirectory);
+	} else
+		lines.push_back("Configuration source: MR_LSP_SERVER is empty");
+
+	line.str(std::string());
+	line.clear();
+	line << "Requests: " << g_lspRequestCount << " total, " << g_lspRequestFailureCount << " failed, " << g_lspPollFailureCount << " poll failed";
+	lines.push_back(line.str());
+	lines.push_back("Last request: " + (g_lspLastRequestLabel.empty() ? std::string("none") : g_lspLastRequestLabel));
+	lines.push_back("Last state: " + g_lspLastRequestState);
+	if (!g_lspLastRequestPath.empty()) lines.push_back("Last document: " + g_lspLastRequestPath);
+	if (!g_lspLastRequestPosition.empty()) lines.push_back("Last position: " + g_lspLastRequestPosition);
+	if (!g_lspLastServerExecutable.empty()) lines.push_back("Last executable: " + g_lspLastServerExecutable);
+	if (!g_lspLastServerArguments.empty()) lines.push_back("Last arguments: " + g_lspLastServerArguments);
+	if (!g_lspLastServerWorkingDirectory.empty()) lines.push_back("Last working directory: " + g_lspLastServerWorkingDirectory);
+	if (!g_lspLastError.empty()) lines.push_back("Last error: " + g_lspLastError);
+	if (!g_lspLastPollError.empty()) lines.push_back("Last poll error: " + g_lspLastPollError);
+
+	line.str(std::string());
+	line.clear();
+	line << "Workspace documents: " << workspace.documents.size();
+	lines.push_back(line.str());
+	if (workspace.root.hasRoot) lines.push_back("Workspace root: " + workspace.root.rootPath);
+	else
+		lines.push_back("Workspace root: none (" + workspace.root.reason + ")");
+	if (mainFile.hasMainFile) {
+		line.str(std::string());
+		line.clear();
+		line << "Main file: ";
+		if (mainFile.bufferId != 0) line << "buffer #" << mainFile.bufferId;
+		else
+			line << mainFile.path;
+		lines.push_back(line.str());
+	} else
+		lines.push_back("Main file: none");
+
+	line.str(std::string());
+	line.clear();
+	line << "Results: diagnostics " << results.diagnosticResults().size() << ", locations " << results.locationResults().size() << ", hovers " << results.hoverResults().size() << ", completions " << results.completionResults().size();
+	lines.push_back(line.str());
+	line.str(std::string());
+	line.clear();
+	line << "Reported: diagnostics " << g_lspReportedDiagnosticCount << ", locations " << g_lspReportedLocationCount << ", hovers " << g_lspReportedHoverCount;
+	lines.push_back(line.str());
+	for (std::size_t i = 0; i < lines.size(); ++i)
+		displayLines.push_back(firstDisplayLine(lines[i], static_cast<std::size_t>(width - 6)));
+
+	height = static_cast<short>(displayLines.size() + 5);
+	buttonY = static_cast<short>(height - 3);
+	dialog = mr::dialogs::createScrollableDialog("LSP STATUS", width, height);
+	for (std::size_t i = 0; i < displayLines.size(); ++i)
+		dialog->insert(new TStaticText(TRect(3, static_cast<short>(2 + i), width - 3, static_cast<short>(3 + i)), displayLines[i].c_str()));
+	{
+		const std::array<mr::dialogs::DialogButtonSpec, 1> buttons = {mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 0, buttons);
+	}
+	dialog->finalizeLayout();
+	TProgram::deskTop->execView(dialog);
+	TObject::destroy(dialog);
+	return true;
+}
+
 void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnosticResult> &diagnostics) {
 	for (std::size_t i = g_lspReportedDiagnosticCount; i < diagnostics.size(); ++i) {
 		const mr::services::MRServiceDiagnosticResult &result = diagnostics[i];
 		std::ostringstream line;
 
+		g_lspLastRequestState = "diagnostics received";
 		line << "LSP diagnostics: " << result.diagnostics.size();
 		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
 		if (!result.diagnostics.empty()) line << " - " << firstDisplayLine(result.diagnostics[0].message, 120);
@@ -1425,6 +1563,7 @@ void reportNewLspLocations(const std::vector<mr::services::MRServiceLocationResu
 		const char *kind = result.header.kind == mr::services::MRServiceResultKind::References ? "references" : "definition";
 		std::string navigationError;
 
+		g_lspLastRequestState = result.header.kind == mr::services::MRServiceResultKind::References ? "references received" : "definition received";
 		line << "LSP " << kind << ": " << result.locations.size();
 		if (!result.locations.empty()) {
 			const mr::services::MRServiceLocationTarget &target = result.locations[0];
@@ -1452,6 +1591,7 @@ void reportNewLspHovers(const std::vector<mr::services::MRServiceHoverResult> &h
 		const mr::services::MRServiceHoverResult &result = hovers[i];
 		std::string text = firstDisplayLine(result.hover.value, 140);
 
+		g_lspLastRequestState = "hover received";
 		if (text.empty()) text = "empty hover";
 		postLspInfo("LSP hover: " + text);
 		if (result.header.state == mr::services::MRServiceResultState::Current) {
@@ -2751,6 +2891,10 @@ void pumpMRLspService() {
 
 	if (!g_lspAppService.runtimeActive()) return;
 	if (!g_lspAppService.poll(errorMessage)) {
+		++g_lspPollFailureCount;
+		g_lspLastRequestState = "poll failed";
+		g_lspLastPollError = errorMessage;
+		g_lspLastError = errorMessage;
 		postLspError("LSP poll failed: " + errorMessage);
 		g_lspAppService.close();
 		return;
@@ -3109,6 +3253,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherLspHover:
 			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::ShowHover, "LSP hover");
+
+		case cmMrOtherLspStatus:
+			return showLspStatusDialog();
 
 		case cmMrOtherMacroManager:
 			return runMacroManagerDialog();
