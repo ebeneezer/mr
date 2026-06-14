@@ -1,5 +1,7 @@
 #include "MRLspServiceSession.hpp"
 
+#include "MRLspEditorSource.hpp"
+
 #include <poll.h>
 #include <vector>
 
@@ -37,6 +39,20 @@ bool MRLspServiceSession::changeDocument(const MRWorkspaceServiceSnapshot &works
 	hasActiveWorkspace = true;
 	resultStore.markStaleAgainstWorkspace(activeWorkspace);
 	return true;
+}
+
+bool MRLspServiceSession::openEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage) {
+	mr::lsp::LspDocumentSourceSnapshot source;
+
+	if (!buildLspDocumentSourceSnapshotFromEditor(document, editor, source, errorMessage)) return false;
+	return openDocument(workspace, source, errorMessage);
+}
+
+bool MRLspServiceSession::changeEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage) {
+	mr::lsp::LspDocumentSourceSnapshot source;
+
+	if (!buildLspDocumentSourceSnapshotFromEditor(document, editor, source, errorMessage)) return false;
+	return changeDocument(workspace, source, errorMessage);
 }
 
 bool MRLspServiceSession::poll(std::string &errorMessage) {

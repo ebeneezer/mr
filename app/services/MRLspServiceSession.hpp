@@ -11,6 +11,8 @@
 
 #include <string>
 
+class MRFileEditor;
+
 namespace mr::services {
 
 class MRLspServiceSession {
@@ -23,6 +25,8 @@ public:
 	bool sendInitialized(std::string &errorMessage);
 	bool openDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
 	bool changeDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
+	bool openEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
+	bool changeEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool requestDefinition(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestReferences(mr::lsp::LspTextPosition position, bool includeDeclaration, std::string &errorMessage);

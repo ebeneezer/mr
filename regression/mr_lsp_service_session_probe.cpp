@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../app/services/MRLspServiceSession.hpp"
+#include "../ui/MRFileEditor/MRFileEditor.hpp"
 
 namespace {
 bool expect(bool condition, const std::string &name, std::string &failureReason) {
@@ -43,6 +44,37 @@ mr::services::MRWorkspaceServiceSnapshot makeWorkspace(std::size_t version) {
 	return workspace;
 }
 
+mr::services::MRWorkspaceDocumentSnapshot documentForEditor(const MRFileEditor &editor, const std::string &path) {
+	mr::services::MRWorkspaceDocumentSnapshot document;
+
+	document.bufferId = 10;
+	document.documentId = editor.documentId();
+	document.documentVersion = editor.documentVersion();
+	document.path = path;
+	document.languageName = editor.syntaxLanguageName();
+	document.mainFile = true;
+	return document;
+}
+
+mr::services::MRWorkspaceServiceSnapshot workspaceForDocument(const mr::services::MRWorkspaceDocumentSnapshot &document) {
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+
+	workspace.documents.push_back(document);
+	workspace.mainFile.hasMainFile = true;
+	workspace.mainFile.bufferId = document.bufferId;
+	workspace.mainFile.path = document.path;
+	workspace.root.hasRoot = true;
+	workspace.root.rootPath = "/tmp/mr/project";
+	workspace.root.reason = "probe root";
+	return workspace;
+}
+
+bool replaceText(MRFileEditor &editor, const std::string &text, std::string &failureReason) {
+	if (editor.replaceBufferData(text.data(), static_cast<uint>(text.size()))) return true;
+	failureReason = "replace buffer data failed";
+	return false;
+}
+
 bool pollUntilCounts(mr::services::MRLspServiceSession &session, std::size_t diagnostics, std::size_t locations, std::size_t hovers, std::size_t completions, std::string &failureReason) {
 	std::string errorMessage;
 
@@ -57,6 +89,25 @@ bool pollUntilCounts(mr::services::MRLspServiceSession &session, std::size_t dia
 		::poll(nullptr, 0, 20);
 	}
 	failureReason = "expected service result counts not observed";
+	return false;
+}
+
+bool pollUntilCurrentDiagnostics(mr::services::MRLspServiceSession &session, std::size_t documentVersion, const std::string &message, std::string &failureReason) {
+	std::string errorMessage;
+
+	for (int i = 0; i < 50; ++i) {
+		if (!session.poll(errorMessage)) {
+			failureReason = "session poll failed: " + errorMessage;
+			return false;
+		}
+		if (session.results().diagnosticResults().size() == 1 &&
+		    session.results().diagnosticResults()[0].header.state == mr::services::MRServiceResultState::Current &&
+		    session.results().diagnosticResults()[0].header.identity.documentVersion == documentVersion &&
+		    session.results().diagnosticResults()[0].diagnostics[0].message == message)
+			return true;
+		::poll(nullptr, 0, 20);
+	}
+	failureReason = "expected current diagnostics not observed";
 	return false;
 }
 
@@ -97,6 +148,29 @@ bool testSessionGuards(std::string &failureReason) {
 	return true;
 }
 
+bool testEditorSessionPath(std::string &failureReason) {
+	const std::string path = "/tmp/mr/project/src/main.cpp";
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, path.c_str());
+	mr::services::MRLspServiceSession session;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	std::string errorMessage;
+
+	if (!startSession(session, failureReason)) return false;
+	if (!replaceText(editor, "int main() { return 0; }\n", failureReason)) return false;
+	document = documentForEditor(editor, path);
+	workspace = workspaceForDocument(document);
+	if (!expect(session.openEditorDocument(workspace, document, editor, errorMessage), "open editor document: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, document.documentVersion, "opened diagnostic", failureReason)) return false;
+	if (!replaceText(editor, "int main() { return 2; }\n", failureReason)) return false;
+	document = documentForEditor(editor, path);
+	workspace = workspaceForDocument(document);
+	if (!expect(session.changeEditorDocument(workspace, document, editor, errorMessage), "change editor document: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, document.documentVersion, "changed diagnostic", failureReason)) return false;
+	if (!expect(session.closeDocument(errorMessage), "close editor document: " + errorMessage, failureReason)) return false;
+	return expect(session.shutdown(errorMessage), "shutdown editor session: " + errorMessage, failureReason);
+}
+
 bool testSessionHappyPath(std::string &failureReason) {
 	mr::services::MRLspServiceSession session;
 	std::string errorMessage;
@@ -121,6 +195,7 @@ bool testSessionHappyPath(std::string &failureReason) {
 
 bool runProbe(std::string &failureReason) {
 	if (!testSessionGuards(failureReason)) return false;
+	if (!testEditorSessionPath(failureReason)) return false;
 	if (!testSessionHappyPath(failureReason)) return false;
 	return true;
 }
