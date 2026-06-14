@@ -4,9 +4,10 @@
 
 namespace mr::lsp {
 namespace {
-void appendJsonString(std::ostringstream &out, std::string_view text) {
+void appendJsonString(std::ostringstream &out, const std::string &text) {
 	out << '"';
-	for (char ch : text) {
+	for (std::size_t index = 0; index < text.size(); ++index) {
+		const char ch = text[index];
 		if (ch == '"' || ch == '\\') {
 			out << '\\' << ch;
 		} else if (ch == '\n') {
@@ -22,9 +23,9 @@ void appendJsonString(std::ostringstream &out, std::string_view text) {
 	out << '"';
 }
 
-std::string normalizedParams(std::string_view paramsJson) {
+std::string normalizedParams(const std::string &paramsJson) {
 	if (paramsJson.empty()) return "null";
-	return std::string(paramsJson);
+	return paramsJson;
 }
 
 bool setError(std::string &errorMessage, const std::string &message) {
@@ -43,21 +44,21 @@ bool LspSession::start(const LspSessionSpec &spec, std::string &errorMessage) {
 	return process.start(spec.process, errorMessage);
 }
 
-bool LspSession::sendNotification(std::string_view method, std::string_view paramsJson, std::string &errorMessage) {
+bool LspSession::sendNotification(const std::string &method, const std::string &paramsJson, std::string &errorMessage) {
 	return sendRawPayload(buildJsonRpcNotification(method, paramsJson), errorMessage);
 }
 
-bool LspSession::sendRequest(std::string_view method, std::string_view paramsJson, JsonRpcPendingRequest &request, std::string &errorMessage) {
-	request = requestTracker.beginRequest(std::string(method));
+bool LspSession::sendRequest(const std::string &method, const std::string &paramsJson, JsonRpcPendingRequest &request, std::string &errorMessage) {
+	request = requestTracker.beginRequest(method);
 	if (sendRawPayload(buildJsonRpcRequest(request, paramsJson), errorMessage)) return true;
 	const bool canceled = requestTracker.cancelRequest(request.idText);
 	(void)canceled;
 	return false;
 }
 
-bool LspSession::sendRawPayload(std::string_view payload, std::string &errorMessage) {
+bool LspSession::sendRawPayload(const std::string &payload, std::string &errorMessage) {
 	if (!process.running()) return setError(errorMessage, "LSP session process is not running.");
-	return process.writeStdin(buildJsonRpcFrame(std::string(payload)), errorMessage);
+	return process.writeStdin(buildJsonRpcFrame(payload), errorMessage);
 }
 
 bool LspSession::poll(std::vector<LspInboundMessage> &messages, std::string &errorMessage) {
@@ -100,7 +101,7 @@ void LspSession::close() {
 	requestTracker.clear();
 }
 
-std::string buildJsonRpcNotification(std::string_view method, std::string_view paramsJson) {
+std::string buildJsonRpcNotification(const std::string &method, const std::string &paramsJson) {
 	std::ostringstream out;
 
 	out << "{\"jsonrpc\":\"2.0\",\"method\":";
@@ -109,7 +110,7 @@ std::string buildJsonRpcNotification(std::string_view method, std::string_view p
 	return out.str();
 }
 
-std::string buildJsonRpcRequest(const JsonRpcPendingRequest &request, std::string_view paramsJson) {
+std::string buildJsonRpcRequest(const JsonRpcPendingRequest &request, const std::string &paramsJson) {
 	std::ostringstream out;
 
 	out << "{\"jsonrpc\":\"2.0\",\"id\":" << request.idText << ",\"method\":";

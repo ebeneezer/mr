@@ -5,7 +5,6 @@
 #include "MRLspJsonRpc.hpp"
 
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace mr::lsp {
@@ -29,9 +28,9 @@ public:
 	~LspSession();
 
 	bool start(const LspSessionSpec &spec, std::string &errorMessage);
-	bool sendNotification(std::string_view method, std::string_view paramsJson, std::string &errorMessage);
-	bool sendRequest(std::string_view method, std::string_view paramsJson, JsonRpcPendingRequest &request, std::string &errorMessage);
-	bool sendRawPayload(std::string_view payload, std::string &errorMessage);
+	bool sendNotification(const std::string &method, const std::string &paramsJson, std::string &errorMessage);
+	bool sendRequest(const std::string &method, const std::string &paramsJson, JsonRpcPendingRequest &request, std::string &errorMessage);
+	bool sendRawPayload(const std::string &payload, std::string &errorMessage);
 	bool poll(std::vector<LspInboundMessage> &messages, std::string &errorMessage);
 	void requestStop();
 	bool wait(int timeoutMs, int &exitStatus);
@@ -45,8 +44,8 @@ private:
 	JsonRpcRequestTracker requestTracker;
 };
 
-[[nodiscard]] std::string buildJsonRpcNotification(std::string_view method, std::string_view paramsJson);
-[[nodiscard]] std::string buildJsonRpcRequest(const JsonRpcPendingRequest &request, std::string_view paramsJson);
+[[nodiscard]] std::string buildJsonRpcNotification(const std::string &method, const std::string &paramsJson);
+[[nodiscard]] std::string buildJsonRpcRequest(const JsonRpcPendingRequest &request, const std::string &paramsJson);
 
 } // namespace mr::lsp
 

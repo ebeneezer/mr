@@ -45,7 +45,7 @@ bool LspLifecycle::sendInitialized(std::string &errorMessage) {
 	return session.sendNotification("initialized", "{}", errorMessage);
 }
 
-bool LspLifecycle::sendInitializedPayload(std::string_view payload, std::string &errorMessage) {
+bool LspLifecycle::sendInitializedPayload(const std::string &payload, std::string &errorMessage) {
 	if (lifecycleState != LspLifecycleState::Initialized)
 		return fail(errorMessage, "LSP lifecycle is not initialized.");
 	return session.sendRawPayload(payload, errorMessage);

@@ -4,7 +4,6 @@
 #include "MRLspSession.hpp"
 
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace mr::lsp {
@@ -33,7 +32,7 @@ public:
 	bool start(const LspInitializeSpec &spec, std::string &errorMessage);
 	bool poll(std::vector<LspInboundMessage> &messages, std::string &errorMessage);
 	bool sendInitialized(std::string &errorMessage);
-	bool sendInitializedPayload(std::string_view payload, std::string &errorMessage);
+	bool sendInitializedPayload(const std::string &payload, std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);
 	bool exit(std::string &errorMessage);
 	void requestStop();
