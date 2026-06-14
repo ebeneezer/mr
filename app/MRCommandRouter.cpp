@@ -299,6 +299,7 @@ mr::services::MRLspAppService g_lspAppService;
 std::size_t g_lspReportedDiagnosticCount = 0;
 std::size_t g_lspReportedLocationCount = 0;
 std::size_t g_lspReportedHoverCount = 0;
+std::size_t g_lspReportedCompletionCount = 0;
 std::size_t g_lspRequestCount = 0;
 std::size_t g_lspRequestFailureCount = 0;
 std::size_t g_lspPollFailureCount = 0;
@@ -469,6 +470,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / LSP references";
 		case cmMrOtherLspHover:
 			return "Other / LSP hover";
+		case cmMrOtherLspComplete:
+			return "Other / LSP complete";
 		case cmMrOtherLspStatus:
 			return "Other / LSP status";
 		case cmMrOtherLspResults:
@@ -1389,6 +1392,58 @@ class LspResultsListView final : public TListViewer {
 	const std::vector<LspResultDialogRow> &rows;
 };
 
+class LspCompletionListView final : public TListViewer {
+  public:
+	LspCompletionListView(const TRect &bounds, TScrollBar *scrollBar, const std::vector<mr::services::MRServiceCompletionItem> &items) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), items(items) {
+		const std::size_t visibleCount = std::min<std::size_t>(items.size(), static_cast<std::size_t>(std::numeric_limits<short>::max()));
+
+		setRange(static_cast<short>(visibleCount));
+	}
+
+	void getText(char *dest, short item, short maxLen) override {
+		std::string text;
+		const mr::services::MRServiceCompletionItem *completionItem = nullptr;
+
+		if (dest == nullptr || maxLen <= 0) return;
+		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) {
+			dest[0] = EOS;
+			return;
+		}
+
+		completionItem = &items[static_cast<std::size_t>(item)];
+		text = completionItem->label;
+		if (!completionItem->detail.empty()) text += " - " + completionItem->detail;
+		text = firstDisplayLine(text, static_cast<std::size_t>(std::max<short>(0, maxLen - 1)));
+		std::strncpy(dest, text.c_str(), static_cast<std::size_t>(maxLen - 1));
+		dest[maxLen - 1] = EOS;
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
+			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+			clearEvent(event);
+			return;
+		}
+		TListViewer::handleEvent(event);
+	}
+
+	void selectItem(short item) override {
+		if (item >= 0 && static_cast<std::size_t>(item) < items.size()) {
+			focusItemNum(item);
+			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+		}
+	}
+
+	[[nodiscard]] bool selectedIndex(std::size_t &index) const noexcept {
+		if (focused < 0 || static_cast<std::size_t>(focused) >= items.size()) return false;
+		index = static_cast<std::size_t>(focused);
+		return true;
+	}
+
+  private:
+	const std::vector<mr::services::MRServiceCompletionItem> &items;
+};
+
 bool showLspReferencesDialog(const mr::services::MRServiceLocationResult &result) {
 	MRDialogFoundation *dialog = nullptr;
 	TScrollBar *scrollBar = nullptr;
@@ -1529,6 +1584,90 @@ bool showLspHoverDialog(const mr::services::MRServiceHoverResult &result) {
 	return dialogResult == cmOK || dialogResult == cmCancel;
 }
 
+MREditWindow *findLspCompletionTargetWindow(const mr::services::MRServiceCompletionResult &result) {
+	MREditWindow *window = nullptr;
+
+	if (result.header.identity.bufferId != 0) {
+		window = findEditWindowByBufferId(result.header.identity.bufferId);
+		if (window != nullptr) return window;
+	}
+	if (!result.header.identity.path.empty()) return findOpenLspTargetWindow(result.header.identity.path);
+	return nullptr;
+}
+
+bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &result) {
+	MRDialogFoundation *dialog = nullptr;
+	TScrollBar *scrollBar = nullptr;
+	LspCompletionListView *listView = nullptr;
+	MREditWindow *targetWindow = nullptr;
+	MRFileEditor *targetEditor = nullptr;
+	ushort dialogResult = cmCancel;
+	std::size_t selectedIndex = 0;
+	std::string insertText;
+	const short width = 96;
+	short visibleRows = 0;
+	short height = 0;
+	short buttonY = 0;
+
+	if (TProgram::deskTop == nullptr) return false;
+	if (result.header.state != mr::services::MRServiceResultState::Current) {
+		if (!result.header.errorMessage.empty()) postLspWarning("LSP completion unavailable: " + result.header.errorMessage);
+		else
+			postLspWarning("LSP completion unavailable.");
+		return true;
+	}
+	if (result.items.empty()) {
+		postLspWarning("LSP completion: no items.");
+		return true;
+	}
+
+	visibleRows = static_cast<short>(std::max<int>(5, std::min<int>(static_cast<int>(result.items.size()), 14)));
+	height = static_cast<short>(visibleRows + 6);
+	buttonY = static_cast<short>(height - 3);
+	dialog = mr::dialogs::createScrollableDialog("LSP COMPLETION", width, height);
+	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select completion:"));
+	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+	dialog->insert(scrollBar);
+	listView = new LspCompletionListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.items);
+	dialog->insert(listView);
+	{
+		const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~I~nsert", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
+	}
+	dialog->setDialogValidationHook([listView]() {
+		MRScrollableDialog::DialogValidationResult validation;
+		std::size_t selected = 0;
+
+		validation.valid = listView != nullptr && listView->selectedIndex(selected);
+		if (!validation.valid) validation.warningText = "Select a completion.";
+		return validation;
+	});
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < result.items.size()) {
+		const mr::services::MRServiceCompletionItem &item = result.items[selectedIndex];
+
+		insertText = !item.insertText.empty() ? item.insertText : item.label;
+	}
+	TObject::destroy(dialog);
+
+	if (dialogResult != cmOK || insertText.empty()) return true;
+	targetWindow = findLspCompletionTargetWindow(result);
+	targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+	if (targetEditor == nullptr) {
+		postLspWarning("LSP completion insert failed: target editor is not open.");
+		return true;
+	}
+	static_cast<void>(mrActivateEditWindow(targetWindow));
+	if (!targetEditor->insertBufferText(insertText)) {
+		postLspWarning("LSP completion insert failed.");
+		return true;
+	}
+	postLspInfo("LSP completion inserted: " + firstDisplayLine(insertText, 80));
+	return true;
+}
+
 bool showLspStatusDialog() {
 	MRDialogFoundation *dialog = nullptr;
 	mr::services::MRLspServerProfile profile;
@@ -1598,7 +1737,7 @@ bool showLspStatusDialog() {
 	lines.push_back(line.str());
 	line.str(std::string());
 	line.clear();
-	line << "Reported: diagnostics " << g_lspReportedDiagnosticCount << ", locations " << g_lspReportedLocationCount << ", hovers " << g_lspReportedHoverCount;
+	line << "Reported: diagnostics " << g_lspReportedDiagnosticCount << ", locations " << g_lspReportedLocationCount << ", hovers " << g_lspReportedHoverCount << ", completions " << g_lspReportedCompletionCount;
 	lines.push_back(line.str());
 	for (std::size_t i = 0; i < lines.size(); ++i)
 		displayLines.push_back(firstDisplayLine(lines[i], static_cast<std::size_t>(width - 6)));
@@ -1857,12 +1996,27 @@ void reportNewLspHovers(const std::vector<mr::services::MRServiceHoverResult> &h
 	g_lspReportedHoverCount = hovers.size();
 }
 
+void reportNewLspCompletions(const std::vector<mr::services::MRServiceCompletionResult> &completions) {
+	for (std::size_t i = g_lspReportedCompletionCount; i < completions.size(); ++i) {
+		const mr::services::MRServiceCompletionResult &result = completions[i];
+		std::ostringstream line;
+
+		g_lspLastRequestState = "completion received";
+		line << "LSP completion: " << result.items.size();
+		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
+		postLspInfo(line.str());
+		static_cast<void>(showLspCompletionDialog(result));
+	}
+	g_lspReportedCompletionCount = completions.size();
+}
+
 void reportNewLspResults() {
 	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
 
 	reportNewLspDiagnostics(results.diagnosticResults());
 	reportNewLspLocations(results.locationResults());
 	reportNewLspHovers(results.hoverResults());
+	reportNewLspCompletions(results.completionResults());
 }
 
 struct ParenthesisPair {
@@ -3506,6 +3660,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherLspHover:
 			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::ShowHover, "LSP hover");
+
+		case cmMrOtherLspComplete:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::Complete, "LSP completion");
 
 		case cmMrOtherLspStatus:
 			return showLspStatusDialog();
