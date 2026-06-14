@@ -2,7 +2,6 @@
 #define MREXTERNALPROCESS_HPP
 
 #include <string>
-#include <string_view>
 #include <sys/types.h>
 #include <vector>
 
@@ -22,7 +21,7 @@ public:
 	~ExternalProcessSession();
 
 	bool start(const ExternalProcessSpec &spec, std::string &errorMessage);
-	bool writeStdin(std::string_view text, std::string &errorMessage);
+	bool writeStdin(const std::string &text, std::string &errorMessage);
 	bool readAvailable(std::string &out, std::string &errorMessage);
 	void requestStop();
 	bool wait(int timeoutMs, int &exitStatus);

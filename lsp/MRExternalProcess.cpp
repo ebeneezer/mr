@@ -102,7 +102,7 @@ bool ExternalProcessSession::start(const ExternalProcessSpec &spec, std::string 
 	return true;
 }
 
-bool ExternalProcessSession::writeStdin(std::string_view text, std::string &errorMessage) {
+bool ExternalProcessSession::writeStdin(const std::string &text, std::string &errorMessage) {
 	std::size_t written = 0;
 
 	if (!running() || stdinFd < 0) return setError(errorMessage, "External process stdin is not open.");
