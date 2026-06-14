@@ -91,6 +91,7 @@ bool buildLspInitializeSpecFromServerProfile(const MRWorkspaceServiceSnapshot &w
 
 bool MRLspServiceSession::start(const mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
 	clearRequests();
+	clearRuntimeBinding();
 	resultStore.clear();
 	hasActiveWorkspace = false;
 	activeEditorDocumentId = 0;
@@ -108,7 +109,30 @@ bool MRLspServiceSession::start(const MRWorkspaceServiceSnapshot &workspace, con
 
 bool MRLspServiceSession::startRuntime(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage) {
 	if (!start(workspace, profile, errorMessage)) return false;
-	return sendInitialized(errorMessage);
+	if (!sendInitialized(errorMessage)) {
+		close();
+		return false;
+	}
+	activeServerProfile = profile;
+	activeRuntimeHasRoot = workspace.root.hasRoot;
+	if (workspace.root.hasRoot) {
+		activeRuntimeRootPath = normalizeWorkspaceServicePath(workspace.root.rootPath);
+	} else {
+		activeRuntimeRootPath.clear();
+	}
+	hasActiveRuntime = true;
+	errorMessage.clear();
+	return true;
+}
+
+bool MRLspServiceSession::ensureRuntime(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage) {
+	if (runtimeMatches(workspace, profile)) {
+		errorMessage.clear();
+		return true;
+	}
+	if (lifecycle.state() != mr::lsp::LspLifecycleState::Stopped && lifecycle.state() != mr::lsp::LspLifecycleState::Shutdown)
+		close();
+	return startRuntime(workspace, profile, errorMessage);
 }
 
 bool MRLspServiceSession::sendInitialized(std::string &errorMessage) {
@@ -208,6 +232,19 @@ bool MRLspServiceSession::syncEditorDocumentAndRequest(
 	return false;
 }
 
+bool MRLspServiceSession::requestEditorDocumentService(
+	const MRWorkspaceServiceSnapshot &workspace,
+	const MRLspServerProfile &profile,
+	const MRWorkspaceDocumentSnapshot &document,
+	const MRFileEditor &editor,
+	MRLspServiceRequestKind requestKind,
+	mr::lsp::LspTextPosition position,
+	bool includeDeclaration,
+	std::string &errorMessage) {
+	if (!ensureRuntime(workspace, profile, errorMessage)) return false;
+	return syncEditorDocumentAndRequest(workspace, document, editor, requestKind, position, includeDeclaration, errorMessage);
+}
+
 bool MRLspServiceSession::poll(std::string &errorMessage) {
 	std::vector<mr::lsp::LspInboundMessage> messages;
 
@@ -288,6 +325,7 @@ bool MRLspServiceSession::shutdown(std::string &errorMessage) {
 
 void MRLspServiceSession::close() {
 	clearRequests();
+	clearRuntimeBinding();
 	documentService.clear();
 	lifecycle.close();
 	hasActiveWorkspace = false;
@@ -299,6 +337,10 @@ void MRLspServiceSession::close() {
 
 const MRServiceResultStore &MRLspServiceSession::results() const noexcept {
 	return resultStore;
+}
+
+bool MRLspServiceSession::runtimeActive() const noexcept {
+	return hasActiveRuntime && lifecycle.state() == mr::lsp::LspLifecycleState::Initialized;
 }
 
 bool MRLspServiceSession::pollUntilState(mr::lsp::LspLifecycleState expectedState, std::string &errorMessage) {
@@ -329,6 +371,21 @@ bool MRLspServiceSession::acceptWorkspaceForSource(const MRWorkspaceServiceSnaps
 	}
 	errorMessage = "LSP service source document is not part of the workspace.";
 	return false;
+}
+
+bool MRLspServiceSession::runtimeMatches(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile) const {
+	std::string rootPath;
+
+	if (!hasActiveRuntime) return false;
+	if (lifecycle.state() != mr::lsp::LspLifecycleState::Initialized) return false;
+	if (activeServerProfile.profileName != profile.profileName) return false;
+	if (activeServerProfile.executablePath != profile.executablePath) return false;
+	if (activeServerProfile.arguments != profile.arguments) return false;
+	if (activeServerProfile.workingDirectory != profile.workingDirectory) return false;
+	if (activeRuntimeHasRoot != workspace.root.hasRoot) return false;
+	if (!workspace.root.hasRoot) return true;
+	rootPath = normalizeWorkspaceServicePath(workspace.root.rootPath);
+	return activeRuntimeRootPath == rootPath;
 }
 
 bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage &message, std::string &errorMessage) {
@@ -372,6 +429,13 @@ void MRLspServiceSession::clearRequests() noexcept {
 	referencesRequest = mr::lsp::LspReferencesRequest();
 	hoverRequest = mr::lsp::LspHoverRequest();
 	completionRequest = mr::lsp::LspCompletionRequest();
+}
+
+void MRLspServiceSession::clearRuntimeBinding() noexcept {
+	activeServerProfile = MRLspServerProfile();
+	activeRuntimeRootPath.clear();
+	activeRuntimeHasRoot = false;
+	hasActiveRuntime = false;
 }
 
 } // namespace mr::services

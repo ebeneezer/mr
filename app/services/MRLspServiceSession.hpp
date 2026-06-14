@@ -42,6 +42,7 @@ public:
 	bool start(const mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
 	bool start(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage);
 	bool startRuntime(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage);
+	bool ensureRuntime(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage);
 	bool sendInitialized(std::string &errorMessage);
 	bool openDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
 	bool changeDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
@@ -50,6 +51,15 @@ public:
 	bool syncEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
 	bool syncEditorDocumentAndRequest(
 		const MRWorkspaceServiceSnapshot &workspace,
+		const MRWorkspaceDocumentSnapshot &document,
+		const MRFileEditor &editor,
+		MRLspServiceRequestKind requestKind,
+		mr::lsp::LspTextPosition position,
+		bool includeDeclaration,
+		std::string &errorMessage);
+	bool requestEditorDocumentService(
+		const MRWorkspaceServiceSnapshot &workspace,
+		const MRLspServerProfile &profile,
 		const MRWorkspaceDocumentSnapshot &document,
 		const MRFileEditor &editor,
 		MRLspServiceRequestKind requestKind,
@@ -66,12 +76,15 @@ public:
 	void close();
 
 	[[nodiscard]] const MRServiceResultStore &results() const noexcept;
+	[[nodiscard]] bool runtimeActive() const noexcept;
 
 private:
 	bool pollUntilState(mr::lsp::LspLifecycleState expectedState, std::string &errorMessage);
 	bool acceptWorkspaceForSource(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
 	bool consumeInboundMessage(const mr::lsp::LspInboundMessage &message, std::string &errorMessage);
+	bool runtimeMatches(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile) const;
 	void clearRequests() noexcept;
+	void clearRuntimeBinding() noexcept;
 
 	mr::lsp::LspLifecycle lifecycle;
 	mr::lsp::LspDocumentService documentService;
@@ -90,6 +103,10 @@ private:
 	std::size_t activeEditorDocumentVersion = 0;
 	std::string activeEditorDocumentPath;
 	bool hasActiveWorkspace = false;
+	MRLspServerProfile activeServerProfile;
+	std::string activeRuntimeRootPath;
+	bool activeRuntimeHasRoot = false;
+	bool hasActiveRuntime = false;
 };
 
 } // namespace mr::services
