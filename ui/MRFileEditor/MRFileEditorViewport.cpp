@@ -816,7 +816,7 @@ TColorAttr MRFileEditor::tokenColor(MRSyntaxToken token, bool selected, TAttrPai
 	auto configuredCodeColor = [background](unsigned char paletteSlot, unsigned char fallbackForeground) noexcept -> TColorAttr {
 		unsigned char configured = 0;
 
-		if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(background | (configured & 0x0F));
+		if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(configured);
 		return static_cast<TColorAttr>(background | fallbackForeground);
 	};
 
