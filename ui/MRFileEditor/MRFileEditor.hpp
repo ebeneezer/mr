@@ -458,11 +458,11 @@ class MRFileEditor : public TScroller {
 
 	static bool hasShiftModifier(ushort mods) noexcept;
 
-	static int configuredTabSize() noexcept;
+	int configuredTabSize() const;
 
-	static bool configuredDisplayTabs() noexcept;
+	bool configuredDisplayTabs() const;
 
-	static bool configuredFormatRuler() noexcept;
+	bool configuredFormatRuler() const;
 
 	static int tabDisplayWidth(const MREditSetupSettings &settings, int visualColumn) noexcept;
 
@@ -620,6 +620,8 @@ class MRFileEditor : public TScroller {
 		void refreshSyntaxContext();
 
 		bool pieceTableOnlyPhaseActive() const noexcept;
+
+		MREditSetupSettings effectiveEditSetupSettings() const;
 
 		std::string effectiveCodeLanguageSetting() const;
 

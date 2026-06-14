@@ -148,7 +148,7 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 }
 
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometry() const noexcept {
-	return textViewportGeometryFor(configuredEditSetupSettings());
+	return textViewportGeometryFor(effectiveEditSetupSettings());
 }
 
 bool MRFileEditor::shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept {
@@ -440,7 +440,7 @@ std::size_t MRFileEditor::lineStartForIndex(std::size_t index) const noexcept {
 int MRFileEditor::longestLineWidth() const noexcept {
 	std::size_t pos = 0;
 	std::size_t len = mBufferModel.length();
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	int maxWidth = 1;
 
 	while (true) {
@@ -498,7 +498,7 @@ void MRFileEditor::drawFormatRulerOverlay(const TextViewportGeometry &viewport, 
 }
 
 bool MRFileEditor::editFormatRulerAtLocalPoint(TPoint local, ushort modifiers) {
-	MREditSetupSettings settings = configuredEditSetupSettings();
+	MREditSetupSettings settings = effectiveEditSetupSettings();
 	const TextViewportGeometry viewport = textViewportGeometryFor(settings);
 	if (!settings.formatRuler || local.y != 0 || !viewport.containsTextX(local.x)) return false;
 	const int column = viewport.textColumnFromLocalX(local.x) + 1;
@@ -527,7 +527,7 @@ bool MRFileEditor::editFormatRulerAtLocalPoint(TPoint local, ushort modifiers) {
 }
 
 bool MRFileEditor::dragFormatRulerAtLocalPoint(TEvent &event, TPoint local) {
-	const MREditSetupSettings initialSettings = configuredEditSetupSettings();
+	const MREditSetupSettings initialSettings = effectiveEditSetupSettings();
 	const TextViewportGeometry viewport = textViewportGeometryFor(initialSettings);
 	const ushort modifiers = event.mouse.controlKeyState;
 	const int startColumn = viewport.textColumnFromLocalX(local.x) + 1;
@@ -565,7 +565,7 @@ void MRFileEditor::draw() {
 	}
 	if (!mFileCompareLineKinds.empty()) hideCursor();
 	syncScrollBarsToState();
-	MREditSetupSettings editSettings = configuredEditSetupSettings();
+	MREditSetupSettings editSettings = effectiveEditSetupSettings();
 	const bool foldingEnabled = foldingPipelineEnabled();
 	const bool miniMapEnabled = miniMapPipelineEnabled();
 	std::size_t totalLines = 1;
@@ -868,7 +868,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	std::size_t bytePos = 0;
 	int visual = 0;
 	int x = 0;
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const bool displayTabs = configuredDisplayTabs();
 	unsigned char diffLineKind = mrfclkNone;
 	bool diffTextActive = false;

@@ -766,13 +766,9 @@ bool MRFileEditor::pieceTableOnlyPhaseActive() const noexcept {
 }
 
 std::string MRFileEditor::effectiveCodeLanguageSetting() const {
-	std::string codeLanguage = configuredEditSetupSettings().codeLanguage;
+	std::string codeLanguage = effectiveEditSetupSettings().codeLanguage;
 
 	if (mCommunicationViewerMode) return "NONE";
-	if (hasPersistentFileName()) {
-		MREditSetupSettings effective;
-		if (effectiveEditSetupSettingsForPath(fileName, effective, nullptr)) codeLanguage = effective.codeLanguage;
-	}
 	return upperAscii(trimAscii(codeLanguage));
 }
 

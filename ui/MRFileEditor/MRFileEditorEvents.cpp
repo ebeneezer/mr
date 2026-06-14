@@ -110,9 +110,10 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 }
 
 std::string MRFileEditor::tabKeyText() const {
-	if (configuredTabExpandSetting()) return "\t";
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
+
+	if (settings.tabExpand) return "\t";
 	std::size_t insertPos = mBufferModel.cursor();
-	const MREditSetupSettings settings = configuredEditSetupSettings();
 	if (mBufferModel.hasSelection()) insertPos = mBufferModel.selection().range().start;
 	int visualColumn = freeCursorMovementEnabled() && insertPos == mBufferModel.cursor() && !mBufferModel.hasSelection() ? displayedCursorColumn() : charColumn(mBufferModel.lineStart(insertPos), insertPos);
 	return std::string(static_cast<std::size_t>(tabDisplayWidth(settings, visualColumn)), ' ');
@@ -418,13 +419,13 @@ void MRFileEditor::handleCommand(TEvent &event) {
 			break;
 		case cmMrTextCenterLine:
 			if (!mReadOnly) {
-				MREditSetupSettings settings = configuredEditSetupSettings();
+				MREditSetupSettings settings = effectiveEditSetupSettings();
 				centerCurrentLine(settings.leftMargin, settings.rightMargin > 0 ? settings.rightMargin : 78);
 			}
 			break;
 		case cmMrTextReformatParagraph:
 			if (!mReadOnly) {
-				MREditSetupSettings settings = configuredEditSetupSettings();
+				MREditSetupSettings settings = effectiveEditSetupSettings();
 				formatParagraph(settings.leftMargin, settings.rightMargin > 0 ? settings.rightMargin : 78);
 			}
 			break;

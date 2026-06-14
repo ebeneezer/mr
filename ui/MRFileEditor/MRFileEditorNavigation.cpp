@@ -137,7 +137,7 @@ int MRFileEditor::charColumn(std::size_t start, std::size_t pos) const noexcept 
 	std::size_t lineStart = mBufferModel.lineStart(start);
 	std::string lineText = mBufferModel.lineText(lineStart);
 	TStringView line(lineText.data(), lineText.size());
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	std::size_t p = 0;
 	std::size_t end = std::min(pos, mBufferModel.length()) - lineStart;
 	int visual = 0;
@@ -294,7 +294,7 @@ std::size_t MRFileEditor::lineMoveOffset(std::size_t pos, int deltaLines, int ta
 std::size_t MRFileEditor::tabStopMoveOffset(std::size_t pos, bool forward) noexcept {
 	const std::size_t cursor = std::min(pos, mBufferModel.length());
 	const std::size_t lineStart = lineStartOffset(cursor);
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const int currentColumn = (freeCursorMovementEnabled() && cursor == mBufferModel.cursor() && !mBufferModel.hasSelection() ? displayedCursorColumn() : charColumn(lineStart, cursor)) + 1;
 	const int targetColumn = forward ? nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn) : prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn);
 
@@ -327,7 +327,7 @@ std::size_t MRFileEditor::charPtrOffset(std::size_t start, int pos) noexcept {
 	std::size_t lineStart = mBufferModel.lineStart(start);
 	std::string lineText = mBufferModel.lineText(lineStart);
 	TStringView line(lineText.data(), lineText.size());
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	std::size_t p = 0;
 	int visual = 0;
 	int target = std::max(pos, 0);
