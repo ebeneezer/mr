@@ -2101,6 +2101,38 @@ bool installRegressionKeymap(std::string_view source, std::string &failureReason
 	return true;
 }
 
+bool testWordStarBasicNavigationKeybindingsHarness(const std::string &wordstarKeymapContent, std::string &failureReason) {
+	ScopedRegressionKeymap restoreKeymap;
+	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::BoundToText);
+	MREditWindow window(TRect(0, 0, 80, 16), "wordstar-basic-nav", 1032);
+	MRFileEditor *editor = nullptr;
+
+	if (!installRegressionKeymap(wordstarKeymapContent, failureReason)) return false;
+	if (!window.replaceTextBuffer("abc\n", "wordstar-basic-nav")) {
+		failureReason = "Unable to seed window editor for WordStar basic navigation path.";
+		return false;
+	}
+	editor = window.getEditor();
+	if (editor == nullptr) {
+		failureReason = "WordStar basic navigation path must have an editor.";
+		return false;
+	}
+	editor->setCursorOffset(0);
+	if (!sendWindowRawCtrl(window, 'D')) return false;
+	if (editor->cursorOffset() != 1) {
+		failureReason = "WordStar Ctrl-D from wordstar.mrmac must move the cursor right through the window key path.";
+		return false;
+	}
+	if (!sendWindowRawCtrl(window, 'S')) return false;
+	if (editor->cursorOffset() != 0) {
+		failureReason = "WordStar Ctrl-S from wordstar.mrmac must move the cursor left through the window key path.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent, std::string &failureReason) {
 	ScopedRegressionKeymap restoreKeymap;
 	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
@@ -2847,6 +2879,7 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 	}
 	if (!mrfeBlockOpsRegressionHarness(failureReason)) return false;
 	if (!testBlockMarkingWindowInputHarness(failureReason)) return false;
+	if (!testWordStarBasicNavigationKeybindingsHarness(wordstarKeymapContent, failureReason)) return false;
 	if (!testWordStarBlockKeybindingsHarness(defaultKeymapContent, failureReason)) return false;
 	if (routerContent.find("win->beginLineBlock();") == std::string::npos || routerContent.find("win->beginColumnBlock();") == std::string::npos || routerContent.find("win->beginStreamBlock();") == std::string::npos || routerContent.find("cmMrBlockToggleVisibility") == std::string::npos) {
 		failureReason = "Block marking commands must route to marking methods and visibility toggle.";
@@ -3459,6 +3492,88 @@ bool testEditProfileCaseSensitiveExtensionMatchGuard(std::string &failureReason)
 	return true;
 }
 
+bool testEffectiveCProfileControlsLoadedEditorGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	MREditSetupSettings globalSettings = resolveEditSetupDefaults();
+	MREditExtensionProfile cProfile;
+	const std::string path = "/tmp/mr_regression_effective_c_profile_" + std::to_string(static_cast<long>(::getpid())) + ".c";
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+
+	auto restore = [&]() {
+		::unlink(path.c_str());
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	globalSettings.formatRuler = true;
+	globalSettings.codeLanguage = "AUTO";
+	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
+		restore();
+		failureReason = "Unable to seed globals for loaded editor profile probe: " + errorText;
+		return false;
+	}
+
+	cProfile.id = "c_runtime_profile";
+	cProfile.name = "C Runtime Profile";
+	cProfile.extensions.push_back("c");
+	cProfile.overrides.values = resolveEditSetupDefaults();
+	cProfile.overrides.values.formatRuler = false;
+	cProfile.overrides.values.codeLanguage = "C";
+	cProfile.overrides.mask = kOvFormatRuler | kOvCodeLanguage;
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(1, cProfile), &errorText)) {
+		restore();
+		failureReason = "Unable to seed C extension profile for loaded editor probe: " + errorText;
+		return false;
+	}
+
+	{
+		std::ofstream file(path.c_str(), std::ios::out | std::ios::trunc);
+		if (!file) {
+			restore();
+			failureReason = "Unable to create temporary C file for loaded editor profile probe.";
+			return false;
+		}
+		file << "#include <stdio.h>\n\nint main(void) {\n\treturn 0;\n}\n";
+	}
+
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "effective-c-profile", 1031);
+		MRFileEditor *editor = nullptr;
+
+		if (!window.loadFromFile(path.c_str())) {
+			restore();
+			failureReason = "Unable to load temporary C file for effective profile probe.";
+			return false;
+		}
+		editor = window.getEditor();
+		if (editor == nullptr) {
+			restore();
+			failureReason = "Loaded editor profile probe has no editor.";
+			return false;
+		}
+		editor->updateMetrics();
+		if (window.syntaxLanguage() != MRSyntaxLanguage::C || editor->syntaxLanguage() != MRSyntaxLanguage::C) {
+			restore();
+			failureReason = "Loaded .c file must activate the C syntax profile.";
+			return false;
+		}
+		if (editor->visibleViewportRows() != editor->size.y) {
+			restore();
+			failureReason = "C profile FORMAT_RULER=false must leave all editor rows available for text.";
+			return false;
+		}
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after loaded editor profile probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testLegacyEditProfileMacroDropToDefaultsGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	const std::string currentVersion = mrCurrentPersistenceVersionString();
@@ -4050,6 +4165,82 @@ bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason
 	return true;
 }
 
+bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
+	static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F};
+	MRColorSetupSettings previous = configuredColorSetupSettings();
+	std::size_t itemCount = 0;
+	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Code, itemCount);
+	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
+	std::string viewportContent;
+	std::string tokenColorFunction;
+	std::string errorText;
+	unsigned char value = 0;
+	bool restoreOk = true;
+
+	auto restore = [&]() {
+		if (!restoreOk) return;
+		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, previous.codeColors.data(), previous.codeColors.size(), &errorText);
+	};
+
+	if (items == nullptr || itemCount != sizeof(probeValues) / sizeof(probeValues[0])) {
+		failureReason = "Unexpected CODECOLORS item mapping.";
+		return false;
+	}
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+		failureReason = "Unable to set CODECOLORS probe values: " + errorText;
+		return false;
+	}
+	for (std::size_t i = 0; i < itemCount; ++i) {
+		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
+			restore();
+			failureReason = "CODECOLORS item must override its mapped palette slot.";
+			return false;
+		}
+		if (value != probeValues[i]) {
+			restore();
+			failureReason = "CODECOLORS slot mapping must preserve the full configured attribute.";
+			return false;
+		}
+	}
+
+	if (!readTextFile(viewportPath, viewportContent, errorText)) {
+		restore();
+		failureReason = "Unable to read MRFileEditorViewport.cpp for code color guard: " + errorText;
+		return false;
+	}
+	const std::size_t tokenColorStart = viewportContent.find("TColorAttr MRFileEditor::tokenColor");
+	const std::size_t tokenColorEnd = viewportContent.find("\nvoid MRFileEditor::formatSyntaxLine", tokenColorStart);
+	if (tokenColorStart == std::string::npos || tokenColorEnd == std::string::npos) {
+		restore();
+		failureReason = "Unable to isolate MRFileEditor::tokenColor for code color guard.";
+		return false;
+	}
+	tokenColorFunction = viewportContent.substr(tokenColorStart, tokenColorEnd - tokenColorStart);
+	if (tokenColorFunction.find("if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(configured);") == std::string::npos) {
+		restore();
+		failureReason = "Code token colors must preserve the full configured attribute, including background.";
+		return false;
+	}
+	if (tokenColorFunction.find("return static_cast<TColorAttr>(background | fallbackForeground);") == std::string::npos) {
+		restore();
+		failureReason = "Code token fallback colors must still combine editor background with fallback foreground.";
+		return false;
+	}
+	if (tokenColorFunction.find("configured & 0x0F") != std::string::npos || tokenColorFunction.find("(configured &") != std::string::npos) {
+		restore();
+		failureReason = "Code token colors must not mask configured colors down to foreground.";
+		return false;
+	}
+
+	restore();
+	if (!restoreOk) {
+		failureReason = "Unable to restore CODECOLORS after probe: " + errorText;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testIndicatorLineNumberColorWiringGuard(std::string &failureReason) {
 	const std::string indicatorPath = absolutePathFromCwd("ui/MRIndicator.hpp");
 	const std::string windowPath = absolutePathFromCwd("ui/MREditWindow.hpp");
@@ -4269,6 +4460,41 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 	}
 	if (content.find("if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))") == std::string::npos) {
 		failureReason = "EOF marker must support emoji toggle with text-mode color override wiring.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason) {
+	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	std::string content;
+	std::string functionBody;
+	std::string ioError;
+
+	if (!readTextFile(routerPath, content, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for LSP completion reporting guard: " + ioError;
+		return false;
+	}
+
+	const std::size_t functionStart = content.find("void reportNewLspCompletions");
+	const std::size_t functionEnd = content.find("\nvoid reportNewLspResults", functionStart);
+	if (functionStart == std::string::npos || functionEnd == std::string::npos) {
+		failureReason = "Unable to isolate reportNewLspCompletions for LSP completion reporting guard.";
+		return false;
+	}
+	functionBody = content.substr(functionStart, functionEnd - functionStart);
+
+	const std::size_t resultCopy = functionBody.find("const mr::services::MRServiceCompletionResult result = completions[g_lspReportedCompletionCount];");
+	const std::size_t reportedIncrement = functionBody.find("++g_lspReportedCompletionCount;", resultCopy);
+	const std::size_t dialogOpen = functionBody.find("showLspCompletionDialog(result)", resultCopy);
+	if (resultCopy == std::string::npos || reportedIncrement == std::string::npos || dialogOpen == std::string::npos) {
+		failureReason = "LSP completion reporting must copy the pending result, advance the reported count, and then open the dialog.";
+		return false;
+	}
+	if (reportedIncrement > dialogOpen) {
+		failureReason = "LSP completion reporting must advance g_lspReportedCompletionCount before opening the modal completion dialog.";
 		return false;
 	}
 
@@ -6384,6 +6610,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);
 	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
+	runTest(ctx, "Effective C profile controls loaded editor", testEffectiveCProfileControlsLoadedEditorGuard);
 	runTest(ctx, "Legacy MREDITPROFILE drop-to-defaults", testLegacyEditProfileMacroDropToDefaultsGuard);
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
@@ -6397,6 +6624,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
+	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
 	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
 	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
@@ -6408,6 +6636,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
+	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
@@ -6452,6 +6681,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);
 	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
+	runTest(ctx, "Effective C profile controls loaded editor", testEffectiveCProfileControlsLoadedEditorGuard);
 	runTest(ctx, "Legacy MREDITPROFILE drop-to-defaults", testLegacyEditProfileMacroDropToDefaultsGuard);
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
@@ -6465,6 +6695,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
+	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
 	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
@@ -6479,6 +6710,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
+	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
