@@ -1913,6 +1913,7 @@ void MREditorApp::idle() {
 	updateMacroBrainBlink();
 	warmIndexedMacroBindings();
 	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
+	pumpMRLspService();
 	pumpDeferredMacroUiPlayback();
 	updatePerformancePanel();
 	updateFullscreenHint();

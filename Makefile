@@ -130,6 +130,23 @@ MR_LSP_APP_SERVICE_PROBE_SOURCE = regression/mr_lsp_app_service_probe.cpp
 MR_LSP_APP_SERVICE_PROBE_OBJECT = regression/mr_lsp_app_service_probe.o
 MR_LSP_APP_SERVICE_SOURCE = app/services/MRLspAppService.cpp
 MR_LSP_APP_SERVICE_OBJECT = app/services/MRLspAppService.o
+MR_LSP_RUNTIME_OBJECTS = \
+	$(MR_LSP_APP_SERVICE_OBJECT) \
+	$(MR_LSP_SERVICE_SESSION_OBJECT) \
+	$(MR_SERVICE_RESULTS_OBJECT) \
+	$(MR_LSP_EDITOR_SOURCE_OBJECT) \
+	$(LSP_COMPLETION_OBJECT) \
+	$(LSP_HOVER_OBJECT) \
+	$(LSP_REFERENCES_OBJECT) \
+	$(LSP_DEFINITION_OBJECT) \
+	$(LSP_DIAGNOSTICS_OBJECT) \
+	$(LSP_DOCUMENT_SERVICE_OBJECT) \
+	$(LSP_DOCUMENT_MIRROR_OBJECT) \
+	$(LSP_URI_OBJECT) \
+	$(LSP_LIFECYCLE_OBJECT) \
+	$(LSP_SESSION_OBJECT) \
+	$(EXTERNAL_PROCESS_OBJECT) \
+	$(LSP_JSONRPC_OBJECT)
 LSP_JSONRPC_PROBE_TARGET = regression/mr_lsp_jsonrpc_probe
 LSP_JSONRPC_PROBE_SOURCE = regression/mr_lsp_jsonrpc_probe.cpp
 LSP_JSONRPC_PROBE_OBJECT = regression/mr_lsp_jsonrpc_probe.o
@@ -669,7 +686,7 @@ $(LSP_COMPLETION_PROBE_OBJECT): $(LSP_COMPLETION_PROBE_SOURCE) lsp/MRLspCompleti
 $(LSP_SERVICE_INTEGRATION_PROBE_OBJECT): $(LSP_SERVICE_INTEGRATION_PROBE_SOURCE) app/services/MRServiceResults.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp
 
 # 3. Linker call
-$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
+$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
 	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true

@@ -59,6 +59,7 @@
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
+#include "../app/services/MRLspAppService.hpp"
 #include "../keymap/MRKeymapActionCatalog.hpp"
 #include "../keymap/MRKeymapSequence.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
@@ -293,6 +294,11 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SETUP_USER_INTERFACE", KeymapDispatchKind::AppCommand, cmMrSetupUserInterfaceSettings, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_LIVE_LOGS", KeymapDispatchKind::AppCommand, cmMrSetupLiveLogs, KeymapWindowMethod::None, KeymapCustomAction::None},
 };
+
+mr::services::MRLspAppService g_lspAppService;
+std::size_t g_lspReportedDiagnosticCount = 0;
+std::size_t g_lspReportedLocationCount = 0;
+std::size_t g_lspReportedHoverCount = 0;
 
 const char *placeholderCommandTitle(ushort command) {
 	switch (command) {
@@ -1048,6 +1054,149 @@ bool runDisabledBlockAction() {
 
 void postDialogError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string(text), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
+
+void postLspInfo(const std::string &text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+	mrLogMessage(text);
+}
+
+void postLspWarning(const std::string &text) {
+	postDialogWarning(text);
+	mrLogMessage(text);
+}
+
+void postLspError(const std::string &text) {
+	postDialogError(text);
+	mrLogMessage(text);
+}
+
+std::string firstDisplayLine(const std::string &text, std::size_t maxLength) {
+	std::string result;
+
+	for (std::size_t i = 0; i < text.size() && result.size() < maxLength; ++i) {
+		const char ch = text[i];
+		if (ch == '\r' || ch == '\n') break;
+		result.push_back(ch);
+	}
+	if (text.size() > result.size() && result.size() == maxLength) result += "...";
+	return result;
+}
+
+bool buildLspServerProfileFromEnvironment(mr::services::MRLspServerProfile &profile) {
+	const char *server = std::getenv("MR_LSP_SERVER");
+	const char *arguments = std::getenv("MR_LSP_SERVER_ARGS");
+	std::istringstream argumentStream(arguments != nullptr ? arguments : "");
+	std::string argument;
+
+	profile = mr::services::MRLspServerProfile();
+	if (server == nullptr || trimAscii(server).empty()) return false;
+	profile.profileName = "environment";
+	profile.executablePath = trimAscii(server);
+	profile.workingDirectory = ".";
+	while (argumentStream >> argument)
+		profile.arguments.push_back(argument);
+	return true;
+}
+
+bool buildCurrentLspDocumentSnapshot(MREditWindow *win, mr::services::MRWorkspaceDocumentSnapshot &document) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+
+	if (win == nullptr || editor == nullptr) {
+		postLspWarning("LSP requires an editor window.");
+		return false;
+	}
+	if (!editor->hasPersistentFileName()) {
+		postLspWarning("LSP requires a saved file.");
+		return false;
+	}
+	document = mr::services::MRWorkspaceDocumentSnapshot();
+	document.bufferId = win->bufferId();
+	document.documentId = editor->documentId();
+	document.documentVersion = editor->documentVersion();
+	document.path = editor->persistentFileName();
+	document.languageName = editor->syntaxLanguageName();
+	document.mainFile = true;
+	return true;
+}
+
+mr::lsp::LspTextPosition currentLspTextPosition(const MRFileEditor &editor) {
+	const std::size_t offset = editor.cursorOffset();
+	mr::lsp::LspTextPosition position;
+
+	position.line = static_cast<int>(editor.lineIndexOfOffset(offset));
+	position.character = static_cast<int>(editor.columnOfOffset(offset));
+	return position;
+}
+
+bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const char *label) {
+	MREditWindow *win = currentEditorCommandWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	std::string errorMessage;
+
+	if (!buildLspServerProfileFromEnvironment(profile)) {
+		postLspWarning("LSP server not configured. Set MR_LSP_SERVER.");
+		return true;
+	}
+	if (!buildCurrentLspDocumentSnapshot(win, document)) return true;
+	g_lspAppService.setMainFileByBufferId(document.bufferId);
+	if (!g_lspAppService.requestCurrentEditorCommand(profile, document, *editor, command, currentLspTextPosition(*editor), errorMessage)) {
+		postLspError(std::string(label != nullptr ? label : "LSP request") + " failed: " + errorMessage);
+		return true;
+	}
+	postLspInfo(std::string(label != nullptr ? label : "LSP request") + " requested.");
+	return true;
+}
+
+void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnosticResult> &diagnostics) {
+	for (std::size_t i = g_lspReportedDiagnosticCount; i < diagnostics.size(); ++i) {
+		const mr::services::MRServiceDiagnosticResult &result = diagnostics[i];
+		std::ostringstream line;
+
+		line << "LSP diagnostics: " << result.diagnostics.size();
+		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
+		if (!result.diagnostics.empty()) line << " - " << firstDisplayLine(result.diagnostics[0].message, 120);
+		postLspInfo(line.str());
+	}
+	g_lspReportedDiagnosticCount = diagnostics.size();
+}
+
+void reportNewLspLocations(const std::vector<mr::services::MRServiceLocationResult> &locations) {
+	for (std::size_t i = g_lspReportedLocationCount; i < locations.size(); ++i) {
+		const mr::services::MRServiceLocationResult &result = locations[i];
+		std::ostringstream line;
+		const char *kind = result.header.kind == mr::services::MRServiceResultKind::References ? "references" : "definition";
+
+		line << "LSP " << kind << ": " << result.locations.size();
+		if (!result.locations.empty()) {
+			const mr::services::MRServiceLocationTarget &target = result.locations[0];
+			line << " " << (!target.path.empty() ? target.path : target.uri);
+			line << ":" << (target.range.start.line + 1) << ":" << (target.range.start.character + 1);
+		}
+		postLspInfo(line.str());
+	}
+	g_lspReportedLocationCount = locations.size();
+}
+
+void reportNewLspHovers(const std::vector<mr::services::MRServiceHoverResult> &hovers) {
+	for (std::size_t i = g_lspReportedHoverCount; i < hovers.size(); ++i) {
+		const mr::services::MRServiceHoverResult &result = hovers[i];
+		std::string text = firstDisplayLine(result.hover.value, 140);
+
+		if (text.empty()) text = "empty hover";
+		postLspInfo("LSP hover: " + text);
+	}
+	g_lspReportedHoverCount = hovers.size();
+}
+
+void reportNewLspResults() {
+	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
+
+	reportNewLspDiagnostics(results.diagnosticResults());
+	reportNewLspLocations(results.locationResults());
+	reportNewLspHovers(results.hoverResults());
 }
 
 struct ParenthesisPair {
@@ -2324,6 +2473,18 @@ bool dispatchMRKeymapMacro(std::string_view macroSpec) {
 	return runMacroSpecByName(std::string(macroSpec).c_str(), &errorText, true);
 }
 
+void pumpMRLspService() {
+	std::string errorMessage;
+
+	if (!g_lspAppService.runtimeActive()) return;
+	if (!g_lspAppService.poll(errorMessage)) {
+		postLspError("LSP poll failed: " + errorMessage);
+		g_lspAppService.close();
+		return;
+	}
+	reportNewLspResults();
+}
+
 bool handleMRCommand(ushort command, void *commandInfo) {
 	switch (command) {
 		case cmMrFileOpen:
@@ -2666,6 +2827,12 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherFindPreviousCompilerError:
 			return handleCompilerErrorNavigation(commandInfo, false);
+
+		case cmMrOtherLspDefinition:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::GoToDefinition, "LSP definition");
+
+		case cmMrOtherLspHover:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::ShowHover, "LSP hover");
 
 		case cmMrOtherMacroManager:
 			return runMacroManagerDialog();
