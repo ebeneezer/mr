@@ -107,6 +107,9 @@ MRFE_BLOCK_OPS_HARNESS_OBJECT = ui/MRFileEditor/MRFEBlockOpsTestHarness.o
 PHASE1_REPRO_PROBE_TARGET = misc/mr_phase1_repro_probe
 PHASE1_REPRO_PROBE_SOURCE = misc/mr_phase1_repro_probe.cpp
 PHASE1_REPRO_PROBE_OBJECT = misc/mr_phase1_repro_probe.o
+MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET = regression/mr_workspace_service_context_probe
+MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE = regression/mr_workspace_service_context_probe.cpp
+MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT = regression/mr_workspace_service_context_probe.o
 LSP_JSONRPC_PROBE_TARGET = regression/mr_lsp_jsonrpc_probe
 LSP_JSONRPC_PROBE_SOURCE = regression/mr_lsp_jsonrpc_probe.cpp
 LSP_JSONRPC_PROBE_OBJECT = regression/mr_lsp_jsonrpc_probe.o
@@ -194,6 +197,7 @@ CXX_SOURCES = \
 	app/MRMenuFactory.cpp \
 	app/MRVersion.cpp \
 	app/MREditorApp.cpp \
+	app/services/MRWorkspaceServiceContext.cpp \
 	keymap/MRKeymapActionCatalog.cpp \
 	keymap/MRKeymapContext.cpp \
 	keymap/MRKeymapProfile.cpp \
@@ -303,7 +307,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -321,6 +325,7 @@ mroutlinetrainer: $(MROUTLINETRAINER_TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
 phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
+workspace-service-context-probe: $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET)
 lsp-jsonrpc-probe: $(LSP_JSONRPC_PROBE_TARGET)
 external-process-probe: $(EXTERNAL_PROCESS_PROBE_TARGET)
 lsp-session-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_SESSION_PROBE_TARGET)
@@ -598,6 +603,8 @@ piecetable/MRTextDocumentLineIndex.o: piecetable/MRTextDocumentLineIndex.cpp pie
 $(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsRuntime.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MROUTLINETRAINER_OBJECT): $(MROUTLINETRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
+app/services/MRWorkspaceServiceContext.o: app/services/MRWorkspaceServiceContext.cpp app/services/MRWorkspaceServiceContext.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
+$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT): $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE) app/services/MRWorkspaceServiceContext.hpp
 $(LSP_JSONRPC_OBJECT): $(LSP_JSONRPC_SOURCE) lsp/MRLspJsonRpc.hpp
 $(LSP_JSONRPC_PROBE_OBJECT): $(LSP_JSONRPC_PROBE_SOURCE) lsp/MRLspJsonRpc.hpp
 $(EXTERNAL_PROCESS_OBJECT): $(EXTERNAL_PROCESS_SOURCE) lsp/MRExternalProcess.hpp
@@ -646,6 +653,9 @@ $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(RE
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(PHASE1_REPRO_PROBE_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
+$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(LSP_JSONRPC_PROBE_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT)
@@ -704,6 +714,7 @@ clean:
 		$(STAGE_PROFILE_PROBE_TARGET) \
 		$(REGRESSION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) \
 		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
+		$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET) \
 		$(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT) $(LSP_JSONRPC_PROBE_TARGET) \
 		$(EXTERNAL_PROCESS_OBJECT) $(EXTERNAL_PROCESS_PROBE_OBJECT) $(EXTERNAL_PROCESS_PROBE_TARGET) \
 		$(LSP_SESSION_OBJECT) $(LSP_SESSION_PROBE_OBJECT) $(LSP_SESSION_PROBE_TARGET) \
