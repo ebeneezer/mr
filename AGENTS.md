@@ -16,7 +16,7 @@ C++20 is the compiler standard. It is not permission to use every modern C++ idi
 Verboten:
 
 1. if ketten - Tabellensteuerung bevorzugen
-2. unnötiger Abstraktion und Type Programmierung
+2. unnötiger Abstraktion und Type Programmierung, Vererbung ist zu bevorzugen
 3. atomare Wrapper
 4. zu offene Objektkapselung - maximales Geheimnisprinzip beachten
 5. Globals sind nur nach Freigabe durch den Maintainer erlaubt
