@@ -1293,7 +1293,8 @@ class LspReferencesListView final : public TListViewer {
 
 	void handleEvent(TEvent &event) override {
 		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
-			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			if (target != nullptr) message(target, evCommand, cmOK, this);
 			clearEvent(event);
 			return;
 		}
@@ -1302,8 +1303,9 @@ class LspReferencesListView final : public TListViewer {
 
 	void selectItem(short item) override {
 		if (item >= 0 && static_cast<std::size_t>(item) < locations.size()) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
 			focusItemNum(item);
-			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+			if (target != nullptr) message(target, evCommand, cmOK, this);
 		}
 	}
 
@@ -1368,7 +1370,8 @@ class LspResultsListView final : public TListViewer {
 
 	void handleEvent(TEvent &event) override {
 		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
-			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			if (target != nullptr) message(target, evCommand, cmOK, this);
 			clearEvent(event);
 			return;
 		}
@@ -1377,8 +1380,9 @@ class LspResultsListView final : public TListViewer {
 
 	void selectItem(short item) override {
 		if (item >= 0 && static_cast<std::size_t>(item) < rows.size()) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
 			focusItemNum(item);
-			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+			if (target != nullptr) message(target, evCommand, cmOK, this);
 		}
 	}
 
@@ -1420,7 +1424,8 @@ class LspCompletionListView final : public TListViewer {
 
 	void handleEvent(TEvent &event) override {
 		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
-			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			if (target != nullptr) message(target, evCommand, cmOK, this);
 			clearEvent(event);
 			return;
 		}
@@ -1429,8 +1434,9 @@ class LspCompletionListView final : public TListViewer {
 
 	void selectItem(short item) override {
 		if (item >= 0 && static_cast<std::size_t>(item) < items.size()) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
 			focusItemNum(item);
-			if (owner != nullptr) message(owner, evCommand, cmOK, this);
+			if (target != nullptr) message(target, evCommand, cmOK, this);
 		}
 	}
 
@@ -1629,20 +1635,13 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
 	dialog->insert(scrollBar);
 	listView = new LspCompletionListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.items);
+	listView->focusItemNum(0);
 	dialog->insert(listView);
 	{
 		const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~I~nsert", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
 	}
-	dialog->setDialogValidationHook([listView]() {
-		MRScrollableDialog::DialogValidationResult validation;
-		std::size_t selected = 0;
-
-		validation.valid = listView != nullptr && listView->selectedIndex(selected);
-		if (!validation.valid) validation.warningText = "Select a completion.";
-		return validation;
-	});
 	dialog->finalizeLayout();
 	dialogResult = TProgram::deskTop->execView(dialog);
 	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < result.items.size()) {
