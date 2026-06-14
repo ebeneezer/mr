@@ -12,7 +12,8 @@ bool setError(std::string &errorMessage, const std::string &message) {
 
 void appendJsonString(std::ostringstream &out, const std::string &text) {
 	out << '"';
-	for (unsigned char ch : text) {
+	for (std::size_t index = 0; index < text.size(); ++index) {
+		const unsigned char ch = static_cast<unsigned char>(text[index]);
 		if (ch == '"' || ch == '\\') {
 			out << '\\' << static_cast<char>(ch);
 		} else if (ch == '\n') {

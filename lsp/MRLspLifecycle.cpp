@@ -33,8 +33,8 @@ bool LspLifecycle::poll(std::vector<LspInboundMessage> &messages, std::string &e
 		lifecycleState = LspLifecycleState::Failed;
 		return false;
 	}
-	for (const LspInboundMessage &message : messages)
-		applyInboundMessage(message);
+	for (std::size_t index = 0; index < messages.size(); ++index)
+		applyInboundMessage(messages[index]);
 	errorMessage.clear();
 	return true;
 }
