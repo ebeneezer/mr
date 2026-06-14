@@ -15,6 +15,9 @@ bool MRLspServiceSession::start(const mr::lsp::LspInitializeSpec &spec, std::str
 	clearRequests();
 	resultStore.clear();
 	hasActiveWorkspace = false;
+	activeEditorDocumentId = 0;
+	activeEditorDocumentVersion = 0;
+	activeEditorDocumentPath.clear();
 	return lifecycle.start(spec, errorMessage);
 }
 
@@ -45,14 +48,51 @@ bool MRLspServiceSession::openEditorDocument(const MRWorkspaceServiceSnapshot &w
 	mr::lsp::LspDocumentSourceSnapshot source;
 
 	if (!buildLspDocumentSourceSnapshotFromEditor(document, editor, source, errorMessage)) return false;
-	return openDocument(workspace, source, errorMessage);
+	if (!openDocument(workspace, source, errorMessage)) return false;
+	activeEditorDocumentId = document.documentId;
+	activeEditorDocumentVersion = document.documentVersion;
+	activeEditorDocumentPath = normalizeWorkspaceServicePath(document.path);
+	return true;
 }
 
 bool MRLspServiceSession::changeEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage) {
 	mr::lsp::LspDocumentSourceSnapshot source;
 
 	if (!buildLspDocumentSourceSnapshotFromEditor(document, editor, source, errorMessage)) return false;
-	return changeDocument(workspace, source, errorMessage);
+	if (!changeDocument(workspace, source, errorMessage)) return false;
+	activeEditorDocumentId = document.documentId;
+	activeEditorDocumentVersion = document.documentVersion;
+	activeEditorDocumentPath = normalizeWorkspaceServicePath(document.path);
+	return true;
+}
+
+bool MRLspServiceSession::syncEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage) {
+	mr::lsp::LspDocumentSourceSnapshot source;
+	const std::string documentPath = normalizeWorkspaceServicePath(document.path);
+
+	if (!buildLspDocumentSourceSnapshotFromEditor(document, editor, source, errorMessage)) return false;
+	if (!documentService.isOpen()) {
+		if (!openDocument(workspace, source, errorMessage)) return false;
+		activeEditorDocumentId = document.documentId;
+		activeEditorDocumentVersion = document.documentVersion;
+		activeEditorDocumentPath = documentPath;
+		return true;
+	}
+	if (activeEditorDocumentId == document.documentId && activeEditorDocumentPath == documentPath) {
+		if (activeEditorDocumentVersion == document.documentVersion) {
+			errorMessage.clear();
+			return true;
+		}
+		if (!changeDocument(workspace, source, errorMessage)) return false;
+		activeEditorDocumentVersion = document.documentVersion;
+		return true;
+	}
+	if (!closeDocument(errorMessage)) return false;
+	if (!openDocument(workspace, source, errorMessage)) return false;
+	activeEditorDocumentId = document.documentId;
+	activeEditorDocumentVersion = document.documentVersion;
+	activeEditorDocumentPath = documentPath;
+	return true;
 }
 
 bool MRLspServiceSession::poll(std::string &errorMessage) {
@@ -99,6 +139,9 @@ bool MRLspServiceSession::requestCompletion(mr::lsp::LspTextPosition position, s
 
 bool MRLspServiceSession::closeDocument(std::string &errorMessage) {
 	if (!documentService.isOpen()) {
+		activeEditorDocumentId = 0;
+		activeEditorDocumentVersion = 0;
+		activeEditorDocumentPath.clear();
 		errorMessage.clear();
 		return true;
 	}
@@ -106,6 +149,9 @@ bool MRLspServiceSession::closeDocument(std::string &errorMessage) {
 	clearRequests();
 	hasActiveWorkspace = false;
 	activeWorkspace = MRWorkspaceServiceSnapshot();
+	activeEditorDocumentId = 0;
+	activeEditorDocumentVersion = 0;
+	activeEditorDocumentPath.clear();
 	return true;
 }
 
@@ -133,6 +179,9 @@ void MRLspServiceSession::close() {
 	lifecycle.close();
 	hasActiveWorkspace = false;
 	activeWorkspace = MRWorkspaceServiceSnapshot();
+	activeEditorDocumentId = 0;
+	activeEditorDocumentVersion = 0;
+	activeEditorDocumentPath.clear();
 }
 
 const MRServiceResultStore &MRLspServiceSession::results() const noexcept {

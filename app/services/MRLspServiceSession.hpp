@@ -27,6 +27,7 @@ public:
 	bool changeDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
 	bool openEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
 	bool changeEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
+	bool syncEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool requestDefinition(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestReferences(mr::lsp::LspTextPosition position, bool includeDeclaration, std::string &errorMessage);
@@ -57,6 +58,9 @@ private:
 	mr::lsp::LspCompletionRequest completionRequest;
 	MRWorkspaceServiceSnapshot activeWorkspace;
 	MRServiceResultStore resultStore;
+	std::size_t activeEditorDocumentId = 0;
+	std::size_t activeEditorDocumentVersion = 0;
+	std::string activeEditorDocumentPath;
 	bool hasActiveWorkspace = false;
 };
 

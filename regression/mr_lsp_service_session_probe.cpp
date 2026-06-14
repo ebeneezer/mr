@@ -92,7 +92,7 @@ bool pollUntilCounts(mr::services::MRLspServiceSession &session, std::size_t dia
 	return false;
 }
 
-bool pollUntilCurrentDiagnostics(mr::services::MRLspServiceSession &session, std::size_t documentVersion, const std::string &message, std::string &failureReason) {
+bool pollUntilCurrentDiagnostics(mr::services::MRLspServiceSession &session, const std::string &path, std::size_t documentVersion, const std::string &message, std::string &failureReason) {
 	std::string errorMessage;
 
 	for (int i = 0; i < 50; ++i) {
@@ -100,11 +100,14 @@ bool pollUntilCurrentDiagnostics(mr::services::MRLspServiceSession &session, std
 			failureReason = "session poll failed: " + errorMessage;
 			return false;
 		}
-		if (session.results().diagnosticResults().size() == 1 &&
-		    session.results().diagnosticResults()[0].header.state == mr::services::MRServiceResultState::Current &&
-		    session.results().diagnosticResults()[0].header.identity.documentVersion == documentVersion &&
-		    session.results().diagnosticResults()[0].diagnostics[0].message == message)
-			return true;
+		for (const mr::services::MRServiceDiagnosticResult &result : session.results().diagnosticResults()) {
+			if (result.header.state == mr::services::MRServiceResultState::Current &&
+			    result.header.identity.path == path &&
+			    result.header.identity.documentVersion == documentVersion &&
+			    !result.diagnostics.empty() &&
+			    result.diagnostics[0].message == message)
+				return true;
+		}
 		::poll(nullptr, 0, 20);
 	}
 	failureReason = "expected current diagnostics not observed";
@@ -161,14 +164,45 @@ bool testEditorSessionPath(std::string &failureReason) {
 	document = documentForEditor(editor, path);
 	workspace = workspaceForDocument(document);
 	if (!expect(session.openEditorDocument(workspace, document, editor, errorMessage), "open editor document: " + errorMessage, failureReason)) return false;
-	if (!pollUntilCurrentDiagnostics(session, document.documentVersion, "opened diagnostic", failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, path, document.documentVersion, "opened diagnostic", failureReason)) return false;
 	if (!replaceText(editor, "int main() { return 2; }\n", failureReason)) return false;
 	document = documentForEditor(editor, path);
 	workspace = workspaceForDocument(document);
 	if (!expect(session.changeEditorDocument(workspace, document, editor, errorMessage), "change editor document: " + errorMessage, failureReason)) return false;
-	if (!pollUntilCurrentDiagnostics(session, document.documentVersion, "changed diagnostic", failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, path, document.documentVersion, "changed diagnostic", failureReason)) return false;
 	if (!expect(session.closeDocument(errorMessage), "close editor document: " + errorMessage, failureReason)) return false;
 	return expect(session.shutdown(errorMessage), "shutdown editor session: " + errorMessage, failureReason);
+}
+
+bool testSyncEditorSessionPath(std::string &failureReason) {
+	const std::string mainPath = "/tmp/mr/project/src/main.cpp";
+	const std::string otherPath = "/tmp/mr/project/src/other.cpp";
+	MRFileEditor mainEditor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, mainPath.c_str());
+	MRFileEditor otherEditor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, otherPath.c_str());
+	mr::services::MRLspServiceSession session;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	std::string errorMessage;
+
+	if (!startSession(session, failureReason)) return false;
+	if (!replaceText(mainEditor, "int main() { return 0; }\n", failureReason)) return false;
+	document = documentForEditor(mainEditor, mainPath);
+	workspace = workspaceForDocument(document);
+	if (!expect(session.syncEditorDocument(workspace, document, mainEditor, errorMessage), "sync open editor document: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, mainPath, document.documentVersion, "opened diagnostic", failureReason)) return false;
+	if (!expect(session.syncEditorDocument(workspace, document, mainEditor, errorMessage), "sync unchanged editor document: " + errorMessage, failureReason)) return false;
+	if (!replaceText(mainEditor, "int main() { return 3; }\n", failureReason)) return false;
+	document = documentForEditor(mainEditor, mainPath);
+	workspace = workspaceForDocument(document);
+	if (!expect(session.syncEditorDocument(workspace, document, mainEditor, errorMessage), "sync changed editor document: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, mainPath, document.documentVersion, "changed diagnostic", failureReason)) return false;
+	if (!replaceText(otherEditor, "int other() { return 4; }\n", failureReason)) return false;
+	document = documentForEditor(otherEditor, otherPath);
+	workspace = workspaceForDocument(document);
+	if (!expect(session.syncEditorDocument(workspace, document, otherEditor, errorMessage), "sync other editor document: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, otherPath, document.documentVersion, "opened diagnostic", failureReason)) return false;
+	if (!expect(session.closeDocument(errorMessage), "close synced document: " + errorMessage, failureReason)) return false;
+	return expect(session.shutdown(errorMessage), "shutdown synced session: " + errorMessage, failureReason);
 }
 
 bool testSessionHappyPath(std::string &failureReason) {
@@ -196,6 +230,7 @@ bool testSessionHappyPath(std::string &failureReason) {
 bool runProbe(std::string &failureReason) {
 	if (!testSessionGuards(failureReason)) return false;
 	if (!testEditorSessionPath(failureReason)) return false;
+	if (!testSyncEditorSessionPath(failureReason)) return false;
 	if (!testSessionHappyPath(failureReason)) return false;
 	return true;
 }
