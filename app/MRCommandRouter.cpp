@@ -1934,26 +1934,27 @@ bool showLspResultsDialog() {
 }
 
 void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnosticResult> &diagnostics) {
-	for (std::size_t i = g_lspReportedDiagnosticCount; i < diagnostics.size(); ++i) {
-		const mr::services::MRServiceDiagnosticResult &result = diagnostics[i];
+	while (g_lspReportedDiagnosticCount < diagnostics.size()) {
+		const mr::services::MRServiceDiagnosticResult result = diagnostics[g_lspReportedDiagnosticCount];
 		std::ostringstream line;
 
+		++g_lspReportedDiagnosticCount;
 		g_lspLastRequestState = "diagnostics received";
 		line << "LSP diagnostics: " << result.diagnostics.size();
 		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
 		if (!result.diagnostics.empty()) line << " - " << firstDisplayLine(result.diagnostics[0].message, 120);
 		postLspInfo(line.str());
 	}
-	g_lspReportedDiagnosticCount = diagnostics.size();
 }
 
 void reportNewLspLocations(const std::vector<mr::services::MRServiceLocationResult> &locations) {
-	for (std::size_t i = g_lspReportedLocationCount; i < locations.size(); ++i) {
-		const mr::services::MRServiceLocationResult &result = locations[i];
+	while (g_lspReportedLocationCount < locations.size()) {
+		const mr::services::MRServiceLocationResult result = locations[g_lspReportedLocationCount];
 		std::ostringstream line;
 		const char *kind = result.header.kind == mr::services::MRServiceResultKind::References ? "references" : "definition";
 		std::string navigationError;
 
+		++g_lspReportedLocationCount;
 		g_lspLastRequestState = result.header.kind == mr::services::MRServiceResultKind::References ? "references received" : "definition received";
 		line << "LSP " << kind << ": " << result.locations.size();
 		if (!result.locations.empty()) {
@@ -1974,14 +1975,14 @@ void reportNewLspLocations(const std::vector<mr::services::MRServiceLocationResu
 				postLspWarning("LSP references unavailable.");
 		}
 	}
-	g_lspReportedLocationCount = locations.size();
 }
 
 void reportNewLspHovers(const std::vector<mr::services::MRServiceHoverResult> &hovers) {
-	for (std::size_t i = g_lspReportedHoverCount; i < hovers.size(); ++i) {
-		const mr::services::MRServiceHoverResult &result = hovers[i];
+	while (g_lspReportedHoverCount < hovers.size()) {
+		const mr::services::MRServiceHoverResult result = hovers[g_lspReportedHoverCount];
 		std::string text = firstDisplayLine(result.hover.value, 140);
 
+		++g_lspReportedHoverCount;
 		g_lspLastRequestState = "hover received";
 		if (text.empty()) text = "empty hover";
 		postLspInfo("LSP hover: " + text);
@@ -1992,21 +1993,20 @@ void reportNewLspHovers(const std::vector<mr::services::MRServiceHoverResult> &h
 		else
 			postLspWarning("LSP hover unavailable.");
 	}
-	g_lspReportedHoverCount = hovers.size();
 }
 
 void reportNewLspCompletions(const std::vector<mr::services::MRServiceCompletionResult> &completions) {
-	for (std::size_t i = g_lspReportedCompletionCount; i < completions.size(); ++i) {
-		const mr::services::MRServiceCompletionResult &result = completions[i];
+	while (g_lspReportedCompletionCount < completions.size()) {
+		const mr::services::MRServiceCompletionResult result = completions[g_lspReportedCompletionCount];
 		std::ostringstream line;
 
+		++g_lspReportedCompletionCount;
 		g_lspLastRequestState = "completion received";
 		line << "LSP completion: " << result.items.size();
 		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
 		postLspInfo(line.str());
 		static_cast<void>(showLspCompletionDialog(result));
 	}
-	g_lspReportedCompletionCount = completions.size();
 }
 
 void reportNewLspResults() {
