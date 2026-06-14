@@ -2,54 +2,52 @@
 
 #include "../../ui/MRFileEditor/MRFileEditor.hpp"
 
+#include <cstddef>
+
+namespace {
+
+struct LspLanguageIdEntry {
+	MRSyntaxLanguage language;
+	const char *id;
+};
+
+const LspLanguageIdEntry lspLanguageIdTable[] = {
+	{ MRSyntaxLanguage::C, "c" },
+	{ MRSyntaxLanguage::Cpp, "cpp" },
+	{ MRSyntaxLanguage::JavaScript, "javascript" },
+	{ MRSyntaxLanguage::Python, "python" },
+	{ MRSyntaxLanguage::Json, "json" },
+	{ MRSyntaxLanguage::Yaml, "yaml" },
+	{ MRSyntaxLanguage::Xml, "xml" },
+	{ MRSyntaxLanguage::Bash, "shellscript" },
+	{ MRSyntaxLanguage::Zsh, "shellscript" },
+	{ MRSyntaxLanguage::Fish, "shellscript" },
+	{ MRSyntaxLanguage::Perl, "perl" },
+	{ MRSyntaxLanguage::Swift, "swift" },
+	{ MRSyntaxLanguage::Rust, "rust" },
+	{ MRSyntaxLanguage::Go, "go" },
+	{ MRSyntaxLanguage::Kotlin, "kotlin" },
+	{ MRSyntaxLanguage::CSharp, "csharp" },
+	{ MRSyntaxLanguage::Pascal, "pascal" },
+	{ MRSyntaxLanguage::Systemd, "systemd" },
+	{ MRSyntaxLanguage::MRMAC, "mrmac" },
+	{ MRSyntaxLanguage::Make, "makefile" },
+	{ MRSyntaxLanguage::Markdown, "markdown" },
+	{ MRSyntaxLanguage::PlainText, "plaintext" },
+};
+
+} // namespace
+
 namespace mr::services {
 
 const char *lspLanguageIdForSyntaxLanguage(MRSyntaxLanguage language) noexcept {
-	switch (language) {
-		case MRSyntaxLanguage::C:
-			return "c";
-		case MRSyntaxLanguage::Cpp:
-			return "cpp";
-		case MRSyntaxLanguage::JavaScript:
-			return "javascript";
-		case MRSyntaxLanguage::Python:
-			return "python";
-		case MRSyntaxLanguage::Json:
-			return "json";
-		case MRSyntaxLanguage::Yaml:
-			return "yaml";
-		case MRSyntaxLanguage::Xml:
-			return "xml";
-		case MRSyntaxLanguage::Bash:
-		case MRSyntaxLanguage::Zsh:
-		case MRSyntaxLanguage::Fish:
-			return "shellscript";
-		case MRSyntaxLanguage::Perl:
-			return "perl";
-		case MRSyntaxLanguage::Swift:
-			return "swift";
-		case MRSyntaxLanguage::Rust:
-			return "rust";
-		case MRSyntaxLanguage::Go:
-			return "go";
-		case MRSyntaxLanguage::Kotlin:
-			return "kotlin";
-		case MRSyntaxLanguage::CSharp:
-			return "csharp";
-		case MRSyntaxLanguage::Pascal:
-			return "pascal";
-		case MRSyntaxLanguage::Systemd:
-			return "systemd";
-		case MRSyntaxLanguage::MRMAC:
-			return "mrmac";
-		case MRSyntaxLanguage::Make:
-			return "makefile";
-		case MRSyntaxLanguage::Markdown:
-			return "markdown";
-		case MRSyntaxLanguage::PlainText:
-		default:
-			return "plaintext";
+	const std::size_t entryCount = sizeof(lspLanguageIdTable) / sizeof(lspLanguageIdTable[0]);
+
+	for (std::size_t index = 0; index < entryCount; ++index) {
+		if (lspLanguageIdTable[index].language == language)
+			return lspLanguageIdTable[index].id;
 	}
+	return "plaintext";
 }
 
 bool buildLspDocumentSourceSnapshotFromEditor(const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, mr::lsp::LspDocumentSourceSnapshot &snapshot, std::string &errorMessage) {
