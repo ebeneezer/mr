@@ -23,6 +23,13 @@ struct MRLspServerProfile {
 	std::string workingDirectory;
 };
 
+enum class MRLspServiceRequestKind {
+	Definition = 0,
+	References,
+	Hover,
+	Completion
+};
+
 [[nodiscard]] bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspSessionSpec &sessionSpec, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
 [[nodiscard]] bool buildLspInitializeSpecFromServerProfile(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
 
@@ -34,12 +41,21 @@ public:
 
 	bool start(const mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
 	bool start(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage);
+	bool startRuntime(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage);
 	bool sendInitialized(std::string &errorMessage);
 	bool openDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
 	bool changeDocument(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
 	bool openEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
 	bool changeEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
 	bool syncEditorDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, const MRFileEditor &editor, std::string &errorMessage);
+	bool syncEditorDocumentAndRequest(
+		const MRWorkspaceServiceSnapshot &workspace,
+		const MRWorkspaceDocumentSnapshot &document,
+		const MRFileEditor &editor,
+		MRLspServiceRequestKind requestKind,
+		mr::lsp::LspTextPosition position,
+		bool includeDeclaration,
+		std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool requestDefinition(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestReferences(mr::lsp::LspTextPosition position, bool includeDeclaration, std::string &errorMessage);

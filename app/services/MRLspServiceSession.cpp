@@ -106,6 +106,11 @@ bool MRLspServiceSession::start(const MRWorkspaceServiceSnapshot &workspace, con
 	return start(spec, errorMessage);
 }
 
+bool MRLspServiceSession::startRuntime(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage) {
+	if (!start(workspace, profile, errorMessage)) return false;
+	return sendInitialized(errorMessage);
+}
+
 bool MRLspServiceSession::sendInitialized(std::string &errorMessage) {
 	if (!pollUntilState(mr::lsp::LspLifecycleState::Initialized, errorMessage)) return false;
 	return lifecycle.sendInitialized(errorMessage);
@@ -178,6 +183,29 @@ bool MRLspServiceSession::syncEditorDocument(const MRWorkspaceServiceSnapshot &w
 	activeEditorDocumentVersion = document.documentVersion;
 	activeEditorDocumentPath = documentPath;
 	return true;
+}
+
+bool MRLspServiceSession::syncEditorDocumentAndRequest(
+	const MRWorkspaceServiceSnapshot &workspace,
+	const MRWorkspaceDocumentSnapshot &document,
+	const MRFileEditor &editor,
+	MRLspServiceRequestKind requestKind,
+	mr::lsp::LspTextPosition position,
+	bool includeDeclaration,
+	std::string &errorMessage) {
+	if (!syncEditorDocument(workspace, document, editor, errorMessage)) return false;
+	switch (requestKind) {
+		case MRLspServiceRequestKind::Definition:
+			return requestDefinition(position, errorMessage);
+		case MRLspServiceRequestKind::References:
+			return requestReferences(position, includeDeclaration, errorMessage);
+		case MRLspServiceRequestKind::Hover:
+			return requestHover(position, errorMessage);
+		case MRLspServiceRequestKind::Completion:
+			return requestCompletion(position, errorMessage);
+	}
+	errorMessage = "LSP service request kind is unknown.";
+	return false;
 }
 
 bool MRLspServiceSession::poll(std::string &errorMessage) {

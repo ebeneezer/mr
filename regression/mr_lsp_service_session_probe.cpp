@@ -122,8 +122,7 @@ bool startSession(mr::services::MRLspServiceSession &session, std::string &failu
 	profile.profileName = "probe";
 	profile.executablePath = "./regression/mr_lsp_session_peer";
 	profile.workingDirectory = ".";
-	if (!expect(session.start(workspace, profile, errorMessage), "session start: " + errorMessage, failureReason)) return false;
-	return expect(session.sendInitialized(errorMessage), "session initialized: " + errorMessage, failureReason);
+	return expect(session.startRuntime(workspace, profile, errorMessage), "session runtime start: " + errorMessage, failureReason);
 }
 
 bool testInitializeSpec(std::string &failureReason) {
@@ -238,6 +237,74 @@ bool testSyncEditorSessionPath(std::string &failureReason) {
 	return expect(session.shutdown(errorMessage), "shutdown synced session: " + errorMessage, failureReason);
 }
 
+bool testRuntimeFacadePath(std::string &failureReason) {
+	const std::string path = "/tmp/mr/project/src/main.cpp";
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, path.c_str());
+	mr::services::MRLspServiceSession session;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	std::string errorMessage;
+
+	if (!startSession(session, failureReason)) return false;
+	if (!replaceText(editor, "int main() { return 5; }\n", failureReason)) return false;
+	document = documentForEditor(editor, path);
+	workspace = workspaceForDocument(document);
+	if (!expect(
+			session.syncEditorDocumentAndRequest(
+				workspace,
+				document,
+				editor,
+				mr::services::MRLspServiceRequestKind::Definition,
+				mr::lsp::LspTextPosition{3, 5},
+				true,
+				errorMessage),
+			"runtime definition request: " + errorMessage,
+			failureReason))
+		return false;
+	if (!pollUntilCounts(session, 1, 1, 0, 0, failureReason)) return false;
+	if (!expect(
+			session.syncEditorDocumentAndRequest(
+				workspace,
+				document,
+				editor,
+				mr::services::MRLspServiceRequestKind::References,
+				mr::lsp::LspTextPosition{3, 5},
+				true,
+				errorMessage),
+			"runtime references request: " + errorMessage,
+			failureReason))
+		return false;
+	if (!pollUntilCounts(session, 1, 2, 0, 0, failureReason)) return false;
+	if (!expect(
+			session.syncEditorDocumentAndRequest(
+				workspace,
+				document,
+				editor,
+				mr::services::MRLspServiceRequestKind::Hover,
+				mr::lsp::LspTextPosition{3, 5},
+				false,
+				errorMessage),
+			"runtime hover request: " + errorMessage,
+			failureReason))
+		return false;
+	if (!pollUntilCounts(session, 1, 2, 1, 0, failureReason)) return false;
+	if (!expect(
+			session.syncEditorDocumentAndRequest(
+				workspace,
+				document,
+				editor,
+				mr::services::MRLspServiceRequestKind::Completion,
+				mr::lsp::LspTextPosition{3, 5},
+				false,
+				errorMessage),
+			"runtime completion request: " + errorMessage,
+			failureReason))
+		return false;
+	if (!pollUntilCounts(session, 1, 2, 1, 1, failureReason)) return false;
+	if (!expect(session.closeDocument(errorMessage), "close runtime document: " + errorMessage, failureReason)) return false;
+	return expect(session.shutdown(errorMessage), "shutdown runtime session: " + errorMessage, failureReason);
+}
+
 bool testSessionHappyPath(std::string &failureReason) {
 	mr::services::MRLspServiceSession session;
 	std::string errorMessage;
@@ -265,6 +332,7 @@ bool runProbe(std::string &failureReason) {
 	if (!testSessionGuards(failureReason)) return false;
 	if (!testEditorSessionPath(failureReason)) return false;
 	if (!testSyncEditorSessionPath(failureReason)) return false;
+	if (!testRuntimeFacadePath(failureReason)) return false;
 	if (!testSessionHappyPath(failureReason)) return false;
 	return true;
 }
