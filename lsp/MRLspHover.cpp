@@ -106,7 +106,8 @@ bool findMatchingBracket(const std::string &text, std::size_t openPos, char open
 std::string jsonString(const std::string &value) {
 	std::string out = "\"";
 
-	for (char ch : value) {
+	for (std::size_t index = 0; index < value.size(); ++index) {
+		const char ch = value[index];
 		if (ch == '"' || ch == '\\') {
 			out.push_back('\\');
 			out.push_back(ch);
