@@ -125,6 +125,11 @@ MR_LSP_EDITOR_SOURCE_PROBE_SOURCE = regression/mr_lsp_editor_source_probe.cpp
 MR_LSP_EDITOR_SOURCE_PROBE_OBJECT = regression/mr_lsp_editor_source_probe.o
 MR_LSP_EDITOR_SOURCE_SOURCE = app/services/MRLspEditorSource.cpp
 MR_LSP_EDITOR_SOURCE_OBJECT = app/services/MRLspEditorSource.o
+MR_LSP_APP_SERVICE_PROBE_TARGET = regression/mr_lsp_app_service_probe
+MR_LSP_APP_SERVICE_PROBE_SOURCE = regression/mr_lsp_app_service_probe.cpp
+MR_LSP_APP_SERVICE_PROBE_OBJECT = regression/mr_lsp_app_service_probe.o
+MR_LSP_APP_SERVICE_SOURCE = app/services/MRLspAppService.cpp
+MR_LSP_APP_SERVICE_OBJECT = app/services/MRLspAppService.o
 LSP_JSONRPC_PROBE_TARGET = regression/mr_lsp_jsonrpc_probe
 LSP_JSONRPC_PROBE_SOURCE = regression/mr_lsp_jsonrpc_probe.cpp
 LSP_JSONRPC_PROBE_OBJECT = regression/mr_lsp_jsonrpc_probe.o
@@ -325,7 +330,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-app-service-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -347,6 +352,7 @@ workspace-service-context-probe: $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET)
 service-results-probe: $(MR_SERVICE_RESULTS_PROBE_TARGET)
 lsp-service-session-probe: $(LSP_SESSION_PEER_TARGET) $(MR_LSP_SERVICE_SESSION_PROBE_TARGET)
 lsp-editor-source-probe: $(MR_LSP_EDITOR_SOURCE_PROBE_TARGET)
+lsp-app-service-probe: $(LSP_SESSION_PEER_TARGET) $(MR_LSP_APP_SERVICE_PROBE_TARGET)
 lsp-jsonrpc-probe: $(LSP_JSONRPC_PROBE_TARGET)
 external-process-probe: $(EXTERNAL_PROCESS_PROBE_TARGET)
 lsp-session-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_SESSION_PROBE_TARGET)
@@ -633,6 +639,8 @@ $(MR_LSP_SERVICE_SESSION_OBJECT): $(MR_LSP_SERVICE_SESSION_SOURCE) app/services/
 $(MR_LSP_SERVICE_SESSION_PROBE_OBJECT): $(MR_LSP_SERVICE_SESSION_PROBE_SOURCE) app/services/MRLspServiceSession.hpp ui/MRFileEditor/MRFileEditor.hpp
 $(MR_LSP_EDITOR_SOURCE_OBJECT): $(MR_LSP_EDITOR_SOURCE_SOURCE) app/services/MRLspEditorSource.hpp app/services/MRWorkspaceServiceContext.hpp lsp/MRLspDocumentService.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT): $(MR_LSP_EDITOR_SOURCE_PROBE_SOURCE) app/services/MRLspEditorSource.hpp ui/MRFileEditor/MRFileEditor.hpp
+$(MR_LSP_APP_SERVICE_OBJECT): $(MR_LSP_APP_SERVICE_SOURCE) app/services/MRLspAppService.hpp app/services/MRLspServiceSession.hpp app/services/MRWorkspaceServiceContext.hpp
+$(MR_LSP_APP_SERVICE_PROBE_OBJECT): $(MR_LSP_APP_SERVICE_PROBE_SOURCE) app/services/MRLspAppService.hpp ui/MRFileEditor/MRFileEditor.hpp
 $(LSP_JSONRPC_OBJECT): $(LSP_JSONRPC_SOURCE) lsp/MRLspJsonRpc.hpp
 $(LSP_JSONRPC_PROBE_OBJECT): $(LSP_JSONRPC_PROBE_SOURCE) lsp/MRLspJsonRpc.hpp
 $(EXTERNAL_PROCESS_OBJECT): $(EXTERNAL_PROCESS_SOURCE) lsp/MRExternalProcess.hpp
@@ -694,6 +702,9 @@ $(MR_LSP_SERVICE_SESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_O
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(MR_LSP_EDITOR_SOURCE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_EDITOR_SOURCE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
+$(MR_LSP_APP_SERVICE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_APP_SERVICE_OBJECT) $(MR_LSP_SERVICE_SESSION_OBJECT) $(MR_SERVICE_RESULTS_OBJECT) $(MR_LSP_EDITOR_SOURCE_OBJECT) $(LSP_COMPLETION_OBJECT) $(LSP_HOVER_OBJECT) $(LSP_REFERENCES_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DIAGNOSTICS_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(MR_LSP_APP_SERVICE_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(LSP_JSONRPC_PROBE_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT)
@@ -759,6 +770,7 @@ clean:
 		$(MR_SERVICE_RESULTS_OBJECT) $(MR_SERVICE_RESULTS_PROBE_OBJECT) $(MR_SERVICE_RESULTS_PROBE_TARGET) \
 		$(MR_LSP_SERVICE_SESSION_OBJECT) $(MR_LSP_SERVICE_SESSION_PROBE_OBJECT) $(MR_LSP_SERVICE_SESSION_PROBE_TARGET) \
 		$(MR_LSP_EDITOR_SOURCE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_TARGET) \
+		$(MR_LSP_APP_SERVICE_OBJECT) $(MR_LSP_APP_SERVICE_PROBE_OBJECT) $(MR_LSP_APP_SERVICE_PROBE_TARGET) \
 		$(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT) $(LSP_JSONRPC_PROBE_TARGET) \
 		$(EXTERNAL_PROCESS_OBJECT) $(EXTERNAL_PROCESS_PROBE_OBJECT) $(EXTERNAL_PROCESS_PROBE_TARGET) \
 		$(LSP_SESSION_OBJECT) $(LSP_SESSION_PROBE_OBJECT) $(LSP_SESSION_PROBE_TARGET) \
