@@ -118,6 +118,19 @@ stattdessen pruefen:
 
 Nur diese Faelle sind relevante Dupes oder Slack.
 
+Slack bedeutet: Ein benannter Farbcode existiert im Theme-/Setup-Inventar, wird
+serialisiert und kann konfiguriert werden, aber kein produktiver Codepfad nutzt
+ihn fuer sichtbare Colorierung. Der Regcheck muss solche Slots finden und sie
+entweder als Fehler melden oder gegen eine explizite Reserveliste abgleichen.
+
+Dupe bedeutet nicht gleicher Attributwert. Dupe bedeutet: Zwei unterschiedlich
+benannte Farbcodes koennen alternativ denselben konkreten Coloring-Pfad im Code
+steuern. Beispiele fuer solche Pfade sind derselbe `MRSyntaxToken`-Fall in
+`MRFileEditor::tokenColor(...)`, derselbe Widget-Draw-Pfad oder derselbe
+Palette-Alias in `configuredColorSlotOverride(...)`. Der Regcheck muss diese
+fachliche Mehrfachsteuerung melden, weil der Benutzer sonst zwei Namen im Setup
+sieht, die am Ende dieselbe Stelle im UI beeinflussen.
+
 ## Aktueller Audit-Befund fuer CODECOLORS
 
 Aktuell besitzt `CODECOLORS` 15 Eintraege:
@@ -212,6 +225,11 @@ Der Regcheck soll daher pruefen:
 - Slots ohne Consumer muessen als Reserve dokumentiert sein.
 - Fuer Code-Slots muss der Test gegen `MRSyntaxToken` und
   `MRFileEditor::tokenColor(...)` pruefen, nicht nur gegen die Theme-Liste.
+- Slack-Check: Jeder benannte Farbcode muss mindestens einen produktiven
+  Consumer besitzen oder in einer expliziten Reserveliste stehen.
+- Dupe-Check: Unterschiedlich benannte Farbcodes duerfen nicht alternativ
+  denselben konkreten Coloring-Pfad steuern, ausser der Alias ist ausdruecklich
+  dokumentiert und fachlich gewollt.
 
 ### 5. Serialisierung
 
