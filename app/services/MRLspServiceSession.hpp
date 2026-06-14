@@ -15,6 +15,8 @@ class MRFileEditor;
 
 namespace mr::services {
 
+[[nodiscard]] bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspSessionSpec &sessionSpec, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage);
+
 class MRLspServiceSession {
 public:
 	MRLspServiceSession() noexcept;

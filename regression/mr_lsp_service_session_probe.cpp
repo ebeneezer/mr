@@ -115,13 +115,32 @@ bool pollUntilCurrentDiagnostics(mr::services::MRLspServiceSession &session, con
 }
 
 bool startSession(mr::services::MRLspServiceSession &session, std::string &failureReason) {
+	mr::lsp::LspSessionSpec sessionSpec;
 	mr::lsp::LspInitializeSpec spec;
+	mr::services::MRWorkspaceServiceSnapshot workspace = makeWorkspace(1);
 	std::string errorMessage;
 
-	spec.session.process.executablePath = "./regression/mr_lsp_session_peer";
-	spec.initializeParamsJson = "{\"processId\":null,\"rootUri\":null,\"capabilities\":{}}";
+	sessionSpec.process.executablePath = "./regression/mr_lsp_session_peer";
+	if (!expect(mr::services::buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, spec, errorMessage), "build initialize spec: " + errorMessage, failureReason)) return false;
 	if (!expect(session.start(spec, errorMessage), "session start: " + errorMessage, failureReason)) return false;
 	return expect(session.sendInitialized(errorMessage), "session initialized: " + errorMessage, failureReason);
+}
+
+bool testInitializeSpec(std::string &failureReason) {
+	mr::lsp::LspSessionSpec sessionSpec;
+	mr::lsp::LspInitializeSpec spec;
+	mr::services::MRWorkspaceServiceSnapshot workspace = makeWorkspace(1);
+	mr::services::MRWorkspaceServiceSnapshot noRootWorkspace;
+	std::string errorMessage;
+	const std::string expectedRootParams = "{\"processId\":null,\"rootPath\":\"/tmp/mr/project\",\"rootUri\":\"file:///tmp/mr/project\",\"workspaceFolders\":[{\"uri\":\"file:///tmp/mr/project\",\"name\":\"project\"}],\"capabilities\":{}}";
+	const std::string expectedNullParams = "{\"processId\":null,\"rootPath\":null,\"rootUri\":null,\"workspaceFolders\":null,\"capabilities\":{}}";
+
+	sessionSpec.process.executablePath = "./regression/mr_lsp_session_peer";
+	if (!expect(mr::services::buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, spec, errorMessage), "root initialize spec: " + errorMessage, failureReason)) return false;
+	if (!expect(spec.session.process.executablePath == sessionSpec.process.executablePath, "initialize executable", failureReason)) return false;
+	if (!expect(spec.initializeParamsJson == expectedRootParams, "root initialize params", failureReason)) return false;
+	if (!expect(mr::services::buildLspInitializeSpecFromWorkspace(noRootWorkspace, sessionSpec, spec, errorMessage), "null initialize spec: " + errorMessage, failureReason)) return false;
+	return expect(spec.initializeParamsJson == expectedNullParams, "null initialize params", failureReason);
 }
 
 bool verifyResults(const mr::services::MRServiceResultStore &results, std::string &failureReason) {
@@ -228,6 +247,7 @@ bool testSessionHappyPath(std::string &failureReason) {
 }
 
 bool runProbe(std::string &failureReason) {
+	if (!testInitializeSpec(failureReason)) return false;
 	if (!testSessionGuards(failureReason)) return false;
 	if (!testEditorSessionPath(failureReason)) return false;
 	if (!testSyncEditorSessionPath(failureReason)) return false;

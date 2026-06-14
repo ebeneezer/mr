@@ -1,14 +1,75 @@
 #include "MRLspServiceSession.hpp"
 
 #include "MRLspEditorSource.hpp"
+#include "../../lsp/MRLspUri.hpp"
 
 #include <poll.h>
 #include <vector>
+
+namespace {
+
+void appendJsonString(std::string &out, const std::string &text) {
+	out.push_back('"');
+	for (char ch : text) {
+		if (ch == '"' || ch == '\\') {
+			out.push_back('\\');
+			out.push_back(ch);
+		} else if (ch == '\n') {
+			out += "\\n";
+		} else if (ch == '\r') {
+			out += "\\r";
+		} else if (ch == '\t') {
+			out += "\\t";
+		} else {
+			out.push_back(ch);
+		}
+	}
+	out.push_back('"');
+}
+
+std::string workspaceFolderNameForRootPath(const std::string &rootPath) {
+	const std::size_t slash = rootPath.find_last_of('/');
+
+	if (rootPath.empty()) return "mr-workspace";
+	if (slash == std::string::npos) return rootPath;
+	if (slash + 1 < rootPath.size()) return rootPath.substr(slash + 1);
+	return rootPath;
+}
+
+} // namespace
 
 namespace mr::services {
 
 MRLspServiceSession::MRLspServiceSession() noexcept
 	: documentService(lifecycle) {
+}
+
+bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspSessionSpec &sessionSpec, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
+	std::string rootUri;
+	std::string params;
+	const std::string rootPath = normalizeWorkspaceServicePath(workspace.root.rootPath);
+
+	spec = mr::lsp::LspInitializeSpec();
+	spec.session = sessionSpec;
+	params = "{\"processId\":null,";
+	if (workspace.root.hasRoot) {
+		if (!mr::lsp::pathToFileUri(rootPath, rootUri, errorMessage)) return false;
+		params += "\"rootPath\":";
+		appendJsonString(params, rootPath);
+		params += ",\"rootUri\":";
+		appendJsonString(params, rootUri);
+		params += ",\"workspaceFolders\":[{\"uri\":";
+		appendJsonString(params, rootUri);
+		params += ",\"name\":";
+		appendJsonString(params, workspaceFolderNameForRootPath(rootPath));
+		params += "}],";
+	} else {
+		params += "\"rootPath\":null,\"rootUri\":null,\"workspaceFolders\":null,";
+	}
+	params += "\"capabilities\":{}}";
+	spec.initializeParamsJson = params;
+	errorMessage.clear();
+	return true;
 }
 
 bool MRLspServiceSession::start(const mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
