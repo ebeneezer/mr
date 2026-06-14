@@ -148,7 +148,8 @@ enum : ushort {
 	cmMrOtherLspDefinition,
 	cmMrOtherLspReferences,
 	cmMrOtherLspHover,
-	cmMrOtherLspStatus
+	cmMrOtherLspStatus,
+	cmMrOtherLspResults
 };
 
 #endif
