@@ -27,6 +27,7 @@
 #include "../mrmac/MRVM.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../app/MRCommandRouter.hpp"
+#include "../app/services/MRLspEditorSource.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsEditSetup.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
@@ -3981,6 +3982,116 @@ bool testEditProfileDescriptorConformanceGuard(std::string &failureReason) {
 	return true;
 }
 
+struct CodeLanguageConformanceEntry {
+	const char *settingValue;
+	const char *extension;
+	const char *text;
+	MRSyntaxLanguage language;
+	const char *marker;
+	const char *lspLanguageId;
+	bool automatic;
+};
+
+static const CodeLanguageConformanceEntry kCodeLanguageConformanceEntries[] = {
+	{"NONE", "txtnone", "plain text\n", MRSyntaxLanguage::PlainText, "", "plaintext", false},
+	{"AUTO", "c", "#include <stdio.h>\nint main(void) { return 0; }\n", MRSyntaxLanguage::C, "C", "c", true},
+	{"C", "langc", "int main(void) { return 0; }\n", MRSyntaxLanguage::C, "C", "c", false},
+	{"CPP", "langcpp", "class Probe { public: int value; };\n", MRSyntaxLanguage::Cpp, "C++", "cpp", false},
+	{"PYTHON", "langpython", "def probe():\n    return 1\n", MRSyntaxLanguage::Python, "Py", "python", false},
+	{"JAVASCRIPT", "langjavascript", "function probe() { return 1; }\n", MRSyntaxLanguage::JavaScript, "JS", "javascript", false},
+	{"TYPESCRIPT", "langtypescript", "function probe(value: number): number { return value; }\n", MRSyntaxLanguage::JavaScript, "JS", "javascript", false},
+	{"TSX", "langtsx", "const probe = <div />;\n", MRSyntaxLanguage::JavaScript, "JS", "javascript", false},
+	{"BASH", "langbash", "if true; then echo ok; fi\n", MRSyntaxLanguage::Bash, "Ba", "shellscript", false},
+	{"ZSH", "langzsh", "if true; then echo ok; fi\n", MRSyntaxLanguage::Zsh, "Zh", "shellscript", false},
+	{"FISH", "langfish", "if true\n    echo ok\nend\n", MRSyntaxLanguage::Fish, "Fi", "shellscript", false},
+	{"JSON", "langjson", "{\"probe\": true}\n", MRSyntaxLanguage::Json, "Jn", "json", false},
+	{"YAML", "langyaml", "probe: true\n", MRSyntaxLanguage::Yaml, "Ya", "yaml", false},
+	{"XML", "langxml", "<probe />\n", MRSyntaxLanguage::Xml, "Xm", "xml", false},
+	{"PERL", "langperl", "sub probe { return 1; }\n", MRSyntaxLanguage::Perl, "Pl", "perl", false},
+	{"SWIFT", "langswift", "func probe() -> Int { return 1 }\n", MRSyntaxLanguage::Swift, "Sw", "swift", false},
+	{"RUST", "langrust", "fn probe() -> i32 { 1 }\n", MRSyntaxLanguage::Rust, "Rs", "rust", false},
+	{"GO", "langgo", "func probe() int { return 1 }\n", MRSyntaxLanguage::Go, "Go", "go", false},
+	{"PASCAL", "langpascal", "begin\nend.\n", MRSyntaxLanguage::Pascal, "Pa", "pascal", false},
+	{"SYSTEMD", "langsystemd", "[Unit]\nDescription=Probe\n", MRSyntaxLanguage::Systemd, "Sd", "systemd", false},
+	{"MAKE", "langmake", "all:\n\t@echo ok\n", MRSyntaxLanguage::Make, "MK", "makefile", false},
+	{"MRMAC", "langmrmac", "$MACRO PROBE;\nEND_MACRO;\n", MRSyntaxLanguage::MRMAC, "MR", "mrmac", false},
+	{"MARKDOWN", "langmarkdown", "# Probe\n", MRSyntaxLanguage::Markdown, "MD", "markdown", false},
+	{"KOTLIN", "langkotlin", "fun probe(): Int = 1\n", MRSyntaxLanguage::Kotlin, "Kt", "kotlin", false},
+	{"CSHARP", "langcsharp", "class Probe { int Value() { return 1; } }\n", MRSyntaxLanguage::CSharp, "C#", "csharp", false},
+};
+
+bool testEditProfileCodeLanguageRasterGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	MREditSetupSettings globalSettings = resolveEditSetupDefaults();
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+
+	auto restore = [&]() {
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	globalSettings.codeLanguage = "NONE";
+	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
+		restore();
+		failureReason = "Unable to seed globals for CODE_LANGUAGE raster: " + errorText;
+		return false;
+	}
+
+	for (std::size_t i = 0; i < sizeof(kCodeLanguageConformanceEntries) / sizeof(kCodeLanguageConformanceEntries[0]); ++i) {
+		const CodeLanguageConformanceEntry &entry = kCodeLanguageConformanceEntries[i];
+		MREditExtensionProfile profile;
+		MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, "");
+		const std::string path = std::string("/tmp/mr_regression_code_language_") + entry.settingValue + "." + entry.extension;
+
+		profile.id = std::string("language_") + entry.extension;
+		profile.name = std::string("Language ") + entry.settingValue;
+		profile.extensions.push_back(entry.extension);
+		profile.overrides.values = resolveEditSetupDefaults();
+		profile.overrides.values.codeLanguage = entry.settingValue;
+		profile.overrides.mask = kOvCodeLanguage;
+		if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(1, profile), &errorText)) {
+			restore();
+			failureReason = std::string("Unable to seed CODE_LANGUAGE profile for ") + entry.settingValue + ": " + errorText;
+			return false;
+		}
+		if (!editor.replaceBufferText(entry.text)) {
+			restore();
+			failureReason = std::string("Unable to seed editor text for CODE_LANGUAGE ") + entry.settingValue;
+			return false;
+		}
+		editor.setPersistentFileName(path.c_str());
+		if (editor.syntaxLanguage() != entry.language) {
+			restore();
+			failureReason = std::string("CODE_LANGUAGE ") + entry.settingValue + " mapped to unexpected syntax language " + editor.syntaxLanguageName();
+			return false;
+		}
+		if (editor.syntaxLanguageAutomatic() != entry.automatic) {
+			restore();
+			failureReason = std::string("CODE_LANGUAGE ") + entry.settingValue + " did not preserve automatic-language state.";
+			return false;
+		}
+		if (std::strcmp(tmrSyntaxLanguageMarker(editor.syntaxLanguage()), entry.marker) != 0) {
+			restore();
+			failureReason = std::string("CODE_LANGUAGE ") + entry.settingValue + " exposed unexpected window marker.";
+			return false;
+		}
+		if (std::strcmp(mr::services::lspLanguageIdForSyntaxLanguage(editor.syntaxLanguage()), entry.lspLanguageId) != 0) {
+			restore();
+			failureReason = std::string("CODE_LANGUAGE ") + entry.settingValue + " exposed unexpected LSP languageId.";
+			return false;
+		}
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after CODE_LANGUAGE raster: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testPathsBrowseEventGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	const std::string root = "/tmp/mr_regression_paths_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
@@ -4379,6 +4490,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D};
 	std::string errorText;
 	std::string content;
+	std::string contentAfterLoad;
 	unsigned char slotValue = 0;
 	bool restored = true;
 
@@ -4419,6 +4531,16 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 	}
 	if (!loadColorThemeFile(themePath, &errorText)) {
 		failureReason = "Unable to load written color theme for WINDOWCOLORS probe: " + errorText;
+		restore();
+		return false;
+	}
+	if (!readTextFile(themePath, contentAfterLoad, errorText)) {
+		failureReason = "Unable to read color theme file after reload: " + errorText;
+		restore();
+		return false;
+	}
+	if (contentAfterLoad != content) {
+		failureReason = "Loading a current complete color theme must not rewrite the theme file.";
 		restore();
 		return false;
 	}
@@ -7099,6 +7221,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
+	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
@@ -7172,6 +7295,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
+	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);

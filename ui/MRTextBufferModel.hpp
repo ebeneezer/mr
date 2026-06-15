@@ -447,6 +447,18 @@ class MRTextBufferModel {
 			mShared->language = MRSyntaxLanguage::Systemd;
 			return;
 		}
+		if (normalizedCodeLanguage == "MAKE") {
+			mShared->language = MRSyntaxLanguage::Make;
+			return;
+		}
+		if (normalizedCodeLanguage == "MRMAC") {
+			mShared->language = MRSyntaxLanguage::MRMAC;
+			return;
+		}
+		if (normalizedCodeLanguage == "MARKDOWN") {
+			mShared->language = MRSyntaxLanguage::Markdown;
+			return;
+		}
 		mShared->language = MRSyntaxLanguage::PlainText;
 	}
 
