@@ -1079,6 +1079,8 @@ const TPalette &extendedAppBasePalette() {
 
 		for (i = 0; i < kBaseSlots; ++i)
 			data[i] = static_cast<unsigned char>(cp[i]);
+		for (; i < kTotalSlots; ++i)
+			data[i] = data[1 - 1];
 		// Dedicated editor-only accent slots (avoid window frame/scrollbar side effects).
 		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
 		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];

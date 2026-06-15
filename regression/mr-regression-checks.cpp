@@ -1351,6 +1351,41 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 	return true;
 }
 
+bool testExtendedBasePaletteInitializationGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("app/MREditorApp.cpp");
+	std::string content;
+	std::string functionBody;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read MREditorApp.cpp for base palette initialization guard: " + ioError;
+		return false;
+	}
+	{
+		const std::size_t start = content.find("const TPalette &extendedAppBasePalette()");
+		const std::size_t end = content.find("\n} // namespace", start);
+
+		if (start == std::string::npos || end == std::string::npos) {
+			failureReason = "Unable to isolate extendedAppBasePalette().";
+			return false;
+		}
+		functionBody = content.substr(start, end - start);
+	}
+	if (functionBody.find("static const int kTotalSlots = kMrPaletteMax;") == std::string::npos ||
+	    functionBody.find("TColorAttr data[kTotalSlots];") == std::string::npos ||
+	    functionBody.find("for (; i < kTotalSlots; ++i)") == std::string::npos ||
+	    functionBody.find("data[i] = data[1 - 1];") == std::string::npos) {
+		failureReason = "extendedAppBasePalette must initialize every slot up to kMrPaletteMax before applying dedicated defaults.";
+		return false;
+	}
+	if (functionBody.find("return TPalette(data, static_cast<ushort>(kTotalSlots));") == std::string::npos) {
+		failureReason = "extendedAppBasePalette must expose all slots up to kMrPaletteMax.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
@@ -3839,6 +3874,7 @@ bool testEditProfileDescriptorConformanceGuard(std::string &failureReason) {
 	MREditSetupSettings fallback;
 	std::string matchedProfile;
 	std::string effectiveThemePath;
+	std::vector<MREditExtensionProfile> originalProfiles;
 
 	auto restore = [&]() {
 		::unlink(themePath.c_str());
@@ -3974,8 +4010,108 @@ bool testEditProfileDescriptorConformanceGuard(std::string &failureReason) {
 		}
 	}
 
+	originalProfiles = *profiles;
+	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
+		restore();
+		failureReason = "Unable to reset edit settings before descriptor profile re-apply: " + errorText;
+		return false;
+	}
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
+		restore();
+		failureReason = "Unable to clear profiles before descriptor profile re-apply: " + errorText;
+		return false;
+	}
+	if (!mrApplySettingsSourceForTesting(rewritten, &errorText)) {
+		restore();
+		failureReason = "Unable to re-apply descriptor profile serializer output: " + errorText;
+		return false;
+	}
+	if (configuredEditExtensionProfiles() != originalProfiles) {
+		restore();
+		failureReason = "Descriptor profile serializer output did not re-create the same profile model.";
+		return false;
+	}
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.qsprof", effective, &matchedProfile)) {
+		restore();
+		failureReason = "Effective settings lookup failed after descriptor profile re-apply.";
+		return false;
+	}
+	for (std::size_t i = 0; i < descriptorCount; ++i) {
+		const MREditSettingDescriptor &descriptor = descriptors[i];
+		std::string expected;
+		std::string actual;
+
+		if (!descriptor.profileSupported) continue;
+		expected = editSetupValueLiteral(originalProfiles[0].overrides.values, descriptor.key);
+		actual = editSetupValueLiteral(effective, descriptor.key);
+		if (expected != actual) {
+			restore();
+			failureReason = std::string("Descriptor profile re-apply lost effective value for ") + descriptor.key;
+			return false;
+		}
+	}
+
 	if (!restore()) {
 		failureReason = "Unable to restore runtime settings after descriptor profile conformance: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testEditProfileInvalidMacroDoesNotLeaveProfileGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	const std::string currentVersion = mrCurrentPersistenceVersionString();
+	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
+	                     "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n"
+	                     "MRFEPROFILE('DEFINE', 'invalid_profile', 'Invalid', '');\n"
+	                     "MRFEPROFILE('EXT', 'invalid_profile', 'badprof', '');\n"
+	                     "MRFEPROFILE('SET', 'invalid_profile', 'TAB_SIZE', '0');\n"
+	                     "END_MACRO;\n";
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+	MREditSetupSettings effective;
+	std::string matchedProfile;
+
+	auto restore = [&]() {
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
+		restore();
+		failureReason = "Unable to clear profiles before invalid profile macro probe: " + errorText;
+		return false;
+	}
+	if (mrApplySettingsSourceForTesting(source, &errorText)) {
+		restore();
+		failureReason = "Invalid MRFEPROFILE TAB_SIZE was accepted.";
+		return false;
+	}
+	if (errorText.find("TAB_SIZE") == std::string::npos) {
+		restore();
+		failureReason = "Invalid MRFEPROFILE value should report TAB_SIZE.";
+		return false;
+	}
+	if (!configuredEditExtensionProfiles().empty()) {
+		restore();
+		failureReason = "Invalid MRFEPROFILE source left a partial profile in runtime state.";
+		return false;
+	}
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.badprof", effective, &matchedProfile)) {
+		restore();
+		failureReason = "Effective lookup failed after invalid profile macro probe.";
+		return false;
+	}
+	if (!matchedProfile.empty()) {
+		restore();
+		failureReason = "Invalid MRFEPROFILE source left a selectable effective profile.";
+		return false;
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after invalid profile macro probe: " + restoreError;
 		return false;
 	}
 	failureReason.clear();
@@ -4476,6 +4612,63 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 
 	if (!restore()) {
 		failureReason = "Unable to restore runtime settings after Color Setup save-theme probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+struct InvalidCurrentColorListEntry {
+	const char *key;
+	const char *value;
+};
+
+static const InvalidCurrentColorListEntry kInvalidCurrentColorListEntries[] = {
+	{"WINDOWCOLORS", "v6:21"},
+	{"MENUDIALOGCOLORS", "v1:21"},
+	{"HELPCOLORS", "v1:21"},
+	{"OTHERCOLORS", "v1:21"},
+	{"MINIMAPCOLORS", "v1:21"},
+	{"FILECOMPAREMINIMAPCOLORS", "v1:21"},
+	{"CODECOLORS", "v1:21"},
+	{"FILECOMPARECOLORS", "v2:21"},
+};
+
+bool testCurrentColorThemeInvalidListsDoNotMutateGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	MRColorSetupSettings previous = configuredColorSetupSettings();
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+
+	auto restore = [&]() {
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	for (std::size_t i = 0; i < sizeof(kInvalidCurrentColorListEntries) / sizeof(kInvalidCurrentColorListEntries[0]); ++i) {
+		const InvalidCurrentColorListEntry &entry = kInvalidCurrentColorListEntries[i];
+
+		errorText.clear();
+		if (applyConfiguredColorSetupValue(entry.key, entry.value, &errorText)) {
+			restore();
+			failureReason = std::string("Invalid current color list was accepted for ") + entry.key;
+			return false;
+		}
+		if (errorText.empty()) {
+			restore();
+			failureReason = std::string("Invalid current color list did not report an error for ") + entry.key;
+			return false;
+		}
+		if (configuredColorSetupSettings() != previous) {
+			restore();
+			failureReason = std::string("Invalid current color list mutated runtime colors for ") + entry.key;
+			return false;
+		}
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after invalid color list probe: " + restoreError;
 		return false;
 	}
 	failureReason.clear();
@@ -7221,6 +7414,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
+	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
@@ -7229,8 +7423,10 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
+	runTest(ctx, "Extended base palette initialization guard", testExtendedBasePaletteInitializationGuard);
 	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
+	runTest(ctx, "Current color theme invalid list rejection", testCurrentColorThemeInvalidListsDoNotMutateGuard);
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
 	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
@@ -7295,6 +7491,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
+	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
@@ -7303,8 +7500,10 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
+	runTest(ctx, "Extended base palette initialization guard", testExtendedBasePaletteInitializationGuard);
 	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
+	runTest(ctx, "Current color theme invalid list rejection", testCurrentColorThemeInvalidListsDoNotMutateGuard);
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
 	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
