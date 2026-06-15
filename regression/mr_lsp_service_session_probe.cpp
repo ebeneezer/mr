@@ -75,7 +75,7 @@ bool replaceText(MRFileEditor &editor, const std::string &text, std::string &fai
 	return false;
 }
 
-bool pollUntilCounts(mr::services::MRLspServiceSession &session, std::size_t diagnostics, std::size_t locations, std::size_t hovers, std::size_t completions, std::string &failureReason) {
+bool pollUntilCounts(mr::services::MRLspServiceSession &session, std::size_t diagnostics, std::size_t locations, std::size_t hovers, std::size_t completions, std::string &failureReason, std::size_t codeActions = 0) {
 	std::string errorMessage;
 
 	for (int i = 0; i < 50; ++i) {
@@ -84,7 +84,7 @@ bool pollUntilCounts(mr::services::MRLspServiceSession &session, std::size_t dia
 			return false;
 		}
 		if (session.results().diagnosticResults().size() == diagnostics && session.results().locationResults().size() == locations && session.results().hoverResults().size() == hovers &&
-		    session.results().completionResults().size() == completions)
+		    session.results().completionResults().size() == completions && session.results().codeActionResults().size() == codeActions)
 			return true;
 		::poll(nullptr, 0, 20);
 	}
@@ -171,6 +171,10 @@ bool verifyResults(const mr::services::MRServiceResultStore &results, std::strin
 	if (!expect(results.completionResults().size() == 1, "completion result count", failureReason)) return false;
 	if (!expect(results.completionResults()[0].items.size() == 2, "completion item count", failureReason)) return false;
 	if (!expect(results.completionResults()[0].items[0].label == "main", "completion first label", failureReason)) return false;
+	if (!expect(results.codeActionResults().size() == 1, "codeAction result count", failureReason)) return false;
+	if (!expect(results.codeActionResults()[0].items.size() == 2, "codeAction item count", failureReason)) return false;
+	if (!expect(results.codeActionResults()[0].items[0].title == "Insert semicolon", "codeAction first title", failureReason)) return false;
+	if (!expect(results.codeActionResults()[0].items[0].hasEdit, "codeAction first edit", failureReason)) return false;
 	return true;
 }
 
@@ -402,6 +406,10 @@ bool testSessionHappyPath(std::string &failureReason) {
 	if (!pollUntilCounts(session, 1, 2, 1, 0, failureReason)) return false;
 	if (!expect(session.requestCompletion(mr::lsp::LspTextPosition{3, 5}, errorMessage), "request completion: " + errorMessage, failureReason)) return false;
 	if (!pollUntilCounts(session, 1, 2, 1, 1, failureReason)) return false;
+	if (!expect(!session.results().diagnosticResults().empty(), "diagnostic result missing before codeAction", failureReason)) return false;
+	if (!expect(!session.results().diagnosticResults()[0].diagnostics.empty(), "diagnostic entry missing before codeAction", failureReason)) return false;
+	if (!expect(session.requestCodeActionsForDiagnostic(session.results().diagnosticResults()[0], session.results().diagnosticResults()[0].diagnostics[0], errorMessage), "request codeAction: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCounts(session, 1, 2, 1, 1, failureReason, 1)) return false;
 	if (!verifyResults(session.results(), failureReason)) return false;
 	if (!expect(session.closeDocument(errorMessage), "close document: " + errorMessage, failureReason)) return false;
 	return expect(session.shutdown(errorMessage), "shutdown: " + errorMessage, failureReason);

@@ -8,6 +8,7 @@
 #include <vector>
 
 namespace mr::lsp {
+struct LspCodeActionResult;
 struct LspCompletionResult;
 struct LspDefinitionResult;
 struct LspDiagnosticBatch;
@@ -31,7 +32,8 @@ enum class MRServiceResultKind {
 	Definition,
 	References,
 	Hover,
-	Completion
+	Completion,
+	CodeAction
 };
 
 enum class MRServiceResultState {
@@ -96,6 +98,14 @@ struct MRServiceCompletionItem {
 	std::string insertText;
 };
 
+struct MRServiceCodeActionItem {
+	std::string title;
+	std::string kind;
+	bool hasEdit = false;
+	bool hasCommand = false;
+	std::string rawLspCodeActionJson;
+};
+
 struct MRServiceDiagnosticResult {
 	MRServiceResultHeader header;
 	std::vector<MRServiceDiagnosticEntry> diagnostics;
@@ -116,6 +126,11 @@ struct MRServiceCompletionResult {
 	std::vector<MRServiceCompletionItem> items;
 };
 
+struct MRServiceCodeActionResult {
+	MRServiceResultHeader header;
+	std::vector<MRServiceCodeActionItem> items;
+};
+
 class MRServiceResultStore {
 public:
 	void clear() noexcept;
@@ -123,18 +138,21 @@ public:
 	void putLocations(const MRServiceLocationResult &result);
 	void putHover(const MRServiceHoverResult &result);
 	void putCompletion(const MRServiceCompletionResult &result);
+	void putCodeActions(const MRServiceCodeActionResult &result);
 	void markStaleAgainstWorkspace(const MRWorkspaceServiceSnapshot &workspace);
 
 	[[nodiscard]] const std::vector<MRServiceDiagnosticResult> &diagnosticResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceLocationResult> &locationResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceHoverResult> &hoverResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceCompletionResult> &completionResults() const noexcept;
+	[[nodiscard]] const std::vector<MRServiceCodeActionResult> &codeActionResults() const noexcept;
 
 private:
 	std::vector<MRServiceDiagnosticResult> diagnostics;
 	std::vector<MRServiceLocationResult> locations;
 	std::vector<MRServiceHoverResult> hovers;
 	std::vector<MRServiceCompletionResult> completions;
+	std::vector<MRServiceCodeActionResult> codeActions;
 };
 
 [[nodiscard]] bool serviceDocumentIdentityMatches(const MRWorkspaceServiceSnapshot &workspace, const MRServiceDocumentIdentity &identity) noexcept;
@@ -143,6 +161,7 @@ private:
 [[nodiscard]] MRServiceLocationResult buildServiceReferencesFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspReferencesResult &references);
 [[nodiscard]] MRServiceHoverResult buildServiceHoverFromLsp(const MRWorkspaceServiceSnapshot &workspace, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspHoverResult &hover);
 [[nodiscard]] MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCompletionResult &completion);
+[[nodiscard]] MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCodeActionResult &codeActions);
 
 } // namespace mr::services
 

@@ -3,6 +3,7 @@
 
 #include "MRServiceResults.hpp"
 
+#include "../../lsp/MRLspCodeAction.hpp"
 #include "../../lsp/MRLspCompletion.hpp"
 #include "../../lsp/MRLspDiagnostics.hpp"
 #include "../../lsp/MRLspDocumentService.hpp"
@@ -95,6 +96,7 @@ public:
 	bool requestReferences(mr::lsp::LspTextPosition position, bool includeDeclaration, std::string &errorMessage);
 	bool requestHover(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestCompletion(mr::lsp::LspTextPosition position, std::string &errorMessage);
+	bool requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage);
 	bool closeDocument(std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);
 	void close();
@@ -117,10 +119,13 @@ private:
 	mr::lsp::LspReferencesAdapter referencesAdapter;
 	mr::lsp::LspHoverAdapter hoverAdapter;
 	mr::lsp::LspCompletionAdapter completionAdapter;
+	mr::lsp::LspCodeActionAdapter codeActionAdapter;
 	mr::lsp::LspDefinitionRequest definitionRequest;
 	mr::lsp::LspReferencesRequest referencesRequest;
 	mr::lsp::LspHoverRequest hoverRequest;
 	mr::lsp::LspCompletionRequest completionRequest;
+	mr::lsp::LspCodeActionRequest codeActionRequest;
+	std::size_t codeActionRequestVersion = 0;
 	MRWorkspaceServiceSnapshot activeWorkspace;
 	MRServiceResultStore resultStore;
 	std::size_t activeEditorDocumentId = 0;

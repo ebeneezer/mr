@@ -120,6 +120,14 @@ std::string completionResponse(const mr::lsp::JsonRpcEnvelope &envelope) {
 	       ",\"result\":{\"isIncomplete\":false,\"items\":[{\"label\":\"main\",\"kind\":3,\"labelDetails\":{\"detail\":null},\"detail\":\"int\\u0020main()\",\"insertText\":\"ma\\u0069n\"},{\"label\":\"macroValue\",\"kind\":6,\"detail\":\"int\"}]}}";
 }
 
+std::string codeActionResponse(const mr::lsp::JsonRpcEnvelope &envelope, const PeerState &state) {
+	const std::string uri = state.documentUri.empty() ? "file:///tmp/mr.cpp" : state.documentUri;
+
+	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText +
+	       ",\"result\":[{\"title\":\"Insert semicolon\",\"kind\":\"quickfix\",\"edit\":{\"changes\":{" + jsonString(uri) +
+	       ":[{\"range\":{\"start\":{\"line\":0,\"character\":4},\"end\":{\"line\":0,\"character\":4}},\"newText\":\";\"}]} }},{\"title\":\"Show diagnostic\",\"command\":{\"title\":\"Show diagnostic\",\"command\":\"mr.showDiagnostic\"}}]}";
+}
+
 void emitDiagnostics(const std::string &uri, int version, const std::string &message) {
 	std::cout << mr::lsp::buildJsonRpcFrame(diagnosticsNotification(uri, version, message));
 	std::cout.flush();
@@ -180,6 +188,11 @@ bool handlePayload(const std::string &payload, PeerState &state) {
 	}
 	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "textDocument/completion") {
 		std::cout << mr::lsp::buildJsonRpcFrame(completionResponse(envelope));
+		std::cout.flush();
+		return true;
+	}
+	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "textDocument/codeAction") {
+		std::cout << mr::lsp::buildJsonRpcFrame(codeActionResponse(envelope, state));
 		std::cout.flush();
 		return true;
 	}

@@ -43,6 +43,16 @@ const mr::services::MRLspServiceCommandSpec lspServiceCommandTable[] = {
 	{ mr::services::MRLspServiceCommandId::Complete, mr::services::MRLspServiceRequestKind::Completion, false, "MR_LSP_COMPLETE", "LSP Complete" },
 };
 
+mr::lsp::LspCodeActionRange codeActionRangeFromServiceRange(const mr::services::MRServiceTextRange &range) {
+	mr::lsp::LspCodeActionRange codeActionRange;
+
+	codeActionRange.start.line = range.start.line;
+	codeActionRange.start.character = range.start.character;
+	codeActionRange.end.line = range.end.line;
+	codeActionRange.end.character = range.end.character;
+	return codeActionRange;
+}
+
 } // namespace
 
 namespace mr::services {
@@ -323,6 +333,28 @@ bool MRLspServiceSession::requestCompletion(mr::lsp::LspTextPosition position, s
 	return completionAdapter.requestCompletion(lifecycle, documentService, position, completionRequest, errorMessage);
 }
 
+bool MRLspServiceSession::requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage) {
+	if (!hasActiveWorkspace) {
+		errorMessage = "LSP service session has no active workspace.";
+		return false;
+	}
+	if (diagnosticResult.header.state != MRServiceResultState::Current) {
+		errorMessage = "LSP codeAction diagnostic result is not current.";
+		return false;
+	}
+	if (!serviceDocumentIdentityMatches(activeWorkspace, diagnosticResult.header.identity)) {
+		errorMessage = "LSP codeAction diagnostic result no longer matches workspace.";
+		return false;
+	}
+	if (diagnosticResult.header.identity.uri != documentService.documentUri()) {
+		errorMessage = "LSP codeAction diagnostic document does not match open document.";
+		return false;
+	}
+	if (!codeActionAdapter.requestCodeActions(lifecycle, documentService, codeActionRangeFromServiceRange(diagnostic.reportedRange), diagnostic.rawLspDiagnosticJson, codeActionRequest, errorMessage)) return false;
+	codeActionRequestVersion = diagnosticResult.header.identity.documentVersion;
+	return true;
+}
+
 bool MRLspServiceSession::closeDocument(std::string &errorMessage) {
 	if (!documentService.isOpen()) {
 		activeEditorDocumentId = 0;
@@ -430,6 +462,7 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 	mr::lsp::LspReferencesResult references;
 	mr::lsp::LspHoverResult hover;
 	mr::lsp::LspCompletionResult completion;
+	mr::lsp::LspCodeActionResult codeActions;
 	bool accepted = false;
 
 	if (hasActiveWorkspace) {
@@ -457,6 +490,8 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 
 	if (!completionAdapter.consume(message, documentService, completionRequest, completion, accepted, errorMessage)) return false;
 	if (accepted) resultStore.putCompletion(buildServiceCompletionFromLsp(activeWorkspace, completionRequest.uri, activeWorkspace.documents.front().documentVersion, completionRequest.idText, completion));
+	if (!codeActionAdapter.consume(message, documentService, codeActionRequest, codeActions, accepted, errorMessage)) return false;
+	if (accepted) resultStore.putCodeActions(buildServiceCodeActionsFromLsp(activeWorkspace, codeActionRequest.uri, codeActionRequestVersion, codeActionRequest.idText, codeActions));
 	return true;
 }
 
@@ -465,6 +500,8 @@ void MRLspServiceSession::clearRequests() noexcept {
 	referencesRequest = mr::lsp::LspReferencesRequest();
 	hoverRequest = mr::lsp::LspHoverRequest();
 	completionRequest = mr::lsp::LspCompletionRequest();
+	codeActionRequest = mr::lsp::LspCodeActionRequest();
+	codeActionRequestVersion = 0;
 }
 
 void MRLspServiceSession::clearRuntimeBinding() noexcept {

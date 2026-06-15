@@ -1,5 +1,6 @@
 #include "MRServiceResults.hpp"
 
+#include "../../lsp/MRLspCodeAction.hpp"
 #include "../../lsp/MRLspCompletion.hpp"
 #include "../../lsp/MRLspDiagnostics.hpp"
 #include "../../lsp/MRLspHover.hpp"
@@ -138,6 +139,7 @@ void MRServiceResultStore::clear() noexcept {
 	locations.clear();
 	hovers.clear();
 	completions.clear();
+	codeActions.clear();
 }
 
 void MRServiceResultStore::putDiagnostics(const MRServiceDiagnosticResult &result) {
@@ -180,6 +182,16 @@ void MRServiceResultStore::putCompletion(const MRServiceCompletionResult &result
 	completions.push_back(result);
 }
 
+void MRServiceResultStore::putCodeActions(const MRServiceCodeActionResult &result) {
+	for (MRServiceCodeActionResult &existing : codeActions) {
+		if (sameResultSlot(existing.header, result.header)) {
+			existing = result;
+			return;
+		}
+	}
+	codeActions.push_back(result);
+}
+
 void MRServiceResultStore::markStaleAgainstWorkspace(const MRWorkspaceServiceSnapshot &workspace) {
 	for (MRServiceDiagnosticResult &result : diagnostics)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
@@ -188,6 +200,8 @@ void MRServiceResultStore::markStaleAgainstWorkspace(const MRWorkspaceServiceSna
 	for (MRServiceHoverResult &result : hovers)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
 	for (MRServiceCompletionResult &result : completions)
+		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
+	for (MRServiceCodeActionResult &result : codeActions)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
 }
 
@@ -205,6 +219,10 @@ const std::vector<MRServiceHoverResult> &MRServiceResultStore::hoverResults() co
 
 const std::vector<MRServiceCompletionResult> &MRServiceResultStore::completionResults() const noexcept {
 	return completions;
+}
+
+const std::vector<MRServiceCodeActionResult> &MRServiceResultStore::codeActionResults() const noexcept {
+	return codeActions;
 }
 
 MRServiceDiagnosticResult buildServiceDiagnosticsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDiagnosticBatch &batch) {
@@ -296,6 +314,27 @@ MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceService
 		serviceItem.kind = item.kind;
 		serviceItem.detail = item.detail;
 		serviceItem.insertText = item.insertText;
+		result.items.push_back(serviceItem);
+	}
+	return result;
+}
+
+MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCodeActionResult &codeActions) {
+	MRServiceCodeActionResult result;
+
+	result.header.source = MRServiceResultSource::Lsp;
+	result.header.kind = MRServiceResultKind::CodeAction;
+	result.header.requestId = requestId;
+	result.header.identity = identityFromUri(workspace, originUri.empty() ? codeActions.uri : originUri, originVersion, result.header.state, result.header.errorMessage);
+	if (result.header.state != MRServiceResultState::Current) return result;
+
+	for (const mr::lsp::LspCodeActionItem &item : codeActions.items) {
+		MRServiceCodeActionItem serviceItem;
+		serviceItem.title = item.title;
+		serviceItem.kind = item.kind;
+		serviceItem.hasEdit = item.hasEdit;
+		serviceItem.hasCommand = item.hasCommand;
+		serviceItem.rawLspCodeActionJson = item.rawJson;
 		result.items.push_back(serviceItem);
 	}
 	return result;

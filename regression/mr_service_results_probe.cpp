@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "../app/services/MRServiceResults.hpp"
+#include "../lsp/MRLspCodeAction.hpp"
 #include "../lsp/MRLspCompletion.hpp"
 #include "../lsp/MRLspDiagnostics.hpp"
 #include "../lsp/MRLspHover.hpp"
@@ -119,6 +120,7 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	mr::lsp::LspReferencesResult references;
 	mr::lsp::LspHoverResult hover;
 	mr::lsp::LspCompletionResult completion;
+	mr::lsp::LspCodeActionResult codeActions;
 
 	if (!makeUri("/tmp/mr/project/src/main.cpp", mainUri, failureReason)) return false;
 	if (!makeUri("/tmp/mr/project/include/main.hpp", headerUri, failureReason)) return false;
@@ -135,6 +137,12 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	completion.items[0].kind = 3;
 	completion.items[0].detail = "int main()";
 	completion.items[0].insertText = "main";
+	codeActions.uri = mainUri;
+	codeActions.items.push_back(mr::lsp::LspCodeActionItem());
+	codeActions.items[0].title = "Insert semicolon";
+	codeActions.items[0].kind = "quickfix";
+	codeActions.items[0].hasEdit = true;
+	codeActions.items[0].rawJson = "{\"title\":\"Insert semicolon\",\"kind\":\"quickfix\",\"edit\":{}}";
 
 	mr::lsp::LspDefinitionResult definitionResult;
 	definitionResult.originUri = mainUri;
@@ -143,6 +151,7 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	const mr::services::MRServiceLocationResult refs = mr::services::buildServiceReferencesFromLsp(workspace, mainUri, 5, "mr-references-1", references);
 	const mr::services::MRServiceHoverResult serviceHover = mr::services::buildServiceHoverFromLsp(workspace, 5, "mr-hover-1", hover);
 	const mr::services::MRServiceCompletionResult serviceCompletion = mr::services::buildServiceCompletionFromLsp(workspace, mainUri, 5, "mr-completion-1", completion);
+	const mr::services::MRServiceCodeActionResult serviceCodeActions = mr::services::buildServiceCodeActionsFromLsp(workspace, mainUri, 5, "mr-code-action-1", codeActions);
 
 	if (!expect(definition.header.state == mr::services::MRServiceResultState::Current, "definition state", failureReason)) return false;
 	if (!expect(definition.locations.size() == 1, "definition count", failureReason)) return false;
@@ -154,6 +163,11 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	if (!expect(serviceCompletion.items.size() == 1, "completion count", failureReason)) return false;
 	if (!expect(serviceCompletion.items[0].label == "main", "completion label", failureReason)) return false;
 	if (!expect(serviceCompletion.items[0].insertText == "main", "completion insert text", failureReason)) return false;
+	if (!expect(serviceCodeActions.items.size() == 1, "codeAction count", failureReason)) return false;
+	if (!expect(serviceCodeActions.items[0].title == "Insert semicolon", "codeAction title", failureReason)) return false;
+	if (!expect(serviceCodeActions.items[0].kind == "quickfix", "codeAction kind", failureReason)) return false;
+	if (!expect(serviceCodeActions.items[0].hasEdit, "codeAction edit", failureReason)) return false;
+	if (!expect(serviceCodeActions.items[0].rawLspCodeActionJson.find("\"edit\"") != std::string::npos, "codeAction raw json", failureReason)) return false;
 	return true;
 }
 
