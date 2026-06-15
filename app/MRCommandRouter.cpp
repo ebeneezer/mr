@@ -1485,7 +1485,8 @@ class LspReferencesListView final : public TListViewer {
 enum class LspResultDialogAction : unsigned char {
 	None = 0,
 	NavigateLocation,
-	ShowHover
+	ShowHover,
+	RequestCodeActions
 };
 
 struct LspResultDialogRow {
@@ -1493,6 +1494,8 @@ struct LspResultDialogRow {
 	LspResultDialogAction action = LspResultDialogAction::None;
 	mr::services::MRServiceLocationTarget location;
 	mr::services::MRServiceHoverResult hover;
+	mr::services::MRServiceDiagnosticResult diagnosticResult;
+	mr::services::MRServiceDiagnosticEntry diagnostic;
 };
 
 const char *lspResultStateText(mr::services::MRServiceResultState state) noexcept {
@@ -1625,6 +1628,62 @@ class LspCompletionListView final : public TListViewer {
 
   private:
 	const std::vector<mr::services::MRServiceCompletionItem> &items;
+};
+
+class LspCodeActionListView final : public TListViewer {
+  public:
+	LspCodeActionListView(const TRect &bounds, TScrollBar *scrollBar, const std::vector<mr::services::MRServiceCodeActionItem> &items) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), items(items) {
+		const std::size_t visibleCount = std::min<std::size_t>(items.size(), static_cast<std::size_t>(std::numeric_limits<short>::max()));
+
+		setRange(static_cast<short>(visibleCount));
+	}
+
+	void getText(char *dest, short item, short maxLen) override {
+		std::string text;
+		const mr::services::MRServiceCodeActionItem *codeAction = nullptr;
+
+		if (dest == nullptr || maxLen <= 0) return;
+		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) {
+			dest[0] = EOS;
+			return;
+		}
+
+		codeAction = &items[static_cast<std::size_t>(item)];
+		text = codeAction->title;
+		if (!codeAction->kind.empty()) text += " - " + codeAction->kind;
+		if (codeAction->hasEdit) text += " [edit]";
+		if (codeAction->hasCommand) text += " [command]";
+		text = firstDisplayLine(text, static_cast<std::size_t>(std::max<short>(0, maxLen - 1)));
+		std::strncpy(dest, text.c_str(), static_cast<std::size_t>(maxLen - 1));
+		dest[maxLen - 1] = EOS;
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			if (target != nullptr) message(target, evCommand, cmOK, this);
+			clearEvent(event);
+			return;
+		}
+		TListViewer::handleEvent(event);
+	}
+
+	void selectItem(short item) override {
+		if (item >= 0 && static_cast<std::size_t>(item) < items.size()) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			focusItemNum(item);
+			if (target != nullptr) message(target, evCommand, cmOK, this);
+		}
+	}
+
+	[[nodiscard]] bool selectedIndex(std::size_t &index) const noexcept {
+		if (focused < 0 || static_cast<std::size_t>(focused) >= items.size()) return false;
+		index = static_cast<std::size_t>(focused);
+		return true;
+	}
+
+  private:
+	const std::vector<mr::services::MRServiceCodeActionItem> &items;
 };
 
 bool showLspReferencesDialog(const mr::services::MRServiceLocationResult &result) {
@@ -1844,6 +1903,77 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 	return true;
 }
 
+bool showLspCodeActionsDialog(const mr::services::MRServiceCodeActionResult &result) {
+	MRDialogFoundation *dialog = nullptr;
+	TScrollBar *scrollBar = nullptr;
+	LspCodeActionListView *listView = nullptr;
+	ushort dialogResult = cmCancel;
+	std::size_t selectedIndex = 0;
+	const short width = 100;
+	short visibleRows = 0;
+	short height = 0;
+	short buttonY = 0;
+
+	if (TProgram::deskTop == nullptr) return false;
+	if (result.header.state != mr::services::MRServiceResultState::Current) {
+		if (!result.header.errorMessage.empty()) postLspWarning("LSP code actions unavailable: " + result.header.errorMessage);
+		else
+			postLspWarning("LSP code actions unavailable.");
+		return true;
+	}
+	if (result.items.empty()) {
+		postLspWarning("LSP code actions: no actions available.");
+		return true;
+	}
+
+	visibleRows = static_cast<short>(std::max<int>(4, std::min<int>(static_cast<int>(result.items.size()), 12)));
+	height = static_cast<short>(visibleRows + 6);
+	buttonY = static_cast<short>(height - 3);
+	dialog = mr::dialogs::createScrollableDialog("LSP CODE ACTIONS", width, height);
+	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Available actions:"));
+	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+	dialog->insert(scrollBar);
+	listView = new LspCodeActionListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.items);
+	listView->focusItemNum(0);
+	dialog->insert(listView);
+	{
+		const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~O~K", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
+	}
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < result.items.size())
+		postLspInfo("LSP code action selected: " + firstDisplayLine(result.items[selectedIndex].title, 100));
+	TObject::destroy(dialog);
+	return true;
+}
+
+bool requestLspCodeActionsForDiagnostic(const mr::services::MRServiceDiagnosticResult &diagnosticResult, const mr::services::MRServiceDiagnosticEntry &diagnostic) {
+	const std::size_t initialCount = g_lspAppService.results().codeActionResults().size();
+	std::string errorMessage;
+
+	if (!g_lspAppService.requestCodeActionsForDiagnostic(diagnosticResult, diagnostic, errorMessage)) {
+		postLspError("LSP code actions failed: " + errorMessage);
+		return true;
+	}
+	for (int i = 0; i < 80; ++i) {
+		if (!g_lspAppService.poll(errorMessage)) {
+			postLspError("LSP code actions poll failed: " + errorMessage);
+			g_lspAppService.close();
+			return true;
+		}
+		if (g_lspAppService.results().codeActionResults().size() > initialCount) {
+			const std::vector<mr::services::MRServiceCodeActionResult> &codeActions = g_lspAppService.results().codeActionResults();
+
+			return showLspCodeActionsDialog(codeActions.back());
+		}
+		::poll(nullptr, 0, 20);
+	}
+	postLspWarning("LSP code actions not received yet.");
+	return true;
+}
+
 bool showLspStatusDialog() {
 	MRDialogFoundation *dialog = nullptr;
 	MREditWindow *currentWindow = currentEditorCommandWindow();
@@ -1924,7 +2054,7 @@ bool showLspStatusDialog() {
 
 	line.str(std::string());
 	line.clear();
-	line << "Results: diagnostics " << results.diagnosticResults().size() << ", locations " << results.locationResults().size() << ", hovers " << results.hoverResults().size() << ", completions " << results.completionResults().size();
+	line << "Results: diagnostics " << results.diagnosticResults().size() << ", locations " << results.locationResults().size() << ", hovers " << results.hoverResults().size() << ", completions " << results.completionResults().size() << ", code actions " << results.codeActionResults().size();
 	lines.push_back(line.str());
 	line.str(std::string());
 	line.clear();
@@ -1997,6 +2127,20 @@ bool showLspResultsDialog() {
 				row.location.range = diagnostic.navigationRange;
 			}
 			rows.push_back(row);
+			if (result.header.state == mr::services::MRServiceResultState::Current && !diagnostic.rawLspDiagnosticJson.empty()) {
+				LspResultDialogRow actionRow;
+
+				rowText.str(std::string());
+				rowText.clear();
+				rowText << "ACTION code actions [" << lspResultStateText(result.header.state) << "] ";
+				rowText << (diagnostic.reportedRange.start.line + 1) << ":" << (diagnostic.reportedRange.start.character + 1) << " ";
+				rowText << firstDisplayLine(diagnostic.message, 76);
+				actionRow.text = rowText.str();
+				actionRow.action = LspResultDialogAction::RequestCodeActions;
+				actionRow.diagnosticResult = result;
+				actionRow.diagnostic = diagnostic;
+				rows.push_back(actionRow);
+			}
 		}
 	}
 
@@ -2084,6 +2228,41 @@ bool showLspResultsDialog() {
 		}
 	}
 
+	for (const mr::services::MRServiceCodeActionResult &result : results.codeActionResults()) {
+		std::size_t visibleCodeActionItems = std::min<std::size_t>(result.items.size(), 30);
+		LspResultDialogRow summaryRow;
+
+		rowText.str(std::string());
+		rowText.clear();
+		rowText << "ACTION [" << lspResultStateText(result.header.state) << "] " << result.items.size() << " items";
+		if (!result.header.identity.path.empty()) rowText << " " << result.header.identity.path;
+		if (!result.header.errorMessage.empty()) rowText << " - " << result.header.errorMessage;
+		summaryRow.text = rowText.str();
+		rows.push_back(summaryRow);
+		for (std::size_t i = 0; i < visibleCodeActionItems; ++i) {
+			const mr::services::MRServiceCodeActionItem &item = result.items[i];
+			LspResultDialogRow itemRow;
+
+			rowText.str(std::string());
+			rowText.clear();
+			rowText << "ACTION item [" << lspResultStateText(result.header.state) << "] " << item.title;
+			if (!item.kind.empty()) rowText << " - " << item.kind;
+			if (item.hasEdit) rowText << " [edit]";
+			if (item.hasCommand) rowText << " [command]";
+			itemRow.text = rowText.str();
+			rows.push_back(itemRow);
+		}
+		if (visibleCodeActionItems < result.items.size()) {
+			LspResultDialogRow tailRow;
+
+			rowText.str(std::string());
+			rowText.clear();
+			rowText << "ACTION item [" << lspResultStateText(result.header.state) << "] " << (result.items.size() - visibleCodeActionItems) << " more items";
+			tailRow.text = rowText.str();
+			rows.push_back(tailRow);
+		}
+	}
+
 	if (rows.empty()) {
 		postLspWarning("LSP results: no results available.");
 		return true;
@@ -2108,7 +2287,7 @@ bool showLspResultsDialog() {
 		std::size_t selected = 0;
 
 		validation.valid = listView != nullptr && listView->selectedIndex(selected) && selected < rows.size() && rows[selected].action != LspResultDialogAction::None;
-		if (!validation.valid) validation.warningText = "Select a navigable or hover result.";
+		if (!validation.valid) validation.warningText = "Select a navigable, hover or action result.";
 		return validation;
 	});
 	dialog->finalizeLayout();
@@ -2122,6 +2301,7 @@ bool showLspResultsDialog() {
 		return true;
 	}
 	if (selectedRow.action == LspResultDialogAction::ShowHover) return showLspHoverDialog(selectedRow.hover);
+	if (selectedRow.action == LspResultDialogAction::RequestCodeActions) return requestLspCodeActionsForDiagnostic(selectedRow.diagnosticResult, selectedRow.diagnostic);
 	return true;
 }
 

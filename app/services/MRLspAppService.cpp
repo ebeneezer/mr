@@ -78,6 +78,10 @@ bool MRLspAppService::syncCurrentEditorDocument(
 	return syncEditorDocument(profile, workspace, document, editor, errorMessage);
 }
 
+bool MRLspAppService::requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage) {
+	return session.requestCodeActionsForDiagnostic(diagnosticResult, diagnostic, errorMessage);
+}
+
 bool MRLspAppService::poll(std::string &errorMessage) {
 	return session.poll(errorMessage);
 }

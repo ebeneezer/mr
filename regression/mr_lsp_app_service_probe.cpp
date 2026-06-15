@@ -40,7 +40,7 @@ mr::services::MRLspServerProfile makeProbeProfile() {
 	return profile;
 }
 
-bool pollUntilCounts(mr::services::MRLspAppService &service, std::size_t diagnostics, std::size_t locations, std::size_t hovers, std::size_t completions, std::string &failureReason) {
+bool pollUntilCounts(mr::services::MRLspAppService &service, std::size_t diagnostics, std::size_t locations, std::size_t hovers, std::size_t completions, std::size_t codeActions, std::string &failureReason) {
 	std::string errorMessage;
 
 	for (int i = 0; i < 50; ++i) {
@@ -49,7 +49,7 @@ bool pollUntilCounts(mr::services::MRLspAppService &service, std::size_t diagnos
 			return false;
 		}
 		if (service.results().diagnosticResults().size() == diagnostics && service.results().locationResults().size() == locations && service.results().hoverResults().size() == hovers &&
-		    service.results().completionResults().size() == completions)
+		    service.results().completionResults().size() == completions && service.results().codeActionResults().size() == codeActions)
 			return true;
 		::poll(nullptr, 0, 20);
 	}
@@ -171,7 +171,7 @@ bool testEditorCommandPath(std::string &failureReason) {
 			failureReason))
 		return false;
 	if (!expect(service.runtimeActive(), "started app service runtime is not active", failureReason)) return false;
-	if (!pollUntilCounts(service, 1, 1, 0, 0, failureReason)) return false;
+	if (!pollUntilCounts(service, 1, 1, 0, 0, 0, failureReason)) return false;
 
 	if (!expect(
 			service.requestEditorCommand(
@@ -185,7 +185,7 @@ bool testEditorCommandPath(std::string &failureReason) {
 			"app service hover command: " + errorMessage,
 			failureReason))
 		return false;
-	if (!pollUntilCounts(service, 1, 1, 1, 0, failureReason)) return false;
+	if (!pollUntilCounts(service, 1, 1, 1, 0, 0, failureReason)) return false;
 	if (!expect(service.shutdown(errorMessage), "app service shutdown: " + errorMessage, failureReason)) return false;
 	return expect(!service.runtimeActive(), "shutdown app service runtime is active", failureReason);
 }
@@ -215,6 +215,19 @@ bool testSyncOnlyDiagnosticsPath(std::string &failureReason) {
 	workspace = service.buildWorkspaceSnapshot(documents);
 	if (!expect(service.syncEditorDocument(profile, workspace, document, editor, errorMessage), "app service sync change: " + errorMessage, failureReason)) return false;
 	if (!pollUntilDiagnosticMessage(service, "changed diagnostic", failureReason)) return false;
+	if (!expect(!service.results().diagnosticResults().empty(), "app service diagnostic result missing before codeAction", failureReason)) return false;
+	if (!expect(!service.results().diagnosticResults()[0].diagnostics.empty(), "app service diagnostic entry missing before codeAction", failureReason)) return false;
+	if (!expect(
+			service.requestCodeActionsForDiagnostic(
+				service.results().diagnosticResults()[0],
+				service.results().diagnosticResults()[0].diagnostics[0],
+				errorMessage),
+			"app service codeAction request: " + errorMessage,
+			failureReason))
+		return false;
+	if (!pollUntilCounts(service, 1, 0, 0, 0, 1, failureReason)) return false;
+	if (!expect(service.results().codeActionResults()[0].items.size() == 2, "app service codeAction item count", failureReason)) return false;
+	if (!expect(service.results().codeActionResults()[0].items[0].title == "Insert semicolon", "app service codeAction title", failureReason)) return false;
 	if (!expect(service.shutdown(errorMessage), "app service sync shutdown: " + errorMessage, failureReason)) return false;
 	return expect(!service.runtimeActive(), "sync shutdown app service runtime is active", failureReason);
 }

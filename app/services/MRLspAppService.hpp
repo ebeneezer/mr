@@ -51,6 +51,7 @@ public:
 		const MRWorkspaceDocumentSnapshot &document,
 		const MRFileEditor &editor,
 		std::string &errorMessage);
+	bool requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);
 	void close();
