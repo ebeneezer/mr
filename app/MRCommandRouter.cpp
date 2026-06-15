@@ -1455,6 +1455,20 @@ const char *lspResultStateText(mr::services::MRServiceResultState state) noexcep
 	return "unknown";
 }
 
+const char *lspDiagnosticSeverityText(int severity) noexcept {
+	switch (severity) {
+		case 1:
+			return "error";
+		case 2:
+			return "warning";
+		case 3:
+			return "info";
+		case 4:
+			return "hint";
+	}
+	return "diagnostic";
+}
+
 class LspResultsListView final : public TListViewer {
   public:
 	LspResultsListView(const TRect &bounds, TScrollBar *scrollBar, const std::vector<LspResultDialogRow> &rows) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), rows(rows) {
@@ -1917,7 +1931,7 @@ bool showLspResultsDialog() {
 
 			rowText.str(std::string());
 			rowText.clear();
-			rowText << "DIAG [" << lspResultStateText(result.header.state) << "] ";
+			rowText << "DIAG " << lspDiagnosticSeverityText(diagnostic.severity) << " [" << lspResultStateText(result.header.state) << "] ";
 			rowText << (diagnostic.range.start.line + 1) << ":" << (diagnostic.range.start.character + 1) << " ";
 			if (!result.header.identity.path.empty()) rowText << result.header.identity.path << " - ";
 			rowText << firstDisplayLine(diagnostic.message, 80);
@@ -2066,7 +2080,12 @@ void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnostic
 		g_lspLastRequestState = "diagnostics received";
 		line << "LSP diagnostics: " << result.diagnostics.size();
 		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
-		if (!result.diagnostics.empty()) line << " - " << firstDisplayLine(result.diagnostics[0].message, 120);
+		if (!result.diagnostics.empty()) {
+			const mr::services::MRServiceDiagnosticEntry &diagnostic = result.diagnostics[0];
+			line << ":" << (diagnostic.range.start.line + 1) << ":" << (diagnostic.range.start.character + 1);
+			line << " " << lspDiagnosticSeverityText(diagnostic.severity);
+			line << " - " << firstDisplayLine(diagnostic.message, 120);
+		}
 		postLspInfo(line.str());
 	}
 }
