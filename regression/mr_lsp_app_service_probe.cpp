@@ -57,6 +57,25 @@ bool pollUntilCounts(mr::services::MRLspAppService &service, std::size_t diagnos
 	return false;
 }
 
+bool pollUntilDiagnosticMessage(mr::services::MRLspAppService &service, const std::string &message, std::string &failureReason) {
+	std::string errorMessage;
+
+	for (int i = 0; i < 50; ++i) {
+		if (!service.poll(errorMessage)) {
+			failureReason = "app service diagnostic poll failed: " + errorMessage;
+			return false;
+		}
+		for (const mr::services::MRServiceDiagnosticResult &result : service.results().diagnosticResults()) {
+			if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+			if (result.diagnostics.empty()) continue;
+			if (result.diagnostics[0].message == message) return true;
+		}
+		::poll(nullptr, 0, 20);
+	}
+	failureReason = "expected app service diagnostic message not observed";
+	return false;
+}
+
 bool testWorkspaceBoundary(std::string &failureReason) {
 	mr::services::MRLspAppService service;
 	mr::services::MRWorkspaceDocumentSnapshot mainDocument;
@@ -171,10 +190,40 @@ bool testEditorCommandPath(std::string &failureReason) {
 	return expect(!service.runtimeActive(), "shutdown app service runtime is active", failureReason);
 }
 
+bool testSyncOnlyDiagnosticsPath(std::string &failureReason) {
+	const std::string path = "/tmp/mr/project/src/main.cpp";
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, path.c_str());
+	mr::services::MRLspAppService service;
+	mr::services::MRLspServerProfile profile = makeProbeProfile();
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	std::vector<mr::services::MRWorkspaceDocumentSnapshot> documents;
+	std::string errorMessage;
+
+	if (!replaceText(editor, "int main() { return 7; }\n", failureReason)) return false;
+	document = documentForEditor(editor, path, 10);
+	documents.push_back(document);
+	service.setMainFileByBufferId(document.bufferId);
+	workspace = service.buildWorkspaceSnapshot(documents);
+	if (!expect(service.syncEditorDocument(profile, workspace, document, editor, errorMessage), "app service sync open: " + errorMessage, failureReason)) return false;
+	if (!pollUntilDiagnosticMessage(service, "opened diagnostic", failureReason)) return false;
+
+	if (!replaceText(editor, "int main() { return ; }\n", failureReason)) return false;
+	document = documentForEditor(editor, path, 10);
+	documents.clear();
+	documents.push_back(document);
+	workspace = service.buildWorkspaceSnapshot(documents);
+	if (!expect(service.syncEditorDocument(profile, workspace, document, editor, errorMessage), "app service sync change: " + errorMessage, failureReason)) return false;
+	if (!pollUntilDiagnosticMessage(service, "changed diagnostic", failureReason)) return false;
+	if (!expect(service.shutdown(errorMessage), "app service sync shutdown: " + errorMessage, failureReason)) return false;
+	return expect(!service.runtimeActive(), "sync shutdown app service runtime is active", failureReason);
+}
+
 bool runProbe(std::string &failureReason) {
 	if (!testWorkspaceBoundary(failureReason)) return false;
 	if (!testRequestGuard(failureReason)) return false;
 	if (!testEditorCommandPath(failureReason)) return false;
+	if (!testSyncOnlyDiagnosticsPath(failureReason)) return false;
 	return true;
 }
 } // namespace

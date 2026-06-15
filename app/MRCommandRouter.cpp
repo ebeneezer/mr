@@ -41,6 +41,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <poll.h>
 #include <sstream>
 #include <set>
 #include <string>
@@ -1314,6 +1315,42 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	}
 	g_lspLastRequestState = "requested";
 	postLspInfo(g_lspLastRequestLabel + " requested.");
+	return true;
+}
+
+bool syncCurrentEditorForLspResults() {
+	MREditWindow *win = currentEditorCommandWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	std::string errorMessage;
+	std::string configurationSource;
+
+	if (win == nullptr || editor == nullptr) return true;
+	if (!buildCurrentLspDocumentSnapshot(win, document)) return false;
+	if (!buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) {
+		postLspWarning(errorMessage.empty() ? "LSP server not configured." : errorMessage);
+		return false;
+	}
+
+	g_lspLastServerExecutable = profile.executablePath;
+	g_lspLastServerWorkingDirectory = profile.workingDirectory;
+	g_lspLastServerArguments = lspServerProfileArgumentText(profile);
+	g_lspLastServerConfigurationSource = configurationSource;
+	g_lspLastRequestPath = document.path;
+	g_lspAppService.setMainFileByBufferId(document.bufferId);
+	if (!g_lspAppService.syncCurrentEditorDocument(profile, document, *editor, errorMessage)) {
+		postLspError("LSP results sync failed: " + errorMessage);
+		return false;
+	}
+	for (int i = 0; i < 25; ++i) {
+		if (!g_lspAppService.poll(errorMessage)) {
+			postLspError("LSP poll failed: " + errorMessage);
+			g_lspAppService.close();
+			return false;
+		}
+		::poll(nullptr, 0, 20);
+	}
 	return true;
 }
 
@@ -3810,6 +3847,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return showLspStatusDialog();
 
 		case cmMrOtherLspResults:
+			if (!syncCurrentEditorForLspResults()) return true;
 			return showLspResultsDialog();
 
 		case cmMrOtherMacroManager:

@@ -33,12 +33,23 @@ public:
 		MRLspServiceCommandId command,
 		mr::lsp::LspTextPosition position,
 		std::string &errorMessage);
+	bool syncEditorDocument(
+		const MRLspServerProfile &profile,
+		const MRWorkspaceServiceSnapshot &workspace,
+		const MRWorkspaceDocumentSnapshot &document,
+		const MRFileEditor &editor,
+		std::string &errorMessage);
 	bool requestCurrentEditorCommand(
 		const MRLspServerProfile &profile,
 		const MRWorkspaceDocumentSnapshot &document,
 		const MRFileEditor &editor,
 		MRLspServiceCommandId command,
 		mr::lsp::LspTextPosition position,
+		std::string &errorMessage);
+	bool syncCurrentEditorDocument(
+		const MRLspServerProfile &profile,
+		const MRWorkspaceDocumentSnapshot &document,
+		const MRFileEditor &editor,
 		std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);

@@ -42,6 +42,20 @@ bool MRLspAppService::requestEditorCommand(
 	return session.requestEditorDocumentServiceCommand(workspace, profile, document, editor, command, position, errorMessage);
 }
 
+bool MRLspAppService::syncEditorDocument(
+	const MRLspServerProfile &profile,
+	const MRWorkspaceServiceSnapshot &workspace,
+	const MRWorkspaceDocumentSnapshot &document,
+	const MRFileEditor &editor,
+	std::string &errorMessage) {
+	if (workspace.documents.empty()) {
+		errorMessage = "LSP app service workspace has no documents.";
+		return false;
+	}
+	if (!session.ensureRuntime(workspace, profile, errorMessage)) return false;
+	return session.syncEditorDocument(workspace, document, editor, errorMessage);
+}
+
 bool MRLspAppService::requestCurrentEditorCommand(
 	const MRLspServerProfile &profile,
 	const MRWorkspaceDocumentSnapshot &document,
@@ -52,6 +66,16 @@ bool MRLspAppService::requestCurrentEditorCommand(
 	MRWorkspaceServiceSnapshot workspace = buildCurrentWorkspaceSnapshot();
 
 	return requestEditorCommand(profile, workspace, document, editor, command, position, errorMessage);
+}
+
+bool MRLspAppService::syncCurrentEditorDocument(
+	const MRLspServerProfile &profile,
+	const MRWorkspaceDocumentSnapshot &document,
+	const MRFileEditor &editor,
+	std::string &errorMessage) {
+	MRWorkspaceServiceSnapshot workspace = buildCurrentWorkspaceSnapshot();
+
+	return syncEditorDocument(profile, workspace, document, editor, errorMessage);
 }
 
 bool MRLspAppService::poll(std::string &errorMessage) {
