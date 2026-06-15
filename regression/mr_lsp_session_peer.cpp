@@ -95,9 +95,11 @@ std::string diagnosticsNotification(const std::string &uri, int version, const s
 	       ",\"diagnostics\":[{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":4}},\"severity\":2,\"message\":" + jsonString(message) + "}]}}";
 }
 
-std::string definitionResponse(const mr::lsp::JsonRpcEnvelope &envelope, const PeerState &state) {
+std::string definitionResponse(const mr::lsp::JsonRpcEnvelope &envelope, const std::string &payload, const PeerState &state) {
 	const std::string uri = state.documentUri.empty() ? "file:///tmp/mr.cpp" : state.documentUri;
 
+	if (payload.find("\"character\":99") != std::string::npos) return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":null}";
+	if (payload.find("\"character\":98") != std::string::npos) return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":[]}";
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":[{\"targetUri\":" + jsonString(uri) +
 	       ",\"targetRange\":{\"start\":{\"line\":4,\"character\":0},\"end\":{\"line\":4,\"character\":12}},\"targetSelectionRange\":{\"start\":{\"line\":4,\"character\":2},\"end\":{\"line\":4,\"character\":9}}}]}";
 }
@@ -162,7 +164,7 @@ bool handlePayload(const std::string &payload, PeerState &state) {
 		return true;
 	}
 	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "textDocument/definition") {
-		std::cout << mr::lsp::buildJsonRpcFrame(definitionResponse(envelope, state));
+		std::cout << mr::lsp::buildJsonRpcFrame(definitionResponse(envelope, payload, state));
 		std::cout.flush();
 		return true;
 	}

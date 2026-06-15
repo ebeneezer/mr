@@ -133,7 +133,10 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	completion.items[0].detail = "int main()";
 	completion.items[0].insertText = "main";
 
-	const mr::services::MRServiceLocationResult definition = mr::services::buildServiceDefinitionFromLsp(workspace, mainUri, 5, "mr-definition-1", makeLocation(mainUri, 4));
+	mr::lsp::LspDefinitionResult definitionResult;
+	definitionResult.originUri = mainUri;
+	definitionResult.locations.push_back(makeLocation(mainUri, 4));
+	const mr::services::MRServiceLocationResult definition = mr::services::buildServiceDefinitionFromLsp(workspace, mainUri, 5, "mr-definition-1", definitionResult);
 	const mr::services::MRServiceLocationResult refs = mr::services::buildServiceReferencesFromLsp(workspace, mainUri, 5, "mr-references-1", references);
 	const mr::services::MRServiceHoverResult serviceHover = mr::services::buildServiceHoverFromLsp(workspace, 5, "mr-hover-1", hover);
 	const mr::services::MRServiceCompletionResult serviceCompletion = mr::services::buildServiceCompletionFromLsp(workspace, mainUri, 5, "mr-completion-1", completion);

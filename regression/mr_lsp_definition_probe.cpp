@@ -60,7 +60,7 @@ bool shutdownLifecycle(mr::lsp::LspLifecycle &lifecycle, std::string &failureRea
 	return expect(exitStatus == 0, "exit status", failureReason);
 }
 
-bool pollDefinition(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocumentService &service, mr::lsp::LspDefinitionAdapter &adapter, mr::lsp::LspDefinitionRequest &request, mr::lsp::LspLocation &location, std::string &failureReason) {
+bool pollDefinition(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocumentService &service, mr::lsp::LspDefinitionAdapter &adapter, mr::lsp::LspDefinitionRequest &request, mr::lsp::LspDefinitionResult &result, std::string &failureReason) {
 	std::string errorMessage;
 	std::vector<mr::lsp::LspInboundMessage> messages;
 
@@ -71,7 +71,7 @@ bool pollDefinition(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocument
 		}
 		for (const mr::lsp::LspInboundMessage &message : messages) {
 			bool accepted = false;
-			if (!adapter.consume(message, service, request, location, accepted, errorMessage)) {
+			if (!adapter.consume(message, service, request, result, accepted, errorMessage)) {
 				failureReason = "definition consume failed: " + errorMessage;
 				return false;
 			}
@@ -88,7 +88,7 @@ bool testDefinitionHappyPath(std::string &failureReason) {
 	mr::lsp::LspDocumentService service(lifecycle);
 	mr::lsp::LspDefinitionAdapter adapter;
 	mr::lsp::LspDefinitionRequest request;
-	mr::lsp::LspLocation location;
+	mr::lsp::LspDefinitionResult result;
 	std::string errorMessage;
 
 	if (!startLifecycle(lifecycle, failureReason)) return false;
@@ -96,14 +96,41 @@ bool testDefinitionHappyPath(std::string &failureReason) {
 	if (!expect(adapter.requestDefinition(lifecycle, service, mr::lsp::LspTextPosition{3, 5}, request, errorMessage), "definition request: " + errorMessage, failureReason)) return false;
 	if (!expect(request.pending, "definition request pending", failureReason)) return false;
 	if (!expect(request.method == "textDocument/definition", "definition request method", failureReason)) return false;
-	if (!pollDefinition(lifecycle, service, adapter, request, location, failureReason)) return false;
+	if (!pollDefinition(lifecycle, service, adapter, request, result, failureReason)) return false;
 	if (!expect(!request.pending, "definition request still pending", failureReason)) return false;
-	if (!expect(location.uri == service.documentUri(), "definition uri", failureReason)) return false;
-	if (!expect(location.start.line == 4, "definition start line", failureReason)) return false;
-	if (!expect(location.start.character == 2, "definition start character", failureReason)) return false;
-	if (!expect(location.end.line == 4, "definition end line", failureReason)) return false;
-	if (!expect(location.end.character == 9, "definition end character", failureReason)) return false;
+	if (!expect(result.originUri == service.documentUri(), "definition origin uri", failureReason)) return false;
+	if (!expect(result.locations.size() == 1, "definition location count", failureReason)) return false;
+	if (!expect(result.locations[0].uri == service.documentUri(), "definition uri", failureReason)) return false;
+	if (!expect(result.locations[0].start.line == 4, "definition start line", failureReason)) return false;
+	if (!expect(result.locations[0].start.character == 2, "definition start character", failureReason)) return false;
+	if (!expect(result.locations[0].end.line == 4, "definition end line", failureReason)) return false;
+	if (!expect(result.locations[0].end.character == 9, "definition end character", failureReason)) return false;
 	if (!expect(service.close(errorMessage), "close: " + errorMessage, failureReason)) return false;
+	return shutdownLifecycle(lifecycle, failureReason);
+}
+
+bool testDefinitionEmptyResults(std::string &failureReason) {
+	mr::lsp::LspLifecycle lifecycle;
+	mr::lsp::LspDocumentService service(lifecycle);
+	mr::lsp::LspDefinitionAdapter adapter;
+	mr::lsp::LspDefinitionRequest request;
+	mr::lsp::LspDefinitionResult result;
+	std::string errorMessage;
+
+	if (!startLifecycle(lifecycle, failureReason)) return false;
+	if (!expect(service.open(makeSourceSnapshot(1, "int main() { return 0; }\n"), errorMessage), "empty open: " + errorMessage, failureReason)) return false;
+
+	if (!expect(adapter.requestDefinition(lifecycle, service, mr::lsp::LspTextPosition{0, 99}, request, errorMessage), "null definition request: " + errorMessage, failureReason)) return false;
+	if (!pollDefinition(lifecycle, service, adapter, request, result, failureReason)) return false;
+	if (!expect(result.originUri == service.documentUri(), "null definition origin uri", failureReason)) return false;
+	if (!expect(result.locations.empty(), "null definition location count", failureReason)) return false;
+
+	if (!expect(adapter.requestDefinition(lifecycle, service, mr::lsp::LspTextPosition{0, 98}, request, errorMessage), "empty array definition request: " + errorMessage, failureReason)) return false;
+	if (!pollDefinition(lifecycle, service, adapter, request, result, failureReason)) return false;
+	if (!expect(result.originUri == service.documentUri(), "empty array definition origin uri", failureReason)) return false;
+	if (!expect(result.locations.empty(), "empty array definition location count", failureReason)) return false;
+
+	if (!expect(service.close(errorMessage), "empty close: " + errorMessage, failureReason)) return false;
 	return shutdownLifecycle(lifecycle, failureReason);
 }
 
@@ -124,6 +151,7 @@ bool testDefinitionGuards(std::string &failureReason) {
 
 bool runProbe(std::string &failureReason) {
 	if (!testDefinitionHappyPath(failureReason)) return false;
+	if (!testDefinitionEmptyResults(failureReason)) return false;
 	if (!testDefinitionGuards(failureReason)) return false;
 	return true;
 }

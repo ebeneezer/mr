@@ -224,16 +224,22 @@ MRServiceDiagnosticResult buildServiceDiagnosticsFromLsp(const MRWorkspaceServic
 	return result;
 }
 
-MRServiceLocationResult buildServiceDefinitionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspLocation &location) {
+MRServiceLocationResult buildServiceDefinitionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDefinitionResult &definition) {
 	MRServiceLocationResult result;
 
 	result.header.source = MRServiceResultSource::Lsp;
 	result.header.kind = MRServiceResultKind::Definition;
 	result.header.requestId = requestId;
 	result.header.identity = identityFromUri(workspace, originUri, originVersion, result.header.state, result.header.errorMessage);
-	if (result.header.state == MRServiceResultState::Current) {
+	if (result.header.state != MRServiceResultState::Current) return result;
+
+	for (const mr::lsp::LspLocation &location : definition.locations) {
 		MRServiceLocationTarget target = locationTargetFromLsp(location, result.header.state, result.header.errorMessage);
-		if (result.header.state == MRServiceResultState::Current) result.locations.push_back(target);
+		if (result.header.state != MRServiceResultState::Current) {
+			result.locations.clear();
+			return result;
+		}
+		result.locations.push_back(target);
 	}
 	return result;
 }

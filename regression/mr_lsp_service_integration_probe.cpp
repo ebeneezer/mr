@@ -116,7 +116,7 @@ bool pollDiagnostics(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocumen
 bool requestDefinition(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocumentService &service, mr::services::MRServiceResultStore &store, const mr::services::MRWorkspaceServiceSnapshot &workspace, std::string &failureReason) {
 	mr::lsp::LspDefinitionAdapter adapter;
 	mr::lsp::LspDefinitionRequest request;
-	mr::lsp::LspLocation location;
+	mr::lsp::LspDefinitionResult definition;
 	std::string errorMessage;
 	std::vector<mr::lsp::LspInboundMessage> messages;
 
@@ -129,12 +129,12 @@ bool requestDefinition(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocum
 		}
 		for (const mr::lsp::LspInboundMessage &message : messages) {
 			bool accepted = false;
-			if (!adapter.consume(message, service, request, location, accepted, errorMessage)) {
+			if (!adapter.consume(message, service, request, definition, accepted, errorMessage)) {
 				failureReason = "definition consume failed: " + errorMessage;
 				return false;
 			}
 			if (accepted) {
-				store.putLocations(mr::services::buildServiceDefinitionFromLsp(workspace, request.uri, workspace.documents.front().documentVersion, request.idText, location));
+				store.putLocations(mr::services::buildServiceDefinitionFromLsp(workspace, request.uri, workspace.documents.front().documentVersion, request.idText, definition));
 				return true;
 			}
 		}

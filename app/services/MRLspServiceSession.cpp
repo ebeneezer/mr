@@ -426,7 +426,7 @@ bool MRLspServiceSession::runtimeMatches(const MRWorkspaceServiceSnapshot &works
 
 bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage &message, std::string &errorMessage) {
 	mr::lsp::LspDiagnosticBatch batch;
-	mr::lsp::LspLocation definitionLocation;
+	mr::lsp::LspDefinitionResult definition;
 	mr::lsp::LspReferencesResult references;
 	mr::lsp::LspHoverResult hover;
 	mr::lsp::LspCompletionResult completion;
@@ -437,9 +437,9 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 		if (batch.accepted || batch.stale || batch.rejected) resultStore.putDiagnostics(buildServiceDiagnosticsFromLsp(activeWorkspace, batch));
 	}
 
-	if (!definitionAdapter.consume(message, documentService, definitionRequest, definitionLocation, accepted, errorMessage)) return false;
+	if (!definitionAdapter.consume(message, documentService, definitionRequest, definition, accepted, errorMessage)) return false;
 	if (accepted) {
-		resultStore.putLocations(buildServiceDefinitionFromLsp(activeWorkspace, definitionRequest.uri, activeWorkspace.documents.front().documentVersion, definitionRequest.idText, definitionLocation));
+		resultStore.putLocations(buildServiceDefinitionFromLsp(activeWorkspace, definitionRequest.uri, activeWorkspace.documents.front().documentVersion, definitionRequest.idText, definition));
 		return true;
 	}
 

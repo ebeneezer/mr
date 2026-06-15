@@ -6,6 +6,7 @@
 #include "MRLspSession.hpp"
 
 #include <string>
+#include <vector>
 
 namespace mr::lsp {
 
@@ -28,10 +29,15 @@ struct LspDefinitionRequest {
 	bool pending = false;
 };
 
+struct LspDefinitionResult {
+	std::string originUri;
+	std::vector<LspLocation> locations;
+};
+
 class LspDefinitionAdapter {
 public:
 	bool requestDefinition(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspTextPosition position, LspDefinitionRequest &request, std::string &errorMessage);
-	bool consume(const LspInboundMessage &message, const LspDocumentService &documentService, LspDefinitionRequest &request, LspLocation &location, bool &accepted, std::string &errorMessage);
+	bool consume(const LspInboundMessage &message, const LspDocumentService &documentService, LspDefinitionRequest &request, LspDefinitionResult &result, bool &accepted, std::string &errorMessage);
 
 private:
 	int nextRequestId = 1;

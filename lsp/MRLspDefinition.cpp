@@ -201,7 +201,7 @@ bool parseDefinitionObject(const std::string &object, LspLocation &location) {
 	return parseLocationLinkObject(object, location);
 }
 
-bool parseDefinitionResultArray(const std::string &arrayText, LspLocation &location) {
+bool parseDefinitionResultArray(const std::string &arrayText, std::vector<LspLocation> &locations) {
 	std::size_t arrayEnd = 0;
 	std::size_t pos = 1;
 
@@ -217,23 +217,31 @@ bool parseDefinitionResultArray(const std::string &arrayText, LspLocation &locat
 		if (arrayText[pos] != '{') return false;
 		std::size_t objectEnd = 0;
 		if (!findMatchingBracket(arrayText, pos, '{', '}', objectEnd) || objectEnd > arrayEnd) return false;
-		return parseDefinitionObject(arrayText.substr(pos, objectEnd - pos + 1), location);
+		LspLocation location;
+		if (!parseDefinitionObject(arrayText.substr(pos, objectEnd - pos + 1), location)) return false;
+		locations.push_back(location);
+		pos = objectEnd + 1;
 	}
-	return false;
+	return true;
 }
 
-bool parseLocation(const std::string &payload, LspLocation &location) {
+bool parseDefinitionResult(const std::string &payload, std::vector<LspLocation> &locations) {
 	std::size_t resultStart = 0;
 	std::size_t resultEnd = 0;
 
+	locations.clear();
 	if (!findKeyValueStart(payload, "result", 0, resultStart) || resultStart >= payload.size()) return false;
+	if (payload.compare(resultStart, 4, "null") == 0) return true;
 	if (payload[resultStart] == '{') {
 		if (!findMatchingBracket(payload, resultStart, '{', '}', resultEnd)) return false;
-		return parseDefinitionObject(payload.substr(resultStart, resultEnd - resultStart + 1), location);
+		LspLocation location;
+		if (!parseDefinitionObject(payload.substr(resultStart, resultEnd - resultStart + 1), location)) return false;
+		locations.push_back(location);
+		return true;
 	}
 	if (payload[resultStart] == '[') {
 		if (!findMatchingBracket(payload, resultStart, '[', ']', resultEnd)) return false;
-		return parseDefinitionResultArray(payload.substr(resultStart, resultEnd - resultStart + 1), location);
+		return parseDefinitionResultArray(payload.substr(resultStart, resultEnd - resultStart + 1), locations);
 	}
 	return false;
 }
@@ -256,9 +264,9 @@ bool LspDefinitionAdapter::requestDefinition(LspLifecycle &lifecycle, const LspD
 	return true;
 }
 
-bool LspDefinitionAdapter::consume(const LspInboundMessage &message, const LspDocumentService &documentService, LspDefinitionRequest &request, LspLocation &location, bool &accepted, std::string &errorMessage) {
+bool LspDefinitionAdapter::consume(const LspInboundMessage &message, const LspDocumentService &documentService, LspDefinitionRequest &request, LspDefinitionResult &result, bool &accepted, std::string &errorMessage) {
 	accepted = false;
-	location = LspLocation();
+	result = LspDefinitionResult();
 	if (!request.pending) {
 		errorMessage.clear();
 		return true;
@@ -268,7 +276,13 @@ bool LspDefinitionAdapter::consume(const LspInboundMessage &message, const LspDo
 		return true;
 	}
 	if (request.method != "textDocument/definition") return setError(errorMessage, "LSP definition request method mismatch.");
-	if (!parseLocation(message.payload, location)) return setError(errorMessage, "LSP definition response location is malformed.");
+	if (request.uri != documentService.documentUri()) {
+		request.pending = false;
+		errorMessage.clear();
+		return true;
+	}
+	result.originUri = request.uri;
+	if (!parseDefinitionResult(message.payload, result.locations)) return setError(errorMessage, "LSP definition response location is malformed.");
 	request.pending = false;
 	accepted = true;
 	errorMessage.clear();
