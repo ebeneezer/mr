@@ -180,19 +180,21 @@ bool LspDiagnosticsAdapter::consume(const LspInboundMessage &message, const LspD
 		return true;
 	}
 	if (!extractStringValue(message.payload, "uri", 0, batch.uri)) return setError(errorMessage, "publishDiagnostics is missing URI.");
-	if (!extractIntValue(message.payload, "version", 0, version)) return setError(errorMessage, "publishDiagnostics is missing version.");
-	batch.version = version;
+	if (extractIntValue(message.payload, "version", 0, version)) {
+		batch.version = version;
+		batch.hasVersion = true;
+	}
 	if (batch.uri != documentService.documentUri()) {
 		batch.rejected = true;
 		errorMessage.clear();
 		return true;
 	}
-	if (documentService.isStaleForSentVersion(batch.version)) {
+	if (batch.hasVersion && documentService.isStaleForSentVersion(batch.version)) {
 		batch.stale = true;
 		errorMessage.clear();
 		return true;
 	}
-	if (!documentService.matchesSentVersion(batch.version)) {
+	if (batch.hasVersion && !documentService.matchesSentVersion(batch.version)) {
 		batch.rejected = true;
 		errorMessage.clear();
 		return true;

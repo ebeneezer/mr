@@ -133,9 +133,32 @@ bool testDiagnosticsUriRejection(std::string &failureReason) {
 	return shutdownLifecycle(lifecycle, failureReason);
 }
 
+bool testDiagnosticsWithoutVersion(std::string &failureReason) {
+	mr::lsp::LspLifecycle lifecycle;
+	mr::lsp::LspDocumentService service(lifecycle);
+	mr::lsp::LspDiagnosticsAdapter adapter;
+	mr::lsp::LspInboundMessage inbound;
+	mr::lsp::LspDiagnosticBatch batch;
+	std::string errorMessage;
+
+	if (!startLifecycle(lifecycle, failureReason)) return false;
+	if (!expect(service.open(makeSourceSnapshot(1, "one"), errorMessage), "unversioned open: " + errorMessage, failureReason)) return false;
+	inbound.payload = "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":\"" + service.documentUri() +
+	                  "\",\"diagnostics\":[{\"range\":{\"end\":{\"line\":0,\"character\":3},\"start\":{\"line\":0,\"character\":0}},\"severity\":2,\"message\":\"unversioned diagnostic\"}]}}";
+	inbound.envelope = mr::lsp::parseJsonRpcEnvelope(inbound.payload);
+	if (!expect(adapter.consume(inbound, service, batch, errorMessage), "unversioned consume: " + errorMessage, failureReason)) return false;
+	if (!expect(batch.accepted, "unversioned diagnostics not accepted", failureReason)) return false;
+	if (!expect(!batch.hasVersion, "unversioned diagnostics has version", failureReason)) return false;
+	if (!expect(batch.version == 0, "unversioned diagnostics version", failureReason)) return false;
+	if (!expect(batch.diagnostics.size() == 1, "unversioned diagnostics count", failureReason)) return false;
+	if (!expect(batch.diagnostics[0].message == "unversioned diagnostic", "unversioned diagnostics message", failureReason)) return false;
+	return shutdownLifecycle(lifecycle, failureReason);
+}
+
 bool runProbe(std::string &failureReason) {
 	if (!testDiagnosticsVersionGate(failureReason)) return false;
 	if (!testDiagnosticsUriRejection(failureReason)) return false;
+	if (!testDiagnosticsWithoutVersion(failureReason)) return false;
 	return true;
 }
 } // namespace

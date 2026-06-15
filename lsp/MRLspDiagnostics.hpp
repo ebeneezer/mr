@@ -27,6 +27,7 @@ struct LspDiagnosticBatch {
 	std::string uri;
 	std::int64_t version = 0;
 	std::vector<LspDiagnostic> diagnostics;
+	bool hasVersion = false;
 	bool accepted = false;
 	bool stale = false;
 	bool rejected = false;
