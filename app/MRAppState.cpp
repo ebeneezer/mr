@@ -127,8 +127,8 @@ void updateAppCommandState() {
 
 	setCommandEnabled(cmMrEditUndo, canModify && state.hasUndo);
 	setCommandEnabled(cmMrEditRedo, canModify && state.hasRedo);
-	setCommandEnabled(cmMrEditCutToBuffer, canModify && state.hasSelection);
-	setCommandEnabled(cmMrEditCopyToBuffer, hasEditor && state.hasSelection);
+	setCommandEnabled(cmMrEditCutToBuffer, canModify && (state.hasSelection || state.hasBlock));
+	setCommandEnabled(cmMrEditCopyToBuffer, hasEditor && (state.hasSelection || state.hasBlock));
 	setCommandEnabled(cmMrEditAppendToBuffer, false);
 	setCommandEnabled(cmMrEditCutAndAppendToBuffer, false);
 	setCommandEnabled(cmMrEditPasteFromBuffer, canModify);

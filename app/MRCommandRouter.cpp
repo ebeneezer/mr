@@ -3138,6 +3138,9 @@ bool handleWindowMoveBlock(MREditWindow *window) {
 	return true;
 }
 
+bool handleEditCopyToSystemClipboard(MREditWindow *targetWindow);
+bool handleEditCutToSystemClipboard(MREditWindow *targetWindow);
+
 bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 	switch (command) {
 		case cmMrEditUndo:
@@ -3150,14 +3153,10 @@ bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 			return dispatchEditorCommandEvent(window, command);
 		case cmMrEditCutToBuffer:
 			if (window == nullptr) return false;
-			if (window->isReadOnly()) {
-				postDialogWarning(kWindowReadOnlyMessage);
-				return true;
-			}
-			return dispatchEditorCommandEvent(window, cmCut);
+			return handleEditCutToSystemClipboard(window);
 		case cmMrEditCopyToBuffer:
 			if (window == nullptr) return false;
-			return dispatchEditorCommandEvent(window, cmCopy);
+			return handleEditCopyToSystemClipboard(window);
 		case cmMrEditPasteFromBuffer:
 			if (window == nullptr) return false;
 			if (window->isReadOnly()) {
@@ -3437,6 +3436,36 @@ bool copyMarkedBlockToSystemClipboard(MREditWindow *targetWindow) {
 	return true;
 }
 
+bool handleEditCopyToSystemClipboard(MREditWindow *targetWindow) {
+	MREditWindow *window = effectiveKeymapWindow(targetWindow);
+
+	if (window == nullptr) return false;
+	if (window->hasSelection()) return dispatchEditorCommandEvent(window, cmCopy);
+	if (window->hasBlock()) return copyMarkedBlockToSystemClipboard(window);
+	return dispatchEditorCommandEvent(window, cmCopy);
+}
+
+bool handleEditCutToSystemClipboard(MREditWindow *targetWindow) {
+	MREditWindow *window = effectiveKeymapWindow(targetWindow);
+	std::string text;
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (window->isReadOnly()) {
+		postDialogWarning(kWindowReadOnlyMessage);
+		return true;
+	}
+	if (window->hasSelection()) return dispatchEditorCommandEvent(window, cmCut);
+	if (!window->hasBlock()) return dispatchEditorCommandEvent(window, cmCut);
+	if (!window->captureBlockPayload(text, &errorText)) {
+		postDialogWarning(errorText.empty() ? "No block marked." : errorText);
+		return true;
+	}
+	TClipboard::setText(TStringView(text.data(), text.size()));
+	if (!window->deleteBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to delete block." : errorText);
+	return true;
+}
+
 } // namespace
 
 bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequenceText, MREditWindow *targetWindow) {
@@ -3592,10 +3621,10 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return dispatchEditorCommand(cmMrEditRedo, true);
 
 		case cmMrEditCutToBuffer:
-			return dispatchEditorCommand(cmCut, true);
+			return handleEditCutToSystemClipboard(currentEditorCommandWindow());
 
 		case cmMrEditCopyToBuffer:
-			return dispatchEditorCommand(cmCopy, false);
+			return handleEditCopyToSystemClipboard(currentEditorCommandWindow());
 
 		case cmMrEditAppendToBuffer:
 		case cmMrEditCutAndAppendToBuffer:

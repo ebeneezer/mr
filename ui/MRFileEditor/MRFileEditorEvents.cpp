@@ -1,5 +1,7 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
+#include "../../app/MRCommands.hpp"
+#include "../../app/MRCommandRouter.hpp"
 #include "../../app/MREditorApp.hpp"
 
 #include <cstring>
@@ -314,11 +316,15 @@ void MRFileEditor::handleKeyDown(TEvent &event) {
 			clearEvent(event);
 			return;
 		case kbCtrlIns:
-			copySelection();
+			if (mBufferModel.hasSelection()) copySelection();
+			else
+				static_cast<void>(handleMRCommand(cmMrEditCopyToBuffer));
 			clearEvent(event);
 			return;
 		case kbShiftDel:
-			cutSelection();
+			if (mBufferModel.hasSelection()) cutSelection();
+			else
+				static_cast<void>(handleMRCommand(cmMrEditCutToBuffer));
 			clearEvent(event);
 			return;
 		default:
