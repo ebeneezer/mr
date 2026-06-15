@@ -101,7 +101,7 @@ std::string definitionResponse(const mr::lsp::JsonRpcEnvelope &envelope, const s
 	if (payload.find("\"character\":99") != std::string::npos) return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":null}";
 	if (payload.find("\"character\":98") != std::string::npos) return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":[]}";
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":[{\"targetUri\":" + jsonString(uri) +
-	       ",\"targetRange\":{\"start\":{\"line\":4,\"character\":0},\"end\":{\"line\":4,\"character\":12}},\"targetSelectionRange\":{\"start\":{\"line\":4,\"character\":2},\"end\":{\"line\":4,\"character\":9}}}]}";
+	       ",\"targetRange\":{\"end\":{\"line\":4,\"character\":12},\"start\":{\"line\":4,\"character\":0}},\"targetSelectionRange\":{\"end\":{\"line\":4,\"character\":9},\"start\":{\"line\":4,\"character\":2}}}]}";
 }
 
 std::string hoverResponse(const mr::lsp::JsonRpcEnvelope &envelope) {
@@ -112,7 +112,7 @@ std::string referencesResponse(const mr::lsp::JsonRpcEnvelope &envelope, const P
 	const std::string uri = state.documentUri.empty() ? "file:///tmp/mr.cpp" : state.documentUri;
 
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":[{\"uri\":" + jsonString(uri) +
-	       ",\"range\":{\"start\":{\"line\":1,\"character\":2},\"end\":{\"line\":1,\"character\":5}}},{\"uri\":\"file:///tmp/other.cpp\",\"range\":{\"start\":{\"line\":7,\"character\":1},\"end\":{\"line\":7,\"character\":8}}}]}";
+	       ",\"range\":{\"end\":{\"line\":1,\"character\":5},\"start\":{\"line\":1,\"character\":2}}},{\"uri\":\"file:///tmp/other.cpp\",\"range\":{\"end\":{\"line\":7,\"character\":8},\"start\":{\"line\":7,\"character\":1}}}]}";
 }
 
 std::string completionResponse(const mr::lsp::JsonRpcEnvelope &envelope) {

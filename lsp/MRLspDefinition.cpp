@@ -170,7 +170,7 @@ bool parseRangeObject(const std::string &object, LspLocation &location) {
 	const std::string range = object.substr(rangeStart, rangeEnd - rangeStart + 1);
 	if (!findKeyValueStart(range, "start", 0, startStart) || startStart >= range.size() || range[startStart] != '{') return false;
 	if (!findMatchingBracket(range, startStart, '{', '}', startEnd)) return false;
-	if (!findKeyValueStart(range, "end", startEnd, endStart) || endStart >= range.size() || range[endStart] != '{') return false;
+	if (!findKeyValueStart(range, "end", 0, endStart) || endStart >= range.size() || range[endStart] != '{') return false;
 	if (!findMatchingBracket(range, endStart, '{', '}', endEnd)) return false;
 	return parsePositionObject(range.substr(startStart, startEnd - startStart + 1), location.start) && parsePositionObject(range.substr(endStart, endEnd - endStart + 1), location.end);
 }
