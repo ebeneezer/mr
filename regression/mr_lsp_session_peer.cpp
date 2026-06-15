@@ -98,7 +98,8 @@ std::string diagnosticsNotification(const std::string &uri, int version, const s
 std::string definitionResponse(const mr::lsp::JsonRpcEnvelope &envelope, const PeerState &state) {
 	const std::string uri = state.documentUri.empty() ? "file:///tmp/mr.cpp" : state.documentUri;
 
-	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":{\"uri\":" + jsonString(uri) + ",\"range\":{\"start\":{\"line\":4,\"character\":2},\"end\":{\"line\":4,\"character\":9}}}}";
+	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":[{\"targetUri\":" + jsonString(uri) +
+	       ",\"targetRange\":{\"start\":{\"line\":4,\"character\":0},\"end\":{\"line\":4,\"character\":12}},\"targetSelectionRange\":{\"start\":{\"line\":4,\"character\":2},\"end\":{\"line\":4,\"character\":9}}}]}";
 }
 
 std::string hoverResponse(const mr::lsp::JsonRpcEnvelope &envelope) {

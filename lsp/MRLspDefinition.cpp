@@ -157,9 +157,7 @@ bool parsePositionObject(const std::string &text, LspTextPosition &position) {
 	return extractIntValue(text, "line", 0, position.line) && extractIntValue(text, "character", 0, position.character);
 }
 
-bool parseLocation(const std::string &payload, LspLocation &location) {
-	std::size_t resultStart = 0;
-	std::size_t resultEnd = 0;
+bool parseRangeObject(const std::string &object, LspLocation &location) {
 	std::size_t rangeStart = 0;
 	std::size_t rangeEnd = 0;
 	std::size_t startStart = 0;
@@ -167,18 +165,77 @@ bool parseLocation(const std::string &payload, LspLocation &location) {
 	std::size_t endStart = 0;
 	std::size_t endEnd = 0;
 
-	if (!findKeyValueStart(payload, "result", 0, resultStart) || resultStart >= payload.size() || payload[resultStart] != '{') return false;
-	if (!findMatchingBracket(payload, resultStart, '{', '}', resultEnd)) return false;
-	const std::string result = payload.substr(resultStart, resultEnd - resultStart + 1);
-	if (!extractStringValue(result, "uri", 0, location.uri)) return false;
-	if (!findKeyValueStart(result, "range", 0, rangeStart) || rangeStart >= result.size() || result[rangeStart] != '{') return false;
-	if (!findMatchingBracket(result, rangeStart, '{', '}', rangeEnd)) return false;
-	const std::string range = result.substr(rangeStart, rangeEnd - rangeStart + 1);
+	if (!findKeyValueStart(object, "range", 0, rangeStart) || rangeStart >= object.size() || object[rangeStart] != '{') return false;
+	if (!findMatchingBracket(object, rangeStart, '{', '}', rangeEnd)) return false;
+	const std::string range = object.substr(rangeStart, rangeEnd - rangeStart + 1);
 	if (!findKeyValueStart(range, "start", 0, startStart) || startStart >= range.size() || range[startStart] != '{') return false;
 	if (!findMatchingBracket(range, startStart, '{', '}', startEnd)) return false;
 	if (!findKeyValueStart(range, "end", startEnd, endStart) || endStart >= range.size() || range[endStart] != '{') return false;
 	if (!findMatchingBracket(range, endStart, '{', '}', endEnd)) return false;
 	return parsePositionObject(range.substr(startStart, startEnd - startStart + 1), location.start) && parsePositionObject(range.substr(endStart, endEnd - endStart + 1), location.end);
+}
+
+bool parseNamedRangeObject(const std::string &object, const std::string &rangeKey, LspLocation &location) {
+	std::size_t rangeStart = 0;
+	std::size_t rangeEnd = 0;
+
+	if (!findKeyValueStart(object, rangeKey, 0, rangeStart) || rangeStart >= object.size() || object[rangeStart] != '{') return false;
+	if (!findMatchingBracket(object, rangeStart, '{', '}', rangeEnd)) return false;
+	const std::string rangeObject = "{\"range\":" + object.substr(rangeStart, rangeEnd - rangeStart + 1) + "}";
+	return parseRangeObject(rangeObject, location);
+}
+
+bool parseLocationObject(const std::string &object, LspLocation &location) {
+	if (!extractStringValue(object, "uri", 0, location.uri)) return false;
+	return parseRangeObject(object, location);
+}
+
+bool parseLocationLinkObject(const std::string &object, LspLocation &location) {
+	if (!extractStringValue(object, "targetUri", 0, location.uri)) return false;
+	if (parseNamedRangeObject(object, "targetSelectionRange", location)) return true;
+	return parseNamedRangeObject(object, "targetRange", location);
+}
+
+bool parseDefinitionObject(const std::string &object, LspLocation &location) {
+	if (parseLocationObject(object, location)) return true;
+	return parseLocationLinkObject(object, location);
+}
+
+bool parseDefinitionResultArray(const std::string &arrayText, LspLocation &location) {
+	std::size_t arrayEnd = 0;
+	std::size_t pos = 1;
+
+	if (arrayText.empty() || arrayText[0] != '[') return false;
+	if (!findMatchingBracket(arrayText, 0, '[', ']', arrayEnd)) return false;
+	while (pos < arrayEnd) {
+		skipWhitespace(arrayText, pos);
+		if (pos >= arrayEnd) break;
+		if (arrayText[pos] == ',') {
+			++pos;
+			continue;
+		}
+		if (arrayText[pos] != '{') return false;
+		std::size_t objectEnd = 0;
+		if (!findMatchingBracket(arrayText, pos, '{', '}', objectEnd) || objectEnd > arrayEnd) return false;
+		return parseDefinitionObject(arrayText.substr(pos, objectEnd - pos + 1), location);
+	}
+	return false;
+}
+
+bool parseLocation(const std::string &payload, LspLocation &location) {
+	std::size_t resultStart = 0;
+	std::size_t resultEnd = 0;
+
+	if (!findKeyValueStart(payload, "result", 0, resultStart) || resultStart >= payload.size()) return false;
+	if (payload[resultStart] == '{') {
+		if (!findMatchingBracket(payload, resultStart, '{', '}', resultEnd)) return false;
+		return parseDefinitionObject(payload.substr(resultStart, resultEnd - resultStart + 1), location);
+	}
+	if (payload[resultStart] == '[') {
+		if (!findMatchingBracket(payload, resultStart, '[', ']', resultEnd)) return false;
+		return parseDefinitionResultArray(payload.substr(resultStart, resultEnd - resultStart + 1), location);
+	}
+	return false;
 }
 } // namespace
 
@@ -212,11 +269,6 @@ bool LspDefinitionAdapter::consume(const LspInboundMessage &message, const LspDo
 	}
 	if (request.method != "textDocument/definition") return setError(errorMessage, "LSP definition request method mismatch.");
 	if (!parseLocation(message.payload, location)) return setError(errorMessage, "LSP definition response location is malformed.");
-	if (location.uri != documentService.documentUri()) {
-		request.pending = false;
-		errorMessage.clear();
-		return true;
-	}
 	request.pending = false;
 	accepted = true;
 	errorMessage.clear();

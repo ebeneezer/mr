@@ -184,8 +184,9 @@ bool parseReferences(const std::string &payload, std::vector<LspLocation> &locat
 	std::size_t pos = 0;
 
 	locations.clear();
-	if (!findKeyValueStart(payload, "result", 0, arrayStart) || arrayStart >= payload.size() || payload[arrayStart] != '[')
-		return setError(errorMessage, "LSP references response result is not an array.");
+	if (!findKeyValueStart(payload, "result", 0, arrayStart) || arrayStart >= payload.size()) return setError(errorMessage, "LSP references response result is not an array.");
+	if (payload.compare(arrayStart, 4, "null") == 0) return true;
+	if (payload[arrayStart] != '[') return setError(errorMessage, "LSP references response result is not an array.");
 	if (!findMatchingBracket(payload, arrayStart, '[', ']', arrayEnd)) return setError(errorMessage, "LSP references response array is malformed.");
 	pos = arrayStart + 1;
 	while (pos < arrayEnd) {
