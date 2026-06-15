@@ -28,6 +28,7 @@
 #include "../app/MREditorApp.hpp"
 #include "../app/MRCommandRouter.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsEditSetup.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
@@ -3767,6 +3768,219 @@ bool testEditProfileDuplicateExactExtensionMacroGuard(std::string &failureReason
 	return true;
 }
 
+struct ProfileConformanceProbeValue {
+	const char *key;
+	const char *value;
+};
+
+static const ProfileConformanceProbeValue kProfileConformanceProbeValues[] = {
+    {"PAGE_BREAK", "\\n"},
+    {"WORD_DELIMITERS", "_:"},
+    {"DEFAULT_EXTENSIONS", "qsprof;mrq"},
+    {"TRUNCATE_SPACES", "false"},
+    {"EOF_CTRL_Z", "true"},
+    {"EOF_CR_LF", "true"},
+    {"TAB_EXPAND", "false"},
+    {"DISPLAY_TABS", "true"},
+    {"TAB_SIZE", "4"},
+    {"LEFT_MARGIN", "2"},
+    {"RIGHT_MARGIN", "96"},
+    {"FORMAT_RULER", "true"},
+    {"WORD_WRAP", "false"},
+    {"INDENT_STYLE", "SMART"},
+    {"CODE_LANGUAGE", "C"},
+    {"CODE_COLORING", "true"},
+    {"CODE_FOLDING", "true"},
+    {"FILE_TYPE", "BINARY"},
+    {"BINARY_RECORD_LENGTH", "256"},
+    {"POST_LOAD_MACRO", "/tmp/mr_regression_post_load.mrmac"},
+    {"PRE_SAVE_MACRO", "/tmp/mr_regression_pre_save.mrmac"},
+    {"DEFAULT_PATH", "/tmp"},
+    {"FORMAT_LINE", "L..|..R"},
+    {"BACKUP_FILES", "false"},
+    {"SHOW_EOF_MARKER", "true"},
+    {"SHOW_EOF_MARKER_EMOJI", "false"},
+    {"LINE_NUMBERS_POSITION", "TRAILING"},
+    {"LINE_NUM_ZERO_FILL", "true"},
+    {"MINIMAP_POSITION", "LEADING"},
+    {"MINIMAP_WIDTH", "7"},
+    {"MINIMAP_MARKER_GLYPH", "|"},
+    {"GUTTERS", "MCL"},
+    {"PERSISTENT_BLOCKS", "false"},
+    {"CODE_FOLDING_POSITION", "LEADING"},
+    {"BLOCK_MOVE", "LEAVE_SPACE"},
+    {"DEFAULT_MODE", "OVERWRITE"},
+    {"CURSOR_STATUS_COLOR", "5E"},
+};
+
+const char *profileConformanceProbeValueForKey(const char *key) {
+	for (std::size_t i = 0; i < sizeof(kProfileConformanceProbeValues) / sizeof(kProfileConformanceProbeValues[0]); ++i)
+		if (std::strcmp(kProfileConformanceProbeValues[i].key, key) == 0) return kProfileConformanceProbeValues[i].value;
+	return nullptr;
+}
+
+bool testEditProfileDescriptorConformanceGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	const std::string currentVersion = mrCurrentPersistenceVersionString();
+	const std::string themePath = "/tmp/mr_regression_profile_conformance_theme_" + std::to_string(static_cast<long>(::getpid())) + ".mrmac";
+	const std::string profileId = "profile_conformance";
+	MREditSetupSettings globalSettings = resolveEditSetupDefaults();
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	std::size_t descriptorCount = 0;
+	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
+	std::string source;
+	std::string rewritten;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+	const std::vector<MREditExtensionProfile> *profiles = nullptr;
+	MREditSetupSettings effective;
+	MREditSetupSettings fallback;
+	std::string matchedProfile;
+	std::string effectiveThemePath;
+
+	auto restore = [&]() {
+		::unlink(themePath.c_str());
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	globalSettings.tabSize = 11;
+	globalSettings.formatRuler = true;
+	globalSettings.lineNumbersPosition = "OFF";
+	globalSettings.showLineNumbers = false;
+	globalSettings.codeLanguage = "NONE";
+	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
+		restore();
+		failureReason = "Unable to seed globals for profile descriptor conformance: " + errorText;
+		return false;
+	}
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
+		restore();
+		failureReason = "Unable to clear profiles before descriptor conformance: " + errorText;
+		return false;
+	}
+
+	source = "$MACRO MR_SETTINGS FROM EDIT;\n";
+	source += "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n";
+	source += "MRFEPROFILE('DEFINE', '" + profileId + "', 'Profile Conformance', '');\n";
+	source += "MRFEPROFILE('EXT', '" + profileId + "', 'qsprof', '');\n";
+	source += "MRFEPROFILE('SET', '" + profileId + "', 'WINDOW_COLORTHEME_URI', '" + themePath + "');\n";
+	source += "MRFEPROFILE('SET', '" + profileId + "', 'COMPILER_PROFILE', 'MR_PROFILE_QS_COMPILER');\n";
+	for (std::size_t i = 0; i < descriptorCount; ++i) {
+		const MREditSettingDescriptor &descriptor = descriptors[i];
+		const char *value = profileConformanceProbeValueForKey(descriptor.key);
+
+		if (!descriptor.profileSupported) continue;
+		if (value == nullptr) {
+			restore();
+			failureReason = std::string("Profile-supported descriptor has no conformance probe value: ") + descriptor.key;
+			return false;
+		}
+		source += "MRFEPROFILE('SET', '" + profileId + "', '" + descriptor.key + "', '" + value + "');\n";
+	}
+	source += "END_MACRO;\n";
+
+	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
+		restore();
+		failureReason = "Unable to apply descriptor-driven MRFEPROFILE source: " + errorText;
+		return false;
+	}
+	profiles = &configuredEditExtensionProfiles();
+	if (profiles->size() != 1 || (*profiles)[0].id != profileId) {
+		restore();
+		failureReason = "Descriptor-driven MRFEPROFILE source did not create exactly one expected profile.";
+		return false;
+	}
+	if ((*profiles)[0].windowColorThemeUri != themePath || (*profiles)[0].compilerProfileId != "MR_PROFILE_QS_COMPILER") {
+		restore();
+		failureReason = "Special MRFEPROFILE SET tokens were not stored on the profile.";
+		return false;
+	}
+
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.qsprof", effective, &matchedProfile)) {
+		restore();
+		failureReason = "Effective settings lookup failed for descriptor conformance profile.";
+		return false;
+	}
+	if (matchedProfile != "Profile Conformance") {
+		restore();
+		failureReason = "Effective settings lookup did not report the descriptor conformance profile.";
+		return false;
+	}
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.none", fallback, &matchedProfile)) {
+		restore();
+		failureReason = "Fallback settings lookup failed during descriptor conformance.";
+		return false;
+	}
+	if (!matchedProfile.empty() || fallback != configuredEditSetupSettings()) {
+		restore();
+		failureReason = "Non-matching extension did not preserve global edit settings.";
+		return false;
+	}
+	if (!effectiveEditWindowColorThemePathForPath("/tmp/example.qsprof", effectiveThemePath, &matchedProfile)) {
+		restore();
+		failureReason = "Effective theme lookup failed for descriptor conformance profile.";
+		return false;
+	}
+	if (effectiveThemePath != themePath || matchedProfile != "Profile Conformance") {
+		restore();
+		failureReason = "WINDOW_COLORTHEME_URI did not participate in profile-specific lookup.";
+		return false;
+	}
+
+	for (std::size_t i = 0; i < descriptorCount; ++i) {
+		const MREditSettingDescriptor &descriptor = descriptors[i];
+		std::string expected;
+		std::string actual;
+
+		if (!descriptor.profileSupported) continue;
+		if (((*profiles)[0].overrides.mask & descriptor.overrideBit) == 0) {
+			restore();
+			failureReason = std::string("MRFEPROFILE SET did not set override bit for ") + descriptor.key;
+			return false;
+		}
+		expected = editSetupValueLiteral((*profiles)[0].overrides.values, descriptor.key);
+		actual = editSetupValueLiteral(effective, descriptor.key);
+		if (expected != actual) {
+			restore();
+			failureReason = std::string("Effective profile merge mismatch for ") + descriptor.key;
+			return false;
+		}
+	}
+
+	paths.settingsMacroUri = snapshot.settingsMacroFilePath;
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+	rewritten = buildSettingsMacroSource(paths);
+	if (rewritten.find("MRFEPROFILE('SET', '" + profileId + "', 'WINDOW_COLORTHEME_URI', '" + themePath + "');") == std::string::npos ||
+	    rewritten.find("MRFEPROFILE('SET', '" + profileId + "', 'COMPILER_PROFILE', 'MR_PROFILE_QS_COMPILER');") == std::string::npos) {
+		restore();
+		failureReason = "Profile serializer did not emit special profile SET tokens.";
+		return false;
+	}
+	for (std::size_t i = 0; i < descriptorCount; ++i) {
+		const MREditSettingDescriptor &descriptor = descriptors[i];
+		const std::string needle = "MRFEPROFILE('SET', '" + profileId + "', '" + descriptor.key + "', '";
+
+		if (!descriptor.profileSupported) continue;
+		if (rewritten.find(needle) == std::string::npos) {
+			restore();
+			failureReason = std::string("Profile serializer did not emit descriptor token ") + descriptor.key;
+			return false;
+		}
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after descriptor profile conformance: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testPathsBrowseEventGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	const std::string root = "/tmp/mr_regression_paths_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
@@ -3831,6 +4045,205 @@ bool testPathsBrowseEventGuard(std::string &failureReason) {
 
 	if (!restore()) {
 		failureReason = "Unable to restore runtime settings after paths roundtrip probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+struct ColorGroupConformanceEntry {
+	MRColorSetupGroup group;
+	const char *key;
+	std::size_t expectedCount;
+};
+
+static const ColorGroupConformanceEntry kColorGroupConformanceEntries[] = {
+    {MRColorSetupGroup::Window, "WINDOWCOLORS", MRColorSetupSettings::kWindowCount},
+    {MRColorSetupGroup::MenuDialog, "MENUDIALOGCOLORS", MRColorSetupSettings::kMenuDialogCount},
+    {MRColorSetupGroup::Help, "HELPCOLORS", MRColorSetupSettings::kHelpCount},
+    {MRColorSetupGroup::Other, "OTHERCOLORS", MRColorSetupSettings::kOtherCount},
+    {MRColorSetupGroup::MiniMap, "MINIMAPCOLORS", MRColorSetupSettings::kMiniMapCount},
+    {MRColorSetupGroup::FileCompareMiniMap, "FILECOMPAREMINIMAPCOLORS", MRColorSetupSettings::kFileCompareMiniMapCount},
+    {MRColorSetupGroup::Code, "CODECOLORS", MRColorSetupSettings::kCodeCount},
+    {MRColorSetupGroup::FileCompare, "FILECOMPARECOLORS", MRColorSetupSettings::kFileCompareCount},
+};
+
+struct ColorGroupAliasEntry {
+	MRColorSetupGroup group;
+	const char *firstName;
+	const char *secondName;
+};
+
+static const ColorGroupAliasEntry kAllowedColorGroupAliases[] = {
+    {MRColorSetupGroup::Help, "Help-Text", "help-attr-1"},
+    {MRColorSetupGroup::Help, "help-Highlight", "help-Link"},
+    {MRColorSetupGroup::Help, "help-Highlight", "help-attr-2"},
+    {MRColorSetupGroup::Help, "help-Link", "help-attr-2"},
+    {MRColorSetupGroup::Help, "help-Chapter", "help-F-keys"},
+    {MRColorSetupGroup::Help, "help-Chapter", "help-attr-3"},
+    {MRColorSetupGroup::Help, "help-F-keys", "help-attr-3"},
+};
+
+bool colorGroupAliasAllowed(MRColorSetupGroup group, const char *firstName, const char *secondName) {
+	for (std::size_t i = 0; i < sizeof(kAllowedColorGroupAliases) / sizeof(kAllowedColorGroupAliases[0]); ++i) {
+		const ColorGroupAliasEntry &entry = kAllowedColorGroupAliases[i];
+
+		if (entry.group != group) continue;
+		if (std::strcmp(entry.firstName, firstName) == 0 && std::strcmp(entry.secondName, secondName) == 0) return true;
+		if (std::strcmp(entry.firstName, secondName) == 0 && std::strcmp(entry.secondName, firstName) == 0) return true;
+	}
+	return false;
+}
+
+bool colorGroupValueAt(const MRColorSetupSettings &settings, MRColorSetupGroup group, std::size_t index, unsigned char &outValue) {
+	switch (group) {
+		case MRColorSetupGroup::Window:
+			if (index >= settings.windowColors.size()) return false;
+			outValue = settings.windowColors[index];
+			return true;
+		case MRColorSetupGroup::MenuDialog:
+			if (index >= settings.menuDialogColors.size()) return false;
+			outValue = settings.menuDialogColors[index];
+			return true;
+		case MRColorSetupGroup::Help:
+			if (index >= settings.helpColors.size()) return false;
+			outValue = settings.helpColors[index];
+			return true;
+		case MRColorSetupGroup::Other:
+			if (index >= settings.otherColors.size()) return false;
+			outValue = settings.otherColors[index];
+			return true;
+		case MRColorSetupGroup::MiniMap:
+			if (index >= settings.miniMapColors.size()) return false;
+			outValue = settings.miniMapColors[index];
+			return true;
+		case MRColorSetupGroup::FileCompareMiniMap:
+			if (index >= settings.fileCompareMiniMapColors.size()) return false;
+			outValue = settings.fileCompareMiniMapColors[index];
+			return true;
+		case MRColorSetupGroup::Code:
+			if (index >= settings.codeColors.size()) return false;
+			outValue = settings.codeColors[index];
+			return true;
+		case MRColorSetupGroup::FileCompare:
+			if (index >= settings.fileCompareColors.size()) return false;
+			outValue = settings.fileCompareColors[index];
+			return true;
+	}
+	return false;
+}
+
+bool restoreColorGroupValues(MRColorSetupGroup group, const MRColorSetupSettings &settings, std::string &errorText) {
+	switch (group) {
+		case MRColorSetupGroup::Window:
+			return setConfiguredColorSetupGroupValues(group, settings.windowColors.data(), settings.windowColors.size(), &errorText);
+		case MRColorSetupGroup::MenuDialog:
+			return setConfiguredColorSetupGroupValues(group, settings.menuDialogColors.data(), settings.menuDialogColors.size(), &errorText);
+		case MRColorSetupGroup::Help:
+			return setConfiguredColorSetupGroupValues(group, settings.helpColors.data(), settings.helpColors.size(), &errorText);
+		case MRColorSetupGroup::Other:
+			return setConfiguredColorSetupGroupValues(group, settings.otherColors.data(), settings.otherColors.size(), &errorText);
+		case MRColorSetupGroup::MiniMap:
+			return setConfiguredColorSetupGroupValues(group, settings.miniMapColors.data(), settings.miniMapColors.size(), &errorText);
+		case MRColorSetupGroup::FileCompareMiniMap:
+			return setConfiguredColorSetupGroupValues(group, settings.fileCompareMiniMapColors.data(), settings.fileCompareMiniMapColors.size(), &errorText);
+		case MRColorSetupGroup::Code:
+			return setConfiguredColorSetupGroupValues(group, settings.codeColors.data(), settings.codeColors.size(), &errorText);
+		case MRColorSetupGroup::FileCompare:
+			return setConfiguredColorSetupGroupValues(group, settings.fileCompareColors.data(), settings.fileCompareColors.size(), &errorText);
+	}
+	errorText = "Unknown color group.";
+	return false;
+}
+
+bool testColorThemeInventoryConformanceGuard(std::string &failureReason) {
+	MRColorSetupSettings previous = configuredColorSetupSettings();
+	MRColorSetupSettings defaults = resolveColorSetupDefaults();
+	std::string source = buildColorThemeMacroSource(defaults);
+	std::string errorText;
+	std::string restoreError;
+	bool restored = true;
+
+	auto restore = [&]() {
+		for (std::size_t i = 0; i < sizeof(kColorGroupConformanceEntries) / sizeof(kColorGroupConformanceEntries[0]); ++i)
+			if (!restoreColorGroupValues(kColorGroupConformanceEntries[i].group, previous, restoreError)) restored = false;
+	};
+
+	for (std::size_t groupIndex = 0; groupIndex < sizeof(kColorGroupConformanceEntries) / sizeof(kColorGroupConformanceEntries[0]); ++groupIndex) {
+		const ColorGroupConformanceEntry &entry = kColorGroupConformanceEntries[groupIndex];
+		const MRColorSetupItem *items = nullptr;
+		std::size_t count = 0;
+		std::vector<unsigned char> probeValues;
+		unsigned char overrideValue = 0;
+
+		if (std::strcmp(colorSetupGroupKey(entry.group), entry.key) != 0) {
+			failureReason = std::string("Color setup group key mismatch for ") + entry.key;
+			return false;
+		}
+		if (colorSetupGroupTitle(entry.group) == nullptr || colorSetupGroupTitle(entry.group)[0] == '\0') {
+			failureReason = std::string("Color setup group has no visible title: ") + entry.key;
+			return false;
+		}
+		if (source.find(std::string(entry.key) + "('") == std::string::npos) {
+			failureReason = std::string("Theme serializer did not emit color group ") + entry.key;
+			return false;
+		}
+
+		items = colorSetupGroupItems(entry.group, count);
+		if (items == nullptr || count != entry.expectedCount) {
+			failureReason = std::string("Color setup item count mismatch for ") + entry.key;
+			return false;
+		}
+		probeValues.resize(count);
+		for (std::size_t i = 0; i < count; ++i) {
+			bool duplicateSlot = false;
+
+			if (items[i].label == nullptr || items[i].label[0] == '\0') {
+				failureReason = std::string("Color setup item without name in ") + entry.key;
+				return false;
+			}
+			for (std::size_t j = 0; j < i; ++j)
+				if (items[j].paletteIndex == items[i].paletteIndex) {
+					if (!colorGroupAliasAllowed(entry.group, items[j].label, items[i].label)) {
+						failureReason = std::string("Undocumented color setup alias in ") + entry.key + ": " + items[j].label + " / " + items[i].label;
+						return false;
+					}
+					probeValues[i] = probeValues[j];
+					duplicateSlot = true;
+					break;
+				}
+			if (!duplicateSlot) probeValues[i] = static_cast<unsigned char>(0x20 + ((groupIndex * 19 + i) % 0x5F));
+		}
+
+		if (!setConfiguredColorSetupGroupValues(entry.group, probeValues.data(), probeValues.size(), &errorText)) {
+			restore();
+			failureReason = std::string("Unable to set probe values for ") + entry.key + ": " + errorText;
+			return false;
+		}
+		for (std::size_t i = 0; i < count; ++i) {
+			unsigned char runtimeValue = 0;
+
+			if (!colorGroupValueAt(configuredColorSetupSettings(), entry.group, i, runtimeValue) || runtimeValue != probeValues[i]) {
+				restore();
+				failureReason = std::string("Runtime color setup value mismatch for ") + entry.key;
+				return false;
+			}
+			if (!configuredColorSlotOverride(items[i].paletteIndex, overrideValue)) {
+				restore();
+				failureReason = std::string("configuredColorSlotOverride does not expose ") + entry.key + " slot " + items[i].label;
+				return false;
+			}
+			if (overrideValue != probeValues[i]) {
+				restore();
+				failureReason = std::string("Color slot override mismatch for ") + entry.key + " slot " + items[i].label;
+				return false;
+			}
+		}
+	}
+
+	restore();
+	if (!restored) {
+		failureReason = "Unable to restore color setup after inventory conformance: " + restoreError;
 		return false;
 	}
 	failureReason.clear();
@@ -4167,11 +4580,38 @@ bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason
 
 bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F};
+	struct CodeColorInventoryEntry {
+		const char *name;
+		const char *paletteMacro;
+		unsigned char paletteIndex;
+		bool tokenColorConsumer;
+		bool sidekickConsumer;
+		bool explicitReserve;
+	};
+	static const CodeColorInventoryEntry codeColorInventory[] = {
+	    {"comments", "kMrPaletteCodeComments", kMrPaletteCodeComments, true, false, false},
+	    {"strings", "kMrPaletteCodeStrings", kMrPaletteCodeStrings, true, false, false},
+	    {"characters", "kMrPaletteCodeCharacters", kMrPaletteCodeCharacters, false, false, true},
+	    {"numbers", "kMrPaletteCodeNumbers", kMrPaletteCodeNumbers, true, false, false},
+	    {"keywords", "kMrPaletteCodeKeywords", kMrPaletteCodeKeywords, true, false, false},
+	    {"types", "kMrPaletteCodeTypes", kMrPaletteCodeTypes, true, false, false},
+	    {"directives", "kMrPaletteCodeDirectives", kMrPaletteCodeDirectives, true, false, false},
+	    {"functions", "kMrPaletteCodeFunctions", kMrPaletteCodeFunctions, false, false, true},
+	    {"builtins", "kMrPaletteCodeBuiltins", kMrPaletteCodeBuiltins, false, false, true},
+	    {"constants", "kMrPaletteCodeConstants", kMrPaletteCodeConstants, true, false, false},
+	    {"operators", "kMrPaletteCodeOperators", kMrPaletteCodeOperators, false, false, true},
+	    {"brackets", "kMrPaletteCodeBrackets", kMrPaletteCodeBrackets, false, false, true},
+	    {"delimiters", "kMrPaletteCodeDelimiters", kMrPaletteCodeDelimiters, true, false, false},
+	    {"sidekick editor text", "kMrPaletteSidekickEditorText", kMrPaletteSidekickEditorText, false, true, false},
+	    {"sidekick editor highlight", "kMrPaletteSidekickEditorHighlight", kMrPaletteSidekickEditorHighlight, false, true, false},
+	};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Code, itemCount);
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
+	const std::string sidekickPath = absolutePathFromCwd("ui/MRSidekickEditor.cpp");
 	std::string viewportContent;
+	std::string sidekickContent;
 	std::string tokenColorFunction;
 	std::string errorText;
 	unsigned char value = 0;
@@ -4182,9 +4622,15 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, previous.codeColors.data(), previous.codeColors.size(), &errorText);
 	};
 
-	if (items == nullptr || itemCount != sizeof(probeValues) / sizeof(probeValues[0])) {
+	if (items == nullptr || itemCount != sizeof(probeValues) / sizeof(probeValues[0]) || itemCount != sizeof(codeColorInventory) / sizeof(codeColorInventory[0])) {
 		failureReason = "Unexpected CODECOLORS item mapping.";
 		return false;
+	}
+	for (std::size_t i = 0; i < itemCount; ++i) {
+		if (std::strcmp(items[i].label, codeColorInventory[i].name) != 0 || items[i].paletteIndex != codeColorInventory[i].paletteIndex) {
+			failureReason = "CODECOLORS inventory order, name or palette slot changed without updating the conformance guard.";
+			return false;
+		}
 	}
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
 		failureReason = "Unable to set CODECOLORS probe values: " + errorText;
@@ -4206,6 +4652,11 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	if (!readTextFile(viewportPath, viewportContent, errorText)) {
 		restore();
 		failureReason = "Unable to read MRFileEditorViewport.cpp for code color guard: " + errorText;
+		return false;
+	}
+	if (!readTextFile(sidekickPath, sidekickContent, errorText)) {
+		restore();
+		failureReason = "Unable to read MRSidekickEditor.cpp for code color guard: " + errorText;
 		return false;
 	}
 	const std::size_t tokenColorStart = viewportContent.find("TColorAttr MRFileEditor::tokenColor");
@@ -4230,6 +4681,32 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 		restore();
 		failureReason = "Code token colors must not mask configured colors down to foreground.";
 		return false;
+	}
+	for (std::size_t i = 0; i < itemCount; ++i) {
+		const CodeColorInventoryEntry &entry = codeColorInventory[i];
+		const bool usedByTokenColor = tokenColorFunction.find(entry.paletteMacro) != std::string::npos;
+		const bool usedBySidekick = sidekickContent.find(entry.paletteMacro) != std::string::npos;
+
+		if (entry.tokenColorConsumer && !usedByTokenColor) {
+			restore();
+			failureReason = std::string("CODECOLORS token consumer is missing for ") + entry.name;
+			return false;
+		}
+		if (entry.sidekickConsumer && !usedBySidekick) {
+			restore();
+			failureReason = std::string("CODECOLORS sidekick consumer is missing for ") + entry.name;
+			return false;
+		}
+		if (entry.explicitReserve && (usedByTokenColor || usedBySidekick)) {
+			restore();
+			failureReason = std::string("CODECOLORS reserve slot gained a consumer without contract update: ") + entry.name;
+			return false;
+		}
+		if (!entry.tokenColorConsumer && !entry.sidekickConsumer && !entry.explicitReserve) {
+			restore();
+			failureReason = std::string("CODECOLORS slot is neither consumed nor explicitly reserved: ") + entry.name;
+			return false;
+		}
 	}
 
 	restore();
@@ -6614,6 +7091,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Legacy MREDITPROFILE drop-to-defaults", testLegacyEditProfileMacroDropToDefaultsGuard);
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
+	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
@@ -6621,6 +7099,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
+	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
@@ -6685,6 +7164,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Legacy MREDITPROFILE drop-to-defaults", testLegacyEditProfileMacroDropToDefaultsGuard);
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
+	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
@@ -6692,6 +7172,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
+	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
