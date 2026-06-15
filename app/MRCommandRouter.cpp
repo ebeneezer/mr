@@ -1921,21 +1921,21 @@ bool showLspCodeActionsDialog(const mr::services::MRServiceCodeActionResult &res
 			postLspWarning("LSP code actions unavailable.");
 		return true;
 	}
+	if (result.items.empty()) {
+		postLspWarning("LSP code actions: no actions available.");
+		return true;
+	}
 
-	visibleRows = result.items.empty() ? 1 : static_cast<short>(std::max<int>(4, std::min<int>(static_cast<int>(result.items.size()), 12)));
+	visibleRows = static_cast<short>(std::max<int>(4, std::min<int>(static_cast<int>(result.items.size()), 12)));
 	height = static_cast<short>(visibleRows + 6);
 	buttonY = static_cast<short>(height - 3);
 	dialog = mr::dialogs::createScrollableDialog("LSP CODE ACTIONS", width, height);
 	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Available actions:"));
-	if (result.items.empty()) {
-		dialog->insert(new TStaticText(TRect(2, 3, width - 2, 4), "No code actions available for this diagnostic."));
-	} else {
-		scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
-		dialog->insert(scrollBar);
-		listView = new LspCodeActionListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.items);
-		listView->focusItemNum(0);
-		dialog->insert(listView);
-	}
+	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+	dialog->insert(scrollBar);
+	listView = new LspCodeActionListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.items);
+	listView->focusItemNum(0);
+	dialog->insert(listView);
 	{
 		const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~O~K", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
@@ -2231,6 +2231,8 @@ bool showLspResultsDialog() {
 	for (const mr::services::MRServiceCodeActionResult &result : results.codeActionResults()) {
 		std::size_t visibleCodeActionItems = std::min<std::size_t>(result.items.size(), 30);
 		LspResultDialogRow summaryRow;
+
+		if (result.items.empty()) continue;
 
 		rowText.str(std::string());
 		rowText.clear();
