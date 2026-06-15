@@ -163,7 +163,8 @@ bool parseDiagnosticsArray(const std::string &payload, std::vector<LspDiagnostic
 		std::size_t objectEnd = 0;
 		if (!findMatchingBracket(payload, pos, '{', '}', objectEnd) || objectEnd > arrayEnd) return setError(errorMessage, "publishDiagnostics diagnostic object is malformed.");
 		LspDiagnostic diagnostic;
-		if (!parseDiagnosticObject(payload.substr(pos, objectEnd - pos + 1), diagnostic)) return setError(errorMessage, "publishDiagnostics diagnostic fields are malformed.");
+		diagnostic.rawJson = payload.substr(pos, objectEnd - pos + 1);
+		if (!parseDiagnosticObject(diagnostic.rawJson, diagnostic)) return setError(errorMessage, "publishDiagnostics diagnostic fields are malformed.");
 		diagnostics.push_back(diagnostic);
 		pos = objectEnd + 1;
 	}

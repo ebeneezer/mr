@@ -72,6 +72,7 @@ bool testDiagnosticsConversion(std::string &failureReason) {
 	batch.diagnostics[0].range.endCharacter = 7;
 	batch.diagnostics[0].severity = 2;
 	batch.diagnostics[0].message = "deterministic diagnostic";
+	batch.diagnostics[0].rawJson = "{\"message\":\"deterministic diagnostic\"}";
 
 	const mr::services::MRServiceDiagnosticResult result = mr::services::buildServiceDiagnosticsFromLsp(workspace, batch);
 	if (!expect(result.header.state == mr::services::MRServiceResultState::Current, "diagnostics state", failureReason)) return false;
@@ -80,7 +81,9 @@ bool testDiagnosticsConversion(std::string &failureReason) {
 	if (!expect(result.header.identity.documentVersion == 5, "diagnostics version", failureReason)) return false;
 	if (!expect(result.diagnostics.size() == 1, "diagnostics count", failureReason)) return false;
 	if (!expect(result.diagnostics[0].message == "deterministic diagnostic", "diagnostics message", failureReason)) return false;
-	if (!expect(result.diagnostics[0].range.start.character == 3, "diagnostics range", failureReason)) return false;
+	if (!expect(result.diagnostics[0].reportedRange.start.character == 3, "diagnostics reported range", failureReason)) return false;
+	if (!expect(result.diagnostics[0].navigationRange.start.character == 3, "diagnostics navigation range", failureReason)) return false;
+	if (!expect(result.diagnostics[0].rawLspDiagnosticJson.find("deterministic diagnostic") != std::string::npos, "diagnostics raw json", failureReason)) return false;
 	return true;
 }
 

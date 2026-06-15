@@ -70,9 +70,11 @@ struct MRServiceResultHeader {
 };
 
 struct MRServiceDiagnosticEntry {
-	MRServiceTextRange range;
+	MRServiceTextRange reportedRange;
+	MRServiceTextRange navigationRange;
 	int severity = 0;
 	std::string message;
+	std::string rawLspDiagnosticJson;
 };
 
 struct MRServiceLocationTarget {

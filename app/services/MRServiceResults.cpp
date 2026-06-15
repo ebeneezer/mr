@@ -216,9 +216,11 @@ MRServiceDiagnosticResult buildServiceDiagnosticsFromLsp(const MRWorkspaceServic
 	applyBatchState(batch, result.header);
 	for (const mr::lsp::LspDiagnostic &diagnostic : batch.diagnostics) {
 		MRServiceDiagnosticEntry entry;
-		entry.range = serviceRangeFromLsp(diagnostic.range);
+		entry.reportedRange = serviceRangeFromLsp(diagnostic.range);
+		entry.navigationRange = entry.reportedRange;
 		entry.severity = diagnostic.severity;
 		entry.message = diagnostic.message;
+		entry.rawLspDiagnosticJson = diagnostic.rawJson;
 		result.diagnostics.push_back(entry);
 	}
 	return result;

@@ -152,6 +152,7 @@ bool testDiagnosticsWithoutVersion(std::string &failureReason) {
 	if (!expect(batch.version == 0, "unversioned diagnostics version", failureReason)) return false;
 	if (!expect(batch.diagnostics.size() == 1, "unversioned diagnostics count", failureReason)) return false;
 	if (!expect(batch.diagnostics[0].message == "unversioned diagnostic", "unversioned diagnostics message", failureReason)) return false;
+	if (!expect(batch.diagnostics[0].rawJson.find("unversioned diagnostic") != std::string::npos, "unversioned diagnostics raw json", failureReason)) return false;
 	return shutdownLifecycle(lifecycle, failureReason);
 }
 

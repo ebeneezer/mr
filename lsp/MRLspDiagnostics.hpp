@@ -21,6 +21,7 @@ struct LspDiagnostic {
 	LspDiagnosticRange range;
 	int severity = 0;
 	std::string message;
+	std::string rawJson;
 };
 
 struct LspDiagnosticBatch {

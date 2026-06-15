@@ -1986,7 +1986,7 @@ bool showLspResultsDialog() {
 			rowText.str(std::string());
 			rowText.clear();
 			rowText << "DIAG " << lspDiagnosticSeverityText(diagnostic.severity) << " [" << lspResultStateText(result.header.state) << "] ";
-			rowText << (diagnostic.range.start.line + 1) << ":" << (diagnostic.range.start.character + 1) << " ";
+			rowText << (diagnostic.reportedRange.start.line + 1) << ":" << (diagnostic.reportedRange.start.character + 1) << " ";
 			if (!result.header.identity.path.empty()) rowText << result.header.identity.path << " - ";
 			rowText << firstDisplayLine(diagnostic.message, 80);
 			row.text = rowText.str();
@@ -1994,7 +1994,7 @@ bool showLspResultsDialog() {
 				row.action = LspResultDialogAction::NavigateLocation;
 				row.location.path = result.header.identity.path;
 				row.location.uri = result.header.identity.uri;
-				row.location.range = diagnostic.range;
+				row.location.range = diagnostic.navigationRange;
 			}
 			rows.push_back(row);
 		}
@@ -2136,7 +2136,7 @@ void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnostic
 		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
 		if (!result.diagnostics.empty()) {
 			const mr::services::MRServiceDiagnosticEntry &diagnostic = result.diagnostics[0];
-			line << ":" << (diagnostic.range.start.line + 1) << ":" << (diagnostic.range.start.character + 1);
+			line << ":" << (diagnostic.reportedRange.start.line + 1) << ":" << (diagnostic.reportedRange.start.character + 1);
 			line << " " << lspDiagnosticSeverityText(diagnostic.severity);
 			line << " - " << firstDisplayLine(diagnostic.message, 120);
 		}
