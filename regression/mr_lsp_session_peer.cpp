@@ -114,7 +114,7 @@ std::string referencesResponse(const mr::lsp::JsonRpcEnvelope &envelope, const P
 
 std::string completionResponse(const mr::lsp::JsonRpcEnvelope &envelope) {
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText +
-	       ",\"result\":{\"isIncomplete\":false,\"items\":[{\"label\":\"main\",\"kind\":3,\"detail\":\"int main()\",\"insertText\":\"main\"},{\"label\":\"macroValue\",\"kind\":6,\"detail\":\"int\"}]}}";
+	       ",\"result\":{\"isIncomplete\":false,\"items\":[{\"label\":\"main\",\"kind\":3,\"labelDetails\":{\"detail\":null},\"detail\":\"int\\u0020main()\",\"insertText\":\"ma\\u0069n\"},{\"label\":\"macroValue\",\"kind\":6,\"detail\":\"int\"}]}}";
 }
 
 void emitDiagnostics(const std::string &uri, int version, const std::string &message) {

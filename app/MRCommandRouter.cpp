@@ -47,6 +47,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <unistd.h>
 
 #include "../dialogs/MRFileInformation.hpp"
 #include "../dialogs/MRAcquireDialog.hpp"
@@ -310,6 +311,7 @@ std::string g_lspLastRequestState = "idle";
 std::string g_lspLastServerExecutable;
 std::string g_lspLastServerWorkingDirectory;
 std::string g_lspLastServerArguments;
+std::string g_lspLastServerConfigurationSource;
 std::string g_lspLastError;
 std::string g_lspLastPollError;
 
@@ -1124,6 +1126,116 @@ bool buildLspServerProfileFromEnvironment(mr::services::MRLspServerProfile &prof
 	return true;
 }
 
+struct LspServerStartEntry {
+	MRSyntaxLanguage language;
+	const char *profileName;
+	const char *executableName;
+	const char *argument1;
+	const char *argument2;
+};
+
+const LspServerStartEntry lspServerStartTable[] = {
+	{ MRSyntaxLanguage::C, "builtin-c-clangd", "clangd", nullptr, nullptr },
+	{ MRSyntaxLanguage::Cpp, "builtin-cpp-clangd", "clangd", nullptr, nullptr },
+};
+
+bool isExecutableFile(const std::string &path) {
+	return !path.empty() && ::access(path.c_str(), X_OK) == 0;
+}
+
+bool executableNameHasPath(const std::string &name) {
+	return name.find('/') != std::string::npos;
+}
+
+bool findExecutableOnPath(const std::string &executableName, std::string &resolvedPath) {
+	const char *pathEnvironment = std::getenv("PATH");
+	std::string pathText = pathEnvironment != nullptr ? pathEnvironment : "";
+	std::size_t start = 0;
+
+	resolvedPath.clear();
+	if (executableName.empty()) return false;
+	if (executableNameHasPath(executableName)) {
+		if (!isExecutableFile(executableName)) return false;
+		resolvedPath = executableName;
+		return true;
+	}
+
+	while (start <= pathText.size()) {
+		std::size_t end = pathText.find(':', start);
+		std::string directory;
+		std::string candidate;
+
+		if (end == std::string::npos) end = pathText.size();
+		directory = pathText.substr(start, end - start);
+		if (directory.empty()) directory = ".";
+		candidate = directory;
+		if (!candidate.empty() && candidate[candidate.size() - 1] != '/') candidate += "/";
+		candidate += executableName;
+		if (isExecutableFile(candidate)) {
+			resolvedPath = candidate;
+			return true;
+		}
+		if (end == pathText.size()) break;
+		start = end + 1;
+	}
+	return false;
+}
+
+const LspServerStartEntry *findBuiltInLspServerStartEntry(MRSyntaxLanguage language) {
+	const std::size_t entryCount = sizeof(lspServerStartTable) / sizeof(lspServerStartTable[0]);
+
+	for (std::size_t index = 0; index < entryCount; ++index) {
+		if (lspServerStartTable[index].language == language) return &lspServerStartTable[index];
+	}
+	return nullptr;
+}
+
+void appendLspServerStartArguments(mr::services::MRLspServerProfile &profile, const LspServerStartEntry &entry) {
+	if (entry.argument1 != nullptr && entry.argument1[0] != '\0') profile.arguments.push_back(entry.argument1);
+	if (entry.argument2 != nullptr && entry.argument2[0] != '\0') profile.arguments.push_back(entry.argument2);
+}
+
+bool buildLspServerProfileFromEditor(const MRFileEditor &editor, mr::services::MRLspServerProfile &profile, std::string &configurationSource, std::string &errorMessage) {
+	const LspServerStartEntry *entry = nullptr;
+	std::string executablePath;
+
+	profile = mr::services::MRLspServerProfile();
+	configurationSource.clear();
+	errorMessage.clear();
+
+	if (buildLspServerProfileFromEnvironment(profile)) {
+		configurationSource = "MR_LSP_SERVER";
+		return true;
+	}
+
+	entry = findBuiltInLspServerStartEntry(editor.syntaxLanguage());
+	if (entry == nullptr) {
+		errorMessage = std::string("No built-in LSP server for language ") + editor.syntaxLanguageName() + ". Set MR_LSP_SERVER.";
+		return false;
+	}
+	if (!findExecutableOnPath(entry->executableName, executablePath)) {
+		errorMessage = std::string("Built-in LSP server for language ") + editor.syntaxLanguageName() + " is not executable or not in PATH: " + entry->executableName;
+		return false;
+	}
+
+	profile.profileName = entry->profileName;
+	profile.executablePath = executablePath;
+	appendLspServerStartArguments(profile, *entry);
+	profile.workingDirectory.clear();
+	configurationSource = std::string("built-in language mapping: ") + editor.syntaxLanguageName();
+	return true;
+}
+
+std::string lspServerProfileArgumentText(const mr::services::MRLspServerProfile &profile) {
+	std::ostringstream argumentText;
+
+	for (std::size_t i = 0; i < profile.arguments.size(); ++i) {
+		if (i != 0) argumentText << " ";
+		argumentText << profile.arguments[i];
+	}
+	return argumentText.str();
+}
+
 bool buildCurrentLspDocumentSnapshot(MREditWindow *win, mr::services::MRWorkspaceDocumentSnapshot &document) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
@@ -1161,8 +1273,8 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	mr::services::MRWorkspaceDocumentSnapshot document;
 	mr::lsp::LspTextPosition position;
 	std::string errorMessage;
+	std::string configurationSource;
 	std::ostringstream positionText;
-	std::ostringstream argumentText;
 
 	++g_lspRequestCount;
 	g_lspLastRequestLabel = label != nullptr ? label : "LSP request";
@@ -1171,26 +1283,23 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	g_lspLastRequestState = "preparing";
 	g_lspLastError.clear();
 	g_lspLastPollError.clear();
-	if (!buildLspServerProfileFromEnvironment(profile)) {
-		g_lspLastRequestState = "failed";
-		g_lspLastError = "LSP server not configured. Set MR_LSP_SERVER.";
-		++g_lspRequestFailureCount;
-		postLspWarning(g_lspLastError);
-		return true;
-	}
-	g_lspLastServerExecutable = profile.executablePath;
-	g_lspLastServerWorkingDirectory = profile.workingDirectory;
-	for (std::size_t i = 0; i < profile.arguments.size(); ++i) {
-		if (i != 0) argumentText << " ";
-		argumentText << profile.arguments[i];
-	}
-	g_lspLastServerArguments = argumentText.str();
 	if (!buildCurrentLspDocumentSnapshot(win, document)) {
 		g_lspLastRequestState = "failed";
 		g_lspLastError = "LSP request requires a saved editor document.";
 		++g_lspRequestFailureCount;
 		return true;
 	}
+	if (editor == nullptr || !buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) {
+		g_lspLastRequestState = "failed";
+		g_lspLastError = errorMessage.empty() ? "LSP server not configured." : errorMessage;
+		++g_lspRequestFailureCount;
+		postLspWarning(g_lspLastError);
+		return true;
+	}
+	g_lspLastServerExecutable = profile.executablePath;
+	g_lspLastServerWorkingDirectory = profile.workingDirectory;
+	g_lspLastServerArguments = lspServerProfileArgumentText(profile);
+	g_lspLastServerConfigurationSource = configurationSource;
 	position = currentLspTextPosition(*editor);
 	positionText << (position.line + 1) << ":" << (position.character + 1);
 	g_lspLastRequestPath = document.path;
@@ -1669,6 +1778,8 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 
 bool showLspStatusDialog() {
 	MRDialogFoundation *dialog = nullptr;
+	MREditWindow *currentWindow = currentEditorCommandWindow();
+	MRFileEditor *currentEditor = currentWindow != nullptr ? currentWindow->getEditor() : nullptr;
 	mr::services::MRLspServerProfile profile;
 	mr::services::MRWorkspaceServiceSnapshot workspace = g_lspAppService.buildCurrentWorkspaceSnapshot();
 	mr::services::MRWorkspaceMainFileState mainFile = g_lspAppService.configuredMainFile();
@@ -1676,15 +1787,25 @@ bool showLspStatusDialog() {
 	std::vector<std::string> lines;
 	std::vector<std::string> displayLines;
 	std::ostringstream line;
-	bool configured = buildLspServerProfileFromEnvironment(profile);
+	std::string configurationSource;
+	std::string profileError;
+	bool configured = false;
 	short width = 96;
 	short height = 0;
 	short buttonY = 0;
 
 	if (TProgram::deskTop == nullptr) return false;
+	if (currentEditor != nullptr) configured = buildLspServerProfileFromEditor(*currentEditor, profile, configurationSource, profileError);
+	else if (buildLspServerProfileFromEnvironment(profile)) {
+		configured = true;
+		configurationSource = "MR_LSP_SERVER";
+	} else
+		profileError = "No current editor and MR_LSP_SERVER is empty.";
+
 	lines.push_back(std::string("Runtime: ") + (g_lspAppService.runtimeActive() ? "active" : "inactive"));
 	lines.push_back(std::string("Server configured: ") + (configured ? "yes" : "no"));
 	if (configured) {
+		lines.push_back("Configuration source: " + configurationSource);
 		lines.push_back("Executable: " + profile.executablePath);
 		if (!profile.arguments.empty()) {
 			line.str(std::string());
@@ -1694,9 +1815,11 @@ bool showLspStatusDialog() {
 				line << " " << profile.arguments[i];
 			lines.push_back(line.str());
 		}
-		lines.push_back("Working directory: " + profile.workingDirectory);
+		if (!profile.workingDirectory.empty()) lines.push_back("Working directory: " + profile.workingDirectory);
+		else
+			lines.push_back("Working directory: workspace root");
 	} else
-		lines.push_back("Configuration source: MR_LSP_SERVER is empty");
+		lines.push_back("Configuration error: " + profileError);
 
 	line.str(std::string());
 	line.clear();
@@ -1706,6 +1829,7 @@ bool showLspStatusDialog() {
 	lines.push_back("Last state: " + g_lspLastRequestState);
 	if (!g_lspLastRequestPath.empty()) lines.push_back("Last document: " + g_lspLastRequestPath);
 	if (!g_lspLastRequestPosition.empty()) lines.push_back("Last position: " + g_lspLastRequestPosition);
+	if (!g_lspLastServerConfigurationSource.empty()) lines.push_back("Last configuration source: " + g_lspLastServerConfigurationSource);
 	if (!g_lspLastServerExecutable.empty()) lines.push_back("Last executable: " + g_lspLastServerExecutable);
 	if (!g_lspLastServerArguments.empty()) lines.push_back("Last arguments: " + g_lspLastServerArguments);
 	if (!g_lspLastServerWorkingDirectory.empty()) lines.push_back("Last working directory: " + g_lspLastServerWorkingDirectory);

@@ -35,6 +35,14 @@ bool executableExists(const std::string &path) {
 	return !path.empty() && ::access(path.c_str(), X_OK) == 0;
 }
 
+void redirectStderrToNull() {
+	int nullFd = ::open("/dev/null", O_WRONLY);
+
+	if (nullFd < 0) return;
+	::dup2(nullFd, STDERR_FILENO);
+	::close(nullFd);
+}
+
 int waitStatusToExitStatus(int waitStatus) {
 	if (WIFEXITED(waitStatus)) return WEXITSTATUS(waitStatus);
 	if (WIFSIGNALED(waitStatus)) return -WTERMSIG(waitStatus);
@@ -74,7 +82,7 @@ bool ExternalProcessSession::start(const ExternalProcessSpec &spec, std::string 
 		::setpgid(0, 0);
 		::dup2(inputPipe[0], STDIN_FILENO);
 		::dup2(outputPipe[1], STDOUT_FILENO);
-		::dup2(outputPipe[1], STDERR_FILENO);
+		redirectStderrToNull();
 		closeFd(inputPipe[0]);
 		closeFd(inputPipe[1]);
 		closeFd(outputPipe[0]);
