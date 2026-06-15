@@ -1323,6 +1323,7 @@ bool syncCurrentEditorForLspResults() {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	mr::services::MRLspServerProfile profile;
 	mr::services::MRWorkspaceDocumentSnapshot document;
+	bool diagnosticsReceived = false;
 	std::string errorMessage;
 	std::string configurationSource;
 
@@ -1343,15 +1344,31 @@ bool syncCurrentEditorForLspResults() {
 		postLspError("LSP results sync failed: " + errorMessage);
 		return false;
 	}
-	for (int i = 0; i < 25; ++i) {
+	for (int i = 0; i < 100; ++i) {
 		if (!g_lspAppService.poll(errorMessage)) {
 			postLspError("LSP poll failed: " + errorMessage);
 			g_lspAppService.close();
 			return false;
 		}
+		for (const mr::services::MRServiceDiagnosticResult &result : g_lspAppService.results().diagnosticResults()) {
+			const mr::services::MRServiceDocumentIdentity &identity = result.header.identity;
+
+			if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+			if (identity.path != document.path) continue;
+			if (identity.documentId != document.documentId) continue;
+			if (identity.documentVersion != document.documentVersion) continue;
+			diagnosticsReceived = true;
+			break;
+		}
+		if (diagnosticsReceived) return true;
 		::poll(nullptr, 0, 20);
 	}
-	return true;
+	postLspWarning("LSP diagnostics for current editor state not received yet.");
+	if (!g_lspAppService.results().diagnosticResults().empty()) return true;
+	if (!g_lspAppService.results().locationResults().empty()) return true;
+	if (!g_lspAppService.results().hoverResults().empty()) return true;
+	if (!g_lspAppService.results().completionResults().empty()) return true;
+	return false;
 }
 
 MREditWindow *findOpenLspTargetWindow(const std::string &path) {
