@@ -632,9 +632,17 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	mMouseSelectionModifiers = 0;
 	auto updateLiveMouseBlockOverlay = [this, liveBlockMode](std::size_t current) {
 		if (liveBlockMode == 0) return;
+		std::size_t visualAnchor = mSelectionAnchor;
 		std::size_t visualEnd = current;
-		if (liveBlockMode != 3 && visualEnd > 0 && lineStartOffset(visualEnd) == visualEnd && lineEndOffset(visualEnd) == visualEnd) --visualEnd;
-		setBlockOverlayState(liveBlockMode, mSelectionAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
+		if (liveBlockMode != 3) {
+			const std::size_t length = mBufferModel.length();
+
+			if (visualAnchor == length && length > 0) --visualAnchor;
+			if (visualEnd == length && length > 0) --visualEnd;
+			else if (visualEnd > 0 && lineStartOffset(visualEnd) == visualEnd && lineEndOffset(visualEnd) == visualEnd)
+				--visualEnd;
+		}
+		setBlockOverlayState(liveBlockMode, visualAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
 	};
 	mSelectionAnchor = anchor;
 	mMouseSelectionColumnsValid = true;

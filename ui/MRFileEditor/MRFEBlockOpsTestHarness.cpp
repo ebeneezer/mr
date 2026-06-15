@@ -1534,30 +1534,65 @@ bool runEditorMouseDragBlockModeFileLineCase(std::string &failureReason) {
 	}
 	const std::size_t lastContentLine = starts.size() - 2;
 	const std::size_t trailingVirtualLine = starts.size() - 1;
+	const int editorHeight = std::max(18, static_cast<int>(trailingVirtualLine) + 3);
 
-	QueuedMouseOwner owner(TRect(0, 0, 90, 12));
-	MRFileEditor *editor = new MRFileEditor(TRect(0, 0, 90, 12), nullptr, nullptr, nullptr, "");
-	MRFEBlockOps ops;
-	owner.insert(editor);
+	{
+		QueuedMouseOwner owner(TRect(0, 0, 90, editorHeight));
+		MRFileEditor *editor = new MRFileEditor(TRect(0, 0, 90, editorHeight), nullptr, nullptr, nullptr, "");
+		MRFEBlockOps ops;
+		owner.insert(editor);
 
-	if (!editor->replaceBufferText(text.c_str())) {
-		failureReason = "Unable to seed editor text in blockmode raw mouse line case.";
-		return false;
+		if (!editor->replaceBufferText(text.c_str())) {
+			failureReason = "Unable to seed editor text in forward blockmode raw mouse line case.";
+			return false;
+		}
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(0), static_cast<int>(trailingVirtualLine), 0, static_cast<uchar>(mbLeftButton | mbRightButton)));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(0), static_cast<int>(trailingVirtualLine), 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, localXForEditorColumn(0), 0, 0, static_cast<uchar>(mbLeftButton | mbRightButton));
+		editor->handleEvent(event);
+		const MRFileEditor::BlockOverlayState overlay = editor->blockOverlayState();
+		if (!overlay.active || overlay.mode != static_cast<int>(MRFEBlockMode::Line) || overlayVisualLine2(*editor, overlay) != lastContentLine) {
+			failureReason = "Forward raw blockmode mouse drag must show live line overlay only through the last touched content line: overlayEnd=" + std::to_string(overlay.end) + " cursor=" + std::to_string(editor->cursorOffset()) +
+			                " overlayLine2=" + std::to_string(overlayVisualLine2(*editor, overlay)) + " lastContentLine=" + std::to_string(lastContentLine) + " trailingVirtualLine=" + std::to_string(trailingVirtualLine) +
+			                " textSize=" + std::to_string(text.size()) + ".";
+			return false;
+		}
+		if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+			failureReason = "Unable to adopt forward raw blockmode mouse line selection.";
+			return false;
+		}
+		if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Line, MRFEBlockStatus::Committed, 0, lastContentLine, 0, 0, "forward raw blockmode both-button line selection", failureReason)) return false;
 	}
-	owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(0), static_cast<int>(trailingVirtualLine), 0, static_cast<uchar>(mbLeftButton | mbRightButton)));
-	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(0), static_cast<int>(trailingVirtualLine), 0, 0));
-	TEvent event = makeMouseEvent(evMouseDown, localXForEditorColumn(0), 0, 0, static_cast<uchar>(mbLeftButton | mbRightButton));
-	editor->handleEvent(event);
-	const MRFileEditor::BlockOverlayState overlay = editor->blockOverlayState();
-	if (!overlay.active || overlay.mode != static_cast<int>(MRFEBlockMode::Line) || overlayVisualLine2(*editor, overlay) != lastContentLine) {
-		failureReason = "Raw blockmode mouse drag must show live line overlay only through the last touched content line.";
-		return false;
+
+	{
+		QueuedMouseOwner owner(TRect(0, 0, 90, editorHeight));
+		MRFileEditor *editor = new MRFileEditor(TRect(0, 0, 90, editorHeight), nullptr, nullptr, nullptr, "");
+		MRFEBlockOps ops;
+		owner.insert(editor);
+
+		if (!editor->replaceBufferText(text.c_str())) {
+			failureReason = "Unable to seed editor text in reverse blockmode raw mouse line case.";
+			return false;
+		}
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(0), 0, 0, static_cast<uchar>(mbLeftButton | mbRightButton)));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(0), 0, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, localXForEditorColumn(0), static_cast<int>(trailingVirtualLine), 0, static_cast<uchar>(mbLeftButton | mbRightButton));
+		editor->handleEvent(event);
+		const MRFileEditor::BlockOverlayState overlay = editor->blockOverlayState();
+		if (!overlay.active || overlay.mode != static_cast<int>(MRFEBlockMode::Line) || overlayVisualLine2(*editor, overlay) != lastContentLine) {
+			failureReason = "Reverse raw blockmode mouse drag must show live line overlay only through the last touched content line: overlayEnd=" + std::to_string(overlay.end) + " cursor=" + std::to_string(editor->cursorOffset()) +
+			                " overlayLine2=" + std::to_string(overlayVisualLine2(*editor, overlay)) + " lastContentLine=" + std::to_string(lastContentLine) + " trailingVirtualLine=" + std::to_string(trailingVirtualLine) +
+			                " textSize=" + std::to_string(text.size()) + ".";
+			return false;
+		}
+		if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+			failureReason = "Unable to adopt reverse raw blockmode mouse line selection.";
+			return false;
+		}
+		if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Line, MRFEBlockStatus::Committed, 0, lastContentLine, 0, 0, "reverse raw blockmode both-button line selection", failureReason)) return false;
 	}
-	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
-		failureReason = "Unable to adopt raw blockmode mouse line selection.";
-		return false;
-	}
-	return checkEditorBlock(*editor, ops, MRFEBlockMode::Line, MRFEBlockStatus::Committed, 0, lastContentLine, 0, 0, "raw blockmode both-button line selection", failureReason);
+
+	return true;
 }
 
 bool runEditorMouseDragReplacesExistingBlockCase(std::string &failureReason) {
