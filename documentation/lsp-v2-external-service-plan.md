@@ -414,6 +414,77 @@ Possible later tranches:
 Runtime variable values are not an LSP feature. They require a build and debug
 context, likely through a debugger protocol or MR-specific runtime integration.
 
+## Validated Manual LSP Test Path
+
+The first real-server validation path uses `clangd` with an unsaved C buffer.
+
+The important property is that MR must send the current editor buffer mirror to
+the language server. The test file on disk may be stale. Successful results
+therefore prove that MR's `didOpen` / `didChange` path, document versioning and
+service result projection are using the editor state, not only the filesystem
+state.
+
+Recommended unsaved C source:
+
+```c
+#include <stdio.h>
+
+int helper(void) {
+	return 1;
+}
+
+int main(void) {
+	int unused;
+
+	puts("Hello world");
+	puts("Hello world");
+
+	helper();
+	helper();
+
+	return 0;
+}
+```
+
+Manual checks:
+
+- Put the cursor on a `helper` call and run LSP definition.
+- Expected: MR jumps to the file-scope `helper` definition in the unsaved
+  editor state.
+- Put the cursor on `helper` and run LSP references.
+- Expected: MR shows the definition plus both local calls.
+- Put the cursor on `helper` and run LSP hover.
+- Expected: hover shows the local `helper` function signature.
+- Type a `he` / `hel` prefix in the same unsaved buffer and run LSP completion.
+- Expected: `helper()` appears as a completion item and insertion inserts only
+  the symbol text chosen by the server.
+
+Known clangd boundary:
+
+```c
+int main(void) {
+	int helper(void) {
+		return 1;
+	}
+
+	helper();
+}
+```
+
+GCC accepts nested functions as a GNU C extension. `clangd` does not model this
+as valid C for definition / references. This is not an MR mirror failure. It is
+a language-server semantic boundary.
+
+Observed real-server response shapes that MR must tolerate:
+
+- `textDocument/definition` may return `null`, a single `Location`,
+  `Location[]` or `LocationLink[]`.
+- `textDocument/references` returns `Location[]`; `range` fields may list
+  `end` before `start`.
+- `textDocument/publishDiagnostics` may omit `version`.
+- Missing diagnostic version means MR cannot perform version-based stale
+  rejection and must fall back to URI/current-document acceptance.
+
 ## Constraints To Preserve
 
 - MR workspace membership is user-facing truth.
@@ -426,4 +497,3 @@ context, likely through a debugger protocol or MR-specific runtime integration.
 - Visible project JSON is not required.
 - Persistent settings and workspace serialization changes require separate
   protected planning.
-
