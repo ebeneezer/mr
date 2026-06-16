@@ -132,8 +132,9 @@ bool testInitializeSpec(std::string &failureReason) {
 	mr::services::MRWorkspaceServiceSnapshot workspace = makeWorkspace(1);
 	mr::services::MRWorkspaceServiceSnapshot noRootWorkspace;
 	std::string errorMessage;
-	const std::string expectedRootParams = "{\"processId\":null,\"rootPath\":\"/tmp/mr/project\",\"rootUri\":\"file:///tmp/mr/project\",\"workspaceFolders\":[{\"uri\":\"file:///tmp/mr/project\",\"name\":\"project\"}],\"capabilities\":{}}";
-	const std::string expectedNullParams = "{\"processId\":null,\"rootPath\":null,\"rootUri\":null,\"workspaceFolders\":null,\"capabilities\":{}}";
+	const std::string completionCapabilities = "\"capabilities\":{\"textDocument\":{\"completion\":{\"completionItem\":{\"snippetSupport\":true}}}}";
+	const std::string expectedRootParams = "{\"processId\":null,\"rootPath\":\"/tmp/mr/project\",\"rootUri\":\"file:///tmp/mr/project\",\"workspaceFolders\":[{\"uri\":\"file:///tmp/mr/project\",\"name\":\"project\"}]," + completionCapabilities + "}";
+	const std::string expectedNullParams = "{\"processId\":null,\"rootPath\":null,\"rootUri\":null,\"workspaceFolders\":null," + completionCapabilities + "}";
 
 	sessionSpec.process.executablePath = "./regression/mr_lsp_session_peer";
 	if (!expect(mr::services::buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, spec, errorMessage), "root initialize spec: " + errorMessage, failureReason)) return false;
@@ -169,8 +170,10 @@ bool verifyResults(const mr::services::MRServiceResultStore &results, std::strin
 	if (!expect(results.hoverResults().size() == 1, "hover result count", failureReason)) return false;
 	if (!expect(results.hoverResults()[0].hover.markupKind == "markdown", "hover kind", failureReason)) return false;
 	if (!expect(results.completionResults().size() == 1, "completion result count", failureReason)) return false;
-	if (!expect(results.completionResults()[0].items.size() == 2, "completion item count", failureReason)) return false;
+	if (!expect(results.completionResults()[0].items.size() == 3, "completion item count", failureReason)) return false;
 	if (!expect(results.completionResults()[0].items[0].label == "main", "completion first label", failureReason)) return false;
+	if (!expect(results.completionResults()[0].items[1].label == "for", "completion snippet label", failureReason)) return false;
+	if (!expect(results.completionResults()[0].items[1].insertTextFormat == 2, "completion snippet format", failureReason)) return false;
 	if (!expect(results.codeActionResults().size() == 1, "codeAction result count", failureReason)) return false;
 	if (!expect(results.codeActionResults()[0].items.size() == 2, "codeAction item count", failureReason)) return false;
 	if (!expect(results.codeActionResults()[0].items[0].title == "Insert semicolon", "codeAction first title", failureReason)) return false;

@@ -117,7 +117,7 @@ std::string referencesResponse(const mr::lsp::JsonRpcEnvelope &envelope, const P
 
 std::string completionResponse(const mr::lsp::JsonRpcEnvelope &envelope) {
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText +
-	       ",\"result\":{\"isIncomplete\":false,\"items\":[{\"label\":\"main\",\"kind\":3,\"labelDetails\":{\"detail\":null},\"detail\":\"int\\u0020main()\",\"insertText\":\"ma\\u0069n\"},{\"label\":\"macroValue\",\"kind\":6,\"detail\":\"int\"}]}}";
+	       ",\"result\":{\"isIncomplete\":false,\"items\":[{\"label\":\"main\",\"kind\":3,\"labelDetails\":{\"detail\":null},\"detail\":\"int\\u0020main()\",\"insertText\":\"ma\\u0069n\"},{\"label\":\"for\",\"kind\":14,\"detail\":\"snippet\",\"insertText\":\"for (${1:int i = 0}; ${2:i < count}; ${3:++i}) {\\n\\t$0\\n}\",\"insertTextFormat\":2},{\"label\":\"macroValue\",\"kind\":6,\"detail\":\"int\"}]}}";
 }
 
 std::string codeActionResponse(const mr::lsp::JsonRpcEnvelope &envelope, const PeerState &state) {

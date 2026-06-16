@@ -25,6 +25,8 @@ struct LspCompletionItem {
 	int kind = 0;
 	std::string detail;
 	std::string insertText;
+	bool hasInsertTextFormat = false;
+	int insertTextFormat = 1;
 };
 
 struct LspCompletionResult {

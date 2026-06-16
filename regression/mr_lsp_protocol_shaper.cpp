@@ -174,6 +174,7 @@ std::string hoverResult() {
 std::string completionResult() {
 	return "{\"isIncomplete\":false,\"items\":["
 	       "{\"label\":\"shaperCompletionOne\",\"kind\":3,\"detail\":\"protocol shaper item\",\"insertText\":\"shaperCompletionOne\"},"
+	       "{\"label\":\"shaperFor\",\"kind\":14,\"detail\":\"protocol shaper snippet\",\"insertText\":\"for (${1:int i = 0}; ${2:i < count}; ${3:++i}) {\\n\\t$0\\n}\",\"insertTextFormat\":2},"
 	       "{\"label\":\"shaperCompletionTwo\",\"kind\":6,\"detail\":\"protocol shaper fallback\"}]}";
 }
 

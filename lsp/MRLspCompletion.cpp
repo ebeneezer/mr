@@ -307,6 +307,7 @@ bool parseCompletionItemObject(const std::string &object, LspCompletionItem &ite
 	if (!extractOptionalTopLevelIntValue(object, "kind", item.hasKind, item.kind)) return false;
 	if (!extractOptionalTopLevelStringValue(object, "detail", item.detail)) return false;
 	if (!extractOptionalTopLevelStringValue(object, "insertText", item.insertText)) return false;
+	if (!extractOptionalTopLevelIntValue(object, "insertTextFormat", item.hasInsertTextFormat, item.insertTextFormat)) return false;
 	return true;
 }
 

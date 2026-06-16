@@ -99,14 +99,18 @@ bool testCompletionHappyPath(std::string &failureReason) {
 	if (!pollCompletion(lifecycle, service, adapter, request, result, failureReason)) return false;
 	if (!expect(!request.pending, "completion request still pending", failureReason)) return false;
 	if (!expect(result.uri == service.documentUri(), "completion uri", failureReason)) return false;
-	if (!expect(result.items.size() == 2, "completion item count", failureReason)) return false;
+	if (!expect(result.items.size() == 3, "completion item count", failureReason)) return false;
 	if (!expect(result.items[0].label == "main", "completion first label", failureReason)) return false;
 	if (!expect(result.items[0].hasKind, "completion first kind missing", failureReason)) return false;
 	if (!expect(result.items[0].kind == 3, "completion first kind", failureReason)) return false;
 	if (!expect(result.items[0].detail == "int main()", "completion first detail", failureReason)) return false;
 	if (!expect(result.items[0].insertText == "main", "completion first insert text", failureReason)) return false;
-	if (!expect(result.items[1].label == "macroValue", "completion second label", failureReason)) return false;
-	if (!expect(result.items[1].insertText.empty(), "completion optional insert text", failureReason)) return false;
+	if (!expect(result.items[1].label == "for", "completion snippet label", failureReason)) return false;
+	if (!expect(result.items[1].hasInsertTextFormat, "completion snippet format missing", failureReason)) return false;
+	if (!expect(result.items[1].insertTextFormat == 2, "completion snippet format", failureReason)) return false;
+	if (!expect(result.items[1].insertText.find("${1:int i = 0}") != std::string::npos, "completion snippet insert text", failureReason)) return false;
+	if (!expect(result.items[2].label == "macroValue", "completion third label", failureReason)) return false;
+	if (!expect(result.items[2].insertText.empty(), "completion optional insert text", failureReason)) return false;
 	if (!expect(service.close(errorMessage), "close: " + errorMessage, failureReason)) return false;
 	return shutdownLifecycle(lifecycle, failureReason);
 }

@@ -137,6 +137,8 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	completion.items[0].kind = 3;
 	completion.items[0].detail = "int main()";
 	completion.items[0].insertText = "main";
+	completion.items[0].hasInsertTextFormat = true;
+	completion.items[0].insertTextFormat = 1;
 	codeActions.uri = mainUri;
 	codeActions.items.push_back(mr::lsp::LspCodeActionItem());
 	codeActions.items[0].title = "Insert semicolon";
@@ -170,6 +172,8 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	if (!expect(serviceCompletion.items.size() == 1, "completion count", failureReason)) return false;
 	if (!expect(serviceCompletion.items[0].label == "main", "completion label", failureReason)) return false;
 	if (!expect(serviceCompletion.items[0].insertText == "main", "completion insert text", failureReason)) return false;
+	if (!expect(serviceCompletion.items[0].hasInsertTextFormat, "completion insert text format present", failureReason)) return false;
+	if (!expect(serviceCompletion.items[0].insertTextFormat == 1, "completion insert text format", failureReason)) return false;
 	if (!expect(serviceCodeActions.items.size() == 1, "codeAction count", failureReason)) return false;
 	if (!expect(serviceCodeActions.items[0].title == "Insert semicolon", "codeAction title", failureReason)) return false;
 	if (!expect(serviceCodeActions.items[0].kind == "quickfix", "codeAction kind", failureReason)) return false;

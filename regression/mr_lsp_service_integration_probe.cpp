@@ -292,10 +292,12 @@ bool verifyResults(const mr::services::MRServiceResultStore &store, std::string 
 	if (!expect(store.hoverResults()[0].hover.markupKind == "plaintext", "hover kind", failureReason)) return false;
 	if (!expect(store.hoverResults()[0].hover.value == "mr protocol shaper hover", "hover value", failureReason)) return false;
 	if (!expect(store.completionResults().size() == 1, "completion result count", failureReason)) return false;
-	if (!expect(store.completionResults()[0].items.size() == 2, "completion item count", failureReason)) return false;
+	if (!expect(store.completionResults()[0].items.size() == 3, "completion item count", failureReason)) return false;
 	if (!expect(store.completionResults()[0].items[0].label == "shaperCompletionOne", "completion first label", failureReason)) return false;
 	if (!expect(store.completionResults()[0].items[0].insertText == "shaperCompletionOne", "completion first insertText", failureReason)) return false;
-	if (!expect(store.completionResults()[0].items[1].label == "shaperCompletionTwo", "completion second label", failureReason)) return false;
+	if (!expect(store.completionResults()[0].items[1].label == "shaperFor", "completion snippet label", failureReason)) return false;
+	if (!expect(store.completionResults()[0].items[1].insertTextFormat == 2, "completion snippet format", failureReason)) return false;
+	if (!expect(store.completionResults()[0].items[2].label == "shaperCompletionTwo", "completion third label", failureReason)) return false;
 	if (!expect(store.codeActionResults().size() == 1, "codeAction result count", failureReason)) return false;
 	if (!expect(store.codeActionResults()[0].items.size() == 2, "codeAction item count", failureReason)) return false;
 	if (!expect(store.codeActionResults()[0].items[0].title == "protocol shaper quick fix", "codeAction first title", failureReason)) return false;

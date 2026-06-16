@@ -83,7 +83,7 @@ bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &works
 	} else {
 		params += "\"rootPath\":null,\"rootUri\":null,\"workspaceFolders\":null,";
 	}
-	params += "\"capabilities\":{}}";
+	params += "\"capabilities\":{\"textDocument\":{\"completion\":{\"completionItem\":{\"snippetSupport\":true}}}}}";
 	spec.initializeParamsJson = params;
 	errorMessage.clear();
 	return true;

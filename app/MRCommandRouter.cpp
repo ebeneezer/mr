@@ -1757,6 +1757,106 @@ MREditWindow *findLspCompletionTargetWindow(const mr::services::MRServiceComplet
 	return nullptr;
 }
 
+std::size_t lspSnippetPlaceholderEnd(const std::string &snippet, std::size_t openBrace) {
+	int depth = 0;
+	bool escaped = false;
+
+	for (std::size_t pos = openBrace; pos < snippet.size(); ++pos) {
+		const char ch = snippet[pos];
+
+		if (escaped) {
+			escaped = false;
+			continue;
+		}
+		if (ch == '\\') {
+			escaped = true;
+			continue;
+		}
+		if (ch == '{') {
+			++depth;
+			continue;
+		}
+		if (ch == '}') {
+			--depth;
+			if (depth == 0) return pos;
+		}
+	}
+	return std::string::npos;
+}
+
+bool lspSnippetNumberAt(const std::string &snippet, std::size_t &pos) {
+	const std::size_t start = pos;
+
+	while (pos < snippet.size() && snippet[pos] >= '0' && snippet[pos] <= '9')
+		++pos;
+	return pos > start;
+}
+
+std::string lspCompletionPlainTextFromSnippet(const std::string &snippet) {
+	std::string text;
+
+	for (std::size_t pos = 0; pos < snippet.size();) {
+		const char ch = snippet[pos];
+
+		if (ch == '\\' && pos + 1 < snippet.size()) {
+			text.push_back(snippet[pos + 1]);
+			pos += 2;
+			continue;
+		}
+		if (ch != '$') {
+			text.push_back(ch);
+			++pos;
+			continue;
+		}
+		if (pos + 1 >= snippet.size()) {
+			text.push_back(ch);
+			++pos;
+			continue;
+		}
+		if (snippet[pos + 1] >= '0' && snippet[pos + 1] <= '9') {
+			pos += 2;
+			while (pos < snippet.size() && snippet[pos] >= '0' && snippet[pos] <= '9')
+				++pos;
+			continue;
+		}
+		if (snippet[pos + 1] != '{') {
+			text.push_back(ch);
+			++pos;
+			continue;
+		}
+		const std::size_t close = lspSnippetPlaceholderEnd(snippet, pos + 1);
+		std::size_t bodyStart = pos + 2;
+		std::size_t bodyPos = bodyStart;
+
+		if (close == std::string::npos) {
+			text.push_back(ch);
+			++pos;
+			continue;
+		}
+		if (lspSnippetNumberAt(snippet, bodyPos) && bodyPos < close && snippet[bodyPos] == ':') {
+			text += lspCompletionPlainTextFromSnippet(snippet.substr(bodyPos + 1, close - bodyPos - 1));
+		} else if (lspSnippetNumberAt(snippet, bodyPos) && bodyPos < close && snippet[bodyPos] == '|') {
+			const std::size_t choiceStart = bodyPos + 1;
+			std::size_t choiceEnd = choiceStart;
+
+			while (choiceEnd < close && snippet[choiceEnd] != ',' && snippet[choiceEnd] != '|')
+				++choiceEnd;
+			text += lspCompletionPlainTextFromSnippet(snippet.substr(choiceStart, choiceEnd - choiceStart));
+		} else if (!lspSnippetNumberAt(snippet, bodyStart)) {
+			text += lspCompletionPlainTextFromSnippet(snippet.substr(bodyStart, close - bodyStart));
+		}
+		pos = close + 1;
+	}
+	return text;
+}
+
+std::string lspCompletionInsertTextForItem(const mr::services::MRServiceCompletionItem &item) {
+	const std::string rawText = !item.insertText.empty() ? item.insertText : item.label;
+
+	if (item.hasInsertTextFormat && item.insertTextFormat == 2) return lspCompletionPlainTextFromSnippet(rawText);
+	return rawText;
+}
+
 bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &result) {
 	MRDialogFoundation *dialog = nullptr;
 	TScrollBar *scrollBar = nullptr;
@@ -1803,7 +1903,7 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < result.items.size()) {
 		const mr::services::MRServiceCompletionItem &item = result.items[selectedIndex];
 
-		insertText = !item.insertText.empty() ? item.insertText : item.label;
+		insertText = lspCompletionInsertTextForItem(item);
 	}
 	TObject::destroy(dialog);
 

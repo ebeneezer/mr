@@ -314,6 +314,8 @@ MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceService
 		serviceItem.kind = item.kind;
 		serviceItem.detail = item.detail;
 		serviceItem.insertText = item.insertText;
+		serviceItem.hasInsertTextFormat = item.hasInsertTextFormat;
+		serviceItem.insertTextFormat = item.insertTextFormat;
 		result.items.push_back(serviceItem);
 	}
 	return result;
