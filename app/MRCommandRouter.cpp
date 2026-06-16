@@ -1188,7 +1188,37 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	positionText << (position.line + 1) << ":" << (position.character + 1);
 	g_lspLastRequestPath = document.path;
 	g_lspLastRequestPosition = positionText.str();
-	mrLogMessage("LSP request dispatch: " + g_lspLastRequestLabel + " path=" + document.path + " version=" + std::to_string(document.documentVersion) + " position=" + g_lspLastRequestPosition);
+	{
+		const std::size_t cursor = editor->cursorOffset();
+		const std::string lineText = editor->lineTextAtOffset(cursor);
+		std::string escapedLine;
+		std::string escapedPrefix;
+		const std::size_t prefixLength = std::min(lineText.size(), static_cast<std::size_t>(std::max(0, position.character)));
+
+		for (std::size_t index = 0; index < lineText.size(); ++index) {
+			const char ch = lineText[index];
+			if (ch == '\t')
+				escapedLine += "\\t";
+			else if (ch == '\r')
+				escapedLine += "\\r";
+			else if (ch == '\n')
+				escapedLine += "\\n";
+			else
+				escapedLine.push_back(ch);
+		}
+		for (std::size_t index = 0; index < prefixLength; ++index) {
+			const char ch = lineText[index];
+			if (ch == '\t')
+				escapedPrefix += "\\t";
+			else if (ch == '\r')
+				escapedPrefix += "\\r";
+			else if (ch == '\n')
+				escapedPrefix += "\\n";
+			else
+				escapedPrefix.push_back(ch);
+		}
+		mrLogMessage("LSP request dispatch: " + g_lspLastRequestLabel + " path=" + document.path + " version=" + std::to_string(document.documentVersion) + " position=" + g_lspLastRequestPosition + " offset=" + std::to_string(cursor) + " textColumn=" + std::to_string(editor->columnOfOffset(cursor)) + " visualColumn=" + std::to_string(editor->displayedCursorColumn()) + " lineLength=" + std::to_string(lineText.size()) + " prefix=\"" + escapedPrefix + "\" line=\"" + escapedLine + "\"");
+	}
 	g_lspAppService.setMainFileByBufferId(document.bufferId);
 	if (!g_lspAppService.requestCurrentEditorCommand(profile, document, *editor, command, position, errorMessage)) {
 		g_lspLastRequestState = "failed";
