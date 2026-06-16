@@ -415,6 +415,104 @@ bool testSessionHappyPath(std::string &failureReason) {
 	return expect(session.shutdown(errorMessage), "shutdown: " + errorMessage, failureReason);
 }
 
+bool testProtocolShaperServicePath(std::string &failureReason) {
+	const std::string path = "/tmp/mr/project/src/main.cpp";
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, path.c_str());
+	mr::services::MRLspServiceSession session;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	std::string errorMessage;
+
+	profile.profileName = "protocol-shaper";
+	profile.executablePath = "./regression/mr_lsp_protocol_shaper";
+	profile.workingDirectory = ".";
+	if (!replaceText(editor, "int main() { return 8; }\n", failureReason)) return false;
+	document = documentForEditor(editor, path);
+	workspace = workspaceForDocument(document);
+	if (!expect(
+			session.requestEditorDocumentServiceCommand(
+				workspace,
+				profile,
+				document,
+				editor,
+				mr::services::MRLspServiceCommandId::GoToDefinition,
+				mr::lsp::LspTextPosition{0, 4},
+				errorMessage),
+			"protocol shaper definition command: " + errorMessage,
+			failureReason))
+		return false;
+	if (!pollUntilCounts(session, 1, 1, 0, 0, failureReason)) return false;
+	if (!expect(session.results().diagnosticResults()[0].diagnostics[0].message == "protocol shaper opened document", "protocol shaper diagnostic", failureReason)) return false;
+	if (!expect(session.results().locationResults()[0].locations[0].path == path, "protocol shaper definition path", failureReason)) return false;
+	if (!expect(
+			session.requestEditorDocumentServiceCommand(
+				workspace,
+				profile,
+				document,
+				editor,
+				mr::services::MRLspServiceCommandId::ShowHover,
+				mr::lsp::LspTextPosition{0, 4},
+				errorMessage),
+			"protocol shaper hover command: " + errorMessage,
+			failureReason))
+		return false;
+	if (!pollUntilCounts(session, 1, 1, 1, 0, failureReason)) return false;
+	if (!expect(session.results().hoverResults()[0].hover.value == "mr protocol shaper hover", "protocol shaper hover value", failureReason)) return false;
+	if (!expect(
+			session.requestEditorDocumentServiceCommand(
+				workspace,
+				profile,
+				document,
+				editor,
+				mr::services::MRLspServiceCommandId::Complete,
+				mr::lsp::LspTextPosition{0, 4},
+				errorMessage),
+			"protocol shaper completion command: " + errorMessage,
+			failureReason))
+		return false;
+	if (!pollUntilCounts(session, 1, 1, 1, 1, failureReason)) return false;
+	if (!expect(session.results().completionResults()[0].items[0].label == "shaperCompletionOne", "protocol shaper completion label", failureReason)) return false;
+	if (!expect(session.requestCodeActionsForDiagnostic(session.results().diagnosticResults()[0], session.results().diagnosticResults()[0].diagnostics[0], errorMessage), "protocol shaper codeAction request: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCounts(session, 1, 1, 1, 1, failureReason, 1)) return false;
+	if (!expect(session.results().codeActionResults()[0].items[0].title == "protocol shaper quick fix", "protocol shaper codeAction title", failureReason)) return false;
+	if (!expect(session.closeDocument(errorMessage), "close protocol shaper document: " + errorMessage, failureReason)) return false;
+	return expect(session.shutdown(errorMessage), "shutdown protocol shaper session: " + errorMessage, failureReason);
+}
+
+bool testProtocolShaperMalformedStart(std::string &failureReason) {
+	const std::string path = "/tmp/mr/project/src/main.cpp";
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, path.c_str());
+	mr::services::MRLspServiceSession session;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	std::string errorMessage;
+
+	profile.profileName = "protocol-shaper-malformed";
+	profile.executablePath = "./regression/mr_lsp_protocol_shaper";
+	profile.arguments.push_back("--scenario");
+	profile.arguments.push_back("malformed");
+	profile.workingDirectory = ".";
+	if (!replaceText(editor, "int main() { return 9; }\n", failureReason)) return false;
+	document = documentForEditor(editor, path);
+	workspace = workspaceForDocument(document);
+	if (!expect(
+			!session.requestEditorDocumentServiceCommand(
+				workspace,
+				profile,
+				document,
+				editor,
+				mr::services::MRLspServiceCommandId::GoToDefinition,
+				mr::lsp::LspTextPosition{0, 4},
+				errorMessage),
+			"malformed protocol shaper accepted",
+			failureReason))
+		return false;
+	if (!expect(errorMessage.find("Content-Length") != std::string::npos, "malformed protocol shaper error text", failureReason)) return false;
+	return expect(!session.runtimeActive(), "malformed protocol shaper runtime remains active", failureReason);
+}
+
 bool runProbe(std::string &failureReason) {
 	if (!testInitializeSpec(failureReason)) return false;
 	if (!testSessionGuards(failureReason)) return false;
@@ -424,6 +522,8 @@ bool runProbe(std::string &failureReason) {
 	if (!testRuntimeFacadePath(failureReason)) return false;
 	if (!testEditorDocumentServiceRequestPath(failureReason)) return false;
 	if (!testSessionHappyPath(failureReason)) return false;
+	if (!testProtocolShaperServicePath(failureReason)) return false;
+	if (!testProtocolShaperMalformedStart(failureReason)) return false;
 	return true;
 }
 } // namespace
