@@ -125,6 +125,11 @@ MR_LSP_EDITOR_SOURCE_PROBE_SOURCE = regression/mr_lsp_editor_source_probe.cpp
 MR_LSP_EDITOR_SOURCE_PROBE_OBJECT = regression/mr_lsp_editor_source_probe.o
 MR_LSP_EDITOR_SOURCE_SOURCE = app/services/MRLspEditorSource.cpp
 MR_LSP_EDITOR_SOURCE_OBJECT = app/services/MRLspEditorSource.o
+MR_LSP_SERVER_PROFILE_PROBE_TARGET = regression/mr_lsp_server_profile_probe
+MR_LSP_SERVER_PROFILE_PROBE_SOURCE = regression/mr_lsp_server_profile_probe.cpp
+MR_LSP_SERVER_PROFILE_PROBE_OBJECT = regression/mr_lsp_server_profile_probe.o
+MR_LSP_SERVER_PROFILE_SOURCE = app/services/MRLspServerProfile.cpp
+MR_LSP_SERVER_PROFILE_OBJECT = app/services/MRLspServerProfile.o
 MR_LSP_APP_SERVICE_PROBE_TARGET = regression/mr_lsp_app_service_probe
 MR_LSP_APP_SERVICE_PROBE_SOURCE = regression/mr_lsp_app_service_probe.cpp
 MR_LSP_APP_SERVICE_PROBE_OBJECT = regression/mr_lsp_app_service_probe.o
@@ -135,6 +140,7 @@ MR_LSP_RUNTIME_OBJECTS = \
 	$(MR_LSP_SERVICE_SESSION_OBJECT) \
 	$(MR_SERVICE_RESULTS_OBJECT) \
 	$(MR_LSP_EDITOR_SOURCE_OBJECT) \
+	$(MR_LSP_SERVER_PROFILE_OBJECT) \
 	$(LSP_CODE_ACTION_OBJECT) \
 	$(LSP_COMPLETION_OBJECT) \
 	$(LSP_HOVER_OBJECT) \
@@ -359,7 +365,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-app-service-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-protocol-shaper lsp-protocol-shaper-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe lsp-code-action-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-app-service-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-protocol-shaper lsp-protocol-shaper-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe lsp-code-action-probe lsp-server-profile-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -381,6 +387,7 @@ workspace-service-context-probe: $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET)
 service-results-probe: $(MR_SERVICE_RESULTS_PROBE_TARGET)
 lsp-service-session-probe: $(LSP_SESSION_PEER_TARGET) $(MR_LSP_SERVICE_SESSION_PROBE_TARGET)
 lsp-editor-source-probe: $(MR_LSP_EDITOR_SOURCE_PROBE_TARGET)
+lsp-server-profile-probe: $(MR_LSP_SERVER_PROFILE_PROBE_TARGET)
 lsp-app-service-probe: $(LSP_SESSION_PEER_TARGET) $(MR_LSP_APP_SERVICE_PROBE_TARGET)
 lsp-jsonrpc-probe: $(LSP_JSONRPC_PROBE_TARGET)
 external-process-probe: $(EXTERNAL_PROCESS_PROBE_TARGET)
@@ -397,7 +404,7 @@ lsp-hover-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_HOVER_PROBE_TARGET)
 lsp-references-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_REFERENCES_PROBE_TARGET)
 lsp-completion-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_COMPLETION_PROBE_TARGET)
 lsp-code-action-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_CODE_ACTION_PROBE_TARGET)
-lsp-service-integration-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_SERVICE_INTEGRATION_PROBE_TARGET)
+lsp-service-integration-probe: $(LSP_PROTOCOL_SHAPER_TARGET) $(LSP_SERVICE_INTEGRATION_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -586,7 +593,7 @@ $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 
 mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox.hpp
-app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp app/services/MRLspAppService.hpp app/services/MRLspServiceSession.hpp app/services/MRServiceResults.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp app/services/MRLspAppService.hpp app/services/MRLspServiceSession.hpp app/services/MRServiceResults.hpp app/services/MRLspServerProfile.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/MRMenuBar.hpp
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/MRVersion.o: CXXFLAGS += -DMR_BUILD_EPOCH=$(MR_BUILD_EPOCH)
@@ -671,6 +678,8 @@ $(MR_LSP_SERVICE_SESSION_OBJECT): $(MR_LSP_SERVICE_SESSION_SOURCE) app/services/
 $(MR_LSP_SERVICE_SESSION_PROBE_OBJECT): $(MR_LSP_SERVICE_SESSION_PROBE_SOURCE) app/services/MRLspServiceSession.hpp ui/MRFileEditor/MRFileEditor.hpp
 $(MR_LSP_EDITOR_SOURCE_OBJECT): $(MR_LSP_EDITOR_SOURCE_SOURCE) app/services/MRLspEditorSource.hpp app/services/MRWorkspaceServiceContext.hpp lsp/MRLspDocumentService.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT): $(MR_LSP_EDITOR_SOURCE_PROBE_SOURCE) app/services/MRLspEditorSource.hpp ui/MRFileEditor/MRFileEditor.hpp
+$(MR_LSP_SERVER_PROFILE_OBJECT): $(MR_LSP_SERVER_PROFILE_SOURCE) app/services/MRLspServerProfile.hpp app/services/MRLspServiceSession.hpp ui/MRSyntax.hpp
+$(MR_LSP_SERVER_PROFILE_PROBE_OBJECT): $(MR_LSP_SERVER_PROFILE_PROBE_SOURCE) app/services/MRLspServerProfile.hpp
 $(MR_LSP_APP_SERVICE_OBJECT): $(MR_LSP_APP_SERVICE_SOURCE) app/services/MRLspAppService.hpp app/services/MRLspServiceSession.hpp app/services/MRWorkspaceServiceContext.hpp
 $(MR_LSP_APP_SERVICE_PROBE_OBJECT): $(MR_LSP_APP_SERVICE_PROBE_SOURCE) app/services/MRLspAppService.hpp ui/MRFileEditor/MRFileEditor.hpp
 $(LSP_JSONRPC_OBJECT): $(LSP_JSONRPC_SOURCE) lsp/MRLspJsonRpc.hpp
@@ -739,6 +748,9 @@ $(MR_LSP_SERVICE_SESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_O
 
 $(MR_LSP_EDITOR_SOURCE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_EDITOR_SOURCE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
+$(MR_LSP_SERVER_PROFILE_PROBE_TARGET): $(MR_LSP_SERVER_PROFILE_OBJECT) $(MR_LSP_SERVER_PROFILE_PROBE_OBJECT)
+	$(TMP_RUN) $(CXX) -o $@ $^ -pthread
 
 $(MR_LSP_APP_SERVICE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(MR_LSP_APP_SERVICE_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
@@ -815,6 +827,7 @@ clean:
 		$(MR_SERVICE_RESULTS_OBJECT) $(MR_SERVICE_RESULTS_PROBE_OBJECT) $(MR_SERVICE_RESULTS_PROBE_TARGET) \
 		$(MR_LSP_SERVICE_SESSION_OBJECT) $(MR_LSP_SERVICE_SESSION_PROBE_OBJECT) $(MR_LSP_SERVICE_SESSION_PROBE_TARGET) \
 		$(MR_LSP_EDITOR_SOURCE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_TARGET) \
+		$(MR_LSP_SERVER_PROFILE_OBJECT) $(MR_LSP_SERVER_PROFILE_PROBE_OBJECT) $(MR_LSP_SERVER_PROFILE_PROBE_TARGET) \
 		$(MR_LSP_APP_SERVICE_OBJECT) $(MR_LSP_APP_SERVICE_PROBE_OBJECT) $(MR_LSP_APP_SERVICE_PROBE_TARGET) \
 		$(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT) $(LSP_JSONRPC_PROBE_TARGET) \
 		$(EXTERNAL_PROCESS_OBJECT) $(EXTERNAL_PROCESS_PROBE_OBJECT) $(EXTERNAL_PROCESS_PROBE_TARGET) \

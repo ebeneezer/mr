@@ -62,6 +62,7 @@
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../app/services/MRLspAppService.hpp"
+#include "../app/services/MRLspServerProfile.hpp"
 #include "../keymap/MRKeymapActionCatalog.hpp"
 #include "../keymap/MRKeymapSequence.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
@@ -1111,130 +1112,8 @@ std::string firstDisplayLine(const std::string &text, std::size_t maxLength) {
 	return result;
 }
 
-bool buildLspServerProfileFromEnvironment(mr::services::MRLspServerProfile &profile) {
-	const char *server = std::getenv("MR_LSP_SERVER");
-	const char *arguments = std::getenv("MR_LSP_SERVER_ARGS");
-	std::istringstream argumentStream(arguments != nullptr ? arguments : "");
-	std::string argument;
-
-	profile = mr::services::MRLspServerProfile();
-	if (server == nullptr || trimAscii(server).empty()) return false;
-	profile.profileName = "environment";
-	profile.executablePath = trimAscii(server);
-	profile.workingDirectory = ".";
-	while (argumentStream >> argument)
-		profile.arguments.push_back(argument);
-	return true;
-}
-
-struct LspServerStartEntry {
-	MRSyntaxLanguage language;
-	const char *profileName;
-	const char *executableName;
-	const char *argument1;
-	const char *argument2;
-};
-
-const LspServerStartEntry lspServerStartTable[] = {
-	{ MRSyntaxLanguage::C, "builtin-c-clangd", "clangd", nullptr, nullptr },
-	{ MRSyntaxLanguage::Cpp, "builtin-cpp-clangd", "clangd", nullptr, nullptr },
-};
-
-bool isExecutableFile(const std::string &path) {
-	return !path.empty() && ::access(path.c_str(), X_OK) == 0;
-}
-
-bool executableNameHasPath(const std::string &name) {
-	return name.find('/') != std::string::npos;
-}
-
-bool findExecutableOnPath(const std::string &executableName, std::string &resolvedPath) {
-	const char *pathEnvironment = std::getenv("PATH");
-	std::string pathText = pathEnvironment != nullptr ? pathEnvironment : "";
-	std::size_t start = 0;
-
-	resolvedPath.clear();
-	if (executableName.empty()) return false;
-	if (executableNameHasPath(executableName)) {
-		if (!isExecutableFile(executableName)) return false;
-		resolvedPath = executableName;
-		return true;
-	}
-
-	while (start <= pathText.size()) {
-		std::size_t end = pathText.find(':', start);
-		std::string directory;
-		std::string candidate;
-
-		if (end == std::string::npos) end = pathText.size();
-		directory = pathText.substr(start, end - start);
-		if (directory.empty()) directory = ".";
-		candidate = directory;
-		if (!candidate.empty() && candidate[candidate.size() - 1] != '/') candidate += "/";
-		candidate += executableName;
-		if (isExecutableFile(candidate)) {
-			resolvedPath = candidate;
-			return true;
-		}
-		if (end == pathText.size()) break;
-		start = end + 1;
-	}
-	return false;
-}
-
-const LspServerStartEntry *findBuiltInLspServerStartEntry(MRSyntaxLanguage language) {
-	const std::size_t entryCount = sizeof(lspServerStartTable) / sizeof(lspServerStartTable[0]);
-
-	for (std::size_t index = 0; index < entryCount; ++index) {
-		if (lspServerStartTable[index].language == language) return &lspServerStartTable[index];
-	}
-	return nullptr;
-}
-
-void appendLspServerStartArguments(mr::services::MRLspServerProfile &profile, const LspServerStartEntry &entry) {
-	if (entry.argument1 != nullptr && entry.argument1[0] != '\0') profile.arguments.push_back(entry.argument1);
-	if (entry.argument2 != nullptr && entry.argument2[0] != '\0') profile.arguments.push_back(entry.argument2);
-}
-
 bool buildLspServerProfileFromEditor(const MRFileEditor &editor, mr::services::MRLspServerProfile &profile, std::string &configurationSource, std::string &errorMessage) {
-	const LspServerStartEntry *entry = nullptr;
-	std::string executablePath;
-
-	profile = mr::services::MRLspServerProfile();
-	configurationSource.clear();
-	errorMessage.clear();
-
-	if (buildLspServerProfileFromEnvironment(profile)) {
-		configurationSource = "MR_LSP_SERVER";
-		return true;
-	}
-
-	entry = findBuiltInLspServerStartEntry(editor.syntaxLanguage());
-	if (entry == nullptr) {
-		errorMessage = std::string("No built-in LSP server for language ") + editor.syntaxLanguageName() + ". Set MR_LSP_SERVER.";
-		return false;
-	}
-	if (!findExecutableOnPath(entry->executableName, executablePath)) {
-		errorMessage = std::string("Built-in LSP server for language ") + editor.syntaxLanguageName() + " is not executable or not in PATH: " + entry->executableName;
-		return false;
-	}
-
-	profile.profileName = entry->profileName;
-	profile.executablePath = executablePath;
-	appendLspServerStartArguments(profile, *entry);
-	profile.workingDirectory.clear();
-	configurationSource = std::string("built-in language mapping: ") + editor.syntaxLanguageName();
-	return true;
-}
-
-std::string lspServerProfileArgumentText(const mr::services::MRLspServerProfile &profile) {
-	std::ostringstream argumentText;
-
-	for (std::size_t i = 0; i < profile.arguments.size(); ++i) {
-		if (i != 0) argumentText << " ";
-		argumentText << profile.arguments[i];
-	}
-	return argumentText.str();
+	return mr::services::buildLspServerProfileForLanguage(editor.syntaxLanguage(), editor.syntaxLanguageName(), profile, configurationSource, errorMessage);
 }
 
 bool buildCurrentLspDocumentSnapshot(MREditWindow *win, mr::services::MRWorkspaceDocumentSnapshot &document) {
@@ -1299,7 +1178,7 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	}
 	g_lspLastServerExecutable = profile.executablePath;
 	g_lspLastServerWorkingDirectory = profile.workingDirectory;
-	g_lspLastServerArguments = lspServerProfileArgumentText(profile);
+	g_lspLastServerArguments = mr::services::lspServerProfileArgumentText(profile);
 	g_lspLastServerConfigurationSource = configurationSource;
 	position = currentLspTextPosition(*editor);
 	positionText << (position.line + 1) << ":" << (position.character + 1);
@@ -1336,7 +1215,7 @@ bool syncCurrentEditorForLspResults() {
 
 	g_lspLastServerExecutable = profile.executablePath;
 	g_lspLastServerWorkingDirectory = profile.workingDirectory;
-	g_lspLastServerArguments = lspServerProfileArgumentText(profile);
+	g_lspLastServerArguments = mr::services::lspServerProfileArgumentText(profile);
 	g_lspLastServerConfigurationSource = configurationSource;
 	g_lspLastRequestPath = document.path;
 	g_lspAppService.setMainFileByBufferId(document.bufferId);
@@ -1864,7 +1743,7 @@ bool showLspStatusDialog() {
 
 	if (TProgram::deskTop == nullptr) return false;
 	if (currentEditor != nullptr) configured = buildLspServerProfileFromEditor(*currentEditor, profile, configurationSource, profileError);
-	else if (buildLspServerProfileFromEnvironment(profile)) {
+	else if (mr::services::buildLspServerProfileFromEnvironment(profile)) {
 		configured = true;
 		configurationSource = "MR_LSP_SERVER";
 	} else
