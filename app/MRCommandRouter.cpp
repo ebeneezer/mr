@@ -1861,18 +1861,8 @@ bool showLspResultsDialog() {
 	if (TProgram::deskTop == nullptr) return false;
 
 	for (const mr::services::MRServiceDiagnosticResult &result : results.diagnosticResults()) {
-		if (result.diagnostics.empty()) {
-			LspResultDialogRow row;
-
-			rowText.str(std::string());
-			rowText.clear();
-			rowText << "DIAG [" << lspResultStateText(result.header.state) << "] 0 diagnostics";
-			if (!result.header.identity.path.empty()) rowText << " " << result.header.identity.path;
-			if (!result.header.errorMessage.empty()) rowText << " - " << result.header.errorMessage;
-			row.text = rowText.str();
-			rows.push_back(row);
-			continue;
-		}
+		if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+		if (result.header.identity.path.empty()) continue;
 		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics) {
 			LspResultDialogRow row;
 
@@ -1883,12 +1873,10 @@ bool showLspResultsDialog() {
 			if (!result.header.identity.path.empty()) rowText << result.header.identity.path << " - ";
 			rowText << firstDisplayLine(diagnostic.message, 80);
 			row.text = rowText.str();
-			if (!result.header.identity.path.empty()) {
-				row.action = LspResultDialogAction::NavigateLocation;
-				row.location.path = result.header.identity.path;
-				row.location.uri = result.header.identity.uri;
-				row.location.range = diagnostic.navigationRange;
-			}
+			row.action = LspResultDialogAction::NavigateLocation;
+			row.location.path = result.header.identity.path;
+			row.location.uri = result.header.identity.uri;
+			row.location.range = diagnostic.navigationRange;
 			rows.push_back(row);
 		}
 	}
@@ -1896,31 +1884,19 @@ bool showLspResultsDialog() {
 	for (const mr::services::MRServiceLocationResult &result : results.locationResults()) {
 		const char *kind = result.header.kind == mr::services::MRServiceResultKind::References ? "REF" : "DEF";
 
-		if (result.locations.empty()) {
-			LspResultDialogRow row;
-
-			rowText.str(std::string());
-			rowText.clear();
-			rowText << kind << " [" << lspResultStateText(result.header.state) << "] 0 locations";
-			if (!result.header.identity.path.empty()) rowText << " " << result.header.identity.path;
-			if (!result.header.errorMessage.empty()) rowText << " - " << result.header.errorMessage;
-			row.text = rowText.str();
-			rows.push_back(row);
-			continue;
-		}
+		if (result.header.state != mr::services::MRServiceResultState::Current) continue;
 		for (const mr::services::MRServiceLocationTarget &target : result.locations) {
 			LspResultDialogRow row;
 
+			if (target.path.empty()) continue;
 			rowText.str(std::string());
 			rowText.clear();
 			rowText << kind << " [" << lspResultStateText(result.header.state) << "] ";
 			rowText << (target.range.start.line + 1) << ":" << (target.range.start.character + 1) << " ";
 			rowText << (!target.path.empty() ? target.path : target.uri);
 			row.text = rowText.str();
-			if (!target.path.empty()) {
-				row.action = LspResultDialogAction::NavigateLocation;
-				row.location = target;
-			}
+			row.action = LspResultDialogAction::NavigateLocation;
+			row.location = target;
 			rows.push_back(row);
 		}
 	}
@@ -1929,7 +1905,9 @@ bool showLspResultsDialog() {
 		LspResultDialogRow row;
 		std::string text = firstDisplayLine(result.hover.value, 90);
 
-		if (text.empty()) text = "empty hover";
+		if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+		if (result.hover.value.empty()) continue;
+		if (text.empty()) continue;
 		rowText.str(std::string());
 		rowText.clear();
 		rowText << "HOVER [" << lspResultStateText(result.header.state) << "] ";
@@ -1937,81 +1915,9 @@ bool showLspResultsDialog() {
 		rowText << text;
 		if (!result.header.errorMessage.empty()) rowText << " - " << result.header.errorMessage;
 		row.text = rowText.str();
-		if (result.header.state == mr::services::MRServiceResultState::Current && !result.hover.value.empty()) {
-			row.action = LspResultDialogAction::ShowHover;
-			row.hover = result;
-		}
+		row.action = LspResultDialogAction::ShowHover;
+		row.hover = result;
 		rows.push_back(row);
-	}
-
-	for (const mr::services::MRServiceCompletionResult &result : results.completionResults()) {
-		std::size_t visibleCompletionItems = std::min<std::size_t>(result.items.size(), 30);
-		LspResultDialogRow summaryRow;
-
-		rowText.str(std::string());
-		rowText.clear();
-		rowText << "COMPL [" << lspResultStateText(result.header.state) << "] " << result.items.size() << " items";
-		if (!result.header.identity.path.empty()) rowText << " " << result.header.identity.path;
-		if (!result.header.errorMessage.empty()) rowText << " - " << result.header.errorMessage;
-		summaryRow.text = rowText.str();
-		rows.push_back(summaryRow);
-		for (std::size_t i = 0; i < visibleCompletionItems; ++i) {
-			const mr::services::MRServiceCompletionItem &item = result.items[i];
-			LspResultDialogRow itemRow;
-
-			rowText.str(std::string());
-			rowText.clear();
-			rowText << "COMPL item [" << lspResultStateText(result.header.state) << "] " << item.label;
-			if (!item.detail.empty()) rowText << " - " << firstDisplayLine(item.detail, 70);
-			itemRow.text = rowText.str();
-			rows.push_back(itemRow);
-		}
-		if (visibleCompletionItems < result.items.size()) {
-			LspResultDialogRow tailRow;
-
-			rowText.str(std::string());
-			rowText.clear();
-			rowText << "COMPL item [" << lspResultStateText(result.header.state) << "] " << (result.items.size() - visibleCompletionItems) << " more items";
-			tailRow.text = rowText.str();
-			rows.push_back(tailRow);
-		}
-	}
-
-	for (const mr::services::MRServiceCodeActionResult &result : results.codeActionResults()) {
-		std::size_t visibleCodeActionItems = std::min<std::size_t>(result.items.size(), 30);
-		LspResultDialogRow summaryRow;
-
-		if (result.items.empty()) continue;
-
-		rowText.str(std::string());
-		rowText.clear();
-		rowText << "ACTION [" << lspResultStateText(result.header.state) << "] " << result.items.size() << " items";
-		if (!result.header.identity.path.empty()) rowText << " " << result.header.identity.path;
-		if (!result.header.errorMessage.empty()) rowText << " - " << result.header.errorMessage;
-		summaryRow.text = rowText.str();
-		rows.push_back(summaryRow);
-		for (std::size_t i = 0; i < visibleCodeActionItems; ++i) {
-			const mr::services::MRServiceCodeActionItem &item = result.items[i];
-			LspResultDialogRow itemRow;
-
-			rowText.str(std::string());
-			rowText.clear();
-			rowText << "ACTION item [" << lspResultStateText(result.header.state) << "] " << item.title;
-			if (!item.kind.empty()) rowText << " - " << item.kind;
-			if (item.hasEdit) rowText << " [edit]";
-			if (item.hasCommand) rowText << " [command]";
-			itemRow.text = rowText.str();
-			rows.push_back(itemRow);
-		}
-		if (visibleCodeActionItems < result.items.size()) {
-			LspResultDialogRow tailRow;
-
-			rowText.str(std::string());
-			rowText.clear();
-			rowText << "ACTION item [" << lspResultStateText(result.header.state) << "] " << (result.items.size() - visibleCodeActionItems) << " more items";
-			tailRow.text = rowText.str();
-			rows.push_back(tailRow);
-		}
 	}
 
 	if (rows.empty()) {
