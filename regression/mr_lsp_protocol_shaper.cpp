@@ -155,7 +155,8 @@ void sendDiagnostics(const std::string &uri, int version, const std::string &mes
 
 std::string initializeResult() {
 	return "{\"capabilities\":{\"textDocumentSync\":1,\"definitionProvider\":true,\"referencesProvider\":true,"
-	       "\"hoverProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\",\"-\"]}}}";
+	       "\"hoverProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\",\"-\"]},"
+	       "\"codeActionProvider\":true}}";
 }
 
 std::string locationResult(const std::string &uri) {
@@ -174,6 +175,14 @@ std::string completionResult() {
 	return "{\"isIncomplete\":false,\"items\":["
 	       "{\"label\":\"shaperCompletionOne\",\"kind\":3,\"detail\":\"protocol shaper item\",\"insertText\":\"shaperCompletionOne\"},"
 	       "{\"label\":\"shaperCompletionTwo\",\"kind\":6,\"detail\":\"protocol shaper fallback\"}]}";
+}
+
+std::string codeActionResult(const std::string &uri) {
+	return "[{\"title\":\"protocol shaper quick fix\",\"kind\":\"quickfix\","
+	       "\"edit\":{\"changes\":{" +
+	       jsonString(uri) +
+	       ":[{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":1}},\"newText\":\";\"}]}}},"
+	       "{\"title\":\"protocol shaper command\",\"command\":{\"title\":\"protocol shaper command\",\"command\":\"mr.protocolShaper\"}}]";
 }
 
 bool handleMessage(ShaperState &state, const mr::lsp::JsonRpcMessage &message) {
@@ -197,6 +206,8 @@ bool handleMessage(ShaperState &state, const mr::lsp::JsonRpcMessage &message) {
 			sendResult(envelope.idText, hoverResult());
 		} else if (envelope.method == "textDocument/completion") {
 			sendResult(envelope.idText, completionResult());
+		} else if (envelope.method == "textDocument/codeAction") {
+			sendResult(envelope.idText, codeActionResult(state.uri));
 		} else {
 			sendResponseError(envelope.idText, "protocol shaper does not implement request: " + envelope.method);
 		}

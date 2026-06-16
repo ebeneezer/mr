@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../app/services/MRServiceResults.hpp"
+#include "../lsp/MRLspCodeAction.hpp"
 #include "../lsp/MRLspCompletion.hpp"
 #include "../lsp/MRLspDiagnostics.hpp"
 #include "../lsp/MRLspHover.hpp"
@@ -68,7 +69,7 @@ bool startLifecycle(mr::lsp::LspLifecycle &lifecycle, std::string &failureReason
 	mr::lsp::LspInitializeSpec spec;
 	std::string errorMessage;
 
-	spec.session.process.executablePath = "./regression/mr_lsp_session_peer";
+	spec.session.process.executablePath = "./regression/mr_lsp_protocol_shaper";
 	spec.initializeParamsJson = "{\"processId\":null,\"rootUri\":null,\"capabilities\":{}}";
 	if (!expect(lifecycle.start(spec, errorMessage), "lifecycle start: " + errorMessage, failureReason)) return false;
 	if (!pollLifecycleUntilState(lifecycle, mr::lsp::LspLifecycleState::Initialized, failureReason)) return false;
@@ -237,26 +238,70 @@ bool requestCompletion(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocum
 	return false;
 }
 
+bool requestCodeActions(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocumentService &service, mr::services::MRServiceResultStore &store, const mr::services::MRWorkspaceServiceSnapshot &workspace, std::string &failureReason) {
+	mr::lsp::LspCodeActionAdapter adapter;
+	mr::lsp::LspCodeActionRequest request;
+	mr::lsp::LspCodeActionResult codeActions;
+	mr::lsp::LspCodeActionRange range;
+	std::string errorMessage;
+	std::vector<mr::lsp::LspInboundMessage> messages;
+	const std::string diagnosticJson = "{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":1}},\"severity\":2,\"message\":\"protocol shaper changed document\"}";
+
+	range.start.line = 0;
+	range.start.character = 0;
+	range.end.line = 0;
+	range.end.character = 1;
+	if (!expect(adapter.requestCodeActions(lifecycle, service, range, diagnosticJson, request, errorMessage), "codeAction request: " + errorMessage, failureReason)) return false;
+	if (!expect(request.method == "textDocument/codeAction", "codeAction method", failureReason)) return false;
+	for (int i = 0; i < 50; ++i) {
+		if (!lifecycle.poll(messages, errorMessage)) {
+			failureReason = "poll codeAction failed: " + errorMessage;
+			return false;
+		}
+		for (const mr::lsp::LspInboundMessage &message : messages) {
+			bool accepted = false;
+			if (!adapter.consume(message, service, request, codeActions, accepted, errorMessage)) {
+				failureReason = "codeAction consume failed: " + errorMessage;
+				return false;
+			}
+			if (accepted) {
+				store.putCodeActions(mr::services::buildServiceCodeActionsFromLsp(workspace, request.uri, workspace.documents.front().documentVersion, request.idText, codeActions));
+				return true;
+			}
+		}
+		::poll(nullptr, 0, 20);
+	}
+	failureReason = "expected codeAction response not observed";
+	return false;
+}
+
 bool verifyResults(const mr::services::MRServiceResultStore &store, std::string &failureReason) {
 	if (!expect(store.diagnosticResults().size() == 1, "diagnostics result count", failureReason)) return false;
 	if (!expect(store.diagnosticResults()[0].header.state == mr::services::MRServiceResultState::Current, "diagnostics state", failureReason)) return false;
 	if (!expect(store.diagnosticResults()[0].header.identity.documentVersion == 2, "diagnostics version", failureReason)) return false;
 	if (!expect(store.diagnosticResults()[0].diagnostics.size() == 1, "diagnostics entry count", failureReason)) return false;
-	if (!expect(store.diagnosticResults()[0].diagnostics[0].message == "changed diagnostic", "diagnostics message", failureReason)) return false;
+	if (!expect(store.diagnosticResults()[0].diagnostics[0].message == "protocol shaper changed document", "diagnostics message", failureReason)) return false;
 	if (!expect(store.locationResults().size() == 2, "location result count", failureReason)) return false;
 	if (!expect(store.locationResults()[0].header.kind == mr::services::MRServiceResultKind::Definition, "definition result kind", failureReason)) return false;
 	if (!expect(store.locationResults()[0].locations.size() == 1, "definition target count", failureReason)) return false;
 	if (!expect(store.locationResults()[0].locations[0].path == "/tmp/mr/project/src/main.cpp", "definition path", failureReason)) return false;
 	if (!expect(store.locationResults()[1].header.kind == mr::services::MRServiceResultKind::References, "references result kind", failureReason)) return false;
 	if (!expect(store.locationResults()[1].locations.size() == 2, "references target count", failureReason)) return false;
-	if (!expect(store.locationResults()[1].locations[1].path == "/tmp/other.cpp", "references external path", failureReason)) return false;
+	if (!expect(store.locationResults()[1].locations[1].path == "/tmp/mr/project/src/main.cpp", "references second path", failureReason)) return false;
 	if (!expect(store.hoverResults().size() == 1, "hover result count", failureReason)) return false;
-	if (!expect(store.hoverResults()[0].hover.markupKind == "markdown", "hover kind", failureReason)) return false;
-	if (!expect(store.hoverResults()[0].hover.value == "**mr hover**\n\nDeterministic hover text.", "hover value", failureReason)) return false;
+	if (!expect(store.hoverResults()[0].hover.markupKind == "plaintext", "hover kind", failureReason)) return false;
+	if (!expect(store.hoverResults()[0].hover.value == "mr protocol shaper hover", "hover value", failureReason)) return false;
 	if (!expect(store.completionResults().size() == 1, "completion result count", failureReason)) return false;
 	if (!expect(store.completionResults()[0].items.size() == 2, "completion item count", failureReason)) return false;
-	if (!expect(store.completionResults()[0].items[0].label == "main", "completion first label", failureReason)) return false;
-	if (!expect(store.completionResults()[0].items[1].label == "macroValue", "completion second label", failureReason)) return false;
+	if (!expect(store.completionResults()[0].items[0].label == "shaperCompletionOne", "completion first label", failureReason)) return false;
+	if (!expect(store.completionResults()[0].items[0].insertText == "shaperCompletionOne", "completion first insertText", failureReason)) return false;
+	if (!expect(store.completionResults()[0].items[1].label == "shaperCompletionTwo", "completion second label", failureReason)) return false;
+	if (!expect(store.codeActionResults().size() == 1, "codeAction result count", failureReason)) return false;
+	if (!expect(store.codeActionResults()[0].items.size() == 2, "codeAction item count", failureReason)) return false;
+	if (!expect(store.codeActionResults()[0].items[0].title == "protocol shaper quick fix", "codeAction first title", failureReason)) return false;
+	if (!expect(store.codeActionResults()[0].items[0].hasEdit, "codeAction first edit", failureReason)) return false;
+	if (!expect(store.codeActionResults()[0].items[1].title == "protocol shaper command", "codeAction second title", failureReason)) return false;
+	if (!expect(store.codeActionResults()[0].items[1].hasCommand, "codeAction second command", failureReason)) return false;
 	return true;
 }
 
@@ -277,6 +322,7 @@ bool runProbe(std::string &failureReason) {
 	if (!requestReferences(lifecycle, service, store, workspace, failureReason)) return false;
 	if (!requestHover(lifecycle, service, store, workspace, failureReason)) return false;
 	if (!requestCompletion(lifecycle, service, store, workspace, failureReason)) return false;
+	if (!requestCodeActions(lifecycle, service, store, workspace, failureReason)) return false;
 	if (!verifyResults(store, failureReason)) return false;
 	if (!expect(service.close(errorMessage), "close: " + errorMessage, failureReason)) return false;
 	return shutdownLifecycle(lifecycle, failureReason);

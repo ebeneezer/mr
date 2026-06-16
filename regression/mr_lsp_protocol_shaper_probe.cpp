@@ -133,6 +133,7 @@ bool testProtocolChannels(std::string &failureReason) {
 	const std::string documentParams = "{\"textDocument\":{\"uri\":\"file:///tmp/mr-lsp-shaper.c\",\"languageId\":\"c\",\"version\":1,\"text\":\"int main(void){return 0;}\\n\"}}";
 	const std::string changedParams = "{\"textDocument\":{\"uri\":\"file:///tmp/mr-lsp-shaper.c\",\"version\":2},\"contentChanges\":[{\"text\":\"int main(void){return 1;}\\n\"}]}";
 	const std::string requestParams = "{\"textDocument\":{\"uri\":\"file:///tmp/mr-lsp-shaper.c\"},\"position\":{\"line\":0,\"character\":4}}";
+	const std::string codeActionParams = "{\"textDocument\":{\"uri\":\"file:///tmp/mr-lsp-shaper.c\"},\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":1}},\"context\":{\"diagnostics\":[]}}";
 
 	if (!startShaper(session, "", failureReason)) return false;
 	if (!sendInitialize(session, failureReason)) return false;
@@ -145,6 +146,7 @@ bool testProtocolChannels(std::string &failureReason) {
 	if (!requestAndExpectPayload(session, "textDocument/references", requestParams, "\"result\":[", failureReason)) return false;
 	if (!requestAndExpectPayload(session, "textDocument/hover", requestParams, "mr protocol shaper hover", failureReason)) return false;
 	if (!requestAndExpectPayload(session, "textDocument/completion", requestParams, "shaperCompletionOne", failureReason)) return false;
+	if (!requestAndExpectPayload(session, "textDocument/codeAction", codeActionParams, "protocol shaper quick fix", failureReason)) return false;
 	if (!expect(session.sendNotification("textDocument/didClose", "{\"textDocument\":{\"uri\":\"file:///tmp/mr-lsp-shaper.c\"}}", errorMessage), "didClose send: " + errorMessage, failureReason)) return false;
 	if (!expectNotification(session, "textDocument/publishDiagnostics", "protocol shaper closed document", failureReason)) return false;
 	return sendShutdownAndExit(session, failureReason);
