@@ -5314,12 +5314,23 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 	const std::size_t requestIdCheck = requestBody.find("lspCompletionRequestIdKnown(knownRequestIds, completions[index].header.requestId)");
 	const std::size_t markReported = requestBody.find("g_lspReportedCompletionCount = completions.size()", requestIdCheck);
 	const std::size_t directReport = requestBody.find("reportLspCompletionResult(completions[index])", requestIdCheck);
+	const std::size_t pollCall = requestBody.find("g_lspAppService.poll(errorMessage)");
+	const std::size_t completionsRead = requestBody.find("completionResults()", pollCall);
+	const std::size_t genericReport = requestBody.find("reportNewLspResults");
 	if (requestIdCheck == std::string::npos || markReported == std::string::npos || directReport == std::string::npos) {
 		failureReason = "LSP completion command must detect replacement results by request id and report the matching result directly.";
 		return false;
 	}
 	if (markReported > directReport) {
 		failureReason = "LSP completion command must mark stored completion results reported before opening the modal completion dialog.";
+		return false;
+	}
+	if (pollCall == std::string::npos || completionsRead == std::string::npos || pollCall > completionsRead) {
+		failureReason = "LSP completion command must poll and inspect completion results directly.";
+		return false;
+	}
+	if (genericReport != std::string::npos) {
+		failureReason = "LSP completion command must not use generic result reporting while waiting for completion.";
 		return false;
 	}
 
