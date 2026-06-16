@@ -156,6 +156,26 @@ bool extractOptionalTopLevelStringValue(const std::string &object, const std::st
 	return parseJsonStringAt(object, pos, value);
 }
 
+bool extractTopLevelIntValue(const std::string &object, const std::string &key, int &value) {
+	std::size_t pos = 0;
+	bool negative = false;
+	int parsed = 0;
+
+	value = 0;
+	if (!findTopLevelObjectValueStart(object, key, pos)) return false;
+	if (pos < object.size() && object[pos] == '-') {
+		negative = true;
+		++pos;
+	}
+	if (pos >= object.size() || object[pos] < '0' || object[pos] > '9') return false;
+	while (pos < object.size() && object[pos] >= '0' && object[pos] <= '9') {
+		parsed = parsed * 10 + static_cast<int>(object[pos] - '0');
+		++pos;
+	}
+	value = negative ? -parsed : parsed;
+	return true;
+}
+
 bool hasTopLevelObjectKey(const std::string &object, const std::string &key) {
 	std::size_t pos = 0;
 
@@ -230,11 +250,113 @@ std::string buildCodeActionRequestPayload(const LspCodeActionRequest &request) {
 	return out.str();
 }
 
+bool parsePositionObject(const std::string &object, LspTextPosition &position) {
+	return extractTopLevelIntValue(object, "line", position.line) && extractTopLevelIntValue(object, "character", position.character);
+}
+
+bool parseRangeObject(const std::string &object, LspCodeActionRange &range) {
+	std::size_t startPos = 0;
+	std::size_t startEnd = 0;
+	std::size_t endPos = 0;
+	std::size_t endEnd = 0;
+
+	if (!findTopLevelObjectValueStart(object, "start", startPos) || startPos >= object.size() || object[startPos] != '{') return false;
+	if (!findMatchingBracket(object, startPos, '{', '}', startEnd)) return false;
+	if (!findTopLevelObjectValueStart(object, "end", endPos) || endPos >= object.size() || object[endPos] != '{') return false;
+	if (!findMatchingBracket(object, endPos, '{', '}', endEnd)) return false;
+	return parsePositionObject(object.substr(startPos, startEnd - startPos + 1), range.start) && parsePositionObject(object.substr(endPos, endEnd - endPos + 1), range.end);
+}
+
+bool parseTextEditObject(const std::string &object, const std::string &uri, LspCodeActionTextEdit &edit) {
+	std::size_t rangePos = 0;
+	std::size_t rangeEnd = 0;
+
+	edit = LspCodeActionTextEdit();
+	edit.uri = uri;
+	if (!findTopLevelObjectValueStart(object, "range", rangePos) || rangePos >= object.size() || object[rangePos] != '{') return false;
+	if (!findMatchingBracket(object, rangePos, '{', '}', rangeEnd)) return false;
+	if (!parseRangeObject(object.substr(rangePos, rangeEnd - rangePos + 1), edit.range)) return false;
+	return extractTopLevelStringValue(object, "newText", edit.newText);
+}
+
+bool parseTextEditArray(const std::string &arrayText, const std::string &uri, std::vector<LspCodeActionTextEdit> &edits) {
+	std::size_t arrayEnd = 0;
+	std::size_t pos = 1;
+
+	if (arrayText.empty() || arrayText[0] != '[') return false;
+	if (!findMatchingBracket(arrayText, 0, '[', ']', arrayEnd)) return false;
+	while (pos < arrayEnd) {
+		skipWhitespace(arrayText, pos);
+		if (pos >= arrayEnd) break;
+		if (arrayText[pos] == ',') {
+			++pos;
+			continue;
+		}
+		if (arrayText[pos] != '{') return false;
+		std::size_t objectEnd = 0;
+		if (!findMatchingBracket(arrayText, pos, '{', '}', objectEnd) || objectEnd > arrayEnd) return false;
+		LspCodeActionTextEdit edit;
+		if (!parseTextEditObject(arrayText.substr(pos, objectEnd - pos + 1), uri, edit)) return false;
+		edits.push_back(edit);
+		pos = objectEnd + 1;
+	}
+	return true;
+}
+
+bool parseChangesObject(const std::string &object, std::vector<LspCodeActionTextEdit> &edits) {
+	std::size_t pos = 0;
+
+	skipWhitespace(object, pos);
+	if (pos >= object.size() || object[pos] != '{') return false;
+	++pos;
+	while (pos < object.size()) {
+		std::string uri;
+		std::size_t arrayEnd = 0;
+
+		skipWhitespace(object, pos);
+		if (pos < object.size() && object[pos] == '}') return true;
+		if (!parseJsonStringAt(object, pos, uri)) return false;
+		skipWhitespace(object, pos);
+		if (pos >= object.size() || object[pos] != ':') return false;
+		++pos;
+		skipWhitespace(object, pos);
+		if (pos >= object.size() || object[pos] != '[') return false;
+		if (!findMatchingBracket(object, pos, '[', ']', arrayEnd)) return false;
+		if (!parseTextEditArray(object.substr(pos, arrayEnd - pos + 1), uri, edits)) return false;
+		pos = arrayEnd + 1;
+		skipWhitespace(object, pos);
+		if (pos < object.size() && object[pos] == ',') {
+			++pos;
+			continue;
+		}
+		if (pos < object.size() && object[pos] == '}') return true;
+	}
+	return false;
+}
+
+bool parseCodeActionEdits(const std::string &object, std::vector<LspCodeActionTextEdit> &edits) {
+	std::size_t editPos = 0;
+	std::size_t editEnd = 0;
+	std::size_t changesPos = 0;
+	std::size_t changesEnd = 0;
+	std::string editObject;
+
+	edits.clear();
+	if (!findTopLevelObjectValueStart(object, "edit", editPos) || editPos >= object.size() || object[editPos] != '{') return true;
+	if (!findMatchingBracket(object, editPos, '{', '}', editEnd)) return false;
+	editObject = object.substr(editPos, editEnd - editPos + 1);
+	if (!findTopLevelObjectValueStart(editObject, "changes", changesPos)) return true;
+	if (changesPos >= editObject.size() || editObject[changesPos] != '{') return false;
+	if (!findMatchingBracket(editObject, changesPos, '{', '}', changesEnd)) return false;
+	return parseChangesObject(editObject.substr(changesPos, changesEnd - changesPos + 1), edits);
+}
+
 bool parseCodeActionObject(const std::string &object, LspCodeActionItem &item) {
 	if (!extractTopLevelStringValue(object, "title", item.title)) return false;
 	if (!extractOptionalTopLevelStringValue(object, "kind", item.kind)) return false;
 	item.hasEdit = hasTopLevelObjectKey(object, "edit");
 	item.hasCommand = hasTopLevelObjectKey(object, "command");
+	if (!parseCodeActionEdits(object, item.edits)) return false;
 	item.rawJson = object;
 	return true;
 }

@@ -335,6 +335,18 @@ MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServic
 		serviceItem.hasEdit = item.hasEdit;
 		serviceItem.hasCommand = item.hasCommand;
 		serviceItem.rawLspCodeActionJson = item.rawJson;
+		for (const mr::lsp::LspCodeActionTextEdit &edit : item.edits) {
+			MRServiceTextEdit serviceEdit;
+			std::string path;
+			std::string uriError;
+
+			serviceEdit.uri = edit.uri;
+			if (mr::lsp::fileUriToPath(edit.uri, path, uriError)) serviceEdit.path = normalizeWorkspaceServicePath(path);
+			serviceEdit.range.start = servicePositionFromLsp(edit.range.start);
+			serviceEdit.range.end = servicePositionFromLsp(edit.range.end);
+			serviceEdit.newText = edit.newText;
+			serviceItem.edits.push_back(serviceEdit);
+		}
 		result.items.push_back(serviceItem);
 	}
 	return result;

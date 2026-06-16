@@ -38,6 +38,7 @@
 #include <fnmatch.h>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -1367,7 +1368,8 @@ class LspReferencesListView final : public TListViewer {
 enum class LspResultDialogAction : unsigned char {
 	None = 0,
 	NavigateLocation,
-	ShowHover
+	ShowHover,
+	ApplyCodeAction
 };
 
 struct LspResultDialogRow {
@@ -1375,6 +1377,8 @@ struct LspResultDialogRow {
 	LspResultDialogAction action = LspResultDialogAction::None;
 	mr::services::MRServiceLocationTarget location;
 	mr::services::MRServiceHoverResult hover;
+	const mr::services::MRServiceCodeActionResult *codeActionResult = nullptr;
+	const mr::services::MRServiceCodeActionItem *codeActionItem = nullptr;
 };
 
 const char *lspResultStateText(mr::services::MRServiceResultState state) noexcept {
@@ -1508,6 +1512,99 @@ class LspCompletionListView final : public TListViewer {
   private:
 	const std::vector<mr::services::MRServiceCompletionItem> &items;
 };
+
+struct LspResolvedTextEdit {
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::string text;
+};
+
+bool lspCodeActionEditTargetsCurrentDocument(const mr::services::MRServiceCodeActionItem &item, const mr::services::MRServiceDocumentIdentity &identity) {
+	if (!item.hasEdit || item.edits.empty()) return false;
+	if (identity.path.empty()) return false;
+	for (const mr::services::MRServiceTextEdit &edit : item.edits) {
+		if (edit.path.empty()) return false;
+		if (edit.path != identity.path) return false;
+	}
+	return true;
+}
+
+bool lspTextOffsetForPosition(const std::string &text, const mr::services::MRServiceTextPosition &position, std::size_t &offset) {
+	std::size_t line = 0;
+	std::size_t lineStart = 0;
+	std::size_t lineEnd = 0;
+
+	offset = 0;
+	if (position.line < 0 || position.character < 0) return false;
+	while (line < static_cast<std::size_t>(position.line)) {
+		const std::size_t nextBreak = text.find('\n', lineStart);
+
+		if (nextBreak == std::string::npos) return false;
+		lineStart = nextBreak + 1;
+		++line;
+	}
+	lineEnd = text.find('\n', lineStart);
+	if (lineEnd == std::string::npos) lineEnd = text.size();
+	if (static_cast<std::size_t>(position.character) > lineEnd - lineStart) return false;
+	offset = lineStart + static_cast<std::size_t>(position.character);
+	return true;
+}
+
+bool applyLspCodeActionEdits(MRFileEditor &editor, const mr::services::MRServiceCodeActionResult &result, const mr::services::MRServiceCodeActionItem &item, std::string &errorMessage) {
+	std::vector<LspResolvedTextEdit> resolvedEdits;
+	const std::string currentText = editor.snapshotText();
+
+	if (result.header.state != mr::services::MRServiceResultState::Current) {
+		errorMessage = "LSP code action result is not current.";
+		return false;
+	}
+	if (result.header.identity.documentVersion != editor.documentVersion()) {
+		errorMessage = "LSP code action belongs to an older document version.";
+		return false;
+	}
+	if (!lspCodeActionEditTargetsCurrentDocument(item, result.header.identity)) {
+		errorMessage = "LSP code action has no applicable same-document edit.";
+		return false;
+	}
+	for (const mr::services::MRServiceTextEdit &edit : item.edits) {
+		LspResolvedTextEdit resolved;
+
+		if (!lspTextOffsetForPosition(currentText, edit.range.start, resolved.start) || !lspTextOffsetForPosition(currentText, edit.range.end, resolved.end)) {
+			errorMessage = "LSP code action edit range is outside the document.";
+			return false;
+		}
+		if (resolved.end < resolved.start) {
+			errorMessage = "LSP code action edit range is reversed.";
+			return false;
+		}
+		resolved.text = edit.newText;
+		resolvedEdits.push_back(resolved);
+	}
+	std::sort(resolvedEdits.begin(), resolvedEdits.end(), [](const LspResolvedTextEdit &left, const LspResolvedTextEdit &right) {
+		if (left.start != right.start) return left.start < right.start;
+		return left.end < right.end;
+	});
+	for (std::size_t i = 1; i < resolvedEdits.size(); ++i) {
+		if (resolvedEdits[i].start < resolvedEdits[i - 1].end) {
+			errorMessage = "LSP code action edits overlap.";
+			return false;
+		}
+	}
+	for (std::size_t i = resolvedEdits.size(); i > 0; --i) {
+		const LspResolvedTextEdit &edit = resolvedEdits[i - 1];
+
+		if (edit.start > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || edit.end > static_cast<std::size_t>(std::numeric_limits<uint>::max())) {
+			errorMessage = "LSP code action edit range is too large.";
+			return false;
+		}
+		if (!editor.replaceRangeAndSelect(static_cast<uint>(edit.start), static_cast<uint>(edit.end), edit.text.data(), static_cast<uint>(edit.text.size()))) {
+			errorMessage = "LSP code action editor replace failed.";
+			return false;
+		}
+	}
+	errorMessage.clear();
+	return true;
+}
 
 bool showLspReferencesDialog(const mr::services::MRServiceLocationResult &result) {
 	MRDialogFoundation *dialog = nullptr;
@@ -1726,6 +1823,17 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 	return true;
 }
 
+MREditWindow *findLspCodeActionTargetWindow(const mr::services::MRServiceCodeActionResult &result) {
+	MREditWindow *window = nullptr;
+
+	if (result.header.identity.bufferId != 0) {
+		window = findEditWindowByBufferId(result.header.identity.bufferId);
+		if (window != nullptr) return window;
+	}
+	if (!result.header.identity.path.empty()) return findOpenLspTargetWindow(result.header.identity.path);
+	return nullptr;
+}
+
 bool showLspStatusDialog() {
 	MRDialogFoundation *dialog = nullptr;
 	MREditWindow *currentWindow = currentEditorCommandWindow();
@@ -1852,6 +1960,7 @@ bool showLspResultsDialog() {
 	std::vector<LspResultDialogRow> rows;
 	std::ostringstream rowText;
 	std::string navigationError;
+	std::string codeActionError;
 	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
 	const short width = 108;
 	short visibleRows = 0;
@@ -1920,6 +2029,29 @@ bool showLspResultsDialog() {
 		rows.push_back(row);
 	}
 
+	for (const mr::services::MRServiceCodeActionResult &result : results.codeActionResults()) {
+		if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+		for (const mr::services::MRServiceCodeActionItem &item : result.items) {
+			LspResultDialogRow row;
+			const mr::services::MRServiceTextEdit *firstEdit = nullptr;
+
+			if (!lspCodeActionEditTargetsCurrentDocument(item, result.header.identity)) continue;
+			firstEdit = &item.edits[0];
+			rowText.str(std::string());
+			rowText.clear();
+			rowText << "ACTION [" << lspResultStateText(result.header.state) << "] ";
+			rowText << (firstEdit->range.start.line + 1) << ":" << (firstEdit->range.start.character + 1) << " ";
+			if (!result.header.identity.path.empty()) rowText << result.header.identity.path << " - ";
+			rowText << firstDisplayLine(item.title, 90);
+			if (!item.kind.empty()) rowText << " - " << item.kind;
+			row.text = rowText.str();
+			row.action = LspResultDialogAction::ApplyCodeAction;
+			row.codeActionResult = &result;
+			row.codeActionItem = &item;
+			rows.push_back(row);
+		}
+	}
+
 	if (rows.empty()) {
 		postLspWarning("LSP results: no results available.");
 		return true;
@@ -1958,6 +2090,22 @@ bool showLspResultsDialog() {
 		return true;
 	}
 	if (selectedRow.action == LspResultDialogAction::ShowHover) return showLspHoverDialog(selectedRow.hover);
+	if (selectedRow.action == LspResultDialogAction::ApplyCodeAction && selectedRow.codeActionResult != nullptr && selectedRow.codeActionItem != nullptr) {
+		MREditWindow *targetWindow = findLspCodeActionTargetWindow(*selectedRow.codeActionResult);
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+
+		if (targetEditor == nullptr) {
+			postLspWarning("LSP code action apply failed: target editor is not open.");
+			return true;
+		}
+		static_cast<void>(mrActivateEditWindow(targetWindow));
+		if (!applyLspCodeActionEdits(*targetEditor, *selectedRow.codeActionResult, *selectedRow.codeActionItem, codeActionError)) {
+			postLspWarning("LSP code action apply failed: " + codeActionError);
+			return true;
+		}
+		postLspInfo("LSP code action applied: " + firstDisplayLine(selectedRow.codeActionItem->title, 80));
+		return true;
+	}
 	return true;
 }
 

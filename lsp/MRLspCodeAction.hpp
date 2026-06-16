@@ -16,6 +16,12 @@ struct LspCodeActionRange {
 	LspTextPosition end;
 };
 
+struct LspCodeActionTextEdit {
+	std::string uri;
+	LspCodeActionRange range;
+	std::string newText;
+};
+
 struct LspCodeActionRequest {
 	std::string idText;
 	std::string method;
@@ -30,6 +36,7 @@ struct LspCodeActionItem {
 	std::string kind;
 	bool hasEdit = false;
 	bool hasCommand = false;
+	std::vector<LspCodeActionTextEdit> edits;
 	std::string rawJson;
 };
 

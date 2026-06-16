@@ -142,6 +142,13 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	codeActions.items[0].title = "Insert semicolon";
 	codeActions.items[0].kind = "quickfix";
 	codeActions.items[0].hasEdit = true;
+	codeActions.items[0].edits.push_back(mr::lsp::LspCodeActionTextEdit());
+	codeActions.items[0].edits[0].uri = mainUri;
+	codeActions.items[0].edits[0].range.start.line = 0;
+	codeActions.items[0].edits[0].range.start.character = 4;
+	codeActions.items[0].edits[0].range.end.line = 0;
+	codeActions.items[0].edits[0].range.end.character = 4;
+	codeActions.items[0].edits[0].newText = ";";
 	codeActions.items[0].rawJson = "{\"title\":\"Insert semicolon\",\"kind\":\"quickfix\",\"edit\":{}}";
 
 	mr::lsp::LspDefinitionResult definitionResult;
@@ -167,6 +174,10 @@ bool testNavigationHoverCompletionConversion(std::string &failureReason) {
 	if (!expect(serviceCodeActions.items[0].title == "Insert semicolon", "codeAction title", failureReason)) return false;
 	if (!expect(serviceCodeActions.items[0].kind == "quickfix", "codeAction kind", failureReason)) return false;
 	if (!expect(serviceCodeActions.items[0].hasEdit, "codeAction edit", failureReason)) return false;
+	if (!expect(serviceCodeActions.items[0].edits.size() == 1, "codeAction edit count", failureReason)) return false;
+	if (!expect(serviceCodeActions.items[0].edits[0].path == "/tmp/mr/project/src/main.cpp", "codeAction edit path", failureReason)) return false;
+	if (!expect(serviceCodeActions.items[0].edits[0].range.start.character == 4, "codeAction edit range", failureReason)) return false;
+	if (!expect(serviceCodeActions.items[0].edits[0].newText == ";", "codeAction edit text", failureReason)) return false;
 	if (!expect(serviceCodeActions.items[0].rawLspCodeActionJson.find("\"edit\"") != std::string::npos, "codeAction raw json", failureReason)) return false;
 	return true;
 }

@@ -117,6 +117,10 @@ bool testCodeActionHappyPath(std::string &failureReason) {
 	if (!expect(result.items[0].kind == "quickfix", "codeAction first kind", failureReason)) return false;
 	if (!expect(result.items[0].hasEdit, "codeAction first edit missing", failureReason)) return false;
 	if (!expect(!result.items[0].hasCommand, "codeAction first command", failureReason)) return false;
+	if (!expect(result.items[0].edits.size() == 1, "codeAction first edit count", failureReason)) return false;
+	if (!expect(result.items[0].edits[0].uri == service.documentUri(), "codeAction first edit uri", failureReason)) return false;
+	if (!expect(result.items[0].edits[0].range.start.line == 0 && result.items[0].edits[0].range.start.character == 4, "codeAction first edit start", failureReason)) return false;
+	if (!expect(result.items[0].edits[0].newText == ";", "codeAction first edit newText", failureReason)) return false;
 	if (!expect(result.items[0].rawJson.find("\"newText\":\";\"") != std::string::npos, "codeAction raw edit", failureReason)) return false;
 	if (!expect(result.items[1].title == "Show diagnostic", "codeAction second title", failureReason)) return false;
 	if (!expect(result.items[1].hasCommand, "codeAction second command missing", failureReason)) return false;

@@ -98,11 +98,19 @@ struct MRServiceCompletionItem {
 	std::string insertText;
 };
 
+struct MRServiceTextEdit {
+	std::string uri;
+	std::string path;
+	MRServiceTextRange range;
+	std::string newText;
+};
+
 struct MRServiceCodeActionItem {
 	std::string title;
 	std::string kind;
 	bool hasEdit = false;
 	bool hasCommand = false;
+	std::vector<MRServiceTextEdit> edits;
 	std::string rawLspCodeActionJson;
 };
 
