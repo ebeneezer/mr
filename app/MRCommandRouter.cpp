@@ -2368,7 +2368,19 @@ bool requestLspCompletionCommand() {
 				if (completions[index].items.empty() && !completions[index].rawLspResponseJson.empty())
 					mrLogMessage("LSP completion empty raw response: " + completions[index].rawLspResponseJson);
 				if (attempt == 0 && completions[index].items.empty()) {
-					mrLogMessage("LSP completion empty response ignored for one retry.");
+					mrLogMessage("LSP completion empty response ignored for one delayed retry.");
+					for (int waitIndex = 0; waitIndex < 15; ++waitIndex) {
+						if (!g_lspAppService.poll(errorMessage)) {
+							++g_lspPollFailureCount;
+							g_lspLastRequestState = "poll failed";
+							g_lspLastPollError = errorMessage;
+							g_lspLastError = errorMessage;
+							postLspError("LSP poll failed: " + errorMessage);
+							g_lspAppService.close();
+							return true;
+						}
+						::poll(nullptr, 0, 20);
+					}
 					retryAfterEmptyCompletion = true;
 					break;
 				}
