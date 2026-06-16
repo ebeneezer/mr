@@ -2292,15 +2292,24 @@ void reportNewLspCompletions(const std::vector<mr::services::MRServiceCompletion
 	}
 }
 
+bool lspCompletionRequestIdKnown(const std::vector<std::string> &requestIds, const std::string &requestId) {
+	for (const std::string &knownRequestId : requestIds)
+		if (knownRequestId == requestId) return true;
+	return false;
+}
+
 bool requestLspCompletionCommand() {
 	bool requestSent = false;
 	std::string errorMessage;
-	const std::size_t completionCountBefore = g_lspAppService.results().completionResults().size();
+	std::vector<std::string> knownRequestIds;
+	const std::vector<mr::services::MRServiceCompletionResult> &initialCompletions = g_lspAppService.results().completionResults();
 
-	if (g_lspReportedCompletionCount < completionCountBefore) g_lspReportedCompletionCount = completionCountBefore;
+	for (const mr::services::MRServiceCompletionResult &completion : initialCompletions)
+		knownRequestIds.push_back(completion.header.requestId);
+	if (g_lspReportedCompletionCount < initialCompletions.size()) g_lspReportedCompletionCount = initialCompletions.size();
 	if (!requestLspEditorCommand(mr::services::MRLspServiceCommandId::Complete, "LSP completion", &requestSent)) return true;
 	if (!requestSent) return true;
-	for (int i = 0; i < 25; ++i) {
+	for (int i = 0; i < 100; ++i) {
 		if (!g_lspAppService.poll(errorMessage)) {
 			++g_lspPollFailureCount;
 			g_lspLastRequestState = "poll failed";
@@ -2311,7 +2320,9 @@ bool requestLspCompletionCommand() {
 			return true;
 		}
 		const std::vector<mr::services::MRServiceCompletionResult> &completions = g_lspAppService.results().completionResults();
-		if (completions.size() > completionCountBefore) {
+		for (std::size_t index = 0; index < completions.size(); ++index) {
+			if (lspCompletionRequestIdKnown(knownRequestIds, completions[index].header.requestId)) continue;
+			if (g_lspReportedCompletionCount < index) g_lspReportedCompletionCount = index;
 			reportNewLspCompletions(completions);
 			return true;
 		}
