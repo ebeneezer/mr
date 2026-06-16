@@ -5263,6 +5263,8 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
 	std::string content;
 	std::string functionBody;
+	std::string helperBody;
+	std::string requestBody;
 	std::string ioError;
 
 	if (!readTextFile(routerPath, content, ioError)) {
@@ -5270,8 +5272,20 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 		return false;
 	}
 
-	const std::size_t functionStart = content.find("void reportNewLspCompletions");
-	const std::size_t functionEnd = content.find("\nvoid reportNewLspResults", functionStart);
+	const std::size_t helperStart = content.find("void reportLspCompletionResult");
+	const std::size_t helperEnd = content.find("\nvoid reportNewLspCompletions", helperStart);
+	if (helperStart == std::string::npos || helperEnd == std::string::npos) {
+		failureReason = "Unable to isolate reportLspCompletionResult for LSP completion reporting guard.";
+		return false;
+	}
+	helperBody = content.substr(helperStart, helperEnd - helperStart);
+	if (helperBody.find("showLspCompletionDialog(result)") == std::string::npos) {
+		failureReason = "LSP completion result helper must open the completion dialog.";
+		return false;
+	}
+
+	const std::size_t functionStart = content.find("void reportNewLspCompletions", helperEnd);
+	const std::size_t functionEnd = content.find("\nbool lspCompletionRequestIdKnown", functionStart);
 	if (functionStart == std::string::npos || functionEnd == std::string::npos) {
 		failureReason = "Unable to isolate reportNewLspCompletions for LSP completion reporting guard.";
 		return false;
@@ -5280,13 +5294,32 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 
 	const std::size_t resultCopy = functionBody.find("const mr::services::MRServiceCompletionResult result = completions[g_lspReportedCompletionCount];");
 	const std::size_t reportedIncrement = functionBody.find("++g_lspReportedCompletionCount;", resultCopy);
-	const std::size_t dialogOpen = functionBody.find("showLspCompletionDialog(result)", resultCopy);
-	if (resultCopy == std::string::npos || reportedIncrement == std::string::npos || dialogOpen == std::string::npos) {
-		failureReason = "LSP completion reporting must copy the pending result, advance the reported count, and then open the dialog.";
+	const std::size_t helperCall = functionBody.find("reportLspCompletionResult(result)", resultCopy);
+	if (resultCopy == std::string::npos || reportedIncrement == std::string::npos || helperCall == std::string::npos) {
+		failureReason = "LSP completion reporting must copy the pending result, advance the reported count, and then report the copied result.";
 		return false;
 	}
-	if (reportedIncrement > dialogOpen) {
-		failureReason = "LSP completion reporting must advance g_lspReportedCompletionCount before opening the modal completion dialog.";
+	if (reportedIncrement > helperCall) {
+		failureReason = "LSP completion reporting must advance g_lspReportedCompletionCount before opening the modal completion dialog via the helper.";
+		return false;
+	}
+
+	const std::size_t requestStart = content.find("bool requestLspCompletionCommand");
+	const std::size_t requestEnd = content.find("\nvoid reportNewLspResults", requestStart);
+	if (requestStart == std::string::npos || requestEnd == std::string::npos) {
+		failureReason = "Unable to isolate requestLspCompletionCommand for LSP completion replacement guard.";
+		return false;
+	}
+	requestBody = content.substr(requestStart, requestEnd - requestStart);
+	const std::size_t requestIdCheck = requestBody.find("lspCompletionRequestIdKnown(knownRequestIds, completions[index].header.requestId)");
+	const std::size_t markReported = requestBody.find("g_lspReportedCompletionCount = completions.size()", requestIdCheck);
+	const std::size_t directReport = requestBody.find("reportLspCompletionResult(completions[index])", requestIdCheck);
+	if (requestIdCheck == std::string::npos || markReported == std::string::npos || directReport == std::string::npos) {
+		failureReason = "LSP completion command must detect replacement results by request id and report the matching result directly.";
+		return false;
+	}
+	if (markReported > directReport) {
+		failureReason = "LSP completion command must mark stored completion results reported before opening the modal completion dialog.";
 		return false;
 	}
 

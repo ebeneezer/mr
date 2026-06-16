@@ -2278,17 +2278,22 @@ void reportNewLspHovers(const std::vector<mr::services::MRServiceHoverResult> &h
 	}
 }
 
+void reportLspCompletionResult(const mr::services::MRServiceCompletionResult &result) {
+	std::ostringstream line;
+
+	g_lspLastRequestState = "completion received";
+	line << "LSP completion: " << result.items.size();
+	if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
+	postLspInfo(line.str());
+	static_cast<void>(showLspCompletionDialog(result));
+}
+
 void reportNewLspCompletions(const std::vector<mr::services::MRServiceCompletionResult> &completions) {
 	while (g_lspReportedCompletionCount < completions.size()) {
 		const mr::services::MRServiceCompletionResult result = completions[g_lspReportedCompletionCount];
-		std::ostringstream line;
 
 		++g_lspReportedCompletionCount;
-		g_lspLastRequestState = "completion received";
-		line << "LSP completion: " << result.items.size();
-		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
-		postLspInfo(line.str());
-		static_cast<void>(showLspCompletionDialog(result));
+		reportLspCompletionResult(result);
 	}
 }
 
@@ -2322,8 +2327,8 @@ bool requestLspCompletionCommand() {
 		const std::vector<mr::services::MRServiceCompletionResult> &completions = g_lspAppService.results().completionResults();
 		for (std::size_t index = 0; index < completions.size(); ++index) {
 			if (lspCompletionRequestIdKnown(knownRequestIds, completions[index].header.requestId)) continue;
-			if (g_lspReportedCompletionCount < index) g_lspReportedCompletionCount = index;
-			reportNewLspCompletions(completions);
+			g_lspReportedCompletionCount = completions.size();
+			reportLspCompletionResult(completions[index]);
 			return true;
 		}
 		::poll(nullptr, 0, 20);
