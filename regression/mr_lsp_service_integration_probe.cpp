@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <iostream>
 #include <poll.h>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,14 @@ bool expect(bool condition, const std::string &name, std::string &failureReason)
 	if (condition) return true;
 	failureReason = name;
 	return false;
+}
+
+std::string timelineText(const std::vector<std::string> &timeline) {
+	std::ostringstream text;
+
+	for (std::size_t index = 0; index < timeline.size(); ++index)
+		text << index << ": " << timeline[index] << "\n";
+	return text.str();
 }
 
 mr::lsp::LspDocumentSourceSnapshot makeSourceSnapshot(std::int64_t version, const std::string &text) {
@@ -275,6 +284,76 @@ bool requestCodeActions(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocu
 	return false;
 }
 
+bool requestCompletionWhileDiagnosticsPending(mr::lsp::LspLifecycle &lifecycle, mr::lsp::LspDocumentService &service, std::string &failureReason) {
+	mr::lsp::LspDiagnosticsAdapter diagnosticsAdapter;
+	mr::lsp::LspCompletionAdapter completionAdapter;
+	mr::lsp::LspCompletionRequest completionRequest;
+	mr::lsp::LspCompletionResult completion;
+	mr::services::MRServiceResultStore store;
+	mr::services::MRWorkspaceServiceSnapshot workspace = makeWorkspace(1);
+	std::string errorMessage;
+	std::vector<mr::lsp::LspInboundMessage> messages;
+	std::vector<std::string> timeline;
+
+	if (!expect(service.open(makeSourceSnapshot(1, "int main() { return 0; }\n"), errorMessage), "timeline open: " + errorMessage, failureReason)) return false;
+	timeline.push_back("tx didOpen v1");
+	if (!pollDiagnostics(lifecycle, service, store, workspace, 1, failureReason)) {
+		failureReason += "\n" + timelineText(timeline);
+		return false;
+	}
+	timeline.push_back("rx diagnostic current v1");
+
+	workspace = makeWorkspace(2);
+	if (!expect(service.change(makeSourceSnapshot(2, "int main() { return 1; }\n"), errorMessage), "timeline change: " + errorMessage, failureReason)) return false;
+	timeline.push_back("tx didChange v2");
+	if (!expect(completionAdapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{3, 5}, completionRequest, errorMessage), "timeline completion request: " + errorMessage, failureReason)) return false;
+	timeline.push_back("tx completion " + completionRequest.idText);
+
+	for (int i = 0; i < 50; ++i) {
+		if (!lifecycle.poll(messages, errorMessage)) {
+			failureReason = "timeline poll failed: " + errorMessage + "\n" + timelineText(timeline);
+			return false;
+		}
+		for (const mr::lsp::LspInboundMessage &message : messages) {
+			mr::lsp::LspDiagnosticBatch batch;
+			bool completionAccepted = false;
+
+			if (!diagnosticsAdapter.consume(message, service, batch, errorMessage)) {
+				failureReason = "timeline diagnostics consume failed: " + errorMessage + "\n" + timelineText(timeline);
+				return false;
+			}
+			if (batch.accepted || batch.stale || batch.rejected) {
+				std::string line = "rx diagnostic ";
+
+				if (batch.accepted) line += "current ";
+				else if (batch.stale)
+					line += "stale ";
+				else
+					line += "rejected ";
+				line += "v" + std::to_string(batch.version);
+				timeline.push_back(line);
+				store.putDiagnostics(mr::services::buildServiceDiagnosticsFromLsp(workspace, batch));
+			}
+
+			if (!completionAdapter.consume(message, service, completionRequest, completion, completionAccepted, errorMessage)) {
+				failureReason = "timeline completion consume failed: " + errorMessage + "\n" + timelineText(timeline);
+				return false;
+			}
+			if (completionAccepted) {
+				timeline.push_back("rx completion accepted " + completionRequest.idText);
+				store.putCompletion(mr::services::buildServiceCompletionFromLsp(workspace, completionRequest.uri, workspace.documents.front().documentVersion, completionRequest.idText, completion));
+				if (!expect(store.completionResults().size() == 1, "timeline completion result count\n" + timelineText(timeline), failureReason)) return false;
+				if (!expect(store.completionResults()[0].items.size() == 3, "timeline completion item count\n" + timelineText(timeline), failureReason)) return false;
+				std::cout << "LSP pending-diagnostics completion timeline:\n" << timelineText(timeline);
+				return true;
+			}
+		}
+		::poll(nullptr, 0, 20);
+	}
+	failureReason = "completion was not accepted while diagnostics were pending\n" + timelineText(timeline);
+	return false;
+}
+
 bool verifyResults(const mr::services::MRServiceResultStore &store, std::string &failureReason) {
 	if (!expect(store.diagnosticResults().size() == 1, "diagnostics result count", failureReason)) return false;
 	if (!expect(store.diagnosticResults()[0].header.state == mr::services::MRServiceResultState::Current, "diagnostics state", failureReason)) return false;
@@ -327,6 +406,8 @@ bool runProbe(std::string &failureReason) {
 	if (!requestCodeActions(lifecycle, service, store, workspace, failureReason)) return false;
 	if (!verifyResults(store, failureReason)) return false;
 	if (!expect(service.close(errorMessage), "close: " + errorMessage, failureReason)) return false;
+	if (!requestCompletionWhileDiagnosticsPending(lifecycle, service, failureReason)) return false;
+	if (!expect(service.close(errorMessage), "timeline close: " + errorMessage, failureReason)) return false;
 	return shutdownLifecycle(lifecycle, failureReason);
 }
 } // namespace
