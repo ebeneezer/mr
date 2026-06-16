@@ -1188,6 +1188,7 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	positionText << (position.line + 1) << ":" << (position.character + 1);
 	g_lspLastRequestPath = document.path;
 	g_lspLastRequestPosition = positionText.str();
+	mrLogMessage("LSP request dispatch: " + g_lspLastRequestLabel + " path=" + document.path + " version=" + std::to_string(document.documentVersion) + " position=" + g_lspLastRequestPosition);
 	g_lspAppService.setMainFileByBufferId(document.bufferId);
 	if (!g_lspAppService.requestCurrentEditorCommand(profile, document, *editor, command, position, errorMessage)) {
 		g_lspLastRequestState = "failed";
@@ -2312,26 +2313,39 @@ bool requestLspCompletionCommand() {
 	for (const mr::services::MRServiceCompletionResult &completion : initialCompletions)
 		knownRequestIds.push_back(completion.header.requestId);
 	if (g_lspReportedCompletionCount < initialCompletions.size()) g_lspReportedCompletionCount = initialCompletions.size();
-	if (!requestLspEditorCommand(mr::services::MRLspServiceCommandId::Complete, "LSP completion", &requestSent)) return true;
-	if (!requestSent) return true;
-	for (int i = 0; i < 100; ++i) {
-		if (!g_lspAppService.poll(errorMessage)) {
-			++g_lspPollFailureCount;
-			g_lspLastRequestState = "poll failed";
-			g_lspLastPollError = errorMessage;
-			g_lspLastError = errorMessage;
-			postLspError("LSP poll failed: " + errorMessage);
-			g_lspAppService.close();
-			return true;
+	for (int attempt = 0; attempt < 2; ++attempt) {
+		bool retryAfterEmptyCompletion = false;
+
+		requestSent = false;
+		if (!requestLspEditorCommand(mr::services::MRLspServiceCommandId::Complete, "LSP completion", &requestSent)) return true;
+		if (!requestSent) return true;
+		for (int i = 0; i < 100; ++i) {
+			if (!g_lspAppService.poll(errorMessage)) {
+				++g_lspPollFailureCount;
+				g_lspLastRequestState = "poll failed";
+				g_lspLastPollError = errorMessage;
+				g_lspLastError = errorMessage;
+				postLspError("LSP poll failed: " + errorMessage);
+				g_lspAppService.close();
+				return true;
+			}
+			const std::vector<mr::services::MRServiceCompletionResult> &completions = g_lspAppService.results().completionResults();
+			for (std::size_t index = 0; index < completions.size(); ++index) {
+				if (lspCompletionRequestIdKnown(knownRequestIds, completions[index].header.requestId)) continue;
+				knownRequestIds.push_back(completions[index].header.requestId);
+				g_lspReportedCompletionCount = completions.size();
+				mrLogMessage("LSP completion response: requestId=" + completions[index].header.requestId + " items=" + std::to_string(completions[index].items.size()) + " attempt=" + std::to_string(attempt + 1));
+				if (attempt == 0 && completions[index].items.empty()) {
+					mrLogMessage("LSP completion empty response ignored for one retry.");
+					retryAfterEmptyCompletion = true;
+					break;
+				}
+				reportLspCompletionResult(completions[index]);
+				return true;
+			}
+			if (retryAfterEmptyCompletion) break;
+			::poll(nullptr, 0, 20);
 		}
-		const std::vector<mr::services::MRServiceCompletionResult> &completions = g_lspAppService.results().completionResults();
-		for (std::size_t index = 0; index < completions.size(); ++index) {
-			if (lspCompletionRequestIdKnown(knownRequestIds, completions[index].header.requestId)) continue;
-			g_lspReportedCompletionCount = completions.size();
-			reportLspCompletionResult(completions[index]);
-			return true;
-		}
-		::poll(nullptr, 0, 20);
 	}
 	postLspInfo("LSP completion requested.");
 	return true;

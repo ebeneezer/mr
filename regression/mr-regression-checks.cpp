@@ -5317,6 +5317,10 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 	const std::size_t pollCall = requestBody.find("g_lspAppService.poll(errorMessage)");
 	const std::size_t completionsRead = requestBody.find("completionResults()", pollCall);
 	const std::size_t genericReport = requestBody.find("reportNewLspResults");
+	const std::size_t retryLoop = requestBody.find("attempt < 2");
+	const std::size_t knownRequestPush = requestBody.find("knownRequestIds.push_back(completions[index].header.requestId)", requestIdCheck);
+	const std::size_t emptyRetry = requestBody.find("attempt == 0 && completions[index].items.empty()", requestIdCheck);
+	const std::size_t retryFlag = requestBody.find("retryAfterEmptyCompletion = true", emptyRetry);
 	if (requestIdCheck == std::string::npos || markReported == std::string::npos || directReport == std::string::npos) {
 		failureReason = "LSP completion command must detect replacement results by request id and report the matching result directly.";
 		return false;
@@ -5331,6 +5335,10 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 	}
 	if (genericReport != std::string::npos) {
 		failureReason = "LSP completion command must not use generic result reporting while waiting for completion.";
+		return false;
+	}
+	if (retryLoop == std::string::npos || knownRequestPush == std::string::npos || emptyRetry == std::string::npos || retryFlag == std::string::npos) {
+		failureReason = "LSP completion command must retry one empty fresh completion response without reusing the same request id.";
 		return false;
 	}
 
