@@ -106,6 +106,7 @@ bool testBuiltInMapping(std::string &failureReason) {
 
 	::unsetenv("MR_LSP_SERVER");
 	::unsetenv("MR_LSP_SERVER_ARGS");
+	if (!expect(mr::services::lspServerExecutableCandidatesForLanguage(MRSyntaxLanguage::C) == "clangd", "C candidate list", failureReason)) return false;
 	if (!expect(mr::services::buildLspServerProfileForLanguage(MRSyntaxLanguage::C, "C", profile, source, errorMessage), "C profile missing: " + errorMessage, failureReason)) return false;
 	if (!expect(profile.profileName == "builtin-c-clangd", "C profile name", failureReason)) return false;
 	if (!expect(profile.executablePath.find("/clangd") != std::string::npos, "C executable", failureReason)) return false;
@@ -116,6 +117,7 @@ bool testBuiltInMapping(std::string &failureReason) {
 	if (!expect(profile.profileName == "builtin-python-pylsp", "Python profile name", failureReason)) return false;
 	if (!expect(profile.executablePath.find("/pylsp") != std::string::npos, "Python executable", failureReason)) return false;
 
+	if (!expect(mr::services::lspServerExecutableCandidatesForLanguage(MRSyntaxLanguage::JavaScript) == "typescript-language-server", "JavaScript candidate list", failureReason)) return false;
 	if (!expect(mr::services::buildLspServerProfileForLanguage(MRSyntaxLanguage::JavaScript, "JavaScript", profile, source, errorMessage), "JavaScript profile missing: " + errorMessage, failureReason)) return false;
 	if (!expect(profile.profileName == "builtin-javascript-typescript-language-server", "JavaScript profile name", failureReason)) return false;
 	if (!expect(profile.executablePath.find("/typescript-language-server") != std::string::npos, "JavaScript executable", failureReason)) return false;
@@ -131,6 +133,7 @@ bool testFailurePaths(std::string &failureReason) {
 
 	::unsetenv("MR_LSP_SERVER");
 	::setenv("PATH", "/tmp/mr-lsp-server-profile-empty", 1);
+	if (!expect(mr::services::lspServerExecutableCandidatesForLanguage(MRSyntaxLanguage::PlainText).empty(), "PlainText candidate list", failureReason)) return false;
 	if (!expect(!mr::services::buildLspServerProfileForLanguage(MRSyntaxLanguage::PlainText, "Plain Text", profile, source, errorMessage), "PlainText profile accepted", failureReason)) return false;
 	if (!expect(errorMessage.find("No built-in LSP server") != std::string::npos, "PlainText error text", failureReason)) return false;
 	if (!expect(!mr::services::buildLspServerProfileForLanguage(MRSyntaxLanguage::C, "C", profile, source, errorMessage), "missing clangd accepted", failureReason)) return false;

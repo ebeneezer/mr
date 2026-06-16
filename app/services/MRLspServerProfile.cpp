@@ -163,6 +163,10 @@ bool buildLspServerProfileForLanguage(MRSyntaxLanguage language, const std::stri
 	return false;
 }
 
+std::string lspServerExecutableCandidatesForLanguage(MRSyntaxLanguage language) {
+	return candidateExecutableListForLanguage(language);
+}
+
 std::string lspServerProfileArgumentText(const MRLspServerProfile &profile) {
 	std::ostringstream argumentText;
 

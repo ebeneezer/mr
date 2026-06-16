@@ -314,6 +314,7 @@ std::string g_lspLastServerExecutable;
 std::string g_lspLastServerWorkingDirectory;
 std::string g_lspLastServerArguments;
 std::string g_lspLastServerConfigurationSource;
+std::string g_lspLastServerProfileName;
 std::string g_lspLastError;
 std::string g_lspLastPollError;
 
@@ -1180,6 +1181,7 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	g_lspLastServerWorkingDirectory = profile.workingDirectory;
 	g_lspLastServerArguments = mr::services::lspServerProfileArgumentText(profile);
 	g_lspLastServerConfigurationSource = configurationSource;
+	g_lspLastServerProfileName = profile.profileName;
 	position = currentLspTextPosition(*editor);
 	positionText << (position.line + 1) << ":" << (position.character + 1);
 	g_lspLastRequestPath = document.path;
@@ -1217,6 +1219,7 @@ bool syncCurrentEditorForLspResults() {
 	g_lspLastServerWorkingDirectory = profile.workingDirectory;
 	g_lspLastServerArguments = mr::services::lspServerProfileArgumentText(profile);
 	g_lspLastServerConfigurationSource = configurationSource;
+	g_lspLastServerProfileName = profile.profileName;
 	g_lspLastRequestPath = document.path;
 	g_lspAppService.setMainFileByBufferId(document.bufferId);
 	if (!g_lspAppService.syncCurrentEditorDocument(profile, document, *editor, errorMessage)) {
@@ -1736,6 +1739,7 @@ bool showLspStatusDialog() {
 	std::ostringstream line;
 	std::string configurationSource;
 	std::string profileError;
+	std::string serverCandidates;
 	bool configured = false;
 	short width = 96;
 	short height = 0;
@@ -1750,9 +1754,18 @@ bool showLspStatusDialog() {
 		profileError = "No current editor and MR_LSP_SERVER is empty.";
 
 	lines.push_back(std::string("Runtime: ") + (g_lspAppService.runtimeActive() ? "active" : "inactive"));
+	if (currentEditor != nullptr) {
+		serverCandidates = mr::services::lspServerExecutableCandidatesForLanguage(currentEditor->syntaxLanguage());
+		lines.push_back(std::string("Editor language: ") + currentEditor->syntaxLanguageName());
+		if (!serverCandidates.empty()) lines.push_back("Built-in candidates: " + serverCandidates);
+		else
+			lines.push_back("Built-in candidates: none");
+	} else
+		lines.push_back("Editor language: none");
 	lines.push_back(std::string("Server configured: ") + (configured ? "yes" : "no"));
 	if (configured) {
 		lines.push_back("Configuration source: " + configurationSource);
+		if (!profile.profileName.empty()) lines.push_back("Profile: " + profile.profileName);
 		lines.push_back("Executable: " + profile.executablePath);
 		if (!profile.arguments.empty()) {
 			line.str(std::string());
@@ -1777,6 +1790,7 @@ bool showLspStatusDialog() {
 	if (!g_lspLastRequestPath.empty()) lines.push_back("Last document: " + g_lspLastRequestPath);
 	if (!g_lspLastRequestPosition.empty()) lines.push_back("Last position: " + g_lspLastRequestPosition);
 	if (!g_lspLastServerConfigurationSource.empty()) lines.push_back("Last configuration source: " + g_lspLastServerConfigurationSource);
+	if (!g_lspLastServerProfileName.empty()) lines.push_back("Last profile: " + g_lspLastServerProfileName);
 	if (!g_lspLastServerExecutable.empty()) lines.push_back("Last executable: " + g_lspLastServerExecutable);
 	if (!g_lspLastServerArguments.empty()) lines.push_back("Last arguments: " + g_lspLastServerArguments);
 	if (!g_lspLastServerWorkingDirectory.empty()) lines.push_back("Last working directory: " + g_lspLastServerWorkingDirectory);
