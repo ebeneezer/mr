@@ -1148,7 +1148,7 @@ mr::lsp::LspTextPosition currentLspTextPosition(const MRFileEditor &editor) {
 	return position;
 }
 
-bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const char *label) {
+bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const char *label, bool *requestSent = nullptr) {
 	MREditWindow *win = currentEditorCommandWindow();
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	mr::services::MRLspServerProfile profile;
@@ -1158,6 +1158,7 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 	std::string configurationSource;
 	std::ostringstream positionText;
 
+	if (requestSent != nullptr) *requestSent = false;
 	++g_lspRequestCount;
 	g_lspLastRequestLabel = label != nullptr ? label : "LSP request";
 	g_lspLastRequestPath.clear();
@@ -1196,6 +1197,7 @@ bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const 
 		return true;
 	}
 	g_lspLastRequestState = "requested";
+	if (requestSent != nullptr) *requestSent = true;
 	postLspInfo(g_lspLastRequestLabel + " requested.");
 	return true;
 }
@@ -2288,6 +2290,35 @@ void reportNewLspCompletions(const std::vector<mr::services::MRServiceCompletion
 		postLspInfo(line.str());
 		static_cast<void>(showLspCompletionDialog(result));
 	}
+}
+
+bool requestLspCompletionCommand() {
+	bool requestSent = false;
+	std::string errorMessage;
+	const std::size_t completionCountBefore = g_lspAppService.results().completionResults().size();
+
+	if (g_lspReportedCompletionCount < completionCountBefore) g_lspReportedCompletionCount = completionCountBefore;
+	if (!requestLspEditorCommand(mr::services::MRLspServiceCommandId::Complete, "LSP completion", &requestSent)) return true;
+	if (!requestSent) return true;
+	for (int i = 0; i < 25; ++i) {
+		if (!g_lspAppService.poll(errorMessage)) {
+			++g_lspPollFailureCount;
+			g_lspLastRequestState = "poll failed";
+			g_lspLastPollError = errorMessage;
+			g_lspLastError = errorMessage;
+			postLspError("LSP poll failed: " + errorMessage);
+			g_lspAppService.close();
+			return true;
+		}
+		const std::vector<mr::services::MRServiceCompletionResult> &completions = g_lspAppService.results().completionResults();
+		if (completions.size() > completionCountBefore) {
+			reportNewLspCompletions(completions);
+			return true;
+		}
+		::poll(nullptr, 0, 20);
+	}
+	postLspInfo("LSP completion requested.");
+	return true;
 }
 
 void reportNewLspResults() {
@@ -3971,7 +4002,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::ShowHover, "LSP hover");
 
 		case cmMrOtherLspComplete:
-			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::Complete, "LSP completion");
+			return requestLspCompletionCommand();
 
 		case cmMrOtherLspStatus:
 			return showLspStatusDialog();
