@@ -5327,6 +5327,55 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 	return true;
 }
 
+bool testLspCompletionInsertTextGuard(std::string &failureReason) {
+	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	std::string content;
+	std::string insertTextBody;
+	std::string dialogBody;
+	std::string ioError;
+
+	if (!readTextFile(routerPath, content, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for LSP completion insert-text guard: " + ioError;
+		return false;
+	}
+
+	const std::size_t insertTextStart = content.find("std::string lspCompletionInsertTextForItem");
+	const std::size_t insertTextEnd = content.find("\nbool showLspCompletionDialog", insertTextStart);
+	if (insertTextStart == std::string::npos || insertTextEnd == std::string::npos) {
+		failureReason = "Unable to isolate lspCompletionInsertTextForItem.";
+		return false;
+	}
+	insertTextBody = content.substr(insertTextStart, insertTextEnd - insertTextStart);
+	if (insertTextBody.find("const std::string rawText = !item.insertText.empty() ? item.insertText : item.label;") == std::string::npos) {
+		failureReason = "LSP completion insert text must prefer insertText and fall back to label.";
+		return false;
+	}
+	if (insertTextBody.find("item.hasInsertTextFormat && item.insertTextFormat == 2") == std::string::npos ||
+	    insertTextBody.find("lspCompletionPlainTextFromSnippet(rawText)") == std::string::npos) {
+		failureReason = "LSP snippet completion must be normalized before insertion.";
+		return false;
+	}
+
+	const std::size_t dialogStart = content.find("bool showLspCompletionDialog", insertTextEnd);
+	const std::size_t dialogEnd = content.find("\nMREditWindow *findLspCodeActionTargetWindow", dialogStart);
+	if (dialogStart == std::string::npos || dialogEnd == std::string::npos) {
+		failureReason = "Unable to isolate showLspCompletionDialog.";
+		return false;
+	}
+	dialogBody = content.substr(dialogStart, dialogEnd - dialogStart);
+	const std::size_t itemLookup = dialogBody.find("const mr::services::MRServiceCompletionItem &item = result.items[selectedIndex];");
+	const std::size_t normalizedInsert = dialogBody.find("insertText = lspCompletionInsertTextForItem(item)", itemLookup);
+	const std::size_t dialogDestroy = dialogBody.find("TObject::destroy(dialog)", normalizedInsert);
+	const std::size_t editorInsert = dialogBody.find("targetEditor->insertBufferText(insertText)", dialogDestroy);
+	if (itemLookup == std::string::npos || normalizedInsert == std::string::npos || dialogDestroy == std::string::npos || editorInsert == std::string::npos) {
+		failureReason = "LSP completion dialog must insert the normalized selected completion text into the editor.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorSave.cpp");
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
@@ -7475,6 +7524,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
+	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
@@ -7555,6 +7605,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
+	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
