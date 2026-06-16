@@ -305,6 +305,7 @@ MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceService
 	result.header.kind = MRServiceResultKind::Completion;
 	result.header.requestId = requestId;
 	result.header.identity = identityFromUri(workspace, originUri.empty() ? completion.uri : originUri, originVersion, result.header.state, result.header.errorMessage);
+	result.rawLspResponseJson = completion.rawResponseJson;
 	if (result.header.state != MRServiceResultState::Current) return result;
 
 	for (const mr::lsp::LspCompletionItem &item : completion.items) {

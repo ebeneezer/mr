@@ -133,6 +133,7 @@ struct MRServiceHoverResult {
 
 struct MRServiceCompletionResult {
 	MRServiceResultHeader header;
+	std::string rawLspResponseJson;
 	std::vector<MRServiceCompletionItem> items;
 };
 

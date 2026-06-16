@@ -396,6 +396,7 @@ bool LspCompletionAdapter::consume(const LspInboundMessage &message, const LspDo
 	}
 	result.uri = request.uri;
 	if (!parseCompletionResult(message.payload, result, errorMessage)) return false;
+	result.rawResponseJson = message.payload;
 	request.pending = false;
 	accepted = true;
 	errorMessage.clear();

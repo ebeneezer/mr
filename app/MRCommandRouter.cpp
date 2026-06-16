@@ -2365,6 +2365,8 @@ bool requestLspCompletionCommand() {
 				knownRequestIds.push_back(completions[index].header.requestId);
 				g_lspReportedCompletionCount = completions.size();
 				mrLogMessage("LSP completion response: requestId=" + completions[index].header.requestId + " items=" + std::to_string(completions[index].items.size()) + " attempt=" + std::to_string(attempt + 1));
+				if (completions[index].items.empty() && !completions[index].rawLspResponseJson.empty())
+					mrLogMessage("LSP completion empty raw response: " + completions[index].rawLspResponseJson);
 				if (attempt == 0 && completions[index].items.empty()) {
 					mrLogMessage("LSP completion empty response ignored for one retry.");
 					retryAfterEmptyCompletion = true;

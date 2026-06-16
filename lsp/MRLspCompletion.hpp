@@ -31,6 +31,7 @@ struct LspCompletionItem {
 
 struct LspCompletionResult {
 	std::string uri;
+	std::string rawResponseJson;
 	std::vector<LspCompletionItem> items;
 };
 
