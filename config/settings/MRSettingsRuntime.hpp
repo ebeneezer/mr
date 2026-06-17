@@ -450,17 +450,21 @@ enum : unsigned char {
 	kMrPaletteFileCompareMiniMapChanged = 200,
 	kMrPaletteFileCompareMiniMapFindMarker = 201,
 	kMrPaletteFileCompareMiniMapErrorMarker = 202,
-	kMrPaletteMax = kMrPaletteFileCompareMiniMapErrorMarker
+	kMrPaletteContextMenu = 203,
+	kMrPaletteContextMenuSelector = 204,
+	kMrPaletteDiagnosticInformation = 205,
+	kMrPaletteMiniMapDiagnostics = 206,
+	kMrPaletteMax = kMrPaletteMiniMapDiagnostics
 };
 
 struct MRColorSetupSettings {
-	static const std::size_t kWindowCount = 13;
+	static const std::size_t kWindowCount = 14;
 	static const std::size_t kMenuDialogCount = 28;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 11;
-	static const std::size_t kMiniMapCount = 5;
+	static const std::size_t kMiniMapCount = 6;
 	static const std::size_t kFileCompareMiniMapCount = 9;
-	static const std::size_t kCodeCount = 15;
+	static const std::size_t kCodeCount = 17;
 	static const std::size_t kFileCompareCount = 14;
 
 	std::array<unsigned char, kWindowCount> windowColors;

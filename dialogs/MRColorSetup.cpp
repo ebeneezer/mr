@@ -93,6 +93,97 @@ class TColorGroupCaption : public TView {
 	std::string mText;
 };
 
+class TAnsi16BackgroundSelector : public TColorSelector {
+  public:
+	TAnsi16BackgroundSelector(const TRect &bounds) noexcept : TColorSelector(bounds, TColorSelector::csBackground) {
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+
+		for (int row = 0; row < size.y; ++row) {
+			buffer.moveChar(0, ' ', 0x70, size.x);
+			for (int column = 0; column < kColumns; ++column) {
+				const int swatch = row * kColumns + column;
+
+				buffer.moveChar(column * kSwatchWidth, '\xDB', static_cast<uchar>(swatch), kSwatchWidth);
+				if (swatch == color) {
+					buffer.putChar(column * kSwatchWidth + 1, 8);
+					if (swatch == 0) buffer.putAttribute(column * kSwatchWidth + 1, 0x70);
+				}
+			}
+			writeLine(0, row, size.x, 1, buffer);
+		}
+	}
+
+	void handleEvent(TEvent &event) override {
+		const uchar oldColor = color;
+
+		TView::handleEvent(event);
+		switch (event.what) {
+			case evMouseDown:
+				do {
+					if (mouseInView(event.mouse.where)) {
+						const TPoint mouse = makeLocal(event.mouse.where);
+
+						color = static_cast<uchar>(mouse.y * kColumns + mouse.x / kSwatchWidth);
+					} else {
+						color = oldColor;
+					}
+					notifyColorChanged();
+					drawView();
+				} while (mouseEvent(event, evMouseMove));
+				clearEvent(event);
+				return;
+
+			case evKeyDown:
+				switch (ctrlToArrow(event.keyDown.keyCode)) {
+					case kbLeft:
+						color = color > 0 ? static_cast<uchar>(color - 1) : static_cast<uchar>(kMaxColor);
+						break;
+
+					case kbRight:
+						color = color < kMaxColor ? static_cast<uchar>(color + 1) : static_cast<uchar>(0);
+						break;
+
+					case kbUp:
+						color = color >= kColumns ? static_cast<uchar>(color - kColumns) : static_cast<uchar>(color + kColumns);
+						break;
+
+					case kbDown:
+						color = color < kColumns ? static_cast<uchar>(color + kColumns) : static_cast<uchar>(color - kColumns);
+						break;
+
+					default:
+						return;
+				}
+				break;
+
+			case evBroadcast:
+				if (event.message.command != cmColorSet) return;
+				color = static_cast<uchar>(event.message.infoByte >> 4);
+				drawView();
+				return;
+
+			default:
+				return;
+		}
+		drawView();
+		notifyColorChanged();
+		clearEvent(event);
+	}
+
+  private:
+	static constexpr int kColumns = 4;
+	static constexpr int kRows = 4;
+	static constexpr int kSwatchWidth = 3;
+	static constexpr int kMaxColor = kColumns * kRows - 1;
+
+	void notifyColorChanged() {
+		message(owner, evBroadcast, cmColorBackgroundChanged, (void *)(size_t)color);
+	}
+};
+
 class TRelayColorItemList : public TColorItemList {
   public:
 	TRelayColorItemList(const TRect &bounds, TScrollBar *scrollBar, TColorItem *colorItems, TView *relay) noexcept : TColorItemList(bounds, scrollBar, colorItems), mRelay(relay) {
@@ -333,12 +424,12 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 		addManaged(mForSel, TRect(60, 3, 72, 7));
 		mForLabel = addCaption(TRect(60, 2, 72, 3), "Foreground");
 
-		mBakSel = new TColorSelector(TRect(60, 9, 72, 11), TColorSelector::csBackground);
-		addManaged(mBakSel, TRect(60, 9, 72, 11));
+		mBakSel = new TAnsi16BackgroundSelector(TRect(60, 9, 72, 13));
+		addManaged(mBakSel, TRect(60, 9, 72, 13));
 		mBakLabel = addCaption(TRect(60, 8, 72, 9), "Background");
 
-		mDisplay = new TColorDisplay(TRect(59, 12, 73, 14), "Text ");
-		addManaged(mDisplay, TRect(59, 12, 73, 14));
+		mDisplay = new TColorDisplay(TRect(59, 14, 73, 16), "Text ");
+		addManaged(mDisplay, TRect(59, 14, 73, 16));
 
 		mMonoSel = new TMonoSelector(TRect(59, 3, 74, 7));
 		mMonoSel->hide();

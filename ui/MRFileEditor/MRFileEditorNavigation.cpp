@@ -186,6 +186,13 @@ std::size_t MRFileEditor::offsetForGlobalPoint(TPoint where) noexcept {
 	return mouseOffset(makeLocal(where));
 }
 
+bool MRFileEditor::textPointInView(TPoint where) noexcept {
+	const TPoint local = makeLocal(where);
+	const TextViewportGeometry viewport = textViewportGeometry();
+
+	return viewport.containsTextPoint(local.x, local.y, visibleTextRows());
+}
+
 int MRFileEditor::currentLineNumber() const noexcept {
 	return static_cast<int>(cachedCursorLineIndex()) + 1;
 }

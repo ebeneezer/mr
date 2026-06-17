@@ -27,6 +27,7 @@ Versioned generated headers are treated as tracked source artifacts for clean-bu
 - `make clean all CXX=clang++` must work.
 - Existing `paplay` build signals must not be removed.
 - Regression checks must not be weakened to make a refactoring pass.
+- Regression checks must target stable behavioral or structural invariants, not narrow one-off scenarios without sufficient abstraction.
 - Structure checks are contracts unless deliberately changed.
 
 ## Forbidden without explicit approval
@@ -35,6 +36,7 @@ Versioned generated headers are treated as tracked source artifacts for clean-bu
 - Changing generated-file policy incidentally.
 - Changing clean semantics beyond the requested build fix.
 - Replacing text structure checks with no equivalent protection.
+- Adding overly case-specific regression checks where one sufficiently abstract invariant check can protect the same contract.
 - Removing Makefile audio feedback.
 
 ## Required tests

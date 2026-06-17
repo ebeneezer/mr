@@ -1,6 +1,6 @@
 $MACRO MR_KEYMAP FROM EDIT;
 KEYMAP_RESET();
-KEYMAP_VERSION('1780418928');
+KEYMAP_VERSION('1781626565');
 KEYMAP_PROFILE('name="WORDSTAR" description="WordStar Core"');
 KEYMAP_PROFILE('name="EMACS" description="Emacs core"');
 KEYMAP_PROFILE('name="NANO" description="GNU nano core"');
@@ -91,7 +91,7 @@ KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_FORWA
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_LINE" sequence="<Ctrl+Y>" description="delete line"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_TO_EOL" sequence="<Ctrl+Q> <Ctrl+L>" description="delete to EOL"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_TO_EOL" sequence="<Ctrl+Q> <L>" description="delete to EOL"');
-KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_INDENT" sequence="<Ctrl+K> <I>" description="Indent block"');
+KEYMAP_BIND('name="WORDSTAR" context=EDIT type=MACRO target="keymaps/wordstar-extensions.mrmac^smart_backspace" sequence="<Backspace>" description="Smart BACKSPACE"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_UP" sequence="<Ctrl+P>" description="Cursor up"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_DOWN" sequence="<Ctrl+N>" description="Cursor down"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_LEFT" sequence="<Ctrl+B>" description="Cursor left"');

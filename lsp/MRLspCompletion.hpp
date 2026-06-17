@@ -27,6 +27,10 @@ struct LspCompletionItem {
 	std::string insertText;
 	bool hasInsertTextFormat = false;
 	int insertTextFormat = 1;
+	bool hasTextEdit = false;
+	LspTextPosition textEditStart;
+	LspTextPosition textEditEnd;
+	std::string textEditNewText;
 };
 
 struct LspCompletionResult {

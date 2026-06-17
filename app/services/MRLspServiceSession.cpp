@@ -351,6 +351,7 @@ bool MRLspServiceSession::requestCodeActionsForDiagnostic(const MRServiceDiagnos
 		return false;
 	}
 	if (!codeActionAdapter.requestCodeActions(lifecycle, documentService, codeActionRangeFromServiceRange(diagnostic.reportedRange), diagnostic.rawLspDiagnosticJson, codeActionRequest, errorMessage)) return false;
+	codeActionRequestRange = diagnostic.navigationRange;
 	codeActionRequestVersion = diagnosticResult.header.identity.documentVersion;
 	return true;
 }
@@ -409,6 +410,10 @@ const MRServiceResultStore &MRLspServiceSession::results() const noexcept {
 
 bool MRLspServiceSession::runtimeActive() const noexcept {
 	return hasActiveRuntime && lifecycle.state() == mr::lsp::LspLifecycleState::Initialized;
+}
+
+std::string MRLspServiceSession::activeHoverRequestId() const {
+	return hoverRequest.pending ? hoverRequest.idText : std::string();
 }
 
 bool MRLspServiceSession::pollUntilState(mr::lsp::LspLifecycleState expectedState, std::string &errorMessage) {
@@ -483,15 +488,49 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 	}
 
 	if (!hoverAdapter.consume(message, documentService, hoverRequest, hover, accepted, errorMessage)) return false;
+	if (!errorMessage.empty()) {
+		MRServiceHoverResult result;
+
+		result.header.source = MRServiceResultSource::Lsp;
+		result.header.kind = MRServiceResultKind::Hover;
+		result.header.state = MRServiceResultState::Error;
+		result.header.requestId = hoverRequest.idText;
+		result.header.errorMessage = errorMessage;
+		if (!activeWorkspace.documents.empty()) {
+			const MRWorkspaceDocumentSnapshot &document = activeWorkspace.documents.front();
+
+			result.header.identity.valid = true;
+			result.header.identity.bufferId = document.bufferId;
+			result.header.identity.documentId = document.documentId;
+			result.header.identity.documentVersion = document.documentVersion;
+			result.header.identity.path = document.path;
+			result.header.identity.uri = hoverRequest.uri;
+		}
+		resultStore.putHover(result);
+		errorMessage.clear();
+		return true;
+	}
 	if (accepted) {
 		resultStore.putHover(buildServiceHoverFromLsp(activeWorkspace, activeWorkspace.documents.front().documentVersion, hoverRequest.idText, hover));
 		return true;
 	}
 
 	if (!completionAdapter.consume(message, documentService, completionRequest, completion, accepted, errorMessage)) return false;
-	if (accepted) resultStore.putCompletion(buildServiceCompletionFromLsp(activeWorkspace, completionRequest.uri, activeWorkspace.documents.front().documentVersion, completionRequest.idText, completion));
+	if (accepted) {
+		MRServiceCompletionResult result = buildServiceCompletionFromLsp(activeWorkspace, completionRequest.uri, activeWorkspace.documents.front().documentVersion, completionRequest.idText, completion);
+
+		result.hasRequestPosition = true;
+		result.requestPosition = MRServiceTextPosition{completionRequest.position.line, completionRequest.position.character};
+		resultStore.putCompletion(result);
+	}
 	if (!codeActionAdapter.consume(message, documentService, codeActionRequest, codeActions, accepted, errorMessage)) return false;
-	if (accepted) resultStore.putCodeActions(buildServiceCodeActionsFromLsp(activeWorkspace, codeActionRequest.uri, codeActionRequestVersion, codeActionRequest.idText, codeActions));
+	if (accepted) {
+		MRServiceCodeActionResult result = buildServiceCodeActionsFromLsp(activeWorkspace, codeActionRequest.uri, codeActionRequestVersion, codeActionRequest.idText, codeActions);
+
+		result.hasContextRange = true;
+		result.contextRange = codeActionRequestRange;
+		resultStore.putCodeActions(result);
+	}
 	return true;
 }
 
@@ -501,6 +540,7 @@ void MRLspServiceSession::clearRequests() noexcept {
 	hoverRequest = mr::lsp::LspHoverRequest();
 	completionRequest = mr::lsp::LspCompletionRequest();
 	codeActionRequest = mr::lsp::LspCodeActionRequest();
+	codeActionRequestRange = MRServiceTextRange();
 	codeActionRequestVersion = 0;
 }
 

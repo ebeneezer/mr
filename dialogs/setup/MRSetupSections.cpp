@@ -319,6 +319,7 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteMiniMapChanged - 1] = data[14 - 1];
 		data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
 		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
+		data[kMrPaletteMiniMapDiagnostics - 1] = 0x4E;
 		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
 		data[kMrPaletteCodeFoldingMarker - 1] = data[9 - 1];
 		data[kMrPaletteStatusLine - 1] = data[2 - 1];
@@ -350,6 +351,7 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteFileCompareMiniMapChanged - 1] = data[kMrPaletteMiniMapChanged - 1];
 		data[kMrPaletteFileCompareMiniMapFindMarker - 1] = data[kMrPaletteMiniMapFindMarker - 1];
 		data[kMrPaletteFileCompareMiniMapErrorMarker - 1] = data[kMrPaletteMiniMapErrorMarker - 1];
+		data[kMrPaletteDiagnosticInformation - 1] = 0x4E;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	TPalette palette = basePalette;

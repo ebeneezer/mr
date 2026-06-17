@@ -7917,7 +7917,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					else if (name == "MOVE_BLOCK")
 						ok = true;
 					else if (name == "DELETE_BLOCK")
-						ok = true;
+						ok = mrvmUiDeleteBlock();
 					else if (name == "CREATE_WINDOW")
 						ok = mrvmUiCreateWindow();
 					else if (name == "DELETE_WINDOW")

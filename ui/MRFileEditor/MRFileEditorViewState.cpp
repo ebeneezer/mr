@@ -31,6 +31,7 @@ MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 	palette.findMarker = configuredColorSlotOverride(findMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.errorMarker = configuredColorSlotOverride(errorMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.warningMarker = configuredColorSlotOverride(kMrPaletteMessageWarning, configured) ? static_cast<TColorAttr>(configured) : palette.changed;
+	palette.diagnostics = configuredColorSlotOverride(kMrPaletteMiniMapDiagnostics, configured) ? static_cast<TColorAttr>(configured) : palette.warningMarker;
 	palette.diffEqual = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapEqual, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.diffMissing = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapMissing, configured) ? static_cast<TColorAttr>(configured) : palette.errorMarker;
 	palette.diffInsert = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapInsert, configured) ? static_cast<TColorAttr>(configured) : palette.warningMarker;

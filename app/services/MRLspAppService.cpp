@@ -1,6 +1,19 @@
 #include "MRLspAppService.hpp"
 
 namespace mr::services {
+namespace {
+bool workspaceContainsDocument(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document) noexcept {
+	const std::string documentPath = normalizeWorkspaceServicePath(document.path);
+
+	for (const MRWorkspaceDocumentSnapshot &candidate : workspace.documents) {
+		if (candidate.path != documentPath) continue;
+		if (candidate.documentId != 0 && document.documentId != 0 && candidate.documentId != document.documentId) continue;
+		if (candidate.documentVersion != document.documentVersion) continue;
+		return true;
+	}
+	return false;
+}
+} // namespace
 
 void MRLspAppService::clearMainFile() noexcept {
 	workspaceContext.clearMainFile();
@@ -24,6 +37,54 @@ MRWorkspaceServiceSnapshot MRLspAppService::buildWorkspaceSnapshot(const std::ve
 
 MRWorkspaceServiceSnapshot MRLspAppService::buildCurrentWorkspaceSnapshot() const {
 	return buildCurrentWorkspaceServiceSnapshot(workspaceContext);
+}
+
+MRLspDocumentServiceSnapshot MRLspAppService::documentServiceSnapshot(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document) const {
+	MRLspDocumentServiceSnapshot snapshot;
+	MRWorkspaceDocumentSnapshot normalizedDocument = document;
+
+	normalizedDocument.path = normalizeWorkspaceServicePath(normalizedDocument.path);
+	snapshot.runtimeActive = runtimeActive();
+	snapshot.mainFile = workspace.mainFile;
+	snapshot.documentInWorkspace = workspaceContainsDocument(workspace, normalizedDocument);
+	snapshot.results = session.results().currentResultsForDocument(normalizedDocument);
+	if (snapshot.documentInWorkspace) {
+		snapshot.commands.requestDefinition = true;
+		snapshot.commands.requestReferences = true;
+		snapshot.commands.requestHover = true;
+		snapshot.commands.requestCompletion = true;
+		snapshot.commands.requestCodeActions = snapshot.results.current.diagnostics > 0;
+		snapshot.commands.applyCodeActions = snapshot.results.current.codeActions > 0;
+	}
+	return snapshot;
+}
+
+MRLspDocumentServiceSnapshot MRLspAppService::currentDocumentServiceSnapshot(const MRWorkspaceDocumentSnapshot &document) const {
+	return documentServiceSnapshot(buildCurrentWorkspaceSnapshot(), document);
+}
+
+MRLspPositionServiceSnapshot MRLspAppService::documentPositionServiceSnapshot(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, MRServiceTextPosition position) const {
+	MRLspPositionServiceSnapshot snapshot;
+	MRWorkspaceDocumentSnapshot normalizedDocument = document;
+
+	normalizedDocument.path = normalizeWorkspaceServicePath(normalizedDocument.path);
+	snapshot.runtimeActive = runtimeActive();
+	snapshot.mainFile = workspace.mainFile;
+	snapshot.documentInWorkspace = workspaceContainsDocument(workspace, normalizedDocument);
+	snapshot.results = session.results().currentResultsForDocumentPosition(normalizedDocument, position);
+	if (snapshot.documentInWorkspace) {
+		snapshot.commands.requestDefinition = true;
+		snapshot.commands.requestReferences = true;
+		snapshot.commands.requestHover = true;
+		snapshot.commands.requestCompletion = true;
+		snapshot.commands.requestCodeActions = !snapshot.results.diagnostics.empty();
+		snapshot.commands.applyCodeActions = !snapshot.results.codeActions.empty();
+	}
+	return snapshot;
+}
+
+MRLspPositionServiceSnapshot MRLspAppService::currentDocumentPositionServiceSnapshot(const MRWorkspaceDocumentSnapshot &document, MRServiceTextPosition position) const {
+	return documentPositionServiceSnapshot(buildCurrentWorkspaceSnapshot(), document, position);
 }
 
 bool MRLspAppService::requestEditorCommand(
@@ -104,6 +165,10 @@ const MRServiceResultStore &MRLspAppService::results() const noexcept {
 
 bool MRLspAppService::runtimeActive() const noexcept {
 	return session.runtimeActive();
+}
+
+std::string MRLspAppService::activeHoverRequestId() const {
+	return session.activeHoverRequestId();
 }
 
 } // namespace mr::services

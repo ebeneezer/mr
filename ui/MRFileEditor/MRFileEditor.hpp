@@ -257,6 +257,7 @@ class MRFileEditor : public TScroller {
 	bool scrollWindowByLines(int deltaRows);
 
 	std::size_t offsetForGlobalPoint(TPoint where) noexcept;
+	bool textPointInView(TPoint where) noexcept;
 
 	struct BlockOverlayState {
 		bool active = false;
@@ -283,6 +284,10 @@ class MRFileEditor : public TScroller {
 	void setCompilerDiagnosticRanges(const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges, const std::vector<std::pair<std::size_t, std::size_t>> &warningRanges);
 
 	void clearCompilerDiagnosticRanges();
+
+	void setLspDiagnosticInformationRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
+
+	void clearLspDiagnosticInformationRanges();
 
 	void revealCursor(Boolean centerCursor = True);
 
@@ -530,6 +535,7 @@ class MRFileEditor : public TScroller {
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept;
 
 	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
+	bool lspDiagnosticInformationContainsOffset(std::size_t offset) const noexcept;
 
 	unsigned char fileCompareLineKindAt(std::size_t lineIndex) const noexcept;
 
@@ -737,6 +743,7 @@ class MRFileEditor : public TScroller {
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
 	std::vector<MRTextBufferModel::Range> mCompilerErrorRanges;
 	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;
+	std::vector<MRTextBufferModel::Range> mLspDiagnosticInformationRanges;
 	LoadTiming mLastLoadTiming;
 	mutable std::size_t mCachedCursorLineDocumentId;
 	mutable std::size_t mCachedCursorLineVersion;
@@ -759,6 +766,8 @@ class MRFileEditor : public TScroller {
 	void pushMappedDirtyRange(std::vector<MRTextBufferModel::Range> &mapped, std::size_t start, std::size_t end, std::size_t maxLength);
 
 	void remapDirtyRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
+
+	void remapLspDiagnosticInformationRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
 
 	void addDirtyRange(MRTextBufferModel::Range range);
 

@@ -16,8 +16,10 @@
 #include <limits.h>
 #include <map>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
 #include <utility>
@@ -27,10 +29,12 @@
 #include "../mrmac/MRVM.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../app/MRCommandRouter.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../app/services/MRLspEditorSource.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsEditSetup.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
+#include "../config/settings/MRSettingsSnapshotIO.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../dialogs/MRAbout.hpp"
@@ -41,6 +45,7 @@
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
+#include "../ui/MRWindowSupport.hpp"
 
 class MRBentoBoxFileCompareRegressionHarness {
   public:
@@ -116,6 +121,9 @@ struct TestContext {
 	TestContext() : passed(0), failed(0) {
 	}
 };
+
+bool keymapMacroBindingDispatchProbeImpl(std::string &failureReason);
+bool keymapAutoexecPersistenceAndBootstrapProbeImpl(std::string &failureReason);
 
 bool compileSource(const std::string &source, std::vector<unsigned char> &bytecode, int &entryOffset, std::string &entryName, std::string &errorText) {
 	unsigned char *compiled = nullptr;
@@ -327,6 +335,7 @@ struct RuntimeSettingsSnapshot {
 	std::string tempDirectoryPath;
 	std::string shellExecutablePath;
 	std::string colorThemeFilePath;
+	std::vector<std::string> autoexecMacros;
 	MREditSetupSettings editSettings;
 	std::vector<MREditExtensionProfile> editExtensionProfiles;
 	MRColorSetupSettings colorSettings;
@@ -365,6 +374,7 @@ RuntimeSettingsSnapshot captureRuntimeSettingsSnapshot() {
 	snapshot.tempDirectoryPath = configuredTempDirectoryPath();
 	snapshot.shellExecutablePath = configuredShellExecutablePath();
 	snapshot.colorThemeFilePath = configuredColorThemeFilePath();
+	configuredAutoexecMacroEntries(snapshot.autoexecMacros);
 	snapshot.editSettings = configuredEditSetupSettings();
 	snapshot.editExtensionProfiles = configuredEditExtensionProfiles();
 	snapshot.colorSettings = configuredColorSetupSettings();
@@ -377,6 +387,7 @@ bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std
 	if (!setConfiguredHelpFilePath(snapshot.helpFilePath, &errorText)) return false;
 	if (!setConfiguredTempDirectoryPath(snapshot.tempDirectoryPath, &errorText)) return false;
 	if (!setConfiguredShellExecutablePath(snapshot.shellExecutablePath, &errorText)) return false;
+	if (!setConfiguredAutoexecMacroEntries(snapshot.autoexecMacros, &errorText)) return false;
 	if (!setConfiguredEditSetupSettings(snapshot.editSettings, &errorText)) return false;
 	if (!setConfiguredEditExtensionProfiles(snapshot.editExtensionProfiles, &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, snapshot.colorSettings.windowColors.data(), snapshot.colorSettings.windowColors.size(), &errorText)) return false;
@@ -387,6 +398,7 @@ bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompareMiniMap, snapshot.colorSettings.fileCompareMiniMapColors.data(), snapshot.colorSettings.fileCompareMiniMapColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompare, snapshot.colorSettings.fileCompareColors.data(), snapshot.colorSettings.fileCompareColors.size(), &errorText)) return false;
 	if (!setConfiguredColorThemeFilePath(snapshot.colorThemeFilePath, &errorText)) return false;
+	clearConfiguredAutoexecMacroDiagnostics();
 	errorText.clear();
 	return true;
 }
@@ -584,6 +596,22 @@ int runMacroScreenFlushProbeMode() {
 	return batchedFlushes < unbatchedFlushes ? 0 : 1;
 }
 
+int runKeymapMacroDispatchProbeMode() {
+	std::string failure;
+
+	if (keymapMacroBindingDispatchProbeImpl(failure)) return 0;
+	if (!failure.empty()) std::cerr << failure << "\n";
+	return 1;
+}
+
+int runKeymapAutoexecBootstrapProbeMode() {
+	std::string failure;
+
+	if (keymapAutoexecPersistenceAndBootstrapProbeImpl(failure)) return 0;
+	if (!failure.empty()) std::cerr << failure << "\n";
+	return 1;
+}
+
 bool validateMrsetupCorePaths(std::string &failureReason) {
 	if (defaultMacroDirectoryPath() != "/tmp") {
 		failureReason = "Startup context should apply MACROPATH='/tmp', got: " + defaultMacroDirectoryPath();
@@ -686,7 +714,12 @@ bool validateMrsetupColorSettings(std::string &failureReason) {
 	MRColorSetupSettings colors = configuredColorSetupSettings();
 
 	if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 || colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 || colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 || colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 || colors.windowColors[8] != 0x1F || colors.windowColors[9] != 0x1F) {
-		failureReason = "Startup context should apply WINDOWCOLORS list (including legacy migration).";
+		std::ostringstream out;
+
+		out << "Startup context should apply WINDOWCOLORS list (including legacy migration):";
+		for (std::size_t i = 0; i < colors.windowColors.size(); ++i)
+			out << " " << i << "=0x" << std::hex << std::uppercase << static_cast<int>(colors.windowColors[i]);
+		failureReason = out.str();
 		return false;
 	}
 	if (colors.menuDialogColors[0] != 0x20 || colors.menuDialogColors[10] != 0x2A) {
@@ -1387,7 +1420,7 @@ bool testExtendedBasePaletteInitializationGuard(std::string &failureReason) {
 }
 
 bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D};
+	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Window, itemCount);
@@ -1412,7 +1445,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 
 	for (std::size_t i = 0; i < itemCount; ++i) {
 		unsigned char slot = items[i].paletteIndex;
-		bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 || slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock || slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers || slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding || slot == kMrPaletteCodeFoldingMarker || slot == kMrPaletteFormatRuler || slot == kMrPaletteFocusedPaneBorder);
+		bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 || slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock || slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers || slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding || slot == kMrPaletteCodeFoldingMarker || slot == kMrPaletteFormatRuler || slot == kMrPaletteFocusedPaneBorder || slot == kMrPaletteDiagnosticInformation);
 		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
 			restore();
 			failureReason = "WINDOWCOLORS item must override its mapped palette slot.";
@@ -2069,6 +2102,20 @@ class ScopedRegressionKeymap {
 	std::string mActive;
 };
 
+class ScopedRegressionMacroDirectory {
+  public:
+	explicit ScopedRegressionMacroDirectory(const std::string &path) : mPrevious(defaultMacroDirectoryPath()) {
+		static_cast<void>(setConfiguredMacroDirectoryPath(path, nullptr));
+	}
+
+	~ScopedRegressionMacroDirectory() {
+		static_cast<void>(setConfiguredMacroDirectoryPath(mPrevious, nullptr));
+	}
+
+  private:
+	std::string mPrevious;
+};
+
 class ScopedRegressionCursorBehaviour {
   public:
 	explicit ScopedRegressionCursorBehaviour(MRCursorBehaviour behaviour) : mPrevious(configuredCursorBehaviour()) {
@@ -2138,8 +2185,49 @@ bool installRegressionKeymap(std::string_view source, std::string &failureReason
 	return true;
 }
 
+MREditorApp *ensureRegressionEditorApp(std::string &failureReason) {
+	static MREditorApp *app = nullptr;
+
+	if (app == nullptr) app = new MREditorApp();
+	if (app == nullptr) {
+		failureReason = "Regression app allocation failed.";
+		return nullptr;
+	}
+	return app;
+}
+
+void destroyRegressionWindow(MREditWindow *window) {
+	if (window == nullptr) return;
+	if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(nullptr, TView::leaveSelect);
+	TObject::destroy(window);
+	if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(nullptr, TView::leaveSelect);
+}
+
+bool runRegressionProbeProcess(const char *probeName, std::string &failureReason) {
+	const std::string logPath = "/tmp/mr_regression_probe_" + std::string(probeName) + "_" + std::to_string(static_cast<long>(::getpid())) + ".log";
+	const std::string command = "./regression/mr-regression-checks --probe " + std::string(probeName) + " >" + logPath + " 2>&1";
+	const int status = std::system(command.c_str());
+	std::string output;
+
+	if (status == 0) {
+		failureReason.clear();
+		return true;
+	}
+	if (readTextFile(logPath, output) && !output.empty()) {
+		const std::size_t lineEnd = output.find_first_of("\r\n");
+		failureReason = lineEnd == std::string::npos ? output : output.substr(0, lineEnd);
+	} else if (WIFEXITED(status))
+		failureReason = "Probe exited with code " + std::to_string(WEXITSTATUS(status)) + ".";
+	else if (WIFSIGNALED(status))
+		failureReason = "Probe terminated by signal " + std::to_string(WTERMSIG(status)) + ".";
+	else
+		failureReason = "Probe did not complete successfully.";
+	return false;
+}
+
 bool testWordStarBasicNavigationKeybindingsHarness(const std::string &wordstarKeymapContent, std::string &failureReason) {
 	ScopedRegressionKeymap restoreKeymap;
+	ScopedRegressionMacroDirectory macroDirectory(absolutePathFromCwd("mrmac/macros"));
 	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::BoundToText);
 	MREditWindow window(TRect(0, 0, 80, 16), "wordstar-basic-nav", 1032);
 	MRFileEditor *editor = nullptr;
@@ -2172,6 +2260,7 @@ bool testWordStarBasicNavigationKeybindingsHarness(const std::string &wordstarKe
 
 bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent, std::string &failureReason) {
 	ScopedRegressionKeymap restoreKeymap;
+	ScopedRegressionMacroDirectory macroDirectory(absolutePathFromCwd("mrmac/macros"));
 	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	ScopedRegressionPersistentBlocks persistentBlocks(true);
 	MREditSetupSettings editSettings = configuredEditSetupSettings();
@@ -3276,6 +3365,392 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 
 	if (!restore()) {
 		failureReason = "Unable to restore runtime settings after extended settings probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool keymapMacroBindingDispatchProbeImpl(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	ScopedRegressionKeymap restoreKeymap;
+	const std::string root = "/tmp/mr_regression_keymap_macro_dispatch_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string settingsPath = root + "/cfg/settings.mrmac";
+	const std::string macroPath = root + "/macros";
+	const std::string tempPath = root + "/tmp";
+	const std::string macroFilePath = macroPath + "/actions/insert-marker.mrmac";
+	const std::string macroTarget = "actions/insert-marker.mrmac^insert_marker";
+	MRSettingsSnapshot cleanSettings;
+	MRKeymapProfile profile;
+	MRKeymapBindingRecord binding;
+	std::string keymapSource;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+
+	auto restore = [&]() {
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	if (!resetSettingsSnapshot(settingsPath, cleanSettings, &errorText)) {
+		failureReason = "Unable to reset clean settings snapshot for macro-dispatch harness: " + errorText;
+		return false;
+	}
+	cleanSettings.paths.settingsMacroUri = settingsPath;
+	cleanSettings.paths.macroPath = macroPath;
+	cleanSettings.paths.helpUri = absolutePathFromCwd("mr.hlp");
+	cleanSettings.paths.tempPath = tempPath;
+	cleanSettings.paths.shellUri = "/bin/sh";
+
+	if (!ensureDirectoryTree(root + "/cfg", &errorText) || !ensureDirectoryTree(macroPath + "/actions", &errorText) || !ensureDirectoryTree(tempPath, &errorText)) {
+		failureReason = "Unable to create macro-dispatch harness directories: " + errorText;
+		return false;
+	}
+	if (!writeTextFile(settingsPath, buildSettingsMacroSource(cleanSettings))) {
+		failureReason = "Unable to write clean settings.mrmac for macro-dispatch harness.";
+		return false;
+	}
+	if (!setConfiguredSettingsMacroFilePath(settingsPath, &errorText)) {
+		failureReason = "Unable to configure settings path for macro-dispatch harness: " + errorText;
+		return false;
+	}
+	if (!setConfiguredMacroDirectoryPath(macroPath, &errorText)) {
+		failureReason = "Unable to configure macro directory for macro-dispatch harness: " + errorText;
+		return false;
+	}
+	if (!writeTextFile(macroFilePath, "$MACRO insert_marker;\nTEXT('!');\nEND_MACRO;\n")) {
+		restore();
+		failureReason = "Unable to write macro target file for macro-dispatch harness.";
+		return false;
+	}
+
+	profile.name = "MACRO_DISPATCH";
+	profile.description = "Regression macro dispatch";
+	binding.profileName = profile.name;
+	binding.context = MRKeymapContext::Edit;
+	binding.target.type = MRKeymapBindingType::Macro;
+	binding.target.target = macroTarget;
+	binding.sequence = *MRKeymapSequence::parse("<F12>");
+	binding.description = "Insert marker";
+	profile.bindings.push_back(binding);
+	keymapSource = serializeKeymapProfilesToSettingsSource(std::vector<MRKeymapProfile>{profile}, profile.name);
+
+	if (ensureRegressionEditorApp(failureReason) == nullptr) {
+		restore();
+		return false;
+	}
+	{
+		MREditWindow *window = nullptr;
+		MRFileEditor *editor = nullptr;
+
+		if (!installRegressionKeymap(keymapSource, failureReason)) {
+			restore();
+			return false;
+		}
+		window = createEditorWindow("keymap-macro-dispatch");
+		if (window == nullptr) {
+			restore();
+			failureReason = "Macro-dispatch harness could not create an editor window.";
+			return false;
+		}
+		if (!mrActivateEditWindow(window)) {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "Macro-dispatch harness could not activate the editor window.";
+			return false;
+		}
+		if (!window->replaceTextBuffer("abc\n", "keymap-macro-dispatch")) {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "Macro-dispatch harness could not seed editor text.";
+			return false;
+		}
+		editor = window->getEditor();
+		if (editor == nullptr) {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "Macro-dispatch harness window has no editor.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		if (!sendWindowKey(*window, kbF12)) {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "Macro-dispatch harness could not send the bound key.";
+			return false;
+		}
+		if (editor->snapshotText() != "!abc\n") {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "Runtime macro binding must dispatch through the editor key path and mutate the active buffer.";
+			return false;
+		}
+		destroyRegressionWindow(window);
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after macro-dispatch harness: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool keymapAutoexecPersistenceAndBootstrapProbeImpl(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	ScopedRegressionKeymap restoreKeymap;
+	const std::string root = "/tmp/mr_regression_keymap_autoexec_bootstrap_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string settingsPath = root + "/cfg/settings.mrmac";
+	const std::string macroPath = root + "/macros";
+	const std::string tempPath = root + "/tmp";
+	const std::string actionMacroFilePath = macroPath + "/actions/bootstrap-marker.mrmac";
+	const std::string keymapMacroFilePath = macroPath + "/keymaps/bootstrap-keymap.mrmac";
+	const std::string retainedAutoexecEntry = "keymaps/bootstrap-keymap.mrmac";
+	const std::string missingAutoexecEntry = "keymaps/missing-entry.mrmac";
+	const std::string macroTarget = "actions/bootstrap-marker.mrmac^insert_bootstrap_marker";
+	MRSettingsSnapshot cleanSettings;
+	MRKeymapProfile profile;
+	MRKeymapBindingRecord binding;
+	std::vector<std::string> configuredEntries;
+	std::string persistedSource;
+	std::string cleanSource;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+
+	auto restore = [&]() {
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	if (!resetSettingsSnapshot(settingsPath, cleanSettings, &errorText)) {
+		failureReason = "Unable to reset clean settings snapshot for AUTOEXEC bootstrap harness: " + errorText;
+		return false;
+	}
+	cleanSettings.paths.settingsMacroUri = settingsPath;
+	cleanSettings.paths.macroPath = macroPath;
+	cleanSettings.paths.helpUri = absolutePathFromCwd("mr.hlp");
+	cleanSettings.paths.tempPath = tempPath;
+	cleanSettings.paths.shellUri = "/bin/sh";
+	cleanSource = buildSettingsMacroSource(cleanSettings);
+
+	if (!ensureDirectoryTree(root + "/cfg", &errorText) || !ensureDirectoryTree(macroPath + "/actions", &errorText) || !ensureDirectoryTree(macroPath + "/keymaps", &errorText) || !ensureDirectoryTree(tempPath, &errorText)) {
+		failureReason = "Unable to create AUTOEXEC bootstrap harness directories: " + errorText;
+		return false;
+	}
+	if (!writeTextFile(actionMacroFilePath, "$MACRO insert_bootstrap_marker;\nTEXT('#');\nEND_MACRO;\n")) {
+		restore();
+		failureReason = "Unable to write action macro for AUTOEXEC bootstrap harness.";
+		return false;
+	}
+
+	profile.name = "AUTOEXEC_BOOTSTRAP";
+	profile.description = "Regression autoexec bootstrap";
+	binding.profileName = profile.name;
+	binding.context = MRKeymapContext::Edit;
+	binding.target.type = MRKeymapBindingType::Macro;
+	binding.target.target = macroTarget;
+	binding.sequence = *MRKeymapSequence::parse("<F11>");
+	binding.description = "Bootstrap marker";
+	profile.bindings.push_back(binding);
+	if (!writeTextFile(keymapMacroFilePath, buildExecutableKeymapMacroSource(std::vector<MRKeymapProfile>{profile}, profile.name))) {
+		restore();
+		failureReason = "Unable to write keymap AUTOEXEC macro file.";
+		return false;
+	}
+	if (!mrApplySettingsSourceForTesting(cleanSource, &errorText)) {
+		restore();
+		failureReason = "Unable to apply clean settings before AUTOEXEC persistence probe: " + errorText;
+		return false;
+	}
+	if (!setConfiguredSettingsMacroFilePath(settingsPath, &errorText)) {
+		restore();
+		failureReason = "Unable to configure settings path before AUTOEXEC persistence probe: " + errorText;
+		return false;
+	}
+	if (!setConfiguredAutoexecMacroEntries(std::vector<std::string>{retainedAutoexecEntry, missingAutoexecEntry}, &errorText)) {
+		restore();
+		failureReason = "Unable to configure AUTOEXEC entries for persistence probe: " + errorText;
+		return false;
+	}
+	if (!persistConfiguredSettingsSnapshot(&errorText)) {
+		restore();
+		failureReason = "Unable to persist settings with AUTOEXEC entries: " + errorText;
+		return false;
+	}
+	if (!mrApplySettingsSourceForTesting(cleanSource, &errorText)) {
+		restore();
+		failureReason = "Unable to reset runtime state before AUTOEXEC bootstrap probe: " + errorText;
+		return false;
+	}
+	if (!setConfiguredSettingsMacroFilePath(settingsPath, &errorText)) {
+		restore();
+		failureReason = "Unable to restore settings path before AUTOEXEC bootstrap probe: " + errorText;
+		return false;
+	}
+	if (!setConfiguredKeymapProfiles({}, &errorText) || !setConfiguredActiveKeymapProfile(std::string(), &errorText)) {
+		restore();
+		failureReason = "Unable to clear runtime keymap before AUTOEXEC bootstrap probe: " + errorText;
+		return false;
+	}
+
+	if (ensureRegressionEditorApp(failureReason) == nullptr) {
+		restore();
+		return false;
+	}
+	{
+		MREditWindow *window = nullptr;
+		MRFileEditor *editor = nullptr;
+
+		configuredAutoexecMacroEntries(configuredEntries);
+		if (configuredEntries.size() != 1 || configuredEntries.front() != retainedAutoexecEntry) {
+			restore();
+			failureReason = "AUTOEXEC bootstrap must retain the existing keymap macro and drop missing entries.";
+			return false;
+		}
+		if (!readTextFile(settingsPath, persistedSource, errorText)) {
+			restore();
+			failureReason = "Unable to read persisted settings after AUTOEXEC bootstrap: " + errorText;
+			return false;
+		}
+		if (persistedSource.find("MRSETUP('AUTOEXEC_MACRO', '" + missingAutoexecEntry + "');") != std::string::npos) {
+			restore();
+			failureReason = "AUTOEXEC bootstrap must persist the filtered settings.mrmac without stale missing entries.";
+			return false;
+		}
+		if (persistedSource.find("MRSETUP('AUTOEXEC_MACRO', '" + retainedAutoexecEntry + "');") == std::string::npos) {
+			restore();
+			failureReason = "AUTOEXEC bootstrap must preserve the surviving keymap macro entry in settings.mrmac.";
+			return false;
+		}
+		window = createEditorWindow("keymap-autoexec-bootstrap");
+		if (window == nullptr) {
+			restore();
+			failureReason = "AUTOEXEC bootstrap harness could not create an editor window.";
+			return false;
+		}
+		if (!mrActivateEditWindow(window)) {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "AUTOEXEC bootstrap harness could not activate the editor window.";
+			return false;
+		}
+		if (!window->replaceTextBuffer("abc\n", "keymap-autoexec-bootstrap")) {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "AUTOEXEC bootstrap harness could not seed editor text.";
+			return false;
+		}
+		editor = window->getEditor();
+		if (editor == nullptr) {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "AUTOEXEC bootstrap harness window has no editor.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		if (!sendWindowKey(*window, kbF11)) {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "AUTOEXEC bootstrap harness could not send the bound key.";
+			return false;
+		}
+		if (editor->snapshotText() != "#abc\n") {
+			destroyRegressionWindow(window);
+			restore();
+			failureReason = "AUTOEXEC bootstrap must restore macro key bindings after restart.";
+			return false;
+		}
+		destroyRegressionWindow(window);
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after AUTOEXEC bootstrap harness: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testKeymapMacroBindingDispatchHarness(std::string &failureReason) {
+	return runRegressionProbeProcess("keymap-macro-dispatch", failureReason);
+}
+
+bool testKeymapAutoexecPersistenceAndBootstrapHarness(std::string &failureReason) {
+	return runRegressionProbeProcess("keymap-autoexec-bootstrap", failureReason);
+}
+
+bool testKeymapMacroBindingNegativeDiagnosticsHarness(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	const std::string root = "/tmp/mr_regression_keymap_macro_diagnostics_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string macroPath = root + "/macros";
+	const std::string presentMacroFilePath = macroPath + "/present.mrmac";
+	MRKeymapProfile profile;
+	MRKeymapBindingRecord binding;
+	std::string source;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+	bool missingFileError = false;
+	bool missingMacroNameError = false;
+	bool missingMacroDefinitionError = false;
+
+	auto restore = [&]() {
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	if (!ensureDirectoryTree(macroPath, &errorText)) {
+		failureReason = "Unable to create macro-diagnostics harness directory: " + errorText;
+		return false;
+	}
+	if (!setConfiguredMacroDirectoryPath(macroPath, &errorText)) {
+		failureReason = "Unable to configure macro directory for macro-diagnostics harness: " + errorText;
+		return false;
+	}
+	if (!writeTextFile(presentMacroFilePath, "$MACRO existing_macro;\nTEXT('x');\nEND_MACRO;\n")) {
+		restore();
+		failureReason = "Unable to write present macro file for diagnostics harness.";
+		return false;
+	}
+
+	profile.name = "MACRO_DIAGNOSTICS";
+	profile.description = "Regression macro diagnostics";
+	binding.profileName = profile.name;
+	binding.context = MRKeymapContext::Edit;
+	binding.target.type = MRKeymapBindingType::Macro;
+	binding.description = "Broken macro";
+
+	binding.target.target = "missing-file.mrmac^run_missing";
+	binding.sequence = *MRKeymapSequence::parse("<F5>");
+	profile.bindings.push_back(binding);
+	binding.target.target = "present.mrmac^";
+	binding.sequence = *MRKeymapSequence::parse("<F6>");
+	profile.bindings.push_back(binding);
+	binding.target.target = "present.mrmac^missing_macro";
+	binding.sequence = *MRKeymapSequence::parse("<F7>");
+	profile.bindings.push_back(binding);
+
+	source = serializeKeymapProfilesToSettingsSource(std::vector<MRKeymapProfile>{profile}, profile.name);
+
+	{
+		MRKeymapLoadResult loaded = loadKeymapProfilesFromSettingsSource(source);
+		for (const MRKeymapDiagnostic &diagnostic : loaded.diagnostics) {
+			if (diagnostic.severity != MRKeymapDiagnosticSeverity::Error) continue;
+			if (diagnostic.message.find("Macro file could not be resolved.") != std::string::npos) missingFileError = true;
+			if (diagnostic.message.find("Macro target has no macro name.") != std::string::npos) missingMacroNameError = true;
+			if (diagnostic.message.find("Macro not found in file.") != std::string::npos) missingMacroDefinitionError = true;
+		}
+	}
+
+	if (!missingFileError || !missingMacroNameError || !missingMacroDefinitionError) {
+		restore();
+		failureReason = "Keymap macro validation must report unresolved files, missing macro names and absent macro definitions.";
+		return false;
+	}
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after macro-diagnostics harness: " + restoreError;
 		return false;
 	}
 	failureReason.clear();
@@ -4624,7 +5099,7 @@ struct InvalidCurrentColorListEntry {
 };
 
 static const InvalidCurrentColorListEntry kInvalidCurrentColorListEntries[] = {
-	{"WINDOWCOLORS", "v6:21"},
+	{"WINDOWCOLORS", "v7:21"},
 	{"MENUDIALOGCOLORS", "v1:21"},
 	{"HELPCOLORS", "v1:21"},
 	{"OTHERCOLORS", "v1:21"},
@@ -4677,10 +5152,10 @@ bool testCurrentColorThemeInvalidListsDoNotMutateGuard(std::string &failureReaso
 
 bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureReason) {
 	const std::string themePath = "/tmp/mr-windowcolors-line-numbers-theme.mrmac";
-	const std::string windowColorsPrefix = "WINDOWCOLORS('v6:";
+	const std::string windowColorsPrefix = "WINDOWCOLORS('v7:";
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string previousThemePath = configuredColorThemeFilePath();
-	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D};
+	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E};
 	std::string errorText;
 	std::string content;
 	std::string contentAfterLoad;
@@ -4709,7 +5184,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		return false;
 	}
 	if (content.find(windowColorsPrefix) == std::string::npos) {
-		failureReason = "Saved theme must serialize WINDOWCOLORS using canonical v6 list format.";
+		failureReason = "Saved theme must serialize WINDOWCOLORS using canonical v7 list format.";
 		restore();
 		return false;
 	}
@@ -4742,7 +5217,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		MRColorSetupSettings loaded = configuredColorSetupSettings();
 		for (std::size_t i = 0; i < probeValues.size(); ++i)
 			if (loaded.windowColors[i] != probeValues[i]) {
-				failureReason = "WINDOWCOLORS v5 roundtrip mismatch after theme reload.";
+				failureReason = "WINDOWCOLORS v7 roundtrip mismatch after theme reload.";
 				restore();
 				return false;
 			}
@@ -4894,39 +5369,44 @@ bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason
 }
 
 bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F};
+	static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F, 0x3A, 0x4B};
 	struct CodeColorInventoryEntry {
 		const char *name;
 		const char *paletteMacro;
 		unsigned char paletteIndex;
 		bool tokenColorConsumer;
 		bool sidekickConsumer;
+		bool contextMenuConsumer;
 		bool explicitReserve;
 	};
 	static const CodeColorInventoryEntry codeColorInventory[] = {
-	    {"comments", "kMrPaletteCodeComments", kMrPaletteCodeComments, true, false, false},
-	    {"strings", "kMrPaletteCodeStrings", kMrPaletteCodeStrings, true, false, false},
-	    {"characters", "kMrPaletteCodeCharacters", kMrPaletteCodeCharacters, false, false, true},
-	    {"numbers", "kMrPaletteCodeNumbers", kMrPaletteCodeNumbers, true, false, false},
-	    {"keywords", "kMrPaletteCodeKeywords", kMrPaletteCodeKeywords, true, false, false},
-	    {"types", "kMrPaletteCodeTypes", kMrPaletteCodeTypes, true, false, false},
-	    {"directives", "kMrPaletteCodeDirectives", kMrPaletteCodeDirectives, true, false, false},
-	    {"functions", "kMrPaletteCodeFunctions", kMrPaletteCodeFunctions, false, false, true},
-	    {"builtins", "kMrPaletteCodeBuiltins", kMrPaletteCodeBuiltins, false, false, true},
-	    {"constants", "kMrPaletteCodeConstants", kMrPaletteCodeConstants, true, false, false},
-	    {"operators", "kMrPaletteCodeOperators", kMrPaletteCodeOperators, false, false, true},
-	    {"brackets", "kMrPaletteCodeBrackets", kMrPaletteCodeBrackets, false, false, true},
-	    {"delimiters", "kMrPaletteCodeDelimiters", kMrPaletteCodeDelimiters, true, false, false},
-	    {"sidekick editor text", "kMrPaletteSidekickEditorText", kMrPaletteSidekickEditorText, false, true, false},
-	    {"sidekick editor highlight", "kMrPaletteSidekickEditorHighlight", kMrPaletteSidekickEditorHighlight, false, true, false},
+	    {"comments", "kMrPaletteCodeComments", kMrPaletteCodeComments, true, false, false, false},
+	    {"strings", "kMrPaletteCodeStrings", kMrPaletteCodeStrings, true, false, false, false},
+	    {"characters", "kMrPaletteCodeCharacters", kMrPaletteCodeCharacters, false, false, false, true},
+	    {"numbers", "kMrPaletteCodeNumbers", kMrPaletteCodeNumbers, true, false, false, false},
+	    {"keywords", "kMrPaletteCodeKeywords", kMrPaletteCodeKeywords, true, false, false, false},
+	    {"types", "kMrPaletteCodeTypes", kMrPaletteCodeTypes, true, false, false, false},
+	    {"directives", "kMrPaletteCodeDirectives", kMrPaletteCodeDirectives, true, false, false, false},
+	    {"functions", "kMrPaletteCodeFunctions", kMrPaletteCodeFunctions, false, false, false, true},
+	    {"builtins", "kMrPaletteCodeBuiltins", kMrPaletteCodeBuiltins, false, false, false, true},
+	    {"constants", "kMrPaletteCodeConstants", kMrPaletteCodeConstants, true, false, false, false},
+	    {"operators", "kMrPaletteCodeOperators", kMrPaletteCodeOperators, false, false, false, true},
+	    {"brackets", "kMrPaletteCodeBrackets", kMrPaletteCodeBrackets, false, false, false, true},
+	    {"delimiters", "kMrPaletteCodeDelimiters", kMrPaletteCodeDelimiters, true, false, false, false},
+	    {"sidekick editor text", "kMrPaletteSidekickEditorText", kMrPaletteSidekickEditorText, false, true, false, false},
+	    {"sidekick editor highlight", "kMrPaletteSidekickEditorHighlight", kMrPaletteSidekickEditorHighlight, false, true, false, false},
+	    {"context menu", "kMrPaletteContextMenu", kMrPaletteContextMenu, false, false, true, false},
+	    {"context menu selector", "kMrPaletteContextMenuSelector", kMrPaletteContextMenuSelector, false, false, true, false},
 	};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Code, itemCount);
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
 	const std::string sidekickPath = absolutePathFromCwd("ui/MRSidekickEditor.cpp");
+	const std::string columnListPath = absolutePathFromCwd("ui/widgets/MRColumnListView.cpp");
 	std::string viewportContent;
 	std::string sidekickContent;
+	std::string columnListContent;
 	std::string tokenColorFunction;
 	std::string errorText;
 	unsigned char value = 0;
@@ -4974,6 +5454,11 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRSidekickEditor.cpp for code color guard: " + errorText;
 		return false;
 	}
+	if (!readTextFile(columnListPath, columnListContent, errorText)) {
+		restore();
+		failureReason = "Unable to read MRColumnListView.cpp for code color guard: " + errorText;
+		return false;
+	}
 	const std::size_t tokenColorStart = viewportContent.find("TColorAttr MRFileEditor::tokenColor");
 	const std::size_t tokenColorEnd = viewportContent.find("\nvoid MRFileEditor::formatSyntaxLine", tokenColorStart);
 	if (tokenColorStart == std::string::npos || tokenColorEnd == std::string::npos) {
@@ -5001,6 +5486,7 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 		const CodeColorInventoryEntry &entry = codeColorInventory[i];
 		const bool usedByTokenColor = tokenColorFunction.find(entry.paletteMacro) != std::string::npos;
 		const bool usedBySidekick = sidekickContent.find(entry.paletteMacro) != std::string::npos;
+		const bool usedByContextMenu = columnListContent.find(entry.paletteMacro) != std::string::npos;
 
 		if (entry.tokenColorConsumer && !usedByTokenColor) {
 			restore();
@@ -5012,12 +5498,17 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 			failureReason = std::string("CODECOLORS sidekick consumer is missing for ") + entry.name;
 			return false;
 		}
-		if (entry.explicitReserve && (usedByTokenColor || usedBySidekick)) {
+		if (entry.contextMenuConsumer && !usedByContextMenu) {
+			restore();
+			failureReason = std::string("CODECOLORS context menu consumer is missing for ") + entry.name;
+			return false;
+		}
+		if (entry.explicitReserve && (usedByTokenColor || usedBySidekick || usedByContextMenu)) {
 			restore();
 			failureReason = std::string("CODECOLORS reserve slot gained a consumer without contract update: ") + entry.name;
 			return false;
 		}
-		if (!entry.tokenColorConsumer && !entry.sidekickConsumer && !entry.explicitReserve) {
+		if (!entry.tokenColorConsumer && !entry.sidekickConsumer && !entry.contextMenuConsumer && !entry.explicitReserve) {
 			restore();
 			failureReason = std::string("CODECOLORS slot is neither consumed nor explicitly reserved: ") + entry.name;
 			return false;
@@ -5384,11 +5875,11 @@ bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 	}
 	dialogBody = content.substr(dialogStart, dialogEnd - dialogStart);
 	const std::size_t itemLookup = dialogBody.find("const mr::services::MRServiceCompletionItem &item = result.items[selectedIndex];");
-	const std::size_t normalizedInsert = dialogBody.find("insertText = lspCompletionInsertTextForItem(item)", itemLookup);
+	const std::size_t normalizedInsert = dialogBody.find("insertText = lspCompletionReplacementTextForItem(item)", itemLookup);
 	const std::size_t dialogDestroy = dialogBody.find("TObject::destroy(dialog)", normalizedInsert);
-	const std::size_t editorInsert = dialogBody.find("targetEditor->insertBufferText(insertText)", dialogDestroy);
-	if (itemLookup == std::string::npos || normalizedInsert == std::string::npos || dialogDestroy == std::string::npos || editorInsert == std::string::npos) {
-		failureReason = "LSP completion dialog must insert the normalized selected completion text into the editor.";
+	const std::size_t editorReplace = dialogBody.find("applyLspCompletionItem(*targetEditor, result, selectedItem, insertText, errorMessage)", dialogDestroy);
+	if (itemLookup == std::string::npos || normalizedInsert == std::string::npos || dialogDestroy == std::string::npos || editorReplace == std::string::npos) {
+		failureReason = "LSP completion dialog must replace the selected completion range with normalized completion text.";
 		return false;
 	}
 
@@ -7508,6 +7999,9 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
 	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
 	runTest(ctx, "Extended settings roundtrip behavior", testExtendedSettingsRoundtripGuard);
+	runTest(ctx, "Keymap AUTOEXEC persistence + bootstrap harness", testKeymapAutoexecPersistenceAndBootstrapHarness);
+	runTest(ctx, "Keymap runtime macro dispatch harness", testKeymapMacroBindingDispatchHarness);
+	runTest(ctx, "Keymap macro diagnostics harness", testKeymapMacroBindingNegativeDiagnosticsHarness);
 	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);
 	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
@@ -7586,6 +8080,9 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
 	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
 	runTest(ctx, "Extended settings roundtrip behavior", testExtendedSettingsRoundtripGuard);
+	runTest(ctx, "Keymap AUTOEXEC persistence + bootstrap harness", testKeymapAutoexecPersistenceAndBootstrapHarness);
+	runTest(ctx, "Keymap runtime macro dispatch harness", testKeymapMacroBindingDispatchHarness);
+	runTest(ctx, "Keymap macro diagnostics harness", testKeymapMacroBindingNegativeDiagnosticsHarness);
 	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);
 	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
@@ -7664,13 +8161,15 @@ int main(int argc, char **argv) {
 			if (std::strcmp(argv[2], "staged-nav") == 0) return runStagedNavProbeMode();
 			if (std::strcmp(argv[2], "staged-mark-page") == 0) return runStagedMarkPageProbeMode();
 			if (std::strcmp(argv[2], "macro-screen-flush") == 0) return runMacroScreenFlushProbeMode();
+			if (std::strcmp(argv[2], "keymap-macro-dispatch") == 0) return runKeymapMacroDispatchProbeMode();
+			if (std::strcmp(argv[2], "keymap-autoexec-bootstrap") == 0) return runKeymapAutoexecBootstrapProbeMode();
 		} else if (argc == 2 && std::strcmp(argv[1], "--full") == 0) {
 			runFull = true;
 		} else if (argc == 2 && std::strcmp(argv[1], "--core") == 0) {
 			runFull = false;
 		} else {
 			std::cerr << "usage: regression/mr-regression-checks "
-			             "[--core|--full|--probe staged-nav|staged-mark-page|macro-screen-flush]\n";
+			             "[--core|--full|--probe staged-nav|staged-mark-page|macro-screen-flush|keymap-macro-dispatch|keymap-autoexec-bootstrap]\n";
 			return 2;
 		}
 	}

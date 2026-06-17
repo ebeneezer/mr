@@ -281,6 +281,9 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {kDialogLastPathKey, MRSettingsKeyClass::Global, false},
     {kDialogPathHistoryKey, MRSettingsKeyClass::Global, false},
     {kDialogFileHistoryKey, MRSettingsKeyClass::Global, false},
+    {"KEYMAP_PROFILE", MRSettingsKeyClass::Global, false},
+    {"KEYMAP_BIND", MRSettingsKeyClass::Global, false},
+    {"ACTIVE_KEYMAP_PROFILE", MRSettingsKeyClass::Global, false},
     {"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
 };
 
@@ -575,6 +578,58 @@ bool normalizeCursorPositionMarker(const std::string &value, std::string &out, s
 		out.push_back(ch);
 	}
 	if (rCount == 0 || cCount == 0) return setError(errorMessage, "must contain R and C placeholder.");
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool keymapDiagnosticsContainError(const std::vector<MRKeymapDiagnostic> &diagnostics) noexcept {
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return true;
+	return false;
+}
+
+std::string firstKeymapDiagnosticMessage(const std::vector<MRKeymapDiagnostic> &diagnostics) {
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
+		if (!diagnostic.message.empty()) return diagnostic.message;
+	return "Invalid keymap payload.";
+}
+
+bool applyKeymapProfileRecord(std::vector<MRKeymapProfile> &profiles, const std::string &value, std::string *errorMessage) {
+	MRKeymapProfile profile;
+	const std::vector<MRKeymapDiagnostic> diagnostics = parseKeymapProfilePayload(value, profile);
+
+	if (keymapDiagnosticsContainError(diagnostics)) return setError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	for (MRKeymapProfile &existing : profiles)
+		if (existing.name == profile.name) {
+			existing = profile;
+			if (errorMessage != nullptr) errorMessage->clear();
+			return true;
+		}
+	profiles.push_back(profile);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool applyKeymapBindingRecord(std::vector<MRKeymapProfile> &profiles, const std::string &value, std::string *errorMessage) {
+	MRKeymapBindingRecord binding;
+	const std::vector<MRKeymapDiagnostic> diagnostics = parseKeymapBindingPayload(value, binding);
+
+	if (keymapDiagnosticsContainError(diagnostics)) return setError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	for (MRKeymapProfile &profile : profiles)
+		if (profile.name == binding.profileName) {
+			profile.bindings.push_back(binding);
+			if (errorMessage != nullptr) errorMessage->clear();
+			return true;
+		}
+	return setError(errorMessage, "Binding references unknown keymap profile: " + binding.profileName);
+}
+
+bool parseActiveKeymapProfileRecord(const std::string &value, std::string &activeProfile, std::string *errorMessage) {
+	MRKeymapProfile profile;
+	const std::vector<MRKeymapDiagnostic> diagnostics = parseKeymapProfilePayload(value, profile);
+
+	if (keymapDiagnosticsContainError(diagnostics)) return setError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	activeProfile = profile.name;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -1209,6 +1264,24 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
+			if (upper == "KEYMAP_PROFILE") {
+				std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+
+				if (!applyKeymapProfileRecord(profiles, value, errorMessage)) return false;
+				return setConfiguredKeymapProfiles(profiles, errorMessage);
+			}
+			if (upper == "KEYMAP_BIND") {
+				std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+
+				if (!applyKeymapBindingRecord(profiles, value, errorMessage)) return false;
+				return setConfiguredKeymapProfiles(profiles, errorMessage);
+			}
+			if (upper == "ACTIVE_KEYMAP_PROFILE") {
+				std::string activeProfile;
+
+				if (!parseActiveKeymapProfileRecord(value, activeProfile, errorMessage)) return false;
+				return setConfiguredActiveKeymapProfile(activeProfile, errorMessage);
+			}
 			if (upper == "DEFAULT_PROFILE_DESCRIPTION") return setConfiguredDefaultProfileDescription(value, errorMessage);
 			break;
 		}
@@ -1734,6 +1807,9 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
+			if (upper == "KEYMAP_PROFILE") return applyKeymapProfileRecord(snapshot.keymapProfiles, value, errorMessage);
+			if (upper == "KEYMAP_BIND") return applyKeymapBindingRecord(snapshot.keymapProfiles, value, errorMessage);
+			if (upper == "ACTIVE_KEYMAP_PROFILE") return parseActiveKeymapProfileRecord(value, snapshot.activeKeymapProfile, errorMessage);
 			break;
 		}
 		case MRSettingsKeyClass::Edit:

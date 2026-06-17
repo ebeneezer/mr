@@ -360,6 +360,15 @@ bool MRFileEditor::findMarkerContainsOffset(std::size_t offset) const noexcept {
 	return false;
 }
 
+bool MRFileEditor::lspDiagnosticInformationContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mLspDiagnosticInformationRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
 bool MRFileEditor::ratioCellActive(int numerator, int denominator, int cellIndex, int cellCount) noexcept {
 	if (numerator <= 0 || denominator <= 0 || cellCount <= 0) return false;
 	if (numerator >= denominator) return true;
@@ -630,6 +639,7 @@ void MRFileEditor::draw() {
 		const std::uint64_t dirtySignature = rangeSignature(mDirtyRanges);
 		const std::uint64_t errorSignature = rangeSignature(mCompilerErrorRanges);
 		const std::uint64_t warningSignature = rangeSignature(mCompilerWarningRanges);
+		const std::uint64_t diagnosticSignature = rangeSignature(mLspDiagnosticInformationRanges);
 		std::uint64_t diffSignature = 1469598103934665603ULL;
 		for (unsigned char kind : mFileCompareLineKinds)
 			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(kind)) * 1099511628211ULL;
@@ -646,12 +656,14 @@ void MRFileEditor::draw() {
 		                                           mMiniMapState.overlayCache().braille == miniMapUseBraille && mMiniMapState.overlayCache().selectionStart == selection.start &&
 		                                           mMiniMapState.overlayCache().selectionEnd == selection.end && mMiniMapState.overlayCache().findSignature == findSignature &&
 		                                           mMiniMapState.overlayCache().dirtySignature == dirtySignature && mMiniMapState.overlayCache().errorSignature == errorSignature &&
-		                                           mMiniMapState.overlayCache().warningSignature == warningSignature && mMiniMapState.overlayCache().diffSignature == diffSignature;
+		                                           mMiniMapState.overlayCache().warningSignature == warningSignature && mMiniMapState.overlayCache().diagnosticSignature == diagnosticSignature &&
+		                                           mMiniMapState.overlayCache().diffSignature == diffSignature;
 
 		if (miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
 		else {
-			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, mCompilerErrorRanges, mCompilerWarningRanges, totalLines,
-			                                                              viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings, mFileCompareLineKinds, mFileCompareMiniMapSlices);
+			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, mCompilerErrorRanges, mCompilerWarningRanges,
+			                                                              mLspDiagnosticInformationRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings,
+			                                                              mFileCompareLineKinds, mFileCompareMiniMapSlices);
 			mMiniMapState.overlayCache().documentId = mBufferModel.documentId();
 			mMiniMapState.overlayCache().documentVersion = mBufferModel.version();
 			mMiniMapState.overlayCache().totalLines = totalLines;
@@ -664,6 +676,7 @@ void MRFileEditor::draw() {
 			mMiniMapState.overlayCache().dirtySignature = dirtySignature;
 			mMiniMapState.overlayCache().errorSignature = errorSignature;
 			mMiniMapState.overlayCache().warningSignature = warningSignature;
+			mMiniMapState.overlayCache().diagnosticSignature = diagnosticSignature;
 			mMiniMapState.overlayCache().diffSignature = diffSignature;
 			mMiniMapState.overlayCache().overlay = miniMapOverlay;
 		}
@@ -959,6 +972,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 				selected = selection.start <= documentPos && documentPos < selection.end;
 			bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
 			bool findMarkedChar = !selected && findMarkerContainsOffset(documentPos);
+			bool diagnosticInformationChar = !selected && lspDiagnosticInformationContainsOffset(documentPos);
 			TAttrPair effectivePair = changedChar ? changedPair : basePair;
 			tokenPair = selected ? selectionPair : effectivePair;
 			color = tokenColor(token, selected, tokenPair);
@@ -969,6 +983,12 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 					color = static_cast<TColorAttr>((color & 0xF0) | 0x0E);
 			}
 			if (diffTextActive && !selected) color = diffTextColor;
+			if (diagnosticInformationChar) {
+				unsigned char diagnosticAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteDiagnosticInformation, diagnosticAttr)) color = static_cast<TColorAttr>(diagnosticAttr);
+				else
+					color = static_cast<TColorAttr>(0x4E);
+			}
 			visibleWidth = nextVisual - std::max(visual, hScroll);
 
 			if (line[bytePos] == '\t' && displayTabs && visual >= hScroll && visibleWidth > 0) {

@@ -98,6 +98,9 @@ struct MRServiceCompletionItem {
 	std::string insertText;
 	bool hasInsertTextFormat = false;
 	int insertTextFormat = 1;
+	bool hasTextEdit = false;
+	MRServiceTextRange textEditRange;
+	std::string textEditNewText;
 };
 
 struct MRServiceTextEdit {
@@ -133,13 +136,45 @@ struct MRServiceHoverResult {
 
 struct MRServiceCompletionResult {
 	MRServiceResultHeader header;
+	bool hasRequestPosition = false;
+	MRServiceTextPosition requestPosition;
 	std::string rawLspResponseJson;
 	std::vector<MRServiceCompletionItem> items;
 };
 
 struct MRServiceCodeActionResult {
 	MRServiceResultHeader header;
+	bool hasContextRange = false;
+	MRServiceTextRange contextRange;
 	std::vector<MRServiceCodeActionItem> items;
+};
+
+struct MRServiceResultCounts {
+	std::size_t diagnostics = 0;
+	std::size_t definitions = 0;
+	std::size_t references = 0;
+	std::size_t hovers = 0;
+	std::size_t completions = 0;
+	std::size_t codeActions = 0;
+};
+
+struct MRServiceDocumentResultsSnapshot {
+	MRServiceDocumentIdentity identity;
+	MRServiceResultCounts stored;
+	MRServiceResultCounts current;
+	std::vector<MRServiceDiagnosticResult> diagnostics;
+	std::vector<MRServiceLocationResult> definitions;
+	std::vector<MRServiceLocationResult> references;
+	std::vector<MRServiceHoverResult> hovers;
+	std::vector<MRServiceCompletionResult> completions;
+	std::vector<MRServiceCodeActionResult> codeActions;
+};
+
+struct MRServicePositionResultsSnapshot {
+	MRServiceTextPosition position;
+	MRServiceDocumentResultsSnapshot document;
+	std::vector<MRServiceDiagnosticResult> diagnostics;
+	std::vector<MRServiceCodeActionResult> codeActions;
 };
 
 class MRServiceResultStore {
@@ -157,6 +192,9 @@ public:
 	[[nodiscard]] const std::vector<MRServiceHoverResult> &hoverResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceCompletionResult> &completionResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceCodeActionResult> &codeActionResults() const noexcept;
+	[[nodiscard]] MRServiceResultCounts resultCounts() const noexcept;
+	[[nodiscard]] MRServiceDocumentResultsSnapshot currentResultsForDocument(const MRWorkspaceDocumentSnapshot &document) const;
+	[[nodiscard]] MRServicePositionResultsSnapshot currentResultsForDocumentPosition(const MRWorkspaceDocumentSnapshot &document, MRServiceTextPosition position) const;
 
 private:
 	std::vector<MRServiceDiagnosticResult> diagnostics;
@@ -167,6 +205,9 @@ private:
 };
 
 [[nodiscard]] bool serviceDocumentIdentityMatches(const MRWorkspaceServiceSnapshot &workspace, const MRServiceDocumentIdentity &identity) noexcept;
+[[nodiscard]] bool serviceDocumentIdentityMatchesDocument(const MRWorkspaceDocumentSnapshot &document, const MRServiceDocumentIdentity &identity) noexcept;
+[[nodiscard]] bool serviceTextRangeContainsPosition(const MRServiceTextRange &range, MRServiceTextPosition position) noexcept;
+[[nodiscard]] bool serviceCodeActionAppliesToDocument(const MRServiceCodeActionItem &item, const MRServiceDocumentIdentity &identity) noexcept;
 [[nodiscard]] MRServiceDiagnosticResult buildServiceDiagnosticsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDiagnosticBatch &batch);
 [[nodiscard]] MRServiceLocationResult buildServiceDefinitionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDefinitionResult &definition);
 [[nodiscard]] MRServiceLocationResult buildServiceReferencesFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspReferencesResult &references);

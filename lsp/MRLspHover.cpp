@@ -1,6 +1,7 @@
 #include "MRLspHover.hpp"
 
 #include <cctype>
+#include <cstdlib>
 #include <sstream>
 
 namespace mr::lsp {
@@ -57,6 +58,26 @@ bool parseJsonStringAt(const std::string &text, std::size_t &pos, std::string &v
 			case 't':
 				value.push_back('\t');
 				break;
+			case 'u': {
+				if (pos + 4 > text.size()) return false;
+				const std::string hex = text.substr(pos, 4);
+				char *end = nullptr;
+				const unsigned long codepoint = std::strtoul(hex.c_str(), &end, 16);
+
+				if (end == nullptr || *end != '\0') return false;
+				pos += 4;
+				if (codepoint <= 0x7Fu) {
+					value.push_back(static_cast<char>(codepoint));
+				} else if (codepoint <= 0x7FFu) {
+					value.push_back(static_cast<char>(0xC0u | ((codepoint >> 6) & 0x1Fu)));
+					value.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
+				} else {
+					value.push_back(static_cast<char>(0xE0u | ((codepoint >> 12) & 0x0Fu)));
+					value.push_back(static_cast<char>(0x80u | ((codepoint >> 6) & 0x3Fu)));
+					value.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
+				}
+				break;
+			}
 			default:
 				return false;
 		}
@@ -125,6 +146,13 @@ std::string jsonString(const std::string &value) {
 	return out;
 }
 
+std::string payloadExcerpt(const std::string &payload) {
+	const std::size_t maxLen = 240;
+
+	if (payload.size() <= maxLen) return payload;
+	return payload.substr(0, maxLen) + "...";
+}
+
 std::string buildHoverRequestPayload(const LspHoverRequest &request) {
 	std::ostringstream out;
 
@@ -138,6 +166,7 @@ bool parseHoverContents(const std::string &payload, LspHoverResult &result) {
 	std::size_t resultStart = 0;
 	std::size_t resultEnd = 0;
 	std::size_t contentsStart = 0;
+	std::ostringstream arrayText;
 
 	if (!findKeyValueStart(payload, "result", 0, resultStart) || resultStart >= payload.size() || payload[resultStart] != '{') return false;
 	if (!findMatchingBracket(payload, resultStart, '{', '}', resultEnd)) return false;
@@ -153,6 +182,42 @@ bool parseHoverContents(const std::string &payload, LspHoverResult &result) {
 		const std::string contentsObject = resultObject.substr(contentsStart, contentsEnd - contentsStart + 1);
 		if (!extractStringValue(contentsObject, "kind", 0, result.kind)) return false;
 		return extractStringValue(contentsObject, "value", 0, result.value);
+	}
+	if (contentsStart < resultObject.size() && resultObject[contentsStart] == '[') {
+		std::size_t contentsEnd = 0;
+		std::size_t pos = contentsStart + 1;
+		bool first = true;
+
+		if (!findMatchingBracket(resultObject, contentsStart, '[', ']', contentsEnd)) return false;
+		while (pos < contentsEnd) {
+			std::string value;
+
+			skipWhitespace(resultObject, pos);
+			if (pos >= contentsEnd) break;
+			if (resultObject[pos] == ',') {
+				++pos;
+				continue;
+			}
+			if (resultObject[pos] == '"') {
+				if (!parseJsonStringAt(resultObject, pos, value)) return false;
+			} else if (resultObject[pos] == '{') {
+				std::size_t objectEnd = 0;
+
+				if (!findMatchingBracket(resultObject, pos, '{', '}', objectEnd) || objectEnd > contentsEnd) return false;
+				const std::string itemObject = resultObject.substr(pos, objectEnd - pos + 1);
+				if (!extractStringValue(itemObject, "value", 0, value)) return false;
+				pos = objectEnd + 1;
+			} else
+				return false;
+			if (!value.empty()) {
+				if (!first) arrayText << '\n';
+				arrayText << value;
+				first = false;
+			}
+		}
+		result.kind = "plaintext";
+		result.value = arrayText.str();
+		return true;
 	}
 	return false;
 }
@@ -192,7 +257,11 @@ bool LspHoverAdapter::consume(const LspInboundMessage &message, const LspDocumen
 		errorMessage.clear();
 		return true;
 	}
-	if (!parseHoverContents(message.payload, result)) return setError(errorMessage, "LSP hover response contents are malformed.");
+	if (!parseHoverContents(message.payload, result)) {
+		request.pending = false;
+		errorMessage = "LSP hover response contents are malformed; payload=" + payloadExcerpt(message.payload);
+		return true;
+	}
 	result.uri = request.uri;
 	request.pending = false;
 	accepted = true;

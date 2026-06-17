@@ -95,6 +95,11 @@ void MRColumnListView::setActivateOnSingleClick(bool enabled) noexcept {
 	activateOnSingleClick = enabled;
 }
 
+void MRColumnListView::setContextMenuColors(bool enabled) noexcept {
+	useContextMenuColors = enabled;
+	if (enabled) useDropListColors = false;
+}
+
 bool MRColumnListView::handleWheel(TEvent &event) {
 	int delta = 0;
 	short next = 0;
@@ -115,6 +120,11 @@ bool MRColumnListView::handleWheel(TEvent &event) {
 TColorAttr MRColumnListView::mapColor(uchar index) {
 	unsigned char configured = 0;
 
+	if (useContextMenuColors) {
+		if ((index == 1 || index == 2 || index == 5) && configuredColorSlotOverride(kMrPaletteContextMenu, configured)) return configured;
+		if ((index == 3 || index == 4) && configuredColorSlotOverride(kMrPaletteContextMenuSelector, configured)) return configured;
+		return TListBox::mapColor(index);
+	}
 	if (!useDropListColors) return TListBox::mapColor(index);
 	if ((index == 1 || index == 2) && configuredColorSlotOverride(kMrPaletteDropListDescription, configured)) return configured;
 	if (index == 3 && configuredColorSlotOverride(58, configured)) return configured;

@@ -120,18 +120,63 @@ void applyBatchState(const mr::lsp::LspDiagnosticBatch &batch, MRServiceResultHe
 		return;
 	}
 }
+
+bool serviceOtherDiagnosticRangeContainsPosition(const std::vector<MRServiceDiagnosticEntry> &diagnostics, std::size_t diagnosticIndex, MRServiceTextPosition position) noexcept {
+	for (std::size_t index = 0; index < diagnostics.size(); ++index) {
+		if (index == diagnosticIndex) continue;
+		if (serviceTextRangeContainsPosition(diagnostics[index].navigationRange, position)) return true;
+	}
+	return false;
+}
+
+MRServiceTextRange serviceDiagnosticHitRange(const std::vector<MRServiceDiagnosticEntry> &diagnostics, std::size_t diagnosticIndex) noexcept {
+	MRServiceTextRange range = diagnostics[diagnosticIndex].navigationRange;
+
+	if (range.start.line == range.end.line && range.start.character > 0) {
+		const MRServiceTextPosition before{range.start.line, range.start.character - 1};
+
+		if (!serviceOtherDiagnosticRangeContainsPosition(diagnostics, diagnosticIndex, before)) range.start.character = before.character;
+	}
+	if (range.start.line == range.end.line) {
+		const MRServiceTextPosition after{range.end.line, range.end.character + 1};
+
+		if (!serviceOtherDiagnosticRangeContainsPosition(diagnostics, diagnosticIndex, after)) range.end.character = after.character;
+	}
+	return range;
+}
 } // namespace
 
 bool serviceDocumentIdentityMatches(const MRWorkspaceServiceSnapshot &workspace, const MRServiceDocumentIdentity &identity) noexcept {
 	if (!identity.valid) return false;
 	for (const MRWorkspaceDocumentSnapshot &document : workspace.documents) {
-		if (identity.bufferId != 0 && document.bufferId != identity.bufferId) continue;
-		if (!identity.path.empty() && document.path != identity.path) continue;
-		if (identity.documentId != 0 && document.documentId != identity.documentId) continue;
-		if (document.documentVersion != identity.documentVersion) return false;
-		return true;
+		if (serviceDocumentIdentityMatchesDocument(document, identity)) return true;
 	}
 	return false;
+}
+
+bool serviceDocumentIdentityMatchesDocument(const MRWorkspaceDocumentSnapshot &document, const MRServiceDocumentIdentity &identity) noexcept {
+	if (!identity.valid) return false;
+	if (identity.bufferId != 0 && document.bufferId != identity.bufferId) return false;
+	if (!identity.path.empty() && document.path != identity.path) return false;
+	if (identity.documentId != 0 && document.documentId != identity.documentId) return false;
+	return document.documentVersion == identity.documentVersion;
+}
+
+bool serviceTextRangeContainsPosition(const MRServiceTextRange &range, MRServiceTextPosition position) noexcept {
+	if (position.line < range.start.line || position.line > range.end.line) return false;
+	if (position.line == range.start.line && position.character < range.start.character) return false;
+	if (position.line == range.end.line && position.character > range.end.character) return false;
+	return true;
+}
+
+bool serviceCodeActionAppliesToDocument(const MRServiceCodeActionItem &item, const MRServiceDocumentIdentity &identity) noexcept {
+	if (!identity.valid || !item.hasEdit || item.edits.empty()) return false;
+	for (const MRServiceTextEdit &edit : item.edits) {
+		if (edit.path.empty()) return false;
+		if (!identity.path.empty() && edit.path != identity.path) return false;
+		if (!identity.uri.empty() && !edit.uri.empty() && edit.uri != identity.uri) return false;
+	}
+	return true;
 }
 
 void MRServiceResultStore::clear() noexcept {
@@ -223,6 +268,95 @@ const std::vector<MRServiceCompletionResult> &MRServiceResultStore::completionRe
 
 const std::vector<MRServiceCodeActionResult> &MRServiceResultStore::codeActionResults() const noexcept {
 	return codeActions;
+}
+
+MRServiceResultCounts MRServiceResultStore::resultCounts() const noexcept {
+	MRServiceResultCounts counts;
+
+	counts.diagnostics = diagnostics.size();
+	for (const MRServiceLocationResult &result : locations) {
+		if (result.header.kind == MRServiceResultKind::Definition)
+			++counts.definitions;
+		else if (result.header.kind == MRServiceResultKind::References)
+			++counts.references;
+	}
+	counts.hovers = hovers.size();
+	counts.completions = completions.size();
+	counts.codeActions = codeActions.size();
+	return counts;
+}
+
+MRServiceDocumentResultsSnapshot MRServiceResultStore::currentResultsForDocument(const MRWorkspaceDocumentSnapshot &document) const {
+	MRServiceDocumentResultsSnapshot snapshot;
+
+	snapshot.stored = resultCounts();
+	for (const MRServiceDiagnosticResult &result : diagnostics) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		++snapshot.current.diagnostics;
+		snapshot.diagnostics.push_back(result);
+	}
+	for (const MRServiceLocationResult &result : locations) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		if (result.header.kind == MRServiceResultKind::Definition) {
+			++snapshot.current.definitions;
+			snapshot.definitions.push_back(result);
+		} else if (result.header.kind == MRServiceResultKind::References) {
+			++snapshot.current.references;
+			snapshot.references.push_back(result);
+		}
+	}
+	for (const MRServiceHoverResult &result : hovers) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		++snapshot.current.hovers;
+		snapshot.hovers.push_back(result);
+	}
+	for (const MRServiceCompletionResult &result : completions) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		++snapshot.current.completions;
+		snapshot.completions.push_back(result);
+	}
+	for (const MRServiceCodeActionResult &result : codeActions) {
+		MRServiceCodeActionResult filtered = result;
+
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		filtered.items.clear();
+		for (const MRServiceCodeActionItem &item : result.items)
+			if (serviceCodeActionAppliesToDocument(item, result.header.identity)) filtered.items.push_back(item);
+		if (filtered.items.empty()) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		++snapshot.current.codeActions;
+		snapshot.codeActions.push_back(filtered);
+	}
+	return snapshot;
+}
+
+MRServicePositionResultsSnapshot MRServiceResultStore::currentResultsForDocumentPosition(const MRWorkspaceDocumentSnapshot &document, MRServiceTextPosition position) const {
+	MRServicePositionResultsSnapshot snapshot;
+
+	snapshot.position = position;
+	snapshot.document = currentResultsForDocument(document);
+	for (const MRServiceDiagnosticResult &result : snapshot.document.diagnostics) {
+		MRServiceDiagnosticResult filtered = result;
+
+		filtered.diagnostics.clear();
+		for (std::size_t index = 0; index < result.diagnostics.size(); ++index)
+			if (serviceTextRangeContainsPosition(serviceDiagnosticHitRange(result.diagnostics, index), position)) filtered.diagnostics.push_back(result.diagnostics[index]);
+		if (!filtered.diagnostics.empty()) snapshot.diagnostics.push_back(filtered);
+	}
+	for (const MRServiceCodeActionResult &result : snapshot.document.codeActions) {
+		if (!result.hasContextRange) continue;
+		if (serviceTextRangeContainsPosition(result.contextRange, position)) snapshot.codeActions.push_back(result);
+	}
+	return snapshot;
 }
 
 MRServiceDiagnosticResult buildServiceDiagnosticsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDiagnosticBatch &batch) {
@@ -317,6 +451,10 @@ MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceService
 		serviceItem.insertText = item.insertText;
 		serviceItem.hasInsertTextFormat = item.hasInsertTextFormat;
 		serviceItem.insertTextFormat = item.insertTextFormat;
+		serviceItem.hasTextEdit = item.hasTextEdit;
+		serviceItem.textEditRange.start = servicePositionFromLsp(item.textEditStart);
+		serviceItem.textEditRange.end = servicePositionFromLsp(item.textEditEnd);
+		serviceItem.textEditNewText = item.textEditNewText;
 		result.items.push_back(serviceItem);
 	}
 	return result;

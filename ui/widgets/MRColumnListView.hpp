@@ -18,6 +18,7 @@ class MRColumnListView : public TListBox {
 
 	void setRows(const std::vector<Row> &rows, short selection = 0);
 	void setActivateOnSingleClick(bool enabled) noexcept;
+	void setContextMenuColors(bool enabled) noexcept;
 	[[nodiscard]] short selectedIndex() const;
 	[[nodiscard]] bool handleWheel(TEvent &event);
 	[[nodiscard]] const std::vector<Row> &rows() const noexcept {
@@ -43,6 +44,7 @@ class MRColumnListView : public TListBox {
 	ushort relayCommand = 0;
 	ushort activationCommand = 0;
 	bool useDropListColors = false;
+	bool useContextMenuColors = false;
 	bool activateOnSingleClick = false;
 };
 

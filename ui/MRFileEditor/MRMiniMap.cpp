@@ -476,7 +476,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	return signals;
 }
 
-MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds, const std::vector<MRFileCompareMiniMapSlice> &fileCompareMiniMapSlices) const {
+MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, const std::vector<mr::editor::Range> &diagnosticRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds, const std::vector<MRFileCompareMiniMapSlice> &fileCompareMiniMapSlices) const {
 	OverlayState overlay;
 	const int dotColumns = useBraille ? std::max(1, miniMapBodyWidth * 2) : std::max(1, miniMapBodyWidth);
 	const int normalizedViewportWidth = std::max(1, viewportWidth);
@@ -536,6 +536,8 @@ MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr:
 		appendRangeMasks(overlay.errorLineMasks, range, true);
 	for (const mr::editor::Range &range : warningRanges)
 		appendRangeMasks(overlay.warningLineMasks, range, true);
+	for (const mr::editor::Range &range : diagnosticRanges)
+		appendRangeMasks(overlay.diagnosticLineMasks, range, true);
 	auto appendDiffMask = [&](unsigned char lineKind, std::size_t lineIndex, std::uint64_t mask) {
 		if (mask == 0) return;
 		switch (lineKind) {
@@ -582,6 +584,7 @@ MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr:
 	}
 	Impl::normalizeLineMasks(overlay.errorLineMasks);
 	Impl::normalizeLineMasks(overlay.warningLineMasks);
+	Impl::normalizeLineMasks(overlay.diagnosticLineMasks);
 	Impl::normalizeLineMasks(overlay.findLineMasks);
 	Impl::normalizeLineMasks(overlay.dirtyLineMasks);
 	Impl::normalizeLineMasks(overlay.diffEqualLineMasks);
@@ -622,6 +625,7 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 		bool cellChanged = false;
 		bool cellError = false;
 		bool cellWarning = false;
+		bool cellDiagnostic = false;
 		bool cellDiffEqual = false;
 		bool cellDiffMissing = false;
 		bool cellDiffInsert = false;
@@ -633,6 +637,7 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 				const std::size_t lineIndex = samplingWindow.startLine + sampleOffset;
 				const std::uint64_t errorBits = Impl::lineMaskBits(overlay.errorLineMasks, lineIndex);
 				const std::uint64_t warningBits = Impl::lineMaskBits(overlay.warningLineMasks, lineIndex);
+				const std::uint64_t diagnosticBits = Impl::lineMaskBits(overlay.diagnosticLineMasks, lineIndex);
 				const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
 				const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
 				const std::uint64_t diffEqualBits = Impl::lineMaskBits(overlay.diffEqualLineMasks, lineIndex);
@@ -641,6 +646,7 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 				const std::uint64_t diffOffsetBits = Impl::lineMaskBits(overlay.diffOffsetLineMasks, lineIndex);
 				if (!cellError && miniMapCellHasOverlayBits(errorBits, x, true)) cellError = true;
 				if (!cellWarning && miniMapCellHasOverlayBits(warningBits, x, true)) cellWarning = true;
+				if (!cellDiagnostic && miniMapCellHasOverlayBits(diagnosticBits, x, true)) cellDiagnostic = true;
 				if (!cellFind && miniMapCellHasOverlayBits(findBits, x, true)) cellFind = true;
 				if (!cellChanged && miniMapCellHasOverlayBits(dirtyBits, x, true)) cellChanged = true;
 				if (!cellDiffEqual && miniMapCellHasOverlayBits(diffEqualBits, x, true)) cellDiffEqual = true;
@@ -652,6 +658,7 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 			std::size_t lineIndex = samplingWindow.startLine + static_cast<std::size_t>(y);
 			const std::uint64_t errorBits = Impl::lineMaskBits(overlay.errorLineMasks, lineIndex);
 			const std::uint64_t warningBits = Impl::lineMaskBits(overlay.warningLineMasks, lineIndex);
+			const std::uint64_t diagnosticBits = Impl::lineMaskBits(overlay.diagnosticLineMasks, lineIndex);
 			const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
 			const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
 			const std::uint64_t diffEqualBits = Impl::lineMaskBits(overlay.diffEqualLineMasks, lineIndex);
@@ -660,6 +667,7 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 			const std::uint64_t diffOffsetBits = Impl::lineMaskBits(overlay.diffOffsetLineMasks, lineIndex);
 			cellError = miniMapCellHasOverlayBits(errorBits, x, false);
 			cellWarning = miniMapCellHasOverlayBits(warningBits, x, false);
+			cellDiagnostic = miniMapCellHasOverlayBits(diagnosticBits, x, false);
 			cellFind = miniMapCellHasOverlayBits(findBits, x, false);
 			cellChanged = miniMapCellHasOverlayBits(dirtyBits, x, false);
 			cellDiffEqual = miniMapCellHasOverlayBits(diffEqualBits, x, false);
@@ -671,6 +679,8 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 		if (cellError) rowPriorityColor = palette.errorMarker;
 		else if (cellWarning)
 			rowPriorityColor = palette.warningMarker;
+		else if (cellDiagnostic)
+			rowPriorityColor = palette.diagnostics;
 		else if (cellDiffMissing)
 			rowPriorityColor = palette.diffMissing;
 		else if (cellDiffInsert)
@@ -683,7 +693,7 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 			rowPriorityColor = palette.findMarker;
 		else if (cellChanged)
 			rowPriorityColor = palette.changed;
-		const bool cellOverlayActive = cellError || cellWarning || cellDiffMissing || cellDiffInsert || cellDiffOffset || cellDiffEqual || cellFind || cellChanged;
+		const bool cellOverlayActive = cellError || cellWarning || cellDiagnostic || cellDiffMissing || cellDiffInsert || cellDiffOffset || cellDiffEqual || cellFind || cellChanged;
 		TColorAttr cellColor = (pattern != 0 || cellOverlayActive) ? rowPriorityColor : palette.normal;
 		if (useBraille) buffer.moveStr(static_cast<ushort>(bodyX + x), glyphTable[pattern], cellColor, 1);
 		else if (pattern != 0)

@@ -67,6 +67,36 @@ void MRFileEditor::clearCompilerDiagnosticRanges() {
 	drawView();
 }
 
+void MRFileEditor::setLspDiagnosticInformationRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
+	std::vector<MRTextBufferModel::Range> normalized;
+	const std::size_t length = mBufferModel.length();
+
+	normalized.reserve(ranges.size());
+	if (length != 0) {
+		for (const auto &rangePair : ranges) {
+			std::size_t start = std::min(rangePair.first, length);
+			std::size_t end = std::min(rangePair.second, length);
+			if (end < start) std::swap(start, end);
+			if (end == start) {
+				if (start > 0 && (start == length || mBufferModel.charAt(start) == '\n' || mBufferModel.charAt(start) == '\r'))
+					--start;
+				else if (end < length)
+					++end;
+			}
+			if (end > start) normalized.push_back(MRTextBufferModel::Range(start, end));
+		}
+	}
+	normalizeRangeList(normalized);
+	mLspDiagnosticInformationRanges.swap(normalized);
+	drawView();
+}
+
+void MRFileEditor::clearLspDiagnosticInformationRanges() {
+	if (mLspDiagnosticInformationRanges.empty()) return;
+	mLspDiagnosticInformationRanges.clear();
+	drawView();
+}
+
 void MRFileEditor::clearDirtyRanges() noexcept {
 	mDirtyRanges.clear();
 }
@@ -152,6 +182,46 @@ void MRFileEditor::remapDirtyRangesForAppliedChange(const MRTextBufferModel::Doc
 
 	mDirtyRanges.swap(mapped);
 	normalizeDirtyRanges();
+}
+
+void MRFileEditor::remapLspDiagnosticInformationRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change) {
+	const std::size_t oldLength = change.oldLength;
+	const std::size_t newLength = change.newLength;
+	const MRTextBufferModel::Range touched = change.touchedRange.normalized();
+	const long long delta = static_cast<long long>(newLength) - static_cast<long long>(oldLength);
+	const std::size_t touchedLength = touched.length();
+	const std::size_t editStart = std::min(touched.start, oldLength);
+	std::size_t replacedOldLength = touchedLength;
+	std::vector<MRTextBufferModel::Range> mapped;
+
+	if (mLspDiagnosticInformationRanges.empty()) return;
+	if (delta >= 0) {
+		const std::size_t deltaUnsigned = static_cast<std::size_t>(delta);
+
+		replacedOldLength = touchedLength > deltaUnsigned ? touchedLength - deltaUnsigned : 0;
+	}
+	if (replacedOldLength > oldLength - editStart) replacedOldLength = oldLength - editStart;
+	const std::size_t oldEditEnd = editStart + replacedOldLength;
+
+	mapped.reserve(mLspDiagnosticInformationRanges.size());
+	for (std::size_t i = 0; i < mLspDiagnosticInformationRanges.size(); ++i) {
+		MRTextBufferModel::Range range = mLspDiagnosticInformationRanges[i].clamped(oldLength).normalized();
+
+		if (range.end <= range.start) continue;
+		if (range.end <= editStart) {
+			pushMappedDirtyRange(mapped, range.start, range.end, newLength);
+			continue;
+		}
+		if (range.start >= oldEditEnd) {
+			const long long shiftedStart = static_cast<long long>(range.start) + delta;
+			const long long shiftedEnd = static_cast<long long>(range.end) + delta;
+
+			if (shiftedEnd <= 0) continue;
+			pushMappedDirtyRange(mapped, static_cast<std::size_t>(std::max<long long>(0, shiftedStart)), static_cast<std::size_t>(std::max<long long>(0, shiftedEnd)), newLength);
+		}
+	}
+	mLspDiagnosticInformationRanges.swap(mapped);
+	normalizeRangeList(mLspDiagnosticInformationRanges);
 }
 
 void MRFileEditor::addDirtyRange(MRTextBufferModel::Range range) {

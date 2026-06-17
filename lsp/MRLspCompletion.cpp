@@ -271,6 +271,64 @@ bool extractOptionalTopLevelIntValue(const std::string &object, const std::strin
 	return parseIntAt(object, pos, value);
 }
 
+bool extractTopLevelIntValue(const std::string &object, const std::string &key, int &value) {
+	std::size_t pos = 0;
+	bool negative = false;
+	int parsed = 0;
+
+	value = 0;
+	if (!findTopLevelObjectValueStart(object, key, pos)) return false;
+	if (pos < object.size() && object[pos] == '-') {
+		negative = true;
+		++pos;
+	}
+	if (pos >= object.size() || object[pos] < '0' || object[pos] > '9') return false;
+	while (pos < object.size() && object[pos] >= '0' && object[pos] <= '9') {
+		parsed = parsed * 10 + static_cast<int>(object[pos] - '0');
+		++pos;
+	}
+	value = negative ? -parsed : parsed;
+	return true;
+}
+
+bool parsePositionObject(const std::string &object, LspTextPosition &position) {
+	return extractTopLevelIntValue(object, "line", position.line) && extractTopLevelIntValue(object, "character", position.character);
+}
+
+bool parseCompletionRangeObject(const std::string &object, LspTextPosition &start, LspTextPosition &end) {
+	std::size_t startPos = 0;
+	std::size_t startEnd = 0;
+	std::size_t endPos = 0;
+	std::size_t endEnd = 0;
+
+	if (!findTopLevelObjectValueStart(object, "start", startPos) || startPos >= object.size() || object[startPos] != '{') return false;
+	if (!findMatchingBracket(object, startPos, '{', '}', startEnd)) return false;
+	if (!findTopLevelObjectValueStart(object, "end", endPos) || endPos >= object.size() || object[endPos] != '{') return false;
+	if (!findMatchingBracket(object, endPos, '{', '}', endEnd)) return false;
+	return parsePositionObject(object.substr(startPos, startEnd - startPos + 1), start) && parsePositionObject(object.substr(endPos, endEnd - endPos + 1), end);
+}
+
+bool parseCompletionTextEditObject(const std::string &object, LspCompletionItem &item) {
+	std::size_t textEditPos = 0;
+	std::size_t textEditEnd = 0;
+	std::size_t rangePos = 0;
+	std::size_t rangeEnd = 0;
+	std::string textEditObject;
+
+	item.hasTextEdit = false;
+	item.textEditNewText.clear();
+	if (!findTopLevelObjectValueStart(object, "textEdit", textEditPos)) return true;
+	if (textEditPos >= object.size() || object[textEditPos] != '{') return true;
+	if (!findMatchingBracket(object, textEditPos, '{', '}', textEditEnd)) return false;
+	textEditObject = object.substr(textEditPos, textEditEnd - textEditPos + 1);
+	if (!findTopLevelObjectValueStart(textEditObject, "range", rangePos) || rangePos >= textEditObject.size() || textEditObject[rangePos] != '{') return true;
+	if (!findMatchingBracket(textEditObject, rangePos, '{', '}', rangeEnd)) return false;
+	if (!parseCompletionRangeObject(textEditObject.substr(rangePos, rangeEnd - rangePos + 1), item.textEditStart, item.textEditEnd)) return false;
+	if (!extractTopLevelStringValue(textEditObject, "newText", item.textEditNewText)) return false;
+	item.hasTextEdit = true;
+	return true;
+}
+
 std::string jsonString(const std::string &value) {
 	std::string out = "\"";
 
@@ -308,6 +366,7 @@ bool parseCompletionItemObject(const std::string &object, LspCompletionItem &ite
 	if (!extractOptionalTopLevelStringValue(object, "detail", item.detail)) return false;
 	if (!extractOptionalTopLevelStringValue(object, "insertText", item.insertText)) return false;
 	if (!extractOptionalTopLevelIntValue(object, "insertTextFormat", item.hasInsertTextFormat, item.insertTextFormat)) return false;
+	if (!parseCompletionTextEditObject(object, item)) return false;
 	return true;
 }
 

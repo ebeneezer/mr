@@ -1688,6 +1688,13 @@ void sendWindowKeyEvent(MREditWindow &window, ushort keyCode, ushort modifiers =
 	window.handleEvent(event);
 }
 
+void sendWindowCommand(MREditWindow &window, ushort command) {
+	TEvent event{};
+	event.what = evCommand;
+	event.message.command = command;
+	window.handleEvent(event);
+}
+
 void sendEditorTextInput(MRFileEditor &editor, char ch) {
 	TEvent event{};
 	event.what = evKeyDown;
@@ -2993,6 +3000,151 @@ bool runStreamIndentCase(const std::string &text, std::size_t anchorLine, int an
 	return true;
 }
 
+bool checkWindowBlock(MREditWindow &window, int mode, int line1, int line2, int col1, int col2, const char *phase, std::string &failureReason) {
+	if (!window.hasBlock() || window.blockStatus() != mode || window.blockLine1() != line1 || window.blockLine2() != line2 || window.blockCol1() != col1 || window.blockCol2() != col2) {
+		failureReason = std::string("Window block geometry mismatch in ") + phase + ": got mode=" + std::to_string(window.blockStatus()) + " line1=" + std::to_string(window.blockLine1()) + " line2=" +
+		                std::to_string(window.blockLine2()) + " col1=" + std::to_string(window.blockCol1()) + " col2=" + std::to_string(window.blockCol2()) + ".";
+		return false;
+	}
+	return true;
+}
+
+bool runWindowBlockRemapAfterDeleteCase(std::string &failureReason) {
+	{
+		const std::string text = "xxxxx\n0123456789\nABCDEFGHIJ\nzzzzz\n";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "stream-delete-above-block", 2501);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "stream-delete-above-block")) {
+			failureReason = "Unable to seed stream delete-above block remap case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 1, 2);
+		window.beginStreamBlock();
+		placeEditorCursor(*editor, text, starts, 2, 5);
+		window.endBlock();
+		placeEditorCursor(*editor, text, starts, 0, 3);
+		sendWindowKeyEvent(window, kbBack);
+		if (editor->snapshotText() != "xxxx\n0123456789\nABCDEFGHIJ\nzzzzz\n") {
+			failureReason = "Stream delete-above case produced wrong text.";
+			return false;
+		}
+		if (!checkWindowBlock(window, MREditWindow::bmStream, 2, 3, 3, 6, "stream delete above block", failureReason)) return false;
+	}
+	{
+		const std::string text = "0123456789\nzz\n";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "stream-delete-inside-block", 2502);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "stream-delete-inside-block")) {
+			failureReason = "Unable to seed stream delete-inside block remap case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 2);
+		window.beginStreamBlock();
+		placeEditorCursor(*editor, text, starts, 0, 8);
+		window.endBlock();
+		placeEditorCursor(*editor, text, starts, 0, 5);
+		sendWindowKeyEvent(window, kbBack);
+		if (editor->snapshotText() != "012356789\nzz\n") {
+			failureReason = "Stream delete-inside case produced wrong text: " + editor->snapshotText();
+			return false;
+		}
+		if (!checkWindowBlock(window, MREditWindow::bmStream, 1, 1, 3, 8, "stream delete inside block", failureReason)) return false;
+	}
+	{
+		const std::string text = "top\none\ntwo\nthree\nfour\n";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "line-delete-above-block", 2503);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "line-delete-above-block")) {
+			failureReason = "Unable to seed line delete-above block remap case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 2, 0);
+		window.beginLineBlock();
+		placeEditorCursor(*editor, text, starts, 3, 0);
+		window.endBlock();
+		placeEditorCursor(*editor, text, starts, 0, 0);
+		sendWindowCommand(window, cmDelLine);
+		if (editor->snapshotText() != "one\ntwo\nthree\nfour\n") {
+			failureReason = "Line delete-above case produced wrong text.";
+			return false;
+		}
+		if (!checkWindowBlock(window, MREditWindow::bmLine, 2, 3, 1, 1, "line delete above block", failureReason)) return false;
+	}
+	{
+		const std::string text = "top\none\ntwo\nthree\nfour\n";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "line-delete-inside-block", 2504);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "line-delete-inside-block")) {
+			failureReason = "Unable to seed line delete-inside block remap case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 1, 0);
+		window.beginLineBlock();
+		placeEditorCursor(*editor, text, starts, 3, 0);
+		window.endBlock();
+		placeEditorCursor(*editor, text, starts, 2, 0);
+		sendWindowCommand(window, cmDelLine);
+		if (editor->snapshotText() != "top\none\nthree\nfour\n") {
+			failureReason = "Line delete-inside case produced wrong text.";
+			return false;
+		}
+		if (!checkWindowBlock(window, MREditWindow::bmLine, 2, 3, 1, 1, "line delete inside block", failureReason)) return false;
+	}
+	{
+		const std::string text = "top\nabcd\nefgh\nijkl\n";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "column-delete-above-block", 2505);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "column-delete-above-block")) {
+			failureReason = "Unable to seed column delete-above block remap case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 1, 1);
+		window.beginColumnBlock();
+		placeEditorCursor(*editor, text, starts, 2, 3);
+		window.endBlock();
+		placeEditorCursor(*editor, text, starts, 0, 0);
+		sendWindowCommand(window, cmDelLine);
+		if (editor->snapshotText() != "abcd\nefgh\nijkl\n") {
+			failureReason = "Column delete-above case produced wrong text.";
+			return false;
+		}
+		if (!checkWindowBlock(window, MREditWindow::bmColumn, 1, 2, 2, 4, "column delete above block", failureReason)) return false;
+	}
+	{
+		const std::string text = "top\nabcd\nefgh\nijkl\nlast\n";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MREditWindow window(TRect(0, 0, 80, 16), "column-delete-inside-block", 2506);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "column-delete-inside-block")) {
+			failureReason = "Unable to seed column delete-inside block remap case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 1, 1);
+		window.beginColumnBlock();
+		placeEditorCursor(*editor, text, starts, 3, 3);
+		window.endBlock();
+		placeEditorCursor(*editor, text, starts, 2, 0);
+		sendWindowCommand(window, cmDelLine);
+		if (editor->snapshotText() != "top\nabcd\nijkl\nlast\n") {
+			failureReason = "Column delete-inside case produced wrong text.";
+			return false;
+		}
+		if (!checkWindowBlock(window, MREditWindow::bmColumn, 2, 3, 2, 4, "column delete inside block", failureReason)) return false;
+	}
+	return true;
+}
+
 bool runWindowBlockTabIndentCase(std::string &failureReason) {
 	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	MREditSetupSettings settings = configuredEditSetupSettings();
@@ -3686,6 +3838,7 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 	if (!runEditorMouseDragBlockModeFileLineCase(failureReason)) return false;
 	if (!runEditorMouseDragReplacesExistingBlockCase(failureReason)) return false;
 	if (!runEditorMouseClickPreservesExistingBlockCase(failureReason)) return false;
+	if (!runWindowBlockRemapAfterDeleteCase(failureReason)) return false;
 
 	failureReason.clear();
 	return true;

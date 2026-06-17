@@ -23,6 +23,7 @@ class MRMiniMapDerivedState : public MRDerivedStateBase {
 		std::uint64_t dirtySignature = 0;
 		std::uint64_t errorSignature = 0;
 		std::uint64_t warningSignature = 0;
+		std::uint64_t diagnosticSignature = 0;
 		std::uint64_t diffSignature = 0;
 		MRMiniMapRenderer::OverlayState overlay;
 	};

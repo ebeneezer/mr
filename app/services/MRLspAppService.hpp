@@ -11,6 +11,31 @@ class MRFileEditor;
 
 namespace mr::services {
 
+struct MRLspCommandAvailability {
+	bool requestDefinition = false;
+	bool requestReferences = false;
+	bool requestHover = false;
+	bool requestCompletion = false;
+	bool requestCodeActions = false;
+	bool applyCodeActions = false;
+};
+
+struct MRLspDocumentServiceSnapshot {
+	bool runtimeActive = false;
+	bool documentInWorkspace = false;
+	MRWorkspaceMainFileState mainFile;
+	MRServiceDocumentResultsSnapshot results;
+	MRLspCommandAvailability commands;
+};
+
+struct MRLspPositionServiceSnapshot {
+	bool runtimeActive = false;
+	bool documentInWorkspace = false;
+	MRWorkspaceMainFileState mainFile;
+	MRServicePositionResultsSnapshot results;
+	MRLspCommandAvailability commands;
+};
+
 class MRLspAppService {
 public:
 	MRLspAppService() noexcept = default;
@@ -24,6 +49,10 @@ public:
 	[[nodiscard]] MRWorkspaceMainFileState configuredMainFile() const;
 	[[nodiscard]] MRWorkspaceServiceSnapshot buildWorkspaceSnapshot(const std::vector<MRWorkspaceDocumentSnapshot> &documents) const;
 	[[nodiscard]] MRWorkspaceServiceSnapshot buildCurrentWorkspaceSnapshot() const;
+	[[nodiscard]] MRLspDocumentServiceSnapshot documentServiceSnapshot(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document) const;
+	[[nodiscard]] MRLspDocumentServiceSnapshot currentDocumentServiceSnapshot(const MRWorkspaceDocumentSnapshot &document) const;
+	[[nodiscard]] MRLspPositionServiceSnapshot documentPositionServiceSnapshot(const MRWorkspaceServiceSnapshot &workspace, const MRWorkspaceDocumentSnapshot &document, MRServiceTextPosition position) const;
+	[[nodiscard]] MRLspPositionServiceSnapshot currentDocumentPositionServiceSnapshot(const MRWorkspaceDocumentSnapshot &document, MRServiceTextPosition position) const;
 
 	bool requestEditorCommand(
 		const MRLspServerProfile &profile,
@@ -58,6 +87,7 @@ public:
 
 	[[nodiscard]] const MRServiceResultStore &results() const noexcept;
 	[[nodiscard]] bool runtimeActive() const noexcept;
+	[[nodiscard]] std::string activeHoverRequestId() const;
 
 private:
 	MRWorkspaceServiceContext workspaceContext;

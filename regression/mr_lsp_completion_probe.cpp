@@ -105,6 +105,10 @@ bool testCompletionHappyPath(std::string &failureReason) {
 	if (!expect(result.items[0].kind == 3, "completion first kind", failureReason)) return false;
 	if (!expect(result.items[0].detail == "int main()", "completion first detail", failureReason)) return false;
 	if (!expect(result.items[0].insertText == "main", "completion first insert text", failureReason)) return false;
+	if (!expect(result.items[0].hasTextEdit, "completion first text edit missing", failureReason)) return false;
+	if (!expect(result.items[0].textEditStart.line == 0 && result.items[0].textEditStart.character == 1, "completion first text edit start", failureReason)) return false;
+	if (!expect(result.items[0].textEditEnd.line == 0 && result.items[0].textEditEnd.character == 3, "completion first text edit end", failureReason)) return false;
+	if (!expect(result.items[0].textEditNewText == "main", "completion first text edit new text", failureReason)) return false;
 	if (!expect(result.items[1].label == "for", "completion snippet label", failureReason)) return false;
 	if (!expect(result.items[1].hasInsertTextFormat, "completion snippet format missing", failureReason)) return false;
 	if (!expect(result.items[1].insertTextFormat == 2, "completion snippet format", failureReason)) return false;

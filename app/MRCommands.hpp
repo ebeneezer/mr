@@ -150,7 +150,8 @@ enum : ushort {
 	cmMrOtherLspHover,
 	cmMrOtherLspComplete,
 	cmMrOtherLspStatus,
-	cmMrOtherLspResults
+	cmMrOtherLspResults,
+	cmMrOtherLspCodeActions
 };
 
 #endif

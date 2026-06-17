@@ -103,6 +103,7 @@ public:
 
 	[[nodiscard]] const MRServiceResultStore &results() const noexcept;
 	[[nodiscard]] bool runtimeActive() const noexcept;
+	[[nodiscard]] std::string activeHoverRequestId() const;
 
 private:
 	bool pollUntilState(mr::lsp::LspLifecycleState expectedState, std::string &errorMessage);
@@ -125,6 +126,7 @@ private:
 	mr::lsp::LspHoverRequest hoverRequest;
 	mr::lsp::LspCompletionRequest completionRequest;
 	mr::lsp::LspCodeActionRequest codeActionRequest;
+	MRServiceTextRange codeActionRequestRange;
 	std::size_t codeActionRequestVersion = 0;
 	MRWorkspaceServiceSnapshot activeWorkspace;
 	MRServiceResultStore resultStore;

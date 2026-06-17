@@ -219,7 +219,7 @@ struct ColorGroupDefinition {
 };
 
 static const MRColorSetupItem kWindowColorItems[] = {
-    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"code folding marker", kMrPaletteCodeFoldingMarker}, {"format ruler", kMrPaletteFormatRuler}, {"focused pane border", kMrPaletteFocusedPaneBorder},
+    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"code folding marker", kMrPaletteCodeFoldingMarker}, {"format ruler", kMrPaletteFormatRuler}, {"focused pane border", kMrPaletteFocusedPaneBorder}, {"diagnostic information", kMrPaletteDiagnosticInformation},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
@@ -235,7 +235,7 @@ static const MRColorSetupItem kOtherColorItems[] = {
 };
 
 static const MRColorSetupItem kMiniMapColorItems[] = {
-    {"normal", kMrPaletteMiniMapNormal}, {"viewport cursor", kMrPaletteMiniMapViewport}, {"changed", kMrPaletteMiniMapChanged}, {"find marker", kMrPaletteMiniMapFindMarker}, {"error marker", kMrPaletteMiniMapErrorMarker},
+    {"normal", kMrPaletteMiniMapNormal}, {"viewport cursor", kMrPaletteMiniMapViewport}, {"changed", kMrPaletteMiniMapChanged}, {"find marker", kMrPaletteMiniMapFindMarker}, {"error marker", kMrPaletteMiniMapErrorMarker}, {"diagnostics", kMrPaletteMiniMapDiagnostics},
 };
 
 static const MRColorSetupItem kFileCompareMiniMapColorItems[] = {
@@ -244,7 +244,7 @@ static const MRColorSetupItem kFileCompareMiniMapColorItems[] = {
 };
 
 static const MRColorSetupItem kCodeColorItems[] = {
-    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight},
+    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight}, {"context menu", kMrPaletteContextMenu}, {"context menu selector", kMrPaletteContextMenuSelector},
 };
 
 static const MRColorSetupItem kFileCompareColorItems[] = {
@@ -301,6 +301,7 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteMiniMapChanged) return defaults[14];
 	if (paletteIndex == kMrPaletteMiniMapFindMarker) return defaults[5];
 	if (paletteIndex == kMrPaletteMiniMapErrorMarker) return defaults[42];
+	if (paletteIndex == kMrPaletteMiniMapDiagnostics) return defaultColorForSlot(kMrPaletteDiagnosticInformation);
 	if (paletteIndex == kMrPaletteCodeComments) return defaults[12];
 	if (paletteIndex == kMrPaletteCodeStrings) return defaults[14];
 	if (paletteIndex == kMrPaletteCodeCharacters) return defaults[14];
@@ -316,6 +317,9 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteCodeDelimiters) return defaults[13];
 	if (paletteIndex == kMrPaletteSidekickEditorText) return 0x30;
 	if (paletteIndex == kMrPaletteSidekickEditorHighlight) return 0xE0;
+	if (paletteIndex == kMrPaletteContextMenu) return defaultColorForSlot(kMrPaletteDropListDescription);
+	if (paletteIndex == kMrPaletteContextMenuSelector) return defaultColorForSlot(kMrPaletteDropListSelectedInactive);
+	if (paletteIndex == kMrPaletteDiagnosticInformation) return 0x4E;
 	if (paletteIndex == kMrPaletteFileCompareTextEqual) return 0x1A;
 	if (paletteIndex == kMrPaletteFileCompareTextMissing) return 0x1C;
 	if (paletteIndex == kMrPaletteFileCompareTextInsert) return 0x1E;
@@ -409,7 +413,7 @@ template <std::size_t N> std::string formatColorListLiteral(const std::array<uns
 
 std::string formatWindowColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
 	std::string out = formatColorListLiteral(values);
-	out[1] = '6';
+	out[1] = '7';
 	return out;
 }
 
@@ -461,13 +465,11 @@ bool parseCodeColorListLiteral(const std::string &literal, std::array<unsigned c
 		if (comma == std::string::npos) break;
 		cursor = comma + 1;
 	}
-	if (parsed.size() != outValues.size() && parsed.size() != outValues.size() - 2) return setError(errorMessage, "Unexpected CODECOLORS list size.");
+	if (parsed.size() != outValues.size() && parsed.size() != outValues.size() - 2 && parsed.size() != outValues.size() - 4) return setError(errorMessage, "Unexpected CODECOLORS list size.");
 	for (std::size_t i = 0; i < parsed.size(); ++i)
 		outValues[i] = parsed[i];
-	if (parsed.size() == outValues.size() - 2) {
-		outValues[outValues.size() - 2] = defaultColorForSlot(kMrPaletteSidekickEditorText);
-		outValues[outValues.size() - 1] = defaultColorForSlot(kMrPaletteSidekickEditorHighlight);
-	}
+	for (std::size_t i = parsed.size(); i < outValues.size(); ++i)
+		outValues[i] = defaultColorForSlot(kCodeColorItems[i].paletteIndex);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -492,6 +494,32 @@ bool parseFileCompareMiniMapColorListLiteral(const std::string &literal, std::ar
 	if (parsed.size() != outValues.size() && parsed.size() != 5) return setError(errorMessage, "Unexpected FILECOMPAREMINIMAPCOLORS list size.");
 	for (std::size_t i = 0; i < outValues.size(); ++i)
 		outValues[i] = defaultColorForSlot(kFileCompareMiniMapColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < parsed.size(); ++i)
+		outValues[i] = parsed[i];
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool parseMiniMapColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kMiniMapCount> &outValues, std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::vector<unsigned char> parsed;
+	unsigned char value = 0;
+
+	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0) text = text.substr(3);
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
+	while (cursor <= text.size()) {
+		std::size_t comma = text.find(',', cursor);
+		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed.push_back(value);
+		if (comma == std::string::npos) break;
+		cursor = comma + 1;
+	}
+	if (parsed.size() != outValues.size() && parsed.size() != outValues.size() - 1) return setError(errorMessage, "Unexpected MINIMAPCOLORS list size.");
+	for (std::size_t i = 0; i < outValues.size(); ++i)
+		outValues[i] = defaultColorForSlot(kMiniMapColorItems[i].paletteIndex);
 	for (std::size_t i = 0; i < parsed.size(); ++i)
 		outValues[i] = parsed[i];
 	if (errorMessage != nullptr) errorMessage->clear();
@@ -560,14 +588,19 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	const unsigned char defaultCodeFoldingMarker = defaultColorForSlot(kMrPaletteCodeFoldingMarker);
 	const unsigned char defaultFormatRuler = defaultColorForSlot(kMrPaletteFormatRuler);
 	const unsigned char defaultFocusedPaneBorder = defaultColorForSlot(kMrPaletteFocusedPaneBorder);
+	const unsigned char defaultDiagnosticInformation = defaultColorForSlot(kMrPaletteDiagnosticInformation);
 	unsigned char value = 0;
+	bool v7Format = false;
 	bool v6Format = false;
 	bool v5Format = false;
 	bool v4Format = false;
 	bool v3Format = false;
 	bool v2Format = false;
 
-	if (text.rfind("v6:", 0) == 0 || text.rfind("V6:", 0) == 0) {
+	if (text.rfind("v7:", 0) == 0 || text.rfind("V7:", 0) == 0) {
+		text = text.substr(3);
+		v7Format = true;
+	} else if (text.rfind("v6:", 0) == 0 || text.rfind("V6:", 0) == 0) {
 		text = text.substr(3);
 		v6Format = true;
 	} else if (text.rfind("v5:", 0) == 0 || text.rfind("V5:", 0) == 0) {
@@ -596,28 +629,36 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		cursor = comma + 1;
 	}
 
-	if (v6Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v6.");
+	if (v7Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v7.");
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
+	} else if (v6Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v6.");
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (v5Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (v4Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 3) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (v3Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 3) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 4) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (v2Format) {
 		if (parsed.size() != 8) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
 		outValues[0] = parsed[0];
@@ -633,31 +674,32 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[9] = defaultCodeFolding;
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 5) {
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
@@ -672,7 +714,23 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 6) {
+		outValues[0] = parsed[0];
+		outValues[1] = parsed[1];
+		outValues[2] = parsed[2];
+		outValues[3] = parsed[3];
+		outValues[4] = parsed[4];
+		outValues[5] = parsed[5];
+		outValues[6] = parsed[6];
+		outValues[7] = parsed[7];
+		outValues[8] = defaultLineNumbers;
+		outValues[9] = defaultCodeFolding;
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
+		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 7) {
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -686,6 +744,7 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
+		outValues[13] = defaultDiagnosticInformation;
 	} else {
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 	}
@@ -829,7 +888,7 @@ bool applyColorSetupValueInternalImpl(MRColorSetupSettings &configured, const st
 			if (!parseOtherColorListLiteral(value, configured.otherColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::MiniMap:
-			if (!parseColorListLiteral(value, configured.miniMapColors, errorMessage)) return false;
+			if (!parseMiniMapColorListLiteral(value, configured.miniMapColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::FileCompareMiniMap:
 			if (!parseFileCompareMiniMapColorListLiteral(value, configured.fileCompareMiniMapColors, errorMessage)) return false;
@@ -942,7 +1001,11 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 
 	ensureConfiguredColorSettingsInitialized();
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup group.");
-	if (values == nullptr || count != definition->count) return setError(errorMessage, "Unexpected color setup group value count.");
+	if (values == nullptr) return setError(errorMessage, "Unexpected color setup group value count.");
+	if (group == MRColorSetupGroup::Code) {
+		if (count != definition->count && count != definition->count - 2 && count != definition->count - 4) return setError(errorMessage, "Unexpected color setup group value count.");
+	} else if (count != definition->count)
+		return setError(errorMessage, "Unexpected color setup group value count.");
 
 	switch (group) {
 		case MRColorSetupGroup::Window:
@@ -964,7 +1027,8 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 			for (std::size_t i = 0; i < configured.fileCompareMiniMapColors.size(); ++i) configured.fileCompareMiniMapColors[i] = values[i];
 			break;
 		case MRColorSetupGroup::Code:
-			for (std::size_t i = 0; i < configured.codeColors.size(); ++i) configured.codeColors[i] = values[i];
+			for (std::size_t i = 0; i < configured.codeColors.size(); ++i)
+				configured.codeColors[i] = i < count ? values[i] : defaultColorForSlot(kCodeColorItems[i].paletteIndex);
 			break;
 		case MRColorSetupGroup::FileCompare:
 			for (std::size_t i = 0; i < configured.fileCompareColors.size(); ++i) configured.fileCompareColors[i] = values[i];
@@ -1342,6 +1406,8 @@ bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, s
 	std::vector<MRKeymapProfile> normalized = profiles;
 	std::string normalizedActiveProfile = configuredActiveKeymapProfileValue();
 	std::string runtimeError;
+	const std::vector<MRKeymapProfile> previousProfiles = configuredKeymapProfilesValue();
+	const std::string previousActiveProfile = configuredActiveKeymapProfileValue();
 
 	for (MRKeymapProfile &profile : normalized) {
 		profile.name = trimAscii(profile.name);
@@ -1361,6 +1427,7 @@ bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, s
 
 	configuredKeymapProfilesValue() = normalized;
 	configuredActiveKeymapProfileValue() = normalizedActiveProfile;
+	if (previousProfiles != configuredKeymapProfilesValue() || previousActiveProfile != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
 	mrLogMessage(summarizeConfiguredKeymapsForLog(configuredKeymapProfilesValue(), configuredActiveKeymapProfileValue()));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -1395,10 +1462,12 @@ std::string configuredActiveKeymapProfile() {
 bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *errorMessage) {
 	std::string normalized = trimAscii(value);
 	std::string runtimeError;
+	const std::string previousActiveProfile = configuredActiveKeymapProfileValue();
 
 	if (!normalized.empty() && std::ranges::find(configuredKeymapProfilesValue(), normalized, &MRKeymapProfile::name) == configuredKeymapProfilesValue().end()) normalized.clear();
 	if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
 	configuredActiveKeymapProfileValue() = normalized;
+	if (previousActiveProfile != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
 	if (normalized.empty()) mrLogMessage("Keymap active profile cleared; built-in key handling remains active.");
 	else
 		mrLogMessage("Keymap active profile set to '" + normalized + "'.");

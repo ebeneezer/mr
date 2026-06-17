@@ -59,35 +59,13 @@ std::vector<std::string> splitLines(const std::string &text) {
 int maxLineLength(const std::vector<std::string> &lines) {
 	int width = 1;
 	for (const std::string &line : lines)
-		width = std::max<int>(width, line.size());
+		width = std::max<int>(width, strwidth(line.c_str()));
 	return width;
 }
 
 std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marker) {
-	switch (marker) {
-		case romAbove: {
-			const std::vector<std::string> lines = splitLines(text);
-			std::ostringstream marked;
-			for (std::size_t i = 0; i < lines.size(); ++i) {
-				if (i != 0) marked << '\n';
-				marked << (i == lines.size() - 1 ? "v " : "  ");
-				marked << lines[i];
-			}
-			return marked.str();
-		}
-		case romLeft:
-			return std::string("< ") + text;
-		case romBelow:
-			break;
-	}
-	const std::vector<std::string> lines = splitLines(text);
-	std::ostringstream marked;
-	for (std::size_t i = 0; i < lines.size(); ++i) {
-		if (i != 0) marked << '\n';
-		marked << (i == 0 ? "^ " : "  ");
-		marked << lines[i];
-	}
-	return marked.str();
+	static_cast<void>(marker);
+	return text;
 }
 
 TRect sidekickBoundsFor(MREditWindow *parent, const std::string &text) {
@@ -246,10 +224,14 @@ void MRSidekickEditor::draw() {
 		if (y < static_cast<int>(mLines.size())) {
 			const std::string &line = mLines[static_cast<std::size_t>(y)];
 			const int textX = mReadOnly ? 0 : 1;
-			const int visible = std::min<int>(line.size(), std::max(0, size.x - textX - (mReadOnly ? 0 : 1)));
-			for (int x = 0; x < visible; ++x) {
-				const std::size_t offset = lineStartOffset + static_cast<std::size_t>(x);
-				buffer.moveChar(static_cast<ushort>(x + textX), line[static_cast<std::size_t>(x)], offsetInPlaceholder(offset) ? highlightColor : textColor, 1);
+			if (mReadOnly) {
+				buffer.moveStr(0, line.c_str(), textColor, static_cast<ushort>(size.x));
+			} else {
+				const int visible = std::min<int>(line.size(), std::max(0, size.x - textX - 1));
+				for (int x = 0; x < visible; ++x) {
+					const std::size_t offset = lineStartOffset + static_cast<std::size_t>(x);
+					buffer.moveChar(static_cast<ushort>(x + textX), line[static_cast<std::size_t>(x)], offsetInPlaceholder(offset) ? highlightColor : textColor, 1);
+				}
 			}
 		}
 		if (!mReadOnly && y == mCursorRow) {

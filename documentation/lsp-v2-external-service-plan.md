@@ -7,6 +7,98 @@ This document is a planning note, not an architecture contract.
 It records the current direction for a second LSP attempt and the broader
 external-service foundation that should precede it.
 
+## Current Implementation Status
+
+The V2 foundation is now usable by MR UI layers.
+
+Implemented service foundation:
+
+- long-lived external service process lifecycle for LSP,
+- `Content-Length` framed JSON-RPC transport,
+- request id tracking and response routing,
+- deterministic LSP peer probes for transport and service behavior,
+- editor-owned document mirrors with `didOpen` / `didChange`,
+- debounced current-document sync after editor edits,
+- stale-result rejection where server versions are available,
+- URI/path mapping for current-file service results.
+
+Implemented LSP channels:
+
+- diagnostics,
+- definition,
+- references,
+- completion,
+- hover,
+- code actions.
+
+Implemented UI projection:
+
+- MR-native editor context mini menu,
+- LSP actions removed from the generic text menu,
+- menu actions use the mouse position for right-click context,
+- edit submenu with cut/copy/paste capability projection,
+- read-only sidekick hover display with dwell-based mouse hover,
+- diagnostic sidekick display when hovering diagnostic marker ranges,
+- LSP result dialog for navigable result sets,
+- diagnostics line in the top status area,
+- diagnostic information markers in the editor text plane,
+- diagnostic locations in the minimap.
+
+Implemented color surface:
+
+- `Context menu` and `Context menu selector` in code colors,
+- `diagnostic information` in window colors,
+- `diagnostics` in minimap colors,
+- ANSI 16-color background selection in the color setup dialog.
+
+Important behavior decisions:
+
+- Context menu construction stays local and must not block on live LSP requests.
+- Hover is informational and must not populate persistent LSP result lists.
+- Diagnostics from clangd are shown at the locations reported by clangd.
+- MR expands diagnostic hit ranges for mouse ergonomics without moving the
+  displayed diagnostic location.
+- End-of-line diagnostic locations are projected to the nearest visible editor
+  cell so they can be seen and hovered.
+- Diagnostic markers are remapped across local edits until the next LSP
+  diagnostic publication replaces them.
+
+Known real-server boundaries:
+
+- `clangd` can omit diagnostic versions; MR must then use URI/current-document
+  acceptance instead of version-based rejection.
+- `clangd` may report follow-up parser errors at syntactically surprising
+  locations. MR should display the reported LSP locations rather than guessing a
+  "better" semantic location.
+- GNU C nested functions remain a clangd semantic boundary, not an MR mirror
+  failure.
+
+Open LSP channels not yet projected into MR UI:
+
+- document symbols,
+- workspace symbols,
+- rename,
+- signature help,
+- document highlight,
+- formatting and range formatting,
+- semantic tokens,
+- inlay hints,
+- call hierarchy and type hierarchy,
+- folding ranges.
+
+Recommended next usable tranche:
+
+1. Document symbols, because they are read-only, low-risk and useful for an
+   outline/jump surface.
+2. Rename, after a preview/apply workflow is designed for workspace edits.
+3. Signature help, integrated with the hover/sidekick information channel.
+4. Document highlight, using transient editor markers rather than persistent
+   diagnostics.
+5. Formatting, only after the edit-application path is reviewed separately.
+
+Semantic tokens should remain a later tranche because they interact with the
+protected syntax and color architecture.
+
 ## Retrospective
 
 The first LSP attempt failed because it treated LSP primarily as an editor

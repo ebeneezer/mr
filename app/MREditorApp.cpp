@@ -1105,6 +1105,7 @@ const TPalette &extendedAppBasePalette() {
 		data[kMrPaletteStatusLineFunctionKey - 1] = data[5 - 1];
 		data[kMrPaletteDesktop - 1] = 0x90;
 		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
+		data[kMrPaletteDiagnosticInformation - 1] = 0x4E;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	return palette;
@@ -1774,6 +1775,8 @@ void MREditorApp::handleEvent(TEvent &event) {
 	const ushort originalWhat = event.what;
 	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
+	if ((event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0) notifyMRLspMouseActivity(event.mouse.where);
+	if (event.what == evKeyDown) notifyMRLspKeyboardActivity();
 	clearTransientSearchSelectionOnUserInput(event);
 	if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbF11)) {
 		toggleFullscreenPresentation();

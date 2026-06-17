@@ -26,6 +26,7 @@
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsRuntimeState.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../keymap/MRKeymapActionCatalog.hpp"
 #include "../keymap/MRKeymapProfile.hpp"
@@ -222,6 +223,8 @@ bool validateKeymapFileVersion(const std::string &source, bool &upgradeRequired,
 std::string buildSerializedKeymapFileSource(const KeymapManagerDraft &draft) {
 	return buildExecutableKeymapMacroSource(draft.profiles, draft.activeProfileName);
 }
+
+bool syncConfiguredKeymapAutoexecEntry(const std::string &fileUri, const std::string &previousFileUri, std::string &errorText);
 
 std::string stripTargetPrefix(std::string_view target) {
 	std::string stripped(target);
@@ -655,8 +658,14 @@ bool saveKeymapDraftToFile(const KeymapManagerDraft &draft, const std::string &p
 }
 
 bool saveKeymapDraftToConfiguredState(const KeymapManagerDraft &draft, const std::string &fileUri, std::string &errorText) {
+	const std::string previousFileUri = configuredKeymapFilePath();
+	MRSettingsWriteReport writeReport;
+
 	if (!runMacroFileByPath(fileUri.c_str(), &errorText, false)) return false;
 	if (!setConfiguredKeymapFilePath(fileUri, &errorText)) return false;
+	if (!syncConfiguredKeymapAutoexecEntry(fileUri, previousFileUri, errorText)) return false;
+	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport)) return false;
+	mrLogSettingsWriteReport("persist keymap settings", writeReport);
 	mrLogMessage("Keymap dialog applied via VM macro execution.");
 	mrLogMessage(summarizeDraftForLog(draft));
 	errorText.clear();
@@ -694,6 +703,61 @@ bool persistDialogHistorySnapshot(std::string &errorText, const char *logLabel) 
 
 	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport)) return false;
 	mrLogSettingsWriteReport(logLabel != nullptr ? logLabel : "persist dialog history", writeReport);
+	errorText.clear();
+	return true;
+}
+
+bool pathStartsWithParentTraversal(const std::filesystem::path &path) {
+	for (const std::filesystem::path &part : path)
+		if (part == "..") return true;
+	return false;
+}
+
+bool tryRelativeAutoexecMacroEntryForPath(const std::string &fileUri, std::string &relativeEntry) {
+	namespace fs = std::filesystem;
+
+	const std::string macroDirectory = defaultMacroDirectoryPath();
+	const std::string normalizedFileUri = normalizeConfiguredPathInput(fileUri);
+	std::error_code ec;
+	fs::path macroRoot;
+	fs::path filePath;
+	fs::path relativePath;
+
+	relativeEntry.clear();
+	if (macroDirectory.empty() || normalizedFileUri.empty()) return false;
+	macroRoot = fs::weakly_canonical(fs::path(macroDirectory), ec);
+	if (ec) return false;
+	ec.clear();
+	filePath = fs::weakly_canonical(fs::path(normalizedFileUri), ec);
+	if (ec) return false;
+	relativePath = filePath.lexically_relative(macroRoot);
+	if (relativePath.empty() || relativePath.is_absolute() || pathStartsWithParentTraversal(relativePath)) return false;
+	relativeEntry = mr::dialogs::normalizeTvPathSeparators(relativePath.generic_string());
+	return !relativeEntry.empty();
+}
+
+bool resolvePersistentKeymapAutoexecEntry(const std::string &fileUri, std::string &relativeEntry, std::string &errorText) {
+	if (!tryRelativeAutoexecMacroEntryForPath(fileUri, relativeEntry)) {
+		errorText = "Persistent keymap files must live under MACROPATH.";
+		return false;
+	}
+	if (!validateAutoexecMacroEntry(relativeEntry, &errorText)) return false;
+	errorText.clear();
+	return true;
+}
+
+bool syncConfiguredKeymapAutoexecEntry(const std::string &fileUri, const std::string &previousFileUri, std::string &errorText) {
+	std::vector<std::string> autoexecEntries;
+	std::string currentEntry;
+	std::string previousEntry;
+
+	if (!resolvePersistentKeymapAutoexecEntry(fileUri, currentEntry, errorText)) return false;
+	configuredAutoexecMacroEntries(autoexecEntries);
+	if (tryRelativeAutoexecMacroEntryForPath(previousFileUri, previousEntry) && upperAscii(previousEntry) != upperAscii(currentEntry))
+		autoexecEntries.erase(std::remove_if(autoexecEntries.begin(), autoexecEntries.end(), [&](const std::string &entry) { return upperAscii(entry) == upperAscii(previousEntry); }), autoexecEntries.end());
+	autoexecEntries.erase(std::remove_if(autoexecEntries.begin(), autoexecEntries.end(), [&](const std::string &entry) { return upperAscii(entry) == upperAscii(currentEntry); }), autoexecEntries.end());
+	autoexecEntries.push_back(currentEntry);
+	if (!setConfiguredAutoexecMacroEntries(autoexecEntries, &errorText)) return false;
 	errorText.clear();
 	return true;
 }
@@ -1804,6 +1868,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 
 	void saveToSelectedFile() {
 		std::string errorText;
+		std::string autoexecEntry;
 
 		if (fileUri.empty()) {
 			saveAs();
@@ -1812,6 +1877,10 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		applyCommitCanonicalization(workingDraft, "Keymap save");
 		refreshAllViews();
 		fileUri = mr::dialogs::ensureMrmacExtension(fileUri);
+		if (!resolvePersistentKeymapAutoexecEntry(fileUri, autoexecEntry, errorText)) {
+			postDialogError(errorText);
+			return;
+		}
 		if (!confirmOverwriteForPath("Overwrite", "Keymap file exists. Overwrite?", fileUri)) return;
 		if (!saveKeymapDraftToFile(workingDraft, fileUri, errorText)) {
 			postDialogError(errorText);
@@ -1828,11 +1897,16 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	void saveAs() {
 		std::string selectedUri;
 		std::string errorText;
+		std::string autoexecEntry;
 
 		if (!chooseKeymapFileForSave(selectedUri)) return;
 		applyCommitCanonicalization(workingDraft, "Keymap save");
 		refreshAllViews();
 		fileUri = selectedUri;
+		if (!resolvePersistentKeymapAutoexecEntry(fileUri, autoexecEntry, errorText)) {
+			postDialogError(errorText);
+			return;
+		}
 		if (!confirmOverwriteForPath("Overwrite", "Keymap file exists. Overwrite?", fileUri)) return;
 		if (!saveKeymapDraftToFile(workingDraft, fileUri, errorText)) {
 			postDialogError(errorText);
@@ -1879,7 +1953,7 @@ void showKeymapManagerHelpDialog() {
 	lines.push_back("The right list shows token, translated description and key sequence.");
 	lines.push_back("Load reads an external keymap/profile macro file.");
 	lines.push_back("Save and Save As write the external keymap/profile macro file.");
-	lines.push_back("Restart persistence for a keymap now comes from AUTOEXEC-marked keymap macros.");
+	lines.push_back("Restart persistence comes only from AUTOEXEC_MACRO under MACROPATH.");
 	lines.push_back("If no active profile is set, built-in key handling remains active.");
 	TDialog *dialog = createSetupSimplePreviewDialog("KEY MANAGER HELP", 82, 13, lines, false);
 	if (dialog != nullptr) {

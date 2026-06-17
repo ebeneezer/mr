@@ -197,6 +197,8 @@ bool testSyncOnlyDiagnosticsPath(std::string &failureReason) {
 	mr::services::MRLspServerProfile profile = makeProbeProfile();
 	mr::services::MRWorkspaceDocumentSnapshot document;
 	mr::services::MRWorkspaceServiceSnapshot workspace;
+	mr::services::MRLspDocumentServiceSnapshot snapshot;
+	mr::services::MRLspPositionServiceSnapshot positionSnapshot;
 	std::vector<mr::services::MRWorkspaceDocumentSnapshot> documents;
 	std::string errorMessage;
 
@@ -215,6 +217,22 @@ bool testSyncOnlyDiagnosticsPath(std::string &failureReason) {
 	workspace = service.buildWorkspaceSnapshot(documents);
 	if (!expect(service.syncEditorDocument(profile, workspace, document, editor, errorMessage), "app service sync change: " + errorMessage, failureReason)) return false;
 	if (!pollUntilDiagnosticMessage(service, "changed diagnostic", failureReason)) return false;
+	snapshot = service.documentServiceSnapshot(workspace, document);
+	if (!expect(snapshot.documentInWorkspace, "app service snapshot document membership", failureReason)) return false;
+	if (!expect(snapshot.commands.requestDefinition, "app service snapshot definition offer", failureReason)) return false;
+	if (!expect(snapshot.commands.requestReferences, "app service snapshot references offer", failureReason)) return false;
+	if (!expect(snapshot.commands.requestHover, "app service snapshot hover offer", failureReason)) return false;
+	if (!expect(snapshot.commands.requestCompletion, "app service snapshot completion offer", failureReason)) return false;
+	if (!expect(snapshot.commands.requestCodeActions, "app service snapshot codeAction request offer", failureReason)) return false;
+	if (!expect(!snapshot.commands.applyCodeActions, "app service snapshot premature codeAction apply offer", failureReason)) return false;
+	if (!expect(snapshot.results.current.diagnostics == 1, "app service snapshot diagnostic count", failureReason)) return false;
+	positionSnapshot = service.documentPositionServiceSnapshot(workspace, document, mr::services::MRServiceTextPosition{0, 2});
+	if (!expect(positionSnapshot.commands.requestCodeActions, "app service position codeAction request offer", failureReason)) return false;
+	if (!expect(!positionSnapshot.commands.applyCodeActions, "app service position premature codeAction apply offer", failureReason)) return false;
+	if (!expect(positionSnapshot.results.diagnostics.size() == 1, "app service position diagnostic count", failureReason)) return false;
+	positionSnapshot = service.documentPositionServiceSnapshot(workspace, document, mr::services::MRServiceTextPosition{2, 0});
+	if (!expect(!positionSnapshot.commands.requestCodeActions, "app service outside position codeAction request offer", failureReason)) return false;
+	if (!expect(positionSnapshot.results.diagnostics.empty(), "app service outside position diagnostic count", failureReason)) return false;
 	if (!expect(!service.results().diagnosticResults().empty(), "app service diagnostic result missing before codeAction", failureReason)) return false;
 	if (!expect(!service.results().diagnosticResults()[0].diagnostics.empty(), "app service diagnostic entry missing before codeAction", failureReason)) return false;
 	if (!expect(
@@ -228,6 +246,19 @@ bool testSyncOnlyDiagnosticsPath(std::string &failureReason) {
 	if (!pollUntilCounts(service, 1, 0, 0, 0, 1, failureReason)) return false;
 	if (!expect(service.results().codeActionResults()[0].items.size() == 2, "app service codeAction item count", failureReason)) return false;
 	if (!expect(service.results().codeActionResults()[0].items[0].title == "Insert semicolon", "app service codeAction title", failureReason)) return false;
+	snapshot = service.documentServiceSnapshot(workspace, document);
+	if (!expect(snapshot.commands.applyCodeActions, "app service snapshot codeAction apply offer", failureReason)) return false;
+	if (!expect(snapshot.results.current.codeActions == 1, "app service snapshot codeAction result count", failureReason)) return false;
+	if (!expect(snapshot.results.codeActions.size() == 1, "app service snapshot codeAction vector count", failureReason)) return false;
+	if (!expect(snapshot.results.codeActions[0].items.size() == 1, "app service snapshot usable codeAction item count", failureReason)) return false;
+	if (!expect(snapshot.results.codeActions[0].items[0].title == "Insert semicolon", "app service snapshot usable codeAction title", failureReason)) return false;
+	positionSnapshot = service.documentPositionServiceSnapshot(workspace, document, mr::services::MRServiceTextPosition{0, 2});
+	if (!expect(positionSnapshot.commands.applyCodeActions, "app service position codeAction apply offer", failureReason)) return false;
+	if (!expect(positionSnapshot.results.codeActions.size() == 1, "app service position codeAction vector count", failureReason)) return false;
+	if (!expect(positionSnapshot.results.codeActions[0].items.size() == 1, "app service position usable codeAction item count", failureReason)) return false;
+	positionSnapshot = service.documentPositionServiceSnapshot(workspace, document, mr::services::MRServiceTextPosition{2, 0});
+	if (!expect(!positionSnapshot.commands.applyCodeActions, "app service outside position codeAction apply offer", failureReason)) return false;
+	if (!expect(positionSnapshot.results.codeActions.empty(), "app service outside position codeAction vector count", failureReason)) return false;
 	if (!expect(service.shutdown(errorMessage), "app service sync shutdown: " + errorMessage, failureReason)) return false;
 	return expect(!service.runtimeActive(), "sync shutdown app service runtime is active", failureReason);
 }

@@ -36,6 +36,7 @@
 #include "MRWindowSupport.hpp"
 #include "MRFileEditor/MRFEBlockOps.hpp"
 #include "../app/MRCommands.hpp"
+#include "../app/MRCommandRouter.hpp"
 #include "../keymap/MRKeymapContext.hpp"
 #include "../keymap/MRKeymapToken.hpp"
 #include "../dialogs/MRWindowList.hpp"
@@ -501,21 +502,29 @@ class MREditWindow : public TWindow {
 				MRWindowManager::reinsertMinimizedWindow(this);
 				clearEvent(event);
 				return;
+				}
+				TWindow::handleEvent(event);
+				return;
 			}
-			TWindow::handleEvent(event);
-			return;
-		}
-		if (handleEditorScrollBarArrowHold(event)) return;
-		const ushort originalEvent = event.what;
-		const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
-		const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
-		const bool originalEditorDoubleClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0 && editor->mouseInView(event.mouse.where);
+			if (handleEditorScrollBarArrowHold(event)) return;
+			const ushort originalEvent = event.what;
+			const TPoint originalMouseWhere = event.what == evMouseDown ? event.mouse.where : TPoint();
+			const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
+			const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
+			const bool originalEditorDoubleClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0 && editor->mouseInView(event.mouse.where);
+			const bool originalEditorRightClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbRightButton) != 0 && (event.mouse.buttons & mbLeftButton) == 0 && (event.mouse.eventFlags & meDoubleClick) == 0 && editor->textPointInView(event.mouse.where);
+			if ((originalEvent & (evMouseDown | evMouseMove | evMouseUp)) != 0) notifyMRLspMouseActivity(event.mouse.where);
+			if (originalEditorRightClick) {
+				static_cast<void>(showMRLspContextMenu(this, originalMouseWhere));
+				clearEvent(event);
+				return;
+			}
 			maybeTraceTtyCollisionKeyEvent("window-pre", event);
 			traceCalculatorHotkeyEvent("window-pre", event);
 
 			if (event.what == evKeyDown && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab)) {
-			event.keyDown.keyCode = kbShiftTab;
-			event.keyDown.controlKeyState |= kbShift;
+				event.keyDown.keyCode = kbShiftTab;
+				event.keyDown.controlKeyState |= kbShift;
 		}
 		if (event.what == evKeyDown) {
 			if (keyDebugEnabled() && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab)) {
@@ -525,7 +534,9 @@ class MREditWindow : public TWindow {
 			}
 			if (handleBlockTabIndentKey(event)) return;
 				if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) {
-					if (editor != nullptr && mBlockOps.hasVisibleBlock() && !mBlockOps.isMarking()) static_cast<void>(mBlockOps.refreshVisual(*editor));
+					if (editor != nullptr && mBlockOps.hasVisibleBlock() && !mBlockOps.isMarking()) {
+						if (!mBlockOps.remapAfterEditorChange(*editor)) static_cast<void>(mBlockOps.refreshVisual(*editor));
+					}
 					return;
 				}
 			if (handleBuiltInBlockHotkeys(event)) return;
@@ -561,22 +572,27 @@ class MREditWindow : public TWindow {
 					std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=editor-dispatch eventBefore=0x%04X eventAfter=0x%04X cursorBefore=%zu cursorAfter=%zu", static_cast<unsigned>(eventTypeBeforeEditor), static_cast<unsigned>(event.what), cursorStart, editor->cursorOffset());
 					mrLogMessage(line);
 				}
+				}
 			}
-		}
 			if (frame != nullptr) {
-			MRFrame *mrFrame = static_cast<MRFrame *>(frame);
-			if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0) mrFrame->updateTaskHover(event.mouse.where, false);
-			else if ((event.what & (evKeyDown | evCommand)) != 0)
-				mrFrame->updateTaskHover(TPoint(), true);
-		}
-
-		TWindow::handleEvent(event);
-		if (editor != nullptr) {
-			if (originalEvent == evMouseDown) {
-				if (!originalEditorDoubleClick || !handleEditorDoubleClickBlockExpansion()) static_cast<void>(mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers()));
+				MRFrame *mrFrame = static_cast<MRFrame *>(frame);
+				if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0) {
+					notifyMRLspMouseActivity(event.mouse.where);
+					mrFrame->updateTaskHover(event.mouse.where, false);
+				}
+				else if ((event.what & (evKeyDown | evCommand)) != 0)
+					mrFrame->updateTaskHover(TPoint(), true);
 			}
-			else if (mBlockOps.isMarking() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.updateFromEditor(*editor));
-			else if (mBlockOps.hasVisibleBlock() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.refreshVisual(*editor));
+
+			TWindow::handleEvent(event);
+			if (editor != nullptr) {
+				if (originalEvent == evMouseDown) {
+					if (!originalEditorDoubleClick || !handleEditorDoubleClickBlockExpansion()) static_cast<void>(mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers()));
+				}
+				else if (mBlockOps.isMarking() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.updateFromEditor(*editor));
+				else if (mBlockOps.hasVisibleBlock() && (originalEvent == evKeyDown || originalEvent == evCommand)) {
+					if (!mBlockOps.remapAfterEditorChange(*editor)) static_cast<void>(mBlockOps.refreshVisual(*editor));
+				}
 		}
 		traceCalculatorHotkeyEvent("window-post", event);
 		if (keyDebugEnabled() && originalEvent == evKeyDown && TKey(keyCodeBefore, keyModifiersBefore) == TKey(kbShiftTab)) {

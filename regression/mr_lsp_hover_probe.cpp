@@ -120,9 +120,84 @@ bool testHoverGuards(std::string &failureReason) {
 	return shutdownLifecycle(lifecycle, failureReason);
 }
 
+mr::lsp::LspInboundMessage hoverResponseMessage(const std::string &idText, const std::string &resultJson) {
+	mr::lsp::LspInboundMessage message;
+
+	message.payload = "{\"jsonrpc\":\"2.0\",\"id\":" + idText + ",\"result\":" + resultJson + "}";
+	message.envelope.kind = mr::lsp::JsonRpcMessageKind::Response;
+	message.envelope.idKind = mr::lsp::JsonRpcIdKind::String;
+	message.envelope.idText = idText;
+	return message;
+}
+
+bool requestDirectHover(mr::lsp::LspLifecycle &lifecycle, mr::lsp::LspDocumentService &service, mr::lsp::LspHoverAdapter &adapter, mr::lsp::LspHoverRequest &request, std::string &failureReason) {
+	std::string errorMessage;
+
+	if (!startLifecycle(lifecycle, failureReason)) return false;
+	if (!expect(service.open(makeSourceSnapshot(1, "int main() { return 0; }\n"), errorMessage), "direct open: " + errorMessage, failureReason)) return false;
+	return expect(adapter.requestHover(lifecycle, service, mr::lsp::LspTextPosition{0, 4}, request, errorMessage), "direct hover request: " + errorMessage, failureReason);
+}
+
+bool testHoverMarkupVariants(std::string &failureReason) {
+	mr::lsp::LspHoverAdapter adapter;
+
+	{
+		mr::lsp::LspLifecycle lifecycle;
+		mr::lsp::LspDocumentService service(lifecycle);
+		mr::lsp::LspHoverRequest request;
+		mr::lsp::LspHoverResult result;
+		std::string errorMessage;
+		bool accepted = false;
+
+		if (!requestDirectHover(lifecycle, service, adapter, request, failureReason)) return false;
+		if (!expect(adapter.consume(hoverResponseMessage(request.idText, "{\"contents\":[{\"language\":\"cpp\",\"value\":\"int f()\"},\"provided by stdio\"]}"), service, request, result, accepted, errorMessage), "array hover consume: " + errorMessage, failureReason)) return false;
+		if (!expect(accepted, "array hover not accepted", failureReason)) return false;
+		if (!expect(result.kind == "plaintext", "array hover kind", failureReason)) return false;
+		if (!expect(result.value.find("int f()") != std::string::npos && result.value.find("provided by stdio") != std::string::npos, "array hover value", failureReason)) return false;
+		if (!expect(service.close(errorMessage), "direct close: " + errorMessage, failureReason)) return false;
+		if (!shutdownLifecycle(lifecycle, failureReason)) return false;
+	}
+	{
+		mr::lsp::LspLifecycle lifecycle;
+		mr::lsp::LspDocumentService service(lifecycle);
+		mr::lsp::LspHoverRequest request;
+		mr::lsp::LspHoverResult result;
+		std::string errorMessage;
+		bool accepted = false;
+
+		if (!requestDirectHover(lifecycle, service, adapter, request, failureReason)) return false;
+		if (!expect(adapter.consume(hoverResponseMessage(request.idText, "{\"contents\":{\"kind\":\"markdown\",\"value\":\"Gr\\u00f6\\u00dfe\"}}"), service, request, result, accepted, errorMessage), "unicode hover consume: " + errorMessage, failureReason)) return false;
+		if (!expect(accepted, "unicode hover not accepted", failureReason)) return false;
+		if (!expect(result.value == "Gr\303\266\303\237e", "unicode hover value", failureReason)) return false;
+		if (!expect(service.close(errorMessage), "unicode close: " + errorMessage, failureReason)) return false;
+		if (!shutdownLifecycle(lifecycle, failureReason)) return false;
+	}
+	return true;
+}
+
+bool testMalformedHoverReportsProtocolError(std::string &failureReason) {
+	mr::lsp::LspLifecycle lifecycle;
+	mr::lsp::LspDocumentService service(lifecycle);
+	mr::lsp::LspHoverAdapter adapter;
+	mr::lsp::LspHoverRequest request;
+	mr::lsp::LspHoverResult result;
+	std::string errorMessage;
+	bool accepted = true;
+
+	if (!requestDirectHover(lifecycle, service, adapter, request, failureReason)) return false;
+	if (!expect(adapter.consume(hoverResponseMessage(request.idText, "{\"contents\":42}"), service, request, result, accepted, errorMessage), "malformed hover protocol error report", failureReason)) return false;
+	if (!expect(!accepted, "malformed hover accepted", failureReason)) return false;
+	if (!expect(!request.pending, "malformed hover left request pending", failureReason)) return false;
+	if (!expect(errorMessage.find("malformed") != std::string::npos, "malformed hover missing diagnostic", failureReason)) return false;
+	if (!expect(service.close(errorMessage), "malformed close: " + errorMessage, failureReason)) return false;
+	return shutdownLifecycle(lifecycle, failureReason);
+}
+
 bool runProbe(std::string &failureReason) {
 	if (!testHoverHappyPath(failureReason)) return false;
 	if (!testHoverGuards(failureReason)) return false;
+	if (!testHoverMarkupVariants(failureReason)) return false;
+	if (!testMalformedHoverReportsProtocolError(failureReason)) return false;
 	return true;
 }
 } // namespace
