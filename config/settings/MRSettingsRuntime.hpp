@@ -216,6 +216,11 @@ enum class MRCompilerErrorMessagePlacement : unsigned char {
 	RightMargin = 1
 };
 
+enum class MRLanguageServerSidekickPlacement : unsigned char {
+	AtCode = 0,
+	RightMargin = 1
+};
+
 enum class MRScrollbarVisibility : unsigned char {
 	Smart = 0,
 	Always = 1
@@ -636,6 +641,10 @@ bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *erro
 [[nodiscard]] MRCursorBehaviour configuredCursorBehaviour();
 bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement placement, std::string *errorMessage = nullptr);
 [[nodiscard]] MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement();
+bool setConfiguredLanguageServerSpawnDaemon(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredLanguageServerSpawnDaemon();
+bool setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement placement, std::string *errorMessage = nullptr);
+[[nodiscard]] MRLanguageServerSidekickPlacement configuredLanguageServerSidekickPlacement();
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage = nullptr);
 [[nodiscard]] MRScrollbarVisibility configuredScrollbarVisibility();
 bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage = nullptr);

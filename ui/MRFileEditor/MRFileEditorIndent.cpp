@@ -1384,7 +1384,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	if (selEnd < selStart) std::swap(selStart, selEnd);
 
 	invalidateSaveNormalizationCache();
-	const bool preserveSyntaxCacheDuringEdit = changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics();
+	const bool preserveSyntaxCacheDuringEdit = changeSet != nullptr && changeSet->changed;
 	resetSyntaxWarmupState(!preserveSyntaxCacheDuringEdit);
 	if (preserveSyntaxCacheDuringEdit) invalidateSyntaxCacheFromLineStart(mBufferModel.lineStart(changeSet->touchedRange.start));
 	if (mFoldState.warmupState().taskId != 0) {
@@ -1447,11 +1447,15 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 		}
 	} else
 		mSuppressLargeFileLineIndexWarmup = false;
+	drawLock++;
 	updateMetrics();
+	ensureCursorVisible(false);
+	drawLock--;
+	drawFlag = False;
+	if (syntaxPipelineEnabled()) refreshVisibleSyntaxCacheForImmediateDraw();
 	if (!pieceTableOnly && !mSuppressLargeFileLineIndexWarmup) scheduleLineIndexWarmupIfNeeded();
 	if (syntaxPipelineEnabled()) scheduleSyntaxWarmupIfNeeded();
 	scheduleSaveNormalizationWarmupIfNeeded();
-	ensureCursorVisible(false);
 	updateIndicator();
 	drawView();
 	return true;

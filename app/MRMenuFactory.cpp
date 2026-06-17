@@ -56,7 +56,7 @@ TSubMenu *createTextMenu() {
 }
 
 TMenuItem *createInstallationAndSetupMenuItem() {
-	return new TMenuItem("~I~nstallation and setup", kbNoKey, new TMenu(*new TMenuItem("~C~olor setup", cmMrSetupColorSetup, kbNoKey, hcNoContext) + *new TMenuItem("~K~ey mapping", cmMrSetupKeyMapping, kbNoKey, hcNoContext) + *new TMenuItem("~M~ouse / Key repeat", cmMrSetupMouseKeyRepeat, kbNoKey, hcNoContext) + *new TMenuItem("~F~ilename extensions", cmMrSetupFilenameExtensions, kbNoKey, hcNoContext) + *new TMenuItem("Compiler ~p~rofiles", cmMrSetupCompilerProfiles, kbNoKey, hcNoContext) + *new TMenuItem("~P~aths", cmMrSetupPaths, kbNoKey, hcNoContext) + *new TMenuItem("~B~ackups / Autosave", cmMrSetupBackupsAutosave, kbNoKey, hcNoContext) + *new TMenuItem("~U~ser interface settings", cmMrSetupUserInterfaceSettings, kbNoKey, hcNoContext) + *new TMenuItem("~L~ive logs", cmMrSetupLiveLogs, kbNoKey, hcNoContext)), hcNoContext);
+	return new TMenuItem("~I~nstallation and setup", kbNoKey, new TMenu(*new TMenuItem("~C~olor setup", cmMrSetupColorSetup, kbNoKey, hcNoContext) + *new TMenuItem("~K~ey mapping", cmMrSetupKeyMapping, kbNoKey, hcNoContext) + *new TMenuItem("LSP ~s~upport", cmMrSetupLspSupport, kbNoKey, hcNoContext) + *new TMenuItem("~F~ilename extensions", cmMrSetupFilenameExtensions, kbNoKey, hcNoContext) + *new TMenuItem("Compiler ~p~rofiles", cmMrSetupCompilerProfiles, kbNoKey, hcNoContext) + *new TMenuItem("~P~aths", cmMrSetupPaths, kbNoKey, hcNoContext) + *new TMenuItem("~B~ackups / Autosave", cmMrSetupBackupsAutosave, kbNoKey, hcNoContext) + *new TMenuItem("~U~ser interface settings", cmMrSetupUserInterfaceSettings, kbNoKey, hcNoContext) + *new TMenuItem("~L~ive logs", cmMrSetupLiveLogs, kbNoKey, hcNoContext)), hcNoContext);
 }
 
 TSubMenu *createOtherMenu() {

@@ -123,7 +123,7 @@ constexpr std::array catalogDefinitions{
     mr("MR_SETUP_EDIT_SETTINGS", "Setup edit settings"),
     mr("MR_SETUP_COLOR", "Setup colors"),
     mr("MR_SETUP_KEYMAP", "Setup keymap"),
-    mr("MR_SETUP_MOUSE_KEY_REPEAT", "Setup mouse / key repeat"),
+    mr("MR_SETUP_LSP_SUPPORT", "Setup LSP support"),
     mr("MR_SETUP_FILENAME_EXTENSIONS", "Setup filename extensions"),
     mr("MR_SETUP_COMPILER_PROFILES", "Setup compiler profiles"),
     mr("MR_SETUP_PATHS", "Setup paths"),

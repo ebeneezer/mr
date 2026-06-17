@@ -371,8 +371,8 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 
 ifneq ($(filter clean,$(MAKECMDGOALS)),)
 ifneq ($(filter all,$(MAKECMDGOALS)),)
-.NOTPARALLEL:
 all: clean
+$(CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS): clean
 endif
 endif
 
@@ -532,7 +532,7 @@ tvision-build: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source
 		$(CMAKE) -S $(TVISION_SOURCE_DIR) -B $(TVISION_SOURCE_DIR)/build $(TVISION_CMAKE_FLAGS); \
 		printf '%s\n' "$(TVISION_TOOLCHAIN_SIGNATURE)" > $(TVISION_TOOLCHAIN_STAMP); \
 	fi
-	$(CMAKE) --build $(TVISION_SOURCE_DIR)/build --target tvision
+	+$(CMAKE) --build $(TVISION_SOURCE_DIR)/build --target tvision
 
 $(TVISION_LIB): tvision-build
 	@test -f $(TVISION_LIB)

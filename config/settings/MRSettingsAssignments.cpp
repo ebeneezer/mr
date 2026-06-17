@@ -169,6 +169,8 @@ static const char *const kLogHandlingPersist = "PERSIST";
 static const char *const kLogHandlingJournalctl = "JOURNALCTL";
 static const char *const kCursorBehaviourBoundToText = "BOUND_TO_TEXT";
 static const char *const kCursorBehaviourFreeMovement = "FREE_MOVEMENT";
+static const char *const kLanguageServerSidekickAtCode = "AT_CODE";
+static const char *const kLanguageServerSidekickRightMargin = "RIGHT_MARGIN";
 static const char *const kFileCompareStartOriginalCompare = "ORIGINAL_COMPARE";
 static const char *const kFileCompareStartCompareOriginal = "COMPARE_ORIGINAL";
 static const char *const kDialogLastPathKey = "DIALOG_LAST_PATH";
@@ -254,6 +256,8 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
     {"COMPILER_ERROR_MESSAGE_PLACEMENT", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_SPAWN_DAEMON", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_SIDEKICK_PLACEMENT", MRSettingsKeyClass::Global, true},
     {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
     {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
 	    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
@@ -370,6 +374,22 @@ bool parseCompilerErrorMessagePlacementLiteral(const std::string &value, MRCompi
 		return true;
 	}
 	return setError(errorMessage, "COMPILER_ERROR_MESSAGE_PLACEMENT must be UNDER_CODE or RIGHT_MARGIN.");
+}
+
+bool parseLanguageServerSidekickPlacementLiteral(const std::string &value, MRLanguageServerSidekickPlacement &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kLanguageServerSidekickAtCode || upper == "CODE" || upper == "ATCODE") {
+		outValue = MRLanguageServerSidekickPlacement::AtCode;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == kLanguageServerSidekickRightMargin || upper == "RIGHT" || upper == "MARGIN") {
+		outValue = MRLanguageServerSidekickPlacement::RightMargin;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "LANGUAGE_SERVER_SIDEKICK_PLACEMENT must be AT_CODE or RIGHT_MARGIN.");
 }
 
 bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibility &outValue, std::string *errorMessage) {
@@ -688,6 +708,8 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredLiveLogSettings(MRLiveLogSettings(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
+	if (!setConfiguredLanguageServerSpawnDaemon(true, errorMessage)) return false;
+	if (!setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement::RightMargin, errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
@@ -1110,6 +1132,16 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				MRCompilerErrorMessagePlacement placement = MRCompilerErrorMessagePlacement::RightMargin;
 				if (!parseCompilerErrorMessagePlacementLiteral(value, placement, errorMessage)) return false;
 				return setConfiguredCompilerErrorMessagePlacement(placement, errorMessage);
+			}
+			if (upper == "LANGUAGE_SERVER_SPAWN_DAEMON") {
+				bool parsed = true;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredLanguageServerSpawnDaemon(parsed, errorMessage);
+			}
+			if (upper == "LANGUAGE_SERVER_SIDEKICK_PLACEMENT") {
+				MRLanguageServerSidekickPlacement placement = MRLanguageServerSidekickPlacement::RightMargin;
+				if (!parseLanguageServerSidekickPlacementLiteral(value, placement, errorMessage)) return false;
+				return setConfiguredLanguageServerSidekickPlacement(placement, errorMessage);
 			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				MRScrollbarVisibility visibility = MRScrollbarVisibility::Smart;
@@ -1643,6 +1675,14 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "COMPILER_ERROR_MESSAGE_PLACEMENT") {
 				if (!parseCompilerErrorMessagePlacementLiteral(value, snapshot.compilerErrorMessagePlacement, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LANGUAGE_SERVER_SPAWN_DAEMON") {
+				if (!parseBooleanLiteral(value, snapshot.languageServerSpawnDaemon, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LANGUAGE_SERVER_SIDEKICK_PLACEMENT") {
+				if (!parseLanguageServerSidekickPlacementLiteral(value, snapshot.languageServerSidekickPlacement, errorMessage)) return false;
 				return true;
 			}
 			if (upper == "SCROLLBAR_VISIBILITY") {

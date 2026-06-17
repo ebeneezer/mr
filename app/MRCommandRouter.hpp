@@ -13,6 +13,7 @@ class MREditWindow;
 [[nodiscard]] bool showMRLspContextMenu(MREditWindow *targetWindow, TPoint where);
 void notifyMRLspMouseActivity(TPoint where) noexcept;
 void notifyMRLspKeyboardActivity() noexcept;
+void mrApplyLspSupportSettingsChange();
 void pumpMRLspService();
 void clearTransientSearchSelectionOnUserInput(const TEvent &event);
 

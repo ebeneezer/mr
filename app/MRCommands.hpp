@@ -107,7 +107,7 @@ enum : ushort {
 	cmMrSetupEditSettings,
 	cmMrSetupColorSetup,
 	cmMrSetupKeyMapping,
-	cmMrSetupMouseKeyRepeat,
+	cmMrSetupLspSupport,
 	cmMrSetupFilenameExtensions,
 	cmMrSetupCompilerProfiles,
 	cmMrSetupPaths,

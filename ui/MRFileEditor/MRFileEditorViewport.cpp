@@ -597,6 +597,7 @@ void MRFileEditor::draw() {
 	std::string viewportMarkerGlyph = MRMiniMapRenderer::normalizedViewportMarkerGlyph(editSettings.miniMapMarkerGlyph);
 	const bool foldedView = foldingEnabled && !mFoldState.closedFoldSpans().empty();
 	const int miniMapRows = std::max(0, visibleTextRows());
+	const int textRows = std::max(0, visibleTextRows());
 	const TColorAttr editorTextFill = editorTextFillColor();
 	if (mBufferModel.exactLineCountKnown()) totalLines = foldedView ? foldedVisibleLineCount() : std::max<std::size_t>(1, mBufferModel.lineCount());
 	else
@@ -682,17 +683,10 @@ void MRFileEditor::draw() {
 		}
 	}
 	if (size.x > 0 && size.y > 0) {
-		TDrawBuffer backgroundBuffer;
-
-		backgroundBuffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(size.x));
-		for (int y = 0; y < size.y; ++y)
-			writeBuf(0, y, size.x, 1, backgroundBuffer);
-	}
-	if (size.x > 0 && size.y > 0 && (showLineNumbers || drawLeadingDiffGutter || drawTrailingDiffGutter || drawCodeFolding || drawMiniMap)) {
 		const std::size_t nonDocumentLineIndex = std::numeric_limits<std::size_t>::max();
-		const int textRows = std::max(0, visibleTextRows());
+		const std::size_t documentRows = topLine < totalLines ? std::min<std::size_t>(static_cast<std::size_t>(textRows), totalLines - topLine) : 0;
 
-		for (int y = 0; y < textRows; ++y) {
+		for (int y = static_cast<int>(documentRows); y < textRows; ++y) {
 			TDrawBuffer gutterBackground;
 
 			gutterBackground.moveChar(0, ' ', editorTextFill, static_cast<ushort>(std::max(0, size.x)));
@@ -706,7 +700,6 @@ void MRFileEditor::draw() {
 		}
 	}
 	if (editSettings.formatRuler && viewport.topInset > 0) drawFormatRulerOverlay(viewport, editSettings);
-	const int textRows = std::max(0, visibleTextRows());
 	for (int y = 0; y < textRows; ++y) {
 		TDrawBuffer buffer;
 		const std::size_t visibleLineIndex = topLine + static_cast<std::size_t>(y);

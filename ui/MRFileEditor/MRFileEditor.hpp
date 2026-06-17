@@ -651,6 +651,8 @@ class MRFileEditor : public TScroller {
 
 		bool syntaxWarmedLineRangeCovered(std::size_t startLine, std::size_t endLine) const noexcept;
 
+		void refreshVisibleSyntaxCacheForImmediateDraw();
+
 	void invalidateFoldCache(bool preserveVisibleProjection = false) noexcept;
 
 	void ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language);

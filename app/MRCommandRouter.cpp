@@ -292,7 +292,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SETUP_EDIT_SETTINGS", KeymapDispatchKind::AppCommand, cmMrSetupEditSettings, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_COLOR", KeymapDispatchKind::AppCommand, cmMrSetupColorSetup, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_KEYMAP", KeymapDispatchKind::AppCommand, cmMrSetupKeyMapping, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MR_SETUP_MOUSE_KEY_REPEAT", KeymapDispatchKind::AppCommand, cmMrSetupMouseKeyRepeat, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_LSP_SUPPORT", KeymapDispatchKind::AppCommand, cmMrSetupLspSupport, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_FILENAME_EXTENSIONS", KeymapDispatchKind::AppCommand, cmMrSetupFilenameExtensions, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_COMPILER_PROFILES", KeymapDispatchKind::AppCommand, cmMrSetupCompilerProfiles, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_PATHS", KeymapDispatchKind::AppCommand, cmMrSetupPaths, KeymapWindowMethod::None, KeymapCustomAction::None},
@@ -308,6 +308,7 @@ std::size_t g_lspReportedLocationCount = 0;
 std::size_t g_lspReportedHoverCount = 0;
 std::size_t g_lspReportedCompletionCount = 0;
 std::size_t g_lspReportedCodeActionCount = 0;
+std::string g_lspReportedDiagnosticSignature;
 std::size_t g_lspRequestCount = 0;
 std::size_t g_lspRequestFailureCount = 0;
 std::size_t g_lspPollFailureCount = 0;
@@ -566,8 +567,8 @@ const char *placeholderCommandTitle(ushort command) {
 
 		case cmMrSetupKeyMapping:
 			return "Installation / Key mapping";
-		case cmMrSetupMouseKeyRepeat:
-			return "Installation / Mouse / Key repeat setup";
+		case cmMrSetupLspSupport:
+			return "Installation / LSP support";
 		case cmMrSetupFilenameExtensions:
 			return "Installation / Filename extensions";
 		case cmMrSetupCompilerProfiles:
@@ -1226,6 +1227,10 @@ bool lspRequestTargetFromCursor(MRFileEditor &editor, LspEditorRequestTarget &ta
 	return lspRequestTargetFromEditorOffset(editor, editor.cursorOffset(), editor.currentViewColumn(), editor.currentViewRow(), target);
 }
 
+MRReadOnlySidekickPlacement configuredLspReadOnlySidekickPlacement() noexcept {
+	return configuredLanguageServerSidekickPlacement() == MRLanguageServerSidekickPlacement::AtCode ? MRReadOnlySidekickPlacement::UnderCode : MRReadOnlySidekickPlacement::RightMargin;
+}
+
 bool lspRequestTargetFromGlobalPoint(MREditWindow *win, TPoint where, LspEditorRequestTarget &target) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
@@ -1274,6 +1279,13 @@ bool requestLspEditorCommandForWindow(MREditWindow *win, mr::services::MRLspServ
 	g_lspLastRequestState = "preparing";
 	g_lspLastError.clear();
 	g_lspLastPollError.clear();
+	if (!configuredLanguageServerSpawnDaemon()) {
+		g_lspLastRequestState = "disabled";
+		g_lspLastError = "LSP support is disabled.";
+		++g_lspRequestFailureCount;
+		if (reportMessages) postLspWarning(g_lspLastError);
+		return true;
+	}
 	if (!buildLspDocumentSnapshotForWindow(win, document, reportMessages)) {
 		g_lspLastRequestState = "failed";
 		g_lspLastError = "LSP request requires a saved editor document.";
@@ -1429,6 +1441,10 @@ bool syncCurrentEditorForLspResults() {
 	std::string errorMessage;
 	std::string configurationSource;
 
+	if (!configuredLanguageServerSpawnDaemon()) {
+		postLspWarning("LSP support is disabled.");
+		return false;
+	}
 	if (win == nullptr || editor == nullptr) return true;
 	if (!buildCurrentLspDocumentSnapshot(win, document)) return false;
 	if (!buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) {
@@ -2143,6 +2159,24 @@ std::string buildLspDiagnosticSidekickText(const mr::services::MRLspPositionServ
 	return text.str();
 }
 
+bool lspDiagnosticSidekickAnchor(const mr::services::MRLspPositionServiceSnapshot &snapshot, MRFileEditor &editor, int &viewColumn, int &viewRow) {
+	const std::string currentText = editor.snapshotText();
+
+	for (const mr::services::MRServiceDiagnosticResult &result : snapshot.results.diagnostics) {
+		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics) {
+			std::size_t offset = 0;
+
+			if (!lspTextOffsetForPosition(currentText, diagnostic.reportedRange.start, offset)) continue;
+			const std::size_t lineStart = editor.lineStartOffset(offset);
+			const std::size_t lineIndex = editor.lineIndexOfOffset(offset);
+			viewColumn = editor.charColumn(lineStart, offset) - editor.delta.x + 1;
+			viewRow = static_cast<int>(lineIndex) - editor.delta.y + 1;
+			return true;
+		}
+	}
+	return false;
+}
+
 bool currentWindowMatchesLspHoverResult(MREditWindow *win, const mr::services::MRServiceHoverResult &result) {
 	mr::services::MRWorkspaceDocumentSnapshot document;
 	const mr::services::MRServiceDocumentIdentity &identity = result.header.identity;
@@ -2198,7 +2232,10 @@ bool showLspHoverSidekick(const mr::services::MRServiceHoverResult &result) {
 	if (g_lspHoverViewAnchor.hasPosition && buildLspDocumentSnapshotForWindow(win, document, false)) {
 		const mr::services::MRLspPositionServiceSnapshot snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, g_lspHoverViewAnchor.position);
 
-		if (!snapshot.results.diagnostics.empty()) text = buildLspDiagnosticSidekickText(snapshot);
+		if (!snapshot.results.diagnostics.empty()) {
+			text = buildLspDiagnosticSidekickText(snapshot);
+			if (!text.empty()) static_cast<void>(lspDiagnosticSidekickAnchor(snapshot, *editor, anchorViewColumn, anchorViewRow));
+		}
 	}
 	if (text.empty()) text = buildLspHoverSidekickText(result);
 	if (text.empty()) {
@@ -2206,7 +2243,7 @@ bool showLspHoverSidekick(const mr::services::MRServiceHoverResult &result) {
 		return true;
 	}
 	preferredViewColumn = anchorViewColumn + 2;
-	if (mrOpenReadOnlySidekickAt(win, text, "LSP hover", anchorViewColumn, anchorViewRow, preferredViewColumn, MRReadOnlySidekickPlacement::RightMargin)) {
+	if (mrOpenReadOnlySidekickAt(win, text, "LSP hover", anchorViewColumn, anchorViewRow, preferredViewColumn, configuredLspReadOnlySidekickPlacement())) {
 		g_lspAutoHover.sidekickOpen = true;
 		g_lspAutoHover.bufferId = win->bufferId();
 		return true;
@@ -2512,7 +2549,11 @@ bool showLspStatusDialog() {
 	} else
 		profileError = "No current editor and MR_LSP_SERVER is empty.";
 
+	lines.push_back(std::string("Support: ") + (configuredLanguageServerSpawnDaemon() ? "enabled" : "disabled"));
 	lines.push_back(std::string("Runtime: ") + (g_lspAppService.runtimeActive() ? "active" : "inactive"));
+	if (!configuredLanguageServerSpawnDaemon()) {
+		lines.push_back("Server configured: disabled by LSP support setup");
+	}
 	if (currentEditor != nullptr) {
 		serverCandidates = mr::services::lspServerExecutableCandidatesForLanguage(currentEditor->syntaxLanguage());
 		lines.push_back(std::string("Editor language: ") + currentEditor->syntaxLanguageName());
@@ -2742,13 +2783,33 @@ bool showLspResultsDialog() {
 }
 
 void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnosticResult> &diagnostics) {
-	while (g_lspReportedDiagnosticCount < diagnostics.size()) {
-		const mr::services::MRServiceDiagnosticResult result = diagnostics[g_lspReportedDiagnosticCount];
+	std::ostringstream signature;
+
+	signature << diagnostics.size() << '\n';
+	for (const mr::services::MRServiceDiagnosticResult &result : diagnostics) {
+		signature << static_cast<int>(result.header.state) << '|';
+		signature << result.header.identity.bufferId << '|';
+		signature << result.header.identity.documentId << '|';
+		signature << result.header.identity.documentVersion << '|';
+		signature << result.header.identity.path << '|';
+		signature << result.diagnostics.size() << '\n';
+		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics) {
+			signature << diagnostic.severity << '|';
+			signature << diagnostic.reportedRange.start.line << ':' << diagnostic.reportedRange.start.character << '-';
+			signature << diagnostic.reportedRange.end.line << ':' << diagnostic.reportedRange.end.character << '|';
+			signature << diagnostic.message << '\n';
+		}
+	}
+	const std::string nextSignature = signature.str();
+
+	if (g_lspReportedDiagnosticSignature == nextSignature) return;
+	g_lspReportedDiagnosticSignature = nextSignature;
+	g_lspReportedDiagnosticCount = diagnostics.size();
+	for (const mr::services::MRServiceDiagnosticResult &result : diagnostics) {
 		std::ostringstream line;
 
-			++g_lspReportedDiagnosticCount;
-			applyLspDiagnosticInformationRanges(result.header.identity);
-			g_lspLastRequestState = "diagnostics received";
+		applyLspDiagnosticInformationRanges(result.header.identity);
+		g_lspLastRequestState = "diagnostics received";
 		line << "LSP diagnostics: " << result.diagnostics.size();
 		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
 		if (!result.diagnostics.empty()) {
@@ -2944,6 +3005,7 @@ std::vector<LspMiniMenuEntry> buildLspContextMenuItems(MREditWindow *win, const 
 
 	if (editor == nullptr) return entries;
 	entries.push_back(LspMiniMenuEntry{"Edit", 0, true});
+	if (!configuredLanguageServerSpawnDaemon()) return entries;
 	if (target != nullptr && buildLspDocumentSnapshotForWindow(win, document, false)) {
 		serverConfigured = buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage);
 		lspPosition = target->position;
@@ -2971,6 +3033,10 @@ bool requestLspCodeActionsAtPosition(MREditWindow *win, const LspEditorRequestTa
 	std::string errorMessage;
 	const std::size_t initialCodeActionCount = g_lspAppService.results().codeActionResults().size();
 
+	if (!configuredLanguageServerSpawnDaemon()) {
+		postLspWarning("LSP support is disabled.");
+		return true;
+	}
 	if (editor == nullptr || !buildCurrentLspDocumentSnapshot(win, document)) return true;
 	if (target != nullptr)
 		lspPosition = target->position;
@@ -4616,8 +4682,12 @@ void pumpLspAutoHoverDwell() {
 	{
 		const mr::services::MRLspPositionServiceSnapshot snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(target.position));
 		const std::string diagnosticText = buildLspDiagnosticSidekickText(snapshot);
+		int diagnosticViewColumn = target.viewColumn;
+		int diagnosticViewRow = target.viewRow;
 
-		if (!diagnosticText.empty() && mrOpenReadOnlySidekickAt(win, diagnosticText, "LSP hover", target.viewColumn, target.viewRow, target.viewColumn + 2, MRReadOnlySidekickPlacement::RightMargin)) {
+		if (!diagnosticText.empty()) static_cast<void>(lspDiagnosticSidekickAnchor(snapshot, *editor, diagnosticViewColumn, diagnosticViewRow));
+		if (!diagnosticText.empty() &&
+		    mrOpenReadOnlySidekickAt(win, diagnosticText, "LSP hover", diagnosticViewColumn, diagnosticViewRow, diagnosticViewColumn + 2, configuredLspReadOnlySidekickPlacement())) {
 			g_lspAutoHover.sidekickOpen = true;
 			g_lspAutoHover.bufferId = win->bufferId();
 			mrLogMessage("LSP diagnostic hover sidekick opened after dwell.");
@@ -4674,6 +4744,10 @@ void pumpLspCurrentDocumentSync() {
 void pumpMRLspService() {
 	std::string errorMessage;
 
+	if (!configuredLanguageServerSpawnDaemon()) {
+		if (g_lspAppService.runtimeActive()) mrApplyLspSupportSettingsChange();
+		return;
+	}
 	pumpLspAutoHoverDwell();
 	if (!g_lspAppService.runtimeActive()) return;
 	pumpLspCurrentDocumentSync();
@@ -4688,6 +4762,20 @@ void pumpMRLspService() {
 		}
 		reportNewLspResults();
 	}
+
+void mrApplyLspSupportSettingsChange() {
+	std::string errorMessage;
+
+	if (configuredLanguageServerSpawnDaemon()) return;
+	forgetLspAutoHover(true);
+	if (!g_lspAppService.runtimeActive()) return;
+	if (!g_lspAppService.shutdown(errorMessage)) {
+		if (!errorMessage.empty()) mrLogMessage("LSP shutdown after disabling support failed: " + errorMessage);
+		g_lspAppService.close();
+		return;
+	}
+	mrLogMessage("LSP runtime shut down after disabling support.");
+}
 
 bool handleMRCommand(ushort command, void *commandInfo) {
 	switch (command) {
@@ -4963,7 +5051,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrSetupEditSettings:
 		case cmMrSetupColorSetup:
 		case cmMrSetupKeyMapping:
-		case cmMrSetupMouseKeyRepeat:
+		case cmMrSetupLspSupport:
 		case cmMrSetupFilenameExtensions:
 		case cmMrSetupCompilerProfiles:
 		case cmMrSetupPaths:

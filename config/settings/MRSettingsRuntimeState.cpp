@@ -30,6 +30,8 @@ int g_virtualDesktops = 1;
 bool g_cyclicVirtualDesktops = false;
 MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
 MRCompilerErrorMessagePlacement g_compilerErrorMessagePlacement = MRCompilerErrorMessagePlacement::RightMargin;
+bool g_languageServerSpawnDaemon = true;
+MRLanguageServerSidekickPlacement g_languageServerSidekickPlacement = MRLanguageServerSidekickPlacement::RightMargin;
 MRScrollbarVisibility g_scrollbarVisibility = MRScrollbarVisibility::Smart;
 bool g_trackCompilerWarnings = false;
 bool g_trackCompilerNotes = false;
@@ -675,6 +677,28 @@ bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement 
 
 MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement() {
 	return g_compilerErrorMessagePlacement;
+}
+
+bool setConfiguredLanguageServerSpawnDaemon(bool enabled, std::string *errorMessage) {
+	if (g_languageServerSpawnDaemon != enabled) markConfiguredSettingsDirty();
+	g_languageServerSpawnDaemon = enabled;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool configuredLanguageServerSpawnDaemon() {
+	return g_languageServerSpawnDaemon;
+}
+
+bool setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement placement, std::string *errorMessage) {
+	if (g_languageServerSidekickPlacement != placement) markConfiguredSettingsDirty();
+	g_languageServerSidekickPlacement = placement;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRLanguageServerSidekickPlacement configuredLanguageServerSidekickPlacement() {
+	return g_languageServerSidekickPlacement;
 }
 
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage) {

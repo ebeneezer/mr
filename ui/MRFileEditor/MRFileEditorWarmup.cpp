@@ -841,6 +841,72 @@ bool MRFileEditor::syntaxWarmedLineRangeCovered(std::size_t startLine, std::size
 	return mSyntaxState.warmedLineRangeCovered(mBufferModel.documentId(), mBufferModel.language(), startLine, endLine);
 }
 
+void MRFileEditor::refreshVisibleSyntaxCacheForImmediateDraw() {
+	if (!syntaxPipelineEnabled()) return;
+
+	const MRSyntaxLanguage language = mBufferModel.language();
+	const int textRows = visibleTextRows();
+	if (language == MRSyntaxLanguage::PlainText || textRows <= 0) return;
+
+	const bool foldedView = foldingPipelineEnabled() && !mFoldState.closedFoldSpans().empty();
+	const bool exactLineCountKnown = mBufferModel.exactLineCountKnown();
+	const std::size_t exactLineCount = exactLineCountKnown ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
+	const std::size_t visibleTopLine = static_cast<std::size_t>(std::max(delta.y, 0));
+	std::size_t visibleBottomLine = visibleTopLine + static_cast<std::size_t>(textRows);
+	if (visibleBottomLine <= visibleTopLine) return;
+	if (foldedView) {
+		const std::size_t foldedCount = foldedVisibleLineCount();
+		if (foldedCount == 0 || visibleTopLine >= foldedCount) return;
+		if (visibleBottomLine > foldedCount) visibleBottomLine = foldedCount;
+	} else if (exactLineCountKnown) {
+		if (visibleTopLine >= exactLineCount) return;
+		if (visibleBottomLine > exactLineCount) visibleBottomLine = exactLineCount;
+	}
+
+	const std::size_t firstDocumentLine = foldedView ? documentLineForVisibleLine(visibleTopLine) : visibleTopLine;
+	std::size_t lastDocumentLine = foldedView ? documentLineForVisibleLine(visibleBottomLine - 1) : visibleBottomLine - 1;
+	if (exactLineCountKnown && lastDocumentLine >= exactLineCount) lastDocumentLine = exactLineCount - 1;
+	if (lastDocumentLine < firstDocumentLine) return;
+
+	const bool statefulSyntax = isStatefulSyntaxLanguage(language);
+	const int rowBudget = std::max(textRows + 8, 8);
+	std::size_t stateTopLine = firstDocumentLine;
+	MRSyntaxLineState state;
+
+	if (statefulSyntax) {
+		const std::size_t preludeLines = static_cast<std::size_t>(rowBudget) * 4;
+		MRSyntaxCheckpointEntry checkpoint;
+
+		stateTopLine = firstDocumentLine > preludeLines ? firstDocumentLine - preludeLines : 0;
+		if (syntaxCheckpointForLine(firstDocumentLine, checkpoint) && checkpoint.lineIndex >= stateTopLine && checkpoint.lineIndex <= firstDocumentLine) {
+			stateTopLine = checkpoint.lineIndex;
+			state = checkpoint.stateIn;
+		}
+	}
+
+	std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
+	std::size_t lineIndex = stateTopLine;
+	std::size_t lineStart = mBufferModel.lineStartByIndex(lineIndex);
+
+	while (lineIndex <= lastDocumentLine) {
+		MRSyntaxLineState stateIn = statefulSyntax ? state : MRSyntaxLineState();
+		MRSyntaxLineResult syntaxLine = tmrHighlightTextLine(language, mBufferModel.lineText(lineStart), stateIn);
+
+		if (lineIndex >= firstDocumentLine) tokenCache[lineStart] = MRSyntaxCacheEntry(stateIn, syntaxLine);
+		if (statefulSyntax) {
+			rememberSyntaxCheckpoint(lineStart, lineIndex, stateIn);
+			state = syntaxLine.stateOut;
+		} else
+			state = MRSyntaxLineState();
+		if (lineStart >= mBufferModel.length()) break;
+		const std::size_t nextLineStart = mBufferModel.nextLine(lineStart);
+		if (nextLineStart <= lineStart) break;
+		lineStart = nextLineStart;
+		++lineIndex;
+	}
+	rememberSyntaxWarmedLineRange(firstDocumentLine, lastDocumentLine + 1);
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif

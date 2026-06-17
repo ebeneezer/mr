@@ -472,7 +472,7 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 
 	if (hasActiveWorkspace) {
 		if (!diagnosticsAdapter.consume(message, documentService, batch, errorMessage)) return false;
-		if (batch.accepted || batch.stale || batch.rejected) resultStore.putDiagnostics(buildServiceDiagnosticsFromLsp(activeWorkspace, batch));
+		if (batch.accepted) resultStore.putDiagnostics(buildServiceDiagnosticsFromLsp(activeWorkspace, batch));
 	}
 
 	if (!definitionAdapter.consume(message, documentService, definitionRequest, definition, accepted, errorMessage)) return false;

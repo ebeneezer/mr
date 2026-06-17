@@ -22,6 +22,7 @@
 #include "MRSetupSections.hpp"
 
 #include "../../app/MRCommands.hpp"
+#include "../../app/MRCommandRouter.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../ui/MRFrame.hpp"
@@ -1893,7 +1894,126 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	char mDataFileCompareCompareTrailingGutters[8] = {0};
 };
 
+struct LspSupportDialogData {
+	ushort flags = 1;
+	ushort sidekickPlacementChoice = 1;
+};
+
+bool lspSupportDialogDataEqual(const LspSupportDialogData &lhs, const LspSupportDialogData &rhs) {
+	return lhs.flags == rhs.flags && lhs.sidekickPlacementChoice == rhs.sidekickPlacementChoice;
+}
+
+class TLspSupportSetupDialog : public MRScrollableDialog {
+  public:
+	TLspSupportSetupDialog() : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(66, 15), "LSP SUPPORT", 66, 15, initSetupDialogFrame) {
+		addManaged(new TStaticText(TRect(3, 2, 29, 3), "Language server:"), TRect(3, 2, 29, 3));
+		mOptionsField = new TCheckBoxes(TRect(3, 3, 47, 8), new TSItem("~S~pawn language server protocol daemon", nullptr));
+		addManaged(mOptionsField, TRect(3, 3, 47, 8));
+
+		addManaged(new TStaticText(TRect(3, 9, 29, 10), "SideKicks appear @:"), TRect(3, 9, 29, 10));
+		mSidekickPlacementField = new TRadioButtons(TRect(3, 10, 28, 13), new TSItem("~c~ode", new TSItem("~r~ight margin", nullptr)));
+		addManaged(mSidekickPlacementField, TRect(3, 10, 28, 13));
+
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		const int buttonLeft = (66 - metrics.rowWidth) / 2;
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, 13, 1, buttons);
+
+		selectContent();
+	}
+
+	void getData(void *rec) override {
+		LspSupportDialogData *data = static_cast<LspSupportDialogData *>(rec);
+		if (mOptionsField != nullptr) mOptionsField->getData(&data->flags);
+		if (mSidekickPlacementField != nullptr) mSidekickPlacementField->getData(&data->sidekickPlacementChoice);
+	}
+
+	void setData(void *rec) override {
+		LspSupportDialogData *data = static_cast<LspSupportDialogData *>(rec);
+		if (mOptionsField != nullptr) mOptionsField->setData(&data->flags);
+		if (mSidekickPlacementField != nullptr) {
+			if (data->sidekickPlacementChoice > 1) data->sidekickPlacementChoice = 1;
+			mSidekickPlacementField->setData(&data->sidekickPlacementChoice);
+		}
+	}
+
+  private:
+	TCheckBoxes *mOptionsField = nullptr;
+	TRadioButtons *mSidekickPlacementField = nullptr;
+};
+
 } // namespace
+
+void runLspSupportDialogFlow() {
+	bool running = true;
+	LspSupportDialogData dialogData;
+
+	if (configuredLanguageServerSpawnDaemon()) dialogData.flags |= 1;
+	else
+		dialogData.flags &= static_cast<ushort>(~1);
+	dialogData.sidekickPlacementChoice = configuredLanguageServerSidekickPlacement() == MRLanguageServerSidekickPlacement::AtCode ? 0 : 1;
+
+	while (running) {
+		TLspSupportSetupDialog *dialog = new TLspSupportSetupDialog();
+		LspSupportDialogData baselineData = dialogData;
+		ushort result = execDialogWithDataCapture(dialog, &dialogData);
+		const bool changed = mr::dialogs::isDialogDraftDirty(baselineData, dialogData, lspSupportDialogDataEqual);
+		auto applyAndPersistLspSupport = [&]() -> bool {
+			std::string errorText;
+			const bool spawnDaemon = (dialogData.flags & 1) != 0;
+			const MRLanguageServerSidekickPlacement sidekickPlacement = dialogData.sidekickPlacementChoice == 0 ? MRLanguageServerSidekickPlacement::AtCode : MRLanguageServerSidekickPlacement::RightMargin;
+
+			if (!setConfiguredLanguageServerSpawnDaemon(spawnDaemon, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredLanguageServerSidekickPlacement(sidekickPlacement, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			mrApplyLspSupportSettingsChange();
+			if (!persistConfiguredSettingsSnapshot(&errorText)) {
+				postSetupFlowError("Installation / LSP support", errorText);
+				return false;
+			}
+			return true;
+		};
+
+		switch (result) {
+			case cmOK:
+				if (changed && !applyAndPersistLspSupport()) break;
+				running = false;
+				break;
+
+			case cmClose:
+			case cmCancel:
+				if (!changed) {
+					running = false;
+					break;
+				}
+				switch (mr::dialogs::runDialogDirtyGating("LSP support settings have unsaved changes.")) {
+					case mr::dialogs::UnsavedChangesChoice::Save:
+						if (!applyAndPersistLspSupport()) break;
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Discard:
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Cancel:
+						discardQueuedCancelEvent();
+						break;
+					default:
+						break;
+				}
+				break;
+
+			default:
+				running = false;
+				break;
+		}
+	}
+	clearSetupDialogStatus();
+}
 
 void runColorSetupDialogFlow() {
 	auto palettesEqual = [](const TPalette &lhs, const TPalette &rhs) {

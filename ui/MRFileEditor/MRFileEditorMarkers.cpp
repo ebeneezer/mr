@@ -87,6 +87,16 @@ void MRFileEditor::setLspDiagnosticInformationRanges(const std::vector<std::pair
 		}
 	}
 	normalizeRangeList(normalized);
+	if (mLspDiagnosticInformationRanges.size() == normalized.size()) {
+		bool unchanged = true;
+
+		for (std::size_t index = 0; index < normalized.size(); ++index) {
+			if (mLspDiagnosticInformationRanges[index].start == normalized[index].start && mLspDiagnosticInformationRanges[index].end == normalized[index].end) continue;
+			unchanged = false;
+			break;
+		}
+		if (unchanged) return;
+	}
 	mLspDiagnosticInformationRanges.swap(normalized);
 	drawView();
 }

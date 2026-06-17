@@ -5725,15 +5725,16 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 		failureReason = "Draw path must stop semantic document rendering at EOF.";
 		return false;
 	}
-	if (content.find("backgroundBuffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(size.x));") == std::string::npos ||
-	    content.find("for (int y = 0; y < size.y; ++y)") == std::string::npos ||
-	    content.find("writeBuf(0, y, size.x, 1, backgroundBuffer);") == std::string::npos) {
-		failureReason = "Editor draw target must be cleared before document rendering.";
+	if (content.find("backgroundBuffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(size.x));") != std::string::npos ||
+	    content.find("for (int y = 0; y < size.y; ++y)") != std::string::npos ||
+	    content.find("writeBuf(0, y, size.x, 1, backgroundBuffer);") != std::string::npos) {
+		failureReason = "Editor draw path must not clear the full target before document rendering.";
 		return false;
 	}
-	if (content.find("renderedTextRows") != std::string::npos ||
-	    content.find("for (int y = renderedTextRows; y < textRows; ++y)") != std::string::npos) {
-		failureReason = "Post-EOF editor area must not be rendered after the last document line.";
+	if (content.find("const std::size_t documentRows = topLine < totalLines ? std::min<std::size_t>(static_cast<std::size_t>(textRows), totalLines - topLine) : 0;") == std::string::npos ||
+	    content.find("for (int y = static_cast<int>(documentRows); y < textRows; ++y)") == std::string::npos ||
+	    content.find("writeBuf(0, y + viewport.topInset, size.x, 1, gutterBackground);") == std::string::npos) {
+		failureReason = "Post-EOF editor area must be cleared only after the last rendered document line.";
 		return false;
 	}
 	if (content.find("const bool emptyEofDocumentLine = lineStart == documentLength && lineEnd == documentLength;") == std::string::npos ||

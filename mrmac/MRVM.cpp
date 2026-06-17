@@ -615,7 +615,7 @@ static const char *keymapActionIdForMacroCommand(const std::string &name) noexce
 	    MacroKeymapActionCommand{"SETUP_EDIT_SETTINGS", "MR_SETUP_EDIT_SETTINGS"},
 	    MacroKeymapActionCommand{"SETUP_COLOR", "MR_SETUP_COLOR"},
 	    MacroKeymapActionCommand{"SETUP_KEYMAP", "MR_SETUP_KEYMAP"},
-	    MacroKeymapActionCommand{"SETUP_MOUSE_KEY_REPEAT", "MR_SETUP_MOUSE_KEY_REPEAT"},
+	    MacroKeymapActionCommand{"SETUP_LSP_SUPPORT", "MR_SETUP_LSP_SUPPORT"},
 	    MacroKeymapActionCommand{"SETUP_FILENAME_EXTENSIONS", "MR_SETUP_FILENAME_EXTENSIONS"},
 	    MacroKeymapActionCommand{"SETUP_COMPILER_PROFILES", "MR_SETUP_COMPILER_PROFILES"},
 	    MacroKeymapActionCommand{"SETUP_PATHS", "MR_SETUP_PATHS"},
