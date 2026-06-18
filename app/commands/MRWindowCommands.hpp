@@ -31,6 +31,10 @@ void mrUpdateAllWindowsColorTheme();
 void applyVirtualDesktopConfigurationChange(int count);
 void setWindowManuallyHidden(MREditWindow *win, bool hidden);
 [[nodiscard]] bool isWindowManuallyHidden(const MREditWindow *win);
+[[nodiscard]] bool mrSetWorkspaceMainFile(MREditWindow *win);
+void mrClearWorkspaceMainFile();
+[[nodiscard]] bool mrIsWorkspaceMainFile(const MREditWindow *win);
+[[nodiscard]] std::string mrWorkspaceMainFilePath();
 
 [[nodiscard]] int currentVirtualDesktop();
 void setCurrentVirtualDesktop(int vd);
@@ -41,6 +45,8 @@ void setCurrentVirtualDesktop(int vd);
 void syncVirtualDesktopVisibility();
 [[nodiscard]] std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths);
 void mrSaveWorkspace(const std::string &filename);
+[[nodiscard]] bool mrSettingsFileHasAutosavedWorkspace();
+[[nodiscard]] bool mrClearAutosavedWorkspace();
 [[nodiscard]] bool mrLoadWorkspaceWithDialog();
 void mrLoadWorkspace(const std::string &filename);
 

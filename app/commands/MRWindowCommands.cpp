@@ -106,6 +106,7 @@ void finishNewEditWindow(MREditWindow *win) {
 
 static int g_currentVirtualDesktop = 1;
 static std::set<const MREditWindow *> g_manuallyHiddenWindows;
+static std::string g_workspaceMainFilePath;
 
 namespace {
 struct WorkspaceEntry {
@@ -127,6 +128,7 @@ struct WorkspaceEntry {
 	bool hasFileCompareSources = false;
 	std::string fileCompareOriginalUrl;
 	std::string fileCompareCompareUrl;
+	bool mainFile = false;
 };
 
 std::string workspaceHexEncode(std::string_view value) {
@@ -315,7 +317,7 @@ int workspaceVirtualDesktopOrRandom(int savedDesktop) {
 
 bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 	static const std::regex linePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
-	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?(?: bento=([^ ]+))?(?: fco=([0-9A-Fa-f]+) fcc=([0-9A-Fa-f]+))?$)", std::regex_constants::ECMAScript);
+	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?(?: main=(0|1))?(?: bento=([^ ]+))?(?: fco=([0-9A-Fa-f]+) fcc=([0-9A-Fa-f]+))?$)", std::regex_constants::ECMAScript);
 	std::smatch match;
 	std::smatch payloadMatch;
 	std::string payload;
@@ -344,14 +346,15 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 		entry.restoreX = entry.x;
 		entry.restoreY = entry.y;
 	}
-	if (payloadMatch[14].matched) {
-		entry.hasBentoSnapshot = parseBentoWorkspaceSnapshot(payloadMatch[14].str(), entry.bentoSnapshot);
+	entry.mainFile = payloadMatch[14].matched && payloadMatch[14].str() == "1";
+	if (payloadMatch[15].matched) {
+		entry.hasBentoSnapshot = parseBentoWorkspaceSnapshot(payloadMatch[15].str(), entry.bentoSnapshot);
 		if (!entry.hasBentoSnapshot) return false;
 	}
-	if (payloadMatch[15].matched || payloadMatch[16].matched) {
-		if (!payloadMatch[15].matched || !payloadMatch[16].matched) return false;
-		if (!workspaceHexDecode(payloadMatch[15].str(), entry.fileCompareOriginalUrl)) return false;
-		if (!workspaceHexDecode(payloadMatch[16].str(), entry.fileCompareCompareUrl)) return false;
+	if (payloadMatch[16].matched || payloadMatch[17].matched) {
+		if (!payloadMatch[16].matched || !payloadMatch[17].matched) return false;
+		if (!workspaceHexDecode(payloadMatch[16].str(), entry.fileCompareOriginalUrl)) return false;
+		if (!workspaceHexDecode(payloadMatch[17].str(), entry.fileCompareCompareUrl)) return false;
 		entry.hasFileCompareSources = !entry.fileCompareOriginalUrl.empty() && !entry.fileCompareCompareUrl.empty();
 		if (!entry.hasFileCompareSources) return false;
 	}
@@ -498,7 +501,56 @@ bool isFileCompareSourceWindowForAnyBento(MREditWindow *window, const std::vecto
 	return false;
 }
 
+std::string normalizedWorkspacePathForWindow(const MREditWindow *win) {
+	const MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	const char *path = editor != nullptr ? editor->persistentFileName() : nullptr;
+	std::string normalizedPath;
+
+	if (path == nullptr || *path == '\0') return std::string();
+	normalizedPath = normalizeConfiguredPathInput(path);
+	return normalizedPath.empty() ? std::string(path) : normalizedPath;
+}
+
 } // namespace
+
+bool mrSetWorkspaceMainFile(MREditWindow *win) {
+	const std::string oldPath = g_workspaceMainFilePath;
+	const std::string newPath = normalizedWorkspacePathForWindow(win);
+
+	if (newPath.empty()) {
+		postWindowCommandError("Workspace main file requires a saved file.");
+		return false;
+	}
+	g_workspaceMainFilePath = newPath;
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		const std::string windowPath = normalizedWorkspacePathForWindow(window);
+		if (window != nullptr && window->frame != nullptr && (windowPath == oldPath || windowPath == g_workspaceMainFilePath)) window->frame->drawView();
+	}
+	mrNotifyWindowTopologyChanged();
+	return true;
+}
+
+void mrClearWorkspaceMainFile() {
+	const std::string oldPath = g_workspaceMainFilePath;
+
+	if (oldPath.empty()) return;
+	g_workspaceMainFilePath.clear();
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		const std::string windowPath = normalizedWorkspacePathForWindow(window);
+		if (window != nullptr && window->frame != nullptr && windowPath == oldPath) window->frame->drawView();
+	}
+	mrNotifyWindowTopologyChanged();
+}
+
+bool mrIsWorkspaceMainFile(const MREditWindow *win) {
+	const std::string path = normalizedWorkspacePathForWindow(win);
+
+	return !path.empty() && !g_workspaceMainFilePath.empty() && path == g_workspaceMainFilePath;
+}
+
+std::string mrWorkspaceMainFilePath() {
+	return g_workspaceMainFilePath;
+}
 
 std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 	std::string source = buildSettingsMacroSource(paths);
@@ -543,9 +595,60 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		cursorLine = editor->currentLineNumber();
 		vd = win->mVirtualDesktop;
 		minimized = win->isMinimized();
-		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + (bentoPayload.empty() ? std::string() : " bento=" + bentoPayload) + fileComparePayload + "');\n");
+		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + (mrIsWorkspaceMainFile(win) ? std::string(" main=1") : std::string()) + (bentoPayload.empty() ? std::string() : " bento=" + bentoPayload) + fileComparePayload + "');\n");
 	}
 	return source;
+}
+
+bool mrSettingsFileHasAutosavedWorkspace() {
+	std::string content;
+	std::string errorText;
+	std::string path = configuredSettingsMacroFilePath();
+
+	if (path.find(".mrmac") == std::string::npos) path += ".mrmac";
+	if (!readTextFile(path, content, errorText)) return false;
+	{
+		std::istringstream input(content);
+		std::string line;
+
+		while (std::getline(input, line)) {
+			WorkspaceEntry entry;
+
+			if (parseWorkspaceEntry(line, entry)) return true;
+		}
+	}
+	return false;
+}
+
+bool mrClearAutosavedWorkspace() {
+	std::string content;
+	std::string errorText;
+	std::string path = configuredSettingsMacroFilePath();
+	std::ostringstream output;
+	bool removed = false;
+
+	if (path.find(".mrmac") == std::string::npos) path += ".mrmac";
+	if (!readTextFile(path, content, errorText)) return false;
+	{
+		std::istringstream input(content);
+		std::string line;
+
+		while (std::getline(input, line)) {
+			WorkspaceEntry entry;
+
+			if (parseWorkspaceEntry(line, entry)) {
+				removed = true;
+				continue;
+			}
+			output << line << '\n';
+		}
+	}
+	if (!removed) return true;
+	if (!writeTextFile(path, output.str())) {
+		postWindowCommandError("Unable to clear autosaved workspace.");
+		return false;
+	}
+	return true;
 }
 
 int currentVirtualDesktop() {
@@ -733,6 +836,8 @@ void mrLoadWorkspace(const std::string &filename) {
 	std::istringstream iss(currentContent);
 	std::string line;
 	bool discardedWorkspaceEntries = false;
+	bool loadedMainFile = false;
+	g_workspaceMainFilePath.clear();
 	while (std::getline(iss, line)) {
 		WorkspaceEntry entry;
 		MREditWindow *win = nullptr;
@@ -775,6 +880,10 @@ void mrLoadWorkspace(const std::string &filename) {
 			MRWindowManager::applyWorkspaceState(win, bounds, restoreBounds, entry.minimized);
 		}
 		restoreEditorCursor(editor, entry.line, entry.column);
+		if (entry.mainFile && !loadedMainFile) {
+			static_cast<void>(mrSetWorkspaceMainFile(win));
+			loadedMainFile = true;
+		}
 	}
 	syncVirtualDesktopVisibility();
 	if (discardedWorkspaceEntries) mrSaveWorkspace(dest);

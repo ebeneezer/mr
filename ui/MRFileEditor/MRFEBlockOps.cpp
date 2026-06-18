@@ -158,6 +158,16 @@ bool blockGeometryIsEmpty(const MRFEBlockGeometry &geometry) {
 	return true;
 }
 
+std::size_t remapBlockOffsetForDocumentChange(std::size_t offset, std::size_t oldLength, std::size_t newLength, std::size_t editStart, std::size_t oldEditEnd, long long delta) noexcept {
+	offset = std::min(offset, oldLength);
+	if (offset <= editStart) return std::min(offset, newLength);
+	if (offset >= oldEditEnd) {
+		const long long shifted = static_cast<long long>(offset) + delta;
+		if (shifted <= 0) return 0;
+		return std::min(static_cast<std::size_t>(shifted), newLength);
+	}
+	return std::min(editStart, newLength);
+}
 
 std::size_t lineContentEndForIndex(const std::string &text, const std::vector<std::size_t> &starts, std::size_t lineIndex) {
 	if (lineIndex + 1 < starts.size()) {
@@ -915,6 +925,7 @@ bool MRFEBlockOps::begin(MRFileEditor &editor, MRFEBlockMode mode) {
 	mGeometry.hidden = false;
 	mGeometry.anchor = editor.cursorOffset();
 	mGeometry.cursor = mGeometry.anchor;
+	mGeometry.documentVersion = editor.documentVersion();
 	switch (mode) {
 	case MRFEBlockMode::Column:
 		mGeometry.anchorColumn = std::max(0, editor.displayedCursorColumn());
@@ -1007,6 +1018,7 @@ bool MRFEBlockOps::adoptMouseSelection(MRFileEditor &editor, unsigned short modi
 	mGeometry.mode = column ? MRFEBlockMode::Column : line ? MRFEBlockMode::Line : MRFEBlockMode::Stream;
 	mGeometry.status = MRFEBlockStatus::Committed;
 	mGeometry.hidden = false;
+	mGeometry.documentVersion = editor.documentVersion();
 	mGeometry.anchor = editor.selectionAnchorOffset();
 	mGeometry.cursor = editor.selectionCursorOffset();
 	if (column) {
@@ -1046,6 +1058,38 @@ bool MRFEBlockOps::refreshVisual(MRFileEditor &editor) {
 		applySelection(editor);
 		applyOverlay(editor);
 	}
+	return true;
+}
+
+bool MRFEBlockOps::remapAfterEditorChange(MRFileEditor &editor) {
+	const MRTextBufferModel::DocumentChangeSet &change = editor.lastDocumentChangeSet();
+	const std::size_t oldLength = change.oldLength;
+	const std::size_t newLength = change.newLength;
+	const MRTextBufferModel::Range touched = change.touchedRange.normalized();
+	const long long delta = static_cast<long long>(newLength) - static_cast<long long>(oldLength);
+	const std::size_t touchedLength = touched.length();
+	const std::size_t editStart = std::min(touched.start, oldLength);
+	std::size_t replacedOldLength = touchedLength;
+
+	if (mGeometry.status == MRFEBlockStatus::Inactive || !change.changed || mGeometry.documentVersion != change.oldVersion || editor.documentVersion() != change.newVersion) return false;
+	if (delta >= 0) {
+		const std::size_t deltaUnsigned = static_cast<std::size_t>(delta);
+		replacedOldLength = touchedLength > deltaUnsigned ? touchedLength - deltaUnsigned : 0;
+	}
+	if (replacedOldLength > oldLength - editStart) replacedOldLength = oldLength - editStart;
+	const std::size_t oldEditEnd = editStart + replacedOldLength;
+
+	mGeometry.anchor = remapBlockOffsetForDocumentChange(mGeometry.anchor, oldLength, newLength, editStart, oldEditEnd, delta);
+	mGeometry.cursor = remapBlockOffsetForDocumentChange(mGeometry.cursor, oldLength, newLength, editStart, oldEditEnd, delta);
+	if (mGeometry.mode != MRFEBlockMode::Column) {
+		mGeometry.anchorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.anchor)));
+		mGeometry.cursorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.cursor)));
+	}
+	mGeometry.documentVersion = change.newVersion;
+	if (mGeometry.hidden) return true;
+	normalize(editor);
+	applySelection(editor);
+	applyOverlay(editor);
 	return true;
 }
 
@@ -1503,6 +1547,7 @@ bool MRFEBlockOps::shiftCurrentLineBlockToTab(MRFileEditor &editor, bool indent,
 		starts = lineStartsForText(text);
 	}
 	setCommittedLineGeometry(mGeometry, text, starts, firstLine, lastLine);
+	mGeometry.documentVersion = editor.documentVersion();
 	applySelection(editor);
 	applyOverlay(editor);
 	editor.setCursorOffset(mGeometry.rangeStart);
@@ -1854,6 +1899,7 @@ bool MRFEBlockOps::setCommittedBlock(MRFileEditor &editor, MRFEBlockMode mode, s
 	mGeometry.mode = mode;
 	mGeometry.status = MRFEBlockStatus::Committed;
 	mGeometry.hidden = false;
+	mGeometry.documentVersion = editor.documentVersion();
 	mGeometry.anchor = anchor;
 	mGeometry.cursor = cursor;
 	mGeometry.anchorColumn = anchorColumn >= 0 ? anchorColumn : std::max(0, static_cast<int>(editor.columnOfOffset(anchor)));
@@ -2000,6 +2046,7 @@ bool MRFEBlockOps::insertTransferMessage(MRFileEditor &editor, const TransferMes
 		working = editor.snapshotText();
 		starts = lineStartsForText(working);
 		setCommittedLineGeometry(mGeometry, working, starts, targetLine, targetLine + (message.rowCount == 0 ? 0 : message.rowCount - 1));
+		mGeometry.documentVersion = editor.documentVersion();
 		applySelection(editor);
 		applyOverlay(editor);
 		return true;
@@ -2045,6 +2092,7 @@ bool MRFEBlockOps::insertTransferMessage(MRFileEditor &editor, const TransferMes
 		mGeometry = MRFEBlockGeometry();
 		mGeometry.mode = MRFEBlockMode::Column;
 		mGeometry.status = MRFEBlockStatus::Committed;
+		mGeometry.documentVersion = editor.documentVersion();
 		mGeometry.anchor = rangeStart;
 		mGeometry.cursor = rangeEnd;
 		mGeometry.rangeStart = rangeStart;

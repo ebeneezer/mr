@@ -148,7 +148,7 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 }
 
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometry() const noexcept {
-	return textViewportGeometryFor(configuredEditSetupSettings());
+	return textViewportGeometryFor(effectiveEditSetupSettings());
 }
 
 bool MRFileEditor::shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept {
@@ -360,6 +360,15 @@ bool MRFileEditor::findMarkerContainsOffset(std::size_t offset) const noexcept {
 	return false;
 }
 
+bool MRFileEditor::lspDiagnosticInformationContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mLspDiagnosticInformationRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
 bool MRFileEditor::ratioCellActive(int numerator, int denominator, int cellIndex, int cellCount) noexcept {
 	if (numerator <= 0 || denominator <= 0 || cellCount <= 0) return false;
 	if (numerator >= denominator) return true;
@@ -440,7 +449,7 @@ std::size_t MRFileEditor::lineStartForIndex(std::size_t index) const noexcept {
 int MRFileEditor::longestLineWidth() const noexcept {
 	std::size_t pos = 0;
 	std::size_t len = mBufferModel.length();
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	int maxWidth = 1;
 
 	while (true) {
@@ -498,7 +507,7 @@ void MRFileEditor::drawFormatRulerOverlay(const TextViewportGeometry &viewport, 
 }
 
 bool MRFileEditor::editFormatRulerAtLocalPoint(TPoint local, ushort modifiers) {
-	MREditSetupSettings settings = configuredEditSetupSettings();
+	MREditSetupSettings settings = effectiveEditSetupSettings();
 	const TextViewportGeometry viewport = textViewportGeometryFor(settings);
 	if (!settings.formatRuler || local.y != 0 || !viewport.containsTextX(local.x)) return false;
 	const int column = viewport.textColumnFromLocalX(local.x) + 1;
@@ -527,7 +536,7 @@ bool MRFileEditor::editFormatRulerAtLocalPoint(TPoint local, ushort modifiers) {
 }
 
 bool MRFileEditor::dragFormatRulerAtLocalPoint(TEvent &event, TPoint local) {
-	const MREditSetupSettings initialSettings = configuredEditSetupSettings();
+	const MREditSetupSettings initialSettings = effectiveEditSetupSettings();
 	const TextViewportGeometry viewport = textViewportGeometryFor(initialSettings);
 	const ushort modifiers = event.mouse.controlKeyState;
 	const int startColumn = viewport.textColumnFromLocalX(local.x) + 1;
@@ -565,7 +574,7 @@ void MRFileEditor::draw() {
 	}
 	if (!mFileCompareLineKinds.empty()) hideCursor();
 	syncScrollBarsToState();
-	MREditSetupSettings editSettings = configuredEditSetupSettings();
+	MREditSetupSettings editSettings = effectiveEditSetupSettings();
 	const bool foldingEnabled = foldingPipelineEnabled();
 	const bool miniMapEnabled = miniMapPipelineEnabled();
 	std::size_t totalLines = 1;
@@ -588,6 +597,7 @@ void MRFileEditor::draw() {
 	std::string viewportMarkerGlyph = MRMiniMapRenderer::normalizedViewportMarkerGlyph(editSettings.miniMapMarkerGlyph);
 	const bool foldedView = foldingEnabled && !mFoldState.closedFoldSpans().empty();
 	const int miniMapRows = std::max(0, visibleTextRows());
+	const int textRows = std::max(0, visibleTextRows());
 	const TColorAttr editorTextFill = editorTextFillColor();
 	if (mBufferModel.exactLineCountKnown()) totalLines = foldedView ? foldedVisibleLineCount() : std::max<std::size_t>(1, mBufferModel.lineCount());
 	else
@@ -630,6 +640,7 @@ void MRFileEditor::draw() {
 		const std::uint64_t dirtySignature = rangeSignature(mDirtyRanges);
 		const std::uint64_t errorSignature = rangeSignature(mCompilerErrorRanges);
 		const std::uint64_t warningSignature = rangeSignature(mCompilerWarningRanges);
+		const std::uint64_t diagnosticSignature = rangeSignature(mLspDiagnosticInformationRanges);
 		std::uint64_t diffSignature = 1469598103934665603ULL;
 		for (unsigned char kind : mFileCompareLineKinds)
 			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(kind)) * 1099511628211ULL;
@@ -646,12 +657,14 @@ void MRFileEditor::draw() {
 		                                           mMiniMapState.overlayCache().braille == miniMapUseBraille && mMiniMapState.overlayCache().selectionStart == selection.start &&
 		                                           mMiniMapState.overlayCache().selectionEnd == selection.end && mMiniMapState.overlayCache().findSignature == findSignature &&
 		                                           mMiniMapState.overlayCache().dirtySignature == dirtySignature && mMiniMapState.overlayCache().errorSignature == errorSignature &&
-		                                           mMiniMapState.overlayCache().warningSignature == warningSignature && mMiniMapState.overlayCache().diffSignature == diffSignature;
+		                                           mMiniMapState.overlayCache().warningSignature == warningSignature && mMiniMapState.overlayCache().diagnosticSignature == diagnosticSignature &&
+		                                           mMiniMapState.overlayCache().diffSignature == diffSignature;
 
 		if (miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
 		else {
-			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, mCompilerErrorRanges, mCompilerWarningRanges, totalLines,
-			                                                              viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings, mFileCompareLineKinds, mFileCompareMiniMapSlices);
+			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, mCompilerErrorRanges, mCompilerWarningRanges,
+			                                                              mLspDiagnosticInformationRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings,
+			                                                              mFileCompareLineKinds, mFileCompareMiniMapSlices);
 			mMiniMapState.overlayCache().documentId = mBufferModel.documentId();
 			mMiniMapState.overlayCache().documentVersion = mBufferModel.version();
 			mMiniMapState.overlayCache().totalLines = totalLines;
@@ -664,22 +677,16 @@ void MRFileEditor::draw() {
 			mMiniMapState.overlayCache().dirtySignature = dirtySignature;
 			mMiniMapState.overlayCache().errorSignature = errorSignature;
 			mMiniMapState.overlayCache().warningSignature = warningSignature;
+			mMiniMapState.overlayCache().diagnosticSignature = diagnosticSignature;
 			mMiniMapState.overlayCache().diffSignature = diffSignature;
 			mMiniMapState.overlayCache().overlay = miniMapOverlay;
 		}
 	}
 	if (size.x > 0 && size.y > 0) {
-		TDrawBuffer backgroundBuffer;
-
-		backgroundBuffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(size.x));
-		for (int y = 0; y < size.y; ++y)
-			writeBuf(0, y, size.x, 1, backgroundBuffer);
-	}
-	if (size.x > 0 && size.y > 0 && (showLineNumbers || drawLeadingDiffGutter || drawTrailingDiffGutter || drawCodeFolding || drawMiniMap)) {
 		const std::size_t nonDocumentLineIndex = std::numeric_limits<std::size_t>::max();
-		const int textRows = std::max(0, visibleTextRows());
+		const std::size_t documentRows = topLine < totalLines ? std::min<std::size_t>(static_cast<std::size_t>(textRows), totalLines - topLine) : 0;
 
-		for (int y = 0; y < textRows; ++y) {
+		for (int y = static_cast<int>(documentRows); y < textRows; ++y) {
 			TDrawBuffer gutterBackground;
 
 			gutterBackground.moveChar(0, ' ', editorTextFill, static_cast<ushort>(std::max(0, size.x)));
@@ -693,7 +700,6 @@ void MRFileEditor::draw() {
 		}
 	}
 	if (editSettings.formatRuler && viewport.topInset > 0) drawFormatRulerOverlay(viewport, editSettings);
-	const int textRows = std::max(0, visibleTextRows());
 	for (int y = 0; y < textRows; ++y) {
 		TDrawBuffer buffer;
 		const std::size_t visibleLineIndex = topLine + static_cast<std::size_t>(y);
@@ -816,7 +822,7 @@ TColorAttr MRFileEditor::tokenColor(MRSyntaxToken token, bool selected, TAttrPai
 	auto configuredCodeColor = [background](unsigned char paletteSlot, unsigned char fallbackForeground) noexcept -> TColorAttr {
 		unsigned char configured = 0;
 
-		if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(background | (configured & 0x0F));
+		if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(configured);
 		return static_cast<TColorAttr>(background | fallbackForeground);
 	};
 
@@ -868,7 +874,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	std::size_t bytePos = 0;
 	int visual = 0;
 	int x = 0;
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const bool displayTabs = configuredDisplayTabs();
 	unsigned char diffLineKind = mrfclkNone;
 	bool diffTextActive = false;
@@ -959,6 +965,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 				selected = selection.start <= documentPos && documentPos < selection.end;
 			bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
 			bool findMarkedChar = !selected && findMarkerContainsOffset(documentPos);
+			bool diagnosticInformationChar = !selected && lspDiagnosticInformationContainsOffset(documentPos);
 			TAttrPair effectivePair = changedChar ? changedPair : basePair;
 			tokenPair = selected ? selectionPair : effectivePair;
 			color = tokenColor(token, selected, tokenPair);
@@ -969,6 +976,12 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 					color = static_cast<TColorAttr>((color & 0xF0) | 0x0E);
 			}
 			if (diffTextActive && !selected) color = diffTextColor;
+			if (diagnosticInformationChar) {
+				unsigned char diagnosticAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteDiagnosticInformation, diagnosticAttr)) color = static_cast<TColorAttr>(diagnosticAttr);
+				else
+					color = static_cast<TColorAttr>(0x4E);
+			}
 			visibleWidth = nextVisual - std::max(visual, hScroll);
 
 			if (line[bytePos] == '\t' && displayTabs && visual >= hScroll && visibleWidth > 0) {

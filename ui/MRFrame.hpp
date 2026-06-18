@@ -59,14 +59,16 @@ class MRFrame : public TFrame {
 		bool macroBrainVisible;
 		bool language;
 		bool languageVisible;
+		bool workspaceMainFile;
+		bool workspaceMainFileVisible;
 		const char *languageMarker;
 		std::uint32_t languageMarkerRgb;
 
-		MarkerState() noexcept : modified(false), insertMode(false), insertModeVisible(false), wordWrap(false), wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false), readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false), macroBrainVisible(false), language(false), languageVisible(false), languageMarker(nullptr), languageMarkerRgb(0) {
+		MarkerState() noexcept : modified(false), insertMode(false), insertModeVisible(false), wordWrap(false), wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false), readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false), macroBrainVisible(false), language(false), languageVisible(false), workspaceMainFile(false), workspaceMainFileVisible(false), languageMarker(nullptr), languageMarkerRgb(0) {
 		}
 
-		MarkerState(bool aModified, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap, bool aWordWrapVisible, bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain, bool aMacroBrainVisible, bool aLanguage, bool aLanguageVisible, const char *aLanguageMarker, std::uint32_t aLanguageMarkerRgb) noexcept
-		    : modified(aModified), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible), wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground), backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible), recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain), macroBrainVisible(aMacroBrainVisible), language(aLanguage), languageVisible(aLanguageVisible), languageMarker(aLanguageMarker), languageMarkerRgb(aLanguageMarkerRgb) {
+		MarkerState(bool aModified, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap, bool aWordWrapVisible, bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain, bool aMacroBrainVisible, bool aLanguage, bool aLanguageVisible, bool aWorkspaceMainFile, bool aWorkspaceMainFileVisible, const char *aLanguageMarker, std::uint32_t aLanguageMarkerRgb) noexcept
+		    : modified(aModified), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible), wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground), backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible), recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain), macroBrainVisible(aMacroBrainVisible), language(aLanguage), languageVisible(aLanguageVisible), workspaceMainFile(aWorkspaceMainFile), workspaceMainFileVisible(aWorkspaceMainFileVisible), languageMarker(aLanguageMarker), languageMarkerRgb(aLanguageMarkerRgb) {
 		}
 	};
 

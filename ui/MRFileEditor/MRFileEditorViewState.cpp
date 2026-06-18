@@ -31,6 +31,7 @@ MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 	palette.findMarker = configuredColorSlotOverride(findMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.errorMarker = configuredColorSlotOverride(errorMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.warningMarker = configuredColorSlotOverride(kMrPaletteMessageWarning, configured) ? static_cast<TColorAttr>(configured) : palette.changed;
+	palette.diagnostics = configuredColorSlotOverride(kMrPaletteMiniMapDiagnostics, configured) ? static_cast<TColorAttr>(configured) : palette.warningMarker;
 	palette.diffEqual = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapEqual, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.diffMissing = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapMissing, configured) ? static_cast<TColorAttr>(configured) : palette.errorMarker;
 	palette.diffInsert = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapInsert, configured) ? static_cast<TColorAttr>(configured) : palette.warningMarker;
@@ -86,7 +87,7 @@ void MRFileEditor::syncFromEditorState(bool) {
 
 void MRFileEditor::syncIndicatorVisualSettings() {
 	if (auto *mrIndicator = dynamic_cast<MRIndicator *>(mIndicator)) {
-		MREditSetupSettings settings = configuredEditSetupSettings();
+		MREditSetupSettings settings = effectiveEditSetupSettings();
 		if (mWordWrapSuppressed) settings.wordWrap = false;
 		mrIndicator->setInsertMode(mInsertMode);
 		mrIndicator->setWordWrap(settings.wordWrap);
@@ -152,19 +153,29 @@ TPalette &MRFileEditor::getPalette() const {
 	return palette;
 }
 
-int MRFileEditor::configuredTabSize() noexcept {
-	int tabSize = configuredTabSizeSetting();
+MREditSetupSettings MRFileEditor::effectiveEditSetupSettings() const {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+
+	if (hasPersistentFileName()) {
+		MREditSetupSettings effective;
+		if (effectiveEditSetupSettingsForPath(fileName, effective, nullptr)) settings = effective;
+	}
+	return settings;
+}
+
+int MRFileEditor::configuredTabSize() const {
+	int tabSize = effectiveEditSetupSettings().tabSize;
 	if (tabSize < 1) tabSize = 1;
 	if (tabSize > 32) tabSize = 32;
 	return tabSize;
 }
 
-bool MRFileEditor::configuredDisplayTabs() noexcept {
-	return configuredDisplayTabsSetting();
+bool MRFileEditor::configuredDisplayTabs() const {
+	return effectiveEditSetupSettings().displayTabs;
 }
 
-bool MRFileEditor::configuredFormatRuler() noexcept {
-	return configuredEditSetupSettings().formatRuler;
+bool MRFileEditor::configuredFormatRuler() const {
+	return effectiveEditSetupSettings().formatRuler;
 }
 
 int MRFileEditor::tabDisplayWidth(const MREditSetupSettings &settings, int visualColumn) noexcept {

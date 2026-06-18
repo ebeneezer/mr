@@ -2,7 +2,7 @@
 #include "../../config/settings/MRSettingsStorage.hpp"
 
 bool MRFileEditor::formatParagraph(int rightMargin) {
-	return formatParagraph(configuredEditSetupSettings().leftMargin, rightMargin);
+	return formatParagraph(effectiveEditSetupSettings().leftMargin, rightMargin);
 }
 
 std::string MRFileEditor::buildFormattedParagraphText(std::string_view paragraphText, int leftMargin, int rightMargin) const {
@@ -190,7 +190,7 @@ bool MRFileEditor::wrapCurrentLineOnce(int leftMargin, int rightMargin) {
 }
 
 void MRFileEditor::applyLiveWordWrapAfterTextInput() {
-	MREditSetupSettings settings = configuredEditSetupSettings();
+	MREditSetupSettings settings = effectiveEditSetupSettings();
 	int leftMargin = 1;
 	int rightMargin = 78;
 

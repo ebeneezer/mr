@@ -1269,13 +1269,13 @@ bool isMakeDirectiveFoldSibling(std::string_view trimmed) noexcept {
 }
 
 std::string MRFileEditor::preferredIndentFill() const {
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const int targetColumn = resolvedEditFormatIndentColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, mPreferredIndentColumn);
 
-	return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
+	return buildEditIndentFill(settings, 1, targetColumn, settings.tabExpand);
 }
 bool MRFileEditor::applyCurrentLineLeadingIndent(int targetColumn) {
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const std::size_t cursor = cursorOffset();
 	const std::size_t lineStart = lineStartOffset(cursor);
 	const std::string lineText = mBufferModel.lineText(lineStart);
@@ -1286,7 +1286,7 @@ bool MRFileEditor::applyCurrentLineLeadingIndent(int targetColumn) {
 
 	while (indentBytes < lineText.size() && (lineText[indentBytes] == ' ' || lineText[indentBytes] == '\t'))
 		++indentBytes;
-	replacement = buildEditIndentFill(settings, 1, std::max(1, targetColumn), configuredTabExpandSetting());
+	replacement = buildEditIndentFill(settings, 1, std::max(1, targetColumn), settings.tabExpand);
 	if (indentBytes == replacement.size() && lineText.compare(0, indentBytes, replacement) == 0) return false;
 	transaction.replace(MRTextBufferModel::Range(lineStart, lineStart + indentBytes), replacement);
 	if (cursor <= lineStart + indentBytes) newCursor = lineStart + replacement.size();
@@ -1317,7 +1317,7 @@ bool MRFileEditor::centerCurrentLine(int leftMargin, int rightMargin) {
 	text = lineTextAtOffset(cursorOffset());
 	trimmed = trimAscii(text);
 	if (trimmed.empty()) return replaceCurrentLineText(std::string());
-	contentWidth = displayWidthForText(trimmed, configuredEditSetupSettings());
+	contentWidth = displayWidthForText(trimmed, effectiveEditSetupSettings());
 	padWidth = std::max(safeLeftMargin - 1, ((safeRightMargin - contentWidth) / 2));
 	return replaceCurrentLineText(std::string(static_cast<std::size_t>(padWidth), ' ') + trimmed);
 }
@@ -1384,7 +1384,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	if (selEnd < selStart) std::swap(selStart, selEnd);
 
 	invalidateSaveNormalizationCache();
-	const bool preserveSyntaxCacheDuringEdit = changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics();
+	const bool preserveSyntaxCacheDuringEdit = changeSet != nullptr && changeSet->changed;
 	resetSyntaxWarmupState(!preserveSyntaxCacheDuringEdit);
 	if (preserveSyntaxCacheDuringEdit) invalidateSyntaxCacheFromLineStart(mBufferModel.lineStart(changeSet->touchedRange.start));
 	if (mFoldState.warmupState().taskId != 0) {
@@ -1424,6 +1424,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	syncDisplayedCursorColumnFromCursor(false);
 	mBufferModel.setModified(modifiedState);
 	if (changeSet == nullptr || changeSet->changed) mFindMarkerRanges.clear();
+	if (changeSet != nullptr && changeSet->changed) remapLspDiagnosticInformationRangesForAppliedChange(*changeSet);
 	if (!modifiedState) clearDirtyRanges();
 	else if (changeSet != nullptr && changeSet->changed) {
 		remapDirtyRangesForAppliedChange(*changeSet);
@@ -1446,11 +1447,15 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 		}
 	} else
 		mSuppressLargeFileLineIndexWarmup = false;
+	drawLock++;
 	updateMetrics();
+	ensureCursorVisible(false);
+	drawLock--;
+	drawFlag = False;
+	if (syntaxPipelineEnabled()) refreshVisibleSyntaxCacheForImmediateDraw();
 	if (!pieceTableOnly && !mSuppressLargeFileLineIndexWarmup) scheduleLineIndexWarmupIfNeeded();
 	if (syntaxPipelineEnabled()) scheduleSyntaxWarmupIfNeeded();
 	scheduleSaveNormalizationWarmupIfNeeded();
-	ensureCursorVisible(false);
 	updateIndicator();
 	drawView();
 	return true;
@@ -1478,7 +1483,7 @@ bool MRFileEditor::newLineWithIndent(const std::string &fill) {
 }
 
 int MRFileEditor::leadingIndentColumnForLine(std::size_t lineStart) const noexcept {
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	std::string lineText = mBufferModel.lineText(lineStart);
 	TStringView line(lineText.data(), lineText.size());
 	std::size_t index = 0;
@@ -1545,15 +1550,15 @@ int MRFileEditor::inferredShellIndentStepColumns(std::size_t lineStart, const MR
 }
 
 std::string MRFileEditor::automaticIndentFillForCursor() const {
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const std::size_t lineStart = lineStartOffset(cursorOffset());
 	const int targetColumn = leadingIndentColumnForLine(lineStart);
 
-	return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
+	return buildEditIndentFill(settings, 1, targetColumn, settings.tabExpand);
 }
 
 std::string MRFileEditor::smartIndentFillForCursor() {
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const MRUiIndentStyle uiIndentStyle = configuredUiIndentStyle();
 	const std::size_t cursor = cursorOffset();
 	const std::size_t lineStart = lineStartOffset(cursor);
@@ -1606,7 +1611,7 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 		}
 	}
 
-	if (!smartEnabled) return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
+	if (!smartEnabled) return buildEditIndentFill(settings, 1, targetColumn, settings.tabExpand);
 	if (neutralAutoScratchIndent) return automaticIndentFillForCursor();
 	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) {
 		const std::size_t last = lastSignificantByte(beforeCursor);
@@ -1809,11 +1814,11 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 		int markdownColumn = 0;
 		if (markdownContinuationColumn(beforeCursor, markdownColumn)) targetColumn = std::max(targetColumn, markdownColumn);
 	}
-	return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
+	return buildEditIndentFill(settings, 1, targetColumn, settings.tabExpand);
 }
 
 void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &insertedText) {
-	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const MRSyntaxLanguage language = mBufferModel.language();
 	const bool smartEnabled = upperAscii(settings.indentStyle) == "SMART";
 	const bool neutralAutoScratchIndent = mBufferModel.languageAutomatic() && !hasPersistentFileName();
@@ -1876,7 +1881,7 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 }
 
 bool MRFileEditor::newLineWithPreferredIndent() {
-	const std::string indentStyle = upperAscii(configuredEditSetupSettings().indentStyle);
+	const std::string indentStyle = upperAscii(effectiveEditSetupSettings().indentStyle);
 	const bool neutralAutoScratchIndent = mBufferModel.languageAutomatic() && !hasPersistentFileName();
 	if (indentStyle == "SMART") {
 		const MRSyntaxLanguage language = mBufferModel.language();

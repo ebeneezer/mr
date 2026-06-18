@@ -11,7 +11,21 @@ This repository does not use vibe coding.
 The agent is an implementation assistant and technical reviewer, not an autonomous architect.
 All work must remain reviewable by the maintainer and must respect the architecture contracts in `documentation/architecture/`.
 
-C++20 is the compiler standard. It is not permission to use every modern C++ idiom.
+C++20 is the compiler standard. It is not permission to use every modern C++ idiom. Agents must perfer classic C++18 style or ask the maintainer for approval to use C++20 constructs when appropriate (need justification).
+
+Verboten:
+
+1. if ketten - Tabellensteuerung bevorzugen
+2. unnötiger Abstraktion und Type Programmierung, Vererbung ist zu bevorzugen
+3. atomare Wrapper
+4. zu offene Objektkapselung - maximales Geheimnisprinzip beachten
+5. Globals sind nur nach Freigabe durch den Maintainer erlaubt
+6. K/V Storage und Registries neben dem zentralen K/V Store
+7. Serialisierungen an settings.mrmac vorbei
+8. Laden von Settings am bootstrapper und der Inkraftsetzung der Settings an der VM vorbei.
+9. RAM Verschwendung
+10. Implementierungen, die wissentlich einfache Lesbarkeit gegenüber Laufzeit Effizienz bevorzugen.
+11. überflüssige Methoden, Hypertrophien, unnötige Redundanzen
 
 ## Priority
 

@@ -33,6 +33,7 @@ struct MRFEBlockGeometry {
 	std::size_t rangeEnd = 0;
 	std::size_t line1 = 0;
 	std::size_t line2 = 0;
+	std::size_t documentVersion = 0;
 	int col1 = 0;
 	int col2 = 0;
 	int anchorColumn = 0;
@@ -76,6 +77,7 @@ class MRFEBlockOps {
 	bool updateFromEditor(MRFileEditor &editor);
 	bool adoptMouseSelection(MRFileEditor &editor, unsigned short modifiers);
 	bool refreshVisual(MRFileEditor &editor);
+	bool remapAfterEditorChange(MRFileEditor &editor);
 	bool moveCursorToStart(MRFileEditor &editor);
 	bool moveCursorToEnd(MRFileEditor &editor);
 	bool captureCurrentBlockPayload(MRFileEditor &editor, MRFEArenaAllocator &arena, std::string *errorText = nullptr);

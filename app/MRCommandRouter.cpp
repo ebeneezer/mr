@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <chrono>
 #include <cstdlib>
@@ -38,15 +39,18 @@
 #include <fnmatch.h>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
+#include <poll.h>
 #include <sstream>
 #include <set>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <unistd.h>
 
 #include "../dialogs/MRFileInformation.hpp"
 #include "../dialogs/MRAcquireDialog.hpp"
@@ -59,6 +63,8 @@
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
+#include "../app/services/MRLspAppService.hpp"
+#include "../app/services/MRLspServerProfile.hpp"
 #include "../keymap/MRKeymapActionCatalog.hpp"
 #include "../keymap/MRKeymapSequence.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
@@ -75,7 +81,9 @@
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRBentoBox.hpp"
+#include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRWindowSupport.hpp"
+#include "../ui/widgets/MRColumnListView.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "MREditorApp.hpp"
@@ -284,7 +292,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SETUP_EDIT_SETTINGS", KeymapDispatchKind::AppCommand, cmMrSetupEditSettings, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_COLOR", KeymapDispatchKind::AppCommand, cmMrSetupColorSetup, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_KEYMAP", KeymapDispatchKind::AppCommand, cmMrSetupKeyMapping, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MR_SETUP_MOUSE_KEY_REPEAT", KeymapDispatchKind::AppCommand, cmMrSetupMouseKeyRepeat, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SETUP_LSP_SUPPORT", KeymapDispatchKind::AppCommand, cmMrSetupLspSupport, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_FILENAME_EXTENSIONS", KeymapDispatchKind::AppCommand, cmMrSetupFilenameExtensions, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_COMPILER_PROFILES", KeymapDispatchKind::AppCommand, cmMrSetupCompilerProfiles, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_PATHS", KeymapDispatchKind::AppCommand, cmMrSetupPaths, KeymapWindowMethod::None, KeymapCustomAction::None},
@@ -293,6 +301,100 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SETUP_USER_INTERFACE", KeymapDispatchKind::AppCommand, cmMrSetupUserInterfaceSettings, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_LIVE_LOGS", KeymapDispatchKind::AppCommand, cmMrSetupLiveLogs, KeymapWindowMethod::None, KeymapCustomAction::None},
 };
+
+mr::services::MRLspAppService g_lspAppService;
+std::size_t g_lspReportedDiagnosticCount = 0;
+std::size_t g_lspReportedLocationCount = 0;
+std::size_t g_lspReportedHoverCount = 0;
+std::size_t g_lspReportedCompletionCount = 0;
+std::size_t g_lspReportedCodeActionCount = 0;
+std::size_t g_lspReportedDocumentSymbolCount = 0;
+std::size_t g_lspReportedSignatureHelpCount = 0;
+std::string g_lspReportedDiagnosticSignature;
+std::size_t g_lspRequestCount = 0;
+std::size_t g_lspRequestFailureCount = 0;
+std::size_t g_lspPollFailureCount = 0;
+std::string g_lspLastRequestLabel;
+std::string g_lspLastRequestPath;
+std::string g_lspLastRequestPosition;
+std::string g_lspLastRequestState = "idle";
+std::string g_lspLastServerExecutable;
+std::string g_lspLastServerWorkingDirectory;
+std::string g_lspLastServerArguments;
+std::string g_lspLastServerConfigurationSource;
+std::string g_lspLastServerProfileName;
+std::string g_lspLastError;
+std::string g_lspLastPollError;
+
+struct LspAutoHoverState {
+	int bufferId = 0;
+	std::size_t documentId = 0;
+	std::size_t documentVersion = 0;
+	std::size_t cursorOffset = 0;
+	int line = -1;
+	int character = -1;
+	int mouseX = -1;
+	int mouseY = -1;
+	bool mouseValid = false;
+	bool valid = false;
+	bool requested = false;
+	std::string requestId;
+	std::string retiredRequestId;
+	bool sidekickOpen = false;
+	bool dismissedForKey = false;
+	std::chrono::steady_clock::time_point stableSince;
+	std::chrono::steady_clock::time_point quietUntil;
+};
+
+struct LspEditorRequestTarget {
+	std::size_t offset = 0;
+	mr::lsp::LspTextPosition position;
+	int viewColumn = 1;
+	int viewRow = 1;
+};
+
+struct LspHoverViewAnchor {
+	std::string requestId;
+	int bufferId = 0;
+	std::size_t documentVersion = 0;
+	LspEditorRequestTarget target;
+};
+
+struct LspSignatureCallContext {
+	std::size_t openParenOffset = 0;
+	LspEditorRequestTarget requestTarget;
+	LspEditorRequestTarget anchorTarget;
+};
+
+struct LspSignatureHelpState {
+	bool active = false;
+	bool requestPending = false;
+	int bufferId = 0;
+	std::size_t documentId = 0;
+	std::size_t openParenOffset = 0;
+	std::size_t lastRequestOffset = 0;
+	std::size_t lastRequestDocumentVersion = 0;
+	std::string requestId;
+};
+
+constexpr std::chrono::milliseconds kLspHoverPumpInterval(75);
+constexpr std::chrono::milliseconds kLspDocumentSyncCheckInterval(100);
+LspAutoHoverState g_lspAutoHover;
+LspHoverViewAnchor g_lspHoverViewAnchor;
+LspHoverViewAnchor g_lspSignatureHelpViewAnchor;
+LspSignatureHelpState g_lspSignatureHelp;
+bool g_lspContextMiniMenuOpen = false;
+bool g_lspMousePositionKnown = false;
+TPoint g_lspLastMousePosition;
+std::chrono::steady_clock::time_point g_lspLastHoverPumpAt;
+std::chrono::steady_clock::time_point g_lspLastDocumentSyncCheckAt;
+std::chrono::steady_clock::time_point g_lspDocumentChangeObservedAt;
+int g_lspObservedBufferId = 0;
+std::size_t g_lspObservedDocumentId = 0;
+std::size_t g_lspObservedDocumentVersion = 0;
+int g_lspSyncedBufferId = 0;
+std::size_t g_lspSyncedDocumentId = 0;
+std::size_t g_lspSyncedDocumentVersion = 0;
 
 const char *placeholderCommandTitle(ushort command) {
 	switch (command) {
@@ -445,6 +547,22 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / Macro manager";
 		case cmMrOtherBuildCurrentFile:
 			return "Other / Build current file";
+		case cmMrOtherLspDefinition:
+			return "Other / LSP definition";
+		case cmMrOtherLspReferences:
+			return "Other / LSP references";
+		case cmMrOtherLspHover:
+			return "Other / LSP hover";
+		case cmMrOtherLspComplete:
+			return "Other / LSP complete";
+		case cmMrOtherLspDocumentSymbols:
+			return "Other / LSP document symbols";
+		case cmMrOtherLspSignatureHelp:
+			return "Other / LSP signature help";
+		case cmMrOtherLspStatus:
+			return "Other / LSP status";
+		case cmMrOtherLspResults:
+			return "Other / LSP results";
 		case cmMrOtherStopProgram:
 			return "Other / Stop current program";
 		case cmMrOtherRestartProgram:
@@ -470,8 +588,8 @@ const char *placeholderCommandTitle(ushort command) {
 
 		case cmMrSetupKeyMapping:
 			return "Installation / Key mapping";
-		case cmMrSetupMouseKeyRepeat:
-			return "Installation / Mouse / Key repeat setup";
+		case cmMrSetupLspSupport:
+			return "Installation / LSP support";
 		case cmMrSetupFilenameExtensions:
 			return "Installation / Filename extensions";
 		case cmMrSetupCompilerProfiles:
@@ -1048,6 +1166,2484 @@ bool runDisabledBlockAction() {
 
 void postDialogError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string(text), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
+
+void postLspInfo(const std::string &text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+	mrLogMessage(text);
+}
+
+void postLspWarning(const std::string &text) {
+	postDialogWarning(text);
+	mrLogMessage(text);
+}
+
+void postLspError(const std::string &text) {
+	postDialogError(text);
+	mrLogMessage(text);
+}
+
+std::string firstDisplayLine(const std::string &text, std::size_t maxLength) {
+	std::string result;
+
+	for (std::size_t i = 0; i < text.size() && result.size() < maxLength; ++i) {
+		const char ch = text[i];
+		if (ch == '\r' || ch == '\n') break;
+		result.push_back(ch);
+	}
+	if (text.size() > result.size() && result.size() == maxLength) result += "...";
+	return result;
+}
+
+bool buildLspServerProfileFromEditor(const MRFileEditor &editor, mr::services::MRLspServerProfile &profile, std::string &configurationSource, std::string &errorMessage) {
+	return mr::services::buildLspServerProfileForLanguage(editor.syntaxLanguage(), editor.syntaxLanguageName(), profile, configurationSource, errorMessage);
+}
+
+bool buildLspDocumentSnapshotForWindow(MREditWindow *win, mr::services::MRWorkspaceDocumentSnapshot &document, bool reportWarnings) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+
+	if (win == nullptr || editor == nullptr) {
+		if (reportWarnings) postLspWarning("LSP requires an editor window.");
+		return false;
+	}
+	if (!editor->hasPersistentFileName()) {
+		if (reportWarnings) postLspWarning("LSP requires a saved file.");
+		return false;
+	}
+	document = mr::services::MRWorkspaceDocumentSnapshot();
+	document.bufferId = win->bufferId();
+	document.documentId = editor->documentId();
+	document.documentVersion = editor->documentVersion();
+	document.path = editor->persistentFileName();
+	document.languageName = editor->syntaxLanguageName();
+	document.mainFile = mrIsWorkspaceMainFile(win);
+	return true;
+}
+
+bool buildCurrentLspDocumentSnapshot(MREditWindow *win, mr::services::MRWorkspaceDocumentSnapshot &document) {
+	return buildLspDocumentSnapshotForWindow(win, document, true);
+}
+
+bool lspIdentifierByte(char ch) noexcept {
+	const unsigned char uch = static_cast<unsigned char>(ch);
+
+	return std::isalnum(uch) != 0 || ch == '_';
+}
+
+bool lspIdentifierRangeAroundOffset(MRFileEditor &editor, std::size_t offset, std::size_t &start, std::size_t &end) {
+	if (editor.bufferLength() == 0) return false;
+	start = std::min(offset, editor.bufferLength());
+	if (start == editor.bufferLength() || !lspIdentifierByte(editor.charAtOffset(start))) {
+		if (start == 0 || !lspIdentifierByte(editor.charAtOffset(start - 1))) return false;
+		--start;
+	}
+	end = start;
+	while (start > editor.lineStartOffset(start) && lspIdentifierByte(editor.charAtOffset(start - 1)))
+		--start;
+	const std::size_t lineEnd = editor.lineEndOffset(end);
+	while (end < lineEnd && lspIdentifierByte(editor.charAtOffset(end)))
+		++end;
+	return end > start;
+}
+
+mr::lsp::LspTextPosition currentLspTextPosition(const MRFileEditor &editor) {
+	const std::size_t offset = editor.cursorOffset();
+	mr::lsp::LspTextPosition position;
+
+	position.line = static_cast<int>(editor.lineIndexOfOffset(offset));
+	position.character = static_cast<int>(editor.columnOfOffset(offset));
+	return position;
+}
+
+bool lspRequestTargetFromEditorOffset(MRFileEditor &editor, std::size_t offset, int viewColumn, int viewRow, LspEditorRequestTarget &target) {
+	const std::size_t documentOffset = std::min(offset, editor.bufferLength());
+
+	target.offset = documentOffset;
+	target.position.line = static_cast<int>(editor.lineIndexOfOffset(documentOffset));
+	target.position.character = static_cast<int>(editor.columnOfOffset(documentOffset));
+	target.viewColumn = std::max(1, viewColumn);
+	target.viewRow = std::max(1, viewRow);
+	return true;
+}
+
+bool lspRequestTargetFromCursor(MRFileEditor &editor, LspEditorRequestTarget &target) {
+	return lspRequestTargetFromEditorOffset(editor, editor.cursorOffset(), editor.currentViewColumn(), editor.currentViewRow(), target);
+}
+
+bool lspSignatureHelpRequestTargetFromCallToken(MRFileEditor &editor, const LspEditorRequestTarget &sourceTarget, LspEditorRequestTarget &requestTarget) {
+	std::size_t identifierStart = 0;
+	std::size_t identifierEnd = 0;
+	std::size_t probe = 0;
+	const std::size_t lineEnd = editor.lineEndOffset(sourceTarget.offset);
+
+	if (!lspIdentifierRangeAroundOffset(editor, sourceTarget.offset, identifierStart, identifierEnd)) return false;
+	probe = identifierEnd;
+	while (probe < lineEnd && std::isspace(static_cast<unsigned char>(editor.charAtOffset(probe))) != 0)
+		++probe;
+	if (probe >= lineEnd || editor.charAtOffset(probe) != '(') return false;
+	return lspRequestTargetFromEditorOffset(editor, probe + 1, sourceTarget.viewColumn, sourceTarget.viewRow, requestTarget);
+}
+
+bool lspSignatureCallContextFromOpenParen(MRFileEditor &editor, std::size_t openParenOffset, const LspEditorRequestTarget &sourceTarget, LspSignatureCallContext &context) {
+	std::size_t nameEnd = openParenOffset;
+	std::size_t nameStart = 0;
+	LspEditorRequestTarget requestTarget;
+
+	while (nameEnd > 0 && std::isspace(static_cast<unsigned char>(editor.charAtOffset(nameEnd - 1))) != 0)
+		--nameEnd;
+	nameStart = nameEnd;
+	while (nameStart > editor.lineStartOffset(nameStart) && lspIdentifierByte(editor.charAtOffset(nameStart - 1)))
+		--nameStart;
+	if (nameStart == nameEnd) return false;
+	if (!lspRequestTargetFromEditorOffset(editor, sourceTarget.offset, sourceTarget.viewColumn, sourceTarget.viewRow, requestTarget)) return false;
+	context.openParenOffset = openParenOffset;
+	context.requestTarget = requestTarget;
+	context.anchorTarget = sourceTarget;
+	return true;
+}
+
+bool lspSignatureCallContextAroundTarget(MRFileEditor &editor, const LspEditorRequestTarget &sourceTarget, LspSignatureCallContext &context) {
+	LspEditorRequestTarget requestTarget;
+	std::size_t scan = sourceTarget.offset;
+	int nesting = 0;
+
+	if (lspSignatureHelpRequestTargetFromCallToken(editor, sourceTarget, requestTarget)) {
+		context.openParenOffset = requestTarget.offset - 1;
+		context.requestTarget = requestTarget;
+		context.anchorTarget = sourceTarget;
+		return true;
+	}
+	while (scan > 0) {
+		const char ch = editor.charAtOffset(scan - 1);
+
+		--scan;
+		if (ch == ')') {
+			++nesting;
+			continue;
+		}
+		if (ch == '(') {
+			if (nesting == 0) return lspSignatureCallContextFromOpenParen(editor, scan, sourceTarget, context);
+			--nesting;
+			continue;
+		}
+		if (nesting == 0 && (ch == ';' || ch == '{' || ch == '}')) break;
+	}
+	return false;
+}
+
+bool lspSignatureRefreshTrigger(MRFileEditor &editor, const LspSignatureCallContext &context, const mr::services::MRWorkspaceDocumentSnapshot &document) {
+	if (!g_lspSignatureHelp.active) return true;
+	if (g_lspSignatureHelp.requestPending) return false;
+	if (context.requestTarget.offset == g_lspSignatureHelp.lastRequestOffset && document.documentVersion == g_lspSignatureHelp.lastRequestDocumentVersion) return false;
+	if (document.documentVersion == g_lspSignatureHelp.lastRequestDocumentVersion) return true;
+	if (context.requestTarget.offset == 0) return false;
+	const char previous = editor.charAtOffset(context.requestTarget.offset - 1);
+	return previous == '(' || previous == ',';
+}
+
+MRReadOnlySidekickPlacement configuredLspReadOnlySidekickPlacement() noexcept {
+	return configuredLanguageServerSidekickPlacement() == MRLanguageServerSidekickPlacement::AtCode ? MRReadOnlySidekickPlacement::UnderCode : MRReadOnlySidekickPlacement::RightMargin;
+}
+
+bool lspRequestTargetFromGlobalPoint(MREditWindow *win, TPoint where, LspEditorRequestTarget &target) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+
+	if (editor == nullptr || !editor->textPointInView(where)) return false;
+	const TPoint local = editor->makeLocal(where);
+	const TRect viewport = editor->visibleTextViewportBounds();
+	return lspRequestTargetFromEditorOffset(*editor, editor->offsetForGlobalPoint(where), local.x - viewport.a.x + 1, local.y - viewport.a.y + 1, target);
+}
+
+MREditWindow *lspEditorWindowAtGlobalPoint(TPoint where, LspEditorRequestTarget &target) {
+	const std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
+
+	for (MREditWindow *window : windows)
+		if (lspRequestTargetFromGlobalPoint(window, where, target)) return window;
+	return nullptr;
+}
+
+mr::services::MRServiceTextPosition serviceTextPositionFromLsp(const mr::lsp::LspTextPosition &position) noexcept {
+	mr::services::MRServiceTextPosition servicePosition;
+
+	servicePosition.line = position.line;
+	servicePosition.character = position.character;
+	return servicePosition;
+}
+
+void suppressLspAutoHoverForExplicitSidekick(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspEditorRequestTarget &target, int quietMilliseconds);
+void activateLspSignatureHelp(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspSignatureCallContext &context, const std::string &requestId);
+void clearLspSignatureHelpState(MREditWindow *win);
+
+bool requestLspEditorCommandForWindow(MREditWindow *win, mr::services::MRLspServiceCommandId command, const char *label, bool reportMessages, bool *requestSent = nullptr, const LspEditorRequestTarget *requestTarget = nullptr) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	LspEditorRequestTarget cursorTarget;
+	LspSignatureCallContext signatureHelpContext;
+	mr::lsp::LspTextPosition position;
+	const LspEditorRequestTarget *target = requestTarget;
+	const LspEditorRequestTarget *serviceTarget = nullptr;
+	std::string errorMessage;
+	std::string configurationSource;
+	std::ostringstream positionText;
+	bool hasSignatureHelpContext = false;
+
+	if (requestSent != nullptr) *requestSent = false;
+	if (reportMessages && command == mr::services::MRLspServiceCommandId::ShowHover) {
+		g_lspAutoHover.requested = false;
+		g_lspAutoHover.requestId.clear();
+	}
+	++g_lspRequestCount;
+	g_lspLastRequestLabel = label != nullptr ? label : "LSP request";
+	g_lspLastRequestPath.clear();
+	g_lspLastRequestPosition.clear();
+	g_lspLastRequestState = "preparing";
+	g_lspLastError.clear();
+	g_lspLastPollError.clear();
+	if (!configuredLanguageServerSpawnDaemon()) {
+		g_lspLastRequestState = "disabled";
+		g_lspLastError = "LSP support is disabled.";
+		++g_lspRequestFailureCount;
+		if (reportMessages) postLspWarning(g_lspLastError);
+		return true;
+	}
+	if (!buildLspDocumentSnapshotForWindow(win, document, reportMessages)) {
+		g_lspLastRequestState = "failed";
+		g_lspLastError = "LSP request requires a saved editor document.";
+		++g_lspRequestFailureCount;
+		return true;
+	}
+	if (editor == nullptr || !buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) {
+		g_lspLastRequestState = "failed";
+		g_lspLastError = errorMessage.empty() ? "LSP server not configured." : errorMessage;
+		++g_lspRequestFailureCount;
+		if (reportMessages) postLspWarning(g_lspLastError);
+		return true;
+	}
+	if (target == nullptr) {
+	lspRequestTargetFromCursor(*editor, cursorTarget);
+		target = &cursorTarget;
+	}
+	serviceTarget = target;
+	if (command == mr::services::MRLspServiceCommandId::SignatureHelp) {
+		hasSignatureHelpContext = lspSignatureCallContextAroundTarget(*editor, *target, signatureHelpContext);
+		if (hasSignatureHelpContext) serviceTarget = &signatureHelpContext.requestTarget;
+	}
+	g_lspLastServerExecutable = profile.executablePath;
+	g_lspLastServerWorkingDirectory = profile.workingDirectory;
+	g_lspLastServerArguments = mr::services::lspServerProfileArgumentText(profile);
+	g_lspLastServerConfigurationSource = configurationSource;
+	g_lspLastServerProfileName = profile.profileName;
+	position = serviceTarget->position;
+	positionText << (position.line + 1) << ":" << (position.character + 1);
+	g_lspLastRequestPath = document.path;
+	g_lspLastRequestPosition = positionText.str();
+	{
+		const std::size_t requestOffset = serviceTarget->offset;
+		const std::string lineText = editor->lineTextAtOffset(requestOffset);
+		std::string escapedLine;
+		std::string escapedPrefix;
+		const std::size_t prefixLength = std::min(lineText.size(), static_cast<std::size_t>(std::max(0, position.character)));
+
+		for (std::size_t index = 0; index < lineText.size(); ++index) {
+			const char ch = lineText[index];
+			if (ch == '\t')
+				escapedLine += "\\t";
+			else if (ch == '\r')
+				escapedLine += "\\r";
+			else if (ch == '\n')
+				escapedLine += "\\n";
+			else
+				escapedLine.push_back(ch);
+		}
+		for (std::size_t index = 0; index < prefixLength; ++index) {
+			const char ch = lineText[index];
+			if (ch == '\t')
+				escapedPrefix += "\\t";
+			else if (ch == '\r')
+				escapedPrefix += "\\r";
+			else if (ch == '\n')
+				escapedPrefix += "\\n";
+			else
+				escapedPrefix.push_back(ch);
+		}
+		mrLogMessage("LSP request dispatch: " + g_lspLastRequestLabel + " path=" + document.path + " version=" + std::to_string(document.documentVersion) + " position=" + g_lspLastRequestPosition + " offset=" + std::to_string(requestOffset) + " textColumn=" + std::to_string(editor->columnOfOffset(requestOffset)) + " viewColumn=" + std::to_string(target->viewColumn) + " lineLength=" + std::to_string(lineText.size()) + " prefix=\"" + escapedPrefix + "\" line=\"" + escapedLine + "\"");
+	}
+	g_lspAppService.setMainFileByBufferId(document.bufferId);
+	if (!g_lspAppService.requestCurrentEditorCommand(profile, document, *editor, command, position, errorMessage)) {
+		g_lspLastRequestState = "failed";
+		g_lspLastError = errorMessage;
+		++g_lspRequestFailureCount;
+		if (reportMessages) postLspError(g_lspLastRequestLabel + " failed: " + errorMessage);
+		return true;
+	}
+	g_lspLastRequestState = "requested";
+	if (requestSent != nullptr) *requestSent = true;
+	if (command == mr::services::MRLspServiceCommandId::ShowHover) {
+		g_lspHoverViewAnchor.requestId = g_lspAppService.activeHoverRequestId();
+		g_lspHoverViewAnchor.bufferId = document.bufferId;
+		g_lspHoverViewAnchor.documentVersion = document.documentVersion;
+		g_lspHoverViewAnchor.target = *target;
+	}
+	if (command == mr::services::MRLspServiceCommandId::SignatureHelp) {
+		g_lspSignatureHelpViewAnchor.requestId = g_lspAppService.activeSignatureHelpRequestId();
+		g_lspSignatureHelpViewAnchor.bufferId = document.bufferId;
+		g_lspSignatureHelpViewAnchor.documentVersion = document.documentVersion;
+		g_lspSignatureHelpViewAnchor.target = hasSignatureHelpContext ? signatureHelpContext.anchorTarget : *target;
+		if (hasSignatureHelpContext) activateLspSignatureHelp(document, win, signatureHelpContext, g_lspSignatureHelpViewAnchor.requestId);
+	}
+	if (reportMessages && (command == mr::services::MRLspServiceCommandId::ShowHover || command == mr::services::MRLspServiceCommandId::SignatureHelp)) {
+		const int quietMilliseconds = command == mr::services::MRLspServiceCommandId::SignatureHelp ? configuredLanguageServerSignatureQuietMs() : 0;
+		suppressLspAutoHoverForExplicitSidekick(document, win, *target, quietMilliseconds);
+	}
+	if (reportMessages) postLspInfo(g_lspLastRequestLabel + " requested.");
+	return true;
+}
+
+bool requestLspEditorCommand(mr::services::MRLspServiceCommandId command, const char *label, bool *requestSent = nullptr) {
+	return requestLspEditorCommandForWindow(currentEditorCommandWindow(), command, label, true, requestSent);
+}
+
+void retirePendingLspAutoHoverRequest() {
+	if (!g_lspAutoHover.requested || g_lspAutoHover.requestId.empty()) return;
+	g_lspAutoHover.retiredRequestId = g_lspAutoHover.requestId;
+	g_lspAutoHover.requestId.clear();
+	g_lspAutoHover.requested = false;
+}
+
+void forgetLspAutoHoverForWindow(MREditWindow *win, bool retirePendingRequest) {
+	if (retirePendingRequest) retirePendingLspAutoHoverRequest();
+	if (win != nullptr && (g_lspAutoHover.sidekickOpen || mrHasReadOnlySidekickForParent(win)) && win->bufferId() == g_lspAutoHover.bufferId) mrDropSidekickForParent(win);
+	g_lspAutoHover.valid = false;
+	g_lspAutoHover.requested = false;
+	g_lspAutoHover.requestId.clear();
+	g_lspAutoHover.sidekickOpen = false;
+}
+
+void forgetLspAutoHover(bool retirePendingRequest) {
+	MREditWindow *window = g_lspAutoHover.bufferId != 0 ? findEditWindowByBufferId(g_lspAutoHover.bufferId) : nullptr;
+
+	forgetLspAutoHoverForWindow(window, retirePendingRequest);
+}
+
+void clearLspSignatureHelpState(MREditWindow *win) {
+	if (win != nullptr && g_lspSignatureHelp.active && win->bufferId() == g_lspSignatureHelp.bufferId) mrDropSidekickForParent(win);
+	g_lspSignatureHelp = LspSignatureHelpState();
+}
+
+void activateLspSignatureHelp(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspSignatureCallContext &context, const std::string &requestId) {
+	if (win == nullptr) return;
+	g_lspSignatureHelp.active = true;
+	g_lspSignatureHelp.requestPending = !requestId.empty();
+	g_lspSignatureHelp.bufferId = win->bufferId();
+	g_lspSignatureHelp.documentId = document.documentId;
+	g_lspSignatureHelp.openParenOffset = context.openParenOffset;
+	g_lspSignatureHelp.lastRequestOffset = context.requestTarget.offset;
+	g_lspSignatureHelp.lastRequestDocumentVersion = document.documentVersion;
+	g_lspSignatureHelp.requestId = requestId;
+}
+
+bool lspAutoHoverMatches(const mr::services::MRWorkspaceDocumentSnapshot &document, int bufferId, std::size_t cursorOffset, const mr::lsp::LspTextPosition &position) noexcept {
+	if (!g_lspAutoHover.valid) return false;
+	if (g_lspAutoHover.bufferId != bufferId) return false;
+	if (g_lspAutoHover.documentId != document.documentId) return false;
+	if (g_lspAutoHover.documentVersion != document.documentVersion) return false;
+	if (g_lspAutoHover.cursorOffset != cursorOffset) return false;
+	if (g_lspAutoHover.line != position.line) return false;
+	if (g_lspAutoHover.character != position.character) return false;
+	return true;
+}
+
+bool currentLspHoverMousePosition(TPoint &where) noexcept {
+	if (!g_lspMousePositionKnown) return false;
+	where = g_lspLastMousePosition;
+	return true;
+}
+
+bool lspAutoHoverMouseMatches(TPoint where) noexcept {
+	if (!g_lspAutoHover.mouseValid) return false;
+	return g_lspAutoHover.mouseX == where.x && g_lspAutoHover.mouseY == where.y;
+}
+
+void armLspAutoHoverForPosition(const mr::services::MRWorkspaceDocumentSnapshot &document, int bufferId, std::size_t cursorOffset, const mr::lsp::LspTextPosition &position, TPoint mouse, bool mouseValid, std::chrono::steady_clock::time_point now) {
+	g_lspAutoHover.bufferId = bufferId;
+	g_lspAutoHover.documentId = document.documentId;
+	g_lspAutoHover.documentVersion = document.documentVersion;
+	g_lspAutoHover.cursorOffset = cursorOffset;
+	g_lspAutoHover.line = position.line;
+	g_lspAutoHover.character = position.character;
+	g_lspAutoHover.mouseX = mouseValid ? mouse.x : -1;
+	g_lspAutoHover.mouseY = mouseValid ? mouse.y : -1;
+	g_lspAutoHover.mouseValid = mouseValid;
+	g_lspAutoHover.valid = true;
+	g_lspAutoHover.requested = false;
+	g_lspAutoHover.requestId.clear();
+	g_lspAutoHover.sidekickOpen = false;
+	g_lspAutoHover.dismissedForKey = false;
+	g_lspAutoHover.stableSince = now;
+	g_lspAutoHover.quietUntil = std::chrono::steady_clock::time_point();
+}
+
+void suppressLspAutoHoverForExplicitSidekick(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspEditorRequestTarget &target, int quietMilliseconds) {
+	TPoint mousePosition;
+	const bool mouseValid = currentLspHoverMousePosition(mousePosition);
+	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+	if (win == nullptr) return;
+	if (g_lspAutoHover.sidekickOpen && g_lspAutoHover.bufferId == win->bufferId()) mrDropSidekickForParent(win);
+	retirePendingLspAutoHoverRequest();
+	armLspAutoHoverForPosition(document, win->bufferId(), target.offset, target.position, mousePosition, mouseValid, now);
+	g_lspAutoHover.dismissedForKey = true;
+	g_lspAutoHover.quietUntil = quietMilliseconds > 0 ? now + std::chrono::milliseconds(quietMilliseconds) : now;
+	g_lspAutoHover.sidekickOpen = false;
+}
+
+bool syncCurrentEditorForLspResults() {
+	MREditWindow *win = currentEditorCommandWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	bool diagnosticsReceived = false;
+	std::string errorMessage;
+	std::string configurationSource;
+
+	if (!configuredLanguageServerSpawnDaemon()) {
+		postLspWarning("LSP support is disabled.");
+		return false;
+	}
+	if (win == nullptr || editor == nullptr) return true;
+	if (!buildCurrentLspDocumentSnapshot(win, document)) return false;
+	if (!buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) {
+		postLspWarning(errorMessage.empty() ? "LSP server not configured." : errorMessage);
+		return false;
+	}
+
+	g_lspLastServerExecutable = profile.executablePath;
+	g_lspLastServerWorkingDirectory = profile.workingDirectory;
+	g_lspLastServerArguments = mr::services::lspServerProfileArgumentText(profile);
+	g_lspLastServerConfigurationSource = configurationSource;
+	g_lspLastServerProfileName = profile.profileName;
+	g_lspLastRequestPath = document.path;
+	g_lspAppService.setMainFileByBufferId(document.bufferId);
+	if (!g_lspAppService.syncCurrentEditorDocument(profile, document, *editor, errorMessage)) {
+		postLspError("LSP results sync failed: " + errorMessage);
+		return false;
+	}
+	for (int i = 0; i < 100; ++i) {
+		if (!g_lspAppService.poll(errorMessage)) {
+			postLspError("LSP poll failed: " + errorMessage);
+			g_lspAppService.close();
+			return false;
+		}
+		for (const mr::services::MRServiceDiagnosticResult &result : g_lspAppService.results().diagnosticResults()) {
+			const mr::services::MRServiceDocumentIdentity &identity = result.header.identity;
+
+			if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+			if (identity.path != document.path) continue;
+			if (identity.documentId != document.documentId) continue;
+			if (identity.documentVersion != document.documentVersion) continue;
+			diagnosticsReceived = true;
+			break;
+		}
+		if (diagnosticsReceived) return true;
+		::poll(nullptr, 0, 20);
+	}
+	postLspWarning("LSP diagnostics for current editor state not received yet.");
+	if (!g_lspAppService.results().diagnosticResults().empty()) return true;
+	if (!g_lspAppService.results().locationResults().empty()) return true;
+	if (!g_lspAppService.results().hoverResults().empty()) return true;
+	if (!g_lspAppService.results().completionResults().empty()) return true;
+	return false;
+}
+
+MREditWindow *findOpenLspTargetWindow(const std::string &path) {
+	const std::string normalizedTarget = mr::services::normalizeWorkspaceServicePath(path);
+	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+
+	for (MREditWindow *window : windows) {
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+
+		if (editor == nullptr || !editor->hasPersistentFileName()) continue;
+		if (mr::services::normalizeWorkspaceServicePath(editor->persistentFileName()) == normalizedTarget) return window;
+	}
+	return nullptr;
+}
+
+bool lspVisualColumnForTarget(MRFileEditor &editor, const mr::services::MRServiceTextPosition &position, int &visualColumn);
+bool lspTextOffsetForPosition(const std::string &text, const mr::services::MRServiceTextPosition &position, std::size_t &offset);
+
+std::string lspIdentifierAtOffset(const std::string &text, std::size_t offset) {
+	std::size_t start = std::min(offset, text.size());
+	std::size_t end = start;
+
+	if (start == text.size() || !lspIdentifierByte(text[start])) {
+		if (start == 0 || !lspIdentifierByte(text[start - 1])) return std::string();
+		--start;
+	}
+	while (start > 0 && lspIdentifierByte(text[start - 1]))
+		--start;
+	end = start;
+	while (end < text.size() && lspIdentifierByte(text[end]))
+		++end;
+	return text.substr(start, end - start);
+}
+
+bool navigateToLspLocation(const mr::services::MRServiceLocationTarget &target, std::string &errorMessage) {
+	MREditWindow *window = nullptr;
+	MRFileEditor *editor = nullptr;
+	std::size_t line = 0;
+	int column = 0;
+
+	if (target.path.empty()) {
+		errorMessage = "LSP target path is empty.";
+		return false;
+	}
+
+	window = findOpenLspTargetWindow(target.path);
+	if (window == nullptr) {
+		window = createEditorWindow(target.path.c_str());
+		if (window == nullptr) {
+			errorMessage = "Unable to create editor window.";
+			return false;
+		}
+		if (!loadResolvedFileIntoWindow(window, target.path, "LSP definition load")) {
+			message(window, evCommand, cmClose, nullptr);
+			errorMessage = "Unable to load LSP target: " + target.path;
+			return false;
+		}
+	}
+
+	editor = window->getEditor();
+	if (editor == nullptr) {
+		errorMessage = "LSP target window has no editor.";
+		return false;
+	}
+
+	if (target.range.start.line > 0) line = static_cast<std::size_t>(target.range.start.line);
+	if (!lspVisualColumnForTarget(*editor, target.range.start, column) && target.range.start.character > 0) column = target.range.start.character;
+	editor->moveCursorToDocumentLineTop(line, column);
+	editor->revealCursor(True);
+	static_cast<void>(mrActivateEditWindow(window));
+	errorMessage.clear();
+	return true;
+}
+
+std::string lspLocationDisplayText(const mr::services::MRServiceLocationTarget &target) {
+	std::ostringstream line;
+	int visualColumn = target.range.start.character;
+
+	if (!target.path.empty()) {
+		MREditWindow *window = findOpenLspTargetWindow(target.path);
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+
+		if (editor != nullptr) static_cast<void>(lspVisualColumnForTarget(*editor, target.range.start, visualColumn));
+	}
+	line << (target.range.start.line + 1) << ":" << (visualColumn + 1) << " ";
+	line << (!target.path.empty() ? target.path : target.uri);
+	return line.str();
+}
+
+bool lspLocationContainsPosition(const mr::services::MRServiceLocationTarget &target, const std::string &path, const mr::services::MRServiceTextPosition &position) {
+	if (target.path.empty() || mr::services::normalizeWorkspaceServicePath(target.path) != mr::services::normalizeWorkspaceServicePath(path)) return false;
+	if (position.line < target.range.start.line || position.line > target.range.end.line) return false;
+	if (position.line == target.range.start.line && position.character < target.range.start.character) return false;
+	if (position.line == target.range.end.line && position.character > target.range.end.character) return false;
+	return true;
+}
+
+bool lspLocationMatchesDocumentSymbol(const mr::services::MRServiceLocationTarget &target, const std::string &path, const std::string &symbol) {
+	MREditWindow *window = nullptr;
+	MRFileEditor *editor = nullptr;
+	std::size_t offset = 0;
+	std::string text;
+
+	if (symbol.empty()) return true;
+	if (target.path.empty() || mr::services::normalizeWorkspaceServicePath(target.path) != mr::services::normalizeWorkspaceServicePath(path)) return true;
+	window = findOpenLspTargetWindow(target.path);
+	editor = window != nullptr ? window->getEditor() : nullptr;
+	if (editor == nullptr) return true;
+	text = editor->snapshotText();
+	if (!lspTextOffsetForPosition(text, target.range.start, offset)) return false;
+	return lspIdentifierAtOffset(text, offset) == symbol;
+}
+
+MREditWindow *findLspDiagnosticTargetWindow(const mr::services::MRServiceDocumentIdentity &identity) {
+	if (identity.bufferId != 0) {
+		MREditWindow *window = findEditWindowByBufferId(identity.bufferId);
+
+		if (window != nullptr) return window;
+	}
+	if (!identity.path.empty()) return findOpenLspTargetWindow(identity.path);
+	return nullptr;
+}
+
+bool lspServiceResultMatchesEditor(const mr::services::MRServiceResultHeader &header, const MRFileEditor &editor) noexcept {
+	if (header.state != mr::services::MRServiceResultState::Current) return false;
+	if (header.identity.documentId != editor.documentId()) return false;
+	if (header.identity.documentVersion != editor.documentVersion()) return false;
+	return true;
+}
+
+void appendLspDiagnosticInformationRange(const std::string &text, const mr::services::MRServiceTextRange &range, std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
+	std::size_t start = 0;
+	std::size_t end = 0;
+
+	if (!lspTextOffsetForPosition(text, range.start, start)) return;
+	if (!lspTextOffsetForPosition(text, range.end, end)) return;
+	ranges.push_back(std::make_pair(start, end));
+}
+
+void applyLspDiagnosticInformationRanges(const mr::services::MRServiceDocumentIdentity &identity) {
+	MREditWindow *window = findLspDiagnosticTargetWindow(identity);
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	std::vector<std::pair<std::size_t, std::size_t>> ranges;
+	std::string text;
+
+	if (editor == nullptr) return;
+	if (identity.documentId != editor->documentId()) return;
+	if (identity.documentVersion != editor->documentVersion()) return;
+	text = editor->snapshotText();
+	for (const mr::services::MRServiceDiagnosticResult &result : g_lspAppService.results().diagnosticResults()) {
+		if (!lspServiceResultMatchesEditor(result.header, *editor)) continue;
+		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics)
+			appendLspDiagnosticInformationRange(text, diagnostic.reportedRange, ranges);
+	}
+	if (ranges.empty())
+		editor->clearLspDiagnosticInformationRanges();
+	else
+		editor->setLspDiagnosticInformationRanges(ranges);
+}
+
+std::vector<mr::services::MRServiceLocationTarget> lspReferenceDialogLocations(const mr::services::MRServiceLocationResult &result) {
+	MREditWindow *window = currentEditorCommandWindow();
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	std::vector<mr::services::MRServiceLocationTarget> locations;
+	mr::services::MRServiceTextPosition currentPosition;
+	std::string currentPath;
+	std::string currentSymbol;
+
+	if (editor != nullptr && editor->hasPersistentFileName()) {
+		std::size_t currentOffset = 0;
+		const std::string currentText = editor->snapshotText();
+
+		currentPath = editor->persistentFileName();
+		currentPosition = serviceTextPositionFromLsp(currentLspTextPosition(*editor));
+		if (lspTextOffsetForPosition(currentText, currentPosition, currentOffset)) currentSymbol = lspIdentifierAtOffset(currentText, currentOffset);
+	}
+	locations.reserve(result.locations.size());
+	for (const mr::services::MRServiceLocationTarget &target : result.locations) {
+		if (!currentPath.empty() && lspLocationContainsPosition(target, currentPath, currentPosition)) continue;
+		if (!currentPath.empty() && !lspLocationMatchesDocumentSymbol(target, currentPath, currentSymbol)) continue;
+		locations.push_back(target);
+	}
+	return locations;
+}
+
+class LspReferencesListView final : public TListViewer {
+  public:
+	LspReferencesListView(const TRect &bounds, TScrollBar *scrollBar, const std::vector<mr::services::MRServiceLocationTarget> &locations) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), locations(locations) {
+		const std::size_t visibleCount = std::min<std::size_t>(locations.size(), static_cast<std::size_t>(std::numeric_limits<short>::max()));
+
+		setRange(static_cast<short>(visibleCount));
+	}
+
+	void getText(char *dest, short item, short maxLen) override {
+		std::string text;
+
+		if (dest == nullptr || maxLen <= 0) return;
+		if (item < 0 || static_cast<std::size_t>(item) >= locations.size()) {
+			dest[0] = EOS;
+			return;
+		}
+
+		text = firstDisplayLine(lspLocationDisplayText(locations[static_cast<std::size_t>(item)]), static_cast<std::size_t>(std::max<short>(0, maxLen - 1)));
+		std::strncpy(dest, text.c_str(), static_cast<std::size_t>(maxLen - 1));
+		dest[maxLen - 1] = EOS;
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			if (target != nullptr) message(target, evCommand, cmOK, this);
+			clearEvent(event);
+			return;
+		}
+		TListViewer::handleEvent(event);
+	}
+
+	void selectItem(short item) override {
+		if (item >= 0 && static_cast<std::size_t>(item) < locations.size()) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			focusItemNum(item);
+			if (target != nullptr) message(target, evCommand, cmOK, this);
+		}
+	}
+
+	[[nodiscard]] bool selectedIndex(std::size_t &index) const noexcept {
+		if (focused < 0 || static_cast<std::size_t>(focused) >= locations.size()) return false;
+		index = static_cast<std::size_t>(focused);
+		return true;
+	}
+
+  private:
+	const std::vector<mr::services::MRServiceLocationTarget> &locations;
+};
+
+enum class LspResultDialogAction : unsigned char {
+	None = 0,
+	NavigateLocation,
+	ShowHover,
+	ApplyCodeAction
+};
+
+struct LspResultDialogRow {
+	std::string text;
+	LspResultDialogAction action = LspResultDialogAction::None;
+	mr::services::MRServiceLocationTarget location;
+	mr::services::MRServiceHoverResult hover;
+	const mr::services::MRServiceCodeActionResult *codeActionResult = nullptr;
+	const mr::services::MRServiceCodeActionItem *codeActionItem = nullptr;
+};
+
+const char *lspResultStateText(mr::services::MRServiceResultState state) noexcept {
+	switch (state) {
+		case mr::services::MRServiceResultState::Current:
+			return "current";
+		case mr::services::MRServiceResultState::Stale:
+			return "stale";
+		case mr::services::MRServiceResultState::Rejected:
+			return "rejected";
+		case mr::services::MRServiceResultState::Error:
+			return "error";
+	}
+	return "unknown";
+}
+
+const char *lspDiagnosticSeverityText(int severity) noexcept {
+	switch (severity) {
+		case 1:
+			return "error";
+		case 2:
+			return "warning";
+		case 3:
+			return "info";
+		case 4:
+			return "hint";
+	}
+	return "diagnostic";
+}
+
+class LspResultsListView final : public TListViewer {
+  public:
+	LspResultsListView(const TRect &bounds, TScrollBar *scrollBar, const std::vector<LspResultDialogRow> &rows) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), rows(rows) {
+		const std::size_t visibleCount = std::min<std::size_t>(rows.size(), static_cast<std::size_t>(std::numeric_limits<short>::max()));
+
+		setRange(static_cast<short>(visibleCount));
+	}
+
+	void getText(char *dest, short item, short maxLen) override {
+		std::string text;
+
+		if (dest == nullptr || maxLen <= 0) return;
+		if (item < 0 || static_cast<std::size_t>(item) >= rows.size()) {
+			dest[0] = EOS;
+			return;
+		}
+
+		text = firstDisplayLine(rows[static_cast<std::size_t>(item)].text, static_cast<std::size_t>(std::max<short>(0, maxLen - 1)));
+		std::strncpy(dest, text.c_str(), static_cast<std::size_t>(maxLen - 1));
+		dest[maxLen - 1] = EOS;
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			if (target != nullptr) message(target, evCommand, cmOK, this);
+			clearEvent(event);
+			return;
+		}
+		TListViewer::handleEvent(event);
+	}
+
+	void selectItem(short item) override {
+		if (item >= 0 && static_cast<std::size_t>(item) < rows.size()) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			focusItemNum(item);
+			if (target != nullptr) message(target, evCommand, cmOK, this);
+		}
+	}
+
+	[[nodiscard]] bool selectedIndex(std::size_t &index) const noexcept {
+		if (focused < 0 || static_cast<std::size_t>(focused) >= rows.size()) return false;
+		index = static_cast<std::size_t>(focused);
+		return true;
+	}
+
+  private:
+	const std::vector<LspResultDialogRow> &rows;
+};
+
+class LspCompletionListView final : public TListViewer {
+  public:
+	LspCompletionListView(const TRect &bounds, TScrollBar *scrollBar, const std::vector<mr::services::MRServiceCompletionItem> &items) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), items(items) {
+		const std::size_t visibleCount = std::min<std::size_t>(items.size(), static_cast<std::size_t>(std::numeric_limits<short>::max()));
+
+		setRange(static_cast<short>(visibleCount));
+	}
+
+	void getText(char *dest, short item, short maxLen) override {
+		std::string text;
+		const mr::services::MRServiceCompletionItem *completionItem = nullptr;
+
+		if (dest == nullptr || maxLen <= 0) return;
+		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) {
+			dest[0] = EOS;
+			return;
+		}
+
+		completionItem = &items[static_cast<std::size_t>(item)];
+		text = completionItem->label;
+		if (!completionItem->detail.empty()) text += " - " + completionItem->detail;
+		text = firstDisplayLine(text, static_cast<std::size_t>(std::max<short>(0, maxLen - 1)));
+		std::strncpy(dest, text.c_str(), static_cast<std::size_t>(maxLen - 1));
+		dest[maxLen - 1] = EOS;
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			if (target != nullptr) message(target, evCommand, cmOK, this);
+			clearEvent(event);
+			return;
+		}
+		TListViewer::handleEvent(event);
+	}
+
+	void selectItem(short item) override {
+		if (item >= 0 && static_cast<std::size_t>(item) < items.size()) {
+			TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+			focusItemNum(item);
+			if (target != nullptr) message(target, evCommand, cmOK, this);
+		}
+	}
+
+	[[nodiscard]] bool selectedIndex(std::size_t &index) const noexcept {
+		if (focused < 0 || static_cast<std::size_t>(focused) >= items.size()) return false;
+		index = static_cast<std::size_t>(focused);
+		return true;
+	}
+
+  private:
+	const std::vector<mr::services::MRServiceCompletionItem> &items;
+};
+
+struct LspResolvedTextEdit {
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::string text;
+};
+
+struct LspMiniMenuEntry {
+	std::string title;
+	ushort command = 0;
+	bool editSubmenu = false;
+};
+
+bool lspCodeActionEditTargetsCurrentDocument(const mr::services::MRServiceCodeActionItem &item, const mr::services::MRServiceDocumentIdentity &identity) {
+	if (!item.hasEdit || item.edits.empty()) return false;
+	if (identity.path.empty()) return false;
+	for (const mr::services::MRServiceTextEdit &edit : item.edits) {
+		if (edit.path.empty()) return false;
+		if (edit.path != identity.path) return false;
+	}
+	return true;
+}
+
+bool lspTextOffsetForPosition(const std::string &text, const mr::services::MRServiceTextPosition &position, std::size_t &offset) {
+	std::size_t line = 0;
+	std::size_t lineStart = 0;
+	std::size_t lineEnd = 0;
+
+	offset = 0;
+	if (position.line < 0 || position.character < 0) return false;
+	while (line < static_cast<std::size_t>(position.line)) {
+		const std::size_t nextBreak = text.find('\n', lineStart);
+
+		if (nextBreak == std::string::npos) return false;
+		lineStart = nextBreak + 1;
+		++line;
+	}
+	lineEnd = text.find('\n', lineStart);
+	if (lineEnd == std::string::npos) lineEnd = text.size();
+	if (static_cast<std::size_t>(position.character) > lineEnd - lineStart) return false;
+	offset = lineStart + static_cast<std::size_t>(position.character);
+	return true;
+}
+
+bool lspVisualColumnForTarget(MRFileEditor &editor, const mr::services::MRServiceTextPosition &position, int &visualColumn) {
+	std::size_t offset = 0;
+	const std::string currentText = editor.snapshotText();
+
+	if (!lspTextOffsetForPosition(currentText, position, offset)) return false;
+	visualColumn = editor.charColumn(editor.lineStartOffset(offset), offset);
+	return true;
+}
+
+bool applyLspCodeActionEdits(MRFileEditor &editor, const mr::services::MRServiceCodeActionResult &result, const mr::services::MRServiceCodeActionItem &item, std::string &errorMessage) {
+	std::vector<LspResolvedTextEdit> resolvedEdits;
+	const std::string currentText = editor.snapshotText();
+
+	if (result.header.state != mr::services::MRServiceResultState::Current) {
+		errorMessage = "LSP code action result is not current.";
+		return false;
+	}
+	if (result.header.identity.documentVersion != editor.documentVersion()) {
+		errorMessage = "LSP code action belongs to an older document version.";
+		return false;
+	}
+	if (!lspCodeActionEditTargetsCurrentDocument(item, result.header.identity)) {
+		errorMessage = "LSP code action has no applicable same-document edit.";
+		return false;
+	}
+	for (const mr::services::MRServiceTextEdit &edit : item.edits) {
+		LspResolvedTextEdit resolved;
+
+		if (!lspTextOffsetForPosition(currentText, edit.range.start, resolved.start) || !lspTextOffsetForPosition(currentText, edit.range.end, resolved.end)) {
+			errorMessage = "LSP code action edit range is outside the document.";
+			return false;
+		}
+		if (resolved.end < resolved.start) {
+			errorMessage = "LSP code action edit range is reversed.";
+			return false;
+		}
+		resolved.text = edit.newText;
+		resolvedEdits.push_back(resolved);
+	}
+	std::sort(resolvedEdits.begin(), resolvedEdits.end(), [](const LspResolvedTextEdit &left, const LspResolvedTextEdit &right) {
+		if (left.start != right.start) return left.start < right.start;
+		return left.end < right.end;
+	});
+	for (std::size_t i = 1; i < resolvedEdits.size(); ++i) {
+		if (resolvedEdits[i].start < resolvedEdits[i - 1].end) {
+			errorMessage = "LSP code action edits overlap.";
+			return false;
+		}
+	}
+	for (std::size_t i = resolvedEdits.size(); i > 0; --i) {
+		const LspResolvedTextEdit &edit = resolvedEdits[i - 1];
+
+		if (edit.start > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || edit.end > static_cast<std::size_t>(std::numeric_limits<uint>::max())) {
+			errorMessage = "LSP code action edit range is too large.";
+			return false;
+		}
+		if (!editor.replaceRangeAndSelect(static_cast<uint>(edit.start), static_cast<uint>(edit.end), edit.text.data(), static_cast<uint>(edit.text.size()))) {
+			errorMessage = "LSP code action editor replace failed.";
+			return false;
+		}
+	}
+	errorMessage.clear();
+	return true;
+}
+
+bool showLspReferencesDialog(const mr::services::MRServiceLocationResult &result) {
+	MRDialogFoundation *dialog = nullptr;
+	TScrollBar *scrollBar = nullptr;
+	LspReferencesListView *listView = nullptr;
+	ushort dialogResult = cmCancel;
+	std::size_t selectedIndex = 0;
+	mr::services::MRServiceLocationTarget target;
+	std::string navigationError;
+	const std::vector<mr::services::MRServiceLocationTarget> locations = lspReferenceDialogLocations(result);
+	const int visibleRows = std::max<int>(4, std::min<int>(static_cast<int>(locations.size()), 12));
+	const short width = 96;
+	const short height = static_cast<short>(visibleRows + 6);
+	const short buttonY = static_cast<short>(height - 3);
+
+	if (TProgram::deskTop == nullptr) return false;
+	if (locations.empty()) {
+		postLspWarning("LSP references: no references found.");
+		return true;
+	}
+
+	dialog = mr::dialogs::createScrollableDialog("LSP REFERENCES", width, height);
+	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select reference:"));
+	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+	dialog->insert(scrollBar);
+	listView = new LspReferencesListView(TRect(2, 2, width - 3, height - 4), scrollBar, locations);
+	dialog->insert(listView);
+	{
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
+	}
+	dialog->setDialogValidationHook([listView]() {
+		MRScrollableDialog::DialogValidationResult validation;
+		std::size_t selected = 0;
+
+		validation.valid = listView != nullptr && listView->selectedIndex(selected);
+		if (!validation.valid) validation.warningText = "Select a reference.";
+		return validation;
+	});
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < locations.size()) target = locations[selectedIndex];
+	else
+		target = mr::services::MRServiceLocationTarget();
+	TObject::destroy(dialog);
+
+	if (target.path.empty() && target.uri.empty()) return true;
+	if (!navigateToLspLocation(target, navigationError)) postLspWarning("LSP references navigation failed: " + navigationError);
+	return true;
+}
+
+std::vector<std::string> buildLspHoverDisplayLines(const std::string &text, std::size_t width, std::size_t maxLines) {
+	std::vector<std::string> lines;
+	std::string sanitized;
+	std::size_t paragraphStart = 0;
+	bool truncated = false;
+
+	if (width == 0 || maxLines == 0) return lines;
+	sanitized.reserve(text.size());
+	for (char ch : text) {
+		unsigned char uch = static_cast<unsigned char>(ch);
+
+		if (ch == '\r') continue;
+		if (ch == '\t') sanitized.push_back(' ');
+		else if (ch == '\n')
+			sanitized.push_back('\n');
+		else if (uch < 32)
+			sanitized.push_back(' ');
+		else
+			sanitized.push_back(ch);
+	}
+
+	while (paragraphStart <= sanitized.size() && lines.size() < maxLines) {
+		std::size_t paragraphEnd = sanitized.find('\n', paragraphStart);
+		std::string paragraph;
+
+		if (paragraphEnd == std::string::npos) paragraphEnd = sanitized.size();
+		paragraph = sanitized.substr(paragraphStart, paragraphEnd - paragraphStart);
+		while (!paragraph.empty() && paragraph.front() == ' ')
+			paragraph.erase(paragraph.begin());
+		while (!paragraph.empty() && lines.size() < maxLines) {
+			std::size_t take = std::min(width, paragraph.size());
+			std::size_t breakPos = paragraph.rfind(' ', take);
+
+			if (take < paragraph.size() && breakPos != std::string::npos && breakPos > 0) take = breakPos;
+			lines.push_back(paragraph.substr(0, take));
+			paragraph.erase(0, take);
+			while (!paragraph.empty() && paragraph.front() == ' ')
+				paragraph.erase(paragraph.begin());
+		}
+		if (paragraph.empty() && paragraphStart < sanitized.size() && lines.size() < maxLines && paragraphEnd == paragraphStart) lines.push_back(std::string());
+		if (paragraphEnd == sanitized.size()) break;
+		paragraphStart = paragraphEnd + 1;
+	}
+	if (paragraphStart < sanitized.size() && lines.size() >= maxLines) truncated = true;
+	if (truncated && !lines.empty()) {
+		std::string &last = lines.back();
+
+		if (last.size() + 3 <= width) last += "...";
+		else if (width >= 3)
+			last = last.substr(0, width - 3) + "...";
+	}
+	return lines;
+}
+
+std::string lspHoverStripInlineMarkdown(const std::string &line) {
+	std::string cleaned;
+
+	cleaned.reserve(line.size());
+	for (std::size_t i = 0; i < line.size(); ++i) {
+		const char ch = line[i];
+
+		if (ch == '`' || ch == '*') continue;
+		cleaned.push_back(ch);
+	}
+	return trimAscii(cleaned);
+}
+
+std::string lspHoverPlainText(const std::string &text) {
+	std::istringstream input(text);
+	std::ostringstream output;
+	std::string line;
+	bool inFence = false;
+	bool previousBlank = true;
+
+	while (std::getline(input, line)) {
+		std::string trimmed = trimAscii(line);
+
+		if (trimmed.rfind("```", 0) == 0 || trimmed.rfind("~~~", 0) == 0) {
+			inFence = !inFence;
+			continue;
+		}
+		if (!inFence && (trimmed == "---" || trimmed == "***")) continue;
+		while (!trimmed.empty() && trimmed[0] == '#')
+			trimmed.erase(trimmed.begin());
+		trimmed = lspHoverStripInlineMarkdown(trimmed);
+		if (trimmed.empty()) {
+			if (!previousBlank) output << '\n';
+			previousBlank = true;
+			continue;
+		}
+		if (!previousBlank) output << '\n';
+		output << trimmed;
+		previousBlank = false;
+	}
+	return output.str();
+}
+
+std::string buildLspHoverSidekickText(const mr::services::MRServiceHoverResult &result) {
+	std::vector<std::string> lines;
+	const std::size_t textWidth = 72;
+	const std::size_t maxLines = 12;
+	std::ostringstream text;
+
+	lines = buildLspHoverDisplayLines(lspHoverPlainText(result.hover.value), textWidth, maxLines);
+	for (std::size_t i = 0; i < lines.size(); ++i) {
+		if (i != 0) text << '\n';
+		text << lines[i];
+	}
+	return text.str();
+}
+
+std::string buildLspDiagnosticSidekickText(const mr::services::MRLspPositionServiceSnapshot &snapshot) {
+	std::ostringstream text;
+	std::size_t count = 0;
+
+	for (const mr::services::MRServiceDiagnosticResult &result : snapshot.results.diagnostics) {
+		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics) {
+			if (count != 0) text << '\n';
+			text << lspDiagnosticSeverityText(diagnostic.severity) << " ";
+			text << (diagnostic.reportedRange.start.line + 1) << ":" << (diagnostic.reportedRange.start.character + 1);
+			text << " - " << firstDisplayLine(diagnostic.message, 72);
+			++count;
+			if (count >= 4) return text.str();
+		}
+	}
+	return text.str();
+}
+
+bool lspDiagnosticSidekickAnchor(const mr::services::MRLspPositionServiceSnapshot &snapshot, MRFileEditor &editor, int &viewColumn, int &viewRow) {
+	const std::string currentText = editor.snapshotText();
+
+	for (const mr::services::MRServiceDiagnosticResult &result : snapshot.results.diagnostics) {
+		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics) {
+			std::size_t offset = 0;
+
+			if (!lspTextOffsetForPosition(currentText, diagnostic.reportedRange.start, offset)) continue;
+			const std::size_t lineStart = editor.lineStartOffset(offset);
+			const std::size_t lineIndex = editor.lineIndexOfOffset(offset);
+			const std::size_t visibleLine = editor.visibleLineForDocumentLine(lineIndex);
+			viewColumn = editor.charColumn(lineStart, offset) - editor.delta.x + 1;
+			viewRow = static_cast<int>(visibleLine) - editor.delta.y + 1;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool currentWindowMatchesLspHoverResult(MREditWindow *win, const mr::services::MRServiceHoverResult &result) {
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	const mr::services::MRServiceDocumentIdentity &identity = result.header.identity;
+
+	if (win == nullptr) return false;
+	if (!buildLspDocumentSnapshotForWindow(win, document, false)) return false;
+	if (identity.bufferId != 0 && identity.bufferId != document.bufferId) return false;
+	if (!identity.path.empty() && mr::services::normalizeWorkspaceServicePath(identity.path) != mr::services::normalizeWorkspaceServicePath(document.path)) return false;
+	if (identity.documentId != 0 && document.documentId != 0 && identity.documentId != document.documentId) return false;
+	if (identity.documentVersion != document.documentVersion) return false;
+	return true;
+}
+
+bool lspHoverResultBelongsToRetiredAutoHover(const mr::services::MRServiceHoverResult &result) {
+	if (result.header.requestId.empty() || result.header.requestId != g_lspAutoHover.retiredRequestId) return false;
+	g_lspAutoHover.retiredRequestId.clear();
+	return true;
+}
+
+bool lspHoverResultMatchesPendingAutoHover(const mr::services::MRServiceHoverResult &result) {
+	if (!g_lspAutoHover.requested) return false;
+	if (g_lspAutoHover.requestId.empty() || result.header.requestId != g_lspAutoHover.requestId) return false;
+	if (result.header.identity.bufferId != 0 && g_lspAutoHover.bufferId != 0 && result.header.identity.bufferId != g_lspAutoHover.bufferId) return false;
+	if (result.header.identity.documentId != 0 && g_lspAutoHover.documentId != 0 && result.header.identity.documentId != g_lspAutoHover.documentId) return false;
+	if (result.header.identity.documentVersion != g_lspAutoHover.documentVersion) return false;
+	g_lspAutoHover.requested = false;
+	g_lspAutoHover.requestId.clear();
+	return true;
+}
+
+bool lspHoverTargetForResult(const mr::services::MRServiceHoverResult &result, MREditWindow *win, LspEditorRequestTarget &target) {
+	if (win == nullptr) return false;
+	if (result.header.requestId.empty() || result.header.requestId != g_lspHoverViewAnchor.requestId) return false;
+	if (g_lspHoverViewAnchor.bufferId != 0 && win->bufferId() != g_lspHoverViewAnchor.bufferId) return false;
+	if (result.header.identity.documentVersion != 0 && g_lspHoverViewAnchor.documentVersion != result.header.identity.documentVersion) return false;
+	target = g_lspHoverViewAnchor.target;
+	return true;
+}
+
+bool currentWindowMatchesLspSignatureHelpResult(MREditWindow *win, const mr::services::MRServiceSignatureHelpResult &result) {
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	const mr::services::MRServiceDocumentIdentity &identity = result.header.identity;
+
+	if (win == nullptr) return false;
+	if (!buildLspDocumentSnapshotForWindow(win, document, false)) return false;
+	if (identity.bufferId != 0 && identity.bufferId != document.bufferId) return false;
+	if (!identity.path.empty() && mr::services::normalizeWorkspaceServicePath(identity.path) != mr::services::normalizeWorkspaceServicePath(document.path)) return false;
+	if (identity.documentId != 0 && document.documentId != 0 && identity.documentId != document.documentId) return false;
+	if (identity.documentVersion != document.documentVersion) return false;
+	return true;
+}
+
+bool lspSignatureHelpTargetForResult(const mr::services::MRServiceSignatureHelpResult &result, MREditWindow *win, LspEditorRequestTarget &target) {
+	if (win == nullptr) return false;
+	if (result.header.requestId.empty() || result.header.requestId != g_lspSignatureHelpViewAnchor.requestId) return false;
+	if (g_lspSignatureHelpViewAnchor.bufferId != 0 && win->bufferId() != g_lspSignatureHelpViewAnchor.bufferId) return false;
+	if (result.header.identity.documentVersion != 0 && g_lspSignatureHelpViewAnchor.documentVersion != result.header.identity.documentVersion) return false;
+	target = g_lspSignatureHelpViewAnchor.target;
+	return true;
+}
+
+std::string buildLspSignatureHelpSidekickText(const mr::services::MRServiceSignatureHelpResult &result) {
+	std::vector<std::string> lines;
+	const std::size_t textWidth = 72;
+	const std::size_t maxLines = 8;
+	std::ostringstream rawText;
+	std::ostringstream text;
+
+	if (result.activeSignature < 0 || static_cast<std::size_t>(result.activeSignature) >= result.signatures.size()) return std::string();
+	const mr::services::MRServiceSignatureInformation &signature = result.signatures[static_cast<std::size_t>(result.activeSignature)];
+	rawText << signature.label;
+	if (result.activeParameter >= 0 && static_cast<std::size_t>(result.activeParameter) < signature.parameters.size()) rawText << "\nparameter: " << signature.parameters[static_cast<std::size_t>(result.activeParameter)].label;
+	if (!signature.documentation.empty()) rawText << "\n" << signature.documentation;
+	lines = buildLspHoverDisplayLines(lspHoverPlainText(rawText.str()), textWidth, maxLines);
+	for (std::size_t i = 0; i < lines.size(); ++i) {
+		if (i != 0) text << '\n';
+		text << lines[i];
+	}
+	return text.str();
+}
+
+bool showLspHoverSidekick(const mr::services::MRServiceHoverResult &result) {
+	MREditWindow *win = currentEditorCommandWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	LspEditorRequestTarget target;
+	std::string text;
+	int anchorViewColumn = 1;
+	int anchorViewRow = 1;
+	int preferredViewColumn = 1;
+
+	if (TProgram::deskTop == nullptr || editor == nullptr) return false;
+	if (!currentWindowMatchesLspHoverResult(win, result)) return false;
+	if (!lspHoverTargetForResult(result, win, target)) return false;
+	anchorViewColumn = target.viewColumn;
+	anchorViewRow = target.viewRow;
+	if (buildLspDocumentSnapshotForWindow(win, document, false)) {
+		const mr::services::MRLspPositionServiceSnapshot snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(target.position));
+
+		if (!snapshot.results.diagnostics.empty()) {
+			text = buildLspDiagnosticSidekickText(snapshot);
+			if (!text.empty()) static_cast<void>(lspDiagnosticSidekickAnchor(snapshot, *editor, anchorViewColumn, anchorViewRow));
+		}
+	}
+	if (text.empty()) text = buildLspHoverSidekickText(result);
+	if (text.empty()) {
+		postLspWarning("LSP hover: empty hover.");
+		return true;
+	}
+	preferredViewColumn = anchorViewColumn;
+	if (mrOpenReadOnlySidekickAt(win, text, "LSP hover", anchorViewColumn, anchorViewRow, preferredViewColumn, configuredLspReadOnlySidekickPlacement())) {
+		g_lspAutoHover.sidekickOpen = true;
+		g_lspAutoHover.bufferId = win->bufferId();
+		return true;
+	}
+	return false;
+}
+
+bool showLspSignatureHelpSidekick(const mr::services::MRServiceSignatureHelpResult &result) {
+	MREditWindow *win = currentEditorCommandWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	LspEditorRequestTarget target;
+	const std::string text = buildLspSignatureHelpSidekickText(result);
+	int anchorViewColumn = 1;
+	int anchorViewRow = 1;
+	int preferredViewColumn = 1;
+
+	if (TProgram::deskTop == nullptr || editor == nullptr) return false;
+	if (!currentWindowMatchesLspSignatureHelpResult(win, result)) return false;
+	if (!lspSignatureHelpTargetForResult(result, win, target)) return false;
+	if (text.empty()) {
+		postLspWarning("LSP signature help: no signature.");
+		return true;
+	}
+	anchorViewColumn = target.viewColumn;
+	anchorViewRow = target.viewRow;
+	preferredViewColumn = anchorViewColumn;
+	return mrOpenReadOnlySidekickAt(win, text, "LSP signature", anchorViewColumn, anchorViewRow, preferredViewColumn, configuredLspReadOnlySidekickPlacement());
+}
+
+MREditWindow *findLspCompletionTargetWindow(const mr::services::MRServiceCompletionResult &result) {
+	MREditWindow *window = nullptr;
+
+	if (result.header.identity.bufferId != 0) {
+		window = findEditWindowByBufferId(result.header.identity.bufferId);
+		if (window != nullptr) return window;
+	}
+	if (!result.header.identity.path.empty()) return findOpenLspTargetWindow(result.header.identity.path);
+	return nullptr;
+}
+
+std::size_t lspSnippetPlaceholderEnd(const std::string &snippet, std::size_t openBrace) {
+	int depth = 0;
+	bool escaped = false;
+
+	for (std::size_t pos = openBrace; pos < snippet.size(); ++pos) {
+		const char ch = snippet[pos];
+
+		if (escaped) {
+			escaped = false;
+			continue;
+		}
+		if (ch == '\\') {
+			escaped = true;
+			continue;
+		}
+		if (ch == '{') {
+			++depth;
+			continue;
+		}
+		if (ch == '}') {
+			--depth;
+			if (depth == 0) return pos;
+		}
+	}
+	return std::string::npos;
+}
+
+bool lspSnippetNumberAt(const std::string &snippet, std::size_t &pos) {
+	const std::size_t start = pos;
+
+	while (pos < snippet.size() && snippet[pos] >= '0' && snippet[pos] <= '9')
+		++pos;
+	return pos > start;
+}
+
+std::string lspCompletionPlainTextFromSnippet(const std::string &snippet) {
+	std::string text;
+
+	for (std::size_t pos = 0; pos < snippet.size();) {
+		const char ch = snippet[pos];
+
+		if (ch == '\\' && pos + 1 < snippet.size()) {
+			text.push_back(snippet[pos + 1]);
+			pos += 2;
+			continue;
+		}
+		if (ch != '$') {
+			text.push_back(ch);
+			++pos;
+			continue;
+		}
+		if (pos + 1 >= snippet.size()) {
+			text.push_back(ch);
+			++pos;
+			continue;
+		}
+		if (snippet[pos + 1] >= '0' && snippet[pos + 1] <= '9') {
+			pos += 2;
+			while (pos < snippet.size() && snippet[pos] >= '0' && snippet[pos] <= '9')
+				++pos;
+			continue;
+		}
+		if (snippet[pos + 1] != '{') {
+			text.push_back(ch);
+			++pos;
+			continue;
+		}
+		const std::size_t close = lspSnippetPlaceholderEnd(snippet, pos + 1);
+		std::size_t bodyStart = pos + 2;
+		std::size_t bodyPos = bodyStart;
+
+		if (close == std::string::npos) {
+			text.push_back(ch);
+			++pos;
+			continue;
+		}
+		if (lspSnippetNumberAt(snippet, bodyPos) && bodyPos < close && snippet[bodyPos] == ':') {
+			text += lspCompletionPlainTextFromSnippet(snippet.substr(bodyPos + 1, close - bodyPos - 1));
+		} else if (lspSnippetNumberAt(snippet, bodyPos) && bodyPos < close && snippet[bodyPos] == '|') {
+			const std::size_t choiceStart = bodyPos + 1;
+			std::size_t choiceEnd = choiceStart;
+
+			while (choiceEnd < close && snippet[choiceEnd] != ',' && snippet[choiceEnd] != '|')
+				++choiceEnd;
+			text += lspCompletionPlainTextFromSnippet(snippet.substr(choiceStart, choiceEnd - choiceStart));
+		} else if (!lspSnippetNumberAt(snippet, bodyStart)) {
+			text += lspCompletionPlainTextFromSnippet(snippet.substr(bodyStart, close - bodyStart));
+		}
+		pos = close + 1;
+	}
+	return text;
+}
+
+std::string lspCompletionInsertTextForItem(const mr::services::MRServiceCompletionItem &item) {
+	const std::string rawText = !item.insertText.empty() ? item.insertText : item.label;
+
+	if (item.hasInsertTextFormat && item.insertTextFormat == 2) return lspCompletionPlainTextFromSnippet(rawText);
+	return rawText;
+}
+
+std::string lspCompletionReplacementTextForItem(const mr::services::MRServiceCompletionItem &item) {
+	const std::string rawText = item.textEditNewText;
+
+	if (!item.hasTextEdit) return lspCompletionInsertTextForItem(item);
+	if (item.hasInsertTextFormat && item.insertTextFormat == 2) return lspCompletionPlainTextFromSnippet(rawText);
+	return rawText;
+}
+
+bool applyLspCompletionItem(MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, const mr::services::MRServiceCompletionItem &item, const std::string &insertText, std::string &errorMessage) {
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::size_t requestOffset = 0;
+	std::size_t identifierStart = 0;
+	std::size_t identifierEnd = 0;
+	const std::string currentText = editor.snapshotText();
+
+	if (result.header.identity.documentVersion != editor.documentVersion()) {
+		errorMessage = "LSP completion belongs to an older document version.";
+		return false;
+	}
+	if (!result.hasRequestPosition || !lspTextOffsetForPosition(currentText, result.requestPosition, requestOffset)) {
+		errorMessage = "LSP completion request position is outside the document.";
+		return false;
+	}
+	const bool hasIdentifierRange = lspIdentifierRangeAroundOffset(editor, requestOffset, identifierStart, identifierEnd);
+	if (item.hasTextEdit) {
+		if (!lspTextOffsetForPosition(currentText, item.textEditRange.start, start) || !lspTextOffsetForPosition(currentText, item.textEditRange.end, end)) {
+			errorMessage = "LSP completion edit range is outside the document.";
+			return false;
+		}
+		if (hasIdentifierRange && start >= identifierStart && end <= identifierEnd) {
+			start = identifierStart;
+			end = identifierEnd;
+		}
+	} else {
+		if (!hasIdentifierRange) {
+			errorMessage = "LSP completion request is not on an identifier.";
+			return false;
+		}
+		start = identifierStart;
+		end = identifierEnd;
+	}
+	if (end < start) {
+		errorMessage = "LSP completion edit range is reversed.";
+		return false;
+	}
+	if (start > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || end > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || insertText.size() > static_cast<std::size_t>(std::numeric_limits<uint>::max())) {
+		errorMessage = "LSP completion edit range is too large.";
+		return false;
+	}
+	if (!editor.replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), insertText.data(), static_cast<uint>(insertText.size()))) {
+		errorMessage = "LSP completion editor replace failed.";
+		return false;
+	}
+	errorMessage.clear();
+	return true;
+}
+
+bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &result) {
+	MRDialogFoundation *dialog = nullptr;
+	TScrollBar *scrollBar = nullptr;
+	LspCompletionListView *listView = nullptr;
+	MREditWindow *targetWindow = nullptr;
+	MRFileEditor *targetEditor = nullptr;
+	ushort dialogResult = cmCancel;
+	std::size_t selectedIndex = 0;
+	std::string insertText;
+	std::string errorMessage;
+	mr::services::MRServiceCompletionItem selectedItem;
+	const short width = 96;
+	short visibleRows = 0;
+	short height = 0;
+	short buttonY = 0;
+
+	if (TProgram::deskTop == nullptr) return false;
+	if (result.header.state != mr::services::MRServiceResultState::Current) {
+		if (!result.header.errorMessage.empty()) postLspWarning("LSP completion unavailable: " + result.header.errorMessage);
+		else
+			postLspWarning("LSP completion unavailable.");
+		return true;
+	}
+	if (result.items.empty()) {
+		postLspWarning("LSP completion: no items.");
+		return true;
+	}
+
+	visibleRows = static_cast<short>(std::max<int>(5, std::min<int>(static_cast<int>(result.items.size()), 14)));
+	height = static_cast<short>(visibleRows + 6);
+	buttonY = static_cast<short>(height - 3);
+	dialog = mr::dialogs::createScrollableDialog("LSP COMPLETION", width, height);
+	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select completion:"));
+	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+	dialog->insert(scrollBar);
+	listView = new LspCompletionListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.items);
+	listView->focusItemNum(0);
+	dialog->insert(listView);
+	{
+		const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~I~nsert", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
+	}
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < result.items.size()) {
+		const mr::services::MRServiceCompletionItem &item = result.items[selectedIndex];
+
+		selectedItem = item;
+		insertText = lspCompletionReplacementTextForItem(item);
+	}
+	TObject::destroy(dialog);
+
+	if (dialogResult != cmOK || insertText.empty()) return true;
+	targetWindow = findLspCompletionTargetWindow(result);
+	targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+	if (targetEditor == nullptr) {
+		postLspWarning("LSP completion insert failed: target editor is not open.");
+		return true;
+	}
+	static_cast<void>(mrActivateEditWindow(targetWindow));
+	if (!applyLspCompletionItem(*targetEditor, result, selectedItem, insertText, errorMessage)) {
+		postLspWarning("LSP completion insert failed: " + errorMessage);
+		return true;
+	}
+	postLspInfo("LSP completion inserted: " + firstDisplayLine(insertText, 80));
+	return true;
+}
+
+MREditWindow *findLspCodeActionTargetWindow(const mr::services::MRServiceCodeActionResult &result) {
+	MREditWindow *window = nullptr;
+
+	if (result.header.identity.bufferId != 0) {
+		window = findEditWindowByBufferId(result.header.identity.bufferId);
+		if (window != nullptr) return window;
+	}
+	if (!result.header.identity.path.empty()) return findOpenLspTargetWindow(result.header.identity.path);
+	return nullptr;
+}
+
+bool showLspStatusDialog() {
+	MRDialogFoundation *dialog = nullptr;
+	MREditWindow *currentWindow = currentEditorCommandWindow();
+	MRFileEditor *currentEditor = currentWindow != nullptr ? currentWindow->getEditor() : nullptr;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceServiceSnapshot workspace = g_lspAppService.buildCurrentWorkspaceSnapshot();
+	mr::services::MRWorkspaceMainFileState mainFile = g_lspAppService.configuredMainFile();
+	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
+	std::vector<std::string> lines;
+	std::vector<std::string> displayLines;
+	std::ostringstream line;
+	std::string configurationSource;
+	std::string profileError;
+	std::string serverCandidates;
+	bool configured = false;
+	short width = 96;
+	short height = 0;
+	short buttonY = 0;
+
+	if (TProgram::deskTop == nullptr) return false;
+	if (currentEditor != nullptr) configured = buildLspServerProfileFromEditor(*currentEditor, profile, configurationSource, profileError);
+	else if (mr::services::buildLspServerProfileFromEnvironment(profile)) {
+		configured = true;
+		configurationSource = "MR_LSP_SERVER";
+	} else
+		profileError = "No current editor and MR_LSP_SERVER is empty.";
+
+	lines.push_back(std::string("Support: ") + (configuredLanguageServerSpawnDaemon() ? "enabled" : "disabled"));
+	lines.push_back(std::string("Runtime: ") + (g_lspAppService.runtimeActive() ? "active" : "inactive"));
+	if (!configuredLanguageServerSpawnDaemon()) {
+		lines.push_back("Server configured: disabled by LSP support setup");
+	}
+	if (currentEditor != nullptr) {
+		serverCandidates = mr::services::lspServerExecutableCandidatesForLanguage(currentEditor->syntaxLanguage());
+		lines.push_back(std::string("Editor language: ") + currentEditor->syntaxLanguageName());
+		if (!serverCandidates.empty()) lines.push_back("Built-in candidates: " + serverCandidates);
+		else
+			lines.push_back("Built-in candidates: none");
+	} else
+		lines.push_back("Editor language: none");
+	lines.push_back(std::string("Server configured: ") + (configured ? "yes" : "no"));
+	if (configured) {
+		lines.push_back("Configuration source: " + configurationSource);
+		if (!profile.profileName.empty()) lines.push_back("Profile: " + profile.profileName);
+		lines.push_back("Executable: " + profile.executablePath);
+		if (!profile.arguments.empty()) {
+			line.str(std::string());
+			line.clear();
+			line << "Arguments:";
+			for (std::size_t i = 0; i < profile.arguments.size(); ++i)
+				line << " " << profile.arguments[i];
+			lines.push_back(line.str());
+		}
+		if (!profile.workingDirectory.empty()) lines.push_back("Working directory: " + profile.workingDirectory);
+		else
+			lines.push_back("Working directory: workspace root");
+	} else
+		lines.push_back("Configuration error: " + profileError);
+
+	line.str(std::string());
+	line.clear();
+	line << "Requests: " << g_lspRequestCount << " total, " << g_lspRequestFailureCount << " failed, " << g_lspPollFailureCount << " poll failed";
+	lines.push_back(line.str());
+	lines.push_back("Last request: " + (g_lspLastRequestLabel.empty() ? std::string("none") : g_lspLastRequestLabel));
+	lines.push_back("Last state: " + g_lspLastRequestState);
+	if (!g_lspLastRequestPath.empty()) lines.push_back("Last document: " + g_lspLastRequestPath);
+	if (!g_lspLastRequestPosition.empty()) lines.push_back("Last position: " + g_lspLastRequestPosition);
+	if (!g_lspLastServerConfigurationSource.empty()) lines.push_back("Last configuration source: " + g_lspLastServerConfigurationSource);
+	if (!g_lspLastServerProfileName.empty()) lines.push_back("Last profile: " + g_lspLastServerProfileName);
+	if (!g_lspLastServerExecutable.empty()) lines.push_back("Last executable: " + g_lspLastServerExecutable);
+	if (!g_lspLastServerArguments.empty()) lines.push_back("Last arguments: " + g_lspLastServerArguments);
+	if (!g_lspLastServerWorkingDirectory.empty()) lines.push_back("Last working directory: " + g_lspLastServerWorkingDirectory);
+	if (!g_lspLastError.empty()) lines.push_back("Last error: " + g_lspLastError);
+	if (!g_lspLastPollError.empty()) lines.push_back("Last poll error: " + g_lspLastPollError);
+
+	line.str(std::string());
+	line.clear();
+	line << "Workspace documents: " << workspace.documents.size();
+	lines.push_back(line.str());
+	if (workspace.root.hasRoot) lines.push_back("Workspace root: " + workspace.root.rootPath);
+	else
+		lines.push_back("Workspace root: none (" + workspace.root.reason + ")");
+	if (mainFile.hasMainFile) {
+		line.str(std::string());
+		line.clear();
+		line << "Main file: ";
+		if (mainFile.bufferId != 0) line << "buffer #" << mainFile.bufferId;
+		else
+			line << mainFile.path;
+		lines.push_back(line.str());
+	} else
+		lines.push_back("Main file: none");
+
+	line.str(std::string());
+	line.clear();
+	line << "Results: diagnostics " << results.diagnosticResults().size() << ", locations " << results.locationResults().size() << ", hovers " << results.hoverResults().size() << ", completions " << results.completionResults().size() << ", code actions " << results.codeActionResults().size() << ", document symbols " << results.documentSymbolResults().size() << ", signatures " << results.signatureHelpResults().size();
+	lines.push_back(line.str());
+	line.str(std::string());
+	line.clear();
+	line << "Reported: diagnostics " << g_lspReportedDiagnosticCount << ", locations " << g_lspReportedLocationCount << ", hovers " << g_lspReportedHoverCount << ", completions " << g_lspReportedCompletionCount << ", code actions " << g_lspReportedCodeActionCount << ", document symbols " << g_lspReportedDocumentSymbolCount << ", signatures " << g_lspReportedSignatureHelpCount;
+	lines.push_back(line.str());
+	for (std::size_t i = 0; i < lines.size(); ++i)
+		displayLines.push_back(firstDisplayLine(lines[i], static_cast<std::size_t>(width - 6)));
+
+	height = static_cast<short>(displayLines.size() + 5);
+	buttonY = static_cast<short>(height - 3);
+	dialog = mr::dialogs::createScrollableDialog("LSP STATUS", width, height);
+	for (std::size_t i = 0; i < displayLines.size(); ++i)
+		dialog->insert(new TStaticText(TRect(3, static_cast<short>(2 + i), width - 3, static_cast<short>(3 + i)), displayLines[i].c_str()));
+	{
+		const std::array<mr::dialogs::DialogButtonSpec, 1> buttons = {mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 0, buttons);
+	}
+	dialog->finalizeLayout();
+	TProgram::deskTop->execView(dialog);
+	TObject::destroy(dialog);
+	return true;
+}
+
+void appendLspDocumentSymbolRows(const mr::services::MRServiceDocumentSymbolsResult &result, std::vector<LspResultDialogRow> &rows) {
+	std::ostringstream rowText;
+
+	if (result.header.state != mr::services::MRServiceResultState::Current) return;
+	for (const mr::services::MRServiceDocumentSymbol &symbol : result.symbols) {
+		LspResultDialogRow row;
+		const int depth = std::max(0, std::min(symbol.depth, 8));
+
+		if (symbol.target.path.empty()) continue;
+		rowText.str(std::string());
+		rowText.clear();
+		rowText << "SYM [" << lspResultStateText(result.header.state) << "] ";
+		rowText << (symbol.target.range.start.line + 1) << ":" << (symbol.target.range.start.character + 1) << " ";
+		rowText << std::string(static_cast<std::size_t>(depth * 2), ' ');
+		rowText << firstDisplayLine(symbol.name, 50);
+		if (!symbol.detail.empty()) rowText << " - " << firstDisplayLine(symbol.detail, 36);
+		rowText << " " << (!symbol.target.path.empty() ? symbol.target.path : symbol.target.uri);
+		row.text = rowText.str();
+		row.action = LspResultDialogAction::NavigateLocation;
+		row.location = symbol.target;
+		rows.push_back(row);
+	}
+}
+
+bool showLspDocumentSymbolsDialog(const mr::services::MRServiceDocumentSymbolsResult &result) {
+	MRDialogFoundation *dialog = nullptr;
+	TScrollBar *scrollBar = nullptr;
+	LspResultsListView *listView = nullptr;
+	ushort dialogResult = cmCancel;
+	std::size_t selectedIndex = 0;
+	std::vector<LspResultDialogRow> rows;
+	std::string navigationError;
+	const short width = 100;
+	short visibleRows = 0;
+	short height = 0;
+	short buttonY = 0;
+
+	if (TProgram::deskTop == nullptr) return false;
+	if (result.header.state != mr::services::MRServiceResultState::Current) {
+		if (!result.header.errorMessage.empty()) postLspWarning("LSP document symbols unavailable: " + result.header.errorMessage);
+		else
+			postLspWarning("LSP document symbols unavailable.");
+		return true;
+	}
+	appendLspDocumentSymbolRows(result, rows);
+	if (rows.empty()) {
+		postLspWarning("LSP document symbols: no symbols.");
+		return true;
+	}
+
+	visibleRows = static_cast<short>(std::max<int>(5, std::min<int>(static_cast<int>(rows.size()), 16)));
+	height = static_cast<short>(visibleRows + 6);
+	buttonY = static_cast<short>(height - 3);
+	dialog = mr::dialogs::createScrollableDialog("LSP SYMBOLS", width, height);
+	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select symbol:"));
+	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+	dialog->insert(scrollBar);
+	listView = new LspResultsListView(TRect(2, 2, width - 3, height - 4), scrollBar, rows);
+	dialog->insert(listView);
+	{
+		const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
+	}
+	dialog->setDialogValidationHook([listView, &rows]() {
+		MRScrollableDialog::DialogValidationResult validation;
+		std::size_t selected = 0;
+
+		validation.valid = listView != nullptr && listView->selectedIndex(selected) && selected < rows.size() && rows[selected].action == LspResultDialogAction::NavigateLocation;
+		if (!validation.valid) validation.warningText = "Select a symbol.";
+		return validation;
+	});
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < rows.size()) {
+		if (!navigateToLspLocation(rows[selectedIndex].location, navigationError)) postLspWarning("LSP symbol navigation failed: " + navigationError);
+	}
+	TObject::destroy(dialog);
+	return true;
+}
+
+bool showLspResultsDialog() {
+	MRDialogFoundation *dialog = nullptr;
+	TScrollBar *scrollBar = nullptr;
+	LspResultsListView *listView = nullptr;
+	ushort dialogResult = cmCancel;
+	std::size_t selectedIndex = 0;
+	LspResultDialogRow selectedRow;
+	std::vector<LspResultDialogRow> rows;
+	std::ostringstream rowText;
+	std::string navigationError;
+	std::string codeActionError;
+	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
+	const short width = 108;
+	short visibleRows = 0;
+	short height = 0;
+	short buttonY = 0;
+
+	if (TProgram::deskTop == nullptr) return false;
+
+	for (const mr::services::MRServiceDiagnosticResult &result : results.diagnosticResults()) {
+		if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+		if (result.header.identity.path.empty()) continue;
+		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics) {
+			LspResultDialogRow row;
+
+			rowText.str(std::string());
+			rowText.clear();
+			rowText << "DIAG " << lspDiagnosticSeverityText(diagnostic.severity) << " [" << lspResultStateText(result.header.state) << "] ";
+			rowText << (diagnostic.reportedRange.start.line + 1) << ":" << (diagnostic.reportedRange.start.character + 1) << " ";
+			if (!result.header.identity.path.empty()) rowText << result.header.identity.path << " - ";
+			rowText << firstDisplayLine(diagnostic.message, 80);
+			row.text = rowText.str();
+			row.action = LspResultDialogAction::NavigateLocation;
+			row.location.path = result.header.identity.path;
+			row.location.uri = result.header.identity.uri;
+			row.location.range = diagnostic.navigationRange;
+			rows.push_back(row);
+		}
+	}
+
+	for (const mr::services::MRServiceLocationResult &result : results.locationResults()) {
+		const char *kind = result.header.kind == mr::services::MRServiceResultKind::References ? "REF" : "DEF";
+
+		if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+		for (const mr::services::MRServiceLocationTarget &target : result.locations) {
+			LspResultDialogRow row;
+
+			if (target.path.empty()) continue;
+			rowText.str(std::string());
+			rowText.clear();
+			rowText << kind << " [" << lspResultStateText(result.header.state) << "] ";
+			rowText << (target.range.start.line + 1) << ":" << (target.range.start.character + 1) << " ";
+			rowText << (!target.path.empty() ? target.path : target.uri);
+			row.text = rowText.str();
+			row.action = LspResultDialogAction::NavigateLocation;
+			row.location = target;
+			rows.push_back(row);
+		}
+	}
+
+	for (const mr::services::MRServiceDocumentSymbolsResult &result : results.documentSymbolResults()) {
+		appendLspDocumentSymbolRows(result, rows);
+	}
+
+	for (const mr::services::MRServiceCodeActionResult &result : results.codeActionResults()) {
+		if (result.header.state != mr::services::MRServiceResultState::Current) continue;
+		for (const mr::services::MRServiceCodeActionItem &item : result.items) {
+			LspResultDialogRow row;
+			const mr::services::MRServiceTextEdit *firstEdit = nullptr;
+
+			if (!lspCodeActionEditTargetsCurrentDocument(item, result.header.identity)) continue;
+			firstEdit = &item.edits[0];
+			rowText.str(std::string());
+			rowText.clear();
+			rowText << "ACTION [" << lspResultStateText(result.header.state) << "] ";
+			rowText << (firstEdit->range.start.line + 1) << ":" << (firstEdit->range.start.character + 1) << " ";
+			if (!result.header.identity.path.empty()) rowText << result.header.identity.path << " - ";
+			rowText << firstDisplayLine(item.title, 90);
+			if (!item.kind.empty()) rowText << " - " << item.kind;
+			row.text = rowText.str();
+			row.action = LspResultDialogAction::ApplyCodeAction;
+			row.codeActionResult = &result;
+			row.codeActionItem = &item;
+			rows.push_back(row);
+		}
+	}
+
+	if (rows.empty()) {
+		postLspWarning("LSP results: no results available.");
+		return true;
+	}
+
+	visibleRows = static_cast<short>(std::max<int>(5, std::min<int>(static_cast<int>(rows.size()), 16)));
+	height = static_cast<short>(visibleRows + 6);
+	buttonY = static_cast<short>(height - 3);
+	dialog = mr::dialogs::createScrollableDialog("LSP RESULTS", width, height);
+	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select result:"));
+	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+	dialog->insert(scrollBar);
+	listView = new LspResultsListView(TRect(2, 2, width - 3, height - 4), scrollBar, rows);
+	dialog->insert(listView);
+	{
+		const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
+	}
+	dialog->setDialogValidationHook([listView, &rows]() {
+		MRScrollableDialog::DialogValidationResult validation;
+		std::size_t selected = 0;
+
+		validation.valid = listView != nullptr && listView->selectedIndex(selected) && selected < rows.size() && rows[selected].action != LspResultDialogAction::None;
+		if (!validation.valid) validation.warningText = "Select a navigable, hover or action result.";
+		return validation;
+	});
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < rows.size()) selectedRow = rows[selectedIndex];
+	TObject::destroy(dialog);
+
+	if (dialogResult != cmOK) return true;
+	if (selectedRow.action == LspResultDialogAction::NavigateLocation) {
+		if (!navigateToLspLocation(selectedRow.location, navigationError)) postLspWarning("LSP result navigation failed: " + navigationError);
+		return true;
+	}
+	if (selectedRow.action == LspResultDialogAction::ShowHover) return showLspHoverSidekick(selectedRow.hover);
+	if (selectedRow.action == LspResultDialogAction::ApplyCodeAction && selectedRow.codeActionResult != nullptr && selectedRow.codeActionItem != nullptr) {
+		MREditWindow *targetWindow = findLspCodeActionTargetWindow(*selectedRow.codeActionResult);
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+
+		if (targetEditor == nullptr) {
+			postLspWarning("LSP code action apply failed: target editor is not open.");
+			return true;
+		}
+		static_cast<void>(mrActivateEditWindow(targetWindow));
+		if (!applyLspCodeActionEdits(*targetEditor, *selectedRow.codeActionResult, *selectedRow.codeActionItem, codeActionError)) {
+			postLspWarning("LSP code action apply failed: " + codeActionError);
+			return true;
+		}
+		postLspInfo("LSP code action applied: " + firstDisplayLine(selectedRow.codeActionItem->title, 80));
+		return true;
+	}
+	return true;
+}
+
+void reportNewLspDiagnostics(const std::vector<mr::services::MRServiceDiagnosticResult> &diagnostics) {
+	std::ostringstream signature;
+
+	signature << diagnostics.size() << '\n';
+	for (const mr::services::MRServiceDiagnosticResult &result : diagnostics) {
+		signature << static_cast<int>(result.header.state) << '|';
+		signature << result.header.identity.bufferId << '|';
+		signature << result.header.identity.documentId << '|';
+		signature << result.header.identity.documentVersion << '|';
+		signature << result.header.identity.path << '|';
+		signature << result.diagnostics.size() << '\n';
+		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics) {
+			signature << diagnostic.severity << '|';
+			signature << diagnostic.reportedRange.start.line << ':' << diagnostic.reportedRange.start.character << '-';
+			signature << diagnostic.reportedRange.end.line << ':' << diagnostic.reportedRange.end.character << '|';
+			signature << diagnostic.message << '\n';
+		}
+	}
+	const std::string nextSignature = signature.str();
+
+	if (g_lspReportedDiagnosticSignature == nextSignature) return;
+	g_lspReportedDiagnosticSignature = nextSignature;
+	g_lspReportedDiagnosticCount = diagnostics.size();
+	for (const mr::services::MRServiceDiagnosticResult &result : diagnostics) {
+		std::ostringstream line;
+
+		applyLspDiagnosticInformationRanges(result.header.identity);
+		g_lspLastRequestState = "diagnostics received";
+		line << "LSP diagnostics: " << result.diagnostics.size();
+		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
+		if (!result.diagnostics.empty()) {
+			const mr::services::MRServiceDiagnosticEntry &diagnostic = result.diagnostics[0];
+			line << ":" << (diagnostic.reportedRange.start.line + 1) << ":" << (diagnostic.reportedRange.start.character + 1);
+			line << " " << lspDiagnosticSeverityText(diagnostic.severity);
+			line << " - " << firstDisplayLine(diagnostic.message, 120);
+		}
+		postLspInfo(line.str());
+	}
+}
+
+void reportNewLspLocations(const std::vector<mr::services::MRServiceLocationResult> &locations) {
+	while (g_lspReportedLocationCount < locations.size()) {
+		const mr::services::MRServiceLocationResult result = locations[g_lspReportedLocationCount];
+		std::ostringstream line;
+		const char *kind = result.header.kind == mr::services::MRServiceResultKind::References ? "references" : "definition";
+		std::string navigationError;
+
+		++g_lspReportedLocationCount;
+		g_lspLastRequestState = result.header.kind == mr::services::MRServiceResultKind::References ? "references received" : "definition received";
+		line << "LSP " << kind << ": " << result.locations.size();
+		if (!result.locations.empty()) {
+			const mr::services::MRServiceLocationTarget &target = result.locations[0];
+			line << " " << (!target.path.empty() ? target.path : target.uri);
+			line << ":" << (target.range.start.line + 1) << ":" << (target.range.start.character + 1);
+		}
+		postLspInfo(line.str());
+		if (result.header.state == mr::services::MRServiceResultState::Current && result.header.kind == mr::services::MRServiceResultKind::Definition && result.locations.size() == 1) {
+			if (!navigateToLspLocation(result.locations[0], navigationError)) postLspWarning("LSP definition navigation failed: " + navigationError);
+		}
+		if (result.header.kind == mr::services::MRServiceResultKind::References) {
+			if (result.header.state == mr::services::MRServiceResultState::Current) {
+				static_cast<void>(showLspReferencesDialog(result));
+			} else if (!result.header.errorMessage.empty())
+				postLspWarning("LSP references unavailable: " + result.header.errorMessage);
+			else
+				postLspWarning("LSP references unavailable.");
+		}
+	}
+}
+
+void reportNewLspHovers(const std::vector<mr::services::MRServiceHoverResult> &hovers) {
+	while (g_lspReportedHoverCount < hovers.size()) {
+		const mr::services::MRServiceHoverResult result = hovers[g_lspReportedHoverCount];
+		std::string text = firstDisplayLine(result.hover.value, 140);
+		const bool retiredAutoHover = lspHoverResultBelongsToRetiredAutoHover(result);
+		const bool autoHover = !retiredAutoHover && lspHoverResultMatchesPendingAutoHover(result);
+
+		++g_lspReportedHoverCount;
+		if (retiredAutoHover) continue;
+		g_lspLastRequestState = "hover received";
+		if (text.empty()) text = "empty hover";
+		if (autoHover) {
+			if (result.header.state == mr::services::MRServiceResultState::Current) mrLogMessage("LSP auto hover received: " + text);
+			else if (!result.header.errorMessage.empty())
+				mrLogMessage("LSP auto hover unavailable: " + result.header.errorMessage);
+			else
+				mrLogMessage("LSP auto hover unavailable.");
+		}
+		if (!autoHover) postLspInfo("LSP hover: " + text);
+		if (result.header.state == mr::services::MRServiceResultState::Current) {
+			if (!autoHover || !result.hover.value.empty()) static_cast<void>(showLspHoverSidekick(result));
+		} else if (!result.header.errorMessage.empty()) {
+			if (!autoHover) postLspWarning("LSP hover unavailable: " + result.header.errorMessage);
+		} else {
+			if (!autoHover) postLspWarning("LSP hover unavailable.");
+		}
+	}
+}
+
+void reportLspCompletionResult(const mr::services::MRServiceCompletionResult &result) {
+	std::ostringstream line;
+
+	g_lspLastRequestState = "completion received";
+	line << "LSP completion: " << result.items.size();
+	if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
+	postLspInfo(line.str());
+	static_cast<void>(showLspCompletionDialog(result));
+}
+
+void reportNewLspCompletions(const std::vector<mr::services::MRServiceCompletionResult> &completions) {
+	while (g_lspReportedCompletionCount < completions.size()) {
+		const mr::services::MRServiceCompletionResult result = completions[g_lspReportedCompletionCount];
+
+		++g_lspReportedCompletionCount;
+		reportLspCompletionResult(result);
+	}
+}
+
+void reportNewLspCodeActions(const std::vector<mr::services::MRServiceCodeActionResult> &codeActions) {
+	while (g_lspReportedCodeActionCount < codeActions.size()) {
+		const mr::services::MRServiceCodeActionResult result = codeActions[g_lspReportedCodeActionCount];
+
+		++g_lspReportedCodeActionCount;
+		applyLspDiagnosticInformationRanges(result.header.identity);
+	}
+}
+
+void reportNewLspDocumentSymbols(const std::vector<mr::services::MRServiceDocumentSymbolsResult> &documentSymbols) {
+	while (g_lspReportedDocumentSymbolCount < documentSymbols.size()) {
+		const mr::services::MRServiceDocumentSymbolsResult result = documentSymbols[g_lspReportedDocumentSymbolCount];
+		std::ostringstream line;
+
+		++g_lspReportedDocumentSymbolCount;
+		g_lspLastRequestState = "document symbols received";
+		line << "LSP document symbols: " << result.symbols.size();
+		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
+		postLspInfo(line.str());
+		if (result.header.state == mr::services::MRServiceResultState::Current)
+			static_cast<void>(showLspDocumentSymbolsDialog(result));
+		else if (!result.header.errorMessage.empty())
+			postLspWarning("LSP document symbols unavailable: " + result.header.errorMessage);
+		else
+			postLspWarning("LSP document symbols unavailable.");
+	}
+}
+
+void reportNewLspSignatureHelps(const std::vector<mr::services::MRServiceSignatureHelpResult> &signatureHelps) {
+	while (g_lspReportedSignatureHelpCount < signatureHelps.size()) {
+		const mr::services::MRServiceSignatureHelpResult result = signatureHelps[g_lspReportedSignatureHelpCount];
+		std::ostringstream line;
+
+		++g_lspReportedSignatureHelpCount;
+		if (g_lspSignatureHelp.active && !result.header.requestId.empty() && result.header.requestId == g_lspSignatureHelp.requestId) g_lspSignatureHelp.requestPending = false;
+		g_lspLastRequestState = "signature help received";
+		line << "LSP signature help: " << result.signatures.size();
+		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
+		if (result.header.state == mr::services::MRServiceResultState::Current && result.activeSignature >= 0 && static_cast<std::size_t>(result.activeSignature) < result.signatures.size())
+			line << " - " << firstDisplayLine(result.signatures[static_cast<std::size_t>(result.activeSignature)].label, 100);
+		postLspInfo(line.str());
+		if (result.header.state == mr::services::MRServiceResultState::Current)
+			static_cast<void>(showLspSignatureHelpSidekick(result));
+		else if (!result.header.errorMessage.empty())
+			postLspWarning("LSP signature help unavailable: " + result.header.errorMessage);
+		else
+			postLspWarning("LSP signature help unavailable.");
+	}
+}
+
+bool lspCompletionRequestIdKnown(const std::vector<std::string> &requestIds, const std::string &requestId) {
+	for (const std::string &knownRequestId : requestIds)
+		if (knownRequestId == requestId) return true;
+	return false;
+}
+
+bool requestLspCompletionCommand(MREditWindow *win = currentEditorCommandWindow(), const LspEditorRequestTarget *target = nullptr) {
+	bool requestSent = false;
+	std::string errorMessage;
+	std::vector<std::string> knownRequestIds;
+	const std::vector<mr::services::MRServiceCompletionResult> &initialCompletions = g_lspAppService.results().completionResults();
+
+	for (const mr::services::MRServiceCompletionResult &completion : initialCompletions)
+		knownRequestIds.push_back(completion.header.requestId);
+	if (g_lspReportedCompletionCount < initialCompletions.size()) g_lspReportedCompletionCount = initialCompletions.size();
+	for (int attempt = 0; attempt < 2; ++attempt) {
+		bool retryAfterEmptyCompletion = false;
+
+		requestSent = false;
+		if (!requestLspEditorCommandForWindow(win, mr::services::MRLspServiceCommandId::Complete, "LSP completion", true, &requestSent, target)) return true;
+		if (!requestSent) return true;
+		for (int i = 0; i < 100; ++i) {
+			if (!g_lspAppService.poll(errorMessage)) {
+				++g_lspPollFailureCount;
+				g_lspLastRequestState = "poll failed";
+				g_lspLastPollError = errorMessage;
+				g_lspLastError = errorMessage;
+				postLspError("LSP poll failed: " + errorMessage);
+				g_lspAppService.close();
+				return true;
+			}
+			const std::vector<mr::services::MRServiceCompletionResult> &completions = g_lspAppService.results().completionResults();
+			for (std::size_t index = 0; index < completions.size(); ++index) {
+				if (lspCompletionRequestIdKnown(knownRequestIds, completions[index].header.requestId)) continue;
+				knownRequestIds.push_back(completions[index].header.requestId);
+				g_lspReportedCompletionCount = completions.size();
+				mrLogMessage("LSP completion response: requestId=" + completions[index].header.requestId + " items=" + std::to_string(completions[index].items.size()) + " attempt=" + std::to_string(attempt + 1));
+				if (completions[index].items.empty() && !completions[index].rawLspResponseJson.empty())
+					mrLogMessage("LSP completion empty raw response: " + completions[index].rawLspResponseJson);
+				if (attempt == 0 && completions[index].items.empty()) {
+					mrLogMessage("LSP completion empty response ignored for one delayed retry.");
+					for (int waitIndex = 0; waitIndex < 15; ++waitIndex) {
+						if (!g_lspAppService.poll(errorMessage)) {
+							++g_lspPollFailureCount;
+							g_lspLastRequestState = "poll failed";
+							g_lspLastPollError = errorMessage;
+							g_lspLastError = errorMessage;
+							postLspError("LSP poll failed: " + errorMessage);
+							g_lspAppService.close();
+							return true;
+						}
+						::poll(nullptr, 0, 20);
+					}
+					retryAfterEmptyCompletion = true;
+					break;
+				}
+				reportLspCompletionResult(completions[index]);
+				return true;
+			}
+			if (retryAfterEmptyCompletion) break;
+			::poll(nullptr, 0, 20);
+		}
+	}
+	postLspInfo("LSP completion requested.");
+	return true;
+}
+
+void reportNewLspResults() {
+	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
+
+	reportNewLspDiagnostics(results.diagnosticResults());
+	reportNewLspLocations(results.locationResults());
+	reportNewLspHovers(results.hoverResults());
+	reportNewLspCompletions(results.completionResults());
+	reportNewLspCodeActions(results.codeActionResults());
+	reportNewLspDocumentSymbols(results.documentSymbolResults());
+	reportNewLspSignatureHelps(results.signatureHelpResults());
+}
+
+std::vector<LspMiniMenuEntry> buildLspContextMenuItems(MREditWindow *win, const LspEditorRequestTarget *target) {
+	struct ContextCommand {
+		const char *title;
+		ushort command;
+		bool enabled;
+	};
+
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRLspPositionServiceSnapshot snapshot;
+	mr::lsp::LspTextPosition lspPosition;
+	std::string configurationSource;
+	std::string errorMessage;
+	std::vector<LspMiniMenuEntry> entries;
+	bool serverConfigured = false;
+
+	if (editor == nullptr) return entries;
+	entries.push_back(LspMiniMenuEntry{"Edit", 0, true});
+	if (!configuredLanguageServerSpawnDaemon()) return entries;
+	if (target != nullptr && buildLspDocumentSnapshotForWindow(win, document, false)) {
+		serverConfigured = buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage);
+		lspPosition = target->position;
+		snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(lspPosition));
+
+		const ContextCommand serviceCommands[] = {
+		    {"Definition", cmMrOtherLspDefinition, serverConfigured && snapshot.commands.requestDefinition},
+		    {"References", cmMrOtherLspReferences, serverConfigured && snapshot.commands.requestReferences},
+		    {"Hover", cmMrOtherLspHover, serverConfigured && snapshot.commands.requestHover},
+		    {"Complete", cmMrOtherLspComplete, serverConfigured && snapshot.commands.requestCompletion},
+		    {"Symbols", cmMrOtherLspDocumentSymbols, serverConfigured && snapshot.commands.requestDocumentSymbols},
+		    {"Signature", cmMrOtherLspSignatureHelp, serverConfigured && snapshot.commands.requestSignatureHelp},
+		    {"Code Actions", cmMrOtherLspCodeActions, serverConfigured && snapshot.commands.requestCodeActions},
+		};
+
+		for (const ContextCommand &entry : serviceCommands)
+			if (entry.enabled) entries.push_back(LspMiniMenuEntry{entry.title, entry.command, false});
+	}
+	return entries;
+}
+
+bool requestLspCodeActionsAtPosition(MREditWindow *win, const LspEditorRequestTarget *target) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRLspPositionServiceSnapshot snapshot;
+	mr::lsp::LspTextPosition lspPosition;
+	std::string errorMessage;
+	const std::size_t initialCodeActionCount = g_lspAppService.results().codeActionResults().size();
+
+	if (!configuredLanguageServerSpawnDaemon()) {
+		postLspWarning("LSP support is disabled.");
+		return true;
+	}
+	if (editor == nullptr || !buildCurrentLspDocumentSnapshot(win, document)) return true;
+	if (target != nullptr)
+		lspPosition = target->position;
+	else
+		lspPosition = currentLspTextPosition(*editor);
+	snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(lspPosition));
+	if (snapshot.results.diagnostics.empty() || snapshot.results.diagnostics[0].diagnostics.empty()) {
+		postLspWarning("LSP code actions: no diagnostic at cursor.");
+		return true;
+	}
+	if (!g_lspAppService.requestCodeActionsForDiagnostic(snapshot.results.diagnostics[0], snapshot.results.diagnostics[0].diagnostics[0], errorMessage)) {
+		postLspError("LSP code actions failed: " + errorMessage);
+		return true;
+	}
+	postLspInfo("LSP code actions requested.");
+	for (int i = 0; i < 100; ++i) {
+		if (!g_lspAppService.poll(errorMessage)) {
+			++g_lspPollFailureCount;
+			g_lspLastRequestState = "poll failed";
+			g_lspLastPollError = errorMessage;
+			g_lspLastError = errorMessage;
+			postLspError("LSP poll failed: " + errorMessage);
+			g_lspAppService.close();
+			return true;
+		}
+		if (g_lspAppService.results().codeActionResults().size() > initialCodeActionCount) return showLspResultsDialog();
+		::poll(nullptr, 0, 20);
+	}
+	return true;
+}
+
+bool requestLspCodeActionsAtCurrentPosition() {
+	return requestLspCodeActionsAtPosition(currentEditorCommandWindow(), nullptr);
+}
+
+int lspDisplayWidth(const std::string &value) noexcept {
+	return std::max(0, strwidth(value.c_str()));
+}
+
+short lspMiniMenuWidthForValues(const std::vector<std::string> &values) noexcept {
+	int width = 0;
+
+	for (const std::string &value : values)
+		width = std::max(width, lspDisplayWidth(value));
+	width = std::max(width + 2, 12);
+	return static_cast<short>(std::min(width, 40));
+}
+
+short lspMiniMenuWidthForEntries(const std::vector<LspMiniMenuEntry> &entries) noexcept {
+	int width = 0;
+
+	for (const LspMiniMenuEntry &entry : entries)
+		width = std::max(width, lspDisplayWidth(entry.title) + (entry.editSubmenu ? 2 : 0));
+	width = std::max(width + 2, 12);
+	return static_cast<short>(std::min(width, 40));
+}
+
+std::string lspMiniMenuDisplayText(const LspMiniMenuEntry &entry, short menuWidth) {
+	static const char kSubmenuArrow[] = "\342\226\266";
+	const int interiorWidth = std::max(1, static_cast<int>(menuWidth) - 2);
+	const int titleWidth = lspDisplayWidth(entry.title);
+	const int arrowWidth = strwidth(kSubmenuArrow);
+	std::string text = entry.title;
+
+	if (!entry.editSubmenu) return text;
+	if (titleWidth + arrowWidth < interiorWidth) text.append(static_cast<std::size_t>(interiorWidth - titleWidth - arrowWidth), ' ');
+	else
+		text.push_back(' ');
+	text += kSubmenuArrow;
+	return text;
+}
+
+TRect lspMiniMenuBoundsFor(TGroup &owner, TPoint where, short width, short rows) {
+	TPoint local = owner.makeLocal(where);
+	const short safeWidth = std::max<short>(1, width);
+	const short safeRows = std::max<short>(1, rows);
+	int x = local.x;
+	int y = local.y;
+
+	if (x + safeWidth > owner.size.x) x = std::max<int>(0, owner.size.x - safeWidth);
+	if (y + safeRows > owner.size.y) y = std::max<int>(0, owner.size.y - safeRows);
+	return TRect(x, y, x + safeWidth, y + safeRows);
+}
+
+MRColumnListView *showLspMiniMenuList(TGroup &owner, TPoint where, const std::vector<std::string> &values, short *menuWidth = nullptr, short forcedWidth = 0, bool contextMenuColors = true) {
+	std::vector<MRColumnListView::Row> rows;
+	MRColumnListView *listView = nullptr;
+	const short width = forcedWidth > 0 ? forcedWidth : lspMiniMenuWidthForValues(values);
+	const short height = static_cast<short>(std::min<std::size_t>(values.size(), 12));
+	const TRect bounds = lspMiniMenuBoundsFor(owner, where, width, height);
+
+	if (values.empty()) return nullptr;
+	if (menuWidth != nullptr) *menuWidth = width;
+	rows.reserve(values.size());
+	for (const std::string &value : values)
+		rows.push_back(MRColumnListView::Row{value});
+
+	listView = new MRColumnListView(bounds, nullptr, nullptr, 0, 0, true);
+	if (contextMenuColors) listView->setContextMenuColors(true);
+	listView->setActivateOnSingleClick(true);
+	owner.insert(listView);
+	listView->setRows(rows, 0);
+	listView->select();
+	listView->drawView();
+	return listView;
+}
+
+void destroyLspMiniMenuList(TGroup &owner, MRColumnListView *&listView) {
+	if (listView == nullptr) return;
+	if (owner.current == listView) owner.setCurrent(nullptr, TView::leaveSelect);
+	owner.remove(listView);
+	TObject::destroy(listView);
+	listView = nullptr;
+}
+
+short lspMiniMenuClickedIndex(MRColumnListView &listView, TPoint where) {
+	const TPoint local = listView.makeLocal(where);
+	const short clicked = static_cast<short>(listView.topItem + local.y);
+
+	if (local.y < 0 || local.y >= listView.size.y) return -1;
+	if (clicked < 0 || clicked >= listView.range) return -1;
+	listView.focusItemNum(clicked);
+	return clicked;
+}
+
+std::vector<LspMiniMenuEntry> buildLspEditMiniMenuItems(MREditWindow *targetWindow) {
+	std::vector<LspMiniMenuEntry> entries;
+	const bool hasMarkedText = targetWindow != nullptr && (targetWindow->hasSelection() || targetWindow->hasBlock());
+
+	if (hasMarkedText) entries.push_back(LspMiniMenuEntry{"Cut", cmMrEditCutToBuffer, false});
+	if (hasMarkedText) entries.push_back(LspMiniMenuEntry{"Copy", cmMrEditCopyToBuffer, false});
+	entries.push_back(LspMiniMenuEntry{"Paste", cmMrEditPasteFromBuffer, false});
+	return entries;
+}
+
+bool chooseLspMiniMenuCommand(TGroup &owner, MREditWindow *targetWindow, TPoint where, const LspEditorRequestTarget *target, ushort &command) {
+	const std::vector<LspMiniMenuEntry> entries = buildLspContextMenuItems(targetWindow, target);
+	const std::vector<LspMiniMenuEntry> editEntries = buildLspEditMiniMenuItems(targetWindow);
+	std::vector<std::string> values;
+	std::vector<std::string> editValues;
+	MRColumnListView *parentList = nullptr;
+	MRColumnListView *editList = nullptr;
+	MRColumnListView *activeList = nullptr;
+	short selected = -1;
+	short editSelected = -1;
+	const short menuWidth = lspMiniMenuWidthForEntries(entries);
+	bool done = false;
+
+	command = 0;
+	values.reserve(entries.size());
+	for (const LspMiniMenuEntry &entry : entries)
+		values.push_back(lspMiniMenuDisplayText(entry, menuWidth));
+	editValues.reserve(editEntries.size());
+	for (const LspMiniMenuEntry &entry : editEntries)
+		editValues.push_back(entry.title);
+
+	parentList = showLspMiniMenuList(owner, where, values, nullptr, menuWidth);
+	activeList = parentList;
+	if (parentList == nullptr) return false;
+	g_lspContextMiniMenuOpen = true;
+	while (!done) {
+		TEvent event{};
+
+		activeList->getEvent(event);
+		if (event.what == evMouseDown && parentList != nullptr && parentList->mouseInView(event.mouse.where)) {
+			selected = lspMiniMenuClickedIndex(*parentList, event.mouse.where);
+			parentList->handleEvent(event);
+			event.what = evNothing;
+			if (selected < 0 || static_cast<std::size_t>(selected) >= entries.size()) {
+				done = true;
+				continue;
+			}
+			if (entries[static_cast<std::size_t>(selected)].editSubmenu) {
+				TPoint editWhere = where;
+
+				editWhere.x += menuWidth;
+				editWhere.y += selected;
+				if (editList == nullptr) editList = showLspMiniMenuList(owner, editWhere, editValues);
+				activeList = editList != nullptr ? editList : parentList;
+				continue;
+			}
+			command = entries[static_cast<std::size_t>(selected)].command;
+			done = true;
+			continue;
+		}
+		if (event.what == evMouseDown && editList != nullptr && editList->mouseInView(event.mouse.where)) {
+			editSelected = lspMiniMenuClickedIndex(*editList, event.mouse.where);
+			editList->handleEvent(event);
+			event.what = evNothing;
+			if (editSelected >= 0 && static_cast<std::size_t>(editSelected) < editEntries.size()) command = editEntries[static_cast<std::size_t>(editSelected)].command;
+			done = true;
+			continue;
+		}
+		if (event.what == evMouseDown) {
+			event.what = evNothing;
+			done = true;
+			continue;
+		}
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
+			event.what = evNothing;
+			done = true;
+			continue;
+		}
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
+			if (activeList == editList && editList != nullptr) {
+				editSelected = editList->selectedIndex();
+				if (editSelected >= 0 && static_cast<std::size_t>(editSelected) < editEntries.size()) command = editEntries[static_cast<std::size_t>(editSelected)].command;
+				event.what = evNothing;
+				done = true;
+				continue;
+			}
+			selected = parentList->selectedIndex();
+			event.what = evNothing;
+			if (selected < 0 || static_cast<std::size_t>(selected) >= entries.size()) {
+				done = true;
+				continue;
+			}
+			if (entries[static_cast<std::size_t>(selected)].editSubmenu) {
+				TPoint editWhere = where;
+
+				editWhere.x += menuWidth;
+				editWhere.y += selected;
+				if (editList == nullptr) editList = showLspMiniMenuList(owner, editWhere, editValues);
+				activeList = editList != nullptr ? editList : parentList;
+				continue;
+			}
+			command = entries[static_cast<std::size_t>(selected)].command;
+			done = true;
+			continue;
+		}
+		activeList->handleEvent(event);
+	}
+	g_lspContextMiniMenuOpen = false;
+	destroyLspMiniMenuList(owner, editList);
+	destroyLspMiniMenuList(owner, parentList);
+	return command != 0;
+}
+
+bool showLspContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
+	ushort command = 0;
+	TGroup *owner = targetWindow != nullptr ? static_cast<TGroup *>(targetWindow) : TProgram::deskTop;
+	LspEditorRequestTarget target;
+
+	if (owner == nullptr) return false;
+	if (targetWindow != nullptr) static_cast<void>(mrActivateEditWindow(targetWindow));
+	forgetLspAutoHoverForWindow(targetWindow, true);
+	if (!lspRequestTargetFromGlobalPoint(targetWindow, where, target)) return true;
+	if (!chooseLspMiniMenuCommand(*owner, targetWindow, where, &target, command)) return true;
+	switch (command) {
+		case cmMrOtherLspDefinition:
+			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::GoToDefinition, "LSP definition", true, nullptr, &target);
+		case cmMrOtherLspReferences:
+			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::FindReferences, "LSP references", true, nullptr, &target);
+		case cmMrOtherLspHover:
+			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::ShowHover, "LSP hover", true, nullptr, &target);
+		case cmMrOtherLspComplete:
+			return requestLspCompletionCommand(targetWindow, &target);
+		case cmMrOtherLspDocumentSymbols:
+			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::DocumentSymbols, "LSP document symbols", true, nullptr, &target);
+		case cmMrOtherLspSignatureHelp:
+			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::SignatureHelp, "LSP signature help", true, nullptr, &target);
+		case cmMrOtherLspCodeActions:
+			return requestLspCodeActionsAtPosition(targetWindow, &target);
+		default:
+			break;
+	}
+	return handleMRCommand(command);
 }
 
 struct ParenthesisPair {
@@ -1936,6 +4532,9 @@ bool handleWindowMoveBlock(MREditWindow *window) {
 	return true;
 }
 
+bool handleEditCopyToSystemClipboard(MREditWindow *targetWindow);
+bool handleEditCutToSystemClipboard(MREditWindow *targetWindow);
+
 bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 	switch (command) {
 		case cmMrEditUndo:
@@ -1948,20 +4547,17 @@ bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 			return dispatchEditorCommandEvent(window, command);
 		case cmMrEditCutToBuffer:
 			if (window == nullptr) return false;
-			if (window->isReadOnly()) {
-				postDialogWarning(kWindowReadOnlyMessage);
-				return true;
-			}
-			return dispatchEditorCommandEvent(window, cmCut);
+			return handleEditCutToSystemClipboard(window);
 		case cmMrEditCopyToBuffer:
 			if (window == nullptr) return false;
-			return dispatchEditorCommandEvent(window, cmCopy);
+			return handleEditCopyToSystemClipboard(window);
 		case cmMrEditPasteFromBuffer:
 			if (window == nullptr) return false;
 			if (window->isReadOnly()) {
 				postDialogWarning(kWindowReadOnlyMessage);
 				return true;
 			}
+			if (window->hasBlock()) return handleCopyBlock(window);
 			return dispatchEditorCommandEvent(window, cmPaste);
 		case cmMrBlockMarkStream:
 			if (window == nullptr) return false;
@@ -2235,7 +4831,51 @@ bool copyMarkedBlockToSystemClipboard(MREditWindow *targetWindow) {
 	return true;
 }
 
+bool handleEditCopyToSystemClipboard(MREditWindow *targetWindow) {
+	MREditWindow *window = effectiveKeymapWindow(targetWindow);
+
+	if (window == nullptr) return false;
+	if (window->hasSelection()) return dispatchEditorCommandEvent(window, cmCopy);
+	if (window->hasBlock()) return copyMarkedBlockToSystemClipboard(window);
+	return dispatchEditorCommandEvent(window, cmCopy);
+}
+
+bool handleEditCutToSystemClipboard(MREditWindow *targetWindow) {
+	MREditWindow *window = effectiveKeymapWindow(targetWindow);
+	std::string text;
+	std::string errorText;
+
+	if (window == nullptr) return false;
+	if (window->isReadOnly()) {
+		postDialogWarning(kWindowReadOnlyMessage);
+		return true;
+	}
+	if (window->hasSelection()) return dispatchEditorCommandEvent(window, cmCut);
+	if (!window->hasBlock()) return dispatchEditorCommandEvent(window, cmCut);
+	if (!window->captureBlockPayload(text, &errorText)) {
+		postDialogWarning(errorText.empty() ? "No block marked." : errorText);
+		return true;
+	}
+	TClipboard::setText(TStringView(text.data(), text.size()));
+	if (!window->deleteBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to delete block." : errorText);
+	return true;
+}
+
 } // namespace
+
+bool showMRLspContextMenu(MREditWindow *targetWindow, TPoint where) {
+	return showLspContextMenuForWindow(targetWindow, where);
+}
+
+void notifyMRLspMouseActivity(TPoint where) noexcept {
+	g_lspLastMousePosition = where;
+	g_lspMousePositionKnown = true;
+}
+
+void notifyMRLspKeyboardActivity() noexcept {
+	g_lspMousePositionKnown = false;
+	forgetLspAutoHover(true);
+}
 
 bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequenceText, MREditWindow *targetWindow) {
 	const auto it = std::ranges::find(kKeymapActionDispatchTable, actionId, &KeymapActionDispatchEntry::actionId);
@@ -2324,6 +4964,218 @@ bool dispatchMRKeymapMacro(std::string_view macroSpec) {
 	return runMacroSpecByName(std::string(macroSpec).c_str(), &errorText, true);
 }
 
+void pumpLspAutoHoverDwell() {
+	MREditWindow *win = nullptr;
+	MRFileEditor *editor = nullptr;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRLspServerProfile profile;
+	LspEditorRequestTarget target;
+	std::string configurationSource;
+	std::string errorMessage;
+	bool requestSent = false;
+	TPoint mousePosition;
+	const bool mouseValid = currentLspHoverMousePosition(mousePosition);
+	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+	if (now - g_lspLastHoverPumpAt < kLspHoverPumpInterval) return;
+	g_lspLastHoverPumpAt = now;
+	if (g_lspContextMiniMenuOpen) return;
+	if (g_lspSignatureHelp.active) return;
+	if (!mouseValid) {
+		forgetLspAutoHover(true);
+		return;
+	}
+	win = lspEditorWindowAtGlobalPoint(mousePosition, target);
+	editor = win != nullptr ? win->getEditor() : nullptr;
+	if (editor == nullptr) {
+		forgetLspAutoHover(true);
+		return;
+	}
+	if (!buildLspDocumentSnapshotForWindow(win, document, false)) {
+		forgetLspAutoHoverForWindow(win, true);
+		return;
+	}
+	if (!buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) {
+		forgetLspAutoHoverForWindow(win, true);
+		return;
+	}
+
+	if (!lspAutoHoverMatches(document, win->bufferId(), target.offset, target.position)) {
+		if ((g_lspAutoHover.sidekickOpen || mrHasReadOnlySidekickForParent(win)) && g_lspAutoHover.bufferId == win->bufferId()) mrDropSidekickForParent(win);
+		retirePendingLspAutoHoverRequest();
+		armLspAutoHoverForPosition(document, win->bufferId(), target.offset, target.position, mousePosition, mouseValid, now);
+		mrLogMessage("LSP hover dwell armed at cursor/mouse position.");
+		return;
+	}
+	if (mouseValid && !lspAutoHoverMouseMatches(mousePosition)) {
+		if ((g_lspAutoHover.sidekickOpen || mrHasReadOnlySidekickForParent(win)) && g_lspAutoHover.bufferId == win->bufferId()) {
+			mrDropSidekickForParent(win);
+			mrLogMessage("LSP hover sidekick dismissed after mouse move.");
+		}
+		retirePendingLspAutoHoverRequest();
+		armLspAutoHoverForPosition(document, win->bufferId(), target.offset, target.position, mousePosition, true, now);
+		mrLogMessage("LSP hover dwell re-armed after mouse move.");
+		return;
+	}
+	if (mrConsumeReadOnlySidekickDismissedForParent(win)) {
+		g_lspAutoHover.sidekickOpen = false;
+		g_lspAutoHover.dismissedForKey = true;
+		g_lspAutoHover.quietUntil = std::chrono::steady_clock::time_point::max();
+	}
+	if (g_lspAutoHover.sidekickOpen) return;
+	if (g_lspAutoHover.dismissedForKey) {
+		if (now < g_lspAutoHover.quietUntil) return;
+		g_lspAutoHover.dismissedForKey = false;
+	}
+	if (g_lspAutoHover.requested) return;
+	if (now - g_lspAutoHover.stableSince < std::chrono::milliseconds(configuredLanguageServerHoverDwellMs())) return;
+	{
+		const mr::services::MRLspPositionServiceSnapshot snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(target.position));
+		const std::string diagnosticText = buildLspDiagnosticSidekickText(snapshot);
+		int diagnosticViewColumn = target.viewColumn;
+		int diagnosticViewRow = target.viewRow;
+
+		if (!diagnosticText.empty()) static_cast<void>(lspDiagnosticSidekickAnchor(snapshot, *editor, diagnosticViewColumn, diagnosticViewRow));
+		if (!diagnosticText.empty() &&
+		    mrOpenReadOnlySidekickAt(win, diagnosticText, "LSP hover", diagnosticViewColumn, diagnosticViewRow, diagnosticViewColumn, configuredLspReadOnlySidekickPlacement())) {
+			g_lspAutoHover.sidekickOpen = true;
+			g_lspAutoHover.bufferId = win->bufferId();
+			mrLogMessage("LSP diagnostic hover sidekick opened after dwell.");
+			return;
+		}
+	}
+
+	if (!requestLspEditorCommandForWindow(win, mr::services::MRLspServiceCommandId::ShowHover, "LSP hover", false, &requestSent, &target)) return;
+	if (requestSent) {
+		g_lspAutoHover.requested = true;
+		g_lspAutoHover.requestId = g_lspAppService.activeHoverRequestId();
+		mrLogMessage("LSP hover auto request sent after dwell.");
+	} else {
+		g_lspAutoHover.dismissedForKey = true;
+		g_lspAutoHover.quietUntil = std::chrono::steady_clock::time_point::max();
+	}
+}
+
+void pumpLspCurrentDocumentSync() {
+	MREditWindow *win = currentEditorCommandWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRLspServerProfile profile;
+	std::string configurationSource;
+	std::string errorMessage;
+	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+	if (!g_lspAppService.runtimeActive()) return;
+	if (now - g_lspLastDocumentSyncCheckAt < kLspDocumentSyncCheckInterval) return;
+	g_lspLastDocumentSyncCheckAt = now;
+	if (editor == nullptr) return;
+	if (!buildLspDocumentSnapshotForWindow(win, document, false)) return;
+	if (document.bufferId != g_lspObservedBufferId || document.documentId != g_lspObservedDocumentId || document.documentVersion != g_lspObservedDocumentVersion) {
+		g_lspObservedBufferId = document.bufferId;
+		g_lspObservedDocumentId = document.documentId;
+		g_lspObservedDocumentVersion = document.documentVersion;
+		g_lspDocumentChangeObservedAt = now;
+		return;
+	}
+	if (document.bufferId == g_lspSyncedBufferId && document.documentId == g_lspSyncedDocumentId && document.documentVersion == g_lspSyncedDocumentVersion) return;
+	if (now - g_lspDocumentChangeObservedAt < std::chrono::milliseconds(configuredLanguageServerDocumentSyncDelayMs())) return;
+	if (!buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) return;
+	if (!g_lspAppService.syncCurrentEditorDocument(profile, document, *editor, errorMessage)) {
+		g_lspLastRequestState = "sync failed";
+		g_lspLastError = errorMessage;
+		mrLogMessage("LSP document sync failed: " + errorMessage);
+		return;
+	}
+	g_lspSyncedBufferId = document.bufferId;
+	g_lspSyncedDocumentId = document.documentId;
+	g_lspSyncedDocumentVersion = document.documentVersion;
+	mrLogMessage("LSP document synced after edit debounce.");
+}
+
+bool lspSignatureTypedTrigger(MRFileEditor &editor, const LspSignatureCallContext &context) {
+	if (context.requestTarget.offset == 0) return false;
+	const char previous = editor.charAtOffset(context.requestTarget.offset - 1);
+	return previous == '(' || previous == ',';
+}
+
+void pumpLspSignatureHelpLifecycle() {
+	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *activeWindow = g_lspSignatureHelp.active ? findEditWindowByBufferId(g_lspSignatureHelp.bufferId) : nullptr;
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	LspEditorRequestTarget cursorTarget;
+	LspSignatureCallContext context;
+	bool requestSent = false;
+
+	if (editor == nullptr) {
+		if (g_lspSignatureHelp.active) clearLspSignatureHelpState(activeWindow);
+		return;
+	}
+	if (!buildLspDocumentSnapshotForWindow(win, document, false)) {
+		if (g_lspSignatureHelp.active) clearLspSignatureHelpState(activeWindow);
+		return;
+	}
+	if (g_lspSignatureHelp.active && (win->bufferId() != g_lspSignatureHelp.bufferId || document.documentId != g_lspSignatureHelp.documentId)) {
+		clearLspSignatureHelpState(activeWindow);
+		return;
+	}
+		lspRequestTargetFromCursor(*editor, cursorTarget);
+	if (g_lspSignatureHelp.active && mrConsumeReadOnlySidekickDismissedForParent(win)) {
+		g_lspSignatureHelp = LspSignatureHelpState();
+		return;
+	}
+	if (!lspSignatureCallContextAroundTarget(*editor, cursorTarget, context)) {
+		if (g_lspSignatureHelp.active) clearLspSignatureHelpState(win);
+		return;
+	}
+	if (g_lspSignatureHelp.active && context.openParenOffset != g_lspSignatureHelp.openParenOffset) {
+		clearLspSignatureHelpState(win);
+		return;
+	}
+	if (!g_lspSignatureHelp.active && !lspSignatureTypedTrigger(*editor, context)) return;
+	if (!lspSignatureRefreshTrigger(*editor, context, document)) return;
+	static_cast<void>(requestLspEditorCommandForWindow(win, mr::services::MRLspServiceCommandId::SignatureHelp, "LSP signature help", false, &requestSent, &context.requestTarget));
+	if (!requestSent && g_lspSignatureHelp.active) g_lspSignatureHelp.requestPending = false;
+}
+
+void pumpMRLspService() {
+	std::string errorMessage;
+
+	if (!configuredLanguageServerSpawnDaemon()) {
+		if (g_lspAppService.runtimeActive()) mrApplyLspSupportSettingsChange();
+		return;
+	}
+	pumpLspSignatureHelpLifecycle();
+	pumpLspAutoHoverDwell();
+	if (!g_lspAppService.runtimeActive()) return;
+	pumpLspCurrentDocumentSync();
+	if (!g_lspAppService.poll(errorMessage)) {
+		++g_lspPollFailureCount;
+		g_lspLastRequestState = "poll failed";
+		g_lspLastPollError = errorMessage;
+		g_lspLastError = errorMessage;
+		postLspError("LSP poll failed: " + errorMessage);
+		g_lspAppService.close();
+		return;
+		}
+		reportNewLspResults();
+	}
+
+void mrApplyLspSupportSettingsChange() {
+	std::string errorMessage;
+
+	if (configuredLanguageServerSpawnDaemon()) return;
+	forgetLspAutoHover(true);
+	clearLspSignatureHelpState(g_lspSignatureHelp.active ? findEditWindowByBufferId(g_lspSignatureHelp.bufferId) : nullptr);
+	if (!g_lspAppService.runtimeActive()) return;
+	if (!g_lspAppService.shutdown(errorMessage)) {
+		if (!errorMessage.empty()) mrLogMessage("LSP shutdown after disabling support failed: " + errorMessage);
+		g_lspAppService.close();
+		return;
+	}
+	mrLogMessage("LSP runtime shut down after disabling support.");
+}
+
 bool handleMRCommand(ushort command, void *commandInfo) {
 	switch (command) {
 		case cmMrFileOpen:
@@ -2374,16 +5226,17 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return dispatchEditorCommand(cmMrEditRedo, true);
 
 		case cmMrEditCutToBuffer:
-			return dispatchEditorCommand(cmCut, true);
+			return handleEditCutToSystemClipboard(currentEditorCommandWindow());
 
 		case cmMrEditCopyToBuffer:
-			return dispatchEditorCommand(cmCopy, false);
+			return handleEditCopyToSystemClipboard(currentEditorCommandWindow());
 
 		case cmMrEditAppendToBuffer:
 		case cmMrEditCutAndAppendToBuffer:
 			return runDisabledBlockAction();
 
 		case cmMrEditPasteFromBuffer:
+			if (currentEditorCommandWindow() != nullptr && currentEditorCommandWindow()->hasBlock()) return handleCopyBlock(currentEditorCommandWindow());
 			return dispatchEditorCommand(cmPaste, true);
 
 		case cmMrEditToggleInsertMode: {
@@ -2597,7 +5450,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrSetupEditSettings:
 		case cmMrSetupColorSetup:
 		case cmMrSetupKeyMapping:
-		case cmMrSetupMouseKeyRepeat:
+		case cmMrSetupLspSupport:
 		case cmMrSetupFilenameExtensions:
 		case cmMrSetupCompilerProfiles:
 		case cmMrSetupPaths:
@@ -2666,6 +5519,34 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherFindPreviousCompilerError:
 			return handleCompilerErrorNavigation(commandInfo, false);
+
+		case cmMrOtherLspDefinition:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::GoToDefinition, "LSP definition");
+
+		case cmMrOtherLspReferences:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::FindReferences, "LSP references");
+
+		case cmMrOtherLspHover:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::ShowHover, "LSP hover");
+
+		case cmMrOtherLspComplete:
+			return requestLspCompletionCommand();
+
+		case cmMrOtherLspDocumentSymbols:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::DocumentSymbols, "LSP document symbols");
+
+		case cmMrOtherLspSignatureHelp:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::SignatureHelp, "LSP signature help");
+
+		case cmMrOtherLspCodeActions:
+			return requestLspCodeActionsAtCurrentPosition();
+
+		case cmMrOtherLspStatus:
+			return showLspStatusDialog();
+
+		case cmMrOtherLspResults:
+			if (!syncCurrentEditorForLspResults()) return true;
+			return showLspResultsDialog();
 
 		case cmMrOtherMacroManager:
 			return runMacroManagerDialog();

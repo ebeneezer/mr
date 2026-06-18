@@ -1,5 +1,7 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
+#include "../../app/MRCommands.hpp"
+#include "../../app/MRCommandRouter.hpp"
 #include "../../app/MREditorApp.hpp"
 
 #include <cstring>
@@ -110,9 +112,10 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 }
 
 std::string MRFileEditor::tabKeyText() const {
-	if (configuredTabExpandSetting()) return "\t";
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
+
+	if (settings.tabExpand) return "\t";
 	std::size_t insertPos = mBufferModel.cursor();
-	const MREditSetupSettings settings = configuredEditSetupSettings();
 	if (mBufferModel.hasSelection()) insertPos = mBufferModel.selection().range().start;
 	int visualColumn = freeCursorMovementEnabled() && insertPos == mBufferModel.cursor() && !mBufferModel.hasSelection() ? displayedCursorColumn() : charColumn(mBufferModel.lineStart(insertPos), insertPos);
 	return std::string(static_cast<std::size_t>(tabDisplayWidth(settings, visualColumn)), ' ');
@@ -313,11 +316,15 @@ void MRFileEditor::handleKeyDown(TEvent &event) {
 			clearEvent(event);
 			return;
 		case kbCtrlIns:
-			copySelection();
+			if (mBufferModel.hasSelection()) copySelection();
+			else
+				static_cast<void>(handleMRCommand(cmMrEditCopyToBuffer));
 			clearEvent(event);
 			return;
 		case kbShiftDel:
-			cutSelection();
+			if (mBufferModel.hasSelection()) cutSelection();
+			else
+				static_cast<void>(handleMRCommand(cmMrEditCutToBuffer));
 			clearEvent(event);
 			return;
 		default:
@@ -418,13 +425,13 @@ void MRFileEditor::handleCommand(TEvent &event) {
 			break;
 		case cmMrTextCenterLine:
 			if (!mReadOnly) {
-				MREditSetupSettings settings = configuredEditSetupSettings();
+				MREditSetupSettings settings = effectiveEditSetupSettings();
 				centerCurrentLine(settings.leftMargin, settings.rightMargin > 0 ? settings.rightMargin : 78);
 			}
 			break;
 		case cmMrTextReformatParagraph:
 			if (!mReadOnly) {
-				MREditSetupSettings settings = configuredEditSetupSettings();
+				MREditSetupSettings settings = effectiveEditSetupSettings();
 				formatParagraph(settings.leftMargin, settings.rightMargin > 0 ? settings.rightMargin : 78);
 			}
 			break;
@@ -625,9 +632,17 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	mMouseSelectionModifiers = 0;
 	auto updateLiveMouseBlockOverlay = [this, liveBlockMode](std::size_t current) {
 		if (liveBlockMode == 0) return;
+		std::size_t visualAnchor = mSelectionAnchor;
 		std::size_t visualEnd = current;
-		if (liveBlockMode != 3 && visualEnd > 0 && lineStartOffset(visualEnd) == visualEnd && lineEndOffset(visualEnd) == visualEnd) --visualEnd;
-		setBlockOverlayState(liveBlockMode, mSelectionAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
+		if (liveBlockMode != 3) {
+			const std::size_t length = mBufferModel.length();
+
+			if (visualAnchor == length && length > 0) --visualAnchor;
+			if (visualEnd == length && length > 0) --visualEnd;
+			else if (visualEnd > 0 && lineStartOffset(visualEnd) == visualEnd && lineEndOffset(visualEnd) == visualEnd)
+				--visualEnd;
+		}
+		setBlockOverlayState(liveBlockMode, visualAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
 	};
 	mSelectionAnchor = anchor;
 	mMouseSelectionColumnsValid = true;

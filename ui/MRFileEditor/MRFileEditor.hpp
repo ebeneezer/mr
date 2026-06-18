@@ -257,6 +257,7 @@ class MRFileEditor : public TScroller {
 	bool scrollWindowByLines(int deltaRows);
 
 	std::size_t offsetForGlobalPoint(TPoint where) noexcept;
+	bool textPointInView(TPoint where) noexcept;
 
 	struct BlockOverlayState {
 		bool active = false;
@@ -284,6 +285,10 @@ class MRFileEditor : public TScroller {
 
 	void clearCompilerDiagnosticRanges();
 
+	void setLspDiagnosticInformationRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
+
+	void clearLspDiagnosticInformationRanges();
+
 	void revealCursor(Boolean centerCursor = True);
 
 	void refreshViewState();
@@ -300,6 +305,10 @@ class MRFileEditor : public TScroller {
 	int visibleViewportRows() const noexcept;
 
 	TRect visibleTextViewportBounds() const noexcept;
+
+	std::size_t documentLineForVisibleLine(std::size_t visibleLine) const noexcept;
+
+	std::size_t visibleLineForDocumentLine(std::size_t documentLine) const noexcept;
 
 	const MRTextBufferModel &bufferModel() const noexcept;
 
@@ -458,11 +467,11 @@ class MRFileEditor : public TScroller {
 
 	static bool hasShiftModifier(ushort mods) noexcept;
 
-	static int configuredTabSize() noexcept;
+	int configuredTabSize() const;
 
-	static bool configuredDisplayTabs() noexcept;
+	bool configuredDisplayTabs() const;
 
-	static bool configuredFormatRuler() noexcept;
+	bool configuredFormatRuler() const;
 
 	static int tabDisplayWidth(const MREditSetupSettings &settings, int visualColumn) noexcept;
 
@@ -530,6 +539,7 @@ class MRFileEditor : public TScroller {
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept;
 
 	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
+	bool lspDiagnosticInformationContainsOffset(std::size_t offset) const noexcept;
 
 	unsigned char fileCompareLineKindAt(std::size_t lineIndex) const noexcept;
 
@@ -621,6 +631,8 @@ class MRFileEditor : public TScroller {
 
 		bool pieceTableOnlyPhaseActive() const noexcept;
 
+		MREditSetupSettings effectiveEditSetupSettings() const;
+
 		std::string effectiveCodeLanguageSetting() const;
 
 		bool languageFeaturesEnabled() const;
@@ -643,6 +655,8 @@ class MRFileEditor : public TScroller {
 
 		bool syntaxWarmedLineRangeCovered(std::size_t startLine, std::size_t endLine) const noexcept;
 
+		void refreshVisibleSyntaxCacheForImmediateDraw();
+
 	void invalidateFoldCache(bool preserveVisibleProjection = false) noexcept;
 
 	void ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language);
@@ -652,10 +666,6 @@ class MRFileEditor : public TScroller {
 	bool toggleFoldAtLine(std::size_t lineIndex);
 
 	bool foldingGutterHit(TPoint local, std::size_t *lineIndexOut = nullptr) const noexcept;
-
-	std::size_t documentLineForVisibleLine(std::size_t visibleLine) const noexcept;
-
-	std::size_t visibleLineForDocumentLine(std::size_t documentLine) const noexcept;
 
 	std::size_t foldedVisibleLineCount() const noexcept;
 
@@ -735,6 +745,7 @@ class MRFileEditor : public TScroller {
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
 	std::vector<MRTextBufferModel::Range> mCompilerErrorRanges;
 	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;
+	std::vector<MRTextBufferModel::Range> mLspDiagnosticInformationRanges;
 	LoadTiming mLastLoadTiming;
 	mutable std::size_t mCachedCursorLineDocumentId;
 	mutable std::size_t mCachedCursorLineVersion;
@@ -757,6 +768,8 @@ class MRFileEditor : public TScroller {
 	void pushMappedDirtyRange(std::vector<MRTextBufferModel::Range> &mapped, std::size_t start, std::size_t end, std::size_t maxLength);
 
 	void remapDirtyRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
+
+	void remapLspDiagnosticInformationRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
 
 	void addDirtyRange(MRTextBufferModel::Range range);
 

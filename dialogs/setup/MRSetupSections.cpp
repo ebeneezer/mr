@@ -22,6 +22,7 @@
 #include "MRSetupSections.hpp"
 
 #include "../../app/MRCommands.hpp"
+#include "../../app/MRCommandRouter.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../ui/MRFrame.hpp"
@@ -319,6 +320,7 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteMiniMapChanged - 1] = data[14 - 1];
 		data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
 		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
+		data[kMrPaletteMiniMapDiagnostics - 1] = 0x4E;
 		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
 		data[kMrPaletteCodeFoldingMarker - 1] = data[9 - 1];
 		data[kMrPaletteStatusLine - 1] = data[2 - 1];
@@ -350,6 +352,7 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteFileCompareMiniMapChanged - 1] = data[kMrPaletteMiniMapChanged - 1];
 		data[kMrPaletteFileCompareMiniMapFindMarker - 1] = data[kMrPaletteMiniMapFindMarker - 1];
 		data[kMrPaletteFileCompareMiniMapErrorMarker - 1] = data[kMrPaletteMiniMapErrorMarker - 1];
+		data[kMrPaletteDiagnosticInformation - 1] = 0x4E;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	TPalette palette = basePalette;
@@ -1891,7 +1894,199 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	char mDataFileCompareCompareTrailingGutters[8] = {0};
 };
 
+struct LspSupportDialogData {
+	ushort flags = 1;
+	ushort sidekickPlacementChoice = 1;
+	int32_t hoverDwellMs = kLanguageServerHoverDwellMsDefault;
+	int32_t documentSyncDelayMs = kLanguageServerDocumentSyncDelayMsDefault;
+	int32_t signatureQuietMs = kLanguageServerSignatureQuietMsDefault;
+};
+
+bool lspSupportDialogDataEqual(const LspSupportDialogData &lhs, const LspSupportDialogData &rhs) {
+	return lhs.flags == rhs.flags && lhs.sidekickPlacementChoice == rhs.sidekickPlacementChoice && lhs.hoverDwellMs == rhs.hoverDwellMs &&
+	       lhs.documentSyncDelayMs == rhs.documentSyncDelayMs && lhs.signatureQuietMs == rhs.signatureQuietMs;
+}
+
+class TLspSupportSetupDialog : public MRScrollableDialog {
+  public:
+	class TLspLatencyClusterFill : public TView {
+	  public:
+		TLspLatencyClusterFill(const TRect &bounds) noexcept : TView(bounds) {
+			eventMask = 0;
+		}
+
+		void draw() override {
+			TDrawBuffer buffer;
+			const TAttrPair color(getColor(0x0402));
+
+			for (int y = 0; y < size.y; ++y) {
+				buffer.moveChar(0, ' ', color, size.x);
+				writeLine(0, y, size.x, 1, buffer);
+			}
+		}
+	};
+
+	class TLspLatencyClusterText : public TStaticText {
+	  public:
+		TLspLatencyClusterText(const TRect &bounds, const char *text) noexcept : TStaticText(bounds, text) {
+		}
+
+		void draw() override {
+			TDrawBuffer buffer;
+			char text[256];
+			const TAttrPair color(getColor(0x0402));
+
+			buffer.moveChar(0, ' ', color, size.x);
+			getText(text);
+			buffer.moveStr(0, text, color, size.x);
+			writeLine(0, 0, size.x, size.y, buffer);
+		}
+	};
+
+	TLspSupportSetupDialog() : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(72, 21), "LSP SUPPORT", 72, 21, initSetupDialogFrame) {
+		addManaged(new TStaticText(TRect(3, 2, 29, 3), "Language server:"), TRect(3, 2, 29, 3));
+		mOptionsField = new TCheckBoxes(TRect(3, 3, 47, 8), new TSItem("~S~pawn language server protocol daemon", nullptr));
+		addManaged(mOptionsField, TRect(3, 3, 47, 8));
+
+		addManaged(new TStaticText(TRect(3, 9, 29, 10), "SideKicks appear @:"), TRect(3, 9, 29, 10));
+		mSidekickPlacementField = new TRadioButtons(TRect(3, 10, 28, 13), new TSItem("~c~ode", new TSItem("~r~ight margin", nullptr)));
+		addManaged(mSidekickPlacementField, TRect(3, 10, 28, 13));
+
+		addManaged(new TLspLatencyClusterFill(TRect(2, 13, 69, 17)), TRect(2, 13, 69, 17));
+		addManaged(new TLspLatencyClusterText(TRect(3, 13, 29, 14), "LSP latencies (ms):"), TRect(3, 13, 29, 14));
+		addManaged(new TLspLatencyClusterText(TRect(3, 14, 23, 15), "Hover dwell:"), TRect(3, 14, 23, 15));
+		mHoverDwellSlider = new MRNumericSlider(TRect(24, 14, 68, 15), kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax,
+		                                         kLanguageServerHoverDwellMsDefault, 100, 500, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mHoverDwellSlider, TRect(24, 14, 68, 15));
+		addManaged(new TLspLatencyClusterText(TRect(3, 15, 23, 16), "Document sync:"), TRect(3, 15, 23, 16));
+		mDocumentSyncDelaySlider = new MRNumericSlider(TRect(24, 15, 68, 16), kLanguageServerDocumentSyncDelayMsMin,
+		                                               kLanguageServerDocumentSyncDelayMsMax, kLanguageServerDocumentSyncDelayMsDefault, 50, 250,
+		                                               MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mDocumentSyncDelaySlider, TRect(24, 15, 68, 16));
+		addManaged(new TLspLatencyClusterText(TRect(3, 16, 23, 17), "Signature quiet:"), TRect(3, 16, 23, 17));
+		mSignatureQuietSlider = new MRNumericSlider(TRect(24, 16, 68, 17), kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax,
+		                                            kLanguageServerSignatureQuietMsDefault, 250, 1000, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mSignatureQuietSlider, TRect(24, 16, 68, 17));
+
+		selectContent();
+	}
+
+	void getData(void *rec) override {
+		LspSupportDialogData *data = static_cast<LspSupportDialogData *>(rec);
+		if (mOptionsField != nullptr) mOptionsField->getData(&data->flags);
+		if (mSidekickPlacementField != nullptr) mSidekickPlacementField->getData(&data->sidekickPlacementChoice);
+		if (mHoverDwellSlider != nullptr) mHoverDwellSlider->getData(&data->hoverDwellMs);
+		if (mDocumentSyncDelaySlider != nullptr) mDocumentSyncDelaySlider->getData(&data->documentSyncDelayMs);
+		if (mSignatureQuietSlider != nullptr) mSignatureQuietSlider->getData(&data->signatureQuietMs);
+	}
+
+	void setData(void *rec) override {
+		LspSupportDialogData *data = static_cast<LspSupportDialogData *>(rec);
+		if (mOptionsField != nullptr) mOptionsField->setData(&data->flags);
+		if (mSidekickPlacementField != nullptr) {
+			if (data->sidekickPlacementChoice > 1) data->sidekickPlacementChoice = 1;
+			mSidekickPlacementField->setData(&data->sidekickPlacementChoice);
+		}
+		if (mHoverDwellSlider != nullptr) mHoverDwellSlider->setData(&data->hoverDwellMs);
+		if (mDocumentSyncDelaySlider != nullptr) mDocumentSyncDelaySlider->setData(&data->documentSyncDelayMs);
+		if (mSignatureQuietSlider != nullptr) mSignatureQuietSlider->setData(&data->signatureQuietMs);
+	}
+
+  private:
+	TCheckBoxes *mOptionsField = nullptr;
+	TRadioButtons *mSidekickPlacementField = nullptr;
+	MRNumericSlider *mHoverDwellSlider = nullptr;
+	MRNumericSlider *mDocumentSyncDelaySlider = nullptr;
+	MRNumericSlider *mSignatureQuietSlider = nullptr;
+};
+
 } // namespace
+
+void runLspSupportDialogFlow() {
+	bool running = true;
+	LspSupportDialogData dialogData;
+
+	if (configuredLanguageServerSpawnDaemon()) dialogData.flags |= 1;
+	else
+		dialogData.flags &= static_cast<ushort>(~1);
+	dialogData.sidekickPlacementChoice = configuredLanguageServerSidekickPlacement() == MRLanguageServerSidekickPlacement::AtCode ? 0 : 1;
+	dialogData.hoverDwellMs = configuredLanguageServerHoverDwellMs();
+	dialogData.documentSyncDelayMs = configuredLanguageServerDocumentSyncDelayMs();
+	dialogData.signatureQuietMs = configuredLanguageServerSignatureQuietMs();
+
+	while (running) {
+		TLspSupportSetupDialog *dialog = new TLspSupportSetupDialog();
+		LspSupportDialogData baselineData = dialogData;
+		ushort result = execDialogWithDataCapture(dialog, &dialogData);
+		const bool changed = mr::dialogs::isDialogDraftDirty(baselineData, dialogData, lspSupportDialogDataEqual);
+		auto applyAndPersistLspSupport = [&]() -> bool {
+			std::string errorText;
+			const bool spawnDaemon = (dialogData.flags & 1) != 0;
+			const MRLanguageServerSidekickPlacement sidekickPlacement = dialogData.sidekickPlacementChoice == 0 ? MRLanguageServerSidekickPlacement::AtCode : MRLanguageServerSidekickPlacement::RightMargin;
+
+			if (!setConfiguredLanguageServerSpawnDaemon(spawnDaemon, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredLanguageServerSidekickPlacement(sidekickPlacement, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredLanguageServerHoverDwellMs(dialogData.hoverDwellMs, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredLanguageServerDocumentSyncDelayMs(dialogData.documentSyncDelayMs, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredLanguageServerSignatureQuietMs(dialogData.signatureQuietMs, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			mrApplyLspSupportSettingsChange();
+			if (!persistConfiguredSettingsSnapshot(&errorText)) {
+				postSetupFlowError("Installation / LSP support", errorText);
+				return false;
+			}
+			return true;
+		};
+
+		switch (result) {
+			case cmOK:
+				if (changed && !applyAndPersistLspSupport()) break;
+				running = false;
+				break;
+
+			case cmClose:
+			case cmCancel:
+				if (!changed) {
+					running = false;
+					break;
+				}
+				switch (mr::dialogs::runDialogDirtyGating("LSP support settings have unsaved changes.")) {
+					case mr::dialogs::UnsavedChangesChoice::Save:
+						if (!applyAndPersistLspSupport()) break;
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Discard:
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Cancel:
+						discardQueuedCancelEvent();
+						break;
+					default:
+						break;
+				}
+				break;
+
+			default:
+				running = false;
+				break;
+		}
+	}
+	clearSetupDialogStatus();
+}
 
 void runColorSetupDialogFlow() {
 	auto palettesEqual = [](const TPalette &lhs, const TPalette &rhs) {

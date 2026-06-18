@@ -127,8 +127,8 @@ void updateAppCommandState() {
 
 	setCommandEnabled(cmMrEditUndo, canModify && state.hasUndo);
 	setCommandEnabled(cmMrEditRedo, canModify && state.hasRedo);
-	setCommandEnabled(cmMrEditCutToBuffer, canModify && state.hasSelection);
-	setCommandEnabled(cmMrEditCopyToBuffer, hasEditor && state.hasSelection);
+	setCommandEnabled(cmMrEditCutToBuffer, canModify && (state.hasSelection || state.hasBlock));
+	setCommandEnabled(cmMrEditCopyToBuffer, hasEditor && (state.hasSelection || state.hasBlock));
 	setCommandEnabled(cmMrEditAppendToBuffer, false);
 	setCommandEnabled(cmMrEditCutAndAppendToBuffer, false);
 	setCommandEnabled(cmMrEditPasteFromBuffer, canModify);
@@ -199,6 +199,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
 	setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows);
 	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasBuildSourceFile);
+	setCommandEnabled(cmMrOtherLspDefinition, hasEditor && state.hasPersistentFileName);
+	setCommandEnabled(cmMrOtherLspHover, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
 	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail);
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));

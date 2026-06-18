@@ -615,7 +615,7 @@ static const char *keymapActionIdForMacroCommand(const std::string &name) noexce
 	    MacroKeymapActionCommand{"SETUP_EDIT_SETTINGS", "MR_SETUP_EDIT_SETTINGS"},
 	    MacroKeymapActionCommand{"SETUP_COLOR", "MR_SETUP_COLOR"},
 	    MacroKeymapActionCommand{"SETUP_KEYMAP", "MR_SETUP_KEYMAP"},
-	    MacroKeymapActionCommand{"SETUP_MOUSE_KEY_REPEAT", "MR_SETUP_MOUSE_KEY_REPEAT"},
+	    MacroKeymapActionCommand{"SETUP_LSP_SUPPORT", "MR_SETUP_LSP_SUPPORT"},
 	    MacroKeymapActionCommand{"SETUP_FILENAME_EXTENSIONS", "MR_SETUP_FILENAME_EXTENSIONS"},
 	    MacroKeymapActionCommand{"SETUP_COMPILER_PROFILES", "MR_SETUP_COMPILER_PROFILES"},
 	    MacroKeymapActionCommand{"SETUP_PATHS", "MR_SETUP_PATHS"},
@@ -7230,7 +7230,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 										                         "COMPILER_ERROR_MESSAGE_PLACEMENT, SCROLLBAR_VISIBILITY, TRACK_COMPILER_WARNINGS, TRACK_COMPILER_NOTES, "
 										                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, WINDOW_COLORTHEME_URI, "
 									                         "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS, FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS, FILE_COMPARE_COMPARE_LEADING_GUTTERS, FILE_COMPARE_COMPARE_TRAILING_GUTTERS, FILE_COMPARE_START_CONFIGURATION, FILE_COMPARE_COMPARE_PANEL_READ_ONLY, "
-									                         "AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
+									                         "AUTOSAVE_WORKSPACE, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
 									                         "LASTFILEDIALOGPATH, "
 									                         "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 									                         "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "
@@ -7917,7 +7917,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					else if (name == "MOVE_BLOCK")
 						ok = true;
 					else if (name == "DELETE_BLOCK")
-						ok = true;
+						ok = mrvmUiDeleteBlock();
 					else if (name == "CREATE_WINDOW")
 						ok = mrvmUiCreateWindow();
 					else if (name == "DELETE_WINDOW")

@@ -128,6 +128,24 @@ bool setError(std::string *errorMessage, const std::string &message) {
 	return false;
 }
 
+bool parseMillisecondsLiteral(const std::string &value, int minValue, int maxValue, int &outValue, std::string *errorMessage) {
+	std::string trimmed = trimAscii(value);
+	int parsed = 0;
+
+	if (trimmed.empty()) return setError(errorMessage, "Milliseconds value must not be empty.");
+	for (char ch : trimmed) {
+		if (std::isdigit(static_cast<unsigned char>(ch)) == 0) return setError(errorMessage, "Milliseconds value must be a non-negative integer.");
+		if (parsed > maxValue / 10) return setError(errorMessage, "Milliseconds value is above the supported range.");
+		parsed = parsed * 10 + (ch - '0');
+		if (parsed > maxValue) return setError(errorMessage, "Milliseconds value is above the supported range.");
+	}
+	if (parsed < minValue || parsed > maxValue)
+		return setError(errorMessage, "Milliseconds value must be between " + std::to_string(minValue) + " and " + std::to_string(maxValue) + ".");
+	outValue = parsed;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
 void trimSnapshotHistoryToLimit(std::vector<std::string> &entries, int limit) {
 	if (limit < 0) limit = 0;
 	if (entries.size() > static_cast<std::size_t>(limit)) entries.resize(static_cast<std::size_t>(limit));
@@ -169,6 +187,8 @@ static const char *const kLogHandlingPersist = "PERSIST";
 static const char *const kLogHandlingJournalctl = "JOURNALCTL";
 static const char *const kCursorBehaviourBoundToText = "BOUND_TO_TEXT";
 static const char *const kCursorBehaviourFreeMovement = "FREE_MOVEMENT";
+static const char *const kLanguageServerSidekickAtCode = "AT_CODE";
+static const char *const kLanguageServerSidekickRightMargin = "RIGHT_MARGIN";
 static const char *const kFileCompareStartOriginalCompare = "ORIGINAL_COMPARE";
 static const char *const kFileCompareStartCompareOriginal = "COMPARE_ORIGINAL";
 static const char *const kDialogLastPathKey = "DIALOG_LAST_PATH";
@@ -254,6 +274,11 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
     {"COMPILER_ERROR_MESSAGE_PLACEMENT", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_SPAWN_DAEMON", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_SIDEKICK_PLACEMENT", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_HOVER_DWELL_MS", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_SIGNATURE_QUIET_MS", MRSettingsKeyClass::Global, true},
     {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
     {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
 	    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
@@ -268,6 +293,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"FILE_COMPARE_COMPARE_TRAILING_GUTTERS", MRSettingsKeyClass::Global, true},
     {"FILE_COMPARE_START_CONFIGURATION", MRSettingsKeyClass::Global, true},
     {"FILE_COMPARE_COMPARE_PANEL_READ_ONLY", MRSettingsKeyClass::Global, true},
+    {"AUTOSAVE_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"LOG_HANDLING", MRSettingsKeyClass::Global, true},
     {"LOGFILE", MRSettingsKeyClass::Global, true},
@@ -281,6 +307,9 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {kDialogLastPathKey, MRSettingsKeyClass::Global, false},
     {kDialogPathHistoryKey, MRSettingsKeyClass::Global, false},
     {kDialogFileHistoryKey, MRSettingsKeyClass::Global, false},
+    {"KEYMAP_PROFILE", MRSettingsKeyClass::Global, false},
+    {"KEYMAP_BIND", MRSettingsKeyClass::Global, false},
+    {"ACTIVE_KEYMAP_PROFILE", MRSettingsKeyClass::Global, false},
     {"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
 };
 
@@ -367,6 +396,22 @@ bool parseCompilerErrorMessagePlacementLiteral(const std::string &value, MRCompi
 		return true;
 	}
 	return setError(errorMessage, "COMPILER_ERROR_MESSAGE_PLACEMENT must be UNDER_CODE or RIGHT_MARGIN.");
+}
+
+bool parseLanguageServerSidekickPlacementLiteral(const std::string &value, MRLanguageServerSidekickPlacement &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kLanguageServerSidekickAtCode || upper == "CODE" || upper == "ATCODE") {
+		outValue = MRLanguageServerSidekickPlacement::AtCode;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == kLanguageServerSidekickRightMargin || upper == "RIGHT" || upper == "MARGIN") {
+		outValue = MRLanguageServerSidekickPlacement::RightMargin;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "LANGUAGE_SERVER_SIDEKICK_PLACEMENT must be AT_CODE or RIGHT_MARGIN.");
 }
 
 bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibility &outValue, std::string *errorMessage) {
@@ -579,6 +624,58 @@ bool normalizeCursorPositionMarker(const std::string &value, std::string &out, s
 	return true;
 }
 
+bool keymapDiagnosticsContainError(const std::vector<MRKeymapDiagnostic> &diagnostics) noexcept {
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return true;
+	return false;
+}
+
+std::string firstKeymapDiagnosticMessage(const std::vector<MRKeymapDiagnostic> &diagnostics) {
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
+		if (!diagnostic.message.empty()) return diagnostic.message;
+	return "Invalid keymap payload.";
+}
+
+bool applyKeymapProfileRecord(std::vector<MRKeymapProfile> &profiles, const std::string &value, std::string *errorMessage) {
+	MRKeymapProfile profile;
+	const std::vector<MRKeymapDiagnostic> diagnostics = parseKeymapProfilePayload(value, profile);
+
+	if (keymapDiagnosticsContainError(diagnostics)) return setError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	for (MRKeymapProfile &existing : profiles)
+		if (existing.name == profile.name) {
+			existing = profile;
+			if (errorMessage != nullptr) errorMessage->clear();
+			return true;
+		}
+	profiles.push_back(profile);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool applyKeymapBindingRecord(std::vector<MRKeymapProfile> &profiles, const std::string &value, std::string *errorMessage) {
+	MRKeymapBindingRecord binding;
+	const std::vector<MRKeymapDiagnostic> diagnostics = parseKeymapBindingPayload(value, binding);
+
+	if (keymapDiagnosticsContainError(diagnostics)) return setError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	for (MRKeymapProfile &profile : profiles)
+		if (profile.name == binding.profileName) {
+			profile.bindings.push_back(binding);
+			if (errorMessage != nullptr) errorMessage->clear();
+			return true;
+		}
+	return setError(errorMessage, "Binding references unknown keymap profile: " + binding.profileName);
+}
+
+bool parseActiveKeymapProfileRecord(const std::string &value, std::string &activeProfile, std::string *errorMessage) {
+	MRKeymapProfile profile;
+	const std::vector<MRKeymapDiagnostic> diagnostics = parseKeymapProfilePayload(value, profile);
+
+	if (keymapDiagnosticsContainError(diagnostics)) return setError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	activeProfile = profile.name;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
 } // namespace
 
 MRSettingsKeyClass classifySettingsKey(std::string_view key) {
@@ -633,6 +730,11 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredLiveLogSettings(MRLiveLogSettings(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
+	if (!setConfiguredLanguageServerSpawnDaemon(true, errorMessage)) return false;
+	if (!setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement::RightMargin, errorMessage)) return false;
+	if (!setConfiguredLanguageServerHoverDwellMs(kLanguageServerHoverDwellMsDefault, errorMessage)) return false;
+	if (!setConfiguredLanguageServerDocumentSyncDelayMs(kLanguageServerDocumentSyncDelayMsDefault, errorMessage)) return false;
+	if (!setConfiguredLanguageServerSignatureQuietMs(kLanguageServerSignatureQuietMsDefault, errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
@@ -644,6 +746,8 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredFileCompareCompareTrailingGutters("", errorMessage)) return false;
 	if (!setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration::OriginalCompare, errorMessage)) return false;
 	if (!setConfiguredFileCompareComparePanelReadOnly(true, errorMessage)) return false;
+	if (!setConfiguredAutosaveWorkspace(false, errorMessage)) return false;
+	if (!setConfiguredAutoloadWorkspace(false, errorMessage)) return false;
 	if (!setConfiguredLogHandling(MRLogHandling::Volatile, errorMessage)) return false;
 	configuredAutoexecMacroStorage().clear();
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage)) return false;
@@ -1056,6 +1160,31 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (!parseCompilerErrorMessagePlacementLiteral(value, placement, errorMessage)) return false;
 				return setConfiguredCompilerErrorMessagePlacement(placement, errorMessage);
 			}
+			if (upper == "LANGUAGE_SERVER_SPAWN_DAEMON") {
+				bool parsed = true;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredLanguageServerSpawnDaemon(parsed, errorMessage);
+			}
+			if (upper == "LANGUAGE_SERVER_SIDEKICK_PLACEMENT") {
+				MRLanguageServerSidekickPlacement placement = MRLanguageServerSidekickPlacement::RightMargin;
+				if (!parseLanguageServerSidekickPlacementLiteral(value, placement, errorMessage)) return false;
+				return setConfiguredLanguageServerSidekickPlacement(placement, errorMessage);
+			}
+			if (upper == "LANGUAGE_SERVER_HOVER_DWELL_MS") {
+				int parsed = kLanguageServerHoverDwellMsDefault;
+				if (!parseMillisecondsLiteral(value, kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax, parsed, errorMessage)) return false;
+				return setConfiguredLanguageServerHoverDwellMs(parsed, errorMessage);
+			}
+			if (upper == "LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS") {
+				int parsed = kLanguageServerDocumentSyncDelayMsDefault;
+				if (!parseMillisecondsLiteral(value, kLanguageServerDocumentSyncDelayMsMin, kLanguageServerDocumentSyncDelayMsMax, parsed, errorMessage)) return false;
+				return setConfiguredLanguageServerDocumentSyncDelayMs(parsed, errorMessage);
+			}
+			if (upper == "LANGUAGE_SERVER_SIGNATURE_QUIET_MS") {
+				int parsed = kLanguageServerSignatureQuietMsDefault;
+				if (!parseMillisecondsLiteral(value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, parsed, errorMessage)) return false;
+				return setConfiguredLanguageServerSignatureQuietMs(parsed, errorMessage);
+			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				MRScrollbarVisibility visibility = MRScrollbarVisibility::Smart;
 				if (!parseScrollbarVisibilityLiteral(value, visibility, errorMessage)) return false;
@@ -1091,6 +1220,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				bool parsed = true;
 				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredFileCompareComparePanelReadOnly(parsed, errorMessage);
+			}
+			if (upper == "AUTOSAVE_WORKSPACE") {
+				bool parsed = false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredAutosaveWorkspace(parsed, errorMessage);
 			}
 			if (upper == "AUTOLOAD_WORKSPACE") {
 				bool parsed = false;
@@ -1208,6 +1342,24 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				addSerializedHistoryEntry(configuredMultiPathHistoryStorage(), value, configuredPathHistoryLimit(), true);
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
+			}
+			if (upper == "KEYMAP_PROFILE") {
+				std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+
+				if (!applyKeymapProfileRecord(profiles, value, errorMessage)) return false;
+				return setConfiguredKeymapProfiles(profiles, errorMessage);
+			}
+			if (upper == "KEYMAP_BIND") {
+				std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+
+				if (!applyKeymapBindingRecord(profiles, value, errorMessage)) return false;
+				return setConfiguredKeymapProfiles(profiles, errorMessage);
+			}
+			if (upper == "ACTIVE_KEYMAP_PROFILE") {
+				std::string activeProfile;
+
+				if (!parseActiveKeymapProfileRecord(value, activeProfile, errorMessage)) return false;
+				return setConfiguredActiveKeymapProfile(activeProfile, errorMessage);
 			}
 			if (upper == "DEFAULT_PROFILE_DESCRIPTION") return setConfiguredDefaultProfileDescription(value, errorMessage);
 			break;
@@ -1572,6 +1724,26 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseCompilerErrorMessagePlacementLiteral(value, snapshot.compilerErrorMessagePlacement, errorMessage)) return false;
 				return true;
 			}
+			if (upper == "LANGUAGE_SERVER_SPAWN_DAEMON") {
+				if (!parseBooleanLiteral(value, snapshot.languageServerSpawnDaemon, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LANGUAGE_SERVER_SIDEKICK_PLACEMENT") {
+				if (!parseLanguageServerSidekickPlacementLiteral(value, snapshot.languageServerSidekickPlacement, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LANGUAGE_SERVER_HOVER_DWELL_MS") {
+				if (!parseMillisecondsLiteral(value, kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax, snapshot.languageServerHoverDwellMs, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS") {
+				if (!parseMillisecondsLiteral(value, kLanguageServerDocumentSyncDelayMsMin, kLanguageServerDocumentSyncDelayMsMax, snapshot.languageServerDocumentSyncDelayMs, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LANGUAGE_SERVER_SIGNATURE_QUIET_MS") {
+				if (!parseMillisecondsLiteral(value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, snapshot.languageServerSignatureQuietMs, errorMessage)) return false;
+				return true;
+			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				if (!parseScrollbarVisibilityLiteral(value, snapshot.scrollbarVisibility, errorMessage)) return false;
 				return true;
@@ -1607,6 +1779,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "FILE_COMPARE_COMPARE_PANEL_READ_ONLY") {
 				if (!parseBooleanLiteral(value, snapshot.fileCompareComparePanelReadOnly, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "AUTOSAVE_WORKSPACE") {
+				if (!parseBooleanLiteral(value, snapshot.autosaveWorkspace, errorMessage)) return false;
 				return true;
 			}
 			if (upper == "AUTOLOAD_WORKSPACE") {
@@ -1734,6 +1910,9 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
+			if (upper == "KEYMAP_PROFILE") return applyKeymapProfileRecord(snapshot.keymapProfiles, value, errorMessage);
+			if (upper == "KEYMAP_BIND") return applyKeymapBindingRecord(snapshot.keymapProfiles, value, errorMessage);
+			if (upper == "ACTIVE_KEYMAP_PROFILE") return parseActiveKeymapProfileRecord(value, snapshot.activeKeymapProfile, errorMessage);
 			break;
 		}
 		case MRSettingsKeyClass::Edit:

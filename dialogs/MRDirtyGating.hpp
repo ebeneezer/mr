@@ -19,6 +19,8 @@ template <typename Draft, typename EqualFn> [[nodiscard]] bool isDialogDraftDirt
 }
 
 [[nodiscard]] UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline, const char *detail = nullptr);
+[[nodiscard]] UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline, const char *detail, const char *discardLabel);
+[[nodiscard]] UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const char *headline, const char *detail, const char *discardLabel);
 
 [[nodiscard]] UnsavedChangesChoice runDialogDirtyGating(const char *headline, const char *primaryLabel = "Save", const char *detail = nullptr);
 

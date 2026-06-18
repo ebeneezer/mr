@@ -108,7 +108,11 @@ bool mrvmUiMoveBlock() {
 }
 
 bool mrvmUiDeleteBlock() {
-	return true;
+	MREditWindow *win = mrvmEditorActiveWindow();
+	std::string errorText;
+
+	if (win == nullptr) return false;
+	return win->deleteBlock(&errorText);
 }
 
 bool mrvmUiExtractCurrentBlockText(std::string &out) {

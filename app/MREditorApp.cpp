@@ -1079,6 +1079,8 @@ const TPalette &extendedAppBasePalette() {
 
 		for (i = 0; i < kBaseSlots; ++i)
 			data[i] = static_cast<unsigned char>(cp[i]);
+		for (; i < kTotalSlots; ++i)
+			data[i] = data[1 - 1];
 		// Dedicated editor-only accent slots (avoid window frame/scrollbar side effects).
 		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
 		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
@@ -1103,6 +1105,7 @@ const TPalette &extendedAppBasePalette() {
 		data[kMrPaletteStatusLineFunctionKey - 1] = data[5 - 1];
 		data[kMrPaletteDesktop - 1] = 0x90;
 		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
+		data[kMrPaletteDiagnosticInformation - 1] = 0x4E;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	return palette;
@@ -1163,6 +1166,17 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 
 	if (configuredAutoloadWorkspace()) {
 		mrLoadWorkspace("");
+	} else if (mrSettingsFileHasAutosavedWorkspace()) {
+		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Load workspace", "Load autosaved workspace?", configuredSettingsMacroFilePath().c_str(), "Discard workspace");
+
+		if (choice == mr::dialogs::UnsavedChangesChoice::Save) {
+			setRuntimePreserveAutosavedWorkspace(false);
+			mrLoadWorkspace("");
+		} else if (choice == mr::dialogs::UnsavedChangesChoice::Discard) {
+			setRuntimePreserveAutosavedWorkspace(false);
+			static_cast<void>(mrClearAutosavedWorkspace());
+		} else
+			setRuntimePreserveAutosavedWorkspace(true);
 	}
 	logStartupPhase("workspace_autoload");
 	mrLogMessage("Editor session started.");
@@ -1772,6 +1786,8 @@ void MREditorApp::handleEvent(TEvent &event) {
 	const ushort originalWhat = event.what;
 	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
+	if ((event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0) notifyMRLspMouseActivity(event.mouse.where);
+	if (event.what == evKeyDown) notifyMRLspKeyboardActivity();
 	clearTransientSearchSelectionOnUserInput(event);
 	if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbF11)) {
 		toggleFullscreenPresentation();
@@ -1913,6 +1929,7 @@ void MREditorApp::idle() {
 	updateMacroBrainBlink();
 	warmIndexedMacroBindings();
 	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
+	pumpMRLspService();
 	pumpDeferredMacroUiPlayback();
 	updatePerformancePanel();
 	updateFullscreenHint();

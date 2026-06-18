@@ -30,6 +30,7 @@
 
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsStorage.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRBentoBox.hpp"
@@ -54,6 +55,9 @@ enum : ushort {
 	cmMRWindowListGet,
 	cmMRWorkspaceSave,
 	cmMRWorkspaceLoad,
+	cmMRWorkspaceAutosaveToggle,
+	cmMRWorkspaceAutoloadToggle,
+	cmMRWorkspaceMainFile,
 	cmMRWindowListActivate,
 };
 
@@ -65,6 +69,17 @@ constexpr const char *kHideAllTitle = "Hide ~a~ll";
 constexpr const char *kRestoreTitle = "~R~estore";
 constexpr const char *kRestoreAllTitle = "Restore ~a~ll";
 constexpr const char *kGetTitle = "~G~et";
+constexpr const char *kAutoWorkspaceOnTitle = "[x] Auto";
+constexpr const char *kAutoWorkspaceOffTitle = "[ ] Auto";
+constexpr const char *kMainWorkspaceOnTitle = "[x] ~M~ain";
+constexpr const char *kMainWorkspaceOffTitle = "[ ] ~M~ain";
+
+void updateButtonTitle(TButton *button, const char *title) {
+	if (button == nullptr || title == nullptr || std::strcmp(button->title, title) == 0) return;
+	delete[] (char *) button->title;
+	button->title = newStr(title);
+	button->drawView();
+}
 
 bool windowListDebugEnabled() noexcept {
 	static int cached = -1;
@@ -327,7 +342,46 @@ class WindowListDialog : public MRDialogFoundation {
 			g_manageWindowListDialog = this;
 	}
 
-	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent), initMrDialogFrame), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
+	bool persistWorkspaceToggleSettings() {
+		std::string errorText;
+
+		if (persistConfiguredSettingsSnapshot(&errorText)) return true;
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorText.empty() ? "Unable to save workspace settings." : errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		return false;
+	}
+
+	void updateWorkspaceToggleButtons() {
+		updateButtonTitle(autosaveWorkspaceButton, configuredAutosaveWorkspace() ? kAutoWorkspaceOnTitle : kAutoWorkspaceOffTitle);
+		updateButtonTitle(autoloadWorkspaceButton, configuredAutoloadWorkspace() ? kAutoWorkspaceOnTitle : kAutoWorkspaceOffTitle);
+	}
+
+	void toggleAutosaveWorkspace() {
+		std::string errorText;
+		const bool enabled = !configuredAutosaveWorkspace();
+
+		if (!setConfiguredAutosaveWorkspace(enabled, &errorText)) {
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorText.empty() ? "Unable to change auto save workspace." : errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+			return;
+		}
+		if (enabled) setRuntimePreserveAutosavedWorkspace(false);
+		if (persistWorkspaceToggleSettings()) {
+			if (!enabled) static_cast<void>(mrClearAutosavedWorkspace());
+			updateWorkspaceToggleButtons();
+		}
+	}
+
+	void toggleAutoloadWorkspace() {
+		std::string errorText;
+		const bool enabled = !configuredAutoloadWorkspace();
+
+		if (!setConfiguredAutoloadWorkspace(enabled, &errorText)) {
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorText.empty() ? "Unable to change auto load workspace." : errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+			return;
+		}
+		if (persistWorkspaceToggleSettings()) updateWorkspaceToggleButtons();
+	}
+
+	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent), initMrDialogFrame), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), workspaceMainFileButton(nullptr), autosaveWorkspaceButton(nullptr), autoloadWorkspaceButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
 		int width = computeWidth();
 		int height = computeHeight(aMode, aCurrent);
 		int listTop = 6;
@@ -337,14 +391,15 @@ class WindowListDialog : public MRDialogFoundation {
 		const int workspaceButtonY = height - 5;
 		const int bottomButtonY = height - 3;
 		const int buttonGap = 2;
-		const int workspaceGap = 4;
+		const int workspacePairGap = 1;
+		const int workspaceGroupGap = 6;
 		int topButtonLeft = 2;
 		int topButtonWidth = 0;
 		auto centeredRowStart = [width](int contentWidth) { return std::max(2, (width - contentWidth) / 2); };
 
 		{
 			const std::array topButtons{mr::dialogs::DialogButtonSpec{"~D~elete", cmMRWindowListDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMRWindowListSave, bfNormal}, mr::dialogs::DialogButtonSpec{kHideToggleTitle, cmMRWindowListHide, bfNormal}, mr::dialogs::DialogButtonSpec{kHideAllTitle, cmMRWindowListHideAll, bfNormal}};
-			const std::array widthCandidates{kHideToggleTitle, kHideAllTitle, kRestoreTitle, kRestoreAllTitle, "Save ~a~ll", "Save a~s~", "~R~evert", kGetTitle};
+			const std::array widthCandidates{kHideToggleTitle, kHideAllTitle, kRestoreTitle, kRestoreAllTitle, "Save ~a~ll", "Save a~s~", "~R~evert", kGetTitle, kMainWorkspaceOnTitle};
 			std::vector<TButton *> topButtonViews;
 			int minTopButtonWidth = 0;
 			mr::dialogs::DialogButtonRowMetrics metrics;
@@ -363,11 +418,16 @@ class WindowListDialog : public MRDialogFoundation {
 			if (topButtonViews.size() >= 4) hideAllButton = topButtonViews[3];
 		}
 		{
-			const std::array actionButtons{mr::dialogs::DialogButtonSpec{"Save ~a~ll", cmMRWindowListSaveAll, bfNormal}, mr::dialogs::DialogButtonSpec{"Save a~s~", cmMRWindowListSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~R~evert", cmMRWindowListRevert, bfNormal}, mr::dialogs::DialogButtonSpec{kGetTitle, cmMRWindowListGet, bfNormal}};
+			const std::array actionButtons{mr::dialogs::DialogButtonSpec{"Save ~a~ll", cmMRWindowListSaveAll, bfNormal}, mr::dialogs::DialogButtonSpec{"Save a~s~", cmMRWindowListSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~R~evert", cmMRWindowListRevert, bfNormal}, mr::dialogs::DialogButtonSpec{kMainWorkspaceOffTitle, cmMRWorkspaceMainFile, bfNormal}};
 			std::vector<TButton *> actionButtonViews;
 
 			mr::dialogs::insertUniformButtonRow(*this, topButtonLeft, actionButtonY, buttonGap, actionButtons, topButtonWidth, &actionButtonViews);
-			if (actionButtonViews.size() >= 4) getButton = actionButtonViews[3];
+			if (actionButtonViews.size() >= 4) {
+				workspaceMainFileButton = actionButtonViews[3];
+				getButton = new TButton(TRect(workspaceMainFileButton->origin.x, workspaceMainFileButton->origin.y, workspaceMainFileButton->origin.x + workspaceMainFileButton->size.x, workspaceMainFileButton->origin.y + workspaceMainFileButton->size.y), kGetTitle, cmMRWindowListGet, bfNormal);
+				insert(getButton);
+				getButton->hide();
+			}
 		}
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
@@ -376,11 +436,24 @@ class WindowListDialog : public MRDialogFoundation {
 		insert(listView);
 
 		{
-			const std::array workspaceButtons{mr::dialogs::DialogButtonSpec{"Sa~v~e workspace", cmMRWorkspaceSave, bfNormal}, mr::dialogs::DialogButtonSpec{"~L~oad workspace", cmMRWorkspaceLoad, bfNormal}};
-			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(workspaceButtons, workspaceGap);
-			const int left = centeredRowStart(metrics.rowWidth);
+			const std::array autoSaveCandidate{mr::dialogs::DialogButtonSpec{kAutoWorkspaceOnTitle, 0, bfNormal}, mr::dialogs::DialogButtonSpec{kAutoWorkspaceOffTitle, 0, bfNormal}};
+			const std::array saveCandidate{mr::dialogs::DialogButtonSpec{"Sa~v~e workspace", 0, bfNormal}};
+			const std::array loadCandidate{mr::dialogs::DialogButtonSpec{"~L~oad workspace", 0, bfNormal}};
+			const int autoWidth = mr::dialogs::measureUniformButtonRow(autoSaveCandidate, 0).buttonWidth;
+			const int saveWidth = mr::dialogs::measureUniformButtonRow(saveCandidate, 0).buttonWidth;
+			const int loadWidth = mr::dialogs::measureUniformButtonRow(loadCandidate, 0).buttonWidth;
+			const int rowWidth = autoWidth + workspacePairGap + saveWidth + workspaceGroupGap + autoWidth + workspacePairGap + loadWidth;
+			int left = centeredRowStart(rowWidth);
 
-			mr::dialogs::insertUniformButtonRow(*this, left, workspaceButtonY, workspaceGap, workspaceButtons);
+			autosaveWorkspaceButton = new TButton(TRect(left, workspaceButtonY, left + autoWidth, workspaceButtonY + 2), configuredAutosaveWorkspace() ? kAutoWorkspaceOnTitle : kAutoWorkspaceOffTitle, cmMRWorkspaceAutosaveToggle, bfNormal);
+			insert(autosaveWorkspaceButton);
+			left += autoWidth + workspacePairGap;
+			insert(new TButton(TRect(left, workspaceButtonY, left + saveWidth, workspaceButtonY + 2), "Sa~v~e workspace", cmMRWorkspaceSave, bfNormal));
+			left += saveWidth + workspaceGroupGap;
+			autoloadWorkspaceButton = new TButton(TRect(left, workspaceButtonY, left + autoWidth, workspaceButtonY + 2), configuredAutoloadWorkspace() ? kAutoWorkspaceOnTitle : kAutoWorkspaceOffTitle, cmMRWorkspaceAutoloadToggle, bfNormal);
+			insert(autoloadWorkspaceButton);
+			left += autoWidth + workspacePairGap;
+			insert(new TButton(TRect(left, workspaceButtonY, left + loadWidth, workspaceButtonY + 2), "~L~oad workspace", cmMRWorkspaceLoad, bfNormal));
 		}
 		{
 			if (mode == mrwlManageWindows) {
@@ -418,6 +491,7 @@ class WindowListDialog : public MRDialogFoundation {
 	void activateModeless() {
 		std::string line;
 		refreshEntries();
+		updateWorkspaceToggleButtons();
 		focusPreferred();
 		if (windowListDebugEnabled()) {
 			line = "Window List activateModeless before visible=";
@@ -584,6 +658,29 @@ class WindowListDialog : public MRDialogFoundation {
 				loadWorkspaceWithDialog();
 				clearEvent(event);
 				break;
+			case cmMRWorkspaceAutosaveToggle:
+				toggleAutosaveWorkspace();
+				clearEvent(event);
+				break;
+			case cmMRWorkspaceAutoloadToggle:
+				toggleAutoloadWorkspace();
+				clearEvent(event);
+				break;
+			case cmMRWorkspaceMainFile: {
+				MREditWindow *win = currentSelection();
+				if (mrIsWorkspaceMainFile(win)) {
+					mrClearWorkspaceMainFile();
+					refreshEntries();
+					if (listView != nullptr) listView->drawView();
+					drawView();
+				} else if (mrSetWorkspaceMainFile(win)) {
+					refreshEntries();
+					if (listView != nullptr) listView->drawView();
+					drawView();
+				}
+				clearEvent(event);
+				break;
+			}
 			case cmHelp:
 				static_cast<void>(mrShowProjectHelp());
 				clearEvent(event);
@@ -608,7 +705,7 @@ class WindowListDialog : public MRDialogFoundation {
 	std::string renderRow(const WindowListEntry &entry) const {
 		std::string filePart = entry.fileLabel;
 		std::string dirPart = trimCopy(entry.directoryLabel);
-		return padRight(entry.statusLabel, 5) + " " + padRight(entry.desktopLabel, 2) + " " + padRight(filePart, 28) + " " + dirPart;
+		return padRight(entry.statusLabel, 5) + " " + padRight(entry.desktopLabel, 2) + " " + (mrIsWorkspaceMainFile(entry.window) ? "♔ " : "  ") + padRight(filePart, 26) + " " + dirPart;
 	}
 
 	void collectEntries() {
@@ -786,6 +883,7 @@ class WindowListDialog : public MRDialogFoundation {
 			const bool wasVisible = (getButton->state & sfVisible) != 0;
 			getButton->setState(sfDisabled, canGet ? False : True);
 			if (canGet) {
+				if (workspaceMainFileButton != nullptr) workspaceMainFileButton->hide();
 				if (!wasVisible) {
 					getButton->show();
 					if (content != nullptr) content->drawView();
@@ -793,9 +891,18 @@ class WindowListDialog : public MRDialogFoundation {
 				}
 			} else if (wasVisible) {
 				getButton->hide();
+				if (workspaceMainFileButton != nullptr) workspaceMainFileButton->show();
+				if (content != nullptr) content->drawView();
+				drawView();
+			} else if (workspaceMainFileButton != nullptr && (workspaceMainFileButton->state & sfVisible) == 0) {
+				workspaceMainFileButton->show();
 				if (content != nullptr) content->drawView();
 				drawView();
 			}
+		}
+		if (workspaceMainFileButton != nullptr) {
+			updateButtonTitle(workspaceMainFileButton, mrIsWorkspaceMainFile(win) ? kMainWorkspaceOnTitle : kMainWorkspaceOffTitle);
+			workspaceMainFileButton->setState(sfDisabled, False);
 		}
 		lastFocusedIndex = listView != nullptr ? listView->focused : -1;
 	}
@@ -821,6 +928,9 @@ class WindowListDialog : public MRDialogFoundation {
 	TButton *hideToggleButton;
 	TButton *hideAllButton;
 	TButton *getButton;
+	TButton *workspaceMainFileButton;
+	TButton *autosaveWorkspaceButton;
+	TButton *autoloadWorkspaceButton;
 	MREditWindow *selected;
 	int lastFocusedIndex;
 	std::vector<WindowListEntry> entries;

@@ -216,6 +216,21 @@ enum class MRCompilerErrorMessagePlacement : unsigned char {
 	RightMargin = 1
 };
 
+enum class MRLanguageServerSidekickPlacement : unsigned char {
+	AtCode = 0,
+	RightMargin = 1
+};
+
+constexpr int kLanguageServerHoverDwellMsDefault = 1000;
+constexpr int kLanguageServerHoverDwellMsMin = 0;
+constexpr int kLanguageServerHoverDwellMsMax = 5000;
+constexpr int kLanguageServerDocumentSyncDelayMsDefault = 300;
+constexpr int kLanguageServerDocumentSyncDelayMsMin = 0;
+constexpr int kLanguageServerDocumentSyncDelayMsMax = 5000;
+constexpr int kLanguageServerSignatureQuietMsDefault = 5000;
+constexpr int kLanguageServerSignatureQuietMsMin = 0;
+constexpr int kLanguageServerSignatureQuietMsMax = 30000;
+
 enum class MRScrollbarVisibility : unsigned char {
 	Smart = 0,
 	Always = 1
@@ -450,17 +465,21 @@ enum : unsigned char {
 	kMrPaletteFileCompareMiniMapChanged = 200,
 	kMrPaletteFileCompareMiniMapFindMarker = 201,
 	kMrPaletteFileCompareMiniMapErrorMarker = 202,
-	kMrPaletteMax = kMrPaletteFileCompareMiniMapErrorMarker
+	kMrPaletteContextMenu = 203,
+	kMrPaletteContextMenuSelector = 204,
+	kMrPaletteDiagnosticInformation = 205,
+	kMrPaletteMiniMapDiagnostics = 206,
+	kMrPaletteMax = kMrPaletteMiniMapDiagnostics
 };
 
 struct MRColorSetupSettings {
-	static const std::size_t kWindowCount = 13;
+	static const std::size_t kWindowCount = 14;
 	static const std::size_t kMenuDialogCount = 28;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 11;
-	static const std::size_t kMiniMapCount = 5;
+	static const std::size_t kMiniMapCount = 6;
 	static const std::size_t kFileCompareMiniMapCount = 9;
-	static const std::size_t kCodeCount = 15;
+	static const std::size_t kCodeCount = 17;
 	static const std::size_t kFileCompareCount = 14;
 
 	std::array<unsigned char, kWindowCount> windowColors;
@@ -632,6 +651,16 @@ bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *erro
 [[nodiscard]] MRCursorBehaviour configuredCursorBehaviour();
 bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement placement, std::string *errorMessage = nullptr);
 [[nodiscard]] MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement();
+bool setConfiguredLanguageServerSpawnDaemon(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredLanguageServerSpawnDaemon();
+bool setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement placement, std::string *errorMessage = nullptr);
+[[nodiscard]] MRLanguageServerSidekickPlacement configuredLanguageServerSidekickPlacement();
+bool setConfiguredLanguageServerHoverDwellMs(int value, std::string *errorMessage = nullptr);
+[[nodiscard]] int configuredLanguageServerHoverDwellMs();
+bool setConfiguredLanguageServerDocumentSyncDelayMs(int value, std::string *errorMessage = nullptr);
+[[nodiscard]] int configuredLanguageServerDocumentSyncDelayMs();
+bool setConfiguredLanguageServerSignatureQuietMs(int value, std::string *errorMessage = nullptr);
+[[nodiscard]] int configuredLanguageServerSignatureQuietMs();
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage = nullptr);
 [[nodiscard]] MRScrollbarVisibility configuredScrollbarVisibility();
 bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage = nullptr);
@@ -654,6 +683,10 @@ bool setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration 
 [[nodiscard]] MRFileCompareStartConfiguration configuredFileCompareStartConfiguration();
 bool setConfiguredFileCompareComparePanelReadOnly(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredFileCompareComparePanelReadOnly();
+bool setConfiguredAutosaveWorkspace(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredAutosaveWorkspace();
+void setRuntimePreserveAutosavedWorkspace(bool enabled);
+[[nodiscard]] bool runtimePreserveAutosavedWorkspace();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredAutoloadWorkspace();
 bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage = nullptr);

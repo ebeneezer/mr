@@ -201,7 +201,7 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 	                                           "SETUP_EDIT_SETTINGS",
 	                                           "SETUP_COLOR",
 	                                           "SETUP_KEYMAP",
-	                                           "SETUP_MOUSE_KEY_REPEAT",
+	                                           "SETUP_LSP_SUPPORT",
 	                                           "SETUP_FILENAME_EXTENSIONS",
 	                                           "SETUP_COMPILER_PROFILES",
 	                                           "SETUP_PATHS",
