@@ -162,10 +162,12 @@ MRWorkspaceServiceSnapshot MRWorkspaceServiceContext::buildSnapshot(const std::v
 	for (const MRWorkspaceDocumentSnapshot &document : documents) {
 		if (document.path.empty()) continue;
 		MRWorkspaceDocumentSnapshot next = document;
+		const bool documentIsMainFile = next.mainFile;
 		next.path = normalizeWorkspaceServicePath(next.path);
 		next.mainFile = false;
 		if (mainFileKind == mfkBufferId && next.bufferId == mainFileBufferId) next.mainFile = true;
 		if (mainFileKind == mfkPath && next.path == mainFilePath) next.mainFile = true;
+		if (mainFileKind == mfkNone && documentIsMainFile) next.mainFile = true;
 		if (next.mainFile) {
 			snapshot.mainFile.hasMainFile = true;
 			snapshot.mainFile.bufferId = next.bufferId;
@@ -193,6 +195,7 @@ std::vector<MRWorkspaceDocumentSnapshot> collectCurrentWorkspaceDocuments() {
 		document.documentVersion = window->documentVersion();
 		document.path = normalizeWorkspaceServicePath(window->currentFileName());
 		document.languageName = window->syntaxLanguageName();
+		document.mainFile = mrIsWorkspaceMainFile(window);
 		documents.push_back(document);
 	}
 	return documents;

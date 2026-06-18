@@ -306,6 +306,10 @@ class MRFileEditor : public TScroller {
 
 	TRect visibleTextViewportBounds() const noexcept;
 
+	std::size_t documentLineForVisibleLine(std::size_t visibleLine) const noexcept;
+
+	std::size_t visibleLineForDocumentLine(std::size_t documentLine) const noexcept;
+
 	const MRTextBufferModel &bufferModel() const noexcept;
 
 	MRTextBufferModel &bufferModel() noexcept;
@@ -662,10 +666,6 @@ class MRFileEditor : public TScroller {
 	bool toggleFoldAtLine(std::size_t lineIndex);
 
 	bool foldingGutterHit(TPoint local, std::size_t *lineIndexOut = nullptr) const noexcept;
-
-	std::size_t documentLineForVisibleLine(std::size_t visibleLine) const noexcept;
-
-	std::size_t visibleLineForDocumentLine(std::size_t documentLine) const noexcept;
 
 	std::size_t foldedVisibleLineCount() const noexcept;
 

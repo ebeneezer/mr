@@ -3,8 +3,10 @@
 #include "../../lsp/MRLspCodeAction.hpp"
 #include "../../lsp/MRLspCompletion.hpp"
 #include "../../lsp/MRLspDiagnostics.hpp"
+#include "../../lsp/MRLspDocumentSymbols.hpp"
 #include "../../lsp/MRLspHover.hpp"
 #include "../../lsp/MRLspReferences.hpp"
+#include "../../lsp/MRLspSignatureHelp.hpp"
 #include "../../lsp/MRLspUri.hpp"
 
 namespace mr::services {
@@ -185,6 +187,8 @@ void MRServiceResultStore::clear() noexcept {
 	hovers.clear();
 	completions.clear();
 	codeActions.clear();
+	documentSymbols.clear();
+	signatureHelps.clear();
 }
 
 void MRServiceResultStore::putDiagnostics(const MRServiceDiagnosticResult &result) {
@@ -237,6 +241,26 @@ void MRServiceResultStore::putCodeActions(const MRServiceCodeActionResult &resul
 	codeActions.push_back(result);
 }
 
+void MRServiceResultStore::putDocumentSymbols(const MRServiceDocumentSymbolsResult &result) {
+	for (MRServiceDocumentSymbolsResult &existing : documentSymbols) {
+		if (sameResultSlot(existing.header, result.header)) {
+			existing = result;
+			return;
+		}
+	}
+	documentSymbols.push_back(result);
+}
+
+void MRServiceResultStore::putSignatureHelp(const MRServiceSignatureHelpResult &result) {
+	for (MRServiceSignatureHelpResult &existing : signatureHelps) {
+		if (sameResultSlot(existing.header, result.header)) {
+			existing = result;
+			return;
+		}
+	}
+	signatureHelps.push_back(result);
+}
+
 void MRServiceResultStore::markStaleAgainstWorkspace(const MRWorkspaceServiceSnapshot &workspace) {
 	for (MRServiceDiagnosticResult &result : diagnostics)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
@@ -247,6 +271,10 @@ void MRServiceResultStore::markStaleAgainstWorkspace(const MRWorkspaceServiceSna
 	for (MRServiceCompletionResult &result : completions)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
 	for (MRServiceCodeActionResult &result : codeActions)
+		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
+	for (MRServiceDocumentSymbolsResult &result : documentSymbols)
+		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
+	for (MRServiceSignatureHelpResult &result : signatureHelps)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
 }
 
@@ -270,6 +298,14 @@ const std::vector<MRServiceCodeActionResult> &MRServiceResultStore::codeActionRe
 	return codeActions;
 }
 
+const std::vector<MRServiceDocumentSymbolsResult> &MRServiceResultStore::documentSymbolResults() const noexcept {
+	return documentSymbols;
+}
+
+const std::vector<MRServiceSignatureHelpResult> &MRServiceResultStore::signatureHelpResults() const noexcept {
+	return signatureHelps;
+}
+
 MRServiceResultCounts MRServiceResultStore::resultCounts() const noexcept {
 	MRServiceResultCounts counts;
 
@@ -283,6 +319,8 @@ MRServiceResultCounts MRServiceResultStore::resultCounts() const noexcept {
 	counts.hovers = hovers.size();
 	counts.completions = completions.size();
 	counts.codeActions = codeActions.size();
+	counts.documentSymbols = documentSymbols.size();
+	counts.signatureHelps = signatureHelps.size();
 	return counts;
 }
 
@@ -335,6 +373,20 @@ MRServiceDocumentResultsSnapshot MRServiceResultStore::currentResultsForDocument
 		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
 		++snapshot.current.codeActions;
 		snapshot.codeActions.push_back(filtered);
+	}
+	for (const MRServiceDocumentSymbolsResult &result : documentSymbols) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		++snapshot.current.documentSymbols;
+		snapshot.documentSymbols.push_back(result);
+	}
+	for (const MRServiceSignatureHelpResult &result : signatureHelps) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		++snapshot.current.signatureHelps;
+		snapshot.signatureHelps.push_back(result);
 	}
 	return snapshot;
 }
@@ -489,6 +541,59 @@ MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServic
 			serviceItem.edits.push_back(serviceEdit);
 		}
 		result.items.push_back(serviceItem);
+	}
+	return result;
+}
+
+MRServiceDocumentSymbolsResult buildServiceDocumentSymbolsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDocumentSymbolsResult &documentSymbols) {
+	MRServiceDocumentSymbolsResult result;
+
+	result.header.source = MRServiceResultSource::Lsp;
+	result.header.kind = MRServiceResultKind::DocumentSymbols;
+	result.header.requestId = requestId;
+	result.header.identity = identityFromUri(workspace, originUri, originVersion, result.header.state, result.header.errorMessage);
+	if (result.header.state != MRServiceResultState::Current) return result;
+
+	for (const mr::lsp::LspDocumentSymbol &symbol : documentSymbols.symbols) {
+		MRServiceDocumentSymbol serviceSymbol;
+
+		serviceSymbol.name = symbol.name;
+		serviceSymbol.detail = symbol.detail;
+		serviceSymbol.kind = symbol.kind;
+		serviceSymbol.depth = symbol.depth;
+		serviceSymbol.target = locationTargetFromLsp(symbol.location, result.header.state, result.header.errorMessage);
+		if (result.header.state != MRServiceResultState::Current) {
+			result.symbols.clear();
+			return result;
+		}
+		result.symbols.push_back(serviceSymbol);
+	}
+	return result;
+}
+
+MRServiceSignatureHelpResult buildServiceSignatureHelpFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspSignatureHelpResult &signatureHelp) {
+	MRServiceSignatureHelpResult result;
+
+	result.header.source = MRServiceResultSource::Lsp;
+	result.header.kind = MRServiceResultKind::SignatureHelp;
+	result.header.requestId = requestId;
+	result.header.identity = identityFromUri(workspace, originUri, originVersion, result.header.state, result.header.errorMessage);
+	if (result.header.state != MRServiceResultState::Current) return result;
+
+	result.activeSignature = signatureHelp.activeSignature;
+	result.activeParameter = signatureHelp.activeParameter;
+	for (const mr::lsp::LspSignatureInformation &signature : signatureHelp.signatures) {
+		MRServiceSignatureInformation serviceSignature;
+
+		serviceSignature.label = signature.label;
+		serviceSignature.documentation = signature.documentation;
+		for (const mr::lsp::LspSignatureParameter &parameter : signature.parameters) {
+			MRServiceSignatureParameter serviceParameter;
+
+			serviceParameter.label = parameter.label;
+			serviceSignature.parameters.push_back(serviceParameter);
+		}
+		result.signatures.push_back(serviceSignature);
 	}
 	return result;
 }

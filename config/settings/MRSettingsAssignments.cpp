@@ -128,6 +128,24 @@ bool setError(std::string *errorMessage, const std::string &message) {
 	return false;
 }
 
+bool parseMillisecondsLiteral(const std::string &value, int minValue, int maxValue, int &outValue, std::string *errorMessage) {
+	std::string trimmed = trimAscii(value);
+	int parsed = 0;
+
+	if (trimmed.empty()) return setError(errorMessage, "Milliseconds value must not be empty.");
+	for (char ch : trimmed) {
+		if (std::isdigit(static_cast<unsigned char>(ch)) == 0) return setError(errorMessage, "Milliseconds value must be a non-negative integer.");
+		if (parsed > maxValue / 10) return setError(errorMessage, "Milliseconds value is above the supported range.");
+		parsed = parsed * 10 + (ch - '0');
+		if (parsed > maxValue) return setError(errorMessage, "Milliseconds value is above the supported range.");
+	}
+	if (parsed < minValue || parsed > maxValue)
+		return setError(errorMessage, "Milliseconds value must be between " + std::to_string(minValue) + " and " + std::to_string(maxValue) + ".");
+	outValue = parsed;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
 void trimSnapshotHistoryToLimit(std::vector<std::string> &entries, int limit) {
 	if (limit < 0) limit = 0;
 	if (entries.size() > static_cast<std::size_t>(limit)) entries.resize(static_cast<std::size_t>(limit));
@@ -258,6 +276,9 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"COMPILER_ERROR_MESSAGE_PLACEMENT", MRSettingsKeyClass::Global, true},
     {"LANGUAGE_SERVER_SPAWN_DAEMON", MRSettingsKeyClass::Global, true},
     {"LANGUAGE_SERVER_SIDEKICK_PLACEMENT", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_HOVER_DWELL_MS", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS", MRSettingsKeyClass::Global, true},
+    {"LANGUAGE_SERVER_SIGNATURE_QUIET_MS", MRSettingsKeyClass::Global, true},
     {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
     {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
 	    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
@@ -272,6 +293,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"FILE_COMPARE_COMPARE_TRAILING_GUTTERS", MRSettingsKeyClass::Global, true},
     {"FILE_COMPARE_START_CONFIGURATION", MRSettingsKeyClass::Global, true},
     {"FILE_COMPARE_COMPARE_PANEL_READ_ONLY", MRSettingsKeyClass::Global, true},
+    {"AUTOSAVE_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"LOG_HANDLING", MRSettingsKeyClass::Global, true},
     {"LOGFILE", MRSettingsKeyClass::Global, true},
@@ -710,6 +732,9 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
 	if (!setConfiguredLanguageServerSpawnDaemon(true, errorMessage)) return false;
 	if (!setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement::RightMargin, errorMessage)) return false;
+	if (!setConfiguredLanguageServerHoverDwellMs(kLanguageServerHoverDwellMsDefault, errorMessage)) return false;
+	if (!setConfiguredLanguageServerDocumentSyncDelayMs(kLanguageServerDocumentSyncDelayMsDefault, errorMessage)) return false;
+	if (!setConfiguredLanguageServerSignatureQuietMs(kLanguageServerSignatureQuietMsDefault, errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
@@ -721,6 +746,8 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredFileCompareCompareTrailingGutters("", errorMessage)) return false;
 	if (!setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration::OriginalCompare, errorMessage)) return false;
 	if (!setConfiguredFileCompareComparePanelReadOnly(true, errorMessage)) return false;
+	if (!setConfiguredAutosaveWorkspace(false, errorMessage)) return false;
+	if (!setConfiguredAutoloadWorkspace(false, errorMessage)) return false;
 	if (!setConfiguredLogHandling(MRLogHandling::Volatile, errorMessage)) return false;
 	configuredAutoexecMacroStorage().clear();
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage)) return false;
@@ -1143,6 +1170,21 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (!parseLanguageServerSidekickPlacementLiteral(value, placement, errorMessage)) return false;
 				return setConfiguredLanguageServerSidekickPlacement(placement, errorMessage);
 			}
+			if (upper == "LANGUAGE_SERVER_HOVER_DWELL_MS") {
+				int parsed = kLanguageServerHoverDwellMsDefault;
+				if (!parseMillisecondsLiteral(value, kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax, parsed, errorMessage)) return false;
+				return setConfiguredLanguageServerHoverDwellMs(parsed, errorMessage);
+			}
+			if (upper == "LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS") {
+				int parsed = kLanguageServerDocumentSyncDelayMsDefault;
+				if (!parseMillisecondsLiteral(value, kLanguageServerDocumentSyncDelayMsMin, kLanguageServerDocumentSyncDelayMsMax, parsed, errorMessage)) return false;
+				return setConfiguredLanguageServerDocumentSyncDelayMs(parsed, errorMessage);
+			}
+			if (upper == "LANGUAGE_SERVER_SIGNATURE_QUIET_MS") {
+				int parsed = kLanguageServerSignatureQuietMsDefault;
+				if (!parseMillisecondsLiteral(value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, parsed, errorMessage)) return false;
+				return setConfiguredLanguageServerSignatureQuietMs(parsed, errorMessage);
+			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				MRScrollbarVisibility visibility = MRScrollbarVisibility::Smart;
 				if (!parseScrollbarVisibilityLiteral(value, visibility, errorMessage)) return false;
@@ -1178,6 +1220,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				bool parsed = true;
 				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredFileCompareComparePanelReadOnly(parsed, errorMessage);
+			}
+			if (upper == "AUTOSAVE_WORKSPACE") {
+				bool parsed = false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredAutosaveWorkspace(parsed, errorMessage);
 			}
 			if (upper == "AUTOLOAD_WORKSPACE") {
 				bool parsed = false;
@@ -1685,6 +1732,18 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseLanguageServerSidekickPlacementLiteral(value, snapshot.languageServerSidekickPlacement, errorMessage)) return false;
 				return true;
 			}
+			if (upper == "LANGUAGE_SERVER_HOVER_DWELL_MS") {
+				if (!parseMillisecondsLiteral(value, kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax, snapshot.languageServerHoverDwellMs, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS") {
+				if (!parseMillisecondsLiteral(value, kLanguageServerDocumentSyncDelayMsMin, kLanguageServerDocumentSyncDelayMsMax, snapshot.languageServerDocumentSyncDelayMs, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LANGUAGE_SERVER_SIGNATURE_QUIET_MS") {
+				if (!parseMillisecondsLiteral(value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, snapshot.languageServerSignatureQuietMs, errorMessage)) return false;
+				return true;
+			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				if (!parseScrollbarVisibilityLiteral(value, snapshot.scrollbarVisibility, errorMessage)) return false;
 				return true;
@@ -1720,6 +1779,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "FILE_COMPARE_COMPARE_PANEL_READ_ONLY") {
 				if (!parseBooleanLiteral(value, snapshot.fileCompareComparePanelReadOnly, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "AUTOSAVE_WORKSPACE") {
+				if (!parseBooleanLiteral(value, snapshot.autosaveWorkspace, errorMessage)) return false;
 				return true;
 			}
 			if (upper == "AUTOLOAD_WORKSPACE") {

@@ -131,10 +131,15 @@ class TDirtyItemDialog : public MRDialogFoundation {
 } // namespace
 
 UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline, const char *detail) {
+	return showUnsavedChangesDialog(primaryLabel, headline, detail, nullptr);
+}
+
+UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline, const char *detail, const char *discardLabel) {
 	const bool hasDetail = detail != nullptr && *detail != '\0';
 	std::string label = primaryLabel != nullptr && *primaryLabel != '\0' ? primaryLabel : "Save";
+	std::string discardLabelText = discardLabel != nullptr && *discardLabel != '\0' ? discardLabel : "Discard";
 	std::string primaryButtonLabel = addMnemonic(label, 's');
-	std::string discardButtonLabel = addMnemonic("Discard", 'd');
+	std::string discardButtonLabel = addMnemonic(discardLabelText, 'd');
 	std::string cancelButtonLabel = addMnemonic("Cancel", 'c');
 	const int gap = 2;
 	const int desktopWidth = TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : 80;
@@ -147,6 +152,44 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	}
 
 	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{cancelButtonLabel.c_str(), cmCancel, bfNormal}};
+	const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
+	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
+	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
+	const int height = std::max(hasDetail ? 10 : 8, static_cast<int>(textLines.size()) + 6);
+	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), "CONFIRM", width, height);
+	int y = 2;
+
+	for (const std::string &line : textLines)
+		insertStaticLine(dialog, 3, y++, line);
+	mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, height - 3, gap, buttons);
+
+	switch (mr::dialogs::execDialog(dialog)) {
+		case cmYes:
+			return UnsavedChangesChoice::Save;
+		case cmNo:
+			return UnsavedChangesChoice::Discard;
+		default:
+			return UnsavedChangesChoice::Cancel;
+	}
+}
+
+UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const char *headline, const char *detail, const char *discardLabel) {
+	const bool hasDetail = detail != nullptr && *detail != '\0';
+	std::string label = primaryLabel != nullptr && *primaryLabel != '\0' ? primaryLabel : "Load workspace";
+	std::string discardLabelText = discardLabel != nullptr && *discardLabel != '\0' ? discardLabel : "Discard workspace";
+	std::string primaryButtonLabel = addMnemonic(label, 'l');
+	std::string discardButtonLabel = addMnemonic(discardLabelText, 'd');
+	const int gap = 2;
+	const int desktopWidth = TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : 80;
+	const int maxTextWidth = std::max(32, desktopWidth - 12);
+	std::vector<std::string> textLines = wrapText(headline != nullptr ? headline : "Load autosaved workspace?", static_cast<std::size_t>(maxTextWidth));
+
+	if (hasDetail) {
+		std::vector<std::string> detailLines = wrapText(detail, static_cast<std::size_t>(maxTextWidth));
+		textLines.insert(textLines.end(), detailLines.begin(), detailLines.end());
+	}
+
+	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}};
 	const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));

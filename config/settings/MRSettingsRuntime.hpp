@@ -221,6 +221,16 @@ enum class MRLanguageServerSidekickPlacement : unsigned char {
 	RightMargin = 1
 };
 
+constexpr int kLanguageServerHoverDwellMsDefault = 1000;
+constexpr int kLanguageServerHoverDwellMsMin = 0;
+constexpr int kLanguageServerHoverDwellMsMax = 5000;
+constexpr int kLanguageServerDocumentSyncDelayMsDefault = 300;
+constexpr int kLanguageServerDocumentSyncDelayMsMin = 0;
+constexpr int kLanguageServerDocumentSyncDelayMsMax = 5000;
+constexpr int kLanguageServerSignatureQuietMsDefault = 5000;
+constexpr int kLanguageServerSignatureQuietMsMin = 0;
+constexpr int kLanguageServerSignatureQuietMsMax = 30000;
+
 enum class MRScrollbarVisibility : unsigned char {
 	Smart = 0,
 	Always = 1
@@ -645,6 +655,12 @@ bool setConfiguredLanguageServerSpawnDaemon(bool enabled, std::string *errorMess
 [[nodiscard]] bool configuredLanguageServerSpawnDaemon();
 bool setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement placement, std::string *errorMessage = nullptr);
 [[nodiscard]] MRLanguageServerSidekickPlacement configuredLanguageServerSidekickPlacement();
+bool setConfiguredLanguageServerHoverDwellMs(int value, std::string *errorMessage = nullptr);
+[[nodiscard]] int configuredLanguageServerHoverDwellMs();
+bool setConfiguredLanguageServerDocumentSyncDelayMs(int value, std::string *errorMessage = nullptr);
+[[nodiscard]] int configuredLanguageServerDocumentSyncDelayMs();
+bool setConfiguredLanguageServerSignatureQuietMs(int value, std::string *errorMessage = nullptr);
+[[nodiscard]] int configuredLanguageServerSignatureQuietMs();
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage = nullptr);
 [[nodiscard]] MRScrollbarVisibility configuredScrollbarVisibility();
 bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage = nullptr);
@@ -667,6 +683,10 @@ bool setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration 
 [[nodiscard]] MRFileCompareStartConfiguration configuredFileCompareStartConfiguration();
 bool setConfiguredFileCompareComparePanelReadOnly(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredFileCompareComparePanelReadOnly();
+bool setConfiguredAutosaveWorkspace(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredAutosaveWorkspace();
+void setRuntimePreserveAutosavedWorkspace(bool enabled);
+[[nodiscard]] bool runtimePreserveAutosavedWorkspace();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredAutoloadWorkspace();
 bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage = nullptr);

@@ -28,7 +28,7 @@ void MRLspAppService::setMainFileByPath(const std::string &path) {
 }
 
 MRWorkspaceMainFileState MRLspAppService::configuredMainFile() const {
-	return workspaceContext.configuredMainFile();
+	return buildCurrentWorkspaceSnapshot().mainFile;
 }
 
 MRWorkspaceServiceSnapshot MRLspAppService::buildWorkspaceSnapshot(const std::vector<MRWorkspaceDocumentSnapshot> &documents) const {
@@ -53,6 +53,8 @@ MRLspDocumentServiceSnapshot MRLspAppService::documentServiceSnapshot(const MRWo
 		snapshot.commands.requestReferences = true;
 		snapshot.commands.requestHover = true;
 		snapshot.commands.requestCompletion = true;
+		snapshot.commands.requestDocumentSymbols = true;
+		snapshot.commands.requestSignatureHelp = true;
 		snapshot.commands.requestCodeActions = snapshot.results.current.diagnostics > 0;
 		snapshot.commands.applyCodeActions = snapshot.results.current.codeActions > 0;
 	}
@@ -77,6 +79,8 @@ MRLspPositionServiceSnapshot MRLspAppService::documentPositionServiceSnapshot(co
 		snapshot.commands.requestReferences = true;
 		snapshot.commands.requestHover = true;
 		snapshot.commands.requestCompletion = true;
+		snapshot.commands.requestDocumentSymbols = true;
+		snapshot.commands.requestSignatureHelp = true;
 		snapshot.commands.requestCodeActions = !snapshot.results.diagnostics.empty();
 		snapshot.commands.applyCodeActions = !snapshot.results.codeActions.empty();
 	}
@@ -169,6 +173,10 @@ bool MRLspAppService::runtimeActive() const noexcept {
 
 std::string MRLspAppService::activeHoverRequestId() const {
 	return session.activeHoverRequestId();
+}
+
+std::string MRLspAppService::activeSignatureHelpRequestId() const {
+	return session.activeSignatureHelpRequestId();
 }
 
 } // namespace mr::services

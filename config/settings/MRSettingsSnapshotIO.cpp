@@ -410,6 +410,9 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.compilerErrorMessagePlacement = configuredCompilerErrorMessagePlacement();
 	snapshot.languageServerSpawnDaemon = configuredLanguageServerSpawnDaemon();
 	snapshot.languageServerSidekickPlacement = configuredLanguageServerSidekickPlacement();
+	snapshot.languageServerHoverDwellMs = configuredLanguageServerHoverDwellMs();
+	snapshot.languageServerDocumentSyncDelayMs = configuredLanguageServerDocumentSyncDelayMs();
+	snapshot.languageServerSignatureQuietMs = configuredLanguageServerSignatureQuietMs();
 	snapshot.scrollbarVisibility = configuredScrollbarVisibility();
 	snapshot.trackCompilerWarnings = configuredTrackCompilerWarnings();
 	snapshot.trackCompilerNotes = configuredTrackCompilerNotes();
@@ -421,6 +424,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.fileCompareCompareTrailingGutters = configuredFileCompareCompareTrailingGutters();
 	snapshot.fileCompareStartConfiguration = configuredFileCompareStartConfiguration();
 	snapshot.fileCompareComparePanelReadOnly = configuredFileCompareComparePanelReadOnly();
+	snapshot.autosaveWorkspace = configuredAutosaveWorkspace();
 	snapshot.autoloadWorkspace = configuredAutoloadWorkspace();
 	snapshot.logHandling = configuredLogHandling();
 	snapshot.logFilePath = configuredLogFilePath();
@@ -596,6 +600,9 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('COMPILER_ERROR_MESSAGE_PLACEMENT', '" + escapeMrmacSingleQuotedLiteral(formatCompilerErrorMessagePlacementLiteral(snapshot.compilerErrorMessagePlacement)) + "');\n";
 	source += "MRSETUP('LANGUAGE_SERVER_SPAWN_DAEMON', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerSpawnDaemon)) + "');\n";
 	source += "MRSETUP('LANGUAGE_SERVER_SIDEKICK_PLACEMENT', '" + escapeMrmacSingleQuotedLiteral(formatLanguageServerSidekickPlacementLiteral(snapshot.languageServerSidekickPlacement)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_HOVER_DWELL_MS', '" + std::to_string(snapshot.languageServerHoverDwellMs) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS', '" + std::to_string(snapshot.languageServerDocumentSyncDelayMs) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_SIGNATURE_QUIET_MS', '" + std::to_string(snapshot.languageServerSignatureQuietMs) + "');\n";
 	source += "MRSETUP('SCROLLBAR_VISIBILITY', '" + escapeMrmacSingleQuotedLiteral(formatScrollbarVisibilityLiteral(snapshot.scrollbarVisibility)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_WARNINGS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerWarnings)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_NOTES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerNotes)) + "');\n";
@@ -608,6 +615,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('FILE_COMPARE_COMPARE_TRAILING_GUTTERS', '" + escapeMrmacSingleQuotedLiteral(snapshot.fileCompareCompareTrailingGutters) + "');\n";
 	source += "MRSETUP('FILE_COMPARE_START_CONFIGURATION', '" + escapeMrmacSingleQuotedLiteral(formatFileCompareStartConfigurationLiteral(snapshot.fileCompareStartConfiguration)) + "');\n";
 	source += "MRSETUP('FILE_COMPARE_COMPARE_PANEL_READ_ONLY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.fileCompareComparePanelReadOnly)) + "');\n";
+	source += "MRSETUP('AUTOSAVE_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autosaveWorkspace)) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoloadWorkspace)) + "');\n";
 	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(snapshot.logHandling)) + "');\n";
 	source += "MRSETUP('LOGFILE', '" + escapeMrmacSingleQuotedLiteral(snapshot.logFilePath) + "');\n";

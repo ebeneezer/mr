@@ -32,6 +32,9 @@ MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
 MRCompilerErrorMessagePlacement g_compilerErrorMessagePlacement = MRCompilerErrorMessagePlacement::RightMargin;
 bool g_languageServerSpawnDaemon = true;
 MRLanguageServerSidekickPlacement g_languageServerSidekickPlacement = MRLanguageServerSidekickPlacement::RightMargin;
+int g_languageServerHoverDwellMs = kLanguageServerHoverDwellMsDefault;
+int g_languageServerDocumentSyncDelayMs = kLanguageServerDocumentSyncDelayMsDefault;
+int g_languageServerSignatureQuietMs = kLanguageServerSignatureQuietMsDefault;
 MRScrollbarVisibility g_scrollbarVisibility = MRScrollbarVisibility::Smart;
 bool g_trackCompilerWarnings = false;
 bool g_trackCompilerNotes = false;
@@ -43,6 +46,8 @@ std::string g_fileCompareCompareLeadingGutters = "LD";
 std::string g_fileCompareCompareTrailingGutters;
 MRFileCompareStartConfiguration g_fileCompareStartConfiguration = MRFileCompareStartConfiguration::OriginalCompare;
 bool g_fileCompareComparePanelReadOnly = true;
+bool g_autosaveWorkspace = false;
+bool g_runtimePreserveAutosavedWorkspace = false;
 bool g_autoloadWorkspace = false;
 MRLogHandling g_logHandling = MRLogHandling::Volatile;
 std::map<std::string, std::string> g_autoexecMacroDiagnostics;
@@ -194,6 +199,14 @@ bool normalizeCursorPositionMarker(const std::string &value, std::string &out, s
 		out.push_back(ch);
 	}
 	if (rCount != 1 || cCount != 1) return setError(errorMessage, "must contain exactly one R and one C placeholder.");
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool validateBoundedMilliseconds(const char *key, int value, int minValue, int maxValue, std::string *errorMessage) {
+	if (value < minValue || value > maxValue) {
+		return setError(errorMessage, std::string(key) + " must be between " + std::to_string(minValue) + " and " + std::to_string(maxValue) + " milliseconds.");
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -701,6 +714,39 @@ MRLanguageServerSidekickPlacement configuredLanguageServerSidekickPlacement() {
 	return g_languageServerSidekickPlacement;
 }
 
+bool setConfiguredLanguageServerHoverDwellMs(int value, std::string *errorMessage) {
+	if (!validateBoundedMilliseconds("LANGUAGE_SERVER_HOVER_DWELL_MS", value, kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax, errorMessage)) return false;
+	if (g_languageServerHoverDwellMs != value) markConfiguredSettingsDirty();
+	g_languageServerHoverDwellMs = value;
+	return true;
+}
+
+int configuredLanguageServerHoverDwellMs() {
+	return g_languageServerHoverDwellMs;
+}
+
+bool setConfiguredLanguageServerDocumentSyncDelayMs(int value, std::string *errorMessage) {
+	if (!validateBoundedMilliseconds("LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS", value, kLanguageServerDocumentSyncDelayMsMin, kLanguageServerDocumentSyncDelayMsMax, errorMessage)) return false;
+	if (g_languageServerDocumentSyncDelayMs != value) markConfiguredSettingsDirty();
+	g_languageServerDocumentSyncDelayMs = value;
+	return true;
+}
+
+int configuredLanguageServerDocumentSyncDelayMs() {
+	return g_languageServerDocumentSyncDelayMs;
+}
+
+bool setConfiguredLanguageServerSignatureQuietMs(int value, std::string *errorMessage) {
+	if (!validateBoundedMilliseconds("LANGUAGE_SERVER_SIGNATURE_QUIET_MS", value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, errorMessage)) return false;
+	if (g_languageServerSignatureQuietMs != value) markConfiguredSettingsDirty();
+	g_languageServerSignatureQuietMs = value;
+	return true;
+}
+
+int configuredLanguageServerSignatureQuietMs() {
+	return g_languageServerSignatureQuietMs;
+}
+
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage) {
 	if (g_scrollbarVisibility != visibility) markConfiguredSettingsDirty();
 	g_scrollbarVisibility = visibility;
@@ -835,6 +881,25 @@ bool setConfiguredFileCompareComparePanelReadOnly(bool enabled, std::string *err
 
 bool configuredFileCompareComparePanelReadOnly() {
 	return g_fileCompareComparePanelReadOnly;
+}
+
+bool setConfiguredAutosaveWorkspace(bool enabled, std::string *errorMessage) {
+	if (g_autosaveWorkspace != enabled) markConfiguredSettingsDirty();
+	g_autosaveWorkspace = enabled;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool configuredAutosaveWorkspace() {
+	return g_autosaveWorkspace;
+}
+
+void setRuntimePreserveAutosavedWorkspace(bool enabled) {
+	g_runtimePreserveAutosavedWorkspace = enabled;
+}
+
+bool runtimePreserveAutosavedWorkspace() {
+	return g_runtimePreserveAutosavedWorkspace;
 }
 
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage) {

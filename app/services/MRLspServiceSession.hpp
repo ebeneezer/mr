@@ -7,8 +7,10 @@
 #include "../../lsp/MRLspCompletion.hpp"
 #include "../../lsp/MRLspDiagnostics.hpp"
 #include "../../lsp/MRLspDocumentService.hpp"
+#include "../../lsp/MRLspDocumentSymbols.hpp"
 #include "../../lsp/MRLspHover.hpp"
 #include "../../lsp/MRLspReferences.hpp"
+#include "../../lsp/MRLspSignatureHelp.hpp"
 
 #include <string>
 #include <vector>
@@ -28,14 +30,18 @@ enum class MRLspServiceRequestKind {
 	Definition = 0,
 	References,
 	Hover,
-	Completion
+	Completion,
+	DocumentSymbols,
+	SignatureHelp
 };
 
 enum class MRLspServiceCommandId {
 	GoToDefinition = 0,
 	FindReferences,
 	ShowHover,
-	Complete
+	Complete,
+	DocumentSymbols,
+	SignatureHelp
 };
 
 struct MRLspServiceCommandSpec {
@@ -96,6 +102,8 @@ public:
 	bool requestReferences(mr::lsp::LspTextPosition position, bool includeDeclaration, std::string &errorMessage);
 	bool requestHover(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestCompletion(mr::lsp::LspTextPosition position, std::string &errorMessage);
+	bool requestDocumentSymbols(std::string &errorMessage);
+	bool requestSignatureHelp(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage);
 	bool closeDocument(std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);
@@ -104,6 +112,7 @@ public:
 	[[nodiscard]] const MRServiceResultStore &results() const noexcept;
 	[[nodiscard]] bool runtimeActive() const noexcept;
 	[[nodiscard]] std::string activeHoverRequestId() const;
+	[[nodiscard]] std::string activeSignatureHelpRequestId() const;
 
 private:
 	bool pollUntilState(mr::lsp::LspLifecycleState expectedState, std::string &errorMessage);
@@ -120,11 +129,15 @@ private:
 	mr::lsp::LspReferencesAdapter referencesAdapter;
 	mr::lsp::LspHoverAdapter hoverAdapter;
 	mr::lsp::LspCompletionAdapter completionAdapter;
+	mr::lsp::LspDocumentSymbolsAdapter documentSymbolsAdapter;
+	mr::lsp::LspSignatureHelpAdapter signatureHelpAdapter;
 	mr::lsp::LspCodeActionAdapter codeActionAdapter;
 	mr::lsp::LspDefinitionRequest definitionRequest;
 	mr::lsp::LspReferencesRequest referencesRequest;
 	mr::lsp::LspHoverRequest hoverRequest;
 	mr::lsp::LspCompletionRequest completionRequest;
+	mr::lsp::LspDocumentSymbolsRequest documentSymbolsRequest;
+	mr::lsp::LspSignatureHelpRequest signatureHelpRequest;
 	mr::lsp::LspCodeActionRequest codeActionRequest;
 	MRServiceTextRange codeActionRequestRange;
 	std::size_t codeActionRequestVersion = 0;

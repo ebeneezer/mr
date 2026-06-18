@@ -72,5 +72,6 @@ bool mrHasReadOnlySidekickForParent(const MREditWindow *parent);
 bool mrConsumeReadOnlySidekickDismissedForParent(const MREditWindow *parent);
 void mrDropSidekickForParent(const MREditWindow *parent);
 void mrDropActiveSidekick();
+bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason);
 
 #endif

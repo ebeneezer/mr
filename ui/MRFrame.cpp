@@ -39,6 +39,7 @@ static constexpr char kRecordingMarkerIcon[] = "📼";
 static constexpr char kActivityMarkerIcon[] = "⌬";
 static constexpr const char *kTaskMarkerIcon = kActivityMarkerIcon;
 static constexpr const char *kMacroBrainMarkerIcon = kActivityMarkerIcon;
+static constexpr char kWorkspaceMainFileMarkerIcon[] = "♔";
 static constexpr char kReadOnlyMarkerIcon[] = "⚿";
 static constexpr char kInsertMarkerIcon[] = "⌶";
 static constexpr char kWordWrapMarkerIcon[] = "┊↵┊"; // ┆↵┆
@@ -47,6 +48,7 @@ static constexpr int kDirtyMarkerSlotWidth = 2;
 static constexpr int kRecordingMarkerSlotWidth = 2;
 static constexpr int kTaskMarkerSlotWidth = 2;
 static constexpr int kMacroBrainMarkerSlotWidth = 2;
+static constexpr int kWorkspaceMainFileMarkerSlotWidth = 1;
 static constexpr int kReadOnlyMarkerSlotWidth = 2;
 static constexpr int kInsertMarkerSlotWidth = 1;
 static constexpr int kWordWrapMarkerSlotWidth = 3;
@@ -84,7 +86,7 @@ int normalZoomStart(int width, bool hasMinimizeButton) noexcept {
 }
 
 bool hasMarkerBlock(const MRFrame::MarkerState &state) noexcept {
-	return state.modified || state.insertMode || state.wordWrap || state.language || state.recording || state.macroBrain || state.background || state.readOnly;
+	return state.modified || state.insertMode || state.wordWrap || state.language || state.workspaceMainFile || state.recording || state.macroBrain || state.background || state.readOnly;
 }
 
 bool isFrameFocused(const MRFrame *frame) noexcept {
@@ -202,6 +204,7 @@ int MRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 	if (state.insertMode) x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
 	if (state.wordWrap) x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
 	if (state.language) x = advanceMarkerX(x, state.languageMarker != nullptr ? state.languageMarker : "", kLanguageMarkerSlotWidth);
+	if (state.workspaceMainFile) x = advanceMarkerX(x, kWorkspaceMainFileMarkerIcon, kWorkspaceMainFileMarkerSlotWidth);
 	if (state.recording) x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	if (state.macroBrain) x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
 	if (state.background) return x;
@@ -215,6 +218,7 @@ int MRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	if (state.insertMode) x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth), hasMarkers = true;
 	if (state.wordWrap) x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth), hasMarkers = true;
 	if (state.language) x = advanceMarkerX(x, state.languageMarker != nullptr ? state.languageMarker : "", kLanguageMarkerSlotWidth), hasMarkers = true;
+	if (state.workspaceMainFile) x = advanceMarkerX(x, kWorkspaceMainFileMarkerIcon, kWorkspaceMainFileMarkerSlotWidth), hasMarkers = true;
 	if (state.recording) x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth), hasMarkers = true;
 	if (state.macroBrain) x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth), hasMarkers = true;
 	if (state.background) x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth), hasMarkers = true;
@@ -383,6 +387,12 @@ void MRFrame::draw() {
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
 		if (markers.languageVisible) b.moveStr(static_cast<ushort>(markerX), languageMarker, cTitle, span);
 		markerX = advanceMarkerX(markerX, languageMarker, kLanguageMarkerSlotWidth);
+	}
+	if (markers.workspaceMainFile) {
+		int span = markerSpan(kWorkspaceMainFileMarkerIcon, kWorkspaceMainFileMarkerSlotWidth);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		if (markers.workspaceMainFileVisible) b.moveStr(static_cast<ushort>(markerX), kWorkspaceMainFileMarkerIcon, cTitle, span);
+		markerX = advanceMarkerX(markerX, kWorkspaceMainFileMarkerIcon, kWorkspaceMainFileMarkerSlotWidth);
 	}
 	if (markers.recording) {
 		TColorAttr recordingColor = cTitle;

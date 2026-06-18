@@ -149,6 +149,8 @@ enum : ushort {
 	cmMrOtherLspReferences,
 	cmMrOtherLspHover,
 	cmMrOtherLspComplete,
+	cmMrOtherLspDocumentSymbols,
+	cmMrOtherLspSignatureHelp,
 	cmMrOtherLspStatus,
 	cmMrOtherLspResults,
 	cmMrOtherLspCodeActions

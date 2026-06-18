@@ -7,7 +7,7 @@ int helper(void) {
 int main() {
 	  
 	int unused;
-         
+       
   puts("Hello world");
 	puts("Hello world");
 	

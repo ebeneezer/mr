@@ -45,6 +45,7 @@
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
+#include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 class MRBentoBoxFileCompareRegressionHarness {
@@ -8040,6 +8041,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
+	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
@@ -8124,6 +8126,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
+	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);

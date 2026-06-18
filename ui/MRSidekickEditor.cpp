@@ -31,7 +31,9 @@ enum ReadOnlyMarker {
 	romBelow,
 	romAbove,
 	romLeft,
-	romRight
+	romRight,
+	romBelowRight,
+	romAboveRight
 };
 
 TColorAttr sidekickColor(unsigned char paletteSlot, TColorAttr fallback) {
@@ -62,6 +64,21 @@ int maxLineLength(const std::vector<std::string> &lines) {
 	for (const std::string &line : lines)
 		width = std::max<int>(width, strwidth(line.c_str()));
 	return width;
+}
+
+bool visibleEditorRowsHaveText(MRFileEditor &editor, int firstViewRow, int rowCount) {
+	const MRTextBufferModel &model = editor.bufferModel();
+	const int lastViewRow = firstViewRow + rowCount;
+
+	for (int viewRow = firstViewRow; viewRow < lastViewRow; ++viewRow) {
+		const int visibleRow = editor.delta.y + viewRow - 1;
+		if (visibleRow < 0) continue;
+		const std::size_t documentLine = editor.documentLineForVisibleLine(static_cast<std::size_t>(visibleRow));
+		if (documentLine >= model.lineCount()) continue;
+		const std::size_t lineStart = model.lineStartByIndex(documentLine);
+		if (!trimAscii(model.lineText(lineStart)).empty()) return true;
+	}
+	return false;
 }
 
 std::vector<std::string> wrapReadOnlySidekickLines(const std::string &text, int contentWidth) {
@@ -102,29 +119,48 @@ std::vector<std::string> wrapReadOnlySidekickLines(const std::string &text, int 
 const char *readOnlyMarkerGlyph(ReadOnlyMarker marker) noexcept {
 	switch (marker) {
 		case romAbove:
+		case romAboveRight:
 			return "▼";
 		case romLeft:
 			return "◀";
 		case romRight:
 			return "▶";
 		case romBelow:
+		case romBelowRight:
 		default:
 			return "▲";
 	}
 }
 
-std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marker, int contentWidth) {
+std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marker, int contentWidth, int visibleLineCount = 0) {
 	const std::vector<std::string> lines = wrapReadOnlySidekickLines(text, contentWidth);
 	std::string out;
+	std::size_t markerLine = 0;
+	const bool markerAtRight = marker == romRight || marker == romBelowRight || marker == romAboveRight;
+
+	if ((marker == romAbove || marker == romAboveRight) && !lines.empty()) {
+		const int visibleLines = visibleLineCount > 0 ? std::min<int>(visibleLineCount, static_cast<int>(lines.size())) : static_cast<int>(lines.size());
+		markerLine = static_cast<std::size_t>(std::max(0, visibleLines - 1));
+	}
 
 	for (std::size_t index = 0; index < lines.size(); ++index) {
 		if (index != 0) out.push_back('\n');
-		if (index == 0) {
-			out += readOnlyMarkerGlyph(marker);
-			out.push_back(' ');
-		} else
-			out += "  ";
-		out += lines[index];
+		if (markerAtRight) {
+			out += lines[index];
+			if (index == markerLine) {
+				const int pad = std::max(0, contentWidth - strwidth(lines[index].c_str()));
+				out.append(static_cast<std::size_t>(pad), ' ');
+				out.push_back(' ');
+				out += readOnlyMarkerGlyph(marker);
+			}
+		} else {
+			if (index == markerLine) {
+				out += readOnlyMarkerGlyph(marker);
+				out.push_back(' ');
+			} else
+				out += "  ";
+			out += lines[index];
+		}
 	}
 	return out;
 }
@@ -176,54 +212,96 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 	const int maxContentWidth = std::max(8, maxSidekickWidth - 2);
 	const int cursorX = std::clamp(editorGlobal.x + textViewport.a.x + std::max(0, anchorViewColumn - 1), viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1));
 	const int cursorY = std::clamp(editorGlobal.y + textViewport.a.y + std::max(0, anchorViewRow - 1), viewport.a.y, std::max(viewport.a.y, viewport.b.y - 1));
-	const int belowCodeSpace = std::max(0, viewport.b.y - cursorY);
-	const int aboveSpace = std::max(0, cursorY - viewport.a.y);
+	const int belowCodeSpace = std::max(0, viewport.b.y - (cursorY + 1));
+	const int aboveCodeSpace = std::max(0, cursorY - viewport.a.y);
 	const int targetX = preferredViewColumn > 0 ? std::clamp(editorGlobal.x + textViewport.a.x + preferredViewColumn - 1, viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1)) : cursorX;
-	const int preferredX = preferredViewColumn > 0 ? std::clamp(editorGlobal.x + textViewport.a.x + preferredViewColumn - 1, targetX, std::max(targetX, viewport.b.x - 1)) : targetX;
 
 	if (placement == MRReadOnlySidekickPlacement::UnderCode) {
-		bool above = belowCodeSpace <= 0 && aboveSpace > 0;
-		marker = above ? romAbove : romBelow;
+		const int viewportWidth = std::max(1, viewport.b.x - viewport.a.x);
+		const int readableWidth = std::min(maxSidekickWidth, viewportWidth);
+		const int minimumWidth = std::min(readableWidth, 12);
+		const int rightAvailable = std::max(0, viewport.b.x - targetX);
+		const int leftAvailable = std::max(0, targetX - viewport.a.x + 1);
+		bool markerAtRight = false;
+		marker = romBelow;
 		std::vector<std::string> lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
-		const int lineCount = static_cast<int>(lines.size());
-		if (belowCodeSpace < lineCount && aboveSpace >= lineCount) above = true;
-		marker = above ? romAbove : romBelow;
-		if (above) lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
+		int wantedWidth = std::clamp(maxLineLength(lines), 1, readableWidth);
+		int x = targetX;
 
-		const int x = targetX;
-		const int wantedWidth = std::clamp(maxLineLength(lines), 1, std::max(1, std::min(maxSidekickWidth, viewport.b.x - x)));
-		const int verticalSpace = std::max(1, above ? aboveSpace : belowCodeSpace);
-		const int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()), 1, verticalSpace);
-		int y = above ? cursorY - wantedHeight : cursorY;
-		y = std::clamp(y, viewport.a.y, std::max(viewport.a.y, viewport.b.y - wantedHeight));
+		if (wantedWidth > rightAvailable) {
+			if (leftAvailable >= minimumWidth) {
+				wantedWidth = std::min(wantedWidth, leftAvailable);
+				x = targetX - wantedWidth + 1;
+				markerAtRight = true;
+				marker = romBelowRight;
+				lines = splitLines(readOnlyTextWithMarker(text, marker, std::max(1, wantedWidth - 2)));
+			} else {
+				wantedWidth = std::min(wantedWidth, std::max(1, viewport.b.x - viewport.a.x));
+				x = viewport.b.x - wantedWidth;
+				lines = splitLines(readOnlyTextWithMarker(text, marker, std::max(1, wantedWidth - 2)));
+			}
+		}
+		const int lineCount = static_cast<int>(lines.size());
+		const bool belowFits = belowCodeSpace >= lineCount;
+		const bool aboveFits = aboveCodeSpace >= lineCount;
+		const bool belowUsesText = belowFits && visibleEditorRowsHaveText(*editor, anchorViewRow + 1, lineCount);
+		const bool aboveUsesText = aboveFits && visibleEditorRowsHaveText(*editor, anchorViewRow - lineCount, lineCount);
+		bool above = false;
+
+		if (belowFits && !belowUsesText)
+			above = false;
+		else if (aboveFits && !aboveUsesText)
+			above = true;
+		else if (!belowFits && aboveCodeSpace > belowCodeSpace)
+			above = true;
+		else if (aboveFits && aboveCodeSpace > belowCodeSpace)
+			above = true;
+		marker = above ? (markerAtRight ? romAboveRight : romAbove) : (markerAtRight ? romBelowRight : romBelow);
+		lines = splitLines(readOnlyTextWithMarker(text, marker, std::max(1, wantedWidth - 2)));
+		const int verticalSpace = above ? aboveCodeSpace : belowCodeSpace;
+		const int wantedHeight = std::max(1, std::min<int>(static_cast<int>(lines.size()), std::max(1, verticalSpace)));
+		const int y = above ? cursorY - wantedHeight - 1 : cursorY;
 		return TRect(x, y, x + wantedWidth, y + wantedHeight);
 	}
 
 	const int belowSpace = std::max(0, viewport.b.y - cursorY);
-	bool above = belowSpace < 3 && aboveSpace > belowSpace;
-	marker = above ? romAbove : romBelow;
+	bool above = belowSpace < 3 && aboveCodeSpace > belowSpace;
+	marker = above ? romAbove : romLeft;
 	std::vector<std::string> lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
 	const int lineCount = static_cast<int>(lines.size());
-	if (belowSpace < lineCount && aboveSpace >= lineCount) above = true;
-	else if (belowSpace <= 0 && aboveSpace > 0)
+	if (belowSpace < lineCount && aboveCodeSpace >= lineCount) above = true;
+	else if (belowSpace <= 0 && aboveCodeSpace > 0)
 		above = true;
-	marker = above ? romAbove : romBelow;
+	marker = above ? romAbove : romLeft;
 	if (above) lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
-	int wantedWidth = std::clamp(maxLineLength(lines), 1, std::max(1, std::min(maxSidekickWidth, viewport.b.x - viewport.a.x)));
-	const int rightAlignedX = std::max(targetX, viewport.b.x - wantedWidth);
-	int x = std::max(preferredX, rightAlignedX);
-	if (x + wantedWidth > viewport.b.x) x = rightAlignedX;
-	x = std::clamp(x, targetX, std::max(targetX, viewport.b.x - 1));
-	if (!above && x > targetX) {
-		marker = romLeft;
-		lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
-		wantedWidth = std::clamp(maxLineLength(lines), 1, std::max(1, std::min(maxSidekickWidth, viewport.b.x - viewport.a.x)));
-	}
-	wantedWidth = std::min(wantedWidth, std::max(1, viewport.b.x - x));
+	const int viewportWidth = std::max(1, viewport.b.x - viewport.a.x);
+	const int readableWidth = std::min(maxSidekickWidth, viewportWidth);
+	const int minimumWidth = std::min(readableWidth, 12);
+	int wantedWidth = std::clamp(maxLineLength(lines), 1, readableWidth);
+	int x = viewport.b.x - wantedWidth;
+	const int rightAvailable = std::max(0, viewport.b.x - (targetX + 1));
+	const int leftAvailable = std::max(0, targetX - viewport.a.x);
 
-	const int verticalSpace = std::max(1, above ? aboveSpace : belowSpace);
+	if (x <= targetX && targetX < x + wantedWidth) {
+		if (rightAvailable >= minimumWidth) {
+			wantedWidth = std::min(wantedWidth, rightAvailable);
+			x = targetX + 1;
+			marker = above ? romAbove : romLeft;
+		} else if (leftAvailable >= minimumWidth) {
+			wantedWidth = std::min(wantedWidth, leftAvailable);
+			x = targetX - wantedWidth;
+			marker = above ? romAbove : romRight;
+		} else {
+			wantedWidth = readableWidth;
+			x = viewport.b.x - wantedWidth;
+			marker = above ? romAbove : romLeft;
+		}
+	}
+	lines = splitLines(readOnlyTextWithMarker(text, marker, std::max(1, wantedWidth - 2)));
+
+	const int verticalSpace = std::max(1, above ? aboveCodeSpace : belowSpace);
 	const int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()), 1, verticalSpace);
-	const int y = (belowSpace == 0 && aboveSpace == 0) ? cursorY : (above ? cursorY - wantedHeight : cursorY);
+	const int y = (belowSpace == 0 && aboveCodeSpace == 0) ? cursorY : (above ? cursorY - wantedHeight : cursorY);
 	return TRect(x, y, x + wantedWidth, y + wantedHeight);
 }
 
@@ -613,7 +691,8 @@ bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, con
 	ReadOnlyMarker marker = romBelow;
 	const TRect bounds = readOnlySidekickBoundsFor(parent, text, marker, anchorViewColumn, anchorViewRow, preferredViewColumn, placement);
 	const int contentWidth = std::max(1, bounds.b.x - bounds.a.x - 2);
-	const std::string markedText = readOnlyTextWithMarker(text, marker, contentWidth);
+	const int visibleLineCount = std::max(1, bounds.b.y - bounds.a.y);
+	const std::string markedText = readOnlyTextWithMarker(text, marker, contentWidth, visibleLineCount);
 	if (gActiveSidekick != nullptr && gActiveSidekick->parentBufferId() == parent->bufferId() && gActiveSidekick->isReadOnly()) {
 		gActiveSidekick->updateReadOnlyText(markedText, title, bounds);
 		if (gActiveSidekick->owner != TProgram::deskTop) {
@@ -657,4 +736,163 @@ void mrDropActiveSidekick() {
 	gActiveSidekick = nullptr;
 	if (group != nullptr) group->remove(sidekick);
 	TObject::destroy(sidekick);
+}
+
+bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason) {
+	struct Case {
+		const char *name;
+		const char *documentText;
+		const char *hintText;
+		int anchorColumn;
+		int anchorRow;
+		int preferredColumn;
+		ReadOnlyMarker expectedMarker;
+		bool expectAbove;
+	};
+	const Case cases[] = {
+	    {"EOF viewport space below is usable", "one\ntwo\nthree\nlast", "error 4:3 - tail", 3, 4, 3, romBelow, false},
+	    {"blank document line below is usable", "one\n\nthree", "error 1:3 - blank target", 3, 1, 3, romBelow, false},
+	    {"text below pushes sidekick above", "\n\nerr\ntext", "error 3:3 - text below", 3, 3, 3, romAbove, true},
+	    {"diagnostic above following code line", "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\ni=\"dumm\";\nreturn(0);", "error 17:3 - Use of undeclared identifier 'i'", 3, 17, 3, romAbove, true},
+	    {"right edge above keeps down glyph at right", "\n\nerr\ntext", "error 3:70 - edge", 76, 3, 76, romAboveRight, true},
+	    {"right edge below keeps up glyph at right", "i=\"dumm\";\n\n\n", "error 1:74 - Use of undeclared identifier 'i'", 76, 1, 76, romBelowRight, false},
+	};
+
+	for (const Case &testCase : cases) {
+		MREditWindow window(TRect(0, 0, 80, 24), "sidekick-geometry", 4101);
+		MRFileEditor *editor = window.getEditor();
+		ReadOnlyMarker marker = romBelow;
+
+		if (editor == nullptr) {
+			failureReason = std::string(testCase.name) + ": editor missing.";
+			return false;
+		}
+		if (!editor->replaceBufferText(testCase.documentText)) {
+			failureReason = std::string(testCase.name) + ": unable to seed editor.";
+			return false;
+		}
+		editor->scrollTo(0, 0);
+		const TPoint editorGlobal = editor->makeGlobal(TPoint(0, 0));
+		const TRect textViewport = editor->visibleTextViewportBounds();
+		const int anchorY = editorGlobal.y + textViewport.a.y + testCase.anchorRow - 1;
+		const TRect bounds = readOnlySidekickBoundsFor(&window, testCase.hintText, marker, testCase.anchorColumn, testCase.anchorRow, testCase.preferredColumn, MRReadOnlySidekickPlacement::UnderCode);
+
+		if (marker != testCase.expectedMarker) {
+			failureReason = std::string(testCase.name) + ": marker mismatch.";
+			return false;
+		}
+		if (testCase.expectAbove) {
+			if (bounds.b.y != anchorY - 1) {
+				failureReason = std::string(testCase.name) + ": above sidekick must render above the anchor row; anchorY=" + std::to_string(anchorY) + " bounds=" + std::to_string(bounds.a.y) + ".." + std::to_string(bounds.b.y) + ".";
+				return false;
+			}
+		} else if (bounds.a.y != anchorY) {
+			failureReason = std::string(testCase.name) + ": below sidekick must render directly below the anchor row; anchorY=" + std::to_string(anchorY) + " bounds=" + std::to_string(bounds.a.y) + ".." + std::to_string(bounds.b.y) + ".";
+			return false;
+		}
+		if (testCase.expectAbove && bounds.a.y <= anchorY && anchorY < bounds.b.y) {
+			failureReason = std::string(testCase.name) + ": above sidekick covers anchor row.";
+			return false;
+		}
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 12), "sidekick-bottom-geometry", 4102);
+		MRFileEditor *editor = window.getEditor();
+		std::string documentText;
+
+		if (editor == nullptr) {
+			failureReason = "bottom viewport row: editor missing.";
+			return false;
+		}
+		for (int row = 1; row <= editor->visibleViewportRows(); ++row) {
+			if (row != 1) documentText.push_back('\n');
+			documentText += row == editor->visibleViewportRows() ? "tail" : "";
+		}
+		if (!editor->replaceBufferText(documentText.c_str())) {
+			failureReason = "bottom viewport row: unable to seed editor.";
+			return false;
+		}
+		editor->scrollTo(0, 0);
+		const int anchorRow = editor->visibleViewportRows();
+		const TPoint editorGlobal = editor->makeGlobal(TPoint(0, 0));
+		const TRect textViewport = editor->visibleTextViewportBounds();
+		const int anchorY = editorGlobal.y + textViewport.a.y + anchorRow - 1;
+		ReadOnlyMarker marker = romBelow;
+		const TRect bounds = readOnlySidekickBoundsFor(&window, "error bottom - no below space", marker, 3, anchorRow, 3, MRReadOnlySidekickPlacement::UnderCode);
+
+		if (marker != romAbove) {
+			failureReason = "bottom viewport row: marker mismatch.";
+			return false;
+		}
+		if (bounds.b.y != anchorY - 1) {
+			failureReason = "bottom viewport row: above sidekick must end directly above the anchor row.";
+			return false;
+		}
+		if (bounds.a.y <= anchorY && anchorY < bounds.b.y) {
+			failureReason = "bottom viewport row: sidekick covers anchor row.";
+			return false;
+		}
+	}
+	if (TProgram::deskTop != nullptr) {
+		MREditWindow *window = new MREditWindow(TRect(0, 0, 80, 24), "sidekick-live-geometry", 4103);
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		const char *documentText = "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\ni=\"dumm\";\nreturn(0);";
+
+		if (window == nullptr || editor == nullptr) {
+			failureReason = "live sidekick geometry: editor missing.";
+			if (window != nullptr) TObject::destroy(window);
+			return false;
+		}
+		TProgram::deskTop->insert(window);
+		if (!editor->replaceBufferText(documentText)) {
+			failureReason = "live sidekick geometry: unable to seed editor.";
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		editor->scrollTo(0, 0);
+		const TPoint editorGlobal = editor->makeGlobal(TPoint(0, 0));
+		const TRect textViewport = editor->visibleTextViewportBounds();
+		const int anchorY = editorGlobal.y + textViewport.a.y + 16;
+
+		if (!mrOpenReadOnlySidekickAt(window, "tail", "LSP hover", 3, 4, 3, MRReadOnlySidekickPlacement::UnderCode)) {
+			failureReason = "live sidekick geometry: initial open failed.";
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		if (!mrOpenReadOnlySidekickAt(window, "error 17:3 - Use of undeclared identifier 'i'", "LSP hover", 3, 17, 3, MRReadOnlySidekickPlacement::UnderCode)) {
+			failureReason = "live sidekick geometry: update open failed.";
+			mrDropActiveSidekick();
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		if (gActiveSidekick == nullptr) {
+			failureReason = "live sidekick geometry: active sidekick missing.";
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		const TRect bounds = gActiveSidekick->getBounds();
+		if (bounds.b.y != anchorY - 1) {
+			failureReason = "live sidekick geometry: updated above sidekick must render above the anchor row; anchorY=" + std::to_string(anchorY) + " bounds=" + std::to_string(bounds.a.y) + ".." + std::to_string(bounds.b.y) + ".";
+			mrDropActiveSidekick();
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		if (bounds.a.y <= anchorY && anchorY < bounds.b.y) {
+			failureReason = "live sidekick geometry: updated sidekick covers anchor row.";
+			mrDropActiveSidekick();
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		mrDropActiveSidekick();
+		TProgram::deskTop->remove(window);
+		TObject::destroy(window);
+	}
+	failureReason.clear();
+	return true;
 }

@@ -12,9 +12,11 @@ struct LspCodeActionResult;
 struct LspCompletionResult;
 struct LspDefinitionResult;
 struct LspDiagnosticBatch;
+struct LspDocumentSymbolsResult;
 struct LspHoverResult;
 struct LspLocation;
 struct LspReferencesResult;
+struct LspSignatureHelpResult;
 }
 
 namespace mr::services {
@@ -33,7 +35,9 @@ enum class MRServiceResultKind {
 	References,
 	Hover,
 	Completion,
-	CodeAction
+	CodeAction,
+	DocumentSymbols,
+	SignatureHelp
 };
 
 enum class MRServiceResultState {
@@ -119,6 +123,24 @@ struct MRServiceCodeActionItem {
 	std::string rawLspCodeActionJson;
 };
 
+struct MRServiceDocumentSymbol {
+	std::string name;
+	std::string detail;
+	int kind = 0;
+	int depth = 0;
+	MRServiceLocationTarget target;
+};
+
+struct MRServiceSignatureParameter {
+	std::string label;
+};
+
+struct MRServiceSignatureInformation {
+	std::string label;
+	std::string documentation;
+	std::vector<MRServiceSignatureParameter> parameters;
+};
+
 struct MRServiceDiagnosticResult {
 	MRServiceResultHeader header;
 	std::vector<MRServiceDiagnosticEntry> diagnostics;
@@ -149,6 +171,18 @@ struct MRServiceCodeActionResult {
 	std::vector<MRServiceCodeActionItem> items;
 };
 
+struct MRServiceDocumentSymbolsResult {
+	MRServiceResultHeader header;
+	std::vector<MRServiceDocumentSymbol> symbols;
+};
+
+struct MRServiceSignatureHelpResult {
+	MRServiceResultHeader header;
+	int activeSignature = 0;
+	int activeParameter = 0;
+	std::vector<MRServiceSignatureInformation> signatures;
+};
+
 struct MRServiceResultCounts {
 	std::size_t diagnostics = 0;
 	std::size_t definitions = 0;
@@ -156,6 +190,8 @@ struct MRServiceResultCounts {
 	std::size_t hovers = 0;
 	std::size_t completions = 0;
 	std::size_t codeActions = 0;
+	std::size_t documentSymbols = 0;
+	std::size_t signatureHelps = 0;
 };
 
 struct MRServiceDocumentResultsSnapshot {
@@ -168,6 +204,8 @@ struct MRServiceDocumentResultsSnapshot {
 	std::vector<MRServiceHoverResult> hovers;
 	std::vector<MRServiceCompletionResult> completions;
 	std::vector<MRServiceCodeActionResult> codeActions;
+	std::vector<MRServiceDocumentSymbolsResult> documentSymbols;
+	std::vector<MRServiceSignatureHelpResult> signatureHelps;
 };
 
 struct MRServicePositionResultsSnapshot {
@@ -185,6 +223,8 @@ public:
 	void putHover(const MRServiceHoverResult &result);
 	void putCompletion(const MRServiceCompletionResult &result);
 	void putCodeActions(const MRServiceCodeActionResult &result);
+	void putDocumentSymbols(const MRServiceDocumentSymbolsResult &result);
+	void putSignatureHelp(const MRServiceSignatureHelpResult &result);
 	void markStaleAgainstWorkspace(const MRWorkspaceServiceSnapshot &workspace);
 
 	[[nodiscard]] const std::vector<MRServiceDiagnosticResult> &diagnosticResults() const noexcept;
@@ -192,6 +232,8 @@ public:
 	[[nodiscard]] const std::vector<MRServiceHoverResult> &hoverResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceCompletionResult> &completionResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceCodeActionResult> &codeActionResults() const noexcept;
+	[[nodiscard]] const std::vector<MRServiceDocumentSymbolsResult> &documentSymbolResults() const noexcept;
+	[[nodiscard]] const std::vector<MRServiceSignatureHelpResult> &signatureHelpResults() const noexcept;
 	[[nodiscard]] MRServiceResultCounts resultCounts() const noexcept;
 	[[nodiscard]] MRServiceDocumentResultsSnapshot currentResultsForDocument(const MRWorkspaceDocumentSnapshot &document) const;
 	[[nodiscard]] MRServicePositionResultsSnapshot currentResultsForDocumentPosition(const MRWorkspaceDocumentSnapshot &document, MRServiceTextPosition position) const;
@@ -202,6 +244,8 @@ private:
 	std::vector<MRServiceHoverResult> hovers;
 	std::vector<MRServiceCompletionResult> completions;
 	std::vector<MRServiceCodeActionResult> codeActions;
+	std::vector<MRServiceDocumentSymbolsResult> documentSymbols;
+	std::vector<MRServiceSignatureHelpResult> signatureHelps;
 };
 
 [[nodiscard]] bool serviceDocumentIdentityMatches(const MRWorkspaceServiceSnapshot &workspace, const MRServiceDocumentIdentity &identity) noexcept;
@@ -214,6 +258,8 @@ private:
 [[nodiscard]] MRServiceHoverResult buildServiceHoverFromLsp(const MRWorkspaceServiceSnapshot &workspace, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspHoverResult &hover);
 [[nodiscard]] MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCompletionResult &completion);
 [[nodiscard]] MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCodeActionResult &codeActions);
+[[nodiscard]] MRServiceDocumentSymbolsResult buildServiceDocumentSymbolsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDocumentSymbolsResult &documentSymbols);
+[[nodiscard]] MRServiceSignatureHelpResult buildServiceSignatureHelpFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspSignatureHelpResult &signatureHelp);
 
 } // namespace mr::services
 

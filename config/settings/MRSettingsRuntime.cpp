@@ -104,6 +104,27 @@ std::string mr::settings::storage::buildSettingsMacroSourceImpl(const MRSetupPat
 	return buildSettingsMacroSource(captureConfiguredSettingsSnapshot(paths));
 }
 
+std::string buildSettingsMacroSourcePreservingWorkspace(const MRSetupPaths &paths, std::string_view previousSource) {
+	static const std::regex workspacePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
+	std::string source = buildSettingsMacroSource(paths);
+	std::string previousText(previousSource);
+	std::string workspaceLines;
+	std::smatch match;
+
+	while (std::regex_search(previousText, match, workspacePattern)) {
+		workspaceLines += "MRSETUP('WORKSPACE', '";
+		workspaceLines += match[1].str();
+		workspaceLines += "');\n";
+		previousText = match.suffix().str();
+	}
+	if (!workspaceLines.empty()) {
+		const std::size_t endMacro = source.rfind("END_MACRO;");
+
+		if (endMacro != std::string::npos) source.insert(endMacro, workspaceLines);
+	}
+	return source;
+}
+
 bool mr::settings::storage::configuredSettingsDirtyImpl() {
 	return configuredSettingsDirtyFlag();
 }
@@ -121,7 +142,7 @@ bool mr::settings::storage::persistConfiguredSettingsSnapshotImpl(std::string *e
 
 	if (report != nullptr) *report = MRSettingsWriteReport();
 	if (report != nullptr) report->settingsPath = settingsPath;
-	if (!mr::settings::storage::configuredSettingsDirtyImpl()) {
+	if (!mr::settings::storage::configuredSettingsDirtyImpl() && !configuredAutosaveWorkspace()) {
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
@@ -135,7 +156,7 @@ bool mr::settings::storage::persistConfiguredSettingsSnapshotImpl(std::string *e
 	if (!validateSettingsMacroFilePath(settingsPath, errorMessage)) return false;
 	if (!ensureDirectoryTree(settingsDir, errorMessage)) return false;
 	static_cast<void>(readTextFile(settingsPath, previousSource));
-	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSource(paths);
+	source = configuredAutosaveWorkspace() && !runtimePreserveAutosavedWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSourcePreservingWorkspace(paths, previousSource);
 	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
 	mr::settings::storage::clearConfiguredSettingsDirtyImpl();
@@ -152,7 +173,7 @@ bool mr::settings::storage::writeSettingsMacroFileImpl(const MRSetupPaths &paths
 	if (!validateSettingsMacroFilePath(settingsPath, errorMessage)) return false;
 	if (!ensureDirectoryTree(settingsDir, errorMessage)) return false;
 	static_cast<void>(readTextFile(settingsPath, previousSource));
-	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSource(paths);
+	source = configuredAutosaveWorkspace() && !runtimePreserveAutosavedWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSourcePreservingWorkspace(paths, previousSource);
 	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
 	mr::settings::storage::clearConfiguredSettingsDirtyImpl();

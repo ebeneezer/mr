@@ -20,7 +20,8 @@ Implemented service foundation:
 - editor-owned document mirrors with `didOpen` / `didChange`,
 - debounced current-document sync after editor edits,
 - stale-result rejection where server versions are available,
-- URI/path mapping for current-file service results.
+- URI/path mapping for current-file service results,
+- MR workspace main-file marker projection as the service-context anchor.
 
 Implemented LSP channels:
 
@@ -29,7 +30,9 @@ Implemented LSP channels:
 - references,
 - completion,
 - hover,
-- code actions.
+- code actions,
+- document symbols,
+- signature help.
 
 Implemented UI projection:
 
@@ -39,6 +42,7 @@ Implemented UI projection:
 - edit submenu with cut/copy/paste capability projection,
 - read-only sidekick hover display with dwell-based mouse hover,
 - diagnostic sidekick display when hovering diagnostic marker ranges,
+- signature help sidekick display from the editor context menu,
 - LSP result dialog for navigable result sets,
 - diagnostics line in the top status area,
 - diagnostic information markers in the editor text plane,
@@ -75,10 +79,8 @@ Known real-server boundaries:
 
 Open LSP channels not yet projected into MR UI:
 
-- document symbols,
 - workspace symbols,
 - rename,
-- signature help,
 - document highlight,
 - formatting and range formatting,
 - semantic tokens,
@@ -88,13 +90,12 @@ Open LSP channels not yet projected into MR UI:
 
 Recommended next usable tranche:
 
-1. Document symbols, because they are read-only, low-risk and useful for an
-   outline/jump surface.
+1. Workspace symbols, using the MR workspace main-file anchor for broad symbol
+   scope.
 2. Rename, after a preview/apply workflow is designed for workspace edits.
-3. Signature help, integrated with the hover/sidekick information channel.
-4. Document highlight, using transient editor markers rather than persistent
+3. Document highlight, using transient editor markers rather than persistent
    diagnostics.
-5. Formatting, only after the edit-application path is reviewed separately.
+4. Formatting, only after the edit-application path is reviewed separately.
 
 Semantic tokens should remain a later tranche because they interact with the
 protected syntax and color architecture.

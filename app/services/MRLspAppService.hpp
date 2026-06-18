@@ -16,6 +16,8 @@ struct MRLspCommandAvailability {
 	bool requestReferences = false;
 	bool requestHover = false;
 	bool requestCompletion = false;
+	bool requestDocumentSymbols = false;
+	bool requestSignatureHelp = false;
 	bool requestCodeActions = false;
 	bool applyCodeActions = false;
 };
@@ -88,6 +90,7 @@ public:
 	[[nodiscard]] const MRServiceResultStore &results() const noexcept;
 	[[nodiscard]] bool runtimeActive() const noexcept;
 	[[nodiscard]] std::string activeHoverRequestId() const;
+	[[nodiscard]] std::string activeSignatureHelpRequestId() const;
 
 private:
 	MRWorkspaceServiceContext workspaceContext;

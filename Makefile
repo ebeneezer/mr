@@ -142,6 +142,8 @@ MR_LSP_RUNTIME_OBJECTS = \
 	$(MR_LSP_EDITOR_SOURCE_OBJECT) \
 	$(MR_LSP_SERVER_PROFILE_OBJECT) \
 	$(LSP_CODE_ACTION_OBJECT) \
+	$(LSP_DOCUMENT_SYMBOLS_OBJECT) \
+	$(LSP_SIGNATURE_HELP_OBJECT) \
 	$(LSP_COMPLETION_OBJECT) \
 	$(LSP_HOVER_OBJECT) \
 	$(LSP_REFERENCES_OBJECT) \
@@ -228,6 +230,10 @@ LSP_CODE_ACTION_PROBE_SOURCE = regression/mr_lsp_code_action_probe.cpp
 LSP_CODE_ACTION_PROBE_OBJECT = regression/mr_lsp_code_action_probe.o
 LSP_CODE_ACTION_SOURCE = lsp/MRLspCodeAction.cpp
 LSP_CODE_ACTION_OBJECT = lsp/MRLspCodeAction.o
+LSP_DOCUMENT_SYMBOLS_SOURCE = lsp/MRLspDocumentSymbols.cpp
+LSP_DOCUMENT_SYMBOLS_OBJECT = lsp/MRLspDocumentSymbols.o
+LSP_SIGNATURE_HELP_SOURCE = lsp/MRLspSignatureHelp.cpp
+LSP_SIGNATURE_HELP_OBJECT = lsp/MRLspSignatureHelp.o
 LSP_SERVICE_INTEGRATION_PROBE_TARGET = regression/mr_lsp_service_integration_probe
 LSP_SERVICE_INTEGRATION_PROBE_SOURCE = regression/mr_lsp_service_integration_probe.cpp
 LSP_SERVICE_INTEGRATION_PROBE_OBJECT = regression/mr_lsp_service_integration_probe.o
@@ -672,9 +678,9 @@ $(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsR
 $(MROUTLINETRAINER_OBJECT): $(MROUTLINETRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 app/services/MRWorkspaceServiceContext.o: app/services/MRWorkspaceServiceContext.cpp app/services/MRWorkspaceServiceContext.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT): $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE) app/services/MRWorkspaceServiceContext.hpp
-$(MR_SERVICE_RESULTS_OBJECT): $(MR_SERVICE_RESULTS_SOURCE) app/services/MRServiceResults.hpp app/services/MRWorkspaceServiceContext.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp lsp/MRLspUri.hpp
-$(MR_SERVICE_RESULTS_PROBE_OBJECT): $(MR_SERVICE_RESULTS_PROBE_SOURCE) app/services/MRServiceResults.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp lsp/MRLspUri.hpp
-$(MR_LSP_SERVICE_SESSION_OBJECT): $(MR_LSP_SERVICE_SESSION_SOURCE) app/services/MRLspServiceSession.hpp app/services/MRServiceResults.hpp app/services/MRLspEditorSource.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentService.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp
+$(MR_SERVICE_RESULTS_OBJECT): $(MR_SERVICE_RESULTS_SOURCE) app/services/MRServiceResults.hpp app/services/MRWorkspaceServiceContext.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentSymbols.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp lsp/MRLspSignatureHelp.hpp lsp/MRLspUri.hpp
+$(MR_SERVICE_RESULTS_PROBE_OBJECT): $(MR_SERVICE_RESULTS_PROBE_SOURCE) app/services/MRServiceResults.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentSymbols.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp lsp/MRLspSignatureHelp.hpp lsp/MRLspUri.hpp
+$(MR_LSP_SERVICE_SESSION_OBJECT): $(MR_LSP_SERVICE_SESSION_SOURCE) app/services/MRLspServiceSession.hpp app/services/MRServiceResults.hpp app/services/MRLspEditorSource.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentSymbols.hpp lsp/MRLspDocumentService.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp lsp/MRLspSignatureHelp.hpp
 $(MR_LSP_SERVICE_SESSION_PROBE_OBJECT): $(MR_LSP_SERVICE_SESSION_PROBE_SOURCE) app/services/MRLspServiceSession.hpp ui/MRFileEditor/MRFileEditor.hpp
 $(MR_LSP_EDITOR_SOURCE_OBJECT): $(MR_LSP_EDITOR_SOURCE_SOURCE) app/services/MRLspEditorSource.hpp app/services/MRWorkspaceServiceContext.hpp lsp/MRLspDocumentService.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT): $(MR_LSP_EDITOR_SOURCE_PROBE_SOURCE) app/services/MRLspEditorSource.hpp ui/MRFileEditor/MRFileEditor.hpp
@@ -710,6 +716,8 @@ $(LSP_REFERENCES_PROBE_OBJECT): $(LSP_REFERENCES_PROBE_SOURCE) lsp/MRLspReferenc
 $(LSP_COMPLETION_OBJECT): $(LSP_COMPLETION_SOURCE) lsp/MRLspCompletion.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
 $(LSP_COMPLETION_PROBE_OBJECT): $(LSP_COMPLETION_PROBE_SOURCE) lsp/MRLspCompletion.hpp
 $(LSP_CODE_ACTION_OBJECT): $(LSP_CODE_ACTION_SOURCE) lsp/MRLspCodeAction.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
+$(LSP_DOCUMENT_SYMBOLS_OBJECT): $(LSP_DOCUMENT_SYMBOLS_SOURCE) lsp/MRLspDocumentSymbols.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
+$(LSP_SIGNATURE_HELP_OBJECT): $(LSP_SIGNATURE_HELP_SOURCE) lsp/MRLspSignatureHelp.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
 $(LSP_CODE_ACTION_PROBE_OBJECT): $(LSP_CODE_ACTION_PROBE_SOURCE) lsp/MRLspCodeAction.hpp
 $(LSP_SERVICE_INTEGRATION_PROBE_OBJECT): $(LSP_SERVICE_INTEGRATION_PROBE_SOURCE) app/services/MRServiceResults.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp
 
@@ -845,6 +853,7 @@ clean:
 		$(LSP_REFERENCES_OBJECT) $(LSP_REFERENCES_PROBE_OBJECT) $(LSP_REFERENCES_PROBE_TARGET) \
 		$(LSP_COMPLETION_OBJECT) $(LSP_COMPLETION_PROBE_OBJECT) $(LSP_COMPLETION_PROBE_TARGET) \
 		$(LSP_CODE_ACTION_OBJECT) $(LSP_CODE_ACTION_PROBE_OBJECT) $(LSP_CODE_ACTION_PROBE_TARGET) \
+		$(LSP_DOCUMENT_SYMBOLS_OBJECT) \
 		$(LSP_SERVICE_INTEGRATION_PROBE_OBJECT) $(LSP_SERVICE_INTEGRATION_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \

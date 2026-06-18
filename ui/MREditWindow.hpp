@@ -37,6 +37,7 @@
 #include "MRFileEditor/MRFEBlockOps.hpp"
 #include "../app/MRCommands.hpp"
 #include "../app/MRCommandRouter.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../keymap/MRKeymapContext.hpp"
 #include "../keymap/MRKeymapToken.hpp"
 #include "../dialogs/MRWindowList.hpp"
@@ -243,12 +244,13 @@ class MREditWindow : public TWindow {
 				const bool showLanguageSlot = editor != nullptr && editor->syntaxLanguage() != MRSyntaxLanguage::PlainText;
 				const char *languageMarker = showLanguageSlot ? tmrSyntaxLanguageMarker(editor->syntaxLanguage()) : nullptr;
 				const std::uint32_t languageMarkerRgb = showLanguageSlot ? tmrSyntaxLanguageMarkerRgb(editor->syntaxLanguage()) : 0;
+				const bool showWorkspaceMainFileSlot = mrIsWorkspaceMainFile(this);
 				const bool isActiveWindow = (this->state & sfActive) != 0;
 				const bool showRecordingSlot = isActiveWindow && mrIsKeystrokeRecordingActive();
 				const bool showRecordingIcon = showRecordingSlot && mrIsKeystrokeRecordingMarkerVisible();
 				const bool showMacroBrainSlot = isActiveWindow && mrIsMacroBrainMarkerActive();
 				const bool showMacroBrainIcon = showMacroBrainSlot && mrIsMacroBrainMarkerVisible();
-				return MRFrame::MarkerState(isFileChanged(), hasInsertSlot, showInsertIcon, hasWordWrapSlot, showWordWrapIcon, hasTaskSlot, showTaskIcon, hasReadOnlySlot, showReadOnlyIcon, showRecordingSlot, showRecordingIcon, showMacroBrainSlot, showMacroBrainIcon, showLanguageSlot, showLanguageSlot, languageMarker, languageMarkerRgb);
+				return MRFrame::MarkerState(isFileChanged(), hasInsertSlot, showInsertIcon, hasWordWrapSlot, showWordWrapIcon, hasTaskSlot, showTaskIcon, hasReadOnlySlot, showReadOnlyIcon, showRecordingSlot, showRecordingIcon, showMacroBrainSlot, showMacroBrainIcon, showLanguageSlot, showLanguageSlot, showWorkspaceMainFileSlot, showWorkspaceMainFileSlot, languageMarker, languageMarkerRgb);
 			});
 			mrFrame->setTaskOverviewProvider([this]() { return describeRunningTasks(); });
 		}

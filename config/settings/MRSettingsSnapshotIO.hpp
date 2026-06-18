@@ -36,6 +36,9 @@ struct MRSettingsSnapshot {
 	MRCompilerErrorMessagePlacement compilerErrorMessagePlacement{MRCompilerErrorMessagePlacement::RightMargin};
 	bool languageServerSpawnDaemon{true};
 	MRLanguageServerSidekickPlacement languageServerSidekickPlacement{MRLanguageServerSidekickPlacement::RightMargin};
+	int languageServerHoverDwellMs{kLanguageServerHoverDwellMsDefault};
+	int languageServerDocumentSyncDelayMs{kLanguageServerDocumentSyncDelayMsDefault};
+	int languageServerSignatureQuietMs{kLanguageServerSignatureQuietMsDefault};
 	MRScrollbarVisibility scrollbarVisibility{MRScrollbarVisibility::Smart};
 	bool trackCompilerWarnings{false};
 	bool trackCompilerNotes{false};
@@ -47,6 +50,7 @@ struct MRSettingsSnapshot {
 	std::string fileCompareCompareTrailingGutters;
 	MRFileCompareStartConfiguration fileCompareStartConfiguration{MRFileCompareStartConfiguration::OriginalCompare};
 	bool fileCompareComparePanelReadOnly{true};
+	bool autosaveWorkspace{false};
 	bool autoloadWorkspace{false};
 	MRLogHandling logHandling{MRLogHandling::Volatile};
 	std::string logFilePath;

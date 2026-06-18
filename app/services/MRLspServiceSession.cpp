@@ -41,6 +41,8 @@ const mr::services::MRLspServiceCommandSpec lspServiceCommandTable[] = {
 	{ mr::services::MRLspServiceCommandId::FindReferences, mr::services::MRLspServiceRequestKind::References, true, "MR_LSP_FIND_REFERENCES", "LSP Find References" },
 	{ mr::services::MRLspServiceCommandId::ShowHover, mr::services::MRLspServiceRequestKind::Hover, false, "MR_LSP_SHOW_HOVER", "LSP Show Hover" },
 	{ mr::services::MRLspServiceCommandId::Complete, mr::services::MRLspServiceRequestKind::Completion, false, "MR_LSP_COMPLETE", "LSP Complete" },
+	{ mr::services::MRLspServiceCommandId::DocumentSymbols, mr::services::MRLspServiceRequestKind::DocumentSymbols, false, "MR_LSP_DOCUMENT_SYMBOLS", "LSP Document Symbols" },
+	{ mr::services::MRLspServiceCommandId::SignatureHelp, mr::services::MRLspServiceRequestKind::SignatureHelp, false, "MR_LSP_SIGNATURE_HELP", "LSP Signature Help" },
 };
 
 mr::lsp::LspCodeActionRange codeActionRangeFromServiceRange(const mr::services::MRServiceTextRange &range) {
@@ -256,6 +258,10 @@ bool MRLspServiceSession::syncEditorDocumentAndRequest(
 			return requestHover(position, errorMessage);
 		case MRLspServiceRequestKind::Completion:
 			return requestCompletion(position, errorMessage);
+		case MRLspServiceRequestKind::DocumentSymbols:
+			return requestDocumentSymbols(errorMessage);
+		case MRLspServiceRequestKind::SignatureHelp:
+			return requestSignatureHelp(position, errorMessage);
 	}
 	errorMessage = "LSP service request kind is unknown.";
 	return false;
@@ -331,6 +337,22 @@ bool MRLspServiceSession::requestCompletion(mr::lsp::LspTextPosition position, s
 		return false;
 	}
 	return completionAdapter.requestCompletion(lifecycle, documentService, position, completionRequest, errorMessage);
+}
+
+bool MRLspServiceSession::requestDocumentSymbols(std::string &errorMessage) {
+	if (!hasActiveWorkspace) {
+		errorMessage = "LSP service session has no active workspace.";
+		return false;
+	}
+	return documentSymbolsAdapter.requestDocumentSymbols(lifecycle, documentService, documentSymbolsRequest, errorMessage);
+}
+
+bool MRLspServiceSession::requestSignatureHelp(mr::lsp::LspTextPosition position, std::string &errorMessage) {
+	if (!hasActiveWorkspace) {
+		errorMessage = "LSP service session has no active workspace.";
+		return false;
+	}
+	return signatureHelpAdapter.requestSignatureHelp(lifecycle, documentService, position, signatureHelpRequest, errorMessage);
 }
 
 bool MRLspServiceSession::requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage) {
@@ -416,6 +438,10 @@ std::string MRLspServiceSession::activeHoverRequestId() const {
 	return hoverRequest.pending ? hoverRequest.idText : std::string();
 }
 
+std::string MRLspServiceSession::activeSignatureHelpRequestId() const {
+	return signatureHelpRequest.pending ? signatureHelpRequest.idText : std::string();
+}
+
 bool MRLspServiceSession::pollUntilState(mr::lsp::LspLifecycleState expectedState, std::string &errorMessage) {
 	for (int i = 0; i < 50; ++i) {
 		if (!poll(errorMessage)) return false;
@@ -468,6 +494,8 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 	mr::lsp::LspHoverResult hover;
 	mr::lsp::LspCompletionResult completion;
 	mr::lsp::LspCodeActionResult codeActions;
+	mr::lsp::LspDocumentSymbolsResult documentSymbols;
+	mr::lsp::LspSignatureHelpResult signatureHelp;
 	bool accepted = false;
 
 	if (hasActiveWorkspace) {
@@ -531,6 +559,15 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 		result.contextRange = codeActionRequestRange;
 		resultStore.putCodeActions(result);
 	}
+	if (!documentSymbolsAdapter.consume(message, documentService, documentSymbolsRequest, documentSymbols, accepted, errorMessage)) return false;
+	if (accepted) {
+		resultStore.putDocumentSymbols(buildServiceDocumentSymbolsFromLsp(activeWorkspace, documentSymbolsRequest.uri, activeWorkspace.documents.front().documentVersion, documentSymbolsRequest.idText, documentSymbols));
+		return true;
+	}
+	if (!signatureHelpAdapter.consume(message, documentService, signatureHelpRequest, signatureHelp, accepted, errorMessage)) return false;
+	if (accepted) {
+		resultStore.putSignatureHelp(buildServiceSignatureHelpFromLsp(activeWorkspace, signatureHelpRequest.uri, activeWorkspace.documents.front().documentVersion, signatureHelpRequest.idText, signatureHelp));
+	}
 	return true;
 }
 
@@ -539,6 +576,8 @@ void MRLspServiceSession::clearRequests() noexcept {
 	referencesRequest = mr::lsp::LspReferencesRequest();
 	hoverRequest = mr::lsp::LspHoverRequest();
 	completionRequest = mr::lsp::LspCompletionRequest();
+	documentSymbolsRequest = mr::lsp::LspDocumentSymbolsRequest();
+	signatureHelpRequest = mr::lsp::LspSignatureHelpRequest();
 	codeActionRequest = mr::lsp::LspCodeActionRequest();
 	codeActionRequestRange = MRServiceTextRange();
 	codeActionRequestVersion = 0;
