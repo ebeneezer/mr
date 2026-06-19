@@ -6098,7 +6098,7 @@ bool testLspRequestVersionRoutingGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRLspServiceSession files for LSP request-version routing guard: " + ioError;
 		return false;
 	}
-	if (!containsAllSubstrings(header, {"std::size_t definitionRequestVersion = 0;", "std::size_t referencesRequestVersion = 0;", "std::size_t hoverRequestVersion = 0;", "std::size_t completionRequestVersion = 0;", "std::size_t documentSymbolsRequestVersion = 0;", "std::size_t signatureHelpRequestVersion = 0;"}, missingNeedle)) {
+	if (!containsAllSubstrings(header, {"std::size_t definitionRequestVersion = 0;", "std::size_t referencesRequestVersion = 0;", "std::size_t hoverRequestVersion = 0;", "std::size_t completionRequestVersion = 0;", "std::size_t documentHighlightRequestVersion = 0;", "std::size_t documentSymbolsRequestVersion = 0;", "std::size_t signatureHelpRequestVersion = 0;"}, missingNeedle)) {
 		failureReason = "LSP service session must store per-request document versions: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -6110,7 +6110,7 @@ bool testLspRequestVersionRoutingGuard(std::string &failureReason) {
 		return false;
 	}
 	consumeBody = source.substr(consumeStart, consumeEnd - consumeStart);
-	if (!containsAllSubstrings(consumeBody, {"definitionRequestVersion", "referencesRequestVersion", "hoverRequestVersion", "completionRequestVersion", "documentSymbolsRequestVersion", "signatureHelpRequestVersion"}, missingNeedle)) {
+	if (!containsAllSubstrings(consumeBody, {"definitionRequestVersion", "referencesRequestVersion", "hoverRequestVersion", "completionRequestVersion", "documentHighlightRequestVersion", "documentSymbolsRequestVersion", "signatureHelpRequestVersion"}, missingNeedle)) {
 		failureReason = "LSP result construction must use per-request document versions: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -6126,8 +6126,90 @@ bool testLspRequestVersionRoutingGuard(std::string &failureReason) {
 		return false;
 	}
 	clearBody = source.substr(clearStart, clearEnd - clearStart);
-	if (!containsAllSubstrings(clearBody, {"definitionRequestVersion = 0;", "referencesRequestVersion = 0;", "hoverRequestVersion = 0;", "completionRequestVersion = 0;", "documentSymbolsRequestVersion = 0;", "signatureHelpRequestVersion = 0;"}, missingNeedle)) {
+	if (!containsAllSubstrings(clearBody, {"definitionRequestVersion = 0;", "referencesRequestVersion = 0;", "hoverRequestVersion = 0;", "completionRequestVersion = 0;", "documentHighlightRequestVersion = 0;", "documentSymbolsRequestVersion = 0;", "signatureHelpRequestVersion = 0;"}, missingNeedle)) {
 		failureReason = "LSP request version fields must be reset with requests: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testLspDocumentHighlightChannelGuard(std::string &failureReason) {
+	const std::string adapterHeaderPath = absolutePathFromCwd("lsp/MRLspDocumentHighlight.hpp");
+	const std::string adapterSourcePath = absolutePathFromCwd("lsp/MRLspDocumentHighlight.cpp");
+	const std::string serviceHeaderPath = absolutePathFromCwd("app/services/MRLspServiceSession.hpp");
+	const std::string serviceSourcePath = absolutePathFromCwd("app/services/MRLspServiceSession.cpp");
+	const std::string resultsHeaderPath = absolutePathFromCwd("app/services/MRServiceResults.hpp");
+	const std::string resultsSourcePath = absolutePathFromCwd("app/services/MRServiceResults.cpp");
+	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	const std::string editorHeaderPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
+	const std::string editorMarkersPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorMarkers.cpp");
+	const std::string editorViewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
+	const std::string makefilePath = absolutePathFromCwd("Makefile");
+	std::string adapterHeader;
+	std::string adapterSource;
+	std::string serviceHeader;
+	std::string serviceSource;
+	std::string resultsHeader;
+	std::string resultsSource;
+	std::string router;
+	std::string editorHeader;
+	std::string editorMarkers;
+	std::string editorViewport;
+	std::string makefile;
+	std::string setterBody;
+	std::string ioError;
+	std::string missingNeedle;
+
+	if (!readTextFile(adapterHeaderPath, adapterHeader, ioError) || !readTextFile(adapterSourcePath, adapterSource, ioError) || !readTextFile(serviceHeaderPath, serviceHeader, ioError) || !readTextFile(serviceSourcePath, serviceSource, ioError) ||
+	    !readTextFile(resultsHeaderPath, resultsHeader, ioError) || !readTextFile(resultsSourcePath, resultsSource, ioError) || !readTextFile(routerPath, router, ioError) || !readTextFile(editorHeaderPath, editorHeader, ioError) ||
+	    !readTextFile(editorMarkersPath, editorMarkers, ioError) || !readTextFile(editorViewportPath, editorViewport, ioError) || !readTextFile(makefilePath, makefile, ioError)) {
+		failureReason = "Unable to read files for LSP document highlight channel guard: " + ioError;
+		return false;
+	}
+
+	if (!containsAllSubstrings(adapterHeader, {"LspDocumentHighlightRequest", "LspDocumentHighlightResult", "LspDocumentHighlightAdapter"}, missingNeedle) || adapterSource.find("\"textDocument/documentHighlight\"") == std::string::npos) {
+		failureReason = "LSP document highlight adapter must be a dedicated documentHighlight adapter.";
+		return false;
+	}
+	if (!containsAllSubstrings(serviceHeader, {"DocumentHighlight", "requestDocumentHighlight", "LspDocumentHighlightAdapter documentHighlightAdapter", "LspDocumentHighlightRequest documentHighlightRequest", "documentHighlightRequestVersion"}, missingNeedle)) {
+		failureReason = "LSP service session must expose a dedicated document highlight request path: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(serviceSource, {"MR_LSP_DOCUMENT_HIGHLIGHT", "requestDocumentHighlight(position, errorMessage)", "documentHighlightAdapter.consume", "putDocumentHighlights(buildServiceDocumentHighlightsFromLsp", "documentHighlightRequestVersion = 0;"}, missingNeedle)) {
+		failureReason = "LSP service session must request, consume and reset document highlight results: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(resultsHeader, {"MRServiceDocumentHighlightEntry", "MRServiceDocumentHighlightResult", "putDocumentHighlights", "documentHighlightResults", "buildServiceDocumentHighlightsFromLsp"}, missingNeedle) ||
+	    !containsAllSubstrings(resultsSource, {"MRServiceResultKind::DocumentHighlight", "MRServiceResultStore::putDocumentHighlights", "MRServiceResultStore::documentHighlightResults", "buildServiceDocumentHighlightsFromLsp"}, missingNeedle)) {
+		failureReason = "Service results must store document highlights separately from locations and diagnostics.";
+		return false;
+	}
+	if (!containsAllSubstrings(router, {"cmMrOtherLspDocumentHighlight", "{\"Highlight\", cmMrOtherLspDocumentHighlight", "MRLspServiceCommandId::DocumentHighlight", "applyLspDocumentHighlightRanges", "reportNewLspDocumentHighlights"}, missingNeedle)) {
+		failureReason = "Command router must expose and apply LSP document highlight through the LSP mini menu: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(editorHeader, {"setLspDocumentHighlightRanges", "clearLspDocumentHighlightRanges", "mLspDocumentHighlightRanges", "lspDocumentHighlightContainsOffset"}, missingNeedle) ||
+	    !containsAllSubstrings(editorViewport, {"lspDocumentHighlightContainsOffset", "documentHighlightChar", "configuredColorSlotOverride(14, highlightedAttr)"}, missingNeedle)) {
+		failureReason = "MRFileEditor must render document highlights through its own transient range state: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	const std::size_t setterStart = editorMarkers.find("void MRFileEditor::setLspDocumentHighlightRanges");
+	const std::size_t setterEnd = editorMarkers.find("\nvoid MRFileEditor::clearLspDocumentHighlightRanges", setterStart);
+	if (setterStart == std::string::npos || setterEnd == std::string::npos) {
+		failureReason = "Unable to isolate setLspDocumentHighlightRanges.";
+		return false;
+	}
+	setterBody = editorMarkers.substr(setterStart, setterEnd - setterStart);
+	if (setterBody.find("mFindMarkerRanges") != std::string::npos || setterBody.find("mLspDiagnosticInformationRanges") != std::string::npos) {
+		failureReason = "Document highlight setter must not reuse find marker or diagnostic information storage.";
+		return false;
+	}
+
+	if (!containsAllSubstrings(makefile, {"LSP_DOCUMENT_HIGHLIGHT_SOURCE", "LSP_DOCUMENT_HIGHLIGHT_OBJECT", "$(LSP_DOCUMENT_HIGHLIGHT_OBJECT)"}, missingNeedle)) {
+		failureReason = "Makefile must build and link the LSP document highlight adapter: missing " + missingNeedle + ".";
 		return false;
 	}
 
@@ -8395,6 +8477,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
 	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
 	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);
+	runTest(ctx, "LSP document highlight channel guard", testLspDocumentHighlightChannelGuard);
 	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
@@ -8483,6 +8566,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
 	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
 	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);
+	runTest(ctx, "LSP document highlight channel guard", testLspDocumentHighlightChannelGuard);
 	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);

@@ -369,6 +369,15 @@ bool MRFileEditor::lspDiagnosticInformationContainsOffset(std::size_t offset) co
 	return false;
 }
 
+bool MRFileEditor::lspDocumentHighlightContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mLspDocumentHighlightRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
 bool MRFileEditor::ratioCellActive(int numerator, int denominator, int cellIndex, int cellCount) noexcept {
 	if (numerator <= 0 || denominator <= 0 || cellCount <= 0) return false;
 	if (numerator >= denominator) return true;
@@ -966,6 +975,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 			bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
 			bool findMarkedChar = !selected && findMarkerContainsOffset(documentPos);
 			bool diagnosticInformationChar = !selected && lspDiagnosticInformationContainsOffset(documentPos);
+			bool documentHighlightChar = !selected && !diagnosticInformationChar && lspDocumentHighlightContainsOffset(documentPos);
 			TAttrPair effectivePair = changedChar ? changedPair : basePair;
 			tokenPair = selected ? selectionPair : effectivePair;
 			color = tokenColor(token, selected, tokenPair);
@@ -976,6 +986,12 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 					color = static_cast<TColorAttr>((color & 0xF0) | 0x0E);
 			}
 			if (diffTextActive && !selected) color = diffTextColor;
+			if (documentHighlightChar) {
+				unsigned char highlightedAttr = 0;
+				if (configuredColorSlotOverride(14, highlightedAttr)) color = static_cast<TColorAttr>(highlightedAttr);
+				else
+					color = static_cast<TColorAttr>(0x1E);
+			}
 			if (diagnosticInformationChar) {
 				unsigned char diagnosticAttr = 0;
 				if (configuredColorSlotOverride(kMrPaletteDiagnosticInformation, diagnosticAttr)) color = static_cast<TColorAttr>(diagnosticAttr);

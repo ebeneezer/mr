@@ -155,7 +155,8 @@ enum : ushort {
 	cmMrOtherLspRename,
 	cmMrOtherLspStatus,
 	cmMrOtherLspResults,
-	cmMrOtherLspCodeActions
+	cmMrOtherLspCodeActions,
+	cmMrOtherLspDocumentHighlight
 };
 
 #endif

@@ -16,6 +16,7 @@ struct MRLspCommandAvailability {
 	bool requestReferences = false;
 	bool requestHover = false;
 	bool requestCompletion = false;
+	bool requestDocumentHighlight = false;
 	bool requestDocumentSymbols = false;
 	bool requestWorkspaceSymbols = false;
 	bool requestSignatureHelp = false;

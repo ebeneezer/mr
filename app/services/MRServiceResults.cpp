@@ -3,6 +3,7 @@
 #include "../../lsp/MRLspCodeAction.hpp"
 #include "../../lsp/MRLspCompletion.hpp"
 #include "../../lsp/MRLspDiagnostics.hpp"
+#include "../../lsp/MRLspDocumentHighlight.hpp"
 #include "../../lsp/MRLspDocumentSymbols.hpp"
 #include "../../lsp/MRLspHover.hpp"
 #include "../../lsp/MRLspReferences.hpp"
@@ -34,6 +35,14 @@ MRServiceTextRange serviceRangeFromLsp(const mr::lsp::LspDiagnosticRange &range)
 	serviceRange.start.character = range.startCharacter;
 	serviceRange.end.line = range.endLine;
 	serviceRange.end.character = range.endCharacter;
+	return serviceRange;
+}
+
+MRServiceTextRange serviceRangeFromLsp(const mr::lsp::LspDocumentHighlightRange &range) {
+	MRServiceTextRange serviceRange;
+
+	serviceRange.start = servicePositionFromLsp(range.start);
+	serviceRange.end = servicePositionFromLsp(range.end);
 	return serviceRange;
 }
 
@@ -187,6 +196,7 @@ void MRServiceResultStore::clear() noexcept {
 	hovers.clear();
 	completions.clear();
 	codeActions.clear();
+	documentHighlights.clear();
 	documentSymbols.clear();
 	signatureHelps.clear();
 	renames.clear();
@@ -242,6 +252,16 @@ void MRServiceResultStore::putCodeActions(const MRServiceCodeActionResult &resul
 	codeActions.push_back(result);
 }
 
+void MRServiceResultStore::putDocumentHighlights(const MRServiceDocumentHighlightResult &result) {
+	for (MRServiceDocumentHighlightResult &existing : documentHighlights) {
+		if (sameResultSlot(existing.header, result.header)) {
+			existing = result;
+			return;
+		}
+	}
+	documentHighlights.push_back(result);
+}
+
 void MRServiceResultStore::putDocumentSymbols(const MRServiceDocumentSymbolsResult &result) {
 	for (MRServiceDocumentSymbolsResult &existing : documentSymbols) {
 		if (sameResultSlot(existing.header, result.header)) {
@@ -283,6 +303,8 @@ void MRServiceResultStore::markStaleAgainstWorkspace(const MRWorkspaceServiceSna
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
 	for (MRServiceCodeActionResult &result : codeActions)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
+	for (MRServiceDocumentHighlightResult &result : documentHighlights)
+		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
 	for (MRServiceDocumentSymbolsResult &result : documentSymbols) {
 		if (result.header.state != MRServiceResultState::Current) continue;
 		if (result.header.kind == MRServiceResultKind::WorkspaceSymbols)
@@ -316,6 +338,10 @@ const std::vector<MRServiceCodeActionResult> &MRServiceResultStore::codeActionRe
 	return codeActions;
 }
 
+const std::vector<MRServiceDocumentHighlightResult> &MRServiceResultStore::documentHighlightResults() const noexcept {
+	return documentHighlights;
+}
+
 const std::vector<MRServiceDocumentSymbolsResult> &MRServiceResultStore::documentSymbolResults() const noexcept {
 	return documentSymbols;
 }
@@ -341,6 +367,7 @@ MRServiceResultCounts MRServiceResultStore::resultCounts() const noexcept {
 	counts.hovers = hovers.size();
 	counts.completions = completions.size();
 	counts.codeActions = codeActions.size();
+	counts.documentHighlights = documentHighlights.size();
 	for (const MRServiceDocumentSymbolsResult &result : documentSymbols) {
 		if (result.header.kind == MRServiceResultKind::WorkspaceSymbols)
 			++counts.workspaceSymbols;
@@ -401,6 +428,13 @@ MRServiceDocumentResultsSnapshot MRServiceResultStore::currentResultsForDocument
 		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
 		++snapshot.current.codeActions;
 		snapshot.codeActions.push_back(filtered);
+	}
+	for (const MRServiceDocumentHighlightResult &result : documentHighlights) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		++snapshot.current.documentHighlights;
+		snapshot.documentHighlights.push_back(result);
 	}
 	for (const MRServiceDocumentSymbolsResult &result : documentSymbols) {
 		if (result.header.state != MRServiceResultState::Current) continue;
@@ -576,6 +610,26 @@ MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServic
 			serviceItem.edits.push_back(serviceEdit);
 		}
 		result.items.push_back(serviceItem);
+	}
+	return result;
+}
+
+MRServiceDocumentHighlightResult buildServiceDocumentHighlightsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDocumentHighlightResult &documentHighlights) {
+	MRServiceDocumentHighlightResult result;
+
+	result.header.source = MRServiceResultSource::Lsp;
+	result.header.kind = MRServiceResultKind::DocumentHighlight;
+	result.header.requestId = requestId;
+	result.header.identity = identityFromUri(workspace, originUri.empty() ? documentHighlights.uri : originUri, originVersion, result.header.state, result.header.errorMessage);
+	if (result.header.state != MRServiceResultState::Current) return result;
+
+	for (const mr::lsp::LspDocumentHighlightRange &highlight : documentHighlights.highlights) {
+		MRServiceDocumentHighlightEntry entry;
+
+		entry.range = serviceRangeFromLsp(highlight);
+		entry.hasKind = highlight.hasKind;
+		entry.kind = highlight.kind;
+		result.highlights.push_back(entry);
 	}
 	return result;
 }

@@ -267,6 +267,7 @@ void MRFileEditor::shareContentStateFrom(const MRFileEditor &source) {
 	clearFindMarkerRanges();
 	clearDirtyRanges();
 	clearLspDiagnosticInformationRanges();
+	clearLspDocumentHighlightRanges();
 	syncFromEditorState(false);
 }
 
@@ -275,6 +276,7 @@ void MRFileEditor::detachContentStateCopy() {
 	clearFindMarkerRanges();
 	clearDirtyRanges();
 	clearLspDiagnosticInformationRanges();
+	clearLspDocumentHighlightRanges();
 	syncFromEditorState(false);
 }
 

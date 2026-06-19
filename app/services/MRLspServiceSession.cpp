@@ -223,6 +223,7 @@ const mr::services::MRLspServiceCommandSpec lspServiceCommandTable[] = {
 	{ mr::services::MRLspServiceCommandId::FindReferences, mr::services::MRLspServiceRequestKind::References, true, "MR_LSP_FIND_REFERENCES", "LSP Find References" },
 	{ mr::services::MRLspServiceCommandId::ShowHover, mr::services::MRLspServiceRequestKind::Hover, false, "MR_LSP_SHOW_HOVER", "LSP Show Hover" },
 	{ mr::services::MRLspServiceCommandId::Complete, mr::services::MRLspServiceRequestKind::Completion, false, "MR_LSP_COMPLETE", "LSP Complete" },
+	{ mr::services::MRLspServiceCommandId::DocumentHighlight, mr::services::MRLspServiceRequestKind::DocumentHighlight, false, "MR_LSP_DOCUMENT_HIGHLIGHT", "LSP Document Highlight" },
 	{ mr::services::MRLspServiceCommandId::DocumentSymbols, mr::services::MRLspServiceRequestKind::DocumentSymbols, false, "MR_LSP_DOCUMENT_SYMBOLS", "LSP Document Symbols" },
 	{ mr::services::MRLspServiceCommandId::WorkspaceSymbols, mr::services::MRLspServiceRequestKind::WorkspaceSymbols, false, "MR_LSP_WORKSPACE_SYMBOLS", "LSP Workspace Symbols" },
 	{ mr::services::MRLspServiceCommandId::SignatureHelp, mr::services::MRLspServiceRequestKind::SignatureHelp, false, "MR_LSP_SIGNATURE_HELP", "LSP Signature Help" },
@@ -465,6 +466,8 @@ bool MRLspServiceSession::syncEditorDocumentAndRequest(
 			return requestHover(position, errorMessage);
 		case MRLspServiceRequestKind::Completion:
 			return requestCompletion(position, errorMessage);
+		case MRLspServiceRequestKind::DocumentHighlight:
+			return requestDocumentHighlight(position, errorMessage);
 		case MRLspServiceRequestKind::DocumentSymbols:
 			return requestDocumentSymbols(errorMessage);
 		case MRLspServiceRequestKind::WorkspaceSymbols:
@@ -556,6 +559,16 @@ bool MRLspServiceSession::requestCompletion(mr::lsp::LspTextPosition position, s
 	}
 	if (!completionAdapter.requestCompletion(lifecycle, documentService, position, completionRequest, errorMessage)) return false;
 	completionRequestVersion = activeEditorDocumentVersion;
+	return true;
+}
+
+bool MRLspServiceSession::requestDocumentHighlight(mr::lsp::LspTextPosition position, std::string &errorMessage) {
+	if (!hasActiveWorkspace) {
+		errorMessage = "LSP service session has no active workspace.";
+		return false;
+	}
+	if (!documentHighlightAdapter.requestDocumentHighlight(lifecycle, documentService, position, documentHighlightRequest, errorMessage)) return false;
+	documentHighlightRequestVersion = activeEditorDocumentVersion;
 	return true;
 }
 
@@ -737,6 +750,7 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 	mr::lsp::LspHoverResult hover;
 	mr::lsp::LspCompletionResult completion;
 	mr::lsp::LspCodeActionResult codeActions;
+	mr::lsp::LspDocumentHighlightResult documentHighlight;
 	mr::lsp::LspDocumentSymbolsResult documentSymbols;
 	mr::lsp::LspWorkspaceSymbolsResult workspaceSymbols;
 	mr::lsp::LspSignatureHelpResult signatureHelp;
@@ -800,6 +814,11 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 		result.requestPosition = MRServiceTextPosition{completionRequest.position.line, completionRequest.position.character};
 		resultStore.putCompletion(result);
 	}
+	if (!documentHighlightAdapter.consume(message, documentService, documentHighlightRequest, documentHighlight, accepted, errorMessage)) return false;
+	if (accepted) {
+		resultStore.putDocumentHighlights(buildServiceDocumentHighlightsFromLsp(activeWorkspace, documentHighlightRequest.uri, documentHighlightRequestVersion, documentHighlightRequest.idText, documentHighlight));
+		return true;
+	}
 	if (!codeActionAdapter.consume(message, documentService, codeActionRequest, codeActions, accepted, errorMessage)) return false;
 	if (accepted) {
 		MRServiceCodeActionResult result = buildServiceCodeActionsFromLsp(activeWorkspace, codeActionRequest.uri, codeActionRequestVersion, codeActionRequest.idText, codeActions);
@@ -835,6 +854,7 @@ void MRLspServiceSession::clearRequests() noexcept {
 	referencesRequest = mr::lsp::LspReferencesRequest();
 	hoverRequest = mr::lsp::LspHoverRequest();
 	completionRequest = mr::lsp::LspCompletionRequest();
+	documentHighlightRequest = mr::lsp::LspDocumentHighlightRequest();
 	documentSymbolsRequest = mr::lsp::LspDocumentSymbolsRequest();
 	workspaceSymbolsRequest = mr::lsp::LspWorkspaceSymbolsRequest();
 	signatureHelpRequest = mr::lsp::LspSignatureHelpRequest();
@@ -844,6 +864,7 @@ void MRLspServiceSession::clearRequests() noexcept {
 	referencesRequestVersion = 0;
 	hoverRequestVersion = 0;
 	completionRequestVersion = 0;
+	documentHighlightRequestVersion = 0;
 	documentSymbolsRequestVersion = 0;
 	signatureHelpRequestVersion = 0;
 	codeActionRequestRange = MRServiceTextRange();

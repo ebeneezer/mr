@@ -12,6 +12,7 @@ struct LspCodeActionResult;
 struct LspCompletionResult;
 struct LspDefinitionResult;
 struct LspDiagnosticBatch;
+struct LspDocumentHighlightResult;
 struct LspDocumentSymbolsResult;
 struct LspWorkspaceSymbolsResult;
 struct LspHoverResult;
@@ -38,6 +39,7 @@ enum class MRServiceResultKind {
 	Hover,
 	Completion,
 	CodeAction,
+	DocumentHighlight,
 	DocumentSymbols,
 	WorkspaceSymbols,
 	SignatureHelp,
@@ -180,6 +182,17 @@ struct MRServiceDocumentSymbolsResult {
 	std::vector<MRServiceDocumentSymbol> symbols;
 };
 
+struct MRServiceDocumentHighlightEntry {
+	MRServiceTextRange range;
+	bool hasKind = false;
+	int kind = 1;
+};
+
+struct MRServiceDocumentHighlightResult {
+	MRServiceResultHeader header;
+	std::vector<MRServiceDocumentHighlightEntry> highlights;
+};
+
 struct MRServiceSignatureHelpResult {
 	MRServiceResultHeader header;
 	int activeSignature = 0;
@@ -199,6 +212,7 @@ struct MRServiceResultCounts {
 	std::size_t hovers = 0;
 	std::size_t completions = 0;
 	std::size_t codeActions = 0;
+	std::size_t documentHighlights = 0;
 	std::size_t documentSymbols = 0;
 	std::size_t workspaceSymbols = 0;
 	std::size_t signatureHelps = 0;
@@ -215,6 +229,7 @@ struct MRServiceDocumentResultsSnapshot {
 	std::vector<MRServiceHoverResult> hovers;
 	std::vector<MRServiceCompletionResult> completions;
 	std::vector<MRServiceCodeActionResult> codeActions;
+	std::vector<MRServiceDocumentHighlightResult> documentHighlights;
 	std::vector<MRServiceDocumentSymbolsResult> documentSymbols;
 	std::vector<MRServiceSignatureHelpResult> signatureHelps;
 	std::vector<MRServiceRenameResult> renames;
@@ -235,6 +250,7 @@ public:
 	void putHover(const MRServiceHoverResult &result);
 	void putCompletion(const MRServiceCompletionResult &result);
 	void putCodeActions(const MRServiceCodeActionResult &result);
+	void putDocumentHighlights(const MRServiceDocumentHighlightResult &result);
 	void putDocumentSymbols(const MRServiceDocumentSymbolsResult &result);
 	void putSignatureHelp(const MRServiceSignatureHelpResult &result);
 	void putRename(const MRServiceRenameResult &result);
@@ -245,6 +261,7 @@ public:
 	[[nodiscard]] const std::vector<MRServiceHoverResult> &hoverResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceCompletionResult> &completionResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceCodeActionResult> &codeActionResults() const noexcept;
+	[[nodiscard]] const std::vector<MRServiceDocumentHighlightResult> &documentHighlightResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceDocumentSymbolsResult> &documentSymbolResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceSignatureHelpResult> &signatureHelpResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceRenameResult> &renameResults() const noexcept;
@@ -258,6 +275,7 @@ private:
 	std::vector<MRServiceHoverResult> hovers;
 	std::vector<MRServiceCompletionResult> completions;
 	std::vector<MRServiceCodeActionResult> codeActions;
+	std::vector<MRServiceDocumentHighlightResult> documentHighlights;
 	std::vector<MRServiceDocumentSymbolsResult> documentSymbols;
 	std::vector<MRServiceSignatureHelpResult> signatureHelps;
 	std::vector<MRServiceRenameResult> renames;
@@ -273,6 +291,7 @@ private:
 [[nodiscard]] MRServiceHoverResult buildServiceHoverFromLsp(const MRWorkspaceServiceSnapshot &workspace, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspHoverResult &hover);
 [[nodiscard]] MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCompletionResult &completion);
 [[nodiscard]] MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCodeActionResult &codeActions);
+[[nodiscard]] MRServiceDocumentHighlightResult buildServiceDocumentHighlightsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDocumentHighlightResult &documentHighlights);
 [[nodiscard]] MRServiceDocumentSymbolsResult buildServiceDocumentSymbolsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDocumentSymbolsResult &documentSymbols);
 [[nodiscard]] MRServiceDocumentSymbolsResult buildServiceWorkspaceSymbolsFromLsp(const std::string &requestId, const mr::lsp::LspWorkspaceSymbolsResult &workspaceSymbols);
 [[nodiscard]] MRServiceSignatureHelpResult buildServiceSignatureHelpFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspSignatureHelpResult &signatureHelp);

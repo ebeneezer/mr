@@ -6,6 +6,7 @@
 #include "../../lsp/MRLspCodeAction.hpp"
 #include "../../lsp/MRLspCompletion.hpp"
 #include "../../lsp/MRLspDiagnostics.hpp"
+#include "../../lsp/MRLspDocumentHighlight.hpp"
 #include "../../lsp/MRLspDocumentService.hpp"
 #include "../../lsp/MRLspDocumentSymbols.hpp"
 #include "../../lsp/MRLspHover.hpp"
@@ -31,6 +32,7 @@ enum class MRLspServiceRequestKind {
 	References,
 	Hover,
 	Completion,
+	DocumentHighlight,
 	DocumentSymbols,
 	WorkspaceSymbols,
 	SignatureHelp,
@@ -42,6 +44,7 @@ enum class MRLspServiceCommandId {
 	FindReferences,
 	ShowHover,
 	Complete,
+	DocumentHighlight,
 	DocumentSymbols,
 	WorkspaceSymbols,
 	SignatureHelp,
@@ -106,6 +109,7 @@ public:
 	bool requestReferences(mr::lsp::LspTextPosition position, bool includeDeclaration, std::string &errorMessage);
 	bool requestHover(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestCompletion(mr::lsp::LspTextPosition position, std::string &errorMessage);
+	bool requestDocumentHighlight(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestDocumentSymbols(std::string &errorMessage);
 	bool requestWorkspaceSymbols(const std::string &query, std::string &errorMessage);
 	bool requestSignatureHelp(mr::lsp::LspTextPosition position, std::string &errorMessage);
@@ -135,6 +139,7 @@ private:
 	mr::lsp::LspReferencesAdapter referencesAdapter;
 	mr::lsp::LspHoverAdapter hoverAdapter;
 	mr::lsp::LspCompletionAdapter completionAdapter;
+	mr::lsp::LspDocumentHighlightAdapter documentHighlightAdapter;
 	mr::lsp::LspDocumentSymbolsAdapter documentSymbolsAdapter;
 	mr::lsp::LspSignatureHelpAdapter signatureHelpAdapter;
 	mr::lsp::LspCodeActionAdapter codeActionAdapter;
@@ -143,6 +148,7 @@ private:
 	mr::lsp::LspReferencesRequest referencesRequest;
 	mr::lsp::LspHoverRequest hoverRequest;
 	mr::lsp::LspCompletionRequest completionRequest;
+	mr::lsp::LspDocumentHighlightRequest documentHighlightRequest;
 	mr::lsp::LspDocumentSymbolsRequest documentSymbolsRequest;
 	mr::lsp::LspWorkspaceSymbolsRequest workspaceSymbolsRequest;
 	mr::lsp::LspSignatureHelpRequest signatureHelpRequest;
@@ -152,6 +158,7 @@ private:
 	std::size_t referencesRequestVersion = 0;
 	std::size_t hoverRequestVersion = 0;
 	std::size_t completionRequestVersion = 0;
+	std::size_t documentHighlightRequestVersion = 0;
 	std::size_t documentSymbolsRequestVersion = 0;
 	std::size_t signatureHelpRequestVersion = 0;
 	MRServiceTextRange codeActionRequestRange;

@@ -107,6 +107,38 @@ void MRFileEditor::clearLspDiagnosticInformationRanges() {
 	drawView();
 }
 
+void MRFileEditor::setLspDocumentHighlightRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
+	std::vector<MRTextBufferModel::Range> normalized;
+
+	normalized.reserve(ranges.size());
+	for (const auto &rangePair : ranges) {
+		std::size_t start = rangePair.first;
+		std::size_t end = rangePair.second;
+
+		if (end < start) std::swap(start, end);
+		if (end > start) normalized.push_back(MRTextBufferModel::Range(start, end));
+	}
+	normalizeRangeList(normalized);
+	if (mLspDocumentHighlightRanges.size() == normalized.size()) {
+		bool unchanged = true;
+
+		for (std::size_t index = 0; index < normalized.size(); ++index) {
+			if (mLspDocumentHighlightRanges[index].start == normalized[index].start && mLspDocumentHighlightRanges[index].end == normalized[index].end) continue;
+			unchanged = false;
+			break;
+		}
+		if (unchanged) return;
+	}
+	mLspDocumentHighlightRanges.swap(normalized);
+	drawView();
+}
+
+void MRFileEditor::clearLspDocumentHighlightRanges() {
+	if (mLspDocumentHighlightRanges.empty()) return;
+	mLspDocumentHighlightRanges.clear();
+	drawView();
+}
+
 void MRFileEditor::clearDirtyRanges() noexcept {
 	mDirtyRanges.clear();
 }

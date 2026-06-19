@@ -1424,6 +1424,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	syncDisplayedCursorColumnFromCursor(false);
 	mBufferModel.setModified(modifiedState);
 	if (changeSet == nullptr || changeSet->changed) mFindMarkerRanges.clear();
+	if (changeSet == nullptr || changeSet->changed) mLspDocumentHighlightRanges.clear();
 	if (changeSet != nullptr && changeSet->changed) remapLspDiagnosticInformationRangesForAppliedChange(*changeSet);
 	if (!modifiedState) clearDirtyRanges();
 	else if (changeSet != nullptr && changeSet->changed) {

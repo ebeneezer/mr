@@ -53,6 +53,7 @@ MRLspDocumentServiceSnapshot MRLspAppService::documentServiceSnapshot(const MRWo
 		snapshot.commands.requestReferences = true;
 		snapshot.commands.requestHover = true;
 		snapshot.commands.requestCompletion = true;
+		snapshot.commands.requestDocumentHighlight = true;
 		snapshot.commands.requestDocumentSymbols = true;
 		snapshot.commands.requestWorkspaceSymbols = workspace.root.hasRoot;
 		snapshot.commands.requestSignatureHelp = true;
@@ -81,6 +82,7 @@ MRLspPositionServiceSnapshot MRLspAppService::documentPositionServiceSnapshot(co
 		snapshot.commands.requestReferences = true;
 		snapshot.commands.requestHover = true;
 		snapshot.commands.requestCompletion = true;
+		snapshot.commands.requestDocumentHighlight = true;
 		snapshot.commands.requestDocumentSymbols = true;
 		snapshot.commands.requestWorkspaceSymbols = workspace.root.hasRoot;
 		snapshot.commands.requestSignatureHelp = true;

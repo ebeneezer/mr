@@ -308,6 +308,7 @@ std::size_t g_lspReportedLocationCount = 0;
 std::size_t g_lspReportedHoverCount = 0;
 std::size_t g_lspReportedCompletionCount = 0;
 std::size_t g_lspReportedCodeActionCount = 0;
+std::size_t g_lspReportedDocumentHighlightCount = 0;
 std::size_t g_lspReportedDocumentSymbolCount = 0;
 std::size_t g_lspReportedSignatureHelpCount = 0;
 std::string g_lspReportedDiagnosticSignature;
@@ -555,6 +556,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / LSP hover";
 		case cmMrOtherLspComplete:
 			return "Other / LSP complete";
+		case cmMrOtherLspDocumentHighlight:
+			return "Other / LSP document highlight";
 		case cmMrOtherLspDocumentSymbols:
 			return "Other / LSP document symbols";
 		case cmMrOtherLspWorkspaceSymbols:
@@ -1913,6 +1916,30 @@ void applyLspDiagnosticInformationRanges(const mr::services::MRServiceDocumentId
 		editor->setLspDiagnosticInformationRanges(ranges);
 }
 
+void applyLspDocumentHighlightRanges(const mr::services::MRServiceDocumentHighlightResult &result) {
+	MREditWindow *window = findLspResultTargetWindow(result.header.identity);
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	std::vector<std::pair<std::size_t, std::size_t>> ranges;
+	std::string text;
+
+	if (editor == nullptr) return;
+	if (result.header.identity.documentId != editor->documentId()) return;
+	if (result.header.identity.documentVersion != editor->documentVersion()) return;
+	text = editor->snapshotText();
+	for (const mr::services::MRServiceDocumentHighlightEntry &highlight : result.highlights) {
+		std::size_t start = 0;
+		std::size_t end = 0;
+
+		if (!lspTextOffsetForPosition(text, highlight.range.start, start)) continue;
+		if (!lspTextOffsetForPosition(text, highlight.range.end, end)) continue;
+		if (end > start) ranges.push_back(std::make_pair(start, end));
+	}
+	if (ranges.empty())
+		editor->clearLspDocumentHighlightRanges();
+	else
+		editor->setLspDocumentHighlightRanges(ranges);
+}
+
 std::vector<mr::services::MRServiceLocationTarget> lspReferenceDialogLocations(const mr::services::MRServiceLocationResult &result) {
 	MREditWindow *window = currentEditorCommandWindow();
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -3031,7 +3058,7 @@ bool showLspStatusDialog() {
 	lines.push_back(line.str());
 	line.str(std::string());
 	line.clear();
-	line << "Reported: diagnostics " << g_lspReportedDiagnosticCount << ", locations " << g_lspReportedLocationCount << ", hovers " << g_lspReportedHoverCount << ", completions " << g_lspReportedCompletionCount << ", code actions " << g_lspReportedCodeActionCount << ", document symbols " << g_lspReportedDocumentSymbolCount << ", signatures " << g_lspReportedSignatureHelpCount;
+	line << "Reported: diagnostics " << g_lspReportedDiagnosticCount << ", locations " << g_lspReportedLocationCount << ", hovers " << g_lspReportedHoverCount << ", completions " << g_lspReportedCompletionCount << ", code actions " << g_lspReportedCodeActionCount << ", document highlights " << g_lspReportedDocumentHighlightCount << ", document symbols " << g_lspReportedDocumentSymbolCount << ", signatures " << g_lspReportedSignatureHelpCount;
 	lines.push_back(line.str());
 	for (std::size_t i = 0; i < lines.size(); ++i)
 		displayLines.push_back(firstDisplayLine(lines[i], static_cast<std::size_t>(width - 6)));
@@ -3410,6 +3437,26 @@ void reportNewLspCodeActions(const std::vector<mr::services::MRServiceCodeAction
 	}
 }
 
+void reportNewLspDocumentHighlights(const std::vector<mr::services::MRServiceDocumentHighlightResult> &documentHighlights) {
+	while (g_lspReportedDocumentHighlightCount < documentHighlights.size()) {
+		const mr::services::MRServiceDocumentHighlightResult result = documentHighlights[g_lspReportedDocumentHighlightCount];
+		std::ostringstream line;
+
+		++g_lspReportedDocumentHighlightCount;
+		g_lspLastRequestState = "document highlight received";
+		if (result.header.state == mr::services::MRServiceResultState::Current) {
+			applyLspDocumentHighlightRanges(result);
+			line << "LSP document highlight: " << result.highlights.size();
+			if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
+			postLspInfo(line.str());
+		} else if (!result.header.errorMessage.empty()) {
+			postLspWarning("LSP document highlight unavailable: " + result.header.errorMessage);
+		} else {
+			postLspWarning("LSP document highlight unavailable.");
+		}
+	}
+}
+
 void reportNewLspDocumentSymbols(const std::vector<mr::services::MRServiceDocumentSymbolsResult> &documentSymbols) {
 	while (g_lspReportedDocumentSymbolCount < documentSymbols.size()) {
 		const mr::services::MRServiceDocumentSymbolsResult result = documentSymbols[g_lspReportedDocumentSymbolCount];
@@ -3662,6 +3709,7 @@ void reportNewLspResults() {
 	reportNewLspHovers(results.hoverResults());
 	reportNewLspCompletions(results.completionResults());
 	reportNewLspCodeActions(results.codeActionResults());
+	reportNewLspDocumentHighlights(results.documentHighlightResults());
 	reportNewLspDocumentSymbols(results.documentSymbolResults());
 	reportNewLspSignatureHelps(results.signatureHelpResults());
 }
@@ -3694,6 +3742,7 @@ std::vector<LspMiniMenuEntry> buildLspContextMenuItems(MREditWindow *win, const 
 		    {"References", cmMrOtherLspReferences, serverConfigured && snapshot.commands.requestReferences},
 		    {"Hover", cmMrOtherLspHover, serverConfigured && snapshot.commands.requestHover},
 		    {"Complete", cmMrOtherLspComplete, serverConfigured && snapshot.commands.requestCompletion},
+		    {"Highlight", cmMrOtherLspDocumentHighlight, serverConfigured && snapshot.commands.requestDocumentHighlight},
 		    {"Symbols", cmMrOtherLspDocumentSymbols, serverConfigured && snapshot.commands.requestDocumentSymbols},
 		    {"Workspace Symbols", cmMrOtherLspWorkspaceSymbols, serverConfigured && snapshot.commands.requestWorkspaceSymbols},
 		    {"Signature", cmMrOtherLspSignatureHelp, serverConfigured && snapshot.commands.requestSignatureHelp},
@@ -4113,6 +4162,8 @@ bool showLspContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::ShowHover, "LSP hover", true, nullptr, &target);
 		case cmMrOtherLspComplete:
 			return requestLspCompletionCommand(targetWindow, &target);
+		case cmMrOtherLspDocumentHighlight:
+			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::DocumentHighlight, "LSP document highlight", true, nullptr, &target);
 		case cmMrOtherLspDocumentSymbols:
 			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::DocumentSymbols, "LSP document symbols", true, nullptr, &target);
 		case cmMrOtherLspWorkspaceSymbols:
@@ -6014,6 +6065,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherLspComplete:
 			return requestLspCompletionCommand();
+
+		case cmMrOtherLspDocumentHighlight:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::DocumentHighlight, "LSP document highlight");
 
 		case cmMrOtherLspDocumentSymbols:
 			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::DocumentSymbols, "LSP document symbols");

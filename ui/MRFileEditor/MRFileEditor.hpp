@@ -289,6 +289,10 @@ class MRFileEditor : public TScroller {
 
 	void clearLspDiagnosticInformationRanges();
 
+	void setLspDocumentHighlightRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
+
+	void clearLspDocumentHighlightRanges();
+
 	void revealCursor(Boolean centerCursor = True);
 
 	void refreshViewState();
@@ -540,6 +544,7 @@ class MRFileEditor : public TScroller {
 
 	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
 	bool lspDiagnosticInformationContainsOffset(std::size_t offset) const noexcept;
+	bool lspDocumentHighlightContainsOffset(std::size_t offset) const noexcept;
 
 	unsigned char fileCompareLineKindAt(std::size_t lineIndex) const noexcept;
 
@@ -746,6 +751,7 @@ class MRFileEditor : public TScroller {
 	std::vector<MRTextBufferModel::Range> mCompilerErrorRanges;
 	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;
 	std::vector<MRTextBufferModel::Range> mLspDiagnosticInformationRanges;
+	std::vector<MRTextBufferModel::Range> mLspDocumentHighlightRanges;
 	LoadTiming mLastLoadTiming;
 	mutable std::size_t mCachedCursorLineDocumentId;
 	mutable std::size_t mCachedCursorLineVersion;
