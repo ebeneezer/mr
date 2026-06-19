@@ -13,9 +13,11 @@ struct LspCompletionResult;
 struct LspDefinitionResult;
 struct LspDiagnosticBatch;
 struct LspDocumentSymbolsResult;
+struct LspWorkspaceSymbolsResult;
 struct LspHoverResult;
 struct LspLocation;
 struct LspReferencesResult;
+struct LspRenameResult;
 struct LspSignatureHelpResult;
 }
 
@@ -37,7 +39,9 @@ enum class MRServiceResultKind {
 	Completion,
 	CodeAction,
 	DocumentSymbols,
-	SignatureHelp
+	WorkspaceSymbols,
+	SignatureHelp,
+	Rename
 };
 
 enum class MRServiceResultState {
@@ -183,6 +187,11 @@ struct MRServiceSignatureHelpResult {
 	std::vector<MRServiceSignatureInformation> signatures;
 };
 
+struct MRServiceRenameResult {
+	MRServiceResultHeader header;
+	std::vector<MRServiceTextEdit> edits;
+};
+
 struct MRServiceResultCounts {
 	std::size_t diagnostics = 0;
 	std::size_t definitions = 0;
@@ -191,7 +200,9 @@ struct MRServiceResultCounts {
 	std::size_t completions = 0;
 	std::size_t codeActions = 0;
 	std::size_t documentSymbols = 0;
+	std::size_t workspaceSymbols = 0;
 	std::size_t signatureHelps = 0;
+	std::size_t renames = 0;
 };
 
 struct MRServiceDocumentResultsSnapshot {
@@ -206,6 +217,7 @@ struct MRServiceDocumentResultsSnapshot {
 	std::vector<MRServiceCodeActionResult> codeActions;
 	std::vector<MRServiceDocumentSymbolsResult> documentSymbols;
 	std::vector<MRServiceSignatureHelpResult> signatureHelps;
+	std::vector<MRServiceRenameResult> renames;
 };
 
 struct MRServicePositionResultsSnapshot {
@@ -225,6 +237,7 @@ public:
 	void putCodeActions(const MRServiceCodeActionResult &result);
 	void putDocumentSymbols(const MRServiceDocumentSymbolsResult &result);
 	void putSignatureHelp(const MRServiceSignatureHelpResult &result);
+	void putRename(const MRServiceRenameResult &result);
 	void markStaleAgainstWorkspace(const MRWorkspaceServiceSnapshot &workspace);
 
 	[[nodiscard]] const std::vector<MRServiceDiagnosticResult> &diagnosticResults() const noexcept;
@@ -234,6 +247,7 @@ public:
 	[[nodiscard]] const std::vector<MRServiceCodeActionResult> &codeActionResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceDocumentSymbolsResult> &documentSymbolResults() const noexcept;
 	[[nodiscard]] const std::vector<MRServiceSignatureHelpResult> &signatureHelpResults() const noexcept;
+	[[nodiscard]] const std::vector<MRServiceRenameResult> &renameResults() const noexcept;
 	[[nodiscard]] MRServiceResultCounts resultCounts() const noexcept;
 	[[nodiscard]] MRServiceDocumentResultsSnapshot currentResultsForDocument(const MRWorkspaceDocumentSnapshot &document) const;
 	[[nodiscard]] MRServicePositionResultsSnapshot currentResultsForDocumentPosition(const MRWorkspaceDocumentSnapshot &document, MRServiceTextPosition position) const;
@@ -246,6 +260,7 @@ private:
 	std::vector<MRServiceCodeActionResult> codeActions;
 	std::vector<MRServiceDocumentSymbolsResult> documentSymbols;
 	std::vector<MRServiceSignatureHelpResult> signatureHelps;
+	std::vector<MRServiceRenameResult> renames;
 };
 
 [[nodiscard]] bool serviceDocumentIdentityMatches(const MRWorkspaceServiceSnapshot &workspace, const MRServiceDocumentIdentity &identity) noexcept;
@@ -259,7 +274,9 @@ private:
 [[nodiscard]] MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCompletionResult &completion);
 [[nodiscard]] MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCodeActionResult &codeActions);
 [[nodiscard]] MRServiceDocumentSymbolsResult buildServiceDocumentSymbolsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDocumentSymbolsResult &documentSymbols);
+[[nodiscard]] MRServiceDocumentSymbolsResult buildServiceWorkspaceSymbolsFromLsp(const std::string &requestId, const mr::lsp::LspWorkspaceSymbolsResult &workspaceSymbols);
 [[nodiscard]] MRServiceSignatureHelpResult buildServiceSignatureHelpFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspSignatureHelpResult &signatureHelp);
+[[nodiscard]] MRServiceRenameResult buildServiceRenameFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspRenameResult &rename);
 
 } // namespace mr::services
 

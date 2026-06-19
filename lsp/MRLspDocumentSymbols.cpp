@@ -162,6 +162,15 @@ std::string buildDocumentSymbolsRequestPayload(const LspDocumentSymbolsRequest &
 	return out.str();
 }
 
+std::string buildWorkspaceSymbolsRequestPayload(const LspWorkspaceSymbolsRequest &request) {
+	std::ostringstream out;
+
+	out << "{\"jsonrpc\":\"2.0\",\"id\":" << request.idText << ",\"method\":\"workspace/symbol\",\"params\":{\"query\":";
+	out << jsonString(request.query);
+	out << "}}";
+	return out.str();
+}
+
 bool parsePositionObject(const std::string &text, LspTextPosition &position) {
 	return extractIntValue(text, "line", 0, position.line) && extractIntValue(text, "character", 0, position.character);
 }
@@ -270,6 +279,35 @@ bool parseDocumentSymbolsResult(const std::string &payload, const std::string &u
 	}
 	return true;
 }
+
+bool parseWorkspaceSymbolsResult(const std::string &payload, std::vector<LspDocumentSymbol> &symbols, std::string &errorMessage) {
+	std::size_t arrayStart = 0;
+	std::size_t arrayEnd = 0;
+	std::size_t pos = 0;
+
+	symbols.clear();
+	if (!findKeyValueStart(payload, "result", 0, arrayStart) || arrayStart >= payload.size()) return setError(errorMessage, "LSP workspace/symbol response result is not an array.");
+	if (payload.compare(arrayStart, 4, "null") == 0) return true;
+	if (payload[arrayStart] != '[') return setError(errorMessage, "LSP workspace/symbol response result is not an array.");
+	if (!findMatchingBracket(payload, arrayStart, '[', ']', arrayEnd)) return setError(errorMessage, "LSP workspace/symbol response array is malformed.");
+	pos = arrayStart + 1;
+	while (pos < arrayEnd) {
+		skipWhitespace(payload, pos);
+		if (pos >= arrayEnd) break;
+		if (payload[pos] == ',') {
+			++pos;
+			continue;
+		}
+		if (payload[pos] != '{') return setError(errorMessage, "LSP workspace/symbol entry is malformed.");
+		std::size_t objectEnd = 0;
+		if (!findMatchingBracket(payload, pos, '{', '}', objectEnd) || objectEnd > arrayEnd) return setError(errorMessage, "LSP workspace/symbol object is malformed.");
+		LspDocumentSymbol symbol;
+		if (!parseSymbolInformationObject(payload.substr(pos, objectEnd - pos + 1), symbol)) return setError(errorMessage, "LSP workspace/symbol fields are malformed.");
+		symbols.push_back(symbol);
+		pos = objectEnd + 1;
+	}
+	return true;
+}
 } // namespace
 
 bool LspDocumentSymbolsAdapter::requestDocumentSymbols(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspDocumentSymbolsRequest &request, std::string &errorMessage) {
@@ -306,6 +344,40 @@ bool LspDocumentSymbolsAdapter::consume(const LspInboundMessage &message, const 
 	}
 	result.originUri = request.uri;
 	if (!parseDocumentSymbolsResult(message.payload, request.uri, result.symbols, errorMessage)) return false;
+	request.pending = false;
+	accepted = true;
+	errorMessage.clear();
+	return true;
+}
+
+bool LspDocumentSymbolsAdapter::requestWorkspaceSymbols(LspLifecycle &lifecycle, const std::string &query, LspWorkspaceSymbolsRequest &request, std::string &errorMessage) {
+	LspWorkspaceSymbolsRequest candidate;
+
+	candidate.idText = jsonString("mr-workspace-symbols-" + std::to_string(nextRequestId));
+	candidate.method = "workspace/symbol";
+	candidate.query = query;
+	candidate.pending = true;
+	if (!lifecycle.sendInitializedPayload(buildWorkspaceSymbolsRequestPayload(candidate), errorMessage)) return false;
+	request = candidate;
+	++nextRequestId;
+	errorMessage.clear();
+	return true;
+}
+
+bool LspDocumentSymbolsAdapter::consumeWorkspaceSymbols(const LspInboundMessage &message, LspWorkspaceSymbolsRequest &request, LspWorkspaceSymbolsResult &result, bool &accepted, std::string &errorMessage) {
+	accepted = false;
+	result = LspWorkspaceSymbolsResult();
+	if (!request.pending) {
+		errorMessage.clear();
+		return true;
+	}
+	if (message.envelope.kind != JsonRpcMessageKind::Response || message.envelope.idText != request.idText) {
+		errorMessage.clear();
+		return true;
+	}
+	if (request.method != "workspace/symbol") return setError(errorMessage, "LSP workspace/symbol request method mismatch.");
+	result.query = request.query;
+	if (!parseWorkspaceSymbolsResult(message.payload, result.symbols, errorMessage)) return false;
 	request.pending = false;
 	accepted = true;
 	errorMessage.clear();

@@ -380,6 +380,7 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	if (options.caseSensitive) optionMask |= 0x0002;
 	if (options.regularExpressions) optionMask |= 0x0004;
 	if (options.searchFilesInMemory) optionMask |= 0x0008;
+	if (options.restrictToWorkspace) optionMask |= 0x0010;
 
 	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH", 102, 17);
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
@@ -389,7 +390,7 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Se~a~rch:", searchField));
 	dialog->insert(searchField);
 	dialog->insert(new TStaticText(TRect(3, 6, 13, 7), "Options:"));
-	optionsField = new TCheckBoxes(TRect(3, 7, 30, 11), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("search editor ~w~indows", nullptr)))));
+	optionsField = new TCheckBoxes(TRect(3, 7, 34, 12), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("search editor ~w~indows", new TSItem("restrict to wor~k~space", nullptr))))));
 	dialog->insert(optionsField);
 	pathField = new TInputLine(TRect(14, 12, 96, 13), kPathBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 12, 14, 13), "Start a~t~:", pathField));
@@ -434,6 +435,7 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 		currentOptions.caseSensitive = (currentMask & 0x0002) != 0;
 		currentOptions.regularExpressions = (currentMask & 0x0004) != 0;
 		currentOptions.searchFilesInMemory = (currentMask & 0x0008) != 0;
+		currentOptions.restrictToWorkspace = (currentMask & 0x0010) != 0;
 		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
 		if (currentOptions.startingPath.empty()) currentOptions.startingPath = ".";
 		currentOptions.searchText = trimAscii(currentSearch);
@@ -522,6 +524,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	if (options.regularExpressions) optionMask |= 0x0004;
 	if (options.searchFilesInMemory) optionMask |= 0x0008;
 	if (options.keepFilesOpen) optionMask |= 0x0010;
+	if (options.restrictToWorkspace) optionMask |= 0x0020;
 
 	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH AND REPLACE", 102, 20);
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
@@ -534,7 +537,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	dialog->insert(new TLabel(TRect(2, 6, 14, 7), "Replac~e~:", replacementField));
 	dialog->insert(replacementField);
 	dialog->insert(new TStaticText(TRect(3, 8, 13, 9), "Options:"));
-	optionsField = new TCheckBoxes(TRect(3, 9, 32, 14), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("search files in ~m~emory", new TSItem("~K~eep all files open", nullptr))))));
+	optionsField = new TCheckBoxes(TRect(3, 9, 34, 15), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("search files in ~m~emory", new TSItem("~K~eep all files open", new TSItem("restrict to wor~k~space", nullptr)))))));
 	dialog->insert(optionsField);
 	pathField = new TInputLine(TRect(14, 15, 96, 16), kPathBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 15, 16, 16), "Start ~a~t:", pathField));
@@ -584,6 +587,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 		currentOptions.regularExpressions = (currentMask & 0x0004) != 0;
 		currentOptions.searchFilesInMemory = (currentMask & 0x0008) != 0;
 		currentOptions.keepFilesOpen = (currentMask & 0x0010) != 0;
+		currentOptions.restrictToWorkspace = (currentMask & 0x0020) != 0;
 		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
 		if (currentOptions.startingPath.empty()) currentOptions.startingPath = ".";
 		currentOptions.searchText = trimAscii(currentSearch);
@@ -599,6 +603,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 		searchOptions.caseSensitive = currentOptions.caseSensitive;
 		searchOptions.regularExpressions = currentOptions.regularExpressions;
 		searchOptions.searchFilesInMemory = currentOptions.searchFilesInMemory;
+		searchOptions.restrictToWorkspace = currentOptions.restrictToWorkspace;
 		searchOptions.filespec = currentOptions.filespec;
 		searchOptions.startingPath = currentOptions.startingPath;
 

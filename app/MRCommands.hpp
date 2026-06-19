@@ -150,7 +150,9 @@ enum : ushort {
 	cmMrOtherLspHover,
 	cmMrOtherLspComplete,
 	cmMrOtherLspDocumentSymbols,
+	cmMrOtherLspWorkspaceSymbols,
 	cmMrOtherLspSignatureHelp,
+	cmMrOtherLspRename,
 	cmMrOtherLspStatus,
 	cmMrOtherLspResults,
 	cmMrOtherLspCodeActions

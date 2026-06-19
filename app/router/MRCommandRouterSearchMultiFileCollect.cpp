@@ -120,7 +120,19 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 		if (ec) startingPath = ".";
 	}
 	startingPath = startingPath.lexically_normal();
-	if (std::filesystem::is_regular_file(startingPath, ec) && !ec) {
+	if (options.restrictToWorkspace) {
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+		for (MREditWindow *window : windows) {
+			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			std::filesystem::path windowPath;
+
+			if (editor == nullptr || !editor->hasPersistentFileName()) continue;
+			windowPath = editor->persistentFileName();
+			if (windowPath.empty()) continue;
+			if (!filespecMatchesPath(windowPath, startingPath, filespecTokens)) continue;
+			appendCandidateUnique(windowPath, true, window, candidates, seen);
+		}
+	} else if (std::filesystem::is_regular_file(startingPath, ec) && !ec) {
 		if (filespecMatchesPath(startingPath, startingPath.parent_path(), filespecTokens)) appendCandidateUnique(startingPath, false, nullptr, candidates, seen);
 	} else if (std::filesystem::is_directory(startingPath, ec) && !ec) {
 		if (options.searchSubdirectories) {
@@ -148,7 +160,7 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 		}
 	}
 
-	if (options.searchFilesInMemory) {
+	if (!options.restrictToWorkspace && options.searchFilesInMemory) {
 		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		for (MREditWindow *window : windows) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
