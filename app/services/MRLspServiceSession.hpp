@@ -148,6 +148,12 @@ private:
 	mr::lsp::LspSignatureHelpRequest signatureHelpRequest;
 	mr::lsp::LspCodeActionRequest codeActionRequest;
 	mr::lsp::LspRenameRequest renameRequest;
+	std::size_t definitionRequestVersion = 0;
+	std::size_t referencesRequestVersion = 0;
+	std::size_t hoverRequestVersion = 0;
+	std::size_t completionRequestVersion = 0;
+	std::size_t documentSymbolsRequestVersion = 0;
+	std::size_t signatureHelpRequestVersion = 0;
 	MRServiceTextRange codeActionRequestRange;
 	std::size_t codeActionRequestVersion = 0;
 	std::size_t renameRequestVersion = 0;

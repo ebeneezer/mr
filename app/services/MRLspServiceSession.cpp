@@ -524,7 +524,9 @@ bool MRLspServiceSession::requestDefinition(mr::lsp::LspTextPosition position, s
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
-	return definitionAdapter.requestDefinition(lifecycle, documentService, position, definitionRequest, errorMessage);
+	if (!definitionAdapter.requestDefinition(lifecycle, documentService, position, definitionRequest, errorMessage)) return false;
+	definitionRequestVersion = activeEditorDocumentVersion;
+	return true;
 }
 
 bool MRLspServiceSession::requestReferences(mr::lsp::LspTextPosition position, bool includeDeclaration, std::string &errorMessage) {
@@ -532,7 +534,9 @@ bool MRLspServiceSession::requestReferences(mr::lsp::LspTextPosition position, b
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
-	return referencesAdapter.requestReferences(lifecycle, documentService, position, includeDeclaration, referencesRequest, errorMessage);
+	if (!referencesAdapter.requestReferences(lifecycle, documentService, position, includeDeclaration, referencesRequest, errorMessage)) return false;
+	referencesRequestVersion = activeEditorDocumentVersion;
+	return true;
 }
 
 bool MRLspServiceSession::requestHover(mr::lsp::LspTextPosition position, std::string &errorMessage) {
@@ -540,7 +544,9 @@ bool MRLspServiceSession::requestHover(mr::lsp::LspTextPosition position, std::s
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
-	return hoverAdapter.requestHover(lifecycle, documentService, position, hoverRequest, errorMessage);
+	if (!hoverAdapter.requestHover(lifecycle, documentService, position, hoverRequest, errorMessage)) return false;
+	hoverRequestVersion = activeEditorDocumentVersion;
+	return true;
 }
 
 bool MRLspServiceSession::requestCompletion(mr::lsp::LspTextPosition position, std::string &errorMessage) {
@@ -548,7 +554,9 @@ bool MRLspServiceSession::requestCompletion(mr::lsp::LspTextPosition position, s
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
-	return completionAdapter.requestCompletion(lifecycle, documentService, position, completionRequest, errorMessage);
+	if (!completionAdapter.requestCompletion(lifecycle, documentService, position, completionRequest, errorMessage)) return false;
+	completionRequestVersion = activeEditorDocumentVersion;
+	return true;
 }
 
 bool MRLspServiceSession::requestDocumentSymbols(std::string &errorMessage) {
@@ -556,7 +564,9 @@ bool MRLspServiceSession::requestDocumentSymbols(std::string &errorMessage) {
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
-	return documentSymbolsAdapter.requestDocumentSymbols(lifecycle, documentService, documentSymbolsRequest, errorMessage);
+	if (!documentSymbolsAdapter.requestDocumentSymbols(lifecycle, documentService, documentSymbolsRequest, errorMessage)) return false;
+	documentSymbolsRequestVersion = activeEditorDocumentVersion;
+	return true;
 }
 
 bool MRLspServiceSession::requestWorkspaceSymbols(const std::string &query, std::string &errorMessage) {
@@ -572,7 +582,9 @@ bool MRLspServiceSession::requestSignatureHelp(mr::lsp::LspTextPosition position
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
-	return signatureHelpAdapter.requestSignatureHelp(lifecycle, documentService, position, signatureHelpRequest, errorMessage);
+	if (!signatureHelpAdapter.requestSignatureHelp(lifecycle, documentService, position, signatureHelpRequest, errorMessage)) return false;
+	signatureHelpRequestVersion = activeEditorDocumentVersion;
+	return true;
 }
 
 bool MRLspServiceSession::requestRename(mr::lsp::LspTextPosition position, const std::string &newName, std::string &errorMessage) {
@@ -738,47 +750,51 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 
 	if (!definitionAdapter.consume(message, documentService, definitionRequest, definition, accepted, errorMessage)) return false;
 	if (accepted) {
-		resultStore.putLocations(buildServiceDefinitionFromLsp(activeWorkspace, definitionRequest.uri, activeWorkspace.documents.front().documentVersion, definitionRequest.idText, definition));
+		resultStore.putLocations(buildServiceDefinitionFromLsp(activeWorkspace, definitionRequest.uri, definitionRequestVersion, definitionRequest.idText, definition));
 		return true;
 	}
 
 	if (!referencesAdapter.consume(message, documentService, referencesRequest, references, accepted, errorMessage)) return false;
 	if (accepted) {
-		resultStore.putLocations(buildServiceReferencesFromLsp(activeWorkspace, referencesRequest.uri, activeWorkspace.documents.front().documentVersion, referencesRequest.idText, references));
+		resultStore.putLocations(buildServiceReferencesFromLsp(activeWorkspace, referencesRequest.uri, referencesRequestVersion, referencesRequest.idText, references));
 		return true;
 	}
 
 	if (!hoverAdapter.consume(message, documentService, hoverRequest, hover, accepted, errorMessage)) return false;
 	if (!errorMessage.empty()) {
 		MRServiceHoverResult result;
+		std::string hoverPath;
+		std::string uriError;
 
 		result.header.source = MRServiceResultSource::Lsp;
 		result.header.kind = MRServiceResultKind::Hover;
 		result.header.state = MRServiceResultState::Error;
 		result.header.requestId = hoverRequest.idText;
 		result.header.errorMessage = errorMessage;
-		if (!activeWorkspace.documents.empty()) {
-			const MRWorkspaceDocumentSnapshot &document = activeWorkspace.documents.front();
+		if (mr::lsp::fileUriToPath(hoverRequest.uri, hoverPath, uriError)) hoverPath = normalizeWorkspaceServicePath(hoverPath);
+		for (const MRWorkspaceDocumentSnapshot &document : activeWorkspace.documents) {
+			if (document.path != hoverPath) continue;
 
 			result.header.identity.valid = true;
 			result.header.identity.bufferId = document.bufferId;
 			result.header.identity.documentId = document.documentId;
-			result.header.identity.documentVersion = document.documentVersion;
+			result.header.identity.documentVersion = hoverRequestVersion;
 			result.header.identity.path = document.path;
 			result.header.identity.uri = hoverRequest.uri;
+			break;
 		}
 		resultStore.putHover(result);
 		errorMessage.clear();
 		return true;
 	}
 	if (accepted) {
-		resultStore.putHover(buildServiceHoverFromLsp(activeWorkspace, activeWorkspace.documents.front().documentVersion, hoverRequest.idText, hover));
+		resultStore.putHover(buildServiceHoverFromLsp(activeWorkspace, hoverRequestVersion, hoverRequest.idText, hover));
 		return true;
 	}
 
 	if (!completionAdapter.consume(message, documentService, completionRequest, completion, accepted, errorMessage)) return false;
 	if (accepted) {
-		MRServiceCompletionResult result = buildServiceCompletionFromLsp(activeWorkspace, completionRequest.uri, activeWorkspace.documents.front().documentVersion, completionRequest.idText, completion);
+		MRServiceCompletionResult result = buildServiceCompletionFromLsp(activeWorkspace, completionRequest.uri, completionRequestVersion, completionRequest.idText, completion);
 
 		result.hasRequestPosition = true;
 		result.requestPosition = MRServiceTextPosition{completionRequest.position.line, completionRequest.position.character};
@@ -794,7 +810,7 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 	}
 	if (!documentSymbolsAdapter.consume(message, documentService, documentSymbolsRequest, documentSymbols, accepted, errorMessage)) return false;
 	if (accepted) {
-		resultStore.putDocumentSymbols(buildServiceDocumentSymbolsFromLsp(activeWorkspace, documentSymbolsRequest.uri, activeWorkspace.documents.front().documentVersion, documentSymbolsRequest.idText, documentSymbols));
+		resultStore.putDocumentSymbols(buildServiceDocumentSymbolsFromLsp(activeWorkspace, documentSymbolsRequest.uri, documentSymbolsRequestVersion, documentSymbolsRequest.idText, documentSymbols));
 		return true;
 	}
 	if (!documentSymbolsAdapter.consumeWorkspaceSymbols(message, workspaceSymbolsRequest, workspaceSymbols, accepted, errorMessage)) return false;
@@ -804,7 +820,7 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 	}
 	if (!signatureHelpAdapter.consume(message, documentService, signatureHelpRequest, signatureHelp, accepted, errorMessage)) return false;
 	if (accepted) {
-		resultStore.putSignatureHelp(buildServiceSignatureHelpFromLsp(activeWorkspace, signatureHelpRequest.uri, activeWorkspace.documents.front().documentVersion, signatureHelpRequest.idText, signatureHelp));
+		resultStore.putSignatureHelp(buildServiceSignatureHelpFromLsp(activeWorkspace, signatureHelpRequest.uri, signatureHelpRequestVersion, signatureHelpRequest.idText, signatureHelp));
 		return true;
 	}
 	if (!renameAdapter.consume(message, documentService, renameRequest, rename, accepted, errorMessage)) return false;
@@ -824,6 +840,12 @@ void MRLspServiceSession::clearRequests() noexcept {
 	signatureHelpRequest = mr::lsp::LspSignatureHelpRequest();
 	codeActionRequest = mr::lsp::LspCodeActionRequest();
 	renameRequest = mr::lsp::LspRenameRequest();
+	definitionRequestVersion = 0;
+	referencesRequestVersion = 0;
+	hoverRequestVersion = 0;
+	completionRequestVersion = 0;
+	documentSymbolsRequestVersion = 0;
+	signatureHelpRequestVersion = 0;
 	codeActionRequestRange = MRServiceTextRange();
 	codeActionRequestVersion = 0;
 	renameRequestVersion = 0;

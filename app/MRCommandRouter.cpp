@@ -1740,7 +1740,7 @@ bool syncCurrentEditorForLspResults() {
 
 MREditWindow *findOpenLspTargetWindow(const std::string &path) {
 	const std::string normalizedTarget = mr::services::normalizeWorkspaceServicePath(path);
-	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	const std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
 
 	for (MREditWindow *window : windows) {
 		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
@@ -1748,6 +1748,16 @@ MREditWindow *findOpenLspTargetWindow(const std::string &path) {
 		if (editor == nullptr || !editor->hasPersistentFileName()) continue;
 		if (mr::services::normalizeWorkspaceServicePath(editor->persistentFileName()) == normalizedTarget) return window;
 	}
+	return nullptr;
+}
+
+MREditWindow *findLspResultTargetWindow(const mr::services::MRServiceDocumentIdentity &identity) {
+	if (identity.bufferId != 0) {
+		MREditWindow *window = findEditWindowByBufferId(identity.bufferId);
+
+		if (window != nullptr) return window;
+	}
+	if (!identity.path.empty()) return findOpenLspTargetWindow(identity.path);
 	return nullptr;
 }
 
@@ -2604,7 +2614,7 @@ std::string buildLspSignatureHelpSidekickText(const mr::services::MRServiceSigna
 }
 
 bool showLspHoverSidekick(const mr::services::MRServiceHoverResult &result) {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = findLspResultTargetWindow(result.header.identity);
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	mr::services::MRWorkspaceDocumentSnapshot document;
 	LspEditorRequestTarget target;
@@ -2641,7 +2651,7 @@ bool showLspHoverSidekick(const mr::services::MRServiceHoverResult &result) {
 }
 
 bool showLspSignatureHelpSidekick(const mr::services::MRServiceSignatureHelpResult &result) {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = findLspResultTargetWindow(result.header.identity);
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	LspEditorRequestTarget target;
 	const std::string text = buildLspSignatureHelpSidekickText(result);

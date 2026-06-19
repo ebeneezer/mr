@@ -5889,6 +5889,127 @@ bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testLspBentoPaneTargetRoutingGuard(std::string &failureReason) {
+	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	std::string content;
+	std::string targetBody;
+	std::string hoverBody;
+	std::string signatureBody;
+	std::string ioError;
+	std::string missingNeedle;
+
+	if (!readTextFile(routerPath, content, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for LSP Bento pane routing guard: " + ioError;
+		return false;
+	}
+
+	const std::size_t targetStart = content.find("MREditWindow *findOpenLspTargetWindow");
+	const std::size_t targetEnd = content.find("\nMREditWindow *findLspResultTargetWindow", targetStart);
+	if (targetStart == std::string::npos || targetEnd == std::string::npos) {
+		failureReason = "Unable to isolate findOpenLspTargetWindow for LSP Bento pane routing guard.";
+		return false;
+	}
+	targetBody = content.substr(targetStart, targetEnd - targetStart);
+	if (targetBody.find("allEditWindowsAndBentoPanesInZOrder()") == std::string::npos) {
+		failureReason = "LSP open-target lookup must include visible Bento panes.";
+		return false;
+	}
+	if (targetBody.find("allEditWindowsInZOrder()") != std::string::npos) {
+		failureReason = "LSP open-target lookup must not regress to top-level editor enumeration only.";
+		return false;
+	}
+
+	const std::size_t helperStart = content.find("MREditWindow *findLspResultTargetWindow");
+	const std::size_t helperEnd = content.find("\nbool lspVisualColumnForTarget", helperStart);
+	if (helperStart == std::string::npos || helperEnd == std::string::npos) {
+		failureReason = "Unable to isolate findLspResultTargetWindow for LSP Bento pane routing guard.";
+		return false;
+	}
+	const std::string helperBody = content.substr(helperStart, helperEnd - helperStart);
+	if (!containsAllSubstrings(helperBody, {"findEditWindowByBufferId(identity.bufferId)", "findOpenLspTargetWindow(identity.path)"}, missingNeedle)) {
+		failureReason = "LSP result target lookup must prefer buffer id and fall back to pane-aware path lookup: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	const std::size_t hoverStart = content.find("bool showLspHoverSidekick");
+	const std::size_t hoverEnd = content.find("\nbool showLspSignatureHelpSidekick", hoverStart);
+	if (hoverStart == std::string::npos || hoverEnd == std::string::npos) {
+		failureReason = "Unable to isolate showLspHoverSidekick for LSP Bento pane routing guard.";
+		return false;
+	}
+	hoverBody = content.substr(hoverStart, hoverEnd - hoverStart);
+	if (hoverBody.find("findLspResultTargetWindow(result.header.identity)") == std::string::npos || hoverBody.find("currentEditorCommandWindow()") != std::string::npos) {
+		failureReason = "LSP hover sidekick must target the result owner, not the current editor command window.";
+		return false;
+	}
+
+	const std::size_t signatureStart = content.find("bool showLspSignatureHelpSidekick", hoverEnd);
+	const std::size_t signatureEnd = content.find("\nMREditWindow *findLspCompletionTargetWindow", signatureStart);
+	if (signatureStart == std::string::npos || signatureEnd == std::string::npos) {
+		failureReason = "Unable to isolate showLspSignatureHelpSidekick for LSP Bento pane routing guard.";
+		return false;
+	}
+	signatureBody = content.substr(signatureStart, signatureEnd - signatureStart);
+	if (signatureBody.find("findLspResultTargetWindow(result.header.identity)") == std::string::npos || signatureBody.find("currentEditorCommandWindow()") != std::string::npos) {
+		failureReason = "LSP signature sidekick must target the result owner, not the current editor command window.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testLspRequestVersionRoutingGuard(std::string &failureReason) {
+	const std::string sessionHeaderPath = absolutePathFromCwd("app/services/MRLspServiceSession.hpp");
+	const std::string sessionSourcePath = absolutePathFromCwd("app/services/MRLspServiceSession.cpp");
+	std::string header;
+	std::string source;
+	std::string consumeBody;
+	std::string clearBody;
+	std::string ioError;
+	std::string missingNeedle;
+
+	if (!readTextFile(sessionHeaderPath, header, ioError) || !readTextFile(sessionSourcePath, source, ioError)) {
+		failureReason = "Unable to read MRLspServiceSession files for LSP request-version routing guard: " + ioError;
+		return false;
+	}
+	if (!containsAllSubstrings(header, {"std::size_t definitionRequestVersion = 0;", "std::size_t referencesRequestVersion = 0;", "std::size_t hoverRequestVersion = 0;", "std::size_t completionRequestVersion = 0;", "std::size_t documentSymbolsRequestVersion = 0;", "std::size_t signatureHelpRequestVersion = 0;"}, missingNeedle)) {
+		failureReason = "LSP service session must store per-request document versions: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	const std::size_t consumeStart = source.find("bool MRLspServiceSession::consumeInboundMessage");
+	const std::size_t consumeEnd = source.find("\nvoid MRLspServiceSession::clearRequests", consumeStart);
+	if (consumeStart == std::string::npos || consumeEnd == std::string::npos) {
+		failureReason = "Unable to isolate MRLspServiceSession::consumeInboundMessage.";
+		return false;
+	}
+	consumeBody = source.substr(consumeStart, consumeEnd - consumeStart);
+	if (!containsAllSubstrings(consumeBody, {"definitionRequestVersion", "referencesRequestVersion", "hoverRequestVersion", "completionRequestVersion", "documentSymbolsRequestVersion", "signatureHelpRequestVersion"}, missingNeedle)) {
+		failureReason = "LSP result construction must use per-request document versions: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (consumeBody.find("activeWorkspace.documents.front().documentVersion") != std::string::npos) {
+		failureReason = "LSP result construction must not use the first workspace document as version anchor.";
+		return false;
+	}
+
+	const std::size_t clearStart = source.find("void MRLspServiceSession::clearRequests");
+	const std::size_t clearEnd = source.find("\nvoid MRLspServiceSession::clearRuntimeBinding", clearStart);
+	if (clearStart == std::string::npos || clearEnd == std::string::npos) {
+		failureReason = "Unable to isolate MRLspServiceSession::clearRequests.";
+		return false;
+	}
+	clearBody = source.substr(clearStart, clearEnd - clearStart);
+	if (!containsAllSubstrings(clearBody, {"definitionRequestVersion = 0;", "referencesRequestVersion = 0;", "hoverRequestVersion = 0;", "completionRequestVersion = 0;", "documentSymbolsRequestVersion = 0;", "signatureHelpRequestVersion = 0;"}, missingNeedle)) {
+		failureReason = "LSP request version fields must be reset with requests: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorSave.cpp");
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
@@ -8041,6 +8162,8 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
+	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
+	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);
 	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
@@ -8126,6 +8249,8 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
+	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
+	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);
 	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
