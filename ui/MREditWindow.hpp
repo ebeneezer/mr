@@ -28,6 +28,8 @@
 #include <unistd.h>
 #include <vector>
 
+#include "utils/MRStringUtils.hpp"
+
 #include "MRFrame.hpp"
 #include "MRIndicator.hpp"
 #include "MRTextBuffer.hpp"
@@ -2223,15 +2225,8 @@ class MREditWindow : public TWindow {
 		return name.substr(0, dot);
 	}
 
-	static std::string trimTaskLabel(const std::string &label) {
-		std::size_t start = label.find_first_not_of(' ');
-		std::size_t end = label.find_last_not_of(' ');
-		if (start == std::string::npos) return std::string();
-		return label.substr(start, end - start + 1);
-	}
-
 	static std::string compactTaskLabel(const TrackedTask &task) {
-		std::string label = trimTaskLabel(task.label);
+		std::string label = trimAscii(task.label);
 
 		if (label.empty()) return label;
 		if (task.kind == mr::coprocessor::TaskKind::MacroJob) return stripExtension(baseNameOf(label));
