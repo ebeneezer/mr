@@ -5901,6 +5901,8 @@ bool testLspBentoPaneTargetRoutingGuard(std::string &failureReason) {
 	std::string navigationBody;
 	std::string miniMenuBoundsBody;
 	std::string workspaceSymbolsBody;
+	std::string completionDialogBody;
+	std::string resultsDialogBody;
 	std::string contextMenuItemsBody;
 	std::string contextMenuBody;
 	std::string bentoActivateBody;
@@ -6003,6 +6005,30 @@ bool testLspBentoPaneTargetRoutingGuard(std::string &failureReason) {
 	workspaceSymbolsBody = content.substr(workspaceSymbolsStart, workspaceSymbolsEnd - workspaceSymbolsStart);
 	if (countSubstring(workspaceSymbolsBody, "displayRows.push_back") != 1) {
 		failureReason = "LSP workspace symbols picker must append display rows only after symbol ranking.";
+		return false;
+	}
+
+	const std::size_t completionDialogStart = content.find("bool showLspCompletionDialog");
+	const std::size_t completionDialogEnd = content.find("\nMREditWindow *findLspCodeActionTargetWindow", completionDialogStart);
+	if (completionDialogStart == std::string::npos || completionDialogEnd == std::string::npos) {
+		failureReason = "Unable to isolate showLspCompletionDialog for LSP Bento pane routing guard.";
+		return false;
+	}
+	completionDialogBody = content.substr(completionDialogStart, completionDialogEnd - completionDialogStart);
+	if (completionDialogBody.find("activateLspTargetWindow(targetWindow)") == std::string::npos || completionDialogBody.find("mrActivateEditWindow(targetWindow)") != std::string::npos) {
+		failureReason = "LSP completion insertion must activate through the Bento-aware target activator.";
+		return false;
+	}
+
+	const std::size_t resultsDialogStart = content.find("bool showLspResultsDialog");
+	const std::size_t resultsDialogEnd = content.find("\nvoid reportNewLspDiagnostics", resultsDialogStart);
+	if (resultsDialogStart == std::string::npos || resultsDialogEnd == std::string::npos) {
+		failureReason = "Unable to isolate showLspResultsDialog for LSP Bento pane routing guard.";
+		return false;
+	}
+	resultsDialogBody = content.substr(resultsDialogStart, resultsDialogEnd - resultsDialogStart);
+	if (resultsDialogBody.find("activateLspTargetWindow(targetWindow)") == std::string::npos || resultsDialogBody.find("mrActivateEditWindow(targetWindow)") != std::string::npos) {
+		failureReason = "LSP result actions must activate through the Bento-aware target activator.";
 		return false;
 	}
 
@@ -8293,7 +8319,7 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 		failureReason = "Quit path must force pending lazy workspace autosave before settings snapshot.";
 		return false;
 	}
-	if (editorApp.find("setRuntimePreserveAutosavedWorkspace(true);\n\t\tmrLogMessage(\"Workspace autoload pending user choice; autosaved workspace preserved.\");\n\t\tconst mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog") == std::string::npos) {
+	if (editorApp.find("setRuntimePreserveAutosavedWorkspace(true);\n\t\tconst mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog") == std::string::npos) {
 		failureReason = "Workspace autoload prompt must preserve autosaved workspace before the user chooses.";
 		return false;
 	}

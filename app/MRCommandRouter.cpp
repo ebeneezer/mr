@@ -2908,7 +2908,7 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 		postLspWarning("LSP completion insert failed: target editor is not open.");
 		return true;
 	}
-	static_cast<void>(mrActivateEditWindow(targetWindow));
+	static_cast<void>(activateLspTargetWindow(targetWindow));
 	if (!applyLspCompletionItem(*targetEditor, result, selectedItem, insertText, errorMessage)) {
 		postLspWarning("LSP completion insert failed: " + errorMessage);
 		return true;
@@ -3272,7 +3272,7 @@ bool showLspResultsDialog() {
 			postLspWarning("LSP code action apply failed: target editor is not open.");
 			return true;
 		}
-		static_cast<void>(mrActivateEditWindow(targetWindow));
+		static_cast<void>(activateLspTargetWindow(targetWindow));
 		if (!applyLspCodeActionEdits(*targetEditor, *selectedRow.codeActionResult, *selectedRow.codeActionItem, codeActionError)) {
 			postLspWarning("LSP code action apply failed: " + codeActionError);
 			return true;

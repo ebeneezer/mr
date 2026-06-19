@@ -1168,7 +1168,6 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 		mrLoadWorkspace("");
 	} else if (mrSettingsFileHasAutosavedWorkspace()) {
 		setRuntimePreserveAutosavedWorkspace(true);
-		mrLogMessage("Workspace autoload pending user choice; autosaved workspace preserved.");
 		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Load workspace", "Load autosaved workspace?", configuredSettingsMacroFilePath().c_str(), "Discard workspace");
 
 		if (choice == mr::dialogs::UnsavedChangesChoice::Save) {
@@ -1177,8 +1176,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 		} else if (choice == mr::dialogs::UnsavedChangesChoice::Discard) {
 			setRuntimePreserveAutosavedWorkspace(false);
 			static_cast<void>(mrClearAutosavedWorkspace());
-		} else
-			mrLogMessage("Workspace autoload dialog closed without action; autosaved workspace preserved.");
+		}
 	}
 	logStartupPhase("workspace_autoload");
 	mrLogMessage("Editor session started.");
