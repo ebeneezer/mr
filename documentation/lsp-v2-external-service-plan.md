@@ -38,6 +38,7 @@ Implemented LSP channels:
 - code actions,
 - document symbols,
 - workspace symbols,
+- document highlight,
 - signature help,
 - rename.
 
@@ -51,6 +52,7 @@ Implemented UI projection:
 - diagnostic sidekick display when hovering diagnostic marker ranges,
 - signature help sidekick display from the editor context menu,
 - workspace-wide rename apply workflow over loaded MR workspace files,
+- document highlight projection as transient editor-owned text markers,
 - LSP result dialog for navigable result sets,
 - diagnostics line in the top status area,
 - diagnostic information markers in the editor text plane,
@@ -91,7 +93,6 @@ Known real-server boundaries:
 
 Open LSP channels not yet projected into MR UI:
 
-- document highlight,
 - formatting and range formatting,
 - semantic tokens,
 - inlay hints,
@@ -100,21 +101,21 @@ Open LSP channels not yet projected into MR UI:
 
 Recommended next usable tranche:
 
-1. Bento LSP integration.
-2. Document highlight, using transient editor markers rather than persistent
-   diagnostics, after Bento has a stable pane-aware LSP projection model.
-3. Formatting, only after the edit-application path is reviewed separately.
+1. Formatting, only after the edit-application path is reviewed separately.
+2. Semantic tokens, after a protected syntax/color architecture decision.
+3. Inlay hints and hierarchy channels, after a separate layout/result UI
+   decision.
 
 Semantic tokens should remain a later tranche because they interact with the
 protected syntax and color architecture.
 
-## Next Tranche: Bento LSP Integration
+## Completed Tranche: Bento LSP Integration
 
-The current LSP UI projection was built and validated primarily for single
-editor windows. Before adding more LSP channels, Bento must become a first-class
-LSP projection surface.
+The LSP UI projection was extended from single editor windows to Bento editor
+panes. Bento is now a first-class LSP projection surface for the implemented
+channels.
 
-The Bento tranche must make LSP targeting pane-aware:
+Bento LSP targeting is pane-aware:
 
 - right-click context actions must target the editor pane under the mouse,
 - hover must target the editor pane under the mouse,
@@ -123,7 +124,7 @@ The Bento tranche must make LSP targeting pane-aware:
 - status and diagnostics text must remain globally visible but identify the
   affected document clearly.
 
-SideKick projection must respect Bento geometry:
+SideKick projection respects Bento geometry:
 
 - SideKick placement must be computed relative to the owning editor pane, not
   only the desktop or top-level edit window,
@@ -133,7 +134,7 @@ SideKick projection must respect Bento geometry:
   drawing space,
 - the existing single-editor SideKick behavior must remain unchanged.
 
-Diagnostics and markers must remain editor-owned:
+Diagnostics and markers remain editor-owned:
 
 - diagnostic text markers stay attached to the editor buffer that owns the
   diagnostic,
@@ -143,8 +144,8 @@ Diagnostics and markers must remain editor-owned:
 - stale diagnostic replacement remains driven by LSP publication, not by Bento
   redraw.
 
-The tranche is complete when the implemented LSP channels behave consistently
-in at least a two-pane Bento setup:
+The tranche is complete for the implemented LSP channels in at least a two-pane
+Bento setup:
 
 - context menu,
 - hover,
@@ -152,7 +153,8 @@ in at least a two-pane Bento setup:
 - diagnostics markers and diagnostic hover,
 - definition/references/result jumps,
 - workspace symbols and rename where the selected target is already loaded in a
-  Bento pane.
+  Bento pane,
+- document highlight as transient editor markers in the focused editor pane.
 
 ## Completion Decision
 
@@ -163,16 +165,14 @@ integration of the implemented LSP service layer. They are optional later
 feature tranches and should be planned separately because they touch different
 editor surfaces:
 
-- document highlight touches transient marker projection,
 - formatting touches edit-application policy,
 - semantic tokens touch protected syntax/color architecture,
 - inlay hints touch inline layout,
 - hierarchy channels need a separate navigation/result UI decision,
 - folding ranges overlap MR's existing folding model.
 
-Document highlight is deliberately deferred until Bento targeting and SideKick
-geometry are pane-aware. Otherwise it would be implemented against the
-single-editor projection model and then need to be corrected for Bento.
+Document highlight is complete for the current projection model. It stays a
+transient marker channel and must not become a persistent diagnostic surface.
 
 ## Retrospective
 
