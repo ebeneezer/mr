@@ -45,10 +45,33 @@ struct LspCodeActionResult {
 	std::vector<LspCodeActionItem> items;
 };
 
+struct LspRenameRequest {
+	std::string idText;
+	std::string method;
+	std::string uri;
+	LspTextPosition position;
+	std::string newName;
+	bool pending = false;
+};
+
+struct LspRenameResult {
+	std::string uri;
+	std::vector<LspCodeActionTextEdit> edits;
+};
+
 class LspCodeActionAdapter {
 public:
 	bool requestCodeActions(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspCodeActionRange range, const std::string &diagnosticJson, LspCodeActionRequest &request, std::string &errorMessage);
 	bool consume(const LspInboundMessage &message, const LspDocumentService &documentService, LspCodeActionRequest &request, LspCodeActionResult &result, bool &accepted, std::string &errorMessage);
+
+private:
+	int nextRequestId = 1;
+};
+
+class LspRenameAdapter {
+public:
+	bool requestRename(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspTextPosition position, const std::string &newName, LspRenameRequest &request, std::string &errorMessage);
+	bool consume(const LspInboundMessage &message, const LspDocumentService &documentService, LspRenameRequest &request, LspRenameResult &result, bool &accepted, std::string &errorMessage);
 
 private:
 	int nextRequestId = 1;

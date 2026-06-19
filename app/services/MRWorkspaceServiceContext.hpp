@@ -28,10 +28,31 @@ struct MRServiceRootContext {
 	std::string reason;
 };
 
+struct MRWorkspaceCompileContextEntry {
+	std::string value;
+	std::string source;
+};
+
+struct MRWorkspaceCompileContext {
+	bool available = false;
+	std::string anchorPath;
+	std::string anchorSource;
+	std::string compilerProfileId;
+	std::string compilerProfileName;
+	std::string compilerProfileMatch;
+	std::string toolchain;
+	std::string executablePath;
+	std::string targetTriple;
+	std::vector<MRWorkspaceCompileContextEntry> includePaths;
+	std::vector<MRWorkspaceCompileContextEntry> buildFlags;
+	std::string errorMessage;
+};
+
 struct MRWorkspaceServiceSnapshot {
 	std::vector<MRWorkspaceDocumentSnapshot> documents;
 	MRWorkspaceMainFileState mainFile;
 	MRServiceRootContext root;
+	MRWorkspaceCompileContext compileContext;
 };
 
 class MRWorkspaceServiceContext {

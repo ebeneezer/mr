@@ -54,7 +54,9 @@ MRLspDocumentServiceSnapshot MRLspAppService::documentServiceSnapshot(const MRWo
 		snapshot.commands.requestHover = true;
 		snapshot.commands.requestCompletion = true;
 		snapshot.commands.requestDocumentSymbols = true;
+		snapshot.commands.requestWorkspaceSymbols = workspace.root.hasRoot;
 		snapshot.commands.requestSignatureHelp = true;
+		snapshot.commands.requestRename = true;
 		snapshot.commands.requestCodeActions = snapshot.results.current.diagnostics > 0;
 		snapshot.commands.applyCodeActions = snapshot.results.current.codeActions > 0;
 	}
@@ -80,7 +82,9 @@ MRLspPositionServiceSnapshot MRLspAppService::documentPositionServiceSnapshot(co
 		snapshot.commands.requestHover = true;
 		snapshot.commands.requestCompletion = true;
 		snapshot.commands.requestDocumentSymbols = true;
+		snapshot.commands.requestWorkspaceSymbols = workspace.root.hasRoot;
 		snapshot.commands.requestSignatureHelp = true;
+		snapshot.commands.requestRename = true;
 		snapshot.commands.requestCodeActions = !snapshot.results.diagnostics.empty();
 		snapshot.commands.applyCodeActions = !snapshot.results.codeActions.empty();
 	}
@@ -131,6 +135,39 @@ bool MRLspAppService::requestCurrentEditorCommand(
 	MRWorkspaceServiceSnapshot workspace = buildCurrentWorkspaceSnapshot();
 
 	return requestEditorCommand(profile, workspace, document, editor, command, position, errorMessage);
+}
+
+bool MRLspAppService::requestWorkspaceSymbols(
+	const MRLspServerProfile &profile,
+	const MRWorkspaceServiceSnapshot &workspace,
+	const MRWorkspaceDocumentSnapshot &document,
+	const MRFileEditor &editor,
+	const std::string &query,
+	std::string &errorMessage) {
+	if (workspace.documents.empty()) {
+		errorMessage = "LSP app service workspace has no documents.";
+		return false;
+	}
+	if (!session.ensureRuntime(workspace, profile, errorMessage)) return false;
+	if (!session.syncEditorDocument(workspace, document, editor, errorMessage)) return false;
+	return session.requestWorkspaceSymbols(query, errorMessage);
+}
+
+bool MRLspAppService::requestRename(
+	const MRLspServerProfile &profile,
+	const MRWorkspaceServiceSnapshot &workspace,
+	const MRWorkspaceDocumentSnapshot &document,
+	const MRFileEditor &editor,
+	mr::lsp::LspTextPosition position,
+	const std::string &newName,
+	std::string &errorMessage) {
+	if (workspace.documents.empty()) {
+		errorMessage = "LSP app service workspace has no documents.";
+		return false;
+	}
+	if (!session.ensureRuntime(workspace, profile, errorMessage)) return false;
+	if (!session.syncEditorDocument(workspace, document, editor, errorMessage)) return false;
+	return session.requestRename(position, newName, errorMessage);
 }
 
 bool MRLspAppService::syncCurrentEditorDocument(

@@ -235,6 +235,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"MULTI_SEARCH_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
     {"MULTI_SEARCH_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
     {"MULTI_SEARCH_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
+    {"MULTI_SEARCH_RESTRICT_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_FILESPEC", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_TEXT", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_REPLACEMENT", MRSettingsKeyClass::Global, true},
@@ -244,6 +245,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"MULTI_SAR_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_KEEP_FILES_OPEN", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_RESTRICT_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"MULTI_FILESPEC_HISTORY", MRSettingsKeyClass::Global, false},
     {"MULTI_PATH_HISTORY", MRSettingsKeyClass::Global, false},
     {"PDF_EXPORT_PATH", MRSettingsKeyClass::Global, true},
@@ -967,6 +969,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (!parseBooleanLiteral(value, options.searchFilesInMemory, errorMessage)) return false;
 				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
 			}
+			if (upper == "MULTI_SEARCH_RESTRICT_WORKSPACE") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.restrictToWorkspace, errorMessage)) return false;
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
 			if (upper == "MULTI_SAR_FILESPEC") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
 				options.filespec = trimAscii(value);
@@ -1011,6 +1018,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			if (upper == "MULTI_SAR_KEEP_FILES_OPEN") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
 				if (!parseBooleanLiteral(value, options.keepFilesOpen, errorMessage)) return false;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_RESTRICT_WORKSPACE") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.restrictToWorkspace, errorMessage)) return false;
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "PDF_EXPORT_PATH") {
@@ -1545,6 +1557,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseBooleanLiteral(value, snapshot.multiSearchDialogOptions.searchFilesInMemory, errorMessage)) return false;
 				return true;
 			}
+			if (upper == "MULTI_SEARCH_RESTRICT_WORKSPACE") {
+				if (!parseBooleanLiteral(value, snapshot.multiSearchDialogOptions.restrictToWorkspace, errorMessage)) return false;
+				return true;
+			}
 			if (upper == "MULTI_SAR_FILESPEC") {
 				snapshot.multiSarDialogOptions.filespec = trimAscii(value);
 				if (snapshot.multiSarDialogOptions.filespec.empty()) snapshot.multiSarDialogOptions.filespec = "*.*";
@@ -1584,6 +1600,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "MULTI_SAR_KEEP_FILES_OPEN") {
 				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.keepFilesOpen, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SAR_RESTRICT_WORKSPACE") {
+				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.restrictToWorkspace, errorMessage)) return false;
 				return true;
 			}
 			if (upper == "PDF_EXPORT_PATH") {

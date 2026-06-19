@@ -21,7 +21,12 @@ Implemented service foundation:
 - debounced current-document sync after editor edits,
 - stale-result rejection where server versions are available,
 - URI/path mapping for current-file service results,
-- MR workspace main-file marker projection as the service-context anchor.
+- MR workspace main-file marker projection as the service-context anchor,
+- transient C/C++ compile context derived from MR compiler profiles and
+  environment supplements,
+- clangd fallback flags passed through LSP initialize options without project
+  configuration files,
+- coalesced `mr.log` trace of the effective clangd compile context.
 
 Implemented LSP channels:
 
@@ -32,7 +37,9 @@ Implemented LSP channels:
 - hover,
 - code actions,
 - document symbols,
-- signature help.
+- workspace symbols,
+- signature help,
+- rename.
 
 Implemented UI projection:
 
@@ -43,6 +50,7 @@ Implemented UI projection:
 - read-only sidekick hover display with dwell-based mouse hover,
 - diagnostic sidekick display when hovering diagnostic marker ranges,
 - signature help sidekick display from the editor context menu,
+- workspace-wide rename apply workflow over loaded MR workspace files,
 - LSP result dialog for navigable result sets,
 - diagnostics line in the top status area,
 - diagnostic information markers in the editor text plane,
@@ -66,6 +74,10 @@ Important behavior decisions:
   cell so they can be seen and hovered.
 - Diagnostic markers are remapped across local edits until the next LSP
   diagnostic publication replaces them.
+- Workspace-wide rename is applied through MR-owned loaded workspace files.
+  MR remains the document authority; LSP supplies the workspace edit.
+- Multi-file search/replace can be restricted to the loaded MR workspace so the
+  existing MFS engine can operate on the same user-facing workspace set.
 
 Known real-server boundaries:
 
@@ -79,8 +91,6 @@ Known real-server boundaries:
 
 Open LSP channels not yet projected into MR UI:
 
-- workspace symbols,
-- rename,
 - document highlight,
 - formatting and range formatting,
 - semantic tokens,
@@ -90,15 +100,79 @@ Open LSP channels not yet projected into MR UI:
 
 Recommended next usable tranche:
 
-1. Workspace symbols, using the MR workspace main-file anchor for broad symbol
-   scope.
-2. Rename, after a preview/apply workflow is designed for workspace edits.
-3. Document highlight, using transient editor markers rather than persistent
-   diagnostics.
-4. Formatting, only after the edit-application path is reviewed separately.
+1. Bento LSP integration.
+2. Document highlight, using transient editor markers rather than persistent
+   diagnostics, after Bento has a stable pane-aware LSP projection model.
+3. Formatting, only after the edit-application path is reviewed separately.
 
 Semantic tokens should remain a later tranche because they interact with the
 protected syntax and color architecture.
+
+## Next Tranche: Bento LSP Integration
+
+The current LSP UI projection was built and validated primarily for single
+editor windows. Before adding more LSP channels, Bento must become a first-class
+LSP projection surface.
+
+The Bento tranche must make LSP targeting pane-aware:
+
+- right-click context actions must target the editor pane under the mouse,
+- hover must target the editor pane under the mouse,
+- keyboard-triggered LSP actions must target the focused editor pane,
+- LSP result jumps must restore the correct MR window and pane context,
+- status and diagnostics text must remain globally visible but identify the
+  affected document clearly.
+
+SideKick projection must respect Bento geometry:
+
+- SideKick placement must be computed relative to the owning editor pane, not
+  only the desktop or top-level edit window,
+- SideKicks must avoid covering the code location when usable space exists
+  above, below or beside the location,
+- neighboring Bento panes and Bento chrome must not be treated as expendable
+  drawing space,
+- the existing single-editor SideKick behavior must remain unchanged.
+
+Diagnostics and markers must remain editor-owned:
+
+- diagnostic text markers stay attached to the editor buffer that owns the
+  diagnostic,
+- minimap diagnostics remain pane-local,
+- diagnostic hover hit ranges stay ergonomic but must not cross pane
+  boundaries,
+- stale diagnostic replacement remains driven by LSP publication, not by Bento
+  redraw.
+
+The tranche is complete when the implemented LSP channels behave consistently
+in at least a two-pane Bento setup:
+
+- context menu,
+- hover,
+- signature help,
+- diagnostics markers and diagnostic hover,
+- definition/references/result jumps,
+- workspace symbols and rename where the selected target is already loaded in a
+  Bento pane.
+
+## Completion Decision
+
+The usable LSP V2 editor/UI tranche is complete.
+
+The remaining items are not foundation blockers and not required for UI
+integration of the implemented LSP service layer. They are optional later
+feature tranches and should be planned separately because they touch different
+editor surfaces:
+
+- document highlight touches transient marker projection,
+- formatting touches edit-application policy,
+- semantic tokens touch protected syntax/color architecture,
+- inlay hints touch inline layout,
+- hierarchy channels need a separate navigation/result UI decision,
+- folding ranges overlap MR's existing folding model.
+
+Document highlight is deliberately deferred until Bento targeting and SideKick
+geometry are pane-aware. Otherwise it would be implemented against the
+single-editor projection model and then need to be corrected for Bento.
 
 ## Retrospective
 
@@ -321,6 +395,50 @@ For build tools, the main file and build profile are the semantic anchor.
 
 For Git, the `.git` repository remains authoritative for Git operations.
 
+## LSP Compile Context
+
+MR-native setup is the authority for C/C++ compile context.
+
+The LSP adapter must not silently discover or consume project-local JSON or
+clangd configuration files. In particular, MR V2 does not use automatic
+`compile_commands.json`, `.clangd` or `compile_flags.txt` discovery.
+
+Effective C/C++ LSP context is derived from:
+
+1. the active MR compiler profile,
+2. the MR workspace main file as semantic root/working-directory anchor,
+3. the process environment as a non-persistent runtime supplement.
+
+The environment may contribute include paths and flags, for example:
+
+- `CPATH`,
+- `C_INCLUDE_PATH`,
+- `CPLUS_INCLUDE_PATH`,
+- `CPPFLAGS`,
+- `CFLAGS`,
+- `CXXFLAGS`,
+- `CC`,
+- `CXX`.
+
+MR compiler profile data wins over environment-derived data. Environment data is
+not written back to settings and does not become MR configuration.
+
+For clangd, MR passes the effective context as `initializationOptions`
+`fallbackFlags` and starts clangd with `--compile_args_from=lsp` and
+`--strong-workspace-mode`. This keeps the context transient and avoids
+project-local `compile_commands.json`, `.clangd` or `compile_flags.txt` files.
+
+The adapter logs the effective compile context as one coalesced `mr.log` entry
+when starting or replacing a clangd runtime. The log states the origin of
+derived values, for example MR compiler profile, workspace main file or
+environment variable. This is diagnostic traceability, not user-facing message
+line traffic.
+
+If a concrete language server later requires information not modeled by MR, MR
+must make an explicit design decision: add a MR-native setup field, extend the
+server adapter, or reject that service for V2. It must not add hidden folder
+configuration discovery as a workaround.
+
 ## Git Context
 
 Git should remain Git.
@@ -359,14 +477,18 @@ V2 should avoid:
 - `.vscode`-style project control,
 - mandatory `settings.json`,
 - mandatory generated `compile_commands.json` in the project,
-- passive behavior changes triggered by hidden interpretation of JSON files.
+- automatic discovery of `compile_commands.json`, `.clangd` or
+  `compile_flags.txt`,
+- passive behavior changes triggered by hidden interpretation of JSON or
+  project-local language-server configuration files.
 
-MR may later support explicit import from existing external files, but it should
-not silently let those files steer editor behavior.
+MR V2 does not use external project configuration files as an automatic
+configuration source. If such support is ever desired, it must be designed as an
+explicit MR-native import or adapter decision, not as folder magic.
 
 If a language server requires configuration data:
 
-1. Prefer direct server arguments or LSP initialization options.
+1. Prefer MR setup, direct server arguments or LSP initialization options.
 2. If a file is unavoidable, generate it in a private MR temp/cache location.
 3. Remove or ignore volatile generated files after the session as appropriate.
 4. If a server cannot operate without visible project control files, it is not a
@@ -587,6 +709,8 @@ Observed real-server response shapes that MR must tolerate:
 - External services do not own MR document state.
 - Context menus are constructed locally from available capabilities.
 - Hover is informational and staged.
-- Visible project JSON is not required.
+- Visible project JSON is not required and is not silently discovered.
+- C/C++ compile context comes from MR compiler profiles plus non-persistent
+  environment supplements.
 - Persistent settings and workspace serialization changes require separate
   protected planning.

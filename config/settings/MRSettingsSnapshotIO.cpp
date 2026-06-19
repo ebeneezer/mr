@@ -561,6 +561,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('MULTI_SEARCH_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.caseSensitive)) + "');\n";
 	source += "MRSETUP('MULTI_SEARCH_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.regularExpressions)) + "');\n";
 	source += "MRSETUP('MULTI_SEARCH_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.searchFilesInMemory)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_RESTRICT_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.restrictToWorkspace)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_FILESPEC', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSarDialogOptions.filespec) + "');\n";
 	source += "MRSETUP('MULTI_SAR_TEXT', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSarDialogOptions.searchText) + "');\n";
 	source += "MRSETUP('MULTI_SAR_REPLACEMENT', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSarDialogOptions.replacementText) + "');\n";
@@ -570,6 +571,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('MULTI_SAR_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.regularExpressions)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.searchFilesInMemory)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.keepFilesOpen)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_RESTRICT_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.restrictToWorkspace)) + "');\n";
 	source += "MRSETUP('PDF_EXPORT_PATH', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.outputPath) + "');\n";
 	source += "MRSETUP('PDF_EXPORT_PAGE_SEPARATOR', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.pageSeparatorLiteral) + "');\n";
 	source += "MRSETUP('PDF_EXPORT_FONT_FAMILY', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.fontFamily) + "');\n";

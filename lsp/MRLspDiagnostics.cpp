@@ -185,17 +185,17 @@ bool LspDiagnosticsAdapter::consume(const LspInboundMessage &message, const LspD
 		batch.version = version;
 		batch.hasVersion = true;
 	}
-	if (batch.uri != documentService.documentUri()) {
+	if (!documentService.hasOpenDocumentUri(batch.uri)) {
 		batch.rejected = true;
 		errorMessage.clear();
 		return true;
 	}
-	if (batch.hasVersion && documentService.isStaleForSentVersion(batch.version)) {
+	if (batch.hasVersion && documentService.isStaleForSentVersion(batch.uri, batch.version)) {
 		batch.stale = true;
 		errorMessage.clear();
 		return true;
 	}
-	if (batch.hasVersion && !documentService.matchesSentVersion(batch.version)) {
+	if (batch.hasVersion && !documentService.matchesSentVersion(batch.uri, batch.version)) {
 		batch.rejected = true;
 		errorMessage.clear();
 		return true;

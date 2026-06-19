@@ -189,6 +189,7 @@ void MRServiceResultStore::clear() noexcept {
 	codeActions.clear();
 	documentSymbols.clear();
 	signatureHelps.clear();
+	renames.clear();
 }
 
 void MRServiceResultStore::putDiagnostics(const MRServiceDiagnosticResult &result) {
@@ -261,6 +262,16 @@ void MRServiceResultStore::putSignatureHelp(const MRServiceSignatureHelpResult &
 	signatureHelps.push_back(result);
 }
 
+void MRServiceResultStore::putRename(const MRServiceRenameResult &result) {
+	for (MRServiceRenameResult &existing : renames) {
+		if (sameResultSlot(existing.header, result.header)) {
+			existing = result;
+			return;
+		}
+	}
+	renames.push_back(result);
+}
+
 void MRServiceResultStore::markStaleAgainstWorkspace(const MRWorkspaceServiceSnapshot &workspace) {
 	for (MRServiceDiagnosticResult &result : diagnostics)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
@@ -272,9 +283,16 @@ void MRServiceResultStore::markStaleAgainstWorkspace(const MRWorkspaceServiceSna
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
 	for (MRServiceCodeActionResult &result : codeActions)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
-	for (MRServiceDocumentSymbolsResult &result : documentSymbols)
-		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
+	for (MRServiceDocumentSymbolsResult &result : documentSymbols) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (result.header.kind == MRServiceResultKind::WorkspaceSymbols)
+			result.header.state = MRServiceResultState::Stale;
+		else if (!serviceDocumentIdentityMatches(workspace, result.header.identity))
+			result.header.state = MRServiceResultState::Stale;
+	}
 	for (MRServiceSignatureHelpResult &result : signatureHelps)
+		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
+	for (MRServiceRenameResult &result : renames)
 		if (result.header.state == MRServiceResultState::Current && !serviceDocumentIdentityMatches(workspace, result.header.identity)) result.header.state = MRServiceResultState::Stale;
 }
 
@@ -306,6 +324,10 @@ const std::vector<MRServiceSignatureHelpResult> &MRServiceResultStore::signature
 	return signatureHelps;
 }
 
+const std::vector<MRServiceRenameResult> &MRServiceResultStore::renameResults() const noexcept {
+	return renames;
+}
+
 MRServiceResultCounts MRServiceResultStore::resultCounts() const noexcept {
 	MRServiceResultCounts counts;
 
@@ -319,8 +341,14 @@ MRServiceResultCounts MRServiceResultStore::resultCounts() const noexcept {
 	counts.hovers = hovers.size();
 	counts.completions = completions.size();
 	counts.codeActions = codeActions.size();
-	counts.documentSymbols = documentSymbols.size();
+	for (const MRServiceDocumentSymbolsResult &result : documentSymbols) {
+		if (result.header.kind == MRServiceResultKind::WorkspaceSymbols)
+			++counts.workspaceSymbols;
+		else
+			++counts.documentSymbols;
+	}
 	counts.signatureHelps = signatureHelps.size();
+	counts.renames = renames.size();
 	return counts;
 }
 
@@ -387,6 +415,13 @@ MRServiceDocumentResultsSnapshot MRServiceResultStore::currentResultsForDocument
 		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
 		++snapshot.current.signatureHelps;
 		snapshot.signatureHelps.push_back(result);
+	}
+	for (const MRServiceRenameResult &result : renames) {
+		if (result.header.state != MRServiceResultState::Current) continue;
+		if (!serviceDocumentIdentityMatchesDocument(document, result.header.identity)) continue;
+		if (!snapshot.identity.valid) snapshot.identity = result.header.identity;
+		++snapshot.current.renames;
+		snapshot.renames.push_back(result);
 	}
 	return snapshot;
 }
@@ -571,6 +606,30 @@ MRServiceDocumentSymbolsResult buildServiceDocumentSymbolsFromLsp(const MRWorksp
 	return result;
 }
 
+MRServiceDocumentSymbolsResult buildServiceWorkspaceSymbolsFromLsp(const std::string &requestId, const mr::lsp::LspWorkspaceSymbolsResult &workspaceSymbols) {
+	MRServiceDocumentSymbolsResult result;
+
+	result.header.source = MRServiceResultSource::Lsp;
+	result.header.kind = MRServiceResultKind::WorkspaceSymbols;
+	result.header.state = MRServiceResultState::Current;
+	result.header.requestId = requestId;
+	for (const mr::lsp::LspDocumentSymbol &symbol : workspaceSymbols.symbols) {
+		MRServiceDocumentSymbol serviceSymbol;
+
+		serviceSymbol.name = symbol.name;
+		serviceSymbol.detail = symbol.detail;
+		serviceSymbol.kind = symbol.kind;
+		serviceSymbol.depth = symbol.depth;
+		serviceSymbol.target = locationTargetFromLsp(symbol.location, result.header.state, result.header.errorMessage);
+		if (result.header.state != MRServiceResultState::Current) {
+			result.symbols.clear();
+			return result;
+		}
+		result.symbols.push_back(serviceSymbol);
+	}
+	return result;
+}
+
 MRServiceSignatureHelpResult buildServiceSignatureHelpFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspSignatureHelpResult &signatureHelp) {
 	MRServiceSignatureHelpResult result;
 
@@ -594,6 +653,30 @@ MRServiceSignatureHelpResult buildServiceSignatureHelpFromLsp(const MRWorkspaceS
 			serviceSignature.parameters.push_back(serviceParameter);
 		}
 		result.signatures.push_back(serviceSignature);
+	}
+	return result;
+}
+
+MRServiceRenameResult buildServiceRenameFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspRenameResult &rename) {
+	MRServiceRenameResult result;
+
+	result.header.source = MRServiceResultSource::Lsp;
+	result.header.kind = MRServiceResultKind::Rename;
+	result.header.requestId = requestId;
+	result.header.identity = identityFromUri(workspace, originUri.empty() ? rename.uri : originUri, originVersion, result.header.state, result.header.errorMessage);
+	if (result.header.state != MRServiceResultState::Current) return result;
+
+	for (const mr::lsp::LspCodeActionTextEdit &edit : rename.edits) {
+		MRServiceTextEdit serviceEdit;
+		std::string path;
+		std::string uriError;
+
+		serviceEdit.uri = edit.uri;
+		if (mr::lsp::fileUriToPath(edit.uri, path, uriError)) serviceEdit.path = normalizeWorkspaceServicePath(path);
+		serviceEdit.range.start = servicePositionFromLsp(edit.range.start);
+		serviceEdit.range.end = servicePositionFromLsp(edit.range.end);
+		serviceEdit.newText = edit.newText;
+		result.edits.push_back(serviceEdit);
 	}
 	return result;
 }

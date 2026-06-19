@@ -557,8 +557,12 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / LSP complete";
 		case cmMrOtherLspDocumentSymbols:
 			return "Other / LSP document symbols";
+		case cmMrOtherLspWorkspaceSymbols:
+			return "Other / LSP workspace symbols";
 		case cmMrOtherLspSignatureHelp:
 			return "Other / LSP signature help";
+		case cmMrOtherLspRename:
+			return "Other / LSP rename";
 		case cmMrOtherLspStatus:
 			return "Other / LSP status";
 		case cmMrOtherLspResults:
@@ -1097,6 +1101,50 @@ NumericInputDialog::Layout defaultNumericInputDialogLayout() {
 bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue);
 bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue, const NumericInputDialog::Layout &layout);
 
+class TextInputDialog final : public MRDialogFoundation {
+  public:
+	TextInputDialog(const char *title, const char *label, const std::string &initialValue) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(62, 8), title, 62, 8, initMrDialogFrame) {
+		char initialBuffer[256] = {0};
+
+		mInputField = new TInputLine(TRect(12, 2, 58, 3), 255);
+		insert(new TLabel(TRect(2, 2, 12, 3), label, mInputField));
+		insert(mInputField);
+		std::snprintf(initialBuffer, sizeof(initialBuffer), "%s", initialValue.c_str());
+		mInputField->setData(initialBuffer);
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		mr::dialogs::insertUniformButtonRow(*this, 14, 5, 2, buttons);
+		setDialogValidationHook([this]() {
+			MRScrollableDialog::DialogValidationResult result;
+			char buffer[256] = {0};
+
+			if (mInputField != nullptr) mInputField->getData(buffer);
+			result.valid = !trimAscii(buffer).empty();
+			if (!result.valid) result.warningText = "Query must not be empty.";
+			return result;
+		});
+		finalizeLayout();
+	}
+
+	[[nodiscard]] std::string value() const {
+		char buffer[256] = {0};
+
+		if (mInputField != nullptr) const_cast<TInputLine *>(mInputField)->getData(buffer);
+		return trimAscii(buffer);
+	}
+
+  private:
+	TInputLine *mInputField = nullptr;
+};
+
+bool promptTextValue(const char *title, const char *label, const std::string &initialValue, std::string &outValue) {
+	TextInputDialog dialog(title, label, initialValue);
+	const ushort result = TProgram::deskTop->execView(&dialog);
+
+	if (result != cmOK) return false;
+	outValue = dialog.value();
+	return !outValue.empty();
+}
+
 bool insertTextIntoWindow(MREditWindow *win, const std::string &text) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	if (win == nullptr || editor == nullptr || text.empty()) return true;
@@ -1244,6 +1292,17 @@ bool lspIdentifierRangeAroundOffset(MRFileEditor &editor, std::size_t offset, st
 	while (end < lineEnd && lspIdentifierByte(editor.charAtOffset(end)))
 		++end;
 	return end > start;
+}
+
+std::string lspIdentifierTextAroundOffset(MRFileEditor &editor, std::size_t offset) {
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::string text;
+
+	if (!lspIdentifierRangeAroundOffset(editor, offset, start, end)) return text;
+	for (std::size_t index = start; index < end; ++index)
+		text.push_back(editor.charAtOffset(index));
+	return text;
 }
 
 mr::lsp::LspTextPosition currentLspTextPosition(const MRFileEditor &editor) {
@@ -1469,7 +1528,30 @@ bool requestLspEditorCommandForWindow(MREditWindow *win, mr::services::MRLspServ
 		}
 		mrLogMessage("LSP request dispatch: " + g_lspLastRequestLabel + " path=" + document.path + " version=" + std::to_string(document.documentVersion) + " position=" + g_lspLastRequestPosition + " offset=" + std::to_string(requestOffset) + " textColumn=" + std::to_string(editor->columnOfOffset(requestOffset)) + " viewColumn=" + std::to_string(target->viewColumn) + " lineLength=" + std::to_string(lineText.size()) + " prefix=\"" + escapedPrefix + "\" line=\"" + escapedLine + "\"");
 	}
-	g_lspAppService.setMainFileByBufferId(document.bufferId);
+	if (command == mr::services::MRLspServiceCommandId::WorkspaceSymbols) {
+		const std::string seed = lspIdentifierTextAroundOffset(*editor, target->offset);
+		std::string query = seed;
+
+		if (query.empty() && !promptTextValue("LSP WORKSPACE SYMBOLS", "Query:", seed, query)) {
+			g_lspLastRequestState = "cancelled";
+			return true;
+		}
+		g_lspAppService.clearMainFile();
+		mr::services::MRWorkspaceServiceSnapshot workspace = g_lspAppService.buildCurrentWorkspaceSnapshot();
+		mrLogMessage("LSP workspace symbols query: \"" + query + "\"");
+		if (!g_lspAppService.requestWorkspaceSymbols(profile, workspace, document, *editor, query, errorMessage)) {
+			g_lspLastRequestState = "failed";
+			g_lspLastError = errorMessage;
+			++g_lspRequestFailureCount;
+			if (reportMessages) postLspError(g_lspLastRequestLabel + " failed: " + errorMessage);
+			return true;
+		}
+		g_lspLastRequestState = "requested";
+		if (requestSent != nullptr) *requestSent = true;
+		if (reportMessages) postLspInfo(g_lspLastRequestLabel + " requested.");
+		return true;
+	}
+	g_lspAppService.clearMainFile();
 	if (!g_lspAppService.requestCurrentEditorCommand(profile, document, *editor, command, position, errorMessage)) {
 		g_lspLastRequestState = "failed";
 		g_lspLastError = errorMessage;
@@ -1624,7 +1706,7 @@ bool syncCurrentEditorForLspResults() {
 	g_lspLastServerConfigurationSource = configurationSource;
 	g_lspLastServerProfileName = profile.profileName;
 	g_lspLastRequestPath = document.path;
-	g_lspAppService.setMainFileByBufferId(document.bufferId);
+	g_lspAppService.clearMainFile();
 	if (!g_lspAppService.syncCurrentEditorDocument(profile, document, *editor, errorMessage)) {
 		postLspError("LSP results sync failed: " + errorMessage);
 		return false;
@@ -2043,6 +2125,15 @@ struct LspResolvedTextEdit {
 	std::string text;
 };
 
+struct LspResolvedWorkspaceTextEdit {
+	MREditWindow *window = nullptr;
+	MRFileEditor *editor = nullptr;
+	std::string path;
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::string text;
+};
+
 struct LspMiniMenuEntry {
 	std::string title;
 	ushort command = 0;
@@ -2138,6 +2229,94 @@ bool applyLspCodeActionEdits(MRFileEditor &editor, const mr::services::MRService
 		}
 		if (!editor.replaceRangeAndSelect(static_cast<uint>(edit.start), static_cast<uint>(edit.end), edit.text.data(), static_cast<uint>(edit.text.size()))) {
 			errorMessage = "LSP code action editor replace failed.";
+			return false;
+		}
+	}
+	errorMessage.clear();
+	return true;
+}
+
+bool applyLspRenameEdits(const mr::services::MRServiceRenameResult &result, const mr::services::MRWorkspaceServiceSnapshot &workspace, std::string &errorMessage) {
+	std::vector<LspResolvedWorkspaceTextEdit> resolvedEdits;
+
+	if (result.header.state != mr::services::MRServiceResultState::Current) {
+		errorMessage = "LSP rename result is not current.";
+		return false;
+	}
+	if (result.edits.empty()) {
+		errorMessage = "LSP rename returned no edits.";
+		return false;
+	}
+	for (const mr::services::MRServiceTextEdit &edit : result.edits) {
+		MREditWindow *window = nullptr;
+		MRFileEditor *editor = nullptr;
+		std::string currentText;
+		bool targetLoaded = false;
+		LspResolvedWorkspaceTextEdit resolved;
+
+		if (edit.path.empty()) {
+			errorMessage = "LSP rename edit has no file path.";
+			return false;
+		}
+		for (const mr::services::MRWorkspaceDocumentSnapshot &document : workspace.documents) {
+			if (document.path != edit.path) continue;
+			window = findEditWindowByBufferId(document.bufferId);
+			targetLoaded = window != nullptr;
+			break;
+		}
+		if (!targetLoaded || window == nullptr) {
+			errorMessage = "LSP rename edit targets an unloaded document: " + edit.path;
+			return false;
+		}
+		editor = window->getEditor();
+		if (editor == nullptr) {
+			errorMessage = "LSP rename edit target has no editor: " + edit.path;
+			return false;
+		}
+		if (window->isReadOnly() || editor->isReadOnly()) {
+			errorMessage = "LSP rename edit target is read-only: " + edit.path;
+			return false;
+		}
+		if (edit.path == result.header.identity.path && result.header.identity.documentVersion != editor->documentVersion()) {
+			errorMessage = "LSP rename belongs to an older document version.";
+			return false;
+		}
+		currentText = editor->snapshotText();
+		if (!lspTextOffsetForPosition(currentText, edit.range.start, resolved.start) || !lspTextOffsetForPosition(currentText, edit.range.end, resolved.end)) {
+			errorMessage = "LSP rename edit range is outside the document: " + edit.path;
+			return false;
+		}
+		if (resolved.end < resolved.start) {
+			errorMessage = "LSP rename edit range is reversed: " + edit.path;
+			return false;
+		}
+		if (resolved.start > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || resolved.end > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || edit.newText.size() > static_cast<std::size_t>(std::numeric_limits<uint>::max())) {
+			errorMessage = "LSP rename edit range is too large: " + edit.path;
+			return false;
+		}
+		resolved.window = window;
+		resolved.editor = editor;
+		resolved.path = edit.path;
+		resolved.text = edit.newText;
+		resolvedEdits.push_back(resolved);
+	}
+	std::sort(resolvedEdits.begin(), resolvedEdits.end(), [](const LspResolvedWorkspaceTextEdit &left, const LspResolvedWorkspaceTextEdit &right) {
+		if (left.path != right.path) return left.path < right.path;
+		if (left.start != right.start) return left.start < right.start;
+		return left.end < right.end;
+	});
+	for (std::size_t i = 1; i < resolvedEdits.size(); ++i) {
+		if (resolvedEdits[i].path != resolvedEdits[i - 1].path) continue;
+		if (resolvedEdits[i].start < resolvedEdits[i - 1].end) {
+			errorMessage = "LSP rename edits overlap: " + resolvedEdits[i].path;
+			return false;
+		}
+	}
+	for (std::size_t i = resolvedEdits.size(); i > 0; --i) {
+		const LspResolvedWorkspaceTextEdit &edit = resolvedEdits[i - 1];
+
+		if (!edit.editor->replaceRangeAndSelect(static_cast<uint>(edit.start), static_cast<uint>(edit.end), edit.text.data(), static_cast<uint>(edit.text.size()))) {
+			errorMessage = "LSP rename editor replace failed: " + edit.path;
 			return false;
 		}
 	}
@@ -2827,7 +3006,11 @@ bool showLspStatusDialog() {
 
 	line.str(std::string());
 	line.clear();
-	line << "Results: diagnostics " << results.diagnosticResults().size() << ", locations " << results.locationResults().size() << ", hovers " << results.hoverResults().size() << ", completions " << results.completionResults().size() << ", code actions " << results.codeActionResults().size() << ", document symbols " << results.documentSymbolResults().size() << ", signatures " << results.signatureHelpResults().size();
+	{
+		const mr::services::MRServiceResultCounts counts = results.resultCounts();
+
+		line << "Results: diagnostics " << counts.diagnostics << ", locations " << results.locationResults().size() << ", hovers " << counts.hovers << ", completions " << counts.completions << ", code actions " << counts.codeActions << ", document symbols " << counts.documentSymbols << ", workspace symbols " << counts.workspaceSymbols << ", signatures " << counts.signatureHelps << ", renames " << counts.renames;
+	}
 	lines.push_back(line.str());
 	line.str(std::string());
 	line.clear();
@@ -2859,11 +3042,12 @@ void appendLspDocumentSymbolRows(const mr::services::MRServiceDocumentSymbolsRes
 	for (const mr::services::MRServiceDocumentSymbol &symbol : result.symbols) {
 		LspResultDialogRow row;
 		const int depth = std::max(0, std::min(symbol.depth, 8));
+		const char *kind = result.header.kind == mr::services::MRServiceResultKind::WorkspaceSymbols ? "WSYM" : "SYM";
 
 		if (symbol.target.path.empty()) continue;
 		rowText.str(std::string());
 		rowText.clear();
-		rowText << "SYM [" << lspResultStateText(result.header.state) << "] ";
+		rowText << kind << " [" << lspResultStateText(result.header.state) << "] ";
 		rowText << (symbol.target.range.start.line + 1) << ":" << (symbol.target.range.start.character + 1) << " ";
 		rowText << std::string(static_cast<std::size_t>(depth * 2), ' ');
 		rowText << firstDisplayLine(symbol.name, 50);
@@ -2875,6 +3059,8 @@ void appendLspDocumentSymbolRows(const mr::services::MRServiceDocumentSymbolsRes
 		rows.push_back(row);
 	}
 }
+
+bool showLspWorkspaceSymbolsPicker(const mr::services::MRServiceDocumentSymbolsResult &result);
 
 bool showLspDocumentSymbolsDialog(const mr::services::MRServiceDocumentSymbolsResult &result) {
 	MRDialogFoundation *dialog = nullptr;
@@ -2891,11 +3077,14 @@ bool showLspDocumentSymbolsDialog(const mr::services::MRServiceDocumentSymbolsRe
 
 	if (TProgram::deskTop == nullptr) return false;
 	if (result.header.state != mr::services::MRServiceResultState::Current) {
-		if (!result.header.errorMessage.empty()) postLspWarning("LSP document symbols unavailable: " + result.header.errorMessage);
+		const char *kindText = result.header.kind == mr::services::MRServiceResultKind::WorkspaceSymbols ? "workspace symbols" : "document symbols";
+
+		if (!result.header.errorMessage.empty()) postLspWarning(std::string("LSP ") + kindText + " unavailable: " + result.header.errorMessage);
 		else
-			postLspWarning("LSP document symbols unavailable.");
+			postLspWarning(std::string("LSP ") + kindText + " unavailable.");
 		return true;
 	}
+	if (result.header.kind == mr::services::MRServiceResultKind::WorkspaceSymbols) return showLspWorkspaceSymbolsPicker(result);
 	appendLspDocumentSymbolRows(result, rows);
 	if (rows.empty()) {
 		postLspWarning("LSP document symbols: no symbols.");
@@ -3210,8 +3399,13 @@ void reportNewLspDocumentSymbols(const std::vector<mr::services::MRServiceDocume
 		std::ostringstream line;
 
 		++g_lspReportedDocumentSymbolCount;
-		g_lspLastRequestState = "document symbols received";
-		line << "LSP document symbols: " << result.symbols.size();
+		if (result.header.kind == mr::services::MRServiceResultKind::WorkspaceSymbols) {
+			g_lspLastRequestState = "workspace symbols received";
+			line << "LSP workspace symbols: " << result.symbols.size();
+		} else {
+			g_lspLastRequestState = "document symbols received";
+			line << "LSP document symbols: " << result.symbols.size();
+		}
 		if (!result.header.identity.path.empty()) line << " " << result.header.identity.path;
 		postLspInfo(line.str());
 		if (result.header.state == mr::services::MRServiceResultState::Current)
@@ -3249,6 +3443,137 @@ bool lspCompletionRequestIdKnown(const std::vector<std::string> &requestIds, con
 	for (const std::string &knownRequestId : requestIds)
 		if (knownRequestId == requestId) return true;
 	return false;
+}
+
+bool lspServerProfilesEqual(const mr::services::MRLspServerProfile &left, const mr::services::MRLspServerProfile &right) {
+	return left.profileName == right.profileName && left.executablePath == right.executablePath && left.arguments == right.arguments && left.workingDirectory == right.workingDirectory;
+}
+
+bool syncLoadedWorkspaceDocumentsForLspRename(
+	const mr::services::MRLspServerProfile &profile,
+	const mr::services::MRWorkspaceServiceSnapshot &workspace,
+	const mr::services::MRWorkspaceDocumentSnapshot &activeDocument,
+	MRFileEditor &activeEditor,
+	std::string &errorMessage) {
+	for (const mr::services::MRWorkspaceDocumentSnapshot &document : workspace.documents) {
+		MREditWindow *window = nullptr;
+		MRFileEditor *editor = nullptr;
+		mr::services::MRLspServerProfile documentProfile;
+		std::string configurationSource;
+
+		if (document.path == activeDocument.path && document.documentId == activeDocument.documentId) continue;
+		window = findEditWindowByBufferId(document.bufferId);
+		editor = window != nullptr ? window->getEditor() : nullptr;
+		if (editor == nullptr) continue;
+		if (!buildLspServerProfileFromEditor(*editor, documentProfile, configurationSource, errorMessage)) return false;
+		if (!lspServerProfilesEqual(profile, documentProfile)) continue;
+		if (!g_lspAppService.syncEditorDocument(profile, workspace, document, *editor, errorMessage)) return false;
+	}
+	return g_lspAppService.syncEditorDocument(profile, workspace, activeDocument, activeEditor, errorMessage);
+}
+
+bool requestLspRenameCommand(MREditWindow *win = currentEditorCommandWindow(), const LspEditorRequestTarget *requestTarget = nullptr) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	LspEditorRequestTarget cursorTarget;
+	const LspEditorRequestTarget *target = requestTarget;
+	std::string configurationSource;
+	std::string errorMessage;
+	std::string oldName;
+	std::string newName;
+	std::vector<std::string> knownRequestIds;
+	const std::vector<mr::services::MRServiceRenameResult> &initialRenames = g_lspAppService.results().renameResults();
+
+	for (const mr::services::MRServiceRenameResult &rename : initialRenames)
+		knownRequestIds.push_back(rename.header.requestId);
+	if (!configuredLanguageServerSpawnDaemon()) {
+		postLspWarning("LSP support is disabled.");
+		return true;
+	}
+	if (editor == nullptr || win == nullptr) {
+		postLspWarning("LSP rename requires an editor window.");
+		return true;
+	}
+	if (win->isReadOnly()) {
+		postLspWarning(kWindowReadOnlyMessage);
+		return true;
+	}
+	if (!buildLspDocumentSnapshotForWindow(win, document, true)) return true;
+	if (!buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) {
+		postLspWarning(errorMessage.empty() ? "LSP server not configured." : errorMessage);
+		return true;
+	}
+	if (target == nullptr) {
+		lspRequestTargetFromCursor(*editor, cursorTarget);
+		target = &cursorTarget;
+	}
+	oldName = lspIdentifierTextAroundOffset(*editor, target->offset);
+	if (oldName.empty()) {
+		postLspWarning("LSP rename requires an identifier.");
+		return true;
+	}
+	newName = oldName;
+	if (!promptTextValue("LSP RENAME", "New name:", oldName, newName)) return true;
+	if (newName.empty()) {
+		postLspWarning("LSP rename new name is empty.");
+		return true;
+	}
+	if (newName == oldName) {
+		postLspInfo("LSP rename unchanged.");
+		return true;
+	}
+	workspace = g_lspAppService.buildCurrentWorkspaceSnapshot();
+	if (!syncLoadedWorkspaceDocumentsForLspRename(profile, workspace, document, *editor, errorMessage)) {
+		g_lspLastRequestState = "failed";
+		g_lspLastError = errorMessage;
+		++g_lspRequestFailureCount;
+		postLspError("LSP rename workspace sync failed: " + errorMessage);
+		return true;
+	}
+	g_lspLastRequestLabel = "LSP rename";
+	g_lspLastRequestPath = document.path;
+	g_lspLastRequestPosition = std::to_string(target->position.line + 1) + ":" + std::to_string(target->position.character + 1);
+	g_lspLastRequestState = "preparing";
+	g_lspLastError.clear();
+	if (!g_lspAppService.requestRename(profile, workspace, document, *editor, target->position, newName, errorMessage)) {
+		g_lspLastRequestState = "failed";
+		g_lspLastError = errorMessage;
+		++g_lspRequestFailureCount;
+		postLspError("LSP rename failed: " + errorMessage);
+		return true;
+	}
+	++g_lspRequestCount;
+	g_lspLastRequestState = "requested";
+	for (int i = 0; i < 100; ++i) {
+		if (!g_lspAppService.poll(errorMessage)) {
+			++g_lspPollFailureCount;
+			g_lspLastRequestState = "poll failed";
+			g_lspLastPollError = errorMessage;
+			g_lspLastError = errorMessage;
+			postLspError("LSP poll failed: " + errorMessage);
+			g_lspAppService.close();
+			return true;
+		}
+		const std::vector<mr::services::MRServiceRenameResult> &renames = g_lspAppService.results().renameResults();
+		for (const mr::services::MRServiceRenameResult &rename : renames) {
+			if (lspCompletionRequestIdKnown(knownRequestIds, rename.header.requestId)) continue;
+			knownRequestIds.push_back(rename.header.requestId);
+			if (!applyLspRenameEdits(rename, workspace, errorMessage)) {
+				g_lspLastRequestState = "apply failed";
+				g_lspLastError = errorMessage;
+				postLspError("LSP rename apply failed: " + errorMessage);
+				return true;
+			}
+			g_lspLastRequestState = "applied";
+			postLspInfo("LSP rename applied.");
+			return true;
+		}
+		::poll(nullptr, 0, 20);
+	}
+	postLspInfo("LSP rename requested.");
+	return true;
 }
 
 bool requestLspCompletionCommand(MREditWindow *win = currentEditorCommandWindow(), const LspEditorRequestTarget *target = nullptr) {
@@ -3355,7 +3680,9 @@ std::vector<LspMiniMenuEntry> buildLspContextMenuItems(MREditWindow *win, const 
 		    {"Hover", cmMrOtherLspHover, serverConfigured && snapshot.commands.requestHover},
 		    {"Complete", cmMrOtherLspComplete, serverConfigured && snapshot.commands.requestCompletion},
 		    {"Symbols", cmMrOtherLspDocumentSymbols, serverConfigured && snapshot.commands.requestDocumentSymbols},
+		    {"Workspace Symbols", cmMrOtherLspWorkspaceSymbols, serverConfigured && snapshot.commands.requestWorkspaceSymbols},
 		    {"Signature", cmMrOtherLspSignatureHelp, serverConfigured && snapshot.commands.requestSignatureHelp},
+		    {"Rename", cmMrOtherLspRename, serverConfigured && snapshot.commands.requestRename},
 		    {"Code Actions", cmMrOtherLspCodeActions, serverConfigured && snapshot.commands.requestCodeActions},
 		};
 
@@ -3502,6 +3829,125 @@ short lspMiniMenuClickedIndex(MRColumnListView &listView, TPoint where) {
 	return clicked;
 }
 
+bool showLspWorkspaceSymbolsPicker(const mr::services::MRServiceDocumentSymbolsResult &result) {
+	struct WorkspaceSymbolDisplayEntry {
+		int rank = 3;
+		LspResultDialogRow resultRow;
+		MRColumnListView::Row displayRow;
+	};
+
+	MRDialogFoundation *dialog = nullptr;
+	TScrollBar *verticalScrollBar = nullptr;
+	TScrollBar *horizontalScrollBar = nullptr;
+	MRColumnListView *listView = nullptr;
+	mr::services::MRWorkspaceServiceSnapshot workspace = g_lspAppService.buildCurrentWorkspaceSnapshot();
+	std::set<std::string> loadedWorkspacePaths;
+	std::vector<WorkspaceSymbolDisplayEntry> entries;
+	std::vector<LspResultDialogRow> resultRows;
+	std::vector<MRColumnListView::Row> displayRows;
+	std::string navigationError;
+	std::string mainPath;
+	std::string rootPath;
+	ushort dialogResult = cmCancel;
+	const short width = 112;
+	short visibleRows = 0;
+	short height = 0;
+	short selected = -1;
+
+	if (TProgram::deskTop == nullptr) return false;
+	if (result.header.state != mr::services::MRServiceResultState::Current) {
+		if (!result.header.errorMessage.empty()) postLspWarning("LSP workspace symbols unavailable: " + result.header.errorMessage);
+		else
+			postLspWarning("LSP workspace symbols unavailable.");
+		return true;
+	}
+	if (result.symbols.empty()) {
+		postLspWarning("LSP workspace symbols: no symbols.");
+		return true;
+	}
+
+	if (workspace.mainFile.hasMainFile) mainPath = mr::services::normalizeWorkspaceServicePath(workspace.mainFile.path);
+	if (workspace.root.hasRoot) rootPath = mr::services::normalizeWorkspaceServicePath(workspace.root.rootPath);
+	for (const mr::services::MRWorkspaceDocumentSnapshot &document : workspace.documents) {
+		if (!document.path.empty()) loadedWorkspacePaths.insert(mr::services::normalizeWorkspaceServicePath(document.path));
+	}
+
+	for (const mr::services::MRServiceDocumentSymbol &symbol : result.symbols) {
+		WorkspaceSymbolDisplayEntry entry;
+		LspResultDialogRow resultRow;
+		MRColumnListView::Row displayRow;
+		std::ostringstream positionText;
+		const std::string &path = !symbol.target.path.empty() ? symbol.target.path : symbol.target.uri;
+		const std::string normalizedPath = mr::services::normalizeWorkspaceServicePath(path);
+		std::string baseName = path;
+		const std::size_t slash = baseName.find_last_of("/\\");
+
+		if (path.empty()) continue;
+		if (!mainPath.empty() && normalizedPath == mainPath)
+			entry.rank = 0;
+		else if (loadedWorkspacePaths.find(normalizedPath) != loadedWorkspacePaths.end())
+			entry.rank = 1;
+		else if (!rootPath.empty() && (normalizedPath == rootPath || (normalizedPath.size() > rootPath.size() && normalizedPath.compare(0, rootPath.size(), rootPath) == 0 && normalizedPath[rootPath.size()] == '/')))
+			entry.rank = 2;
+		if (slash != std::string::npos) baseName.erase(0, slash + 1);
+		positionText << (symbol.target.range.start.line + 1) << ":" << (symbol.target.range.start.character + 1);
+
+		displayRow.push_back(firstDisplayLine(symbol.name, 220));
+		if (!symbol.detail.empty()) displayRow.push_back(firstDisplayLine(symbol.detail, 160));
+		displayRow.push_back(positionText.str());
+		displayRow.push_back(baseName);
+		displayRow.push_back(firstDisplayLine(path, 220));
+		displayRows.push_back(displayRow);
+
+		resultRow.action = LspResultDialogAction::NavigateLocation;
+		resultRow.location = symbol.target;
+		entry.resultRow = resultRow;
+		entry.displayRow = displayRow;
+		entries.push_back(entry);
+	}
+	if (entries.empty()) {
+		postLspWarning("LSP workspace symbols: no navigable symbols.");
+		return true;
+	}
+	std::stable_sort(entries.begin(), entries.end(), [](const WorkspaceSymbolDisplayEntry &left, const WorkspaceSymbolDisplayEntry &right) {
+		return left.rank < right.rank;
+	});
+	for (const WorkspaceSymbolDisplayEntry &entry : entries) {
+		resultRows.push_back(entry.resultRow);
+		displayRows.push_back(entry.displayRow);
+	}
+
+	visibleRows = static_cast<short>(std::max<int>(5, std::min<int>(static_cast<int>(resultRows.size()), 14)));
+	height = static_cast<short>(visibleRows + 5);
+	dialog = mr::dialogs::createScrollableDialog("LSP WORKSPACE SYMBOLS", width, height);
+	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select symbol:"));
+	verticalScrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, static_cast<short>(2 + visibleRows)));
+	horizontalScrollBar = new TScrollBar(TRect(2, static_cast<short>(2 + visibleRows), width - 3, static_cast<short>(3 + visibleRows)));
+	dialog->insert(verticalScrollBar);
+	dialog->insert(horizontalScrollBar);
+	listView = new MRColumnListView(TRect(2, 2, width - 3, static_cast<short>(2 + visibleRows)), verticalScrollBar, horizontalScrollBar, dialog, 0, cmOK);
+	listView->setActivateOnSingleClick(true);
+	dialog->insert(listView);
+	listView->setRows(displayRows, 0);
+	dialog->setDialogValidationHook([listView, &resultRows]() {
+		MRScrollableDialog::DialogValidationResult validation;
+		const short selectedIndex = listView != nullptr ? listView->selectedIndex() : -1;
+
+		validation.valid = selectedIndex >= 0 && static_cast<std::size_t>(selectedIndex) < resultRows.size();
+		if (!validation.valid) validation.warningText = "Select a symbol.";
+		return validation;
+	});
+	dialog->finalizeLayout();
+	dialogResult = TProgram::deskTop->execView(dialog);
+	if (dialogResult == cmOK && listView != nullptr) selected = listView->selectedIndex();
+	TObject::destroy(dialog);
+
+	if (dialogResult == cmOK && selected >= 0 && static_cast<std::size_t>(selected) < resultRows.size()) {
+		if (!navigateToLspLocation(resultRows[static_cast<std::size_t>(selected)].location, navigationError)) postLspWarning("LSP workspace symbol navigation failed: " + navigationError);
+	}
+	return true;
+}
+
 std::vector<LspMiniMenuEntry> buildLspEditMiniMenuItems(MREditWindow *targetWindow) {
 	std::vector<LspMiniMenuEntry> entries;
 	const bool hasMarkedText = targetWindow != nullptr && (targetWindow->hasSelection() || targetWindow->hasBlock());
@@ -3636,8 +4082,12 @@ bool showLspContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 			return requestLspCompletionCommand(targetWindow, &target);
 		case cmMrOtherLspDocumentSymbols:
 			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::DocumentSymbols, "LSP document symbols", true, nullptr, &target);
+		case cmMrOtherLspWorkspaceSymbols:
+			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::WorkspaceSymbols, "LSP workspace symbols", true, nullptr, &target);
 		case cmMrOtherLspSignatureHelp:
 			return requestLspEditorCommandForWindow(targetWindow, mr::services::MRLspServiceCommandId::SignatureHelp, "LSP signature help", true, nullptr, &target);
+		case cmMrOtherLspRename:
+			return requestLspRenameCommand(targetWindow, &target);
 		case cmMrOtherLspCodeActions:
 			return requestLspCodeActionsAtPosition(targetWindow, &target);
 		default:
@@ -5535,8 +5985,14 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrOtherLspDocumentSymbols:
 			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::DocumentSymbols, "LSP document symbols");
 
+		case cmMrOtherLspWorkspaceSymbols:
+			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::WorkspaceSymbols, "LSP workspace symbols");
+
 		case cmMrOtherLspSignatureHelp:
 			return requestLspEditorCommand(mr::services::MRLspServiceCommandId::SignatureHelp, "LSP signature help");
+
+		case cmMrOtherLspRename:
+			return requestLspRenameCommand();
 
 		case cmMrOtherLspCodeActions:
 			return requestLspCodeActionsAtCurrentPosition();

@@ -323,11 +323,12 @@ struct MRMultiSearchDialogOptions {
 	bool caseSensitive;
 	bool regularExpressions;
 	bool searchFilesInMemory;
+	bool restrictToWorkspace;
 	std::string filespec;
 	std::string startingPath;
 	std::string searchText;
 
-	MRMultiSearchDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), filespec("*.*"), startingPath(), searchText() {
+	MRMultiSearchDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), restrictToWorkspace(false), filespec("*.*"), startingPath(), searchText() {
 	}
 
 	auto operator==(const MRMultiSearchDialogOptions &) const noexcept -> bool = default;
@@ -339,12 +340,13 @@ struct MRMultiSarDialogOptions {
 	bool regularExpressions;
 	bool searchFilesInMemory;
 	bool keepFilesOpen;
+	bool restrictToWorkspace;
 	std::string filespec;
 	std::string startingPath;
 	std::string searchText;
 	std::string replacementText;
 
-	MRMultiSarDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), keepFilesOpen(false), filespec("*.*"), startingPath(), searchText(), replacementText() {
+	MRMultiSarDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), keepFilesOpen(false), restrictToWorkspace(false), filespec("*.*"), startingPath(), searchText(), replacementText() {
 	}
 
 	auto operator==(const MRMultiSarDialogOptions &) const noexcept -> bool = default;

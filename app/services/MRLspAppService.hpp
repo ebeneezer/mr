@@ -17,7 +17,9 @@ struct MRLspCommandAvailability {
 	bool requestHover = false;
 	bool requestCompletion = false;
 	bool requestDocumentSymbols = false;
+	bool requestWorkspaceSymbols = false;
 	bool requestSignatureHelp = false;
+	bool requestRename = false;
 	bool requestCodeActions = false;
 	bool applyCodeActions = false;
 };
@@ -76,6 +78,21 @@ public:
 		const MRFileEditor &editor,
 		MRLspServiceCommandId command,
 		mr::lsp::LspTextPosition position,
+		std::string &errorMessage);
+	bool requestWorkspaceSymbols(
+		const MRLspServerProfile &profile,
+		const MRWorkspaceServiceSnapshot &workspace,
+		const MRWorkspaceDocumentSnapshot &document,
+		const MRFileEditor &editor,
+		const std::string &query,
+		std::string &errorMessage);
+	bool requestRename(
+		const MRLspServerProfile &profile,
+		const MRWorkspaceServiceSnapshot &workspace,
+		const MRWorkspaceDocumentSnapshot &document,
+		const MRFileEditor &editor,
+		mr::lsp::LspTextPosition position,
+		const std::string &newName,
 		std::string &errorMessage);
 	bool syncCurrentEditorDocument(
 		const MRLspServerProfile &profile,

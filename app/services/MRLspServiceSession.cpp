@@ -2,8 +2,10 @@
 
 #include "MRLspEditorSource.hpp"
 #include "../../lsp/MRLspUri.hpp"
+#include "../../ui/MRWindowSupport.hpp"
 
 #include <poll.h>
+#include <sstream>
 #include <vector>
 
 namespace {
@@ -36,13 +38,195 @@ std::string workspaceFolderNameForRootPath(const std::string &rootPath) {
 	return rootPath;
 }
 
+std::string executableBaseName(const std::string &path) {
+	const std::size_t slash = path.find_last_of('/');
+
+	if (slash == std::string::npos) return path;
+	if (slash + 1 < path.size()) return path.substr(slash + 1);
+	return std::string();
+}
+
+bool profileUsesClangd(const mr::services::MRLspServerProfile &profile) {
+	const std::string baseName = executableBaseName(profile.executablePath);
+
+	return baseName == "clangd" || baseName.rfind("clangd-", 0) == 0;
+}
+
+bool argumentListContains(const std::vector<std::string> &arguments, const std::string &argument) {
+	for (const std::string &candidate : arguments)
+		if (candidate == argument) return true;
+	return false;
+}
+
+void appendArgumentOnce(std::vector<std::string> &arguments, const std::string &argument) {
+	if (!argumentListContains(arguments, argument)) arguments.push_back(argument);
+}
+
+bool splitShellLikeWords(const std::string &text, std::vector<std::string> &words, std::string &errorMessage) {
+	enum QuoteMode {
+		qmNone = 0,
+		qmSingle,
+		qmDouble
+	};
+	QuoteMode quoteMode = qmNone;
+	std::string current;
+	bool hasCurrent = false;
+
+	for (std::size_t index = 0; index < text.size(); ++index) {
+		const char ch = text[index];
+
+		if (quoteMode == qmSingle) {
+			if (ch == '\'') quoteMode = qmNone;
+			else {
+				current.push_back(ch);
+				hasCurrent = true;
+			}
+			continue;
+		}
+		if (quoteMode == qmDouble) {
+			if (ch == '"') {
+				quoteMode = qmNone;
+				continue;
+			}
+			if (ch == '\\' && index + 1 < text.size()) {
+				++index;
+				current.push_back(text[index]);
+				hasCurrent = true;
+				continue;
+			}
+			current.push_back(ch);
+			hasCurrent = true;
+			continue;
+		}
+		if (ch == '\'') {
+			quoteMode = qmSingle;
+			hasCurrent = true;
+			continue;
+		}
+		if (ch == '"') {
+			quoteMode = qmDouble;
+			hasCurrent = true;
+			continue;
+		}
+		if (ch == '\\' && index + 1 < text.size()) {
+			++index;
+			current.push_back(text[index]);
+			hasCurrent = true;
+			continue;
+		}
+		if (static_cast<unsigned char>(ch) <= ' ') {
+			if (hasCurrent) {
+				words.push_back(current);
+				current.clear();
+				hasCurrent = false;
+			}
+			continue;
+		}
+		current.push_back(ch);
+		hasCurrent = true;
+	}
+	if (quoteMode != qmNone) {
+		errorMessage = "LSP compile context contains an unterminated quoted build flag.";
+		return false;
+	}
+	if (hasCurrent) words.push_back(current);
+	errorMessage.clear();
+	return true;
+}
+
+bool compileContextFallbackFlagIsLanguageStandard(const std::string &flag) {
+	return flag.rfind("-std=", 0) == 0 || flag.rfind("--std=", 0) == 0;
+}
+
+void appendCompileContextFallbackFlags(const mr::services::MRWorkspaceCompileContext &context, std::vector<std::string> &fallbackFlags, std::string &errorMessage) {
+	for (const mr::services::MRWorkspaceCompileContextEntry &entry : context.includePaths)
+		fallbackFlags.push_back("-I" + entry.value);
+	if (!context.targetTriple.empty()) fallbackFlags.push_back("--target=" + context.targetTriple);
+	for (const mr::services::MRWorkspaceCompileContextEntry &entry : context.buildFlags) {
+		std::vector<std::string> words;
+
+		if (entry.source == "CC" || entry.source == "CXX") continue;
+		if (!splitShellLikeWords(entry.value, words, errorMessage)) return;
+		for (const std::string &word : words)
+			if (!compileContextFallbackFlagIsLanguageStandard(word)) fallbackFlags.push_back(word);
+	}
+	errorMessage.clear();
+}
+
+std::string compileContextFingerprint(const mr::services::MRWorkspaceCompileContext &context) {
+	std::ostringstream line;
+
+	line << (context.available ? "available" : "unavailable") << '\n'
+	     << context.anchorPath << '\n'
+	     << context.anchorSource << '\n'
+	     << context.compilerProfileId << '\n'
+	     << context.compilerProfileName << '\n'
+	     << context.compilerProfileMatch << '\n'
+	     << context.toolchain << '\n'
+	     << context.executablePath << '\n'
+	     << context.targetTriple << '\n'
+	     << context.errorMessage << '\n';
+	for (const mr::services::MRWorkspaceCompileContextEntry &entry : context.includePaths)
+		line << "I:" << entry.source << ':' << entry.value << '\n';
+	for (const mr::services::MRWorkspaceCompileContextEntry &entry : context.buildFlags)
+		line << "F:" << entry.source << ':' << entry.value << '\n';
+	return line.str();
+}
+
+void appendCompileContextEntries(std::ostringstream &line, const char *label, const std::vector<mr::services::MRWorkspaceCompileContextEntry> &entries) {
+	line << " " << label << "=";
+	if (entries.empty()) {
+		line << "none";
+		return;
+	}
+	for (std::size_t index = 0; index < entries.size(); ++index) {
+		if (index != 0) line << "; ";
+		line << entries[index].value << " [" << entries[index].source << "]";
+	}
+}
+
+void logLspCompileContext(const mr::services::MRWorkspaceServiceSnapshot &workspace, const mr::services::MRLspServerProfile &profile, const std::vector<std::string> &fallbackFlags) {
+	const mr::services::MRWorkspaceCompileContext &context = workspace.compileContext;
+	std::ostringstream line;
+
+	if (!profileUsesClangd(profile)) return;
+	line << "LSP clangd compile context:";
+	if (!context.available) {
+		line << " unavailable";
+		if (!context.errorMessage.empty()) line << " reason=" << context.errorMessage;
+		mrLogMessage(line.str());
+		return;
+	}
+	line << " anchor=" << context.anchorPath << " [" << context.anchorSource << "]"
+	     << " profile=" << context.compilerProfileName;
+	if (!context.compilerProfileMatch.empty()) line << " match=" << context.compilerProfileMatch;
+	if (!context.toolchain.empty()) line << " toolchain=" << context.toolchain;
+	if (!context.executablePath.empty()) line << " compiler=" << context.executablePath;
+	if (!context.targetTriple.empty()) line << " target=" << context.targetTriple;
+	line << " fallbackFlags=" << fallbackFlags.size();
+	appendCompileContextEntries(line, "includes", context.includePaths);
+	appendCompileContextEntries(line, "flags", context.buildFlags);
+	mrLogMessage(line.str());
+}
+
+void appendJsonStringArray(std::string &out, const std::vector<std::string> &values) {
+	out.push_back('[');
+	for (std::size_t index = 0; index < values.size(); ++index) {
+		if (index != 0) out.push_back(',');
+		appendJsonString(out, values[index]);
+	}
+	out.push_back(']');
+}
+
 const mr::services::MRLspServiceCommandSpec lspServiceCommandTable[] = {
 	{ mr::services::MRLspServiceCommandId::GoToDefinition, mr::services::MRLspServiceRequestKind::Definition, false, "MR_LSP_GOTO_DEFINITION", "LSP Go To Definition" },
 	{ mr::services::MRLspServiceCommandId::FindReferences, mr::services::MRLspServiceRequestKind::References, true, "MR_LSP_FIND_REFERENCES", "LSP Find References" },
 	{ mr::services::MRLspServiceCommandId::ShowHover, mr::services::MRLspServiceRequestKind::Hover, false, "MR_LSP_SHOW_HOVER", "LSP Show Hover" },
 	{ mr::services::MRLspServiceCommandId::Complete, mr::services::MRLspServiceRequestKind::Completion, false, "MR_LSP_COMPLETE", "LSP Complete" },
 	{ mr::services::MRLspServiceCommandId::DocumentSymbols, mr::services::MRLspServiceRequestKind::DocumentSymbols, false, "MR_LSP_DOCUMENT_SYMBOLS", "LSP Document Symbols" },
+	{ mr::services::MRLspServiceCommandId::WorkspaceSymbols, mr::services::MRLspServiceRequestKind::WorkspaceSymbols, false, "MR_LSP_WORKSPACE_SYMBOLS", "LSP Workspace Symbols" },
 	{ mr::services::MRLspServiceCommandId::SignatureHelp, mr::services::MRLspServiceRequestKind::SignatureHelp, false, "MR_LSP_SIGNATURE_HELP", "LSP Signature Help" },
+	{ mr::services::MRLspServiceCommandId::Rename, mr::services::MRLspServiceRequestKind::Rename, false, "MR_LSP_RENAME", "LSP Rename" },
 };
 
 mr::lsp::LspCodeActionRange codeActionRangeFromServiceRange(const mr::services::MRServiceTextRange &range) {
@@ -63,7 +247,7 @@ MRLspServiceSession::MRLspServiceSession() noexcept
 	: documentService(lifecycle) {
 }
 
-bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspSessionSpec &sessionSpec, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
+bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspSessionSpec &sessionSpec, const std::vector<std::string> &fallbackFlags, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
 	std::string rootUri;
 	std::string params;
 	const std::string rootPath = normalizeWorkspaceServicePath(workspace.root.rootPath);
@@ -85,14 +269,26 @@ bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &works
 	} else {
 		params += "\"rootPath\":null,\"rootUri\":null,\"workspaceFolders\":null,";
 	}
+	if (!fallbackFlags.empty()) {
+		params += "\"initializationOptions\":{\"fallbackFlags\":";
+		appendJsonStringArray(params, fallbackFlags);
+		params += "},";
+	}
 	params += "\"capabilities\":{\"textDocument\":{\"completion\":{\"completionItem\":{\"snippetSupport\":true}}}}}";
 	spec.initializeParamsJson = params;
 	errorMessage.clear();
 	return true;
 }
 
+bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspSessionSpec &sessionSpec, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
+	const std::vector<std::string> fallbackFlags;
+
+	return buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, fallbackFlags, spec, errorMessage);
+}
+
 bool buildLspInitializeSpecFromServerProfile(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, mr::lsp::LspInitializeSpec &spec, std::string &errorMessage) {
 	mr::lsp::LspSessionSpec sessionSpec;
+	std::vector<std::string> fallbackFlags;
 
 	if (profile.executablePath.empty()) {
 		errorMessage = "LSP server profile executable path is empty.";
@@ -100,12 +296,18 @@ bool buildLspInitializeSpecFromServerProfile(const MRWorkspaceServiceSnapshot &w
 	}
 	sessionSpec.process.executablePath = profile.executablePath;
 	sessionSpec.process.arguments = profile.arguments;
+	if (profileUsesClangd(profile)) {
+		appendArgumentOnce(sessionSpec.process.arguments, "--compile_args_from=lsp");
+		appendArgumentOnce(sessionSpec.process.arguments, "--strong-workspace-mode");
+		if (workspace.compileContext.available) appendCompileContextFallbackFlags(workspace.compileContext, fallbackFlags, errorMessage);
+		if (!errorMessage.empty()) return false;
+	}
 	if (!profile.workingDirectory.empty()) {
 		sessionSpec.process.workingDirectory = normalizeWorkspaceServicePath(profile.workingDirectory);
 	} else if (workspace.root.hasRoot) {
 		sessionSpec.process.workingDirectory = normalizeWorkspaceServicePath(workspace.root.rootPath);
 	}
-	return buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, spec, errorMessage);
+	return buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, fallbackFlags, spec, errorMessage);
 }
 
 bool lspServiceCommandSpec(MRLspServiceCommandId command, MRLspServiceCommandSpec &spec) noexcept {
@@ -139,12 +341,20 @@ bool MRLspServiceSession::start(const MRWorkspaceServiceSnapshot &workspace, con
 }
 
 bool MRLspServiceSession::startRuntime(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile, std::string &errorMessage) {
+	std::vector<std::string> fallbackFlags;
+
+	if (profileUsesClangd(profile) && workspace.compileContext.available) {
+		appendCompileContextFallbackFlags(workspace.compileContext, fallbackFlags, errorMessage);
+		if (!errorMessage.empty()) return false;
+	}
 	if (!start(workspace, profile, errorMessage)) return false;
 	if (!sendInitialized(errorMessage)) {
 		close();
 		return false;
 	}
+	logLspCompileContext(workspace, profile, fallbackFlags);
 	activeServerProfile = profile;
+	activeRuntimeCompileContextFingerprint = compileContextFingerprint(workspace.compileContext);
 	activeRuntimeHasRoot = workspace.root.hasRoot;
 	if (workspace.root.hasRoot) {
 		activeRuntimeRootPath = normalizeWorkspaceServicePath(workspace.root.rootPath);
@@ -216,24 +426,21 @@ bool MRLspServiceSession::syncEditorDocument(const MRWorkspaceServiceSnapshot &w
 	const std::string documentPath = normalizeWorkspaceServicePath(document.path);
 
 	if (!buildLspDocumentSourceSnapshotFromEditor(document, editor, source, errorMessage)) return false;
-	if (!documentService.isOpen()) {
+	if (!documentService.hasOpenDocument(source, errorMessage)) {
 		if (!openDocument(workspace, source, errorMessage)) return false;
 		activeEditorDocumentId = document.documentId;
 		activeEditorDocumentVersion = document.documentVersion;
 		activeEditorDocumentPath = documentPath;
 		return true;
 	}
-	if (activeEditorDocumentId == document.documentId && activeEditorDocumentPath == documentPath) {
-		if (activeEditorDocumentVersion == document.documentVersion) {
-			errorMessage.clear();
-			return true;
-		}
-		if (!changeDocument(workspace, source, errorMessage)) return false;
+	if (documentService.matchesSentVersion(source, errorMessage)) {
+		if (!documentService.activate(source, errorMessage)) return false;
+		activeEditorDocumentId = document.documentId;
 		activeEditorDocumentVersion = document.documentVersion;
+		activeEditorDocumentPath = documentPath;
 		return true;
 	}
-	if (!closeDocument(errorMessage)) return false;
-	if (!openDocument(workspace, source, errorMessage)) return false;
+	if (!changeDocument(workspace, source, errorMessage)) return false;
 	activeEditorDocumentId = document.documentId;
 	activeEditorDocumentVersion = document.documentVersion;
 	activeEditorDocumentPath = documentPath;
@@ -260,8 +467,13 @@ bool MRLspServiceSession::syncEditorDocumentAndRequest(
 			return requestCompletion(position, errorMessage);
 		case MRLspServiceRequestKind::DocumentSymbols:
 			return requestDocumentSymbols(errorMessage);
+		case MRLspServiceRequestKind::WorkspaceSymbols:
+			return requestWorkspaceSymbols(std::string(), errorMessage);
 		case MRLspServiceRequestKind::SignatureHelp:
 			return requestSignatureHelp(position, errorMessage);
+		case MRLspServiceRequestKind::Rename:
+			errorMessage = "LSP rename requires a new name.";
+			return false;
 	}
 	errorMessage = "LSP service request kind is unknown.";
 	return false;
@@ -347,12 +559,30 @@ bool MRLspServiceSession::requestDocumentSymbols(std::string &errorMessage) {
 	return documentSymbolsAdapter.requestDocumentSymbols(lifecycle, documentService, documentSymbolsRequest, errorMessage);
 }
 
+bool MRLspServiceSession::requestWorkspaceSymbols(const std::string &query, std::string &errorMessage) {
+	if (!hasActiveWorkspace) {
+		errorMessage = "LSP service session has no active workspace.";
+		return false;
+	}
+	return documentSymbolsAdapter.requestWorkspaceSymbols(lifecycle, query, workspaceSymbolsRequest, errorMessage);
+}
+
 bool MRLspServiceSession::requestSignatureHelp(mr::lsp::LspTextPosition position, std::string &errorMessage) {
 	if (!hasActiveWorkspace) {
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
 	return signatureHelpAdapter.requestSignatureHelp(lifecycle, documentService, position, signatureHelpRequest, errorMessage);
+}
+
+bool MRLspServiceSession::requestRename(mr::lsp::LspTextPosition position, const std::string &newName, std::string &errorMessage) {
+	if (!hasActiveWorkspace) {
+		errorMessage = "LSP service session has no active workspace.";
+		return false;
+	}
+	if (!renameAdapter.requestRename(lifecycle, documentService, position, newName, renameRequest, errorMessage)) return false;
+	renameRequestVersion = activeEditorDocumentVersion;
+	return true;
 }
 
 bool MRLspServiceSession::requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage) {
@@ -481,6 +711,7 @@ bool MRLspServiceSession::runtimeMatches(const MRWorkspaceServiceSnapshot &works
 	if (activeServerProfile.executablePath != profile.executablePath) return false;
 	if (activeServerProfile.arguments != profile.arguments) return false;
 	if (activeServerProfile.workingDirectory != profile.workingDirectory) return false;
+	if (profileUsesClangd(profile) && activeRuntimeCompileContextFingerprint != compileContextFingerprint(workspace.compileContext)) return false;
 	if (activeRuntimeHasRoot != workspace.root.hasRoot) return false;
 	if (!workspace.root.hasRoot) return true;
 	rootPath = normalizeWorkspaceServicePath(workspace.root.rootPath);
@@ -495,7 +726,9 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 	mr::lsp::LspCompletionResult completion;
 	mr::lsp::LspCodeActionResult codeActions;
 	mr::lsp::LspDocumentSymbolsResult documentSymbols;
+	mr::lsp::LspWorkspaceSymbolsResult workspaceSymbols;
 	mr::lsp::LspSignatureHelpResult signatureHelp;
+	mr::lsp::LspRenameResult rename;
 	bool accepted = false;
 
 	if (hasActiveWorkspace) {
@@ -564,9 +797,19 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 		resultStore.putDocumentSymbols(buildServiceDocumentSymbolsFromLsp(activeWorkspace, documentSymbolsRequest.uri, activeWorkspace.documents.front().documentVersion, documentSymbolsRequest.idText, documentSymbols));
 		return true;
 	}
+	if (!documentSymbolsAdapter.consumeWorkspaceSymbols(message, workspaceSymbolsRequest, workspaceSymbols, accepted, errorMessage)) return false;
+	if (accepted) {
+		resultStore.putDocumentSymbols(buildServiceWorkspaceSymbolsFromLsp(workspaceSymbolsRequest.idText, workspaceSymbols));
+		return true;
+	}
 	if (!signatureHelpAdapter.consume(message, documentService, signatureHelpRequest, signatureHelp, accepted, errorMessage)) return false;
 	if (accepted) {
 		resultStore.putSignatureHelp(buildServiceSignatureHelpFromLsp(activeWorkspace, signatureHelpRequest.uri, activeWorkspace.documents.front().documentVersion, signatureHelpRequest.idText, signatureHelp));
+		return true;
+	}
+	if (!renameAdapter.consume(message, documentService, renameRequest, rename, accepted, errorMessage)) return false;
+	if (accepted) {
+		resultStore.putRename(buildServiceRenameFromLsp(activeWorkspace, renameRequest.uri, renameRequestVersion, renameRequest.idText, rename));
 	}
 	return true;
 }
@@ -577,15 +820,19 @@ void MRLspServiceSession::clearRequests() noexcept {
 	hoverRequest = mr::lsp::LspHoverRequest();
 	completionRequest = mr::lsp::LspCompletionRequest();
 	documentSymbolsRequest = mr::lsp::LspDocumentSymbolsRequest();
+	workspaceSymbolsRequest = mr::lsp::LspWorkspaceSymbolsRequest();
 	signatureHelpRequest = mr::lsp::LspSignatureHelpRequest();
 	codeActionRequest = mr::lsp::LspCodeActionRequest();
+	renameRequest = mr::lsp::LspRenameRequest();
 	codeActionRequestRange = MRServiceTextRange();
 	codeActionRequestVersion = 0;
+	renameRequestVersion = 0;
 }
 
 void MRLspServiceSession::clearRuntimeBinding() noexcept {
 	activeServerProfile = MRLspServerProfile();
 	activeRuntimeRootPath.clear();
+	activeRuntimeCompileContextFingerprint.clear();
 	activeRuntimeHasRoot = false;
 	hasActiveRuntime = false;
 }

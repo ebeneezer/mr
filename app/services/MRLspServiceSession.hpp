@@ -32,7 +32,9 @@ enum class MRLspServiceRequestKind {
 	Hover,
 	Completion,
 	DocumentSymbols,
-	SignatureHelp
+	WorkspaceSymbols,
+	SignatureHelp,
+	Rename
 };
 
 enum class MRLspServiceCommandId {
@@ -41,7 +43,9 @@ enum class MRLspServiceCommandId {
 	ShowHover,
 	Complete,
 	DocumentSymbols,
-	SignatureHelp
+	WorkspaceSymbols,
+	SignatureHelp,
+	Rename
 };
 
 struct MRLspServiceCommandSpec {
@@ -103,7 +107,9 @@ public:
 	bool requestHover(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestCompletion(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestDocumentSymbols(std::string &errorMessage);
+	bool requestWorkspaceSymbols(const std::string &query, std::string &errorMessage);
 	bool requestSignatureHelp(mr::lsp::LspTextPosition position, std::string &errorMessage);
+	bool requestRename(mr::lsp::LspTextPosition position, const std::string &newName, std::string &errorMessage);
 	bool requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage);
 	bool closeDocument(std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);
@@ -132,15 +138,19 @@ private:
 	mr::lsp::LspDocumentSymbolsAdapter documentSymbolsAdapter;
 	mr::lsp::LspSignatureHelpAdapter signatureHelpAdapter;
 	mr::lsp::LspCodeActionAdapter codeActionAdapter;
+	mr::lsp::LspRenameAdapter renameAdapter;
 	mr::lsp::LspDefinitionRequest definitionRequest;
 	mr::lsp::LspReferencesRequest referencesRequest;
 	mr::lsp::LspHoverRequest hoverRequest;
 	mr::lsp::LspCompletionRequest completionRequest;
 	mr::lsp::LspDocumentSymbolsRequest documentSymbolsRequest;
+	mr::lsp::LspWorkspaceSymbolsRequest workspaceSymbolsRequest;
 	mr::lsp::LspSignatureHelpRequest signatureHelpRequest;
 	mr::lsp::LspCodeActionRequest codeActionRequest;
+	mr::lsp::LspRenameRequest renameRequest;
 	MRServiceTextRange codeActionRequestRange;
 	std::size_t codeActionRequestVersion = 0;
+	std::size_t renameRequestVersion = 0;
 	MRWorkspaceServiceSnapshot activeWorkspace;
 	MRServiceResultStore resultStore;
 	std::size_t activeEditorDocumentId = 0;
@@ -149,6 +159,7 @@ private:
 	bool hasActiveWorkspace = false;
 	MRLspServerProfile activeServerProfile;
 	std::string activeRuntimeRootPath;
+	std::string activeRuntimeCompileContextFingerprint;
 	bool activeRuntimeHasRoot = false;
 	bool hasActiveRuntime = false;
 };

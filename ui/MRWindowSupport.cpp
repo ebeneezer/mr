@@ -511,10 +511,15 @@ bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage)
 }
 
 void mrLogSettingsWriteReport(std::string_view reason, const MRSettingsWriteReport &report) {
+	std::string message;
+
 	if (!report.contentChanged && report.logLines.empty()) return;
-	if (!reason.empty()) mrLogMessage(std::string("settings.mrmac write (") + std::string(reason) + "): " + report.settingsPath);
-	for (const std::string &line : report.logLines)
-		mrLogMessage(line);
+	if (!reason.empty()) message += std::string("settings.mrmac write (") + std::string(reason) + "): " + report.settingsPath;
+	for (const std::string &line : report.logLines) {
+		if (!message.empty()) message += '\n';
+		message += line;
+	}
+	mrLogMessage(message);
 }
 
 bool mrKeyTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &outToken) {

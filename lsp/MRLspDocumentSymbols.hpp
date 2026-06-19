@@ -31,10 +31,24 @@ struct LspDocumentSymbolsResult {
 	std::vector<LspDocumentSymbol> symbols;
 };
 
+struct LspWorkspaceSymbolsRequest {
+	std::string idText;
+	std::string method;
+	std::string query;
+	bool pending = false;
+};
+
+struct LspWorkspaceSymbolsResult {
+	std::string query;
+	std::vector<LspDocumentSymbol> symbols;
+};
+
 class LspDocumentSymbolsAdapter {
 public:
 	bool requestDocumentSymbols(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspDocumentSymbolsRequest &request, std::string &errorMessage);
 	bool consume(const LspInboundMessage &message, const LspDocumentService &documentService, LspDocumentSymbolsRequest &request, LspDocumentSymbolsResult &result, bool &accepted, std::string &errorMessage);
+	bool requestWorkspaceSymbols(LspLifecycle &lifecycle, const std::string &query, LspWorkspaceSymbolsRequest &request, std::string &errorMessage);
+	bool consumeWorkspaceSymbols(const LspInboundMessage &message, LspWorkspaceSymbolsRequest &request, LspWorkspaceSymbolsResult &result, bool &accepted, std::string &errorMessage);
 
 private:
 	int nextRequestId = 1;

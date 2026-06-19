@@ -250,6 +250,19 @@ std::string buildCodeActionRequestPayload(const LspCodeActionRequest &request) {
 	return out.str();
 }
 
+std::string buildRenameRequestPayload(const LspRenameRequest &request) {
+	std::ostringstream out;
+
+	out << "{\"jsonrpc\":\"2.0\",\"id\":" << request.idText << ",\"method\":\"textDocument/rename\",\"params\":{\"textDocument\":{\"uri\":";
+	out << jsonString(request.uri);
+	out << "},\"position\":";
+	appendPosition(out, request.position);
+	out << ",\"newName\":";
+	out << jsonString(request.newName);
+	out << "}}";
+	return out.str();
+}
+
 bool parsePositionObject(const std::string &object, LspTextPosition &position) {
 	return extractTopLevelIntValue(object, "line", position.line) && extractTopLevelIntValue(object, "character", position.character);
 }
@@ -334,21 +347,26 @@ bool parseChangesObject(const std::string &object, std::vector<LspCodeActionText
 	return false;
 }
 
-bool parseCodeActionEdits(const std::string &object, std::vector<LspCodeActionTextEdit> &edits) {
-	std::size_t editPos = 0;
-	std::size_t editEnd = 0;
+bool parseWorkspaceEditObject(const std::string &editObject, std::vector<LspCodeActionTextEdit> &edits, std::string &errorMessage) {
 	std::size_t changesPos = 0;
 	std::size_t changesEnd = 0;
-	std::string editObject;
 
 	edits.clear();
-	if (!findTopLevelObjectValueStart(object, "edit", editPos) || editPos >= object.size() || object[editPos] != '{') return true;
-	if (!findMatchingBracket(object, editPos, '{', '}', editEnd)) return false;
-	editObject = object.substr(editPos, editEnd - editPos + 1);
 	if (!findTopLevelObjectValueStart(editObject, "changes", changesPos)) return true;
 	if (changesPos >= editObject.size() || editObject[changesPos] != '{') return false;
 	if (!findMatchingBracket(editObject, changesPos, '{', '}', changesEnd)) return false;
 	return parseChangesObject(editObject.substr(changesPos, changesEnd - changesPos + 1), edits);
+}
+
+bool parseCodeActionEdits(const std::string &object, std::vector<LspCodeActionTextEdit> &edits) {
+	std::size_t editPos = 0;
+	std::size_t editEnd = 0;
+	std::string errorMessage;
+
+	edits.clear();
+	if (!findTopLevelObjectValueStart(object, "edit", editPos) || editPos >= object.size() || object[editPos] != '{') return true;
+	if (!findMatchingBracket(object, editPos, '{', '}', editEnd)) return false;
+	return parseWorkspaceEditObject(object.substr(editPos, editEnd - editPos + 1), edits, errorMessage);
 }
 
 bool parseCodeActionObject(const std::string &object, LspCodeActionItem &item) {
@@ -397,6 +415,22 @@ bool parseCodeActionResult(const std::string &payload, std::vector<LspCodeAction
 	if (!findMatchingBracket(payload, resultStart, '[', ']', resultEnd)) return setError(errorMessage, "LSP codeAction response result array is malformed.");
 	return parseCodeActionResultArray(payload.substr(resultStart, resultEnd - resultStart + 1), items, errorMessage);
 }
+
+bool parseRenameResult(const std::string &payload, std::vector<LspCodeActionTextEdit> &edits, std::string &errorMessage) {
+	std::size_t resultStart = 0;
+	std::size_t resultEnd = 0;
+	std::string editObject;
+
+	edits.clear();
+	if (!findKeyValueStart(payload, "result", 0, resultStart) || resultStart >= payload.size()) return setError(errorMessage, "LSP rename response is missing result.");
+	if (payload.compare(resultStart, 4, "null") == 0) return true;
+	if (payload[resultStart] != '{') return setError(errorMessage, "LSP rename response result is malformed.");
+	if (!findMatchingBracket(payload, resultStart, '{', '}', resultEnd)) return setError(errorMessage, "LSP rename response result object is malformed.");
+	editObject = payload.substr(resultStart, resultEnd - resultStart + 1);
+	if (!parseWorkspaceEditObject(editObject, edits, errorMessage)) return setError(errorMessage, "LSP rename WorkspaceEdit is malformed.");
+	if (edits.empty() && hasTopLevelObjectKey(editObject, "documentChanges")) return setError(errorMessage, "LSP rename documentChanges WorkspaceEdit is not supported.");
+	return true;
+}
 } // namespace
 
 bool LspCodeActionAdapter::requestCodeActions(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspCodeActionRange range, const std::string &diagnosticJson, LspCodeActionRequest &request, std::string &errorMessage) {
@@ -435,6 +469,52 @@ bool LspCodeActionAdapter::consume(const LspInboundMessage &message, const LspDo
 		return setError(errorMessage, "LSP codeAction response URI no longer matches document service.");
 	}
 	if (!parseCodeActionResult(message.payload, result.items, errorMessage)) {
+		request.pending = false;
+		return false;
+	}
+	result.uri = request.uri;
+	request.pending = false;
+	accepted = true;
+	errorMessage.clear();
+	return true;
+}
+
+bool LspRenameAdapter::requestRename(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspTextPosition position, const std::string &newName, LspRenameRequest &request, std::string &errorMessage) {
+	LspRenameRequest candidate;
+
+	if (!documentService.isOpen()) return setError(errorMessage, "LSP document service has no open document.");
+	if (position.line < 0 || position.character < 0) return setError(errorMessage, "LSP rename position is negative.");
+	if (newName.empty()) return setError(errorMessage, "LSP rename new name is empty.");
+	candidate.idText = jsonString("mr-rename-" + std::to_string(nextRequestId));
+	candidate.method = "textDocument/rename";
+	candidate.uri = documentService.documentUri();
+	candidate.position = position;
+	candidate.newName = newName;
+	candidate.pending = true;
+	if (!lifecycle.sendInitializedPayload(buildRenameRequestPayload(candidate), errorMessage)) return false;
+	request = candidate;
+	++nextRequestId;
+	errorMessage.clear();
+	return true;
+}
+
+bool LspRenameAdapter::consume(const LspInboundMessage &message, const LspDocumentService &documentService, LspRenameRequest &request, LspRenameResult &result, bool &accepted, std::string &errorMessage) {
+	accepted = false;
+	result = LspRenameResult();
+	if (!request.pending) {
+		errorMessage.clear();
+		return true;
+	}
+	if (message.envelope.kind != JsonRpcMessageKind::Response || message.envelope.idText != request.idText) {
+		errorMessage.clear();
+		return true;
+	}
+	if (request.method != "textDocument/rename") return setError(errorMessage, "LSP rename request method mismatch.");
+	if (request.uri != documentService.documentUri()) {
+		request.pending = false;
+		return setError(errorMessage, "LSP rename response URI no longer matches document service.");
+	}
+	if (!parseRenameResult(message.payload, result.edits, errorMessage)) {
 		request.pending = false;
 		return false;
 	}
