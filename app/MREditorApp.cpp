@@ -1168,7 +1168,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 		mrLoadWorkspace("");
 	} else if (mrSettingsFileHasAutosavedWorkspace()) {
 		setRuntimePreserveAutosavedWorkspace(true);
-		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Load workspace", "Load autosaved workspace?", configuredSettingsMacroFilePath().c_str(), "Discard workspace");
+		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Restore workspace", "Restore autosaved workspace?", configuredSettingsMacroFilePath().c_str(), "Discard workspace");
 
 		if (choice == mr::dialogs::UnsavedChangesChoice::Save) {
 			setRuntimePreserveAutosavedWorkspace(false);

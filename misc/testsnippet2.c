@@ -1,16 +1,10 @@
 #include <stdio.h>
 
-int helper(void) {
+int halper(void) {
 		return 1;
 }
 
 int main() {
-	              
-	printf
-	
-	switch (expression) {
-
-}
 	  
 	int unused;
        
@@ -20,6 +14,5 @@ int main() {
 	helper();
   helper();
   
-	i="dumm";
 	return(0);
 }
