@@ -221,6 +221,26 @@ enum class MRLanguageServerSidekickPlacement : unsigned char {
 	RightMargin = 1
 };
 
+struct MRLanguageServerChannelSettings {
+	bool diagnostics;
+	bool definition;
+	bool references;
+	bool hover;
+	bool completion;
+	bool documentHighlight;
+	bool documentSymbols;
+	bool workspaceSymbols;
+	bool signatureHelp;
+	bool rename;
+	bool codeActions;
+
+	MRLanguageServerChannelSettings() noexcept
+	    : diagnostics(true), definition(true), references(true), hover(true), completion(true), documentHighlight(true), documentSymbols(true), workspaceSymbols(true), signatureHelp(true), rename(true), codeActions(true) {
+	}
+
+	auto operator==(const MRLanguageServerChannelSettings &) const noexcept -> bool = default;
+};
+
 constexpr int kLanguageServerHoverDwellMsDefault = 1000;
 constexpr int kLanguageServerHoverDwellMsMin = 0;
 constexpr int kLanguageServerHoverDwellMsMax = 5000;
@@ -663,6 +683,8 @@ bool setConfiguredLanguageServerDocumentSyncDelayMs(int value, std::string *erro
 [[nodiscard]] int configuredLanguageServerDocumentSyncDelayMs();
 bool setConfiguredLanguageServerSignatureQuietMs(int value, std::string *errorMessage = nullptr);
 [[nodiscard]] int configuredLanguageServerSignatureQuietMs();
+bool setConfiguredLanguageServerChannelSettings(const MRLanguageServerChannelSettings &settings, std::string *errorMessage = nullptr);
+[[nodiscard]] MRLanguageServerChannelSettings configuredLanguageServerChannelSettings();
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage = nullptr);
 [[nodiscard]] MRScrollbarVisibility configuredScrollbarVisibility();
 bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage = nullptr);

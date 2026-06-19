@@ -35,6 +35,7 @@ MRLanguageServerSidekickPlacement g_languageServerSidekickPlacement = MRLanguage
 int g_languageServerHoverDwellMs = kLanguageServerHoverDwellMsDefault;
 int g_languageServerDocumentSyncDelayMs = kLanguageServerDocumentSyncDelayMsDefault;
 int g_languageServerSignatureQuietMs = kLanguageServerSignatureQuietMsDefault;
+MRLanguageServerChannelSettings g_languageServerChannelSettings;
 MRScrollbarVisibility g_scrollbarVisibility = MRScrollbarVisibility::Smart;
 bool g_trackCompilerWarnings = false;
 bool g_trackCompilerNotes = false;
@@ -745,6 +746,17 @@ bool setConfiguredLanguageServerSignatureQuietMs(int value, std::string *errorMe
 
 int configuredLanguageServerSignatureQuietMs() {
 	return g_languageServerSignatureQuietMs;
+}
+
+bool setConfiguredLanguageServerChannelSettings(const MRLanguageServerChannelSettings &settings, std::string *errorMessage) {
+	if (!(g_languageServerChannelSettings == settings)) markConfiguredSettingsDirty();
+	g_languageServerChannelSettings = settings;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRLanguageServerChannelSettings configuredLanguageServerChannelSettings() {
+	return g_languageServerChannelSettings;
 }
 
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage) {

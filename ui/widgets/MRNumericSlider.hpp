@@ -49,6 +49,7 @@ class MRNumericSlider final : public TView {
 	void setChangedCommand(ushort cmd) noexcept {
 		changedCmd = cmd;
 	}
+	void setClusterPalette(Boolean enable) noexcept;
 
   private:
 	static int32_t absOrOne(int32_t v) noexcept;
@@ -79,6 +80,7 @@ class MRNumericSlider final : public TView {
 	int textWidth;
 	Format format;
 	ushort changedCmd;
+	Boolean clusterPalette;
 };
 
 #endif

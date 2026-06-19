@@ -382,7 +382,7 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	if (options.searchFilesInMemory) optionMask |= 0x0008;
 	if (options.restrictToWorkspace) optionMask |= 0x0010;
 
-	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH", 102, 17);
+	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH", 102, 18);
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
@@ -392,13 +392,13 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	dialog->insert(new TStaticText(TRect(3, 6, 13, 7), "Options:"));
 	optionsField = new TCheckBoxes(TRect(3, 7, 34, 12), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("search editor ~w~indows", new TSItem("restrict to wor~k~space", nullptr))))));
 	dialog->insert(optionsField);
-	pathField = new TInputLine(TRect(14, 12, 96, 13), kPathBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 12, 14, 13), "Start a~t~:", pathField));
+	pathField = new TInputLine(TRect(14, 13, 96, 14), kPathBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 13, 14, 14), "Start a~t~:", pathField));
 	dialog->insert(pathField);
 	{
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 14, 0, buttons);
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 15, 0, buttons);
 	}
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
@@ -526,7 +526,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	if (options.keepFilesOpen) optionMask |= 0x0010;
 	if (options.restrictToWorkspace) optionMask |= 0x0020;
 
-	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH AND REPLACE", 102, 20);
+	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH AND REPLACE", 102, 21);
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
@@ -539,13 +539,13 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	dialog->insert(new TStaticText(TRect(3, 8, 13, 9), "Options:"));
 	optionsField = new TCheckBoxes(TRect(3, 9, 34, 15), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("search files in ~m~emory", new TSItem("~K~eep all files open", new TSItem("restrict to wor~k~space", nullptr)))))));
 	dialog->insert(optionsField);
-	pathField = new TInputLine(TRect(14, 15, 96, 16), kPathBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 15, 16, 16), "Start ~a~t:", pathField));
+	pathField = new TInputLine(TRect(14, 16, 96, 17), kPathBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 16, 16, 17), "Start ~a~t:", pathField));
 	dialog->insert(pathField);
 	{
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 17, 0, buttons);
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 18, 0, buttons);
 	}
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);

@@ -18,7 +18,7 @@ TAttrPair configuredPaletteSlotOr(TView *view, unsigned char paletteSlot, ushort
 }
 } // namespace
 
-MRNumericSlider::MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue, int32_t aStep, int32_t aPageStep, Format aFormat, ushort aChangedCmd) noexcept : TView(bounds), minValue(std::min(aMin, aMax)), maxValue(std::max(aMin, aMax)), value(0), step(absOrOne(aStep)), pageStep(aPageStep ? absOrOne(aPageStep) : absOrOne(aStep) * 10), textWidth(1), format(aFormat), changedCmd(aChangedCmd) {
+MRNumericSlider::MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue, int32_t aStep, int32_t aPageStep, Format aFormat, ushort aChangedCmd) noexcept : TView(bounds), minValue(std::min(aMin, aMax)), maxValue(std::max(aMin, aMax)), value(0), step(absOrOne(aStep)), pageStep(aPageStep ? absOrOne(aPageStep) : absOrOne(aStep) * 10), textWidth(1), format(aFormat), changedCmd(aChangedCmd), clusterPalette(False) {
 
 	options |= ofSelectable;
 	eventMask |= evMouseDown | evMouseWheel;
@@ -31,7 +31,8 @@ void MRNumericSlider::draw() {
 	const Boolean disabled = getState(sfDisabled);
 	const Boolean focused = getState(sfFocused) && !disabled;
 
-	const TAttrPair cTrack = disabled ? TAttrPair(mapColor(5)) : focused ? TAttrPair(mapColor(2)) : TAttrPair(mapColor(1));
+	const TAttrPair cTrack = clusterPalette ? (disabled ? getColor(0x0505) : focused ? getColor(0x0402) : getColor(0x0301))
+	                                        : (disabled ? TAttrPair(mapColor(5)) : focused ? TAttrPair(mapColor(2)) : TAttrPair(mapColor(1)));
 	const TAttrPair cHandle = disabled ? TAttrPair(mapColor(5)) : configuredPaletteSlotOr(this, kPaletteDialogSelector, focused ? 2 : 1);
 	const char *trackGlyph = disabled ? "·" : focused ? "═" : "─";
 
@@ -139,6 +140,16 @@ void MRNumericSlider::setState(ushort aState, Boolean enable) {
 
 TColorAttr MRNumericSlider::mapColor(uchar index) {
 	if (owner) {
+		if (clusterPalette) {
+			switch (index) {
+				case 1:
+					return owner->mapColor(0x10);
+				case 2:
+					return owner->mapColor(0x11);
+				case 5:
+					return owner->mapColor(0x1f);
+			}
+		}
 		switch (index) {
 			case 1:
 				return owner->mapColor(4); // passive track
@@ -192,6 +203,12 @@ void MRNumericSlider::setFormat(Format aFormat) noexcept {
 		recalcMetrics();
 		drawView();
 	}
+}
+
+void MRNumericSlider::setClusterPalette(Boolean enable) noexcept {
+	if (clusterPalette == enable) return;
+	clusterPalette = enable;
+	drawView();
 }
 
 int32_t MRNumericSlider::absOrOne(int32_t v) noexcept {

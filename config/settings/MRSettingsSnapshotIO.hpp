@@ -39,6 +39,7 @@ struct MRSettingsSnapshot {
 	int languageServerHoverDwellMs{kLanguageServerHoverDwellMsDefault};
 	int languageServerDocumentSyncDelayMs{kLanguageServerDocumentSyncDelayMsDefault};
 	int languageServerSignatureQuietMs{kLanguageServerSignatureQuietMsDefault};
+	MRLanguageServerChannelSettings languageServerChannels;
 	MRScrollbarVisibility scrollbarVisibility{MRScrollbarVisibility::Smart};
 	bool trackCompilerWarnings{false};
 	bool trackCompilerNotes{false};

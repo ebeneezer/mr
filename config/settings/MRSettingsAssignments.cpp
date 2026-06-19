@@ -281,6 +281,17 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"LANGUAGE_SERVER_HOVER_DWELL_MS", MRSettingsKeyClass::Global, true},
     {"LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS", MRSettingsKeyClass::Global, true},
     {"LANGUAGE_SERVER_SIGNATURE_QUIET_MS", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_DIAGNOSTICS", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_DEFINITION", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_REFERENCES", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_HOVER", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_COMPLETION", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_DOCUMENT_HIGHLIGHT", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_DOCUMENT_SYMBOLS", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_WORKSPACE_SYMBOLS", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_SIGNATURE_HELP", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_RENAME", MRSettingsKeyClass::Global, true},
+	{"LANGUAGE_SERVER_CHANNEL_CODE_ACTIONS", MRSettingsKeyClass::Global, true},
     {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
     {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
 	    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
@@ -414,6 +425,36 @@ bool parseLanguageServerSidekickPlacementLiteral(const std::string &value, MRLan
 		return true;
 	}
 	return setError(errorMessage, "LANGUAGE_SERVER_SIDEKICK_PLACEMENT must be AT_CODE or RIGHT_MARGIN.");
+}
+
+struct LanguageServerChannelAssignment {
+	const char *key;
+	bool MRLanguageServerChannelSettings::*field;
+};
+
+const LanguageServerChannelAssignment kLanguageServerChannelAssignments[] = {
+	{"LANGUAGE_SERVER_CHANNEL_DIAGNOSTICS", &MRLanguageServerChannelSettings::diagnostics},
+	{"LANGUAGE_SERVER_CHANNEL_DEFINITION", &MRLanguageServerChannelSettings::definition},
+	{"LANGUAGE_SERVER_CHANNEL_REFERENCES", &MRLanguageServerChannelSettings::references},
+	{"LANGUAGE_SERVER_CHANNEL_HOVER", &MRLanguageServerChannelSettings::hover},
+	{"LANGUAGE_SERVER_CHANNEL_COMPLETION", &MRLanguageServerChannelSettings::completion},
+	{"LANGUAGE_SERVER_CHANNEL_DOCUMENT_HIGHLIGHT", &MRLanguageServerChannelSettings::documentHighlight},
+	{"LANGUAGE_SERVER_CHANNEL_DOCUMENT_SYMBOLS", &MRLanguageServerChannelSettings::documentSymbols},
+	{"LANGUAGE_SERVER_CHANNEL_WORKSPACE_SYMBOLS", &MRLanguageServerChannelSettings::workspaceSymbols},
+	{"LANGUAGE_SERVER_CHANNEL_SIGNATURE_HELP", &MRLanguageServerChannelSettings::signatureHelp},
+	{"LANGUAGE_SERVER_CHANNEL_RENAME", &MRLanguageServerChannelSettings::rename},
+	{"LANGUAGE_SERVER_CHANNEL_CODE_ACTIONS", &MRLanguageServerChannelSettings::codeActions},
+};
+
+bool parseLanguageServerChannelSetting(const std::string &upperKey, const std::string &value, MRLanguageServerChannelSettings &settings, bool &handled, std::string *errorMessage) {
+	handled = false;
+	for (const LanguageServerChannelAssignment &assignment : kLanguageServerChannelAssignments) {
+		if (upperKey != assignment.key) continue;
+		handled = true;
+		if (!parseBooleanLiteral(value, settings.*(assignment.field), errorMessage)) return false;
+		return true;
+	}
+	return true;
 }
 
 bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibility &outValue, std::string *errorMessage) {
@@ -737,6 +778,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredLanguageServerHoverDwellMs(kLanguageServerHoverDwellMsDefault, errorMessage)) return false;
 	if (!setConfiguredLanguageServerDocumentSyncDelayMs(kLanguageServerDocumentSyncDelayMsDefault, errorMessage)) return false;
 	if (!setConfiguredLanguageServerSignatureQuietMs(kLanguageServerSignatureQuietMsDefault, errorMessage)) return false;
+	if (!setConfiguredLanguageServerChannelSettings(MRLanguageServerChannelSettings(), errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
@@ -1196,6 +1238,13 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				int parsed = kLanguageServerSignatureQuietMsDefault;
 				if (!parseMillisecondsLiteral(value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, parsed, errorMessage)) return false;
 				return setConfiguredLanguageServerSignatureQuietMs(parsed, errorMessage);
+			}
+			{
+				MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
+				bool handled = false;
+
+				if (!parseLanguageServerChannelSetting(upper, value, channels, handled, errorMessage)) return false;
+				if (handled) return setConfiguredLanguageServerChannelSettings(channels, errorMessage);
 			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				MRScrollbarVisibility visibility = MRScrollbarVisibility::Smart;
@@ -1763,6 +1812,12 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			if (upper == "LANGUAGE_SERVER_SIGNATURE_QUIET_MS") {
 				if (!parseMillisecondsLiteral(value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, snapshot.languageServerSignatureQuietMs, errorMessage)) return false;
 				return true;
+			}
+			{
+				bool handled = false;
+
+				if (!parseLanguageServerChannelSetting(upper, value, snapshot.languageServerChannels, handled, errorMessage)) return false;
+				if (handled) return true;
 			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				if (!parseScrollbarVisibilityLiteral(value, snapshot.scrollbarVisibility, errorMessage)) return false;

@@ -413,6 +413,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.languageServerHoverDwellMs = configuredLanguageServerHoverDwellMs();
 	snapshot.languageServerDocumentSyncDelayMs = configuredLanguageServerDocumentSyncDelayMs();
 	snapshot.languageServerSignatureQuietMs = configuredLanguageServerSignatureQuietMs();
+	snapshot.languageServerChannels = configuredLanguageServerChannelSettings();
 	snapshot.scrollbarVisibility = configuredScrollbarVisibility();
 	snapshot.trackCompilerWarnings = configuredTrackCompilerWarnings();
 	snapshot.trackCompilerNotes = configuredTrackCompilerNotes();
@@ -605,6 +606,17 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('LANGUAGE_SERVER_HOVER_DWELL_MS', '" + std::to_string(snapshot.languageServerHoverDwellMs) + "');\n";
 	source += "MRSETUP('LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS', '" + std::to_string(snapshot.languageServerDocumentSyncDelayMs) + "');\n";
 	source += "MRSETUP('LANGUAGE_SERVER_SIGNATURE_QUIET_MS', '" + std::to_string(snapshot.languageServerSignatureQuietMs) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_DIAGNOSTICS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.diagnostics)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_DEFINITION', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.definition)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_REFERENCES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.references)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_HOVER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.hover)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_COMPLETION', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.completion)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_DOCUMENT_HIGHLIGHT', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.documentHighlight)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_DOCUMENT_SYMBOLS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.documentSymbols)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_WORKSPACE_SYMBOLS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.workspaceSymbols)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_SIGNATURE_HELP', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.signatureHelp)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_RENAME', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.rename)) + "');\n";
+	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_CODE_ACTIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.codeActions)) + "');\n";
 	source += "MRSETUP('SCROLLBAR_VISIBILITY', '" + escapeMrmacSingleQuotedLiteral(formatScrollbarVisibilityLiteral(snapshot.scrollbarVisibility)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_WARNINGS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerWarnings)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_NOTES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerNotes)) + "');\n";

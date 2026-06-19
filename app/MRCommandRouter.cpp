@@ -1446,6 +1446,40 @@ void suppressLspAutoHoverForExplicitSidekick(const mr::services::MRWorkspaceDocu
 void activateLspSignatureHelp(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspSignatureCallContext &context, const std::string &requestId);
 void clearLspSignatureHelpState(MREditWindow *win);
 
+bool languageServerCommandChannelEnabled(mr::services::MRLspServiceCommandId command) {
+	const MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
+
+	switch (command) {
+		case mr::services::MRLspServiceCommandId::GoToDefinition:
+			return channels.definition;
+		case mr::services::MRLspServiceCommandId::FindReferences:
+			return channels.references;
+		case mr::services::MRLspServiceCommandId::ShowHover:
+			return channels.hover;
+		case mr::services::MRLspServiceCommandId::Complete:
+			return channels.completion;
+		case mr::services::MRLspServiceCommandId::DocumentHighlight:
+			return channels.documentHighlight;
+		case mr::services::MRLspServiceCommandId::DocumentSymbols:
+			return channels.documentSymbols;
+		case mr::services::MRLspServiceCommandId::WorkspaceSymbols:
+			return channels.workspaceSymbols;
+		case mr::services::MRLspServiceCommandId::SignatureHelp:
+			return channels.signatureHelp;
+		case mr::services::MRLspServiceCommandId::Rename:
+			return channels.rename;
+	}
+	return true;
+}
+
+bool reportDisabledLanguageServerChannel(const char *label, bool reportMessages) {
+	if (reportMessages) postLspWarning(std::string(label != nullptr ? label : "LSP channel") + " channel is disabled.");
+	g_lspLastRequestState = "disabled";
+	g_lspLastError = std::string(label != nullptr ? label : "LSP channel") + " channel is disabled.";
+	++g_lspRequestFailureCount;
+	return true;
+}
+
 bool requestLspEditorCommandForWindow(MREditWindow *win, mr::services::MRLspServiceCommandId command, const char *label, bool reportMessages, bool *requestSent = nullptr, const LspEditorRequestTarget *requestTarget = nullptr) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	mr::services::MRLspServerProfile profile;
@@ -1479,6 +1513,7 @@ bool requestLspEditorCommandForWindow(MREditWindow *win, mr::services::MRLspServ
 		if (reportMessages) postLspWarning(g_lspLastError);
 		return true;
 	}
+	if (!languageServerCommandChannelEnabled(command)) return reportDisabledLanguageServerChannel(label, reportMessages);
 	if (!buildLspDocumentSnapshotForWindow(win, document, reportMessages)) {
 		g_lspLastRequestState = "failed";
 		g_lspLastError = "LSP request requires a saved editor document.";
@@ -3566,6 +3601,10 @@ bool requestLspRenameCommand(MREditWindow *win = currentEditorCommandWindow(), c
 		postLspWarning("LSP support is disabled.");
 		return true;
 	}
+	if (!configuredLanguageServerChannelSettings().rename) {
+		postLspWarning("LSP rename channel is disabled.");
+		return true;
+	}
 	if (editor == nullptr || win == nullptr) {
 		postLspWarning("LSP rename requires an editor window.");
 		return true;
@@ -3713,15 +3752,16 @@ bool requestLspCompletionCommand(MREditWindow *win = currentEditorCommandWindow(
 
 void reportNewLspResults() {
 	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
+	const MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
 
-	reportNewLspDiagnostics(results.diagnosticResults());
-	reportNewLspLocations(results.locationResults());
-	reportNewLspHovers(results.hoverResults());
-	reportNewLspCompletions(results.completionResults());
-	reportNewLspCodeActions(results.codeActionResults());
-	reportNewLspDocumentHighlights(results.documentHighlightResults());
-	reportNewLspDocumentSymbols(results.documentSymbolResults());
-	reportNewLspSignatureHelps(results.signatureHelpResults());
+	if (channels.diagnostics) reportNewLspDiagnostics(results.diagnosticResults());
+	if (channels.definition || channels.references) reportNewLspLocations(results.locationResults());
+	if (channels.hover) reportNewLspHovers(results.hoverResults());
+	if (channels.completion) reportNewLspCompletions(results.completionResults());
+	if (channels.codeActions) reportNewLspCodeActions(results.codeActionResults());
+	if (channels.documentHighlight) reportNewLspDocumentHighlights(results.documentHighlightResults());
+	if (channels.documentSymbols || channels.workspaceSymbols) reportNewLspDocumentSymbols(results.documentSymbolResults());
+	if (channels.signatureHelp) reportNewLspSignatureHelps(results.signatureHelpResults());
 }
 
 std::vector<LspMiniMenuEntry> buildLspContextMenuItems(MREditWindow *win, const LspEditorRequestTarget *target) {
@@ -3744,20 +3784,21 @@ std::vector<LspMiniMenuEntry> buildLspContextMenuItems(MREditWindow *win, const 
 	entries.push_back(LspMiniMenuEntry{"Edit", 0, true});
 	if (!configuredLanguageServerSpawnDaemon()) return entries;
 	if (target != nullptr && buildLspDocumentSnapshotForWindow(win, document, false)) {
+		const MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
 		serverConfigured = buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage);
 		snapshot = g_lspAppService.currentDocumentServiceSnapshot(document);
 
 		const ContextCommand serviceCommands[] = {
-		    {"Definition", cmMrOtherLspDefinition, serverConfigured && snapshot.commands.requestDefinition},
-		    {"References", cmMrOtherLspReferences, serverConfigured && snapshot.commands.requestReferences},
-		    {"Hover", cmMrOtherLspHover, serverConfigured && snapshot.commands.requestHover},
-		    {"Complete", cmMrOtherLspComplete, serverConfigured && snapshot.commands.requestCompletion},
-		    {"Highlight", cmMrOtherLspDocumentHighlight, serverConfigured && snapshot.commands.requestDocumentHighlight},
-		    {"Symbols", cmMrOtherLspDocumentSymbols, serverConfigured && snapshot.commands.requestDocumentSymbols},
-		    {"Workspace Symbols", cmMrOtherLspWorkspaceSymbols, serverConfigured && snapshot.commands.requestWorkspaceSymbols},
-		    {"Signature", cmMrOtherLspSignatureHelp, serverConfigured && snapshot.commands.requestSignatureHelp},
-		    {"Rename", cmMrOtherLspRename, serverConfigured && snapshot.commands.requestRename},
-		    {"Code Actions", cmMrOtherLspCodeActions, serverConfigured && snapshot.commands.requestCodeActions},
+		    {"Definition", cmMrOtherLspDefinition, serverConfigured && snapshot.commands.requestDefinition && channels.definition},
+		    {"References", cmMrOtherLspReferences, serverConfigured && snapshot.commands.requestReferences && channels.references},
+		    {"Hover", cmMrOtherLspHover, serverConfigured && snapshot.commands.requestHover && channels.hover},
+		    {"Complete", cmMrOtherLspComplete, serverConfigured && snapshot.commands.requestCompletion && channels.completion},
+		    {"Highlight", cmMrOtherLspDocumentHighlight, serverConfigured && snapshot.commands.requestDocumentHighlight && channels.documentHighlight},
+		    {"Symbols", cmMrOtherLspDocumentSymbols, serverConfigured && snapshot.commands.requestDocumentSymbols && channels.documentSymbols},
+		    {"Workspace Symbols", cmMrOtherLspWorkspaceSymbols, serverConfigured && snapshot.commands.requestWorkspaceSymbols && channels.workspaceSymbols},
+		    {"Signature", cmMrOtherLspSignatureHelp, serverConfigured && snapshot.commands.requestSignatureHelp && channels.signatureHelp},
+		    {"Rename", cmMrOtherLspRename, serverConfigured && snapshot.commands.requestRename && channels.rename},
+		    {"Code Actions", cmMrOtherLspCodeActions, serverConfigured && snapshot.commands.requestCodeActions && channels.codeActions},
 		};
 
 		for (const ContextCommand &entry : serviceCommands)
@@ -3776,6 +3817,10 @@ bool requestLspCodeActionsAtPosition(MREditWindow *win, const LspEditorRequestTa
 
 	if (!configuredLanguageServerSpawnDaemon()) {
 		postLspWarning("LSP support is disabled.");
+		return true;
+	}
+	if (!configuredLanguageServerChannelSettings().codeActions) {
+		postLspWarning("LSP code actions channel is disabled.");
 		return true;
 	}
 	if (editor == nullptr || !buildCurrentLspDocumentSnapshot(win, document)) return true;
@@ -5520,11 +5565,16 @@ void pumpLspAutoHoverDwell() {
 	TPoint mousePosition;
 	const bool mouseValid = currentLspHoverMousePosition(mousePosition);
 	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+	const MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
 
 	if (now - g_lspLastHoverPumpAt < kLspHoverPumpInterval) return;
 	g_lspLastHoverPumpAt = now;
 	if (g_lspContextMiniMenuOpen) return;
 	if (g_lspSignatureHelp.active) return;
+	if (!channels.diagnostics && !channels.hover) {
+		forgetLspAutoHover(true);
+		return;
+	}
 	if (!mouseValid) {
 		forgetLspAutoHover(true);
 		return;
@@ -5573,7 +5623,7 @@ void pumpLspAutoHoverDwell() {
 	}
 	if (g_lspAutoHover.requested) return;
 	if (now - g_lspAutoHover.stableSince < std::chrono::milliseconds(configuredLanguageServerHoverDwellMs())) return;
-	{
+	if (channels.diagnostics) {
 		const mr::services::MRLspPositionServiceSnapshot snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(target.position));
 		const std::string diagnosticText = buildLspDiagnosticSidekickText(snapshot);
 		int diagnosticViewColumn = target.viewColumn;
@@ -5589,6 +5639,7 @@ void pumpLspAutoHoverDwell() {
 		}
 	}
 
+	if (!channels.hover) return;
 	if (!requestLspEditorCommandForWindow(win, mr::services::MRLspServiceCommandId::ShowHover, "LSP hover", false, &requestSent, &target)) return;
 	if (requestSent) {
 		g_lspAutoHover.requested = true;
@@ -5612,6 +5663,7 @@ void pumpLspCurrentDocumentSync() {
 	if (!g_lspAppService.runtimeActive()) return;
 	if (now - g_lspLastDocumentSyncCheckAt < kLspDocumentSyncCheckInterval) return;
 	g_lspLastDocumentSyncCheckAt = now;
+	if (!configuredLanguageServerChannelSettings().diagnostics) return;
 	if (editor == nullptr) return;
 	if (!buildLspDocumentSnapshotForWindow(win, document, false)) return;
 	if (document.bufferId != g_lspObservedBufferId || document.documentId != g_lspObservedDocumentId || document.documentVersion != g_lspObservedDocumentVersion) {
@@ -5651,6 +5703,10 @@ void pumpLspSignatureHelpLifecycle() {
 	LspSignatureCallContext context;
 	bool requestSent = false;
 
+	if (!configuredLanguageServerChannelSettings().signatureHelp) {
+		if (g_lspSignatureHelp.active) clearLspSignatureHelpState(activeWindow);
+		return;
+	}
 	if (editor == nullptr) {
 		if (g_lspSignatureHelp.active) clearLspSignatureHelpState(activeWindow);
 		return;
