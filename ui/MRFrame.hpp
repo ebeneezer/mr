@@ -17,6 +17,7 @@
 #include <vector>
 
 class MRFrame;
+class MRFrameMarkerHintView;
 
 class MRTaskOverviewView : public TView {
   public:
@@ -96,6 +97,9 @@ class MRFrame : public TFrame {
 	int taskMarkerColumn(const MarkerState &state) const noexcept;
 	int markersEndColumn(const MarkerState &state) const noexcept;
 	bool taskMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept;
+	bool markerHintAt(TPoint localMouse, const MarkerState &state, std::string &text, int &column) const;
+	void showMarkerHint(const std::string &text, int markerColumn);
+	void hideMarkerHint();
 	void showTaskOverview();
 	void hideTaskOverview();
 
@@ -105,6 +109,10 @@ class MRFrame : public TFrame {
 	TGroup *mTaskOverviewPopupOwner;
 	std::chrono::steady_clock::time_point mTaskOverviewLastRefresh;
 	bool mTaskOverviewPinned;
+	MRFrameMarkerHintView *mMarkerHintPopup;
+	TGroup *mMarkerHintPopupOwner;
+	std::string mMarkerHintText;
+	int mMarkerHintColumn;
 };
 
 #endif

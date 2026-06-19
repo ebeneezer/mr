@@ -57,6 +57,7 @@ static constexpr char kMarkerRightBracket = ']';
 static constexpr int kMarkerGap = 1;
 static constexpr int kNormalControlGap = 1;
 static constexpr int kNormalRightPadding = 1;
+static constexpr unsigned char kFrameMarkerHintColorSlot = 134;
 static constexpr auto kTaskOverviewRefreshInterval = std::chrono::milliseconds(250);
 
 int markerWidth(TStringView icon) noexcept {
@@ -100,6 +101,13 @@ bool isFrameFocused(const MRFrame *frame) noexcept {
 
 	if (window != nullptr && (window->state & sfFocused) != 0) return true;
 	return frame != nullptr && (frame->state & sfFocused) != 0;
+}
+
+TColorAttr frameMarkerHintColor() {
+	unsigned char configured = 0;
+
+	if (configuredColorSlotOverride(kFrameMarkerHintColorSlot, configured)) return static_cast<TColorAttr>(configured);
+	return 0x70;
 }
 
 } // namespace
@@ -171,10 +179,41 @@ TPalette &MRTaskOverviewWindow::getPalette() const {
 	return paletteGray;
 }
 
-MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr), mTaskOverviewLastRefresh(std::chrono::steady_clock::time_point()), mTaskOverviewPinned(false) {
+class MRFrameMarkerHintView : public TView {
+  public:
+	MRFrameMarkerHintView(const TRect &bounds, MRFrame *frame, std::string text) noexcept : TView(bounds), mFrame(frame), mText(std::move(text)) {
+		options &= ~(ofSelectable | ofTopSelect);
+		eventMask = evMouseDown;
+	}
+
+	virtual void draw() override {
+		TDrawBuffer buffer;
+		const TColorAttr color = frameMarkerHintColor();
+
+		buffer.moveChar(0, ' ', color, size.x);
+		buffer.moveStr(0, mText.c_str(), color, static_cast<ushort>(size.x));
+		writeLine(0, 0, size.x, 1, buffer);
+		mrvmUiInvalidateScreenBase();
+	}
+
+	virtual void handleEvent(TEvent &event) override {
+		if (event.what == evMouseDown) {
+			MRFrame *frame = mFrame;
+			clearEvent(event);
+			if (frame != nullptr) frame->updateTaskHover(TPoint(), true);
+		}
+	}
+
+  private:
+	MRFrame *mFrame;
+	std::string mText;
+};
+
+MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr), mTaskOverviewLastRefresh(std::chrono::steady_clock::time_point()), mTaskOverviewPinned(false), mMarkerHintPopup(nullptr), mMarkerHintPopupOwner(nullptr), mMarkerHintText(), mMarkerHintColumn(-1) {
 }
 
 MRFrame::~MRFrame() {
+	hideMarkerHint();
 	hideTaskOverview();
 }
 
@@ -230,6 +269,47 @@ bool MRFrame::taskMarkerHit(TPoint localMouse, const MarkerState &state) const n
 	int taskX = taskMarkerColumn(state);
 
 	return taskX >= 0 && localMouse.y == 0 && localMouse.x >= taskX && localMouse.x < taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth);
+}
+
+bool MRFrame::markerHintAt(TPoint localMouse, const MarkerState &state, std::string &text, int &column) const {
+	struct Candidate {
+		bool active;
+		const char *icon;
+		int minWidth;
+		const char *hint;
+		bool taskOverview;
+	};
+	std::string languageHint;
+	const char *languageMarker = state.languageMarker != nullptr ? state.languageMarker : "";
+	if (state.language) languageHint = std::string("▲ Language: ") + languageMarker;
+	const Candidate candidates[] = {
+	    {state.modified, kDirtyMarkerIcon, kDirtyMarkerSlotWidth, "▲ Changed", false},
+	    {state.insertMode, kInsertMarkerIcon, kInsertMarkerSlotWidth, "▲ Insert mode", false},
+	    {state.wordWrap, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth, "▲ Word wrap", false},
+	    {state.language, languageMarker, kLanguageMarkerSlotWidth, languageHint.c_str(), false},
+	    {state.workspaceMainFile, kWorkspaceMainFileMarkerIcon, kWorkspaceMainFileMarkerSlotWidth, "▲ Main workspace file", false},
+	    {state.recording, kRecordingMarkerIcon, kRecordingMarkerSlotWidth, "▲ Macro recording", false},
+	    {state.macroBrain, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth, "▲ Macro activity", false},
+	    {state.background, kTaskMarkerIcon, kTaskMarkerSlotWidth, "", true},
+	    {state.readOnly, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth, "▲ Read only", false},
+	};
+	int x = markerStartColumn();
+
+	text.clear();
+	column = -1;
+	if (localMouse.y != 0) return false;
+	for (const Candidate &candidate : candidates) {
+		if (!candidate.active) continue;
+		const int span = markerSpan(candidate.icon, candidate.minWidth);
+		if (localMouse.x >= x && localMouse.x < x + span) {
+			if (candidate.taskOverview) return false;
+			text = candidate.hint;
+			column = x;
+			return !text.empty();
+		}
+		x = advanceMarkerX(x, candidate.icon, candidate.minWidth);
+	}
+	return false;
 }
 
 void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color) {
@@ -564,6 +644,46 @@ void MRFrame::setState(ushort aState, Boolean enable) {
 	if ((aState & (sfActive | sfFocused | sfDragging)) != 0) drawView();
 }
 
+void MRFrame::showMarkerHint(const std::string &text, int markerColumn) {
+	TGroup *group = owner != nullptr ? owner->owner : nullptr;
+	std::string displayText = text;
+
+	if (group == nullptr || displayText.empty()) return;
+	displayText.push_back(' ');
+	if (mMarkerHintPopup != nullptr && mMarkerHintText == displayText && mMarkerHintColumn == markerColumn) return;
+
+	const int width = std::max(1, strwidth(displayText.c_str()));
+	TPoint topLeft = makeGlobal(TPoint(markerColumn, 1));
+	topLeft = group->makeLocal(topLeft);
+	int left = topLeft.x;
+	int top = topLeft.y;
+
+	if (left + width > group->size.x - 1) left = std::max(0, group->size.x - width);
+	if (left < 0) left = 0;
+	if (top >= group->size.y) top = std::max(0, group->size.y - 1);
+	if (top < 0) top = 0;
+
+	hideMarkerHint();
+	mMarkerHintPopup = new MRFrameMarkerHintView(TRect(left, top, left + width, top + 1), this, displayText);
+	group->insert(mMarkerHintPopup);
+	mMarkerHintPopupOwner = group;
+	mMarkerHintText = displayText;
+	mMarkerHintColumn = markerColumn;
+	mMarkerHintPopup->makeFirst();
+	mMarkerHintPopup->setState(sfActive, False);
+	mMarkerHintPopup->drawView();
+}
+
+void MRFrame::hideMarkerHint() {
+	if (mMarkerHintPopup == nullptr) return;
+	if (mMarkerHintPopupOwner != nullptr) mMarkerHintPopupOwner->remove(mMarkerHintPopup);
+	TObject::destroy(mMarkerHintPopup);
+	mMarkerHintPopup = nullptr;
+	mMarkerHintPopupOwner = nullptr;
+	mMarkerHintText.clear();
+	mMarkerHintColumn = -1;
+}
+
 void MRFrame::showTaskOverview() {
 	TGroup *group = owner != nullptr ? owner->owner : nullptr;
 	std::vector<std::string> lines;
@@ -622,26 +742,36 @@ void MRFrame::hideTaskOverview() {
 void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
+	std::string hintText;
+	int hintColumn = -1;
 
 	if (forceHide) {
+		hideMarkerHint();
 		hideTaskOverview();
 		return;
 	}
-	if (mTaskOverviewPinned) return;
-	if (taskX < 0 || !mTaskOverviewProvider) {
-		hideTaskOverview();
+	if (mTaskOverviewPinned) {
+		hideMarkerHint();
 		return;
 	}
 	if (!mouseInView(globalMouse)) {
+		hideMarkerHint();
 		hideTaskOverview();
 		return;
 	}
 	TPoint local = makeLocal(globalMouse);
-	if (local.y != 0 || local.x < taskX || local.x >= taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth)) {
-		hideTaskOverview();
+	if (taskX >= 0 && mTaskOverviewProvider && local.y == 0 && local.x >= taskX && local.x < taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth)) {
+		hideMarkerHint();
+		showTaskOverview();
 		return;
 	}
-	showTaskOverview();
+	if (markerHintAt(local, state, hintText, hintColumn)) {
+		hideTaskOverview();
+		showMarkerHint(hintText, hintColumn);
+		return;
+	}
+	hideMarkerHint();
+	hideTaskOverview();
 }
 
 void MRFrame::tickTaskOverviewAnimation() {
