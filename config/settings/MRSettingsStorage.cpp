@@ -13,6 +13,7 @@ std::string buildSettingsMacroSourceImpl(const MRSetupPaths &paths);
 bool configuredSettingsDirtyImpl();
 void clearConfiguredSettingsDirtyImpl();
 bool persistConfiguredSettingsSnapshotImpl(std::string *errorMessage, MRSettingsWriteReport *report);
+bool persistConfiguredSettingsSnapshotWithWorkspaceImpl(std::string *errorMessage, MRSettingsWriteReport *report);
 bool writeSettingsMacroFileImpl(const MRSetupPaths &paths, std::string *errorMessage, MRSettingsWriteReport *report);
 bool ensureSettingsMacroFileExistsImpl(const std::string &settingsMacroUri, std::string *errorMessage);
 
@@ -54,6 +55,10 @@ void clearConfiguredSettingsDirty() {
 
 bool persistConfiguredSettingsSnapshot(std::string *errorMessage, MRSettingsWriteReport *report) {
 	return mr::settings::storage::persistConfiguredSettingsSnapshotImpl(errorMessage, report);
+}
+
+bool persistConfiguredSettingsSnapshotWithWorkspace(std::string *errorMessage, MRSettingsWriteReport *report) {
+	return mr::settings::storage::persistConfiguredSettingsSnapshotWithWorkspaceImpl(errorMessage, report);
 }
 
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage, MRSettingsWriteReport *report) {

@@ -196,6 +196,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREditWindow *&problemsWindow);
 	void activatePrimaryPane() noexcept;
 	void activateSecondaryPane() noexcept;
+	[[nodiscard]] bool activatePaneWindow(MREditWindow *pane) noexcept;
 	void toggleActivePane() noexcept;
 	void setCompilerOutputStatus(const char *status);
 	void clearCompilerDiagnostics();

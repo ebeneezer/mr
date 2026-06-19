@@ -609,6 +609,20 @@ const MREditWindow *MRBentoBox::editorCommandTarget() const noexcept {
 	return pane != nullptr ? static_cast<const MREditWindow *>(pane) : static_cast<const MREditWindow *>(this);
 }
 
+bool MRBentoBox::activatePaneWindow(MREditWindow *pane) noexcept {
+	if (pane == nullptr) return false;
+	if (pane == this) {
+		setActivePane(0);
+		return mrActivateEditWindow(this);
+	}
+	for (const BentoLeaf &leaf : leaves) {
+		if (!leaf.visible || leaf.pane != pane) continue;
+		setActivePane(leaf.id);
+		return mrActivateEditWindow(this);
+	}
+	return false;
+}
+
 bool MRBentoBox::showsFrameGrowHandle() const noexcept {
 	return false;
 }
@@ -658,30 +672,39 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 			layoutSplitPanes();
 			if (bentoRoleIsOutline(role)) refreshOutlinePanes(true);
 			if (bentoMode == bbmFileCompare) refreshFileComparePanes();
+			mrMarkWorkspaceAutosaveDirty();
 			return true;
 		case bppSplitRight:
 			if (!bentoRoleIsOutline(role)) {
 				if (bentoMode == bbmFileCompare) {
 					const bool ok = splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
 					if (ok) refreshFileComparePanes();
+					if (ok) mrMarkWorkspaceAutosaveDirty();
 					return ok;
 				}
-				return splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
+				const bool ok = splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
+				if (ok) mrMarkWorkspaceAutosaveDirty();
+				return ok;
 			}
 			if (splitLeafNode(targetLeafId, bsoVertical, spec) < 0) return false;
 			refreshOutlinePanes(true);
+			mrMarkWorkspaceAutosaveDirty();
 			return true;
 		case bppSplitDown:
 			if (!bentoRoleIsOutline(role)) {
 				if (bentoMode == bbmFileCompare) {
 					const bool ok = splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
 					if (ok) refreshFileComparePanes();
+					if (ok) mrMarkWorkspaceAutosaveDirty();
 					return ok;
 				}
-				return splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
+				const bool ok = splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
+				if (ok) mrMarkWorkspaceAutosaveDirty();
+				return ok;
 			}
 			if (splitLeafNode(targetLeafId, bsoHorizontal, spec) < 0) return false;
 			refreshOutlinePanes(true);
+			mrMarkWorkspaceAutosaveDirty();
 			return true;
 		default:
 			return false;
@@ -988,10 +1011,16 @@ bool MRBentoBox::splitActiveEditorPane(MRBentoPanePlacement placement) {
 	MRBentoPaneSpec spec = paneSpecForRole(bprSplitEditor);
 
 	switch (placement) {
-		case bppSplitRight:
-			return splitLeafNode(activeLeafId, bsoVertical, spec) >= 0;
-		case bppSplitDown:
-			return splitLeafNode(activeLeafId, bsoHorizontal, spec) >= 0;
+		case bppSplitRight: {
+			const bool ok = splitLeafNode(activeLeafId, bsoVertical, spec) >= 0;
+			if (ok) mrMarkWorkspaceAutosaveDirty();
+			return ok;
+		}
+		case bppSplitDown: {
+			const bool ok = splitLeafNode(activeLeafId, bsoHorizontal, spec) >= 0;
+			if (ok) mrMarkWorkspaceAutosaveDirty();
+			return ok;
+		}
 		default:
 			return false;
 	}
@@ -1786,16 +1815,20 @@ void MRBentoBox::closePane(int leafId) noexcept {
 	collapseLeafNode(leafId);
 	if (activeLeafId == leafId || nodeIndexForLeaf(activeLeafId) < 0) setActivePane(0);
 	layoutSplitPanes();
+	mrMarkWorkspaceAutosaveDirty();
 }
 
 void MRBentoBox::closeSecondaryPane() noexcept {
 	int toolLeaf = firstToolLeafId();
+	bool changed = false;
 	while (toolLeaf >= 0) {
 		collapseLeafNode(toolLeaf);
+		changed = true;
 		toolLeaf = firstToolLeafId();
 	}
 	setActivePane(0);
 	layoutSplitPanes();
+	if (changed) mrMarkWorkspaceAutosaveDirty();
 }
 
 void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
@@ -2014,6 +2047,7 @@ void MRBentoBox::setDividerPosition(int nodeIndex, int position) noexcept {
 	if (layoutTree[nodeIndex].dividerPosition == clampedPosition) return;
 	layoutTree[nodeIndex].dividerPosition = clampedPosition;
 	layoutSplitPanes();
+	mrMarkWorkspaceAutosaveDirty();
 }
 
 void MRBentoBox::setActivePane(int leafId) noexcept {
@@ -2050,6 +2084,7 @@ void MRBentoBox::toggleLeafMaximized(int leafId) noexcept {
 	maximizedLeafId = maximizedLeafId == leafId ? -1 : leafId;
 	setActivePane(leafId);
 	layoutSplitPanes();
+	mrMarkWorkspaceAutosaveDirty();
 }
 
 bool MRBentoBox::handleDividerChromeMouse(TEvent &event) {

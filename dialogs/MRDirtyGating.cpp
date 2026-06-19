@@ -182,7 +182,7 @@ UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const cha
 	const int gap = 2;
 	const int desktopWidth = TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : 80;
 	const int maxTextWidth = std::max(32, desktopWidth - 12);
-	std::vector<std::string> textLines = wrapText(headline != nullptr ? headline : "Load autosaved workspace?", static_cast<std::size_t>(maxTextWidth));
+	std::vector<std::string> textLines = wrapText(headline != nullptr ? headline : "Restore autosaved workspace?", static_cast<std::size_t>(maxTextWidth));
 
 	if (hasDetail) {
 		std::vector<std::string> detailLines = wrapText(detail, static_cast<std::size_t>(maxTextWidth));

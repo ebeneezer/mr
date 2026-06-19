@@ -66,6 +66,7 @@ struct MRSettingsWriteReport {
 [[nodiscard]] bool configuredSettingsDirty();
 void clearConfiguredSettingsDirty();
 bool persistConfiguredSettingsSnapshot(std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
+bool persistConfiguredSettingsSnapshotWithWorkspace(std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
 bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage = nullptr);
 

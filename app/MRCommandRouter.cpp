@@ -1761,6 +1761,13 @@ MREditWindow *findLspResultTargetWindow(const mr::services::MRServiceDocumentIde
 	return nullptr;
 }
 
+bool activateLspTargetWindow(MREditWindow *window) {
+	if (window == nullptr) return false;
+	if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window)) return bentoBox->activatePaneWindow(window);
+	if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window->owner)) return bentoBox->activatePaneWindow(window);
+	return mrActivateEditWindow(window);
+}
+
 bool lspVisualColumnForTarget(MRFileEditor &editor, const mr::services::MRServiceTextPosition &position, int &visualColumn);
 bool lspTextOffsetForPosition(const std::string &text, const mr::services::MRServiceTextPosition &position, std::size_t &offset);
 
@@ -1815,7 +1822,7 @@ bool navigateToLspLocation(const mr::services::MRServiceLocationTarget &target, 
 	if (!lspVisualColumnForTarget(*editor, target.range.start, column) && target.range.start.character > 0) column = target.range.start.character;
 	editor->moveCursorToDocumentLineTop(line, column);
 	editor->revealCursor(True);
-	static_cast<void>(mrActivateEditWindow(window));
+	static_cast<void>(activateLspTargetWindow(window));
 	errorMessage.clear();
 	return true;
 }
@@ -3669,8 +3676,7 @@ std::vector<LspMiniMenuEntry> buildLspContextMenuItems(MREditWindow *win, const 
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	mr::services::MRWorkspaceDocumentSnapshot document;
 	mr::services::MRLspServerProfile profile;
-	mr::services::MRLspPositionServiceSnapshot snapshot;
-	mr::lsp::LspTextPosition lspPosition;
+	mr::services::MRLspDocumentServiceSnapshot snapshot;
 	std::string configurationSource;
 	std::string errorMessage;
 	std::vector<LspMiniMenuEntry> entries;
@@ -3681,8 +3687,7 @@ std::vector<LspMiniMenuEntry> buildLspContextMenuItems(MREditWindow *win, const 
 	if (!configuredLanguageServerSpawnDaemon()) return entries;
 	if (target != nullptr && buildLspDocumentSnapshotForWindow(win, document, false)) {
 		serverConfigured = buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage);
-		lspPosition = target->position;
-		snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(lspPosition));
+		snapshot = g_lspAppService.currentDocumentServiceSnapshot(document);
 
 		const ContextCommand serviceCommands[] = {
 		    {"Definition", cmMrOtherLspDefinition, serverConfigured && snapshot.commands.requestDefinition},
@@ -3786,26 +3791,44 @@ std::string lspMiniMenuDisplayText(const LspMiniMenuEntry &entry, short menuWidt
 	return text;
 }
 
-TRect lspMiniMenuBoundsFor(TGroup &owner, TPoint where, short width, short rows) {
+bool lspMiniMenuBoundsFor(TGroup &owner, MRFileEditor *editor, TPoint where, short width, short requestedRows, TRect &bounds) {
 	TPoint local = owner.makeLocal(where);
 	const short safeWidth = std::max<short>(1, width);
-	const short safeRows = std::max<short>(1, rows);
-	int x = local.x;
-	int y = local.y;
+	TRect constraint(0, 0, owner.size.x, owner.size.y);
+	short safeRows = std::max<short>(1, requestedRows);
+	int x;
+	int y;
 
-	if (x + safeWidth > owner.size.x) x = std::max<int>(0, owner.size.x - safeWidth);
-	if (y + safeRows > owner.size.y) y = std::max<int>(0, owner.size.y - safeRows);
-	return TRect(x, y, x + safeWidth, y + safeRows);
+	if (editor != nullptr) {
+		const TRect viewport = editor->visibleTextViewportBounds();
+		const TPoint editorGlobal = editor->makeGlobal(TPoint(0, 0));
+		const TPoint viewportTopLeft = owner.makeLocal(TPoint(editorGlobal.x + viewport.a.x, editorGlobal.y + viewport.a.y));
+		const TPoint viewportBottomRight = owner.makeLocal(TPoint(editorGlobal.x + viewport.b.x, editorGlobal.y + viewport.b.y));
+
+		constraint = TRect(
+		    std::max<short>(0, viewportTopLeft.x),
+		    std::max<short>(0, viewportTopLeft.y),
+		    std::min<short>(owner.size.x, viewportBottomRight.x),
+		    std::min<short>(owner.size.y, viewportBottomRight.y));
+	}
+	if (constraint.b.x - constraint.a.x < 12 || constraint.b.y - constraint.a.y < 2) return false;
+	if (safeWidth > constraint.b.x - constraint.a.x) return false;
+	safeRows = std::min<short>(safeRows, constraint.b.y - constraint.a.y);
+	x = std::max<int>(constraint.a.x, std::min<int>(local.x, constraint.b.x - safeWidth));
+	y = std::max<int>(constraint.a.y, std::min<int>(local.y, constraint.b.y - safeRows));
+	bounds = TRect(static_cast<short>(x), static_cast<short>(y), static_cast<short>(x + safeWidth), static_cast<short>(y + safeRows));
+	return true;
 }
 
-MRColumnListView *showLspMiniMenuList(TGroup &owner, TPoint where, const std::vector<std::string> &values, short *menuWidth = nullptr, short forcedWidth = 0, bool contextMenuColors = true) {
+MRColumnListView *showLspMiniMenuList(TGroup &owner, MRFileEditor *editor, TPoint where, const std::vector<std::string> &values, short *menuWidth = nullptr, short forcedWidth = 0, bool contextMenuColors = true) {
 	std::vector<MRColumnListView::Row> rows;
 	MRColumnListView *listView = nullptr;
 	const short width = forcedWidth > 0 ? forcedWidth : lspMiniMenuWidthForValues(values);
 	const short height = static_cast<short>(std::min<std::size_t>(values.size(), 12));
-	const TRect bounds = lspMiniMenuBoundsFor(owner, where, width, height);
+	TRect bounds;
 
 	if (values.empty()) return nullptr;
+	if (!lspMiniMenuBoundsFor(owner, editor, where, width, height, bounds)) return nullptr;
 	if (menuWidth != nullptr) *menuWidth = width;
 	rows.reserve(values.size());
 	for (const std::string &value : values)
@@ -3907,7 +3930,6 @@ bool showLspWorkspaceSymbolsPicker(const mr::services::MRServiceDocumentSymbolsR
 		displayRow.push_back(positionText.str());
 		displayRow.push_back(baseName);
 		displayRow.push_back(firstDisplayLine(path, 220));
-		displayRows.push_back(displayRow);
 
 		resultRow.action = LspResultDialogAction::NavigateLocation;
 		resultRow.location = symbol.target;
@@ -3971,6 +3993,7 @@ std::vector<LspMiniMenuEntry> buildLspEditMiniMenuItems(MREditWindow *targetWind
 bool chooseLspMiniMenuCommand(TGroup &owner, MREditWindow *targetWindow, TPoint where, const LspEditorRequestTarget *target, ushort &command) {
 	const std::vector<LspMiniMenuEntry> entries = buildLspContextMenuItems(targetWindow, target);
 	const std::vector<LspMiniMenuEntry> editEntries = buildLspEditMiniMenuItems(targetWindow);
+	MRFileEditor *editor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
 	std::vector<std::string> values;
 	std::vector<std::string> editValues;
 	MRColumnListView *parentList = nullptr;
@@ -3989,7 +4012,7 @@ bool chooseLspMiniMenuCommand(TGroup &owner, MREditWindow *targetWindow, TPoint 
 	for (const LspMiniMenuEntry &entry : editEntries)
 		editValues.push_back(entry.title);
 
-	parentList = showLspMiniMenuList(owner, where, values, nullptr, menuWidth);
+	parentList = showLspMiniMenuList(owner, editor, where, values, nullptr, menuWidth);
 	activeList = parentList;
 	if (parentList == nullptr) return false;
 	g_lspContextMiniMenuOpen = true;
@@ -4010,7 +4033,7 @@ bool chooseLspMiniMenuCommand(TGroup &owner, MREditWindow *targetWindow, TPoint 
 
 				editWhere.x += menuWidth;
 				editWhere.y += selected;
-				if (editList == nullptr) editList = showLspMiniMenuList(owner, editWhere, editValues);
+				if (editList == nullptr) editList = showLspMiniMenuList(owner, editor, editWhere, editValues);
 				activeList = editList != nullptr ? editList : parentList;
 				continue;
 			}
@@ -4055,7 +4078,7 @@ bool chooseLspMiniMenuCommand(TGroup &owner, MREditWindow *targetWindow, TPoint 
 
 				editWhere.x += menuWidth;
 				editWhere.y += selected;
-				if (editList == nullptr) editList = showLspMiniMenuList(owner, editWhere, editValues);
+				if (editList == nullptr) editList = showLspMiniMenuList(owner, editor, editWhere, editValues);
 				activeList = editList != nullptr ? editList : parentList;
 				continue;
 			}
@@ -4077,7 +4100,7 @@ bool showLspContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 	LspEditorRequestTarget target;
 
 	if (owner == nullptr) return false;
-	if (targetWindow != nullptr) static_cast<void>(mrActivateEditWindow(targetWindow));
+	if (targetWindow != nullptr) static_cast<void>(activateLspTargetWindow(targetWindow));
 	forgetLspAutoHoverForWindow(targetWindow, true);
 	if (!lspRequestTargetFromGlobalPoint(targetWindow, where, target)) return true;
 	if (!chooseLspMiniMenuCommand(*owner, targetWindow, where, &target, command)) return true;

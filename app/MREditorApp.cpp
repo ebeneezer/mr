@@ -1167,6 +1167,8 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	if (configuredAutoloadWorkspace()) {
 		mrLoadWorkspace("");
 	} else if (mrSettingsFileHasAutosavedWorkspace()) {
+		setRuntimePreserveAutosavedWorkspace(true);
+		mrLogMessage("Workspace autoload pending user choice; autosaved workspace preserved.");
 		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Load workspace", "Load autosaved workspace?", configuredSettingsMacroFilePath().c_str(), "Discard workspace");
 
 		if (choice == mr::dialogs::UnsavedChangesChoice::Save) {
@@ -1176,7 +1178,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 			setRuntimePreserveAutosavedWorkspace(false);
 			static_cast<void>(mrClearAutosavedWorkspace());
 		} else
-			setRuntimePreserveAutosavedWorkspace(true);
+			mrLogMessage("Workspace autoload dialog closed without action; autosaved workspace preserved.");
 	}
 	logStartupPhase("workspace_autoload");
 	mrLogMessage("Editor session started.");
@@ -1456,6 +1458,7 @@ void MREditorApp::prepareForQuit() {
 	}
 
 	const auto snapshotStartedAt = std::chrono::steady_clock::now();
+	mrFlushWorkspaceAutosaveNow();
 	if (!persistConfiguredSettingsSnapshot(&settingsError, &settingsWriteReport) && !settingsError.empty()) mrLogMessage(("Settings snapshot on exit failed: " + settingsError).c_str());
 	else
 		mrLogSettingsWriteReport("exit snapshot", settingsWriteReport);
@@ -1931,6 +1934,7 @@ void MREditorApp::idle() {
 	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
 	pumpMRLspService();
 	pumpDeferredMacroUiPlayback();
+	mrFlushWorkspaceAutosaveIfDue();
 	updatePerformancePanel();
 	updateFullscreenHint();
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {

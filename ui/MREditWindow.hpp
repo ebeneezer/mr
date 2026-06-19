@@ -421,8 +421,11 @@ class MREditWindow : public TWindow {
 	}
 
 	void changeBounds(const TRect &bounds) override {
+		const TRect previousBounds = getBounds();
+
 		mrDropSidekickForParent(this);
 		TWindow::changeBounds(bounds);
+		if (previousBounds != getBounds()) mrMarkWorkspaceAutosaveDirty();
 		layoutEditorChrome();
 		if (mFullscreenPresentation) return;
 		if (MRWindowManager::isWindowMinimized(this)) {

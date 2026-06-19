@@ -107,6 +107,9 @@ void finishNewEditWindow(MREditWindow *win) {
 static int g_currentVirtualDesktop = 1;
 static std::set<const MREditWindow *> g_manuallyHiddenWindows;
 static std::string g_workspaceMainFilePath;
+static bool g_workspaceAutosaveDirty = false;
+static std::chrono::steady_clock::time_point g_workspaceAutosaveDue;
+static constexpr std::chrono::milliseconds kWorkspaceAutosaveDelay(1000);
 
 namespace {
 struct WorkspaceEntry {
@@ -552,11 +555,50 @@ std::string mrWorkspaceMainFilePath() {
 	return g_workspaceMainFilePath;
 }
 
+void mrMarkWorkspaceAutosaveDirty() {
+	g_workspaceAutosaveDirty = true;
+	g_workspaceAutosaveDue = std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay;
+	if (configuredAutosaveWorkspace()) setRuntimePreserveAutosavedWorkspace(false);
+	mrLogMessage(std::string("Workspace autosave marked dirty autosave=") + (configuredAutosaveWorkspace() ? "1" : "0") + " preserve=" + (runtimePreserveAutosavedWorkspace() ? "1" : "0") + ".");
+}
+
+namespace {
+void flushWorkspaceAutosave(bool force) {
+	std::string errorText;
+	MRSettingsWriteReport report;
+
+	if (!g_workspaceAutosaveDirty) return;
+	if (!configuredAutosaveWorkspace()) return;
+	if (runtimePreserveAutosavedWorkspace()) return;
+	if (!force && std::chrono::steady_clock::now() < g_workspaceAutosaveDue) return;
+	mrLogMessage(std::string("Workspace autosave flush begin force=") + (force ? "1" : "0") + ".");
+	g_workspaceAutosaveDirty = false;
+	if (!persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)) {
+		g_workspaceAutosaveDirty = true;
+		g_workspaceAutosaveDue = std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay;
+		if (!errorText.empty()) mrLogMessage("Workspace autosave failed: " + errorText);
+		return;
+	}
+	mrLogSettingsWriteReport("workspace autosave", report);
+	mrLogMessage("Workspace autosave flush end.");
+}
+} // namespace
+
+void mrFlushWorkspaceAutosaveIfDue() {
+	flushWorkspaceAutosave(false);
+}
+
+void mrFlushWorkspaceAutosaveNow() {
+	flushWorkspaceAutosave(true);
+}
+
 std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 	std::string source = buildSettingsMacroSource(paths);
 	const std::size_t endMacro = source.rfind("END_MACRO;");
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	std::vector<MRBentoBox *> fileCompareBoxes;
+	int candidateWindows = 0;
+	int writtenEntries = 0;
 
 	if (endMacro == std::string::npos) return source;
 	for (MREditWindow *win : windows) {
@@ -577,18 +619,31 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		std::string bentoPayload;
 		std::string fileComparePayload;
 
-		if (win == nullptr || editor == nullptr) continue;
-		if (isFileCompareSourceWindowForAnyBento(win, fileCompareBoxes)) continue;
+		if (win == nullptr || editor == nullptr) {
+			mrLogMessage("Workspace serialize skipped window without editor.");
+			continue;
+		}
+		++candidateWindows;
+		if (isFileCompareSourceWindowForAnyBento(win, fileCompareBoxes)) {
+			mrLogMessage("Workspace serialize skipped file-compare source window: " + workspaceDisplayName(editor->persistentFileName()));
+			continue;
+		}
 		if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win)) {
 			bentoPayload = encodeBentoWorkspaceSnapshot(bentoBox->workspaceSnapshot());
 			if (bentoBox->isFileCompareBox()) {
-				if (!bentoBox->fileCompareWorkspaceSourcePaths(fileCompareOriginalUrl, fileCompareCompareUrl)) continue;
+				if (!bentoBox->fileCompareWorkspaceSourcePaths(fileCompareOriginalUrl, fileCompareCompareUrl)) {
+					mrLogMessage("Workspace serialize skipped file-compare Bento without source paths.");
+					continue;
+				}
 				url = fileCompareOriginalUrl;
 				fileComparePayload = " fco=" + workspaceHexEncode(fileCompareOriginalUrl) + " fcc=" + workspaceHexEncode(fileCompareCompareUrl);
 			}
 		}
 		if (url.empty()) url = editor->persistentFileName();
-		if (url.empty()) continue;
+		if (url.empty()) {
+			mrLogMessage("Workspace serialize skipped window without persistent filename.");
+			continue;
+		}
 		bounds = win->isMinimized() ? win->minimizedWorkspaceBounds() : win->getBounds();
 		restoreBounds = win->restoreWorkspaceBounds();
 		cursorColumn = editor->currentColumnNumber();
@@ -596,7 +651,10 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		vd = win->mVirtualDesktop;
 		minimized = win->isMinimized();
 		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + (mrIsWorkspaceMainFile(win) ? std::string(" main=1") : std::string()) + (bentoPayload.empty() ? std::string() : " bento=" + bentoPayload) + fileComparePayload + "');\n");
+		++writtenEntries;
+		mrLogMessage("Workspace serialize entry url=" + url + " vd=" + std::to_string(vd) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + ".");
 	}
+	mrLogMessage("Workspace serialize summary candidates=" + std::to_string(candidateWindows) + " entries=" + std::to_string(writtenEntries) + " settings=" + paths.settingsMacroUri + ".");
 	return source;
 }
 
@@ -606,16 +664,25 @@ bool mrSettingsFileHasAutosavedWorkspace() {
 	std::string path = configuredSettingsMacroFilePath();
 
 	if (path.find(".mrmac") == std::string::npos) path += ".mrmac";
-	if (!readTextFile(path, content, errorText)) return false;
+	if (!readTextFile(path, content, errorText)) {
+		mrLogMessage("Workspace autosave probe failed path=" + path + " error=" + errorText + ".");
+		return false;
+	}
 	{
 		std::istringstream input(content);
 		std::string line;
+		int parsedEntries = 0;
 
 		while (std::getline(input, line)) {
 			WorkspaceEntry entry;
 
-			if (parseWorkspaceEntry(line, entry)) return true;
+			if (parseWorkspaceEntry(line, entry)) {
+				++parsedEntries;
+				mrLogMessage("Workspace autosave probe found entry url=" + entry.url + ".");
+				return true;
+			}
 		}
+		mrLogMessage("Workspace autosave probe found no entries path=" + path + " parsed=" + std::to_string(parsedEntries) + ".");
 	}
 	return false;
 }
@@ -829,14 +896,18 @@ void mrLoadWorkspace(const std::string &filename) {
 	std::string currentContent;
 	std::string errorText;
 	if (!readTextFile(dest, currentContent, errorText)) {
+		mrLogMessage("Workspace load failed read path=" + dest + " error=" + errorText + ".");
 		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Unable to read workspace: " + workspaceDisplayName(dest), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 		return;
 	}
+	mrLogMessage("Workspace load begin path=" + dest + " bytes=" + std::to_string(currentContent.size()) + ".");
 
 	std::istringstream iss(currentContent);
 	std::string line;
 	bool discardedWorkspaceEntries = false;
 	bool loadedMainFile = false;
+	int parsedWorkspaceEntries = 0;
+	int loadedWorkspaceEntries = 0;
 	g_workspaceMainFilePath.clear();
 	while (std::getline(iss, line)) {
 		WorkspaceEntry entry;
@@ -846,12 +917,15 @@ void mrLoadWorkspace(const std::string &filename) {
 		int resolvedVirtualDesktop = 1;
 
 		if (!parseWorkspaceEntry(line, entry)) continue;
+		++parsedWorkspaceEntries;
 		resolvedVirtualDesktop = workspaceVirtualDesktopOrRandom(entry.vd);
+		mrLogMessage("Workspace load entry #" + std::to_string(parsedWorkspaceEntries) + " url=" + entry.url + " saved_vd=" + std::to_string(entry.vd) + " resolved_vd=" + std::to_string(resolvedVirtualDesktop) + " bento=" + (entry.hasBentoSnapshot ? "1" : "0") + " filecompare=" + (entry.hasFileCompareSources ? "1" : "0") + ".");
 
 		if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare) {
 			win = restoreFileCompareWorkspaceEntry(entry, resolvedVirtualDesktop);
 			editor = win != nullptr ? win->getEditor() : nullptr;
 			if (win == nullptr || editor == nullptr) {
+				mrLogMessage("Workspace load failed file-compare restore url=" + entry.url + ".");
 				discardedWorkspaceEntries = true;
 				continue;
 			}
@@ -859,6 +933,7 @@ void mrLoadWorkspace(const std::string &filename) {
 			win = createEditorWindow(entry.url.c_str());
 			editor = win != nullptr ? win->getEditor() : nullptr;
 			if (win == nullptr || editor == nullptr || !editor->loadMappedFile(entry.url.c_str(), err)) {
+				mrLogMessage("Workspace load failed file url=" + entry.url + " window=" + (win != nullptr ? "1" : "0") + " editor=" + (editor != nullptr ? "1" : "0") + " error=" + err + ".");
 				if (win != nullptr) message(win, evCommand, cmClose, nullptr);
 				discardedWorkspaceEntries = true;
 				continue;
@@ -867,6 +942,7 @@ void mrLoadWorkspace(const std::string &filename) {
 		if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode != bbmFileCompare) {
 			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
 			if (bentoBox == nullptr || !bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)) {
+				mrLogMessage("Workspace load failed Bento snapshot restore url=" + entry.url + " bento_window=" + (bentoBox != nullptr ? "1" : "0") + ".");
 				message(win, evCommand, cmClose, nullptr);
 				discardedWorkspaceEntries = true;
 				continue;
@@ -878,15 +954,23 @@ void mrLoadWorkspace(const std::string &filename) {
 			const TRect bounds(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height);
 			const TRect restoreBounds(entry.restoreX, entry.restoreY, entry.restoreX + std::max(entry.restoreWidth, 1), entry.restoreY + std::max(entry.restoreHeight, 1));
 			MRWindowManager::applyWorkspaceState(win, bounds, restoreBounds, entry.minimized);
+			mrLogMessage("Workspace load applied geometry url=" + entry.url + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " min=" + (entry.minimized ? "1" : "0") + ".");
 		}
 		restoreEditorCursor(editor, entry.line, entry.column);
 		if (entry.mainFile && !loadedMainFile) {
 			static_cast<void>(mrSetWorkspaceMainFile(win));
 			loadedMainFile = true;
 		}
+		++loadedWorkspaceEntries;
+		mrLogMessage("Workspace load restored entry #" + std::to_string(loadedWorkspaceEntries) + " url=" + entry.url + ".");
 	}
 	syncVirtualDesktopVisibility();
-	if (discardedWorkspaceEntries) mrSaveWorkspace(dest);
+	mrLogMessage("Workspace load summary path=" + dest + " parsed=" + std::to_string(parsedWorkspaceEntries) + " loaded=" + std::to_string(loadedWorkspaceEntries) + " discarded=" + (discardedWorkspaceEntries ? "1" : "0") + ".");
+	if (parsedWorkspaceEntries != 0 && loadedWorkspaceEntries == 0) {
+		setRuntimePreserveAutosavedWorkspace(true);
+		mrLogMessage("Workspace load restored no entries; autosaved workspace was left preserved.");
+	}
+	if (discardedWorkspaceEntries) mrLogMessage("Workspace load skipped one or more invalid entries; source was left unchanged.");
 }
 
 MREditWindow *createEditorWindow(const char *title) {

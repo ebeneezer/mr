@@ -5891,14 +5891,25 @@ bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 
 bool testLspBentoPaneTargetRoutingGuard(std::string &failureReason) {
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	const std::string bentoHeaderPath = absolutePathFromCwd("ui/MRBentoBox.hpp");
+	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
 	std::string content;
+	std::string bentoHeader;
+	std::string bentoProjection;
 	std::string targetBody;
+	std::string activateBody;
+	std::string navigationBody;
+	std::string miniMenuBoundsBody;
+	std::string workspaceSymbolsBody;
+	std::string contextMenuItemsBody;
+	std::string contextMenuBody;
+	std::string bentoActivateBody;
 	std::string hoverBody;
 	std::string signatureBody;
 	std::string ioError;
 	std::string missingNeedle;
 
-	if (!readTextFile(routerPath, content, ioError)) {
+	if (!readTextFile(routerPath, content, ioError) || !readTextFile(bentoHeaderPath, bentoHeader, ioError) || !readTextFile(bentoProjectionPath, bentoProjection, ioError)) {
 		failureReason = "Unable to read MRCommandRouter.cpp for LSP Bento pane routing guard: " + ioError;
 		return false;
 	}
@@ -5928,6 +5939,94 @@ bool testLspBentoPaneTargetRoutingGuard(std::string &failureReason) {
 	const std::string helperBody = content.substr(helperStart, helperEnd - helperStart);
 	if (!containsAllSubstrings(helperBody, {"findEditWindowByBufferId(identity.bufferId)", "findOpenLspTargetWindow(identity.path)"}, missingNeedle)) {
 		failureReason = "LSP result target lookup must prefer buffer id and fall back to pane-aware path lookup: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	if (bentoHeader.find("[[nodiscard]] bool activatePaneWindow(MREditWindow *pane) noexcept;") == std::string::npos) {
+		failureReason = "MRBentoBox must expose explicit pane activation for LSP result navigation.";
+		return false;
+	}
+	const std::size_t bentoActivateStart = bentoProjection.find("bool MRBentoBox::activatePaneWindow");
+	const std::size_t bentoActivateEnd = bentoProjection.find("\nbool MRBentoBox::showsFrameGrowHandle", bentoActivateStart);
+	if (bentoActivateStart == std::string::npos || bentoActivateEnd == std::string::npos) {
+		failureReason = "Unable to isolate MRBentoBox::activatePaneWindow for LSP Bento pane routing guard.";
+		return false;
+	}
+	bentoActivateBody = bentoProjection.substr(bentoActivateStart, bentoActivateEnd - bentoActivateStart);
+	if (!containsAllSubstrings(bentoActivateBody, {"setActivePane(leaf.id)", "mrActivateEditWindow(this)"}, missingNeedle)) {
+		failureReason = "Bento pane activation must select the owning leaf and activate the Bento window: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	const std::size_t activateStart = content.find("bool activateLspTargetWindow");
+	const std::size_t activateEnd = content.find("\nbool lspVisualColumnForTarget", activateStart);
+	if (activateStart == std::string::npos || activateEnd == std::string::npos) {
+		failureReason = "Unable to isolate activateLspTargetWindow for LSP Bento pane routing guard.";
+		return false;
+	}
+	activateBody = content.substr(activateStart, activateEnd - activateStart);
+	if (!containsAllSubstrings(activateBody, {"bentoBox->activatePaneWindow(window)", "dynamic_cast<MRBentoBox *>(window->owner)", "mrActivateEditWindow(window)"}, missingNeedle)) {
+		failureReason = "LSP target activation must handle Bento panes and plain editor windows: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	const std::size_t navigationStart = content.find("bool navigateToLspLocation");
+	const std::size_t navigationEnd = content.find("\nstd::string lspLocationDisplayText", navigationStart);
+	if (navigationStart == std::string::npos || navigationEnd == std::string::npos) {
+		failureReason = "Unable to isolate navigateToLspLocation for LSP Bento pane routing guard.";
+		return false;
+	}
+	navigationBody = content.substr(navigationStart, navigationEnd - navigationStart);
+	if (navigationBody.find("activateLspTargetWindow(window)") == std::string::npos || navigationBody.find("mrActivateEditWindow(window)") != std::string::npos) {
+		failureReason = "LSP navigation must activate through the Bento-aware target activator.";
+		return false;
+	}
+
+	const std::size_t miniMenuBoundsStart = content.find("bool lspMiniMenuBoundsFor");
+	const std::size_t miniMenuBoundsEnd = content.find("\nMRColumnListView *showLspMiniMenuList", miniMenuBoundsStart);
+	if (miniMenuBoundsStart == std::string::npos || miniMenuBoundsEnd == std::string::npos) {
+		failureReason = "Unable to isolate lspMiniMenuBoundsFor for LSP Bento pane routing guard.";
+		return false;
+	}
+	miniMenuBoundsBody = content.substr(miniMenuBoundsStart, miniMenuBoundsEnd - miniMenuBoundsStart);
+	if (miniMenuBoundsBody.find("visibleTextViewportBounds") == std::string::npos || miniMenuBoundsBody.find("safeWidth > constraint.b.x - constraint.a.x") == std::string::npos) {
+		failureReason = "LSP mini menu bounds must stay inside the target editor text viewport.";
+		return false;
+	}
+
+	const std::size_t workspaceSymbolsStart = content.find("bool showLspWorkspaceSymbolsPicker");
+	const std::size_t workspaceSymbolsEnd = content.find("\nstd::vector<LspMiniMenuEntry> buildLspEditMiniMenuItems", workspaceSymbolsStart);
+	if (workspaceSymbolsStart == std::string::npos || workspaceSymbolsEnd == std::string::npos) {
+		failureReason = "Unable to isolate showLspWorkspaceSymbolsPicker for LSP Bento pane routing guard.";
+		return false;
+	}
+	workspaceSymbolsBody = content.substr(workspaceSymbolsStart, workspaceSymbolsEnd - workspaceSymbolsStart);
+	if (countSubstring(workspaceSymbolsBody, "displayRows.push_back") != 1) {
+		failureReason = "LSP workspace symbols picker must append display rows only after symbol ranking.";
+		return false;
+	}
+
+	const std::size_t contextMenuStart = content.find("bool showLspContextMenuForWindow");
+	const std::size_t contextMenuEnd = content.find("\nstruct ParenthesisPair", contextMenuStart);
+	if (contextMenuStart == std::string::npos || contextMenuEnd == std::string::npos) {
+		failureReason = "Unable to isolate showLspContextMenuForWindow for LSP Bento pane routing guard.";
+		return false;
+	}
+	contextMenuBody = content.substr(contextMenuStart, contextMenuEnd - contextMenuStart);
+	if (contextMenuBody.find("activateLspTargetWindow(targetWindow)") == std::string::npos || contextMenuBody.find("mrActivateEditWindow(targetWindow)") != std::string::npos) {
+		failureReason = "LSP context menu must activate the target through the Bento-aware activator.";
+		return false;
+	}
+
+	const std::size_t contextMenuItemsStart = content.find("std::vector<LspMiniMenuEntry> buildLspContextMenuItems");
+	const std::size_t contextMenuItemsEnd = content.find("\nbool requestLspCodeActionsAtPosition", contextMenuItemsStart);
+	if (contextMenuItemsStart == std::string::npos || contextMenuItemsEnd == std::string::npos) {
+		failureReason = "Unable to isolate buildLspContextMenuItems for LSP Bento pane routing guard.";
+		return false;
+	}
+	contextMenuItemsBody = content.substr(contextMenuItemsStart, contextMenuItemsEnd - contextMenuItemsStart);
+	if (contextMenuItemsBody.find("currentDocumentPositionServiceSnapshot") != std::string::npos || contextMenuItemsBody.find("currentDocumentServiceSnapshot(document)") == std::string::npos) {
+		failureReason = "LSP context menu must use a document-wide service snapshot before rendering the menu.";
 		return false;
 	}
 
@@ -7591,8 +7690,8 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	}
 	splitRightPos = source.find("case bppSplitRight:");
 	splitDownPos = source.find("case bppSplitDown:");
-	verticalOrientationPos = splitRightPos != std::string::npos ? source.find("return splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;", splitRightPos) : std::string::npos;
-	horizontalOrientationPos = splitDownPos != std::string::npos ? source.find("return splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;", splitDownPos) : std::string::npos;
+	verticalOrientationPos = splitRightPos != std::string::npos ? source.find("splitLeafNode(targetLeafId, bsoVertical, spec)", splitRightPos) : std::string::npos;
+	horizontalOrientationPos = splitDownPos != std::string::npos ? source.find("splitLeafNode(targetLeafId, bsoHorizontal, spec)", splitDownPos) : std::string::npos;
 	if (splitRightPos == std::string::npos || splitDownPos == std::string::npos || verticalOrientationPos == std::string::npos || horizontalOrientationPos == std::string::npos || verticalOrientationPos > splitDownPos) {
 		failureReason = "Bento split placement mapping changed.";
 		return false;
@@ -8102,6 +8201,111 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
+	const std::string windowCommandsHeaderPath = absolutePathFromCwd("app/commands/MRWindowCommands.hpp");
+	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
+	const std::string windowListPath = absolutePathFromCwd("dialogs/MRWindowList.cpp");
+	const std::string editWindowPath = absolutePathFromCwd("ui/MREditWindow.hpp");
+	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
+	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	const std::string settingsStorageHeaderPath = absolutePathFromCwd("config/settings/MRSettingsStorage.hpp");
+	const std::string settingsRuntimePath = absolutePathFromCwd("config/settings/MRSettingsRuntime.cpp");
+	std::string windowCommandsHeader;
+	std::string windowCommands;
+	std::string windowList;
+	std::string editWindow;
+	std::string editorApp;
+	std::string bentoProjection;
+	std::string settingsStorageHeader;
+	std::string settingsRuntime;
+	std::string flushBody;
+	std::string loadWorkspaceBody;
+	std::string ioError;
+	std::string missingNeedle;
+
+	if (!readTextFile(windowCommandsHeaderPath, windowCommandsHeader, ioError) || !readTextFile(windowCommandsPath, windowCommands, ioError) || !readTextFile(windowListPath, windowList, ioError) || !readTextFile(editWindowPath, editWindow, ioError) || !readTextFile(editorAppPath, editorApp, ioError) || !readTextFile(bentoProjectionPath, bentoProjection, ioError) || !readTextFile(settingsStorageHeaderPath, settingsStorageHeader, ioError) || !readTextFile(settingsRuntimePath, settingsRuntime, ioError)) {
+		failureReason = "Unable to read workspace autosave lazy wiring sources: " + ioError;
+		return false;
+	}
+	if (!containsAllSubstrings(windowCommandsHeader, {"void mrMarkWorkspaceAutosaveDirty();", "void mrFlushWorkspaceAutosaveIfDue();", "void mrFlushWorkspaceAutosaveNow();"}, missingNeedle)) {
+		failureReason = "Workspace autosave lazy public wiring changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowCommands, {"g_workspaceAutosaveDirty", "kWorkspaceAutosaveDelay", "configuredAutosaveWorkspace()", "setRuntimePreserveAutosavedWorkspace(false)", "runtimePreserveAutosavedWorkspace()", "persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)", "mrLogSettingsWriteReport(\"workspace autosave\", report)"}, missingNeedle)) {
+		failureReason = "Workspace autosave lazy persistence path changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	const std::size_t flushStart = windowCommands.find("void flushWorkspaceAutosave(bool force)");
+	const std::size_t flushEnd = windowCommands.find("\n} // namespace", flushStart);
+	if (flushStart == std::string::npos || flushEnd == std::string::npos) {
+		failureReason = "Unable to isolate workspace autosave flush helper.";
+		return false;
+	}
+	flushBody = windowCommands.substr(flushStart, flushEnd - flushStart);
+	if (flushBody.find("mrSaveWorkspace(") != std::string::npos || flushBody.find("writeTextFile(") != std::string::npos) {
+		failureReason = "Workspace autosave lazy flush must not call mrSaveWorkspace directly.";
+		return false;
+	}
+	if (flushBody.find("setRuntimePreserveAutosavedWorkspace(false)") != std::string::npos || flushBody.find("if (runtimePreserveAutosavedWorkspace()) return;") == std::string::npos) {
+		failureReason = "Workspace autosave flush must respect preserved autosaved workspace state.";
+		return false;
+	}
+	if (flushBody.find("!force && std::chrono::steady_clock::now() < g_workspaceAutosaveDue") == std::string::npos) {
+		failureReason = "Workspace autosave flush must support delayed idle flush and forced quit flush.";
+		return false;
+	}
+	const std::size_t loadStart = windowCommands.find("void mrLoadWorkspace(const std::string &filename)");
+	const std::size_t loadEnd = windowCommands.find("\nMREditWindow *createEditorWindow", loadStart);
+	if (loadStart == std::string::npos || loadEnd == std::string::npos) {
+		failureReason = "Unable to isolate mrLoadWorkspace.";
+		return false;
+	}
+	loadWorkspaceBody = windowCommands.substr(loadStart, loadEnd - loadStart);
+	if (loadWorkspaceBody.find("mrSaveWorkspace(") != std::string::npos) {
+		failureReason = "Workspace load must not rewrite its source when entries cannot be restored.";
+		return false;
+	}
+	if (!containsAllSubstrings(loadWorkspaceBody, {"parsedWorkspaceEntries", "loadedWorkspaceEntries", "setRuntimePreserveAutosavedWorkspace(true)"}, missingNeedle)) {
+		failureReason = "Workspace load must preserve autosaved source when no entries restore: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (settingsStorageHeader.find("persistConfiguredSettingsSnapshotWithWorkspace") == std::string::npos) {
+		failureReason = "Settings storage must expose a dedicated workspace snapshot persist path.";
+		return false;
+	}
+	if (!containsAllSubstrings(settingsRuntime, {"persistConfiguredSettingsSnapshotWithMode(false", "persistConfiguredSettingsSnapshotWithMode(true", "includeWorkspace ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSourcePreservingWorkspace(paths, previousSource)", "source = buildSettingsMacroSourcePreservingWorkspace(paths, previousSource);"}, missingNeedle)) {
+		failureReason = "Settings persistence must separate normal settings writes from workspace autosave writes: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowList, {"void mrNotifyWindowTopologyChanged()", "mrMarkWorkspaceAutosaveDirty();"}, missingNeedle)) {
+		failureReason = "Workspace topology changes must mark lazy autosave dirty: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(editWindow, {"const TRect previousBounds = getBounds();", "if (previousBounds != getBounds()) mrMarkWorkspaceAutosaveDirty();"}, missingNeedle)) {
+		failureReason = "Workspace window geometry changes must mark lazy autosave dirty: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (editorApp.find("mrFlushWorkspaceAutosaveIfDue();") == std::string::npos) {
+		failureReason = "Editor idle loop must flush lazy workspace autosave.";
+		return false;
+	}
+	if (editorApp.find("mrFlushWorkspaceAutosaveNow();") == std::string::npos) {
+		failureReason = "Quit path must force pending lazy workspace autosave before settings snapshot.";
+		return false;
+	}
+	if (editorApp.find("setRuntimePreserveAutosavedWorkspace(true);\n\t\tmrLogMessage(\"Workspace autoload pending user choice; autosaved workspace preserved.\");\n\t\tconst mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog") == std::string::npos) {
+		failureReason = "Workspace autoload prompt must preserve autosaved workspace before the user chooses.";
+		return false;
+	}
+	if (!containsAllSubstrings(bentoProjection, {"mrMarkWorkspaceAutosaveDirty();", "setDividerPosition", "toggleLeafMaximized", "closePane"}, missingNeedle)) {
+		failureReason = "Bento workspace geometry changes must mark lazy autosave dirty: missing " + missingNeedle + ".";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 	std::string failure;
 
@@ -8141,6 +8345,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
 	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
+	runTest(ctx, "Workspace autosave lazy wiring guard", testWorkspaceAutosaveLazyWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Extended base palette initialization guard", testExtendedBasePaletteInitializationGuard);
 	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
@@ -8225,6 +8430,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
 	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
+	runTest(ctx, "Workspace autosave lazy wiring guard", testWorkspaceAutosaveLazyWiringGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Extended base palette initialization guard", testExtendedBasePaletteInitializationGuard);
 	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
