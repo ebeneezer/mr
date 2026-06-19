@@ -31,7 +31,7 @@
   - automated syntax highlighting, code folding and smart indenting for all known programming languages (except the marsian X!/&%/:-P language)
   - a macro manager for recording macros and binding them to hotkeys. You can also create, manage, edit and bind .mrmac files from inside the manager
   - virtual desktops
-  - saving/reloading workspaces
+  - workspaces: Loading, saving, autoloading,autosaving, workspace-wide multifile search & replace.
   - a window manager that can tile, minimize and cascade windows
   - recursive multi file search & search and replace
   - full Perl regex PCRE2
@@ -47,6 +47,7 @@
   - printing via PDF exports
   - acquire files from the output of shell commands or pipes
   - compiler profiles with automatic setup and error tracking in code
+  - LSP support
 
 ## Why? Who needs this?
 

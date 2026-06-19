@@ -26,6 +26,9 @@ Verboten:
 9. RAM Verschwendung
 10. Implementierungen, die wissentlich einfache Lesbarkeit gegenüber Laufzeit Effizienz bevorzugen.
 11. überflüssige Methoden, Hypertrophien, unnötige Redundanzen
+12. das Literal "Impl" am Ende von Bezeichnern
+13. das Literal"_" am Ende von Bezeichnern
+14. das Literal "_" am Anfang von Bezeichnern
 
 ## Priority
 
