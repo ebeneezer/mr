@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <set>
 #include <stop_token>
 #include <string>
 #include <vector>
@@ -15,6 +16,13 @@
 
 class MREditWindow;
 class MRVMHashStore;
+
+struct MRMacroExecUiCommandRequest {
+	std::string closureId;
+	std::string lvalue;
+	std::string target;
+	std::string command;
+};
 
 class VirtualMachine {
   public:
@@ -36,6 +44,9 @@ class VirtualMachine {
 	std::vector<Value> stack;
 	std::map<std::string, Value> variables;
 	std::unique_ptr<MRVMHashStore> mHashStore;
+	std::string mClosureId;
+	std::set<std::string> mClosureVariableNames;
+	std::vector<MRMacroExecUiCommandRequest> mExecUiCommandRequests;
 	bool verboseLogging;
 	bool logTruncated;
 	bool mAsyncDelayPending;
@@ -79,6 +90,8 @@ class VirtualMachine {
 	Value hashRead(int handle, const std::string &key) const;
 	void hashWrite(int handle, const std::string &key, const Value &value);
 	void hashErase(int handle, const std::string &key);
+	void setClosureContext(const std::string &closureId);
+	const std::vector<MRMacroExecUiCommandRequest> &execUiCommandRequests() const noexcept;
 	void execute(const unsigned char *bytecode, size_t length);
 	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, bool resetState, bool firstRun);
 	void setAsyncDelayEnabled(bool enabled) noexcept {
@@ -104,6 +117,7 @@ bool mrvmFlushPendingStartupKeymapBatch(std::string *errorMessage);
 
 struct MRMacroJobResult {
 	std::vector<std::string> logLines;
+	std::vector<MRMacroExecUiCommandRequest> execUiCommandRequests;
 	bool hadError;
 	bool cancelled;
 
@@ -112,6 +126,9 @@ struct MRMacroJobResult {
 };
 
 MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+bool mrvmStoreExecSessionClosureInt(const std::string &closureId, const std::string &lvalue, int value);
+bool mrvmApplyExecUiCommandRequest(const MRMacroExecUiCommandRequest &request);
 
 enum MRMacroDeferredUiCommandType {
 	mrducNone = 0,

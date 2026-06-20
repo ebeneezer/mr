@@ -12,15 +12,10 @@ using Value = VirtualMachine::Value;
 }
 
 bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode);
-bool enqueueDeferredUiCommand(const MRMacroDeferredUiCommand &command, int &errorCode);
 bool currentExecutingMacroSpec(std::string &macroSpec);
 
 namespace {
 constexpr const char *kDeferredWorkingMessageText = "working...";
-constexpr const char *kDeferredTvCallMessageBox = "MESSAGEBOX";
-constexpr const char *kDeferredTvCallVideoMode = "VIDEO_MODE";
-constexpr const char *kDeferredTvCallVideoCard = "VIDEO_CARD";
-constexpr const char *kDeferredTvCallToggle = "TOGGLE";
 
 bool isStringLike(const Value &value) {
 	return value.type == TYPE_STR || value.type == TYPE_CHAR;
@@ -66,6 +61,7 @@ enum class DeferredVisualUiProc {
 	MarqueeInfo,
 	MarqueeWarning,
 	MarqueeError,
+	MessageBox,
 	Working,
 	Brain,
 	PutBox,
@@ -85,6 +81,7 @@ DeferredVisualUiProc classifyDeferredVisualUiProc(const std::string &name) noexc
 	if (name == "MARQUEE") return DeferredVisualUiProc::MarqueeInfo;
 	if (name == "MARQUEE_WARNING") return DeferredVisualUiProc::MarqueeWarning;
 	if (name == "MARQUEE_ERROR") return DeferredVisualUiProc::MarqueeError;
+	if (name == "UI_MESSAGEBOX") return DeferredVisualUiProc::MessageBox;
 	if (name == "WORKING") return DeferredVisualUiProc::Working;
 	if (name == "BRAIN") return DeferredVisualUiProc::Brain;
 	if (name == "PUT_BOX") return DeferredVisualUiProc::PutBox;
@@ -111,6 +108,10 @@ bool buildDeferredVisualUiProcedureCommand(const std::string &name, const std::v
 		case DeferredVisualUiProc::MarqueeError:
 			if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects one string argument.");
 			command = MRMacroDeferredUiCommand(name == "MARQUEE" ? mrducMarqueeInfo : (name == "MARQUEE_WARNING" ? mrducMarqueeWarning : mrducMarqueeError), 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
+			return true;
+		case DeferredVisualUiProc::MessageBox:
+			if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("UI_MESSAGEBOX expects one string argument.");
+			command = MRMacroDeferredUiCommand(mrducMessageBox, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
 			return true;
 		case DeferredVisualUiProc::Working:
 			if (!args.empty()) throw std::runtime_error("WORKING expects no arguments.");
@@ -214,14 +215,6 @@ bool applyDeferredMenuUiProcedureCommand(const MRMacroDeferredUiCommand &command
 	}
 }
 
-std::string composeTvCallText(const std::vector<Value> &args) {
-	std::string text;
-	for (std::size_t i = 0; i < args.size(); ++i) {
-		if (i != 0) text.push_back(' ');
-		text += valueAsString(args[i]);
-	}
-	return text;
-}
 } // namespace
 
 bool dispatchDeferredVisualUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode) {
@@ -241,16 +234,4 @@ bool dispatchDeferredMenuUiProcedure(const std::string &name, const std::vector<
 	if (queueDeferredUiProcedure(name, args, errorCode)) return true;
 	if (!buildDeferredMenuUiProcedureCommand(name, args, command)) return false;
 	return applyDeferredMenuUiProcedureCommand(command);
-}
-
-bool dispatchDeferredUiTvCall(const std::string &nameUpper, const std::vector<Value> &args, int &errorCode) {
-	errorCode = 0;
-	if (nameUpper == kDeferredTvCallMessageBox) {
-		MRMacroDeferredUiCommand command(mrducMessageBox, 0, 0, 0, 0, 0, 0, 0, 0, composeTvCallText(args));
-		if (enqueueDeferredUiCommand(command, errorCode)) return true;
-		mrvmUiRenderFacadeRenderDeferredCommand(command);
-		return true;
-	}
-	if (nameUpper == kDeferredTvCallVideoMode || nameUpper == kDeferredTvCallVideoCard || nameUpper == kDeferredTvCallToggle) throw std::runtime_error("TVCALL " + nameUpper + " is not implemented.");
-	return false;
 }

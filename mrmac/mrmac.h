@@ -4,7 +4,6 @@
 #include <stddef.h>
 
 /* Opcode set for the current MRMAC core */
-#define OP_TVCALL 0x20
 #define OP_JZ 0x21
 #define OP_CALL 0x22
 #define OP_RET 0x23
@@ -80,6 +79,10 @@
 #define MACRO_MODE_DOS_SHELL 1
 #define MACRO_MODE_ALL 255
 
+/* Compiled MRMac unit kinds. */
+#define MRMAC_UNIT_MACRO 0
+#define MRMAC_UNIT_CLOSURE 1
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -112,6 +115,8 @@ int get_compiled_macro_entry(int index);
 int get_compiled_macro_flags(int index);
 const char *get_compiled_macro_keyspec(int index);
 int get_compiled_macro_mode(int index);
+int get_compiled_macro_unit_kind(int index);
+int get_compiled_macro_tick_ms(int index);
 const char *get_compiled_macro_file_name(void);
 
 #ifdef __cplusplus

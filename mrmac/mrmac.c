@@ -42,6 +42,8 @@ typedef struct {
 	unsigned flags;
 	char *keyspec;
 	int mode;
+	int unit_kind;
+	int tick_ms;
 } CompiledMacroInfo;
 
 #define MAX_COMPILED_MACROS 256
@@ -74,8 +76,11 @@ typedef enum {
 	TOK_REAL_LITERAL,
 	TOK_KEYSPEC,
 	TOK_MACRO,
+	TOK_CLOSURE,
 	TOK_MACRO_FILE,
 	TOK_END_MACRO,
+	TOK_END_CLOSURE,
+	TOK_DEF_TICK,
 	TOK_DEF_INT,
 	TOK_DEF_STR,
 	TOK_DEF_CHAR,
@@ -87,7 +92,6 @@ typedef enum {
 	TOK_END,
 	TOK_WHILE,
 	TOK_DO,
-	TOK_TVCALL,
 	TOK_CALL,
 	TOK_RET,
 	TOK_GOTO,
@@ -180,13 +184,15 @@ static void reset_compiled_macro_info(void) {
 		free(g_compiled_macros[i].keyspec);
 		g_compiled_macros[i].keyspec = NULL;
 		g_compiled_macros[i].mode = MACRO_MODE_EDIT;
+		g_compiled_macros[i].unit_kind = MRMAC_UNIT_MACRO;
+		g_compiled_macros[i].tick_ms = 0;
 	}
 	g_compiled_macro_count = 0;
 	free(g_compiled_macro_file_name);
 	g_compiled_macro_file_name = NULL;
 }
 
-static int add_compiled_macro_info(const char *name, int entry_pos, unsigned flags, const char *keyspec, int mode) {
+static int add_compiled_macro_info(const char *name, int entry_pos, unsigned flags, const char *keyspec, int mode, int unit_kind, int tick_ms) {
 	CompiledMacroInfo *slot;
 
 	if (g_compiled_macro_count >= MAX_COMPILED_MACROS) {
@@ -208,9 +214,15 @@ static int add_compiled_macro_info(const char *name, int entry_pos, unsigned fla
 		return -1;
 	}
 	if (mode != MACRO_MODE_EDIT && mode != MACRO_MODE_DOS_SHELL && mode != MACRO_MODE_ALL) mode = MACRO_MODE_EDIT;
+	if (unit_kind != MRMAC_UNIT_CLOSURE) {
+		unit_kind = MRMAC_UNIT_MACRO;
+		tick_ms = 0;
+	}
 	slot->entry_pos = entry_pos;
 	slot->flags = flags;
 	slot->mode = mode;
+	slot->unit_kind = unit_kind;
+	slot->tick_ms = tick_ms;
 	g_compiled_macro_count++;
 	return 0;
 }
@@ -551,15 +563,6 @@ static void lexer_next(Lexer *lex, Token *tok) {
 	}
 
 	if (*lex->p == '$') {
-		if (isxdigit((unsigned char)lex->p[1])) {
-			char *endp;
-			tok->kind = TOK_INTEGER_LITERAL;
-			tok->ival = (int)strtol(lex->p + 1, &endp, 16);
-			tok->text = xstrdup("");
-			lex->p = endp;
-			return;
-		}
-
 		if (strncasecmp(lex->p, "$MACRO_FILE", 11) == 0 && !is_ident_part((unsigned char)lex->p[11])) {
 			tok->kind = TOK_MACRO_FILE;
 			tok->text = xstrdup("$MACRO_FILE");
@@ -570,6 +573,20 @@ static void lexer_next(Lexer *lex, Token *tok) {
 			tok->kind = TOK_MACRO;
 			tok->text = xstrdup("$MACRO");
 			lex->p += 6;
+			return;
+		}
+		if (strncasecmp(lex->p, "$CLOSURE", 8) == 0 && !is_ident_part((unsigned char)lex->p[8])) {
+			tok->kind = TOK_CLOSURE;
+			tok->text = xstrdup("$CLOSURE");
+			lex->p += 8;
+			return;
+		}
+		if (isxdigit((unsigned char)lex->p[1])) {
+			char *endp;
+			tok->kind = TOK_INTEGER_LITERAL;
+			tok->ival = (int)strtol(lex->p + 1, &endp, 16);
+			tok->text = xstrdup("");
+			lex->p = endp;
 			return;
 		}
 	}
@@ -675,6 +692,10 @@ static void lexer_next(Lexer *lex, Token *tok) {
 		tok->text = text;
 
 		if (ident_eq(text, "END_MACRO")) tok->kind = TOK_END_MACRO;
+		else if (ident_eq(text, "END_CLOSURE"))
+			tok->kind = TOK_END_CLOSURE;
+		else if (ident_eq(text, "DEF_TICK"))
+			tok->kind = TOK_DEF_TICK;
 		else if (ident_eq(text, "DEF_INT"))
 			tok->kind = TOK_DEF_INT;
 		else if (ident_eq(text, "DEF_STR"))
@@ -697,8 +718,6 @@ static void lexer_next(Lexer *lex, Token *tok) {
 			tok->kind = TOK_WHILE;
 		else if (ident_eq(text, "DO"))
 			tok->kind = TOK_DO;
-		else if (ident_eq(text, "TVCALL"))
-			tok->kind = TOK_TVCALL;
 		else if (ident_eq(text, "CALL"))
 			tok->kind = TOK_CALL;
 		else if (ident_eq(text, "RET"))
@@ -2053,6 +2072,34 @@ static int parse_expression(Parser *ps, int min_prec, ExprInfo *out) {
 
 static int parse_statement_list(Parser *ps, TokenKind end1, TokenKind end2, TokenKind end3);
 
+static int token_is_identifier_text(const Token *tok, const char *text) {
+	return tok != NULL && tok->kind == TOK_IDENTIFIER && tok->text != NULL && ident_eq(tok->text, text);
+}
+
+static int parse_exec_assignment_expression(Parser *ps, const char *name, int line) {
+	ExprInfo target;
+	ExprInfo command;
+
+	if (parser_expect(ps, TOK_IDENTIFIER, "EXEC expected.") != 0) return -1;
+	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0) return -1;
+	if (parse_expression(ps, 1, &target) != 0) return -1;
+	if (!is_stringlike_type(target.type)) {
+		set_compile_error(line, "Type mismatch or syntax error.");
+		return -1;
+	}
+	if (parser_expect(ps, TOK_COMMA, "',' expected.") != 0) return -1;
+	if (parse_expression(ps, 1, &command) != 0) return -1;
+	if (!is_stringlike_type(command.type)) {
+		set_compile_error(line, "Type mismatch or syntax error.");
+		return -1;
+	}
+	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) return -1;
+	emit_byte(OP_PUSH_S);
+	emit_string(name);
+	emit_proc_call("EXEC_ASSIGN", 3);
+	return 0;
+}
+
 static int parse_variable_declaration(Parser *ps, int decl_type) {
 	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0) return -1;
 
@@ -2103,6 +2150,13 @@ static int parse_assignment_after_name(Parser *ps, const char *name, int line) {
 	}
 
 	if (parser_expect(ps, TOK_ASSIGN, "':=' expected.") != 0) return -1;
+	if (token_is_identifier_text(&ps->tok, "EXEC")) {
+		if (var_type != TYPE_INT) {
+			set_compile_error(line, "Type mismatch or syntax error.");
+			return -1;
+		}
+		return parse_exec_assignment_expression(ps, name, line);
+	}
 	if (parse_expression(ps, 1, &expr) != 0) return -1;
 	if (!can_assign_type(var_type, expr.type)) {
 		set_compile_error(line, "Type mismatch or syntax error.");
@@ -2248,38 +2302,6 @@ static int parse_call_statement(Parser *ps) {
 	return 0;
 }
 
-static int parse_tvcall_statement(Parser *ps) {
-	char *name;
-	ExprInfo args[32];
-	int argc = 0;
-
-	if (parser_expect(ps, TOK_TVCALL, "Syntax Error.") != 0) return -1;
-	if (ps->tok.kind != TOK_IDENTIFIER) {
-		set_compile_error(ps->tok.line, "Identifier expected.");
-		return -1;
-	}
-	name = xstrdup(ps->tok.text);
-	parser_next(ps);
-	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0) {
-		free(name);
-		return -1;
-	}
-	if (parse_argument_expressions(ps, args, &argc, 32) != 0) {
-		free(name);
-		return -1;
-	}
-	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) {
-		free(name);
-		return -1;
-	}
-
-	emit_byte(OP_TVCALL);
-	emit_string(name);
-	emit_byte((unsigned char)argc);
-	free(name);
-	return 0;
-}
-
 typedef struct {
 	const char *name;
 	int argc;
@@ -2395,6 +2417,9 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("SNIPPET_NEXT_PLACEHOLDER", CALL_ARG_STRINGLIKE, "SNIPPET_NEXT_PLACEHOLDER"),
     PROC_SIG1("SNIPPET_PREV_PLACEHOLDER", CALL_ARG_STRINGLIKE, "SNIPPET_PREV_PLACEHOLDER"),
     PROC_SIG1("RUN_MACRO", CALL_ARG_STRINGLIKE, "RUN_MACRO"),
+    PROC_SIG3("EXEC_ASSIGN", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "EXEC_ASSIGN"),
+    PROC_SIG1("EXEC_SESSION_LIST", CALL_ARG_STRINGLIKE, "EXEC_SESSION_LIST"),
+    PROC_SIG1("EXEC_SESSION_STOP", CALL_ARG_INT, "EXEC_SESSION_STOP"),
     PROC_SIG1("MARQUEE", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG1("MARQUEE_WARNING", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG1("MARQUEE_ERROR", CALL_ARG_STRINGLIKE, NULL),
@@ -2540,6 +2565,10 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG8("UI_LISTBOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, NULL),
     PROC_SIG1("UI_LIST_CLEAR", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG2("UI_LIST_ADD", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG2("UI_MODELESS_ON", CALL_ARG_INT, CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG1("UI_MODELESS_SHOW", CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG1("UI_MODELESS_CLOSE", CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG1("UI_MESSAGEBOX", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG0("SET_INDENT_LEVEL", "SET_INDENT_LEVEL"),
     PROC_SIG1("REPLACE", CALL_ARG_STRINGLIKE, "REPLACE"),
     PROC_SIG1("TEXT", CALL_ARG_STRINGLIKE, "TEXT"),
@@ -3013,7 +3042,7 @@ typedef struct {
 } KeywordStatementDispatch;
 
 static const KeywordStatementDispatch kKeywordStatementDispatch[] = {
-    {TOK_GOTO, parse_goto_statement}, {TOK_CALL, parse_call_statement}, {TOK_TVCALL, parse_tvcall_statement}, {TOK_RET, parse_ret_statement}, {TOK_IF, parse_if_statement}, {TOK_WHILE, parse_while_statement},
+    {TOK_GOTO, parse_goto_statement}, {TOK_CALL, parse_call_statement}, {TOK_RET, parse_ret_statement}, {TOK_IF, parse_if_statement}, {TOK_WHILE, parse_while_statement},
 };
 
 static int parse_keyword_statement(Parser *ps, int *out_handled) {
@@ -3183,7 +3212,7 @@ static int parse_macro_definition(Parser *ps) {
 		return -1;
 	}
 
-	if (add_compiled_macro_info(name, (int)emit_get_pos(), flags, keyspec, mode) != 0) {
+	if (add_compiled_macro_info(name, (int)emit_get_pos(), flags, keyspec, mode, MRMAC_UNIT_MACRO, 0) != 0) {
 		free(keyspec);
 		free(name);
 		return -1;
@@ -3218,12 +3247,89 @@ static int parse_macro_definition(Parser *ps) {
 	return 0;
 }
 
+static int parse_closure_tick(Parser *ps, int *tick_ms) {
+	int value;
+
+	if (parser_expect(ps, TOK_DEF_TICK, "DEF_TICK expected.") != 0) return -1;
+	if (parser_expect(ps, TOK_LPAREN, "( expected.") != 0) return -1;
+	if (ps->tok.kind != TOK_INTEGER_LITERAL) {
+		set_compile_error(ps->tok.line, "Integer expected.");
+		return -1;
+	}
+	value = ps->tok.ival;
+	if (value <= 0) {
+		set_compile_error(ps->tok.line, "DEF_TICK interval must be positive.");
+		return -1;
+	}
+	parser_next(ps);
+	if (parser_expect(ps, TOK_RPAREN, ") expected.") != 0) return -1;
+	if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0) return -1;
+	if (tick_ms != NULL) *tick_ms = value;
+	return 0;
+}
+
+static int parse_closure_definition(Parser *ps) {
+	char *name;
+	int tick_ms = 0;
+
+	if (parser_expect(ps, TOK_CLOSURE, "Scommand expected.") != 0) return -1;
+	if (ps->tok.kind != TOK_IDENTIFIER) {
+		set_compile_error(ps->tok.line, "Closure name expected.");
+		return -1;
+	}
+
+	name = xstrdup(ps->tok.text);
+	if (name == NULL) {
+		set_compile_error(ps->tok.line, "Out of memory.");
+		return -1;
+	}
+	if (begin_macro(name) != 0) {
+		free(name);
+		return -1;
+	}
+	parser_next(ps);
+	if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0) {
+		free(name);
+		return -1;
+	}
+	if (parse_closure_tick(ps, &tick_ms) != 0) {
+		free(name);
+		return -1;
+	}
+	if (add_compiled_macro_info(name, (int)emit_get_pos(), 0, "", MACRO_MODE_EDIT, MRMAC_UNIT_CLOSURE, tick_ms) != 0) {
+		free(name);
+		return -1;
+	}
+	if (parse_statement_list(ps, TOK_END_CLOSURE, TOK_EOF, TOK_EOF) != 0) {
+		free(name);
+		return -1;
+	}
+	if (parser_expect(ps, TOK_END_CLOSURE, "Premature end of file.") != 0) {
+		free(name);
+		return -1;
+	}
+	if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0) {
+		free(name);
+		return -1;
+	}
+	if (resolve_pending_refs() != 0) {
+		free(name);
+		return -1;
+	}
+
+	emit_byte(OP_HALT);
+	free(name);
+	return 0;
+}
+
 static int parse_program(Parser *ps) {
 	while (ps->tok.kind != TOK_EOF) {
 		if (ps->tok.kind == TOK_MACRO_FILE) {
 			if (parse_macro_file_definition(ps) != 0) return -1;
 		} else if (ps->tok.kind == TOK_MACRO) {
 			if (parse_macro_definition(ps) != 0) return -1;
+		} else if (ps->tok.kind == TOK_CLOSURE) {
+			if (parse_closure_definition(ps) != 0) return -1;
 		} else if (ps->tok.kind == TOK_ERROR) {
 			set_compile_error(ps->tok.line, ps->tok.text ? ps->tok.text : "Syntax Error.");
 			return -1;
@@ -3323,4 +3429,14 @@ const char *get_compiled_macro_keyspec(int index) {
 int get_compiled_macro_mode(int index) {
 	if (index < 0 || index >= g_compiled_macro_count) return MACRO_MODE_EDIT;
 	return g_compiled_macros[index].mode;
+}
+
+int get_compiled_macro_unit_kind(int index) {
+	if (index < 0 || index >= g_compiled_macro_count) return MRMAC_UNIT_MACRO;
+	return g_compiled_macros[index].unit_kind;
+}
+
+int get_compiled_macro_tick_ms(int index) {
+	if (index < 0 || index >= g_compiled_macro_count) return 0;
+	return g_compiled_macros[index].tick_ms;
 }

@@ -1,0 +1,14 @@
+$MACRO_FILE ExecSessionTailProbe;
+
+$MACRO ExecSessionTailProbe;
+MAKE_MESSAGE('ExecSessionTailProbe loaded: closure ticks every second and sends TEXT_END to the active editor.');
+END_MACRO;
+
+$CLOSURE ExecSessionTailTick;
+DEF_TICK(1000);
+DEF_INT(TickCount);
+DEF_INT(ExecResult);
+
+TickCount := TickCount + 1;
+ExecResult := EXEC('ACTIVE', 'TEXT_END');
+END_CLOSURE;

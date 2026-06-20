@@ -215,12 +215,16 @@ struct ExternalIoFinishedPayload final : Payload {
 struct MacroJobFinishedPayload final : Payload {
 	std::string displayName;
 	std::vector<std::string> logLines;
+	std::vector<MRMacroExecUiCommandRequest> execUiCommandRequests;
 	bool hadError;
 
-	MacroJobFinishedPayload() noexcept : displayName(), logLines(), hadError(false) {
+	MacroJobFinishedPayload() noexcept : displayName(), logLines(), execUiCommandRequests(), hadError(false) {
 	}
 
-	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError) : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError) {
+	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError) : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), execUiCommandRequests(), hadError(aHadError) {
+	}
+
+	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, std::vector<MRMacroExecUiCommandRequest> requests, bool aHadError) : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), execUiCommandRequests(std::move(requests)), hadError(aHadError) {
 	}
 };
 

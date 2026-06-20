@@ -66,7 +66,7 @@ Architecture contracts:
 - `documentation/architecture/settings-bootstrap-contract.md`
 - `documentation/architecture/settings-persistence-contract.md`
 - `documentation/architecture/mrmac-language-contract.md`
-- `documentation/architecture/vm-tvcall-contract.md`
+- `documentation/architecture/vm-deferred-ui-contract.md`
 - `documentation/architecture/keymap-contract.md`
 - `documentation/architecture/coprocessor-deferred-ui-contract.md`
 - `documentation/architecture/file-path-utilities-contract.md`
@@ -99,7 +99,7 @@ The following areas are protected and must not be changed opportunistically:
 - `MRSETUP`,
 - `SAVE_SETTINGS`,
 - workspace serialization,
-- VM intrinsics and TVCALL,
+- VM intrinsics and deferred UI,
 - MacroCellGrid / MacroCellView / deferred UI playback,
 - TVision drawing/event mechanics,
 - keymap persistence and resolver semantics,

@@ -8,6 +8,5 @@
 
 bool dispatchDeferredVisualUiProcedure(const std::string &name, const std::vector<VirtualMachine::Value> &args, int &errorCode);
 bool dispatchDeferredMenuUiProcedure(const std::string &name, const std::vector<VirtualMachine::Value> &args, int &errorCode);
-bool dispatchDeferredUiTvCall(const std::string &nameUpper, const std::vector<VirtualMachine::Value> &args, int &errorCode);
 
 #endif

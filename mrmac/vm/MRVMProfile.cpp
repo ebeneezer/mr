@@ -230,28 +230,25 @@ unsigned classifyProcName(const std::string &name) {
 	if (name == "MRSETUP" || name == "MRCOMPILERPROFILE") return mrefUiAffinity;
 	if (name == "MAKE_MESSAGE") return mrefUiAffinity;
 	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") return mrefUiAffinity;
+	if (name == "EXEC_SESSION_LIST" || name == "EXEC_SESSION_STOP") return mrefUiAffinity;
 	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "SET_GLOBAL_HASH" || name == "UNLOAD_MACRO") return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE" || name == "SET_FILE_ATTR") return mrefExternalIo;
 	if (name == "SHELL_TO_OS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "LOAD_FILE" || name == "SAVE_FILE") return mrefUiAffinity | mrefExternalIo;
-	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" || name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX") return mrefUiAffinity;
+	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" || name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX" || name == "UI_MODELESS_ON" || name == "UI_MODELESS_SHOW" || name == "UI_MODELESS_CLOSE" || name == "UI_MESSAGEBOX") return mrefUiAffinity;
 	if (name == "SAVE_SETTINGS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "BEEP") return mrefUiAffinity;
 	if (name == "WRITE_SOD") return mrefUiAffinity;
 	if (name == "REPLACE" || name == "TEXT" || name == "PUT_LINE" || name == "CR" || name == "KEY_IN" || name == "DEL_CHAR" || name == "DEL_CHARS" || name == "DEL_LINE" || name == "INDENT" || name == "UNDENT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "ERASE_WINDOW" || name == "WINDOW_COPY" || name == "WINDOW_MOVE") return mrefUiAffinity | mrefStagedWrite;
 	if (name == "SNIPPET_START" || name == "SNIPPETS_UNLOAD" || name == "SNIPPET_NEXT_PLACEHOLDER" || name == "SNIPPET_PREV_PLACEHOLDER") return mrefUiAffinity;
 	if (name == "RUN_MACRO") return mrefUiAffinity | mrefStagedWrite;
+	if (name == "EXEC_ASSIGN") return mrefBackgroundSafe;
 	if (name == "DELAY") return mrefBackgroundSafe;
 	if (isKeymapActionMacroCommand(name)) return mrefUiAffinity;
 	if (name == "SET_RANDOM_MARK" || name == "GET_RANDOM_MARK" || name == "EXTEND_BLOCK_BY_MOTION") return mrefUiAffinity;
 	if (name == "SET_INDENT_LEVEL" || name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" || name == "READ_KEY" || name == "PUSH_KEY" || name == "PASS_KEY" || name == "PUSH_LABELS" || name == "POP_LABELS" || name == "FLABEL" || name == "MACRO_TO_KEY" ||
 	    name == "CMD_TO_KEY" || name == "UNASSIGN_KEY" || name == "UNASSIGN_ALL_KEYS" || name == "KEY_RECORD" || name == "PLAY_KEY_MACRO" || name == "SAVE_OS_SCREEN" || name == "REST_OS_SCREEN" || name == "QUIT" || name == "GOTO_LINE" || name == "GOTO_COL" || name == "SWITCH_WINDOW" || name == "SIZE_WINDOW" || name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS")
 		return mrefUiAffinity;
-	return mrefUiAffinity;
-}
-
-unsigned classifyTvCallName(const std::string &name) {
-	if (name == "MESSAGEBOX") return mrefUiAffinity;
 	return mrefUiAffinity;
 }
 
@@ -389,7 +386,7 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	                                       "SCROLL_BOX_DN",
 	                                       "CLEAR_SCREEN",
 	                                       "KILL_BOX",
-	                                       "MESSAGEBOX"};
+	                                       "UI_MESSAGEBOX"};
 
 	for (const char *symbol : kAllowed)
 		if (value == symbol) return true;
@@ -513,14 +510,6 @@ MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::
 				noteExecutionFlags(profile, classifyProcName(name), name);
 				break;
 			}
-			case OP_TVCALL: {
-				std::string name;
-				if (!readBytecodeCString(bytecode, length, ip, name) || !skipBytecodeBytes(length, ip, sizeof(unsigned char))) return profile;
-				++profile.tvCallCount;
-				name = upperProfileKey(name);
-				noteExecutionFlags(profile, classifyTvCallName(name), name);
-				break;
-			}
 			case OP_RET:
 			case OP_HALT:
 			case OP_ADD:
@@ -571,7 +560,7 @@ std::string mrvmDescribeExecutionProfile(const MRMacroExecutionProfile &profile)
 		out << parts[i];
 	}
 
-	out << " [ops=" << profile.opcodeCount << ", intr=" << profile.intrinsicCount << ", proc=" << profile.procCount << ", procvar=" << profile.procVarCount << ", tv=" << profile.tvCallCount << "]";
+	out << " [ops=" << profile.opcodeCount << ", intr=" << profile.intrinsicCount << ", proc=" << profile.procCount << ", procvar=" << profile.procVarCount << "]";
 	return out.str();
 }
 

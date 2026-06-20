@@ -678,10 +678,10 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "$macro", 8) * 5);
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "$macro_file", 8) * 5);
-	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "tvcall", 8) * 5);
+	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "def_tick", 8) * 5);
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "def_int", 8) * 4);
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "def_str", 8) * 4);
-	if (containsText(lower, "$macro") || containsText(lower, "tvcall")) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::MRMAC)] += 3;
+	if (containsText(lower, "$macro") || containsText(lower, "def_tick")) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::MRMAC)] += 3;
 
 	addClassificationScore(scores, MRSyntaxLanguage::Make, countMatches(lower, ".phony", 8) * 4);
 	addClassificationScore(scores, MRSyntaxLanguage::Make, makeRecipeLines * 2);

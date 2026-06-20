@@ -15,7 +15,8 @@ The contracts are not design essays. They define boundaries that must not be blu
 - `settings-bootstrap-contract.md`
 - `settings-persistence-contract.md`
 - `mrmac-language-contract.md`
-- `vm-tvcall-contract.md`
+- `mrmac-exec-session-contract.md`
+- `vm-deferred-ui-contract.md`
 - `keymap-contract.md`
 - `coprocessor-deferred-ui-contract.md`
 - `file-path-utilities-contract.md`

@@ -1,0 +1,331 @@
+# MRMac Execution Session Contract
+
+## Scope
+
+Applies to future changes that introduce or modify MRMac execution sessions,
+including:
+
+- `mrmac/MRMacroRunner.cpp`
+- `mrmac/MRMacroRunner.hpp`
+- `mrmac/MRVM.cpp`
+- `mrmac/MRVM.hpp`
+- `mrmac/vm/MRVMProfile.*`
+- `coprocessor/MRCoprocessor.*`
+- `coprocessor/MRCoprocessorDispatch.*`
+- foreground macro delay pumping
+- background and staged macro result routing
+- debugger, timer, event-handler and modeless UI consumers of macro execution
+
+## Authority
+
+The VM owns bytecode execution semantics.
+
+An MRMac execution session owns execution lifetime, ownership metadata, routing,
+cancellation, yield/resume state and result publication for one logical macro
+execution.
+
+The coprocessor owns background task scheduling and completion delivery.
+Deferred macro UI playback owns deferred UI command ordering and application.
+
+Consumers such as the MRMac debugger, timers, event callbacks and modeless tools
+must consume execution sessions. They must not create parallel macro runners or
+side channels into VM state.
+
+## Terms
+
+An execution session is a typed runtime object for one logical macro execution.
+It may be backed by:
+
+- foreground UI-thread execution,
+- foreground execution suspended on cooperative `DELAY`,
+- background-safe `Lane::Macro` execution,
+- staged background execution with existing commit and deferred playback.
+
+An execution result is the typed completion record of a session. It may report
+completion, cancellation, failure, VM log lines, staged edits, deferred UI
+commands or future debugger snapshots according to the selected route.
+
+An execution owner identifies the UI/runtime owner of a session, such as a
+buffer id, window role or later debugger session id. Ownership is for routing
+and lifetime checks. It is not a persistence identity.
+
+A closure unit is an MRMac source unit declared with `$CLOSURE`. A closure unit
+is scheduled runtime code, not a debugger concept and not a second macro
+frontend.
+
+## Runtime Split
+
+The following diagram summarizes the intended split between timer sources,
+runtime consumers, execution sessions, macro routing and coprocessor work items.
+
+![MRMac exec session timer scheduler execution split](assets/mrmac-exec-session-timer-scheduler-execution-split.png)
+
+## Invariants
+
+- Normal macro semantics remain owned by the existing compiler and VM.
+- Exec sessions must not introduce a second compiler frontend.
+- Exec sessions must not renumber opcodes or change bytecode semantics.
+- Exec sessions must not bypass `VirtualMachine::executeAt` for normal bytecode
+  execution.
+- Exec sessions must reuse the existing route classification from
+  `MRMacroExecutionProfile` unless a dedicated architecture decision changes it.
+- Exec sessions must reuse `Lane::Macro` for background macro work unless a
+  dedicated architecture decision adds a lane.
+- Exec sessions must not change deferred UI playback ordering or batching.
+- Exec sessions must not add direct TVision screen writes.
+- Exec sessions must not add new settings or workspace persistence.
+- Exec session state is runtime state. It must not be serialized through
+  `settings.mrmac` or workspace files without a dedicated persistence decision.
+- Closure state is stored only in the central VM K/V hash under the top-level
+  key `EXECSESSIONS`.
+- Exec sessions must not add a second closure registry or a second persistence
+  store. Runtime scheduler state may remember which consumer is scheduled; the
+  closure variable state remains in `EXECSESSIONS`.
+- `MRSETUP` and `SAVE_SETTINGS` behavior must remain governed by the VM and
+  settings contracts.
+- Cancellation and pause are cooperative. A session must not interrupt execution
+  in the middle of a C++ intrinsic, external I/O operation or deferred UI
+  playback application.
+- `DELAY` remains a cooperative yield point. Generalizing foreground pending
+  delay into session state must preserve existing async delay semantics.
+
+## Consumer Rule
+
+The MRMac debugger is a consumer of execution sessions.
+
+Debugger-specific concepts such as source maps, breakpoints, step mode,
+variable snapshots and source-location projection must be layered on top of
+execution sessions. They must not be mixed into the base session contract unless
+they are represented as optional typed session capabilities or results.
+
+Modeless MRMac UI, timers and event callbacks are also consumers of execution
+sessions. They may request execution, cancellation or status, but they do not
+own VM internals.
+
+## Closure Units
+
+The first closure syntax is:
+
+```mrmac
+$CLOSURE Name;
+DEF_TICK(1000);
+DEF_INT(Counter);
+Counter := Counter + 1;
+END_CLOSURE;
+```
+
+`DEF_TICK` declares the scheduler interval in milliseconds. It is runtime
+metadata, not bytecode.
+
+The compiler records closure units as compiled MRMac units with an entry offset,
+unit kind and tick interval. It must not introduce new opcodes for this tranche.
+
+The runner starts a closure unit through `VirtualMachine::executeAt` using the
+recorded entry offset. The scheduler may carry source text plus entry name as a
+runtime package, but it must not compile, cache or inject bytecode itself.
+
+Closure variables declared by `DEF_*` are loaded from:
+
+```text
+EXECSESSIONS/closures/<closureId>/state/<variableName>
+```
+
+On assignment, declared closure variables are written back to the same state
+hash. If the closure id or state entry is absent, the VM falls back to the normal
+default value for the declared type. If a later asynchronous result cannot find
+the closure state for its lvalue, the result must be discarded rather than
+reviving expired closure state.
+
+The initial closure id is the runtime macro spec that identifies the loaded
+closure, for example:
+
+```text
+path/to/file.mrmac^ClockTick
+```
+
+This id is a runtime K/V key. It is not a persisted object identity.
+
+## Exec UI Commands
+
+MRMac may request a UI-affine command from a closure with assignment syntax:
+
+```mrmac
+Result := EXEC('ACTIVE', 'TEXT_END');
+```
+
+`EXEC` returns an integer success code. `1` means the UI command was accepted and
+executed; `0` means the target or command was not accepted.
+
+`EXEC` is not a normal expression intrinsic. The compiler treats
+`lvalue := EXEC(target, command)` as a special assignment form so the lvalue is
+known to the VM. The first implementation supports only integer lvalues.
+
+In a UI-thread macro, `EXEC` may execute immediately through the existing
+command router and write the lvalue directly.
+
+In a background execution session, `EXEC` must not touch TVision or editor state
+directly. The worker records a typed UI-command request. The UI result pump later
+applies the request on the UI thread and writes the success code back to:
+
+```text
+EXECSESSIONS/closures/<closureId>/state/<lvalue>
+```
+
+If the closure id or lvalue state is gone, the result is discarded. The result
+must not recreate expired closure lifetime.
+
+The first target contract is conservative:
+
+- empty target or `ACTIVE`: current effective editor window,
+- `BUFFER:<id>`: editor window with that buffer id.
+
+The command string is normalized through the existing keymap/action command
+surface. The first compatibility aliases include `TEXT_END`, `EOF`,
+`TEXT_START`, `TOF`, `LINE_END`, `EOL`, `LINE_START`, `HOME`, `SCROLL_UP` and
+`SCROLL_DOWN`.
+
+## Route Boundaries
+
+Foreground execution may touch live UI state only through existing VM/UI bridge
+rules.
+
+Background-safe execution may run on `Lane::Macro` only when the bytecode profile
+is background-safe.
+
+Staged execution may run on `Lane::Macro` only through the existing staged input,
+staged result, conflict check, commit and deferred playback route.
+
+Exec sessions may name these routes and expose status for them. They must not
+merge route semantics into a generic path that hides staging, validation,
+canonical execution, final apply or rendering.
+
+## Allowed
+
+- Introducing session metadata that describes existing macro execution routes.
+- Moving foreground pending `DELAY` ownership into explicit session state while
+  preserving behavior.
+- Attaching session ids to existing background and staged macro results.
+- Adding typed runtime-only status and result snapshots for UI consumers.
+- Adding runtime-only change hooks that let consumers refresh those snapshots.
+- Adding runtime-only snapshot dirty generations driven by those hooks.
+- Adding multiple runtime-only change listeners with explicit registration ids
+  and deregistration.
+- Adding owner-based runtime filters for status and cooperative cancellation
+  requests.
+- Adding opt-in startup smoke consumers that install hooks without starting
+  macro execution.
+- Adding cancellation/status commands that route through existing cooperative
+  cancellation mechanisms.
+
+## Forbidden without explicit approval
+
+- New macro execution lanes.
+- New opcode semantics.
+- Bytecode injection APIs that bypass the canonical compiler path.
+- Persisting sessions, breakpoints or runtime state in settings/workspace files.
+- Direct TVision rendering from sessions or consumers.
+- Debugger-only state baked into the base session model.
+- A modeless widget or TVision binding API in the first session tranche.
+- New deferred UI batching boundaries.
+- Replacing staged macro conflict checks with session-level shortcuts.
+- Single-listener overwrite semantics for execution-session change consumers.
+
+## Listener Lifetime
+
+Execution-session change listeners are runtime-only process state.
+
+Listeners must use stable function-pointer callbacks. A listener that represents
+a short-lived consumer must deregister by id before the owning consumer is
+destroyed. A process-lifetime consumer may keep its listener registered until
+process exit.
+
+Notification must copy the registered callbacks under the listener lock and call
+them after releasing that lock. Listener callbacks must not depend on holding
+the listener lock.
+
+Convenience installers for process-lifetime listeners must be idempotent unless
+they explicitly document that repeated registration is intended.
+
+## Status Consumers
+
+Status consumers may build runtime-only snapshots from active sessions, pending
+foreground `DELAY` sessions and recent terminal results. They must treat these
+snapshots as observation state only.
+
+Status consumers must not introduce debugger concepts, UI rendering contracts or
+new macro execution routes. They may format status lines for logs or later UI
+surfaces, but they must not mutate VM, editor or coprocessor state.
+
+## Runtime Scheduler
+
+The timer source is a separate runtime component. It supplies monotonic runtime
+ticks and must not know macro specs, owners, execution routes or overrun policy.
+
+The runtime scheduler owns scheduled consumer metadata such as owner, interval,
+macro spec or macro source package and overrun policy. It is runtime-only state
+and must not be serialized.
+
+The scheduler does not execute bytecode directly. When a scheduled tick is
+allowed to run, it requests a normal execution session. The macro runner still
+owns route classification, and the coprocessor still receives only concrete
+work items for background or staged execution.
+
+A scheduled source package must enter through the same compiler path as other
+MRMac source text. The scheduler may carry source text as runtime consumer
+configuration, but it must not compile, cache or inject bytecode.
+
+When a loaded file contains a closure unit with `DEF_TICK`, the runtime may
+register one scheduled consumer for that closure. Reloading or unloading the
+file must remove the previous scheduled consumer before installing a replacement.
+
+Skipped ticks must be visible as scheduler events and must be logged. A skipped
+tick is not an execution result, because no execution session was created for
+that tick. Debugger and status tooling must be able to explain both what ran
+from execution-session results and what did not run from scheduler events.
+
+The first overrun policy is `skip`: if the previous session for a scheduled
+consumer is still active, the next due tick records `TickSkipped` with the
+blocking session id.
+
+The scheduler execution hook records `TickDue` and then requests execution
+through the normal macro runner. It must record `TickStarted` or
+`TickStartFailed` so the debugger can explain both successful dispatch and
+dispatch failure.
+
+The scheduler must observe execution-session terminal results and clear the
+matching scheduled consumer's active session id. This observation is keyed by
+session id, not by macro name. It must record `TickFinished` so status and
+debugger consumers can explain when an overrun blocker disappeared.
+
+## Cancellation Requests
+
+Session cancellation requests are cooperative.
+
+A request may mark an active background or staged session as
+`CancellationRequested`, but the session remains active until the existing
+coprocessor result path publishes a terminal result. Foreground `DELAY`
+sessions may be cancelled directly at their cooperative yield point and then
+publish `Cancelled`.
+
+Owner-scoped cancellation must match only the explicit owner identity. A buffer
+owner must not match ownerless sessions or sessions for another buffer.
+
+## Required tests
+
+For execution-session code changes, test:
+
+- `make clean all CXX=clang++`
+- representative macro compile and run
+- foreground UI-thread macro execution
+- foreground `DELAY` yield, resume and cancel
+- background-safe `Lane::Macro` execution
+- staged macro execution, conflict rejection and successful commit
+- deferred UI playback ordering and batching
+- VM cancellation behavior
+- MRSETUP allowed and forbidden contexts if touched
+- SAVE_SETTINGS behavior if touched
+- relevant regression probes and structure checks
+
+Documentation-only changes to this contract do not require runtime regression
+tests, but any later code tranche must name the affected route and tests before
+implementation.

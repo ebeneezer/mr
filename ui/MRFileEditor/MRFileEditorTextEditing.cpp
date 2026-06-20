@@ -42,8 +42,10 @@ bool MRFileEditor::appendLogViewerData(const char *data, uint length, const std:
 	const int oldDeltaX = delta.x;
 	const int oldDeltaY = delta.y;
 	const int visibleRows = std::max(1, visibleTextRows());
-	const int oldMaxY = std::max(0, static_cast<int>(std::max<std::size_t>(1, mBufferModel.lineCount())) - visibleRows);
-	const bool follow = oldDeltaY >= oldMaxY;
+	const std::size_t oldLineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+	const std::size_t oldVisibleTop = static_cast<std::size_t>(std::max(0, oldDeltaY));
+	const std::size_t oldVisibleBottom = oldVisibleTop + static_cast<std::size_t>(visibleRows - 1);
+	const bool follow = oldVisibleBottom >= oldLineCount - 1;
 
 	if (data == nullptr || length == 0) return true;
 	text.assign(data, length);

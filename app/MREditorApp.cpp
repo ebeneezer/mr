@@ -46,7 +46,11 @@
 #include "MRAppState.hpp"
 #include "MRCommandRouter.hpp"
 #include "MRCommands.hpp"
+#include "MRExecSessionSmoke.hpp"
+#include "MRExecSessionStatus.hpp"
 #include "MRMenuFactory.hpp"
+#include "MRRuntimeScheduler.hpp"
+#include "MRRuntimeTimerSource.hpp"
 
 #include <algorithm>
 #include <ctime>
@@ -1144,6 +1148,10 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	initializeFullscreenHint();
 	loadStartupSettingsMacro(std::string(), nullptr);
 	logStartupPhase("settings_bootstrap");
+	installExecSessionStatusConsumerIfEnabled();
+	installExecSessionSmokePackageIfEnabled();
+	installRuntimeSchedulerSmokeIfEnabled();
+	logStartupPhase("runtime_scheduler");
 	applyConfiguredDisplayLayout();
 	logStartupPhase("display_layout_initial");
 	bootstrapIndexedMacroBindings();
@@ -1151,6 +1159,10 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	static_cast<void>(loadStartupFilesFromCommandLine());
 	logStartupPhase("startup_files");
 	startupQuitPending = runStartupAutomationFromCommandLine();
+	runExecSessionSmokeRoutedMacroIfEnabled();
+	logExecSessionStatusSnapshotIfEnabled();
+	logExecSessionSmokeSnapshotIfEnabled();
+	logRuntimeSchedulerStatusIfEnabled();
 	logStartupPhase("startup_automation");
 	applyConfiguredDisplayLayout();
 	logStartupPhase("display_layout_final");
@@ -1925,6 +1937,7 @@ void MREditorApp::idle() {
 		putEvent(quitEvent);
 	}
 	TApplication::idle();
+	pumpRuntimeTimerSource();
 	pumpForegroundMacroDelays();
 	updateRecordingBlink();
 	updateMacroBrainBlink();

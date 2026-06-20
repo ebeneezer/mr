@@ -7,6 +7,7 @@
 
 #include "MRMacroRunner.hpp"
 
+#include "MRMacroExecutionSession.hpp"
 #include "mrmac.h"
 #include "MRVM.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
@@ -26,19 +27,38 @@
 
 namespace {
 struct PendingForegroundMacro {
+	MRMacroExecutionSession session;
 	std::string label;
 	std::shared_ptr<VirtualMachine> vm;
 
 	PendingForegroundMacro() {
 	}
 
-	PendingForegroundMacro(std::string aLabel, std::shared_ptr<VirtualMachine> aVm) : label(std::move(aLabel)), vm(std::move(aVm)) {
+	PendingForegroundMacro(MRMacroExecutionSession aSession, std::string aLabel, std::shared_ptr<VirtualMachine> aVm) : session(std::move(aSession)), label(std::move(aLabel)), vm(std::move(aVm)) {
 	}
 };
 
-std::mutex g_pendingForegroundMacrosMutex;
-std::vector<PendingForegroundMacro> g_pendingForegroundMacros;
-void queuePendingForegroundMacro(const std::string &label, const std::shared_ptr<VirtualMachine> &vm);
+std::mutex pendingForegroundMacrosMutex;
+std::vector<PendingForegroundMacro> pendingForegroundMacros;
+void queuePendingForegroundMacro(const MRMacroExecutionSession &session, const std::string &label, const std::shared_ptr<VirtualMachine> &vm);
+std::size_t cancelForegroundMacroDelaysForOwner(const MRMacroExecutionOwner &owner);
+
+MRMacroExecutionOwner macroExecutionOwnerForWindow(const MREditWindow *win) noexcept {
+	MRMacroExecutionOwner owner;
+
+	if (win == nullptr) return owner;
+	owner.hasBuffer = true;
+	owner.bufferId = win->bufferId();
+	return owner;
+}
+
+MRMacroExecutionSession makeMacroExecutionSessionForOwner(const std::string &label, MRMacroExecutionRoute route, const MREditWindow *win, const MRMacroExecutionOwner *ownerOverride) {
+	return createMacroExecutionSession(label, route, ownerOverride != nullptr ? *ownerOverride : macroExecutionOwnerForWindow(win));
+}
+
+std::string sessionLogSuffix(const MRMacroExecutionSession &session) {
+	return " [session #" + std::to_string(session.sessionId) + "]";
+}
 
 bool hasMrmacExtension(const std::string &path) {
 	std::string::size_type pos = path.rfind('.');
@@ -189,16 +209,22 @@ void showErrorBox(const char *title, const char *text) {
 	messageBox(mfError | mfOKButton, "%s:\n\n%s", title, text);
 }
 
-bool runMacroSource(const char *displayName, const char *source, const MRMacroExecutionProfile *routeProfile, std::string *errorMessage, bool showErrorDialogs) {
+bool runMacroSource(const char *displayName, const char *source, const MRMacroExecutionProfile *routeProfile, std::string *errorMessage, bool showErrorDialogs, MRMacroExecutionSession *sessionOut = nullptr, const MRMacroExecutionOwner *ownerOverride = nullptr, const char *unitName = nullptr, const char *closureId = nullptr) {
 	size_t bytecodeSize = 0;
 	unsigned char *bytecode = nullptr;
 	std::shared_ptr<VirtualMachine> vm = std::make_shared<VirtualMachine>();
 	MRMacroExecutionProfile profile;
 	std::vector<unsigned char> bytecodeCopy;
 	std::string label = displayName != nullptr ? displayName : "Macro Loader";
+	std::string selectedUnitName = unitName != nullptr ? trimPathInput(unitName) : std::string();
+	std::string selectedClosureId = closureId != nullptr ? trimPathInput(closureId) : std::string();
+	std::size_t entryOffset = 0;
+	std::size_t profileOffset = 0;
+	std::size_t profileLength = 0;
 	MREditWindow *win = currentEditWindow();
 	std::uint64_t taskId = 0;
 
+	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
 	if (errorMessage != nullptr) errorMessage->clear();
 	if (source == nullptr) {
 		if (errorMessage != nullptr) *errorMessage = "No macro source available.";
@@ -219,14 +245,48 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 		if (showErrorDialogs) showErrorBox(displayName != nullptr ? displayName : "Macro Loader", err);
 		return false;
 	}
+	if (!selectedUnitName.empty()) {
+		bool found = false;
+		const int macroCount = get_compiled_macro_count();
+		const std::string selectedKey = upperAscii(selectedUnitName);
+		int selectedIndex = -1;
 
-	profile = routeProfile != nullptr ? *routeProfile : mrvmAnalyzeBytecode(bytecode, bytecodeSize);
+		for (int i = 0; i < macroCount; ++i) {
+			const char *compiledName = get_compiled_macro_name(i);
+			const int entry = get_compiled_macro_entry(i);
+
+			if (compiledName == nullptr || entry < 0) continue;
+			if (upperAscii(compiledName) != selectedKey) continue;
+			entryOffset = static_cast<std::size_t>(entry);
+			selectedIndex = i;
+			found = true;
+			break;
+		}
+		if (!found) {
+			std::free(bytecode);
+			if (errorMessage != nullptr) *errorMessage = "Compiled MRMac unit not found: " + selectedUnitName;
+			if (showErrorDialogs) showErrorBox(displayName != nullptr ? displayName : "Macro Loader", errorMessage != nullptr ? errorMessage->c_str() : "Compiled MRMac unit not found.");
+			return false;
+		}
+		profileOffset = entryOffset;
+		profileLength = bytecodeSize - profileOffset;
+		for (int i = 0; i < macroCount; ++i) {
+			const int entry = get_compiled_macro_entry(i);
+			if (i == selectedIndex || entry < 0) continue;
+			if (static_cast<std::size_t>(entry) > entryOffset && static_cast<std::size_t>(entry) - entryOffset < profileLength) profileLength = static_cast<std::size_t>(entry) - entryOffset;
+		}
+	}
+	if (!selectedUnitName.empty()) label = selectedUnitName;
+
+	profile = routeProfile != nullptr ? *routeProfile : mrvmAnalyzeBytecode(bytecode + profileOffset, profileLength != 0 ? profileLength : bytecodeSize);
 	if (mrvmCanRunInBackground(profile)) {
-		mrLogMessage(buildExecutionRouteLogLine(label, "background", profile).c_str());
+		MRMacroExecutionSession session = makeMacroExecutionSessionForOwner(label, MRMacroExecutionRoute::Background, win, ownerOverride);
+		const std::string routeLogLine = buildExecutionRouteLogLine(label, "background", profile) + sessionLogSuffix(session);
+		mrLogMessage(routeLogLine.c_str());
 		bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 		std::free(bytecode);
 		bytecode = nullptr;
-		taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, 0, std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy)](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
+		taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, 0, std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), entryOffset, selectedClosureId](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
 			mr::coprocessor::Result result;
 			MRMacroJobResult runResult;
 
@@ -235,13 +295,13 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 				result.status = mr::coprocessor::TaskStatus::Cancelled;
 				return result;
 			}
-			runResult = mrvmRunBytecodeBackground(bytecodeCopy.data(), bytecodeCopy.size(), stopToken, info.cancelFlag);
+			runResult = mrvmRunBytecodeBackgroundAt(bytecodeCopy.data(), bytecodeCopy.size(), entryOffset, label, selectedClosureId, stopToken, info.cancelFlag);
 			if (runResult.cancelled) {
 				result.status = mr::coprocessor::TaskStatus::Cancelled;
 				return result;
 			}
 			result.status = mr::coprocessor::TaskStatus::Completed;
-			result.payload = std::make_shared<mr::coprocessor::MacroJobFinishedPayload>(label, std::move(runResult.logLines), runResult.hadError);
+			result.payload = std::make_shared<mr::coprocessor::MacroJobFinishedPayload>(label, std::move(runResult.logLines), std::move(runResult.execUiCommandRequests), runResult.hadError);
 			return result;
 		});
 		if (taskId == 0) {
@@ -249,6 +309,9 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 			if (showErrorDialogs) showErrorBox(label.c_str(), "Unable to start background macro worker.");
 			return false;
 		}
+		session.taskId = taskId;
+		trackMacroExecutionSession(session);
+		if (sessionOut != nullptr) *sessionOut = session;
 		if (win != nullptr) {
 			win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
 			win->noteQueuedBackgroundMacro(label, false);
@@ -256,22 +319,27 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 		{
 			std::string line = "Queued background-safe macro '";
 			line += label;
-			line += "' [task #";
+			line += "' [session #";
+			line += std::to_string(session.sessionId);
+			line += ", task #";
 			line += std::to_string(taskId);
 			line += "] ";
 			line += backgroundMacroPolicyText(false);
 			mrLogMessage(line.c_str());
 		}
+		notifyMacroExecutionSessionChanged();
 		return true;
 	}
 
-	if (mrvmCanRunStagedInBackground(profile)) {
+	if (selectedUnitName.empty() && mrvmCanRunStagedInBackground(profile)) {
 		MRMacroStagedExecutionInput stagedInput;
 		MacroCommitConflictSnapshot conflictSnapshot;
 		MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
 		if (win != nullptr && editor != nullptr) {
-			mrLogMessage(buildExecutionRouteLogLine(label, "staged", profile).c_str());
+			MRMacroExecutionSession session = makeMacroExecutionSessionForOwner(label, MRMacroExecutionRoute::StagedBackground, win, ownerOverride);
+			const std::string routeLogLine = buildExecutionRouteLogLine(label, "staged", profile) + sessionLogSuffix(session);
+			mrLogMessage(routeLogLine.c_str());
 			bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 			std::free(bytecode);
 			bytecode = nullptr;
@@ -370,68 +438,174 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 				if (showErrorDialogs) showErrorBox(label.c_str(), "Unable to start staged background macro worker.");
 				return false;
 			}
+			session.taskId = taskId;
+			trackMacroExecutionSession(session);
+			if (sessionOut != nullptr) *sessionOut = session;
 			win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
 			win->noteQueuedBackgroundMacro(label, true);
 			{
 				std::string line = "Queued staged macro '";
 				line += label;
-				line += "' [task #";
+				line += "' [session #";
+				line += std::to_string(session.sessionId);
+				line += ", task #";
 				line += std::to_string(taskId);
 				line += "] ";
 				line += backgroundMacroPolicyText(true);
 				mrLogMessage(line.c_str());
 			}
+			notifyMacroExecutionSessionChanged();
 			return true;
 		}
 		mrLogMessage(("Staged execution skipped for macro '" + label + "': no active editor window, running on UI thread.").c_str());
 	}
 
-	mrLogMessage(buildExecutionRouteLogLine(label, "ui-thread", profile).c_str());
+	MRMacroExecutionSession session = makeMacroExecutionSessionForOwner(label, MRMacroExecutionRoute::UiThread, win, ownerOverride);
+	{
+		const std::string routeLogLine = buildExecutionRouteLogLine(label, "ui-thread", profile) + sessionLogSuffix(session);
+		mrLogMessage(routeLogLine.c_str());
+	}
 
 	vm->setAsyncDelayEnabled(true);
-	vm->execute(bytecode, bytecodeSize);
+	if (!selectedClosureId.empty()) vm->setClosureContext(selectedClosureId);
+	vm->executeAt(bytecode, bytecodeSize, entryOffset, std::string(), label, true, false);
 	std::free(bytecode);
 	if (vm->hasPendingDelay()) {
-		queuePendingForegroundMacro(label, vm);
-		mrLogMessage(("Macro '" + label + "' yielded on DELAY; execution will resume asynchronously.").c_str());
+		session.route = MRMacroExecutionRoute::ForegroundDelay;
+		session.state = MRMacroExecutionState::Yielded;
+		queuePendingForegroundMacro(session, label, vm);
+		if (sessionOut != nullptr) *sessionOut = session;
+		mrLogMessage(("Macro '" + label + "' yielded on DELAY; execution will resume asynchronously" + sessionLogSuffix(session) + ".").c_str());
+		notifyMacroExecutionSessionChanged();
+	} else {
+		session.state = vm->wasCancelled() ? MRMacroExecutionState::Cancelled : MRMacroExecutionState::Completed;
+		if (sessionOut != nullptr) *sessionOut = session;
+		publishMacroExecutionResult(session, session.state, vm->wasCancelled() ? "UI-thread macro session cancelled." : "UI-thread macro session completed.");
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-void queuePendingForegroundMacro(const std::string &label, const std::shared_ptr<VirtualMachine> &vm) {
-	std::lock_guard<std::mutex> lock(g_pendingForegroundMacrosMutex);
-	g_pendingForegroundMacros.push_back(PendingForegroundMacro(label, vm));
+void queuePendingForegroundMacro(const MRMacroExecutionSession &session, const std::string &label, const std::shared_ptr<VirtualMachine> &vm) {
+	std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
+	pendingForegroundMacros.push_back(PendingForegroundMacro(session, label, vm));
 }
-} // namespace
 
-void pumpForegroundMacroDelays() {
-	std::lock_guard<std::mutex> lock(g_pendingForegroundMacrosMutex);
-	std::size_t i = 0;
+std::size_t cancelForegroundMacroDelaysForOwner(const MRMacroExecutionOwner &owner) {
+	std::vector<MRMacroExecutionResult> results;
+	{
+		std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
+		std::size_t i = 0;
 
-	while (i < g_pendingForegroundMacros.size()) {
-		std::vector<PendingForegroundMacro>::difference_type index = static_cast<std::vector<PendingForegroundMacro>::difference_type>(i);
-		PendingForegroundMacro &pending = g_pendingForegroundMacros[i];
-		if (!pending.vm) {
-			g_pendingForegroundMacros.erase(g_pendingForegroundMacros.begin() + index);
-			continue;
-		}
-		if (pending.vm->hasPendingDelay()) {
-			if (pending.vm->resumePendingDelay()) {
+		while (i < pendingForegroundMacros.size()) {
+			std::vector<PendingForegroundMacro>::difference_type index = static_cast<std::vector<PendingForegroundMacro>::difference_type>(i);
+			PendingForegroundMacro &pendingForegroundMacro = pendingForegroundMacros[i];
+			if (!macroExecutionOwnerMatches(pendingForegroundMacro.session.owner, owner)) {
 				++i;
 				continue;
 			}
+			if (pendingForegroundMacro.vm) pendingForegroundMacro.vm->cancelPendingDelay();
+			pendingForegroundMacro.session.state = MRMacroExecutionState::Cancelled;
+			MRMacroExecutionResult result;
+			result.session = pendingForegroundMacro.session;
+			result.state = MRMacroExecutionState::Cancelled;
+			result.message = "Foreground DELAY session cancelled by owner.";
+			results.push_back(result);
+			pendingForegroundMacros.erase(pendingForegroundMacros.begin() + index);
 		}
-		g_pendingForegroundMacros.erase(g_pendingForegroundMacros.begin() + index);
 	}
+	for (const MRMacroExecutionResult &result : results)
+		publishMacroExecutionResult(result.session, result.state, result.message);
+	return results.size();
+}
+} // namespace
+
+std::vector<MRMacroExecutionSession> pendingForegroundMacroExecutionSessions() {
+	std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
+	std::vector<MRMacroExecutionSession> sessions;
+
+	sessions.reserve(pendingForegroundMacros.size());
+	for (const auto &pending : pendingForegroundMacros)
+		sessions.push_back(pending.session);
+	return sessions;
+}
+
+void pumpForegroundMacroDelays() {
+	std::vector<MRMacroExecutionResult> results;
+	{
+		std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
+		std::size_t i = 0;
+
+		while (i < pendingForegroundMacros.size()) {
+			std::vector<PendingForegroundMacro>::difference_type index = static_cast<std::vector<PendingForegroundMacro>::difference_type>(i);
+			PendingForegroundMacro &pending = pendingForegroundMacros[i];
+			if (!pending.vm) {
+				pending.session.state = MRMacroExecutionState::Failed;
+				MRMacroExecutionResult result;
+				result.session = pending.session;
+				result.state = MRMacroExecutionState::Failed;
+				result.message = "Foreground DELAY session failed: missing VM.";
+				results.push_back(result);
+				pendingForegroundMacros.erase(pendingForegroundMacros.begin() + index);
+				continue;
+			}
+			if (pending.vm->hasPendingDelay()) {
+				if (pending.vm->resumePendingDelay()) {
+					++i;
+					continue;
+				}
+			}
+			pending.session.state = pending.vm->wasCancelled() ? MRMacroExecutionState::Cancelled : MRMacroExecutionState::Completed;
+			MRMacroExecutionResult result;
+			result.session = pending.session;
+			result.state = pending.session.state;
+			result.message = pending.vm->wasCancelled() ? "Foreground DELAY session cancelled." : "Foreground DELAY session completed.";
+			results.push_back(result);
+			pendingForegroundMacros.erase(pendingForegroundMacros.begin() + index);
+		}
+	}
+	for (const MRMacroExecutionResult &result : results)
+		publishMacroExecutionResult(result.session, result.state, result.message);
 }
 
 void cancelForegroundMacroDelays() {
-	std::lock_guard<std::mutex> lock(g_pendingForegroundMacrosMutex);
+	std::vector<MRMacroExecutionResult> results;
+	{
+		std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
 
-	for (auto &g_pendingForegroundMacro : g_pendingForegroundMacros)
-		if (g_pendingForegroundMacro.vm) g_pendingForegroundMacro.vm->cancelPendingDelay();
-	g_pendingForegroundMacros.clear();
+		for (auto &pendingForegroundMacro : pendingForegroundMacros)
+			if (pendingForegroundMacro.vm) {
+				pendingForegroundMacro.vm->cancelPendingDelay();
+				pendingForegroundMacro.session.state = MRMacroExecutionState::Cancelled;
+				MRMacroExecutionResult result;
+				result.session = pendingForegroundMacro.session;
+				result.state = MRMacroExecutionState::Cancelled;
+				result.message = "Foreground DELAY session cancelled.";
+				results.push_back(result);
+			}
+		pendingForegroundMacros.clear();
+	}
+	for (const MRMacroExecutionResult &result : results)
+		publishMacroExecutionResult(result.session, result.state, result.message);
+}
+
+std::size_t requestMacroExecutionCancellationForBuffer(int bufferId) {
+	MRMacroExecutionOwner owner;
+	std::vector<MRMacroExecutionSession> activeSessions;
+	std::size_t cancelledCount = 0;
+
+	if (bufferId <= 0) return 0;
+	owner.hasBuffer = true;
+	owner.bufferId = bufferId;
+	activeSessions = activeMacroExecutionSessionsForOwner(owner);
+	for (const MRMacroExecutionSession &session : activeSessions) {
+		if (session.taskId == 0) continue;
+		if (!mr::coprocessor::globalCoprocessor().cancelTask(session.taskId)) continue;
+		markMacroExecutionSessionCancellationRequestedForTask(session.taskId);
+		++cancelledCount;
+	}
+	cancelledCount += cancelForegroundMacroDelaysForOwner(owner);
+	return cancelledCount;
 }
 
 bool runMacroFileByPathRouted(const char *path, bool forceUiThread, std::string *errorMessage, bool showErrorDialogs) {
@@ -503,6 +677,56 @@ bool runMacroSourceText(const char *displayName, const char *source, std::string
 	return true;
 }
 
+bool runMacroSourceTextAsExecutionSession(const char *displayName, const char *source, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
+	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
+	if (source == nullptr || *source == '\0') {
+		if (errorMessage != nullptr) *errorMessage = "No macro source available.";
+		if (showErrorDialogs) showErrorBox(displayName != nullptr ? displayName : "Macro Loader", "No macro source available.");
+		return false;
+	}
+	if (!runMacroSource(displayName, source, nullptr, errorMessage, showErrorDialogs, sessionOut)) {
+		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
+		return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool runMacroSourceTextAsExecutionSessionForOwner(const char *displayName, const char *source, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
+	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
+	if (source == nullptr || *source == '\0') {
+		if (errorMessage != nullptr) *errorMessage = "No macro source available.";
+		if (showErrorDialogs) showErrorBox(displayName != nullptr ? displayName : "Macro Loader", "No macro source available.");
+		return false;
+	}
+	if (!runMacroSource(displayName, source, nullptr, errorMessage, showErrorDialogs, sessionOut, &owner)) {
+		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
+		return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool runMacroSourceUnitAsExecutionSessionForOwner(const char *displayName, const char *source, const char *unitName, const char *closureId, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
+	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
+	if (source == nullptr || *source == '\0') {
+		if (errorMessage != nullptr) *errorMessage = "No macro source available.";
+		if (showErrorDialogs) showErrorBox(displayName != nullptr ? displayName : "Macro Loader", "No macro source available.");
+		return false;
+	}
+	if (unitName == nullptr || *unitName == '\0') {
+		if (errorMessage != nullptr) *errorMessage = "No MRMac unit specified.";
+		if (showErrorDialogs) showErrorBox(displayName != nullptr ? displayName : "Macro Loader", "No MRMac unit specified.");
+		return false;
+	}
+	if (!runMacroSource(displayName, source, nullptr, errorMessage, showErrorDialogs, sessionOut, &owner, unitName, closureId)) {
+		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
+		return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
 bool runMacroSpecByName(const char *macroSpec, std::string *errorMessage, bool showErrorDialogs) {
 	std::string spec = macroSpec != nullptr ? trimPathInput(macroSpec) : std::string();
 	std::string runError;
@@ -518,6 +742,46 @@ bool runMacroSpecByName(const char *macroSpec, std::string *errorMessage, bool s
 		if (showErrorDialogs) showErrorBox(spec.c_str(), runError.empty() ? "Macro execution failed." : runError.c_str());
 		return false;
 	}
+	return true;
+}
+
+bool runMacroSpecByNameAsExecutionSession(const char *macroSpec, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
+	std::string spec = macroSpec != nullptr ? trimPathInput(macroSpec) : std::string();
+	std::string runnerSource;
+
+	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (spec.empty()) {
+		if (errorMessage != nullptr) *errorMessage = "No macro specification specified.";
+		if (showErrorDialogs) showErrorBox("Macro Runner", "No macro specification specified.");
+		return false;
+	}
+	runnerSource = "$MACRO ScheduledMacroLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(spec) + "');\nEND_MACRO;\n";
+	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), nullptr, errorMessage, showErrorDialogs, sessionOut)) {
+		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
+		return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool runMacroSpecByNameAsExecutionSessionForOwner(const char *macroSpec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
+	std::string spec = macroSpec != nullptr ? trimPathInput(macroSpec) : std::string();
+	std::string runnerSource;
+
+	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (spec.empty()) {
+		if (errorMessage != nullptr) *errorMessage = "No macro specification specified.";
+		if (showErrorDialogs) showErrorBox("Macro Runner", "No macro specification specified.");
+		return false;
+	}
+	runnerSource = "$MACRO ScheduledMacroLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(spec) + "');\nEND_MACRO;\n";
+	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), nullptr, errorMessage, showErrorDialogs, sessionOut, &owner)) {
+		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
+		return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 

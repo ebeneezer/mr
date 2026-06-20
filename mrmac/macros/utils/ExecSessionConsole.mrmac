@@ -1,0 +1,71 @@
+$MACRO_FILE ExecSessionConsole;
+
+$MACRO ExecSessionConsoleRefresh;
+DEF_INT(Count);
+
+UI_LIST_CLEAR('EXECSESSION_CONSOLE_ITEMS');
+EXEC_SESSION_LIST('EXECSESSION_CONSOLE_ITEMS');
+Count := RETURN_INT;
+SET_GLOBAL_INT('EXECSESSION_CONSOLE_COUNT', Count);
+
+IF Count = 0 THEN
+    UI_LIST_ADD('EXECSESSION_CONSOLE_ITEMS', '(no scheduled closures)');
+END;
+END_MACRO;
+
+$MACRO ExecSessionConsoleStop;
+DEF_INT(SelectedIndex, ConsumerId, Count);
+
+SelectedIndex := UI_INDEX(1);
+Count := GLOBAL_INT('EXECSESSION_CONSOLE_COUNT');
+
+IF Count = 0 THEN
+    MAKE_MESSAGE('No scheduled closures.');
+ELSE
+    ConsumerId := GLOBAL_INT('EXECSESSION_CONSOLE_ID_' + STR(SelectedIndex));
+    IF ConsumerId > 0 THEN
+        EXEC_SESSION_STOP(ConsumerId);
+        IF RETURN_INT = 1 THEN
+            MAKE_MESSAGE('Exec session closure stopped.');
+        ELSE
+            MARQUEE_ERROR('Unable to stop selected closure.');
+        END;
+    ELSE
+        MARQUEE_ERROR('No closure id for selection.');
+    END;
+END;
+
+RUN_MACRO('ExecSessionConsoleRefresh');
+END_MACRO;
+
+$MACRO ExecSessionConsoleHelp;
+MAKE_MESSAGE('Stop removes the scheduled closure and invalidates its closure state.');
+END_MACRO;
+
+$MACRO ExecSessionConsoleClose;
+UI_MODELESS_CLOSE('ExecSessionConsole');
+END_MACRO;
+
+$MACRO ExecSessionConsole;
+DEF_INT(Start);
+
+Start := GLOBAL_INT('EXECSESSION_CONSOLE_START');
+IF Start <= 0 THEN
+    Start := 1;
+END;
+
+RUN_MACRO('ExecSessionConsoleRefresh');
+
+UI_DIALOG(0, 0, 76, 18, 'Exec Sessions');
+UI_LABEL(2, 1, 'Scheduled closures');
+UI_LISTBOX(2, 2, 72, 9, 1, '', 'EXECSESSION_CONSOLE_ITEMS', Start);
+UI_BUTTON(2, 14, 12, 2, '~S~top');
+UI_BUTTON(16, 14, 12, 3, '~R~efresh');
+UI_BUTTON(30, 14, 12, 4, '~D~one');
+UI_BUTTON(44, 14, 12, 5, '~H~elp');
+UI_MODELESS_ON(2, 'ExecSessionConsoleStop');
+UI_MODELESS_ON(3, 'ExecSessionConsoleRefresh');
+UI_MODELESS_ON(4, 'ExecSessionConsoleClose');
+UI_MODELESS_ON(5, 'ExecSessionConsoleHelp');
+UI_MODELESS_SHOW('ExecSessionConsole');
+END_MACRO;

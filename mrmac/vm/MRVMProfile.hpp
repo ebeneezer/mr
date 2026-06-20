@@ -18,12 +18,11 @@ struct MRMacroExecutionProfile {
 	std::size_t intrinsicCount;
 	std::size_t procCount;
 	std::size_t procVarCount;
-	std::size_t tvCallCount;
 	std::vector<std::string> stagedWriteSymbols;
 	std::vector<std::string> uiAffinitySymbols;
 	std::vector<std::string> externalIoSymbols;
 
-	MRMacroExecutionProfile() noexcept : flags(0), opcodeCount(0), intrinsicCount(0), procCount(0), procVarCount(0), tvCallCount(0), stagedWriteSymbols(), uiAffinitySymbols(), externalIoSymbols() {
+	MRMacroExecutionProfile() noexcept : flags(0), opcodeCount(0), intrinsicCount(0), procCount(0), procVarCount(0), stagedWriteSymbols(), uiAffinitySymbols(), externalIoSymbols() {
 	}
 
 	bool has(unsigned mask) const noexcept {

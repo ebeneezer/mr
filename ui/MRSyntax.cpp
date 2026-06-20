@@ -21,7 +21,7 @@ constexpr std::uint32_t kSyntaxPayloadXmlDirective = 3;
 constexpr std::uint32_t kSyntaxPayloadXmlProcessing = 4;
 
 const char *const kMrmacKeywords[] = {
-	"IF", "THEN", "ELSE", "END", "WHILE", "DO", "TVCALL", "CALL", "RET", "GOTO", "TO", "FROM", "TRANS", "DUMP", "PERM", "AND", "OR", "NOT", "SHL", "SHR", "MOD"
+	"IF", "THEN", "ELSE", "END", "WHILE", "DO", "CALL", "RET", "GOTO", "TO", "FROM", "TRANS", "DUMP", "PERM", "AND", "OR", "NOT", "SHL", "SHR", "MOD"
 };
 
 const char *const kMrmacTypeKeywords[] = {

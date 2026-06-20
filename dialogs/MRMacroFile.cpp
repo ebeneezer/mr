@@ -63,7 +63,7 @@ class MacroManagerActivationSink {
 };
 
 enum : ushort {
-	cmMRMacroManagerCreate = 220,
+	cmMRMacroManagerCreate = 0x6A20,
 	cmMRMacroManagerDelete,
 	cmMRMacroManagerCopy,
 	cmMRMacroManagerEdit,

@@ -20,7 +20,8 @@ Protected architecture touched: yes.
 Betroffene Vertraege:
 
 - `documentation/architecture/mrmac-language-contract.md`
-- `documentation/architecture/vm-tvcall-contract.md`
+- `documentation/architecture/mrmac-exec-session-contract.md`
+- `documentation/architecture/vm-deferred-ui-contract.md`
 - `documentation/architecture/coprocessor-deferred-ui-contract.md`
 - `documentation/architecture/tvision-integration-contract.md`
 - `documentation/architecture/build-regression-contract.md`
@@ -39,8 +40,20 @@ Invarianten:
 - Keine Opcode-Umnummerierung.
 - Keine direkten TVision-Screenbuffer-Writes.
 - Kein Render-Seitenkanal fuer Debugger-Overlay.
-- TVCALL und Macro-Screen-Operationen bleiben staged/projection-basiert, soweit sie nicht bereits UI-thread-only laufen.
+- Typed UI procedures und Macro-Screen-Operationen bleiben staged/projection-basiert, soweit sie nicht bereits UI-thread-only laufen.
 - Breakpoints bleiben im ersten Entwurf ephemeral pro Debug-Session und werden nicht in Settings oder Workspace persistiert.
+
+## Exec Session Dependency
+
+Der Macro Debugger ist Consumer von MRMac Execution Sessions.
+
+Der Debugger darf keinen parallelen Macro Runner einfuehren. Start, Pause,
+Continue, Stop, Cancellation, Yield/Resume und Result-Routing laufen ueber den
+Session-Kern. Debugger-spezifisch bleiben Source-Map, Breakpoints,
+Step-Semantik, Variablen-Snapshots und UI-Projektion.
+
+Die base Execution Session gehoert nicht dem Debugger. Sie ist auch Grundlage
+fuer Timer, modeless MRMac UI und spaetere Event-Handler.
 
 ## Begriffsklaerung
 
@@ -67,7 +80,7 @@ Das klingt attraktiv, waere aber eine andere Semantik als normales Debuggen:
 
 - Breakpoints koennten vor noch nicht committed Side-Effects stehen.
 - Variablen und Editorzustand waeren nicht mehr eindeutig "live".
-- TVCALL/deferred UI muesste in einer Vorschauwelt gespiegelt werden.
+- Deferred UI muesste in einer Vorschauwelt gespiegelt werden.
 - Step Into ueber `RUN_MACRO(...)` wuerde verschachtelte staged Welten erzeugen.
 
 Planentscheidung: Der erste Macro Debugger fuehrt echte Macro-Semantik aus und pausiert kooperativ an VM-Instruktionsgrenzen. Ein preview-/staged-debug mode bleibt explizit ausserhalb des ersten Plans.
@@ -139,6 +152,10 @@ Wenn eine Zeile keine debuggable instruction erzeugt, muss der Debugger das sich
 ## Debug Session Model
 
 Es braucht eine interne Debug-Session, aber keine Benutzer-Shell.
+
+Die Debug-Session referenziert eine MRMac Execution Session und konsumiert deren
+Laufzeitstatus. Sie besitzt Breakpoints, Step-Modus und Debugger-Snapshots,
+aber nicht die VM-Ausfuehrungsroute selbst.
 
 Die Debug-Session besitzt:
 
@@ -315,7 +332,7 @@ Pflicht bei relevanten Slices:
 - Step Into ueber `RUN_MACRO(...)`
 - Locals/file globals/app globals im Variables-Pane
 - Hash/Array read-only Darstellung
-- TVCALL/deferred UI Macro-Faelle
+- Deferred UI Macro-Faelle
 - UI: Bento Pane placement, focus traversal, resize, redraw, modal open/close in Umgebung
 - Coprocessor/deferred UI checks, falls worker route oder playback beruehrt wird
 

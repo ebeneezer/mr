@@ -23,6 +23,7 @@
 #include <tvision/tv.h>
 
 #include "mrmac.h"
+#include "MRMacroModelessUi.hpp"
 #include "MRVM.hpp"
 #include "vm/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
@@ -63,6 +64,7 @@
 
 #include "../ui/MREditWindow.hpp"
 #include "../app/MRCommandRouter.hpp"
+#include "../app/MRRuntimeScheduler.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRStatusLine.hpp"
@@ -110,8 +112,11 @@ struct MacroRef {
 	bool transientAttr;
 	bool dumpAttr;
 	bool permAttr;
+	bool closureUnit;
+	std::uint64_t tickMs;
+	MRRuntimeScheduledConsumerId scheduledConsumerId;
 
-	MacroRef() : entryOffset(0), fromMode(MACRO_MODE_EDIT), hasAssignedKey(false), firstRunPending(true), transientAttr(false), dumpAttr(false), permAttr(false) {
+	MacroRef() : entryOffset(0), fromMode(MACRO_MODE_EDIT), hasAssignedKey(false), firstRunPending(true), transientAttr(false), dumpAttr(false), permAttr(false), closureUnit(false), tickMs(0), scheduledConsumerId(0) {
 	}
 };
 
@@ -3085,6 +3090,11 @@ static bool queueDeferredUiProcedureImpl(const std::string &name, const std::vec
 		session->deferredUiCommands.emplace_back(mrducMakeMessage, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
 		return true;
 	}
+	if (name == "UI_MESSAGEBOX") {
+		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("UI_MESSAGEBOX expects one string argument.");
+		session->deferredUiCommands.emplace_back(mrducMessageBox, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
+		return true;
+	}
 	if (name == "WORKING") {
 		if (!args.empty()) throw std::runtime_error("WORKING expects no arguments.");
 		session->deferredUiCommands.emplace_back(mrducMarqueeWarning, 0, 0, 0, 0, 0, 0, 0, 0, kMacroWorkingMessageText);
@@ -3816,6 +3826,116 @@ static bool readGlobalValue(const std::string &name, GlobalEntry &entry) {
 	return true;
 }
 
+static Value ensureGlobalHashRoot(const std::string &name) {
+	const std::string key = upperKey(name);
+	std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
+
+	if (it != g_runtimeEnv.globals.end() && it->second.type == TYPE_HASH && it->second.value.type == TYPE_HASH) return it->second.value;
+
+	Value root = makeHash(g_runtimeEnv.globalHashStore.createHash(), true);
+	setGlobalValueDirect(key, TYPE_HASH, root);
+	return root;
+}
+
+static Value ensureGlobalHashChild(const Value &parent, const std::string &key) {
+	if (mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key)) {
+		Value child = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
+		if (child.type == TYPE_HASH) return child;
+	}
+
+	Value child = makeHash(g_runtimeEnv.globalHashStore.createHash(), true);
+	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key, child);
+	return child;
+}
+
+static Value ensureClosureStateHash(const std::string &closureId, int tickMs) {
+	Value root = ensureGlobalHashRoot("EXECSESSIONS");
+	Value closures = ensureGlobalHashChild(root, "closures");
+	Value closure = ensureGlobalHashChild(closures, closureId);
+	Value state = ensureGlobalHashChild(closure, "state");
+
+	if (tickMs > 0) mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "tick_ms", makeInt(tickMs));
+	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "status", makeString("active"));
+	return state;
+}
+
+static bool findClosureStateHash(const std::string &closureId, Value &state) {
+	GlobalEntry rootEntry;
+	Value closures;
+	Value closure;
+
+	if (closureId.empty()) return false;
+	if (!readGlobalValue("EXECSESSIONS", rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
+	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, "closures")) return false;
+	closures = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, "closures");
+	if (closures.type != TYPE_HASH || !mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closures, closureId)) return false;
+	closure = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closures, closureId);
+	if (closure.type != TYPE_HASH || !mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "state")) return false;
+	state = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "state");
+	return state.type == TYPE_HASH;
+}
+
+static bool eraseClosureRuntimeState(const std::string &closureId) {
+	GlobalEntry rootEntry;
+	Value closures;
+
+	if (closureId.empty()) return false;
+	if (!readGlobalValue("EXECSESSIONS", rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
+	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, "closures")) return false;
+	closures = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, "closures");
+	if (closures.type != TYPE_HASH || !mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closures, closureId)) return false;
+	mrvmHashEraseValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closures, closureId);
+	return true;
+}
+
+static bool readClosureVariableValue(const std::string &closureId, const std::string &name, Value &value) {
+	Value state;
+
+	if (closureId.empty()) return false;
+	if (!findClosureStateHash(closureId, state)) return false;
+	if (state.type != TYPE_HASH || !mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, state, name)) return false;
+	value = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, state, name);
+	return true;
+}
+
+static bool writeClosureVariableValue(const std::string &closureId, const std::string &name, const Value &value, MRVMHashStore &localStore) {
+	Value state;
+	Value stored = value;
+
+	if (closureId.empty()) return false;
+	if (!findClosureStateHash(closureId, state)) return false;
+	if (value.type == TYPE_HASH || mrvmValueIsArrayType(value.type)) stored = mrvmHashCopyValueForStore(value, localStore, g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, true);
+	else
+		stored.globalStorage = true;
+	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, state, name, stored);
+	return true;
+}
+
+static std::string normalizeExecUiCommandAction(const std::string &command) {
+	const std::string key = upperKey(trimAscii(command));
+
+	if (key.rfind("MRMAC_", 0) == 0 || key.rfind("MR_", 0) == 0) return key;
+	if (key == "TEXT_END" || key == "EOF" || key == "BOTTOM_OF_FILE") return "MRMAC_CURSOR_BOTTOM_OF_FILE";
+	if (key == "TEXT_START" || key == "TOF" || key == "TOP_OF_FILE") return "MRMAC_CURSOR_TOP_OF_FILE";
+	if (key == "LINE_END" || key == "EOL" || key == "END_OF_LINE") return "MRMAC_CURSOR_END_OF_LINE";
+	if (key == "LINE_START" || key == "HOME" || key == "START_OF_LINE") return "MRMAC_CURSOR_HOME";
+	if (key == "SCROLL_UP") return "MRMAC_VIEW_SCROLL_UP";
+	if (key == "SCROLL_DOWN") return "MRMAC_VIEW_SCROLL_DOWN";
+	return key;
+}
+
+static MREditWindow *execUiCommandTargetWindow(const std::string &target) {
+	const std::string key = upperKey(trimAscii(target));
+
+	if (key.empty() || key == "ACTIVE") return nullptr;
+	if (key.rfind("BUFFER:", 0) == 0) {
+		const std::string idText = trimAscii(key.substr(7));
+		if (idText.empty()) return nullptr;
+		return findEditWindowByBufferId(std::atoi(idText.c_str()));
+	}
+	return nullptr;
+}
+
 static bool fileExists(const std::string &path) {
 	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
 	return in.good();
@@ -3938,6 +4058,10 @@ static bool removeMacroFromRegistryByKey(const std::string &macroKey) {
 	std::string ownerSpec;
 
 	if (it == g_runtimeEnv.loadedMacros.end()) return false;
+	if (it->second.scheduledConsumerId != 0) {
+		removeRuntimeScheduledConsumer(it->second.scheduledConsumerId);
+		it->second.scheduledConsumerId = 0;
+	}
 	static_cast<void>(composeLoadedMacroSpec(it->second, ownerSpec));
 	if (!ownerSpec.empty()) static_cast<void>(mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(ownerSpec));
 
@@ -4415,6 +4539,7 @@ struct MacroUiDialogDefinition {
 	std::vector<MacroUiDisplaySpec> displays;
 	std::vector<MacroUiInputSpec> inputs;
 	std::vector<MacroUiListBoxSpec> listBoxes;
+	std::map<int, std::string> modelessButtonMacros;
 	std::map<int, std::string> textValues;
 	std::map<int, int> indexValues;
 	int lastCommandId = 0;
@@ -4431,6 +4556,7 @@ struct MacroUiDialogDefinition {
 		displays.clear();
 		inputs.clear();
 		listBoxes.clear();
+		modelessButtonMacros.clear();
 		textValues.clear();
 		indexValues.clear();
 		lastCommandId = 0;
@@ -4828,6 +4954,149 @@ static void addMacroUiItemListValue(const std::vector<Value> &args) {
 
 	if (key.empty()) throw std::runtime_error("UI_LIST_ADD expects a non-empty list name.");
 	g_macroUiItemLists[key].push_back(valueAsString(args[1]));
+}
+
+static std::vector<std::string> resolveMacroModelessListItems(const std::string &itemSpec) {
+	return resolveMacroUiListItems(itemSpec);
+}
+
+static void runMacroModelessCommand(const std::string &, int, const MRMacroModelessSelection &selection, const std::string &macroSpec) {
+	if (selection.controlId != 0) {
+		g_macroUiDialog.indexValues[selection.controlId] = selection.index;
+		g_macroUiDialog.textValues[selection.controlId] = selection.text;
+	}
+	if (!macroSpec.empty()) {
+		std::string errorText;
+		if (!mrvmRunMacroSpec(macroSpec, &errorText)) {
+			runtimeErrorLevel() = 1001;
+			if (!errorText.empty()) static_cast<void>(mrvmUiMarquee(2, errorText));
+		}
+	}
+}
+
+static void bindMacroModelessButton(const std::vector<Value> &args) {
+	const int buttonId = valueAsInt(args[0]);
+	const std::string macroSpec = valueAsString(args[1]);
+
+	if (buttonId <= 0) throw std::runtime_error("UI_MODELESS_ON expects a positive button id.");
+	g_macroUiDialog.modelessButtonMacros[buttonId] = macroSpec;
+	runtimeErrorLevel() = 0;
+}
+
+static MRMacroModelessWindowDefinition buildMacroModelessDefinition(const std::string &windowId) {
+	MRMacroModelessWindowDefinition definition;
+
+	definition.x = g_macroUiDialog.x;
+	definition.y = g_macroUiDialog.y;
+	definition.width = g_macroUiDialog.width;
+	definition.height = g_macroUiDialog.height;
+	definition.windowId = windowId;
+	definition.title = g_macroUiDialog.title;
+
+	for (const MacroUiLabelSpec &label : g_macroUiDialog.labels) {
+		MRMacroModelessLabelSpec entry;
+		entry.x = label.x;
+		entry.y = label.y;
+		entry.text = label.text;
+		definition.labels.push_back(std::move(entry));
+	}
+
+	for (const MacroUiListBoxSpec &listBox : g_macroUiDialog.listBoxes) {
+		MRMacroModelessListBoxSpec entry;
+		entry.x = listBox.x;
+		entry.y = listBox.y;
+		entry.width = listBox.width;
+		entry.height = listBox.height;
+		entry.id = listBox.id;
+		entry.label = listBox.label;
+		entry.itemSpec = listBox.itemSpec;
+		entry.start = listBox.start;
+		definition.listBoxes.push_back(std::move(entry));
+	}
+
+	for (const MacroUiButtonSpec &button : g_macroUiDialog.buttons) {
+		MRMacroModelessButtonSpec entry;
+		const auto macroIt = g_macroUiDialog.modelessButtonMacros.find(button.id);
+
+		entry.x = button.x;
+		entry.y = button.y;
+		entry.width = button.width;
+		entry.id = button.id;
+		entry.text = button.text;
+		entry.macroSpec = macroIt != g_macroUiDialog.modelessButtonMacros.end() ? macroIt->second : std::string();
+		definition.buttons.push_back(std::move(entry));
+	}
+
+	return definition;
+}
+
+static void showMacroModelessDialog(const std::vector<Value> &args) {
+	const std::string windowId = macroUiListKey(valueAsString(args[0]));
+
+	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_SHOW expects a non-empty window id.");
+	setMacroModelessListResolver(resolveMacroModelessListItems);
+	setMacroModelessCommandRunner(runMacroModelessCommand);
+	runtimeReturnInt() = showMacroModelessWindow(buildMacroModelessDefinition(windowId)) ? 1 : 0;
+	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
+}
+
+static void closeMacroModelessDialog(const std::vector<Value> &args) {
+	const std::string windowId = macroUiListKey(valueAsString(args[0]));
+
+	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_CLOSE expects a non-empty window id.");
+	runtimeReturnInt() = closeMacroModelessWindow(windowId) ? 1 : 0;
+	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
+}
+
+static void listExecSessionClosures(const std::vector<Value> &args) {
+	const std::string key = macroUiListKey(valueAsString(args[0]));
+	const std::vector<MRRuntimeScheduledConsumer> consumers = runtimeScheduledConsumers();
+	int row = 0;
+
+	if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("EXEC_SESSION_LIST is not available in background mode.");
+	if (key.empty()) throw std::runtime_error("EXEC_SESSION_LIST expects a non-empty list name.");
+
+	g_macroUiItemLists[key].clear();
+	for (const MRRuntimeScheduledConsumer &consumer : consumers) {
+		if (consumer.config.closureId.empty()) continue;
+		if (consumer.consumerId > static_cast<MRRuntimeScheduledConsumerId>(std::numeric_limits<int>::max())) continue;
+		++row;
+		setGlobalValue("EXECSESSION_CONSOLE_ID_" + std::to_string(row), TYPE_INT, makeInt(static_cast<int>(consumer.consumerId)));
+
+		std::string line = std::to_string(row);
+		line += "  #";
+		line += std::to_string(consumer.consumerId);
+		line += "  ";
+		line += consumer.activeSessionId != 0 ? "running " : "waiting ";
+		line += "tick=";
+		line += std::to_string(consumer.config.intervalMs);
+		line += "  ";
+		line += consumer.config.entryName.empty() ? consumer.config.closureId : consumer.config.entryName;
+		g_macroUiItemLists[key].push_back(line);
+	}
+	setGlobalValue("EXECSESSION_CONSOLE_COUNT", TYPE_INT, makeInt(row));
+	runtimeReturnInt() = row;
+	runtimeErrorLevel() = 0;
+}
+
+static void stopExecSessionClosure(const std::vector<Value> &args) {
+	const int requestedId = valueAsInt(args[0]);
+	const std::vector<MRRuntimeScheduledConsumer> consumers = runtimeScheduledConsumers();
+	std::string closureId;
+	bool removed = false;
+
+	if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("EXEC_SESSION_STOP is not available in background mode.");
+	if (requestedId > 0) {
+		for (const MRRuntimeScheduledConsumer &consumer : consumers) {
+			if (consumer.consumerId != static_cast<MRRuntimeScheduledConsumerId>(requestedId)) continue;
+			closureId = consumer.config.closureId;
+			break;
+		}
+		removed = removeRuntimeScheduledConsumer(static_cast<MRRuntimeScheduledConsumerId>(requestedId));
+	}
+	if (removed && !closureId.empty()) static_cast<void>(eraseClosureRuntimeState(closureId));
+	runtimeReturnInt() = removed ? 1 : 0;
+	runtimeErrorLevel() = removed ? 0 : 1001;
 }
 
 static int runMacroUiDialogDefinition() {
@@ -5454,6 +5723,8 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 		int flags = get_compiled_macro_flags(i);
 		const char *keyspecText = get_compiled_macro_keyspec(i);
 		int mode = get_compiled_macro_mode(i);
+		int unitKind = get_compiled_macro_unit_kind(i);
+		int tickMs = get_compiled_macro_tick_ms(i);
 		std::string displayName = macroNameText != nullptr ? macroNameText : std::string();
 		std::string macroKey = upperKey(displayName);
 		std::map<std::string, MacroRef>::iterator mit = g_runtimeEnv.loadedMacros.find(macroKey);
@@ -5468,6 +5739,23 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 		mit->second.permAttr = (flags & MACRO_ATTR_PERM) != 0;
 		mit->second.assignedKeySpec = keyspecText != nullptr ? keyspecText : std::string();
 		mit->second.fromMode = (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL) ? mode : MACRO_MODE_EDIT;
+		mit->second.closureUnit = unitKind == MRMAC_UNIT_CLOSURE;
+		mit->second.tickMs = tickMs > 0 ? static_cast<std::uint64_t>(tickMs) : 0;
+		if (mit->second.scheduledConsumerId != 0) {
+			removeRuntimeScheduledConsumer(mit->second.scheduledConsumerId);
+			mit->second.scheduledConsumerId = 0;
+		}
+		if (mit->second.closureUnit && mit->second.tickMs != 0) {
+			MRRuntimeScheduledConsumerConfig config;
+			const std::string macroSpec = fit->second.displayName + "^" + displayName;
+			config.intervalMs = mit->second.tickMs;
+			config.macroSpec = macroSpec;
+			config.macroSource = source;
+			config.entryName = displayName;
+			config.closureId = macroSpec;
+			ensureClosureStateHash(config.closureId, static_cast<int>(mit->second.tickMs));
+			mit->second.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
+		}
 		mit->second.hasAssignedKey = false;
 		if (!mit->second.assignedKeySpec.empty()) mit->second.hasAssignedKey = parseAssignedKeySpec(mit->second.assignedKeySpec, mit->second.assignedKey);
 	}
@@ -5569,6 +5857,8 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		int flags = get_compiled_macro_flags(i);
 		const char *keyspecText = get_compiled_macro_keyspec(i);
 		int mode = get_compiled_macro_mode(i);
+		int unitKind = get_compiled_macro_unit_kind(i);
+		int tickMs = get_compiled_macro_tick_ms(i);
 		std::string displayName = macroNameText != nullptr ? macroNameText : std::string();
 		std::string macroKey = upperKey(displayName);
 		MacroRef ref;
@@ -5585,8 +5875,21 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		ref.permAttr = (flags & MACRO_ATTR_PERM) != 0;
 		ref.assignedKeySpec = keyspecText != nullptr ? keyspecText : std::string();
 		ref.fromMode = (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL) ? mode : MACRO_MODE_EDIT;
+		ref.closureUnit = unitKind == MRMAC_UNIT_CLOSURE;
+		ref.tickMs = tickMs > 0 ? static_cast<std::uint64_t>(tickMs) : 0;
 		ref.hasAssignedKey = false;
 		if (!ref.assignedKeySpec.empty()) ref.hasAssignedKey = parseAssignedKeySpec(ref.assignedKeySpec, ref.assignedKey);
+		if (ref.closureUnit && ref.tickMs != 0) {
+			MRRuntimeScheduledConsumerConfig config;
+			const std::string macroSpec = newFile.displayName + "^" + displayName;
+			config.intervalMs = ref.tickMs;
+			config.macroSpec = macroSpec;
+			config.macroSource = source;
+			config.entryName = displayName;
+			config.closureId = macroSpec;
+			ensureClosureStateHash(config.closureId, static_cast<int>(ref.tickMs));
+			ref.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
+		}
 		g_runtimeEnv.loadedMacros[macroKey] = ref;
 		g_runtimeEnv.macroOrder.push_back(macroKey);
 		newFile.macroNames.push_back(macroKey);
@@ -6303,7 +6606,7 @@ bool mrvmEditorModifyCurrentWindow() {
 	return modifyCurrentEditWindow();
 }
 
-MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
+MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
 	MRMacroJobResult result;
 	VirtualMachine vm;
 	struct CancelGuard {
@@ -6322,8 +6625,10 @@ MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::s
 	} cancelGuard(&stopToken, std::move(cancelFlag));
 
 	vm.setVerboseLogging(false);
-	vm.execute(bytecode, length);
+	if (!closureId.empty()) vm.setClosureContext(closureId);
+	vm.executeAt(bytecode, length, entryOffset, std::string(), macroName, true, false);
 	result.logLines = vm.log;
+	result.execUiCommandRequests = vm.execUiCommandRequests();
 	result.cancelled = vm.wasCancelled();
 	for (std::size_t i = 0; i < result.logLines.size(); ++i) {
 		if (result.logLines[i].rfind("VM Error:", 0) == 0) {
@@ -6332,6 +6637,10 @@ MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::s
 		}
 	}
 	return result;
+}
+
+MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
+	return mrvmRunBytecodeBackgroundAt(bytecode, length, 0, std::string(), std::string(), stopToken, std::move(cancelFlag));
 }
 
 struct MRVMStagedExecutionContext {
@@ -6522,7 +6831,7 @@ std::vector<std::string> mrvmProcessArguments() {
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), c(0), hashHandle(0), arrayElementType(TYPE_INT), arrayValues(), globalStorage(false) {
 }
 
-VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), verboseLogging(true), logTruncated(false), mAsyncDelayPending(false), mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayTaskId(0), mAsyncDelayGeneration(0), mAsyncDelayMillis(0), cancelledExecution(false) {
+VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), mClosureId(), mClosureVariableNames(), verboseLogging(true), logTruncated(false), mAsyncDelayPending(false), mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayTaskId(0), mAsyncDelayGeneration(0), mAsyncDelayMillis(0), cancelledExecution(false) {
 }
 
 VirtualMachine::~VirtualMachine() = default;
@@ -6553,6 +6862,36 @@ void VirtualMachine::hashWrite(int handle, const std::string &key, const Value &
 
 void VirtualMachine::hashErase(int handle, const std::string &key) {
 	mHashStore->erase(handle, key);
+}
+
+void VirtualMachine::setClosureContext(const std::string &closureId) {
+	mClosureId = closureId;
+	mClosureVariableNames.clear();
+	mExecUiCommandRequests.clear();
+}
+
+const std::vector<MRMacroExecUiCommandRequest> &VirtualMachine::execUiCommandRequests() const noexcept {
+	return mExecUiCommandRequests;
+}
+
+bool mrvmStoreExecSessionClosureInt(const std::string &closureId, const std::string &lvalue, int value) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	MRVMHashStore localStore;
+	bool stored = false;
+
+	if (trimAscii(closureId).empty() || trimAscii(lvalue).empty()) return false;
+	stored = writeClosureVariableValue(closureId, lvalue, makeInt(value), localStore);
+	if (!stored) mrLogMessage(("MRMac exec session stale closure result discarded: closure='" + closureId + "' lvalue='" + lvalue + "'.").c_str());
+	return stored;
+}
+
+bool mrvmApplyExecUiCommandRequest(const MRMacroExecUiCommandRequest &request) {
+	MREditWindow *targetWindow = execUiCommandTargetWindow(request.target);
+	const std::string action = normalizeExecUiCommandAction(request.command);
+	const bool accepted = dispatchMRKeymapAction(action, std::string_view(), targetWindow);
+
+	if (!request.closureId.empty() && !request.lvalue.empty()) static_cast<void>(mrvmStoreExecSessionClosureInt(request.closureId, request.lvalue, accepted ? 1 : 0));
+	return accepted;
 }
 
 void VirtualMachine::appendLogLine(const std::string &line, bool important) {
@@ -6796,8 +7135,20 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 			} else if (opcode == OP_DEF_VAR) {
 				std::string varName;
 				int varType = static_cast<int>(bytecode[ip++]);
+				Value value;
 				readCString(varName);
-				if (varType == TYPE_HASH)
+				if (!mClosureId.empty()) {
+					bool restored = false;
+					mClosureVariableNames.insert(varName);
+					if (readClosureVariableValue(mClosureId, varName, value)) {
+						variables[varName] = mrvmCoerceForStore(value, varType);
+						restored = true;
+					} else if (varType == TYPE_HASH)
+						variables[varName] = makeHash(mHashStore->createHash());
+					else
+						variables[varName] = mrvmDefaultValueForType(varType);
+					if (!restored) static_cast<void>(writeClosureVariableValue(mClosureId, varName, variables[varName], *mHashStore));
+				} else if (varType == TYPE_HASH)
 					variables[varName] = makeHash(mHashStore->createHash());
 				else
 					variables[varName] = mrvmDefaultValueForType(varType);
@@ -6822,6 +7173,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				Value value = mrvmCoerceForStore(pop(), targetType);
 				if (value.type == TYPE_STR) enforceStringLength(value.s);
 				if (!storeSpecialVariable(varName, value)) variables[varName] = value;
+				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) writeClosureVariableValue(mClosureId, varName, value, *mHashStore);
 				appendLogLine("Store variable: " + varName);
 			} else if (opcode == OP_HASH_LOAD) {
 				std::string varName;
@@ -6856,6 +7208,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (it == variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 				if (value.type == TYPE_STR) enforceStringLength(value.s);
 				mrvmHashWriteValue(*mHashStore, g_runtimeEnv.globalHashStore, it->second, valueAsString(key), value);
+				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) writeClosureVariableValue(mClosureId, varName, it->second, *mHashStore);
 				appendLogLine("Store hash value: " + varName);
 			} else if (opcode == OP_HASH_STORE_VALUE) {
 				Value value;
@@ -6900,6 +7253,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				it = variables.find(varName);
 				if (it == variables.end() || !mrvmValueIsArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
 				mrvmArrayWriteValue(it->second, index.i, value, *mHashStore, g_runtimeEnv.globalHashStore);
+				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) writeClosureVariableValue(mClosureId, varName, it->second, *mHashStore);
 				appendLogLine("Store array value: " + varName);
 			} else if (opcode == OP_GOTO) {
 				int target;
@@ -7128,7 +7482,25 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				readCString(name);
 				unsigned char argc = bytecode[ip++];
 				std::vector<Value> args = popArgs(argc);
-					if (name == "KEYMAP_RESET") {
+					if (name == "EXEC_ASSIGN") {
+						MRMacroExecUiCommandRequest request;
+						bool accepted = false;
+
+						if (args.size() != 3 || !isStringLike(args[0]) || !isStringLike(args[1]) || !isStringLike(args[2])) throw std::runtime_error("EXEC expects (target, command).");
+						request.closureId = mClosureId;
+						request.target = valueAsString(args[0]);
+						request.command = valueAsString(args[1]);
+						request.lvalue = valueAsString(args[2]);
+						if (currentBackgroundEditSession() != nullptr || g_backgroundMacroStopToken != nullptr) {
+							mExecUiCommandRequests.push_back(request);
+							runtimeErrorLevel() = 0;
+						} else {
+							accepted = mrvmApplyExecUiCommandRequest(request);
+							variables[request.lvalue] = makeInt(accepted ? 1 : 0);
+							if (!mClosureId.empty() && mClosureVariableNames.find(request.lvalue) != mClosureVariableNames.end()) writeClosureVariableValue(mClosureId, request.lvalue, variables[request.lvalue], *mHashStore);
+							runtimeErrorLevel() = accepted ? 0 : 1001;
+						}
+					} else if (name == "KEYMAP_RESET") {
 						if (!args.empty()) throw std::runtime_error("KEYMAP_RESET expects no arguments.");
 						if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), nullptr)) throw std::runtime_error("KEYMAP_RESET failed: invalid keymap state.");
 						if (!setConfiguredActiveKeymapProfile("", nullptr)) throw std::runtime_error("KEYMAP_RESET failed: invalid active keymap profile.");
@@ -7314,6 +7686,16 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "UI_LIST_ADD") {
 					addMacroUiItemListValue(args);
 					runtimeErrorLevel() = 0;
+				} else if (name == "UI_MODELESS_ON") {
+					bindMacroModelessButton(args);
+				} else if (name == "UI_MODELESS_SHOW") {
+					showMacroModelessDialog(args);
+				} else if (name == "UI_MODELESS_CLOSE") {
+					closeMacroModelessDialog(args);
+				} else if (name == "EXEC_SESSION_LIST") {
+					listExecSessionClosures(args);
+				} else if (name == "EXEC_SESSION_STOP") {
+					stopExecSessionClosure(args);
 				} else if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error(name + " expects (string, string).");
 					setGlobalValue(valueAsString(args[0]), TYPE_STR, makeString(valueAsString(args[1])));
@@ -7339,7 +7721,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "SNIPPET_PREV_PLACEHOLDER") {
 					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPET_PREV_PLACEHOLDER expects (string).");
 					runtimeErrorLevel() = 0;
-				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR" || name == "MAKE_MESSAGE") {
+				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR" || name == "MAKE_MESSAGE" || name == "UI_MESSAGEBOX") {
 					int deferredError = 0;
 					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
@@ -8055,22 +8437,6 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else {
 					throw std::runtime_error("Unknown procedure: " + name);
 				}
-			} else if (opcode == OP_TVCALL) {
-				std::string funcName;
-				std::string funcNameUpper;
-				int deferredError = 0;
-				readCString(funcName);
-				unsigned char argc = bytecode[ip++];
-				std::vector<Value> args = popArgs(argc);
-				funcNameUpper = upperKey(funcName);
-
-				appendLogLine("TVCALL: " + funcName + " (" + std::to_string(argc) + " params)");
-
-				if (dispatchDeferredUiTvCall(funcNameUpper, args, deferredError)) {
-					runtimeErrorLevel() = 0;
-					continue;
-				}
-				runtimeErrorLevel() = 0;
 			} else if (opcode == OP_HALT) {
 				appendLogLine("Program end reached.");
 				break;

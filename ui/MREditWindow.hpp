@@ -967,6 +967,10 @@ class MREditWindow : public TWindow {
 		editor->setCommunicationViewerOptions(lineNumbers);
 	}
 
+	void suppressMiniMap(bool suppress) noexcept {
+		if (editor != nullptr) editor->setMiniMapSuppressed(suppress);
+	}
+
 	void setDisplayTitle(const char *title) {
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
@@ -2430,6 +2434,7 @@ class MRLogWindow : public MREditWindow {
 	MRLogWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MRLogWindow::initFrame), MREditWindow(bounds, title, aNumber) {
 		setWindowRole(wrLog);
 		setReadOnly(true);
+		suppressMiniMap(true);
 	}
 
 	virtual void handleEvent(TEvent &event) override {

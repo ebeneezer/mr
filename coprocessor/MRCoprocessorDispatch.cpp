@@ -24,6 +24,7 @@
 #include "../app/router/MRCommandRouterSearch.hpp"
 #include "../app/router/MRCommandRouterSearchCore.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../mrmac/MRMacroExecutionSession.hpp"
 #include "../mrmac/MRVM.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRFileEditor/MRFileEditor.hpp"
@@ -213,6 +214,15 @@ void recordMacroPerformance(const mr::coprocessor::Result &result, MREditWindow 
 		return;
 	}
 	mr::performance::recordBackgroundEvent(result.task.lane, outcome, result.timing, "Background macro", win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
+}
+
+std::size_t applyMacroExecUiCommandRequests(const std::vector<MRMacroExecUiCommandRequest> &requests) {
+	std::size_t accepted = 0;
+
+	for (const MRMacroExecUiCommandRequest &request : requests) {
+		if (mrvmApplyExecUiCommandRequest(request)) ++accepted;
+	}
+	return accepted;
 }
 
 std::string formatTimingSummary(const mr::coprocessor::TaskTiming &timing) {
@@ -1143,6 +1153,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				releaseMacroTask(targetWindow, result, "conflict");
 			}
 			mrLogMessage(statusSummary.c_str());
+			publishMacroExecutionResultForTask(result.task.id, accepted ? MRMacroExecutionState::Completed : MRMacroExecutionState::Rejected, statusSummary);
 			appendMacroLogLines(staged->logLines);
 			return;
 		}
@@ -1150,15 +1161,18 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			std::ostringstream statusLine;
 			MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
 			std::string statusSummary;
+			const std::size_t acceptedUiRequests = applyMacroExecUiCommandRequests(macro->execUiCommandRequests);
 
 			recordMacroPerformance(result, targetWindow, targetWindow != nullptr ? targetWindow->documentId() : 0, targetWindow != nullptr ? targetWindow->bufferLength() : 0, macro->displayName);
 			statusLine << "Background macro '" << macro->displayName << "' finished";
 			if (macro->hadError) statusLine << " with VM errors";
+			if (!macro->execUiCommandRequests.empty()) statusLine << "; exec-ui " << acceptedUiRequests << "/" << macro->execUiCommandRequests.size();
 			statusLine << formatTimingSummary(result.timing) << ".";
 			statusSummary = statusLine.str();
 			if (targetWindow != nullptr) targetWindow->noteBackgroundMacroCompleted(statusSummary);
 			releaseMacroTask(targetWindow, result, "finished");
 			mrLogMessage(statusSummary.c_str());
+			publishMacroExecutionResultForTask(result.task.id, MRMacroExecutionState::Completed, statusSummary);
 			appendMacroLogLines(macro->logLines);
 			return;
 		}
@@ -1197,6 +1211,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			if (targetWindow != nullptr) targetWindow->noteBackgroundMacroCancelled(statusSummary);
 			releaseMacroTask(targetWindow, result, "cancelled");
 			mrLogMessage(statusSummary.c_str());
+			publishMacroExecutionResultForTask(result.task.id, MRMacroExecutionState::Cancelled, statusSummary);
 		} else if (result.failed()) {
 			std::ostringstream failureLine;
 			failureLine << "Background macro '" << displayName << "' failed";
@@ -1207,6 +1222,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			if (targetWindow != nullptr) targetWindow->noteBackgroundMacroFailed(statusSummary);
 			releaseMacroTask(targetWindow, result, "failed");
 			mrLogMessage(statusSummary.c_str());
+			publishMacroExecutionResultForTask(result.task.id, MRMacroExecutionState::Failed, statusSummary);
 		}
 		if (result.failed()) return;
 	}

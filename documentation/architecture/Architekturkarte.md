@@ -39,20 +39,20 @@ Zentrale Dateien: ￼mrmac/mrmac.c, ￼mrmac/MRMacroRunner.cpp.
 Zentrale Klassen/Funktionen: custom mrmac compiler, Bytecode-Erzeugung, Macro-Runner für Vorder-/Hintergrundmakros.
 Autoritativer Zustand: geparste Makroquelle und erzeugter Bytecode; keine Settings-Autorität.
 Wichtige Datenflüsse: Datei/Text -> custom compiler -> Bytecode -> VM/Runner.
-Kritische Seiteneffekte: Makroaufrufe können UI, TVCALL, Settings-Startup und Background-Jobs auslösen.
+Kritische Seiteneffekte: Makroaufrufe können UI, Settings-Startup und Background-Jobs auslösen.
 Schnittstellen: VM, App, Coprocessor, Dateisystem.
 AGENTS-Grenzen: keine opportunistischen Sprachsemantik-Änderungen, keine ungeklärten Compiler-Abkürzungen.
 Nicht opportunistisch ändern: Grammar, Bytecode-OpCodes, Startup-Kontext für MRSETUP.
 Bekannte technische Schulden: historische Makro-Semantik ist stabilitätskritisch; Änderungen brauchen Regression-Abdeckung.
-5. VM / Intrinsics / TVCALL
+5. VM / Intrinsics / Deferred UI
 
 Zentrale Dateien: ￼mrmac/MRVM.cpp, ￼mrmac/MRVM.hpp.
-Zentrale Klassen/Funktionen: VM-Ausführung, Intrinsic-Dispatch, OP_TVCALL, MacroCellGrid, MacroCellView, UiScreenStateFacade, mrvmUiRenderFacadeRenderDeferredCommand.
+Zentrale Klassen/Funktionen: VM-Ausführung, Intrinsic-Dispatch, typed UI procedures, MacroCellGrid, MacroCellView, UiScreenStateFacade, mrvmUiRenderFacadeRenderDeferredCommand.
 Autoritativer Zustand: VM-Execution-State, UI-Facade-Zustand für Macro-Screen-Overlay, Runtime-Umgebung.
-Wichtige Datenflüsse: Bytecode -> VM -> Intrinsics/TVCALL -> UI-Facade oder Deferred-Command-Erzeugung.
+Wichtige Datenflüsse: Bytecode -> VM -> Intrinsics / typed UI procedures -> UI-Facade oder Deferred-Command-Erzeugung.
 Kritische Seiteneffekte: Bildschirmprojektion, Dialoge aus Makros, Settings-Anwendung im Startup-Modus, SAVE_SETTINGS, Keymap-Payload-Anwendung.
 Schnittstellen: Settings-Modul, TVision-nahe UI, Coprocessor-Dispatch, App.
-AGENTS-Grenzen: VM-Ausführung, MRSETUP-Semantik, TVCALL-Fluss, MacroCellGrid/MacroCellView nicht opportunistisch ändern.
+AGENTS-Grenzen: VM-Ausführung, MRSETUP-Semantik, Deferred-UI-Fluss, MacroCellGrid/MacroCellView nicht opportunistisch ändern.
 Nicht opportunistisch ändern: Startup-Gating für MRSETUP, direkte VM-Persistenzpfade, Overlay-/Projection-Logik.
 Bekannte technische Schulden: VM kennt Settings- und Persistenzoperationen direkt; High-Risk-Grenze zwischen Producer und Consumer ist empfindlich.
 6. Keymap
@@ -129,13 +129,13 @@ Warum riskant: VM überschreitet damit die reine Ausführungsgrenze in Settings-
 Vor jeder Änderung klären: Welche Keys dürfen im VM-Pfad bleiben? Ist Persistenz aus der VM Architektur oder Altlast? Welche Fehlerform wird garantiert?
 Tests/Builds: Clean-Build, Regression-Checks zu verbotenen/erlaubten MRSETUP-Pfaden, VM-Fehlermeldungen, SAVE_SETTINGS-Erfolg/Fehler.
 Nicht ohne Freigabe ändern: Startup-Gating, erlaubte Keys, Fehlertexte, Persistenzaufrufe.
-5. TVCALL / MacroCellGrid / MacroCellView
+5. Deferred UI / MacroCellGrid / MacroCellView
 
 Ist-Zustand: VM produziert Screen-/Overlay-Operationen; MacroCellGrid hält Modell, MacroCellView projiziert TVision-nah.
 Warum riskant: Producer-/Consumer-Grenze, Overlay-Rendering und Deferred-Playback hängen eng zusammen.
 Vor jeder Änderung klären: Wer ist Producer? Wer projiziert? Gibt es konkurrierende Write-Pfade? Bleibt TVision-Nähe erhalten?
-Tests/Builds: Clean-Build, Regression-Checks zu whitelisted mrvmUi*-Bridges, TVCALL-Makros, Overlay-/Message-/Marquee-Fälle, Deferred-Playback.
-Nicht ohne Freigabe ändern: MacroCellGrid, MacroCellView, TVCALL-Routing, batch boundaries, direct render facade usage.
+Tests/Builds: Clean-Build, Regression-Checks zu whitelisted mrvmUi*-Bridges, typed UI procedure macros, Overlay-/Message-/Marquee-Fälle, Deferred-Playback.
+Nicht ohne Freigabe ändern: MacroCellGrid, MacroCellView, Deferred-UI-Routing, batch boundaries, direct render facade usage.
 6. Keymap-Diagnostik und Keymap-Persistenz
 
 Ist-Zustand: Keymap wird aus Settings-Source geparst, kanonisiert, in Settings-Zustand geschrieben und zur Laufzeit im Resolver projiziert; Diagnostikformatierung ist im Loader und Dialog doppelt.
@@ -175,7 +175,7 @@ Settings-Startup-Flow
 settings.mrmac-Persistenzpfade
 Workspace-Serialisierung
 MRSETUP-/SAVE_SETTINGS-Pfad in der VM
-TVCALL-Rendering, MacroCellGrid, MacroCellView, Deferred-UI-Bridge
+Deferred-UI-Rendering, MacroCellGrid, MacroCellView, Deferred-UI-Bridge
 Keymap-Persistenzformat und aktive Profil-Fallbacks
 Build-Modell für generierte Header jenseits des bereits reparierten Clean-Build-Fixes
 Dialog-History-/Path-History-Semantik

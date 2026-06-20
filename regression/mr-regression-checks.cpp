@@ -26,9 +26,13 @@
 #include <vector>
 
 #include "../mrmac/mrmac.h"
+#include "../mrmac/MRMacroExecutionSession.hpp"
 #include "../mrmac/MRVM.hpp"
+#include "../app/MRExecSessionStatus.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../app/MRCommandRouter.hpp"
+#include "../app/MRRuntimeScheduler.hpp"
+#include "../app/MRRuntimeTimerSource.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/services/MRLspEditorSource.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
@@ -511,6 +515,410 @@ bool runCustomStagedProbe(const std::string &source, const std::string &document
 		return false;
 	}
 
+	return true;
+}
+
+bool testExecSessionStagedConflictRejectionGuard(std::string &failureReason) {
+	static constexpr std::uint64_t kTaskId = 700001;
+	mr::editor::TextDocument document("alpha\nbeta\n");
+	mr::editor::StagedEditTransaction stale(document.readSnapshot(), "exec-session-staged-conflict");
+	MRMacroExecutionOwner owner;
+	MRMacroExecutionSession session;
+	mr::editor::CommitResult conflict;
+	std::vector<MRMacroExecutionResult> results;
+	std::vector<MRMacroExecutionSession> activeSessions;
+
+	stale.insert(1, "!");
+	document.insert(0, "v");
+	conflict = document.tryApply(stale);
+	if (!conflict.conflicted()) {
+		failureReason = "Stale staged transaction must conflict before publishing a rejected exec-session result.";
+		return false;
+	}
+
+	owner.hasBuffer = true;
+	owner.bufferId = 17;
+	session = createMacroExecutionSession("exec-session-staged-conflict", MRMacroExecutionRoute::StagedBackground, owner);
+	session.taskId = kTaskId;
+	trackMacroExecutionSession(session);
+	if (!publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Rejected, "staged commit rejected by conflict")) {
+		failureReason = "Rejected exec-session result must report that a tracked task was completed.";
+		return false;
+	}
+
+	results = recentMacroExecutionResults();
+	if (results.empty()) {
+		failureReason = "Rejected exec-session result was not published.";
+		return false;
+	}
+	const MRMacroExecutionResult &result = results.back();
+	if (result.state != MRMacroExecutionState::Rejected || result.session.state != MRMacroExecutionState::Rejected) {
+		failureReason = "Staged conflict must publish MRMacroExecutionState::Rejected.";
+		return false;
+	}
+	if (result.session.route != MRMacroExecutionRoute::StagedBackground || result.session.taskId != kTaskId || result.session.owner.bufferId != owner.bufferId) {
+		failureReason = "Rejected exec-session result lost route, task or owner metadata.";
+		return false;
+	}
+	activeSessions = activeMacroExecutionSessions();
+	for (const MRMacroExecutionSession &activeSession : activeSessions)
+		if (activeSession.taskId == kTaskId) {
+			failureReason = "Rejected exec-session result must remove the active task session.";
+			return false;
+		}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testExecSessionListenerFanoutGuard(std::string &failureReason) {
+	MRMacroExecutionSessionListenerId firstListener = installMacroExecutionSessionStatusHook();
+	MRMacroExecutionSessionListenerId secondListener = installMacroExecutionSessionStatusHook();
+	std::uint64_t generation = macroExecutionSessionStatusGeneration();
+
+	if (firstListener == 0 || secondListener == 0 || firstListener == secondListener) {
+		removeMacroExecutionSessionListener(firstListener);
+		removeMacroExecutionSessionListener(secondListener);
+		failureReason = "Exec-session listeners must receive distinct non-zero ids.";
+		return false;
+	}
+
+	notifyMacroExecutionSessionChanged();
+	if (macroExecutionSessionStatusGeneration() != generation + 2) {
+		removeMacroExecutionSessionListener(firstListener);
+		removeMacroExecutionSessionListener(secondListener);
+		failureReason = "Exec-session notify must fan out to all registered listeners.";
+		return false;
+	}
+	generation += 2;
+
+	if (!removeMacroExecutionSessionListener(firstListener)) {
+		removeMacroExecutionSessionListener(secondListener);
+		failureReason = "Exec-session listener removal must acknowledge an active listener.";
+		return false;
+	}
+	notifyMacroExecutionSessionChanged();
+	if (macroExecutionSessionStatusGeneration() != generation + 1) {
+		removeMacroExecutionSessionListener(secondListener);
+		failureReason = "Exec-session notify must stop calling a removed listener.";
+		return false;
+	}
+	generation += 1;
+
+	if (!removeMacroExecutionSessionListener(secondListener)) {
+		failureReason = "Exec-session listener removal must remove the remaining listener.";
+		return false;
+	}
+	notifyMacroExecutionSessionChanged();
+	if (macroExecutionSessionStatusGeneration() != generation) {
+		failureReason = "Exec-session notify must not call removed listeners.";
+		return false;
+	}
+	if (removeMacroExecutionSessionListener(secondListener)) {
+		failureReason = "Exec-session listener removal must reject an already removed listener.";
+		return false;
+	}
+	if (addMacroExecutionSessionListener(nullptr) != 0) {
+		failureReason = "Exec-session listener registration must reject null hooks.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testExecSessionOwnerCancellationGuard(std::string &failureReason) {
+	static constexpr std::uint64_t kOwnedTaskId = 700101;
+	static constexpr std::uint64_t kOtherTaskId = 700102;
+	MRMacroExecutionOwner owner;
+	MRMacroExecutionOwner otherOwner;
+	MRMacroExecutionSession ownedSession;
+	MRMacroExecutionSession otherSession;
+	std::vector<MRMacroExecutionSession> ownedSessions;
+	std::vector<MRMacroExecutionSession> activeSessions;
+	bool ownedTaskStillActive = false;
+
+	owner.hasBuffer = true;
+	owner.bufferId = 21;
+	otherOwner.hasBuffer = true;
+	otherOwner.bufferId = 22;
+
+	ownedSession = createMacroExecutionSession("exec-session-owned-cancel", MRMacroExecutionRoute::Background, owner);
+	ownedSession.taskId = kOwnedTaskId;
+	trackMacroExecutionSession(ownedSession);
+	otherSession = createMacroExecutionSession("exec-session-other-cancel", MRMacroExecutionRoute::Background, otherOwner);
+	otherSession.taskId = kOtherTaskId;
+	trackMacroExecutionSession(otherSession);
+
+	if (!macroExecutionOwnerMatches(owner, owner) || macroExecutionOwnerMatches(otherOwner, owner)) {
+		publishMacroExecutionResultForTask(kOwnedTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		publishMacroExecutionResultForTask(kOtherTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		failureReason = "Exec-session owner matching must be exact for buffer owners.";
+		return false;
+	}
+
+	ownedSessions = activeMacroExecutionSessionsForOwner(owner);
+	if (ownedSessions.size() != 1 || ownedSessions.front().taskId != kOwnedTaskId) {
+		publishMacroExecutionResultForTask(kOwnedTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		publishMacroExecutionResultForTask(kOtherTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		failureReason = "Exec-session owner filter must return only matching active sessions.";
+		return false;
+	}
+
+	if (!markMacroExecutionSessionCancellationRequestedForTask(kOwnedTaskId)) {
+		publishMacroExecutionResultForTask(kOwnedTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		publishMacroExecutionResultForTask(kOtherTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		failureReason = "Exec-session cancellation request must mark a tracked task.";
+		return false;
+	}
+	activeSessions = activeMacroExecutionSessions();
+	for (const MRMacroExecutionSession &activeSession : activeSessions)
+		if (activeSession.taskId == kOwnedTaskId) {
+			ownedTaskStillActive = true;
+			if (activeSession.state != MRMacroExecutionState::CancellationRequested) {
+				publishMacroExecutionResultForTask(kOwnedTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+				publishMacroExecutionResultForTask(kOtherTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+				failureReason = "Exec-session cancellation request must update active state.";
+				return false;
+			}
+		}
+	if (!ownedTaskStillActive) {
+		publishMacroExecutionResultForTask(kOtherTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		failureReason = "Exec-session cancellation request must not publish a terminal result.";
+		return false;
+	}
+	if (markMacroExecutionSessionCancellationRequestedForTask(0) || markMacroExecutionSessionCancellationRequestedForTask(99999991)) {
+		publishMacroExecutionResultForTask(kOwnedTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		publishMacroExecutionResultForTask(kOtherTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		failureReason = "Exec-session cancellation request must reject invalid task ids.";
+		return false;
+	}
+
+	publishMacroExecutionResultForTask(kOwnedTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+	publishMacroExecutionResultForTask(kOtherTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+	failureReason.clear();
+	return true;
+}
+
+bool testExecSessionStatusConsumerGuard(std::string &failureReason) {
+	static constexpr std::uint64_t kTaskId = 700201;
+	MRMacroExecutionOwner owner;
+	MRMacroExecutionSession session;
+	MRExecSessionStatusSnapshot snapshot;
+	std::vector<std::string> lines;
+	std::uint64_t generation = 0;
+	bool sawHeader = false;
+	bool sawSession = false;
+
+	const MRMacroExecutionSessionListenerId listenerId = installExecSessionStatusConsumer();
+	if (listenerId == 0 || installExecSessionStatusConsumer() != listenerId) {
+		failureReason = "Exec-session status consumer must install idempotently.";
+		return false;
+	}
+
+	owner.hasBuffer = true;
+	owner.bufferId = 31;
+	session = createMacroExecutionSession("exec-session-status-consumer", MRMacroExecutionRoute::Background, owner);
+	session.taskId = kTaskId;
+	trackMacroExecutionSession(session);
+	generation = execSessionStatusConsumerGeneration();
+	notifyMacroExecutionSessionChanged();
+	if (execSessionStatusConsumerGeneration() != generation + 1) {
+		publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		failureReason = "Exec-session status consumer must observe session change notifications.";
+		return false;
+	}
+
+	snapshot = execSessionStatusSnapshot();
+	if (snapshot.activeCount == 0 || snapshot.generation != execSessionStatusConsumerGeneration()) {
+		publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		failureReason = "Exec-session status snapshot must report active count and consumer generation.";
+		return false;
+	}
+
+	lines = execSessionStatusLines(0);
+	for (const std::string &line : lines) {
+		if (line.find("MRMac exec sessions: active=") != std::string::npos) sawHeader = true;
+		if (line.find("exec-session-status-consumer") != std::string::npos && line.find("route=background") != std::string::npos) sawSession = true;
+		if (line.find("breakpoint") != std::string::npos || line.find("debug") != std::string::npos) {
+			publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+			failureReason = "Exec-session status consumer must not emit debugger vocabulary.";
+			return false;
+		}
+	}
+	if (!sawHeader || !sawSession) {
+		publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+		failureReason = "Exec-session status consumer must format header and active sessions.";
+		return false;
+	}
+
+	publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+	failureReason.clear();
+	return true;
+}
+
+bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
+	static constexpr MRMacroExecutionSessionId kSessionId = 700301;
+	MRRuntimeScheduledConsumerConfig invalidConfig;
+	MRRuntimeScheduledConsumerConfig config;
+	MRRuntimeScheduledConsumerId consumerId = 0;
+	MRMacroExecutionSessionId blockingSessionId = 0;
+	std::vector<MRRuntimeSchedulerEvent> events;
+	std::vector<std::string> lines;
+	bool sawStarted = false;
+	bool sawSkipped = false;
+	bool sawFinished = false;
+	bool sawDue = false;
+	bool sawDispatchResult = false;
+	bool sawSkippedLine = false;
+	bool sawSourcePackageLine = false;
+
+	invalidConfig.intervalMs = 0;
+	invalidConfig.macroSpec = "runtime-scheduler-invalid";
+	if (registerRuntimeScheduledConsumer(invalidConfig) != 0) {
+		failureReason = "Runtime scheduler must reject zero interval consumers.";
+		return false;
+	}
+
+	config.owner.hasBuffer = true;
+	config.owner.bufferId = 41;
+	config.intervalMs = 1000;
+	config.macroSpec = "runtime-scheduler-overrun-skip";
+	config.macroSource = "$MACRO RuntimeSchedulerRegression;\nDEF_INT(ProbeValue);\nProbeValue := GLOBAL_INT('RUNTIME_SCHEDULER_REGRESSION');\nEND_MACRO;\n";
+	config.overrunPolicy = MRRuntimeScheduleOverrunPolicy::Skip;
+	consumerId = registerRuntimeScheduledConsumer(config);
+	if (consumerId == 0) {
+		failureReason = "Runtime scheduler must register a valid scheduled consumer.";
+		return false;
+	}
+	if (!noteRuntimeScheduledConsumerStarted(consumerId, kSessionId)) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler must mark a consumer session as started.";
+		return false;
+	}
+	if (runtimeScheduledConsumerTickMayStart(consumerId, &blockingSessionId)) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler skip policy must reject overrun ticks.";
+		return false;
+	}
+	if (blockingSessionId != kSessionId) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler skip policy must report the blocking session id.";
+		return false;
+	}
+
+	events = recentRuntimeSchedulerEvents();
+	for (const MRRuntimeSchedulerEvent &event : events)
+		if (event.consumerId == consumerId) {
+			if (event.kind == MRRuntimeSchedulerEventKind::TickStarted && event.sessionId == kSessionId) sawStarted = true;
+			if (event.kind == MRRuntimeSchedulerEventKind::TickSkipped && event.blockingSessionId == kSessionId && event.skipReason == MRRuntimeSchedulerSkipReason::PreviousSessionStillActive) sawSkipped = true;
+		}
+	if (!sawStarted || !sawSkipped) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler must record started and skipped events for debugger/status consumers.";
+		return false;
+	}
+	{
+		MRMacroExecutionSession session;
+
+		session.sessionId = kSessionId;
+		session.taskId = kSessionId;
+		session.owner = config.owner;
+		session.route = MRMacroExecutionRoute::Background;
+		session.state = MRMacroExecutionState::Running;
+		trackMacroExecutionSession(session);
+		if (!publishMacroExecutionResultForTask(kSessionId, MRMacroExecutionState::Completed, "scheduler regression completed")) {
+			removeRuntimeScheduledConsumer(consumerId);
+			failureReason = "Runtime scheduler regression must publish the active execution-session result.";
+			return false;
+		}
+	}
+	events = recentRuntimeSchedulerEvents();
+	for (const MRRuntimeSchedulerEvent &event : events)
+		if (event.consumerId == consumerId && event.kind == MRRuntimeSchedulerEventKind::TickFinished && event.sessionId == kSessionId) sawFinished = true;
+	if (!sawFinished) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler must record finished events from execution-session terminal results.";
+		return false;
+	}
+	if (!runtimeScheduledConsumerTickMayStart(consumerId, &blockingSessionId)) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler must release active consumers after execution-session terminal results.";
+		return false;
+	}
+
+	lines = runtimeSchedulerStatusLines(8);
+	for (const std::string &line : lines) {
+		if (line.find("tick-skipped") != std::string::npos && line.find("blocking-session #700301") != std::string::npos) sawSkippedLine = true;
+		if (line.find("source-package") != std::string::npos) sawSourcePackageLine = true;
+	}
+	if (!sawSkippedLine) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler status lines must expose skipped ticks with blocking session id.";
+		return false;
+	}
+	if (!sawSourcePackageLine) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler status lines must expose source-package scheduled consumers.";
+		return false;
+	}
+	if (!noteRuntimeScheduledConsumerStarted(consumerId, kSessionId)) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler must mark a consumer session as started after automatic finish.";
+		return false;
+	}
+	if (noteRuntimeScheduledConsumerFinished(consumerId, kSessionId + 1)) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler must reject finishing a non-active session.";
+		return false;
+	}
+	if (!noteRuntimeScheduledConsumerFinished(consumerId, kSessionId)) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler must clear the active session on matching finish.";
+		return false;
+	}
+	if (!runtimeScheduledConsumerTickMayStart(consumerId, &blockingSessionId)) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler must allow a tick after the previous session finished.";
+		return false;
+	}
+	if (pumpRuntimeScheduler(1000000) == 0) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler pump must emit a due event for an idle due consumer.";
+		return false;
+	}
+	if (pumpRuntimeScheduler(1000500) != 0) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler pump must not emit a due event before interval expiry.";
+		return false;
+	}
+	events = recentRuntimeSchedulerEvents();
+	for (const MRRuntimeSchedulerEvent &event : events)
+		if (event.consumerId == consumerId) {
+			if (event.kind == MRRuntimeSchedulerEventKind::TickDue && event.dueAtMs == 1000000 && event.observedAtMs == 1000000) sawDue = true;
+			if (event.kind == MRRuntimeSchedulerEventKind::TickStarted && event.sessionId != 0) sawDispatchResult = true;
+		}
+	if (!sawDue) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler pump must record due and observed timestamps.";
+		return false;
+	}
+	if (!sawDispatchResult) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler pump must record accepted source-package dispatch results.";
+		return false;
+	}
+	if (runtimeTimerSourceNowMs() == 0) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime timer source must provide monotonic millisecond time.";
+		return false;
+	}
+	if (!removeRuntimeScheduledConsumer(consumerId) || removeRuntimeScheduledConsumer(consumerId)) {
+		failureReason = "Runtime scheduler consumer removal must be acknowledged once.";
+		return false;
+	}
+
+	failureReason.clear();
 	return true;
 }
 
@@ -6965,8 +7373,8 @@ bool testMarqueeProcWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	profile = mrvmAnalyzeBytecode(bytecode.data(), bytecode.size());
-	if (profile.procCount < 3 || profile.tvCallCount != 0) {
-		failureReason = "MARQUEE probe must compile as OP_PROC (not TVCALL).";
+	if (profile.procCount < 3) {
+		failureReason = "MARQUEE probe must compile as OP_PROC.";
 		return false;
 	}
 	if (!mrvmCanRunStagedInBackground(profile)) {
@@ -7119,47 +7527,80 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	return true;
 }
 
-bool testTvCallSurfaceGuard(std::string &failureReason) {
+bool testUiMessageBoxProcGuard(std::string &failureReason) {
+	const std::string headerPath = absolutePathFromCwd("mrmac/mrmac.h");
+	const std::string compilerPath = absolutePathFromCwd("mrmac/mrmac.c");
 	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
+	const std::string deferredHeaderPath = absolutePathFromCwd("mrmac/vm/MRVMDeferredUi.hpp");
 	const std::string deferredPath = absolutePathFromCwd("mrmac/vm/MRVMDeferredUi.cpp");
-	std::string content;
+	const std::string syntaxPath = absolutePathFromCwd("ui/MRSyntax.cpp");
+	std::string headerContent;
+	std::string compilerContent;
+	std::string vmContent;
+	std::string deferredHeaderContent;
 	std::string deferredContent;
+	std::string syntaxContent;
 	std::string ioError;
-	std::size_t dispatchStart = std::string::npos;
-	std::size_t dispatchEnd = std::string::npos;
-	std::string dispatchBlock;
+	std::vector<unsigned char> bytecode;
+	std::string compileError;
+	const std::string legacyKeyword = std::string("TV") + "CALL";
+	MRMacroExecutionProfile profile;
+	std::vector<std::string> unsupported;
+	static const char kSource[] = "$MACRO Probe;\n"
+	                              "UI_MESSAGEBOX('hello');\n"
+	                              "END_MACRO;\n";
 
-	if (!readTextFile(vmPath, content, ioError)) {
-		failureReason = "Unable to read MRVM.cpp for TVCALL surface guard: " + ioError;
+	if (!readTextFile(headerPath, headerContent, ioError)) {
+		failureReason = "Unable to read mrmac.h for UI_MESSAGEBOX guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(compilerPath, compilerContent, ioError)) {
+		failureReason = "Unable to read mrmac.c for UI_MESSAGEBOX guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(vmPath, vmContent, ioError)) {
+		failureReason = "Unable to read MRVM.cpp for UI_MESSAGEBOX guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(deferredHeaderPath, deferredHeaderContent, ioError)) {
+		failureReason = "Unable to read MRVMDeferredUi.hpp for UI_MESSAGEBOX guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(deferredPath, deferredContent, ioError)) {
-		failureReason = "Unable to read MRVMDeferredUi.cpp for TVCALL surface guard: " + ioError;
+		failureReason = "Unable to read MRVMDeferredUi.cpp for UI_MESSAGEBOX guard: " + ioError;
 		return false;
 	}
-	dispatchStart = content.find("} else if (opcode == OP_TVCALL) {");
-	if (dispatchStart == std::string::npos) {
-		failureReason = "Unable to locate OP_TVCALL runtime dispatch block.";
+	if (!readTextFile(syntaxPath, syntaxContent, ioError)) {
+		failureReason = "Unable to read MRSyntax.cpp for UI_MESSAGEBOX guard: " + ioError;
 		return false;
 	}
-	dispatchEnd = content.find("} else if (opcode == OP_HALT) {", dispatchStart);
-	if (dispatchEnd == std::string::npos || dispatchEnd <= dispatchStart) {
-		failureReason = "Unable to locate OP_TVCALL runtime dispatch block end marker.";
+	if (headerContent.find("OP_" + legacyKeyword) != std::string::npos || compilerContent.find("TOK_" + legacyKeyword) != std::string::npos || compilerContent.find("OP_" + legacyKeyword) != std::string::npos || vmContent.find("OP_" + legacyKeyword) != std::string::npos || deferredHeaderContent.find("dispatchDeferredUi" + legacyKeyword) != std::string::npos || deferredContent.find("dispatchDeferredUi" + legacyKeyword) != std::string::npos || syntaxContent.find("\"" + legacyKeyword + "\"") != std::string::npos) {
+		failureReason = "Legacy UI-call lexer/parser/opcode/runtime/syntax surface must be removed.";
 		return false;
 	}
-	dispatchBlock = content.substr(dispatchStart, dispatchEnd - dispatchStart);
-	if (deferredContent.find("bool dispatchDeferredUiTvCall(") == std::string::npos || content.find("if (dispatchDeferredUiTvCall(funcNameUpper, args, deferredError))") == std::string::npos || deferredContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command);") == std::string::npos || content.find("session->deferredUiCommands.push_back(command);") == std::string::npos) {
-		failureReason = "TVCALL runtime dispatch must route through dispatchDeferredUiTvCall and the central deferred UI command path.";
+	if (compilerContent.find("PROC_SIG1(\"UI_MESSAGEBOX\"") == std::string::npos || vmContent.find("name == \"UI_MESSAGEBOX\"") == std::string::npos || deferredContent.find("DeferredVisualUiProc::MessageBox") == std::string::npos || deferredContent.find("mrducMessageBox") == std::string::npos) {
+		failureReason = "UI_MESSAGEBOX must be a typed OP_PROC routed through the deferred UI command path.";
 		return false;
 	}
-	if (deferredContent.find("kDeferredTvCallVideoMode = \"VIDEO_MODE\"") == std::string::npos || deferredContent.find("kDeferredTvCallVideoCard = \"VIDEO_CARD\"") == std::string::npos || deferredContent.find("kDeferredTvCallToggle = \"TOGGLE\"") == std::string::npos || deferredContent.find("is not implemented.") == std::string::npos) {
-		failureReason = "TVCALL runtime must keep VIDEO_MODE/VIDEO_CARD/TOGGLE explicitly unimplemented.";
+	if (!compileBytecode(kSource, bytecode, compileError)) {
+		failureReason = "Unable to compile UI_MESSAGEBOX proc probe: " + compileError;
 		return false;
 	}
-	if (dispatchBlock.find("MARQUEE") != std::string::npos) {
-		failureReason = "TVCALL runtime dispatch must not route MARQUEE* commands.";
+	profile = mrvmAnalyzeBytecode(bytecode.data(), bytecode.size());
+	if (profile.procCount < 1) {
+		failureReason = "UI_MESSAGEBOX probe must compile as OP_PROC.";
 		return false;
 	}
+	if (!mrvmCanRunStagedInBackground(profile)) {
+		failureReason = "UI_MESSAGEBOX proc probe must be staged-background eligible.";
+		return false;
+	}
+	unsupported = mrvmUnsupportedStagedSymbols(profile);
+	if (!unsupported.empty()) {
+		failureReason = "UI_MESSAGEBOX proc name must be an accepted staged symbol.";
+		return false;
+	}
+	if (!expectCompileError("$MACRO Bad;\n" + legacyKeyword + " MESSAGEBOX('hello');\nEND_MACRO;\n", "Syntax Error.", failureReason)) return false;
 	failureReason.clear();
 	return true;
 }
@@ -8492,9 +8933,14 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
 	runTest(ctx, "CREATE_GLOBAL_STR operation + staging guards", testCreateGlobalStrOperation);
+	runTest(ctx, "Exec session staged conflict rejection guard", testExecSessionStagedConflictRejectionGuard);
+	runTest(ctx, "Exec session listener fanout guard", testExecSessionListenerFanoutGuard);
+	runTest(ctx, "Exec session owner cancellation guard", testExecSessionOwnerCancellationGuard);
+	runTest(ctx, "Exec session status consumer guard", testExecSessionStatusConsumerGuard);
+	runTest(ctx, "Runtime scheduler skip event guard", testRuntimeSchedulerSkipEventGuard);
 	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
 	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
-	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
+	runTest(ctx, "UI_MESSAGEBOX proc guard / legacy UI-call removal guard", testUiMessageBoxProcGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "Render sink classification guard", testRenderSinkClassificationGuard);
 	runTest(ctx, "Resize/KILL_BOX reprojection guard", testResizeKillBoxReprojectionGuard);
@@ -8580,12 +9026,17 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
 	runTest(ctx, "CREATE_GLOBAL_STR operation + staging guards", testCreateGlobalStrOperation);
+	runTest(ctx, "Exec session staged conflict rejection guard", testExecSessionStagedConflictRejectionGuard);
+	runTest(ctx, "Exec session listener fanout guard", testExecSessionListenerFanoutGuard);
+	runTest(ctx, "Exec session owner cancellation guard", testExecSessionOwnerCancellationGuard);
+	runTest(ctx, "Exec session status consumer guard", testExecSessionStatusConsumerGuard);
+	runTest(ctx, "Runtime scheduler skip event guard", testRuntimeSchedulerSkipEventGuard);
 	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
 	runTest(ctx, "MARQUEE proc wiring guard", testMarqueeProcWiringGuard);
 	runTest(ctx, "Deferred UI mailbox playback guard", testDeferredUiPlaybackMailboxGuard);
 	runTest(ctx, "Deferred UI mutation-epoch guard", testDeferredUiMutationEpochGuard);
 	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
-	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
+	runTest(ctx, "UI_MESSAGEBOX proc guard / legacy UI-call removal guard", testUiMessageBoxProcGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "Render sink classification guard", testRenderSinkClassificationGuard);
 	runTest(ctx, "Resize/KILL_BOX reprojection guard", testResizeKillBoxReprojectionGuard);
