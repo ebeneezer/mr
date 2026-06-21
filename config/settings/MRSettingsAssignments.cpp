@@ -315,6 +315,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"WORKSPACE", MRSettingsKeyClass::Global, false},
     {"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
     {"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
+    {"MAX_WORKSPACE_HISTORY", MRSettingsKeyClass::Global, true},
     {"PATH_HISTORY", MRSettingsKeyClass::Global, false},
     {"FILE_HISTORY", MRSettingsKeyClass::Global, false},
     {kDialogLastPathKey, MRSettingsKeyClass::Global, false},
@@ -806,6 +807,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), errorMessage)) return false;
 	configuredPathHistoryLimit() = kHistoryLimitDefault;
 	configuredFileHistoryLimit() = kHistoryLimitDefault;
+	configuredWorkspaceHistoryLimit() = kHistoryLimitDefault;
 	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage()) {
 		state.lastPath.clear();
 		state.pathHistory.clear();
@@ -1359,6 +1361,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_FILE_HISTORY")) return false;
 				return setConfiguredFileHistoryLimitValue(parsed, errorMessage);
 			}
+			if (upper == "MAX_WORKSPACE_HISTORY") {
+				int parsed = 0;
+				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_WORKSPACE_HISTORY")) return false;
+				return setConfiguredWorkspaceHistoryLimitValue(parsed, errorMessage);
+			}
 			if (upper == "PATH_HISTORY") {
 				addSerializedHistoryEntry(dialogHistoryState(MRDialogHistoryScope::General).pathHistory, value, configuredPathHistoryLimit(), true);
 				if (errorMessage != nullptr) errorMessage->clear();
@@ -1390,7 +1397,7 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				std::string parsedValue;
 
 				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage)) return false;
-				addSerializedHistoryEntry(dialogHistoryState(scope).fileHistory, parsedValue, configuredFileHistoryLimit(), true);
+				addSerializedHistoryEntry(dialogHistoryState(scope).fileHistory, parsedValue, configuredFileHistoryLimitForScope(scope), true);
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
@@ -1935,6 +1942,11 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_FILE_HISTORY")) return false;
 				return setSnapshotFileHistoryLimit(snapshot, parsed, errorMessage);
 			}
+			if (upper == "MAX_WORKSPACE_HISTORY") {
+				int parsed = 0;
+				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_WORKSPACE_HISTORY")) return false;
+				return setSnapshotWorkspaceHistoryLimit(snapshot, parsed, errorMessage);
+			}
 			if (upper == "PATH_HISTORY") {
 				addSerializedHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::General)].pathHistory, value, snapshot.maxPathHistory, true);
 				if (errorMessage != nullptr) errorMessage->clear();
@@ -1964,9 +1976,11 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			if (upper == kDialogFileHistoryKey) {
 				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
 				std::string parsedValue;
+				int limit = 0;
 
 				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage)) return false;
-				addSerializedHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(scope)].fileHistory, parsedValue, snapshot.maxFileHistory, true);
+				limit = scope == MRDialogHistoryScope::WorkspaceLoad || scope == MRDialogHistoryScope::WorkspaceSave ? snapshot.maxWorkspaceHistory : snapshot.maxFileHistory;
+				addSerializedHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(scope)].fileHistory, parsedValue, limit, true);
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}

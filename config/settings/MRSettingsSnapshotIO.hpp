@@ -58,6 +58,7 @@ struct MRSettingsSnapshot {
 	std::vector<std::string> autoexecMacros;
 	int maxPathHistory{15};
 	int maxFileHistory{15};
+	int maxWorkspaceHistory{15};
 	std::array<DialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> dialogHistory;
 	std::vector<std::string> multiFilespecHistory;
 	std::vector<std::string> multiPathHistory;
@@ -80,6 +81,7 @@ bool writeNormalizedBootstrapFiles(const MRSettingsSnapshot &snapshot, std::stri
 bool setSnapshotScopedDialogLastPath(MRSettingsSnapshot &snapshot, MRDialogHistoryScope scope, const std::string &path, std::string *errorMessage);
 bool setSnapshotPathHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage);
 bool setSnapshotFileHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage);
+bool setSnapshotWorkspaceHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage);
 bool setSnapshotEditProfiles(MRSettingsSnapshot &snapshot, const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage);
 bool setSnapshotCompilerProfiles(MRSettingsSnapshot &snapshot, const std::vector<MRCompilerProfile> &profiles, std::string *errorMessage);
 [[nodiscard]] MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths);

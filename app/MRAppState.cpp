@@ -112,6 +112,7 @@ void updateAppCommandState() {
 
 	setCommandEnabled(cmMrFileOpen, true);
 	setCommandEnabled(cmMrFileLoad, true);
+	setCommandEnabled(cmMrFileGetLast, true);
 	setCommandEnabled(cmMrFileOpenWorkspace, true);
 	setCommandEnabled(cmMrFileAcquire, true);
 	setCommandEnabled(cmMrFileOpenLiveLog, true);

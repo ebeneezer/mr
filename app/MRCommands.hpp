@@ -155,7 +155,8 @@ enum : ushort {
 	cmMrOtherLspStatus,
 	cmMrOtherLspResults,
 	cmMrOtherLspCodeActions,
-	cmMrOtherLspDocumentHighlight
+	cmMrOtherLspDocumentHighlight,
+	cmMrFileGetLast
 };
 
 #endif

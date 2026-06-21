@@ -641,6 +641,7 @@ std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] char configuredPageBreakCharacter();
 [[nodiscard]] int configuredMaxPathHistory();
 [[nodiscard]] int configuredMaxFileHistory();
+[[nodiscard]] int configuredMaxWorkspaceHistory();
 void configuredPathHistoryEntries(std::vector<std::string> &outValues);
 void configuredFileHistoryEntries(std::vector<std::string> &outValues);
 bool setConfiguredWindowManager(bool enabled, std::string *errorMessage = nullptr);

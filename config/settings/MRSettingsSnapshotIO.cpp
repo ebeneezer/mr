@@ -164,6 +164,16 @@ std::string fallbackRememberedLoadDirectory(const MRSettingsSnapshot &snapshot) 
 	return std::string();
 }
 
+int snapshotFileHistoryLimitForScope(const MRSettingsSnapshot &snapshot, MRDialogHistoryScope scope) {
+	switch (scope) {
+		case MRDialogHistoryScope::WorkspaceLoad:
+		case MRDialogHistoryScope::WorkspaceSave:
+			return snapshot.maxWorkspaceHistory;
+		default:
+			return snapshot.maxFileHistory;
+	}
+}
+
 std::string appendFileName(std::string_view directory, const char *fileName) {
 	std::string base(directory);
 
@@ -327,7 +337,7 @@ bool setSnapshotScopedDialogLastPath(MRSettingsSnapshot &snapshot, MRDialogHisto
 		state.lastPath = normalized;
 		addHistoryEntry(state.pathHistory, normalized, snapshot.maxPathHistory);
 	} else if (!normalized.empty()) {
-		addHistoryEntry(state.fileHistory, normalized, snapshot.maxFileHistory);
+		addHistoryEntry(state.fileHistory, normalized, snapshotFileHistoryLimitForScope(snapshot, scope));
 		directory = normalizedDialogDirectoryFromPath(normalized);
 		if (!directory.empty()) {
 			state.lastPath = directory;
@@ -357,9 +367,20 @@ bool setSnapshotPathHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::s
 bool setSnapshotFileHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage) {
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
 	snapshot.maxFileHistory = value;
-	for (MRSettingsSnapshot::DialogHistoryState &state : snapshot.dialogHistory)
-		trimHistoryToLimit(state.fileHistory, value);
+	for (std::size_t i = 0; i < snapshot.dialogHistory.size(); ++i) {
+		const MRDialogHistoryScope scope = static_cast<MRDialogHistoryScope>(i);
+		if (scope != MRDialogHistoryScope::WorkspaceLoad && scope != MRDialogHistoryScope::WorkspaceSave) trimHistoryToLimit(snapshot.dialogHistory[i].fileHistory, value);
+	}
 	trimHistoryToLimit(snapshot.multiFilespecHistory, value);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool setSnapshotWorkspaceHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage) {
+	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_WORKSPACE_HISTORY must be within 5..50.");
+	snapshot.maxWorkspaceHistory = value;
+	trimHistoryToLimit(snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::WorkspaceLoad)].fileHistory, value);
+	trimHistoryToLimit(snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::WorkspaceSave)].fileHistory, value);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -432,6 +453,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	configuredAutoexecMacroEntries(snapshot.autoexecMacros);
 	snapshot.maxPathHistory = configuredMaxPathHistory();
 	snapshot.maxFileHistory = configuredMaxFileHistory();
+	snapshot.maxWorkspaceHistory = configuredMaxWorkspaceHistory();
 	snapshot.defaultProfileDescription = configuredDefaultProfileDescription();
 	snapshot.editSettings = configuredEditSetupSettings();
 	snapshot.colorSettings = configuredColorSetupSettings();
@@ -637,6 +659,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 		source += "MRSETUP('AUTOEXEC_MACRO', '" + escapeMrmacSingleQuotedLiteral(autoexecMacro) + "');\n";
 	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(snapshot.maxPathHistory) + "');\n";
 	source += "MRSETUP('MAX_FILE_HISTORY', '" + std::to_string(snapshot.maxFileHistory) + "');\n";
+	source += "MRSETUP('MAX_WORKSPACE_HISTORY', '" + std::to_string(snapshot.maxWorkspaceHistory) + "');\n";
 	for (const MRDialogHistoryScopeSpec &scopeSpec : kDialogHistoryScopeSpecs) {
 		const MRSettingsSnapshot::DialogHistoryState &state = snapshot.dialogHistory[dialogHistoryScopeIndex(scopeSpec.scope)];
 

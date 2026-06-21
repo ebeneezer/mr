@@ -94,6 +94,21 @@ int &configuredFileHistoryLimit() {
 	return value;
 }
 
+int &configuredWorkspaceHistoryLimit() {
+	static int value = kHistoryLimitDefault;
+	return value;
+}
+
+int configuredFileHistoryLimitForScope(MRDialogHistoryScope scope) {
+	switch (scope) {
+		case MRDialogHistoryScope::WorkspaceLoad:
+		case MRDialogHistoryScope::WorkspaceSave:
+			return configuredWorkspaceHistoryLimit();
+		default:
+			return configuredFileHistoryLimit();
+	}
+}
+
 long long &configuredHistoryEpochCounter() {
 	static long long value = 0;
 	return value;
@@ -196,9 +211,24 @@ bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage) {
 
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
 	configuredFileHistoryLimit() = value;
-	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage())
-		trimHistoryToLimit(state.fileHistory, value);
+	for (std::size_t i = 0; i < configuredDialogHistoryStorage().size(); ++i) {
+		const MRDialogHistoryScope scope = static_cast<MRDialogHistoryScope>(i);
+		if (scope != MRDialogHistoryScope::WorkspaceLoad && scope != MRDialogHistoryScope::WorkspaceSave) trimHistoryToLimit(configuredDialogHistoryStorage()[i].fileHistory, value);
+	}
 	if (previousLimit != configuredFileHistoryLimit() || previousStates != configuredDialogHistoryStorage()) markConfiguredSettingsDirty();
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool setConfiguredWorkspaceHistoryLimitValue(int value, std::string *errorMessage) {
+	const int previousLimit = configuredWorkspaceHistoryLimit();
+	const auto previousStates = configuredDialogHistoryStorage();
+
+	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_WORKSPACE_HISTORY must be within 5..50.");
+	configuredWorkspaceHistoryLimit() = value;
+	trimHistoryToLimit(dialogHistoryState(MRDialogHistoryScope::WorkspaceLoad).fileHistory, value);
+	trimHistoryToLimit(dialogHistoryState(MRDialogHistoryScope::WorkspaceSave).fileHistory, value);
+	if (previousLimit != configuredWorkspaceHistoryLimit() || previousStates != configuredDialogHistoryStorage()) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -209,6 +239,10 @@ int configuredMaxPathHistory() {
 
 int configuredMaxFileHistory() {
 	return configuredFileHistoryLimit();
+}
+
+int configuredMaxWorkspaceHistory() {
+	return configuredWorkspaceHistoryLimit();
 }
 
 void configuredPathHistoryEntries(std::vector<std::string> &outValues) {
@@ -263,7 +297,7 @@ bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path
 		state.lastPath = normalized;
 		addHistoryEntry(state.pathHistory, normalized, configuredPathHistoryLimit());
 	} else if (!normalized.empty()) {
-		addHistoryEntry(state.fileHistory, normalized, configuredFileHistoryLimit());
+		addHistoryEntry(state.fileHistory, normalized, configuredFileHistoryLimitForScope(scope));
 		directory = normalizedDialogDirectoryFromPath(normalized);
 		if (!directory.empty()) {
 			state.lastPath = directory;

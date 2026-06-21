@@ -58,6 +58,7 @@
 #include "../dialogs/MRPdfExportDialog.hpp"
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../dialogs/setup/MRSetupCommon.hpp"
+#include "../config/settings/MRSettingsHistory.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsRuntimeState.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
@@ -98,6 +99,176 @@ bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandL
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
+
+enum : ushort {
+	cmMrGetLastFilesActivate = 3890,
+	cmMrGetLastFoldersActivate,
+	cmMrGetLastWorkspacesActivate
+};
+
+enum class GetLastKind : unsigned char {
+	None = 0,
+	File,
+	Folder,
+	Workspace
+};
+
+struct GetLastEntry {
+	std::string value;
+	long long epoch;
+};
+
+std::vector<MRColumnListView::Row> getLastRowsForValues(const std::vector<std::string> &values) {
+	std::vector<MRColumnListView::Row> rows;
+
+	rows.reserve(values.size());
+	for (const std::string &value : values)
+		rows.push_back(MRColumnListView::Row{value});
+	return rows;
+}
+
+void appendHistoryEntries(std::vector<GetLastEntry> &outEntries, MRDialogHistoryScope scope, bool files) {
+	const MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+	const std::vector<MRDialogHistoryEntry> &source = files ? state.fileHistory : state.pathHistory;
+
+	for (const MRDialogHistoryEntry &entry : source) {
+		const std::string normalized = normalizeConfiguredPathInput(entry.value);
+		if (!normalized.empty()) outEntries.push_back(GetLastEntry{normalized, entry.epoch});
+	}
+}
+
+std::vector<std::string> recentValuesForScopes(MRDialogHistoryScope firstScope, MRDialogHistoryScope secondScope, bool files, int limit) {
+	std::vector<GetLastEntry> entries;
+	std::vector<std::string> values;
+	std::set<std::string> seen;
+
+	appendHistoryEntries(entries, firstScope, files);
+	appendHistoryEntries(entries, secondScope, files);
+	std::sort(entries.begin(), entries.end(), [](const GetLastEntry &left, const GetLastEntry &right) {
+		if (left.epoch != right.epoch) return left.epoch > right.epoch;
+		return left.value < right.value;
+	});
+	for (const GetLastEntry &entry : entries) {
+		if (seen.find(entry.value) != seen.end()) continue;
+		seen.insert(entry.value);
+		values.push_back(entry.value);
+		if (values.size() >= static_cast<std::size_t>(std::max(0, limit))) break;
+	}
+	return values;
+}
+
+std::vector<std::string> recentWorkspaceValues() {
+	std::vector<GetLastEntry> entries;
+	std::vector<std::string> values;
+	std::set<std::string> seen;
+	const int limit = configuredMaxWorkspaceHistory();
+
+	appendHistoryEntries(entries, MRDialogHistoryScope::WorkspaceLoad, true);
+	std::sort(entries.begin(), entries.end(), [](const GetLastEntry &left, const GetLastEntry &right) {
+		if (left.epoch != right.epoch) return left.epoch > right.epoch;
+		return left.value < right.value;
+	});
+	for (const GetLastEntry &entry : entries) {
+		if (seen.find(entry.value) != seen.end()) continue;
+		seen.insert(entry.value);
+		values.push_back(entry.value);
+		if (values.size() >= static_cast<std::size_t>(std::max(0, limit))) break;
+	}
+	return values;
+}
+
+short getLastListHeight(std::size_t itemCount) {
+	const int wanted = std::max<int>(3, static_cast<int>(itemCount));
+	return static_cast<short>(std::min<int>(wanted, 8));
+}
+
+class GetLastDialog final : public MRDialogFoundation {
+  public:
+	GetLastDialog(const std::vector<std::string> &files, const std::vector<std::string> &folders, const std::vector<std::string> &workspaces, short width, short height, short fileRows, short folderRows, short workspaceRows)
+	    : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(width, height), "GET LAST", width, height, initMrDialogFrame), fileValues(files), folderValues(folders), workspaceValues(workspaces) {
+		short y = 1;
+
+		fileList = insertLabeledList("Files:", cmMrGetLastFilesActivate, fileValues, y, width, fileRows);
+		folderList = insertLabeledList("Folders:", cmMrGetLastFoldersActivate, folderValues, y, width, folderRows);
+		workspaceList = insertLabeledList("Workspaces:", cmMrGetLastWorkspacesActivate, workspaceValues, y, width, workspaceRows);
+	}
+
+	void selectInitialList() {
+		if (fileList != nullptr && !fileValues.empty()) {
+			fileList->select();
+			return;
+		}
+		if (folderList != nullptr && !folderValues.empty()) {
+			folderList->select();
+			return;
+		}
+		if (workspaceList != nullptr && !workspaceValues.empty()) workspaceList->select();
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evCommand) {
+			switch (event.message.command) {
+				case cmMrGetLastFilesActivate:
+					acceptSelection(GetLastKind::File, fileList, fileValues);
+					clearEvent(event);
+					return;
+				case cmMrGetLastFoldersActivate:
+					acceptSelection(GetLastKind::Folder, folderList, folderValues);
+					clearEvent(event);
+					return;
+				case cmMrGetLastWorkspacesActivate:
+					acceptSelection(GetLastKind::Workspace, workspaceList, workspaceValues);
+					clearEvent(event);
+					return;
+				default:
+					break;
+			}
+		}
+		MRDialogFoundation::handleEvent(event);
+	}
+
+	[[nodiscard]] GetLastKind acceptedKind() const noexcept {
+		return selectedKind;
+	}
+
+	[[nodiscard]] const std::string &acceptedValue() const noexcept {
+		return selectedValue;
+	}
+
+  private:
+	MRColumnListView *insertLabeledList(const char *label, ushort command, const std::vector<std::string> &values, short &y, short width, short rows) {
+		TScrollBar *scrollBar = nullptr;
+		MRColumnListView *list = nullptr;
+
+		insert(new TStaticText(TRect(2, y, width - 2, y + 1), label));
+		++y;
+		scrollBar = new TScrollBar(TRect(width - 3, y, width - 2, y + rows));
+		insert(scrollBar);
+		list = new MRColumnListView(TRect(2, y, width - 3, y + rows), scrollBar, this, 0, command);
+		list->setRows(getLastRowsForValues(values));
+		insert(list);
+		y = static_cast<short>(y + rows + 1);
+		return list;
+	}
+
+	void acceptSelection(GetLastKind kind, MRColumnListView *list, const std::vector<std::string> &values) {
+		const short selected = list != nullptr ? list->selectedIndex() : -1;
+
+		if (selected < 0 || static_cast<std::size_t>(selected) >= values.size()) return;
+		selectedKind = kind;
+		selectedValue = values[static_cast<std::size_t>(selected)];
+		endModal(cmOK);
+	}
+
+	std::vector<std::string> fileValues;
+	std::vector<std::string> folderValues;
+	std::vector<std::string> workspaceValues;
+	MRColumnListView *fileList = nullptr;
+	MRColumnListView *folderList = nullptr;
+	MRColumnListView *workspaceList = nullptr;
+	GetLastKind selectedKind = GetLastKind::None;
+	std::string selectedValue;
+};
 
 enum class KeymapDispatchKind : unsigned char {
 	AppCommand = 0,
@@ -394,6 +565,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "File / Open";
 		case cmMrFileLoad:
 			return "File / Load";
+		case cmMrFileGetLast:
+			return "File / Get Last";
 		case cmMrFileOpenWorkspace:
 			return "File / Open Workspace";
 		case cmMrFileAcquire:
@@ -4291,6 +4464,92 @@ bool handleFileLoad() {
 	return true;
 }
 
+bool openRecentFileValue(const std::string &value) {
+	std::string resolvedPath;
+
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::OpenFile, value.c_str(), resolvedPath)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, value.c_str());
+		return true;
+	}
+	if (!openResolvedFilesIntoWindows(std::vector<std::string>{resolvedPath})) forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
+	return true;
+}
+
+bool openLoadDialogForRecentFolder(const std::string &value) {
+	char fileName[MAXPATH];
+	std::string folder = normalizeConfiguredPathInput(value);
+	std::string resolvedPath;
+	ushort result = cmCancel;
+
+	if (folder.empty() || !isReadableDirectory(folder)) {
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Folder is not readable: " + folder, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, folder.c_str());
+		return true;
+	}
+
+	std::memset(fileName, 0, sizeof(fileName));
+	mr::dialogs::writeRecordField(fileName, sizeof(fileName), folder);
+	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::LoadFile, "*.*", "LOAD FILE", "~N~ame", fdOpenButton, fileName);
+	if (result == cmCancel) return true;
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, fileName, resolvedPath)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, fileName);
+		return true;
+	}
+	if (!loadResolvedFilesIntoWindows(std::vector<std::string>{resolvedPath})) forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
+	return true;
+}
+
+bool restoreRecentWorkspaceValue(const std::string &value) {
+	const std::string selectedPath = mr::dialogs::ensureMrmacExtension(normalizeConfiguredPathInput(value));
+	const bool readable = ::access(selectedPath.c_str(), F_OK) == 0 && ::access(selectedPath.c_str(), R_OK) == 0;
+
+	mrLoadWorkspace(selectedPath);
+	if (readable) rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
+	else
+		forgetLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
+	return true;
+}
+
+bool handleFileGetLast() {
+	GetLastDialog *dialog = nullptr;
+	ushort result = cmCancel;
+	GetLastKind acceptedKind = GetLastKind::None;
+	std::string acceptedValue;
+	std::vector<std::string> files = recentValuesForScopes(MRDialogHistoryScope::OpenFile, MRDialogHistoryScope::LoadFile, true, configuredMaxFileHistory());
+	std::vector<std::string> folders = recentValuesForScopes(MRDialogHistoryScope::OpenFile, MRDialogHistoryScope::LoadFile, false, configuredMaxPathHistory());
+	std::vector<std::string> workspaces = recentWorkspaceValues();
+	const short width = 96;
+	const short fileRows = getLastListHeight(files.size());
+	const short folderRows = getLastListHeight(folders.size());
+	const short workspaceRows = getLastListHeight(workspaces.size());
+	const short height = static_cast<short>(fileRows + folderRows + workspaceRows + 8);
+
+	if (TProgram::deskTop == nullptr) return true;
+	dialog = new GetLastDialog(files, folders, workspaces, width, height, fileRows, folderRows, workspaceRows);
+	dialog->finalizeLayout();
+	dialog->selectInitialList();
+	result = TProgram::deskTop->execView(dialog);
+	if (result == cmOK) {
+		acceptedKind = dialog->acceptedKind();
+		acceptedValue = dialog->acceptedValue();
+	}
+	TObject::destroy(dialog);
+
+	if (result != cmOK || acceptedValue.empty()) return true;
+	switch (acceptedKind) {
+		case GetLastKind::File:
+			return openRecentFileValue(acceptedValue);
+		case GetLastKind::Folder:
+			return openLoadDialogForRecentFolder(acceptedValue);
+		case GetLastKind::Workspace:
+			return restoreRecentWorkspaceValue(acceptedValue);
+		case GetLastKind::None:
+		default:
+			break;
+	}
+	return true;
+}
+
 bool handleFileAcquire() {
 	static_cast<void>(runAcquireDialog(MRAcquireMode::OpenFile));
 	return true;
@@ -5402,6 +5661,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrFileLoad:
 			return handleFileLoad();
+
+		case cmMrFileGetLast:
+			return handleFileGetLast();
 
 		case cmMrFileOpenWorkspace:
 			return mrLoadWorkspaceWithDialog();
