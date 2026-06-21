@@ -27,14 +27,13 @@
 
 namespace {
 struct PendingForegroundMacro {
-	MRMacroExecutionSession session;
-	std::string label;
+	MRMacroExecutionSessionId sessionId = 0;
 	std::shared_ptr<VirtualMachine> vm;
 
 	PendingForegroundMacro() {
 	}
 
-	PendingForegroundMacro(MRMacroExecutionSession aSession, std::string aLabel, std::shared_ptr<VirtualMachine> aVm) : session(std::move(aSession)), label(std::move(aLabel)), vm(std::move(aVm)) {
+	PendingForegroundMacro(MRMacroExecutionSessionId aSessionId, std::shared_ptr<VirtualMachine> aVm) : sessionId(aSessionId), vm(std::move(aVm)) {
 	}
 };
 
@@ -65,8 +64,8 @@ bool hasMrmacExtension(const std::string &path) {
 	if (pos == std::string::npos) return false;
 
 	std::string ext = path.substr(pos);
-	for (char &i : ext)
-		if (i >= 'A' && i <= 'Z') i = static_cast<char>(i - 'A' + 'a');
+	for (std::size_t index = 0; index < ext.size(); ++index)
+		if (ext[index] >= 'A' && ext[index] <= 'Z') ext[index] = static_cast<char>(ext[index] - 'A' + 'a');
 
 	return ext == ".mrmac";
 }
@@ -98,8 +97,8 @@ std::string trimPathInput(const std::string &path) {
 }
 
 std::string upperAscii(std::string value) {
-	for (char &ch : value)
-		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+	for (std::size_t index = 0; index < value.size(); ++index)
+		value[index] = static_cast<char>(std::toupper(static_cast<unsigned char>(value[index])));
 	return value;
 }
 
@@ -117,7 +116,9 @@ std::string stemOfPath(const std::string &path) {
 std::string escapeMrmacSingleQuotedLiteral(std::string_view value) {
 	std::string escaped;
 	escaped.reserve(value.size());
-	for (char ch : value) {
+	for (std::size_t index = 0; index < value.size(); ++index) {
+		const char ch = value[index];
+
 		escaped.push_back(ch);
 		if (ch == '\'') escaped.push_back('\'');
 	}
@@ -488,7 +489,9 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 
 void queuePendingForegroundMacro(const MRMacroExecutionSession &session, const std::string &label, const std::shared_ptr<VirtualMachine> &vm) {
 	std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
-	pendingForegroundMacros.push_back(PendingForegroundMacro(session, label, vm));
+	(void)label;
+	mrvmStorePendingForegroundMacroExecutionSession(session);
+	pendingForegroundMacros.push_back(PendingForegroundMacro(session.sessionId, vm));
 }
 
 std::size_t cancelForegroundMacroDelaysForOwner(const MRMacroExecutionOwner &owner) {
@@ -500,34 +503,34 @@ std::size_t cancelForegroundMacroDelaysForOwner(const MRMacroExecutionOwner &own
 		while (i < pendingForegroundMacros.size()) {
 			std::vector<PendingForegroundMacro>::difference_type index = static_cast<std::vector<PendingForegroundMacro>::difference_type>(i);
 			PendingForegroundMacro &pendingForegroundMacro = pendingForegroundMacros[i];
-			if (!macroExecutionOwnerMatches(pendingForegroundMacro.session.owner, owner)) {
+			MRMacroExecutionSession session;
+			if (!mrvmReadPendingForegroundMacroExecutionSession(pendingForegroundMacro.sessionId, session) || !macroExecutionOwnerMatches(session.owner, owner)) {
 				++i;
 				continue;
 			}
 			if (pendingForegroundMacro.vm) pendingForegroundMacro.vm->cancelPendingDelay();
-			pendingForegroundMacro.session.state = MRMacroExecutionState::Cancelled;
+			session.state = MRMacroExecutionState::Cancelled;
 			MRMacroExecutionResult result;
-			result.session = pendingForegroundMacro.session;
+			result.session = session;
 			result.state = MRMacroExecutionState::Cancelled;
 			result.message = "Foreground DELAY session cancelled by owner.";
 			results.push_back(result);
+			mrvmRemovePendingForegroundMacroExecutionSession(pendingForegroundMacro.sessionId);
 			pendingForegroundMacros.erase(pendingForegroundMacros.begin() + index);
 		}
 	}
-	for (const MRMacroExecutionResult &result : results)
+	for (std::size_t index = 0; index < results.size(); ++index) {
+		const MRMacroExecutionResult &result = results[index];
+
 		publishMacroExecutionResult(result.session, result.state, result.message);
+	}
 	return results.size();
 }
 } // namespace
 
 std::vector<MRMacroExecutionSession> pendingForegroundMacroExecutionSessions() {
 	std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
-	std::vector<MRMacroExecutionSession> sessions;
-
-	sessions.reserve(pendingForegroundMacros.size());
-	for (const auto &pending : pendingForegroundMacros)
-		sessions.push_back(pending.session);
-	return sessions;
+	return mrvmPendingForegroundMacroExecutionSessions();
 }
 
 void pumpForegroundMacroDelays() {
@@ -539,13 +542,19 @@ void pumpForegroundMacroDelays() {
 		while (i < pendingForegroundMacros.size()) {
 			std::vector<PendingForegroundMacro>::difference_type index = static_cast<std::vector<PendingForegroundMacro>::difference_type>(i);
 			PendingForegroundMacro &pending = pendingForegroundMacros[i];
+			MRMacroExecutionSession session;
+			if (!mrvmReadPendingForegroundMacroExecutionSession(pending.sessionId, session)) {
+				pendingForegroundMacros.erase(pendingForegroundMacros.begin() + index);
+				continue;
+			}
 			if (!pending.vm) {
-				pending.session.state = MRMacroExecutionState::Failed;
+				session.state = MRMacroExecutionState::Failed;
 				MRMacroExecutionResult result;
-				result.session = pending.session;
+				result.session = session;
 				result.state = MRMacroExecutionState::Failed;
 				result.message = "Foreground DELAY session failed: missing VM.";
 				results.push_back(result);
+				mrvmRemovePendingForegroundMacroExecutionSession(pending.sessionId);
 				pendingForegroundMacros.erase(pendingForegroundMacros.begin() + index);
 				continue;
 			}
@@ -555,17 +564,21 @@ void pumpForegroundMacroDelays() {
 					continue;
 				}
 			}
-			pending.session.state = pending.vm->wasCancelled() ? MRMacroExecutionState::Cancelled : MRMacroExecutionState::Completed;
+			session.state = pending.vm->wasCancelled() ? MRMacroExecutionState::Cancelled : MRMacroExecutionState::Completed;
 			MRMacroExecutionResult result;
-			result.session = pending.session;
-			result.state = pending.session.state;
+			result.session = session;
+			result.state = session.state;
 			result.message = pending.vm->wasCancelled() ? "Foreground DELAY session cancelled." : "Foreground DELAY session completed.";
 			results.push_back(result);
+			mrvmRemovePendingForegroundMacroExecutionSession(pending.sessionId);
 			pendingForegroundMacros.erase(pendingForegroundMacros.begin() + index);
 		}
 	}
-	for (const MRMacroExecutionResult &result : results)
+	for (std::size_t index = 0; index < results.size(); ++index) {
+		const MRMacroExecutionResult &result = results[index];
+
 		publishMacroExecutionResult(result.session, result.state, result.message);
+	}
 }
 
 void cancelForegroundMacroDelays() {
@@ -573,20 +586,29 @@ void cancelForegroundMacroDelays() {
 	{
 		std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
 
-		for (auto &pendingForegroundMacro : pendingForegroundMacros)
+		for (std::size_t index = 0; index < pendingForegroundMacros.size(); ++index) {
+			PendingForegroundMacro &pendingForegroundMacro = pendingForegroundMacros[index];
+
 			if (pendingForegroundMacro.vm) {
+				MRMacroExecutionSession session;
+				if (!mrvmReadPendingForegroundMacroExecutionSession(pendingForegroundMacro.sessionId, session)) continue;
 				pendingForegroundMacro.vm->cancelPendingDelay();
-				pendingForegroundMacro.session.state = MRMacroExecutionState::Cancelled;
+				session.state = MRMacroExecutionState::Cancelled;
 				MRMacroExecutionResult result;
-				result.session = pendingForegroundMacro.session;
+				result.session = session;
 				result.state = MRMacroExecutionState::Cancelled;
 				result.message = "Foreground DELAY session cancelled.";
 				results.push_back(result);
+				mrvmRemovePendingForegroundMacroExecutionSession(pendingForegroundMacro.sessionId);
 			}
+		}
 		pendingForegroundMacros.clear();
 	}
-	for (const MRMacroExecutionResult &result : results)
+	for (std::size_t index = 0; index < results.size(); ++index) {
+		const MRMacroExecutionResult &result = results[index];
+
 		publishMacroExecutionResult(result.session, result.state, result.message);
+	}
 }
 
 std::size_t requestMacroExecutionCancellationForBuffer(int bufferId) {
@@ -598,7 +620,9 @@ std::size_t requestMacroExecutionCancellationForBuffer(int bufferId) {
 	owner.hasBuffer = true;
 	owner.bufferId = bufferId;
 	activeSessions = activeMacroExecutionSessionsForOwner(owner);
-	for (const MRMacroExecutionSession &session : activeSessions) {
+	for (std::size_t index = 0; index < activeSessions.size(); ++index) {
+		const MRMacroExecutionSession &session = activeSessions[index];
+
 		if (session.taskId == 0) continue;
 		if (!mr::coprocessor::globalCoprocessor().cancelTask(session.taskId)) continue;
 		markMacroExecutionSessionCancellationRequestedForTask(session.taskId);

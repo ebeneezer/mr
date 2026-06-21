@@ -19,6 +19,13 @@ struct MRMacroModelessButtonSpec {
 	std::string macroSpec;
 };
 
+struct MRMacroModelessDisplaySpec {
+	int x = 0;
+	int y = 0;
+	int width = 20;
+	std::string text;
+};
+
 struct MRMacroModelessListBoxSpec {
 	int x = 0;
 	int y = 0;
@@ -30,6 +37,18 @@ struct MRMacroModelessListBoxSpec {
 	int start = 1;
 };
 
+struct MRMacroModelessGridSpec {
+	int x = 0;
+	int y = 0;
+	int width = 20;
+	int height = 4;
+	int id = 0;
+	std::string label;
+	std::string itemSpec;
+	std::string macroSpec;
+	int start = 1;
+};
+
 struct MRMacroModelessWindowDefinition {
 	int x = 0;
 	int y = 0;
@@ -38,8 +57,10 @@ struct MRMacroModelessWindowDefinition {
 	std::string windowId;
 	std::string title;
 	std::vector<MRMacroModelessLabelSpec> labels;
+	std::vector<MRMacroModelessDisplaySpec> displays;
 	std::vector<MRMacroModelessButtonSpec> buttons;
 	std::vector<MRMacroModelessListBoxSpec> listBoxes;
+	std::vector<MRMacroModelessGridSpec> grids;
 };
 
 struct MRMacroModelessSelection {
@@ -54,6 +75,8 @@ using MRMacroModelessCommandRunner = void (*)(const std::string &windowId, int b
 void setMacroModelessListResolver(MRMacroModelessListResolver resolver);
 void setMacroModelessCommandRunner(MRMacroModelessCommandRunner runner);
 bool showMacroModelessWindow(const MRMacroModelessWindowDefinition &definition);
+bool updateMacroModelessWindow(const MRMacroModelessWindowDefinition &definition);
+bool updateMacroModelessDisplay(const std::string &windowId, int displayIndex, const std::string &text);
 bool closeMacroModelessWindow(const std::string &windowId);
 void refreshMacroModelessWindows();
 

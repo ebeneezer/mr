@@ -229,13 +229,14 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 unsigned classifyProcName(const std::string &name) {
 	if (name == "MRSETUP" || name == "MRCOMPILERPROFILE") return mrefUiAffinity;
 	if (name == "MAKE_MESSAGE") return mrefUiAffinity;
+	if (name == "SET_CLIPBOARD_TEXT") return mrefUiAffinity;
 	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") return mrefUiAffinity;
 	if (name == "EXEC_SESSION_LIST" || name == "EXEC_SESSION_STOP") return mrefUiAffinity;
 	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "SET_GLOBAL_HASH" || name == "UNLOAD_MACRO") return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE" || name == "SET_FILE_ATTR") return mrefExternalIo;
 	if (name == "SHELL_TO_OS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "LOAD_FILE" || name == "SAVE_FILE") return mrefUiAffinity | mrefExternalIo;
-	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" || name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX" || name == "UI_MODELESS_ON" || name == "UI_MODELESS_SHOW" || name == "UI_MODELESS_CLOSE" || name == "UI_MESSAGEBOX") return mrefUiAffinity;
+	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" || name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX" || name == "UI_GRID" || name == "UI_MODELESS_ON" || name == "UI_MODELESS_SHOW" || name == "UI_MODELESS_UPDATE" || name == "UI_MODELESS_DISPLAY" || name == "UI_MODELESS_CLOSE" || name == "UI_MESSAGEBOX") return mrefUiAffinity;
 	if (name == "SAVE_SETTINGS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "BEEP") return mrefUiAffinity;
 	if (name == "WRITE_SOD") return mrefUiAffinity;

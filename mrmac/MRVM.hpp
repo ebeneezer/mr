@@ -12,6 +12,9 @@
 #include <vector>
 
 #include "MRTextDocument.hpp"
+#include "MRMacroExecutionSession.hpp"
+#include "MRMacroModelessUi.hpp"
+#include "../app/MRRuntimeScheduler.hpp"
 #include "vm/MRVMProfile.hpp"
 
 class MREditWindow;
@@ -129,6 +132,38 @@ MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::s
 MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 bool mrvmStoreExecSessionClosureInt(const std::string &closureId, const std::string &lvalue, int value);
 bool mrvmApplyExecUiCommandRequest(const MRMacroExecUiCommandRequest &request);
+
+MRMacroExecutionSessionId mrvmNextMacroExecutionSessionId();
+void mrvmStoreActiveMacroExecutionSession(const MRMacroExecutionSession &session);
+std::vector<MRMacroExecutionSession> mrvmActiveMacroExecutionSessions();
+std::vector<MRMacroExecutionSession> mrvmActiveMacroExecutionSessionsForOwner(const MRMacroExecutionOwner &owner);
+bool mrvmMarkMacroExecutionSessionCancellationRequestedForTask(std::uint64_t taskId);
+bool mrvmTakeActiveMacroExecutionSessionForTask(std::uint64_t taskId, MRMacroExecutionSession &session);
+void mrvmRecordMacroExecutionResult(MRMacroExecutionSession session, MRMacroExecutionState state, const std::string &message);
+std::vector<MRMacroExecutionResult> mrvmRecentMacroExecutionResults();
+void mrvmStorePendingForegroundMacroExecutionSession(const MRMacroExecutionSession &session);
+bool mrvmReadPendingForegroundMacroExecutionSession(MRMacroExecutionSessionId sessionId, MRMacroExecutionSession &session);
+bool mrvmRemovePendingForegroundMacroExecutionSession(MRMacroExecutionSessionId sessionId);
+std::vector<MRMacroExecutionSession> mrvmPendingForegroundMacroExecutionSessions();
+MRMacroExecutionSessionListenerId mrvmNextMacroExecutionSessionListenerId();
+void mrvmRegisterMacroExecutionSessionListener(MRMacroExecutionSessionListenerId listenerId);
+void mrvmRemoveMacroExecutionSessionListener(MRMacroExecutionSessionListenerId listenerId);
+void mrvmNoteMacroExecutionSessionStatusChanged();
+std::uint64_t mrvmMacroExecutionSessionStatusGeneration();
+
+MRRuntimeScheduledConsumerId mrvmNextRuntimeScheduledConsumerId();
+void mrvmStoreRuntimeScheduledConsumer(const MRRuntimeScheduledConsumer &consumer);
+bool mrvmReadRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId, MRRuntimeScheduledConsumer &consumer);
+bool mrvmRemoveRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId);
+std::vector<MRRuntimeScheduledConsumer> mrvmRuntimeScheduledConsumers();
+void mrvmRecordRuntimeSchedulerEvent(const MRRuntimeSchedulerEvent &event);
+std::vector<MRRuntimeSchedulerEvent> mrvmRecentRuntimeSchedulerEvents();
+MRRuntimeSchedulerEventId mrvmNextRuntimeSchedulerEventId();
+
+void mrvmStoreModelessWindowDefinition(const MRMacroModelessWindowDefinition &definition);
+bool mrvmStoreModelessWindowDisplay(const std::string &windowId, int displayIndex, const std::string &text);
+void mrvmStoreModelessWindowLiveGeometry(const std::string &windowId, int x, int y, int width, int height);
+void mrvmRemoveModelessWindowDefinition(const std::string &windowId);
 
 enum MRMacroDeferredUiCommandType {
 	mrducNone = 0,

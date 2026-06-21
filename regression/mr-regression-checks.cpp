@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <initializer_list>
 #include <iostream>
@@ -916,6 +917,152 @@ bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
 	if (!removeRuntimeScheduledConsumer(consumerId) || removeRuntimeScheduledConsumer(consumerId)) {
 		failureReason = "Runtime scheduler consumer removal must be acknowledged once.";
 		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testExecSessionKvAccessBoundaryGuard(std::string &failureReason) {
+	const std::filesystem::path rootPath = std::filesystem::current_path();
+	static const char *kSourceRoots[] = {"app", "config", "coprocessor", "dialogs", "diff", "keymap", "mrmac", "piecetable", "ui"};
+	static const char *kAllowedDirectKvFiles[] = {"mrmac/MRVM.cpp", "mrmac/macros/utils/ExecSessionConsole.mrmac"};
+	static const char *kDirectKvNeedles[] = {"\"EXECSESSIONS\"", "'EXECSESSIONS'"};
+
+	for (const char *sourceRoot : kSourceRoots) {
+		const std::filesystem::path scanRoot = rootPath / sourceRoot;
+		std::error_code errorCode;
+		std::filesystem::recursive_directory_iterator it(scanRoot, std::filesystem::directory_options::skip_permission_denied, errorCode);
+		std::filesystem::recursive_directory_iterator end;
+		if (errorCode) {
+			failureReason = "Unable to scan source root for exec-session K/V access guard: " + scanRoot.string();
+			return false;
+		}
+		for (; it != end; it.increment(errorCode)) {
+			if (errorCode) {
+				failureReason = "Unable to advance source scan for exec-session K/V access guard: " + errorCode.message();
+				return false;
+			}
+			if (!it->is_regular_file(errorCode)) continue;
+			if (errorCode) {
+				failureReason = "Unable to inspect source entry for exec-session K/V access guard: " + errorCode.message();
+				return false;
+			}
+			const std::filesystem::path path = it->path();
+			const std::string extension = path.extension().string();
+			if (extension != ".cpp" && extension != ".hpp" && extension != ".c" && extension != ".h" && extension != ".mrmac") continue;
+
+			const std::string relativePath = std::filesystem::relative(path, rootPath, errorCode).generic_string();
+			if (errorCode) {
+				failureReason = "Unable to compute relative path for exec-session K/V access guard: " + path.string();
+				return false;
+			}
+			bool allowed = false;
+			for (const char *allowedPath : kAllowedDirectKvFiles)
+				if (relativePath == allowedPath) {
+					allowed = true;
+					break;
+				}
+			if (allowed) continue;
+
+			std::string content;
+			std::string ioError;
+			if (!readTextFile(path.string(), content, ioError)) {
+				failureReason = "Unable to read source for exec-session K/V access guard: " + ioError;
+				return false;
+			}
+			for (const char *needle : kDirectKvNeedles)
+				if (content.find(needle) != std::string::npos) {
+					failureReason = "Non exec-session code must not access EXECSESSIONS K/V contents directly: " + relativePath + " contains " + needle + ".";
+					return false;
+				}
+		}
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testExecSessionRuntimeStoreBoundaryGuard(std::string &failureReason) {
+	const std::filesystem::path rootPath = std::filesystem::current_path();
+	struct ScannedFile {
+		const char *path;
+		const char *const *allowedStores;
+		std::size_t allowedStoreCount;
+	};
+	static const char *kSessionSourceAllowed[] = {"std::vector<MacroExecutionSessionListener> macroExecutionSessionListeners;"};
+	static const char *kMacroRunnerAllowed[] = {"std::vector<PendingForegroundMacro> pendingForegroundMacros;"};
+	static const char *kModelessUiAllowed[] = {"std::map<std::string, class MRMacroModelessWindow *> g_windows;"};
+	static const ScannedFile kFiles[] = {
+	    {"mrmac/MRMacroExecutionSession.cpp", kSessionSourceAllowed, sizeof(kSessionSourceAllowed) / sizeof(kSessionSourceAllowed[0])},
+	    {"mrmac/MRMacroRunner.cpp", kMacroRunnerAllowed, sizeof(kMacroRunnerAllowed) / sizeof(kMacroRunnerAllowed[0])},
+	    {"app/MRRuntimeScheduler.cpp", nullptr, 0},
+	    {"app/MRExecSessionStatus.cpp", nullptr, 0},
+	    {"mrmac/MRMacroModelessUi.cpp", kModelessUiAllowed, sizeof(kModelessUiAllowed) / sizeof(kModelessUiAllowed[0])},
+	};
+	static const char *kForbiddenStoreNeedles[] = {"std::map<", "std::unordered_map<", "std::vector<", "std::deque<", "std::list<", "std::set<", "std::unordered_set<"};
+	const std::size_t fileCount = sizeof(kFiles) / sizeof(kFiles[0]);
+	const std::size_t forbiddenStoreNeedleCount = sizeof(kForbiddenStoreNeedles) / sizeof(kForbiddenStoreNeedles[0]);
+
+	for (std::size_t fileIndex = 0; fileIndex < fileCount; ++fileIndex) {
+		const ScannedFile &file = kFiles[fileIndex];
+		std::string content;
+		std::string ioError;
+		if (!readTextFile((rootPath / file.path).string(), content, ioError)) {
+			failureReason = "Unable to read source for exec-session runtime store guard: " + ioError;
+			return false;
+		}
+		std::istringstream lines(content);
+		std::string line;
+		int lineNumber = 0;
+		while (std::getline(lines, line)) {
+			++lineNumber;
+			if (line.empty() || std::isspace(static_cast<unsigned char>(line[0]))) continue;
+			if (line.find('(') != std::string::npos || line.find(';') == std::string::npos) continue;
+			bool hasForbiddenStore = false;
+			for (std::size_t needleIndex = 0; needleIndex < forbiddenStoreNeedleCount; ++needleIndex) {
+				const char *needle = kForbiddenStoreNeedles[needleIndex];
+				if (line.find(needle) != std::string::npos) {
+					hasForbiddenStore = true;
+					break;
+				}
+			}
+			if (!hasForbiddenStore) continue;
+			bool allowed = false;
+			for (std::size_t index = 0; index < file.allowedStoreCount; ++index) {
+				if (line.find(file.allowedStores[index]) != std::string::npos) {
+					allowed = true;
+					break;
+				}
+			}
+			if (allowed) continue;
+			failureReason = "Exec-session/modeless runtime store guard rejected top-level store in " + std::string(file.path) + ":" + std::to_string(lineNumber) + ": " + line;
+			return false;
+		}
+	}
+	{
+		std::string vmSource;
+		std::string ioError;
+		if (!readTextFile((rootPath / "mrmac/MRVM.cpp").string(), vmSource, ioError)) {
+			failureReason = "Unable to read MRVM.cpp for modeless UI staging store guard: " + ioError;
+			return false;
+		}
+		if (vmSource.find("g_macroUiDialog") != std::string::npos || vmSource.find("g_macroUiItemLists") != std::string::npos) {
+			failureReason = "Modeless UI staging data must live under MODELESSUI/staging K/V, not in MRVM.cpp store globals.";
+			return false;
+		}
+		if (vmSource.find("readGlobalValue(\"EXECSESSIONS\"") != std::string::npos || vmSource.find("readGlobalValue(\"MODELESSUI\"") != std::string::npos) {
+			failureReason = "EXECSESSIONS and MODELESSUI root reads must go through MRVM.cpp K/V root accessors.";
+			return false;
+		}
+		if (vmSource.find("ensureMacroUiStagingHash") == std::string::npos || vmSource.find("\"MODELESSUI\"") == std::string::npos) {
+			failureReason = "Modeless UI staging guard expects MODELESSUI/staging K/V accessors in MRVM.cpp.";
+			return false;
+		}
+		if (vmSource.find("findGlobalHashRoot") == std::string::npos || vmSource.find("findExecSessionsChild") == std::string::npos || vmSource.find("findModelessUiChild") == std::string::npos) {
+			failureReason = "Exec-session/modeless K/V root accessors must remain centralized in MRVM.cpp.";
+			return false;
+		}
 	}
 
 	failureReason.clear();
@@ -8938,6 +9085,8 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Exec session owner cancellation guard", testExecSessionOwnerCancellationGuard);
 	runTest(ctx, "Exec session status consumer guard", testExecSessionStatusConsumerGuard);
 	runTest(ctx, "Runtime scheduler skip event guard", testRuntimeSchedulerSkipEventGuard);
+	runTest(ctx, "Exec session K/V access boundary guard", testExecSessionKvAccessBoundaryGuard);
+	runTest(ctx, "Exec session runtime store boundary guard", testExecSessionRuntimeStoreBoundaryGuard);
 	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
 	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
 	runTest(ctx, "UI_MESSAGEBOX proc guard / legacy UI-call removal guard", testUiMessageBoxProcGuard);
@@ -9031,6 +9180,8 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Exec session owner cancellation guard", testExecSessionOwnerCancellationGuard);
 	runTest(ctx, "Exec session status consumer guard", testExecSessionStatusConsumerGuard);
 	runTest(ctx, "Runtime scheduler skip event guard", testRuntimeSchedulerSkipEventGuard);
+	runTest(ctx, "Exec session K/V access boundary guard", testExecSessionKvAccessBoundaryGuard);
+	runTest(ctx, "Exec session runtime store boundary guard", testExecSessionRuntimeStoreBoundaryGuard);
 	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
 	runTest(ctx, "MARQUEE proc wiring guard", testMarqueeProcWiringGuard);
 	runTest(ctx, "Deferred UI mailbox playback guard", testDeferredUiPlaybackMailboxGuard);

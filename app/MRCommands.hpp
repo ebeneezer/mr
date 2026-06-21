@@ -93,7 +93,7 @@ enum : ushort {
 	cmMrOtherClearOutput,
 	cmMrOtherFindNextCompilerError,
 	cmMrOtherMatchBraceOrParen,
-	cmMrOtherAsciiTable,
+	cmMrOtherReservedSlot,
 
 	cmMrMacroToggleRecording,
 
@@ -129,7 +129,6 @@ enum : ushort {
 	cmMrSearchMultiFileSearch,
 	cmMrSearchListFilesFromLastSearch,
 	cmMrSearchMultiFileSearchReplace,
-	cmMrOtherEmojiTable,
 	cmMrEnsureUsableWorkWindow,
 	cmMrDeferredActivateWindow,
 	cmMrWindowTopologyChanged,

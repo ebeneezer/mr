@@ -211,8 +211,6 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrFileCompareNextChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrFileComparePreviousChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
-	setCommandEnabled(cmMrOtherAsciiTable, canModify);
-	setCommandEnabled(cmMrOtherEmojiTable, canModify);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
 	setCommandEnabled(cmMrHelpContents, true);
 	setCommandEnabled(cmMrSetupUserInterfaceSettings, true);

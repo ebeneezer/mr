@@ -76,11 +76,18 @@ runtime consumers, execution sessions, macro routing and coprocessor work items.
 - Exec sessions must not add new settings or workspace persistence.
 - Exec session state is runtime state. It must not be serialized through
   `settings.mrmac` or workspace files without a dedicated persistence decision.
-- Closure state is stored only in the central VM K/V hash under the top-level
-  key `EXECSESSIONS`.
-- Exec sessions must not add a second closure registry or a second persistence
-  store. Runtime scheduler state may remember which consumer is scheduled; the
-  closure variable state remains in `EXECSESSIONS`.
+- Exec-session runtime state is stored in the central VM K/V hash under the
+  top-level key `EXECSESSIONS`.
+- `runtime-only` means that this state is not serialized. It does not permit a
+  second value-bearing C++ registry beside the central VM K/V store.
+- Closure variable state, active session metadata, recent terminal results,
+  foreground `DELAY` metadata, scheduler consumers, scheduler events, status
+  generations and listener ids belong under `EXECSESSIONS`.
+- C++ may keep only mechanical runtime handles that cannot be represented as
+  VM K/V values, such as function-pointer callbacks and suspended
+  `VirtualMachine` ownership for foreground `DELAY`.
+- Exec sessions must not add a second closure registry, a second scheduler
+  registry or a second persistence store.
 - `MRSETUP` and `SAVE_SETTINGS` behavior must remain governed by the VM and
   settings contracts.
 - Cancellation and pause are cooperative. A session must not interrupt execution
@@ -135,6 +142,12 @@ hash. If the closure id or state entry is absent, the VM falls back to the norma
 default value for the declared type. If a later asynchronous result cannot find
 the closure state for its lvalue, the result must be discarded rather than
 reviving expired closure state.
+
+Closure variable lifetime is bounded by the execution-session lifecycle that
+owns the closure. Invalidating the owning session invalidates the closure unit,
+its timer or callback registration and all closure variable state. No closure
+state may be kept alive in a C++ side registry after the owning session or its
+`EXECSESSIONS` K/V subtree has been removed.
 
 The initial closure id is the runtime macro spec that identifies the loaded
 closure, for example:
@@ -261,9 +274,10 @@ surfaces, but they must not mutate VM, editor or coprocessor state.
 The timer source is a separate runtime component. It supplies monotonic runtime
 ticks and must not know macro specs, owners, execution routes or overrun policy.
 
-The runtime scheduler owns scheduled consumer metadata such as owner, interval,
-macro spec or macro source package and overrun policy. It is runtime-only state
-and must not be serialized.
+The runtime scheduler owns scheduled consumer behavior. Its scheduled consumer
+metadata such as owner, interval, macro spec or macro source package and
+overrun policy is runtime-only state under `EXECSESSIONS` and must not be
+serialized.
 
 The scheduler does not execute bytecode directly. When a scheduled tick is
 allowed to run, it requests a normal execution session. The macro runner still
@@ -283,9 +297,10 @@ tick is not an execution result, because no execution session was created for
 that tick. Debugger and status tooling must be able to explain both what ran
 from execution-session results and what did not run from scheduler events.
 
-The first overrun policy is `skip`: if the previous session for a scheduled
-consumer is still active, the next due tick records `TickSkipped` with the
-blocking session id.
+The only approved overrun policy is `skip`: if the previous session for a
+scheduled consumer is still active, the next due tick records `TickSkipped` with
+the blocking session id. Queueing, coalescing, latest-wins replacement or
+parallel overlap require a dedicated architecture decision before implementation.
 
 The scheduler execution hook records `TickDue` and then requests execution
 through the normal macro runner. It must record `TickStarted` or

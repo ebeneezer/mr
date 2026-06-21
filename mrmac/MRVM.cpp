@@ -20,6 +20,7 @@
 #define Uses_TScreen
 #define Uses_TDrawBuffer
 #define Uses_TView
+#define Uses_TClipboard
 #include <tvision/tv.h>
 
 #include "mrmac.h"
@@ -42,6 +43,7 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
+#include <deque>
 #include <fcntl.h>
 #include <fstream>
 #include <glob.h>
@@ -76,7 +78,6 @@
 #include "../keymap/MRKeymapProfile.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
-#include "../app/MRVersion.hpp"
 
 MREditWindow *createEditorWindow(const char *title);
 std::vector<MREditWindow *> allEditWindowsInZOrder();
@@ -271,7 +272,7 @@ struct RuntimeEnvironment {
 	std::size_t lastSearchCursor;
 	int key1;
 	int key2;
-	std::vector<MacroKeyCodePair> pushedKeys;
+	std::deque<MacroKeyCodePair> pushedKeys;
 	std::vector<MacroFunctionLabelFrame> functionLabelStack;
 	std::vector<ExplicitKeyBinding> explicitKeyBindings;
 	std::map<const void *, int> windowLinkGroups;
@@ -2658,8 +2659,8 @@ static void cleanupWindowLinkGroups() {
 	std::map<int, int> counts;
 	std::map<const void *, int>::iterator it;
 
-	for (auto &window : windows)
-		live.insert(window);
+	for (std::size_t index = 0; index < windows.size(); ++index)
+		live.insert(windows[index]);
 
 	for (it = g_runtimeEnv.windowLinkGroups.begin(); it != g_runtimeEnv.windowLinkGroups.end();) {
 		if (live.find(it->first) == live.end()) it = g_runtimeEnv.windowLinkGroups.erase(it);
@@ -2808,7 +2809,8 @@ static void syncLinkedWindowsFrom(MREditWindow *source) {
 	if (source == nullptr) return;
 	group = windowLinkGroupOf(source);
 	if (group == 0) return;
-	for (auto &window : windows) {
+	for (std::size_t index = 0; index < windows.size(); ++index) {
+		MREditWindow *window = windows[index];
 		if (window == source) continue;
 		if (windowLinkGroupOf(window) == group) copyWindowBufferState(source, window);
 	}
@@ -2827,8 +2829,8 @@ bool redrawEntireScreen() {
 	std::vector<MREditWindow *> windows = allEditWindows();
 	if (TProgram::deskTop == nullptr) return false;
 	TProgram::deskTop->drawView();
-	for (auto &window : windows)
-		window->drawView();
+	for (std::size_t index = 0; index < windows.size(); ++index)
+		windows[index]->drawView();
 	return true;
 }
 
@@ -3837,6 +3839,14 @@ static Value ensureGlobalHashRoot(const std::string &name) {
 	return root;
 }
 
+static bool findGlobalHashRoot(const std::string &name, Value &root) {
+	GlobalEntry rootEntry;
+
+	if (!readGlobalValue(name, rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
+	root = rootEntry.value;
+	return true;
+}
+
 static Value ensureGlobalHashChild(const Value &parent, const std::string &key) {
 	if (mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key)) {
 		Value child = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
@@ -3848,44 +3858,260 @@ static Value ensureGlobalHashChild(const Value &parent, const std::string &key) 
 	return child;
 }
 
+static bool findGlobalHashChild(const Value &parent, const std::string &key, Value &child) {
+	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key)) return false;
+	child = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
+	return child.type == TYPE_HASH;
+}
+
+static bool eraseGlobalHashChild(const Value &parent, const std::string &key) {
+	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key)) return false;
+	mrvmHashEraseValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
+	return true;
+}
+
+static Value replaceGlobalHashChild(const Value &parent, const std::string &key) {
+	static_cast<void>(eraseGlobalHashChild(parent, key));
+	return ensureGlobalHashChild(parent, key);
+}
+
+static bool parseUint64Text(const std::string &text, std::uint64_t &value) {
+	value = 0;
+	if (text.empty()) return false;
+	for (std::size_t index = 0; index < text.size(); ++index) {
+		const unsigned char ch = static_cast<unsigned char>(text[index]);
+		std::uint64_t digit;
+		if (std::isdigit(ch) == 0) return false;
+		digit = static_cast<std::uint64_t>(ch - static_cast<unsigned char>('0'));
+		if (value > (std::numeric_limits<std::uint64_t>::max() - digit) / 10) return false;
+		value = value * 10 + digit;
+	}
+	return true;
+}
+
+static std::uint64_t valueAsUint64(const Value &value) {
+	std::uint64_t parsed = 0;
+
+	if (value.type == TYPE_INT) return value.i > 0 ? static_cast<std::uint64_t>(value.i) : 0;
+	return parseUint64Text(valueAsString(value), parsed) ? parsed : 0;
+}
+
+static void hashWriteInt(const Value &hash, const std::string &key, int value) {
+	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key, makeInt(value));
+}
+
+static void hashWriteUint(const Value &hash, const std::string &key, std::uint64_t value) {
+	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key, makeString(std::to_string(value)));
+}
+
+static void hashWriteString(const Value &hash, const std::string &key, const std::string &value) {
+	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key, makeString(value));
+}
+
+static int hashReadInt(const Value &hash, const std::string &key, int fallback = 0) {
+	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key)) return fallback;
+	return valueAsInt(mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key));
+}
+
+static std::uint64_t hashReadUint(const Value &hash, const std::string &key, std::uint64_t fallback = 0) {
+	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key)) return fallback;
+	return valueAsUint64(mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key));
+}
+
+static std::string hashReadString(const Value &hash, const std::string &key) {
+	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key)) return std::string();
+	return valueAsString(mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key));
+}
+
+static Value ensureExecSessionsHash() {
+	return ensureGlobalHashRoot("EXECSESSIONS");
+}
+
+static bool findExecSessionsHash(Value &root) {
+	return findGlobalHashRoot("EXECSESSIONS", root);
+}
+
+static Value ensureExecSessionsChild(const std::string &key) {
+	return ensureGlobalHashChild(ensureExecSessionsHash(), key);
+}
+
+static Value ensureModelessUiHash() {
+	return ensureGlobalHashRoot("MODELESSUI");
+}
+
+static bool findModelessUiHash(Value &root) {
+	return findGlobalHashRoot("MODELESSUI", root);
+}
+
+static bool findModelessUiChild(const std::string &key, Value &child) {
+	Value root;
+
+	if (!findModelessUiHash(root)) return false;
+	return findGlobalHashChild(root, key, child);
+}
+
+static bool findExecSessionsChild(const std::string &key, Value &child) {
+	Value root;
+
+	if (!findExecSessionsHash(root)) return false;
+	return findGlobalHashChild(root, key, child);
+}
+
+static std::uint64_t nextExecSessionCounter(const std::string &key) {
+	Value root = ensureExecSessionsHash();
+	const std::uint64_t value = hashReadUint(root, key, 1);
+
+	hashWriteUint(root, key, value + 1);
+	return value;
+}
+
+static void writeMacroExecutionOwnerHash(const Value &hash, const MRMacroExecutionOwner &owner) {
+	hashWriteInt(hash, "hasBuffer", owner.hasBuffer ? 1 : 0);
+	hashWriteInt(hash, "bufferId", owner.bufferId);
+}
+
+static MRMacroExecutionOwner readMacroExecutionOwnerHash(const Value &hash) {
+	MRMacroExecutionOwner owner;
+
+	owner.hasBuffer = hashReadInt(hash, "hasBuffer") != 0;
+	owner.bufferId = hashReadInt(hash, "bufferId");
+	return owner;
+}
+
+static void writeMacroExecutionSessionHash(const Value &hash, const MRMacroExecutionSession &session) {
+	Value owner = replaceGlobalHashChild(hash, "owner");
+
+	hashWriteUint(hash, "sessionId", session.sessionId);
+	hashWriteInt(hash, "route", static_cast<int>(session.route));
+	hashWriteInt(hash, "state", static_cast<int>(session.state));
+	hashWriteUint(hash, "taskId", session.taskId);
+	hashWriteString(hash, "label", session.label);
+	writeMacroExecutionOwnerHash(owner, session.owner);
+}
+
+static bool readMacroExecutionSessionHash(const Value &hash, MRMacroExecutionSession &session) {
+	Value owner;
+
+	session.sessionId = hashReadUint(hash, "sessionId");
+	session.route = static_cast<MRMacroExecutionRoute>(hashReadInt(hash, "route", static_cast<int>(MRMacroExecutionRoute::Unknown)));
+	session.state = static_cast<MRMacroExecutionState>(hashReadInt(hash, "state", static_cast<int>(MRMacroExecutionState::Created)));
+	session.taskId = hashReadUint(hash, "taskId");
+	session.label = hashReadString(hash, "label");
+	if (findGlobalHashChild(hash, "owner", owner)) session.owner = readMacroExecutionOwnerHash(owner);
+	return session.sessionId != 0;
+}
+
+static void writeMacroExecutionResultHash(const Value &hash, const MRMacroExecutionResult &result) {
+	Value sessionHash = replaceGlobalHashChild(hash, "session");
+
+	writeMacroExecutionSessionHash(sessionHash, result.session);
+	hashWriteInt(hash, "state", static_cast<int>(result.state));
+	hashWriteString(hash, "message", result.message);
+}
+
+static bool readMacroExecutionResultHash(const Value &hash, MRMacroExecutionResult &result) {
+	Value sessionHash;
+
+	if (!findGlobalHashChild(hash, "session", sessionHash)) return false;
+	if (!readMacroExecutionSessionHash(sessionHash, result.session)) return false;
+	result.state = static_cast<MRMacroExecutionState>(hashReadInt(hash, "state", static_cast<int>(MRMacroExecutionState::Created)));
+	result.message = hashReadString(hash, "message");
+	return true;
+}
+
+static std::vector<std::uint64_t> sortedHashUintKeys(const Value &hash) {
+	std::vector<std::uint64_t> ids;
+	std::vector<std::string> keys = g_runtimeEnv.globalHashStore.keys(hash.hashHandle);
+
+	for (std::size_t index = 0; index < keys.size(); ++index) {
+		std::uint64_t id = 0;
+		if (parseUint64Text(keys[index], id)) ids.push_back(id);
+	}
+	std::sort(ids.begin(), ids.end());
+	return ids;
+}
+
+static void trimHashByNumericKeys(const Value &hash, std::size_t limit) {
+	std::vector<std::uint64_t> ids = sortedHashUintKeys(hash);
+	std::size_t removeCount;
+
+	if (ids.size() <= limit) return;
+	removeCount = ids.size() - limit;
+	for (std::size_t index = 0; index < removeCount; ++index)
+		mrvmHashEraseValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, std::to_string(ids[index]));
+}
+
+static void writeModelessLabelHash(const Value &hash, const MRMacroModelessLabelSpec &label) {
+	hashWriteInt(hash, "x", label.x);
+	hashWriteInt(hash, "y", label.y);
+	hashWriteString(hash, "text", label.text);
+}
+
+static void writeModelessDisplayHash(const Value &hash, const MRMacroModelessDisplaySpec &display) {
+	hashWriteInt(hash, "x", display.x);
+	hashWriteInt(hash, "y", display.y);
+	hashWriteInt(hash, "width", display.width);
+	hashWriteString(hash, "text", display.text);
+}
+
+static void writeModelessButtonHash(const Value &hash, const MRMacroModelessButtonSpec &button) {
+	hashWriteInt(hash, "x", button.x);
+	hashWriteInt(hash, "y", button.y);
+	hashWriteInt(hash, "width", button.width);
+	hashWriteInt(hash, "id", button.id);
+	hashWriteString(hash, "text", button.text);
+	hashWriteString(hash, "macroSpec", button.macroSpec);
+}
+
+static void writeModelessListBoxHash(const Value &hash, const MRMacroModelessListBoxSpec &listBox) {
+	hashWriteInt(hash, "x", listBox.x);
+	hashWriteInt(hash, "y", listBox.y);
+	hashWriteInt(hash, "width", listBox.width);
+	hashWriteInt(hash, "height", listBox.height);
+	hashWriteInt(hash, "id", listBox.id);
+	hashWriteString(hash, "label", listBox.label);
+	hashWriteString(hash, "itemSpec", listBox.itemSpec);
+	hashWriteInt(hash, "start", listBox.start);
+}
+
+static void writeModelessGridHash(const Value &hash, const MRMacroModelessGridSpec &grid) {
+	hashWriteInt(hash, "x", grid.x);
+	hashWriteInt(hash, "y", grid.y);
+	hashWriteInt(hash, "width", grid.width);
+	hashWriteInt(hash, "height", grid.height);
+	hashWriteInt(hash, "id", grid.id);
+	hashWriteString(hash, "label", grid.label);
+	hashWriteString(hash, "itemSpec", grid.itemSpec);
+	hashWriteString(hash, "macroSpec", grid.macroSpec);
+	hashWriteInt(hash, "start", grid.start);
+}
+
 static Value ensureClosureStateHash(const std::string &closureId, int tickMs) {
-	Value root = ensureGlobalHashRoot("EXECSESSIONS");
+	Value root = ensureExecSessionsHash();
 	Value closures = ensureGlobalHashChild(root, "closures");
 	Value closure = ensureGlobalHashChild(closures, closureId);
 	Value state = ensureGlobalHashChild(closure, "state");
 
 	if (tickMs > 0) mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "tick_ms", makeInt(tickMs));
-	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "status", makeString("active"));
 	return state;
 }
 
 static bool findClosureStateHash(const std::string &closureId, Value &state) {
-	GlobalEntry rootEntry;
 	Value closures;
 	Value closure;
 
 	if (closureId.empty()) return false;
-	if (!readGlobalValue("EXECSESSIONS", rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
-	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, "closures")) return false;
-	closures = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, "closures");
-	if (closures.type != TYPE_HASH || !mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closures, closureId)) return false;
-	closure = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closures, closureId);
-	if (closure.type != TYPE_HASH || !mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "state")) return false;
-	state = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "state");
-	return state.type == TYPE_HASH;
+	if (!findExecSessionsChild("closures", closures)) return false;
+	if (!findGlobalHashChild(closures, closureId, closure)) return false;
+	return findGlobalHashChild(closure, "state", state);
 }
 
 static bool eraseClosureRuntimeState(const std::string &closureId) {
-	GlobalEntry rootEntry;
 	Value closures;
 
 	if (closureId.empty()) return false;
-	if (!readGlobalValue("EXECSESSIONS", rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
-	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, "closures")) return false;
-	closures = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, "closures");
-	if (closures.type != TYPE_HASH || !mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closures, closureId)) return false;
-	mrvmHashEraseValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closures, closureId);
-	return true;
+	if (!findExecSessionsChild("closures", closures)) return false;
+	return eraseGlobalHashChild(closures, closureId);
 }
 
 static bool readClosureVariableValue(const std::string &closureId, const std::string &name, Value &value) {
@@ -4358,7 +4584,7 @@ static bool keyPairFromEvent(const TEvent &event, int &key1, int &key2) noexcept
 static bool popQueuedKeyPair(int &key1, int &key2) noexcept {
 	if (g_runtimeEnv.pushedKeys.empty()) return false;
 	const MacroKeyCodePair pair = g_runtimeEnv.pushedKeys.front();
-	g_runtimeEnv.pushedKeys.erase(g_runtimeEnv.pushedKeys.begin());
+	g_runtimeEnv.pushedKeys.pop_front();
 	key1 = pair.key1;
 	key2 = pair.key2;
 	storeLastKeyPair(key1, key2);
@@ -4528,6 +4754,17 @@ struct MacroUiListBoxSpec {
 	int start = 1;
 };
 
+struct MacroUiGridSpec {
+	int x = 0;
+	int y = 0;
+	int width = 20;
+	int height = 4;
+	int id = 0;
+	std::string label;
+	std::string itemSpec;
+	int start = 1;
+};
+
 struct MacroUiDialogDefinition {
 	int x = 0;
 	int y = 0;
@@ -4539,29 +4776,8 @@ struct MacroUiDialogDefinition {
 	std::vector<MacroUiDisplaySpec> displays;
 	std::vector<MacroUiInputSpec> inputs;
 	std::vector<MacroUiListBoxSpec> listBoxes;
+	std::vector<MacroUiGridSpec> grids;
 	std::map<int, std::string> modelessButtonMacros;
-	std::map<int, std::string> textValues;
-	std::map<int, int> indexValues;
-	int lastCommandId = 0;
-	bool active = false;
-
-	void reset() {
-		x = 0;
-		y = 0;
-		width = 40;
-		height = 12;
-		title.clear();
-		labels.clear();
-		buttons.clear();
-		displays.clear();
-		inputs.clear();
-		listBoxes.clear();
-		modelessButtonMacros.clear();
-		textValues.clear();
-		indexValues.clear();
-		lastCommandId = 0;
-		active = false;
-	}
 };
 
 struct MacroUiButtonCaption {
@@ -4650,13 +4866,326 @@ static std::string macroUiListKey(const std::string &name) {
 	return upperKey(trimAscii(name));
 }
 
-static std::unordered_map<std::string, std::vector<std::string>> g_macroUiItemLists;
+static Value ensureMacroUiStagingHash() {
+	return ensureGlobalHashChild(ensureModelessUiHash(), "staging");
+}
+
+static Value ensureMacroUiCurrentDialogHash() {
+	return ensureGlobalHashChild(ensureMacroUiStagingHash(), "currentDialog");
+}
+
+static Value ensureMacroUiDialogSection(const char *sectionName) {
+	return ensureGlobalHashChild(ensureMacroUiCurrentDialogHash(), sectionName);
+}
+
+static Value appendMacroUiDialogSectionItem(const char *sectionName) {
+	Value section = ensureMacroUiDialogSection(sectionName);
+	int count = hashReadInt(section, "count", 0) + 1;
+
+	hashWriteInt(section, "count", count);
+	return replaceGlobalHashChild(section, std::to_string(count));
+}
+
+static bool findMacroUiStagingChild(const std::string &key, Value &child) {
+	Value staging;
+
+	if (!findModelessUiChild("staging", staging)) return false;
+	return findGlobalHashChild(staging, key, child);
+}
+
+static bool findMacroUiCurrentDialog(Value &dialog) {
+	Value staging;
+
+	if (!findMacroUiStagingChild("currentDialog", staging)) return false;
+	dialog = staging;
+	return true;
+}
+
+static void resetMacroUiCurrentDialog() {
+	Value dialog = replaceGlobalHashChild(ensureMacroUiStagingHash(), "currentDialog");
+
+	hashWriteInt(dialog, "x", 0);
+	hashWriteInt(dialog, "y", 0);
+	hashWriteInt(dialog, "width", 40);
+	hashWriteInt(dialog, "height", 12);
+	hashWriteString(dialog, "title", "");
+}
+
+static void writeMacroUiTextValue(int id, const std::string &text) {
+	if (id <= 0) return;
+	hashWriteString(ensureMacroUiDialogSection("textValues"), std::to_string(id), text);
+}
+
+static void writeMacroUiIndexValue(int id, int index) {
+	if (id <= 0) return;
+	hashWriteInt(ensureMacroUiDialogSection("indexValues"), std::to_string(id), index);
+}
+
+static std::string readMacroUiTextValue(int id) {
+	Value dialog;
+	Value values;
+
+	if (id <= 0 || !findMacroUiCurrentDialog(dialog) || !findGlobalHashChild(dialog, "textValues", values)) return std::string();
+	return hashReadString(values, std::to_string(id));
+}
+
+static int readMacroUiIndexValue(int id) {
+	Value dialog;
+	Value values;
+
+	if (id <= 0 || !findMacroUiCurrentDialog(dialog) || !findGlobalHashChild(dialog, "indexValues", values)) return 0;
+	return hashReadInt(values, std::to_string(id), 0);
+}
+
+static void writeMacroUiLabelHash(const Value &hash, const MacroUiLabelSpec &label) {
+	hashWriteInt(hash, "x", label.x);
+	hashWriteInt(hash, "y", label.y);
+	hashWriteString(hash, "text", label.text);
+}
+
+static void writeMacroUiButtonHash(const Value &hash, const MacroUiButtonSpec &button) {
+	hashWriteInt(hash, "x", button.x);
+	hashWriteInt(hash, "y", button.y);
+	hashWriteInt(hash, "width", button.width);
+	hashWriteInt(hash, "id", button.id);
+	hashWriteString(hash, "text", button.text);
+}
+
+static void writeMacroUiDisplayHash(const Value &hash, const MacroUiDisplaySpec &display) {
+	hashWriteInt(hash, "x", display.x);
+	hashWriteInt(hash, "y", display.y);
+	hashWriteInt(hash, "width", display.width);
+	hashWriteString(hash, "text", display.text);
+}
+
+static void writeMacroUiInputHash(const Value &hash, const MacroUiInputSpec &input) {
+	hashWriteInt(hash, "x", input.x);
+	hashWriteInt(hash, "y", input.y);
+	hashWriteInt(hash, "width", input.width);
+	hashWriteInt(hash, "id", input.id);
+	hashWriteString(hash, "label", input.label);
+	hashWriteString(hash, "text", input.text);
+}
+
+static void writeMacroUiListBoxHash(const Value &hash, const MacroUiListBoxSpec &listBox) {
+	hashWriteInt(hash, "x", listBox.x);
+	hashWriteInt(hash, "y", listBox.y);
+	hashWriteInt(hash, "width", listBox.width);
+	hashWriteInt(hash, "height", listBox.height);
+	hashWriteInt(hash, "id", listBox.id);
+	hashWriteString(hash, "label", listBox.label);
+	hashWriteString(hash, "itemSpec", listBox.itemSpec);
+	hashWriteInt(hash, "start", listBox.start);
+}
+
+static void writeMacroUiGridHash(const Value &hash, const MacroUiGridSpec &grid) {
+	hashWriteInt(hash, "x", grid.x);
+	hashWriteInt(hash, "y", grid.y);
+	hashWriteInt(hash, "width", grid.width);
+	hashWriteInt(hash, "height", grid.height);
+	hashWriteInt(hash, "id", grid.id);
+	hashWriteString(hash, "label", grid.label);
+	hashWriteString(hash, "itemSpec", grid.itemSpec);
+	hashWriteInt(hash, "start", grid.start);
+}
+
+static MacroUiLabelSpec readMacroUiLabelHash(const Value &hash) {
+	MacroUiLabelSpec label;
+
+	label.x = hashReadInt(hash, "x", 0);
+	label.y = hashReadInt(hash, "y", 0);
+	label.text = hashReadString(hash, "text");
+	return label;
+}
+
+static MacroUiButtonSpec readMacroUiButtonHash(const Value &hash) {
+	MacroUiButtonSpec button;
+
+	button.x = hashReadInt(hash, "x", 0);
+	button.y = hashReadInt(hash, "y", 0);
+	button.width = hashReadInt(hash, "width", 8);
+	button.id = hashReadInt(hash, "id", 0);
+	button.text = hashReadString(hash, "text");
+	return button;
+}
+
+static MacroUiDisplaySpec readMacroUiDisplayHash(const Value &hash) {
+	MacroUiDisplaySpec display;
+
+	display.x = hashReadInt(hash, "x", 0);
+	display.y = hashReadInt(hash, "y", 0);
+	display.width = hashReadInt(hash, "width", 20);
+	display.text = hashReadString(hash, "text");
+	return display;
+}
+
+static MacroUiInputSpec readMacroUiInputHash(const Value &hash) {
+	MacroUiInputSpec input;
+
+	input.x = hashReadInt(hash, "x", 0);
+	input.y = hashReadInt(hash, "y", 0);
+	input.width = hashReadInt(hash, "width", 20);
+	input.id = hashReadInt(hash, "id", 0);
+	input.label = hashReadString(hash, "label");
+	input.text = hashReadString(hash, "text");
+	return input;
+}
+
+static MacroUiListBoxSpec readMacroUiListBoxHash(const Value &hash) {
+	MacroUiListBoxSpec listBox;
+
+	listBox.x = hashReadInt(hash, "x", 0);
+	listBox.y = hashReadInt(hash, "y", 0);
+	listBox.width = hashReadInt(hash, "width", 20);
+	listBox.height = hashReadInt(hash, "height", 4);
+	listBox.id = hashReadInt(hash, "id", 0);
+	listBox.label = hashReadString(hash, "label");
+	listBox.itemSpec = hashReadString(hash, "itemSpec");
+	listBox.start = hashReadInt(hash, "start", 1);
+	return listBox;
+}
+
+static MacroUiGridSpec readMacroUiGridHash(const Value &hash) {
+	MacroUiGridSpec grid;
+
+	grid.x = hashReadInt(hash, "x", 0);
+	grid.y = hashReadInt(hash, "y", 0);
+	grid.width = hashReadInt(hash, "width", 20);
+	grid.height = hashReadInt(hash, "height", 4);
+	grid.id = hashReadInt(hash, "id", 0);
+	grid.label = hashReadString(hash, "label");
+	grid.itemSpec = hashReadString(hash, "itemSpec");
+	grid.start = hashReadInt(hash, "start", 1);
+	return grid;
+}
+
+static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiLabelSpec> &labels) {
+	Value section;
+
+	if (!findGlobalHashChild(dialog, sectionName, section)) return;
+	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
+		Value item;
+		if (findGlobalHashChild(section, std::to_string(index), item)) labels.push_back(readMacroUiLabelHash(item));
+	}
+}
+
+static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiButtonSpec> &buttons) {
+	Value section;
+
+	if (!findGlobalHashChild(dialog, sectionName, section)) return;
+	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
+		Value item;
+		if (findGlobalHashChild(section, std::to_string(index), item)) buttons.push_back(readMacroUiButtonHash(item));
+	}
+}
+
+static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiDisplaySpec> &displays) {
+	Value section;
+
+	if (!findGlobalHashChild(dialog, sectionName, section)) return;
+	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
+		Value item;
+		if (findGlobalHashChild(section, std::to_string(index), item)) displays.push_back(readMacroUiDisplayHash(item));
+	}
+}
+
+static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiInputSpec> &inputs) {
+	Value section;
+
+	if (!findGlobalHashChild(dialog, sectionName, section)) return;
+	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
+		Value item;
+		if (findGlobalHashChild(section, std::to_string(index), item)) inputs.push_back(readMacroUiInputHash(item));
+	}
+}
+
+static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiListBoxSpec> &listBoxes) {
+	Value section;
+
+	if (!findGlobalHashChild(dialog, sectionName, section)) return;
+	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
+		Value item;
+		if (findGlobalHashChild(section, std::to_string(index), item)) listBoxes.push_back(readMacroUiListBoxHash(item));
+	}
+}
+
+static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiGridSpec> &grids) {
+	Value section;
+
+	if (!findGlobalHashChild(dialog, sectionName, section)) return;
+	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
+		Value item;
+		if (findGlobalHashChild(section, std::to_string(index), item)) grids.push_back(readMacroUiGridHash(item));
+	}
+}
+
+static MacroUiDialogDefinition readMacroUiDialogDefinition() {
+	MacroUiDialogDefinition definition;
+	Value dialog;
+	Value macros;
+
+	if (!findMacroUiCurrentDialog(dialog)) return definition;
+	definition.x = hashReadInt(dialog, "x", 0);
+	definition.y = hashReadInt(dialog, "y", 0);
+	definition.width = hashReadInt(dialog, "width", 40);
+	definition.height = hashReadInt(dialog, "height", 12);
+	definition.title = hashReadString(dialog, "title");
+	readMacroUiDialogSection(dialog, "labels", definition.labels);
+	readMacroUiDialogSection(dialog, "buttons", definition.buttons);
+	readMacroUiDialogSection(dialog, "displays", definition.displays);
+	readMacroUiDialogSection(dialog, "inputs", definition.inputs);
+	readMacroUiDialogSection(dialog, "listBoxes", definition.listBoxes);
+	readMacroUiDialogSection(dialog, "grids", definition.grids);
+	if (findGlobalHashChild(dialog, "modelessButtonMacros", macros)) {
+		for (int index = 1; index <= hashReadInt(macros, "count", 0); ++index) {
+			Value item;
+			const std::string key = std::to_string(index);
+			if (!findGlobalHashChild(macros, key, item)) continue;
+			definition.modelessButtonMacros[hashReadInt(item, "id", 0)] = hashReadString(item, "macroSpec");
+		}
+	}
+	return definition;
+}
+
+static void writeMacroUiModelessMacro(int controlId, const std::string &macroSpec) {
+	Value macros;
+	Value item;
+	int count = 0;
+
+	if (controlId <= 0) return;
+	macros = ensureMacroUiDialogSection("modelessButtonMacros");
+	count = hashReadInt(macros, "count", 0);
+	for (int index = 1; index <= count; ++index) {
+		if (!findGlobalHashChild(macros, std::to_string(index), item)) continue;
+		if (hashReadInt(item, "id", 0) == controlId) {
+			hashWriteString(item, "macroSpec", macroSpec);
+			return;
+		}
+	}
+	++count;
+	hashWriteInt(macros, "count", count);
+	item = replaceGlobalHashChild(macros, std::to_string(count));
+	hashWriteInt(item, "id", controlId);
+	hashWriteString(item, "macroSpec", macroSpec);
+}
+
+static bool findMacroUiItemList(const std::string &key, Value &list) {
+	Value lists;
+
+	if (!findMacroUiStagingChild("itemLists", lists)) return false;
+	return findGlobalHashChild(lists, key, list);
+}
 
 static std::vector<std::string> resolveMacroUiListItems(const std::string &itemSpec) {
 	const std::string key = macroUiListKey(itemSpec);
-	const auto it = g_macroUiItemLists.find(key);
+	Value list;
+	std::vector<std::string> values;
 
-	if (it != g_macroUiItemLists.end()) return it->second;
+	if (findMacroUiItemList(key, list)) {
+		for (int index = 1; index <= hashReadInt(list, "count", 0); ++index)
+			values.push_back(hashReadString(list, std::to_string(index)));
+		return values;
+	}
 	return parseMacroMenuItems(itemSpec);
 }
 
@@ -4679,8 +5208,6 @@ static TRect macroDialogBounds(int width, int height, int x, int y) {
 	if (y > 0) top = std::clamp(desk.a.y + y - 1, desk.a.y, desk.b.y - dialogHeight);
 	return TRect(left, top, left + dialogWidth, top + dialogHeight);
 }
-
-static MacroUiDialogDefinition g_macroUiDialog;
 
 class MacroMenuListView final : public TListViewer {
   public:
@@ -4847,6 +5374,261 @@ class MacroUiListView final : public TListViewer {
 	ushort command = 0;
 };
 
+struct MacroUiGridItem {
+	std::string label;
+	std::string text;
+	std::string detail;
+};
+
+static MacroUiGridItem parseMacroUiGridItem(const std::string &source) {
+	MacroUiGridItem item;
+	const std::size_t firstTab = source.find('\t');
+	const std::size_t secondTab = firstTab != std::string::npos ? source.find('\t', firstTab + 1) : std::string::npos;
+
+	if (firstTab == std::string::npos) {
+		item.label = source;
+		item.text = source;
+		return item;
+	}
+	item.label = source.substr(0, firstTab);
+	if (secondTab == std::string::npos) {
+		item.text = source.substr(firstTab + 1);
+		return item;
+	}
+	item.text = source.substr(firstTab + 1, secondTab - firstTab - 1);
+	item.detail = source.substr(secondTab + 1);
+	return item;
+}
+
+static std::vector<MacroUiGridItem> parseMacroUiGridItems(const std::vector<std::string> &values) {
+	std::vector<MacroUiGridItem> items;
+
+	items.reserve(values.size());
+	for (std::size_t index = 0; index < values.size(); ++index)
+		items.push_back(parseMacroUiGridItem(values[index]));
+	return items;
+}
+
+class MacroUiGridView final : public TView {
+  public:
+	MacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command) : TView(bounds), items(parseMacroUiGridItems(values)), scrollBar(scrollBar), command(command) {
+		options |= ofSelectable;
+		eventMask |= evMouseDown | evMouseWheel | evKeyDown | evBroadcast;
+		updateScrollBar();
+	}
+
+	void draw() override {
+		TDrawBuffer row;
+		const TColorAttr normal = getColor(1);
+		const TColorAttr selected = getColor(3);
+		const short blankRow = size.y > 1 ? size.y - 2 : 0;
+		const short detailRow = size.y > 0 ? size.y - 1 : 0;
+
+		updateScrollBar();
+		for (short y = 0; y < size.y; ++y) {
+			row.moveChar(0, ' ', normal, size.x);
+			writeLine(0, y, size.x, 1, row);
+		}
+		for (std::size_t index = 0; index < items.size(); ++index) {
+			const int rowIndex = static_cast<int>(index) / columns() - scrollOffset;
+			const int colIndex = static_cast<int>(index) % columns();
+			const short x = static_cast<short>(gridLeftOffset() + colIndex * cellWidth);
+			const short y = static_cast<short>(rowIndex);
+			if (y < 0 || y >= blankRow || x >= size.x) continue;
+			drawCell(index, x, y, index == selectedIndex ? selected : normal);
+		}
+		drawDetail(detailRow, normal);
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseDown && containsMouse(event)) {
+			TPoint local = makeLocal(event.mouse.where);
+			const int gridLeft = gridLeftOffset();
+			if (local.x >= gridLeft && local.x < gridLeft + gridWidth()) {
+				const int col = cellWidth > 0 ? (local.x - gridLeft) / cellWidth : 0;
+				const int row = local.y + scrollOffset;
+				const std::size_t index = static_cast<std::size_t>(row * columns() + col);
+				if (index < items.size()) {
+					selectedIndex = index;
+					ensureSelectedVisible();
+					drawView();
+					if ((event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr) message(owner, evCommand, command, this);
+				}
+			}
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evMouseWheel && containsMouse(event)) {
+			const int step = event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft ? -1 : 1;
+			setScrollOffset(scrollOffset + step);
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evKeyDown) {
+			const ushort arrow = ctrlToArrow(event.keyDown.keyCode);
+			if (moveSelection(arrow)) {
+				clearEvent(event);
+				return;
+			}
+			if (arrow == kbEnter && owner != nullptr) {
+				message(owner, evCommand, command, this);
+				clearEvent(event);
+				return;
+			}
+		}
+		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged && event.message.infoPtr == scrollBar) {
+			setScrollOffset(scrollBar != nullptr ? scrollBar->value : 0);
+			clearEvent(event);
+			return;
+		}
+		TView::handleEvent(event);
+	}
+
+	void focusIndex(int start) {
+		if (items.empty()) {
+			selectedIndex = 0;
+			scrollOffset = 0;
+		} else
+			selectedIndex = static_cast<std::size_t>(std::clamp(start, 1, static_cast<int>(items.size())) - 1);
+		ensureSelectedVisible();
+		drawView();
+	}
+
+	[[nodiscard]] int selectedIndexValue() const noexcept {
+		return items.empty() ? 0 : static_cast<int>(selectedIndex + 1);
+	}
+
+	[[nodiscard]] std::string selectedText() const {
+		return selectedIndex < items.size() ? items[selectedIndex].text : std::string();
+	}
+
+  private:
+	[[nodiscard]] int columns() const noexcept {
+		return std::max(1, (static_cast<int>(size.x) - 1) / cellWidth);
+	}
+
+	[[nodiscard]] int gridWidth() const noexcept {
+		return std::max(0, columns() * cellWidth);
+	}
+
+	[[nodiscard]] int gridLeftOffset() const noexcept {
+		return std::max(0, (static_cast<int>(size.x) - gridWidth()) / 2);
+	}
+
+	void drawCell(std::size_t index, short x, short y, TColorAttr attr) {
+		TDrawBuffer cell;
+		std::string text = items[index].label;
+		if (static_cast<int>(text.size()) + 1 < cellWidth) text = " " + text;
+		cell.moveChar(0, ' ', attr, static_cast<ushort>(cellWidth));
+		cell.moveStr(0, text.c_str(), attr, static_cast<ushort>(cellWidth));
+		writeLine(x, y, static_cast<short>(std::min(cellWidth, static_cast<int>(size.x - x))), 1, cell);
+	}
+
+	void drawDetail(short y, TColorAttr attr) {
+		if (items.empty() || y < 0 || y >= size.y) return;
+		TDrawBuffer row;
+		std::string text = items[selectedIndex].label;
+		if (!items[selectedIndex].detail.empty()) {
+			if (!text.empty()) text += " ";
+			text += items[selectedIndex].detail;
+		}
+		const int detailWidth = strwidth(text.c_str());
+		const int start = std::max(0, (static_cast<int>(size.x) - detailWidth) / 2);
+		row.moveChar(0, ' ', attr, size.x);
+		row.moveStr(static_cast<ushort>(start), text.c_str(), attr, static_cast<ushort>(std::max(0, size.x - start)));
+		writeLine(0, y, size.x, 1, row);
+	}
+
+	bool moveSelection(ushort keyCode) {
+		if (items.empty()) return false;
+		std::size_t next = selectedIndex;
+		const int cols = columns();
+		const int pageStep = std::max(cols, cols * 4);
+
+		switch (keyCode) {
+			case kbLeft:
+				next = selectedIndex == 0 ? items.size() - 1 : selectedIndex - 1;
+				break;
+			case kbRight:
+				next = (selectedIndex + 1) % items.size();
+				break;
+			case kbUp:
+				next = selectedIndex < static_cast<std::size_t>(cols) ? selectedIndex : selectedIndex - static_cast<std::size_t>(cols);
+				break;
+			case kbDown:
+				next = std::min(items.size() - 1, selectedIndex + static_cast<std::size_t>(cols));
+				break;
+			case kbHome:
+				next = 0;
+				break;
+			case kbEnd:
+				next = items.size() - 1;
+				break;
+			case kbPgUp:
+				next = selectedIndex < static_cast<std::size_t>(pageStep) ? 0 : selectedIndex - static_cast<std::size_t>(pageStep);
+				break;
+			case kbPgDn:
+				next = std::min(items.size() - 1, selectedIndex + static_cast<std::size_t>(pageStep));
+				break;
+			default:
+				return false;
+		}
+		if (next != selectedIndex) {
+			selectedIndex = next;
+			ensureSelectedVisible();
+			drawView();
+		}
+		return true;
+	}
+
+	[[nodiscard]] int totalRows() const noexcept {
+		const int cols = columns();
+		return cols <= 0 ? 0 : static_cast<int>((items.size() + static_cast<std::size_t>(cols - 1)) / static_cast<std::size_t>(cols));
+	}
+
+	[[nodiscard]] int visibleRows() const noexcept {
+		return std::max(1, static_cast<int>(size.y) - 2);
+	}
+
+	[[nodiscard]] int maxScrollOffset() const noexcept {
+		return std::max(0, totalRows() - visibleRows());
+	}
+
+	void setScrollOffset(int offset) {
+		const int clamped = std::max(0, std::min(offset, maxScrollOffset()));
+		if (clamped == scrollOffset) return;
+		scrollOffset = clamped;
+		updateScrollBar();
+		drawView();
+	}
+
+	void updateScrollBar() {
+		if (scrollBar == nullptr) return;
+		scrollBar->setParams(scrollOffset, 0, maxScrollOffset(), visibleRows(), 1);
+	}
+
+	void ensureSelectedVisible() {
+		if (items.empty()) {
+			scrollOffset = 0;
+			updateScrollBar();
+			return;
+		}
+		const int row = static_cast<int>(selectedIndex) / columns();
+		if (row < scrollOffset) scrollOffset = row;
+		else if (row >= scrollOffset + visibleRows())
+			scrollOffset = row - visibleRows() + 1;
+		scrollOffset = std::max(0, std::min(scrollOffset, maxScrollOffset()));
+		updateScrollBar();
+	}
+
+	std::vector<MacroUiGridItem> items;
+	TScrollBar *scrollBar = nullptr;
+	ushort command = 0;
+	std::size_t selectedIndex = 0;
+	int scrollOffset = 0;
+	static constexpr int cellWidth = 4;
+};
+
 class MacroUiDisplayLine final : public TView {
   public:
 	MacroUiDisplayLine(const TRect &bounds, std::string text) noexcept : TView(bounds), text(std::move(text)) {
@@ -4873,13 +5655,15 @@ class MacroUiDisplayLine final : public TView {
 };
 
 static void beginMacroUiDialog(const std::vector<Value> &args) {
-	g_macroUiDialog.reset();
-	g_macroUiDialog.x = valueAsInt(args[0]);
-	g_macroUiDialog.y = valueAsInt(args[1]);
-	g_macroUiDialog.width = std::max(24, valueAsInt(args[2]));
-	g_macroUiDialog.height = std::max(8, valueAsInt(args[3]));
-	g_macroUiDialog.title = valueAsString(args[4]);
-	g_macroUiDialog.active = true;
+	Value dialog;
+
+	resetMacroUiCurrentDialog();
+	dialog = ensureMacroUiCurrentDialogHash();
+	hashWriteInt(dialog, "x", valueAsInt(args[0]));
+	hashWriteInt(dialog, "y", valueAsInt(args[1]));
+	hashWriteInt(dialog, "width", std::max(24, valueAsInt(args[2])));
+	hashWriteInt(dialog, "height", std::max(8, valueAsInt(args[3])));
+	hashWriteString(dialog, "title", valueAsString(args[4]));
 }
 
 static void addMacroUiLabel(const std::vector<Value> &args) {
@@ -4888,7 +5672,7 @@ static void addMacroUiLabel(const std::vector<Value> &args) {
 	spec.x = valueAsInt(args[0]);
 	spec.y = valueAsInt(args[1]);
 	spec.text = valueAsString(args[2]);
-	g_macroUiDialog.labels.push_back(std::move(spec));
+	writeMacroUiLabelHash(appendMacroUiDialogSectionItem("labels"), spec);
 }
 
 static void addMacroUiButton(const std::vector<Value> &args) {
@@ -4899,7 +5683,7 @@ static void addMacroUiButton(const std::vector<Value> &args) {
 	spec.width = std::max(6, valueAsInt(args[2]));
 	spec.id = valueAsInt(args[3]);
 	spec.text = valueAsString(args[4]);
-	g_macroUiDialog.buttons.push_back(std::move(spec));
+	writeMacroUiButtonHash(appendMacroUiDialogSectionItem("buttons"), spec);
 }
 
 static void addMacroUiDisplay(const std::vector<Value> &args) {
@@ -4909,7 +5693,7 @@ static void addMacroUiDisplay(const std::vector<Value> &args) {
 	spec.y = valueAsInt(args[1]);
 	spec.width = std::max(4, valueAsInt(args[2]));
 	spec.text = valueAsString(args[3]);
-	g_macroUiDialog.displays.push_back(std::move(spec));
+	writeMacroUiDisplayHash(appendMacroUiDialogSectionItem("displays"), spec);
 }
 
 static void addMacroUiInput(const std::vector<Value> &args) {
@@ -4921,13 +5705,14 @@ static void addMacroUiInput(const std::vector<Value> &args) {
 	spec.id = valueAsInt(args[3]);
 	spec.label = valueAsString(args[4]);
 	spec.text = valueAsString(args[5]);
-	g_macroUiDialog.textValues[spec.id] = spec.text;
-	g_macroUiDialog.inputs.push_back(std::move(spec));
+	writeMacroUiTextValue(spec.id, spec.text);
+	writeMacroUiInputHash(appendMacroUiDialogSectionItem("inputs"), spec);
 }
 
 static void addMacroUiListBox(const std::vector<Value> &args) {
 	MacroUiListBoxSpec spec;
 	const std::vector<std::string> items = resolveMacroUiListItems(valueAsString(args[6]));
+	int selectedIndex = 0;
 
 	spec.x = valueAsInt(args[0]);
 	spec.y = valueAsInt(args[1]);
@@ -4937,33 +5722,56 @@ static void addMacroUiListBox(const std::vector<Value> &args) {
 	spec.label = valueAsString(args[5]);
 	spec.itemSpec = valueAsString(args[6]);
 	spec.start = std::max(1, valueAsInt(args[7]));
-	g_macroUiDialog.indexValues[spec.id] = items.empty() ? 0 : std::min(static_cast<int>(items.size()), spec.start);
-	g_macroUiDialog.textValues[spec.id] = items.empty() ? std::string() : items[static_cast<std::size_t>(g_macroUiDialog.indexValues[spec.id] - 1)];
-	g_macroUiDialog.listBoxes.push_back(std::move(spec));
+	if (!items.empty()) selectedIndex = std::min(static_cast<int>(items.size()), spec.start);
+	writeMacroUiIndexValue(spec.id, selectedIndex);
+	writeMacroUiTextValue(spec.id, selectedIndex > 0 ? items[static_cast<std::size_t>(selectedIndex - 1)] : std::string());
+	writeMacroUiListBoxHash(appendMacroUiDialogSectionItem("listBoxes"), spec);
+}
+
+static void addMacroUiGrid(const std::vector<Value> &args) {
+	MacroUiGridSpec spec;
+	const std::vector<std::string> items = resolveMacroUiListItems(valueAsString(args[6]));
+	int selectedIndex = 0;
+
+	spec.x = valueAsInt(args[0]);
+	spec.y = valueAsInt(args[1]);
+	spec.width = std::max(8, valueAsInt(args[2]));
+	spec.height = std::max(3, valueAsInt(args[3]));
+	spec.id = valueAsInt(args[4]);
+	spec.label = valueAsString(args[5]);
+	spec.itemSpec = valueAsString(args[6]);
+	spec.start = std::max(1, valueAsInt(args[7]));
+	if (!items.empty()) selectedIndex = std::min(static_cast<int>(items.size()), spec.start);
+	writeMacroUiIndexValue(spec.id, selectedIndex);
+	writeMacroUiTextValue(spec.id, selectedIndex > 0 ? parseMacroUiGridItem(items[static_cast<std::size_t>(selectedIndex - 1)]).text : std::string());
+	writeMacroUiGridHash(appendMacroUiDialogSectionItem("grids"), spec);
 }
 
 static void clearMacroUiItemList(const std::vector<Value> &args) {
 	const std::string key = macroUiListKey(valueAsString(args[0]));
+	Value list;
 
 	if (key.empty()) throw std::runtime_error("UI_LIST_CLEAR expects a non-empty list name.");
-	g_macroUiItemLists[key].clear();
+	list = replaceGlobalHashChild(ensureGlobalHashChild(ensureMacroUiStagingHash(), "itemLists"), key);
+	hashWriteInt(list, "count", 0);
 }
 
 static void addMacroUiItemListValue(const std::vector<Value> &args) {
 	const std::string key = macroUiListKey(valueAsString(args[0]));
+	Value list;
+	int count = 0;
 
 	if (key.empty()) throw std::runtime_error("UI_LIST_ADD expects a non-empty list name.");
-	g_macroUiItemLists[key].push_back(valueAsString(args[1]));
-}
-
-static std::vector<std::string> resolveMacroModelessListItems(const std::string &itemSpec) {
-	return resolveMacroUiListItems(itemSpec);
+	list = ensureGlobalHashChild(ensureGlobalHashChild(ensureMacroUiStagingHash(), "itemLists"), key);
+	count = hashReadInt(list, "count", 0) + 1;
+	hashWriteInt(list, "count", count);
+	hashWriteString(list, std::to_string(count), valueAsString(args[1]));
 }
 
 static void runMacroModelessCommand(const std::string &, int, const MRMacroModelessSelection &selection, const std::string &macroSpec) {
 	if (selection.controlId != 0) {
-		g_macroUiDialog.indexValues[selection.controlId] = selection.index;
-		g_macroUiDialog.textValues[selection.controlId] = selection.text;
+		writeMacroUiIndexValue(selection.controlId, selection.index);
+		writeMacroUiTextValue(selection.controlId, selection.text);
 	}
 	if (!macroSpec.empty()) {
 		std::string errorText;
@@ -4978,22 +5786,24 @@ static void bindMacroModelessButton(const std::vector<Value> &args) {
 	const int buttonId = valueAsInt(args[0]);
 	const std::string macroSpec = valueAsString(args[1]);
 
-	if (buttonId <= 0) throw std::runtime_error("UI_MODELESS_ON expects a positive button id.");
-	g_macroUiDialog.modelessButtonMacros[buttonId] = macroSpec;
+	if (buttonId <= 0) throw std::runtime_error("UI_MODELESS_ON expects a positive control id.");
+	writeMacroUiModelessMacro(buttonId, macroSpec);
 	runtimeErrorLevel() = 0;
 }
 
 static MRMacroModelessWindowDefinition buildMacroModelessDefinition(const std::string &windowId) {
 	MRMacroModelessWindowDefinition definition;
+	MacroUiDialogDefinition dialog = readMacroUiDialogDefinition();
 
-	definition.x = g_macroUiDialog.x;
-	definition.y = g_macroUiDialog.y;
-	definition.width = g_macroUiDialog.width;
-	definition.height = g_macroUiDialog.height;
+	definition.x = dialog.x;
+	definition.y = dialog.y;
+	definition.width = dialog.width;
+	definition.height = dialog.height;
 	definition.windowId = windowId;
-	definition.title = g_macroUiDialog.title;
+	definition.title = dialog.title;
 
-	for (const MacroUiLabelSpec &label : g_macroUiDialog.labels) {
+	for (std::size_t labelIndex = 0; labelIndex < dialog.labels.size(); ++labelIndex) {
+		const MacroUiLabelSpec &label = dialog.labels[labelIndex];
 		MRMacroModelessLabelSpec entry;
 		entry.x = label.x;
 		entry.y = label.y;
@@ -5001,7 +5811,18 @@ static MRMacroModelessWindowDefinition buildMacroModelessDefinition(const std::s
 		definition.labels.push_back(std::move(entry));
 	}
 
-	for (const MacroUiListBoxSpec &listBox : g_macroUiDialog.listBoxes) {
+	for (std::size_t displayIndex = 0; displayIndex < dialog.displays.size(); ++displayIndex) {
+		const MacroUiDisplaySpec &display = dialog.displays[displayIndex];
+		MRMacroModelessDisplaySpec entry;
+		entry.x = display.x;
+		entry.y = display.y;
+		entry.width = display.width;
+		entry.text = display.text;
+		definition.displays.push_back(std::move(entry));
+	}
+
+	for (std::size_t listBoxIndex = 0; listBoxIndex < dialog.listBoxes.size(); ++listBoxIndex) {
+		const MacroUiListBoxSpec &listBox = dialog.listBoxes[listBoxIndex];
 		MRMacroModelessListBoxSpec entry;
 		entry.x = listBox.x;
 		entry.y = listBox.y;
@@ -5014,16 +5835,36 @@ static MRMacroModelessWindowDefinition buildMacroModelessDefinition(const std::s
 		definition.listBoxes.push_back(std::move(entry));
 	}
 
-	for (const MacroUiButtonSpec &button : g_macroUiDialog.buttons) {
+	for (std::size_t gridIndex = 0; gridIndex < dialog.grids.size(); ++gridIndex) {
+		const MacroUiGridSpec &grid = dialog.grids[gridIndex];
+		MRMacroModelessGridSpec entry;
+		std::map<int, std::string>::const_iterator macroIt;
+
+		entry.x = grid.x;
+		entry.y = grid.y;
+		entry.width = grid.width;
+		entry.height = grid.height;
+		entry.id = grid.id;
+		entry.label = grid.label;
+		entry.itemSpec = grid.itemSpec;
+		macroIt = dialog.modelessButtonMacros.find(grid.id);
+		entry.macroSpec = macroIt != dialog.modelessButtonMacros.end() ? macroIt->second : std::string();
+		entry.start = grid.start;
+		definition.grids.push_back(std::move(entry));
+	}
+
+	for (std::size_t buttonIndex = 0; buttonIndex < dialog.buttons.size(); ++buttonIndex) {
+		const MacroUiButtonSpec &button = dialog.buttons[buttonIndex];
 		MRMacroModelessButtonSpec entry;
-		const auto macroIt = g_macroUiDialog.modelessButtonMacros.find(button.id);
+		std::map<int, std::string>::const_iterator macroIt;
 
 		entry.x = button.x;
 		entry.y = button.y;
 		entry.width = button.width;
 		entry.id = button.id;
 		entry.text = button.text;
-		entry.macroSpec = macroIt != g_macroUiDialog.modelessButtonMacros.end() ? macroIt->second : std::string();
+		macroIt = dialog.modelessButtonMacros.find(button.id);
+		entry.macroSpec = macroIt != dialog.modelessButtonMacros.end() ? macroIt->second : std::string();
 		definition.buttons.push_back(std::move(entry));
 	}
 
@@ -5034,9 +5875,29 @@ static void showMacroModelessDialog(const std::vector<Value> &args) {
 	const std::string windowId = macroUiListKey(valueAsString(args[0]));
 
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_SHOW expects a non-empty window id.");
-	setMacroModelessListResolver(resolveMacroModelessListItems);
+	setMacroModelessListResolver(resolveMacroUiListItems);
 	setMacroModelessCommandRunner(runMacroModelessCommand);
 	runtimeReturnInt() = showMacroModelessWindow(buildMacroModelessDefinition(windowId)) ? 1 : 0;
+	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
+}
+
+static void updateMacroModelessDialog(const std::vector<Value> &args) {
+	const std::string windowId = macroUiListKey(valueAsString(args[0]));
+
+	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_UPDATE expects a non-empty window id.");
+	setMacroModelessListResolver(resolveMacroUiListItems);
+	setMacroModelessCommandRunner(runMacroModelessCommand);
+	runtimeReturnInt() = updateMacroModelessWindow(buildMacroModelessDefinition(windowId)) ? 1 : 0;
+	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
+}
+
+static void updateMacroModelessDisplayLine(const std::vector<Value> &args) {
+	const std::string windowId = macroUiListKey(valueAsString(args[0]));
+	const int displayIndex = valueAsInt(args[1]);
+
+	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_DISPLAY expects a non-empty window id.");
+	if (displayIndex <= 0) throw std::runtime_error("UI_MODELESS_DISPLAY expects a positive display index.");
+	runtimeReturnInt() = updateMacroModelessDisplay(windowId, displayIndex, valueAsString(args[2])) ? 1 : 0;
 	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
 }
 
@@ -5051,17 +5912,28 @@ static void closeMacroModelessDialog(const std::vector<Value> &args) {
 static void listExecSessionClosures(const std::vector<Value> &args) {
 	const std::string key = macroUiListKey(valueAsString(args[0]));
 	const std::vector<MRRuntimeScheduledConsumer> consumers = runtimeScheduledConsumers();
+	Value consoleRoot;
+	Value consoleList;
+	Value ids;
+	Value itemLists;
+	Value list;
 	int row = 0;
 
 	if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("EXEC_SESSION_LIST is not available in background mode.");
 	if (key.empty()) throw std::runtime_error("EXEC_SESSION_LIST expects a non-empty list name.");
 
-	g_macroUiItemLists[key].clear();
-	for (const MRRuntimeScheduledConsumer &consumer : consumers) {
+	itemLists = ensureGlobalHashChild(ensureMacroUiStagingHash(), "itemLists");
+	list = replaceGlobalHashChild(itemLists, key);
+	hashWriteInt(list, "count", 0);
+	consoleRoot = ensureGlobalHashChild(ensureExecSessionsHash(), "console");
+	consoleList = replaceGlobalHashChild(consoleRoot, key);
+	ids = ensureGlobalHashChild(consoleList, "ids");
+	for (std::size_t index = 0; index < consumers.size(); ++index) {
+		const MRRuntimeScheduledConsumer &consumer = consumers[index];
 		if (consumer.config.closureId.empty()) continue;
 		if (consumer.consumerId > static_cast<MRRuntimeScheduledConsumerId>(std::numeric_limits<int>::max())) continue;
 		++row;
-		setGlobalValue("EXECSESSION_CONSOLE_ID_" + std::to_string(row), TYPE_INT, makeInt(static_cast<int>(consumer.consumerId)));
+		hashWriteInt(ids, std::to_string(row), static_cast<int>(consumer.consumerId));
 
 		std::string line = std::to_string(row);
 		line += "  #";
@@ -5072,9 +5944,10 @@ static void listExecSessionClosures(const std::vector<Value> &args) {
 		line += std::to_string(consumer.config.intervalMs);
 		line += "  ";
 		line += consumer.config.entryName.empty() ? consumer.config.closureId : consumer.config.entryName;
-		g_macroUiItemLists[key].push_back(line);
+		hashWriteString(list, std::to_string(row), line);
 	}
-	setGlobalValue("EXECSESSION_CONSOLE_COUNT", TYPE_INT, makeInt(row));
+	hashWriteInt(list, "count", row);
+	hashWriteInt(consoleList, "count", row);
 	runtimeReturnInt() = row;
 	runtimeErrorLevel() = 0;
 }
@@ -5087,7 +5960,8 @@ static void stopExecSessionClosure(const std::vector<Value> &args) {
 
 	if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("EXEC_SESSION_STOP is not available in background mode.");
 	if (requestedId > 0) {
-		for (const MRRuntimeScheduledConsumer &consumer : consumers) {
+		for (std::size_t index = 0; index < consumers.size(); ++index) {
+			const MRRuntimeScheduledConsumer &consumer = consumers[index];
 			if (consumer.consumerId != static_cast<MRRuntimeScheduledConsumerId>(requestedId)) continue;
 			closureId = consumer.config.closureId;
 			break;
@@ -5105,13 +5979,18 @@ static int runMacroUiDialogDefinition() {
 		explicit MacroUiDialog(const MacroUiDialogDefinition &definition) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(definition.width, definition.height, definition.x, definition.y), definition.title.empty() ? "DIALOG" : definition.title.c_str(), definition.width, definition.height) {
 			ushort nextCommand = 41000;
 
-			for (const auto &label : definition.labels)
+			for (std::size_t index = 0; index < definition.labels.size(); ++index) {
+				const MacroUiLabelSpec &label = definition.labels[index];
 				insert(new TStaticText(TRect(label.x, label.y, label.x + strwidth(label.text.c_str()), label.y + 1), label.text.c_str()));
+			}
 
-			for (const auto &display : definition.displays)
+			for (std::size_t index = 0; index < definition.displays.size(); ++index) {
+				const MacroUiDisplaySpec &display = definition.displays[index];
 				insert(new MacroUiDisplayLine(TRect(display.x, display.y, display.x + display.width, display.y + 1), display.text));
+			}
 
-			for (const auto &input : definition.inputs) {
+			for (std::size_t index = 0; index < definition.inputs.size(); ++index) {
+				const MacroUiInputSpec &input = definition.inputs[index];
 				const std::string labelText = input.label + ":";
 				char *buffer = newStr(input.text.c_str());
 				TInputLine *inputLine = new TInputLine(TRect(input.x + strwidth(labelText.c_str()) + 1, input.y, input.x + strwidth(labelText.c_str()) + 1 + input.width, input.y + 1), input.width);
@@ -5122,7 +6001,8 @@ static int runMacroUiDialogDefinition() {
 				inputLines.emplace_back(input.id, inputLine);
 			}
 
-			for (const auto &listBox : definition.listBoxes) {
+			for (std::size_t index = 0; index < definition.listBoxes.size(); ++index) {
+				const MacroUiListBoxSpec &listBox = definition.listBoxes[index];
 				const std::vector<std::string> items = resolveMacroUiListItems(listBox.itemSpec);
 				const int listTop = listBox.label.empty() ? listBox.y : listBox.y + 1;
 				TScrollBar *scrollBar = nullptr;
@@ -5139,11 +6019,30 @@ static int runMacroUiDialogDefinition() {
 				++nextCommand;
 			}
 
-			for (const auto &button : definition.buttons) {
+			for (std::size_t index = 0; index < definition.grids.size(); ++index) {
+				const MacroUiGridSpec &grid = definition.grids[index];
+				const std::vector<std::string> items = resolveMacroUiListItems(grid.itemSpec);
+				const int gridTop = grid.label.empty() ? grid.y : grid.y + 1;
+				TScrollBar *scrollBar = nullptr;
+				MacroUiGridView *gridView = nullptr;
+
+				if (!grid.label.empty()) insert(new TStaticText(TRect(grid.x, grid.y, grid.x + strwidth(grid.label.c_str()), grid.y + 1), grid.label.c_str()));
+				scrollBar = new TScrollBar(TRect(grid.x + grid.width - 1, gridTop, grid.x + grid.width, gridTop + grid.height));
+				insert(scrollBar);
+				gridView = new MacroUiGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand);
+				insert(gridView);
+				gridView->focusIndex(grid.start);
+				commandToId[nextCommand] = grid.id;
+				gridViews.emplace_back(grid.id, gridView);
+				++nextCommand;
+			}
+
+			for (std::size_t index = 0; index < definition.buttons.size(); ++index) {
+				const MacroUiButtonSpec &button = definition.buttons[index];
 				const MacroUiButtonCaption caption = parseMacroUiButtonCaption(button.text);
 				commandToId[nextCommand] = button.id;
-				for (ushort hotKey : caption.hotKeys)
-					buttonHotKeys.emplace_back(hotKey, nextCommand);
+				for (std::size_t hotKeyIndex = 0; hotKeyIndex < caption.hotKeys.size(); ++hotKeyIndex)
+					buttonHotKeys.emplace_back(caption.hotKeys[hotKeyIndex], nextCommand);
 				insert(new TButton(TRect(button.x, button.y, button.x + button.width, button.y + 2), caption.displayLabel.c_str(), nextCommand, bfNormal));
 				++nextCommand;
 			}
@@ -5153,12 +6052,15 @@ static int runMacroUiDialogDefinition() {
 			if (event.what == evKeyDown) {
 				const unsigned char typedChar = static_cast<unsigned char>(event.keyDown.charScan.charCode);
 				const ushort hotKey = typedChar >= 32 ? static_cast<ushort>(std::toupper(typedChar)) : event.keyDown.keyCode;
-				for (const auto &[registeredKey, command] : buttonHotKeys)
+				for (std::size_t index = 0; index < buttonHotKeys.size(); ++index) {
+					const ushort registeredKey = buttonHotKeys[index].first;
+					const ushort command = buttonHotKeys[index].second;
 					if (registeredKey == hotKey) {
 						endModal(command);
 						clearEvent(event);
 						return;
 					}
+				}
 				if (ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
 					endModal(cmCancel);
 					clearEvent(event);
@@ -5177,24 +6079,35 @@ static int runMacroUiDialogDefinition() {
 		}
 
 		int selectedControlId(ushort result) const noexcept {
-			const auto it = commandToId.find(result);
+			std::map<ushort, int>::const_iterator it = commandToId.find(result);
 			return it != commandToId.end() ? it->second : 0;
 		}
 
 		void collectValues(std::map<int, std::string> &textValues, std::map<int, int> &indexValues) const {
 			char buffer[512] = {0};
 
-			for (const auto &[id, inputLine] : inputLines) {
+			for (std::size_t rowIndex = 0; rowIndex < inputLines.size(); ++rowIndex) {
+				const int id = inputLines[rowIndex].first;
+				TInputLine *inputLine = inputLines[rowIndex].second;
 				std::memset(buffer, 0, sizeof(buffer));
 				if (inputLine != nullptr) inputLine->getData(buffer);
 				textValues[id] = buffer;
 			}
-			for (const auto &[id, listView] : listViews) {
-				const int index = listView != nullptr ? listView->focused + 1 : 0;
-				indexValues[id] = std::max(0, index);
-				if (listView != nullptr && index > 0 && static_cast<std::size_t>(index - 1) < listView->values().size()) textValues[id] = listView->values()[static_cast<std::size_t>(index - 1)];
+			for (std::size_t rowIndex = 0; rowIndex < listViews.size(); ++rowIndex) {
+				const int id = listViews[rowIndex].first;
+				MacroUiListView *listView = listViews[rowIndex].second;
+				const int selectedIndex = listView != nullptr ? listView->focused + 1 : 0;
+				indexValues[id] = std::max(0, selectedIndex);
+				if (listView != nullptr && selectedIndex > 0 && static_cast<std::size_t>(selectedIndex - 1) < listView->values().size()) textValues[id] = listView->values()[static_cast<std::size_t>(selectedIndex - 1)];
 				else
 					textValues[id].clear();
+			}
+			for (std::size_t rowIndex = 0; rowIndex < gridViews.size(); ++rowIndex) {
+				const int id = gridViews[rowIndex].first;
+				MacroUiGridView *gridView = gridViews[rowIndex].second;
+				const int selectedIndex = gridView != nullptr ? gridView->selectedIndexValue() : 0;
+				indexValues[id] = std::max(0, selectedIndex);
+				textValues[id] = gridView != nullptr ? gridView->selectedText() : std::string();
 			}
 		}
 
@@ -5203,19 +6116,27 @@ static int runMacroUiDialogDefinition() {
 		std::vector<std::pair<ushort, ushort>> buttonHotKeys;
 		std::vector<std::pair<int, TInputLine *>> inputLines;
 		std::vector<std::pair<int, MacroUiListView *>> listViews;
+		std::vector<std::pair<int, MacroUiGridView *>> gridViews;
 	};
 
-	MacroUiDialog *dialog = new MacroUiDialog(g_macroUiDialog);
+	MacroUiDialogDefinition definition = readMacroUiDialogDefinition();
+	MacroUiDialog *dialog = new MacroUiDialog(definition);
+	std::map<int, std::string> textValues;
+	std::map<int, int> indexValues;
 	ushort result = cmCancel;
+	int lastCommandId = 0;
 
 	if (dialog == nullptr) return 0;
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
-	dialog->collectValues(g_macroUiDialog.textValues, g_macroUiDialog.indexValues);
-	g_macroUiDialog.lastCommandId = result == cmCancel ? 0 : dialog->selectedControlId(result);
+	dialog->collectValues(textValues, indexValues);
+	for (std::map<int, std::string>::const_iterator it = textValues.begin(); it != textValues.end(); ++it)
+		writeMacroUiTextValue(it->first, it->second);
+	for (std::map<int, int>::const_iterator it = indexValues.begin(); it != indexValues.end(); ++it)
+		writeMacroUiIndexValue(it->first, it->second);
+	lastCommandId = result == cmCancel ? 0 : dialog->selectedControlId(result);
 	TObject::destroy(dialog);
-	g_macroUiDialog.active = false;
-	return g_macroUiDialog.lastCommandId;
+	return lastCommandId;
 }
 
 static int runMacroMenuIntrinsic(const std::string &name, const std::vector<Value> &args) {
@@ -6397,14 +7318,8 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 		return makeInt(runMacroMenuIntrinsic(name, args));
 	}
 	if (name == "UI_EXEC") return makeInt(runMacroUiDialogDefinition());
-	if (name == "UI_TEXT") {
-		const auto it = g_macroUiDialog.textValues.find(valueAsInt(args[0]));
-		return makeString(it != g_macroUiDialog.textValues.end() ? it->second : std::string());
-	}
-	if (name == "UI_INDEX") {
-		const auto it = g_macroUiDialog.indexValues.find(valueAsInt(args[0]));
-		return makeInt(it != g_macroUiDialog.indexValues.end() ? it->second : 0);
-	}
+	if (name == "UI_TEXT") return makeString(readMacroUiTextValue(valueAsInt(args[0])));
+	if (name == "UI_INDEX") return makeInt(readMacroUiIndexValue(valueAsInt(args[0])));
 	if (name == "STRING_IN") {
 		if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("STRING_IN is not available in background mode.");
 		return makeString(runMacroStringInputIntrinsic(args));
@@ -6892,6 +7807,499 @@ bool mrvmApplyExecUiCommandRequest(const MRMacroExecUiCommandRequest &request) {
 
 	if (!request.closureId.empty() && !request.lvalue.empty()) static_cast<void>(mrvmStoreExecSessionClosureInt(request.closureId, request.lvalue, accepted ? 1 : 0));
 	return accepted;
+}
+
+MRMacroExecutionSessionId mrvmNextMacroExecutionSessionId() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	return nextExecSessionCounter("nextSessionId");
+}
+
+void mrvmStoreActiveMacroExecutionSession(const MRMacroExecutionSession &session) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value activeByTask = ensureExecSessionsChild("activeByTask");
+	Value sessionHash;
+
+	if (session.taskId == 0) return;
+	sessionHash = replaceGlobalHashChild(activeByTask, std::to_string(session.taskId));
+	writeMacroExecutionSessionHash(sessionHash, session);
+}
+
+std::vector<MRMacroExecutionSession> mrvmActiveMacroExecutionSessions() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value activeByTask;
+	std::vector<MRMacroExecutionSession> sessions;
+	std::vector<std::uint64_t> taskIds;
+
+	if (!findExecSessionsChild("activeByTask", activeByTask)) return sessions;
+	taskIds = sortedHashUintKeys(activeByTask);
+	for (std::size_t index = 0; index < taskIds.size(); ++index) {
+		const std::uint64_t taskId = taskIds[index];
+		Value sessionHash;
+		MRMacroExecutionSession session;
+		if (!findGlobalHashChild(activeByTask, std::to_string(taskId), sessionHash)) continue;
+		if (readMacroExecutionSessionHash(sessionHash, session)) sessions.push_back(session);
+	}
+	return sessions;
+}
+
+std::vector<MRMacroExecutionSession> mrvmActiveMacroExecutionSessionsForOwner(const MRMacroExecutionOwner &owner) {
+	std::vector<MRMacroExecutionSession> sessions = mrvmActiveMacroExecutionSessions();
+	std::vector<MRMacroExecutionSession> matches;
+
+	for (std::size_t index = 0; index < sessions.size(); ++index) {
+		const MRMacroExecutionSession &session = sessions[index];
+		if (macroExecutionOwnerMatches(session.owner, owner)) matches.push_back(session);
+	}
+	return matches;
+}
+
+bool mrvmMarkMacroExecutionSessionCancellationRequestedForTask(std::uint64_t taskId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value activeByTask;
+	Value sessionHash;
+	MRMacroExecutionSession session;
+
+	if (taskId == 0 || !findExecSessionsChild("activeByTask", activeByTask)) return false;
+	if (!findGlobalHashChild(activeByTask, std::to_string(taskId), sessionHash)) return false;
+	if (!readMacroExecutionSessionHash(sessionHash, session)) return false;
+	session.state = MRMacroExecutionState::CancellationRequested;
+	writeMacroExecutionSessionHash(sessionHash, session);
+	return true;
+}
+
+bool mrvmTakeActiveMacroExecutionSessionForTask(std::uint64_t taskId, MRMacroExecutionSession &session) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value activeByTask;
+	Value sessionHash;
+	const std::string key = std::to_string(taskId);
+
+	if (taskId == 0 || !findExecSessionsChild("activeByTask", activeByTask)) return false;
+	if (!findGlobalHashChild(activeByTask, key, sessionHash)) return false;
+	if (!readMacroExecutionSessionHash(sessionHash, session)) return false;
+	return eraseGlobalHashChild(activeByTask, key);
+}
+
+void mrvmRecordMacroExecutionResult(MRMacroExecutionSession session, MRMacroExecutionState state, const std::string &message) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value recentResults = ensureExecSessionsChild("recentResults");
+	Value resultHash;
+	MRMacroExecutionResult result;
+	const std::uint64_t resultId = nextExecSessionCounter("nextResultId");
+
+	session.state = state;
+	result.session = session;
+	result.state = state;
+	result.message = message;
+	resultHash = replaceGlobalHashChild(recentResults, std::to_string(resultId));
+	writeMacroExecutionResultHash(resultHash, result);
+	trimHashByNumericKeys(recentResults, 32);
+}
+
+std::vector<MRMacroExecutionResult> mrvmRecentMacroExecutionResults() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value recentResults;
+	std::vector<MRMacroExecutionResult> results;
+	std::vector<std::uint64_t> resultIds;
+
+	if (!findExecSessionsChild("recentResults", recentResults)) return results;
+	resultIds = sortedHashUintKeys(recentResults);
+	for (std::size_t index = 0; index < resultIds.size(); ++index) {
+		const std::uint64_t resultId = resultIds[index];
+		Value resultHash;
+		MRMacroExecutionResult result;
+		if (!findGlobalHashChild(recentResults, std::to_string(resultId), resultHash)) continue;
+		if (readMacroExecutionResultHash(resultHash, result)) results.push_back(result);
+	}
+	return results;
+}
+
+void mrvmStorePendingForegroundMacroExecutionSession(const MRMacroExecutionSession &session) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value pendingDelay = ensureExecSessionsChild("pendingForegroundDelay");
+	Value sessionHash;
+
+	if (session.sessionId == 0) return;
+	sessionHash = replaceGlobalHashChild(pendingDelay, std::to_string(session.sessionId));
+	writeMacroExecutionSessionHash(sessionHash, session);
+}
+
+bool mrvmReadPendingForegroundMacroExecutionSession(MRMacroExecutionSessionId sessionId, MRMacroExecutionSession &session) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value pendingDelay;
+	Value sessionHash;
+
+	if (sessionId == 0 || !findExecSessionsChild("pendingForegroundDelay", pendingDelay)) return false;
+	if (!findGlobalHashChild(pendingDelay, std::to_string(sessionId), sessionHash)) return false;
+	return readMacroExecutionSessionHash(sessionHash, session);
+}
+
+bool mrvmRemovePendingForegroundMacroExecutionSession(MRMacroExecutionSessionId sessionId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value pendingDelay;
+
+	if (sessionId == 0 || !findExecSessionsChild("pendingForegroundDelay", pendingDelay)) return false;
+	return eraseGlobalHashChild(pendingDelay, std::to_string(sessionId));
+}
+
+std::vector<MRMacroExecutionSession> mrvmPendingForegroundMacroExecutionSessions() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value pendingDelay;
+	std::vector<MRMacroExecutionSession> sessions;
+	std::vector<std::uint64_t> sessionIds;
+
+	if (!findExecSessionsChild("pendingForegroundDelay", pendingDelay)) return sessions;
+	sessionIds = sortedHashUintKeys(pendingDelay);
+	for (std::size_t index = 0; index < sessionIds.size(); ++index) {
+		const std::uint64_t sessionId = sessionIds[index];
+		Value sessionHash;
+		MRMacroExecutionSession session;
+		if (!findGlobalHashChild(pendingDelay, std::to_string(sessionId), sessionHash)) continue;
+		if (readMacroExecutionSessionHash(sessionHash, session)) sessions.push_back(session);
+	}
+	return sessions;
+}
+
+MRMacroExecutionSessionListenerId mrvmNextMacroExecutionSessionListenerId() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	return nextExecSessionCounter("nextListenerId");
+}
+
+void mrvmRegisterMacroExecutionSessionListener(MRMacroExecutionSessionListenerId listenerId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value listeners = ensureExecSessionsChild("listeners");
+	Value listenerHash;
+
+	if (listenerId == 0) return;
+	listenerHash = replaceGlobalHashChild(listeners, std::to_string(listenerId));
+	hashWriteUint(listenerHash, "listenerId", listenerId);
+}
+
+void mrvmRemoveMacroExecutionSessionListener(MRMacroExecutionSessionListenerId listenerId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value listeners;
+
+	if (listenerId == 0 || !findExecSessionsChild("listeners", listeners)) return;
+	static_cast<void>(eraseGlobalHashChild(listeners, std::to_string(listenerId)));
+}
+
+void mrvmNoteMacroExecutionSessionStatusChanged() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value root = ensureExecSessionsHash();
+	const std::uint64_t generation = hashReadUint(root, "statusGeneration") + 1;
+
+	hashWriteUint(root, "statusGeneration", generation);
+}
+
+std::uint64_t mrvmMacroExecutionSessionStatusGeneration() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value root;
+
+	if (!findExecSessionsHash(root)) return 0;
+	return hashReadUint(root, "statusGeneration");
+}
+
+static void writeRuntimeScheduledConsumerConfigHash(const Value &hash, const MRRuntimeScheduledConsumerConfig &config) {
+	Value owner = replaceGlobalHashChild(hash, "owner");
+
+	writeMacroExecutionOwnerHash(owner, config.owner);
+	hashWriteUint(hash, "intervalMs", config.intervalMs);
+	hashWriteString(hash, "macroSpec", config.macroSpec);
+	hashWriteString(hash, "macroSource", config.macroSource);
+	hashWriteString(hash, "entryName", config.entryName);
+	hashWriteString(hash, "closureId", config.closureId);
+	hashWriteInt(hash, "overrunPolicy", static_cast<int>(config.overrunPolicy));
+}
+
+static MRRuntimeScheduledConsumerConfig readRuntimeScheduledConsumerConfigHash(const Value &hash) {
+	MRRuntimeScheduledConsumerConfig config;
+	Value owner;
+
+	if (findGlobalHashChild(hash, "owner", owner)) config.owner = readMacroExecutionOwnerHash(owner);
+	config.intervalMs = hashReadUint(hash, "intervalMs");
+	config.macroSpec = hashReadString(hash, "macroSpec");
+	config.macroSource = hashReadString(hash, "macroSource");
+	config.entryName = hashReadString(hash, "entryName");
+	config.closureId = hashReadString(hash, "closureId");
+	config.overrunPolicy = static_cast<MRRuntimeScheduleOverrunPolicy>(hashReadInt(hash, "overrunPolicy", static_cast<int>(MRRuntimeScheduleOverrunPolicy::Skip)));
+	return config;
+}
+
+static void writeRuntimeScheduledConsumerHash(const Value &hash, const MRRuntimeScheduledConsumer &consumer) {
+	Value config = replaceGlobalHashChild(hash, "config");
+
+	hashWriteUint(hash, "consumerId", consumer.consumerId);
+	writeRuntimeScheduledConsumerConfigHash(config, consumer.config);
+	hashWriteUint(hash, "activeSessionId", consumer.activeSessionId);
+	hashWriteUint(hash, "nextDueMs", consumer.nextDueMs);
+}
+
+static bool readRuntimeScheduledConsumerHash(const Value &hash, MRRuntimeScheduledConsumer &consumer) {
+	Value config;
+
+	consumer.consumerId = hashReadUint(hash, "consumerId");
+	if (findGlobalHashChild(hash, "config", config)) consumer.config = readRuntimeScheduledConsumerConfigHash(config);
+	consumer.activeSessionId = hashReadUint(hash, "activeSessionId");
+	consumer.nextDueMs = hashReadUint(hash, "nextDueMs");
+	return consumer.consumerId != 0;
+}
+
+static void writeRuntimeSchedulerEventHash(const Value &hash, const MRRuntimeSchedulerEvent &event) {
+	Value owner = replaceGlobalHashChild(hash, "owner");
+
+	hashWriteUint(hash, "eventId", event.eventId);
+	hashWriteUint(hash, "consumerId", event.consumerId);
+	writeMacroExecutionOwnerHash(owner, event.owner);
+	hashWriteInt(hash, "kind", static_cast<int>(event.kind));
+	hashWriteInt(hash, "skipReason", static_cast<int>(event.skipReason));
+	hashWriteUint(hash, "sessionId", event.sessionId);
+	hashWriteUint(hash, "blockingSessionId", event.blockingSessionId);
+	hashWriteUint(hash, "dueAtMs", event.dueAtMs);
+	hashWriteUint(hash, "observedAtMs", event.observedAtMs);
+	hashWriteString(hash, "macroSpec", event.macroSpec);
+	hashWriteString(hash, "message", event.message);
+}
+
+static bool readRuntimeSchedulerEventHash(const Value &hash, MRRuntimeSchedulerEvent &event) {
+	Value owner;
+
+	event.eventId = hashReadUint(hash, "eventId");
+	event.consumerId = hashReadUint(hash, "consumerId");
+	if (findGlobalHashChild(hash, "owner", owner)) event.owner = readMacroExecutionOwnerHash(owner);
+	event.kind = static_cast<MRRuntimeSchedulerEventKind>(hashReadInt(hash, "kind", static_cast<int>(MRRuntimeSchedulerEventKind::ConsumerRegistered)));
+	event.skipReason = static_cast<MRRuntimeSchedulerSkipReason>(hashReadInt(hash, "skipReason", static_cast<int>(MRRuntimeSchedulerSkipReason::None)));
+	event.sessionId = hashReadUint(hash, "sessionId");
+	event.blockingSessionId = hashReadUint(hash, "blockingSessionId");
+	event.dueAtMs = hashReadUint(hash, "dueAtMs");
+	event.observedAtMs = hashReadUint(hash, "observedAtMs");
+	event.macroSpec = hashReadString(hash, "macroSpec");
+	event.message = hashReadString(hash, "message");
+	return event.eventId != 0;
+}
+
+MRRuntimeScheduledConsumerId mrvmNextRuntimeScheduledConsumerId() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	return nextExecSessionCounter("nextScheduledConsumerId");
+}
+
+void mrvmStoreRuntimeScheduledConsumer(const MRRuntimeScheduledConsumer &consumer) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value consumers = ensureExecSessionsChild("scheduledConsumers");
+	Value consumerHash;
+
+	if (consumer.consumerId == 0) return;
+	consumerHash = replaceGlobalHashChild(consumers, std::to_string(consumer.consumerId));
+	writeRuntimeScheduledConsumerHash(consumerHash, consumer);
+}
+
+bool mrvmReadRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId, MRRuntimeScheduledConsumer &consumer) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value consumers;
+	Value consumerHash;
+
+	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
+	if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) return false;
+	return readRuntimeScheduledConsumerHash(consumerHash, consumer);
+}
+
+bool mrvmRemoveRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value consumers;
+
+	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
+	return eraseGlobalHashChild(consumers, std::to_string(consumerId));
+}
+
+std::vector<MRRuntimeScheduledConsumer> mrvmRuntimeScheduledConsumers() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value consumers;
+	std::vector<MRRuntimeScheduledConsumer> result;
+	std::vector<std::uint64_t> consumerIds;
+
+	if (!findExecSessionsChild("scheduledConsumers", consumers)) return result;
+	consumerIds = sortedHashUintKeys(consumers);
+	for (std::size_t index = 0; index < consumerIds.size(); ++index) {
+		const std::uint64_t consumerId = consumerIds[index];
+		Value consumerHash;
+		MRRuntimeScheduledConsumer consumer;
+		if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) continue;
+		if (readRuntimeScheduledConsumerHash(consumerHash, consumer)) result.push_back(consumer);
+	}
+	return result;
+}
+
+MRRuntimeSchedulerEventId mrvmNextRuntimeSchedulerEventId() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	return nextExecSessionCounter("nextSchedulerEventId");
+}
+
+void mrvmRecordRuntimeSchedulerEvent(const MRRuntimeSchedulerEvent &event) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value events = ensureExecSessionsChild("schedulerEvents");
+	Value eventHash;
+
+	if (event.eventId == 0) return;
+	eventHash = replaceGlobalHashChild(events, std::to_string(event.eventId));
+	writeRuntimeSchedulerEventHash(eventHash, event);
+	trimHashByNumericKeys(events, 64);
+}
+
+std::vector<MRRuntimeSchedulerEvent> mrvmRecentRuntimeSchedulerEvents() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value events;
+	std::vector<MRRuntimeSchedulerEvent> result;
+	std::vector<std::uint64_t> eventIds;
+
+	if (!findExecSessionsChild("schedulerEvents", events)) return result;
+	eventIds = sortedHashUintKeys(events);
+	for (std::size_t index = 0; index < eventIds.size(); ++index) {
+		const std::uint64_t eventId = eventIds[index];
+		Value eventHash;
+		MRRuntimeSchedulerEvent event;
+		if (!findGlobalHashChild(events, std::to_string(eventId), eventHash)) continue;
+		if (readRuntimeSchedulerEventHash(eventHash, event)) result.push_back(event);
+	}
+	return result;
+}
+
+void mrvmStoreModelessWindowDefinition(const MRMacroModelessWindowDefinition &definition) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value root = ensureModelessUiHash();
+	Value windows = ensureGlobalHashChild(root, "windows");
+	Value window;
+	Value previousWindow;
+	Value previousLiveGeometry;
+	Value labels;
+	Value displays;
+	Value buttons;
+	Value listBoxes;
+	Value grids;
+	bool hasLiveGeometry = false;
+	int liveX = 0;
+	int liveY = 0;
+	int liveWidth = 0;
+	int liveHeight = 0;
+	int liveGeometryVersion = 0;
+	int index = 0;
+
+	if (definition.windowId.empty()) return;
+	if (findGlobalHashChild(windows, definition.windowId, previousWindow) && findGlobalHashChild(previousWindow, "liveGeometry", previousLiveGeometry)) {
+		hasLiveGeometry = hashReadInt(previousLiveGeometry, "geometryVersion", 0) > 0;
+		liveX = hashReadInt(previousLiveGeometry, "x", 0);
+		liveY = hashReadInt(previousLiveGeometry, "y", 0);
+		liveWidth = hashReadInt(previousLiveGeometry, "width", 0);
+		liveHeight = hashReadInt(previousLiveGeometry, "height", 0);
+		liveGeometryVersion = hashReadInt(previousLiveGeometry, "geometryVersion", 0);
+	}
+	window = replaceGlobalHashChild(windows, definition.windowId);
+	hashWriteString(window, "windowId", definition.windowId);
+	hashWriteString(window, "title", definition.title);
+	hashWriteInt(window, "x", definition.x);
+	hashWriteInt(window, "y", definition.y);
+	hashWriteInt(window, "width", definition.width);
+	hashWriteInt(window, "height", definition.height);
+
+	if (hasLiveGeometry) {
+		Value liveGeometry = ensureGlobalHashChild(window, "liveGeometry");
+
+		hashWriteInt(liveGeometry, "x", liveX);
+		hashWriteInt(liveGeometry, "y", liveY);
+		hashWriteInt(liveGeometry, "width", liveWidth);
+		hashWriteInt(liveGeometry, "height", liveHeight);
+		hashWriteInt(liveGeometry, "geometryVersion", liveGeometryVersion);
+	}
+
+	labels = ensureGlobalHashChild(window, "labels");
+	for (std::size_t labelIndex = 0; labelIndex < definition.labels.size(); ++labelIndex) {
+		const MRMacroModelessLabelSpec &label = definition.labels[labelIndex];
+		++index;
+		writeModelessLabelHash(replaceGlobalHashChild(labels, std::to_string(index)), label);
+	}
+	hashWriteInt(labels, "count", index);
+
+	index = 0;
+	displays = ensureGlobalHashChild(window, "displays");
+	for (std::size_t displayIndex = 0; displayIndex < definition.displays.size(); ++displayIndex) {
+		const MRMacroModelessDisplaySpec &display = definition.displays[displayIndex];
+		++index;
+		writeModelessDisplayHash(replaceGlobalHashChild(displays, std::to_string(index)), display);
+	}
+	hashWriteInt(displays, "count", index);
+
+	index = 0;
+	buttons = ensureGlobalHashChild(window, "buttons");
+	for (std::size_t buttonIndex = 0; buttonIndex < definition.buttons.size(); ++buttonIndex) {
+		const MRMacroModelessButtonSpec &button = definition.buttons[buttonIndex];
+		++index;
+		writeModelessButtonHash(replaceGlobalHashChild(buttons, std::to_string(index)), button);
+	}
+	hashWriteInt(buttons, "count", index);
+
+	index = 0;
+	listBoxes = ensureGlobalHashChild(window, "listBoxes");
+	for (std::size_t listBoxIndex = 0; listBoxIndex < definition.listBoxes.size(); ++listBoxIndex) {
+		const MRMacroModelessListBoxSpec &listBox = definition.listBoxes[listBoxIndex];
+		++index;
+		writeModelessListBoxHash(replaceGlobalHashChild(listBoxes, std::to_string(index)), listBox);
+	}
+	hashWriteInt(listBoxes, "count", index);
+
+	index = 0;
+	grids = ensureGlobalHashChild(window, "grids");
+	for (std::size_t gridIndex = 0; gridIndex < definition.grids.size(); ++gridIndex) {
+		const MRMacroModelessGridSpec &grid = definition.grids[gridIndex];
+		++index;
+		writeModelessGridHash(replaceGlobalHashChild(grids, std::to_string(index)), grid);
+	}
+	hashWriteInt(grids, "count", index);
+}
+
+bool mrvmStoreModelessWindowDisplay(const std::string &windowId, int displayIndex, const std::string &text) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value windows;
+	Value window;
+	Value displays;
+	Value display;
+
+	if (windowId.empty() || displayIndex <= 0) return false;
+	if (!findModelessUiChild("windows", windows)) return false;
+	if (!findGlobalHashChild(windows, windowId, window)) return false;
+	if (!findGlobalHashChild(window, "displays", displays)) return false;
+	if (!findGlobalHashChild(displays, std::to_string(displayIndex), display)) return false;
+	if (hashReadString(display, "text") == text) return true;
+	hashWriteString(display, "text", text);
+	return true;
+}
+
+void mrvmStoreModelessWindowLiveGeometry(const std::string &windowId, int x, int y, int width, int height) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value root;
+	Value windows;
+	Value window;
+	Value liveGeometry;
+	int version = 0;
+
+	if (windowId.empty()) return;
+	root = ensureModelessUiHash();
+	windows = ensureGlobalHashChild(root, "windows");
+	window = ensureGlobalHashChild(windows, windowId);
+	liveGeometry = ensureGlobalHashChild(window, "liveGeometry");
+
+	if (hashReadInt(liveGeometry, "x", x) == x && hashReadInt(liveGeometry, "y", y) == y && hashReadInt(liveGeometry, "width", width) == width && hashReadInt(liveGeometry, "height", height) == height && hashReadInt(liveGeometry, "geometryVersion", 0) > 0) return;
+	version = hashReadInt(liveGeometry, "geometryVersion", 0) + 1;
+	hashWriteInt(liveGeometry, "x", x);
+	hashWriteInt(liveGeometry, "y", y);
+	hashWriteInt(liveGeometry, "width", width);
+	hashWriteInt(liveGeometry, "height", height);
+	hashWriteInt(liveGeometry, "geometryVersion", version);
+}
+
+void mrvmRemoveModelessWindowDefinition(const std::string &windowId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value windows;
+
+	if (windowId.empty()) return;
+	if (!findModelessUiChild("windows", windows)) return;
+	static_cast<void>(eraseGlobalHashChild(windows, windowId));
 }
 
 void VirtualMachine::appendLogLine(const std::string &line, bool important) {
@@ -7680,6 +9088,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "UI_LISTBOX") {
 					addMacroUiListBox(args);
 					runtimeErrorLevel() = 0;
+				} else if (name == "UI_GRID") {
+					addMacroUiGrid(args);
+					runtimeErrorLevel() = 0;
 				} else if (name == "UI_LIST_CLEAR") {
 					clearMacroUiItemList(args);
 					runtimeErrorLevel() = 0;
@@ -7690,6 +9101,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					bindMacroModelessButton(args);
 				} else if (name == "UI_MODELESS_SHOW") {
 					showMacroModelessDialog(args);
+				} else if (name == "UI_MODELESS_UPDATE") {
+					updateMacroModelessDialog(args);
+				} else if (name == "UI_MODELESS_DISPLAY") {
+					updateMacroModelessDisplayLine(args);
 				} else if (name == "UI_MODELESS_CLOSE") {
 					closeMacroModelessDialog(args);
 				} else if (name == "EXEC_SESSION_LIST") {
@@ -7988,17 +9403,23 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					else
 						replaced = replaceLastSearchBackground(valueAsString(args[0]));
 					runtimeErrorLevel() = replaced ? 0 : 1010;
-				} else if (name == "TEXT") {
-					MRFileEditor *editor;
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("TEXT expects one string argument.");
-					editor = currentEditor();
-					if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-						runtimeErrorLevel() = 1001;
-						continue;
-					}
-					insertEditorText(editor, valueAsString(args[0]));
-					runtimeErrorLevel() = 0;
-				} else if (name == "KEY_IN") {
+					} else if (name == "TEXT") {
+						MRFileEditor *editor;
+						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("TEXT expects one string argument.");
+						editor = currentEditor();
+						if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
+							runtimeErrorLevel() = 1001;
+							continue;
+						}
+						insertEditorText(editor, valueAsString(args[0]));
+						runtimeErrorLevel() = 0;
+					} else if (name == "SET_CLIPBOARD_TEXT") {
+						std::string text;
+						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SET_CLIPBOARD_TEXT expects one string argument.");
+						text = valueAsString(args[0]);
+						TClipboard::setText(TStringView(text.data(), text.size()));
+						runtimeErrorLevel() = 0;
+					} else if (name == "KEY_IN") {
 					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("KEY_IN expects one string argument.");
 					if (!replayKeyInputSequence(valueAsString(args[0]))) {
 						runtimeErrorLevel() = currentBackgroundEditSession() != nullptr ? 1010 : 1001;

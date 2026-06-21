@@ -6,7 +6,6 @@ DEF_INT(Count);
 UI_LIST_CLEAR('EXECSESSION_CONSOLE_ITEMS');
 EXEC_SESSION_LIST('EXECSESSION_CONSOLE_ITEMS');
 Count := RETURN_INT;
-SET_GLOBAL_INT('EXECSESSION_CONSOLE_COUNT', Count);
 
 IF Count = 0 THEN
     UI_LIST_ADD('EXECSESSION_CONSOLE_ITEMS', '(no scheduled closures)');
@@ -17,12 +16,12 @@ $MACRO ExecSessionConsoleStop;
 DEF_INT(SelectedIndex, ConsumerId, Count);
 
 SelectedIndex := UI_INDEX(1);
-Count := GLOBAL_INT('EXECSESSION_CONSOLE_COUNT');
+Count := GLOBAL_HASH('EXECSESSIONS')['console']['EXECSESSION_CONSOLE_ITEMS']['count'];
 
 IF Count = 0 THEN
     MAKE_MESSAGE('No scheduled closures.');
 ELSE
-    ConsumerId := GLOBAL_INT('EXECSESSION_CONSOLE_ID_' + STR(SelectedIndex));
+    ConsumerId := GLOBAL_HASH('EXECSESSIONS')['console']['EXECSESSION_CONSOLE_ITEMS']['ids'][STR(SelectedIndex)];
     IF ConsumerId > 0 THEN
         EXEC_SESSION_STOP(ConsumerId);
         IF RETURN_INT = 1 THEN
@@ -49,10 +48,7 @@ END_MACRO;
 $MACRO ExecSessionConsole;
 DEF_INT(Start);
 
-Start := GLOBAL_INT('EXECSESSION_CONSOLE_START');
-IF Start <= 0 THEN
-    Start := 1;
-END;
+Start := 1;
 
 RUN_MACRO('ExecSessionConsoleRefresh');
 

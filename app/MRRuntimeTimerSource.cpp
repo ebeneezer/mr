@@ -1,6 +1,7 @@
 #include "MRRuntimeTimerSource.hpp"
 
 #include "MRRuntimeScheduler.hpp"
+#include "../mrmac/MRMacroModelessUi.hpp"
 
 #include <chrono>
 
@@ -10,5 +11,6 @@ std::uint64_t runtimeTimerSourceNowMs() {
 }
 
 std::size_t pumpRuntimeTimerSource() {
+	refreshMacroModelessWindows();
 	return pumpRuntimeScheduler(runtimeTimerSourceNowMs());
 }

@@ -121,10 +121,16 @@ std::vector<std::string> execSessionStatusLines(std::size_t maxRecentResults) {
 	std::vector<std::string> lines;
 
 	lines.push_back("MRMac exec sessions: active=" + std::to_string(activeSessions.size()) + ", pending-delay=" + std::to_string(pendingSessions.size()) + ", recent-results=" + std::to_string(recentResults.size()) + ", generation=" + std::to_string(execSessionStatusConsumerGeneration()) + ".");
-	for (const MRMacroExecutionSession &session : activeSessions)
+	for (std::size_t index = 0; index < activeSessions.size(); ++index) {
+		const MRMacroExecutionSession &session = activeSessions[index];
+
 		lines.push_back(execSessionLinePrefix("active session", session));
-	for (const MRMacroExecutionSession &session : pendingSessions)
+	}
+	for (std::size_t index = 0; index < pendingSessions.size(); ++index) {
+		const MRMacroExecutionSession &session = pendingSessions[index];
+
 		lines.push_back(execSessionLinePrefix("pending session", session));
+	}
 	for (std::size_t i = recentStart; i < recentResults.size(); ++i) {
 		std::string line = execSessionLinePrefix("result session", recentResults[i].session);
 		line += " result-state=";
@@ -141,6 +147,11 @@ std::vector<std::string> execSessionStatusLines(std::size_t maxRecentResults) {
 
 void logExecSessionStatusSnapshotIfEnabled() {
 	if (!execSessionStatusEnabled()) return;
-	for (const std::string &line : execSessionStatusLines(8))
+	const std::vector<std::string> lines = execSessionStatusLines(8);
+
+	for (std::size_t index = 0; index < lines.size(); ++index) {
+		const std::string &line = lines[index];
+
 		mrLogMessage(line.c_str());
+	}
 }

@@ -1,9 +1,9 @@
 #include "MRMacroExecutionSession.hpp"
 
+#include "MRVM.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 #include <cstdlib>
-#include <map>
 #include <mutex>
 
 namespace {
@@ -12,27 +12,11 @@ struct MacroExecutionSessionListener {
 	MRMacroExecutionSessionHook hook = nullptr;
 };
 
-std::mutex macroExecutionSessionMutex;
-MRMacroExecutionSessionId nextMacroExecutionSessionValue = 1;
-std::mutex macroExecutionResultsMutex;
-std::vector<MRMacroExecutionResult> macroExecutionResults;
-constexpr std::size_t kMacroExecutionResultHistoryLimit = 32;
-std::mutex activeMacroExecutionSessionsMutex;
-std::map<std::uint64_t, MRMacroExecutionSession> activeMacroExecutionSessionMap;
 std::mutex macroExecutionSessionListenersMutex;
-MRMacroExecutionSessionListenerId nextMacroExecutionSessionListenerValue = 1;
 std::vector<MacroExecutionSessionListener> macroExecutionSessionListeners;
-std::mutex macroExecutionSessionStatusMutex;
-std::uint64_t macroExecutionSessionStatusGenerationValue = 0;
-
-MRMacroExecutionSessionId nextMacroExecutionSessionId() {
-	std::lock_guard<std::mutex> lock(macroExecutionSessionMutex);
-	return nextMacroExecutionSessionValue++;
-}
 
 void noteMacroExecutionSessionStatusChanged() {
-	std::lock_guard<std::mutex> lock(macroExecutionSessionStatusMutex);
-	++macroExecutionSessionStatusGenerationValue;
+	mrvmNoteMacroExecutionSessionStatusChanged();
 }
 
 bool macroExecutionSessionTraceEnabled() noexcept;
@@ -45,7 +29,7 @@ std::vector<std::string> describeMacroExecutionSessionTraceStatus();
 MRMacroExecutionSession createMacroExecutionSession(const std::string &label, MRMacroExecutionRoute route, const MRMacroExecutionOwner &owner) {
 	MRMacroExecutionSession session;
 
-	session.sessionId = nextMacroExecutionSessionId();
+	session.sessionId = mrvmNextMacroExecutionSessionId();
 	session.owner = owner;
 	session.route = route;
 	session.state = MRMacroExecutionState::Running;
@@ -60,61 +44,29 @@ bool macroExecutionOwnerMatches(const MRMacroExecutionOwner &sessionOwner, const
 
 void trackMacroExecutionSession(const MRMacroExecutionSession &session) {
 	if (session.taskId == 0) return;
-
-	std::lock_guard<std::mutex> lock(activeMacroExecutionSessionsMutex);
-	activeMacroExecutionSessionMap[session.taskId] = session;
+	mrvmStoreActiveMacroExecutionSession(session);
 }
 
 std::vector<MRMacroExecutionSession> activeMacroExecutionSessions() {
-	std::lock_guard<std::mutex> lock(activeMacroExecutionSessionsMutex);
-	std::vector<MRMacroExecutionSession> sessions;
-
-	sessions.reserve(activeMacroExecutionSessionMap.size());
-	for (const auto &entry : activeMacroExecutionSessionMap)
-		sessions.push_back(entry.second);
-	return sessions;
+	return mrvmActiveMacroExecutionSessions();
 }
 
 std::vector<MRMacroExecutionSession> activeMacroExecutionSessionsForOwner(const MRMacroExecutionOwner &owner) {
-	std::lock_guard<std::mutex> lock(activeMacroExecutionSessionsMutex);
-	std::vector<MRMacroExecutionSession> sessions;
-
-	for (const auto &entry : activeMacroExecutionSessionMap)
-		if (macroExecutionOwnerMatches(entry.second.owner, owner)) sessions.push_back(entry.second);
-	return sessions;
-}
-
-static void recordMacroExecutionResult(MRMacroExecutionSession session, MRMacroExecutionState state, const std::string &message) {
-	std::lock_guard<std::mutex> lock(macroExecutionResultsMutex);
-	MRMacroExecutionResult result;
-
-	session.state = state;
-	result.session = session;
-	result.state = state;
-	result.message = message;
-	macroExecutionResults.push_back(result);
-	while (macroExecutionResults.size() > kMacroExecutionResultHistoryLimit)
-		macroExecutionResults.erase(macroExecutionResults.begin());
+	return mrvmActiveMacroExecutionSessionsForOwner(owner);
 }
 
 void publishMacroExecutionResult(MRMacroExecutionSession session, MRMacroExecutionState state, const std::string &message) {
-	recordMacroExecutionResult(session, state, message);
+	mrvmRecordMacroExecutionResult(session, state, message);
 	notifyMacroExecutionSessionChanged();
 }
 
 std::vector<MRMacroExecutionResult> recentMacroExecutionResults() {
-	std::lock_guard<std::mutex> lock(macroExecutionResultsMutex);
-	return macroExecutionResults;
+	return mrvmRecentMacroExecutionResults();
 }
 
 bool markMacroExecutionSessionCancellationRequestedForTask(std::uint64_t taskId) {
 	if (taskId == 0) return false;
-	{
-		std::lock_guard<std::mutex> lock(activeMacroExecutionSessionsMutex);
-		std::map<std::uint64_t, MRMacroExecutionSession>::iterator found = activeMacroExecutionSessionMap.find(taskId);
-		if (found == activeMacroExecutionSessionMap.end()) return false;
-		found->second.state = MRMacroExecutionState::CancellationRequested;
-	}
+	if (!mrvmMarkMacroExecutionSessionCancellationRequestedForTask(taskId)) return false;
 	notifyMacroExecutionSessionChanged();
 	return true;
 }
@@ -123,14 +75,8 @@ static bool noteMacroExecutionResultForTask(std::uint64_t taskId, MRMacroExecuti
 	MRMacroExecutionSession session;
 
 	if (taskId == 0) return false;
-	{
-		std::lock_guard<std::mutex> lock(activeMacroExecutionSessionsMutex);
-		std::map<std::uint64_t, MRMacroExecutionSession>::iterator found = activeMacroExecutionSessionMap.find(taskId);
-		if (found == activeMacroExecutionSessionMap.end()) return false;
-		session = found->second;
-		activeMacroExecutionSessionMap.erase(found);
-	}
-	recordMacroExecutionResult(session, state, message);
+	if (!mrvmTakeActiveMacroExecutionSessionForTask(taskId, session)) return false;
+	mrvmRecordMacroExecutionResult(session, state, message);
 	return true;
 }
 
@@ -146,9 +92,10 @@ MRMacroExecutionSessionListenerId addMacroExecutionSessionListener(MRMacroExecut
 	std::lock_guard<std::mutex> lock(macroExecutionSessionListenersMutex);
 	MacroExecutionSessionListener listener;
 
-	listener.listenerId = nextMacroExecutionSessionListenerValue++;
+	listener.listenerId = mrvmNextMacroExecutionSessionListenerId();
 	listener.hook = hook;
 	macroExecutionSessionListeners.push_back(listener);
+	mrvmRegisterMacroExecutionSessionListener(listener.listenerId);
 	return listener.listenerId;
 }
 
@@ -159,6 +106,7 @@ bool removeMacroExecutionSessionListener(MRMacroExecutionSessionListenerId liste
 	for (std::vector<MacroExecutionSessionListener>::iterator it = macroExecutionSessionListeners.begin(); it != macroExecutionSessionListeners.end(); ++it)
 		if (it->listenerId == listenerId) {
 			macroExecutionSessionListeners.erase(it);
+			mrvmRemoveMacroExecutionSessionListener(listenerId);
 			return true;
 		}
 	return false;
@@ -169,14 +117,21 @@ void notifyMacroExecutionSessionChanged() {
 	{
 		std::lock_guard<std::mutex> lock(macroExecutionSessionListenersMutex);
 		hooks.reserve(macroExecutionSessionListeners.size());
-		for (const MacroExecutionSessionListener &listener : macroExecutionSessionListeners)
+		for (std::size_t index = 0; index < macroExecutionSessionListeners.size(); ++index) {
+			const MacroExecutionSessionListener &listener = macroExecutionSessionListeners[index];
+
 			if (listener.hook != nullptr) hooks.push_back(listener.hook);
+		}
 	}
-	for (MRMacroExecutionSessionHook hook : hooks)
-		hook();
+	for (std::size_t index = 0; index < hooks.size(); ++index)
+		hooks[index]();
 	if (!macroExecutionSessionTraceEnabled()) return;
-	for (const std::string &line : describeMacroExecutionSessionTraceStatus())
+	const std::vector<std::string> traceLines = describeMacroExecutionSessionTraceStatus();
+	for (std::size_t index = 0; index < traceLines.size(); ++index) {
+		const std::string &line = traceLines[index];
+
 		mrLogMessage(line.c_str());
+	}
 }
 
 MRMacroExecutionSessionListenerId installMacroExecutionSessionStatusHook() {
@@ -184,8 +139,7 @@ MRMacroExecutionSessionListenerId installMacroExecutionSessionStatusHook() {
 }
 
 std::uint64_t macroExecutionSessionStatusGeneration() {
-	std::lock_guard<std::mutex> lock(macroExecutionSessionStatusMutex);
-	return macroExecutionSessionStatusGenerationValue;
+	return mrvmMacroExecutionSessionStatusGeneration();
 }
 
 namespace {
@@ -266,10 +220,16 @@ std::vector<std::string> describeMacroExecutionSessionTraceStatus() {
 	std::vector<std::string> lines;
 
 	lines.push_back("MRMac execution sessions: active=" + std::to_string(activeSessions.size()) + ", pending-delay=" + std::to_string(pendingSessions.size()) + ", recent-results=" + std::to_string(recentResults.size()) + ".");
-	for (const auto &session : activeSessions)
+	for (std::size_t index = 0; index < activeSessions.size(); ++index) {
+		const MRMacroExecutionSession &session = activeSessions[index];
+
 		lines.push_back("active " + describeMacroExecutionSession(session));
-	for (const auto &session : pendingSessions)
+	}
+	for (std::size_t index = 0; index < pendingSessions.size(); ++index) {
+		const MRMacroExecutionSession &session = pendingSessions[index];
+
 		lines.push_back("pending " + describeMacroExecutionSession(session));
+	}
 	return lines;
 }
 } // namespace

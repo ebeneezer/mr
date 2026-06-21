@@ -1,9 +1,15 @@
+$MACRO_FILE desktoputils;
 $MACRO REGISTER_DESKTOP_UTILITIES FROM EDIT;
-IF GLOBAL_INT('DESKTOP_UTILITIES_REGISTERED') = 0 THEN
+IF GLOBAL_INT('DESKTOP_UTILITIES_MENU_VERSION') <> 6 THEN
+    REGISTER_MENU_ITEM('Tools', 'Calculator', 'desktoputils^SHOW_CALC');
+    REGISTER_MENU_ITEM('Tools', 'Analog clock', 'desktoputils^SHOW_ANALOG_CLOCK');
     REGISTER_MENU_ITEM('Tools', 'ASCII table', 'desktoputils^SHOW_ASCII_TABLE');
     REGISTER_MENU_ITEM('Tools', 'Emoji table', 'desktoputils^SHOW_EMOJI_TABLE');
     SET_GLOBAL_INT('DESKTOP_UTILITIES_REGISTERED', TRUE);
+    SET_GLOBAL_INT('DESKTOP_UTILITIES_MENU_VERSION', 6);
 END;
+MACRO_TO_KEY('<AltShftC>', 'desktoputils^SHOW_CALC', 0);
+MACRO_TO_KEY('<AltShftK>', 'desktoputils^SHOW_ANALOG_CLOCK', 0);
 MACRO_TO_KEY('<AltShftA>', 'desktoputils^SHOW_ASCII_TABLE', 0);
 MACRO_TO_KEY('<AltShftE>', 'desktoputils^SHOW_EMOJI_TABLE', 0);
 END_MACRO;
@@ -41,12 +47,12 @@ WHILE Code <= 255 DO
     IF Code < 128 THEN
         SET_GLOBAL_INT('DESKTOPUTILS_ASCII_CODE', Code);
         RUN_MACRO('DesktopUtilsAsciiLabel');
-        UI_LIST_ADD('DESKTOPUTILS_ASCII_ITEMS', STR(Code) + ' ' + RETURN_STR);
+        UI_LIST_ADD('DESKTOPUTILS_ASCII_ITEMS', RETURN_STR + UTF8(9) + STR(Code) + UTF8(9) + 'ASCII ' + STR(Code));
     ELSE
         IF Code >= 160 THEN
             SET_GLOBAL_INT('DESKTOPUTILS_ASCII_CODE', Code);
             RUN_MACRO('DesktopUtilsAsciiLabel');
-            UI_LIST_ADD('DESKTOPUTILS_ASCII_ITEMS', STR(Code) + ' ' + RETURN_STR);
+            UI_LIST_ADD('DESKTOPUTILS_ASCII_ITEMS', RETURN_STR + UTF8(9) + STR(Code) + UTF8(9) + 'LATIN-1 ' + STR(Code));
         END;
     END;
     Code := Code + 1;
@@ -60,9 +66,36 @@ DEF_INT(Codepoint, RangeEnd);
 Codepoint := GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START');
 RangeEnd := GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END');
 WHILE Codepoint <= RangeEnd DO
-    UI_LIST_ADD('DESKTOPUTILS_EMOJI_ITEMS', UTF8(Codepoint) + ' ' + STR(Codepoint));
+    SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_CODEPOINT', Codepoint);
+    RUN_MACRO('DesktopUtilsEmojiHex');
+    UI_LIST_ADD('DESKTOPUTILS_EMOJI_ITEMS', UTF8(Codepoint) + UTF8(9) + UTF8(Codepoint) + UTF8(9) + 'U+' + RETURN_STR);
     Codepoint := Codepoint + 1;
 END;
+END_MACRO;
+
+$MACRO DesktopUtilsEmojiHex FROM EDIT;
+DEF_INT(Value, Digit, TargetLen);
+DEF_STR(Digits, Out);
+
+Value := GLOBAL_INT('DESKTOPUTILS_EMOJI_CODEPOINT');
+Digits := '0123456789ABCDEF';
+Out := '';
+IF Value = 0 THEN
+    Out := '0';
+END;
+WHILE Value > 0 DO
+    Digit := (Value MOD 16) + 1;
+    Out := COPY(Digits, Digit, 1) + Out;
+    Value := Value / 16;
+END;
+TargetLen := 4;
+IF GLOBAL_INT('DESKTOPUTILS_EMOJI_CODEPOINT') > $FFFF THEN
+    TargetLen := 5;
+END;
+WHILE LENGTH(Out) < TargetLen DO
+    Out := '0' + Out;
+END;
+RETURN_STR := Out;
 END_MACRO;
 
 $MACRO DesktopUtilsBuildEmojiItems FROM EDIT;
@@ -107,157 +140,1172 @@ RUN_MACRO('DesktopUtilsAppendEmojiRange');
 SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_ITEMS_READY', TRUE);
 END_MACRO;
 
-$MACRO DesktopUtilsEmojiCodepointFromIndex FROM EDIT;
-DEF_INT(Offset);
+$MACRO SHOW_ASCII_TABLE FROM EDIT;
+DEF_INT(Start);
 
-Offset := GLOBAL_INT('DESKTOPUTILS_EMOJI_INDEX') - 1;
-RETURN_INT := 0;
-IF Offset < 0 THEN
-    RETURN_INT := 0;
-ELSE
-    IF Offset < 256 THEN
-        RETURN_INT := $2300 + Offset;
-    ELSE
-        Offset := Offset - 256;
-        IF Offset < 448 THEN
-            RETURN_INT := $2600 + Offset;
-        ELSE
-            Offset := Offset - 448;
-            IF Offset < 26 THEN
-                RETURN_INT := $1F1E6 + Offset;
-            ELSE
-                Offset := Offset - 26;
-                IF Offset < 768 THEN
-                    RETURN_INT := $1F300 + Offset;
-                ELSE
-                    Offset := Offset - 768;
-                    IF Offset < 80 THEN
-                        RETURN_INT := $1F600 + Offset;
-                    ELSE
-                        Offset := Offset - 80;
-                        IF Offset < 128 THEN
-                            RETURN_INT := $1F680 + Offset;
-                        ELSE
-                            Offset := Offset - 128;
-                            IF Offset < 128 THEN
-                                RETURN_INT := $1F780 + Offset;
-                            ELSE
-                                Offset := Offset - 128;
-                                IF Offset < 256 THEN
-                                    RETURN_INT := $1F900 + Offset;
-                                ELSE
-                                    Offset := Offset - 256;
-                                    IF Offset < 144 THEN
-                                        RETURN_INT := $1FA70 + Offset;
-                                    END;
-                                END;
-                            END;
-                        END;
-                    END;
-                END;
-            END;
-        END;
-    END;
+IF GLOBAL_INT('DESKTOPUTILS_ASCII_ITEMS_READY') = 0 THEN
+    RUN_MACRO('DesktopUtilsBuildAsciiItems');
 END;
+Start := GLOBAL_INT('DESKTOPUTILS_ASCII_START');
+IF Start <= 0 THEN
+    Start := 1;
+END;
+UI_DIALOG(0, 0, 67, 15, 'ASCII TABLE');
+UI_GRID(2, 2, 64, 11, 1, '', 'DESKTOPUTILS_ASCII_ITEMS', Start);
+UI_MODELESS_ON(1, 'desktoputils^DesktopUtilsAsciiInsertSelected');
+UI_MODELESS_SHOW('DesktopUtilsAsciiTable');
 END_MACRO;
 
-$MACRO SHOW_ASCII_TABLE FROM EDIT;
-DEF_INT(Choice, Done, Start, SelectedIndex, Code);
+$MACRO DesktopUtilsAsciiInsertSelected FROM EDIT;
+DEF_INT(SelectedIndex, Code, ParseRc);
+DEF_STR(SelectedText);
 
-IF WINDOW_COUNT = 0 THEN
-    MARQUEE_ERROR('Open a text window first.');
-ELSE
-    IF READ_ONLY THEN
-        MARQUEE_ERROR('Window is read-only.');
-    ELSE
-        IF GLOBAL_INT('DESKTOPUTILS_ASCII_ITEMS_READY') = 0 THEN
-            RUN_MACRO('DesktopUtilsBuildAsciiItems');
-        END;
-        Start := GLOBAL_INT('DESKTOPUTILS_ASCII_START');
-        IF Start <= 0 THEN
-            Start := 1;
-        END;
-        Done := FALSE;
-        WHILE NOT Done DO
-            UI_DIALOG(0, 0, 44, 18, 'ASCII table');
-            UI_LISTBOX(2, 2, 40, 10, 1, 'Characters', 'DESKTOPUTILS_ASCII_ITEMS', Start);
-            UI_BUTTON(2, 14, 12, 2, '~I~nsert<Enter>');
-            UI_BUTTON(16, 14, 12, 3, 'C~a~ncel');
-            UI_BUTTON(30, 14, 12, 4, '~H~elp');
-            Choice := UI_EXEC;
-            SelectedIndex := UI_INDEX(1);
-            IF SelectedIndex > 0 THEN
-                Start := SelectedIndex;
-                SET_GLOBAL_INT('DESKTOPUTILS_ASCII_START', Start);
-            END;
-            IF (Choice = 1) OR (Choice = 2) THEN
-                IF SelectedIndex > 0 THEN
-                    Code := SelectedIndex - 1;
-                    IF Code >= 128 THEN
-                        Code := Code + 32;
-                    END;
-                    TEXT(UTF8(Code));
-                END;
-                Done := TRUE;
-            END;
-            IF (Choice = 0) OR (Choice = 3) THEN
-                Done := TRUE;
-            END;
-            IF Choice = 4 THEN
-                MAKE_MESSAGE('Enter or Insert posts the selected ASCII character.');
-            END;
-        END;
-    END;
+SelectedIndex := UI_INDEX(1);
+SelectedText := UI_TEXT(1);
+IF SelectedIndex > 0 THEN
+    SET_GLOBAL_INT('DESKTOPUTILS_ASCII_START', SelectedIndex);
 END;
+ParseRc := VAL(Code, SelectedText);
+IF ParseRc = 0 THEN
+    SET_CLIPBOARD_TEXT(UTF8(Code));
+    MAKE_MESSAGE('ASCII character copied to clipboard.');
+END;
+UI_MODELESS_CLOSE('DesktopUtilsAsciiTable');
 END_MACRO;
 
 $MACRO SHOW_EMOJI_TABLE FROM EDIT;
-DEF_INT(Choice, Done, Start, SelectedIndex, Codepoint);
+DEF_INT(Start);
 
-IF WINDOW_COUNT = 0 THEN
-    MARQUEE_ERROR('Open a text window first.');
+IF GLOBAL_INT('DESKTOPUTILS_EMOJI_ITEMS_READY') = 0 THEN
+    RUN_MACRO('DesktopUtilsBuildEmojiItems');
+END;
+Start := GLOBAL_INT('DESKTOPUTILS_EMOJI_START');
+IF Start <= 0 THEN
+    Start := 1;
+END;
+UI_DIALOG(0, 0, 67, 15, 'EMOJI TABLE');
+UI_GRID(2, 2, 64, 11, 1, '', 'DESKTOPUTILS_EMOJI_ITEMS', Start);
+UI_MODELESS_ON(1, 'desktoputils^DesktopUtilsEmojiInsertSelected');
+UI_MODELESS_SHOW('DesktopUtilsEmojiTable');
+END_MACRO;
+
+$MACRO DesktopUtilsEmojiInsertSelected FROM EDIT;
+DEF_INT(SelectedIndex);
+DEF_STR(SelectedText);
+
+SelectedIndex := UI_INDEX(1);
+SelectedText := UI_TEXT(1);
+IF SelectedIndex > 0 THEN
+    SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_START', SelectedIndex);
+END;
+IF LENGTH(SelectedText) > 0 THEN
+    SET_CLIPBOARD_TEXT(SelectedText);
+    MAKE_MESSAGE('Emoji copied to clipboard.');
+END;
+UI_MODELESS_CLOSE('DesktopUtilsEmojiTable');
+END_MACRO;
+$MACRO CalculatorFormatValue FROM EDIT;
+DEF_INT(Base, Value, Negative, Digit);
+DEF_STR(Digits, Out);
+
+Base := GLOBAL_INT('CALCULATOR_BASE');
+Value := GLOBAL_INT('CALCULATOR_VALUE');
+Digits := '0123456789ABCDEF';
+Out := '';
+Negative := FALSE;
+
+IF Value < 0 THEN
+    Negative := TRUE;
+    Value := 0 - Value;
+END;
+
+IF Value = 0 THEN
+    Out := '0';
+END;
+
+WHILE Value > 0 DO
+    Digit := (Value MOD Base) + 1;
+    Out := COPY(Digits, Digit, 1) + Out;
+    Value := Value / Base;
+END;
+
+IF Base = 16 THEN
+    Out := '$' + Out;
+END;
+
+IF Negative THEN
+    Out := '-' + Out;
+END;
+
+RETURN_STR := Out;
+END_MACRO;
+
+$MACRO CalculatorParseValue FROM EDIT;
+DEF_INT(Base, Value, Digit, Negative, I, Limit, Ok);
+DEF_STR(Input, Digits, Ch);
+
+Base := GLOBAL_INT('CALCULATOR_BASE');
+Input := CAPS(REMOVE_SPACE(GLOBAL_STR('CALCULATOR_INPUT')));
+Digits := '0123456789ABCDEF';
+Value := 0;
+Digit := 0;
+Negative := FALSE;
+Ok := TRUE;
+Limit := LENGTH(Input);
+
+IF Limit = 0 THEN
+    Ok := FALSE;
+END;
+
+IF Ok AND (COPY(Input, 1, 1) = '-') THEN
+    Negative := TRUE;
+    I := 2;
 ELSE
-    IF READ_ONLY THEN
-        MARQUEE_ERROR('Window is read-only.');
+    I := 1;
+END;
+
+IF Ok AND (Base = 16) AND (I <= Limit) AND (COPY(Input, I, 1) = '$') THEN
+    I := I + 1;
+END;
+
+IF Ok AND (I > Limit) THEN
+    Ok := FALSE;
+END;
+
+WHILE I <= Limit DO
+    Ch := COPY(Input, I, 1);
+    Digit := POS(Ch, Digits);
+    IF (Digit = 0) OR (Digit > Base) THEN
+        Ok := FALSE;
+    END;
+    IF Ok THEN
+        Value := Value * Base + Digit - 1;
+    END;
+    I := I + 1;
+END;
+
+IF Ok AND Negative THEN
+    Value := 0 - Value;
+END;
+
+RETURN_INT := Value;
+RETURN_STR := Input;
+ERROR_LEVEL := 0;
+
+IF NOT Ok THEN
+    RETURN_INT := 0;
+    ERROR_LEVEL := 1;
+END;
+END_MACRO;
+
+$MACRO CalculatorApplyOperator FROM EDIT;
+DEF_INT(Acc, Cur, Op);
+
+Acc := GLOBAL_INT('CALCULATOR_ACC');
+Cur := GLOBAL_INT('CALCULATOR_CUR');
+Op := GLOBAL_INT('CALCULATOR_OP');
+ERROR_LEVEL := 0;
+
+IF Op = 1 THEN
+    Acc := Acc + Cur;
+END;
+
+IF Op = 2 THEN
+    Acc := Acc - Cur;
+END;
+
+IF Op = 3 THEN
+    Acc := Acc * Cur;
+END;
+
+IF Op = 4 THEN
+    IF Cur = 0 THEN
+        ERROR_LEVEL := 1;
     ELSE
-        IF GLOBAL_INT('DESKTOPUTILS_EMOJI_ITEMS_READY') = 0 THEN
-            RUN_MACRO('DesktopUtilsBuildEmojiItems');
+        Acc := Acc / Cur;
+    END;
+END;
+
+IF Op = 5 THEN
+    IF Cur = 0 THEN
+        ERROR_LEVEL := 1;
+    ELSE
+        Acc := Acc MOD Cur;
+    END;
+END;
+
+IF Op = 6 THEN
+    Acc := Acc BAND Cur;
+END;
+
+IF Op = 7 THEN
+    Acc := Acc BOR Cur;
+END;
+
+IF Op = 8 THEN
+    Acc := Acc BXOR Cur;
+END;
+
+RETURN_INT := Acc;
+END_MACRO;
+
+$MACRO CalculatorRightAlign FROM EDIT;
+DEF_INT(TargetWidth, PadCount);
+DEF_STR(Text, Out);
+
+TargetWidth := GLOBAL_INT('CALCULATOR_ALIGN_WIDTH');
+Text := GLOBAL_STR('CALCULATOR_ALIGN_TEXT');
+IF LENGTH(Text) = 0 THEN
+    Text := '0';
+END;
+Out := Text;
+PadCount := TargetWidth - LENGTH(Text);
+
+WHILE PadCount > 0 DO
+    Out := ' ' + Out;
+    PadCount := PadCount - 1;
+END;
+
+RETURN_STR := Out;
+END_MACRO;
+
+$MACRO CalculatorAppendToken FROM EDIT;
+DEF_INT(Base);
+DEF_STR(Input, Token, Allowed, Sign, Prefix, Work);
+
+Base := GLOBAL_INT('CALCULATOR_BASE');
+Input := GLOBAL_STR('CALCULATOR_INPUT');
+Token := GLOBAL_STR('CALCULATOR_APPEND');
+Allowed := '01';
+Sign := '';
+Prefix := '';
+Work := Input;
+ERROR_LEVEL := 0;
+
+IF Base = 10 THEN
+    Allowed := '0123456789';
+END;
+
+IF Base = 16 THEN
+    Allowed := '0123456789ABCDEF';
+END;
+
+IF POS(Token, Allowed) = 0 THEN
+    ERROR_LEVEL := 1;
+    RETURN_STR := Input;
+END;
+
+IF ERROR_LEVEL = 0 THEN
+    IF COPY(Work, 1, 1) = '-' THEN
+        Sign := '-';
+        Work := COPY(Work, 2, LENGTH(Work) - 1);
+    END;
+
+    IF (Base = 16) AND (COPY(Work, 1, 1) = '$') THEN
+        Prefix := '$';
+        Work := COPY(Work, 2, LENGTH(Work) - 1);
+    END;
+
+    IF Work = '0' THEN
+        Work := Token;
+    ELSE
+        Work := Work + Token;
+    END;
+
+    RETURN_STR := Sign + Prefix + Work;
+END;
+END_MACRO;
+
+$MACRO CalculatorToggleSign FROM EDIT;
+DEF_STR(Input);
+
+Input := GLOBAL_STR('CALCULATOR_INPUT');
+
+IF COPY(Input, 1, 1) = '-' THEN
+    RETURN_STR := COPY(Input, 2, LENGTH(Input) - 1);
+ELSE
+    IF (Input = '0') OR (Input = '$0') THEN
+        RETURN_STR := Input;
+    ELSE
+        RETURN_STR := '-' + Input;
+    END;
+END;
+END_MACRO;
+
+$MACRO SHOW_CALC FROM EDIT;
+DEF_INT(Choice, Done, CurrentValue, ParseRc, PendingOp);
+DEF_INT(Base, Acc, Cur, Mem, NextOp);
+DEF_STR(DisplayCur, DisplayMem, BlockSeed, InputText);
+
+MAKE_MESSAGE('Welcome to calculator V 1.0');
+
+Base := 10;
+Acc := 0;
+Cur := 0;
+Mem := 0;
+PendingOp := 0;
+Choice := 0;
+Done := FALSE;
+InputText := '0';
+
+IF (BLOCK_STAT = 1) OR (BLOCK_STAT = 3) THEN
+    BlockSeed := REMOVE_SPACE(BLOCK_TEXT);
+    ParseRc := VAL(CurrentValue, BlockSeed);
+    IF ParseRc = 0 THEN
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_INT('CALCULATOR_VALUE', CurrentValue);
+        RUN_MACRO('CalculatorFormatValue');
+        InputText := RETURN_STR;
+    END;
+END;
+
+WHILE NOT Done DO
+    SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+    SET_GLOBAL_INT('CALCULATOR_VALUE', Mem);
+    RUN_MACRO('CalculatorFormatValue');
+    DisplayMem := RETURN_STR;
+    SET_GLOBAL_INT('CALCULATOR_ALIGN_WIDTH', 71);
+    SET_GLOBAL_STR('CALCULATOR_ALIGN_TEXT', DisplayMem);
+    RUN_MACRO('CalculatorRightAlign');
+    DisplayMem := RETURN_STR;
+
+    DisplayCur := InputText;
+    IF LENGTH(DisplayCur) = 0 THEN
+        DisplayCur := '0';
+    END;
+    SET_GLOBAL_INT('CALCULATOR_ALIGN_WIDTH', 71);
+    SET_GLOBAL_STR('CALCULATOR_ALIGN_TEXT', DisplayCur);
+    RUN_MACRO('CalculatorRightAlign');
+    DisplayCur := RETURN_STR;
+
+    UI_DIALOG(0, 0, 76, 18, 'Calculator');
+    UI_DISPLAY(2, 3, 72, DisplayCur);
+    UI_DISPLAY(2, 5, 72, DisplayMem);
+    UI_BUTTON(2, 7, 12, 1, 'And<F4>');
+    UI_BUTTON(14, 7, 12, 2, 'Or<F5>');
+    UI_BUTTON(26, 7, 12, 3, 'Xor<F6>');
+    UI_BUTTON(38, 7, 12, 4, 'Mem Sto<F3>');
+    UI_BUTTON(50, 7, 12, 24, 'Mem Rcl');
+    UI_BUTTON(62, 7, 12, 6, 'Clr<F2>');
+    UI_BUTTON(2, 9, 12, 7, '~A~');
+    UI_BUTTON(14, 9, 12, 8, '~B~');
+    UI_BUTTON(26, 9, 12, 9, '~C~');
+    UI_BUTTON(38, 9, 12, 10, '~D~');
+    UI_BUTTON(50, 9, 12, 11, '~E~');
+    UI_BUTTON(62, 9, 12, 12, '~F~');
+    UI_BUTTON(2, 11, 12, 13, '~7~');
+    UI_BUTTON(14, 11, 12, 14, '~8~');
+    UI_BUTTON(26, 11, 12, 15, '~9~');
+    UI_BUTTON(38, 11, 12, 16, '/');
+    UI_BUTTON(50, 11, 12, 17, '*');
+    UI_BUTTON(62, 11, 12, 30, 'Paste<F1>');
+    UI_BUTTON(2, 13, 12, 19, '~4~');
+    UI_BUTTON(14, 13, 12, 20, '~5~');
+    UI_BUTTON(26, 13, 12, 21, '~6~');
+    UI_BUTTON(38, 13, 12, 22, '-');
+    UI_BUTTON(50, 13, 12, 23, '+');
+    UI_BUTTON(62, 13, 12, 5, 'Base<F7>');
+    UI_BUTTON(2, 15, 12, 25, '~1~');
+    UI_BUTTON(14, 15, 12, 26, '~2~');
+    UI_BUTTON(26, 15, 12, 27, '~3~');
+    UI_BUTTON(38, 15, 12, 28, '~0~');
+    UI_BUTTON(50, 15, 12, 29, '+/-<F8>');
+    UI_BUTTON(62, 15, 12, 18, '=');
+    Choice := UI_EXEC;
+
+    IF Choice = 0 THEN
+        Done := TRUE;
+    END;
+
+    IF (Choice >= 7) AND (Choice <= 15) THEN
+        IF Choice = 7 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'A');
         END;
-        Start := GLOBAL_INT('DESKTOPUTILS_EMOJI_START');
-        IF Start <= 0 THEN
-            Start := 1;
+        IF Choice = 8 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'B');
         END;
-        Done := FALSE;
-        WHILE NOT Done DO
-            UI_DIALOG(0, 0, 44, 18, 'Emoji table');
-            UI_LISTBOX(2, 2, 40, 10, 1, 'Emoji', 'DESKTOPUTILS_EMOJI_ITEMS', Start);
-            UI_BUTTON(2, 14, 12, 2, '~I~nsert<Enter>');
-            UI_BUTTON(16, 14, 12, 3, 'C~a~ncel');
-            UI_BUTTON(30, 14, 12, 4, '~H~elp');
-            Choice := UI_EXEC;
-            SelectedIndex := UI_INDEX(1);
-            IF SelectedIndex > 0 THEN
-                Start := SelectedIndex;
-                SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_START', Start);
-            END;
-            IF (Choice = 1) OR (Choice = 2) THEN
-                IF SelectedIndex > 0 THEN
-                    SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_INDEX', SelectedIndex);
-                    RUN_MACRO('DesktopUtilsEmojiCodepointFromIndex');
-                    Codepoint := RETURN_INT;
-                    IF Codepoint > 0 THEN
-                        TEXT(UTF8(Codepoint));
-                    END;
+        IF Choice = 9 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'C');
+        END;
+        IF Choice = 10 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'D');
+        END;
+        IF Choice = 11 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'E');
+        END;
+        IF Choice = 12 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'F');
+        END;
+        IF Choice = 13 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '7');
+        END;
+        IF Choice = 14 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '8');
+        END;
+        IF Choice = 15 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '9');
+        END;
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        RUN_MACRO('CalculatorAppendToken');
+        IF ERROR_LEVEL = 0 THEN
+            InputText := RETURN_STR;
+        ELSE
+            MARQUEE_WARNING('Digit not valid for current base.');
+        END;
+    END;
+
+    IF (Choice >= 19) AND (Choice <= 21) THEN
+        IF Choice = 19 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '4');
+        END;
+        IF Choice = 20 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '5');
+        END;
+        IF Choice = 21 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '6');
+        END;
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        RUN_MACRO('CalculatorAppendToken');
+        IF ERROR_LEVEL = 0 THEN
+            InputText := RETURN_STR;
+        ELSE
+            MARQUEE_WARNING('Digit not valid for current base.');
+        END;
+    END;
+
+    IF (Choice >= 25) AND (Choice <= 28) THEN
+        IF Choice = 25 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '1');
+        END;
+        IF Choice = 26 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '2');
+        END;
+        IF Choice = 27 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '3');
+        END;
+        IF Choice = 28 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '0');
+        END;
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        RUN_MACRO('CalculatorAppendToken');
+        IF ERROR_LEVEL = 0 THEN
+            InputText := RETURN_STR;
+        ELSE
+            MARQUEE_WARNING('Digit not valid for current base.');
+        END;
+    END;
+
+    IF (Choice >= 1) AND (Choice <= 3) THEN
+        NextOp := 6;
+        IF Choice = 2 THEN
+            NextOp := 7;
+        END;
+        IF Choice = 3 THEN
+            NextOp := 8;
+        END;
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Cur := RETURN_INT;
+            IF PendingOp = 0 THEN
+                Acc := Cur;
+            ELSE
+                SET_GLOBAL_INT('CALCULATOR_ACC', Acc);
+                SET_GLOBAL_INT('CALCULATOR_CUR', Cur);
+                SET_GLOBAL_INT('CALCULATOR_OP', PendingOp);
+                RUN_MACRO('CalculatorApplyOperator');
+                IF ERROR_LEVEL = 0 THEN
+                    Acc := RETURN_INT;
                 END;
-                Done := TRUE;
             END;
-            IF (Choice = 0) OR (Choice = 3) THEN
-                Done := TRUE;
+            IF ERROR_LEVEL = 0 THEN
+                PendingOp := NextOp;
+                InputText := '0';
+            ELSE
+                MARQUEE_WARNING('Operation failed.');
             END;
-            IF Choice = 4 THEN
-                MAKE_MESSAGE('Enter or Insert posts the selected emoji.');
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 4 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Mem := RETURN_INT;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 5 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            CurrentValue := RETURN_INT;
+            IF Base = 10 THEN
+                Base := 16;
+            ELSE
+                IF Base = 16 THEN
+                    Base := 2;
+                ELSE
+                    Base := 10;
+                END;
+            END;
+            SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+            SET_GLOBAL_INT('CALCULATOR_VALUE', CurrentValue);
+            RUN_MACRO('CalculatorFormatValue');
+            InputText := RETURN_STR;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 6 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF (ERROR_LEVEL = 0) AND (RETURN_INT = 0) THEN
+            Mem := 0;
+        END;
+        InputText := '0';
+    END;
+
+    IF (Choice >= 16) AND (Choice <= 17) THEN
+        NextOp := 4;
+        IF Choice = 17 THEN
+            NextOp := 3;
+        END;
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Cur := RETURN_INT;
+            IF PendingOp = 0 THEN
+                Acc := Cur;
+            ELSE
+                SET_GLOBAL_INT('CALCULATOR_ACC', Acc);
+                SET_GLOBAL_INT('CALCULATOR_CUR', Cur);
+                SET_GLOBAL_INT('CALCULATOR_OP', PendingOp);
+                RUN_MACRO('CalculatorApplyOperator');
+                IF ERROR_LEVEL = 0 THEN
+                    Acc := RETURN_INT;
+                END;
+            END;
+            IF ERROR_LEVEL = 0 THEN
+                PendingOp := NextOp;
+                InputText := '0';
+            ELSE
+                MARQUEE_WARNING('Division or modulo by zero is not allowed.');
+            END;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 18 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Cur := RETURN_INT;
+            IF PendingOp = 0 THEN
+                Acc := Cur;
+            ELSE
+                SET_GLOBAL_INT('CALCULATOR_ACC', Acc);
+                SET_GLOBAL_INT('CALCULATOR_CUR', Cur);
+                SET_GLOBAL_INT('CALCULATOR_OP', PendingOp);
+                RUN_MACRO('CalculatorApplyOperator');
+                IF ERROR_LEVEL = 0 THEN
+                    Acc := RETURN_INT;
+                END;
+            END;
+            IF ERROR_LEVEL = 0 THEN
+                PendingOp := 0;
+                SET_GLOBAL_INT('CALCULATOR_VALUE', Acc);
+                RUN_MACRO('CalculatorFormatValue');
+                InputText := RETURN_STR;
+            ELSE
+                MARQUEE_WARNING('Operation failed.');
+            END;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF (Choice >= 22) AND (Choice <= 23) THEN
+        NextOp := 2;
+        IF Choice = 23 THEN
+            NextOp := 1;
+        END;
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Cur := RETURN_INT;
+            IF PendingOp = 0 THEN
+                Acc := Cur;
+            ELSE
+                SET_GLOBAL_INT('CALCULATOR_ACC', Acc);
+                SET_GLOBAL_INT('CALCULATOR_CUR', Cur);
+                SET_GLOBAL_INT('CALCULATOR_OP', PendingOp);
+                RUN_MACRO('CalculatorApplyOperator');
+                IF ERROR_LEVEL = 0 THEN
+                    Acc := RETURN_INT;
+                END;
+            END;
+            IF ERROR_LEVEL = 0 THEN
+                PendingOp := NextOp;
+                InputText := '0';
+            ELSE
+                MARQUEE_WARNING('Division or modulo by zero is not allowed.');
+            END;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 29 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        RUN_MACRO('CalculatorToggleSign');
+        InputText := RETURN_STR;
+    END;
+
+    IF Choice = 30 THEN
+        TEXT(InputText);
+        Done := TRUE;
+    END;
+
+    IF Choice = 24 THEN
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_INT('CALCULATOR_VALUE', Mem);
+        RUN_MACRO('CalculatorFormatValue');
+        InputText := RETURN_STR;
+    END;
+END;
+END_MACRO;
+
+$MACRO SHOW_ANALOG_CLOCK FROM EDIT;
+SET_GLOBAL_INT('ANALOGCLOCK_OPEN_REQUEST', GLOBAL_INT('ANALOGCLOCK_OPEN_REQUEST') + 1);
+END_MACRO;
+
+$MACRO AnalogClockParseTime FROM EDIT;
+DEF_STR(NowText, Digits, Ch);
+DEF_INT(Hour, Minute, Second, Digit);
+
+NowText := TIME;
+Digits := '0123456789';
+
+Ch := COPY(NowText, 1, 1);
+Digit := POS(Ch, Digits) - 1;
+Hour := Digit * 10;
+Ch := COPY(NowText, 2, 1);
+Digit := POS(Ch, Digits) - 1;
+Hour := Hour + Digit;
+
+Ch := COPY(NowText, 4, 1);
+Digit := POS(Ch, Digits) - 1;
+Minute := Digit * 10;
+Ch := COPY(NowText, 5, 1);
+Digit := POS(Ch, Digits) - 1;
+Minute := Minute + Digit;
+
+Ch := COPY(NowText, 7, 1);
+Digit := POS(Ch, Digits) - 1;
+Second := Digit * 10;
+Ch := COPY(NowText, 8, 1);
+Digit := POS(Ch, Digits) - 1;
+Second := Second + Digit;
+
+IF COPY(NowText, 9, 1) = 'p' THEN
+    IF Hour < 12 THEN
+        Hour := Hour + 12;
+    END;
+END;
+IF COPY(NowText, 9, 1) = 'a' THEN
+    IF Hour = 12 THEN
+        Hour := 0;
+    END;
+END;
+
+SET_GLOBAL_INT('ANALOGCLOCK_HOUR', Hour);
+SET_GLOBAL_INT('ANALOGCLOCK_MINUTE', Minute);
+SET_GLOBAL_INT('ANALOGCLOCK_SECOND', Second);
+SET_GLOBAL_STR('ANALOGCLOCK_TIME', NowText);
+END_MACRO;
+
+$MACRO AnalogClockBlankLine FROM EDIT;
+DEF_INT(I, Width);
+DEF_STR(Line);
+
+Width := GLOBAL_INT('ANALOGCLOCK_DISPLAY_WIDTH');
+Line := '';
+I := 0;
+WHILE I < Width DO
+    Line := Line + ' ';
+    I := I + 1;
+END;
+RETURN_STR := Line;
+END_MACRO;
+
+$MACRO AnalogClockSetCell FROM EDIT;
+DEF_INT(X, Y, Width);
+DEF_STR(Key, Line, Glyph);
+
+X := GLOBAL_INT('ANALOGCLOCK_CELL_X');
+Y := GLOBAL_INT('ANALOGCLOCK_CELL_Y');
+Width := GLOBAL_INT('ANALOGCLOCK_DISPLAY_WIDTH');
+Glyph := GLOBAL_STR('ANALOGCLOCK_CELL_GLYPH');
+
+IF (X >= 1) AND (X <= Width) THEN
+    IF (Y >= 1) AND (Y <= GLOBAL_INT('ANALOGCLOCK_DISPLAY_ROWS')) THEN
+        Key := 'ANALOGCLOCK_ROW_' + STR(Y);
+        Line := GLOBAL_STR(Key);
+        Line := COPY(Line, 1, X - 1) + Glyph + COPY(Line, X + 1, Width - X);
+        SET_GLOBAL_STR(Key, Line);
+    END;
+END;
+END_MACRO;
+
+$MACRO AnalogClockTableValue FROM EDIT;
+DEF_INT(Index, Pos1, D1, D2, D3);
+DEF_STR(Table, Digits);
+
+Index := GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX');
+Table := '000010021031041050059067074081087091095098099100';
+Digits := '0123456789';
+Pos1 := (Index * 3) + 1;
+D1 := POS(COPY(Table, Pos1, 1), Digits) - 1;
+D2 := POS(COPY(Table, Pos1 + 1, 1), Digits) - 1;
+D3 := POS(COPY(Table, Pos1 + 2, 1), Digits) - 1;
+SET_GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE', (D1 * 100) + (D2 * 10) + D3);
+END_MACRO;
+
+$MACRO AnalogClockPoint FROM EDIT;
+DEF_INT(Pos, Rx, Ry, Dx, Dy, Step, XCoef, YCoef);
+
+Pos := GLOBAL_INT('ANALOGCLOCK_POS') MOD 60;
+Rx := GLOBAL_INT('ANALOGCLOCK_RX');
+Ry := GLOBAL_INT('ANALOGCLOCK_RY');
+Dx := 0;
+Dy := 0 - Ry;
+
+IF Pos <= 15 THEN
+    Step := Pos;
+    SET_GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX', Step);
+    RUN_MACRO('AnalogClockTableValue');
+    XCoef := GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE');
+    SET_GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX', 15 - Step);
+    RUN_MACRO('AnalogClockTableValue');
+    YCoef := GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE');
+    Dx := (Rx * XCoef) / 100;
+    Dy := 0 - ((Ry * YCoef) / 100);
+ELSE
+    IF Pos <= 30 THEN
+        Step := Pos - 15;
+        SET_GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX', 15 - Step);
+        RUN_MACRO('AnalogClockTableValue');
+        XCoef := GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE');
+        SET_GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX', Step);
+        RUN_MACRO('AnalogClockTableValue');
+        YCoef := GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE');
+        Dx := (Rx * XCoef) / 100;
+        Dy := (Ry * YCoef) / 100;
+    ELSE
+        IF Pos <= 45 THEN
+            Step := Pos - 30;
+            SET_GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX', Step);
+            RUN_MACRO('AnalogClockTableValue');
+            XCoef := GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE');
+            SET_GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX', 15 - Step);
+            RUN_MACRO('AnalogClockTableValue');
+            YCoef := GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE');
+            Dx := 0 - ((Rx * XCoef) / 100);
+            Dy := (Ry * YCoef) / 100;
+        ELSE
+            Step := Pos - 45;
+            SET_GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX', 15 - Step);
+            RUN_MACRO('AnalogClockTableValue');
+            XCoef := GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE');
+            SET_GLOBAL_INT('ANALOGCLOCK_TABLE_INDEX', Step);
+            RUN_MACRO('AnalogClockTableValue');
+            YCoef := GLOBAL_INT('ANALOGCLOCK_TABLE_VALUE');
+            Dx := 0 - ((Rx * XCoef) / 100);
+            Dy := 0 - ((Ry * YCoef) / 100);
+        END;
+    END;
+END;
+
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_X', GLOBAL_INT('ANALOGCLOCK_CX') + Dx);
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_Y', GLOBAL_INT('ANALOGCLOCK_CY') + Dy);
+END_MACRO;
+
+$MACRO AnalogClockDrawCell FROM EDIT;
+SET_GLOBAL_STR('ANALOGCLOCK_CELL_GLYPH', GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH'));
+RUN_MACRO('AnalogClockSetCell');
+END_MACRO;
+
+$MACRO AnalogClockDrawHand FROM EDIT;
+DEF_INT(Cx, Cy, X2, Y2, Dx, Dy, Adx, Ady, Steps, I, X, Y);
+
+Cx := GLOBAL_INT('ANALOGCLOCK_CX');
+Cy := GLOBAL_INT('ANALOGCLOCK_CY');
+X2 := GLOBAL_INT('ANALOGCLOCK_HAND_X');
+Y2 := GLOBAL_INT('ANALOGCLOCK_HAND_Y');
+Dx := X2 - Cx;
+Dy := Y2 - Cy;
+Adx := Dx;
+Ady := Dy;
+IF Adx < 0 THEN
+    Adx := 0 - Adx;
+END;
+IF Ady < 0 THEN
+    Ady := 0 - Ady;
+END;
+Steps := Adx;
+IF Ady > Steps THEN
+    Steps := Ady;
+END;
+IF Steps <= 0 THEN
+    Steps := 1;
+END;
+I := 0;
+WHILE I <= Steps DO
+    X := Cx + ((Dx * I) / Steps);
+    Y := Cy + ((Dy * I) / Steps);
+    SET_GLOBAL_INT('ANALOGCLOCK_CELL_X', X);
+    SET_GLOBAL_INT('ANALOGCLOCK_CELL_Y', Y);
+    RUN_MACRO('AnalogClockDrawCell');
+    I := I + 1;
+END;
+END_MACRO;
+
+$MACRO AnalogClockDrawStaticDial FROM EDIT;
+DEF_INT(Pos);
+
+Pos := 0;
+WHILE Pos < 60 DO
+    SET_GLOBAL_INT('ANALOGCLOCK_POS', Pos);
+    RUN_MACRO('AnalogClockPoint');
+    IF (Pos MOD 5) = 0 THEN
+        SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', 'o');
+        RUN_MACRO('AnalogClockDrawCell');
+    ELSE
+        IF GLOBAL_INT('ANALOGCLOCK_MINOR_TICKS') <> 0 THEN
+            IF (Pos MOD 2) = 0 THEN
+                SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '.');
+                RUN_MACRO('AnalogClockDrawCell');
+            END;
+        END;
+    END;
+    Pos := Pos + 1;
+END;
+
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_X', GLOBAL_INT('ANALOGCLOCK_CX') - 1);
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_Y', GLOBAL_INT('ANALOGCLOCK_CY') - GLOBAL_INT('ANALOGCLOCK_RY') - 2);
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '1');
+RUN_MACRO('AnalogClockDrawCell');
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_X', GLOBAL_INT('ANALOGCLOCK_CX'));
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '2');
+RUN_MACRO('AnalogClockDrawCell');
+
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_X', GLOBAL_INT('ANALOGCLOCK_CX') + GLOBAL_INT('ANALOGCLOCK_RX') + 2);
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_Y', GLOBAL_INT('ANALOGCLOCK_CY'));
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '3');
+RUN_MACRO('AnalogClockDrawCell');
+
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_X', GLOBAL_INT('ANALOGCLOCK_CX'));
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_Y', GLOBAL_INT('ANALOGCLOCK_CY') + GLOBAL_INT('ANALOGCLOCK_RY') + 2);
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '6');
+RUN_MACRO('AnalogClockDrawCell');
+
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_X', GLOBAL_INT('ANALOGCLOCK_CX') - GLOBAL_INT('ANALOGCLOCK_RX') - 2);
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_Y', GLOBAL_INT('ANALOGCLOCK_CY'));
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '9');
+RUN_MACRO('AnalogClockDrawCell');
+END_MACRO;
+
+$MACRO AnalogClockDrawDynamicDial FROM EDIT;
+DEF_INT(Sec, Min, HourPos);
+
+Sec := GLOBAL_INT('ANALOGCLOCK_SECOND');
+Min := GLOBAL_INT('ANALOGCLOCK_MINUTE');
+SET_GLOBAL_INT('ANALOGCLOCK_POS', Min);
+SET_GLOBAL_INT('ANALOGCLOCK_RX', GLOBAL_INT('ANALOGCLOCK_MIN_RX'));
+SET_GLOBAL_INT('ANALOGCLOCK_RY', GLOBAL_INT('ANALOGCLOCK_MIN_RY'));
+RUN_MACRO('AnalogClockPoint');
+SET_GLOBAL_INT('ANALOGCLOCK_HAND_X', GLOBAL_INT('ANALOGCLOCK_CELL_X'));
+SET_GLOBAL_INT('ANALOGCLOCK_HAND_Y', GLOBAL_INT('ANALOGCLOCK_CELL_Y'));
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '=');
+RUN_MACRO('AnalogClockDrawHand');
+
+HourPos := ((GLOBAL_INT('ANALOGCLOCK_HOUR') MOD 12) * 5) + (Min / 12);
+SET_GLOBAL_INT('ANALOGCLOCK_POS', HourPos);
+SET_GLOBAL_INT('ANALOGCLOCK_RX', GLOBAL_INT('ANALOGCLOCK_HOUR_RX'));
+SET_GLOBAL_INT('ANALOGCLOCK_RY', GLOBAL_INT('ANALOGCLOCK_HOUR_RY'));
+RUN_MACRO('AnalogClockPoint');
+SET_GLOBAL_INT('ANALOGCLOCK_HAND_X', GLOBAL_INT('ANALOGCLOCK_CELL_X'));
+SET_GLOBAL_INT('ANALOGCLOCK_HAND_Y', GLOBAL_INT('ANALOGCLOCK_CELL_Y'));
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '#');
+RUN_MACRO('AnalogClockDrawHand');
+
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_X', GLOBAL_INT('ANALOGCLOCK_CX'));
+SET_GLOBAL_INT('ANALOGCLOCK_CELL_Y', GLOBAL_INT('ANALOGCLOCK_CY'));
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', 'O');
+RUN_MACRO('AnalogClockDrawCell');
+
+SET_GLOBAL_INT('ANALOGCLOCK_RX', GLOBAL_INT('ANALOGCLOCK_SECOND_RX'));
+SET_GLOBAL_INT('ANALOGCLOCK_RY', GLOBAL_INT('ANALOGCLOCK_SECOND_RY'));
+Sec := GLOBAL_INT('ANALOGCLOCK_SECOND');
+SET_GLOBAL_INT('ANALOGCLOCK_POS', Sec);
+RUN_MACRO('AnalogClockPoint');
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '*');
+RUN_MACRO('AnalogClockDrawCell');
+Sec := Sec - 1;
+IF Sec < 0 THEN
+    Sec := Sec + 60;
+END;
+SET_GLOBAL_INT('ANALOGCLOCK_POS', Sec);
+RUN_MACRO('AnalogClockPoint');
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '.');
+RUN_MACRO('AnalogClockDrawCell');
+Sec := Sec - 1;
+IF Sec < 0 THEN
+    Sec := Sec + 60;
+END;
+SET_GLOBAL_INT('ANALOGCLOCK_POS', Sec);
+RUN_MACRO('AnalogClockPoint');
+SET_GLOBAL_STR('ANALOGCLOCK_DRAW_GLYPH', '.');
+RUN_MACRO('AnalogClockDrawCell');
+END_MACRO;
+
+$MACRO AnalogClockBuildRows FROM EDIT;
+DEF_INT(Row, Width, Rows, Rx, Ry, MaxRx, Cx, Cy, RebuildBackground);
+DEF_STR(Key, BackgroundKey);
+
+Width := GLOBAL_INT('ANALOGCLOCK_WINDOW_WIDTH') - 4;
+Rows := GLOBAL_INT('ANALOGCLOCK_WINDOW_HEIGHT') - 3;
+IF Width < 20 THEN
+    Width := 20;
+END;
+IF Rows < 8 THEN
+    Rows := 8;
+END;
+SET_GLOBAL_INT('ANALOGCLOCK_DISPLAY_WIDTH', Width);
+SET_GLOBAL_INT('ANALOGCLOCK_DISPLAY_ROWS', Rows);
+
+Cx := (Width + 1) / 2;
+Cy := (Rows + 1) / 2;
+Ry := (Rows - 5) / 2;
+IF Ry < 3 THEN
+    Ry := 3;
+END;
+IF (Cy - Ry) < 3 THEN
+    Ry := Cy - 3;
+END;
+IF (Cy + Ry) > (Rows - 2) THEN
+    Ry := Rows - Cy - 2;
+END;
+IF Ry < 2 THEN
+    Ry := 2;
+END;
+Rx := Ry * 2;
+MaxRx := (Width / 2) - 4;
+IF Rx > MaxRx THEN
+    Rx := MaxRx;
+END;
+IF Rx < 6 THEN
+    Rx := 6;
+END;
+SET_GLOBAL_INT('ANALOGCLOCK_CX', Cx);
+SET_GLOBAL_INT('ANALOGCLOCK_CY', Cy);
+SET_GLOBAL_INT('ANALOGCLOCK_RX', Rx);
+SET_GLOBAL_INT('ANALOGCLOCK_RY', Ry);
+SET_GLOBAL_INT('ANALOGCLOCK_SECOND_RX', Rx);
+SET_GLOBAL_INT('ANALOGCLOCK_SECOND_RY', Ry);
+SET_GLOBAL_INT('ANALOGCLOCK_MIN_RX', (Rx * 8) / 10);
+SET_GLOBAL_INT('ANALOGCLOCK_MIN_RY', (Ry * 8) / 10);
+SET_GLOBAL_INT('ANALOGCLOCK_HOUR_RX', (Rx * 5) / 10);
+SET_GLOBAL_INT('ANALOGCLOCK_HOUR_RY', (Ry * 5) / 10);
+SET_GLOBAL_INT('ANALOGCLOCK_MINOR_TICKS', FALSE);
+IF Rx >= 10 THEN
+    IF Ry >= 5 THEN
+        SET_GLOBAL_INT('ANALOGCLOCK_MINOR_TICKS', TRUE);
+    END;
+END;
+
+RebuildBackground := FALSE;
+IF GLOBAL_INT('ANALOGCLOCK_BACKGROUND_WIDTH') <> Width THEN
+    RebuildBackground := TRUE;
+END;
+IF GLOBAL_INT('ANALOGCLOCK_BACKGROUND_ROWS') <> Rows THEN
+    RebuildBackground := TRUE;
+END;
+IF GLOBAL_INT('ANALOGCLOCK_BACKGROUND_STYLE') <> 1 THEN
+    RebuildBackground := TRUE;
+END;
+
+IF RebuildBackground <> 0 THEN
+    Row := 1;
+    WHILE Row <= Rows DO
+        RUN_MACRO('AnalogClockBlankLine');
+        Key := 'ANALOGCLOCK_ROW_' + STR(Row);
+        SET_GLOBAL_STR(Key, RETURN_STR);
+        Row := Row + 1;
+    END;
+    RUN_MACRO('AnalogClockDrawStaticDial');
+    Row := 1;
+    WHILE Row <= Rows DO
+        Key := 'ANALOGCLOCK_ROW_' + STR(Row);
+        BackgroundKey := 'ANALOGCLOCK_BACKGROUND_ROW_' + STR(Row);
+        SET_GLOBAL_STR(BackgroundKey, GLOBAL_STR(Key));
+        Row := Row + 1;
+    END;
+    SET_GLOBAL_INT('ANALOGCLOCK_BACKGROUND_WIDTH', Width);
+    SET_GLOBAL_INT('ANALOGCLOCK_BACKGROUND_ROWS', Rows);
+    SET_GLOBAL_INT('ANALOGCLOCK_BACKGROUND_STYLE', 1);
+END;
+
+Row := 1;
+WHILE Row <= Rows DO
+    Key := 'ANALOGCLOCK_ROW_' + STR(Row);
+    BackgroundKey := 'ANALOGCLOCK_BACKGROUND_ROW_' + STR(Row);
+    SET_GLOBAL_STR(Key, GLOBAL_STR(BackgroundKey));
+    Row := Row + 1;
+END;
+
+RUN_MACRO('AnalogClockParseTime');
+RUN_MACRO('AnalogClockDrawDynamicDial');
+END_MACRO;
+
+$MACRO AnalogClockBuildModelessProjection FROM EDIT;
+DEF_INT(Row, Width, Rows, Height);
+DEF_STR(Key);
+
+RUN_MACRO('AnalogClockBuildRows');
+Width := GLOBAL_INT('ANALOGCLOCK_DISPLAY_WIDTH');
+Rows := GLOBAL_INT('ANALOGCLOCK_DISPLAY_ROWS');
+Height := Rows + 3;
+
+UI_DIALOG(0, 0, Width + 4, Height, 'Analog clock');
+Row := 1;
+WHILE Row <= Rows DO
+    Key := 'ANALOGCLOCK_ROW_' + STR(Row);
+    UI_DISPLAY(2, Row, Width, GLOBAL_STR(Key));
+    Row := Row + 1;
+END;
+END_MACRO;
+
+$MACRO AnalogClockShowModeless FROM EDIT;
+RUN_MACRO('AnalogClockBuildModelessProjection');
+UI_MODELESS_SHOW('AnalogClock');
+END_MACRO;
+
+$MACRO AnalogClockUpdateModeless FROM EDIT;
+DEF_INT(Row, Rows);
+DEF_STR(Key);
+
+RUN_MACRO('AnalogClockBuildRows');
+Rows := GLOBAL_INT('ANALOGCLOCK_DISPLAY_ROWS');
+
+Row := 1;
+WHILE Row <= Rows DO
+    Key := 'ANALOGCLOCK_ROW_' + STR(Row);
+    UI_MODELESS_DISPLAY('AnalogClock', Row, GLOBAL_STR(Key));
+    Row := Row + 1;
+END;
+END_MACRO;
+
+$CLOSURE AnalogClockTick;
+DEF_TICK(1000);
+DEF_INT(Active, Displayed, SeenOpenRequest, OpenRequest, Width, Height, GeometryVersion, LastGeometryVersion, LiveWidth, LiveHeight, NeedsFullUpdate);
+DEF_HASH(ModelessRoot, ModelessWindows, ClockWindow, LiveGeometry);
+
+OpenRequest := GLOBAL_INT('ANALOGCLOCK_OPEN_REQUEST');
+IF OpenRequest <> SeenOpenRequest THEN
+    SeenOpenRequest := OpenRequest;
+    IF Width <= 0 THEN
+        Width := 42;
+        Height := 19;
+    END;
+    Active := TRUE;
+    Displayed := FALSE;
+    NeedsFullUpdate := TRUE;
+END;
+
+IF Active <> 0 THEN
+    IF Displayed <> 0 THEN
+        ModelessRoot := GLOBAL_HASH('MODELESSUI');
+        IF EXISTS(ModelessRoot, 'windows') = 1 THEN
+            ModelessWindows := ModelessRoot['windows'];
+            IF EXISTS(ModelessWindows, 'ANALOGCLOCK') = 1 THEN
+                ClockWindow := ModelessWindows['ANALOGCLOCK'];
+                IF EXISTS(ClockWindow, 'liveGeometry') = 1 THEN
+                    LiveGeometry := ClockWindow['liveGeometry'];
+                    GeometryVersion := LiveGeometry['geometryVersion'];
+                    IF GeometryVersion <> LastGeometryVersion THEN
+                        LastGeometryVersion := GeometryVersion;
+                        LiveWidth := LiveGeometry['width'];
+                        LiveHeight := LiveGeometry['height'];
+                        IF LiveWidth >= 24 THEN
+                            Width := LiveWidth;
+                        END;
+                        IF LiveHeight >= 11 THEN
+                            Height := LiveHeight;
+                        END;
+                        NeedsFullUpdate := TRUE;
+                    END;
+                ELSE
+                    Active := FALSE;
+                    Displayed := FALSE;
+                END;
+            ELSE
+                Active := FALSE;
+                Displayed := FALSE;
+            END;
+        ELSE
+            Active := FALSE;
+            Displayed := FALSE;
+        END;
+    END;
+END;
+
+IF Active <> 0 THEN
+    SET_GLOBAL_INT('ANALOGCLOCK_WINDOW_WIDTH', Width);
+    SET_GLOBAL_INT('ANALOGCLOCK_WINDOW_HEIGHT', Height);
+    IF Displayed <> 0 THEN
+        IF NeedsFullUpdate <> 0 THEN
+            RUN_MACRO('AnalogClockBuildModelessProjection');
+            UI_MODELESS_UPDATE('AnalogClock');
+            NeedsFullUpdate := FALSE;
+        ELSE
+            RUN_MACRO('AnalogClockUpdateModeless');
+        END;
+    ELSE
+        RUN_MACRO('AnalogClockShowModeless');
+        NeedsFullUpdate := FALSE;
+    END;
+    Displayed := TRUE;
+    ModelessRoot := GLOBAL_HASH('MODELESSUI');
+    IF EXISTS(ModelessRoot, 'windows') = 1 THEN
+        ModelessWindows := ModelessRoot['windows'];
+        IF EXISTS(ModelessWindows, 'ANALOGCLOCK') = 1 THEN
+            ClockWindow := ModelessWindows['ANALOGCLOCK'];
+            IF EXISTS(ClockWindow, 'liveGeometry') = 1 THEN
+                LiveGeometry := ClockWindow['liveGeometry'];
+                GeometryVersion := LiveGeometry['geometryVersion'];
+                IF GeometryVersion > 0 THEN
+                    LastGeometryVersion := GeometryVersion;
+                END;
             END;
         END;
     END;
 END;
-END_MACRO;
+END_CLOSURE;
