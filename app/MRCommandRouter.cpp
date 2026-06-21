@@ -206,6 +206,16 @@ class GetLastDialog final : public MRDialogFoundation {
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseWheel && handleListWheel(event)) return;
+		if (event.what == evKeyDown) {
+			const ushort keyCode = event.keyDown.keyCode;
+
+			if (keyCode == kbTab || keyCode == kbCtrlI || keyCode == kbShiftTab) {
+				selectAdjacentList(keyCode == kbShiftTab);
+				clearEvent(event);
+				return;
+			}
+		}
 		if (event.what == evCommand) {
 			switch (event.message.command) {
 				case cmMrGetLastFilesActivate:
@@ -236,6 +246,62 @@ class GetLastDialog final : public MRDialogFoundation {
 	}
 
   private:
+	struct ListSlot {
+		MRColumnListView *list;
+		const std::vector<std::string> *values;
+	};
+
+	std::array<ListSlot, 3> listSlots() const {
+		return std::array<ListSlot, 3>{ListSlot{fileList, &fileValues}, ListSlot{folderList, &folderValues}, ListSlot{workspaceList, &workspaceValues}};
+	}
+
+	static bool listSlotSelectable(const ListSlot &slot) {
+		return slot.list != nullptr && slot.values != nullptr && !slot.values->empty();
+	}
+
+	bool handleListWheel(TEvent &event) {
+		const std::array<ListSlot, 3> slots = listSlots();
+
+		for (const ListSlot &slot : slots) {
+			if (slot.list == nullptr || !slot.list->containsMouse(event)) continue;
+			static_cast<void>(slot.list->handleWheel(event));
+			clearEvent(event);
+			return true;
+		}
+		clearEvent(event);
+		return true;
+	}
+
+	int currentListIndex(const std::array<ListSlot, 3> &slots) const {
+		TGroup *content = managedContent();
+		TView *currentView = content != nullptr ? content->current : nullptr;
+
+		for (std::size_t i = 0; i < slots.size(); ++i)
+			if (slots[i].list == currentView) return static_cast<int>(i);
+		for (std::size_t i = 0; i < slots.size(); ++i)
+			if (slots[i].list != nullptr && (slots[i].list->state & sfSelected) != 0) return static_cast<int>(i);
+		return -1;
+	}
+
+	void selectAdjacentList(bool reverse) {
+		const std::array<ListSlot, 3> slots = listSlots();
+		const int currentIndex = currentListIndex(slots);
+		const int count = static_cast<int>(slots.size());
+
+		for (int step = 1; step <= count; ++step) {
+			int index = currentIndex >= 0 ? currentIndex : (reverse ? 0 : count - 1);
+			index += reverse ? -step : step;
+			while (index < 0)
+				index += count;
+			while (index >= count)
+				index -= count;
+			if (listSlotSelectable(slots[static_cast<std::size_t>(index)])) {
+				slots[static_cast<std::size_t>(index)].list->select();
+				return;
+			}
+		}
+	}
+
 	MRColumnListView *insertLabeledList(const char *label, ushort command, const std::vector<std::string> &values, short &y, short width, short rows) {
 		TScrollBar *scrollBar = nullptr;
 		MRColumnListView *list = nullptr;
