@@ -260,12 +260,37 @@ void MRFileEditor::rememberSyntaxCheckpoint(std::size_t lineStart, std::size_t l
 
 MRSyntaxLineState MRFileEditor::syntaxWarmupInitialState(std::size_t lineStart) const noexcept {
 	if (lineStart == 0) return MRSyntaxLineState();
+	if (!isStatefulSyntaxLanguage(mBufferModel.language())) return MRSyntaxLineState();
 
 	const std::size_t lineIndex = mBufferModel.lineIndex(lineStart);
 	MRSyntaxCheckpointEntry checkpoint;
+	const std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
+	MRSyntaxLineState state;
+	std::size_t stateLineIndex = 0;
+	std::size_t stateLineStart = 0;
 
-	if (syntaxCheckpointForLine(lineIndex, checkpoint) && checkpoint.lineIndex == lineIndex && checkpoint.lineStart == lineStart) return checkpoint.stateIn;
-	return MRSyntaxLineState();
+	if (syntaxCheckpointForLine(lineIndex, checkpoint)) {
+		if (checkpoint.lineIndex == lineIndex && checkpoint.lineStart == lineStart) return checkpoint.stateIn;
+		if (checkpoint.lineIndex >= lineIndex || checkpoint.lineStart >= lineStart) return MRSyntaxLineState();
+		state = checkpoint.stateIn;
+		stateLineIndex = checkpoint.lineIndex;
+		stateLineStart = checkpoint.lineStart;
+	}
+
+	while (stateLineIndex < lineIndex) {
+		std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = tokenCache.find(stateLineStart);
+
+		if (found == tokenCache.end()) return MRSyntaxLineState();
+		if (found->second.stateIn != state) return MRSyntaxLineState();
+		state = found->second.syntaxLine.stateOut;
+		if (stateLineStart >= mBufferModel.length()) return MRSyntaxLineState();
+		const std::size_t nextLineStart = mBufferModel.nextLine(stateLineStart);
+		if (nextLineStart <= stateLineStart) return MRSyntaxLineState();
+		stateLineStart = nextLineStart;
+		++stateLineIndex;
+	}
+	if (stateLineStart != lineStart) return MRSyntaxLineState();
+	return state;
 }
 
 bool MRFileEditor::hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState) const {
@@ -480,6 +505,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 				requiredLineStarts = syntaxWarmupLineStarts(stateTopLine, requiredRowCount);
 				warmupLineStarts = syntaxWarmupLineStarts(stateTopLine, warmupRowCount);
 			}
+			if (!warmupLineStarts.empty()) requiredState = syntaxWarmupInitialState(warmupLineStarts.front());
 			const std::size_t preludeCount = requiredLineStarts.size() > static_cast<std::size_t>(requiredChunkRows) ? requiredLineStarts.size() - static_cast<std::size_t>(requiredChunkRows) : 0;
 			requestBottomLine = requestTopLine + (warmupLineStarts.size() > preludeCount ? warmupLineStarts.size() - preludeCount : 0);
 			if (exactLineCountKnown && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
