@@ -64,7 +64,7 @@ TSubMenu *createOtherMenu() {
 }
 
 TSubMenu *createMacroMenu() {
-	return &(*new TSubMenu("Macro", kbNoKey) + *new TMenuItem("Macro ~M~anager...", cmMrOtherMacroManager, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~R~ecording start/stop", cmMrMacroToggleRecording, kbAltF10, hcNoContext, "AltF10"));
+	return &(*new TSubMenu("Macro", kbNoKey) + *new TMenuItem("Macro ~L~ibrary...", cmMrOtherMacroLibrary, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~R~ecording start/stop", cmMrMacroToggleRecording, kbAltF10, hcNoContext, "AltF10"));
 }
 
 TSubMenu *createHelpMenu() {

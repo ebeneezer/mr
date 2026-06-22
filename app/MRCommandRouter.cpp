@@ -774,8 +774,8 @@ const char *placeholderCommandTitle(ushort command) {
 		case cmMrTextLowerCasePlaceholder:
 			return "Text / Lower case";
 
-		case cmMrOtherMacroManager:
-			return "Other / Macro manager";
+		case cmMrOtherMacroLibrary:
+			return "Other / Macro library";
 		case cmMrOtherBuildCurrentFile:
 			return "Other / Build current file";
 		case cmMrOtherLspDefinition:
@@ -6104,8 +6104,8 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			if (!syncCurrentEditorForLspResults()) return true;
 			return showLspResultsDialog();
 
-		case cmMrOtherMacroManager:
-			return runMacroManagerDialog();
+		case cmMrOtherMacroLibrary:
+			return runMacroLibraryDialog();
 
 		case cmMrOtherMatchBraceOrParen:
 			return handleMatchParenthesis();

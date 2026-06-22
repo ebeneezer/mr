@@ -86,7 +86,7 @@ enum : ushort {
 	cmMrTextLowerCasePlaceholder,
 
 	cmMrOtherInstallationAndSetup,
-	cmMrOtherMacroManager,
+	cmMrOtherMacroLibrary,
 	cmMrOtherExecuteProgram,
 	cmMrOtherStopProgram,
 	cmMrOtherRestartProgram,

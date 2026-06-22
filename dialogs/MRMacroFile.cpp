@@ -53,29 +53,29 @@ TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
 
-class MacroManagerActivationSink {
+class MacroLibraryActivationSink {
   public:
 	virtual void activateFocusedEntry(bool fromAutoexecList) = 0;
 	virtual void noteListFocus(bool autoexecListFocused) = 0;
 
   protected:
-	~MacroManagerActivationSink() = default;
+	~MacroLibraryActivationSink() = default;
 };
 
 enum : ushort {
-	cmMRMacroManagerCreate = 0x6A20,
-	cmMRMacroManagerDelete,
-	cmMRMacroManagerCopy,
-	cmMRMacroManagerEdit,
-	cmMRMacroManagerBind,
-	cmMRMacroManagerAddAutoexec,
-	cmMRMacroManagerRemoveAutoexec,
-	cmMRMacroManagerPlayback,
-	cmMRMacroManagerOpenEditor
+	cmMRMacroLibraryCreate = 0x6A20,
+	cmMRMacroLibraryDelete,
+	cmMRMacroLibraryCopy,
+	cmMRMacroLibraryEdit,
+	cmMRMacroLibraryBind,
+	cmMRMacroLibraryAddAutoexec,
+	cmMRMacroLibraryRemoveAutoexec,
+	cmMRMacroLibraryPlayback,
+	cmMRMacroLibraryOpenEditor
 };
 
-constexpr int kMacroManagerVirtualWidth = 92;
-constexpr int kMacroManagerVirtualHeight = 27;
+constexpr int kMacroLibraryVirtualWidth = 92;
+constexpr int kMacroLibraryVirtualHeight = 27;
 
 void postMacroDialogError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
@@ -410,9 +410,9 @@ bool openMacroSourceInEditor(const std::string &path) {
 	return true;
 }
 
-class MacroManagerListView : public TListViewer {
+class MacroLibraryListView : public TListViewer {
   public:
-	MacroManagerListView(const TRect &bounds, TScrollBar *aVScrollBar, const std::vector<std::string> &aItems, const std::vector<bool> &aErrorFlags, MacroManagerActivationSink &activationSink, bool autoexecList) noexcept : TListViewer(bounds, 1, nullptr, aVScrollBar), itemRows(aItems), compileErrorFlags(aErrorFlags), activationSink(activationSink), autoexecList(autoexecList) {
+	MacroLibraryListView(const TRect &bounds, TScrollBar *aVScrollBar, const std::vector<std::string> &aItems, const std::vector<bool> &aErrorFlags, MacroLibraryActivationSink &activationSink, bool autoexecList) noexcept : TListViewer(bounds, 1, nullptr, aVScrollBar), itemRows(aItems), compileErrorFlags(aErrorFlags), activationSink(activationSink), autoexecList(autoexecList) {
 		eventMask |= evMouseWheel;
 		setRange(static_cast<short>(itemRows.size()));
 	}
@@ -519,21 +519,21 @@ class MacroManagerListView : public TListViewer {
 
 	std::vector<std::string> itemRows;
 	std::vector<bool> compileErrorFlags;
-	MacroManagerActivationSink &activationSink;
+	MacroLibraryActivationSink &activationSink;
 	short selectableItemCount = 0;
 	bool autoexecList = false;
 };
 
-class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivationSink {
+class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivationSink {
   public:
-	MacroManagerDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(kMacroManagerVirtualWidth, kMacroManagerVirtualHeight), "MACRO MANAGER", kMacroManagerVirtualWidth, kMacroManagerVirtualHeight, initMrDialogFrame), directoryPath(defaultMacroDirectoryPath()), macroListView(nullptr), macroScrollBar(nullptr), autoexecListView(nullptr), autoexecScrollBar(nullptr) {
-		const int width = kMacroManagerVirtualWidth;
-		const int height = kMacroManagerVirtualHeight;
+	MacroLibraryDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(kMacroLibraryVirtualWidth, kMacroLibraryVirtualHeight), "MACRO LIBRARY", kMacroLibraryVirtualWidth, kMacroLibraryVirtualHeight, initMrDialogFrame), directoryPath(defaultMacroDirectoryPath()), macroListView(nullptr), macroScrollBar(nullptr), autoexecListView(nullptr), autoexecScrollBar(nullptr) {
+		const int width = kMacroLibraryVirtualWidth;
+		const int height = kMacroLibraryVirtualHeight;
 		const int gap = 2;
-		const std::array topButtons{mr::dialogs::DialogButtonSpec{"~C~reate", cmMRMacroManagerCreate, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMRMacroManagerDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"C~o~py", cmMRMacroManagerCopy, bfNormal}, mr::dialogs::DialogButtonSpec{"~E~dit", cmMRMacroManagerEdit, bfNormal}, mr::dialogs::DialogButtonSpec{"~B~ind", cmMRMacroManagerBind, bfNormal}};
-		const std::array addAutoexecButton{mr::dialogs::DialogButtonSpec{"~A~dd", cmMRMacroManagerAddAutoexec, bfNormal}};
-		const std::array removeAutoexecButton{mr::dialogs::DialogButtonSpec{"~R~emove", cmMRMacroManagerRemoveAutoexec, bfNormal}};
-		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~P~layback", cmMRMacroManagerPlayback, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const std::array topButtons{mr::dialogs::DialogButtonSpec{"~C~reate", cmMRMacroLibraryCreate, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMRMacroLibraryDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"C~o~py", cmMRMacroLibraryCopy, bfNormal}, mr::dialogs::DialogButtonSpec{"~E~dit", cmMRMacroLibraryEdit, bfNormal}, mr::dialogs::DialogButtonSpec{"~B~ind", cmMRMacroLibraryBind, bfNormal}};
+		const std::array addAutoexecButton{mr::dialogs::DialogButtonSpec{"~A~dd", cmMRMacroLibraryAddAutoexec, bfNormal}};
+		const std::array removeAutoexecButton{mr::dialogs::DialogButtonSpec{"~R~emove", cmMRMacroLibraryRemoveAutoexec, bfNormal}};
+		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~P~layback", cmMRMacroLibraryPlayback, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const int uniformButtonWidth = std::max({mr::dialogs::measureUniformButtonRow(topButtons, gap).buttonWidth, mr::dialogs::measureUniformButtonRow(addAutoexecButton, 0).buttonWidth, mr::dialogs::measureUniformButtonRow(removeAutoexecButton, 0).buttonWidth, mr::dialogs::measureUniformButtonRow(bottomButtons, gap).buttonWidth});
 		const mr::dialogs::DialogButtonRowMetrics topMetrics = mr::dialogs::measureUniformButtonRow(topButtons, gap, uniformButtonWidth);
 		const mr::dialogs::DialogButtonRowMetrics addAutoexecMetrics = mr::dialogs::measureUniformButtonRow(addAutoexecButton, 0, uniformButtonWidth);
@@ -560,13 +560,13 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		macroScrollBar = new TScrollBar(TRect(leftListRight, listTop, leftListRight + 1, listBottom));
 		macroScrollBar->eventMask &= ~evMouseWheel;
 		insert(macroScrollBar);
-		macroListView = new MacroManagerListView(TRect(leftListLeft, listTop, leftListRight, listBottom), macroScrollBar, std::vector<std::string>(), std::vector<bool>(), *this, false);
+		macroListView = new MacroLibraryListView(TRect(leftListLeft, listTop, leftListRight, listBottom), macroScrollBar, std::vector<std::string>(), std::vector<bool>(), *this, false);
 		insert(macroListView);
 
 		autoexecScrollBar = new TScrollBar(TRect(rightListRight, listTop, rightListRight + 1, listBottom));
 		autoexecScrollBar->eventMask &= ~evMouseWheel;
 		insert(autoexecScrollBar);
-		autoexecListView = new MacroManagerListView(TRect(rightListLeft, listTop, rightListRight, listBottom), autoexecScrollBar, std::vector<std::string>(), std::vector<bool>(), *this, true);
+		autoexecListView = new MacroLibraryListView(TRect(rightListLeft, listTop, rightListRight, listBottom), autoexecScrollBar, std::vector<std::string>(), std::vector<bool>(), *this, true);
 		insert(autoexecListView);
 
 		mr::dialogs::insertUniformButtonRow(*this, addAutoexecLeft, 11, 0, addAutoexecButton, uniformButtonWidth);
@@ -653,35 +653,35 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		if (event.what != evCommand) goto base;
 
 		switch (event.message.command) {
-			case cmMRMacroManagerCreate:
+			case cmMRMacroLibraryCreate:
 				handleCreate();
 				clearEvent(event);
 				break;
-			case cmMRMacroManagerDelete:
+			case cmMRMacroLibraryDelete:
 				handleDelete();
 				clearEvent(event);
 				break;
-			case cmMRMacroManagerCopy:
+			case cmMRMacroLibraryCopy:
 				handleCopy();
 				clearEvent(event);
 				break;
-			case cmMRMacroManagerEdit:
+			case cmMRMacroLibraryEdit:
 				handleEdit();
 				clearEvent(event);
 				break;
-			case cmMRMacroManagerBind:
+			case cmMRMacroLibraryBind:
 				handleBind();
 				clearEvent(event);
 				break;
-			case cmMRMacroManagerAddAutoexec:
+			case cmMRMacroLibraryAddAutoexec:
 				handleAddAutoexec();
 				clearEvent(event);
 				break;
-			case cmMRMacroManagerRemoveAutoexec:
+			case cmMRMacroLibraryRemoveAutoexec:
 				handleRemoveAutoexec();
 				clearEvent(event);
 				break;
-			case cmMRMacroManagerPlayback:
+			case cmMRMacroLibraryPlayback:
 				handlePlayback();
 				clearEvent(event);
 				break;
@@ -870,7 +870,7 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 
 		std::memset(pathBuffer, 0, sizeof(pathBuffer));
 		std::strncpy(pathBuffer, "new_macro.mrmac", sizeof(pathBuffer) - 1);
-		if (inputBox("MACRO MANAGER", "~F~ile name", pathBuffer, static_cast<uchar>(sizeof(pathBuffer) - 1)) == cmCancel) return;
+		if (inputBox("MACRO LIBRARY", "~F~ile name", pathBuffer, static_cast<uchar>(sizeof(pathBuffer) - 1)) == cmCancel) return;
 
 		path = trimAscii(pathBuffer);
 		if (path.empty()) return;
@@ -887,7 +887,7 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		}
 		rememberLoadDialogPath(MRDialogHistoryScope::MacroFile, path.c_str());
 		openPathValue = path;
-		endModal(cmMRMacroManagerOpenEditor);
+		endModal(cmMRMacroLibraryOpenEditor);
 	}
 
 	void handleDelete() {
@@ -921,7 +921,7 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 
 		std::memset(pathBuffer, 0, sizeof(pathBuffer));
 		std::strncpy(pathBuffer, suggested.c_str(), sizeof(pathBuffer) - 1);
-		if (inputBox("MACRO MANAGER", "Copy to ~F~ile", pathBuffer, static_cast<uchar>(sizeof(pathBuffer) - 1)) == cmCancel) return;
+		if (inputBox("MACRO LIBRARY", "Copy to ~F~ile", pathBuffer, static_cast<uchar>(sizeof(pathBuffer) - 1)) == cmCancel) return;
 
 		destPath = trimAscii(pathBuffer);
 		if (destPath.empty()) return;
@@ -943,7 +943,7 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		const MacroFileEntry *entry = selectedEntry();
 		if (entry == nullptr) return;
 		openPathValue = entry->path;
-		endModal(cmMRMacroManagerOpenEditor);
+		endModal(cmMRMacroLibraryOpenEditor);
 	}
 
 	void handleBind() {
@@ -966,7 +966,7 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		const MacroFileEntry *entry = selectedEntry();
 		if (entry == nullptr) return;
 		playbackPathValue = entry->path;
-		endModal(cmMRMacroManagerPlayback);
+		endModal(cmMRMacroLibraryPlayback);
 	}
 
 	void handleAddAutoexec() {
@@ -990,9 +990,9 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 	std::vector<bool> rowHasCompileError;
 	std::vector<std::string> autoexecEntries;
 	std::vector<std::string> autoexecRows;
-	MacroManagerListView *macroListView;
+	MacroLibraryListView *macroListView;
 	TScrollBar *macroScrollBar;
-	MacroManagerListView *autoexecListView;
+	MacroLibraryListView *autoexecListView;
 	TScrollBar *autoexecScrollBar;
 	std::string openPathValue;
 	std::string playbackPathValue;
@@ -1018,8 +1018,8 @@ bool runMacroFileDialog() {
 	return true;
 }
 
-bool runMacroManagerDialog() {
-	MacroManagerDialog *dialog = new MacroManagerDialog();
+bool runMacroLibraryDialog() {
+	MacroLibraryDialog *dialog = new MacroLibraryDialog();
 	ushort result = cmCancel;
 	std::string openPath;
 	std::string playbackPath;
@@ -1032,8 +1032,8 @@ bool runMacroManagerDialog() {
 	playbackPath = dialog->playbackPath();
 	TObject::destroy(dialog);
 
-	if (result == cmMRMacroManagerOpenEditor && !openPath.empty()) return openMacroSourceInEditor(openPath);
-	if (result == cmMRMacroManagerPlayback && !playbackPath.empty()) return runMacroFileByPathWithColorRefresh(playbackPath.c_str());
+	if (result == cmMRMacroLibraryOpenEditor && !openPath.empty()) return openMacroSourceInEditor(openPath);
+	if (result == cmMRMacroLibraryPlayback && !playbackPath.empty()) return runMacroFileByPathWithColorRefresh(playbackPath.c_str());
 	if (result == cmHelp) static_cast<void>(mrShowProjectHelp());
 	return result != cmCancel;
 }
