@@ -1,5 +1,5 @@
-#ifndef MRWINDOWMANAGER_HPP
-#define MRWINDOWMANAGER_HPP
+#ifndef MRWINDOWLAYOUT_HPP
+#define MRWINDOWLAYOUT_HPP
 
 #define Uses_TEvent
 #define Uses_TRect
@@ -8,7 +8,7 @@
 
 class MREditWindow;
 
-class MRWindowManager {
+class MRWindowLayout {
   public:
 	struct MinimizedGlyphs {
 		const char *menu;

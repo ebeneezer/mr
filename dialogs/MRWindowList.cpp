@@ -35,7 +35,7 @@
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRBentoBox.hpp"
 #include "../ui/MRFrame.hpp"
-#include "../ui/MRWindowManager.hpp"
+#include "../ui/MRWindowLayout.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 
@@ -639,7 +639,7 @@ class WindowListDialog : public MRDialogFoundation {
 					TGroup *content = managedContent();
 					win->mVirtualDesktop = currentVirtualDesktop();
 					syncVirtualDesktopVisibility();
-					MRWindowManager::handleDesktopLayoutChange();
+					MRWindowLayout::handleDesktopLayoutChange();
 					mrNotifyWindowTopologyChanged();
 					refreshEntries();
 					updateHideToggleState();

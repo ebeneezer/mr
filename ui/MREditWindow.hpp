@@ -31,8 +31,7 @@
 #include "MRFrame.hpp"
 #include "MRIndicator.hpp"
 #include "MRTextBuffer.hpp"
-#include "MRWindowManager.hpp"
-#include "MRWindowManager.hpp"
+#include "MRWindowLayout.hpp"
 #include "MRWindowSupport.hpp"
 #include "MRFileEditor/MRFEBlockOps.hpp"
 #include "../app/MRCommands.hpp"
@@ -187,7 +186,7 @@ class MREditScrollBar : public TScrollBar {
 };
 
 class MREditWindow : public TWindow {
-	friend class MRWindowManager;
+	friend class MRWindowLayout;
 
   public:
 	struct TrackedTask {
@@ -386,7 +385,7 @@ class MREditWindow : public TWindow {
 			if (editor != nullptr) editor->drawView();
 			return;
 		}
-		if (MRWindowManager::isWindowMinimized(this)) {
+		if (MRWindowLayout::isWindowMinimized(this)) {
 			layoutEditorChrome();
 			if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr) frame->drawView();
 			return;
@@ -400,18 +399,18 @@ class MREditWindow : public TWindow {
 	}
 
 	void dragView(TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) override {
-		MRWindowManager::handleDragView(this, event, mode, limits, minSize, maxSize);
+		MRWindowLayout::handleDragView(this, event, mode, limits, minSize, maxSize);
 	}
 
 	void sizeLimits(TPoint &minSize, TPoint &maxSize) override {
 		TWindow::sizeLimits(minSize, maxSize);
-		if (MRWindowManager::isWindowMinimized(this)) {
-			minSize.x = MRWindowManager::minimizedWindowWidth(this);
+		if (MRWindowLayout::isWindowMinimized(this)) {
+			minSize.x = MRWindowLayout::minimizedWindowWidth(this);
 			minSize.y = 1;
 			maxSize = minSize;
 			return;
 		}
-		const TRect usableBounds = MRWindowManager::usableDesktopBounds();
+		const TRect usableBounds = MRWindowLayout::usableDesktopBounds();
 		const int usableWidth = std::max(1, usableBounds.b.x - usableBounds.a.x);
 		const int usableHeight = std::max(1, usableBounds.b.y - usableBounds.a.y);
 		maxSize.x = std::min<int>(maxSize.x, usableWidth);
@@ -428,7 +427,7 @@ class MREditWindow : public TWindow {
 		if (previousBounds != getBounds()) mrMarkWorkspaceAutosaveDirty();
 		layoutEditorChrome();
 		if (mFullscreenPresentation) return;
-		if (MRWindowManager::isWindowMinimized(this)) {
+		if (MRWindowLayout::isWindowMinimized(this)) {
 			if (frame != nullptr) frame->drawView();
 			return;
 		}
@@ -497,14 +496,14 @@ class MREditWindow : public TWindow {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
-		if (MRWindowManager::isWindowMinimized(this)) {
+		if (MRWindowLayout::isWindowMinimized(this)) {
 			if (event.what == evCommand && (event.message.command == cmMrWindowMinimize || event.message.command == cmZoom)) {
-				MRWindowManager::restoreWindow(this);
+				MRWindowLayout::restoreWindow(this);
 				clearEvent(event);
 				return;
 			}
 			if (event.what == evCommand && event.message.command == cmResize) {
-				MRWindowManager::reinsertMinimizedWindow(this);
+				MRWindowLayout::reinsertMinimizedWindow(this);
 				clearEvent(event);
 				return;
 				}
@@ -797,15 +796,15 @@ class MREditWindow : public TWindow {
 	}
 
 	bool isMinimized() const noexcept {
-		return MRWindowManager::isWindowMinimized(this);
+		return MRWindowLayout::isWindowMinimized(this);
 	}
 
 	void minimizeWindow() {
-		MRWindowManager::minimizeWindow(this);
+		MRWindowLayout::minimizeWindow(this);
 	}
 
 	void restoreWindow() {
-		MRWindowManager::restoreWindow(this);
+		MRWindowLayout::restoreWindow(this);
 	}
 
 	void setFullscreenPresentation(bool enabled) {
@@ -825,11 +824,11 @@ class MREditWindow : public TWindow {
 	}
 
 	TRect minimizedWorkspaceBounds() const noexcept {
-		return MRWindowManager::minimizedBoundsForWorkspace(this);
+		return MRWindowLayout::minimizedBoundsForWorkspace(this);
 	}
 
 	TRect restoreWorkspaceBounds() const noexcept {
-		return MRWindowManager::restoreBoundsForWorkspace(this);
+		return MRWindowLayout::restoreBoundsForWorkspace(this);
 	}
 
 	bool canSaveInPlace() const {
@@ -1902,7 +1901,7 @@ class MREditWindow : public TWindow {
 	}
 
 	void layoutEditorChrome() {
-		if (MRWindowManager::isWindowMinimized(this)) {
+		if (MRWindowLayout::isWindowMinimized(this)) {
 			if (hScrollBar != nullptr) hScrollBar->hide();
 			if (vScrollBar != nullptr) vScrollBar->hide();
 			if (indicator != nullptr) indicator->hide();

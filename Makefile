@@ -356,7 +356,7 @@ CXX_SOURCES = \
 	ui/MRPerformancePanel.cpp \
 	ui/MRSidekickEditor.cpp \
 	ui/widgets/MRScopedHistoryUI.cpp \
-	ui/MRWindowManager.cpp \
+	ui/MRWindowLayout.cpp \
 	ui/widgets/MRNumericSlider.cpp \
 	ui/MRPalette.cpp \
 	ui/MRWindowSupport.cpp \

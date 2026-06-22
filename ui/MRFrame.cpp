@@ -6,7 +6,7 @@
 #include "MRFrame.hpp"
 #include "MRBentoBox.hpp"
 #include "MREditWindow.hpp"
-#include "MRWindowManager.hpp"
+#include "MRWindowLayout.hpp"
 #include "../app/MRMenuFactory.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 
@@ -393,10 +393,10 @@ void MRFrame::draw() {
 	}
 
 	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
-	if (editWindow != nullptr && MRWindowManager::isWindowMinimized(editWindow)) {
-		const MRWindowManager::MinimizedGlyphs &glyphs = MRWindowManager::minimizedGlyphs();
-		const MRWindowManager::MinimizedLayout layout = MRWindowManager::minimizedLayout(editWindow, width);
-		const char *title = MRWindowManager::minimizedDisplayTitle(editWindow);
+	if (editWindow != nullptr && MRWindowLayout::isWindowMinimized(editWindow)) {
+		const MRWindowLayout::MinimizedGlyphs &glyphs = MRWindowLayout::minimizedGlyphs();
+		const MRWindowLayout::MinimizedLayout layout = MRWindowLayout::minimizedLayout(editWindow, width);
+		const char *title = MRWindowLayout::minimizedDisplayTitle(editWindow);
 
 		b.moveChar(0, ' ', cTitle, size.x);
 		if (layout.menuEnd > layout.menuStart) b.moveStr(static_cast<ushort>(layout.menuStart), glyphs.menu, cTitle, layout.menuEnd - layout.menuStart);
@@ -564,13 +564,13 @@ void MRFrame::handleEvent(TEvent &event) {
 		TWindow *window = static_cast<TWindow *>(owner);
 		MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
 		if (mouse.y == 0 && window != nullptr) {
-			if (editWindow != nullptr && MRWindowManager::isWindowMinimized(editWindow)) {
-				const MRWindowManager::MinimizedLayout layout = MRWindowManager::minimizedLayout(editWindow, size.x);
+			if (editWindow != nullptr && MRWindowLayout::isWindowMinimized(editWindow)) {
+				const MRWindowLayout::MinimizedLayout layout = MRWindowLayout::minimizedLayout(editWindow, size.x);
 				if (mouse.x >= layout.menuStart && mouse.x < layout.menuEnd) {
 					TMenuItem *items = createMRWindowMenuPopupItems();
 					if (items != nullptr) popupMenu(event.mouse.where, *items, owner);
 					clearEvent(event);
-				} else if (MRWindowManager::isMinimizedReinsertGlyphHit(editWindow, mouse)) {
+				} else if (MRWindowLayout::isMinimizedReinsertGlyphHit(editWindow, mouse)) {
 					event.what = evCommand;
 					event.message.command = cmResize;
 					event.message.infoPtr = owner;
@@ -582,7 +582,7 @@ void MRFrame::handleEvent(TEvent &event) {
 					event.message.infoPtr = owner;
 					putEvent(event);
 					clearEvent(event);
-				} else if (MRWindowManager::isMinimizedRestoreGlyphHit(editWindow, mouse)) {
+				} else if (MRWindowLayout::isMinimizedRestoreGlyphHit(editWindow, mouse)) {
 					event.what = evCommand;
 					event.message.command = cmMrWindowMinimize;
 					event.message.infoPtr = owner;

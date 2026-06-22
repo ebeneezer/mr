@@ -1,4 +1,4 @@
-#include "MRWindowManager.hpp"
+#include "MRWindowLayout.hpp"
 
 #include "MREditWindow.hpp"
 #include "MRWindowSupport.hpp"
@@ -305,20 +305,20 @@ void refreshDesktop() {
 
 void updateLayoutAfterStateChange() {
 	markLayoutDirty();
-	MRWindowManager::handleDesktopLayoutChange();
+	MRWindowLayout::handleDesktopLayoutChange();
 	mrNotifyWindowTopologyChanged();
 }
 
 } // namespace
 
-void MRWindowManager::handleDragView(MREditWindow *window, TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) {
+void MRWindowLayout::handleDragView(MREditWindow *window, TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) {
 	if (window == nullptr) return;
 
 	if (window->mMinimized && (mode & dmDragMove) != 0 && event.what == evMouseDown) {
 		TRect trayLimits = fullDesktopBounds();
 		TRect originalBounds = window->getBounds();
 		TPoint offset = window->origin - event.mouse.where;
-		const int width = MRWindowManager::minimizedWindowWidth(window);
+		const int width = MRWindowLayout::minimizedWindowWidth(window);
 
 		window->setState(sfDragging, True);
 		do {
@@ -414,36 +414,36 @@ void MRWindowManager::handleDragView(MREditWindow *window, TEvent &event, uchar 
 	}
 }
 
-bool MRWindowManager::isWindowMinimized(const MREditWindow *window) noexcept {
+bool MRWindowLayout::isWindowMinimized(const MREditWindow *window) noexcept {
 	return window != nullptr && window->mMinimized;
 }
 
-int MRWindowManager::minimizedDesktopRows() noexcept {
+int MRWindowLayout::minimizedDesktopRows() noexcept {
 	return minimizedRowsForDesktop(currentVirtualDesktop());
 }
 
-TRect MRWindowManager::usableDesktopBounds() noexcept {
+TRect MRWindowLayout::usableDesktopBounds() noexcept {
 	return usableDesktopBoundsForDesktop(currentVirtualDesktop());
 }
 
-TRect MRWindowManager::minimizedBoundsForWorkspace(const MREditWindow *window) noexcept {
+TRect MRWindowLayout::minimizedBoundsForWorkspace(const MREditWindow *window) noexcept {
 	if (window == nullptr) return TRect(0, 0, 1, 1);
 	if (window->mMinimized) return window->getBounds();
 	return normalizedMinimizedBounds(window, nextMinimizedBounds(const_cast<MREditWindow *>(window)), fullDesktopBounds());
 }
 
-TRect MRWindowManager::restoreBoundsForWorkspace(const MREditWindow *window) noexcept {
+TRect MRWindowLayout::restoreBoundsForWorkspace(const MREditWindow *window) noexcept {
 	if (window == nullptr) return TRect(0, 0, 1, 1);
 	if (window->mMinimized) return window->mRestoreBounds;
 	return window->getBounds();
 }
 
-const MRWindowManager::MinimizedGlyphs &MRWindowManager::minimizedGlyphs() noexcept {
+const MRWindowLayout::MinimizedGlyphs &MRWindowLayout::minimizedGlyphs() noexcept {
 	static const MinimizedGlyphs glyphs = {kMinimizedMenuGlyph, kMinimizedRestoreGlyph, kMinimizedReinsertGlyph};
 	return glyphs;
 }
 
-MRWindowManager::MinimizedLayout MRWindowManager::minimizedLayout(const MREditWindow *window, int width) noexcept {
+MRWindowLayout::MinimizedLayout MRWindowLayout::minimizedLayout(const MREditWindow *window, int width) noexcept {
 	const int menuWidth = minimizedMenuWidth();
 	const int restoreWidth = minimizedRestoreWidth();
 	const int reinsertWidth = minimizedReinsertWidth();
@@ -457,32 +457,32 @@ MRWindowManager::MinimizedLayout MRWindowManager::minimizedLayout(const MREditWi
 	return {0, menuWidth, titleStart, titleStart + titleWidth, restoreStart, restoreEnd, reinsertStart, reinsertEnd};
 }
 
-const char *MRWindowManager::minimizedDisplayTitle(const MREditWindow *window) noexcept {
+const char *MRWindowLayout::minimizedDisplayTitle(const MREditWindow *window) noexcept {
 	g_minimizedTitleBuffer = minimizedDisplayTitleString(window);
 	return g_minimizedTitleBuffer.c_str();
 }
 
-int MRWindowManager::minimizedDisplayTitleWidth(const MREditWindow *window) noexcept {
+int MRWindowLayout::minimizedDisplayTitleWidth(const MREditWindow *window) noexcept {
 	return minimizedTitleWidth(window);
 }
 
-int MRWindowManager::minimizedWindowWidth(const MREditWindow *window) noexcept {
+int MRWindowLayout::minimizedWindowWidth(const MREditWindow *window) noexcept {
 	return minimizedWindowWidthValue(window);
 }
 
-bool MRWindowManager::isMinimizedRestoreGlyphHit(const MREditWindow *window, TPoint local) noexcept {
+bool MRWindowLayout::isMinimizedRestoreGlyphHit(const MREditWindow *window, TPoint local) noexcept {
 	if (window == nullptr || !window->mMinimized || local.y != 0) return false;
 	const MinimizedLayout layout = minimizedLayout(window, window->size.x);
 	return local.x >= layout.restoreStart && local.x < layout.restoreEnd;
 }
 
-bool MRWindowManager::isMinimizedReinsertGlyphHit(const MREditWindow *window, TPoint local) noexcept {
+bool MRWindowLayout::isMinimizedReinsertGlyphHit(const MREditWindow *window, TPoint local) noexcept {
 	if (window == nullptr || !window->mMinimized || local.y != 0) return false;
 	const MinimizedLayout layout = minimizedLayout(window, window->size.x);
 	return local.x >= layout.reinsertStart && local.x < layout.reinsertEnd;
 }
 
-void MRWindowManager::minimizeWindow(MREditWindow *window) {
+void MRWindowLayout::minimizeWindow(MREditWindow *window) {
 	if (window == nullptr || window->mMinimized) return;
 	TRect target;
 	const bool wasVisible = (window->state & sfVisible) != 0;
@@ -513,14 +513,14 @@ void MRWindowManager::minimizeWindow(MREditWindow *window) {
 	updateLayoutAfterStateChange();
 }
 
-void MRWindowManager::reinsertMinimizedWindow(MREditWindow *window) {
+void MRWindowLayout::reinsertMinimizedWindow(MREditWindow *window) {
 	if (window == nullptr || !window->mMinimized) return;
 	placeVisibleWindow(window, nextMinimizedBounds(window));
 	window->mLastMinimizedBounds = window->getBounds();
 	updateLayoutAfterStateChange();
 }
 
-void MRWindowManager::restoreWindow(MREditWindow *window) {
+void MRWindowLayout::restoreWindow(MREditWindow *window) {
 	if (window == nullptr || !window->mMinimized) return;
 	const bool wasVisible = (window->state & sfVisible) != 0;
 	const TRect target = clampToBounds(window->mRestoreBounds, usableDesktopBoundsForDesktop(window->mVirtualDesktop));
@@ -544,14 +544,14 @@ void MRWindowManager::restoreWindow(MREditWindow *window) {
 	updateLayoutAfterStateChange();
 }
 
-void MRWindowManager::toggleMinimizedWindow(MREditWindow *window) {
+void MRWindowLayout::toggleMinimizedWindow(MREditWindow *window) {
 	if (window == nullptr) return;
 	if (window->mMinimized) restoreWindow(window);
 	else
 		minimizeWindow(window);
 }
 
-void MRWindowManager::applyWorkspaceState(MREditWindow *window, const TRect &bounds, const TRect &restoreBounds, bool minimized) {
+void MRWindowLayout::applyWorkspaceState(MREditWindow *window, const TRect &bounds, const TRect &restoreBounds, bool minimized) {
 	if (window == nullptr) return;
 	window->mRestoreBounds = clampToBounds(restoreBounds, usableDesktopBoundsForDesktop(window->mVirtualDesktop));
 	window->mMinimized = minimized;
@@ -566,7 +566,7 @@ void MRWindowManager::applyWorkspaceState(MREditWindow *window, const TRect &bou
 	mrNotifyWindowTopologyChanged();
 }
 
-void MRWindowManager::handleDesktopLayoutChange() {
+void MRWindowLayout::handleDesktopLayoutChange() {
 	if (TProgram::deskTop == nullptr) return;
 
 	const TRect currentDesktopExtent = fullDesktopBounds();

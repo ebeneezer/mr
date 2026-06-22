@@ -41,7 +41,7 @@
 #include "../ui/MRPalette.hpp"
 #include "../ui/MRPerformancePanel.hpp"
 #include "../ui/MRFrame.hpp"
-#include "../ui/MRWindowManager.hpp"
+#include "../ui/MRWindowLayout.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRAppState.hpp"
 #include "MRCommandRouter.hpp"
@@ -1433,7 +1433,7 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 	if (desktopRect.b.y <= desktopRect.a.y) desktopRect.b.y = desktopRect.a.y + 1;
 	if (deskTop != nullptr) deskTop->locate(desktopRect);
 	applyConfiguredWindowFramePolicy();
-	MRWindowManager::handleDesktopLayoutChange();
+	MRWindowLayout::handleDesktopLayoutChange();
 	if (fullscreenActive && fullscreenWindow != nullptr && deskTop != nullptr) {
 		TRect fullscreenBounds = deskTop->getExtent();
 		fullscreenWindow->setFullscreenPresentation(true);
@@ -1973,7 +1973,7 @@ void MREditorApp::idle() {
 			if (auto *mrFrame = dynamic_cast<MRFrame *>(window->frame)) mrFrame->tickTaskOverviewAnimation();
 		}
 	}
-	MRWindowManager::handleDesktopLayoutChange();
+	MRWindowLayout::handleDesktopLayoutChange();
 	updateAppCommandState();
 	syncFunctionKeyState();
 }

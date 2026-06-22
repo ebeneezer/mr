@@ -35,7 +35,7 @@
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRBentoBox.hpp"
 #include "../../ui/widgets/MRScopedHistoryUI.hpp"
-#include "../../ui/MRWindowManager.hpp"
+#include "../../ui/MRWindowLayout.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "../../dialogs/MRWindowList.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
@@ -728,7 +728,7 @@ void setWindowManuallyHidden(MREditWindow *win, bool hidden) {
 	if (hidden) g_manuallyHiddenWindows.insert(win);
 	else
 		g_manuallyHiddenWindows.erase(win);
-	MRWindowManager::handleDesktopLayoutChange();
+	MRWindowLayout::handleDesktopLayoutChange();
 	mrNotifyWindowTopologyChanged();
 }
 
@@ -770,7 +770,7 @@ void syncVirtualDesktopVisibility() {
 		TProgram::deskTop->drawView();
 	}
 	if (TProgram::application != nullptr) TProgram::application->redraw();
-	MRWindowManager::handleDesktopLayoutChange();
+	MRWindowLayout::handleDesktopLayoutChange();
 }
 
 void setCurrentVirtualDesktop(int vd) {
@@ -953,7 +953,7 @@ void mrLoadWorkspace(const std::string &filename) {
 		if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0) {
 			const TRect bounds(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height);
 			const TRect restoreBounds(entry.restoreX, entry.restoreY, entry.restoreX + std::max(entry.restoreWidth, 1), entry.restoreY + std::max(entry.restoreHeight, 1));
-			MRWindowManager::applyWorkspaceState(win, bounds, restoreBounds, entry.minimized);
+			MRWindowLayout::applyWorkspaceState(win, bounds, restoreBounds, entry.minimized);
 			mrLogMessage("Workspace load applied geometry url=" + entry.url + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " min=" + (entry.minimized ? "1" : "0") + ".");
 		}
 		restoreEditorCursor(editor, entry.line, entry.column);
@@ -978,7 +978,7 @@ MREditWindow *createEditorWindow(const char *title) {
 	MREditWindow *win;
 
 	if (TProgram::deskTop == nullptr) return nullptr;
-	bounds = MRWindowManager::usableDesktopBounds();
+	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRBentoBox(bounds, title, nextEditorWindowNumber(), bbmDocumentViewports);
 	finishNewEditWindow(win);
@@ -990,7 +990,7 @@ MREditWindow *createHelpWindow(const char *title) {
 	MREditWindow *win;
 
 	if (TProgram::deskTop == nullptr) return nullptr;
-	bounds = MRWindowManager::usableDesktopBounds();
+	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRHelpWindow(bounds, title, nextEditorWindowNumber());
 	finishNewEditWindow(win);
@@ -1002,7 +1002,7 @@ MREditWindow *createLogWindow(const char *title) {
 	MREditWindow *win;
 
 	if (TProgram::deskTop == nullptr) return nullptr;
-	bounds = MRWindowManager::usableDesktopBounds();
+	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRLogWindow(bounds, title, nextEditorWindowNumber());
 	finishNewEditWindow(win);
@@ -1014,7 +1014,7 @@ MREditWindow *createCommunicationWindow(const char *title) {
 	MREditWindow *win;
 
 	if (TProgram::deskTop == nullptr) return nullptr;
-	bounds = MRWindowManager::usableDesktopBounds();
+	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRCommunicationWindow(bounds, title, nextEditorWindowNumber());
 	finishNewEditWindow(win);
@@ -1026,7 +1026,7 @@ MRBentoBox *createBentoBoxWindow(const char *title) {
 	MRBentoBox *win;
 
 	if (TProgram::deskTop == nullptr) return nullptr;
-	bounds = MRWindowManager::usableDesktopBounds();
+	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRBentoBox(bounds, title, nextEditorWindowNumber());
 	finishNewEditWindow(win);
@@ -1038,7 +1038,7 @@ MRBentoBox *createFileCompareBentoBoxWindow(const char *title) {
 	MRBentoBox *win;
 
 	if (TProgram::deskTop == nullptr) return nullptr;
-	bounds = MRWindowManager::usableDesktopBounds();
+	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRBentoBox(bounds, title, nextEditorWindowNumber(), bbmFileCompare);
 	finishNewEditWindow(win);
@@ -1632,7 +1632,7 @@ bool handleWindowCascade() {
 
 	if (TProgram::deskTop == nullptr) return false;
 
-	desktopBounds = MRWindowManager::usableDesktopBounds();
+	desktopBounds = MRWindowLayout::usableDesktopBounds();
 
 	for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
 		MREditWindow *win = *it;
@@ -1666,7 +1666,7 @@ bool handleWindowTile() {
 
 	if (TProgram::deskTop == nullptr) return false;
 
-	desktopBounds = MRWindowManager::usableDesktopBounds();
+	desktopBounds = MRWindowLayout::usableDesktopBounds();
 
 	for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
 		MREditWindow *win = *it;
