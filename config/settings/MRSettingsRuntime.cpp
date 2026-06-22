@@ -33,20 +33,20 @@
 
 namespace mr::settings::storage {
 
-bool buildCanonicalSettingsSourceImpl(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource,
+bool buildCanonicalSettingsSourceFromStorage(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource,
                                       std::string *errorMessage);
-bool prepareStartupSettingsSourceImpl(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource,
+bool prepareStartupSettingsSourceFromStorage(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource,
                                       std::string *errorMessage);
-std::string describeSettingsLoadReportImpl(const MRSettingsLoadReport &report);
-bool diffSettingsSourcesImpl(const std::string &beforeSource, const std::string &afterSource, std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage);
-std::string formatSettingsChangeForLogImpl(const MRSettingsChangeEntry &change);
-std::string buildSettingsMacroSourceImpl(const MRSetupPaths &paths);
-bool configuredSettingsDirtyImpl();
-void clearConfiguredSettingsDirtyImpl();
-bool persistConfiguredSettingsSnapshotImpl(std::string *errorMessage, MRSettingsWriteReport *report);
-bool persistConfiguredSettingsSnapshotWithWorkspaceImpl(std::string *errorMessage, MRSettingsWriteReport *report);
-bool writeSettingsMacroFileImpl(const MRSetupPaths &paths, std::string *errorMessage, MRSettingsWriteReport *report);
-bool ensureSettingsMacroFileExistsImpl(const std::string &settingsMacroUri, std::string *errorMessage);
+std::string describeStorageSettingsLoadReport(const MRSettingsLoadReport &report);
+bool diffStorageSettingsSources(const std::string &beforeSource, const std::string &afterSource, std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage);
+std::string formatStorageSettingsChangeForLog(const MRSettingsChangeEntry &change);
+std::string buildSettingsMacroSourceFromRuntimeModel(const MRSetupPaths &paths);
+bool configuredSettingsDirtyInStorage();
+void clearConfiguredSettingsDirtyInStorage();
+bool persistConfiguredSettingsSnapshotFromRuntimeModel(std::string *errorMessage, MRSettingsWriteReport *report);
+bool persistConfiguredSettingsSnapshotWithWorkspaceFromRuntimeModel(std::string *errorMessage, MRSettingsWriteReport *report);
+bool writeSettingsMacroFileFromRuntimeModel(const MRSetupPaths &paths, std::string *errorMessage, MRSettingsWriteReport *report);
+bool ensureSettingsMacroFileExistsInStorage(const std::string &settingsMacroUri, std::string *errorMessage);
 
 } // namespace mr::settings::storage
 
@@ -59,7 +59,7 @@ bool setError(std::string *errorMessage, const std::string &message) {
 
 } // namespace
 
-std::string mr::settings::storage::describeSettingsLoadReportImpl(const MRSettingsLoadReport &report) {
+std::string mr::settings::storage::describeStorageSettingsLoadReport(const MRSettingsLoadReport &report) {
 	std::vector<std::string> parts;
 	std::string text;
 
@@ -80,7 +80,7 @@ std::string mr::settings::storage::describeSettingsLoadReportImpl(const MRSettin
 	return text;
 }
 
-bool mr::settings::storage::diffSettingsSourcesImpl(const std::string &beforeSource, const std::string &afterSource, std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage) {
+bool mr::settings::storage::diffStorageSettingsSources(const std::string &beforeSource, const std::string &afterSource, std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage) {
 	const MRFlattenedSettingsDocument before = flattenSettingsDocument(parseSettingsDocument(beforeSource, true));
 	const MRFlattenedSettingsDocument after = flattenSettingsDocument(parseSettingsDocument(afterSource, true));
 
@@ -90,7 +90,7 @@ bool mr::settings::storage::diffSettingsSourcesImpl(const std::string &beforeSou
 	return true;
 }
 
-std::string mr::settings::storage::formatSettingsChangeForLogImpl(const MRSettingsChangeEntry &change) {
+std::string mr::settings::storage::formatStorageSettingsChangeForLog(const MRSettingsChangeEntry &change) {
 	std::string text = change.scope + " ";
 
 	if (change.kind == MRSettingsChangeEntry::Kind::Added) text += "+ " + change.key + " = " + quoteValue(change.newValue);
@@ -101,7 +101,7 @@ std::string mr::settings::storage::formatSettingsChangeForLogImpl(const MRSettin
 	return text;
 }
 
-std::string mr::settings::storage::buildSettingsMacroSourceImpl(const MRSetupPaths &paths) {
+std::string mr::settings::storage::buildSettingsMacroSourceFromRuntimeModel(const MRSetupPaths &paths) {
 	return buildSettingsMacroSource(captureConfiguredSettingsSnapshot(paths));
 }
 
@@ -126,11 +126,11 @@ std::string buildSettingsMacroSourcePreservingWorkspace(const MRSetupPaths &path
 	return source;
 }
 
-bool mr::settings::storage::configuredSettingsDirtyImpl() {
+bool mr::settings::storage::configuredSettingsDirtyInStorage() {
 	return configuredSettingsDirtyFlag();
 }
 
-void mr::settings::storage::clearConfiguredSettingsDirtyImpl() {
+void mr::settings::storage::clearConfiguredSettingsDirtyInStorage() {
 	configuredSettingsDirtyFlag() = false;
 }
 
@@ -143,7 +143,7 @@ bool persistConfiguredSettingsSnapshotWithMode(bool includeWorkspace, std::strin
 
 	if (report != nullptr) *report = MRSettingsWriteReport();
 	if (report != nullptr) report->settingsPath = settingsPath;
-	if (!mr::settings::storage::configuredSettingsDirtyImpl() && !includeWorkspace) {
+	if (!mr::settings::storage::configuredSettingsDirtyInStorage() && !includeWorkspace) {
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
@@ -160,20 +160,20 @@ bool persistConfiguredSettingsSnapshotWithMode(bool includeWorkspace, std::strin
 	source = includeWorkspace ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSourcePreservingWorkspace(paths, previousSource);
 	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
-	mr::settings::storage::clearConfiguredSettingsDirtyImpl();
+	mr::settings::storage::clearConfiguredSettingsDirtyInStorage();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool mr::settings::storage::persistConfiguredSettingsSnapshotImpl(std::string *errorMessage, MRSettingsWriteReport *report) {
+bool mr::settings::storage::persistConfiguredSettingsSnapshotFromRuntimeModel(std::string *errorMessage, MRSettingsWriteReport *report) {
 	return persistConfiguredSettingsSnapshotWithMode(false, errorMessage, report);
 }
 
-bool mr::settings::storage::persistConfiguredSettingsSnapshotWithWorkspaceImpl(std::string *errorMessage, MRSettingsWriteReport *report) {
+bool mr::settings::storage::persistConfiguredSettingsSnapshotWithWorkspaceFromRuntimeModel(std::string *errorMessage, MRSettingsWriteReport *report) {
 	return persistConfiguredSettingsSnapshotWithMode(true, errorMessage, report);
 }
 
-bool mr::settings::storage::writeSettingsMacroFileImpl(const MRSetupPaths &paths, std::string *errorMessage, MRSettingsWriteReport *report) {
+bool mr::settings::storage::writeSettingsMacroFileFromRuntimeModel(const MRSetupPaths &paths, std::string *errorMessage, MRSettingsWriteReport *report) {
 	std::string settingsPath = normalizeConfiguredPathInput(paths.settingsMacroUri);
 	std::string settingsDir = directoryPartOf(settingsPath);
 	std::string source;
@@ -185,12 +185,12 @@ bool mr::settings::storage::writeSettingsMacroFileImpl(const MRSetupPaths &paths
 	source = buildSettingsMacroSourcePreservingWorkspace(paths, previousSource);
 	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
-	mr::settings::storage::clearConfiguredSettingsDirtyImpl();
+	mr::settings::storage::clearConfiguredSettingsDirtyInStorage();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool mr::settings::storage::ensureSettingsMacroFileExistsImpl(const std::string &settingsMacroUri, std::string *errorMessage) {
+bool mr::settings::storage::ensureSettingsMacroFileExistsInStorage(const std::string &settingsMacroUri, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(settingsMacroUri);
 	struct stat st;
 

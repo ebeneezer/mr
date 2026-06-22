@@ -398,7 +398,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int perlSigilDeclLines = countPerlSigilDeclLines(sample, 16);
 	const int rustFunctionLines = countLinePrefixMatches(lower, "fn ", 12) + countLinePrefixMatches(lower, "pub fn ", 12) + countLinePrefixMatches(lower, "async fn ", 8) +
 	                              countLinePrefixMatches(lower, "pub async fn ", 8);
-	const int rustImplLines = countLinePrefixMatches(lower, "impl ", 12);
+	const int rustConcreteBlockLines = countLinePrefixMatches(lower, "impl ", 12);
 	const int rustStructLines = countLinePrefixMatches(lower, "struct ", 8) + countLinePrefixMatches(lower, "pub struct ", 8) + countLinePrefixMatches(lower, "enum ", 8) +
 	                            countLinePrefixMatches(lower, "pub enum ", 8) + countLinePrefixMatches(lower, "trait ", 8) + countLinePrefixMatches(lower, "pub trait ", 8);
 	const int goFunctionLines = countLinePrefixMatches(lower, "func ", 12) + countLinePrefixMatches(lower, "func (", 12);
@@ -617,7 +617,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Swift)] += 2;
 
 	addClassificationScore(scores, MRSyntaxLanguage::Rust, rustFunctionLines * 4);
-	addClassificationScore(scores, MRSyntaxLanguage::Rust, rustImplLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, rustConcreteBlockLines * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::Rust, rustStructLines * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::Rust, countLinePrefixMatches(lower, "use ", 12) * 2);
 	addClassificationScore(scores, MRSyntaxLanguage::Rust, countLinePrefixMatches(lower, "pub use ", 12) * 2);
@@ -629,8 +629,8 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	addClassificationScore(scores, MRSyntaxLanguage::Rust, countMatches(lower, "#[", 12) * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::Rust, countMatches(lower, "->", 16));
 	if (ext == ".rs") strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Rust)] += 2;
-	if (rustFunctionLines + rustImplLines + rustStructLines > 0)
-		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Rust)] += std::min(4, rustFunctionLines + rustImplLines + rustStructLines);
+	if (rustFunctionLines + rustConcreteBlockLines + rustStructLines > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Rust)] += std::min(4, rustFunctionLines + rustConcreteBlockLines + rustStructLines);
 
 	addClassificationScore(scores, MRSyntaxLanguage::Go, goPackageLines * 6);
 	addClassificationScore(scores, MRSyntaxLanguage::Go, goImportLines * 3);

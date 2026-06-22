@@ -119,7 +119,7 @@ std::vector<std::string> buildViewportAnchoredLineTexts(const mr::editor::ReadSn
 
 } // namespace
 
-struct MRMiniMapRenderer::Impl {
+struct MRMiniMapRenderer::RendererState {
 	struct RenderCache {
 		bool valid = false;
 		bool braille = true;
@@ -256,7 +256,7 @@ struct MRMiniMapRenderer::Impl {
 	}
 };
 
-MRMiniMapRenderer::MRMiniMapRenderer() noexcept : mImpl(std::make_unique<Impl>()) {
+MRMiniMapRenderer::MRMiniMapRenderer() noexcept : mState(std::make_unique<RendererState>()) {
 }
 
 MRMiniMapRenderer::~MRMiniMapRenderer() noexcept = default;
@@ -272,48 +272,48 @@ std::string MRMiniMapRenderer::normalizedViewportMarkerGlyph(const std::string &
 }
 
 std::uint64_t MRMiniMapRenderer::pendingWarmupTaskId() const noexcept {
-	return mImpl != nullptr ? mImpl->warmupTaskId : 0;
+	return mState != nullptr ? mState->warmupTaskId : 0;
 }
 
 bool MRMiniMapRenderer::hasProjection(int rowCount, int bodyWidth) const noexcept {
-	return mImpl != nullptr && Impl::hasProjectionFor(mImpl->cache, rowCount, bodyWidth);
+	return mState != nullptr && RendererState::hasProjectionFor(mState->cache, rowCount, bodyWidth);
 }
 
 MRMiniMapRenderer::Signals MRMiniMapRenderer::clearWarmupTask(std::uint64_t expectedTaskId) noexcept {
-	return mImpl != nullptr ? mImpl->clearWarmupTask(expectedTaskId) : Signals();
+	return mState != nullptr ? mState->clearWarmupTask(expectedTaskId) : Signals();
 }
 
 MRMiniMapRenderer::Signals MRMiniMapRenderer::invalidate(bool cancelTask, std::size_t documentId) noexcept {
-	return mImpl != nullptr ? mImpl->invalidate(cancelTask, documentId) : Signals();
+	return mState != nullptr ? mState->invalidate(cancelTask, documentId) : Signals();
 }
 
 MRMiniMapRenderer::ApplyWarmupResult MRMiniMapRenderer::applyWarmup(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId, std::size_t documentId, std::size_t version) noexcept {
 	ApplyWarmupResult result;
 
-	if (mImpl == nullptr) return result;
-	if (documentId != mImpl->warmupDocumentId || version != expectedVersion) return result;
-	const bool matchingPendingTask = expectedTaskId != 0 && mImpl->warmupTaskId == expectedTaskId;
+	if (mState == nullptr) return result;
+	if (documentId != mState->warmupDocumentId || version != expectedVersion) return result;
+	const bool matchingPendingTask = expectedTaskId != 0 && mState->warmupTaskId == expectedTaskId;
 	const bool missingVisibleProjection =
-	    !mImpl->cache.valid || mImpl->cache.documentId != documentId || mImpl->cache.documentVersion != version || mImpl->cache.bodyWidth <= 0 || mImpl->cache.rowCount <= 0 || mImpl->cache.rowPatterns.empty();
+	    !mState->cache.valid || mState->cache.documentId != documentId || mState->cache.documentVersion != version || mState->cache.bodyWidth <= 0 || mState->cache.rowCount <= 0 || mState->cache.rowPatterns.empty();
 	if (!matchingPendingTask && !missingVisibleProjection) return result;
-	const bool visualChanged = !mImpl->cache.valid || mImpl->cache.braille != payload.braille || mImpl->cache.rowCount != payload.rowCount || mImpl->cache.bodyWidth != payload.bodyWidth ||
-	                           mImpl->cache.totalLines != std::max<std::size_t>(1, payload.totalLines) || mImpl->cache.windowStartLine != payload.windowStartLine ||
-	                           mImpl->cache.windowLineCount != std::max<std::size_t>(1, payload.windowLineCount) || mImpl->cache.viewportWidth != std::max(1, payload.viewportWidth) ||
-	                           mImpl->cache.rowPatterns != payload.rowPatterns || mImpl->cache.rowLineStarts != payload.rowLineStarts || mImpl->cache.rowLineEnds != payload.rowLineEnds;
-	mImpl->cache.valid = true;
-	mImpl->cache.braille = payload.braille;
-	mImpl->cache.rowCount = payload.rowCount;
-	mImpl->cache.bodyWidth = payload.bodyWidth;
-	mImpl->cache.documentId = documentId;
-	mImpl->cache.documentVersion = version;
-	mImpl->cache.totalLines = std::max<std::size_t>(1, payload.totalLines);
-	mImpl->cache.windowStartLine = payload.windowStartLine;
-	mImpl->cache.windowLineCount = std::max<std::size_t>(1, payload.windowLineCount);
-	mImpl->cache.viewportWidth = std::max(1, payload.viewportWidth);
-	mImpl->cache.rowPatterns = payload.rowPatterns;
-	mImpl->cache.rowLineStarts = payload.rowLineStarts;
-	mImpl->cache.rowLineEnds = payload.rowLineEnds;
-	if (matchingPendingTask) result.signals.merge(mImpl->clearWarmupTask(expectedTaskId));
+	const bool visualChanged = !mState->cache.valid || mState->cache.braille != payload.braille || mState->cache.rowCount != payload.rowCount || mState->cache.bodyWidth != payload.bodyWidth ||
+	                           mState->cache.totalLines != std::max<std::size_t>(1, payload.totalLines) || mState->cache.windowStartLine != payload.windowStartLine ||
+	                           mState->cache.windowLineCount != std::max<std::size_t>(1, payload.windowLineCount) || mState->cache.viewportWidth != std::max(1, payload.viewportWidth) ||
+	                           mState->cache.rowPatterns != payload.rowPatterns || mState->cache.rowLineStarts != payload.rowLineStarts || mState->cache.rowLineEnds != payload.rowLineEnds;
+	mState->cache.valid = true;
+	mState->cache.braille = payload.braille;
+	mState->cache.rowCount = payload.rowCount;
+	mState->cache.bodyWidth = payload.bodyWidth;
+	mState->cache.documentId = documentId;
+	mState->cache.documentVersion = version;
+	mState->cache.totalLines = std::max<std::size_t>(1, payload.totalLines);
+	mState->cache.windowStartLine = payload.windowStartLine;
+	mState->cache.windowLineCount = std::max<std::size_t>(1, payload.windowLineCount);
+	mState->cache.viewportWidth = std::max(1, payload.viewportWidth);
+	mState->cache.rowPatterns = payload.rowPatterns;
+	mState->cache.rowLineStarts = payload.rowLineStarts;
+	mState->cache.rowLineEnds = payload.rowLineEnds;
+	if (matchingPendingTask) result.signals.merge(mState->clearWarmupTask(expectedTaskId));
 	result.signals.redraw = visualChanged;
 	result.applied = true;
 	return result;
@@ -323,45 +323,45 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
                                                                      const mr::editor::ReadSnapshot &snapshot, const MREditSetupSettings &settings, bool preservePendingTaskForSameDocument) {
 	Signals signals;
 
-	if (mImpl == nullptr) return signals;
+	if (mState == nullptr) return signals;
 	if (viewport.bodyWidth <= 0 || rowCount <= 0) return invalidate(true, documentId);
 	std::size_t totalLines = std::max<std::size_t>(1, totalLinesHint);
 	if (snapshot.exactLineCountKnown()) totalLines = std::max<std::size_t>(1, snapshot.lineCount());
-	const Impl::SamplingWindow samplingWindow = Impl::samplingWindowFor(totalLines, topLine, rowCount, useBraille);
-	if (mImpl->cacheReadyForViewport(viewport, rowCount, useBraille, samplingWindow, documentId, version)) return signals;
+	const RendererState::SamplingWindow samplingWindow = RendererState::samplingWindowFor(totalLines, topLine, rowCount, useBraille);
+	if (mState->cacheReadyForViewport(viewport, rowCount, useBraille, samplingWindow, documentId, version)) return signals;
 	const int bodyWidth = viewport.bodyWidth;
 	const int viewportWidth = std::max(1, viewport.width);
-	const bool haveProjection = Impl::hasProjectionFor(mImpl->cache, rowCount, bodyWidth);
-	if (preservePendingTaskForSameDocument && mImpl->warmupTaskId == 0 && mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth &&
-	    mImpl->warmupViewportWidth == viewportWidth && mImpl->warmupBraille == useBraille && mImpl->lastWarmupScheduledWindowStartLine == samplingWindow.startLine &&
-	    mImpl->lastWarmupScheduledWindowLineCount == samplingWindow.lineCount && mImpl->lastWarmupScheduledAt != std::chrono::steady_clock::time_point() &&
-	    std::chrono::steady_clock::now() - mImpl->lastWarmupScheduledAt < kLargeFileViewportWarmupDebounce)
+	const bool haveProjection = RendererState::hasProjectionFor(mState->cache, rowCount, bodyWidth);
+	if (preservePendingTaskForSameDocument && mState->warmupTaskId == 0 && mState->warmupDocumentId == documentId && mState->warmupVersion == version && mState->warmupRows == rowCount && mState->warmupBodyWidth == bodyWidth &&
+	    mState->warmupViewportWidth == viewportWidth && mState->warmupBraille == useBraille && mState->lastWarmupScheduledWindowStartLine == samplingWindow.startLine &&
+	    mState->lastWarmupScheduledWindowLineCount == samplingWindow.lineCount && mState->lastWarmupScheduledAt != std::chrono::steady_clock::time_point() &&
+	    std::chrono::steady_clock::now() - mState->lastWarmupScheduledAt < kLargeFileViewportWarmupDebounce)
 		return signals;
-	if (mImpl->warmupTaskId != 0) {
-		if (mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth && mImpl->warmupViewportWidth == viewportWidth && mImpl->warmupBraille == useBraille && mImpl->warmupWindowStartLine == samplingWindow.startLine && mImpl->warmupWindowLineCount == samplingWindow.lineCount) return signals;
-		if (preservePendingTaskForSameDocument && mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version) {
-			const Impl::SamplingWindow pendingWindow = {mImpl->warmupWindowStartLine, std::max<std::size_t>(1, mImpl->warmupWindowLineCount)};
-			if (Impl::pendingWindowStillUseful(mImpl->warmupTopLine, pendingWindow, topLine, rowCount) && haveProjection) return signals;
+	if (mState->warmupTaskId != 0) {
+		if (mState->warmupDocumentId == documentId && mState->warmupVersion == version && mState->warmupRows == rowCount && mState->warmupBodyWidth == bodyWidth && mState->warmupViewportWidth == viewportWidth && mState->warmupBraille == useBraille && mState->warmupWindowStartLine == samplingWindow.startLine && mState->warmupWindowLineCount == samplingWindow.lineCount) return signals;
+		if (preservePendingTaskForSameDocument && mState->warmupDocumentId == documentId && mState->warmupVersion == version) {
+			const RendererState::SamplingWindow pendingWindow = {mState->warmupWindowStartLine, std::max<std::size_t>(1, mState->warmupWindowLineCount)};
+			if (RendererState::pendingWindowStillUseful(mState->warmupTopLine, pendingWindow, topLine, rowCount) && haveProjection) return signals;
 		}
-		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mImpl->warmupTaskId));
-		signals.merge(mImpl->clearWarmupTask(mImpl->warmupTaskId));
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mState->warmupTaskId));
+		signals.merge(mState->clearWarmupTask(mState->warmupTaskId));
 	}
 
-	std::uint64_t previousTaskId = mImpl->warmupTaskId;
-	mImpl->warmupDocumentId = documentId;
-	mImpl->warmupVersion = version;
-	mImpl->warmupTopLine = topLine;
-	mImpl->warmupRows = rowCount;
-	mImpl->warmupBodyWidth = bodyWidth;
-	mImpl->warmupViewportWidth = viewportWidth;
-	mImpl->warmupBraille = useBraille;
-	mImpl->warmupWindowStartLine = samplingWindow.startLine;
-	mImpl->warmupWindowLineCount = samplingWindow.lineCount;
-	mImpl->lastWarmupScheduledWindowStartLine = samplingWindow.startLine;
-	mImpl->lastWarmupScheduledWindowLineCount = samplingWindow.lineCount;
-	mImpl->lastWarmupScheduledAt = std::chrono::steady_clock::now();
+	std::uint64_t previousTaskId = mState->warmupTaskId;
+	mState->warmupDocumentId = documentId;
+	mState->warmupVersion = version;
+	mState->warmupTopLine = topLine;
+	mState->warmupRows = rowCount;
+	mState->warmupBodyWidth = bodyWidth;
+	mState->warmupViewportWidth = viewportWidth;
+	mState->warmupBraille = useBraille;
+	mState->warmupWindowStartLine = samplingWindow.startLine;
+	mState->warmupWindowLineCount = samplingWindow.lineCount;
+	mState->lastWarmupScheduledWindowStartLine = samplingWindow.startLine;
+	mState->lastWarmupScheduledWindowLineCount = samplingWindow.lineCount;
+	mState->lastWarmupScheduledAt = std::chrono::steady_clock::now();
 	std::string miniMapTaskLabel = "rendering mini map lines " + std::to_string(samplingWindow.startLine + 1) + "-" + std::to_string(samplingWindow.startLine + samplingWindow.lineCount);
-	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submit(
+	mState->warmupTaskId = mr::coprocessor::globalCoprocessor().submit(
 	    mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, miniMapTaskLabel,
 	    [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow, topLine](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
@@ -472,7 +472,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 		result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(useBraille, rowCount, bodyWidth, normalizedTotalLines, windowStartLine, windowLineCount, viewportWidth, std::move(rowPatterns), std::move(rowLineStarts), std::move(rowLineEnds));
 		return result;
 	});
-	if (mImpl->warmupTaskId != previousTaskId) signals.notifyTaskStateChanged = true;
+	if (mState->warmupTaskId != previousTaskId) signals.notifyTaskStateChanged = true;
 	return signals;
 }
 
@@ -582,31 +582,31 @@ MRMiniMapRenderer::OverlayState MRMiniMapRenderer::computeOverlayState(const mr:
 			appendDiffMask(slice.lineKind, slice.lineIndex, mask);
 		}
 	}
-	Impl::normalizeLineMasks(overlay.errorLineMasks);
-	Impl::normalizeLineMasks(overlay.warningLineMasks);
-	Impl::normalizeLineMasks(overlay.diagnosticLineMasks);
-	Impl::normalizeLineMasks(overlay.findLineMasks);
-	Impl::normalizeLineMasks(overlay.dirtyLineMasks);
-	Impl::normalizeLineMasks(overlay.diffEqualLineMasks);
-	Impl::normalizeLineMasks(overlay.diffMissingLineMasks);
-	Impl::normalizeLineMasks(overlay.diffInsertLineMasks);
-	Impl::normalizeLineMasks(overlay.diffOffsetLineMasks);
+	RendererState::normalizeLineMasks(overlay.errorLineMasks);
+	RendererState::normalizeLineMasks(overlay.warningLineMasks);
+	RendererState::normalizeLineMasks(overlay.diagnosticLineMasks);
+	RendererState::normalizeLineMasks(overlay.findLineMasks);
+	RendererState::normalizeLineMasks(overlay.dirtyLineMasks);
+	RendererState::normalizeLineMasks(overlay.diffEqualLineMasks);
+	RendererState::normalizeLineMasks(overlay.diffMissingLineMasks);
+	RendererState::normalizeLineMasks(overlay.diffInsertLineMasks);
+	RendererState::normalizeLineMasks(overlay.diffOffsetLineMasks);
 	return overlay;
 }
 
 void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, int viewWidth, const Viewport &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const Palette &palette, const OverlayState &overlay) const {
-	if (mImpl == nullptr) return;
+	if (mState == nullptr) return;
 	if (viewport.bodyWidth <= 0 || viewport.bodyX < 0 || viewport.infoX < 0 || totalLines == 0 || miniMapRows <= 0) return;
 
 	const std::array<std::string, 256> &glyphTable = brailleGlyphTable();
 	const int bodyX = viewport.bodyX;
 	const int bodyWidth = viewport.bodyWidth;
-	const Impl::SamplingWindow samplingWindow = Impl::samplingWindowFor(totalLines, topLine, miniMapRows, useBraille);
-	const bool cacheReady = mImpl->cacheReadyForViewport(viewport, miniMapRows, useBraille, samplingWindow, mImpl->cache.documentId, mImpl->cache.documentVersion);
+	const RendererState::SamplingWindow samplingWindow = RendererState::samplingWindowFor(totalLines, topLine, miniMapRows, useBraille);
+	const bool cacheReady = mState->cacheReadyForViewport(viewport, miniMapRows, useBraille, samplingWindow, mState->cache.documentId, mState->cache.documentVersion);
 	const bool stalePatternCacheUsable =
-	    !cacheReady && mImpl->cache.documentId != 0 && mImpl->cache.bodyWidth == bodyWidth && mImpl->cache.rowCount == miniMapRows && mImpl->cache.viewportWidth == std::max(1, viewport.width) &&
-	    mImpl->cache.braille == useBraille && mImpl->cache.windowStartLine == samplingWindow.startLine && mImpl->cache.windowLineCount == std::max<std::size_t>(1, samplingWindow.lineCount) &&
-	    !mImpl->cache.rowPatterns.empty();
+	    !cacheReady && mState->cache.documentId != 0 && mState->cache.bodyWidth == bodyWidth && mState->cache.rowCount == miniMapRows && mState->cache.viewportWidth == std::max(1, viewport.width) &&
+	    mState->cache.braille == useBraille && mState->cache.windowStartLine == samplingWindow.startLine && mState->cache.windowLineCount == std::max<std::size_t>(1, samplingWindow.lineCount) &&
+	    !mState->cache.rowPatterns.empty();
 
 	if (y >= miniMapRows) {
 		buffer.moveChar(static_cast<ushort>(bodyX), ' ', palette.normal, static_cast<ushort>(bodyWidth));
@@ -619,7 +619,7 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 		unsigned char pattern = 0;
 		if (cacheReady || stalePatternCacheUsable) {
 			std::size_t index = static_cast<std::size_t>(y * bodyWidth + x);
-			if (index < mImpl->cache.rowPatterns.size()) pattern = mImpl->cache.rowPatterns[index];
+			if (index < mState->cache.rowPatterns.size()) pattern = mState->cache.rowPatterns[index];
 		}
 		bool cellFind = false;
 		bool cellChanged = false;
@@ -635,15 +635,15 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 				const std::size_t sampleOffset = static_cast<std::size_t>(y) * 4 + static_cast<std::size_t>(py);
 				if (sampleOffset >= samplingWindow.lineCount) break;
 				const std::size_t lineIndex = samplingWindow.startLine + sampleOffset;
-				const std::uint64_t errorBits = Impl::lineMaskBits(overlay.errorLineMasks, lineIndex);
-				const std::uint64_t warningBits = Impl::lineMaskBits(overlay.warningLineMasks, lineIndex);
-				const std::uint64_t diagnosticBits = Impl::lineMaskBits(overlay.diagnosticLineMasks, lineIndex);
-				const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
-				const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
-				const std::uint64_t diffEqualBits = Impl::lineMaskBits(overlay.diffEqualLineMasks, lineIndex);
-				const std::uint64_t diffMissingBits = Impl::lineMaskBits(overlay.diffMissingLineMasks, lineIndex);
-				const std::uint64_t diffInsertBits = Impl::lineMaskBits(overlay.diffInsertLineMasks, lineIndex);
-				const std::uint64_t diffOffsetBits = Impl::lineMaskBits(overlay.diffOffsetLineMasks, lineIndex);
+				const std::uint64_t errorBits = RendererState::lineMaskBits(overlay.errorLineMasks, lineIndex);
+				const std::uint64_t warningBits = RendererState::lineMaskBits(overlay.warningLineMasks, lineIndex);
+				const std::uint64_t diagnosticBits = RendererState::lineMaskBits(overlay.diagnosticLineMasks, lineIndex);
+				const std::uint64_t findBits = RendererState::lineMaskBits(overlay.findLineMasks, lineIndex);
+				const std::uint64_t dirtyBits = RendererState::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
+				const std::uint64_t diffEqualBits = RendererState::lineMaskBits(overlay.diffEqualLineMasks, lineIndex);
+				const std::uint64_t diffMissingBits = RendererState::lineMaskBits(overlay.diffMissingLineMasks, lineIndex);
+				const std::uint64_t diffInsertBits = RendererState::lineMaskBits(overlay.diffInsertLineMasks, lineIndex);
+				const std::uint64_t diffOffsetBits = RendererState::lineMaskBits(overlay.diffOffsetLineMasks, lineIndex);
 				if (!cellError && miniMapCellHasOverlayBits(errorBits, x, true)) cellError = true;
 				if (!cellWarning && miniMapCellHasOverlayBits(warningBits, x, true)) cellWarning = true;
 				if (!cellDiagnostic && miniMapCellHasOverlayBits(diagnosticBits, x, true)) cellDiagnostic = true;
@@ -656,15 +656,15 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 			}
 		} else {
 			std::size_t lineIndex = samplingWindow.startLine + static_cast<std::size_t>(y);
-			const std::uint64_t errorBits = Impl::lineMaskBits(overlay.errorLineMasks, lineIndex);
-			const std::uint64_t warningBits = Impl::lineMaskBits(overlay.warningLineMasks, lineIndex);
-			const std::uint64_t diagnosticBits = Impl::lineMaskBits(overlay.diagnosticLineMasks, lineIndex);
-			const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
-			const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
-			const std::uint64_t diffEqualBits = Impl::lineMaskBits(overlay.diffEqualLineMasks, lineIndex);
-			const std::uint64_t diffMissingBits = Impl::lineMaskBits(overlay.diffMissingLineMasks, lineIndex);
-			const std::uint64_t diffInsertBits = Impl::lineMaskBits(overlay.diffInsertLineMasks, lineIndex);
-			const std::uint64_t diffOffsetBits = Impl::lineMaskBits(overlay.diffOffsetLineMasks, lineIndex);
+			const std::uint64_t errorBits = RendererState::lineMaskBits(overlay.errorLineMasks, lineIndex);
+			const std::uint64_t warningBits = RendererState::lineMaskBits(overlay.warningLineMasks, lineIndex);
+			const std::uint64_t diagnosticBits = RendererState::lineMaskBits(overlay.diagnosticLineMasks, lineIndex);
+			const std::uint64_t findBits = RendererState::lineMaskBits(overlay.findLineMasks, lineIndex);
+			const std::uint64_t dirtyBits = RendererState::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
+			const std::uint64_t diffEqualBits = RendererState::lineMaskBits(overlay.diffEqualLineMasks, lineIndex);
+			const std::uint64_t diffMissingBits = RendererState::lineMaskBits(overlay.diffMissingLineMasks, lineIndex);
+			const std::uint64_t diffInsertBits = RendererState::lineMaskBits(overlay.diffInsertLineMasks, lineIndex);
+			const std::uint64_t diffOffsetBits = RendererState::lineMaskBits(overlay.diffOffsetLineMasks, lineIndex);
 			cellError = miniMapCellHasOverlayBits(errorBits, x, false);
 			cellWarning = miniMapCellHasOverlayBits(warningBits, x, false);
 			cellDiagnostic = miniMapCellHasOverlayBits(diagnosticBits, x, false);

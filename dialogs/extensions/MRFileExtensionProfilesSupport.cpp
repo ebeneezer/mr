@@ -531,7 +531,7 @@ enum : unsigned long long {
 	}
 }
 
-bool normalizeDraftSyntaxImpl(EditProfileDraft &draft, std::string &errorText) {
+bool normalizeDraftSyntaxRecord(EditProfileDraft &draft, std::string &errorText) {
 	MRFileExtensionEditorSettings normalizedSettings;
 	std::vector<std::string> selectors;
 
@@ -556,9 +556,9 @@ bool normalizeDraftSyntaxImpl(EditProfileDraft &draft, std::string &errorText) {
 	return true;
 }
 
-bool normalizeDraftListSyntaxImpl(std::vector<EditProfileDraft> &drafts, std::string &errorText) {
+bool normalizeDraftListSyntaxRecords(std::vector<EditProfileDraft> &drafts, std::string &errorText) {
 	for (EditProfileDraft &draft : drafts)
-		if (!normalizeDraftSyntaxImpl(draft, errorText)) return false;
+		if (!normalizeDraftSyntaxRecord(draft, errorText)) return false;
 	errorText.clear();
 	return true;
 }
@@ -649,11 +649,11 @@ std::string joinCommaSeparated(const std::vector<std::string> &values) {
 }
 
 bool normalizeDraftSyntax(EditProfileDraft &draft, std::string &errorText) {
-	return normalizeDraftSyntaxImpl(draft, errorText);
+	return normalizeDraftSyntaxRecord(draft, errorText);
 }
 
 bool normalizeDraftListSyntax(std::vector<EditProfileDraft> &drafts, std::string &errorText) {
-	return normalizeDraftListSyntaxImpl(drafts, errorText);
+	return normalizeDraftListSyntaxRecords(drafts, errorText);
 }
 
 std::vector<std::string> splitExtensionLiteral(const std::string &literal) {

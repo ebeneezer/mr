@@ -128,8 +128,8 @@ struct TestContext {
 	}
 };
 
-bool keymapMacroBindingDispatchProbeImpl(std::string &failureReason);
-bool keymapAutoexecPersistenceAndBootstrapProbeImpl(std::string &failureReason);
+bool runKeymapMacroBindingDispatchProbe(std::string &failureReason);
+bool runKeymapAutoexecPersistenceAndBootstrapProbe(std::string &failureReason);
 
 bool compileSource(const std::string &source, std::vector<unsigned char> &bytecode, int &entryOffset, std::string &entryName, std::string &errorText) {
 	unsigned char *compiled = nullptr;
@@ -1155,7 +1155,7 @@ int runMacroScreenFlushProbeMode() {
 int runKeymapMacroDispatchProbeMode() {
 	std::string failure;
 
-	if (keymapMacroBindingDispatchProbeImpl(failure)) return 0;
+	if (runKeymapMacroBindingDispatchProbe(failure)) return 0;
 	if (!failure.empty()) std::cerr << failure << "\n";
 	return 1;
 }
@@ -1163,7 +1163,7 @@ int runKeymapMacroDispatchProbeMode() {
 int runKeymapAutoexecBootstrapProbeMode() {
 	std::string failure;
 
-	if (keymapAutoexecPersistenceAndBootstrapProbeImpl(failure)) return 0;
+	if (runKeymapAutoexecPersistenceAndBootstrapProbe(failure)) return 0;
 	if (!failure.empty()) std::cerr << failure << "\n";
 	return 1;
 }
@@ -3927,7 +3927,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	return true;
 }
 
-bool keymapMacroBindingDispatchProbeImpl(std::string &failureReason) {
+bool runKeymapMacroBindingDispatchProbe(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	ScopedRegressionKeymap restoreKeymap;
 	const std::string root = "/tmp/mr_regression_keymap_macro_dispatch_" + std::to_string(static_cast<long>(::getpid()));
@@ -4053,7 +4053,7 @@ bool keymapMacroBindingDispatchProbeImpl(std::string &failureReason) {
 	return true;
 }
 
-bool keymapAutoexecPersistenceAndBootstrapProbeImpl(std::string &failureReason) {
+bool runKeymapAutoexecPersistenceAndBootstrapProbe(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	ScopedRegressionKeymap restoreKeymap;
 	const std::string root = "/tmp/mr_regression_keymap_autoexec_bootstrap_" + std::to_string(static_cast<long>(::getpid()));

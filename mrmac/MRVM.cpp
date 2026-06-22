@@ -512,8 +512,8 @@ static int lineIndexForPtr(MRFileEditor *editor, uint ptr);
 static int countEditWindows();
 static int currentEditWindowIndex();
 static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2);
-static bool queueDeferredUiProcedureImpl(const std::string &name, const std::vector<Value> &args, int &errorCode);
-static bool enqueueDeferredUiCommandImpl(const MRMacroDeferredUiCommand &command, int &errorCode);
+static bool queueDeferredUiProcedureForBackgroundSession(const std::string &name, const std::vector<Value> &args, int &errorCode);
+static bool enqueueDeferredUiCommandForBackgroundSession(const MRMacroDeferredUiCommand &command, int &errorCode);
 bool createEditWindow();
 bool switchEditWindow(int index);
 bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2);
@@ -532,7 +532,7 @@ static const char *keymapActionIdForMacroCommand(const std::string &name) noexce
 static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
 static bool executeLoadedMacroWithConfiguredKeymapBatch(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
 static bool tryLoadIndexedMacroForKey(const TKey &pressed);
-static bool currentExecutingMacroSpecImpl(std::string &macroSpec);
+static bool currentExecutingMacroSpecFromRuntimeStack(std::string &macroSpec);
 static bool composeLoadedMacroSpec(const MacroRef &macroRef, std::string &macroSpec);
 static std::string menuLabelFromBindingKey(const TKey &key);
 static std::string normalizeMenuKeySpec(std::string keySpec);
@@ -3072,7 +3072,7 @@ bool modifyCurrentEditWindow() {
 	return true;
 }
 
-static bool queueDeferredUiProcedureImpl(const std::string &name, const std::vector<Value> &args, int &errorCode) {
+static bool queueDeferredUiProcedureForBackgroundSession(const std::string &name, const std::vector<Value> &args, int &errorCode) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 
 	errorCode = 0;
@@ -3248,7 +3248,7 @@ static bool queueDeferredUiProcedureImpl(const std::string &name, const std::vec
 	return false;
 }
 
-static bool enqueueDeferredUiCommandImpl(const MRMacroDeferredUiCommand &command, int &errorCode) {
+static bool enqueueDeferredUiCommandForBackgroundSession(const MRMacroDeferredUiCommand &command, int &errorCode) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 
 	errorCode = 0;
@@ -6408,7 +6408,7 @@ static bool executeRuntimeMacroSpec(const std::string &spec, std::vector<std::st
 	return executeLoadedMacroWithConfiguredKeymapBatch(macroIt, macroKey, paramPart, logLines);
 }
 
-static bool currentExecutingMacroSpecImpl(std::string &macroSpec) {
+static bool currentExecutingMacroSpecFromRuntimeStack(std::string &macroSpec) {
 	const std::string macroDisplayName = !g_runtimeEnv.macroStack.empty() ? trimAscii(g_runtimeEnv.macroStack.back().macroName) : std::string();
 	const auto macroIt = g_runtimeEnv.loadedMacros.find(upperKey(macroDisplayName));
 	std::string fileDisplayName;
@@ -7330,15 +7330,15 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 } // namespace
 
 bool queueDeferredUiProcedure(const std::string &name, const std::vector<VirtualMachine::Value> &args, int &errorCode) {
-	return queueDeferredUiProcedureImpl(name, args, errorCode);
+	return queueDeferredUiProcedureForBackgroundSession(name, args, errorCode);
 }
 
 bool enqueueDeferredUiCommand(const MRMacroDeferredUiCommand &command, int &errorCode) {
-	return enqueueDeferredUiCommandImpl(command, errorCode);
+	return enqueueDeferredUiCommandForBackgroundSession(command, errorCode);
 }
 
 bool currentExecutingMacroSpec(std::string &macroSpec) {
-	return currentExecutingMacroSpecImpl(macroSpec);
+	return currentExecutingMacroSpecFromRuntimeStack(macroSpec);
 }
 
 std::string mrvmEditorExpandUserPath(const std::string &path) {

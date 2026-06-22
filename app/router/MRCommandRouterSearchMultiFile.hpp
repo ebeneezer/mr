@@ -4,9 +4,9 @@
 #include <string>
 
 [[nodiscard]] bool hasPreviousMultiFileSearchResults();
-[[nodiscard]] bool handleSearchMultiFileSearchImpl(const std::string &patternSeed);
-[[nodiscard]] bool handleSearchListFilesFromLastSearchImpl();
-[[nodiscard]] bool handleSearchMultiFileSearchReplaceImpl(const std::string &patternSeed, const std::string &replacementSeed);
-[[nodiscard]] bool handleSearchResultsNextMultiFileImpl();
+[[nodiscard]] bool handleMultiFileSearchDialog(const std::string &patternSeed);
+[[nodiscard]] bool handleLastMultiFileSearchListDialog();
+[[nodiscard]] bool handleMultiFileSearchReplaceDialog(const std::string &patternSeed, const std::string &replacementSeed);
+[[nodiscard]] bool handleNextMultiFileSearchResult();
 
 #endif

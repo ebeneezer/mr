@@ -16,7 +16,7 @@ namespace {
 
 constexpr unsigned char kCtrlZ = 0x1Au;
 
-bool readTextFileImpl(const std::string &path, std::string &out, std::string *outError) {
+bool readTextFileWithOptionalError(const std::string &path, std::string &out, std::string *outError) {
 	std::ifstream file(path, std::ios::in | std::ios::binary);
 	if (!file.is_open()) {
 		if (outError != nullptr) *outError = "Could not open file: " + path;
@@ -249,11 +249,11 @@ void processNormalizedByte(unsigned char byte, MRTextSaveStreamState &state, std
 } // namespace
 
 bool readTextFile(const std::string &path, std::string &out) {
-	return readTextFileImpl(path, out, nullptr);
+	return readTextFileWithOptionalError(path, out, nullptr);
 }
 
 bool readTextFile(const std::string &path, std::string &out, std::string &outError) {
-	return readTextFileImpl(path, out, &outError);
+	return readTextFileWithOptionalError(path, out, &outError);
 }
 
 bool writeTextFile(std::string_view path, std::string_view content) {

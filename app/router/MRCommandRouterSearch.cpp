@@ -1096,7 +1096,7 @@ bool handleSearchReplace() {
 
 bool handleSearchMultiFileSearch() {
 	const bool hadPrevious = hasPreviousMultiFileSearchResults();
-	const bool handled = handleSearchMultiFileSearchImpl(g_searchUiState.pattern);
+	const bool handled = handleMultiFileSearchDialog(g_searchUiState.pattern);
 
 	if (hadPrevious || hasPreviousMultiFileSearchResults()) rememberMultiFileSearchResultContext();
 	return handled;
@@ -1104,7 +1104,7 @@ bool handleSearchMultiFileSearch() {
 
 bool handleSearchListFilesFromLastSearch() {
 	const bool hadPrevious = hasPreviousMultiFileSearchResults();
-	const bool handled = handleSearchListFilesFromLastSearchImpl();
+	const bool handled = handleLastMultiFileSearchListDialog();
 
 	if (hadPrevious || hasPreviousMultiFileSearchResults()) rememberMultiFileSearchResultContext();
 	return handled;
@@ -1112,7 +1112,7 @@ bool handleSearchListFilesFromLastSearch() {
 
 bool handleSearchMultiFileSearchReplace() {
 	const bool hadPrevious = hasPreviousMultiFileSearchResults();
-	const bool handled = handleSearchMultiFileSearchReplaceImpl(g_searchUiState.pattern, g_searchUiState.replacement);
+	const bool handled = handleMultiFileSearchReplaceDialog(g_searchUiState.pattern, g_searchUiState.replacement);
 
 	if (hadPrevious || hasPreviousMultiFileSearchResults()) rememberMultiFileSearchResultContext();
 	return handled;
@@ -1124,7 +1124,7 @@ bool handleSearchResultsNext() {
 		case SearchResultsContextKind::SingleFile:
 			return handleSearchRepeatPrevious();
 		case SearchResultsContextKind::MultiFile:
-			return handleSearchResultsNextMultiFileImpl();
+			return handleNextMultiFileSearchResult();
 		case SearchResultsContextKind::None:
 			postDialogWarning(kNoPreviousSearchMessage);
 			return true;

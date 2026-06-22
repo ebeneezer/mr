@@ -77,7 +77,7 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 
 namespace mr::settings::storage {
 
-bool buildCanonicalSettingsSourceImpl(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
+bool buildCanonicalSettingsSourceFromStorage(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
 	MRSettingsSnapshot snapshot;
 	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
 
@@ -87,7 +87,7 @@ bool buildCanonicalSettingsSourceImpl(const std::string &settingsPath, const std
 	return true;
 }
 
-bool prepareStartupSettingsSourceImpl(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
+bool prepareStartupSettingsSourceFromStorage(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
 	MRSettingsLoadReport localReport;
 	MRSettingsLoadReport &activeReport = report != nullptr ? *report : localReport;
 	MRSettingsSnapshot snapshot;

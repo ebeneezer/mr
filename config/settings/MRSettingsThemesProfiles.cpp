@@ -870,7 +870,7 @@ bool parseOtherColorListLiteral(const std::string &literal, std::array<unsigned 
 	return true;
 }
 
-bool applyColorSetupValueInternalImpl(MRColorSetupSettings &configured, const std::string &key, const std::string &value, std::string *errorMessage) {
+bool applyColorSetupValueToGroup(MRColorSetupSettings &configured, const std::string &key, const std::string &value, std::string *errorMessage) {
 	const ColorGroupDefinition *definition = findColorGroupDefinitionByKey(key);
 
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup key.");
@@ -907,7 +907,7 @@ bool applyColorSetupValueInternalImpl(MRColorSetupSettings &configured, const st
 } // namespace
 
 bool applyColorSetupValueInternal(MRColorSetupSettings &configured, const std::string &key, const std::string &value, std::string *errorMessage) {
-	return applyColorSetupValueInternalImpl(configured, key, value, errorMessage);
+	return applyColorSetupValueToGroup(configured, key, value, errorMessage);
 }
 
 std::string defaultColorThemePathForSettings(std::string_view settingsPath) {

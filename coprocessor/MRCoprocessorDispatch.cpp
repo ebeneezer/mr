@@ -823,7 +823,7 @@ void logDeferredMacroUiPlaybackSummary(const DeferredMacroUiPlayback &playback) 
 	mrLogMessage(summary.str().c_str());
 }
 
-void pumpDeferredMacroUiPlaybackImpl() {
+void pumpDeferredMacroUiPlaybackQueue() {
 	const auto deadline = std::chrono::steady_clock::now() + kMacroUiPlaybackBudgetSlice;
 	std::size_t remainingCommands = kMacroUiPlaybackBudgetCommands;
 
@@ -888,7 +888,7 @@ void pumpDeferredMacroUiPlaybackImpl() {
 } // namespace
 
 void pumpDeferredMacroUiPlayback() {
-	pumpDeferredMacroUiPlaybackImpl();
+	pumpDeferredMacroUiPlaybackQueue();
 }
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result) {

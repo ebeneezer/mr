@@ -111,6 +111,6 @@ class MRMiniMapRenderer {
 	void drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, int viewWidth, const Viewport &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const Palette &palette, const OverlayState &overlay) const;
 
   private:
-	struct Impl;
-	std::unique_ptr<Impl> mImpl;
+	struct RendererState;
+	std::unique_ptr<RendererState> mState;
 };

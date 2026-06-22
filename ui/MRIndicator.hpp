@@ -298,7 +298,7 @@ class MRIndicator : public TIndicator {
 	static bool applyBlinkUpdate(std::size_t indicatorId, mr::coprocessor::IndicatorBlinkChannel channel, std::size_t generation, bool visible) {
 		MRIndicator *indicator = lookupIndicator(indicatorId);
 		if (indicator == nullptr) return false;
-		return indicator->applyBlinkUpdateImpl(channel, generation, visible);
+		return indicator->applyBlinkUpdateToIndicator(channel, generation, visible);
 	}
 
   private:
@@ -674,7 +674,7 @@ class MRIndicator : public TIndicator {
 		});
 	}
 
-	bool applyBlinkUpdateImpl(mr::coprocessor::IndicatorBlinkChannel channel, std::size_t generation, bool visible) {
+	bool applyBlinkUpdateToIndicator(mr::coprocessor::IndicatorBlinkChannel channel, std::size_t generation, bool visible) {
 		switch (channel) {
 			case mr::coprocessor::IndicatorBlinkChannel::Insert:
 				if (generation != mInsertBlinkGeneration || !mInsertBlinkActive) return false;

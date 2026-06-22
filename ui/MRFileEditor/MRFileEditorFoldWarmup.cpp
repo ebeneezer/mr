@@ -1291,7 +1291,7 @@ std::vector<MRViewportScanChunk> planViewportScanChunks(std::size_t scanTopLine,
 	return chunks;
 }
 
-std::vector<std::string> buildViewportScanLineTextsParallelImpl(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
+std::vector<std::string> buildViewportScanLineTextsFromChunks(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
                                                                 std::size_t focusBottomLine) {
 	std::vector<MRViewportScanChunk> chunks = planViewportScanChunks(scanTopLine, scanBottomLine, focusTopLine, focusBottomLine);
 	std::vector<std::string> lineTexts;
@@ -2019,7 +2019,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 
 std::vector<std::string> mrBuildViewportScanLineTextsParallel(const mr::editor::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
                                                               std::size_t focusBottomLine) {
-	return buildViewportScanLineTextsParallelImpl(snapshot, scanTopLine, scanBottomLine, focusTopLine, focusBottomLine);
+	return buildViewportScanLineTextsFromChunks(snapshot, scanTopLine, scanBottomLine, focusTopLine, focusBottomLine);
 }
 
 std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language) {

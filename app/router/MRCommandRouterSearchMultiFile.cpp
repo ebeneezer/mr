@@ -74,7 +74,7 @@ bool hasPreviousMultiFileSearchResults() {
 	return g_lastMultiFileSearchSession.valid && !g_lastMultiFileSearchSession.files.empty();
 }
 
-bool handleSearchMultiFileSearchImpl(const std::string &patternSeed) {
+bool handleMultiFileSearchDialog(const std::string &patternSeed) {
 	MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
 	std::string pattern;
 	MREditWindow *previousWindow = currentEditWindow();
@@ -112,7 +112,7 @@ bool handleSearchMultiFileSearchImpl(const std::string &patternSeed) {
 	return true;
 }
 
-bool handleSearchListFilesFromLastSearchImpl() {
+bool handleLastMultiFileSearchListDialog() {
 	MultiDialogAction action = MultiDialogAction::Cancel;
 	std::string errorText;
 	MREditWindow *previousWindow = currentEditWindow();
@@ -135,7 +135,7 @@ bool handleSearchListFilesFromLastSearchImpl() {
 	return true;
 }
 
-bool handleSearchMultiFileSearchReplaceImpl(const std::string &patternSeed, const std::string &replacementSeed) {
+bool handleMultiFileSearchReplaceDialog(const std::string &patternSeed, const std::string &replacementSeed) {
 	MRMultiSarDialogOptions sarOptions = configuredMultiSarDialogOptions();
 	std::string pattern;
 	std::string replacement;
@@ -188,7 +188,7 @@ bool handleSearchMultiFileSearchReplaceImpl(const std::string &patternSeed, cons
 	return true;
 }
 
-bool handleSearchResultsNextMultiFileImpl() {
+bool handleNextMultiFileSearchResult() {
 	if (!hasPreviousMultiFileSearchResults()) {
 		postDialogWarning(kNoPreviousMultiFileSearchListMessage);
 		return true;
