@@ -161,7 +161,9 @@ struct KeymapManagerDraft {
 	std::vector<MRKeymapProfile> profiles;
 	std::string activeProfileName;
 
-	auto operator==(const KeymapManagerDraft &) const noexcept -> bool = default;
+	bool operator==(const KeymapManagerDraft &other) const noexcept {
+		return profiles == other.profiles && activeProfileName == other.activeProfileName;
+	}
 };
 
 std::string summarizeDraftForLog(const KeymapManagerDraft &draft) {

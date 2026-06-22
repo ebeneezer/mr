@@ -1,8 +1,9 @@
-# Controlled C++20 Code Style
+# Controlled C++20 / C++18-Style Code Style
 
 ## Principle
 
-This project uses a controlled C++20 subset.
+This project builds as C++20 but defaults stylistically to classic C++18-style code.
+C++20 features are allowed only where they carry a concrete technical benefit.
 
 Optimize for a systems programmer reading the code locally:
 - explicit control flow,
@@ -15,6 +16,24 @@ Optimize for a systems programmer reading the code locally:
 Modern C++ idioms are not automatically improvements.
 
 A shorter expression is a regression if it makes local behavior harder to understand.
+
+## C++20 boundary
+
+C++20 syntax is not a style target by itself. Prefer C++18-era code when the result
+is equally clear and efficient.
+
+Allowed C++20 exceptions:
+
+- `std::jthread` and `std::stop_token` for existing cooperative cancellation and background work,
+- `std::span` where it avoids copying and represents a bounded view explicitly,
+- `std::string_view` for non-owning text parsing and high-volume string analysis,
+- `std::filesystem` for path and directory operations,
+- standard containers and algorithms when they express the actual data structure or avoid hand-written fragile code,
+- `starts_with` / `ends_with` in syntax, folding, indentation and other text-heavy recognizers where replacing them would add noise without measurable benefit.
+
+Avoid introducing C++20 features just to shorten code. In particular, do not add
+concepts, ranges pipelines, generic algorithm chains, or defaulted comparisons
+unless the touched contract explicitly benefits from them.
 
 ## Preferred
 

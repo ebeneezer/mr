@@ -25,7 +25,9 @@ class MRKeymapSequence final {
 		return tokenValues.size();
 	}
 
-	auto operator==(const MRKeymapSequence &) const noexcept -> bool = default;
+	bool operator==(const MRKeymapSequence &other) const noexcept {
+		return tokenValues == other.tokenValues;
+	}
 
   private:
 	std::vector<MRKeymapToken> tokenValues;

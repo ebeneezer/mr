@@ -74,7 +74,9 @@ class MRKeymapToken final {
 		return (modifierBits & static_cast<std::uint8_t>(modifier)) != 0;
 	}
 
-	auto operator==(const MRKeymapToken &) const noexcept -> bool = default;
+	bool operator==(const MRKeymapToken &other) const noexcept {
+		return baseKeyValue == other.baseKeyValue && printableKeyValue == other.printableKeyValue && modifierBits == other.modifierBits;
+	}
 
   private:
 	MRKeymapBaseKey baseKeyValue{MRKeymapBaseKey::Printable};

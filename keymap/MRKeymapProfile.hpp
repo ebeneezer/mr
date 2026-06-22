@@ -23,7 +23,9 @@ struct MRKeymapBindingTarget {
 	MRKeymapBindingType type{MRKeymapBindingType::Action};
 	std::string target;
 
-	auto operator==(const MRKeymapBindingTarget &) const noexcept -> bool = default;
+	bool operator==(const MRKeymapBindingTarget &other) const noexcept {
+		return type == other.type && target == other.target;
+	}
 };
 
 struct MRKeymapBindingRecord {
@@ -33,7 +35,9 @@ struct MRKeymapBindingRecord {
 	MRKeymapSequence sequence;
 	std::string description;
 
-	auto operator==(const MRKeymapBindingRecord &) const noexcept -> bool = default;
+	bool operator==(const MRKeymapBindingRecord &other) const noexcept {
+		return profileName == other.profileName && context == other.context && target == other.target && sequence == other.sequence && description == other.description;
+	}
 };
 
 struct MRKeymapProfile {
@@ -41,7 +45,9 @@ struct MRKeymapProfile {
 	std::string description;
 	std::vector<MRKeymapBindingRecord> bindings;
 
-	auto operator==(const MRKeymapProfile &) const noexcept -> bool = default;
+	bool operator==(const MRKeymapProfile &other) const noexcept {
+		return name == other.name && description == other.description && bindings == other.bindings;
+	}
 };
 
 enum class MRKeymapDiagnosticKind : unsigned char {

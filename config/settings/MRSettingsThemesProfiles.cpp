@@ -1418,7 +1418,14 @@ bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, s
 			binding.description = trimAscii(binding.description);
 		}
 	}
-	if (normalizedActiveProfile.empty() || std::ranges::find(normalized, normalizedActiveProfile, &MRKeymapProfile::name) == normalized.end()) normalizedActiveProfile.clear();
+	bool activeProfileExists = false;
+	for (const MRKeymapProfile &profile : normalized) {
+		if (profile.name == normalizedActiveProfile) {
+			activeProfileExists = true;
+			break;
+		}
+	}
+	if (normalizedActiveProfile.empty() || !activeProfileExists) normalizedActiveProfile.clear();
 
 	const auto diagnostics = validateKeymapProfiles(normalized);
 	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
@@ -1464,7 +1471,14 @@ bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *err
 	std::string runtimeError;
 	const std::string previousActiveProfile = configuredActiveKeymapProfileValue();
 
-	if (!normalized.empty() && std::ranges::find(configuredKeymapProfilesValue(), normalized, &MRKeymapProfile::name) == configuredKeymapProfilesValue().end()) normalized.clear();
+	bool activeProfileExists = false;
+	for (const MRKeymapProfile &profile : configuredKeymapProfilesValue()) {
+		if (profile.name == normalized) {
+			activeProfileExists = true;
+			break;
+		}
+	}
+	if (!normalized.empty() && !activeProfileExists) normalized.clear();
 	if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
 	configuredActiveKeymapProfileValue() = normalized;
 	if (previousActiveProfile != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();

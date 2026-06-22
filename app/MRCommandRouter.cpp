@@ -5411,21 +5411,27 @@ void notifyMRLspKeyboardActivity() noexcept {
 }
 
 bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequenceText, MREditWindow *targetWindow) {
-	const auto it = std::ranges::find(kKeymapActionDispatchTable, actionId, &KeymapActionDispatchEntry::actionId);
+	const KeymapActionDispatchEntry *entry = nullptr;
 	MREditWindow *window = effectiveKeymapWindow(targetWindow);
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 	const std::optional<int> markIndex = randomAccessMarkIndexFromSequence(sequenceText);
 
-	if (it == kKeymapActionDispatchTable.end()) return false;
-	switch (it->kind) {
+	for (const KeymapActionDispatchEntry &candidate : kKeymapActionDispatchTable) {
+		if (candidate.actionId == actionId) {
+			entry = &candidate;
+			break;
+		}
+	}
+	if (entry == nullptr) return false;
+	switch (entry->kind) {
 		case KeymapDispatchKind::AppCommand:
-			return dispatchTargetedKeymapAppCommand(window, it->command);
+			return dispatchTargetedKeymapAppCommand(window, entry->command);
 		case KeymapDispatchKind::EditorCommand:
-			return dispatchEditorCommandEvent(window, it->command);
+			return dispatchEditorCommandEvent(window, entry->command);
 		case KeymapDispatchKind::WindowMethod:
-			return dispatchKeymapWindowMethod(window, it->windowMethod);
+			return dispatchKeymapWindowMethod(window, entry->windowMethod);
 		case KeymapDispatchKind::Custom:
-			switch (it->customAction) {
+			switch (entry->customAction) {
 				case KeymapCustomAction::DeleteForwardCharOrBlock:
 					return dispatchEditorCommandEvent(window, cmDelChar);
 				case KeymapCustomAction::LoadBlockFromFile:
