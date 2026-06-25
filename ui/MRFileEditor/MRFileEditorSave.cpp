@@ -6,6 +6,7 @@
 #include <ctime>
 #include <fstream>
 #include <sstream>
+#include <unistd.h>
 
 namespace {
 
@@ -145,23 +146,37 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 	char ext[MAXEXT];
 	MRTextSaveOptions saveOptions;
 	const std::size_t pieceCount = mBufferModel.document().pieceCount();
+	const bool backupEnabled = configuredBackupFilesSetting();
+	const bool mappedInPlaceSave = mBufferModel.document().hasMappedOriginal() && samePath(mBufferModel.document().mappedPath().c_str(), targetPath);
+	bool backupMovedTarget = false;
+	bool useTemporaryTarget = false;
+	std::string temporaryTargetPath;
+	std::string outputTargetPath;
 
 	resolveSaveOptionsForPath(targetPath, saveOptions);
 
-	if (configuredBackupFilesSetting()) {
+	if (backupEnabled) {
 		fnsplit(targetPath, drive, dir, file, ext);
 		char backupName[MAXPATH];
 		fnmerge(backupName, drive, dir, file, ".bak");
 		unlink(backupName);
-		rename(targetPath, backupName);
+		backupMovedTarget = rename(targetPath, backupName) == 0;
+	}
+	useTemporaryTarget = mappedInPlaceSave && !backupMovedTarget;
+	outputTargetPath = targetPath != nullptr ? targetPath : "";
+	if (useTemporaryTarget) {
+		temporaryTargetPath = outputTargetPath + ".mr-save-tmp-" + std::to_string(static_cast<long long>(::getpid()));
+		unlink(temporaryTargetPath.c_str());
+		outputTargetPath = temporaryTargetPath;
 	}
 
-	std::ofstream out(targetPath, std::ios::out | std::ios::binary | std::ios::trunc);
+	std::ofstream out(outputTargetPath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
 	if (!out) {
 		TEditor::editorDialog(edCreateError, targetPath);
 		return false;
 	}
 	auto failWrite = [&]() -> bool {
+		if (!temporaryTargetPath.empty()) unlink(temporaryTargetPath.c_str());
 		TEditor::editorDialog(edWriteError, targetPath);
 		return false;
 	};
@@ -172,6 +187,9 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 			writeChunk(out, chunk.data, chunk.length);
 			if (!out) return failWrite();
 		}
+		out.close();
+		if (!out) return failWrite();
+		if (!temporaryTargetPath.empty() && rename(temporaryTargetPath.c_str(), targetPath) != 0) return failWrite();
 		return true;
 	}
 	const std::size_t sourceBytes = mBufferModel.document().length();
@@ -198,6 +216,9 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 
 	noteSaveNormalizationThroughput(sourceBytes, static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - normalizeStartedAt).count()));
 	if (!out) return failWrite();
+	out.close();
+	if (!out) return failWrite();
+	if (!temporaryTargetPath.empty() && rename(temporaryTargetPath.c_str(), targetPath) != 0) return failWrite();
 	return true;
 }
 

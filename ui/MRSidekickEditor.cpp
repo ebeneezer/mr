@@ -1,5 +1,6 @@
 #define Uses_TDrawBuffer
 #define Uses_TDeskTop
+#define Uses_TDialog
 #define Uses_TEvent
 #define Uses_TGroup
 #define Uses_TKeys
@@ -12,6 +13,7 @@
 #include "MREditWindow.hpp"
 #include "MRFileEditor/MRFileEditor.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../app/MRCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 
 #include <algorithm>
@@ -260,7 +262,7 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 		lines = splitLines(readOnlyTextWithMarker(text, marker, std::max(1, wantedWidth - 2)));
 		const int verticalSpace = above ? aboveCodeSpace : belowCodeSpace;
 		const int wantedHeight = std::max(1, std::min<int>(static_cast<int>(lines.size()), std::max(1, verticalSpace)));
-		const int y = above ? cursorY - wantedHeight - 1 : cursorY;
+		const int y = above ? cursorY - wantedHeight : cursorY + 1;
 		return TRect(x, y, x + wantedWidth, y + wantedHeight);
 	}
 
@@ -307,9 +309,10 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 
 } // namespace
 
-MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly)
-    : TView(bounds), mParentBufferId(parentBufferId), mReplaceStart(replaceStart), mReplaceEnd(replaceEnd), mTitle(std::move(title)), mLines(), mPlaceholders(std::move(placeholders)), mPlaceholderIndex(-1), mCursorRow(0), mCursorCol(0), mReadOnly(readOnly) {
+MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly, bool modalClose, bool snippetSidekick)
+    : TView(bounds), mParentBufferId(parentBufferId), mReplaceStart(replaceStart), mReplaceEnd(replaceEnd), mTitle(std::move(title)), mLines(), mPlaceholders(std::move(placeholders)), mPlaceholderTouched(mPlaceholders.size(), 0), mPlaceholderIndex(-1), mPlaceholderEndEdge(false), mCursorRow(0), mCursorCol(0), mReadOnly(readOnly), mModalClose(modalClose), mSnippetSidekick(snippetSidekick) {
 	if (!mReadOnly) options |= ofSelectable;
+	growMode = gfGrowHiX | gfGrowHiY;
 	eventMask |= evKeyDown | evMouseDown;
 	setText(std::move(text));
 	if (!mPlaceholders.empty()) moveToPlaceholder(1);
@@ -355,8 +358,10 @@ std::string MRSidekickEditor::text() const {
 }
 
 void MRSidekickEditor::draw() {
-	const TColorAttr textColor = sidekickColor(kMrPaletteSidekickEditorText, 0x30);
-	const TColorAttr highlightColor = sidekickColor(kMrPaletteSidekickEditorHighlight, 0xE0);
+	const TColorAttr textColor = sidekickColor(mSnippetSidekick ? kMrPaletteSnippetSidekickText : kMrPaletteSidekickEditorText, 0x30);
+	const TColorAttr highlightColor = sidekickColor(mSnippetSidekick ? kMrPaletteSnippetActivePlaceholder : kMrPaletteSidekickEditorHighlight, 0xE0);
+	const TColorAttr placeholderColor = sidekickColor(kMrPaletteSnippetPlaceholder, 0x38);
+	const TColorAttr defaultTextColor = sidekickColor(kMrPaletteSnippetDefaultText, 0x38);
 	std::size_t lineStartOffset = 0;
 
 	for (int y = 0; y < size.y; ++y) {
@@ -371,7 +376,18 @@ void MRSidekickEditor::draw() {
 				const int visible = std::min<int>(line.size(), std::max(0, size.x - textX - 1));
 				for (int x = 0; x < visible; ++x) {
 					const std::size_t offset = lineStartOffset + static_cast<std::size_t>(x);
-					buffer.moveChar(static_cast<ushort>(x + textX), line[static_cast<std::size_t>(x)], offsetInPlaceholder(offset) ? highlightColor : textColor, 1);
+					TColorAttr charColor = textColor;
+					if (mSnippetSidekick) {
+						for (std::size_t index = 0; index < mPlaceholders.size(); ++index) {
+							const MRSidekickSpan &span = mPlaceholders[index];
+							if (offset < span.start || offset >= span.end) continue;
+							if (static_cast<int>(index) == mPlaceholderIndex) charColor = highlightColor;
+							else if (index < mPlaceholderTouched.size() && mPlaceholderTouched[index] == 0) charColor = defaultTextColor;
+							else charColor = placeholderColor;
+							break;
+						}
+					}
+					buffer.moveChar(static_cast<ushort>(x + textX), line[static_cast<std::size_t>(x)], charColor, 1);
 				}
 			}
 		}
@@ -413,8 +429,8 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 	const bool tabPressed = !shiftTabPressed && (event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI || event.keyDown.charScan.charCode == '\t');
 
 	if (ctrlEnterPressed || altEnterPressed) {
-		if (!mReadOnly) commitAndClose();
 		clearEvent(event);
+		if (!mReadOnly) commitAndClose();
 		return;
 	}
 	if (shiftTabPressed || tabPressed) {
@@ -432,8 +448,8 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 	}
 	switch (arrowKey) {
 		case kbEsc:
-			closeSidekick();
 			clearEvent(event);
+			closeSidekick();
 			return;
 		case kbEnter:
 			if (mReadOnly) {
@@ -494,8 +510,13 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 	clearEvent(event);
 }
 
-void MRSidekickEditor::closeSidekick() {
+void MRSidekickEditor::closeSidekick(ushort command) {
 	TGroup *group = owner;
+
+	if (mModalClose) {
+		endModal(command);
+		return;
+	}
 	if (mReadOnly) gDismissedReadOnlySidekickParentBufferId = mParentBufferId;
 	if (group != nullptr) group->remove(this);
 	TObject::destroy(this);
@@ -507,12 +528,14 @@ void MRSidekickEditor::commitAndClose() {
 	const std::string replacement = text();
 
 	if (editor != nullptr && !editor->isReadOnly()) editor->replaceRangeAndSelect(static_cast<uint>(mReplaceStart), static_cast<uint>(mReplaceEnd), replacement.c_str(), static_cast<uint>(replacement.size()));
-	closeSidekick();
+	closeSidekick(cmOK);
 }
 
 void MRSidekickEditor::insertChar(char ch) {
 	const std::size_t offset = cursorOffset();
 	std::string &line = mLines[static_cast<std::size_t>(mCursorRow)];
+
+	if (replaceActivePlaceholder(std::string(1, ch))) return;
 	line.insert(static_cast<std::size_t>(mCursorCol), 1, ch);
 	++mCursorCol;
 	adjustPlaceholdersAfterInsert(offset, 1);
@@ -522,6 +545,8 @@ void MRSidekickEditor::insertNewLine() {
 	const std::size_t offset = cursorOffset();
 	std::string &line = mLines[static_cast<std::size_t>(mCursorRow)];
 	std::string tail = line.substr(static_cast<std::size_t>(mCursorCol));
+
+	if (replaceActivePlaceholder("\n")) return;
 	line.erase(static_cast<std::size_t>(mCursorCol));
 	mLines.insert(mLines.begin() + mCursorRow + 1, tail);
 	++mCursorRow;
@@ -562,6 +587,48 @@ void MRSidekickEditor::eraseForward() {
 	adjustPlaceholdersAfterErase(eraseOffset, 1);
 }
 
+bool MRSidekickEditor::replaceActivePlaceholder(const std::string &replacement) {
+	std::vector<MRSidekickSpan> placeholders;
+	std::string value;
+	MRSidekickSpan active{};
+	std::size_t offset = 0;
+	std::size_t oldLength = 0;
+	std::size_t newLength = 0;
+
+	if (mPlaceholderIndex < 0 || static_cast<std::size_t>(mPlaceholderIndex) >= mPlaceholders.size()) return false;
+	if (static_cast<std::size_t>(mPlaceholderIndex) < mPlaceholderTouched.size() && mPlaceholderTouched[static_cast<std::size_t>(mPlaceholderIndex)] != 0) return false;
+	active = mPlaceholders[static_cast<std::size_t>(mPlaceholderIndex)];
+	offset = cursorOffset();
+	if (offset < active.start || offset > active.end) return false;
+	value = text();
+	if (active.start > value.size() || active.end > value.size() || active.end < active.start) return false;
+	oldLength = active.end - active.start;
+	newLength = replacement.size();
+	value.replace(active.start, oldLength, replacement);
+	placeholders = mPlaceholders;
+	for (std::size_t index = 0; index < placeholders.size(); ++index) {
+		MRSidekickSpan &span = placeholders[index];
+
+		if (index == static_cast<std::size_t>(mPlaceholderIndex)) {
+			span.end = span.start + newLength;
+		} else if (span.start >= active.end) {
+			if (newLength >= oldLength) {
+				span.start += newLength - oldLength;
+				span.end += newLength - oldLength;
+			} else {
+				span.start -= std::min(span.start, oldLength - newLength);
+				span.end -= std::min(span.end, oldLength - newLength);
+			}
+		}
+	}
+	mPlaceholders = std::move(placeholders);
+	if (static_cast<std::size_t>(mPlaceholderIndex) < mPlaceholderTouched.size()) mPlaceholderTouched[static_cast<std::size_t>(mPlaceholderIndex)] = 1;
+	setText(std::move(value));
+	mPlaceholderEndEdge = true;
+	setCursorFromOffset(active.start + newLength);
+	return true;
+}
+
 void MRSidekickEditor::moveLeft() {
 	if (mCursorCol > 0) {
 		--mCursorCol;
@@ -596,11 +663,31 @@ void MRSidekickEditor::moveDown() {
 
 void MRSidekickEditor::moveToPlaceholder(int direction) {
 	if (mPlaceholders.empty()) return;
-	if (mPlaceholderIndex < 0)
+	if (mPlaceholderIndex < 0) {
 		mPlaceholderIndex = direction >= 0 ? 0 : static_cast<int>(mPlaceholders.size()) - 1;
-	else
-		mPlaceholderIndex = (mPlaceholderIndex + direction + static_cast<int>(mPlaceholders.size())) % static_cast<int>(mPlaceholders.size());
-	setCursorFromOffset(mPlaceholders[static_cast<std::size_t>(mPlaceholderIndex)].start);
+		mPlaceholderEndEdge = direction < 0;
+	} else if (direction >= 0) {
+		if (!mPlaceholderEndEdge) {
+			mPlaceholderEndEdge = true;
+		} else {
+			mPlaceholderIndex = (mPlaceholderIndex + 1) % static_cast<int>(mPlaceholders.size());
+			mPlaceholderEndEdge = false;
+		}
+	} else {
+		if (mPlaceholderEndEdge) {
+			mPlaceholderEndEdge = false;
+		} else {
+			mPlaceholderIndex = (mPlaceholderIndex + static_cast<int>(mPlaceholders.size()) - 1) % static_cast<int>(mPlaceholders.size());
+			mPlaceholderEndEdge = true;
+		}
+	}
+	setCursorFromActivePlaceholder();
+}
+
+void MRSidekickEditor::setCursorFromActivePlaceholder() {
+	const MRSidekickSpan &placeholder = mPlaceholders[static_cast<std::size_t>(mPlaceholderIndex)];
+
+	setCursorFromOffset(mPlaceholderEndEdge ? placeholder.end : placeholder.start);
 }
 
 void MRSidekickEditor::setCursorFromOffset(std::size_t offset) {
@@ -626,12 +713,6 @@ std::size_t MRSidekickEditor::cursorOffset() const noexcept {
 	for (int row = 0; row < mCursorRow && row < static_cast<int>(mLines.size()); ++row)
 		offset += mLines[static_cast<std::size_t>(row)].size() + 1;
 	return offset + static_cast<std::size_t>(std::max(0, mCursorCol));
-}
-
-bool MRSidekickEditor::offsetInPlaceholder(std::size_t offset) const noexcept {
-	for (const MRSidekickSpan &span : mPlaceholders)
-		if (offset >= span.start && offset < span.end) return true;
-	return false;
 }
 
 void MRSidekickEditor::adjustPlaceholdersAfterInsert(std::size_t offset, std::size_t length) {
@@ -665,18 +746,6 @@ void MRSidekickEditor::clampCursor() noexcept {
 	if (mLines.empty()) mLines.push_back(std::string());
 	mCursorRow = std::clamp(mCursorRow, 0, static_cast<int>(mLines.size()) - 1);
 	mCursorCol = std::clamp(mCursorCol, 0, static_cast<int>(mLines[static_cast<std::size_t>(mCursorRow)].size()));
-}
-
-bool mrOpenSnippetSidekick(MREditWindow *parent, std::size_t replaceStart, std::size_t replaceEnd, const std::string &text, const std::string &title, const std::vector<MRSidekickSpan> &placeholders) {
-	if (parent == nullptr || parent->getEditor() == nullptr || TProgram::deskTop == nullptr) return false;
-	mrDropActiveSidekick();
-	MRSidekickEditor *sidekick = new MRSidekickEditor(sidekickBoundsFor(parent, text), parent->bufferId(), replaceStart, replaceEnd, text, title, placeholders);
-	if (sidekick == nullptr) return false;
-	gActiveSidekick = sidekick;
-	TProgram::deskTop->insert(sidekick);
-	TProgram::deskTop->setCurrent(sidekick, TView::normalSelect);
-	sidekick->drawView();
-	return true;
 }
 
 bool mrOpenReadOnlySidekick(MREditWindow *parent, const std::string &text, const std::string &title, int preferredViewColumn, MRReadOnlySidekickPlacement placement) {
@@ -782,16 +851,16 @@ bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason)
 			return false;
 		}
 		if (testCase.expectAbove) {
-			if (bounds.b.y != anchorY - 1) {
+			if (bounds.b.y != anchorY) {
 				failureReason = std::string(testCase.name) + ": above sidekick must render above the anchor row; anchorY=" + std::to_string(anchorY) + " bounds=" + std::to_string(bounds.a.y) + ".." + std::to_string(bounds.b.y) + ".";
 				return false;
 			}
-		} else if (bounds.a.y != anchorY) {
+		} else if (bounds.a.y != anchorY + 1) {
 			failureReason = std::string(testCase.name) + ": below sidekick must render directly below the anchor row; anchorY=" + std::to_string(anchorY) + " bounds=" + std::to_string(bounds.a.y) + ".." + std::to_string(bounds.b.y) + ".";
 			return false;
 		}
-		if (testCase.expectAbove && bounds.a.y <= anchorY && anchorY < bounds.b.y) {
-			failureReason = std::string(testCase.name) + ": above sidekick covers anchor row.";
+		if (bounds.a.y <= anchorY && anchorY < bounds.b.y) {
+			failureReason = std::string(testCase.name) + ": sidekick covers anchor row.";
 			return false;
 		}
 	}
@@ -824,7 +893,7 @@ bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason)
 			failureReason = "bottom viewport row: marker mismatch.";
 			return false;
 		}
-		if (bounds.b.y != anchorY - 1) {
+		if (bounds.b.y != anchorY) {
 			failureReason = "bottom viewport row: above sidekick must end directly above the anchor row.";
 			return false;
 		}
@@ -875,7 +944,7 @@ bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason)
 			return false;
 		}
 		const TRect bounds = gActiveSidekick->getBounds();
-		if (bounds.b.y != anchorY - 1) {
+		if (bounds.b.y != anchorY) {
 			failureReason = "live sidekick geometry: updated above sidekick must render above the anchor row; anchorY=" + std::to_string(anchorY) + " bounds=" + std::to_string(bounds.a.y) + ".." + std::to_string(bounds.b.y) + ".";
 			mrDropActiveSidekick();
 			TProgram::deskTop->remove(window);
@@ -889,8 +958,8 @@ bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason)
 			TObject::destroy(window);
 			return false;
 		}
-		mrDropActiveSidekick();
-		TProgram::deskTop->remove(window);
+			mrDropActiveSidekick();
+			TProgram::deskTop->remove(window);
 		TObject::destroy(window);
 	}
 	failureReason.clear();

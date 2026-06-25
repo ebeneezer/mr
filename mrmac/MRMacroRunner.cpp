@@ -210,7 +210,7 @@ void showErrorBox(const char *title, const char *text) {
 	messageBox(mfError | mfOKButton, "%s:\n\n%s", title, text);
 }
 
-bool runMacroSource(const char *displayName, const char *source, const MRMacroExecutionProfile *routeProfile, std::string *errorMessage, bool showErrorDialogs, MRMacroExecutionSession *sessionOut = nullptr, const MRMacroExecutionOwner *ownerOverride = nullptr, const char *unitName = nullptr, const char *closureId = nullptr) {
+bool runMacroSource(const char *displayName, const char *source, const MRMacroExecutionProfile *routeProfile, std::string *errorMessage, bool showErrorDialogs, MRMacroExecutionSession *sessionOut = nullptr, const MRMacroExecutionOwner *ownerOverride = nullptr, const char *unitName = nullptr, const char *closureId = nullptr, bool logRoute = true) {
 	size_t bytecodeSize = 0;
 	unsigned char *bytecode = nullptr;
 	std::shared_ptr<VirtualMachine> vm = std::make_shared<VirtualMachine>();
@@ -317,7 +317,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 			win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
 			win->noteQueuedBackgroundMacro(label, false);
 		}
-		{
+		if (logRoute) {
 			std::string line = "Queued background-safe macro '";
 			line += label;
 			line += "' [session #";
@@ -340,7 +340,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 		if (win != nullptr && editor != nullptr) {
 			MRMacroExecutionSession session = makeMacroExecutionSessionForOwner(label, MRMacroExecutionRoute::StagedBackground, win, ownerOverride);
 			const std::string routeLogLine = buildExecutionRouteLogLine(label, "staged", profile) + sessionLogSuffix(session);
-			mrLogMessage(routeLogLine.c_str());
+			if (logRoute) mrLogMessage(routeLogLine.c_str());
 			bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 			std::free(bytecode);
 			bytecode = nullptr;
@@ -444,7 +444,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 			if (sessionOut != nullptr) *sessionOut = session;
 			win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
 			win->noteQueuedBackgroundMacro(label, true);
-			{
+			if (logRoute) {
 				std::string line = "Queued staged macro '";
 				line += label;
 				line += "' [session #";
@@ -458,11 +458,11 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 			notifyMacroExecutionSessionChanged();
 			return true;
 		}
-		mrLogMessage(("Staged execution skipped for macro '" + label + "': no active editor window, running on UI thread.").c_str());
+		if (logRoute) mrLogMessage(("Staged execution skipped for macro '" + label + "': no active editor window, running on UI thread.").c_str());
 	}
 
 	MRMacroExecutionSession session = makeMacroExecutionSessionForOwner(label, MRMacroExecutionRoute::UiThread, win, ownerOverride);
-	{
+	if (logRoute) {
 		const std::string routeLogLine = buildExecutionRouteLogLine(label, "ui-thread", profile) + sessionLogSuffix(session);
 		mrLogMessage(routeLogLine.c_str());
 	}
@@ -781,7 +781,7 @@ bool runMacroSpecByNameAsExecutionSession(const char *macroSpec, MRMacroExecutio
 		return false;
 	}
 	runnerSource = "$MACRO ScheduledMacroLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(spec) + "');\nEND_MACRO;\n";
-	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), nullptr, errorMessage, showErrorDialogs, sessionOut)) {
+	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), nullptr, errorMessage, showErrorDialogs, sessionOut, nullptr, nullptr, nullptr, false)) {
 		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
 		return false;
 	}
@@ -801,7 +801,7 @@ bool runMacroSpecByNameAsExecutionSessionForOwner(const char *macroSpec, const M
 		return false;
 	}
 	runnerSource = "$MACRO ScheduledMacroLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(spec) + "');\nEND_MACRO;\n";
-	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), nullptr, errorMessage, showErrorDialogs, sessionOut, &owner)) {
+	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), nullptr, errorMessage, showErrorDialogs, sessionOut, &owner, nullptr, nullptr, false)) {
 		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
 		return false;
 	}

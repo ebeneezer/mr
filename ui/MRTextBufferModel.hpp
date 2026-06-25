@@ -459,6 +459,10 @@ class MRTextBufferModel {
 			mShared->language = MRSyntaxLanguage::Markdown;
 			return;
 		}
+		if (normalizedCodeLanguage == "LATEX" || normalizedCodeLanguage == "TEX") {
+			mShared->language = MRSyntaxLanguage::Latex;
+			return;
+		}
 		mShared->language = MRSyntaxLanguage::PlainText;
 	}
 

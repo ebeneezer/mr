@@ -468,6 +468,13 @@ bool LspCodeActionAdapter::consume(const LspInboundMessage &message, const LspDo
 		request.pending = false;
 		return setError(errorMessage, "LSP codeAction response URI no longer matches document service.");
 	}
+	if (message.envelope.hasError) {
+		result.uri = request.uri;
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
 	if (!parseCodeActionResult(message.payload, result.items, errorMessage)) {
 		request.pending = false;
 		return false;
@@ -513,6 +520,13 @@ bool LspRenameAdapter::consume(const LspInboundMessage &message, const LspDocume
 	if (request.uri != documentService.documentUri()) {
 		request.pending = false;
 		return setError(errorMessage, "LSP rename response URI no longer matches document service.");
+	}
+	if (message.envelope.hasError) {
+		result.uri = request.uri;
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
 	}
 	if (!parseRenameResult(message.payload, result.edits, errorMessage)) {
 		request.pending = false;

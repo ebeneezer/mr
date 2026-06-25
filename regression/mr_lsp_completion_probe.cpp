@@ -25,16 +25,24 @@ mr::lsp::LspDocumentSourceSnapshot makeSourceSnapshot(std::int64_t version, cons
 bool pollLifecycleUntilState(mr::lsp::LspLifecycle &lifecycle, mr::lsp::LspLifecycleState expectedState, std::string &failureReason) {
 	std::string errorMessage;
 	std::vector<mr::lsp::LspInboundMessage> messages;
+	std::size_t seenMessages = 0;
+	std::string matchedText;
 
 	for (int i = 0; i < 50; ++i) {
 		if (!lifecycle.poll(messages, errorMessage)) {
 			failureReason = "poll failed: " + errorMessage;
 			return false;
 		}
+		seenMessages += messages.size();
+		for (const mr::lsp::LspInboundMessage &message : messages) {
+			if (!message.matchedPendingRequest) continue;
+			if (!matchedText.empty()) matchedText += ";";
+			matchedText += " matched=" + message.pendingRequest.method + "/" + message.pendingRequest.idText;
+		}
 		if (lifecycle.state() == expectedState) return true;
 		::poll(nullptr, 0, 20);
 	}
-	failureReason = "expected lifecycle state not observed";
+	failureReason = std::string("expected lifecycle state not observed, state=") + mr::lsp::lspLifecycleStateName(lifecycle.state()) + ", messages=" + std::to_string(seenMessages) + " " + matchedText;
 	return false;
 }
 
@@ -45,7 +53,10 @@ bool startLifecycle(mr::lsp::LspLifecycle &lifecycle, std::string &failureReason
 	spec.session.process.executablePath = "./regression/mr_lsp_session_peer";
 	spec.initializeParamsJson = "{\"processId\":null,\"rootUri\":null,\"capabilities\":{}}";
 	if (!expect(lifecycle.start(spec, errorMessage), "lifecycle start: " + errorMessage, failureReason)) return false;
-	if (!pollLifecycleUntilState(lifecycle, mr::lsp::LspLifecycleState::Initialized, failureReason)) return false;
+	if (!pollLifecycleUntilState(lifecycle, mr::lsp::LspLifecycleState::Initialized, failureReason)) {
+		failureReason = "start initialize: " + failureReason;
+		return false;
+	}
 	return expect(lifecycle.sendInitialized(errorMessage), "initialized send: " + errorMessage, failureReason);
 }
 
@@ -54,7 +65,10 @@ bool shutdownLifecycle(mr::lsp::LspLifecycle &lifecycle, std::string &failureRea
 	int exitStatus = -1;
 
 	if (!expect(lifecycle.shutdown(errorMessage), "shutdown: " + errorMessage, failureReason)) return false;
-	if (!pollLifecycleUntilState(lifecycle, mr::lsp::LspLifecycleState::Shutdown, failureReason)) return false;
+	if (!pollLifecycleUntilState(lifecycle, mr::lsp::LspLifecycleState::Shutdown, failureReason)) {
+		failureReason = "shutdown wait: " + failureReason;
+		return false;
+	}
 	if (!expect(lifecycle.exit(errorMessage), "exit: " + errorMessage, failureReason)) return false;
 	if (!expect(lifecycle.wait(1000, exitStatus), "wait", failureReason)) return false;
 	return expect(exitStatus == 0, "exit status", failureReason);
@@ -83,17 +97,42 @@ bool pollCompletion(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocument
 	return false;
 }
 
+bool pollCompletionResolve(mr::lsp::LspLifecycle &lifecycle, mr::lsp::LspCompletionAdapter &adapter, mr::lsp::LspCompletionResolveRequest &request, mr::lsp::LspCompletionResolveResult &result, std::string &failureReason) {
+	std::string errorMessage;
+	std::vector<mr::lsp::LspInboundMessage> messages;
+
+	for (int i = 0; i < 50; ++i) {
+		if (!lifecycle.poll(messages, errorMessage)) {
+			failureReason = "poll failed: " + errorMessage;
+			return false;
+		}
+		for (const mr::lsp::LspInboundMessage &message : messages) {
+			bool accepted = false;
+			if (!adapter.consumeResolve(message, request, result, accepted, errorMessage)) {
+				failureReason = "completion resolve consume failed: " + errorMessage;
+				return false;
+			}
+			if (accepted) return true;
+		}
+		::poll(nullptr, 0, 20);
+	}
+	failureReason = "expected completion resolve response not observed";
+	return false;
+}
+
 bool testCompletionHappyPath(std::string &failureReason) {
 	mr::lsp::LspLifecycle lifecycle;
 	mr::lsp::LspDocumentService service(lifecycle);
 	mr::lsp::LspCompletionAdapter adapter;
 	mr::lsp::LspCompletionRequest request;
 	mr::lsp::LspCompletionResult result;
+	mr::lsp::LspCompletionResolveRequest resolveRequest;
+	mr::lsp::LspCompletionResolveResult resolveResult;
 	std::string errorMessage;
 
 	if (!startLifecycle(lifecycle, failureReason)) return false;
 	if (!expect(service.open(makeSourceSnapshot(1, "int main() { return 0; }\n"), errorMessage), "open: " + errorMessage, failureReason)) return false;
-	if (!expect(adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{3, 5}, request, errorMessage), "completion request: " + errorMessage, failureReason)) return false;
+	if (!expect(adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{3, 5}, std::string(), request, errorMessage), "completion request: " + errorMessage, failureReason)) return false;
 	if (!expect(request.pending, "completion request pending", failureReason)) return false;
 	if (!expect(request.method == "textDocument/completion", "completion request method", failureReason)) return false;
 	if (!pollCompletion(lifecycle, service, adapter, request, result, failureReason)) return false;
@@ -115,6 +154,15 @@ bool testCompletionHappyPath(std::string &failureReason) {
 	if (!expect(result.items[1].insertText.find("${1:int i = 0}") != std::string::npos, "completion snippet insert text", failureReason)) return false;
 	if (!expect(result.items[2].label == "macroValue", "completion third label", failureReason)) return false;
 	if (!expect(result.items[2].insertText.empty(), "completion optional insert text", failureReason)) return false;
+	if (!expect(adapter.requestResolve(lifecycle, result.items[2], resolveRequest, errorMessage), "completion resolve request: " + errorMessage, failureReason)) return false;
+	if (!pollCompletionResolve(lifecycle, adapter, resolveRequest, resolveResult, failureReason)) return false;
+	if (!expect(resolveResult.item.label == "macroValue", "completion resolve label", failureReason)) return false;
+	if (!expect(resolveResult.item.documentation == "Resolved macro documentation.", "completion resolve documentation", failureReason)) return false;
+	if (!expect(resolveResult.item.insertText == "macroValue", "completion resolve insert text", failureReason)) return false;
+	if (!expect(adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{4, 1}, "\\", request, errorMessage), "triggered completion request: " + errorMessage, failureReason)) return false;
+	if (!expect(request.hasTriggerCharacter && request.triggerCharacter == "\\", "triggered completion metadata", failureReason)) return false;
+	if (!pollCompletion(lifecycle, service, adapter, request, result, failureReason)) return false;
+	if (!expect(result.items.size() == 3, "triggered completion item count", failureReason)) return false;
 	if (!expect(service.close(errorMessage), "close: " + errorMessage, failureReason)) return false;
 	return shutdownLifecycle(lifecycle, failureReason);
 }
@@ -126,11 +174,11 @@ bool testCompletionGuards(std::string &failureReason) {
 	mr::lsp::LspCompletionRequest request;
 	std::string errorMessage;
 
-	if (!expect(!adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{0, 0}, request, errorMessage), "completion without document accepted", failureReason)) return false;
+	if (!expect(!adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{0, 0}, std::string(), request, errorMessage), "completion without document accepted", failureReason)) return false;
 	if (!expect(!request.pending, "failed completion pending", failureReason)) return false;
 	if (!startLifecycle(lifecycle, failureReason)) return false;
 	if (!expect(service.open(makeSourceSnapshot(1, "one"), errorMessage), "guard open: " + errorMessage, failureReason)) return false;
-	if (!expect(!adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{0, -1}, request, errorMessage), "negative completion position accepted", failureReason)) return false;
+	if (!expect(!adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{0, -1}, std::string(), request, errorMessage), "negative completion position accepted", failureReason)) return false;
 	return shutdownLifecycle(lifecycle, failureReason);
 }
 

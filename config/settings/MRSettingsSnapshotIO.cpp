@@ -729,6 +729,10 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'RUNTIME', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.runtimePaths)) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'SUCCESS_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(profile.buildSuccessAudioUri) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'FAILURE_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(profile.buildFailureAudioUri) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LSP_EXECUTABLE', '" + escapeMrmacSingleQuotedLiteral(profile.lspExecutablePath) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LSP_ARGUMENTS', '" + escapeMrmacSingleQuotedLiteral(profile.lspArguments) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LSP_WORKING_DIRECTORY', '" + escapeMrmacSingleQuotedLiteral(profile.lspWorkingDirectory) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LSP_MIDDLEWARE', '" + escapeMrmacSingleQuotedLiteral(profile.lspMiddlewarePath) + "');\n";
 	}
 
 	for (const auto &profile : snapshot.editProfiles) {

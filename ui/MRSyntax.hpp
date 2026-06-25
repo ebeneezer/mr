@@ -29,7 +29,8 @@ enum class MRSyntaxLanguage : unsigned char {
 	Systemd,
 	MRMAC,
 	Make,
-	Markdown
+	Markdown,
+	Latex
 };
 
 enum class MRSyntaxToken : unsigned char {
@@ -112,6 +113,11 @@ class MRMakeSyntaxHighlighter final : public MRSyntaxHighlighter {
 };
 
 class MRMarkdownSyntaxHighlighter final : public MRSyntaxHighlighter {
+  public:
+	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
+};
+
+class MRLatexSyntaxHighlighter final : public MRSyntaxHighlighter {
   public:
 	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
 };

@@ -325,6 +325,13 @@ bool LspSignatureHelpAdapter::consume(const LspInboundMessage &message, const Ls
 		errorMessage.clear();
 		return true;
 	}
+	if (message.envelope.hasError) {
+		result.uri = request.uri;
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
 	if (!parseSignatureHelpResult(message.payload, result)) {
 		request.pending = false;
 		errorMessage = "LSP signatureHelp response is malformed; payload=" + payloadExcerpt(message.payload);

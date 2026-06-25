@@ -44,6 +44,7 @@ Schnittstellen: VM, App, Coprocessor, Dateisystem.
 AGENTS-Grenzen: keine opportunistischen Sprachsemantik-Änderungen, keine ungeklärten Compiler-Abkürzungen.
 Nicht opportunistisch ändern: Grammar, Bytecode-OpCodes, Startup-Kontext für MRSETUP.
 Bekannte technische Schulden: historische Makro-Semantik ist stabilitätskritisch; Änderungen brauchen Regression-Abdeckung.
+Strategische Rolle: MRMAC ist ein zentrales Alleinstellungsmerkmal von MR in der Klasse der TUI-Editoren. MR konkurriert nicht über die Breite eines Plugin-Marktplatzes wie große Editor-Ökosysteme, sondern über TUI-Dichte, Geschwindigkeit, Toolchain-Integration und tiefe Scriptbarkeit. Anwender sollen lokale Editor-Automation, Snippets, Toolchain-Steuerung und Arbeitsabläufe mit MRMAC bauen können, ohne dass MR selbst zu einer zentral gepflegten Sammlung sprachspezifischer Bibliotheken wird.
 5. VM / Intrinsics / Deferred UI
 
 Zentrale Dateien: ￼mrmac/MRVM.cpp, ￼mrmac/MRVM.hpp.

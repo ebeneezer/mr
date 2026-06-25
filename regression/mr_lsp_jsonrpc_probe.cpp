@@ -124,11 +124,16 @@ bool testPayloadClassification(std::string &failureReason) {
 }
 
 bool testEnvelopeExtraction(std::string &failureReason) {
+	const mr::lsp::JsonRpcEnvelope resultEnvelope = mr::lsp::parseJsonRpcEnvelope("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"uri\":\"file:///tmp/a.cpp\"}}");
+	const mr::lsp::JsonRpcEnvelope errorEnvelope = mr::lsp::parseJsonRpcEnvelope("{\"jsonrpc\":\"2.0\",\"id\":\"r2\",\"error\":{\"code\":-32601,\"message\":\"missing\"}}");
+
 	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/definition\",\"params\":{}}", mr::lsp::JsonRpcMessageKind::Request, mr::lsp::JsonRpcIdKind::Number, "1", "textDocument/definition", "envelope numeric request", failureReason)) return false;
 	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":\"abc-1\",\"method\":\"workspace/symbol\"}", mr::lsp::JsonRpcMessageKind::Request, mr::lsp::JsonRpcIdKind::String, "\"abc-1\"", "workspace/symbol", "envelope string request", failureReason)) return false;
 	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}", mr::lsp::JsonRpcMessageKind::Notification, mr::lsp::JsonRpcIdKind::None, "", "initialized", "envelope notification", failureReason)) return false;
 	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"uri\":\"file:///tmp/a.cpp\"}}", mr::lsp::JsonRpcMessageKind::Response, mr::lsp::JsonRpcIdKind::Number, "2", "", "envelope response", failureReason)) return false;
 	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":\"r2\",\"error\":{\"code\":-32601,\"message\":\"missing\"}}", mr::lsp::JsonRpcMessageKind::Response, mr::lsp::JsonRpcIdKind::String, "\"r2\"", "", "envelope error response", failureReason)) return false;
+	if (!expect(resultEnvelope.hasResult && !resultEnvelope.hasError, "envelope result flags", failureReason)) return false;
+	if (!expect(!errorEnvelope.hasResult && errorEnvelope.hasError, "envelope error flags", failureReason)) return false;
 	if (!expectEnvelope("{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"shutdown\"}", mr::lsp::JsonRpcMessageKind::Unknown, mr::lsp::JsonRpcIdKind::Null, "null", "shutdown", "envelope null id", failureReason)) return false;
 	if (!expectEnvelope("{\"params\":{\"id\":4,\"method\":\"nested\"}}", mr::lsp::JsonRpcMessageKind::Unknown, mr::lsp::JsonRpcIdKind::None, "", "", "envelope nested ignored", failureReason)) return false;
 	if (!expectEnvelope("{\"message\":\"method should not count\",\"id\":3}", mr::lsp::JsonRpcMessageKind::Unknown, mr::lsp::JsonRpcIdKind::Number, "3", "", "envelope string ignored", failureReason)) return false;

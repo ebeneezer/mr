@@ -218,6 +218,177 @@ void appendJsonStringArray(std::string &out, const std::vector<std::string> &val
 	out.push_back(']');
 }
 
+void skipJsonWhitespaceLocal(const std::string &text, std::size_t &pos) noexcept {
+	while (pos < text.size() && static_cast<unsigned char>(text[pos]) <= ' ')
+		++pos;
+}
+
+bool initializeCapabilityIsAdvertised(const std::string &payload, const std::string &key) {
+	const std::string quotedKey = "\"" + key + "\"";
+	std::size_t pos = payload.find(quotedKey);
+
+	if (pos == std::string::npos) return false;
+	pos += quotedKey.size();
+	skipJsonWhitespaceLocal(payload, pos);
+	if (pos >= payload.size() || payload[pos] != ':') return false;
+	++pos;
+	skipJsonWhitespaceLocal(payload, pos);
+	if (pos >= payload.size()) return false;
+	if (payload.compare(pos, 4, "null") == 0) return false;
+	if (payload.compare(pos, 5, "false") == 0) return false;
+	return true;
+}
+
+bool findJsonObjectEndLocal(const std::string &text, std::size_t openPos, std::size_t &closePos) {
+	int depth = 0;
+	bool inString = false;
+	bool escaped = false;
+
+	if (openPos >= text.size() || text[openPos] != '{') return false;
+	for (std::size_t pos = openPos; pos < text.size(); ++pos) {
+		const char ch = text[pos];
+		if (inString) {
+			if (escaped) escaped = false;
+			else if (ch == '\\') escaped = true;
+			else if (ch == '"') inString = false;
+			continue;
+		}
+		if (ch == '"') {
+			inString = true;
+			continue;
+		}
+		if (ch == '{') {
+			++depth;
+			continue;
+		}
+		if (ch == '}') {
+			--depth;
+			if (depth == 0) {
+				closePos = pos;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool parseJsonStringArrayLocal(const std::string &text, std::size_t arrayStart, std::vector<std::string> &values) {
+	std::size_t pos = arrayStart + 1;
+
+	if (arrayStart >= text.size() || text[arrayStart] != '[') return false;
+	values.clear();
+	for (;;) {
+		std::string value;
+
+		skipJsonWhitespaceLocal(text, pos);
+		if (pos >= text.size()) return false;
+		if (text[pos] == ']') return true;
+		if (text[pos] != '"') return false;
+		++pos;
+		while (pos < text.size()) {
+			const char ch = text[pos++];
+			if (ch == '"') break;
+			if (ch == '\\') {
+				if (pos >= text.size()) return false;
+				value.push_back(text[pos++]);
+			} else {
+				value.push_back(ch);
+			}
+		}
+		values.push_back(value);
+		skipJsonWhitespaceLocal(text, pos);
+		if (pos >= text.size()) return false;
+		if (text[pos] == ',') {
+			++pos;
+			continue;
+		}
+		if (text[pos] == ']') return true;
+		return false;
+	}
+}
+
+void extractCompletionTriggerCharacters(const std::string &payload, std::vector<std::string> &triggerCharacters) {
+	const std::string providerKey = "\"completionProvider\"";
+	const std::string triggerKey = "\"triggerCharacters\"";
+	const std::size_t providerPos = payload.find(providerKey);
+	std::size_t providerValue = 0;
+	std::size_t providerEnd = 0;
+	std::size_t triggerPos = 0;
+	std::size_t triggerValue = 0;
+
+	triggerCharacters.clear();
+	if (providerPos == std::string::npos) return;
+	providerValue = providerPos + providerKey.size();
+	skipJsonWhitespaceLocal(payload, providerValue);
+	if (providerValue >= payload.size() || payload[providerValue] != ':') return;
+	++providerValue;
+	skipJsonWhitespaceLocal(payload, providerValue);
+	if (providerValue >= payload.size() || payload[providerValue] != '{') return;
+	if (!findJsonObjectEndLocal(payload, providerValue, providerEnd)) return;
+	triggerPos = payload.find(triggerKey, providerValue);
+	if (triggerPos == std::string::npos || triggerPos > providerEnd) return;
+	triggerValue = triggerPos + triggerKey.size();
+	skipJsonWhitespaceLocal(payload, triggerValue);
+	if (triggerValue >= payload.size() || payload[triggerValue] != ':') return;
+	++triggerValue;
+	skipJsonWhitespaceLocal(payload, triggerValue);
+	if (triggerValue > providerEnd || triggerValue >= payload.size() || payload[triggerValue] != '[') return;
+	static_cast<void>(parseJsonStringArrayLocal(payload, triggerValue, triggerCharacters));
+}
+
+bool completionResolveProviderAdvertised(const std::string &payload) {
+	const std::string providerKey = "\"completionProvider\"";
+	const std::string resolveKey = "\"resolveProvider\"";
+	const std::size_t providerPos = payload.find(providerKey);
+	std::size_t providerValue = 0;
+	std::size_t providerEnd = 0;
+	std::size_t resolvePos = 0;
+	std::size_t resolveValue = 0;
+
+	if (providerPos == std::string::npos) return false;
+	providerValue = providerPos + providerKey.size();
+	skipJsonWhitespaceLocal(payload, providerValue);
+	if (providerValue >= payload.size() || payload[providerValue] != ':') return false;
+	++providerValue;
+	skipJsonWhitespaceLocal(payload, providerValue);
+	if (providerValue >= payload.size() || payload[providerValue] != '{') return false;
+	if (!findJsonObjectEndLocal(payload, providerValue, providerEnd)) return false;
+	resolvePos = payload.find(resolveKey, providerValue);
+	if (resolvePos == std::string::npos || resolvePos > providerEnd) return false;
+	resolveValue = resolvePos + resolveKey.size();
+	skipJsonWhitespaceLocal(payload, resolveValue);
+	if (resolveValue >= payload.size() || payload[resolveValue] != ':') return false;
+	++resolveValue;
+	skipJsonWhitespaceLocal(payload, resolveValue);
+	return resolveValue <= providerEnd && payload.compare(resolveValue, 4, "true") == 0;
+}
+
+const char *lspClientCapabilitiesJson() noexcept {
+	return "\"capabilities\":{"
+	       "\"workspace\":{\"workspaceFolders\":true,\"symbol\":{\"dynamicRegistration\":false}},"
+	       "\"textDocument\":{"
+	       "\"synchronization\":{\"didSave\":true},"
+	       "\"publishDiagnostics\":{\"relatedInformation\":true},"
+	       "\"hover\":{\"contentFormat\":[\"markdown\",\"plaintext\"]},"
+	       "\"completion\":{\"contextSupport\":true,\"completionItem\":{"
+	       "\"snippetSupport\":true,"
+	       "\"commitCharactersSupport\":true,"
+	       "\"documentationFormat\":[\"markdown\",\"plaintext\"],"
+	       "\"deprecatedSupport\":true,"
+	       "\"preselectSupport\":true,"
+	       "\"insertReplaceSupport\":true,"
+	       "\"resolveSupport\":{\"properties\":[\"documentation\",\"detail\",\"additionalTextEdits\"]}"
+	       "},\"completionItemKind\":{\"valueSet\":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]}},"
+	       "\"signatureHelp\":{\"signatureInformation\":{\"documentationFormat\":[\"markdown\",\"plaintext\"]}},"
+	       "\"definition\":{\"linkSupport\":true},"
+	       "\"references\":{\"dynamicRegistration\":false},"
+	       "\"documentHighlight\":{\"dynamicRegistration\":false},"
+	       "\"documentSymbol\":{\"hierarchicalDocumentSymbolSupport\":true,\"symbolKind\":{\"valueSet\":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26]}},"
+	       "\"codeAction\":{\"dynamicRegistration\":false},"
+	       "\"rename\":{\"prepareSupport\":true}"
+	       "}}";
+}
+
 const mr::services::MRLspServiceCommandSpec lspServiceCommandTable[] = {
 	{ mr::services::MRLspServiceCommandId::GoToDefinition, mr::services::MRLspServiceRequestKind::Definition, false, "MR_LSP_GOTO_DEFINITION", "LSP Go To Definition" },
 	{ mr::services::MRLspServiceCommandId::FindReferences, mr::services::MRLspServiceRequestKind::References, true, "MR_LSP_FIND_REFERENCES", "LSP Find References" },
@@ -275,7 +446,8 @@ bool buildLspInitializeSpecFromWorkspace(const MRWorkspaceServiceSnapshot &works
 		appendJsonStringArray(params, fallbackFlags);
 		params += "},";
 	}
-	params += "\"capabilities\":{\"textDocument\":{\"completion\":{\"completionItem\":{\"snippetSupport\":true}}}}}";
+	params += lspClientCapabilitiesJson();
+	params += "}";
 	spec.initializeParamsJson = params;
 	errorMessage.clear();
 	return true;
@@ -353,6 +525,7 @@ bool MRLspServiceSession::startRuntime(const MRWorkspaceServiceSnapshot &workspa
 		close();
 		return false;
 	}
+	updateCapabilitiesFromInitializeResponse(lifecycle.initializeResponsePayload());
 	logLspCompileContext(workspace, profile, fallbackFlags);
 	activeServerProfile = profile;
 	activeRuntimeCompileContextFingerprint = compileContextFingerprint(workspace.compileContext);
@@ -441,6 +614,14 @@ bool MRLspServiceSession::syncEditorDocument(const MRWorkspaceServiceSnapshot &w
 		activeEditorDocumentPath = documentPath;
 		return true;
 	}
+	if (documentService.isStaleForSentVersion(source, errorMessage)) {
+		if (!documentService.close(source, errorMessage)) return false;
+		if (!openDocument(workspace, source, errorMessage)) return false;
+		activeEditorDocumentId = document.documentId;
+		activeEditorDocumentVersion = document.documentVersion;
+		activeEditorDocumentPath = documentPath;
+		return true;
+	}
 	if (!changeDocument(workspace, source, errorMessage)) return false;
 	activeEditorDocumentId = document.documentId;
 	activeEditorDocumentVersion = document.documentVersion;
@@ -455,8 +636,10 @@ bool MRLspServiceSession::syncEditorDocumentAndRequest(
 	MRLspServiceRequestKind requestKind,
 	mr::lsp::LspTextPosition position,
 	bool includeDeclaration,
+	const std::string &completionTriggerCandidate,
 	std::string &errorMessage) {
 	if (!syncEditorDocument(workspace, document, editor, errorMessage)) return false;
+	if (!requestKindSupported(requestKind, errorMessage)) return false;
 	switch (requestKind) {
 		case MRLspServiceRequestKind::Definition:
 			return requestDefinition(position, errorMessage);
@@ -465,7 +648,7 @@ bool MRLspServiceSession::syncEditorDocumentAndRequest(
 		case MRLspServiceRequestKind::Hover:
 			return requestHover(position, errorMessage);
 		case MRLspServiceRequestKind::Completion:
-			return requestCompletion(position, errorMessage);
+			return requestCompletion(position, completionTriggerCandidate, errorMessage);
 		case MRLspServiceRequestKind::DocumentHighlight:
 			return requestDocumentHighlight(position, errorMessage);
 		case MRLspServiceRequestKind::DocumentSymbols:
@@ -490,9 +673,10 @@ bool MRLspServiceSession::requestEditorDocumentService(
 	MRLspServiceRequestKind requestKind,
 	mr::lsp::LspTextPosition position,
 	bool includeDeclaration,
+	const std::string &completionTriggerCandidate,
 	std::string &errorMessage) {
 	if (!ensureRuntime(workspace, profile, errorMessage)) return false;
-	return syncEditorDocumentAndRequest(workspace, document, editor, requestKind, position, includeDeclaration, errorMessage);
+	return syncEditorDocumentAndRequest(workspace, document, editor, requestKind, position, includeDeclaration, completionTriggerCandidate, errorMessage);
 }
 
 bool MRLspServiceSession::requestEditorDocumentServiceCommand(
@@ -502,6 +686,7 @@ bool MRLspServiceSession::requestEditorDocumentServiceCommand(
 	const MRFileEditor &editor,
 	MRLspServiceCommandId command,
 	mr::lsp::LspTextPosition position,
+	const std::string &completionTriggerCandidate,
 	std::string &errorMessage) {
 	MRLspServiceCommandSpec spec;
 
@@ -509,7 +694,7 @@ bool MRLspServiceSession::requestEditorDocumentServiceCommand(
 		errorMessage = "LSP service command is unknown.";
 		return false;
 	}
-	return requestEditorDocumentService(workspace, profile, document, editor, spec.requestKind, position, spec.includeDeclaration, errorMessage);
+	return requestEditorDocumentService(workspace, profile, document, editor, spec.requestKind, position, spec.includeDeclaration, completionTriggerCandidate, errorMessage);
 }
 
 bool MRLspServiceSession::poll(std::string &errorMessage) {
@@ -527,6 +712,7 @@ bool MRLspServiceSession::requestDefinition(mr::lsp::LspTextPosition position, s
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
+	if (!requestKindSupported(MRLspServiceRequestKind::Definition, errorMessage)) return false;
 	if (!definitionAdapter.requestDefinition(lifecycle, documentService, position, definitionRequest, errorMessage)) return false;
 	definitionRequestVersion = activeEditorDocumentVersion;
 	return true;
@@ -537,6 +723,7 @@ bool MRLspServiceSession::requestReferences(mr::lsp::LspTextPosition position, b
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
+	if (!requestKindSupported(MRLspServiceRequestKind::References, errorMessage)) return false;
 	if (!referencesAdapter.requestReferences(lifecycle, documentService, position, includeDeclaration, referencesRequest, errorMessage)) return false;
 	referencesRequestVersion = activeEditorDocumentVersion;
 	return true;
@@ -547,17 +734,22 @@ bool MRLspServiceSession::requestHover(mr::lsp::LspTextPosition position, std::s
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
+	if (!requestKindSupported(MRLspServiceRequestKind::Hover, errorMessage)) return false;
 	if (!hoverAdapter.requestHover(lifecycle, documentService, position, hoverRequest, errorMessage)) return false;
 	hoverRequestVersion = activeEditorDocumentVersion;
 	return true;
 }
 
-bool MRLspServiceSession::requestCompletion(mr::lsp::LspTextPosition position, std::string &errorMessage) {
+bool MRLspServiceSession::requestCompletion(mr::lsp::LspTextPosition position, const std::string &triggerCandidate, std::string &errorMessage) {
+	std::string triggerCharacter;
+
 	if (!hasActiveWorkspace) {
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
-	if (!completionAdapter.requestCompletion(lifecycle, documentService, position, completionRequest, errorMessage)) return false;
+	if (!requestKindSupported(MRLspServiceRequestKind::Completion, errorMessage)) return false;
+	static_cast<void>(completionTriggerCharacterAccepted(triggerCandidate, triggerCharacter));
+	if (!completionAdapter.requestCompletion(lifecycle, documentService, position, triggerCharacter, completionRequest, errorMessage)) return false;
 	completionRequestVersion = activeEditorDocumentVersion;
 	return true;
 }
@@ -567,6 +759,7 @@ bool MRLspServiceSession::requestDocumentHighlight(mr::lsp::LspTextPosition posi
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
+	if (!requestKindSupported(MRLspServiceRequestKind::DocumentHighlight, errorMessage)) return false;
 	if (!documentHighlightAdapter.requestDocumentHighlight(lifecycle, documentService, position, documentHighlightRequest, errorMessage)) return false;
 	documentHighlightRequestVersion = activeEditorDocumentVersion;
 	return true;
@@ -577,6 +770,7 @@ bool MRLspServiceSession::requestDocumentSymbols(std::string &errorMessage) {
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
+	if (!requestKindSupported(MRLspServiceRequestKind::DocumentSymbols, errorMessage)) return false;
 	if (!documentSymbolsAdapter.requestDocumentSymbols(lifecycle, documentService, documentSymbolsRequest, errorMessage)) return false;
 	documentSymbolsRequestVersion = activeEditorDocumentVersion;
 	return true;
@@ -587,6 +781,7 @@ bool MRLspServiceSession::requestWorkspaceSymbols(const std::string &query, std:
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
+	if (!requestKindSupported(MRLspServiceRequestKind::WorkspaceSymbols, errorMessage)) return false;
 	return documentSymbolsAdapter.requestWorkspaceSymbols(lifecycle, query, workspaceSymbolsRequest, errorMessage);
 }
 
@@ -595,6 +790,7 @@ bool MRLspServiceSession::requestSignatureHelp(mr::lsp::LspTextPosition position
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
+	if (!requestKindSupported(MRLspServiceRequestKind::SignatureHelp, errorMessage)) return false;
 	if (!signatureHelpAdapter.requestSignatureHelp(lifecycle, documentService, position, signatureHelpRequest, errorMessage)) return false;
 	signatureHelpRequestVersion = activeEditorDocumentVersion;
 	return true;
@@ -605,6 +801,7 @@ bool MRLspServiceSession::requestRename(mr::lsp::LspTextPosition position, const
 		errorMessage = "LSP service session has no active workspace.";
 		return false;
 	}
+	if (!requestKindSupported(MRLspServiceRequestKind::Rename, errorMessage)) return false;
 	if (!renameAdapter.requestRename(lifecycle, documentService, position, newName, renameRequest, errorMessage)) return false;
 	renameRequestVersion = activeEditorDocumentVersion;
 	return true;
@@ -627,9 +824,46 @@ bool MRLspServiceSession::requestCodeActionsForDiagnostic(const MRServiceDiagnos
 		errorMessage = "LSP codeAction diagnostic document does not match open document.";
 		return false;
 	}
+	if (!supportsCodeAction) {
+		errorMessage = "LSP server does not advertise code action support.";
+		return false;
+	}
 	if (!codeActionAdapter.requestCodeActions(lifecycle, documentService, codeActionRangeFromServiceRange(diagnostic.reportedRange), diagnostic.rawLspDiagnosticJson, codeActionRequest, errorMessage)) return false;
 	codeActionRequestRange = diagnostic.navigationRange;
 	codeActionRequestVersion = diagnosticResult.header.identity.documentVersion;
+	return true;
+}
+
+bool MRLspServiceSession::resolveCompletionItem(const MRServiceCompletionItem &item, MRServiceCompletionItem &resolvedItem, std::string &errorMessage) {
+	mr::lsp::LspCompletionItem lspItem;
+	mr::lsp::LspCompletionResolveRequest request;
+	mr::lsp::LspCompletionResolveResult result;
+	std::vector<mr::lsp::LspInboundMessage> messages;
+
+	resolvedItem = item;
+	if (!supportsCompletionResolve || item.rawLspCompletionItemJson.empty()) {
+		errorMessage.clear();
+		return true;
+	}
+	lspItem.rawJson = item.rawLspCompletionItemJson;
+	lspItem.label = item.label;
+	if (!completionAdapter.requestResolve(lifecycle, lspItem, request, errorMessage)) return false;
+	for (int round = 0; round < 25; ++round) {
+		if (!lifecycle.poll(messages, errorMessage)) return false;
+		for (const mr::lsp::LspInboundMessage &message : messages) {
+			bool accepted = false;
+
+			if (!completionAdapter.consumeResolve(message, request, result, accepted, errorMessage)) return false;
+			if (accepted) {
+				if (!result.item.label.empty()) resolvedItem = buildServiceCompletionItemFromLsp(result.item);
+				errorMessage.clear();
+				return true;
+			}
+			if (!consumeInboundMessage(message, errorMessage)) return false;
+		}
+		::poll(nullptr, 0, 20);
+	}
+	errorMessage.clear();
 	return true;
 }
 
@@ -689,6 +923,38 @@ bool MRLspServiceSession::runtimeActive() const noexcept {
 	return hasActiveRuntime && lifecycle.state() == mr::lsp::LspLifecycleState::Initialized;
 }
 
+bool MRLspServiceSession::runtimeCapabilitiesKnown() const noexcept {
+	return runtimeActive();
+}
+
+bool MRLspServiceSession::supportsRequestKind(MRLspServiceRequestKind requestKind) const noexcept {
+	switch (requestKind) {
+		case MRLspServiceRequestKind::Definition:
+			return supportsDefinition;
+		case MRLspServiceRequestKind::References:
+			return supportsReferences;
+		case MRLspServiceRequestKind::Hover:
+			return supportsHover;
+		case MRLspServiceRequestKind::Completion:
+			return supportsCompletion;
+		case MRLspServiceRequestKind::DocumentHighlight:
+			return supportsDocumentHighlight;
+		case MRLspServiceRequestKind::DocumentSymbols:
+			return supportsDocumentSymbols;
+		case MRLspServiceRequestKind::WorkspaceSymbols:
+			return supportsWorkspaceSymbols;
+		case MRLspServiceRequestKind::SignatureHelp:
+			return supportsSignatureHelp;
+		case MRLspServiceRequestKind::Rename:
+			return supportsRename;
+	}
+	return false;
+}
+
+bool MRLspServiceSession::supportsCodeActions() const noexcept {
+	return supportsCodeAction;
+}
+
 std::string MRLspServiceSession::activeHoverRequestId() const {
 	return hoverRequest.pending ? hoverRequest.idText : std::string();
 }
@@ -736,11 +1002,78 @@ bool MRLspServiceSession::runtimeMatches(const MRWorkspaceServiceSnapshot &works
 	if (activeServerProfile.executablePath != profile.executablePath) return false;
 	if (activeServerProfile.arguments != profile.arguments) return false;
 	if (activeServerProfile.workingDirectory != profile.workingDirectory) return false;
+	if (activeServerProfile.lspMiddlewarePath != profile.lspMiddlewarePath) return false;
 	if (profileUsesClangd(profile) && activeRuntimeCompileContextFingerprint != compileContextFingerprint(workspace.compileContext)) return false;
 	if (activeRuntimeHasRoot != workspace.root.hasRoot) return false;
 	if (!workspace.root.hasRoot) return true;
 	rootPath = normalizeWorkspaceServicePath(workspace.root.rootPath);
 	return activeRuntimeRootPath == rootPath;
+}
+
+bool MRLspServiceSession::requestKindSupported(MRLspServiceRequestKind requestKind, std::string &errorMessage) const {
+	const char *name = "requested";
+
+	switch (requestKind) {
+		case MRLspServiceRequestKind::Definition:
+			name = "definition";
+			break;
+		case MRLspServiceRequestKind::References:
+			name = "references";
+			break;
+		case MRLspServiceRequestKind::Hover:
+			name = "hover";
+			break;
+		case MRLspServiceRequestKind::Completion:
+			name = "completion";
+			break;
+		case MRLspServiceRequestKind::DocumentHighlight:
+			name = "document highlight";
+			break;
+		case MRLspServiceRequestKind::DocumentSymbols:
+			name = "document symbols";
+			break;
+		case MRLspServiceRequestKind::WorkspaceSymbols:
+			name = "workspace symbols";
+			break;
+		case MRLspServiceRequestKind::SignatureHelp:
+			name = "signature help";
+			break;
+		case MRLspServiceRequestKind::Rename:
+			name = "rename";
+			break;
+	}
+	if (supportsRequestKind(requestKind)) {
+		errorMessage.clear();
+		return true;
+	}
+	errorMessage = std::string("LSP server does not advertise ") + name + " support.";
+	return false;
+}
+
+bool MRLspServiceSession::completionTriggerCharacterAccepted(const std::string &candidate, std::string &triggerCharacter) const {
+	triggerCharacter.clear();
+	if (candidate.empty()) return false;
+	for (const std::string &serverTriggerCharacter : completionTriggerCharacters) {
+		if (serverTriggerCharacter != candidate) continue;
+		triggerCharacter = candidate;
+		return true;
+	}
+	return false;
+}
+
+void MRLspServiceSession::updateCapabilitiesFromInitializeResponse(const std::string &payload) noexcept {
+	supportsDefinition = initializeCapabilityIsAdvertised(payload, "definitionProvider");
+	supportsReferences = initializeCapabilityIsAdvertised(payload, "referencesProvider");
+	supportsHover = initializeCapabilityIsAdvertised(payload, "hoverProvider");
+	supportsCompletion = initializeCapabilityIsAdvertised(payload, "completionProvider");
+	supportsDocumentHighlight = initializeCapabilityIsAdvertised(payload, "documentHighlightProvider");
+	supportsDocumentSymbols = initializeCapabilityIsAdvertised(payload, "documentSymbolProvider");
+	supportsWorkspaceSymbols = initializeCapabilityIsAdvertised(payload, "workspaceSymbolProvider");
+	supportsSignatureHelp = initializeCapabilityIsAdvertised(payload, "signatureHelpProvider");
+	supportsRename = initializeCapabilityIsAdvertised(payload, "renameProvider");
+	supportsCodeAction = initializeCapabilityIsAdvertised(payload, "codeActionProvider");
+	supportsCompletionResolve = completionResolveProviderAdvertised(payload);
+	extractCompletionTriggerCharacters(payload, completionTriggerCharacters);
 }
 
 bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage &message, std::string &errorMessage) {
@@ -812,6 +1145,9 @@ bool MRLspServiceSession::consumeInboundMessage(const mr::lsp::LspInboundMessage
 
 		result.hasRequestPosition = true;
 		result.requestPosition = MRServiceTextPosition{completionRequest.position.line, completionRequest.position.character};
+		result.hasTriggerCharacter = completionRequest.hasTriggerCharacter;
+		result.triggerCharacter = completionRequest.triggerCharacter;
+		result.lspMiddlewarePath = activeServerProfile.lspMiddlewarePath;
 		resultStore.putCompletion(result);
 	}
 	if (!documentHighlightAdapter.consume(message, documentService, documentHighlightRequest, documentHighlight, accepted, errorMessage)) return false;
@@ -878,6 +1214,18 @@ void MRLspServiceSession::clearRuntimeBinding() noexcept {
 	activeRuntimeCompileContextFingerprint.clear();
 	activeRuntimeHasRoot = false;
 	hasActiveRuntime = false;
+	supportsDefinition = false;
+	supportsReferences = false;
+	supportsHover = false;
+	supportsCompletion = false;
+	supportsDocumentHighlight = false;
+	supportsDocumentSymbols = false;
+	supportsWorkspaceSymbols = false;
+	supportsSignatureHelp = false;
+	supportsRename = false;
+	supportsCodeAction = false;
+	supportsCompletionResolve = false;
+	completionTriggerCharacters.clear();
 }
 
 } // namespace mr::services

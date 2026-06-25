@@ -282,6 +282,12 @@ bool LspDefinitionAdapter::consume(const LspInboundMessage &message, const LspDo
 		return true;
 	}
 	result.originUri = request.uri;
+	if (message.envelope.hasError) {
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
 	if (!parseDefinitionResult(message.payload, result.locations)) return setError(errorMessage, "LSP definition response location is malformed.");
 	request.pending = false;
 	accepted = true;

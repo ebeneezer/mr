@@ -258,6 +258,7 @@ std::string detectCompilerToolchain(const std::string &compilerPath, const std::
 	std::string versionUpper = upperAscii(version);
 
 	if (name.find("SWIFTC") != std::string::npos) return "SWIFT";
+	if (name.find("LATEXMK") != std::string::npos || versionUpper.find("LATEXMK") != std::string::npos) return "LATEXMK";
 	if (name.find("CLANG") != std::string::npos || versionUpper.find("CLANG") != std::string::npos) return "CLANG";
 	if (name.find("G++") != std::string::npos || name.find("GCC") != std::string::npos || versionUpper.find("GCC") != std::string::npos) return "GCC";
 	return std::string();
@@ -287,6 +288,7 @@ std::string defaultBuildFlagsForProfile(const std::string &toolchain, const MRCo
 		if (flavor == "SIZE") return "-std=c++20 -Os -Wall";
 		return "-std=c++20 -O2 -Wall";
 	}
+	if (toolchain == "LATEXMK") return "-pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd";
 	return std::string();
 }
 
@@ -317,6 +319,15 @@ CompilerProbe probeSwiftCompiler(const std::string &compilerPath) {
 	return probe;
 }
 
+CompilerProbe probeLatexmkCompiler(const std::string &compilerPath) {
+	CompilerProbe probe;
+
+	probe.toolchain = "LATEXMK";
+	probe.executablePath = compilerPath;
+	probe.versionText = versionText(compilerPath);
+	return probe;
+}
+
 void addProfile(std::vector<MRCompilerProfile> &profiles, const CompilerProbe &probe, const std::string &suffix, const std::string &flags) {
 	MRCompilerProfile profile;
 	std::string idPrefix = probe.toolchain == "GCC" ? "GCC" : probe.toolchain;
@@ -340,6 +351,7 @@ std::string normalizeToolchain(const std::string &value) {
 	if (upper == "G++" || upper == "GCC" || upper == "GNU") return "GCC";
 	if (upper == "CLANG++" || upper == "CLANG" || upper == "LLVM") return "CLANG";
 	if (upper == "SWIFTC" || upper == "SWIFT") return "SWIFT";
+	if (upper == "LATEXMK" || upper == "LATEX") return "LATEXMK";
 	if (upper == "CUSTOM") return "CUSTOM";
 	return upper;
 }
@@ -408,11 +420,15 @@ bool normalizeCompilerProfileInPlace(MRCompilerProfile &profile, std::string *er
 	profile.runtimePaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.runtimePaths));
 	profile.buildSuccessAudioUri = normalizeConfiguredPathInput(profile.buildSuccessAudioUri);
 	profile.buildFailureAudioUri = normalizeConfiguredPathInput(profile.buildFailureAudioUri);
+	profile.lspExecutablePath = normalizeConfiguredPathInput(profile.lspExecutablePath);
+	profile.lspArguments = trimAscii(profile.lspArguments);
+	profile.lspWorkingDirectory = normalizeConfiguredPathInput(profile.lspWorkingDirectory);
+	profile.lspMiddlewarePath = normalizeConfiguredPathInput(profile.lspMiddlewarePath);
 
 	if (profile.id.empty()) return setError(errorMessage, "Compiler profile id may not be empty.");
 	if (profile.name.empty()) return setError(errorMessage, "Compiler profile name may not be empty.");
 	if (profile.toolchain.empty()) return setError(errorMessage, "Compiler profile toolchain may not be empty.");
-	if (profile.toolchain != "GCC" && profile.toolchain != "CLANG" && profile.toolchain != "SWIFT" && profile.toolchain != "CUSTOM") return setError(errorMessage, "Compiler profile toolchain must be GCC, CLANG, SWIFT or CUSTOM.");
+	if (profile.toolchain != "GCC" && profile.toolchain != "CLANG" && profile.toolchain != "SWIFT" && profile.toolchain != "LATEXMK" && profile.toolchain != "CUSTOM") return setError(errorMessage, "Compiler profile toolchain must be GCC, CLANG, SWIFT, LATEXMK or CUSTOM.");
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -438,6 +454,7 @@ std::vector<std::string> defaultCompilerExecutablePaths() {
 	appendUniquePath(paths, executableFromPath("g++"));
 	appendUniquePath(paths, executableFromPath("clang++"));
 	appendUniquePath(paths, executableFromPath("swiftc"));
+	appendUniquePath(paths, executableFromPath("latexmk"));
 	cachedPaths = paths;
 	initialized = true;
 	return paths;
@@ -452,6 +469,7 @@ std::vector<MRCompilerProfile> defaultCompilerProfiles() {
 	std::string gcc = executableFromPath("g++");
 	std::string clang = executableFromPath("clang++");
 	std::string swift = executableFromPath("swiftc");
+	std::string latexmk = executableFromPath("latexmk");
 	if (!gcc.empty()) {
 		const CompilerProbe probe = probeCppCompiler("GCC", gcc);
 		addProfile(profiles, probe, "Debug", "-std=c++20 -g -O0 -Wall -Wextra");
@@ -473,6 +491,10 @@ std::vector<MRCompilerProfile> defaultCompilerProfiles() {
 		addProfile(profiles, probe, "Speed", "-O -whole-module-optimization");
 		addProfile(profiles, probe, "Size", "-Osize");
 	}
+	if (!latexmk.empty()) {
+		const CompilerProbe probe = probeLatexmkCompiler(latexmk);
+		addProfile(profiles, probe, "PDF", "-pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd");
+	}
 	cachedProfiles = profiles;
 	initialized = true;
 	return profiles;
@@ -492,6 +514,8 @@ bool autoConfigureCompilerProfileFromExecutable(MRCompilerProfile &profile, std:
 	if (toolchain.empty()) return setError(errorMessage, "Automatic setup does not support this compiler executable.");
 	if (toolchain == "SWIFT")
 		probe = probeSwiftCompiler(compilerPath);
+	else if (toolchain == "LATEXMK")
+		probe = probeLatexmkCompiler(compilerPath);
 	else
 		probe = probeCppCompiler(toolchain, compilerPath);
 
@@ -581,6 +605,14 @@ bool applyConfiguredCompilerProfileDirective(const std::string &operation, const
 			profile->buildSuccessAudioUri = arg4;
 		else if (key == "FAILURE_AUDIO_URI")
 			profile->buildFailureAudioUri = arg4;
+		else if (key == "LSP_EXECUTABLE")
+			profile->lspExecutablePath = arg4;
+		else if (key == "LSP_ARGUMENTS")
+			profile->lspArguments = arg4;
+		else if (key == "LSP_WORKING_DIRECTORY")
+			profile->lspWorkingDirectory = arg4;
+		else if (key == "LSP_MIDDLEWARE")
+			profile->lspMiddlewarePath = arg4;
 		else
 			return setError(errorMessage, "Unknown compiler profile setting key.");
 		return setConfiguredCompilerProfiles(profiles, errorMessage);

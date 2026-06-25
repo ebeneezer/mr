@@ -33,6 +33,7 @@ const LspLanguageIdEntry lspLanguageIdTable[] = {
 	{ MRSyntaxLanguage::MRMAC, "mrmac" },
 	{ MRSyntaxLanguage::Make, "makefile" },
 	{ MRSyntaxLanguage::Markdown, "markdown" },
+	{ MRSyntaxLanguage::Latex, "latex" },
 	{ MRSyntaxLanguage::PlainText, "plaintext" },
 };
 

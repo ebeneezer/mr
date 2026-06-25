@@ -60,6 +60,13 @@ std::string compilerOutputPathForSource(const std::string &sourcePath) {
 	return output.string();
 }
 
+std::string latexPdfOutputPathForSource(const std::string &sourcePath) {
+	std::filesystem::path output(sourcePath);
+
+	output.replace_extension(".pdf");
+	return output.string();
+}
+
 bool pathIsDirectory(const std::string &path) {
 	std::error_code error;
 
@@ -83,10 +90,19 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	commandLine.clear();
 	if (source.empty()) return setError(errorMessage, "No source file selected for build.");
 	if (profile.executablePath.empty()) return setError(errorMessage, "Compiler profile has no executable path.");
-	if (toolchain != "GCC" && toolchain != "CLANG" && toolchain != "SWIFT") return setError(errorMessage, "Build current file currently supports GCC, CLANG and SWIFT compiler profiles.");
+	if (toolchain != "GCC" && toolchain != "CLANG" && toolchain != "SWIFT" && toolchain != "LATEXMK") return setError(errorMessage, "Build current file currently supports GCC, CLANG, SWIFT and LATEXMK compiler profiles.");
 
 	command << shellQuote(profile.executablePath);
 	if (!profile.buildFlags.empty()) command << ' ' << profile.buildFlags;
+	if (toolchain == "LATEXMK") {
+		const std::string pdfPath = latexPdfOutputPathForSource(source);
+
+		command << ' ' << shellQuote(source);
+		command << " && if command -v zathura >/dev/null 2>&1; then exec zathura " << shellQuote(pdfPath) << "; else printf '%s\\n' " << shellQuote("MR: zathura not found; PDF written to " + pdfPath) << "; fi";
+		commandLine = command.str();
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
 	for (const std::string &path : profile.includePaths)
 		if (!path.empty()) command << " -I" << shellQuote(path);
 	for (const std::string &path : profile.libraryPaths)

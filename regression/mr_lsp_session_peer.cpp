@@ -120,6 +120,12 @@ std::string completionResponse(const mr::lsp::JsonRpcEnvelope &envelope) {
 	       ",\"result\":{\"isIncomplete\":false,\"items\":[{\"label\":\"main\",\"kind\":3,\"labelDetails\":{\"detail\":null},\"detail\":\"int\\u0020main()\",\"insertText\":\"ma\\u0069n\",\"textEdit\":{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":3}},\"newText\":\"main\"}},{\"label\":\"for\",\"kind\":14,\"detail\":\"snippet\",\"insertText\":\"for (${1:int i = 0}; ${2:i < count}; ${3:++i}) {\\n\\t$0\\n}\",\"insertTextFormat\":2},{\"label\":\"macroValue\",\"kind\":6,\"detail\":\"int\"}]}}";
 }
 
+std::string completionResolveResponse(const mr::lsp::JsonRpcEnvelope &envelope, const std::string &payload) {
+	if (payload.find("\"label\":\"macroValue\"") != std::string::npos)
+		return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":{\"label\":\"macroValue\",\"kind\":6,\"detail\":\"int\",\"documentation\":{\"kind\":\"markdown\",\"value\":\"Resolved macro documentation.\"},\"insertText\":\"macroValue\"}}";
+	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":{\"label\":\"resolved\",\"documentation\":\"Resolved fallback.\"}}";
+}
+
 std::string codeActionResponse(const mr::lsp::JsonRpcEnvelope &envelope, const PeerState &state) {
 	const std::string uri = state.documentUri.empty() ? "file:///tmp/mr.cpp" : state.documentUri;
 
@@ -135,7 +141,9 @@ void emitDiagnostics(const std::string &uri, int version, const std::string &mes
 
 std::string responseFor(const mr::lsp::JsonRpcEnvelope &envelope) {
 	if (envelope.kind != mr::lsp::JsonRpcMessageKind::Request) return {};
-	if (envelope.method == "initialize") return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":{\"capabilities\":{}}}";
+	if (envelope.method == "initialize")
+		return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText +
+		       ",\"result\":{\"capabilities\":{\"definitionProvider\":true,\"referencesProvider\":true,\"hoverProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\",\"\\\\\"],\"resolveProvider\":true},\"codeActionProvider\":true}}}";
 	if (envelope.method == "shutdown") return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":null}";
 	if (envelope.method == "mr/echo") return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"result\":{\"ok\":true}}";
 	return "{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"error\":{\"code\":-32601,\"message\":\"method not found\"}}";
@@ -187,7 +195,20 @@ bool handlePayload(const std::string &payload, PeerState &state) {
 		return true;
 	}
 	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "textDocument/completion") {
+		const bool invokedCompletion = payload.find("\"triggerKind\":1") != std::string::npos;
+		const bool triggeredCompletion = payload.find("\"triggerKind\":2") != std::string::npos && payload.find("\"triggerCharacter\":\"\\\\\"") != std::string::npos;
+
+		if (!invokedCompletion && !triggeredCompletion) {
+			std::cout << mr::lsp::buildJsonRpcFrame("{\"jsonrpc\":\"2.0\",\"id\":" + envelope.idText + ",\"error\":{\"code\":-32602,\"message\":\"missing completion context\"}}");
+			std::cout.flush();
+			return true;
+		}
 		std::cout << mr::lsp::buildJsonRpcFrame(completionResponse(envelope));
+		std::cout.flush();
+		return true;
+	}
+	if (envelope.kind == mr::lsp::JsonRpcMessageKind::Request && envelope.method == "completionItem/resolve") {
+		std::cout << mr::lsp::buildJsonRpcFrame(completionResolveResponse(envelope, payload));
 		std::cout.flush();
 		return true;
 	}

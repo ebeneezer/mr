@@ -22,7 +22,7 @@ enum class MRReadOnlySidekickPlacement : unsigned char {
 
 class MRSidekickEditor : public TView {
   public:
-	MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly = false);
+	MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly = false, bool modalClose = false, bool snippetSidekick = false);
 	~MRSidekickEditor() override;
 
 	void draw() override;
@@ -39,33 +39,37 @@ class MRSidekickEditor : public TView {
 	std::string mTitle;
 	std::vector<std::string> mLines;
 	std::vector<MRSidekickSpan> mPlaceholders;
+	std::vector<unsigned char> mPlaceholderTouched;
 	int mPlaceholderIndex;
+	bool mPlaceholderEndEdge;
 	int mCursorRow;
 	int mCursorCol;
 	bool mReadOnly;
+	bool mModalClose;
+	bool mSnippetSidekick;
 
 	void setText(std::string text);
 	[[nodiscard]] std::string text() const;
-	void closeSidekick();
+	void closeSidekick(ushort command = cmCancel);
 	void commitAndClose();
 	void insertChar(char ch);
 	void insertNewLine();
 	void eraseBackward();
 	void eraseForward();
+	bool replaceActivePlaceholder(const std::string &replacement);
 	void moveLeft();
 	void moveRight();
 	void moveUp();
 	void moveDown();
 	void moveToPlaceholder(int direction);
+	void setCursorFromActivePlaceholder();
 	void setCursorFromOffset(std::size_t offset);
 	[[nodiscard]] std::size_t cursorOffset() const noexcept;
-	[[nodiscard]] bool offsetInPlaceholder(std::size_t offset) const noexcept;
 	void adjustPlaceholdersAfterInsert(std::size_t offset, std::size_t length);
 	void adjustPlaceholdersAfterErase(std::size_t offset, std::size_t length);
 	void clampCursor() noexcept;
 };
 
-bool mrOpenSnippetSidekick(MREditWindow *parent, std::size_t replaceStart, std::size_t replaceEnd, const std::string &text, const std::string &title, const std::vector<MRSidekickSpan> &placeholders = std::vector<MRSidekickSpan>());
 bool mrOpenReadOnlySidekick(MREditWindow *parent, const std::string &text, const std::string &title, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);
 bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);
 bool mrHasReadOnlySidekickForParent(const MREditWindow *parent);

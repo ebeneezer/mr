@@ -12,6 +12,7 @@ bool LspLifecycle::start(const LspInitializeSpec &spec, std::string &errorMessag
 	if (lifecycleState != LspLifecycleState::Stopped && lifecycleState != LspLifecycleState::Shutdown)
 		return fail(errorMessage, "LSP lifecycle is not stopped.");
 	initializeRequestId.clear();
+	lastInitializeResponsePayload.clear();
 	shutdownRequestId.clear();
 	if (!session.start(spec.session, errorMessage)) {
 		lifecycleState = LspLifecycleState::Failed;
@@ -83,6 +84,7 @@ void LspLifecycle::close() {
 	session.close();
 	lifecycleState = LspLifecycleState::Stopped;
 	initializeRequestId.clear();
+	lastInitializeResponsePayload.clear();
 	shutdownRequestId.clear();
 }
 
@@ -94,6 +96,10 @@ bool LspLifecycle::running() const noexcept {
 	return session.running();
 }
 
+const std::string &LspLifecycle::initializeResponsePayload() const noexcept {
+	return lastInitializeResponsePayload;
+}
+
 bool LspLifecycle::fail(std::string &errorMessage, const std::string &message) {
 	errorMessage = message;
 	lifecycleState = LspLifecycleState::Failed;
@@ -103,6 +109,7 @@ bool LspLifecycle::fail(std::string &errorMessage, const std::string &message) {
 void LspLifecycle::applyInboundMessage(const LspInboundMessage &message) {
 	if (!message.matchedPendingRequest) return;
 	if (lifecycleState == LspLifecycleState::Starting && message.pendingRequest.idText == initializeRequestId && message.pendingRequest.method == "initialize") {
+		lastInitializeResponsePayload = message.payload;
 		lifecycleState = LspLifecycleState::Initialized;
 		return;
 	}

@@ -150,8 +150,9 @@ void MRFileEditor::handleEvent(TEvent &event) {
 			handleMouse(event);
 			break;
 		case evMouseWheel:
-			if (vScrollBar != nullptr) vScrollBar->handleEvent(event);
-			if (event.what != evNothing && hScrollBar != nullptr) hScrollBar->handleEvent(event);
+			static_cast<void>(scrollWindowByWheel(event.mouse.wheel));
+			clearEvent(event);
+			return;
 			break;
 		case evKeyDown:
 			handleKeyDown(event);
@@ -169,8 +170,20 @@ void MRFileEditor::scrollDraw() {
 	int newDeltaY = vScrollBar != nullptr ? vScrollBar->value : 0;
 
 	if (newDeltaX != delta.x || newDeltaY != delta.y) {
+		const int oldDeltaY = delta.y;
+		const bool verticalMoved = newDeltaY != oldDeltaY;
+		const int cursorRow = std::max(0, std::min(static_cast<int>(visibleLineForDocumentLine(cachedCursorLineIndex())) - oldDeltaY, std::max(1, visibleTextRows()) - 1));
+		const int cursorColumn = displayedCursorColumn();
+
 		delta.x = newDeltaX;
 		delta.y = newDeltaY;
+		if (verticalMoved) {
+			const std::size_t targetVisibleLine = static_cast<std::size_t>(std::max(0, newDeltaY + cursorRow));
+			const std::size_t targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
+			const std::size_t targetOffset = charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), cursorColumn);
+			moveCursor(targetOffset, false, false, cursorColumn);
+			return;
+		}
 		if (useApproximateLargeFileMetrics()) updateMetrics();
 		scheduleSyntaxWarmupIfNeeded();
 		drawView();
@@ -669,8 +682,7 @@ void MRFileEditor::handleMouse(TEvent &event) {
 				++dy;
 			if (dx != delta.x || dy != delta.y) scrollTo(std::max(dx, 0), std::max(dy, 0));
 		} else if (event.what == evMouseWheel) {
-			if (vScrollBar != nullptr) vScrollBar->handleEvent(event);
-			if (event.what != evNothing && hScrollBar != nullptr) hScrollBar->handleEvent(event);
+			static_cast<void>(scrollWindowByWheel(event.mouse.wheel));
 		}
 		int dragColumn = 0;
 		std::size_t target = mouseOffset(makeLocal(event.mouse.where), &dragColumn);

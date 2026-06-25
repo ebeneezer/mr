@@ -25,6 +25,7 @@ struct MRLspServerProfile {
 	std::string executablePath;
 	std::vector<std::string> arguments;
 	std::string workingDirectory;
+	std::string lspMiddlewarePath;
 };
 
 enum class MRLspServiceRequestKind {
@@ -86,6 +87,7 @@ public:
 		MRLspServiceRequestKind requestKind,
 		mr::lsp::LspTextPosition position,
 		bool includeDeclaration,
+		const std::string &completionTriggerCandidate,
 		std::string &errorMessage);
 	bool requestEditorDocumentService(
 		const MRWorkspaceServiceSnapshot &workspace,
@@ -95,6 +97,7 @@ public:
 		MRLspServiceRequestKind requestKind,
 		mr::lsp::LspTextPosition position,
 		bool includeDeclaration,
+		const std::string &completionTriggerCandidate,
 		std::string &errorMessage);
 	bool requestEditorDocumentServiceCommand(
 		const MRWorkspaceServiceSnapshot &workspace,
@@ -103,24 +106,29 @@ public:
 		const MRFileEditor &editor,
 		MRLspServiceCommandId command,
 		mr::lsp::LspTextPosition position,
+		const std::string &completionTriggerCandidate,
 		std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool requestDefinition(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestReferences(mr::lsp::LspTextPosition position, bool includeDeclaration, std::string &errorMessage);
 	bool requestHover(mr::lsp::LspTextPosition position, std::string &errorMessage);
-	bool requestCompletion(mr::lsp::LspTextPosition position, std::string &errorMessage);
+	bool requestCompletion(mr::lsp::LspTextPosition position, const std::string &triggerCandidate, std::string &errorMessage);
 	bool requestDocumentHighlight(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestDocumentSymbols(std::string &errorMessage);
 	bool requestWorkspaceSymbols(const std::string &query, std::string &errorMessage);
 	bool requestSignatureHelp(mr::lsp::LspTextPosition position, std::string &errorMessage);
 	bool requestRename(mr::lsp::LspTextPosition position, const std::string &newName, std::string &errorMessage);
 	bool requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage);
+	bool resolveCompletionItem(const MRServiceCompletionItem &item, MRServiceCompletionItem &resolvedItem, std::string &errorMessage);
 	bool closeDocument(std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);
 	void close();
 
 	[[nodiscard]] const MRServiceResultStore &results() const noexcept;
 	[[nodiscard]] bool runtimeActive() const noexcept;
+	[[nodiscard]] bool runtimeCapabilitiesKnown() const noexcept;
+	[[nodiscard]] bool supportsRequestKind(MRLspServiceRequestKind requestKind) const noexcept;
+	[[nodiscard]] bool supportsCodeActions() const noexcept;
 	[[nodiscard]] std::string activeHoverRequestId() const;
 	[[nodiscard]] std::string activeSignatureHelpRequestId() const;
 
@@ -129,6 +137,9 @@ private:
 	bool acceptWorkspaceForSource(const MRWorkspaceServiceSnapshot &workspace, const mr::lsp::LspDocumentSourceSnapshot &source, std::string &errorMessage);
 	bool consumeInboundMessage(const mr::lsp::LspInboundMessage &message, std::string &errorMessage);
 	bool runtimeMatches(const MRWorkspaceServiceSnapshot &workspace, const MRLspServerProfile &profile) const;
+	bool requestKindSupported(MRLspServiceRequestKind requestKind, std::string &errorMessage) const;
+	bool completionTriggerCharacterAccepted(const std::string &candidate, std::string &triggerCharacter) const;
+	void updateCapabilitiesFromInitializeResponse(const std::string &payload) noexcept;
 	void clearRequests() noexcept;
 	void clearRuntimeBinding() noexcept;
 
@@ -175,6 +186,18 @@ private:
 	std::string activeRuntimeCompileContextFingerprint;
 	bool activeRuntimeHasRoot = false;
 	bool hasActiveRuntime = false;
+	bool supportsDefinition = false;
+	bool supportsReferences = false;
+	bool supportsHover = false;
+	bool supportsCompletion = false;
+	bool supportsDocumentHighlight = false;
+	bool supportsDocumentSymbols = false;
+	bool supportsWorkspaceSymbols = false;
+	bool supportsSignatureHelp = false;
+	bool supportsRename = false;
+	bool supportsCodeAction = false;
+	bool supportsCompletionResolve = false;
+	std::vector<std::string> completionTriggerCharacters;
 };
 
 } // namespace mr::services

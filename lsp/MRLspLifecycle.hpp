@@ -41,6 +41,7 @@ public:
 
 	[[nodiscard]] LspLifecycleState state() const noexcept;
 	[[nodiscard]] bool running() const noexcept;
+	[[nodiscard]] const std::string &initializeResponsePayload() const noexcept;
 
 private:
 	bool fail(std::string &errorMessage, const std::string &message);
@@ -49,6 +50,7 @@ private:
 	LspSession session;
 	LspLifecycleState lifecycleState = LspLifecycleState::Stopped;
 	std::string initializeRequestId;
+	std::string lastInitializeResponsePayload;
 	std::string shutdownRequestId;
 };
 

@@ -1194,13 +1194,8 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			MRFileEditor *wheelEditor = wheelWindow != nullptr ? wheelWindow->getEditor() : nullptr;
 
 			if (wheelEditor != nullptr) {
-				const int wheelStep = event.mouse.wheel == mwRight || event.mouse.wheel == mwDown ? 3 : -3;
-
 				setActivePane(wheelLeafId);
-				if (event.mouse.wheel == mwLeft || event.mouse.wheel == mwRight)
-					wheelEditor->scrollTo(std::max(0, wheelEditor->delta.x + wheelStep), wheelEditor->delta.y);
-				else
-					wheelEditor->scrollTo(wheelEditor->delta.x, std::max(0, wheelEditor->delta.y + wheelStep));
+				static_cast<void>(wheelEditor->scrollWindowByWheel(event.mouse.wheel));
 				clearEvent(event);
 				syncFileCompareLinkedPaneFrom(wheelLeafId, false);
 				if (wheelLeafId != 0 && wheelWindow != nullptr) wheelWindow->drawView();
@@ -1255,11 +1250,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			MRFileEditor *targetEditor = targetPane->getEditor();
 			if (trackFileCompareMutation && targetEditor != nullptr) fileCompareVersionBefore = targetEditor->documentVersion();
 			if (event.what == evMouseWheel && targetEditor != nullptr) {
-				const int wheelStep = event.mouse.wheel == mwRight || event.mouse.wheel == mwDown ? 3 : -3;
-				if (event.mouse.wheel == mwLeft || event.mouse.wheel == mwRight)
-					targetEditor->scrollTo(std::max(0, targetEditor->delta.x + wheelStep), targetEditor->delta.y);
-				else
-					targetEditor->scrollTo(targetEditor->delta.x, std::max(0, targetEditor->delta.y + wheelStep));
+				static_cast<void>(targetEditor->scrollWindowByWheel(event.mouse.wheel));
 				clearEvent(event);
 				bentoProjectionDirty |= bpdScrollBar;
 			} else
@@ -1293,11 +1284,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	}
 	if (event.what == evMouseWheel && activeLeafId == 0 && getEditor() != nullptr && pointInRect(localMouse, contentBounds(paneBoundsForLeaf(0)))) {
 		MRFileEditor *sourceEditor = getEditor();
-		const int wheelStep = event.mouse.wheel == mwRight || event.mouse.wheel == mwDown ? 3 : -3;
-		if (event.mouse.wheel == mwLeft || event.mouse.wheel == mwRight)
-			sourceEditor->scrollTo(std::max(0, sourceEditor->delta.x + wheelStep), sourceEditor->delta.y);
-		else
-			sourceEditor->scrollTo(sourceEditor->delta.x, std::max(0, sourceEditor->delta.y + wheelStep));
+		static_cast<void>(sourceEditor->scrollWindowByWheel(event.mouse.wheel));
 		clearEvent(event);
 		bentoProjectionDirty |= bpdScrollBar | bpdChrome | bpdOverlay;
 		syncFileCompareLinkedPaneFrom(0);

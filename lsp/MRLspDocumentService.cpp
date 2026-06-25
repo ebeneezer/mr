@@ -76,6 +76,29 @@ bool LspDocumentService::close(std::string &errorMessage) {
 	return true;
 }
 
+bool LspDocumentService::close(const LspDocumentSourceSnapshot &snapshot, std::string &errorMessage) {
+	LspDocumentSnapshot documentSnapshot;
+	LspDocumentNotification notification;
+	std::map<std::string, LspDocumentMirror>::iterator found;
+	LspDocumentMirror candidate;
+
+	if (!sourceToDocumentSnapshot(snapshot, documentSnapshot, errorMessage)) return false;
+	found = mirrors.find(documentSnapshot.uri);
+	if (found == mirrors.end()) {
+		errorMessage = "LSP document service document is not open.";
+		return false;
+	}
+	candidate = found->second;
+	if (!candidate.close(notification, errorMessage)) return false;
+	if (!sendMirrorNotification(notification, errorMessage)) return false;
+	mirrors.erase(found);
+	if (activeUri == documentSnapshot.uri) {
+		activeUri.clear();
+		if (!mirrors.empty()) activeUri = mirrors.begin()->first;
+	}
+	return true;
+}
+
 void LspDocumentService::clear() {
 	mirrors.clear();
 	activeUri.clear();
@@ -134,6 +157,16 @@ bool LspDocumentService::isStaleForSentVersion(std::int64_t version) const noexc
 	const std::map<std::string, LspDocumentMirror>::const_iterator found = mirrors.find(activeUri);
 
 	return found != mirrors.end() && found->second.isStaleForSentVersion(version);
+}
+
+bool LspDocumentService::isStaleForSentVersion(const LspDocumentSourceSnapshot &snapshot, std::string &errorMessage) const {
+	LspDocumentSnapshot documentSnapshot;
+	std::map<std::string, LspDocumentMirror>::const_iterator found;
+
+	if (!sourceToDocumentSnapshot(snapshot, documentSnapshot, errorMessage)) return false;
+	found = mirrors.find(documentSnapshot.uri);
+	errorMessage.clear();
+	return found != mirrors.end() && found->second.isStaleForSentVersion(documentSnapshot.version);
 }
 
 bool LspDocumentService::isStaleForSentVersion(const std::string &uri, std::int64_t version) const noexcept {

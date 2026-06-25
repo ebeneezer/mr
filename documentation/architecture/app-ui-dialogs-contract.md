@@ -57,6 +57,17 @@ These rules apply to new dialogs and to layout changes in existing dialogs.
 - Radio-button clusters must have a left-aligned heading ending with a colon.
 - Checkbox options that belong together must be grouped into one checkbox cluster with a left-aligned heading ending with a colon.
 - Dialog content must keep equal visual distance to the left and right dialog borders.
+- Text input rows belong to visual field groups. Within one group, labels,
+  input starts, input ends and optional comfort controls must align
+  consistently.
+- Text inputs with comfort controls such as history drop lists or browse
+  glyphs may extend near the right dialog border, but must leave at least one
+  column of frame spacing. Two columns are acceptable only when the matching
+  left spacing and neighboring rows use the same group rhythm.
+- Text inputs without comfort controls use the same plain input width as their
+  group peers. They do not extend into the reserved comfort-control columns.
+- Comfort-control columns are reserved outside the input field. The highlighted
+  input area must not run underneath history or browse glyphs.
 - Dialog titles must be uppercase and must not use ellipses.
 - Dialog button rows must be horizontally centered.
 - Dialogs must not add a Cancel button by default. Closing without applying changes is handled by the dialog close action.

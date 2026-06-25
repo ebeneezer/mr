@@ -115,6 +115,40 @@ bool parseCompilerDiagnosticLine(const std::string &line, const std::string &sou
 	return true;
 }
 
+bool parseLatexSourceDiagnosticLine(const std::string &line, const std::string &sourcePath, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
+	std::size_t lineColon = std::string::npos;
+	std::size_t textColon = std::string::npos;
+	std::size_t sourceLine = 0;
+
+	for (std::size_t colon = line.find(':'); colon != std::string::npos; colon = line.find(':', colon + 1)) {
+		const std::size_t nextColon = line.find(':', colon + 1);
+
+		if (nextColon == std::string::npos) return false;
+		if (!parseUnsignedField(line, colon + 1, nextColon, sourceLine)) continue;
+		lineColon = colon;
+		textColon = nextColon;
+		break;
+	}
+	if (lineColon == std::string::npos || textColon == std::string::npos || sourceLine == 0) return false;
+
+	const std::string diagnosticPath = line.substr(0, lineColon);
+	if (!compilerDiagnosticPathMatches(diagnosticPath, sourcePath)) return false;
+
+	diagnostic.sourcePath = diagnosticPath;
+	diagnostic.sourceLine = sourceLine;
+	diagnostic.sourceColumn = 1;
+	diagnostic.text = line.substr(textColon + 1);
+	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
+		diagnostic.text.erase(diagnostic.text.begin());
+	if (diagnostic.text.empty()) return false;
+	diagnostic.severity = diagnostic.text.find("Warning:") != std::string::npos ? "warning" : "error";
+	diagnostic.sourceOffset = 0;
+	diagnostic.outputOffset = outputOffset;
+	diagnostic.problemOffset = 0;
+	diagnostic.sourceAvailable = true;
+	return true;
+}
+
 bool parseCompilerDriverDiagnosticLine(const std::string &line, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
 	static const DiagnosticSeverityMarker markers[] = {{"warning:", "warning"}, {"note:", "note"}};
 	std::size_t markerPos = std::string::npos;
@@ -141,6 +175,41 @@ bool parseCompilerDriverDiagnosticLine(const std::string &line, std::size_t outp
 	diagnostic.text = line.substr(markerPos + std::strlen(matchedMarker->marker));
 	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
 		diagnostic.text.erase(diagnostic.text.begin());
+	diagnostic.sourceOffset = 0;
+	diagnostic.outputOffset = outputOffset;
+	diagnostic.problemOffset = 0;
+	diagnostic.sourceAvailable = false;
+	return true;
+}
+
+bool parseLatexBuildWarningLine(const std::string &line, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
+	static const DiagnosticSeverityMarker markers[] = {{"LaTeX Warning:", "LaTeX"}, {"Package ", "Package"}, {"Class ", "Class"}};
+	const DiagnosticSeverityMarker *matchedMarker = nullptr;
+	std::size_t markerPos = std::string::npos;
+	std::size_t warningPos = std::string::npos;
+
+	for (const DiagnosticSeverityMarker &marker : markers) {
+		if (line.rfind(marker.marker, 0) != 0) continue;
+		matchedMarker = &marker;
+		markerPos = std::strlen(marker.marker);
+		break;
+	}
+	if (matchedMarker == nullptr) return false;
+	if (std::strcmp(matchedMarker->marker, "LaTeX Warning:") == 0) {
+		diagnostic.sourcePath = matchedMarker->severity;
+		diagnostic.text = line.substr(markerPos);
+	} else {
+		warningPos = line.find(" Warning:", markerPos);
+		if (warningPos == std::string::npos) return false;
+		diagnostic.sourcePath = line.substr(0, warningPos);
+		diagnostic.text = line.substr(warningPos + std::strlen(" Warning:"));
+	}
+	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
+		diagnostic.text.erase(diagnostic.text.begin());
+	if (diagnostic.text.empty()) return false;
+	diagnostic.sourceLine = 0;
+	diagnostic.sourceColumn = 0;
+	diagnostic.severity = "warning";
 	diagnostic.sourceOffset = 0;
 	diagnostic.outputOffset = outputOffset;
 	diagnostic.problemOffset = 0;
@@ -186,7 +255,9 @@ std::vector<MRCompilerDiagnostic> parseCompilerDiagnostics(const std::string &te
 
 		if (lineEnd == std::string::npos) lineEnd = textLength;
 		const std::string line = text.substr(lineStart, lineEnd - lineStart);
-		if (parseCompilerDiagnosticLine(line, sourcePath, lineStart, diagnostic) || parseCompilerDriverDiagnosticLine(line, lineStart, diagnostic)) diagnostics.push_back(std::move(diagnostic));
+		if (parseCompilerDiagnosticLine(line, sourcePath, lineStart, diagnostic) || parseLatexSourceDiagnosticLine(line, sourcePath, lineStart, diagnostic) || parseCompilerDriverDiagnosticLine(line, lineStart, diagnostic) ||
+		    parseLatexBuildWarningLine(line, lineStart, diagnostic))
+			diagnostics.push_back(std::move(diagnostic));
 		if (lineEnd == textLength) break;
 		lineStart = lineEnd + 1;
 	}
@@ -392,10 +463,11 @@ bool MRBentoBox::refreshCompilerDiagnosticsFromOutput() {
 	diagnostics = parseCompilerDiagnostics(outputWindow->buffer().readSnapshot().text(), currentFileName());
 	for (MRCompilerDiagnostic &diagnostic : diagnostics) {
 		if (!compilerDiagnosticSeverityEnabled(diagnostic)) continue;
-		if (!diagnostic.sourceAvailable) continue;
-		const std::size_t lineStart = sourceSnapshot.lineStartByIndex(diagnostic.sourceLine > 0 ? diagnostic.sourceLine - 1 : 0);
-		const std::size_t lineEnd = sourceSnapshot.lineEnd(lineStart);
-		diagnostic.sourceOffset = sourceOffsetForCompilerColumn(sourceEditor, lineStart, lineEnd, diagnostic.sourceColumn);
+		if (diagnostic.sourceAvailable) {
+			const std::size_t lineStart = sourceSnapshot.lineStartByIndex(diagnostic.sourceLine > 0 ? diagnostic.sourceLine - 1 : 0);
+			const std::size_t lineEnd = sourceSnapshot.lineEnd(lineStart);
+			diagnostic.sourceOffset = sourceOffsetForCompilerColumn(sourceEditor, lineStart, lineEnd, diagnostic.sourceColumn);
+		}
 		filteredDiagnostics.push_back(std::move(diagnostic));
 	}
 	compilerDiagnostics = std::move(filteredDiagnostics);

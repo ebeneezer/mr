@@ -25,6 +25,7 @@ public:
 	bool change(const LspDocumentSourceSnapshot &snapshot, std::string &errorMessage);
 	bool activate(const LspDocumentSourceSnapshot &snapshot, std::string &errorMessage);
 	bool close(std::string &errorMessage);
+	bool close(const LspDocumentSourceSnapshot &snapshot, std::string &errorMessage);
 	void clear();
 
 	[[nodiscard]] bool isOpen() const noexcept;
@@ -36,6 +37,7 @@ public:
 	[[nodiscard]] bool matchesSentVersion(const LspDocumentSourceSnapshot &snapshot, std::string &errorMessage) const;
 	[[nodiscard]] bool matchesSentVersion(const std::string &uri, std::int64_t version) const noexcept;
 	[[nodiscard]] bool isStaleForSentVersion(std::int64_t version) const noexcept;
+	[[nodiscard]] bool isStaleForSentVersion(const LspDocumentSourceSnapshot &snapshot, std::string &errorMessage) const;
 	[[nodiscard]] bool isStaleForSentVersion(const std::string &uri, std::int64_t version) const noexcept;
 
 private:

@@ -26,7 +26,7 @@ bool isIndentWhitespace(char ch) noexcept {
 
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
-	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
+	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Latex || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
 	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Xml;
 }
 
@@ -1156,6 +1156,31 @@ int markdownHeadingLevel(std::string_view trimmed, std::string_view nextTrimmed)
 	return 0;
 }
 
+int latexHeadingLevel(std::string_view trimmed) noexcept {
+	struct LatexHeadingEntry {
+		const char *prefix;
+		int level;
+	};
+	static const LatexHeadingEntry entries[] = {
+		{"\\part", 1},
+		{"\\chapter", 2},
+		{"\\section", 3},
+		{"\\subsection", 4},
+		{"\\subsubsection", 5},
+		{"\\paragraph", 6},
+		{"\\subparagraph", 7},
+	};
+
+	for (const LatexHeadingEntry &entry : entries) {
+		const std::string_view prefix(entry.prefix);
+		if (!trimmed.starts_with(prefix)) continue;
+		if (trimmed.size() == prefix.size()) return entry.level;
+		const char next = trimmed[prefix.size()];
+		if (next == '{' || next == '*' || next == '[' || next == ' ' || next == '\t') return entry.level;
+	}
+	return 0;
+}
+
 bool markdownFenceMarker(std::string_view trimmed, char &marker, std::size_t &runLength) noexcept {
 	if (!isMarkdownFenceLine(trimmed)) return false;
 	marker = trimmed.front();
@@ -1529,7 +1554,9 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			return currentLast != std::string_view::npos && (trimmed[currentLast] == '{' || trimmed[currentLast] == '[' || trimmed[currentLast] == '(');
 		}();
 		const bool indentOpens = !nextTrimmed.empty() && nextIndent > currentIndent;
-		const int headingLevel = language == MRSyntaxLanguage::Markdown ? markdownHeadingLevel(trimmed, nextTrimmed) : (language == MRSyntaxLanguage::Systemd && isSystemdSectionHeader(trimmed) ? 1 : 0);
+		const int headingLevel = language == MRSyntaxLanguage::Markdown ? markdownHeadingLevel(trimmed, nextTrimmed) :
+		                         language == MRSyntaxLanguage::Latex ? latexHeadingLevel(trimmed) :
+		                         (language == MRSyntaxLanguage::Systemd && isSystemdSectionHeader(trimmed) ? 1 : 0);
 		const bool shellDedent = (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && isShellDedentLead(trimmed, upperLine);
 		const bool shellSiblingLead = (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && isShellSiblingLead(upperLine);
 		const bool fishConditionalLead = language == MRSyntaxLanguage::Fish && (isFishElseIfLead(upperLine) || isFishElseLead(upperLine));
@@ -1979,6 +2006,9 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 					openBlock(MRFoldSourceKind::Indent, currentIndent);
 				break;
 			}
+			case MRSyntaxLanguage::Latex:
+				if (headingLevel > 0) openBlock(MRFoldSourceKind::Section, currentIndent, 0, 0, 0, headingLevel);
+				break;
 			case MRSyntaxLanguage::Make:
 				if (!isMakeRecipeLine(lineText) && isMakeTargetLine(trimmed) && !nextTrimmed.empty() && nextLineTextPtr != nullptr && isMakeRecipeLine(*nextLineTextPtr))
 					openBlock(MRFoldSourceKind::Target, currentIndent);

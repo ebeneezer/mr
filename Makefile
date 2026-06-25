@@ -240,6 +240,9 @@ LSP_SIGNATURE_HELP_OBJECT = lsp/MRLspSignatureHelp.o
 LSP_SERVICE_INTEGRATION_PROBE_TARGET = regression/mr_lsp_service_integration_probe
 LSP_SERVICE_INTEGRATION_PROBE_SOURCE = regression/mr_lsp_service_integration_probe.cpp
 LSP_SERVICE_INTEGRATION_PROBE_OBJECT = regression/mr_lsp_service_integration_probe.o
+LSP_LIVE_MATRIX_PROBE_TARGET = regression/mr_lsp_live_matrix_probe
+LSP_LIVE_MATRIX_PROBE_SOURCE = regression/mr_lsp_live_matrix_probe.cpp
+LSP_LIVE_MATRIX_PROBE_OBJECT = regression/mr_lsp_live_matrix_probe.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -322,7 +325,6 @@ CXX_SOURCES = \
 	mrmac/vm/MRVMDeferredUi.cpp \
 	mrmac/vm/MRVMEditor.cpp \
 	mrmac/vm/MRVMHash.cpp \
-	mrmac/vm/MRVMSnippet.cpp \
 	mrmac/vm/MRVMValue.cpp \
 	mrmac/vm/MRVMSettings.cpp \
 	mrmac/vm/MRVMScreen.cpp \
@@ -380,7 +382,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-app-service-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-protocol-shaper lsp-protocol-shaper-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe lsp-code-action-probe lsp-server-profile-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-app-service-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-protocol-shaper lsp-protocol-shaper-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe lsp-code-action-probe lsp-server-profile-probe lsp-live-matrix-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -420,6 +422,7 @@ lsp-references-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_REFERENCES_PROBE_TARGET)
 lsp-completion-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_COMPLETION_PROBE_TARGET)
 lsp-code-action-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_CODE_ACTION_PROBE_TARGET)
 lsp-service-integration-probe: $(LSP_PROTOCOL_SHAPER_TARGET) $(LSP_SERVICE_INTEGRATION_PROBE_TARGET)
+lsp-live-matrix-probe: $(LSP_LIVE_MATRIX_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -737,6 +740,7 @@ $(LSP_DOCUMENT_SYMBOLS_OBJECT): $(LSP_DOCUMENT_SYMBOLS_SOURCE) lsp/MRLspDocument
 $(LSP_SIGNATURE_HELP_OBJECT): $(LSP_SIGNATURE_HELP_SOURCE) lsp/MRLspSignatureHelp.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
 $(LSP_CODE_ACTION_PROBE_OBJECT): $(LSP_CODE_ACTION_PROBE_SOURCE) lsp/MRLspCodeAction.hpp
 $(LSP_SERVICE_INTEGRATION_PROBE_OBJECT): $(LSP_SERVICE_INTEGRATION_PROBE_SOURCE) app/services/MRServiceResults.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp
+$(LSP_LIVE_MATRIX_PROBE_OBJECT): $(LSP_LIVE_MATRIX_PROBE_SOURCE) lsp/MRLspCompletion.hpp lsp/MRLspDocumentSymbols.hpp lsp/MRLspHover.hpp lsp/MRLspSignatureHelp.hpp lsp/MRLspUri.hpp
 
 # 3. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) | pcre2-check
@@ -831,6 +835,9 @@ $(LSP_CODE_ACTION_PROBE_TARGET): $(LSP_CODE_ACTION_OBJECT) $(LSP_DEFINITION_OBJE
 $(LSP_SERVICE_INTEGRATION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(LSP_SERVICE_INTEGRATION_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
+$(LSP_LIVE_MATRIX_PROBE_TARGET): $(LSP_COMPLETION_OBJECT) $(LSP_DOCUMENT_SYMBOLS_OBJECT) $(LSP_HOVER_OBJECT) $(LSP_SIGNATURE_HELP_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_LIVE_MATRIX_PROBE_OBJECT)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
+
 
 # C++ compilations
 %.o: %.cpp
@@ -873,6 +880,7 @@ clean:
 		$(LSP_DOCUMENT_HIGHLIGHT_OBJECT) \
 		$(LSP_DOCUMENT_SYMBOLS_OBJECT) \
 		$(LSP_SERVICE_INTEGRATION_PROBE_OBJECT) $(LSP_SERVICE_INTEGRATION_PROBE_TARGET) \
+		$(LSP_LIVE_MATRIX_PROBE_OBJECT) $(LSP_LIVE_MATRIX_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe

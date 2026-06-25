@@ -343,6 +343,12 @@ bool LspDocumentSymbolsAdapter::consume(const LspInboundMessage &message, const 
 		return true;
 	}
 	result.originUri = request.uri;
+	if (message.envelope.hasError) {
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
 	if (!parseDocumentSymbolsResult(message.payload, request.uri, result.symbols, errorMessage)) return false;
 	request.pending = false;
 	accepted = true;
@@ -377,6 +383,12 @@ bool LspDocumentSymbolsAdapter::consumeWorkspaceSymbols(const LspInboundMessage 
 	}
 	if (request.method != "workspace/symbol") return setError(errorMessage, "LSP workspace/symbol request method mismatch.");
 	result.query = request.query;
+	if (message.envelope.hasError) {
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
 	if (!parseWorkspaceSymbolsResult(message.payload, result.symbols, errorMessage)) return false;
 	request.pending = false;
 	accepted = true;

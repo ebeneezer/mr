@@ -13,6 +13,22 @@ bool workspaceContainsDocument(const MRWorkspaceServiceSnapshot &workspace, cons
 	}
 	return false;
 }
+
+void setLspCommandAvailability(const MRLspServiceSession &session, bool hasWorkspaceRoot, bool hasCodeActionContext, MRLspCommandAvailability &commands) noexcept {
+	const bool capabilitiesKnown = session.runtimeCapabilitiesKnown();
+
+	commands.requestDefinition = !capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::Definition);
+	commands.requestReferences = !capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::References);
+	commands.requestHover = !capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::Hover);
+	commands.requestCompletion = !capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::Completion);
+	commands.requestDocumentHighlight = !capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::DocumentHighlight);
+	commands.requestDocumentSymbols = !capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::DocumentSymbols);
+	commands.requestWorkspaceSymbols = hasWorkspaceRoot && (!capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::WorkspaceSymbols));
+	commands.requestSignatureHelp = !capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::SignatureHelp);
+	commands.requestRename = !capabilitiesKnown || session.supportsRequestKind(MRLspServiceRequestKind::Rename);
+	commands.requestCodeActions = hasCodeActionContext && (!capabilitiesKnown || session.supportsCodeActions());
+	commands.applyCodeActions = hasCodeActionContext;
+}
 } // namespace
 
 void MRLspAppService::clearMainFile() noexcept {
@@ -49,16 +65,7 @@ MRLspDocumentServiceSnapshot MRLspAppService::documentServiceSnapshot(const MRWo
 	snapshot.documentInWorkspace = workspaceContainsDocument(workspace, normalizedDocument);
 	snapshot.results = session.results().currentResultsForDocument(normalizedDocument);
 	if (snapshot.documentInWorkspace) {
-		snapshot.commands.requestDefinition = true;
-		snapshot.commands.requestReferences = true;
-		snapshot.commands.requestHover = true;
-		snapshot.commands.requestCompletion = true;
-		snapshot.commands.requestDocumentHighlight = true;
-		snapshot.commands.requestDocumentSymbols = true;
-		snapshot.commands.requestWorkspaceSymbols = workspace.root.hasRoot;
-		snapshot.commands.requestSignatureHelp = true;
-		snapshot.commands.requestRename = true;
-		snapshot.commands.requestCodeActions = snapshot.results.current.diagnostics > 0;
+		setLspCommandAvailability(session, workspace.root.hasRoot, snapshot.results.current.diagnostics > 0, snapshot.commands);
 		snapshot.commands.applyCodeActions = snapshot.results.current.codeActions > 0;
 	}
 	return snapshot;
@@ -78,16 +85,7 @@ MRLspPositionServiceSnapshot MRLspAppService::documentPositionServiceSnapshot(co
 	snapshot.documentInWorkspace = workspaceContainsDocument(workspace, normalizedDocument);
 	snapshot.results = session.results().currentResultsForDocumentPosition(normalizedDocument, position);
 	if (snapshot.documentInWorkspace) {
-		snapshot.commands.requestDefinition = true;
-		snapshot.commands.requestReferences = true;
-		snapshot.commands.requestHover = true;
-		snapshot.commands.requestCompletion = true;
-		snapshot.commands.requestDocumentHighlight = true;
-		snapshot.commands.requestDocumentSymbols = true;
-		snapshot.commands.requestWorkspaceSymbols = workspace.root.hasRoot;
-		snapshot.commands.requestSignatureHelp = true;
-		snapshot.commands.requestRename = true;
-		snapshot.commands.requestCodeActions = !snapshot.results.diagnostics.empty();
+		setLspCommandAvailability(session, workspace.root.hasRoot, !snapshot.results.diagnostics.empty(), snapshot.commands);
 		snapshot.commands.applyCodeActions = !snapshot.results.codeActions.empty();
 	}
 	return snapshot;
@@ -104,13 +102,14 @@ bool MRLspAppService::requestEditorCommand(
 	const MRFileEditor &editor,
 	MRLspServiceCommandId command,
 	mr::lsp::LspTextPosition position,
+	const std::string &completionTriggerCandidate,
 	std::string &errorMessage) {
 	if (workspace.documents.empty()) {
 		errorMessage = "LSP app service workspace has no documents.";
 		return false;
 	}
 
-	return session.requestEditorDocumentServiceCommand(workspace, profile, document, editor, command, position, errorMessage);
+	return session.requestEditorDocumentServiceCommand(workspace, profile, document, editor, command, position, completionTriggerCandidate, errorMessage);
 }
 
 bool MRLspAppService::syncEditorDocument(
@@ -133,10 +132,11 @@ bool MRLspAppService::requestCurrentEditorCommand(
 	const MRFileEditor &editor,
 	MRLspServiceCommandId command,
 	mr::lsp::LspTextPosition position,
+	const std::string &completionTriggerCandidate,
 	std::string &errorMessage) {
 	MRWorkspaceServiceSnapshot workspace = buildCurrentWorkspaceSnapshot();
 
-	return requestEditorCommand(profile, workspace, document, editor, command, position, errorMessage);
+	return requestEditorCommand(profile, workspace, document, editor, command, position, completionTriggerCandidate, errorMessage);
 }
 
 bool MRLspAppService::requestWorkspaceSymbols(
@@ -184,6 +184,10 @@ bool MRLspAppService::syncCurrentEditorDocument(
 
 bool MRLspAppService::requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage) {
 	return session.requestCodeActionsForDiagnostic(diagnosticResult, diagnostic, errorMessage);
+}
+
+bool MRLspAppService::resolveCompletionItem(const MRServiceCompletionItem &item, MRServiceCompletionItem &resolvedItem, std::string &errorMessage) {
+	return session.resolveCompletionItem(item, resolvedItem, errorMessage);
 }
 
 bool MRLspAppService::poll(std::string &errorMessage) {

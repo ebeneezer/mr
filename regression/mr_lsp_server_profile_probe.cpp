@@ -1,4 +1,5 @@
 #include "../app/services/MRLspServerProfile.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <cstdlib>
 #include <cstring>
@@ -82,6 +83,8 @@ bool createFakeServerDirectory(std::string &directory, std::string &failureReaso
 	if (!createExecutable(directory + "/clangd", failureReason)) return false;
 	if (!createExecutable(directory + "/pylsp", failureReason)) return false;
 	if (!createExecutable(directory + "/typescript-language-server", failureReason)) return false;
+	if (!createExecutable(directory + "/texlab", failureReason)) return false;
+	if (!createExecutable(directory + "/custom-lsp", failureReason)) return false;
 	return true;
 }
 
@@ -123,6 +126,43 @@ bool testBuiltInMapping(std::string &failureReason) {
 	if (!expect(profile.executablePath.find("/typescript-language-server") != std::string::npos, "JavaScript executable", failureReason)) return false;
 	if (!expect(profile.arguments.size() == 1 && profile.arguments[0] == "--stdio", "JavaScript arguments", failureReason)) return false;
 	if (!expect(mr::services::lspServerProfileArgumentText(profile) == "--stdio", "argument text", failureReason)) return false;
+	if (!expect(mr::services::lspServerExecutableCandidatesForLanguage(MRSyntaxLanguage::Latex) == "digestif, texlab", "LaTeX candidate list", failureReason)) return false;
+	if (!expect(mr::services::buildLspServerProfileForLanguage(MRSyntaxLanguage::Latex, "LaTeX", profile, source, errorMessage), "LaTeX profile missing: " + errorMessage, failureReason)) return false;
+	if (!expect(profile.profileName == "builtin-latex-texlab", "LaTeX profile name", failureReason)) return false;
+	if (!expect(profile.executablePath.find("/texlab") != std::string::npos, "LaTeX executable", failureReason)) return false;
+	if (!expect(profile.arguments.size() == 1 && profile.arguments[0] == "run", "LaTeX arguments", failureReason)) return false;
+	if (!expect(profile.lspMiddlewarePath.empty(), "LaTeX middleware must not be auto-filled while MRExpand is reset", failureReason)) return false;
+	return true;
+}
+
+bool testCompilerProfileOverride(const std::string &fakeDirectory, std::string &failureReason) {
+	MRCompilerProfile compilerProfile;
+	mr::services::MRLspServerProfile profile;
+	std::string source;
+	std::string errorMessage;
+
+	compilerProfile.id = "LSP_OVERRIDE";
+	compilerProfile.name = "LSP override";
+	compilerProfile.toolchain = "CUSTOM";
+	compilerProfile.lspExecutablePath = fakeDirectory + "/custom-lsp";
+	compilerProfile.lspArguments = "--stdio --custom";
+	compilerProfile.lspWorkingDirectory = "/tmp";
+	const std::string environmentServer = fakeDirectory + "/clangd";
+
+	::setenv("MR_LSP_SERVER", environmentServer.c_str(), 1);
+	::setenv("MR_LSP_SERVER_ARGS", "--env", 1);
+	if (!expect(mr::services::buildLspServerProfileForLanguageWithCompilerProfile(MRSyntaxLanguage::Cpp, "C++", compilerProfile, profile, source, errorMessage), "compiler profile LSP missing: " + errorMessage, failureReason)) return false;
+	if (!expect(profile.profileName == "compiler-profile-LSP_OVERRIDE", "compiler profile source name", failureReason)) return false;
+	if (!expect(profile.executablePath.find("/custom-lsp") != std::string::npos, "compiler profile executable", failureReason)) return false;
+	if (!expect(profile.arguments.size() == 2 && profile.arguments[0] == "--stdio" && profile.arguments[1] == "--custom", "compiler profile arguments", failureReason)) return false;
+	if (!expect(profile.workingDirectory == "/tmp", "compiler profile working directory", failureReason)) return false;
+	if (!expect(source == "compiler profile: LSP_OVERRIDE", "compiler profile source", failureReason)) return false;
+	compilerProfile.lspExecutablePath = fakeDirectory + "/texlab";
+	compilerProfile.lspArguments = "run";
+	compilerProfile.lspWorkingDirectory.clear();
+	compilerProfile.lspMiddlewarePath.clear();
+	if (!expect(mr::services::buildLspServerProfileForLanguageWithCompilerProfile(MRSyntaxLanguage::Latex, "LaTeX", compilerProfile, profile, source, errorMessage), "compiler profile LaTeX LSP missing: " + errorMessage, failureReason)) return false;
+	if (!expect(profile.lspMiddlewarePath.empty(), "compiler profile LaTeX default middleware must stay empty while MRExpand is reset", failureReason)) return false;
 	return true;
 }
 
@@ -152,7 +192,7 @@ bool runProbe(std::string &failureReason) {
 		return false;
 	}
 	::setenv("PATH", fakeDirectory.c_str(), 1);
-	ok = testEnvironmentOverride(failureReason) && testBuiltInMapping(failureReason) && testFailurePaths(failureReason);
+	ok = testEnvironmentOverride(failureReason) && testBuiltInMapping(failureReason) && testCompilerProfileOverride(fakeDirectory, failureReason) && testFailurePaths(failureReason);
 	restoreEnvironment(snapshot);
 	return ok;
 }

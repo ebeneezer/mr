@@ -372,14 +372,21 @@ bool browseColorThemeUri(MRDialogHistoryScope scope, const std::string &currentU
 
 std::vector<std::string> compilerProfileIdChoices() {
 	std::vector<std::string> choices;
-	std::vector<MRCompilerProfile> defaultProfiles;
-	const std::vector<MRCompilerProfile> *profiles = &configuredCompilerProfiles();
+	std::vector<MRCompilerProfile> profiles = configuredCompilerProfiles();
 
-	if (profiles->empty()) {
-		defaultProfiles = defaultCompilerProfiles();
-		profiles = &defaultProfiles;
+	for (const MRCompilerProfile &defaultProfile : defaultCompilerProfiles()) {
+		const std::string defaultId = canonicalCompilerProfileId(defaultProfile.id);
+		bool exists = false;
+
+		if (defaultId.empty()) continue;
+		for (const MRCompilerProfile &profile : profiles)
+			if (canonicalCompilerProfileId(profile.id) == defaultId) {
+				exists = true;
+				break;
+			}
+		if (!exists) profiles.push_back(defaultProfile);
 	}
-	for (const MRCompilerProfile &profile : *profiles) {
+	for (const MRCompilerProfile &profile : profiles) {
 		const std::string id = canonicalCompilerProfileId(profile.id);
 		if (!id.empty() && std::find(choices.begin(), choices.end(), id) == choices.end()) choices.push_back(id);
 	}

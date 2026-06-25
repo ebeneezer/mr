@@ -1,39 +1,5 @@
 #include "MRFileEditor.hpp"
 
-#include <array>
-#include <chrono>
-#include <ctime>
-#include <fstream>
-#include <sstream>
-
-namespace {
-
-static constexpr auto kSlowNavigationTraceThreshold = std::chrono::microseconds(2000);
-
-std::string directProbeTimestamp() {
-	std::array<char, 32> buffer{};
-	const std::time_t now = std::time(nullptr);
-	const std::tm *tmNow = std::localtime(&now);
-
-	if (tmNow == nullptr) return std::string("--:--:--");
-	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
-	return std::string(buffer.data());
-}
-
-void appendDirectProbeLog(std::string_view message) {
-	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
-
-	if (!out) return;
-	out << "[" << directProbeTimestamp() << "] " << message << '\n';
-	out.flush();
-}
-
-template <class Duration> long long traceMicros(Duration duration) {
-	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
-}
-
-} // namespace
-
 bool MRFileEditor::freeCursorMovementEnabled() const noexcept {
 	return configuredCursorBehaviour() == MRCursorBehaviour::FreeMovement;
 }
@@ -133,7 +99,6 @@ std::string MRFileEditor::lineTextAtOffset(std::size_t pos) const {
 }
 
 int MRFileEditor::charColumn(std::size_t start, std::size_t pos) const noexcept {
-	const auto startedAt = std::chrono::steady_clock::now();
 	std::size_t lineStart = mBufferModel.lineStart(start);
 	std::string lineText = mBufferModel.lineText(lineStart);
 	TStringView line(lineText.data(), lineText.size());
@@ -151,13 +116,6 @@ int MRFileEditor::charColumn(std::size_t start, std::size_t pos) const noexcept 
 		visual += static_cast<int>(width);
 		p = next;
 	}
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowNavigationTraceThreshold) {
-		std::ostringstream trace;
-		trace << "Phase1 nav charColumn total_us=" << traceMicros(totalElapsed) << " start=" << start << " pos=" << pos << " line_start=" << lineStart << " end_bytes=" << end
-		      << " line_bytes=" << line.size() << " len=" << mBufferModel.length() << " add=" << mBufferModel.document().addBufferLength() << " pieces=" << mBufferModel.document().pieceCount();
-		appendDirectProbeLog(trace.str());
-	}
 	return visual;
 }
 
@@ -170,15 +128,60 @@ void MRFileEditor::setCursorOffsetAtVisualColumn(std::size_t pos, int visualColu
 }
 
 bool MRFileEditor::scrollWindowByLines(int deltaRows) {
-	const std::size_t cursorBefore = cursorOffset();
-	const int rowBefore = currentViewRow();
-	const int targetVisualColumn = displayedCursorColumn();
-	const std::size_t target = lineMoveOffset(cursorBefore, deltaRows, targetVisualColumn);
+	int maxY = vScrollBar != nullptr ? vScrollBar->maxVal : std::max(0, limit.y - size.y);
+	int targetY = std::min(std::max(delta.y + deltaRows, 0), std::max(0, maxY));
 
 	if (deltaRows == 0) return true;
-	if (target == cursorBefore) return false;
-	moveCursor(target, false, false, targetVisualColumn);
-	if (const int rowDelta = currentViewRow() - rowBefore; rowDelta != 0) scrollTo(std::max(delta.x, 0), std::max(delta.y + rowDelta, 0));
+	if (targetY == delta.y) return false;
+	scrollTo(std::max(delta.x, 0), targetY);
+	scheduleSyntaxWarmupIfNeeded();
+	updateIndicator();
+	drawView();
+	return true;
+}
+
+bool MRFileEditor::scrollWindowByWheel(int wheel) {
+	const int oldDeltaY = delta.y;
+	const int cursorRow = std::max(0, std::min(static_cast<int>(visibleLineForDocumentLine(cachedCursorLineIndex())) - oldDeltaY, std::max(1, visibleTextRows()) - 1));
+	const int cursorColumn = displayedCursorColumn();
+	int targetX = delta.x;
+	int targetY = delta.y;
+
+	switch (wheel) {
+		case mwUp:
+			targetY -= 3;
+			break;
+		case mwDown:
+			targetY += 3;
+			break;
+		case mwLeft:
+			targetX -= 3;
+			break;
+		case mwRight:
+			targetX += 3;
+			break;
+		default:
+			return false;
+	}
+
+	if (hScrollBar != nullptr) targetX = std::min(std::max(targetX, hScrollBar->minVal), hScrollBar->maxVal);
+	else
+		targetX = std::max(targetX, 0);
+	if (vScrollBar != nullptr) targetY = std::min(std::max(targetY, vScrollBar->minVal), vScrollBar->maxVal);
+	else
+		targetY = std::max(targetY, 0);
+	if (targetX == delta.x && targetY == delta.y) return false;
+	scrollTo(targetX, targetY);
+	if (targetY != oldDeltaY) {
+		const std::size_t targetVisibleLine = static_cast<std::size_t>(std::max(0, targetY + cursorRow));
+		const std::size_t targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
+		const std::size_t targetOffset = charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), cursorColumn);
+		moveCursor(targetOffset, false, false, cursorColumn);
+	} else {
+		scheduleSyntaxWarmupIfNeeded();
+		updateIndicator();
+		drawView();
+	}
 	return true;
 }
 
@@ -252,50 +255,18 @@ std::size_t MRFileEditor::prevCharOffset(std::size_t pos) noexcept {
 }
 
 std::size_t MRFileEditor::lineMoveOffset(std::size_t pos, int deltaLines, int targetVisualColumn) noexcept {
-	const auto startedAt = std::chrono::steady_clock::now();
 	const std::size_t clampedPos = std::min(pos, mBufferModel.length());
-	const auto lineIndexStartedAt = std::chrono::steady_clock::now();
 	const std::size_t currentDocumentLine = mBufferModel.lineIndex(clampedPos);
-	const auto lineIndexElapsed = std::chrono::steady_clock::now() - lineIndexStartedAt;
-	const auto visibleLineStartedAt = std::chrono::steady_clock::now();
 	const std::size_t currentVisibleLine = visibleLineForDocumentLine(currentDocumentLine);
-	const auto visibleLineElapsed = std::chrono::steady_clock::now() - visibleLineStartedAt;
 	std::size_t targetVisibleLine = currentVisibleLine;
 	std::size_t targetDocumentLine = currentDocumentLine;
-	std::chrono::steady_clock::duration charColumnElapsed{};
-	std::chrono::steady_clock::duration documentLineElapsed{};
-	std::chrono::steady_clock::duration charPtrElapsed{};
 
-	if (targetVisualColumn < 0) {
-		const auto charColumnStartedAt = std::chrono::steady_clock::now();
-		targetVisualColumn = charColumn(mBufferModel.lineStart(pos), clampedPos);
-		charColumnElapsed = std::chrono::steady_clock::now() - charColumnStartedAt;
-	}
+	if (targetVisualColumn < 0) targetVisualColumn = charColumn(mBufferModel.lineStart(pos), clampedPos);
 	if (deltaLines < 0) targetVisibleLine = currentVisibleLine > static_cast<std::size_t>(-deltaLines) ? currentVisibleLine - static_cast<std::size_t>(-deltaLines) : 0;
 	else
 		targetVisibleLine = currentVisibleLine + static_cast<std::size_t>(deltaLines);
-	{
-		const auto documentLineStartedAt = std::chrono::steady_clock::now();
-		targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
-		documentLineElapsed = std::chrono::steady_clock::now() - documentLineStartedAt;
-	}
-	std::size_t targetOffset = 0;
-	{
-		const auto charPtrStartedAt = std::chrono::steady_clock::now();
-		targetOffset = charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), targetVisualColumn);
-		charPtrElapsed = std::chrono::steady_clock::now() - charPtrStartedAt;
-	}
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowNavigationTraceThreshold) {
-		std::ostringstream line;
-		line << "Phase1 nav lineMoveOffset total_us=" << traceMicros(totalElapsed) << " line_index_us=" << traceMicros(lineIndexElapsed) << " visible_map_us=" << traceMicros(visibleLineElapsed)
-		     << " char_column_us=" << traceMicros(charColumnElapsed) << " document_map_us=" << traceMicros(documentLineElapsed) << " char_ptr_us=" << traceMicros(charPtrElapsed) << " pos=" << clampedPos
-		     << " delta_lines=" << deltaLines << " target_visual=" << targetVisualColumn << " current_doc_line=" << currentDocumentLine << " current_visible_line=" << currentVisibleLine
-		     << " target_doc_line=" << targetDocumentLine << " target_visible_line=" << targetVisibleLine << " len=" << mBufferModel.length() << " add=" << mBufferModel.document().addBufferLength()
-		     << " pieces=" << mBufferModel.document().pieceCount() << " undo=" << mBufferModel.undoStackDepth() << " redo=" << mBufferModel.redoStackDepth();
-		appendDirectProbeLog(line.str());
-	}
-	return targetOffset;
+	targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
+	return charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), targetVisualColumn);
 }
 
 std::size_t MRFileEditor::tabStopMoveOffset(std::size_t pos, bool forward) noexcept {
@@ -330,7 +301,6 @@ std::size_t MRFileEditor::nextWordOffset(std::size_t pos) noexcept {
 }
 
 std::size_t MRFileEditor::charPtrOffset(std::size_t start, int pos) noexcept {
-	const auto startedAt = std::chrono::steady_clock::now();
 	std::size_t lineStart = mBufferModel.lineStart(start);
 	std::string lineText = mBufferModel.lineText(lineStart);
 	TStringView line(lineText.data(), lineText.size());
@@ -346,13 +316,6 @@ std::size_t MRFileEditor::charPtrOffset(std::size_t start, int pos) noexcept {
 		if (visual + static_cast<int>(width) > target) break;
 		visual += static_cast<int>(width);
 		p = next;
-	}
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowNavigationTraceThreshold) {
-		std::ostringstream trace;
-		trace << "Phase1 nav charPtrOffset total_us=" << traceMicros(totalElapsed) << " start=" << start << " line_start=" << lineStart << " target_visual=" << pos << " line_bytes=" << line.size()
-		      << " len=" << mBufferModel.length() << " add=" << mBufferModel.document().addBufferLength() << " pieces=" << mBufferModel.document().pieceCount();
-		appendDirectProbeLog(trace.str());
 	}
 	return lineStart + p;
 }
@@ -377,7 +340,6 @@ void MRFileEditor::ensureCursorVisible(bool centerCursor) {
 }
 
 void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool centerCursor, int requestedVisualColumn) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	target = canonicalCursorOffset(std::min(target, mBufferModel.length()));
 	if (extendSelection) {
 		std::size_t anchor = mBufferModel.hasSelection() ? mBufferModel.selection().anchor : mBufferModel.cursor();
@@ -389,49 +351,16 @@ void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool cen
 			mBufferModel.setCursorAndSelection(target, target, target);
 		mSelectionAnchor = target;
 	}
-	std::chrono::steady_clock::duration visualColumnElapsed{};
-	std::chrono::steady_clock::duration updateMetricsElapsed{};
-	std::chrono::steady_clock::duration ensureVisibleElapsed{};
-	std::chrono::steady_clock::duration updateIndicatorElapsed{};
-	std::chrono::steady_clock::duration drawViewElapsed{};
-	{
-		const auto visualColumnStartedAt = std::chrono::steady_clock::now();
-		if (freeCursorMovementEnabled() && requestedVisualColumn >= 0) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), requestedVisualColumn);
-		else
-			mCursorVisualColumn = actualCursorVisualColumn(target);
-		visualColumnElapsed = std::chrono::steady_clock::now() - visualColumnStartedAt;
-	}
+	if (freeCursorMovementEnabled() && requestedVisualColumn >= 0) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), requestedVisualColumn);
+	else
+		mCursorVisualColumn = actualCursorVisualColumn(target);
 	if (useApproximateLargeFileMetrics()) {
-		const auto updateMetricsStartedAt = std::chrono::steady_clock::now();
 		updateMetrics();
-		updateMetricsElapsed = std::chrono::steady_clock::now() - updateMetricsStartedAt;
 	}
-	{
-		const auto ensureVisibleStartedAt = std::chrono::steady_clock::now();
-		ensureCursorVisible(centerCursor);
-		ensureVisibleElapsed = std::chrono::steady_clock::now() - ensureVisibleStartedAt;
-	}
+	ensureCursorVisible(centerCursor);
 	scheduleSyntaxWarmupIfNeeded();
-	{
-		const auto updateIndicatorStartedAt = std::chrono::steady_clock::now();
-		updateIndicator();
-		updateIndicatorElapsed = std::chrono::steady_clock::now() - updateIndicatorStartedAt;
-	}
-	{
-		const auto drawViewStartedAt = std::chrono::steady_clock::now();
-		drawView();
-		drawViewElapsed = std::chrono::steady_clock::now() - drawViewStartedAt;
-	}
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowNavigationTraceThreshold) {
-		std::ostringstream line;
-		line << "Phase1 nav moveCursor total_us=" << traceMicros(totalElapsed) << " visual_column_us=" << traceMicros(visualColumnElapsed) << " update_metrics_us=" << traceMicros(updateMetricsElapsed)
-		     << " ensure_visible_us=" << traceMicros(ensureVisibleElapsed) << " update_indicator_us=" << traceMicros(updateIndicatorElapsed) << " draw_view_us=" << traceMicros(drawViewElapsed)
-		     << " target=" << target << " extend=" << (extendSelection ? 1 : 0) << " center=" << (centerCursor ? 1 : 0) << " requested_visual=" << requestedVisualColumn << " cursor_line=" << cachedCursorLineIndex()
-		     << " delta_x=" << delta.x << " delta_y=" << delta.y << " len=" << mBufferModel.length() << " add=" << mBufferModel.document().addBufferLength() << " pieces=" << mBufferModel.document().pieceCount()
-		     << " undo=" << mBufferModel.undoStackDepth() << " redo=" << mBufferModel.redoStackDepth();
-		appendDirectProbeLog(line.str());
-	}
+	updateIndicator();
+	drawView();
 }
 
 std::size_t MRFileEditor::mouseOffset(TPoint local, int *visualColumnOut) noexcept {

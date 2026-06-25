@@ -3,6 +3,7 @@
 
 #include <tvision/tv.h>
 
+#include <string>
 #include <string_view>
 
 class MREditWindow;
@@ -16,5 +17,6 @@ void notifyMRLspKeyboardActivity() noexcept;
 void mrApplyLspSupportSettingsChange();
 void pumpMRLspService();
 void clearTransientSearchSelectionOnUserInput(const TEvent &event);
+bool mrLspCompletionTargetSelfTestForRegression(std::string &failureReason);
 
 #endif

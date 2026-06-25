@@ -260,6 +260,20 @@ bool extractOptionalTopLevelStringValue(const std::string &object, const std::st
 	return parseJsonStringAt(object, pos, value);
 }
 
+bool extractOptionalMarkupValue(const std::string &object, const std::string &key, std::string &value) {
+	std::size_t pos = 0;
+	std::size_t objectEnd = 0;
+
+	value.clear();
+	if (!findTopLevelObjectValueStart(object, key, pos)) return true;
+	if (pos >= object.size()) return true;
+	if (object[pos] == '"') return parseJsonStringAt(object, pos, value);
+	if (object.compare(pos, 4, "null") == 0) return true;
+	if (object[pos] != '{') return true;
+	if (!findMatchingBracket(object, pos, '{', '}', objectEnd)) return false;
+	return extractOptionalTopLevelStringValue(object.substr(pos, objectEnd - pos + 1), "value", value);
+}
+
 bool extractOptionalTopLevelIntValue(const std::string &object, const std::string &key, bool &present, int &value) {
 	std::size_t pos = 0;
 
@@ -356,14 +370,31 @@ std::string buildCompletionRequestPayload(const LspCompletionRequest &request) {
 
 	out << "{\"jsonrpc\":\"2.0\",\"id\":" << request.idText << ",\"method\":\"textDocument/completion\",\"params\":{\"textDocument\":{\"uri\":";
 	out << jsonString(request.uri);
-	out << "},\"position\":{\"line\":" << request.position.line << ",\"character\":" << request.position.character << "}}}";
+	out << "},\"position\":{\"line\":" << request.position.line << ",\"character\":" << request.position.character << "},\"context\":{\"triggerKind\":";
+	if (request.hasTriggerCharacter) {
+		out << "2,\"triggerCharacter\":" << jsonString(request.triggerCharacter);
+	} else {
+		out << '1';
+	}
+	out << "}}}";
+	return out.str();
+}
+
+std::string buildCompletionResolveRequestPayload(const LspCompletionResolveRequest &request, const LspCompletionItem &item) {
+	std::ostringstream out;
+
+	out << "{\"jsonrpc\":\"2.0\",\"id\":" << request.idText << ",\"method\":\"completionItem/resolve\",\"params\":";
+	out << item.rawJson;
+	out << "}";
 	return out.str();
 }
 
 bool parseCompletionItemObject(const std::string &object, LspCompletionItem &item) {
+	item.rawJson = object;
 	if (!extractTopLevelStringValue(object, "label", item.label)) return false;
 	if (!extractOptionalTopLevelIntValue(object, "kind", item.hasKind, item.kind)) return false;
 	if (!extractOptionalTopLevelStringValue(object, "detail", item.detail)) return false;
+	if (!extractOptionalMarkupValue(object, "documentation", item.documentation)) return false;
 	if (!extractOptionalTopLevelStringValue(object, "insertText", item.insertText)) return false;
 	if (!extractOptionalTopLevelIntValue(object, "insertTextFormat", item.hasInsertTextFormat, item.insertTextFormat)) return false;
 	if (!parseCompletionTextEditObject(object, item)) return false;
@@ -401,6 +432,10 @@ bool parseCompletionResult(const std::string &payload, LspCompletionResult &resu
 
 	if (!findKeyValueStart(payload, "result", 0, resultStart)) return setError(errorMessage, "LSP completion response has no result.");
 	if (resultStart >= payload.size()) return setError(errorMessage, "LSP completion response result is malformed.");
+	if (payload.compare(resultStart, 4, "null") == 0) {
+		result.items.clear();
+		return true;
+	}
 	if (payload[resultStart] == '[') {
 		if (!findMatchingBracket(payload, resultStart, '[', ']', resultEnd)) return setError(errorMessage, "LSP completion response result array is malformed.");
 		return parseCompletionItemsArray(payload.substr(resultStart, resultEnd - resultStart + 1), result.items, errorMessage);
@@ -417,9 +452,20 @@ bool parseCompletionResult(const std::string &payload, LspCompletionResult &resu
 	}
 	return setError(errorMessage, "LSP completion response result has unsupported shape.");
 }
+
+bool parseCompletionResolveResult(const std::string &payload, LspCompletionResolveResult &result, std::string &errorMessage) {
+	std::size_t resultStart = 0;
+	std::size_t resultEnd = 0;
+
+	if (!findKeyValueStart(payload, "result", 0, resultStart)) return setError(errorMessage, "LSP completionItem/resolve response has no result.");
+	if (resultStart >= payload.size() || payload[resultStart] != '{') return setError(errorMessage, "LSP completionItem/resolve result is not an object.");
+	if (!findMatchingBracket(payload, resultStart, '{', '}', resultEnd)) return setError(errorMessage, "LSP completionItem/resolve result is malformed.");
+	if (!parseCompletionItemObject(payload.substr(resultStart, resultEnd - resultStart + 1), result.item)) return setError(errorMessage, "LSP completionItem/resolve item fields are malformed.");
+	return true;
+}
 } // namespace
 
-bool LspCompletionAdapter::requestCompletion(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspTextPosition position, LspCompletionRequest &request, std::string &errorMessage) {
+bool LspCompletionAdapter::requestCompletion(LspLifecycle &lifecycle, const LspDocumentService &documentService, LspTextPosition position, const std::string &triggerCharacter, LspCompletionRequest &request, std::string &errorMessage) {
 	LspCompletionRequest candidate;
 
 	if (!documentService.isOpen()) return setError(errorMessage, "LSP document service has no open document.");
@@ -428,8 +474,25 @@ bool LspCompletionAdapter::requestCompletion(LspLifecycle &lifecycle, const LspD
 	candidate.method = "textDocument/completion";
 	candidate.uri = documentService.documentUri();
 	candidate.position = position;
+	candidate.triggerCharacter = triggerCharacter;
+	candidate.hasTriggerCharacter = !triggerCharacter.empty();
 	candidate.pending = true;
 	if (!lifecycle.sendInitializedPayload(buildCompletionRequestPayload(candidate), errorMessage)) return false;
+	request = candidate;
+	++nextRequestId;
+	errorMessage.clear();
+	return true;
+}
+
+bool LspCompletionAdapter::requestResolve(LspLifecycle &lifecycle, const LspCompletionItem &item, LspCompletionResolveRequest &request, std::string &errorMessage) {
+	LspCompletionResolveRequest candidate;
+
+	if (item.rawJson.empty()) return setError(errorMessage, "LSP completion item has no raw payload.");
+	candidate.idText = jsonString("mr-completion-resolve-" + std::to_string(nextRequestId));
+	candidate.method = "completionItem/resolve";
+	candidate.label = item.label;
+	candidate.pending = true;
+	if (!lifecycle.sendInitializedPayload(buildCompletionResolveRequestPayload(candidate, item), errorMessage)) return false;
 	request = candidate;
 	++nextRequestId;
 	errorMessage.clear();
@@ -454,7 +517,41 @@ bool LspCompletionAdapter::consume(const LspInboundMessage &message, const LspDo
 		return true;
 	}
 	result.uri = request.uri;
+	if (message.envelope.hasError) {
+		result.rawResponseJson = message.payload;
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
 	if (!parseCompletionResult(message.payload, result, errorMessage)) return false;
+	result.rawResponseJson = message.payload;
+	request.pending = false;
+	accepted = true;
+	errorMessage.clear();
+	return true;
+}
+
+bool LspCompletionAdapter::consumeResolve(const LspInboundMessage &message, LspCompletionResolveRequest &request, LspCompletionResolveResult &result, bool &accepted, std::string &errorMessage) {
+	accepted = false;
+	result = LspCompletionResolveResult();
+	if (!request.pending) {
+		errorMessage.clear();
+		return true;
+	}
+	if (message.envelope.kind != JsonRpcMessageKind::Response || message.envelope.idText != request.idText) {
+		errorMessage.clear();
+		return true;
+	}
+	if (request.method != "completionItem/resolve") return setError(errorMessage, "LSP completionItem/resolve request method mismatch.");
+	if (message.envelope.hasError) {
+		result.rawResponseJson = message.payload;
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
+	if (!parseCompletionResolveResult(message.payload, result, errorMessage)) return false;
 	result.rawResponseJson = message.payload;
 	request.pending = false;
 	accepted = true;

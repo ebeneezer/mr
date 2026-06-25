@@ -2113,6 +2113,14 @@ bool applySettingsSnapshotCompilerProfileDirective(MRSettingsSnapshot &snapshot,
 			profile->buildSuccessAudioUri = arg4;
 		else if (key == "FAILURE_AUDIO_URI")
 			profile->buildFailureAudioUri = arg4;
+		else if (key == "LSP_EXECUTABLE")
+			profile->lspExecutablePath = arg4;
+		else if (key == "LSP_ARGUMENTS")
+			profile->lspArguments = arg4;
+		else if (key == "LSP_WORKING_DIRECTORY")
+			profile->lspWorkingDirectory = arg4;
+		else if (key == "LSP_MIDDLEWARE")
+			profile->lspMiddlewarePath = arg4;
 		else
 			return setError(errorMessage, "Unknown compiler profile setting key.");
 		return setSnapshotCompilerProfiles(snapshot, profiles, errorMessage);

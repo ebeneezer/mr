@@ -255,6 +255,33 @@ static bool isXmlNameChar(char ch) {
 	return std::isalnum(value) || ch == '_' || ch == ':' || ch == '-' || ch == '.';
 }
 
+static bool isLatexCommandChar(char ch) {
+	unsigned char value = static_cast<unsigned char>(ch);
+	return std::isalpha(value) || ch == '@';
+}
+
+static std::size_t findLatexCommentStart(std::string_view line) noexcept {
+	for (std::size_t i = 0; i < line.size(); ++i) {
+		if (line[i] != '%') continue;
+		std::size_t slashCount = 0;
+		std::size_t pos = i;
+		while (pos > 0 && line[pos - 1] == '\\') {
+			++slashCount;
+			--pos;
+		}
+		if ((slashCount % 2) == 0) return i;
+	}
+	return std::string_view::npos;
+}
+
+static bool latexCommandNameIsSection(std::string_view name) noexcept {
+	return name == "part" || name == "chapter" || name == "section" || name == "subsection" || name == "subsubsection" || name == "paragraph" || name == "subparagraph";
+}
+
+static bool latexCommandNamePaintsKey(std::string_view name) noexcept {
+	return name == "begin" || name == "end" || name == "label" || name == "ref" || name == "pageref" || name == "cite" || name == "citep" || name == "citet" || name == "usepackage" || name == "documentclass";
+}
+
 static std::size_t skipWhitespaceView(std::string_view text, std::size_t pos = 0) {
 	while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\t'))
 		++pos;
@@ -2308,6 +2335,80 @@ MRSyntaxLineResult MRMarkdownSyntaxHighlighter::highlightLine(std::string_view l
 		result.stateOut.mode = MRSyntaxMode::BlockComment;
 	}
 
+	result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+	return result;
+}
+
+MRSyntaxLineResult MRLatexSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
+	const std::size_t commentStart = findLatexCommentStart(line);
+	const std::size_t scanEnd = commentStart == std::string_view::npos ? line.size() : commentStart;
+	std::size_t index = 0;
+
+	result.stateOut = previousState;
+	result.stateOut.mode = MRSyntaxMode::Normal;
+	result.stateOut.flags = 0;
+	result.stateOut.payload = 0;
+
+	while (index < scanEnd) {
+		const char ch = line[index];
+
+		if (ch == '\\') {
+			const std::size_t commandStart = index;
+			std::size_t nameStart = index + 1;
+			std::size_t nameEnd = nameStart;
+			std::size_t commandEnd = nameStart;
+
+			if (nameStart < scanEnd && isLatexCommandChar(line[nameStart])) {
+				while (nameEnd < scanEnd && isLatexCommandChar(line[nameEnd]))
+					++nameEnd;
+				commandEnd = nameEnd;
+				if (commandEnd < scanEnd && line[commandEnd] == '*') ++commandEnd;
+			} else if (nameStart < scanEnd)
+				commandEnd = nameStart + 1;
+			paint(tokens, commandStart, commandEnd, MRSyntaxToken::Directive);
+			if (nameEnd > nameStart) {
+				const std::string_view commandName = line.substr(nameStart, nameEnd - nameStart);
+				const MRSyntaxToken argumentToken = latexCommandNameIsSection(commandName) ? MRSyntaxToken::Section : MRSyntaxToken::Key;
+
+				if (latexCommandNameIsSection(commandName) || latexCommandNamePaintsKey(commandName)) {
+					std::size_t argumentStart = skipWhitespaceView(line, commandEnd);
+					if (argumentStart < scanEnd && line[argumentStart] == '[') {
+						std::size_t argumentEnd = line.find(']', argumentStart + 1);
+						if (argumentEnd != std::string_view::npos && argumentEnd < scanEnd) {
+							paint(tokens, argumentStart, argumentEnd + 1, MRSyntaxToken::Key);
+							argumentStart = skipWhitespaceView(line, argumentEnd + 1);
+						}
+					}
+					if (argumentStart < scanEnd && line[argumentStart] == '{') {
+						std::size_t argumentEnd = line.find('}', argumentStart + 1);
+						if (argumentEnd != std::string_view::npos && argumentEnd < scanEnd)
+							paint(tokens, argumentStart + 1, argumentEnd, argumentToken);
+					}
+				}
+			}
+			index = commandEnd;
+			continue;
+		}
+		if (ch == '$') {
+			if (index + 1 < scanEnd && line[index + 1] == '$') {
+				paint(tokens, index, index + 2, MRSyntaxToken::String);
+				index += 2;
+			} else {
+				paint(tokens, index, index + 1, MRSyntaxToken::String);
+				++index;
+			}
+			continue;
+		}
+		if (ch == '{' || ch == '}' || ch == '[' || ch == ']' || ch == '(' || ch == ')') {
+			paint(tokens, index, index + 1, MRSyntaxToken::Delimiter);
+			++index;
+			continue;
+		}
+		++index;
+	}
+	if (commentStart != std::string_view::npos) paint(tokens, commentStart, line.size(), MRSyntaxToken::Comment);
 	result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
 	return result;
 }
@@ -4730,6 +4831,10 @@ MRSyntaxLineResult tmrHighlightTextLine(MRSyntaxLanguage language, std::string_v
 		}
 		case MRSyntaxLanguage::Markdown: {
 			MRMarkdownSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Latex: {
+			MRLatexSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
 		case MRSyntaxLanguage::MRMAC: {

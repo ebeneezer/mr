@@ -14,6 +14,7 @@ class MRVMHashStore {
 	void clearExceptRoots(const std::vector<int> &roots);
 	int createHash();
 	int cloneHashFrom(const MRVMHashStore &sourceStore, int sourceHandle, bool targetGlobalStorage);
+	void eraseValueTrees(const VirtualMachine::Value &value, bool targetGlobalStorage);
 	bool contains(int handle, const std::string &key) const;
 	VirtualMachine::Value read(int handle, const std::string &key) const;
 	void write(int handle, const std::string &key, const VirtualMachine::Value &value);
@@ -23,6 +24,8 @@ class MRVMHashStore {
 
   private:
 	void collectReachable(int handle, std::set<int> &reachable) const;
+	void eraseValueTrees(const VirtualMachine::Value &value, bool targetGlobalStorage, std::set<int> &erased);
+	void eraseHashTree(int handle, bool targetGlobalStorage, std::set<int> &erased);
 
 	int nextHandle = 1;
 	std::map<int, std::map<std::string, VirtualMachine::Value>> hashes;

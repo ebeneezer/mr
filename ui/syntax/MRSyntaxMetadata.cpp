@@ -44,6 +44,8 @@ const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 			return "Make";
 		case MRSyntaxLanguage::Markdown:
 			return "Markdown";
+		case MRSyntaxLanguage::Latex:
+			return "LaTeX";
 		default:
 			return "Plain Text";
 	}
@@ -93,6 +95,8 @@ const char *tmrSyntaxLanguageMarker(MRSyntaxLanguage language) noexcept {
 			return "MK";
 		case MRSyntaxLanguage::Markdown:
 			return "MD";
+		case MRSyntaxLanguage::Latex:
+			return "TeX";
 		default:
 			return "";
 	}
@@ -142,6 +146,8 @@ std::uint32_t tmrSyntaxLanguageMarkerRgb(MRSyntaxLanguage language) noexcept {
 			return 0x8FA8B6;
 		case MRSyntaxLanguage::Markdown:
 			return 0xC0A060;
+		case MRSyntaxLanguage::Latex:
+			return 0x6CB7A8;
 		default:
 			return 0;
 	}

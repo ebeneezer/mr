@@ -542,6 +542,25 @@ MRServiceHoverResult buildServiceHoverFromLsp(const MRWorkspaceServiceSnapshot &
 	return result;
 }
 
+MRServiceCompletionItem buildServiceCompletionItemFromLsp(const mr::lsp::LspCompletionItem &item) {
+	MRServiceCompletionItem serviceItem;
+
+	serviceItem.rawLspCompletionItemJson = item.rawJson;
+	serviceItem.label = item.label;
+	serviceItem.hasKind = item.hasKind;
+	serviceItem.kind = item.kind;
+	serviceItem.detail = item.detail;
+	serviceItem.documentation = item.documentation;
+	serviceItem.insertText = item.insertText;
+	serviceItem.hasInsertTextFormat = item.hasInsertTextFormat;
+	serviceItem.insertTextFormat = item.insertTextFormat;
+	serviceItem.hasTextEdit = item.hasTextEdit;
+	serviceItem.textEditRange.start = servicePositionFromLsp(item.textEditStart);
+	serviceItem.textEditRange.end = servicePositionFromLsp(item.textEditEnd);
+	serviceItem.textEditNewText = item.textEditNewText;
+	return serviceItem;
+}
+
 MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCompletionResult &completion) {
 	MRServiceCompletionResult result;
 
@@ -552,21 +571,8 @@ MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceService
 	result.rawLspResponseJson = completion.rawResponseJson;
 	if (result.header.state != MRServiceResultState::Current) return result;
 
-	for (const mr::lsp::LspCompletionItem &item : completion.items) {
-		MRServiceCompletionItem serviceItem;
-		serviceItem.label = item.label;
-		serviceItem.hasKind = item.hasKind;
-		serviceItem.kind = item.kind;
-		serviceItem.detail = item.detail;
-		serviceItem.insertText = item.insertText;
-		serviceItem.hasInsertTextFormat = item.hasInsertTextFormat;
-		serviceItem.insertTextFormat = item.insertTextFormat;
-		serviceItem.hasTextEdit = item.hasTextEdit;
-		serviceItem.textEditRange.start = servicePositionFromLsp(item.textEditStart);
-		serviceItem.textEditRange.end = servicePositionFromLsp(item.textEditEnd);
-		serviceItem.textEditNewText = item.textEditNewText;
-		result.items.push_back(serviceItem);
-	}
+	for (const mr::lsp::LspCompletionItem &item : completion.items)
+		result.items.push_back(buildServiceCompletionItemFromLsp(item));
 	return result;
 }
 

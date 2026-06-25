@@ -374,6 +374,8 @@ JsonRpcEnvelope parseJsonRpcEnvelope(const std::string &payload) {
 	envelope.idKind = members.idKind;
 	envelope.idText = members.idText;
 	envelope.method = members.methodText;
+	envelope.hasResult = members.result;
+	envelope.hasError = members.error;
 	if (members.idKind != JsonRpcIdKind::None && (members.result || members.error) && !members.method) envelope.kind = JsonRpcMessageKind::Response;
 	else if ((members.idKind == JsonRpcIdKind::Number || members.idKind == JsonRpcIdKind::String) && members.method && !members.result && !members.error)
 		envelope.kind = JsonRpcMessageKind::Request;

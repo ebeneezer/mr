@@ -35,14 +35,17 @@
 #include "../app/MRRuntimeScheduler.hpp"
 #include "../app/MRRuntimeTimerSource.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../app/commands/MRExternalCommand.hpp"
 #include "../app/services/MRLspEditorSource.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsEditSetup.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
+#include "../config/settings/MRSettingsAssignments.hpp"
 #include "../config/settings/MRSettingsSnapshotIO.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../dialogs/MRAbout.hpp"
+#include "../dialogs/extensions/MRFileExtensionProfilesSupport.hpp"
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../diff/MRDiff.hpp"
 #include "../piecetable/MRTextDocument.hpp"
@@ -5183,6 +5186,7 @@ static const CodeLanguageConformanceEntry kCodeLanguageConformanceEntries[] = {
 	{"MAKE", "langmake", "all:\n\t@echo ok\n", MRSyntaxLanguage::Make, "MK", "makefile", false},
 	{"MRMAC", "langmrmac", "$MACRO PROBE;\nEND_MACRO;\n", MRSyntaxLanguage::MRMAC, "MR", "mrmac", false},
 	{"MARKDOWN", "langmarkdown", "# Probe\n", MRSyntaxLanguage::Markdown, "MD", "markdown", false},
+	{"LATEX", "langlatex", "\\documentclass{article}\n\\begin{document}\nProbe\n\\end{document}\n", MRSyntaxLanguage::Latex, "TeX", "latex", false},
 	{"KOTLIN", "langkotlin", "fun probe(): Int = 1\n", MRSyntaxLanguage::Kotlin, "Kt", "kotlin", false},
 	{"CSHARP", "langcsharp", "class Probe { int Value() { return 1; } }\n", MRSyntaxLanguage::CSharp, "C#", "csharp", false},
 };
@@ -5925,7 +5929,7 @@ bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason
 }
 
 bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F, 0x3A, 0x4B};
+	static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F, 0x3A, 0x4B, 0x5C, 0x6D, 0x7E, 0x8F, 0x9A};
 	struct CodeColorInventoryEntry {
 		const char *name;
 		const char *paletteMacro;
@@ -5953,6 +5957,11 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	    {"sidekick editor highlight", "kMrPaletteSidekickEditorHighlight", kMrPaletteSidekickEditorHighlight, false, true, false, false},
 	    {"context menu", "kMrPaletteContextMenu", kMrPaletteContextMenu, false, false, true, false},
 	    {"context menu selector", "kMrPaletteContextMenuSelector", kMrPaletteContextMenuSelector, false, false, true, false},
+	    {"snippet sidekick frame", "kMrPaletteSnippetSidekickFrame", kMrPaletteSnippetSidekickFrame, false, false, false, true},
+	    {"snippet sidekick text", "kMrPaletteSnippetSidekickText", kMrPaletteSnippetSidekickText, false, true, false, false},
+	    {"snippet placeholder", "kMrPaletteSnippetPlaceholder", kMrPaletteSnippetPlaceholder, false, true, false, false},
+	    {"snippet active placeholder", "kMrPaletteSnippetActivePlaceholder", kMrPaletteSnippetActivePlaceholder, false, true, false, false},
+	    {"snippet default text", "kMrPaletteSnippetDefaultText", kMrPaletteSnippetDefaultText, false, true, false, false},
 	};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
@@ -6013,6 +6022,12 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	if (!readTextFile(columnListPath, columnListContent, errorText)) {
 		restore();
 		failureReason = "Unable to read MRColumnListView.cpp for code color guard: " + errorText;
+		return false;
+	}
+	if (sidekickContent.find("mSnippetSidekick ? kMrPaletteSnippetSidekickText : kMrPaletteSidekickEditorText") == std::string::npos ||
+	    sidekickContent.find("mSnippetSidekick ? kMrPaletteSnippetActivePlaceholder : kMrPaletteSidekickEditorHighlight") == std::string::npos || sidekickContent.find("if (mSnippetSidekick)") == std::string::npos) {
+		restore();
+		failureReason = "Snippet SideKick colors must be gated by snippet SideKick state, not by editability.";
 		return false;
 	}
 	const std::size_t tokenColorStart = viewportContent.find("TColorAttr MRFileEditor::tokenColor");
@@ -6370,6 +6385,8 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 	const std::size_t emptyRetry = requestBody.find("attempt == 0 && completions[index].items.empty()", requestIdCheck);
 	const std::size_t delayedRetryWait = requestBody.find("waitIndex < 15", emptyRetry);
 	const std::size_t retryFlag = requestBody.find("retryAfterEmptyCompletion = true", emptyRetry);
+	const std::size_t triggerFallback = requestBody.find("const bool completionTriggerEnabled = attempt == 0");
+	const std::size_t completionRequest = requestBody.find("requestLspEditorCommandForWindow(win, mr::services::MRLspServiceCommandId::Complete, \"LSP completion\", true, &requestSent, target, completionTriggerEnabled)");
 	if (requestIdCheck == std::string::npos || markReported == std::string::npos || directReport == std::string::npos) {
 		failureReason = "LSP completion command must detect replacement results by request id and report the matching result directly.";
 		return false;
@@ -6390,6 +6407,10 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 		failureReason = "LSP completion command must retry one empty fresh completion response after a short poll delay without reusing the same request id.";
 		return false;
 	}
+	if (triggerFallback == std::string::npos || completionRequest == std::string::npos) {
+		failureReason = "LSP completion retry must disable the completion trigger on the second request.";
+		return false;
+	}
 
 	failureReason.clear();
 	return true;
@@ -6398,8 +6419,10 @@ bool testLspCompletionReportingMarksBeforeDialogGuard(std::string &failureReason
 bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
 	std::string content;
-	std::string insertTextBody;
+	std::string rawTextBody;
+	std::string applyBody;
 	std::string dialogBody;
+	std::string requestBody;
 	std::string ioError;
 
 	if (!readTextFile(routerPath, content, ioError)) {
@@ -6407,24 +6430,47 @@ bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 		return false;
 	}
 
-	const std::size_t insertTextStart = content.find("std::string lspCompletionInsertTextForItem");
-	const std::size_t insertTextEnd = content.find("\nbool showLspCompletionDialog", insertTextStart);
-	if (insertTextStart == std::string::npos || insertTextEnd == std::string::npos) {
-		failureReason = "Unable to isolate lspCompletionInsertTextForItem.";
+	const std::size_t rawTextStart = content.find("std::string lspCompletionRawReplacementTextForItem");
+	const std::size_t rawTextEnd = content.find("\nbool applyLspCompletionItem", rawTextStart);
+	if (rawTextStart == std::string::npos || rawTextEnd == std::string::npos) {
+		failureReason = "Unable to isolate lspCompletionRawReplacementTextForItem.";
 		return false;
 	}
-	insertTextBody = content.substr(insertTextStart, insertTextEnd - insertTextStart);
-	if (insertTextBody.find("const std::string rawText = !item.insertText.empty() ? item.insertText : item.label;") == std::string::npos) {
-		failureReason = "LSP completion insert text must prefer insertText and fall back to label.";
+	rawTextBody = content.substr(rawTextStart, rawTextEnd - rawTextStart);
+	if (rawTextBody.find("if (item.hasTextEdit) text = item.textEditNewText;") == std::string::npos || rawTextBody.find("text = !item.insertText.empty() ? item.insertText : item.label;") == std::string::npos ||
+	    rawTextBody.find("return lspCompletionPlainTextFromSnippet(text);") == std::string::npos) {
+		failureReason = "LSP completion replacement text must prefer textEdit, then insertText, then label and normalize snippets to plain text while MRExpand is reset.";
 		return false;
 	}
-	if (insertTextBody.find("item.hasInsertTextFormat && item.insertTextFormat == 2") == std::string::npos ||
-	    insertTextBody.find("lspCompletionPlainTextFromSnippet(rawText)") == std::string::npos) {
-		failureReason = "LSP snippet completion must be normalized before insertion.";
+	{
+		const std::size_t requestStart = content.find("bool requestLspEditorCommandForWindow");
+		const std::size_t requestEnd = content.find("\nbool requestLspEditorCommand(", requestStart);
+
+		if (requestStart == std::string::npos || requestEnd == std::string::npos) {
+			failureReason = "Unable to isolate requestLspEditorCommandForWindow.";
+			return false;
+		}
+		requestBody = content.substr(requestStart, requestEnd - requestStart);
+		if (requestBody.find("MRLspServiceCommandId::Complete") == std::string::npos || requestBody.find("lspCompletionRequestTargetFromSource(*editor, *serviceTarget, completionTarget, completionTriggerOffset)") == std::string::npos ||
+		    requestBody.find("serviceTarget = &completionTarget;") == std::string::npos || requestBody.find("editor->charAtOffset(completionTriggerOffset)") == std::string::npos) {
+			failureReason = "LSP completion must keep cursor-inside-literal requests at the cursor and preserve the trigger context.";
+			return false;
+		}
+	}
+
+	const std::size_t applyStart = content.find("bool applyLspCompletionItem", rawTextEnd);
+	const std::size_t applyEnd = content.find("\nbool showLspCompletionDialog", applyStart);
+	if (applyStart == std::string::npos || applyEnd == std::string::npos) {
+		failureReason = "Unable to isolate applyLspCompletionItem.";
+		return false;
+	}
+	applyBody = content.substr(applyStart, applyEnd - applyStart);
+	if (applyBody.find("mrScheduleSnippetSidekick") != std::string::npos || applyBody.find("MRExpand") != std::string::npos || applyBody.find("replaceRangeAndSelect") == std::string::npos) {
+		failureReason = "LSP completion must not route through the reset MRExpand snippet sidekick.";
 		return false;
 	}
 
-	const std::size_t dialogStart = content.find("bool showLspCompletionDialog", insertTextEnd);
+	const std::size_t dialogStart = content.find("bool showLspCompletionDialog", applyEnd);
 	const std::size_t dialogEnd = content.find("\nMREditWindow *findLspCodeActionTargetWindow", dialogStart);
 	if (dialogStart == std::string::npos || dialogEnd == std::string::npos) {
 		failureReason = "Unable to isolate showLspCompletionDialog.";
@@ -6432,11 +6478,12 @@ bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 	}
 	dialogBody = content.substr(dialogStart, dialogEnd - dialogStart);
 	const std::size_t itemLookup = dialogBody.find("const mr::services::MRServiceCompletionItem &item = result.items[selectedIndex];");
-	const std::size_t normalizedInsert = dialogBody.find("insertText = lspCompletionReplacementTextForItem(item)", itemLookup);
-	const std::size_t dialogDestroy = dialogBody.find("TObject::destroy(dialog)", normalizedInsert);
-	const std::size_t editorReplace = dialogBody.find("applyLspCompletionItem(*targetEditor, result, selectedItem, insertText, errorMessage)", dialogDestroy);
-	if (itemLookup == std::string::npos || normalizedInsert == std::string::npos || dialogDestroy == std::string::npos || editorReplace == std::string::npos) {
-		failureReason = "LSP completion dialog must replace the selected completion range with normalized completion text.";
+	const std::size_t dialogDestroy = dialogBody.find("TObject::destroy(dialog)", itemLookup);
+	const std::size_t resolveItem = dialogBody.find("g_lspAppService.resolveCompletionItem(selectedItem, resolvedItem, errorMessage)", dialogDestroy);
+	const std::size_t rawInsert = dialogBody.find("insertText = lspCompletionRawReplacementTextForItem(selectedItem)", resolveItem);
+	const std::size_t editorReplace = dialogBody.find("applyLspCompletionItem(targetWindow, *targetEditor, result, selectedItem, insertText, errorMessage)", rawInsert);
+	if (itemLookup == std::string::npos || dialogDestroy == std::string::npos || resolveItem == std::string::npos || rawInsert == std::string::npos || editorReplace == std::string::npos) {
+		failureReason = "LSP completion dialog must resolve the selected item after the dialog closes, then apply the resolved replacement text.";
 		return false;
 	}
 
@@ -6598,6 +6645,10 @@ bool testLspBentoPaneTargetRoutingGuard(std::string &failureReason) {
 		failureReason = "LSP context menu must activate the target through the Bento-aware activator.";
 		return false;
 	}
+	if (contextMenuBody.find("requestLspCompletionCommand(targetWindow, &target)") == std::string::npos) {
+		failureReason = "LSP context menu completion must use the clicked editor target, not the stale cursor target.";
+		return false;
+	}
 
 	const std::size_t contextMenuItemsStart = content.find("std::vector<LspMiniMenuEntry> buildLspContextMenuItems");
 	const std::size_t contextMenuItemsEnd = content.find("\nbool requestLspCodeActionsAtPosition", contextMenuItemsStart);
@@ -6621,6 +6672,21 @@ bool testLspBentoPaneTargetRoutingGuard(std::string &failureReason) {
 	if (hoverBody.find("findLspResultTargetWindow(result.header.identity)") == std::string::npos || hoverBody.find("currentEditorCommandWindow()") != std::string::npos) {
 		failureReason = "LSP hover sidekick must target the result owner, not the current editor command window.";
 		return false;
+	}
+	{
+		const std::size_t hoverReportStart = content.find("void reportNewLspHovers");
+		const std::size_t hoverReportEnd = content.find("\nvoid reportLspCompletionResult", hoverReportStart);
+		std::string hoverReportBody;
+
+		if (hoverReportStart == std::string::npos || hoverReportEnd == std::string::npos) {
+			failureReason = "Unable to isolate reportNewLspHovers for stale auto-hover guard.";
+			return false;
+		}
+		hoverReportBody = content.substr(hoverReportStart, hoverReportEnd - hoverReportStart);
+		if (hoverReportBody.find("lspAutoHoverResultStillAtRequestAnchor(result)") == std::string::npos || hoverReportBody.find("LSP auto hover ignored: request anchor moved before result arrived.") == std::string::npos) {
+			failureReason = "LSP auto hover results must be rejected when the request anchor moved before display.";
+			return false;
+		}
 	}
 
 	const std::size_t signatureStart = content.find("bool showLspSignatureHelpSidekick", hoverEnd);
@@ -6646,6 +6712,7 @@ bool testLspRequestVersionRoutingGuard(std::string &failureReason) {
 	std::string source;
 	std::string consumeBody;
 	std::string clearBody;
+	std::string syncBody;
 	std::string ioError;
 	std::string missingNeedle;
 
@@ -6672,6 +6739,20 @@ bool testLspRequestVersionRoutingGuard(std::string &failureReason) {
 	if (consumeBody.find("activeWorkspace.documents.front().documentVersion") != std::string::npos) {
 		failureReason = "LSP result construction must not use the first workspace document as version anchor.";
 		return false;
+	}
+	{
+		const std::size_t syncStart = source.find("bool MRLspServiceSession::syncEditorDocument");
+		const std::size_t syncEnd = source.find("\nbool MRLspServiceSession::syncEditorDocumentAndRequest", syncStart);
+
+		if (syncStart == std::string::npos || syncEnd == std::string::npos) {
+			failureReason = "Unable to isolate MRLspServiceSession::syncEditorDocument.";
+			return false;
+		}
+		syncBody = source.substr(syncStart, syncEnd - syncStart);
+		if (!containsAllSubstrings(syncBody, {"documentService.isStaleForSentVersion(source, errorMessage)", "documentService.close(source, errorMessage)", "openDocument(workspace, source, errorMessage)"}, missingNeedle)) {
+			failureReason = "LSP sync must reopen documents whose editor version moved behind the sent LSP version: missing " + missingNeedle + ".";
+			return false;
+		}
 	}
 
 	const std::size_t clearStart = source.find("void MRLspServiceSession::clearRequests");
@@ -6795,8 +6876,13 @@ bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 		failureReason = "Save As must guard existing target overwrite before writing.";
 		return false;
 	}
-	if (content.find("if (configuredBackupFilesSetting())") == std::string::npos || content.find("fnmerge(backupName, drive, dir, file, \".bak\");") == std::string::npos) {
+	if (content.find("const bool backupEnabled = configuredBackupFilesSetting();") == std::string::npos || content.find("if (backupEnabled)") == std::string::npos || content.find("fnmerge(backupName, drive, dir, file, \".bak\");") == std::string::npos) {
 		failureReason = "Backup file creation must be gated by configurable BACKUP_FILES setting.";
+		return false;
+	}
+	if (content.find("const bool mappedInPlaceSave = mBufferModel.document().hasMappedOriginal() && samePath(mBufferModel.document().mappedPath().c_str(), targetPath);") == std::string::npos || content.find("useTemporaryTarget = mappedInPlaceSave && !backupMovedTarget;") == std::string::npos ||
+	    content.find("rename(temporaryTargetPath.c_str(), targetPath)") == std::string::npos) {
+		failureReason = "Mapped in-place save must write through a temporary target unless the original file was moved away for backup.";
 		return false;
 	}
 
@@ -6895,6 +6981,70 @@ bool testFileExtensionRightMarginSyncGuard(std::string &failureReason) {
 		failureReason = "File extension editor settings panel must preserve the typed right margin while synchronizing FORMAT_LINE.";
 		return false;
 	}
+	failureReason.clear();
+	return true;
+}
+
+bool testFileExtensionCodeLanguageChoicesGuard(std::string &failureReason) {
+	const std::string panelPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionEditorSettings.cpp");
+	MRFileExtensionProfilesInternal::FileExtensionEditorSettingsDialogRecord record;
+	MRFileExtensionEditorSettings settings;
+	std::string panelContent;
+	std::string ioError;
+	std::string errorText;
+
+	if (!readTextFile(panelPath, panelContent, ioError)) {
+		failureReason = "Unable to read MRFileExtensionEditorSettings.cpp for code-language choice guard: " + ioError;
+		return false;
+	}
+	if (panelContent.find("\"LaTeX\"") == std::string::npos) {
+		failureReason = "File extension code-language drop list must expose LaTeX.";
+		return false;
+	}
+
+	MRFileExtensionProfilesInternal::initFileExtensionEditorSettingsDialogRecord(record);
+	MRFileExtensionProfilesInternal::writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "LaTeX");
+	if (!MRFileExtensionProfilesInternal::fileExtensionEditorSettingsDialogRecordToSettings(record, settings, errorText)) {
+		failureReason = "File extension code-language parser rejected LaTeX: " + errorText;
+		return false;
+	}
+	if (settings.codeLanguage != "LATEX") {
+		failureReason = "File extension code-language parser did not canonicalize LaTeX to LATEX.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testFileExtensionCompilerProfileChoicesGuard(std::string &failureReason) {
+	const std::string dialogPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionProfiles.cpp");
+	const std::string supportPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionProfilesSupport.cpp");
+	std::string dialogContent;
+	std::string supportContent;
+	std::string ioError;
+
+	if (!readTextFile(dialogPath, dialogContent, ioError)) {
+		failureReason = "Unable to read MRFileExtensionProfiles.cpp for compiler-profile choices guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(supportPath, supportContent, ioError)) {
+		failureReason = "Unable to read MRFileExtensionProfilesSupport.cpp for compiler-profile choices guard: " + ioError;
+		return false;
+	}
+	if (dialogContent.find("std::vector<MRCompilerProfile> profiles = configuredCompilerProfiles();") == std::string::npos || dialogContent.find("for (const MRCompilerProfile &defaultProfile : defaultCompilerProfiles())") == std::string::npos || dialogContent.find("if (!exists) profiles.push_back(defaultProfile);") == std::string::npos) {
+		failureReason = "File extension compiler-profile drop list must merge configured profiles with missing default profiles.";
+		return false;
+	}
+	if (supportContent.find("if (configuredCompilerProfiles().empty())") != std::string::npos) {
+		failureReason = "File extension compiler-profile validation must not accept default profiles only when configured profiles are empty.";
+		return false;
+	}
+	if (supportContent.find("for (const MRCompilerProfile &profile : defaultCompilerProfiles())") == std::string::npos || supportContent.find("if (profile.id == id) return true;") == std::string::npos) {
+		failureReason = "File extension compiler-profile validation must accept configured and default compiler profile ids.";
+		return false;
+	}
+
 	failureReason.clear();
 	return true;
 }
@@ -8282,6 +8432,81 @@ bool testCompilerProfileAutomaticSetupGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testCompilerProfileLspSettingsRoundtripGuard(std::string &failureReason) {
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	MRSettingsSnapshot snapshot = captureConfiguredSettingsSnapshot(paths);
+	MRSettingsSnapshot loaded;
+	MRCompilerProfile profile;
+	std::string source;
+	std::string errorText;
+
+	profile.id = "LSP_PROFILE";
+	profile.name = "LSP Profile";
+	profile.toolchain = "CUSTOM";
+	profile.lspExecutablePath = "/usr/bin/custom-lsp";
+	profile.lspArguments = "--stdio --probe";
+	profile.lspWorkingDirectory = "/tmp";
+	profile.lspMiddlewarePath = "/tmp/mrexpand.mrmac";
+	if (!setSnapshotCompilerProfiles(snapshot, std::vector<MRCompilerProfile>{profile}, &errorText)) {
+		failureReason = "Unable to seed compiler profile LSP roundtrip snapshot: " + errorText;
+		return false;
+	}
+	source = buildSettingsMacroSource(snapshot);
+	if (source.find("MRCOMPILERPROFILE('SET', 'LSP_PROFILE', 'LSP_EXECUTABLE', '/usr/bin/custom-lsp');") == std::string::npos || source.find("MRCOMPILERPROFILE('SET', 'LSP_PROFILE', 'LSP_ARGUMENTS', '--stdio --probe');") == std::string::npos || source.find("MRCOMPILERPROFILE('SET', 'LSP_PROFILE', 'LSP_WORKING_DIRECTORY', '/tmp');") == std::string::npos || source.find("MRCOMPILERPROFILE('SET', 'LSP_PROFILE', 'LSP_MIDDLEWARE', '/tmp/mrexpand.mrmac');") == std::string::npos) {
+		failureReason = "Compiler profile LSP fields were not serialized.";
+		return false;
+	}
+	if (!applySettingsSnapshotCompilerProfileDirective(loaded, "DEFINE", "LSP_PROFILE", "LSP Profile", "CUSTOM", &errorText) || !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "LSP_PROFILE", "LSP_EXECUTABLE", "/usr/bin/custom-lsp", &errorText) || !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "LSP_PROFILE", "LSP_ARGUMENTS", "--stdio --probe", &errorText) || !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "LSP_PROFILE", "LSP_WORKING_DIRECTORY", "/tmp", &errorText) || !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "LSP_PROFILE", "LSP_MIDDLEWARE", "/tmp/mrexpand.mrmac", &errorText)) {
+		failureReason = "Compiler profile LSP directive apply failed: " + errorText;
+		return false;
+	}
+	if (loaded.compilerProfiles.size() != 1 || loaded.compilerProfiles[0].lspExecutablePath != "/usr/bin/custom-lsp" || loaded.compilerProfiles[0].lspArguments != "--stdio --probe" || loaded.compilerProfiles[0].lspWorkingDirectory != "/tmp" || loaded.compilerProfiles[0].lspMiddlewarePath != "/tmp/mrexpand.mrmac") {
+		failureReason = "Compiler profile LSP fields did not roundtrip through directives.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testLatexmkCompilerProfileCommandGuard(std::string &failureReason) {
+	MRCompilerProfile profile;
+	std::string commandLine;
+	std::string errorText;
+
+	profile.id = "LATEXMK_PDF";
+	profile.name = "latexmk PDF";
+	profile.toolchain = "LATEXMK";
+	profile.executablePath = "/usr/bin/latexmk";
+	profile.buildFlags = "-pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd";
+	if (!normalizeCompilerProfileInPlace(profile, &errorText)) {
+		failureReason = "LATEXMK compiler profile did not normalize: " + errorText;
+		return false;
+	}
+	if (!buildCompilerProfileCommandLine(profile, "/tmp/mr latex/main.tex", commandLine, &errorText)) {
+		failureReason = "LATEXMK compiler command was rejected: " + errorText;
+		return false;
+	}
+	if (commandLine.find("'/usr/bin/latexmk' -pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd '/tmp/mr latex/main.tex'") == std::string::npos) {
+		failureReason = "LATEXMK compiler command did not contain the expected latexmk invocation.";
+		return false;
+	}
+	if (commandLine.find("exec zathura '/tmp/mr latex/main.pdf'") == std::string::npos) {
+		failureReason = "LATEXMK compiler command did not contain the expected controlled PDF viewer invocation.";
+		return false;
+	}
+	if (commandLine.find("zathura not found") == std::string::npos) {
+		failureReason = "LATEXMK compiler command did not contain the expected missing-viewer fallback message.";
+		return false;
+	}
+	if (commandLine.find(" -o ") != std::string::npos) {
+		failureReason = "LATEXMK compiler command must not append C-style -o output.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	std::string source;
 	std::string diagnosticsSource;
@@ -9036,6 +9261,8 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
+	runTest(ctx, "Compiler profile LSP settings roundtrip guard", testCompilerProfileLspSettingsRoundtripGuard);
+	runTest(ctx, "LATEXMK compiler profile command guard", testLatexmkCompilerProfileCommandGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
@@ -9063,11 +9290,14 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
+	runTest(ctx, "LSP completion target cursor-inside-literal guard", mrLspCompletionTargetSelfTestForRegression);
 	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
 	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);
 	runTest(ctx, "LSP document highlight channel guard", testLspDocumentHighlightChannelGuard);
 	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
+	runTest(ctx, "File extension code-language choices guard", testFileExtensionCodeLanguageChoicesGuard);
+	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
@@ -9129,6 +9359,8 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
+	runTest(ctx, "Compiler profile LSP settings roundtrip guard", testCompilerProfileLspSettingsRoundtripGuard);
+	runTest(ctx, "LATEXMK compiler profile command guard", testLatexmkCompilerProfileCommandGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
@@ -9155,10 +9387,13 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
+	runTest(ctx, "File extension code-language choices guard", testFileExtensionCodeLanguageChoicesGuard);
+	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
+	runTest(ctx, "LSP completion target cursor-inside-literal guard", mrLspCompletionTargetSelfTestForRegression);
 	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
 	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);
 	runTest(ctx, "LSP document highlight channel guard", testLspDocumentHighlightChannelGuard);

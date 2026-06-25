@@ -1,8 +1,11 @@
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <poll.h>
 #include <string>
+#include <unistd.h>
 
 #include "../app/services/MRLspServiceSession.hpp"
 #include "../ui/MRFileEditor/MRFileEditor.hpp"
@@ -75,6 +78,79 @@ bool replaceText(MRFileEditor &editor, const std::string &text, std::string &fai
 	return false;
 }
 
+bool isExecutableFile(const std::string &path) {
+	return !path.empty() && ::access(path.c_str(), X_OK) == 0;
+}
+
+bool findExecutableOnPath(const std::string &executableName, std::string &resolvedPath) {
+	const char *pathEnvironment = std::getenv("PATH");
+	const std::string pathText = pathEnvironment != nullptr ? pathEnvironment : "";
+	std::size_t start = 0;
+
+	resolvedPath.clear();
+	if (executableName.find('/') != std::string::npos) {
+		if (!isExecutableFile(executableName)) return false;
+		resolvedPath = executableName;
+		return true;
+	}
+	while (start <= pathText.size()) {
+		std::size_t end = pathText.find(':', start);
+		std::string directory;
+		std::string candidate;
+
+		if (end == std::string::npos) end = pathText.size();
+		directory = pathText.substr(start, end - start);
+		if (directory.empty()) directory = ".";
+		candidate = directory;
+		if (!candidate.empty() && candidate[candidate.size() - 1] != '/') candidate += "/";
+		candidate += executableName;
+		if (isExecutableFile(candidate)) {
+			resolvedPath = candidate;
+			return true;
+		}
+		if (end == pathText.size()) break;
+		start = end + 1;
+	}
+	return false;
+}
+
+bool writeTextFile(const std::filesystem::path &path, const std::string &text, std::string &failureReason) {
+	std::ofstream out(path);
+
+	if (!out) {
+		failureReason = "unable to create " + path.string();
+		return false;
+	}
+	out << text;
+	if (!out) {
+		failureReason = "unable to write " + path.string();
+		return false;
+	}
+	return true;
+}
+
+bool textPositionAfterNeedle(const std::string &text, const std::string &needle, mr::lsp::LspTextPosition &position, std::string &failureReason) {
+	const std::size_t found = text.find(needle);
+	int line = 0;
+	int character = 0;
+
+	if (found == std::string::npos) {
+		failureReason = "needle missing: " + needle;
+		return false;
+	}
+	for (std::size_t index = 0; index < found + needle.size(); ++index) {
+		if (text[index] == '\n') {
+			++line;
+			character = 0;
+		} else {
+			++character;
+		}
+	}
+	position.line = line;
+	position.character = character;
+	return true;
+}
+
 bool pollUntilCounts(mr::services::MRLspServiceSession &session, std::size_t diagnostics, std::size_t locations, std::size_t hovers, std::size_t completions, std::string &failureReason, std::size_t codeActions = 0) {
 	std::string errorMessage;
 
@@ -89,6 +165,25 @@ bool pollUntilCounts(mr::services::MRLspServiceSession &session, std::size_t dia
 		::poll(nullptr, 0, 20);
 	}
 	failureReason = "expected service result counts not observed";
+	return false;
+}
+
+bool pollUntilCompletionContains(mr::services::MRLspServiceSession &session, const std::string &label, std::string &failureReason) {
+	std::string errorMessage;
+
+	for (int i = 0; i < 150; ++i) {
+		if (!session.poll(errorMessage)) {
+			failureReason = "session poll failed: " + errorMessage;
+			return false;
+		}
+		for (const mr::services::MRServiceCompletionResult &result : session.results().completionResults()) {
+			for (const mr::services::MRServiceCompletionItem &item : result.items) {
+				if (item.label == label) return true;
+			}
+		}
+		::poll(nullptr, 0, 20);
+	}
+	failureReason = "expected completion item not observed: " + label;
 	return false;
 }
 
@@ -132,16 +227,18 @@ bool testInitializeSpec(std::string &failureReason) {
 	mr::services::MRWorkspaceServiceSnapshot workspace = makeWorkspace(1);
 	mr::services::MRWorkspaceServiceSnapshot noRootWorkspace;
 	std::string errorMessage;
-	const std::string completionCapabilities = "\"capabilities\":{\"textDocument\":{\"completion\":{\"completionItem\":{\"snippetSupport\":true}}}}";
-	const std::string expectedRootParams = "{\"processId\":null,\"rootPath\":\"/tmp/mr/project\",\"rootUri\":\"file:///tmp/mr/project\",\"workspaceFolders\":[{\"uri\":\"file:///tmp/mr/project\",\"name\":\"project\"}]," + completionCapabilities + "}";
-	const std::string expectedNullParams = "{\"processId\":null,\"rootPath\":null,\"rootUri\":null,\"workspaceFolders\":null," + completionCapabilities + "}";
 
 	sessionSpec.process.executablePath = "./regression/mr_lsp_session_peer";
 	if (!expect(mr::services::buildLspInitializeSpecFromWorkspace(workspace, sessionSpec, spec, errorMessage), "root initialize spec: " + errorMessage, failureReason)) return false;
 	if (!expect(spec.session.process.executablePath == sessionSpec.process.executablePath, "initialize executable", failureReason)) return false;
-	if (!expect(spec.initializeParamsJson == expectedRootParams, "root initialize params", failureReason)) return false;
+	if (!expect(spec.initializeParamsJson.find("\"rootUri\":\"file:///tmp/mr/project\"") != std::string::npos, "root initialize uri", failureReason)) return false;
+	if (!expect(spec.initializeParamsJson.find("\"workspaceFolders\":[{\"uri\":\"file:///tmp/mr/project\",\"name\":\"project\"}]") != std::string::npos, "root initialize workspace folders", failureReason)) return false;
+	if (!expect(spec.initializeParamsJson.find("\"snippetSupport\":true") != std::string::npos, "initialize snippet capability", failureReason)) return false;
+	if (!expect(spec.initializeParamsJson.find("\"contextSupport\":true") != std::string::npos, "initialize completion context capability", failureReason)) return false;
+	if (!expect(spec.initializeParamsJson.find("\"hover\":{\"contentFormat\":[\"markdown\",\"plaintext\"]}") != std::string::npos, "initialize hover markup capability", failureReason)) return false;
+	if (!expect(spec.initializeParamsJson.find("\"hierarchicalDocumentSymbolSupport\":true") != std::string::npos, "initialize symbol hierarchy capability", failureReason)) return false;
 	if (!expect(mr::services::buildLspInitializeSpecFromWorkspace(noRootWorkspace, sessionSpec, spec, errorMessage), "null initialize spec: " + errorMessage, failureReason)) return false;
-	if (!expect(spec.initializeParamsJson == expectedNullParams, "null initialize params", failureReason)) return false;
+	if (!expect(spec.initializeParamsJson.find("\"rootPath\":null,\"rootUri\":null,\"workspaceFolders\":null") != std::string::npos, "null initialize root fields", failureReason)) return false;
 
 	profile.profileName = "probe";
 	profile.executablePath = "./regression/mr_lsp_session_peer";
@@ -253,6 +350,26 @@ bool testSyncEditorSessionPath(std::string &failureReason) {
 	workspace = workspaceForDocument(document);
 	if (!expect(session.syncEditorDocument(workspace, document, mainEditor, errorMessage), "sync changed editor document: " + errorMessage, failureReason)) return false;
 	if (!pollUntilCurrentDiagnostics(session, mainPath, document.documentVersion, "changed diagnostic", failureReason)) return false;
+	mainEditor.pushUndoSnapshot();
+	if (!mainEditor.replaceRangeAndSelect(0, 3, "long", 4)) {
+		failureReason = "sync undo editor document: edit failed";
+		return false;
+	}
+	document = documentForEditor(mainEditor, mainPath);
+	workspace = workspaceForDocument(document);
+	if (!expect(session.syncEditorDocument(workspace, document, mainEditor, errorMessage), "sync undo editor changed document: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, mainPath, document.documentVersion, "changed diagnostic", failureReason)) return false;
+	{
+		TEvent undoEvent{};
+
+		undoEvent.what = evCommand;
+		undoEvent.message.command = cmUndo;
+		mainEditor.handleEvent(undoEvent);
+	}
+	document = documentForEditor(mainEditor, mainPath);
+	workspace = workspaceForDocument(document);
+	if (!expect(session.syncEditorDocument(workspace, document, mainEditor, errorMessage), "sync undo reopened editor document: " + errorMessage, failureReason)) return false;
+	if (!pollUntilCurrentDiagnostics(session, mainPath, document.documentVersion, "opened diagnostic", failureReason)) return false;
 	if (!replaceText(otherEditor, "int other() { return 4; }\n", failureReason)) return false;
 	document = documentForEditor(otherEditor, otherPath);
 	workspace = workspaceForDocument(document);
@@ -282,6 +399,7 @@ bool testRuntimeFacadePath(std::string &failureReason) {
 				mr::services::MRLspServiceRequestKind::Definition,
 				mr::lsp::LspTextPosition{3, 5},
 				true,
+				std::string(),
 				errorMessage),
 			"runtime definition request: " + errorMessage,
 			failureReason))
@@ -295,6 +413,7 @@ bool testRuntimeFacadePath(std::string &failureReason) {
 				mr::services::MRLspServiceRequestKind::References,
 				mr::lsp::LspTextPosition{3, 5},
 				true,
+				std::string(),
 				errorMessage),
 			"runtime references request: " + errorMessage,
 			failureReason))
@@ -308,6 +427,7 @@ bool testRuntimeFacadePath(std::string &failureReason) {
 				mr::services::MRLspServiceRequestKind::Hover,
 				mr::lsp::LspTextPosition{3, 5},
 				false,
+				std::string(),
 				errorMessage),
 			"runtime hover request: " + errorMessage,
 			failureReason))
@@ -321,6 +441,7 @@ bool testRuntimeFacadePath(std::string &failureReason) {
 				mr::services::MRLspServiceRequestKind::Completion,
 				mr::lsp::LspTextPosition{3, 5},
 				false,
+				std::string(),
 				errorMessage),
 			"runtime completion request: " + errorMessage,
 			failureReason))
@@ -354,6 +475,7 @@ bool testEditorDocumentServiceRequestPath(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::GoToDefinition,
 				mr::lsp::LspTextPosition{3, 5},
+				std::string(),
 				errorMessage),
 			"editor service definition command: " + errorMessage,
 			failureReason))
@@ -368,6 +490,7 @@ bool testEditorDocumentServiceRequestPath(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::ShowHover,
 				mr::lsp::LspTextPosition{3, 5},
+				std::string(),
 				errorMessage),
 			"editor service hover command: " + errorMessage,
 			failureReason))
@@ -382,6 +505,7 @@ bool testEditorDocumentServiceRequestPath(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::Complete,
 				mr::lsp::LspTextPosition{3, 5},
+				std::string(),
 				errorMessage),
 			"editor service completion command after profile change: " + errorMessage,
 			failureReason))
@@ -407,7 +531,7 @@ bool testSessionHappyPath(std::string &failureReason) {
 	if (!pollUntilCounts(session, 1, 2, 0, 0, failureReason)) return false;
 	if (!expect(session.requestHover(mr::lsp::LspTextPosition{3, 5}, errorMessage), "request hover: " + errorMessage, failureReason)) return false;
 	if (!pollUntilCounts(session, 1, 2, 1, 0, failureReason)) return false;
-	if (!expect(session.requestCompletion(mr::lsp::LspTextPosition{3, 5}, errorMessage), "request completion: " + errorMessage, failureReason)) return false;
+	if (!expect(session.requestCompletion(mr::lsp::LspTextPosition{3, 5}, std::string(), errorMessage), "request completion: " + errorMessage, failureReason)) return false;
 	if (!pollUntilCounts(session, 1, 2, 1, 1, failureReason)) return false;
 	if (!expect(!session.results().diagnosticResults().empty(), "diagnostic result missing before codeAction", failureReason)) return false;
 	if (!expect(!session.results().diagnosticResults()[0].diagnostics.empty(), "diagnostic entry missing before codeAction", failureReason)) return false;
@@ -441,6 +565,7 @@ bool testProtocolShaperServicePath(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::GoToDefinition,
 				mr::lsp::LspTextPosition{0, 4},
+				std::string(),
 				errorMessage),
 			"protocol shaper definition command: " + errorMessage,
 			failureReason))
@@ -456,6 +581,7 @@ bool testProtocolShaperServicePath(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::ShowHover,
 				mr::lsp::LspTextPosition{0, 4},
+				std::string(),
 				errorMessage),
 			"protocol shaper hover command: " + errorMessage,
 			failureReason))
@@ -470,6 +596,7 @@ bool testProtocolShaperServicePath(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::Complete,
 				mr::lsp::LspTextPosition{0, 4},
+				std::string(),
 				errorMessage),
 			"protocol shaper completion command: " + errorMessage,
 			failureReason))
@@ -508,12 +635,81 @@ bool testProtocolShaperMalformedStart(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::GoToDefinition,
 				mr::lsp::LspTextPosition{0, 4},
+				std::string(),
 				errorMessage),
 			"malformed protocol shaper accepted",
 			failureReason))
 		return false;
 	if (!expect(errorMessage.find("Content-Length") != std::string::npos, "malformed protocol shaper error text", failureReason)) return false;
 	return expect(!session.runtimeActive(), "malformed protocol shaper runtime remains active", failureReason);
+}
+
+bool testDigestifEditorCompletionInsideLiteral(std::string &failureReason) {
+	const std::string documentText =
+	    "\\documentclass{article}\n"
+	    "\\begin{document}\n"
+	    "\\begin{tabular\n"
+	    "\\end{document}\n";
+	std::string digestifPath;
+	const std::filesystem::path workDirectory = std::filesystem::path("/tmp") / ("mr-digestif-session-" + std::to_string(::getpid()));
+	const std::filesystem::path filePath = workDirectory / "main.tex";
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, filePath.string().c_str());
+	mr::services::MRLspServiceSession session;
+	mr::services::MRLspServerProfile profile;
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	mr::lsp::LspTextPosition position;
+	std::string errorMessage;
+
+	if (!findExecutableOnPath("digestif", digestifPath)) {
+		std::cout << "SKIP digestif editor completion inside literal: executable not found\n";
+		return true;
+	}
+	std::filesystem::remove_all(workDirectory);
+	std::filesystem::create_directories(workDirectory);
+	if (!writeTextFile(filePath, documentText, failureReason)) return false;
+	if (!replaceText(editor, documentText, failureReason)) {
+		std::filesystem::remove_all(workDirectory);
+		return false;
+	}
+	if (!textPositionAfterNeedle(documentText, "\\begin{ta", position, failureReason)) {
+		std::filesystem::remove_all(workDirectory);
+		return false;
+	}
+	document = documentForEditor(editor, filePath.string());
+	workspace = workspaceForDocument(document);
+	workspace.root.hasRoot = true;
+	workspace.root.rootPath = workDirectory.string();
+	workspace.root.reason = "digestif live service probe";
+	profile.profileName = "digestif-live";
+	profile.executablePath = digestifPath;
+	profile.workingDirectory = workDirectory.string();
+	if (!expect(
+	        session.requestEditorDocumentServiceCommand(
+	            workspace,
+	            profile,
+	            document,
+	            editor,
+	            mr::services::MRLspServiceCommandId::Complete,
+	            position,
+	            "{",
+	            errorMessage),
+	        "digestif completion inside literal request: " + errorMessage,
+	        failureReason)) {
+		std::filesystem::remove_all(workDirectory);
+		return false;
+	}
+	if (!pollUntilCompletionContains(session, "tabular", failureReason)) {
+		static_cast<void>(session.shutdown(errorMessage));
+		std::filesystem::remove_all(workDirectory);
+		return false;
+	}
+	if (!expect(session.shutdown(errorMessage), "shutdown digestif live service: " + errorMessage, failureReason)) {
+		std::filesystem::remove_all(workDirectory);
+		return false;
+	}
+	std::filesystem::remove_all(workDirectory);
+	return true;
 }
 
 bool runProbe(std::string &failureReason) {
@@ -527,6 +723,7 @@ bool runProbe(std::string &failureReason) {
 	if (!testSessionHappyPath(failureReason)) return false;
 	if (!testProtocolShaperServicePath(failureReason)) return false;
 	if (!testProtocolShaperMalformedStart(failureReason)) return false;
+	if (!testDigestifEditorCompletionInsideLiteral(failureReason)) return false;
 	return true;
 }
 } // namespace

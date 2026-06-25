@@ -41,7 +41,7 @@ bool hasSystemdUnitSuffix(std::string_view lowerName) noexcept {
 	return false;
 }
 
-constexpr std::size_t kSyntaxLanguageCount = static_cast<std::size_t>(MRSyntaxLanguage::Markdown) + 1;
+constexpr std::size_t kSyntaxLanguageCount = static_cast<std::size_t>(MRSyntaxLanguage::Latex) + 1;
 
 std::size_t syntaxLanguageIndex(MRSyntaxLanguage language) noexcept {
 	return static_cast<std::size_t>(language);
@@ -333,6 +333,7 @@ MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::str
 		return MRSyntaxLanguage::Systemd;
 	if (ext == ".mrmac") return MRSyntaxLanguage::MRMAC;
 	if (ext == ".md" || ext == ".markdown" || lowerName == "readme") return MRSyntaxLanguage::Markdown;
+	if (ext == ".tex" || ext == ".ltx" || ext == ".sty" || ext == ".cls") return MRSyntaxLanguage::Latex;
 	return MRSyntaxLanguage::PlainText;
 }
 
@@ -350,6 +351,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const bool forceKotlinLanguageByExtension = ext == ".kt" || ext == ".kts";
 	const bool forceCSharpLanguageByExtension = ext == ".cs" || ext == ".csx" || ext == ".cake";
 	const bool forcePascalLanguageByExtension = ext == ".pas" || ext == ".pp" || ext == ".lpr" || ext == ".dpr";
+	const bool forceLatexLanguageByExtension = ext == ".tex" || ext == ".ltx" || ext == ".sty" || ext == ".cls";
 	const std::string_view sample = classificationSample(text);
 	const std::string lowerSample = lowerCopyView(sample);
 	const std::string_view lower = lowerSample;
@@ -365,6 +367,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (forceKotlinLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Kotlin, 100);
 	if (forceCSharpLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::CSharp, 100);
 	if (forcePascalLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Pascal, 100);
+	if (forceLatexLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Latex, 100);
 
 	const int includeLines = countLinePrefixMatches(lower, "#include", 8);
 	const int cStdHeaderIncludes = countMatches(lower, "<assert.h>", 4) + countMatches(lower, "<ctype.h>", 4) + countMatches(lower, "<errno.h>", 4) + countMatches(lower, "<float.h>", 4) +
@@ -423,6 +426,9 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int makeTargetLines = countMakeTargetLikeLines(sample, 16);
 	const int makeRecipeLines = countRecipeTabLines(sample, 16);
 	const int markdownStructureLines = countMarkdownStructureLines(sample, 24);
+	const int latexDocumentLines = countMatches(lower, "\\documentclass", 4) + countMatches(lower, "\\begin{document}", 4) + countMatches(lower, "\\end{document}", 4);
+	const int latexSectionLines = countMatches(lower, "\\section", 12) + countMatches(lower, "\\subsection", 12) + countMatches(lower, "\\chapter", 8) + countMatches(lower, "\\part", 8);
+	const int latexEnvironmentLines = countMatches(lower, "\\begin{", 16) + countMatches(lower, "\\end{", 16);
 	const int semicolonCount = countCharacter(sample, ';', 32);
 	const int braceCount = countCharacter(sample, '{', 32) + countCharacter(sample, '}', 32);
 	const int shellControlCount = countMatches(lower, "[[", 12) + countMatches(lower, "case ", 8) + countMatches(lower, "typeset ", 8) + countMatches(lower, "autoload ", 8) + countMatches(lower, "setopt ", 8);
@@ -450,7 +456,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		    ext == ".pod" || ext == ".swift" || ext == ".rs" || ext == ".go" || ext == ".kt" || ext == ".kts" || ext == ".cs" || ext == ".csx" || ext == ".cake" || ext == ".xml" ||
 		    ext == ".xsd" || ext == ".xsl" || ext == ".xslt" || ext == ".svg" || ext == ".mrmac" || ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" ||
 		    ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" || ext == ".swap" || ext == ".device" || ext == ".link" ||
-		    ext == ".netdev" || ext == ".network")
+		    ext == ".netdev" || ext == ".network" || ext == ".tex" || ext == ".ltx" || ext == ".sty" || ext == ".cls")
 			pathBias = 14;
 		if (detectedByPath == MRSyntaxLanguage::Systemd)
 			pathBias = 24;
@@ -700,6 +706,16 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	addClassificationScore(scores, MRSyntaxLanguage::Markdown, countMatches(lower, "\n|", 8));
 	addClassificationScore(scores, MRSyntaxLanguage::Markdown, markdownStructureLines * 2);
 	if (markdownStructureLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Markdown)] += std::min(4, markdownStructureLines);
+
+	addClassificationScore(scores, MRSyntaxLanguage::Latex, latexDocumentLines * 8);
+	addClassificationScore(scores, MRSyntaxLanguage::Latex, latexSectionLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Latex, latexEnvironmentLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Latex, countMatches(lower, "\\usepackage", 8) * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Latex, countMatches(lower, "\\label{", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Latex, countMatches(lower, "\\ref{", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Latex, countMatches(lower, "\\cite", 8) * 2);
+	if (latexDocumentLines + latexSectionLines + latexEnvironmentLines > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Latex)] += std::min(4, latexDocumentLines + latexSectionLines + latexEnvironmentLines);
 
 	if (jsonKeyLines >= 3) {
 		addClassificationScore(scores, MRSyntaxLanguage::Json, 6);

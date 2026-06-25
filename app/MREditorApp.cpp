@@ -40,6 +40,7 @@
 #include "../ui/MRStatusLine.hpp"
 #include "../ui/MRPalette.hpp"
 #include "../ui/MRPerformancePanel.hpp"
+#include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowLayout.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -1802,6 +1803,26 @@ void MREditorApp::handleEvent(TEvent &event) {
 	if ((event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0) notifyMRLspMouseActivity(event.mouse.where);
 	if (event.what == evKeyDown) notifyMRLspKeyboardActivity();
 	clearTransientSearchSelectionOnUserInput(event);
+	if (event.what == evMouseWheel) {
+		TView *top = TopView();
+		const bool modalViewActive = top != nullptr && top != this && (top->state & sfModal) != 0;
+		if (!modalViewActive) {
+			MREditWindow *wheelWindow = currentEditWindow();
+			if (wheelWindow == nullptr || !wheelWindow->containsMouse(event)) {
+				wheelWindow = nullptr;
+				for (MREditWindow *candidate : allEditWindowsInZOrder()) {
+					if (candidate != nullptr && (candidate->state & sfVisible) != 0 && candidate->containsMouse(event)) {
+						wheelWindow = candidate;
+						break;
+					}
+				}
+			}
+			if (wheelWindow != nullptr) {
+				wheelWindow->handleEvent(event);
+				if (event.what == evNothing) return;
+			}
+		}
+	}
 	if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbF11)) {
 		toggleFullscreenPresentation();
 		clearEvent(event);

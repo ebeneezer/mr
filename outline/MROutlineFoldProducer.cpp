@@ -703,6 +703,13 @@ std::string outlineSectionDisplayName(MRSyntaxLanguage language, std::string_vie
 		heading = outlineTrimView(heading);
 		if (!heading.empty()) return std::string(heading);
 	}
+	if (language == MRSyntaxLanguage::Latex) {
+		std::size_t openBrace = trimmed.find('{');
+		if (openBrace != std::string_view::npos) {
+			std::size_t closeBrace = trimmed.find('}', openBrace + 1);
+			if (closeBrace != std::string_view::npos && closeBrace > openBrace + 1) return std::string(outlineTrimView(trimmed.substr(openBrace + 1, closeBrace - openBrace - 1)));
+		}
+	}
 	return std::string();
 }
 

@@ -244,6 +244,12 @@ bool LspReferencesAdapter::consume(const LspInboundMessage &message, const LspDo
 		return true;
 	}
 	result.originUri = request.uri;
+	if (message.envelope.hasError) {
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
 	if (!parseReferences(message.payload, result.locations, errorMessage)) return false;
 	request.pending = false;
 	accepted = true;

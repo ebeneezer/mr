@@ -52,6 +52,7 @@ const char *dialogCodeLanguageLabel(const std::string &codeLanguage) {
 	if (normalized == "RUST") return "Rust";
 	if (normalized == "GO") return "Go";
 	if (normalized == "PASCAL") return "Pascal";
+	if (normalized == "LATEX") return "LaTeX";
 	if (normalized == "KOTLIN") return "Kotlin";
 	if (normalized == "CSHARP") return "C#";
 	if (normalized == "SYSTEMD") return "systemd et al.";
@@ -80,6 +81,7 @@ bool parseDialogCodeLanguage(const std::string &dialogValue, std::string &canoni
 	else if (normalized == "RUST") canonicalValue = "RUST";
 	else if (normalized == "GO") canonicalValue = "GO";
 	else if (normalized == "PASCAL") canonicalValue = "PASCAL";
+	else if (normalized == "LATEX" || normalized == "TEX") canonicalValue = "LATEX";
 	else if (normalized == "KOTLIN") canonicalValue = "KOTLIN";
 	else if (normalized == "C#" || normalized == "CSHARP") canonicalValue = "CSHARP";
 	else if (normalized == "SYSTEMD" || normalized == "SYSTEMD ET AL.") canonicalValue = "SYSTEMD";
@@ -158,7 +160,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
 	{
 		if (!parseDialogCodeLanguage(readRecordField(record.codeLanguage), settings.codeLanguage)) {
-			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, YAML, XML, Perl, Swift, Rust, Go, Pascal, Kotlin, C# or systemd et al..";
+			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, YAML, XML, Perl, Swift, Rust, Go, Pascal, LaTeX, Kotlin, C# or systemd et al..";
 			return false;
 		}
 	}
@@ -427,10 +429,8 @@ enum : unsigned long long {
 
 	if (id.empty()) return true;
 	if (compilerProfileIdExists(id)) return true;
-	if (configuredCompilerProfiles().empty()) {
-		for (const MRCompilerProfile &profile : defaultCompilerProfiles())
-			if (profile.id == id) return true;
-	}
+	for (const MRCompilerProfile &profile : defaultCompilerProfiles())
+		if (profile.id == id) return true;
 	return false;
 }
 

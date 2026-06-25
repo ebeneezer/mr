@@ -119,6 +119,7 @@ class MREditScrollBar : public TScrollBar {
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseWheel && !containsMouse(event)) return;
 		if (!mColorOverride || event.what != evMouseDown) {
 			TScrollBar::handleEvent(event);
 			return;
@@ -212,7 +213,7 @@ class MREditWindow : public TWindow {
 		wrHelp
 	};
 
-	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
+	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -511,6 +512,11 @@ class MREditWindow : public TWindow {
 				return;
 			}
 			if (handleEditorScrollBarArrowHold(event)) return;
+			if (event.what == evMouseWheel && editor != nullptr) {
+				static_cast<void>(editor->scrollWindowByWheel(event.mouse.wheel));
+				clearEvent(event);
+				return;
+			}
 			const ushort originalEvent = event.what;
 			const TPoint originalMouseWhere = event.what == evMouseDown ? event.mouse.where : TPoint();
 			const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
@@ -1728,6 +1734,8 @@ class MREditWindow : public TWindow {
 	}
 
 	void resetWindowColorsToConfiguredDefaults() {
+		mAppliedColorThemePath.clear();
+		mAppliedColorThemeUri.clear();
 		mWindowPaletteData = defaultWindowPaletteData();
 		rebuildWindowPalette();
 		mCustomEofMarkerColorValid = false;
@@ -1735,13 +1743,18 @@ class MREditWindow : public TWindow {
 		refreshWindowPaletteViews();
 	}
 
-  public:
+ public:
 	void applyWindowColorThemeForPath(const std::string &path) {
 		std::array<unsigned char, MRColorSetupSettings::kWindowCount> colors;
 		std::string themePath;
 		std::string errorText;
+		const bool hasTheme = effectiveEditWindowColorThemePathForPath(path, themePath, nullptr) && !themePath.empty();
+
+		if (path == mAppliedColorThemePath && themePath == mAppliedColorThemeUri) return;
 		resetWindowColorsToConfiguredDefaults();
-		if (!effectiveEditWindowColorThemePathForPath(path, themePath, nullptr) || themePath.empty()) return;
+		mAppliedColorThemePath = path;
+		mAppliedColorThemeUri = themePath;
+		if (!hasTheme) return;
 		if (!loadWindowColorThemeGroupValues(themePath, colors, &errorText)) {
 			mrLogMessage(("Window color theme load failed: " + themePath + " (" + errorText + ")").c_str());
 			return;
@@ -2399,6 +2412,8 @@ class MREditWindow : public TWindow {
 	std::size_t mMacroCancelledCount;
 	std::size_t mMacroFailedCount;
 	std::string mLastMacroSummaryText;
+	std::string mAppliedColorThemePath;
+	std::string mAppliedColorThemeUri;
 	mutable std::array<TColorAttr, 13> mWindowPaletteData;
 	mutable TPalette mWindowPalette;
 	bool mCustomEofMarkerColorValid;

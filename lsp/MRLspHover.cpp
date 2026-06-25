@@ -168,7 +168,9 @@ bool parseHoverContents(const std::string &payload, LspHoverResult &result) {
 	std::size_t contentsStart = 0;
 	std::ostringstream arrayText;
 
-	if (!findKeyValueStart(payload, "result", 0, resultStart) || resultStart >= payload.size() || payload[resultStart] != '{') return false;
+	if (!findKeyValueStart(payload, "result", 0, resultStart) || resultStart >= payload.size()) return false;
+	if (payload.compare(resultStart, 4, "null") == 0) return true;
+	if (payload[resultStart] != '{') return false;
 	if (!findMatchingBracket(payload, resultStart, '{', '}', resultEnd)) return false;
 	const std::string resultObject = payload.substr(resultStart, resultEnd - resultStart + 1);
 	if (!findKeyValueStart(resultObject, "contents", 0, contentsStart)) return false;
@@ -254,6 +256,13 @@ bool LspHoverAdapter::consume(const LspInboundMessage &message, const LspDocumen
 	if (request.method != "textDocument/hover") return setError(errorMessage, "LSP hover request method mismatch.");
 	if (request.uri != documentService.documentUri()) {
 		request.pending = false;
+		errorMessage.clear();
+		return true;
+	}
+	if (message.envelope.hasError) {
+		result.uri = request.uri;
+		request.pending = false;
+		accepted = true;
 		errorMessage.clear();
 		return true;
 	}

@@ -84,6 +84,21 @@ bool runtimeExecutionSessionStillActive(const MRMacroExecutionSession &session) 
 	return session.sessionId != 0 && (session.state == MRMacroExecutionState::Running || session.state == MRMacroExecutionState::Yielded || session.state == MRMacroExecutionState::CancellationRequested);
 }
 
+bool runtimeSchedulerEventShouldEnterVisibleLog(const MRRuntimeSchedulerEvent &event) noexcept {
+	switch (event.kind) {
+		case MRRuntimeSchedulerEventKind::TickDue:
+		case MRRuntimeSchedulerEventKind::TickStarted:
+			return false;
+		case MRRuntimeSchedulerEventKind::TickFinished:
+		case MRRuntimeSchedulerEventKind::TickStartFailed:
+		case MRRuntimeSchedulerEventKind::TickSkipped:
+		case MRRuntimeSchedulerEventKind::ConsumerRemoved:
+		case MRRuntimeSchedulerEventKind::ConsumerRegistered:
+		default:
+			return true;
+	}
+}
+
 void recordRuntimeScheduledConsumerFinishResults(const std::vector<MRMacroExecutionResult> &results) {
 	std::vector<MRRuntimeSchedulerEvent> logEvents;
 	{
@@ -98,8 +113,9 @@ void recordRuntimeScheduledConsumerFinishResults(const std::vector<MRMacroExecut
 
 				if (consumer.activeSessionId != result.session.sessionId) continue;
 				consumer.activeSessionId = 0;
-				mrvmStoreRuntimeScheduledConsumer(consumer);
-				logEvents.push_back(recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::TickFinished, MRRuntimeSchedulerSkipReason::None, result.session.sessionId, 0, 0, 0, result.message));
+				static_cast<void>(mrvmUpdateRuntimeScheduledConsumerActiveSession(consumer.consumerId, consumer.activeSessionId));
+				MRRuntimeSchedulerEvent event = recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::TickFinished, MRRuntimeSchedulerSkipReason::None, result.session.sessionId, 0, 0, 0, result.message);
+				if (result.state != MRMacroExecutionState::Completed) logEvents.push_back(event);
 				break;
 			}
 		}
@@ -132,13 +148,13 @@ void recordRuntimeScheduledConsumerStartResult(MRRuntimeScheduledConsumerId cons
 		if (!mrvmReadRuntimeScheduledConsumer(consumerId, consumer)) return;
 		if (accepted) {
 			consumer.activeSessionId = runtimeExecutionSessionStillActive(session) ? session.sessionId : 0;
-			mrvmStoreRuntimeScheduledConsumer(consumer);
+			static_cast<void>(mrvmUpdateRuntimeScheduledConsumerActiveSession(consumer.consumerId, consumer.activeSessionId));
 			event = recordRuntimeSchedulerEventLocked(consumerId, consumer.config, MRRuntimeSchedulerEventKind::TickStarted, MRRuntimeSchedulerSkipReason::None, session.sessionId, 0, 0, 0, message);
 		} else
 			event = recordRuntimeSchedulerEventLocked(consumerId, consumer.config, MRRuntimeSchedulerEventKind::TickStartFailed, MRRuntimeSchedulerSkipReason::None, 0, 0, 0, 0, message);
 		recorded = true;
 	}
-	if (recorded) mrLogMessage(runtimeSchedulerEventLine(event).c_str());
+	if (recorded && !accepted) mrLogMessage(runtimeSchedulerEventLine(event).c_str());
 	if (accepted) recordRuntimeScheduledConsumerFinishResults(recentMacroExecutionResults());
 }
 
@@ -261,7 +277,7 @@ bool noteRuntimeScheduledConsumerStarted(MRRuntimeScheduledConsumerId consumerId
 
 	if (!mrvmReadRuntimeScheduledConsumer(consumerId, consumer) || sessionId == 0) return false;
 	consumer.activeSessionId = sessionId;
-	mrvmStoreRuntimeScheduledConsumer(consumer);
+	static_cast<void>(mrvmUpdateRuntimeScheduledConsumerActiveSession(consumer.consumerId, consumer.activeSessionId));
 	recordRuntimeSchedulerEventLocked(consumerId, consumer.config, MRRuntimeSchedulerEventKind::TickStarted, MRRuntimeSchedulerSkipReason::None, sessionId, 0, 0, 0, std::string());
 	return true;
 }
@@ -272,7 +288,7 @@ bool noteRuntimeScheduledConsumerFinished(MRRuntimeScheduledConsumerId consumerI
 
 	if (!mrvmReadRuntimeScheduledConsumer(consumerId, consumer) || sessionId == 0 || consumer.activeSessionId != sessionId) return false;
 	consumer.activeSessionId = 0;
-	mrvmStoreRuntimeScheduledConsumer(consumer);
+	static_cast<void>(mrvmUpdateRuntimeScheduledConsumerActiveSession(consumer.consumerId, consumer.activeSessionId));
 	return true;
 }
 
@@ -281,19 +297,25 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 	std::vector<RuntimeSchedulerDueConsumer> dueConsumers;
 	{
 		std::lock_guard<std::mutex> lock(runtimeSchedulerMutex);
-		std::vector<MRRuntimeScheduledConsumer> consumers = mrvmRuntimeScheduledConsumers();
+		std::vector<MRRuntimeScheduledConsumerId> consumerIds = mrvmRuntimeScheduledConsumerIds();
 
-		for (std::size_t consumerIndex = 0; consumerIndex < consumers.size(); ++consumerIndex) {
-			MRRuntimeScheduledConsumer &consumer = consumers[consumerIndex];
+		for (std::size_t consumerIndex = 0; consumerIndex < consumerIds.size(); ++consumerIndex) {
+			const MRRuntimeScheduledConsumerId consumerId = consumerIds[consumerIndex];
+			std::uint64_t intervalMs = 0;
+			MRMacroExecutionSessionId activeSessionId = 0;
+			std::uint64_t nextDueMs = 0;
+			MRRuntimeScheduledConsumer consumer;
 
-			if (consumer.nextDueMs == 0) consumer.nextDueMs = nowMs;
-			if (nowMs < consumer.nextDueMs) continue;
+			if (!mrvmReadRuntimeScheduledConsumerSchedule(consumerId, intervalMs, activeSessionId, nextDueMs)) continue;
+			if (nextDueMs == 0) nextDueMs = nowMs;
+			if (nowMs < nextDueMs) continue;
+			if (!mrvmReadRuntimeScheduledConsumer(consumerId, consumer)) continue;
 
-			const std::uint64_t dueAtMs = consumer.nextDueMs;
-			consumer.nextDueMs = nowMs + consumer.config.intervalMs;
-			mrvmStoreRuntimeScheduledConsumer(consumer);
-			if (consumer.activeSessionId != 0) {
-				logEvents.push_back(recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::TickSkipped, MRRuntimeSchedulerSkipReason::PreviousSessionStillActive, 0, consumer.activeSessionId, dueAtMs, nowMs, "tick skipped; previous session is still active"));
+			const std::uint64_t dueAtMs = nextDueMs;
+			consumer.nextDueMs = nowMs + intervalMs;
+			static_cast<void>(mrvmUpdateRuntimeScheduledConsumerNextDue(consumerId, consumer.nextDueMs));
+			if (activeSessionId != 0) {
+				logEvents.push_back(recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::TickSkipped, MRRuntimeSchedulerSkipReason::PreviousSessionStillActive, 0, activeSessionId, dueAtMs, nowMs, "tick skipped; previous session is still active"));
 				continue;
 			}
 			logEvents.push_back(recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::TickDue, MRRuntimeSchedulerSkipReason::None, 0, 0, dueAtMs, nowMs, "tick due; requesting execution session"));
@@ -308,7 +330,7 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 	for (std::size_t eventIndex = 0; eventIndex < logEvents.size(); ++eventIndex) {
 		const MRRuntimeSchedulerEvent &event = logEvents[eventIndex];
 
-		mrLogMessage(runtimeSchedulerEventLine(event).c_str());
+		if (runtimeSchedulerEventShouldEnterVisibleLog(event)) mrLogMessage(runtimeSchedulerEventLine(event).c_str());
 	}
 	for (std::size_t dueIndex = 0; dueIndex < dueConsumers.size(); ++dueIndex) {
 		const RuntimeSchedulerDueConsumer &dueConsumer = dueConsumers[dueIndex];

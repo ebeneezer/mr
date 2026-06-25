@@ -28,7 +28,6 @@
 #include "MRVM.hpp"
 #include "vm/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
-#include "vm/MRVMSnippet.hpp"
 #include "vm/MRVMValue.hpp"
 #include "vm/MRVMScreen.hpp"
 #include "vm/MRVMSettings.hpp"
@@ -106,6 +105,7 @@ struct MacroRef {
 	std::string displayName;
 	std::size_t entryOffset;
 	std::string assignedKeySpec;
+	std::string closureId;
 	TKey assignedKey;
 	int fromMode;
 	bool hasAssignedKey;
@@ -1181,13 +1181,6 @@ MREditWindow *activeMacroEditWindow() {
 MRFileEditor *currentEditor() {
 	MREditWindow *win = activeMacroEditWindow();
 	return win != nullptr ? win->getEditor() : nullptr;
-}
-
-static bool openSnippetSidekickFromActiveEditor(MRVMHashStore &store) {
-	GlobalEntry rootEntry;
-
-	if (!readGlobalValue("SNIPPETS", rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
-	return mrvmSnippetOpenSidekickFromActiveEditor(activeMacroEditWindow(), store, g_runtimeEnv.globalHashStore, rootEntry.value);
 }
 
 static BackgroundEditSession *currentBackgroundEditSession() noexcept {
@@ -3865,8 +3858,12 @@ static bool findGlobalHashChild(const Value &parent, const std::string &key, Val
 }
 
 static bool eraseGlobalHashChild(const Value &parent, const std::string &key) {
+	Value child;
+
 	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key)) return false;
+	child = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
 	mrvmHashEraseValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
+	g_runtimeEnv.globalHashStore.eraseValueTrees(child, true);
 	return true;
 }
 
@@ -4038,7 +4035,7 @@ static void trimHashByNumericKeys(const Value &hash, std::size_t limit) {
 	if (ids.size() <= limit) return;
 	removeCount = ids.size() - limit;
 	for (std::size_t index = 0; index < removeCount; ++index)
-		mrvmHashEraseValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, std::to_string(ids[index]));
+		static_cast<void>(eraseGlobalHashChild(hash, std::to_string(ids[index])));
 }
 
 static void writeModelessLabelHash(const Value &hash, const MRMacroModelessLabelSpec &label) {
@@ -6241,6 +6238,7 @@ static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt
 	childFileKey = macroIt->second.fileKey;
 	macroIt->second.firstRunPending = false;
 
+	if (macroIt->second.closureUnit) childVm.setClosureContext(macroIt->second.closureId);
 	childVm.executeAt(fit->second.bytecode.data(), fit->second.bytecode.size(), macroIt->second.entryOffset, paramPart, macroIt->second.displayName, false, childFirstRun);
 	if (logSink != nullptr) logSink->insert(logSink->end(), childVm.log.begin(), childVm.log.end());
 	if (childDump) unloadMacroFromRegistry(macroKey);
@@ -6662,6 +6660,7 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 		mit->second.fromMode = (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL) ? mode : MACRO_MODE_EDIT;
 		mit->second.closureUnit = unitKind == MRMAC_UNIT_CLOSURE;
 		mit->second.tickMs = tickMs > 0 ? static_cast<std::uint64_t>(tickMs) : 0;
+		mit->second.closureId.clear();
 		if (mit->second.scheduledConsumerId != 0) {
 			removeRuntimeScheduledConsumer(mit->second.scheduledConsumerId);
 			mit->second.scheduledConsumerId = 0;
@@ -6671,9 +6670,9 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 			const std::string macroSpec = fit->second.displayName + "^" + displayName;
 			config.intervalMs = mit->second.tickMs;
 			config.macroSpec = macroSpec;
-			config.macroSource = source;
 			config.entryName = displayName;
 			config.closureId = macroSpec;
+			mit->second.closureId = macroSpec;
 			ensureClosureStateHash(config.closureId, static_cast<int>(mit->second.tickMs));
 			mit->second.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
 		}
@@ -6805,9 +6804,9 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 			const std::string macroSpec = newFile.displayName + "^" + displayName;
 			config.intervalMs = ref.tickMs;
 			config.macroSpec = macroSpec;
-			config.macroSource = source;
 			config.entryName = displayName;
 			config.closureId = macroSpec;
+			ref.closureId = macroSpec;
 			ensureClosureStateHash(config.closureId, static_cast<int>(ref.tickMs));
 			ref.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
 		}
@@ -8101,12 +8100,60 @@ bool mrvmReadRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId, M
 	return readRuntimeScheduledConsumerHash(consumerHash, consumer);
 }
 
+bool mrvmUpdateRuntimeScheduledConsumerActiveSession(MRRuntimeScheduledConsumerId consumerId, MRMacroExecutionSessionId activeSessionId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value consumers;
+	Value consumerHash;
+
+	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
+	if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) return false;
+	hashWriteUint(consumerHash, "activeSessionId", activeSessionId);
+	return true;
+}
+
+bool mrvmUpdateRuntimeScheduledConsumerNextDue(MRRuntimeScheduledConsumerId consumerId, std::uint64_t nextDueMs) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value consumers;
+	Value consumerHash;
+
+	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
+	if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) return false;
+	hashWriteUint(consumerHash, "nextDueMs", nextDueMs);
+	return true;
+}
+
 bool mrvmRemoveRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	Value consumers;
 
 	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
 	return eraseGlobalHashChild(consumers, std::to_string(consumerId));
+}
+
+std::vector<MRRuntimeScheduledConsumerId> mrvmRuntimeScheduledConsumerIds() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value consumers;
+
+	if (!findExecSessionsChild("scheduledConsumers", consumers)) return std::vector<MRRuntimeScheduledConsumerId>();
+	return sortedHashUintKeys(consumers);
+}
+
+bool mrvmReadRuntimeScheduledConsumerSchedule(MRRuntimeScheduledConsumerId consumerId, std::uint64_t &intervalMs, MRMacroExecutionSessionId &activeSessionId, std::uint64_t &nextDueMs) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	Value consumers;
+	Value consumerHash;
+	Value config;
+
+	intervalMs = 0;
+	activeSessionId = 0;
+	nextDueMs = 0;
+	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
+	if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) return false;
+	if (!findGlobalHashChild(consumerHash, "config", config)) return false;
+	intervalMs = hashReadUint(config, "intervalMs");
+	activeSessionId = hashReadUint(consumerHash, "activeSessionId");
+	nextDueMs = hashReadUint(consumerHash, "nextDueMs");
+	return intervalMs != 0;
 }
 
 std::vector<MRRuntimeScheduledConsumer> mrvmRuntimeScheduledConsumers() {
@@ -9120,22 +9167,6 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "SET_GLOBAL_HASH") {
 					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_HASH) throw std::runtime_error("SET_GLOBAL_HASH expects (string, hash).");
 					setGlobalValueFromStore(valueAsString(args[0]), TYPE_HASH, args[1], *mHashStore);
-				} else if (name == "SNIPPET_START") {
-					if (!args.empty()) throw std::runtime_error("SNIPPET_START expects no arguments.");
-					runtimeErrorLevel() = openSnippetSidekickFromActiveEditor(*mHashStore) ? 0 : 0;
-				} else if (name == "SNIPPETS_UNLOAD") {
-					GlobalEntry rootEntry;
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPETS_UNLOAD expects one string argument.");
-					if (readGlobalValue("SNIPPETS", rootEntry) && rootEntry.type == TYPE_HASH && rootEntry.value.type == TYPE_HASH) {
-						mrvmSnippetUnloadLanguage(*mHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, valueAsString(args[0]));
-					}
-					runtimeErrorLevel() = 0;
-				} else if (name == "SNIPPET_NEXT_PLACEHOLDER") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPET_NEXT_PLACEHOLDER expects (string).");
-					runtimeErrorLevel() = 0;
-				} else if (name == "SNIPPET_PREV_PLACEHOLDER") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPET_PREV_PLACEHOLDER expects (string).");
-					runtimeErrorLevel() = 0;
 				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR" || name == "MAKE_MESSAGE" || name == "UI_MESSAGEBOX") {
 					int deferredError = 0;
 					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {

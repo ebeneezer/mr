@@ -31,6 +31,8 @@ struct JsonRpcEnvelope {
 	JsonRpcIdKind idKind = JsonRpcIdKind::None;
 	std::string idText;
 	std::string method;
+	bool hasResult = false;
+	bool hasError = false;
 };
 
 struct JsonRpcPendingRequest {

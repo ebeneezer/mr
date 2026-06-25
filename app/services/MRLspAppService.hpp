@@ -66,6 +66,7 @@ public:
 		const MRFileEditor &editor,
 		MRLspServiceCommandId command,
 		mr::lsp::LspTextPosition position,
+		const std::string &completionTriggerCandidate,
 		std::string &errorMessage);
 	bool syncEditorDocument(
 		const MRLspServerProfile &profile,
@@ -79,6 +80,7 @@ public:
 		const MRFileEditor &editor,
 		MRLspServiceCommandId command,
 		mr::lsp::LspTextPosition position,
+		const std::string &completionTriggerCandidate,
 		std::string &errorMessage);
 	bool requestWorkspaceSymbols(
 		const MRLspServerProfile &profile,
@@ -101,6 +103,7 @@ public:
 		const MRFileEditor &editor,
 		std::string &errorMessage);
 	bool requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage);
+	bool resolveCompletionItem(const MRServiceCompletionItem &item, MRServiceCompletionItem &resolvedItem, std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);
 	void close();

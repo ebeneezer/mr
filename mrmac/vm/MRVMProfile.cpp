@@ -241,7 +241,6 @@ unsigned classifyProcName(const std::string &name) {
 	if (name == "BEEP") return mrefUiAffinity;
 	if (name == "WRITE_SOD") return mrefUiAffinity;
 	if (name == "REPLACE" || name == "TEXT" || name == "PUT_LINE" || name == "CR" || name == "KEY_IN" || name == "DEL_CHAR" || name == "DEL_CHARS" || name == "DEL_LINE" || name == "INDENT" || name == "UNDENT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "ERASE_WINDOW" || name == "WINDOW_COPY" || name == "WINDOW_MOVE") return mrefUiAffinity | mrefStagedWrite;
-	if (name == "SNIPPET_START" || name == "SNIPPETS_UNLOAD" || name == "SNIPPET_NEXT_PLACEHOLDER" || name == "SNIPPET_PREV_PLACEHOLDER") return mrefUiAffinity;
 	if (name == "RUN_MACRO") return mrefUiAffinity | mrefStagedWrite;
 	if (name == "EXEC_ASSIGN") return mrefBackgroundSafe;
 	if (name == "DELAY") return mrefBackgroundSafe;

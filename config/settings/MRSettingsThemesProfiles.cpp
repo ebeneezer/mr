@@ -244,7 +244,7 @@ static const MRColorSetupItem kFileCompareMiniMapColorItems[] = {
 };
 
 static const MRColorSetupItem kCodeColorItems[] = {
-    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight}, {"context menu", kMrPaletteContextMenu}, {"context menu selector", kMrPaletteContextMenuSelector},
+    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight}, {"context menu", kMrPaletteContextMenu}, {"context menu selector", kMrPaletteContextMenuSelector}, {"snippet sidekick frame", kMrPaletteSnippetSidekickFrame}, {"snippet sidekick text", kMrPaletteSnippetSidekickText}, {"snippet placeholder", kMrPaletteSnippetPlaceholder}, {"snippet active placeholder", kMrPaletteSnippetActivePlaceholder}, {"snippet default text", kMrPaletteSnippetDefaultText},
 };
 
 static const MRColorSetupItem kFileCompareColorItems[] = {
@@ -320,6 +320,11 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteContextMenu) return defaultColorForSlot(kMrPaletteDropListDescription);
 	if (paletteIndex == kMrPaletteContextMenuSelector) return defaultColorForSlot(kMrPaletteDropListSelectedInactive);
 	if (paletteIndex == kMrPaletteDiagnosticInformation) return 0x4E;
+	if (paletteIndex == kMrPaletteSnippetSidekickFrame) return 0x3F;
+	if (paletteIndex == kMrPaletteSnippetSidekickText) return 0x30;
+	if (paletteIndex == kMrPaletteSnippetPlaceholder) return 0x38;
+	if (paletteIndex == kMrPaletteSnippetActivePlaceholder) return 0xE0;
+	if (paletteIndex == kMrPaletteSnippetDefaultText) return 0x38;
 	if (paletteIndex == kMrPaletteFileCompareTextEqual) return 0x1A;
 	if (paletteIndex == kMrPaletteFileCompareTextMissing) return 0x1C;
 	if (paletteIndex == kMrPaletteFileCompareTextInsert) return 0x1E;
@@ -465,7 +470,7 @@ bool parseCodeColorListLiteral(const std::string &literal, std::array<unsigned c
 		if (comma == std::string::npos) break;
 		cursor = comma + 1;
 	}
-	if (parsed.size() != outValues.size() && parsed.size() != outValues.size() - 2 && parsed.size() != outValues.size() - 4) return setError(errorMessage, "Unexpected CODECOLORS list size.");
+	if (parsed.size() != outValues.size() && parsed.size() != outValues.size() - 5 && parsed.size() != outValues.size() - 7 && parsed.size() != outValues.size() - 9) return setError(errorMessage, "Unexpected CODECOLORS list size.");
 	for (std::size_t i = 0; i < parsed.size(); ++i)
 		outValues[i] = parsed[i];
 	for (std::size_t i = parsed.size(); i < outValues.size(); ++i)
@@ -1003,7 +1008,7 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup group.");
 	if (values == nullptr) return setError(errorMessage, "Unexpected color setup group value count.");
 	if (group == MRColorSetupGroup::Code) {
-		if (count != definition->count && count != definition->count - 2 && count != definition->count - 4) return setError(errorMessage, "Unexpected color setup group value count.");
+		if (count != definition->count && count != definition->count - 5 && count != definition->count - 7 && count != definition->count - 9) return setError(errorMessage, "Unexpected color setup group value count.");
 	} else if (count != definition->count)
 		return setError(errorMessage, "Unexpected color setup group value count.");
 

@@ -255,6 +255,7 @@ class MRFileEditor : public TScroller {
 	void setCursorOffsetAtVisualColumn(std::size_t pos, int visualColumn);
 
 	bool scrollWindowByLines(int deltaRows);
+	bool scrollWindowByWheel(int wheel);
 
 	std::size_t offsetForGlobalPoint(TPoint where) noexcept;
 	bool textPointInView(TPoint where) noexcept;

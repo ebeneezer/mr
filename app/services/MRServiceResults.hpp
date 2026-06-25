@@ -9,6 +9,7 @@
 
 namespace mr::lsp {
 struct LspCodeActionResult;
+struct LspCompletionItem;
 struct LspCompletionResult;
 struct LspDefinitionResult;
 struct LspDiagnosticBatch;
@@ -101,10 +102,12 @@ struct MRServiceHoverPayload {
 };
 
 struct MRServiceCompletionItem {
+	std::string rawLspCompletionItemJson;
 	std::string label;
 	bool hasKind = false;
 	int kind = 0;
 	std::string detail;
+	std::string documentation;
 	std::string insertText;
 	bool hasInsertTextFormat = false;
 	int insertTextFormat = 1;
@@ -166,6 +169,9 @@ struct MRServiceCompletionResult {
 	MRServiceResultHeader header;
 	bool hasRequestPosition = false;
 	MRServiceTextPosition requestPosition;
+	bool hasTriggerCharacter = false;
+	std::string triggerCharacter;
+	std::string lspMiddlewarePath;
 	std::string rawLspResponseJson;
 	std::vector<MRServiceCompletionItem> items;
 };
@@ -289,6 +295,7 @@ private:
 [[nodiscard]] MRServiceLocationResult buildServiceDefinitionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDefinitionResult &definition);
 [[nodiscard]] MRServiceLocationResult buildServiceReferencesFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspReferencesResult &references);
 [[nodiscard]] MRServiceHoverResult buildServiceHoverFromLsp(const MRWorkspaceServiceSnapshot &workspace, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspHoverResult &hover);
+[[nodiscard]] MRServiceCompletionItem buildServiceCompletionItemFromLsp(const mr::lsp::LspCompletionItem &item);
 [[nodiscard]] MRServiceCompletionResult buildServiceCompletionFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCompletionResult &completion);
 [[nodiscard]] MRServiceCodeActionResult buildServiceCodeActionsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspCodeActionResult &codeActions);
 [[nodiscard]] MRServiceDocumentHighlightResult buildServiceDocumentHighlightsFromLsp(const MRWorkspaceServiceSnapshot &workspace, const std::string &originUri, std::size_t originVersion, const std::string &requestId, const mr::lsp::LspDocumentHighlightResult &documentHighlights);

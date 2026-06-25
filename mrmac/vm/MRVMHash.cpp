@@ -71,6 +71,37 @@ int MRVMHashStore::cloneHashFrom(const MRVMHashStore &sourceStore, int sourceHan
 	return targetHandle;
 }
 
+void MRVMHashStore::eraseHashTree(int handle, bool targetGlobalStorage, std::set<int> &erased) {
+	std::map<int, std::map<std::string, VirtualMachine::Value>>::iterator hashIt;
+	std::map<std::string, VirtualMachine::Value> hashValues;
+
+	if (handle <= 0 || erased.find(handle) != erased.end()) return;
+	hashIt = hashes.find(handle);
+	if (hashIt == hashes.end()) return;
+	erased.insert(handle);
+	hashValues = hashIt->second;
+	for (const std::pair<const std::string, VirtualMachine::Value> &entry : hashValues)
+		eraseValueTrees(entry.second, targetGlobalStorage, erased);
+	hashes.erase(handle);
+}
+
+void MRVMHashStore::eraseValueTrees(const VirtualMachine::Value &value, bool targetGlobalStorage, std::set<int> &erased) {
+	if (value.type == TYPE_HASH && value.globalStorage == targetGlobalStorage) {
+		eraseHashTree(value.hashHandle, targetGlobalStorage, erased);
+		return;
+	}
+	if (mrvmValueIsArrayType(value.type)) {
+		for (const VirtualMachine::Value &arrayValue : value.arrayValues)
+			eraseValueTrees(arrayValue, targetGlobalStorage, erased);
+	}
+}
+
+void MRVMHashStore::eraseValueTrees(const VirtualMachine::Value &value, bool targetGlobalStorage) {
+	std::set<int> erased;
+
+	eraseValueTrees(value, targetGlobalStorage, erased);
+}
+
 bool MRVMHashStore::contains(int handle, const std::string &key) const {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::const_iterator hashIt = hashes.find(handle);
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");

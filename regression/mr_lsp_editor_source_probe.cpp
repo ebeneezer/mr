@@ -36,6 +36,7 @@ bool testLanguageIds(std::string &failureReason) {
 	if (!expect(std::strcmp(mr::services::lspLanguageIdForSyntaxLanguage(MRSyntaxLanguage::Zsh), "shellscript") == 0, "zsh language id", failureReason)) return false;
 	if (!expect(std::strcmp(mr::services::lspLanguageIdForSyntaxLanguage(MRSyntaxLanguage::CSharp), "csharp") == 0, "csharp language id", failureReason)) return false;
 	if (!expect(std::strcmp(mr::services::lspLanguageIdForSyntaxLanguage(MRSyntaxLanguage::Make), "makefile") == 0, "make language id", failureReason)) return false;
+	if (!expect(std::strcmp(mr::services::lspLanguageIdForSyntaxLanguage(MRSyntaxLanguage::Latex), "latex") == 0, "latex language id", failureReason)) return false;
 	if (!expect(std::strcmp(mr::services::lspLanguageIdForSyntaxLanguage(MRSyntaxLanguage::PlainText), "plaintext") == 0, "plain text language id", failureReason)) return false;
 	return true;
 }

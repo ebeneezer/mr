@@ -185,6 +185,10 @@ struct MRCompilerProfile {
 	std::vector<std::string> runtimePaths;
 	std::string buildSuccessAudioUri;
 	std::string buildFailureAudioUri;
+	std::string lspExecutablePath;
+	std::string lspArguments;
+	std::string lspWorkingDirectory;
+	std::string lspMiddlewarePath;
 
 	auto operator==(const MRCompilerProfile &) const noexcept -> bool = default;
 };
@@ -491,7 +495,12 @@ enum : unsigned char {
 	kMrPaletteContextMenuSelector = 204,
 	kMrPaletteDiagnosticInformation = 205,
 	kMrPaletteMiniMapDiagnostics = 206,
-	kMrPaletteMax = kMrPaletteMiniMapDiagnostics
+	kMrPaletteSnippetSidekickFrame = 207,
+	kMrPaletteSnippetSidekickText = 208,
+	kMrPaletteSnippetPlaceholder = 209,
+	kMrPaletteSnippetActivePlaceholder = 210,
+	kMrPaletteSnippetDefaultText = 211,
+	kMrPaletteMax = kMrPaletteSnippetDefaultText
 };
 
 struct MRColorSetupSettings {
@@ -501,7 +510,7 @@ struct MRColorSetupSettings {
 	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 6;
 	static const std::size_t kFileCompareMiniMapCount = 9;
-	static const std::size_t kCodeCount = 17;
+	static const std::size_t kCodeCount = 22;
 	static const std::size_t kFileCompareCount = 14;
 
 	std::array<unsigned char, kWindowCount> windowColors;

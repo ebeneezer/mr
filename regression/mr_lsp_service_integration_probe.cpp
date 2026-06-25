@@ -223,7 +223,7 @@ bool requestCompletion(mr::lsp::LspLifecycle &lifecycle, const mr::lsp::LspDocum
 	std::string errorMessage;
 	std::vector<mr::lsp::LspInboundMessage> messages;
 
-	if (!expect(adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{3, 5}, request, errorMessage), "completion request: " + errorMessage, failureReason)) return false;
+	if (!expect(adapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{3, 5}, std::string(), request, errorMessage), "completion request: " + errorMessage, failureReason)) return false;
 	if (!expect(request.method == "textDocument/completion", "completion method", failureReason)) return false;
 	for (int i = 0; i < 50; ++i) {
 		if (!lifecycle.poll(messages, errorMessage)) {
@@ -306,7 +306,7 @@ bool requestCompletionWhileDiagnosticsPending(mr::lsp::LspLifecycle &lifecycle, 
 	workspace = makeWorkspace(2);
 	if (!expect(service.change(makeSourceSnapshot(2, "int main() { return 1; }\n"), errorMessage), "timeline change: " + errorMessage, failureReason)) return false;
 	timeline.push_back("tx didChange v2");
-	if (!expect(completionAdapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{3, 5}, completionRequest, errorMessage), "timeline completion request: " + errorMessage, failureReason)) return false;
+	if (!expect(completionAdapter.requestCompletion(lifecycle, service, mr::lsp::LspTextPosition{3, 5}, std::string(), completionRequest, errorMessage), "timeline completion request: " + errorMessage, failureReason)) return false;
 	timeline.push_back("tx completion " + completionRequest.idText);
 
 	for (int i = 0; i < 50; ++i) {

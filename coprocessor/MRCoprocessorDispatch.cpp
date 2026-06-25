@@ -1152,7 +1152,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (targetWindow != nullptr) targetWindow->noteBackgroundMacroConflict(statusSummary);
 				releaseMacroTask(targetWindow, result, "conflict");
 			}
-			mrLogMessage(statusSummary.c_str());
+			if (!accepted || textChanged || staged->hadError || !staged->deferredUiCommands.empty()) mrLogMessage(statusSummary.c_str());
 			publishMacroExecutionResultForTask(result.task.id, accepted ? MRMacroExecutionState::Completed : MRMacroExecutionState::Rejected, statusSummary);
 			appendMacroLogLines(staged->logLines);
 			return;
@@ -1318,10 +1318,7 @@ void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId) {
 }
 
 void mrTraceCoprocessorTaskRelease(int bufferId, std::uint64_t taskId, const char *state) {
-	std::ostringstream line;
-
-	line << "Released coprocessor task #" << taskId << " for window #" << bufferId;
-	if (state != nullptr && *state != '\0') line << " (" << state << ")";
-	line << ".";
-	mrLogMessage(line.str().c_str());
+	static_cast<void>(bufferId);
+	static_cast<void>(taskId);
+	static_cast<void>(state);
 }

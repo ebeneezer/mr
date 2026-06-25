@@ -204,6 +204,12 @@ bool LspDocumentHighlightAdapter::consume(const LspInboundMessage &message, cons
 		return true;
 	}
 	result.uri = request.uri;
+	if (message.envelope.hasError) {
+		request.pending = false;
+		accepted = true;
+		errorMessage.clear();
+		return true;
+	}
 	if (!parseDocumentHighlights(message.payload, result.highlights, errorMessage)) return false;
 	request.pending = false;
 	accepted = true;

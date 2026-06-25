@@ -312,10 +312,7 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 	if (g_logBuffer.empty()) g_logBuffer = "MR/MEMAC log initialized.\n";
 	if (win == nullptr) win = createReadOnlyTextWindow(kLogWindowTitle.data(), g_logBuffer.c_str(), !activate);
 	if (win == nullptr) return nullptr;
-	win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
 	win->setWindowRole(MREditWindow::wrLog);
-	win->setReadOnly(true);
-	win->setFileChanged(false);
 	if (activate) static_cast<void>(mrActivateEditWindow(win));
 	return win;
 }
@@ -474,27 +471,35 @@ void mrLogMessage(std::string_view message) {
 	const std::string line = normalizeLogLine(message);
 	MREditWindow *win;
 	std::size_t persistedStart = 0;
+	std::string_view appendedChunk;
 
 	if (line.empty()) return;
 	persistedStart = g_logBuffer.size();
 	if (!g_logBuffer.empty() && g_logBuffer[g_logBuffer.size() - 1] != '\n') g_logBuffer += '\n';
 	g_logBuffer += "[" + currentTimestamp() + "] " + line + "\n";
+	appendedChunk = std::string_view(g_logBuffer.data() + persistedStart, g_logBuffer.size() - persistedStart);
 	if (configuredLogHandling() == MRLogHandling::Persist) {
 		const std::string path = configuredLogFilePath();
 		const bool pathChanged = g_logPersistedPath != path;
-		const std::string_view chunk = pathChanged ? std::string_view(g_logBuffer.data(), g_logBuffer.size()) : std::string_view(g_logBuffer.data() + persistedStart, g_logBuffer.size() - persistedStart);
+		const std::string_view chunk = pathChanged ? std::string_view(g_logBuffer.data(), g_logBuffer.size()) : appendedChunk;
 
 		if (!path.empty() && !chunk.empty() && appendLogChunkToFile(path, chunk, nullptr)) {
 			g_logPersistedBytes = g_logBuffer.size();
 			g_logPersistedPath = path;
 		}
 	}
-	win = ensureLogWindowInternal(false);
-	if (win != nullptr) {
-		win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
-		win->setReadOnly(true);
-		win->setFileChanged(false);
+	win = findWindowByTitle(kLogWindowTitle);
+	if (win == nullptr) {
+		win = ensureLogWindowInternal(false);
+	} else {
+		const std::string chunkText(appendedChunk);
+		if (!win->appendLogViewerText(chunkText.c_str())) {
+			win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
+			win->setReadOnly(true);
+			win->setFileChanged(false);
+		}
 	}
+	if (win != nullptr) win->setWindowRole(MREditWindow::wrLog);
 }
 
 bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage) {

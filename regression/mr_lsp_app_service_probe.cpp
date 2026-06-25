@@ -136,6 +136,7 @@ bool testRequestGuard(std::string &failureReason) {
 			editor,
 			mr::services::MRLspServiceCommandId::GoToDefinition,
 			mr::lsp::LspTextPosition{3, 5},
+			std::string(),
 			errorMessage),
 		"empty app service workspace accepted",
 		failureReason);
@@ -166,6 +167,7 @@ bool testEditorCommandPath(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::GoToDefinition,
 				mr::lsp::LspTextPosition{3, 5},
+				std::string(),
 				errorMessage),
 			"app service definition command: " + errorMessage,
 			failureReason))
@@ -181,6 +183,7 @@ bool testEditorCommandPath(std::string &failureReason) {
 				editor,
 				mr::services::MRLspServiceCommandId::ShowHover,
 				mr::lsp::LspTextPosition{3, 5},
+				std::string(),
 				errorMessage),
 			"app service hover command: " + errorMessage,
 			failureReason))
