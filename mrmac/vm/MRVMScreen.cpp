@@ -1,5 +1,6 @@
 #include "MRVMScreen.hpp"
 
+#define Uses_MsgBox
 #define Uses_TProgram
 #define Uses_TApplication
 #define Uses_TScreen
@@ -1043,4 +1044,135 @@ bool mrvmUiKillBox() {
 	} catch (...) {
 		return false;
 	}
+}
+
+bool mrvmUiRegisterMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (menuBar == nullptr) {
+		if (errorMessage != nullptr) *errorMessage = "REGISTER_MENU_ITEM requires an active MRMenuBar.";
+		return false;
+	}
+	return returnWithDirectScreenMutation(menuBar->registerRuntimeMenuItem(menuTitle, itemTitle, macroSpec, ownerSpec, errorMessage));
+}
+
+bool mrvmUiRemoveMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (menuBar == nullptr) {
+		if (errorMessage != nullptr) *errorMessage = "REMOVE_MENU_ITEM requires an active MRMenuBar.";
+		return false;
+	}
+	return returnWithDirectScreenMutation(menuBar->removeRuntimeMenuItem(menuTitle, itemTitle, ownerSpec, errorMessage));
+}
+
+bool mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (menuBar == nullptr) return true;
+	return returnWithDirectScreenMutation(menuBar->removeRuntimeNodesOwnedByMacroSpec(ownerSpec, errorMessage));
+}
+
+bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec, std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (menuBar == nullptr) return true;
+	return returnWithDirectScreenMutation(menuBar->removeRuntimeNodesOwnedByFile(fileSpec, errorMessage));
+}
+
+bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (menuBar == nullptr) return true;
+	return returnWithDirectScreenMutation(menuBar->refreshRuntimeMenus(errorMessage));
+}
+
+bool mrvmUiMessageBox(const std::string &text) {
+	try {
+		messageBox(mfInformation | mfOKButton, "%s", text.c_str());
+		return returnWithDirectScreenMutation(true);
+	} catch (...) {
+		return false;
+	}
+}
+
+struct ScreenRenderFacade {
+	static bool renderDeferredCommand(const MRMacroDeferredUiCommand &command) {
+		switch (command.type) {
+			case mrducCreateWindow:
+				return mrvmUiCreateWindow();
+			case mrducDeleteWindow:
+				return mrvmUiDeleteCurrentWindow();
+			case mrducModifyWindow:
+				return mrvmUiModifyCurrentWindow();
+			case mrducLinkWindow:
+				return mrvmUiLinkCurrentWindow();
+			case mrducUnlinkWindow:
+				return mrvmUiUnlinkCurrentWindow();
+			case mrducZoom:
+				return mrvmUiZoomCurrentWindow();
+			case mrducRedraw:
+				return mrvmUiRedrawCurrentWindow();
+			case mrducNewScreen:
+				return mrvmUiNewScreen();
+			case mrducSwitchWindow:
+				return mrvmUiSwitchWindow(command.a1);
+			case mrducSizeWindow:
+				return mrvmUiSizeCurrentWindow(command.a1, command.a2, command.a3, command.a4);
+			case mrducMarqueeInfo:
+				return mrvmUiMarquee(0, command.text);
+			case mrducMarqueeWarning:
+				return mrvmUiMarquee(1, command.text);
+			case mrducMarqueeError:
+				return mrvmUiMarquee(2, command.text);
+			case mrducMakeMessage:
+				return applyMakeMessageProc(std::vector<Value>{makeStringValue(command.text)});
+			case mrducBrain:
+				return mrvmUiBrain(command.a1 != 0);
+			case mrducPutBox:
+				return mrvmUiPutBox(command.a1, command.a2, command.a3, command.a4, command.a5, command.a6, command.text, command.a7);
+			case mrducWrite:
+				return mrvmUiWrite(command.text, command.a1, command.a2, command.a3, command.a4);
+			case mrducClrLine:
+				return mrvmUiClrLine(command.a1, command.a2, command.a3);
+			case mrducGotoxy:
+				return mrvmUiGotoxy(command.a1, command.a2);
+			case mrducPutLineNum:
+				return mrvmUiPutLineNum(command.a1);
+			case mrducPutColNum:
+				return mrvmUiPutColNum(command.a1);
+			case mrducScrollBoxUp:
+				return mrvmUiScrollBoxUp(command.a1, command.a2, command.a3, command.a4, command.a5);
+			case mrducScrollBoxDn:
+				return mrvmUiScrollBoxDn(command.a1, command.a2, command.a3, command.a4, command.a5);
+			case mrducClearScreen:
+				return mrvmUiClearScreen(command.a1);
+			case mrducKillBox:
+				return mrvmUiKillBox();
+			case mrducRegisterMenuItem:
+				return mrvmUiRegisterMenuItem(command.text, command.text2, command.text3, command.text4);
+			case mrducRemoveMenuItem:
+				return mrvmUiRemoveMenuItem(command.text, command.text2, command.text3);
+			case mrducMessageBox:
+				return mrvmUiMessageBox(command.text);
+			case mrducDelay:
+				return true;
+			default:
+				return false;
+		}
+	}
+};
+
+bool mrvmUiScreenRenderDeferredCommand(const MRMacroDeferredUiCommand &command) {
+	return ScreenRenderFacade::renderDeferredCommand(command);
 }

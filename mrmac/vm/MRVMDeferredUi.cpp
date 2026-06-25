@@ -1,8 +1,12 @@
 #include "MRVMDeferredUi.hpp"
+#include "MRVMRuntimeState.hpp"
+#include "MRVMValue.hpp"
 
 #include "../mrmac.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -11,7 +15,6 @@ namespace {
 using Value = VirtualMachine::Value;
 }
 
-bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode);
 bool currentExecutingMacroSpec(std::string &macroSpec);
 
 namespace {
@@ -216,6 +219,191 @@ bool applyDeferredMenuUiProcedureCommand(const MRMacroDeferredUiCommand &command
 }
 
 } // namespace
+
+bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode) {
+	BackgroundEditSession *session = g_backgroundEditSession;
+
+	errorCode = 0;
+	if (session == nullptr) return false;
+
+	if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR") {
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error(name + " expects one string argument.");
+		if (name == "MARQUEE") session->deferredUiCommands.emplace_back(mrducMarqueeInfo, 0, 0, 0, 0, 0, 0, 0, 0, mrvmValueAsString(args[0]));
+		else if (name == "MARQUEE_WARNING")
+			session->deferredUiCommands.emplace_back(mrducMarqueeWarning, 0, 0, 0, 0, 0, 0, 0, 0, mrvmValueAsString(args[0]));
+		else
+			session->deferredUiCommands.emplace_back(mrducMarqueeError, 0, 0, 0, 0, 0, 0, 0, 0, mrvmValueAsString(args[0]));
+		return true;
+	}
+	if (name == "MAKE_MESSAGE") {
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("MAKE_MESSAGE expects one string argument.");
+		session->deferredUiCommands.emplace_back(mrducMakeMessage, 0, 0, 0, 0, 0, 0, 0, 0, mrvmValueAsString(args[0]));
+		return true;
+	}
+	if (name == "UI_MESSAGEBOX") {
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("UI_MESSAGEBOX expects one string argument.");
+		session->deferredUiCommands.emplace_back(mrducMessageBox, 0, 0, 0, 0, 0, 0, 0, 0, mrvmValueAsString(args[0]));
+		return true;
+	}
+	if (name == "WORKING") {
+		if (!args.empty()) throw std::runtime_error("WORKING expects no arguments.");
+		session->deferredUiCommands.emplace_back(mrducMarqueeWarning, 0, 0, 0, 0, 0, 0, 0, 0, kDeferredWorkingMessageText);
+		return true;
+	}
+	if (name == "BRAIN") {
+		if (args.size() != 1 || !mrvmIsNumeric(args[0])) throw std::runtime_error("BRAIN expects one integer argument.");
+		session->deferredUiCommands.emplace_back(mrducBrain, mrvmValueAsInt(args[0]) != 0 ? 1 : 0);
+		return true;
+	}
+	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") throw std::runtime_error(name + " is not allowed during staged background execution.");
+
+	if (name == "PUT_BOX") {
+		if (args.size() != 8 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT || args[5].type != TYPE_INT || !mrvmIsStringLike(args[6]) || args[7].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int, int, int, int, int, string, int).");
+		session->deferredUiCommands.emplace_back(mrducPutBox, mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1]), mrvmValueAsInt(args[2]), mrvmValueAsInt(args[3]), mrvmValueAsInt(args[4]), mrvmValueAsInt(args[5]), mrvmValueAsInt(args[7]), 0, mrvmValueAsString(args[6]));
+		return true;
+	}
+	if (name == "WRITE") {
+		if (args.size() != 5 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT) throw std::runtime_error(name + " expects (string, int, int, int, int).");
+		session->deferredUiCommands.emplace_back(mrducWrite, mrvmValueAsInt(args[1]), mrvmValueAsInt(args[2]), mrvmValueAsInt(args[3]), mrvmValueAsInt(args[4]), 0, 0, 0, 0, mrvmValueAsString(args[0]));
+		return true;
+	}
+	if (name == "CLR_LINE") {
+		if (args.empty()) {
+			session->deferredUiCommands.emplace_back(mrducClrLine);
+			return true;
+		}
+		if (args.size() != 3 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("CLR_LINE expects no arguments or (int, int, int).");
+		session->deferredUiCommands.emplace_back(mrducClrLine, mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1]), mrvmValueAsInt(args[2]));
+		return true;
+	}
+	if (name == "GOTOXY") {
+		int x;
+		int y;
+		if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT) throw std::runtime_error("GOTOXY expects (int, int).");
+		x = mrvmValueAsInt(args[0]);
+		y = mrvmValueAsInt(args[1]);
+		if (session->screenWidth > 0) x = std::max(1, std::min(x, session->screenWidth));
+		if (session->screenHeight > 0) y = std::max(1, std::min(y, session->screenHeight));
+		session->screenCursorX = x;
+		session->screenCursorY = y;
+		session->deferredUiCommands.emplace_back(mrducGotoxy, x, y);
+		return true;
+	}
+	if (name == "PUT_LINE_NUM") {
+		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("PUT_LINE_NUM expects one integer argument.");
+		session->deferredUiCommands.emplace_back(mrducPutLineNum, mrvmValueAsInt(args[0]));
+		return true;
+	}
+	if (name == "PUT_COL_NUM") {
+		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("PUT_COL_NUM expects one integer argument.");
+		session->deferredUiCommands.emplace_back(mrducPutColNum, mrvmValueAsInt(args[0]));
+		return true;
+	}
+	if (name == "SCROLL_BOX_UP" || name == "SCROLL_BOX_DN") {
+		if (args.size() != 5 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int, int, int, int).");
+		session->deferredUiCommands.emplace_back(name == "SCROLL_BOX_UP" ? mrducScrollBoxUp : mrducScrollBoxDn, mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1]), mrvmValueAsInt(args[2]), mrvmValueAsInt(args[3]), mrvmValueAsInt(args[4]), 0, 0, 0);
+		return true;
+	}
+	if (name == "CLEAR_SCREEN") {
+		if (!(args.empty() || (args.size() == 1 && args[0].type == TYPE_INT))) throw std::runtime_error("CLEAR_SCREEN expects no arguments or one integer argument.");
+		session->screenCursorX = 1;
+		session->screenCursorY = 1;
+		session->deferredUiCommands.emplace_back(mrducClearScreen, args.empty() ? 0x07 : mrvmValueAsInt(args[0]));
+		return true;
+	}
+	if (name == "KILL_BOX") {
+		if (!args.empty()) throw std::runtime_error("KILL_BOX expects no arguments.");
+		session->deferredUiCommands.emplace_back(mrducKillBox);
+		return true;
+	}
+
+	if (name == "CREATE_WINDOW") {
+		session->deferredUiCommands.emplace_back(mrducCreateWindow);
+		if (session->windowCount < std::numeric_limits<int>::max()) ++session->windowCount;
+		session->currentWindow = std::max(1, session->windowCount);
+		session->linkStatus = 0;
+		return true;
+	}
+	if (name == "DELETE_WINDOW") {
+		session->deferredUiCommands.emplace_back(mrducDeleteWindow);
+		if (session->windowCount > 0) --session->windowCount;
+		if (session->windowCount <= 0) {
+			session->windowCount = 0;
+			session->currentWindow = 0;
+			session->linkStatus = 0;
+		} else if (session->currentWindow > session->windowCount)
+			session->currentWindow = session->windowCount;
+		return true;
+	}
+	if (name == "MODIFY_WINDOW") {
+		session->deferredUiCommands.emplace_back(mrducModifyWindow);
+		return true;
+	}
+	if (name == "LINK_WINDOW") {
+		session->deferredUiCommands.emplace_back(mrducLinkWindow);
+		session->linkStatus = 1;
+		return true;
+	}
+	if (name == "UNLINK_WINDOW") {
+		session->deferredUiCommands.emplace_back(mrducUnlinkWindow);
+		session->linkStatus = 0;
+		return true;
+	}
+	if (name == "ZOOM") {
+		session->deferredUiCommands.emplace_back(mrducZoom);
+		return true;
+	}
+	if (name == "REDRAW") {
+		session->deferredUiCommands.emplace_back(mrducRedraw);
+		return true;
+	}
+	if (name == "NEW_SCREEN") {
+		session->deferredUiCommands.emplace_back(mrducNewScreen);
+		return true;
+	}
+	if (name == "SWITCH_WINDOW") {
+		int index;
+		int count;
+		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("SWITCH_WINDOW expects one integer argument.");
+		index = mrvmValueAsInt(args[0]);
+		count = session->windowCount;
+		if (count > 0) {
+			if (index <= 0) index = 1;
+			if (index > count) index = ((index - 1) % count) + 1;
+			session->currentWindow = index;
+		}
+		session->deferredUiCommands.emplace_back(mrducSwitchWindow, index);
+		return true;
+	}
+	if (name == "SIZE_WINDOW") {
+		int x1;
+		int y1;
+		int x2;
+		int y2;
+		if (args.size() != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT) throw std::runtime_error("SIZE_WINDOW expects four integer arguments.");
+		x1 = mrvmValueAsInt(args[0]);
+		y1 = mrvmValueAsInt(args[1]);
+		x2 = mrvmValueAsInt(args[2]);
+		y2 = mrvmValueAsInt(args[3]);
+		session->windowGeometryValid = true;
+		session->windowX1 = x1;
+		session->windowY1 = y1;
+		session->windowX2 = x2;
+		session->windowY2 = y2;
+		session->deferredUiCommands.emplace_back(mrducSizeWindow, x1, y1, x2, y2);
+		return true;
+	}
+	return false;
+}
+
+bool enqueueDeferredUiCommand(const MRMacroDeferredUiCommand &command, int &errorCode) {
+	BackgroundEditSession *session = g_backgroundEditSession;
+
+	errorCode = 0;
+	if (session == nullptr) return false;
+	session->deferredUiCommands.push_back(command);
+	return true;
+}
 
 bool dispatchDeferredVisualUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode) {
 	MRMacroDeferredUiCommand command;

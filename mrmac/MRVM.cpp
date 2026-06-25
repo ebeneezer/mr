@@ -26,8 +26,18 @@
 #include "mrmac.h"
 #include "MRMacroModelessUi.hpp"
 #include "MRVM.hpp"
+#include "vm/MRVMExecSessions.hpp"
 #include "vm/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
+#include "vm/MRVMMacroDialogRuntime.hpp"
+#include "vm/MRVMKeymapRuntime.hpp"
+#include "vm/MRVMMacroSpecRuntime.hpp"
+#include "vm/MRVMModelessUiRuntime.hpp"
+#include "vm/MRVMProcessRuntime.hpp"
+#include "vm/MRVMRuntimeCatalog.hpp"
+#include "vm/MRVMRuntimeGlobals.hpp"
+#include "vm/MRVMRuntimeKv.hpp"
+#include "vm/MRVMRuntimeState.hpp"
 #include "vm/MRVMValue.hpp"
 #include "vm/MRVMScreen.hpp"
 #include "vm/MRVMSettings.hpp"
@@ -43,21 +53,18 @@
 #include <cstring>
 #include <ctime>
 #include <deque>
-#include <fcntl.h>
 #include <fstream>
 #include <glob.h>
+#include <initializer_list>
 #include <limits>
 #include <map>
 #include <optional>
 #include <mutex>
-#include <poll.h>
-#include <signal.h>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
 #include <utility>
@@ -88,319 +95,27 @@ void mrSaveWorkspace(const std::string &filename);
 void mrLoadWorkspace(const std::string &filename);
 void applyVirtualDesktopConfigurationChange(int count);
 
+RuntimeEnvironment g_runtimeEnv;
+std::recursive_mutex g_vmExecutionMutex;
+thread_local BackgroundEditSession *g_backgroundEditSession = nullptr;
+thread_local const std::stop_token *g_backgroundMacroStopToken = nullptr;
+thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
+thread_local ExecutionState *g_executionState = nullptr;
+thread_local MRMacroExecutionSessionId g_executionSessionId = 0;
+
 namespace {
 using Value = VirtualMachine::Value;
-
-struct GlobalEntry {
-	int type;
-	Value value;
-};
 
 static void setGlobalValue(const std::string &name, int type, const Value &value);
 static void setGlobalValueFromStore(const std::string &name, int type, const Value &value, MRVMHashStore &localStore);
 static bool readGlobalValue(const std::string &name, GlobalEntry &entry);
 
-struct MacroRef {
-	std::string fileKey;
-	std::string displayName;
-	std::size_t entryOffset;
-	std::string assignedKeySpec;
-	std::string closureId;
-	TKey assignedKey;
-	int fromMode;
-	bool hasAssignedKey;
-	bool firstRunPending;
-	bool transientAttr;
-	bool dumpAttr;
-	bool permAttr;
-	bool closureUnit;
-	std::uint64_t tickMs;
-	MRRuntimeScheduledConsumerId scheduledConsumerId;
-
-	MacroRef() : entryOffset(0), fromMode(MACRO_MODE_EDIT), hasAssignedKey(false), firstRunPending(true), transientAttr(false), dumpAttr(false), permAttr(false), closureUnit(false), tickMs(0), scheduledConsumerId(0) {
-	}
-};
-
-struct LoadedMacroFile {
-	std::string fileKey;
-	std::string displayName;
-	std::string resolvedPath;
-	std::vector<unsigned char> bytecode;
-	std::vector<std::string> macroNames;
-	MRMacroExecutionProfile profile;
-};
-
-struct IndexedBoundMacroEntry {
-	TKey key;
-	std::string filePath;
-
-	IndexedBoundMacroEntry() {
-	}
-	IndexedBoundMacroEntry(const TKey &aKey, std::string aFilePath) : key(aKey), filePath(std::move(aFilePath)) {
-	}
-};
-
-struct MacroStackFrame {
-	std::string macroName;
-	bool firstRun;
-
-	MacroStackFrame() : firstRun(false) {
-	}
-	MacroStackFrame(const std::string &aName, bool aFirstRun) : macroName(aName), firstRun(aFirstRun) {
-	}
-};
-
-struct MacroKeyCodePair {
-	int key1 = 0;
-	int key2 = 0;
-};
-
-struct MacroFunctionLabelFrame {
-	std::array<std::string, 49> editLabels;
-	std::array<std::string, 49> shellLabels;
-};
-
-enum MacroAssignableCommandId {
-	macdBackSpace = 0x7001,
-	macdBlockBegin = 0x7002,
-	macdBlockEnd = 0x7003,
-	macdBlockOff = 0x7004,
-	macdColBlockBegin = 0x7005,
-	macdCopyBlock = 0x7006,
-	macdCr = 0x7007,
-	macdDeleteBlock = 0x7008,
-	macdDelChar = 0x7009,
-	macdDelLine = 0x700A,
-	macdDown = 0x700B,
-	macdEof = 0x700C,
-	macdEol = 0x700D,
-	macdFirstWord = 0x700E,
-	macdGotoMark = 0x700F,
-	macdHome = 0x7010,
-	macdIndent = 0x7011,
-	macdKeyRecord = 0x7012,
-	macdLastPageBreak = 0x7013,
-	macdLeft = 0x7014,
-	macdMarkPos = 0x7015,
-	macdMoveBlock = 0x7016,
-	macdNextPageBreak = 0x7017,
-	macdPageDown = 0x7018,
-	macdPageUp = 0x7019,
-	macdRight = 0x701A,
-	macdSaveFile = 0x701B,
-	macdStrBlockBegin = 0x701C,
-	macdTabLeft = 0x701D,
-	macdTabRight = 0x701E,
-	macdTof = 0x701F,
-	macdUndent = 0x7020,
-	macdUndo = 0x7021,
-	macdUp = 0x7022,
-	macdWordLeft = 0x7023,
-	macdWordRight = 0x7024
-};
-
-enum class ExplicitBindingKind : unsigned char {
-	MacroSpec,
-	Command
-};
-
-struct ExplicitKeyBinding {
-	TKey key;
-	int mode = MACRO_MODE_EDIT;
-	ExplicitBindingKind kind = ExplicitBindingKind::MacroSpec;
-	std::string macroSpec;
-	int commandId = 0;
-};
-
-struct RuntimeEnvironment {
-	std::map<std::string, GlobalEntry> globals;
-	std::vector<std::string> globalOrder;
-	std::size_t globalEnumIndex;
-	MRVMHashStore globalHashStore;
-	std::string parameterString;
-	int returnInt;
-	std::string returnStr;
-	int errorLevel;
-	std::map<std::string, LoadedMacroFile> loadedFiles;
-	std::map<std::string, MacroRef> loadedMacros;
-	std::vector<std::string> macroOrder;
-	std::vector<IndexedBoundMacroEntry> indexedBoundMacros;
-	std::vector<std::string> indexedBoundFiles;
-	std::size_t indexedWarmupCursor;
-	std::set<std::string> indexedWarmupAttemptedFiles;
-	std::size_t macroEnumIndex;
-	std::vector<MacroStackFrame> macroStack;
-	std::vector<std::string> fileMatches;
-	std::size_t fileMatchIndex;
-	std::string lastFileName;
-	std::map<const void *, std::vector<uint>> markStacks;
-	std::map<const void *, std::array<std::optional<uint>, 10>> randomAccessMarks;
-	std::string startupCommand;
-	std::vector<std::string> processArgs;
-	std::string executablePath;
-	std::string executableDir;
-	std::string shellPath;
-	std::string shellVersion;
-	int docMode;
-	int shadowChar;
-	int refresh;
-	int mouse;
-	int logoScreen;
-	int explosions;
-	bool ignoreCase;
-	int printMargin;
-	int formatStat;
-	int undoStat;
-	int memAlloc;
-	int insCursor;
-	int ovrCursor;
-	int ctrlHelp;
-	int mouseHSense;
-	int mouseVSense;
-	int statusRow;
-	int messageRow;
-	int maxWindowRow;
-	int minWindowRow;
-	int nameLine;
-	std::string defaultFormat;
-	bool tabExpand;
-	bool lastSearchValid;
-	const void *lastSearchWindow;
-	std::string lastSearchFileName;
-	std::size_t lastSearchStart;
-	std::size_t lastSearchEnd;
-	std::size_t lastSearchCursor;
-	int key1;
-	int key2;
-	std::deque<MacroKeyCodePair> pushedKeys;
-	std::vector<MacroFunctionLabelFrame> functionLabelStack;
-	std::vector<ExplicitKeyBinding> explicitKeyBindings;
-	std::map<const void *, int> windowLinkGroups;
-	int nextWindowLinkGroupId;
-
-	RuntimeEnvironment() : globalEnumIndex(0), returnInt(0), errorLevel(0), indexedWarmupCursor(0), macroEnumIndex(0), fileMatchIndex(0), docMode(0), shadowChar(176), refresh(1), mouse(1), logoScreen(0), explosions(0), ignoreCase(false), printMargin(0), formatStat(0), undoStat(1), memAlloc(0), insCursor(0), ovrCursor(3), ctrlHelp(0), mouseHSense(8), mouseVSense(8), statusRow(-1), messageRow(-1), maxWindowRow(-1), minWindowRow(-1), nameLine(0), tabExpand(true), lastSearchValid(false), lastSearchWindow(nullptr), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), key1(0), key2(0), nextWindowLinkGroupId(1) {
-		functionLabelStack.emplace_back();
-	}
-};
-
-struct BackgroundEditSession {
-	mr::editor::TextDocument document;
-	mr::editor::StagedEditTransaction transaction;
-	std::size_t cursorOffset;
-	std::size_t selectionStart;
-	std::size_t selectionEnd;
-	bool lastSearchValid;
-	std::size_t lastSearchStart;
-	std::size_t lastSearchEnd;
-	std::size_t lastSearchCursor;
-	bool ignoreCase;
-	bool tabExpand;
-	int blockMode;
-	bool blockMarkingOn;
-	std::size_t blockAnchor;
-	std::size_t blockEnd;
-	bool firstSave;
-	bool eofInMemory;
-	int bufferId;
-	bool temporaryFile;
-	std::string temporaryFileName;
-	int currentWindow;
-	int linkStatus;
-	int windowCount;
-	bool windowGeometryValid;
-	int windowX1;
-	int windowY1;
-	int windowX2;
-	int windowY2;
-	std::map<std::string, GlobalEntry> globals;
-	std::vector<std::string> globalOrder;
-	std::size_t globalEnumIndex;
-	std::map<std::string, std::string> loadedMacroDisplayNames;
-	std::vector<std::string> macroOrder;
-	std::size_t macroEnumIndex;
-	std::vector<MRMacroDeferredUiCommand> deferredUiCommands;
-	bool insertMode;
-	int indentLevel;
-	int pageLines;
-	std::string fileName;
-	bool fileChanged;
-	int screenWidth;
-	int screenHeight;
-	int screenCursorX;
-	int screenCursorY;
-	std::vector<uint> markStack;
-	std::array<std::optional<uint>, 10> randomAccessMarks;
-
-	BackgroundEditSession() : document(), cursorOffset(0), selectionStart(0), selectionEnd(0), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), firstSave(false), eofInMemory(false), bufferId(0), temporaryFile(false), currentWindow(0), linkStatus(0), windowCount(0), windowGeometryValid(false), windowX1(0), windowY1(0), windowX2(0), windowY2(0), globalEnumIndex(0), macroEnumIndex(0), insertMode(true), indentLevel(1), pageLines(20), fileChanged(false), screenWidth(0), screenHeight(0), screenCursorX(1), screenCursorY(1) {
-	}
-
-	bool hasSelection() const noexcept {
-		return selectionEnd > selectionStart;
-	}
-
-	void clearSelection() noexcept {
-		selectionStart = cursorOffset;
-		selectionEnd = cursorOffset;
-	}
-
-	void clearLastSearch() noexcept {
-		lastSearchValid = false;
-		lastSearchStart = 0;
-		lastSearchEnd = 0;
-		lastSearchCursor = 0;
-	}
-
-	void clampState() noexcept {
-		std::size_t length = document.length();
-		cursorOffset = std::min(cursorOffset, length);
-		selectionStart = std::min(selectionStart, length);
-		selectionEnd = std::min(selectionEnd, length);
-		if (selectionEnd < selectionStart) std::swap(selectionStart, selectionEnd);
-	}
-};
-
-struct ExecutionState {
-	std::string parameterString;
-	int returnInt;
-	std::string returnStr;
-	int errorLevel;
-
-	ExecutionState() : returnInt(0), errorLevel(0) {
-	}
-};
-
-static RuntimeEnvironment g_runtimeEnv;
-static std::recursive_mutex g_vmExecutionMutex;
-static thread_local BackgroundEditSession *g_backgroundEditSession = nullptr;
-static thread_local const std::stop_token *g_backgroundMacroStopToken = nullptr;
-static thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
-static thread_local ExecutionState *g_executionState = nullptr;
-static thread_local int g_keyReplayDepth = 0;
-static std::string valueAsString(const Value &value);
-static int valueAsInt(const Value &value);
-
-static bool isStringLike(const Value &value);
-static bool isNumeric(const Value &value);
-static void enforceStringLength(const std::string &s);
-static std::string commandFirstLine(const std::string &command);
-static std::string detectExecutablePathFromProc();
-static std::string normalizeDirPath(const std::string &path);
-static std::string detectExecutableDir(const std::string &argv0);
-static std::string detectShellPath();
-static std::string detectShellVersion(const std::string &shellPath);
-static int detectCpuCode();
-static std::string getenvValue(const std::string &name);
 static std::string getEnvironmentValue(const std::string &entryName);
-static bool changeDirectoryPath(const std::string &path);
-static bool deleteFilePath(const std::string &path);
 static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileKey = nullptr);
 static bool unloadMacroFromRegistry(const std::string &macroName);
-static bool parseRunMacroSpec(const std::string &spec, std::string &filePart, std::string &macroPart, std::string &paramPart);
 static bool ensureLoadedFileResident(const std::string &fileKey);
 static bool evictTransientFileImage(const std::string &fileKey);
 static bool currentBackgroundChildMacroAllowed(const LoadedMacroFile &file) noexcept;
-std::string expandUserPath(const std::string &path);
-static bool fileExistsPath(const std::string &path);
 static std::vector<MREditWindow *> allEditWindows();
 static void cleanupWindowLinkGroups();
 static int windowLinkGroupOf(MREditWindow *win);
@@ -420,6 +135,7 @@ MREditWindow *activeMacroEditWindow();
 MRFileEditor *currentEditor();
 static BackgroundEditSession *currentBackgroundEditSession() noexcept;
 static ExecutionState *currentExecutionState() noexcept;
+static MRMacroExecutionSessionId currentExecutionSessionId() noexcept;
 static bool backgroundMacroCancelRequested() noexcept;
 static bool backgroundReplaceRange(const mr::editor::Range &range, const std::string &text, std::size_t cursorPos);
 static bool backgroundSetCursor(std::size_t target);
@@ -512,154 +228,24 @@ static int lineIndexForPtr(MRFileEditor *editor, uint ptr);
 static int countEditWindows();
 static int currentEditWindowIndex();
 static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2);
-static bool queueDeferredUiProcedureForBackgroundSession(const std::string &name, const std::vector<Value> &args, int &errorCode);
-static bool enqueueDeferredUiCommandForBackgroundSession(const MRMacroDeferredUiCommand &command, int &errorCode);
 bool createEditWindow();
 bool switchEditWindow(int index);
 bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2);
 bool deleteCurrentEditWindow();
 bool eraseCurrentEditWindow();
 bool modifyCurrentEditWindow();
-static bool parseIndexedBindingHeaders(const std::string &source, std::vector<TKey> &keys);
-static std::vector<std::string> listMrmacFilesInDirectory(const std::string &directoryPath);
-static std::string normalizeKeySpecToken(const std::string &spec);
-static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey);
-static bool dispatchSyntheticKeyToUi(const TKey &key, const char *text = nullptr, std::size_t textLength = 0);
-static bool replayKeyInputSequence(const std::string &sequence);
 static int currentUiMacroMode();
 static bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept;
-static const char *keymapActionIdForMacroCommand(const std::string &name) noexcept;
-static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
-static bool executeLoadedMacroWithConfiguredKeymapBatch(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
+static bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
+static bool executeLoadedMacroWithConfiguredKeymapBatch(const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
+static bool readLoadedMacroByKey(const std::string &macroKey, MacroRef &macroRef);
+static std::vector<std::string> macroCatalogMacroOrder();
+static std::size_t macroCatalogMacroEnumIndex();
+static void setMacroCatalogMacroEnumIndex(std::size_t index);
 static bool tryLoadIndexedMacroForKey(const TKey &pressed);
 static bool currentExecutingMacroSpecFromRuntimeStack(std::string &macroSpec);
 static bool composeLoadedMacroSpec(const MacroRef &macroRef, std::string &macroSpec);
-static std::string menuLabelFromBindingKey(const TKey &key);
-static std::string normalizeMenuKeySpec(std::string keySpec);
 static bool macroSpecTargetsLoadedMacro(const std::string &spec, const std::string &targetFileKey, const std::string &targetMacroKey);
-
-static std::string upperKey(const std::string &value) {
-	std::string out = value;
-	for (char &i : out)
-		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
-	return out;
-}
-
-static constexpr const char *kMacroWorkingMessageText = "working...";
-
-struct MacroKeymapActionCommand {
-	const char *name;
-	const char *actionId;
-};
-
-static const char *keymapActionIdForMacroCommand(const std::string &name) noexcept {
-	static constexpr std::array commands{
-	    MacroKeymapActionCommand{"APPEND_BLOCK", "MRMAC_BLOCK_APPEND_TO_BUFFER"},
-	    MacroKeymapActionCommand{"BACK_HOME", "MRMAC_DELETE_BACKWARD_TO_HOME"},
-	    MacroKeymapActionCommand{"BACK_WORD", "MRMAC_DELETE_BACKWARD_WORD"},
-	    MacroKeymapActionCommand{"BLOCK_MARK_LINES", "MR_BLOCK_MARK_LINES"},
-	    MacroKeymapActionCommand{"BLOCK_TOGGLE_MARKING", "MR_BLOCK_TOGGLE_MARKING"},
-	    MacroKeymapActionCommand{"BLOCK_TOGGLE_VISIBILITY", "MRMAC_BLOCK_TOGGLE_VISIBILITY"},
-	    MacroKeymapActionCommand{"BOTTOM_OF_WINDOW", "MRMAC_CURSOR_BOTTOM_OF_WINDOW"},
-	    MacroKeymapActionCommand{"CENTER_LINE", "MR_TEXT_CENTER_LINE"},
-	    MacroKeymapActionCommand{"CENTER_LINE_ON_SCREEN", "MRMAC_VIEW_CENTER_LINE"},
-	    MacroKeymapActionCommand{"COPY_BLOCK_TO_CLIPBOARD", "MRMAC_BLOCK_COPY_TO_CLIPBOARD"},
-	    MacroKeymapActionCommand{"CUT_APPEND_BLOCK", "MRMAC_BLOCK_CUT_APPEND_TO_BUFFER"},
-	    MacroKeymapActionCommand{"CUT_BLOCK", "MRMAC_BLOCK_MOVE_TO_BUFFER"},
-	    MacroKeymapActionCommand{"DEL_CHAR_OR_BLOCK", "MRMAC_DELETE_FORWARD_CHAR_OR_BLOCK"},
-	    MacroKeymapActionCommand{"DEL_EOL", "MRMAC_DELETE_TO_EOL"},
-	    MacroKeymapActionCommand{"DEL_WORD", "MRMAC_DELETE_FORWARD_WORD"},
-	    MacroKeymapActionCommand{"DESKTOP_MOVE_WINDOW_LEFT", "MR_DESKTOP_MOVE_WINDOW_LEFT"},
-	    MacroKeymapActionCommand{"DESKTOP_MOVE_WINDOW_RIGHT", "MR_DESKTOP_MOVE_WINDOW_RIGHT"},
-	    MacroKeymapActionCommand{"DESKTOP_VIEWPORT_LEFT", "MR_DESKTOP_VIEWPORT_LEFT"},
-	    MacroKeymapActionCommand{"DESKTOP_VIEWPORT_RIGHT", "MR_DESKTOP_VIEWPORT_RIGHT"},
-	    MacroKeymapActionCommand{"END_OF_BLOCK", "MRMAC_CURSOR_END_OF_BLOCK"},
-	    MacroKeymapActionCommand{"FORCE_SAVE", "MR_FILE_FORCE_SAVE"},
-	    MacroKeymapActionCommand{"INDENT_BLOCK", "MRMAC_BLOCK_INDENT"},
-	    MacroKeymapActionCommand{"JUSTIFY_PARAGRAPH", "MR_JUSTIFY_PARAGRAPH"},
-	    MacroKeymapActionCommand{"LIST_MATCHED_FILES", "MRMAC_SEARCH_LIST_MATCHED_FILES"},
-	    MacroKeymapActionCommand{"LSP_CODE_ACTIONS", "MR_LSP_CODE_ACTIONS"},
-	    MacroKeymapActionCommand{"LSP_COMPLETE", "MR_LSP_COMPLETE"},
-	    MacroKeymapActionCommand{"LSP_DEFINITION", "MR_LSP_GOTO_DEFINITION"},
-	    MacroKeymapActionCommand{"LSP_HIGHLIGHT", "MR_LSP_DOCUMENT_HIGHLIGHT"},
-	    MacroKeymapActionCommand{"LSP_HOVER", "MR_LSP_SHOW_HOVER"},
-	    MacroKeymapActionCommand{"LSP_REFERENCES", "MR_LSP_FIND_REFERENCES"},
-	    MacroKeymapActionCommand{"LSP_RENAME", "MR_LSP_RENAME"},
-	    MacroKeymapActionCommand{"LSP_SIGNATURE", "MR_LSP_SIGNATURE_HELP"},
-	    MacroKeymapActionCommand{"LSP_SYMBOLS", "MR_LSP_DOCUMENT_SYMBOLS"},
-	    MacroKeymapActionCommand{"LSP_WORKSPACE_SYMBOLS", "MR_LSP_WORKSPACE_SYMBOLS"},
-	    MacroKeymapActionCommand{"LOAD_BLOCK", "MR_LOAD_BLOCK_FROM_FILE"},
-	    MacroKeymapActionCommand{"MARK_WORD_RIGHT", "MRMAC_BLOCK_MARK_WORD_RIGHT"},
-	    MacroKeymapActionCommand{"MULTI_FILE_SEARCH", "MRMAC_SEARCH_MULTI_FILE"},
-	    MacroKeymapActionCommand{"MULTI_FILE_SEARCH_REPLACE", "MR_SEARCH_MULTI_FILE_REPLACE"},
-	    MacroKeymapActionCommand{"NEXT_SEARCH_RESULT", "MR_SEARCH_RESULTS_NEXT"},
-	    MacroKeymapActionCommand{"PASTE_BLOCK", "MRMAC_BLOCK_COPY_FROM_BUFFER"},
-	    MacroKeymapActionCommand{"PASTE_FROM_CLIPBOARD", "MRMAC_BLOCK_PASTE_FROM_CLIPBOARD"},
-	    MacroKeymapActionCommand{"REDO", "MRMAC_REDO_LAST_UNDO"},
-	    MacroKeymapActionCommand{"REFORMAT_DOCUMENT", "MR_TEXT_REFORMAT_DOCUMENT"},
-	    MacroKeymapActionCommand{"REFORMAT_PARAGRAPH", "MR_TEXT_REFORMAT_PARAGRAPH"},
-	    MacroKeymapActionCommand{"REVERT_FILE", "MR_FILE_REVERT"},
-	    MacroKeymapActionCommand{"REPEAT_SEARCH", "MRMAC_SEARCH_REPEAT_LAST"},
-	    MacroKeymapActionCommand{"SAVE_ALL", "MR_FILE_SAVE_ALL"},
-	    MacroKeymapActionCommand{"SCROLL_DOWN", "MRMAC_VIEW_SCROLL_DOWN"},
-	    MacroKeymapActionCommand{"SCROLL_UP", "MRMAC_VIEW_SCROLL_UP"},
-	    MacroKeymapActionCommand{"SEARCH", "MRMAC_SEARCH_FORWARD"},
-	    MacroKeymapActionCommand{"SEARCH_REPLACE", "MRMAC_SEARCH_REPLACE"},
-	    MacroKeymapActionCommand{"SET_LEFT_MARGIN", "MR_SET_LEFT_MARGIN"},
-	    MacroKeymapActionCommand{"SET_RIGHT_MARGIN", "MR_SET_RIGHT_MARGIN"},
-	    MacroKeymapActionCommand{"SORT_COLUMN_BLOCK_TOGGLE", "MR_SORT_COLUMN_BLOCK_TOGGLE"},
-	    MacroKeymapActionCommand{"START_OF_BLOCK", "MRMAC_CURSOR_START_OF_BLOCK"},
-	    MacroKeymapActionCommand{"TOGGLE_FORMAT_RULER", "MR_TOGGLE_FORMAT_RULER"},
-	    MacroKeymapActionCommand{"TOGGLE_WORD_WRAP", "MR_TOGGLE_WORD_WRAP"},
-	    MacroKeymapActionCommand{"TOP_OF_WINDOW", "MRMAC_CURSOR_TOP_OF_WINDOW"},
-	    MacroKeymapActionCommand{"UNDO", "MRMAC_UNDO"},
-	    MacroKeymapActionCommand{"UNDENT_BLOCK", "MRMAC_BLOCK_UNDENT"},
-	    MacroKeymapActionCommand{"WINDOW_CASCADE", "MR_WINDOW_CASCADE"},
-	    MacroKeymapActionCommand{"WINDOW_CLOSE", "MR_WINDOW_CLOSE"},
-	    MacroKeymapActionCommand{"WINDOW_COPY_BLOCK", "MRMAC_BLOCK_COPY_INTERWINDOW"},
-	    MacroKeymapActionCommand{"WINDOW_LIST", "MR_WINDOW_LIST"},
-	    MacroKeymapActionCommand{"WINDOW_MOVE_BLOCK", "MRMAC_BLOCK_MOVE_INTERWINDOW"},
-	    MacroKeymapActionCommand{"WINDOW_OPEN", "MR_WINDOW_OPEN"},
-	    MacroKeymapActionCommand{"WINDOW_NEXT", "MR_WINDOW_NEXT"},
-	    MacroKeymapActionCommand{"WINDOW_PREVIOUS", "MR_WINDOW_PREVIOUS"},
-	    MacroKeymapActionCommand{"WINDOW_SPLIT_HORIZONTAL", "MR_WINDOW_SPLIT_HORIZONTAL"},
-	    MacroKeymapActionCommand{"WINDOW_SPLIT_VERTICAL", "MR_WINDOW_SPLIT_VERTICAL"},
-	    MacroKeymapActionCommand{"WINDOW_TILE", "MR_WINDOW_TILE"},
-	    MacroKeymapActionCommand{"WINDOW_ZOOM", "MR_WINDOW_ZOOM"},
-	    MacroKeymapActionCommand{"MATCH_PARENTHESIS", "MR_MATCH_PARENTHESIS"},
-	    MacroKeymapActionCommand{"MACRO_TOGGLE_RECORDING", "MR_MACRO_TOGGLE_RECORDING"},
-	    MacroKeymapActionCommand{"SETUP_EDIT_SETTINGS", "MR_SETUP_EDIT_SETTINGS"},
-	    MacroKeymapActionCommand{"SETUP_COLOR", "MR_SETUP_COLOR"},
-	    MacroKeymapActionCommand{"SETUP_KEYMAP", "MR_SETUP_KEYMAP"},
-	    MacroKeymapActionCommand{"SETUP_LSP_SUPPORT", "MR_SETUP_LSP_SUPPORT"},
-	    MacroKeymapActionCommand{"SETUP_FILENAME_EXTENSIONS", "MR_SETUP_FILENAME_EXTENSIONS"},
-	    MacroKeymapActionCommand{"SETUP_COMPILER_PROFILES", "MR_SETUP_COMPILER_PROFILES"},
-	    MacroKeymapActionCommand{"SETUP_PATHS", "MR_SETUP_PATHS"},
-	    MacroKeymapActionCommand{"SETUP_BACKUPS_AUTOSAVE", "MR_SETUP_BACKUPS_AUTOSAVE"},
-	    MacroKeymapActionCommand{"SETUP_SEARCH_REPLACE_DEFAULTS", "MR_SETUP_SEARCH_REPLACE_DEFAULTS"},
-	    MacroKeymapActionCommand{"SETUP_USER_INTERFACE", "MR_SETUP_USER_INTERFACE"},
-	    MacroKeymapActionCommand{"SETUP_LIVE_LOGS", "MR_SETUP_LIVE_LOGS"},
-	    MacroKeymapActionCommand{"EXIT_SAVE_ALL", "MR_EXIT_DIRTY_SAVE_ALL"}};
-
-	for (const MacroKeymapActionCommand &command : commands)
-		if (name == command.name) return command.actionId;
-	return nullptr;
-}
-
-static bool startsWithTokenInsensitive(const std::string &text, std::size_t pos, const char *token) {
-	std::size_t i = 0;
-	if (token == nullptr) return false;
-	while (token[i] != '\0') {
-		if (pos + i >= text.size()) return false;
-		if (std::toupper(static_cast<unsigned char>(text[pos + i])) != std::toupper(static_cast<unsigned char>(token[i]))) return false;
-		++i;
-	}
-	if (pos + i < text.size()) {
-		unsigned char ch = static_cast<unsigned char>(text[pos + i]);
-		if (std::isalnum(ch) != 0 || ch == '_') return false;
-	}
-	return true;
-}
 
 static void appendUniqueString(std::vector<std::string> &values, const std::string &value) {
 	if (value.empty()) return;
@@ -673,470 +259,23 @@ static void logMacroProfileLine(const char *prefix, const LoadedMacroFile &file)
 	mrLogMessage(line.c_str());
 }
 
-static Value makeInt(int value) {
-	Value v;
-	v.type = TYPE_INT;
-	v.i = value;
-	return v;
-}
-
-static Value makeReal(double value) {
-	Value v;
-	v.type = TYPE_REAL;
-	v.r = value;
-	return v;
-}
-
-static Value makeString(const std::string &value) {
-	Value v;
-	v.type = TYPE_STR;
-	v.s = value;
-	return v;
-}
-
-static Value makeChar(unsigned char value) {
-	Value v;
-	v.type = TYPE_CHAR;
-	v.c = value;
-	return v;
-}
-
-static Value makeHash(int handle, bool globalStorage = false) {
-	Value v;
-	v.type = TYPE_HASH;
-	v.hashHandle = handle;
-	v.globalStorage = globalStorage;
-	return v;
-}
-
-static std::string charToString(unsigned char c) {
-	if (c == 0) return std::string();
-	return std::string(1, static_cast<char>(c));
-}
-
-static bool isStringLike(const Value &value) {
-	return value.type == TYPE_STR || value.type == TYPE_CHAR;
-}
-
-static bool isNumeric(const Value &value) {
-	return value.type == TYPE_INT || value.type == TYPE_REAL;
-}
-
-static std::string valueAsString(const Value &value) {
-	char buf[128];
-
-	switch (value.type) {
-		case TYPE_STR:
-			return value.s;
-		case TYPE_CHAR:
-			return charToString(value.c);
-		case TYPE_INT:
-			std::snprintf(buf, sizeof(buf), "%d", value.i);
-			return std::string(buf);
-		case TYPE_REAL:
-			std::snprintf(buf, sizeof(buf), "%.11g", value.r);
-			return std::string(buf);
-		default:
-			return std::string();
-	}
-}
-
-static std::string removeSpaceAscii(const std::string &value) {
-	std::string out;
-	bool previousWasSpace = false;
-	std::size_t i = 0;
-	std::size_t end = value.size();
-
-	while (i < end && value[i] == ' ')
-		++i;
-	while (end > i && value[end - 1] == ' ')
-		--end;
-
-	for (; i < end; ++i) {
-		char ch = value[i];
-		if (ch == ' ') {
-			if (!previousWasSpace) out.push_back(' ');
-			previousWasSpace = true;
-		} else {
-			out.push_back(ch);
-			previousWasSpace = false;
-		}
-	}
-	return out;
-}
-
-static std::size_t findLastPathSeparator(const std::string &value) {
-	std::size_t slash = value.find_last_of("\\/");
-	if (slash == std::string::npos) return std::string::npos;
-	return slash;
-}
-
-static std::size_t baseNameStart(const std::string &value) {
-	std::size_t sep = findLastPathSeparator(value);
-	if (sep != std::string::npos) return sep + 1;
-	if (value.size() >= 2 && value[1] == ':') return 2;
-	return 0;
-}
-
-static std::string getExtensionPart(const std::string &value) {
-	std::size_t baseStart = baseNameStart(value);
-	std::size_t dot = value.find_last_of('.');
-	if (dot == std::string::npos || dot < baseStart) return std::string();
-	return value.substr(dot);
-}
-
-static std::string getPathPart(const std::string &value) {
-	std::size_t sep = findLastPathSeparator(value);
-	if (sep != std::string::npos) return value.substr(0, sep + 1);
-	if (value.size() >= 2 && value[1] == ':') return value.substr(0, 2);
-	return std::string();
-}
-
-static std::string truncateExtensionPart(const std::string &value) {
-	std::size_t baseStart = baseNameStart(value);
-	std::size_t dot = value.find_last_of('.');
-	if (dot == std::string::npos || dot < baseStart) return value;
-	return value.substr(0, dot);
-}
-
-static std::string truncatePathPart(const std::string &value) {
-	return value.substr(baseNameStart(value));
-}
-
-static double valueAsReal(const Value &value) {
-	if (value.type == TYPE_REAL) return value.r;
-	if (value.type == TYPE_INT) return static_cast<double>(value.i);
-	throw std::runtime_error("numeric value expected");
-}
-
-static int valueAsInt(const Value &value) {
-	if (value.type == TYPE_INT) return value.i;
-	throw std::runtime_error("integer value expected");
-}
-
-static bool valueHasContent(const Value &value) {
-	switch (value.type) {
-		case TYPE_INT:
-			return value.i != 0;
-		case TYPE_REAL:
-			return value.r != 0.0;
-		case TYPE_CHAR:
-			return value.c != 0;
-		case TYPE_STR:
-			return !value.s.empty();
-		case TYPE_HASH:
-			return value.hashHandle > 0;
-		case TYPE_INT_ARRAY:
-		case TYPE_STR_ARRAY:
-		case TYPE_CHAR_ARRAY:
-		case TYPE_REAL_ARRAY:
-		case TYPE_HASH_ARRAY:
-			return !value.arrayValues.empty();
-		default:
-			return false;
-	}
-}
-
-static int compareValues(const Value &a, const Value &b) {
-	if (isStringLike(a) && isStringLike(b)) {
-		std::string as = valueAsString(a);
-		std::string bs = valueAsString(b);
-		if (as < bs) return -1;
-		if (as > bs) return 1;
-		return 0;
-	}
-
-	if (isNumeric(a) && isNumeric(b)) {
-		double av = valueAsReal(a);
-		double bv = valueAsReal(b);
-		if (av < bv) return -1;
-		if (av > bv) return 1;
-		return 0;
-	}
-
-	throw std::runtime_error("type mismatch");
-}
-
-static void enforceStringLength(const std::string &s) {
-	if (s.size() > 254) throw std::runtime_error("String length error.");
-}
-
-static std::string utf8FromCodepoint(std::uint32_t codepoint) {
-	std::string text;
-	int byteCount = 0;
-
-	if (codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) throw std::runtime_error("UTF8 expects a valid Unicode codepoint.");
-	byteCount = codepoint <= 0x7F ? 1 : (codepoint <= 0x7FF ? 2 : (codepoint <= 0xFFFF ? 3 : 4));
-	switch (byteCount) {
-		case 1:
-			text.push_back(static_cast<char>(codepoint));
-			break;
-		case 2:
-			text.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
-			text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-			break;
-		case 3:
-			text.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
-			text.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-			text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-			break;
-		case 4:
-			text.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
-			text.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-			text.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-			text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-			break;
-	}
-	return text;
-}
-
-static int checkedStringIndex(int pos) {
-	if (pos < 1 || pos > 254) throw std::runtime_error("Invalid string index on string copy operation.");
-	return pos;
-}
-
-static int checkedInsertIndex(int pos) {
-	if (pos < 0 || pos > 254) throw std::runtime_error("Invalid string index on string copy operation.");
-	return pos;
-}
-
-static int findValErrorPosition(const std::string &text) {
-	std::size_t i = 0;
-	const std::size_t n = text.size();
-
-	while (i < n && std::isspace(static_cast<unsigned char>(text[i])))
-		++i;
-	if (i == n) return 1;
-
-	if (text[i] == '+' || text[i] == '-') ++i;
-
-	{
-		const std::size_t firstDigit = i;
-		while (i < n && std::isdigit(static_cast<unsigned char>(text[i])))
-			++i;
-		if (i == firstDigit) return static_cast<int>(firstDigit + 1);
-	}
-
-	while (i < n && std::isspace(static_cast<unsigned char>(text[i])))
-		++i;
-	if (i != n) return static_cast<int>(i + 1);
-	return 0;
-}
-
-static int findRValErrorPosition(const std::string &text) {
-	std::size_t i = 0;
-	const std::size_t n = text.size();
-
-	while (i < n && std::isspace(static_cast<unsigned char>(text[i])))
-		++i;
-	if (i == n) return 1;
-
-	if (text[i] == '+' || text[i] == '-') ++i;
-
-	{
-		bool seenDigits = false;
-		while (i < n && std::isdigit(static_cast<unsigned char>(text[i]))) {
-			seenDigits = true;
-			++i;
-		}
-		if (i < n && text[i] == '.') {
-			++i;
-			while (i < n && std::isdigit(static_cast<unsigned char>(text[i]))) {
-				seenDigits = true;
-				++i;
-			}
-		}
-		if (!seenDigits) return static_cast<int>(i + 1);
-	}
-
-	if (i < n && (text[i] == 'e' || text[i] == 'E')) {
-		const std::size_t expPos = i;
-		++i;
-		if (i < n && (text[i] == '+' || text[i] == '-')) ++i;
-		{
-			const std::size_t firstExpDigit = i;
-			while (i < n && std::isdigit(static_cast<unsigned char>(text[i])))
-				++i;
-			if (i == firstExpDigit) return static_cast<int>(expPos + 1);
-		}
-	}
-
-	while (i < n && std::isspace(static_cast<unsigned char>(text[i])))
-		++i;
-	if (i != n) return static_cast<int>(i + 1);
-	return 0;
-}
-
-static std::string commandFirstLine(const std::string &command) {
-	std::string line;
-	FILE *pipe = ::popen(command.c_str(), "r");
-	if (pipe == nullptr) return std::string();
-	char buffer[512];
-	if (std::fgets(buffer, sizeof(buffer), pipe) != nullptr) line = buffer;
-	::pclose(pipe);
-	while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
-		line.pop_back();
-	return line;
-}
-
-static std::string detectExecutablePathFromProc() {
-	char buf[4096];
-	ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-	if (n <= 0) return std::string();
-	buf[n] = '\0';
-	return std::string(buf);
-}
-
-static std::string normalizeDirPath(const std::string &path) {
-	if (path.empty()) return std::string("./");
-	std::string out = path;
-	if (out.back() != '/') out.push_back('/');
-	return out;
-}
-
-static std::string detectExecutableDir(const std::string &argv0) {
-	std::string path = detectExecutablePathFromProc();
-	if (path.empty()) path = argv0;
-	if (path.empty()) {
-		char cwd[4096];
-		if (::getcwd(cwd, sizeof(cwd)) != nullptr) return normalizeDirPath(std::string(cwd));
-		return std::string("./");
-	}
-	std::size_t sep = path.find_last_of("/");
-	if (sep == std::string::npos) {
-		char cwd[4096];
-		if (::getcwd(cwd, sizeof(cwd)) != nullptr) return normalizeDirPath(std::string(cwd));
-		return std::string("./");
-	}
-	return normalizeDirPath(path.substr(0, sep));
-}
-
-static std::string detectShellPath() {
-	const char *comspec = std::getenv("COMSPEC");
-	if (comspec != nullptr && *comspec != '\0') return std::string(comspec);
-	const char *shell = std::getenv("SHELL");
-	if (shell != nullptr && *shell != '\0') return std::string(shell);
-	return std::string("/bin/sh");
-}
-
-static std::string detectShellVersion(const std::string &shellPath) {
-	if (shellPath.empty()) return std::string();
-	const char *bashVersion = std::getenv("BASH_VERSION");
-	const char *zshVersion = std::getenv("ZSH_VERSION");
-	const char *fishVersion = std::getenv("FISH_VERSION");
-	std::string base = shellPath.substr(shellPath.find_last_of('/') == std::string::npos ? 0 : shellPath.find_last_of('/') + 1);
-	if (base == "bash" && bashVersion != nullptr && *bashVersion != '\0') return std::string("bash ") + bashVersion;
-	if (base == "zsh" && zshVersion != nullptr && *zshVersion != '\0') return std::string("zsh ") + zshVersion;
-	if (base == "fish" && fishVersion != nullptr && *fishVersion != '\0') return std::string("fish ") + fishVersion;
-	std::string command = "'";
-	for (char i : shellPath) {
-		if (i == '\'') command += "'\\''";
-		else
-			command.push_back(i);
-	}
-	command += "' --version 2>/dev/null";
-	std::string line = commandFirstLine(command);
-	if (!line.empty()) return line;
-	return base;
-}
-
-static int detectCpuCode() {
-#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
-	return 3;
-#elif defined(__aarch64__) || defined(__arm__) || defined(__riscv) || defined(__powerpc__) || defined(__ppc64__)
-	return 3;
-#else
-	return 3;
-#endif
-}
-
-static std::string getenvValue(const std::string &name) {
-	const char *value = std::getenv(name.c_str());
-	if (value == nullptr) return std::string();
-	return std::string(value);
-}
-
 static std::string getEnvironmentValue(const std::string &entryName) {
 	std::string key = trimAscii(entryName);
 	std::size_t pos = key.find('=');
 	if (pos != std::string::npos) key = key.substr(0, pos);
 	if (key.empty()) return std::string();
-	std::string direct = getenvValue(key);
+	std::string direct = mrvmGetenvValue(key);
 	if (!direct.empty()) return direct;
-	std::string up = upperKey(key);
+	std::string up = mrvmUpperKey(key);
 	if (up == "MR_PATH") return g_runtimeEnv.executableDir;
 	if (up == "COMSPEC") return g_runtimeEnv.shellPath;
 	if (up == "OS_VERSION") return g_runtimeEnv.shellVersion;
 	return std::string();
 }
 
-static bool changeDirectoryPath(const std::string &path) {
-	std::string expanded = expandUserPath(trimAscii(path));
-	if (expanded.empty()) return false;
-	return ::chdir(expanded.c_str()) == 0;
-}
-
-static bool deleteFilePath(const std::string &path) {
-	std::string expanded = expandUserPath(trimAscii(path));
-	if (expanded.empty()) return false;
-	return std::remove(expanded.c_str()) == 0;
-}
-
-std::string expandUserPath(const std::string &path) {
-	if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
-		const char *home = std::getenv("HOME");
-		if (home != nullptr && *home != '\0') return std::string(home) + path.substr(1);
-	}
-	return path;
-}
-
-static bool fileExistsPath(const std::string &path) {
-	struct stat st;
-	std::string expanded = expandUserPath(trimAscii(path));
-	if (expanded.empty()) return false;
-	return ::stat(expanded.c_str(), &st) == 0;
-}
-
-static int inferDosFileAttributes(const std::string &path, const struct stat &st) {
-	int attr = 0;
-	std::string name = truncatePathPart(path);
-
-	if (!name.empty() && name.front() == '.') attr |= 0x02;
-	if (S_ISDIR(st.st_mode)) attr |= 0x10;
-	else
-		attr |= 0x20;
-	if (::access(path.c_str(), W_OK) != 0) attr |= 0x01;
-	return attr;
-}
-
-static bool readFileMetadata(const std::string &path, int *attrOut, int *sizeOut, int *timeOut) {
-	struct stat st;
-	std::string expanded = expandUserPath(trimAscii(path));
-
-	if (expanded.empty() || ::stat(expanded.c_str(), &st) != 0) return false;
-
-	if (attrOut != nullptr) *attrOut = inferDosFileAttributes(expanded, st);
-	if (sizeOut != nullptr) {
-		long long size = static_cast<long long>(st.st_size);
-		if (size < 0) size = 0;
-		if (size > std::numeric_limits<int>::max()) size = std::numeric_limits<int>::max();
-		*sizeOut = static_cast<int>(size);
-	}
-	if (timeOut != nullptr) {
-		std::tm localTime{};
-		if (::localtime_r(&st.st_mtime, &localTime) == nullptr) *timeOut = 0;
-		else {
-			const int dosDate = ((std::max(0, localTime.tm_year + 1900 - 1980) & 0x7F) << 9) | (((localTime.tm_mon + 1) & 0x0F) << 5) | (localTime.tm_mday & 0x1F);
-			const int dosTime = ((localTime.tm_hour & 0x1F) << 11) | ((localTime.tm_min & 0x3F) << 5) | ((localTime.tm_sec / 2) & 0x1F);
-			*timeOut = (dosDate << 16) | dosTime;
-		}
-	}
-	return true;
-}
-
 static int findFirstFileMatch(const std::string &pattern) {
 	glob_t g;
-	std::string expanded = expandUserPath(trimAscii(pattern));
+	std::string expanded = mrvmProcessExpandUserPath(trimAscii(pattern));
 	int rc;
 
 	g_runtimeEnv.fileMatches.clear();
@@ -1156,7 +295,7 @@ static int findFirstFileMatch(const std::string &pattern) {
 	} else
 		::globfree(&g);
 
-	if (fileExistsPath(expanded)) {
+	if (mrvmFileExistsPath(expanded)) {
 		g_runtimeEnv.fileMatches.push_back(expanded);
 		g_runtimeEnv.lastFileName = expanded;
 		return 0;
@@ -1191,6 +330,10 @@ static ExecutionState *currentExecutionState() noexcept {
 	return g_executionState;
 }
 
+static MRMacroExecutionSessionId currentExecutionSessionId() noexcept {
+	return g_executionSessionId;
+}
+
 static std::string &runtimeParameterString() noexcept {
 	ExecutionState *state = currentExecutionState();
 	return state != nullptr ? state->parameterString : g_runtimeEnv.parameterString;
@@ -1209,123 +352,6 @@ static std::string &runtimeReturnStr() noexcept {
 static int &runtimeErrorLevel() noexcept {
 	ExecutionState *state = currentExecutionState();
 	return state != nullptr ? state->errorLevel : g_runtimeEnv.errorLevel;
-}
-
-struct SubshellResult {
-	std::string output;
-	int errorLevel;
-};
-
-static SubshellResult runSubshellCapture(const std::string &command, int timeoutMs) {
-	SubshellResult result;
-	int pipeFds[2] = {-1, -1};
-	pid_t childPid = -1;
-	int waitStatus = 0;
-	bool pipeOpen = true;
-	bool childExited = false;
-	bool timedOut = false;
-	int timeoutPolls = 0;
-	std::array<char, 4096> buffer{};
-	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
-
-	result.errorLevel = 0;
-	if (timeoutMs <= 0) {
-		result.errorLevel = EINVAL;
-		return result;
-	}
-	if (::pipe(pipeFds) != 0) {
-		result.errorLevel = errno != 0 ? errno : 1;
-		return result;
-	}
-	childPid = ::fork();
-	if (childPid < 0) {
-		result.errorLevel = errno != 0 ? errno : 1;
-		::close(pipeFds[0]);
-		::close(pipeFds[1]);
-		return result;
-	}
-	if (childPid == 0) {
-		std::string shellPath = configuredShellExecutablePath();
-		::setpgid(0, 0);
-		::dup2(pipeFds[1], STDOUT_FILENO);
-		::dup2(pipeFds[1], STDERR_FILENO);
-		::close(pipeFds[0]);
-		::close(pipeFds[1]);
-		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(nullptr));
-		::_exit(127);
-	}
-	::close(pipeFds[1]);
-	::setpgid(childPid, childPid);
-	{
-		const int flags = ::fcntl(pipeFds[0], F_GETFL, 0);
-		if (flags >= 0) ::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK);
-	}
-	while (pipeOpen || !childExited) {
-		struct pollfd pfd;
-		int pollResult = 0;
-
-		if (!childExited && !timedOut && std::chrono::steady_clock::now() >= deadline) {
-			timedOut = true;
-			::kill(-childPid, SIGTERM);
-		}
-		if (!childExited && timedOut) {
-			if (timeoutPolls > 10) ::kill(-childPid, SIGKILL);
-			++timeoutPolls;
-		}
-		pfd.fd = pipeFds[0];
-		pfd.events = POLLIN | POLLHUP;
-		pfd.revents = 0;
-		pollResult = pipeOpen ? ::poll(&pfd, 1, 50) : 0;
-		if (pollResult < 0 && errno != EINTR) {
-			result.errorLevel = errno != 0 ? errno : 1;
-			break;
-		}
-		if (pipeOpen && pollResult > 0) {
-			for (;;) {
-				const ssize_t count = ::read(pipeFds[0], buffer.data(), buffer.size());
-				if (count > 0) {
-					result.output.append(buffer.data(), static_cast<std::size_t>(count));
-					continue;
-				}
-				if (count == 0) {
-					pipeOpen = false;
-					break;
-				}
-				if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) break;
-				result.errorLevel = errno != 0 ? errno : 1;
-				pipeOpen = false;
-				break;
-			}
-		}
-		if (!pipeOpen && !childExited) std::this_thread::sleep_for(std::chrono::milliseconds(50));
-		if (!childExited) {
-			const pid_t waited = ::waitpid(childPid, &waitStatus, WNOHANG);
-			if (waited == childPid) childExited = true;
-			else if (waited < 0 && errno != EINTR) {
-				result.errorLevel = errno != 0 ? errno : 1;
-				break;
-			}
-		}
-		if (childExited && pipeOpen && pollResult == 0) pipeOpen = false;
-	}
-	if (pipeFds[0] >= 0) ::close(pipeFds[0]);
-	if (!childExited && childPid > 0) {
-		::kill(-childPid, SIGKILL);
-		while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
-			;
-		childExited = true;
-	}
-	if (result.errorLevel != 0) return result;
-	if (timedOut) {
-		result.errorLevel = 124;
-		return result;
-	}
-	if (WIFEXITED(waitStatus)) result.errorLevel = WEXITSTATUS(waitStatus);
-	else if (WIFSIGNALED(waitStatus))
-		result.errorLevel = 128 + WTERMSIG(waitStatus);
-	else
-		result.errorLevel = 1;
-	return result;
 }
 
 static char normalizeSearchChar(char c, bool ignoreCase) noexcept {
@@ -1426,49 +452,49 @@ static Value loadCurrentFileState(const std::string &key) {
 	MREditWindow *win = activeMacroEditWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (key == "FIRST_SAVE") {
-		if (win != nullptr) return makeInt(win->hasBeenSavedInSession() ? 1 : 0);
-		return makeInt(session != nullptr && session->firstSave ? 1 : 0);
+		if (win != nullptr) return mrvmMakeInt(win->hasBeenSavedInSession() ? 1 : 0);
+		return mrvmMakeInt(session != nullptr && session->firstSave ? 1 : 0);
 	}
 	if (key == "BUFFER_ID") {
-		if (win != nullptr) return makeInt(win->bufferId());
-		if (session != nullptr) return makeInt(session->bufferId);
-		return makeInt(0);
+		if (win != nullptr) return mrvmMakeInt(win->bufferId());
+		if (session != nullptr) return mrvmMakeInt(session->bufferId);
+		return mrvmMakeInt(0);
 	}
 	if (key == "TMP_FILE") {
-		if (win != nullptr) return makeInt(win->isTemporaryFile() ? 1 : 0);
-		return makeInt(session != nullptr && session->temporaryFile ? 1 : 0);
+		if (win != nullptr) return mrvmMakeInt(win->isTemporaryFile() ? 1 : 0);
+		return mrvmMakeInt(session != nullptr && session->temporaryFile ? 1 : 0);
 	}
 	if (key == "TMP_FILE_NAME") {
-		if (win != nullptr) return makeString(win->temporaryFileName());
-		if (session != nullptr) return makeString(session->temporaryFileName);
-		return makeString("");
+		if (win != nullptr) return mrvmMakeString(win->temporaryFileName());
+		if (session != nullptr) return mrvmMakeString(session->temporaryFileName);
+		return mrvmMakeString("");
 	}
 	if (key == "FILE_CHANGED") {
-		if (win != nullptr) return makeInt(win->isFileChanged() ? 1 : 0);
-		return makeInt(session != nullptr && session->fileChanged ? 1 : 0);
+		if (win != nullptr) return mrvmMakeInt(win->isFileChanged() ? 1 : 0);
+		return mrvmMakeInt(session != nullptr && session->fileChanged ? 1 : 0);
 	}
 	if (key == "FILE_NAME") {
-		if (win != nullptr) return makeString(win->currentFileName());
-		if (session != nullptr) return makeString(session->fileName);
-		return makeString("");
+		if (win != nullptr) return mrvmMakeString(win->currentFileName());
+		if (session != nullptr) return mrvmMakeString(session->fileName);
+		return mrvmMakeString("");
 	}
 	if (key == "CUR_FILE_ATTR") {
 		int attr = 0;
 		std::string path = win != nullptr ? std::string(win->currentFileName()) : (session != nullptr ? session->fileName : std::string());
-		if (!readFileMetadata(path, &attr, nullptr, nullptr)) return makeInt(0);
-		return makeInt(attr);
+		if (!mrvmReadFileMetadata(path, &attr, nullptr, nullptr)) return mrvmMakeInt(0);
+		return mrvmMakeInt(attr);
 	}
 	if (key == "CUR_FILE_SIZE") {
 		int size = 0;
 		std::string path = win != nullptr ? std::string(win->currentFileName()) : (session != nullptr ? session->fileName : std::string());
-		if (!readFileMetadata(path, nullptr, &size, nullptr)) return makeInt(0);
-		return makeInt(size);
+		if (!mrvmReadFileMetadata(path, nullptr, &size, nullptr)) return mrvmMakeInt(0);
+		return mrvmMakeInt(size);
 	}
 	if (key == "READ_ONLY") {
-		if (win != nullptr) return makeInt(win->isReadOnly() ? 1 : 0);
-		return makeInt(0);
+		if (win != nullptr) return mrvmMakeInt(win->isReadOnly() ? 1 : 0);
+		return mrvmMakeInt(0);
 	}
-	return makeInt(0);
+	return mrvmMakeInt(0);
 }
 
 static std::string snapshotEditorText(MRFileEditor *editor) {
@@ -1551,8 +577,8 @@ static bool searchEditorForward(MRFileEditor *editor, const std::string &needle,
 	haystack = text.substr(startPos, endPos - startPos);
 	query = needle;
 	if (ignoreCase) {
-		haystack = upperKey(haystack);
-		query = upperKey(query);
+		haystack = mrvmUpperKey(haystack);
+		query = mrvmUpperKey(query);
 	}
 
 	found = haystack.find(query);
@@ -1613,8 +639,8 @@ static bool searchEditorBackward(MRFileEditor *editor, const std::string &needle
 	haystack = text.substr(startPos, endPos - startPos + std::min<std::size_t>(needle.size(), text.size() - endPos));
 	query = needle;
 	if (ignoreCase) {
-		haystack = upperKey(haystack);
-		query = upperKey(query);
+		haystack = mrvmUpperKey(haystack);
+		query = mrvmUpperKey(query);
 	}
 
 	found = haystack.rfind(query, endPos - startPos);
@@ -1752,14 +778,14 @@ static Value currentEditorCharValue() {
 	uint lineEnd;
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr) {
-		if (session == nullptr) return makeChar(static_cast<char>(255));
+		if (session == nullptr) return mrvmMakeChar(static_cast<char>(255));
 		lineEnd = static_cast<uint>(session->document.lineEnd(session->cursorOffset));
-		if (session->cursorOffset >= session->document.length() || session->cursorOffset >= lineEnd) return makeChar(static_cast<char>(255));
-		return makeChar(session->document.charAt(session->cursorOffset));
+		if (session->cursorOffset >= session->document.length() || session->cursorOffset >= lineEnd) return mrvmMakeChar(static_cast<char>(255));
+		return mrvmMakeChar(session->document.charAt(session->cursorOffset));
 	}
 	lineEnd = editor->lineEndOffset(editor->cursorOffset());
-	if (editor->cursorOffset() >= editor->bufferLength() || editor->cursorOffset() >= lineEnd) return makeChar(static_cast<char>(255));
-	return makeChar(editor->charAtOffset(editor->cursorOffset()));
+	if (editor->cursorOffset() >= editor->bufferLength() || editor->cursorOffset() >= lineEnd) return mrvmMakeChar(static_cast<char>(255));
+	return mrvmMakeChar(editor->charAtOffset(editor->cursorOffset()));
 }
 
 static bool isVirtualChar(char c) {
@@ -1796,7 +822,7 @@ static std::string expandTabsString(const std::string &value, bool toVirtuals) {
 				++col;
 		}
 	}
-	enforceStringLength(out);
+	mrvmEnforceStringLength(out);
 	return out;
 }
 
@@ -1825,7 +851,7 @@ static std::string tabsToSpacesString(const std::string &value) {
 				++col;
 		}
 	}
-	enforceStringLength(out);
+	mrvmEnforceStringLength(out);
 	return out;
 }
 
@@ -1930,7 +956,7 @@ static std::string currentEditorWord(MRFileEditor *editor, const std::string &de
 		}
 		session->cursorOffset = pos;
 		session->clearSelection();
-		enforceStringLength(out);
+		mrvmEnforceStringLength(out);
 		return out;
 	}
 	pos = editor->cursorOffset();
@@ -1943,7 +969,7 @@ static std::string currentEditorWord(MRFileEditor *editor, const std::string &de
 	}
 	editor->setCursorOffset(pos, 0);
 	editor->revealCursor(True);
-	enforceStringLength(out);
+	mrvmEnforceStringLength(out);
 	return out;
 }
 
@@ -2872,7 +1898,7 @@ static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2) {
 }
 
 static int encodeIndentStyle(const std::string &style) {
-	const std::string key = upperKey(style);
+	const std::string key = mrvmUpperKey(style);
 	if (key == "AUTOMATIC") return 1;
 	if (key == "SMART") return 2;
 	return 0;
@@ -2890,7 +1916,7 @@ static std::string decodeIndentStyle(int value) {
 }
 
 static int encodeBackupMode(const std::string &method) {
-	const std::string key = upperKey(method);
+	const std::string key = mrvmUpperKey(method);
 	if (key == "BAK_FILE") return 1;
 	if (key == "DIRECTORY") return 2;
 	return 0;
@@ -3065,192 +2091,6 @@ bool modifyCurrentEditWindow() {
 	return true;
 }
 
-static bool queueDeferredUiProcedureForBackgroundSession(const std::string &name, const std::vector<Value> &args, int &errorCode) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-
-	errorCode = 0;
-	if (session == nullptr) return false;
-
-	if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects one string argument.");
-		if (name == "MARQUEE") session->deferredUiCommands.emplace_back(mrducMarqueeInfo, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
-		else if (name == "MARQUEE_WARNING")
-			session->deferredUiCommands.emplace_back(mrducMarqueeWarning, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
-		else
-			session->deferredUiCommands.emplace_back(mrducMarqueeError, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
-		return true;
-	}
-	if (name == "MAKE_MESSAGE") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("MAKE_MESSAGE expects one string argument.");
-		session->deferredUiCommands.emplace_back(mrducMakeMessage, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
-		return true;
-	}
-	if (name == "UI_MESSAGEBOX") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("UI_MESSAGEBOX expects one string argument.");
-		session->deferredUiCommands.emplace_back(mrducMessageBox, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
-		return true;
-	}
-	if (name == "WORKING") {
-		if (!args.empty()) throw std::runtime_error("WORKING expects no arguments.");
-		session->deferredUiCommands.emplace_back(mrducMarqueeWarning, 0, 0, 0, 0, 0, 0, 0, 0, kMacroWorkingMessageText);
-		return true;
-	}
-	if (name == "BRAIN") {
-		if (args.size() != 1 || !isNumeric(args[0])) throw std::runtime_error("BRAIN expects one integer argument.");
-		session->deferredUiCommands.emplace_back(mrducBrain, valueAsInt(args[0]) != 0 ? 1 : 0);
-		return true;
-	}
-	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") throw std::runtime_error(name + " is not allowed during staged background execution.");
-
-	if (name == "PUT_BOX") {
-		if (args.size() != 8 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT || args[5].type != TYPE_INT || !isStringLike(args[6]) || args[7].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int, int, int, int, int, string, int).");
-		session->deferredUiCommands.emplace_back(mrducPutBox, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]), valueAsInt(args[4]), valueAsInt(args[5]), valueAsInt(args[7]), 0, valueAsString(args[6]));
-		return true;
-	}
-	if (name == "WRITE") {
-		if (args.size() != 5 || !isStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT) throw std::runtime_error(name + " expects (string, int, int, int, int).");
-		session->deferredUiCommands.emplace_back(mrducWrite, valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]), valueAsInt(args[4]), 0, 0, 0, 0, valueAsString(args[0]));
-		return true;
-	}
-	if (name == "CLR_LINE") {
-		if (args.empty()) {
-			session->deferredUiCommands.emplace_back(mrducClrLine);
-			return true;
-		}
-		if (args.size() != 3 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("CLR_LINE expects no arguments or (int, int, int).");
-		session->deferredUiCommands.emplace_back(mrducClrLine, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]));
-		return true;
-	}
-	if (name == "GOTOXY") {
-		int x;
-		int y;
-		if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT) throw std::runtime_error("GOTOXY expects (int, int).");
-		x = valueAsInt(args[0]);
-		y = valueAsInt(args[1]);
-		if (session->screenWidth > 0) x = std::max(1, std::min(x, session->screenWidth));
-		if (session->screenHeight > 0) y = std::max(1, std::min(y, session->screenHeight));
-		session->screenCursorX = x;
-		session->screenCursorY = y;
-		session->deferredUiCommands.emplace_back(mrducGotoxy, x, y);
-		return true;
-	}
-	if (name == "PUT_LINE_NUM") {
-		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("PUT_LINE_NUM expects one integer argument.");
-		session->deferredUiCommands.emplace_back(mrducPutLineNum, valueAsInt(args[0]));
-		return true;
-	}
-	if (name == "PUT_COL_NUM") {
-		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("PUT_COL_NUM expects one integer argument.");
-		session->deferredUiCommands.emplace_back(mrducPutColNum, valueAsInt(args[0]));
-		return true;
-	}
-	if (name == "SCROLL_BOX_UP" || name == "SCROLL_BOX_DN") {
-		if (args.size() != 5 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int, int, int, int).");
-		session->deferredUiCommands.emplace_back(name == "SCROLL_BOX_UP" ? mrducScrollBoxUp : mrducScrollBoxDn, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]), valueAsInt(args[4]), 0, 0, 0);
-		return true;
-	}
-	if (name == "CLEAR_SCREEN") {
-		if (!(args.empty() || (args.size() == 1 && args[0].type == TYPE_INT))) throw std::runtime_error("CLEAR_SCREEN expects no arguments or one integer argument.");
-		session->screenCursorX = 1;
-		session->screenCursorY = 1;
-		session->deferredUiCommands.emplace_back(mrducClearScreen, args.empty() ? 0x07 : valueAsInt(args[0]));
-		return true;
-	}
-	if (name == "KILL_BOX") {
-		if (!args.empty()) throw std::runtime_error("KILL_BOX expects no arguments.");
-		session->deferredUiCommands.emplace_back(mrducKillBox);
-		return true;
-	}
-
-	if (name == "CREATE_WINDOW") {
-		session->deferredUiCommands.emplace_back(mrducCreateWindow);
-		if (session->windowCount < std::numeric_limits<int>::max()) ++session->windowCount;
-		session->currentWindow = std::max(1, session->windowCount);
-		session->linkStatus = 0;
-		return true;
-	}
-	if (name == "DELETE_WINDOW") {
-		session->deferredUiCommands.emplace_back(mrducDeleteWindow);
-		if (session->windowCount > 0) --session->windowCount;
-		if (session->windowCount <= 0) {
-			session->windowCount = 0;
-			session->currentWindow = 0;
-			session->linkStatus = 0;
-		} else if (session->currentWindow > session->windowCount)
-			session->currentWindow = session->windowCount;
-		return true;
-	}
-	if (name == "MODIFY_WINDOW") {
-		session->deferredUiCommands.emplace_back(mrducModifyWindow);
-		return true;
-	}
-	if (name == "LINK_WINDOW") {
-		session->deferredUiCommands.emplace_back(mrducLinkWindow);
-		session->linkStatus = 1;
-		return true;
-	}
-	if (name == "UNLINK_WINDOW") {
-		session->deferredUiCommands.emplace_back(mrducUnlinkWindow);
-		session->linkStatus = 0;
-		return true;
-	}
-	if (name == "ZOOM") {
-		session->deferredUiCommands.emplace_back(mrducZoom);
-		return true;
-	}
-	if (name == "REDRAW") {
-		session->deferredUiCommands.emplace_back(mrducRedraw);
-		return true;
-	}
-	if (name == "NEW_SCREEN") {
-		session->deferredUiCommands.emplace_back(mrducNewScreen);
-		return true;
-	}
-	if (name == "SWITCH_WINDOW") {
-		int index;
-		int count;
-		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("SWITCH_WINDOW expects one integer argument.");
-		index = valueAsInt(args[0]);
-		count = session->windowCount;
-		if (count > 0) {
-			if (index <= 0) index = 1;
-			if (index > count) index = ((index - 1) % count) + 1;
-			session->currentWindow = index;
-		}
-		session->deferredUiCommands.emplace_back(mrducSwitchWindow, index);
-		return true;
-	}
-	if (name == "SIZE_WINDOW") {
-		int x1;
-		int y1;
-		int x2;
-		int y2;
-		if (args.size() != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT) throw std::runtime_error("SIZE_WINDOW expects four integer arguments.");
-		x1 = valueAsInt(args[0]);
-		y1 = valueAsInt(args[1]);
-		x2 = valueAsInt(args[2]);
-		y2 = valueAsInt(args[3]);
-		session->windowGeometryValid = true;
-		session->windowX1 = x1;
-		session->windowY1 = y1;
-		session->windowX2 = x2;
-		session->windowY2 = y2;
-		session->deferredUiCommands.emplace_back(mrducSizeWindow, x1, y1, x2, y2);
-		return true;
-	}
-	return false;
-}
-
-static bool enqueueDeferredUiCommandForBackgroundSession(const MRMacroDeferredUiCommand &command, int &errorCode) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-
-	errorCode = 0;
-	if (session == nullptr) return false;
-	session->deferredUiCommands.push_back(command);
-	return true;
-}
-
-
 bool moveEditorTabRight(MRFileEditor *editor) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 	int col;
@@ -3332,93 +2172,93 @@ static std::string formatCurrentTime() {
 }
 
 static Value loadSpecialVariable(const std::string &name, bool &handled) {
-	std::string key = upperKey(name);
+	std::string key = mrvmUpperKey(name);
 	handled = true;
-	if (key == "RETURN_INT") return makeInt(runtimeReturnInt());
-	if (key == "RETURN_STR") return makeString(runtimeReturnStr());
-	if (key == "ERROR_LEVEL") return makeInt(runtimeErrorLevel());
-	if (key == "IGNORE_CASE") return makeInt(currentRuntimeIgnoreCase() ? 1 : 0);
-	if (key == "REG_EXP_STAT") return makeInt(currentRegexStatusValue());
-	if (key == "TAB_EXPAND") return makeInt(currentRuntimeTabExpand() ? 1 : 0);
-	if (key == "DISPLAY_TABS") return makeInt(configuredDisplayTabsSetting() ? 1 : 0);
-	if (key == "SHADOW_CHAR") return makeInt(g_runtimeEnv.shadowChar);
-	if (key == "REFRESH") return makeInt(g_runtimeEnv.refresh);
-	if (key == "MESSAGES") return makeInt(configuredMenulineMessages() ? 1 : 0);
-	if (key == "MOUSE") return makeInt(g_runtimeEnv.mouse);
-	if (key == "LOGO_SCREEN") return makeInt(g_runtimeEnv.logoScreen);
-	if (key == "EXPLOSIONS") return makeInt(g_runtimeEnv.explosions);
-	if (key == "TRUNCATE_SPACES") return makeInt(configuredEditSetupSettings().truncateSpaces ? 1 : 0);
+	if (key == "RETURN_INT") return mrvmMakeInt(runtimeReturnInt());
+	if (key == "RETURN_STR") return mrvmMakeString(runtimeReturnStr());
+	if (key == "ERROR_LEVEL") return mrvmMakeInt(runtimeErrorLevel());
+	if (key == "IGNORE_CASE") return mrvmMakeInt(currentRuntimeIgnoreCase() ? 1 : 0);
+	if (key == "REG_EXP_STAT") return mrvmMakeInt(currentRegexStatusValue());
+	if (key == "TAB_EXPAND") return mrvmMakeInt(currentRuntimeTabExpand() ? 1 : 0);
+	if (key == "DISPLAY_TABS") return mrvmMakeInt(configuredDisplayTabsSetting() ? 1 : 0);
+	if (key == "SHADOW_CHAR") return mrvmMakeInt(g_runtimeEnv.shadowChar);
+	if (key == "REFRESH") return mrvmMakeInt(g_runtimeEnv.refresh);
+	if (key == "MESSAGES") return mrvmMakeInt(configuredMenulineMessages() ? 1 : 0);
+	if (key == "MOUSE") return mrvmMakeInt(g_runtimeEnv.mouse);
+	if (key == "LOGO_SCREEN") return mrvmMakeInt(g_runtimeEnv.logoScreen);
+	if (key == "EXPLOSIONS") return mrvmMakeInt(g_runtimeEnv.explosions);
+	if (key == "TRUNCATE_SPACES") return mrvmMakeInt(configuredEditSetupSettings().truncateSpaces ? 1 : 0);
 	if (key == "BACKUPS") {
 		const MREditSetupSettings settings = configuredEditSetupSettings();
-		if (!settings.backupFiles) return makeInt(0);
-		return makeInt(encodeBackupMode(settings.backupMethod));
+		if (!settings.backupFiles) return mrvmMakeInt(0);
+		return mrvmMakeInt(encodeBackupMode(settings.backupMethod));
 	}
 	if (key == "AUTOSAVE") {
 		const MREditSetupSettings settings = configuredEditSetupSettings();
-		return makeInt((settings.autosaveInactivitySeconds > 0 || settings.autosaveIntervalSeconds > 0) ? 1 : 0);
+		return mrvmMakeInt((settings.autosaveInactivitySeconds > 0 || settings.autosaveIntervalSeconds > 0) ? 1 : 0);
 	}
-	if (key == "UNDO_STAT") return makeInt(g_runtimeEnv.undoStat);
-	if (key == "FORMAT_STAT") return makeInt(g_runtimeEnv.formatStat);
-	if (key == "WRAP_STAT") return makeInt(configuredEditSetupSettings().wordWrap ? 1 : 0);
-	if (key == "MEM_ALLOC") return makeInt(g_runtimeEnv.memAlloc);
-	if (key == "LEFT_MARGIN") return makeInt(configuredEditSetupSettings().leftMargin);
-	if (key == "RIGHT_MARGIN") return makeInt(configuredEditSetupSettings().rightMargin);
-	if (key == "FORMAT_RULER") return makeInt(configuredEditSetupSettings().formatRuler ? 1 : 0);
-	if (key == "INDENT_STYLE") return makeInt(encodeIndentStyle(configuredEditSetupSettings().indentStyle));
-	if (key == "INS_CURSOR") return makeInt(g_runtimeEnv.insCursor);
-	if (key == "OVR_CURSOR") return makeInt(g_runtimeEnv.ovrCursor);
-	if (key == "CTRL_HELP") return makeInt(g_runtimeEnv.ctrlHelp);
-	if (key == "MOUSE_H_SENSE") return makeInt(g_runtimeEnv.mouseHSense);
-	if (key == "MOUSE_V_SENSE") return makeInt(g_runtimeEnv.mouseVSense);
-	if (key == "WINDOW_ATTR") return makeInt(currentWindowAttrValue());
-	if (key == "TEXT_COLOR") return makeInt(readWindowColorValue(0));
-	if (key == "CHANGE_COLOR") return makeInt(readWindowColorValue(1));
-	if (key == "BACK_COLOR") return makeInt(readOtherColorValue(9));
-	if (key == "MENU_COLOR") return makeInt(readMenuDialogColorValue(0));
-	if (key == "STAT_COLOR") return makeInt(readOtherColorValue(0));
-	if (key == "ERROR_COLOR") return makeInt(readOtherColorValue(4));
-	if (key == "SHADOW_COLOR") return makeInt(readMenuDialogColorValue(7));
-	if (key == "STATUS_ROW") return makeInt(currentStatusRowValue());
-	if (key == "MESSAGE_ROW") return makeInt(currentMessageRowValue());
-	if (key == "MAX_WINDOW_ROW") return makeInt(currentMaxWindowRowValue());
-	if (key == "MIN_WINDOW_ROW") return makeInt(currentMinWindowRowValue());
-	if (key == "NAME_LINE") return makeInt(g_runtimeEnv.nameLine);
-	if (key == "INSERT_MODE") return makeInt(currentEditorInsertMode() ? 1 : 0);
-	if (key == "INDENT_LEVEL") return makeInt(currentEditorIndentLevel());
-	if (key == "MPARM_STR") return makeString(runtimeParameterString());
-	if (key == "DATE") return makeString(formatCurrentDate());
-	if (key == "TIME") return makeString(formatCurrentTime());
-	if (key == "COMSPEC") return makeString(g_runtimeEnv.shellPath);
-	if (key == "TEMP_PATH") return makeString(configuredTempDirectoryPath());
-	if (key == "MR_PATH") return makeString(g_runtimeEnv.executableDir);
-	if (key == "OS_VERSION") return makeString(g_runtimeEnv.shellVersion);
-	if (key == "PARAM_COUNT") return makeInt(static_cast<int>(g_runtimeEnv.processArgs.size()));
-	if (key == "CPU") return makeInt(detectCpuCode());
-	if (key == "DOC_MODE") return makeInt(g_runtimeEnv.docMode);
-	if (key == "PRINT_MARGIN") return makeInt(g_runtimeEnv.printMargin);
-	if (key == "C_COL") return makeInt(currentEditorColumn(currentEditor()));
-	if (key == "C_LINE") return makeInt(currentEditorLineNumber(currentEditor()));
-	if (key == "C_ROW") return makeInt(currentEditorRow(currentEditor()));
-	if (key == "C_PAGE") return makeInt(currentEditorPage(currentEditor()));
-	if (key == "PG_LINE") return makeInt(currentEditorPageLine(currentEditor()));
-	if (key == "AT_EOF") return makeInt(currentEditorAtEof(currentEditor()) ? 1 : 0);
-	if (key == "AT_EOL") return makeInt(currentEditorAtEol(currentEditor()) ? 1 : 0);
-	if (key == "CUR_WINDOW") return makeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->currentWindow : currentEditWindowIndex());
-	if (key == "LINK_STAT") return makeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->linkStatus : currentLinkStatus());
-	if (key == "WINDOW_COUNT") return makeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->windowCount : countEditWindows());
-	if (key == "KEY1") return makeInt(g_runtimeEnv.key1);
-	if (key == "KEY2") return makeInt(g_runtimeEnv.key2);
+	if (key == "UNDO_STAT") return mrvmMakeInt(g_runtimeEnv.undoStat);
+	if (key == "FORMAT_STAT") return mrvmMakeInt(g_runtimeEnv.formatStat);
+	if (key == "WRAP_STAT") return mrvmMakeInt(configuredEditSetupSettings().wordWrap ? 1 : 0);
+	if (key == "MEM_ALLOC") return mrvmMakeInt(g_runtimeEnv.memAlloc);
+	if (key == "LEFT_MARGIN") return mrvmMakeInt(configuredEditSetupSettings().leftMargin);
+	if (key == "RIGHT_MARGIN") return mrvmMakeInt(configuredEditSetupSettings().rightMargin);
+	if (key == "FORMAT_RULER") return mrvmMakeInt(configuredEditSetupSettings().formatRuler ? 1 : 0);
+	if (key == "INDENT_STYLE") return mrvmMakeInt(encodeIndentStyle(configuredEditSetupSettings().indentStyle));
+	if (key == "INS_CURSOR") return mrvmMakeInt(g_runtimeEnv.insCursor);
+	if (key == "OVR_CURSOR") return mrvmMakeInt(g_runtimeEnv.ovrCursor);
+	if (key == "CTRL_HELP") return mrvmMakeInt(g_runtimeEnv.ctrlHelp);
+	if (key == "MOUSE_H_SENSE") return mrvmMakeInt(g_runtimeEnv.mouseHSense);
+	if (key == "MOUSE_V_SENSE") return mrvmMakeInt(g_runtimeEnv.mouseVSense);
+	if (key == "WINDOW_ATTR") return mrvmMakeInt(currentWindowAttrValue());
+	if (key == "TEXT_COLOR") return mrvmMakeInt(readWindowColorValue(0));
+	if (key == "CHANGE_COLOR") return mrvmMakeInt(readWindowColorValue(1));
+	if (key == "BACK_COLOR") return mrvmMakeInt(readOtherColorValue(9));
+	if (key == "MENU_COLOR") return mrvmMakeInt(readMenuDialogColorValue(0));
+	if (key == "STAT_COLOR") return mrvmMakeInt(readOtherColorValue(0));
+	if (key == "ERROR_COLOR") return mrvmMakeInt(readOtherColorValue(4));
+	if (key == "SHADOW_COLOR") return mrvmMakeInt(readMenuDialogColorValue(7));
+	if (key == "STATUS_ROW") return mrvmMakeInt(currentStatusRowValue());
+	if (key == "MESSAGE_ROW") return mrvmMakeInt(currentMessageRowValue());
+	if (key == "MAX_WINDOW_ROW") return mrvmMakeInt(currentMaxWindowRowValue());
+	if (key == "MIN_WINDOW_ROW") return mrvmMakeInt(currentMinWindowRowValue());
+	if (key == "NAME_LINE") return mrvmMakeInt(g_runtimeEnv.nameLine);
+	if (key == "INSERT_MODE") return mrvmMakeInt(currentEditorInsertMode() ? 1 : 0);
+	if (key == "INDENT_LEVEL") return mrvmMakeInt(currentEditorIndentLevel());
+	if (key == "MPARM_STR") return mrvmMakeString(runtimeParameterString());
+	if (key == "DATE") return mrvmMakeString(formatCurrentDate());
+	if (key == "TIME") return mrvmMakeString(formatCurrentTime());
+	if (key == "COMSPEC") return mrvmMakeString(g_runtimeEnv.shellPath);
+	if (key == "TEMP_PATH") return mrvmMakeString(configuredTempDirectoryPath());
+	if (key == "MR_PATH") return mrvmMakeString(g_runtimeEnv.executableDir);
+	if (key == "OS_VERSION") return mrvmMakeString(g_runtimeEnv.shellVersion);
+	if (key == "PARAM_COUNT") return mrvmMakeInt(static_cast<int>(g_runtimeEnv.processArgs.size()));
+	if (key == "CPU") return mrvmMakeInt(mrvmDetectCpuCode());
+	if (key == "DOC_MODE") return mrvmMakeInt(g_runtimeEnv.docMode);
+	if (key == "PRINT_MARGIN") return mrvmMakeInt(g_runtimeEnv.printMargin);
+	if (key == "C_COL") return mrvmMakeInt(currentEditorColumn(currentEditor()));
+	if (key == "C_LINE") return mrvmMakeInt(currentEditorLineNumber(currentEditor()));
+	if (key == "C_ROW") return mrvmMakeInt(currentEditorRow(currentEditor()));
+	if (key == "C_PAGE") return mrvmMakeInt(currentEditorPage(currentEditor()));
+	if (key == "PG_LINE") return mrvmMakeInt(currentEditorPageLine(currentEditor()));
+	if (key == "AT_EOF") return mrvmMakeInt(currentEditorAtEof(currentEditor()) ? 1 : 0);
+	if (key == "AT_EOL") return mrvmMakeInt(currentEditorAtEol(currentEditor()) ? 1 : 0);
+	if (key == "CUR_WINDOW") return mrvmMakeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->currentWindow : currentEditWindowIndex());
+	if (key == "LINK_STAT") return mrvmMakeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->linkStatus : currentLinkStatus());
+	if (key == "WINDOW_COUNT") return mrvmMakeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->windowCount : countEditWindows());
+	if (key == "KEY1") return mrvmMakeInt(g_runtimeEnv.key1);
+	if (key == "KEY2") return mrvmMakeInt(g_runtimeEnv.key2);
 	if (key == "LAST_FILE_ATTR" || key == "LAST_FILE_SIZE" || key == "LAST_FILE_TIME") {
 		int attr = 0;
 		int size = 0;
 		int packedTime = 0;
-		if (!readFileMetadata(g_runtimeEnv.lastFileName, &attr, &size, &packedTime)) return makeInt(0);
-		if (key == "LAST_FILE_ATTR") return makeInt(attr);
-		if (key == "LAST_FILE_SIZE") return makeInt(size);
-		return makeInt(packedTime);
+		if (!mrvmReadFileMetadata(g_runtimeEnv.lastFileName, &attr, &size, &packedTime)) return mrvmMakeInt(0);
+		if (key == "LAST_FILE_ATTR") return mrvmMakeInt(attr);
+		if (key == "LAST_FILE_SIZE") return mrvmMakeInt(size);
+		return mrvmMakeInt(packedTime);
 	}
-	if (key == "VIRTUAL_DESKTOPS") return makeInt(configuredVirtualDesktops());
-	if (key == "CYCLIC_VIRTUAL_DESKTOPS") return makeInt(configuredCyclicVirtualDesktops() ? 1 : 0);
+	if (key == "VIRTUAL_DESKTOPS") return mrvmMakeInt(configuredVirtualDesktops());
+	if (key == "CYCLIC_VIRTUAL_DESKTOPS") return mrvmMakeInt(configuredCyclicVirtualDesktops() ? 1 : 0);
 	if (key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" || key == "WIN_Y2") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
 		int x1;
@@ -3426,65 +2266,65 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		int x2;
 		int y2;
 		if (session != nullptr) {
-			if (!session->windowGeometryValid) return makeInt(0);
+			if (!session->windowGeometryValid) return mrvmMakeInt(0);
 			x1 = session->windowX1;
 			y1 = session->windowY1;
 			x2 = session->windowX2;
 			y2 = session->windowY2;
 		} else {
-			if (!currentWindowGeometry(x1, y1, x2, y2)) return makeInt(0);
+			if (!currentWindowGeometry(x1, y1, x2, y2)) return mrvmMakeInt(0);
 		}
-		if (key == "WIN_X1") return makeInt(x1);
-		if (key == "WIN_Y1") return makeInt(y1);
-		if (key == "WIN_X2") return makeInt(x2);
-		return makeInt(y2);
+		if (key == "WIN_X1") return mrvmMakeInt(x1);
+		if (key == "WIN_Y1") return mrvmMakeInt(y1);
+		if (key == "WIN_X2") return mrvmMakeInt(x2);
+		return mrvmMakeInt(y2);
 	}
 	if (key == "BLOCK_STAT") {
 		MREditWindow *win = activeMacroEditWindow();
-		return makeInt(blockStatusValue(win));
+		return mrvmMakeInt(blockStatusValue(win));
 	}
 	if (key == "BLOCK_LINE1") {
 		MREditWindow *win = activeMacroEditWindow();
-		return makeInt(blockLine1Value(win, currentEditor()));
+		return mrvmMakeInt(blockLine1Value(win, currentEditor()));
 	}
 	if (key == "BLOCK_LINE2") {
 		MREditWindow *win = activeMacroEditWindow();
-		return makeInt(blockLine2Value(win, currentEditor()));
+		return mrvmMakeInt(blockLine2Value(win, currentEditor()));
 	}
 	if (key == "BLOCK_COL1") {
 		MREditWindow *win = activeMacroEditWindow();
-		return makeInt(blockCol1Value(win, currentEditor()));
+		return mrvmMakeInt(blockCol1Value(win, currentEditor()));
 	}
 	if (key == "BLOCK_COL2") {
 		MREditWindow *win = activeMacroEditWindow();
-		return makeInt(blockCol2Value(win, currentEditor()));
+		return mrvmMakeInt(blockCol2Value(win, currentEditor()));
 	}
 	if (key == "MARKING") {
 		MREditWindow *win = activeMacroEditWindow();
-		return makeInt(blockMarkingValue(win) ? 1 : 0);
+		return mrvmMakeInt(blockMarkingValue(win) ? 1 : 0);
 	}
-	if (key == "LAST_FILE_NAME") return makeString(g_runtimeEnv.lastFileName);
+	if (key == "LAST_FILE_NAME") return mrvmMakeString(g_runtimeEnv.lastFileName);
 	if (key == "FOUND_STR" || key == "SEARCH_FILE" || key == "FOUND_X" || key == "FOUND_Y") {
 		const SearchMatchSnapshot snapshot = currentSearchMatchSnapshot();
 		if (!snapshot.valid) {
-			if (key == "FOUND_STR" || key == "SEARCH_FILE") return makeString("");
-			return makeInt(0);
+			if (key == "FOUND_STR" || key == "SEARCH_FILE") return mrvmMakeString("");
+			return mrvmMakeInt(0);
 		}
-		if (key == "FOUND_STR") return makeString(snapshot.foundText);
-		if (key == "SEARCH_FILE") return makeString(snapshot.fileName);
-		if (key == "FOUND_X") return makeInt(snapshot.foundX);
-		return makeInt(snapshot.foundY);
+		if (key == "FOUND_STR") return mrvmMakeString(snapshot.foundText);
+		if (key == "SEARCH_FILE") return mrvmMakeString(snapshot.fileName);
+		if (key == "FOUND_X") return mrvmMakeInt(snapshot.foundX);
+		return mrvmMakeInt(snapshot.foundY);
 	}
-	if (key == "GET_LINE") return makeString(currentEditorLineText(currentEditor()));
-	if (key == "FORMAT_LINE") return makeString(configuredEditSetupSettings().formatLine);
-	if (key == "DEFAULT_FORMAT") return makeString(defaultFormatLineValue());
-	if (key == "PAGE_STR") return makeString(configuredEditSetupSettings().pageBreak);
-	if (key == "WORD_DELIMITS") return makeString(configuredEditSetupSettings().wordDelimiters);
+	if (key == "GET_LINE") return mrvmMakeString(currentEditorLineText(currentEditor()));
+	if (key == "FORMAT_LINE") return mrvmMakeString(configuredEditSetupSettings().formatLine);
+	if (key == "DEFAULT_FORMAT") return mrvmMakeString(defaultFormatLineValue());
+	if (key == "PAGE_STR") return mrvmMakeString(configuredEditSetupSettings().pageBreak);
+	if (key == "WORD_DELIMITS") return mrvmMakeString(configuredEditSetupSettings().wordDelimiters);
 	if (key == "CUR_CHAR") return currentEditorCharValue();
 	if (key == "FIRST_SAVE" || key == "BUFFER_ID" || key == "TMP_FILE" || key == "TMP_FILE_NAME" || key == "FILE_CHANGED" || key == "FILE_NAME" || key == "CUR_FILE_ATTR" || key == "CUR_FILE_SIZE" || key == "READ_ONLY") return loadCurrentFileState(key);
 	if (key == "FIRST_RUN") {
-		if (!g_runtimeEnv.macroStack.empty()) return makeInt(g_runtimeEnv.macroStack.back().firstRun ? 1 : 0);
-		return makeInt(0);
+		if (!g_runtimeEnv.macroStack.empty()) return mrvmMakeInt(g_runtimeEnv.macroStack.back().firstRun ? 1 : 0);
+		return mrvmMakeInt(0);
 	}
 	if (key == "FIRST_MACRO") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
@@ -3493,17 +2333,20 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 			while (session->macroEnumIndex < session->macroOrder.size()) {
 				const std::string &macroKey = session->macroOrder[session->macroEnumIndex++];
 				std::map<std::string, std::string>::const_iterator it = session->loadedMacroDisplayNames.find(macroKey);
-				if (it != session->loadedMacroDisplayNames.end()) return makeString(it->second);
+				if (it != session->loadedMacroDisplayNames.end()) return mrvmMakeString(it->second);
 			}
 		} else {
-			g_runtimeEnv.macroEnumIndex = 0;
-			while (g_runtimeEnv.macroEnumIndex < g_runtimeEnv.macroOrder.size()) {
-				const std::string &macroKey = g_runtimeEnv.macroOrder[g_runtimeEnv.macroEnumIndex++];
-				std::map<std::string, MacroRef>::const_iterator it = g_runtimeEnv.loadedMacros.find(macroKey);
-				if (it != g_runtimeEnv.loadedMacros.end()) return makeString(it->second.displayName);
+			const std::vector<std::string> orderValues = macroCatalogMacroOrder();
+			std::size_t enumIndex = 0;
+			setMacroCatalogMacroEnumIndex(enumIndex);
+			while (enumIndex < orderValues.size()) {
+				const std::string macroKey = orderValues[enumIndex++];
+				MacroRef macroRef;
+				setMacroCatalogMacroEnumIndex(enumIndex);
+				if (readLoadedMacroByKey(macroKey, macroRef)) return mrvmMakeString(macroRef.displayName);
 			}
 		}
-		return makeString("");
+		return mrvmMakeString("");
 	}
 	if (key == "NEXT_MACRO") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
@@ -3511,76 +2354,79 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 			while (session->macroEnumIndex < session->macroOrder.size()) {
 				const std::string &macroKey = session->macroOrder[session->macroEnumIndex++];
 				std::map<std::string, std::string>::const_iterator it = session->loadedMacroDisplayNames.find(macroKey);
-				if (it != session->loadedMacroDisplayNames.end()) return makeString(it->second);
+				if (it != session->loadedMacroDisplayNames.end()) return mrvmMakeString(it->second);
 			}
 		} else {
-			while (g_runtimeEnv.macroEnumIndex < g_runtimeEnv.macroOrder.size()) {
-				const std::string &macroKey = g_runtimeEnv.macroOrder[g_runtimeEnv.macroEnumIndex++];
-				std::map<std::string, MacroRef>::const_iterator it = g_runtimeEnv.loadedMacros.find(macroKey);
-				if (it != g_runtimeEnv.loadedMacros.end()) return makeString(it->second.displayName);
+			const std::vector<std::string> orderValues = macroCatalogMacroOrder();
+			std::size_t enumIndex = macroCatalogMacroEnumIndex();
+			while (enumIndex < orderValues.size()) {
+				const std::string macroKey = orderValues[enumIndex++];
+				MacroRef macroRef;
+				setMacroCatalogMacroEnumIndex(enumIndex);
+				if (readLoadedMacroByKey(macroKey, macroRef)) return mrvmMakeString(macroRef.displayName);
 			}
 		}
-		return makeString("");
+		return mrvmMakeString("");
 	}
 	handled = false;
-	return makeInt(0);
+	return mrvmMakeInt(0);
 }
 
 static bool storeSpecialVariable(const std::string &name, const Value &value) {
-	std::string key = upperKey(name);
+	std::string key = mrvmUpperKey(name);
 	if (key == "RETURN_INT") {
-		runtimeReturnInt() = valueAsInt(value);
+		runtimeReturnInt() = mrvmValueAsInt(value);
 		return true;
 	}
 	if (key == "RETURN_STR") {
-		runtimeReturnStr() = valueAsString(value);
-		enforceStringLength(runtimeReturnStr());
+		runtimeReturnStr() = mrvmValueAsString(value);
+		mrvmEnforceStringLength(runtimeReturnStr());
 		return true;
 	}
 	if (key == "ERROR_LEVEL") {
-		runtimeErrorLevel() = valueAsInt(value);
+		runtimeErrorLevel() = mrvmValueAsInt(value);
 		return true;
 	}
 	if (key == "IGNORE_CASE") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
-		if (session != nullptr) session->ignoreCase = valueAsInt(value) != 0;
+		if (session != nullptr) session->ignoreCase = mrvmValueAsInt(value) != 0;
 		else
-			g_runtimeEnv.ignoreCase = valueAsInt(value) != 0;
+			g_runtimeEnv.ignoreCase = mrvmValueAsInt(value) != 0;
 		return true;
 	}
-	if (key == "REG_EXP_STAT") return setCurrentRegexStatus(valueAsInt(value) != 0);
+	if (key == "REG_EXP_STAT") return setCurrentRegexStatus(mrvmValueAsInt(value) != 0);
 	if (key == "TAB_EXPAND") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
-		if (session != nullptr) session->tabExpand = valueAsInt(value) != 0;
+		if (session != nullptr) session->tabExpand = mrvmValueAsInt(value) != 0;
 		else
-			g_runtimeEnv.tabExpand = valueAsInt(value) != 0;
+			g_runtimeEnv.tabExpand = mrvmValueAsInt(value) != 0;
 		return true;
 	}
 	if (key == "SHADOW_CHAR") {
-		g_runtimeEnv.shadowChar = std::clamp(valueAsInt(value), 0, 255);
+		g_runtimeEnv.shadowChar = std::clamp(mrvmValueAsInt(value), 0, 255);
 		return true;
 	}
 	if (key == "REFRESH") {
-		g_runtimeEnv.refresh = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.refresh = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
-	if (key == "MESSAGES") return setConfiguredMenulineMessages(valueAsInt(value) != 0, nullptr);
+	if (key == "MESSAGES") return setConfiguredMenulineMessages(mrvmValueAsInt(value) != 0, nullptr);
 	if (key == "MOUSE") {
-		g_runtimeEnv.mouse = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.mouse = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
 	if (key == "LOGO_SCREEN") {
-		g_runtimeEnv.logoScreen = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.logoScreen = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
 	if (key == "EXPLOSIONS") {
-		g_runtimeEnv.explosions = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.explosions = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
-	if (key == "TRUNCATE_SPACES") return applyConfiguredEditSetupValue("TRUNCATE_SPACES", valueAsInt(value) != 0 ? "TRUE" : "FALSE", nullptr);
+	if (key == "TRUNCATE_SPACES") return applyConfiguredEditSetupValue("TRUNCATE_SPACES", mrvmValueAsInt(value) != 0 ? "TRUE" : "FALSE", nullptr);
 	if (key == "BACKUPS") {
 		MREditSetupSettings settings = configuredEditSetupSettings();
-		switch (valueAsInt(value)) {
+		switch (mrvmValueAsInt(value)) {
 			case 2:
 				settings.backupMethod = "DIRECTORY";
 				settings.backupFiles = true;
@@ -3598,7 +2444,7 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	}
 	if (key == "AUTOSAVE") {
 		MREditSetupSettings settings = configuredEditSetupSettings();
-		if (valueAsInt(value) != 0) {
+		if (mrvmValueAsInt(value) != 0) {
 			const MREditSetupSettings defaults = resolveEditSetupDefaults();
 			if (settings.autosaveInactivitySeconds <= 0) settings.autosaveInactivitySeconds = defaults.autosaveInactivitySeconds;
 			if (settings.autosaveIntervalSeconds <= 0) settings.autosaveIntervalSeconds = defaults.autosaveIntervalSeconds;
@@ -3609,99 +2455,99 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 		return setConfiguredEditSetupSettings(settings, nullptr);
 	}
 	if (key == "UNDO_STAT") {
-		g_runtimeEnv.undoStat = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.undoStat = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
 	if (key == "FORMAT_STAT") {
-		g_runtimeEnv.formatStat = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.formatStat = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
-	if (key == "WRAP_STAT") return applyConfiguredEditSetupValue("WORD_WRAP", valueAsInt(value) != 0 ? "TRUE" : "FALSE", nullptr);
+	if (key == "WRAP_STAT") return applyConfiguredEditSetupValue("WORD_WRAP", mrvmValueAsInt(value) != 0 ? "TRUE" : "FALSE", nullptr);
 	if (key == "MEM_ALLOC") {
-		g_runtimeEnv.memAlloc = std::max(0, valueAsInt(value));
+		g_runtimeEnv.memAlloc = std::max(0, mrvmValueAsInt(value));
 		return true;
 	}
-	if (key == "LEFT_MARGIN") return applyConfiguredEditSetupValue("LEFT_MARGIN", std::to_string(valueAsInt(value)), nullptr);
-	if (key == "RIGHT_MARGIN") return applyConfiguredEditSetupValue("RIGHT_MARGIN", std::to_string(valueAsInt(value)), nullptr);
-	if (key == "FORMAT_RULER") return applyConfiguredEditSetupValue("FORMAT_RULER", valueAsInt(value) != 0 ? "TRUE" : "FALSE", nullptr);
-	if (key == "INDENT_STYLE") return applyConfiguredEditSetupValue("INDENT_STYLE", decodeIndentStyle(valueAsInt(value)), nullptr);
+	if (key == "LEFT_MARGIN") return applyConfiguredEditSetupValue("LEFT_MARGIN", std::to_string(mrvmValueAsInt(value)), nullptr);
+	if (key == "RIGHT_MARGIN") return applyConfiguredEditSetupValue("RIGHT_MARGIN", std::to_string(mrvmValueAsInt(value)), nullptr);
+	if (key == "FORMAT_RULER") return applyConfiguredEditSetupValue("FORMAT_RULER", mrvmValueAsInt(value) != 0 ? "TRUE" : "FALSE", nullptr);
+	if (key == "INDENT_STYLE") return applyConfiguredEditSetupValue("INDENT_STYLE", decodeIndentStyle(mrvmValueAsInt(value)), nullptr);
 	if (key == "INS_CURSOR") {
-		g_runtimeEnv.insCursor = std::clamp(valueAsInt(value), 0, 3);
+		g_runtimeEnv.insCursor = std::clamp(mrvmValueAsInt(value), 0, 3);
 		return true;
 	}
 	if (key == "OVR_CURSOR") {
-		g_runtimeEnv.ovrCursor = std::clamp(valueAsInt(value), 0, 3);
+		g_runtimeEnv.ovrCursor = std::clamp(mrvmValueAsInt(value), 0, 3);
 		return true;
 	}
 	if (key == "CTRL_HELP") {
-		g_runtimeEnv.ctrlHelp = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.ctrlHelp = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
 	if (key == "MOUSE_H_SENSE") {
-		g_runtimeEnv.mouseHSense = std::max(0, valueAsInt(value));
+		g_runtimeEnv.mouseHSense = std::max(0, mrvmValueAsInt(value));
 		return true;
 	}
 	if (key == "MOUSE_V_SENSE") {
-		g_runtimeEnv.mouseVSense = std::max(0, valueAsInt(value));
+		g_runtimeEnv.mouseVSense = std::max(0, mrvmValueAsInt(value));
 		return true;
 	}
-	if (key == "WINDOW_ATTR") return setCurrentWindowAttrValue(valueAsInt(value));
-	if (key == "TEXT_COLOR") return writeWindowColorValue(0, valueAsInt(value));
-	if (key == "CHANGE_COLOR") return writeWindowColorValue(1, valueAsInt(value));
-	if (key == "BACK_COLOR") return writeOtherColorValue(9, valueAsInt(value));
-	if (key == "MENU_COLOR") return writeMenuDialogColorValue(0, valueAsInt(value));
-	if (key == "STAT_COLOR") return writeOtherColorValue(0, valueAsInt(value));
-	if (key == "ERROR_COLOR") return writeOtherColorValue(4, valueAsInt(value));
-	if (key == "SHADOW_COLOR") return writeMenuDialogColorValue(7, valueAsInt(value));
+	if (key == "WINDOW_ATTR") return setCurrentWindowAttrValue(mrvmValueAsInt(value));
+	if (key == "TEXT_COLOR") return writeWindowColorValue(0, mrvmValueAsInt(value));
+	if (key == "CHANGE_COLOR") return writeWindowColorValue(1, mrvmValueAsInt(value));
+	if (key == "BACK_COLOR") return writeOtherColorValue(9, mrvmValueAsInt(value));
+	if (key == "MENU_COLOR") return writeMenuDialogColorValue(0, mrvmValueAsInt(value));
+	if (key == "STAT_COLOR") return writeOtherColorValue(0, mrvmValueAsInt(value));
+	if (key == "ERROR_COLOR") return writeOtherColorValue(4, mrvmValueAsInt(value));
+	if (key == "SHADOW_COLOR") return writeMenuDialogColorValue(7, mrvmValueAsInt(value));
 	if (key == "STATUS_ROW") {
-		g_runtimeEnv.statusRow = std::max(0, valueAsInt(value));
+		g_runtimeEnv.statusRow = std::max(0, mrvmValueAsInt(value));
 		return true;
 	}
 	if (key == "MESSAGE_ROW") {
-		g_runtimeEnv.messageRow = std::max(0, valueAsInt(value));
+		g_runtimeEnv.messageRow = std::max(0, mrvmValueAsInt(value));
 		return true;
 	}
 	if (key == "MAX_WINDOW_ROW") {
-		g_runtimeEnv.maxWindowRow = std::max(0, valueAsInt(value));
+		g_runtimeEnv.maxWindowRow = std::max(0, mrvmValueAsInt(value));
 		return true;
 	}
 	if (key == "MIN_WINDOW_ROW") {
-		g_runtimeEnv.minWindowRow = std::max(0, valueAsInt(value));
+		g_runtimeEnv.minWindowRow = std::max(0, mrvmValueAsInt(value));
 		return true;
 	}
 	if (key == "NAME_LINE") {
-		g_runtimeEnv.nameLine = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.nameLine = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
-	if (key == "INSERT_MODE") return setCurrentEditorInsertMode(valueAsInt(value) != 0);
-	if (key == "INDENT_LEVEL") return setCurrentEditorIndentLevel(valueAsInt(value));
+	if (key == "INSERT_MODE") return setCurrentEditorInsertMode(mrvmValueAsInt(value) != 0);
+	if (key == "INDENT_LEVEL") return setCurrentEditorIndentLevel(mrvmValueAsInt(value));
 	if (key == "MPARM_STR") {
-		runtimeParameterString() = valueAsString(value);
-		enforceStringLength(runtimeParameterString());
+		runtimeParameterString() = mrvmValueAsString(value);
+		mrvmEnforceStringLength(runtimeParameterString());
 		return true;
 	}
 	if (key == "DOC_MODE") {
-		g_runtimeEnv.docMode = valueAsInt(value) != 0 ? 1 : 0;
+		g_runtimeEnv.docMode = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
 	if (key == "PRINT_MARGIN") {
-		g_runtimeEnv.printMargin = std::max(0, valueAsInt(value));
+		g_runtimeEnv.printMargin = std::max(0, mrvmValueAsInt(value));
 		return true;
 	}
-	if (key == "FORMAT_LINE") return applyConfiguredEditSetupValue("FORMAT_LINE", valueAsString(value), nullptr);
+	if (key == "FORMAT_LINE") return applyConfiguredEditSetupValue("FORMAT_LINE", mrvmValueAsString(value), nullptr);
 	if (key == "DEFAULT_FORMAT") {
-		g_runtimeEnv.defaultFormat = valueAsString(value);
-		enforceStringLength(g_runtimeEnv.defaultFormat);
+		g_runtimeEnv.defaultFormat = mrvmValueAsString(value);
+		mrvmEnforceStringLength(g_runtimeEnv.defaultFormat);
 		return true;
 	}
-	if (key == "PAGE_STR") return applyConfiguredEditSetupValue("PAGE_BREAK", valueAsString(value), nullptr);
-	if (key == "WORD_DELIMITS") return applyConfiguredEditSetupValue("WORD_DELIMITERS", valueAsString(value), nullptr);
+	if (key == "PAGE_STR") return applyConfiguredEditSetupValue("PAGE_BREAK", mrvmValueAsString(value), nullptr);
+	if (key == "WORD_DELIMITS") return applyConfiguredEditSetupValue("WORD_DELIMITERS", mrvmValueAsString(value), nullptr);
 	if (key == "FILE_CHANGED") {
 		MREditWindow *win = activeMacroEditWindow();
 		BackgroundEditSession *session = currentBackgroundEditSession();
-		if (win != nullptr) win->setFileChanged(valueAsInt(value) != 0);
+		if (win != nullptr) win->setFileChanged(mrvmValueAsInt(value) != 0);
 		else if (session != nullptr)
-			session->fileChanged = valueAsInt(value) != 0;
+			session->fileChanged = mrvmValueAsInt(value) != 0;
 		else
 			return false;
 		return true;
@@ -3709,21 +2555,21 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	if (key == "FILE_NAME") {
 		MREditWindow *win = activeMacroEditWindow();
 		BackgroundEditSession *session = currentBackgroundEditSession();
-		if (win != nullptr) win->setCurrentFileName(valueAsString(value).c_str());
+		if (win != nullptr) win->setCurrentFileName(mrvmValueAsString(value).c_str());
 		else if (session != nullptr)
-			session->fileName = valueAsString(value);
+			session->fileName = mrvmValueAsString(value);
 		else
 			return false;
 		return true;
 	}
 	if (key == "VIRTUAL_DESKTOPS") {
 		if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("VIRTUAL_DESKTOPS cannot be changed in background mode.");
-		applyVirtualDesktopConfigurationChange(valueAsInt(value));
+		applyVirtualDesktopConfigurationChange(mrvmValueAsInt(value));
 		return true;
 	}
 	if (key == "CYCLIC_VIRTUAL_DESKTOPS") {
 		if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("CYCLIC_VIRTUAL_DESKTOPS cannot be changed in background mode.");
-		setConfiguredCyclicVirtualDesktops(valueAsInt(value) != 0, nullptr);
+		setConfiguredCyclicVirtualDesktops(mrvmValueAsInt(value) != 0, nullptr);
 		return true;
 	}
 	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" || key == "LAST_FILE_NAME" || key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" || key == "C_LINE" || key == "C_ROW" || key == "C_PAGE" || key == "PG_LINE" || key == "AT_EOF" || key == "AT_EOL" || key == "CUR_WINDOW" || key == "LINK_STAT" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" || key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "KEY1" || key == "KEY2" || key == "BLOCK_STAT" || key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" || key == "BLOCK_COL2" || key == "MARKING" || key == "FIRST_SAVE" || key == "BUFFER_ID" || key == "TMP_FILE" || key == "TMP_FILE_NAME" || key == "LAST_FILE_ATTR" || key == "LAST_FILE_SIZE" || key == "LAST_FILE_TIME" || key == "CUR_FILE_ATTR" || key == "CUR_FILE_SIZE" || key == "READ_ONLY" || key == "FOUND_STR" || key == "SEARCH_FILE" || key == "FOUND_X" || key == "FOUND_Y" || key == "COMSPEC" || key == "TEMP_PATH" || key == "MR_PATH" ||
@@ -3749,19 +2595,48 @@ static std::string parseNamedValue(const std::string &needle, const std::string 
 	return source.substr(pos, end - pos);
 }
 
-static void setGlobalValueDirect(const std::string &name, int type, const Value &value) {
-	std::string key = upperKey(name);
-	GlobalEntry entry;
+static std::vector<int> currentGlobalHashRoots() {
+	return std::vector<int>();
+}
 
-	entry.type = type;
-	entry.value = value;
-	entry.value.globalStorage = true;
-	if (g_runtimeEnv.globals.find(key) == g_runtimeEnv.globals.end()) g_runtimeEnv.globalOrder.push_back(key);
-	g_runtimeEnv.globals[key] = entry;
+static Value ensureGlobalHashRoot(const std::string &name) {
+	return g_runtimeEnv.runtimeKv.ensureRoot(name);
+}
+
+static Value ensureGlobalHashChild(const Value &parent, const std::string &key) {
+	return g_runtimeEnv.runtimeKv.ensureChild(parent, key);
+}
+
+static Value replaceGlobalHashChild(const Value &parent, const std::string &key) {
+	return g_runtimeEnv.runtimeKv.replaceChild(parent, key);
+}
+
+static bool readRuntimeGlobalValueDirect(const std::string &name, GlobalEntry &entry) {
+	return mrvmRuntimeGlobalRead(g_runtimeEnv.runtimeKv, name, entry);
+}
+
+static std::vector<std::string> macroGlobalOrderValues() {
+	return mrvmRuntimeGlobalOrderValues(g_runtimeEnv.runtimeKv);
+}
+
+static std::size_t macroGlobalEnumIndex() {
+	return mrvmRuntimeGlobalEnumIndex(g_runtimeEnv.runtimeKv);
+}
+
+static void setMacroGlobalEnumIndex(std::size_t index) {
+	mrvmRuntimeGlobalSetEnumIndex(g_runtimeEnv.runtimeKv, index);
+}
+
+static void writeRuntimeGlobalValueDirect(const std::string &name, int type, const Value &value) {
+	mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, name, type, value);
+}
+
+static bool isMacroVisibleRuntimeRootName(const std::string &key) {
+	return key == "EXECSESSIONS" || key == "MODELESSUI" || key == "MACROCATALOG" || key == "MACROGLOBALS";
 }
 
 static void setSessionGlobalValueDirect(BackgroundEditSession &session, const std::string &name, int type, const Value &value) {
-	std::string key = upperKey(name);
+	std::string key = mrvmUpperKey(name);
 	GlobalEntry entry;
 
 	entry.type = type;
@@ -3778,34 +2653,25 @@ static void setGlobalValue(const std::string &name, int type, const Value &value
 		setSessionGlobalValueDirect(*session, name, type, value);
 		return;
 	}
-	setGlobalValueDirect(name, type, value);
+	writeRuntimeGlobalValueDirect(name, type, value);
 }
 
 static void setGlobalValueFromStore(const std::string &name, int type, const Value &value, MRVMHashStore &localStore) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	Value stored = value;
 
-	if (type == TYPE_HASH || mrvmValueIsArrayType(type)) stored = mrvmHashCopyValueForStore(value, localStore, g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, true);
+	if (type == TYPE_HASH || mrvmValueIsArrayType(type)) stored = mrvmHashCopyValueForStore(value, localStore, g_runtimeEnv.runtimeKv.globalStore(), g_runtimeEnv.runtimeKv.globalStore(), true);
 	else
 		stored.globalStorage = true;
 	if (session != nullptr && type != TYPE_HASH && !mrvmValueIsArrayType(type)) {
 		setSessionGlobalValueDirect(*session, name, type, stored);
 		return;
 	}
-	setGlobalValueDirect(name, type, stored);
-}
-
-static std::vector<int> currentGlobalHashRoots() {
-	std::vector<int> roots;
-
-	for (const std::pair<const std::string, GlobalEntry> &entry : g_runtimeEnv.globals) {
-		if (entry.second.type == TYPE_HASH && entry.second.value.type == TYPE_HASH && !entry.second.value.globalStorage) roots.push_back(entry.second.value.hashHandle);
-	}
-	return roots;
+	writeRuntimeGlobalValueDirect(name, type, stored);
 }
 
 static bool readGlobalValue(const std::string &name, GlobalEntry &entry) {
-	const std::string key = upperKey(name);
+	const std::string key = mrvmUpperKey(name);
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (session != nullptr) {
 		std::map<std::string, GlobalEntry>::const_iterator sessionIt = session->globals.find(key);
@@ -3814,383 +2680,124 @@ static bool readGlobalValue(const std::string &name, GlobalEntry &entry) {
 			return true;
 		}
 	}
-	std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
-
-	if (it == g_runtimeEnv.globals.end()) return false;
-	entry = it->second;
-	return true;
-}
-
-static Value ensureGlobalHashRoot(const std::string &name) {
-	const std::string key = upperKey(name);
-	std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
-
-	if (it != g_runtimeEnv.globals.end() && it->second.type == TYPE_HASH && it->second.value.type == TYPE_HASH) return it->second.value;
-
-	Value root = makeHash(g_runtimeEnv.globalHashStore.createHash(), true);
-	setGlobalValueDirect(key, TYPE_HASH, root);
-	return root;
-}
-
-static bool findGlobalHashRoot(const std::string &name, Value &root) {
-	GlobalEntry rootEntry;
-
-	if (!readGlobalValue(name, rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
-	root = rootEntry.value;
-	return true;
-}
-
-static Value ensureGlobalHashChild(const Value &parent, const std::string &key) {
-	if (mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key)) {
-		Value child = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
-		if (child.type == TYPE_HASH) return child;
+	if (readRuntimeGlobalValueDirect(key, entry)) return true;
+	if (isMacroVisibleRuntimeRootName(key)) {
+		Value root = ensureGlobalHashRoot(key);
+		entry.type = TYPE_HASH;
+		entry.value = root;
+		return true;
 	}
-
-	Value child = makeHash(g_runtimeEnv.globalHashStore.createHash(), true);
-	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key, child);
-	return child;
-}
-
-static bool findGlobalHashChild(const Value &parent, const std::string &key, Value &child) {
-	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key)) return false;
-	child = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
-	return child.type == TYPE_HASH;
-}
-
-static bool eraseGlobalHashChild(const Value &parent, const std::string &key) {
-	Value child;
-
-	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key)) return false;
-	child = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
-	mrvmHashEraseValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, parent, key);
-	g_runtimeEnv.globalHashStore.eraseValueTrees(child, true);
-	return true;
-}
-
-static Value replaceGlobalHashChild(const Value &parent, const std::string &key) {
-	static_cast<void>(eraseGlobalHashChild(parent, key));
-	return ensureGlobalHashChild(parent, key);
-}
-
-static bool parseUint64Text(const std::string &text, std::uint64_t &value) {
-	value = 0;
-	if (text.empty()) return false;
-	for (std::size_t index = 0; index < text.size(); ++index) {
-		const unsigned char ch = static_cast<unsigned char>(text[index]);
-		std::uint64_t digit;
-		if (std::isdigit(ch) == 0) return false;
-		digit = static_cast<std::uint64_t>(ch - static_cast<unsigned char>('0'));
-		if (value > (std::numeric_limits<std::uint64_t>::max() - digit) / 10) return false;
-		value = value * 10 + digit;
-	}
-	return true;
-}
-
-static std::uint64_t valueAsUint64(const Value &value) {
-	std::uint64_t parsed = 0;
-
-	if (value.type == TYPE_INT) return value.i > 0 ? static_cast<std::uint64_t>(value.i) : 0;
-	return parseUint64Text(valueAsString(value), parsed) ? parsed : 0;
+	return false;
 }
 
 static void hashWriteInt(const Value &hash, const std::string &key, int value) {
-	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key, makeInt(value));
+	mrvmHashWriteValue(g_runtimeEnv.runtimeKv.globalStore(), g_runtimeEnv.runtimeKv.globalStore(), hash, key, mrvmMakeInt(value));
 }
 
-static void hashWriteUint(const Value &hash, const std::string &key, std::uint64_t value) {
-	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key, makeString(std::to_string(value)));
+static Value ensureExecSessionsChildPath(std::initializer_list<const char *> keys) {
+	return mrvmExecSessionsEnsureChildPath(g_runtimeEnv.runtimeKv, keys);
 }
 
-static void hashWriteString(const Value &hash, const std::string &key, const std::string &value) {
-	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key, makeString(value));
+static bool findExecSessionsChildPath(std::initializer_list<const char *> keys, Value &child) {
+	return mrvmExecSessionsFindChildPath(g_runtimeEnv.runtimeKv, keys, child);
 }
 
-static int hashReadInt(const Value &hash, const std::string &key, int fallback = 0) {
-	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key)) return fallback;
-	return valueAsInt(mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key));
+static bool readLoadedMacroFileByKey(const std::string &fileKey, LoadedMacroFile &file) {
+	return mrvmRuntimeCatalogReadLoadedFile(g_runtimeEnv.runtimeKv, fileKey, file);
 }
 
-static std::uint64_t hashReadUint(const Value &hash, const std::string &key, std::uint64_t fallback = 0) {
-	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key)) return fallback;
-	return valueAsUint64(mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key));
+static bool loadedMacroFileExists(const std::string &fileKey) {
+	return mrvmRuntimeCatalogLoadedFileExists(g_runtimeEnv.runtimeKv, fileKey);
 }
 
-static std::string hashReadString(const Value &hash, const std::string &key) {
-	if (!mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key)) return std::string();
-	return valueAsString(mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, hash, key));
+static void writeLoadedMacroFileByKey(const LoadedMacroFile &file) {
+	mrvmRuntimeCatalogWriteLoadedFile(g_runtimeEnv.runtimeKv, file);
 }
 
-static Value ensureExecSessionsHash() {
-	return ensureGlobalHashRoot("EXECSESSIONS");
+static bool eraseLoadedMacroFileByKey(const std::string &fileKey) {
+	return mrvmRuntimeCatalogEraseLoadedFile(g_runtimeEnv.runtimeKv, fileKey);
 }
 
-static bool findExecSessionsHash(Value &root) {
-	return findGlobalHashRoot("EXECSESSIONS", root);
+static std::vector<std::string> loadedMacroFileKeys() {
+	return mrvmRuntimeCatalogLoadedFileKeys(g_runtimeEnv.runtimeKv);
 }
 
-static Value ensureExecSessionsChild(const std::string &key) {
-	return ensureGlobalHashChild(ensureExecSessionsHash(), key);
+static bool readLoadedMacroByKey(const std::string &macroKey, MacroRef &macroRef) {
+	return mrvmRuntimeCatalogReadLoadedMacro(g_runtimeEnv.runtimeKv, macroKey, macroRef);
 }
 
-static Value ensureModelessUiHash() {
-	return ensureGlobalHashRoot("MODELESSUI");
+static bool loadedMacroExists(const std::string &macroKey) {
+	return mrvmRuntimeCatalogLoadedMacroExists(g_runtimeEnv.runtimeKv, macroKey);
 }
 
-static bool findModelessUiHash(Value &root) {
-	return findGlobalHashRoot("MODELESSUI", root);
+static void writeLoadedMacroByKey(const std::string &macroKey, const MacroRef &macroRef) {
+	mrvmRuntimeCatalogWriteLoadedMacro(g_runtimeEnv.runtimeKv, macroKey, macroRef);
 }
 
-static bool findModelessUiChild(const std::string &key, Value &child) {
-	Value root;
-
-	if (!findModelessUiHash(root)) return false;
-	return findGlobalHashChild(root, key, child);
+static bool eraseLoadedMacroByKey(const std::string &macroKey) {
+	return mrvmRuntimeCatalogEraseLoadedMacro(g_runtimeEnv.runtimeKv, macroKey);
 }
 
-static bool findExecSessionsChild(const std::string &key, Value &child) {
-	Value root;
-
-	if (!findExecSessionsHash(root)) return false;
-	return findGlobalHashChild(root, key, child);
+static std::vector<std::string> macroCatalogMacroOrder() {
+	return mrvmRuntimeCatalogMacroOrder(g_runtimeEnv.runtimeKv);
 }
 
-static std::uint64_t nextExecSessionCounter(const std::string &key) {
-	Value root = ensureExecSessionsHash();
-	const std::uint64_t value = hashReadUint(root, key, 1);
-
-	hashWriteUint(root, key, value + 1);
-	return value;
+static void appendMacroCatalogMacroOrder(const std::string &macroKey) {
+	mrvmRuntimeCatalogAppendMacroOrder(g_runtimeEnv.runtimeKv, macroKey);
 }
 
-static void writeMacroExecutionOwnerHash(const Value &hash, const MRMacroExecutionOwner &owner) {
-	hashWriteInt(hash, "hasBuffer", owner.hasBuffer ? 1 : 0);
-	hashWriteInt(hash, "bufferId", owner.bufferId);
+static void removeMacroCatalogMacroOrder(const std::string &macroKey) {
+	mrvmRuntimeCatalogRemoveMacroOrder(g_runtimeEnv.runtimeKv, macroKey);
 }
 
-static MRMacroExecutionOwner readMacroExecutionOwnerHash(const Value &hash) {
-	MRMacroExecutionOwner owner;
-
-	owner.hasBuffer = hashReadInt(hash, "hasBuffer") != 0;
-	owner.bufferId = hashReadInt(hash, "bufferId");
-	return owner;
+static std::size_t macroCatalogMacroEnumIndex() {
+	return mrvmRuntimeCatalogMacroEnumIndex(g_runtimeEnv.runtimeKv);
 }
 
-static void writeMacroExecutionSessionHash(const Value &hash, const MRMacroExecutionSession &session) {
-	Value owner = replaceGlobalHashChild(hash, "owner");
-
-	hashWriteUint(hash, "sessionId", session.sessionId);
-	hashWriteInt(hash, "route", static_cast<int>(session.route));
-	hashWriteInt(hash, "state", static_cast<int>(session.state));
-	hashWriteUint(hash, "taskId", session.taskId);
-	hashWriteString(hash, "label", session.label);
-	writeMacroExecutionOwnerHash(owner, session.owner);
+static void setMacroCatalogMacroEnumIndex(std::size_t index) {
+	mrvmRuntimeCatalogSetMacroEnumIndex(g_runtimeEnv.runtimeKv, index);
 }
 
-static bool readMacroExecutionSessionHash(const Value &hash, MRMacroExecutionSession &session) {
-	Value owner;
-
-	session.sessionId = hashReadUint(hash, "sessionId");
-	session.route = static_cast<MRMacroExecutionRoute>(hashReadInt(hash, "route", static_cast<int>(MRMacroExecutionRoute::Unknown)));
-	session.state = static_cast<MRMacroExecutionState>(hashReadInt(hash, "state", static_cast<int>(MRMacroExecutionState::Created)));
-	session.taskId = hashReadUint(hash, "taskId");
-	session.label = hashReadString(hash, "label");
-	if (findGlobalHashChild(hash, "owner", owner)) session.owner = readMacroExecutionOwnerHash(owner);
-	return session.sessionId != 0;
+static std::size_t macroCatalogLoadedMacroCount() {
+	return mrvmRuntimeCatalogLoadedMacroCount(g_runtimeEnv.runtimeKv);
 }
 
-static void writeMacroExecutionResultHash(const Value &hash, const MRMacroExecutionResult &result) {
-	Value sessionHash = replaceGlobalHashChild(hash, "session");
-
-	writeMacroExecutionSessionHash(sessionHash, result.session);
-	hashWriteInt(hash, "state", static_cast<int>(result.state));
-	hashWriteString(hash, "message", result.message);
+static std::vector<IndexedBoundMacroEntry> macroCatalogIndexedBindings() {
+	return mrvmRuntimeCatalogIndexedBindings(g_runtimeEnv.runtimeKv);
 }
 
-static bool readMacroExecutionResultHash(const Value &hash, MRMacroExecutionResult &result) {
-	Value sessionHash;
-
-	if (!findGlobalHashChild(hash, "session", sessionHash)) return false;
-	if (!readMacroExecutionSessionHash(sessionHash, result.session)) return false;
-	result.state = static_cast<MRMacroExecutionState>(hashReadInt(hash, "state", static_cast<int>(MRMacroExecutionState::Created)));
-	result.message = hashReadString(hash, "message");
-	return true;
+static void writeMacroCatalogIndexedBindings(const std::vector<IndexedBoundMacroEntry> &bindings) {
+	mrvmRuntimeCatalogWriteIndexedBindings(g_runtimeEnv.runtimeKv, bindings);
 }
 
-static std::vector<std::uint64_t> sortedHashUintKeys(const Value &hash) {
-	std::vector<std::uint64_t> ids;
-	std::vector<std::string> keys = g_runtimeEnv.globalHashStore.keys(hash.hashHandle);
-
-	for (std::size_t index = 0; index < keys.size(); ++index) {
-		std::uint64_t id = 0;
-		if (parseUint64Text(keys[index], id)) ids.push_back(id);
-	}
-	std::sort(ids.begin(), ids.end());
-	return ids;
+static bool markMacroCatalogIndexedWarmupAttempted(const std::string &fileKey) {
+	return mrvmRuntimeCatalogMarkIndexedWarmupAttempted(g_runtimeEnv.runtimeKv, fileKey);
 }
 
-static void trimHashByNumericKeys(const Value &hash, std::size_t limit) {
-	std::vector<std::uint64_t> ids = sortedHashUintKeys(hash);
-	std::size_t removeCount;
-
-	if (ids.size() <= limit) return;
-	removeCount = ids.size() - limit;
-	for (std::size_t index = 0; index < removeCount; ++index)
-		static_cast<void>(eraseGlobalHashChild(hash, std::to_string(ids[index])));
-}
-
-static void writeModelessLabelHash(const Value &hash, const MRMacroModelessLabelSpec &label) {
-	hashWriteInt(hash, "x", label.x);
-	hashWriteInt(hash, "y", label.y);
-	hashWriteString(hash, "text", label.text);
-}
-
-static void writeModelessDisplayHash(const Value &hash, const MRMacroModelessDisplaySpec &display) {
-	hashWriteInt(hash, "x", display.x);
-	hashWriteInt(hash, "y", display.y);
-	hashWriteInt(hash, "width", display.width);
-	hashWriteString(hash, "text", display.text);
-}
-
-static void writeModelessButtonHash(const Value &hash, const MRMacroModelessButtonSpec &button) {
-	hashWriteInt(hash, "x", button.x);
-	hashWriteInt(hash, "y", button.y);
-	hashWriteInt(hash, "width", button.width);
-	hashWriteInt(hash, "id", button.id);
-	hashWriteString(hash, "text", button.text);
-	hashWriteString(hash, "macroSpec", button.macroSpec);
-}
-
-static void writeModelessListBoxHash(const Value &hash, const MRMacroModelessListBoxSpec &listBox) {
-	hashWriteInt(hash, "x", listBox.x);
-	hashWriteInt(hash, "y", listBox.y);
-	hashWriteInt(hash, "width", listBox.width);
-	hashWriteInt(hash, "height", listBox.height);
-	hashWriteInt(hash, "id", listBox.id);
-	hashWriteString(hash, "label", listBox.label);
-	hashWriteString(hash, "itemSpec", listBox.itemSpec);
-	hashWriteInt(hash, "start", listBox.start);
-}
-
-static void writeModelessGridHash(const Value &hash, const MRMacroModelessGridSpec &grid) {
-	hashWriteInt(hash, "x", grid.x);
-	hashWriteInt(hash, "y", grid.y);
-	hashWriteInt(hash, "width", grid.width);
-	hashWriteInt(hash, "height", grid.height);
-	hashWriteInt(hash, "id", grid.id);
-	hashWriteString(hash, "label", grid.label);
-	hashWriteString(hash, "itemSpec", grid.itemSpec);
-	hashWriteString(hash, "macroSpec", grid.macroSpec);
-	hashWriteInt(hash, "start", grid.start);
-}
-
-static Value ensureClosureStateHash(const std::string &closureId, int tickMs) {
-	Value root = ensureExecSessionsHash();
-	Value closures = ensureGlobalHashChild(root, "closures");
-	Value closure = ensureGlobalHashChild(closures, closureId);
-	Value state = ensureGlobalHashChild(closure, "state");
-
-	if (tickMs > 0) mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, closure, "tick_ms", makeInt(tickMs));
-	return state;
-}
-
-static bool findClosureStateHash(const std::string &closureId, Value &state) {
-	Value closures;
-	Value closure;
-
-	if (closureId.empty()) return false;
-	if (!findExecSessionsChild("closures", closures)) return false;
-	if (!findGlobalHashChild(closures, closureId, closure)) return false;
-	return findGlobalHashChild(closure, "state", state);
-}
-
-static bool eraseClosureRuntimeState(const std::string &closureId) {
-	Value closures;
-
-	if (closureId.empty()) return false;
-	if (!findExecSessionsChild("closures", closures)) return false;
-	return eraseGlobalHashChild(closures, closureId);
-}
-
-static bool readClosureVariableValue(const std::string &closureId, const std::string &name, Value &value) {
-	Value state;
-
-	if (closureId.empty()) return false;
-	if (!findClosureStateHash(closureId, state)) return false;
-	if (state.type != TYPE_HASH || !mrvmHashContainsValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, state, name)) return false;
-	value = mrvmHashReadValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, state, name);
-	return true;
-}
-
-static bool writeClosureVariableValue(const std::string &closureId, const std::string &name, const Value &value, MRVMHashStore &localStore) {
-	Value state;
-	Value stored = value;
-
-	if (closureId.empty()) return false;
-	if (!findClosureStateHash(closureId, state)) return false;
-	if (value.type == TYPE_HASH || mrvmValueIsArrayType(value.type)) stored = mrvmHashCopyValueForStore(value, localStore, g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, true);
-	else
-		stored.globalStorage = true;
-	mrvmHashWriteValue(g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, state, name, stored);
-	return true;
-}
-
-static std::string normalizeExecUiCommandAction(const std::string &command) {
-	const std::string key = upperKey(trimAscii(command));
-
-	if (key.rfind("MRMAC_", 0) == 0 || key.rfind("MR_", 0) == 0) return key;
-	if (key == "TEXT_END" || key == "EOF" || key == "BOTTOM_OF_FILE") return "MRMAC_CURSOR_BOTTOM_OF_FILE";
-	if (key == "TEXT_START" || key == "TOF" || key == "TOP_OF_FILE") return "MRMAC_CURSOR_TOP_OF_FILE";
-	if (key == "LINE_END" || key == "EOL" || key == "END_OF_LINE") return "MRMAC_CURSOR_END_OF_LINE";
-	if (key == "LINE_START" || key == "HOME" || key == "START_OF_LINE") return "MRMAC_CURSOR_HOME";
-	if (key == "SCROLL_UP") return "MRMAC_VIEW_SCROLL_UP";
-	if (key == "SCROLL_DOWN") return "MRMAC_VIEW_SCROLL_DOWN";
-	return key;
-}
-
-static MREditWindow *execUiCommandTargetWindow(const std::string &target) {
-	const std::string key = upperKey(trimAscii(target));
-
-	if (key.empty() || key == "ACTIVE") return nullptr;
-	if (key.rfind("BUFFER:", 0) == 0) {
-		const std::string idText = trimAscii(key.substr(7));
-		if (idText.empty()) return nullptr;
-		return findEditWindowByBufferId(std::atoi(idText.c_str()));
-	}
-	return nullptr;
-}
-
-static bool fileExists(const std::string &path) {
-	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
-	return in.good();
-}
-
-static std::string stripMrmacExtension(const std::string &value) {
-	std::string upper = upperKey(value);
-	if (upper.size() >= 6 && upper.substr(upper.size() - 6) == ".MRMAC") return value.substr(0, value.size() - 6);
-	return value;
-}
-
-static std::string makeFileKey(const std::string &value) {
-	return upperKey(stripMrmacExtension(trimAscii(value)));
+static std::size_t macroCatalogIndexedBindingCount() {
+	return mrvmRuntimeCatalogIndexedBindingCount(g_runtimeEnv.runtimeKv);
 }
 
 static std::string loadedFileBasenameKey(const LoadedMacroFile &file) {
 	std::string source = !file.resolvedPath.empty() ? file.resolvedPath : file.displayName;
 
 	if (source.empty()) source = file.fileKey;
-	return makeFileKey(truncatePathPart(source));
+	return mrvmMakeMacroFileKey(mrvmTruncatePathPart(source));
 }
 
 static std::string resolveLoadedFileKeyForSpec(const std::string &fileSpec) {
-	const std::string exactKey = makeFileKey(fileSpec);
+	const std::string exactKey = mrvmMakeMacroFileKey(fileSpec);
 	std::string matchedKey;
+	const std::vector<std::string> fileKeys = loadedMacroFileKeys();
 
 	if (fileSpec.empty()) return std::string();
-	if (g_runtimeEnv.loadedFiles.find(exactKey) != g_runtimeEnv.loadedFiles.end()) return exactKey;
-	for (const auto &entry : g_runtimeEnv.loadedFiles) {
-		if (loadedFileBasenameKey(entry.second) != exactKey) continue;
-		if (!matchedKey.empty() && matchedKey != entry.first) return std::string();
-		matchedKey = entry.first;
+	if (loadedMacroFileExists(exactKey)) return exactKey;
+	for (const std::string &fileKey : fileKeys) {
+		LoadedMacroFile file;
+		if (!readLoadedMacroFileByKey(fileKey, file)) continue;
+		if (loadedFileBasenameKey(file) != exactKey) continue;
+		if (!matchedKey.empty() && matchedKey != fileKey) return std::string();
+		matchedKey = fileKey;
 	}
 	return matchedKey;
 }
@@ -4200,368 +2807,37 @@ static bool fileSpecMatchesLoadedFileKey(const std::string &fileSpec, const std:
 
 	if (targetFileKey.empty()) return fileSpec.empty();
 	if (!resolvedKey.empty()) return resolvedKey == targetFileKey;
-	return makeFileKey(fileSpec) == targetFileKey;
-}
-
-static bool hasMrmacExtension(const std::string &path) {
-	std::size_t dotPos = path.rfind('.');
-	if (dotPos == std::string::npos) return false;
-	return upperKey(path.substr(dotPos)) == ".MRMAC";
-}
-
-static bool isBootstrapIndexedMacroFile(const std::string &path) {
-	const std::string baseName = upperKey(truncatePathPart(path));
-
-	// Regression fixtures in mrmac/macros/test*.mrmac should not auto-bind at app startup.
-	if (baseName.size() >= 4 && baseName.compare(0, 4, "TEST") == 0) return false;
-	return true;
-}
-
-static std::vector<std::string> listMrmacFilesInDirectory(const std::string &directoryPath) {
-	std::vector<std::string> files;
-	std::string dir = trimAscii(directoryPath);
-	std::string pattern;
-	glob_t matches;
-
-	if (dir.empty()) return files;
-	if (!dir.empty() && dir.back() == '/') pattern = dir + "*";
-	else
-		pattern = dir + "/*";
-
-	std::memset(&matches, 0, sizeof(matches));
-	if (::glob(pattern.c_str(), 0, nullptr, &matches) != 0) {
-		::globfree(&matches);
-		return files;
-	}
-	for (std::size_t i = 0; i < matches.gl_pathc; ++i) {
-		const char *pathText = matches.gl_pathv != nullptr ? matches.gl_pathv[i] : nullptr;
-		if (pathText == nullptr || *pathText == '\0') continue;
-		std::string path = pathText;
-		if (!hasMrmacExtension(path)) continue;
-		if (!isBootstrapIndexedMacroFile(path)) continue;
-		if (!fileExists(path)) continue;
-		files.push_back(path);
-	}
-	::globfree(&matches);
-	std::sort(files.begin(), files.end());
-	return files;
-}
-
-static std::string resolveMacroFilePath(const std::string &spec) {
-	std::string trimmed = trimAscii(spec);
-	std::string macroDirectory = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
-	auto tryMacroDirectory = [&](const std::string &candidate) -> std::string {
-		std::string joined;
-
-		if (macroDirectory.empty() || candidate.empty()) return std::string();
-		joined = macroDirectory;
-		if (joined.back() != '/') joined += '/';
-		joined += candidate;
-		return fileExists(joined) ? joined : std::string();
-	};
-	if (trimmed.empty()) return std::string();
-	if (fileExists(trimmed)) return trimmed;
-	if (std::string fromMacroDirectory = tryMacroDirectory(trimmed); !fromMacroDirectory.empty()) return fromMacroDirectory;
-	if (upperKey(trimmed).size() < 6 || upperKey(trimmed).substr(upperKey(trimmed).size() - 6) != ".MRMAC") {
-		std::string withExt = trimmed + ".mrmac";
-		if (fileExists(withExt)) return withExt;
-		if (std::string withExtFromMacroDirectory = tryMacroDirectory(withExt); !withExtFromMacroDirectory.empty()) return withExtFromMacroDirectory;
-	}
-	return trimmed;
+	return mrvmMakeMacroFileKey(fileSpec) == targetFileKey;
 }
 
 static bool macroIsRunning(const std::string &macroKey) {
 	for (auto &i : g_runtimeEnv.macroStack)
-		if (upperKey(i.macroName) == macroKey) return true;
+		if (mrvmUpperKey(i.macroName) == macroKey) return true;
 	return false;
 }
 
 static bool removeMacroFromRegistryByKey(const std::string &macroKey) {
-	std::map<std::string, MacroRef>::iterator it = g_runtimeEnv.loadedMacros.find(macroKey);
+	MacroRef macroRef;
+	LoadedMacroFile file;
 	std::string ownerSpec;
 
-	if (it == g_runtimeEnv.loadedMacros.end()) return false;
-	if (it->second.scheduledConsumerId != 0) {
-		removeRuntimeScheduledConsumer(it->second.scheduledConsumerId);
-		it->second.scheduledConsumerId = 0;
+	if (!readLoadedMacroByKey(macroKey, macroRef)) return false;
+	if (macroRef.scheduledConsumerId != 0) {
+		removeRuntimeScheduledConsumer(macroRef.scheduledConsumerId);
+		macroRef.scheduledConsumerId = 0;
 	}
-	static_cast<void>(composeLoadedMacroSpec(it->second, ownerSpec));
+	static_cast<void>(composeLoadedMacroSpec(macroRef, ownerSpec));
 	if (!ownerSpec.empty()) static_cast<void>(mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(ownerSpec));
 
-	const std::string fileKey = it->second.fileKey;
-	g_runtimeEnv.loadedMacros.erase(it);
-	g_runtimeEnv.macroOrder.erase(std::remove(g_runtimeEnv.macroOrder.begin(), g_runtimeEnv.macroOrder.end(), macroKey), g_runtimeEnv.macroOrder.end());
+	const std::string fileKey = macroRef.fileKey;
+	static_cast<void>(eraseLoadedMacroByKey(macroKey));
+	removeMacroCatalogMacroOrder(macroKey);
 
-	std::map<std::string, LoadedMacroFile>::iterator fit = g_runtimeEnv.loadedFiles.find(fileKey);
-	if (fit != g_runtimeEnv.loadedFiles.end()) {
-		fit->second.macroNames.erase(std::remove(fit->second.macroNames.begin(), fit->second.macroNames.end(), macroKey), fit->second.macroNames.end());
-		if (fit->second.macroNames.empty()) g_runtimeEnv.loadedFiles.erase(fit);
-	}
-	return true;
-}
-
-static std::string normalizeKeySpecToken(const std::string &spec) {
-	std::string trimmed = trimAscii(spec);
-	std::string normalized;
-
-	if (trimmed.size() < 3 || trimmed.front() != '<' || trimmed.back() != '>') return std::string();
-	trimmed = trimmed.substr(1, trimmed.size() - 2);
-	for (char i : trimmed) {
-		unsigned char ch = static_cast<unsigned char>(i);
-		if (std::isspace(ch) != 0 || ch == '_' || ch == '+') continue;
-		normalized.push_back(static_cast<char>(std::toupper(ch)));
-	}
-	return normalized;
-}
-
-static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey) {
-	std::string token = normalizeKeySpecToken(spec);
-	bool wantShift = false;
-	bool wantCtrl = false;
-	bool wantAlt = false;
-	bool wantSuper = false;
-	bool changed = true;
-	ushort baseCode = 0;
-	ushort modifiers = 0;
-
-	if (token.empty()) return false;
-
-	while (changed) {
-		changed = false;
-		if (token.rfind("SHIFT", 0) == 0) {
-			wantShift = true;
-			token.erase(0, 5);
-			changed = true;
-			continue;
-		}
-		if (token.rfind("SHFT", 0) == 0) {
-			wantShift = true;
-			token.erase(0, 4);
-			changed = true;
-			continue;
-		}
-		if (token.rfind("CTRL", 0) == 0) {
-			wantCtrl = true;
-			token.erase(0, 4);
-			changed = true;
-			continue;
-		}
-		if (token.rfind("ALT", 0) == 0) {
-			wantAlt = true;
-			token.erase(0, 3);
-			changed = true;
-			continue;
-		}
-		if (token.rfind("SUPER", 0) == 0) {
-			wantSuper = true;
-			token.erase(0, 5);
-			changed = true;
-			continue;
-		}
-	}
-
-	if (token.empty()) return false;
-
-	if (token.size() >= 2 && token[0] == 'F' && std::all_of(token.begin() + 1, token.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; })) {
-		int number = std::atoi(token.c_str() + 1);
-		switch (number) {
-			case 1:
-				baseCode = kbF1;
-				break;
-			case 2:
-				baseCode = kbF2;
-				break;
-			case 3:
-				baseCode = kbF3;
-				break;
-			case 4:
-				baseCode = kbF4;
-				break;
-			case 5:
-				baseCode = kbF5;
-				break;
-			case 6:
-				baseCode = kbF6;
-				break;
-			case 7:
-				baseCode = kbF7;
-				break;
-			case 8:
-				baseCode = kbF8;
-				break;
-			case 9:
-				baseCode = kbF9;
-				break;
-			case 10:
-				baseCode = kbF10;
-				break;
-			case 11:
-				baseCode = kbF11;
-				break;
-			case 12:
-				baseCode = kbF12;
-				break;
-			default:
-				return false;
-		}
-	} else if (token == "ENTER" || token == "RETURN")
-		baseCode = kbEnter;
-	else {
-		static const std::unordered_map<std::string_view, ushort> tokenToBaseCode = {{"TAB", kbTab}, {"ESC", kbEsc}, {"BS", kbBack}, {"BACK", kbBack}, {"BACKSPACE", kbBack}, {"UP", kbUp}, {"DN", kbDown}, {"DOWN", kbDown}, {"LF", kbLeft}, {"LEFT", kbLeft}, {"RT", kbRight}, {"RIGHT", kbRight}, {"PGUP", kbPgUp}, {"PGDN", kbPgDn}, {"HOME", kbHome}, {"END", kbEnd}, {"INS", kbIns}, {"DEL", kbDel}, {"GREY-", kbGrayMinus}, {"GREY+", kbGrayPlus}, {"GREY*", static_cast<ushort>('*')}, {"SPACE", static_cast<ushort>(' ')}, {"MINUS", static_cast<ushort>('-')}, {"EQUAL", static_cast<ushort>('=')}};
-		auto it = tokenToBaseCode.find(token);
-		if (it != tokenToBaseCode.end()) {
-			baseCode = it->second;
-		} else if (token.size() == 1) {
-			baseCode = static_cast<ushort>(token[0]);
-		} else {
-			return false;
-		}
-	}
-
-	if (wantShift) modifiers |= kbShift;
-	if (wantCtrl) modifiers |= kbCtrlShift;
-	if (wantAlt) modifiers |= kbAltShift;
-	if (wantSuper) modifiers |= kbSuperShift;
-
-	outKey = TKey(baseCode, modifiers);
-	return true;
-}
-
-static bool parseIndexedBindingHeaders(const std::string &source, std::vector<TKey> &keys) {
-	std::size_t i = 0;
-	bool foundAny = false;
-
-	keys.clear();
-	while (i < source.size()) {
-		std::size_t macroPos = source.find('$', i);
-		if (macroPos == std::string::npos) break;
-		i = macroPos + 1;
-		if (!startsWithTokenInsensitive(source, macroPos, "$MACRO")) continue;
-
-		std::size_t p = macroPos + 6;
-		while (p < source.size() && std::isspace(static_cast<unsigned char>(source[p])) != 0)
-			++p;
-		if (p >= source.size()) break;
-		std::size_t nameStart = p;
-		while (p < source.size()) {
-			unsigned char ch = static_cast<unsigned char>(source[p]);
-			if (std::isalnum(ch) == 0 && ch != '_') break;
-			++p;
-		}
-		if (p == nameStart) continue;
-
-		std::size_t semicolon = source.find(';', p);
-		if (semicolon == std::string::npos) break;
-
-		std::istringstream header(source.substr(p, semicolon - p));
-		std::vector<std::string> tokens;
-		std::string token;
-		while (header >> token)
-			tokens.push_back(token);
-		for (std::size_t t = 0; t + 1 < tokens.size(); ++t) {
-			TKey parsed;
-			if (upperKey(tokens[t]) != "TO") continue;
-			if (!parseAssignedKeySpec(tokens[t + 1], parsed)) continue;
-			bool duplicate = false;
-			for (const auto &key : keys)
-				if (key == parsed) {
-					duplicate = true;
-					break;
-				}
-			if (!duplicate) {
-				keys.push_back(parsed);
-				foundAny = true;
-			}
-		}
-		i = semicolon + 1;
-	}
-	return foundAny;
-}
-
-static bool dispatchSyntheticKeyToUi(const TKey &key, const char *text, std::size_t textLength) {
-	MREditWindow *win = activeMacroEditWindow();
-	TEvent event;
-
-	if (win == nullptr || win->getEditor() == nullptr) return false;
-
-	std::memset(&event, 0, sizeof(event));
-	event.what = evKeyDown;
-	event.keyDown.keyCode = key.code;
-	event.keyDown.controlKeyState = key.mods;
-	if (text != nullptr && textLength > 0) {
-		if (textLength > sizeof(event.keyDown.text)) textLength = sizeof(event.keyDown.text);
-		std::memcpy(event.keyDown.text, text, textLength);
-		event.keyDown.textLength = static_cast<uchar>(textLength);
-	}
-	win->handleEvent(event);
-	return true;
-}
-
-static bool replayKeyInputSequence(const std::string &sequence) {
-	struct KeyReplayGuard {
-		KeyReplayGuard() noexcept {
-			++g_keyReplayDepth;
-		}
-		~KeyReplayGuard() {
-			--g_keyReplayDepth;
-		}
-	} replayGuard;
-
-	std::size_t i = 0;
-
-	if (currentBackgroundEditSession() != nullptr) return false;
-	if (activeMacroEditWindow() == nullptr || currentEditor() == nullptr) return false;
-
-	while (i < sequence.size()) {
-		unsigned char ch = static_cast<unsigned char>(sequence[i]);
-		if (ch == '<') {
-			std::size_t closePos = sequence.find('>', i + 1);
-			if (closePos != std::string::npos) {
-				TKey key;
-				std::string token = sequence.substr(i, closePos - i + 1);
-				if (parseAssignedKeySpec(token, key)) {
-					if (!dispatchSyntheticKeyToUi(key)) return false;
-					i = closePos + 1;
-					continue;
-				}
-			}
-		}
-
-		if (ch == '\r') {
-			if (i + 1 < sequence.size() && sequence[i + 1] == '\n') ++i;
-			if (!dispatchSyntheticKeyToUi(TKey(kbEnter))) return false;
-			++i;
-			continue;
-		}
-		if (ch == '\n') {
-			if (!dispatchSyntheticKeyToUi(TKey(kbEnter))) return false;
-			++i;
-			continue;
-		}
-		if (ch == '\t') {
-			if (!dispatchSyntheticKeyToUi(TKey(kbTab))) return false;
-			++i;
-			continue;
-		}
-		if (ch == '\b') {
-			if (!dispatchSyntheticKeyToUi(TKey(kbBack))) return false;
-			++i;
-			continue;
-		}
-		if (ch == 27) {
-			if (!dispatchSyntheticKeyToUi(TKey(kbEsc))) return false;
-			++i;
-			continue;
-		}
-		if (ch == 127) {
-			if (!dispatchSyntheticKeyToUi(TKey(kbDel))) return false;
-			++i;
-			continue;
-		}
-
-		char textByte = static_cast<char>(ch);
-		if (!dispatchSyntheticKeyToUi(TKey(static_cast<ushort>(ch)), &textByte, 1)) return false;
-		++i;
+	if (readLoadedMacroFileByKey(fileKey, file)) {
+		file.macroNames.erase(std::remove(file.macroNames.begin(), file.macroNames.end(), macroKey), file.macroNames.end());
+		if (file.macroNames.empty()) static_cast<void>(eraseLoadedMacroFileByKey(fileKey));
+		else
+			writeLoadedMacroFileByKey(file);
 	}
 	return true;
 }
@@ -4617,55 +2893,6 @@ static bool readMacroKeyPair(bool blocking, int &key1, int &key2) {
 	return pollUiForKeyPair(blocking, key1, key2);
 }
 
-static bool keyPairToTKey(int key1, int key2, TKey &key, const char *&text, std::size_t &textLength, char &textByte) {
-	static const std::unordered_map<int, ushort> scanCodeToKey = {{59, kbF1}, {60, kbF2}, {61, kbF3}, {62, kbF4}, {63, kbF5}, {64, kbF6}, {65, kbF7}, {66, kbF8}, {67, kbF9}, {68, kbF10}, {133, kbF11}, {134, kbF12}, {72, kbUp}, {80, kbDown}, {75, kbLeft}, {77, kbRight}, {73, kbPgUp}, {81, kbPgDn}, {71, kbHome}, {79, kbEnd}, {82, kbIns}, {83, kbDel}, {15, kbShiftTab}};
-
-	text = nullptr;
-	textLength = 0;
-	if (key1 != 0) {
-		switch (key1) {
-			case 13:
-				key = TKey(kbEnter);
-				return true;
-			case 9:
-				key = TKey(kbTab);
-				return true;
-			case 8:
-				key = TKey(kbBack);
-				return true;
-			case 27:
-				key = TKey(kbEsc);
-				return true;
-			case 127:
-				key = TKey(kbDel);
-				return true;
-			default:
-				key = TKey(static_cast<ushort>(static_cast<unsigned char>(key1)));
-				if (key1 >= 32 && key1 <= 255) {
-					textByte = static_cast<char>(static_cast<unsigned char>(key1));
-					text = &textByte;
-					textLength = 1;
-				}
-				return true;
-		}
-	}
-	auto it = scanCodeToKey.find(key2);
-	if (it == scanCodeToKey.end()) return false;
-	key = TKey(it->second);
-	return true;
-}
-
-static bool passMacroKeyPairToUi(int key1, int key2) {
-	TKey key;
-	const char *text = nullptr;
-	std::size_t textLength = 0;
-	char textByte = '\0';
-
-	if (currentBackgroundEditSession() != nullptr) return false;
-	if (!keyPairToTKey(key1, key2, key, text, textLength, textByte)) return false;
-	return dispatchSyntheticKeyToUi(key, text, textLength);
-}
-
 static MacroFunctionLabelFrame &currentFunctionLabelFrame() {
 	if (g_runtimeEnv.functionLabelStack.empty()) g_runtimeEnv.functionLabelStack.emplace_back();
 	return g_runtimeEnv.functionLabelStack.back();
@@ -4693,1082 +2920,18 @@ static void applyFunctionLabelState() {
 	mrvmUiInvalidateScreenBase();
 }
 
-struct MacroMenuRequest {
-	int x = 0;
-	int y = 0;
-	int start = 1;
-	std::string title;
-	std::string menuSpec;
-	bool horizontal = false;
-};
-
-struct MacroStringInputRequest {
-	int x = 0;
-	int y = 0;
-	int width = 40;
-	std::string title;
-	std::string initialValue;
-};
-
-struct MacroUiLabelSpec {
-	int x = 0;
-	int y = 0;
-	std::string text;
-};
-
-struct MacroUiButtonSpec {
-	int x = 0;
-	int y = 0;
-	int width = 8;
-	int id = 0;
-	std::string text;
-};
-
-struct MacroUiDisplaySpec {
-	int x = 0;
-	int y = 0;
-	int width = 20;
-	std::string text;
-};
-
-struct MacroUiInputSpec {
-	int x = 0;
-	int y = 0;
-	int width = 20;
-	int id = 0;
-	std::string label;
-	std::string text;
-};
-
-struct MacroUiListBoxSpec {
-	int x = 0;
-	int y = 0;
-	int width = 20;
-	int height = 4;
-	int id = 0;
-	std::string label;
-	std::string itemSpec;
-	int start = 1;
-};
-
-struct MacroUiGridSpec {
-	int x = 0;
-	int y = 0;
-	int width = 20;
-	int height = 4;
-	int id = 0;
-	std::string label;
-	std::string itemSpec;
-	int start = 1;
-};
-
-struct MacroUiDialogDefinition {
-	int x = 0;
-	int y = 0;
-	int width = 40;
-	int height = 12;
-	std::string title;
-	std::vector<MacroUiLabelSpec> labels;
-	std::vector<MacroUiButtonSpec> buttons;
-	std::vector<MacroUiDisplaySpec> displays;
-	std::vector<MacroUiInputSpec> inputs;
-	std::vector<MacroUiListBoxSpec> listBoxes;
-	std::vector<MacroUiGridSpec> grids;
-	std::map<int, std::string> modelessButtonMacros;
-};
-
-struct MacroUiButtonCaption {
-	std::string displayLabel;
-	std::vector<ushort> hotKeys;
-};
-
-static ushort macroNamedHotKeyCode(const std::string &name) noexcept {
-	struct NamedKey {
-		const char *name;
-		ushort code;
-	};
-	static const NamedKey kNamedKeys[] = {
-	    {"ENTER", kbEnter}, {"ESC", kbEsc}, {"ESCAPE", kbEsc}, {"TAB", kbTab}, {"F1", kbF1}, {"F2", kbF2}, {"F3", kbF3}, {"F4", kbF4}, {"F5", kbF5}, {"F6", kbF6}, {"F7", kbF7}, {"F8", kbF8}, {"F9", kbF9}, {"F10", kbF10}, {"F11", kbF11}, {"F12", kbF12},
-	};
-
-	for (const NamedKey &entry : kNamedKeys)
-		if (upperKey(name) == entry.name) return entry.code;
-	return 0;
-}
-
-static MacroUiButtonCaption parseMacroUiButtonCaption(const std::string &text) {
-	MacroUiButtonCaption entry;
-	std::size_t index = 0;
-
-	const std::string label = trimAscii(text);
-	while (index < label.size()) {
-		if (label[index] == '~') {
-			const std::size_t close = label.find('~', index + 1);
-			if (close != std::string::npos && close > index + 1) {
-				entry.displayLabel += label.substr(index + 1, close - index - 1);
-				const char hotChar = static_cast<char>(std::toupper(static_cast<unsigned char>(label[index + 1])));
-				entry.hotKeys.push_back(static_cast<ushort>(hotChar));
-				index = close + 1;
-				continue;
-			}
-		}
-		if (label[index] == '<') {
-			const std::size_t close = label.find('>', index + 1);
-			if (close != std::string::npos) {
-				const ushort keyCode = macroNamedHotKeyCode(trimAscii(label.substr(index + 1, close - index - 1)));
-				if (keyCode != 0) entry.hotKeys.push_back(keyCode);
-				index = close + 1;
-				continue;
-			}
-		}
-		entry.displayLabel.push_back(label[index]);
-		++index;
-	}
-	if (entry.displayLabel.size() == 1) {
-		const char hotChar = static_cast<char>(std::toupper(static_cast<unsigned char>(entry.displayLabel.front())));
-		entry.hotKeys.push_back(static_cast<ushort>(hotChar));
-	}
-	return entry;
-}
-
-static std::vector<std::string> parseMacroMenuItems(const std::string &menuSpec) {
-	std::vector<std::string> items;
-	std::size_t pos = 0;
-	std::size_t last = 0;
-
-	while (pos < menuSpec.size()) {
-		std::size_t openPos = menuSpec.find('(', pos);
-		if (openPos == std::string::npos) break;
-		std::string item = trimAscii(menuSpec.substr(last, openPos - last));
-		std::size_t closePos = menuSpec.find(')', openPos + 1);
-		if (!item.empty()) items.push_back(item);
-		if (closePos == std::string::npos) return items;
-		pos = closePos + 1;
-		last = pos;
-	}
-	if (items.empty()) {
-		std::size_t start = 0;
-		while (start <= menuSpec.size()) {
-			std::size_t sep = menuSpec.find('|', start);
-			std::string item = trimAscii(menuSpec.substr(start, sep == std::string::npos ? sep : sep - start));
-			if (!item.empty()) items.push_back(item);
-			if (sep == std::string::npos) break;
-			start = sep + 1;
-		}
-	}
-	return items;
-}
-
-static std::string macroUiListKey(const std::string &name) {
-	return upperKey(trimAscii(name));
-}
-
-static Value ensureMacroUiStagingHash() {
-	return ensureGlobalHashChild(ensureModelessUiHash(), "staging");
-}
-
-static Value ensureMacroUiCurrentDialogHash() {
-	return ensureGlobalHashChild(ensureMacroUiStagingHash(), "currentDialog");
-}
-
-static Value ensureMacroUiDialogSection(const char *sectionName) {
-	return ensureGlobalHashChild(ensureMacroUiCurrentDialogHash(), sectionName);
-}
-
-static Value appendMacroUiDialogSectionItem(const char *sectionName) {
-	Value section = ensureMacroUiDialogSection(sectionName);
-	int count = hashReadInt(section, "count", 0) + 1;
-
-	hashWriteInt(section, "count", count);
-	return replaceGlobalHashChild(section, std::to_string(count));
-}
-
-static bool findMacroUiStagingChild(const std::string &key, Value &child) {
-	Value staging;
-
-	if (!findModelessUiChild("staging", staging)) return false;
-	return findGlobalHashChild(staging, key, child);
-}
-
-static bool findMacroUiCurrentDialog(Value &dialog) {
-	Value staging;
-
-	if (!findMacroUiStagingChild("currentDialog", staging)) return false;
-	dialog = staging;
-	return true;
-}
-
-static void resetMacroUiCurrentDialog() {
-	Value dialog = replaceGlobalHashChild(ensureMacroUiStagingHash(), "currentDialog");
-
-	hashWriteInt(dialog, "x", 0);
-	hashWriteInt(dialog, "y", 0);
-	hashWriteInt(dialog, "width", 40);
-	hashWriteInt(dialog, "height", 12);
-	hashWriteString(dialog, "title", "");
-}
-
-static void writeMacroUiTextValue(int id, const std::string &text) {
-	if (id <= 0) return;
-	hashWriteString(ensureMacroUiDialogSection("textValues"), std::to_string(id), text);
-}
-
-static void writeMacroUiIndexValue(int id, int index) {
-	if (id <= 0) return;
-	hashWriteInt(ensureMacroUiDialogSection("indexValues"), std::to_string(id), index);
-}
-
-static std::string readMacroUiTextValue(int id) {
-	Value dialog;
-	Value values;
-
-	if (id <= 0 || !findMacroUiCurrentDialog(dialog) || !findGlobalHashChild(dialog, "textValues", values)) return std::string();
-	return hashReadString(values, std::to_string(id));
-}
-
-static int readMacroUiIndexValue(int id) {
-	Value dialog;
-	Value values;
-
-	if (id <= 0 || !findMacroUiCurrentDialog(dialog) || !findGlobalHashChild(dialog, "indexValues", values)) return 0;
-	return hashReadInt(values, std::to_string(id), 0);
-}
-
-static void writeMacroUiLabelHash(const Value &hash, const MacroUiLabelSpec &label) {
-	hashWriteInt(hash, "x", label.x);
-	hashWriteInt(hash, "y", label.y);
-	hashWriteString(hash, "text", label.text);
-}
-
-static void writeMacroUiButtonHash(const Value &hash, const MacroUiButtonSpec &button) {
-	hashWriteInt(hash, "x", button.x);
-	hashWriteInt(hash, "y", button.y);
-	hashWriteInt(hash, "width", button.width);
-	hashWriteInt(hash, "id", button.id);
-	hashWriteString(hash, "text", button.text);
-}
-
-static void writeMacroUiDisplayHash(const Value &hash, const MacroUiDisplaySpec &display) {
-	hashWriteInt(hash, "x", display.x);
-	hashWriteInt(hash, "y", display.y);
-	hashWriteInt(hash, "width", display.width);
-	hashWriteString(hash, "text", display.text);
-}
-
-static void writeMacroUiInputHash(const Value &hash, const MacroUiInputSpec &input) {
-	hashWriteInt(hash, "x", input.x);
-	hashWriteInt(hash, "y", input.y);
-	hashWriteInt(hash, "width", input.width);
-	hashWriteInt(hash, "id", input.id);
-	hashWriteString(hash, "label", input.label);
-	hashWriteString(hash, "text", input.text);
-}
-
-static void writeMacroUiListBoxHash(const Value &hash, const MacroUiListBoxSpec &listBox) {
-	hashWriteInt(hash, "x", listBox.x);
-	hashWriteInt(hash, "y", listBox.y);
-	hashWriteInt(hash, "width", listBox.width);
-	hashWriteInt(hash, "height", listBox.height);
-	hashWriteInt(hash, "id", listBox.id);
-	hashWriteString(hash, "label", listBox.label);
-	hashWriteString(hash, "itemSpec", listBox.itemSpec);
-	hashWriteInt(hash, "start", listBox.start);
-}
-
-static void writeMacroUiGridHash(const Value &hash, const MacroUiGridSpec &grid) {
-	hashWriteInt(hash, "x", grid.x);
-	hashWriteInt(hash, "y", grid.y);
-	hashWriteInt(hash, "width", grid.width);
-	hashWriteInt(hash, "height", grid.height);
-	hashWriteInt(hash, "id", grid.id);
-	hashWriteString(hash, "label", grid.label);
-	hashWriteString(hash, "itemSpec", grid.itemSpec);
-	hashWriteInt(hash, "start", grid.start);
-}
-
-static MacroUiLabelSpec readMacroUiLabelHash(const Value &hash) {
-	MacroUiLabelSpec label;
-
-	label.x = hashReadInt(hash, "x", 0);
-	label.y = hashReadInt(hash, "y", 0);
-	label.text = hashReadString(hash, "text");
-	return label;
-}
-
-static MacroUiButtonSpec readMacroUiButtonHash(const Value &hash) {
-	MacroUiButtonSpec button;
-
-	button.x = hashReadInt(hash, "x", 0);
-	button.y = hashReadInt(hash, "y", 0);
-	button.width = hashReadInt(hash, "width", 8);
-	button.id = hashReadInt(hash, "id", 0);
-	button.text = hashReadString(hash, "text");
-	return button;
-}
-
-static MacroUiDisplaySpec readMacroUiDisplayHash(const Value &hash) {
-	MacroUiDisplaySpec display;
-
-	display.x = hashReadInt(hash, "x", 0);
-	display.y = hashReadInt(hash, "y", 0);
-	display.width = hashReadInt(hash, "width", 20);
-	display.text = hashReadString(hash, "text");
-	return display;
-}
-
-static MacroUiInputSpec readMacroUiInputHash(const Value &hash) {
-	MacroUiInputSpec input;
-
-	input.x = hashReadInt(hash, "x", 0);
-	input.y = hashReadInt(hash, "y", 0);
-	input.width = hashReadInt(hash, "width", 20);
-	input.id = hashReadInt(hash, "id", 0);
-	input.label = hashReadString(hash, "label");
-	input.text = hashReadString(hash, "text");
-	return input;
-}
-
-static MacroUiListBoxSpec readMacroUiListBoxHash(const Value &hash) {
-	MacroUiListBoxSpec listBox;
-
-	listBox.x = hashReadInt(hash, "x", 0);
-	listBox.y = hashReadInt(hash, "y", 0);
-	listBox.width = hashReadInt(hash, "width", 20);
-	listBox.height = hashReadInt(hash, "height", 4);
-	listBox.id = hashReadInt(hash, "id", 0);
-	listBox.label = hashReadString(hash, "label");
-	listBox.itemSpec = hashReadString(hash, "itemSpec");
-	listBox.start = hashReadInt(hash, "start", 1);
-	return listBox;
-}
-
-static MacroUiGridSpec readMacroUiGridHash(const Value &hash) {
-	MacroUiGridSpec grid;
-
-	grid.x = hashReadInt(hash, "x", 0);
-	grid.y = hashReadInt(hash, "y", 0);
-	grid.width = hashReadInt(hash, "width", 20);
-	grid.height = hashReadInt(hash, "height", 4);
-	grid.id = hashReadInt(hash, "id", 0);
-	grid.label = hashReadString(hash, "label");
-	grid.itemSpec = hashReadString(hash, "itemSpec");
-	grid.start = hashReadInt(hash, "start", 1);
-	return grid;
-}
-
-static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiLabelSpec> &labels) {
-	Value section;
-
-	if (!findGlobalHashChild(dialog, sectionName, section)) return;
-	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
-		Value item;
-		if (findGlobalHashChild(section, std::to_string(index), item)) labels.push_back(readMacroUiLabelHash(item));
-	}
-}
-
-static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiButtonSpec> &buttons) {
-	Value section;
-
-	if (!findGlobalHashChild(dialog, sectionName, section)) return;
-	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
-		Value item;
-		if (findGlobalHashChild(section, std::to_string(index), item)) buttons.push_back(readMacroUiButtonHash(item));
-	}
-}
-
-static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiDisplaySpec> &displays) {
-	Value section;
-
-	if (!findGlobalHashChild(dialog, sectionName, section)) return;
-	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
-		Value item;
-		if (findGlobalHashChild(section, std::to_string(index), item)) displays.push_back(readMacroUiDisplayHash(item));
-	}
-}
-
-static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiInputSpec> &inputs) {
-	Value section;
-
-	if (!findGlobalHashChild(dialog, sectionName, section)) return;
-	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
-		Value item;
-		if (findGlobalHashChild(section, std::to_string(index), item)) inputs.push_back(readMacroUiInputHash(item));
-	}
-}
-
-static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiListBoxSpec> &listBoxes) {
-	Value section;
-
-	if (!findGlobalHashChild(dialog, sectionName, section)) return;
-	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
-		Value item;
-		if (findGlobalHashChild(section, std::to_string(index), item)) listBoxes.push_back(readMacroUiListBoxHash(item));
-	}
-}
-
-static void readMacroUiDialogSection(const Value &dialog, const char *sectionName, std::vector<MacroUiGridSpec> &grids) {
-	Value section;
-
-	if (!findGlobalHashChild(dialog, sectionName, section)) return;
-	for (int index = 1; index <= hashReadInt(section, "count", 0); ++index) {
-		Value item;
-		if (findGlobalHashChild(section, std::to_string(index), item)) grids.push_back(readMacroUiGridHash(item));
-	}
-}
-
-static MacroUiDialogDefinition readMacroUiDialogDefinition() {
-	MacroUiDialogDefinition definition;
-	Value dialog;
-	Value macros;
-
-	if (!findMacroUiCurrentDialog(dialog)) return definition;
-	definition.x = hashReadInt(dialog, "x", 0);
-	definition.y = hashReadInt(dialog, "y", 0);
-	definition.width = hashReadInt(dialog, "width", 40);
-	definition.height = hashReadInt(dialog, "height", 12);
-	definition.title = hashReadString(dialog, "title");
-	readMacroUiDialogSection(dialog, "labels", definition.labels);
-	readMacroUiDialogSection(dialog, "buttons", definition.buttons);
-	readMacroUiDialogSection(dialog, "displays", definition.displays);
-	readMacroUiDialogSection(dialog, "inputs", definition.inputs);
-	readMacroUiDialogSection(dialog, "listBoxes", definition.listBoxes);
-	readMacroUiDialogSection(dialog, "grids", definition.grids);
-	if (findGlobalHashChild(dialog, "modelessButtonMacros", macros)) {
-		for (int index = 1; index <= hashReadInt(macros, "count", 0); ++index) {
-			Value item;
-			const std::string key = std::to_string(index);
-			if (!findGlobalHashChild(macros, key, item)) continue;
-			definition.modelessButtonMacros[hashReadInt(item, "id", 0)] = hashReadString(item, "macroSpec");
-		}
-	}
-	return definition;
-}
-
-static void writeMacroUiModelessMacro(int controlId, const std::string &macroSpec) {
-	Value macros;
-	Value item;
-	int count = 0;
-
-	if (controlId <= 0) return;
-	macros = ensureMacroUiDialogSection("modelessButtonMacros");
-	count = hashReadInt(macros, "count", 0);
-	for (int index = 1; index <= count; ++index) {
-		if (!findGlobalHashChild(macros, std::to_string(index), item)) continue;
-		if (hashReadInt(item, "id", 0) == controlId) {
-			hashWriteString(item, "macroSpec", macroSpec);
-			return;
-		}
-	}
-	++count;
-	hashWriteInt(macros, "count", count);
-	item = replaceGlobalHashChild(macros, std::to_string(count));
-	hashWriteInt(item, "id", controlId);
-	hashWriteString(item, "macroSpec", macroSpec);
-}
-
-static bool findMacroUiItemList(const std::string &key, Value &list) {
-	Value lists;
-
-	if (!findMacroUiStagingChild("itemLists", lists)) return false;
-	return findGlobalHashChild(lists, key, list);
-}
-
 static std::vector<std::string> resolveMacroUiListItems(const std::string &itemSpec) {
-	const std::string key = macroUiListKey(itemSpec);
-	Value list;
+	const std::string key = mrvmModelessUiListKey(itemSpec);
 	std::vector<std::string> values;
 
-	if (findMacroUiItemList(key, list)) {
-		for (int index = 1; index <= hashReadInt(list, "count", 0); ++index)
-			values.push_back(hashReadString(list, std::to_string(index)));
-		return values;
-	}
-	return parseMacroMenuItems(itemSpec);
-}
-
-static int macroMenuDialogWidth(const MacroMenuRequest &request) noexcept {
-	return std::max(36, std::min(72, static_cast<int>(request.menuSpec.size()) + 8));
-}
-
-static int macroMenuDialogHeight(const MacroMenuRequest &request) {
-	return std::min(22, std::max(10, static_cast<int>(parseMacroMenuItems(request.menuSpec).size()) + 7));
-}
-
-static TRect macroDialogBounds(int width, int height, int x, int y) {
-	TRect desk = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, 80, 25);
-	int dialogWidth = std::min(width, desk.b.x - desk.a.x - 2);
-	int dialogHeight = std::min(height, desk.b.y - desk.a.y - 2);
-	int left = desk.a.x + (desk.b.x - desk.a.x - dialogWidth) / 2;
-	int top = desk.a.y + (desk.b.y - desk.a.y - dialogHeight) / 2;
-
-	if (x > 0) left = std::clamp(desk.a.x + x - 1, desk.a.x, desk.b.x - dialogWidth);
-	if (y > 0) top = std::clamp(desk.a.y + y - 1, desk.a.y, desk.b.y - dialogHeight);
-	return TRect(left, top, left + dialogWidth, top + dialogHeight);
-}
-
-class MacroMenuListView final : public TListViewer {
-  public:
-	MacroMenuListView(const TRect &bounds, TScrollBar *scrollBar, const std::vector<std::string> &menuItems) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), items(menuItems) {
-		setRange(static_cast<short>(items.size()));
-	}
-
-	void getText(char *dest, short item, short maxLen) override {
-		if (dest == nullptr || maxLen <= 0) return;
-		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) {
-			dest[0] = EOS;
-			return;
-		}
-		std::strncpy(dest, items[static_cast<std::size_t>(item)].c_str(), static_cast<std::size_t>(maxLen - 1));
-		dest[maxLen - 1] = EOS;
-	}
-
-	void handleEvent(TEvent &event) override {
-		TListViewer::handleEvent(event);
-		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && owner != nullptr) {
-			message(owner, evCommand, cmOK, this);
-			clearEvent(event);
-		}
-	}
-
-  private:
-	std::vector<std::string> items;
-};
-
-static int runMacroMenuDialog(const MacroMenuRequest &request) {
-	class MacroMenuDialog final : public MRDialogFoundation {
-	  public:
-		MacroMenuDialog(const MacroMenuRequest &menuRequest) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(macroMenuDialogWidth(menuRequest), macroMenuDialogHeight(menuRequest), menuRequest.x, menuRequest.y), menuRequest.title.empty() ? (menuRequest.horizontal ? "BAR MENU" : "V MENU") : menuRequest.title.c_str(), macroMenuDialogWidth(menuRequest), macroMenuDialogHeight(menuRequest)), menuRequestItems(parseMacroMenuItems(menuRequest.menuSpec)) {
-			int width = size.x;
-			int height = size.y;
-
-			scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
-			insert(scrollBar);
-			listView = new MacroMenuListView(TRect(2, 2, width - 3, height - 4), scrollBar, menuRequestItems);
-			insert(listView);
-			insert(new TButton(TRect(width - 30, height - 3, width - 21, height - 1), "~D~one", cmOK, bfDefault));
-			insert(new TButton(TRect(width - 20, height - 3, width - 9, height - 1), "~C~ancel", cmCancel, bfNormal));
-			insert(new TButton(TRect(width - 8, height - 3, width - 2, height - 1), "~H~elp", cmHelp, bfNormal));
-			if (!menuRequestItems.empty()) {
-				int index = std::clamp(menuRequest.start, 1, static_cast<int>(menuRequestItems.size())) - 1;
-				listView->focusItemNum(static_cast<short>(index));
-			}
-		}
-
-		void handleEvent(TEvent &event) override {
-			MRDialogFoundation::handleEvent(event);
-			if (event.what == evCommand && event.message.command == cmHelp) {
-				static_cast<void>(mrShowProjectHelp());
-				clearEvent(event);
-			}
-		}
-
-		int selectedIndex() const noexcept {
-			if (listView == nullptr || listView->focused < 0) return 0;
-			return listView->focused + 1;
-		}
-
-	  private:
-		std::vector<std::string> menuRequestItems;
-		TScrollBar *scrollBar = nullptr;
-		MacroMenuListView *listView = nullptr;
-	};
-
-	MacroMenuDialog *dialog = new MacroMenuDialog(request);
-	ushort result = cmCancel;
-	int selected = 0;
-
-	if (dialog == nullptr) return 0;
-	dialog->finalizeLayout();
-	result = TProgram::deskTop->execView(dialog);
-	selected = result == cmOK ? dialog->selectedIndex() : 0;
-	TObject::destroy(dialog);
-	return selected;
-}
-
-static std::string runMacroStringInputDialog(const MacroStringInputRequest &request) {
-	class MacroStringInputDialog final : public MRDialogFoundation {
-	  public:
-		MacroStringInputDialog(const MacroStringInputRequest &inputRequest) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(std::max(34, inputRequest.width + 10), 9, inputRequest.x, inputRequest.y), inputRequest.title.empty() ? "STRING INPUT" : inputRequest.title.c_str(), std::max(34, inputRequest.width + 10), 9) {
-			int width = size.x;
-			char *buffer = newStr(inputRequest.initialValue.c_str());
-
-			inputLine = new TInputLine(TRect(13, 2, width - 3, 3), std::max(1, inputRequest.width));
-			insert(new TLabel(TRect(2, 2, 12, 3), "Value:", inputLine));
-			insert(inputLine);
-			inputLine->setData(buffer);
-			delete[] buffer;
-			insert(new TButton(TRect(width - 30, 6, width - 21, 8), "~D~one", cmOK, bfDefault));
-			insert(new TButton(TRect(width - 20, 6, width - 9, 8), "~C~ancel", cmCancel, bfNormal));
-			insert(new TButton(TRect(width - 8, 6, width - 2, 8), "~H~elp", cmHelp, bfNormal));
-			selectNext(False);
-		}
-
-		void handleEvent(TEvent &event) override {
-			MRDialogFoundation::handleEvent(event);
-			if (event.what == evCommand && event.message.command == cmHelp) {
-				static_cast<void>(mrShowProjectHelp());
-				clearEvent(event);
-			}
-		}
-
-		std::string value() const {
-			char buffer[512] = {0};
-			if (inputLine != nullptr) inputLine->getData(buffer);
-			return std::string(buffer);
-		}
-
-	  private:
-		TInputLine *inputLine = nullptr;
-	};
-
-	MacroStringInputDialog *dialog = new MacroStringInputDialog(request);
-	ushort result = cmCancel;
-	std::string value;
-
-	if (dialog == nullptr) return std::string();
-	dialog->finalizeLayout();
-	result = TProgram::deskTop->execView(dialog);
-	value = result == cmOK ? dialog->value() : std::string();
-	TObject::destroy(dialog);
-	return value;
-}
-
-class MacroUiListView final : public TListViewer {
-  public:
-	MacroUiListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> items, ushort command) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), items(std::move(items)), command(command) {
-		setRange(static_cast<short>(this->items.size()));
-	}
-
-	void getText(char *dest, short item, short maxLen) override {
-		if (dest == nullptr || maxLen <= 0) return;
-		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) {
-			dest[0] = EOS;
-			return;
-		}
-		std::strncpy(dest, items[static_cast<std::size_t>(item)].c_str(), static_cast<std::size_t>(maxLen - 1));
-		dest[maxLen - 1] = EOS;
-	}
-
-	void handleEvent(TEvent &event) override {
-		TListViewer::handleEvent(event);
-		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && owner != nullptr) {
-			message(owner, evCommand, command, this);
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evMouseDown && (event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr) {
-			message(owner, evCommand, command, this);
-			clearEvent(event);
-		}
-	}
-
-	const std::vector<std::string> &values() const noexcept {
-		return items;
-	}
-
-  private:
-	std::vector<std::string> items;
-	ushort command = 0;
-};
-
-struct MacroUiGridItem {
-	std::string label;
-	std::string text;
-	std::string detail;
-};
-
-static MacroUiGridItem parseMacroUiGridItem(const std::string &source) {
-	MacroUiGridItem item;
-	const std::size_t firstTab = source.find('\t');
-	const std::size_t secondTab = firstTab != std::string::npos ? source.find('\t', firstTab + 1) : std::string::npos;
-
-	if (firstTab == std::string::npos) {
-		item.label = source;
-		item.text = source;
-		return item;
-	}
-	item.label = source.substr(0, firstTab);
-	if (secondTab == std::string::npos) {
-		item.text = source.substr(firstTab + 1);
-		return item;
-	}
-	item.text = source.substr(firstTab + 1, secondTab - firstTab - 1);
-	item.detail = source.substr(secondTab + 1);
-	return item;
-}
-
-static std::vector<MacroUiGridItem> parseMacroUiGridItems(const std::vector<std::string> &values) {
-	std::vector<MacroUiGridItem> items;
-
-	items.reserve(values.size());
-	for (std::size_t index = 0; index < values.size(); ++index)
-		items.push_back(parseMacroUiGridItem(values[index]));
-	return items;
-}
-
-class MacroUiGridView final : public TView {
-  public:
-	MacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command) : TView(bounds), items(parseMacroUiGridItems(values)), scrollBar(scrollBar), command(command) {
-		options |= ofSelectable;
-		eventMask |= evMouseDown | evMouseWheel | evKeyDown | evBroadcast;
-		updateScrollBar();
-	}
-
-	void draw() override {
-		TDrawBuffer row;
-		const TColorAttr normal = getColor(1);
-		const TColorAttr selected = getColor(3);
-		const short blankRow = size.y > 1 ? size.y - 2 : 0;
-		const short detailRow = size.y > 0 ? size.y - 1 : 0;
-
-		updateScrollBar();
-		for (short y = 0; y < size.y; ++y) {
-			row.moveChar(0, ' ', normal, size.x);
-			writeLine(0, y, size.x, 1, row);
-		}
-		for (std::size_t index = 0; index < items.size(); ++index) {
-			const int rowIndex = static_cast<int>(index) / columns() - scrollOffset;
-			const int colIndex = static_cast<int>(index) % columns();
-			const short x = static_cast<short>(gridLeftOffset() + colIndex * cellWidth);
-			const short y = static_cast<short>(rowIndex);
-			if (y < 0 || y >= blankRow || x >= size.x) continue;
-			drawCell(index, x, y, index == selectedIndex ? selected : normal);
-		}
-		drawDetail(detailRow, normal);
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evMouseDown && containsMouse(event)) {
-			TPoint local = makeLocal(event.mouse.where);
-			const int gridLeft = gridLeftOffset();
-			if (local.x >= gridLeft && local.x < gridLeft + gridWidth()) {
-				const int col = cellWidth > 0 ? (local.x - gridLeft) / cellWidth : 0;
-				const int row = local.y + scrollOffset;
-				const std::size_t index = static_cast<std::size_t>(row * columns() + col);
-				if (index < items.size()) {
-					selectedIndex = index;
-					ensureSelectedVisible();
-					drawView();
-					if ((event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr) message(owner, evCommand, command, this);
-				}
-			}
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evMouseWheel && containsMouse(event)) {
-			const int step = event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft ? -1 : 1;
-			setScrollOffset(scrollOffset + step);
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evKeyDown) {
-			const ushort arrow = ctrlToArrow(event.keyDown.keyCode);
-			if (moveSelection(arrow)) {
-				clearEvent(event);
-				return;
-			}
-			if (arrow == kbEnter && owner != nullptr) {
-				message(owner, evCommand, command, this);
-				clearEvent(event);
-				return;
-			}
-		}
-		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged && event.message.infoPtr == scrollBar) {
-			setScrollOffset(scrollBar != nullptr ? scrollBar->value : 0);
-			clearEvent(event);
-			return;
-		}
-		TView::handleEvent(event);
-	}
-
-	void focusIndex(int start) {
-		if (items.empty()) {
-			selectedIndex = 0;
-			scrollOffset = 0;
-		} else
-			selectedIndex = static_cast<std::size_t>(std::clamp(start, 1, static_cast<int>(items.size())) - 1);
-		ensureSelectedVisible();
-		drawView();
-	}
-
-	[[nodiscard]] int selectedIndexValue() const noexcept {
-		return items.empty() ? 0 : static_cast<int>(selectedIndex + 1);
-	}
-
-	[[nodiscard]] std::string selectedText() const {
-		return selectedIndex < items.size() ? items[selectedIndex].text : std::string();
-	}
-
-  private:
-	[[nodiscard]] int columns() const noexcept {
-		return std::max(1, (static_cast<int>(size.x) - 1) / cellWidth);
-	}
-
-	[[nodiscard]] int gridWidth() const noexcept {
-		return std::max(0, columns() * cellWidth);
-	}
-
-	[[nodiscard]] int gridLeftOffset() const noexcept {
-		return std::max(0, (static_cast<int>(size.x) - gridWidth()) / 2);
-	}
-
-	void drawCell(std::size_t index, short x, short y, TColorAttr attr) {
-		TDrawBuffer cell;
-		std::string text = items[index].label;
-		if (static_cast<int>(text.size()) + 1 < cellWidth) text = " " + text;
-		cell.moveChar(0, ' ', attr, static_cast<ushort>(cellWidth));
-		cell.moveStr(0, text.c_str(), attr, static_cast<ushort>(cellWidth));
-		writeLine(x, y, static_cast<short>(std::min(cellWidth, static_cast<int>(size.x - x))), 1, cell);
-	}
-
-	void drawDetail(short y, TColorAttr attr) {
-		if (items.empty() || y < 0 || y >= size.y) return;
-		TDrawBuffer row;
-		std::string text = items[selectedIndex].label;
-		if (!items[selectedIndex].detail.empty()) {
-			if (!text.empty()) text += " ";
-			text += items[selectedIndex].detail;
-		}
-		const int detailWidth = strwidth(text.c_str());
-		const int start = std::max(0, (static_cast<int>(size.x) - detailWidth) / 2);
-		row.moveChar(0, ' ', attr, size.x);
-		row.moveStr(static_cast<ushort>(start), text.c_str(), attr, static_cast<ushort>(std::max(0, size.x - start)));
-		writeLine(0, y, size.x, 1, row);
-	}
-
-	bool moveSelection(ushort keyCode) {
-		if (items.empty()) return false;
-		std::size_t next = selectedIndex;
-		const int cols = columns();
-		const int pageStep = std::max(cols, cols * 4);
-
-		switch (keyCode) {
-			case kbLeft:
-				next = selectedIndex == 0 ? items.size() - 1 : selectedIndex - 1;
-				break;
-			case kbRight:
-				next = (selectedIndex + 1) % items.size();
-				break;
-			case kbUp:
-				next = selectedIndex < static_cast<std::size_t>(cols) ? selectedIndex : selectedIndex - static_cast<std::size_t>(cols);
-				break;
-			case kbDown:
-				next = std::min(items.size() - 1, selectedIndex + static_cast<std::size_t>(cols));
-				break;
-			case kbHome:
-				next = 0;
-				break;
-			case kbEnd:
-				next = items.size() - 1;
-				break;
-			case kbPgUp:
-				next = selectedIndex < static_cast<std::size_t>(pageStep) ? 0 : selectedIndex - static_cast<std::size_t>(pageStep);
-				break;
-			case kbPgDn:
-				next = std::min(items.size() - 1, selectedIndex + static_cast<std::size_t>(pageStep));
-				break;
-			default:
-				return false;
-		}
-		if (next != selectedIndex) {
-			selectedIndex = next;
-			ensureSelectedVisible();
-			drawView();
-		}
-		return true;
-	}
-
-	[[nodiscard]] int totalRows() const noexcept {
-		const int cols = columns();
-		return cols <= 0 ? 0 : static_cast<int>((items.size() + static_cast<std::size_t>(cols - 1)) / static_cast<std::size_t>(cols));
-	}
-
-	[[nodiscard]] int visibleRows() const noexcept {
-		return std::max(1, static_cast<int>(size.y) - 2);
-	}
-
-	[[nodiscard]] int maxScrollOffset() const noexcept {
-		return std::max(0, totalRows() - visibleRows());
-	}
-
-	void setScrollOffset(int offset) {
-		const int clamped = std::max(0, std::min(offset, maxScrollOffset()));
-		if (clamped == scrollOffset) return;
-		scrollOffset = clamped;
-		updateScrollBar();
-		drawView();
-	}
-
-	void updateScrollBar() {
-		if (scrollBar == nullptr) return;
-		scrollBar->setParams(scrollOffset, 0, maxScrollOffset(), visibleRows(), 1);
-	}
-
-	void ensureSelectedVisible() {
-		if (items.empty()) {
-			scrollOffset = 0;
-			updateScrollBar();
-			return;
-		}
-		const int row = static_cast<int>(selectedIndex) / columns();
-		if (row < scrollOffset) scrollOffset = row;
-		else if (row >= scrollOffset + visibleRows())
-			scrollOffset = row - visibleRows() + 1;
-		scrollOffset = std::max(0, std::min(scrollOffset, maxScrollOffset()));
-		updateScrollBar();
-	}
-
-	std::vector<MacroUiGridItem> items;
-	TScrollBar *scrollBar = nullptr;
-	ushort command = 0;
-	std::size_t selectedIndex = 0;
-	int scrollOffset = 0;
-	static constexpr int cellWidth = 4;
-};
-
-class MacroUiDisplayLine final : public TView {
-  public:
-	MacroUiDisplayLine(const TRect &bounds, std::string text) noexcept : TView(bounds), text(std::move(text)) {
-		options &= ~(ofSelectable | ofFirstClick);
-		eventMask &= static_cast<ushort>(~(evMouseDown | evMouseUp | evMouseMove | evKeyDown));
-	}
-
-	void draw() override {
-		TDrawBuffer buffer;
-		unsigned char configuredAttr = 0;
-		TColorAttr color = getColor(1);
-		const int width = size.x;
-		const std::string value = text.empty() ? std::string("0") : text;
-		const int start = std::max(0, width - static_cast<int>(value.size()));
-
-		if (configuredColorSlotOverride(9, configuredAttr)) color = TColorAttr(configuredAttr);
-		buffer.moveChar(0, ' ', color, static_cast<ushort>(width));
-		if (start < width) buffer.moveStr(static_cast<ushort>(start), value.c_str(), color, width - start);
-		writeLine(0, 0, width, 1, buffer);
-	}
-
-  private:
-	std::string text;
-};
-
-static void beginMacroUiDialog(const std::vector<Value> &args) {
-	Value dialog;
-
-	resetMacroUiCurrentDialog();
-	dialog = ensureMacroUiCurrentDialogHash();
-	hashWriteInt(dialog, "x", valueAsInt(args[0]));
-	hashWriteInt(dialog, "y", valueAsInt(args[1]));
-	hashWriteInt(dialog, "width", std::max(24, valueAsInt(args[2])));
-	hashWriteInt(dialog, "height", std::max(8, valueAsInt(args[3])));
-	hashWriteString(dialog, "title", valueAsString(args[4]));
-}
-
-static void addMacroUiLabel(const std::vector<Value> &args) {
-	MacroUiLabelSpec spec;
-
-	spec.x = valueAsInt(args[0]);
-	spec.y = valueAsInt(args[1]);
-	spec.text = valueAsString(args[2]);
-	writeMacroUiLabelHash(appendMacroUiDialogSectionItem("labels"), spec);
-}
-
-static void addMacroUiButton(const std::vector<Value> &args) {
-	MacroUiButtonSpec spec;
-
-	spec.x = valueAsInt(args[0]);
-	spec.y = valueAsInt(args[1]);
-	spec.width = std::max(6, valueAsInt(args[2]));
-	spec.id = valueAsInt(args[3]);
-	spec.text = valueAsString(args[4]);
-	writeMacroUiButtonHash(appendMacroUiDialogSectionItem("buttons"), spec);
-}
-
-static void addMacroUiDisplay(const std::vector<Value> &args) {
-	MacroUiDisplaySpec spec;
-
-	spec.x = valueAsInt(args[0]);
-	spec.y = valueAsInt(args[1]);
-	spec.width = std::max(4, valueAsInt(args[2]));
-	spec.text = valueAsString(args[3]);
-	writeMacroUiDisplayHash(appendMacroUiDialogSectionItem("displays"), spec);
-}
-
-static void addMacroUiInput(const std::vector<Value> &args) {
-	MacroUiInputSpec spec;
-
-	spec.x = valueAsInt(args[0]);
-	spec.y = valueAsInt(args[1]);
-	spec.width = std::max(4, valueAsInt(args[2]));
-	spec.id = valueAsInt(args[3]);
-	spec.label = valueAsString(args[4]);
-	spec.text = valueAsString(args[5]);
-	writeMacroUiTextValue(spec.id, spec.text);
-	writeMacroUiInputHash(appendMacroUiDialogSectionItem("inputs"), spec);
-}
-
-static void addMacroUiListBox(const std::vector<Value> &args) {
-	MacroUiListBoxSpec spec;
-	const std::vector<std::string> items = resolveMacroUiListItems(valueAsString(args[6]));
-	int selectedIndex = 0;
-
-	spec.x = valueAsInt(args[0]);
-	spec.y = valueAsInt(args[1]);
-	spec.width = std::max(8, valueAsInt(args[2]));
-	spec.height = std::max(2, valueAsInt(args[3]));
-	spec.id = valueAsInt(args[4]);
-	spec.label = valueAsString(args[5]);
-	spec.itemSpec = valueAsString(args[6]);
-	spec.start = std::max(1, valueAsInt(args[7]));
-	if (!items.empty()) selectedIndex = std::min(static_cast<int>(items.size()), spec.start);
-	writeMacroUiIndexValue(spec.id, selectedIndex);
-	writeMacroUiTextValue(spec.id, selectedIndex > 0 ? items[static_cast<std::size_t>(selectedIndex - 1)] : std::string());
-	writeMacroUiListBoxHash(appendMacroUiDialogSectionItem("listBoxes"), spec);
-}
-
-static void addMacroUiGrid(const std::vector<Value> &args) {
-	MacroUiGridSpec spec;
-	const std::vector<std::string> items = resolveMacroUiListItems(valueAsString(args[6]));
-	int selectedIndex = 0;
-
-	spec.x = valueAsInt(args[0]);
-	spec.y = valueAsInt(args[1]);
-	spec.width = std::max(8, valueAsInt(args[2]));
-	spec.height = std::max(3, valueAsInt(args[3]));
-	spec.id = valueAsInt(args[4]);
-	spec.label = valueAsString(args[5]);
-	spec.itemSpec = valueAsString(args[6]);
-	spec.start = std::max(1, valueAsInt(args[7]));
-	if (!items.empty()) selectedIndex = std::min(static_cast<int>(items.size()), spec.start);
-	writeMacroUiIndexValue(spec.id, selectedIndex);
-	writeMacroUiTextValue(spec.id, selectedIndex > 0 ? parseMacroUiGridItem(items[static_cast<std::size_t>(selectedIndex - 1)]).text : std::string());
-	writeMacroUiGridHash(appendMacroUiDialogSectionItem("grids"), spec);
-}
-
-static void clearMacroUiItemList(const std::vector<Value> &args) {
-	const std::string key = macroUiListKey(valueAsString(args[0]));
-	Value list;
-
-	if (key.empty()) throw std::runtime_error("UI_LIST_CLEAR expects a non-empty list name.");
-	list = replaceGlobalHashChild(ensureGlobalHashChild(ensureMacroUiStagingHash(), "itemLists"), key);
-	hashWriteInt(list, "count", 0);
-}
-
-static void addMacroUiItemListValue(const std::vector<Value> &args) {
-	const std::string key = macroUiListKey(valueAsString(args[0]));
-	Value list;
-	int count = 0;
-
-	if (key.empty()) throw std::runtime_error("UI_LIST_ADD expects a non-empty list name.");
-	list = ensureGlobalHashChild(ensureGlobalHashChild(ensureMacroUiStagingHash(), "itemLists"), key);
-	count = hashReadInt(list, "count", 0) + 1;
-	hashWriteInt(list, "count", count);
-	hashWriteString(list, std::to_string(count), valueAsString(args[1]));
+	if (mrvmModelessUiReadItemList(g_runtimeEnv.runtimeKv, key, values)) return values;
+	return mrvmResolveMacroUiListItems(g_runtimeEnv.runtimeKv, itemSpec);
 }
 
 static void runMacroModelessCommand(const std::string &, int, const MRMacroModelessSelection &selection, const std::string &macroSpec) {
 	if (selection.controlId != 0) {
-		writeMacroUiIndexValue(selection.controlId, selection.index);
-		writeMacroUiTextValue(selection.controlId, selection.text);
+		mrvmModelessUiWriteIndexValue(g_runtimeEnv.runtimeKv, selection.controlId, selection.index);
+		mrvmModelessUiWriteTextValue(g_runtimeEnv.runtimeKv, selection.controlId, selection.text);
 	}
 	if (!macroSpec.empty()) {
 		std::string errorText;
@@ -5779,127 +2942,38 @@ static void runMacroModelessCommand(const std::string &, int, const MRMacroModel
 	}
 }
 
-static void bindMacroModelessButton(const std::vector<Value> &args) {
-	const int buttonId = valueAsInt(args[0]);
-	const std::string macroSpec = valueAsString(args[1]);
-
-	if (buttonId <= 0) throw std::runtime_error("UI_MODELESS_ON expects a positive control id.");
-	writeMacroUiModelessMacro(buttonId, macroSpec);
-	runtimeErrorLevel() = 0;
-}
-
-static MRMacroModelessWindowDefinition buildMacroModelessDefinition(const std::string &windowId) {
-	MRMacroModelessWindowDefinition definition;
-	MacroUiDialogDefinition dialog = readMacroUiDialogDefinition();
-
-	definition.x = dialog.x;
-	definition.y = dialog.y;
-	definition.width = dialog.width;
-	definition.height = dialog.height;
-	definition.windowId = windowId;
-	definition.title = dialog.title;
-
-	for (std::size_t labelIndex = 0; labelIndex < dialog.labels.size(); ++labelIndex) {
-		const MacroUiLabelSpec &label = dialog.labels[labelIndex];
-		MRMacroModelessLabelSpec entry;
-		entry.x = label.x;
-		entry.y = label.y;
-		entry.text = label.text;
-		definition.labels.push_back(std::move(entry));
-	}
-
-	for (std::size_t displayIndex = 0; displayIndex < dialog.displays.size(); ++displayIndex) {
-		const MacroUiDisplaySpec &display = dialog.displays[displayIndex];
-		MRMacroModelessDisplaySpec entry;
-		entry.x = display.x;
-		entry.y = display.y;
-		entry.width = display.width;
-		entry.text = display.text;
-		definition.displays.push_back(std::move(entry));
-	}
-
-	for (std::size_t listBoxIndex = 0; listBoxIndex < dialog.listBoxes.size(); ++listBoxIndex) {
-		const MacroUiListBoxSpec &listBox = dialog.listBoxes[listBoxIndex];
-		MRMacroModelessListBoxSpec entry;
-		entry.x = listBox.x;
-		entry.y = listBox.y;
-		entry.width = listBox.width;
-		entry.height = listBox.height;
-		entry.id = listBox.id;
-		entry.label = listBox.label;
-		entry.itemSpec = listBox.itemSpec;
-		entry.start = listBox.start;
-		definition.listBoxes.push_back(std::move(entry));
-	}
-
-	for (std::size_t gridIndex = 0; gridIndex < dialog.grids.size(); ++gridIndex) {
-		const MacroUiGridSpec &grid = dialog.grids[gridIndex];
-		MRMacroModelessGridSpec entry;
-		std::map<int, std::string>::const_iterator macroIt;
-
-		entry.x = grid.x;
-		entry.y = grid.y;
-		entry.width = grid.width;
-		entry.height = grid.height;
-		entry.id = grid.id;
-		entry.label = grid.label;
-		entry.itemSpec = grid.itemSpec;
-		macroIt = dialog.modelessButtonMacros.find(grid.id);
-		entry.macroSpec = macroIt != dialog.modelessButtonMacros.end() ? macroIt->second : std::string();
-		entry.start = grid.start;
-		definition.grids.push_back(std::move(entry));
-	}
-
-	for (std::size_t buttonIndex = 0; buttonIndex < dialog.buttons.size(); ++buttonIndex) {
-		const MacroUiButtonSpec &button = dialog.buttons[buttonIndex];
-		MRMacroModelessButtonSpec entry;
-		std::map<int, std::string>::const_iterator macroIt;
-
-		entry.x = button.x;
-		entry.y = button.y;
-		entry.width = button.width;
-		entry.id = button.id;
-		entry.text = button.text;
-		macroIt = dialog.modelessButtonMacros.find(button.id);
-		entry.macroSpec = macroIt != dialog.modelessButtonMacros.end() ? macroIt->second : std::string();
-		definition.buttons.push_back(std::move(entry));
-	}
-
-	return definition;
-}
-
 static void showMacroModelessDialog(const std::vector<Value> &args) {
-	const std::string windowId = macroUiListKey(valueAsString(args[0]));
+	const std::string windowId = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
 
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_SHOW expects a non-empty window id.");
 	setMacroModelessListResolver(resolveMacroUiListItems);
 	setMacroModelessCommandRunner(runMacroModelessCommand);
-	runtimeReturnInt() = showMacroModelessWindow(buildMacroModelessDefinition(windowId)) ? 1 : 0;
+	runtimeReturnInt() = showMacroModelessWindow(mrvmBuildMacroModelessDefinition(g_runtimeEnv.runtimeKv, windowId)) ? 1 : 0;
 	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
 }
 
 static void updateMacroModelessDialog(const std::vector<Value> &args) {
-	const std::string windowId = macroUiListKey(valueAsString(args[0]));
+	const std::string windowId = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
 
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_UPDATE expects a non-empty window id.");
 	setMacroModelessListResolver(resolveMacroUiListItems);
 	setMacroModelessCommandRunner(runMacroModelessCommand);
-	runtimeReturnInt() = updateMacroModelessWindow(buildMacroModelessDefinition(windowId)) ? 1 : 0;
+	runtimeReturnInt() = updateMacroModelessWindow(mrvmBuildMacroModelessDefinition(g_runtimeEnv.runtimeKv, windowId)) ? 1 : 0;
 	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
 }
 
 static void updateMacroModelessDisplayLine(const std::vector<Value> &args) {
-	const std::string windowId = macroUiListKey(valueAsString(args[0]));
-	const int displayIndex = valueAsInt(args[1]);
+	const std::string windowId = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
+	const int displayIndex = mrvmValueAsInt(args[1]);
 
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_DISPLAY expects a non-empty window id.");
 	if (displayIndex <= 0) throw std::runtime_error("UI_MODELESS_DISPLAY expects a positive display index.");
-	runtimeReturnInt() = updateMacroModelessDisplay(windowId, displayIndex, valueAsString(args[2])) ? 1 : 0;
+	runtimeReturnInt() = updateMacroModelessDisplay(windowId, displayIndex, mrvmValueAsString(args[2])) ? 1 : 0;
 	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
 }
 
 static void closeMacroModelessDialog(const std::vector<Value> &args) {
-	const std::string windowId = macroUiListKey(valueAsString(args[0]));
+	const std::string windowId = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
 
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_CLOSE expects a non-empty window id.");
 	runtimeReturnInt() = closeMacroModelessWindow(windowId) ? 1 : 0;
@@ -5907,22 +2981,18 @@ static void closeMacroModelessDialog(const std::vector<Value> &args) {
 }
 
 static void listExecSessionClosures(const std::vector<Value> &args) {
-	const std::string key = macroUiListKey(valueAsString(args[0]));
+	const std::string key = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
 	const std::vector<MRRuntimeScheduledConsumer> consumers = runtimeScheduledConsumers();
 	Value consoleRoot;
 	Value consoleList;
 	Value ids;
-	Value itemLists;
-	Value list;
 	int row = 0;
 
 	if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("EXEC_SESSION_LIST is not available in background mode.");
 	if (key.empty()) throw std::runtime_error("EXEC_SESSION_LIST expects a non-empty list name.");
 
-	itemLists = ensureGlobalHashChild(ensureMacroUiStagingHash(), "itemLists");
-	list = replaceGlobalHashChild(itemLists, key);
-	hashWriteInt(list, "count", 0);
-	consoleRoot = ensureGlobalHashChild(ensureExecSessionsHash(), "console");
+	mrvmModelessUiClearItemList(g_runtimeEnv.runtimeKv, key);
+	if (!findExecSessionsChildPath({"console"}, consoleRoot)) consoleRoot = ensureExecSessionsChildPath({"console"});
 	consoleList = replaceGlobalHashChild(consoleRoot, key);
 	ids = ensureGlobalHashChild(consoleList, "ids");
 	for (std::size_t index = 0; index < consumers.size(); ++index) {
@@ -5941,16 +3011,15 @@ static void listExecSessionClosures(const std::vector<Value> &args) {
 		line += std::to_string(consumer.config.intervalMs);
 		line += "  ";
 		line += consumer.config.entryName.empty() ? consumer.config.closureId : consumer.config.entryName;
-		hashWriteString(list, std::to_string(row), line);
+		mrvmModelessUiAddItemListValue(g_runtimeEnv.runtimeKv, key, line);
 	}
-	hashWriteInt(list, "count", row);
 	hashWriteInt(consoleList, "count", row);
 	runtimeReturnInt() = row;
 	runtimeErrorLevel() = 0;
 }
 
 static void stopExecSessionClosure(const std::vector<Value> &args) {
-	const int requestedId = valueAsInt(args[0]);
+	const int requestedId = mrvmValueAsInt(args[0]);
 	const std::vector<MRRuntimeScheduledConsumer> consumers = runtimeScheduledConsumers();
 	std::string closureId;
 	bool removed = false;
@@ -5965,227 +3034,9 @@ static void stopExecSessionClosure(const std::vector<Value> &args) {
 		}
 		removed = removeRuntimeScheduledConsumer(static_cast<MRRuntimeScheduledConsumerId>(requestedId));
 	}
-	if (removed && !closureId.empty()) static_cast<void>(eraseClosureRuntimeState(closureId));
+	if (removed && !closureId.empty()) static_cast<void>(mrvmExecSessionsEraseClosureState(g_runtimeEnv.runtimeKv, closureId));
 	runtimeReturnInt() = removed ? 1 : 0;
 	runtimeErrorLevel() = removed ? 0 : 1001;
-}
-
-static int runMacroUiDialogDefinition() {
-	class MacroUiDialog final : public MRDialogFoundation {
-	  public:
-		explicit MacroUiDialog(const MacroUiDialogDefinition &definition) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(definition.width, definition.height, definition.x, definition.y), definition.title.empty() ? "DIALOG" : definition.title.c_str(), definition.width, definition.height) {
-			ushort nextCommand = 41000;
-
-			for (std::size_t index = 0; index < definition.labels.size(); ++index) {
-				const MacroUiLabelSpec &label = definition.labels[index];
-				insert(new TStaticText(TRect(label.x, label.y, label.x + strwidth(label.text.c_str()), label.y + 1), label.text.c_str()));
-			}
-
-			for (std::size_t index = 0; index < definition.displays.size(); ++index) {
-				const MacroUiDisplaySpec &display = definition.displays[index];
-				insert(new MacroUiDisplayLine(TRect(display.x, display.y, display.x + display.width, display.y + 1), display.text));
-			}
-
-			for (std::size_t index = 0; index < definition.inputs.size(); ++index) {
-				const MacroUiInputSpec &input = definition.inputs[index];
-				const std::string labelText = input.label + ":";
-				char *buffer = newStr(input.text.c_str());
-				TInputLine *inputLine = new TInputLine(TRect(input.x + strwidth(labelText.c_str()) + 1, input.y, input.x + strwidth(labelText.c_str()) + 1 + input.width, input.y + 1), input.width);
-				insert(new TLabel(TRect(input.x, input.y, input.x + strwidth(labelText.c_str()), input.y + 1), labelText.c_str(), inputLine));
-				insert(inputLine);
-				inputLine->setData(buffer);
-				delete[] buffer;
-				inputLines.emplace_back(input.id, inputLine);
-			}
-
-			for (std::size_t index = 0; index < definition.listBoxes.size(); ++index) {
-				const MacroUiListBoxSpec &listBox = definition.listBoxes[index];
-				const std::vector<std::string> items = resolveMacroUiListItems(listBox.itemSpec);
-				const int listTop = listBox.label.empty() ? listBox.y : listBox.y + 1;
-				TScrollBar *scrollBar = nullptr;
-				MacroUiListView *listView = nullptr;
-
-				if (!listBox.label.empty()) insert(new TStaticText(TRect(listBox.x, listBox.y, listBox.x + strwidth(listBox.label.c_str()), listBox.y + 1), listBox.label.c_str()));
-				scrollBar = new TScrollBar(TRect(listBox.x + listBox.width - 1, listTop, listBox.x + listBox.width, listTop + listBox.height));
-				insert(scrollBar);
-				listView = new MacroUiListView(TRect(listBox.x, listTop, listBox.x + listBox.width - 1, listTop + listBox.height), scrollBar, items, nextCommand);
-				insert(listView);
-				if (!items.empty()) listView->focusItemNum(static_cast<short>(std::clamp(listBox.start, 1, static_cast<int>(items.size())) - 1));
-				commandToId[nextCommand] = listBox.id;
-				listViews.emplace_back(listBox.id, listView);
-				++nextCommand;
-			}
-
-			for (std::size_t index = 0; index < definition.grids.size(); ++index) {
-				const MacroUiGridSpec &grid = definition.grids[index];
-				const std::vector<std::string> items = resolveMacroUiListItems(grid.itemSpec);
-				const int gridTop = grid.label.empty() ? grid.y : grid.y + 1;
-				TScrollBar *scrollBar = nullptr;
-				MacroUiGridView *gridView = nullptr;
-
-				if (!grid.label.empty()) insert(new TStaticText(TRect(grid.x, grid.y, grid.x + strwidth(grid.label.c_str()), grid.y + 1), grid.label.c_str()));
-				scrollBar = new TScrollBar(TRect(grid.x + grid.width - 1, gridTop, grid.x + grid.width, gridTop + grid.height));
-				insert(scrollBar);
-				gridView = new MacroUiGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand);
-				insert(gridView);
-				gridView->focusIndex(grid.start);
-				commandToId[nextCommand] = grid.id;
-				gridViews.emplace_back(grid.id, gridView);
-				++nextCommand;
-			}
-
-			for (std::size_t index = 0; index < definition.buttons.size(); ++index) {
-				const MacroUiButtonSpec &button = definition.buttons[index];
-				const MacroUiButtonCaption caption = parseMacroUiButtonCaption(button.text);
-				commandToId[nextCommand] = button.id;
-				for (std::size_t hotKeyIndex = 0; hotKeyIndex < caption.hotKeys.size(); ++hotKeyIndex)
-					buttonHotKeys.emplace_back(caption.hotKeys[hotKeyIndex], nextCommand);
-				insert(new TButton(TRect(button.x, button.y, button.x + button.width, button.y + 2), caption.displayLabel.c_str(), nextCommand, bfNormal));
-				++nextCommand;
-			}
-		}
-
-		void handleEvent(TEvent &event) override {
-			if (event.what == evKeyDown) {
-				const unsigned char typedChar = static_cast<unsigned char>(event.keyDown.charScan.charCode);
-				const ushort hotKey = typedChar >= 32 ? static_cast<ushort>(std::toupper(typedChar)) : event.keyDown.keyCode;
-				for (std::size_t index = 0; index < buttonHotKeys.size(); ++index) {
-					const ushort registeredKey = buttonHotKeys[index].first;
-					const ushort command = buttonHotKeys[index].second;
-					if (registeredKey == hotKey) {
-						endModal(command);
-						clearEvent(event);
-						return;
-					}
-				}
-				if (ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
-					endModal(cmCancel);
-					clearEvent(event);
-					return;
-				}
-			}
-
-			MRDialogFoundation::handleEvent(event);
-			if (event.what == evCommand) {
-				if (commandToId.find(event.message.command) != commandToId.end()) {
-					endModal(event.message.command);
-					clearEvent(event);
-					return;
-				}
-			}
-		}
-
-		int selectedControlId(ushort result) const noexcept {
-			std::map<ushort, int>::const_iterator it = commandToId.find(result);
-			return it != commandToId.end() ? it->second : 0;
-		}
-
-		void collectValues(std::map<int, std::string> &textValues, std::map<int, int> &indexValues) const {
-			char buffer[512] = {0};
-
-			for (std::size_t rowIndex = 0; rowIndex < inputLines.size(); ++rowIndex) {
-				const int id = inputLines[rowIndex].first;
-				TInputLine *inputLine = inputLines[rowIndex].second;
-				std::memset(buffer, 0, sizeof(buffer));
-				if (inputLine != nullptr) inputLine->getData(buffer);
-				textValues[id] = buffer;
-			}
-			for (std::size_t rowIndex = 0; rowIndex < listViews.size(); ++rowIndex) {
-				const int id = listViews[rowIndex].first;
-				MacroUiListView *listView = listViews[rowIndex].second;
-				const int selectedIndex = listView != nullptr ? listView->focused + 1 : 0;
-				indexValues[id] = std::max(0, selectedIndex);
-				if (listView != nullptr && selectedIndex > 0 && static_cast<std::size_t>(selectedIndex - 1) < listView->values().size()) textValues[id] = listView->values()[static_cast<std::size_t>(selectedIndex - 1)];
-				else
-					textValues[id].clear();
-			}
-			for (std::size_t rowIndex = 0; rowIndex < gridViews.size(); ++rowIndex) {
-				const int id = gridViews[rowIndex].first;
-				MacroUiGridView *gridView = gridViews[rowIndex].second;
-				const int selectedIndex = gridView != nullptr ? gridView->selectedIndexValue() : 0;
-				indexValues[id] = std::max(0, selectedIndex);
-				textValues[id] = gridView != nullptr ? gridView->selectedText() : std::string();
-			}
-		}
-
-	  private:
-		std::map<ushort, int> commandToId;
-		std::vector<std::pair<ushort, ushort>> buttonHotKeys;
-		std::vector<std::pair<int, TInputLine *>> inputLines;
-		std::vector<std::pair<int, MacroUiListView *>> listViews;
-		std::vector<std::pair<int, MacroUiGridView *>> gridViews;
-	};
-
-	MacroUiDialogDefinition definition = readMacroUiDialogDefinition();
-	MacroUiDialog *dialog = new MacroUiDialog(definition);
-	std::map<int, std::string> textValues;
-	std::map<int, int> indexValues;
-	ushort result = cmCancel;
-	int lastCommandId = 0;
-
-	if (dialog == nullptr) return 0;
-	dialog->finalizeLayout();
-	result = TProgram::deskTop->execView(dialog);
-	dialog->collectValues(textValues, indexValues);
-	for (std::map<int, std::string>::const_iterator it = textValues.begin(); it != textValues.end(); ++it)
-		writeMacroUiTextValue(it->first, it->second);
-	for (std::map<int, int>::const_iterator it = indexValues.begin(); it != indexValues.end(); ++it)
-		writeMacroUiIndexValue(it->first, it->second);
-	lastCommandId = result == cmCancel ? 0 : dialog->selectedControlId(result);
-	TObject::destroy(dialog);
-	return lastCommandId;
-}
-
-static int runMacroMenuIntrinsic(const std::string &name, const std::vector<Value> &args) {
-	MacroMenuRequest request;
-
-	request.horizontal = name == "BAR_MENU";
-	if (args.size() == 1) {
-		request.menuSpec = valueAsString(args[0]);
-	} else if (args.size() == 2) {
-		request.title = valueAsString(args[0]);
-		request.menuSpec = valueAsString(args[1]);
-	} else if (args.size() == 3) {
-		request.start = valueAsInt(args[0]);
-		request.title = valueAsString(args[1]);
-		request.menuSpec = valueAsString(args[2]);
-	} else if (args.size() == 5) {
-		request.x = valueAsInt(args[0]);
-		request.y = valueAsInt(args[1]);
-		request.start = valueAsInt(args[2]);
-		request.title = valueAsString(args[3]);
-		request.menuSpec = valueAsString(args[4]);
-	} else {
-		throw std::runtime_error(name + " expects 1, 2, 3 or 5 arguments.");
-	}
-	return runMacroMenuDialog(request);
-}
-
-static std::string runMacroStringInputIntrinsic(const std::vector<Value> &args) {
-	MacroStringInputRequest request;
-
-	request.title = "STRING INPUT";
-	if (args.size() == 1) {
-		request.initialValue = valueAsString(args[0]);
-		request.width = std::max(20, static_cast<int>(request.initialValue.size()) + 2);
-	} else if (args.size() == 2) {
-		request.title = valueAsString(args[0]);
-		request.initialValue = valueAsString(args[1]);
-		request.width = std::max(20, static_cast<int>(request.initialValue.size()) + 2);
-	} else if (args.size() == 3) {
-		request.title = valueAsString(args[0]);
-		request.initialValue = valueAsString(args[1]);
-		request.width = std::max(8, valueAsInt(args[2]));
-	} else if (args.size() == 5) {
-		request.x = valueAsInt(args[0]);
-		request.y = valueAsInt(args[1]);
-		request.width = std::max(8, valueAsInt(args[2]));
-		request.title = valueAsString(args[3]);
-		request.initialValue = valueAsString(args[4]);
-	} else {
-		throw std::runtime_error("STRING_IN expects 1, 2, 3 or 5 arguments.");
-	}
-	return runMacroStringInputDialog(request);
 }
 
 static int currentUiMacroMode() {
@@ -6198,8 +3049,9 @@ static bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept {
 	return macroRef.fromMode == MACRO_MODE_ALL || macroRef.fromMode == mode;
 }
 
-static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink) {
-	std::map<std::string, LoadedMacroFile>::iterator fit;
+static bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink) {
+	MacroRef macroRef;
+	LoadedMacroFile file;
 	VirtualMachine childVm;
 	bool backgroundStaged = currentBackgroundEditSession() != nullptr;
 	bool childFirstRun;
@@ -6207,39 +3059,39 @@ static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt
 	bool childTransient;
 	std::string childFileKey;
 
-	if (macroIt == g_runtimeEnv.loadedMacros.end()) {
+	if (!readLoadedMacroByKey(macroKey, macroRef)) {
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
 
-	fit = g_runtimeEnv.loadedFiles.find(macroIt->second.fileKey);
-	if (fit == g_runtimeEnv.loadedFiles.end()) {
+	if (!readLoadedMacroFileByKey(macroRef.fileKey, file)) {
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
 
 	if (backgroundStaged) {
-		if (fit->second.bytecode.empty() || !currentBackgroundChildMacroAllowed(fit->second)) {
+		if (file.bytecode.empty() || !currentBackgroundChildMacroAllowed(file)) {
 			runtimeErrorLevel() = 5001;
 			return false;
 		}
-	} else if (!ensureLoadedFileResident(macroIt->second.fileKey))
+	} else if (!ensureLoadedFileResident(macroRef.fileKey))
 		return false;
 
-	fit = g_runtimeEnv.loadedFiles.find(macroIt->second.fileKey);
-	if (fit == g_runtimeEnv.loadedFiles.end() || fit->second.bytecode.empty()) {
+	if (!readLoadedMacroFileByKey(macroRef.fileKey, file) || file.bytecode.empty()) {
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
 
-	childFirstRun = macroIt->second.firstRunPending;
-	childDump = macroIt->second.dumpAttr;
-	childTransient = macroIt->second.transientAttr;
-	childFileKey = macroIt->second.fileKey;
-	macroIt->second.firstRunPending = false;
+	childFirstRun = macroRef.firstRunPending;
+	childDump = macroRef.dumpAttr;
+	childTransient = macroRef.transientAttr;
+	childFileKey = macroRef.fileKey;
+	macroRef.firstRunPending = false;
+	writeLoadedMacroByKey(macroKey, macroRef);
 
-	if (macroIt->second.closureUnit) childVm.setClosureContext(macroIt->second.closureId);
-	childVm.executeAt(fit->second.bytecode.data(), fit->second.bytecode.size(), macroIt->second.entryOffset, paramPart, macroIt->second.displayName, false, childFirstRun);
+	childVm.setExecutionSessionContext(currentExecutionSessionId());
+	if (macroRef.closureUnit) childVm.setClosureContext(macroRef.closureId);
+	childVm.executeAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, paramPart, macroRef.displayName, false, childFirstRun);
 	if (logSink != nullptr) logSink->insert(logSink->end(), childVm.log.begin(), childVm.log.end());
 	if (childDump) unloadMacroFromRegistry(macroKey);
 	else if (childTransient)
@@ -6248,13 +3100,14 @@ static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt
 	return true;
 }
 
-static bool executeLoadedMacroWithConfiguredKeymapBatch(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink) {
+static bool executeLoadedMacroWithConfiguredKeymapBatch(const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink) {
+	MacroRef macroRef;
+	LoadedMacroFile file;
 	bool configuredKeymapBatch = false;
 	std::string keymapBatchError;
-	const auto fileIt = g_runtimeEnv.loadedFiles.find(macroIt->second.fileKey);
 
-	if (fileIt != g_runtimeEnv.loadedFiles.end()) {
-		const std::vector<std::string> unsupported = mrvmUnsupportedStagedSymbols(fileIt->second.profile);
+	if (readLoadedMacroByKey(macroKey, macroRef) && readLoadedMacroFileByKey(macroRef.fileKey, file)) {
+		const std::vector<std::string> unsupported = mrvmUnsupportedStagedSymbols(file.profile);
 		for (const std::string &symbol : unsupported)
 			if (symbol == "KEYMAP_RESET" || symbol == "KEYMAP_PROFILE" || symbol == "KEYMAP_BIND" || symbol == "ACTIVE_KEYMAP_PROFILE") {
 				configuredKeymapBatch = true;
@@ -6262,7 +3115,7 @@ static bool executeLoadedMacroWithConfiguredKeymapBatch(std::map<std::string, Ma
 			}
 	}
 	if (configuredKeymapBatch) mrvmBeginConfiguredKeymapBatch();
-	const bool executed = executeLoadedMacro(macroIt, macroKey, paramPart, logSink);
+	const bool executed = executeLoadedMacro(macroKey, paramPart, logSink);
 	if (configuredKeymapBatch && !mrvmEndConfiguredKeymapBatch(&keymapBatchError)) {
 		runtimeErrorLevel() = 1001;
 		if (logSink != nullptr) logSink->push_back("VM Error: keymap batch flush failed: " + (keymapBatchError.empty() ? std::string("invalid keymap batch.") : keymapBatchError));
@@ -6271,105 +3124,28 @@ static bool executeLoadedMacroWithConfiguredKeymapBatch(std::map<std::string, Ma
 	return executed;
 }
 
-static bool parseRunMacroSpec(const std::string &spec, std::string &filePart, std::string &macroPart, std::string &paramPart) {
-	std::string trimmed = trimAscii(spec);
-	std::size_t spacePos;
-	std::string head;
-	std::size_t caretPos;
-
-	filePart.clear();
-	macroPart.clear();
-	paramPart.clear();
-
-	if (trimmed.empty()) return false;
-
-	spacePos = trimmed.find_first_of(" \t\r\n");
-	if (spacePos == std::string::npos) head = trimmed;
-	else {
-		head = trimmed.substr(0, spacePos);
-		paramPart = trimAscii(trimmed.substr(spacePos + 1));
-	}
-
-	caretPos = head.find('^');
-	if (caretPos == std::string::npos) macroPart = head;
-	else {
-		filePart = head.substr(0, caretPos);
-		macroPart = head.substr(caretPos + 1);
-	}
-	return !macroPart.empty();
-}
-
-static bool parseBindingModeValue(int rawMode, int &mode) noexcept {
-	if (rawMode == MACRO_MODE_EDIT || rawMode == MACRO_MODE_DOS_SHELL || rawMode == MACRO_MODE_ALL) {
-		mode = rawMode;
-		return true;
-	}
-	return false;
-}
-
-static bool bindingModeMatches(int bindingMode, int currentMode) noexcept {
-	return bindingMode == MACRO_MODE_ALL || bindingMode == currentMode;
-}
-
-static bool isAsciiLetterKeyCode(ushort code) noexcept {
-	return code >= 'A' && code <= 'Z';
-}
-
-static bool isCalculatorHotkey(const TKey &key) noexcept {
-	return (key.mods & kbAltShift) != 0 && key.code == 'C';
-}
-
-static void logCalculatorHotkeyState(const char *stage, const TKey &key, std::string_view detail = {}) {
-	if (!isCalculatorHotkey(key)) return;
-	char line[320];
-	if (detail.empty()) std::snprintf(line, sizeof(line), "KEYDBG calc stage=%s code=0x%04X mods=0x%04X", stage, static_cast<unsigned>(key.code), static_cast<unsigned>(key.mods));
-	else
-		std::snprintf(line, sizeof(line), "KEYDBG calc stage=%s code=0x%04X mods=0x%04X %.*s", stage, static_cast<unsigned>(key.code), static_cast<unsigned>(key.mods), static_cast<int>(detail.size()), detail.data());
-	mrLogMessage(line);
-}
-
-static bool bindingKeysEqual(const TKey &lhs, const TKey &rhs) noexcept {
-	const ushort lhsModsSansShift = lhs.mods & static_cast<ushort>(~kbShift);
-	const ushort rhsModsSansShift = rhs.mods & static_cast<ushort>(~kbShift);
-
-	if (lhs == rhs) return true;
-	if (lhs.code != rhs.code || !isAsciiLetterKeyCode(lhs.code)) return false;
-	if ((lhs.mods & kbAltShift) == 0 || (rhs.mods & kbAltShift) == 0) return false;
-	return lhsModsSansShift == rhsModsSansShift;
-}
-
-static bool parseBindingKeyValue(const Value &value, TKey &key) {
-	if (value.type == TYPE_INT) {
-		const int encoded = valueAsInt(value);
-		const ushort code = static_cast<ushort>(encoded & 0xFFFF);
-		const ushort mods = static_cast<ushort>((static_cast<unsigned int>(encoded) >> 16) & 0xFFFF);
-		key = TKey(code, mods);
-		return code != kbNoKey;
-	}
-	if (!isStringLike(value)) return false;
-	return parseAssignedKeySpec(valueAsString(value), key);
-}
-
-static void removeExplicitBindingsForKey(const TKey &key, int mode) {
-	auto &bindings = g_runtimeEnv.explicitKeyBindings;
-	bindings.erase(std::remove_if(bindings.begin(), bindings.end(), [&](const ExplicitKeyBinding &binding) { return binding.mode == mode && bindingKeysEqual(binding.key, key); }), bindings.end());
-}
-
 static void clearRegisteredBindingsForKey(const TKey *key, int mode, bool clearAllModes) {
-	for (auto &entry : g_runtimeEnv.loadedMacros) {
-		MacroRef &macroRef = entry.second;
+	const std::vector<std::string> orderValues = macroCatalogMacroOrder();
+	for (const std::string &macroKey : orderValues) {
+		MacroRef macroRef;
+		if (!readLoadedMacroByKey(macroKey, macroRef)) continue;
 		if (!macroRef.hasAssignedKey) continue;
 		if (!clearAllModes && macroRef.fromMode != mode) continue;
-		if (key != nullptr && !bindingKeysEqual(macroRef.assignedKey, *key)) continue;
+		if (key != nullptr && !mrvmBindingKeysEqual(macroRef.assignedKey, *key)) continue;
 		macroRef.hasAssignedKey = false;
 		macroRef.assignedKeySpec.clear();
+		writeLoadedMacroByKey(macroKey, macroRef);
 	}
-	g_runtimeEnv.indexedBoundMacros.erase(std::remove_if(g_runtimeEnv.indexedBoundMacros.begin(), g_runtimeEnv.indexedBoundMacros.end(),
-	                                                     [&](const IndexedBoundMacroEntry &entry) {
-		                                                     if (key != nullptr && !bindingKeysEqual(entry.key, *key)) return false;
-		                                                     return clearAllModes || mode == MACRO_MODE_ALL || mode == MACRO_MODE_EDIT || mode == MACRO_MODE_DOS_SHELL;
-	                                                     }),
-	                                      g_runtimeEnv.indexedBoundMacros.end());
+	{
+		std::vector<IndexedBoundMacroEntry> indexed = macroCatalogIndexedBindings();
+		indexed.erase(std::remove_if(indexed.begin(), indexed.end(),
+		                             [&](const IndexedBoundMacroEntry &entry) {
+			                             if (key != nullptr && !mrvmBindingKeysEqual(entry.key, *key)) return false;
+			                             return clearAllModes || mode == MACRO_MODE_ALL || mode == MACRO_MODE_EDIT || mode == MACRO_MODE_DOS_SHELL;
+		                             }),
+		              indexed.end());
+		writeMacroCatalogIndexedBindings(indexed);
+	}
 }
 
 static bool executeRuntimeMacroSpec(const std::string &spec, std::vector<std::string> *logLines) {
@@ -6378,106 +3154,68 @@ static bool executeRuntimeMacroSpec(const std::string &spec, std::vector<std::st
 	std::string paramPart;
 	std::string targetFileKey;
 	std::string macroKey;
-	std::map<std::string, MacroRef>::iterator macroIt;
+	MacroRef macroRef;
 
-	if (!parseRunMacroSpec(spec, filePart, macroPart, paramPart)) {
+	if (!mrvmParseRunMacroSpec(spec, filePart, macroPart, paramPart)) {
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
 
-	macroKey = upperKey(macroPart);
+	macroKey = mrvmUpperKey(macroPart);
 	if (!filePart.empty()) targetFileKey = resolveLoadedFileKeyForSpec(filePart);
-	if (!filePart.empty() && targetFileKey.empty()) targetFileKey = makeFileKey(filePart);
+	if (!filePart.empty() && targetFileKey.empty()) targetFileKey = mrvmMakeMacroFileKey(filePart);
 
-	macroIt = g_runtimeEnv.loadedMacros.find(macroKey);
-	if (macroIt == g_runtimeEnv.loadedMacros.end() || (!targetFileKey.empty() && macroIt->second.fileKey != targetFileKey)) {
+	if (!readLoadedMacroByKey(macroKey, macroRef) || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
 		if (!filePart.empty()) {
 			if (!loadMacroFileIntoRegistry(filePart, &targetFileKey)) return false;
 		} else {
 			if (!loadMacroFileIntoRegistry(macroPart, &targetFileKey)) return false;
 		}
-		macroIt = g_runtimeEnv.loadedMacros.find(macroKey);
+		static_cast<void>(readLoadedMacroByKey(macroKey, macroRef));
 	}
 
-	if (macroIt == g_runtimeEnv.loadedMacros.end() || (!targetFileKey.empty() && macroIt->second.fileKey != targetFileKey)) {
+	if (macroRef.displayName.empty() || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
-	return executeLoadedMacroWithConfiguredKeymapBatch(macroIt, macroKey, paramPart, logLines);
+	return executeLoadedMacroWithConfiguredKeymapBatch(macroKey, paramPart, logLines);
 }
 
 static bool currentExecutingMacroSpecFromRuntimeStack(std::string &macroSpec) {
 	const std::string macroDisplayName = !g_runtimeEnv.macroStack.empty() ? trimAscii(g_runtimeEnv.macroStack.back().macroName) : std::string();
-	const auto macroIt = g_runtimeEnv.loadedMacros.find(upperKey(macroDisplayName));
+	MacroRef macroRef;
+	LoadedMacroFile file;
 	std::string fileDisplayName;
 
 	macroSpec.clear();
-	if (macroDisplayName.empty() || macroIt == g_runtimeEnv.loadedMacros.end()) return false;
-
-	{
-		const auto fileIt = g_runtimeEnv.loadedFiles.find(macroIt->second.fileKey);
-
-		if (fileIt == g_runtimeEnv.loadedFiles.end()) return false;
-		fileDisplayName = !fileIt->second.displayName.empty() ? fileIt->second.displayName : fileIt->second.resolvedPath;
-	}
+	if (macroDisplayName.empty() || !readLoadedMacroByKey(mrvmUpperKey(macroDisplayName), macroRef)) return false;
+	if (!readLoadedMacroFileByKey(macroRef.fileKey, file)) return false;
+	fileDisplayName = !file.displayName.empty() ? file.displayName : file.resolvedPath;
 	if (fileDisplayName.empty()) return false;
-	macroSpec = fileDisplayName + "^" + macroIt->second.displayName;
+	macroSpec = fileDisplayName + "^" + macroRef.displayName;
 	return true;
 }
 
 
 static bool composeLoadedMacroSpec(const MacroRef &macroRef, std::string &macroSpec) {
+	LoadedMacroFile file;
 	std::string fileDisplayName;
 
 	macroSpec.clear();
-	{
-		const auto fileIt = g_runtimeEnv.loadedFiles.find(macroRef.fileKey);
-
-		if (fileIt == g_runtimeEnv.loadedFiles.end()) return false;
-		fileDisplayName = !fileIt->second.displayName.empty() ? fileIt->second.displayName : fileIt->second.resolvedPath;
-	}
+	if (!readLoadedMacroFileByKey(macroRef.fileKey, file)) return false;
+	fileDisplayName = !file.displayName.empty() ? file.displayName : file.resolvedPath;
 	if (fileDisplayName.empty() || macroRef.displayName.empty()) return false;
 	macroSpec = fileDisplayName + "^" + macroRef.displayName;
 	return true;
-}
-
-static std::string normalizeMenuKeySpec(std::string keySpec) {
-	keySpec = trimAscii(keySpec);
-	if (keySpec.size() >= 2 && keySpec.front() == '<' && keySpec.back() == '>') keySpec = keySpec.substr(1, keySpec.size() - 2);
-	return keySpec;
-}
-
-static std::string menuLabelFromBindingKey(const TKey &key) {
-	struct ComboSpec {
-		const char *prefix;
-		ushort mods;
-	};
-	struct NamedKeySpec {
-		const char *token;
-		ushort code;
-	};
-	static const ComboSpec combos[] = {{"", 0}, {"Shft", kbShift}, {"Ctrl", kbCtrlShift}, {"Alt", kbAltShift}, {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)}, {"AltShft", static_cast<ushort>(kbAltShift | kbShift)}, {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)}, {"CtrlAltShft", static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}, {"Super", kbSuperShift}, {"SuperShft", static_cast<ushort>(kbSuperShift | kbShift)}, {"SuperCtrl", static_cast<ushort>(kbSuperShift | kbCtrlShift)}, {"SuperAlt", static_cast<ushort>(kbSuperShift | kbAltShift)}, {"SuperCtrlShft", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbShift)}, {"SuperAltShft", static_cast<ushort>(kbSuperShift | kbAltShift | kbShift)}, {"SuperCtrlAlt", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbAltShift)}, {"SuperCtrlAltShft", static_cast<ushort>(kbSuperShift | kbCtrlShift | kbAltShift | kbShift)}};
-	static const NamedKeySpec named[] = {{"Enter", kbEnter}, {"Tab", kbTab}, {"Esc", kbEsc}, {"Backspace", kbBack}, {"Up", kbUp}, {"Down", kbDown}, {"Left", kbLeft}, {"Right", kbRight}, {"PgUp", kbPgUp}, {"PgDn", kbPgDn}, {"Home", kbHome}, {"End", kbEnd}, {"Ins", kbIns}, {"Del", kbDel}, {"Grey-", kbGrayMinus}, {"Grey+", kbGrayPlus}, {"Grey*", static_cast<ushort>('*')}, {"Space", static_cast<ushort>(' ')}, {"Minus", static_cast<ushort>('-')}, {"Equal", static_cast<ushort>('=')}, {"F1", kbF1}, {"F2", kbF2}, {"F3", kbF3}, {"F4", kbF4}, {"F5", kbF5}, {"F6", kbF6}, {"F7", kbF7}, {"F8", kbF8}, {"F9", kbF9}, {"F10", kbF10}, {"F11", kbF11}, {"F12", kbF12}};
-	for (const ComboSpec &combo : combos)
-		for (const NamedKeySpec &entry : named)
-			if (key == TKey(entry.code, combo.mods)) return std::string(combo.prefix) + entry.token;
-	for (const ComboSpec &combo : combos) {
-		for (char c = 'A'; c <= 'Z'; ++c)
-			if (key == TKey(static_cast<ushort>(c), combo.mods)) return std::string(combo.prefix) + c;
-		for (char c = '0'; c <= '9'; ++c)
-			if (key == TKey(static_cast<ushort>(c), combo.mods)) return std::string(combo.prefix) + c;
-	}
-	if (key.code != kbNoKey && key.code < 256 && std::isprint(static_cast<unsigned char>(key.code)) != 0) return std::string(1, static_cast<char>(key.code));
-	return std::string();
 }
 
 static bool macroSpecTargetsLoadedMacro(const std::string &spec, const std::string &targetFileKey, const std::string &targetMacroKey) {
 	std::string filePart;
 	std::string macroPart;
 	std::string paramPart;
-	const bool parsed = parseRunMacroSpec(spec, filePart, macroPart, paramPart);
+	const bool parsed = mrvmParseRunMacroSpec(spec, filePart, macroPart, paramPart);
 
-	if (!parsed || upperKey(macroPart) != targetMacroKey) return false;
+	if (!parsed || mrvmUpperKey(macroPart) != targetMacroKey) return false;
 	if (targetFileKey.empty()) return true;
 	if (filePart.empty()) return false;
 	return fileSpecMatchesLoadedFileKey(filePart, targetFileKey);
@@ -6589,14 +3327,14 @@ static bool executeBoundCommand(int commandId) {
 }
 
 static bool executeExplicitKeyBinding(const TKey &pressed, int mode, std::vector<std::string> *logLines) {
-	logCalculatorHotkeyState("vm-explicit-enter", pressed);
+	mrvmLogCalculatorHotkeyState("vm-explicit-enter", pressed);
 	for (std::size_t i = g_runtimeEnv.explicitKeyBindings.size(); i > 0; --i) {
-		const ExplicitKeyBinding &binding = g_runtimeEnv.explicitKeyBindings[i - 1];
-		if (!bindingKeysEqual(binding.key, pressed) || !bindingModeMatches(binding.mode, mode)) continue;
-		if (binding.kind == ExplicitBindingKind::MacroSpec) logCalculatorHotkeyState("vm-explicit-match", pressed, binding.macroSpec);
+		const MRVMExplicitKeyBinding &binding = g_runtimeEnv.explicitKeyBindings[i - 1];
+		if (!mrvmBindingKeysEqual(binding.key, pressed) || !mrvmBindingModeMatches(binding.mode, mode)) continue;
+		if (binding.kind == MRVMExplicitBindingKind::MacroSpec) mrvmLogCalculatorHotkeyState("vm-explicit-match", pressed, binding.macroSpec);
 		else
-			logCalculatorHotkeyState("vm-explicit-match-cmd", pressed);
-		if (binding.kind == ExplicitBindingKind::MacroSpec) return executeRuntimeMacroSpec(binding.macroSpec, logLines);
+			mrvmLogCalculatorHotkeyState("vm-explicit-match-cmd", pressed);
+		if (binding.kind == MRVMExplicitBindingKind::MacroSpec) return executeRuntimeMacroSpec(binding.macroSpec, logLines);
 		runtimeErrorLevel() = executeBoundCommand(binding.commandId) ? 0 : 1001;
 		return runtimeErrorLevel() == 0;
 	}
@@ -6606,21 +3344,21 @@ static bool executeExplicitKeyBinding(const TKey &pressed, int mode, std::vector
 static bool fileContainsOnlyTransientMacros(const LoadedMacroFile &file) {
 	if (file.macroNames.empty()) return false;
 	for (const auto &macroName : file.macroNames) {
-		std::map<std::string, MacroRef>::const_iterator mit = g_runtimeEnv.loadedMacros.find(macroName);
-		if (mit == g_runtimeEnv.loadedMacros.end() || !mit->second.transientAttr) return false;
+		MacroRef macroRef;
+		if (!readLoadedMacroByKey(macroName, macroRef) || !macroRef.transientAttr) return false;
 	}
 	return true;
 }
 
 static bool refreshLoadedFileBytecode(const std::string &fileKey) {
-	std::map<std::string, LoadedMacroFile>::iterator fit = g_runtimeEnv.loadedFiles.find(fileKey);
+	LoadedMacroFile file;
 	std::string source;
 	unsigned char *compiled = nullptr;
 	size_t compiledSize = 0;
 	int macroCount;
 
-	if (fit == g_runtimeEnv.loadedFiles.end()) return false;
-	if (fit->second.resolvedPath.empty() || !readTextFile(fit->second.resolvedPath, source)) {
+	if (!readLoadedMacroFileByKey(fileKey, file)) return false;
+	if (file.resolvedPath.empty() || !readTextFile(file.resolvedPath, source)) {
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
@@ -6631,9 +3369,9 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 		return false;
 	}
 
-	fit->second.bytecode.assign(compiled, compiled + compiledSize);
+	file.bytecode.assign(compiled, compiled + compiledSize);
 	std::free(compiled);
-	fit->second.profile = mrvmAnalyzeBytecode(fit->second.bytecode.data(), fit->second.bytecode.size());
+	file.profile = mrvmAnalyzeBytecode(file.bytecode.data(), file.bytecode.size());
 
 	macroCount = get_compiled_macro_count();
 	for (int i = 0; i < macroCount; ++i) {
@@ -6645,61 +3383,64 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 		int unitKind = get_compiled_macro_unit_kind(i);
 		int tickMs = get_compiled_macro_tick_ms(i);
 		std::string displayName = macroNameText != nullptr ? macroNameText : std::string();
-		std::string macroKey = upperKey(displayName);
-		std::map<std::string, MacroRef>::iterator mit = g_runtimeEnv.loadedMacros.find(macroKey);
+		std::string macroKey = mrvmUpperKey(displayName);
+		MacroRef macroRef;
 
 		if (displayName.empty() || entry < 0) continue;
-		if (mit == g_runtimeEnv.loadedMacros.end() || mit->second.fileKey != fileKey) continue;
+		if (!readLoadedMacroByKey(macroKey, macroRef) || macroRef.fileKey != fileKey) continue;
 
-		mit->second.displayName = displayName;
-		mit->second.entryOffset = static_cast<std::size_t>(entry);
-		mit->second.transientAttr = (flags & MACRO_ATTR_TRANS) != 0;
-		mit->second.dumpAttr = (flags & MACRO_ATTR_DUMP) != 0;
-		mit->second.permAttr = (flags & MACRO_ATTR_PERM) != 0;
-		mit->second.assignedKeySpec = keyspecText != nullptr ? keyspecText : std::string();
-		mit->second.fromMode = (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL) ? mode : MACRO_MODE_EDIT;
-		mit->second.closureUnit = unitKind == MRMAC_UNIT_CLOSURE;
-		mit->second.tickMs = tickMs > 0 ? static_cast<std::uint64_t>(tickMs) : 0;
-		mit->second.closureId.clear();
-		if (mit->second.scheduledConsumerId != 0) {
-			removeRuntimeScheduledConsumer(mit->second.scheduledConsumerId);
-			mit->second.scheduledConsumerId = 0;
+		macroRef.displayName = displayName;
+		macroRef.entryOffset = static_cast<std::size_t>(entry);
+		macroRef.transientAttr = (flags & MACRO_ATTR_TRANS) != 0;
+		macroRef.dumpAttr = (flags & MACRO_ATTR_DUMP) != 0;
+		macroRef.permAttr = (flags & MACRO_ATTR_PERM) != 0;
+		macroRef.assignedKeySpec = keyspecText != nullptr ? keyspecText : std::string();
+		macroRef.fromMode = (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL) ? mode : MACRO_MODE_EDIT;
+		macroRef.closureUnit = unitKind == MRMAC_UNIT_CLOSURE;
+		macroRef.tickMs = tickMs > 0 ? static_cast<std::uint64_t>(tickMs) : 0;
+		macroRef.closureId.clear();
+		if (macroRef.scheduledConsumerId != 0) {
+			removeRuntimeScheduledConsumer(macroRef.scheduledConsumerId);
+			macroRef.scheduledConsumerId = 0;
 		}
-		if (mit->second.closureUnit && mit->second.tickMs != 0) {
+		if (macroRef.closureUnit && macroRef.tickMs != 0) {
 			MRRuntimeScheduledConsumerConfig config;
-			const std::string macroSpec = fit->second.displayName + "^" + displayName;
-			config.intervalMs = mit->second.tickMs;
+			const std::string macroSpec = file.displayName + "^" + displayName;
+			config.intervalMs = macroRef.tickMs;
 			config.macroSpec = macroSpec;
 			config.entryName = displayName;
 			config.closureId = macroSpec;
-			mit->second.closureId = macroSpec;
-			ensureClosureStateHash(config.closureId, static_cast<int>(mit->second.tickMs));
-			mit->second.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
+			macroRef.closureId = macroSpec;
+			mrvmExecSessionsEnsureClosureState(g_runtimeEnv.runtimeKv, config.closureId, static_cast<int>(macroRef.tickMs));
+			macroRef.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
 		}
-		mit->second.hasAssignedKey = false;
-		if (!mit->second.assignedKeySpec.empty()) mit->second.hasAssignedKey = parseAssignedKeySpec(mit->second.assignedKeySpec, mit->second.assignedKey);
+		macroRef.hasAssignedKey = false;
+		if (!macroRef.assignedKeySpec.empty()) macroRef.hasAssignedKey = mrvmParseAssignedKeySpec(macroRef.assignedKeySpec, macroRef.assignedKey);
+		writeLoadedMacroByKey(macroKey, macroRef);
 	}
 
+	writeLoadedMacroFileByKey(file);
 	runtimeErrorLevel() = 0;
-	logMacroProfileLine("Refreshed macro file", fit->second);
+	logMacroProfileLine("Refreshed macro file", file);
 	return true;
 }
 
 static bool ensureLoadedFileResident(const std::string &fileKey) {
-	std::map<std::string, LoadedMacroFile>::iterator fit = g_runtimeEnv.loadedFiles.find(fileKey);
-	if (fit == g_runtimeEnv.loadedFiles.end()) return false;
-	if (!fit->second.bytecode.empty()) return true;
+	LoadedMacroFile file;
+	if (!readLoadedMacroFileByKey(fileKey, file)) return false;
+	if (!file.bytecode.empty()) return true;
 	return refreshLoadedFileBytecode(fileKey);
 }
 
 static bool evictTransientFileImage(const std::string &fileKey) {
-	std::map<std::string, LoadedMacroFile>::iterator fit = g_runtimeEnv.loadedFiles.find(fileKey);
-	if (fit == g_runtimeEnv.loadedFiles.end()) return false;
-	if (!fileContainsOnlyTransientMacros(fit->second)) return false;
-	for (const auto &macroName : fit->second.macroNames)
+	LoadedMacroFile file;
+	if (!readLoadedMacroFileByKey(fileKey, file)) return false;
+	if (!fileContainsOnlyTransientMacros(file)) return false;
+	for (const auto &macroName : file.macroNames)
 		if (macroIsRunning(macroName)) return false;
-	fit->second.bytecode.clear();
-	fit->second.bytecode.shrink_to_fit();
+	file.bytecode.clear();
+	file.bytecode.shrink_to_fit();
+	writeLoadedMacroFileByKey(file);
 	return true;
 }
 
@@ -6709,10 +3450,11 @@ static bool currentBackgroundChildMacroAllowed(const LoadedMacroFile &file) noex
 }
 
 static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileKey) {
-	std::string resolvedPath = resolveMacroFilePath(spec);
-	std::string fileKey = makeFileKey(spec);
+	std::string resolvedPath = mrvmResolveMacroFilePath(spec, normalizeConfiguredPathInput(configuredMacroDirectoryPath()));
+	std::string fileKey = mrvmMakeMacroFileKey(spec);
 	std::string source;
 	LoadedMacroFile newFile;
+	LoadedMacroFile existingFile;
 	unsigned char *compiled = nullptr;
 	size_t compiledSize = 0;
 	int macroCount;
@@ -6724,9 +3466,9 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		return false;
 	}
 
-	std::map<std::string, LoadedMacroFile>::iterator existingFile = g_runtimeEnv.loadedFiles.find(fileKey);
-	if (existingFile != g_runtimeEnv.loadedFiles.end()) {
-		for (const auto &macroName : existingFile->second.macroNames)
+	const bool hasExistingFile = readLoadedMacroFileByKey(fileKey, existingFile);
+	if (hasExistingFile) {
+		for (const auto &macroName : existingFile.macroNames)
 			if (macroIsRunning(macroName)) {
 				runtimeErrorLevel() = 5006;
 				return false;
@@ -6743,14 +3485,13 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	for (int i = 0; i < macroCount; ++i) {
 		const char *macroNameText = get_compiled_macro_name(i);
 		std::string displayName = macroNameText != nullptr ? macroNameText : std::string();
-		std::string macroKey = upperKey(displayName);
-		std::map<std::string, MacroRef>::iterator mit;
+		std::string macroKey = mrvmUpperKey(displayName);
+		MacroRef existingMacro;
 
 		if (displayName.empty()) continue;
 
-		mit = g_runtimeEnv.loadedMacros.find(macroKey);
-		if (mit != g_runtimeEnv.loadedMacros.end()) {
-			if (macroIsRunning(macroKey) || mit->second.permAttr) {
+		if (readLoadedMacroByKey(macroKey, existingMacro)) {
+			if (macroIsRunning(macroKey) || existingMacro.permAttr) {
 				std::free(compiled);
 				runtimeErrorLevel() = 5006;
 				return false;
@@ -6765,8 +3506,8 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	std::free(compiled);
 	newFile.profile = mrvmAnalyzeBytecode(newFile.bytecode.data(), newFile.bytecode.size());
 
-	if (existingFile != g_runtimeEnv.loadedFiles.end()) {
-		std::vector<std::string> oldNames = existingFile->second.macroNames;
+	if (hasExistingFile) {
+		std::vector<std::string> oldNames = existingFile.macroNames;
 		for (const auto &oldName : oldNames)
 			removeMacroFromRegistryByKey(oldName);
 	}
@@ -6780,7 +3521,7 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		int unitKind = get_compiled_macro_unit_kind(i);
 		int tickMs = get_compiled_macro_tick_ms(i);
 		std::string displayName = macroNameText != nullptr ? macroNameText : std::string();
-		std::string macroKey = upperKey(displayName);
+		std::string macroKey = mrvmUpperKey(displayName);
 		MacroRef ref;
 
 		if (displayName.empty() || entry < 0) continue;
@@ -6798,7 +3539,7 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		ref.closureUnit = unitKind == MRMAC_UNIT_CLOSURE;
 		ref.tickMs = tickMs > 0 ? static_cast<std::uint64_t>(tickMs) : 0;
 		ref.hasAssignedKey = false;
-		if (!ref.assignedKeySpec.empty()) ref.hasAssignedKey = parseAssignedKeySpec(ref.assignedKeySpec, ref.assignedKey);
+		if (!ref.assignedKeySpec.empty()) ref.hasAssignedKey = mrvmParseAssignedKeySpec(ref.assignedKeySpec, ref.assignedKey);
 		if (ref.closureUnit && ref.tickMs != 0) {
 			MRRuntimeScheduledConsumerConfig config;
 			const std::string macroSpec = newFile.displayName + "^" + displayName;
@@ -6807,15 +3548,15 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 			config.entryName = displayName;
 			config.closureId = macroSpec;
 			ref.closureId = macroSpec;
-			ensureClosureStateHash(config.closureId, static_cast<int>(ref.tickMs));
+			mrvmExecSessionsEnsureClosureState(g_runtimeEnv.runtimeKv, config.closureId, static_cast<int>(ref.tickMs));
 			ref.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
 		}
-		g_runtimeEnv.loadedMacros[macroKey] = ref;
-		g_runtimeEnv.macroOrder.push_back(macroKey);
+		writeLoadedMacroByKey(macroKey, ref);
+		appendMacroCatalogMacroOrder(macroKey);
 		newFile.macroNames.push_back(macroKey);
 	}
 
-	g_runtimeEnv.loadedFiles[fileKey] = newFile;
+	writeLoadedMacroFileByKey(newFile);
 	runtimeErrorLevel() = 0;
 	logMacroProfileLine("Loaded macro file", newFile);
 	static_cast<void>(mrvmUiRefreshRuntimeMenus(nullptr));
@@ -6824,23 +3565,24 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 }
 
 static bool tryLoadIndexedMacroForKey(const TKey &pressed) {
-	logCalculatorHotkeyState("vm-indexed-enter", pressed);
-	for (std::size_t i = 0; i < g_runtimeEnv.indexedBoundMacros.size(); ++i) {
-		const IndexedBoundMacroEntry &entry = g_runtimeEnv.indexedBoundMacros[i];
+	mrvmLogCalculatorHotkeyState("vm-indexed-enter", pressed);
+	const std::vector<IndexedBoundMacroEntry> indexed = macroCatalogIndexedBindings();
+	for (std::size_t i = 0; i < indexed.size(); ++i) {
+		const IndexedBoundMacroEntry &entry = indexed[i];
 		std::string fileKey;
 
-		if (!bindingKeysEqual(entry.key, pressed)) continue;
-		logCalculatorHotkeyState("vm-indexed-match", pressed, entry.filePath);
-		fileKey = makeFileKey(entry.filePath);
-		if (g_runtimeEnv.loadedFiles.find(fileKey) != g_runtimeEnv.loadedFiles.end()) return true;
-		g_runtimeEnv.indexedWarmupAttemptedFiles.insert(fileKey);
+		if (!mrvmBindingKeysEqual(entry.key, pressed)) continue;
+		mrvmLogCalculatorHotkeyState("vm-indexed-match", pressed, entry.filePath);
+		fileKey = mrvmMakeMacroFileKey(entry.filePath);
+		if (loadedMacroFileExists(fileKey)) return true;
+		static_cast<void>(markMacroCatalogIndexedWarmupAttempted(fileKey));
 		if (loadMacroFileIntoRegistry(entry.filePath, nullptr)) return true;
 	}
 	return false;
 }
 
 static bool unloadMacroFromRegistry(const std::string &macroName) {
-	std::string macroKey = upperKey(trimAscii(macroName));
+	std::string macroKey = mrvmUpperKey(trimAscii(macroName));
 	if (macroKey.empty()) return false;
 	if (macroIsRunning(macroKey)) {
 		runtimeErrorLevel() = 5006;
@@ -6854,10 +3596,10 @@ static bool unloadMacroFromRegistry(const std::string &macroName) {
 static bool applyHashIntrinsic(VirtualMachine &vm, const std::string &name, const std::vector<Value> &args, Value &out) {
 	if (name == "GLOBAL_HASH") {
 		GlobalEntry entry;
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GLOBAL_HASH expects one string argument.");
-		if (!readGlobalValue(valueAsString(args[0]), entry) || entry.type != TYPE_HASH || entry.value.type != TYPE_HASH) {
-			Value value = makeHash(g_runtimeEnv.globalHashStore.createHash(), true);
-			setGlobalValue(valueAsString(args[0]), TYPE_HASH, value);
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("GLOBAL_HASH expects one string argument.");
+		if (!readGlobalValue(mrvmValueAsString(args[0]), entry) || entry.type != TYPE_HASH || entry.value.type != TYPE_HASH) {
+			Value value = mrvmMakeHash(g_runtimeEnv.runtimeKv.globalStore().createHash(), true);
+			setGlobalValue(mrvmValueAsString(args[0]), TYPE_HASH, value);
 			out = value;
 			return true;
 		}
@@ -6865,33 +3607,33 @@ static bool applyHashIntrinsic(VirtualMachine &vm, const std::string &name, cons
 		return true;
 	}
 	if (name == "EXISTS") {
-		if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("EXISTS expects (hash, string).");
-		out = makeInt(mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], valueAsString(args[1])) ? 1 : 0);
+		if (args.size() != 2 || args[0].type != TYPE_HASH || !mrvmIsStringLike(args[1])) throw std::runtime_error("EXISTS expects (hash, string).");
+		out = mrvmMakeInt(mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0], mrvmValueAsString(args[1])) ? 1 : 0);
 		return true;
 	}
 	if (name == "HAS_VALUE") {
-		if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("HAS_VALUE expects (hash, string).");
-		const std::string key = valueAsString(args[1]);
-		if (!mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) {
-			out = makeInt(0);
+		if (args.size() != 2 || args[0].type != TYPE_HASH || !mrvmIsStringLike(args[1])) throw std::runtime_error("HAS_VALUE expects (hash, string).");
+		const std::string key = mrvmValueAsString(args[1]);
+		if (!mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0], key)) {
+			out = mrvmMakeInt(0);
 			return true;
 		}
-		out = makeInt(valueHasContent(mrvmHashReadValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) ? 1 : 0);
+		out = mrvmMakeInt(mrvmValueHasContent(mrvmHashReadValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0], key)) ? 1 : 0);
 		return true;
 	}
 	if (name == "KEYS") {
 		Value result = mrvmMakeArrayValue(TYPE_STR);
 		if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("KEYS expects one hash argument.");
-		for (const std::string &key : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).keys(args[0].hashHandle))
-			result.arrayValues.push_back(makeString(key));
+		for (const std::string &key : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0]).keys(args[0].hashHandle))
+			result.arrayValues.push_back(mrvmMakeString(key));
 		out = result;
 		return true;
 	}
 	if (name == "VALUES") {
 		Value result = mrvmMakeArrayValue(TYPE_STR);
 		if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("VALUES expects one hash argument.");
-		for (const Value &value : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).values(args[0].hashHandle))
-			result.arrayValues.push_back(makeString(valueAsString(value)));
+		for (const Value &value : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0]).values(args[0].hashHandle))
+			result.arrayValues.push_back(mrvmMakeString(mrvmValueAsString(value)));
 		out = result;
 		return true;
 	}
@@ -6901,111 +3643,111 @@ static bool applyHashIntrinsic(VirtualMachine &vm, const std::string &name, cons
 static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const std::vector<Value> &args) {
 	if (name == "STR") {
 		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("STR expects one integer argument.");
-		return makeString(valueAsString(args[0]));
+		return mrvmMakeString(mrvmValueAsString(args[0]));
 	}
 	if (name == "CHAR") {
 		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("CHAR expects one integer argument.");
-		return makeChar(static_cast<unsigned char>(args[0].i & 0xFF));
+		return mrvmMakeChar(static_cast<unsigned char>(args[0].i & 0xFF));
 	}
 	if (name == "UTF8") {
 		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("UTF8 expects one integer argument.");
-		return makeString(utf8FromCodepoint(static_cast<std::uint32_t>(args[0].i)));
+		return mrvmMakeString(mrvmUtf8FromCodepoint(static_cast<std::uint32_t>(args[0].i)));
 	}
 	if (name == "ASCII") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("ASCII expects one string argument.");
-		std::string s = valueAsString(args[0]);
-		return makeInt(s.empty() ? 0 : static_cast<unsigned char>(s[0]));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("ASCII expects one string argument.");
+		std::string s = mrvmValueAsString(args[0]);
+		return mrvmMakeInt(s.empty() ? 0 : static_cast<unsigned char>(s[0]));
 	}
 	if (name == "CAPS") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("CAPS expects one string argument.");
-		return makeString(upperKey(valueAsString(args[0])));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("CAPS expects one string argument.");
+		return mrvmMakeString(mrvmUpperKey(mrvmValueAsString(args[0])));
 	}
 	if (name == "COPY") {
 		std::string s;
 		int pos;
 		int count;
 		std::size_t start;
-		if (args.size() != 3 || !isStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("COPY expects (string, int, int).");
-		s = valueAsString(args[0]);
-		pos = checkedStringIndex(args[1].i);
+		if (args.size() != 3 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("COPY expects (string, int, int).");
+		s = mrvmValueAsString(args[0]);
+		pos = mrvmCheckedStringIndex(args[1].i);
 		count = args[2].i;
 		if (count < 0) throw std::runtime_error("Invalid string index on string copy operation.");
-		if (static_cast<std::size_t>(pos) > s.size()) return makeString("");
+		if (static_cast<std::size_t>(pos) > s.size()) return mrvmMakeString("");
 		start = static_cast<std::size_t>(pos - 1);
-		return makeString(s.substr(start, static_cast<std::size_t>(count)));
+		return mrvmMakeString(s.substr(start, static_cast<std::size_t>(count)));
 	}
 		if (name == "LENGTH") {
-			if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("LENGTH expects one string argument.");
-			return makeInt(static_cast<int>(valueAsString(args[0]).size()));
+			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("LENGTH expects one string argument.");
+			return mrvmMakeInt(static_cast<int>(mrvmValueAsString(args[0]).size()));
 		}
 		if (name == "LEN") {
-			if (args.size() != 1 || (!isStringLike(args[0]) && !mrvmValueIsArrayType(args[0].type))) throw std::runtime_error("LEN expects one string or array argument.");
-			if (mrvmValueIsArrayType(args[0].type)) return makeInt(static_cast<int>(args[0].arrayValues.size()));
-			return makeInt(static_cast<int>(valueAsString(args[0]).size()));
+			if (args.size() != 1 || (!mrvmIsStringLike(args[0]) && !mrvmValueIsArrayType(args[0].type))) throw std::runtime_error("LEN expects one string or array argument.");
+			if (mrvmValueIsArrayType(args[0].type)) return mrvmMakeInt(static_cast<int>(args[0].arrayValues.size()));
+			return mrvmMakeInt(static_cast<int>(mrvmValueAsString(args[0]).size()));
 		}
 		if (name == "POS") {
 			std::string needle;
 			std::string haystack;
 		std::size_t pos;
-		if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("POS expects (substring, string).");
-		needle = valueAsString(args[0]);
-		haystack = valueAsString(args[1]);
-		if (needle.empty()) return makeInt(1);
+		if (args.size() != 2 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1])) throw std::runtime_error("POS expects (substring, string).");
+		needle = mrvmValueAsString(args[0]);
+		haystack = mrvmValueAsString(args[1]);
+		if (needle.empty()) return mrvmMakeInt(1);
 		pos = haystack.find(needle);
-		return makeInt(pos == std::string::npos ? 0 : static_cast<int>(pos + 1));
+		return mrvmMakeInt(pos == std::string::npos ? 0 : static_cast<int>(pos + 1));
 	}
 	if (name == "XPOS") {
 		std::string needle;
 		std::string haystack;
 		int startPos;
 		std::size_t pos;
-		if (args.size() != 3 || !isStringLike(args[0]) || !isStringLike(args[1]) || args[2].type != TYPE_INT) throw std::runtime_error("XPOS expects (substring, string, int).");
-		needle = valueAsString(args[0]);
-		haystack = valueAsString(args[1]);
-		startPos = checkedStringIndex(args[2].i);
-		if (needle.empty()) return makeInt(startPos <= static_cast<int>(haystack.size()) + 1 ? startPos : 0);
-		if (static_cast<std::size_t>(startPos) > haystack.size()) return makeInt(0);
+		if (args.size() != 3 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || args[2].type != TYPE_INT) throw std::runtime_error("XPOS expects (substring, string, int).");
+		needle = mrvmValueAsString(args[0]);
+		haystack = mrvmValueAsString(args[1]);
+		startPos = mrvmCheckedStringIndex(args[2].i);
+		if (needle.empty()) return mrvmMakeInt(startPos <= static_cast<int>(haystack.size()) + 1 ? startPos : 0);
+		if (static_cast<std::size_t>(startPos) > haystack.size()) return mrvmMakeInt(0);
 		pos = haystack.find(needle, static_cast<std::size_t>(startPos - 1));
-		return makeInt(pos == std::string::npos ? 0 : static_cast<int>(pos + 1));
+		return mrvmMakeInt(pos == std::string::npos ? 0 : static_cast<int>(pos + 1));
 	}
 	if (name == "STR_DEL") {
 		std::string s;
 		int pos;
 		int count;
 		std::size_t start;
-		if (args.size() != 3 || !isStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("STR_DEL expects (string, int, int).");
-		s = valueAsString(args[0]);
-		pos = checkedStringIndex(args[1].i);
+		if (args.size() != 3 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("STR_DEL expects (string, int, int).");
+		s = mrvmValueAsString(args[0]);
+		pos = mrvmCheckedStringIndex(args[1].i);
 		count = args[2].i;
 		if (count < 0) throw std::runtime_error("Invalid string index on string copy operation.");
-		if (static_cast<std::size_t>(pos) > s.size()) return makeString(s);
+		if (static_cast<std::size_t>(pos) > s.size()) return mrvmMakeString(s);
 		start = static_cast<std::size_t>(pos - 1);
 		s.erase(start, static_cast<std::size_t>(count));
-		return makeString(s);
+		return mrvmMakeString(s);
 	}
 	if (name == "STR_INS") {
 		std::string target;
 		std::string dest;
 		int location;
 		std::size_t insertPos;
-		if (args.size() != 3 || !isStringLike(args[0]) || !isStringLike(args[1]) || args[2].type != TYPE_INT) throw std::runtime_error("STR_INS expects (string, string, int).");
-		target = valueAsString(args[0]);
-		dest = valueAsString(args[1]);
-		location = checkedInsertIndex(args[2].i);
+		if (args.size() != 3 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || args[2].type != TYPE_INT) throw std::runtime_error("STR_INS expects (string, string, int).");
+		target = mrvmValueAsString(args[0]);
+		dest = mrvmValueAsString(args[1]);
+		location = mrvmCheckedInsertIndex(args[2].i);
 		insertPos = static_cast<std::size_t>(location);
 		if (insertPos > dest.size()) insertPos = dest.size();
 		dest.insert(insertPos, target);
-		enforceStringLength(dest);
-		return makeString(dest);
+		mrvmEnforceStringLength(dest);
+		return mrvmMakeString(dest);
 	}
 	if (name == "REAL_I") {
 		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("REAL_I expects one integer argument.");
-		return makeReal(static_cast<double>(args[0].i));
+		return mrvmMakeReal(static_cast<double>(args[0].i));
 	}
 	if (name == "INT_R") {
 		if (args.size() != 1 || args[0].type != TYPE_REAL) throw std::runtime_error("INT_R expects one real argument.");
 		if (args[0].r < static_cast<double>(std::numeric_limits<int>::min()) || args[0].r > static_cast<double>(std::numeric_limits<int>::max())) throw std::runtime_error("Real to Integer conversion out of range.");
-		return makeInt(static_cast<int>(args[0].r));
+		return mrvmMakeInt(static_cast<int>(args[0].r));
 	}
 	if (name == "RSTR") {
 		char fmt[32];
@@ -7023,57 +3765,57 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 
 		std::snprintf(fmt, sizeof(fmt), "%%%d.%df", width, precision);
 		std::snprintf(buf, sizeof(buf), fmt, args[0].r);
-		enforceStringLength(buf);
-		return makeString(buf);
+		mrvmEnforceStringLength(buf);
+		return mrvmMakeString(buf);
 	}
 	if (name == "REMOVE_SPACE") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("REMOVE_SPACE expects one string argument.");
-		return makeString(removeSpaceAscii(valueAsString(args[0])));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("REMOVE_SPACE expects one string argument.");
+		return mrvmMakeString(mrvmRemoveSpaceAscii(mrvmValueAsString(args[0])));
 	}
 	if (name == "GET_EXTENSION") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GET_EXTENSION expects one string argument.");
-		return makeString(getExtensionPart(valueAsString(args[0])));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("GET_EXTENSION expects one string argument.");
+		return mrvmMakeString(mrvmGetExtensionPart(mrvmValueAsString(args[0])));
 	}
 	if (name == "GET_PATH") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GET_PATH expects one string argument.");
-		return makeString(getPathPart(valueAsString(args[0])));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("GET_PATH expects one string argument.");
+		return mrvmMakeString(mrvmGetPathPart(mrvmValueAsString(args[0])));
 	}
 	if (name == "TRUNCATE_EXTENSION") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("TRUNCATE_EXTENSION expects one string argument.");
-		return makeString(truncateExtensionPart(valueAsString(args[0])));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("TRUNCATE_EXTENSION expects one string argument.");
+		return mrvmMakeString(mrvmTruncateExtensionPart(mrvmValueAsString(args[0])));
 	}
 	if (name == "TRUNCATE_PATH") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("TRUNCATE_PATH expects one string argument.");
-		return makeString(truncatePathPart(valueAsString(args[0])));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("TRUNCATE_PATH expects one string argument.");
+		return mrvmMakeString(mrvmTruncatePathPart(mrvmValueAsString(args[0])));
 	}
 	if (name == "FILE_EXISTS") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("FILE_EXISTS expects one string argument.");
-		return makeInt(fileExistsPath(valueAsString(args[0])) ? 1 : 0);
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("FILE_EXISTS expects one string argument.");
+		return mrvmMakeInt(mrvmFileExistsPath(mrvmValueAsString(args[0])) ? 1 : 0);
 	}
 	if (name == "FILE_ATTR") {
 		int attr = 0;
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("FILE_ATTR expects one string argument.");
-		if (!readFileMetadata(valueAsString(args[0]), &attr, nullptr, nullptr)) {
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("FILE_ATTR expects one string argument.");
+		if (!mrvmReadFileMetadata(mrvmValueAsString(args[0]), &attr, nullptr, nullptr)) {
 			runtimeErrorLevel() = errno != 0 ? errno : 1;
-			return makeInt(0);
+			return mrvmMakeInt(0);
 		}
 		runtimeErrorLevel() = 0;
-		return makeInt(attr);
+		return mrvmMakeInt(attr);
 	}
 	if (name == "FIRST_FILE") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("FIRST_FILE expects one string argument.");
-		return makeInt(findFirstFileMatch(valueAsString(args[0])));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("FIRST_FILE expects one string argument.");
+		return mrvmMakeInt(findFirstFileMatch(mrvmValueAsString(args[0])));
 	}
 	if (name == "NEXT_FILE") {
 		if (!args.empty()) throw std::runtime_error("NEXT_FILE expects no arguments.");
-		return makeInt(findNextFileMatch());
+		return mrvmMakeInt(findNextFileMatch());
 	}
 	if (name == "SUBSHELL") {
-		SubshellResult subshell;
-		if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SUBSHELL expects (string, int).");
-		subshell = runSubshellCapture(valueAsString(args[0]), valueAsInt(args[1]));
+		MRVMSubshellResult subshell;
+		if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SUBSHELL expects (string, int).");
+		subshell = mrvmRunSubshellCapture(mrvmValueAsString(args[0]), mrvmValueAsInt(args[1]), configuredShellExecutablePath());
 		runtimeErrorLevel() = subshell.errorLevel;
-		return makeString(subshell.output);
+		return mrvmMakeString(subshell.output);
 	}
 	if (name == "SEARCH_FWD") {
 		MRFileEditor *editor;
@@ -7081,20 +3823,20 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 		std::size_t matchEnd = 0;
 		MREditWindow *win;
 		BackgroundEditSession *session;
-		if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SEARCH_FWD expects (string, int).");
-		if (valueAsString(args[0]).empty()) {
+		if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SEARCH_FWD expects (string, int).");
+		if (mrvmValueAsString(args[0]).empty()) {
 			runtimeErrorLevel() = 1010;
-			return makeInt(0);
+			return mrvmMakeInt(0);
 		}
 		editor = currentEditor();
 		session = currentBackgroundEditSession();
-		if (editor == nullptr && session == nullptr) return makeInt(0);
-		if (!searchEditorForward(editor, valueAsString(args[0]), valueAsInt(args[1]), currentRuntimeIgnoreCase(), matchStart, matchEnd)) {
+		if (editor == nullptr && session == nullptr) return mrvmMakeInt(0);
+		if (!searchEditorForward(editor, mrvmValueAsString(args[0]), mrvmValueAsInt(args[1]), currentRuntimeIgnoreCase(), matchStart, matchEnd)) {
 			if (session != nullptr) session->clearLastSearch();
 			else
 				g_runtimeEnv.lastSearchValid = false;
 			runtimeErrorLevel() = 0;
-			return makeInt(0);
+			return mrvmMakeInt(0);
 		}
 		if (editor != nullptr) {
 			editor->setCursorOffset(static_cast<uint>(matchStart), 0);
@@ -7120,7 +3862,7 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 			g_runtimeEnv.lastSearchCursor = matchStart;
 		}
 		runtimeErrorLevel() = 0;
-		return makeInt(1);
+		return mrvmMakeInt(1);
 	}
 	if (name == "SEARCH_BWD") {
 		MRFileEditor *editor;
@@ -7128,20 +3870,20 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 		std::size_t matchEnd = 0;
 		MREditWindow *win;
 		BackgroundEditSession *session;
-		if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SEARCH_BWD expects (string, int).");
-		if (valueAsString(args[0]).empty()) {
+		if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SEARCH_BWD expects (string, int).");
+		if (mrvmValueAsString(args[0]).empty()) {
 			runtimeErrorLevel() = 1010;
-			return makeInt(0);
+			return mrvmMakeInt(0);
 		}
 		editor = currentEditor();
 		session = currentBackgroundEditSession();
-		if (editor == nullptr && session == nullptr) return makeInt(0);
-		if (!searchEditorBackward(editor, valueAsString(args[0]), valueAsInt(args[1]), currentRuntimeIgnoreCase(), matchStart, matchEnd)) {
+		if (editor == nullptr && session == nullptr) return mrvmMakeInt(0);
+		if (!searchEditorBackward(editor, mrvmValueAsString(args[0]), mrvmValueAsInt(args[1]), currentRuntimeIgnoreCase(), matchStart, matchEnd)) {
 			if (session != nullptr) session->clearLastSearch();
 			else
 				g_runtimeEnv.lastSearchValid = false;
 			runtimeErrorLevel() = 0;
-			return makeInt(0);
+			return mrvmMakeInt(0);
 		}
 		if (editor != nullptr) {
 			editor->setCursorOffset(static_cast<uint>(matchStart), 0);
@@ -7167,42 +3909,38 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 			g_runtimeEnv.lastSearchCursor = matchStart;
 		}
 		runtimeErrorLevel() = 0;
-		return makeInt(1);
+		return mrvmMakeInt(1);
 	}
 	if (name == "GET_ENVIRONMENT") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GET_ENVIRONMENT expects one string argument.");
-		return makeString(getEnvironmentValue(valueAsString(args[0])));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("GET_ENVIRONMENT expects one string argument.");
+		return mrvmMakeString(getEnvironmentValue(mrvmValueAsString(args[0])));
 	}
 	if (name == "GET_WORD") {
 		MRFileEditor *editor;
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GET_WORD expects one string argument.");
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("GET_WORD expects one string argument.");
 		editor = currentEditor();
-		if (editor == nullptr && currentBackgroundEditSession() == nullptr) return makeString("");
-		return makeString(currentEditorWord(editor, valueAsString(args[0])));
+		if (editor == nullptr && currentBackgroundEditSession() == nullptr) return mrvmMakeString("");
+		return mrvmMakeString(currentEditorWord(editor, mrvmValueAsString(args[0])));
 	}
 	if (name == "PARAM_STR") {
 		int index;
 		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("PARAM_STR expects one integer argument.");
-		index = valueAsInt(args[0]);
-		if (index == 0) return makeString(g_runtimeEnv.startupCommand);
-		if (index < 0 || static_cast<std::size_t>(index) > g_runtimeEnv.processArgs.size()) return makeString("");
-		return makeString(g_runtimeEnv.processArgs[static_cast<std::size_t>(index - 1)]);
+		index = mrvmValueAsInt(args[0]);
+		if (index == 0) return mrvmMakeString(g_runtimeEnv.startupCommand);
+		if (index < 0 || static_cast<std::size_t>(index) > g_runtimeEnv.processArgs.size()) return mrvmMakeString("");
+		return mrvmMakeString(g_runtimeEnv.processArgs[static_cast<std::size_t>(index - 1)]);
 	}
 	if (name == "GLOBAL_STR") {
-		std::map<std::string, GlobalEntry>::const_iterator it;
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GLOBAL_STR expects one string argument.");
-		std::string key = upperKey(valueAsString(args[0]));
-		it = g_runtimeEnv.globals.find(key);
-		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_STR) return makeString("");
-		return it->second.value;
+		GlobalEntry entry;
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("GLOBAL_STR expects one string argument.");
+		if (!readGlobalValue(mrvmValueAsString(args[0]), entry) || entry.type != TYPE_STR) return mrvmMakeString("");
+		return entry.value;
 	}
 	if (name == "GLOBAL_INT") {
-		std::map<std::string, GlobalEntry>::const_iterator it;
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GLOBAL_INT expects one string argument.");
-		std::string key = upperKey(valueAsString(args[0]));
-		it = g_runtimeEnv.globals.find(key);
-		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_INT) return makeInt(0);
-		return it->second.value;
+		GlobalEntry entry;
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("GLOBAL_INT expects one string argument.");
+		if (!readGlobalValue(mrvmValueAsString(args[0]), entry) || entry.type != TYPE_INT) return mrvmMakeInt(0);
+		return entry.value;
 	}
 	{
 		Value result;
@@ -7212,136 +3950,140 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 		int key1 = 0;
 		int key2 = 0;
 		if (!args.empty()) throw std::runtime_error("CHECK_KEY expects no arguments.");
-		if (readMacroKeyPair(false, key1, key2)) return makeInt(1);
-		return makeInt(0);
+		if (readMacroKeyPair(false, key1, key2)) return mrvmMakeInt(1);
+		return mrvmMakeInt(0);
 	}
 	if (name == "VERSION") {
 		if (!args.empty()) throw std::runtime_error("VERSION expects no arguments.");
-		return makeString(mrDisplayVersion());
+		return mrvmMakeString(mrDisplayVersion());
 	}
 	if (name == "OS_BACK") {
 		if (!args.empty()) throw std::runtime_error("OS_BACK expects no arguments.");
-		return makeInt(0);
+		return mrvmMakeInt(0);
 	}
 	if (name == "OS_COLOR") {
 		if (!args.empty()) throw std::runtime_error("OS_COLOR expects no arguments.");
-		return makeInt(7);
+		return mrvmMakeInt(7);
 	}
 	if (name == "PARSE_STR") {
-		if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("PARSE_STR expects (string, string).");
-		return makeString(parseNamedValue(valueAsString(args[0]), valueAsString(args[1])));
+		if (args.size() != 2 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1])) throw std::runtime_error("PARSE_STR expects (string, string).");
+		return mrvmMakeString(parseNamedValue(mrvmValueAsString(args[0]), mrvmValueAsString(args[1])));
 	}
 	if (name == "PARSE_INT") {
 		std::string parsed;
 		int errorPos;
-		if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("PARSE_INT expects (string, string).");
-		parsed = parseNamedValue(valueAsString(args[0]), valueAsString(args[1]));
-		if (parsed.empty()) return makeInt(0);
-		errorPos = findValErrorPosition(parsed);
-		if (errorPos != 0) return makeInt(0);
-		return makeInt(static_cast<int>(std::strtol(parsed.c_str(), nullptr, 10)));
+		if (args.size() != 2 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1])) throw std::runtime_error("PARSE_INT expects (string, string).");
+		parsed = parseNamedValue(mrvmValueAsString(args[0]), mrvmValueAsString(args[1]));
+		if (parsed.empty()) return mrvmMakeInt(0);
+		errorPos = mrvmFindValErrorPosition(parsed);
+		if (errorPos != 0) return mrvmMakeInt(0);
+		return mrvmMakeInt(static_cast<int>(std::strtol(parsed.c_str(), nullptr, 10)));
 	}
 	if (name == "INQ_MACRO") {
 		BackgroundEditSession *session;
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("INQ_MACRO expects one string argument.");
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("INQ_MACRO expects one string argument.");
 		session = currentBackgroundEditSession();
-		if (session != nullptr) return makeInt(session->loadedMacroDisplayNames.find(upperKey(valueAsString(args[0]))) != session->loadedMacroDisplayNames.end() ? 1 : 0);
-		return makeInt(g_runtimeEnv.loadedMacros.find(upperKey(valueAsString(args[0]))) != g_runtimeEnv.loadedMacros.end() ? 1 : 0);
+		if (session != nullptr) return mrvmMakeInt(session->loadedMacroDisplayNames.find(mrvmUpperKey(mrvmValueAsString(args[0]))) != session->loadedMacroDisplayNames.end() ? 1 : 0);
+		return mrvmMakeInt(loadedMacroExists(mrvmUpperKey(mrvmValueAsString(args[0]))) ? 1 : 0);
 	}
 	if (name == "COPY_FILE") {
 		std::string source;
 		std::string target;
-		const bool append = args.size() == 3 && valueAsInt(args[2]) != 0;
+		const bool append = args.size() == 3 && mrvmValueAsInt(args[2]) != 0;
 		std::ifstream in;
 		std::ofstream out;
 
-		if ((args.size() != 2 && args.size() != 3) || !isStringLike(args[0]) || !isStringLike(args[1]) || (args.size() == 3 && args[2].type != TYPE_INT)) throw std::runtime_error("COPY_FILE expects (string, string[, int]).");
-		source = expandUserPath(valueAsString(args[0]));
-		target = expandUserPath(valueAsString(args[1]));
+		if ((args.size() != 2 && args.size() != 3) || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || (args.size() == 3 && args[2].type != TYPE_INT)) throw std::runtime_error("COPY_FILE expects (string, string[, int]).");
+		source = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
+		target = mrvmProcessExpandUserPath(mrvmValueAsString(args[1]));
 		in.open(source.c_str(), std::ios::in | std::ios::binary);
 		out.open(target.c_str(), (append ? (std::ios::out | std::ios::binary | std::ios::app) : (std::ios::out | std::ios::binary | std::ios::trunc)));
 		if (!in || !out) {
 			runtimeErrorLevel() = errno != 0 ? errno : 1;
-			return makeInt(runtimeErrorLevel());
+			return mrvmMakeInt(runtimeErrorLevel());
 		}
 		out << in.rdbuf();
 		runtimeErrorLevel() = (in.good() || in.eof()) && out.good() ? 0 : (errno != 0 ? errno : 1);
-		return makeInt(runtimeErrorLevel());
+		return mrvmMakeInt(runtimeErrorLevel());
 	}
 	if (name == "RENAME_FILE") {
 		std::string source;
 		std::string target;
-		if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("RENAME_FILE expects (string, string).");
-		source = expandUserPath(valueAsString(args[0]));
-		target = expandUserPath(valueAsString(args[1]));
+		if (args.size() != 2 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1])) throw std::runtime_error("RENAME_FILE expects (string, string).");
+		source = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
+		target = mrvmProcessExpandUserPath(mrvmValueAsString(args[1]));
 		runtimeErrorLevel() = ::rename(source.c_str(), target.c_str()) == 0 ? 0 : (errno != 0 ? errno : 1);
-		return makeInt(runtimeErrorLevel());
+		return mrvmMakeInt(runtimeErrorLevel());
 	}
 	if (name == "SWITCH_FILE") {
-		const std::string target = expandUserPath(valueAsString(args[0]));
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SWITCH_FILE expects one string argument.");
-		if (currentBackgroundEditSession() != nullptr) return makeInt(0);
+		const std::string target = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
+		if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("SWITCH_FILE expects one string argument.");
+		if (currentBackgroundEditSession() != nullptr) return mrvmMakeInt(0);
 		for (MREditWindow *window : allEditWindowsInZOrder()) {
 			if (window == nullptr) continue;
-			if (target != expandUserPath(window->currentFileName())) continue;
+			if (target != mrvmProcessExpandUserPath(window->currentFileName())) continue;
 			runtimeErrorLevel() = mrActivateEditWindow(window) ? 0 : 1001;
-			return makeInt(runtimeErrorLevel() == 0 ? 1 : 0);
+			return mrvmMakeInt(runtimeErrorLevel() == 0 ? 1 : 0);
 		}
 		runtimeErrorLevel() = 0;
-		return makeInt(0);
+		return mrvmMakeInt(0);
 	}
-	if (name == "SCREEN_LENGTH") return makeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->screenHeight : static_cast<int>(TDisplay::getRows()));
-	if (name == "SCREEN_WIDTH") return makeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->screenWidth : static_cast<int>(TDisplay::getCols()));
+	if (name == "SCREEN_LENGTH") return mrvmMakeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->screenHeight : static_cast<int>(TDisplay::getRows()));
+	if (name == "SCREEN_WIDTH") return mrvmMakeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->screenWidth : static_cast<int>(TDisplay::getCols()));
 	if (name == "WHEREX") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
 		int x = 0;
 		int y = 0;
 		MRFileEditor *editor = currentEditor();
-		if (editor != nullptr && currentUiCursorPosition(x, y)) return makeInt(x);
-		if (session != nullptr) return makeInt(session->screenCursorX);
-		return makeInt(currentUiCursorPosition(x, y) ? x : 0);
+		if (editor != nullptr && currentUiCursorPosition(x, y)) return mrvmMakeInt(x);
+		if (session != nullptr) return mrvmMakeInt(session->screenCursorX);
+		return mrvmMakeInt(currentUiCursorPosition(x, y) ? x : 0);
 	}
 	if (name == "WHEREY") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
 		int x = 0;
 		int y = 0;
-		if (currentEditor() != nullptr && currentUiCursorPosition(x, y)) return makeInt(y);
-		if (session != nullptr) return makeInt(session->screenCursorY);
-		return makeInt(currentUiCursorPosition(x, y) ? y : 0);
+		if (currentEditor() != nullptr && currentUiCursorPosition(x, y)) return mrvmMakeInt(y);
+		if (session != nullptr) return mrvmMakeInt(session->screenCursorY);
+		return mrvmMakeInt(currentUiCursorPosition(x, y) ? y : 0);
 	}
 	if (name == "BLOCK_TEXT") {
-		return makeString(std::string());
+		return mrvmMakeString(std::string());
 	}
 	if (name == "BAR_MENU" || name == "V_MENU") {
 		if (currentBackgroundEditSession() != nullptr) throw std::runtime_error(name + " is not available in background mode.");
-		return makeInt(runMacroMenuIntrinsic(name, args));
+		return mrvmMakeInt(mrvmRunMacroMenuIntrinsic(name, args));
 	}
-	if (name == "UI_EXEC") return makeInt(runMacroUiDialogDefinition());
-	if (name == "UI_TEXT") return makeString(readMacroUiTextValue(valueAsInt(args[0])));
-	if (name == "UI_INDEX") return makeInt(readMacroUiIndexValue(valueAsInt(args[0])));
+	if (name == "UI_EXEC") return mrvmMakeInt(mrvmRunMacroUiDialogDefinition(g_runtimeEnv.runtimeKv));
+	if (name == "UI_TEXT") return mrvmMakeString(mrvmModelessUiReadTextValue(g_runtimeEnv.runtimeKv, mrvmValueAsInt(args[0])));
+	if (name == "UI_INDEX") return mrvmMakeInt(mrvmModelessUiReadIndexValue(g_runtimeEnv.runtimeKv, mrvmValueAsInt(args[0])));
 	if (name == "STRING_IN") {
 		if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("STRING_IN is not available in background mode.");
-		return makeString(runMacroStringInputIntrinsic(args));
+		return mrvmMakeString(mrvmRunMacroStringInputIntrinsic(args));
 	}
 
 	throw std::runtime_error("Unknown intrinsic: " + name);
 }
 } // namespace
 
-bool queueDeferredUiProcedure(const std::string &name, const std::vector<VirtualMachine::Value> &args, int &errorCode) {
-	return queueDeferredUiProcedureForBackgroundSession(name, args, errorCode);
-}
-
-bool enqueueDeferredUiCommand(const MRMacroDeferredUiCommand &command, int &errorCode) {
-	return enqueueDeferredUiCommandForBackgroundSession(command, errorCode);
-}
-
 bool currentExecutingMacroSpec(std::string &macroSpec) {
 	return currentExecutingMacroSpecFromRuntimeStack(macroSpec);
 }
 
+MRVMRuntimeKv &mrvmRuntimeKv() noexcept {
+	return g_runtimeEnv.runtimeKv;
+}
+
+std::recursive_mutex &mrvmExecutionMutex() noexcept {
+	return g_vmExecutionMutex;
+}
+
+bool mrvmHasActiveBackgroundEditSession() noexcept {
+	return currentBackgroundEditSession() != nullptr;
+}
+
 std::string mrvmEditorExpandUserPath(const std::string &path) {
-	return expandUserPath(path);
+	return mrvmProcessExpandUserPath(path);
 }
 
 MREditWindow *mrvmEditorActiveWindow() {
@@ -7520,232 +4262,18 @@ bool mrvmEditorModifyCurrentWindow() {
 	return modifyCurrentEditWindow();
 }
 
-MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
-	MRMacroJobResult result;
-	VirtualMachine vm;
-	struct CancelGuard {
-		const std::stop_token *savedToken;
-		std::shared_ptr<std::atomic_bool> savedFlag;
-
-		CancelGuard(const std::stop_token *token, std::shared_ptr<std::atomic_bool> flag) : savedToken(g_backgroundMacroStopToken), savedFlag(g_backgroundMacroCancelFlag) {
-			g_backgroundMacroStopToken = token;
-			g_backgroundMacroCancelFlag = std::move(flag);
-		}
-
-		~CancelGuard() {
-			g_backgroundMacroStopToken = savedToken;
-			g_backgroundMacroCancelFlag = savedFlag;
-		}
-	} cancelGuard(&stopToken, std::move(cancelFlag));
-
-	vm.setVerboseLogging(false);
-	if (!closureId.empty()) vm.setClosureContext(closureId);
-	vm.executeAt(bytecode, length, entryOffset, std::string(), macroName, true, false);
-	result.logLines = vm.log;
-	result.execUiCommandRequests = vm.execUiCommandRequests();
-	result.cancelled = vm.wasCancelled();
-	for (std::size_t i = 0; i < result.logLines.size(); ++i) {
-		if (result.logLines[i].rfind("VM Error:", 0) == 0) {
-			result.hadError = true;
-			break;
-		}
-	}
-	return result;
-}
-
-MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
-	return mrvmRunBytecodeBackgroundAt(bytecode, length, 0, std::string(), std::string(), stopToken, std::move(cancelFlag));
-}
-
-struct MRVMStagedExecutionContext {
-	const MRMacroStagedExecutionInput &input;
-	const std::stop_token &stopToken;
-	std::shared_ptr<std::atomic_bool> cancelFlag;
-	BackgroundEditSession session;
-
-	struct InstallGuard {
-		BackgroundEditSession *previousSession;
-		const std::stop_token *previousStopToken;
-		std::shared_ptr<std::atomic_bool> previousCancelFlag;
-
-		explicit InstallGuard(MRVMStagedExecutionContext &context) noexcept
-		    : previousSession(g_backgroundEditSession), previousStopToken(g_backgroundMacroStopToken), previousCancelFlag(g_backgroundMacroCancelFlag) {
-			g_backgroundEditSession = &context.session;
-			g_backgroundMacroStopToken = &context.stopToken;
-			g_backgroundMacroCancelFlag = context.cancelFlag;
-		}
-
-		~InstallGuard() {
-			g_backgroundEditSession = previousSession;
-			g_backgroundMacroStopToken = previousStopToken;
-			g_backgroundMacroCancelFlag = previousCancelFlag;
-		}
-	};
-
-	MRVMStagedExecutionContext(const MRMacroStagedExecutionInput &stagedInput, const std::stop_token &stagedStopToken, std::shared_ptr<std::atomic_bool> stagedCancelFlag)
-	    : input(stagedInput), stopToken(stagedStopToken), cancelFlag(std::move(stagedCancelFlag)), session() {
-	}
-
-	void initializeSession() {
-		session.document = input.document;
-		session.transaction = mr::editor::StagedEditTransaction(input.baseVersion, "macro-staged-write");
-		session.cursorOffset = input.cursorOffset;
-		session.selectionStart = input.selectionStart;
-		session.selectionEnd = input.selectionEnd;
-		session.blockMode = input.blockMode;
-		session.blockMarkingOn = input.blockMarkingOn;
-		session.blockAnchor = input.blockAnchor;
-		session.blockEnd = input.blockEnd;
-		session.firstSave = input.firstSave;
-		session.eofInMemory = input.eofInMemory;
-		session.bufferId = input.bufferId;
-		session.temporaryFile = input.temporaryFile;
-		session.temporaryFileName = input.temporaryFileName;
-		session.currentWindow = input.currentWindow;
-		session.linkStatus = input.linkStatus;
-		session.windowCount = input.windowCount;
-		session.windowGeometryValid = input.windowGeometryValid;
-		session.windowX1 = input.windowX1;
-		session.windowY1 = input.windowY1;
-		session.windowX2 = input.windowX2;
-		session.windowY2 = input.windowY2;
-		session.globals.clear();
-		session.globalOrder.clear();
-		session.globalEnumIndex = 0;
-		for (const auto &i : input.globalOrder)
-			appendUniqueString(session.globalOrder, upperKey(i));
-		for (const auto &globalInt : input.globalInts) {
-			GlobalEntry entry;
-			std::string key = upperKey(globalInt.first);
-			entry.type = TYPE_INT;
-			entry.value = makeInt(globalInt.second);
-			if (session.globals.find(key) == session.globals.end()) appendUniqueString(session.globalOrder, key);
-			session.globals[key] = entry;
-		}
-		for (const auto &globalString : input.globalStrings) {
-			GlobalEntry entry;
-			std::string key = upperKey(globalString.first);
-			entry.type = TYPE_STR;
-			entry.value = makeString(globalString.second);
-			if (session.globals.find(key) == session.globals.end()) appendUniqueString(session.globalOrder, key);
-			session.globals[key] = entry;
-		}
-		session.loadedMacroDisplayNames.clear();
-		session.macroOrder.clear();
-		session.macroEnumIndex = 0;
-		session.deferredUiCommands.clear();
-		for (const auto &i : input.macroOrder)
-			appendUniqueString(session.macroOrder, upperKey(i));
-		for (const auto &macroDisplayName : input.macroDisplayNames) {
-			std::string key = upperKey(macroDisplayName.first);
-			session.loadedMacroDisplayNames[key] = macroDisplayName.second;
-			if (std::find(session.macroOrder.begin(), session.macroOrder.end(), key) == session.macroOrder.end()) session.macroOrder.push_back(key);
-		}
-		session.lastSearchValid = input.lastSearchValid;
-		session.lastSearchStart = input.lastSearchStart;
-		session.lastSearchEnd = input.lastSearchEnd;
-		session.lastSearchCursor = input.lastSearchCursor;
-		session.ignoreCase = input.ignoreCase;
-		session.tabExpand = input.tabExpand;
-		session.markStack.clear();
-		for (unsigned long i : input.markStack)
-			session.markStack.push_back(static_cast<uint>(i));
-		session.insertMode = input.insertMode;
-		session.indentLevel = input.indentLevel;
-		session.pageLines = std::max(1, input.pageLines);
-		session.fileName = input.fileName;
-		session.fileChanged = input.fileChanged;
-		session.screenWidth = input.screenWidth;
-		session.screenHeight = input.screenHeight;
-		session.screenCursorX = input.screenCursorX;
-		session.screenCursorY = input.screenCursorY;
-		session.clampState();
-	}
-
-	MRMacroStagedJobResult buildResult(const VirtualMachine &vm) const {
-		MRMacroStagedJobResult result;
-
-		result.logLines = vm.log;
-		result.cancelled = vm.wasCancelled();
-		for (std::size_t i = 0; i < result.logLines.size(); ++i) {
-			if (result.logLines[i].rfind("VM Error:", 0) == 0) {
-				result.hadError = true;
-				break;
-			}
-		}
-		result.transaction = session.transaction;
-		result.cursorOffset = session.cursorOffset;
-		result.selectionStart = session.selectionStart;
-		result.selectionEnd = session.selectionEnd;
-		result.blockMode = session.blockMode;
-		result.blockMarkingOn = session.blockMarkingOn;
-		result.blockAnchor = session.blockAnchor;
-		result.blockEnd = session.blockEnd;
-		result.globalOrder.clear();
-		result.globalInts.clear();
-		result.globalStrings.clear();
-		result.globalOrder.reserve(session.globalOrder.size());
-		for (std::size_t i = 0; i < session.globalOrder.size(); ++i) {
-			const std::string &key = session.globalOrder[i];
-			std::map<std::string, GlobalEntry>::const_iterator it = session.globals.find(key);
-			if (it == session.globals.end()) continue;
-			result.globalOrder.push_back(key);
-			if (it->second.type == TYPE_INT) result.globalInts[key] = valueAsInt(it->second.value);
-			else if (it->second.type == TYPE_STR)
-				result.globalStrings[key] = valueAsString(it->second.value);
-		}
-		result.macroOrder = session.macroOrder;
-		result.macroDisplayNames = session.loadedMacroDisplayNames;
-		result.deferredUiCommands = session.deferredUiCommands;
-		result.lastSearchValid = session.lastSearchValid;
-		result.lastSearchStart = session.lastSearchStart;
-		result.lastSearchEnd = session.lastSearchEnd;
-		result.lastSearchCursor = session.lastSearchCursor;
-		result.ignoreCase = session.ignoreCase;
-		result.tabExpand = session.tabExpand;
-		result.markStack.reserve(session.markStack.size());
-		for (unsigned int i : session.markStack)
-			result.markStack.push_back(static_cast<std::size_t>(i));
-		result.insertMode = session.insertMode;
-		result.indentLevel = session.indentLevel;
-		result.fileName = session.fileName;
-		result.fileChanged = session.fileChanged;
-		return result;
-	}
-};
-
-MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
-	VirtualMachine vm;
-	MRVMStagedExecutionContext context(input, stopToken, std::move(cancelFlag));
-
-	context.initializeSession();
-	MRVMStagedExecutionContext::InstallGuard installGuard(context);
-	vm.setVerboseLogging(false);
-	vm.execute(bytecode, length);
-	return context.buildResult(vm);
-}
-
 void mrvmSetProcessContext(int argc, char **argv) {
-	g_runtimeEnv.startupCommand.clear();
-	g_runtimeEnv.processArgs.clear();
-	if (argc > 0 && argv != nullptr && argv[0] != nullptr) g_runtimeEnv.startupCommand = argv[0];
-	for (int i = 1; argv != nullptr && i < argc; ++i)
-		g_runtimeEnv.processArgs.push_back(argv[i] != nullptr ? std::string(argv[i]) : std::string());
-	g_runtimeEnv.executablePath = detectExecutablePathFromProc();
-	if (g_runtimeEnv.executablePath.empty() && !g_runtimeEnv.startupCommand.empty()) g_runtimeEnv.executablePath = g_runtimeEnv.startupCommand;
-	g_runtimeEnv.executableDir = detectExecutableDir(g_runtimeEnv.startupCommand);
-	g_runtimeEnv.shellPath = detectShellPath();
-	g_runtimeEnv.shellVersion = detectShellVersion(g_runtimeEnv.shellPath);
+	mrvmProcessRuntimeSetContext(argc, argv);
 }
 
 std::vector<std::string> mrvmProcessArguments() {
-	return g_runtimeEnv.processArgs;
+	return mrvmProcessRuntimeArguments();
 }
 
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), c(0), hashHandle(0), arrayElementType(TYPE_INT), arrayValues(), globalStorage(false) {
 }
 
-VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), mClosureId(), mClosureVariableNames(), verboseLogging(true), logTruncated(false), mAsyncDelayPending(false), mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayTaskId(0), mAsyncDelayGeneration(0), mAsyncDelayMillis(0), cancelledExecution(false) {
+VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), mClosureId(), mClosureVariableNames(), mExecutionSessionId(0), mSessionVariableNames(), verboseLogging(true), logTruncated(false), mAsyncDelayPending(false), mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayTaskId(0), mAsyncDelayGeneration(0), mAsyncDelayMillis(0), cancelledExecution(false) {
 }
 
 VirtualMachine::~VirtualMachine() = default;
@@ -7784,569 +4312,13 @@ void VirtualMachine::setClosureContext(const std::string &closureId) {
 	mExecUiCommandRequests.clear();
 }
 
+void VirtualMachine::setExecutionSessionContext(MRMacroExecutionSessionId sessionId) {
+	mExecutionSessionId = sessionId;
+	mSessionVariableNames.clear();
+}
+
 const std::vector<MRMacroExecUiCommandRequest> &VirtualMachine::execUiCommandRequests() const noexcept {
 	return mExecUiCommandRequests;
-}
-
-bool mrvmStoreExecSessionClosureInt(const std::string &closureId, const std::string &lvalue, int value) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	MRVMHashStore localStore;
-	bool stored = false;
-
-	if (trimAscii(closureId).empty() || trimAscii(lvalue).empty()) return false;
-	stored = writeClosureVariableValue(closureId, lvalue, makeInt(value), localStore);
-	if (!stored) mrLogMessage(("MRMac exec session stale closure result discarded: closure='" + closureId + "' lvalue='" + lvalue + "'.").c_str());
-	return stored;
-}
-
-bool mrvmApplyExecUiCommandRequest(const MRMacroExecUiCommandRequest &request) {
-	MREditWindow *targetWindow = execUiCommandTargetWindow(request.target);
-	const std::string action = normalizeExecUiCommandAction(request.command);
-	const bool accepted = dispatchMRKeymapAction(action, std::string_view(), targetWindow);
-
-	if (!request.closureId.empty() && !request.lvalue.empty()) static_cast<void>(mrvmStoreExecSessionClosureInt(request.closureId, request.lvalue, accepted ? 1 : 0));
-	return accepted;
-}
-
-MRMacroExecutionSessionId mrvmNextMacroExecutionSessionId() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	return nextExecSessionCounter("nextSessionId");
-}
-
-void mrvmStoreActiveMacroExecutionSession(const MRMacroExecutionSession &session) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value activeByTask = ensureExecSessionsChild("activeByTask");
-	Value sessionHash;
-
-	if (session.taskId == 0) return;
-	sessionHash = replaceGlobalHashChild(activeByTask, std::to_string(session.taskId));
-	writeMacroExecutionSessionHash(sessionHash, session);
-}
-
-std::vector<MRMacroExecutionSession> mrvmActiveMacroExecutionSessions() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value activeByTask;
-	std::vector<MRMacroExecutionSession> sessions;
-	std::vector<std::uint64_t> taskIds;
-
-	if (!findExecSessionsChild("activeByTask", activeByTask)) return sessions;
-	taskIds = sortedHashUintKeys(activeByTask);
-	for (std::size_t index = 0; index < taskIds.size(); ++index) {
-		const std::uint64_t taskId = taskIds[index];
-		Value sessionHash;
-		MRMacroExecutionSession session;
-		if (!findGlobalHashChild(activeByTask, std::to_string(taskId), sessionHash)) continue;
-		if (readMacroExecutionSessionHash(sessionHash, session)) sessions.push_back(session);
-	}
-	return sessions;
-}
-
-std::vector<MRMacroExecutionSession> mrvmActiveMacroExecutionSessionsForOwner(const MRMacroExecutionOwner &owner) {
-	std::vector<MRMacroExecutionSession> sessions = mrvmActiveMacroExecutionSessions();
-	std::vector<MRMacroExecutionSession> matches;
-
-	for (std::size_t index = 0; index < sessions.size(); ++index) {
-		const MRMacroExecutionSession &session = sessions[index];
-		if (macroExecutionOwnerMatches(session.owner, owner)) matches.push_back(session);
-	}
-	return matches;
-}
-
-bool mrvmMarkMacroExecutionSessionCancellationRequestedForTask(std::uint64_t taskId) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value activeByTask;
-	Value sessionHash;
-	MRMacroExecutionSession session;
-
-	if (taskId == 0 || !findExecSessionsChild("activeByTask", activeByTask)) return false;
-	if (!findGlobalHashChild(activeByTask, std::to_string(taskId), sessionHash)) return false;
-	if (!readMacroExecutionSessionHash(sessionHash, session)) return false;
-	session.state = MRMacroExecutionState::CancellationRequested;
-	writeMacroExecutionSessionHash(sessionHash, session);
-	return true;
-}
-
-bool mrvmTakeActiveMacroExecutionSessionForTask(std::uint64_t taskId, MRMacroExecutionSession &session) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value activeByTask;
-	Value sessionHash;
-	const std::string key = std::to_string(taskId);
-
-	if (taskId == 0 || !findExecSessionsChild("activeByTask", activeByTask)) return false;
-	if (!findGlobalHashChild(activeByTask, key, sessionHash)) return false;
-	if (!readMacroExecutionSessionHash(sessionHash, session)) return false;
-	return eraseGlobalHashChild(activeByTask, key);
-}
-
-void mrvmRecordMacroExecutionResult(MRMacroExecutionSession session, MRMacroExecutionState state, const std::string &message) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value recentResults = ensureExecSessionsChild("recentResults");
-	Value resultHash;
-	MRMacroExecutionResult result;
-	const std::uint64_t resultId = nextExecSessionCounter("nextResultId");
-
-	session.state = state;
-	result.session = session;
-	result.state = state;
-	result.message = message;
-	resultHash = replaceGlobalHashChild(recentResults, std::to_string(resultId));
-	writeMacroExecutionResultHash(resultHash, result);
-	trimHashByNumericKeys(recentResults, 32);
-}
-
-std::vector<MRMacroExecutionResult> mrvmRecentMacroExecutionResults() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value recentResults;
-	std::vector<MRMacroExecutionResult> results;
-	std::vector<std::uint64_t> resultIds;
-
-	if (!findExecSessionsChild("recentResults", recentResults)) return results;
-	resultIds = sortedHashUintKeys(recentResults);
-	for (std::size_t index = 0; index < resultIds.size(); ++index) {
-		const std::uint64_t resultId = resultIds[index];
-		Value resultHash;
-		MRMacroExecutionResult result;
-		if (!findGlobalHashChild(recentResults, std::to_string(resultId), resultHash)) continue;
-		if (readMacroExecutionResultHash(resultHash, result)) results.push_back(result);
-	}
-	return results;
-}
-
-void mrvmStorePendingForegroundMacroExecutionSession(const MRMacroExecutionSession &session) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value pendingDelay = ensureExecSessionsChild("pendingForegroundDelay");
-	Value sessionHash;
-
-	if (session.sessionId == 0) return;
-	sessionHash = replaceGlobalHashChild(pendingDelay, std::to_string(session.sessionId));
-	writeMacroExecutionSessionHash(sessionHash, session);
-}
-
-bool mrvmReadPendingForegroundMacroExecutionSession(MRMacroExecutionSessionId sessionId, MRMacroExecutionSession &session) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value pendingDelay;
-	Value sessionHash;
-
-	if (sessionId == 0 || !findExecSessionsChild("pendingForegroundDelay", pendingDelay)) return false;
-	if (!findGlobalHashChild(pendingDelay, std::to_string(sessionId), sessionHash)) return false;
-	return readMacroExecutionSessionHash(sessionHash, session);
-}
-
-bool mrvmRemovePendingForegroundMacroExecutionSession(MRMacroExecutionSessionId sessionId) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value pendingDelay;
-
-	if (sessionId == 0 || !findExecSessionsChild("pendingForegroundDelay", pendingDelay)) return false;
-	return eraseGlobalHashChild(pendingDelay, std::to_string(sessionId));
-}
-
-std::vector<MRMacroExecutionSession> mrvmPendingForegroundMacroExecutionSessions() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value pendingDelay;
-	std::vector<MRMacroExecutionSession> sessions;
-	std::vector<std::uint64_t> sessionIds;
-
-	if (!findExecSessionsChild("pendingForegroundDelay", pendingDelay)) return sessions;
-	sessionIds = sortedHashUintKeys(pendingDelay);
-	for (std::size_t index = 0; index < sessionIds.size(); ++index) {
-		const std::uint64_t sessionId = sessionIds[index];
-		Value sessionHash;
-		MRMacroExecutionSession session;
-		if (!findGlobalHashChild(pendingDelay, std::to_string(sessionId), sessionHash)) continue;
-		if (readMacroExecutionSessionHash(sessionHash, session)) sessions.push_back(session);
-	}
-	return sessions;
-}
-
-MRMacroExecutionSessionListenerId mrvmNextMacroExecutionSessionListenerId() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	return nextExecSessionCounter("nextListenerId");
-}
-
-void mrvmRegisterMacroExecutionSessionListener(MRMacroExecutionSessionListenerId listenerId) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value listeners = ensureExecSessionsChild("listeners");
-	Value listenerHash;
-
-	if (listenerId == 0) return;
-	listenerHash = replaceGlobalHashChild(listeners, std::to_string(listenerId));
-	hashWriteUint(listenerHash, "listenerId", listenerId);
-}
-
-void mrvmRemoveMacroExecutionSessionListener(MRMacroExecutionSessionListenerId listenerId) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value listeners;
-
-	if (listenerId == 0 || !findExecSessionsChild("listeners", listeners)) return;
-	static_cast<void>(eraseGlobalHashChild(listeners, std::to_string(listenerId)));
-}
-
-void mrvmNoteMacroExecutionSessionStatusChanged() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value root = ensureExecSessionsHash();
-	const std::uint64_t generation = hashReadUint(root, "statusGeneration") + 1;
-
-	hashWriteUint(root, "statusGeneration", generation);
-}
-
-std::uint64_t mrvmMacroExecutionSessionStatusGeneration() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value root;
-
-	if (!findExecSessionsHash(root)) return 0;
-	return hashReadUint(root, "statusGeneration");
-}
-
-static void writeRuntimeScheduledConsumerConfigHash(const Value &hash, const MRRuntimeScheduledConsumerConfig &config) {
-	Value owner = replaceGlobalHashChild(hash, "owner");
-
-	writeMacroExecutionOwnerHash(owner, config.owner);
-	hashWriteUint(hash, "intervalMs", config.intervalMs);
-	hashWriteString(hash, "macroSpec", config.macroSpec);
-	hashWriteString(hash, "macroSource", config.macroSource);
-	hashWriteString(hash, "entryName", config.entryName);
-	hashWriteString(hash, "closureId", config.closureId);
-	hashWriteInt(hash, "overrunPolicy", static_cast<int>(config.overrunPolicy));
-}
-
-static MRRuntimeScheduledConsumerConfig readRuntimeScheduledConsumerConfigHash(const Value &hash) {
-	MRRuntimeScheduledConsumerConfig config;
-	Value owner;
-
-	if (findGlobalHashChild(hash, "owner", owner)) config.owner = readMacroExecutionOwnerHash(owner);
-	config.intervalMs = hashReadUint(hash, "intervalMs");
-	config.macroSpec = hashReadString(hash, "macroSpec");
-	config.macroSource = hashReadString(hash, "macroSource");
-	config.entryName = hashReadString(hash, "entryName");
-	config.closureId = hashReadString(hash, "closureId");
-	config.overrunPolicy = static_cast<MRRuntimeScheduleOverrunPolicy>(hashReadInt(hash, "overrunPolicy", static_cast<int>(MRRuntimeScheduleOverrunPolicy::Skip)));
-	return config;
-}
-
-static void writeRuntimeScheduledConsumerHash(const Value &hash, const MRRuntimeScheduledConsumer &consumer) {
-	Value config = replaceGlobalHashChild(hash, "config");
-
-	hashWriteUint(hash, "consumerId", consumer.consumerId);
-	writeRuntimeScheduledConsumerConfigHash(config, consumer.config);
-	hashWriteUint(hash, "activeSessionId", consumer.activeSessionId);
-	hashWriteUint(hash, "nextDueMs", consumer.nextDueMs);
-}
-
-static bool readRuntimeScheduledConsumerHash(const Value &hash, MRRuntimeScheduledConsumer &consumer) {
-	Value config;
-
-	consumer.consumerId = hashReadUint(hash, "consumerId");
-	if (findGlobalHashChild(hash, "config", config)) consumer.config = readRuntimeScheduledConsumerConfigHash(config);
-	consumer.activeSessionId = hashReadUint(hash, "activeSessionId");
-	consumer.nextDueMs = hashReadUint(hash, "nextDueMs");
-	return consumer.consumerId != 0;
-}
-
-static void writeRuntimeSchedulerEventHash(const Value &hash, const MRRuntimeSchedulerEvent &event) {
-	Value owner = replaceGlobalHashChild(hash, "owner");
-
-	hashWriteUint(hash, "eventId", event.eventId);
-	hashWriteUint(hash, "consumerId", event.consumerId);
-	writeMacroExecutionOwnerHash(owner, event.owner);
-	hashWriteInt(hash, "kind", static_cast<int>(event.kind));
-	hashWriteInt(hash, "skipReason", static_cast<int>(event.skipReason));
-	hashWriteUint(hash, "sessionId", event.sessionId);
-	hashWriteUint(hash, "blockingSessionId", event.blockingSessionId);
-	hashWriteUint(hash, "dueAtMs", event.dueAtMs);
-	hashWriteUint(hash, "observedAtMs", event.observedAtMs);
-	hashWriteString(hash, "macroSpec", event.macroSpec);
-	hashWriteString(hash, "message", event.message);
-}
-
-static bool readRuntimeSchedulerEventHash(const Value &hash, MRRuntimeSchedulerEvent &event) {
-	Value owner;
-
-	event.eventId = hashReadUint(hash, "eventId");
-	event.consumerId = hashReadUint(hash, "consumerId");
-	if (findGlobalHashChild(hash, "owner", owner)) event.owner = readMacroExecutionOwnerHash(owner);
-	event.kind = static_cast<MRRuntimeSchedulerEventKind>(hashReadInt(hash, "kind", static_cast<int>(MRRuntimeSchedulerEventKind::ConsumerRegistered)));
-	event.skipReason = static_cast<MRRuntimeSchedulerSkipReason>(hashReadInt(hash, "skipReason", static_cast<int>(MRRuntimeSchedulerSkipReason::None)));
-	event.sessionId = hashReadUint(hash, "sessionId");
-	event.blockingSessionId = hashReadUint(hash, "blockingSessionId");
-	event.dueAtMs = hashReadUint(hash, "dueAtMs");
-	event.observedAtMs = hashReadUint(hash, "observedAtMs");
-	event.macroSpec = hashReadString(hash, "macroSpec");
-	event.message = hashReadString(hash, "message");
-	return event.eventId != 0;
-}
-
-MRRuntimeScheduledConsumerId mrvmNextRuntimeScheduledConsumerId() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	return nextExecSessionCounter("nextScheduledConsumerId");
-}
-
-void mrvmStoreRuntimeScheduledConsumer(const MRRuntimeScheduledConsumer &consumer) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value consumers = ensureExecSessionsChild("scheduledConsumers");
-	Value consumerHash;
-
-	if (consumer.consumerId == 0) return;
-	consumerHash = replaceGlobalHashChild(consumers, std::to_string(consumer.consumerId));
-	writeRuntimeScheduledConsumerHash(consumerHash, consumer);
-}
-
-bool mrvmReadRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId, MRRuntimeScheduledConsumer &consumer) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value consumers;
-	Value consumerHash;
-
-	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
-	if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) return false;
-	return readRuntimeScheduledConsumerHash(consumerHash, consumer);
-}
-
-bool mrvmUpdateRuntimeScheduledConsumerActiveSession(MRRuntimeScheduledConsumerId consumerId, MRMacroExecutionSessionId activeSessionId) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value consumers;
-	Value consumerHash;
-
-	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
-	if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) return false;
-	hashWriteUint(consumerHash, "activeSessionId", activeSessionId);
-	return true;
-}
-
-bool mrvmUpdateRuntimeScheduledConsumerNextDue(MRRuntimeScheduledConsumerId consumerId, std::uint64_t nextDueMs) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value consumers;
-	Value consumerHash;
-
-	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
-	if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) return false;
-	hashWriteUint(consumerHash, "nextDueMs", nextDueMs);
-	return true;
-}
-
-bool mrvmRemoveRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value consumers;
-
-	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
-	return eraseGlobalHashChild(consumers, std::to_string(consumerId));
-}
-
-std::vector<MRRuntimeScheduledConsumerId> mrvmRuntimeScheduledConsumerIds() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value consumers;
-
-	if (!findExecSessionsChild("scheduledConsumers", consumers)) return std::vector<MRRuntimeScheduledConsumerId>();
-	return sortedHashUintKeys(consumers);
-}
-
-bool mrvmReadRuntimeScheduledConsumerSchedule(MRRuntimeScheduledConsumerId consumerId, std::uint64_t &intervalMs, MRMacroExecutionSessionId &activeSessionId, std::uint64_t &nextDueMs) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value consumers;
-	Value consumerHash;
-	Value config;
-
-	intervalMs = 0;
-	activeSessionId = 0;
-	nextDueMs = 0;
-	if (consumerId == 0 || !findExecSessionsChild("scheduledConsumers", consumers)) return false;
-	if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) return false;
-	if (!findGlobalHashChild(consumerHash, "config", config)) return false;
-	intervalMs = hashReadUint(config, "intervalMs");
-	activeSessionId = hashReadUint(consumerHash, "activeSessionId");
-	nextDueMs = hashReadUint(consumerHash, "nextDueMs");
-	return intervalMs != 0;
-}
-
-std::vector<MRRuntimeScheduledConsumer> mrvmRuntimeScheduledConsumers() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value consumers;
-	std::vector<MRRuntimeScheduledConsumer> result;
-	std::vector<std::uint64_t> consumerIds;
-
-	if (!findExecSessionsChild("scheduledConsumers", consumers)) return result;
-	consumerIds = sortedHashUintKeys(consumers);
-	for (std::size_t index = 0; index < consumerIds.size(); ++index) {
-		const std::uint64_t consumerId = consumerIds[index];
-		Value consumerHash;
-		MRRuntimeScheduledConsumer consumer;
-		if (!findGlobalHashChild(consumers, std::to_string(consumerId), consumerHash)) continue;
-		if (readRuntimeScheduledConsumerHash(consumerHash, consumer)) result.push_back(consumer);
-	}
-	return result;
-}
-
-MRRuntimeSchedulerEventId mrvmNextRuntimeSchedulerEventId() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	return nextExecSessionCounter("nextSchedulerEventId");
-}
-
-void mrvmRecordRuntimeSchedulerEvent(const MRRuntimeSchedulerEvent &event) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value events = ensureExecSessionsChild("schedulerEvents");
-	Value eventHash;
-
-	if (event.eventId == 0) return;
-	eventHash = replaceGlobalHashChild(events, std::to_string(event.eventId));
-	writeRuntimeSchedulerEventHash(eventHash, event);
-	trimHashByNumericKeys(events, 64);
-}
-
-std::vector<MRRuntimeSchedulerEvent> mrvmRecentRuntimeSchedulerEvents() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value events;
-	std::vector<MRRuntimeSchedulerEvent> result;
-	std::vector<std::uint64_t> eventIds;
-
-	if (!findExecSessionsChild("schedulerEvents", events)) return result;
-	eventIds = sortedHashUintKeys(events);
-	for (std::size_t index = 0; index < eventIds.size(); ++index) {
-		const std::uint64_t eventId = eventIds[index];
-		Value eventHash;
-		MRRuntimeSchedulerEvent event;
-		if (!findGlobalHashChild(events, std::to_string(eventId), eventHash)) continue;
-		if (readRuntimeSchedulerEventHash(eventHash, event)) result.push_back(event);
-	}
-	return result;
-}
-
-void mrvmStoreModelessWindowDefinition(const MRMacroModelessWindowDefinition &definition) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value root = ensureModelessUiHash();
-	Value windows = ensureGlobalHashChild(root, "windows");
-	Value window;
-	Value previousWindow;
-	Value previousLiveGeometry;
-	Value labels;
-	Value displays;
-	Value buttons;
-	Value listBoxes;
-	Value grids;
-	bool hasLiveGeometry = false;
-	int liveX = 0;
-	int liveY = 0;
-	int liveWidth = 0;
-	int liveHeight = 0;
-	int liveGeometryVersion = 0;
-	int index = 0;
-
-	if (definition.windowId.empty()) return;
-	if (findGlobalHashChild(windows, definition.windowId, previousWindow) && findGlobalHashChild(previousWindow, "liveGeometry", previousLiveGeometry)) {
-		hasLiveGeometry = hashReadInt(previousLiveGeometry, "geometryVersion", 0) > 0;
-		liveX = hashReadInt(previousLiveGeometry, "x", 0);
-		liveY = hashReadInt(previousLiveGeometry, "y", 0);
-		liveWidth = hashReadInt(previousLiveGeometry, "width", 0);
-		liveHeight = hashReadInt(previousLiveGeometry, "height", 0);
-		liveGeometryVersion = hashReadInt(previousLiveGeometry, "geometryVersion", 0);
-	}
-	window = replaceGlobalHashChild(windows, definition.windowId);
-	hashWriteString(window, "windowId", definition.windowId);
-	hashWriteString(window, "title", definition.title);
-	hashWriteInt(window, "x", definition.x);
-	hashWriteInt(window, "y", definition.y);
-	hashWriteInt(window, "width", definition.width);
-	hashWriteInt(window, "height", definition.height);
-
-	if (hasLiveGeometry) {
-		Value liveGeometry = ensureGlobalHashChild(window, "liveGeometry");
-
-		hashWriteInt(liveGeometry, "x", liveX);
-		hashWriteInt(liveGeometry, "y", liveY);
-		hashWriteInt(liveGeometry, "width", liveWidth);
-		hashWriteInt(liveGeometry, "height", liveHeight);
-		hashWriteInt(liveGeometry, "geometryVersion", liveGeometryVersion);
-	}
-
-	labels = ensureGlobalHashChild(window, "labels");
-	for (std::size_t labelIndex = 0; labelIndex < definition.labels.size(); ++labelIndex) {
-		const MRMacroModelessLabelSpec &label = definition.labels[labelIndex];
-		++index;
-		writeModelessLabelHash(replaceGlobalHashChild(labels, std::to_string(index)), label);
-	}
-	hashWriteInt(labels, "count", index);
-
-	index = 0;
-	displays = ensureGlobalHashChild(window, "displays");
-	for (std::size_t displayIndex = 0; displayIndex < definition.displays.size(); ++displayIndex) {
-		const MRMacroModelessDisplaySpec &display = definition.displays[displayIndex];
-		++index;
-		writeModelessDisplayHash(replaceGlobalHashChild(displays, std::to_string(index)), display);
-	}
-	hashWriteInt(displays, "count", index);
-
-	index = 0;
-	buttons = ensureGlobalHashChild(window, "buttons");
-	for (std::size_t buttonIndex = 0; buttonIndex < definition.buttons.size(); ++buttonIndex) {
-		const MRMacroModelessButtonSpec &button = definition.buttons[buttonIndex];
-		++index;
-		writeModelessButtonHash(replaceGlobalHashChild(buttons, std::to_string(index)), button);
-	}
-	hashWriteInt(buttons, "count", index);
-
-	index = 0;
-	listBoxes = ensureGlobalHashChild(window, "listBoxes");
-	for (std::size_t listBoxIndex = 0; listBoxIndex < definition.listBoxes.size(); ++listBoxIndex) {
-		const MRMacroModelessListBoxSpec &listBox = definition.listBoxes[listBoxIndex];
-		++index;
-		writeModelessListBoxHash(replaceGlobalHashChild(listBoxes, std::to_string(index)), listBox);
-	}
-	hashWriteInt(listBoxes, "count", index);
-
-	index = 0;
-	grids = ensureGlobalHashChild(window, "grids");
-	for (std::size_t gridIndex = 0; gridIndex < definition.grids.size(); ++gridIndex) {
-		const MRMacroModelessGridSpec &grid = definition.grids[gridIndex];
-		++index;
-		writeModelessGridHash(replaceGlobalHashChild(grids, std::to_string(index)), grid);
-	}
-	hashWriteInt(grids, "count", index);
-}
-
-bool mrvmStoreModelessWindowDisplay(const std::string &windowId, int displayIndex, const std::string &text) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value windows;
-	Value window;
-	Value displays;
-	Value display;
-
-	if (windowId.empty() || displayIndex <= 0) return false;
-	if (!findModelessUiChild("windows", windows)) return false;
-	if (!findGlobalHashChild(windows, windowId, window)) return false;
-	if (!findGlobalHashChild(window, "displays", displays)) return false;
-	if (!findGlobalHashChild(displays, std::to_string(displayIndex), display)) return false;
-	if (hashReadString(display, "text") == text) return true;
-	hashWriteString(display, "text", text);
-	return true;
-}
-
-void mrvmStoreModelessWindowLiveGeometry(const std::string &windowId, int x, int y, int width, int height) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value root;
-	Value windows;
-	Value window;
-	Value liveGeometry;
-	int version = 0;
-
-	if (windowId.empty()) return;
-	root = ensureModelessUiHash();
-	windows = ensureGlobalHashChild(root, "windows");
-	window = ensureGlobalHashChild(windows, windowId);
-	liveGeometry = ensureGlobalHashChild(window, "liveGeometry");
-
-	if (hashReadInt(liveGeometry, "x", x) == x && hashReadInt(liveGeometry, "y", y) == y && hashReadInt(liveGeometry, "width", width) == width && hashReadInt(liveGeometry, "height", height) == height && hashReadInt(liveGeometry, "geometryVersion", 0) > 0) return;
-	version = hashReadInt(liveGeometry, "geometryVersion", 0) + 1;
-	hashWriteInt(liveGeometry, "x", x);
-	hashWriteInt(liveGeometry, "y", y);
-	hashWriteInt(liveGeometry, "width", width);
-	hashWriteInt(liveGeometry, "height", height);
-	hashWriteInt(liveGeometry, "geometryVersion", version);
-}
-
-void mrvmRemoveModelessWindowDefinition(const std::string &windowId) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	Value windows;
-
-	if (windowId.empty()) return;
-	if (!findModelessUiChild("windows", windows)) return;
-	static_cast<void>(eraseGlobalHashChild(windows, windowId));
 }
 
 void VirtualMachine::appendLogLine(const std::string &line, bool important) {
@@ -8375,7 +4347,7 @@ VirtualMachine::Value VirtualMachine::pop() {
 	}
 
 	appendLogLine("VM Error: Stack underflow.", true);
-	return makeInt(0);
+	return mrvmMakeInt(0);
 }
 
 int VirtualMachine::normalizeDelayMillis(int millis) noexcept {
@@ -8482,6 +4454,17 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 			g_executionState = previous;
 		}
 	} executionStateGuard(&state);
+	struct ExecutionSessionGuard {
+		MRMacroExecutionSessionId previous;
+
+		explicit ExecutionSessionGuard(MRMacroExecutionSessionId next) noexcept : previous(g_executionSessionId) {
+			if (next != 0) g_executionSessionId = next;
+		}
+
+		~ExecutionSessionGuard() {
+			g_executionSessionId = previous;
+		}
+	} executionSessionGuard(mExecutionSessionId != 0 ? mExecutionSessionId : g_executionSessionId);
 
 	if (resumeFromDelay) {
 		bytecode = mAsyncBytecode.data();
@@ -8510,14 +4493,15 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		}
 
 		variables.clear();
+		mSessionVariableNames.clear();
 		mHashStore->clearExceptRoots(currentGlobalHashRoots());
 		stack.clear();
 		cancelledExecution = false;
 		if (resetState) {
 			log.clear();
 			logTruncated = false;
-			g_runtimeEnv.globalEnumIndex = 0;
-			g_runtimeEnv.macroEnumIndex = 0;
+			setMacroGlobalEnumIndex(0);
+			setMacroCatalogMacroEnumIndex(0);
 			state.parameterString.clear();
 			state.returnInt = 0;
 			state.returnStr.clear();
@@ -8574,18 +4558,18 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 			if (opcode == OP_PUSH_I) {
 				int val;
 				readInt(val);
-				push(makeInt(val));
+				push(mrvmMakeInt(val));
 				appendLogLine("Push integer: " + std::to_string(val));
 			} else if (opcode == OP_PUSH_R) {
 				double val;
 				readDouble(val);
-				push(makeReal(val));
-				appendLogLine("Push real: " + valueAsString(makeReal(val)));
+				push(mrvmMakeReal(val));
+				appendLogLine("Push real: " + mrvmValueAsString(mrvmMakeReal(val)));
 			} else if (opcode == OP_PUSH_S) {
 				std::string str;
 				readCString(str);
-				enforceStringLength(str);
-				push(makeString(str));
+				mrvmEnforceStringLength(str);
+				push(mrvmMakeString(str));
 				appendLogLine("Push string: " + str);
 			} else if (opcode == OP_DEF_VAR) {
 				std::string varName;
@@ -8595,16 +4579,27 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (!mClosureId.empty()) {
 					bool restored = false;
 					mClosureVariableNames.insert(varName);
-					if (readClosureVariableValue(mClosureId, varName, value)) {
+					if (mrvmExecSessionsReadClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, varName, value)) {
 						variables[varName] = mrvmCoerceForStore(value, varType);
 						restored = true;
 					} else if (varType == TYPE_HASH)
-						variables[varName] = makeHash(mHashStore->createHash());
+						variables[varName] = mrvmMakeHash(mHashStore->createHash());
 					else
 						variables[varName] = mrvmDefaultValueForType(varType);
-					if (!restored) static_cast<void>(writeClosureVariableValue(mClosureId, varName, variables[varName], *mHashStore));
+					if (!restored) static_cast<void>(mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, varName, variables[varName], *mHashStore));
+				} else if (currentExecutionSessionId() != 0) {
+					bool restored = false;
+					mSessionVariableNames.insert(varName);
+					if (mrvmExecSessionsReadSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, value)) {
+						variables[varName] = mrvmCoerceForStore(value, varType);
+						restored = true;
+					} else if (varType == TYPE_HASH)
+						variables[varName] = mrvmMakeHash(mHashStore->createHash());
+					else
+						variables[varName] = mrvmDefaultValueForType(varType);
+					if (!restored) static_cast<void>(mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, variables[varName], *mHashStore));
 				} else if (varType == TYPE_HASH)
-					variables[varName] = makeHash(mHashStore->createHash());
+					variables[varName] = mrvmMakeHash(mHashStore->createHash());
 				else
 					variables[varName] = mrvmDefaultValueForType(varType);
 				appendLogLine("Define variable: " + varName);
@@ -8617,7 +4612,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (handled) push(special);
 				else {
 					std::map<std::string, Value>::const_iterator it = variables.find(varName);
-					if (it == variables.end()) variables[varName] = makeInt(0);
+					if (it == variables.end()) variables[varName] = mrvmMakeInt(0);
 					push(variables[varName]);
 				}
 				appendLogLine("Load variable: " + varName);
@@ -8626,9 +4621,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				int targetType = static_cast<int>(bytecode[ip++]);
 				readCString(varName);
 				Value value = mrvmCoerceForStore(pop(), targetType);
-				if (value.type == TYPE_STR) enforceStringLength(value.s);
+				if (value.type == TYPE_STR) mrvmEnforceStringLength(value.s);
 				if (!storeSpecialVariable(varName, value)) variables[varName] = value;
-				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) writeClosureVariableValue(mClosureId, varName, value, *mHashStore);
+				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, varName, value, *mHashStore);
+				else if (currentExecutionSessionId() != 0 && mSessionVariableNames.find(varName) != mSessionVariableNames.end())
+					mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, value, *mHashStore);
 				appendLogLine("Store variable: " + varName);
 			} else if (opcode == OP_HASH_LOAD) {
 				std::string varName;
@@ -8636,10 +4633,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				std::map<std::string, Value>::const_iterator it;
 				readCString(varName);
 				key = pop();
-				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
+				if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
 				it = variables.find(varName);
 				if (it == variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
-				push(mrvmHashReadValue(*mHashStore, g_runtimeEnv.globalHashStore, it->second, valueAsString(key)));
+				push(mrvmHashReadValue(*mHashStore, g_runtimeEnv.runtimeKv.globalStore(), it->second, mrvmValueAsString(key)));
 				appendLogLine("Load hash value: " + varName);
 			} else if (opcode == OP_HASH_LOAD_VALUE) {
 				Value key;
@@ -8647,8 +4644,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				key = pop();
 				hash = pop();
 				if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
-				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
-				push(mrvmHashReadValue(*mHashStore, g_runtimeEnv.globalHashStore, hash, valueAsString(key)));
+				if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
+				push(mrvmHashReadValue(*mHashStore, g_runtimeEnv.runtimeKv.globalStore(), hash, mrvmValueAsString(key)));
 				appendLogLine("Load hash value from expression.");
 			} else if (opcode == OP_HASH_STORE) {
 				std::string varName;
@@ -8658,12 +4655,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				readCString(varName);
 				value = pop();
 				key = pop();
-				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
+				if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
 				it = variables.find(varName);
 				if (it == variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
-				if (value.type == TYPE_STR) enforceStringLength(value.s);
-				mrvmHashWriteValue(*mHashStore, g_runtimeEnv.globalHashStore, it->second, valueAsString(key), value);
-				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) writeClosureVariableValue(mClosureId, varName, it->second, *mHashStore);
+				if (value.type == TYPE_STR) mrvmEnforceStringLength(value.s);
+				mrvmHashWriteValue(*mHashStore, g_runtimeEnv.runtimeKv.globalStore(), it->second, mrvmValueAsString(key), value);
+				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, varName, it->second, *mHashStore);
+				else if (currentExecutionSessionId() != 0 && mSessionVariableNames.find(varName) != mSessionVariableNames.end())
+					mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, it->second, *mHashStore);
 				appendLogLine("Store hash value: " + varName);
 			} else if (opcode == OP_HASH_STORE_VALUE) {
 				Value value;
@@ -8673,9 +4672,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				key = pop();
 				hash = pop();
 				if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
-				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
-				if (value.type == TYPE_STR) enforceStringLength(value.s);
-				mrvmHashWriteValue(*mHashStore, g_runtimeEnv.globalHashStore, hash, valueAsString(key), value);
+				if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
+				if (value.type == TYPE_STR) mrvmEnforceStringLength(value.s);
+				mrvmHashWriteValue(*mHashStore, g_runtimeEnv.runtimeKv.globalStore(), hash, mrvmValueAsString(key), value);
 				appendLogLine("Store hash value from expression.");
 			} else if (opcode == OP_ARRAY_LOAD) {
 				std::string varName;
@@ -8707,8 +4706,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
 				it = variables.find(varName);
 				if (it == variables.end() || !mrvmValueIsArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
-				mrvmArrayWriteValue(it->second, index.i, value, *mHashStore, g_runtimeEnv.globalHashStore);
-				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) writeClosureVariableValue(mClosureId, varName, it->second, *mHashStore);
+				mrvmArrayWriteValue(it->second, index.i, value, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+				if (!mClosureId.empty() && mClosureVariableNames.find(varName) != mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, varName, it->second, *mHashStore);
+				else if (currentExecutionSessionId() != 0 && mSessionVariableNames.find(varName) != mSessionVariableNames.end())
+					mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, it->second, *mHashStore);
 				appendLogLine("Store array value: " + varName);
 			} else if (opcode == OP_GOTO) {
 				int target;
@@ -8736,54 +4737,54 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 			} else if (opcode == OP_ADD) {
 				Value b = pop();
 				Value a = pop();
-				if (isStringLike(a) && isStringLike(b)) {
-					std::string s = valueAsString(a) + valueAsString(b);
-					enforceStringLength(s);
-					push(makeString(s));
-				} else if (isNumeric(a) && isNumeric(b)) {
-					if (a.type == TYPE_REAL || b.type == TYPE_REAL) push(makeReal(valueAsReal(a) + valueAsReal(b)));
+				if (mrvmIsStringLike(a) && mrvmIsStringLike(b)) {
+					std::string s = mrvmValueAsString(a) + mrvmValueAsString(b);
+					mrvmEnforceStringLength(s);
+					push(mrvmMakeString(s));
+				} else if (mrvmIsNumeric(a) && mrvmIsNumeric(b)) {
+					if (a.type == TYPE_REAL || b.type == TYPE_REAL) push(mrvmMakeReal(mrvmValueAsReal(a) + mrvmValueAsReal(b)));
 					else
-						push(makeInt(a.i + b.i));
+						push(mrvmMakeInt(a.i + b.i));
 				} else
 					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 			} else if (opcode == OP_SUB) {
 				Value b = pop();
 				Value a = pop();
-				if (!isNumeric(a) || !isNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
-				if (a.type == TYPE_REAL || b.type == TYPE_REAL) push(makeReal(valueAsReal(a) - valueAsReal(b)));
+				if (!mrvmIsNumeric(a) || !mrvmIsNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
+				if (a.type == TYPE_REAL || b.type == TYPE_REAL) push(mrvmMakeReal(mrvmValueAsReal(a) - mrvmValueAsReal(b)));
 				else
-					push(makeInt(a.i - b.i));
+					push(mrvmMakeInt(a.i - b.i));
 			} else if (opcode == OP_MUL) {
 				Value b = pop();
 				Value a = pop();
-				if (!isNumeric(a) || !isNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
-				if (a.type == TYPE_REAL || b.type == TYPE_REAL) push(makeReal(valueAsReal(a) * valueAsReal(b)));
+				if (!mrvmIsNumeric(a) || !mrvmIsNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
+				if (a.type == TYPE_REAL || b.type == TYPE_REAL) push(mrvmMakeReal(mrvmValueAsReal(a) * mrvmValueAsReal(b)));
 				else
-					push(makeInt(a.i * b.i));
+					push(mrvmMakeInt(a.i * b.i));
 			} else if (opcode == OP_DIV) {
 				Value b = pop();
 				Value a = pop();
-				if (!isNumeric(a) || !isNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
+				if (!mrvmIsNumeric(a) || !mrvmIsNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if ((b.type == TYPE_REAL && b.r == 0.0) || (b.type == TYPE_INT && b.i == 0)) throw std::runtime_error("Division by zero.");
-				if (a.type == TYPE_REAL || b.type == TYPE_REAL) push(makeReal(valueAsReal(a) / valueAsReal(b)));
+				if (a.type == TYPE_REAL || b.type == TYPE_REAL) push(mrvmMakeReal(mrvmValueAsReal(a) / mrvmValueAsReal(b)));
 				else
-					push(makeInt(a.i / b.i));
+					push(mrvmMakeInt(a.i / b.i));
 			} else if (opcode == OP_MOD) {
 				Value b = pop();
 				Value a = pop();
 				if (a.type != TYPE_INT || b.type != TYPE_INT) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if (b.i == 0) throw std::runtime_error("Modulo by zero.");
-				push(makeInt(a.i % b.i));
+				push(mrvmMakeInt(a.i % b.i));
 			} else if (opcode == OP_NEG) {
 				Value a = pop();
-				if (!isNumeric(a)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
-				if (a.type == TYPE_REAL) push(makeReal(-a.r));
+				if (!mrvmIsNumeric(a)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
+				if (a.type == TYPE_REAL) push(mrvmMakeReal(-a.r));
 				else
-					push(makeInt(-a.i));
+					push(mrvmMakeInt(-a.i));
 			} else if (opcode == OP_CMP_EQ || opcode == OP_CMP_NE || opcode == OP_CMP_LT || opcode == OP_CMP_GT || opcode == OP_CMP_LE || opcode == OP_CMP_GE) {
 				Value b = pop();
 				Value a = pop();
-				int cmp = compareValues(a, b);
+				int cmp = mrvmCompareValues(a, b);
 				int result = 0;
 				switch (opcode) {
 					case OP_CMP_EQ:
@@ -8805,38 +4806,38 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						result = (cmp >= 0);
 						break;
 				}
-				push(makeInt(result));
+				push(mrvmMakeInt(result));
 			} else if (opcode == OP_AND) {
 				Value b = pop();
 				Value a = pop();
-				push(makeInt((valueAsInt(a) != 0 && valueAsInt(b) != 0) ? 1 : 0));
+				push(mrvmMakeInt((mrvmValueAsInt(a) != 0 && mrvmValueAsInt(b) != 0) ? 1 : 0));
 			} else if (opcode == OP_OR) {
 				Value b = pop();
 				Value a = pop();
-				push(makeInt((valueAsInt(a) != 0 || valueAsInt(b) != 0) ? 1 : 0));
+				push(mrvmMakeInt((mrvmValueAsInt(a) != 0 || mrvmValueAsInt(b) != 0) ? 1 : 0));
 			} else if (opcode == OP_NOT) {
 				Value a = pop();
-				push(makeInt(valueAsInt(a) == 0 ? 1 : 0));
+				push(mrvmMakeInt(mrvmValueAsInt(a) == 0 ? 1 : 0));
 			} else if (opcode == OP_SHL) {
 				Value b = pop();
 				Value a = pop();
-				push(makeInt(valueAsInt(a) << valueAsInt(b)));
+				push(mrvmMakeInt(mrvmValueAsInt(a) << mrvmValueAsInt(b)));
 			} else if (opcode == OP_SHR) {
 				Value b = pop();
 				Value a = pop();
-				push(makeInt(valueAsInt(a) >> valueAsInt(b)));
+				push(mrvmMakeInt(mrvmValueAsInt(a) >> mrvmValueAsInt(b)));
 			} else if (opcode == OP_BIT_AND) {
 				Value b = pop();
 				Value a = pop();
-				push(makeInt(valueAsInt(a) & valueAsInt(b)));
+				push(mrvmMakeInt(mrvmValueAsInt(a) & mrvmValueAsInt(b)));
 			} else if (opcode == OP_BIT_OR) {
 				Value b = pop();
 				Value a = pop();
-				push(makeInt(valueAsInt(a) | valueAsInt(b)));
+				push(mrvmMakeInt(mrvmValueAsInt(a) | mrvmValueAsInt(b)));
 			} else if (opcode == OP_BIT_XOR) {
 				Value b = pop();
 				Value a = pop();
-				push(makeInt(valueAsInt(a) ^ valueAsInt(b)));
+				push(mrvmMakeInt(mrvmValueAsInt(a) ^ mrvmValueAsInt(b)));
 			} else if (opcode == OP_INTRINSIC) {
 				std::string name;
 				readCString(name);
@@ -8849,28 +4850,28 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				int resultCode = 0;
 				readCString(varName);
 				source = pop();
-				if (!isStringLike(source)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
+				if (!mrvmIsStringLike(source)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 
-				std::string textValue = valueAsString(source);
+				std::string textValue = mrvmValueAsString(source);
 				if (opcode == OP_VAL) {
-					int errorPos = findValErrorPosition(textValue);
+					int errorPos = mrvmFindValErrorPosition(textValue);
 					if (errorPos == 0) {
 						long long parsed = std::strtoll(textValue.c_str(), nullptr, 10);
 						if (parsed < static_cast<long long>(std::numeric_limits<int>::min()) || parsed > static_cast<long long>(std::numeric_limits<int>::max())) throw std::runtime_error("Real to Integer conversion out of range.");
-						variables[varName] = makeInt(static_cast<int>(parsed));
+						variables[varName] = mrvmMakeInt(static_cast<int>(parsed));
 					} else
 						resultCode = errorPos;
 				} else {
-					int errorPos = findRValErrorPosition(textValue);
+					int errorPos = mrvmFindRValErrorPosition(textValue);
 					if (errorPos == 0) {
 						char *endPtr = nullptr;
 						double parsed = std::strtod(textValue.c_str(), &endPtr);
 						(void)endPtr;
-						variables[varName] = makeReal(parsed);
+						variables[varName] = mrvmMakeReal(parsed);
 					} else
 						resultCode = errorPos;
 				}
-				push(makeInt(resultCode));
+				push(mrvmMakeInt(resultCode));
 			} else if (opcode == OP_FIRST_GLOBAL || opcode == OP_NEXT_GLOBAL) {
 				std::string targetVar;
 				readCString(targetVar);
@@ -8882,26 +4883,31 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						const std::string &key = session->globalOrder[session->globalEnumIndex++];
 						std::map<std::string, GlobalEntry>::const_iterator it = session->globals.find(key);
 						if (it == session->globals.end()) continue;
-						variables[targetVar] = makeInt(it->second.type == TYPE_INT ? 1 : 0);
-						push(makeString(key));
+						variables[targetVar] = mrvmMakeInt(it->second.type == TYPE_INT ? 1 : 0);
+						push(mrvmMakeString(key));
 						goto handled_global_enum;
 					}
-					variables[targetVar] = makeInt(0);
-					push(makeString(""));
+					variables[targetVar] = mrvmMakeInt(0);
+					push(mrvmMakeString(""));
 					goto handled_global_enum;
 				}
 
-				if (opcode == OP_FIRST_GLOBAL) g_runtimeEnv.globalEnumIndex = 0;
-				while (g_runtimeEnv.globalEnumIndex < g_runtimeEnv.globalOrder.size()) {
-					const std::string &key = g_runtimeEnv.globalOrder[g_runtimeEnv.globalEnumIndex++];
-					std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
-					if (it == g_runtimeEnv.globals.end()) continue;
-					variables[targetVar] = makeInt(it->second.type == TYPE_INT ? 1 : 0);
-					push(makeString(key));
-					goto handled_global_enum;
+				if (opcode == OP_FIRST_GLOBAL) setMacroGlobalEnumIndex(0);
+				{
+					const std::vector<std::string> order = macroGlobalOrderValues();
+					std::size_t index = macroGlobalEnumIndex();
+					while (index < order.size()) {
+						const std::string key = order[index++];
+						GlobalEntry entry;
+						setMacroGlobalEnumIndex(index);
+						if (!readRuntimeGlobalValueDirect(key, entry)) continue;
+						variables[targetVar] = mrvmMakeInt(entry.type == TYPE_INT ? 1 : 0);
+						push(mrvmMakeString(key));
+						goto handled_global_enum;
+					}
 				}
-				variables[targetVar] = makeInt(0);
-				push(makeString(""));
+				variables[targetVar] = mrvmMakeInt(0);
+				push(mrvmMakeString(""));
 			handled_global_enum:;
 			} else if (opcode == OP_PROC_VAR) {
 				std::string name;
@@ -8918,18 +4924,18 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (it == variables.end()) throw std::runtime_error("Variable expected.");
 				if (it->second.type != TYPE_STR) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if (name == "EXPAND_TABS") {
-					std::string source = valueAsString(it->second);
+					std::string source = mrvmValueAsString(it->second);
 					bool toVirtuals = currentRuntimeTabExpand();
-					it->second = makeString(expandTabsString(source, toVirtuals));
+					it->second = mrvmMakeString(expandTabsString(source, toVirtuals));
 					if (varArgc > 1) {
 						std::map<std::string, Value>::iterator indexIt = variables.find(indexVarName);
 						if (indexIt == variables.end()) throw std::runtime_error("Variable expected.");
 						if (indexIt->second.type != TYPE_INT) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
-						indexIt->second = makeInt(expandedTabsAdjustedIndex(source, indexIt->second.i));
+						indexIt->second = mrvmMakeInt(expandedTabsAdjustedIndex(source, indexIt->second.i));
 					}
 				} else if (name == "TABS_TO_SPACES") {
 					if (varArgc != 1) throw std::runtime_error("TABS_TO_SPACES expects one variable argument.");
-					it->second = makeString(tabsToSpacesString(valueAsString(it->second)));
+					it->second = mrvmMakeString(tabsToSpacesString(mrvmValueAsString(it->second)));
 				} else
 					throw std::runtime_error("Unknown variable procedure.");
 			} else if (opcode == OP_PROC) {
@@ -8941,18 +4947,20 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						MRMacroExecUiCommandRequest request;
 						bool accepted = false;
 
-						if (args.size() != 3 || !isStringLike(args[0]) || !isStringLike(args[1]) || !isStringLike(args[2])) throw std::runtime_error("EXEC expects (target, command).");
+						if (args.size() != 3 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || !mrvmIsStringLike(args[2])) throw std::runtime_error("EXEC expects (target, command).");
 						request.closureId = mClosureId;
-						request.target = valueAsString(args[0]);
-						request.command = valueAsString(args[1]);
-						request.lvalue = valueAsString(args[2]);
+						request.target = mrvmValueAsString(args[0]);
+						request.command = mrvmValueAsString(args[1]);
+						request.lvalue = mrvmValueAsString(args[2]);
 						if (currentBackgroundEditSession() != nullptr || g_backgroundMacroStopToken != nullptr) {
 							mExecUiCommandRequests.push_back(request);
 							runtimeErrorLevel() = 0;
 						} else {
 							accepted = mrvmApplyExecUiCommandRequest(request);
-							variables[request.lvalue] = makeInt(accepted ? 1 : 0);
-							if (!mClosureId.empty() && mClosureVariableNames.find(request.lvalue) != mClosureVariableNames.end()) writeClosureVariableValue(mClosureId, request.lvalue, variables[request.lvalue], *mHashStore);
+							variables[request.lvalue] = mrvmMakeInt(accepted ? 1 : 0);
+							if (!mClosureId.empty() && mClosureVariableNames.find(request.lvalue) != mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, request.lvalue, variables[request.lvalue], *mHashStore);
+							else if (currentExecutionSessionId() != 0 && mSessionVariableNames.find(request.lvalue) != mSessionVariableNames.end())
+								mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), request.lvalue, variables[request.lvalue], *mHashStore);
 							runtimeErrorLevel() = accepted ? 0 : 1001;
 						}
 					} else if (name == "KEYMAP_RESET") {
@@ -8961,11 +4969,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						if (!setConfiguredActiveKeymapProfile("", nullptr)) throw std::runtime_error("KEYMAP_RESET failed: invalid active keymap profile.");
 						runtimeErrorLevel() = 0;
 					} else if (name == "KEYMAP_VERSION" || name == "THEME_VERSION") {
-						const std::string versionLiteral = args.size() == 1 && isStringLike(args[0]) ? trimAscii(valueAsString(args[0])) : std::string();
+						const std::string versionLiteral = args.size() == 1 && mrvmIsStringLike(args[0]) ? trimAscii(mrvmValueAsString(args[0])) : std::string();
 						std::uint64_t parsedVersion = 0;
 						const std::string artifactLabel = name == "KEYMAP_VERSION" ? "Keymap" : "Theme";
 
-						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
+						if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
 						if (!mrParsePersistenceVersion(versionLiteral, parsedVersion))
 							throw std::runtime_error(name + " failed: invalid persistence version.");
 						if (parsedVersion > mrCurrentPersistenceVersion())
@@ -8974,18 +4982,18 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 0;
 					} else if (name == "KEYMAP_PROFILE") {
 						std::string errorText;
-						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("KEYMAP_PROFILE expects (string).");
-						if (!mrvmApplyConfiguredKeymapProfilePayload(valueAsString(args[0]), &errorText)) throw std::runtime_error("KEYMAP_PROFILE failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("KEYMAP_PROFILE expects (string).");
+						if (!mrvmApplyConfiguredKeymapProfilePayload(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("KEYMAP_PROFILE failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 						runtimeErrorLevel() = 0;
 					} else if (name == "KEYMAP_BIND") {
 						std::string errorText;
-						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("KEYMAP_BIND expects (string).");
-						if (!mrvmApplyConfiguredKeymapBindingPayload(valueAsString(args[0]), &errorText)) throw std::runtime_error("KEYMAP_BIND failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("KEYMAP_BIND expects (string).");
+						if (!mrvmApplyConfiguredKeymapBindingPayload(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("KEYMAP_BIND failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 						runtimeErrorLevel() = 0;
 					} else if (name == "ACTIVE_KEYMAP_PROFILE") {
 						std::string errorText;
-						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("ACTIVE_KEYMAP_PROFILE expects (string).");
-						if (!mrvmApplyConfiguredActiveKeymapProfilePayload(valueAsString(args[0]), &errorText)) throw std::runtime_error("ACTIVE_KEYMAP_PROFILE failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("ACTIVE_KEYMAP_PROFILE expects (string).");
+						if (!mrvmApplyConfiguredActiveKeymapProfilePayload(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("ACTIVE_KEYMAP_PROFILE failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 						runtimeErrorLevel() = 0;
 					} else if (name == "THEME_RESET") {
 						std::string errorText;
@@ -9011,10 +5019,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 0;
 					} else if (name == "THEME_NAME" || name == "WINDOWCOLORS" || name == "MENUDIALOGCOLORS" || name == "HELPCOLORS" || name == "OTHERCOLORS" || name == "MINIMAPCOLORS" || name == "FILECOMPAREMINIMAPCOLORS" || name == "CODECOLORS" || name == "FILECOMPARECOLORS") {
 						std::string errorText;
-						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
+						if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
 						if (name == "THEME_NAME") {
-							if (!setConfiguredColorThemeDisplayName(valueAsString(args[0]), &errorText)) throw std::runtime_error("THEME_NAME failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-						} else if (!applyConfiguredColorSetupValue(name, valueAsString(args[0]), &errorText, false))
+							if (!setConfiguredColorThemeDisplayName(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("THEME_NAME failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						} else if (!applyConfiguredColorSetupValue(name, mrvmValueAsString(args[0]), &errorText, false))
 							throw std::runtime_error(name + " failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 						runtimeErrorLevel() = 0;
 					} else if (name == "MRSETUP") {
@@ -9022,17 +5030,17 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						std::string errorText;
 						MRSetupPaths activePaths = resolveSetupPathDefaults();
 
-						if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("MRSETUP expects (string, string).");
-						setupKey = upperKey(trimAscii(valueAsString(args[0])));
+						if (args.size() != 2 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1])) throw std::runtime_error("MRSETUP expects (string, string).");
+						setupKey = mrvmUpperKey(trimAscii(mrvmValueAsString(args[0])));
 						if (setupKey == "FILECOMPAREMINIMAPCOLORS" && !mrvmIsStartupSettingsMode()) {
-							if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText, false))
+							if (!applyConfiguredColorSetupValue(setupKey, mrvmValueAsString(args[1]), &errorText, false))
 								throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 							runtimeErrorLevel() = 0;
 							break;
 						}
 						if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRSETUP is only allowed in settings.mrmac during startup.");
 						if (setupKey == "SETTINGS_VERSION") {
-							const std::string versionLiteral = trimAscii(valueAsString(args[1]));
+							const std::string versionLiteral = trimAscii(mrvmValueAsString(args[1]));
 							std::uint64_t parsedVersion = 0;
 
 							if (!mrParsePersistenceVersion(versionLiteral, parsedVersion))
@@ -9040,7 +5048,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							if (parsedVersion > mrCurrentPersistenceVersion())
 								throw std::runtime_error("MRSETUP(" + setupKey + ") failed: future build version " + versionLiteral + " is not supported.");
 						} else if (setupKey == "SETTINGSPATH") {
-							if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(SETTINGSPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
+							if (!setConfiguredSettingsMacroFilePath(mrvmValueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(SETTINGSPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
 							activePaths.settingsMacroUri = configuredSettingsMacroFilePath();
 						} else
 						switch (classifySettingsKey(setupKey)) {
@@ -9086,11 +5094,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							case MRSettingsKeyClass::Version:
 							case MRSettingsKeyClass::Path:
 							case MRSettingsKeyClass::Global:
-								if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), activePaths, &errorText))
+								if (!applyConfiguredSettingsAssignment(setupKey, mrvmValueAsString(args[1]), activePaths, &errorText))
 									throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 								break;
 							case MRSettingsKeyClass::Edit:
-								if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
+								if (!applyConfiguredEditSetupValue(setupKey, mrvmValueAsString(args[1]), &errorText))
 									throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 								if (setupKey == "TAB_EXPAND") {
 									BackgroundEditSession *session = currentBackgroundEditSession();
@@ -9100,7 +5108,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								}
 								break;
 							case MRSettingsKeyClass::ColorInline:
-								if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText))
+								if (!applyConfiguredColorSetupValue(setupKey, mrvmValueAsString(args[1]), &errorText))
 									throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 								break;
 						}
@@ -9108,44 +5116,45 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "MRFEPROFILE") {
 					std::string errorText;
 					if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRFEPROFILE is only allowed in settings.mrmac during startup.");
-					if (args.size() != 4 || !isStringLike(args[0]) || !isStringLike(args[1]) || !isStringLike(args[2]) || !isStringLike(args[3])) throw std::runtime_error("MRFEPROFILE expects (string, string, string, string).");
-					if (!applyConfiguredEditExtensionProfileDirective(valueAsString(args[0]), valueAsString(args[1]), valueAsString(args[2]), valueAsString(args[3]), &errorText)) throw std::runtime_error("MRFEPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
+					if (args.size() != 4 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || !mrvmIsStringLike(args[2]) || !mrvmIsStringLike(args[3])) throw std::runtime_error("MRFEPROFILE expects (string, string, string, string).");
+					if (!applyConfiguredEditExtensionProfileDirective(mrvmValueAsString(args[0]), mrvmValueAsString(args[1]), mrvmValueAsString(args[2]), mrvmValueAsString(args[3]), &errorText)) throw std::runtime_error("MRFEPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
 					runtimeErrorLevel() = 0;
 				} else if (name == "MRCOMPILERPROFILE") {
 					std::string errorText;
 					if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRCOMPILERPROFILE is only allowed in settings.mrmac during startup.");
-					if (args.size() != 4 || !isStringLike(args[0]) || !isStringLike(args[1]) || !isStringLike(args[2]) || !isStringLike(args[3])) throw std::runtime_error("MRCOMPILERPROFILE expects (string, string, string, string).");
-					if (!applyConfiguredCompilerProfileDirective(valueAsString(args[0]), valueAsString(args[1]), valueAsString(args[2]), valueAsString(args[3]), &errorText)) throw std::runtime_error("MRCOMPILERPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
+					if (args.size() != 4 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || !mrvmIsStringLike(args[2]) || !mrvmIsStringLike(args[3])) throw std::runtime_error("MRCOMPILERPROFILE expects (string, string, string, string).");
+					if (!applyConfiguredCompilerProfileDirective(mrvmValueAsString(args[0]), mrvmValueAsString(args[1]), mrvmValueAsString(args[2]), mrvmValueAsString(args[3]), &errorText)) throw std::runtime_error("MRCOMPILERPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
 					runtimeErrorLevel() = 0;
-				} else if (name == "UI_DIALOG") {
-					beginMacroUiDialog(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_LABEL") {
-					addMacroUiLabel(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_BUTTON") {
-					addMacroUiButton(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_DISPLAY") {
-					addMacroUiDisplay(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_INPUT") {
-					addMacroUiInput(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_LISTBOX") {
-					addMacroUiListBox(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_GRID") {
-					addMacroUiGrid(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_LIST_CLEAR") {
-					clearMacroUiItemList(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_LIST_ADD") {
-					addMacroUiItemListValue(args);
-					runtimeErrorLevel() = 0;
-				} else if (name == "UI_MODELESS_ON") {
-					bindMacroModelessButton(args);
+					} else if (name == "UI_DIALOG") {
+						mrvmBeginMacroUiDialog(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_LABEL") {
+						mrvmAddMacroUiLabel(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_BUTTON") {
+						mrvmAddMacroUiButton(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_DISPLAY") {
+						mrvmAddMacroUiDisplay(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_INPUT") {
+						mrvmAddMacroUiInput(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_LISTBOX") {
+						mrvmAddMacroUiListBox(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_GRID") {
+						mrvmAddMacroUiGrid(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_LIST_CLEAR") {
+						mrvmClearMacroUiItemList(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_LIST_ADD") {
+						mrvmAddMacroUiItemListValue(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_MODELESS_ON") {
+						mrvmBindMacroModelessButton(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
 				} else if (name == "UI_MODELESS_SHOW") {
 					showMacroModelessDialog(args);
 				} else if (name == "UI_MODELESS_UPDATE") {
@@ -9159,14 +5168,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "EXEC_SESSION_STOP") {
 					stopExecSessionClosure(args);
 				} else if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR") {
-					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error(name + " expects (string, string).");
-					setGlobalValue(valueAsString(args[0]), TYPE_STR, makeString(valueAsString(args[1])));
+					if (args.size() != 2 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1])) throw std::runtime_error(name + " expects (string, string).");
+					setGlobalValue(mrvmValueAsString(args[0]), TYPE_STR, mrvmMakeString(mrvmValueAsString(args[1])));
 				} else if (name == "SET_GLOBAL_INT") {
-					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SET_GLOBAL_INT expects (string, int).");
-					setGlobalValue(valueAsString(args[0]), TYPE_INT, makeInt(args[1].i));
+					if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SET_GLOBAL_INT expects (string, int).");
+					setGlobalValue(mrvmValueAsString(args[0]), TYPE_INT, mrvmMakeInt(args[1].i));
 				} else if (name == "SET_GLOBAL_HASH") {
-					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_HASH) throw std::runtime_error("SET_GLOBAL_HASH expects (string, hash).");
-					setGlobalValueFromStore(valueAsString(args[0]), TYPE_HASH, args[1], *mHashStore);
+					if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_HASH) throw std::runtime_error("SET_GLOBAL_HASH expects (string, hash).");
+					setGlobalValueFromStore(mrvmValueAsString(args[0]), TYPE_HASH, args[1], *mHashStore);
 				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR" || name == "MAKE_MESSAGE" || name == "UI_MESSAGEBOX") {
 					int deferredError = 0;
 					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
@@ -9249,7 +5258,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					int millis = 0;
 					BackgroundEditSession *session = nullptr;
 					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("DELAY expects one integer argument.");
-					millis = normalizeDelayMillis(valueAsInt(args[0]));
+					millis = normalizeDelayMillis(mrvmValueAsInt(args[0]));
 					if (millis == 0) {
 						runtimeErrorLevel() = 0;
 						continue;
@@ -9274,50 +5283,50 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					static_cast<void>(::fsync(STDOUT_FILENO));
 					runtimeErrorLevel() = 0;
 				} else if (name == "LOAD_MACRO_FILE") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("LOAD_MACRO_FILE expects one string argument.");
-					loadMacroFileIntoRegistry(valueAsString(args[0]), nullptr);
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("LOAD_MACRO_FILE expects one string argument.");
+					loadMacroFileIntoRegistry(mrvmValueAsString(args[0]), nullptr);
 				} else if (name == "UNLOAD_MACRO") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("UNLOAD_MACRO expects one string argument.");
-					unloadMacroFromRegistry(valueAsString(args[0]));
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("UNLOAD_MACRO expects one string argument.");
+					unloadMacroFromRegistry(mrvmValueAsString(args[0]));
 				} else if (name == "CHANGE_DIR") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("CHANGE_DIR expects one string argument.");
-					if (changeDirectoryPath(valueAsString(args[0]))) runtimeErrorLevel() = 0;
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("CHANGE_DIR expects one string argument.");
+					if (mrvmChangeDirectoryPath(mrvmValueAsString(args[0]))) runtimeErrorLevel() = 0;
 					else
 						runtimeErrorLevel() = errno != 0 ? errno : 1;
 				} else if (name == "DEL_FILE") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("DEL_FILE expects one string argument.");
-					if (deleteFilePath(valueAsString(args[0]))) runtimeErrorLevel() = 0;
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("DEL_FILE expects one string argument.");
+					if (mrvmDeleteFilePath(mrvmValueAsString(args[0]))) runtimeErrorLevel() = 0;
 					else
 						runtimeErrorLevel() = errno != 0 ? errno : 1;
 				} else if (name == "SET_FILE_ATTR") {
 					struct stat st;
 					mode_t modeBits;
 					std::string path;
-					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SET_FILE_ATTR expects (string, int).");
-					path = expandUserPath(valueAsString(args[0]));
+					if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SET_FILE_ATTR expects (string, int).");
+					path = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
 					if (::stat(path.c_str(), &st) != 0) {
 						runtimeErrorLevel() = errno != 0 ? errno : 1;
 						continue;
 					}
 					modeBits = st.st_mode;
-					if ((valueAsInt(args[1]) & 0x01) != 0) modeBits &= static_cast<mode_t>(~(S_IWUSR | S_IWGRP | S_IWOTH));
+					if ((mrvmValueAsInt(args[1]) & 0x01) != 0) modeBits &= static_cast<mode_t>(~(S_IWUSR | S_IWGRP | S_IWOTH));
 					else
 						modeBits |= static_cast<mode_t>(S_IWUSR);
 					runtimeErrorLevel() = ::chmod(path.c_str(), modeBits) == 0 ? 0 : (errno != 0 ? errno : 1);
 				} else if (name == "SHELL_TO_OS") {
 					int exitCode = 0;
-					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SHELL_TO_OS expects (string, int).");
+					if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SHELL_TO_OS expects (string, int).");
 					if (currentBackgroundEditSession() != nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					(void)mrvmUiNewScreen();
-					exitCode = std::system(valueAsString(args[0]).c_str());
+					exitCode = std::system(mrvmValueAsString(args[0]).c_str());
 					(void)mrvmUiNewScreen();
 					runtimeErrorLevel() = exitCode;
 				} else if (name == "WRITE_SOD") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("WRITE_SOD expects one string argument.");
-					mrLogMessage(valueAsString(args[0]));
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("WRITE_SOD expects one string argument.");
+					mrLogMessage(mrvmValueAsString(args[0]));
 					runtimeErrorLevel() = 0;
 				} else if (name == "SAVE_OS_SCREEN") {
 					if (!args.empty()) throw std::runtime_error("SAVE_OS_SCREEN expects no arguments.");
@@ -9333,20 +5342,20 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					if (!args.empty()) returnCode = valueAsInt(args[0]);
+					if (!args.empty()) returnCode = mrvmValueAsInt(args[0]);
 					runtimeErrorLevel() = returnCode;
 					(void)dispatchApplicationCommandEvent(cmQuit);
 				} else if (name == "LOAD_FILE") {
 					MREditWindow *win;
 					std::string path;
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("LOAD_FILE expects one string argument.");
-					path = expandUserPath(valueAsString(args[0]));
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("LOAD_FILE expects one string argument.");
+					path = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
 					win = activeMacroEditWindow();
 					if (win == nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					if (!fileExistsPath(path)) {
+					if (!mrvmFileExistsPath(path)) {
 						runtimeErrorLevel() = 3002;
 						continue;
 					}
@@ -9367,13 +5376,13 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = dispatchMRKeymapAction("MR_LOAD_BLOCK_FROM_FILE") ? 0 : 1001;
 						continue;
 					}
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("LOAD_BLOCK expects zero or one string argument.");
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("LOAD_BLOCK expects zero or one string argument.");
 					if (win == nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					path = expandUserPath(valueAsString(args[0]));
-					if (!fileExistsPath(path) || !mrvmEditorLoadBlockFromFile(win, path)) {
+					path = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
+					if (!mrvmFileExistsPath(path) || !mrvmEditorLoadBlockFromFile(win, path)) {
 						runtimeErrorLevel() = 3002;
 						continue;
 					}
@@ -9404,12 +5413,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = dispatchMRKeymapAction("MR_SAVE_BLOCK_TO_FILE") ? 0 : 1001;
 						continue;
 					}
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
 					if (win == nullptr || editor == nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					path = expandUserPath(valueAsString(args[0]));
+					path = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
 					if (!mrvmEditorSaveCurrentBlockToFile(win, editor, path)) {
 						runtimeErrorLevel() = errno != 0 ? errno : 1010;
 						continue;
@@ -9423,36 +5432,36 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					MRFileEditor *editor;
 					bool replaced;
 					BackgroundEditSession *session;
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("REPLACE expects one string argument.");
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("REPLACE expects one string argument.");
 					editor = currentEditor();
 					session = currentBackgroundEditSession();
 					if (editor == nullptr && session == nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					if (editor != nullptr) replaced = replaceLastSearch(editor, valueAsString(args[0]));
+					if (editor != nullptr) replaced = replaceLastSearch(editor, mrvmValueAsString(args[0]));
 					else
-						replaced = replaceLastSearchBackground(valueAsString(args[0]));
+						replaced = replaceLastSearchBackground(mrvmValueAsString(args[0]));
 					runtimeErrorLevel() = replaced ? 0 : 1010;
 					} else if (name == "TEXT") {
 						MRFileEditor *editor;
-						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("TEXT expects one string argument.");
+						if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("TEXT expects one string argument.");
 						editor = currentEditor();
 						if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
 							runtimeErrorLevel() = 1001;
 							continue;
 						}
-						insertEditorText(editor, valueAsString(args[0]));
+						insertEditorText(editor, mrvmValueAsString(args[0]));
 						runtimeErrorLevel() = 0;
 					} else if (name == "SET_CLIPBOARD_TEXT") {
 						std::string text;
-						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SET_CLIPBOARD_TEXT expects one string argument.");
-						text = valueAsString(args[0]);
+						if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("SET_CLIPBOARD_TEXT expects one string argument.");
+						text = mrvmValueAsString(args[0]);
 						TClipboard::setText(TStringView(text.data(), text.size()));
 						runtimeErrorLevel() = 0;
 					} else if (name == "KEY_IN") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("KEY_IN expects one string argument.");
-					if (!replayKeyInputSequence(valueAsString(args[0]))) {
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("KEY_IN expects one string argument.");
+					if (!mrvmReplayKeyInputSequence(mrvmValueAsString(args[0]))) {
 						runtimeErrorLevel() = currentBackgroundEditSession() != nullptr ? 1010 : 1001;
 						continue;
 					}
@@ -9468,10 +5477,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					runtimeErrorLevel() = 0;
 				} else if (name == "PUSH_KEY") {
 					if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT) throw std::runtime_error("PUSH_KEY expects two integer arguments.");
-					runtimeErrorLevel() = pushQueuedKeyPair(valueAsInt(args[0]), valueAsInt(args[1])) ? 0 : 1010;
+					runtimeErrorLevel() = pushQueuedKeyPair(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1])) ? 0 : 1010;
 				} else if (name == "PASS_KEY") {
 					if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT) throw std::runtime_error("PASS_KEY expects two integer arguments.");
-					runtimeErrorLevel() = passMacroKeyPairToUi(valueAsInt(args[0]), valueAsInt(args[1])) ? 0 : 1010;
+					runtimeErrorLevel() = mrvmPassMacroKeyPairToUi(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1])) ? 0 : 1010;
 				} else if (name == "PUSH_LABELS") {
 					if (!args.empty()) throw std::runtime_error("PUSH_LABELS expects no arguments.");
 					g_runtimeEnv.functionLabelStack.emplace_back();
@@ -9486,59 +5495,59 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					int keyNumber;
 					int mode;
 					MacroFunctionLabelFrame &frame = currentFunctionLabelFrame();
-					if (args.size() != 3 || !isStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("FLABEL expects (string, int, int).");
-					keyNumber = valueAsInt(args[1]);
-					mode = valueAsInt(args[2]);
+					if (args.size() != 3 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("FLABEL expects (string, int, int).");
+					keyNumber = mrvmValueAsInt(args[1]);
+					mode = mrvmValueAsInt(args[2]);
 					if (keyNumber <= 0 || keyNumber >= 49) {
 						runtimeErrorLevel() = 1010;
 						continue;
 					}
 					if (mode == 255) mode = currentUiMacroMode();
-					if (mode == MACRO_MODE_DOS_SHELL) frame.shellLabels[static_cast<std::size_t>(keyNumber)] = valueAsString(args[0]);
+					if (mode == MACRO_MODE_DOS_SHELL) frame.shellLabels[static_cast<std::size_t>(keyNumber)] = mrvmValueAsString(args[0]);
 					else
-						frame.editLabels[static_cast<std::size_t>(keyNumber)] = valueAsString(args[0]);
+						frame.editLabels[static_cast<std::size_t>(keyNumber)] = mrvmValueAsString(args[0]);
 					applyFunctionLabelState();
 					runtimeErrorLevel() = 0;
 				} else if (name == "MACRO_TO_KEY") {
 					TKey key;
 					int mode = MACRO_MODE_EDIT;
-					ExplicitKeyBinding binding;
+					MRVMExplicitKeyBinding binding;
 					std::string refreshError;
-					if (args.size() != 3 || !isStringLike(args[1]) || args[2].type != TYPE_INT) throw std::runtime_error("MACRO_TO_KEY expects (key, string, int).");
+					if (args.size() != 3 || !mrvmIsStringLike(args[1]) || args[2].type != TYPE_INT) throw std::runtime_error("MACRO_TO_KEY expects (key, string, int).");
 					if (currentBackgroundEditSession() != nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					if (!parseBindingKeyValue(args[0], key) || !parseBindingModeValue(valueAsInt(args[2]), mode)) {
+					if (!mrvmParseBindingKeyValue(args[0], key) || !mrvmParseBindingModeValue(mrvmValueAsInt(args[2]), mode)) {
 						runtimeErrorLevel() = 1010;
 						continue;
 					}
-					removeExplicitBindingsForKey(key, mode);
+					mrvmRemoveExplicitBindingsForKey(g_runtimeEnv.explicitKeyBindings, key, mode);
 					binding.key = key;
 					binding.mode = mode;
-					binding.kind = ExplicitBindingKind::MacroSpec;
-					binding.macroSpec = valueAsString(args[1]);
+					binding.kind = MRVMExplicitBindingKind::MacroSpec;
+					binding.macroSpec = mrvmValueAsString(args[1]);
 					g_runtimeEnv.explicitKeyBindings.push_back(binding);
 					if (!mrvmUiRefreshRuntimeMenus(&refreshError)) throw std::runtime_error("MACRO_TO_KEY could not refresh runtime menus: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 					runtimeErrorLevel() = 0;
 				} else if (name == "CMD_TO_KEY") {
 					TKey key;
 					int mode = MACRO_MODE_EDIT;
-					ExplicitKeyBinding binding;
+					MRVMExplicitKeyBinding binding;
 					if (args.size() != 3 || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("CMD_TO_KEY expects (key, int, int).");
 					if (currentBackgroundEditSession() != nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					if (!parseBindingKeyValue(args[0], key) || !parseBindingModeValue(valueAsInt(args[2]), mode)) {
+					if (!mrvmParseBindingKeyValue(args[0], key) || !mrvmParseBindingModeValue(mrvmValueAsInt(args[2]), mode)) {
 						runtimeErrorLevel() = 1010;
 						continue;
 					}
-					removeExplicitBindingsForKey(key, mode);
+					mrvmRemoveExplicitBindingsForKey(g_runtimeEnv.explicitKeyBindings, key, mode);
 					binding.key = key;
 					binding.mode = mode;
-					binding.kind = ExplicitBindingKind::Command;
-					binding.commandId = valueAsInt(args[1]);
+					binding.kind = MRVMExplicitBindingKind::Command;
+					binding.commandId = mrvmValueAsInt(args[1]);
 					g_runtimeEnv.explicitKeyBindings.push_back(binding);
 					runtimeErrorLevel() = 0;
 				} else if (name == "UNASSIGN_KEY") {
@@ -9550,11 +5559,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					if (!parseBindingKeyValue(args[0], key) || !parseBindingModeValue(valueAsInt(args[1]), mode)) {
+					if (!mrvmParseBindingKeyValue(args[0], key) || !mrvmParseBindingModeValue(mrvmValueAsInt(args[1]), mode)) {
 						runtimeErrorLevel() = 1010;
 						continue;
 					}
-					removeExplicitBindingsForKey(key, mode);
+					mrvmRemoveExplicitBindingsForKey(g_runtimeEnv.explicitKeyBindings, key, mode);
 					clearRegisteredBindingsForKey(&key, mode, mode == MACRO_MODE_ALL);
 					if (!mrvmUiRefreshRuntimeMenus(&refreshError)) throw std::runtime_error("UNASSIGN_KEY could not refresh runtime menus: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 					runtimeErrorLevel() = 0;
@@ -9587,11 +5596,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					if (args.size() == 3 && !parseBindingModeValue(valueAsInt(args[2]), mode)) {
+					if (args.size() == 3 && !mrvmParseBindingModeValue(mrvmValueAsInt(args[2]), mode)) {
 						runtimeErrorLevel() = 1010;
 						continue;
 					}
-					if (!keyPairToTKey(valueAsInt(args[0]), valueAsInt(args[1]), key, text, textLength, textByte)) {
+					if (!mrvmKeyPairToTKey(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1]), key, text, textLength, textByte)) {
 						runtimeErrorLevel() = 1010;
 						continue;
 					}
@@ -9602,13 +5611,13 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					runtimeErrorLevel() = 1001;
 				} else if (name == "PUT_LINE") {
 					MRFileEditor *editor;
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("PUT_LINE expects one string argument.");
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("PUT_LINE expects one string argument.");
 					editor = currentEditor();
 					if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					replaceEditorLine(editor, valueAsString(args[0]));
+					replaceEditorLine(editor, mrvmValueAsString(args[0]));
 					runtimeErrorLevel() = 0;
 				} else if (name == "CR") {
 					MRFileEditor *editor = currentEditor();
@@ -9635,7 +5644,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					deleteEditorChars(editor, valueAsInt(args[0]));
+					deleteEditorChars(editor, mrvmValueAsInt(args[0]));
 					runtimeErrorLevel() = 0;
 				} else if (name == "DEL_LINE") {
 					MRFileEditor *editor = currentEditor();
@@ -9664,7 +5673,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					}
 					wordWrapEditorLine(editor);
 					runtimeErrorLevel() = 0;
-				} else if (const char *actionId = keymapActionIdForMacroCommand(name)) {
+				} else if (const char *actionId = mrvmKeymapActionIdForMacroCommand(name)) {
 					if (!args.empty()) throw std::runtime_error((name + " expects no arguments.").c_str());
 					if (currentBackgroundEditSession() != nullptr) {
 						runtimeErrorLevel() = 1001;
@@ -9680,12 +5689,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					const std::string sequenceText = "<" + std::to_string(args[0].i) + ">";
 					runtimeErrorLevel() = dispatchMRKeymapAction(name == "SET_RANDOM_MARK" ? "MRMAC_MARK_SET_RANDOM_ACCESS" : "MRMAC_MARK_GET_RANDOM_ACCESS", sequenceText) ? 0 : 1001;
 				} else if (name == "EXTEND_BLOCK_BY_MOTION") {
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("EXTEND_BLOCK_BY_MOTION expects one key sequence string argument.");
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("EXTEND_BLOCK_BY_MOTION expects one key sequence string argument.");
 					if (currentBackgroundEditSession() != nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_BLOCK_EXTEND_BY_MOTION", valueAsString(args[0])) ? 0 : 1001;
+					runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_BLOCK_EXTEND_BY_MOTION", mrvmValueAsString(args[0])) ? 0 : 1001;
 				} else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "INDENT" || name == "UNDENT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "BLOCK_TOGGLE_VISIBILITY" || name == "BLOCK_STAT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
 				           name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS") {
 					MRFileEditor *editor = currentEditor();
@@ -9817,7 +5826,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					runtimeErrorLevel() = gotoEditorLine(editor, valueAsInt(args[0])) ? 0 : 1010;
+					runtimeErrorLevel() = gotoEditorLine(editor, mrvmValueAsInt(args[0])) ? 0 : 1010;
 				} else if (name == "GOTO_COL") {
 					MRFileEditor *editor = currentEditor();
 					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("GOTO_COL expects one integer argument.");
@@ -9825,7 +5834,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					runtimeErrorLevel() = gotoEditorCol(editor, valueAsInt(args[0])) ? 0 : 1010;
+					runtimeErrorLevel() = gotoEditorCol(editor, mrvmValueAsInt(args[0])) ? 0 : 1010;
 				} else if (name == "SWITCH_WINDOW") {
 					int deferredError = 0;
 					if (queueDeferredUiProcedure(name, args, deferredError)) {
@@ -9833,7 +5842,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						continue;
 					}
 					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("SWITCH_WINDOW expects one integer argument.");
-					runtimeErrorLevel() = mrvmUiSwitchWindow(valueAsInt(args[0])) ? 0 : 1001;
+					runtimeErrorLevel() = mrvmUiSwitchWindow(mrvmValueAsInt(args[0])) ? 0 : 1001;
 				} else if (name == "SIZE_WINDOW") {
 					int deferredError = 0;
 					if (queueDeferredUiProcedure(name, args, deferredError)) {
@@ -9841,7 +5850,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						continue;
 					}
 					if (args.size() != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT) throw std::runtime_error("SIZE_WINDOW expects four integer arguments.");
-					runtimeErrorLevel() = mrvmUiSizeCurrentWindow(valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3])) ? 0 : 1010;
+					runtimeErrorLevel() = mrvmUiSizeCurrentWindow(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1]), mrvmValueAsInt(args[2]), mrvmValueAsInt(args[3])) ? 0 : 1010;
 				} else if (name == "WINDOW_COPY" || name == "WINDOW_MOVE") {
 					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error((name + " expects one integer argument.").c_str());
 					runtimeErrorLevel() = 0;
@@ -9852,23 +5861,22 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					std::string paramPart;
 					std::string targetFileKey;
 					std::string macroKey;
-					std::map<std::string, MacroRef>::iterator mit;
+					MacroRef macroRef;
 					bool backgroundStaged = currentBackgroundEditSession() != nullptr;
 
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("RUN_MACRO expects one string argument.");
+					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("RUN_MACRO expects one string argument.");
 
-					spec = valueAsString(args[0]);
-					if (!parseRunMacroSpec(spec, filePart, macroPart, paramPart)) {
+					spec = mrvmValueAsString(args[0]);
+					if (!mrvmParseRunMacroSpec(spec, filePart, macroPart, paramPart)) {
 						runtimeErrorLevel() = 5001;
 						continue;
 					}
 
-					macroKey = upperKey(macroPart);
+					macroKey = mrvmUpperKey(macroPart);
 					if (!filePart.empty()) targetFileKey = resolveLoadedFileKeyForSpec(filePart);
-					if (!filePart.empty() && targetFileKey.empty()) targetFileKey = makeFileKey(filePart);
+					if (!filePart.empty() && targetFileKey.empty()) targetFileKey = mrvmMakeMacroFileKey(filePart);
 
-					mit = g_runtimeEnv.loadedMacros.find(macroKey);
-					if (mit == g_runtimeEnv.loadedMacros.end() || (!targetFileKey.empty() && mit->second.fileKey != targetFileKey)) {
+					if (!readLoadedMacroByKey(macroKey, macroRef) || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
 						if (backgroundStaged) {
 							runtimeErrorLevel() = 5001;
 							continue;
@@ -9878,14 +5886,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						} else {
 							if (!loadMacroFileIntoRegistry(macroPart, &targetFileKey)) continue;
 						}
-						mit = g_runtimeEnv.loadedMacros.find(macroKey);
+						static_cast<void>(readLoadedMacroByKey(macroKey, macroRef));
 					}
 
-					if (mit == g_runtimeEnv.loadedMacros.end() || (!targetFileKey.empty() && mit->second.fileKey != targetFileKey)) {
+					if (macroRef.displayName.empty() || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
 						runtimeErrorLevel() = 5001;
 						continue;
 					}
-					if (!executeLoadedMacroWithConfiguredKeymapBatch(mit, macroKey, paramPart, &log)) continue;
+					if (!executeLoadedMacroWithConfiguredKeymapBatch(macroKey, paramPart, &log)) continue;
 				} else {
 					throw std::runtime_error("Unknown procedure: " + name);
 				}
@@ -9981,66 +5989,6 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 	if (pushedMacroFrame) g_runtimeEnv.macroStack.pop_back();
 }
 
-std::vector<std::size_t> mrvmUiCopyWindowMarkStack(const void *windowKey) {
-	std::vector<std::size_t> out;
-	std::map<const void *, std::vector<uint>>::const_iterator it;
-
-	if (windowKey == nullptr) return out;
-	it = g_runtimeEnv.markStacks.find(windowKey);
-	if (it == g_runtimeEnv.markStacks.end()) return out;
-	out.reserve(it->second.size());
-	for (unsigned int i : it->second)
-		out.push_back(static_cast<std::size_t>(i));
-	return out;
-}
-
-bool mrvmUiCopyWindowLastSearch(const void *windowKey, const std::string &fileName, std::size_t &start, std::size_t &end, std::size_t &cursor) {
-	start = 0;
-	end = 0;
-	cursor = 0;
-	if (!g_runtimeEnv.lastSearchValid || windowKey == nullptr) return false;
-	if (g_runtimeEnv.lastSearchWindow != windowKey) return false;
-	if (g_runtimeEnv.lastSearchFileName != fileName) return false;
-	start = g_runtimeEnv.lastSearchStart;
-	end = g_runtimeEnv.lastSearchEnd;
-	cursor = g_runtimeEnv.lastSearchCursor;
-	return true;
-}
-
-void mrvmUiCopyGlobals(std::vector<std::string> &order, std::map<std::string, int> &ints, std::map<std::string, std::string> &strings) {
-	order.clear();
-	ints.clear();
-	strings.clear();
-	order.reserve(g_runtimeEnv.globalOrder.size());
-	for (std::size_t i = 0; i < g_runtimeEnv.globalOrder.size(); ++i) {
-		const std::string &key = g_runtimeEnv.globalOrder[i];
-		std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
-		if (it == g_runtimeEnv.globals.end()) continue;
-		order.push_back(key);
-		if (it->second.type == TYPE_INT) ints[key] = valueAsInt(it->second.value);
-		else if (it->second.type == TYPE_STR)
-			strings[key] = valueAsString(it->second.value);
-	}
-}
-
-void mrvmUiCopyLoadedMacros(std::vector<std::string> &order, std::map<std::string, std::string> &displayNames) {
-	order.clear();
-	displayNames.clear();
-	order.reserve(g_runtimeEnv.macroOrder.size());
-	for (std::size_t i = 0; i < g_runtimeEnv.macroOrder.size(); ++i) {
-		const std::string &key = g_runtimeEnv.macroOrder[i];
-		std::map<std::string, MacroRef>::const_iterator it = g_runtimeEnv.loadedMacros.find(key);
-		if (it == g_runtimeEnv.loadedMacros.end()) continue;
-		order.push_back(key);
-		displayNames[key] = it->second.displayName;
-	}
-}
-
-void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand) {
-	ignoreCase = g_runtimeEnv.ignoreCase;
-	tabExpand = g_runtimeEnv.tabExpand;
-}
-
 int mrvmUiCurrentWindowIndex(const void *windowKey) {
 	std::vector<MREditWindow *> windows;
 
@@ -10089,158 +6037,8 @@ bool mrvmUiCursorPosition(int &x, int &y) {
 	return currentUiCursorPosition(x, y);
 }
 
-void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets) {
-	std::vector<uint> marks;
-
-	if (windowKey == nullptr) return;
-	if (offsets.empty()) {
-		g_runtimeEnv.markStacks.erase(windowKey);
-		return;
-	}
-	marks.reserve(offsets.size());
-	for (unsigned long offset : offsets)
-		marks.push_back(static_cast<uint>(offset));
-	g_runtimeEnv.markStacks[windowKey] = marks;
-}
-
-void mrvmUiReplaceWindowLastSearch(const void *windowKey, const std::string &fileName, bool valid, std::size_t start, std::size_t end, std::size_t cursor) {
-	if (!valid) {
-		if (g_runtimeEnv.lastSearchWindow == windowKey) {
-			g_runtimeEnv.lastSearchValid = false;
-			g_runtimeEnv.lastSearchWindow = nullptr;
-			g_runtimeEnv.lastSearchFileName.clear();
-			g_runtimeEnv.lastSearchStart = 0;
-			g_runtimeEnv.lastSearchEnd = 0;
-			g_runtimeEnv.lastSearchCursor = 0;
-		}
-		return;
-	}
-	g_runtimeEnv.lastSearchValid = true;
-	g_runtimeEnv.lastSearchWindow = windowKey;
-	g_runtimeEnv.lastSearchFileName = fileName;
-	g_runtimeEnv.lastSearchStart = start;
-	g_runtimeEnv.lastSearchEnd = end;
-	g_runtimeEnv.lastSearchCursor = cursor;
-}
-
-void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<std::string, int> &ints, const std::map<std::string, std::string> &strings) {
-	std::map<std::string, GlobalEntry> preservedHashes;
-	std::vector<std::string> preservedHashOrder;
-	std::set<std::string> seen;
-
-	for (const std::string &key : g_runtimeEnv.globalOrder) {
-		std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
-		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_HASH) continue;
-		if (ints.find(key) != ints.end() || strings.find(key) != strings.end()) continue;
-		preservedHashOrder.push_back(key);
-		preservedHashes[key] = it->second;
-	}
-
-	g_runtimeEnv.globals.clear();
-	g_runtimeEnv.globalOrder.clear();
-	g_runtimeEnv.globalEnumIndex = 0;
-
-	for (const auto &i : order) {
-		const std::string key = upperKey(i);
-		GlobalEntry entry;
-		std::map<std::string, int>::const_iterator intIt;
-		std::map<std::string, std::string>::const_iterator strIt;
-		if (!seen.insert(key).second) continue;
-		intIt = ints.find(key);
-		if (intIt != ints.end()) {
-			entry.type = TYPE_INT;
-			entry.value = makeInt(intIt->second);
-		} else {
-			strIt = strings.find(key);
-			if (strIt == strings.end()) continue;
-			entry.type = TYPE_STR;
-			entry.value = makeString(strIt->second);
-		}
-		entry.value.globalStorage = true;
-		g_runtimeEnv.globalOrder.push_back(key);
-		g_runtimeEnv.globals[key] = entry;
-	}
-
-	for (const auto &it : ints) {
-		const std::string key = upperKey(it.first);
-		GlobalEntry entry;
-		if (!seen.insert(key).second) continue;
-		entry.type = TYPE_INT;
-		entry.value = makeInt(it.second);
-		entry.value.globalStorage = true;
-		g_runtimeEnv.globalOrder.push_back(key);
-		g_runtimeEnv.globals[key] = entry;
-	}
-	for (const auto &string : strings) {
-		const std::string key = upperKey(string.first);
-		GlobalEntry entry;
-		if (!seen.insert(key).second) continue;
-		entry.type = TYPE_STR;
-		entry.value = makeString(string.second);
-		entry.value.globalStorage = true;
-		g_runtimeEnv.globalOrder.push_back(key);
-		g_runtimeEnv.globals[key] = entry;
-	}
-
-	for (const std::string &key : preservedHashOrder) {
-		std::map<std::string, GlobalEntry>::const_iterator hashIt;
-		if (!seen.insert(key).second) continue;
-		hashIt = preservedHashes.find(key);
-		if (hashIt == preservedHashes.end()) continue;
-		g_runtimeEnv.globalOrder.push_back(key);
-		g_runtimeEnv.globals[key] = hashIt->second;
-	}
-}
-
-void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand) {
-	g_runtimeEnv.ignoreCase = ignoreCase;
-	g_runtimeEnv.tabExpand = tabExpand;
-}
-
 void mrvmUiSyncLinkedWindowsFrom(MREditWindow *window) {
 	syncLinkedWindowsFrom(window);
-}
-
-bool mrvmUiRegisterMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage) {
-	auto *app = dynamic_cast<TApplication *>(TProgram::application);
-	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (menuBar == nullptr) {
-		if (errorMessage != nullptr) *errorMessage = "REGISTER_MENU_ITEM requires an active MRMenuBar.";
-		return false;
-	}
-	return returnWithDirectScreenMutation(menuBar->registerRuntimeMenuItem(menuTitle, itemTitle, macroSpec, ownerSpec, errorMessage));
-}
-
-bool mrvmUiRemoveMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage) {
-	auto *app = dynamic_cast<TApplication *>(TProgram::application);
-	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (menuBar == nullptr) {
-		if (errorMessage != nullptr) *errorMessage = "REMOVE_MENU_ITEM requires an active MRMenuBar.";
-		return false;
-	}
-	return returnWithDirectScreenMutation(menuBar->removeRuntimeMenuItem(menuTitle, itemTitle, ownerSpec, errorMessage));
-}
-
-bool mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage) {
-	auto *app = dynamic_cast<TApplication *>(TProgram::application);
-	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (menuBar == nullptr) return true;
-	return returnWithDirectScreenMutation(menuBar->removeRuntimeNodesOwnedByMacroSpec(ownerSpec, errorMessage));
-}
-
-bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec, std::string *errorMessage) {
-	auto *app = dynamic_cast<TApplication *>(TProgram::application);
-	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (menuBar == nullptr) return true;
-	return returnWithDirectScreenMutation(menuBar->removeRuntimeNodesOwnedByFile(fileSpec, errorMessage));
 }
 
 std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec) {
@@ -10250,111 +6048,32 @@ std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec) {
 	std::string paramPart;
 	std::string targetFileKey;
 	const std::string targetMacroKey = [&]() {
-		parseRunMacroSpec(macroSpec, filePart, macroPart, paramPart);
-		return upperKey(macroPart);
+		mrvmParseRunMacroSpec(macroSpec, filePart, macroPart, paramPart);
+		return mrvmUpperKey(macroPart);
 	}();
 	const int mode = currentUiMacroMode();
 
 	if (targetMacroKey.empty()) return std::string();
 	if (!filePart.empty()) targetFileKey = resolveLoadedFileKeyForSpec(filePart);
-	if (!filePart.empty() && targetFileKey.empty()) targetFileKey = makeFileKey(filePart);
+	if (!filePart.empty() && targetFileKey.empty()) targetFileKey = mrvmMakeMacroFileKey(filePart);
 	for (auto it = g_runtimeEnv.explicitKeyBindings.rbegin(); it != g_runtimeEnv.explicitKeyBindings.rend(); ++it) {
-		if (it->kind != ExplicitBindingKind::MacroSpec || !bindingModeMatches(it->mode, mode)) continue;
+		if (it->kind != MRVMExplicitBindingKind::MacroSpec || !mrvmBindingModeMatches(it->mode, mode)) continue;
 		if (!macroSpecTargetsLoadedMacro(it->macroSpec, targetFileKey, targetMacroKey)) continue;
-		return menuLabelFromBindingKey(it->key);
+		return mrvmMenuLabelFromBindingKey(it->key);
 	}
 	{
-		const auto macroIt = g_runtimeEnv.loadedMacros.find(targetMacroKey);
-		if (macroIt == g_runtimeEnv.loadedMacros.end()) return std::string();
-		if (!targetFileKey.empty() && macroIt->second.fileKey != targetFileKey) return std::string();
-		if (!macroAllowsUiMode(macroIt->second, mode) || !macroIt->second.hasAssignedKey) return std::string();
-		if (!macroIt->second.assignedKeySpec.empty()) return normalizeMenuKeySpec(macroIt->second.assignedKeySpec);
-		return menuLabelFromBindingKey(macroIt->second.assignedKey);
-	}
-}
-
-bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage) {
-	auto *app = dynamic_cast<TApplication *>(TProgram::application);
-	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (menuBar == nullptr) return true;
-	return returnWithDirectScreenMutation(menuBar->refreshRuntimeMenus(errorMessage));
-}
-
-bool mrvmUiMessageBox(const std::string &text) {
-	try {
-		messageBox(mfInformation | mfOKButton, "%s", text.c_str());
-		return returnWithDirectScreenMutation(true);
-	} catch (...) {
-		return false;
+		MacroRef macroRef;
+		if (!readLoadedMacroByKey(targetMacroKey, macroRef)) return std::string();
+		if (!targetFileKey.empty() && macroRef.fileKey != targetFileKey) return std::string();
+		if (!macroAllowsUiMode(macroRef, mode) || !macroRef.hasAssignedKey) return std::string();
+		if (!macroRef.assignedKeySpec.empty()) return mrvmNormalizeMenuKeySpec(macroRef.assignedKeySpec);
+		return mrvmMenuLabelFromBindingKey(macroRef.assignedKey);
 	}
 }
 
 struct UiRenderFacade {
 	static bool renderDeferredCommand(const MRMacroDeferredUiCommand &command) {
-		switch (command.type) {
-			case mrducCreateWindow:
-				return mrvmUiCreateWindow();
-			case mrducDeleteWindow:
-				return mrvmUiDeleteCurrentWindow();
-			case mrducModifyWindow:
-				return mrvmUiModifyCurrentWindow();
-			case mrducLinkWindow:
-				return mrvmUiLinkCurrentWindow();
-			case mrducUnlinkWindow:
-				return mrvmUiUnlinkCurrentWindow();
-			case mrducZoom:
-				return mrvmUiZoomCurrentWindow();
-			case mrducRedraw:
-				return mrvmUiRedrawCurrentWindow();
-			case mrducNewScreen:
-				return mrvmUiNewScreen();
-			case mrducSwitchWindow:
-				return mrvmUiSwitchWindow(command.a1);
-			case mrducSizeWindow:
-				return mrvmUiSizeCurrentWindow(command.a1, command.a2, command.a3, command.a4);
-			case mrducMarqueeInfo:
-				return mrvmUiMarquee(0, command.text);
-			case mrducMarqueeWarning:
-				return mrvmUiMarquee(1, command.text);
-			case mrducMarqueeError:
-				return mrvmUiMarquee(2, command.text);
-			case mrducMakeMessage:
-				return applyMakeMessageProc(std::vector<Value>{makeString(command.text)});
-			case mrducBrain:
-				return mrvmUiBrain(command.a1 != 0);
-			case mrducPutBox:
-				return mrvmUiPutBox(command.a1, command.a2, command.a3, command.a4, command.a5, command.a6, command.text, command.a7);
-			case mrducWrite:
-				return mrvmUiWrite(command.text, command.a1, command.a2, command.a3, command.a4);
-			case mrducClrLine:
-				return mrvmUiClrLine(command.a1, command.a2, command.a3);
-			case mrducGotoxy:
-				return mrvmUiGotoxy(command.a1, command.a2);
-			case mrducPutLineNum:
-				return mrvmUiPutLineNum(command.a1);
-			case mrducPutColNum:
-				return mrvmUiPutColNum(command.a1);
-			case mrducScrollBoxUp:
-				return mrvmUiScrollBoxUp(command.a1, command.a2, command.a3, command.a4, command.a5);
-			case mrducScrollBoxDn:
-				return mrvmUiScrollBoxDn(command.a1, command.a2, command.a3, command.a4, command.a5);
-			case mrducClearScreen:
-				return mrvmUiClearScreen(command.a1);
-			case mrducKillBox:
-				return mrvmUiKillBox();
-			case mrducRegisterMenuItem:
-				return mrvmUiRegisterMenuItem(command.text, command.text2, command.text3, command.text4);
-			case mrducRemoveMenuItem:
-				return mrvmUiRemoveMenuItem(command.text, command.text2, command.text3);
-			case mrducMessageBox:
-				return mrvmUiMessageBox(command.text);
-			case mrducDelay:
-				return true;
-			default:
-				return false;
-		}
+		return mrvmUiScreenRenderDeferredCommand(command);
 	}
 };
 
@@ -10364,68 +6083,6 @@ bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &com
 
 bool mrvmUiRenderDeferredCommand(const MRMacroDeferredUiCommand &command) {
 	return mrvmUiRenderFacadeRenderDeferredCommand(command);
-}
-
-void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount, std::size_t *bindingCount) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	std::vector<std::string> files = listMrmacFilesInDirectory(directoryPath);
-	std::set<std::string> dedupe;
-
-	g_runtimeEnv.indexedBoundMacros.clear();
-	g_runtimeEnv.indexedBoundFiles.clear();
-	g_runtimeEnv.indexedWarmupCursor = 0;
-	g_runtimeEnv.indexedWarmupAttemptedFiles.clear();
-
-	for (const auto &file : files) {
-		std::string source;
-		std::vector<TKey> keys;
-		std::string fileKey;
-
-		if (!readTextFile(file, source)) continue;
-		if (!parseIndexedBindingHeaders(source, keys) || keys.empty()) continue;
-		fileKey = makeFileKey(file);
-		if (dedupe.insert(fileKey).second) g_runtimeEnv.indexedBoundFiles.push_back(file);
-		for (auto key : keys)
-			g_runtimeEnv.indexedBoundMacros.emplace_back(key, file);
-	}
-
-	if (fileCount != nullptr) *fileCount = g_runtimeEnv.indexedBoundFiles.size();
-	if (bindingCount != nullptr) *bindingCount = g_runtimeEnv.indexedBoundMacros.size();
-}
-
-bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath, std::string *failedFilePath, std::string *errorMessage) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-
-	if (loadedFilePath != nullptr) loadedFilePath->clear();
-	if (failedFilePath != nullptr) failedFilePath->clear();
-	if (errorMessage != nullptr) errorMessage->clear();
-
-	while (g_runtimeEnv.indexedWarmupCursor < g_runtimeEnv.indexedBoundFiles.size()) {
-		const std::string &filePath = g_runtimeEnv.indexedBoundFiles[g_runtimeEnv.indexedWarmupCursor++];
-		std::string fileKey = makeFileKey(filePath);
-		std::string localError;
-
-		if (!g_runtimeEnv.indexedWarmupAttemptedFiles.insert(fileKey).second) continue;
-		if (g_runtimeEnv.loadedFiles.find(fileKey) != g_runtimeEnv.loadedFiles.end()) continue;
-		if (loadMacroFileIntoRegistry(filePath, nullptr)) {
-			if (loadedFilePath != nullptr) *loadedFilePath = filePath;
-			return true;
-		}
-		if (failedFilePath != nullptr) *failedFilePath = filePath;
-		{
-			const char *compileError = get_last_compile_error();
-			if (compileError != nullptr) localError = compileError;
-		}
-		if (localError.empty()) localError = "Unable to load macro file.";
-		if (errorMessage != nullptr) *errorMessage = localError;
-		return false;
-	}
-	return false;
-}
-
-bool mrvmHasPendingIndexedMacroWarmup() {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	return g_runtimeEnv.indexedWarmupCursor < g_runtimeEnv.indexedBoundFiles.size();
 }
 
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage) {
@@ -10481,19 +6138,20 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 	const bool rawCtrlSpace = keyCode == kbNoKey && (controlKeyState & kbCtrlShift) != 0 && (controlKeyState & (kbAltShift | kbSuperShift | kbPaste)) == 0;
 	bool traceSnippetKey = false;
 	auto dispatchLoadedBinding = [&]() -> bool {
-		for (std::size_t i = g_runtimeEnv.macroOrder.size(); i > 0; --i) {
-			const std::string &macroKey = g_runtimeEnv.macroOrder[i - 1];
-			std::map<std::string, MacroRef>::iterator it = g_runtimeEnv.loadedMacros.find(macroKey);
+		const std::vector<std::string> orderValues = macroCatalogMacroOrder();
+		for (std::size_t i = orderValues.size(); i > 0; --i) {
+			const std::string &macroKey = orderValues[i - 1];
+			MacroRef macroRef;
 
-			if (it == g_runtimeEnv.loadedMacros.end()) continue;
-			if (!it->second.hasAssignedKey) continue;
-			if (!macroAllowsUiMode(it->second, mode)) continue;
-			if (!bindingKeysEqual(pressed, it->second.assignedKey)) continue;
+			if (!readLoadedMacroByKey(macroKey, macroRef)) continue;
+			if (!macroRef.hasAssignedKey) continue;
+			if (!macroAllowsUiMode(macroRef, mode)) continue;
+			if (!mrvmBindingKeysEqual(pressed, macroRef.assignedKey)) continue;
 
-			logCalculatorHotkeyState("vm-loaded-match", pressed, it->second.displayName);
-			if (traceSnippetKey) mrLogMessage(("KEYDBG vm loaded binding match macro=" + it->second.displayName).c_str());
-			executedMacroName = it->second.displayName;
-			executeLoadedMacroWithConfiguredKeymapBatch(it, macroKey, std::string(), logLines);
+			mrvmLogCalculatorHotkeyState("vm-loaded-match", pressed, macroRef.displayName);
+			if (traceSnippetKey) mrLogMessage(("KEYDBG vm loaded binding match macro=" + macroRef.displayName).c_str());
+			executedMacroName = macroRef.displayName;
+			executeLoadedMacroWithConfiguredKeymapBatch(macroKey, std::string(), logLines);
 			return true;
 		}
 		return false;
@@ -10503,16 +6161,16 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 	traceSnippetKey = rawCtrlSpace || (pressed.code == static_cast<ushort>(' ') && (pressed.mods & kbCtrlShift) != 0) || (pressed.code == static_cast<ushort>('@') && (pressed.mods & kbCtrlShift) != 0);
 	executedMacroName.clear();
 	if (logLines != nullptr) logLines->clear();
-	if (g_keyReplayDepth > 0) return false;
+	if (mrvmKeyReplayActive()) return false;
 	if (traceSnippetKey) {
 		char line[512];
-		std::snprintf(line, sizeof(line), "KEYDBG vm assigned-key rawCode=0x%04X rawMods=0x%04X code=0x%04X mods=0x%04X mode=%d explicit=%zu loaded=%zu indexed=%zu", static_cast<unsigned>(keyCode), static_cast<unsigned>(controlKeyState), static_cast<unsigned>(pressed.code), static_cast<unsigned>(pressed.mods), mode, g_runtimeEnv.explicitKeyBindings.size(), g_runtimeEnv.loadedMacros.size(), g_runtimeEnv.indexedBoundMacros.size());
+		std::snprintf(line, sizeof(line), "KEYDBG vm assigned-key rawCode=0x%04X rawMods=0x%04X code=0x%04X mods=0x%04X mode=%d explicit=%zu loaded=%zu indexed=%zu", static_cast<unsigned>(keyCode), static_cast<unsigned>(controlKeyState), static_cast<unsigned>(pressed.code), static_cast<unsigned>(pressed.mods), mode, g_runtimeEnv.explicitKeyBindings.size(), macroCatalogLoadedMacroCount(), macroCatalogIndexedBindingCount());
 		mrLogMessage(line);
 	}
-	logCalculatorHotkeyState("vm-enter", pressed);
+	mrvmLogCalculatorHotkeyState("vm-enter", pressed);
 	if (executeExplicitKeyBinding(pressed, mode, logLines)) {
 		executedMacroName = "<bound>";
-		logCalculatorHotkeyState("vm-explicit-consumed", pressed);
+		mrvmLogCalculatorHotkeyState("vm-explicit-consumed", pressed);
 		if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key consumed by explicit binding");
 		return true;
 	}
@@ -10523,7 +6181,7 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 		if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key no indexed binding");
 		return false;
 	}
-	logCalculatorHotkeyState("vm-indexed-loaded", pressed);
+	mrvmLogCalculatorHotkeyState("vm-indexed-loaded", pressed);
 	if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key indexed binding loaded");
 	return dispatchLoadedBinding();
 }

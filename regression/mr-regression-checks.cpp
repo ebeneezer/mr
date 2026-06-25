@@ -929,7 +929,7 @@ bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
 bool testExecSessionKvAccessBoundaryGuard(std::string &failureReason) {
 	const std::filesystem::path rootPath = std::filesystem::current_path();
 	static const char *kSourceRoots[] = {"app", "config", "coprocessor", "dialogs", "diff", "keymap", "mrmac", "piecetable", "ui"};
-	static const char *kAllowedDirectKvFiles[] = {"mrmac/MRVM.cpp", "mrmac/macros/utils/ExecSessionConsole.mrmac"};
+	static const char *kAllowedDirectKvFiles[] = {"mrmac/MRVM.cpp", "mrmac/vm/MRVMExecSessions.cpp", "mrmac/macros/utils/ExecSessionConsole.mrmac"};
 	static const char *kDirectKvNeedles[] = {"\"EXECSESSIONS\"", "'EXECSESSIONS'"};
 
 	for (const char *sourceRoot : kSourceRoots) {
@@ -1045,12 +1045,17 @@ bool testExecSessionRuntimeStoreBoundaryGuard(std::string &failureReason) {
 	}
 	{
 		std::string vmSource;
+		std::string modelessUiRuntimeSource;
 		std::string ioError;
 		if (!readTextFile((rootPath / "mrmac/MRVM.cpp").string(), vmSource, ioError)) {
 			failureReason = "Unable to read MRVM.cpp for modeless UI staging store guard: " + ioError;
 			return false;
 		}
-		if (vmSource.find("g_macroUiDialog") != std::string::npos || vmSource.find("g_macroUiItemLists") != std::string::npos) {
+		if (!readTextFile((rootPath / "mrmac/vm/MRVMModelessUiRuntime.cpp").string(), modelessUiRuntimeSource, ioError)) {
+			failureReason = "Unable to read MRVMModelessUiRuntime.cpp for modeless UI staging store guard: " + ioError;
+			return false;
+		}
+		if (vmSource.find("g_macroUiDialog") != std::string::npos || vmSource.find("g_macroUiItemLists") != std::string::npos || modelessUiRuntimeSource.find("g_macroUiDialog") != std::string::npos || modelessUiRuntimeSource.find("g_macroUiItemLists") != std::string::npos) {
 			failureReason = "Modeless UI staging data must live under MODELESSUI/staging K/V, not in MRVM.cpp store globals.";
 			return false;
 		}
@@ -1058,12 +1063,12 @@ bool testExecSessionRuntimeStoreBoundaryGuard(std::string &failureReason) {
 			failureReason = "EXECSESSIONS and MODELESSUI root reads must go through MRVM.cpp K/V root accessors.";
 			return false;
 		}
-		if (vmSource.find("ensureMacroUiStagingHash") == std::string::npos || vmSource.find("\"MODELESSUI\"") == std::string::npos) {
-			failureReason = "Modeless UI staging guard expects MODELESSUI/staging K/V accessors in MRVM.cpp.";
+		if (modelessUiRuntimeSource.find("ensureModelessUiChildPath") == std::string::npos || modelessUiRuntimeSource.find("\"MODELESSUI\"") == std::string::npos || modelessUiRuntimeSource.find("\"staging\"") == std::string::npos) {
+			failureReason = "Modeless UI staging guard expects MODELESSUI/staging K/V accessors in MRVMModelessUiRuntime.cpp.";
 			return false;
 		}
-		if (vmSource.find("findGlobalHashRoot") == std::string::npos || vmSource.find("findExecSessionsChild") == std::string::npos || vmSource.find("findModelessUiChild") == std::string::npos) {
-			failureReason = "Exec-session/modeless K/V root accessors must remain centralized in MRVM.cpp.";
+		if (vmSource.find("findExecSessionsChild") == std::string::npos || vmSource.find("mrvmModelessUiReadItemList") == std::string::npos) {
+			failureReason = "MRVM.cpp must access EXECSESSIONS and MODELESSUI through runtime K/V module functions.";
 			return false;
 		}
 	}

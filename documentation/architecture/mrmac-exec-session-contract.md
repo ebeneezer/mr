@@ -20,6 +20,10 @@ including:
 
 The VM owns bytecode execution semantics.
 
+The VM global hash store is the central runtime K/V store for MRMac runtime
+state. Top-level K/V roots such as `EXECSESSIONS` are authoritative runtime
+state roots, not mirrors of independent C++ registries.
+
 An MRMac execution session owns execution lifetime, ownership metadata, routing,
 cancellation, yield/resume state and result publication for one logical macro
 execution.
@@ -80,14 +84,37 @@ runtime consumers, execution sessions, macro routing and coprocessor work items.
   top-level key `EXECSESSIONS`.
 - `runtime-only` means that this state is not serialized. It does not permit a
   second value-bearing C++ registry beside the central VM K/V store.
+- C++ snapshots of `EXECSESSIONS` data are transfer objects only. They must be
+  rebuilt from the K/V store and must not become the authoritative store.
 - Closure variable state, active session metadata, recent terminal results,
-  foreground `DELAY` metadata, scheduler consumers, scheduler events, status
-  generations and listener ids belong under `EXECSESSIONS`.
+  foreground `DELAY` metadata, session-persistent `DEF_*` variables, scheduler
+  consumers, scheduler events, status generations and listener ids belong under
+  `EXECSESSIONS`.
+- `EXECSESSIONS` data must be grouped by runtime role:
+  - `EXECSESSIONS/counters/*` for runtime id counters,
+  - `EXECSESSIONS/status/generation` for status generation,
+  - `EXECSESSIONS/sessions/active/byTask/<taskId>` for active sessions,
+  - `EXECSESSIONS/sessions/pending/foregroundDelay/<sessionId>` for foreground
+    `DELAY` sessions,
+  - `EXECSESSIONS/sessions/byId/<sessionId>/variables/byName/<variableName>`
+    for variables declared by `DEF_*` in a long-lived execution session,
+  - `EXECSESSIONS/results/recent/<resultId>` for recent terminal results,
+  - `EXECSESSIONS/listeners/registered/<listenerId>` for listener ids,
+  - `EXECSESSIONS/scheduler/consumers/<consumerId>` for scheduler consumers,
+  - `EXECSESSIONS/scheduler/events/recent/<eventId>` for scheduler events,
+  - `EXECSESSIONS/closures/<closureId>/state/<variableName>` for closure
+    variable state,
+  - `EXECSESSIONS/console/*` for execution-session console state.
+  New runtime data must be placed under a meaningful branch instead of adding
+  flat siblings directly below `EXECSESSIONS`.
 - C++ may keep only mechanical runtime handles that cannot be represented as
   VM K/V values, such as function-pointer callbacks and suspended
   `VirtualMachine` ownership for foreground `DELAY`.
 - Exec sessions must not add a second closure registry, a second scheduler
   registry or a second persistence store.
+- Listener callback function pointers and suspended foreground VM ownership are
+  mechanical process handles. Their ids, ownership, status and user-visible
+  metadata remain K/V state.
 - `MRSETUP` and `SAVE_SETTINGS` behavior must remain governed by the VM and
   settings contracts.
 - Cancellation and pause are cooperative. A session must not interrupt execution
@@ -105,9 +132,36 @@ variable snapshots and source-location projection must be layered on top of
 execution sessions. They must not be mixed into the base session contract unless
 they are represented as optional typed session capabilities or results.
 
+The debugger must be able to inspect macro-visible runtime state through the
+central K/V roots. It must not require private C++ registries for values that
+are representable as VM scalar, string, array or hash data. Relevant roots
+include `MACROGLOBALS`, `EXECSESSIONS`, `MACROCATALOG` and other approved
+macro-visible runtime roots.
+
 Modeless MRMac UI, timers and event callbacks are also consumers of execution
 sessions. They may request execution, cancellation or status, but they do not
 own VM internals.
+
+## Session Variables
+
+`DEF_*` declarations in a normal finite macro execution create VM-local
+variables for that execution. They are not file-wide globals.
+
+When an execution session can outlive a single immediate stack execution, its
+declared `DEF_*` variables are session runtime state. They must be represented
+under:
+
+```text
+EXECSESSIONS/sessions/byId/<sessionId>/variables/byName/<variableName>
+```
+
+This state is owned by the execution session lifecycle. Removing the session
+removes its variables. A later session that executes the same macro source must
+not inherit variables through the source file path or macro file identity.
+
+Session variables must not be stored in `MACROGLOBALS`. `MACROGLOBALS` is only
+for explicit MRMac globals addressed through the global language procedures and
+intrinsics.
 
 ## Closure Units
 

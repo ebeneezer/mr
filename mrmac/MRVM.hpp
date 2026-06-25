@@ -49,6 +49,8 @@ class VirtualMachine {
 	std::unique_ptr<MRVMHashStore> mHashStore;
 	std::string mClosureId;
 	std::set<std::string> mClosureVariableNames;
+	MRMacroExecutionSessionId mExecutionSessionId;
+	std::set<std::string> mSessionVariableNames;
 	std::vector<MRMacroExecUiCommandRequest> mExecUiCommandRequests;
 	bool verboseLogging;
 	bool logTruncated;
@@ -94,6 +96,7 @@ class VirtualMachine {
 	void hashWrite(int handle, const std::string &key, const Value &value);
 	void hashErase(int handle, const std::string &key);
 	void setClosureContext(const std::string &closureId);
+	void setExecutionSessionContext(MRMacroExecutionSessionId sessionId);
 	const std::vector<MRMacroExecUiCommandRequest> &execUiCommandRequests() const noexcept;
 	void execute(const unsigned char *bytecode, size_t length);
 	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, bool resetState, bool firstRun);
@@ -129,7 +132,7 @@ struct MRMacroJobResult {
 };
 
 MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
-MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, MRMacroExecutionSessionId sessionId = 0, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 bool mrvmStoreExecSessionClosureInt(const std::string &closureId, const std::string &lvalue, int value);
 bool mrvmApplyExecUiCommandRequest(const MRMacroExecUiCommandRequest &request);
 
@@ -349,7 +352,7 @@ struct MRMacroStagedJobResult {
 	}
 };
 
-MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, MRMacroExecutionSessionId sessionId = 0, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 
 std::vector<std::size_t> mrvmUiCopyWindowMarkStack(const void *windowKey);
 void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets);

@@ -136,6 +136,7 @@ Longer names are acceptable when they are more precise.
 - Private class members may be unavoidable in headers because they define object layout; do not add more private surface than the class needs.
 - Inline code in headers requires a technical reason, such as templates or required trivial inline definitions.
 - New source files require explicit approval.
+- Source files at or above 1000 lines must be split into semantically named subordinate source files when further work touches the area. The split must follow stable domain boundaries, preserve ownership and visibility, and avoid creating secondary registries, broad façade APIs or helper networks only to move lines.
 
 ## Comments
 

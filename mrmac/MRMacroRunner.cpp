@@ -287,7 +287,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 		bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 		std::free(bytecode);
 		bytecode = nullptr;
-		taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, 0, std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), entryOffset, selectedClosureId](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
+		taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, 0, std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), entryOffset, selectedClosureId, sessionId = session.sessionId](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
 			mr::coprocessor::Result result;
 			MRMacroJobResult runResult;
 
@@ -296,7 +296,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 				result.status = mr::coprocessor::TaskStatus::Cancelled;
 				return result;
 			}
-			runResult = mrvmRunBytecodeBackgroundAt(bytecodeCopy.data(), bytecodeCopy.size(), entryOffset, label, selectedClosureId, stopToken, info.cancelFlag);
+			runResult = mrvmRunBytecodeBackgroundAt(bytecodeCopy.data(), bytecodeCopy.size(), entryOffset, label, selectedClosureId, sessionId, stopToken, info.cancelFlag);
 			if (runResult.cancelled) {
 				result.status = mr::coprocessor::TaskStatus::Cancelled;
 				return result;
@@ -414,7 +414,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 			conflictSnapshot.windowY2 = stagedInput.windowY2;
 
 			taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob, static_cast<std::size_t>(win->bufferId()), stagedInput.baseVersion,
-			                                                     std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), stagedInput = std::move(stagedInput), conflictSnapshot = std::move(conflictSnapshot)](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
+			                                                     std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), stagedInput = std::move(stagedInput), conflictSnapshot = std::move(conflictSnapshot), sessionId = session.sessionId](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
 				mr::coprocessor::Result result;
 				MRMacroStagedJobResult runResult;
 
@@ -424,7 +424,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 					return result;
 				}
 
-				runResult = mrvmRunBytecodeStagedBackground(bytecodeCopy.data(), bytecodeCopy.size(), stagedInput, stopToken, info.cancelFlag);
+				runResult = mrvmRunBytecodeStagedBackground(bytecodeCopy.data(), bytecodeCopy.size(), stagedInput, sessionId, stopToken, info.cancelFlag);
 				if (runResult.cancelled) {
 					result.status = mr::coprocessor::TaskStatus::Cancelled;
 					return result;
@@ -468,6 +468,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 	}
 
 	vm->setAsyncDelayEnabled(true);
+	vm->setExecutionSessionContext(session.sessionId);
 	if (!selectedClosureId.empty()) vm->setClosureContext(selectedClosureId);
 	vm->executeAt(bytecode, bytecodeSize, entryOffset, std::string(), label, true, false);
 	std::free(bytecode);

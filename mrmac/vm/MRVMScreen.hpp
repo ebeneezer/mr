@@ -19,5 +19,6 @@ bool applyPutLineColNumberProc(const std::string &name, const std::vector<Virtua
 bool applyScrollBoxProc(const std::string &name, const std::vector<VirtualMachine::Value> &args, bool down);
 bool applyClearScreenProc(const std::string &name, const std::vector<VirtualMachine::Value> &args);
 bool applyKillBoxProc(const std::string &name, const std::vector<VirtualMachine::Value> &args);
+bool mrvmUiScreenRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 
 #endif
