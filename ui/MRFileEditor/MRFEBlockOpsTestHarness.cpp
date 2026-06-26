@@ -25,6 +25,8 @@
 
 bool mrfeSeedMouseColumnStateForRegression(MRFileEditor &editor, int anchorColumn, int cursorColumn);
 bool mrfeRenderedBlockOverlayLineRangeForRegression(const MRFileEditor &editor, std::size_t &line1, std::size_t &line2);
+int mrfeLocalXForVisualColumnForRegression(const MRFileEditor &editor, int visualColumn);
+bool mrfeRenderedColumnOverlayColumnsForRegression(MRFileEditor &editor, std::size_t lineIndex, int width, int &col1, int &col2);
 
 class MRFEBlockOpsTestPeer {
   public:
@@ -1472,6 +1474,10 @@ int localXForEditorColumn(int column) {
 	return regressionTextLeft + std::max(0, column);
 }
 
+int localXForEditorColumn(const MRFileEditor &editor, int column) {
+	return mrfeLocalXForVisualColumnForRegression(editor, column);
+}
+
 uchar mouseButtonsForMode(MRFEBlockMode mode) {
 	if (mode == MRFEBlockMode::Column) return static_cast<uchar>(mbRightButton);
 	if (mode == MRFEBlockMode::Line) return static_cast<uchar>(mbLeftButton | mbRightButton);
@@ -1511,9 +1517,10 @@ bool runEditorMouseDragCaseForMode(MRFEBlockMode mode, const char *phase, std::s
 		return false;
 	}
 
+	const int expectedCol2 = mode == MRFEBlockMode::Column ? 5 : 4;
 	if (mode == MRFEBlockMode::Line) {
 		if (!checkEditorBlock(*editor, ops, mode, MRFEBlockStatus::Committed, 0, 2, 0, 0, phase, failureReason)) return false;
-	} else if (!checkEditorBlock(*editor, ops, mode, MRFEBlockStatus::Committed, 0, 2, 1, 4, phase, failureReason))
+	} else if (!checkEditorBlock(*editor, ops, mode, MRFEBlockStatus::Committed, 0, 2, 1, expectedCol2, phase, failureReason))
 		return false;
 
 	TEvent right{};
@@ -1521,7 +1528,7 @@ bool runEditorMouseDragCaseForMode(MRFEBlockMode mode, const char *phase, std::s
 	right.keyDown.keyCode = kbRight;
 	editor->handleEvent(right);
 	if (mode == MRFEBlockMode::Line) return checkEditorBlock(*editor, ops, mode, MRFEBlockStatus::Committed, 0, 2, 0, 0, phase, failureReason);
-	return checkEditorBlock(*editor, ops, mode, MRFEBlockStatus::Committed, 0, 2, 1, 4, phase, failureReason);
+	return checkEditorBlock(*editor, ops, mode, MRFEBlockStatus::Committed, 0, 2, 1, expectedCol2, phase, failureReason);
 }
 
 bool runEditorMouseDragBlockModeFileLineCase(std::string &failureReason) {
@@ -1630,7 +1637,158 @@ bool runEditorMouseDragReplacesExistingBlockCase(std::string &failureReason) {
 		failureReason = "Unable to adopt replacement mouse column block.";
 		return false;
 	}
-	return checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 2, 1, 4, "mouse column replaces existing block", failureReason);
+	return checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 2, 1, 5, "mouse column replaces existing block", failureReason);
+}
+
+bool runEditorMouseReleaseFinalPointCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::string text = "alpha\n\nbeta\n";
+	QueuedMouseOwner owner(TRect(0, 0, 80, 8));
+	MRFileEditor *editor = new MRFileEditor(TRect(0, 0, 80, 8), nullptr, nullptr, nullptr, "");
+	MRFEBlockOps ops;
+	owner.insert(editor);
+
+	if (!editor->replaceBufferText(text.c_str())) {
+		failureReason = "Unable to seed editor text in mouse release final point case.";
+		return false;
+	}
+
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 4), 2, 0, 0));
+	TEvent event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 1), 0, kbAltShift, mbLeftButton);
+	editor->handleEvent(event);
+	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+		failureReason = "Alt mouse release point must be adoptable even without an intermediate move event.";
+		return false;
+	}
+	if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 2, 1, 5, "alt mouse release point column block", failureReason)) return false;
+
+	MRFEBlockOpsTestPeer::clear(ops, *editor);
+	owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(*editor, 4), 1, kbAltShift, mbLeftButton));
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 4), 1, 0, 0));
+	event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 1), 0, kbAltShift, mbLeftButton);
+	editor->handleEvent(event);
+	std::size_t liveLine1 = 0;
+	std::size_t liveLine2 = 0;
+	if (!mrfeRenderedBlockOverlayLineRangeForRegression(*editor, liveLine1, liveLine2)) {
+		failureReason = "Unable to inspect live column overlay after mouse move onto empty line.";
+		return false;
+	}
+	if (liveLine1 != 0 || liveLine2 != 1) {
+		failureReason = "Live column overlay must keep mouse move onto empty line: renderedLine1=" + std::to_string(liveLine1) + " renderedLine2=" + std::to_string(liveLine2) + ".";
+		return false;
+	}
+	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+		failureReason = "Alt mouse move/release on an empty line must be adoptable.";
+		return false;
+	}
+	if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 1, 1, 5, "alt mouse move/release on empty line column block", failureReason)) return false;
+
+	MRFEBlockOpsTestPeer::clear(ops, *editor);
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 4), 1, 0, 0));
+	event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 1), 0, kbAltShift, mbLeftButton);
+	editor->handleEvent(event);
+	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+		failureReason = "Alt mouse release on an empty line must be adoptable.";
+		return false;
+	}
+	if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 1, 1, 5, "alt mouse release on empty line column block", failureReason)) return false;
+	int emptyRenderedCol1 = 0;
+	int emptyRenderedCol2 = 0;
+	if (!mrfeRenderedColumnOverlayColumnsForRegression(*editor, 1, 24, emptyRenderedCol1, emptyRenderedCol2)) {
+		failureReason = "Unable to inspect rendered column overlay columns on empty line.";
+		return false;
+	}
+	if (emptyRenderedCol1 != 1 || emptyRenderedCol2 != 5) {
+		failureReason = "Rendered empty-line column overlay must match committed columns: renderedCol1=" + std::to_string(emptyRenderedCol1) + " renderedCol2=" + std::to_string(emptyRenderedCol2) + ".";
+		return false;
+	}
+
+	MRFEBlockOpsTestPeer::clear(ops, *editor);
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 4), 1, 0, 0));
+	event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 1), 2, kbAltShift, mbLeftButton);
+	editor->handleEvent(event);
+	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+		failureReason = "Reverse alt mouse release on an empty line must be adoptable.";
+		return false;
+	}
+	if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 1, 2, 1, 5, "reverse alt mouse release on empty line column block", failureReason)) return false;
+
+	MRFEBlockOpsTestPeer::clear(ops, *editor);
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 4), 3, 0, 0));
+	event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 1), 2, kbAltShift, mbLeftButton);
+	editor->handleEvent(event);
+	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+		failureReason = "Alt mouse release on trailing empty line must be adoptable.";
+		return false;
+	}
+	if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 2, 3, 1, 5, "alt mouse release on trailing empty line column block", failureReason)) return false;
+	if (!mrfeRenderedColumnOverlayColumnsForRegression(*editor, 3, 24, emptyRenderedCol1, emptyRenderedCol2)) {
+		failureReason = "Unable to inspect rendered column overlay columns on trailing empty line.";
+		return false;
+	}
+	if (emptyRenderedCol1 != 1 || emptyRenderedCol2 != 5) {
+		failureReason = "Rendered trailing-empty-line column overlay must match committed columns: renderedCol1=" + std::to_string(emptyRenderedCol1) + " renderedCol2=" + std::to_string(emptyRenderedCol2) + ".";
+		return false;
+	}
+
+	MRFEBlockOpsTestPeer::clear(ops, *editor);
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 3), 2, 0, 0));
+	event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 3), 0, kbAltShift, mbLeftButton);
+	editor->handleEvent(event);
+	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+		failureReason = "Vertical alt mouse column drag must be adoptable as a one-column block.";
+		return false;
+	}
+	if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 2, 3, 4, "vertical alt mouse one-column block", failureReason)) return false;
+
+	MRFEBlockOpsTestPeer::clear(ops, *editor);
+	if (!editor->replaceBufferText("abcdef\nx\nbeta\n")) {
+		failureReason = "Unable to seed editor text in mouse free-space release case.";
+		return false;
+	}
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 10), 1, 0, 0));
+	event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 1), 0, kbAltShift, mbLeftButton);
+	editor->handleEvent(event);
+	std::size_t renderedLine1 = 0;
+	std::size_t renderedLine2 = 0;
+	if (!mrfeRenderedBlockOverlayLineRangeForRegression(*editor, renderedLine1, renderedLine2)) {
+		failureReason = "Unable to inspect live column overlay after free-space mouse release.";
+		return false;
+	}
+	if (renderedLine1 != 0 || renderedLine2 != 1) {
+		failureReason = "Column overlay must keep a free-space mouse release on the target line: renderedLine1=" + std::to_string(renderedLine1) + " renderedLine2=" + std::to_string(renderedLine2) + ".";
+		return false;
+	}
+	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+		failureReason = "Alt mouse release in free space must be adoptable.";
+		return false;
+	}
+	if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 1, 1, 11, "alt mouse free-space release column block", failureReason)) return false;
+
+	MRFEBlockOpsTestPeer::clear(ops, *editor);
+	if (!editor->replaceBufferText("abcdefghijkl\nmnopqrstuvwx\n")) {
+		failureReason = "Unable to seed editor text in mouse text release case.";
+		return false;
+	}
+	owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 10), 1, 0, 0));
+	event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 1), 0, kbAltShift, mbLeftButton);
+	editor->handleEvent(event);
+	if (!MRFEBlockOpsTestPeer::adoptMouseSelection(ops, *editor, editor->lastMouseSelectionModifiers())) {
+		failureReason = "Alt mouse release in text must be adoptable.";
+		return false;
+	}
+	if (!checkEditorBlock(*editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 1, 1, 11, "alt mouse text release column block", failureReason)) return false;
+	int renderedCol1 = 0;
+	int renderedCol2 = 0;
+	if (!mrfeRenderedColumnOverlayColumnsForRegression(*editor, 1, 24, renderedCol1, renderedCol2)) {
+		failureReason = "Unable to inspect rendered column overlay columns after text release.";
+		return false;
+	}
+	if (renderedCol1 != 1 || renderedCol2 != 11) {
+		failureReason = "Rendered column overlay must match committed text-release columns: renderedCol1=" + std::to_string(renderedCol1) + " renderedCol2=" + std::to_string(renderedCol2) + ".";
+		return false;
+	}
+	return true;
 }
 
 bool runEditorMouseClickPreservesExistingBlockCase(std::string &failureReason) {
@@ -3531,6 +3689,8 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 	if (!runEmptyBlockCommitTurnsOffCase(MRFEBlockMode::Stream, editorText, 1, 0, "editor empty stream on empty line turns marking off", failureReason)) return false;
 	if (!runEditorMarkingCase(MRFEBlockMode::Column, editorText, 0, 1, 0, 4, 0, 0, 1, 4, "editor column single line", failureReason)) return false;
 	if (!runEditorMarkingCase(MRFEBlockMode::Column, editorText, 2, 3, 0, 1, 0, 2, 1, 3, "editor column reverse over empty line", failureReason)) return false;
+	if (!runEditorMarkingCase(MRFEBlockMode::Column, editorText, 0, 1, 1, 4, 0, 1, 1, 4, "editor column forward ending on empty line", failureReason)) return false;
+	if (!runEditorMarkingCase(MRFEBlockMode::Column, editorText, 2, 4, 1, 1, 1, 2, 1, 4, "editor column reverse ending on empty line", failureReason)) return false;
 	if (!runEditorMarkingCase(MRFEBlockMode::Column, editorText, 1, 2, 1, 6, 1, 1, 2, 6, "editor column empty line virtual range", failureReason)) return false;
 	if (!runMenuColumnIgnoresStaleMouseStateCase(failureReason)) return false;
 	if (!runEditorToggleCase(MRFEBlockMode::Line, "line toggle hide/show", failureReason)) return false;
@@ -3837,6 +3997,7 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 	if (!runEditorMouseDragCaseForMode(MRFEBlockMode::Line, "raw mouse ctrl-alt drag line over empty line", failureReason)) return false;
 	if (!runEditorMouseDragBlockModeFileLineCase(failureReason)) return false;
 	if (!runEditorMouseDragReplacesExistingBlockCase(failureReason)) return false;
+	if (!runEditorMouseReleaseFinalPointCase(failureReason)) return false;
 	if (!runEditorMouseClickPreservesExistingBlockCase(failureReason)) return false;
 	if (!runWindowBlockRemapAfterDeleteCase(failureReason)) return false;
 

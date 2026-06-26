@@ -522,8 +522,14 @@ class MREditWindow : public TWindow {
 			const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
 			const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
 			const bool originalEditorDoubleClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0 && editor->mouseInView(event.mouse.where);
-			const bool originalEditorRightClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbRightButton) != 0 && (event.mouse.buttons & mbLeftButton) == 0 && (event.mouse.eventFlags & meDoubleClick) == 0 && editor->textPointInView(event.mouse.where);
-			if ((originalEvent & (evMouseDown | evMouseMove | evMouseUp)) != 0) notifyMRLspMouseActivity(event.mouse.where);
+			const bool originalEditorBlockMouseGesture = originalEvent == evMouseDown && editor != nullptr && editorBlockMouseGesture(event);
+			const bool originalEditorRightClick = originalEvent == evMouseDown && editor != nullptr && plainEditorRightClick(event);
+			if ((originalEvent & (evMouseDown | evMouseMove | evMouseUp)) != 0) {
+				if (originalEditorBlockMouseGesture)
+					notifyMRLspBlockMouseActivity();
+				else
+					notifyMRLspMouseActivity(event.mouse.where);
+			}
 			if (originalEditorRightClick) {
 				static_cast<void>(showMRLspContextMenu(this, originalMouseWhere));
 				clearEvent(event);
@@ -587,7 +593,10 @@ class MREditWindow : public TWindow {
 			if (frame != nullptr) {
 				MRFrame *mrFrame = static_cast<MRFrame *>(frame);
 				if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0) {
-					notifyMRLspMouseActivity(event.mouse.where);
+					if (originalEditorBlockMouseGesture)
+						notifyMRLspBlockMouseActivity();
+					else
+						notifyMRLspMouseActivity(event.mouse.where);
 					mrFrame->updateTaskHover(event.mouse.where, false);
 				}
 				else if ((event.what & (evKeyDown | evCommand)) != 0)
@@ -2059,6 +2068,22 @@ class MREditWindow : public TWindow {
 			(void)event;
 			return false;
 		}
+
+	bool plainEditorRightClick(const TEvent &event) const {
+		if (event.what != evMouseDown || editor == nullptr) return false;
+		if ((event.mouse.buttons & mbRightButton) == 0 || (event.mouse.buttons & mbLeftButton) != 0) return false;
+		if ((event.mouse.eventFlags & meDoubleClick) != 0) return false;
+		if ((event.mouse.controlKeyState & (kbShift | kbCtrlShift | kbAltShift)) != 0) return false;
+		return editor->textPointInView(event.mouse.where);
+	}
+
+	bool editorBlockMouseGesture(const TEvent &event) const {
+		if (event.what != evMouseDown || editor == nullptr) return false;
+		if (!editor->textPointInView(event.mouse.where)) return false;
+		if (plainEditorRightClick(event)) return false;
+		if ((event.mouse.buttons & (mbLeftButton | mbRightButton)) == 0) return false;
+		return (event.mouse.buttons & mbLeftButton) != 0 || (event.mouse.controlKeyState & (kbShift | kbCtrlShift | kbAltShift)) != 0;
+	}
 
 	bool handleBlockTabIndentKey(TEvent &event) {
 		if (event.what != evKeyDown || editor == nullptr || !mBlockOps.hasVisibleBlock()) return false;

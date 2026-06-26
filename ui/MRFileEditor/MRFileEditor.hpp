@@ -58,6 +58,8 @@ std::string mrBuildOutlineTrainingAscii(const std::string &text, MRSyntaxLanguag
 class MRFileEditor : public TScroller {
 	friend bool mrfeSeedMouseColumnStateForRegression(MRFileEditor &editor, int anchorColumn, int cursorColumn);
 	friend bool mrfeRenderedBlockOverlayLineRangeForRegression(const MRFileEditor &editor, std::size_t &line1, std::size_t &line2);
+	friend int mrfeLocalXForVisualColumnForRegression(const MRFileEditor &editor, int visualColumn);
+	friend bool mrfeRenderedColumnOverlayColumnsForRegression(MRFileEditor &editor, std::size_t lineIndex, int width, int &col1, int &col2);
 
   public:
 	struct LoadTiming {

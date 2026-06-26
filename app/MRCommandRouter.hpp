@@ -13,6 +13,7 @@ class MREditWindow;
 [[nodiscard]] bool dispatchMRKeymapMacro(std::string_view macroSpec);
 [[nodiscard]] bool showMRLspContextMenu(MREditWindow *targetWindow, TPoint where);
 void notifyMRLspMouseActivity(TPoint where) noexcept;
+void notifyMRLspBlockMouseActivity() noexcept;
 void notifyMRLspKeyboardActivity() noexcept;
 void mrApplyLspSupportSettingsChange();
 void pumpMRLspService();

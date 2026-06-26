@@ -4,7 +4,43 @@
 #include "../../app/MRCommandRouter.hpp"
 #include "../../app/MREditorApp.hpp"
 
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <sstream>
+#include <string_view>
+
+namespace {
+
+bool columnBlockTraceEnabled() noexcept {
+	const char *value = std::getenv("MR_COLUMN_BLOCK_TRACE");
+	return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
+
+void appendColumnBlockTrace(std::string_view message) {
+	if (!columnBlockTraceEnabled()) return;
+	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+	if (out) out << "COLBLOCK event " << message << '\n';
+}
+
+const char *mouseEventName(ushort what) noexcept {
+	switch (what) {
+	case evMouseDown:
+		return "down";
+	case evMouseMove:
+		return "move";
+	case evMouseAuto:
+		return "auto";
+	case evMouseWheel:
+		return "wheel";
+	case evMouseUp:
+		return "up";
+	default:
+		return "other";
+	}
+}
+
+}
 
 bool MRFileEditor::hasShiftModifier(ushort mods) noexcept {
 	return (mods & (kbShift | kbCtrlShift | kbAltShift)) != 0;
@@ -642,12 +678,20 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	const bool liveStreamBlock = !liveLineBlock && !liveColumnBlock && (leftButton || rightButton || mouseCtrl);
 	const int liveBlockMode = liveColumnBlock ? 2 : liveLineBlock ? 1 : liveStreamBlock ? 3 : 0;
 	const unsigned short liveSelectionModifiers = liveLineBlock ? static_cast<unsigned short>(kbCtrlShift | kbAltShift) : liveColumnBlock ? kbAltShift : liveStreamBlock ? kbCtrlShift : 0;
+	const bool explicitBlockMouseGesture = liveBlockMode != 0 && (mouseCtrl || mouseAlt || (leftButton && rightButton) || (rightButton && !leftButton));
+	if (columnBlockTraceEnabled() && liveColumnBlock) {
+		std::ostringstream trace;
+		trace << "start local=(" << local.x << ',' << local.y << ") anchor=" << anchor << " anchorLine=" << mBufferModel.lineIndex(anchor) << " targetColumn=" << targetColumn
+		      << " buttons=" << event.mouse.buttons << " mods=" << event.mouse.controlKeyState << " delta=(" << delta.x << ',' << delta.y << ") rows=" << visibleTextRows()
+		      << " lineCount=" << mBufferModel.lineCount() << " length=" << mBufferModel.length();
+		appendColumnBlockTrace(trace.str());
+	}
 	mMouseSelectionModifiers = 0;
 	auto updateLiveMouseBlockOverlay = [this, liveBlockMode](std::size_t current) {
 		if (liveBlockMode == 0) return;
 		std::size_t visualAnchor = mSelectionAnchor;
 		std::size_t visualEnd = current;
-		if (liveBlockMode != 3) {
+		if (liveBlockMode == 1) {
 			const std::size_t length = mBufferModel.length();
 
 			if (visualAnchor == length && length > 0) --visualAnchor;
@@ -656,18 +700,34 @@ void MRFileEditor::handleMouse(TEvent &event) {
 				--visualEnd;
 		}
 		setBlockOverlayState(liveBlockMode, visualAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn);
+		if (columnBlockTraceEnabled() && liveBlockMode == 2) {
+			std::ostringstream trace;
+			trace << "overlay anchor=" << mSelectionAnchor << " current=" << current << " visualAnchor=" << visualAnchor << " visualEnd=" << visualEnd
+			      << " anchorColumn=" << mMouseSelectionAnchorColumn << " cursorColumn=" << mMouseSelectionCursorColumn;
+			appendColumnBlockTrace(trace.str());
+		}
 	};
 	mSelectionAnchor = anchor;
 	mMouseSelectionColumnsValid = true;
 	mMouseSelectionAnchorColumn = targetColumn;
 	mMouseSelectionCursorColumn = targetColumn;
+	auto setMouseSelectionColumns = [this, liveColumnBlock, targetColumn](int cursorColumn, bool activeSelection) {
+		mMouseSelectionAnchorColumn = targetColumn;
+		mMouseSelectionCursorColumn = cursorColumn;
+		if (!activeSelection || !liveColumnBlock) return;
+		if (cursorColumn < targetColumn) mMouseSelectionAnchorColumn = targetColumn + 1;
+		else
+			mMouseSelectionCursorColumn = cursorColumn + 1;
+	};
 	mBufferModel.setCursorAndSelection(anchor, anchor, anchor);
 	if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(anchor), targetColumn);
 	else
 		mCursorVisualColumn = actualCursorVisualColumn(anchor);
 	updateIndicator();
-	drawView();
+	if (!explicitBlockMouseGesture) drawView();
 
+	MREditorApp *app = dynamic_cast<MREditorApp *>(TProgram::application);
+	if (app != nullptr) app->beginInteractiveMouseCapture();
 	bool dragged = false;
 	while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseWheel)) {
 		if (event.what == evMouseMove || event.what == evMouseAuto) {
@@ -685,20 +745,55 @@ void MRFileEditor::handleMouse(TEvent &event) {
 			static_cast<void>(scrollWindowByWheel(event.mouse.wheel));
 		}
 		int dragColumn = 0;
-		std::size_t target = mouseOffset(makeLocal(event.mouse.where), &dragColumn);
+		const TPoint dragLocal = makeLocal(event.mouse.where);
+		std::size_t target = mouseOffset(dragLocal, &dragColumn);
 		if (target != anchor || dragColumn != targetColumn) {
 			dragged = true;
 			mMouseSelectionModifiers = liveSelectionModifiers;
 		}
-		mMouseSelectionCursorColumn = dragColumn;
+		setMouseSelectionColumns(dragColumn, dragged);
 		mBufferModel.setCursorAndSelection(target, mSelectionAnchor, target);
 		if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), dragColumn);
 		else
 			mCursorVisualColumn = actualCursorVisualColumn(target);
 		if (dragged) updateLiveMouseBlockOverlay(target);
+		if (columnBlockTraceEnabled() && liveColumnBlock) {
+			std::ostringstream trace;
+			trace << mouseEventName(event.what) << " local=(" << dragLocal.x << ',' << dragLocal.y << ") target=" << target << " targetLine=" << mBufferModel.lineIndex(target)
+			      << " dragColumn=" << dragColumn << " dragged=" << dragged << " anchorColumn=" << mMouseSelectionAnchorColumn
+			      << " cursorColumn=" << mMouseSelectionCursorColumn << " selectionAnchor=" << mSelectionAnchor << " cursor=" << mBufferModel.cursor()
+			      << " delta=(" << delta.x << ',' << delta.y << ')';
+			appendColumnBlockTrace(trace.str());
+		}
 		updateIndicator();
 		drawView();
 	}
+	if (event.what == evMouseUp) {
+		int dragColumn = 0;
+		const TPoint dragLocal = makeLocal(event.mouse.where);
+		std::size_t target = mouseOffset(dragLocal, &dragColumn);
+		if (target != anchor || dragColumn != targetColumn) {
+			dragged = true;
+			mMouseSelectionModifiers = liveSelectionModifiers;
+		}
+		setMouseSelectionColumns(dragColumn, dragged);
+		mBufferModel.setCursorAndSelection(target, mSelectionAnchor, target);
+		if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), dragColumn);
+		else
+			mCursorVisualColumn = actualCursorVisualColumn(target);
+		if (dragged) updateLiveMouseBlockOverlay(target);
+		if (columnBlockTraceEnabled() && liveColumnBlock) {
+			std::ostringstream trace;
+			trace << mouseEventName(event.what) << " local=(" << dragLocal.x << ',' << dragLocal.y << ") target=" << target << " targetLine=" << mBufferModel.lineIndex(target)
+			      << " dragColumn=" << dragColumn << " dragged=" << dragged << " anchorColumn=" << mMouseSelectionAnchorColumn
+			      << " cursorColumn=" << mMouseSelectionCursorColumn << " selectionAnchor=" << mSelectionAnchor << " cursor=" << mBufferModel.cursor()
+			      << " mods=" << mMouseSelectionModifiers << " delta=(" << delta.x << ',' << delta.y << ')';
+			appendColumnBlockTrace(trace.str());
+		}
+		updateIndicator();
+		drawView();
+	}
+	if (app != nullptr) app->endInteractiveMouseCapture();
 	if (!dragged) {
 		mMouseSelectionModifiers = 0;
 		mMouseSelectionColumnsValid = false;

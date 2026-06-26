@@ -5674,6 +5674,11 @@ void notifyMRLspMouseActivity(TPoint where) noexcept {
 	g_lspMousePositionKnown = true;
 }
 
+void notifyMRLspBlockMouseActivity() noexcept {
+	g_lspMousePositionKnown = false;
+	forgetLspAutoHover(true);
+}
+
 void notifyMRLspKeyboardActivity() noexcept {
 	g_lspMousePositionKnown = false;
 	forgetLspAutoHover(true);

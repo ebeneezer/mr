@@ -12,8 +12,10 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -34,6 +36,31 @@ struct ColumnLineReplacement {
 	MRTextBufferModel::Range range;
 	std::string text;
 };
+
+bool columnBlockTraceEnabled() noexcept {
+	const char *value = std::getenv("MR_COLUMN_BLOCK_TRACE");
+	return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
+
+void appendColumnBlockTrace(std::string_view message) {
+	if (!columnBlockTraceEnabled()) return;
+	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+	if (out) out << "COLBLOCK ops " << message << '\n';
+}
+
+const char *blockModeName(MRFEBlockMode mode) noexcept {
+	switch (mode) {
+	case MRFEBlockMode::None:
+		return "none";
+	case MRFEBlockMode::Line:
+		return "line";
+	case MRFEBlockMode::Column:
+		return "column";
+	case MRFEBlockMode::Stream:
+		return "stream";
+	}
+	return "unknown";
+}
 
 std::vector<std::size_t> lineStartsForText(const std::string &text) {
 	std::vector<std::size_t> starts;
@@ -1013,6 +1040,13 @@ bool MRFEBlockOps::adoptMouseSelection(MRFileEditor &editor, unsigned short modi
 	const bool column = !line && alt;
 	const bool stream = !line && !column && (ctrl || (modifiers & kbShift) != 0);
 	if (!column && !line && !stream) return false;
+	if (columnBlockTraceEnabled()) {
+		std::ostringstream trace;
+		trace << "adopt-input modifiers=" << modifiers << " mode=" << (column ? "column" : line ? "line" : "stream")
+		      << " selectionAnchor=" << editor.selectionAnchorOffset() << " selectionCursor=" << editor.selectionCursorOffset()
+		      << " cursor=" << editor.cursorOffset() << " lineCount=" << editor.bufferModel().lineCount() << " length=" << editor.bufferModel().length();
+		appendColumnBlockTrace(trace.str());
+	}
 
 	mGeometry = MRFEBlockGeometry();
 	mGeometry.mode = column ? MRFEBlockMode::Column : line ? MRFEBlockMode::Line : MRFEBlockMode::Stream;
@@ -1041,6 +1075,13 @@ bool MRFEBlockOps::adoptMouseSelection(MRFileEditor &editor, unsigned short modi
 		mGeometry.cursorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.cursor)));
 	}
 	normalize(editor);
+	if (columnBlockTraceEnabled()) {
+		std::ostringstream trace;
+		trace << "adopt-normalized mode=" << blockModeName(mGeometry.mode) << " anchor=" << mGeometry.anchor << " cursor=" << mGeometry.cursor
+		      << " anchorColumn=" << mGeometry.anchorColumn << " cursorColumn=" << mGeometry.cursorColumn << " line1=" << mGeometry.line1 << " line2=" << mGeometry.line2
+		      << " col1=" << mGeometry.col1 << " col2=" << mGeometry.col2 << " rangeStart=" << mGeometry.rangeStart << " rangeEnd=" << mGeometry.rangeEnd;
+		appendColumnBlockTrace(trace.str());
+	}
 	if (blockGeometryIsEmpty(mGeometry)) {
 		clear(editor);
 		return true;
@@ -2149,12 +2190,26 @@ void MRFEBlockOps::applyOverlay(MRFileEditor &editor) {
 	std::size_t visualEnd = mGeometry.rangeEnd;
 	switch (mGeometry.mode) {
 	case MRFEBlockMode::Line:
-	case MRFEBlockMode::Column:
 		if (visualEnd > mGeometry.rangeStart) --visualEnd;
+		break;
+	case MRFEBlockMode::Column:
+		if (visualEnd > mGeometry.rangeStart) {
+			const MRTextBufferModel &model = editor.bufferModel();
+			const bool endsAtLastKnownLine = mGeometry.line2 + 1 >= model.lineCount();
+			if (visualEnd != model.length() || !endsAtLastKnownLine) --visualEnd;
+		}
 		break;
 	case MRFEBlockMode::Stream:
 	case MRFEBlockMode::None:
 		break;
+	}
+	if (columnBlockTraceEnabled() && mGeometry.mode == MRFEBlockMode::Column) {
+		const MRTextBufferModel &model = editor.bufferModel();
+		std::ostringstream trace;
+		trace << "apply-overlay mode=" << blockModeName(mGeometry.mode) << " line1=" << mGeometry.line1 << " line2=" << mGeometry.line2
+		      << " col1=" << mGeometry.col1 << " col2=" << mGeometry.col2 << " rangeStart=" << mGeometry.rangeStart << " rangeEnd=" << mGeometry.rangeEnd
+		      << " visualEnd=" << visualEnd << " lineCount=" << model.lineCount() << " length=" << model.length();
+		appendColumnBlockTrace(trace.str());
 	}
 	editor.setBlockOverlayState(static_cast<int>(mGeometry.mode), mGeometry.rangeStart, visualEnd, true, mGeometry.status == MRFEBlockStatus::Marking, mGeometry.col1, mGeometry.col2);
 }

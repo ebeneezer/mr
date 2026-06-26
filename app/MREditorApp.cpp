@@ -1132,7 +1132,7 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0) {
 	const auto startupStartedAt = std::chrono::steady_clock::now();
 	auto phaseStartedAt = startupStartedAt;
 	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
@@ -1206,6 +1206,14 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 
 bool MREditorApp::quitPrepared() const noexcept {
 	return exitPrepared;
+}
+
+void MREditorApp::beginInteractiveMouseCapture() noexcept {
+	++interactiveMouseCaptureDepth;
+}
+
+void MREditorApp::endInteractiveMouseCapture() noexcept {
+	if (interactiveMouseCaptureDepth > 0) --interactiveMouseCaptureDepth;
 }
 
 MREditorApp::~MREditorApp() {
@@ -1958,6 +1966,7 @@ void MREditorApp::idle() {
 		putEvent(quitEvent);
 	}
 	TApplication::idle();
+	if (interactiveMouseCaptureDepth > 0) return;
 	pumpRuntimeTimerSource();
 	pumpForegroundMacroDelays();
 	updateRecordingBlink();

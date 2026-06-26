@@ -25,7 +25,7 @@ bool quitTailTraceActive() noexcept {
 
 std::size_t renderedBlockOverlayEndForViewport(const MRTextBufferModel &model, std::size_t overlayStart, std::size_t overlayEnd, int overlayMode) noexcept {
 	if (overlayStart > overlayEnd) std::swap(overlayStart, overlayEnd);
-	if (overlayMode != 3 && overlayEnd > overlayStart && model.lineStart(overlayEnd) == overlayEnd && model.lineEnd(overlayEnd) == overlayEnd) --overlayEnd;
+	if (overlayMode == 1 && overlayEnd > overlayStart && model.lineStart(overlayEnd) == overlayEnd && model.lineEnd(overlayEnd) == overlayEnd) --overlayEnd;
 	return overlayEnd;
 }
 
@@ -92,6 +92,35 @@ bool mrfeRenderedBlockOverlayLineRangeForRegression(const MRFileEditor &editor, 
 	line2 = editor.mBufferModel.lineIndex(end);
 	if (line1 > line2) std::swap(line1, line2);
 	return true;
+}
+
+int mrfeLocalXForVisualColumnForRegression(const MRFileEditor &editor, int visualColumn) {
+	return static_cast<int>(editor.textViewportGeometry().localXFromVisualColumn(std::max(0, visualColumn)));
+}
+
+bool mrfeRenderedColumnOverlayColumnsForRegression(MRFileEditor &editor, std::size_t lineIndex, int width, int &col1, int &col2) {
+	class DrawBufferProbe : public TDrawBuffer {
+	  public:
+		TColorAttr attrAt(int column) const noexcept {
+			return getAttr(data[column]);
+		}
+	};
+
+	if (width <= 0) return false;
+	DrawBufferProbe buffer;
+	MRSyntaxLineResult syntaxLine;
+	const std::size_t lineStart = editor.mBufferModel.lineStartByIndex(lineIndex);
+	const TColorAttr selectedColor = editor.tokenColor(MRSyntaxToken::Text, true, editor.getColor(0x0201));
+	col1 = -1;
+	col2 = -1;
+	editor.formatSyntaxLine(buffer, lineStart, syntaxLine, 0, width, 0, true, false, false);
+	for (int column = 0; column < width; ++column) {
+		if (buffer.attrAt(column) == selectedColor) {
+			if (col1 < 0) col1 = column;
+			col2 = column + 1;
+		}
+	}
+	return col1 >= 0 && col2 >= col1;
 }
 
 unsigned char MRFileEditor::fileCompareLineKindAt(std::size_t lineIndex) const noexcept {
@@ -977,8 +1006,10 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 			bool diagnosticInformationChar = !selected && lspDiagnosticInformationContainsOffset(documentPos);
 			bool documentHighlightChar = !selected && !diagnosticInformationChar && lspDocumentHighlightContainsOffset(documentPos);
 			TAttrPair effectivePair = changedChar ? changedPair : basePair;
+			TColorAttr unselectedColor = tokenColor(token, false, effectivePair);
+			TColorAttr selectedColor = tokenColor(token, true, selectionPair);
 			tokenPair = selected ? selectionPair : effectivePair;
-			color = tokenColor(token, selected, tokenPair);
+			color = selected ? selectedColor : unselectedColor;
 			if (findMarkedChar) {
 				unsigned char warningAttr = 0;
 				if (configuredColorSlotOverride(kMrPaletteMessageWarning, warningAttr)) color = static_cast<TColorAttr>((color & 0xF0) | (warningAttr & 0x0F));
@@ -998,9 +1029,29 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 				else
 					color = static_cast<TColorAttr>(0x4E);
 			}
+			if (!selected) unselectedColor = color;
 			visibleWidth = nextVisual - std::max(visual, hScroll);
 
-			if (line[bytePos] == '\t' && displayTabs && visual >= hScroll && visibleWidth > 0) {
+			if (line[bytePos] == '\t' && overlayActive && overlayMode == 2 && overlayLine1 <= lineIndex && lineIndex <= overlayLine2 && charWidth > 1 && visibleWidth > 0) {
+				const int visibleStart = std::max(visual, hScroll);
+				const int visibleEnd = nextVisual;
+				int drawColumn = drawX + x;
+				int cell = visibleStart;
+				while (cell < visibleEnd) {
+					const bool cellSelected = overlayCol1 <= cell && cell < overlayCol2Exclusive;
+					const TColorAttr cellColor = cellSelected ? selectedColor : unselectedColor;
+					const int segmentStart = cell;
+					int segmentEnd = std::min(visibleEnd, cellSelected ? overlayCol2Exclusive : overlayCol1);
+					if (segmentEnd <= segmentStart) segmentEnd = visibleEnd;
+					if (displayTabs && segmentStart == visual)
+						b.moveStr(static_cast<ushort>(drawColumn), "\xE2\x96\xB6", cellColor, 1);
+					else
+						b.moveChar(static_cast<ushort>(drawColumn), ' ', cellColor, 1);
+					if (segmentEnd - segmentStart > 1) b.moveChar(static_cast<ushort>(drawColumn + 1), ' ', cellColor, static_cast<ushort>(segmentEnd - segmentStart - 1));
+					drawColumn += segmentEnd - segmentStart;
+					cell = segmentEnd;
+				}
+			} else if (line[bytePos] == '\t' && displayTabs && visual >= hScroll && visibleWidth > 0) {
 				b.moveStr(static_cast<ushort>(drawX + x), "\xE2\x96\xB6", color, 1);
 				if (visibleWidth > 1) b.moveChar(static_cast<ushort>(drawX + x + 1), ' ', color, static_cast<ushort>(visibleWidth - 1));
 			} else if (line[bytePos] == '\t' || visual < hScroll)

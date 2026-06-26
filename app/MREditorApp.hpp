@@ -28,6 +28,8 @@ class MREditorApp : public TApplication {
 	void idle() override;
 	TPalette &getPalette() const override;
 	bool quitPrepared() const noexcept;
+	void beginInteractiveMouseCapture() noexcept;
+	void endInteractiveMouseCapture() noexcept;
 
   private:
 	void prepareForQuit();
@@ -79,6 +81,7 @@ class MREditorApp : public TApplication {
 	bool fullscreenMenuBarTransientVisible;
 	MREditWindow *fullscreenWindow;
 	TRect fullscreenRestoreBounds;
+	int interactiveMouseCaptureDepth;
 };
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.
