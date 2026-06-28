@@ -30,7 +30,7 @@ std::string normalizedDiagnosticPath(const std::string &path) {
 	for (char &ch : normalized)
 		if (ch == '\\') ch = '/';
 	normalized = std::filesystem::path(normalized).lexically_normal().generic_string();
-	if (normalized.rfind("./", 0) == 0) normalized.erase(0, 2);
+	if (normalized.starts_with("./")) normalized.erase(0, 2);
 	return normalized;
 }
 

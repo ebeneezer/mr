@@ -59,7 +59,7 @@ bool percentDecodePath(const std::string &encoded, std::string &decoded, std::st
 }
 
 bool startsWith(const std::string &text, const std::string &prefix) {
-	return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
+	return text.starts_with(prefix);
 }
 } // namespace
 

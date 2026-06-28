@@ -25,7 +25,7 @@ std::string extensionPart(const std::string &value) {
 }
 
 bool endsWithText(std::string_view text, std::string_view suffix) noexcept {
-	return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
+	return text.ends_with(suffix);
 }
 
 bool hasSystemdUnitSuffix(std::string_view lowerName) noexcept {
@@ -70,7 +70,7 @@ int countMatches(std::string_view haystack, std::string_view needle, int maxCoun
 }
 
 bool startsWithText(std::string_view text, std::string_view prefix) noexcept {
-	return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
+	return text.starts_with(prefix);
 }
 
 std::string_view firstLineView(std::string_view text) noexcept {

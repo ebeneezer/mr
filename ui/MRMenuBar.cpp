@@ -308,7 +308,7 @@ bool MRMenuBar::ownerSpecMatchesFile(const std::string &ownerSpec, const std::st
 
 		ownerFile = canonicalOwner.substr(nameStart, caretPos - nameStart);
 	}
-	if (canonicalOwner.substr(0, caretPos) == canonicalFile) return true;
+	if (std::string_view(canonicalOwner).substr(0, caretPos) == canonicalFile) return true;
 	return ownerFile == canonicalFile;
 }
 

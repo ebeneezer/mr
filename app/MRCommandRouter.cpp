@@ -2624,7 +2624,7 @@ std::string lspHoverPlainText(const std::string &text) {
 	while (std::getline(input, line)) {
 		std::string trimmed = trimAscii(line);
 
-		if (trimmed.rfind("```", 0) == 0 || trimmed.rfind("~~~", 0) == 0) {
+		if (trimmed.starts_with("```") || trimmed.starts_with("~~~")) {
 			inFence = !inFence;
 			continue;
 		}

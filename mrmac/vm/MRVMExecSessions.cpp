@@ -231,7 +231,7 @@ bool readRuntimeSchedulerEventHash(MRVMRuntimeKv &runtimeKv, const Value &hash, 
 std::string normalizeExecUiCommandAction(const std::string &command) {
 	const std::string key = mrvmUpperKey(trimAscii(command));
 
-	if (key.rfind("MRMAC_", 0) == 0 || key.rfind("MR_", 0) == 0) return key;
+	if (key.starts_with("MRMAC_") || key.starts_with("MR_")) return key;
 	if (key == "TEXT_END" || key == "EOF" || key == "BOTTOM_OF_FILE") return "MRMAC_CURSOR_BOTTOM_OF_FILE";
 	if (key == "TEXT_START" || key == "TOF" || key == "TOP_OF_FILE") return "MRMAC_CURSOR_TOP_OF_FILE";
 	if (key == "LINE_END" || key == "EOL" || key == "END_OF_LINE") return "MRMAC_CURSOR_END_OF_LINE";
@@ -245,7 +245,7 @@ MREditWindow *execUiCommandTargetWindow(const std::string &target) {
 	const std::string key = mrvmUpperKey(trimAscii(target));
 
 	if (key.empty() || key == "ACTIVE") return nullptr;
-	if (key.rfind("BUFFER:", 0) == 0) {
+	if (key.starts_with("BUFFER:")) {
 		const std::string idText = trimAscii(key.substr(7));
 		if (idText.empty()) return nullptr;
 		return findEditWindowByBufferId(std::atoi(idText.c_str()));
