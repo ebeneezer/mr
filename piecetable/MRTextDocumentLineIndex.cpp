@@ -1,4 +1,5 @@
 #include "MRTextDocumentLineIndex.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <array>
 #include <atomic>
@@ -267,7 +268,7 @@ void appendDocumentTrace(std::string_view message) {
 	if (tmNow == nullptr) return;
 	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return;
 
-	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 	if (!out) return;
 	out << "[" << buffer.data() << "] " << message << '\n';
 	out.flush();

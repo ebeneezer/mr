@@ -3,9 +3,19 @@
 
 #include "MRSettingsRuntime.hpp"
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
+
+struct MRSettingsRuntimeIoRateSnapshot {
+	std::uint64_t readsPerMinute = 0;
+	std::uint64_t writesPerMinute = 0;
+};
+
+void recordSettingsRuntimeRead();
+void recordSettingsRuntimeWrite();
+[[nodiscard]] MRSettingsRuntimeIoRateSnapshot settingsRuntimeIoRateSnapshot();
 
 std::vector<std::string> &configuredAutoexecMacroStorage();
 bool &configuredSettingsDirtyFlag();

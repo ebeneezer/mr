@@ -138,6 +138,22 @@ ship and maintain universal language snippet catalogs.
 The strategic boundary is: LSP provides standardized language intelligence;
 MRMAC provides user-controlled local workflow automation.
 
+Snippet middleware runtime state is stored in the central VM K/V hash under the
+top-level key `MACROSNIPPETS`. `MACROSNIPPETS` is runtime-only state. It must
+not be serialized through settings, workspace files or sidecar snippet catalogs.
+The intended branches are:
+
+- `MACROSNIPPETS/request` for the current LSP completion item, editor anchor
+  and replacement range handed to MRMAC middleware,
+- `MACROSNIPPETS/sidekick` for the middleware-produced editable text,
+  placeholder spans and availability state,
+- `MACROSNIPPETS/result` for future middleware result metadata when needed.
+
+C++ may populate `MACROSNIPPETS/request`, invoke configured MRMAC middleware,
+read `MACROSNIPPETS/sidekick` and apply the returned edit. C++ must not own
+language-specific snippet catalogs or duplicate this runtime data in a second
+value-bearing registry.
+
 MRExpand must not use C++-parsed sidecar snippet tables. If MRExpand is
 reintroduced, snippet mapping and edit-stop selection must run through MRMAC
 middleware or another explicitly configured user tool. C++ may host the

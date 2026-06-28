@@ -2,6 +2,8 @@
 
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../coprocessor/MRPerformance.hpp"
+#include "../config/settings/MRSettingsRuntimeState.hpp"
+#include "../mrmac/vm/MRVMHash.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -304,6 +306,8 @@ void MRPerformancePanel::setAnimationFrame(unsigned frame) noexcept {
 void MRPerformancePanel::draw() {
 	const mr::coprocessor::Snapshot snapshot = mr::coprocessor::globalCoprocessor().snapshot();
 	const std::vector<mr::performance::Event> recent = mr::performance::recentGlobal(12);
+	const MRVMHashIoRateSnapshot hashIoRate = mrvmHashIoRateSnapshot();
+	const MRSettingsRuntimeIoRateSnapshot settingsIoRate = settingsRuntimeIoRateSnapshot();
 	const TColorAttr text = 0x70;
 	const TColorAttr header = text;
 	const TColorAttr laneColor = text;
@@ -319,8 +323,16 @@ void MRPerformancePanel::draw() {
 	line += std::to_string(snapshot.pendingResults);
 	line += " extern:";
 	line += std::to_string(runningExternalSourceCount(snapshot.externalSources));
+	line += "  VM Hash IO/min: ";
+	line += std::to_string(hashIoRate.readsPerMinute);
+	line += "/";
+	line += std::to_string(hashIoRate.writesPerMinute);
+	line += "  Settings IO/min: ";
+	line += std::to_string(settingsIoRate.readsPerMinute);
+	line += "/";
+	line += std::to_string(settingsIoRate.writesPerMinute);
 	line += "  recent: ";
-	line += compactRecent(recent, static_cast<std::size_t>(std::max(0, size.x - 35)));
+	line += compactRecent(recent, static_cast<std::size_t>(std::max(0, size.x - static_cast<int>(line.size()))));
 	writePanelLine(y++, line, header);
 
 	{

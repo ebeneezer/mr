@@ -977,6 +977,7 @@ MRColorSetupSettings resolveColorSetupDefaults() {
 
 MRColorSetupSettings configuredColorSetupSettings() {
 	ensureConfiguredColorSettingsInitialized();
+	recordSettingsRuntimeRead();
 	return configuredColorSettings();
 }
 
@@ -1040,6 +1041,7 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 			break;
 	}
 	configuredColorThemeDisplayNameValue().clear();
+	recordSettingsRuntimeWrite();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -1084,6 +1086,7 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 	configuredColorSettings() = configured;
 	configuredColorSettingsInitialized() = true;
 	if (clearThemeDisplayName) configuredColorThemeDisplayNameValue().clear();
+	recordSettingsRuntimeWrite();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

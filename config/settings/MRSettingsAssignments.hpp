@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <vector>
 
 enum class MRSettingsKeyClass : unsigned char;
 struct MRSetupPaths;
@@ -11,6 +12,7 @@ struct MRSettingsSnapshot;
 
 [[nodiscard]] MRSettingsKeyClass classifySettingsKey(std::string_view key);
 [[nodiscard]] bool isCanonicalSerializedSettingsKey(std::string_view key);
+[[nodiscard]] std::vector<std::string> canonicalSerializedSettingsKeys();
 [[nodiscard]] std::size_t canonicalSerializedSettingsKeyCount();
 bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths &paths, std::string *errorMessage = nullptr);
 bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths, std::string *errorMessage = nullptr);

@@ -67,7 +67,11 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 		if (!applySettingsSnapshotEditExtensionProfileDirective(snapshot, directive.operation, directive.profileId, directive.arg3, directive.arg4, errorMessage)) return false;
 
 	if (canonicalKeysSeen.size() < canonicalSerializedSettingsKeyCount()) {
-		activeReport.defaultedCanonicalKeyCount = canonicalSerializedSettingsKeyCount() - canonicalKeysSeen.size();
+		const std::vector<std::string> canonicalKeys = canonicalSerializedSettingsKeys();
+
+		for (const std::string &canonicalKey : canonicalKeys)
+			if (canonicalKeysSeen.find(canonicalKey) == canonicalKeysSeen.end()) activeReport.defaultedCanonicalKeys.push_back(canonicalKey);
+		activeReport.defaultedCanonicalKeyCount = activeReport.defaultedCanonicalKeys.size();
 		markFlag(activeReport, MRSettingsLoadReport::MissingCanonicalKeyDefaulted);
 	}
 
@@ -109,6 +113,15 @@ bool prepareStartupSettingsSourceFromStorage(const std::string &settingsPath, co
 	summary = describeSettingsLoadReport(activeReport);
 	mrLogMessage(("Settings normalized: " + normalizedPath).c_str());
 	if (!summary.empty()) mrLogMessage(("Settings normalization details: " + summary).c_str());
+	if (!activeReport.defaultedCanonicalKeys.empty()) {
+		std::string defaultedKeysText;
+
+		for (std::size_t i = 0; i < activeReport.defaultedCanonicalKeys.size(); ++i) {
+			if (i != 0) defaultedKeysText += ", ";
+			defaultedKeysText += activeReport.defaultedCanonicalKeys[i];
+		}
+		mrLogMessage(("Settings defaulted canonical keys: " + defaultedKeysText).c_str());
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

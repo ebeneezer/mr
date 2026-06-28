@@ -6,9 +6,10 @@ int helper(void) {
 
 int main() {
 	              
-	printf
-	
-	switch (expression) {
+							 
+							 
+							 
+  switch (expression) {
 
 }
 	  

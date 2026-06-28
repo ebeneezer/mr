@@ -123,6 +123,8 @@ constexpr std::array catalogDefinitions{
     mr("MR_LSP_FIND_REFERENCES", "LSP find references"),
     mr("MR_LSP_SHOW_HOVER", "LSP show hover"),
     mr("MR_LSP_COMPLETE", "LSP complete"),
+    mr("MR_SNIPPET_PLACEHOLDER_NEXT", "Snippet next placeholder"),
+    mr("MR_SNIPPET_PLACEHOLDER_PREVIOUS", "Snippet previous placeholder"),
     mr("MR_LSP_DOCUMENT_HIGHLIGHT", "LSP document highlight"),
     mr("MR_LSP_DOCUMENT_SYMBOLS", "LSP document symbols"),
     mr("MR_LSP_WORKSPACE_SYMBOLS", "LSP workspace symbols"),

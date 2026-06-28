@@ -48,6 +48,7 @@ KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_FILE_FORCE_SAVE
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_FILE_FORCE_SAVE" sequence="<Ctrl+K> <D>" description="Force save"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_BUILD_CURRENT_FILE" sequence="<F9>" description="Build current file"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_MATCH_PARENTHESIS" sequence="<Alt+P>" description="Match parenthesis"');
+KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_LSP_COMPLETE" sequence="<Ctrl+Space>" description="LSP complete"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+K> <Ctrl+X>" description="Exit with save-all dialog"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+K> <X>" description="Exit with save-all dialog"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_TEXT_REFORMAT_PARAGRAPH" sequence="<Ctrl+B>" description="Reformat paragraph"');
@@ -108,7 +109,7 @@ KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_DELETE_TO_EOL" 
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_DELETE_FORWARD_CHAR_OR_BLOCK" sequence="<Ctrl+D>" description="Delete character"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_DELETE_FORWARD_WORD" sequence="<Alt+D>" description="Delete word forward"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_DELETE_BACKWARD_WORD" sequence="<Alt+Backspace>" description="Delete word backward"');
-KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_SET_BEGIN" sequence="<Ctrl+Space>" description="Set mark"');
+KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_LSP_COMPLETE" sequence="<Ctrl+Space>" description="LSP complete"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_CLEAR" sequence="<Ctrl+G>" description="Cancel mark"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_PASTE_FROM_CLIPBOARD" sequence="<Ctrl+Y>" description="Yank from clipboard"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_COPY_TO_CLIPBOARD" sequence="<Alt+W>" description="Copy marked region to clipboard"');
@@ -142,6 +143,7 @@ KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_TEXT_REFORMAT_PARAG
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_FILE_SAVE" sequence="<Ctrl+O>" description="Write out"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_BUILD_CURRENT_FILE" sequence="<F9>" description="Build current file"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_MATCH_PARENTHESIS" sequence="<Alt+P>" description="Match parenthesis"');
+KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_LSP_COMPLETE" sequence="<Ctrl+Space>" description="LSP complete"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+X>" description="Exit with save-all dialog"');
 ACTIVE_KEYMAP_PROFILE('name="WORDSTAR"');
 END_MACRO;

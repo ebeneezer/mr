@@ -445,6 +445,83 @@ bool validateCompilerProfiles(const std::vector<MRCompilerProfile> &profiles, st
 	return true;
 }
 
+bool applyCompilerProfileDirectiveToVector(std::vector<MRCompilerProfile> &profiles, const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, bool *changed, std::string *errorMessage) {
+	std::string op = upperAscii(trimAscii(operation));
+	std::string id = canonicalCompilerProfileId(profileId);
+	MRCompilerProfile *profile = nullptr;
+
+	if (changed != nullptr) *changed = false;
+	if (op.empty()) return setError(errorMessage, "MRCOMPILERPROFILE operation may not be empty.");
+	if (id.empty()) return setError(errorMessage, "MRCOMPILERPROFILE profile id may not be empty.");
+	for (MRCompilerProfile &candidate : profiles)
+		if (candidate.id == id) {
+			profile = &candidate;
+			break;
+		}
+	if (op == "DEFINE") {
+		if (profile != nullptr) return setError(errorMessage, "Duplicate compiler profile id: " + id);
+		MRCompilerProfile created;
+		created.id = id;
+		created.name = canonicalCompilerProfileName(arg3);
+		created.toolchain = arg4;
+		if (!normalizeCompilerProfileInPlace(created, errorMessage)) return false;
+		profiles.push_back(created);
+		if (!validateCompilerProfiles(profiles, errorMessage)) {
+			profiles.pop_back();
+			return false;
+		}
+		if (changed != nullptr) *changed = true;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (profile == nullptr) return setError(errorMessage, "Unknown compiler profile id: " + id);
+	if (op == "SET") {
+		MRCompilerProfile previous = *profile;
+		std::string key = upperAscii(trimAscii(arg3));
+
+		if (key == "NAME")
+			profile->name = arg4;
+		else if (key == "TOOLCHAIN")
+			profile->toolchain = arg4;
+		else if (key == "EXECUTABLE")
+			profile->executablePath = arg4;
+		else if (key == "VERSION")
+			profile->versionText = arg4;
+		else if (key == "TARGET")
+			profile->targetTriple = arg4;
+		else if (key == "FLAGS")
+			profile->buildFlags = arg4;
+		else if (key == "INCLUDES")
+			profile->includePaths = splitCompilerProfilePathList(arg4);
+		else if (key == "LIBRARIES")
+			profile->libraryPaths = splitCompilerProfilePathList(arg4);
+		else if (key == "RUNTIME")
+			profile->runtimePaths = splitCompilerProfilePathList(arg4);
+		else if (key == "SUCCESS_AUDIO_URI")
+			profile->buildSuccessAudioUri = arg4;
+		else if (key == "FAILURE_AUDIO_URI")
+			profile->buildFailureAudioUri = arg4;
+		else if (key == "LSP_EXECUTABLE")
+			profile->lspExecutablePath = arg4;
+		else if (key == "LSP_ARGUMENTS")
+			profile->lspArguments = arg4;
+		else if (key == "LSP_WORKING_DIRECTORY")
+			profile->lspWorkingDirectory = arg4;
+		else if (key == "LSP_MIDDLEWARE")
+			profile->lspMiddlewarePath = arg4;
+		else
+			return setError(errorMessage, "Unknown compiler profile setting key.");
+		if (!normalizeCompilerProfileInPlace(*profile, errorMessage) || !validateCompilerProfiles(profiles, errorMessage)) {
+			*profile = previous;
+			return false;
+		}
+		if (changed != nullptr) *changed = previous != *profile;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "MRCOMPILERPROFILE supports operations DEFINE and SET.");
+}
+
 std::vector<std::string> defaultCompilerExecutablePaths() {
 	static std::vector<std::string> cachedPaths;
 	static bool initialized = false;
@@ -557,65 +634,10 @@ bool compilerProfileIdExists(const std::string &profileId) {
 }
 
 bool applyConfiguredCompilerProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage) {
-	std::string op = upperAscii(trimAscii(operation));
-	std::string id = canonicalCompilerProfileId(profileId);
-	std::vector<MRCompilerProfile> profiles = configuredCompilerProfilesValue();
-	MRCompilerProfile *profile = nullptr;
+	bool changed = false;
 
-	if (op.empty()) return setError(errorMessage, "MRCOMPILERPROFILE operation may not be empty.");
-	if (id.empty()) return setError(errorMessage, "MRCOMPILERPROFILE profile id may not be empty.");
-	for (MRCompilerProfile &candidate : profiles)
-		if (candidate.id == id) {
-			profile = &candidate;
-			break;
-		}
-
-	if (op == "DEFINE") {
-		if (profile != nullptr) return setError(errorMessage, "Duplicate compiler profile id: " + id);
-		MRCompilerProfile created;
-		created.id = id;
-		created.name = canonicalCompilerProfileName(arg3);
-		created.toolchain = normalizeToolchain(arg4);
-		profiles.push_back(created);
-		return setConfiguredCompilerProfiles(profiles, errorMessage);
-	}
-	if (profile == nullptr) return setError(errorMessage, "Unknown compiler profile id: " + id);
-	if (op == "SET") {
-		std::string key = upperAscii(trimAscii(arg3));
-
-		if (key == "NAME")
-			profile->name = arg4;
-		else if (key == "TOOLCHAIN")
-			profile->toolchain = arg4;
-		else if (key == "EXECUTABLE")
-			profile->executablePath = arg4;
-		else if (key == "VERSION")
-			profile->versionText = arg4;
-		else if (key == "TARGET")
-			profile->targetTriple = arg4;
-		else if (key == "FLAGS")
-			profile->buildFlags = arg4;
-		else if (key == "INCLUDES")
-			profile->includePaths = splitCompilerProfilePathList(arg4);
-		else if (key == "LIBRARIES")
-			profile->libraryPaths = splitCompilerProfilePathList(arg4);
-		else if (key == "RUNTIME")
-			profile->runtimePaths = splitCompilerProfilePathList(arg4);
-		else if (key == "SUCCESS_AUDIO_URI")
-			profile->buildSuccessAudioUri = arg4;
-		else if (key == "FAILURE_AUDIO_URI")
-			profile->buildFailureAudioUri = arg4;
-		else if (key == "LSP_EXECUTABLE")
-			profile->lspExecutablePath = arg4;
-		else if (key == "LSP_ARGUMENTS")
-			profile->lspArguments = arg4;
-		else if (key == "LSP_WORKING_DIRECTORY")
-			profile->lspWorkingDirectory = arg4;
-		else if (key == "LSP_MIDDLEWARE")
-			profile->lspMiddlewarePath = arg4;
-		else
-			return setError(errorMessage, "Unknown compiler profile setting key.");
-		return setConfiguredCompilerProfiles(profiles, errorMessage);
-	}
-	return setError(errorMessage, "MRCOMPILERPROFILE supports operations DEFINE and SET.");
+	if (!applyCompilerProfileDirectiveToVector(configuredCompilerProfilesValue(), operation, profileId, arg3, arg4, &changed, errorMessage)) return false;
+	if (changed) markConfiguredSettingsDirty();
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }

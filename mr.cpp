@@ -1,6 +1,7 @@
 #include "mrmac/MRVM.hpp"
 #include "app/MREditorApp.hpp"
 #include "app/MRHelp.generated.hpp"
+#include "config/settings/MRSettingsRuntime.hpp"
 #include "ui/MRPalette.hpp"
 
 #include <cstring>
@@ -21,7 +22,7 @@ bool hasHelpFlag(int argc, char **argv) {
 }
 
 void appendMainShutdownTrace(std::string_view message) {
-	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 	if (!out) return;
 	const std::time_t now = std::time(nullptr);
 	const std::tm *tmNow = std::localtime(&now);

@@ -1,6 +1,7 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
 #include "../../app/MREditorApp.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 
 #include <chrono>
 #include <ctime>
@@ -43,7 +44,7 @@ std::string directProbeTimestamp() {
 }
 
 void appendDirectProbeLog(std::string_view message) {
-	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 
 	if (!out) return;
 	out << "[" << directProbeTimestamp() << "] " << message << '\n';
@@ -1478,7 +1479,31 @@ MRTextBufferModel::CommitResult MRFileEditor::applyStagedTransaction(const MRTex
 }
 
 bool MRFileEditor::newLineWithIndent(const std::string &fill) {
-	const bool applied = insertBufferText(std::string("\n") + fill);
+	const std::string insertedText = std::string("\n") + fill;
+	const std::size_t cursor = cursorOffset();
+	const std::size_t lineStart = lineStartOffset(cursor);
+	const std::size_t lineEnd = lineEndOffset(lineStart);
+	const std::string lineText = mBufferModel.lineText(lineStart);
+	bool applied = false;
+
+	if (cursor == lineEnd && !lineText.empty() && trimView(lineText).empty()) {
+		MRTextBufferModel::Range range;
+		MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "insert-newline-empty-indent");
+
+		if (mReadOnly) return false;
+		range = MRTextBufferModel::Range(lineStart, lineEnd).clamped(mBufferModel.length());
+		transaction.replace(range, insertedText);
+		applied = applyStagedTransaction(transaction, range.start + insertedText.size(), range.start + insertedText.size(), range.start + insertedText.size(), true).applied();
+	} else if (paddingColumnsBeforeInsertAtCursor() > 0) {
+		MRTextBufferModel::Range range;
+		MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "insert-newline-free-cursor");
+
+		if (mReadOnly) return false;
+		range = MRTextBufferModel::Range(cursor, cursor).clamped(mBufferModel.length());
+		transaction.replace(range, insertedText);
+		applied = applyStagedTransaction(transaction, range.start + insertedText.size(), range.start + insertedText.size(), range.start + insertedText.size(), true).applied();
+	} else
+		applied = insertBufferText(insertedText);
 	if (applied) applyLiveSmartDedentAfterTextInput("");
 	return applied;
 }
@@ -1552,9 +1577,15 @@ int MRFileEditor::inferredShellIndentStepColumns(std::size_t lineStart, const MR
 
 std::string MRFileEditor::automaticIndentFillForCursor() const {
 	const MREditSetupSettings settings = effectiveEditSetupSettings();
-	const std::size_t lineStart = lineStartOffset(cursorOffset());
+	const std::size_t cursor = cursorOffset();
+	const std::size_t lineStart = lineStartOffset(cursor);
+	const std::string lineText = mBufferModel.lineText(lineStart);
+	const std::size_t cursorColumn = cursor - lineStart;
+	const std::size_t indentBytes = leadingIndentBytes(lineText);
 	const int targetColumn = leadingIndentColumnForLine(lineStart);
 
+	if (trimView(lineText).empty()) return std::string();
+	if (cursorColumn < indentBytes) return std::string();
 	return buildEditIndentFill(settings, 1, targetColumn, settings.tabExpand);
 }
 

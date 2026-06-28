@@ -298,8 +298,6 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
 	    {"UI_INDENT_STYLE", MRSettingsKeyClass::Global, true},
 	    {"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
 	    {kWindowColorThemeProfileKey, MRSettingsKeyClass::Global, true},
-	    {"FILE_COMPARE_LEFT_GUTTERS", MRSettingsKeyClass::Global, true},
-    {"FILE_COMPARE_RIGHT_GUTTERS", MRSettingsKeyClass::Global, true},
     {"FILE_COMPARE_ORIGINAL_LEADING_GUTTERS", MRSettingsKeyClass::Global, true},
     {"FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS", MRSettingsKeyClass::Global, true},
     {"FILE_COMPARE_COMPARE_LEADING_GUTTERS", MRSettingsKeyClass::Global, true},
@@ -738,6 +736,19 @@ bool isCanonicalSerializedSettingsKey(std::string_view key) {
 	for (const auto &descriptor : kFixedSettingsKeyDescriptors)
 		if (upper == descriptor.key) return descriptor.serialized;
 	return editSettingDescriptorByKeyInternal(upper) != nullptr;
+}
+
+std::vector<std::string> canonicalSerializedSettingsKeys() {
+	std::size_t editDescriptorCount = 0;
+	const MREditSettingDescriptor *editDescriptors = editSettingDescriptors(editDescriptorCount);
+	std::vector<std::string> keys;
+
+	keys.reserve(canonicalSerializedSettingsKeyCount());
+	for (const auto &descriptor : kFixedSettingsKeyDescriptors)
+		if (descriptor.serialized) keys.push_back(descriptor.key);
+	for (std::size_t i = 0; i < editDescriptorCount; ++i)
+		keys.push_back(editDescriptors[i].key);
+	return keys;
 }
 
 std::size_t canonicalSerializedSettingsKeyCount() {
@@ -1270,8 +1281,8 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				}
 				if (upper == "CURSOR_POSITION_MARKER") return setConfiguredCursorPositionMarker(value, errorMessage);
 				if (upper == kWindowColorThemeProfileKey) return loadColorThemeFile(value, errorMessage);
-				if (upper == "FILE_COMPARE_LEFT_GUTTERS" || upper == "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS") return setConfiguredFileCompareOriginalLeadingGutters(value, errorMessage);
-			if (upper == "FILE_COMPARE_RIGHT_GUTTERS" || upper == "FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS") return setConfiguredFileCompareOriginalTrailingGutters(value, errorMessage);
+				if (upper == "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS") return setConfiguredFileCompareOriginalLeadingGutters(value, errorMessage);
+			if (upper == "FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS") return setConfiguredFileCompareOriginalTrailingGutters(value, errorMessage);
 			if (upper == "FILE_COMPARE_COMPARE_LEADING_GUTTERS") return setConfiguredFileCompareCompareLeadingGutters(value, errorMessage);
 			if (upper == "FILE_COMPARE_COMPARE_TRAILING_GUTTERS") return setConfiguredFileCompareCompareTrailingGutters(value, errorMessage);
 			if (upper == "FILE_COMPARE_START_CONFIGURATION") {
@@ -1851,8 +1862,8 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 					if (errorMessage != nullptr) errorMessage->clear();
 					return true;
 				}
-				if (upper == "FILE_COMPARE_LEFT_GUTTERS" || upper == "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareOriginalLeadingGutters, errorMessage);
-			if (upper == "FILE_COMPARE_RIGHT_GUTTERS" || upper == "FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareOriginalTrailingGutters, errorMessage);
+				if (upper == "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareOriginalLeadingGutters, errorMessage);
+			if (upper == "FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareOriginalTrailingGutters, errorMessage);
 			if (upper == "FILE_COMPARE_COMPARE_LEADING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareCompareLeadingGutters, errorMessage);
 			if (upper == "FILE_COMPARE_COMPARE_TRAILING_GUTTERS") return normalizeFileCompareGutters(value, snapshot.fileCompareCompareTrailingGutters, errorMessage);
 			if (upper == "FILE_COMPARE_START_CONFIGURATION") {
@@ -2066,64 +2077,5 @@ bool applySettingsSnapshotEditExtensionProfileDirective(MRSettingsSnapshot &snap
 }
 
 bool applySettingsSnapshotCompilerProfileDirective(MRSettingsSnapshot &snapshot, const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage) {
-	std::string op = upperAscii(trimAscii(operation));
-	std::string id = canonicalCompilerProfileId(profileId);
-	std::vector<MRCompilerProfile> profiles = snapshot.compilerProfiles;
-	MRCompilerProfile *profile = nullptr;
-
-	if (op.empty()) return setError(errorMessage, "MRCOMPILERPROFILE operation may not be empty.");
-	if (id.empty()) return setError(errorMessage, "MRCOMPILERPROFILE profile id may not be empty.");
-	for (MRCompilerProfile &candidate : profiles)
-		if (candidate.id == id) {
-			profile = &candidate;
-			break;
-		}
-	if (op == "DEFINE") {
-		if (profile != nullptr) return setError(errorMessage, "Duplicate compiler profile id: " + id);
-		MRCompilerProfile created;
-		created.id = id;
-		created.name = canonicalCompilerProfileName(arg3);
-		created.toolchain = arg4;
-		profiles.push_back(created);
-		return setSnapshotCompilerProfiles(snapshot, profiles, errorMessage);
-	}
-	if (profile == nullptr) return setError(errorMessage, "Unknown compiler profile id: " + id);
-	if (op == "SET") {
-		std::string key = upperAscii(trimAscii(arg3));
-
-		if (key == "NAME")
-			profile->name = arg4;
-		else if (key == "TOOLCHAIN")
-			profile->toolchain = arg4;
-		else if (key == "EXECUTABLE")
-			profile->executablePath = arg4;
-		else if (key == "VERSION")
-			profile->versionText = arg4;
-		else if (key == "TARGET")
-			profile->targetTriple = arg4;
-		else if (key == "FLAGS")
-			profile->buildFlags = arg4;
-		else if (key == "INCLUDES")
-			profile->includePaths = splitCompilerProfilePathList(arg4);
-		else if (key == "LIBRARIES")
-			profile->libraryPaths = splitCompilerProfilePathList(arg4);
-		else if (key == "RUNTIME")
-			profile->runtimePaths = splitCompilerProfilePathList(arg4);
-		else if (key == "SUCCESS_AUDIO_URI")
-			profile->buildSuccessAudioUri = arg4;
-		else if (key == "FAILURE_AUDIO_URI")
-			profile->buildFailureAudioUri = arg4;
-		else if (key == "LSP_EXECUTABLE")
-			profile->lspExecutablePath = arg4;
-		else if (key == "LSP_ARGUMENTS")
-			profile->lspArguments = arg4;
-		else if (key == "LSP_WORKING_DIRECTORY")
-			profile->lspWorkingDirectory = arg4;
-		else if (key == "LSP_MIDDLEWARE")
-			profile->lspMiddlewarePath = arg4;
-		else
-			return setError(errorMessage, "Unknown compiler profile setting key.");
-		return setSnapshotCompilerProfiles(snapshot, profiles, errorMessage);
-	}
-	return setError(errorMessage, "MRCOMPILERPROFILE supports operations DEFINE and SET.");
+	return applyCompilerProfileDirectiveToVector(snapshot.compilerProfiles, operation, profileId, arg3, arg4, nullptr, errorMessage);
 }

@@ -6,10 +6,13 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <map>
+#include <mutex>
 #include <pwd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -52,6 +55,47 @@ bool g_runtimePreserveAutosavedWorkspace = false;
 bool g_autoloadWorkspace = false;
 MRLogHandling g_logHandling = MRLogHandling::Volatile;
 std::map<std::string, std::string> g_autoexecMacroDiagnostics;
+
+struct SettingsIoBucket {
+	std::uint64_t second;
+	std::uint64_t reads;
+	std::uint64_t writes;
+
+	SettingsIoBucket() noexcept : second(0), reads(0), writes(0) {
+	}
+};
+
+struct SettingsIoMeter {
+	std::mutex mutex;
+	std::array<SettingsIoBucket, 60> buckets;
+};
+
+SettingsIoMeter &settingsIoMeter() {
+	static SettingsIoMeter meter;
+	return meter;
+}
+
+std::uint64_t settingsIoSecondNow() {
+	return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+void recordSettingsRuntimeIo(bool write) {
+	SettingsIoMeter &meter = settingsIoMeter();
+	const std::uint64_t now = settingsIoSecondNow();
+	const std::size_t index = static_cast<std::size_t>(now % meter.buckets.size());
+	std::lock_guard<std::mutex> lock(meter.mutex);
+	SettingsIoBucket &bucket = meter.buckets[index];
+
+	if (bucket.second != now) {
+		bucket.second = now;
+		bucket.reads = 0;
+		bucket.writes = 0;
+	}
+	if (write)
+		++bucket.writes;
+	else
+		++bucket.reads;
+}
 
 bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr) *errorMessage = message;
@@ -214,6 +258,28 @@ bool validateBoundedMilliseconds(const char *key, int value, int minValue, int m
 
 } // namespace
 
+void recordSettingsRuntimeRead() {
+	recordSettingsRuntimeIo(false);
+}
+
+void recordSettingsRuntimeWrite() {
+	recordSettingsRuntimeIo(true);
+}
+
+MRSettingsRuntimeIoRateSnapshot settingsRuntimeIoRateSnapshot() {
+	SettingsIoMeter &meter = settingsIoMeter();
+	const std::uint64_t now = settingsIoSecondNow();
+	MRSettingsRuntimeIoRateSnapshot snapshot;
+	std::lock_guard<std::mutex> lock(meter.mutex);
+
+	for (const SettingsIoBucket &bucket : meter.buckets) {
+		if (bucket.second == 0 || bucket.second + 60 <= now) continue;
+		snapshot.readsPerMinute += bucket.reads;
+		snapshot.writesPerMinute += bucket.writes;
+	}
+	return snapshot;
+}
+
 std::vector<std::string> &configuredAutoexecMacroStorage() {
 	static std::vector<std::string> value;
 	return value;
@@ -225,6 +291,7 @@ bool &configuredSettingsDirtyFlag() {
 }
 
 void markConfiguredSettingsDirty() {
+	recordSettingsRuntimeWrite();
 	configuredSettingsDirtyFlag() = true;
 }
 
@@ -1174,12 +1241,9 @@ bool setConfiguredLogFilePath(const std::string &path, std::string *errorMessage
 
 std::string configuredLogFilePath() {
 	const std::string &configured = configuredLogFile();
-	std::string dir;
 
 	if (!configured.empty()) return makeAbsolutePath(configured);
-	dir = directoryPartOf(makeAbsolutePath(configuredSettingsMacroFilePath()));
-	if (dir.empty() || !isWritableDirectory(dir)) dir = builtInTempDirectoryPath();
-	return appendFileName(dir, "mr.log");
+	return appendFileName(configuredTempDirectoryPath(), "mr.log");
 }
 
 std::string defaultSettingsMacroFilePath() {

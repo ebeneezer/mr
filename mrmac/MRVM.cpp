@@ -2632,7 +2632,7 @@ static void writeRuntimeGlobalValueDirect(const std::string &name, int type, con
 }
 
 static bool isMacroVisibleRuntimeRootName(const std::string &key) {
-	return key == "EXECSESSIONS" || key == "MODELESSUI" || key == "MACROCATALOG" || key == "MACROGLOBALS";
+	return key == "EXECSESSIONS" || key == "MODELESSUI" || key == "MACROCATALOG" || key == "MACROGLOBALS" || key == "MACROSNIPPETS";
 }
 
 static void setSessionGlobalValueDirect(BackgroundEditSession &session, const std::string &name, int type, const Value &value) {

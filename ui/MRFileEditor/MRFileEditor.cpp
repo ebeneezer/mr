@@ -1,6 +1,7 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
 #include "../../app/MREditorApp.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../outline/MROutlineFoldProducer.hpp"
 
@@ -27,7 +28,7 @@ std::string directProbeTimestamp() {
 }
 
 void appendDirectProbeLog(std::string_view message) {
-	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 
 	if (!out) return;
 	out << "[" << directProbeTimestamp() << "] " << message << '\n';

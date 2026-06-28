@@ -116,7 +116,18 @@ Value copyValueToGlobalStore(MRVMRuntimeKv &runtimeKv, const Value &value, MRVMH
 	Value stored = value;
 	MRVMHashStore &globalStore = runtimeKv.globalStore();
 
-	if (value.type == TYPE_HASH || mrvmValueIsArrayType(value.type)) return mrvmHashCopyValueForStore(value, localStore, globalStore, globalStore, true);
+	if (value.type == TYPE_HASH) {
+		MRVMHashStore &sourceStore = mrvmHashRuntimeStoreForValue(localStore, globalStore, value);
+		stored.hashHandle = globalStore.cloneHashFrom(sourceStore, value.hashHandle, true);
+		stored.globalStorage = true;
+		return stored;
+	}
+	if (mrvmValueIsArrayType(value.type)) {
+		for (Value &arrayValue : stored.arrayValues)
+			arrayValue = copyValueToGlobalStore(runtimeKv, arrayValue, localStore);
+		stored.globalStorage = true;
+		return stored;
+	}
 	stored.globalStorage = true;
 	return stored;
 }

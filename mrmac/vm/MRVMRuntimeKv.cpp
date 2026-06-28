@@ -8,7 +8,9 @@ namespace {
 using Value = VirtualMachine::Value;
 }
 
-MRVMRuntimeKv::MRVMRuntimeKv() : rootHandle(store.createHash()) {
+MRVMRuntimeKv::MRVMRuntimeKv() : rootHandle(0) {
+	store.setIoTrackingEnabled(true);
+	rootHandle = store.createHash();
 }
 
 MRVMHashStore &MRVMRuntimeKv::globalStore() noexcept {

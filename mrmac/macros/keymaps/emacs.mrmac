@@ -20,7 +20,7 @@ KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_DELETE_TO_EOL" 
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_DELETE_FORWARD_CHAR_OR_BLOCK" sequence="<Ctrl+D>" description="Delete character"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_DELETE_FORWARD_WORD" sequence="<Alt+D>" description="Delete word forward"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_DELETE_BACKWARD_WORD" sequence="<Alt+Backspace>" description="Delete word backward"');
-KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_SET_BEGIN" sequence="<Ctrl+Space>" description="Set mark"');
+KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_LSP_COMPLETE" sequence="<Ctrl+Space>" description="LSP complete"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_CLEAR" sequence="<Ctrl+G>" description="Cancel mark"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_PASTE_FROM_CLIPBOARD" sequence="<Ctrl+Y>" description="Yank from clipboard"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_BLOCK_COPY_TO_CLIPBOARD" sequence="<Alt+W>" description="Copy marked region to clipboard"');

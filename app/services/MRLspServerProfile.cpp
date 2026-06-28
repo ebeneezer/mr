@@ -2,6 +2,7 @@
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <filesystem>
@@ -30,36 +31,35 @@ struct LspServerStartEntry {
 	const char *executableName;
 	const char *argument1;
 	const char *argument2;
-	const char *middlewarePath;
 };
 
 const LspServerStartEntry lspServerStartTable[] = {
-	{ MRSyntaxLanguage::C, "builtin-c-clangd", "clangd", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Cpp, "builtin-cpp-clangd", "clangd", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::JavaScript, "builtin-javascript-typescript-language-server", "typescript-language-server", "--stdio", nullptr, nullptr },
-	{ MRSyntaxLanguage::Python, "builtin-python-pyright", "pyright-langserver", "--stdio", nullptr, nullptr },
-	{ MRSyntaxLanguage::Python, "builtin-python-basedpyright", "basedpyright-langserver", "--stdio", nullptr, nullptr },
-	{ MRSyntaxLanguage::Python, "builtin-python-pylsp", "pylsp", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Json, "builtin-json-vscode-json-language-server", "vscode-json-language-server", "--stdio", nullptr, nullptr },
-	{ MRSyntaxLanguage::Yaml, "builtin-yaml-language-server", "yaml-language-server", "--stdio", nullptr, nullptr },
-	{ MRSyntaxLanguage::Xml, "builtin-xml-lemminx", "lemminx", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Bash, "builtin-bash-language-server", "bash-language-server", "start", nullptr, nullptr },
-	{ MRSyntaxLanguage::Zsh, "builtin-zsh-bash-language-server", "bash-language-server", "start", nullptr, nullptr },
-	{ MRSyntaxLanguage::Fish, "builtin-fish-fish-lsp", "fish-lsp", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Swift, "builtin-swift-sourcekit-lsp", "sourcekit-lsp", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Rust, "builtin-rust-rust-analyzer", "rust-analyzer", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Go, "builtin-go-gopls", "gopls", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Perl, "builtin-perl-perlnavigator", "perlnavigator", "--stdio", nullptr, nullptr },
-	{ MRSyntaxLanguage::Kotlin, "builtin-kotlin-lsp", "kotlin-lsp", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Kotlin, "builtin-kotlin-language-server", "kotlin-language-server", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::CSharp, "builtin-csharp-csharp-ls", "csharp-ls", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Pascal, "builtin-pascal-pasls", "pasls", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Systemd, "builtin-systemd-systemd-lsp", "systemd-lsp", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Make, "builtin-make-make-ls", "make-ls", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Make, "builtin-make-autotools-language-server", "autotools-language-server", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Markdown, "builtin-markdown-marksman", "marksman", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Latex, "builtin-latex-digestif", "digestif", nullptr, nullptr, nullptr },
-	{ MRSyntaxLanguage::Latex, "builtin-latex-texlab", "texlab", "run", nullptr, nullptr },
+	{ MRSyntaxLanguage::C, "builtin-c-clangd", "clangd", nullptr, nullptr },
+	{ MRSyntaxLanguage::Cpp, "builtin-cpp-clangd", "clangd", nullptr, nullptr },
+	{ MRSyntaxLanguage::JavaScript, "builtin-javascript-typescript-language-server", "typescript-language-server", "--stdio", nullptr },
+	{ MRSyntaxLanguage::Python, "builtin-python-pyright", "pyright-langserver", "--stdio", nullptr },
+	{ MRSyntaxLanguage::Python, "builtin-python-basedpyright", "basedpyright-langserver", "--stdio", nullptr },
+	{ MRSyntaxLanguage::Python, "builtin-python-pylsp", "pylsp", nullptr, nullptr },
+	{ MRSyntaxLanguage::Json, "builtin-json-vscode-json-language-server", "vscode-json-language-server", "--stdio", nullptr },
+	{ MRSyntaxLanguage::Yaml, "builtin-yaml-language-server", "yaml-language-server", "--stdio", nullptr },
+	{ MRSyntaxLanguage::Xml, "builtin-xml-lemminx", "lemminx", nullptr, nullptr },
+	{ MRSyntaxLanguage::Bash, "builtin-bash-language-server", "bash-language-server", "start", nullptr },
+	{ MRSyntaxLanguage::Zsh, "builtin-zsh-bash-language-server", "bash-language-server", "start", nullptr },
+	{ MRSyntaxLanguage::Fish, "builtin-fish-fish-lsp", "fish-lsp", nullptr, nullptr },
+	{ MRSyntaxLanguage::Swift, "builtin-swift-sourcekit-lsp", "sourcekit-lsp", nullptr, nullptr },
+	{ MRSyntaxLanguage::Rust, "builtin-rust-rust-analyzer", "rust-analyzer", nullptr, nullptr },
+	{ MRSyntaxLanguage::Go, "builtin-go-gopls", "gopls", nullptr, nullptr },
+	{ MRSyntaxLanguage::Perl, "builtin-perl-perlnavigator", "perlnavigator", "--stdio", nullptr },
+	{ MRSyntaxLanguage::Kotlin, "builtin-kotlin-lsp", "kotlin-lsp", nullptr, nullptr },
+	{ MRSyntaxLanguage::Kotlin, "builtin-kotlin-language-server", "kotlin-language-server", nullptr, nullptr },
+	{ MRSyntaxLanguage::CSharp, "builtin-csharp-csharp-ls", "csharp-ls", nullptr, nullptr },
+	{ MRSyntaxLanguage::Pascal, "builtin-pascal-pasls", "pasls", nullptr, nullptr },
+	{ MRSyntaxLanguage::Systemd, "builtin-systemd-systemd-lsp", "systemd-lsp", nullptr, nullptr },
+	{ MRSyntaxLanguage::Make, "builtin-make-make-ls", "make-ls", nullptr, nullptr },
+	{ MRSyntaxLanguage::Make, "builtin-make-autotools-language-server", "autotools-language-server", nullptr, nullptr },
+	{ MRSyntaxLanguage::Markdown, "builtin-markdown-marksman", "marksman", nullptr, nullptr },
+	{ MRSyntaxLanguage::Latex, "builtin-latex-digestif", "digestif", nullptr, nullptr },
+	{ MRSyntaxLanguage::Latex, "builtin-latex-texlab", "texlab", "run", nullptr },
 };
 
 bool isExecutableFile(const std::string &path) {
@@ -140,7 +140,6 @@ std::string usableMiddlewarePath(const char *path) {
 }
 
 std::string candidateExecutableListForLanguage(MRSyntaxLanguage language);
-std::string defaultMiddlewarePathForLanguage(MRSyntaxLanguage language);
 
 std::vector<std::string> lspArgumentsForEntry(const LspServerStartEntry &entry) {
 	std::vector<std::string> arguments;
@@ -160,6 +159,60 @@ std::vector<std::string> splitArgumentText(const std::string &arguments) {
 	return out;
 }
 
+bool lspExecutableBaseNameMatches(const std::string &executableName, const char *expected) {
+	const std::string baseName = std::filesystem::path(executableName).filename().string();
+
+	return baseName == expected || baseName.rfind(std::string(expected) + "-", 0) == 0;
+}
+
+std::vector<std::string> lspMiddlewareFileNamesForCandidate(MRSyntaxLanguage language, const std::string &executableName) {
+	std::vector<std::string> fileNames;
+
+	if (lspExecutableBaseNameMatches(executableName, "clangd")) {
+		if (language == MRSyntaxLanguage::Cpp) {
+			fileNames.push_back("clangd-cpp-snippets.mrmac");
+			fileNames.push_back("clangd-snippets.mrmac");
+		} else if (language == MRSyntaxLanguage::C)
+			fileNames.push_back("clangd-snippets.mrmac");
+	}
+	if (language == MRSyntaxLanguage::Latex && (lspExecutableBaseNameMatches(executableName, "digestif") || lspExecutableBaseNameMatches(executableName, "texlab")))
+		fileNames.push_back("digestif-snippets.mrmac");
+	return fileNames;
+}
+
+std::string findLspMiddlewareBelowMacroPath(const std::vector<std::string> &fileNames) {
+	namespace fs = std::filesystem;
+
+	const std::string macroDirectory = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
+	std::vector<std::string> matches;
+	std::error_code errorCode;
+	fs::path root;
+
+	if (macroDirectory.empty() || fileNames.empty()) return std::string();
+	root = fs::path(macroDirectory);
+	if (!fs::is_directory(root, errorCode)) return std::string();
+	for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, errorCode), end; it != end; it.increment(errorCode)) {
+		if (errorCode) {
+			errorCode.clear();
+			continue;
+		}
+		if (!it->is_regular_file(errorCode)) {
+			errorCode.clear();
+			continue;
+		}
+		const std::string fileName = it->path().filename().string();
+		if (std::find(fileNames.begin(), fileNames.end(), fileName) == fileNames.end()) continue;
+		matches.push_back(fs::absolute(it->path(), errorCode).generic_string());
+		errorCode.clear();
+	}
+	std::sort(matches.begin(), matches.end());
+	return matches.empty() ? std::string() : matches.front();
+}
+
+std::string suggestedLspMiddlewarePathForCandidate(const mr::services::MRLspServerCandidate &candidate) {
+	return findLspMiddlewareBelowMacroPath(lspMiddlewareFileNamesForCandidate(candidate.language, candidate.executableName));
+}
+
 bool buildBuiltInLspServerProfileForLanguage(MRSyntaxLanguage language, const std::string &languageName, mr::services::MRLspServerProfile &profile, std::string &configurationSource, std::string &errorMessage) {
 	const std::size_t entryCount = sizeof(lspServerStartTable) / sizeof(lspServerStartTable[0]);
 	std::string executablePath;
@@ -174,7 +227,6 @@ bool buildBuiltInLspServerProfileForLanguage(MRSyntaxLanguage language, const st
 		profile.executablePath = executablePath;
 		appendLspServerStartArguments(profile, entry);
 		profile.workingDirectory.clear();
-		profile.lspMiddlewarePath = usableMiddlewarePath(entry.middlewarePath);
 		configurationSource = std::string("built-in language mapping: ") + languageName;
 		return true;
 	}
@@ -198,17 +250,6 @@ std::string candidateExecutableListForLanguage(MRSyntaxLanguage language) {
 		text += lspServerStartTable[index].executableName;
 	}
 	return text;
-}
-
-std::string defaultMiddlewarePathForLanguage(MRSyntaxLanguage language) {
-	const std::size_t entryCount = sizeof(lspServerStartTable) / sizeof(lspServerStartTable[0]);
-
-	for (std::size_t index = 0; index < entryCount; ++index) {
-		if (lspServerStartTable[index].language != language) continue;
-		std::string path = usableMiddlewarePath(lspServerStartTable[index].middlewarePath);
-		if (!path.empty()) return path;
-	}
-	return std::string();
 }
 
 } // namespace
@@ -269,7 +310,6 @@ bool buildLspServerProfileForLanguage(MRSyntaxLanguage language, const std::stri
 
 bool buildLspServerProfileForLanguageWithCompilerProfile(MRSyntaxLanguage language, const std::string &languageName, const MRCompilerProfile &compilerProfile, MRLspServerProfile &profile, std::string &configurationSource, std::string &errorMessage) {
 	if (buildLspServerProfileFromCompilerProfile(compilerProfile, profile, configurationSource, errorMessage)) {
-		if (profile.lspMiddlewarePath.empty()) profile.lspMiddlewarePath = defaultMiddlewarePathForLanguage(language);
 		return true;
 	}
 	if (!errorMessage.empty()) return false;
@@ -291,7 +331,7 @@ bool resolveLspServerCandidate(const MRLspServerCandidate &candidate, MRLspServe
 	profile.executablePath = executablePath;
 	profile.arguments = candidate.arguments;
 	profile.workingDirectory.clear();
-	profile.lspMiddlewarePath = candidate.middlewarePath;
+	profile.lspMiddlewarePath = suggestedLspMiddlewarePathForCandidate(candidate);
 	return true;
 }
 
@@ -308,7 +348,6 @@ std::vector<MRLspServerCandidate> lspServerCandidatesForLanguage(MRSyntaxLanguag
 		candidate.profileName = entry.profileName;
 		candidate.executableName = entry.executableName;
 		candidate.arguments = lspArgumentsForEntry(entry);
-		candidate.middlewarePath = usableMiddlewarePath(entry.middlewarePath);
 		candidates.push_back(candidate);
 	}
 	return candidates;

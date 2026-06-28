@@ -42,6 +42,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <poll.h>
 #include <sstream>
@@ -70,7 +71,10 @@
 #include "../keymap/MRKeymapSequence.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/MRVM.hpp"
+#include "../mrmac/mrmac.h"
 #include "../mrmac/vm/MRVMEditor.hpp"
+#include "../mrmac/vm/MRVMHash.hpp"
+#include "../mrmac/vm/MRVMRuntimeKv.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 #include "../app/commands/MRLogViewer.hpp"
@@ -93,8 +97,13 @@
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 
+MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
+std::recursive_mutex &mrvmExecutionMutex() noexcept;
+
 namespace {
 bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride = std::string_view(), const std::string &successAudioUri = std::string(), const std::string &failureAudioUri = std::string());
+bool lspCompletionShouldShowChoiceDialog(std::size_t itemCount) noexcept;
+int lspReadOnlyHoverAnchorRow(int anchorViewRow, MRReadOnlySidekickPlacement placement, bool diagnosticHover) noexcept;
 
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
@@ -388,7 +397,9 @@ enum class KeymapCustomAction : unsigned char {
 	SearchResultsNext = 27,
 	CompilerProblemsNext = 28,
 	CompilerProblemsPrevious = 29,
-	DisabledBlockAction = 30
+	DisabledBlockAction = 30,
+	SnippetPlaceholderNext = 31,
+	SnippetPlaceholderPrevious = 32
 };
 
 struct KeymapActionDispatchEntry {
@@ -510,6 +521,8 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_LSP_FIND_REFERENCES", KeymapDispatchKind::AppCommand, cmMrOtherLspReferences, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_LSP_SHOW_HOVER", KeymapDispatchKind::AppCommand, cmMrOtherLspHover, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_LSP_COMPLETE", KeymapDispatchKind::AppCommand, cmMrOtherLspComplete, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_SNIPPET_PLACEHOLDER_NEXT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SnippetPlaceholderNext},
+    KeymapActionDispatchEntry{"MR_SNIPPET_PLACEHOLDER_PREVIOUS", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SnippetPlaceholderPrevious},
     KeymapActionDispatchEntry{"MR_LSP_DOCUMENT_HIGHLIGHT", KeymapDispatchKind::AppCommand, cmMrOtherLspDocumentHighlight, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_LSP_DOCUMENT_SYMBOLS", KeymapDispatchKind::AppCommand, cmMrOtherLspDocumentSymbols, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_LSP_WORKSPACE_SYMBOLS", KeymapDispatchKind::AppCommand, cmMrOtherLspWorkspaceSymbols, KeymapWindowMethod::None, KeymapCustomAction::None},
@@ -1247,9 +1260,28 @@ int lspViewColumnForOffset(MRFileEditor &editor, std::size_t offset) {
 bool lspCompletionRequestTargetFromSource(MRFileEditor &editor, const LspEditorRequestTarget &sourceTarget, LspEditorRequestTarget &requestTarget, std::size_t &triggerOffset) {
 	std::size_t identifierStart = 0;
 	std::size_t identifierEnd = 0;
+	std::size_t openParenOffset = 0;
+	std::size_t nameEnd = 0;
+	std::size_t lineStart = 0;
 
 	requestTarget = sourceTarget;
 	triggerOffset = sourceTarget.offset > 0 ? sourceTarget.offset - 1 : 0;
+	if (sourceTarget.offset < editor.bufferLength() && editor.charAtOffset(sourceTarget.offset) == '(')
+		openParenOffset = sourceTarget.offset;
+	else if (sourceTarget.offset > 0 && editor.charAtOffset(sourceTarget.offset - 1) == '(')
+		openParenOffset = sourceTarget.offset - 1;
+	else
+		openParenOffset = editor.bufferLength();
+	if (openParenOffset < editor.bufferLength()) {
+		nameEnd = openParenOffset;
+		lineStart = editor.lineStartOffset(openParenOffset);
+		while (nameEnd > lineStart && std::isspace(static_cast<unsigned char>(editor.charAtOffset(nameEnd - 1))) != 0)
+			--nameEnd;
+		if (nameEnd > lineStart && lspIdentifierByte(editor.charAtOffset(nameEnd - 1))) {
+			triggerOffset = editor.bufferLength();
+			return lspRequestTargetFromEditorOffset(editor, nameEnd, lspViewColumnForOffset(editor, nameEnd), sourceTarget.viewRow, requestTarget);
+		}
+	}
 	if (sourceTarget.offset < editor.bufferLength() && !lspIdentifierByte(editor.charAtOffset(sourceTarget.offset)) && editor.charAtOffset(sourceTarget.offset) != '\n' && editor.charAtOffset(sourceTarget.offset) != '\r' && sourceTarget.offset + 1 < editor.bufferLength() &&
 	    editor.charAtOffset(sourceTarget.offset + 1) != '\n' && editor.charAtOffset(sourceTarget.offset + 1) != '\r' &&
 	    lspIdentifierRangeAroundOffset(editor, sourceTarget.offset + 1, identifierStart, identifierEnd)) {
@@ -1268,16 +1300,23 @@ bool lspCompletionRequestTargetFromSource(MRFileEditor &editor, const LspEditorR
 	return lspRequestTargetFromEditorOffset(editor, identifierEnd, lspViewColumnForOffset(editor, identifierEnd), sourceTarget.viewRow, requestTarget);
 }
 
+bool lspCompletionEditRange(MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, const mr::services::MRServiceCompletionItem &item, std::size_t &start, std::size_t &end, std::string &errorMessage);
+void suppressLspAutoHoverForCompletion(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspEditorRequestTarget &target);
+bool lspDiagnosticSidekickAnchor(const mr::services::MRLspPositionServiceSnapshot &snapshot, MRFileEditor &editor, int &viewColumn, int &viewRow);
+
 bool lspCompletionTargetSelfTestForRegression(std::string &failureReason) {
 	MRFileEditor editor(TRect(0, 0, 80, 12), nullptr, nullptr, nullptr, "completion-target.tex");
-	const std::string text = "\\begin{tab\n\\begin{tabular\nobject.ve\nplain\n";
+	const std::string text = "\\begin{tab\n\\begin{tabular\nobject.ve\nswitch(\nplain\n";
 	const std::size_t latexStart = text.find("tab");
 	const std::size_t latexEnd = latexStart + 3;
 	const std::size_t latexLongStart = text.find("tabular");
 	const std::size_t latexLongEnd = latexLongStart + 7;
 	const std::size_t cppStart = text.find("ve");
 	const std::size_t cppEnd = cppStart + 2;
-	if (latexStart == std::string::npos || latexLongStart == std::string::npos || cppStart == std::string::npos) {
+	const std::size_t switchStart = text.find("switch(");
+	const std::size_t switchEnd = switchStart + 6;
+	const std::size_t switchParenEnd = switchStart + 7;
+	if (latexStart == std::string::npos || latexLongStart == std::string::npos || cppStart == std::string::npos || switchStart == std::string::npos) {
 		failureReason = "completion target self-test seed text is invalid.";
 		return false;
 	}
@@ -1372,6 +1411,133 @@ bool lspCompletionTargetSelfTestForRegression(std::string &failureReason) {
 			failureReason = "dotted literal offset " + std::to_string(offset - cppStart) + ": trigger mismatch.";
 			return false;
 		}
+	}
+	{
+		LspEditorRequestTarget sourceTarget;
+		LspEditorRequestTarget requestTarget;
+		std::size_t triggerOffset = 0;
+		std::size_t replaceStart = 0;
+		std::size_t replaceEnd = 0;
+		std::string errorMessage;
+		mr::services::MRServiceCompletionResult result;
+		mr::services::MRServiceCompletionItem item;
+
+		lspRequestTargetFromEditorOffset(editor, switchParenEnd, lspViewColumnForOffset(editor, switchParenEnd), 4, sourceTarget);
+		if (!lspCompletionRequestTargetFromSource(editor, sourceTarget, requestTarget, triggerOffset)) {
+			failureReason = "open paren target calculation failed.";
+			return false;
+		}
+		if (requestTarget.offset != switchEnd) {
+			failureReason = "open paren request offset mismatch.";
+			return false;
+		}
+		if (triggerOffset < editor.bufferLength()) {
+			failureReason = "open paren completion must not use typed paren as trigger.";
+			return false;
+		}
+		result.header.identity.documentVersion = editor.documentVersion();
+		result.hasRequestPosition = true;
+		result.requestPosition.line = requestTarget.position.line;
+		result.requestPosition.character = requestTarget.position.character;
+		item.label = "switch (condition) {cases}";
+		item.insertText = "switch (${1:condition}) {\n$0\n}";
+		item.hasInsertTextFormat = true;
+		item.insertTextFormat = 2;
+		if (!lspCompletionEditRange(editor, result, item, replaceStart, replaceEnd, errorMessage)) {
+			failureReason = "open paren snippet range failed: " + errorMessage;
+			return false;
+		}
+		if (replaceStart != switchStart || replaceEnd != switchParenEnd) {
+			failureReason = "open paren snippet range mismatch.";
+			return false;
+		}
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 12), "completion-hover", 4104);
+		LspEditorRequestTarget sourceTarget;
+		mr::services::MRWorkspaceDocumentSnapshot document;
+
+		g_lspAutoHover = LspAutoHoverState();
+		document.bufferId = window.bufferId();
+		document.documentId = 1001;
+		document.documentVersion = editor.documentVersion();
+		g_lspAutoHover.bufferId = window.bufferId();
+		g_lspAutoHover.documentId = document.documentId;
+		g_lspAutoHover.documentVersion = document.documentVersion;
+		g_lspAutoHover.requested = true;
+		g_lspAutoHover.requestId = "hover-before-complete";
+		if (!lspRequestTargetFromEditorOffset(editor, switchParenEnd, lspViewColumnForOffset(editor, switchParenEnd), 4, sourceTarget)) {
+			failureReason = "completion hover suppression target calculation failed.";
+			g_lspAutoHover = LspAutoHoverState();
+			return false;
+		}
+		suppressLspAutoHoverForCompletion(document, &window, sourceTarget);
+		if (g_lspAutoHover.requested || !g_lspAutoHover.requestId.empty()) {
+			failureReason = "completion hover suppression left request pending.";
+			g_lspAutoHover = LspAutoHoverState();
+			return false;
+		}
+		if (g_lspAutoHover.retiredRequestId != "hover-before-complete") {
+			failureReason = "completion hover suppression did not retire prior request.";
+			g_lspAutoHover = LspAutoHoverState();
+			return false;
+		}
+		if (!g_lspAutoHover.dismissedForKey || g_lspAutoHover.quietUntil <= std::chrono::steady_clock::now()) {
+			failureReason = "completion hover suppression did not arm quiet period.";
+			g_lspAutoHover = LspAutoHoverState();
+			return false;
+		}
+		g_lspAutoHover = LspAutoHoverState();
+	}
+	if (lspCompletionShouldShowChoiceDialog(0) || lspCompletionShouldShowChoiceDialog(1) || !lspCompletionShouldShowChoiceDialog(2)) {
+		failureReason = "single completion choice dialog predicate mismatch.";
+		return false;
+	}
+	if (lspReadOnlyHoverAnchorRow(9, MRReadOnlySidekickPlacement::UnderCode, false) != 9) {
+		failureReason = "normal hover anchor row must stay on the reported row for under-code placement.";
+		return false;
+	}
+	if (lspReadOnlyHoverAnchorRow(9, MRReadOnlySidekickPlacement::UnderCode, true) != 9) {
+		failureReason = "diagnostic hover anchor row must stay on the reported row for under-code placement.";
+		return false;
+	}
+	if (lspReadOnlyHoverAnchorRow(9, MRReadOnlySidekickPlacement::RightMargin, false) != 9) {
+		failureReason = "right-margin hover anchor row must not shift.";
+		return false;
+	}
+	{
+		MRFileEditor diagnosticEditor(TRect(0, 0, 80, 12), nullptr, nullptr, nullptr, "diagnostic-anchor.c");
+		mr::services::MRLspPositionServiceSnapshot snapshot;
+		mr::services::MRServiceDiagnosticResult result;
+		mr::services::MRServiceDiagnosticEntry diagnostic;
+		int viewColumn = 12;
+		int viewRow = 1;
+
+		if (!diagnosticEditor.replaceBufferText("int main() {\n    int i;\n}\n")) {
+			failureReason = "diagnostic anchor self-test could not seed editor text.";
+			return false;
+		}
+		diagnostic.reportedRange.start.line = 1;
+		diagnostic.reportedRange.start.character = 160;
+		diagnostic.reportedRange.end = diagnostic.reportedRange.start;
+		result.diagnostics.push_back(diagnostic);
+		snapshot.results.diagnostics.push_back(result);
+		if (!lspDiagnosticSidekickAnchor(snapshot, diagnosticEditor, viewColumn, viewRow)) {
+			failureReason = "diagnostic anchor must tolerate out-of-line reported column.";
+			return false;
+		}
+		if (viewColumn != 12) {
+			failureReason = "diagnostic anchor must preserve request column when reported column is outside the line.";
+			return false;
+		}
+		if (viewRow != 2) {
+			failureReason = "diagnostic anchor must keep the reported diagnostic line when reported column is outside the line.";
+			return false;
+		}
+	}
+	if (!MRKeymapActionCatalog::contains("MR_SNIPPET_PLACEHOLDER_NEXT") || !MRKeymapActionCatalog::contains("MR_SNIPPET_PLACEHOLDER_PREVIOUS")) {
+		failureReason = "snippet placeholder actions missing from action catalog.";
+		return false;
 	}
 	failureReason.clear();
 	return true;
@@ -1478,6 +1644,7 @@ mr::services::MRServiceTextPosition serviceTextPositionFromLsp(const mr::lsp::Ls
 }
 
 void suppressLspAutoHoverForExplicitSidekick(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspEditorRequestTarget &target, int quietMilliseconds);
+void suppressLspAutoHoverForCompletion(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspEditorRequestTarget &target);
 void activateLspSignatureHelp(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspSignatureCallContext &context, const std::string &requestId);
 void clearLspSignatureHelpState(MREditWindow *win);
 
@@ -1656,6 +1823,7 @@ bool requestLspEditorCommandForWindow(MREditWindow *win, mr::services::MRLspServ
 		return true;
 	}
 	g_lspAppService.clearMainFile();
+	if (command == mr::services::MRLspServiceCommandId::Complete) suppressLspAutoHoverForCompletion(document, win, *serviceTarget);
 	if (!g_lspAppService.requestCurrentEditorCommand(profile, document, *editor, command, position, completionTriggerCandidate, errorMessage)) {
 		g_lspLastRequestState = "failed";
 		g_lspLastError = errorMessage;
@@ -1704,6 +1872,8 @@ void forgetLspAutoHoverForWindow(MREditWindow *win, bool retirePendingRequest) {
 	g_lspAutoHover.requested = false;
 	g_lspAutoHover.requestId.clear();
 	g_lspAutoHover.sidekickOpen = false;
+	g_lspAutoHover.dismissedForKey = false;
+	g_lspAutoHover.quietUntil = std::chrono::steady_clock::time_point();
 }
 
 void forgetLspAutoHover(bool retirePendingRequest) {
@@ -1787,6 +1957,22 @@ void suppressLspAutoHoverForExplicitSidekick(const mr::services::MRWorkspaceDocu
 	armLspAutoHoverForPosition(document, win->bufferId(), target.offset, target.position, mousePosition, mouseValid, now);
 	g_lspAutoHover.dismissedForKey = true;
 	g_lspAutoHover.quietUntil = quietMilliseconds > 0 ? now + std::chrono::milliseconds(quietMilliseconds) : now;
+	g_lspAutoHover.sidekickOpen = false;
+}
+
+void suppressLspAutoHoverForCompletion(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspEditorRequestTarget &target) {
+	TPoint mousePosition;
+	const bool mouseValid = currentLspHoverMousePosition(mousePosition);
+	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+	int quietMilliseconds = configuredLanguageServerHoverDwellMs();
+
+	if (quietMilliseconds < 250) quietMilliseconds = 250;
+	if (win == nullptr) return;
+	if ((g_lspAutoHover.sidekickOpen || mrHasReadOnlySidekickForParent(win)) && g_lspAutoHover.bufferId == win->bufferId()) mrDropSidekickForParent(win);
+	retirePendingLspAutoHoverRequest();
+	armLspAutoHoverForPosition(document, win->bufferId(), target.offset, target.position, mousePosition, mouseValid, now);
+	g_lspAutoHover.dismissedForKey = true;
+	g_lspAutoHover.quietUntil = now + std::chrono::milliseconds(quietMilliseconds);
 	g_lspAutoHover.sidekickOpen = false;
 }
 
@@ -2681,11 +2867,19 @@ bool lspDiagnosticSidekickAnchor(const mr::services::MRLspPositionServiceSnapsho
 	for (const mr::services::MRServiceDiagnosticResult &result : snapshot.results.diagnostics) {
 		for (const mr::services::MRServiceDiagnosticEntry &diagnostic : result.diagnostics) {
 			std::size_t offset = 0;
-
-			if (!lspTextOffsetForPosition(currentText, diagnostic.reportedRange.start, offset)) continue;
-			const std::size_t lineStart = editor.lineStartOffset(offset);
-			const std::size_t lineIndex = editor.lineIndexOfOffset(offset);
+			std::size_t lineStart = 0;
+			const int requestedViewColumn = viewColumn;
+			if (diagnostic.reportedRange.start.line < 0) continue;
+			const std::size_t lineIndex = static_cast<std::size_t>(diagnostic.reportedRange.start.line);
+			if (lineIndex >= editor.bufferModel().lineCount()) continue;
 			const std::size_t visibleLine = editor.visibleLineForDocumentLine(lineIndex);
+
+			if (!lspTextOffsetForPosition(currentText, diagnostic.reportedRange.start, offset)) {
+				viewColumn = std::max(1, requestedViewColumn);
+				viewRow = static_cast<int>(visibleLine) - editor.delta.y + 1;
+				return true;
+			}
+			lineStart = editor.bufferModel().lineStartByIndex(lineIndex);
 			viewColumn = editor.charColumn(lineStart, offset) - editor.delta.x + 1;
 			viewRow = static_cast<int>(visibleLine) - editor.delta.y + 1;
 			return true;
@@ -2773,6 +2967,10 @@ bool lspSignatureHelpTargetForResult(const mr::services::MRServiceSignatureHelpR
 	return true;
 }
 
+int lspReadOnlyHoverAnchorRow(int anchorViewRow, MRReadOnlySidekickPlacement, bool) noexcept {
+	return anchorViewRow;
+}
+
 std::string buildLspSignatureHelpSidekickText(const mr::services::MRServiceSignatureHelpResult &result) {
 	std::vector<std::string> lines;
 	const std::size_t textWidth = 72;
@@ -2802,6 +3000,8 @@ bool showLspHoverSidekick(const mr::services::MRServiceHoverResult &result) {
 	int anchorViewColumn = 1;
 	int anchorViewRow = 1;
 	int preferredViewColumn = 1;
+	bool diagnosticHover = false;
+	const MRReadOnlySidekickPlacement placement = configuredLspReadOnlySidekickPlacement();
 
 	if (lspModalViewActive()) return false;
 	if (TProgram::deskTop == nullptr || editor == nullptr) return false;
@@ -2814,7 +3014,7 @@ bool showLspHoverSidekick(const mr::services::MRServiceHoverResult &result) {
 
 		if (!snapshot.results.diagnostics.empty()) {
 			text = buildLspDiagnosticSidekickText(snapshot);
-			if (!text.empty()) static_cast<void>(lspDiagnosticSidekickAnchor(snapshot, *editor, anchorViewColumn, anchorViewRow));
+			diagnosticHover = !text.empty();
 		}
 	}
 	if (text.empty()) text = buildLspHoverSidekickText(result);
@@ -2823,7 +3023,8 @@ bool showLspHoverSidekick(const mr::services::MRServiceHoverResult &result) {
 		return true;
 	}
 	preferredViewColumn = anchorViewColumn;
-	if (mrOpenReadOnlySidekickAt(win, text, "LSP hover", anchorViewColumn, anchorViewRow, preferredViewColumn, configuredLspReadOnlySidekickPlacement())) {
+	anchorViewRow = lspReadOnlyHoverAnchorRow(anchorViewRow, placement, diagnosticHover);
+	if (mrOpenReadOnlySidekickAt(win, text, "LSP hover", anchorViewColumn, anchorViewRow, preferredViewColumn, placement)) {
 		g_lspAutoHover.sidekickOpen = true;
 		g_lspAutoHover.bufferId = win->bufferId();
 		return true;
@@ -2839,6 +3040,7 @@ bool showLspSignatureHelpSidekick(const mr::services::MRServiceSignatureHelpResu
 	int anchorViewColumn = 1;
 	int anchorViewRow = 1;
 	int preferredViewColumn = 1;
+	const MRReadOnlySidekickPlacement placement = configuredLspReadOnlySidekickPlacement();
 
 	if (TProgram::deskTop == nullptr || editor == nullptr) return false;
 	if (!currentWindowMatchesLspSignatureHelpResult(win, result)) return false;
@@ -2848,9 +3050,9 @@ bool showLspSignatureHelpSidekick(const mr::services::MRServiceSignatureHelpResu
 		return true;
 	}
 	anchorViewColumn = target.viewColumn;
-	anchorViewRow = target.viewRow;
+	anchorViewRow = lspReadOnlyHoverAnchorRow(target.viewRow, placement, false);
 	preferredViewColumn = anchorViewColumn;
-	return mrOpenReadOnlySidekickAt(win, text, "LSP signature", anchorViewColumn, anchorViewRow, preferredViewColumn, configuredLspReadOnlySidekickPlacement());
+	return mrOpenReadOnlySidekickAt(win, text, "LSP signature", anchorViewColumn, anchorViewRow, preferredViewColumn, placement);
 }
 
 MREditWindow *findLspCompletionTargetWindow(const mr::services::MRServiceCompletionResult &result) {
@@ -2864,116 +3066,86 @@ MREditWindow *findLspCompletionTargetWindow(const mr::services::MRServiceComplet
 	return nullptr;
 }
 
-std::size_t lspSnippetPlaceholderEnd(const std::string &snippet, std::size_t openBrace) {
-	int depth = 0;
-	bool escaped = false;
-
-	for (std::size_t pos = openBrace; pos < snippet.size(); ++pos) {
-		const char ch = snippet[pos];
-
-		if (escaped) {
-			escaped = false;
-			continue;
-		}
-		if (ch == '\\') {
-			escaped = true;
-			continue;
-		}
-		if (ch == '{') {
-			++depth;
-			continue;
-		}
-		if (ch == '}') {
-			--depth;
-			if (depth == 0) return pos;
-		}
-	}
-	return std::string::npos;
-}
-
-bool lspSnippetNumberAt(const std::string &snippet, std::size_t &pos) {
-	const std::size_t start = pos;
-
-	while (pos < snippet.size() && snippet[pos] >= '0' && snippet[pos] <= '9')
-		++pos;
-	return pos > start;
-}
-
-std::string lspCompletionPlainTextFromSnippet(const std::string &snippet) {
-	std::string text;
-
-	for (std::size_t pos = 0; pos < snippet.size();) {
-		const char ch = snippet[pos];
-
-		if (ch == '\\' && pos + 1 < snippet.size()) {
-			const char escaped = snippet[pos + 1];
-
-			if (escaped == '$' || escaped == '}' || escaped == '\\') {
-				text.push_back(escaped);
-				pos += 2;
-				continue;
-			}
-		}
-		if (ch != '$') {
-			text.push_back(ch);
-			++pos;
-			continue;
-		}
-		if (pos + 1 >= snippet.size()) {
-			text.push_back(ch);
-			++pos;
-			continue;
-		}
-		if (snippet[pos + 1] >= '0' && snippet[pos + 1] <= '9') {
-			pos += 2;
-			while (pos < snippet.size() && snippet[pos] >= '0' && snippet[pos] <= '9')
-				++pos;
-			continue;
-		}
-		if (snippet[pos + 1] != '{') {
-			text.push_back(ch);
-			++pos;
-			continue;
-		}
-		const std::size_t close = lspSnippetPlaceholderEnd(snippet, pos + 1);
-		std::size_t bodyStart = pos + 2;
-		std::size_t bodyPos = bodyStart;
-
-		if (close == std::string::npos) {
-			text.push_back(ch);
-			++pos;
-			continue;
-		}
-		if (lspSnippetNumberAt(snippet, bodyPos) && bodyPos < close && snippet[bodyPos] == ':') {
-			text += lspCompletionPlainTextFromSnippet(snippet.substr(bodyPos + 1, close - bodyPos - 1));
-		} else if (lspSnippetNumberAt(snippet, bodyPos) && bodyPos < close && snippet[bodyPos] == '|') {
-			const std::size_t choiceStart = bodyPos + 1;
-			std::size_t choiceEnd = choiceStart;
-
-			while (choiceEnd < close && snippet[choiceEnd] != ',' && snippet[choiceEnd] != '|')
-				++choiceEnd;
-			text += lspCompletionPlainTextFromSnippet(snippet.substr(choiceStart, choiceEnd - choiceStart));
-		} else if (!lspSnippetNumberAt(snippet, bodyStart)) {
-			text += lspCompletionPlainTextFromSnippet(snippet.substr(bodyStart, close - bodyStart));
-		}
-		pos = close + 1;
-	}
-	return text;
-}
-
 std::string lspCompletionRawReplacementTextForItem(const mr::services::MRServiceCompletionItem &item) {
 	std::string text;
 
 	if (item.hasTextEdit) text = item.textEditNewText;
 	else
 		text = !item.insertText.empty() ? item.insertText : item.label;
-	if (item.hasInsertTextFormat && item.insertTextFormat == 2) return lspCompletionPlainTextFromSnippet(text);
 	return text;
 }
 
-bool applyLspCompletionItem(MREditWindow *targetWindow, MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, const mr::services::MRServiceCompletionItem &item, const std::string &insertText, std::string &errorMessage) {
-	std::size_t start = 0;
-	std::size_t end = 0;
+bool lspCompletionSnippetConsumesOpenParen(MRFileEditor &editor, const mr::services::MRServiceCompletionItem &item, std::size_t start, std::size_t end) {
+	std::string identifier;
+	std::string replacement;
+	std::size_t pos = 0;
+
+	if (!item.hasInsertTextFormat || item.insertTextFormat != 2) return false;
+	if (end >= editor.bufferLength() || editor.charAtOffset(end) != '(') return false;
+	if (start >= end) return false;
+	for (std::size_t index = start; index < end; ++index)
+		identifier.push_back(editor.charAtOffset(index));
+	replacement = lspCompletionRawReplacementTextForItem(item);
+	if (replacement.compare(0, identifier.size(), identifier) != 0) return false;
+	pos = identifier.size();
+	while (pos < replacement.size() && std::isspace(static_cast<unsigned char>(replacement[pos])) != 0)
+		++pos;
+	return pos < replacement.size() && replacement[pos] == '(';
+}
+
+VirtualMachine::Value mrSnippetIntValue(int value) {
+	VirtualMachine::Value result;
+
+	result.type = TYPE_INT;
+	result.i = value;
+	return result;
+}
+
+VirtualMachine::Value mrSnippetStringValue(const std::string &value) {
+	VirtualMachine::Value result;
+
+	result.type = TYPE_STR;
+	result.s = value;
+	return result;
+}
+
+void mrSnippetWriteInt(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &hash, const std::string &key, int value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+
+	mrvmHashWriteValue(store, store, hash, key, mrSnippetIntValue(value));
+}
+
+void mrSnippetWriteString(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &hash, const std::string &key, const std::string &value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+
+	mrvmHashWriteValue(store, store, hash, key, mrSnippetStringValue(value));
+}
+
+bool mrSnippetReadValue(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &hash, const std::string &key, VirtualMachine::Value &value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+
+	if (!mrvmHashContainsValue(store, store, hash, key)) return false;
+	value = mrvmHashReadValue(store, store, hash, key);
+	return true;
+}
+
+bool mrSnippetReadInt(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &hash, const std::string &key, int &value) {
+	VirtualMachine::Value stored;
+
+	if (!mrSnippetReadValue(runtimeKv, hash, key, stored) || stored.type != TYPE_INT) return false;
+	value = stored.i;
+	return true;
+}
+
+bool mrSnippetReadString(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &hash, const std::string &key, std::string &value) {
+	VirtualMachine::Value stored;
+
+	if (!mrSnippetReadValue(runtimeKv, hash, key, stored) || stored.type != TYPE_STR) return false;
+	value = stored.s;
+	return true;
+}
+
+bool lspCompletionEditRange(MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, const mr::services::MRServiceCompletionItem &item, std::size_t &start, std::size_t &end, std::string &errorMessage) {
 	std::size_t requestOffset = 0;
 	std::size_t identifierStart = 0;
 	std::size_t identifierEnd = 0;
@@ -3009,8 +3181,23 @@ bool applyLspCompletionItem(MREditWindow *targetWindow, MRFileEditor &editor, co
 		errorMessage = "LSP completion edit range is reversed.";
 		return false;
 	}
-	if (start > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || end > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || insertText.size() > static_cast<std::size_t>(std::numeric_limits<uint>::max())) {
+	if (start > static_cast<std::size_t>(std::numeric_limits<uint>::max()) || end > static_cast<std::size_t>(std::numeric_limits<uint>::max())) {
 		errorMessage = "LSP completion edit range is too large.";
+		return false;
+	}
+	if (lspCompletionSnippetConsumesOpenParen(editor, item, start, end)) ++end;
+	errorMessage.clear();
+	return true;
+}
+
+bool applyLspCompletionItem(MREditWindow *targetWindow, MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, const mr::services::MRServiceCompletionItem &item, const std::string &insertText, std::string &errorMessage) {
+	std::size_t start = 0;
+	std::size_t end = 0;
+
+	static_cast<void>(targetWindow);
+	if (!lspCompletionEditRange(editor, result, item, start, end, errorMessage)) return false;
+	if (insertText.size() > static_cast<std::size_t>(std::numeric_limits<uint>::max())) {
+		errorMessage = "LSP completion edit text is too large.";
 		return false;
 	}
 	if (!editor.replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), insertText.data(), static_cast<uint>(insertText.size()))) {
@@ -3021,6 +3208,124 @@ bool applyLspCompletionItem(MREditWindow *targetWindow, MRFileEditor &editor, co
 	return true;
 }
 
+bool writeMacroSnippetRequest(MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, const mr::services::MRServiceCompletionItem &item, const std::string &insertText, std::size_t replaceStart, std::size_t replaceEnd, std::string &errorMessage) {
+	std::size_t requestOffset = 0;
+	const std::string currentText = editor.snapshotText();
+
+	if (!result.hasRequestPosition || !lspTextOffsetForPosition(currentText, result.requestPosition, requestOffset)) {
+		errorMessage = "LSP completion request position is outside the document.";
+		return false;
+	}
+	if (replaceStart > static_cast<std::size_t>(std::numeric_limits<int>::max()) || replaceEnd > static_cast<std::size_t>(std::numeric_limits<int>::max()) || requestOffset > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+		errorMessage = "LSP snippet request range is too large.";
+		return false;
+	}
+	{
+		std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+		VirtualMachine::Value root = runtimeKv.ensureRoot("MACROSNIPPETS");
+		VirtualMachine::Value request = runtimeKv.replaceChild(root, "request");
+		VirtualMachine::Value sidekick = runtimeKv.replaceChild(root, "sidekick");
+
+		mrSnippetWriteInt(runtimeKv, request, "available", 1);
+		mrSnippetWriteString(runtimeKv, request, "label", item.label);
+		mrSnippetWriteString(runtimeKv, request, "detail", item.detail);
+		mrSnippetWriteString(runtimeKv, request, "documentation", item.documentation);
+		mrSnippetWriteString(runtimeKv, request, "insertText", item.insertText);
+		mrSnippetWriteString(runtimeKv, request, "textEditNewText", item.textEditNewText);
+		mrSnippetWriteString(runtimeKv, request, "replacementText", insertText);
+		mrSnippetWriteString(runtimeKv, request, "token", lspIdentifierTextAroundOffset(editor, requestOffset));
+		mrSnippetWriteString(runtimeKv, request, "rawLspCompletionItemJson", item.rawLspCompletionItemJson);
+		mrSnippetWriteInt(runtimeKv, request, "hasInsertTextFormat", item.hasInsertTextFormat ? 1 : 0);
+		mrSnippetWriteInt(runtimeKv, request, "insertTextFormat", item.hasInsertTextFormat ? item.insertTextFormat : 1);
+		mrSnippetWriteInt(runtimeKv, request, "hasTextEdit", item.hasTextEdit ? 1 : 0);
+		mrSnippetWriteInt(runtimeKv, request, "replaceStart", static_cast<int>(replaceStart));
+		mrSnippetWriteInt(runtimeKv, request, "replaceEnd", static_cast<int>(replaceEnd));
+		mrSnippetWriteInt(runtimeKv, request, "offset", static_cast<int>(requestOffset));
+		mrSnippetWriteInt(runtimeKv, request, "line", result.requestPosition.line);
+		mrSnippetWriteInt(runtimeKv, request, "character", result.requestPosition.character);
+		mrSnippetWriteInt(runtimeKv, sidekick, "available", 0);
+		mrSnippetWriteString(runtimeKv, sidekick, "text", std::string());
+		mrSnippetWriteInt(runtimeKv, sidekick, "placeholderCount", 0);
+	}
+	errorMessage.clear();
+	return true;
+}
+
+bool readMacroSnippetSidekick(std::string &text, std::vector<MRSidekickSpan> &placeholders, std::string &errorMessage) {
+	int available = 0;
+	int placeholderCount = 0;
+	VirtualMachine::Value root;
+
+	text.clear();
+	placeholders.clear();
+	{
+		std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+
+		if (!runtimeKv.findRoot("MACROSNIPPETS", root)) {
+			errorMessage = "snippet middleware did not publish a sidekick.";
+			return false;
+		}
+		VirtualMachine::Value sidekick;
+		if (!runtimeKv.findChild(root, "sidekick", sidekick)) {
+			errorMessage = "snippet middleware did not publish a sidekick.";
+			return false;
+		}
+		if (!mrSnippetReadInt(runtimeKv, sidekick, "available", available) || available == 0) {
+			errorMessage = "snippet middleware did not provide an available sidekick.";
+			return false;
+		}
+		if (!mrSnippetReadString(runtimeKv, sidekick, "text", text)) {
+			errorMessage = "snippet middleware did not provide sidekick text.";
+			return false;
+		}
+		static_cast<void>(mrSnippetReadInt(runtimeKv, sidekick, "placeholderCount", placeholderCount));
+		for (int index = 1; index <= placeholderCount; ++index) {
+			int start = 0;
+			int end = 0;
+			const std::string suffix = std::to_string(index);
+
+			if (!mrSnippetReadInt(runtimeKv, sidekick, "placeholderStart" + suffix, start)) continue;
+			if (!mrSnippetReadInt(runtimeKv, sidekick, "placeholderEnd" + suffix, end)) continue;
+			if (start < 0 || end < start || static_cast<std::size_t>(end) > text.size()) continue;
+			placeholders.push_back(MRSidekickSpan{static_cast<std::size_t>(start), static_cast<std::size_t>(end)});
+		}
+	}
+	errorMessage.clear();
+	return true;
+}
+
+bool runLspSnippetMiddleware(MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, const mr::services::MRServiceCompletionItem &item, const std::string &insertText, std::size_t replaceStart, std::size_t replaceEnd, std::string &sidekickText, std::vector<MRSidekickSpan> &placeholders, std::string &errorMessage) {
+	if (result.lspMiddlewarePath.empty()) {
+		errorMessage = "no LSP snippet middleware configured.";
+		return false;
+	}
+	if (!writeMacroSnippetRequest(editor, result, item, insertText, replaceStart, replaceEnd, errorMessage)) return false;
+	if (!runMacroFileByPathOnUiThread(result.lspMiddlewarePath.c_str(), &errorMessage, false)) {
+		if (errorMessage.empty()) errorMessage = "snippet middleware execution failed.";
+		return false;
+	}
+	return readMacroSnippetSidekick(sidekickText, placeholders, errorMessage);
+}
+
+bool lspSnippetSidekickAnchor(MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, int &viewColumn, int &viewRow) {
+	std::size_t offset = 0;
+	const std::string currentText = editor.snapshotText();
+
+	if (!result.hasRequestPosition || !lspTextOffsetForPosition(currentText, result.requestPosition, offset)) return false;
+	const std::size_t lineStart = editor.lineStartOffset(offset);
+	const std::size_t lineIndex = editor.lineIndexOfOffset(offset);
+	const std::size_t visibleLine = editor.visibleLineForDocumentLine(lineIndex);
+	viewColumn = editor.charColumn(lineStart, offset) - editor.delta.x + 1;
+	viewRow = static_cast<int>(visibleLine) - editor.delta.y + 1;
+	return true;
+}
+
+bool lspCompletionShouldShowChoiceDialog(std::size_t itemCount) noexcept {
+	return itemCount > 1;
+}
+
 bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &result) {
 	MRDialogFoundation *dialog = nullptr;
 	TScrollBar *scrollBar = nullptr;
@@ -3029,9 +3334,14 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 	MRFileEditor *targetEditor = nullptr;
 	ushort dialogResult = cmCancel;
 	std::size_t selectedIndex = 0;
+	std::size_t replaceStart = 0;
+	std::size_t replaceEnd = 0;
 	std::string insertText;
+	std::string sidekickText;
 	std::string errorMessage;
+	std::vector<MRSidekickSpan> placeholders;
 	mr::services::MRServiceCompletionItem selectedItem;
+	bool snippetCommitted = false;
 	const short width = 96;
 	short visibleRows = 0;
 	short height = 0;
@@ -3055,29 +3365,34 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 		return true;
 	}
 
-	visibleRows = static_cast<short>(std::max<int>(5, std::min<int>(static_cast<int>(result.items.size()), 14)));
-	height = static_cast<short>(visibleRows + 6);
-	buttonY = static_cast<short>(height - 3);
-	dialog = mr::dialogs::createScrollableDialog("LSP COMPLETION", width, height);
-	dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select completion:"));
-	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
-	dialog->insert(scrollBar);
-	listView = new LspCompletionListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.items);
-	listView->focusItemNum(0);
-	dialog->insert(listView);
-	{
-		const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~I~nsert", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
-		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
-	}
-	dialog->finalizeLayout();
-	dialogResult = TProgram::deskTop->execView(dialog);
-	if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < result.items.size()) {
-		const mr::services::MRServiceCompletionItem &item = result.items[selectedIndex];
+	if (!lspCompletionShouldShowChoiceDialog(result.items.size())) {
+		selectedItem = result.items.front();
+		dialogResult = cmOK;
+	} else {
+		visibleRows = static_cast<short>(std::max<int>(5, std::min<int>(static_cast<int>(result.items.size()), 14)));
+		height = static_cast<short>(visibleRows + 6);
+		buttonY = static_cast<short>(height - 3);
+		dialog = mr::dialogs::createScrollableDialog("LSP COMPLETION", width, height);
+		dialog->insert(new TStaticText(TRect(2, 1, width - 2, 2), "Select completion:"));
+		scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
+		dialog->insert(scrollBar);
+		listView = new LspCompletionListView(TRect(2, 2, width - 3, height - 4), scrollBar, result.items);
+		listView->focusItemNum(0);
+		dialog->insert(listView);
+		{
+			const std::array<mr::dialogs::DialogButtonSpec, 2> buttons = {mr::dialogs::DialogButtonSpec{"~I~nsert", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal}};
+			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
+			mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
+		}
+		dialog->finalizeLayout();
+		dialogResult = TProgram::deskTop->execView(dialog);
+		if (dialogResult == cmOK && listView != nullptr && listView->selectedIndex(selectedIndex) && selectedIndex < result.items.size()) {
+			const mr::services::MRServiceCompletionItem &item = result.items[selectedIndex];
 
-		selectedItem = item;
+			selectedItem = item;
+		}
+		TObject::destroy(dialog);
 	}
-	TObject::destroy(dialog);
 
 	if (dialogResult != cmOK || selectedItem.label.empty()) return true;
 	{
@@ -3099,10 +3414,32 @@ bool showLspCompletionDialog(const mr::services::MRServiceCompletionResult &resu
 	insertText = lspCompletionRawReplacementTextForItem(selectedItem);
 	if (insertText.empty()) return true;
 	static_cast<void>(activateLspTargetWindow(targetWindow));
+	if (!lspCompletionEditRange(*targetEditor, result, selectedItem, replaceStart, replaceEnd, errorMessage)) {
+		postLspWarning("LSP completion insert failed: " + errorMessage);
+		return true;
+	}
+	if (selectedItem.hasInsertTextFormat && selectedItem.insertTextFormat == 2) {
+		int anchorViewColumn = targetEditor->currentViewColumn();
+		int anchorViewRow = targetEditor->currentViewRow();
+
+		if (!runLspSnippetMiddleware(*targetEditor, result, selectedItem, insertText, replaceStart, replaceEnd, sidekickText, placeholders, errorMessage)) {
+			postLspWarning("LSP snippet middleware failed: " + errorMessage);
+			return true;
+		}
+		static_cast<void>(lspSnippetSidekickAnchor(*targetEditor, result, anchorViewColumn, anchorViewRow));
+		if (!mrOpenSnippetSidekickAt(targetWindow, sidekickText, "Snippet SideKick", replaceStart, replaceEnd, placeholders, anchorViewColumn, anchorViewRow, snippetCommitted)) {
+			postLspWarning("LSP snippet sidekick failed.");
+			return true;
+		}
+		if (snippetCommitted) forgetLspAutoHoverForWindow(targetWindow, true);
+		postLspInfo(snippetCommitted ? "LSP snippet inserted." : "LSP snippet cancelled.");
+		return true;
+	}
 	if (!applyLspCompletionItem(targetWindow, *targetEditor, result, selectedItem, insertText, errorMessage)) {
 		postLspWarning("LSP completion insert failed: " + errorMessage);
 		return true;
 	}
+	forgetLspAutoHoverForWindow(targetWindow, true);
 	postLspInfo("LSP completion inserted: " + firstDisplayLine(insertText, 80));
 	return true;
 }
@@ -5763,6 +6100,14 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 					return handleCompilerProblemsNavigation(window, true);
 				case KeymapCustomAction::CompilerProblemsPrevious:
 					return handleCompilerProblemsNavigation(window, false);
+				case KeymapCustomAction::SnippetPlaceholderNext:
+					if (mrMoveSnippetPlaceholderForParent(window, 1)) return true;
+					postLspWarning("No active snippet sidekick.");
+					return true;
+				case KeymapCustomAction::SnippetPlaceholderPrevious:
+					if (mrMoveSnippetPlaceholderForParent(window, -1)) return true;
+					postLspWarning("No active snippet sidekick.");
+					return true;
 				case KeymapCustomAction::None:
 					return false;
 			}
@@ -5851,17 +6196,17 @@ void pumpLspAutoHoverDwell() {
 	}
 	if (g_lspAutoHover.requested) return;
 	if (now - g_lspAutoHover.stableSince < std::chrono::milliseconds(configuredLanguageServerHoverDwellMs())) return;
-	if (channels.diagnostics) {
-		const mr::services::MRLspPositionServiceSnapshot snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(target.position));
-		const std::string diagnosticText = buildLspDiagnosticSidekickText(snapshot);
-		int diagnosticViewColumn = target.viewColumn;
-		int diagnosticViewRow = target.viewRow;
-
-		if (!diagnosticText.empty()) static_cast<void>(lspDiagnosticSidekickAnchor(snapshot, *editor, diagnosticViewColumn, diagnosticViewRow));
-		if (!diagnosticText.empty() &&
-		    mrOpenReadOnlySidekickAt(win, diagnosticText, "LSP hover", diagnosticViewColumn, diagnosticViewRow, diagnosticViewColumn, configuredLspReadOnlySidekickPlacement())) {
-			g_lspAutoHover.sidekickOpen = true;
-			g_lspAutoHover.bufferId = win->bufferId();
+		if (channels.diagnostics) {
+			const mr::services::MRLspPositionServiceSnapshot snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(target.position));
+			const std::string diagnosticText = buildLspDiagnosticSidekickText(snapshot);
+			int diagnosticViewColumn = target.viewColumn;
+			int diagnosticViewRow = target.viewRow;
+			const MRReadOnlySidekickPlacement placement = configuredLspReadOnlySidekickPlacement();
+			diagnosticViewRow = lspReadOnlyHoverAnchorRow(diagnosticViewRow, placement, true);
+			if (!diagnosticText.empty() &&
+			    mrOpenReadOnlySidekickAt(win, diagnosticText, "LSP hover", diagnosticViewColumn, diagnosticViewRow, diagnosticViewColumn, placement)) {
+				g_lspAutoHover.sidekickOpen = true;
+				g_lspAutoHover.bufferId = win->bufferId();
 			mrLogMessage("LSP diagnostic hover sidekick opened after dwell.");
 			return;
 		}

@@ -17,7 +17,6 @@ struct MRLspServerCandidate {
 	std::string profileName;
 	std::string executableName;
 	std::vector<std::string> arguments;
-	std::string middlewarePath;
 };
 
 [[nodiscard]] bool buildLspServerProfileFromEnvironment(MRLspServerProfile &profile);

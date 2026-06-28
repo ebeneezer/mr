@@ -26,6 +26,7 @@ struct MRSettingsLoadReport {
 	std::size_t ignoredAssignmentCount = 0;
 	std::size_t duplicateAssignmentCount = 0;
 	std::size_t defaultedCanonicalKeyCount = 0;
+	std::vector<std::string> defaultedCanonicalKeys;
 
 	[[nodiscard]] bool normalized() const noexcept {
 		return flags != None;

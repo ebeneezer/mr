@@ -793,6 +793,7 @@ END;
 END_MACRO;
 
 $MACRO SHOW_ANALOG_CLOCK FROM EDIT;
+LOAD_MACRO_FILE('utils/analogclocktick.mrmac');
 SET_GLOBAL_INT('ANALOGCLOCK_OPEN_REQUEST', GLOBAL_INT('ANALOGCLOCK_OPEN_REQUEST') + 1);
 END_MACRO;
 
@@ -1222,90 +1223,3 @@ WHILE Row <= Rows DO
     Row := Row + 1;
 END;
 END_MACRO;
-
-$CLOSURE AnalogClockTick;
-DEF_TICK(1000);
-DEF_INT(Active, Displayed, SeenOpenRequest, OpenRequest, Width, Height, GeometryVersion, LastGeometryVersion, LiveWidth, LiveHeight, NeedsFullUpdate);
-DEF_HASH(ModelessRoot, ModelessWindows, ClockWindow, LiveGeometry);
-
-OpenRequest := GLOBAL_INT('ANALOGCLOCK_OPEN_REQUEST');
-IF OpenRequest <> SeenOpenRequest THEN
-    SeenOpenRequest := OpenRequest;
-    IF Width <= 0 THEN
-        Width := 42;
-        Height := 19;
-    END;
-    Active := TRUE;
-    Displayed := FALSE;
-    NeedsFullUpdate := TRUE;
-END;
-
-IF Active <> 0 THEN
-    IF Displayed <> 0 THEN
-        ModelessRoot := GLOBAL_HASH('MODELESSUI');
-        IF EXISTS(ModelessRoot, 'windows') = 1 THEN
-            ModelessWindows := ModelessRoot['windows'];
-            IF EXISTS(ModelessWindows, 'ANALOGCLOCK') = 1 THEN
-                ClockWindow := ModelessWindows['ANALOGCLOCK'];
-                IF EXISTS(ClockWindow, 'liveGeometry') = 1 THEN
-                    LiveGeometry := ClockWindow['liveGeometry'];
-                    GeometryVersion := LiveGeometry['geometryVersion'];
-                    IF GeometryVersion <> LastGeometryVersion THEN
-                        LastGeometryVersion := GeometryVersion;
-                        LiveWidth := LiveGeometry['width'];
-                        LiveHeight := LiveGeometry['height'];
-                        IF LiveWidth >= 24 THEN
-                            Width := LiveWidth;
-                        END;
-                        IF LiveHeight >= 11 THEN
-                            Height := LiveHeight;
-                        END;
-                        NeedsFullUpdate := TRUE;
-                    END;
-                ELSE
-                    Active := FALSE;
-                    Displayed := FALSE;
-                END;
-            ELSE
-                Active := FALSE;
-                Displayed := FALSE;
-            END;
-        ELSE
-            Active := FALSE;
-            Displayed := FALSE;
-        END;
-    END;
-END;
-
-IF Active <> 0 THEN
-    SET_GLOBAL_INT('ANALOGCLOCK_WINDOW_WIDTH', Width);
-    SET_GLOBAL_INT('ANALOGCLOCK_WINDOW_HEIGHT', Height);
-    IF Displayed <> 0 THEN
-        IF NeedsFullUpdate <> 0 THEN
-            RUN_MACRO('AnalogClockBuildModelessProjection');
-            UI_MODELESS_UPDATE('AnalogClock');
-            NeedsFullUpdate := FALSE;
-        ELSE
-            RUN_MACRO('AnalogClockUpdateModeless');
-        END;
-    ELSE
-        RUN_MACRO('AnalogClockShowModeless');
-        NeedsFullUpdate := FALSE;
-    END;
-    Displayed := TRUE;
-    ModelessRoot := GLOBAL_HASH('MODELESSUI');
-    IF EXISTS(ModelessRoot, 'windows') = 1 THEN
-        ModelessWindows := ModelessRoot['windows'];
-        IF EXISTS(ModelessWindows, 'ANALOGCLOCK') = 1 THEN
-            ClockWindow := ModelessWindows['ANALOGCLOCK'];
-            IF EXISTS(ClockWindow, 'liveGeometry') = 1 THEN
-                LiveGeometry := ClockWindow['liveGeometry'];
-                GeometryVersion := LiveGeometry['geometryVersion'];
-                IF GeometryVersion > 0 THEN
-                    LastGeometryVersion := GeometryVersion;
-                END;
-            END;
-        END;
-    END;
-END;
-END_CLOSURE;

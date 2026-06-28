@@ -2,7 +2,8 @@
 #include "MRSettingsSourceModel.hpp"
 
 #include <algorithm>
-#include <regex>
+#include <array>
+#include <cctype>
 #include <set>
 #include <utility>
 
@@ -30,62 +31,119 @@ std::string joinStrings(const std::vector<std::string> &values, std::string_view
 	return out;
 }
 
+namespace {
+
+bool asciiEqualAt(std::string_view source, std::size_t pos, std::string_view token) {
+	if (pos + token.size() > source.size()) return false;
+	for (std::size_t i = 0; i < token.size(); ++i) {
+		const unsigned char lhs = static_cast<unsigned char>(source[pos + i]);
+		const unsigned char rhs = static_cast<unsigned char>(token[i]);
+
+		if (std::toupper(lhs) != std::toupper(rhs)) return false;
+	}
+	return true;
+}
+
+void skipSettingsDirectiveSpace(std::string_view source, std::size_t &pos) {
+	while (pos < source.size()) {
+		const char ch = source[pos];
+
+		if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') return;
+		++pos;
+	}
+}
+
+bool parseSettingsQuotedLiteral(std::string_view source, std::size_t &pos, std::string &value) {
+	value.clear();
+	if (pos >= source.size() || source[pos] != '\'') return false;
+	++pos;
+	while (pos < source.size()) {
+		const char ch = source[pos++];
+
+		if (ch == '\'') {
+			if (pos < source.size() && source[pos] == '\'') {
+				value.push_back('\'');
+				++pos;
+				continue;
+			}
+			return true;
+		}
+		value.push_back(ch);
+	}
+	return false;
+}
+
+bool parseSettingsDirectiveAt(std::string_view source, std::size_t pos, std::string_view token, std::size_t argCount, std::array<std::string, 4> &args, std::size_t &endPos) {
+	if (!asciiEqualAt(source, pos, token)) return false;
+
+	pos += token.size();
+	skipSettingsDirectiveSpace(source, pos);
+	if (pos >= source.size() || source[pos] != '(') return false;
+	++pos;
+	skipSettingsDirectiveSpace(source, pos);
+
+	for (std::size_t argIndex = 0; argIndex < argCount; ++argIndex) {
+		if (!parseSettingsQuotedLiteral(source, pos, args[argIndex])) return false;
+		skipSettingsDirectiveSpace(source, pos);
+		if (argIndex + 1 < argCount) {
+			if (pos >= source.size() || source[pos] != ',') return false;
+			++pos;
+			skipSettingsDirectiveSpace(source, pos);
+		}
+	}
+	if (pos >= source.size() || source[pos] != ')') return false;
+	endPos = pos + 1;
+	return true;
+}
+
+} // namespace
+
 MRParsedSettingsDocument parseSettingsDocument(std::string_view source, bool acceptLegacyFeProfileToken) {
-	static const std::regex assignmentPattern("MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
-	static const std::regex profilePattern("MRFEPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
-	static const std::regex compilerProfilePattern("MRCOMPILERPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
-	static const std::regex profilePatternWithLegacy("(?:MRFEPROFILE|MREDITPROFILE)\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
-	const std::regex &activeProfilePattern = acceptLegacyFeProfileToken ? profilePatternWithLegacy : profilePattern;
 	MRParsedSettingsDocument document;
-	std::smatch match;
-	std::string remaining(source);
+	std::array<std::string, 4> args;
 
-	while (std::regex_search(remaining, match, assignmentPattern)) {
-		if (match.size() >= 3) {
+	for (std::size_t pos = 0; pos < source.size(); ++pos) {
+		std::size_t endPos = pos;
+
+		if (parseSettingsDirectiveAt(source, pos, "MRSETUP", 2, args, endPos)) {
 			MRParsedSettingsAssignment assignment;
-			assignment.key = upperAscii(trimAscii(match[1].str()));
-			assignment.value = unescapeMrmacSingleQuotedLiteral(match[2].str());
+			assignment.key = upperAscii(trimAscii(args[0]));
+			assignment.value = args[1];
 			document.assignments.push_back(std::move(assignment));
-		}
-		remaining = match.suffix().str();
-	}
-
-	remaining.assign(source.data(), source.size());
-	while (std::regex_search(remaining, match, activeProfilePattern)) {
-		if (match.size() >= 5) {
+			pos = endPos - 1;
+			continue;
+		} else if (parseSettingsDirectiveAt(source, pos, "MRFEPROFILE", 4, args, endPos) || (acceptLegacyFeProfileToken && parseSettingsDirectiveAt(source, pos, "MREDITPROFILE", 4, args, endPos))) {
 			MRParsedEditProfileDirective directive;
-			directive.operation = unescapeMrmacSingleQuotedLiteral(match[1].str());
-			directive.profileId = unescapeMrmacSingleQuotedLiteral(match[2].str());
-			directive.arg3 = unescapeMrmacSingleQuotedLiteral(match[3].str());
-			directive.arg4 = unescapeMrmacSingleQuotedLiteral(match[4].str());
+			directive.operation = args[0];
+			directive.profileId = args[1];
+			directive.arg3 = args[2];
+			directive.arg4 = args[3];
 			document.profileDirectives.push_back(std::move(directive));
-		}
-		remaining = match.suffix().str();
-	}
-	remaining.assign(source.data(), source.size());
-	while (std::regex_search(remaining, match, compilerProfilePattern)) {
-		if (match.size() >= 5) {
+			pos = endPos - 1;
+			continue;
+		} else if (parseSettingsDirectiveAt(source, pos, "MRCOMPILERPROFILE", 4, args, endPos)) {
 			MRParsedCompilerProfileDirective directive;
-			directive.operation = unescapeMrmacSingleQuotedLiteral(match[1].str());
-			directive.profileId = unescapeMrmacSingleQuotedLiteral(match[2].str());
-			directive.arg3 = unescapeMrmacSingleQuotedLiteral(match[3].str());
-			directive.arg4 = unescapeMrmacSingleQuotedLiteral(match[4].str());
+			directive.operation = args[0];
+			directive.profileId = args[1];
+			directive.arg3 = args[2];
+			directive.arg4 = args[3];
 			document.compilerProfileDirectives.push_back(std::move(directive));
+			pos = endPos - 1;
 		}
-		remaining = match.suffix().str();
 	}
 	return document;
 }
 
 std::size_t countLegacyFeProfileDirectives(std::string_view source) {
-	static const std::regex legacyProfilePattern("MREDITPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
-	std::smatch match;
-	std::string remaining(source);
+	std::array<std::string, 4> args;
 	std::size_t count = 0;
 
-	while (std::regex_search(remaining, match, legacyProfilePattern)) {
+	for (std::size_t pos = 0; pos < source.size(); ++pos) {
+		std::size_t endPos = pos;
+
+		if (!parseSettingsDirectiveAt(source, pos, "MREDITPROFILE", 4, args, endPos)) continue;
 		++count;
-		remaining = match.suffix().str();
+		pos = endPos - 1;
 	}
 	return count;
 }

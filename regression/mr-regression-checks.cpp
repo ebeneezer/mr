@@ -37,6 +37,7 @@
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/services/MRLspEditorSource.hpp"
+#include "../app/services/MRLspServerProfile.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsEditSetup.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
@@ -3240,8 +3241,64 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 			return false;
 		}
 	}
-	return true;
-}
+	{
+		MREditSetupSettings editSettings = configuredEditSetupSettings();
+		editSettings.indentStyle = "AUTOMATIC";
+		ScopedRegressionEditSetupSettings editSetup(editSettings);
+		MREditWindow window(TRect(0, 0, 80, 16), "free-cursor-enter", 1021);
+		if (!window.replaceTextBuffer("alpha\n\nomega", "free-cursor-enter")) {
+			failureReason = "Unable to seed window editor for free-cursor Enter path.";
+			return false;
+		}
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "Free-cursor Enter path must have an editor.";
+			return false;
+		}
+		const std::size_t emptyLine = editor->nextLineOffset(0);
+		editor->setCursorOffsetAtVisualColumn(emptyLine, 12);
+		if (!sendWindowKey(window, kbEnter)) return false;
+		if (editor->snapshotText() != "alpha\n\n\nomega") {
+			failureReason = "Free-cursor Enter must not materialize padding spaces before newline, got: " + editor->snapshotText();
+			return false;
+		}
+		if (editor->displayedCursorColumn() != 0) {
+			failureReason = "Free-cursor Enter must reset visible cursor column on the inserted blank line.";
+			return false;
+		}
+		if (!window.replaceTextBuffer("alpha\n            \nomega", "free-cursor-enter-spaces")) {
+			failureReason = "Unable to seed window editor for whitespace-only Enter path.";
+			return false;
+		}
+		const std::size_t whitespaceLine = editor->nextLineOffset(0);
+		editor->setCursorOffsetAtVisualColumn(editor->lineEndOffset(whitespaceLine), 12);
+		if (!sendWindowKey(window, kbEnter)) return false;
+		if (editor->snapshotText() != "alpha\n\n\nomega") {
+			failureReason = "Automatic Enter on whitespace-only line must not propagate indentation, got: " + editor->snapshotText();
+			return false;
+		}
+			if (editor->displayedCursorColumn() != 0) {
+				failureReason = "Automatic Enter on whitespace-only line must reset visible cursor column.";
+				return false;
+			}
+			if (!window.replaceTextBuffer("alpha\n        beta\nomega", "automatic-leading-whitespace-enter")) {
+				failureReason = "Unable to seed window editor for leading-whitespace Enter path.";
+				return false;
+			}
+			const std::size_t indentedLine = editor->nextLineOffset(0);
+			editor->setCursorOffset(indentedLine + 4);
+			if (!sendWindowKey(window, kbEnter)) return false;
+			if (editor->snapshotText() != "alpha\n    \n    beta\nomega") {
+				failureReason = "Automatic Enter inside leading whitespace must not duplicate the full line indent, got: " + editor->snapshotText();
+				return false;
+			}
+			if (editor->displayedCursorColumn() != 0) {
+				failureReason = "Automatic Enter inside leading whitespace must leave cursor at start of inserted line.";
+				return false;
+			}
+		}
+		return true;
+	}
 
 bool expectWindowFreeCursorRightPastEol(MREditWindow &window, const char *phase, std::string &failureReason) {
 	MRFileEditor *editor = window.getEditor();
@@ -5962,9 +6019,9 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	    {"sidekick editor highlight", "kMrPaletteSidekickEditorHighlight", kMrPaletteSidekickEditorHighlight, false, true, false, false},
 	    {"context menu", "kMrPaletteContextMenu", kMrPaletteContextMenu, false, false, true, false},
 	    {"context menu selector", "kMrPaletteContextMenuSelector", kMrPaletteContextMenuSelector, false, false, true, false},
-	    {"snippet sidekick frame", "kMrPaletteSnippetSidekickFrame", kMrPaletteSnippetSidekickFrame, false, false, false, true},
+	    {"snippet sidekick frame", "kMrPaletteSnippetSidekickFrame", kMrPaletteSnippetSidekickFrame, false, true, false, false},
 	    {"snippet sidekick text", "kMrPaletteSnippetSidekickText", kMrPaletteSnippetSidekickText, false, true, false, false},
-	    {"snippet placeholder", "kMrPaletteSnippetPlaceholder", kMrPaletteSnippetPlaceholder, false, true, false, false},
+	    {"snippet placeholder", "kMrPaletteSnippetPlaceholder", kMrPaletteSnippetPlaceholder, false, false, false, true},
 	    {"snippet active placeholder", "kMrPaletteSnippetActivePlaceholder", kMrPaletteSnippetActivePlaceholder, false, true, false, false},
 	    {"snippet default text", "kMrPaletteSnippetDefaultText", kMrPaletteSnippetDefaultText, false, true, false, false},
 	};
@@ -6436,15 +6493,15 @@ bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 	}
 
 	const std::size_t rawTextStart = content.find("std::string lspCompletionRawReplacementTextForItem");
-	const std::size_t rawTextEnd = content.find("\nbool applyLspCompletionItem", rawTextStart);
+	const std::size_t rawTextEnd = content.find("\nVirtualMachine::Value mrSnippetIntValue", rawTextStart);
 	if (rawTextStart == std::string::npos || rawTextEnd == std::string::npos) {
 		failureReason = "Unable to isolate lspCompletionRawReplacementTextForItem.";
 		return false;
 	}
 	rawTextBody = content.substr(rawTextStart, rawTextEnd - rawTextStart);
 	if (rawTextBody.find("if (item.hasTextEdit) text = item.textEditNewText;") == std::string::npos || rawTextBody.find("text = !item.insertText.empty() ? item.insertText : item.label;") == std::string::npos ||
-	    rawTextBody.find("return lspCompletionPlainTextFromSnippet(text);") == std::string::npos) {
-		failureReason = "LSP completion replacement text must prefer textEdit, then insertText, then label and normalize snippets to plain text while MRExpand is reset.";
+	    rawTextBody.find("lspCompletionPlainTextFromSnippet") != std::string::npos) {
+		failureReason = "LSP completion replacement text must prefer textEdit, then insertText, then label and keep snippets raw for MRMac middleware.";
 		return false;
 	}
 	{
@@ -6464,14 +6521,15 @@ bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 	}
 
 	const std::size_t applyStart = content.find("bool applyLspCompletionItem", rawTextEnd);
-	const std::size_t applyEnd = content.find("\nbool showLspCompletionDialog", applyStart);
+	const std::size_t applyEnd = content.find("\nbool writeMacroSnippetRequest", applyStart);
 	if (applyStart == std::string::npos || applyEnd == std::string::npos) {
 		failureReason = "Unable to isolate applyLspCompletionItem.";
 		return false;
 	}
 	applyBody = content.substr(applyStart, applyEnd - applyStart);
-	if (applyBody.find("mrScheduleSnippetSidekick") != std::string::npos || applyBody.find("MRExpand") != std::string::npos || applyBody.find("replaceRangeAndSelect") == std::string::npos) {
-		failureReason = "LSP completion must not route through the reset MRExpand snippet sidekick.";
+	if (applyBody.find("mrScheduleSnippetSidekick") != std::string::npos || applyBody.find("MRExpand") != std::string::npos || applyBody.find("replaceRangeAndSelect") == std::string::npos ||
+	    applyBody.find("runLspSnippetMiddleware") != std::string::npos) {
+		failureReason = "Plain LSP completion apply must stay direct and must not route through MRExpand or middleware side effects.";
 		return false;
 	}
 
@@ -6486,12 +6544,171 @@ bool testLspCompletionInsertTextGuard(std::string &failureReason) {
 	const std::size_t dialogDestroy = dialogBody.find("TObject::destroy(dialog)", itemLookup);
 	const std::size_t resolveItem = dialogBody.find("g_lspAppService.resolveCompletionItem(selectedItem, resolvedItem, errorMessage)", dialogDestroy);
 	const std::size_t rawInsert = dialogBody.find("insertText = lspCompletionRawReplacementTextForItem(selectedItem)", resolveItem);
-	const std::size_t editorReplace = dialogBody.find("applyLspCompletionItem(targetWindow, *targetEditor, result, selectedItem, insertText, errorMessage)", rawInsert);
-	if (itemLookup == std::string::npos || dialogDestroy == std::string::npos || resolveItem == std::string::npos || rawInsert == std::string::npos || editorReplace == std::string::npos) {
-		failureReason = "LSP completion dialog must resolve the selected item after the dialog closes, then apply the resolved replacement text.";
+	const std::size_t rangePlan = dialogBody.find("lspCompletionEditRange(*targetEditor, result, selectedItem, replaceStart, replaceEnd, errorMessage)", rawInsert);
+	const std::size_t snippetBranch = dialogBody.find("selectedItem.hasInsertTextFormat && selectedItem.insertTextFormat == 2", rangePlan);
+	const std::size_t middlewareRun = dialogBody.find("runLspSnippetMiddleware(*targetEditor, result, selectedItem, insertText, replaceStart, replaceEnd, sidekickText, placeholders, errorMessage)", snippetBranch);
+	const std::size_t snippetSidekickOpen = dialogBody.find("mrOpenSnippetSidekickAt(targetWindow, sidekickText, \"Snippet SideKick\", replaceStart, replaceEnd, placeholders", middlewareRun);
+	const std::size_t editorReplace = dialogBody.find("applyLspCompletionItem(targetWindow, *targetEditor, result, selectedItem, insertText, errorMessage)", snippetSidekickOpen);
+	if (itemLookup == std::string::npos || dialogDestroy == std::string::npos || resolveItem == std::string::npos || rawInsert == std::string::npos || rangePlan == std::string::npos || snippetBranch == std::string::npos || middlewareRun == std::string::npos || snippetSidekickOpen == std::string::npos || editorReplace == std::string::npos) {
+		failureReason = "LSP completion dialog must resolve, plan the edit range, route snippet items through MRMac middleware and open the snippet sidekick before plain completion apply.";
 		return false;
 	}
 
+	failureReason.clear();
+	return true;
+}
+
+bool testLspSnippetMiddlewareMacroCompileGuard(std::string &failureReason) {
+	const std::string profilePath = absolutePathFromCwd("app/services/MRLspServerProfile.cpp");
+	std::string source;
+	std::string profileSource;
+	std::string ioError;
+	std::vector<std::string> middlewareFileNames;
+	std::map<std::string, std::string> middlewarePaths;
+	std::vector<unsigned char> bytecode;
+	ScopedRegressionMacroDirectory macroDirectory(absolutePathFromCwd("mrmac/macros"));
+
+	middlewareFileNames.push_back("clangd-snippets.mrmac");
+	middlewareFileNames.push_back("clangd-cpp-snippets.mrmac");
+	middlewareFileNames.push_back("digestif-snippets.mrmac");
+
+	{
+		namespace fs = std::filesystem;
+
+		const fs::path macroRoot(configuredMacroDirectoryPath());
+		std::error_code errorCode;
+
+		if (!fs::is_directory(macroRoot, errorCode)) {
+			failureReason = "Configured macro path is not readable for clangd C++ snippet middleware guard.";
+			return false;
+		}
+		for (fs::recursive_directory_iterator it(macroRoot, fs::directory_options::skip_permission_denied, errorCode), end; it != end; it.increment(errorCode)) {
+			if (errorCode) {
+				errorCode.clear();
+				continue;
+			}
+			if (!it->is_regular_file(errorCode)) {
+				errorCode.clear();
+				continue;
+			}
+			const std::string fileName = it->path().filename().string();
+			if (std::find(middlewareFileNames.begin(), middlewareFileNames.end(), fileName) != middlewareFileNames.end() && middlewarePaths.find(fileName) == middlewarePaths.end())
+				middlewarePaths[fileName] = fs::absolute(it->path(), errorCode).generic_string();
+			errorCode.clear();
+		}
+	}
+	for (const std::string &middlewareFileName : middlewareFileNames) {
+		std::map<std::string, std::string>::const_iterator pathIt = middlewarePaths.find(middlewareFileName);
+
+		if (pathIt == middlewarePaths.end()) {
+			failureReason = "Unable to find snippet middleware below MACROPATH: " + middlewareFileName;
+			return false;
+		}
+		if (!readTextFile(pathIt->second, source, ioError)) {
+			failureReason = "Unable to read snippet middleware " + middlewareFileName + ": " + ioError;
+			return false;
+		}
+		bytecode.clear();
+		if (!compileBytecode(source, bytecode, failureReason)) {
+			failureReason = "Snippet middleware must compile " + middlewareFileName + ": " + failureReason;
+			return false;
+		}
+		if (bytecode.empty()) {
+			failureReason = "Snippet middleware compiled to empty bytecode: " + middlewareFileName;
+			return false;
+		}
+	}
+	if (!readTextFile(profilePath, profileSource, ioError)) {
+		failureReason = "Unable to read MRLspServerProfile.cpp for clangd C++ middleware guard: " + ioError;
+		return false;
+	}
+	if (profileSource.find("const char *middlewarePath") != std::string::npos) {
+		failureReason = "Built-in LSP server table must not hardcode middleware paths.";
+		return false;
+	}
+	{
+		std::string root = "/tmp/mr_regression_lsp_middleware_" + std::to_string(static_cast<long>(::getpid()));
+		std::string fakeClangd = root + "/clangd";
+		std::string fakeDigestif = root + "/digestif";
+		mr::services::MRLspServerCandidate candidate;
+		mr::services::MRLspServerProfile profile;
+
+		(void)::mkdir(root.c_str(), 0700);
+		if (!writeTextFile(fakeClangd, "#!/bin/sh\nexit 0\n") || !writeTextFile(fakeDigestif, "#!/bin/sh\nexit 0\n")) {
+			failureReason = "Unable to create fake LSP executables for middleware auto-setup guard.";
+			return false;
+		}
+		(void)::chmod(fakeClangd.c_str(), 0700);
+		(void)::chmod(fakeDigestif.c_str(), 0700);
+		candidate.language = MRSyntaxLanguage::C;
+		candidate.profileName = "probe-c-clangd";
+		candidate.executableName = fakeClangd;
+		if (!mr::services::resolveLspServerCandidate(candidate, profile)) {
+			failureReason = "Unable to resolve C clangd candidate for middleware auto-setup guard.";
+			return false;
+		}
+		if (profile.lspMiddlewarePath.empty() || profile.lspMiddlewarePath.find("clangd-snippets.mrmac") == std::string::npos) {
+			failureReason = "C clangd auto-setup must suggest the C snippet middleware from MACROPATH.";
+			return false;
+		}
+		candidate.language = MRSyntaxLanguage::Cpp;
+		candidate.profileName = "probe-cpp-clangd";
+		candidate.executableName = fakeClangd;
+		if (!mr::services::resolveLspServerCandidate(candidate, profile)) {
+			failureReason = "Unable to resolve C++ clangd candidate for middleware auto-setup guard.";
+			return false;
+		}
+		if (profile.lspMiddlewarePath.empty() || profile.lspMiddlewarePath.find("clangd-cpp-snippets.mrmac") == std::string::npos) {
+			failureReason = "C++ clangd auto-setup must suggest the C++ snippet middleware from MACROPATH.";
+			return false;
+		}
+		candidate.language = MRSyntaxLanguage::Latex;
+		candidate.profileName = "probe-latex-digestif";
+		candidate.executableName = fakeDigestif;
+		if (!mr::services::resolveLspServerCandidate(candidate, profile)) {
+			failureReason = "Unable to resolve LaTeX digestif candidate for middleware auto-setup guard.";
+			return false;
+		}
+		if (profile.lspMiddlewarePath.empty() || profile.lspMiddlewarePath.find("digestif-snippets.mrmac") == std::string::npos) {
+			failureReason = "LaTeX auto-setup must suggest the LaTeX snippet middleware from MACROPATH.";
+			return false;
+		}
+		(void)::unlink(fakeClangd.c_str());
+		(void)::unlink(fakeDigestif.c_str());
+		(void)::rmdir(root.c_str());
+	}
+	{
+		MRCompilerProfile compilerProfile;
+		mr::services::MRLspServerProfile profile;
+		std::string sourceText;
+		std::string errorText;
+
+		compilerProfile.id = "NO_MIDDLEWARE";
+		compilerProfile.name = "No middleware";
+		compilerProfile.toolchain = "CLANG";
+		compilerProfile.lspExecutablePath = "/bin/sh";
+		if (!mr::services::buildLspServerProfileForLanguageWithCompilerProfile(MRSyntaxLanguage::Cpp, "C++", compilerProfile, profile, sourceText, errorText)) {
+			failureReason = "Unable to build compiler profile LSP probe: " + errorText;
+			return false;
+		}
+		if (!profile.lspMiddlewarePath.empty()) {
+			failureReason = "Runtime compiler profile resolution must not auto-fill LSP middleware.";
+			return false;
+		}
+		compilerProfile.lspMiddlewarePath = middlewarePaths["clangd-cpp-snippets.mrmac"];
+		if (!mr::services::buildLspServerProfileForLanguageWithCompilerProfile(MRSyntaxLanguage::Cpp, "C++", compilerProfile, profile, sourceText, errorText)) {
+			failureReason = "Unable to build compiler profile LSP middleware probe: " + errorText;
+			return false;
+		}
+		if (profile.lspMiddlewarePath != middlewarePaths["clangd-cpp-snippets.mrmac"]) {
+			failureReason = "Runtime compiler profile resolution must use only configured LSP_MIDDLEWARE.";
+			return false;
+		}
+	}
+	if (profileSource.find("suggestedLspMiddlewarePathForCandidate(candidate)") == std::string::npos) {
+		failureReason = "LSP middleware suggestion must stay in candidate auto-setup resolution.";
+		return false;
+	}
 	failureReason.clear();
 	return true;
 }
@@ -9295,6 +9512,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
+	runTest(ctx, "LSP snippet middleware macro compile guard", testLspSnippetMiddlewareMacroCompileGuard);
 	runTest(ctx, "LSP completion target cursor-inside-literal guard", mrLspCompletionTargetSelfTestForRegression);
 	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
 	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);
@@ -9398,6 +9616,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
+	runTest(ctx, "LSP snippet middleware macro compile guard", testLspSnippetMiddlewareMacroCompileGuard);
 	runTest(ctx, "LSP completion target cursor-inside-literal guard", mrLspCompletionTargetSelfTestForRegression);
 	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
 	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);

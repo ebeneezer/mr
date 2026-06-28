@@ -1,6 +1,7 @@
 #ifndef MRVMHASH_HPP
 #define MRVMHASH_HPP
 
+#include <cstdint>
 #include <map>
 #include <set>
 #include <string>
@@ -10,6 +11,7 @@
 
 class MRVMHashStore {
   public:
+	void setIoTrackingEnabled(bool enabled) noexcept;
 	void clear();
 	void clearExceptRoots(const std::vector<int> &roots);
 	int createHash();
@@ -28,8 +30,16 @@ class MRVMHashStore {
 	void eraseHashTree(int handle, bool targetGlobalStorage, std::set<int> &erased);
 
 	int nextHandle = 1;
+	bool ioTrackingEnabled = false;
 	std::map<int, std::map<std::string, VirtualMachine::Value>> hashes;
 };
+
+struct MRVMHashIoRateSnapshot {
+	std::uint64_t readsPerMinute;
+	std::uint64_t writesPerMinute;
+};
+
+[[nodiscard]] MRVMHashIoRateSnapshot mrvmHashIoRateSnapshot();
 
 MRVMHashStore &mrvmHashRuntimeStoreForValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue);
 const MRVMHashStore &mrvmHashRuntimeStoreForValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue);

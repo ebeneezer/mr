@@ -44,7 +44,7 @@ bool columnBlockTraceEnabled() noexcept {
 
 void appendColumnBlockTrace(std::string_view message) {
 	if (!columnBlockTraceEnabled()) return;
-	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 	if (out) out << "COLBLOCK ops " << message << '\n';
 }
 

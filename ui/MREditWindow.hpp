@@ -47,6 +47,7 @@ void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 class MREditWindow;
 void setWindowManuallyHidden(MREditWindow *win, bool hidden);
 void mrDropSidekickForParent(const MREditWindow *parent);
+bool mrMoveSnippetPlaceholderForParent(const MREditWindow *parent, int direction);
 
 class MREditScrollBar : public TScrollBar {
   public:
@@ -267,7 +268,7 @@ class MREditWindow : public TWindow {
 	virtual ~MREditWindow() override {
 		mrDropSidekickForParent(this);
 		{
-			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 			if (out) {
 				std::time_t now = std::time(nullptr);
 				std::tm *tmNow = std::localtime(&now);
@@ -282,7 +283,7 @@ class MREditWindow : public TWindow {
 		prepareForClose();
 		mrNotifyWindowTopologyChanged();
 		{
-			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 			if (out) {
 				std::time_t now = std::time(nullptr);
 				std::tm *tmNow = std::localtime(&now);
@@ -309,7 +310,7 @@ class MREditWindow : public TWindow {
 		if (command != cmClose) return TWindow::valid(command);
 		const auto closeValidStartedAt = std::chrono::steady_clock::now();
 		{
-			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 			if (out) {
 				std::time_t now = std::time(nullptr);
 				std::tm *tmNow = std::localtime(&now);
@@ -322,7 +323,7 @@ class MREditWindow : public TWindow {
 			}
 		}
 		if (!TWindow::valid(command)) {
-			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 			if (out) {
 				std::time_t now = std::time(nullptr);
 				std::tm *tmNow = std::localtime(&now);
@@ -336,7 +337,7 @@ class MREditWindow : public TWindow {
 			return False;
 		}
 		{
-			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 			if (out) {
 				std::time_t now = std::time(nullptr);
 				std::tm *tmNow = std::localtime(&now);
@@ -351,7 +352,7 @@ class MREditWindow : public TWindow {
 		scheduleEnsureUsableWorkWindow();
 		prepareForClose();
 		{
-			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 			if (out) {
 				std::time_t now = std::time(nullptr);
 				std::tm *tmNow = std::localtime(&now);
@@ -547,6 +548,16 @@ class MREditWindow : public TWindow {
 				char line[192];
 				std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=window-pre keyCode=0x%04X mods=0x%04X cursor=%zu", static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), editor != nullptr ? editor->cursorOffset() : 0);
 				mrLogMessage(line);
+			}
+			{
+				const ushort keyCode = event.keyDown.keyCode;
+				const bool shift = (event.keyDown.controlKeyState & kbShift) != 0;
+				const bool shiftTab = keyCode == kbShiftTab || ((keyCode == kbTab || keyCode == kbCtrlI || event.keyDown.charScan.charCode == '\t') && shift);
+				const bool tab = !shiftTab && (keyCode == kbTab || keyCode == kbCtrlI || event.keyDown.charScan.charCode == '\t');
+				if ((tab || shiftTab) && mrMoveSnippetPlaceholderForParent(this, shiftTab ? -1 : 1)) {
+					clearEvent(event);
+					return;
+				}
 			}
 			if (handleBlockTabIndentKey(event)) return;
 				if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) {
@@ -1759,7 +1770,6 @@ class MREditWindow : public TWindow {
 		std::string errorText;
 		const bool hasTheme = effectiveEditWindowColorThemePathForPath(path, themePath, nullptr) && !themePath.empty();
 
-		if (path == mAppliedColorThemePath && themePath == mAppliedColorThemeUri) return;
 		resetWindowColorsToConfiguredDefaults();
 		mAppliedColorThemePath = path;
 		mAppliedColorThemeUri = themePath;
@@ -2027,7 +2037,7 @@ class MREditWindow : public TWindow {
 		     << " undo_before=" << undoBefore << " redo_before=" << redoBefore << " undo_after=" << undoAfter << " redo_after=" << redoAfter << " clear_undo_redo_ms=" << clearUndoRedoMs
 		     << " destroy_editor_ms=" << destroyEditorMs << " took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt).count() << ".";
 		{
-			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 			if (out) {
 				std::time_t now = std::time(nullptr);
 				std::tm *tmNow = std::localtime(&now);

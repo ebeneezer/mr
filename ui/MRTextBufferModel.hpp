@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "../app/utils/MRStringUtils.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "MRSyntax.hpp"
 #include "MRTextDocument.hpp"
 
@@ -31,7 +32,7 @@ inline std::string undoTraceTimestamp() {
 }
 
 inline void appendUndoTrace(std::string_view message) {
-	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 
 	if (!out) return;
 	out << "[" << undoTraceTimestamp() << "] " << message << '\n';

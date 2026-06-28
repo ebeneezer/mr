@@ -96,7 +96,7 @@ class MRDeskTop : public TDeskTop {
 	}
 
 	virtual ~MRDeskTop() override {
-		std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+		std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 		if (!out) return;
 		std::time_t now = std::time(nullptr);
 		std::tm *tmNow = std::localtime(&now);
