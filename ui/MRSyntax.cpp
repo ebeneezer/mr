@@ -737,7 +737,7 @@ static std::size_t findRawStringTerminator(std::string_view line, std::size_t co
 			++i;
 			continue;
 		}
-		if (line.substr(i + 1, delimiter.size()) == delimiter && line[i + 1 + delimiter.size()] == '"') return i + 2 + delimiter.size();
+		if (std::string_view(line).substr(i + 1).starts_with(delimiter) && line[i + 1 + delimiter.size()] == '"') return i + 2 + delimiter.size();
 		++i;
 	}
 	return std::string_view::npos;
@@ -1058,7 +1058,7 @@ static std::size_t findMarkdownMarkerEnd(std::string_view line, std::size_t star
 			++i;
 			continue;
 		}
-		if (line.substr(i, marker.size()) == marker) return i;
+		if (std::string_view(line).substr(i).starts_with(marker)) return i;
 	}
 	return std::string_view::npos;
 }
@@ -1247,12 +1247,12 @@ static std::size_t consumeBalancedRegion(std::string_view line, std::size_t star
 			i += 2;
 			continue;
 		}
-		if (i + open.size() <= line.size() && line.substr(i, open.size()) == open) {
+		if (std::string_view(line).substr(i).starts_with(open)) {
 			++depth;
 			i += open.size();
 			continue;
 		}
-		if (i + close.size() <= line.size() && line.substr(i, close.size()) == close) {
+		if (std::string_view(line).substr(i).starts_with(close)) {
 			--depth;
 			i += close.size();
 			if (depth == 0) return i;
@@ -3957,7 +3957,7 @@ MRSyntaxLineResult MRXmlSyntaxHighlighter::highlightLine(std::string_view line, 
 	}
 
 	while (i < line.size()) {
-		if (i + 4 <= line.size() && line.substr(i, 4) == "<!--") {
+		if (std::string_view(line).substr(i).starts_with("<!--")) {
 			const std::size_t end = findXmlCommentEnd(line, i + 4);
 			if (end == std::string_view::npos) {
 				appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
@@ -3969,7 +3969,7 @@ MRSyntaxLineResult MRXmlSyntaxHighlighter::highlightLine(std::string_view line, 
 			i = end;
 			continue;
 		}
-		if (i + 9 <= line.size() && line.substr(i, 9) == "<![CDATA[") {
+		if (std::string_view(line).substr(i).starts_with("<![CDATA[")) {
 			const std::size_t end = findXmlCdataEnd(line, i + 9);
 			if (end == std::string_view::npos) {
 				appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::String);
@@ -3981,7 +3981,7 @@ MRSyntaxLineResult MRXmlSyntaxHighlighter::highlightLine(std::string_view line, 
 			i = end;
 			continue;
 		}
-		if (i + 2 <= line.size() && line.substr(i, 2) == "<?") {
+		if (std::string_view(line).substr(i).starts_with("<?")) {
 			const std::size_t end = findXmlProcessingEnd(line, i + 2);
 			if (end == std::string_view::npos) {
 				appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Directive);
@@ -3993,7 +3993,7 @@ MRSyntaxLineResult MRXmlSyntaxHighlighter::highlightLine(std::string_view line, 
 			i = end;
 			continue;
 		}
-		if (i + 2 <= line.size() && line.substr(i, 2) == "<!" && (i + 4 > line.size() || line.substr(i, 4) != "<!--")) {
+		if (std::string_view(line).substr(i).starts_with("<!") && !std::string_view(line).substr(i).starts_with("<!--")) {
 			const std::size_t end = findXmlMarkupEnd(line, i + 2);
 			if (end == std::string_view::npos) {
 				appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Directive);

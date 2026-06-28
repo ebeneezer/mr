@@ -455,7 +455,7 @@ bool runServerProbe(const LiveServerSpec &spec, int &skipped, std::string &failu
 	const bool hardFail = std::string(spec.name) == "digestif";
 
 	if (!startServer(run, errorMessage)) {
-		if (errorMessage.rfind("SKIP ", 0) == 0) {
+		if (errorMessage.starts_with("SKIP ")) {
 			++skipped;
 			std::cout << errorMessage << "\n";
 			return true;

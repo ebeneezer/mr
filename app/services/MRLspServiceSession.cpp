@@ -49,7 +49,7 @@ std::string executableBaseName(const std::string &path) {
 bool profileUsesClangd(const mr::services::MRLspServerProfile &profile) {
 	const std::string baseName = executableBaseName(profile.executablePath);
 
-	return baseName == "clangd" || baseName.rfind("clangd-", 0) == 0;
+	return baseName == "clangd" || baseName.starts_with("clangd-");
 }
 
 bool argumentListContains(const std::vector<std::string> &arguments, const std::string &argument) {
@@ -135,7 +135,7 @@ bool splitShellLikeWords(const std::string &text, std::vector<std::string> &word
 }
 
 bool compileContextFallbackFlagIsLanguageStandard(const std::string &flag) {
-	return flag.rfind("-std=", 0) == 0 || flag.rfind("--std=", 0) == 0;
+	return flag.starts_with("-std=") || flag.starts_with("--std=");
 }
 
 void appendCompileContextFallbackFlags(const mr::services::MRWorkspaceCompileContext &context, std::vector<std::string> &fallbackFlags, std::string &errorMessage) {

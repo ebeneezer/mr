@@ -189,31 +189,31 @@ bool mrvmParseAssignedKeySpec(const std::string &spec, TKey &outKey) {
 
 	while (changed) {
 		changed = false;
-		if (token.rfind("SHIFT", 0) == 0) {
+		if (token.starts_with("SHIFT")) {
 			wantShift = true;
 			token.erase(0, 5);
 			changed = true;
 			continue;
 		}
-		if (token.rfind("SHFT", 0) == 0) {
+		if (token.starts_with("SHFT")) {
 			wantShift = true;
 			token.erase(0, 4);
 			changed = true;
 			continue;
 		}
-		if (token.rfind("CTRL", 0) == 0) {
+		if (token.starts_with("CTRL")) {
 			wantCtrl = true;
 			token.erase(0, 4);
 			changed = true;
 			continue;
 		}
-		if (token.rfind("ALT", 0) == 0) {
+		if (token.starts_with("ALT")) {
 			wantAlt = true;
 			token.erase(0, 3);
 			changed = true;
 			continue;
 		}
-		if (token.rfind("SUPER", 0) == 0) {
+		if (token.starts_with("SUPER")) {
 			wantSuper = true;
 			token.erase(0, 5);
 			changed = true;
