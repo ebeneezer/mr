@@ -1216,6 +1216,7 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, 
 }
 
 const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles() {
+	recordSettingsRuntimeRead();
 	return configuredEditProfiles();
 }
 
@@ -1366,6 +1367,7 @@ MREditSetupSettings configuredEditSetupSettings() {
 	static bool initialized = false;
 	MREditSetupSettings &configured = configuredEditSettings();
 
+	recordSettingsRuntimeRead();
 	if (!initialized) {
 		configured = resolveEditSetupDefaults();
 		initialized = true;

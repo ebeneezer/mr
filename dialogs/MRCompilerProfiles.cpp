@@ -226,26 +226,8 @@ std::string profileLabel(const MRCompilerProfile &profile) {
 	return id + "  " + name;
 }
 
-void appendMissingDefaultProfiles(std::vector<MRCompilerProfile> &profiles) {
-	for (const MRCompilerProfile &defaultProfile : defaultCompilerProfiles()) {
-		const std::string defaultId = canonicalCompilerProfileId(defaultProfile.id);
-		bool exists = false;
-
-		if (defaultId.empty()) continue;
-		for (const MRCompilerProfile &profile : profiles)
-			if (canonicalCompilerProfileId(profile.id) == defaultId) {
-				exists = true;
-				break;
-			}
-		if (!exists) profiles.push_back(defaultProfile);
-	}
-}
-
 std::vector<MRCompilerProfile> initialCompilerProfilesForDialog() {
-	std::vector<MRCompilerProfile> profiles = configuredCompilerProfiles();
-
-	appendMissingDefaultProfiles(profiles);
-	return profiles;
+	return configuredCompilerProfiles();
 }
 
 bool compilerProfileListsEqual(const std::vector<MRCompilerProfile> &lhs, const std::vector<MRCompilerProfile> &rhs) {
@@ -400,6 +382,7 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		const int browseLeft = right - 2;
 		const int historyLeft = browseLeft - 2;
 		const int fieldWithButtonsRight = historyLeft;
+		const int wideFieldRight = browseLeft;
 		const int buttonTop = 21;
 		const int bottomTop = 23;
 
@@ -412,11 +395,11 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		insert(list);
 
 		insert(new TStaticText(TRect(labelLeft, 2, fieldLeft - 1, 3), "Profile ID:"));
-		idField = addField(TRect(fieldLeft, 2, fieldWithButtonsRight, 3), kIdSize - 1);
+		idField = addField(TRect(fieldLeft, 2, wideFieldRight, 3), kIdSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 3, fieldLeft - 1, 4), "Name:"));
-		nameField = addField(TRect(fieldLeft, 3, fieldWithButtonsRight, 4), kNameSize - 1);
+		nameField = addField(TRect(fieldLeft, 3, wideFieldRight, 4), kNameSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 4, fieldLeft - 1, 5), "Toolchain:"));
-		toolchainField = addField(TRect(fieldLeft, 4, 75, 5), kToolchainSize - 1);
+		toolchainField = addField(TRect(fieldLeft, 4, wideFieldRight, 5), kToolchainSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 5, fieldLeft - 1, 6), "Executable:"));
 		executableField = addField(TRect(fieldLeft, 5, fieldWithButtonsRight, 6), kExecutableSize - 1);
 		executableHistoryButton = executableDropList.createButton(*this, TRect(historyLeft, 5, browseLeft, 6), executableField, this, cmCompilerProfilesChooseExecutable, true);
@@ -424,17 +407,17 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		insert(executableBrowseButton);
 		executableListAnchor = TRect(fieldLeft, 6, right, 7);
 		insert(new TStaticText(TRect(labelLeft, 6, fieldLeft - 1, 7), "Version:"));
-		versionField = addField(TRect(fieldLeft, 6, fieldWithButtonsRight, 7), kVersionSize - 1);
+		versionField = addField(TRect(fieldLeft, 6, wideFieldRight, 7), kVersionSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 7, fieldLeft - 1, 8), "Target:"));
-		targetField = addField(TRect(fieldLeft, 7, fieldWithButtonsRight, 8), kTargetSize - 1);
+		targetField = addField(TRect(fieldLeft, 7, wideFieldRight, 8), kTargetSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 8, fieldLeft - 1, 9), "Build flags:"));
-		flagsField = addField(TRect(fieldLeft, 8, fieldWithButtonsRight, 9), kFlagsSize - 1);
+		flagsField = addField(TRect(fieldLeft, 8, wideFieldRight, 9), kFlagsSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 9, fieldLeft - 1, 10), "Includes:"));
-		includesField = addField(TRect(fieldLeft, 9, fieldWithButtonsRight, 10), kPathListSize - 1);
+		includesField = addField(TRect(fieldLeft, 9, wideFieldRight, 10), kPathListSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 10, fieldLeft - 1, 11), "Libraries:"));
-		librariesField = addField(TRect(fieldLeft, 10, fieldWithButtonsRight, 11), kPathListSize - 1);
+		librariesField = addField(TRect(fieldLeft, 10, wideFieldRight, 11), kPathListSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 11, fieldLeft - 1, 12), "Runtime:"));
-		runtimeField = addField(TRect(fieldLeft, 11, fieldWithButtonsRight, 12), kPathListSize - 1);
+		runtimeField = addField(TRect(fieldLeft, 11, wideFieldRight, 12), kPathListSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 12, fieldLeft - 1, 13), "LSP exec:"));
 		lspExecutableField = addField(TRect(fieldLeft, 12, fieldWithButtonsRight, 13), kLspExecutableSize - 1);
 		lspExecutableHistoryButton = lspExecutableDropList.createButton(*this, TRect(historyLeft, 12, browseLeft, 13), lspExecutableField, this, cmCompilerProfilesChooseLspExecutable, true);
@@ -442,7 +425,7 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		insert(lspExecutableBrowseButton);
 		lspExecutableListAnchor = TRect(fieldLeft, 13, right, 14);
 		insert(new TStaticText(TRect(labelLeft, 13, fieldLeft - 1, 14), "LSP args:"));
-		lspArgumentsField = addField(TRect(fieldLeft, 13, fieldWithButtonsRight, 14), kLspArgumentsSize - 1);
+		lspArgumentsField = addField(TRect(fieldLeft, 13, wideFieldRight, 14), kLspArgumentsSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 14, fieldLeft - 1, 15), "LSP cwd:"));
 		lspWorkingDirectoryField = addField(TRect(fieldLeft, 14, fieldWithButtonsRight, 15), kLspWorkingDirectorySize - 1);
 		lspWorkingDirectoryHistoryButton = lspWorkingDirectoryDropList.createButton(*this, TRect(historyLeft, 14, browseLeft, 15), lspWorkingDirectoryField, this, cmCompilerProfilesChooseLspWorkingDirectory, true);
@@ -493,12 +476,12 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		ushort originalCommand = event.what == evCommand ? event.message.command : 0;
 		ushort originalBroadcast = event.what == evBroadcast ? event.message.command : 0;
 
-		if (executableDropList.handleLinkedInputEvent(event, *this, executableListAnchor, executableChoices(), executableField, this, cmCompilerProfilesAcceptExecutable, 8)) return;
-		if (lspExecutableDropList.handleLinkedInputEvent(event, *this, lspExecutableListAnchor, lspExecutableChoices(), lspExecutableField, this, cmCompilerProfilesAcceptLspExecutable, 8)) return;
-		if (lspWorkingDirectoryDropList.handleLinkedInputEvent(event, *this, lspWorkingDirectoryListAnchor, lspWorkingDirectoryChoices(), lspWorkingDirectoryField, this, cmCompilerProfilesAcceptLspWorkingDirectory, 8)) return;
-		if (lspMiddlewareDropList.handleLinkedInputEvent(event, *this, lspMiddlewareListAnchor, lspMiddlewareChoices(), lspMiddlewareField, this, cmCompilerProfilesAcceptLspMiddleware, 8)) return;
-		if (successAudioDropList.handleLinkedInputEvent(event, *this, successAudioListAnchor, audioUriChoices(), successAudioField, this, cmCompilerProfilesAcceptSuccessAudio, 8)) return;
-		if (failureAudioDropList.handleLinkedInputEvent(event, *this, failureAudioListAnchor, audioUriChoices(), failureAudioField, this, cmCompilerProfilesAcceptFailureAudio, 8)) return;
+		if (executableDropList.handleOpenListEvent(event)) return;
+		if (lspExecutableDropList.handleOpenListEvent(event)) return;
+		if (lspWorkingDirectoryDropList.handleOpenListEvent(event)) return;
+		if (lspMiddlewareDropList.handleOpenListEvent(event)) return;
+		if (successAudioDropList.handleOpenListEvent(event)) return;
+		if (failureAudioDropList.handleOpenListEvent(event)) return;
 		if (originalWhat == evCommand && originalCommand == cmOK) {
 			saveCurrentProfile();
 			if (!saveProfiles()) {

@@ -113,7 +113,7 @@ bool normalizeFileCompareGutters(const std::string &value, std::string &out, std
 				out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
 				break;
 			default:
-				return setError(errorMessage, "FILE_COMPARE_*_GUTTERS may contain only M, D, L or C.");
+				return setError(errorMessage, "May contain only M, D, L or C.");
 		}
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
@@ -596,6 +596,7 @@ bool setConfiguredWindowManager(bool enabled, std::string *errorMessage) {
 }
 
 bool configuredWindowManager() {
+	recordSettingsRuntimeRead();
 	return g_windowManagerEnabled;
 }
 
@@ -617,6 +618,7 @@ bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
 }
 
 bool configuredMenulineMessages() {
+	recordSettingsRuntimeRead();
 	return g_menulineMessagesEnabled;
 }
 
@@ -628,6 +630,7 @@ bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options, std:
 }
 
 MRSearchDialogOptions configuredSearchDialogOptions() {
+	recordSettingsRuntimeRead();
 	return g_searchDialogOptions;
 }
 
@@ -639,6 +642,7 @@ bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::strin
 }
 
 MRSarDialogOptions configuredSarDialogOptions() {
+	recordSettingsRuntimeRead();
 	return g_sarDialogOptions;
 }
 
@@ -650,6 +654,7 @@ bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &opt
 }
 
 MRMultiSearchDialogOptions configuredMultiSearchDialogOptions() {
+	recordSettingsRuntimeRead();
 	return g_multiSearchDialogOptions;
 }
 
@@ -661,6 +666,7 @@ bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options, 
 }
 
 MRMultiSarDialogOptions configuredMultiSarDialogOptions() {
+	recordSettingsRuntimeRead();
 	return g_multiSarDialogOptions;
 }
 
@@ -676,6 +682,7 @@ bool setConfiguredPdfExportSettings(const MRPdfExportSettings &settings, std::st
 }
 
 MRPdfExportSettings configuredPdfExportSettings() {
+	recordSettingsRuntimeRead();
 	return g_pdfExportSettings;
 }
 
@@ -697,6 +704,7 @@ bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string
 }
 
 MRAcquireSettings configuredAcquireSettings() {
+	recordSettingsRuntimeRead();
 	return g_acquireSettings;
 }
 
@@ -711,6 +719,7 @@ bool setConfiguredLiveLogSettings(const MRLiveLogSettings &settings, std::string
 }
 
 MRLiveLogSettings configuredLiveLogSettings() {
+	recordSettingsRuntimeRead();
 	return g_liveLogSettings;
 }
 
@@ -724,6 +733,7 @@ bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
 }
 
 int configuredVirtualDesktops() {
+	recordSettingsRuntimeRead();
 	return g_virtualDesktops;
 }
 
@@ -735,6 +745,7 @@ bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage)
 }
 
 bool configuredCyclicVirtualDesktops() {
+	recordSettingsRuntimeRead();
 	return g_cyclicVirtualDesktops;
 }
 
@@ -746,6 +757,7 @@ bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *erro
 }
 
 MRCursorBehaviour configuredCursorBehaviour() {
+	recordSettingsRuntimeRead();
 	return g_cursorBehaviour;
 }
 
@@ -757,6 +769,7 @@ bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement 
 }
 
 MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement() {
+	recordSettingsRuntimeRead();
 	return g_compilerErrorMessagePlacement;
 }
 
@@ -768,6 +781,7 @@ bool setConfiguredLanguageServerSpawnDaemon(bool enabled, std::string *errorMess
 }
 
 bool configuredLanguageServerSpawnDaemon() {
+	recordSettingsRuntimeRead();
 	return g_languageServerSpawnDaemon;
 }
 
@@ -779,6 +793,7 @@ bool setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacem
 }
 
 MRLanguageServerSidekickPlacement configuredLanguageServerSidekickPlacement() {
+	recordSettingsRuntimeRead();
 	return g_languageServerSidekickPlacement;
 }
 
@@ -790,6 +805,7 @@ bool setConfiguredLanguageServerHoverDwellMs(int value, std::string *errorMessag
 }
 
 int configuredLanguageServerHoverDwellMs() {
+	recordSettingsRuntimeRead();
 	return g_languageServerHoverDwellMs;
 }
 
@@ -801,6 +817,7 @@ bool setConfiguredLanguageServerDocumentSyncDelayMs(int value, std::string *erro
 }
 
 int configuredLanguageServerDocumentSyncDelayMs() {
+	recordSettingsRuntimeRead();
 	return g_languageServerDocumentSyncDelayMs;
 }
 
@@ -812,6 +829,7 @@ bool setConfiguredLanguageServerSignatureQuietMs(int value, std::string *errorMe
 }
 
 int configuredLanguageServerSignatureQuietMs() {
+	recordSettingsRuntimeRead();
 	return g_languageServerSignatureQuietMs;
 }
 
@@ -823,6 +841,7 @@ bool setConfiguredLanguageServerChannelSettings(const MRLanguageServerChannelSet
 }
 
 MRLanguageServerChannelSettings configuredLanguageServerChannelSettings() {
+	recordSettingsRuntimeRead();
 	return g_languageServerChannelSettings;
 }
 
@@ -834,6 +853,7 @@ bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::str
 }
 
 MRScrollbarVisibility configuredScrollbarVisibility() {
+	recordSettingsRuntimeRead();
 	return g_scrollbarVisibility;
 }
 
@@ -845,6 +865,7 @@ bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage)
 }
 
 bool configuredTrackCompilerWarnings() {
+	recordSettingsRuntimeRead();
 	return g_trackCompilerWarnings;
 }
 
@@ -856,6 +877,7 @@ bool setConfiguredTrackCompilerNotes(bool enabled, std::string *errorMessage) {
 }
 
 bool configuredTrackCompilerNotes() {
+	recordSettingsRuntimeRead();
 	return g_trackCompilerNotes;
 }
 
@@ -867,6 +889,7 @@ bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage
 }
 
 MRUiIndentStyle configuredUiIndentStyle() {
+	recordSettingsRuntimeRead();
 	return g_uiIndentStyle;
 }
 
@@ -881,6 +904,7 @@ bool setConfiguredCursorPositionMarker(const std::string &value, std::string *er
 }
 
 std::string configuredCursorPositionMarker() {
+	recordSettingsRuntimeRead();
 	return g_cursorPositionMarker;
 }
 
@@ -895,6 +919,7 @@ bool setConfiguredFileCompareOriginalLeadingGutters(const std::string &value, st
 }
 
 std::string configuredFileCompareOriginalLeadingGutters() {
+	recordSettingsRuntimeRead();
 	return g_fileCompareOriginalLeadingGutters;
 }
 
@@ -909,6 +934,7 @@ bool setConfiguredFileCompareOriginalTrailingGutters(const std::string &value, s
 }
 
 std::string configuredFileCompareOriginalTrailingGutters() {
+	recordSettingsRuntimeRead();
 	return g_fileCompareOriginalTrailingGutters;
 }
 
@@ -923,6 +949,7 @@ bool setConfiguredFileCompareCompareLeadingGutters(const std::string &value, std
 }
 
 std::string configuredFileCompareCompareLeadingGutters() {
+	recordSettingsRuntimeRead();
 	return g_fileCompareCompareLeadingGutters;
 }
 
@@ -937,6 +964,7 @@ bool setConfiguredFileCompareCompareTrailingGutters(const std::string &value, st
 }
 
 std::string configuredFileCompareCompareTrailingGutters() {
+	recordSettingsRuntimeRead();
 	return g_fileCompareCompareTrailingGutters;
 }
 
@@ -948,6 +976,7 @@ bool setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration 
 }
 
 MRFileCompareStartConfiguration configuredFileCompareStartConfiguration() {
+	recordSettingsRuntimeRead();
 	return g_fileCompareStartConfiguration;
 }
 
@@ -959,6 +988,7 @@ bool setConfiguredFileCompareComparePanelReadOnly(bool enabled, std::string *err
 }
 
 bool configuredFileCompareComparePanelReadOnly() {
+	recordSettingsRuntimeRead();
 	return g_fileCompareComparePanelReadOnly;
 }
 
@@ -970,6 +1000,7 @@ bool setConfiguredAutosaveWorkspace(bool enabled, std::string *errorMessage) {
 }
 
 bool configuredAutosaveWorkspace() {
+	recordSettingsRuntimeRead();
 	return g_autosaveWorkspace;
 }
 
@@ -978,6 +1009,7 @@ void setRuntimePreserveAutosavedWorkspace(bool enabled) {
 }
 
 bool runtimePreserveAutosavedWorkspace() {
+	recordSettingsRuntimeRead();
 	return g_runtimePreserveAutosavedWorkspace;
 }
 
@@ -989,6 +1021,7 @@ bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage) {
 }
 
 bool configuredAutoloadWorkspace() {
+	recordSettingsRuntimeRead();
 	return g_autoloadWorkspace;
 }
 
@@ -1000,10 +1033,12 @@ bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage)
 }
 
 MRLogHandling configuredLogHandling() {
+	recordSettingsRuntimeRead();
 	return g_logHandling;
 }
 
 void configuredAutoexecMacroEntries(std::vector<std::string> &outValues) {
+	recordSettingsRuntimeRead();
 	outValues = configuredAutoexecMacroStorage();
 }
 
@@ -1049,6 +1084,7 @@ bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName, std::
 		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
 	auto it = g_autoexecMacroDiagnostics.find(key);
 
+	recordSettingsRuntimeRead();
 	errorText.clear();
 	if (it == g_autoexecMacroDiagnostics.end()) return false;
 	errorText = it->second;
@@ -1088,6 +1124,8 @@ bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *er
 
 std::string configuredSettingsMacroFilePath() {
 	const std::string &configured = configuredSettingsMacroFile();
+
+	recordSettingsRuntimeRead();
 	if (!configured.empty()) return makeAbsolutePath(configured);
 	return resolveSetupPathDefaults().settingsMacroUri;
 }
@@ -1118,6 +1156,8 @@ bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *error
 std::string configuredMacroDirectoryPath() {
 	const std::string &configured = configuredMacroDirectory();
 	std::string absoluteConfigured = makeAbsolutePath(configured);
+
+	recordSettingsRuntimeRead();
 	if (!isReadableDirectory(absoluteConfigured)) return std::string();
 	return absoluteConfigured;
 }
@@ -1146,6 +1186,8 @@ bool setConfiguredHelpFilePath(const std::string &path, std::string *errorMessag
 
 std::string configuredHelpFilePath() {
 	const std::string &configured = configuredHelpFile();
+
+	recordSettingsRuntimeRead();
 	if (!configured.empty()) return makeAbsolutePath(configured);
 	return resolveSetupPathDefaults().helpUri;
 }
@@ -1174,6 +1216,8 @@ std::string configuredTempDirectoryPath() {
 	const std::string &configured = configuredTempDirectory();
 	std::string absoluteConfigured = makeAbsolutePath(configured);
 	std::string builtIn = resolveSetupPathDefaults().tempPath;
+
+	recordSettingsRuntimeRead();
 	if (isWritableDirectory(absoluteConfigured)) return absoluteConfigured;
 	if (isWritableDirectory(builtIn)) return builtIn;
 	return "/tmp";
@@ -1205,6 +1249,8 @@ std::string configuredShellExecutablePath() {
 	const std::string &configured = configuredShellExecutable();
 	std::string absoluteConfigured = makeAbsolutePath(configured);
 	std::string builtIn = resolveSetupPathDefaults().shellUri;
+
+	recordSettingsRuntimeRead();
 	if (isExecutableFile(absoluteConfigured)) return absoluteConfigured;
 	if (isExecutableFile(builtIn)) return builtIn;
 	return "/bin/sh";
@@ -1242,6 +1288,7 @@ bool setConfiguredLogFilePath(const std::string &path, std::string *errorMessage
 std::string configuredLogFilePath() {
 	const std::string &configured = configuredLogFile();
 
+	recordSettingsRuntimeRead();
 	if (!configured.empty()) return makeAbsolutePath(configured);
 	return appendFileName(configuredTempDirectoryPath(), "mr.log");
 }

@@ -976,8 +976,8 @@ MRColorSetupSettings resolveColorSetupDefaults() {
 }
 
 MRColorSetupSettings configuredColorSetupSettings() {
-	ensureConfiguredColorSettingsInitialized();
 	recordSettingsRuntimeRead();
+	ensureConfiguredColorSettingsInitialized();
 	return configuredColorSettings();
 }
 
@@ -1294,6 +1294,8 @@ bool setConfiguredColorThemeFilePath(const std::string &path, std::string *error
 
 std::string configuredColorThemeFilePath() {
 	const std::string &configured = configuredColorThemeFile();
+
+	recordSettingsRuntimeRead();
 	if (!configured.empty()) return makeAbsolutePath(configured);
 	return defaultColorThemeFilePath();
 }
@@ -1301,6 +1303,7 @@ std::string configuredColorThemeFilePath() {
 std::string configuredColorThemeDisplayName() {
 	std::string name = trimAscii(configuredColorThemeDisplayNameValue());
 
+	recordSettingsRuntimeRead();
 	if (name.empty()) return std::string("default");
 	return name;
 }
@@ -1392,6 +1395,7 @@ bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<uns
 }
 
 std::string configuredDefaultProfileDescription() {
+	recordSettingsRuntimeRead();
 	return configuredDefaultProfileDescriptionValue();
 }
 
@@ -1407,6 +1411,7 @@ bool setConfiguredDefaultProfileDescription(const std::string &value, std::strin
 }
 
 const std::vector<MRKeymapProfile> &configuredKeymapProfiles() {
+	recordSettingsRuntimeRead();
 	return configuredKeymapProfilesValue();
 }
 
@@ -1450,6 +1455,8 @@ bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, s
 
 std::string configuredKeymapFilePath() {
 	const std::string &configured = configuredKeymapFileValue();
+
+	recordSettingsRuntimeRead();
 	return configured.empty() ? std::string() : makeAbsolutePath(configured);
 }
 
@@ -1471,6 +1478,7 @@ bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMess
 }
 
 std::string configuredActiveKeymapProfile() {
+	recordSettingsRuntimeRead();
 	return configuredActiveKeymapProfileValue();
 }
 

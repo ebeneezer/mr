@@ -608,6 +608,7 @@ bool autoConfigureCompilerProfileFromExecutable(MRCompilerProfile &profile, std:
 }
 
 const std::vector<MRCompilerProfile> &configuredCompilerProfiles() {
+	recordSettingsRuntimeRead();
 	return configuredCompilerProfilesValue();
 }
 
