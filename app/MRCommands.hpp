@@ -18,6 +18,7 @@ enum : ushort {
 
 	cmMrEditUndo,
 	cmMrEditRedo,
+	cmMrEditMarkAll,
 	cmMrEditCutToBuffer,
 	cmMrEditCopyToBuffer,
 	cmMrEditAppendToBuffer,
@@ -156,7 +157,9 @@ enum : ushort {
 	cmMrOtherLspResults,
 	cmMrOtherLspCodeActions,
 	cmMrOtherLspDocumentHighlight,
-	cmMrFileGetLast
+	cmMrFileGetLast,
+	cmMrTextToggleLineDrawing,
+	cmMrTextToggleDoubleLines
 };
 
 #endif

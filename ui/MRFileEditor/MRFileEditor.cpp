@@ -54,8 +54,8 @@ MRFileEditor::DestructionProbe::~DestructionProbe() {
 }
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxState(), mFoldState(), mMiniMapState(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
-      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMouseSelectionColumnsValid(false), mMouseSelectionAnchorColumn(0), mMouseSelectionCursorColumn(0), mMouseSelectionModifiers(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackCursor(false), mBlockOverlayColumnAnchor(-1), mBlockOverlayColumnEnd(-1), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0) {
+    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mLineDrawingEnabled(false), mLineDrawingDoubleLines(false), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualLine(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxState(), mFoldState(), mMiniMapState(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
+      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMouseSelectionColumnsValid(false), mMouseSelectionLinesValid(false), mMouseSelectionAnchorColumn(0), mMouseSelectionCursorColumn(0), mMouseSelectionAnchorLine(0), mMouseSelectionCursorLine(0), mMouseSelectionModifiers(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackCursor(false), mBlockOverlayColumnAnchor(-1), mBlockOverlayColumnEnd(-1), mBlockOverlayLineRangeValid(false), mBlockOverlayLine1(0), mBlockOverlayLine2(0), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
 	eventMask |= evMouse | evKeyboard | evCommand;
@@ -133,6 +133,14 @@ bool MRFileEditor::hasRedoHistory() const noexcept {
 
 bool MRFileEditor::insertModeEnabled() const noexcept {
 	return mInsertMode;
+}
+
+bool MRFileEditor::lineDrawingEnabled() const noexcept {
+	return mLineDrawingEnabled;
+}
+
+bool MRFileEditor::lineDrawingDoubleLines() const noexcept {
+	return mLineDrawingDoubleLines;
 }
 
 std::size_t MRFileEditor::originalBufferLength() const noexcept {
@@ -240,6 +248,29 @@ void MRFileEditor::setInsertModeEnabled(bool on) {
 	mInsertMode = on;
 	syncFromEditorState(false);
 	if (owner != nullptr) message(owner, evBroadcast, cmUpdateTitle, 0);
+}
+
+void MRFileEditor::setLineDrawingEnabled(bool on) {
+	if (mLineDrawingEnabled == on) return;
+	mLineDrawingEnabled = on;
+	if (!mLineDrawingEnabled) mLineDrawingDoubleLines = false;
+	if (owner != nullptr) message(owner, evBroadcast, cmUpdateTitle, 0);
+}
+
+void MRFileEditor::setLineDrawingDoubleLines(bool on) {
+	if (!mLineDrawingEnabled) return;
+	if (mLineDrawingDoubleLines == on) return;
+	mLineDrawingDoubleLines = on;
+	if (owner != nullptr) message(owner, evBroadcast, cmUpdateTitle, 0);
+}
+
+void MRFileEditor::toggleLineDrawing() {
+	setLineDrawingEnabled(!lineDrawingEnabled());
+}
+
+void MRFileEditor::toggleLineDrawingDoubleLines() {
+	if (!lineDrawingEnabled()) return;
+	setLineDrawingDoubleLines(!lineDrawingDoubleLines());
 }
 
 int MRFileEditor::preferredIndentColumn() const noexcept {

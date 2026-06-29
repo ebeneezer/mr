@@ -35,6 +35,7 @@ class MRMenuBar : public TMenuBar {
 	void tickMarquee();
 	void setPersistentBlocksMenuState(bool enabled);
 	void setInsertModeMenuState(bool enabled);
+	void setLineDrawingMenuState(bool enabled, bool doubleLines);
 	bool registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool refreshRuntimeMenus(std::string *errorMessage = nullptr);
 	bool removeRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage = nullptr);

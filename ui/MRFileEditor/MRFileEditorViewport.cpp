@@ -84,6 +84,11 @@ bool fileCompareGuttersContain(const std::string &gutters, char marker) noexcept
 
 bool mrfeRenderedBlockOverlayLineRangeForRegression(const MRFileEditor &editor, std::size_t &line1, std::size_t &line2) {
 	if (!editor.mBlockOverlayActive || editor.mBlockOverlayMode == 0) return false;
+	if (editor.mBlockOverlayMode == 2 && editor.mBlockOverlayLineRangeValid) {
+		line1 = std::min(editor.mBlockOverlayLine1, editor.mBlockOverlayLine2);
+		line2 = std::max(editor.mBlockOverlayLine1, editor.mBlockOverlayLine2);
+		return true;
+	}
 	std::size_t start = editor.mBlockOverlayAnchor;
 	std::size_t end = editor.mBlockOverlayTrackCursor ? editor.mBufferModel.cursor() : editor.mBlockOverlayEnd;
 	if (start > end) std::swap(start, end);
@@ -109,11 +114,12 @@ bool mrfeRenderedColumnOverlayColumnsForRegression(MRFileEditor &editor, std::si
 	if (width <= 0) return false;
 	DrawBufferProbe buffer;
 	MRSyntaxLineResult syntaxLine;
-	const std::size_t lineStart = editor.mBufferModel.lineStartByIndex(lineIndex);
+	const bool documentLine = lineIndex < editor.mBufferModel.lineCount();
+	const std::size_t lineStart = documentLine ? editor.mBufferModel.lineStartByIndex(lineIndex) : lineIndex;
 	const TColorAttr selectedColor = editor.tokenColor(MRSyntaxToken::Text, true, editor.getColor(0x0201));
 	col1 = -1;
 	col2 = -1;
-	editor.formatSyntaxLine(buffer, lineStart, syntaxLine, 0, width, 0, true, false, false);
+	editor.formatSyntaxLine(buffer, lineStart, syntaxLine, 0, width, 0, documentLine, false, false);
 	for (int column = 0; column < width; ++column) {
 		if (buffer.attrAt(column) == selectedColor) {
 			if (col1 < 0) col1 = column;
@@ -508,7 +514,7 @@ bool MRFileEditor::useApproximateLargeFileMetrics() const noexcept {
 
 int MRFileEditor::dynamicLargeFileLineLimit() const noexcept {
 	const std::size_t estimated = mBufferModel.estimatedLineCount();
-	const std::size_t currentLine = visibleLineForDocumentLine(cachedCursorLineIndex());
+	const std::size_t currentLine = visibleLineForDocumentLine(displayedCursorLineIndex());
 	const int textRows = std::max(1, visibleTextRows());
 	const std::size_t minimum = static_cast<std::size_t>(textRows);
 	const std::size_t margin = static_cast<std::size_t>(std::max(textRows * 4, 256));
@@ -640,6 +646,10 @@ void MRFileEditor::draw() {
 	if (mBufferModel.exactLineCountKnown()) totalLines = foldedView ? foldedVisibleLineCount() : std::max<std::size_t>(1, mBufferModel.lineCount());
 	else
 		totalLines = std::max<std::size_t>(1, std::max<std::size_t>(mBufferModel.estimatedLineCount(), static_cast<std::size_t>(std::max(delta.y, 0)) + static_cast<std::size_t>(std::max(miniMapRows, 1))));
+	if (!foldedView) {
+		totalLines = std::max(totalLines, displayedCursorLineIndex() + 1);
+		if (mBlockOverlayActive && mBlockOverlayMode == 2 && mBlockOverlayLineRangeValid) totalLines = std::max(totalLines, std::max(mBlockOverlayLine1, mBlockOverlayLine2) + 1);
+	}
 	std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
 	if (topLine >= totalLines) topLine = totalLines - 1;
 	std::size_t linePtr = mBufferModel.lineStartByIndex(documentLineForVisibleLine(topLine));
@@ -743,8 +753,8 @@ void MRFileEditor::draw() {
 		const std::size_t visibleLineIndex = topLine + static_cast<std::size_t>(y);
 		if (visibleLineIndex >= totalLines) break;
 		const std::size_t currentLineIndex = foldedView ? documentLineForVisibleLine(visibleLineIndex) : lineIndex;
-		const std::size_t currentLinePtr = foldedView ? mBufferModel.lineStartByIndex(currentLineIndex) : linePtr;
-		const bool isDocumentLine = true;
+		const bool isDocumentLine = currentLineIndex < mBufferModel.lineCount();
+		const std::size_t currentLinePtr = isDocumentLine ? (foldedView ? mBufferModel.lineStartByIndex(currentLineIndex) : linePtr) : currentLineIndex;
 		MRSyntaxLineResult syntaxLine;
 		buffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(std::max(0, size.x)));
 		if (showLineNumbers) {
@@ -758,10 +768,10 @@ void MRFileEditor::draw() {
 		}
 		if (drawLeadingDiffGutter) drawFileCompareGutter(buffer, viewport.fileCompareLeadingGutterX, viewport.fileCompareLeadingGutterWidth, currentLineIndex);
 		if (drawTrailingDiffGutter) drawFileCompareGutter(buffer, viewport.fileCompareTrailingGutterX, viewport.fileCompareTrailingGutterWidth, currentLineIndex);
-		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, currentLinePtr, currentLineIndex);
+		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, isDocumentLine ? currentLinePtr : 0, currentLineIndex);
 		if (drawLeadingMiniMap) mMiniMapState.renderer().drawGutter(buffer, y, miniMapRows, size.x, miniMapViewportFor(true), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 		if (drawTrailingMiniMap) mMiniMapState.renderer().drawGutter(buffer, y, miniMapRows, size.x, miniMapViewportFor(false), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
-		if (syntaxEnabled) {
+		if (syntaxEnabled && isDocumentLine) {
 			std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = mSyntaxState.tokenCache().find(currentLinePtr);
 			const bool statefulCacheReady = !statefulSyntax || syntaxWarmedLineRangeCovered(currentLineIndex, currentLineIndex + 1);
 
@@ -770,7 +780,7 @@ void MRFileEditor::draw() {
 		formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, false, false);
 		writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
 		if (!foldedView) {
-			if (linePtr < mBufferModel.length()) linePtr = mBufferModel.nextLine(linePtr);
+			if (isDocumentLine && linePtr < mBufferModel.length()) linePtr = mBufferModel.nextLine(linePtr);
 			++lineIndex;
 		}
 	}
@@ -923,7 +933,23 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	drawX = std::max(drawX, 0);
 	if (!isDocumentLine) {
 		TColorAttr color = editorTextFillColor();
+		const std::size_t virtualLineIndex = lineStart;
 		b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
+		if (displayedCursorLineIndex() == virtualLineIndex) b.moveChar(static_cast<ushort>(drawX), ' ', static_cast<TColorAttr>(getColor(0x0303)), static_cast<ushort>(width));
+		if (mBlockOverlayActive && mBlockOverlayMode == 2 && mBlockOverlayLineRangeValid) {
+			const std::size_t overlayLine1 = std::min(mBlockOverlayLine1, mBlockOverlayLine2);
+			const std::size_t overlayLine2 = std::max(mBlockOverlayLine1, mBlockOverlayLine2);
+			const int overlayCol1 = std::min(mBlockOverlayColumnAnchor, mBlockOverlayColumnEnd);
+			const int overlayCol2Exclusive = std::max(mBlockOverlayColumnAnchor, mBlockOverlayColumnEnd);
+
+			if (overlayLine1 <= virtualLineIndex && virtualLineIndex <= overlayLine2 && overlayCol2Exclusive > overlayCol1) {
+				const int selectedStartX = std::max(0, overlayCol1 - hScroll);
+				const int selectedEndX = std::min(width, overlayCol2Exclusive - hScroll);
+
+				if (selectedEndX > selectedStartX)
+					b.moveChar(static_cast<ushort>(drawX + selectedStartX), ' ', static_cast<TColorAttr>(getColor(0x0201) >> 8), static_cast<ushort>(selectedEndX - selectedStartX));
+			}
+		}
 		if (drawEofMarker) drawEofMarkerGlyph(b, hScroll, width, drawX, basePair, drawEofMarkerAsEmoji);
 		return;
 	}
@@ -939,8 +965,13 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	overlayEnd = mBlockOverlayTrackCursor ? mBufferModel.cursor() : mBlockOverlayEnd;
 	if (overlayStart > overlayEnd) std::swap(overlayStart, overlayEnd);
 	overlayEnd = renderedBlockOverlayEndForViewport(mBufferModel, overlayStart, overlayEnd, overlayMode);
-	overlayLine1 = mBufferModel.lineIndex(overlayStart);
-	overlayLine2 = mBufferModel.lineIndex(overlayEnd);
+	if (overlayMode == 2 && mBlockOverlayLineRangeValid) {
+		overlayLine1 = mBlockOverlayLine1;
+		overlayLine2 = mBlockOverlayLine2;
+	} else {
+		overlayLine1 = mBufferModel.lineIndex(overlayStart);
+		overlayLine2 = mBufferModel.lineIndex(overlayEnd);
+	}
 	if (overlayLine1 > overlayLine2) std::swap(overlayLine1, overlayLine2);
 	overlayCol1 = std::min(mBlockOverlayColumnAnchor, mBlockOverlayColumnEnd);
 	overlayCol2Exclusive = std::max(mBlockOverlayColumnAnchor, mBlockOverlayColumnEnd);
@@ -1153,6 +1184,7 @@ void MRFileEditor::updateMetrics() {
 		mLastUiHotpathTrace.clear();
 	}
 	limitX = std::max(limitX, displayedCursorColumn() + 1);
+	limitY = std::max<int>(limitY, static_cast<int>(visibleLineForDocumentLine(displayedCursorLineIndex())) + 1);
 
 	int maxX = std::max(0, limitX - viewportWidth);
 	int maxY = std::max(0, limitY - textRows);
@@ -1169,7 +1201,7 @@ void MRFileEditor::updateIndicator() {
 	mIndicatorUpdateInProgress = true;
 	TextViewportGeometry viewport = textViewportGeometry();
 	unsigned long visualColumn = static_cast<unsigned long>(displayedCursorColumn());
-	unsigned long line = static_cast<unsigned long>(visibleLineForDocumentLine(cachedCursorLineIndex()));
+	unsigned long line = static_cast<unsigned long>(visibleLineForDocumentLine(displayedCursorLineIndex()));
 	long long localX = viewport.localXFromVisualColumn(static_cast<long long>(visualColumn));
 	long long localY = static_cast<long long>(line) - delta.y + viewport.topInset;
 

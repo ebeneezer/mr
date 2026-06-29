@@ -33,6 +33,8 @@ struct MRFEBlockGeometry {
 	std::size_t rangeEnd = 0;
 	std::size_t line1 = 0;
 	std::size_t line2 = 0;
+	std::size_t anchorLine = 0;
+	std::size_t cursorLine = 0;
 	std::size_t documentVersion = 0;
 	int col1 = 0;
 	int col2 = 0;

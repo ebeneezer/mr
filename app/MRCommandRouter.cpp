@@ -486,7 +486,10 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
     KeymapActionDispatchEntry{"MR_TEXT_FILE_COMPARE", KeymapDispatchKind::AppCommand, cmMrTextFileCompare, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_EDIT_MARK_ALL", KeymapDispatchKind::AppCommand, cmMrEditMarkAll, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_EDIT_TOGGLE_INSERT_MODE", KeymapDispatchKind::AppCommand, cmMrEditToggleInsertMode, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_TEXT_TOGGLE_LINE_DRAWING", KeymapDispatchKind::AppCommand, cmMrTextToggleLineDrawing, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_TEXT_TOGGLE_DOUBLE_LINES", KeymapDispatchKind::AppCommand, cmMrTextToggleDoubleLines, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
     KeymapActionDispatchEntry{"MR_TOGGLE_FORMAT_RULER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleFormatRuler},
@@ -679,6 +682,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Edit / Undo";
 		case cmMrEditRedo:
 			return "Edit / Redo";
+		case cmMrEditMarkAll:
+			return "Edit / Mark all";
 		case cmMrEditCutToBuffer:
 			return "Edit / Cut";
 		case cmMrEditCopyToBuffer:
@@ -691,6 +696,10 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Edit / Paste";
 		case cmMrEditToggleInsertMode:
 			return "Edit / Insert";
+		case cmMrTextToggleLineDrawing:
+			return "Text / Line drawing";
+		case cmMrTextToggleDoubleLines:
+			return "Text / Double lines";
 		case cmMrWindowClose:
 			return "Window / Close";
 		case cmMrWindowSplitHorizontal:
@@ -5683,6 +5692,9 @@ bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 		case cmMrEditCutToBuffer:
 			if (window == nullptr) return false;
 			return handleEditCutToSystemClipboard(window);
+		case cmMrEditMarkAll:
+			if (window == nullptr) return false;
+			return window->markAllLines();
 		case cmMrEditCopyToBuffer:
 			if (window == nullptr) return false;
 			return handleEditCopyToSystemClipboard(window);
@@ -5715,6 +5727,14 @@ bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 		case cmMrEditToggleInsertMode:
 			if (window == nullptr || window->getEditor() == nullptr) return false;
 			window->getEditor()->setInsertModeEnabled(!window->getEditor()->insertModeEnabled());
+			return true;
+		case cmMrTextToggleLineDrawing:
+			if (window == nullptr || window->getEditor() == nullptr) return false;
+			window->getEditor()->toggleLineDrawing();
+			return true;
+		case cmMrTextToggleDoubleLines:
+			if (window == nullptr || window->getEditor() == nullptr) return false;
+			window->getEditor()->toggleLineDrawingDoubleLines();
 			return true;
 		default:
 			return dispatchApplicationCommandEvent(command);
@@ -6404,6 +6424,11 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrEditRedo:
 			return dispatchEditorCommand(cmMrEditRedo, true);
 
+		case cmMrEditMarkAll: {
+			MREditWindow *win = currentEditWindow();
+			return win != nullptr && win->markAllLines();
+		}
+
 		case cmMrEditCutToBuffer:
 			return handleEditCutToSystemClipboard(currentEditorCommandWindow());
 
@@ -6421,6 +6446,18 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrEditToggleInsertMode: {
 			MREditWindow *win = currentEditWindow();
 			if (win != nullptr && win->getEditor() != nullptr) win->getEditor()->setInsertModeEnabled(!win->getEditor()->insertModeEnabled());
+			return true;
+		}
+
+		case cmMrTextToggleLineDrawing: {
+			MREditWindow *win = currentEditWindow();
+			if (win != nullptr && win->getEditor() != nullptr) win->getEditor()->toggleLineDrawing();
+			return true;
+		}
+
+		case cmMrTextToggleDoubleLines: {
+			MREditWindow *win = currentEditWindow();
+			if (win != nullptr && win->getEditor() != nullptr) win->getEditor()->toggleLineDrawingDoubleLines();
 			return true;
 		}
 

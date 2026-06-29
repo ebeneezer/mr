@@ -128,12 +128,15 @@ void updateAppCommandState() {
 
 	setCommandEnabled(cmMrEditUndo, canModify && state.hasUndo);
 	setCommandEnabled(cmMrEditRedo, canModify && state.hasRedo);
+	setCommandEnabled(cmMrEditMarkAll, hasEditor);
 	setCommandEnabled(cmMrEditCutToBuffer, canModify && (state.hasSelection || state.hasBlock));
 	setCommandEnabled(cmMrEditCopyToBuffer, hasEditor && (state.hasSelection || state.hasBlock));
 	setCommandEnabled(cmMrEditAppendToBuffer, false);
 	setCommandEnabled(cmMrEditCutAndAppendToBuffer, false);
 	setCommandEnabled(cmMrEditPasteFromBuffer, canModify);
 	setCommandEnabled(cmMrEditToggleInsertMode, hasEditor);
+	setCommandEnabled(cmMrTextToggleLineDrawing, hasEditor);
+	setCommandEnabled(cmMrTextToggleDoubleLines, hasEditor && state.window != nullptr && state.window->lineDrawingEnabled());
 
 	setCommandEnabled(cmMrWindowOpen, true);
 	setCommandEnabled(cmMrWindowClose, hasWindow);

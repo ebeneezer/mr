@@ -128,6 +128,10 @@ class MRFileEditor : public TScroller {
 	bool hasRedoHistory() const noexcept;
 
 	bool insertModeEnabled() const noexcept;
+	bool lineDrawingEnabled() const noexcept;
+	bool lineDrawingDoubleLines() const noexcept;
+	std::size_t displayedCursorLineIndex() const noexcept;
+	std::size_t blockCursorLineIndex() const noexcept;
 
 	std::size_t originalBufferLength() const noexcept;
 
@@ -180,12 +184,18 @@ class MRFileEditor : public TScroller {
 	bool usesApproximateMetrics() const noexcept;
 
 	void setInsertModeEnabled(bool on);
+	void setLineDrawingEnabled(bool on);
+	void setLineDrawingDoubleLines(bool on);
+	void toggleLineDrawing();
+	void toggleLineDrawingDoubleLines();
+	bool drawLineDrawingBoxForColumnBlock(std::size_t line1, std::size_t line2, int col1, int col2);
 
 	int preferredIndentColumn() const noexcept;
 
 	void setPreferredIndentColumn(int column) noexcept;
 
 	bool freeCursorMovementEnabled() const noexcept;
+	bool freeCursorVirtualMovementAllowed() const noexcept;
 
 	int actualCursorVisualColumn(std::size_t offset) const noexcept;
 
@@ -270,14 +280,18 @@ class MRFileEditor : public TScroller {
 		bool trackCursor = false;
 		int columnAnchor = -1;
 		int columnEnd = -1;
+		bool lineRangeValid = false;
+		std::size_t line1 = 0;
+		std::size_t line2 = 0;
 	};
 
-	void setBlockOverlayState(int mode, std::size_t anchor, std::size_t end, bool active, bool trackCursor = false, int columnAnchor = -1, int columnEnd = -1);
+	void setBlockOverlayState(int mode, std::size_t anchor, std::size_t end, bool active, bool trackCursor = false, int columnAnchor = -1, int columnEnd = -1, bool lineRangeValid = false, std::size_t line1 = 0, std::size_t line2 = 0, bool redraw = true);
 	BlockOverlayState blockOverlayState() const noexcept;
 
 		void setSelectionOffsets(std::size_t start, std::size_t end, Boolean = False);
 
 	bool lastMouseSelectionColumns(int &anchorColumn, int &cursorColumn) const noexcept;
+	bool lastMouseSelectionLines(std::size_t &anchorLine, std::size_t &cursorLine) const noexcept;
 	unsigned short lastMouseSelectionModifiers() const noexcept;
 
 	void setFindMarkerRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
@@ -473,6 +487,15 @@ class MRFileEditor : public TScroller {
 	static bool isWordByte(char ch) noexcept;
 
 	static bool hasShiftModifier(ushort mods) noexcept;
+
+	bool drawLineDrawingCursorMotion(ushort key);
+	bool handleLineDrawingMouse(TEvent &event, TPoint local);
+	void restoreLineDrawingCursor(std::size_t visualLine, int visualColumn);
+	bool materializeLineDrawingRows(std::size_t line1, std::size_t line2, int rightVisualColumn);
+	bool lineDrawingCellMaskAt(std::size_t lineIndex, int visualColumn, unsigned char &mask, unsigned char &doubleMask);
+	unsigned char supportedLineDrawingMask(std::size_t lineIndex, int visualColumn, unsigned char existingMask, unsigned char connectionMask);
+	bool drawLineDrawingSegment(std::size_t fromLine, int fromColumn, std::size_t toLine, int toColumn);
+	bool drawLineDrawingMouseSegment(std::size_t fromLine, int fromColumn, std::size_t toLine, int toColumn, int &lastAxis);
 
 	int configuredTabSize() const;
 
@@ -706,6 +729,8 @@ class MRFileEditor : public TScroller {
 	bool mWordWrapSuppressed = false;
 	bool mScrollBarsAlwaysVisible = false;
 	bool mInsertMode;
+	bool mLineDrawingEnabled;
+	bool mLineDrawingDoubleLines;
 	bool mAutoIndent;
 		char fileName[MAXPATH];
 		std::string mSyntaxTitleHint;
@@ -713,6 +738,7 @@ class MRFileEditor : public TScroller {
 		MRTextBufferModel mBufferModel;
 	MRTextBufferModel::DocumentChangeSet mLastDocumentChangeSet;
 	std::size_t mSelectionAnchor;
+	std::size_t mCursorVisualLine;
 	int mCursorVisualColumn;
 	bool mIndicatorUpdateInProgress;
 	std::uint64_t mLineIndexWarmupTaskId;
@@ -738,8 +764,11 @@ class MRFileEditor : public TScroller {
 	double mSaveNormalizationThroughputBytesPerMicro;
 	std::size_t mSaveNormalizationThroughputSamples;
 	bool mMouseSelectionColumnsValid;
+	bool mMouseSelectionLinesValid;
 	int mMouseSelectionAnchorColumn;
 	int mMouseSelectionCursorColumn;
+	std::size_t mMouseSelectionAnchorLine;
+	std::size_t mMouseSelectionCursorLine;
 	unsigned short mMouseSelectionModifiers;
 	bool mBlockOverlayActive;
 	int mBlockOverlayMode;
@@ -748,6 +777,9 @@ class MRFileEditor : public TScroller {
 	bool mBlockOverlayTrackCursor;
 	int mBlockOverlayColumnAnchor;
 	int mBlockOverlayColumnEnd;
+	bool mBlockOverlayLineRangeValid;
+	std::size_t mBlockOverlayLine1;
+	std::size_t mBlockOverlayLine2;
 	int mPreferredIndentColumn;
 	std::vector<MRTextBufferModel::Range> mFindMarkerRanges;
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;

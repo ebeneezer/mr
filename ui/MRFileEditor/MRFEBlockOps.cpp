@@ -866,6 +866,8 @@ bool MRFEBlockOps::begin(MRFileEditor &editor, MRFEBlockMode mode) {
 	mGeometry.hidden = false;
 	mGeometry.anchor = editor.cursorOffset();
 	mGeometry.cursor = mGeometry.anchor;
+	mGeometry.anchorLine = mode == MRFEBlockMode::Column ? editor.blockCursorLineIndex() : editor.displayedCursorLineIndex();
+	mGeometry.cursorLine = mGeometry.anchorLine;
 	mGeometry.documentVersion = editor.documentVersion();
 	switch (mode) {
 	case MRFEBlockMode::Column:
@@ -929,6 +931,7 @@ bool MRFEBlockOps::toggleVisibility(MRFileEditor &editor) {
 bool MRFEBlockOps::updateFromEditor(MRFileEditor &editor) {
 	if (mGeometry.status == MRFEBlockStatus::Inactive) return false;
 	mGeometry.cursor = editor.cursorOffset();
+	mGeometry.cursorLine = mGeometry.mode == MRFEBlockMode::Column ? editor.blockCursorLineIndex() : editor.displayedCursorLineIndex();
 	switch (mGeometry.mode) {
 	case MRFEBlockMode::Column:
 		mGeometry.cursorColumn = std::max(0, editor.displayedCursorColumn());
@@ -969,12 +972,20 @@ bool MRFEBlockOps::adoptMouseSelection(MRFileEditor &editor, unsigned short modi
 	mGeometry.documentVersion = editor.documentVersion();
 	mGeometry.anchor = editor.selectionAnchorOffset();
 	mGeometry.cursor = editor.selectionCursorOffset();
+	mGeometry.anchorLine = editor.lineIndexOfOffset(mGeometry.anchor);
+	mGeometry.cursorLine = editor.lineIndexOfOffset(mGeometry.cursor);
 	if (column) {
 		int anchorColumn = 0;
 		int cursorColumn = 0;
+		std::size_t anchorLine = 0;
+		std::size_t cursorLine = 0;
 		if (editor.lastMouseSelectionColumns(anchorColumn, cursorColumn)) {
 			mGeometry.anchorColumn = std::max(anchorColumn, 0);
 			mGeometry.cursorColumn = std::max(cursorColumn, 0);
+		}
+		if (editor.lastMouseSelectionLines(anchorLine, cursorLine)) {
+			mGeometry.anchorLine = anchorLine;
+			mGeometry.cursorLine = cursorLine;
 		}
 	} else {
 		if (line && mGeometry.anchor != mGeometry.cursor) {
@@ -1037,6 +1048,12 @@ bool MRFEBlockOps::remapAfterEditorChange(MRFileEditor &editor) {
 	if (mGeometry.mode != MRFEBlockMode::Column) {
 		mGeometry.anchorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.anchor)));
 		mGeometry.cursorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.cursor)));
+	} else {
+		const std::size_t realLineCount = std::max<std::size_t>(1, editor.bufferModel().lineCount());
+		if (mGeometry.anchorLine < realLineCount && mGeometry.cursorLine < realLineCount) {
+			mGeometry.anchorLine = editor.lineIndexOfOffset(mGeometry.anchor);
+			mGeometry.cursorLine = editor.lineIndexOfOffset(mGeometry.cursor);
+		}
 	}
 	mGeometry.documentVersion = change.newVersion;
 	if (mGeometry.hidden) return true;
@@ -1855,6 +1872,8 @@ bool MRFEBlockOps::setCommittedBlock(MRFileEditor &editor, MRFEBlockMode mode, s
 	mGeometry.documentVersion = editor.documentVersion();
 	mGeometry.anchor = anchor;
 	mGeometry.cursor = cursor;
+	mGeometry.anchorLine = editor.lineIndexOfOffset(anchor);
+	mGeometry.cursorLine = editor.lineIndexOfOffset(cursor);
 	mGeometry.anchorColumn = anchorColumn >= 0 ? anchorColumn : std::max(0, static_cast<int>(editor.columnOfOffset(anchor)));
 	mGeometry.cursorColumn = cursorColumn >= 0 ? cursorColumn : std::max(0, static_cast<int>(editor.columnOfOffset(cursor)));
 	normalize(editor);
@@ -2117,12 +2136,15 @@ void MRFEBlockOps::normalize(MRFileEditor &editor) {
 		break;
 	}
 	case MRFEBlockMode::Column: {
-		const std::size_t anchorLine = editor.lineIndexOfOffset(mGeometry.anchor);
-		const std::size_t cursorLine = editor.lineIndexOfOffset(mGeometry.cursor);
+		const std::size_t realLineCount = std::max<std::size_t>(1, editor.bufferModel().lineCount());
+		const std::size_t anchorLine = mGeometry.anchorLine;
+		const std::size_t cursorLine = mGeometry.cursorLine;
+		const std::size_t realLine1 = std::min(std::min(anchorLine, cursorLine), realLineCount - 1);
+		const std::size_t realLine2 = std::min(std::max(anchorLine, cursorLine), realLineCount - 1);
 		mGeometry.line1 = std::min(anchorLine, cursorLine);
 		mGeometry.line2 = std::max(anchorLine, cursorLine);
-		mGeometry.rangeStart = editor.bufferModel().lineStartByIndex(mGeometry.line1);
-		mGeometry.rangeEnd = editor.nextLineOffset(editor.bufferModel().lineStartByIndex(mGeometry.line2));
+		mGeometry.rangeStart = editor.bufferModel().lineStartByIndex(realLine1);
+		mGeometry.rangeEnd = editor.nextLineOffset(editor.bufferModel().lineStartByIndex(realLine2));
 		mGeometry.col1 = std::min(anchorColumn, cursorColumn);
 		mGeometry.col2 = std::max(anchorColumn, cursorColumn);
 		break;
@@ -2165,7 +2187,7 @@ void MRFEBlockOps::applyOverlay(MRFileEditor &editor) {
 		      << " visualEnd=" << visualEnd << " lineCount=" << model.lineCount() << " length=" << model.length();
 		appendColumnBlockTrace(trace.str());
 	}
-	editor.setBlockOverlayState(static_cast<int>(mGeometry.mode), mGeometry.rangeStart, visualEnd, true, mGeometry.status == MRFEBlockStatus::Marking, mGeometry.col1, mGeometry.col2);
+	editor.setBlockOverlayState(static_cast<int>(mGeometry.mode), mGeometry.rangeStart, visualEnd, true, mGeometry.status == MRFEBlockStatus::Marking, mGeometry.col1, mGeometry.col2, mGeometry.mode == MRFEBlockMode::Column, mGeometry.line1, mGeometry.line2);
 }
 
 void MRFEBlockOps::deactivateVisual(MRFileEditor &editor) {

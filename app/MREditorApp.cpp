@@ -1173,7 +1173,10 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	logStartupPhase("recording_ui");
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
-		if (MREditWindow *win = currentEditWindow(); win != nullptr) mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
+		if (MREditWindow *win = currentEditWindow(); win != nullptr) {
+			mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
+			mrMenuBar->setLineDrawingMenuState(win->lineDrawingEnabled(), win->lineDrawingDoubleLines());
+		}
 	}
 	logStartupPhase("menu_state");
 
@@ -1983,9 +1986,13 @@ void MREditorApp::idle() {
 		std::string rightStatus = buildTopRightCursorStatus();
 		mrMenuBar->setRightStatus(rightStatus);
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
-		if (MREditWindow *win = currentEditWindow(); win != nullptr) mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
-		else
+		if (MREditWindow *win = currentEditWindow(); win != nullptr) {
+			mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
+			mrMenuBar->setLineDrawingMenuState(win->lineDrawingEnabled(), win->lineDrawingDoubleLines());
+		} else {
 			mrMenuBar->setInsertModeMenuState(false);
+			mrMenuBar->setLineDrawingMenuState(false, false);
+		}
 		if (mr::messageline::currentVisibleMessage(message)) {
 			MRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
 			if (isHeroVisibleMessage(message)) marqueeKind = MRMenuBar::MarqueeKind::Hero;

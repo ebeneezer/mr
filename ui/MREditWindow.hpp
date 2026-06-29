@@ -525,6 +525,50 @@ class MREditWindow : public TWindow {
 			const bool originalEditorDoubleClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0 && editor->mouseInView(event.mouse.where);
 			const bool originalEditorBlockMouseGesture = originalEvent == evMouseDown && editor != nullptr && editorBlockMouseGesture(event);
 			const bool originalEditorRightClick = originalEvent == evMouseDown && editor != nullptr && plainEditorRightClick(event);
+			if (event.what == evCommand) {
+				const ushort command = event.message.command;
+				if (keyDebugEnabled() && (command == cmMrBlockMarkLines || command == cmMrBlockMarkColumns || command == cmMrBlockMarkStream || command == cmMrBlockToggleMarking || command == cmMrBlockToggleVisibility ||
+				                         command == cmMrBlockEndMarking || command == cmMrBlockTurnMarkingOff)) {
+					char line[224];
+					std::snprintf(line, sizeof(line), "KEYDBG block-command stage=window-pre command=0x%04X block=%d marking=%d cursor=%zu", static_cast<unsigned>(command), hasBlock() ? 1 : 0, isBlockMarking() ? 1 : 0,
+					              editor != nullptr ? editor->cursorOffset() : 0);
+					mrLogMessage(line);
+				}
+				switch (command) {
+					case cmMrBlockMarkLines:
+						beginLineBlock();
+						clearEvent(event);
+						return;
+					case cmMrBlockMarkColumns:
+						beginColumnBlock();
+						clearEvent(event);
+						return;
+					case cmMrBlockMarkStream:
+						beginStreamBlock();
+						clearEvent(event);
+						return;
+					case cmMrBlockToggleMarking:
+						if (isBlockMarking()) endBlock();
+						else
+							beginLineBlock();
+						clearEvent(event);
+						return;
+					case cmMrBlockToggleVisibility:
+						static_cast<void>(toggleBlockVisibility());
+						clearEvent(event);
+						return;
+					case cmMrBlockEndMarking:
+						endBlock();
+						clearEvent(event);
+						return;
+					case cmMrBlockTurnMarkingOff:
+						clearBlock();
+						clearEvent(event);
+						return;
+					default:
+						break;
+				}
+			}
 			if ((originalEvent & (evMouseDown | evMouseMove | evMouseUp)) != 0) {
 				if (originalEditorBlockMouseGesture)
 					notifyMRLspBlockMouseActivity();
@@ -617,7 +661,9 @@ class MREditWindow : public TWindow {
 			TWindow::handleEvent(event);
 			if (editor != nullptr) {
 				if (originalEvent == evMouseDown) {
-					if (!originalEditorDoubleClick || !handleEditorDoubleClickBlockExpansion()) static_cast<void>(mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers()));
+					if (!originalEditorDoubleClick || !handleEditorDoubleClickBlockExpansion()) {
+						if (mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers())) static_cast<void>(finishLineDrawingColumnBlock());
+					}
 				}
 				else if (mBlockOps.isMarking() && (originalEvent == evKeyDown || originalEvent == evCommand)) static_cast<void>(mBlockOps.updateFromEditor(*editor));
 				else if (mBlockOps.hasVisibleBlock() && (originalEvent == evKeyDown || originalEvent == evCommand)) {
@@ -799,6 +845,14 @@ class MREditWindow : public TWindow {
 
 	bool insertModeEnabled() const noexcept {
 		return editor != nullptr && editor->insertModeEnabled();
+	}
+
+	bool lineDrawingEnabled() const noexcept {
+		return editor != nullptr && editor->lineDrawingEnabled();
+	}
+
+	bool lineDrawingDoubleLines() const noexcept {
+		return editor != nullptr && editor->lineDrawingDoubleLines();
 	}
 
 	std::size_t cursorOffset() const noexcept {
@@ -1443,9 +1497,36 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) static_cast<void>(mBlockOps.beginStream(*editor));
 	}
 
+	bool finishLineDrawingColumnBlock() {
+		int rightColumn = 0;
+
+		if (editor == nullptr) return false;
+		if (!editor->lineDrawingEnabled() || editor->isReadOnly() || !mBlockOps.hasVisibleBlock() || mBlockOps.mGeometry.mode != MRFEBlockMode::Column) return false;
+		rightColumn = mBlockOps.mGeometry.col2 > mBlockOps.mGeometry.col1 ? mBlockOps.mGeometry.col2 - 1 : mBlockOps.mGeometry.col2;
+		static_cast<void>(editor->drawLineDrawingBoxForColumnBlock(mBlockOps.mGeometry.line1, mBlockOps.mGeometry.line2, mBlockOps.mGeometry.col1, rightColumn));
+		static_cast<void>(mBlockOps.clear(*editor));
+		return true;
+	}
+
+	bool markAllLines() {
+		std::size_t length = 0;
+		std::size_t lastLine = 0;
+		std::size_t cursor = 0;
+
+		mCursorGestureBlockMarking = false;
+		if (editor == nullptr) return false;
+		length = editor->bufferModel().length();
+		if (length == 0) return mBlockOps.clear(*editor);
+		lastLine = editor->bufferModel().lineIndex(length - 1);
+		cursor = editor->bufferModel().lineStartByIndex(lastLine);
+		return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Line, 0, cursor);
+	}
+
 	void endBlock() {
 		mCursorGestureBlockMarking = false;
-		if (editor != nullptr) static_cast<void>(mBlockOps.end(*editor));
+		if (editor == nullptr) return;
+		static_cast<void>(mBlockOps.end(*editor));
+		static_cast<void>(finishLineDrawingColumnBlock());
 	}
 
 	void clearBlock() {
@@ -2157,7 +2238,7 @@ class MREditWindow : public TWindow {
 		const ushort mods = event.keyDown.controlKeyState;
 		if (!isBlockCursorNavigationKey(keyCode)) return false;
 		if (!isBlockCursorMarkingModifier(mods)) {
-			if (mCursorGestureBlockMarking && mBlockOps.isMarking()) static_cast<void>(mBlockOps.end(*editor));
+			if (mCursorGestureBlockMarking && mBlockOps.isMarking()) endBlock();
 			mCursorGestureBlockMarking = false;
 			return false;
 		}
@@ -2174,7 +2255,14 @@ class MREditWindow : public TWindow {
 			mCursorGestureBlockMarking = true;
 		}
 		event.keyDown.keyCode = keyCode;
-		editor->handleEvent(event);
+		if (targetMode == MRFEBlockMode::Column) {
+			TEvent editorEvent = event;
+
+			editorEvent.keyDown.controlKeyState = 0;
+			editor->handleEvent(editorEvent);
+			clearEvent(event);
+		} else
+			editor->handleEvent(event);
 		static_cast<void>(mBlockOps.updateFromEditor(*editor));
 		return true;
 	}

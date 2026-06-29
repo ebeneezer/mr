@@ -40,6 +40,26 @@ TMenuItem *findMenuItemByCommand(TMenu *menu, ushort command) {
 	return nullptr;
 }
 
+bool removeMenuItemByCommand(TMenu *menu, ushort command) {
+	TMenuItem **link = nullptr;
+
+	if (menu == nullptr) return false;
+	link = &menu->items;
+	while (*link != nullptr) {
+		TMenuItem *item = *link;
+		if (item->command == command) {
+			*link = item->next;
+			item->next = nullptr;
+			if (menu->deflt == item) menu->deflt = menu->items;
+			delete item;
+			return true;
+		}
+		if (item->command == 0 && removeMenuItemByCommand(item->subMenu, command)) return true;
+		link = &item->next;
+	}
+	return false;
+}
+
 struct MenuShortcutSpec {
 	ushort command;
 	TKey startupKey;
@@ -651,6 +671,41 @@ void MRMenuBar::setInsertModeMenuState(bool enabled) {
 	delete[] const_cast<char *>(item->name);
 	item->name = newStr(wantedLabel.c_str());
 	drawView();
+}
+
+void MRMenuBar::setLineDrawingMenuState(bool enabled, bool doubleLines) {
+	const std::string lineDrawingLabel = enabled ? "~L~ine drawing [ON]" : "~L~ine drawing [OFF]";
+	const std::string doubleLinesLabel = doubleLines ? "~D~ouble lines [ON]" : "~D~ouble lines [OFF]";
+	TMenuItem *lineDrawingItem = nullptr;
+	TMenuItem *doubleLinesItem = findMenuItemByCommand(menu, cmMrTextToggleDoubleLines);
+	bool changed = false;
+
+	if (enabled && doubleLinesItem == nullptr) {
+		changed = rebuildRuntimeMenu() || changed;
+	} else if (!enabled && doubleLinesItem != nullptr) {
+		changed = removeMenuItemByCommand(menu, cmMrTextToggleDoubleLines) || changed;
+	}
+	lineDrawingItem = findMenuItemByCommand(menu, cmMrTextToggleLineDrawing);
+	doubleLinesItem = findMenuItemByCommand(menu, cmMrTextToggleDoubleLines);
+	if (lineDrawingItem != nullptr && lineDrawingItem->command == cmMrTextToggleLineDrawing) {
+		if (lineDrawingItem->name == nullptr || lineDrawingLabel != lineDrawingItem->name) {
+			delete[] const_cast<char *>(lineDrawingItem->name);
+			lineDrawingItem->name = newStr(lineDrawingLabel.c_str());
+			changed = true;
+		}
+	}
+	if (doubleLinesItem != nullptr && doubleLinesItem->command == cmMrTextToggleDoubleLines) {
+		if (doubleLinesItem->name == nullptr || doubleLinesLabel != doubleLinesItem->name) {
+			delete[] const_cast<char *>(doubleLinesItem->name);
+			doubleLinesItem->name = newStr(doubleLinesLabel.c_str());
+			changed = true;
+		}
+		if (doubleLinesItem->disabled) {
+			doubleLinesItem->disabled = false;
+			changed = true;
+		}
+	}
+	if (changed) drawView();
 }
 
 void MRMenuBar::tickMarquee() {

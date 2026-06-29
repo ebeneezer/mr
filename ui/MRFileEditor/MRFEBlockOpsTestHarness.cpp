@@ -133,6 +133,9 @@ class MRFEBlockOpsTestPeer {
 
 namespace {
 
+void sendEditorKeyEvent(MRFileEditor &editor, ushort keyCode, ushort modifiers = 0);
+void sendWindowKeyEvent(MREditWindow &window, ushort keyCode, ushort modifiers = 0);
+
 struct MarkerInput {
 	std::string text;
 	std::vector<std::size_t> lineStarts;
@@ -993,6 +996,41 @@ std::string escapedArenaPayload(std::string_view payload) {
 	return escaped;
 }
 
+std::string expectedLineDrawingBoxText(int leftColumn, int rightColumn, std::size_t topLine, std::size_t bottomLine) {
+	std::string text;
+	const int left = std::max(0, leftColumn);
+	const int right = std::max(left, rightColumn);
+	const int innerWidth = std::max(0, right - left - 1);
+
+	for (std::size_t line = 0; line <= bottomLine; ++line) {
+		if (line < topLine) {
+			if (line < bottomLine) text.push_back('\n');
+			continue;
+		}
+		text.append(static_cast<std::size_t>(left), ' ');
+		if (line == topLine && line == bottomLine) {
+			for (int column = left; column <= right; ++column)
+				text += "─";
+		} else if (line == topLine) {
+			text += "┌";
+			for (int column = 0; column < innerWidth; ++column)
+				text += "─";
+			text += "┐";
+		} else if (line == bottomLine) {
+			text += "└";
+			for (int column = 0; column < innerWidth; ++column)
+				text += "─";
+			text += "┘";
+		} else {
+			text += "│";
+			text.append(static_cast<std::size_t>(innerWidth), ' ');
+			text += "│";
+		}
+		if (line < bottomLine) text.push_back('\n');
+	}
+	return text;
+}
+
 std::string lineSeparatorForText(const std::string &text) {
 	for (std::size_t i = 0; i < text.size(); ++i) {
 		if (text[i] == '\r') {
@@ -1009,6 +1047,7 @@ void placeEditorCursor(MRFileEditor &editor, const std::string &text, const std:
 }
 
 std::size_t overlayVisualLine2(MRFileEditor &editor, MRFileEditor::BlockOverlayState overlay) {
+	if (overlay.mode == static_cast<int>(MRFEBlockMode::Column) && overlay.lineRangeValid) return std::max(overlay.line1, overlay.line2);
 	std::size_t start = overlay.anchor;
 	std::size_t end = overlay.trackCursor ? editor.cursorOffset() : overlay.end;
 	if (start > end) std::swap(start, end);
@@ -1018,7 +1057,7 @@ std::size_t overlayVisualLine2(MRFileEditor &editor, MRFileEditor::BlockOverlayS
 bool checkEditorBlock(MRFileEditor &editor, const MRFEBlockOps &ops, MRFEBlockMode mode, MRFEBlockStatus status, std::size_t line1, std::size_t line2, int col1, int col2, const char *phase, std::string &failureReason) {
 	const MRFEBlockGeometry &geometry = MRFEBlockOpsTestPeer::geometry(ops);
 	const MRFileEditor::BlockOverlayState overlay = editor.blockOverlayState();
-	const std::size_t overlayLine1 = editor.lineIndexOfOffset(overlay.anchor);
+	const std::size_t overlayLine1 = overlay.mode == static_cast<int>(MRFEBlockMode::Column) && overlay.lineRangeValid ? std::min(overlay.line1, overlay.line2) : editor.lineIndexOfOffset(overlay.anchor);
 	const std::size_t overlayLine2 = overlayVisualLine2(editor, overlay);
 	const int expectedMode = static_cast<int>(mode);
 
@@ -1108,6 +1147,94 @@ bool runEditorMarkingCase(MRFEBlockMode mode, const std::string &text, std::size
 		return false;
 	}
 	return checkEditorBlock(editor, ops, mode, MRFEBlockStatus::Committed, expectedLine1, expectedLine2, expectedCol1, expectedCol2, phase, failureReason);
+}
+
+bool runFreeCursorBelowEofNavigationCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, "");
+
+	static_cast<void>(editor.replaceBufferText(""));
+	if (editor.snapshotText() != "") {
+		failureReason = "Unable to seed empty editor for free cursor EOF navigation.";
+		return false;
+	}
+	sendEditorKeyEvent(editor, kbDown);
+	sendEditorKeyEvent(editor, kbDown);
+	if (editor.cursorOffset() != 0 || editor.currentLineNumber() != 3 || editor.snapshotText() != "") {
+		failureReason = "Free cursor down movement below EOF must keep buffer empty and expose the virtual line: offset=" + std::to_string(editor.cursorOffset()) +
+		                " line=" + std::to_string(editor.currentLineNumber()) + " text='" + editor.snapshotText() + "'.";
+		return false;
+	}
+	sendEditorKeyEvent(editor, kbUp);
+	if (editor.cursorOffset() != 0 || editor.currentLineNumber() != 2 || editor.snapshotText() != "") {
+		failureReason = "Free cursor up movement from virtual EOF line must keep virtual position without materializing text.";
+		return false;
+	}
+	return true;
+}
+
+bool runColumnBlockBelowEofCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, "");
+	MRFEBlockOps ops;
+	int renderedCol1 = -1;
+	int renderedCol2 = -1;
+
+	static_cast<void>(editor.replaceBufferText(""));
+	if (editor.snapshotText() != "") {
+		failureReason = "Unable to seed empty editor for free cursor virtual column block.";
+		return false;
+	}
+	sendEditorKeyEvent(editor, kbRight);
+	sendEditorKeyEvent(editor, kbRight);
+	if (!MRFEBlockOpsTestPeer::beginColumn(ops, editor)) {
+		failureReason = "Unable to begin virtual column block.";
+		return false;
+	}
+	sendEditorKeyEvent(editor, kbDown);
+	sendEditorKeyEvent(editor, kbDown);
+	sendEditorKeyEvent(editor, kbRight);
+	if (!MRFEBlockOpsTestPeer::updateFromEditor(ops, editor) || !MRFEBlockOpsTestPeer::end(ops, editor)) {
+		failureReason = "Unable to commit virtual column block.";
+		return false;
+	}
+	if (!checkEditorBlock(editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 0, 2, 2, 3, "free cursor virtual column block below EOF", failureReason)) return false;
+	if (editor.snapshotText() != "") {
+		failureReason = "Virtual column block marking below EOF must not materialize editor text.";
+		return false;
+	}
+	if (!mrfeRenderedColumnOverlayColumnsForRegression(editor, 2, 12, renderedCol1, renderedCol2) || renderedCol1 != 2 || renderedCol2 != 3) {
+		failureReason = "Virtual column block overlay must render on the virtual EOF line: col1=" + std::to_string(renderedCol1) + " col2=" + std::to_string(renderedCol2) + ".";
+		return false;
+	}
+	return true;
+}
+
+bool runWindowColumnBlockEmptyLineKeepsFreeCursorColumnCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::string text = "alpha\n\nbeta\n";
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+	MREditWindow window(TRect(0, 0, 80, 12), "window-column-empty-line", 2603);
+	MRFileEditor *editor = window.getEditor();
+
+	if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "window-column-empty-line")) {
+		failureReason = "Unable to seed window column empty-line free cursor case.";
+		return false;
+	}
+	placeEditorCursor(*editor, text, starts, 0, 2);
+	window.beginColumnBlock();
+	placeEditorCursor(*editor, text, starts, 1, 5);
+	window.endBlock();
+	if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmColumn || window.blockLine1() != 1 || window.blockLine2() != 2 || window.blockCol1() != 3 || window.blockCol2() != 6) {
+		failureReason = "Window Alt-Cursor column block over empty line must preserve free cursor columns: line1=" + std::to_string(window.blockLine1()) +
+		                " line2=" + std::to_string(window.blockLine2()) + " col1=" + std::to_string(window.blockCol1()) + " col2=" + std::to_string(window.blockCol2()) + ".";
+		return false;
+	}
+	if (editor->snapshotText() != text) {
+		failureReason = "Window Alt-Cursor column marking over empty line must not change text.";
+		return false;
+	}
+	return true;
 }
 
 bool seedMouseColumnState(MRFileEditor &editor, int anchorColumn, int cursorColumn) {
@@ -1834,6 +1961,11 @@ TEvent makeKeyEvent(ushort keyCode, ushort modifiers = 0) {
 	return event;
 }
 
+void sendEditorKeyEvent(MRFileEditor &editor, ushort keyCode, ushort modifiers) {
+	TEvent event = makeKeyEvent(keyCode, modifiers);
+	editor.handleEvent(event);
+}
+
 void sendEditorCommand(MRFileEditor &editor, ushort command) {
 	TEvent event{};
 	event.what = evCommand;
@@ -1841,7 +1973,7 @@ void sendEditorCommand(MRFileEditor &editor, ushort command) {
 	editor.handleEvent(event);
 }
 
-void sendWindowKeyEvent(MREditWindow &window, ushort keyCode, ushort modifiers = 0) {
+void sendWindowKeyEvent(MREditWindow &window, ushort keyCode, ushort modifiers) {
 	TEvent event = makeKeyEvent(keyCode, modifiers);
 	window.handleEvent(event);
 }
@@ -3410,6 +3542,101 @@ bool runWindowBlockTabIndentCase(std::string &failureReason) {
 	return true;
 }
 
+bool runWindowBlockKeybindingClearStateCase(std::string &failureReason) {
+	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+	const std::string text = "alpha\nbeta\ngamma\n";
+	const std::vector<std::size_t> starts = lineStartsForText(text);
+
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "stream-gesture-clear-state", 2701);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "stream-gesture-clear-state")) {
+			failureReason = "Unable to seed stream gesture clear-state case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 0);
+		sendWindowKeyEvent(window, kbRight, kbShift);
+		if (!window.hasBlock() || !window.isBlockMarking() || editor->blockOverlayState().mode != MREditWindow::bmStream) {
+			failureReason = "Shift-Cursor stream gesture must enter visible marking before clear-state case.";
+			return false;
+		}
+		sendWindowCommand(window, cmMrBlockTurnMarkingOff);
+		if (window.hasBlock() || window.isBlockMarking() || editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Turn marking off must clear stream gesture block, overlay and editor selection.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbDown);
+		sendWindowKeyEvent(window, kbRight);
+		if (window.hasBlock() || window.isBlockMarking() || editor->blockOverlayState().active || editor->hasTextSelection() || editor->currentLineNumber() != 2 || editor->currentColumnNumber() != 3) {
+			failureReason = "Plain cursor movement after stream gesture clear must not reactivate block state: block=" + std::to_string(window.hasBlock() ? 1 : 0) +
+			                " marking=" + std::to_string(window.isBlockMarking() ? 1 : 0) + " overlay=" + std::to_string(editor->blockOverlayState().active ? 1 : 0) +
+			                " selection=" + std::to_string(editor->hasTextSelection() ? 1 : 0) + " line=" + std::to_string(editor->currentLineNumber()) +
+			                " column=" + std::to_string(editor->currentColumnNumber()) + ".";
+			return false;
+		}
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "column-gesture-clear-state", 2702);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "column-gesture-clear-state")) {
+			failureReason = "Unable to seed column gesture clear-state case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 1);
+		sendWindowKeyEvent(window, kbDown, kbAltShift);
+		if (!window.hasBlock() || !window.isBlockMarking() || editor->blockOverlayState().mode != MREditWindow::bmColumn) {
+			failureReason = "Alt-Cursor column gesture must enter visible marking before clear-state case.";
+			return false;
+		}
+		sendWindowCommand(window, cmMrBlockTurnMarkingOff);
+		if (window.hasBlock() || window.isBlockMarking() || editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Turn marking off must clear column gesture block, overlay and editor selection.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbDown);
+		sendWindowKeyEvent(window, kbRight);
+		if (window.hasBlock() || window.isBlockMarking() || editor->blockOverlayState().active || editor->hasTextSelection() || editor->currentLineNumber() != 3 || editor->currentColumnNumber() != 3) {
+			failureReason = "Plain cursor movement after column gesture clear must not reactivate block state: block=" + std::to_string(window.hasBlock() ? 1 : 0) +
+			                " marking=" + std::to_string(window.isBlockMarking() ? 1 : 0) + " overlay=" + std::to_string(editor->blockOverlayState().active ? 1 : 0) +
+			                " selection=" + std::to_string(editor->hasTextSelection() ? 1 : 0) + " line=" + std::to_string(editor->currentLineNumber()) +
+			                " column=" + std::to_string(editor->currentColumnNumber()) + ".";
+			return false;
+		}
+	}
+	{
+		MREditWindow window(TRect(0, 0, 80, 16), "line-gesture-clear-state", 2703);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "line-gesture-clear-state")) {
+			failureReason = "Unable to seed line gesture clear-state case.";
+			return false;
+		}
+		placeEditorCursor(*editor, text, starts, 0, 0);
+		sendWindowKeyEvent(window, kbDown, kbCtrlShift | kbAltShift);
+		if (!window.hasBlock() || !window.isBlockMarking() || editor->blockOverlayState().mode != MREditWindow::bmLine) {
+			failureReason = "Ctrl-Alt-Cursor line gesture must enter visible marking before clear-state case.";
+			return false;
+		}
+		sendWindowCommand(window, cmMrBlockTurnMarkingOff);
+		if (window.hasBlock() || window.isBlockMarking() || editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Turn marking off must clear line gesture block, overlay and editor selection.";
+			return false;
+		}
+		sendWindowKeyEvent(window, kbDown);
+		sendWindowKeyEvent(window, kbRight);
+		if (window.hasBlock() || window.isBlockMarking() || editor->blockOverlayState().active || editor->hasTextSelection() || editor->currentLineNumber() != 3 || editor->currentColumnNumber() != 2) {
+			failureReason = "Plain cursor movement after line gesture clear must not reactivate block state: block=" + std::to_string(window.hasBlock() ? 1 : 0) +
+			                " marking=" + std::to_string(window.isBlockMarking() ? 1 : 0) + " overlay=" + std::to_string(editor->blockOverlayState().active ? 1 : 0) +
+			                " selection=" + std::to_string(editor->hasTextSelection() ? 1 : 0) + " line=" + std::to_string(editor->currentLineNumber()) +
+			                " column=" + std::to_string(editor->currentColumnNumber()) + ".";
+			return false;
+		}
+	}
+	return true;
+}
+
 bool runBlockCopyCase(MRFEBlockMode mode, const std::string &text, std::size_t anchorLine, int anchorColumn, std::size_t cursorLine, int cursorColumn, std::size_t targetLine, int targetColumn, const std::string &copiedText, const char *phase, std::string &failureReason, bool targetInsertMode = true) {
 	ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	const std::vector<std::size_t> starts = lineStartsForText(text);
@@ -3638,6 +3865,468 @@ bool runStreamBlockLoadSaveCase(std::string &failureReason) {
 	return true;
 }
 
+bool runLineDrawingCornerCase(std::string &failureReason) {
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		MRFileEditor editor(TRect(0, 0, 80, 8), nullptr, nullptr, nullptr, "");
+
+		if (!editor.replaceBufferText("\t\n\t\n\t")) {
+			failureReason = "Unable to seed line drawing tab box case.";
+			return false;
+		}
+		editor.setLineDrawingEnabled(true);
+		if (!editor.drawLineDrawingBoxForColumnBlock(0, 2, 4, 8)) {
+			failureReason = "Line drawing column box did not report a change.";
+			return false;
+		}
+		if (editor.snapshotText() != "    ┌───┐\n    │   │\n    └───┘") {
+			failureReason = "Line drawing column box must create true corners and expand touched tab prefixes: " + escapedArenaPayload(editor.snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		MRFileEditor editor(TRect(0, 0, 80, 8), nullptr, nullptr, nullptr, "");
+
+		if (!editor.replaceBufferText("\t\n\n\t")) {
+			failureReason = "Unable to seed line drawing empty-line tab box case.";
+			return false;
+		}
+		editor.setLineDrawingEnabled(true);
+		if (!editor.drawLineDrawingBoxForColumnBlock(0, 2, 4, 8)) {
+			failureReason = "Line drawing empty-line column box did not report a change.";
+			return false;
+		}
+		if (editor.snapshotText() != "    ┌───┐\n    │   │\n    └───┘") {
+			failureReason = "Line drawing column box must materialize empty rows as spaces: " + escapedArenaPayload(editor.snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		const std::string text = "          \n          \n          ";
+		const std::vector<std::size_t> starts = lineStartsForText(text);
+		MRFileEditor editor(TRect(0, 0, 80, 8), nullptr, nullptr, nullptr, "");
+
+		if (!editor.replaceBufferText(text.c_str())) {
+			failureReason = "Unable to seed line drawing cursor corner case.";
+			return false;
+		}
+		editor.setLineDrawingEnabled(true);
+		placeEditorCursor(editor, text, starts, 0, 2);
+		sendEditorKeyEvent(editor, kbRight, kbShift);
+		sendEditorKeyEvent(editor, kbRight, kbShift);
+		sendEditorKeyEvent(editor, kbDown, kbShift);
+		sendEditorKeyEvent(editor, kbDown, kbShift);
+		if (editor.snapshotText() != "  ──┐     \n    │     \n    │     ") {
+			failureReason = "Line drawing cursor corner must not retain the phantom east arm: " + escapedArenaPayload(editor.snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		QueuedMouseOwner owner(TRect(0, 0, 80, 8));
+		MRFileEditor *editor = new MRFileEditor(TRect(0, 0, 80, 8), nullptr, nullptr, nullptr, "");
+
+		owner.insert(editor);
+		if (!editor->replaceBufferText("          \n          \n          ")) {
+			failureReason = "Unable to seed line drawing mouse corner case.";
+			return false;
+		}
+		editor->setLineDrawingEnabled(true);
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(*editor, 5), 0, 0, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(*editor, 5), 2, 0, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(*editor, 2), 2, 0, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(*editor, 2), 0, 0, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 2), 0, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 2), 0, 0, mbLeftButton);
+		editor->handleEvent(event);
+		if (editor->snapshotText() != "  ┌──┐    \n  │  │    \n  └──┘    ") {
+			failureReason = "Line drawing mouse box must create true corners: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		QueuedMouseOwner owner(TRect(0, 0, 80, 12));
+		MRFileEditor *editor = new MRFileEditor(TRect(0, 0, 80, 12), nullptr, nullptr, nullptr, "");
+
+		owner.insert(editor);
+		static_cast<void>(editor->replaceBufferText(""));
+		if (editor->snapshotText() != "") {
+			failureReason = "Unable to seed empty line drawing mouse below-EOF case.";
+			return false;
+		}
+		editor->setLineDrawingEnabled(true);
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(*editor, 10), 7, 0, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 10), 7, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 10), 4, 0, mbLeftButton);
+		editor->handleEvent(event);
+		if (editor->currentLineNumber() != 8 || editor->currentColumnNumber() != 11) {
+			failureReason = "Plain line drawing mouse below EOF must leave the cursor on the release line: line=" + std::to_string(editor->currentLineNumber()) +
+			                " column=" + std::to_string(editor->currentColumnNumber()) + ".";
+			return false;
+		}
+		if (editor->snapshotText() != "\n\n\n\n          │\n          │\n          │\n          │") {
+			failureReason = "Plain line drawing mouse below EOF must draw beyond the first line: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		QueuedMouseOwner owner(TRect(0, 0, 120, 8));
+		MRFileEditor *editor = new MRFileEditor(TRect(0, 0, 120, 8), nullptr, nullptr, nullptr, "");
+		std::string expected;
+
+		owner.insert(editor);
+		static_cast<void>(editor->replaceBufferText(""));
+		editor->setLineDrawingEnabled(true);
+		for (int i = 1; i <= 120; ++i) {
+			const int column = std::min(i, 60);
+			owner.queueMouseEvent(makeMouseEvent(evMouseMove, localXForEditorColumn(*editor, column), 0, 0, mbLeftButton));
+		}
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, localXForEditorColumn(*editor, 60), 0, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, localXForEditorColumn(*editor, 0), 0, 0, mbLeftButton);
+		editor->handleEvent(event);
+		for (int column = 0; column <= 60; ++column)
+			expected += "─";
+		if (editor->snapshotText() != expected) {
+			failureReason = "Fast plain line drawing mouse must coalesce collinear moves without changing the final line: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		QueuedMouseOwner owner(TRect(0, 0, 80, 8));
+		MREditWindow *window = new MREditWindow(TRect(0, 0, 80, 8), "line-drawing-empty-alt-column", 2604);
+		MRFileEditor *editor = nullptr;
+
+		owner.insert(window);
+		editor = window->getEditor();
+		if (editor == nullptr) {
+			failureReason = "Unable to seed line drawing empty alt-mouse column block case.";
+			return false;
+		}
+		static_cast<void>(window->replaceTextBuffer("", "line-drawing-empty-alt-column"));
+		if (editor->snapshotText() != "") {
+			failureReason = "Unable to seed line drawing empty alt-mouse column block case.";
+			return false;
+		}
+		editor->setLineDrawingEnabled(true);
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 4), 2)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 4), 2)).y, kbAltShift, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 4), 2)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 4), 2)).y, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 1), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 1), 0)).y, kbAltShift, mbLeftButton);
+		window->handleEvent(event);
+		if (window->hasBlock() || editor->hasTextSelection()) {
+			failureReason = "Line drawing empty alt-left column gesture must consume the visible column block after drawing.";
+			return false;
+		}
+		if (editor->snapshotText() != " ┌──┐\n │  │\n └──┘") {
+			failureReason = "Line drawing empty alt-left column gesture must materialize virtual rows as spaces: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		QueuedMouseOwner owner(TRect(0, 0, 120, 16));
+		MREditWindow *window = new MREditWindow(TRect(0, 0, 120, 16), "line-drawing-large-alt-column", 2605);
+		MRFileEditor *editor = nullptr;
+		const std::string expected = expectedLineDrawingBoxText(20, 60, 0, 8);
+
+		owner.insert(window);
+		editor = window->getEditor();
+		if (editor == nullptr) {
+			failureReason = "Unable to seed line drawing large alt-mouse column block case.";
+			return false;
+		}
+		static_cast<void>(window->replaceTextBuffer("", "line-drawing-large-alt-column"));
+		if (editor->snapshotText() != "") {
+			failureReason = "Unable to seed line drawing large alt-mouse column block case.";
+			return false;
+		}
+		editor->setLineDrawingEnabled(true);
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).y, kbAltShift, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).y, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 20), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 20), 0)).y, kbAltShift, mbLeftButton);
+		window->handleEvent(event);
+		if (editor->snapshotText() != expected) {
+			failureReason = "Line drawing large alt-left column gesture must draw a complete rectangle: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		QueuedMouseOwner owner(TRect(0, 0, 120, 16));
+		MREditWindow *window = new MREditWindow(TRect(0, 0, 120, 16), "line-drawing-fast-alt-column", 2609);
+		MRFileEditor *editor = nullptr;
+		const std::string expected = expectedLineDrawingBoxText(20, 60, 0, 8);
+
+		owner.insert(window);
+		editor = window->getEditor();
+		if (editor == nullptr) {
+			failureReason = "Unable to seed fast line drawing alt-mouse column block case.";
+			return false;
+		}
+		static_cast<void>(window->replaceTextBuffer("", "line-drawing-fast-alt-column"));
+		editor->setLineDrawingEnabled(true);
+		for (int i = 0; i < 120; ++i) {
+			const int column = 20 + (i % 41);
+			const int line = i % 9;
+			owner.queueMouseEvent(makeMouseEvent(evMouseMove, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, column), line)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, column), line)).y, kbAltShift, mbLeftButton));
+		}
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).y, kbAltShift, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).y, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 20), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 20), 0)).y, kbAltShift, mbLeftButton);
+		window->handleEvent(event);
+		if (window->hasBlock() || editor->hasTextSelection()) {
+			failureReason = "Fast line drawing alt-left column gesture must consume the visible column block after drawing.";
+			return false;
+		}
+		if (editor->snapshotText() != expected) {
+			failureReason = "Fast line drawing alt-left column gesture must draw the final rectangle, not intermediate drag debris: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		QueuedMouseOwner owner(TRect(0, 0, 120, 16));
+		MREditWindow *window = new MREditWindow(TRect(0, 0, 120, 16), "line-drawing-large-reverse-alt-column", 2606);
+		MRFileEditor *editor = nullptr;
+		const std::string expected = expectedLineDrawingBoxText(20, 60, 0, 8);
+
+		owner.insert(window);
+		editor = window->getEditor();
+		if (editor == nullptr) {
+			failureReason = "Unable to seed line drawing large reverse alt-mouse column block case.";
+			return false;
+		}
+		static_cast<void>(window->replaceTextBuffer("", "line-drawing-large-reverse-alt-column"));
+		if (editor->snapshotText() != "") {
+			failureReason = "Unable to seed line drawing large reverse alt-mouse column block case.";
+			return false;
+		}
+		editor->setLineDrawingEnabled(true);
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 20), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 20), 0)).y, kbAltShift, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 20), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 20), 0)).y, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 60), 8)).y, kbAltShift, mbLeftButton);
+		window->handleEvent(event);
+		if (editor->snapshotText() != expected) {
+			failureReason = "Line drawing large reverse alt-left column gesture must draw a complete rectangle: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		QueuedMouseOwner owner(TRect(0, 0, 80, 12));
+		MREditWindow *window = new MREditWindow(TRect(0, 0, 80, 12), "line-drawing-empty-below-eof-alt-column", 2610);
+		MRFileEditor *editor = nullptr;
+
+		owner.insert(window);
+		editor = window->getEditor();
+		if (editor == nullptr) {
+			failureReason = "Unable to seed below-EOF empty alt-mouse line drawing case.";
+			return false;
+		}
+		static_cast<void>(window->replaceTextBuffer("", "line-drawing-empty-below-eof-alt-column"));
+		editor->setLineDrawingEnabled(true);
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 10), 7)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 10), 7)).y, kbAltShift, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 10), 7)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 10), 7)).y, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 10), 4)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 10), 4)).y, kbAltShift, mbLeftButton);
+		window->handleEvent(event);
+		if (window->hasBlock() || editor->hasTextSelection()) {
+			failureReason = "Below-EOF vertical alt-left column gesture must consume the visible column block after drawing.";
+			return false;
+		}
+		if (editor->currentLineNumber() != 8 || editor->currentColumnNumber() != 11) {
+			failureReason = "Below-EOF vertical alt-left column gesture must leave the cursor on the virtual release line: line=" + std::to_string(editor->currentLineNumber()) +
+			                " column=" + std::to_string(editor->currentColumnNumber()) + ".";
+			return false;
+		}
+		if (editor->snapshotText() != "\n\n\n\n          │\n          │\n          │\n          │") {
+			failureReason = "Below-EOF vertical alt-left column gesture must materialize virtual rows as a vertical line: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		MRFileEditor editor(TRect(0, 0, 80, 8), nullptr, nullptr, nullptr, "");
+
+		static_cast<void>(editor.replaceBufferText(""));
+		if (editor.snapshotText() != "") {
+			failureReason = "Unable to seed line drawing empty cursor box case.";
+			return false;
+		}
+		editor.setLineDrawingEnabled(true);
+		sendEditorKeyEvent(editor, kbRight);
+		sendEditorKeyEvent(editor, kbRight);
+		sendEditorKeyEvent(editor, kbRight, kbShift);
+		sendEditorKeyEvent(editor, kbRight, kbShift);
+		sendEditorKeyEvent(editor, kbDown, kbShift);
+		sendEditorKeyEvent(editor, kbDown, kbShift);
+		sendEditorKeyEvent(editor, kbLeft, kbShift);
+		sendEditorKeyEvent(editor, kbLeft, kbShift);
+		if (editor.snapshotText() != "  ──┐\n    │\n  ──┘") {
+			failureReason = "Line drawing cursor path in an empty editor must materialize virtual rows: " + escapedArenaPayload(editor.snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		MREditWindow window(TRect(0, 0, 80, 8), "line-drawing-alt-cursor-column", 2607);
+		MRFileEditor *editor = window.getEditor();
+
+		if (editor == nullptr) {
+			failureReason = "Unable to seed line drawing alt-cursor column block case.";
+			return false;
+		}
+		static_cast<void>(window.replaceTextBuffer("", "line-drawing-alt-cursor-column"));
+		editor->setLineDrawingEnabled(true);
+		sendWindowKeyEvent(window, kbRight);
+		sendWindowKeyEvent(window, kbRight);
+		sendWindowKeyEvent(window, kbDown, kbAltShift);
+		sendWindowKeyEvent(window, kbDown, kbAltShift);
+		sendWindowKeyEvent(window, kbRight, kbAltShift);
+		sendWindowKeyEvent(window, kbRight, kbAltShift);
+		sendWindowKeyEvent(window, kbRight);
+		if (window.hasBlock() || editor->hasTextSelection()) {
+			failureReason = "Line drawing Alt-Cursor column gesture must consume the column block when Alt ends.";
+			return false;
+		}
+		if (editor->snapshotText() != "  ┌┐\n  ││\n  └┘") {
+			failureReason = "Line drawing Alt-Cursor column gesture must draw when Alt ends: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		MRFileEditor editor(TRect(0, 0, 80, 8), nullptr, nullptr, nullptr, "");
+		MRFEBlockOps ops;
+
+		static_cast<void>(editor.replaceBufferText(""));
+		editor.setLineDrawingEnabled(true);
+		for (int step = 0; step < 10; ++step)
+			sendEditorKeyEvent(editor, kbRight);
+		sendEditorKeyEvent(editor, kbDown, kbShift);
+		sendEditorKeyEvent(editor, kbDown, kbShift);
+		if (editor.currentLineNumber() != 3 || editor.currentColumnNumber() != 11 || editor.hasTextSelection()) {
+			failureReason = "Line drawing Shift-Cursor must preserve the free cursor after materialization: line=" + std::to_string(editor.currentLineNumber()) +
+			                " column=" + std::to_string(editor.currentColumnNumber()) + " selection=" + std::to_string(editor.hasTextSelection() ? 1 : 0) + ".";
+			return false;
+		}
+		sendEditorKeyEvent(editor, kbDown);
+		if (editor.currentLineNumber() != 4 || editor.currentColumnNumber() != 11 || editor.hasTextSelection()) {
+			failureReason = "Free cursor movement after line drawing materialization must continue below EOF: line=" + std::to_string(editor.currentLineNumber()) +
+			                " column=" + std::to_string(editor.currentColumnNumber()) + " selection=" + std::to_string(editor.hasTextSelection() ? 1 : 0) + ".";
+			return false;
+		}
+		if (!MRFEBlockOpsTestPeer::beginColumn(ops, editor)) {
+			failureReason = "Unable to begin column block after line drawing materialization.";
+			return false;
+		}
+		sendEditorKeyEvent(editor, kbDown);
+		sendEditorKeyEvent(editor, kbRight);
+		if (!MRFEBlockOpsTestPeer::updateFromEditor(ops, editor) || !MRFEBlockOpsTestPeer::end(ops, editor)) {
+			failureReason = "Unable to commit column block after line drawing materialization.";
+			return false;
+		}
+		if (!checkEditorBlock(editor, ops, MRFEBlockMode::Column, MRFEBlockStatus::Committed, 3, 4, 10, 11, "column block after line drawing materialization", failureReason)) return false;
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		MRFileEditor editor(TRect(0, 0, 120, 12), nullptr, nullptr, nullptr, "");
+		std::size_t lastLineStart = 0;
+		std::size_t lastLineEnd = 0;
+
+		static_cast<void>(editor.replaceBufferText(""));
+		editor.setLineDrawingEnabled(true);
+		if (!editor.drawLineDrawingBoxForColumnBlock(0, 6, 20, 21)) {
+			failureReason = "Unable to draw materialized baseline box for free cursor selection movement case.";
+			return false;
+		}
+		lastLineStart = editor.bufferModel().lineStartByIndex(6);
+		lastLineEnd = editor.lineEndOffset(lastLineStart);
+		editor.setCursorOffsetAtVisualColumn(lastLineEnd, 26);
+		editor.setSelectionOffsets(lastLineStart, lastLineEnd, False);
+		if (editor.currentLineNumber() != 7 || editor.currentColumnNumber() != 27 || !editor.hasTextSelection()) {
+			failureReason = "Unable to seed active selection to the right of a materialized line drawing box: line=" + std::to_string(editor.currentLineNumber()) +
+			                " column=" + std::to_string(editor.currentColumnNumber()) + " selection=" + std::to_string(editor.hasTextSelection() ? 1 : 0) + ".";
+			return false;
+		}
+		sendEditorKeyEvent(editor, kbRight);
+		if (editor.currentLineNumber() != 7 || editor.currentColumnNumber() != 28 || !editor.hasTextSelection()) {
+			failureReason = "Free cursor right movement must not stick at a materialized box line while a block selection is active: line=" + std::to_string(editor.currentLineNumber()) +
+			                " column=" + std::to_string(editor.currentColumnNumber()) + " selection=" + std::to_string(editor.hasTextSelection() ? 1 : 0) + ".";
+			return false;
+		}
+	}
+
+	{
+		ScopedCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
+		const std::string text = "alpha\n\nbeta\n";
+		QueuedMouseOwner owner(TRect(0, 0, 80, 8));
+		MREditWindow *window = new MREditWindow(TRect(0, 0, 80, 8), "line-drawing-alt-column", 2601);
+		MRFileEditor *editor = nullptr;
+
+		owner.insert(window);
+		editor = window->getEditor();
+		if (editor == nullptr || !window->replaceTextBuffer(text.c_str(), "line-drawing-alt-column")) {
+			failureReason = "Unable to seed line drawing alt-mouse column block case.";
+			return false;
+		}
+		editor->setLineDrawingEnabled(true);
+		owner.queueMouseEvent(makeMouseEvent(evMouseMove, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 4), 2)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 4), 2)).y, kbAltShift, mbLeftButton));
+		owner.queueMouseEvent(makeMouseEvent(evMouseUp, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 4), 2)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 4), 2)).y, 0, 0));
+		TEvent event = makeMouseEvent(evMouseDown, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 1), 0)).x, editor->makeGlobal(TPoint(localXForEditorColumn(*editor, 1), 0)).y, kbAltShift, mbLeftButton);
+		window->handleEvent(event);
+		if (window->hasBlock() || editor->hasTextSelection()) {
+			failureReason = "Line drawing alt-left column gesture must consume the visible column block after drawing.";
+			return false;
+		}
+		if (editor->snapshotText() != "a┌──┐\n │  │\nb└──┘\n") {
+			failureReason = "Line drawing alt-left column gesture must draw the committed column block: " + escapedArenaPayload(editor->snapshotText());
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool runEditMarkAllCase(std::string &failureReason) {
+	const std::string text = "alpha\n\nbeta\nomega";
+	MREditWindow window(TRect(0, 0, 80, 16), "edit-mark-all", 2602);
+	MRFileEditor *editor = window.getEditor();
+
+	if (editor == nullptr || !window.replaceTextBuffer(text.c_str(), "edit-mark-all")) {
+		failureReason = "Unable to seed edit mark all case.";
+		return false;
+	}
+	static_cast<void>(window.markAllLines());
+	if (editor->snapshotText() != text || editor->hasTextSelection()) {
+		failureReason = "Edit mark all must preserve text and use block state, not editor text selection.";
+		return false;
+	}
+	if (!window.hasBlock() || window.blockStatus() != MREditWindow::bmLine || window.blockLine1() != 1 || window.blockLine2() != 4) {
+		failureReason = "Edit mark all must mark the full editor contents as a line block: has=" + std::to_string(window.hasBlock() ? 1 : 0) +
+		                " mode=" + std::to_string(window.blockStatus()) + " line1=" + std::to_string(window.blockLine1()) + " line2=" + std::to_string(window.blockLine2()) + ".";
+		return false;
+	}
+	return true;
+}
+
 } // namespace
 
 bool mrfeSeedMouseColumnStateForRegression(MRFileEditor &editor, int anchorColumn, int cursorColumn) {
@@ -3692,6 +4381,9 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 	if (!runEditorMarkingCase(MRFEBlockMode::Column, editorText, 0, 1, 1, 4, 0, 1, 1, 4, "editor column forward ending on empty line", failureReason)) return false;
 	if (!runEditorMarkingCase(MRFEBlockMode::Column, editorText, 2, 4, 1, 1, 1, 2, 1, 4, "editor column reverse ending on empty line", failureReason)) return false;
 	if (!runEditorMarkingCase(MRFEBlockMode::Column, editorText, 1, 2, 1, 6, 1, 1, 2, 6, "editor column empty line virtual range", failureReason)) return false;
+	if (!runFreeCursorBelowEofNavigationCase(failureReason)) return false;
+	if (!runColumnBlockBelowEofCase(failureReason)) return false;
+	if (!runWindowColumnBlockEmptyLineKeepsFreeCursorColumnCase(failureReason)) return false;
 	if (!runMenuColumnIgnoresStaleMouseStateCase(failureReason)) return false;
 	if (!runEditorToggleCase(MRFEBlockMode::Line, "line toggle hide/show", failureReason)) return false;
 	if (!runEditorToggleCase(MRFEBlockMode::Column, "column toggle hide/show", failureReason)) return false;
@@ -3744,6 +4436,7 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 		if (!runStreamIndentCase("aa MOVE zz\n        middle\nend!!!!", 0, 3, 2, 3, 4, true, true, "aa  MOVE zz\n            middle\n   end!!!!", 0, 2, 4, 6, "multiline stream indent continues whole middle line past right margin without rotation", failureReason, 8)) return false;
 	}
 	if (!runWindowBlockTabIndentCase(failureReason)) return false;
+	if (!runWindowBlockKeybindingClearStateCase(failureReason)) return false;
 	{
 		MREditSetupSettings settings = configuredEditSetupSettings();
 		settings.columnBlockMove = "DELETE_SPACE";
@@ -3999,6 +4692,8 @@ bool mrfeBlockOpsRegressionHarness(std::string &failureReason) {
 	if (!runEditorMouseDragReplacesExistingBlockCase(failureReason)) return false;
 	if (!runEditorMouseReleaseFinalPointCase(failureReason)) return false;
 	if (!runEditorMouseClickPreservesExistingBlockCase(failureReason)) return false;
+	if (!runLineDrawingCornerCase(failureReason)) return false;
+	if (!runEditMarkAllCase(failureReason)) return false;
 	if (!runWindowBlockRemapAfterDeleteCase(failureReason)) return false;
 
 	failureReason.clear();

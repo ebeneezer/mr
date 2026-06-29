@@ -2965,6 +2965,41 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "direct MRMAC committed stream overlay", failureReason)) return false;
 	}
 	{
+		MREditWindow window(TRect(0, 0, 80, 16), "mrmac-action-clear-state", 1018);
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr || !window.replaceTextBuffer("alpha\nbeta\ngamma\n", "mrmac-action-clear-state")) {
+			failureReason = "Unable to seed window editor for direct MRMAC clear-state path.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_BLOCK_SET_BEGIN", "", &window)) {
+			failureReason = "MRMAC_BLOCK_SET_BEGIN action dispatch failed before clear-state path.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_CURSOR_RIGHT", "", &window)) {
+			failureReason = "MRMAC_CURSOR_RIGHT action dispatch failed before clear-state path.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_BLOCK_CLEAR", "", &window)) {
+			failureReason = "MRMAC_BLOCK_CLEAR action dispatch failed.";
+			return false;
+		}
+		if (window.hasBlock() || window.isBlockMarking() || editor->blockOverlayState().active || editor->hasTextSelection()) {
+			failureReason = "Direct MRMAC block clear must remove marking state, overlay and editor selection.";
+			return false;
+		}
+		if (!dispatchMRKeymapAction("MRMAC_CURSOR_DOWN", "", &window) || !dispatchMRKeymapAction("MRMAC_CURSOR_RIGHT", "", &window)) {
+			failureReason = "Direct MRMAC cursor action dispatch failed after clear-state path.";
+			return false;
+		}
+		if (window.hasBlock() || window.isBlockMarking() || editor->blockOverlayState().active || editor->hasTextSelection() || editor->currentLineNumber() != 2 || editor->currentColumnNumber() != 3) {
+			failureReason = "Direct MRMAC cursor movement after block clear must not reactivate marking state: block=" + std::to_string(window.hasBlock() ? 1 : 0) +
+			                " marking=" + std::to_string(window.isBlockMarking() ? 1 : 0) + " overlay=" + std::to_string(editor->blockOverlayState().active ? 1 : 0) +
+			                " selection=" + std::to_string(editor->hasTextSelection() ? 1 : 0) + " line=" + std::to_string(editor->currentLineNumber()) +
+			                " column=" + std::to_string(editor->currentColumnNumber()) + ".";
+			return false;
+		}
+	}
+	{
 		const std::string text = "aa MOVE zz\nend";
 		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-keymap-move-undo", 1015);
 		MRFileEditor *editor = window.getEditor();
