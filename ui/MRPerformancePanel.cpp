@@ -4,8 +4,10 @@
 #include "../coprocessor/MRPerformance.hpp"
 #include "../config/settings/MRSettingsRuntimeState.hpp"
 #include "../mrmac/vm/MRVMHash.hpp"
+#include "MRWindowSupport.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -61,6 +63,39 @@ const char *eventShortName(const mr::performance::Event &event) noexcept {
 	if (event.action == "External command") return "IO";
 	if (event.action == "Background macro") return "MAC";
 	return "TASK";
+}
+
+std::uint64_t performancePanelSecondNow() {
+	return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+void logVmHashIoHotspots(const MRVMHashIoRateSnapshot &rate) {
+	static std::uint64_t lastLogSecond = 0;
+	static std::uint64_t lastLoggedReads = 0;
+	static std::uint64_t lastLoggedWrites = 0;
+	constexpr std::uint64_t kLogThreshold = 10000;
+	constexpr std::uint64_t kLogIntervalSeconds = 5;
+	const std::uint64_t now = performancePanelSecondNow();
+	std::vector<MRVMHashIoHotspot> hotspots;
+	std::string line;
+
+	if (rate.readsPerMinute < kLogThreshold && rate.writesPerMinute < kLogThreshold) return;
+	if (lastLogSecond != 0 && now < lastLogSecond + kLogIntervalSeconds && rate.readsPerMinute == lastLoggedReads && rate.writesPerMinute == lastLoggedWrites) return;
+	lastLogSecond = now;
+	lastLoggedReads = rate.readsPerMinute;
+	lastLoggedWrites = rate.writesPerMinute;
+	hotspots = mrvmHashIoHotspotsSnapshot(12);
+	line = "VM Hash IO hotspots/min total=" + std::to_string(rate.readsPerMinute) + "/" + std::to_string(rate.writesPerMinute) + " top:";
+	for (const MRVMHashIoHotspot &hotspot : hotspots) {
+		line += " ";
+		line += hotspot.label;
+		line += "=";
+		line += std::to_string(hotspot.readsPerMinute);
+		line += "/";
+		line += std::to_string(hotspot.writesPerMinute);
+		line += ";";
+	}
+	mrLogMessage(line);
 }
 
 char eventMarker(const mr::performance::Event &event) noexcept {
@@ -318,6 +353,7 @@ void MRPerformancePanel::draw() {
 	std::string line;
 	int y = 0;
 
+	logVmHashIoHotspots(hashIoRate);
 	line = " PERF ";
 	line += " results:";
 	line += std::to_string(snapshot.pendingResults);

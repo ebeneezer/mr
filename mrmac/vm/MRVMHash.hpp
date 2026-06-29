@@ -39,7 +39,14 @@ struct MRVMHashIoRateSnapshot {
 	std::uint64_t writesPerMinute;
 };
 
+struct MRVMHashIoHotspot {
+	std::string label;
+	std::uint64_t readsPerMinute;
+	std::uint64_t writesPerMinute;
+};
+
 [[nodiscard]] MRVMHashIoRateSnapshot mrvmHashIoRateSnapshot();
+[[nodiscard]] std::vector<MRVMHashIoHotspot> mrvmHashIoHotspotsSnapshot(std::size_t limit);
 
 MRVMHashStore &mrvmHashRuntimeStoreForValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue);
 const MRVMHashStore &mrvmHashRuntimeStoreForValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue);

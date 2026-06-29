@@ -14,7 +14,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
-#include <memory>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -22,15 +21,6 @@
 
 
 namespace {
-
-struct MarkerInput {
-	std::string text;
-	std::vector<std::size_t> lineStarts;
-	std::size_t anchor = 0;
-	std::size_t cursor = 0;
-	int anchorColumn = 0;
-	int cursorColumn = 0;
-};
 
 struct ColumnLineReplacement {
 	MRTextBufferModel::Range range;
@@ -88,87 +78,11 @@ std::size_t lineIndexForOffset(const std::vector<std::size_t> &starts, std::size
 	return line;
 }
 
-std::size_t lineBlockEndpointOffset(const std::string &text, const std::vector<std::size_t> &starts, std::size_t offset) {
-	if (offset == 0) return 0;
-	for (std::size_t i = 1; i < starts.size(); ++i)
-		if (starts[i] == offset && starts[i] == text.size()) return starts[i] - 1;
+std::size_t lineBlockEndpointOffset(MRFileEditor &editor, std::size_t offset) {
+	const std::size_t length = editor.bufferLength();
+	offset = std::min(offset, length);
+	if (offset != 0 && offset == length && editor.lineStartOffset(offset) == offset) return offset - 1;
 	return offset;
-}
-
-std::size_t nextLineForIndex(const MarkerInput &input, std::size_t lineIndex) {
-	if (lineIndex + 1 < input.lineStarts.size()) return input.lineStarts[lineIndex + 1];
-	return input.text.size();
-}
-
-class BlockMarker {
-  public:
-	virtual ~BlockMarker() = default;
-	virtual void normalize(const MarkerInput &input, MRFEBlockGeometry &geometry) const = 0;
-};
-
-class StreamBlockMarker final : public BlockMarker {
-  public:
-	void normalize(const MarkerInput &input, MRFEBlockGeometry &geometry) const override {
-		geometry.rangeStart = std::min(input.anchor, input.cursor);
-		geometry.rangeEnd = std::max(input.anchor, input.cursor);
-		geometry.line1 = lineIndexForOffset(input.lineStarts, geometry.rangeStart);
-		geometry.line2 = lineIndexForOffset(input.lineStarts, geometry.rangeEnd);
-		geometry.col1 = std::min(input.anchorColumn, input.cursorColumn);
-		geometry.col2 = std::max(input.anchorColumn, input.cursorColumn);
-	}
-};
-
-class LineBlockMarker final : public BlockMarker {
-  public:
-	void normalize(const MarkerInput &input, MRFEBlockGeometry &geometry) const override {
-		if (input.anchor == input.cursor && input.anchor == input.text.size() && input.text.size() > 0) {
-			geometry.line1 = lineIndexForOffset(input.lineStarts, input.anchor);
-			geometry.line2 = geometry.line1;
-			geometry.rangeStart = input.anchor;
-			geometry.rangeEnd = input.anchor;
-			geometry.col1 = 0;
-			geometry.col2 = 0;
-			return;
-		}
-		const std::size_t anchor = lineBlockEndpointOffset(input.text, input.lineStarts, std::min(input.anchor, input.text.size()));
-		const std::size_t cursor = lineBlockEndpointOffset(input.text, input.lineStarts, std::min(input.cursor, input.text.size()));
-		std::size_t anchorLine = lineIndexForOffset(input.lineStarts, anchor);
-		std::size_t cursorLine = lineIndexForOffset(input.lineStarts, cursor);
-		geometry.line1 = std::min(anchorLine, cursorLine);
-		geometry.line2 = std::max(anchorLine, cursorLine);
-		geometry.rangeStart = input.lineStarts[geometry.line1];
-		geometry.rangeEnd = nextLineForIndex(input, geometry.line2);
-		geometry.col1 = 0;
-		geometry.col2 = 0;
-	}
-};
-
-class ColumnBlockMarker final : public BlockMarker {
-  public:
-	void normalize(const MarkerInput &input, MRFEBlockGeometry &geometry) const override {
-		std::size_t anchorLine = lineIndexForOffset(input.lineStarts, std::min(input.anchor, input.text.size()));
-		std::size_t cursorLine = lineIndexForOffset(input.lineStarts, std::min(input.cursor, input.text.size()));
-		geometry.line1 = std::min(anchorLine, cursorLine);
-		geometry.line2 = std::max(anchorLine, cursorLine);
-		geometry.rangeStart = input.lineStarts[geometry.line1];
-		geometry.rangeEnd = nextLineForIndex(input, geometry.line2);
-		geometry.col1 = std::min(input.anchorColumn, input.cursorColumn);
-		geometry.col2 = std::max(input.anchorColumn, input.cursorColumn);
-	}
-};
-
-std::unique_ptr<BlockMarker> markerForMode(MRFEBlockMode mode) {
-	switch (mode) {
-	case MRFEBlockMode::Line:
-		return std::make_unique<LineBlockMarker>();
-	case MRFEBlockMode::Column:
-		return std::make_unique<ColumnBlockMarker>();
-	case MRFEBlockMode::Stream:
-		return std::make_unique<StreamBlockMarker>();
-	case MRFEBlockMode::None:
-		return nullptr;
-	}
-	return nullptr;
 }
 
 bool blockGeometryIsEmpty(const MRFEBlockGeometry &geometry) {
@@ -1064,12 +978,10 @@ bool MRFEBlockOps::adoptMouseSelection(MRFileEditor &editor, unsigned short modi
 		}
 	} else {
 		if (line && mGeometry.anchor != mGeometry.cursor) {
-			const std::string text = editor.snapshotText();
-			const std::vector<std::size_t> starts = lineStartsForText(text);
 			if (mGeometry.anchor > mGeometry.cursor)
-				mGeometry.anchor = lineBlockEndpointOffset(text, starts, std::min(mGeometry.anchor, text.size()));
+				mGeometry.anchor = lineBlockEndpointOffset(editor, mGeometry.anchor);
 			else
-				mGeometry.cursor = lineBlockEndpointOffset(text, starts, std::min(mGeometry.cursor, text.size()));
+				mGeometry.cursor = lineBlockEndpointOffset(editor, mGeometry.cursor);
 		}
 		mGeometry.anchorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.anchor)));
 		mGeometry.cursorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.cursor)));
@@ -2165,17 +2077,59 @@ bool MRFEBlockOps::isMarking() const noexcept {
 }
 
 void MRFEBlockOps::normalize(MRFileEditor &editor) {
-	MarkerInput input;
-	input.text = editor.snapshotText();
-	input.lineStarts = lineStartsForText(input.text);
-	input.anchor = std::min(mGeometry.anchor, input.text.size());
-	input.cursor = std::min(mGeometry.cursor, input.text.size());
-	input.anchorColumn = std::max(mGeometry.anchorColumn, 0);
-	input.cursorColumn = std::max(mGeometry.cursorColumn, 0);
-	mGeometry.anchor = input.anchor;
-	mGeometry.cursor = input.cursor;
-	std::unique_ptr<BlockMarker> marker = markerForMode(mGeometry.mode);
-	if (marker != nullptr) marker->normalize(input, mGeometry);
+	const std::size_t length = editor.bufferLength();
+	const int anchorColumn = std::max(mGeometry.anchorColumn, 0);
+	const int cursorColumn = std::max(mGeometry.cursorColumn, 0);
+
+	mGeometry.anchor = std::min(mGeometry.anchor, length);
+	mGeometry.cursor = std::min(mGeometry.cursor, length);
+	mGeometry.anchorColumn = anchorColumn;
+	mGeometry.cursorColumn = cursorColumn;
+	switch (mGeometry.mode) {
+	case MRFEBlockMode::Stream:
+		mGeometry.rangeStart = std::min(mGeometry.anchor, mGeometry.cursor);
+		mGeometry.rangeEnd = std::max(mGeometry.anchor, mGeometry.cursor);
+		mGeometry.line1 = editor.lineIndexOfOffset(mGeometry.rangeStart);
+		mGeometry.line2 = editor.lineIndexOfOffset(mGeometry.rangeEnd);
+		mGeometry.col1 = std::min(anchorColumn, cursorColumn);
+		mGeometry.col2 = std::max(anchorColumn, cursorColumn);
+		break;
+	case MRFEBlockMode::Line: {
+		if (mGeometry.anchor == mGeometry.cursor && mGeometry.anchor == length && length > 0) {
+			mGeometry.line1 = editor.lineIndexOfOffset(mGeometry.anchor);
+			mGeometry.line2 = mGeometry.line1;
+			mGeometry.rangeStart = mGeometry.anchor;
+			mGeometry.rangeEnd = mGeometry.anchor;
+			mGeometry.col1 = 0;
+			mGeometry.col2 = 0;
+			break;
+		}
+		const std::size_t anchor = lineBlockEndpointOffset(editor, mGeometry.anchor);
+		const std::size_t cursor = lineBlockEndpointOffset(editor, mGeometry.cursor);
+		const std::size_t anchorLine = editor.lineIndexOfOffset(anchor);
+		const std::size_t cursorLine = editor.lineIndexOfOffset(cursor);
+		mGeometry.line1 = std::min(anchorLine, cursorLine);
+		mGeometry.line2 = std::max(anchorLine, cursorLine);
+		mGeometry.rangeStart = editor.bufferModel().lineStartByIndex(mGeometry.line1);
+		mGeometry.rangeEnd = editor.nextLineOffset(editor.bufferModel().lineStartByIndex(mGeometry.line2));
+		mGeometry.col1 = 0;
+		mGeometry.col2 = 0;
+		break;
+	}
+	case MRFEBlockMode::Column: {
+		const std::size_t anchorLine = editor.lineIndexOfOffset(mGeometry.anchor);
+		const std::size_t cursorLine = editor.lineIndexOfOffset(mGeometry.cursor);
+		mGeometry.line1 = std::min(anchorLine, cursorLine);
+		mGeometry.line2 = std::max(anchorLine, cursorLine);
+		mGeometry.rangeStart = editor.bufferModel().lineStartByIndex(mGeometry.line1);
+		mGeometry.rangeEnd = editor.nextLineOffset(editor.bufferModel().lineStartByIndex(mGeometry.line2));
+		mGeometry.col1 = std::min(anchorColumn, cursorColumn);
+		mGeometry.col2 = std::max(anchorColumn, cursorColumn);
+		break;
+	}
+	case MRFEBlockMode::None:
+		break;
+	}
 }
 
 void MRFEBlockOps::applySelection(MRFileEditor &editor) {

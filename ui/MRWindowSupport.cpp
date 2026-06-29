@@ -288,13 +288,14 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 [[nodiscard]] MREditWindow *createReadOnlyTextWindow(const char *title, const char *text, bool hidden) {
 	MREditWindow *previous;
 	MREditWindow *win;
+	const std::string textCopy = text != nullptr ? text : "";
 
 	if (TProgram::deskTop == nullptr) return nullptr;
 
 	previous = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 	win = createLogWindow(title);
 	if (win == nullptr) return nullptr;
-	if (!win->loadTextBuffer(text, title)) {
+	if (!win->loadTextBuffer(textCopy.c_str(), title)) {
 		message(win, evCommand, cmClose, nullptr);
 		return nullptr;
 	}
@@ -472,12 +473,14 @@ void mrLogMessage(std::string_view message) {
 	MREditWindow *win;
 	std::size_t persistedStart = 0;
 	std::string_view appendedChunk;
+	std::string chunkText;
 
 	if (line.empty()) return;
 	persistedStart = g_logBuffer.size();
 	if (!g_logBuffer.empty() && g_logBuffer[g_logBuffer.size() - 1] != '\n') g_logBuffer += '\n';
 	g_logBuffer += "[" + currentTimestamp() + "] " + line + "\n";
 	appendedChunk = std::string_view(g_logBuffer.data() + persistedStart, g_logBuffer.size() - persistedStart);
+	chunkText.assign(appendedChunk);
 	if (configuredLogHandling() == MRLogHandling::Persist) {
 		const std::string path = configuredLogFilePath();
 		const bool pathChanged = g_logPersistedPath != path;
@@ -492,7 +495,6 @@ void mrLogMessage(std::string_view message) {
 	if (win == nullptr) {
 		win = ensureLogWindowInternal(false);
 	} else {
-		const std::string chunkText(appendedChunk);
 		if (!win->appendLogViewerText(chunkText.c_str())) {
 			win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
 			win->setReadOnly(true);

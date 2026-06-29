@@ -3,8 +3,10 @@
 #include "MRVMValue.hpp"
 
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <stdexcept>
 
@@ -16,6 +18,7 @@ struct HashIoBucket {
 	std::uint64_t second;
 	std::uint64_t reads;
 	std::uint64_t writes;
+	std::map<std::string, MRVMHashIoHotspot> hotspots;
 
 	HashIoBucket() noexcept : second(0), reads(0), writes(0) {
 	}
@@ -35,10 +38,21 @@ std::uint64_t hashIoSecondNow() {
 	return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
-void recordHashIo(bool write) {
+std::string hashIoHotspotLabel(const char *operation, const std::string &key) {
+	std::string label = operation != nullptr ? operation : "unknown";
+
+	if (!key.empty()) {
+		label += ":";
+		label += key;
+	}
+	return label;
+}
+
+void recordHashIo(bool write, const char *operation, const std::string &key) {
 	HashIoMeter &meter = hashIoMeter();
 	const std::uint64_t now = hashIoSecondNow();
 	const std::size_t index = static_cast<std::size_t>(now % meter.buckets.size());
+	const std::string label = hashIoHotspotLabel(operation, key);
 	std::lock_guard<std::mutex> lock(meter.mutex);
 	HashIoBucket &bucket = meter.buckets[index];
 
@@ -46,11 +60,17 @@ void recordHashIo(bool write) {
 		bucket.second = now;
 		bucket.reads = 0;
 		bucket.writes = 0;
+		bucket.hotspots.clear();
 	}
-	if (write)
+	MRVMHashIoHotspot &hotspot = bucket.hotspots[label];
+	if (hotspot.label.empty()) hotspot.label = label;
+	if (write) {
 		++bucket.writes;
-	else
+		++hotspot.writesPerMinute;
+	} else {
 		++bucket.reads;
+		++hotspot.readsPerMinute;
+	}
 }
 
 } // namespace
@@ -60,7 +80,7 @@ void MRVMHashStore::setIoTrackingEnabled(bool enabled) noexcept {
 }
 
 void MRVMHashStore::clear() {
-	if (ioTrackingEnabled) recordHashIo(true);
+	if (ioTrackingEnabled) recordHashIo(true, "clear", std::string());
 	hashes.clear();
 	nextHandle = 1;
 }
@@ -84,7 +104,7 @@ void MRVMHashStore::clearExceptRoots(const std::vector<int> &roots) {
 	std::set<int> reachable;
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::iterator it;
 
-	if (ioTrackingEnabled) recordHashIo(true);
+	if (ioTrackingEnabled) recordHashIo(true, "clearExceptRoots", std::string());
 	for (int root : roots)
 		collectReachable(root, reachable);
 	for (it = hashes.begin(); it != hashes.end();) {
@@ -96,7 +116,7 @@ void MRVMHashStore::clearExceptRoots(const std::vector<int> &roots) {
 }
 
 int MRVMHashStore::createHash() {
-	if (ioTrackingEnabled) recordHashIo(true);
+	if (ioTrackingEnabled) recordHashIo(true, "createHash", std::string());
 	int handle = nextHandle++;
 	hashes[handle] = std::map<std::string, VirtualMachine::Value>();
 	return handle;
@@ -104,7 +124,7 @@ int MRVMHashStore::createHash() {
 
 int MRVMHashStore::cloneHashFrom(const MRVMHashStore &sourceStore, int sourceHandle, bool targetGlobalStorage) {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::const_iterator sourceIt = sourceStore.hashes.find(sourceHandle);
-	if (sourceStore.ioTrackingEnabled) recordHashIo(false);
+	if (sourceStore.ioTrackingEnabled) recordHashIo(false, "cloneHashFrom", std::string());
 	if (sourceIt == sourceStore.hashes.end()) throw std::runtime_error("Invalid hash value.");
 
 	int targetHandle = createHash();
@@ -156,20 +176,20 @@ void MRVMHashStore::eraseValueTrees(const VirtualMachine::Value &value, bool tar
 void MRVMHashStore::eraseValueTrees(const VirtualMachine::Value &value, bool targetGlobalStorage) {
 	std::set<int> erased;
 
-	if (ioTrackingEnabled) recordHashIo(true);
+	if (ioTrackingEnabled) recordHashIo(true, "eraseValueTrees", std::string());
 	eraseValueTrees(value, targetGlobalStorage, erased);
 }
 
 bool MRVMHashStore::contains(int handle, const std::string &key) const {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::const_iterator hashIt = hashes.find(handle);
-	if (ioTrackingEnabled) recordHashIo(false);
+	if (ioTrackingEnabled) recordHashIo(false, "contains", key);
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");
 	return hashIt->second.find(key) != hashIt->second.end();
 }
 
 VirtualMachine::Value MRVMHashStore::read(int handle, const std::string &key) const {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::const_iterator hashIt = hashes.find(handle);
-	if (ioTrackingEnabled) recordHashIo(false);
+	if (ioTrackingEnabled) recordHashIo(false, "read", key);
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");
 
 	std::map<std::string, VirtualMachine::Value>::const_iterator valueIt = hashIt->second.find(key);
@@ -179,14 +199,14 @@ VirtualMachine::Value MRVMHashStore::read(int handle, const std::string &key) co
 
 void MRVMHashStore::write(int handle, const std::string &key, const VirtualMachine::Value &value) {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::iterator hashIt = hashes.find(handle);
-	if (ioTrackingEnabled) recordHashIo(true);
+	if (ioTrackingEnabled) recordHashIo(true, "write", key);
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");
 	hashIt->second[key] = value;
 }
 
 void MRVMHashStore::erase(int handle, const std::string &key) {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::iterator hashIt = hashes.find(handle);
-	if (ioTrackingEnabled) recordHashIo(true);
+	if (ioTrackingEnabled) recordHashIo(true, "erase", key);
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");
 	hashIt->second.erase(key);
 }
@@ -195,7 +215,7 @@ std::vector<std::string> MRVMHashStore::keys(int handle) const {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::const_iterator hashIt = hashes.find(handle);
 	std::vector<std::string> result;
 
-	if (ioTrackingEnabled) recordHashIo(false);
+	if (ioTrackingEnabled) recordHashIo(false, "keys", std::string());
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");
 	result.reserve(hashIt->second.size());
 	for (const std::pair<const std::string, VirtualMachine::Value> &entry : hashIt->second)
@@ -207,7 +227,7 @@ std::vector<VirtualMachine::Value> MRVMHashStore::values(int handle) const {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::const_iterator hashIt = hashes.find(handle);
 	std::vector<VirtualMachine::Value> result;
 
-	if (ioTrackingEnabled) recordHashIo(false);
+	if (ioTrackingEnabled) recordHashIo(false, "values", std::string());
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");
 	result.reserve(hashIt->second.size());
 	for (const std::pair<const std::string, VirtualMachine::Value> &entry : hashIt->second)
@@ -227,6 +247,36 @@ MRVMHashIoRateSnapshot mrvmHashIoRateSnapshot() {
 		snapshot.writesPerMinute += bucket.writes;
 	}
 	return snapshot;
+}
+
+std::vector<MRVMHashIoHotspot> mrvmHashIoHotspotsSnapshot(std::size_t limit) {
+	HashIoMeter &meter = hashIoMeter();
+	const std::uint64_t now = hashIoSecondNow();
+	std::map<std::string, MRVMHashIoHotspot> totals;
+	std::vector<MRVMHashIoHotspot> hotspots;
+	std::lock_guard<std::mutex> lock(meter.mutex);
+
+	for (const HashIoBucket &bucket : meter.buckets) {
+		if (bucket.second == 0 || bucket.second + 60 <= now) continue;
+		for (const std::pair<const std::string, MRVMHashIoHotspot> &entry : bucket.hotspots) {
+			MRVMHashIoHotspot &total = totals[entry.first];
+			if (total.label.empty()) total.label = entry.first;
+			total.readsPerMinute += entry.second.readsPerMinute;
+			total.writesPerMinute += entry.second.writesPerMinute;
+		}
+	}
+	hotspots.reserve(totals.size());
+	for (const std::pair<const std::string, MRVMHashIoHotspot> &entry : totals)
+		hotspots.push_back(entry.second);
+	std::sort(hotspots.begin(), hotspots.end(), [](const MRVMHashIoHotspot &left, const MRVMHashIoHotspot &right) {
+		const std::uint64_t leftTotal = left.readsPerMinute + left.writesPerMinute;
+		const std::uint64_t rightTotal = right.readsPerMinute + right.writesPerMinute;
+
+		if (leftTotal != rightTotal) return leftTotal > rightTotal;
+		return left.label < right.label;
+	});
+	if (limit > 0 && hotspots.size() > limit) hotspots.resize(limit);
+	return hotspots;
 }
 
 MRVMHashStore &mrvmHashRuntimeStoreForValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue) {
