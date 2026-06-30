@@ -899,6 +899,7 @@ bool MRLspServiceSession::shutdown(std::string &errorMessage) {
 		errorMessage = "LSP service session exited with status " + std::to_string(exitStatus) + ".";
 		return false;
 	}
+	close();
 	errorMessage.clear();
 	return true;
 }
@@ -921,6 +922,14 @@ const MRServiceResultStore &MRLspServiceSession::results() const noexcept {
 
 bool MRLspServiceSession::runtimeActive() const noexcept {
 	return hasActiveRuntime && lifecycle.state() == mr::lsp::LspLifecycleState::Initialized;
+}
+
+bool MRLspServiceSession::documentOpen() const noexcept {
+	return documentService.isOpen();
+}
+
+const std::string &MRLspServiceSession::activeDocumentPath() const noexcept {
+	return activeEditorDocumentPath;
 }
 
 bool MRLspServiceSession::runtimeCapabilitiesKnown() const noexcept {

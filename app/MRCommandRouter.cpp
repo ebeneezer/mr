@@ -629,6 +629,7 @@ LspAutoHoverState g_lspAutoHover;
 LspHoverViewAnchor g_lspHoverViewAnchor;
 LspHoverViewAnchor g_lspSignatureHelpViewAnchor;
 LspSignatureHelpState g_lspSignatureHelp;
+MRLspRuntimeSettings g_lspRuntimeSettings;
 bool g_lspContextMiniMenuOpen = false;
 bool g_lspMousePositionKnown = false;
 TPoint g_lspLastMousePosition;
@@ -1312,6 +1313,7 @@ bool lspCompletionRequestTargetFromSource(MRFileEditor &editor, const LspEditorR
 bool lspCompletionEditRange(MRFileEditor &editor, const mr::services::MRServiceCompletionResult &result, const mr::services::MRServiceCompletionItem &item, std::size_t &start, std::size_t &end, std::string &errorMessage);
 void suppressLspAutoHoverForCompletion(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspEditorRequestTarget &target);
 bool lspDiagnosticSidekickAnchor(const mr::services::MRLspPositionServiceSnapshot &snapshot, MRFileEditor &editor, int &viewColumn, int &viewRow);
+bool lspRequestTargetFromGlobalPoint(MREditWindow *win, TPoint where, LspEditorRequestTarget &target);
 
 bool lspCompletionTargetSelfTestForRegression(std::string &failureReason) {
 	MRFileEditor editor(TRect(0, 0, 80, 12), nullptr, nullptr, nullptr, "completion-target.tex");
@@ -1332,6 +1334,44 @@ bool lspCompletionTargetSelfTestForRegression(std::string &failureReason) {
 	if (!editor.replaceBufferText(text.c_str())) {
 		failureReason = "completion target self-test could not seed editor text.";
 		return false;
+	}
+	if (TProgram::deskTop != nullptr) {
+		MREditWindow *window = new MREditWindow(TRect(0, 0, 100, 16), "lsp-mouse-anchor", 4105);
+		MRFileEditor *mouseEditor = window != nullptr ? window->getEditor() : nullptr;
+		const std::string mouseText = "\\hline\n";
+
+		if (window == nullptr || mouseEditor == nullptr) {
+			failureReason = "mouse anchor self-test could not create editor window.";
+			if (window != nullptr) TObject::destroy(window);
+			return false;
+		}
+		TProgram::deskTop->insert(window);
+		if (!mouseEditor->replaceBufferText(mouseText.c_str())) {
+			failureReason = "mouse anchor self-test could not seed editor text.";
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		mouseEditor->scrollTo(0, 0);
+		const TPoint editorGlobal = mouseEditor->makeGlobal(TPoint(0, 0));
+		const TRect viewport = mouseEditor->visibleTextViewportBounds();
+		const int mouseLocalX = viewport.a.x + static_cast<int>(mouseText.find('\n')) + 14;
+		const TPoint mousePoint = {static_cast<short>(editorGlobal.x + mouseLocalX), static_cast<short>(editorGlobal.y + viewport.a.y)};
+		LspEditorRequestTarget target;
+		if (!lspRequestTargetFromGlobalPoint(window, mousePoint, target)) {
+			failureReason = "mouse anchor self-test could not calculate LSP target.";
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		if (target.viewColumn != static_cast<int>(mouseText.find('\n')) + 1) {
+			failureReason = "mouse anchor self-test must anchor to the resolved document offset, not the raw mouse column.";
+			TProgram::deskTop->remove(window);
+			TObject::destroy(window);
+			return false;
+		}
+		TProgram::deskTop->remove(window);
+		TObject::destroy(window);
 	}
 	{
 		LspEditorRequestTarget sourceTarget;
@@ -1623,17 +1663,24 @@ bool lspSignatureRefreshTrigger(MRFileEditor &editor, const LspSignatureCallCont
 	return previous == '(' || previous == ',';
 }
 
+MRReadOnlySidekickPlacement readOnlySidekickPlacement(MRLanguageServerSidekickPlacement placement) noexcept {
+	return placement == MRLanguageServerSidekickPlacement::AtCode ? MRReadOnlySidekickPlacement::UnderCode : MRReadOnlySidekickPlacement::RightMargin;
+}
+
 MRReadOnlySidekickPlacement configuredLspReadOnlySidekickPlacement() noexcept {
-	return configuredLanguageServerSidekickPlacement() == MRLanguageServerSidekickPlacement::AtCode ? MRReadOnlySidekickPlacement::UnderCode : MRReadOnlySidekickPlacement::RightMargin;
+	return readOnlySidekickPlacement(g_lspRuntimeSettings.sidekickPlacement);
 }
 
 bool lspRequestTargetFromGlobalPoint(MREditWindow *win, TPoint where, LspEditorRequestTarget &target) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
 	if (editor == nullptr || !editor->textPointInView(where)) return false;
-	const TPoint local = editor->makeLocal(where);
-	const TRect viewport = editor->visibleTextViewportBounds();
-	return lspRequestTargetFromEditorOffset(*editor, editor->offsetForGlobalPoint(where), local.x - viewport.a.x + 1, local.y - viewport.a.y + 1, target);
+	const std::size_t offset = editor->offsetForGlobalPoint(where);
+	const std::size_t lineIndex = editor->lineIndexOfOffset(offset);
+	const std::size_t visibleLine = editor->visibleLineForDocumentLine(lineIndex);
+	const int viewColumn = lspViewColumnForOffset(*editor, offset);
+	const int viewRow = static_cast<int>(visibleLine) - editor->delta.y + 1;
+	return lspRequestTargetFromEditorOffset(*editor, offset, viewColumn, viewRow, target);
 }
 
 MREditWindow *lspEditorWindowAtGlobalPoint(TPoint where, LspEditorRequestTarget &target) {
@@ -1657,9 +1704,7 @@ void suppressLspAutoHoverForCompletion(const mr::services::MRWorkspaceDocumentSn
 void activateLspSignatureHelp(const mr::services::MRWorkspaceDocumentSnapshot &document, MREditWindow *win, const LspSignatureCallContext &context, const std::string &requestId);
 void clearLspSignatureHelpState(MREditWindow *win);
 
-bool languageServerCommandChannelEnabled(mr::services::MRLspServiceCommandId command) {
-	const MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
-
+bool languageServerCommandChannelEnabled(mr::services::MRLspServiceCommandId command, const MRLanguageServerChannelSettings &channels) {
 	switch (command) {
 		case mr::services::MRLspServiceCommandId::GoToDefinition:
 			return channels.definition;
@@ -1681,6 +1726,10 @@ bool languageServerCommandChannelEnabled(mr::services::MRLspServiceCommandId com
 			return channels.rename;
 	}
 	return true;
+}
+
+bool languageServerCommandChannelEnabled(mr::services::MRLspServiceCommandId command) {
+	return languageServerCommandChannelEnabled(command, g_lspRuntimeSettings.channels);
 }
 
 bool reportDisabledLanguageServerChannel(const char *label, bool reportMessages) {
@@ -1720,7 +1769,7 @@ bool requestLspEditorCommandForWindow(MREditWindow *win, mr::services::MRLspServ
 	g_lspLastRequestState = "preparing";
 	g_lspLastError.clear();
 	g_lspLastPollError.clear();
-	if (!configuredLanguageServerSpawnDaemon()) {
+	if (!g_lspRuntimeSettings.spawnDaemon) {
 		g_lspLastRequestState = "disabled";
 		g_lspLastError = "LSP support is disabled.";
 		++g_lspRequestFailureCount;
@@ -1856,7 +1905,7 @@ bool requestLspEditorCommandForWindow(MREditWindow *win, mr::services::MRLspServ
 		if (hasSignatureHelpContext) activateLspSignatureHelp(document, win, signatureHelpContext, g_lspSignatureHelpViewAnchor.requestId);
 	}
 	if (reportMessages && (command == mr::services::MRLspServiceCommandId::ShowHover || command == mr::services::MRLspServiceCommandId::SignatureHelp)) {
-		const int quietMilliseconds = command == mr::services::MRLspServiceCommandId::SignatureHelp ? configuredLanguageServerSignatureQuietMs() : 0;
+		const int quietMilliseconds = command == mr::services::MRLspServiceCommandId::SignatureHelp ? g_lspRuntimeSettings.signatureQuietMs : 0;
 		suppressLspAutoHoverForExplicitSidekick(document, win, *target, quietMilliseconds);
 	}
 	if (reportMessages) postLspInfo(g_lspLastRequestLabel + " requested.");
@@ -1973,7 +2022,7 @@ void suppressLspAutoHoverForCompletion(const mr::services::MRWorkspaceDocumentSn
 	TPoint mousePosition;
 	const bool mouseValid = currentLspHoverMousePosition(mousePosition);
 	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-	int quietMilliseconds = configuredLanguageServerHoverDwellMs();
+	int quietMilliseconds = g_lspRuntimeSettings.hoverDwellMs;
 
 	if (quietMilliseconds < 250) quietMilliseconds = 250;
 	if (win == nullptr) return;
@@ -4221,9 +4270,8 @@ bool requestLspCompletionCommand(MREditWindow *win = currentEditorCommandWindow(
 	return true;
 }
 
-void reportNewLspResults() {
+void reportNewLspResults(const MRLanguageServerChannelSettings &channels) {
 	const mr::services::MRServiceResultStore &results = g_lspAppService.results();
-	const MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
 
 	if (channels.diagnostics) reportNewLspDiagnostics(results.diagnosticResults());
 	if (channels.definition || channels.references) reportNewLspLocations(results.locationResults());
@@ -5758,6 +5806,7 @@ bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &sett
 	mrLogSettingsWriteReport("visible edit setup update", writeReport);
 	for (MREditWindow *window : allEditWindowsInZOrder())
 		if (window != nullptr && window->getEditor() != nullptr) window->getEditor()->refreshConfiguredVisualSettings();
+	mrRefreshEditorApplicationUiSettingsSnapshot();
 	return true;
 }
 
@@ -6022,6 +6071,137 @@ bool mrLspCompletionTargetSelfTestForRegression(std::string &failureReason) {
 	return lspCompletionTargetSelfTestForRegression(failureReason);
 }
 
+namespace {
+
+struct LspSnippetMiddlewareCase {
+	const char *name;
+	const char *middlewareFileName;
+	const char *documentText;
+	std::size_t requestOffset;
+	const char *label;
+	const char *insertText;
+	const char *expectedText;
+	std::vector<MRSidekickSpan> expectedPlaceholders;
+};
+
+bool findLspSnippetMiddlewareForRegression(const std::string &fileName, std::string &path, std::string &errorMessage) {
+	namespace fs = std::filesystem;
+
+	const fs::path root(configuredMacroDirectoryPath());
+	std::error_code errorCode;
+
+	path.clear();
+	if (!fs::is_directory(root, errorCode)) {
+		errorMessage = "macro directory is not readable: " + root.generic_string();
+		return false;
+	}
+	for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, errorCode), end; it != end; it.increment(errorCode)) {
+		if (errorCode) {
+			errorCode.clear();
+			continue;
+		}
+		if (!it->is_regular_file(errorCode)) {
+			errorCode.clear();
+			continue;
+		}
+		if (it->path().filename().string() == fileName) {
+			path = fs::absolute(it->path(), errorCode).generic_string();
+			errorMessage.clear();
+			return true;
+		}
+		errorCode.clear();
+	}
+	errorMessage = "snippet middleware not found below macro directory: " + fileName;
+	return false;
+}
+
+mr::services::MRServiceTextPosition lspSnippetRegressionPositionForOffset(const std::string &text, std::size_t offset) {
+	mr::services::MRServiceTextPosition position;
+
+	if (offset > text.size()) offset = text.size();
+	for (std::size_t index = 0; index < offset; ++index) {
+		if (text[index] == '\n') {
+			++position.line;
+			position.character = 0;
+		} else
+			++position.character;
+	}
+	return position;
+}
+
+std::string lspSnippetRegressionPlaceholderText(const std::vector<MRSidekickSpan> &placeholders) {
+	std::ostringstream out;
+
+	for (std::size_t index = 0; index < placeholders.size(); ++index) {
+		if (index > 0) out << ",";
+		out << placeholders[index].start << ".." << placeholders[index].end;
+	}
+	return out.str();
+}
+
+bool lspSnippetRegressionPlaceholdersEqual(const std::vector<MRSidekickSpan> &actual, const std::vector<MRSidekickSpan> &expected) {
+	if (actual.size() != expected.size()) return false;
+	for (std::size_t index = 0; index < actual.size(); ++index)
+		if (actual[index].start != expected[index].start || actual[index].end != expected[index].end) return false;
+	return true;
+}
+
+bool lspSnippetRegressionCasePassed(const LspSnippetMiddlewareCase &testCase, std::string &failureReason) {
+	std::string middlewarePath;
+	std::string sidekickText;
+	std::string errorMessage;
+	std::vector<MRSidekickSpan> placeholders;
+	MREditWindow window(TRect(0, 0, 100, 20), "snippet-middleware-regression", 3061);
+	MRFileEditor *editor = window.getEditor();
+	mr::services::MRServiceCompletionResult result;
+	mr::services::MRServiceCompletionItem item;
+
+	if (!findLspSnippetMiddlewareForRegression(testCase.middlewareFileName, middlewarePath, failureReason)) return false;
+	if (editor == nullptr || !editor->replaceBufferText(testCase.documentText)) {
+		failureReason = std::string(testCase.name) + ": unable to seed editor text.";
+		return false;
+	}
+	result.header.state = mr::services::MRServiceResultState::Current;
+	result.header.identity.bufferId = window.bufferId();
+	result.header.identity.documentId = editor->documentId();
+	result.header.identity.documentVersion = editor->documentVersion();
+	result.hasRequestPosition = true;
+	result.requestPosition = lspSnippetRegressionPositionForOffset(testCase.documentText, testCase.requestOffset);
+	result.lspMiddlewarePath = middlewarePath;
+	item.label = testCase.label;
+	item.insertText = testCase.insertText;
+	item.hasInsertTextFormat = true;
+	item.insertTextFormat = 2;
+	if (!runLspSnippetMiddleware(*editor, result, item, testCase.insertText, 0, std::strlen(testCase.documentText), sidekickText, placeholders, errorMessage)) {
+		failureReason = std::string(testCase.name) + ": middleware failed: " + errorMessage;
+		return false;
+	}
+	if (sidekickText != testCase.expectedText) {
+		failureReason = std::string(testCase.name) + ": sidekick text mismatch. expected='" + testCase.expectedText + "' actual='" + sidekickText + "'";
+		return false;
+	}
+	if (!lspSnippetRegressionPlaceholdersEqual(placeholders, testCase.expectedPlaceholders)) {
+		failureReason = std::string(testCase.name) + ": placeholder mismatch. expected=" + lspSnippetRegressionPlaceholderText(testCase.expectedPlaceholders) + " actual=" + lspSnippetRegressionPlaceholderText(placeholders);
+		return false;
+	}
+	return true;
+}
+
+} // namespace
+
+bool mrLspSnippetMiddlewareExpansionSelfTestForRegression(std::string &failureReason) {
+	std::vector<LspSnippetMiddlewareCase> cases;
+
+	cases.push_back(LspSnippetMiddlewareCase{"C if rewrite", "clangd-snippets.mrmac", "if", 2, "if", "if (${1:cond}) {\n\t$0\n}", "if (condition) {\n    \n}", std::vector<MRSidekickSpan>{MRSidekickSpan{4, 13}, MRSidekickSpan{21, 21}}});
+	cases.push_back(LspSnippetMiddlewareCase{"C snippet syntax", "clangd-snippets.mrmac", "value", 5, "value", "${1|int,float|} value = \\$${2:name};\n$0", "int value = $name;\n", std::vector<MRSidekickSpan>{MRSidekickSpan{0, 3}, MRSidekickSpan{13, 17}, MRSidekickSpan{19, 19}}});
+	cases.push_back(LspSnippetMiddlewareCase{"C++ range-for rewrite", "clangd-cpp-snippets.mrmac", "for", 3, "for", "for (range-declaration : expression) {\n\t$0\n}", "for (const auto &item : items) {\n    \n}", std::vector<MRSidekickSpan>{MRSidekickSpan{5, 21}, MRSidekickSpan{24, 29}, MRSidekickSpan{37, 37}}});
+	cases.push_back(LspSnippetMiddlewareCase{"LaTeX section rewrite", "digestif-snippets.mrmac", "\\section", 8, "\\section", "\\section{$1}$0", "\\section{Title}\ncontent\n", std::vector<MRSidekickSpan>{MRSidekickSpan{9, 14}, MRSidekickSpan{16, 23}, MRSidekickSpan{24, 24}}});
+	for (const LspSnippetMiddlewareCase &testCase : cases)
+		if (!lspSnippetRegressionCasePassed(testCase, failureReason)) return false;
+	failureReason.clear();
+	return true;
+}
+
 bool showMRLspContextMenu(MREditWindow *targetWindow, TPoint where) {
 	return showLspContextMenuForWindow(targetWindow, where);
 }
@@ -6039,6 +6219,26 @@ void notifyMRLspBlockMouseActivity() noexcept {
 void notifyMRLspKeyboardActivity() noexcept {
 	g_lspMousePositionKnown = false;
 	forgetLspAutoHover(true);
+}
+
+MRLspRuntimeSettings configuredMRLspRuntimeSettings() {
+	MRLspRuntimeSettings settings;
+
+	settings.spawnDaemon = configuredLanguageServerSpawnDaemon();
+	settings.sidekickPlacement = configuredLanguageServerSidekickPlacement();
+	settings.hoverDwellMs = configuredLanguageServerHoverDwellMs();
+	settings.documentSyncDelayMs = configuredLanguageServerDocumentSyncDelayMs();
+	settings.signatureQuietMs = configuredLanguageServerSignatureQuietMs();
+	settings.channels = configuredLanguageServerChannelSettings();
+	return settings;
+}
+
+void mrRefreshLspRuntimeSettingsSnapshot(const MRLspRuntimeSettings &settings) {
+	g_lspRuntimeSettings = settings;
+}
+
+void mrRefreshLspRuntimeSettingsSnapshot() {
+	mrRefreshLspRuntimeSettingsSnapshot(configuredMRLspRuntimeSettings());
 }
 
 bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequenceText, MREditWindow *targetWindow) {
@@ -6142,7 +6342,7 @@ bool dispatchMRKeymapMacro(std::string_view macroSpec) {
 	return runMacroSpecByName(std::string(macroSpec).c_str(), &errorText, true);
 }
 
-void pumpLspAutoHoverDwell() {
+void pumpLspAutoHoverDwell(const MRLspRuntimeSettings &settings) {
 	MREditWindow *win = nullptr;
 	MRFileEditor *editor = nullptr;
 	mr::services::MRWorkspaceDocumentSnapshot document;
@@ -6154,7 +6354,6 @@ void pumpLspAutoHoverDwell() {
 	TPoint mousePosition;
 	const bool mouseValid = currentLspHoverMousePosition(mousePosition);
 	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-	const MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
 
 	if (now - g_lspLastHoverPumpAt < kLspHoverPumpInterval) return;
 	g_lspLastHoverPumpAt = now;
@@ -6164,7 +6363,7 @@ void pumpLspAutoHoverDwell() {
 		forgetLspAutoHover(true);
 		return;
 	}
-	if (!channels.diagnostics && !channels.hover) {
+	if (!settings.channels.diagnostics && !settings.channels.hover) {
 		forgetLspAutoHover(true);
 		return;
 	}
@@ -6215,13 +6414,13 @@ void pumpLspAutoHoverDwell() {
 		g_lspAutoHover.dismissedForKey = false;
 	}
 	if (g_lspAutoHover.requested) return;
-	if (now - g_lspAutoHover.stableSince < std::chrono::milliseconds(configuredLanguageServerHoverDwellMs())) return;
-		if (channels.diagnostics) {
+	if (now - g_lspAutoHover.stableSince < std::chrono::milliseconds(settings.hoverDwellMs)) return;
+		if (settings.channels.diagnostics) {
 			const mr::services::MRLspPositionServiceSnapshot snapshot = g_lspAppService.currentDocumentPositionServiceSnapshot(document, serviceTextPositionFromLsp(target.position));
 			const std::string diagnosticText = buildLspDiagnosticSidekickText(snapshot);
 			int diagnosticViewColumn = target.viewColumn;
 			int diagnosticViewRow = target.viewRow;
-			const MRReadOnlySidekickPlacement placement = configuredLspReadOnlySidekickPlacement();
+			const MRReadOnlySidekickPlacement placement = readOnlySidekickPlacement(settings.sidekickPlacement);
 			diagnosticViewRow = lspReadOnlyHoverAnchorRow(diagnosticViewRow, placement, true);
 			if (!diagnosticText.empty() &&
 			    mrOpenReadOnlySidekickAt(win, diagnosticText, "LSP hover", diagnosticViewColumn, diagnosticViewRow, diagnosticViewColumn, placement)) {
@@ -6232,7 +6431,7 @@ void pumpLspAutoHoverDwell() {
 		}
 	}
 
-	if (!channels.hover) return;
+	if (!settings.channels.hover) return;
 	if (!requestLspEditorCommandForWindow(win, mr::services::MRLspServiceCommandId::ShowHover, "LSP hover", false, &requestSent, &target)) return;
 	if (requestSent) {
 		g_lspAutoHover.requested = true;
@@ -6244,7 +6443,7 @@ void pumpLspAutoHoverDwell() {
 	}
 }
 
-void pumpLspCurrentDocumentSync() {
+void pumpLspCurrentDocumentSync(const MRLspRuntimeSettings &settings) {
 	MREditWindow *win = currentEditorCommandWindow();
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	mr::services::MRWorkspaceDocumentSnapshot document;
@@ -6256,7 +6455,7 @@ void pumpLspCurrentDocumentSync() {
 	if (!g_lspAppService.runtimeActive()) return;
 	if (now - g_lspLastDocumentSyncCheckAt < kLspDocumentSyncCheckInterval) return;
 	g_lspLastDocumentSyncCheckAt = now;
-	if (!configuredLanguageServerChannelSettings().diagnostics) return;
+	if (!settings.channels.diagnostics) return;
 	if (editor == nullptr) return;
 	if (!buildLspDocumentSnapshotForWindow(win, document, false)) return;
 	if (document.bufferId != g_lspObservedBufferId || document.documentId != g_lspObservedDocumentId || document.documentVersion != g_lspObservedDocumentVersion) {
@@ -6267,7 +6466,7 @@ void pumpLspCurrentDocumentSync() {
 		return;
 	}
 	if (document.bufferId == g_lspSyncedBufferId && document.documentId == g_lspSyncedDocumentId && document.documentVersion == g_lspSyncedDocumentVersion) return;
-	if (now - g_lspDocumentChangeObservedAt < std::chrono::milliseconds(configuredLanguageServerDocumentSyncDelayMs())) return;
+	if (now - g_lspDocumentChangeObservedAt < std::chrono::milliseconds(settings.documentSyncDelayMs)) return;
 	if (!buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) return;
 	if (!g_lspAppService.syncCurrentEditorDocument(profile, document, *editor, errorMessage)) {
 		g_lspLastRequestState = "sync failed";
@@ -6287,7 +6486,69 @@ bool lspSignatureTypedTrigger(MRFileEditor &editor, const LspSignatureCallContex
 	return previous == '(' || previous == ',';
 }
 
-void pumpLspSignatureHelpLifecycle() {
+void clearLspDocumentSyncTracking() noexcept {
+	g_lspObservedBufferId = 0;
+	g_lspObservedDocumentId = 0;
+	g_lspObservedDocumentVersion = 0;
+	g_lspSyncedBufferId = 0;
+	g_lspSyncedDocumentId = 0;
+	g_lspSyncedDocumentVersion = 0;
+}
+
+bool lspWorkspaceHasConfiguredDocument(const mr::services::MRWorkspaceServiceSnapshot &workspace) {
+	for (const mr::services::MRWorkspaceDocumentSnapshot &document : workspace.documents) {
+		MREditWindow *window = findEditWindowByBufferId(document.bufferId);
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		mr::services::MRLspServerProfile profile;
+		std::string configurationSource;
+		std::string errorMessage;
+
+		if (editor == nullptr) continue;
+		if (buildLspServerProfileFromEditor(*editor, profile, configurationSource, errorMessage)) return true;
+	}
+	return false;
+}
+
+void clearLspTransientDocumentState() {
+	forgetLspAutoHover(true);
+	clearLspSignatureHelpState(g_lspSignatureHelp.active ? findEditWindowByBufferId(g_lspSignatureHelp.bufferId) : nullptr);
+	clearLspDocumentSyncTracking();
+}
+
+bool pumpLspActiveDocumentLifecycle() {
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	std::string errorMessage;
+	bool closedDocument = false;
+
+	if (!g_lspAppService.runtimeActive()) return true;
+	workspace = g_lspAppService.buildCurrentWorkspaceSnapshot();
+	if (!g_lspAppService.closeActiveDocumentIfMissingFromWorkspace(workspace, closedDocument, errorMessage)) {
+		g_lspLastRequestState = "document lifecycle close failed";
+		g_lspLastError = errorMessage;
+		mrLogMessage("LSP document close after workspace change failed: " + errorMessage);
+		g_lspAppService.close();
+		clearLspTransientDocumentState();
+		return false;
+	}
+	if (closedDocument) {
+		clearLspTransientDocumentState();
+		mrLogMessage("LSP document closed after workspace document disappeared.");
+	}
+	if (g_lspAppService.documentOpen() || lspWorkspaceHasConfiguredDocument(workspace)) return true;
+	if (!g_lspAppService.shutdown(errorMessage)) {
+		g_lspLastRequestState = "shutdown after document close failed";
+		g_lspLastError = errorMessage;
+		mrLogMessage("LSP shutdown after last document closed failed: " + errorMessage);
+		g_lspAppService.close();
+		clearLspTransientDocumentState();
+		return false;
+	}
+	clearLspTransientDocumentState();
+	mrLogMessage("LSP runtime shut down after last LSP document closed.");
+	return true;
+}
+
+void pumpLspSignatureHelpLifecycle(const MRLspRuntimeSettings &settings) {
 	MREditWindow *win = currentEditorCommandWindow();
 	MREditWindow *activeWindow = g_lspSignatureHelp.active ? findEditWindowByBufferId(g_lspSignatureHelp.bufferId) : nullptr;
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
@@ -6296,7 +6557,7 @@ void pumpLspSignatureHelpLifecycle() {
 	LspSignatureCallContext context;
 	bool requestSent = false;
 
-	if (!configuredLanguageServerChannelSettings().signatureHelp) {
+	if (!settings.channels.signatureHelp) {
 		if (g_lspSignatureHelp.active) clearLspSignatureHelpState(activeWindow);
 		return;
 	}
@@ -6331,20 +6592,21 @@ void pumpLspSignatureHelpLifecycle() {
 	if (!requestSent && g_lspSignatureHelp.active) g_lspSignatureHelp.requestPending = false;
 }
 
-void pumpMRLspService() {
+void pumpMRLspService(const MRLspRuntimeSettings &settings) {
 	std::string errorMessage;
 	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
-	if (!configuredLanguageServerSpawnDaemon()) {
-		if (g_lspAppService.runtimeActive()) mrApplyLspSupportSettingsChange();
+	if (!settings.spawnDaemon) {
+		if (g_lspAppService.runtimeActive()) mrApplyLspSupportSettingsChange(false);
 		return;
 	}
 	if (now - g_lspLastServicePumpAt < kLspServicePumpInterval) return;
 	g_lspLastServicePumpAt = now;
-	pumpLspSignatureHelpLifecycle();
-	pumpLspAutoHoverDwell();
+	pumpLspSignatureHelpLifecycle(settings);
+	pumpLspAutoHoverDwell(settings);
 	if (!g_lspAppService.runtimeActive()) return;
-	pumpLspCurrentDocumentSync();
+	if (!pumpLspActiveDocumentLifecycle() || !g_lspAppService.runtimeActive()) return;
+	pumpLspCurrentDocumentSync(settings);
 	if (!g_lspAppService.poll(errorMessage)) {
 		++g_lspPollFailureCount;
 		g_lspLastRequestState = "poll failed";
@@ -6354,13 +6616,24 @@ void pumpMRLspService() {
 		g_lspAppService.close();
 		return;
 		}
-		reportNewLspResults();
+		reportNewLspResults(settings.channels);
 	}
 
-void mrApplyLspSupportSettingsChange() {
+void pumpMRLspService() {
+	pumpMRLspService(configuredMRLspRuntimeSettings());
+}
+
+void pumpMRLspService(bool spawnDaemonEnabled) {
+	MRLspRuntimeSettings settings = g_lspRuntimeSettings;
+
+	settings.spawnDaemon = spawnDaemonEnabled;
+	pumpMRLspService(settings);
+}
+
+void mrApplyLspSupportSettingsChange(bool spawnDaemonEnabled) {
 	std::string errorMessage;
 
-	if (configuredLanguageServerSpawnDaemon()) return;
+	if (spawnDaemonEnabled) return;
 	forgetLspAutoHover(true);
 	clearLspSignatureHelpState(g_lspSignatureHelp.active ? findEditWindowByBufferId(g_lspSignatureHelp.bufferId) : nullptr);
 	if (!g_lspAppService.runtimeActive()) return;
@@ -6370,6 +6643,10 @@ void mrApplyLspSupportSettingsChange() {
 		return;
 	}
 	mrLogMessage("LSP runtime shut down after disabling support.");
+}
+
+void mrApplyLspSupportSettingsChange() {
+	mrApplyLspSupportSettingsChange(configuredLanguageServerSpawnDaemon());
 }
 
 bool handleMRCommand(ushort command, void *commandInfo) {
@@ -6674,7 +6951,10 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrSetupUserInterfaceSettings:
 		case cmMrSetupLiveLogs:
 		case cmMrSetupSearchAndReplaceDefaults: {
-			if (runSetupDialogCommand(command)) return true;
+			if (runSetupDialogCommand(command)) {
+				mrRefreshEditorApplicationUiSettingsSnapshot();
+				return true;
+			}
 			const char *title = placeholderCommandTitle(command);
 			if (title != nullptr) {
 				showPlaceholderCommandBox(title);

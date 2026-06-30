@@ -2878,7 +2878,7 @@ void runLiveLogsSetupDialogFlow() {
 			}
 			for (MREditWindow *window : allEditWindowsInZOrder()) {
 				if (window == nullptr || !window->isCommunicationWindow()) continue;
-				window->setLogViewerOptions(settings.showLineNumbers);
+				window->setLogViewerOptions(settings.showLineNumbers, settings.scrollDirection);
 				window->drawView();
 			}
 			if (!persistConfiguredSettingsSnapshot(&errorText)) {

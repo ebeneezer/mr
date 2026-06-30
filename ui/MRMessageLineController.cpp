@@ -30,6 +30,7 @@ struct State {
 	std::array<Slot, kOwnerCount> slots;
 	Token nextToken = 1;
 	std::uint64_t nextSequence = 1;
+	bool enabled = true;
 };
 
 State &state() {
@@ -83,10 +84,16 @@ bool exportSlot(const Slot &slot, VisibleMessage &out) {
 	return true;
 }
 
+bool messageLineEnabled() {
+	State &shared = state();
+	std::lock_guard<std::mutex> lock(shared.mutex);
+	return shared.enabled;
+}
+
 } // namespace
 
 Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration, int priority) {
-	if (!configuredMenulineMessages()) return 0;
+	if (!messageLineEnabled()) return 0;
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	const auto now = std::chrono::steady_clock::now();
@@ -108,7 +115,7 @@ Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::mill
 }
 
 Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> &segments, Kind kind, std::chrono::milliseconds duration, int priority) {
-	if (!configuredMenulineMessages()) return 0;
+	if (!messageLineEnabled()) return 0;
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	const auto now = std::chrono::steady_clock::now();
@@ -134,7 +141,7 @@ Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> 
 }
 
 Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
-	if (!configuredMenulineMessages()) return 0;
+	if (!messageLineEnabled()) return 0;
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	Slot *slot = slotForOwner(shared, owner);
@@ -201,8 +208,24 @@ void clearOwnerToken(Owner owner, Token token) {
 	slot->sequence = shared.nextSequence++;
 }
 
+void setRuntimeMessageLineEnabled(bool enabled) {
+	State &shared = state();
+	std::lock_guard<std::mutex> lock(shared.mutex);
+
+	shared.enabled = enabled;
+	if (enabled) return;
+	for (Slot &slot : shared.slots) {
+		slot.active = false;
+		slot.text.clear();
+		slot.segments.clear();
+		slot.timed = false;
+		slot.expiresAt = std::chrono::steady_clock::time_point::max();
+		slot.priority = 0;
+	}
+}
+
 bool currentVisibleMessage(VisibleMessage &out) {
-	if (!configuredMenulineMessages()) {
+	if (!messageLineEnabled()) {
 		out = VisibleMessage();
 		return false;
 	}
@@ -221,7 +244,7 @@ bool currentVisibleMessage(VisibleMessage &out) {
 }
 
 bool currentOwnerMessage(Owner owner, VisibleMessage &out) {
-	if (!configuredMenulineMessages()) {
+	if (!messageLineEnabled()) {
 		out = VisibleMessage();
 		return false;
 	}

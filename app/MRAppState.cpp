@@ -100,7 +100,7 @@ AppCommandState appCommandState() {
 }
 } // namespace
 
-void updateAppCommandState() {
+void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	AppCommandState state = appCommandState();
 	bool hasWindow = state.window != nullptr;
 	bool hasEditor = hasWindow;
@@ -152,10 +152,9 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrWindowSplitHorizontal, hasWindow);
 	setCommandEnabled(cmMrWindowSplitVertical, hasWindow);
 	{
-		const int desktopCount = configuredVirtualDesktops();
 		const int currentDesktop = currentVirtualDesktop();
 		const bool hasMultipleDesktops = desktopCount > 1;
-		const bool cyclicViewport = hasMultipleDesktops && configuredCyclicVirtualDesktops();
+		const bool cyclicViewport = hasMultipleDesktops && cyclicVirtualDesktops;
 		const int windowDesktop = hasWindow ? state.window->mVirtualDesktop : 1;
 
 		setCommandEnabled(cmMrWindowNextDesktop, hasMultipleDesktops && (currentDesktop < desktopCount || cyclicViewport));
@@ -219,4 +218,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrHelpContents, true);
 	setCommandEnabled(cmMrSetupUserInterfaceSettings, true);
 	setCommandEnabled(cmMrHelpPerformancePanel, true);
+}
+
+void updateAppCommandState() {
+	updateAppCommandState(configuredVirtualDesktops(), configuredCyclicVirtualDesktops());
 }

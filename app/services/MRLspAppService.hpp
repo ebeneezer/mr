@@ -104,12 +104,14 @@ public:
 		std::string &errorMessage);
 	bool requestCodeActionsForDiagnostic(const MRServiceDiagnosticResult &diagnosticResult, const MRServiceDiagnosticEntry &diagnostic, std::string &errorMessage);
 	bool resolveCompletionItem(const MRServiceCompletionItem &item, MRServiceCompletionItem &resolvedItem, std::string &errorMessage);
+	bool closeActiveDocumentIfMissingFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, bool &closedDocument, std::string &errorMessage);
 	bool poll(std::string &errorMessage);
 	bool shutdown(std::string &errorMessage);
 	void close();
 
 	[[nodiscard]] const MRServiceResultStore &results() const noexcept;
 	[[nodiscard]] bool runtimeActive() const noexcept;
+	[[nodiscard]] bool documentOpen() const noexcept;
 	[[nodiscard]] std::string activeHoverRequestId() const;
 	[[nodiscard]] std::string activeSignatureHelpRequestId() const;
 

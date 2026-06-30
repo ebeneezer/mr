@@ -266,11 +266,41 @@ bool testSyncOnlyDiagnosticsPath(std::string &failureReason) {
 	return expect(!service.runtimeActive(), "sync shutdown app service runtime is active", failureReason);
 }
 
+bool testCloseActiveDocumentWhenMissingFromWorkspace(std::string &failureReason) {
+	const std::string path = "/tmp/mr/project/src/main.cpp";
+	MRFileEditor editor(TRect(0, 0, 80, 16), nullptr, nullptr, nullptr, path.c_str());
+	mr::services::MRLspAppService service;
+	mr::services::MRLspServerProfile profile = makeProbeProfile();
+	mr::services::MRWorkspaceDocumentSnapshot document;
+	mr::services::MRWorkspaceServiceSnapshot workspace;
+	mr::services::MRWorkspaceServiceSnapshot emptyWorkspace;
+	std::vector<mr::services::MRWorkspaceDocumentSnapshot> documents;
+	std::string errorMessage;
+	bool closedDocument = false;
+
+	if (!replaceText(editor, "int main() { return 7; }\n", failureReason)) return false;
+	document = documentForEditor(editor, path, 10);
+	documents.push_back(document);
+	workspace = service.buildWorkspaceSnapshot(documents);
+	if (!expect(service.syncEditorDocument(profile, workspace, document, editor, errorMessage), "app service lifecycle sync: " + errorMessage, failureReason)) return false;
+	if (!expect(service.runtimeActive(), "app service lifecycle runtime inactive after sync", failureReason)) return false;
+	if (!expect(service.documentOpen(), "app service lifecycle document not open", failureReason)) return false;
+	if (!expect(service.closeActiveDocumentIfMissingFromWorkspace(workspace, closedDocument, errorMessage), "app service lifecycle present check: " + errorMessage, failureReason)) return false;
+	if (!expect(!closedDocument, "app service lifecycle present document closed", failureReason)) return false;
+	if (!expect(service.documentOpen(), "app service lifecycle present document no longer open", failureReason)) return false;
+	if (!expect(service.closeActiveDocumentIfMissingFromWorkspace(emptyWorkspace, closedDocument, errorMessage), "app service lifecycle missing close: " + errorMessage, failureReason)) return false;
+	if (!expect(closedDocument, "app service lifecycle missing document not closed", failureReason)) return false;
+	if (!expect(!service.documentOpen(), "app service lifecycle document remains open", failureReason)) return false;
+	if (!expect(service.shutdown(errorMessage), "app service lifecycle shutdown: " + errorMessage, failureReason)) return false;
+	return expect(!service.runtimeActive(), "app service lifecycle runtime active after shutdown", failureReason);
+}
+
 bool runProbe(std::string &failureReason) {
 	if (!testWorkspaceBoundary(failureReason)) return false;
 	if (!testRequestGuard(failureReason)) return false;
 	if (!testEditorCommandPath(failureReason)) return false;
 	if (!testSyncOnlyDiagnosticsPath(failureReason)) return false;
+	if (!testCloseActiveDocumentWhenMissingFromWorkspace(failureReason)) return false;
 	return true;
 }
 } // namespace

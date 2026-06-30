@@ -1,7 +1,7 @@
 #include "MRFileEditor.hpp"
 
 bool MRFileEditor::freeCursorMovementEnabled() const noexcept {
-	return configuredCursorBehaviour() == MRCursorBehaviour::FreeMovement;
+	return mCursorBehaviour == MRCursorBehaviour::FreeMovement;
 }
 
 bool MRFileEditor::freeCursorVirtualMovementAllowed() const noexcept {

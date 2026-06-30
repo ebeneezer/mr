@@ -10,6 +10,7 @@ struct MRVMSubshellResult {
 };
 
 std::string mrvmCommandFirstLine(const std::string &command);
+int mrvmRunShellCommand(const std::string &command, const std::string &shellPath);
 std::string mrvmDetectExecutablePathFromProc();
 std::string mrvmNormalizeDirPath(const std::string &path);
 std::string mrvmDetectExecutableDir(const std::string &argv0);

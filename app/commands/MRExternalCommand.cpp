@@ -72,6 +72,51 @@ bool pathIsDirectory(const std::string &path) {
 
 	return std::filesystem::is_directory(path, error);
 }
+
+std::string trimShellCommand(std::string_view command) {
+	std::size_t start = 0;
+	std::size_t end = command.size();
+
+	while (start < end && std::isspace(static_cast<unsigned char>(command[start])) != 0)
+		++start;
+	while (end > start && std::isspace(static_cast<unsigned char>(command[end - 1])) != 0)
+		--end;
+	return std::string(command.substr(start, end - start));
+}
+
+void appendShellCommandGroup(std::ostringstream &out, const std::string &command) {
+	out << "( " << command << " )";
+}
+
+std::string wrapBuildCommandWithProfileHooks(const MRCompilerProfile &profile, const std::string &buildCommand) {
+	const std::string preCommand = trimShellCommand(profile.preBuildCommand);
+	const std::string succeededCommand = trimShellCommand(profile.buildSucceededCommand);
+	const std::string failedCommand = trimShellCommand(profile.buildFailedCommand);
+	std::ostringstream command;
+
+	if (preCommand.empty() && succeededCommand.empty() && failedCommand.empty()) return buildCommand;
+	command << "__mr_build_status=0; ";
+	if (!preCommand.empty()) {
+		appendShellCommandGroup(command, preCommand);
+		command << "; __mr_pre_status=$?; if [ \"$__mr_pre_status\" -eq 0 ]; then ";
+	} else
+		command << "if true; then ";
+	appendShellCommandGroup(command, buildCommand);
+	command << "; __mr_build_status=$?; ";
+	if (!preCommand.empty()) command << "else __mr_build_status=$__mr_pre_status; fi; ";
+	else
+		command << "fi; ";
+	command << "if [ \"$__mr_build_status\" -eq 0 ]; then ";
+	if (!succeededCommand.empty()) appendShellCommandGroup(command, succeededCommand);
+	else
+		command << ":";
+	command << "; else ";
+	if (!failedCommand.empty()) appendShellCommandGroup(command, failedCommand);
+	else
+		command << ":";
+	command << "; fi; exit \"$__mr_build_status\"";
+	return command.str();
+}
 } // namespace
 
 std::string shortenCommandTitle(std::string_view command) {
@@ -86,6 +131,7 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	std::string toolchain = profile.toolchain;
 	std::string source = trimPathInput(sourcePath);
 	std::ostringstream command;
+	std::string buildCommand;
 
 	commandLine.clear();
 	if (source.empty()) return setError(errorMessage, "No source file selected for build.");
@@ -99,7 +145,7 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 
 		command << ' ' << shellQuote(source);
 		command << " && if command -v zathura >/dev/null 2>&1; then exec zathura " << shellQuote(pdfPath) << "; else printf '%s\\n' " << shellQuote("MR: zathura not found; PDF written to " + pdfPath) << "; fi";
-		commandLine = command.str();
+		commandLine = wrapBuildCommandWithProfileHooks(profile, command.str());
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
@@ -113,7 +159,8 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	command << ' ' << shellQuote(source);
 	command << " -o " << shellQuote(compilerOutputPathForSource(source));
 
-	commandLine = command.str();
+	buildCommand = command.str();
+	commandLine = wrapBuildCommandWithProfileHooks(profile, buildCommand);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

@@ -34,11 +34,13 @@
 #include "../app/MRCommandRouter.hpp"
 #include "../app/MRRuntimeScheduler.hpp"
 #include "../app/MRRuntimeTimerSource.hpp"
+#include "../app/MRMenuFactory.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/services/MRLspEditorSource.hpp"
 #include "../app/services/MRLspServerProfile.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsRuntimeState.hpp"
 #include "../config/settings/MRSettingsEditSetup.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsAssignments.hpp"
@@ -54,6 +56,9 @@
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
+#include "../ui/MRDeskTop.hpp"
+#include "../ui/MRIndicator.hpp"
+#include "../ui/MRMenuBar.hpp"
 #include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
@@ -3801,6 +3806,178 @@ bool testEofMarkerDoesNotExtendScrollRange(std::string &failureReason) {
 	return true;
 }
 
+bool testCommunicationViewerDrawDoesNotReadSettings(std::string &failureReason) {
+	MREditWindow window(TRect(0, 0, 100, 20), "settings-io-communication-draw", 3051);
+	MRFileEditor *editor = window.getEditor();
+	TMenuBar *menuBar = createMRMenuBar(TRect(0, 0, 100, 1));
+	MRMenuBar *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar);
+	MRIndicator indicator(TRect(0, 0, 40, 1));
+	MRDesktopBackground desktopBackground(TRect(0, 0, 100, 20));
+
+	if (editor == nullptr) {
+		failureReason = "Communication draw settings-IO guard did not create an editor.";
+		delete menuBar;
+		return false;
+	}
+	if (mrMenuBar == nullptr) {
+		failureReason = "Communication draw settings-IO guard did not create an MR menu bar.";
+		delete menuBar;
+		return false;
+	}
+	editor->setCommunicationViewerMode(true, true, MRLiveLogScrollDirection::Up);
+	window.setReadOnly(true);
+	indicator.setDisplayValue(25, 7, False);
+	mrMenuBar->setRightStatus("8:26");
+	mrMenuBar->setAutoMarqueeStatus("settings io guard", MRMenuBar::MarqueeKind::Warning);
+
+	MRSettingsRuntimeIoRateSnapshot before = settingsRuntimeIoRateSnapshot();
+	for (int i = 0; i < 8; ++i)
+		editor->draw();
+	MRSettingsRuntimeIoRateSnapshot after = settingsRuntimeIoRateSnapshot();
+
+	if (after.readsPerMinute != before.readsPerMinute) {
+		failureReason = "Communication viewer draw must not read runtime settings; reads before=" + std::to_string(before.readsPerMinute) + " after=" + std::to_string(after.readsPerMinute) + ".";
+		delete menuBar;
+		return false;
+	}
+	before = settingsRuntimeIoRateSnapshot();
+	for (int i = 0; i < 8; ++i)
+		window.draw();
+	after = settingsRuntimeIoRateSnapshot();
+	if (after.readsPerMinute != before.readsPerMinute) {
+		failureReason = "Communication window chrome draw must not read runtime settings; reads before=" + std::to_string(before.readsPerMinute) + " after=" + std::to_string(after.readsPerMinute) + ".";
+		delete menuBar;
+		return false;
+	}
+	before = settingsRuntimeIoRateSnapshot();
+	for (int i = 0; i < 8; ++i)
+		indicator.draw();
+	after = settingsRuntimeIoRateSnapshot();
+	if (after.readsPerMinute != before.readsPerMinute) {
+		failureReason = "Indicator draw must not read runtime settings; reads before=" + std::to_string(before.readsPerMinute) + " after=" + std::to_string(after.readsPerMinute) + ".";
+		delete menuBar;
+		return false;
+	}
+	before = settingsRuntimeIoRateSnapshot();
+	for (int i = 0; i < 8; ++i)
+		menuBar->draw();
+	after = settingsRuntimeIoRateSnapshot();
+	if (after.readsPerMinute != before.readsPerMinute) {
+		failureReason = "Menu bar draw must not read runtime settings; reads before=" + std::to_string(before.readsPerMinute) + " after=" + std::to_string(after.readsPerMinute) + ".";
+		delete menuBar;
+		return false;
+	}
+	mrRefreshVirtualDesktopSettingsSnapshot(3, false);
+	before = settingsRuntimeIoRateSnapshot();
+	for (int i = 0; i < 8; ++i)
+		desktopBackground.draw();
+	after = settingsRuntimeIoRateSnapshot();
+	if (after.readsPerMinute != before.readsPerMinute) {
+		failureReason = "Desktop background draw must not read runtime settings; reads before=" + std::to_string(before.readsPerMinute) + " after=" + std::to_string(after.readsPerMinute) + ".";
+		delete menuBar;
+		return false;
+	}
+	mr::messageline::setRuntimeMessageLineEnabled(true);
+	mr::messageline::VisibleMessage visibleMessage;
+	before = settingsRuntimeIoRateSnapshot();
+	for (int i = 0; i < 8; ++i) {
+		static_cast<void>(mr::messageline::currentVisibleMessage(visibleMessage));
+		static_cast<void>(mr::messageline::currentOwnerMessage(mr::messageline::Owner::DialogInteraction, visibleMessage));
+	}
+	after = settingsRuntimeIoRateSnapshot();
+	if (after.readsPerMinute != before.readsPerMinute) {
+		failureReason = "Message line polling must not read runtime settings; reads before=" + std::to_string(before.readsPerMinute) + " after=" + std::to_string(after.readsPerMinute) + ".";
+		delete menuBar;
+		return false;
+	}
+	delete menuBar;
+	failureReason.clear();
+	return true;
+}
+
+bool testApplicationIdleDoesNotReadMenuSettings(std::string &failureReason) {
+	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
+	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	std::string appContent;
+	std::string routerContent;
+	std::string ioError;
+
+	if (!readTextFile(appPath, appContent, ioError)) {
+		failureReason = "Unable to read MREditorApp.cpp for idle settings-IO guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(routerPath, routerContent, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for idle settings-IO guard: " + ioError;
+		return false;
+	}
+	const std::string idleNeedle = "void MREditorApp::idle()";
+	const std::size_t idleStart = appContent.find(idleNeedle);
+	const std::size_t paletteStart = appContent.find("TPalette &MREditorApp::getPalette()", idleStart == std::string::npos ? 0 : idleStart);
+	if (idleStart == std::string::npos || paletteStart == std::string::npos || paletteStart <= idleStart) {
+		failureReason = "Unable to isolate MREditorApp::idle() for settings-IO guard.";
+		return false;
+	}
+	const std::string idleBody = appContent.substr(idleStart, paletteStart - idleStart);
+	if (idleBody.find("configuredCursorPositionMarker(") != std::string::npos || idleBody.find("configuredPersistentBlocksSetting(") != std::string::npos || idleBody.find("configuredMenulineMessages(") != std::string::npos || idleBody.find("configuredVirtualDesktops(") != std::string::npos || idleBody.find("configuredCyclicVirtualDesktops(") != std::string::npos || idleBody.find("configuredLanguageServer") != std::string::npos || idleBody.find("configuredMRLspRuntimeSettings(") != std::string::npos) {
+		failureReason = "MREditorApp::idle() must use cached UI settings, not counted settings getters.";
+		return false;
+	}
+	if (idleBody.find("pumpMRLspService(lspRuntimeSettings)") == std::string::npos || idleBody.find("updateAppCommandState(virtualDesktopCount, cyclicVirtualDesktopsEnabled)") == std::string::npos) {
+		failureReason = "MREditorApp::idle() must pass cached settings snapshots into tick helpers.";
+		return false;
+	}
+	if (appContent.find("buildTopRightCursorStatus(const std::string &markerFormat)") == std::string::npos || appContent.find("cursorPositionMarkerFormat = configuredCursorPositionMarker();") == std::string::npos || appContent.find("persistentBlocksMenuEnabled = configuredPersistentBlocksSetting();") == std::string::npos || appContent.find("menulineMessagesEnabled = configuredMenulineMessages();") == std::string::npos || appContent.find("virtualDesktopCount = configuredVirtualDesktops();") == std::string::npos || appContent.find("cyclicVirtualDesktopsEnabled = configuredCyclicVirtualDesktops();") == std::string::npos || appContent.find("lspRuntimeSettings = configuredMRLspRuntimeSettings();") == std::string::npos) {
+		failureReason = "App UI settings cache must own cursor marker, persistent-blocks, message-line, desktop and LSP snapshots.";
+		return false;
+	}
+	if (appContent.find("mrRefreshLspRuntimeSettingsSnapshot(lspRuntimeSettings);") == std::string::npos) {
+		failureReason = "App UI settings cache must publish the LSP runtime snapshot.";
+		return false;
+	}
+	if (appContent.find("mr::messageline::setRuntimeMessageLineEnabled(menulineMessagesEnabled);") == std::string::npos) {
+		failureReason = "App UI settings cache must publish the message-line runtime snapshot.";
+		return false;
+	}
+	if (routerContent.find("mrRefreshEditorApplicationUiSettingsSnapshot();") == std::string::npos) {
+		failureReason = "Setup command handling must refresh the app UI settings cache.";
+		return false;
+	}
+	{
+		const std::string pumpNeedle = "void pumpLspAutoHoverDwell(const MRLspRuntimeSettings &settings)";
+		const std::string noargPumpNeedle = "void pumpMRLspService()";
+		const std::size_t pumpStart = routerContent.find(pumpNeedle);
+		const std::size_t noargPumpStart = routerContent.find(noargPumpNeedle, pumpStart == std::string::npos ? 0 : pumpStart);
+
+		if (pumpStart == std::string::npos || noargPumpStart == std::string::npos || noargPumpStart <= pumpStart) {
+			failureReason = "Unable to isolate LSP runtime pump region for settings-IO guard.";
+			return false;
+		}
+		const std::string pumpBody = routerContent.substr(pumpStart, noargPumpStart - pumpStart);
+		if (pumpBody.find("configuredLanguageServer") != std::string::npos || pumpBody.find("configuredMRLspRuntimeSettings(") != std::string::npos) {
+			failureReason = "LSP runtime pump must use MRLspRuntimeSettings, not counted settings getters.";
+			return false;
+		}
+	}
+	{
+		const std::string requestNeedle = "bool requestLspEditorCommandForWindow(";
+		const std::string nextNeedle = "bool requestLspEditorCommand(";
+		const std::size_t requestStart = routerContent.find(requestNeedle);
+		const std::size_t nextStart = routerContent.find(nextNeedle, requestStart == std::string::npos ? 0 : requestStart + requestNeedle.size());
+
+		if (requestStart == std::string::npos || nextStart == std::string::npos || nextStart <= requestStart) {
+			failureReason = "Unable to isolate LSP request helper for settings-IO guard.";
+			return false;
+		}
+		const std::string requestBody = routerContent.substr(requestStart, nextStart - requestStart);
+		if (requestBody.find("configuredLanguageServer") != std::string::npos || requestBody.find("configuredMRLspRuntimeSettings(") != std::string::npos || requestBody.find("g_lspRuntimeSettings.spawnDaemon") == std::string::npos) {
+			failureReason = "LSP request helper must use the runtime snapshot for tick-reachable checks.";
+			return false;
+		}
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	const std::string root = "/tmp/mr_regression_edit_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
@@ -6748,6 +6925,12 @@ bool testLspSnippetMiddlewareMacroCompileGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testLspSnippetMiddlewareExpansionHarness(std::string &failureReason) {
+	ScopedRegressionMacroDirectory macroDirectory(absolutePathFromCwd("mrmac/macros"));
+
+	return mrLspSnippetMiddlewareExpansionSelfTestForRegression(failureReason);
+}
+
 bool testLspBentoPaneTargetRoutingGuard(std::string &failureReason) {
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
 	const std::string bentoHeaderPath = absolutePathFromCwd("ui/MRBentoBox.hpp");
@@ -8510,8 +8693,8 @@ bool testMarqueeColorSourceGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRMenuBar.cpp for marquee color source guard: " + ioError;
 		return false;
 	}
-	if (content.find("configuredColorSlotOverride(slot, biosAttr)") == std::string::npos) {
-		failureReason = "Marquee colors must be sourced from configuredColorSlotOverride(...).";
+	if (content.find("resolvedPaletteAttribute(marqueePaletteSlot(") == std::string::npos) {
+		failureReason = "Marquee colors must be sourced from the configured palette slot helper.";
 		return false;
 	}
 	if (content.find("getColor(0x2B2B)") != std::string::npos || content.find("getColor(0x2C2C)") != std::string::npos || content.find("getColor(0x2A2A)") != std::string::npos) {
@@ -8726,6 +8909,61 @@ bool testCompilerProfileLspSettingsRoundtripGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testCompilerProfileBuildCommandRoundtripGuard(std::string &failureReason) {
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	MRSettingsSnapshot snapshot = captureConfiguredSettingsSnapshot(paths);
+	MRSettingsSnapshot loaded;
+	MRCompilerProfile profile;
+	std::string source;
+	std::string commandLine;
+	std::string errorText;
+
+	profile.id = "BUILD_COMMAND_PROFILE";
+	profile.name = "Build Command Profile";
+	profile.toolchain = "GCC";
+	profile.executablePath = "/usr/bin/g++";
+	profile.buildFlags = "-Wall";
+	profile.preBuildCommand = "printf pre";
+	profile.buildSucceededCommand = "printf ok";
+	profile.buildFailedCommand = "printf fail";
+	if (!setSnapshotCompilerProfiles(snapshot, std::vector<MRCompilerProfile>{profile}, &errorText)) {
+		failureReason = "Unable to seed compiler profile build command snapshot: " + errorText;
+		return false;
+	}
+	source = buildSettingsMacroSource(snapshot);
+	if (source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'PRE_BUILD_COMMAND', 'printf pre');") == std::string::npos ||
+	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'BUILD_SUCCEEDED_COMMAND', 'printf ok');") == std::string::npos ||
+	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'BUILD_FAILED_COMMAND', 'printf fail');") == std::string::npos) {
+		failureReason = "Compiler profile build command fields were not serialized.";
+		return false;
+	}
+	if (!applySettingsSnapshotCompilerProfileDirective(loaded, "DEFINE", "BUILD_COMMAND_PROFILE", "Build Command Profile", "GCC", &errorText) ||
+	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "EXECUTABLE", "/usr/bin/g++", &errorText) ||
+	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "FLAGS", "-Wall", &errorText) ||
+	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "PRE_BUILD_COMMAND", "printf pre", &errorText) ||
+	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "BUILD_SUCCEEDED_COMMAND", "printf ok", &errorText) ||
+	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "BUILD_FAILED_COMMAND", "printf fail", &errorText)) {
+		failureReason = "Compiler profile build command directive apply failed: " + errorText;
+		return false;
+	}
+	if (loaded.compilerProfiles.size() != 1 || loaded.compilerProfiles[0].preBuildCommand != "printf pre" || loaded.compilerProfiles[0].buildSucceededCommand != "printf ok" || loaded.compilerProfiles[0].buildFailedCommand != "printf fail") {
+		failureReason = "Compiler profile build command fields did not roundtrip through directives.";
+		return false;
+	}
+	if (!buildCompilerProfileCommandLine(profile, "/tmp/source.cpp", commandLine, &errorText)) {
+		failureReason = "Compiler profile build hook command was rejected: " + errorText;
+		return false;
+	}
+	if (commandLine.find("printf pre") == std::string::npos || commandLine.find("printf ok") == std::string::npos || commandLine.find("printf fail") == std::string::npos ||
+	    commandLine.find("__mr_build_status") == std::string::npos || commandLine.find("exit \"$__mr_build_status\"") == std::string::npos) {
+		failureReason = "Compiler profile build hooks were not embedded in the controlled shell command.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 bool testLatexmkCompilerProfileCommandGuard(std::string &failureReason) {
 	MRCompilerProfile profile;
 	std::string commandLine;
@@ -8760,6 +8998,44 @@ bool testLatexmkCompilerProfileCommandGuard(std::string &failureReason) {
 		failureReason = "LATEXMK compiler command must not append C-style -o output.";
 		return false;
 	}
+	failureReason.clear();
+	return true;
+}
+
+bool testConfiguredShellExecutionGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
+	const std::string processRuntimePath = absolutePathFromCwd("mrmac/vm/MRVMProcessRuntime.cpp");
+	const std::string compilerProfilesPath = absolutePathFromCwd("config/settings/MRSettingsCompilerProfiles.cpp");
+	std::string vm;
+	std::string processRuntime;
+	std::string compilerProfiles;
+	std::string ioError;
+
+	if (!readTextFile(vmPath, vm, ioError) || !readTextFile(processRuntimePath, processRuntime, ioError) || !readTextFile(compilerProfilesPath, compilerProfiles, ioError)) {
+		failureReason = "Unable to read shell execution sources: " + ioError;
+		return false;
+	}
+	if (vm.find("std::system(") != std::string::npos || vm.find("system(") != std::string::npos) {
+		failureReason = "SHELL_TO_OS must not use libc system().";
+		return false;
+	}
+	if (vm.find("mrvmRunShellCommand(mrvmValueAsString(args[0]), configuredShellExecutablePath())") == std::string::npos) {
+		failureReason = "SHELL_TO_OS must execute through the configured shell path.";
+		return false;
+	}
+	if (processRuntime.find("::popen(") != std::string::npos || processRuntime.find("popen(") != std::string::npos) {
+		failureReason = "VM shell probes must not use popen's implicit shell.";
+		return false;
+	}
+	if (compilerProfiles.find("::popen(") != std::string::npos || compilerProfiles.find("popen(") != std::string::npos) {
+		failureReason = "Compiler profile probes must not use popen's implicit shell.";
+		return false;
+	}
+	if (compilerProfiles.find("std::string shellPath = configuredShellExecutablePath();") == std::string::npos) {
+		failureReason = "Compiler profile probes must use the configured shell path.";
+		return false;
+	}
+
 	failureReason.clear();
 	return true;
 }
@@ -9519,7 +9795,9 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "Compiler profile LSP settings roundtrip guard", testCompilerProfileLspSettingsRoundtripGuard);
+	runTest(ctx, "Compiler profile build command roundtrip guard", testCompilerProfileBuildCommandRoundtripGuard);
 	runTest(ctx, "LATEXMK compiler profile command guard", testLatexmkCompilerProfileCommandGuard);
+	runTest(ctx, "Configured shell execution guard", testConfiguredShellExecutionGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
@@ -9540,6 +9818,8 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
+	runTest(ctx, "Communication viewer draw settings IO guard", testCommunicationViewerDrawDoesNotReadSettings);
+	runTest(ctx, "Application idle settings IO guard", testApplicationIdleDoesNotReadMenuSettings);
 	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
 	runTest(ctx, "Post-EOF clear-area guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
@@ -9548,6 +9828,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
 	runTest(ctx, "LSP snippet middleware macro compile guard", testLspSnippetMiddlewareMacroCompileGuard);
+	runTest(ctx, "LSP snippet middleware expansion harness", testLspSnippetMiddlewareExpansionHarness);
 	runTest(ctx, "LSP completion target cursor-inside-literal guard", mrLspCompletionTargetSelfTestForRegression);
 	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
 	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);
@@ -9618,7 +9899,9 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "Compiler profile LSP settings roundtrip guard", testCompilerProfileLspSettingsRoundtripGuard);
+	runTest(ctx, "Compiler profile build command roundtrip guard", testCompilerProfileBuildCommandRoundtripGuard);
 	runTest(ctx, "LATEXMK compiler profile command guard", testLatexmkCompilerProfileCommandGuard);
+	runTest(ctx, "Configured shell execution guard", testConfiguredShellExecutionGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
@@ -9636,6 +9919,8 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
+	runTest(ctx, "Communication viewer draw settings IO guard", testCommunicationViewerDrawDoesNotReadSettings);
+	runTest(ctx, "Application idle settings IO guard", testApplicationIdleDoesNotReadMenuSettings);
 	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);
 	runTest(ctx, "Changed-text color wiring guard", testChangedTextColorWiringGuard);
@@ -9652,6 +9937,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "LSP completion reporting reentrancy guard", testLspCompletionReportingMarksBeforeDialogGuard);
 	runTest(ctx, "LSP completion insert-text guard", testLspCompletionInsertTextGuard);
 	runTest(ctx, "LSP snippet middleware macro compile guard", testLspSnippetMiddlewareMacroCompileGuard);
+	runTest(ctx, "LSP snippet middleware expansion harness", testLspSnippetMiddlewareExpansionHarness);
 	runTest(ctx, "LSP completion target cursor-inside-literal guard", mrLspCompletionTargetSelfTestForRegression);
 	runTest(ctx, "LSP Bento pane target routing guard", testLspBentoPaneTargetRoutingGuard);
 	runTest(ctx, "LSP request version routing guard", testLspRequestVersionRoutingGuard);

@@ -115,6 +115,43 @@ TMenuItem *menuItemAt(TMenuItem *items, std::size_t index) noexcept {
 
 TMenu *cloneMenu(const TMenu *source);
 
+unsigned char resolvedPaletteAttribute(unsigned char paletteIndex, unsigned char fallback) {
+	unsigned char value = fallback;
+
+	static_cast<void>(configuredColorSlotOverride(paletteIndex, value));
+	return value;
+}
+
+unsigned char marqueePaletteSlot(MRMenuBar::MarqueeKind kind) noexcept {
+	switch (kind) {
+		case MRMenuBar::MarqueeKind::Warning:
+			return kMrPaletteMessageWarning;
+		case MRMenuBar::MarqueeKind::Error:
+			return kMrPaletteMessageError;
+		case MRMenuBar::MarqueeKind::Hero:
+			return kMrPaletteMessageHero;
+		case MRMenuBar::MarqueeKind::Success:
+		case MRMenuBar::MarqueeKind::Info:
+		default:
+			return kMrPaletteMessage;
+	}
+}
+
+unsigned char marqueeFallbackAttribute(MRMenuBar::MarqueeKind kind) noexcept {
+	switch (kind) {
+		case MRMenuBar::MarqueeKind::Warning:
+			return 0x78;
+		case MRMenuBar::MarqueeKind::Error:
+			return 0x2B;
+		case MRMenuBar::MarqueeKind::Hero:
+			return 0x2F;
+		case MRMenuBar::MarqueeKind::Success:
+		case MRMenuBar::MarqueeKind::Info:
+		default:
+			return 0x2F;
+	}
+}
+
 TMenuItem *cloneMenuItem(const TMenuItem *source) {
 	TMenuItem *cloned = nullptr;
 
@@ -836,12 +873,9 @@ void MRMenuBar::draw() {
 	int menuEnd = 0;
 
 	{
-		const MRColorSetupSettings colors = configuredColorSetupSettings();
-		unsigned char statusAttr = colors.otherColors[8];
-		unsigned char menuBarHotkeyAttr = 0;
+		unsigned char statusAttr = resolvedPaletteAttribute(kMrPaletteCursorPositionMarker, 0x78);
+		unsigned char menuBarHotkeyAttr = resolvedPaletteAttribute(kMrPaletteMenuBarHotkey, 0);
 
-		(void)configuredColorSlotOverride(kMrPaletteCursorPositionMarker, statusAttr);
-		(void)configuredColorSlotOverride(kMrPaletteMenuBarHotkey, menuBarHotkeyAttr);
 		cMenuBarHotkey = TColorAttr(menuBarHotkeyAttr);
 		cStatus = TColorAttr(statusAttr);
 	}
@@ -974,62 +1008,9 @@ void MRMenuBar::draw() {
 				mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
 			}
 		}
-		{
-			const MRColorSetupSettings colors = configuredColorSetupSettings();
-			unsigned char biosAttr = colors.otherColors[5]; // "message"
-			unsigned char slot = kMrPaletteMessage;
-			switch (mMarqueeActiveKind) {
-				case MarqueeKind::Warning:
-					slot = kMrPaletteMessageWarning;
-					biosAttr = colors.otherColors[6];
-					break;
-				case MarqueeKind::Error:
-					slot = kMrPaletteMessageError;
-					biosAttr = colors.otherColors[4];
-					break;
-				case MarqueeKind::Hero:
-					slot = kMrPaletteMessageHero;
-					biosAttr = colors.otherColors[7];
-					break;
-				case MarqueeKind::Success:
-				case MarqueeKind::Info:
-				default:
-					slot = kMrPaletteMessage;
-					biosAttr = colors.otherColors[5];
-					break;
-			}
-			// Primary source required by regression guard; array value remains fallback.
-			if (configuredColorSlotOverride(slot, biosAttr)) cMarquee = TColorAttr(biosAttr);
-			else
-				cMarquee = TColorAttr(biosAttr);
-		}
+		cMarquee = TColorAttr(resolvedPaletteAttribute(marqueePaletteSlot(mMarqueeActiveKind), marqueeFallbackAttribute(mMarqueeActiveKind)));
 		auto colorForMarqueeKind = [](MarqueeKind kind) -> TColorAttr {
-			const MRColorSetupSettings colors = configuredColorSetupSettings();
-			unsigned char biosAttr = colors.otherColors[5];
-			unsigned char slot = kMrPaletteMessage;
-
-			switch (kind) {
-				case MarqueeKind::Warning:
-					slot = kMrPaletteMessageWarning;
-					biosAttr = colors.otherColors[6];
-					break;
-				case MarqueeKind::Error:
-					slot = kMrPaletteMessageError;
-					biosAttr = colors.otherColors[4];
-					break;
-				case MarqueeKind::Hero:
-					slot = kMrPaletteMessageHero;
-					biosAttr = colors.otherColors[7];
-					break;
-				case MarqueeKind::Success:
-				case MarqueeKind::Info:
-				default:
-					slot = kMrPaletteMessage;
-					biosAttr = colors.otherColors[5];
-					break;
-			}
-			if (configuredColorSlotOverride(slot, biosAttr)) return TColorAttr(biosAttr);
-			return TColorAttr(biosAttr);
+			return TColorAttr(resolvedPaletteAttribute(marqueePaletteSlot(kind), marqueeFallbackAttribute(kind)));
 		};
 		int marqueeTextLen = static_cast<int>(mMarqueeActiveText.size());
 		int drawStart = laneStart;

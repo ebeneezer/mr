@@ -1021,12 +1021,12 @@ std::size_t loadStartupFilesFromCommandLine() {
 	return loadedCount;
 }
 
-std::string buildTopRightCursorStatus() {
+std::string buildTopRightCursorStatus(const std::string &markerFormat) {
 	MREditWindow *win = currentEditWindow();
 	if (win == nullptr || win->getEditor() == nullptr) return std::string();
 	if (isEmptyUntitledEditableWindow(win)) return std::string();
 
-	std::string format = configuredCursorPositionMarker();
+	std::string format = markerFormat;
 	std::string out;
 	const std::string rowText = std::to_string(win->cursorLineNumber());
 	const std::string colText = std::to_string(win->cursorColumnNumber());
@@ -1132,7 +1132,7 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false), lspRuntimeSettings() {
 	const auto startupStartedAt = std::chrono::steady_clock::now();
 	auto phaseStartedAt = startupStartedAt;
 	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
@@ -1148,6 +1148,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	initializePerformancePanel();
 	initializeFullscreenHint();
 	loadStartupSettingsMacro(std::string(), nullptr);
+	refreshConfiguredUiSettingsSnapshot();
 	logStartupPhase("settings_bootstrap");
 	installExecSessionStatusConsumerIfEnabled();
 	installExecSessionSmokePackageIfEnabled();
@@ -1172,7 +1173,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	syncRecordingUiState();
 	logStartupPhase("recording_ui");
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
-		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+		mrMenuBar->setPersistentBlocksMenuState(persistentBlocksMenuEnabled);
 		if (MREditWindow *win = currentEditWindow(); win != nullptr) {
 			mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
 			mrMenuBar->setLineDrawingMenuState(win->lineDrawingEnabled(), win->lineDrawingDoubleLines());
@@ -1196,7 +1197,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	}
 	logStartupPhase("workspace_autoload");
 	mrLogMessage("Editor session started.");
-	updateAppCommandState();
+	updateAppCommandState(virtualDesktopCount, cyclicVirtualDesktopsEnabled);
 	syncFunctionKeyState();
 	logStartupPhase("command_state");
 	{
@@ -1209,6 +1210,23 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 
 bool MREditorApp::quitPrepared() const noexcept {
 	return exitPrepared;
+}
+
+void MREditorApp::refreshConfiguredUiSettingsSnapshot() {
+	cursorPositionMarkerFormat = configuredCursorPositionMarker();
+	persistentBlocksMenuEnabled = configuredPersistentBlocksSetting();
+	menulineMessagesEnabled = configuredMenulineMessages();
+	virtualDesktopCount = configuredVirtualDesktops();
+	cyclicVirtualDesktopsEnabled = configuredCyclicVirtualDesktops();
+	lspRuntimeSettings = configuredMRLspRuntimeSettings();
+	mr::messageline::setRuntimeMessageLineEnabled(menulineMessagesEnabled);
+	mrRefreshVirtualDesktopSettingsSnapshot(virtualDesktopCount, cyclicVirtualDesktopsEnabled);
+	mrRefreshLspRuntimeSettingsSnapshot(lspRuntimeSettings);
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->setPersistentBlocksMenuState(persistentBlocksMenuEnabled);
+}
+
+void mrRefreshEditorApplicationUiSettingsSnapshot() {
+	if (auto *app = dynamic_cast<MREditorApp *>(TProgram::application)) app->refreshConfiguredUiSettingsSnapshot();
 }
 
 void MREditorApp::beginInteractiveMouseCapture() noexcept {
@@ -1976,16 +1994,16 @@ void MREditorApp::idle() {
 	updateMacroBrainBlink();
 	warmIndexedMacroBindings();
 	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
-	pumpMRLspService();
+	pumpMRLspService(lspRuntimeSettings);
 	pumpDeferredMacroUiPlayback();
 	mrFlushWorkspaceAutosaveIfDue();
 	updatePerformancePanel();
 	updateFullscreenHint();
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
 		mr::messageline::VisibleMessage message;
-		std::string rightStatus = buildTopRightCursorStatus();
+		std::string rightStatus = buildTopRightCursorStatus(cursorPositionMarkerFormat);
 		mrMenuBar->setRightStatus(rightStatus);
-		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+		mrMenuBar->setPersistentBlocksMenuState(persistentBlocksMenuEnabled);
 		if (MREditWindow *win = currentEditWindow(); win != nullptr) {
 			mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
 			mrMenuBar->setLineDrawingMenuState(win->lineDrawingEnabled(), win->lineDrawingDoubleLines());
@@ -2011,7 +2029,7 @@ void MREditorApp::idle() {
 		}
 	}
 	MRWindowLayout::handleDesktopLayoutChange();
-	updateAppCommandState();
+	updateAppCommandState(virtualDesktopCount, cyclicVirtualDesktopsEnabled);
 	syncFunctionKeyState();
 }
 

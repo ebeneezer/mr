@@ -91,6 +91,8 @@ bool parseLanguageName(const std::string &name, MRSyntaxLanguage &language) noex
 		language = MRSyntaxLanguage::Python;
 	else if (name == "markdown" || name == "md")
 		language = MRSyntaxLanguage::Markdown;
+	else if (name == "latex" || name == "tex" || name == "ltx")
+		language = MRSyntaxLanguage::Latex;
 	else if (name == "bash" || name == "sh")
 		language = MRSyntaxLanguage::Bash;
 	else if (name == "zsh")
@@ -168,6 +170,8 @@ const char *languageName(MRSyntaxLanguage language) noexcept {
 			return "Make";
 		case MRSyntaxLanguage::Markdown:
 			return "Markdown";
+		case MRSyntaxLanguage::Latex:
+			return "LaTeX";
 	}
 	return "PlainText";
 }
@@ -217,6 +221,8 @@ std::string languageSettingName(MRSyntaxLanguage language, bool automatic) {
 			return "MRMAC";
 		case MRSyntaxLanguage::Markdown:
 			return "MARKDOWN";
+		case MRSyntaxLanguage::Latex:
+			return "LATEX";
 		case MRSyntaxLanguage::PlainText:
 		default:
 			return "NONE";
@@ -253,6 +259,7 @@ std::vector<LanguageRun> allLanguageRuns() {
 		{MRSyntaxLanguage::Xml, false},
 		{MRSyntaxLanguage::Python, false},
 		{MRSyntaxLanguage::Markdown, false},
+		{MRSyntaxLanguage::Latex, false},
 		{MRSyntaxLanguage::Bash, false},
 		{MRSyntaxLanguage::Zsh, false},
 		{MRSyntaxLanguage::Fish, false},
@@ -842,7 +849,7 @@ int targetColumnForFill(std::string_view fill, const MREditSetupSettings &settin
 }
 
 void resetEditorForSimulation(MRFileEditor &editor, const std::string &text, const std::string &inputPath, const std::string &codeLanguage) {
-	editor.replaceWholeBuffer(text, 0);
+	editor.replaceBufferData(text.data(), static_cast<uint>(text.size()));
 	editor.setPersistentFileName(inputPath);
 	if (!codeLanguage.empty()) editor.bufferModel().setSyntaxContext(inputPath, inputPath, codeLanguage);
 }

@@ -1041,9 +1041,9 @@ class MREditWindow : public TWindow {
 		return editor->prependLogViewerData(text, static_cast<uint>(std::strlen(text)), chunkFindRanges);
 	}
 
-	void setLogViewerOptions(bool lineNumbers) {
+	void setLogViewerOptions(bool lineNumbers, MRLiveLogScrollDirection scrollDirection) {
 		if (editor == nullptr) return;
-		editor->setCommunicationViewerOptions(lineNumbers);
+		editor->setCommunicationViewerOptions(lineNumbers, scrollDirection);
 	}
 
 	void suppressMiniMap(bool suppress) noexcept {

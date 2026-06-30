@@ -759,7 +759,7 @@ void MRFileEditor::draw() {
 		buffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(std::max(0, size.x)));
 		if (showLineNumbers) {
 			std::size_t displayLineNumber = currentLineIndex + 1;
-			if (mCommunicationViewerMode && configuredLiveLogSettings().scrollDirection == MRLiveLogScrollDirection::Up) {
+			if (mCommunicationViewerMode && mCommunicationViewerScrollDirection == MRLiveLogScrollDirection::Up) {
 				const std::size_t totalLineCount =
 				    mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : std::max<std::size_t>(1, mBufferModel.estimatedLineCount());
 				if (currentLineIndex < totalLineCount) displayLineNumber = totalLineCount - currentLineIndex;

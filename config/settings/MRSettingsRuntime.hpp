@@ -180,6 +180,9 @@ struct MRCompilerProfile {
 	std::string versionText;
 	std::string targetTriple;
 	std::string buildFlags;
+	std::string preBuildCommand;
+	std::string buildSucceededCommand;
+	std::string buildFailedCommand;
 	std::vector<std::string> includePaths;
 	std::vector<std::string> libraryPaths;
 	std::vector<std::string> runtimePaths;

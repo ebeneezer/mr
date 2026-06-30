@@ -126,6 +126,8 @@ public:
 
 	[[nodiscard]] const MRServiceResultStore &results() const noexcept;
 	[[nodiscard]] bool runtimeActive() const noexcept;
+	[[nodiscard]] bool documentOpen() const noexcept;
+	[[nodiscard]] const std::string &activeDocumentPath() const noexcept;
 	[[nodiscard]] bool runtimeCapabilitiesKnown() const noexcept;
 	[[nodiscard]] bool supportsRequestKind(MRLspServiceRequestKind requestKind) const noexcept;
 	[[nodiscard]] bool supportsCodeActions() const noexcept;

@@ -458,13 +458,13 @@ mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, st
 	return result;
 }
 
-bool startLogViewerWindow(MREditWindow *win, mr::coprocessor::ExternalSourceKind sourceKind, const std::string &sourceName, const std::string &title, mr::coprocessor::TaskFn taskFn) {
+bool startLogViewerWindow(MREditWindow *win, mr::coprocessor::ExternalSourceKind sourceKind, const std::string &sourceName, const std::string &title, const MRLiveLogSettings &liveLogSettings, mr::coprocessor::TaskFn taskFn) {
 	std::size_t sourceId;
 	std::uint64_t taskId;
 
 	if (win == nullptr) return false;
 	win->setDisplayTitle(title.c_str());
-	win->setLogViewerOptions(configuredLiveLogSettings().showLineNumbers);
+	win->setLogViewerOptions(liveLogSettings.showLineNumbers, liveLogSettings.scrollDirection);
 	win->setReadOnly(true);
 	win->setFileChanged(false);
 	win->setWindowRole(MREditWindow::wrCommunicationPipe, sourceName);
@@ -509,12 +509,12 @@ bool openLiveLogViewer() {
 		postLogViewerError("Unable to load live log content.");
 		return true;
 	}
-	win->setLogViewerOptions(liveLogSettings.showLineNumbers);
+	win->setLogViewerOptions(liveLogSettings.showLineNumbers, liveLogSettings.scrollDirection);
 	if (liveLogSettings.scrollDirection == MRLiveLogScrollDirection::Up) message(win, evCommand, cmTextStart, nullptr);
 	else
 		message(win, evCommand, cmTextEnd, nullptr);
 	const std::size_t targetBufferId = static_cast<std::size_t>(win->bufferId());
-	if (!startLogViewerWindow(win, mr::coprocessor::ExternalSourceKind::File, resolvedPath, title, [resolvedPath, targetBufferId, search, liveLogSettings](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runFileTailTask(info, stopToken, info.documentId, targetBufferId, resolvedPath, search, liveLogSettings); })) {
+	if (!startLogViewerWindow(win, mr::coprocessor::ExternalSourceKind::File, resolvedPath, title, liveLogSettings, [resolvedPath, targetBufferId, search, liveLogSettings](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runFileTailTask(info, stopToken, info.documentId, targetBufferId, resolvedPath, search, liveLogSettings); })) {
 		message(win, evCommand, cmClose, nullptr);
 		postLogViewerError("Unable to start live log worker.");
 	}
@@ -551,7 +551,7 @@ bool openJournalViewer() {
 		return true;
 	}
 	const std::size_t targetBufferId = static_cast<std::size_t>(win->bufferId());
-	if (!startLogViewerWindow(win, mr::coprocessor::ExternalSourceKind::Journal, appTag, title, [appTag, targetBufferId, search, liveLogSettings](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runJournalTask(info, stopToken, info.documentId, targetBufferId, appTag, search, liveLogSettings); })) {
+	if (!startLogViewerWindow(win, mr::coprocessor::ExternalSourceKind::Journal, appTag, title, liveLogSettings, [appTag, targetBufferId, search, liveLogSettings](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runJournalTask(info, stopToken, info.documentId, targetBufferId, appTag, search, liveLogSettings); })) {
 		message(win, evCommand, cmClose, nullptr);
 		postLogViewerError("Unable to start journal worker.");
 	}

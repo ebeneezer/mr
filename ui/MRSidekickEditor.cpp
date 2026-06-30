@@ -357,7 +357,7 @@ TRect snippetSidekickBoundsFor(MREditWindow *parent, const std::string &text, st
 		const std::size_t lineIndex = editor->lineIndexOfOffset(replaceStart);
 		const std::size_t visibleLine = editor->visibleLineForDocumentLine(lineIndex);
 		const std::size_t lineStart = editor->lineStartOffset(replaceStart);
-		const int literalViewColumn = editor->charColumn(lineStart, replaceStart) + 1;
+		const int literalViewColumn = editor->charColumn(lineStart, replaceStart) - editor->delta.x + 1;
 		const int literalViewRow = static_cast<int>(visibleLine) - editor->delta.y + 1;
 
 		anchorViewColumn = literalViewColumn > 0 ? literalViewColumn : anchorViewColumn;
@@ -1748,6 +1748,27 @@ bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason)
 			}
 			TProgram::deskTop->remove(commitDialog);
 			TObject::destroy(commitDialog);
+			const std::string scrolledLatexText = std::string(96, 'x') + "\\hline\n";
+			const std::size_t scrolledReplaceStart = scrolledLatexText.find("\\hline");
+			if (scrolledReplaceStart == std::string::npos || !editor->replaceBufferText(scrolledLatexText.c_str())) {
+				failureReason = "live snippet sidekick: unable to seed horizontally scrolled LaTeX anchor case.";
+				TProgram::deskTop->remove(window);
+				TObject::destroy(window);
+				return false;
+			}
+			editor->scrollTo(92, 0);
+			const TPoint scrolledEditorGlobal = editor->makeGlobal(TPoint(0, 0));
+			const TRect scrolledViewport = editor->visibleTextViewportBounds();
+			const int scrolledVisualColumn = editor->charColumn(editor->lineStartOffset(scrolledReplaceStart), scrolledReplaceStart);
+			const int expectedScrolledX = scrolledEditorGlobal.x + scrolledViewport.a.x + scrolledVisualColumn - editor->delta.x - 1;
+			const int expectedScrolledY = scrolledEditorGlobal.y + scrolledViewport.a.y - 2;
+			const TRect scrolledBounds = snippetSidekickBoundsFor(window, "\\hline", scrolledReplaceStart, 40, 20);
+			if (scrolledBounds.a.x != expectedScrolledX || scrolledBounds.a.y != expectedScrolledY) {
+				failureReason = "live snippet sidekick: horizontally scrolled LaTeX anchor must use visible view coordinates.";
+				TProgram::deskTop->remove(window);
+				TObject::destroy(window);
+				return false;
+			}
 			TProgram::deskTop->remove(window);
 			TObject::destroy(window);
 		}

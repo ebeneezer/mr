@@ -982,6 +982,67 @@ char matchingOpenDelimiterForCloser(char ch) noexcept {
 	}
 }
 
+std::string_view latexLineBeforeComment(std::string_view line) noexcept {
+	for (std::size_t index = 0; index < line.size(); ++index) {
+		if (line[index] != '%') continue;
+		std::size_t slashCount = 0;
+		std::size_t probe = index;
+		while (probe > 0 && line[probe - 1] == '\\') {
+			++slashCount;
+			--probe;
+		}
+		if (slashCount % 2 == 0) return line.substr(0, index);
+	}
+	return line;
+}
+
+bool isLatexCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimView(trimmed).starts_with("%");
+}
+
+bool latexEnvironmentNameChar(char ch) noexcept {
+	const unsigned char uch = static_cast<unsigned char>(ch);
+	return std::isalnum(uch) != 0 || ch == '*' || ch == '_' || ch == '-' || ch == ':' || ch == '@';
+}
+
+bool parseLatexEnvironmentCommand(std::string_view line, std::string_view command, std::string_view &environmentName, std::size_t *commandEndOffset = nullptr) noexcept {
+	line = trimView(latexLineBeforeComment(line));
+	environmentName = std::string_view();
+	if (!line.starts_with(command)) return false;
+	std::size_t index = command.size();
+	if (index < line.size() && line[index] != '{' && line[index] != ' ' && line[index] != '\t') return false;
+	while (index < line.size() && (line[index] == ' ' || line[index] == '\t'))
+		++index;
+	if (index >= line.size() || line[index] != '{') return false;
+	const std::size_t nameStart = index + 1;
+	std::size_t nameEnd = nameStart;
+	while (nameEnd < line.size() && latexEnvironmentNameChar(line[nameEnd]))
+		++nameEnd;
+	if (nameEnd == nameStart || nameEnd >= line.size() || line[nameEnd] != '}') return false;
+	environmentName = line.substr(nameStart, nameEnd - nameStart);
+	if (commandEndOffset != nullptr) *commandEndOffset = nameEnd + 1;
+	return true;
+}
+
+bool latexLineContainsEnvironmentEnd(std::string_view line, std::string_view environmentName) noexcept {
+	line = latexLineBeforeComment(line);
+	for (std::size_t pos = line.find("\\end"); pos != std::string_view::npos; pos = line.find("\\end", pos + 1)) {
+		std::string_view candidateName;
+		if (parseLatexEnvironmentCommand(line.substr(pos), "\\end", candidateName) && candidateName == environmentName) return true;
+	}
+	return false;
+}
+
+bool parseLatexLeadingBeginEnvironment(std::string_view trimmed, std::string_view &environmentName) noexcept {
+	std::size_t commandEndOffset = 0;
+	if (!parseLatexEnvironmentCommand(trimmed, "\\begin", environmentName, &commandEndOffset)) return false;
+	return !latexLineContainsEnvironmentEnd(trimmed.substr(commandEndOffset), environmentName);
+}
+
+bool parseLatexLeadingEndEnvironment(std::string_view trimmed, std::string_view &environmentName) noexcept {
+	return parseLatexEnvironmentCommand(trimmed, "\\end", environmentName);
+}
+
 enum class SmartDedentKind {
 	None,
 	Delimiter,
@@ -1003,6 +1064,7 @@ enum class SmartDedentKind {
 	PascalEnd,
 	PascalRepeat,
 	XmlTag,
+	LatexEnvironment,
 	CLikeElse,
 	CLikeCatch,
 };
@@ -1054,6 +1116,11 @@ SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntax
 		case MRSyntaxLanguage::Xml: {
 			std::string_view tagName;
 			if (parseXmlLeadingCloseTag(normalizedTrimmed, tagName)) return {SmartDedentKind::XmlTag, 0, tagName};
+			break;
+		}
+		case MRSyntaxLanguage::Latex: {
+			std::string_view environmentName;
+			if (parseLatexLeadingEndEnvironment(normalizedTrimmed, environmentName)) return {SmartDedentKind::LatexEnvironment, 0, environmentName};
 			break;
 		}
 		case MRSyntaxLanguage::C:
@@ -1132,6 +1199,8 @@ bool isDedentSearchSkippableLine(std::string_view trimmed, MRSyntaxLanguage lang
 			return isSystemdCommentLine(trimmed);
 		case MRSyntaxLanguage::Xml:
 			return isXmlCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Latex:
+			return isLatexCommentLikeLine(trimmed);
 		default:
 			return false;
 	}
@@ -1195,6 +1264,10 @@ bool matchesSmartDedentAnchor(std::string_view trimmed, std::string_view upperLi
 		case SmartDedentKind::XmlTag: {
 			std::string_view tagName;
 			return language == MRSyntaxLanguage::Xml && parseXmlLeadingOpenTag(trimmed, tagName) && tagName == request.tagName;
+		}
+		case SmartDedentKind::LatexEnvironment: {
+			std::string_view environmentName;
+			return language == MRSyntaxLanguage::Latex && parseLatexLeadingBeginEnvironment(trimmed, environmentName) && environmentName == request.tagName;
 		}
 		case SmartDedentKind::CLikeElse:
 			return normalizedUpper.starts_with("IF ") || normalizedUpper.starts_with("ELSE");
@@ -1828,6 +1901,10 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 		std::string_view tagName;
 		if (parseXmlLeadingOpenTag(trimmedBeforeCursor, tagName))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Latex) {
+		std::string_view environmentName;
+		if (parseLatexLeadingBeginEnvironment(trimmedBeforeCursor, environmentName))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Systemd) {
 		if (isSystemdContinuationLead(trimmedBeforeCursor)) {
 			if (baseColumn > 1)
@@ -1862,7 +1939,7 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 		    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Fish && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
 		    language != MRSyntaxLanguage::Rust && language != MRSyntaxLanguage::Go && language != MRSyntaxLanguage::Kotlin && language != MRSyntaxLanguage::CSharp &&
 		    language != MRSyntaxLanguage::Pascal && language != MRSyntaxLanguage::Systemd &&
-		    language != MRSyntaxLanguage::Xml)
+		    language != MRSyntaxLanguage::Xml && language != MRSyntaxLanguage::Latex)
 		return;
 
 	const std::size_t lineStart = lineStartOffset(cursorOffset());

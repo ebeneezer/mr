@@ -1092,7 +1092,8 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 }
 
 bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value) {
-	MRColorSetupSettings configured = configuredColorSetupSettings();
+	ensureConfiguredColorSettingsInitialized();
+	const MRColorSetupSettings &configured = configuredColorSettings();
 	unsigned char dialogFrame = 0;
 	unsigned char dialogText = 0;
 	unsigned char dialogBackground = 0;

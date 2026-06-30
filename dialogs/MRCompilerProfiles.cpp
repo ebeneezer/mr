@@ -68,7 +68,7 @@ enum : ushort {
 
 enum {
 	kDialogWidth = 112,
-	kDialogHeight = 26,
+	kDialogHeight = 29,
 	kIdSize = 64,
 	kNameSize = 128,
 	kToolchainSize = 24,
@@ -76,6 +76,7 @@ enum {
 	kVersionSize = 160,
 	kTargetSize = 128,
 	kFlagsSize = 256,
+	kBuildCommandSize = 256,
 	kPathListSize = 256,
 	kAudioUriSize = 256,
 	kLspExecutableSize = 256,
@@ -376,22 +377,22 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		const int left = 3;
 		const int listRight = 37;
 		const int scrollRight = 38;
-		const int labelLeft = 41;
-		const int fieldLeft = 57;
+		const int labelLeft = 39;
+		const int fieldLeft = 63;
 		const int right = 109;
 		const int browseLeft = right - 2;
 		const int historyLeft = browseLeft - 2;
 		const int fieldWithButtonsRight = historyLeft;
 		const int wideFieldRight = browseLeft;
-		const int buttonTop = 21;
-		const int bottomTop = 23;
+		const int buttonTop = 24;
+		const int bottomTop = 26;
 
 		options |= ofCentered;
 
 		insert(new TStaticText(TRect(left, 2, left + 18, 3), "Profiles:"));
-		scrollBar = new TScrollBar(TRect(listRight, 3, scrollRight, 20));
+		scrollBar = new TScrollBar(TRect(listRight, 3, scrollRight, 23));
 		insert(scrollBar);
-		list = new TCompilerProfileListBox(TRect(left, 3, listRight, 20), scrollBar);
+		list = new TCompilerProfileListBox(TRect(left, 3, listRight, 23), scrollBar);
 		insert(list);
 
 		insert(new TStaticText(TRect(labelLeft, 2, fieldLeft - 1, 3), "Profile ID:"));
@@ -412,44 +413,50 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		targetField = addField(TRect(fieldLeft, 7, wideFieldRight, 8), kTargetSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 8, fieldLeft - 1, 9), "Build flags:"));
 		flagsField = addField(TRect(fieldLeft, 8, wideFieldRight, 9), kFlagsSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 9, fieldLeft - 1, 10), "Includes:"));
-		includesField = addField(TRect(fieldLeft, 9, wideFieldRight, 10), kPathListSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 10, fieldLeft - 1, 11), "Libraries:"));
-		librariesField = addField(TRect(fieldLeft, 10, wideFieldRight, 11), kPathListSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 11, fieldLeft - 1, 12), "Runtime:"));
-		runtimeField = addField(TRect(fieldLeft, 11, wideFieldRight, 12), kPathListSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 12, fieldLeft - 1, 13), "LSP exec:"));
-		lspExecutableField = addField(TRect(fieldLeft, 12, fieldWithButtonsRight, 13), kLspExecutableSize - 1);
-		lspExecutableHistoryButton = lspExecutableDropList.createButton(*this, TRect(historyLeft, 12, browseLeft, 13), lspExecutableField, this, cmCompilerProfilesChooseLspExecutable, true);
-		lspExecutableBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 12, right, 13), "🔎", cmCompilerProfilesBrowseLspExecutable);
-		insert(lspExecutableBrowseButton);
-		lspExecutableListAnchor = TRect(fieldLeft, 13, right, 14);
-		insert(new TStaticText(TRect(labelLeft, 13, fieldLeft - 1, 14), "LSP args:"));
-		lspArgumentsField = addField(TRect(fieldLeft, 13, wideFieldRight, 14), kLspArgumentsSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 14, fieldLeft - 1, 15), "LSP cwd:"));
-		lspWorkingDirectoryField = addField(TRect(fieldLeft, 14, fieldWithButtonsRight, 15), kLspWorkingDirectorySize - 1);
-		lspWorkingDirectoryHistoryButton = lspWorkingDirectoryDropList.createButton(*this, TRect(historyLeft, 14, browseLeft, 15), lspWorkingDirectoryField, this, cmCompilerProfilesChooseLspWorkingDirectory, true);
-		lspWorkingDirectoryBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 14, right, 15), "🔎", cmCompilerProfilesBrowseLspWorkingDirectory);
-		insert(lspWorkingDirectoryBrowseButton);
-		lspWorkingDirectoryListAnchor = TRect(fieldLeft, 15, right, 16);
-		insert(new TStaticText(TRect(labelLeft, 15, fieldLeft - 1, 16), "LSP middleware:"));
-		lspMiddlewareField = addField(TRect(fieldLeft, 15, fieldWithButtonsRight, 16), kLspMiddlewareSize - 1);
-		lspMiddlewareHistoryButton = lspMiddlewareDropList.createButton(*this, TRect(historyLeft, 15, browseLeft, 16), lspMiddlewareField, this, cmCompilerProfilesChooseLspMiddleware, true);
-		lspMiddlewareBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 15, right, 16), "🔎", cmCompilerProfilesBrowseLspMiddleware);
-		insert(lspMiddlewareBrowseButton);
-		lspMiddlewareListAnchor = TRect(fieldLeft, 16, right, 17);
-		insert(new TStaticText(TRect(labelLeft, 16, fieldLeft - 1, 17), "Success audio:"));
-		successAudioField = addField(TRect(fieldLeft, 16, fieldWithButtonsRight, 17), kAudioUriSize - 1);
-		successAudioHistoryButton = successAudioDropList.createButton(*this, TRect(historyLeft, 16, browseLeft, 17), successAudioField, this, cmCompilerProfilesChooseSuccessAudio, true);
-		successAudioBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 16, right, 17), "🔎", cmCompilerProfilesBrowseSuccessAudio);
+		insert(new TStaticText(TRect(labelLeft, 9, fieldLeft - 1, 10), "Pre build cmd:"));
+		preBuildCommandField = addField(TRect(fieldLeft, 9, wideFieldRight, 10), kBuildCommandSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 10, fieldLeft - 1, 11), "Build succeeded cmd:"));
+		buildSucceededCommandField = addField(TRect(fieldLeft, 10, wideFieldRight, 11), kBuildCommandSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 11, fieldLeft - 1, 12), "Build succeeded audio:"));
+		successAudioField = addField(TRect(fieldLeft, 11, fieldWithButtonsRight, 12), kAudioUriSize - 1);
+		successAudioHistoryButton = successAudioDropList.createButton(*this, TRect(historyLeft, 11, browseLeft, 12), successAudioField, this, cmCompilerProfilesChooseSuccessAudio, true);
+		successAudioBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 11, right, 12), "🔎", cmCompilerProfilesBrowseSuccessAudio);
 		insert(successAudioBrowseButton);
-		successAudioListAnchor = TRect(fieldLeft, 17, right, 18);
-		insert(new TStaticText(TRect(labelLeft, 17, fieldLeft - 1, 18), "Failure audio:"));
-		failureAudioField = addField(TRect(fieldLeft, 17, fieldWithButtonsRight, 18), kAudioUriSize - 1);
-		failureAudioHistoryButton = failureAudioDropList.createButton(*this, TRect(historyLeft, 17, browseLeft, 18), failureAudioField, this, cmCompilerProfilesChooseFailureAudio, true);
-		failureAudioBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 17, right, 18), "🔎", cmCompilerProfilesBrowseFailureAudio);
+		successAudioListAnchor = TRect(fieldLeft, 12, right, 13);
+		insert(new TStaticText(TRect(labelLeft, 12, fieldLeft - 1, 13), "Build failed cmd:"));
+		buildFailedCommandField = addField(TRect(fieldLeft, 12, wideFieldRight, 13), kBuildCommandSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 13, fieldLeft - 1, 14), "Build failed audio:"));
+		failureAudioField = addField(TRect(fieldLeft, 13, fieldWithButtonsRight, 14), kAudioUriSize - 1);
+		failureAudioHistoryButton = failureAudioDropList.createButton(*this, TRect(historyLeft, 13, browseLeft, 14), failureAudioField, this, cmCompilerProfilesChooseFailureAudio, true);
+		failureAudioBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 13, right, 14), "🔎", cmCompilerProfilesBrowseFailureAudio);
 		insert(failureAudioBrowseButton);
-		failureAudioListAnchor = TRect(fieldLeft, 18, right, 19);
+		failureAudioListAnchor = TRect(fieldLeft, 14, right, 15);
+		insert(new TStaticText(TRect(labelLeft, 14, fieldLeft - 1, 15), "Includes:"));
+		includesField = addField(TRect(fieldLeft, 14, wideFieldRight, 15), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 15, fieldLeft - 1, 16), "Libraries:"));
+		librariesField = addField(TRect(fieldLeft, 15, wideFieldRight, 16), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 16, fieldLeft - 1, 17), "Runtime:"));
+		runtimeField = addField(TRect(fieldLeft, 16, wideFieldRight, 17), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 17, fieldLeft - 1, 18), "LSP exec:"));
+		lspExecutableField = addField(TRect(fieldLeft, 17, fieldWithButtonsRight, 18), kLspExecutableSize - 1);
+		lspExecutableHistoryButton = lspExecutableDropList.createButton(*this, TRect(historyLeft, 17, browseLeft, 18), lspExecutableField, this, cmCompilerProfilesChooseLspExecutable, true);
+		lspExecutableBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 17, right, 18), "🔎", cmCompilerProfilesBrowseLspExecutable);
+		insert(lspExecutableBrowseButton);
+		lspExecutableListAnchor = TRect(fieldLeft, 18, right, 19);
+		insert(new TStaticText(TRect(labelLeft, 18, fieldLeft - 1, 19), "LSP args:"));
+		lspArgumentsField = addField(TRect(fieldLeft, 18, wideFieldRight, 19), kLspArgumentsSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 19, fieldLeft - 1, 20), "LSP cwd:"));
+		lspWorkingDirectoryField = addField(TRect(fieldLeft, 19, fieldWithButtonsRight, 20), kLspWorkingDirectorySize - 1);
+		lspWorkingDirectoryHistoryButton = lspWorkingDirectoryDropList.createButton(*this, TRect(historyLeft, 19, browseLeft, 20), lspWorkingDirectoryField, this, cmCompilerProfilesChooseLspWorkingDirectory, true);
+		lspWorkingDirectoryBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 19, right, 20), "🔎", cmCompilerProfilesBrowseLspWorkingDirectory);
+		insert(lspWorkingDirectoryBrowseButton);
+		lspWorkingDirectoryListAnchor = TRect(fieldLeft, 20, right, 21);
+		insert(new TStaticText(TRect(labelLeft, 20, fieldLeft - 1, 21), "LSP middleware:"));
+		lspMiddlewareField = addField(TRect(fieldLeft, 20, fieldWithButtonsRight, 21), kLspMiddlewareSize - 1);
+		lspMiddlewareHistoryButton = lspMiddlewareDropList.createButton(*this, TRect(historyLeft, 20, browseLeft, 21), lspMiddlewareField, this, cmCompilerProfilesChooseLspMiddleware, true);
+		lspMiddlewareBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 20, right, 21), "🔎", cmCompilerProfilesBrowseLspMiddleware);
+		insert(lspMiddlewareBrowseButton);
+		lspMiddlewareListAnchor = TRect(fieldLeft, 21, right, 22);
 
 		insert(new TButton(TRect(left, buttonTop, left + 10, buttonTop + 2), "~A~dd", cmCompilerProfilesAdd, bfNormal));
 		insert(new TButton(TRect(left + 12, buttonTop, left + 22, buttonTop + 2), "~C~opy", cmCompilerProfilesCopy, bfNormal));
@@ -885,6 +892,9 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		writeInput(versionField, profile.versionText, kVersionSize);
 		writeInput(targetField, profile.targetTriple, kTargetSize);
 		writeInput(flagsField, profile.buildFlags, kFlagsSize);
+		writeInput(preBuildCommandField, profile.preBuildCommand, kBuildCommandSize);
+		writeInput(buildSucceededCommandField, profile.buildSucceededCommand, kBuildCommandSize);
+		writeInput(buildFailedCommandField, profile.buildFailedCommand, kBuildCommandSize);
 		writeInput(includesField, normalizeCompilerProfilePathList(profile.includePaths), kPathListSize);
 		writeInput(librariesField, normalizeCompilerProfilePathList(profile.libraryPaths), kPathListSize);
 		writeInput(runtimeField, normalizeCompilerProfilePathList(profile.runtimePaths), kPathListSize);
@@ -907,6 +917,9 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		profile.versionText = readInput(versionField, kVersionSize);
 		profile.targetTriple = readInput(targetField, kTargetSize);
 		profile.buildFlags = readInput(flagsField, kFlagsSize);
+		profile.preBuildCommand = readInput(preBuildCommandField, kBuildCommandSize);
+		profile.buildSucceededCommand = readInput(buildSucceededCommandField, kBuildCommandSize);
+		profile.buildFailedCommand = readInput(buildFailedCommandField, kBuildCommandSize);
 		profile.includePaths = splitCompilerProfilePathList(readInput(includesField, kPathListSize));
 		profile.libraryPaths = splitCompilerProfilePathList(readInput(librariesField, kPathListSize));
 		profile.runtimePaths = splitCompilerProfilePathList(readInput(runtimeField, kPathListSize));
@@ -1055,6 +1068,9 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	TInputLine *versionField = nullptr;
 	TInputLine *targetField = nullptr;
 	TInputLine *flagsField = nullptr;
+	TInputLine *preBuildCommandField = nullptr;
+	TInputLine *buildSucceededCommandField = nullptr;
+	TInputLine *buildFailedCommandField = nullptr;
 	TInputLine *includesField = nullptr;
 	TInputLine *librariesField = nullptr;
 	TInputLine *runtimeField = nullptr;

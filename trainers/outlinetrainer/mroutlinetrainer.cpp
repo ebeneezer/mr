@@ -27,6 +27,8 @@ bool parseLanguageName(const std::string &name, MRSyntaxLanguage &language) noex
 		language = MRSyntaxLanguage::Python;
 	else if (name == "markdown" || name == "md")
 		language = MRSyntaxLanguage::Markdown;
+	else if (name == "latex" || name == "tex" || name == "ltx")
+		language = MRSyntaxLanguage::Latex;
 	else if (name == "bash" || name == "sh")
 		language = MRSyntaxLanguage::Bash;
 	else if (name == "zsh")
@@ -104,6 +106,8 @@ const char *languageName(MRSyntaxLanguage language) noexcept {
 			return "Make";
 		case MRSyntaxLanguage::Markdown:
 			return "Markdown";
+		case MRSyntaxLanguage::Latex:
+			return "LaTeX";
 	}
 	return "PlainText";
 }

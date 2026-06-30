@@ -42,14 +42,73 @@ std::vector<std::string> mrvmProcessRuntimeArguments() {
 
 std::string mrvmCommandFirstLine(const std::string &command) {
 	std::string line;
-	FILE *pipe = ::popen(command.c_str(), "r");
 	char buffer[512];
-	if (pipe == nullptr) return std::string();
-	if (::fgets(buffer, sizeof(buffer), pipe) != nullptr) line = buffer;
-	::pclose(pipe);
+	std::string shellPath = mrvmDetectShellPath();
+	int pipeFds[2] = {-1, -1};
+	pid_t childPid = -1;
+	int waitStatus = 0;
+
+	if (command.empty() || shellPath.empty()) return std::string();
+	if (::pipe(pipeFds) != 0) return std::string();
+	childPid = ::fork();
+	if (childPid < 0) {
+		::close(pipeFds[0]);
+		::close(pipeFds[1]);
+		return std::string();
+	}
+	if (childPid == 0) {
+		::dup2(pipeFds[1], STDOUT_FILENO);
+		::close(pipeFds[0]);
+		::close(pipeFds[1]);
+		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(nullptr));
+		::_exit(127);
+	}
+	::close(pipeFds[1]);
+	for (;;) {
+		const ssize_t count = ::read(pipeFds[0], buffer, sizeof(buffer));
+
+		if (count > 0) {
+			for (std::size_t index = 0; index < static_cast<std::size_t>(count); ++index) {
+				if (buffer[index] == '\n') {
+					::close(pipeFds[0]);
+					while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
+						;
+					while (!line.empty() && line.back() == '\r')
+						line.pop_back();
+					return line;
+				}
+				line.push_back(buffer[index]);
+			}
+			continue;
+		}
+		if (count == 0) break;
+		if (errno == EINTR) continue;
+		break;
+	}
+	::close(pipeFds[0]);
+	while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
+		;
 	while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
 		line.pop_back();
 	return line;
+}
+
+int mrvmRunShellCommand(const std::string &command, const std::string &shellPath) {
+	pid_t childPid = -1;
+	int waitStatus = -1;
+
+	if (command.empty() || shellPath.empty()) return -1;
+	childPid = ::fork();
+	if (childPid < 0) return -1;
+	if (childPid == 0) {
+		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(nullptr));
+		::_exit(127);
+	}
+	while (::waitpid(childPid, &waitStatus, 0) < 0) {
+		if (errno == EINTR) continue;
+		return -1;
+	}
+	return waitStatus;
 }
 
 std::string mrvmDetectExecutablePathFromProc() {

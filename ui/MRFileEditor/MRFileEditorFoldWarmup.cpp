@@ -1181,6 +1181,63 @@ int latexHeadingLevel(std::string_view trimmed) noexcept {
 	return 0;
 }
 
+std::string_view latexLineBeforeComment(std::string_view line) noexcept {
+	for (std::size_t index = 0; index < line.size(); ++index) {
+		if (line[index] != '%') continue;
+		std::size_t slashCount = 0;
+		std::size_t probe = index;
+		while (probe > 0 && line[probe - 1] == '\\') {
+			++slashCount;
+			--probe;
+		}
+		if (slashCount % 2 == 0) return line.substr(0, index);
+	}
+	return line;
+}
+
+bool latexEnvironmentNameChar(char ch) noexcept {
+	const unsigned char uch = static_cast<unsigned char>(ch);
+	return std::isalnum(uch) != 0 || ch == '*' || ch == '_' || ch == '-' || ch == ':' || ch == '@';
+}
+
+bool parseLatexEnvironmentCommand(std::string_view line, std::string_view command, std::string_view &environmentName, std::size_t *commandEndOffset = nullptr) noexcept {
+	line = trimView(latexLineBeforeComment(line));
+	environmentName = std::string_view();
+	if (!line.starts_with(command)) return false;
+	std::size_t index = command.size();
+	if (index < line.size() && line[index] != '{' && line[index] != ' ' && line[index] != '\t') return false;
+	while (index < line.size() && isIndentWhitespace(line[index]))
+		++index;
+	if (index >= line.size() || line[index] != '{') return false;
+	const std::size_t nameStart = index + 1;
+	std::size_t nameEnd = nameStart;
+	while (nameEnd < line.size() && latexEnvironmentNameChar(line[nameEnd]))
+		++nameEnd;
+	if (nameEnd == nameStart || nameEnd >= line.size() || line[nameEnd] != '}') return false;
+	environmentName = line.substr(nameStart, nameEnd - nameStart);
+	if (commandEndOffset != nullptr) *commandEndOffset = nameEnd + 1;
+	return true;
+}
+
+bool latexLineContainsEnvironmentEnd(std::string_view line, std::string_view environmentName) noexcept {
+	line = latexLineBeforeComment(line);
+	for (std::size_t pos = line.find("\\end"); pos != std::string_view::npos; pos = line.find("\\end", pos + 1)) {
+		std::string_view candidateName;
+		if (parseLatexEnvironmentCommand(line.substr(pos), "\\end", candidateName) && candidateName == environmentName) return true;
+	}
+	return false;
+}
+
+bool parseLatexLeadingBeginEnvironment(std::string_view trimmed, std::string_view &environmentName) noexcept {
+	std::size_t commandEndOffset = 0;
+	if (!parseLatexEnvironmentCommand(trimmed, "\\begin", environmentName, &commandEndOffset)) return false;
+	return !latexLineContainsEnvironmentEnd(trimmed.substr(commandEndOffset), environmentName);
+}
+
+bool parseLatexLeadingEndEnvironment(std::string_view trimmed, std::string_view &environmentName) noexcept {
+	return parseLatexEnvironmentCommand(trimmed, "\\end", environmentName);
+}
+
 bool markdownFenceMarker(std::string_view trimmed, char &marker, std::size_t &runLength) noexcept {
 	if (!isMarkdownFenceLine(trimmed)) return false;
 	marker = trimmed.front();
@@ -1379,6 +1436,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		kFishCaseBlock = 6,
 		kFishGenericBlock = 7,
 		kXmlTagBlock = 8,
+		kLatexEnvironmentBlock = 9,
 	};
 	auto appendVisibleSpan = [&](const MRFoldOpenBlock &block, std::size_t endLine) {
 		if (endLine <= block.startLine) return;
@@ -1573,6 +1631,10 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const bool xmlLeadingOpenTag = language == MRSyntaxLanguage::Xml && parseXmlLeadingOpenTag(trimmed, xmlLeadingOpenTagName);
 		std::string_view xmlLeadingCloseTagName;
 		const bool xmlLeadingCloseTag = language == MRSyntaxLanguage::Xml && parseXmlLeadingCloseTag(trimmed, xmlLeadingCloseTagName);
+		std::string_view latexBeginEnvironmentName;
+		const bool latexBeginEnvironment = language == MRSyntaxLanguage::Latex && parseLatexLeadingBeginEnvironment(trimmed, latexBeginEnvironmentName);
+		std::string_view latexEndEnvironmentName;
+		const bool latexEndEnvironment = language == MRSyntaxLanguage::Latex && parseLatexLeadingEndEnvironment(trimmed, latexEndEnvironmentName);
 		const bool pythonDedent = language == MRSyntaxLanguage::Python && isPythonDedentLead(upperLine);
 		const bool perlSiblingLead = language == MRSyntaxLanguage::Perl && isPerlSiblingLead(upperLine);
 		const bool perlSiblingAfterLeadingCloser = language == MRSyntaxLanguage::Perl && isPerlSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
@@ -1797,6 +1859,25 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			appendVisibleSpan(openBlocks.back(), lineIndex);
 			openBlocks.pop_back();
 		}
+		if (language == MRSyntaxLanguage::Latex && latexEndEnvironment && !openBlocks.empty()) {
+			std::size_t matchingIndex = std::numeric_limits<std::size_t>::max();
+			for (std::size_t index = openBlocks.size(); index-- > 0;) {
+				const MRFoldOpenBlock &block = openBlocks[index];
+				if (block.languageBlockKind == kLatexEnvironmentBlock) {
+					if (block.xmlTagName == latexEndEnvironmentName) matchingIndex = index;
+					break;
+				}
+				if (block.sourceKind != MRFoldSourceKind::Section) break;
+			}
+			if (matchingIndex != std::numeric_limits<std::size_t>::max()) {
+				while (openBlocks.size() - 1 > matchingIndex) {
+					appendVisibleSpan(openBlocks.back(), lineIndex - 1);
+					openBlocks.pop_back();
+				}
+				appendVisibleSpan(openBlocks.back(), lineIndex);
+				openBlocks.pop_back();
+			}
+		}
 		while (!openBlocks.empty()) {
 			const MRFoldOpenBlock block = openBlocks.back();
 			bool closeBlock = false;
@@ -2008,6 +2089,8 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			}
 			case MRSyntaxLanguage::Latex:
 				if (headingLevel > 0) openBlock(MRFoldSourceKind::Section, currentIndent, 0, 0, 0, headingLevel);
+				if (latexBeginEnvironment)
+					openBlock(MRFoldSourceKind::Directive, currentIndent, 0, 0, 0, 0, kLatexEnvironmentBlock, std::numeric_limits<std::size_t>::max(), false, latexBeginEnvironmentName);
 				break;
 			case MRSyntaxLanguage::Make:
 				if (!isMakeRecipeLine(lineText) && isMakeTargetLine(trimmed) && !nextTrimmed.empty() && nextLineTextPtr != nullptr && isMakeRecipeLine(*nextLineTextPtr))
@@ -2038,7 +2121,9 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 
 	const std::size_t finalLine = baseLineIndex + lineTexts.size() - 1;
 	for (const MRFoldOpenBlock &block : openBlocks)
-		if (language == MRSyntaxLanguage::Systemd && block.sourceKind == MRFoldSourceKind::Section && block.lastContentLine != std::numeric_limits<std::size_t>::max() && block.lastContentLine > block.startLine)
+		if (language == MRSyntaxLanguage::Latex && block.languageBlockKind == kLatexEnvironmentBlock)
+			continue;
+		else if (language == MRSyntaxLanguage::Systemd && block.sourceKind == MRFoldSourceKind::Section && block.lastContentLine != std::numeric_limits<std::size_t>::max() && block.lastContentLine > block.startLine)
 			appendVisibleSpan(block, block.lastContentLine);
 		else
 			appendVisibleSpan(block, finalLine);

@@ -105,6 +105,8 @@ void finishNewEditWindow(MREditWindow *win) {
 #include "../config/settings/MRSettingsStorage.hpp"
 
 static int g_currentVirtualDesktop = 1;
+static int g_virtualDesktopCountSnapshot = 1;
+static bool g_cyclicVirtualDesktopsSnapshot = false;
 static std::set<const MREditWindow *> g_manuallyHiddenWindows;
 static std::string g_workspaceMainFilePath;
 static bool g_workspaceAutosaveDirty = false;
@@ -112,6 +114,12 @@ static std::chrono::steady_clock::time_point g_workspaceAutosaveDue;
 static constexpr std::chrono::milliseconds kWorkspaceAutosaveDelay(1000);
 
 namespace {
+int normalizedVirtualDesktopCount(int count) {
+	if (count < 1) return 1;
+	if (count > 9) return 9;
+	return count;
+}
+
 struct WorkspaceEntry {
 	std::string url;
 	int width = -1;
@@ -308,7 +316,7 @@ bool parseBentoWorkspaceSnapshot(const std::string &token, MRBentoWorkspaceSnaps
 }
 
 int workspaceVirtualDesktopOrRandom(int savedDesktop) {
-	int maxDesktop = configuredVirtualDesktops();
+	int maxDesktop = mrVirtualDesktopCountSnapshot();
 
 	if (maxDesktop < 1) maxDesktop = 1;
 	if (savedDesktop >= 1 && savedDesktop <= maxDesktop) return savedDesktop;
@@ -722,6 +730,23 @@ int currentVirtualDesktop() {
 	return g_currentVirtualDesktop;
 }
 
+void mrRefreshVirtualDesktopSettingsSnapshot(int count, bool cyclic) {
+	g_virtualDesktopCountSnapshot = normalizedVirtualDesktopCount(count);
+	g_cyclicVirtualDesktopsSnapshot = cyclic;
+}
+
+void mrRefreshVirtualDesktopSettingsSnapshot() {
+	mrRefreshVirtualDesktopSettingsSnapshot(configuredVirtualDesktops(), configuredCyclicVirtualDesktops());
+}
+
+int mrVirtualDesktopCountSnapshot() {
+	return g_virtualDesktopCountSnapshot;
+}
+
+bool mrCyclicVirtualDesktopsSnapshot() {
+	return g_cyclicVirtualDesktopsSnapshot;
+}
+
 void setWindowManuallyHidden(MREditWindow *win, bool hidden) {
 	if (win == nullptr) return;
 	if (hidden == isWindowManuallyHidden(win)) return;
@@ -777,7 +802,7 @@ void setCurrentVirtualDesktop(int vd) {
 	const int oldDesktop = g_currentVirtualDesktop;
 
 	if (vd < 1) vd = 1;
-	int maxVd = configuredVirtualDesktops();
+	int maxVd = mrVirtualDesktopCountSnapshot();
 	if (maxVd < 1) maxVd = 1;
 	if (vd > maxVd) vd = maxVd;
 	g_currentVirtualDesktop = vd;
@@ -789,19 +814,19 @@ void applyVirtualDesktopConfigurationChange(int count) {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	std::string ignoredError;
 
-	if (count < 1) count = 1;
-	if (count > 9) count = 9;
+	count = normalizedVirtualDesktopCount(count);
 	for (MREditWindow *win : windows)
 		if (win != nullptr && win->mVirtualDesktop > count) win->mVirtualDesktop = count;
 
 	setConfiguredVirtualDesktops(count, &ignoredError);
+	mrRefreshVirtualDesktopSettingsSnapshot(count, configuredCyclicVirtualDesktops());
 	setCurrentVirtualDesktop(std::min(currentVirtualDesktop(), count));
 }
 
 bool moveToNextVirtualDesktop() {
 	MREditWindow *win = currentEditWindow();
 	if (win == nullptr) return false;
-	int maxVd = configuredVirtualDesktops();
+	int maxVd = mrVirtualDesktopCountSnapshot();
 	if (win->mVirtualDesktop >= maxVd) return false;
 	win->mVirtualDesktop++;
 	syncVirtualDesktopVisibility();
@@ -818,9 +843,9 @@ bool moveToPrevVirtualDesktop() {
 }
 
 bool viewportRight() {
-	int maxVd = configuredVirtualDesktops();
+	int maxVd = mrVirtualDesktopCountSnapshot();
 	if (g_currentVirtualDesktop >= maxVd) {
-		if (configuredCyclicVirtualDesktops() && maxVd > 1) {
+		if (mrCyclicVirtualDesktopsSnapshot() && maxVd > 1) {
 			setCurrentVirtualDesktop(1);
 			return true;
 		}
@@ -831,9 +856,9 @@ bool viewportRight() {
 }
 
 bool viewportLeft() {
-	int maxVd = configuredVirtualDesktops();
+	int maxVd = mrVirtualDesktopCountSnapshot();
 	if (g_currentVirtualDesktop <= 1) {
-		if (configuredCyclicVirtualDesktops() && maxVd > 1) {
+		if (mrCyclicVirtualDesktopsSnapshot() && maxVd > 1) {
 			setCurrentVirtualDesktop(maxVd);
 			return true;
 		}

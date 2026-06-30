@@ -169,6 +169,47 @@ bool outlineParseXmlLeadingOpenTag(std::string_view trimmed, std::string_view &t
 	return true;
 }
 
+bool outlineLatexCommandNameChar(char ch) noexcept {
+	const unsigned char uch = static_cast<unsigned char>(ch);
+	return std::isalpha(uch) != 0;
+}
+
+std::size_t outlineLatexSkipBalanced(std::string_view text, std::size_t start, char open, char close) noexcept {
+	int depth = 0;
+	for (std::size_t index = start; index < text.size(); ++index) {
+		if (text[index] == '\\' && index + 1 < text.size()) {
+			++index;
+			continue;
+		}
+		if (text[index] == open) ++depth;
+		if (text[index] == close) {
+			--depth;
+			if (depth == 0) return index + 1;
+		}
+	}
+	return std::string_view::npos;
+}
+
+std::string outlineLatexSectionTitle(std::string_view trimmed) {
+	if (trimmed.empty() || trimmed.front() != '\\') return std::string();
+	std::size_t index = 1;
+	while (index < trimmed.size() && outlineLatexCommandNameChar(trimmed[index]))
+		++index;
+	while (index < trimmed.size() && (trimmed[index] == '*' || std::isspace(static_cast<unsigned char>(trimmed[index])) != 0))
+		++index;
+	while (index < trimmed.size() && trimmed[index] == '[') {
+		const std::size_t next = outlineLatexSkipBalanced(trimmed, index, '[', ']');
+		if (next == std::string_view::npos) return std::string();
+		index = next;
+		while (index < trimmed.size() && std::isspace(static_cast<unsigned char>(trimmed[index])) != 0)
+			++index;
+	}
+	if (index >= trimmed.size() || trimmed[index] != '{') return std::string();
+	const std::size_t end = outlineLatexSkipBalanced(trimmed, index, '{', '}');
+	if (end == std::string_view::npos || end <= index + 2) return std::string();
+	return std::string(outlineTrimView(trimmed.substr(index + 1, end - index - 2)));
+}
+
 bool outlineKindIsFunctionLike(MROutlineKind kind) noexcept {
 	switch (kind) {
 		case mrokMethod:
@@ -674,6 +715,13 @@ std::string outlineModuleDisplayName(MRSyntaxLanguage language, std::string_view
 		const std::string name = outlineNameAfterUpperToken(trimmed, upperLine, "MOD ");
 		if (!name.empty()) return name;
 	}
+	if (language == MRSyntaxLanguage::Latex && trimmed.starts_with("\\begin")) {
+		std::size_t openBrace = trimmed.find('{');
+		if (openBrace != std::string_view::npos) {
+			std::size_t closeBrace = trimmed.find('}', openBrace + 1);
+			if (closeBrace != std::string_view::npos && closeBrace > openBrace + 1) return std::string(outlineTrimView(trimmed.substr(openBrace + 1, closeBrace - openBrace - 1)));
+		}
+	}
 	return std::string();
 }
 
@@ -704,11 +752,8 @@ std::string outlineSectionDisplayName(MRSyntaxLanguage language, std::string_vie
 		if (!heading.empty()) return std::string(heading);
 	}
 	if (language == MRSyntaxLanguage::Latex) {
-		std::size_t openBrace = trimmed.find('{');
-		if (openBrace != std::string_view::npos) {
-			std::size_t closeBrace = trimmed.find('}', openBrace + 1);
-			if (closeBrace != std::string_view::npos && closeBrace > openBrace + 1) return std::string(outlineTrimView(trimmed.substr(openBrace + 1, closeBrace - openBrace - 1)));
-		}
+		name = outlineLatexSectionTitle(trimmed);
+		if (!name.empty()) return name;
 	}
 	return std::string();
 }
@@ -785,10 +830,16 @@ std::string mrBuildOutlineTrainingAsciiForFoldSpans(const std::vector<std::strin
 	std::string output;
 	std::size_t structureCount = 0;
 	std::size_t functionsCount = 0;
+	std::vector<MRFoldSpan> orderedSpans = spans;
+
+	std::stable_sort(orderedSpans.begin(), orderedSpans.end(), [](const MRFoldSpan &lhs, const MRFoldSpan &rhs) {
+		if (lhs.startLine != rhs.startLine) return lhs.startLine < rhs.startLine;
+		return lhs.level < rhs.level;
+	});
 	auto appendSection = [&](const char *title, MROutlineView view, std::size_t &count) {
 		std::string rows;
 		std::vector<MROutlineAcceptedKey> acceptedKeys;
-		for (const MRFoldSpan &span : spans) {
+		for (const MRFoldSpan &span : orderedSpans) {
 			if (span.startLine >= lineTexts.size()) continue;
 			const std::string_view trimmed = outlineTrimView(lineTexts[span.startLine]);
 			std::string_view endTrimmed;
@@ -827,6 +878,7 @@ bool mrBuildFoldOutlineSnapshotFromFoldState(MRSyntaxLanguage language, std::siz
 	std::vector<std::uint32_t> levelLast;
 	std::vector<std::uint32_t> lastChild;
 	std::vector<MROutlineAcceptedKey> acceptedKeys;
+	std::vector<MRFoldSpan> orderedSpans = spans;
 
 	snapshot.documentId = documentId;
 	snapshot.version = version;
@@ -838,7 +890,11 @@ bool mrBuildFoldOutlineSnapshotFromFoldState(MRSyntaxLanguage language, std::siz
 	if (bottomLine <= topLine) return false;
 	if (!request.allowPartial && !complete) return false;
 
-	for (const MRFoldSpan &span : spans) {
+	std::stable_sort(orderedSpans.begin(), orderedSpans.end(), [](const MRFoldSpan &lhs, const MRFoldSpan &rhs) {
+		if (lhs.startLine != rhs.startLine) return lhs.startLine < rhs.startLine;
+		return lhs.level < rhs.level;
+	});
+	for (const MRFoldSpan &span : orderedSpans) {
 		if (span.startLine < topLine || span.startLine >= bottomLine) continue;
 		const std::size_t lineTextIndex = span.startLine - topLine;
 		if (lineTextIndex >= lineTexts.size()) continue;

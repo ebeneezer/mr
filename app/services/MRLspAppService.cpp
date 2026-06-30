@@ -14,6 +14,15 @@ bool workspaceContainsDocument(const MRWorkspaceServiceSnapshot &workspace, cons
 	return false;
 }
 
+bool workspaceContainsPath(const MRWorkspaceServiceSnapshot &workspace, const std::string &path) {
+	const std::string documentPath = normalizeWorkspaceServicePath(path);
+
+	if (documentPath.empty()) return false;
+	for (const MRWorkspaceDocumentSnapshot &document : workspace.documents)
+		if (document.path == documentPath) return true;
+	return false;
+}
+
 void setLspCommandAvailability(const MRLspServiceSession &session, bool hasWorkspaceRoot, bool hasCodeActionContext, MRLspCommandAvailability &commands) noexcept {
 	const bool capabilitiesKnown = session.runtimeCapabilitiesKnown();
 
@@ -190,6 +199,22 @@ bool MRLspAppService::resolveCompletionItem(const MRServiceCompletionItem &item,
 	return session.resolveCompletionItem(item, resolvedItem, errorMessage);
 }
 
+bool MRLspAppService::closeActiveDocumentIfMissingFromWorkspace(const MRWorkspaceServiceSnapshot &workspace, bool &closedDocument, std::string &errorMessage) {
+	closedDocument = false;
+	if (!session.documentOpen()) {
+		errorMessage.clear();
+		return true;
+	}
+	if (workspaceContainsPath(workspace, session.activeDocumentPath())) {
+		errorMessage.clear();
+		return true;
+	}
+	if (!session.closeDocument(errorMessage)) return false;
+	closedDocument = true;
+	errorMessage.clear();
+	return true;
+}
+
 bool MRLspAppService::poll(std::string &errorMessage) {
 	return session.poll(errorMessage);
 }
@@ -212,6 +237,10 @@ const MRServiceResultStore &MRLspAppService::results() const noexcept {
 
 bool MRLspAppService::runtimeActive() const noexcept {
 	return session.runtimeActive();
+}
+
+bool MRLspAppService::documentOpen() const noexcept {
+	return session.documentOpen();
 }
 
 std::string MRLspAppService::activeHoverRequestId() const {

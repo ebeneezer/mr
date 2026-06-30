@@ -364,6 +364,8 @@ Betroffene Stellen:
 - `app/commands/MRExternalCommand.cpp`
 - Compilerprofile/Settings nur lesen, nicht opportunistisch umbauen.
 - SideKick fuer Compilerdiagnostics: `ui/MRBentoBoxDiagnostics.cpp`
+- `SHELL_TO_OS` und Compiler-Probe-Ausfuehrung muessen ueber die konfigurierte
+  Shell laufen; `system()`/`popen()` duerfen nicht wieder eingefuehrt werden.
 
 Faelle:
 
@@ -379,6 +381,8 @@ Akzeptanz:
 - Kein UI-Lag.
 - Buildfenster und Diagnostic-SideKick bleiben bedienbar.
 - Keine neue Settings-Serialisierung ohne ausdrueckliche Freigabe.
+- Regression schuetzt, dass Shell-Kommandos compilatweit nicht heimlich auf
+  libc-Default-Shells zurueckfallen.
 
 ## Zug 8 - Dokumentations-Akzeptanz
 

@@ -60,6 +60,8 @@ MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScroll
 	options |= ofFirstClick;
 	eventMask |= evMouse | evKeyboard | evCommand;
 	if (!aFileName.empty()) setPersistentFileName(aFileName);
+	else
+		refreshEditorSettingsSnapshot();
 	syncFromEditorState(false);
 }
 
@@ -100,12 +102,14 @@ bool MRFileEditor::hasPersistentFileName() const {
 
 void MRFileEditor::setPersistentFileName(TStringView name) noexcept {
 	strnzcpy(fileName, name, sizeof(fileName));
+	refreshEditorSettingsSnapshot();
 	refreshSyntaxContext();
 	scheduleSaveNormalizationWarmupIfNeeded();
 }
 
 void MRFileEditor::clearPersistentFileName() noexcept {
 	fileName[0] = EOS;
+	refreshEditorSettingsSnapshot();
 	refreshSyntaxContext();
 	scheduleSaveNormalizationWarmupIfNeeded();
 }

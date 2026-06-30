@@ -55,6 +55,7 @@ Token postAutoTimed(Owner owner, std::string_view text, Kind kind, int priority,
 Token postAutoTimedAfter(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds delay, int priority, std::chrono::milliseconds perCharacter = std::chrono::milliseconds(100));
 void clearOwner(Owner owner);
 void clearOwnerToken(Owner owner, Token token);
+void setRuntimeMessageLineEnabled(bool enabled);
 [[nodiscard]] bool currentVisibleMessage(VisibleMessage &out);
 [[nodiscard]] bool currentOwnerMessage(Owner owner, VisibleMessage &out);
 

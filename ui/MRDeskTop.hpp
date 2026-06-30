@@ -62,7 +62,7 @@ class MRDesktopBackground : public TBackground {
 	}
 
 	static std::vector<std::string> markerLines(int currentVd) {
-		if (configuredVirtualDesktops() <= 1) return {};
+		if (mrVirtualDesktopCountSnapshot() <= 1) return {};
 
 		switch (currentVd) {
 			case 1:

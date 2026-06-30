@@ -40,6 +40,8 @@ MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 }
 
 void MRFileEditor::refreshConfiguredVisualSettings() {
+	refreshEditorSettingsSnapshot();
+	if (auto *mrIndicator = dynamic_cast<MRIndicator *>(mIndicator)) mrIndicator->setCursorPositionMarkerFormat(configuredCursorPositionMarker());
 	syncDisplayedCursorColumnFromCursor(true);
 	refreshSyntaxContext();
 	invalidateFoldCache();
@@ -153,14 +155,20 @@ TPalette &MRFileEditor::getPalette() const {
 	return palette;
 }
 
-MREditSetupSettings MRFileEditor::effectiveEditSetupSettings() const {
+void MRFileEditor::refreshEditorSettingsSnapshot() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 
 	if (hasPersistentFileName()) {
 		MREditSetupSettings effective;
 		if (effectiveEditSetupSettingsForPath(fileName, effective, nullptr)) settings = effective;
 	}
-	return settings;
+	mEffectiveEditSettings = settings;
+	mCursorBehaviour = configuredCursorBehaviour();
+	mScrollbarVisibility = configuredScrollbarVisibility();
+}
+
+const MREditSetupSettings &MRFileEditor::effectiveEditSetupSettings() const noexcept {
+	return mEffectiveEditSettings;
 }
 
 int MRFileEditor::configuredTabSize() const {
@@ -193,7 +201,7 @@ void MRFileEditor::syncScrollBarsToState() noexcept {
 	normalizeScrollBarTrackGlyph(hScrollBar);
 	normalizeScrollBarTrackGlyph(vScrollBar);
 	bool showBase = mScrollBarsAlwaysVisible || (state & (sfActive | sfSelected)) != 0;
-	const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
+	const bool showWithoutRange = mScrollbarVisibility == MRScrollbarVisibility::Always;
 	MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
 	if (window != nullptr && window->isMinimized()) showBase = false;
 	if (hScrollBar != nullptr) {
@@ -217,16 +225,21 @@ int MRFileEditor::decimalDigits(std::size_t value) noexcept {
 	return digits;
 }
 
-void MRFileEditor::setCommunicationViewerMode(bool enabled, bool lineNumbers) {
-	if (mCommunicationViewerMode == enabled && mCommunicationViewerLineNumbers == lineNumbers) return;
+void MRFileEditor::setCommunicationViewerMode(bool enabled, bool lineNumbers, MRLiveLogScrollDirection scrollDirection) {
+	if (mCommunicationViewerMode == enabled && mCommunicationViewerLineNumbers == lineNumbers && mCommunicationViewerScrollDirection == scrollDirection) return;
 	mCommunicationViewerMode = enabled;
 	mCommunicationViewerLineNumbers = lineNumbers;
+	mCommunicationViewerScrollDirection = scrollDirection;
 	refreshSyntaxContext();
 	refreshViewState();
 }
 
 void MRFileEditor::setCommunicationViewerOptions(bool lineNumbers) {
-	setCommunicationViewerMode(true, lineNumbers);
+	setCommunicationViewerOptions(lineNumbers, MRLiveLogScrollDirection::Down);
+}
+
+void MRFileEditor::setCommunicationViewerOptions(bool lineNumbers, MRLiveLogScrollDirection scrollDirection) {
+	setCommunicationViewerMode(true, lineNumbers, scrollDirection);
 }
 
 void MRFileEditor::setMiniMapSuppressed(bool suppressed) noexcept {

@@ -206,9 +206,11 @@ class MRFileEditor : public TScroller {
 	void syncDisplayedCursorColumnFromCursor(bool preserveFreeColumn) noexcept;
 
 	void refreshConfiguredVisualSettings();
+	void refreshEditorSettingsSnapshot();
 	void moveCursorToDocumentLineTop(std::size_t lineIndex, int visualColumn);
-	void setCommunicationViewerMode(bool enabled, bool lineNumbers);
+	void setCommunicationViewerMode(bool enabled, bool lineNumbers, MRLiveLogScrollDirection scrollDirection = MRLiveLogScrollDirection::Down);
 	void setCommunicationViewerOptions(bool lineNumbers);
+	void setCommunicationViewerOptions(bool lineNumbers, MRLiveLogScrollDirection scrollDirection);
 	void setMiniMapSuppressed(bool suppressed) noexcept;
 	void setWordWrapSuppressed(bool suppressed) noexcept;
 	void setScrollBarsAlwaysVisible(bool visible) noexcept;
@@ -662,7 +664,7 @@ class MRFileEditor : public TScroller {
 
 		bool pieceTableOnlyPhaseActive() const noexcept;
 
-		MREditSetupSettings effectiveEditSetupSettings() const;
+		const MREditSetupSettings &effectiveEditSetupSettings() const noexcept;
 
 		std::string effectiveCodeLanguageSetting() const;
 
@@ -725,6 +727,10 @@ class MRFileEditor : public TScroller {
 	TColorAttr mCustomWindowEofMarkerColorOverride = 0;
 	bool mCommunicationViewerMode = false;
 	bool mCommunicationViewerLineNumbers = true;
+	MRLiveLogScrollDirection mCommunicationViewerScrollDirection = MRLiveLogScrollDirection::Down;
+	MREditSetupSettings mEffectiveEditSettings;
+	MRCursorBehaviour mCursorBehaviour = MRCursorBehaviour::BoundToText;
+	MRScrollbarVisibility mScrollbarVisibility = MRScrollbarVisibility::Smart;
 	bool mMiniMapSuppressed = false;
 	bool mWordWrapSuppressed = false;
 	bool mScrollBarsAlwaysVisible = false;

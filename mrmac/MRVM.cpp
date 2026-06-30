@@ -5321,7 +5321,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						continue;
 					}
 					(void)mrvmUiNewScreen();
-					exitCode = std::system(mrvmValueAsString(args[0]).c_str());
+					exitCode = mrvmRunShellCommand(mrvmValueAsString(args[0]), configuredShellExecutablePath());
 					(void)mrvmUiNewScreen();
 					runtimeErrorLevel() = exitCode;
 				} else if (name == "WRITE_SOD") {

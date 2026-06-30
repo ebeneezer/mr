@@ -94,7 +94,7 @@ class MRIndicator : public TIndicator {
 	using TaskOverviewProvider = std::function<std::vector<std::string>()>;
 
 	MRIndicator(const TRect &bounds) noexcept
-	    : TIndicator(bounds), mReadOnly(false), mInsertMode(false), mInsertModeDisplayState(false), mWordWrap(false), mWordWrapDisplayState(false), mDisplayColumn(0), mDisplayLine(0), mTaskCount(0), mTaskDisplayCount(0), mIndicatorId(allocateIndicatorId()), mBlinkGeneration(0), mInsertBlinkGeneration(0), mWordWrapBlinkGeneration(0), mTaskBlinkGeneration(0), mReadOnlyBlinkActive(false), mReadOnlyBlinkVisible(false), mInsertModeInitialized(false), mInsertBlinkActive(false), mInsertBlinkVisible(false), mWordWrapInitialized(false), mWordWrapBlinkActive(false), mWordWrapBlinkVisible(false), mTaskBlinkActive(false), mTaskBlinkVisible(false), mStatusNoticeGeneration(0), mStatusNoticeActive(false), mStatusNoticeText(), mStatusNoticeKind(NoticeKind::Info), mTaskOverviewProvider(), mTaskOverviewPopup(nullptr), mReadOnlyBlinkUntil(), mInsertBlinkUntil(), mWordWrapBlinkUntil(), mTaskBlinkUntil(), mTaskBlinkTaskId(0), mReadOnlyBlinkTaskId(0), mInsertBlinkTaskId(0), mWordWrapBlinkTaskId(0),
+	    : TIndicator(bounds), mReadOnly(false), mInsertMode(false), mInsertModeDisplayState(false), mWordWrap(false), mWordWrapDisplayState(false), mDisplayColumn(0), mDisplayLine(0), mTaskCount(0), mTaskDisplayCount(0), mIndicatorId(allocateIndicatorId()), mBlinkGeneration(0), mInsertBlinkGeneration(0), mWordWrapBlinkGeneration(0), mTaskBlinkGeneration(0), mReadOnlyBlinkActive(false), mReadOnlyBlinkVisible(false), mInsertModeInitialized(false), mInsertBlinkActive(false), mInsertBlinkVisible(false), mWordWrapInitialized(false), mWordWrapBlinkActive(false), mWordWrapBlinkVisible(false), mTaskBlinkActive(false), mTaskBlinkVisible(false), mStatusNoticeGeneration(0), mStatusNoticeActive(false), mStatusNoticeText(), mStatusNoticeKind(NoticeKind::Info), mCursorPositionMarkerFormat(configuredCursorPositionMarker()), mTaskOverviewProvider(), mTaskOverviewPopup(nullptr), mReadOnlyBlinkUntil(), mInsertBlinkUntil(), mWordWrapBlinkUntil(), mTaskBlinkUntil(), mTaskBlinkTaskId(0), mReadOnlyBlinkTaskId(0), mInsertBlinkTaskId(0), mWordWrapBlinkTaskId(0),
 	      mStatusNoticeTaskId(0) {
 		registerIndicator(this);
 	}
@@ -227,6 +227,13 @@ class MRIndicator : public TIndicator {
 
 	void setTaskOverviewProvider(TaskOverviewProvider provider) {
 		mTaskOverviewProvider = std::move(provider);
+	}
+
+	void setCursorPositionMarkerFormat(const std::string &format) {
+		if (mCursorPositionMarkerFormat != format) {
+			mCursorPositionMarkerFormat = format;
+			drawView();
+		}
 	}
 
 	void updateTaskHover(TPoint globalMouse, bool forceHide = false) {
@@ -428,8 +435,8 @@ class MRIndicator : public TIndicator {
 		if (!text.empty()) b.moveStr(static_cast<ushort>(x), text.c_str(), noticeColor);
 	}
 
-	static std::string resolvedCursorPositionMarkerText(unsigned long row, unsigned long column) {
-		std::string format = configuredCursorPositionMarker();
+	std::string resolvedCursorPositionMarkerText(unsigned long row, unsigned long column) const {
+		std::string format = mCursorPositionMarkerFormat;
 		std::string out;
 		const std::string rowText = std::to_string(row);
 		const std::string colText = std::to_string(column);
@@ -761,6 +768,7 @@ class MRIndicator : public TIndicator {
 	bool mStatusNoticeActive;
 	std::string mStatusNoticeText;
 	NoticeKind mStatusNoticeKind;
+	std::string mCursorPositionMarkerFormat;
 	TaskOverviewProvider mTaskOverviewProvider;
 	MRTaskOverviewPopup *mTaskOverviewPopup;
 	std::chrono::steady_clock::time_point mReadOnlyBlinkUntil;

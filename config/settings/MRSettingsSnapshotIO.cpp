@@ -724,6 +724,9 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'VERSION', '" + escapeMrmacSingleQuotedLiteral(profile.versionText) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'TARGET', '" + escapeMrmacSingleQuotedLiteral(profile.targetTriple) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'FLAGS', '" + escapeMrmacSingleQuotedLiteral(profile.buildFlags) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'PRE_BUILD_COMMAND', '" + escapeMrmacSingleQuotedLiteral(profile.preBuildCommand) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'BUILD_SUCCEEDED_COMMAND', '" + escapeMrmacSingleQuotedLiteral(profile.buildSucceededCommand) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'BUILD_FAILED_COMMAND', '" + escapeMrmacSingleQuotedLiteral(profile.buildFailedCommand) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'INCLUDES', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.includePaths)) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LIBRARIES', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.libraryPaths)) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'RUNTIME', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.runtimePaths)) + "');\n";

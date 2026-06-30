@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "MRCommandRouter.hpp"
+
 class MRPerformancePanel;
 class MREditWindow;
 
@@ -30,6 +32,7 @@ class MREditorApp : public TApplication {
 	bool quitPrepared() const noexcept;
 	void beginInteractiveMouseCapture() noexcept;
 	void endInteractiveMouseCapture() noexcept;
+	void refreshConfiguredUiSettingsSnapshot();
 
   private:
 	void prepareForQuit();
@@ -82,10 +85,17 @@ class MREditorApp : public TApplication {
 	MREditWindow *fullscreenWindow;
 	TRect fullscreenRestoreBounds;
 	int interactiveMouseCaptureDepth;
+	std::string cursorPositionMarkerFormat;
+	bool persistentBlocksMenuEnabled;
+	bool menulineMessagesEnabled;
+	int virtualDesktopCount;
+	bool cyclicVirtualDesktopsEnabled;
+	MRLspRuntimeSettings lspRuntimeSettings;
 };
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.
 bool mrApplySettingsSourceForTesting(const std::string &source, std::string *errorMessage = nullptr);
 bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage = nullptr);
+void mrRefreshEditorApplicationUiSettingsSnapshot();
 
 #endif

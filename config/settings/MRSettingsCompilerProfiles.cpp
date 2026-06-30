@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -12,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -31,33 +33,65 @@ struct CompilerProbe {
 	std::vector<std::string> runtimePaths;
 };
 
-std::string commandFirstLine(const std::string &command) {
-	std::array<char, 1024> buffer{};
-	std::string line;
-	FILE *pipe = ::popen(command.c_str(), "r");
-
-	if (pipe == nullptr) return std::string();
-	if (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) line = buffer.data();
-	::pclose(pipe);
-	while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
-		line.pop_back();
-	return line;
-}
-
 std::vector<std::string> commandLines(const std::string &command) {
 	std::array<char, 2048> buffer{};
 	std::vector<std::string> lines;
-	FILE *pipe = ::popen(command.c_str(), "r");
+	std::string line;
+	std::string shellPath = configuredShellExecutablePath();
+	int pipeFds[2] = {-1, -1};
+	pid_t childPid = -1;
+	int waitStatus = 0;
 
-	if (pipe == nullptr) return lines;
-	while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
-		std::string line = buffer.data();
+	if (command.empty() || shellPath.empty()) return lines;
+	if (::pipe(pipeFds) != 0) return lines;
+	childPid = ::fork();
+	if (childPid < 0) {
+		::close(pipeFds[0]);
+		::close(pipeFds[1]);
+		return lines;
+	}
+	if (childPid == 0) {
+		::dup2(pipeFds[1], STDOUT_FILENO);
+		::close(pipeFds[0]);
+		::close(pipeFds[1]);
+		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(nullptr));
+		::_exit(127);
+	}
+	::close(pipeFds[1]);
+	for (;;) {
+		const ssize_t count = ::read(pipeFds[0], buffer.data(), buffer.size());
+
+		if (count > 0) {
+			for (std::size_t index = 0; index < static_cast<std::size_t>(count); ++index) {
+				if (buffer[index] == '\n') {
+					while (!line.empty() && line.back() == '\r')
+						line.pop_back();
+					lines.push_back(line);
+					line.clear();
+				} else
+					line.push_back(buffer[index]);
+			}
+			continue;
+		}
+		if (count == 0) break;
+		if (errno == EINTR) continue;
+		break;
+	}
+	::close(pipeFds[0]);
+	while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
+		;
+	if (!line.empty()) {
 		while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
 			line.pop_back();
 		lines.push_back(line);
 	}
-	::pclose(pipe);
 	return lines;
+}
+
+std::string commandFirstLine(const std::string &command) {
+	std::vector<std::string> lines = commandLines(command);
+
+	return lines.empty() ? std::string() : lines.front();
 }
 
 std::string commandText(const std::string &command) {
@@ -415,6 +449,9 @@ bool normalizeCompilerProfileInPlace(MRCompilerProfile &profile, std::string *er
 	profile.versionText = trimAscii(profile.versionText);
 	profile.targetTriple = trimAscii(profile.targetTriple);
 	profile.buildFlags = trimAscii(profile.buildFlags);
+	profile.preBuildCommand = trimAscii(profile.preBuildCommand);
+	profile.buildSucceededCommand = trimAscii(profile.buildSucceededCommand);
+	profile.buildFailedCommand = trimAscii(profile.buildFailedCommand);
 	profile.includePaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.includePaths));
 	profile.libraryPaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.libraryPaths));
 	profile.runtimePaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.runtimePaths));
@@ -491,6 +528,12 @@ bool applyCompilerProfileDirectiveToVector(std::vector<MRCompilerProfile> &profi
 			profile->targetTriple = arg4;
 		else if (key == "FLAGS")
 			profile->buildFlags = arg4;
+		else if (key == "PRE_BUILD_COMMAND")
+			profile->preBuildCommand = arg4;
+		else if (key == "BUILD_SUCCEEDED_COMMAND")
+			profile->buildSucceededCommand = arg4;
+		else if (key == "BUILD_FAILED_COMMAND")
+			profile->buildFailedCommand = arg4;
 		else if (key == "INCLUDES")
 			profile->includePaths = splitCompilerProfilePathList(arg4);
 		else if (key == "LIBRARIES")
