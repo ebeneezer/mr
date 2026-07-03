@@ -21,8 +21,7 @@ enum MROutlineKind : unsigned char {
 };
 
 enum MROutlineSource : unsigned char {
-	mrosFold = 0,
-	mrosLsp
+	mrosFold = 0
 };
 
 enum MROutlineConfidence : unsigned char {

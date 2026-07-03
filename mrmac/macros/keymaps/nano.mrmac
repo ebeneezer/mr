@@ -25,7 +25,6 @@ KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_TEXT_REFORMAT_PARAG
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_FILE_SAVE" sequence="<Ctrl+O>" description="Write out"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_BUILD_CURRENT_FILE" sequence="<F9>" description="Build current file"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_MATCH_PARENTHESIS" sequence="<Alt+P>" description="Match parenthesis"');
-KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_LSP_COMPLETE" sequence="<Ctrl+Space>" description="LSP complete"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+X>" description="Exit with save-all dialog"');
 ACTIVE_KEYMAP_PROFILE('name="NANO"');
 END_MACRO;

@@ -202,8 +202,6 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
 	setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows);
 	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasBuildSourceFile);
-	setCommandEnabled(cmMrOtherLspDefinition, hasEditor && state.hasPersistentFileName);
-	setCommandEnabled(cmMrOtherLspHover, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
 	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail);
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
@@ -214,6 +212,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrFileCompareNextChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrFileComparePreviousChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
+	setCommandEnabled(cmMrOtherLocalOutline, hasEditor);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
 	setCommandEnabled(cmMrHelpContents, true);
 	setCommandEnabled(cmMrSetupUserInterfaceSettings, true);

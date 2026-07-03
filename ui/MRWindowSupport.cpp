@@ -285,6 +285,14 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 	return nullptr;
 }
 
+[[nodiscard]] bool isDesktopEditWindow(MREditWindow *win) {
+	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+
+	for (MREditWindow *candidate : windows)
+		if (candidate == win) return true;
+	return false;
+}
+
 [[nodiscard]] MREditWindow *createReadOnlyTextWindow(const char *title, const char *text, bool hidden) {
 	MREditWindow *previous;
 	MREditWindow *win;
@@ -323,6 +331,10 @@ bool mrActivateEditWindow(MREditWindow *win) {
 	std::string line;
 
 	if (win == nullptr) return false;
+	if (!isDesktopEditWindow(win)) {
+		mrLogMessage("mrActivateEditWindow rejected stale window pointer");
+		return false;
+	}
 	if (focusDebugEnabled()) {
 		line = "mrActivateEditWindow before target='";
 		line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
@@ -335,7 +347,7 @@ bool mrActivateEditWindow(MREditWindow *win) {
 		mrLogMessage(line);
 	}
 	setWindowManuallyHidden(win, false);
-	setCurrentVirtualDesktop(win->mVirtualDesktop);
+	if (win->mVirtualDesktop != currentVirtualDesktop()) setCurrentVirtualDesktop(win->mVirtualDesktop);
 	if ((win->state & sfVisible) == 0) win->show();
 	if (TProgram::deskTop != nullptr && TProgram::deskTop->current != win) TProgram::deskTop->setCurrent(win, TView::normalSelect);
 	win->select();
@@ -355,7 +367,13 @@ bool mrActivateEditWindow(MREditWindow *win) {
 
 void mrScheduleWindowActivation(MREditWindow *win) {
 	std::string line;
+	TEvent event{};
+
 	if (win == nullptr) return;
+	if (!isDesktopEditWindow(win)) {
+		mrLogMessage("mrScheduleWindowActivation rejected stale window pointer");
+		return;
+	}
 	line = "mrScheduleWindowActivation target='";
 	line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
 	line += "' visible=";
@@ -371,7 +389,10 @@ void mrScheduleWindowActivation(MREditWindow *win) {
 		g_deferredActivationWindow = nullptr;
 		return;
 	}
-	message(TProgram::application, evCommand, cmMrDeferredActivateWindow, nullptr);
+	event.what = evCommand;
+	event.message.command = cmMrDeferredActivateWindow;
+	event.message.infoPtr = nullptr;
+	TProgram::application->putEvent(event);
 }
 
 bool mrDispatchDeferredWindowActivation() {
@@ -379,6 +400,11 @@ bool mrDispatchDeferredWindowActivation() {
 	std::string line;
 
 	if (win == nullptr) return false;
+	if (!isDesktopEditWindow(win)) {
+		mrLogMessage("mrDispatchDeferredWindowActivation rejected stale window pointer");
+		g_deferredActivationWindow = nullptr;
+		return false;
+	}
 	line = "mrDispatchDeferredWindowActivation before target='";
 	line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
 	line += "' visible=";

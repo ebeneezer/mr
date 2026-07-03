@@ -11,6 +11,7 @@
 #define Uses_TRect
 #define Uses_TScrollBar
 #define Uses_TStaticText
+#define Uses_TDrawBuffer
 #define Uses_TFileDialog
 #include <tvision/tv.h>
 
@@ -21,9 +22,11 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <unistd.h>
@@ -89,6 +92,14 @@ bool windowListDebugEnabled() noexcept {
 		cached = (value != nullptr && *value != '\0' && std::strcmp(value, "0") != 0) ? 1 : 0;
 	}
 	return cached == 1;
+}
+
+void logWindowListTiming(const std::string &label, long long tookUs, const std::string &detail) {
+	std::ostringstream line;
+
+	line << label << " took_us=" << tookUs;
+	if (!detail.empty()) line << " " << detail;
+	mrLogMessage(line.str());
 }
 
 void postWindowListClose(TView *dialog) {
@@ -263,6 +274,7 @@ void hideWindow(MREditWindow *win) {
 class WindowListView : public TListViewer {
   public:
 	WindowListView(const TRect &bounds, TScrollBar *aVScrollBar, const std::vector<std::string> &aItems) noexcept : TListViewer(bounds, 1, nullptr, aVScrollBar), items(aItems) {
+		eventMask |= evMouseWheel;
 		setRange(static_cast<short>(items.size()));
 	}
 
@@ -291,6 +303,20 @@ class WindowListView : public TListViewer {
 	void handleEvent(TEvent &event) override {
 		const bool isDoubleClickActivation = event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0;
 		TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
+		int wheelDelta = 0;
+		short nextFocused = 0;
+
+		if (event.what == evMouseWheel && containsMouse(event) && range > 0) {
+			if (event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft) wheelDelta = -1;
+			else if (event.mouse.wheel == mwDown || event.mouse.wheel == mwRight)
+				wheelDelta = 1;
+			if (wheelDelta != 0) {
+				nextFocused = static_cast<short>(std::clamp<int>(focused + wheelDelta, 0, range - 1));
+				focusItemNum(nextFocused);
+				clearEvent(event);
+				return;
+			}
+		}
 
 		TListViewer::handleEvent(event);
 		if (isDoubleClickActivation && focused >= 0 && focused < range && target != nullptr) {
@@ -306,6 +332,41 @@ class WindowListView : public TListViewer {
 
   private:
 	std::vector<std::string> items;
+};
+
+class WindowListCounterView : public TView {
+  public:
+	explicit WindowListCounterView(const TRect &bounds) : TView(bounds), text("0|0") {
+	}
+
+	void setCounter(int focusedIndex, std::size_t total) {
+		std::string next;
+
+		if (total == 0 || focusedIndex < 0) next = "0|0";
+		else
+			next = std::to_string(focusedIndex + 1) + "|" + std::to_string(total);
+		if (next == text) return;
+		text = next;
+		drawView();
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+		TColorAttr color = getColor(1);
+		std::string shown = text;
+		int start = size.x - static_cast<int>(shown.size());
+
+		buffer.moveChar(0, ' ', color, size.x);
+		if (start < 0) {
+			shown = shown.substr(shown.size() - static_cast<std::size_t>(size.x));
+			start = 0;
+		}
+		if (!shown.empty()) buffer.moveStr(static_cast<ushort>(start), shown.c_str(), color, std::max(0, size.x - start));
+		writeLine(0, 0, size.x, 1, buffer);
+	}
+
+  private:
+	std::string text;
 };
 
 class WindowListDialog : public MRDialogFoundation {
@@ -381,7 +442,7 @@ class WindowListDialog : public MRDialogFoundation {
 		if (persistWorkspaceToggleSettings()) updateWorkspaceToggleButtons();
 	}
 
-	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent), initMrDialogFrame), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), workspaceMainFileButton(nullptr), autosaveWorkspaceButton(nullptr), autoloadWorkspaceButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
+	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent), initMrDialogFrame), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), workspaceMainFileButton(nullptr), autosaveWorkspaceButton(nullptr), autoloadWorkspaceButton(nullptr), counterView(nullptr), selected(nullptr), lastFocusedIndex(-1) {
 		int width = computeWidth();
 		int height = computeHeight(aMode, aCurrent);
 		int listTop = 6;
@@ -432,6 +493,7 @@ class WindowListDialog : public MRDialogFoundation {
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
 		insert(scrollBar);
+		insert(new TStaticText(TRect(2, listTop - 1, width - 3, listTop), "State VD M File                       Directory"));
 		listView = new WindowListView(TRect(2, listTop, width - 3, listBottom), scrollBar, std::vector<std::string>());
 		insert(listView);
 
@@ -470,6 +532,8 @@ class WindowListDialog : public MRDialogFoundation {
 				mr::dialogs::insertUniformButtonRow(*this, left, bottomButtonY, buttonGap, bottomButtons);
 			}
 		}
+		counterView = new WindowListCounterView(TRect(width - 12, height - 2, width - 2, height - 1));
+		insert(counterView);
 
 		refreshEntries();
 		focusPreferred();
@@ -518,33 +582,85 @@ class WindowListDialog : public MRDialogFoundation {
 		}
 	}
 
+	void returnDialogToFront() {
+		if (owner != nullptr) makeFirst();
+		if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(this, TView::normalSelect);
+		else
+			select();
+		if (listView != nullptr) listView->select();
+	}
+
+	void previewFocusedWindow() {
+		MREditWindow *win = currentSelection();
+
+		if (mode != mrwlManageWindows) return;
+		if (win == nullptr) return;
+		if (win->isMinimized()) return;
+		if (isWindowManuallyHidden(win)) return;
+		if (win->mVirtualDesktop != currentVirtualDesktop()) return;
+		if ((win->state & sfVisible) == 0) return;
+		static_cast<void>(mrActivateEditWindow(win));
+		returnDialogToFront();
+	}
+
+	void closeModelessWindowList() {
+		if (mode == mrwlManageWindows && g_manageWindowListDialog == this) g_manageWindowListDialog = nullptr;
+		close();
+	}
+
 	void handleEvent(TEvent &event) override {
+		const auto eventStartedAt = std::chrono::steady_clock::now();
+		const ushort originalWhat = event.what;
+		const ushort originalCommand = event.what == evCommand || event.what == evBroadcast ? event.message.command : 0;
+		const int oldFocusForTiming = listView != nullptr ? listView->focused : -1;
+
 		if (event.what == evCommand && event.message.command == cmMRWindowListActivate && event.message.infoPtr == this) {
 			activateModeless();
+			{
+				const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - eventStartedAt).count();
+				logWindowListTiming("Window List activate event timing", tookUs, "entries=" + std::to_string(entries.size()));
+			}
 			clearEvent(event);
+			return;
+		}
+		if (mode == mrwlManageWindows && event.what == evCommand && event.message.command == cmClose && (event.message.infoPtr == nullptr || event.message.infoPtr == this)) {
+			clearEvent(event);
+			closeModelessWindowList();
 			return;
 		}
 		if (event.what == evBroadcast && event.message.command == cmMrWindowTopologyChanged) {
 			if (mode == mrwlManageWindows) {
+				const auto refreshStartedAt = std::chrono::steady_clock::now();
 				refreshEntries();
+				const long long refreshUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - refreshStartedAt).count();
+				long long drawUs = 0;
+				const auto drawStartedAt = std::chrono::steady_clock::now();
 				if (listView != nullptr) listView->drawView();
 				drawView();
+				drawUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - drawStartedAt).count();
 				if ((state & sfVisible) != 0 && TProgram::deskTop != nullptr) {
 					MREditWindow *currentWindow = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 					if (currentWindow != nullptr && currentWindow->isMinimized()) activateModeless();
+				}
+				{
+					std::ostringstream detail;
+					const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - eventStartedAt).count();
+
+					detail << "entries=" << entries.size() << " refresh_us=" << refreshUs << " draw_us=" << drawUs;
+					logWindowListTiming("Window List topology timing", tookUs, detail.str());
 				}
 			}
 			clearEvent(event);
 			return;
 		}
 		if (mode == mrwlManageWindows && event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
-			postWindowListClose(this);
 			clearEvent(event);
+			closeModelessWindowList();
 			return;
 		}
 		if (mode == mrwlManageWindows && event.what == evCommand && event.message.command == cmCancel) {
-			postWindowListClose(this);
 			clearEvent(event);
+			closeModelessWindowList();
 			return;
 		}
 		if (event.what == evCommand && event.message.command == cmOK) {
@@ -557,13 +673,30 @@ class WindowListDialog : public MRDialogFoundation {
 				if (selected->isMinimized()) selected->restoreWindow();
 				static_cast<void>(mrActivateEditWindow(selected));
 				clearEvent(event);
+				closeModelessWindowList();
 				return;
 			}
 		}
 
-		MRDialogFoundation::handleEvent(event);
+		{
+			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			MRDialogFoundation::handleEvent(event);
+			const long long phaseUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+			if (phaseUs >= 10000) logWindowListTiming("Window List base event slow", phaseUs, "what=" + std::to_string(originalWhat) + " command=" + std::to_string(originalCommand));
+		}
 
-		if (listView != nullptr && listView->focused != lastFocusedIndex) updateHideToggleState();
+		if (listView != nullptr && listView->focused != lastFocusedIndex) {
+			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			updateHideToggleState();
+			previewFocusedWindow();
+			{
+				std::ostringstream detail;
+				const long long phaseUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+
+				detail << "old_focus=" << oldFocusForTiming << " new_focus=" << listView->focused << " entries=" << entries.size();
+				logWindowListTiming("Window List focus timing", phaseUs, detail.str());
+			}
+		}
 
 		if (event.what == evKeyDown) {
 			switch (ctrlToArrow(event.keyDown.keyCode)) {
@@ -709,42 +842,81 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void collectEntries() {
+		const auto startedAt = std::chrono::steady_clock::now();
+		long long enumerateUs = 0;
+		long long rowUs = 0;
+		const auto enumerateStartedAt = startedAt;
 		const std::vector<MREditWindow *> windows = allEditWindows();
+		enumerateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - enumerateStartedAt).count();
 		entries.clear();
 		rows.clear();
-		for (std::size_t i = 0; i < windows.size(); ++i) {
-			WindowListEntry entry;
-			std::string fileName = windows[i]->currentFileName();
-			const char *title = windows[i]->getTitle(0);
-			std::string titleText = title != nullptr ? title : "";
+		{
+			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			for (std::size_t i = 0; i < windows.size(); ++i) {
+				WindowListEntry entry;
+				std::string fileName = windows[i]->currentFileName();
+				const char *title = windows[i]->getTitle(0);
+				std::string titleText = title != nullptr ? title : "";
 
-			if (mode == mrwlSelectLinkTarget && windows[i] == current) continue;
-			if (mode == mrwlSelectFileCompareTarget && !isFileCompareWindowListCandidate(windows[i], current)) continue;
+				if (mode == mrwlSelectLinkTarget && windows[i] == current) continue;
+				if (mode == mrwlSelectFileCompareTarget && !isFileCompareWindowListCandidate(windows[i], current)) continue;
 
-			entry.window = windows[i];
-			entry.hidden = isWindowManuallyHidden(windows[i]);
-			entry.minimized = windows[i]->isMinimized();
-			entry.statusLabel = entry.minimized ? "[min]" : (entry.hidden ? "[hid]" : "");
-			entry.desktopLabel = std::to_string(windows[i]->mVirtualDesktop);
-			entry.fileLabel = fileName.empty() ? (titleText.empty() ? "?No-File" : baseNameOf(titleText)) : baseNameOf(fileName);
-			entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
-			entries.push_back(entry);
-			rows.push_back(renderRow(entry));
+				entry.window = windows[i];
+				entry.hidden = isWindowManuallyHidden(windows[i]);
+				entry.minimized = windows[i]->isMinimized();
+				entry.statusLabel = entry.minimized ? "[min]" : (entry.hidden ? "[hid]" : "");
+				entry.desktopLabel = std::to_string(windows[i]->mVirtualDesktop);
+				entry.fileLabel = fileName.empty() ? (titleText.empty() ? "?No-File" : baseNameOf(titleText)) : baseNameOf(fileName);
+				entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
+				entries.push_back(entry);
+				rows.push_back(renderRow(entry));
+			}
+			rowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+		}
+		{
+			std::ostringstream detail;
+			const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+
+			detail << "windows=" << windows.size() << " entries=" << entries.size() << " enumerate_us=" << enumerateUs << " row_us=" << rowUs;
+			if (tookUs >= 10000 || windows.size() >= 50) logWindowListTiming("Window List collect timing", tookUs, detail.str());
 		}
 	}
 
 	void sanitizeTrackedWindows() {
+		const auto startedAt = std::chrono::steady_clock::now();
 		const std::vector<MREditWindow *> windows = allEditWindows();
 		if (!containsWindow(windows, current)) current = nullptr;
 		if (!containsWindow(windows, preferred)) preferred = nullptr;
 		if (!containsWindow(windows, selected)) selected = nullptr;
+		{
+			const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+			if (tookUs >= 10000 || windows.size() >= 50) logWindowListTiming("Window List sanitize timing", tookUs, "windows=" + std::to_string(windows.size()));
+		}
 	}
 
 	void refreshEntries() {
+		const auto startedAt = std::chrono::steady_clock::now();
 		int oldFocus = listView != nullptr ? listView->focused : 0;
-		sanitizeTrackedWindows();
-		collectEntries();
-		if (listView != nullptr) listView->setItems(rows);
+		long long sanitizeUs = 0;
+		long long collectUs = 0;
+		long long setItemsUs = 0;
+		long long focusUs = 0;
+		long long buttonsUs = 0;
+		{
+			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			sanitizeTrackedWindows();
+			sanitizeUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+		}
+		{
+			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			collectEntries();
+			collectUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+		}
+		if (listView != nullptr) {
+			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			listView->setItems(rows);
+			setItemsUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+		}
 		if (entries.empty()) {
 			selected = nullptr;
 			if (mode == mrwlManageWindows) postWindowListClose(this);
@@ -754,8 +926,23 @@ class WindowListDialog : public MRDialogFoundation {
 		}
 		if (oldFocus < 0) oldFocus = 0;
 		if (oldFocus >= static_cast<int>(entries.size())) oldFocus = static_cast<int>(entries.size()) - 1;
-		listView->focusItemNum(static_cast<short>(oldFocus));
-		updateHideToggleState();
+		{
+			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			listView->focusItemNum(static_cast<short>(oldFocus));
+			focusUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+		}
+		{
+			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			updateHideToggleState();
+			buttonsUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+		}
+		{
+			std::ostringstream detail;
+			const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+
+			detail << "entries=" << entries.size() << " old_focus=" << oldFocus << " sanitize_us=" << sanitizeUs << " collect_us=" << collectUs << " set_items_us=" << setItemsUs << " focus_us=" << focusUs << " buttons_us=" << buttonsUs;
+			if (tookUs >= 10000 || entries.size() >= 50) logWindowListTiming("Window List refresh timing", tookUs, detail.str());
+		}
 	}
 
 	void focusPreferred() {
@@ -858,6 +1045,7 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void updateHideToggleState() {
+		const auto startedAt = std::chrono::steady_clock::now();
 		MREditWindow *win = currentSelection();
 		const bool enabled = canToggleCurrentSelection();
 		const bool canGet = win != nullptr && win->mVirtualDesktop != currentVirtualDesktop();
@@ -904,7 +1092,12 @@ class WindowListDialog : public MRDialogFoundation {
 			updateButtonTitle(workspaceMainFileButton, mrIsWorkspaceMainFile(win) ? kMainWorkspaceOnTitle : kMainWorkspaceOffTitle);
 			workspaceMainFileButton->setState(sfDisabled, False);
 		}
+		if (counterView != nullptr) counterView->setCounter(listView != nullptr ? listView->focused : -1, entries.size());
 		lastFocusedIndex = listView != nullptr ? listView->focused : -1;
+		{
+			const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+			if (tookUs >= 5000) logWindowListTiming("Window List button state slow", tookUs, "focus=" + std::to_string(lastFocusedIndex));
+		}
 	}
 
 	void handleHideAll() {
@@ -931,6 +1124,7 @@ class WindowListDialog : public MRDialogFoundation {
 	TButton *workspaceMainFileButton;
 	TButton *autosaveWorkspaceButton;
 	TButton *autoloadWorkspaceButton;
+	WindowListCounterView *counterView;
 	MREditWindow *selected;
 	int lastFocusedIndex;
 	std::vector<WindowListEntry> entries;
@@ -948,7 +1142,7 @@ MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *curren
 
 	if (mode == mrwlManageWindows) {
 		if (g_manageWindowListDialog != nullptr) {
-			postWindowListActivate(g_manageWindowListDialog);
+			g_manageWindowListDialog->activateModeless();
 			return nullptr;
 		}
 		dialog = new WindowListDialog(mode, current, preferred);

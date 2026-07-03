@@ -1,0 +1,81 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{graphicx}
+
+\title{MR LaTeX Outline Demo}
+\author{Outline Probe}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This compact document is intended to demonstrate a local outline view for
+LaTeX in the single editor.  It contains numbered sections, starred sections,
+optional section titles and common environments.
+\end{abstract}
+
+\section{Introduction}
+
+The outline should show the document environment and the structural commands
+below this point.  Plain paragraphs should not create outline noise.
+
+\subsection{Motivation}
+
+The user needs a navigable structure list for LaTeX document structure.
+
+\subsection*{Unnumbered Background}
+
+Starred headings are useful in real documents and should still be navigable
+when the local outline can identify them safely.
+
+\section[Short Methods]{Methods With Optional Title}
+
+\subsection{Model}
+
+The local outline can also include environments when they help navigation.
+
+\begin{equation}
+  E = mc^2
+\end{equation}
+
+\begin{table}
+  \centering
+  \begin{tabular}{ll}
+    Channel & Expected product \\
+    Completion & Insert or choice list \\
+    Outline & Structure navigation \\
+  \end{tabular}
+  \caption{Small channel matrix}
+\end{table}
+
+\subsection{Sidekick Candidate}
+
+The proposed single-editor action would show the same local outline snapshot
+that Bento already uses, then jump to the selected source offset.
+
+\section{Results}
+
+\begin{itemize}
+  \item One entry should be executed directly.
+  \item Multiple entries should be shown as a navigation list.
+  \item Empty outline should produce a status message, not a dead menu item.
+\end{itemize}
+
+\section{Conclusion}
+
+This demo is intentionally small enough to inspect manually.
+
+\appendix
+
+\section{Appendix Data}
+
+Appendix sections should remain visible as document structure.
+
+\begin{verbatim}
+\section{This must not become a real outline entry}
+\end{verbatim}
+
+\end{document}

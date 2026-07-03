@@ -47,7 +47,6 @@
   - printing via PDF exports
   - acquire files from the output of shell commands or pipes
   - compiler profiles with automatic setup and error tracking in code
-  - LSP support
 
 ## Why? Who needs this?
 

@@ -22,7 +22,7 @@ class MRStatusLine : public TStatusLine {
 		std::string text;
 	};
 
-	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextFunctionKeyLabels(), mMacroFunctionLabels() {
+	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextHintLabels(), mMacroFunctionLabels() {
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -71,12 +71,26 @@ class MRStatusLine : public TStatusLine {
 		drawView();
 	}
 
+	void setContextHintLabels(const std::vector<std::string> &labels) {
+		if (mContextHintLabels == labels) return;
+		mContextHintLabels = labels;
+		drawView();
+	}
+
+	void setContextHintLabelsActive(bool active) {
+		if (mContextHintLabelsActive == active) return;
+		mContextHintLabelsActive = active;
+		drawView();
+	}
+
 	virtual void draw() override {
 		if (!mShowFunctionKeyLabels) {
 			TDrawBuffer b;
 			TColorAttr color = getColor(1);
 			b.moveChar(0, ' ', color, size.x);
 			writeLine(0, 0, size.x, 1, b);
+		} else if (mContextHintLabelsActive && !mContextHintLabels.empty()) {
+			drawContextHintLabels();
 		} else if (mContextFunctionKeysActive && !mContextFunctionKeyLabels.empty()) {
 			drawContextFunctionLabels();
 		} else if (!mMacroFunctionLabels.empty()) {
@@ -133,9 +147,8 @@ class MRStatusLine : public TStatusLine {
 	}
 
   private:
-	std::vector<int> contextVisibleLabelIndexes() const {
+	std::vector<int> contextVisibleLabelIndexes(int count) const {
 		std::vector<int> indexes;
-		const int count = static_cast<int>(mContextFunctionKeyLabels.size());
 
 		if (size.x >= 120 || count <= 8) {
 			for (int i = 0; i < count; ++i)
@@ -152,6 +165,14 @@ class MRStatusLine : public TStatusLine {
 		for (int index : preferred)
 			if (index < count) indexes.push_back(index);
 		return indexes;
+	}
+
+	std::vector<int> contextFunctionVisibleLabelIndexes() const {
+		return contextVisibleLabelIndexes(static_cast<int>(mContextFunctionKeyLabels.size()));
+	}
+
+	std::vector<int> contextHintVisibleLabelIndexes() const {
+		return contextVisibleLabelIndexes(static_cast<int>(mContextHintLabels.size()));
 	}
 
 	static bool isFunctionKey(ushort keyCode) noexcept {
@@ -178,7 +199,7 @@ class MRStatusLine : public TStatusLine {
 		TDrawBuffer buffer;
 		TColorAttr backgroundColor = getColor(1);
 		TAttrPair labelColor = getColor(0x0403);
-		std::vector<int> indexes = contextVisibleLabelIndexes();
+		std::vector<int> indexes = contextFunctionVisibleLabelIndexes();
 		const int segmentCount = static_cast<int>(indexes.size());
 		const int segmentWidth = segmentCount > 0 ? std::max(1, size.x / segmentCount) : size.x;
 
@@ -194,8 +215,28 @@ class MRStatusLine : public TStatusLine {
 		writeLine(0, 0, size.x, 1, buffer);
 	}
 
+	void drawContextHintLabels() {
+		TDrawBuffer buffer;
+		TColorAttr backgroundColor = getColor(1);
+		TAttrPair labelColor = getColor(0x0403);
+		std::vector<int> indexes = contextHintVisibleLabelIndexes();
+		const int segmentCount = static_cast<int>(indexes.size());
+		const int segmentWidth = segmentCount > 0 ? std::max(1, size.x / segmentCount) : size.x;
+
+		buffer.moveChar(0, ' ', backgroundColor, size.x);
+		for (int segment = 0; segment < segmentCount; ++segment) {
+			int x = segment * segmentWidth;
+			int width = segment == segmentCount - 1 ? size.x - x : segmentWidth;
+			std::string text = mContextHintLabels[static_cast<std::size_t>(indexes[static_cast<std::size_t>(segment)])];
+
+			if (width <= 0) continue;
+			buffer.moveCStr(static_cast<ushort>(x), text.c_str(), labelColor, static_cast<ushort>(width));
+		}
+		writeLine(0, 0, size.x, 1, buffer);
+	}
+
 	ushort commandForContextFunctionLabelAt(short x, short y) const {
-		std::vector<int> indexes = contextVisibleLabelIndexes();
+		std::vector<int> indexes = contextFunctionVisibleLabelIndexes();
 		const int segmentCount = static_cast<int>(indexes.size());
 		const int segmentWidth = segmentCount > 0 ? std::max(1, size.x / segmentCount) : size.x;
 		int segment = 0;
@@ -237,7 +278,9 @@ class MRStatusLine : public TStatusLine {
 	bool mRecordingVisible;
 	bool mShowFunctionKeyLabels;
 	bool mContextFunctionKeysActive;
+	bool mContextHintLabelsActive;
 	std::vector<FunctionKeyLabel> mContextFunctionKeyLabels;
+	std::vector<std::string> mContextHintLabels;
 	std::vector<std::string> mMacroFunctionLabels;
 };
 #endif

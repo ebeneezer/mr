@@ -374,17 +374,17 @@ std::vector<std::string> compilerProfileIdChoices() {
 	std::vector<std::string> choices;
 	std::vector<MRCompilerProfile> profiles = configuredCompilerProfiles();
 
-	for (const MRCompilerProfile &defaultProfile : defaultCompilerProfiles()) {
-		const std::string defaultId = canonicalCompilerProfileId(defaultProfile.id);
+	for (const MRCompilerProfile &detectedProfile : detectedCompilerProfiles()) {
+		const std::string detectedId = canonicalCompilerProfileId(detectedProfile.id);
 		bool exists = false;
 
-		if (defaultId.empty()) continue;
+		if (detectedId.empty()) continue;
 		for (const MRCompilerProfile &profile : profiles)
-			if (canonicalCompilerProfileId(profile.id) == defaultId) {
+			if (canonicalCompilerProfileId(profile.id) == detectedId) {
 				exists = true;
 				break;
 			}
-		if (!exists) profiles.push_back(defaultProfile);
+		if (!exists) profiles.push_back(detectedProfile);
 	}
 	for (const MRCompilerProfile &profile : profiles) {
 		const std::string id = canonicalCompilerProfileId(profile.id);

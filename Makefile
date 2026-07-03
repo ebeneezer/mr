@@ -110,139 +110,6 @@ PHASE1_REPRO_PROBE_OBJECT = misc/mr_phase1_repro_probe.o
 MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET = regression/mr_workspace_service_context_probe
 MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE = regression/mr_workspace_service_context_probe.cpp
 MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT = regression/mr_workspace_service_context_probe.o
-MR_SERVICE_RESULTS_PROBE_TARGET = regression/mr_service_results_probe
-MR_SERVICE_RESULTS_PROBE_SOURCE = regression/mr_service_results_probe.cpp
-MR_SERVICE_RESULTS_PROBE_OBJECT = regression/mr_service_results_probe.o
-MR_SERVICE_RESULTS_SOURCE = app/services/MRServiceResults.cpp
-MR_SERVICE_RESULTS_OBJECT = app/services/MRServiceResults.o
-MR_LSP_SERVICE_SESSION_PROBE_TARGET = regression/mr_lsp_service_session_probe
-MR_LSP_SERVICE_SESSION_PROBE_SOURCE = regression/mr_lsp_service_session_probe.cpp
-MR_LSP_SERVICE_SESSION_PROBE_OBJECT = regression/mr_lsp_service_session_probe.o
-MR_LSP_SERVICE_SESSION_SOURCE = app/services/MRLspServiceSession.cpp
-MR_LSP_SERVICE_SESSION_OBJECT = app/services/MRLspServiceSession.o
-MR_LSP_EDITOR_SOURCE_PROBE_TARGET = regression/mr_lsp_editor_source_probe
-MR_LSP_EDITOR_SOURCE_PROBE_SOURCE = regression/mr_lsp_editor_source_probe.cpp
-MR_LSP_EDITOR_SOURCE_PROBE_OBJECT = regression/mr_lsp_editor_source_probe.o
-MR_LSP_EDITOR_SOURCE_SOURCE = app/services/MRLspEditorSource.cpp
-MR_LSP_EDITOR_SOURCE_OBJECT = app/services/MRLspEditorSource.o
-MR_LSP_SERVER_PROFILE_PROBE_TARGET = regression/mr_lsp_server_profile_probe
-MR_LSP_SERVER_PROFILE_PROBE_SOURCE = regression/mr_lsp_server_profile_probe.cpp
-MR_LSP_SERVER_PROFILE_PROBE_OBJECT = regression/mr_lsp_server_profile_probe.o
-MR_LSP_SERVER_PROFILE_SOURCE = app/services/MRLspServerProfile.cpp
-MR_LSP_SERVER_PROFILE_OBJECT = app/services/MRLspServerProfile.o
-MR_LSP_APP_SERVICE_PROBE_TARGET = regression/mr_lsp_app_service_probe
-MR_LSP_APP_SERVICE_PROBE_SOURCE = regression/mr_lsp_app_service_probe.cpp
-MR_LSP_APP_SERVICE_PROBE_OBJECT = regression/mr_lsp_app_service_probe.o
-MR_LSP_APP_SERVICE_SOURCE = app/services/MRLspAppService.cpp
-MR_LSP_APP_SERVICE_OBJECT = app/services/MRLspAppService.o
-MR_LSP_RUNTIME_OBJECTS = \
-	$(MR_LSP_APP_SERVICE_OBJECT) \
-	$(MR_LSP_SERVICE_SESSION_OBJECT) \
-	$(MR_SERVICE_RESULTS_OBJECT) \
-	$(MR_LSP_EDITOR_SOURCE_OBJECT) \
-	$(MR_LSP_SERVER_PROFILE_OBJECT) \
-	$(LSP_CODE_ACTION_OBJECT) \
-	$(LSP_DOCUMENT_HIGHLIGHT_OBJECT) \
-	$(LSP_DOCUMENT_SYMBOLS_OBJECT) \
-	$(LSP_SIGNATURE_HELP_OBJECT) \
-	$(LSP_COMPLETION_OBJECT) \
-	$(LSP_HOVER_OBJECT) \
-	$(LSP_REFERENCES_OBJECT) \
-	$(LSP_DEFINITION_OBJECT) \
-	$(LSP_DIAGNOSTICS_OBJECT) \
-	$(LSP_DOCUMENT_SERVICE_OBJECT) \
-	$(LSP_DOCUMENT_MIRROR_OBJECT) \
-	$(LSP_URI_OBJECT) \
-	$(LSP_LIFECYCLE_OBJECT) \
-	$(LSP_SESSION_OBJECT) \
-	$(EXTERNAL_PROCESS_OBJECT) \
-	$(LSP_JSONRPC_OBJECT)
-LSP_JSONRPC_PROBE_TARGET = regression/mr_lsp_jsonrpc_probe
-LSP_JSONRPC_PROBE_SOURCE = regression/mr_lsp_jsonrpc_probe.cpp
-LSP_JSONRPC_PROBE_OBJECT = regression/mr_lsp_jsonrpc_probe.o
-LSP_JSONRPC_SOURCE = lsp/MRLspJsonRpc.cpp
-LSP_JSONRPC_OBJECT = lsp/MRLspJsonRpc.o
-EXTERNAL_PROCESS_PROBE_TARGET = regression/mr_external_process_probe
-EXTERNAL_PROCESS_PROBE_SOURCE = regression/mr_external_process_probe.cpp
-EXTERNAL_PROCESS_PROBE_OBJECT = regression/mr_external_process_probe.o
-EXTERNAL_PROCESS_SOURCE = lsp/MRExternalProcess.cpp
-EXTERNAL_PROCESS_OBJECT = lsp/MRExternalProcess.o
-LSP_SESSION_PROBE_TARGET = regression/mr_lsp_session_probe
-LSP_SESSION_PROBE_SOURCE = regression/mr_lsp_session_probe.cpp
-LSP_SESSION_PROBE_OBJECT = regression/mr_lsp_session_probe.o
-LSP_SESSION_PEER_TARGET = regression/mr_lsp_session_peer
-LSP_SESSION_PEER_SOURCE = regression/mr_lsp_session_peer.cpp
-LSP_SESSION_PEER_OBJECT = regression/mr_lsp_session_peer.o
-LSP_PROTOCOL_SHAPER_TARGET = regression/mr_lsp_protocol_shaper
-LSP_PROTOCOL_SHAPER_SOURCE = regression/mr_lsp_protocol_shaper.cpp
-LSP_PROTOCOL_SHAPER_OBJECT = regression/mr_lsp_protocol_shaper.o
-LSP_PROTOCOL_SHAPER_PROBE_TARGET = regression/mr_lsp_protocol_shaper_probe
-LSP_PROTOCOL_SHAPER_PROBE_SOURCE = regression/mr_lsp_protocol_shaper_probe.cpp
-LSP_PROTOCOL_SHAPER_PROBE_OBJECT = regression/mr_lsp_protocol_shaper_probe.o
-LSP_SESSION_SOURCE = lsp/MRLspSession.cpp
-LSP_SESSION_OBJECT = lsp/MRLspSession.o
-LSP_LIFECYCLE_PROBE_TARGET = regression/mr_lsp_lifecycle_probe
-LSP_LIFECYCLE_PROBE_SOURCE = regression/mr_lsp_lifecycle_probe.cpp
-LSP_LIFECYCLE_PROBE_OBJECT = regression/mr_lsp_lifecycle_probe.o
-LSP_LIFECYCLE_SOURCE = lsp/MRLspLifecycle.cpp
-LSP_LIFECYCLE_OBJECT = lsp/MRLspLifecycle.o
-LSP_DOCUMENT_MIRROR_PROBE_TARGET = regression/mr_lsp_document_mirror_probe
-LSP_DOCUMENT_MIRROR_PROBE_SOURCE = regression/mr_lsp_document_mirror_probe.cpp
-LSP_DOCUMENT_MIRROR_PROBE_OBJECT = regression/mr_lsp_document_mirror_probe.o
-LSP_DOCUMENT_MIRROR_SOURCE = lsp/MRLspDocumentMirror.cpp
-LSP_DOCUMENT_MIRROR_OBJECT = lsp/MRLspDocumentMirror.o
-LSP_URI_PROBE_TARGET = regression/mr_lsp_uri_probe
-LSP_URI_PROBE_SOURCE = regression/mr_lsp_uri_probe.cpp
-LSP_URI_PROBE_OBJECT = regression/mr_lsp_uri_probe.o
-LSP_URI_SOURCE = lsp/MRLspUri.cpp
-LSP_URI_OBJECT = lsp/MRLspUri.o
-LSP_DOCUMENT_SERVICE_PROBE_TARGET = regression/mr_lsp_document_service_probe
-LSP_DOCUMENT_SERVICE_PROBE_SOURCE = regression/mr_lsp_document_service_probe.cpp
-LSP_DOCUMENT_SERVICE_PROBE_OBJECT = regression/mr_lsp_document_service_probe.o
-LSP_DOCUMENT_SERVICE_SOURCE = lsp/MRLspDocumentService.cpp
-LSP_DOCUMENT_SERVICE_OBJECT = lsp/MRLspDocumentService.o
-LSP_DIAGNOSTICS_PROBE_TARGET = regression/mr_lsp_diagnostics_probe
-LSP_DIAGNOSTICS_PROBE_SOURCE = regression/mr_lsp_diagnostics_probe.cpp
-LSP_DIAGNOSTICS_PROBE_OBJECT = regression/mr_lsp_diagnostics_probe.o
-LSP_DIAGNOSTICS_SOURCE = lsp/MRLspDiagnostics.cpp
-LSP_DIAGNOSTICS_OBJECT = lsp/MRLspDiagnostics.o
-LSP_DEFINITION_PROBE_TARGET = regression/mr_lsp_definition_probe
-LSP_DEFINITION_PROBE_SOURCE = regression/mr_lsp_definition_probe.cpp
-LSP_DEFINITION_PROBE_OBJECT = regression/mr_lsp_definition_probe.o
-LSP_DEFINITION_SOURCE = lsp/MRLspDefinition.cpp
-LSP_DEFINITION_OBJECT = lsp/MRLspDefinition.o
-LSP_HOVER_PROBE_TARGET = regression/mr_lsp_hover_probe
-LSP_HOVER_PROBE_SOURCE = regression/mr_lsp_hover_probe.cpp
-LSP_HOVER_PROBE_OBJECT = regression/mr_lsp_hover_probe.o
-LSP_HOVER_SOURCE = lsp/MRLspHover.cpp
-LSP_HOVER_OBJECT = lsp/MRLspHover.o
-LSP_REFERENCES_PROBE_TARGET = regression/mr_lsp_references_probe
-LSP_REFERENCES_PROBE_SOURCE = regression/mr_lsp_references_probe.cpp
-LSP_REFERENCES_PROBE_OBJECT = regression/mr_lsp_references_probe.o
-LSP_REFERENCES_SOURCE = lsp/MRLspReferences.cpp
-LSP_REFERENCES_OBJECT = lsp/MRLspReferences.o
-LSP_COMPLETION_PROBE_TARGET = regression/mr_lsp_completion_probe
-LSP_COMPLETION_PROBE_SOURCE = regression/mr_lsp_completion_probe.cpp
-LSP_COMPLETION_PROBE_OBJECT = regression/mr_lsp_completion_probe.o
-LSP_COMPLETION_SOURCE = lsp/MRLspCompletion.cpp
-LSP_COMPLETION_OBJECT = lsp/MRLspCompletion.o
-LSP_CODE_ACTION_PROBE_TARGET = regression/mr_lsp_code_action_probe
-LSP_CODE_ACTION_PROBE_SOURCE = regression/mr_lsp_code_action_probe.cpp
-LSP_CODE_ACTION_PROBE_OBJECT = regression/mr_lsp_code_action_probe.o
-LSP_CODE_ACTION_SOURCE = lsp/MRLspCodeAction.cpp
-LSP_CODE_ACTION_OBJECT = lsp/MRLspCodeAction.o
-LSP_DOCUMENT_HIGHLIGHT_SOURCE = lsp/MRLspDocumentHighlight.cpp
-LSP_DOCUMENT_HIGHLIGHT_OBJECT = lsp/MRLspDocumentHighlight.o
-LSP_DOCUMENT_SYMBOLS_SOURCE = lsp/MRLspDocumentSymbols.cpp
-LSP_DOCUMENT_SYMBOLS_OBJECT = lsp/MRLspDocumentSymbols.o
-LSP_SIGNATURE_HELP_SOURCE = lsp/MRLspSignatureHelp.cpp
-LSP_SIGNATURE_HELP_OBJECT = lsp/MRLspSignatureHelp.o
-LSP_SERVICE_INTEGRATION_PROBE_TARGET = regression/mr_lsp_service_integration_probe
-LSP_SERVICE_INTEGRATION_PROBE_SOURCE = regression/mr_lsp_service_integration_probe.cpp
-LSP_SERVICE_INTEGRATION_PROBE_OBJECT = regression/mr_lsp_service_integration_probe.o
-LSP_LIVE_MATRIX_PROBE_TARGET = regression/mr_lsp_live_matrix_probe
-LSP_LIVE_MATRIX_PROBE_SOURCE = regression/mr_lsp_live_matrix_probe.cpp
-LSP_LIVE_MATRIX_PROBE_OBJECT = regression/mr_lsp_live_matrix_probe.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -393,14 +260,14 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe service-results-probe lsp-app-service-probe lsp-jsonrpc-probe external-process-probe lsp-session-probe lsp-protocol-shaper lsp-protocol-shaper-probe lsp-lifecycle-probe lsp-document-mirror-probe lsp-uri-probe lsp-document-service-probe lsp-diagnostics-probe lsp-definition-probe lsp-hover-probe lsp-references-probe lsp-completion-probe lsp-code-action-probe lsp-server-profile-probe lsp-live-matrix-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
 ifneq ($(filter clean,$(MAKECMDGOALS)),)
 ifneq ($(filter all,$(MAKECMDGOALS)),)
 all: clean
-$(CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS): clean
+$(CXX_OBJECTS) $(C_OBJECTS): clean
 endif
 endif
 
@@ -412,28 +279,6 @@ stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
 phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
 workspace-service-context-probe: $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET)
-service-results-probe: $(MR_SERVICE_RESULTS_PROBE_TARGET)
-lsp-service-session-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_PROTOCOL_SHAPER_TARGET) $(MR_LSP_SERVICE_SESSION_PROBE_TARGET)
-lsp-editor-source-probe: $(MR_LSP_EDITOR_SOURCE_PROBE_TARGET)
-lsp-server-profile-probe: $(MR_LSP_SERVER_PROFILE_PROBE_TARGET)
-lsp-app-service-probe: $(LSP_SESSION_PEER_TARGET) $(MR_LSP_APP_SERVICE_PROBE_TARGET)
-lsp-jsonrpc-probe: $(LSP_JSONRPC_PROBE_TARGET)
-external-process-probe: $(EXTERNAL_PROCESS_PROBE_TARGET)
-lsp-session-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_SESSION_PROBE_TARGET)
-lsp-protocol-shaper: $(LSP_PROTOCOL_SHAPER_TARGET)
-lsp-protocol-shaper-probe: $(LSP_PROTOCOL_SHAPER_TARGET) $(LSP_PROTOCOL_SHAPER_PROBE_TARGET)
-lsp-lifecycle-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_LIFECYCLE_PROBE_TARGET)
-lsp-document-mirror-probe: $(LSP_DOCUMENT_MIRROR_PROBE_TARGET)
-lsp-uri-probe: $(LSP_URI_PROBE_TARGET)
-lsp-document-service-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_DOCUMENT_SERVICE_PROBE_TARGET)
-lsp-diagnostics-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_DIAGNOSTICS_PROBE_TARGET)
-lsp-definition-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_DEFINITION_PROBE_TARGET)
-lsp-hover-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_HOVER_PROBE_TARGET)
-lsp-references-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_REFERENCES_PROBE_TARGET)
-lsp-completion-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_COMPLETION_PROBE_TARGET)
-lsp-code-action-probe: $(LSP_SESSION_PEER_TARGET) $(LSP_CODE_ACTION_PROBE_TARGET)
-lsp-service-integration-probe: $(LSP_PROTOCOL_SHAPER_TARGET) $(LSP_SERVICE_INTEGRATION_PROBE_TARGET)
-lsp-live-matrix-probe: $(LSP_LIVE_MATRIX_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -622,7 +467,7 @@ $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 
 mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox.hpp
-app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMRuntimeKv.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp app/services/MRLspAppService.hpp app/services/MRLspServiceSession.hpp app/services/MRServiceResults.hpp app/services/MRLspServerProfile.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMRuntimeKv.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/MRMenuBar.hpp
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/MRVersion.o: CXXFLAGS += -DMR_BUILD_EPOCH=$(MR_BUILD_EPOCH)
@@ -719,70 +564,25 @@ $(MROUTLINETRAINER_OBJECT): $(MROUTLINETRAINER_SOURCE) ui/MRFileEditor/MRFileEdi
 $(REGRESSION_PROBE_OBJECT): $(REGRESSION_PROBE_SOURCE) app/MRExecSessionStatus.hpp app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRVM.hpp piecetable/MRTextDocument.hpp
 app/services/MRWorkspaceServiceContext.o: app/services/MRWorkspaceServiceContext.cpp app/services/MRWorkspaceServiceContext.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT): $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE) app/services/MRWorkspaceServiceContext.hpp
-$(MR_SERVICE_RESULTS_OBJECT): $(MR_SERVICE_RESULTS_SOURCE) app/services/MRServiceResults.hpp app/services/MRWorkspaceServiceContext.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentHighlight.hpp lsp/MRLspDocumentSymbols.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp lsp/MRLspSignatureHelp.hpp lsp/MRLspUri.hpp
-$(MR_SERVICE_RESULTS_PROBE_OBJECT): $(MR_SERVICE_RESULTS_PROBE_SOURCE) app/services/MRServiceResults.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentSymbols.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp lsp/MRLspSignatureHelp.hpp lsp/MRLspUri.hpp
-$(MR_LSP_SERVICE_SESSION_OBJECT): $(MR_LSP_SERVICE_SESSION_SOURCE) app/services/MRLspServiceSession.hpp app/services/MRServiceResults.hpp app/services/MRLspEditorSource.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentHighlight.hpp lsp/MRLspDocumentSymbols.hpp lsp/MRLspDocumentService.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp lsp/MRLspSignatureHelp.hpp
-$(MR_LSP_SERVICE_SESSION_PROBE_OBJECT): $(MR_LSP_SERVICE_SESSION_PROBE_SOURCE) app/services/MRLspServiceSession.hpp ui/MRFileEditor/MRFileEditor.hpp
-$(MR_LSP_EDITOR_SOURCE_OBJECT): $(MR_LSP_EDITOR_SOURCE_SOURCE) app/services/MRLspEditorSource.hpp app/services/MRWorkspaceServiceContext.hpp lsp/MRLspDocumentService.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
-$(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT): $(MR_LSP_EDITOR_SOURCE_PROBE_SOURCE) app/services/MRLspEditorSource.hpp ui/MRFileEditor/MRFileEditor.hpp
-$(MR_LSP_SERVER_PROFILE_OBJECT): $(MR_LSP_SERVER_PROFILE_SOURCE) app/services/MRLspServerProfile.hpp app/services/MRLspServiceSession.hpp ui/MRSyntax.hpp
-$(MR_LSP_SERVER_PROFILE_PROBE_OBJECT): $(MR_LSP_SERVER_PROFILE_PROBE_SOURCE) app/services/MRLspServerProfile.hpp
-$(MR_LSP_APP_SERVICE_OBJECT): $(MR_LSP_APP_SERVICE_SOURCE) app/services/MRLspAppService.hpp app/services/MRLspServiceSession.hpp app/services/MRWorkspaceServiceContext.hpp
-$(MR_LSP_APP_SERVICE_PROBE_OBJECT): $(MR_LSP_APP_SERVICE_PROBE_SOURCE) app/services/MRLspAppService.hpp ui/MRFileEditor/MRFileEditor.hpp
-$(LSP_JSONRPC_OBJECT): $(LSP_JSONRPC_SOURCE) lsp/MRLspJsonRpc.hpp
-$(LSP_JSONRPC_PROBE_OBJECT): $(LSP_JSONRPC_PROBE_SOURCE) lsp/MRLspJsonRpc.hpp
-$(EXTERNAL_PROCESS_OBJECT): $(EXTERNAL_PROCESS_SOURCE) lsp/MRExternalProcess.hpp
-$(EXTERNAL_PROCESS_PROBE_OBJECT): $(EXTERNAL_PROCESS_PROBE_SOURCE) lsp/MRExternalProcess.hpp
-$(LSP_SESSION_OBJECT): $(LSP_SESSION_SOURCE) lsp/MRLspSession.hpp lsp/MRLspJsonRpc.hpp lsp/MRExternalProcess.hpp
-$(LSP_SESSION_PROBE_OBJECT): $(LSP_SESSION_PROBE_SOURCE) lsp/MRLspSession.hpp
-$(LSP_SESSION_PEER_OBJECT): $(LSP_SESSION_PEER_SOURCE) lsp/MRLspJsonRpc.hpp
-$(LSP_PROTOCOL_SHAPER_OBJECT): $(LSP_PROTOCOL_SHAPER_SOURCE) lsp/MRLspJsonRpc.hpp
-$(LSP_PROTOCOL_SHAPER_PROBE_OBJECT): $(LSP_PROTOCOL_SHAPER_PROBE_SOURCE) lsp/MRLspSession.hpp
-$(LSP_LIFECYCLE_OBJECT): $(LSP_LIFECYCLE_SOURCE) lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_LIFECYCLE_PROBE_OBJECT): $(LSP_LIFECYCLE_PROBE_SOURCE) lsp/MRLspLifecycle.hpp
-$(LSP_DOCUMENT_MIRROR_OBJECT): $(LSP_DOCUMENT_MIRROR_SOURCE) lsp/MRLspDocumentMirror.hpp
-$(LSP_DOCUMENT_MIRROR_PROBE_OBJECT): $(LSP_DOCUMENT_MIRROR_PROBE_SOURCE) lsp/MRLspDocumentMirror.hpp
-$(LSP_URI_OBJECT): $(LSP_URI_SOURCE) lsp/MRLspUri.hpp
-$(LSP_URI_PROBE_OBJECT): $(LSP_URI_PROBE_SOURCE) lsp/MRLspUri.hpp
-$(LSP_DOCUMENT_SERVICE_OBJECT): $(LSP_DOCUMENT_SERVICE_SOURCE) lsp/MRLspDocumentService.hpp lsp/MRLspDocumentMirror.hpp lsp/MRLspLifecycle.hpp lsp/MRLspUri.hpp
-$(LSP_DOCUMENT_SERVICE_PROBE_OBJECT): $(LSP_DOCUMENT_SERVICE_PROBE_SOURCE) lsp/MRLspDocumentService.hpp
-$(LSP_DIAGNOSTICS_OBJECT): $(LSP_DIAGNOSTICS_SOURCE) lsp/MRLspDiagnostics.hpp lsp/MRLspDocumentService.hpp lsp/MRLspSession.hpp
-$(LSP_DIAGNOSTICS_PROBE_OBJECT): $(LSP_DIAGNOSTICS_PROBE_SOURCE) lsp/MRLspDiagnostics.hpp
-$(LSP_DEFINITION_OBJECT): $(LSP_DEFINITION_SOURCE) lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_DEFINITION_PROBE_OBJECT): $(LSP_DEFINITION_PROBE_SOURCE) lsp/MRLspDefinition.hpp
-$(LSP_HOVER_OBJECT): $(LSP_HOVER_SOURCE) lsp/MRLspHover.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_HOVER_PROBE_OBJECT): $(LSP_HOVER_PROBE_SOURCE) lsp/MRLspHover.hpp
-$(LSP_REFERENCES_OBJECT): $(LSP_REFERENCES_SOURCE) lsp/MRLspReferences.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_REFERENCES_PROBE_OBJECT): $(LSP_REFERENCES_PROBE_SOURCE) lsp/MRLspReferences.hpp
-$(LSP_COMPLETION_OBJECT): $(LSP_COMPLETION_SOURCE) lsp/MRLspCompletion.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_COMPLETION_PROBE_OBJECT): $(LSP_COMPLETION_PROBE_SOURCE) lsp/MRLspCompletion.hpp
-$(LSP_CODE_ACTION_OBJECT): $(LSP_CODE_ACTION_SOURCE) lsp/MRLspCodeAction.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_DOCUMENT_HIGHLIGHT_OBJECT): $(LSP_DOCUMENT_HIGHLIGHT_SOURCE) lsp/MRLspDocumentHighlight.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_DOCUMENT_SYMBOLS_OBJECT): $(LSP_DOCUMENT_SYMBOLS_SOURCE) lsp/MRLspDocumentSymbols.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_SIGNATURE_HELP_OBJECT): $(LSP_SIGNATURE_HELP_SOURCE) lsp/MRLspSignatureHelp.hpp lsp/MRLspDefinition.hpp lsp/MRLspDocumentService.hpp lsp/MRLspLifecycle.hpp lsp/MRLspSession.hpp
-$(LSP_CODE_ACTION_PROBE_OBJECT): $(LSP_CODE_ACTION_PROBE_SOURCE) lsp/MRLspCodeAction.hpp
-$(LSP_SERVICE_INTEGRATION_PROBE_OBJECT): $(LSP_SERVICE_INTEGRATION_PROBE_SOURCE) app/services/MRServiceResults.hpp lsp/MRLspCodeAction.hpp lsp/MRLspCompletion.hpp lsp/MRLspDiagnostics.hpp lsp/MRLspHover.hpp lsp/MRLspReferences.hpp
-$(LSP_LIVE_MATRIX_PROBE_OBJECT): $(LSP_LIVE_MATRIX_PROBE_SOURCE) lsp/MRLspCompletion.hpp lsp/MRLspDocumentSymbols.hpp lsp/MRLspHover.hpp lsp/MRLspSignatureHelp.hpp lsp/MRLspUri.hpp
-
 # 3. Linker call
-$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) | pcre2-check
+$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
 	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
 
-$(MRFOLDTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(MRFOLDTRAINER_OBJECT) | pcre2-check
+$(MRFOLDTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRFOLDTRAINER_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(MRINDENTTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(MRINDENTTRAINER_OBJECT) | pcre2-check
+$(MRINDENTTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRINDENTTRAINER_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(MROUTLINETRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(MROUTLINETRAINER_OBJECT) | pcre2-check
+$(MROUTLINETRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MROUTLINETRAINER_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(REGRESSION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) | pcre2-check
+$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(PHASE1_REPRO_PROBE_OBJECT) | pcre2-check
@@ -790,76 +590,6 @@ $(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(
 
 $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
-
-$(MR_SERVICE_RESULTS_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(MR_SERVICE_RESULTS_PROBE_OBJECT) | pcre2-check
-	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
-
-$(MR_LSP_SERVICE_SESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(MR_LSP_SERVICE_SESSION_PROBE_OBJECT) | pcre2-check
-	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
-
-$(MR_LSP_EDITOR_SOURCE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_EDITOR_SOURCE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT) | pcre2-check
-	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
-
-$(MR_LSP_SERVER_PROFILE_PROBE_TARGET): $(MR_LSP_SERVER_PROFILE_OBJECT) $(MR_LSP_SERVER_PROFILE_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ -pthread
-
-$(MR_LSP_APP_SERVICE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(MR_LSP_APP_SERVICE_PROBE_OBJECT) | pcre2-check
-	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
-
-$(LSP_JSONRPC_PROBE_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(EXTERNAL_PROCESS_PROBE_TARGET): $(EXTERNAL_PROCESS_OBJECT) $(EXTERNAL_PROCESS_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_SESSION_PROBE_TARGET): $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_SESSION_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_SESSION_PEER_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_SESSION_PEER_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_PROTOCOL_SHAPER_TARGET): $(LSP_JSONRPC_OBJECT) $(LSP_PROTOCOL_SHAPER_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_PROTOCOL_SHAPER_PROBE_TARGET): $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_PROTOCOL_SHAPER_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_LIFECYCLE_PROBE_TARGET): $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_LIFECYCLE_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_DOCUMENT_MIRROR_PROBE_TARGET): $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_URI_PROBE_TARGET): $(LSP_URI_OBJECT) $(LSP_URI_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_DOCUMENT_SERVICE_PROBE_TARGET): $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_DOCUMENT_SERVICE_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_DIAGNOSTICS_PROBE_TARGET): $(LSP_DIAGNOSTICS_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_DIAGNOSTICS_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_DEFINITION_PROBE_TARGET): $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_DEFINITION_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_HOVER_PROBE_TARGET): $(LSP_HOVER_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_HOVER_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_REFERENCES_PROBE_TARGET): $(LSP_REFERENCES_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_REFERENCES_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_COMPLETION_PROBE_TARGET): $(LSP_COMPLETION_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_COMPLETION_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_CODE_ACTION_PROBE_TARGET): $(LSP_CODE_ACTION_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_CODE_ACTION_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
-$(LSP_SERVICE_INTEGRATION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_LSP_RUNTIME_OBJECTS) $(LSP_SERVICE_INTEGRATION_PROBE_OBJECT) | pcre2-check
-	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
-
-$(LSP_LIVE_MATRIX_PROBE_TARGET): $(LSP_COMPLETION_OBJECT) $(LSP_DOCUMENT_SYMBOLS_OBJECT) $(LSP_HOVER_OBJECT) $(LSP_SIGNATURE_HELP_OBJECT) $(LSP_DEFINITION_OBJECT) $(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_URI_OBJECT) $(LSP_LIFECYCLE_OBJECT) $(LSP_SESSION_OBJECT) $(EXTERNAL_PROCESS_OBJECT) $(LSP_JSONRPC_OBJECT) $(LSP_LIVE_MATRIX_PROBE_OBJECT)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(PTHREAD_FLAGS)
-
 
 # C++ compilations
 %.o: %.cpp
@@ -878,31 +608,6 @@ clean:
 		$(REGRESSION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) \
 		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
 		$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET) \
-		$(MR_SERVICE_RESULTS_OBJECT) $(MR_SERVICE_RESULTS_PROBE_OBJECT) $(MR_SERVICE_RESULTS_PROBE_TARGET) \
-		$(MR_LSP_SERVICE_SESSION_OBJECT) $(MR_LSP_SERVICE_SESSION_PROBE_OBJECT) $(MR_LSP_SERVICE_SESSION_PROBE_TARGET) \
-		$(MR_LSP_EDITOR_SOURCE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_OBJECT) $(MR_LSP_EDITOR_SOURCE_PROBE_TARGET) \
-		$(MR_LSP_SERVER_PROFILE_OBJECT) $(MR_LSP_SERVER_PROFILE_PROBE_OBJECT) $(MR_LSP_SERVER_PROFILE_PROBE_TARGET) \
-		$(MR_LSP_APP_SERVICE_OBJECT) $(MR_LSP_APP_SERVICE_PROBE_OBJECT) $(MR_LSP_APP_SERVICE_PROBE_TARGET) \
-		$(LSP_JSONRPC_OBJECT) $(LSP_JSONRPC_PROBE_OBJECT) $(LSP_JSONRPC_PROBE_TARGET) \
-		$(EXTERNAL_PROCESS_OBJECT) $(EXTERNAL_PROCESS_PROBE_OBJECT) $(EXTERNAL_PROCESS_PROBE_TARGET) \
-		$(LSP_SESSION_OBJECT) $(LSP_SESSION_PROBE_OBJECT) $(LSP_SESSION_PROBE_TARGET) \
-		$(LSP_SESSION_PEER_OBJECT) $(LSP_SESSION_PEER_TARGET) \
-		$(LSP_PROTOCOL_SHAPER_OBJECT) $(LSP_PROTOCOL_SHAPER_TARGET) \
-		$(LSP_PROTOCOL_SHAPER_PROBE_OBJECT) $(LSP_PROTOCOL_SHAPER_PROBE_TARGET) \
-		$(LSP_LIFECYCLE_OBJECT) $(LSP_LIFECYCLE_PROBE_OBJECT) $(LSP_LIFECYCLE_PROBE_TARGET) \
-		$(LSP_DOCUMENT_MIRROR_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_OBJECT) $(LSP_DOCUMENT_MIRROR_PROBE_TARGET) \
-		$(LSP_URI_OBJECT) $(LSP_URI_PROBE_OBJECT) $(LSP_URI_PROBE_TARGET) \
-		$(LSP_DOCUMENT_SERVICE_OBJECT) $(LSP_DOCUMENT_SERVICE_PROBE_OBJECT) $(LSP_DOCUMENT_SERVICE_PROBE_TARGET) \
-		$(LSP_DIAGNOSTICS_OBJECT) $(LSP_DIAGNOSTICS_PROBE_OBJECT) $(LSP_DIAGNOSTICS_PROBE_TARGET) \
-		$(LSP_DEFINITION_OBJECT) $(LSP_DEFINITION_PROBE_OBJECT) $(LSP_DEFINITION_PROBE_TARGET) \
-		$(LSP_HOVER_OBJECT) $(LSP_HOVER_PROBE_OBJECT) $(LSP_HOVER_PROBE_TARGET) \
-		$(LSP_REFERENCES_OBJECT) $(LSP_REFERENCES_PROBE_OBJECT) $(LSP_REFERENCES_PROBE_TARGET) \
-		$(LSP_COMPLETION_OBJECT) $(LSP_COMPLETION_PROBE_OBJECT) $(LSP_COMPLETION_PROBE_TARGET) \
-		$(LSP_CODE_ACTION_OBJECT) $(LSP_CODE_ACTION_PROBE_OBJECT) $(LSP_CODE_ACTION_PROBE_TARGET) \
-		$(LSP_DOCUMENT_HIGHLIGHT_OBJECT) \
-		$(LSP_DOCUMENT_SYMBOLS_OBJECT) \
-		$(LSP_SERVICE_INTEGRATION_PROBE_OBJECT) $(LSP_SERVICE_INTEGRATION_PROBE_TARGET) \
-		$(LSP_LIVE_MATRIX_PROBE_OBJECT) $(LSP_LIVE_MATRIX_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe

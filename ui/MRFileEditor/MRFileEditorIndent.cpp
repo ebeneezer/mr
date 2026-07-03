@@ -1033,6 +1033,15 @@ bool latexLineContainsEnvironmentEnd(std::string_view line, std::string_view env
 	return false;
 }
 
+bool isLatexRawTextEnvironment(std::string_view environmentName) noexcept {
+	return environmentName == "verbatim" || environmentName == "verbatim*" || environmentName == "lstlisting" || environmentName == "minted";
+}
+
+bool latexLineContainsRawTextEnvironmentEnd(std::string_view line) noexcept {
+	return latexLineContainsEnvironmentEnd(line, "verbatim") || latexLineContainsEnvironmentEnd(line, "verbatim*") || latexLineContainsEnvironmentEnd(line, "lstlisting") ||
+	       latexLineContainsEnvironmentEnd(line, "minted");
+}
+
 bool parseLatexLeadingBeginEnvironment(std::string_view trimmed, std::string_view &environmentName) noexcept {
 	std::size_t commandEndOffset = 0;
 	if (!parseLatexEnvironmentCommand(trimmed, "\\begin", environmentName, &commandEndOffset)) return false;
@@ -1369,6 +1378,24 @@ bool MRFileEditor::applyCurrentLineLeadingIndent(int targetColumn) {
 	return applyStagedTransaction(transaction, newCursor, newCursor, newCursor, true).applied();
 }
 
+std::string MRFileEditor::activeLatexRawTextEnvironmentBeforeLine(std::size_t lineStart) const {
+	std::size_t probeLineStart = lineStart;
+
+	while (probeLineStart > 0) {
+		const std::size_t candidateLineStart = lineStartOffset(probeLineStart - 1);
+		if (candidateLineStart == probeLineStart) break;
+		probeLineStart = candidateLineStart;
+
+		const std::string candidateLineText = mBufferModel.lineText(candidateLineStart);
+		if (latexLineContainsRawTextEnvironmentEnd(candidateLineText)) return std::string();
+
+		const std::string_view candidateTrimmed = trimView(candidateLineText);
+		std::string_view environmentName;
+		if (parseLatexLeadingBeginEnvironment(candidateTrimmed, environmentName) && isLatexRawTextEnvironment(environmentName)) return std::string(environmentName);
+	}
+	return std::string();
+}
+
 bool MRFileEditor::replaceCurrentLineText(const std::string &text) {
 	std::size_t start = mBufferModel.lineStart(mBufferModel.cursor());
 	std::size_t end = mBufferModel.lineEnd(mBufferModel.cursor());
@@ -1498,8 +1525,6 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	syncDisplayedCursorColumnFromCursor(false);
 	mBufferModel.setModified(modifiedState);
 	if (changeSet == nullptr || changeSet->changed) mFindMarkerRanges.clear();
-	if (changeSet == nullptr || changeSet->changed) mLspDocumentHighlightRanges.clear();
-	if (changeSet != nullptr && changeSet->changed) remapLspDiagnosticInformationRangesForAppliedChange(*changeSet);
 	if (!modifiedState) clearDirtyRanges();
 	else if (changeSet != nullptr && changeSet->changed) {
 		remapDirtyRangesForAppliedChange(*changeSet);
@@ -1903,7 +1928,9 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Latex) {
 		std::string_view environmentName;
-		if (parseLatexLeadingBeginEnvironment(trimmedBeforeCursor, environmentName))
+		if (!activeLatexRawTextEnvironmentBeforeLine(lineStart).empty())
+			targetColumn = baseColumn;
+		else if (parseLatexLeadingBeginEnvironment(trimmedBeforeCursor, environmentName) && !isLatexRawTextEnvironment(environmentName))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Systemd) {
 		if (isSystemdContinuationLead(trimmedBeforeCursor)) {
@@ -1951,6 +1978,13 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 	if (language == MRSyntaxLanguage::Systemd && isSystemdSectionHeader(trimmedLine)) {
 		applyCurrentLineLeadingIndent(1);
 		return;
+	}
+	if (language == MRSyntaxLanguage::Latex) {
+		const std::string activeRawEnvironment = activeLatexRawTextEnvironmentBeforeLine(lineStart);
+		if (!activeRawEnvironment.empty()) {
+			std::string_view environmentName;
+			if (!parseLatexLeadingEndEnvironment(trimmedLine, environmentName) || environmentName != activeRawEnvironment) return;
+		}
 	}
 	const SmartDedentRequest request = classifySmartDedentRequest(trimmedLine, language);
 

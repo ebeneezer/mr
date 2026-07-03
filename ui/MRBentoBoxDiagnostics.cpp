@@ -182,7 +182,28 @@ bool parseCompilerDriverDiagnosticLine(const std::string &line, std::size_t outp
 	return true;
 }
 
-bool parseLatexBuildWarningLine(const std::string &line, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
+bool parseLatexBangDiagnosticLine(const std::string &line, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
+	if (line.rfind("! ", 0) != 0) return false;
+	std::string text = line.substr(2);
+
+	while (!text.empty() && text.front() == ' ')
+		text.erase(text.begin());
+	if (text.empty()) return false;
+	if (text.rfind("==>", 0) == 0 || text == "Emergency stop.") return false;
+
+	diagnostic.sourcePath = "LaTeX";
+	diagnostic.sourceLine = 0;
+	diagnostic.sourceColumn = 0;
+	diagnostic.severity = "error";
+	diagnostic.text = text;
+	diagnostic.sourceOffset = 0;
+	diagnostic.outputOffset = outputOffset;
+	diagnostic.problemOffset = 0;
+	diagnostic.sourceAvailable = false;
+	return true;
+}
+
+bool parseLatexBuildWarningLine(const std::string &line, const std::string &sourcePath, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
 	static const DiagnosticSeverityMarker markers[] = {{"LaTeX Warning:", "LaTeX"}, {"Package ", "Package"}, {"Class ", "Class"}};
 	const DiagnosticSeverityMarker *matchedMarker = nullptr;
 	std::size_t markerPos = std::string::npos;
@@ -209,11 +230,25 @@ bool parseLatexBuildWarningLine(const std::string &line, std::size_t outputOffse
 	if (diagnostic.text.empty()) return false;
 	diagnostic.sourceLine = 0;
 	diagnostic.sourceColumn = 0;
+	const std::string inputLineMarker = " on input line ";
+	const std::size_t inputLine = diagnostic.text.find(inputLineMarker);
+	if (inputLine != std::string::npos) {
+		const std::size_t lineStart = inputLine + inputLineMarker.size();
+		std::size_t lineEnd = lineStart;
+		while (lineEnd < diagnostic.text.size() && std::isdigit(static_cast<unsigned char>(diagnostic.text[lineEnd])) != 0)
+			++lineEnd;
+		std::size_t sourceLine = 0;
+		if (parseUnsignedField(diagnostic.text, lineStart, lineEnd, sourceLine) && sourceLine > 0) {
+			diagnostic.sourceLine = sourceLine;
+			diagnostic.sourceColumn = 1;
+		}
+	}
 	diagnostic.severity = "warning";
 	diagnostic.sourceOffset = 0;
 	diagnostic.outputOffset = outputOffset;
 	diagnostic.problemOffset = 0;
-	diagnostic.sourceAvailable = false;
+	diagnostic.sourceAvailable = diagnostic.sourceLine > 0 && !sourcePath.empty();
+	if (diagnostic.sourceAvailable) diagnostic.sourcePath = sourcePath;
 	return true;
 }
 
@@ -256,7 +291,7 @@ std::vector<MRCompilerDiagnostic> parseCompilerDiagnostics(const std::string &te
 		if (lineEnd == std::string::npos) lineEnd = textLength;
 		const std::string line = text.substr(lineStart, lineEnd - lineStart);
 		if (parseCompilerDiagnosticLine(line, sourcePath, lineStart, diagnostic) || parseLatexSourceDiagnosticLine(line, sourcePath, lineStart, diagnostic) || parseCompilerDriverDiagnosticLine(line, lineStart, diagnostic) ||
-		    parseLatexBuildWarningLine(line, lineStart, diagnostic))
+		    parseLatexBangDiagnosticLine(line, lineStart, diagnostic) || parseLatexBuildWarningLine(line, sourcePath, lineStart, diagnostic))
 			diagnostics.push_back(std::move(diagnostic));
 		if (lineEnd == textLength) break;
 		lineStart = lineEnd + 1;

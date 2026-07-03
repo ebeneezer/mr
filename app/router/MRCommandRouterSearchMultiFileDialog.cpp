@@ -151,7 +151,7 @@ bool buildMultiPreviewBlock(const std::string &text, const SearchMatchEntry &mat
 
 class MultiFileListView : public TListViewer {
   public:
-	MultiFileListView(const TRect &bounds, TScrollBar *aScrollBar, MultiFileSearchSession &session, TView *dialogOwner) noexcept : TListViewer(bounds, 1, nullptr, aScrollBar), session(session), dialogOwner(dialogOwner) {
+	MultiFileListView(const TRect &bounds, TScrollBar *aScrollBar, MultiFileSearchSession &session, TView *dialogOwner, ushort &pendingCommand) noexcept : TListViewer(bounds, 1, nullptr, aScrollBar), session(session), dialogOwner(dialogOwner), pendingCommand(pendingCommand) {
 		setRange(static_cast<short>(session.files.size()));
 	}
 
@@ -198,20 +198,21 @@ class MultiFileListView : public TListViewer {
 	void focusItemNum(short item) override {
 		TListViewer::focusItemNum(item);
 		if (item >= 0 && static_cast<std::size_t>(item) < session.files.size()) session.selectedFileIndex = static_cast<std::size_t>(item);
-		message(owner, evBroadcast, cmMrMultiFileSelectionChanged, this);
+		message(dialogOwner != nullptr ? dialogOwner : owner, evBroadcast, cmMrMultiFileSelectionChanged, this);
 	}
 
 	void selectItem(short item) override {
 		if (item >= 0 && static_cast<std::size_t>(item) < session.files.size()) {
 			session.selectedFileIndex = static_cast<std::size_t>(item);
-			message(owner, evBroadcast, cmMrMultiFileSelectionChanged, this);
-			if (!session.replaceMode && dialogOwner != nullptr) message(dialogOwner, evCommand, cmMrMultiLoadKeepDialog, this);
+			message(dialogOwner != nullptr ? dialogOwner : owner, evBroadcast, cmMrMultiFileSelectionChanged, this);
+			pendingCommand = session.replaceMode ? cmMrMultiReplace : cmMrMultiLoad;
 		}
 	}
 
   private:
 	MultiFileSearchSession &session;
 	TView *dialogOwner = nullptr;
+	ushort &pendingCommand;
 };
 
 class MultiPreviewHeaderView : public TView {
@@ -379,10 +380,11 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	if (options.searchSubdirectories) optionMask |= 0x0001;
 	if (options.caseSensitive) optionMask |= 0x0002;
 	if (options.regularExpressions) optionMask |= 0x0004;
-	if (options.searchFilesInMemory) optionMask |= 0x0008;
-	if (options.restrictToWorkspace) optionMask |= 0x0010;
+	if (options.wholeWords) optionMask |= 0x0008;
+	if (options.searchFilesInMemory) optionMask |= 0x0010;
+	if (options.restrictToWorkspace) optionMask |= 0x0020;
 
-	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH", 102, 18);
+	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH", 102, 19);
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
@@ -390,15 +392,15 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Se~a~rch:", searchField));
 	dialog->insert(searchField);
 	dialog->insert(new TStaticText(TRect(3, 6, 13, 7), "Options:"));
-	optionsField = new TCheckBoxes(TRect(3, 7, 34, 12), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("search editor ~w~indows", new TSItem("restrict to wor~k~space", nullptr))))));
+	optionsField = new TCheckBoxes(TRect(3, 7, 34, 13), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("whole wor~d~s", new TSItem("search editor ~w~indows", new TSItem("restrict to wor~k~space", nullptr)))))));
 	dialog->insert(optionsField);
-	pathField = new TInputLine(TRect(14, 13, 96, 14), kPathBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 13, 14, 14), "Start a~t~:", pathField));
+	pathField = new TInputLine(TRect(14, 14, 96, 15), kPathBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 14, 14, 15), "Start a~t~:", pathField));
 	dialog->insert(pathField);
 	{
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 15, 0, buttons);
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 16, 0, buttons);
 	}
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
@@ -434,8 +436,10 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 		currentOptions.searchSubdirectories = (currentMask & 0x0001) != 0;
 		currentOptions.caseSensitive = (currentMask & 0x0002) != 0;
 		currentOptions.regularExpressions = (currentMask & 0x0004) != 0;
-		currentOptions.searchFilesInMemory = (currentMask & 0x0008) != 0;
-		currentOptions.restrictToWorkspace = (currentMask & 0x0010) != 0;
+		currentOptions.wholeWords = (currentMask & 0x0008) != 0;
+		currentOptions.searchFilesInMemory = (currentMask & 0x0010) != 0;
+		currentOptions.restrictToWorkspace = (currentMask & 0x0020) != 0;
+		if (currentOptions.wholeWords) currentOptions.regularExpressions = false;
 		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
 		if (currentOptions.startingPath.empty()) currentOptions.startingPath = ".";
 		currentOptions.searchText = trimAscii(currentSearch);
@@ -522,11 +526,12 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	if (options.searchSubdirectories) optionMask |= 0x0001;
 	if (options.caseSensitive) optionMask |= 0x0002;
 	if (options.regularExpressions) optionMask |= 0x0004;
-	if (options.searchFilesInMemory) optionMask |= 0x0008;
-	if (options.keepFilesOpen) optionMask |= 0x0010;
-	if (options.restrictToWorkspace) optionMask |= 0x0020;
+	if (options.wholeWords) optionMask |= 0x0008;
+	if (options.searchFilesInMemory) optionMask |= 0x0010;
+	if (options.keepFilesOpen) optionMask |= 0x0020;
+	if (options.restrictToWorkspace) optionMask |= 0x0040;
 
-	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH AND REPLACE", 102, 21);
+	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH AND REPLACE", 102, 23);
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
@@ -537,15 +542,15 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	dialog->insert(new TLabel(TRect(2, 6, 14, 7), "Replac~e~:", replacementField));
 	dialog->insert(replacementField);
 	dialog->insert(new TStaticText(TRect(3, 8, 13, 9), "Options:"));
-	optionsField = new TCheckBoxes(TRect(3, 9, 34, 15), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("search files in ~m~emory", new TSItem("~K~eep all files open", new TSItem("restrict to wor~k~space", nullptr)))))));
+	optionsField = new TCheckBoxes(TRect(3, 9, 34, 16), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("whole wor~d~s", new TSItem("search files in ~m~emory", new TSItem("~K~eep all files open", new TSItem("restrict to wor~k~space", nullptr))))))));
 	dialog->insert(optionsField);
-	pathField = new TInputLine(TRect(14, 16, 96, 17), kPathBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 16, 16, 17), "Start ~a~t:", pathField));
+	pathField = new TInputLine(TRect(14, 18, 96, 19), kPathBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 18, 16, 19), "Start ~a~t:", pathField));
 	dialog->insert(pathField);
 	{
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 18, 0, buttons);
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 20, 0, buttons);
 	}
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
@@ -585,9 +590,11 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 		currentOptions.searchSubdirectories = (currentMask & 0x0001) != 0;
 		currentOptions.caseSensitive = (currentMask & 0x0002) != 0;
 		currentOptions.regularExpressions = (currentMask & 0x0004) != 0;
-		currentOptions.searchFilesInMemory = (currentMask & 0x0008) != 0;
-		currentOptions.keepFilesOpen = (currentMask & 0x0010) != 0;
-		currentOptions.restrictToWorkspace = (currentMask & 0x0020) != 0;
+		currentOptions.wholeWords = (currentMask & 0x0008) != 0;
+		currentOptions.searchFilesInMemory = (currentMask & 0x0010) != 0;
+		currentOptions.keepFilesOpen = (currentMask & 0x0020) != 0;
+		currentOptions.restrictToWorkspace = (currentMask & 0x0040) != 0;
+		if (currentOptions.wholeWords) currentOptions.regularExpressions = false;
 		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
 		if (currentOptions.startingPath.empty()) currentOptions.startingPath = ".";
 		currentOptions.searchText = trimAscii(currentSearch);
@@ -601,6 +608,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 
 		searchOptions.searchSubdirectories = currentOptions.searchSubdirectories;
 		searchOptions.caseSensitive = currentOptions.caseSensitive;
+		searchOptions.wholeWords = currentOptions.wholeWords;
 		searchOptions.regularExpressions = currentOptions.regularExpressions;
 		searchOptions.searchFilesInMemory = currentOptions.searchFilesInMemory;
 		searchOptions.restrictToWorkspace = currentOptions.restrictToWorkspace;
@@ -646,7 +654,7 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 			const int gap = 2;
 			listScrollBar = new TScrollBar(TRect(29, listTop, 30, listBottom));
 			addManaged(listScrollBar, TRect(29, listTop, 30, listBottom));
-			listView = new MultiFileListView(TRect(2, listTop, 29, listBottom), listScrollBar, session, this);
+			listView = new MultiFileListView(TRect(2, listTop, 29, listBottom), listScrollBar, session, this, pendingListCommand);
 			addManaged(listView, TRect(2, listTop, 29, listBottom));
 			previewView = new MultiPreviewView(TRect(32, listTop, 116, listBottom), session);
 			addManaged(previewView, TRect(32, listTop, 116, listBottom));
@@ -658,8 +666,7 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 				mr::dialogs::addManagedUniformButtonRow(*this, (118 - metrics.rowWidth) / 2, buttonTop, gap, buttons);
 			} else {
 				const std::array buttons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrMultiLoad, bfDefault},
-				                         mr::dialogs::DialogButtonSpec{"Load ~A~ll", cmMrMultiLoadAll, bfNormal},
-				                         mr::dialogs::DialogButtonSpec{"~D~one", cmMrMultiDone, bfNormal}};
+				                         mr::dialogs::DialogButtonSpec{"Load ~A~ll", cmMrMultiLoadAll, bfNormal}};
 				const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 				mr::dialogs::addManagedUniformButtonRow(*this, (118 - metrics.rowWidth) / 2, buttonTop, gap, buttons);
 			}
@@ -677,6 +684,11 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 		}
 
 		void handleEvent(TEvent &event) override {
+			if (event.what == evBroadcast && event.message.command == cmMrMultiFileSelectionChanged) {
+				refreshPreview(true);
+				clearEvent(event);
+				return;
+			}
 			if (event.what == evCommand) {
 				switch (event.message.command) {
 					case cmMrMultiLoad:
@@ -698,17 +710,17 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 				return;
 			}
 			MRScrollableDialog::handleEvent(event);
-			if (event.what == evBroadcast && event.message.command == cmMrMultiFileSelectionChanged) {
-				if (previewHeaderView != nullptr) previewHeaderView->drawView();
-				previewView->drawView();
+			if (pendingListCommand != 0) {
+				const ushort command = pendingListCommand;
+
+				pendingListCommand = 0;
+				endModal(command);
 				clearEvent(event);
 				return;
 			}
 			if (event.what == evCommand && event.message.command == cmMrMultiFileMatchPrev) {
 				if (moveSessionMatch(session, -1, true)) {
 					if (listView != nullptr) listView->focusItemNum(static_cast<short>(session.selectedFileIndex));
-					if (previewHeaderView != nullptr) previewHeaderView->drawView();
-					previewView->drawView();
 				}
 				clearEvent(event);
 				return;
@@ -716,8 +728,6 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 			if (event.what == evCommand && event.message.command == cmMrMultiFileMatchNext) {
 				if (moveSessionMatch(session, 1, true)) {
 					if (listView != nullptr) listView->focusItemNum(static_cast<short>(session.selectedFileIndex));
-					if (previewHeaderView != nullptr) previewHeaderView->drawView();
-					previewView->drawView();
 				}
 				clearEvent(event);
 				return;
@@ -735,7 +745,18 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 		}
 
 	  private:
+		void refreshPreview(bool updateEditorViewport) {
+			if (updateEditorViewport) {
+				static_cast<void>(previewSessionCurrentMatch(session));
+				if (owner != nullptr) makeFirst();
+				if (listView != nullptr) listView->select();
+			}
+			if (previewHeaderView != nullptr) previewHeaderView->drawView();
+			if (previewView != nullptr) previewView->drawView();
+		}
+
 		MultiFileSearchSession &session;
+		ushort pendingListCommand = 0;
 		TScrollBar *listScrollBar = nullptr;
 		MultiFileListView *listView = nullptr;
 		MultiPreviewHeaderView *previewHeaderView = nullptr;
@@ -754,5 +775,6 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 	if (result == cmMrMultiReplace) return MultiDialogAction::Replace;
 	if (result == cmMrMultiReplaceAll) return MultiDialogAction::ReplaceAll;
 	if (result == cmMrMultiSkip) return MultiDialogAction::Skip;
+	if (result == cmCancel) return MultiDialogAction::Done;
 	return MultiDialogAction::Cancel;
 }

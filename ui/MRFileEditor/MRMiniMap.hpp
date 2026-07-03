@@ -42,7 +42,6 @@ class MRMiniMapRenderer {
 		TColorAttr findMarker = 0;
 		TColorAttr errorMarker = 0;
 		TColorAttr warningMarker = 0;
-		TColorAttr diagnostics = 0;
 		TColorAttr diffEqual = 0;
 		TColorAttr diffMissing = 0;
 		TColorAttr diffInsert = 0;
@@ -56,7 +55,6 @@ class MRMiniMapRenderer {
 		};
 		std::vector<LineMask> errorLineMasks;
 		std::vector<LineMask> warningLineMasks;
-		std::vector<LineMask> diagnosticLineMasks;
 		std::vector<LineMask> findLineMasks;
 		std::vector<LineMask> dirtyLineMasks;
 		std::vector<LineMask> diffEqualLineMasks;
@@ -105,7 +103,7 @@ class MRMiniMapRenderer {
 	Signals scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version, const mr::editor::ReadSnapshot &snapshot,
 	                              const MREditSetupSettings &settings, bool preservePendingTaskForSameDocument = false);
 	OverlayState computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges,
-	                                 const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, const std::vector<mr::editor::Range> &diagnosticRanges, std::size_t totalLines,
+	                                 const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines,
 	                                 int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds,
 	                                 const std::vector<MRFileCompareMiniMapSlice> &fileCompareMiniMapSlices) const;
 	void drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, int viewWidth, const Viewport &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const Palette &palette, const OverlayState &overlay) const;

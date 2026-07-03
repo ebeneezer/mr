@@ -188,10 +188,6 @@ struct MRCompilerProfile {
 	std::vector<std::string> runtimePaths;
 	std::string buildSuccessAudioUri;
 	std::string buildFailureAudioUri;
-	std::string lspExecutablePath;
-	std::string lspArguments;
-	std::string lspWorkingDirectory;
-	std::string lspMiddlewarePath;
 
 	auto operator==(const MRCompilerProfile &) const noexcept -> bool = default;
 };
@@ -222,41 +218,6 @@ enum class MRCompilerErrorMessagePlacement : unsigned char {
 	UnderCode = 0,
 	RightMargin = 1
 };
-
-enum class MRLanguageServerSidekickPlacement : unsigned char {
-	AtCode = 0,
-	RightMargin = 1
-};
-
-struct MRLanguageServerChannelSettings {
-	bool diagnostics;
-	bool definition;
-	bool references;
-	bool hover;
-	bool completion;
-	bool documentHighlight;
-	bool documentSymbols;
-	bool workspaceSymbols;
-	bool signatureHelp;
-	bool rename;
-	bool codeActions;
-
-	MRLanguageServerChannelSettings() noexcept
-	    : diagnostics(true), definition(true), references(true), hover(true), completion(true), documentHighlight(true), documentSymbols(true), workspaceSymbols(true), signatureHelp(true), rename(true), codeActions(true) {
-	}
-
-	auto operator==(const MRLanguageServerChannelSettings &) const noexcept -> bool = default;
-};
-
-constexpr int kLanguageServerHoverDwellMsDefault = 1000;
-constexpr int kLanguageServerHoverDwellMsMin = 0;
-constexpr int kLanguageServerHoverDwellMsMax = 5000;
-constexpr int kLanguageServerDocumentSyncDelayMsDefault = 300;
-constexpr int kLanguageServerDocumentSyncDelayMsMin = 0;
-constexpr int kLanguageServerDocumentSyncDelayMsMax = 5000;
-constexpr int kLanguageServerSignatureQuietMsDefault = 5000;
-constexpr int kLanguageServerSignatureQuietMsMin = 0;
-constexpr int kLanguageServerSignatureQuietMsMax = 30000;
 
 enum class MRScrollbarVisibility : unsigned char {
 	Smart = 0,
@@ -348,6 +309,7 @@ struct MRSarDialogOptions {
 struct MRMultiSearchDialogOptions {
 	bool searchSubdirectories;
 	bool caseSensitive;
+	bool wholeWords;
 	bool regularExpressions;
 	bool searchFilesInMemory;
 	bool restrictToWorkspace;
@@ -355,7 +317,7 @@ struct MRMultiSearchDialogOptions {
 	std::string startingPath;
 	std::string searchText;
 
-	MRMultiSearchDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), restrictToWorkspace(false), filespec("*.*"), startingPath(), searchText() {
+	MRMultiSearchDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), wholeWords(false), regularExpressions(true), searchFilesInMemory(true), restrictToWorkspace(false), filespec("*.*"), startingPath(), searchText() {
 	}
 
 	auto operator==(const MRMultiSearchDialogOptions &) const noexcept -> bool = default;
@@ -364,6 +326,7 @@ struct MRMultiSearchDialogOptions {
 struct MRMultiSarDialogOptions {
 	bool searchSubdirectories;
 	bool caseSensitive;
+	bool wholeWords;
 	bool regularExpressions;
 	bool searchFilesInMemory;
 	bool keepFilesOpen;
@@ -373,7 +336,7 @@ struct MRMultiSarDialogOptions {
 	std::string searchText;
 	std::string replacementText;
 
-	MRMultiSarDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), keepFilesOpen(false), restrictToWorkspace(false), filespec("*.*"), startingPath(), searchText(), replacementText() {
+	MRMultiSarDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), wholeWords(false), regularExpressions(true), searchFilesInMemory(true), keepFilesOpen(false), restrictToWorkspace(false), filespec("*.*"), startingPath(), searchText(), replacementText() {
 	}
 
 	auto operator==(const MRMultiSarDialogOptions &) const noexcept -> bool = default;
@@ -626,7 +589,7 @@ bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile
 const std::vector<MRCompilerProfile> &configuredCompilerProfiles();
 bool setConfiguredCompilerProfiles(const std::vector<MRCompilerProfile> &profiles, std::string *errorMessage = nullptr);
 bool applyConfiguredCompilerProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage = nullptr);
-[[nodiscard]] std::vector<MRCompilerProfile> defaultCompilerProfiles();
+[[nodiscard]] std::vector<MRCompilerProfile> detectedCompilerProfiles();
 [[nodiscard]] std::string canonicalCompilerProfileId(const std::string &value);
 [[nodiscard]] std::string canonicalCompilerProfileName(const std::string &value);
 [[nodiscard]] bool compilerProfileIdExists(const std::string &profileId);
@@ -686,18 +649,6 @@ bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *erro
 [[nodiscard]] MRCursorBehaviour configuredCursorBehaviour();
 bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement placement, std::string *errorMessage = nullptr);
 [[nodiscard]] MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement();
-bool setConfiguredLanguageServerSpawnDaemon(bool enabled, std::string *errorMessage = nullptr);
-[[nodiscard]] bool configuredLanguageServerSpawnDaemon();
-bool setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement placement, std::string *errorMessage = nullptr);
-[[nodiscard]] MRLanguageServerSidekickPlacement configuredLanguageServerSidekickPlacement();
-bool setConfiguredLanguageServerHoverDwellMs(int value, std::string *errorMessage = nullptr);
-[[nodiscard]] int configuredLanguageServerHoverDwellMs();
-bool setConfiguredLanguageServerDocumentSyncDelayMs(int value, std::string *errorMessage = nullptr);
-[[nodiscard]] int configuredLanguageServerDocumentSyncDelayMs();
-bool setConfiguredLanguageServerSignatureQuietMs(int value, std::string *errorMessage = nullptr);
-[[nodiscard]] int configuredLanguageServerSignatureQuietMs();
-bool setConfiguredLanguageServerChannelSettings(const MRLanguageServerChannelSettings &settings, std::string *errorMessage = nullptr);
-[[nodiscard]] MRLanguageServerChannelSettings configuredLanguageServerChannelSettings();
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage = nullptr);
 [[nodiscard]] MRScrollbarVisibility configuredScrollbarVisibility();
 bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage = nullptr);

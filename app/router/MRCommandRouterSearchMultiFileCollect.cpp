@@ -114,6 +114,10 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 	std::filesystem::path startingPath = normalizeConfiguredPathInput(options.startingPath);
 	std::vector<std::string> filespecTokens = splitFilespecTokens(options.filespec);
 	std::error_code ec;
+	const auto startedAt = std::chrono::steady_clock::now();
+	std::size_t workspaceWindowsSeen = 0;
+	std::size_t workspaceWindowsAccepted = 0;
+	std::size_t filesystemEntriesSeen = 0;
 
 	if (startingPath.empty()) {
 		startingPath = std::filesystem::current_path(ec);
@@ -122,14 +126,20 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 	startingPath = startingPath.lexically_normal();
 	if (options.restrictToWorkspace) {
 		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+		const std::string normalizedStart = normalizedSearchPath(startingPath);
 		for (MREditWindow *window : windows) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			std::filesystem::path windowPath;
+			std::string normalizedWindowPath;
 
+			++workspaceWindowsSeen;
 			if (editor == nullptr || !editor->hasPersistentFileName()) continue;
 			windowPath = editor->persistentFileName();
 			if (windowPath.empty()) continue;
+			normalizedWindowPath = normalizedSearchPath(windowPath);
+			if (!normalizedStart.empty() && normalizedWindowPath != normalizedStart && (normalizedWindowPath.size() <= normalizedStart.size() || normalizedWindowPath.compare(0, normalizedStart.size(), normalizedStart) != 0 || normalizedWindowPath[normalizedStart.size()] != '/')) continue;
 			if (!filespecMatchesPath(windowPath, startingPath, filespecTokens)) continue;
+			++workspaceWindowsAccepted;
 			appendCandidateUnique(windowPath, true, window, candidates, seen);
 		}
 	} else if (std::filesystem::is_regular_file(startingPath, ec) && !ec) {
@@ -139,6 +149,7 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 			std::filesystem::recursive_directory_iterator it(startingPath, std::filesystem::directory_options::skip_permission_denied, ec);
 			const std::filesystem::recursive_directory_iterator end;
 			for (; !ec && it != end; it.increment(ec)) {
+				++filesystemEntriesSeen;
 				if (!it->is_regular_file(ec) || ec) {
 					ec.clear();
 					continue;
@@ -150,6 +161,7 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 			std::filesystem::directory_iterator it(startingPath, std::filesystem::directory_options::skip_permission_denied, ec);
 			const std::filesystem::directory_iterator end;
 			for (; !ec && it != end; it.increment(ec)) {
+				++filesystemEntriesSeen;
 				if (!it->is_regular_file(ec) || ec) {
 					ec.clear();
 					continue;
@@ -174,6 +186,16 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 	}
 
 	std::sort(candidates.begin(), candidates.end(), [](const MultiFileSearchCandidate &lhs, const MultiFileSearchCandidate &rhs) { return lhs.normalizedPath < rhs.normalizedPath; });
+	{
+		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+		std::ostringstream line;
+
+		line << "MFS candidates took_us=" << tookUs << " count=" << candidates.size() << " restrict_workspace=" << (options.restrictToWorkspace ? 1 : 0) << " filespec=\"" << options.filespec << "\" start=\"" << startingPath.generic_string() << "\"";
+		if (options.restrictToWorkspace) line << " workspace_windows_seen=" << workspaceWindowsSeen << " accepted=" << workspaceWindowsAccepted;
+		else
+			line << " filesystem_entries_seen=" << filesystemEntriesSeen << " recursive=" << (options.searchSubdirectories ? 1 : 0) << " in_memory=" << (options.searchFilesInMemory ? 1 : 0);
+		mrLogMessage(line.str());
+	}
 	return candidates;
 }
 
@@ -195,13 +217,16 @@ std::string normalizedSearchPath(const std::filesystem::path &path) {
 }
 
 MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session, const MRMultiSearchDialogOptions &options, const std::string &pattern, const std::string &replacement, bool replaceMode, bool keepFilesOpen, std::string &errorText) {
+	const auto collectStartedAt = std::chrono::steady_clock::now();
 	std::vector<MultiFileSearchCandidate> candidates = collectMultiFileSearchCandidates(options);
 	pcre2_code *code = nullptr;
 	std::string regexError;
-	const MRSearchTextType textType = options.regularExpressions ? MRSearchTextType::Pcre : MRSearchTextType::Literal;
+	const MRSearchTextType textType = options.wholeWords ? MRSearchTextType::Word : (options.regularExpressions ? MRSearchTextType::Pcre : MRSearchTextType::Literal);
 	const std::string patternExpression = buildSearchPatternExpression(pattern, textType);
 	std::size_t filesSearched = 0;
 	std::size_t totalHits = 0;
+	std::size_t totalBytes = 0;
+	std::size_t slowFiles = 0;
 	bool cancelled = false;
 	auto lastProgressAt = std::chrono::steady_clock::now();
 
@@ -209,6 +234,7 @@ MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session,
 	session.pattern = pattern;
 	session.replacement = replacement;
 	session.caseSensitive = options.caseSensitive;
+	session.wholeWords = options.wholeWords;
 	session.regularExpressions = options.regularExpressions;
 	session.replaceMode = replaceMode;
 	session.keepFilesOpen = keepFilesOpen;
@@ -226,21 +252,43 @@ MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session,
 		std::string text;
 		std::string readError;
 		std::vector<SearchMatchEntry> matches;
+		const auto fileStartedAt = std::chrono::steady_clock::now();
+		long long loadUs = 0;
+		long long matchUs = 0;
 
 		if (shouldCancelLongRunningSearch()) {
 			cancelled = true;
 			break;
 		}
-		if (candidate.window != nullptr && candidate.window->getEditor() != nullptr) text = candidate.window->getEditor()->snapshotText();
-		else if (!readTextFile(candidate.normalizedPath, text, readError)) {
-			if (readError.empty()) readError = "Unable to read file: " + candidate.normalizedPath;
-			errorText = readError;
-			pcre2_code_free(code);
-			return MultiFileCollectOutcome::Error;
+		{
+			const auto loadStartedAt = std::chrono::steady_clock::now();
+			if (candidate.window != nullptr && candidate.window->getEditor() != nullptr) text = candidate.window->getEditor()->snapshotText();
+			else if (!readTextFile(candidate.normalizedPath, text, readError)) {
+				if (readError.empty()) readError = "Unable to read file: " + candidate.normalizedPath;
+				errorText = readError;
+				pcre2_code_free(code);
+				return MultiFileCollectOutcome::Error;
+			}
+			loadUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - loadStartedAt).count();
 		}
 		++filesSearched;
-		static_cast<void>(collectRegexMatches(text, code, matches));
+		totalBytes += text.size();
+		{
+			const auto matchStartedAt = std::chrono::steady_clock::now();
+			static_cast<void>(collectRegexMatches(text, code, matches));
+			matchUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - matchStartedAt).count();
+		}
 		totalHits += matches.size();
+		{
+			const long long fileUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - fileStartedAt).count();
+			if (fileUs >= 20000) {
+				++slowFiles;
+				std::ostringstream line;
+
+				line << "MFS collect file slow took_us=" << fileUs << " load_us=" << loadUs << " match_us=" << matchUs << " bytes=" << text.size() << " hits=" << matches.size() << " in_memory=" << (candidate.inMemory ? 1 : 0) << " path=\"" << candidate.normalizedPath << "\"";
+				mrLogMessage(line.str());
+			}
+		}
 		{
 			const auto now = std::chrono::steady_clock::now();
 			if (now - lastProgressAt >= std::chrono::seconds(5)) {
@@ -260,6 +308,13 @@ MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session,
 	if (code != nullptr) pcre2_code_free(code);
 	postMultiSearchProgress(filesSearched, totalHits);
 	if (cancelled) postSearchCancelledError();
+	{
+		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - collectStartedAt).count();
+		std::ostringstream line;
+
+		line << "MFS collect summary took_us=" << tookUs << " candidates=" << candidates.size() << " files_searched=" << filesSearched << " result_files=" << session.files.size() << " hits=" << totalHits << " bytes=" << totalBytes << " slow_files=" << slowFiles << " cancelled=" << (cancelled ? 1 : 0) << " replace=" << (replaceMode ? 1 : 0) << " whole_words=" << (options.wholeWords ? 1 : 0) << " regex=" << (options.regularExpressions ? 1 : 0) << " case=" << (options.caseSensitive ? 1 : 0) << " pattern_len=" << pattern.size();
+		mrLogMessage(line.str());
+	}
 	if (session.files.empty()) {
 		errorText.clear();
 		return cancelled ? MultiFileCollectOutcome::Cancelled : MultiFileCollectOutcome::NoHits;

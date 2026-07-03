@@ -208,6 +208,7 @@ class MRFileEditor : public TScroller {
 	void refreshConfiguredVisualSettings();
 	void refreshEditorSettingsSnapshot();
 	void moveCursorToDocumentLineTop(std::size_t lineIndex, int visualColumn);
+	void restoreCursorViewState(std::size_t lineIndex, int visualColumn);
 	void setCommunicationViewerMode(bool enabled, bool lineNumbers, MRLiveLogScrollDirection scrollDirection = MRLiveLogScrollDirection::Down);
 	void setCommunicationViewerOptions(bool lineNumbers);
 	void setCommunicationViewerOptions(bool lineNumbers, MRLiveLogScrollDirection scrollDirection);
@@ -303,16 +304,9 @@ class MRFileEditor : public TScroller {
 	void setCompilerDiagnosticRanges(const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges, const std::vector<std::pair<std::size_t, std::size_t>> &warningRanges);
 
 	void clearCompilerDiagnosticRanges();
-
-	void setLspDiagnosticInformationRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
-
-	void clearLspDiagnosticInformationRanges();
-
-	void setLspDocumentHighlightRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
-
-	void clearLspDocumentHighlightRanges();
-
 	void revealCursor(Boolean centerCursor = True);
+
+	void centerDocumentLocationInView(std::size_t lineIndex, int visualColumn);
 
 	void refreshViewState();
 
@@ -463,6 +457,8 @@ class MRFileEditor : public TScroller {
 
 		bool applyCurrentLineLeadingIndent(int targetColumn);
 
+		std::string activeLatexRawTextEnvironmentBeforeLine(std::size_t lineStart) const;
+
 		void applyLiveSmartDedentAfterTextInput(const std::string &insertedText);
 
 		void effectiveFormatMargins(const MREditSetupSettings &settings, int &leftMargin, int &rightMargin) const noexcept;
@@ -571,9 +567,6 @@ class MRFileEditor : public TScroller {
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept;
 
 	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
-	bool lspDiagnosticInformationContainsOffset(std::size_t offset) const noexcept;
-	bool lspDocumentHighlightContainsOffset(std::size_t offset) const noexcept;
-
 	unsigned char fileCompareLineKindAt(std::size_t lineIndex) const noexcept;
 
 	MRMiniMapRenderer::Palette resolveMiniMapPalette();
@@ -790,10 +783,7 @@ class MRFileEditor : public TScroller {
 	std::vector<MRTextBufferModel::Range> mFindMarkerRanges;
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
 	std::vector<MRTextBufferModel::Range> mCompilerErrorRanges;
-	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;
-	std::vector<MRTextBufferModel::Range> mLspDiagnosticInformationRanges;
-	std::vector<MRTextBufferModel::Range> mLspDocumentHighlightRanges;
-	LoadTiming mLastLoadTiming;
+	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;	LoadTiming mLastLoadTiming;
 	mutable std::size_t mCachedCursorLineDocumentId;
 	mutable std::size_t mCachedCursorLineVersion;
 	mutable std::size_t mCachedCursorLineOffset;
@@ -815,9 +805,6 @@ class MRFileEditor : public TScroller {
 	void pushMappedDirtyRange(std::vector<MRTextBufferModel::Range> &mapped, std::size_t start, std::size_t end, std::size_t maxLength);
 
 	void remapDirtyRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
-
-	void remapLspDiagnosticInformationRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
-
 	void addDirtyRange(MRTextBufferModel::Range range);
 
 	bool isDirtyOffset(std::size_t pos) const noexcept;

@@ -25,6 +25,7 @@ struct MultiFileSearchSession {
 	bool valid = false;
 	bool replaceMode = false;
 	bool caseSensitive = false;
+	bool wholeWords = false;
 	bool regularExpressions = true;
 	bool keepFilesOpen = false;
 	std::string pattern;
@@ -65,8 +66,8 @@ MultiFileSearchFileResult *currentSessionFile(MultiFileSearchSession &session);
 SearchMatchEntry *currentSessionMatch(MultiFileSearchSession &session);
 std::size_t sessionTotalMatchCount(const MultiFileSearchSession &session);
 std::size_t sessionCurrentMatchOrdinal(const MultiFileSearchSession &session);
-MREditWindow *preferredSessionRestoreWindow(MultiFileSearchSession &session, MREditWindow *fallback);
 bool activateSessionCurrentMatch(MultiFileSearchSession &session);
+bool previewSessionCurrentMatch(MultiFileSearchSession &session);
 bool loadAllSessionFiles(MultiFileSearchSession &session, std::string &errorText);
 bool moveSessionMatch(MultiFileSearchSession &session, int direction, bool wrap);
 void closeTemporaryWindowsForSession(MultiFileSearchSession &session);

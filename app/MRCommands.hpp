@@ -108,7 +108,6 @@ enum : ushort {
 	cmMrSetupEditSettings,
 	cmMrSetupColorSetup,
 	cmMrSetupKeyMapping,
-	cmMrSetupLspSupport,
 	cmMrSetupFilenameExtensions,
 	cmMrSetupCompilerProfiles,
 	cmMrSetupPaths,
@@ -145,21 +144,12 @@ enum : ushort {
 	cmMrFileCompareApplyCompareToOriginal,
 	cmMrFileCompareNextChange,
 	cmMrFileComparePreviousChange,
-	cmMrOtherLspDefinition,
-	cmMrOtherLspReferences,
-	cmMrOtherLspHover,
-	cmMrOtherLspComplete,
-	cmMrOtherLspDocumentSymbols,
-	cmMrOtherLspWorkspaceSymbols,
-	cmMrOtherLspSignatureHelp,
-	cmMrOtherLspRename,
-	cmMrOtherLspStatus,
-	cmMrOtherLspResults,
-	cmMrOtherLspCodeActions,
-	cmMrOtherLspDocumentHighlight,
+	cmMrOtherReferences,
+	cmMrOtherRename,
 	cmMrFileGetLast,
 	cmMrTextToggleLineDrawing,
-	cmMrTextToggleDoubleLines
+	cmMrTextToggleDoubleLines,
+	cmMrOtherLocalOutline
 };
 
 #endif

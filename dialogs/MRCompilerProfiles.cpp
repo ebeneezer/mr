@@ -18,7 +18,6 @@
 #include <tvision/tv.h>
 
 #include "MRCompilerProfiles.hpp"
-#include "../app/services/MRLspServerProfile.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
@@ -35,7 +34,6 @@
 #include <limits.h>
 #include <sstream>
 #include <string>
-#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -53,15 +51,6 @@ enum : ushort {
 	cmCompilerProfilesChooseFailureAudio,
 	cmCompilerProfilesBrowseFailureAudio,
 	cmCompilerProfilesAcceptFailureAudio,
-	cmCompilerProfilesChooseLspExecutable,
-	cmCompilerProfilesBrowseLspExecutable,
-	cmCompilerProfilesAcceptLspExecutable,
-	cmCompilerProfilesChooseLspWorkingDirectory,
-	cmCompilerProfilesBrowseLspWorkingDirectory,
-	cmCompilerProfilesAcceptLspWorkingDirectory,
-	cmCompilerProfilesChooseLspMiddleware,
-	cmCompilerProfilesBrowseLspMiddleware,
-	cmCompilerProfilesAcceptLspMiddleware,
 	cmCompilerProfilesAutomaticSetup,
 	cmCompilerProfilesSelectionChanged
 };
@@ -78,11 +67,7 @@ enum {
 	kFlagsSize = 256,
 	kBuildCommandSize = 256,
 	kPathListSize = 256,
-	kAudioUriSize = 256,
-	kLspExecutableSize = 256,
-	kLspArgumentsSize = 256,
-	kLspWorkingDirectorySize = 256,
-	kLspMiddlewareSize = 256
+	kAudioUriSize = 256
 };
 
 TFrame *initMrDialogFrame(TRect bounds) {
@@ -262,114 +247,6 @@ bool saveCompilerProfiles(const std::vector<MRCompilerProfile> &profiles, std::s
 	return true;
 }
 
-std::string lspCandidateArgumentText(const mr::services::MRLspServerCandidate &candidate) {
-	std::ostringstream text;
-
-	for (std::size_t i = 0; i < candidate.arguments.size(); ++i) {
-		if (i != 0) text << " ";
-		text << candidate.arguments[i];
-	}
-	return text.str();
-}
-
-std::string lspCandidateLabel(const mr::services::MRLspServerCandidate &candidate) {
-	const std::string arguments = lspCandidateArgumentText(candidate);
-	std::string label = candidate.executableName;
-
-	if (!arguments.empty()) label += " " + arguments;
-	if (!candidate.profileName.empty()) label += "  [" + candidate.profileName + "]";
-	return label;
-}
-
-std::string readCurrentWorkingDirectory() {
-	char cwd[PATH_MAX];
-
-	if (::getcwd(cwd, sizeof(cwd)) == nullptr) return std::string();
-	return std::string(cwd);
-}
-
-MRSyntaxLanguage inferLspLanguageFromCompilerProfile(const MRCompilerProfile &profile) {
-	struct LanguageToken {
-		const char *token;
-		MRSyntaxLanguage language;
-	};
-	static const LanguageToken tokens[] = {
-		{ "LATEXMK", MRSyntaxLanguage::Latex },
-		{ "LATEX", MRSyntaxLanguage::Latex },
-		{ "TEX", MRSyntaxLanguage::Latex },
-		{ "SWIFT", MRSyntaxLanguage::Swift },
-		{ "CLANG", MRSyntaxLanguage::Cpp },
-		{ "GCC", MRSyntaxLanguage::Cpp },
-		{ "G++", MRSyntaxLanguage::Cpp },
-		{ "CPP", MRSyntaxLanguage::Cpp },
-		{ "C++", MRSyntaxLanguage::Cpp },
-		{ "PYTHON", MRSyntaxLanguage::Python },
-		{ "JAVASCRIPT", MRSyntaxLanguage::JavaScript },
-		{ "TYPESCRIPT", MRSyntaxLanguage::JavaScript },
-		{ "JSON", MRSyntaxLanguage::Json },
-		{ "YAML", MRSyntaxLanguage::Yaml },
-		{ "XML", MRSyntaxLanguage::Xml },
-		{ "BASH", MRSyntaxLanguage::Bash },
-		{ "ZSH", MRSyntaxLanguage::Zsh },
-		{ "FISH", MRSyntaxLanguage::Fish },
-		{ "PERL", MRSyntaxLanguage::Perl },
-		{ "RUST", MRSyntaxLanguage::Rust },
-		{ "GO", MRSyntaxLanguage::Go },
-		{ "KOTLIN", MRSyntaxLanguage::Kotlin },
-		{ "CSHARP", MRSyntaxLanguage::CSharp },
-		{ "C#", MRSyntaxLanguage::CSharp },
-		{ "PASCAL", MRSyntaxLanguage::Pascal },
-		{ "SYSTEMD", MRSyntaxLanguage::Systemd },
-		{ "MAKE", MRSyntaxLanguage::Make },
-		{ "MARKDOWN", MRSyntaxLanguage::Markdown }
-	};
-	const std::string text = upperAscii(profile.toolchain + " " + profile.id + " " + profile.name);
-
-	for (const LanguageToken &token : tokens)
-		if (text.find(token.token) != std::string::npos) return token.language;
-	return MRSyntaxLanguage::PlainText;
-}
-
-class LspCandidateSelectionDialog : public MRDialogFoundation {
-  public:
-	explicit LspCandidateSelectionDialog(const std::vector<mr::services::MRLspServerCandidate> &availableCandidates)
-	    : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(84, 13), "SELECT LSP SERVER", 84, 13, initMrDialogFrame), candidates(availableCandidates) {
-		TPlainStringCollection *items = new TPlainStringCollection(std::max<short>(1, static_cast<short>(candidates.size())), 5);
-		TListBoxRec data;
-
-		insert(new TStaticText(TRect(3, 2, 79, 3), "Available language servers:"));
-		scrollBar = new TScrollBar(TRect(79, 3, 80, 9));
-		insert(scrollBar);
-		list = new TListBox(TRect(3, 3, 79, 9), 1, scrollBar);
-		insert(list);
-		insert(new TButton(TRect(36, 10, 48, 12), "~S~elect", cmOK, bfDefault));
-		if (items != nullptr && list != nullptr) {
-			for (const mr::services::MRLspServerCandidate &candidate : candidates)
-				items->insert(dupCString(lspCandidateLabel(candidate)));
-			data.items = items;
-			data.selection = 0;
-			list->setData(&data);
-		}
-		finalizeLayout();
-		if (list != nullptr) list->select();
-	}
-
-	int run() {
-		TListBoxRec data;
-		const ushort result = TProgram::deskTop != nullptr ? TProgram::deskTop->execView(this) : cmCancel;
-
-		if (result != cmOK || list == nullptr || candidates.empty()) return -1;
-		list->getData(&data);
-		if (data.selection >= candidates.size()) return -1;
-		return static_cast<int>(data.selection);
-	}
-
-  private:
-	std::vector<mr::services::MRLspServerCandidate> candidates;
-	TListBox *list = nullptr;
-	TScrollBar *scrollBar = nullptr;
-};
-
 class CompilerProfilesDialog : public MRDialogFoundation {
   public:
 	explicit CompilerProfilesDialog(const std::vector<MRCompilerProfile> &initialProfiles)
@@ -437,27 +314,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		librariesField = addField(TRect(fieldLeft, 15, wideFieldRight, 16), kPathListSize - 1);
 		insert(new TStaticText(TRect(labelLeft, 16, fieldLeft - 1, 17), "Runtime:"));
 		runtimeField = addField(TRect(fieldLeft, 16, wideFieldRight, 17), kPathListSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 17, fieldLeft - 1, 18), "LSP exec:"));
-		lspExecutableField = addField(TRect(fieldLeft, 17, fieldWithButtonsRight, 18), kLspExecutableSize - 1);
-		lspExecutableHistoryButton = lspExecutableDropList.createButton(*this, TRect(historyLeft, 17, browseLeft, 18), lspExecutableField, this, cmCompilerProfilesChooseLspExecutable, true);
-		lspExecutableBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 17, right, 18), "🔎", cmCompilerProfilesBrowseLspExecutable);
-		insert(lspExecutableBrowseButton);
-		lspExecutableListAnchor = TRect(fieldLeft, 18, right, 19);
-		insert(new TStaticText(TRect(labelLeft, 18, fieldLeft - 1, 19), "LSP args:"));
-		lspArgumentsField = addField(TRect(fieldLeft, 18, wideFieldRight, 19), kLspArgumentsSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 19, fieldLeft - 1, 20), "LSP cwd:"));
-		lspWorkingDirectoryField = addField(TRect(fieldLeft, 19, fieldWithButtonsRight, 20), kLspWorkingDirectorySize - 1);
-		lspWorkingDirectoryHistoryButton = lspWorkingDirectoryDropList.createButton(*this, TRect(historyLeft, 19, browseLeft, 20), lspWorkingDirectoryField, this, cmCompilerProfilesChooseLspWorkingDirectory, true);
-		lspWorkingDirectoryBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 19, right, 20), "🔎", cmCompilerProfilesBrowseLspWorkingDirectory);
-		insert(lspWorkingDirectoryBrowseButton);
-		lspWorkingDirectoryListAnchor = TRect(fieldLeft, 20, right, 21);
-		insert(new TStaticText(TRect(labelLeft, 20, fieldLeft - 1, 21), "LSP middleware:"));
-		lspMiddlewareField = addField(TRect(fieldLeft, 20, fieldWithButtonsRight, 21), kLspMiddlewareSize - 1);
-		lspMiddlewareHistoryButton = lspMiddlewareDropList.createButton(*this, TRect(historyLeft, 20, browseLeft, 21), lspMiddlewareField, this, cmCompilerProfilesChooseLspMiddleware, true);
-		lspMiddlewareBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 20, right, 21), "🔎", cmCompilerProfilesBrowseLspMiddleware);
-		insert(lspMiddlewareBrowseButton);
-		lspMiddlewareListAnchor = TRect(fieldLeft, 21, right, 22);
-
 		insert(new TButton(TRect(left, buttonTop, left + 10, buttonTop + 2), "~A~dd", cmCompilerProfilesAdd, bfNormal));
 		insert(new TButton(TRect(left + 12, buttonTop, left + 22, buttonTop + 2), "~C~opy", cmCompilerProfilesCopy, bfNormal));
 		insert(new TButton(TRect(left + 24, buttonTop, scrollRight, buttonTop + 2), "De~l~ete", cmCompilerProfilesDelete, bfNormal));
@@ -484,9 +340,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		ushort originalBroadcast = event.what == evBroadcast ? event.message.command : 0;
 
 		if (executableDropList.handleOpenListEvent(event)) return;
-		if (lspExecutableDropList.handleOpenListEvent(event)) return;
-		if (lspWorkingDirectoryDropList.handleOpenListEvent(event)) return;
-		if (lspMiddlewareDropList.handleOpenListEvent(event)) return;
 		if (successAudioDropList.handleOpenListEvent(event)) return;
 		if (failureAudioDropList.handleOpenListEvent(event)) return;
 		if (originalWhat == evCommand && originalCommand == cmOK) {
@@ -526,42 +379,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 					return;
 				case cmCompilerProfilesAcceptExecutable:
 					acceptExecutableSelection();
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesChooseLspExecutable:
-					lspExecutableDropList.toggle(*this, lspExecutableListAnchor, lspExecutableChoices(), readInput(lspExecutableField, kLspExecutableSize), this, cmCompilerProfilesAcceptLspExecutable, 8);
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesBrowseLspExecutable:
-					browseLspExecutable();
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesAcceptLspExecutable:
-					acceptLspExecutableSelection();
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesChooseLspWorkingDirectory:
-					lspWorkingDirectoryDropList.toggle(*this, lspWorkingDirectoryListAnchor, lspWorkingDirectoryChoices(), readInput(lspWorkingDirectoryField, kLspWorkingDirectorySize), this, cmCompilerProfilesAcceptLspWorkingDirectory, 8);
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesBrowseLspWorkingDirectory:
-					browseLspWorkingDirectory();
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesAcceptLspWorkingDirectory:
-					acceptLspWorkingDirectorySelection();
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesChooseLspMiddleware:
-					lspMiddlewareDropList.toggle(*this, lspMiddlewareListAnchor, lspMiddlewareChoices(), readInput(lspMiddlewareField, kLspMiddlewareSize), this, cmCompilerProfilesAcceptLspMiddleware, 8);
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesBrowseLspMiddleware:
-					browseLspMiddleware();
-					clearEvent(event);
-					return;
-				case cmCompilerProfilesAcceptLspMiddleware:
-					acceptLspMiddlewareSelection();
 					clearEvent(event);
 					return;
 				case cmCompilerProfilesChooseSuccessAudio:
@@ -612,7 +429,7 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 			const std::string path = normalizeConfiguredPathInput(profile.executablePath);
 			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
 		}
-		for (const std::string &pathValue : defaultCompilerExecutablePaths()) {
+		for (const std::string &pathValue : detectedCompilerExecutablePaths()) {
 			const std::string path = normalizeConfiguredPathInput(pathValue);
 			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
 		}
@@ -633,82 +450,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		std::sort(choices.begin(), choices.end());
 		return choices;
 	}
-
-	std::vector<std::string> lspExecutableChoices() const {
-		std::vector<std::string> choices;
-		MRSyntaxLanguage language = MRSyntaxLanguage::PlainText;
-
-		for (const MRCompilerProfile &profile : profiles) {
-			const std::string path = normalizeConfiguredPathInput(profile.lspExecutablePath);
-
-			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
-		}
-		if (lspExecutableField != nullptr) {
-			const std::string path = normalizeConfiguredPathInput(readInput(lspExecutableField, kLspExecutableSize));
-
-			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
-		}
-		if (currentIndex >= 0 && currentIndex < static_cast<int>(profiles.size())) language = inferLspLanguageFromCompilerProfile(profiles[currentIndex]);
-		if (language != MRSyntaxLanguage::PlainText) {
-			for (const mr::services::MRLspServerCandidate &candidate : mr::services::availableLspServerCandidatesForLanguage(language)) {
-				mr::services::MRLspServerProfile profile;
-
-				if (!mr::services::resolveLspServerCandidate(candidate, profile)) continue;
-				if (!profile.executablePath.empty() && std::find(choices.begin(), choices.end(), profile.executablePath) == choices.end()) choices.push_back(profile.executablePath);
-			}
-		}
-		std::sort(choices.begin(), choices.end());
-		return choices;
-	}
-
-	std::vector<std::string> lspWorkingDirectoryChoices() const {
-		std::vector<std::string> choices;
-		std::vector<std::string> pathHistory;
-
-		for (const MRCompilerProfile &profile : profiles) {
-			const std::string path = normalizeConfiguredPathInput(profile.lspWorkingDirectory);
-
-			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
-		}
-		if (lspWorkingDirectoryField != nullptr) {
-			const std::string path = normalizeConfiguredPathInput(readInput(lspWorkingDirectoryField, kLspWorkingDirectorySize));
-
-			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
-		}
-		configuredScopedDialogPathHistoryEntries(MRDialogHistoryScope::General, pathHistory);
-		for (const std::string &pathValue : pathHistory) {
-			const std::string path = normalizeConfiguredPathInput(pathValue);
-
-			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
-		}
-		std::sort(choices.begin(), choices.end());
-		return choices;
-	}
-
-	std::vector<std::string> lspMiddlewareChoices() const {
-		std::vector<std::string> choices;
-		std::vector<std::string> fileHistory;
-
-		for (const MRCompilerProfile &profile : profiles) {
-			const std::string path = normalizeConfiguredPathInput(profile.lspMiddlewarePath);
-
-			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
-		}
-		if (lspMiddlewareField != nullptr) {
-			const std::string path = normalizeConfiguredPathInput(readInput(lspMiddlewareField, kLspMiddlewareSize));
-
-			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
-		}
-		configuredScopedDialogFileHistoryEntries(MRDialogHistoryScope::General, fileHistory);
-		for (const std::string &pathValue : fileHistory) {
-			const std::string path = normalizeConfiguredPathInput(pathValue);
-
-			if (!path.empty() && std::find(choices.begin(), choices.end(), path) == choices.end()) choices.push_back(path);
-		}
-		std::sort(choices.begin(), choices.end());
-		return choices;
-	}
-
 	void acceptExecutableSelection() {
 		std::string selectedValue;
 
@@ -716,31 +457,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		writeInput(executableField, selectedValue, kExecutableSize);
 		saveCurrentProfile();
 	}
-
-	void acceptLspExecutableSelection() {
-		std::string selectedValue;
-
-		if (!lspExecutableDropList.acceptSelection(selectedValue)) return;
-		writeInput(lspExecutableField, selectedValue, kLspExecutableSize);
-		saveCurrentProfile();
-	}
-
-	void acceptLspWorkingDirectorySelection() {
-		std::string selectedValue;
-
-		if (!lspWorkingDirectoryDropList.acceptSelection(selectedValue)) return;
-		writeInput(lspWorkingDirectoryField, selectedValue, kLspWorkingDirectorySize);
-		saveCurrentProfile();
-	}
-
-	void acceptLspMiddlewareSelection() {
-		std::string selectedValue;
-
-		if (!lspMiddlewareDropList.acceptSelection(selectedValue)) return;
-		writeInput(lspMiddlewareField, selectedValue, kLspMiddlewareSize);
-		saveCurrentProfile();
-	}
-
 	void acceptAudioUriSelection(MRDropList &dropList, TInputLine *field) {
 		std::string selectedValue;
 
@@ -770,73 +486,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		writeInput(executableField, normalizeConfiguredPathInput(fileName), kExecutableSize);
 		saveCurrentProfile();
 	}
-
-	void browseLspExecutable() {
-		char fileName[MAXPATH] = {0};
-		const std::string currentPath = normalizeConfiguredPathInput(readInput(lspExecutableField, kLspExecutableSize));
-		ushort result = cmCancel;
-
-		if (!currentPath.empty()) {
-			const std::size_t slashPos = currentPath.find_last_of('/');
-
-			if (slashPos != std::string::npos) {
-				std::string seed = currentPath.substr(0, slashPos + 1);
-				seed += "*.*";
-				mr::dialogs::writeRecordField(fileName, sizeof(fileName), seed);
-			} else
-				mr::dialogs::writeRecordField(fileName, sizeof(fileName), currentPath);
-		} else
-			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::General, fileName, sizeof(fileName), "*.*");
-		result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::General, "*.*", "SELECT LSP EXECUTABLE", "~N~ame", fdOpenButton, fileName);
-		if (result == cmCancel) return;
-		writeInput(lspExecutableField, normalizeConfiguredPathInput(fileName), kLspExecutableSize);
-		saveCurrentProfile();
-	}
-
-	void browseLspWorkingDirectory() {
-		const std::string originalCwd = readCurrentWorkingDirectory();
-		const std::string currentPath = normalizeConfiguredPathInput(readInput(lspWorkingDirectoryField, kLspWorkingDirectorySize));
-		std::string picked;
-		ushort result = cmCancel;
-
-		if (!currentPath.empty()) (void)::chdir(currentPath.c_str());
-		else {
-			const std::string seed = configuredLastFileDialogPath(MRDialogHistoryScope::General);
-
-			if (!seed.empty()) (void)::chdir(seed.c_str());
-		}
-		result = mr::dialogs::execDialog(mr::dialogs::createDirectoryDialog(MRDialogHistoryScope::General, cdNormal));
-		picked = readCurrentWorkingDirectory();
-		if (!originalCwd.empty()) (void)::chdir(originalCwd.c_str());
-		if (result == cmCancel || picked.empty()) return;
-		picked = normalizeConfiguredPathInput(picked);
-		writeInput(lspWorkingDirectoryField, picked, kLspWorkingDirectorySize);
-		rememberLoadDialogPath(MRDialogHistoryScope::General, picked.c_str());
-		saveCurrentProfile();
-	}
-
-	void browseLspMiddleware() {
-		char fileName[MAXPATH] = {0};
-		const std::string currentPath = normalizeConfiguredPathInput(readInput(lspMiddlewareField, kLspMiddlewareSize));
-		ushort result = cmCancel;
-
-		if (!currentPath.empty()) {
-			const std::size_t slashPos = currentPath.find_last_of('/');
-
-			if (slashPos != std::string::npos) {
-				std::string seed = currentPath.substr(0, slashPos + 1);
-				seed += "*.*";
-				mr::dialogs::writeRecordField(fileName, sizeof(fileName), seed);
-			} else
-				mr::dialogs::writeRecordField(fileName, sizeof(fileName), currentPath);
-		} else
-			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::General, fileName, sizeof(fileName), "*.*");
-		result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::General, "*.*", "SELECT LSP MIDDLEWARE", "~N~ame", fdOpenButton, fileName);
-		if (result == cmCancel) return;
-		writeInput(lspMiddlewareField, normalizeConfiguredPathInput(fileName), kLspMiddlewareSize);
-		saveCurrentProfile();
-	}
-
 	void browseAudioUri(TInputLine *field) {
 		char fileName[MAXPATH] = {0};
 		const std::string currentPath = normalizeConfiguredPathInput(readInput(field, kAudioUriSize));
@@ -898,10 +547,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		writeInput(includesField, normalizeCompilerProfilePathList(profile.includePaths), kPathListSize);
 		writeInput(librariesField, normalizeCompilerProfilePathList(profile.libraryPaths), kPathListSize);
 		writeInput(runtimeField, normalizeCompilerProfilePathList(profile.runtimePaths), kPathListSize);
-		writeInput(lspExecutableField, profile.lspExecutablePath, kLspExecutableSize);
-		writeInput(lspArgumentsField, profile.lspArguments, kLspArgumentsSize);
-		writeInput(lspWorkingDirectoryField, profile.lspWorkingDirectory, kLspWorkingDirectorySize);
-		writeInput(lspMiddlewareField, profile.lspMiddlewarePath, kLspMiddlewareSize);
 		writeInput(successAudioField, profile.buildSuccessAudioUri, kAudioUriSize);
 		writeInput(failureAudioField, profile.buildFailureAudioUri, kAudioUriSize);
 	}
@@ -923,10 +568,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		profile.includePaths = splitCompilerProfilePathList(readInput(includesField, kPathListSize));
 		profile.libraryPaths = splitCompilerProfilePathList(readInput(librariesField, kPathListSize));
 		profile.runtimePaths = splitCompilerProfilePathList(readInput(runtimeField, kPathListSize));
-		profile.lspExecutablePath = readInput(lspExecutableField, kLspExecutableSize);
-		profile.lspArguments = readInput(lspArgumentsField, kLspArgumentsSize);
-		profile.lspWorkingDirectory = readInput(lspWorkingDirectoryField, kLspWorkingDirectorySize);
-		profile.lspMiddlewarePath = readInput(lspMiddlewareField, kLspMiddlewareSize);
 		profile.buildSuccessAudioUri = readInput(successAudioField, kAudioUriSize);
 		profile.buildFailureAudioUri = readInput(failureAudioField, kAudioUriSize);
 	}
@@ -934,9 +575,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	void changeSelection(int index) {
 		if (index == currentIndex || index < 0 || index >= static_cast<int>(profiles.size())) return;
 		executableDropList.hide();
-		lspExecutableDropList.hide();
-		lspWorkingDirectoryDropList.hide();
-		lspMiddlewareDropList.hide();
 		successAudioDropList.hide();
 		failureAudioDropList.hide();
 		saveCurrentProfile();
@@ -983,54 +621,62 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 
 	void automaticSetup() {
 		std::string errorText;
-		MRSyntaxLanguage language = MRSyntaxLanguage::PlainText;
-		std::vector<mr::services::MRLspServerCandidate> availableCandidates;
-		int selectedCandidate = -1;
 
-		if (currentIndex < 0 || currentIndex >= static_cast<int>(profiles.size())) return;
+		if (currentIndex < 0 || currentIndex >= static_cast<int>(profiles.size())) {
+			insertDetectedCompilerProfiles();
+			return;
+		}
 		saveCurrentProfile();
+		if (trimAscii(profiles[currentIndex].executablePath).empty()) {
+			insertDetectedCompilerProfiles();
+			return;
+		}
 		if (!autoConfigureCompilerProfileFromExecutable(profiles[currentIndex], &errorText)) {
 			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 			loadCurrentProfile();
 			return;
 		}
-		language = inferLspLanguageFromCompilerProfile(profiles[currentIndex]);
-		if (language != MRSyntaxLanguage::PlainText) {
-			availableCandidates = mr::services::availableLspServerCandidatesForLanguage(language);
-			if (availableCandidates.size() == 1) {
-				mr::services::MRLspServerProfile lspProfile;
-
-				if (mr::services::resolveLspServerCandidate(availableCandidates[0], lspProfile)) {
-					profiles[currentIndex].lspExecutablePath = lspProfile.executablePath;
-					profiles[currentIndex].lspArguments = mr::services::lspServerProfileArgumentText(lspProfile);
-					profiles[currentIndex].lspWorkingDirectory = lspProfile.workingDirectory;
-					profiles[currentIndex].lspMiddlewarePath = lspProfile.lspMiddlewarePath;
-				}
-			} else if (availableCandidates.size() > 1) {
-				LspCandidateSelectionDialog *dialog = new LspCandidateSelectionDialog(availableCandidates);
-
-				if (dialog != nullptr) {
-					selectedCandidate = dialog->run();
-					TObject::destroy(dialog);
-				}
-				if (selectedCandidate >= 0 && selectedCandidate < static_cast<int>(availableCandidates.size())) {
-					mr::services::MRLspServerProfile lspProfile;
-
-					if (mr::services::resolveLspServerCandidate(availableCandidates[static_cast<std::size_t>(selectedCandidate)], lspProfile)) {
-						profiles[currentIndex].lspExecutablePath = lspProfile.executablePath;
-						profiles[currentIndex].lspArguments = mr::services::lspServerProfileArgumentText(lspProfile);
-						profiles[currentIndex].lspWorkingDirectory = lspProfile.workingDirectory;
-						profiles[currentIndex].lspMiddlewarePath = lspProfile.lspMiddlewarePath;
-					}
-				}
-			} else {
-				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string("No LSP server found in PATH for ") + tmrSyntaxLanguageName(language) + ".", mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
-			}
-		} else {
-			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Unable to infer LSP language for this compiler profile.", mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
-		}
 		loadCurrentProfile();
 		refreshList();
+	}
+
+	void insertDetectedCompilerProfiles() {
+		const std::vector<MRCompilerProfile> detectedProfiles = detectedCompilerProfiles();
+		int firstDetectedIndex = -1;
+		int firstAddedIndex = -1;
+
+		for (const MRCompilerProfile &detectedProfile : detectedProfiles) {
+			const std::string detectedId = canonicalCompilerProfileId(detectedProfile.id);
+			int existingIndex = -1;
+
+			for (std::size_t i = 0; i < profiles.size(); ++i) {
+				if (canonicalCompilerProfileId(profiles[i].id) == detectedId) {
+					existingIndex = static_cast<int>(i);
+					break;
+				}
+			}
+			if (existingIndex >= 0) {
+				if (firstDetectedIndex < 0) firstDetectedIndex = existingIndex;
+				continue;
+			}
+			profiles.push_back(detectedProfile);
+			if (firstAddedIndex < 0) firstAddedIndex = static_cast<int>(profiles.size()) - 1;
+		}
+		if (firstAddedIndex >= 0) {
+			currentIndex = firstAddedIndex;
+			refreshList();
+			loadCurrentProfile();
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Detected compiler profiles inserted.", mr::messageline::Kind::Success, mr::messageline::kPriorityMedium);
+			return;
+		}
+		if (firstDetectedIndex >= 0) {
+			currentIndex = firstDetectedIndex;
+			refreshList();
+			loadCurrentProfile();
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Detected compiler profile selected.", mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+			return;
+		}
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "No compiler executables detected.", mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 	}
 
 	bool saveProfiles() {
@@ -1048,15 +694,9 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	TCompilerProfileListBox *list = nullptr;
 	TScrollBar *scrollBar = nullptr;
 	MRDropList executableDropList;
-	MRDropList lspExecutableDropList;
-	MRDropList lspWorkingDirectoryDropList;
-	MRDropList lspMiddlewareDropList;
 	MRDropList successAudioDropList;
 	MRDropList failureAudioDropList;
 	TRect executableListAnchor;
-	TRect lspExecutableListAnchor;
-	TRect lspWorkingDirectoryListAnchor;
-	TRect lspMiddlewareListAnchor;
 	TRect successAudioListAnchor;
 	TRect failureAudioListAnchor;
 	TInputLine *idField = nullptr;
@@ -1074,16 +714,6 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	TInputLine *includesField = nullptr;
 	TInputLine *librariesField = nullptr;
 	TInputLine *runtimeField = nullptr;
-	TInputLine *lspExecutableField = nullptr;
-	TView *lspExecutableHistoryButton = nullptr;
-	TInlineGlyphButton *lspExecutableBrowseButton = nullptr;
-	TInputLine *lspArgumentsField = nullptr;
-	TInputLine *lspWorkingDirectoryField = nullptr;
-	TView *lspWorkingDirectoryHistoryButton = nullptr;
-	TInlineGlyphButton *lspWorkingDirectoryBrowseButton = nullptr;
-	TInputLine *lspMiddlewareField = nullptr;
-	TView *lspMiddlewareHistoryButton = nullptr;
-	TInlineGlyphButton *lspMiddlewareBrowseButton = nullptr;
 	TInputLine *successAudioField = nullptr;
 	TInputLine *failureAudioField = nullptr;
 	TView *successAudioHistoryButton = nullptr;

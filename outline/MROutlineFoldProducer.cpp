@@ -752,6 +752,7 @@ std::string outlineSectionDisplayName(MRSyntaxLanguage language, std::string_vie
 		if (!heading.empty()) return std::string(heading);
 	}
 	if (language == MRSyntaxLanguage::Latex) {
+		if (trimmed == "\\appendix") return "Appendix";
 		name = outlineLatexSectionTitle(trimmed);
 		if (!name.empty()) return name;
 	}

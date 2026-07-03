@@ -1355,7 +1355,7 @@ bool effectiveCompilerProfileForPath(const std::string &path, MRCompilerProfile 
 			out = profile;
 			return true;
 		}
-	for (const MRCompilerProfile &profile : defaultCompilerProfiles())
+	for (const MRCompilerProfile &profile : detectedCompilerProfiles())
 		if (profile.id == compilerProfileId) {
 			out = profile;
 			return true;

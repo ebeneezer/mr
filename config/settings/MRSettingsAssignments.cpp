@@ -128,24 +128,6 @@ bool setError(std::string *errorMessage, const std::string &message) {
 	return false;
 }
 
-bool parseMillisecondsLiteral(const std::string &value, int minValue, int maxValue, int &outValue, std::string *errorMessage) {
-	std::string trimmed = trimAscii(value);
-	int parsed = 0;
-
-	if (trimmed.empty()) return setError(errorMessage, "Milliseconds value must not be empty.");
-	for (char ch : trimmed) {
-		if (std::isdigit(static_cast<unsigned char>(ch)) == 0) return setError(errorMessage, "Milliseconds value must be a non-negative integer.");
-		if (parsed > maxValue / 10) return setError(errorMessage, "Milliseconds value is above the supported range.");
-		parsed = parsed * 10 + (ch - '0');
-		if (parsed > maxValue) return setError(errorMessage, "Milliseconds value is above the supported range.");
-	}
-	if (parsed < minValue || parsed > maxValue)
-		return setError(errorMessage, "Milliseconds value must be between " + std::to_string(minValue) + " and " + std::to_string(maxValue) + ".");
-	outValue = parsed;
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
 void trimSnapshotHistoryToLimit(std::vector<std::string> &entries, int limit) {
 	if (limit < 0) limit = 0;
 	if (entries.size() > static_cast<std::size_t>(limit)) entries.resize(static_cast<std::size_t>(limit));
@@ -187,8 +169,6 @@ static const char *const kLogHandlingPersist = "PERSIST";
 static const char *const kLogHandlingJournalctl = "JOURNALCTL";
 static const char *const kCursorBehaviourBoundToText = "BOUND_TO_TEXT";
 static const char *const kCursorBehaviourFreeMovement = "FREE_MOVEMENT";
-static const char *const kLanguageServerSidekickAtCode = "AT_CODE";
-static const char *const kLanguageServerSidekickRightMargin = "RIGHT_MARGIN";
 static const char *const kFileCompareStartOriginalCompare = "ORIGINAL_COMPARE";
 static const char *const kFileCompareStartCompareOriginal = "COMPARE_ORIGINAL";
 static const char *const kDialogLastPathKey = "DIALOG_LAST_PATH";
@@ -276,22 +256,6 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
     {"COMPILER_ERROR_MESSAGE_PLACEMENT", MRSettingsKeyClass::Global, true},
-    {"LANGUAGE_SERVER_SPAWN_DAEMON", MRSettingsKeyClass::Global, true},
-    {"LANGUAGE_SERVER_SIDEKICK_PLACEMENT", MRSettingsKeyClass::Global, true},
-    {"LANGUAGE_SERVER_HOVER_DWELL_MS", MRSettingsKeyClass::Global, true},
-    {"LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS", MRSettingsKeyClass::Global, true},
-    {"LANGUAGE_SERVER_SIGNATURE_QUIET_MS", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_DIAGNOSTICS", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_DEFINITION", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_REFERENCES", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_HOVER", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_COMPLETION", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_DOCUMENT_HIGHLIGHT", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_DOCUMENT_SYMBOLS", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_WORKSPACE_SYMBOLS", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_SIGNATURE_HELP", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_RENAME", MRSettingsKeyClass::Global, true},
-	{"LANGUAGE_SERVER_CHANNEL_CODE_ACTIONS", MRSettingsKeyClass::Global, true},
     {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
     {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
 	    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
@@ -408,52 +372,6 @@ bool parseCompilerErrorMessagePlacementLiteral(const std::string &value, MRCompi
 		return true;
 	}
 	return setError(errorMessage, "COMPILER_ERROR_MESSAGE_PLACEMENT must be UNDER_CODE or RIGHT_MARGIN.");
-}
-
-bool parseLanguageServerSidekickPlacementLiteral(const std::string &value, MRLanguageServerSidekickPlacement &outValue, std::string *errorMessage) {
-	const std::string upper = upperAscii(trimAscii(value));
-
-	if (upper == kLanguageServerSidekickAtCode || upper == "CODE" || upper == "ATCODE") {
-		outValue = MRLanguageServerSidekickPlacement::AtCode;
-		if (errorMessage != nullptr) errorMessage->clear();
-		return true;
-	}
-	if (upper == kLanguageServerSidekickRightMargin || upper == "RIGHT" || upper == "MARGIN") {
-		outValue = MRLanguageServerSidekickPlacement::RightMargin;
-		if (errorMessage != nullptr) errorMessage->clear();
-		return true;
-	}
-	return setError(errorMessage, "LANGUAGE_SERVER_SIDEKICK_PLACEMENT must be AT_CODE or RIGHT_MARGIN.");
-}
-
-struct LanguageServerChannelAssignment {
-	const char *key;
-	bool MRLanguageServerChannelSettings::*field;
-};
-
-const LanguageServerChannelAssignment kLanguageServerChannelAssignments[] = {
-	{"LANGUAGE_SERVER_CHANNEL_DIAGNOSTICS", &MRLanguageServerChannelSettings::diagnostics},
-	{"LANGUAGE_SERVER_CHANNEL_DEFINITION", &MRLanguageServerChannelSettings::definition},
-	{"LANGUAGE_SERVER_CHANNEL_REFERENCES", &MRLanguageServerChannelSettings::references},
-	{"LANGUAGE_SERVER_CHANNEL_HOVER", &MRLanguageServerChannelSettings::hover},
-	{"LANGUAGE_SERVER_CHANNEL_COMPLETION", &MRLanguageServerChannelSettings::completion},
-	{"LANGUAGE_SERVER_CHANNEL_DOCUMENT_HIGHLIGHT", &MRLanguageServerChannelSettings::documentHighlight},
-	{"LANGUAGE_SERVER_CHANNEL_DOCUMENT_SYMBOLS", &MRLanguageServerChannelSettings::documentSymbols},
-	{"LANGUAGE_SERVER_CHANNEL_WORKSPACE_SYMBOLS", &MRLanguageServerChannelSettings::workspaceSymbols},
-	{"LANGUAGE_SERVER_CHANNEL_SIGNATURE_HELP", &MRLanguageServerChannelSettings::signatureHelp},
-	{"LANGUAGE_SERVER_CHANNEL_RENAME", &MRLanguageServerChannelSettings::rename},
-	{"LANGUAGE_SERVER_CHANNEL_CODE_ACTIONS", &MRLanguageServerChannelSettings::codeActions},
-};
-
-bool parseLanguageServerChannelSetting(const std::string &upperKey, const std::string &value, MRLanguageServerChannelSettings &settings, bool &handled, std::string *errorMessage) {
-	handled = false;
-	for (const LanguageServerChannelAssignment &assignment : kLanguageServerChannelAssignments) {
-		if (upperKey != assignment.key) continue;
-		handled = true;
-		if (!parseBooleanLiteral(value, settings.*(assignment.field), errorMessage)) return false;
-		return true;
-	}
-	return true;
 }
 
 bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibility &outValue, std::string *errorMessage) {
@@ -785,12 +703,6 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredLiveLogSettings(MRLiveLogSettings(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
-	if (!setConfiguredLanguageServerSpawnDaemon(true, errorMessage)) return false;
-	if (!setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement::RightMargin, errorMessage)) return false;
-	if (!setConfiguredLanguageServerHoverDwellMs(kLanguageServerHoverDwellMsDefault, errorMessage)) return false;
-	if (!setConfiguredLanguageServerDocumentSyncDelayMs(kLanguageServerDocumentSyncDelayMsDefault, errorMessage)) return false;
-	if (!setConfiguredLanguageServerSignatureQuietMs(kLanguageServerSignatureQuietMsDefault, errorMessage)) return false;
-	if (!setConfiguredLanguageServerChannelSettings(MRLanguageServerChannelSettings(), errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
@@ -1226,38 +1138,6 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				MRCompilerErrorMessagePlacement placement = MRCompilerErrorMessagePlacement::RightMargin;
 				if (!parseCompilerErrorMessagePlacementLiteral(value, placement, errorMessage)) return false;
 				return setConfiguredCompilerErrorMessagePlacement(placement, errorMessage);
-			}
-			if (upper == "LANGUAGE_SERVER_SPAWN_DAEMON") {
-				bool parsed = true;
-				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
-				return setConfiguredLanguageServerSpawnDaemon(parsed, errorMessage);
-			}
-			if (upper == "LANGUAGE_SERVER_SIDEKICK_PLACEMENT") {
-				MRLanguageServerSidekickPlacement placement = MRLanguageServerSidekickPlacement::RightMargin;
-				if (!parseLanguageServerSidekickPlacementLiteral(value, placement, errorMessage)) return false;
-				return setConfiguredLanguageServerSidekickPlacement(placement, errorMessage);
-			}
-			if (upper == "LANGUAGE_SERVER_HOVER_DWELL_MS") {
-				int parsed = kLanguageServerHoverDwellMsDefault;
-				if (!parseMillisecondsLiteral(value, kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax, parsed, errorMessage)) return false;
-				return setConfiguredLanguageServerHoverDwellMs(parsed, errorMessage);
-			}
-			if (upper == "LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS") {
-				int parsed = kLanguageServerDocumentSyncDelayMsDefault;
-				if (!parseMillisecondsLiteral(value, kLanguageServerDocumentSyncDelayMsMin, kLanguageServerDocumentSyncDelayMsMax, parsed, errorMessage)) return false;
-				return setConfiguredLanguageServerDocumentSyncDelayMs(parsed, errorMessage);
-			}
-			if (upper == "LANGUAGE_SERVER_SIGNATURE_QUIET_MS") {
-				int parsed = kLanguageServerSignatureQuietMsDefault;
-				if (!parseMillisecondsLiteral(value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, parsed, errorMessage)) return false;
-				return setConfiguredLanguageServerSignatureQuietMs(parsed, errorMessage);
-			}
-			{
-				MRLanguageServerChannelSettings channels = configuredLanguageServerChannelSettings();
-				bool handled = false;
-
-				if (!parseLanguageServerChannelSetting(upper, value, channels, handled, errorMessage)) return false;
-				if (handled) return setConfiguredLanguageServerChannelSettings(channels, errorMessage);
 			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				MRScrollbarVisibility visibility = MRScrollbarVisibility::Smart;
@@ -1810,32 +1690,6 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			if (upper == "COMPILER_ERROR_MESSAGE_PLACEMENT") {
 				if (!parseCompilerErrorMessagePlacementLiteral(value, snapshot.compilerErrorMessagePlacement, errorMessage)) return false;
 				return true;
-			}
-			if (upper == "LANGUAGE_SERVER_SPAWN_DAEMON") {
-				if (!parseBooleanLiteral(value, snapshot.languageServerSpawnDaemon, errorMessage)) return false;
-				return true;
-			}
-			if (upper == "LANGUAGE_SERVER_SIDEKICK_PLACEMENT") {
-				if (!parseLanguageServerSidekickPlacementLiteral(value, snapshot.languageServerSidekickPlacement, errorMessage)) return false;
-				return true;
-			}
-			if (upper == "LANGUAGE_SERVER_HOVER_DWELL_MS") {
-				if (!parseMillisecondsLiteral(value, kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax, snapshot.languageServerHoverDwellMs, errorMessage)) return false;
-				return true;
-			}
-			if (upper == "LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS") {
-				if (!parseMillisecondsLiteral(value, kLanguageServerDocumentSyncDelayMsMin, kLanguageServerDocumentSyncDelayMsMax, snapshot.languageServerDocumentSyncDelayMs, errorMessage)) return false;
-				return true;
-			}
-			if (upper == "LANGUAGE_SERVER_SIGNATURE_QUIET_MS") {
-				if (!parseMillisecondsLiteral(value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, snapshot.languageServerSignatureQuietMs, errorMessage)) return false;
-				return true;
-			}
-			{
-				bool handled = false;
-
-				if (!parseLanguageServerChannelSetting(upper, value, snapshot.languageServerChannels, handled, errorMessage)) return false;
-				if (handled) return true;
 			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				if (!parseScrollbarVisibilityLiteral(value, snapshot.scrollbarVisibility, errorMessage)) return false;

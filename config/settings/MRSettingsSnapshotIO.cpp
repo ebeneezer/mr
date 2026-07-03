@@ -44,8 +44,6 @@ static const char *const kCursorBehaviourBoundToText = "BOUND_TO_TEXT";
 static const char *const kCursorBehaviourFreeMovement = "FREE_MOVEMENT";
 static const char *const kCompilerErrorMessageUnderCode = "UNDER_CODE";
 static const char *const kCompilerErrorMessageRightMargin = "RIGHT_MARGIN";
-static const char *const kLanguageServerSidekickAtCode = "AT_CODE";
-static const char *const kLanguageServerSidekickRightMargin = "RIGHT_MARGIN";
 static const char *const kScrollbarVisibilitySmart = "SMART";
 static const char *const kScrollbarVisibilityAlways = "ALWAYS";
 static const char *const kDialogLastPathKey = "DIALOG_LAST_PATH";
@@ -85,10 +83,6 @@ std::string formatCursorBehaviourLiteral(MRCursorBehaviour behaviour) {
 
 std::string formatCompilerErrorMessagePlacementLiteral(MRCompilerErrorMessagePlacement placement) {
 	return placement == MRCompilerErrorMessagePlacement::UnderCode ? kCompilerErrorMessageUnderCode : kCompilerErrorMessageRightMargin;
-}
-
-std::string formatLanguageServerSidekickPlacementLiteral(MRLanguageServerSidekickPlacement placement) {
-	return placement == MRLanguageServerSidekickPlacement::AtCode ? kLanguageServerSidekickAtCode : kLanguageServerSidekickRightMargin;
 }
 
 std::string formatScrollbarVisibilityLiteral(MRScrollbarVisibility visibility) {
@@ -429,12 +423,6 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
 	snapshot.compilerErrorMessagePlacement = configuredCompilerErrorMessagePlacement();
-	snapshot.languageServerSpawnDaemon = configuredLanguageServerSpawnDaemon();
-	snapshot.languageServerSidekickPlacement = configuredLanguageServerSidekickPlacement();
-	snapshot.languageServerHoverDwellMs = configuredLanguageServerHoverDwellMs();
-	snapshot.languageServerDocumentSyncDelayMs = configuredLanguageServerDocumentSyncDelayMs();
-	snapshot.languageServerSignatureQuietMs = configuredLanguageServerSignatureQuietMs();
-	snapshot.languageServerChannels = configuredLanguageServerChannelSettings();
 	snapshot.scrollbarVisibility = configuredScrollbarVisibility();
 	snapshot.trackCompilerWarnings = configuredTrackCompilerWarnings();
 	snapshot.trackCompilerNotes = configuredTrackCompilerNotes();
@@ -623,22 +611,6 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
 	source += "MRSETUP('COMPILER_ERROR_MESSAGE_PLACEMENT', '" + escapeMrmacSingleQuotedLiteral(formatCompilerErrorMessagePlacementLiteral(snapshot.compilerErrorMessagePlacement)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_SPAWN_DAEMON', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerSpawnDaemon)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_SIDEKICK_PLACEMENT', '" + escapeMrmacSingleQuotedLiteral(formatLanguageServerSidekickPlacementLiteral(snapshot.languageServerSidekickPlacement)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_HOVER_DWELL_MS', '" + std::to_string(snapshot.languageServerHoverDwellMs) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS', '" + std::to_string(snapshot.languageServerDocumentSyncDelayMs) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_SIGNATURE_QUIET_MS', '" + std::to_string(snapshot.languageServerSignatureQuietMs) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_DIAGNOSTICS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.diagnostics)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_DEFINITION', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.definition)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_REFERENCES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.references)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_HOVER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.hover)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_COMPLETION', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.completion)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_DOCUMENT_HIGHLIGHT', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.documentHighlight)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_DOCUMENT_SYMBOLS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.documentSymbols)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_WORKSPACE_SYMBOLS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.workspaceSymbols)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_SIGNATURE_HELP', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.signatureHelp)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_RENAME', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.rename)) + "');\n";
-	source += "MRSETUP('LANGUAGE_SERVER_CHANNEL_CODE_ACTIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.languageServerChannels.codeActions)) + "');\n";
 	source += "MRSETUP('SCROLLBAR_VISIBILITY', '" + escapeMrmacSingleQuotedLiteral(formatScrollbarVisibilityLiteral(snapshot.scrollbarVisibility)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_WARNINGS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerWarnings)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_NOTES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerNotes)) + "');\n";
@@ -732,10 +704,6 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'RUNTIME', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.runtimePaths)) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'SUCCESS_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(profile.buildSuccessAudioUri) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'FAILURE_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(profile.buildFailureAudioUri) + "');\n";
-		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LSP_EXECUTABLE', '" + escapeMrmacSingleQuotedLiteral(profile.lspExecutablePath) + "');\n";
-		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LSP_ARGUMENTS', '" + escapeMrmacSingleQuotedLiteral(profile.lspArguments) + "');\n";
-		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LSP_WORKING_DIRECTORY', '" + escapeMrmacSingleQuotedLiteral(profile.lspWorkingDirectory) + "');\n";
-		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LSP_MIDDLEWARE', '" + escapeMrmacSingleQuotedLiteral(profile.lspMiddlewarePath) + "');\n";
 	}
 
 	for (const auto &profile : snapshot.editProfiles) {

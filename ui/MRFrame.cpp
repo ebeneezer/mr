@@ -750,6 +750,11 @@ void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 		hideTaskOverview();
 		return;
 	}
+	if (!isFrameFocused(this)) {
+		hideMarkerHint();
+		hideTaskOverview();
+		return;
+	}
 	if (mTaskOverviewPinned) {
 		hideMarkerHint();
 		return;

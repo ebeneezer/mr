@@ -16,6 +16,7 @@
 #include "MRFileEditor/MRFileEditor.hpp"
 #include "MRWindowSupport.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../app/MREditorApp.hpp"
 #include "../app/MRCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/commands/MRFileCommands.hpp"
@@ -36,6 +37,17 @@ MRSidekickEditor *gActiveSidekick = nullptr;
 int gDismissedReadOnlySidekickParentBufferId = 0;
 
 constexpr TColorAttr kSidekickCursor = 0x70;
+
+class SnippetSidekickHintGuard {
+  public:
+	SnippetSidekickHintGuard() {
+		mrSetSnippetSidekickHintsActive(true);
+	}
+
+	~SnippetSidekickHintGuard() {
+		mrSetSnippetSidekickHintsActive(false);
+	}
+};
 
 enum class SnippetSidekickAction : unsigned char {
 	CursorLeft,
@@ -1248,7 +1260,11 @@ bool mrOpenSnippetSidekickAt(MREditWindow *parent, const std::string &text, cons
 		TObject::destroy(dialog);
 		return false;
 	}
-	const ushort result = TProgram::deskTop->execView(dialog);
+	ushort result = cmCancel;
+	{
+		SnippetSidekickHintGuard hintGuard;
+		result = TProgram::deskTop->execView(dialog);
+	}
 	committed = result == cmOK;
 	TObject::destroy(dialog);
 	static_cast<void>(mrActivateEditWindow(parent));
@@ -1493,7 +1509,7 @@ bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason)
 		const int viewportBottom = editorGlobal.y + textViewport.b.y;
 		const int anchorY = std::clamp(viewportTop + 15, viewportTop - 1, std::max(viewportTop - 1, viewportBottom - 1));
 
-		if (!mrOpenReadOnlySidekickAt(window, "tail", "LSP hover", 3, 4, 3, MRReadOnlySidekickPlacement::UnderCode)) {
+		if (!mrOpenReadOnlySidekickAt(window, "tail", "Read-only sidekick", 3, 4, 3, MRReadOnlySidekickPlacement::UnderCode)) {
 			failureReason = "live sidekick geometry: initial open failed.";
 			TProgram::deskTop->remove(window);
 			TObject::destroy(window);
@@ -1506,7 +1522,7 @@ bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason)
 			TObject::destroy(window);
 			return false;
 		}
-		if (!mrOpenReadOnlySidekickAt(window, "error 17:3 - Use of undeclared identifier 'i'", "LSP hover", 3, 17, 3, MRReadOnlySidekickPlacement::UnderCode)) {
+		if (!mrOpenReadOnlySidekickAt(window, "error 17:3 - Use of undeclared identifier 'i'", "Read-only sidekick", 3, 17, 3, MRReadOnlySidekickPlacement::UnderCode)) {
 			failureReason = "live sidekick geometry: update open failed.";
 			mrDropActiveSidekick();
 			TProgram::deskTop->remove(window);

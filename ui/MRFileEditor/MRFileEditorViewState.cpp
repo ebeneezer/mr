@@ -31,7 +31,6 @@ MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 	palette.findMarker = configuredColorSlotOverride(findMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.errorMarker = configuredColorSlotOverride(errorMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.warningMarker = configuredColorSlotOverride(kMrPaletteMessageWarning, configured) ? static_cast<TColorAttr>(configured) : palette.changed;
-	palette.diagnostics = configuredColorSlotOverride(kMrPaletteMiniMapDiagnostics, configured) ? static_cast<TColorAttr>(configured) : palette.warningMarker;
 	palette.diffEqual = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapEqual, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
 	palette.diffMissing = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapMissing, configured) ? static_cast<TColorAttr>(configured) : palette.errorMarker;
 	palette.diffInsert = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapInsert, configured) ? static_cast<TColorAttr>(configured) : palette.warningMarker;
@@ -58,6 +57,22 @@ void MRFileEditor::revealCursor(Boolean centerCursor) {
 	drawView();
 }
 
+void MRFileEditor::centerDocumentLocationInView(std::size_t lineIndex, int visualColumn) {
+	const std::size_t lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+	const std::size_t documentLine = std::min(lineIndex, lineCount - 1);
+	const std::size_t visibleLine = visibleLineForDocumentLine(documentLine);
+	const int textRows = std::max(1, visibleTextRows());
+	const int viewportWidth = std::max(1, textViewportWidth());
+	const int clampedColumn = std::max(0, visualColumn);
+	const int targetX = clampedColumn > viewportWidth / 2 ? clampedColumn - viewportWidth / 2 : 0;
+	const int targetY = visibleLine > static_cast<std::size_t>(textRows / 2) ? static_cast<int>(std::min<std::size_t>(visibleLine - static_cast<std::size_t>(textRows / 2), static_cast<std::size_t>(INT_MAX))) : 0;
+
+	scrollTo(targetX, targetY);
+	scheduleSyntaxWarmupIfNeeded();
+	updateIndicator();
+	drawView();
+}
+
 void MRFileEditor::moveCursorToDocumentLineTop(std::size_t lineIndex, int visualColumn) {
 	const std::size_t lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
 	const std::size_t documentLine = std::min(lineIndex, lineCount - 1);
@@ -68,6 +83,23 @@ void MRFileEditor::moveCursorToDocumentLineTop(std::size_t lineIndex, int visual
 
 	scrollTo(std::max(0, delta.x), std::max(0, targetLine));
 	moveCursor(targetOffset, false, false, std::max(0, visualColumn));
+}
+
+void MRFileEditor::restoreCursorViewState(std::size_t lineIndex, int visualColumn) {
+	const std::size_t lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+	const std::size_t documentLine = std::min(lineIndex, lineCount - 1);
+	const std::size_t visibleLine = visibleLineForDocumentLine(documentLine);
+	const int targetLine = static_cast<int>(std::min<std::size_t>(visibleLine, static_cast<std::size_t>(INT_MAX)));
+	const int targetColumn = std::max(0, visualColumn);
+	const std::size_t lineStart = mBufferModel.lineStartByIndex(documentLine);
+	const std::size_t targetOffset = charPtrOffset(lineStart, targetColumn);
+
+	delta.x = std::max(0, delta.x);
+	delta.y = std::max(0, targetLine);
+	mBufferModel.setCursorAndSelection(targetOffset, targetOffset, targetOffset);
+	mSelectionAnchor = targetOffset;
+	mCursorVisualLine = cachedCursorLineIndex();
+	mCursorVisualColumn = actualCursorVisualColumn(targetOffset);
 }
 
 void MRFileEditor::refreshViewState() {

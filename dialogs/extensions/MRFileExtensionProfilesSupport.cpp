@@ -429,7 +429,7 @@ enum : unsigned long long {
 
 	if (id.empty()) return true;
 	if (compilerProfileIdExists(id)) return true;
-	for (const MRCompilerProfile &profile : defaultCompilerProfiles())
+	for (const MRCompilerProfile &profile : detectedCompilerProfiles())
 		if (profile.id == id) return true;
 	return false;
 }

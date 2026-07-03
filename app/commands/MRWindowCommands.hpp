@@ -1,12 +1,28 @@
 #ifndef MRWINDOWCOMMANDS_HPP
 #define MRWINDOWCOMMANDS_HPP
 
+#include <set>
 #include <vector>
 #include <string>
 
 class MREditWindow;
 class MRBentoBox;
 struct MRSetupPaths;
+
+class MRWindowOpenBatch {
+  public:
+	MRWindowOpenBatch();
+	void begin();
+	[[nodiscard]] MREditWindow *createEditorWindow(const char *title);
+	void finish(bool syncVisibility, bool notifyTopology);
+	[[nodiscard]] bool active() const noexcept;
+
+  private:
+	std::set<short> usedNumbers;
+	bool mActive;
+	bool mDesktopLocked;
+	std::size_t mCreatedCount;
+};
 
 [[nodiscard]] MREditWindow *createEditorWindow(const char *title);
 [[nodiscard]] MREditWindow *createHelpWindow(const char *title);
@@ -52,6 +68,7 @@ void mrSaveWorkspace(const std::string &filename);
 void mrMarkWorkspaceAutosaveDirty();
 void mrFlushWorkspaceAutosaveIfDue();
 void mrFlushWorkspaceAutosaveNow();
+[[nodiscard]] bool mrWorkspaceRestoreInProgress();
 [[nodiscard]] bool mrSettingsFileHasAutosavedWorkspace();
 [[nodiscard]] bool mrClearAutosavedWorkspace();
 [[nodiscard]] bool mrLoadWorkspaceWithDialog();

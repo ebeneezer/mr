@@ -569,14 +569,8 @@ class MREditWindow : public TWindow {
 						break;
 				}
 			}
-			if ((originalEvent & (evMouseDown | evMouseMove | evMouseUp)) != 0) {
-				if (originalEditorBlockMouseGesture)
-					notifyMRLspBlockMouseActivity();
-				else
-					notifyMRLspMouseActivity(event.mouse.where);
-			}
 			if (originalEditorRightClick) {
-				static_cast<void>(showMRLspContextMenu(this, originalMouseWhere));
+				static_cast<void>(showMREditorContextMenu(this, originalMouseWhere));
 				clearEvent(event);
 				return;
 			}
@@ -647,14 +641,14 @@ class MREditWindow : public TWindow {
 			}
 			if (frame != nullptr) {
 				MRFrame *mrFrame = static_cast<MRFrame *>(frame);
-				if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0) {
-					if (originalEditorBlockMouseGesture)
-						notifyMRLspBlockMouseActivity();
+				if (event.what == evMouseMove && event.mouse.buttons == 0 && event.mouse.wheel == 0) {
+					const bool workspaceRestoreActive = mrWorkspaceRestoreInProgress();
+					if (workspaceRestoreActive || originalEditorBlockMouseGesture)
+						mrFrame->updateTaskHover(TPoint(), true);
 					else
-						notifyMRLspMouseActivity(event.mouse.where);
-					mrFrame->updateTaskHover(event.mouse.where, false);
+						mrFrame->updateTaskHover(event.mouse.where, false);
 				}
-				else if ((event.what & (evKeyDown | evCommand)) != 0)
+				else if ((event.what & (evMouseDown | evMouseUp | evKeyDown | evCommand)) != 0)
 					mrFrame->updateTaskHover(TPoint(), true);
 			}
 

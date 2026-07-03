@@ -1163,6 +1163,7 @@ int latexHeadingLevel(std::string_view trimmed) noexcept {
 	};
 	static const LatexHeadingEntry entries[] = {
 		{"\\part", 1},
+		{"\\appendix", 1},
 		{"\\chapter", 2},
 		{"\\section", 3},
 		{"\\subsection", 4},
@@ -1226,6 +1227,10 @@ bool latexLineContainsEnvironmentEnd(std::string_view line, std::string_view env
 		if (parseLatexEnvironmentCommand(line.substr(pos), "\\end", candidateName) && candidateName == environmentName) return true;
 	}
 	return false;
+}
+
+bool isLatexRawTextEnvironment(std::string_view environmentName) noexcept {
+	return environmentName == "verbatim" || environmentName == "verbatim*" || environmentName == "lstlisting" || environmentName == "minted";
 }
 
 bool parseLatexLeadingBeginEnvironment(std::string_view trimmed, std::string_view &environmentName) noexcept {
@@ -1604,6 +1609,18 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const std::size_t currentIndent = leadingIndentBytes(lineText);
 		const bool nonEmpty = !trimmed.empty();
 		const std::string upperLine = upperAscii(std::string(trimmed));
+		if (language == MRSyntaxLanguage::Latex && !openBlocks.empty() && openBlocks.back().languageBlockKind == kLatexEnvironmentBlock &&
+		    isLatexRawTextEnvironment(openBlocks.back().xmlTagName)) {
+			if (latexLineContainsEnvironmentEnd(lineText, openBlocks.back().xmlTagName)) {
+				appendVisibleSpan(openBlocks.back(), lineIndex);
+				openBlocks.pop_back();
+			}
+			previousPreviousLineText = previousLineText;
+			previousPreviousUpperLine = previousUpperLine;
+			previousLineText = lineText;
+			previousUpperLine = upperLine;
+			continue;
+		}
 		const std::string *nextLineTextPtr = localLineIndex + 1 < lineTexts.size() ? &lineTexts[localLineIndex + 1] : nullptr;
 		const std::string_view nextTrimmed = nextLineTextPtr != nullptr ? trimView(*nextLineTextPtr) : std::string_view();
 		const std::size_t nextIndent = nextLineTextPtr != nullptr ? leadingIndentBytes(*nextLineTextPtr) : 0;
@@ -1861,11 +1878,16 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		}
 		if (language == MRSyntaxLanguage::Latex && latexEndEnvironment && !openBlocks.empty()) {
 			std::size_t matchingIndex = std::numeric_limits<std::size_t>::max();
+			const bool recoverToDocumentEnd = latexEndEnvironmentName == "document";
 			for (std::size_t index = openBlocks.size(); index-- > 0;) {
 				const MRFoldOpenBlock &block = openBlocks[index];
 				if (block.languageBlockKind == kLatexEnvironmentBlock) {
-					if (block.xmlTagName == latexEndEnvironmentName) matchingIndex = index;
-					break;
+					if (block.xmlTagName == latexEndEnvironmentName) {
+						matchingIndex = index;
+						break;
+					}
+					if (!recoverToDocumentEnd) break;
+					continue;
 				}
 				if (block.sourceKind != MRFoldSourceKind::Section) break;
 			}

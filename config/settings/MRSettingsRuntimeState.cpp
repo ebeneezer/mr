@@ -33,12 +33,6 @@ int g_virtualDesktops = 1;
 bool g_cyclicVirtualDesktops = false;
 MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
 MRCompilerErrorMessagePlacement g_compilerErrorMessagePlacement = MRCompilerErrorMessagePlacement::RightMargin;
-bool g_languageServerSpawnDaemon = true;
-MRLanguageServerSidekickPlacement g_languageServerSidekickPlacement = MRLanguageServerSidekickPlacement::RightMargin;
-int g_languageServerHoverDwellMs = kLanguageServerHoverDwellMsDefault;
-int g_languageServerDocumentSyncDelayMs = kLanguageServerDocumentSyncDelayMsDefault;
-int g_languageServerSignatureQuietMs = kLanguageServerSignatureQuietMsDefault;
-MRLanguageServerChannelSettings g_languageServerChannelSettings;
 MRScrollbarVisibility g_scrollbarVisibility = MRScrollbarVisibility::Smart;
 bool g_trackCompilerWarnings = false;
 bool g_trackCompilerNotes = false;
@@ -244,14 +238,6 @@ bool normalizeCursorPositionMarker(const std::string &value, std::string &out, s
 		out.push_back(ch);
 	}
 	if (rCount != 1 || cCount != 1) return setError(errorMessage, "must contain exactly one R and one C placeholder.");
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool validateBoundedMilliseconds(const char *key, int value, int minValue, int maxValue, std::string *errorMessage) {
-	if (value < minValue || value > maxValue) {
-		return setError(errorMessage, std::string(key) + " must be between " + std::to_string(minValue) + " and " + std::to_string(maxValue) + " milliseconds.");
-	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -771,78 +757,6 @@ bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement 
 MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement() {
 	recordSettingsRuntimeRead();
 	return g_compilerErrorMessagePlacement;
-}
-
-bool setConfiguredLanguageServerSpawnDaemon(bool enabled, std::string *errorMessage) {
-	if (g_languageServerSpawnDaemon != enabled) markConfiguredSettingsDirty();
-	g_languageServerSpawnDaemon = enabled;
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool configuredLanguageServerSpawnDaemon() {
-	recordSettingsRuntimeRead();
-	return g_languageServerSpawnDaemon;
-}
-
-bool setConfiguredLanguageServerSidekickPlacement(MRLanguageServerSidekickPlacement placement, std::string *errorMessage) {
-	if (g_languageServerSidekickPlacement != placement) markConfiguredSettingsDirty();
-	g_languageServerSidekickPlacement = placement;
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-MRLanguageServerSidekickPlacement configuredLanguageServerSidekickPlacement() {
-	recordSettingsRuntimeRead();
-	return g_languageServerSidekickPlacement;
-}
-
-bool setConfiguredLanguageServerHoverDwellMs(int value, std::string *errorMessage) {
-	if (!validateBoundedMilliseconds("LANGUAGE_SERVER_HOVER_DWELL_MS", value, kLanguageServerHoverDwellMsMin, kLanguageServerHoverDwellMsMax, errorMessage)) return false;
-	if (g_languageServerHoverDwellMs != value) markConfiguredSettingsDirty();
-	g_languageServerHoverDwellMs = value;
-	return true;
-}
-
-int configuredLanguageServerHoverDwellMs() {
-	recordSettingsRuntimeRead();
-	return g_languageServerHoverDwellMs;
-}
-
-bool setConfiguredLanguageServerDocumentSyncDelayMs(int value, std::string *errorMessage) {
-	if (!validateBoundedMilliseconds("LANGUAGE_SERVER_DOCUMENT_SYNC_DELAY_MS", value, kLanguageServerDocumentSyncDelayMsMin, kLanguageServerDocumentSyncDelayMsMax, errorMessage)) return false;
-	if (g_languageServerDocumentSyncDelayMs != value) markConfiguredSettingsDirty();
-	g_languageServerDocumentSyncDelayMs = value;
-	return true;
-}
-
-int configuredLanguageServerDocumentSyncDelayMs() {
-	recordSettingsRuntimeRead();
-	return g_languageServerDocumentSyncDelayMs;
-}
-
-bool setConfiguredLanguageServerSignatureQuietMs(int value, std::string *errorMessage) {
-	if (!validateBoundedMilliseconds("LANGUAGE_SERVER_SIGNATURE_QUIET_MS", value, kLanguageServerSignatureQuietMsMin, kLanguageServerSignatureQuietMsMax, errorMessage)) return false;
-	if (g_languageServerSignatureQuietMs != value) markConfiguredSettingsDirty();
-	g_languageServerSignatureQuietMs = value;
-	return true;
-}
-
-int configuredLanguageServerSignatureQuietMs() {
-	recordSettingsRuntimeRead();
-	return g_languageServerSignatureQuietMs;
-}
-
-bool setConfiguredLanguageServerChannelSettings(const MRLanguageServerChannelSettings &settings, std::string *errorMessage) {
-	if (!(g_languageServerChannelSettings == settings)) markConfiguredSettingsDirty();
-	g_languageServerChannelSettings = settings;
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-MRLanguageServerChannelSettings configuredLanguageServerChannelSettings() {
-	recordSettingsRuntimeRead();
-	return g_languageServerChannelSettings;
 }
 
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage) {

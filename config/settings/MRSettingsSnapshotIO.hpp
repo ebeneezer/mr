@@ -34,12 +34,6 @@ struct MRSettingsSnapshot {
 	bool cyclicVirtualDesktops{false};
 	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};
 	MRCompilerErrorMessagePlacement compilerErrorMessagePlacement{MRCompilerErrorMessagePlacement::RightMargin};
-	bool languageServerSpawnDaemon{true};
-	MRLanguageServerSidekickPlacement languageServerSidekickPlacement{MRLanguageServerSidekickPlacement::RightMargin};
-	int languageServerHoverDwellMs{kLanguageServerHoverDwellMsDefault};
-	int languageServerDocumentSyncDelayMs{kLanguageServerDocumentSyncDelayMsDefault};
-	int languageServerSignatureQuietMs{kLanguageServerSignatureQuietMsDefault};
-	MRLanguageServerChannelSettings languageServerChannels;
 	MRScrollbarVisibility scrollbarVisibility{MRScrollbarVisibility::Smart};
 	bool trackCompilerWarnings{false};
 	bool trackCompilerNotes{false};

@@ -457,10 +457,6 @@ bool normalizeCompilerProfileInPlace(MRCompilerProfile &profile, std::string *er
 	profile.runtimePaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.runtimePaths));
 	profile.buildSuccessAudioUri = normalizeConfiguredPathInput(profile.buildSuccessAudioUri);
 	profile.buildFailureAudioUri = normalizeConfiguredPathInput(profile.buildFailureAudioUri);
-	profile.lspExecutablePath = normalizeConfiguredPathInput(profile.lspExecutablePath);
-	profile.lspArguments = trimAscii(profile.lspArguments);
-	profile.lspWorkingDirectory = normalizeConfiguredPathInput(profile.lspWorkingDirectory);
-	profile.lspMiddlewarePath = normalizeConfiguredPathInput(profile.lspMiddlewarePath);
 
 	if (profile.id.empty()) return setError(errorMessage, "Compiler profile id may not be empty.");
 	if (profile.name.empty()) return setError(errorMessage, "Compiler profile name may not be empty.");
@@ -544,14 +540,6 @@ bool applyCompilerProfileDirectiveToVector(std::vector<MRCompilerProfile> &profi
 			profile->buildSuccessAudioUri = arg4;
 		else if (key == "FAILURE_AUDIO_URI")
 			profile->buildFailureAudioUri = arg4;
-		else if (key == "LSP_EXECUTABLE")
-			profile->lspExecutablePath = arg4;
-		else if (key == "LSP_ARGUMENTS")
-			profile->lspArguments = arg4;
-		else if (key == "LSP_WORKING_DIRECTORY")
-			profile->lspWorkingDirectory = arg4;
-		else if (key == "LSP_MIDDLEWARE")
-			profile->lspMiddlewarePath = arg4;
 		else
 			return setError(errorMessage, "Unknown compiler profile setting key.");
 		if (!normalizeCompilerProfileInPlace(*profile, errorMessage) || !validateCompilerProfiles(profiles, errorMessage)) {
@@ -565,7 +553,7 @@ bool applyCompilerProfileDirectiveToVector(std::vector<MRCompilerProfile> &profi
 	return setError(errorMessage, "MRCOMPILERPROFILE supports operations DEFINE and SET.");
 }
 
-std::vector<std::string> defaultCompilerExecutablePaths() {
+std::vector<std::string> detectedCompilerExecutablePaths() {
 	static std::vector<std::string> cachedPaths;
 	static bool initialized = false;
 	std::vector<std::string> paths;
@@ -580,7 +568,7 @@ std::vector<std::string> defaultCompilerExecutablePaths() {
 	return paths;
 }
 
-std::vector<MRCompilerProfile> defaultCompilerProfiles() {
+std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 	static std::vector<MRCompilerProfile> cachedProfiles;
 	static bool initialized = false;
 	std::vector<MRCompilerProfile> profiles;

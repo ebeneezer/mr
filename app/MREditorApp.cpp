@@ -133,6 +133,12 @@ bool compilerDiagnosticsFunctionKeysActive() {
 	return bentoBox != nullptr && bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
 }
 
+bool topNonEditorDesktopViewContains(TPoint where) {
+	TView *desktopTop = TProgram::deskTop != nullptr ? TProgram::deskTop->TopView() : nullptr;
+
+	return desktopTop != nullptr && dynamic_cast<MREditWindow *>(desktopTop) == nullptr && (desktopTop->state & sfVisible) != 0 && desktopTop->mouseInView(where);
+}
+
 MRBentoBox *currentFileCompareBentoBox() {
 	MREditWindow *window = currentEditWindow();
 
@@ -239,6 +245,17 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &editorFunctionKeyLabels() {
 		labels[6] = {TKey(kbF7), cmMrBlockEndMarking, "~F7~ EndMark"};
 	} else if (!diagnosticsActive && !fileCompareActive && !bentoToolPaneActive && !readOnlyActive)
 		labels[6] = {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"};
+	return labels;
+}
+
+const std::vector<std::string> &snippetSidekickHintLabels() {
+	static const std::vector<std::string> labels{
+	    "~A-Enter~ Insert",
+	    "~Esc~ Cancel",
+	    "~Tab~ Next",
+	    "~sTab~ Prev",
+	    "~Enter~ NewLn",
+	};
 	return labels;
 }
 
@@ -996,6 +1013,7 @@ std::size_t loadStartupFilesFromCommandLine() {
 	std::vector<std::string> files;
 	std::size_t loadedCount = 0;
 	MREditWindow *lastLoadedWindow = nullptr;
+	MRWindowOpenBatch openBatch;
 
 	if (request.specs.empty()) return 0;
 
@@ -1004,8 +1022,9 @@ std::size_t loadStartupFilesFromCommandLine() {
 		mrLogMessage("No readable startup files matched command-line arguments.");
 		return 0;
 	}
+	if (files.size() > 1) openBatch.begin();
 	for (const std::string &file : files) {
-		MREditWindow *win = createEditorWindow(file.c_str());
+		MREditWindow *win = openBatch.active() ? openBatch.createEditorWindow(file.c_str()) : createEditorWindow(file.c_str());
 		if (win == nullptr) {
 			mrLogMessage("Startup load aborted: unable to create editor window.");
 			break;
@@ -1017,6 +1036,7 @@ std::size_t loadStartupFilesFromCommandLine() {
 		lastLoadedWindow = win;
 		++loadedCount;
 	}
+	if (openBatch.active()) openBatch.finish(true, loadedCount != 0);
 	if (lastLoadedWindow != nullptr) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
 	return loadedCount;
 }
@@ -1132,7 +1152,7 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false), lspRuntimeSettings() {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), snippetSidekickHintsActive(false), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false) {
 	const auto startupStartedAt = std::chrono::steady_clock::now();
 	auto phaseStartedAt = startupStartedAt;
 	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
@@ -1218,15 +1238,23 @@ void MREditorApp::refreshConfiguredUiSettingsSnapshot() {
 	menulineMessagesEnabled = configuredMenulineMessages();
 	virtualDesktopCount = configuredVirtualDesktops();
 	cyclicVirtualDesktopsEnabled = configuredCyclicVirtualDesktops();
-	lspRuntimeSettings = configuredMRLspRuntimeSettings();
 	mr::messageline::setRuntimeMessageLineEnabled(menulineMessagesEnabled);
 	mrRefreshVirtualDesktopSettingsSnapshot(virtualDesktopCount, cyclicVirtualDesktopsEnabled);
-	mrRefreshLspRuntimeSettingsSnapshot(lspRuntimeSettings);
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->setPersistentBlocksMenuState(persistentBlocksMenuEnabled);
+}
+
+void MREditorApp::setSnippetSidekickHintsActive(bool active) {
+	if (snippetSidekickHintsActive == active) return;
+	snippetSidekickHintsActive = active;
+	syncFunctionKeyState();
 }
 
 void mrRefreshEditorApplicationUiSettingsSnapshot() {
 	if (auto *app = dynamic_cast<MREditorApp *>(TProgram::application)) app->refreshConfiguredUiSettingsSnapshot();
+}
+
+void mrSetSnippetSidekickHintsActive(bool active) {
+	if (auto *app = dynamic_cast<MREditorApp *>(TProgram::application)) app->setSnippetSidekickHintsActive(active);
 }
 
 void MREditorApp::beginInteractiveMouseCapture() noexcept {
@@ -1398,14 +1426,22 @@ void MREditorApp::syncFunctionKeyState() {
 	const bool editorActive = !startupActive && editorFunctionKeyContextActive();
 
 	if (auto *mrStatus = dynamic_cast<MRStatusLine *>(statusLine)) {
-		if (startupActive) {
+		if (snippetSidekickHintsActive) {
+			mrStatus->setContextFunctionKeysActive(false);
+			mrStatus->setContextHintLabels(snippetSidekickHintLabels());
+			mrStatus->setContextHintLabelsActive(true);
+		} else if (startupActive) {
+			mrStatus->setContextHintLabelsActive(false);
 			mrStatus->setContextFunctionKeyLabels(startupFunctionKeyLabels());
 			mrStatus->setContextFunctionKeysActive(true);
 		} else if (editorActive) {
+			mrStatus->setContextHintLabelsActive(false);
 			mrStatus->setContextFunctionKeyLabels(editorFunctionKeyLabels());
 			mrStatus->setContextFunctionKeysActive(true);
-		} else
+		} else {
+			mrStatus->setContextHintLabelsActive(false);
 			mrStatus->setContextFunctionKeysActive(false);
+		}
 	}
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
 		mrMenuBar->setStartupFunctionKeysActive(startupActive);
@@ -1829,13 +1865,12 @@ void MREditorApp::handleEvent(TEvent &event) {
 	const ushort originalWhat = event.what;
 	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
-	if ((event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0) notifyMRLspMouseActivity(event.mouse.where);
-	if (event.what == evKeyDown) notifyMRLspKeyboardActivity();
 	clearTransientSearchSelectionOnUserInput(event);
 	if (event.what == evMouseWheel) {
 		TView *top = TopView();
 		const bool modalViewActive = top != nullptr && top != this && (top->state & sfModal) != 0;
-		if (!modalViewActive) {
+		bool nonEditorDesktopTopUnderMouse = !modalViewActive && topNonEditorDesktopViewContains(event.mouse.where);
+		if (!modalViewActive && !nonEditorDesktopTopUnderMouse) {
 			MREditWindow *wheelWindow = currentEditWindow();
 			if (wheelWindow == nullptr || !wheelWindow->containsMouse(event)) {
 				wheelWindow = nullptr;
@@ -1994,7 +2029,6 @@ void MREditorApp::idle() {
 	updateMacroBrainBlink();
 	warmIndexedMacroBindings();
 	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
-	pumpMRLspService(lspRuntimeSettings);
 	pumpDeferredMacroUiPlayback();
 	mrFlushWorkspaceAutosaveIfDue();
 	updatePerformancePanel();

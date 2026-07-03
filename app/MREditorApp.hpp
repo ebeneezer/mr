@@ -33,6 +33,7 @@ class MREditorApp : public TApplication {
 	void beginInteractiveMouseCapture() noexcept;
 	void endInteractiveMouseCapture() noexcept;
 	void refreshConfiguredUiSettingsSnapshot();
+	void setSnippetSidekickHintsActive(bool active);
 
   private:
 	void prepareForQuit();
@@ -88,14 +89,15 @@ class MREditorApp : public TApplication {
 	std::string cursorPositionMarkerFormat;
 	bool persistentBlocksMenuEnabled;
 	bool menulineMessagesEnabled;
+	bool snippetSidekickHintsActive;
 	int virtualDesktopCount;
 	bool cyclicVirtualDesktopsEnabled;
-	MRLspRuntimeSettings lspRuntimeSettings;
 };
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.
 bool mrApplySettingsSourceForTesting(const std::string &source, std::string *errorMessage = nullptr);
 bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage = nullptr);
 void mrRefreshEditorApplicationUiSettingsSnapshot();
+void mrSetSnippetSidekickHintsActive(bool active);
 
 #endif

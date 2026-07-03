@@ -10,7 +10,6 @@ TDialog *createColorSetupDialog();
 void runColorSetupDialogFlow();
 void runBackupsAutosaveDialogFlow();
 void runPathsSetupDialogFlow();
-void runLspSupportDialogFlow();
 void runUserInterfaceSettingsDialogFlow();
 void runLiveLogsSetupDialogFlow();
 

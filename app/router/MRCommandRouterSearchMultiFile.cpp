@@ -74,25 +74,54 @@ bool hasPreviousMultiFileSearchResults() {
 	return g_lastMultiFileSearchSession.valid && !g_lastMultiFileSearchSession.files.empty();
 }
 
-bool handleMultiFileSearchDialog(const std::string &patternSeed) {
+MRMultiSearchDialogOptions workspaceMultiSearchOptions(const std::string &patternSeed, const std::string &startingPath) {
 	MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+
+	options.searchSubdirectories = false;
+	options.restrictToWorkspace = true;
+	options.searchFilesInMemory = false;
+	options.wholeWords = true;
+	options.regularExpressions = false;
+	options.caseSensitive = true;
+	options.filespec = "*";
+	options.startingPath = startingPath;
+	options.searchText = patternSeed;
+	return options;
+}
+
+MRMultiSarDialogOptions workspaceMultiSarOptions(const std::string &patternSeed, const std::string &replacementSeed, const std::string &startingPath) {
+	MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+
+	options.searchSubdirectories = false;
+	options.restrictToWorkspace = true;
+	options.searchFilesInMemory = false;
+	options.wholeWords = true;
+	options.regularExpressions = false;
+	options.caseSensitive = true;
+	options.filespec = "*";
+	options.startingPath = startingPath;
+	options.searchText = patternSeed;
+	options.replacementText = replacementSeed.empty() ? patternSeed : replacementSeed;
+	return options;
+}
+
+bool handleMultiFileSearchDialogWithOptions(const std::string &patternSeed, MRMultiSearchDialogOptions options) {
 	std::string pattern;
 	MREditWindow *previousWindow = currentEditWindow();
 	for (;;) {
 		MultiFileSearchSession session;
 		std::string errorText;
 		if (!promptMultiFileSearchValues(patternSeed, pattern, options, session)) {
-			if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
+			if (previousWindow != nullptr) static_cast<void>(mrActivateEditWindow(previousWindow));
 			return true;
 		}
 		g_lastMultiFileSearchSession = session;
 		switch (runMultiFileResultsDialog(g_lastMultiFileSearchSession)) {
 			case MultiDialogAction::Done:
-				if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
+				if (previousWindow != nullptr) static_cast<void>(mrActivateEditWindow(previousWindow));
 				return true;
 			case MultiDialogAction::Load:
 				static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
-				if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
 				return true;
 			case MultiDialogAction::LoadAll:
 				if (!loadAllSessionFiles(g_lastMultiFileSearchSession, errorText)) {
@@ -101,7 +130,6 @@ bool handleMultiFileSearchDialog(const std::string &patternSeed) {
 					return true;
 				}
 				static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
-				if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
 				return true;
 			case MultiDialogAction::Cancel:
 				continue;
@@ -109,6 +137,50 @@ bool handleMultiFileSearchDialog(const std::string &patternSeed) {
 				return true;
 		}
 	}
+	return true;
+}
+
+bool handleMultiFileSearchDialog(const std::string &patternSeed) {
+	return handleMultiFileSearchDialogWithOptions(patternSeed, configuredMultiSearchDialogOptions());
+}
+
+bool handleWorkspaceMultiFileSearchDialog(const std::string &patternSeed, const std::string &startingPath) {
+	MRMultiSearchDialogOptions options = workspaceMultiSearchOptions(patternSeed, startingPath);
+	MultiFileSearchSession session;
+	std::string errorText;
+	MREditWindow *previousWindow = currentEditWindow();
+
+	postMultiSearchStartedWarning();
+	switch (collectMultiFileSession(session, options, options.searchText, "", false, false, errorText)) {
+		case MultiFileCollectOutcome::Error:
+			static_cast<void>(showMultiFileSessionCollectionError(errorText));
+			return true;
+		case MultiFileCollectOutcome::NoHits:
+			postNoHitsWarning();
+			return true;
+		case MultiFileCollectOutcome::Cancelled:
+			if (session.files.empty()) return true;
+			break;
+		case MultiFileCollectOutcome::Success:
+			break;
+	}
+	g_lastMultiFileSearchSession = session;
+	switch (runMultiFileResultsDialog(g_lastMultiFileSearchSession)) {
+		case MultiDialogAction::Load:
+			static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+			return true;
+		case MultiDialogAction::LoadAll:
+			if (!loadAllSessionFiles(g_lastMultiFileSearchSession, errorText)) {
+				if (!errorText.empty()) postSearchError(errorText);
+				closeTemporaryWindowsForSession(g_lastMultiFileSearchSession);
+				return true;
+			}
+			static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+			return true;
+		default:
+			break;
+	}
+	if (previousWindow != nullptr) static_cast<void>(mrActivateEditWindow(previousWindow));
 	return true;
 }
 
@@ -122,21 +194,20 @@ bool handleLastMultiFileSearchListDialog() {
 		return true;
 	}
 	action = runMultiFileResultsDialog(g_lastMultiFileSearchSession);
-	if (action == MultiDialogAction::Load) static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+	if (action == MultiDialogAction::Load) return activateSessionCurrentMatch(g_lastMultiFileSearchSession);
 	if (action == MultiDialogAction::LoadAll) {
 		if (!loadAllSessionFiles(g_lastMultiFileSearchSession, errorText)) {
 			if (!errorText.empty()) postSearchError(errorText);
 			closeTemporaryWindowsForSession(g_lastMultiFileSearchSession);
 			return true;
 		}
-		static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+		return activateSessionCurrentMatch(g_lastMultiFileSearchSession);
 	}
-	if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
+	if (previousWindow != nullptr) static_cast<void>(mrActivateEditWindow(previousWindow));
 	return true;
 }
 
-bool handleMultiFileSearchReplaceDialog(const std::string &patternSeed, const std::string &replacementSeed) {
-	MRMultiSarDialogOptions sarOptions = configuredMultiSarDialogOptions();
+bool handleMultiFileSearchReplaceDialogWithOptions(const std::string &patternSeed, const std::string &replacementSeed, MRMultiSarDialogOptions sarOptions) {
 	std::string pattern;
 	std::string replacement;
 	for (;;) {
@@ -149,6 +220,7 @@ bool handleMultiFileSearchReplaceDialog(const std::string &patternSeed, const st
 
 		while (!session.files.empty()) {
 			const MultiDialogAction action = runMultiFileResultsDialog(session);
+			if (action == MultiDialogAction::Done) break;
 			if (action == MultiDialogAction::Cancel) {
 				returnToSearchDialog = true;
 				break;
@@ -186,6 +258,14 @@ bool handleMultiFileSearchReplaceDialog(const std::string &patternSeed, const st
 		return true;
 	}
 	return true;
+}
+
+bool handleMultiFileSearchReplaceDialog(const std::string &patternSeed, const std::string &replacementSeed) {
+	return handleMultiFileSearchReplaceDialogWithOptions(patternSeed, replacementSeed, configuredMultiSarDialogOptions());
+}
+
+bool handleWorkspaceMultiFileSearchReplaceDialog(const std::string &patternSeed, const std::string &replacementSeed, const std::string &startingPath) {
+	return handleMultiFileSearchReplaceDialogWithOptions(patternSeed, replacementSeed, workspaceMultiSarOptions(patternSeed, replacementSeed, startingPath));
 }
 
 bool handleNextMultiFileSearchResult() {

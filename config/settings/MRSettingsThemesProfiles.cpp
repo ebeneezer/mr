@@ -278,6 +278,16 @@ const ColorGroupDefinition *findColorGroupDefinitionByKey(const std::string &key
 	return nullptr;
 }
 
+bool codeColorCountAccepted(std::size_t count, std::size_t currentCount) noexcept {
+	if (count == currentCount) return true;
+	if (count == currentCount + 1) return true;
+	if (currentCount > 0 && count == currentCount - 1) return true;
+	if (currentCount > 5 && count == currentCount - 6) return true;
+	if (currentCount > 7 && count == currentCount - 8) return true;
+	if (currentCount > 9 && count == currentCount - 10) return true;
+	return false;
+}
+
 unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	static constexpr std::array<unsigned char, 146> defaults = {
 	    0x00, 0x71, 0x70, 0x78, 0x74, 0x20, 0x28, 0x24, 0x17, 0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71, 0x1F, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x21, 0x3F, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x7F, 0x7E, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30, 0x3F, 0x3E, 0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00, 0x17, 0x1F, 0x1A, 0x71, 0x71, 0x1E, 0x17, 0x1F, 0x1E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x10, 0x30, 0x3F, 0x3E, 0x70, 0x2F, 0x7A, 0x20, 0x12, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x30, 0x3F, 0x3E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x30, 0x70, 0x7F, 0x7E, 0x1F, 0x2F, 0x1A, 0x20, 0x32, 0x31, 0x71, 0x70, 0x2F, 0x7E, 0x71, 0x13, 0x78, 0x00, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x30, 0x3E, 0x1E,
@@ -301,7 +311,6 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteMiniMapChanged) return defaults[14];
 	if (paletteIndex == kMrPaletteMiniMapFindMarker) return defaults[5];
 	if (paletteIndex == kMrPaletteMiniMapErrorMarker) return defaults[42];
-	if (paletteIndex == kMrPaletteMiniMapDiagnostics) return defaultColorForSlot(kMrPaletteDiagnosticInformation);
 	if (paletteIndex == kMrPaletteCodeComments) return defaults[12];
 	if (paletteIndex == kMrPaletteCodeStrings) return defaults[14];
 	if (paletteIndex == kMrPaletteCodeCharacters) return defaults[14];
@@ -319,7 +328,6 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteSidekickEditorHighlight) return 0xE0;
 	if (paletteIndex == kMrPaletteContextMenu) return defaultColorForSlot(kMrPaletteDropListDescription);
 	if (paletteIndex == kMrPaletteContextMenuSelector) return defaultColorForSlot(kMrPaletteDropListSelectedInactive);
-	if (paletteIndex == kMrPaletteDiagnosticInformation) return 0x4E;
 	if (paletteIndex == kMrPaletteSnippetSidekickFrame) return 0x3F;
 	if (paletteIndex == kMrPaletteSnippetSidekickText) return 0x30;
 	if (paletteIndex == kMrPaletteSnippetPlaceholder) return 0x38;
@@ -470,10 +478,10 @@ bool parseCodeColorListLiteral(const std::string &literal, std::array<unsigned c
 		if (comma == std::string::npos) break;
 		cursor = comma + 1;
 	}
-	if (parsed.size() != outValues.size() && parsed.size() != outValues.size() - 5 && parsed.size() != outValues.size() - 7 && parsed.size() != outValues.size() - 9) return setError(errorMessage, "Unexpected CODECOLORS list size.");
-	for (std::size_t i = 0; i < parsed.size(); ++i)
+	if (!codeColorCountAccepted(parsed.size(), outValues.size())) return setError(errorMessage, "Unexpected CODECOLORS list size.");
+	for (std::size_t i = 0; i < parsed.size() && i < outValues.size(); ++i)
 		outValues[i] = parsed[i];
-	for (std::size_t i = parsed.size(); i < outValues.size(); ++i)
+	for (std::size_t i = std::min<std::size_t>(parsed.size(), outValues.size()); i < outValues.size(); ++i)
 		outValues[i] = defaultColorForSlot(kCodeColorItems[i].paletteIndex);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -593,7 +601,6 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	const unsigned char defaultCodeFoldingMarker = defaultColorForSlot(kMrPaletteCodeFoldingMarker);
 	const unsigned char defaultFormatRuler = defaultColorForSlot(kMrPaletteFormatRuler);
 	const unsigned char defaultFocusedPaneBorder = defaultColorForSlot(kMrPaletteFocusedPaneBorder);
-	const unsigned char defaultDiagnosticInformation = defaultColorForSlot(kMrPaletteDiagnosticInformation);
 	unsigned char value = 0;
 	bool v7Format = false;
 	bool v6Format = false;
@@ -601,6 +608,10 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	bool v4Format = false;
 	bool v3Format = false;
 	bool v2Format = false;
+	auto resetWindowColorDefaults = [&]() {
+		for (std::size_t i = 0; i < outValues.size(); ++i)
+			outValues[i] = defaultColorForSlot(kWindowColorItems[i].paletteIndex);
+	};
 
 	if (text.rfind("v7:", 0) == 0 || text.rfind("V7:", 0) == 0) {
 		text = text.substr(3);
@@ -636,36 +647,38 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 
 	if (v7Format) {
 		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v7.");
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (v6Format) {
 		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v6.");
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (v5Format) {
 		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (v4Format) {
 		if (parsed.size() != MRColorSetupSettings::kWindowCount - 3) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (v3Format) {
 		if (parsed.size() != MRColorSetupSettings::kWindowCount - 4) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (v2Format) {
 		if (parsed.size() != 8) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
+		resetWindowColorDefaults();
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -679,33 +692,34 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
+		resetWindowColorDefaults();
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 5) {
+		resetWindowColorDefaults();
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -719,8 +733,8 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 6) {
+		resetWindowColorDefaults();
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -734,8 +748,8 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 7) {
+		resetWindowColorDefaults();
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -749,7 +763,6 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
 		outValues[12] = defaultFocusedPaneBorder;
-		outValues[13] = defaultDiagnosticInformation;
 	} else {
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 	}
@@ -1009,7 +1022,7 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup group.");
 	if (values == nullptr) return setError(errorMessage, "Unexpected color setup group value count.");
 	if (group == MRColorSetupGroup::Code) {
-		if (count != definition->count && count != definition->count - 5 && count != definition->count - 7 && count != definition->count - 9) return setError(errorMessage, "Unexpected color setup group value count.");
+		if (!codeColorCountAccepted(count, definition->count)) return setError(errorMessage, "Unexpected color setup group value count.");
 	} else if (count != definition->count)
 		return setError(errorMessage, "Unexpected color setup group value count.");
 
@@ -1368,13 +1381,26 @@ bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorM
 
 bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
+	std::string source;
+	std::map<std::string, std::string> assignments;
+	MRColorSetupSettings colors = resolveColorSetupDefaults();
+	bool upgradeRequired = false;
+	std::string themeName;
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
-	if (!runMacroFileByPath(normalized.c_str(), errorMessage, false)) return false;
-	if (trimAscii(configuredColorThemeDisplayNameValue()).empty())
-		if (!setConfiguredColorThemeDisplayName(fileNamePartOf(normalized), errorMessage)) return false;
+	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
+	if (!parseThemeSetupAssignments(source, assignments, &upgradeRequired, errorMessage)) return false;
+	(void)upgradeRequired;
+	for (const ColorGroupDefinition &group : kColorGroups)
+		if (!applyColorSetupValueInternal(colors, group.key, assignments[group.key], errorMessage)) return false;
+	configuredColorSettings() = colors;
+	configuredColorSettingsInitialized() = true;
+	themeName = trimAscii(assignments["THEME_NAME"]);
+	if (themeName.empty()) themeName = fileNamePartOf(normalized);
+	if (!setConfiguredColorThemeDisplayName(themeName, errorMessage)) return false;
 	if (!setConfiguredColorThemeFilePath(normalized, errorMessage)) return false;
+	recordSettingsRuntimeWrite();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

@@ -4,6 +4,7 @@
 #include "MRSidekickEditor.hpp"
 #include "MRWindowSupport.hpp"
 
+#include "../app/MRCommandRouter.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"

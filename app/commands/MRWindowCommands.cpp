@@ -5,6 +5,7 @@
 #define Uses_TFileDialog
 #define Uses_MsgBox
 #define Uses_TObject
+#define Uses_TScreen
 #include <tvision/tv.h>
 
 #include "MRFileCommands.hpp"
@@ -32,7 +33,9 @@
 #include "../../coprocessor/MRCoprocessor.hpp"
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
+#include "../../ui/MRMenuBar.hpp"
 #include "../../ui/MREditWindow.hpp"
+#include "../../ui/MRFrame.hpp"
 #include "../../ui/MRBentoBox.hpp"
 #include "../../ui/widgets/MRScopedHistoryUI.hpp"
 #include "../../ui/MRWindowLayout.hpp"
@@ -41,6 +44,14 @@
 #include "../../dialogs/setup/MRSetupCommon.hpp"
 
 namespace {
+void logWindowTiming(const std::string &label, long long tookUs, const std::string &detail) {
+	std::ostringstream line;
+
+	line << label << " took_us=" << tookUs;
+	if (!detail.empty()) line << " " << detail;
+	mrLogMessage(line.str());
+}
+
 void postWindowCommandError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
@@ -55,10 +66,15 @@ void collectEditWindowsInZOrder(TView *view, void *arg) {
 
 std::vector<MREditWindow *> allEditWindowsInZOrder() {
 	std::vector<MREditWindow *> windows;
+	const auto startedAt = std::chrono::steady_clock::now();
 
 	if (TProgram::deskTop == nullptr) return windows;
 
 	TProgram::deskTop->forEach(collectEditWindowsInZOrder, &windows);
+	{
+		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+		if (tookUs >= 5000) logWindowTiming("Window enumerate slow", tookUs, "count=" + std::to_string(windows.size()));
+	}
 	return windows;
 }
 
@@ -75,31 +91,90 @@ std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder() {
 }
 
 namespace {
-short nextEditorWindowNumber() {
+void collectUsedEditorWindowNumbers(std::set<short> &used) {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-	std::set<short> used;
-	short candidate = 1;
 
 	for (auto &window : windows) {
 		if (window != nullptr && window->number > 0) used.insert(window->number);
 	}
+}
+
+short nextEditorWindowNumberFromSet(std::set<short> &used) {
+	short candidate = 1;
 
 	while (used.find(candidate) != used.end()) {
 		if (candidate == std::numeric_limits<short>::max()) return candidate;
 		++candidate;
 	}
+	used.insert(candidate);
 	return candidate;
 }
 
-void finishNewEditWindow(MREditWindow *win) {
+short nextEditorWindowNumber() {
+	std::set<short> used;
+
+	collectUsedEditorWindowNumbers(used);
+	return nextEditorWindowNumberFromSet(used);
+}
+
+void finishNewEditWindow(MREditWindow *win, bool notifyTopology = true) {
 	if (win == nullptr || TProgram::deskTop == nullptr) return;
 	TProgram::deskTop->insert(win);
 	win->mVirtualDesktop = currentVirtualDesktop();
 	win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
 	if (win->getEditor() != nullptr) win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
-	mrNotifyWindowTopologyChanged();
+	if (notifyTopology) mrNotifyWindowTopologyChanged();
+}
+
+MREditWindow *createEditorWindowWithNumber(const char *title, short number, bool notifyTopology) {
+	TRect bounds;
+	MREditWindow *win;
+
+	if (TProgram::deskTop == nullptr) return nullptr;
+	bounds = MRWindowLayout::usableDesktopBounds();
+	bounds.grow(-2, -1);
+	win = new MRBentoBox(bounds, title, number, bbmDocumentViewports);
+	finishNewEditWindow(win, notifyTopology);
+	return win;
 }
 } // namespace
+
+MRWindowOpenBatch::MRWindowOpenBatch() : usedNumbers(), mActive(false), mDesktopLocked(false), mCreatedCount(0) {
+}
+
+void MRWindowOpenBatch::begin() {
+	if (mActive) return;
+	usedNumbers.clear();
+	collectUsedEditorWindowNumbers(usedNumbers);
+	mCreatedCount = 0;
+	if (TProgram::deskTop != nullptr) {
+		TProgram::deskTop->lock();
+		mDesktopLocked = true;
+	}
+	mActive = true;
+}
+
+MREditWindow *MRWindowOpenBatch::createEditorWindow(const char *title) {
+	MREditWindow *window = nullptr;
+
+	if (!mActive) begin();
+	window = createEditorWindowWithNumber(title, nextEditorWindowNumberFromSet(usedNumbers), false);
+	if (window != nullptr) ++mCreatedCount;
+	return window;
+}
+
+void MRWindowOpenBatch::finish(bool syncVisibility, bool notifyTopology) {
+	if (!mActive) return;
+	if (mDesktopLocked && TProgram::deskTop != nullptr) TProgram::deskTop->unlock();
+	mDesktopLocked = false;
+	mActive = false;
+	if (mCreatedCount != 0 && syncVisibility) syncVirtualDesktopVisibility();
+	if (mCreatedCount != 0 && notifyTopology) mrNotifyWindowTopologyChanged();
+}
+
+bool MRWindowOpenBatch::active() const noexcept {
+	return mActive;
+}
 
 #include "../utils/MRFileIOUtils.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
@@ -110,8 +185,10 @@ static bool g_cyclicVirtualDesktopsSnapshot = false;
 static std::set<const MREditWindow *> g_manuallyHiddenWindows;
 static std::string g_workspaceMainFilePath;
 static bool g_workspaceAutosaveDirty = false;
+static bool g_workspaceRestoreInProgress = false;
 static std::chrono::steady_clock::time_point g_workspaceAutosaveDue;
 static constexpr std::chrono::milliseconds kWorkspaceAutosaveDelay(1000);
+static constexpr int kWorkspaceRestoreProgressEntryThreshold = 50;
 
 namespace {
 int normalizedVirtualDesktopCount(int count) {
@@ -372,21 +449,50 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 	return !entry.url.empty();
 }
 
-void restoreEditorCursor(MRFileEditor *editor, int line, int column) {
-	std::size_t target = 0;
+int countWorkspaceEntriesInSource(const std::string &source) {
+	std::istringstream input(source);
+	std::string line;
+	int count = 0;
 
+	while (std::getline(input, line)) {
+		WorkspaceEntry entry;
+
+		if (parseWorkspaceEntry(line, entry)) ++count;
+	}
+	return count;
+}
+
+void drawWorkspaceMessageLineNow(const std::string &text, MRMenuBar::MarqueeKind kind) {
+	MRMenuBar *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar);
+
+	if (menuBar == nullptr) return;
+	menuBar->setAutoMarqueeStatus(text, kind);
+	menuBar->drawView();
+	TScreen::flushScreen();
+}
+
+void postWorkspaceRestoreProgress(int processedEntries, int totalEntries, bool refreshNow) {
+	std::string text = "Workspace restore: " + std::to_string(processedEntries) + "/" + std::to_string(totalEntries);
+
+	mr::messageline::postSticky(mr::messageline::Owner::HeroEvent, text, mr::messageline::Kind::Info, mr::messageline::kPriorityHigh);
+	if (refreshNow) drawWorkspaceMessageLineNow(text, MRMenuBar::MarqueeKind::Hero);
+}
+
+void hideAllEditorFrameHoverPopups() {
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+
+	for (MREditWindow *window : windows)
+		if (window != nullptr) {
+			MRFrame *frame = dynamic_cast<MRFrame *>(window->frame);
+			if (frame != nullptr) frame->updateTaskHover(TPoint(), true);
+		}
+}
+
+void restoreEditorCursor(MRFileEditor *editor, int line, int column) {
 	if (editor == nullptr) return;
 	line = std::max(1, line);
 	column = std::max(1, column);
-
-	for (int currentLine = 1; currentLine < line && target < editor->bufferLength(); ++currentLine) {
-		std::size_t next = editor->nextLineOffset(target);
-		if (next <= target) break;
-		target = next;
-	}
-	target = editor->charPtrOffset(target, column - 1);
-	editor->setCursorOffset(target);
-	editor->revealCursor(True);
+	editor->restoreCursorViewState(static_cast<std::size_t>(line - 1), column - 1);
 }
 
 std::string workspacePathBaseName(const std::string &path) {
@@ -572,8 +678,10 @@ void mrMarkWorkspaceAutosaveDirty() {
 
 namespace {
 void flushWorkspaceAutosave(bool force) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	std::string errorText;
 	MRSettingsWriteReport report;
+	long long persistUs = 0;
 
 	if (!g_workspaceAutosaveDirty) return;
 	if (!configuredAutosaveWorkspace()) return;
@@ -581,13 +689,18 @@ void flushWorkspaceAutosave(bool force) {
 	if (!force && std::chrono::steady_clock::now() < g_workspaceAutosaveDue) return;
 	mrLogMessage(std::string("Workspace autosave flush begin force=") + (force ? "1" : "0") + ".");
 	g_workspaceAutosaveDirty = false;
-	if (!persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)) {
-		g_workspaceAutosaveDirty = true;
-		g_workspaceAutosaveDue = std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay;
-		if (!errorText.empty()) mrLogMessage("Workspace autosave failed: " + errorText);
-		return;
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		if (!persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)) {
+			g_workspaceAutosaveDirty = true;
+			g_workspaceAutosaveDue = std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay;
+			if (!errorText.empty()) mrLogMessage("Workspace autosave failed: " + errorText);
+			return;
+		}
+		persistUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 	mrLogSettingsWriteReport("workspace autosave", report);
+	logWindowTiming("Workspace autosave flush timing", std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count(), "persist_us=" + std::to_string(persistUs));
 	mrLogMessage("Workspace autosave flush end.");
 }
 } // namespace
@@ -598,6 +711,10 @@ void mrFlushWorkspaceAutosaveIfDue() {
 
 void mrFlushWorkspaceAutosaveNow() {
 	flushWorkspaceAutosave(true);
+}
+
+bool mrWorkspaceRestoreInProgress() {
+	return g_workspaceRestoreInProgress;
 }
 
 std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
@@ -660,7 +777,6 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		minimized = win->isMinimized();
 		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + (mrIsWorkspaceMainFile(win) ? std::string(" main=1") : std::string()) + (bentoPayload.empty() ? std::string() : " bento=" + bentoPayload) + fileComparePayload + "');\n");
 		++writtenEntries;
-		mrLogMessage("Workspace serialize entry url=" + url + " vd=" + std::to_string(vd) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + ".");
 	}
 	mrLogMessage("Workspace serialize summary candidates=" + std::to_string(candidateWindows) + " entries=" + std::to_string(writtenEntries) + " settings=" + paths.settingsMacroUri + ".");
 	return source;
@@ -909,7 +1025,16 @@ bool mrLoadWorkspaceWithDialog() {
 }
 
 void mrLoadWorkspace(const std::string &filename) {
+	const auto loadStartedAt = std::chrono::steady_clock::now();
 	std::string settingsPath = filename;
+	long long readUs = 0;
+	long long parseLoopUs = 0;
+	long long visibilityUs = 0;
+	int totalWorkspaceEntries = 0;
+	std::chrono::steady_clock::time_point lastWorkspaceProgressAt = std::chrono::steady_clock::time_point::min();
+	const ushort restoreCursorLines = TScreen::cursorLines;
+	bool cursorSuppressedForRestore = false;
+
 	if (settingsPath.empty()) {
 		settingsPath = configuredSettingsMacroFilePath();
 	}
@@ -920,12 +1045,32 @@ void mrLoadWorkspace(const std::string &filename) {
 
 	std::string currentContent;
 	std::string errorText;
-	if (!readTextFile(dest, currentContent, errorText)) {
-		mrLogMessage("Workspace load failed read path=" + dest + " error=" + errorText + ".");
-		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Unable to read workspace: " + workspaceDisplayName(dest), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
-		return;
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		if (!readTextFile(dest, currentContent, errorText)) {
+			mrLogMessage("Workspace load failed read path=" + dest + " error=" + errorText + ".");
+			mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Unable to read workspace: " + workspaceDisplayName(dest), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+			return;
+		}
+		readUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 	mrLogMessage("Workspace load begin path=" + dest + " bytes=" + std::to_string(currentContent.size()) + ".");
+	totalWorkspaceEntries = countWorkspaceEntriesInSource(currentContent);
+	g_workspaceRestoreInProgress = totalWorkspaceEntries > kWorkspaceRestoreProgressEntryThreshold;
+	if (g_workspaceRestoreInProgress) {
+		cursorSuppressedForRestore = true;
+		TScreen::cursorLines = 0;
+		TScreen::setCursorType(0);
+		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
+		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
+		mr::messageline::clearOwner(mr::messageline::Owner::MacroMessage);
+		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
+		mr::messageline::clearOwner(mr::messageline::Owner::MacroBrain);
+		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
+		hideAllEditorFrameHoverPopups();
+		postWorkspaceRestoreProgress(0, totalWorkspaceEntries, true);
+		lastWorkspaceProgressAt = std::chrono::steady_clock::now();
+	}
 
 	std::istringstream iss(currentContent);
 	std::string line;
@@ -933,69 +1078,138 @@ void mrLoadWorkspace(const std::string &filename) {
 	bool loadedMainFile = false;
 	int parsedWorkspaceEntries = 0;
 	int loadedWorkspaceEntries = 0;
+	MRWindowOpenBatch openBatch;
 	g_workspaceMainFilePath.clear();
-	while (std::getline(iss, line)) {
-		WorkspaceEntry entry;
-		MREditWindow *win = nullptr;
-		MRFileEditor *editor = nullptr;
-		std::string err;
-		int resolvedVirtualDesktop = 1;
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		openBatch.begin();
+		while (std::getline(iss, line)) {
+			const auto entryStartedAt = std::chrono::steady_clock::now();
+			WorkspaceEntry entry;
+			MREditWindow *win = nullptr;
+			MRFileEditor *editor = nullptr;
+			std::string err;
+			int resolvedVirtualDesktop = 1;
+			long long createUs = 0;
+			long long fileLoadUs = 0;
+			long long bentoUs = 0;
+			long long geometryUs = 0;
+			long long cursorUs = 0;
 
-		if (!parseWorkspaceEntry(line, entry)) continue;
-		++parsedWorkspaceEntries;
-		resolvedVirtualDesktop = workspaceVirtualDesktopOrRandom(entry.vd);
-		mrLogMessage("Workspace load entry #" + std::to_string(parsedWorkspaceEntries) + " url=" + entry.url + " saved_vd=" + std::to_string(entry.vd) + " resolved_vd=" + std::to_string(resolvedVirtualDesktop) + " bento=" + (entry.hasBentoSnapshot ? "1" : "0") + " filecompare=" + (entry.hasFileCompareSources ? "1" : "0") + ".");
+				if (!parseWorkspaceEntry(line, entry)) continue;
+				++parsedWorkspaceEntries;
+				if (g_workspaceRestoreInProgress) {
+					const auto now = std::chrono::steady_clock::now();
+					const bool shouldReportProgress = parsedWorkspaceEntries == 1 || parsedWorkspaceEntries == totalWorkspaceEntries || now - lastWorkspaceProgressAt >= std::chrono::milliseconds(1500);
 
-		if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare) {
-			win = restoreFileCompareWorkspaceEntry(entry, resolvedVirtualDesktop);
-			editor = win != nullptr ? win->getEditor() : nullptr;
-			if (win == nullptr || editor == nullptr) {
-				mrLogMessage("Workspace load failed file-compare restore url=" + entry.url + ".");
-				discardedWorkspaceEntries = true;
-				continue;
+				if (shouldReportProgress) {
+					postWorkspaceRestoreProgress(parsedWorkspaceEntries, totalWorkspaceEntries, true);
+					lastWorkspaceProgressAt = now;
+				}
 			}
-		} else {
-			win = createEditorWindow(entry.url.c_str());
-			editor = win != nullptr ? win->getEditor() : nullptr;
-			if (win == nullptr || editor == nullptr || !editor->loadMappedFile(entry.url.c_str(), err)) {
-				mrLogMessage("Workspace load failed file url=" + entry.url + " window=" + (win != nullptr ? "1" : "0") + " editor=" + (editor != nullptr ? "1" : "0") + " error=" + err + ".");
-				if (win != nullptr) message(win, evCommand, cmClose, nullptr);
-				discardedWorkspaceEntries = true;
-				continue;
-			}
-		}
-		if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode != bbmFileCompare) {
-			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
-			if (bentoBox == nullptr || !bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)) {
-				mrLogMessage("Workspace load failed Bento snapshot restore url=" + entry.url + " bento_window=" + (bentoBox != nullptr ? "1" : "0") + ".");
-				message(win, evCommand, cmClose, nullptr);
-				discardedWorkspaceEntries = true;
-				continue;
-			}
-		}
+			resolvedVirtualDesktop = workspaceVirtualDesktopOrRandom(entry.vd);
 
-		win->mVirtualDesktop = resolvedVirtualDesktop;
-		if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0) {
-			const TRect bounds(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height);
-			const TRect restoreBounds(entry.restoreX, entry.restoreY, entry.restoreX + std::max(entry.restoreWidth, 1), entry.restoreY + std::max(entry.restoreHeight, 1));
-			MRWindowLayout::applyWorkspaceState(win, bounds, restoreBounds, entry.minimized);
-			mrLogMessage("Workspace load applied geometry url=" + entry.url + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " min=" + (entry.minimized ? "1" : "0") + ".");
+			if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare) {
+				const auto subStartedAt = std::chrono::steady_clock::now();
+				win = restoreFileCompareWorkspaceEntry(entry, resolvedVirtualDesktop);
+				bentoUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+				editor = win != nullptr ? win->getEditor() : nullptr;
+				if (win == nullptr || editor == nullptr) {
+					mrLogMessage("Workspace load failed file-compare restore url=" + entry.url + ".");
+					discardedWorkspaceEntries = true;
+					continue;
+				}
+			} else {
+				{
+					const auto subStartedAt = std::chrono::steady_clock::now();
+					win = openBatch.createEditorWindow(entry.url.c_str());
+					createUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+				}
+				editor = win != nullptr ? win->getEditor() : nullptr;
+				{
+					const auto subStartedAt = std::chrono::steady_clock::now();
+					if (win == nullptr || editor == nullptr || !editor->loadMappedFile(entry.url.c_str(), err)) {
+						fileLoadUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+						mrLogMessage("Workspace load failed file url=" + entry.url + " window=" + (win != nullptr ? "1" : "0") + " editor=" + (editor != nullptr ? "1" : "0") + " error=" + err + ".");
+						if (win != nullptr) message(win, evCommand, cmClose, nullptr);
+						discardedWorkspaceEntries = true;
+						continue;
+					}
+					fileLoadUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+				}
+			}
+			if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode != bbmFileCompare) {
+				const auto subStartedAt = std::chrono::steady_clock::now();
+				MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
+				if (bentoBox == nullptr || !bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)) {
+					bentoUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+					mrLogMessage("Workspace load failed Bento snapshot restore url=" + entry.url + " bento_window=" + (bentoBox != nullptr ? "1" : "0") + ".");
+					message(win, evCommand, cmClose, nullptr);
+					discardedWorkspaceEntries = true;
+					continue;
+				}
+				bentoUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+			}
+
+			win->mVirtualDesktop = resolvedVirtualDesktop;
+			if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0) {
+				const auto subStartedAt = std::chrono::steady_clock::now();
+				const TRect bounds(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height);
+				const TRect restoreBounds(entry.restoreX, entry.restoreY, entry.restoreX + std::max(entry.restoreWidth, 1), entry.restoreY + std::max(entry.restoreHeight, 1));
+				MRWindowLayout::applyWorkspaceState(win, bounds, restoreBounds, entry.minimized, false, false);
+				geometryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+			}
+			{
+				const auto subStartedAt = std::chrono::steady_clock::now();
+				restoreEditorCursor(editor, entry.line, entry.column);
+				cursorUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+			}
+			if (entry.mainFile && !loadedMainFile) {
+				static_cast<void>(mrSetWorkspaceMainFile(win));
+				loadedMainFile = true;
+			}
+			++loadedWorkspaceEntries;
+			{
+				const long long entryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - entryStartedAt).count();
+				std::ostringstream detail;
+
+				detail << "entry=" << loadedWorkspaceEntries << " parsed=" << parsedWorkspaceEntries << " create_us=" << createUs << " file_us=" << fileLoadUs << " bento_us=" << bentoUs << " geometry_us=" << geometryUs << " cursor_us=" << cursorUs << " min=" << (entry.minimized ? 1 : 0) << " url=\"" << entry.url << "\"";
+				if (entryUs >= 250000) logWindowTiming("Workspace load entry slow", entryUs, detail.str());
+			}
 		}
-		restoreEditorCursor(editor, entry.line, entry.column);
-		if (entry.mainFile && !loadedMainFile) {
-			static_cast<void>(mrSetWorkspaceMainFile(win));
-			loadedMainFile = true;
+		openBatch.finish(false, false);
+		parseLoopUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 		}
-		++loadedWorkspaceEntries;
-		mrLogMessage("Workspace load restored entry #" + std::to_string(loadedWorkspaceEntries) + " url=" + entry.url + ".");
+		g_workspaceRestoreInProgress = false;
+		if (totalWorkspaceEntries > kWorkspaceRestoreProgressEntryThreshold) hideAllEditorFrameHoverPopups();
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		syncVirtualDesktopVisibility();
+		if (loadedWorkspaceEntries != 0) mrNotifyWindowTopologyChanged();
+		visibilityUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
-	syncVirtualDesktopVisibility();
 	mrLogMessage("Workspace load summary path=" + dest + " parsed=" + std::to_string(parsedWorkspaceEntries) + " loaded=" + std::to_string(loadedWorkspaceEntries) + " discarded=" + (discardedWorkspaceEntries ? "1" : "0") + ".");
-	if (parsedWorkspaceEntries != 0 && loadedWorkspaceEntries == 0) {
-		setRuntimePreserveAutosavedWorkspace(true);
-		mrLogMessage("Workspace load restored no entries; autosaved workspace was left preserved.");
+	{
+		std::ostringstream detail;
+		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - loadStartedAt).count();
+
+		detail << "read_us=" << readUs << " parse_loop_us=" << parseLoopUs << " visibility_us=" << visibilityUs << " parsed=" << parsedWorkspaceEntries << " loaded=" << loadedWorkspaceEntries << " bytes=" << currentContent.size() << " path=\"" << dest << "\"";
+		logWindowTiming("Workspace load total timing", tookUs, detail.str());
+		}
+		if (parsedWorkspaceEntries != 0 && loadedWorkspaceEntries == 0) {
+			setRuntimePreserveAutosavedWorkspace(true);
+			mrLogMessage("Workspace load restored no entries; autosaved workspace was left preserved.");
+		}
+		if (discardedWorkspaceEntries) mrLogMessage("Workspace load skipped one or more invalid entries; source was left unchanged.");
+		if (totalWorkspaceEntries > kWorkspaceRestoreProgressEntryThreshold) {
+			mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
+			drawWorkspaceMessageLineNow(std::string(), MRMenuBar::MarqueeKind::Hero);
+		}
+	if (cursorSuppressedForRestore) {
+		TScreen::cursorLines = restoreCursorLines;
+		TScreen::setCursorType(restoreCursorLines);
+		if (TProgram::deskTop != nullptr) TProgram::deskTop->resetCursor();
 	}
-	if (discardedWorkspaceEntries) mrLogMessage("Workspace load skipped one or more invalid entries; source was left unchanged.");
 }
 
 MREditWindow *createEditorWindow(const char *title) {
@@ -1442,13 +1656,19 @@ bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 	MREditWindow *current = currentEditWindow();
 	MREditWindow *previousActive = restoreWindow != nullptr ? restoreWindow : current;
 	MREditWindow *lastLoadedWindow = nullptr;
+	MRWindowOpenBatch openBatch;
+	const bool useBatch = resolvedPaths.size() > 1;
 
 	for (const std::string &resolvedPath : resolvedPaths) {
 		MREditWindow *target = findReusableEmptyWindow(current);
 		bool createdTarget = false;
 
 		if (target == nullptr) {
-			target = createEditorWindow("?No-File?");
+			if (useBatch) {
+				if (!openBatch.active()) openBatch.begin();
+				target = openBatch.createEditorWindow("?No-File?");
+			} else
+				target = createEditorWindow("?No-File?");
 			createdTarget = true;
 		}
 		if (target == nullptr) continue;
@@ -1462,6 +1682,7 @@ bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 		lastLoadedWindow = target;
 		current = target;
 	}
+	if (openBatch.active()) openBatch.finish(true, lastLoadedWindow != nullptr);
 	if (lastLoadedWindow != nullptr) {
 		if (activation == MRLoadedWindowActivation::ActivateLast) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
 		else if (previousActive != nullptr && previousActive != lastLoadedWindow)
@@ -1476,10 +1697,16 @@ bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 	MREditWindow *lastLoadedWindow = nullptr;
 	bool createdTarget = false;
 	bool first = true;
+	MRWindowOpenBatch openBatch;
+	const bool useBatch = resolvedPaths.size() > 1;
 
 	if (resolvedPaths.empty()) return false;
 	if (target == nullptr) {
-		target = createEditorWindow("?No-File?");
+		if (useBatch) {
+			openBatch.begin();
+			target = openBatch.createEditorWindow("?No-File?");
+		} else
+			target = createEditorWindow("?No-File?");
 		createdTarget = true;
 	} else if (!target->confirmAbandonForReload())
 		return false;
@@ -1490,7 +1717,11 @@ bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 		if (!first) {
 			loadTarget = findReusableEmptyWindow(nullptr);
 			if (loadTarget == nullptr) {
-				loadTarget = createEditorWindow("?No-File?");
+				if (useBatch) {
+					if (!openBatch.active()) openBatch.begin();
+					loadTarget = openBatch.createEditorWindow("?No-File?");
+				} else
+					loadTarget = createEditorWindow("?No-File?");
 				createdLoadTarget = true;
 			}
 		}
@@ -1509,6 +1740,7 @@ bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 		lastLoadedWindow = loadTarget;
 		first = false;
 	}
+	if (openBatch.active()) openBatch.finish(true, lastLoadedWindow != nullptr);
 	if (lastLoadedWindow != nullptr) {
 		if (activation == MRLoadedWindowActivation::ActivateLast) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
 		else if (previousActive != nullptr && previousActive != lastLoadedWindow)
@@ -1651,53 +1883,88 @@ bool saveCurrentEditWindowAs() {
 }
 
 bool handleWindowCascade() {
+	const auto startedAt = std::chrono::steady_clock::now();
+	const auto enumerateStartedAt = startedAt;
 	std::vector<MREditWindow *> allWindows = allEditWindowsInZOrder();
 	std::vector<MREditWindow *> visibleWindows;
 	TRect desktopBounds;
+	long long enumerateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - enumerateStartedAt).count();
+	long long filterUs = 0;
+	long long locateUs = 0;
 
 	if (TProgram::deskTop == nullptr) return false;
 
 	desktopBounds = MRWindowLayout::usableDesktopBounds();
 
-	for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
-		MREditWindow *win = *it;
-		if (win != nullptr && (win->state & sfVisible) != 0 && !win->isMinimized()) {
-			visibleWindows.push_back(win);
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
+			MREditWindow *win = *it;
+			if (win != nullptr && (win->state & sfVisible) != 0 && !win->isMinimized()) {
+				visibleWindows.push_back(win);
+			}
 		}
+		filterUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 
 	if (visibleWindows.empty()) return true;
 
 	int cascadeIndex = 0;
-	TProgram::deskTop->lock();
-	for (MREditWindow *win : visibleWindows) {
-		TRect bounds;
-		bounds.a.x = desktopBounds.a.x + cascadeIndex;
-		bounds.a.y = desktopBounds.a.y + cascadeIndex;
-		bounds.b.x = desktopBounds.b.x;
-		bounds.b.y = desktopBounds.b.y;
-		win->locate(bounds);
-		cascadeIndex++;
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		TProgram::deskTop->lock();
+		for (MREditWindow *win : visibleWindows) {
+			const auto windowStartedAt = std::chrono::steady_clock::now();
+			TRect bounds;
+			bounds.a.x = desktopBounds.a.x + cascadeIndex;
+			bounds.a.y = desktopBounds.a.y + cascadeIndex;
+			bounds.b.x = desktopBounds.b.x;
+			bounds.b.y = desktopBounds.b.y;
+			MRWindowLayout::applyBatchWindowBounds(win, bounds);
+			{
+				const long long windowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - windowStartedAt).count();
+				if (windowUs >= 10000) logWindowTiming("Window cascade bounds slow", windowUs, "index=" + std::to_string(cascadeIndex));
+			}
+			cascadeIndex++;
+		}
+		TProgram::deskTop->unlock();
+		MRWindowLayout::refreshDesktopProjection();
+		mrNotifyWindowTopologyChanged();
+		locateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
-	TProgram::deskTop->unlock();
+	{
+		std::ostringstream detail;
+		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
 
+		detail << "all=" << allWindows.size() << " visible=" << visibleWindows.size() << " enumerate_us=" << enumerateUs << " filter_us=" << filterUs << " locate_us=" << locateUs;
+		logWindowTiming("Window cascade timing", tookUs, detail.str());
+	}
 	return true;
 }
 
 bool handleWindowTile() {
+	const auto startedAt = std::chrono::steady_clock::now();
+	const auto enumerateStartedAt = startedAt;
 	std::vector<MREditWindow *> allWindows = allEditWindowsInZOrder();
 	std::vector<MREditWindow *> visibleWindows;
 	TRect desktopBounds;
+	long long enumerateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - enumerateStartedAt).count();
+	long long filterUs = 0;
+	long long locateUs = 0;
 
 	if (TProgram::deskTop == nullptr) return false;
 
 	desktopBounds = MRWindowLayout::usableDesktopBounds();
 
-	for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
-		MREditWindow *win = *it;
-		if (win != nullptr && (win->state & sfVisible) != 0 && !win->isMinimized()) {
-			visibleWindows.push_back(win);
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
+			MREditWindow *win = *it;
+			if (win != nullptr && (win->state & sfVisible) != 0 && !win->isMinimized()) {
+				visibleWindows.push_back(win);
+			}
 		}
+		filterUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 
 	int count = visibleWindows.size();
@@ -1781,11 +2048,28 @@ bool handleWindowTile() {
 			break;
 	}
 
-	TProgram::deskTop->lock();
-	for (int i = 0; i < count; i++) {
-		visibleWindows[i]->locate(rects[i]);
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		TProgram::deskTop->lock();
+		for (int i = 0; i < count; i++) {
+			const auto windowStartedAt = std::chrono::steady_clock::now();
+			MRWindowLayout::applyBatchWindowBounds(visibleWindows[i], rects[i]);
+			{
+				const long long windowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - windowStartedAt).count();
+				if (windowUs >= 10000) logWindowTiming("Window tile bounds slow", windowUs, "index=" + std::to_string(i));
+			}
+		}
+		TProgram::deskTop->unlock();
+		MRWindowLayout::refreshDesktopProjection();
+		mrNotifyWindowTopologyChanged();
+		locateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
-	TProgram::deskTop->unlock();
+	{
+		std::ostringstream detail;
+		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
 
+		detail << "all=" << allWindows.size() << " visible=" << visibleWindows.size() << " enumerate_us=" << enumerateUs << " filter_us=" << filterUs << " locate_us=" << locateUs;
+		logWindowTiming("Window tile timing", tookUs, detail.str());
+	}
 	return true;
 }

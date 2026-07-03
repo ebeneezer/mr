@@ -44,7 +44,9 @@ class MRWindowLayout {
 	static void reinsertMinimizedWindow(MREditWindow *window);
 	static void restoreWindow(MREditWindow *window);
 	static void toggleMinimizedWindow(MREditWindow *window);
-	static void applyWorkspaceState(MREditWindow *window, const TRect &bounds, const TRect &restoreBounds, bool minimized);
+	static void applyWorkspaceState(MREditWindow *window, const TRect &bounds, const TRect &restoreBounds, bool minimized, bool notifyTopology = true, bool projectNow = true);
+	static void applyBatchWindowBounds(MREditWindow *window, const TRect &bounds);
+	static void refreshDesktopProjection();
 	static void handleDesktopLayoutChange();
 };
 
