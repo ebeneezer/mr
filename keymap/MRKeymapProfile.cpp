@@ -63,8 +63,8 @@ bool sameDispatchSlot(const MRKeymapBindingRecord &lhs, const MRKeymapBindingRec
 std::string displayBindingTarget(std::string_view target) {
 	std::string name(target);
 
-	if (name.rfind("MRMAC_", 0) == 0) return name.substr(6);
-	if (name.rfind("MR_", 0) == 0) return name.substr(3);
+	if (name.starts_with("MRMAC_")) return name.substr(6);
+	if (name.starts_with("MR_")) return name.substr(3);
 	return name;
 }
 

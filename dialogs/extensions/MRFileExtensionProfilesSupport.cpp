@@ -407,7 +407,7 @@ enum : unsigned long long {
 		return false;
 	}
 	if (!normalizeEditExtensionSelectors(selectors, &errorText)) {
-		if (errorText.rfind("Extensions", 0) == 0) errorText.replace(0, std::strlen("Extensions"), "Extension");
+		if (errorText.starts_with("Extensions")) errorText.replace(0, std::strlen("Extensions"), "Extension");
 		return false;
 	}
 	errorText.clear();
@@ -544,7 +544,7 @@ bool normalizeDraftSyntaxRecord(EditProfileDraft &draft, std::string &errorText)
 	else {
 		selectors = splitExtensionLiteral(draft.extensionsLiteral);
 		if (!normalizeEditExtensionSelectors(selectors, &errorText)) {
-			if (errorText.rfind("Extensions", 0) == 0) errorText.replace(0, std::strlen("Extensions"), "Extension");
+			if (errorText.starts_with("Extensions")) errorText.replace(0, std::strlen("Extensions"), "Extension");
 			return false;
 		}
 		draft.extensionsLiteral = joinExtensionsLiteral(selectors);
@@ -839,7 +839,7 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 			std::vector<std::string> selectors = splitExtensionLiteral(draft.extensionsLiteral);
 			std::string extError;
 			if (!normalizeEditExtensionSelectors(selectors, &extError)) {
-				if (extError.rfind("Extensions", 0) == 0) extError.replace(0, std::strlen("Extensions"), "Extension");
+				if (extError.starts_with("Extensions")) extError.replace(0, std::strlen("Extensions"), "Extension");
 				if (static_cast<int>(i) == currentIndex) errorText = extError;
 				else
 					errorText = profileOwnerLabel(draft) + ": " + extError;

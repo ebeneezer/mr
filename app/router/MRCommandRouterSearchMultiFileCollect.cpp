@@ -81,7 +81,7 @@ bool filespecMatchesPath(const std::filesystem::path &candidatePath, const std::
 		const char *subject = nullptr;
 
 		if (hasPathSeparator) {
-			if (!relativeText.empty() && relativeText != "." && relativeText.rfind("../", 0) != 0 && relativeText != "..") subject = relativeText.c_str();
+			if (!relativeText.empty() && relativeText != "." && !relativeText.starts_with("../") && relativeText != "..") subject = relativeText.c_str();
 			else
 				subject = fullText.c_str();
 		} else

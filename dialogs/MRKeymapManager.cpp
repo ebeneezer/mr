@@ -231,8 +231,8 @@ bool syncConfiguredKeymapAutoexecEntry(const std::string &fileUri, const std::st
 std::string stripTargetPrefix(std::string_view target) {
 	std::string stripped(target);
 
-	if (stripped.rfind("MRMAC_", 0) == 0) return stripped.substr(6);
-	if (stripped.rfind("MR_", 0) == 0) return stripped.substr(3);
+	if (stripped.starts_with("MRMAC_")) return stripped.substr(6);
+	if (stripped.starts_with("MR_")) return stripped.substr(3);
 	return stripped;
 }
 
