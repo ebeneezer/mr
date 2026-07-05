@@ -794,7 +794,7 @@ struct StartupAutomationRequest {
 bool parseRunMacroOptionValue(const std::string &arg, std::string &value) {
 	static const std::string prefix = "--run-macro=";
 
-	if (arg.rfind(prefix, 0) != 0) return false;
+	if (!arg.starts_with(prefix)) return false;
 	value = arg.substr(prefix.size());
 	return true;
 }

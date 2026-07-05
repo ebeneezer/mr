@@ -318,7 +318,7 @@ bool parseWorkspaceInt(const std::string &text, int &value) {
 bool parseWorkspacePrefixedInt(const std::string &text, const char *prefix, int &value) {
 	const std::string expected(prefix);
 
-	if (text.rfind(expected, 0) != 0) return false;
+	if (!text.starts_with(expected)) return false;
 	return parseWorkspaceInt(text.substr(expected.size()), value);
 }
 
@@ -357,7 +357,7 @@ bool parseBentoWorkspaceSnapshot(const std::string &token, MRBentoWorkspaceSnaps
 	if (mode < bbmToolWorkspace || mode > bbmFileCompare) return false;
 	snapshot.mode = static_cast<MRBentoBoxMode>(mode);
 
-	if (fields[5].rfind("n:", 0) != 0 || fields[6].rfind("l:", 0) != 0) return false;
+	if (!fields[5].starts_with("n:") || !fields[6].starts_with("l:")) return false;
 	snapshot.nodes.clear();
 	snapshot.leaves.clear();
 

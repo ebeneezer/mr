@@ -30,7 +30,7 @@ std::string normalizedDiagnosticPath(const std::string &path) {
 	for (char &ch : normalized)
 		if (ch == '\\') ch = '/';
 	normalized = std::filesystem::path(normalized).lexically_normal().generic_string();
-	if (normalized.rfind("./", 0) == 0) normalized.erase(0, 2);
+	if (normalized.starts_with("./")) normalized.erase(0, 2);
 	return normalized;
 }
 
@@ -183,13 +183,13 @@ bool parseCompilerDriverDiagnosticLine(const std::string &line, std::size_t outp
 }
 
 bool parseLatexBangDiagnosticLine(const std::string &line, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
-	if (line.rfind("! ", 0) != 0) return false;
+	if (!line.starts_with("! ")) return false;
 	std::string text = line.substr(2);
 
 	while (!text.empty() && text.front() == ' ')
 		text.erase(text.begin());
 	if (text.empty()) return false;
-	if (text.rfind("==>", 0) == 0 || text == "Emergency stop.") return false;
+	if (text.starts_with("==>") || text == "Emergency stop.") return false;
 
 	diagnostic.sourcePath = "LaTeX";
 	diagnostic.sourceLine = 0;
@@ -210,7 +210,7 @@ bool parseLatexBuildWarningLine(const std::string &line, const std::string &sour
 	std::size_t warningPos = std::string::npos;
 
 	for (const DiagnosticSeverityMarker &marker : markers) {
-		if (line.rfind(marker.marker, 0) != 0) continue;
+		if (!line.starts_with(marker.marker)) continue;
 		matchedMarker = &marker;
 		markerPos = std::strlen(marker.marker);
 		break;

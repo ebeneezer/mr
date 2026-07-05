@@ -131,7 +131,7 @@ bool startsWithDoneButtonCaption(const char *title) {
 		if (ch == '<') break;
 		normalized.push_back(static_cast<char>(std::toupper(ch)));
 	}
-	return normalized.rfind("DONE", 0) == 0;
+	return normalized.starts_with("DONE");
 }
 
 std::string visibleButtonCaption(const char *title) {

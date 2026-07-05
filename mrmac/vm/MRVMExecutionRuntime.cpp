@@ -123,7 +123,7 @@ struct MRVMStagedExecutionContext {
 		result.logLines = vm.log;
 		result.cancelled = vm.wasCancelled();
 		for (std::size_t i = 0; i < result.logLines.size(); ++i) {
-			if (result.logLines[i].rfind("VM Error:", 0) == 0) {
+			if (result.logLines[i].starts_with("VM Error:")) {
 				result.hadError = true;
 				break;
 			}
@@ -196,7 +196,7 @@ MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std:
 	result.execUiCommandRequests = vm.execUiCommandRequests();
 	result.cancelled = vm.wasCancelled();
 	for (std::size_t i = 0; i < result.logLines.size(); ++i) {
-		if (result.logLines[i].rfind("VM Error:", 0) == 0) {
+		if (result.logLines[i].starts_with("VM Error:")) {
 			result.hadError = true;
 			break;
 		}

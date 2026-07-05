@@ -467,7 +467,7 @@ bool parseCodeColorListLiteral(const std::string &literal, std::array<unsigned c
 	std::vector<unsigned char> parsed;
 	unsigned char value = 0;
 
-	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0) text = text.substr(3);
+	if (text.starts_with("v1:") || text.starts_with("V1:")) text = text.substr(3);
 	if (text.empty()) return setError(errorMessage, "Empty color list.");
 	while (cursor <= text.size()) {
 		std::size_t comma = text.find(',', cursor);
@@ -493,7 +493,7 @@ bool parseFileCompareMiniMapColorListLiteral(const std::string &literal, std::ar
 	std::vector<unsigned char> parsed;
 	unsigned char value = 0;
 
-	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0) text = text.substr(3);
+	if (text.starts_with("v1:") || text.starts_with("V1:")) text = text.substr(3);
 	if (text.empty()) return setError(errorMessage, "Empty color list.");
 	while (cursor <= text.size()) {
 		std::size_t comma = text.find(',', cursor);
@@ -519,7 +519,7 @@ bool parseMiniMapColorListLiteral(const std::string &literal, std::array<unsigne
 	std::vector<unsigned char> parsed;
 	unsigned char value = 0;
 
-	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0) text = text.substr(3);
+	if (text.starts_with("v1:") || text.starts_with("V1:")) text = text.substr(3);
 	if (text.empty()) return setError(errorMessage, "Empty color list.");
 	while (cursor <= text.size()) {
 		std::size_t comma = text.find(',', cursor);
@@ -547,10 +547,10 @@ bool parseFileCompareColorListLiteral(const std::string &literal, std::array<uns
 	bool v2Format = false;
 	static constexpr std::array<std::size_t, 5> acceptedSizes = {12, MRColorSetupSettings::kFileCompareCount, 15, 16, 18};
 
-	if (text.rfind("v2:", 0) == 0 || text.rfind("V2:", 0) == 0) {
+	if (text.starts_with("v2:") || text.starts_with("V2:")) {
 		text = text.substr(3);
 		v2Format = true;
-	} else if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+	} else if (text.starts_with("v1:") || text.starts_with("V1:"))
 		text = text.substr(3);
 	if (text.empty()) return setError(errorMessage, "Empty color list.");
 	while (cursor <= text.size()) {
@@ -613,25 +613,25 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 			outValues[i] = defaultColorForSlot(kWindowColorItems[i].paletteIndex);
 	};
 
-	if (text.rfind("v7:", 0) == 0 || text.rfind("V7:", 0) == 0) {
+	if (text.starts_with("v7:") || text.starts_with("V7:")) {
 		text = text.substr(3);
 		v7Format = true;
-	} else if (text.rfind("v6:", 0) == 0 || text.rfind("V6:", 0) == 0) {
+	} else if (text.starts_with("v6:") || text.starts_with("V6:")) {
 		text = text.substr(3);
 		v6Format = true;
-	} else if (text.rfind("v5:", 0) == 0 || text.rfind("V5:", 0) == 0) {
+	} else if (text.starts_with("v5:") || text.starts_with("V5:")) {
 		text = text.substr(3);
 		v5Format = true;
-	} else if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
+	} else if (text.starts_with("v4:") || text.starts_with("V4:")) {
 		text = text.substr(3);
 		v4Format = true;
-	} else if (text.rfind("v3:", 0) == 0 || text.rfind("V3:", 0) == 0) {
+	} else if (text.starts_with("v3:") || text.starts_with("V3:")) {
 		text = text.substr(3);
 		v3Format = true;
-	} else if (text.rfind("v2:", 0) == 0 || text.rfind("V2:", 0) == 0) {
+	} else if (text.starts_with("v2:") || text.starts_with("V2:")) {
 		text = text.substr(3);
 		v2Format = true;
-	} else if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+	} else if (text.starts_with("v1:") || text.starts_with("V1:"))
 		text = text.substr(3);
 	if (text.empty()) return setError(errorMessage, "Empty color list.");
 

@@ -174,7 +174,7 @@ bool compileSource(const std::string &source, std::vector<unsigned char> &byteco
 
 bool firstVmError(const std::vector<std::string> &logLines, std::string &outErrorLine) {
 	for (std::size_t i = 0; i < logLines.size(); ++i)
-		if (logLines[i].rfind("VM Error:", 0) == 0) {
+		if (logLines[i].starts_with("VM Error:")) {
 			outErrorLine = logLines[i];
 			return true;
 		}
@@ -6993,7 +6993,7 @@ bool testAboutQuoteReadmeExtractionGuard(std::string &failureReason) {
 		std::size_t lineEnd = generatedContent.find('\n', lineStart);
 		std::string line = lineEnd == std::string::npos ? generatedContent.substr(lineStart) : generatedContent.substr(lineStart, lineEnd - lineStart);
 
-		if (line.rfind("    \"", 0) == 0)
+		if (line.starts_with("    \""))
 			++generatedQuoteCount;
 		if (lineEnd == std::string::npos)
 			break;

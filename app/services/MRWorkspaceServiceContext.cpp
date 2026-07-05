@@ -199,7 +199,7 @@ void appendMakefileIncludeFlags(std::vector<MRWorkspaceCompileContextEntry> &ent
 		if (words[index] == "-I" && index + 1 < words.size()) {
 			++index;
 			path = words[index];
-		} else if (words[index].rfind("-I", 0) == 0 && words[index].size() > 2)
+		} else if (words[index].starts_with("-I") && words[index].size() > 2)
 			path = words[index].substr(2);
 		if (path.empty() || path[0] == '$') continue;
 		appendCompileContextEntry(entries, joinWorkspaceRootPath(rootPath, path), "Makefile");

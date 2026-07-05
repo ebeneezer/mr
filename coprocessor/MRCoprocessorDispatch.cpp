@@ -138,13 +138,13 @@ void setSplitDiagnosticsStatusForOutput(MREditWindow *outputWindow, const char *
 
 std::string macroDisplayName(const mr::coprocessor::TaskInfo &task, const char *payloadName = nullptr) {
 	if (payloadName != nullptr && *payloadName != '\0') return payloadName;
-	if (task.label.rfind("macro: ", 0) == 0) return task.label.substr(7);
+	if (task.label.starts_with("macro: ")) return task.label.substr(7);
 	if (!task.label.empty()) return task.label;
 	return "macro";
 }
 
 std::string externalIoDisplayName(const mr::coprocessor::TaskInfo &task) {
-	if (task.label.rfind("external-io: ", 0) == 0) return task.label.substr(13);
+	if (task.label.starts_with("external-io: ")) return task.label.substr(13);
 	if (!task.label.empty()) return task.label;
 	return "external command";
 }
@@ -344,9 +344,9 @@ std::string liveLogSearchHitPrefix(MREditWindow *win) {
 	const std::string titleText = title != nullptr ? title : "";
 	const std::string detail = win != nullptr ? win->windowRoleDetail() : std::string();
 
-	if (titleText.rfind("JOURNAL: ", 0) == 0) return "[JOU]" + titleText.substr(9);
+	if (titleText.starts_with("JOURNAL: ")) return "[JOU]" + titleText.substr(9);
 	if (!detail.empty()) return baseNameOf(detail);
-	if (titleText.rfind("LIVELOG: ", 0) == 0) return titleText.substr(9);
+	if (titleText.starts_with("LIVELOG: ")) return titleText.substr(9);
 	return titleText.empty() ? "log" : titleText;
 }
 

@@ -236,7 +236,7 @@ std::vector<std::string> librarySearchPaths(const std::string &compilerPath) {
 	std::vector<std::string> lines = commandLines(shellQuote(compilerPath) + " -print-search-dirs 2>/dev/null");
 
 	for (const std::string &line : lines)
-		if (line.rfind("libraries: =", 0) == 0) return splitColonList(line.substr(std::strlen("libraries: =")));
+		if (line.starts_with("libraries: =")) return splitColonList(line.substr(std::strlen("libraries: =")));
 	return std::vector<std::string>();
 }
 

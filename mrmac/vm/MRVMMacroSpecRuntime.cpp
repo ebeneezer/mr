@@ -20,7 +20,7 @@ bool macroFileExists(const std::string &path) {
 
 std::string mrvmStripMrmacExtension(const std::string &value) {
 	std::string upper = mrvmUpperKey(value);
-	if (upper.size() >= 6 && upper.substr(upper.size() - 6) == ".MRMAC") return value.substr(0, value.size() - 6);
+	if (std::string_view(upper).ends_with(".MRMAC")) return value.substr(0, value.size() - 6);
 	return value;
 }
 
