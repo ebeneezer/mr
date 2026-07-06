@@ -48,6 +48,7 @@ class MREditWindow;
 void setWindowManuallyHidden(MREditWindow *win, bool hidden);
 void mrDropSidekickForParent(const MREditWindow *parent);
 bool mrMoveSnippetPlaceholderForParent(const MREditWindow *parent, int direction);
+void mrvmCloseForksForOwner(int ownerBufferId);
 
 class MREditScrollBar : public TScrollBar {
   public:
@@ -680,6 +681,7 @@ class MREditWindow : public TWindow {
 	bool loadFromFile(const char *fileName) {
 		std::string expandedName;
 		std::string loadError;
+		const std::string oldFileName = currentFileName();
 
 		if (editor == nullptr || fileName == nullptr || *fileName == '\0') return false;
 
@@ -699,10 +701,13 @@ class MREditWindow : public TWindow {
 		mTemporaryFileName.clear();
 		setWindowRole(wrFile);
 		updateTitleFromEditor();
+		if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
 		return true;
 	}
 
 	bool loadTextBuffer(const char *text, const char *title = nullptr) {
+		const std::string oldFileName = currentFileName();
+
 		if (editor == nullptr) return false;
 		if (!editor->replaceBufferText(text)) return false;
 
@@ -717,6 +722,7 @@ class MREditWindow : public TWindow {
 		else
 			updateTitleFromEditor();
 		refreshSyntaxContext();
+		if (!oldFileName.empty()) mrvmCloseForksForOwner(mBufferId);
 		return true;
 	}
 
@@ -735,6 +741,8 @@ class MREditWindow : public TWindow {
 	}
 
 	bool saveCurrentFileAs() {
+		const std::string oldFileName = currentFileName();
+
 		if (editor == nullptr || isReadOnly() || !editor->canSaveAs()) return false;
 
 		bool ok = editor->saveAsWithPrompt() == True;
@@ -745,11 +753,14 @@ class MREditWindow : public TWindow {
 			setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
 			setWindowRole(wrFile);
 			updateTitleFromEditor();
+			if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
 		}
 		return ok;
 	}
 
 	bool saveCurrentFileWithoutOverwritePrompt() {
+		const std::string oldFileName = currentFileName();
+
 		if (editor == nullptr || isReadOnly() || !editor->canSaveAs()) return false;
 
 		bool ok = editor->canSaveInPlace() ? editor->saveInPlace() == True : editor->saveAsWithoutOverwritePrompt() == True;
@@ -760,6 +771,7 @@ class MREditWindow : public TWindow {
 			setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
 			setWindowRole(wrFile);
 			updateTitleFromEditor();
+			if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
 		}
 		return ok;
 	}
@@ -997,6 +1009,8 @@ class MREditWindow : public TWindow {
 	}
 
 	void setCurrentFileName(const char *fileName) {
+		const std::string oldFileName = currentFileName();
+
 		if (editor == nullptr) return;
 
 		if (fileName == nullptr || *fileName == '\0') editor->clearPersistentFileName();
@@ -1007,6 +1021,7 @@ class MREditWindow : public TWindow {
 		if ((fileName == nullptr || *fileName == '\0') && mWindowRole == wrFile) setWindowRole(wrText);
 		updateTitleFromEditor();
 		refreshSyntaxContext();
+		if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
 	}
 
 	bool confirmAbandonForReload() {
@@ -2092,6 +2107,7 @@ class MREditWindow : public TWindow {
 
 		if (mClosePrepared) return;
 		mClosePrepared = true;
+		mrvmCloseForksForOwner(mBufferId);
 		cancelledCount = prepareCoprocessorTasksForShutdown();
 		if (editor != nullptr) {
 			undoBefore = editor->bufferModel().undoStackDepth();

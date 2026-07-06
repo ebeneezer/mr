@@ -1,5 +1,6 @@
 #define Uses_TCollection
 #define Uses_TDialog
+#define Uses_TDrawBuffer
 #define Uses_TListBox
 #define Uses_TObject
 #define Uses_TRect
@@ -70,6 +71,8 @@ void MRColumnListView::setRows(const std::vector<Row> &rows, short selection) {
 		maxDisplayRowWidth = std::max(maxDisplayRowWidth, displayRow.size());
 		displayRows.push_back(std::move(displayRow));
 	}
+	displayRowValues = displayRows;
+	rowStyles.clear();
 	for (const std::string &displayRow : displayRows)
 		items->insert(dupCString(displayRow));
 
@@ -80,6 +83,12 @@ void MRColumnListView::setRows(const std::vector<Row> &rows, short selection) {
 	data.selection = static_cast<ushort>(selection);
 	configureHorizontalScrollBar(maxDisplayRowWidth);
 	setData(&data);
+}
+
+void MRColumnListView::setRowStyles(const std::vector<RowStyle> &styles) {
+	rowStyles = styles;
+	if (rowStyles.size() != rowValues.size()) rowStyles.clear();
+	drawView();
 }
 
 short MRColumnListView::selectedIndex() const {
@@ -148,6 +157,75 @@ void MRColumnListView::handleEvent(TEvent &event) {
 	}
 	TListBox::handleEvent(event);
 	if (acceptAfterMouseDown) dispatchActivation();
+}
+
+TColorAttr MRColumnListView::colorForRow(short row) {
+	unsigned char configured = 0;
+	RowStyle style = RowStyle::Normal;
+
+	if (row >= 0 && static_cast<std::size_t>(row) < rowStyles.size()) style = rowStyles[static_cast<std::size_t>(row)];
+	switch (style) {
+		case RowStyle::OutlineHeader:
+			if (configuredColorSlotOverride(kMrPaletteOutlineFileHeader, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1F);
+		case RowStyle::OutlineLevel0:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel0, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1F);
+		case RowStyle::OutlineLevel1:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel1, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1E);
+		case RowStyle::OutlineLevel2:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel2, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1B);
+		case RowStyle::OutlineLevel3:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel3, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1A);
+		case RowStyle::OutlineLevel4:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel4, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1D);
+		case RowStyle::OutlineLevel5:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel5, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x19);
+		case RowStyle::OutlineLevel6:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel6, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1C);
+		case RowStyle::OutlineLevel7:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel7, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x13);
+		case RowStyle::OutlineLevel8:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel8, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1F);
+		case RowStyle::OutlineLevel9:
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel9, configured)) return static_cast<TColorAttr>(configured);
+			return TColorAttr(0x1E);
+		case RowStyle::Normal:
+		default:
+			return mapColor(1);
+	}
+}
+
+void MRColumnListView::draw() {
+	if (rowStyles.empty()) {
+		TListBox::draw();
+		return;
+	}
+
+	for (short y = 0; y < size.y; ++y) {
+		TDrawBuffer buffer;
+		const short row = static_cast<short>(topItem + y);
+		const bool selected = row == focused;
+		const TColorAttr color = selected ? mapColor(3) : colorForRow(row);
+		std::string text;
+
+		buffer.moveChar(0, ' ', color, size.x);
+		if (row >= 0 && static_cast<std::size_t>(row) < displayRowValues.size()) text = displayRowValues[static_cast<std::size_t>(row)];
+		if (hScrollBar != nullptr && hScrollBar->value > 0) {
+			const std::size_t offset = static_cast<std::size_t>(std::min<int>(hScrollBar->value, static_cast<int>(text.size())));
+			text.erase(0, offset);
+		}
+		buffer.moveStr(0, text.c_str(), color, size.x);
+		writeLine(0, y, size.x, 1, buffer);
+	}
 }
 
 void MRColumnListView::focusItemNum(short item) {

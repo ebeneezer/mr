@@ -1070,6 +1070,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
 		return;
 	}
+	const int mouseLeafId = mouseEvent ? leafAt(localMouse) : -1;
 	if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
 		MREditWindow::handleEvent(event);
 		refreshOutlinePanes(false);
@@ -1195,7 +1196,6 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			MRFileEditor *wheelEditor = wheelWindow != nullptr ? wheelWindow->getEditor() : nullptr;
 
 			if (wheelEditor != nullptr) {
-				setActivePane(wheelLeafId);
 				static_cast<void>(wheelEditor->scrollWindowByWheel(event.mouse.wheel));
 				clearEvent(event);
 				syncFileCompareLinkedPaneFrom(wheelLeafId, false);
@@ -1206,8 +1206,9 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			}
 		}
 	}
-	if (mouseEvent) setActivePaneForMouse(event.mouse.where);
-	if (activeLeafId != 0 && splitEventTargetsSecondaryPane(event)) {
+	if (event.what == evMouseDown) setActivePaneForMouse(event.mouse.where);
+	const bool mouseTargetsActivePane = !mouseEvent || mouseLeafId == activeLeafId;
+	if (activeLeafId != 0 && mouseTargetsActivePane && splitEventTargetsSecondaryPane(event)) {
 		MRPaneEditWindow *targetPane = paneWindowForLeaf(activeLeafId);
 		TRect targetBounds = paneBoundsForLeaf(activeLeafId);
 		const MRBentoPaneRole activeRole = roleForLeaf(activeLeafId);

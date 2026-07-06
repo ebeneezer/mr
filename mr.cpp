@@ -2,6 +2,7 @@
 #include "app/MREditorApp.hpp"
 #include "app/MRHelp.generated.hpp"
 #include "config/settings/MRSettingsRuntime.hpp"
+#include "mrmac/vm/MRVMProcessRuntime.hpp"
 #include "ui/MRPalette.hpp"
 
 #include <cstring>
@@ -54,6 +55,7 @@ int main(int argc, char **argv) {
 			appendMainShutdownTrace(line.str());
 		}
 	}
+	mrvmCloseAllForkedProcesses();
 	{
 		std::ostringstream line;
 		line << "main phase after_app_scope took_ms="

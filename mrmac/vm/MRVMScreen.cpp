@@ -336,7 +336,7 @@ bool applyMarqueeProc(const std::string &name, const std::vector<Value> &args) {
 		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
 	} else {
 		if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMarquee, existingMessage) && existingMessage.kind == kind && existingMessage.text == text) return true;
-		mr::messageline::postSticky(mr::messageline::Owner::MacroMarquee, text, kind, mr::messageline::kPriorityMedium);
+		mr::messageline::postAutoTimed(mr::messageline::Owner::MacroMarquee, text, kind, mr::messageline::kPriorityMedium);
 	}
 	forceMacroUiMessageRefresh(app);
 	return returnWithDirectScreenMutation(true);

@@ -204,11 +204,21 @@ struct ExternalIoFinishedPayload final : Payload {
 	int signalNumber;
 	std::string successAudioUri;
 	std::string failureAudioUri;
+	std::string buildSourcePath;
+	std::string buildSourceDir;
+	std::string buildSourceFile;
+	std::string buildSourceStem;
+	std::string buildOutputPath;
+	std::string buildPdfPath;
+	std::string buildProfileId;
+	std::string buildProfileName;
+	std::string buildToolchain;
+	std::string postBuildMacro;
 
-	ExternalIoFinishedPayload() noexcept : channelId(0), targetBufferId(0), exitCode(0), signaled(false), signalNumber(0), successAudioUri(), failureAudioUri() {
+	ExternalIoFinishedPayload() noexcept : channelId(0), targetBufferId(0), exitCode(0), signaled(false), signalNumber(0), successAudioUri(), failureAudioUri(), buildSourcePath(), buildSourceDir(), buildSourceFile(), buildSourceStem(), buildOutputPath(), buildPdfPath(), buildProfileId(), buildProfileName(), buildToolchain(), postBuildMacro() {
 	}
 
-	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber, std::size_t aTargetBufferId = 0, std::string aSuccessAudioUri = std::string(), std::string aFailureAudioUri = std::string()) : channelId(aChannelId), targetBufferId(aTargetBufferId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber), successAudioUri(std::move(aSuccessAudioUri)), failureAudioUri(std::move(aFailureAudioUri)) {
+	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber, std::size_t aTargetBufferId = 0, std::string aSuccessAudioUri = std::string(), std::string aFailureAudioUri = std::string()) : channelId(aChannelId), targetBufferId(aTargetBufferId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber), successAudioUri(std::move(aSuccessAudioUri)), failureAudioUri(std::move(aFailureAudioUri)), buildSourcePath(), buildSourceDir(), buildSourceFile(), buildSourceStem(), buildOutputPath(), buildPdfPath(), buildProfileId(), buildProfileName(), buildToolchain(), postBuildMacro() {
 	}
 };
 

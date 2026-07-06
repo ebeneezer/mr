@@ -128,18 +128,53 @@ bool containsPathSeparator(const std::string &value) {
 	return value.find('/') != std::string::npos;
 }
 
+bool executableFileExists(const std::string &path) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+
+	return !normalized.empty() && ::access(normalized.c_str(), X_OK) == 0;
+}
+
+std::string pathJoinExecutable(const std::string &directory, const std::string &name) {
+	std::string out = directory.empty() ? std::string(".") : directory;
+
+	if (!out.empty() && out.back() != '/') out += '/';
+	out += name;
+	return out;
+}
+
+std::string processPathSearchKey() {
+	const char *pathValue = std::getenv("PATH");
+
+	return pathValue != nullptr ? pathValue : "";
+}
+
 std::string executableFromPath(const std::string &name) {
 	std::string trimmed = trimAscii(name);
+	std::string pathText = processPathSearchKey();
+	std::string current;
 
 	if (trimmed.empty()) return std::string();
-	return normalizeConfiguredPathInput(commandFirstLine("command -v " + shellQuote(trimmed) + " 2>/dev/null"));
+	if (containsPathSeparator(trimmed)) return executableFileExists(trimmed) ? normalizeConfiguredPathInput(trimmed) : std::string();
+	for (char ch : pathText) {
+		if (ch == ':') {
+			const std::string candidate = pathJoinExecutable(current, trimmed);
+			if (executableFileExists(candidate)) return normalizeConfiguredPathInput(candidate);
+			current.clear();
+		} else
+			current.push_back(ch);
+	}
+	{
+		const std::string candidate = pathJoinExecutable(current, trimmed);
+		if (executableFileExists(candidate)) return normalizeConfiguredPathInput(candidate);
+	}
+	return std::string();
 }
 
 std::string resolveCompilerExecutable(const std::string &value) {
 	std::string trimmed = trimAscii(value);
 
 	if (trimmed.empty()) return std::string();
-	if (containsPathSeparator(trimmed)) return normalizeConfiguredPathInput(trimmed);
+	if (containsPathSeparator(trimmed)) return executableFileExists(trimmed) ? normalizeConfiguredPathInput(trimmed) : std::string();
 	return executableFromPath(trimmed);
 }
 
@@ -293,6 +328,7 @@ std::string detectCompilerToolchain(const std::string &compilerPath, const std::
 
 	if (name.find("SWIFTC") != std::string::npos) return "SWIFT";
 	if (name.find("LATEXMK") != std::string::npos || versionUpper.find("LATEXMK") != std::string::npos) return "LATEXMK";
+	if (name == "PDFLATEX" || name == "XELATEX" || name == "LUALATEX" || name == "LATEX" || name == "PLATEX" || name == "UPLATEX" || name == "DVILUALATEX") return "LATEX";
 	if (name.find("CLANG") != std::string::npos || versionUpper.find("CLANG") != std::string::npos) return "CLANG";
 	if (name.find("G++") != std::string::npos || name.find("GCC") != std::string::npos || versionUpper.find("GCC") != std::string::npos) return "GCC";
 	return std::string();
@@ -323,6 +359,7 @@ std::string defaultBuildFlagsForProfile(const std::string &toolchain, const MRCo
 		return "-std=c++20 -O2 -Wall";
 	}
 	if (toolchain == "LATEXMK") return "-pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd";
+	if (toolchain == "LATEX") return "-interaction=nonstopmode -file-line-error -synctex=1";
 	return std::string();
 }
 
@@ -353,13 +390,36 @@ CompilerProbe probeSwiftCompiler(const std::string &compilerPath) {
 	return probe;
 }
 
-CompilerProbe probeLatexmkCompiler(const std::string &compilerPath) {
+CompilerProbe probeLatexCompiler(const std::string &toolchain, const std::string &compilerPath) {
 	CompilerProbe probe;
 
-	probe.toolchain = "LATEXMK";
+	probe.toolchain = toolchain;
 	probe.executablePath = compilerPath;
 	probe.versionText = versionText(compilerPath);
 	return probe;
+}
+
+std::string compilerPostBuildMacroSpec() {
+	return "compilersupport/MRCompilerMiddleware.mrmac^LatexMKPostBuild";
+}
+
+bool isCompilerMiddlewarePostBuildMacroSpec(const std::string &spec) {
+	const std::string trimmed = trimAscii(spec);
+
+	return trimmed == "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild" || trimmed == "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerLatexmkPostBuild" || trimmed == compilerPostBuildMacroSpec();
+}
+
+bool isCompilerMiddlewarePreBuildMacroSpec(const std::string &spec) {
+	return trimAscii(spec) == "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild";
+}
+
+void addDetectedCompilerProfileIdsForTool(std::vector<std::string> &ids, const std::string &toolchain, const char *suffixes[], std::size_t suffixCount) {
+	if (toolchain.empty()) return;
+	for (std::size_t index = 0; index < suffixCount; ++index) {
+		std::string id = canonicalCompilerProfileId(toolchain + "_" + suffixes[index]);
+
+		if (!id.empty() && std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+	}
 }
 
 void addProfile(std::vector<MRCompilerProfile> &profiles, const CompilerProbe &probe, const std::string &suffix, const std::string &flags) {
@@ -373,6 +433,7 @@ void addProfile(std::vector<MRCompilerProfile> &profiles, const CompilerProbe &p
 	profile.versionText = probe.versionText;
 	profile.targetTriple = probe.targetTriple;
 	profile.buildFlags = flags;
+	if (probe.toolchain == "LATEXMK") profile.postBuildMacro = compilerPostBuildMacroSpec();
 	profile.includePaths = probe.includePaths;
 	profile.libraryPaths = probe.libraryPaths;
 	profile.runtimePaths = probe.runtimePaths;
@@ -385,7 +446,8 @@ std::string normalizeToolchain(const std::string &value) {
 	if (upper == "G++" || upper == "GCC" || upper == "GNU") return "GCC";
 	if (upper == "CLANG++" || upper == "CLANG" || upper == "LLVM") return "CLANG";
 	if (upper == "SWIFTC" || upper == "SWIFT") return "SWIFT";
-	if (upper == "LATEXMK" || upper == "LATEX") return "LATEXMK";
+	if (upper == "LATEXMK") return "LATEXMK";
+	if (upper == "LATEX") return "LATEX";
 	if (upper == "CUSTOM") return "CUSTOM";
 	return upper;
 }
@@ -452,6 +514,14 @@ bool normalizeCompilerProfileInPlace(MRCompilerProfile &profile, std::string *er
 	profile.preBuildCommand = trimAscii(profile.preBuildCommand);
 	profile.buildSucceededCommand = trimAscii(profile.buildSucceededCommand);
 	profile.buildFailedCommand = trimAscii(profile.buildFailedCommand);
+	profile.preBuildMacro = trimAscii(profile.preBuildMacro);
+	profile.postBuildMacro = trimAscii(profile.postBuildMacro);
+	if (isCompilerMiddlewarePreBuildMacroSpec(profile.preBuildMacro)) profile.preBuildMacro.clear();
+	if (isCompilerMiddlewarePostBuildMacroSpec(profile.postBuildMacro)) {
+		if (profile.toolchain == "LATEXMK") profile.postBuildMacro = compilerPostBuildMacroSpec();
+		else
+			profile.postBuildMacro.clear();
+	}
 	profile.includePaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.includePaths));
 	profile.libraryPaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.libraryPaths));
 	profile.runtimePaths = splitCompilerProfilePathList(normalizeCompilerProfilePathList(profile.runtimePaths));
@@ -461,7 +531,7 @@ bool normalizeCompilerProfileInPlace(MRCompilerProfile &profile, std::string *er
 	if (profile.id.empty()) return setError(errorMessage, "Compiler profile id may not be empty.");
 	if (profile.name.empty()) return setError(errorMessage, "Compiler profile name may not be empty.");
 	if (profile.toolchain.empty()) return setError(errorMessage, "Compiler profile toolchain may not be empty.");
-	if (profile.toolchain != "GCC" && profile.toolchain != "CLANG" && profile.toolchain != "SWIFT" && profile.toolchain != "LATEXMK" && profile.toolchain != "CUSTOM") return setError(errorMessage, "Compiler profile toolchain must be GCC, CLANG, SWIFT, LATEXMK or CUSTOM.");
+	if (profile.toolchain != "GCC" && profile.toolchain != "CLANG" && profile.toolchain != "SWIFT" && profile.toolchain != "LATEXMK" && profile.toolchain != "LATEX" && profile.toolchain != "CUSTOM") return setError(errorMessage, "Compiler profile toolchain must be GCC, CLANG, SWIFT, LATEXMK, LATEX or CUSTOM.");
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -530,6 +600,10 @@ bool applyCompilerProfileDirectiveToVector(std::vector<MRCompilerProfile> &profi
 			profile->buildSucceededCommand = arg4;
 		else if (key == "BUILD_FAILED_COMMAND")
 			profile->buildFailedCommand = arg4;
+		else if (key == "PRE_BUILD_MACRO")
+			profile->preBuildMacro = arg4;
+		else if (key == "POST_BUILD_MACRO")
+			profile->postBuildMacro = arg4;
 		else if (key == "INCLUDES")
 			profile->includePaths = splitCompilerProfilePathList(arg4);
 		else if (key == "LIBRARIES")
@@ -554,30 +628,52 @@ bool applyCompilerProfileDirectiveToVector(std::vector<MRCompilerProfile> &profi
 }
 
 std::vector<std::string> detectedCompilerExecutablePaths() {
-	static std::vector<std::string> cachedPaths;
-	static bool initialized = false;
 	std::vector<std::string> paths;
 
-	if (initialized) return cachedPaths;
 	appendUniquePath(paths, executableFromPath("g++"));
 	appendUniquePath(paths, executableFromPath("clang++"));
 	appendUniquePath(paths, executableFromPath("swiftc"));
 	appendUniquePath(paths, executableFromPath("latexmk"));
-	cachedPaths = paths;
-	initialized = true;
+	appendUniquePath(paths, executableFromPath("pdflatex"));
+	appendUniquePath(paths, executableFromPath("xelatex"));
+	appendUniquePath(paths, executableFromPath("lualatex"));
+	appendUniquePath(paths, executableFromPath("latex"));
+	appendUniquePath(paths, executableFromPath("platex"));
+	appendUniquePath(paths, executableFromPath("uplatex"));
+	appendUniquePath(paths, executableFromPath("dvilualatex"));
 	return paths;
+}
+
+std::vector<std::string> detectedCompilerProfileIds() {
+	std::vector<std::string> ids;
+	const char *buildFlavors[] = {"Debug", "Normal", "Speed", "Size"};
+	const char *latexmkSuffixes[] = {"PDF"};
+	const char *latexEngines[] = {"pdflatex", "xelatex", "lualatex", "latex", "platex", "uplatex", "dvilualatex"};
+
+	if (!executableFromPath("g++").empty()) addDetectedCompilerProfileIdsForTool(ids, "GCC", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("clang++").empty()) addDetectedCompilerProfileIdsForTool(ids, "CLANG", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("swiftc").empty()) addDetectedCompilerProfileIdsForTool(ids, "SWIFT", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("latexmk").empty()) addDetectedCompilerProfileIdsForTool(ids, "LATEXMK", latexmkSuffixes, sizeof(latexmkSuffixes) / sizeof(latexmkSuffixes[0]));
+	for (const char *engine : latexEngines)
+		if (!executableFromPath(engine).empty()) {
+			const std::string id = canonicalCompilerProfileId(std::string("LATEX_") + engine);
+			if (!id.empty() && std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+		}
+	return ids;
 }
 
 std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 	static std::vector<MRCompilerProfile> cachedProfiles;
-	static bool initialized = false;
+	static std::string cachedKey;
 	std::vector<MRCompilerProfile> profiles;
+	const std::string key = processPathSearchKey() + "\n" + configuredShellExecutablePath();
 
-	if (initialized) return cachedProfiles;
+	if (cachedKey == key) return cachedProfiles;
 	std::string gcc = executableFromPath("g++");
 	std::string clang = executableFromPath("clang++");
 	std::string swift = executableFromPath("swiftc");
 	std::string latexmk = executableFromPath("latexmk");
+	const char *latexEngines[] = {"pdflatex", "xelatex", "lualatex", "latex", "platex", "uplatex", "dvilualatex"};
 	if (!gcc.empty()) {
 		const CompilerProbe probe = probeCppCompiler("GCC", gcc);
 		addProfile(profiles, probe, "Debug", "-std=c++20 -g -O0 -Wall -Wextra");
@@ -600,11 +696,17 @@ std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 		addProfile(profiles, probe, "Size", "-Osize");
 	}
 	if (!latexmk.empty()) {
-		const CompilerProbe probe = probeLatexmkCompiler(latexmk);
+		const CompilerProbe probe = probeLatexCompiler("LATEXMK", latexmk);
 		addProfile(profiles, probe, "PDF", "-pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd");
 	}
+	for (const char *engine : latexEngines) {
+		const std::string path = executableFromPath(engine);
+		if (path.empty()) continue;
+		const CompilerProbe probe = probeLatexCompiler("LATEX", path);
+		addProfile(profiles, probe, engine, "-interaction=nonstopmode -file-line-error -synctex=1");
+	}
 	cachedProfiles = profiles;
-	initialized = true;
+	cachedKey = key;
 	return profiles;
 }
 
@@ -623,7 +725,9 @@ bool autoConfigureCompilerProfileFromExecutable(MRCompilerProfile &profile, std:
 	if (toolchain == "SWIFT")
 		probe = probeSwiftCompiler(compilerPath);
 	else if (toolchain == "LATEXMK")
-		probe = probeLatexmkCompiler(compilerPath);
+		probe = probeLatexCompiler("LATEXMK", compilerPath);
+	else if (toolchain == "LATEX")
+		probe = probeLatexCompiler("LATEX", compilerPath);
 	else
 		probe = probeCppCompiler(toolchain, compilerPath);
 

@@ -43,6 +43,30 @@ normalized model.
 When canonical rewrite is performed, the rewritten source must use the current
 canonical settings version rather than preserve the older source version.
 
+## Obsolete And Unknown Keys
+
+The bootstrap must not keep a retired-token compatibility list.
+
+Any `MRSETUP` token that is not known to the running build is obsolete or
+unknown input. It must be dropped silently during bootstrap normalization and
+must not be applied to the staging snapshot or final runtime model.
+
+The current build supplies hardcoded defaults for every setting token it knows.
+Known tokens from the settings source may overwrite those defaults. Missing
+known tokens keep the current build defaults.
+
+The final canonical settings source is generated only from the complete current
+model. Therefore unknown, obsolete or retired tokens disappear because they are
+not part of the current model, not because a save path filters a growing list of
+legacy spellings.
+
+Do not reintroduce removed settings as accepted no-op keys. If a token is no
+longer canonical, it must become unknown to the bootstrap classifier.
+
+The final VM startup apply must receive only the canonicalized current-source
+settings. The VM may reject unknown `MRSETUP` keys; unknown and obsolete input
+must be eliminated before the final VM apply.
+
 Any persisted settings source with a version lower than the running
 `MR_BUILD_EPOCH` is upgrade-required input.
 

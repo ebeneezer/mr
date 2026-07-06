@@ -27,6 +27,7 @@
 
 #include "../../app/MREditorApp.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRMenuBar.hpp"
@@ -374,18 +375,6 @@ std::vector<std::string> compilerProfileIdChoices() {
 	std::vector<std::string> choices;
 	std::vector<MRCompilerProfile> profiles = configuredCompilerProfiles();
 
-	for (const MRCompilerProfile &detectedProfile : detectedCompilerProfiles()) {
-		const std::string detectedId = canonicalCompilerProfileId(detectedProfile.id);
-		bool exists = false;
-
-		if (detectedId.empty()) continue;
-		for (const MRCompilerProfile &profile : profiles)
-			if (canonicalCompilerProfileId(profile.id) == detectedId) {
-				exists = true;
-				break;
-			}
-		if (!exists) profiles.push_back(detectedProfile);
-	}
 	for (const MRCompilerProfile &profile : profiles) {
 		const std::string id = canonicalCompilerProfileId(profile.id);
 		if (!id.empty() && std::find(choices.begin(), choices.end(), id) == choices.end()) choices.push_back(id);
@@ -419,12 +408,61 @@ void postDialogError(const std::string &text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
 
+std::string focusedEditorExtension() {
+	MREditWindow *window = currentEditorCommandWindow();
+	std::string path;
+	std::size_t slash = std::string::npos;
+	std::size_t dot = std::string::npos;
+
+	if (window == nullptr || !window->hasPersistentFileName()) return std::string();
+	path = window->currentFileName();
+	slash = path.find_last_of("/\\");
+	dot = path.find_last_of('.');
+	if (dot == std::string::npos || dot + 1 >= path.size()) return std::string();
+	if (slash != std::string::npos && dot < slash) return std::string();
+	return path.substr(dot + 1);
+}
+
+bool isLatexProfileExtension(const std::string &value) {
+	const std::string upper = upperAscii(value);
+
+	return upper == "TEX" || upper == "LTX" || upper == "STY" || upper == "CLS";
+}
+
+bool profileExtensionMatches(const std::string &selector, const std::string &extension) {
+	std::string selectorUpper;
+	std::string extensionUpper;
+
+	if (selector == extension) return true;
+	selectorUpper = upperAscii(selector);
+	extensionUpper = upperAscii(extension);
+	return selectorUpper == extensionUpper && isLatexProfileExtension(selectorUpper) && isLatexProfileExtension(extensionUpper);
+}
+
+int focusedEditorProfileIndex(const std::vector<EditProfileDraft> &drafts) {
+	const std::string extension = focusedEditorExtension();
+
+	if (extension.empty()) return -1;
+	for (std::size_t i = 0; i < drafts.size(); ++i) {
+		const EditProfileDraft &draft = drafts[i];
+		std::vector<std::string> selectors;
+
+		if (draft.isDefault) continue;
+		selectors = splitExtensionLiteral(draft.extensionsLiteral);
+		for (const std::string &selector : selectors) {
+			if (profileExtensionMatches(selector, extension)) return static_cast<int>(i);
+		}
+	}
+	return -1;
+}
+
 class TEditProfilesDialog : public MRScrollableDialog {
   public:
 	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS", kDialogWidth, kVirtualHeight, initMrDialogFrame), draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37, 56, kDialogWidth - 2, 7)) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
-		if (!draftList.empty()) mCurrentIndex = 0;
+		mCurrentIndex = focusedEditorProfileIndex(draftList);
+		if (mCurrentIndex < 0 && !draftList.empty()) mCurrentIndex = 0;
 		refreshProfileList();
 		loadCurrentDraftToWidgets();
 		refreshValidationState();

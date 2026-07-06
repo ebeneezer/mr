@@ -7,6 +7,17 @@
 #include <set>
 #include <string>
 
+namespace {
+bool isUnknownEditProfileSetDirective(const MRParsedEditProfileDirective &directive) {
+	const std::string operation = upperAscii(trimAscii(directive.operation));
+	const std::string key = upperAscii(trimAscii(directive.arg3));
+
+	if (operation != "SET") return false;
+	if (key == "COMPILER_PROFILE" || key == "WINDOW_COLORTHEME_URI") return false;
+	return findEditSettingDescriptorByKey(key) == nullptr;
+}
+} // namespace
+
 bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsSnapshot &snapshot, MRSettingsLoadReport *report, std::string *errorMessage) {
 	MRSettingsLoadReport localReport;
 	MRSettingsLoadReport &activeReport = report != nullptr ? *report : localReport;
@@ -63,8 +74,14 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 	for (const MRParsedCompilerProfileDirective &directive : document.compilerProfileDirectives)
 		if (!applySettingsSnapshotCompilerProfileDirective(snapshot, directive.operation, directive.profileId, directive.arg3, directive.arg4, errorMessage)) return false;
 
-	for (const MRParsedEditProfileDirective &directive : document.profileDirectives)
+	for (const MRParsedEditProfileDirective &directive : document.profileDirectives) {
+		if (isUnknownEditProfileSetDirective(directive)) {
+			markFlag(activeReport, MRSettingsLoadReport::UnknownKeyDropped);
+			++activeReport.ignoredAssignmentCount;
+			continue;
+		}
 		if (!applySettingsSnapshotEditExtensionProfileDirective(snapshot, directive.operation, directive.profileId, directive.arg3, directive.arg4, errorMessage)) return false;
+	}
 
 	if (canonicalKeysSeen.size() < canonicalSerializedSettingsKeyCount()) {
 		const std::vector<std::string> canonicalKeys = canonicalSerializedSettingsKeys();

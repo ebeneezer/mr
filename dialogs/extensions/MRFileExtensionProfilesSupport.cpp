@@ -140,7 +140,6 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	if (settings.displayTabs) record.optionsMask |= kOptionDisplayTabs;
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
-	if (settings.codeFoldingFeature) record.optionsMask |= kOptionCodeFoldingFeature;
 	if (settings.backupFiles) record.optionsMask |= kOptionBackupFiles;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
@@ -297,7 +296,6 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
 	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
 	settings.codeColoring = (record.optionsMask & kOptionCodeColoring) != 0;
-	settings.codeFoldingFeature = (record.optionsMask & kOptionCodeFoldingFeature) != 0;
 	settings.backupFiles = (record.optionsMask & kOptionBackupFiles) != 0;
 	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING" : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING" : "OFF";
 	if (settings.lineNumbersPosition == "OFF" && (record.optionsMask & kOptionShowLineNumbers) != 0) settings.lineNumbersPosition = "LEADING";
@@ -341,7 +339,6 @@ enum : unsigned long long {
 	kOvIndentStyle = ::kOvIndentStyle,
 	kOvCodeLanguage = ::kOvCodeLanguage,
 	kOvCodeColoring = ::kOvCodeColoring,
-	kOvCodeFoldingFeature = ::kOvCodeFoldingFeature,
 	kOvFileType = ::kOvFileType,
 	kOvBinaryRecordLength = ::kOvBinaryRecordLength,
 	kOvPostLoadMacro = ::kOvPostLoadMacro,
@@ -428,10 +425,7 @@ enum : unsigned long long {
 	const std::string id = canonicalCompilerProfileId(profileId);
 
 	if (id.empty()) return true;
-	if (compilerProfileIdExists(id)) return true;
-	for (const MRCompilerProfile &profile : detectedCompilerProfiles())
-		if (profile.id == id) return true;
-	return false;
+	return compilerProfileIdExists(id);
 }
 
 [[nodiscard]] bool validateCompilerProfileLiteral(const EditProfileDraft &draft, std::string &errorText) {
@@ -484,7 +478,6 @@ enum : unsigned long long {
 	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle)) mask |= kOvIndentStyle;
 	if (upperAscii(trimAscii(effective.codeLanguage)) != upperAscii(trimAscii(defaults.codeLanguage))) mask |= kOvCodeLanguage;
 	if (effective.codeColoring != defaults.codeColoring) mask |= kOvCodeColoring;
-	if (effective.codeFoldingFeature != defaults.codeFoldingFeature) mask |= kOvCodeFoldingFeature;
 	if (upperAscii(effective.fileType) != upperAscii(defaults.fileType)) mask |= kOvFileType;
 	if (effective.binaryRecordLength != defaults.binaryRecordLength) mask |= kOvBinaryRecordLength;
 	if (trimAscii(effective.postLoadMacro) != trimAscii(defaults.postLoadMacro)) mask |= kOvPostLoadMacro;
@@ -714,7 +707,6 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	if (settings.displayTabs) record.optionsMask |= kOptionDisplayTabs;
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
-	if (settings.codeFoldingFeature) record.optionsMask |= kOptionCodeFoldingFeature;
 	if (settings.backupFiles) record.optionsMask |= kOptionBackupFiles;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;

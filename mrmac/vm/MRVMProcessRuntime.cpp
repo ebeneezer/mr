@@ -40,6 +40,187 @@ std::vector<std::string> mrvmProcessRuntimeArguments() {
 	return g_runtimeEnv.processArgs;
 }
 
+static void mrvmReapForkedProcesses() {
+	std::vector<MRVMForkedProcess> live;
+
+	live.reserve(g_runtimeEnv.forkedProcesses.size());
+	for (const MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses) {
+		int waitStatus = 0;
+		const pid_t pid = static_cast<pid_t>(process.pid);
+		const pid_t waited = ::waitpid(pid, &waitStatus, WNOHANG);
+
+		if (waited == 0 || (waited < 0 && errno == EINTR)) live.push_back(process);
+	}
+	g_runtimeEnv.forkedProcesses.swap(live);
+}
+
+static bool processHasOwner(const MRVMForkedProcess &process, int ownerBufferId) {
+	return ownerBufferId > 0 && std::find(process.ownerBufferIds.begin(), process.ownerBufferIds.end(), ownerBufferId) != process.ownerBufferIds.end();
+}
+
+static void addProcessOwner(MRVMForkedProcess &process, int ownerBufferId) {
+	if (ownerBufferId <= 0 || processHasOwner(process, ownerBufferId)) return;
+	process.ownerBufferIds.push_back(ownerBufferId);
+}
+
+static void terminateForkedProcess(int pid) {
+	int waitStatus = 0;
+	bool exited = false;
+
+	if (pid <= 0) return;
+	if (::kill(-static_cast<pid_t>(pid), SIGTERM) != 0 && errno == ESRCH) ::kill(static_cast<pid_t>(pid), SIGTERM);
+	for (int attempt = 0; attempt < 10; ++attempt) {
+		const pid_t waited = ::waitpid(static_cast<pid_t>(pid), &waitStatus, WNOHANG);
+
+		if (waited == static_cast<pid_t>(pid) || (waited < 0 && errno == ECHILD)) {
+			exited = true;
+			break;
+		}
+		if (waited < 0 && errno != EINTR) break;
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	}
+	if (!exited) {
+		if (::kill(-static_cast<pid_t>(pid), SIGKILL) != 0 && errno == ESRCH) ::kill(static_cast<pid_t>(pid), SIGKILL);
+		while (::waitpid(static_cast<pid_t>(pid), &waitStatus, 0) < 0 && errno == EINTR)
+			;
+	}
+}
+
+static void removeOwnerFromProcess(MRVMForkedProcess &process, int ownerBufferId) {
+	if (ownerBufferId <= 0) return;
+	process.ownerBufferIds.erase(std::remove(process.ownerBufferIds.begin(), process.ownerBufferIds.end(), ownerBufferId), process.ownerBufferIds.end());
+}
+
+static void removeOwnerFromMismatchedPdfProcesses(int ownerBufferId, const std::string &pdfPath) {
+	std::vector<MRVMForkedProcess> live;
+
+	if (ownerBufferId <= 0 || pdfPath.empty()) return;
+	live.reserve(g_runtimeEnv.forkedProcesses.size());
+	for (MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses) {
+		if (processHasOwner(process, ownerBufferId) && process.pdfPath != pdfPath) removeOwnerFromProcess(process, ownerBufferId);
+		if (!process.ownerBufferIds.empty() || process.pdfPath.empty()) live.push_back(process);
+		else
+			terminateForkedProcess(process.pid);
+	}
+	g_runtimeEnv.forkedProcesses.swap(live);
+}
+
+int mrvmForkProcess(const std::vector<std::string> &arguments, int ownerBufferId, const std::string &sourcePath, const std::string &pdfPath) {
+	std::vector<std::string> commandArguments = arguments;
+	std::vector<char *> argv;
+	int errorPipe[2] = {-1, -1};
+	pid_t childPid = -1;
+	int execError = 0;
+
+	if (commandArguments.empty()) return EINVAL;
+	commandArguments[0] = trimAscii(commandArguments[0]);
+	if (commandArguments[0].empty()) return EINVAL;
+	argv.reserve(commandArguments.size() + 1);
+	for (std::string &argument : commandArguments)
+		argv.push_back(argument.data());
+	argv.push_back(nullptr);
+
+	mrvmReapForkedProcesses();
+	removeOwnerFromMismatchedPdfProcesses(ownerBufferId, pdfPath);
+	if (!pdfPath.empty()) {
+		for (MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses) {
+			if (process.pdfPath != pdfPath) continue;
+			addProcessOwner(process, ownerBufferId);
+			return 0;
+		}
+	}
+	if (::pipe(errorPipe) != 0) return errno != 0 ? errno : 1;
+	(void)::fcntl(errorPipe[1], F_SETFD, FD_CLOEXEC);
+	childPid = ::fork();
+	if (childPid < 0) {
+		const int savedErrno = errno != 0 ? errno : 1;
+		::close(errorPipe[0]);
+		::close(errorPipe[1]);
+		return savedErrno;
+	}
+	if (childPid == 0) {
+		int nullIn = -1;
+		int nullOut = -1;
+		int savedErrno = 0;
+
+		::close(errorPipe[0]);
+		::setpgid(0, 0);
+		nullIn = ::open("/dev/null", O_RDONLY);
+		if (nullIn >= 0) {
+			::dup2(nullIn, STDIN_FILENO);
+			::close(nullIn);
+		}
+		nullOut = ::open("/dev/null", O_WRONLY);
+		if (nullOut >= 0) {
+			::dup2(nullOut, STDOUT_FILENO);
+			::dup2(nullOut, STDERR_FILENO);
+			::close(nullOut);
+		}
+		::execvp(argv[0], argv.data());
+		savedErrno = errno != 0 ? errno : 1;
+		(void)::write(errorPipe[1], &savedErrno, sizeof(savedErrno));
+		::_exit(127);
+	}
+	::close(errorPipe[1]);
+	::setpgid(childPid, childPid);
+	{
+		std::size_t readBytes = 0;
+		char *target = reinterpret_cast<char *>(&execError);
+
+		while (readBytes < sizeof(execError)) {
+			const ssize_t count = ::read(errorPipe[0], target + readBytes, sizeof(execError) - readBytes);
+
+			if (count == 0) break;
+			if (count > 0) {
+				readBytes += static_cast<std::size_t>(count);
+				continue;
+			}
+			if (errno == EINTR) continue;
+			execError = errno != 0 ? errno : 1;
+			break;
+		}
+	}
+	::close(errorPipe[0]);
+	if (execError != 0) {
+		int waitStatus = 0;
+		while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
+			;
+		return execError;
+	}
+	{
+		MRVMForkedProcess process;
+
+		process.pid = static_cast<int>(childPid);
+		process.sourcePath = sourcePath;
+		process.pdfPath = pdfPath;
+		addProcessOwner(process, ownerBufferId);
+		g_runtimeEnv.forkedProcesses.push_back(process);
+	}
+	return 0;
+}
+
+void mrvmCloseForksForOwner(int ownerBufferId) {
+	std::vector<MRVMForkedProcess> live;
+
+	if (ownerBufferId <= 0) return;
+	mrvmReapForkedProcesses();
+	live.reserve(g_runtimeEnv.forkedProcesses.size());
+	for (MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses) {
+		removeOwnerFromProcess(process, ownerBufferId);
+		if (!process.ownerBufferIds.empty() || process.pdfPath.empty()) live.push_back(process);
+		else
+			terminateForkedProcess(process.pid);
+	}
+	g_runtimeEnv.forkedProcesses.swap(live);
+}
+
+void mrvmCloseAllForkedProcesses() {
+	mrvmReapForkedProcesses();
+	for (const MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses)
+		terminateForkedProcess(process.pid);
+	g_runtimeEnv.forkedProcesses.clear();
+}
+
 std::string mrvmCommandFirstLine(const std::string &command) {
 	std::string line;
 	char buffer[512];

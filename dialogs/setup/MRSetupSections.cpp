@@ -354,6 +354,17 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteFileCompareMiniMapFindMarker - 1] = data[kMrPaletteMiniMapFindMarker - 1];
 		data[kMrPaletteFileCompareMiniMapErrorMarker - 1] = data[kMrPaletteMiniMapErrorMarker - 1];
 		data[kMrPaletteDiagnosticInformation - 1] = 0x4E;
+		data[kMrPaletteOutlineFileHeader - 1] = 0x1F;
+		data[kMrPaletteOutlineLevel0 - 1] = 0x1F;
+		data[kMrPaletteOutlineLevel1 - 1] = 0x1E;
+		data[kMrPaletteOutlineLevel2 - 1] = 0x1B;
+		data[kMrPaletteOutlineLevel3 - 1] = 0x1A;
+		data[kMrPaletteOutlineLevel4 - 1] = 0x1D;
+		data[kMrPaletteOutlineLevel5 - 1] = 0x19;
+		data[kMrPaletteOutlineLevel6 - 1] = 0x1C;
+		data[kMrPaletteOutlineLevel7 - 1] = 0x13;
+		data[kMrPaletteOutlineLevel8 - 1] = 0x1F;
+		data[kMrPaletteOutlineLevel9 - 1] = 0x1E;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	TPalette palette = basePalette;
@@ -1662,7 +1673,7 @@ class TIndentStylePreview : public TView {
 
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
   public:
-	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour,
+	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour,
 	                            MRCompilerErrorMessagePlacement initialCompilerErrorMessagePlacement, MRScrollbarVisibility initialScrollbarVisibility, bool initialTrackCompilerWarnings, bool initialTrackCompilerNotes,
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker, const std::string &initialFileCompareOriginalLeadingGutters, const std::string &initialFileCompareOriginalTrailingGutters,
 	                            const std::string &initialFileCompareCompareLeadingGutters, const std::string &initialFileCompareCompareTrailingGutters, MRFileCompareStartConfiguration initialFileCompareStartConfiguration,
@@ -1671,12 +1682,11 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 		int const yStart = 2;
 
-		TCheckBoxes *cb = new TCheckBoxes(TRect(3, yStart, 36, yStart + 7),
+		TCheckBoxes *cb = new TCheckBoxes(TRect(3, yStart, 36, yStart + 6),
 		                                   new TSItem("~W~indow Manager",
 		                                              new TSItem("~M~enuline messages",
-		                                                         new TSItem("~A~uto load workspace",
-		                                                                    new TSItem("~C~ycle virtual desktops",
-		                                                                               new TSItem("Track compiler ~w~arnings", new TSItem("Track compiler ~n~otes", new TSItem("File Compare panel R/~O~", nullptr))))))));
+		                                                         new TSItem("~C~ycle virtual desktops",
+		                                                                    new TSItem("Track compiler ~w~arnings", new TSItem("Track compiler ~n~otes", new TSItem("File Compare panel R/~O~", nullptr)))))));
 
 		mOptionsField = cb;
 		addManaged(mOptionsField, mOptionsField->getBounds());
@@ -1776,9 +1786,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		if (mOptionsField != nullptr) {
 			ushort visualFlags = 0;
 			mOptionsField->getData(&visualFlags);
-			data->flags = visualFlags & 0x000F;
-			data->compilerDiagnosticFlags = static_cast<ushort>((visualFlags >> 4) & 0x0003);
-			if ((visualFlags & 0x0040) != 0) data->flags |= 0x0010;
+			data->flags = visualFlags & 0x0003;
+			if ((visualFlags & 0x0004) != 0) data->flags |= 0x0004;
+			data->compilerDiagnosticFlags = static_cast<ushort>((visualFlags >> 3) & 0x0003);
+			if ((visualFlags & 0x0020) != 0) data->flags |= 0x0008;
 		}
 		if (mVirtualDesktopsSlider != nullptr) {
 			int32_t val = 1;
@@ -1801,8 +1812,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	void setData(void *rec) override {
 		UserInterfaceSettingsDialogData *data = static_cast<UserInterfaceSettingsDialogData *>(rec);
 		if (mOptionsField != nullptr) {
-			ushort visualFlags = static_cast<ushort>((data->flags & 0x000F) | ((data->compilerDiagnosticFlags & 0x0003) << 4));
-			if ((data->flags & 0x0010) != 0) visualFlags |= 0x0040;
+			ushort visualFlags = static_cast<ushort>(data->flags & 0x0003);
+			if ((data->flags & 0x0004) != 0) visualFlags |= 0x0004;
+			visualFlags |= static_cast<ushort>((data->compilerDiagnosticFlags & 0x0003) << 3);
+			if ((data->flags & 0x0008) != 0) visualFlags |= 0x0020;
 			mOptionsField->setData(&visualFlags);
 		}
 		if (mVirtualDesktopsSlider != nullptr) {
@@ -2219,7 +2232,6 @@ void runUserInterfaceSettingsDialogFlow() {
 		bool currentWm = configuredWindowManager();
 		bool currentMm = configuredMenulineMessages();
 		int currentVd = configuredVirtualDesktops();
-		bool currentAw = configuredAutoloadWorkspace();
 		bool currentCv = configuredCyclicVirtualDesktops();
 		MRCursorBehaviour currentCb = configuredCursorBehaviour();
 		MRCompilerErrorMessagePlacement currentCemp = configuredCompilerErrorMessagePlacement();
@@ -2235,15 +2247,14 @@ void runUserInterfaceSettingsDialogFlow() {
 		MRFileCompareStartConfiguration currentFileCompareStartConfiguration = configuredFileCompareStartConfiguration();
 		bool currentFileCompareComparePanelReadOnly = configuredFileCompareComparePanelReadOnly();
 
-		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw, currentCv, currentCb, currentCemp, currentScrollbarVisibility, currentTrackWarnings, currentTrackNotes, currentUiIndentStyle, currentCp,
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentCv, currentCb, currentCemp, currentScrollbarVisibility, currentTrackWarnings, currentTrackNotes, currentUiIndentStyle, currentCp,
 		                                                                         currentFileCompareOriginalLeadingGutters, currentFileCompareOriginalTrailingGutters, currentFileCompareCompareLeadingGutters, currentFileCompareCompareTrailingGutters,
 		                                                                         currentFileCompareStartConfiguration, currentFileCompareComparePanelReadOnly);
 		UserInterfaceSettingsDialogData dialogData;
 		if (currentWm) dialogData.flags |= 1;
 		if (currentMm) dialogData.flags |= 2;
-		if (currentAw) dialogData.flags |= 4;
-		if (currentCv) dialogData.flags |= 8;
-		if (currentFileCompareComparePanelReadOnly) dialogData.flags |= 16;
+		if (currentCv) dialogData.flags |= 4;
+		if (currentFileCompareComparePanelReadOnly) dialogData.flags |= 8;
 
 		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
 		dialogData.cursorBehaviourChoice = currentCb == MRCursorBehaviour::FreeMovement ? 0 : 1;
@@ -2263,9 +2274,8 @@ void runUserInterfaceSettingsDialogFlow() {
 		ushort result = execDialogWithDataCapture(dialog, &dialogData);
 		bool newWm = (dialogData.flags & 1) != 0;
 		bool newMm = (dialogData.flags & 2) != 0;
-		bool newAw = (dialogData.flags & 4) != 0;
-		bool newCv = (dialogData.flags & 8) != 0;
-		bool newFileCompareComparePanelReadOnly = (dialogData.flags & 16) != 0;
+		bool newCv = (dialogData.flags & 4) != 0;
+		bool newFileCompareComparePanelReadOnly = (dialogData.flags & 8) != 0;
 		int newVd = static_cast<int>(dialogData.virtualDesktops);
 		MRCursorBehaviour newCb = dialogData.cursorBehaviourChoice == 0 ? MRCursorBehaviour::FreeMovement : MRCursorBehaviour::BoundToText;
 		MRCompilerErrorMessagePlacement newCemp = dialogData.compilerErrorMessageChoice == 0 ? MRCompilerErrorMessagePlacement::UnderCode : MRCompilerErrorMessagePlacement::RightMargin;
@@ -2338,7 +2348,6 @@ void runUserInterfaceSettingsDialogFlow() {
 			}
 			setConfiguredWindowManager(newWm, &errorText);
 			setConfiguredMenulineMessages(newMm, &errorText);
-			setConfiguredAutoloadWorkspace(newAw, &errorText);
 			setConfiguredCyclicVirtualDesktops(newCv, &errorText);
 			applyVirtualDesktopConfigurationChange(newVd);
 			for (MREditWindow *window : allEditWindowsInZOrder())

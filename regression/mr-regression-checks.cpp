@@ -19,6 +19,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <thread>
@@ -4632,8 +4633,8 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 	profile.overrides.values.backupFiles = false;
 	profile.overrides.values.codeLanguage = "PERL";
 	profile.overrides.values.codeColoring = true;
-	profile.overrides.values.codeFoldingFeature = true;
-	profile.overrides.mask = kOvTabSize | kOvLineNumbersPosition | kOvDefaultMode | kOvBackupFiles | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingFeature;
+	profile.overrides.values.codeFoldingPosition = "LEADING";
+	profile.overrides.mask = kOvTabSize | kOvLineNumbersPosition | kOvDefaultMode | kOvBackupFiles | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingPosition;
 	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(1, profile), &errorText)) {
 		restore();
 		failureReason = "Unable to seed extension profile roundtrip probe: " + errorText;
@@ -4647,7 +4648,8 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 	paths.shellUri = configuredShellExecutablePath();
 	source = buildSettingsMacroSource(paths);
 	if (source.find("MRFEPROFILE('SET', 'perl_profile', 'BACKUP_FILES', 'false');") == std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_LANGUAGE', 'PERL');") == std::string::npos ||
-	    source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_COLORING', 'true');") == std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_FOLDING', 'true');") == std::string::npos) {
+	    source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_COLORING', 'true');") == std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_FOLDING_POSITION', 'LEADING');") == std::string::npos ||
+	    source.find("CODE_FOLDING'") != std::string::npos) {
 		restore();
 		failureReason = "Profile roundtrip source did not serialize profile override literals.";
 		return false;
@@ -4700,7 +4702,7 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 		failureReason = "Effective profile lookup did not report the matching profile name.";
 		return false;
 	}
-	if (effective.tabSize != 3 || !effective.showLineNumbers || effective.defaultMode != "OVERWRITE" || effective.backupFiles || effective.codeLanguage != "PERL" || !effective.codeColoring || !effective.codeFoldingFeature) {
+	if (effective.tabSize != 3 || !effective.showLineNumbers || effective.defaultMode != "OVERWRITE" || effective.backupFiles || effective.codeLanguage != "PERL" || !effective.codeColoring || !effective.codeFolding || effective.codeFoldingPosition != "LEADING") {
 		restore();
 		failureReason = "Effective edit settings did not merge profile overrides onto globals.";
 		return false;
@@ -5100,7 +5102,6 @@ static const ProfileConformanceProbeValue kProfileConformanceProbeValues[] = {
     {"INDENT_STYLE", "SMART"},
     {"CODE_LANGUAGE", "C"},
     {"CODE_COLORING", "true"},
-    {"CODE_FOLDING", "true"},
     {"FILE_TYPE", "BINARY"},
     {"BINARY_RECORD_LENGTH", "256"},
     {"POST_LOAD_MACRO", "/tmp/mr_regression_post_load.mrmac"},
@@ -6205,9 +6206,11 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Code, itemCount);
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
+	const std::string warmupPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorWarmup.cpp");
 	const std::string sidekickPath = absolutePathFromCwd("ui/MRSidekickEditor.cpp");
 	const std::string columnListPath = absolutePathFromCwd("ui/widgets/MRColumnListView.cpp");
 	std::string viewportContent;
+	std::string warmupContent;
 	std::string sidekickContent;
 	std::string columnListContent;
 	std::string tokenColorFunction;
@@ -6252,6 +6255,11 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFileEditorViewport.cpp for code color guard: " + errorText;
 		return false;
 	}
+	if (!readTextFile(warmupPath, warmupContent, errorText)) {
+		restore();
+		failureReason = "Unable to read MRFileEditorWarmup.cpp for code color guard: " + errorText;
+		return false;
+	}
 	if (!readTextFile(sidekickPath, sidekickContent, errorText)) {
 		restore();
 		failureReason = "Unable to read MRSidekickEditor.cpp for code color guard: " + errorText;
@@ -6289,6 +6297,11 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	if (tokenColorFunction.find("configured & 0x0F") != std::string::npos || tokenColorFunction.find("(configured &") != std::string::npos) {
 		restore();
 		failureReason = "Code token colors must not mask configured colors down to foreground.";
+		return false;
+	}
+	if (warmupContent.find("bool MRFileEditor::syntaxPipelineEnabled() const") == std::string::npos || warmupContent.find("return languageFeaturesEnabled() && effectiveEditSetupSettings().codeColoring;") == std::string::npos) {
+		restore();
+		failureReason = "Editor syntax coloring pipeline must be gated by CODE_COLORING, not only by CODE_LANGUAGE.";
 		return false;
 	}
 	for (std::size_t i = 0; i < itemCount; ++i) {
@@ -6536,7 +6549,8 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 		return false;
 	}
 	if (content.find("if (visibleLineIndex >= totalLines) break;") == std::string::npos ||
-	    content.find("formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, false, false);") == std::string::npos) {
+	    content.find("const bool drawEofMarker = editSettings.showEofMarker && isDocumentLine && currentLinePtr == mBufferModel.length();") == std::string::npos ||
+	    content.find("formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarker && editSettings.showEofMarkerEmoji);") == std::string::npos) {
 		failureReason = "Draw path must stop semantic document rendering at EOF.";
 		return false;
 	}
@@ -6555,6 +6569,14 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 	if (content.find("const bool emptyEofDocumentLine = lineStart == documentLength && lineEnd == documentLength;") == std::string::npos ||
 	    content.find("currentLine = !emptyEofDocumentLine && lineStart <= cursorPos && cursorPos < lineEnd;") == std::string::npos) {
 		failureReason = "Empty EOF document lines must keep the text color combination instead of current-line color.";
+		return false;
+	}
+	if (content.find("bool eofDocumentLineVisible = false;") == std::string::npos ||
+	    content.find("if (currentLineIndex < mBufferModel.lineCount() && mBufferModel.lineStartByIndex(currentLineIndex) == mBufferModel.length())") == std::string::npos ||
+	    content.find("const bool drawEofMarker = editSettings.showEofMarker && !eofDocumentLineVisible && y == static_cast<int>(documentRows);") == std::string::npos ||
+	    content.find("formatSyntaxLine(gutterBackground, virtualLineIndex, MRSyntaxLineResult(), delta.x, textWidth, viewport.textLeft, false, true, editSettings.showEofMarkerEmoji);") == std::string::npos ||
+	    content.find("if (drawEofMarker) drawEofMarkerGlyph(b, hScroll, width, drawX, basePair, drawEofMarkerAsEmoji);") == std::string::npos) {
+		failureReason = "EOF marker must be drawn once on the EOF line or first visible post-EOF line without extending scroll range.";
 		return false;
 	}
 	if (content.find("if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))") == std::string::npos) {
@@ -6730,6 +6752,49 @@ bool testFileExtensionCodeLanguageChoicesGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testFileExtensionFoldingControlsGuard(std::string &failureReason) {
+	const std::string panelPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionEditorSettings.cpp");
+	const std::string internalPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionEditorSettingsInternal.hpp");
+	const std::string editSetupPath = absolutePathFromCwd("config/settings/MRSettingsEditSetup.cpp");
+	const std::string snapshotPath = absolutePathFromCwd("config/settings/MRSettingsSnapshotIO.cpp");
+	const std::string warmupPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorWarmup.cpp");
+	std::string panelContent;
+	std::string internalContent;
+	std::string editSetupContent;
+	std::string snapshotContent;
+	std::string warmupContent;
+	std::string ioError;
+
+	if (!readTextFile(panelPath, panelContent, ioError) || !readTextFile(internalPath, internalContent, ioError) || !readTextFile(editSetupPath, editSetupContent, ioError) || !readTextFile(snapshotPath, snapshotContent, ioError) ||
+	    !readTextFile(warmupPath, warmupContent, ioError)) {
+		failureReason = "Unable to read file extension folding-control sources: " + ioError;
+		return false;
+	}
+	if (panelContent.find("Code fo~L~ding") != std::string::npos || internalContent.find("kOptionCodeFoldingFeature") != std::string::npos || internalContent.find("kLeftOptionCodeFoldingFeature") != std::string::npos) {
+		failureReason = "File extension editor settings must not expose a separate Code folding checkbox.";
+		return false;
+	}
+	if (panelContent.find("\"Code folding:\"") == std::string::npos || panelContent.find("new TSItem(\"~O~ff\", new TSItem(\"~L~eading\", new TSItem(\"~T~railing\", nullptr)))") == std::string::npos) {
+		failureReason = "File extension editor settings must expose Code folding only as Off/Leading/Trailing.";
+		return false;
+	}
+	if (editSetupContent.find("{\"CODE_FOLDING\",") != std::string::npos || snapshotContent.find("MRSETUP('CODE_FOLDING',") != std::string::npos) {
+		failureReason = "CODE_FOLDING must not remain a canonical edit setting or serialized MRSETUP token.";
+		return false;
+	}
+	if (editSetupContent.find("{\"CODE_FOLDING_POSITION\"") == std::string::npos || snapshotContent.find("MRSETUP('CODE_FOLDING_POSITION'") == std::string::npos) {
+		failureReason = "CODE_FOLDING_POSITION must remain the canonical folding control.";
+		return false;
+	}
+	if (warmupContent.find("bool MRFileEditor::foldingPipelineEnabled() const") == std::string::npos || warmupContent.find("return languageFeaturesEnabled() && effectiveEditSetupSettings().codeFolding;") == std::string::npos) {
+		failureReason = "Editor folding pipeline must be gated by effective code folding position.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 bool testFileExtensionCompilerProfileChoicesGuard(std::string &failureReason) {
 	const std::string dialogPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionProfiles.cpp");
 	const std::string supportPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionProfilesSupport.cpp");
@@ -6745,16 +6810,21 @@ bool testFileExtensionCompilerProfileChoicesGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFileExtensionProfilesSupport.cpp for compiler-profile choices guard: " + ioError;
 		return false;
 	}
-	if (dialogContent.find("std::vector<MRCompilerProfile> profiles = configuredCompilerProfiles();") == std::string::npos || dialogContent.find("for (const MRCompilerProfile &detectedProfile : detectedCompilerProfiles())") == std::string::npos || dialogContent.find("if (!exists) profiles.push_back(detectedProfile);") == std::string::npos) {
-		failureReason = "File extension compiler-profile drop list must merge configured profiles with missing detected compiler profiles.";
+	if (dialogContent.find("std::vector<MRCompilerProfile> profiles = configuredCompilerProfiles();") == std::string::npos) {
+		failureReason = "File extension compiler-profile drop list must read configured profiles.";
+		return false;
+	}
+	if (dialogContent.find("detectedCompilerProfiles()") != std::string::npos || supportContent.find("detectedCompilerProfiles()") != std::string::npos || dialogContent.find("detectedCompilerProfileIds()") != std::string::npos ||
+	    supportContent.find("detectedCompilerProfileIds()") != std::string::npos) {
+		failureReason = "File extension compiler-profile UI must not synthesize compiler profile ids from auto-detection.";
 		return false;
 	}
 	if (supportContent.find("if (configuredCompilerProfiles().empty())") != std::string::npos) {
 		failureReason = "File extension compiler-profile validation must not accept detected profiles only when configured profiles are empty.";
 		return false;
 	}
-	if (supportContent.find("for (const MRCompilerProfile &profile : detectedCompilerProfiles())") == std::string::npos || supportContent.find("if (profile.id == id) return true;") == std::string::npos) {
-		failureReason = "File extension compiler-profile validation must accept configured and detected compiler profile ids.";
+	if (supportContent.find("return compilerProfileIdExists(id);") == std::string::npos) {
+		failureReason = "File extension compiler-profile validation must accept configured compiler profile ids only.";
 		return false;
 	}
 
@@ -8145,6 +8215,84 @@ bool testCompilerProfileAutomaticSetupGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testCompilerProfilePathLatexDetectionGuard(std::string &failureReason) {
+	namespace fs = std::filesystem;
+	char tempTemplate[] = "/tmp/mr-latex-path-XXXXXX";
+	char *created = ::mkdtemp(tempTemplate);
+	const char *previousPath = std::getenv("PATH");
+	const bool hadPreviousPath = previousPath != nullptr;
+	const std::string previousPathValue = hadPreviousPath ? previousPath : "";
+
+	auto restore = [&]() {
+		if (hadPreviousPath) setenv("PATH", previousPathValue.c_str(), 1);
+		else
+			unsetenv("PATH");
+		if (created != nullptr) fs::remove_all(created);
+	};
+
+	if (created == nullptr) {
+		failureReason = "Unable to create temporary PATH directory for LaTeX detection.";
+		return false;
+	}
+	const fs::path tempDir(created);
+	const fs::path latexmk = tempDir / "latexmk";
+	const fs::path xelatex = tempDir / "xelatex";
+	{
+		std::ofstream out(latexmk);
+		out << "#!/bin/sh\nprintf '%s\\n' 'Latexmk, John Collins, 4.99'\n";
+	}
+	{
+		std::ofstream out(xelatex);
+		out << "#!/bin/sh\nprintf '%s\\n' 'XeTeX 3.141592653'\n";
+	}
+	if (::chmod(latexmk.c_str(), 0755) != 0 || ::chmod(xelatex.c_str(), 0755) != 0) {
+		restore();
+		failureReason = "Unable to mark fake LaTeX compilers executable.";
+		return false;
+	}
+	setenv("PATH", tempDir.string().c_str(), 1);
+
+	const std::vector<std::string> executablePaths = detectedCompilerExecutablePaths();
+	const std::vector<std::string> profileIds = detectedCompilerProfileIds();
+	const std::vector<MRCompilerProfile> profiles = detectedCompilerProfiles();
+	const std::string latexmkText = normalizeConfiguredPathInput(latexmk.string());
+	const std::string xelatexText = normalizeConfiguredPathInput(xelatex.string());
+	bool sawLatexmkPath = false;
+	bool sawXelatexPath = false;
+	bool sawLatexmkProfile = false;
+	bool sawXelatexProfile = false;
+	bool sawLatexmkProfileId = false;
+	bool sawXelatexProfileId = false;
+
+	for (const std::string &path : executablePaths) {
+		if (path == latexmkText) sawLatexmkPath = true;
+		if (path == xelatexText) sawXelatexPath = true;
+	}
+	for (const MRCompilerProfile &profile : profiles) {
+		if (profile.toolchain == "LATEXMK" && profile.executablePath == latexmkText && profile.buildSucceededCommand.empty() && !profile.postBuildMacro.empty()) sawLatexmkProfile = true;
+		if (profile.toolchain == "LATEX" && profile.executablePath == xelatexText && profile.id == "LATEX_XELATEX" && profile.buildSucceededCommand.empty() && !profile.postBuildMacro.empty()) sawXelatexProfile = true;
+	}
+	for (const std::string &id : profileIds) {
+		if (id == "LATEXMK_PDF") sawLatexmkProfileId = true;
+		if (id == "LATEX_XELATEX") sawXelatexProfileId = true;
+	}
+	restore();
+	if (!sawLatexmkPath || !sawXelatexPath) {
+		failureReason = "LaTeX compiler executable detection must search the process PATH directly.";
+		return false;
+	}
+	if (!sawLatexmkProfile || !sawXelatexProfile) {
+		failureReason = "LaTeX compiler profile detection must create LATEXMK and LATEX profiles with MRMac post-build middleware from PATH executables.";
+		return false;
+	}
+	if (!sawLatexmkProfileId || !sawXelatexProfileId) {
+		failureReason = "Lightweight LaTeX compiler profile id detection must create LATEXMK and LATEX ids from PATH executables.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testCompilerProfileBuildCommandRoundtripGuard(std::string &failureReason) {
 	MRSetupPaths paths = resolveSetupPathDefaults();
 	MRSettingsSnapshot snapshot = captureConfiguredSettingsSnapshot(paths);
@@ -8162,6 +8310,8 @@ bool testCompilerProfileBuildCommandRoundtripGuard(std::string &failureReason) {
 	profile.preBuildCommand = "printf pre";
 	profile.buildSucceededCommand = "printf ok";
 	profile.buildFailedCommand = "printf fail";
+	profile.preBuildMacro = "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild";
+	profile.postBuildMacro = "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild";
 	if (!setSnapshotCompilerProfiles(snapshot, std::vector<MRCompilerProfile>{profile}, &errorText)) {
 		failureReason = "Unable to seed compiler profile build command snapshot: " + errorText;
 		return false;
@@ -8169,7 +8319,9 @@ bool testCompilerProfileBuildCommandRoundtripGuard(std::string &failureReason) {
 	source = buildSettingsMacroSource(snapshot);
 	if (source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'PRE_BUILD_COMMAND', 'printf pre');") == std::string::npos ||
 	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'BUILD_SUCCEEDED_COMMAND', 'printf ok');") == std::string::npos ||
-	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'BUILD_FAILED_COMMAND', 'printf fail');") == std::string::npos) {
+	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'BUILD_FAILED_COMMAND', 'printf fail');") == std::string::npos ||
+	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'PRE_BUILD_MACRO', 'compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild');") == std::string::npos ||
+	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'POST_BUILD_MACRO', 'compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild');") == std::string::npos) {
 		failureReason = "Compiler profile build command fields were not serialized.";
 		return false;
 	}
@@ -8178,11 +8330,14 @@ bool testCompilerProfileBuildCommandRoundtripGuard(std::string &failureReason) {
 	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "FLAGS", "-Wall", &errorText) ||
 	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "PRE_BUILD_COMMAND", "printf pre", &errorText) ||
 	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "BUILD_SUCCEEDED_COMMAND", "printf ok", &errorText) ||
-	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "BUILD_FAILED_COMMAND", "printf fail", &errorText)) {
+	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "BUILD_FAILED_COMMAND", "printf fail", &errorText) ||
+	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "PRE_BUILD_MACRO", "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild", &errorText) ||
+	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "POST_BUILD_MACRO", "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild", &errorText)) {
 		failureReason = "Compiler profile build command directive apply failed: " + errorText;
 		return false;
 	}
-	if (loaded.compilerProfiles.size() != 1 || loaded.compilerProfiles[0].preBuildCommand != "printf pre" || loaded.compilerProfiles[0].buildSucceededCommand != "printf ok" || loaded.compilerProfiles[0].buildFailedCommand != "printf fail") {
+	if (loaded.compilerProfiles.size() != 1 || loaded.compilerProfiles[0].preBuildCommand != "printf pre" || loaded.compilerProfiles[0].buildSucceededCommand != "printf ok" || loaded.compilerProfiles[0].buildFailedCommand != "printf fail" ||
+	    loaded.compilerProfiles[0].preBuildMacro != "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild" || loaded.compilerProfiles[0].postBuildMacro != "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild") {
 		failureReason = "Compiler profile build command fields did not roundtrip through directives.";
 		return false;
 	}
@@ -8210,6 +8365,7 @@ bool testLatexmkCompilerProfileCommandGuard(std::string &failureReason) {
 	profile.toolchain = "LATEXMK";
 	profile.executablePath = "/usr/bin/latexmk";
 	profile.buildFlags = "-pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd";
+	profile.buildSucceededCommand = "zathura --fork \"$MR_BUILD_PDF_PATH\"";
 	if (!normalizeCompilerProfileInPlace(profile, &errorText)) {
 		failureReason = "LATEXMK compiler profile did not normalize: " + errorText;
 		return false;
@@ -8222,12 +8378,16 @@ bool testLatexmkCompilerProfileCommandGuard(std::string &failureReason) {
 		failureReason = "LATEXMK compiler command did not contain the expected latexmk invocation.";
 		return false;
 	}
-	if (commandLine.find("exec zathura '/tmp/mr latex/main.pdf'") == std::string::npos) {
-		failureReason = "LATEXMK compiler command did not contain the expected controlled PDF viewer invocation.";
+	if (commandLine.find("MR_BUILD_PDF_PATH='/tmp/mr latex/main.pdf'") == std::string::npos) {
+		failureReason = "LATEXMK compiler command did not expose the expected PDF path to build commands.";
 		return false;
 	}
-	if (commandLine.find("zathura not found") == std::string::npos) {
-		failureReason = "LATEXMK compiler command did not contain the expected missing-viewer fallback message.";
+	if (commandLine.find("zathura --fork \"$MR_BUILD_PDF_PATH\"") == std::string::npos) {
+		failureReason = "LATEXMK compiler command did not run the configured build-succeeded command.";
+		return false;
+	}
+	if (commandLine.find("exec zathura") != std::string::npos) {
+		failureReason = "LATEXMK compiler command must not hard-code controlled PDF viewer execution.";
 		return false;
 	}
 	if (commandLine.find(" -o ") != std::string::npos) {
@@ -8240,14 +8400,21 @@ bool testLatexmkCompilerProfileCommandGuard(std::string &failureReason) {
 
 bool testConfiguredShellExecutionGuard(std::string &failureReason) {
 	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
+	const std::string compilerSourcePath = absolutePathFromCwd("mrmac/mrmac.c");
 	const std::string processRuntimePath = absolutePathFromCwd("mrmac/vm/MRVMProcessRuntime.cpp");
+	const std::string profilePath = absolutePathFromCwd("mrmac/vm/MRVMProfile.cpp");
 	const std::string compilerProfilesPath = absolutePathFromCwd("config/settings/MRSettingsCompilerProfiles.cpp");
+	const std::string compilerMiddlewarePath = absolutePathFromCwd("mrmac/macros/compilersupport/MRCompilerMiddleware.mrmac");
 	std::string vm;
+	std::string compilerSource;
 	std::string processRuntime;
+	std::string profile;
 	std::string compilerProfiles;
+	std::string compilerMiddleware;
 	std::string ioError;
 
-	if (!readTextFile(vmPath, vm, ioError) || !readTextFile(processRuntimePath, processRuntime, ioError) || !readTextFile(compilerProfilesPath, compilerProfiles, ioError)) {
+	if (!readTextFile(vmPath, vm, ioError) || !readTextFile(compilerSourcePath, compilerSource, ioError) || !readTextFile(processRuntimePath, processRuntime, ioError) || !readTextFile(profilePath, profile, ioError) || !readTextFile(compilerProfilesPath, compilerProfiles, ioError) ||
+	    !readTextFile(compilerMiddlewarePath, compilerMiddleware, ioError)) {
 		failureReason = "Unable to read shell execution sources: " + ioError;
 		return false;
 	}
@@ -8270,6 +8437,127 @@ bool testConfiguredShellExecutionGuard(std::string &failureReason) {
 	if (compilerProfiles.find("std::string shellPath = configuredShellExecutablePath();") == std::string::npos) {
 		failureReason = "Compiler profile probes must use the configured shell path.";
 		return false;
+	}
+	if (vm.find("name == \"FORK\"") == std::string::npos || vm.find("mrvmForkProcess(forkArguments)") == std::string::npos) {
+		failureReason = "VM must expose FORK as a shell-free process intrinsic.";
+		return false;
+	}
+	if (processRuntime.find("::execvp(argv[0], argv.data())") == std::string::npos || processRuntime.find("g_runtimeEnv.forkedProcessIds.push_back(static_cast<int>(childPid));") == std::string::npos) {
+		failureReason = "FORK must execute through execvp and retain only the child pid as a mechanical runtime handle.";
+		return false;
+	}
+	if (compilerSource.find("PROC_SIG8(\"FORK\"") == std::string::npos || compilerSource.find("strcasecmp(spec->name, \"FORK\")") == std::string::npos) {
+		failureReason = "MRMac compiler must accept FORK as a variadic string-like procedure call.";
+		return false;
+	}
+	if (profile.find("if (name == \"FORK\") return mrefExternalIo;") == std::string::npos || profile.find("\"FORK\",") == std::string::npos) {
+		failureReason = "FORK must be classified and whitelisted as a supported external I/O intrinsic.";
+		return false;
+	}
+	if (compilerMiddleware.find("SHELL_TO_OS(") != std::string::npos || compilerMiddleware.find("touch") != std::string::npos || compilerMiddleware.find("--fork") != std::string::npos) {
+		failureReason = "Compiler middleware must not use shell, touch or zathura --fork.";
+		return false;
+	}
+	if (compilerMiddleware.find("RUN_MACRO('MRCompilerLatexmkPostBuild');") == std::string::npos || compilerMiddleware.find("ViewerStarted := GLOBAL_INT(ViewerKey);") == std::string::npos ||
+	    compilerMiddleware.find("FORK('zathura', PdfPath);") == std::string::npos || compilerMiddleware.find("SET_GLOBAL_INT(ViewerKey, 1);") == std::string::npos || compilerMiddleware.find("MARQUEE_ERROR(") == std::string::npos) {
+		failureReason = "Compiler middleware must route LATEXMK post-build through FORK and report failures through MARQUEE_ERROR.";
+		return false;
+	}
+	{
+		std::vector<unsigned char> bytecode;
+		int entryOffset = 0;
+		std::string entryName;
+		std::string compileError;
+
+		if (!compileSource(compilerMiddleware, bytecode, entryOffset, entryName, compileError)) {
+			failureReason = "Compiler middleware macro source does not compile: " + compileError;
+			return false;
+		}
+	}
+	{
+		namespace fs = std::filesystem;
+		const char *mkdirPath = nullptr;
+		char tempTemplate[] = "/tmp/mr-fork-probe-XXXXXX";
+		char *created = nullptr;
+		std::vector<std::string> savedOrder;
+		std::map<std::string, int> savedInts;
+		std::map<std::string, std::string> savedStrings;
+		std::vector<std::string> globalOrder;
+		std::map<std::string, int> globalInts;
+		std::map<std::string, std::string> globalStrings;
+		std::vector<unsigned char> bytecode;
+		int entryOffset = 0;
+		std::string entryName;
+		std::string compileError;
+		std::string source;
+		std::string vmError;
+		bool createdByFork = false;
+
+		if (fs::exists("/usr/bin/mkdir")) mkdirPath = "/usr/bin/mkdir";
+		else if (fs::exists("/bin/mkdir"))
+			mkdirPath = "/bin/mkdir";
+		if (mkdirPath == nullptr) {
+			failureReason = "FORK runtime probe requires mkdir.";
+			return false;
+		}
+		created = ::mkdtemp(tempTemplate);
+		if (created == nullptr) {
+			failureReason = "Unable to create temporary FORK probe directory.";
+			return false;
+		}
+		const fs::path tempRoot(created);
+		const fs::path targetPath = tempRoot / "created-by-fork";
+		struct ForkProbeCleanup {
+			fs::path tempRoot;
+			std::vector<std::string> order;
+			std::map<std::string, int> ints;
+			std::map<std::string, std::string> strings;
+
+			ForkProbeCleanup(fs::path tempRootRef, std::vector<std::string> savedOrderRef, std::map<std::string, int> savedIntsRef, std::map<std::string, std::string> savedStringsRef)
+			    : tempRoot(std::move(tempRootRef)), order(std::move(savedOrderRef)), ints(std::move(savedIntsRef)), strings(std::move(savedStringsRef)) {
+			}
+
+			~ForkProbeCleanup() {
+				std::error_code ignored;
+
+				if (!tempRoot.empty()) fs::remove_all(tempRoot, ignored);
+				mrvmUiReplaceGlobals(order, ints, strings);
+			}
+		};
+
+		mrvmUiCopyGlobals(savedOrder, savedInts, savedStrings);
+		ForkProbeCleanup cleanup(tempRoot, savedOrder, savedInts, savedStrings);
+		source = "$MACRO ForkRuntimeProbe;\nFORK('";
+		source += mkdirPath;
+		source += "', '";
+		source += targetPath.string();
+		source += "');\nSET_GLOBAL_INT('FORK_PROBE_ERROR', ERROR_LEVEL);\nEND_MACRO;\n";
+		if (!compileSource(source, bytecode, entryOffset, entryName, compileError)) {
+			failureReason = "FORK runtime probe macro does not compile: " + compileError;
+			return false;
+		}
+		{
+			VirtualMachine vm;
+
+			vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), entryName, true, true);
+			if (firstVmError(vm.log, vmError)) {
+				failureReason = "FORK runtime probe produced VM error: " + vmError;
+				return false;
+			}
+		}
+		mrvmUiCopyGlobals(globalOrder, globalInts, globalStrings);
+		if (!checkGlobalInt(globalInts, "FORK_PROBE_ERROR", 0, failureReason)) return false;
+		for (int attempt = 0; attempt < 50; ++attempt) {
+			if (fs::is_directory(targetPath)) {
+				createdByFork = true;
+				break;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		}
+		if (!createdByFork) {
+			failureReason = "FORK runtime probe did not create the expected directory.";
+			return false;
+		}
 	}
 
 	failureReason.clear();
@@ -8370,8 +8658,12 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento command routing must keep window-close commands out of secondary panes.";
 		return false;
 	}
-	if (!containsAllSubstrings(source, {"evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel | evKeyDown", "const bool mouseEvent = (event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0;", "if (mouseEvent) setActivePaneForMouse(event.mouse.where);"}, missingNeedle)) {
-		failureReason = "Bento mouse-wheel routing must target the pane under the pointer: missing " + missingNeedle + ".";
+	if (!containsAllSubstrings(source, {"evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel | evKeyDown", "const bool mouseEvent = (event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0;", "if (event.what == evMouseDown) setActivePaneForMouse(event.mouse.where);", "const bool mouseTargetsActivePane = !mouseEvent || mouseLeafId == activeLeafId;", "if (activeLeafId != 0 && mouseTargetsActivePane && splitEventTargetsSecondaryPane(event))"}, missingNeedle)) {
+		failureReason = "Bento mouse routing must focus panes by click only and route mouse events to the active pane only: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (source.find("setActivePane(wheelLeafId);") != std::string::npos) {
+		failureReason = "Bento mouse-wheel routing must not change the active pane.";
 		return false;
 	}
 	if (!containsAllSubstrings(editWindowHeader, {"class MRHelpWindow : public MREditWindow", "class MRLogWindow : public MREditWindow", "class MRCommunicationWindow : public MREditWindow", "virtual bool allowsDocumentViewportSplit() const noexcept", "virtual bool isCommunicationWindow() const noexcept override"}, missingNeedle)) {
@@ -9030,6 +9322,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
+	runTest(ctx, "Compiler profile PATH LaTeX detection guard", testCompilerProfilePathLatexDetectionGuard);
 	runTest(ctx, "Compiler profile build command roundtrip guard", testCompilerProfileBuildCommandRoundtripGuard);
 	runTest(ctx, "LATEXMK compiler profile command guard", testLatexmkCompilerProfileCommandGuard);
 	runTest(ctx, "Configured shell execution guard", testConfiguredShellExecutionGuard);
@@ -9063,6 +9356,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "File extension code-language choices guard", testFileExtensionCodeLanguageChoicesGuard);
+	runTest(ctx, "File extension folding controls guard", testFileExtensionFoldingControlsGuard);
 	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
 	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
@@ -9125,6 +9419,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
+	runTest(ctx, "Compiler profile PATH LaTeX detection guard", testCompilerProfilePathLatexDetectionGuard);
 	runTest(ctx, "Compiler profile build command roundtrip guard", testCompilerProfileBuildCommandRoundtripGuard);
 	runTest(ctx, "LATEXMK compiler profile command guard", testLatexmkCompilerProfileCommandGuard);
 	runTest(ctx, "Configured shell execution guard", testConfiguredShellExecutionGuard);
@@ -9157,6 +9452,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
 	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
 	runTest(ctx, "File extension code-language choices guard", testFileExtensionCodeLanguageChoicesGuard);
+	runTest(ctx, "File extension folding controls guard", testFileExtensionFoldingControlsGuard);
 	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
 	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);

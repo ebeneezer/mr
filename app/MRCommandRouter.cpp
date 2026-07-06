@@ -100,7 +100,7 @@ MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
 std::recursive_mutex &mrvmExecutionMutex() noexcept;
 
 namespace {
-bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride = std::string_view(), const std::string &successAudioUri = std::string(), const std::string &failureAudioUri = std::string());
+bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride = std::string_view(), const std::string &successAudioUri = std::string(), const std::string &failureAudioUri = std::string(), const MRBuildHookContext &buildContext = MRBuildHookContext());
 
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
@@ -121,7 +121,6 @@ enum class GetLastKind : unsigned char {
 
 struct GetLastEntry {
 	std::string value;
-	long long epoch;
 };
 
 std::vector<MRColumnListView::Row> getLastRowsForValues(const std::vector<std::string> &values) {
@@ -139,7 +138,7 @@ void appendHistoryEntries(std::vector<GetLastEntry> &outEntries, MRDialogHistory
 
 	for (const MRDialogHistoryEntry &entry : source) {
 		const std::string normalized = normalizeConfiguredPathInput(entry.value);
-		if (!normalized.empty()) outEntries.push_back(GetLastEntry{normalized, entry.epoch});
+		if (!normalized.empty()) outEntries.push_back(GetLastEntry{normalized});
 	}
 }
 
@@ -150,10 +149,6 @@ std::vector<std::string> recentValuesForScopes(MRDialogHistoryScope firstScope, 
 
 	appendHistoryEntries(entries, firstScope, files);
 	appendHistoryEntries(entries, secondScope, files);
-	std::sort(entries.begin(), entries.end(), [](const GetLastEntry &left, const GetLastEntry &right) {
-		if (left.epoch != right.epoch) return left.epoch > right.epoch;
-		return left.value < right.value;
-	});
 	for (const GetLastEntry &entry : entries) {
 		if (seen.find(entry.value) != seen.end()) continue;
 		seen.insert(entry.value);
@@ -170,10 +165,6 @@ std::vector<std::string> recentWorkspaceValues() {
 	const int limit = configuredMaxWorkspaceHistory();
 
 	appendHistoryEntries(entries, MRDialogHistoryScope::WorkspaceLoad, true);
-	std::sort(entries.begin(), entries.end(), [](const GetLastEntry &left, const GetLastEntry &right) {
-		if (left.epoch != right.epoch) return left.epoch > right.epoch;
-		return left.value < right.value;
-	});
 	for (const GetLastEntry &entry : entries) {
 		if (seen.find(entry.value) != seen.end()) continue;
 		seen.insert(entry.value);
@@ -534,214 +525,6 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SETUP_LIVE_LOGS", KeymapDispatchKind::AppCommand, cmMrSetupLiveLogs, KeymapWindowMethod::None, KeymapCustomAction::None},
 };
 
-const char *placeholderCommandTitle(ushort command) {
-	switch (command) {
-		case cmMrFileOpen:
-			return "File / Open";
-		case cmMrFileLoad:
-			return "File / Load";
-		case cmMrFileGetLast:
-			return "File / Get Last";
-		case cmMrFileOpenWorkspace:
-			return "File / Open Workspace";
-		case cmMrFileAcquire:
-			return "File / Acquire";
-		case cmMrFileOpenLiveLog:
-			return "File / Open Live Log";
-		case cmMrFileOpenJournal:
-			return "File / Open Journal";
-		case cmMrFileSave:
-			return "File / Save";
-		case cmMrFileSaveAs:
-			return "File / Save As";
-		case cmMrFileSaveAll:
-			return "File / Save All";
-		case cmMrFileRevert:
-			return "File / Revert";
-		case cmMrFileInformation:
-			return "File / Information";
-		case cmMrFileMerge:
-			return "File / Merge";
-		case cmMrFilePrint:
-			return "File / Export to PDF";
-		case cmMrFileShellToDos:
-			return "File / Shell";
-		case cmMrSetupLiveLogs:
-			return "Setup / Live logs";
-
-		case cmMrEditUndo:
-			return "Edit / Undo";
-		case cmMrEditRedo:
-			return "Edit / Redo";
-		case cmMrEditMarkAll:
-			return "Edit / Mark all";
-		case cmMrEditCutToBuffer:
-			return "Edit / Cut";
-		case cmMrEditCopyToBuffer:
-			return "Edit / Copy";
-		case cmMrEditAppendToBuffer:
-			return "Edit / Append";
-		case cmMrEditCutAndAppendToBuffer:
-			return "Edit / Cut & append";
-		case cmMrEditPasteFromBuffer:
-			return "Edit / Paste";
-		case cmMrEditToggleInsertMode:
-			return "Edit / Insert";
-		case cmMrTextToggleLineDrawing:
-			return "Text / Line drawing";
-		case cmMrTextToggleDoubleLines:
-			return "Text / Double lines";
-		case cmMrWindowClose:
-			return "Window / Close";
-		case cmMrWindowSplitHorizontal:
-			return "Window / Split horizontal";
-		case cmMrWindowSplitVertical:
-			return "Window / Split vertical";
-		case cmMrWindowList:
-			return "Window / List";
-		case cmMrWindowNext:
-			return "Window / Next";
-		case cmMrWindowPrevious:
-			return "Window / Previous";
-		case cmMrWindowHide:
-			return "Window / Hide";
-		case cmMrWindowZoom:
-			return "Window / Zoom";
-		case cmMrWindowMinimize:
-			return "Window / Minimize";
-		case cmMrWindowLink:
-			return "Window / Link";
-		case cmMrWindowUnlink:
-			return "Window / Unlink";
-
-		case cmMrBlockCopy:
-			return "Block / Copy block";
-		case cmMrBlockMove:
-			return "Block / Move block";
-		case cmMrBlockDelete:
-			return "Block / Delete block";
-		case cmMrBlockSaveToDisk:
-			return "Block / Save block to disk";
-		case cmMrBlockIndent:
-			return "Block / Indent block";
-		case cmMrBlockUndent:
-			return "Block / Undent block";
-		case cmMrBlockWindowCopy:
-			return "Block / Window copy";
-		case cmMrBlockWindowMove:
-			return "Block / Window move";
-		case cmMrBlockMarkLines:
-			return "Block / Mark lines of text";
-		case cmMrBlockMarkColumns:
-			return "Block / Mark columns of text";
-		case cmMrBlockMarkStream:
-			return "Block / Mark stream of text";
-		case cmMrBlockToggleVisibility:
-			return "Block / Hide/show block mark";
-		case cmMrBlockEndMarking:
-			return "Block / End marking";
-		case cmMrBlockTurnMarkingOff:
-			return "Block / Turn marking off";
-		case cmMrBlockPersistent:
-			return "Block / Persistent blocks";
-
-		case cmMrSearchFindText:
-			return "Search / Search for text";
-		case cmMrSearchReplace:
-			return "Search / Search and Replace";
-		case cmMrSearchRepeatPrevious:
-			return "Search / Repeat previous search";
-		case cmMrSearchMultiFileSearch:
-			return "Search / Multiple file search";
-		case cmMrSearchListFilesFromLastSearch:
-			return "Search / List files from last search";
-		case cmMrSearchMultiFileSearchReplace:
-			return "Search / Multiple file search and replace";
-		case cmMrSearchPushMarker:
-			return "Search / Push position onto marker stack";
-		case cmMrSearchGetMarker:
-			return "Search / Get position from marker stack";
-		case cmMrSearchSetRandomAccessMark:
-			return "Search / Set random access mark";
-		case cmMrSearchRetrieveRandomAccessMark:
-			return "Search / Retrieve random access mark";
-		case cmMrSearchGotoLineNumber:
-			return "Search / Goto line number";
-
-		case cmMrTextUpperCaseMenu:
-			return "Text / Upper case";
-		case cmMrTextLowerCaseMenu:
-			return "Text / Lower case";
-		case cmMrTextCenterLine:
-			return "Text / Center line";
-		case cmMrTextTimeDateStamp:
-			return "Text / Time/Date stamp";
-		case cmMrTextReformatParagraph:
-			return "Text / Re-format paragraph";
-		case cmMrTextFileCompare:
-			return "Text / File compare";
-		case cmMrFileCompareApplyOriginalToCompare:
-			return "Text / Apply original to compare";
-		case cmMrFileCompareApplyCompareToOriginal:
-			return "Text / Apply compare to original";
-		case cmMrTextUpperCasePlaceholder:
-			return "Text / Upper case";
-		case cmMrTextLowerCasePlaceholder:
-			return "Text / Lower case";
-
-		case cmMrOtherMacroLibrary:
-			return "Other / Macro library";
-		case cmMrOtherBuildCurrentFile:
-			return "Other / Build current file";
-		case cmMrOtherReferences:
-			return "Search / References";
-		case cmMrOtherRename:
-			return "Search / Rename";
-		case cmMrOtherLocalOutline:
-			return "Other / Outline";
-		case cmMrOtherStopProgram:
-			return "Other / Stop current program";
-		case cmMrOtherRestartProgram:
-			return "Other / Restart current program";
-		case cmMrOtherClearOutput:
-			return "Other / Clear current output";
-		case cmMrOtherFindNextCompilerError:
-			return "Other / Next compiler error";
-		case cmMrOtherFindPreviousCompilerError:
-			return "Other / Previous compiler error";
-		case cmMrHelpContents:
-			return "Help / Table of contents";
-		case cmMrHelpKeys:
-			return "Help / Keys";
-		case cmMrHelpDetailedIndex:
-			return "Help / Detailed index";
-		case cmMrHelpPreviousTopic:
-			return "Help / Previous topic";
-		case cmMrHelpPerformancePanel:
-			return "Help / Performance panel";
-		case cmMrHelpAbout:
-			return "Help / About";
-
-		case cmMrSetupKeyMapping:
-			return "Installation / Key mapping";
-		case cmMrSetupFilenameExtensions:
-			return "Installation / Filename extensions";
-		case cmMrSetupCompilerProfiles:
-			return "Installation / Compiler profiles";
-		case cmMrSetupPaths:
-			return "Installation / Paths";
-		case cmMrSetupBackupsAutosave:
-			return "Installation / Backups / Autosave";
-		case cmMrSetupUserInterfaceSettings:
-			return "Installation / User interface settings";
-		case cmMrSetupSearchAndReplaceDefaults:
-			return "Installation / Search and Replace defaults";
-
-		default:
-			return nullptr;
-	}
-}
-
 std::optional<int> randomAccessMarkIndexFromSequence(std::string_view sequenceText) {
 	const auto sequence = MRKeymapSequence::parse(sequenceText);
 
@@ -833,11 +616,6 @@ bool dispatchKeymapWindowMethod(MREditWindow *targetWindow, KeymapWindowMethod m
 			break;
 	}
 	return false;
-}
-
-void showPlaceholderCommandBox(const char *title) {
-	if (title == nullptr) title = "Command";
-	messageBox(mfInformation | mfOKButton, "%s\n\nPlaceholder implementation for now.", title);
 }
 
 bool handleExportToPdf();
@@ -1034,8 +812,11 @@ struct ContextMenuEntry {
 
 struct LocalOutlineMenuEntry {
 	std::string label;
+	MREditWindow *targetWindow = nullptr;
 	std::size_t sourceOffset = 0;
 	std::size_t sourceSelectionEnd = 0;
+	int outlineLevel = 0;
+	bool header = false;
 };
 
 bool editorTextTargetFromEditorOffset(MRFileEditor &editor, std::size_t offset, int viewColumn, int viewRow, EditorTextTarget &target) {
@@ -1200,11 +981,11 @@ bool miniMenuBoundsFor(TGroup &owner, MRFileEditor *editor, TPoint where, short 
 	return true;
 }
 
-MRColumnListView *showMiniMenuList(TGroup &owner, MRFileEditor *editor, TPoint where, const std::vector<std::string> &values, short *menuWidth = nullptr, short forcedWidth = 0, bool contextMenuColors = true) {
+MRColumnListView *showMiniMenuList(TGroup &owner, MRFileEditor *editor, TPoint where, const std::vector<std::string> &values, short *menuWidth = nullptr, short forcedWidth = 0, short forcedRows = 0, bool contextMenuColors = true) {
 	std::vector<MRColumnListView::Row> rows;
 	MRColumnListView *listView = nullptr;
 	const short width = forcedWidth > 0 ? forcedWidth : miniMenuWidthForValues(values);
-	const short height = static_cast<short>(std::min<std::size_t>(values.size(), 12));
+	const short height = forcedRows > 0 ? forcedRows : static_cast<short>(std::min<std::size_t>(values.size(), 12));
 	TRect bounds;
 
 	if (values.empty()) return nullptr;
@@ -1307,19 +1088,85 @@ bool buildLocalOutlineMenuEntries(MRFileEditor &editor, std::vector<LocalOutline
 		entry.sourceOffset = node.selectionRange.start.offset;
 		entry.sourceSelectionEnd = editor.lineEndOffset(entry.sourceOffset);
 		if (entry.sourceSelectionEnd < entry.sourceOffset) entry.sourceSelectionEnd = entry.sourceOffset;
+		entry.outlineLevel = depth;
 		entries.push_back(entry);
 	}
 	return true;
 }
 
-bool jumpToLocalOutlineEntry(MREditWindow *win, const LocalOutlineMenuEntry &entry) {
+std::string outlineHeaderForWindow(MREditWindow *win) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	const char *title = win != nullptr ? win->getTitle(0) : nullptr;
 
+	if (editor != nullptr && editor->hasPersistentFileName()) return editor->persistentFileName();
+	return title != nullptr ? std::string(title) : std::string("untitled");
+}
+
+bool appendWorkspaceOutlineEntriesForWindow(MREditWindow *win, std::vector<LocalOutlineMenuEntry> &entries, bool &complete, bool &warming, bool includeHeader) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	std::vector<LocalOutlineMenuEntry> localEntries;
+	bool localComplete = false;
+
+	if (editor == nullptr) return false;
+	if (!buildLocalOutlineMenuEntries(*editor, localEntries, localComplete)) {
+		warming = true;
+		complete = false;
+		return false;
+	}
+	if (!localComplete) complete = false;
+	if (includeHeader && !localEntries.empty()) {
+		LocalOutlineMenuEntry header;
+
+		header.label = outlineHeaderForWindow(win);
+		header.targetWindow = win;
+		header.header = true;
+		entries.push_back(std::move(header));
+	}
+	for (LocalOutlineMenuEntry &entry : localEntries) {
+		entry.targetWindow = win;
+		entries.push_back(std::move(entry));
+	}
+	return true;
+}
+
+bool buildWorkspaceOutlineMenuEntries(MREditWindow *preferredWindow, std::vector<LocalOutlineMenuEntry> &entries, bool &complete, bool &warming) {
+	std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
+	std::vector<MREditWindow *> sourceWindows;
+	std::set<int> seenBufferIds;
+
+	entries.clear();
+	complete = true;
+	warming = false;
+	if (preferredWindow != nullptr) {
+		MRFileEditor *editor = preferredWindow->getEditor();
+
+		if (editor != nullptr) {
+			seenBufferIds.insert(preferredWindow->bufferId());
+			sourceWindows.push_back(preferredWindow);
+		}
+	}
+	for (MREditWindow *win : windows) {
+		if (win == nullptr || win->getEditor() == nullptr) continue;
+		if (seenBufferIds.find(win->bufferId()) != seenBufferIds.end()) continue;
+		seenBufferIds.insert(win->bufferId());
+		sourceWindows.push_back(win);
+	}
+	for (MREditWindow *win : sourceWindows)
+		appendWorkspaceOutlineEntriesForWindow(win, entries, complete, warming, sourceWindows.size() > 1);
+	if (seenBufferIds.empty()) complete = false;
+	return !entries.empty();
+}
+
+bool jumpToLocalOutlineEntry(MREditWindow *win, const LocalOutlineMenuEntry &entry) {
+	MREditWindow *targetWindow = entry.targetWindow != nullptr ? entry.targetWindow : win;
+	MRFileEditor *editor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+
+	if (entry.header) return true;
 	if (editor == nullptr) return false;
 	editor->setCursorOffset(entry.sourceOffset);
 	editor->setSelectionOffsets(entry.sourceOffset, entry.sourceSelectionEnd);
 	editor->revealCursor(True);
-	static_cast<void>(activateEditorTargetWindow(win));
+	static_cast<void>(activateEditorTargetWindow(targetWindow));
 	postDialogInfo("Outline: " + firstDisplayLine(entry.label, 80));
 	return true;
 }
@@ -1334,42 +1181,104 @@ bool showLocalOutlineForWindow(MREditWindow *win, const TPoint *where = nullptr)
 	TGroup *owner = win != nullptr ? static_cast<TGroup *>(win) : TProgram::deskTop;
 	std::vector<LocalOutlineMenuEntry> entries;
 	std::vector<std::string> values;
+	std::vector<MRColumnListView::RowStyle> rowStyles;
 	MRColumnListView *listView = nullptr;
 	TPoint menuPoint;
 	short selected = -1;
 	bool complete = false;
+	bool warming = false;
 	bool done = false;
+	short outlineWidth = 0;
+	short outlineRows = 0;
 
 	if (owner == nullptr || editor == nullptr) {
 		postDialogWarning("Outline requires an editor window.");
 		return true;
 	}
-	if (!buildLocalOutlineMenuEntries(*editor, entries, complete)) {
-		postDialogInfo("Outline warming up.");
+	if (!buildWorkspaceOutlineMenuEntries(win, entries, complete, warming)) {
+		if (warming) {
+			postDialogInfo("Workspace outline warming up.");
+			return true;
+		}
+		postDialogWarning(complete ? "Workspace outline: no outline." : "Workspace outline: no outline in warmed range.");
 		return true;
 	}
 	if (entries.empty()) {
-		postDialogWarning(complete ? "Outline: no structure." : "Outline: no structure in warmed range.");
+		postDialogWarning(complete ? "Workspace outline: no outline." : "Workspace outline: no outline in warmed range.");
 		return true;
 	}
 	if (entries.size() == 1) return jumpToLocalOutlineEntry(win, entries.front());
 	values.reserve(entries.size());
-	for (const LocalOutlineMenuEntry &entry : entries)
+	rowStyles.reserve(entries.size());
+	for (const LocalOutlineMenuEntry &entry : entries) {
 		values.push_back(entry.label);
+		if (entry.header)
+			rowStyles.push_back(MRColumnListView::RowStyle::OutlineHeader);
+		else {
+			const int level = std::clamp(entry.outlineLevel, 0, 9);
+			rowStyles.push_back(static_cast<MRColumnListView::RowStyle>(static_cast<unsigned char>(MRColumnListView::RowStyle::OutlineLevel0) + level));
+		}
+	}
 	menuPoint = localOutlineMenuPoint(*editor, where);
-	listView = showMiniMenuList(*owner, editor, menuPoint, values, nullptr, 0, true);
+	{
+		const TRect viewport = editor->visibleTextViewportBounds();
+		const short viewportWidth = static_cast<short>(std::max<short>(12, viewport.b.x - viewport.a.x));
+		const short viewportRows = static_cast<short>(std::max<short>(1, viewport.b.y - viewport.a.y));
+
+		outlineWidth = static_cast<short>(std::max<short>(12, (viewportWidth * 3) / 4));
+		outlineRows = static_cast<short>(std::max<short>(1, std::min<short>(static_cast<short>((viewportRows * 3) / 4), static_cast<short>(values.size()))));
+	}
+	listView = showMiniMenuList(*owner, editor, menuPoint, values, nullptr, outlineWidth, outlineRows, true);
 	if (listView == nullptr) {
 		postDialogWarning("Outline menu cannot be shown.");
 		return true;
 	}
+	listView->setRowStyles(rowStyles);
+	auto selectableOutlineRow = [&entries](short index) {
+		return index >= 0 && static_cast<std::size_t>(index) < entries.size() && !entries[static_cast<std::size_t>(index)].header;
+	};
+	auto focusSelectableOutlineRow = [&entries, listView, &selectableOutlineRow](short requested, int direction) {
+		const short lastIndex = static_cast<short>(entries.size() - 1);
+		short index = static_cast<short>(std::clamp<int>(requested, 0, lastIndex));
+
+		if (direction == 0) direction = 1;
+		for (; index >= 0 && index <= lastIndex; index = static_cast<short>(index + direction))
+			if (selectableOutlineRow(index)) {
+				listView->focusItemNum(index);
+				return;
+			}
+		index = static_cast<short>(std::clamp<int>(requested, 0, lastIndex));
+		direction = -direction;
+		for (; index >= 0 && index <= lastIndex; index = static_cast<short>(index + direction))
+			if (selectableOutlineRow(index)) {
+				listView->focusItemNum(index);
+				return;
+			}
+	};
+	focusSelectableOutlineRow(0, 1);
 	while (!done) {
 		TEvent event{};
 
 		owner->getEvent(event);
+		if (event.what == evMouseWheel) {
+			const short before = listView->selectedIndex();
+
+			if (listView->handleWheel(event)) {
+				const short after = listView->selectedIndex();
+
+				if (!selectableOutlineRow(after)) focusSelectableOutlineRow(after, after >= before ? 1 : -1);
+				continue;
+			}
+		}
 		if (event.what == evMouseDown && listView->mouseInView(event.mouse.where)) {
 			selected = miniMenuClickedIndex(*listView, event.mouse.where);
 			listView->handleEvent(event);
 			event.what = evNothing;
+			if (!selectableOutlineRow(selected)) {
+				focusSelectableOutlineRow(selected, selected >= listView->selectedIndex() ? 1 : -1);
+				selected = -1;
+				continue;
+			}
 			done = true;
 			continue;
 		}
@@ -1386,10 +1295,22 @@ bool showLocalOutlineForWindow(MREditWindow *win, const TPoint *where = nullptr)
 		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
 			selected = listView->selectedIndex();
 			event.what = evNothing;
+			if (!selectableOutlineRow(selected)) {
+				focusSelectableOutlineRow(selected, 1);
+				selected = -1;
+				continue;
+			}
 			done = true;
 			continue;
 		}
+		const short before = listView->selectedIndex();
+
 		listView->handleEvent(event);
+		if (event.what == evNothing) {
+			const short after = listView->selectedIndex();
+
+			if (!selectableOutlineRow(after)) focusSelectableOutlineRow(after, after >= before ? 1 : -1);
+		}
 	}
 	destroyMiniMenuList(*owner, listView);
 	if (selected < 0 || static_cast<std::size_t>(selected) >= entries.size()) return true;
@@ -1416,6 +1337,7 @@ std::vector<ContextMenuEntry> buildEditMiniMenuItems(MREditWindow *targetWindow)
 
 	if (hasMarkedText) entries.push_back(ContextMenuEntry{"Cut", cmMrEditCutToBuffer, false});
 	if (hasMarkedText) entries.push_back(ContextMenuEntry{"Copy", cmMrEditCopyToBuffer, false});
+	entries.push_back(ContextMenuEntry{"Mark all", cmMrEditMarkAll, false});
 	entries.push_back(ContextMenuEntry{"Paste", cmMrEditPasteFromBuffer, false});
 	return entries;
 }
@@ -2261,6 +2183,7 @@ bool handleBuildCurrentFile() {
 	std::string commandLine;
 	std::string outputTitle;
 	MRCompilerProfile compilerProfile;
+	MRBuildHookContext buildContext;
 	MRBentoBox *bentoBox;
 	MRBentoBox *sourceBentoBox;
 	MREditWindow *outputWindow;
@@ -2285,6 +2208,14 @@ bool handleBuildCurrentFile() {
 	}
 	if (!buildCompilerProfileCommandLine(compilerProfile, sourcePath, commandLine, &errorText)) {
 		postDialogWarning(errorText.empty() ? "Unable to build compiler command line." : errorText);
+		return true;
+	}
+	buildContext = buildCompilerProfileHookContext(compilerProfile, sourcePath, win->bufferId());
+	if (!runBuildHookMacro(compilerProfile.preBuildMacro, buildContext, 0, "PRE_BUILD", std::string(), &errorText)) {
+		std::string postError;
+
+		static_cast<void>(runBuildHookMacro(compilerProfile.postBuildMacro, buildContext, -1, "FAILED", errorText.empty() ? "Pre build macro failed." : errorText, &postError));
+		postDialogWarning(errorText.empty() ? "Pre build macro failed." : errorText);
 		return true;
 	}
 	outputTitle = buildCompilerOutputTitle(compilerProfile, matchedProfileName, sourcePath);
@@ -2318,13 +2249,14 @@ bool handleBuildCurrentFile() {
 	if (sourceBentoBox == nullptr && win != bentoBox && win->currentFileName() == sourcePath && !win->isFileChanged()) sourceWindowToClose = win;
 	static_cast<void>(mrActivateEditWindow(bentoBox));
 	if (sourceWindowToClose != nullptr) message(sourceWindowToClose, evCommand, cmClose, nullptr);
+	buildContext.sourceBufferId = bentoBox->bufferId();
 	bentoBox->clearCompilerDiagnostics();
-	startExternalCommandInWindow(outputWindow, commandLine, true, false, false, outputTitle, compilerProfile.buildSuccessAudioUri, compilerProfile.buildFailureAudioUri);
+	startExternalCommandInWindow(outputWindow, commandLine, true, false, false, outputTitle, compilerProfile.buildSuccessAudioUri, compilerProfile.buildFailureAudioUri, buildContext);
 	bentoBox->activatePrimaryPane();
 	return true;
 }
 
-bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride, const std::string &successAudioUri, const std::string &failureAudioUri) {
+bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride, const std::string &successAudioUri, const std::string &failureAudioUri, const MRBuildHookContext &buildContext) {
 	std::string title;
 	std::string initialText;
 	std::ostringstream logLine;
@@ -2345,7 +2277,7 @@ bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandL
 	win->setWindowRole(MREditWindow::wrCommunicationCommand, commandLine);
 	if (activate) static_cast<void>(mrActivateEditWindow(win));
 
-	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, static_cast<std::size_t>(win->bufferId()), 0, std::string("external-io: ") + commandLine, [commandLine, channelId = static_cast<std::size_t>(win->bufferId()), successAudioUri, failureAudioUri](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runExternalCommandTask(info, stopToken, channelId, commandLine, successAudioUri, failureAudioUri); });
+	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, static_cast<std::size_t>(win->bufferId()), 0, std::string("external-io: ") + commandLine, [commandLine, channelId = static_cast<std::size_t>(win->bufferId()), successAudioUri, failureAudioUri, buildContext](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runExternalCommandTask(info, stopToken, channelId, commandLine, buildContext, successAudioUri, failureAudioUri); });
 	if (taskId == 0) {
 		if (closeOnFailure) message(win, evCommand, cmClose, nullptr);
 		postSearchError("Unable to start external command worker.");
@@ -3022,7 +2954,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return dispatchEditorCommand(cmMrEditRedo, true);
 
 		case cmMrEditMarkAll: {
-			MREditWindow *win = currentEditWindow();
+			MREditWindow *win = currentEditorCommandWindow();
 			return win != nullptr && win->markAllLines();
 		}
 
@@ -3288,11 +3220,6 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 				mrRefreshEditorApplicationUiSettingsSnapshot();
 				return true;
 			}
-			const char *title = placeholderCommandTitle(command);
-			if (title != nullptr) {
-				showPlaceholderCommandBox(title);
-				return true;
-			}
 			return false;
 		}
 
@@ -3343,6 +3270,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrOtherClearOutput:
 			return handleClearCurrentOutput();
 
+		case cmMrOtherMacroLibrary:
+			return runMacroLibraryDialog();
+
 		case cmMrOtherFindNextCompilerError:
 			return handleCompilerErrorNavigation(commandInfo, true);
 
@@ -3361,14 +3291,8 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrOtherMatchBraceOrParen:
 			return handleMatchParenthesis();
 
-		default: {
-			const char *title = placeholderCommandTitle(command);
-			if (title != nullptr) {
-				showPlaceholderCommandBox(title);
-				return true;
-			}
+		default:
 			return false;
-		}
 	}
 }
 

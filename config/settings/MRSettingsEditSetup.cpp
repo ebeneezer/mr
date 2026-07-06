@@ -67,7 +67,6 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvIndentStyle},
     {"CODE_LANGUAGE", "Code language", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvCodeLanguage},
     {"CODE_COLORING", "Code coloring", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeColoring},
-    {"CODE_FOLDING", "Code folding", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeFoldingFeature},
     {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvFileType},
     {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvBinaryRecordLength},
     {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true, kOvPostLoadMacro},
@@ -513,8 +512,24 @@ std::string extensionSelectorForPath(std::string_view path) {
 	return std::string(base.substr(dot + 1));
 }
 
+bool isLatexExtensionSelector(const std::string &value) {
+	const std::string upper = upperAscii(value);
+
+	return upper == "TEX" || upper == "LTX" || upper == "STY" || upper == "CLS";
+}
+
+bool editExtensionSelectorMatches(const std::string &selector, const std::string &ext) {
+	std::string selectorUpper;
+	std::string extUpper;
+
+	if (selector == ext) return true;
+	selectorUpper = upperAscii(selector);
+	extUpper = upperAscii(ext);
+	return selectorUpper == extUpper && isLatexExtensionSelector(selectorUpper) && isLatexExtensionSelector(extUpper);
+}
+
 unsigned long long supportedEditProfileOverrideMask() noexcept {
-	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingFeature | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
+	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
@@ -911,8 +926,6 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		current.codeLanguage = normalized;
 	} else if (upperKeyName == "CODE_COLORING") {
 		if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
-	} else if (upperKeyName == "CODE_FOLDING") {
-		if (!parseAndAssignBooleanLiteral(value, current.codeFoldingFeature, errorMessage)) return false;
 	} else if (upperKeyName == "FILE_TYPE") {
 		normalized = normalizeFileType(value);
 		if (normalized.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
@@ -1028,7 +1041,6 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 	if (upperKey == "INDENT_STYLE") return settings.indentStyle;
 	if (upperKey == "CODE_LANGUAGE") return settings.codeLanguage;
 	if (upperKey == "CODE_COLORING") return formatEditSetupBoolean(settings.codeColoring);
-	if (upperKey == "CODE_FOLDING") return formatEditSetupBoolean(settings.codeFoldingFeature);
 	if (upperKey == "FILE_TYPE") return settings.fileType;
 	if (upperKey == "BINARY_RECORD_LENGTH") return std::to_string(settings.binaryRecordLength);
 	if (upperKey == "POST_LOAD_MACRO") return settings.postLoadMacro;
@@ -1122,7 +1134,6 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.indentStyle = kIndentStyleOff;
 	defaults.codeLanguage = "NONE";
 	defaults.codeColoring = false;
-	defaults.codeFoldingFeature = false;
 	defaults.fileType = kFileTypeUnix;
 	defaults.binaryRecordLength = 100;
 	defaults.postLoadMacro.clear();
@@ -1173,7 +1184,6 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, 
 	if ((overrides.mask & kOvIndentStyle) != 0) merged.indentStyle = overrides.values.indentStyle;
 	if ((overrides.mask & kOvCodeLanguage) != 0) merged.codeLanguage = overrides.values.codeLanguage;
 	if ((overrides.mask & kOvCodeColoring) != 0) merged.codeColoring = overrides.values.codeColoring;
-	if ((overrides.mask & kOvCodeFoldingFeature) != 0) merged.codeFoldingFeature = overrides.values.codeFoldingFeature;
 	if ((overrides.mask & kOvFileType) != 0) merged.fileType = overrides.values.fileType;
 	if ((overrides.mask & kOvBinaryRecordLength) != 0) merged.binaryRecordLength = overrides.values.binaryRecordLength;
 	if ((overrides.mask & kOvPostLoadMacro) != 0) merged.postLoadMacro = overrides.values.postLoadMacro;
@@ -1304,7 +1314,7 @@ bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSetti
 	if (ext.empty()) return true;
 	for (const MREditExtensionProfile &profile : configuredEditProfiles())
 		for (const std::string &selector : profile.extensions)
-			if (selector == ext) {
+			if (editExtensionSelectorMatches(selector, ext)) {
 				out = mergeEditSetupSettings(defaults, profile.overrides);
 				if (matchedProfileName != nullptr) *matchedProfileName = profile.name;
 				return true;
@@ -1320,7 +1330,7 @@ bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::stri
 	if (ext.empty()) return true;
 	for (const MREditExtensionProfile &profile : configuredEditProfiles())
 		for (const std::string &selector : profile.extensions)
-			if (selector == ext) {
+			if (editExtensionSelectorMatches(selector, ext)) {
 				if (!profile.windowColorThemeUri.empty()) themeUri = profile.windowColorThemeUri;
 				if (matchedProfileName != nullptr) *matchedProfileName = profile.name;
 				return true;
@@ -1341,7 +1351,7 @@ bool effectiveCompilerProfileForPath(const std::string &path, MRCompilerProfile 
 		if (profileMatched) break;
 		for (const std::string &selector : profile.extensions) {
 			if (profileMatched) break;
-			if (selector == ext) {
+			if (editExtensionSelectorMatches(selector, ext)) {
 				compilerProfileId = canonicalCompilerProfileId(profile.compilerProfileId);
 				if (matchedProfileName != nullptr) *matchedProfileName = profile.name;
 				profileMatched = true;
@@ -1437,7 +1447,6 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.indentStyle = indentStyle;
 	normalized.codeLanguage = codeLanguage;
 	normalized.codeColoring = settings.codeColoring;
-	normalized.codeFoldingFeature = settings.codeFoldingFeature;
 	normalized.fileType = fileType;
 	normalized.binaryRecordLength = settings.binaryRecordLength;
 	normalized.postLoadMacro = postLoadMacro;

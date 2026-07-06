@@ -41,6 +41,16 @@ struct MacroFunctionLabelFrame {
 	std::array<std::string, 49> shellLabels;
 };
 
+struct MRVMForkedProcess {
+	int pid;
+	std::string sourcePath;
+	std::string pdfPath;
+	std::vector<int> ownerBufferIds;
+
+	MRVMForkedProcess() : pid(0), sourcePath(), pdfPath(), ownerBufferIds() {
+	}
+};
+
 enum MacroAssignableCommandId {
 	macdBackSpace = 0x7001,
 	macdBlockBegin = 0x7002,
@@ -98,6 +108,7 @@ struct RuntimeEnvironment {
 	std::string executableDir;
 	std::string shellPath;
 	std::string shellVersion;
+	std::vector<MRVMForkedProcess> forkedProcesses;
 	int docMode;
 	int shadowChar;
 	int refresh;

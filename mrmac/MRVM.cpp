@@ -2615,6 +2615,20 @@ static bool readRuntimeGlobalValueDirect(const std::string &name, GlobalEntry &e
 	return mrvmRuntimeGlobalRead(g_runtimeEnv.runtimeKv, name, entry);
 }
 
+static std::string runtimeGlobalStringValue(const std::string &name) {
+	GlobalEntry entry;
+
+	if (!readRuntimeGlobalValueDirect(name, entry) || entry.type != TYPE_STR) return std::string();
+	return mrvmValueAsString(entry.value);
+}
+
+static int runtimeGlobalIntValue(const std::string &name) {
+	GlobalEntry entry;
+
+	if (!readRuntimeGlobalValueDirect(name, entry) || entry.type != TYPE_INT) return 0;
+	return mrvmValueAsInt(entry.value);
+}
+
 static std::vector<std::string> macroGlobalOrderValues() {
 	return mrvmRuntimeGlobalOrderValues(g_runtimeEnv.runtimeKv);
 }
@@ -5084,7 +5098,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 									                         "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
 									                         "DEFAULT_PROFILE_DESCRIPTION, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
 									                         "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, LEFT_MARGIN, RIGHT_MARGIN, FORMAT_RULER, WORD_WRAP, "
-								                         "INDENT_STYLE, CODE_LANGUAGE, CODE_COLORING, CODE_FOLDING, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
+								                         "INDENT_STYLE, CODE_LANGUAGE, CODE_COLORING, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 								                         "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
 								                         "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
 								                         "SHOW_EOF_MARKER_EMOJI, LINE_NUMBERS_POSITION, LINE_NUM_ZERO_FILL, "
@@ -5324,6 +5338,15 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					exitCode = mrvmRunShellCommand(mrvmValueAsString(args[0]), configuredShellExecutablePath());
 					(void)mrvmUiNewScreen();
 					runtimeErrorLevel() = exitCode;
+				} else if (name == "FORK") {
+					std::vector<std::string> forkArguments;
+					if (args.empty()) throw std::runtime_error("FORK expects at least one string argument.");
+					forkArguments.reserve(args.size());
+					for (const Value &arg : args) {
+						if (!mrvmIsStringLike(arg)) throw std::runtime_error("FORK expects string arguments.");
+						forkArguments.push_back(mrvmValueAsString(arg));
+					}
+					runtimeErrorLevel() = mrvmForkProcess(forkArguments, runtimeGlobalIntValue("MR_BUILD_SOURCE_BUFFER_ID"), runtimeGlobalStringValue("MR_BUILD_SOURCE_PATH"), runtimeGlobalStringValue("MR_BUILD_PDF_PATH"));
 				} else if (name == "WRITE_SOD") {
 					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("WRITE_SOD expects one string argument.");
 					mrLogMessage(mrvmValueAsString(args[0]));

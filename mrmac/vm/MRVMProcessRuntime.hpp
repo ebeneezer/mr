@@ -24,6 +24,9 @@ std::string mrvmProcessExpandUserPath(const std::string &path);
 bool mrvmFileExistsPath(const std::string &path);
 bool mrvmReadFileMetadata(const std::string &path, int *attrOut, int *sizeOut, int *timeOut);
 MRVMSubshellResult mrvmRunSubshellCapture(const std::string &command, int timeoutMs, const std::string &shellPath);
+int mrvmForkProcess(const std::vector<std::string> &arguments, int ownerBufferId = 0, const std::string &sourcePath = std::string(), const std::string &pdfPath = std::string());
+void mrvmCloseForksForOwner(int ownerBufferId);
+void mrvmCloseAllForkedProcesses();
 void mrvmProcessRuntimeSetContext(int argc, char **argv);
 std::vector<std::string> mrvmProcessRuntimeArguments();
 

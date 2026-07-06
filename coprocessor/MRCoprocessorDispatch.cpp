@@ -21,6 +21,7 @@
 #include "MRPerformance.hpp"
 #include "MRWindowCommands.hpp"
 
+#include "../app/commands/MRExternalCommand.hpp"
 #include "../app/router/MRCommandRouterSearch.hpp"
 #include "../app/router/MRCommandRouterSearchCore.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
@@ -128,6 +129,53 @@ std::string communicationDividerStatus(const mr::coprocessor::ExternalIoFinished
 	else
 		out << "exit code: " << payload.exitCode;
 	return out.str();
+}
+
+MRBuildHookContext buildHookContextFromPayload(const mr::coprocessor::ExternalIoFinishedPayload &payload) {
+	MRBuildHookContext context;
+
+	context.sourcePath = payload.buildSourcePath;
+	context.sourceDir = payload.buildSourceDir;
+	context.sourceFile = payload.buildSourceFile;
+	context.sourceStem = payload.buildSourceStem;
+	context.outputPath = payload.buildOutputPath;
+	context.pdfPath = payload.buildPdfPath;
+	context.profileId = payload.buildProfileId;
+	context.profileName = payload.buildProfileName;
+	context.toolchain = payload.buildToolchain;
+	context.postBuildMacro = payload.postBuildMacro;
+	return context;
+}
+
+void runExternalIoPostBuildMacro(const mr::coprocessor::Result &result, const mr::coprocessor::ExternalIoFinishedPayload &payload) {
+	std::string statusText;
+	std::string errorText;
+	std::string macroError;
+	int exitStatus = payload.exitCode;
+
+	if (payload.postBuildMacro.empty()) return;
+	if (result.cancelled()) {
+		statusText = "CANCELLED";
+		if (exitStatus == 0) exitStatus = -2;
+		errorText = "cancelled";
+	} else if (result.failed()) {
+		statusText = "FAILED";
+		if (exitStatus == 0) exitStatus = -1;
+		errorText = result.error;
+	} else if (payload.signaled) {
+		statusText = "FAILED";
+		exitStatus = -1;
+		errorText = "signal " + std::to_string(payload.signalNumber);
+	} else if (payload.exitCode == 0)
+		statusText = "SUCCESS";
+	else {
+		statusText = "FAILED";
+		errorText = "exit code " + std::to_string(payload.exitCode);
+	}
+	if (!runBuildHookMacro(payload.postBuildMacro, buildHookContextFromPayload(payload), exitStatus, statusText, errorText, &macroError)) {
+		const std::string line = macroError.empty() ? "Post build macro failed." : macroError;
+		mr::messageline::postAutoTimed(mr::messageline::Owner::MacroMarquee, line, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+	}
 }
 
 void setSplitDiagnosticsStatusForOutput(MREditWindow *outputWindow, const char *status) {
@@ -1075,6 +1123,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			if (!finished->signaled && finished->exitCode == 0) playAudioSignal(finished->successAudioUri);
 			else
 				playAudioSignal(finished->failureAudioUri);
+			runExternalIoPostBuildMacro(result, *finished);
 			mrTraceCoprocessorTaskRelease(static_cast<int>(finished->channelId), result.task.id, "finished");
 			if (result.task.lane == mr::coprocessor::Lane::Extern) mr::coprocessor::globalCoprocessor().unregisterExternalSource(result.task.documentId);
 			statusLine << "Communication session #" << finished->channelId << " ";
@@ -1179,6 +1228,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::ExternalIo) {
+		const mr::coprocessor::ExternalIoFinishedPayload *finished = dynamic_cast<const mr::coprocessor::ExternalIoFinishedPayload *>(result.payload.get());
 		MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
 		if (targetWindow != nullptr) {
 			targetWindow->releaseCoprocessorTask(result.task.id);
@@ -1194,6 +1244,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			}
 		}
 		recordTaskPerformance(result, "External command", targetWindow, targetWindow != nullptr ? targetWindow->documentId() : 0, targetWindow != nullptr ? targetWindow->bufferLength() : 0, externalIoDisplayName(result.task));
+		if (finished != nullptr) runExternalIoPostBuildMacro(result, *finished);
 		if (result.cancelled()) mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "cancelled");
 		else if (result.failed())
 			mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "failed");

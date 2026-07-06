@@ -928,87 +928,65 @@ void MRMenuBar::draw() {
 		auto now = std::chrono::steady_clock::now();
 		mMarqueeLaneWidth = newLaneWidth;
 		const std::vector<MarqueeSegment> targetSegments = mManualMarqueeStatus.empty() ? mAutoMarqueeSegments : std::vector<MarqueeSegment>();
-		if (static_cast<int>(targetText.size()) <= mMarqueeLaneWidth) {
-			mMarqueeActiveText = targetText;
-			mMarqueeActiveSegments = targetSegments;
-			mMarqueeActiveKind = targetMarqueeKind;
-			mMarqueeHasPending = false;
-			mMarqueePendingText.clear();
-			mMarqueePendingSegments.clear();
-			mMarqueePendingKind = MarqueeKind::Info;
-			mMarqueeOffset = 0;
-			mMarqueeDirection = -1;
-			mMarqueeIntroActive = false;
-			mMarqueeIntroShift = 0;
-			mMarqueeIntroStartShift = 0;
-			mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
-			mMarqueeOutroActive = false;
-			mMarqueeOutroShift = 0;
-			mMarqueeOutroStartShift = 0;
-			mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
-			mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
+		if (targetText == mMarqueeActiveText && targetMarqueeKind == mMarqueeActiveKind && targetSegments == mMarqueeActiveSegments) {
+			if (mMarqueeHasPending) {
+				mMarqueeHasPending = false;
+				mMarqueePendingText.clear();
+				mMarqueePendingSegments.clear();
+				mMarqueePendingKind = MarqueeKind::Info;
+			}
+			if (mMarqueeOutroActive) {
+				mMarqueeOutroActive = false;
+				mMarqueeOutroShift = 0;
+				mMarqueeOutroStartShift = 0;
+				mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
+				mMarqueeScrollNextAt = !mMarqueeActiveText.empty() && static_cast<int>(mMarqueeActiveText.size()) > mMarqueeLaneWidth ? now + marqueeScrollStartDelay() : std::chrono::steady_clock::time_point::min();
+			}
 		} else {
-			if (targetText == mMarqueeActiveText && targetMarqueeKind == mMarqueeActiveKind && targetSegments == mMarqueeActiveSegments) {
-				if (mMarqueeHasPending) {
-					mMarqueeHasPending = false;
-					mMarqueePendingText.clear();
-					mMarqueePendingKind = MarqueeKind::Info;
-				}
-				if (mMarqueeOutroActive) {
-					mMarqueeOutroActive = false;
-					mMarqueeOutroShift = 0;
-					mMarqueeOutroStartShift = 0;
-					mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
-					mMarqueeScrollNextAt = !mMarqueeActiveText.empty() && static_cast<int>(mMarqueeActiveText.size()) > mMarqueeLaneWidth ? now + marqueeScrollStartDelay() : std::chrono::steady_clock::time_point::min();
-				}
-			} else {
-				mMarqueeHasPending = true;
-				mMarqueePendingText = targetText;
-				mMarqueePendingSegments = targetSegments;
-				mMarqueePendingKind = targetMarqueeKind;
-				// No outgoing animation when there is no currently visible text.
-				// Start the incoming animation immediately.
-				if (mMarqueeActiveText.empty()) {
-					mMarqueeActiveText = mMarqueePendingText;
-					mMarqueeActiveSegments = mMarqueePendingSegments;
-					mMarqueeActiveKind = mMarqueePendingKind;
-					mMarqueeHasPending = false;
-					mMarqueePendingText.clear();
-					mMarqueePendingSegments.clear();
-					mMarqueePendingKind = MarqueeKind::Info;
-					mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
-					mMarqueeDirection = -1;
-					mMarqueeOutroActive = false;
-					mMarqueeOutroShift = 0;
-					mMarqueeOutroStartShift = 0;
-					mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
-					if (!mMarqueeActiveText.empty()) {
-						mMarqueeIntroActive = true;
-						mMarqueeIntroStartShift = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
-						mMarqueeIntroShift = mMarqueeIntroStartShift;
-						mMarqueeIntroStartedAt = now;
-						mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
-					} else {
-						mMarqueeIntroActive = false;
-						mMarqueeIntroShift = 0;
-						mMarqueeIntroStartShift = 0;
-						mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
-						mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
-					}
-				} else if (!mMarqueeOutroActive) {
-					const int visibleShiftSpan = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
-					mMarqueeOutroActive = true;
-					mMarqueeOutroStartShift = mMarqueeIntroActive ? mMarqueeIntroShift : 0;
-					if (mMarqueeOutroStartShift < 0) mMarqueeOutroStartShift = 0;
-					if (mMarqueeOutroStartShift > visibleShiftSpan) mMarqueeOutroStartShift = visibleShiftSpan;
-					mMarqueeOutroShift = mMarqueeOutroStartShift;
-					mMarqueeOutroStartedAt = now;
+			mMarqueeHasPending = true;
+			mMarqueePendingText = targetText;
+			mMarqueePendingSegments = targetSegments;
+			mMarqueePendingKind = targetMarqueeKind;
+			if (mMarqueeActiveText.empty()) {
+				mMarqueeActiveText = mMarqueePendingText;
+				mMarqueeActiveSegments = mMarqueePendingSegments;
+				mMarqueeActiveKind = mMarqueePendingKind;
+				mMarqueeHasPending = false;
+				mMarqueePendingText.clear();
+				mMarqueePendingSegments.clear();
+				mMarqueePendingKind = MarqueeKind::Info;
+				mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
+				mMarqueeDirection = -1;
+				mMarqueeOutroActive = false;
+				mMarqueeOutroShift = 0;
+				mMarqueeOutroStartShift = 0;
+				mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
+				if (!mMarqueeActiveText.empty()) {
+					mMarqueeIntroActive = true;
+					mMarqueeIntroStartShift = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
+					mMarqueeIntroShift = mMarqueeIntroStartShift;
+					mMarqueeIntroStartedAt = now;
+					mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
+				} else {
 					mMarqueeIntroActive = false;
 					mMarqueeIntroShift = 0;
 					mMarqueeIntroStartShift = 0;
 					mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
 					mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
 				}
+			} else if (!mMarqueeOutroActive) {
+				const int visibleShiftSpan = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
+				mMarqueeOutroActive = true;
+				mMarqueeOutroStartShift = mMarqueeIntroActive ? mMarqueeIntroShift : 0;
+				if (mMarqueeOutroStartShift < 0) mMarqueeOutroStartShift = 0;
+				if (mMarqueeOutroStartShift > visibleShiftSpan) mMarqueeOutroStartShift = visibleShiftSpan;
+				mMarqueeOutroShift = mMarqueeOutroStartShift;
+				mMarqueeOutroStartedAt = now;
+				mMarqueeIntroActive = false;
+				mMarqueeIntroShift = 0;
+				mMarqueeIntroStartShift = 0;
+				mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
+				mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
 			}
 		}
 		if (mMarqueeActiveText.empty() && mMarqueeHasPending && !mMarqueeOutroActive) {

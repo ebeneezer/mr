@@ -110,6 +110,28 @@ C++ `MacroRef`, `LoadedMacroFile` and `IndexedBoundMacroEntry` objects are
 transfer objects only. They must be rebuilt from `MACROCATALOG` and must not
 become a second value-bearing macro registry.
 
+## Compiler Support Macros
+
+Compiler support macro files, including
+`mrmac/macros/compilersupport/MRCompilerMiddleware.mrmac`, are libraries of
+concrete build-hook routines.
+
+A compiler profile must reference the exact macro routine it intends to run,
+for example `compilersupport/MRCompilerMiddleware.mrmac^LatexMKPostBuild`.
+
+Compiler support macros must not introduce a generic post-build dispatcher such
+as `MRCompilerPostBuild` that switches on `MR_BUILD_TOOLCHAIN`.
+
+Concrete routines must be named for the build tool or workflow they implement,
+for example `LatexMKPostBuild`.
+
+Shared helper macros are allowed only when they factor repeated mechanics. They
+must not hide toolchain selection, profile selection or post-build routing.
+
+Auto-detected compiler profiles may set a default hook only by writing the
+same explicit macro spec that the user can inspect and replace in the compiler
+profile dialog.
+
 ## Allowed
 
 - Local bug fixes with regression proof.

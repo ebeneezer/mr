@@ -807,11 +807,11 @@ bool MRFileEditor::languageFeaturesEnabled() const {
 }
 
 bool MRFileEditor::syntaxPipelineEnabled() const {
-	return languageFeaturesEnabled();
+	return languageFeaturesEnabled() && effectiveEditSetupSettings().codeColoring;
 }
 
 bool MRFileEditor::foldingPipelineEnabled() const {
-	return languageFeaturesEnabled();
+	return languageFeaturesEnabled() && effectiveEditSetupSettings().codeFolding;
 }
 
 bool MRFileEditor::miniMapPipelineEnabled() const noexcept {

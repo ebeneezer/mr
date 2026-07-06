@@ -18,6 +18,7 @@
 #include <tvision/tv.h>
 
 #include "MRCompilerProfiles.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
@@ -25,12 +26,14 @@
 #include "MRDirtyGating.hpp"
 #include "setup/MRSetupCommon.hpp"
 #include "../ui/MRFrame.hpp"
+#include "../ui/MREditWindow.hpp"
 #include "../ui/widgets/MRDropList.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 #include <limits.h>
 #include <sstream>
 #include <string>
@@ -51,6 +54,12 @@ enum : ushort {
 	cmCompilerProfilesChooseFailureAudio,
 	cmCompilerProfilesBrowseFailureAudio,
 	cmCompilerProfilesAcceptFailureAudio,
+	cmCompilerProfilesChoosePreBuildMacro,
+	cmCompilerProfilesBrowsePreBuildMacro,
+	cmCompilerProfilesAcceptPreBuildMacro,
+	cmCompilerProfilesChoosePostBuildMacro,
+	cmCompilerProfilesBrowsePostBuildMacro,
+	cmCompilerProfilesAcceptPostBuildMacro,
 	cmCompilerProfilesAutomaticSetup,
 	cmCompilerProfilesSelectionChanged
 };
@@ -66,6 +75,7 @@ enum {
 	kTargetSize = 128,
 	kFlagsSize = 256,
 	kBuildCommandSize = 256,
+	kBuildMacroSize = 256,
 	kPathListSize = 256,
 	kAudioUriSize = 256
 };
@@ -212,8 +222,50 @@ std::string profileLabel(const MRCompilerProfile &profile) {
 	return id + "  " + name;
 }
 
+std::string macroSpecPathPart(const std::string &macroSpec) {
+	const std::size_t separator = macroSpec.find('^');
+
+	return trimAscii(separator == std::string::npos ? macroSpec : macroSpec.substr(0, separator));
+}
+
+std::string macroSpecNamePart(const std::string &macroSpec) {
+	const std::size_t separator = macroSpec.find('^');
+
+	return separator == std::string::npos ? std::string() : trimAscii(macroSpec.substr(separator + 1));
+}
+
+std::string relativeMacroPathIfPossible(const std::string &path) {
+	namespace fs = std::filesystem;
+	const std::string normalizedPath = normalizeConfiguredPathInput(path);
+	const std::string macroRootText = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
+	std::error_code error;
+
+	if (normalizedPath.empty() || macroRootText.empty()) return normalizedPath;
+	const fs::path macroRoot = fs::weakly_canonical(fs::path(macroRootText), error);
+	if (error) return normalizedPath;
+	const fs::path selected = fs::weakly_canonical(fs::path(normalizedPath), error);
+	if (error) return normalizedPath;
+	fs::path relative = fs::relative(selected, macroRoot, error);
+	if (error || relative.empty()) return normalizedPath;
+	std::string relativeText = relative.generic_string();
+	if (relativeText == "." || relativeText.rfind("..", 0) == 0) return normalizedPath;
+	return relativeText;
+}
+
 std::vector<MRCompilerProfile> initialCompilerProfilesForDialog() {
 	return configuredCompilerProfiles();
+}
+
+int preferredCompilerProfileIndexForCurrentEditor(const std::vector<MRCompilerProfile> &profiles) {
+	MREditWindow *window = currentEditWindow();
+	MRCompilerProfile effectiveProfile;
+	std::string errorText;
+
+	if (window == nullptr || window->currentFileName()[0] == '\0') return -1;
+	if (!effectiveCompilerProfileForPath(window->currentFileName(), effectiveProfile, nullptr, &errorText)) return -1;
+	for (std::size_t i = 0; i < profiles.size(); ++i)
+		if (profiles[i].id == effectiveProfile.id) return static_cast<int>(i);
+	return -1;
 }
 
 bool compilerProfileListsEqual(const std::vector<MRCompilerProfile> &lhs, const std::vector<MRCompilerProfile> &rhs) {
@@ -308,18 +360,31 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		failureAudioBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 13, right, 14), "🔎", cmCompilerProfilesBrowseFailureAudio);
 		insert(failureAudioBrowseButton);
 		failureAudioListAnchor = TRect(fieldLeft, 14, right, 15);
-		insert(new TStaticText(TRect(labelLeft, 14, fieldLeft - 1, 15), "Includes:"));
-		includesField = addField(TRect(fieldLeft, 14, wideFieldRight, 15), kPathListSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 15, fieldLeft - 1, 16), "Libraries:"));
-		librariesField = addField(TRect(fieldLeft, 15, wideFieldRight, 16), kPathListSize - 1);
-		insert(new TStaticText(TRect(labelLeft, 16, fieldLeft - 1, 17), "Runtime:"));
-		runtimeField = addField(TRect(fieldLeft, 16, wideFieldRight, 17), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 14, fieldLeft - 1, 15), "Pre build macro:"));
+		preBuildMacroField = addField(TRect(fieldLeft, 14, fieldWithButtonsRight, 15), kBuildMacroSize - 1);
+		preBuildMacroHistoryButton = preBuildMacroDropList.createButton(*this, TRect(historyLeft, 14, browseLeft, 15), preBuildMacroField, this, cmCompilerProfilesChoosePreBuildMacro, true);
+		preBuildMacroBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 14, right, 15), "🔎", cmCompilerProfilesBrowsePreBuildMacro);
+		insert(preBuildMacroBrowseButton);
+		preBuildMacroListAnchor = TRect(fieldLeft, 15, right, 16);
+		insert(new TStaticText(TRect(labelLeft, 15, fieldLeft - 1, 16), "Post build macro:"));
+		postBuildMacroField = addField(TRect(fieldLeft, 15, fieldWithButtonsRight, 16), kBuildMacroSize - 1);
+		postBuildMacroHistoryButton = postBuildMacroDropList.createButton(*this, TRect(historyLeft, 15, browseLeft, 16), postBuildMacroField, this, cmCompilerProfilesChoosePostBuildMacro, true);
+		postBuildMacroBrowseButton = new TInlineGlyphButton(TRect(browseLeft, 15, right, 16), "🔎", cmCompilerProfilesBrowsePostBuildMacro);
+		insert(postBuildMacroBrowseButton);
+		postBuildMacroListAnchor = TRect(fieldLeft, 16, right, 17);
+		insert(new TStaticText(TRect(labelLeft, 16, fieldLeft - 1, 17), "Includes:"));
+		includesField = addField(TRect(fieldLeft, 16, wideFieldRight, 17), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 17, fieldLeft - 1, 18), "Libraries:"));
+		librariesField = addField(TRect(fieldLeft, 17, wideFieldRight, 18), kPathListSize - 1);
+		insert(new TStaticText(TRect(labelLeft, 18, fieldLeft - 1, 19), "Runtime:"));
+		runtimeField = addField(TRect(fieldLeft, 18, wideFieldRight, 19), kPathListSize - 1);
 		insert(new TButton(TRect(left, buttonTop, left + 10, buttonTop + 2), "~A~dd", cmCompilerProfilesAdd, bfNormal));
 		insert(new TButton(TRect(left + 12, buttonTop, left + 22, buttonTop + 2), "~C~opy", cmCompilerProfilesCopy, bfNormal));
 		insert(new TButton(TRect(left + 24, buttonTop, scrollRight, buttonTop + 2), "De~l~ete", cmCompilerProfilesDelete, bfNormal));
 		insert(new TButton(TRect(46, bottomTop, 65, bottomTop + 2), "Automatic Setup", cmCompilerProfilesAutomaticSetup, bfNormal));
 
-		currentIndex = profiles.empty() ? -1 : 0;
+		currentIndex = preferredCompilerProfileIndexForCurrentEditor(profiles);
+		if (currentIndex < 0) currentIndex = profiles.empty() ? -1 : 0;
 		refreshList();
 		loadCurrentProfile();
 		finalizeLayout();
@@ -342,6 +407,8 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		if (executableDropList.handleOpenListEvent(event)) return;
 		if (successAudioDropList.handleOpenListEvent(event)) return;
 		if (failureAudioDropList.handleOpenListEvent(event)) return;
+		if (preBuildMacroDropList.handleOpenListEvent(event)) return;
+		if (postBuildMacroDropList.handleOpenListEvent(event)) return;
 		if (originalWhat == evCommand && originalCommand == cmOK) {
 			saveCurrentProfile();
 			if (!saveProfiles()) {
@@ -405,6 +472,30 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 					acceptAudioUriSelection(failureAudioDropList, failureAudioField);
 					clearEvent(event);
 					return;
+				case cmCompilerProfilesChoosePreBuildMacro:
+					preBuildMacroDropList.toggle(*this, preBuildMacroListAnchor, macroSpecChoices(true), readInput(preBuildMacroField, kBuildMacroSize), this, cmCompilerProfilesAcceptPreBuildMacro, 8);
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesBrowsePreBuildMacro:
+					browseMacroSpec(preBuildMacroField, "SELECT PRE BUILD MACRO");
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesAcceptPreBuildMacro:
+					acceptMacroSpecSelection(preBuildMacroDropList, preBuildMacroField);
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesChoosePostBuildMacro:
+					postBuildMacroDropList.toggle(*this, postBuildMacroListAnchor, macroSpecChoices(false), readInput(postBuildMacroField, kBuildMacroSize), this, cmCompilerProfilesAcceptPostBuildMacro, 8);
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesBrowsePostBuildMacro:
+					browseMacroSpec(postBuildMacroField, "SELECT POST BUILD MACRO");
+					clearEvent(event);
+					return;
+				case cmCompilerProfilesAcceptPostBuildMacro:
+					acceptMacroSpecSelection(postBuildMacroDropList, postBuildMacroField);
+					clearEvent(event);
+					return;
 				case cmCompilerProfilesAutomaticSetup:
 					automaticSetup();
 					clearEvent(event);
@@ -450,6 +541,18 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		std::sort(choices.begin(), choices.end());
 		return choices;
 	}
+
+	std::vector<std::string> macroSpecChoices(bool preBuild) const {
+		std::vector<std::string> choices;
+
+		for (const MRCompilerProfile &profile : profiles) {
+			const std::string spec = trimAscii(preBuild ? profile.preBuildMacro : profile.postBuildMacro);
+			if (!spec.empty() && std::find(choices.begin(), choices.end(), spec) == choices.end()) choices.push_back(spec);
+		}
+		std::sort(choices.begin(), choices.end());
+		return choices;
+	}
+
 	void acceptExecutableSelection() {
 		std::string selectedValue;
 
@@ -462,6 +565,14 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 
 		if (!dropList.acceptSelection(selectedValue)) return;
 		writeInput(field, selectedValue, kAudioUriSize);
+		saveCurrentProfile();
+	}
+
+	void acceptMacroSpecSelection(MRDropList &dropList, TInputLine *field) {
+		std::string selectedValue;
+
+		if (!dropList.acceptSelection(selectedValue)) return;
+		writeInput(field, selectedValue, kBuildMacroSize);
 		saveCurrentProfile();
 	}
 
@@ -509,6 +620,40 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		saveCurrentProfile();
 	}
 
+	void browseMacroSpec(TInputLine *field, const char *title) {
+		char fileName[MAXPATH] = {0};
+		const std::string currentSpec = readInput(field, kBuildMacroSize);
+		const std::string currentPath = normalizeConfiguredPathInput(macroSpecPathPart(currentSpec));
+		const std::string currentMacro = macroSpecNamePart(currentSpec);
+		const std::string macroRoot = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
+		ushort result = cmCancel;
+
+		if (field == nullptr) return;
+		if (!currentPath.empty()) {
+			const std::size_t slashPos = currentPath.find_last_of('/');
+
+			if (slashPos != std::string::npos) {
+				std::string seed = currentPath.substr(0, slashPos + 1);
+				seed += "*.mrmac";
+				mr::dialogs::writeRecordField(fileName, sizeof(fileName), seed);
+			} else
+				mr::dialogs::writeRecordField(fileName, sizeof(fileName), currentPath);
+		} else if (!macroRoot.empty()) {
+			std::string seed = macroRoot;
+			if (!seed.empty() && seed.back() != '/') seed += '/';
+			seed += "*.mrmac";
+			mr::dialogs::writeRecordField(fileName, sizeof(fileName), seed);
+		} else
+			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::MacroFile, fileName, sizeof(fileName), "*.mrmac");
+		result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::MacroFile, "*.mrmac", title, "~N~ame", fdOpenButton, fileName);
+		if (result == cmCancel) return;
+		std::string spec = relativeMacroPathIfPossible(fileName);
+		spec += "^";
+		spec += currentMacro;
+		writeInput(field, spec, kBuildMacroSize);
+		saveCurrentProfile();
+	}
+
 	void refreshList() {
 		TPlainStringCollection *items = new TPlainStringCollection(std::max<short>(1, static_cast<short>(profiles.size())), 5);
 		TListBoxRec data;
@@ -544,6 +689,8 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		writeInput(preBuildCommandField, profile.preBuildCommand, kBuildCommandSize);
 		writeInput(buildSucceededCommandField, profile.buildSucceededCommand, kBuildCommandSize);
 		writeInput(buildFailedCommandField, profile.buildFailedCommand, kBuildCommandSize);
+		writeInput(preBuildMacroField, profile.preBuildMacro, kBuildMacroSize);
+		writeInput(postBuildMacroField, profile.postBuildMacro, kBuildMacroSize);
 		writeInput(includesField, normalizeCompilerProfilePathList(profile.includePaths), kPathListSize);
 		writeInput(librariesField, normalizeCompilerProfilePathList(profile.libraryPaths), kPathListSize);
 		writeInput(runtimeField, normalizeCompilerProfilePathList(profile.runtimePaths), kPathListSize);
@@ -565,6 +712,8 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		profile.preBuildCommand = readInput(preBuildCommandField, kBuildCommandSize);
 		profile.buildSucceededCommand = readInput(buildSucceededCommandField, kBuildCommandSize);
 		profile.buildFailedCommand = readInput(buildFailedCommandField, kBuildCommandSize);
+		profile.preBuildMacro = readInput(preBuildMacroField, kBuildMacroSize);
+		profile.postBuildMacro = readInput(postBuildMacroField, kBuildMacroSize);
 		profile.includePaths = splitCompilerProfilePathList(readInput(includesField, kPathListSize));
 		profile.libraryPaths = splitCompilerProfilePathList(readInput(librariesField, kPathListSize));
 		profile.runtimePaths = splitCompilerProfilePathList(readInput(runtimeField, kPathListSize));
@@ -577,6 +726,8 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		executableDropList.hide();
 		successAudioDropList.hide();
 		failureAudioDropList.hide();
+		preBuildMacroDropList.hide();
+		postBuildMacroDropList.hide();
 		saveCurrentProfile();
 		currentIndex = index;
 		loadCurrentProfile();
@@ -636,14 +787,26 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 			loadCurrentProfile();
 			return;
 		}
+		{
+			int firstDetectedIndex = -1;
+			int firstAddedIndex = -1;
+
+			mergeDetectedCompilerProfiles(firstAddedIndex, firstDetectedIndex);
+			if (firstAddedIndex >= 0) {
+				currentIndex = firstAddedIndex;
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Compiler profile configured; detected profiles inserted.", mr::messageline::Kind::Success, mr::messageline::kPriorityMedium);
+			} else
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Compiler profile configured.", mr::messageline::Kind::Success, mr::messageline::kPriorityMedium);
+		}
 		loadCurrentProfile();
 		refreshList();
 	}
 
-	void insertDetectedCompilerProfiles() {
+	void mergeDetectedCompilerProfiles(int &firstAddedIndex, int &firstDetectedIndex) {
 		const std::vector<MRCompilerProfile> detectedProfiles = detectedCompilerProfiles();
-		int firstDetectedIndex = -1;
-		int firstAddedIndex = -1;
+
+		firstAddedIndex = -1;
+		firstDetectedIndex = -1;
 
 		for (const MRCompilerProfile &detectedProfile : detectedProfiles) {
 			const std::string detectedId = canonicalCompilerProfileId(detectedProfile.id);
@@ -662,6 +825,13 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 			profiles.push_back(detectedProfile);
 			if (firstAddedIndex < 0) firstAddedIndex = static_cast<int>(profiles.size()) - 1;
 		}
+	}
+
+	void insertDetectedCompilerProfiles() {
+		int firstDetectedIndex = -1;
+		int firstAddedIndex = -1;
+
+		mergeDetectedCompilerProfiles(firstAddedIndex, firstDetectedIndex);
 		if (firstAddedIndex >= 0) {
 			currentIndex = firstAddedIndex;
 			refreshList();
@@ -696,9 +866,13 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	MRDropList executableDropList;
 	MRDropList successAudioDropList;
 	MRDropList failureAudioDropList;
+	MRDropList preBuildMacroDropList;
+	MRDropList postBuildMacroDropList;
 	TRect executableListAnchor;
 	TRect successAudioListAnchor;
 	TRect failureAudioListAnchor;
+	TRect preBuildMacroListAnchor;
+	TRect postBuildMacroListAnchor;
 	TInputLine *idField = nullptr;
 	TInputLine *nameField = nullptr;
 	TInputLine *toolchainField = nullptr;
@@ -711,6 +885,8 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	TInputLine *preBuildCommandField = nullptr;
 	TInputLine *buildSucceededCommandField = nullptr;
 	TInputLine *buildFailedCommandField = nullptr;
+	TInputLine *preBuildMacroField = nullptr;
+	TInputLine *postBuildMacroField = nullptr;
 	TInputLine *includesField = nullptr;
 	TInputLine *librariesField = nullptr;
 	TInputLine *runtimeField = nullptr;
@@ -720,6 +896,10 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 	TInlineGlyphButton *successAudioBrowseButton = nullptr;
 	TView *failureAudioHistoryButton = nullptr;
 	TInlineGlyphButton *failureAudioBrowseButton = nullptr;
+	TView *preBuildMacroHistoryButton = nullptr;
+	TInlineGlyphButton *preBuildMacroBrowseButton = nullptr;
+	TView *postBuildMacroHistoryButton = nullptr;
+	TInlineGlyphButton *postBuildMacroBrowseButton = nullptr;
 };
 
 } // namespace

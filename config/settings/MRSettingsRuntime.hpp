@@ -37,7 +37,6 @@ struct MREditSetupSettings {
 	std::string indentStyle;
 	std::string codeLanguage;
 	bool codeColoring;
-	bool codeFoldingFeature;
 	std::string fileType;
 	int binaryRecordLength;
 	std::string postLoadMacro;
@@ -67,7 +66,7 @@ struct MREditSetupSettings {
 	std::string miniMapMarkerGlyph;
 	std::string gutters;
 
-	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(true), indentStyle(), codeLanguage("NONE"), codeColoring(false), codeFoldingFeature(false), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
+	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(true), indentStyle(), codeLanguage("NONE"), codeColoring(false), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
 	}
 
 	auto operator==(const MREditSetupSettings &) const noexcept -> bool = default;
@@ -139,7 +138,6 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvFormatRuler = 1ull << 41,
 	kOvCodeLanguage = 1ull << 42,
 	kOvCodeColoring = 1ull << 43,
-	kOvCodeFoldingFeature = 1ull << 45,
 };
 
 struct MREditSettingDescriptor {
@@ -183,6 +181,8 @@ struct MRCompilerProfile {
 	std::string preBuildCommand;
 	std::string buildSucceededCommand;
 	std::string buildFailedCommand;
+	std::string preBuildMacro;
+	std::string postBuildMacro;
 	std::vector<std::string> includePaths;
 	std::vector<std::string> libraryPaths;
 	std::vector<std::string> runtimePaths;
@@ -466,7 +466,18 @@ enum : unsigned char {
 	kMrPaletteSnippetPlaceholder = 209,
 	kMrPaletteSnippetActivePlaceholder = 210,
 	kMrPaletteSnippetDefaultText = 211,
-	kMrPaletteMax = kMrPaletteSnippetDefaultText
+	kMrPaletteOutlineFileHeader = 212,
+	kMrPaletteOutlineLevel0 = 213,
+	kMrPaletteOutlineLevel1 = 214,
+	kMrPaletteOutlineLevel2 = 215,
+	kMrPaletteOutlineLevel3 = 216,
+	kMrPaletteOutlineLevel4 = 217,
+	kMrPaletteOutlineLevel5 = 218,
+	kMrPaletteOutlineLevel6 = 219,
+	kMrPaletteOutlineLevel7 = 220,
+	kMrPaletteOutlineLevel8 = 221,
+	kMrPaletteOutlineLevel9 = 222,
+	kMrPaletteMax = kMrPaletteOutlineLevel9
 };
 
 struct MRColorSetupSettings {
@@ -476,7 +487,7 @@ struct MRColorSetupSettings {
 	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 6;
 	static const std::size_t kFileCompareMiniMapCount = 9;
-	static const std::size_t kCodeCount = 22;
+	static const std::size_t kCodeCount = 33;
 	static const std::size_t kFileCompareCount = 14;
 
 	std::array<unsigned char, kWindowCount> windowColors;
@@ -590,6 +601,7 @@ const std::vector<MRCompilerProfile> &configuredCompilerProfiles();
 bool setConfiguredCompilerProfiles(const std::vector<MRCompilerProfile> &profiles, std::string *errorMessage = nullptr);
 bool applyConfiguredCompilerProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage = nullptr);
 [[nodiscard]] std::vector<MRCompilerProfile> detectedCompilerProfiles();
+[[nodiscard]] std::vector<std::string> detectedCompilerProfileIds();
 [[nodiscard]] std::string canonicalCompilerProfileId(const std::string &value);
 [[nodiscard]] std::string canonicalCompilerProfileName(const std::string &value);
 [[nodiscard]] bool compilerProfileIdExists(const std::string &profileId);

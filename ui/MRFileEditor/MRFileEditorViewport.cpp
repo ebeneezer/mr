@@ -717,9 +717,23 @@ void MRFileEditor::draw() {
 	if (size.x > 0 && size.y > 0) {
 		const std::size_t nonDocumentLineIndex = std::numeric_limits<std::size_t>::max();
 		const std::size_t documentRows = topLine < totalLines ? std::min<std::size_t>(static_cast<std::size_t>(textRows), totalLines - topLine) : 0;
+		bool eofDocumentLineVisible = false;
+
+		if (editSettings.showEofMarker) {
+			for (int y = 0; y < static_cast<int>(documentRows); ++y) {
+				const std::size_t visibleLineIndex = topLine + static_cast<std::size_t>(y);
+				const std::size_t currentLineIndex = documentLineForVisibleLine(visibleLineIndex);
+				if (currentLineIndex < mBufferModel.lineCount() && mBufferModel.lineStartByIndex(currentLineIndex) == mBufferModel.length()) {
+					eofDocumentLineVisible = true;
+					break;
+				}
+			}
+		}
 
 		for (int y = static_cast<int>(documentRows); y < textRows; ++y) {
 			TDrawBuffer gutterBackground;
+			const bool drawEofMarker = editSettings.showEofMarker && !eofDocumentLineVisible && y == static_cast<int>(documentRows);
+			const std::size_t virtualLineIndex = topLine + static_cast<std::size_t>(y);
 
 			gutterBackground.moveChar(0, ' ', editorTextFill, static_cast<ushort>(std::max(0, size.x)));
 			if (showLineNumbers) drawLineNumberGutter(gutterBackground, 0, false, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers, nonDocumentLineIndex);
@@ -728,6 +742,7 @@ void MRFileEditor::draw() {
 			if (drawCodeFolding) drawCodeFoldingGutter(gutterBackground, viewport.codeFoldingX, viewport.codeFoldingWidth, 0, nonDocumentLineIndex);
 			if (drawLeadingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(true), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 			if (drawTrailingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(false), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
+			if (drawEofMarker) formatSyntaxLine(gutterBackground, virtualLineIndex, MRSyntaxLineResult(), delta.x, textWidth, viewport.textLeft, false, true, editSettings.showEofMarkerEmoji);
 			writeBuf(0, y + viewport.topInset, size.x, 1, gutterBackground);
 		}
 	}
@@ -761,7 +776,8 @@ void MRFileEditor::draw() {
 
 			if (found != mSyntaxState.tokenCache().end() && statefulCacheReady) syntaxLine = found->second.syntaxLine;
 		}
-		formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, false, false);
+		const bool drawEofMarker = editSettings.showEofMarker && isDocumentLine && currentLinePtr == mBufferModel.length();
+		formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarker && editSettings.showEofMarkerEmoji);
 		writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
 		if (!foldedView) {
 			if (isDocumentLine && linePtr < mBufferModel.length()) linePtr = mBufferModel.nextLine(linePtr);
@@ -1110,6 +1126,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 		} else
 			b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(width - x));
 	}
+	if (drawEofMarker) drawEofMarkerGlyph(b, hScroll, width, drawX, basePair, drawEofMarkerAsEmoji);
 }
 
 void MRFileEditor::drawEofMarkerGlyph(TDrawBuffer &b, int hScroll, int width, int drawX, TAttrPair basePair, bool drawEmoji) {

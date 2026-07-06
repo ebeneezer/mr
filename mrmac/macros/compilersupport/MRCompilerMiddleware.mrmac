@@ -1,0 +1,32 @@
+$MACRO LatexMKPostBuild FROM ALL;
+DEF_INT(Status);
+DEF_STR(SourceFile, ErrorText, PdfPath, StatusText);
+
+Status := GLOBAL_INT('MR_BUILD_EXIT_STATUS');
+SourceFile := GLOBAL_STR('MR_BUILD_SOURCE_FILE');
+IF SourceFile = '' THEN
+    SourceFile := GLOBAL_STR('MR_BUILD_SOURCE_PATH');
+END;
+ErrorText := GLOBAL_STR('MR_BUILD_ERROR_TEXT');
+StatusText := GLOBAL_STR('MR_BUILD_STATUS_TEXT');
+PdfPath := GLOBAL_STR('MR_BUILD_PDF_PATH');
+
+IF Status <> 0 THEN
+    IF ErrorText <> '' THEN
+        MARQUEE_ERROR('LaTeXmk failed: ' + SourceFile + ' (' + ErrorText + ')');
+    ELSE
+        IF StatusText <> '' THEN
+            MARQUEE_ERROR('LaTeXmk failed: ' + SourceFile + ' (' + StatusText + ', exit ' + STR(Status) + ')');
+        ELSE
+            MARQUEE_ERROR('LaTeXmk failed: ' + SourceFile + ' (exit ' + STR(Status) + ')');
+        END;
+    END;
+ELSE
+    FORK('zathura', PdfPath);
+    IF ERROR_LEVEL = 0 THEN
+        MAKE_MESSAGE('LaTeXmk PDF ready: ' + PdfPath);
+    ELSE
+        MARQUEE_ERROR('LaTeXmk succeeded, but zathura did not start: ' + PdfPath);
+    END;
+END;
+END_MACRO;

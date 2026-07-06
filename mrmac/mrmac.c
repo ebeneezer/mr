@@ -2461,6 +2461,7 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("CHANGE_DIR", CALL_ARG_STRINGLIKE, "CHANGE_DIR"),
     PROC_SIG1("DEL_FILE", CALL_ARG_STRINGLIKE, "DEL_FILE"),
     PROC_SIG2("SET_FILE_ATTR", CALL_ARG_STRINGLIKE, CALL_ARG_INT, "SET_FILE_ATTR"),
+    PROC_SIG8("FORK", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "FORK"),
     PROC_SIG2("SHELL_TO_OS", CALL_ARG_STRINGLIKE, CALL_ARG_INT, "SHELL_TO_OS"),
     PROC_SIG1("WRITE_SOD", CALL_ARG_STRINGLIKE, "WRITE_SOD"),
     PROC_SIG1("LOAD_FILE", CALL_ARG_STRINGLIKE, "LOAD_FILE"),
@@ -2646,6 +2647,25 @@ static int validate_proc_signature(const ProcSignature *spec, const ExprInfo *ar
 		}
 		set_compile_error(line, "Wrong number of arguments.");
 		return -1;
+	}
+	if (strcasecmp(spec->name, "FORK") == 0) {
+		int i;
+
+		if (argc == 0) {
+			set_compile_error(line, "Wrong number of arguments.");
+			return -1;
+		}
+		for (i = 0; i < argc; ++i)
+			if (is_inferred_type(args[i].type)) {
+				set_compile_error(line, "Can not infer result type.");
+				return -1;
+			}
+		for (i = 0; i < argc; ++i)
+			if (!call_arg_matches_type(CALL_ARG_STRINGLIKE, args[i].type)) {
+				set_compile_error(line, "Type mismatch or syntax error.");
+				return -1;
+			}
+		return 0;
 	}
 	return validate_call_arguments(spec->args, spec->argc, args, argc, line);
 }

@@ -249,6 +249,16 @@ std::string serializeScopedHistoryRecord(std::string_view key, MRDialogHistorySc
 	return "MRSETUP('" + std::string(key) + "', '" + escapeMrmacSingleQuotedLiteral(payload) + "');\n";
 }
 
+void appendHistoryRecords(std::string &source, const char *key, const std::vector<std::string> &values) {
+	for (const std::string &value : values)
+		source += "MRSETUP('" + std::string(key) + "', '" + escapeMrmacSingleQuotedLiteral(value) + "');\n";
+}
+
+void appendScopedHistoryRecords(std::string &source, const char *key, MRDialogHistoryScope scope, const std::vector<std::string> &values) {
+	for (const std::string &value : values)
+		source += serializeScopedHistoryRecord(key, scope, "value", value);
+}
+
 } // namespace
 
 std::string defaultLogFilePathForSettings(std::string_view settingsPath) {
@@ -595,8 +605,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('PDF_EXPORT_TOP_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.topMarginPoints) + "');\n";
 	source += "MRSETUP('PDF_EXPORT_BOTTOM_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.bottomMarginPoints) + "');\n";
 	source += "MRSETUP('ACQUIRE_COMMAND', '" + escapeMrmacSingleQuotedLiteral(snapshot.acquireSettings.commandLine) + "');\n";
-	for (const std::string &entry : snapshot.acquireSettings.commandHistory)
-		source += "MRSETUP('ACQUIRE_COMMAND_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
+	appendHistoryRecords(source, "ACQUIRE_COMMAND_HISTORY", snapshot.acquireSettings.commandHistory);
 	source += "MRSETUP('LIVE_LOG_REPORT_MESSAGE_LINE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.reportSearchHitsOnMessageLine)) + "');\n";
 	source += "MRSETUP('LIVE_LOG_REPORT_BEEP', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.reportSearchHitsWithSystemBeep)) + "');\n";
 	source += "MRSETUP('LIVE_LOG_REPORT_AUDIO', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.reportSearchHitsWithAudioSignal)) + "');\n";
@@ -605,8 +614,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('LIVE_LOG_TIMESTAMPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.showTimestamps)) + "');\n";
 	source += "MRSETUP('LIVE_LOG_SYNTAX_HIGHLIGHTING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.syntaxHighlighting)) + "');\n";
 	source += "MRSETUP('LIVE_LOG_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(snapshot.liveLogSettings.audioSignalUri) + "');\n";
-	for (const std::string &entry : snapshot.liveLogSettings.journalAppTagHistory)
-		source += "MRSETUP('LIVE_LOG_JOURNAL_TAG_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
+	appendHistoryRecords(source, "LIVE_LOG_JOURNAL_TAG_HISTORY", snapshot.liveLogSettings.journalAppTagHistory);
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
@@ -636,15 +644,11 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 		const MRSettingsSnapshot::DialogHistoryState &state = snapshot.dialogHistory[dialogHistoryScopeIndex(scopeSpec.scope)];
 
 		if (!state.lastPath.empty()) source += serializeScopedHistoryRecord(kDialogLastPathKey, scopeSpec.scope, "path", state.lastPath);
-		for (const std::string &entry : state.pathHistory)
-			source += serializeScopedHistoryRecord(kDialogPathHistoryKey, scopeSpec.scope, "value", entry);
-		for (const std::string &entry : state.fileHistory)
-			source += serializeScopedHistoryRecord(kDialogFileHistoryKey, scopeSpec.scope, "value", entry);
+		appendScopedHistoryRecords(source, kDialogPathHistoryKey, scopeSpec.scope, state.pathHistory);
+		appendScopedHistoryRecords(source, kDialogFileHistoryKey, scopeSpec.scope, state.fileHistory);
 	}
-	for (const std::string &entry : snapshot.multiFilespecHistory)
-		source += "MRSETUP('MULTI_FILESPEC_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
-	for (const std::string &entry : snapshot.multiPathHistory)
-		source += "MRSETUP('MULTI_PATH_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
+	appendHistoryRecords(source, "MULTI_FILESPEC_HISTORY", snapshot.multiFilespecHistory);
+	appendHistoryRecords(source, "MULTI_PATH_HISTORY", snapshot.multiPathHistory);
 	source += "MRSETUP('DEFAULT_PROFILE_DESCRIPTION', '" + escapeMrmacSingleQuotedLiteral(snapshot.defaultProfileDescription) + "');\n";
 	source += "MRSETUP('PAGE_BREAK', '" + escapeMrmacSingleQuotedLiteral(edit.pageBreak) + "');\n";
 	source += "MRSETUP('WORD_DELIMITERS', '" + escapeMrmacSingleQuotedLiteral(edit.wordDelimiters) + "');\n";
@@ -662,7 +666,6 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
 	source += "MRSETUP('CODE_LANGUAGE', '" + escapeMrmacSingleQuotedLiteral(edit.codeLanguage) + "');\n";
 	source += "MRSETUP('CODE_COLORING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeColoring)) + "');\n";
-	source += "MRSETUP('CODE_FOLDING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeFoldingFeature)) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";
 	source += "MRSETUP('POST_LOAD_MACRO', '" + escapeMrmacSingleQuotedLiteral(edit.postLoadMacro) + "');\n";
@@ -699,6 +702,8 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'PRE_BUILD_COMMAND', '" + escapeMrmacSingleQuotedLiteral(profile.preBuildCommand) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'BUILD_SUCCEEDED_COMMAND', '" + escapeMrmacSingleQuotedLiteral(profile.buildSucceededCommand) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'BUILD_FAILED_COMMAND', '" + escapeMrmacSingleQuotedLiteral(profile.buildFailedCommand) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'PRE_BUILD_MACRO', '" + escapeMrmacSingleQuotedLiteral(profile.preBuildMacro) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'POST_BUILD_MACRO', '" + escapeMrmacSingleQuotedLiteral(profile.postBuildMacro) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'INCLUDES', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.includePaths)) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LIBRARIES', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.libraryPaths)) + "');\n";
 		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'RUNTIME', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.runtimePaths)) + "');\n";

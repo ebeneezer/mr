@@ -244,7 +244,7 @@ static const MRColorSetupItem kFileCompareMiniMapColorItems[] = {
 };
 
 static const MRColorSetupItem kCodeColorItems[] = {
-    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight}, {"context menu", kMrPaletteContextMenu}, {"context menu selector", kMrPaletteContextMenuSelector}, {"snippet sidekick frame", kMrPaletteSnippetSidekickFrame}, {"snippet sidekick text", kMrPaletteSnippetSidekickText}, {"snippet placeholder", kMrPaletteSnippetPlaceholder}, {"snippet active placeholder", kMrPaletteSnippetActivePlaceholder}, {"snippet default text", kMrPaletteSnippetDefaultText},
+    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight}, {"context menu", kMrPaletteContextMenu}, {"context menu selector", kMrPaletteContextMenuSelector}, {"snippet sidekick frame", kMrPaletteSnippetSidekickFrame}, {"snippet sidekick text", kMrPaletteSnippetSidekickText}, {"snippet placeholder", kMrPaletteSnippetPlaceholder}, {"snippet active placeholder", kMrPaletteSnippetActivePlaceholder}, {"snippet default text", kMrPaletteSnippetDefaultText}, {"outline file header", kMrPaletteOutlineFileHeader}, {"outline level 1", kMrPaletteOutlineLevel0}, {"outline level 2", kMrPaletteOutlineLevel1}, {"outline level 3", kMrPaletteOutlineLevel2}, {"outline level 4", kMrPaletteOutlineLevel3}, {"outline level 5", kMrPaletteOutlineLevel4}, {"outline level 6", kMrPaletteOutlineLevel5}, {"outline level 7", kMrPaletteOutlineLevel6}, {"outline level 8", kMrPaletteOutlineLevel7}, {"outline level 9", kMrPaletteOutlineLevel8}, {"outline level 10", kMrPaletteOutlineLevel9},
 };
 
 static const MRColorSetupItem kFileCompareColorItems[] = {
@@ -285,6 +285,7 @@ bool codeColorCountAccepted(std::size_t count, std::size_t currentCount) noexcep
 	if (currentCount > 5 && count == currentCount - 6) return true;
 	if (currentCount > 7 && count == currentCount - 8) return true;
 	if (currentCount > 9 && count == currentCount - 10) return true;
+	if (currentCount > 10 && count == currentCount - 11) return true;
 	return false;
 }
 
@@ -333,6 +334,17 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteSnippetPlaceholder) return 0x38;
 	if (paletteIndex == kMrPaletteSnippetActivePlaceholder) return 0xE0;
 	if (paletteIndex == kMrPaletteSnippetDefaultText) return 0x38;
+	if (paletteIndex == kMrPaletteOutlineFileHeader) return 0x1F;
+	if (paletteIndex == kMrPaletteOutlineLevel0) return 0x1F;
+	if (paletteIndex == kMrPaletteOutlineLevel1) return 0x1E;
+	if (paletteIndex == kMrPaletteOutlineLevel2) return 0x1B;
+	if (paletteIndex == kMrPaletteOutlineLevel3) return 0x1A;
+	if (paletteIndex == kMrPaletteOutlineLevel4) return 0x1D;
+	if (paletteIndex == kMrPaletteOutlineLevel5) return 0x19;
+	if (paletteIndex == kMrPaletteOutlineLevel6) return 0x1C;
+	if (paletteIndex == kMrPaletteOutlineLevel7) return 0x13;
+	if (paletteIndex == kMrPaletteOutlineLevel8) return 0x1F;
+	if (paletteIndex == kMrPaletteOutlineLevel9) return 0x1E;
 	if (paletteIndex == kMrPaletteFileCompareTextEqual) return 0x1A;
 	if (paletteIndex == kMrPaletteFileCompareTextMissing) return 0x1C;
 	if (paletteIndex == kMrPaletteFileCompareTextInsert) return 0x1E;
