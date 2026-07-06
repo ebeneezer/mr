@@ -477,12 +477,16 @@ enum : unsigned char {
 	kMrPaletteOutlineLevel7 = 220,
 	kMrPaletteOutlineLevel8 = 221,
 	kMrPaletteOutlineLevel9 = 222,
-	kMrPaletteMax = kMrPaletteOutlineLevel9
+	kMrPaletteSpinnerHandles = 223,
+	kMrPaletteSpinnerDisplay = 224,
+	kMrPaletteFocusedSpinnerHandles = 225,
+	kMrPaletteFocusedSpinnerDisplay = 226,
+	kMrPaletteMax = kMrPaletteFocusedSpinnerDisplay
 };
 
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 14;
-	static const std::size_t kMenuDialogCount = 28;
+	static const std::size_t kMenuDialogCount = 32;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 6;

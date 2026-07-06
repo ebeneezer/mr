@@ -31,6 +31,7 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/widgets/MRNumericSlider.hpp"
+#include "../../ui/widgets/MRSpinner.hpp"
 #include "../../ui/MRPalette.hpp"
 #include "../MRDirtyGating.hpp"
 #include "MRSetupCommon.hpp"
@@ -365,6 +366,10 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteOutlineLevel7 - 1] = 0x13;
 		data[kMrPaletteOutlineLevel8 - 1] = 0x1F;
 		data[kMrPaletteOutlineLevel9 - 1] = 0x1E;
+		data[kMrPaletteSpinnerHandles - 1] = data[52 - 1];
+		data[kMrPaletteSpinnerDisplay - 1] = data[50 - 1];
+		data[kMrPaletteFocusedSpinnerHandles - 1] = data[58 - 1];
+		data[kMrPaletteFocusedSpinnerDisplay - 1] = data[51 - 1];
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	TPalette palette = basePalette;
@@ -1601,6 +1606,18 @@ bool validateFileCompareGuttersInput(std::string_view value, std::string &errorT
 	return true;
 }
 
+std::vector<std::string> fileCompareGutterSpinnerValues() {
+	std::vector<std::string> values;
+
+	values.reserve(5);
+	values.push_back(" ");
+	values.push_back("M");
+	values.push_back("D");
+	values.push_back("L");
+	values.push_back("C");
+	return values;
+}
+
 bool userInterfaceSettingsDialogDataEqual(const UserInterfaceSettingsDialogData &lhs, const UserInterfaceSettingsDialogData &rhs) {
 	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && lhs.compilerErrorMessageChoice == rhs.compilerErrorMessageChoice &&
 	       lhs.fileCompareStartChoice == rhs.fileCompareStartChoice && lhs.compilerDiagnosticFlags == rhs.compilerDiagnosticFlags && lhs.scrollbarVisibilityChoice == rhs.scrollbarVisibilityChoice && lhs.uiIndentStyleChoice == rhs.uiIndentStyleChoice &&
@@ -1678,7 +1695,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker, const std::string &initialFileCompareOriginalLeadingGutters, const std::string &initialFileCompareOriginalTrailingGutters,
 	                            const std::string &initialFileCompareCompareLeadingGutters, const std::string &initialFileCompareCompareTrailingGutters, MRFileCompareStartConfiguration initialFileCompareStartConfiguration,
 	                            bool initialFileCompareComparePanelReadOnly)
-	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 28), "USER INTERFACE SETTINGS", 86, 28, initSetupDialogFrame) {
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 32), "USER INTERFACE SETTINGS", 86, 32, initSetupDialogFrame) {
 
 		int const yStart = 2;
 
@@ -1690,26 +1707,6 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 		mOptionsField = cb;
 		addManaged(mOptionsField, mOptionsField->getBounds());
-
-		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 12, 70, 13), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(mVirtualDesktopsSlider, TRect(24, 12, 70, 13));
-		addManaged(new TLabel(TRect(2, 12, 23, 13), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 12, 23, 13));
-
-		mCursorPositionMarkerField = new TInputLine(TRect(28, 13, 42, 14), 11);
-		addManaged(mCursorPositionMarkerField, TRect(28, 13, 42, 14));
-		addManaged(new TLabel(TRect(2, 13, 27, 14), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 13, 27, 14));
-
-		addManaged(new TStaticText(TRect(3, 14, 25, 15), "File compare gutters:"), TRect(3, 14, 25, 15));
-		addManaged(new TStaticText(TRect(26, 14, 36, 15), "Original:"), TRect(26, 14, 36, 15));
-		mFileCompareOriginalLeadingGuttersField = new TInputLine(TRect(37, 14, 44, 15), 6);
-		addManaged(mFileCompareOriginalLeadingGuttersField, TRect(37, 14, 44, 15));
-		mFileCompareOriginalTrailingGuttersField = new TInputLine(TRect(45, 14, 52, 15), 6);
-		addManaged(mFileCompareOriginalTrailingGuttersField, TRect(45, 14, 52, 15));
-		addManaged(new TStaticText(TRect(54, 14, 63, 15), "Compare:"), TRect(54, 14, 63, 15));
-		mFileCompareCompareLeadingGuttersField = new TInputLine(TRect(64, 14, 71, 15), 6);
-		addManaged(mFileCompareCompareLeadingGuttersField, TRect(64, 14, 71, 15));
-		mFileCompareCompareTrailingGuttersField = new TInputLine(TRect(72, 14, 79, 15), 6);
-		addManaged(mFileCompareCompareTrailingGuttersField, TRect(72, 14, 79, 15));
 
 		addManaged(new TStaticText(TRect(38, 2, 57, 3), "Cursor behaviour:"), TRect(38, 2, 57, 3));
 		mCursorBehaviourField = new TRadioButtons(TRect(38, 3, 57, 6), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
@@ -1727,11 +1724,27 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		mFileCompareStartField = new TRadioButtons(TRect(58, 8, 83, 11), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
 		addManaged(mFileCompareStartField, TRect(58, 8, 83, 11));
 
-		addManaged(new TStaticText(TRect(3, 16, 20, 17), "Indent style:"), TRect(3, 16, 20, 17));
-		mIndentStyleField = new TRadioButtons(TRect(3, 17, 23, 26), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
-		addManaged(mIndentStyleField, TRect(3, 17, 23, 26));
-		mIndentStylePreview = new TIndentStylePreview(TRect(25, 17, 47, 26));
-		addManaged(mIndentStylePreview, TRect(25, 17, 47, 26));
+		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 12, 70, 13), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mVirtualDesktopsSlider, TRect(24, 12, 70, 13));
+		addManaged(new TLabel(TRect(2, 12, 23, 13), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 12, 23, 13));
+
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 13, 42, 14), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 13, 42, 14));
+		addManaged(new TLabel(TRect(2, 13, 27, 14), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 13, 27, 14));
+
+		addManaged(new TStaticText(TRect(3, 16, 25, 17), "File compare gutters:"), TRect(3, 16, 25, 17));
+		addManaged(new TStaticText(TRect(26, 16, 36, 17), "Original:"), TRect(26, 16, 36, 17));
+		addFileCompareGutterSpinners(mFileCompareOriginalLeadingGutterSpinners, 37, 15);
+		addFileCompareGutterSpinners(mFileCompareOriginalTrailingGutterSpinners, 43, 15);
+		addManaged(new TStaticText(TRect(54, 16, 63, 17), "Compare:"), TRect(54, 16, 63, 17));
+		addFileCompareGutterSpinners(mFileCompareCompareLeadingGutterSpinners, 64, 15);
+		addFileCompareGutterSpinners(mFileCompareCompareTrailingGutterSpinners, 70, 15);
+
+		addManaged(new TStaticText(TRect(3, 19, 20, 20), "Indent style:"), TRect(3, 19, 20, 20));
+		mIndentStyleField = new TRadioButtons(TRect(3, 20, 23, 29), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
+		addManaged(mIndentStyleField, TRect(3, 20, 23, 29));
+		mIndentStylePreview = new TIndentStylePreview(TRect(25, 20, 47, 29));
+		addManaged(mIndentStylePreview, TRect(25, 20, 47, 29));
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		mInitialCompilerErrorMessageChoice = initialCompilerErrorMessagePlacement == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
@@ -1739,10 +1752,6 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		mInitialScrollbarVisibilityChoice = initialScrollbarVisibility == MRScrollbarVisibility::Always ? 1 : 0;
 		mInitialCompilerDiagnosticFlags = (initialTrackCompilerWarnings ? 1 : 0) | (initialTrackCompilerNotes ? 2 : 0);
 		writeRecordField(mDataCursorMarker, sizeof(mDataCursorMarker), initialCursorPositionMarker);
-		writeRecordField(mDataFileCompareOriginalLeadingGutters, sizeof(mDataFileCompareOriginalLeadingGutters), initialFileCompareOriginalLeadingGutters);
-		writeRecordField(mDataFileCompareOriginalTrailingGutters, sizeof(mDataFileCompareOriginalTrailingGutters), initialFileCompareOriginalTrailingGutters);
-		writeRecordField(mDataFileCompareCompareLeadingGutters, sizeof(mDataFileCompareCompareLeadingGutters), initialFileCompareCompareLeadingGutters);
-		writeRecordField(mDataFileCompareCompareTrailingGutters, sizeof(mDataFileCompareCompareTrailingGutters), initialFileCompareCompareTrailingGutters);
 		mInitialFileCompareComparePanelReadOnly = initialFileCompareComparePanelReadOnly;
 		if (mIndentStyleField != nullptr) {
 			ushort styleChoice = 0;
@@ -1803,10 +1812,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		if (mScrollbarVisibilityField != nullptr) mScrollbarVisibilityField->getData(&data->scrollbarVisibilityChoice);
 		if (mIndentStyleField != nullptr) mIndentStyleField->getData(&data->uiIndentStyleChoice);
 		if (mCursorPositionMarkerField != nullptr) mCursorPositionMarkerField->getData(data->cursorPositionMarker);
-		if (mFileCompareOriginalLeadingGuttersField != nullptr) mFileCompareOriginalLeadingGuttersField->getData(data->fileCompareOriginalLeadingGutters);
-		if (mFileCompareOriginalTrailingGuttersField != nullptr) mFileCompareOriginalTrailingGuttersField->getData(data->fileCompareOriginalTrailingGutters);
-		if (mFileCompareCompareLeadingGuttersField != nullptr) mFileCompareCompareLeadingGuttersField->getData(data->fileCompareCompareLeadingGutters);
-		if (mFileCompareCompareTrailingGuttersField != nullptr) mFileCompareCompareTrailingGuttersField->getData(data->fileCompareCompareTrailingGutters);
+		writeRecordField(data->fileCompareOriginalLeadingGutters, sizeof(data->fileCompareOriginalLeadingGutters), fileCompareGutterSpinnersText(mFileCompareOriginalLeadingGutterSpinners));
+		writeRecordField(data->fileCompareOriginalTrailingGutters, sizeof(data->fileCompareOriginalTrailingGutters), fileCompareGutterSpinnersText(mFileCompareOriginalTrailingGutterSpinners));
+		writeRecordField(data->fileCompareCompareLeadingGutters, sizeof(data->fileCompareCompareLeadingGutters), fileCompareGutterSpinnersText(mFileCompareCompareLeadingGutterSpinners));
+		writeRecordField(data->fileCompareCompareTrailingGutters, sizeof(data->fileCompareCompareTrailingGutters), fileCompareGutterSpinnersText(mFileCompareCompareTrailingGutterSpinners));
 	}
 
 	void setData(void *rec) override {
@@ -1851,13 +1860,60 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			if (data->cursorPositionMarker[0] == '\0') writeRecordField(data->cursorPositionMarker, sizeof(data->cursorPositionMarker), mDataCursorMarker);
 			mCursorPositionMarkerField->setData(data->cursorPositionMarker);
 		}
-		if (mFileCompareOriginalLeadingGuttersField != nullptr) mFileCompareOriginalLeadingGuttersField->setData(data->fileCompareOriginalLeadingGutters);
-		if (mFileCompareOriginalTrailingGuttersField != nullptr) mFileCompareOriginalTrailingGuttersField->setData(data->fileCompareOriginalTrailingGutters);
-		if (mFileCompareCompareLeadingGuttersField != nullptr) mFileCompareCompareLeadingGuttersField->setData(data->fileCompareCompareLeadingGutters);
-		if (mFileCompareCompareTrailingGuttersField != nullptr) mFileCompareCompareTrailingGuttersField->setData(data->fileCompareCompareTrailingGutters);
+		setFileCompareGutterSpinners(mFileCompareOriginalLeadingGutterSpinners, readRecordField(data->fileCompareOriginalLeadingGutters));
+		setFileCompareGutterSpinners(mFileCompareOriginalTrailingGutterSpinners, readRecordField(data->fileCompareOriginalTrailingGutters));
+		setFileCompareGutterSpinners(mFileCompareCompareLeadingGutterSpinners, readRecordField(data->fileCompareCompareLeadingGutters));
+		setFileCompareGutterSpinners(mFileCompareCompareTrailingGutterSpinners, readRecordField(data->fileCompareCompareTrailingGutters));
 	}
 
   private:
+	static const std::size_t kFileCompareGutterSpinnerCount = 4;
+
+	void addFileCompareGutterSpinners(std::array<MRSpinner *, kFileCompareGutterSpinnerCount> &spinners, int x, int y) {
+		for (std::size_t i = 0; i < spinners.size(); ++i) {
+			const int left = x + static_cast<int>(i);
+
+			spinners[i] = new MRSpinner(TRect(left, y, left + 1, y + 3), fileCompareGutterSpinnerValues());
+			addManaged(spinners[i], TRect(left, y, left + 1, y + 3));
+		}
+	}
+
+	std::string fileCompareGutterSpinnersText(const std::array<MRSpinner *, kFileCompareGutterSpinnerCount> &spinners) const {
+		std::string text;
+
+		text.reserve(spinners.size());
+		for (MRSpinner *spinner : spinners) {
+			if (spinner == nullptr) continue;
+			const std::string &value = spinner->currentValue();
+
+			if (value != " ") text += value;
+		}
+		return text;
+	}
+
+	void setFileCompareGutterSpinners(std::array<MRSpinner *, kFileCompareGutterSpinnerCount> &spinners, std::string_view text) {
+		std::size_t index = 0;
+
+		for (MRSpinner *spinner : spinners)
+			if (spinner != nullptr) spinner->setCurrentValue(" ");
+		for (char ch : text) {
+			if (index >= spinners.size()) break;
+			char value = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+
+			switch (value) {
+				case 'M':
+				case 'D':
+				case 'L':
+				case 'C':
+					if (spinners[index] != nullptr) spinners[index]->setCurrentValue(std::string(1, value));
+					++index;
+					break;
+				default:
+					break;
+			}
+		}
+	}
+
 	std::string currentCursorMarkerInput() const {
 		char value[12] = {0};
 		if (mCursorPositionMarkerField != nullptr) mCursorPositionMarkerField->getData(value);
@@ -1865,27 +1921,19 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	}
 
 	std::string currentFileCompareOriginalLeadingGuttersInput() const {
-		char value[8] = {0};
-		if (mFileCompareOriginalLeadingGuttersField != nullptr) mFileCompareOriginalLeadingGuttersField->getData(value);
-		return readRecordField(value);
+		return fileCompareGutterSpinnersText(mFileCompareOriginalLeadingGutterSpinners);
 	}
 
 	std::string currentFileCompareOriginalTrailingGuttersInput() const {
-		char value[8] = {0};
-		if (mFileCompareOriginalTrailingGuttersField != nullptr) mFileCompareOriginalTrailingGuttersField->getData(value);
-		return readRecordField(value);
+		return fileCompareGutterSpinnersText(mFileCompareOriginalTrailingGutterSpinners);
 	}
 
 	std::string currentFileCompareCompareLeadingGuttersInput() const {
-		char value[8] = {0};
-		if (mFileCompareCompareLeadingGuttersField != nullptr) mFileCompareCompareLeadingGuttersField->getData(value);
-		return readRecordField(value);
+		return fileCompareGutterSpinnersText(mFileCompareCompareLeadingGutterSpinners);
 	}
 
 	std::string currentFileCompareCompareTrailingGuttersInput() const {
-		char value[8] = {0};
-		if (mFileCompareCompareTrailingGuttersField != nullptr) mFileCompareCompareTrailingGuttersField->getData(value);
-		return readRecordField(value);
+		return fileCompareGutterSpinnersText(mFileCompareCompareTrailingGutterSpinners);
 	}
 
 	DialogValidationResult validateDialogValues() const {
@@ -1921,10 +1969,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	TCheckBoxes *mCompilerDiagnosticsField = nullptr;
 	TRadioButtons *mScrollbarVisibilityField = nullptr;
 	TInputLine *mCursorPositionMarkerField = nullptr;
-	TInputLine *mFileCompareOriginalLeadingGuttersField = nullptr;
-	TInputLine *mFileCompareOriginalTrailingGuttersField = nullptr;
-	TInputLine *mFileCompareCompareLeadingGuttersField = nullptr;
-	TInputLine *mFileCompareCompareTrailingGuttersField = nullptr;
+	std::array<MRSpinner *, kFileCompareGutterSpinnerCount> mFileCompareOriginalLeadingGutterSpinners{};
+	std::array<MRSpinner *, kFileCompareGutterSpinnerCount> mFileCompareOriginalTrailingGutterSpinners{};
+	std::array<MRSpinner *, kFileCompareGutterSpinnerCount> mFileCompareCompareLeadingGutterSpinners{};
+	std::array<MRSpinner *, kFileCompareGutterSpinnerCount> mFileCompareCompareTrailingGutterSpinners{};
 	TRadioButtons *mIndentStyleField = nullptr;
 	TIndentStylePreview *mIndentStylePreview = nullptr;
 	ushort mInitialCursorBehaviourChoice = 1;
@@ -1935,10 +1983,6 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	bool mInitialFileCompareComparePanelReadOnly = true;
 	ushort mLastIndentStyleChoice = 0;
 	char mDataCursorMarker[12] = {0};
-	char mDataFileCompareOriginalLeadingGutters[8] = {0};
-	char mDataFileCompareOriginalTrailingGutters[8] = {0};
-	char mDataFileCompareCompareLeadingGutters[8] = {0};
-	char mDataFileCompareCompareTrailingGutters[8] = {0};
 };
 
 } // namespace

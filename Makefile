@@ -238,6 +238,7 @@ CXX_SOURCES = \
 	ui/widgets/MRScopedHistoryUI.cpp \
 	ui/MRWindowLayout.cpp \
 	ui/widgets/MRNumericSlider.cpp \
+	ui/widgets/MRSpinner.cpp \
 	ui/MRPalette.cpp \
 	ui/MRWindowSupport.cpp \
 	ui/MRSyntax.cpp \
@@ -507,6 +508,7 @@ ui/MRFileEditor/MRTextFormatting.o: ui/MRFileEditor/MRTextFormatting.cpp ui/MRFi
 ui/MRFileEditor/MRTextViewport.o: ui/MRFileEditor/MRTextViewport.cpp ui/MRFileEditor/MRTextViewport.hpp config/settings/MRSettingsRuntime.hpp
 ui/widgets/MRScopedHistoryUI.o: ui/widgets/MRScopedHistoryUI.cpp ui/widgets/MRScopedHistoryUI.hpp dialogs/MRAcquireDialog.hpp config/settings/MRSettingsRuntime.hpp ui/MRFrame.hpp ui/widgets/MRDropList.hpp
 ui/widgets/MRNumericSlider.o: ui/widgets/MRNumericSlider.cpp ui/widgets/MRNumericSlider.hpp config/settings/MRSettingsRuntime.hpp
+ui/widgets/MRSpinner.o: ui/widgets/MRSpinner.cpp ui/widgets/MRSpinner.hpp config/settings/MRSettingsRuntime.hpp
 mrmac/MRMacroModelessUi.o: mrmac/MRMacroModelessUi.cpp mrmac/MRMacroModelessUi.hpp mrmac/MRVM.hpp
 mrmac/MRMacroExecutionSession.o: mrmac/MRMacroExecutionSession.cpp mrmac/MRMacroExecutionSession.hpp ui/MRWindowSupport.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/MRMacroExecutionSession.hpp mrmac/mrmac.h mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
