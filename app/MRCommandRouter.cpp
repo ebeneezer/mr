@@ -24,6 +24,7 @@
 #include "MRCommandRouter.hpp"
 #include "router/MRCommandRouterSearch.hpp"
 #include "router/MRCommandRouterSearchMultiFile.hpp"
+#include "router/MRCommandRouterText.hpp"
 #include "export/MRPdfTextExporter.hpp"
 
 #include <algorithm>
@@ -480,6 +481,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_TEXT_TOGGLE_DOUBLE_LINES", KeymapDispatchKind::AppCommand, cmMrTextToggleDoubleLines, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
+    KeymapActionDispatchEntry{"PRETTIFY_BLOCK_OR_FILE", KeymapDispatchKind::EditorCommand, cmMrTextPrettifyBlockOrFile, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TOGGLE_FORMAT_RULER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleFormatRuler},
     KeymapActionDispatchEntry{"MR_TOGGLE_WORD_WRAP", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleWordWrap},
     KeymapActionDispatchEntry{"MR_SET_LEFT_MARGIN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetLeftMargin},
@@ -552,7 +554,7 @@ bool dispatchEditorCommandEvent(MREditWindow *targetWindow, ushort command) {
 	TEvent event;
 
 	if (editor == nullptr) return false;
-	const bool trackFileCompareMutation = command == cmUndo || command == cmMrEditUndo || command == cmMrEditRedo;
+	const bool trackFileCompareMutation = command == cmUndo || command == cmMrEditUndo || command == cmMrEditRedo || command == cmMrTextPrettifyBlockOrFile;
 	const std::size_t versionBefore = trackFileCompareMutation ? editor->documentVersion() : 0;
 	std::memset(&event, 0, sizeof(event));
 	event.what = evCommand;
@@ -619,82 +621,6 @@ bool dispatchKeymapWindowMethod(MREditWindow *targetWindow, KeymapWindowMethod m
 }
 
 bool handleExportToPdf();
-
-class NumericInputDialog final : public MRDialogFoundation {
-  public:
-	struct Layout {
-		short width = 52;
-		short height = 10;
-		short inputLeft = 18;
-		short inputRight = 48;
-		short buttonY = 6;
-		short buttonLeft = 8;
-		short buttonGap = 2;
-		bool showHelp = true;
-	};
-
-	NumericInputDialog(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, const Layout &layout) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height), title, layout.width, layout.height, initMrDialogFrame), mHelpText(helpText != nullptr ? helpText : ""), mMinValue(minValue), mMaxValue(maxValue) {
-		char buffer[32] = {0};
-
-		std::snprintf(buffer, sizeof(buffer), "%d", initialValue);
-		mInputField = new TInputLine(TRect(layout.inputLeft, 2, layout.inputRight, 3), layout.inputRight - layout.inputLeft);
-		if (label != nullptr && label[0] != '\0') insert(new TLabel(TRect(2, 2, layout.inputLeft, 3), label, mInputField));
-		insert(mInputField);
-		if (layout.showHelp) {
-			const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
-			mr::dialogs::insertUniformButtonRow(*this, layout.buttonLeft, layout.buttonY, layout.buttonGap, buttons);
-		} else {
-			const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
-			mr::dialogs::insertUniformButtonRow(*this, layout.buttonLeft, layout.buttonY, layout.buttonGap, buttons);
-		}
-		mInputField->setData(buffer);
-		setDialogValidationHook([this]() {
-			MRScrollableDialog::DialogValidationResult result;
-			int ignored = 0;
-
-			result.valid = tryReadValue(ignored);
-			if (!result.valid) result.warningText = "Please enter an integer in range.";
-			return result;
-		});
-		finalizeLayout();
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evCommand && event.message.command == cmHelp) {
-			messageBox(mfInformation | mfOKButton, "%s", mHelpText.c_str());
-			clearEvent(event);
-			return;
-		}
-		MRDialogFoundation::handleEvent(event);
-	}
-
-	[[nodiscard]] bool tryReadValue(int &outValue) const {
-		char buffer[32] = {0};
-		char *endPtr = nullptr;
-		long parsed = 0;
-
-		if (mInputField == nullptr) return false;
-		const_cast<TInputLine *>(mInputField)->getData(buffer);
-		parsed = std::strtol(buffer, &endPtr, 10);
-		if (endPtr == buffer || !trimAscii(endPtr != nullptr ? endPtr : "").empty()) return false;
-		if (parsed < mMinValue || parsed > mMaxValue) return false;
-		outValue = static_cast<int>(parsed);
-		return true;
-	}
-
-  private:
-	std::string mHelpText;
-	TInputLine *mInputField = nullptr;
-	int mMinValue = 0;
-	int mMaxValue = 0;
-};
-
-NumericInputDialog::Layout defaultNumericInputDialogLayout() {
-	return NumericInputDialog::Layout{};
-}
-
-bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue);
-bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue, const NumericInputDialog::Layout &layout);
 
 constexpr const char *kWindowReadOnlyMessage = "Window is read-only.";
 constexpr const char *kNoExternalProgramTaskMessage = "No external program task is running in this window.";
@@ -1772,7 +1698,7 @@ bool handleExportToPdf() {
 }
 
 bool promptGotoLineNumber(long &lineNumber) {
-	NumericInputDialog::Layout layout;
+	MRRouterIntegerInputLayout layout;
 	const int kMinLineNumber = 1;
 	const int kMaxLineNumber = 999999999;
 	int value = 0;
@@ -1785,30 +1711,9 @@ bool promptGotoLineNumber(long &lineNumber) {
 	layout.buttonLeft = 4;
 	layout.buttonGap = 2;
 	layout.showHelp = false;
-	if (!promptIntegerValue("GOTO LINE NUMBER", "", "Enter the target line number.", static_cast<int>(std::max<long>(kMinLineNumber, std::min<long>(lineNumber > 0 ? lineNumber : 1, kMaxLineNumber))), kMinLineNumber, kMaxLineNumber, value, layout)) return false;
+	if (!promptRouterIntegerValue("GOTO LINE NUMBER", "", "Enter the target line number.", static_cast<int>(std::max<long>(kMinLineNumber, std::min<long>(lineNumber > 0 ? lineNumber : 1, kMaxLineNumber))), kMinLineNumber, kMaxLineNumber, value, layout)) return false;
 	lineNumber = value;
 	return true;
-}
-
-bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue) {
-	return promptIntegerValue(title, label, helpText, initialValue, minValue, maxValue, outValue, defaultNumericInputDialogLayout());
-}
-
-bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue, const NumericInputDialog::Layout &layout) {
-	NumericInputDialog *dialog = new NumericInputDialog(title, label, helpText, initialValue, minValue, maxValue, layout);
-	bool accepted = false;
-	ushort result = cmCancel;
-
-	if (dialog == nullptr) return false;
-	if (TProgram::deskTop == nullptr) {
-		TObject::destroy(dialog);
-		return false;
-	}
-	dialog->finalizeLayout();
-	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel) accepted = dialog->tryReadValue(outValue);
-	TObject::destroy(dialog);
-	return accepted;
 }
 
 bool handleSearchGotoLineNumber() {
@@ -2300,7 +2205,7 @@ bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
 		postDialogWarning(kWindowReadOnlyMessage);
 		return true;
 	}
-	const bool trackFileCompareMutation = editorCommand == cmUndo || editorCommand == cmMrEditUndo || editorCommand == cmMrEditRedo;
+	const bool trackFileCompareMutation = editorCommand == cmUndo || editorCommand == cmMrEditUndo || editorCommand == cmMrEditRedo || editorCommand == cmMrTextPrettifyBlockOrFile;
 	const std::size_t versionBefore = trackFileCompareMutation ? editor->documentVersion() : 0;
 	message(editor, evCommand, editorCommand, nullptr);
 	if (trackFileCompareMutation && editor->documentVersion() != versionBefore) {
@@ -2516,116 +2421,6 @@ bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 		default:
 			return dispatchApplicationCommandEvent(command);
 	}
-}
-
-bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix);
-
-bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix) {
-	MRSettingsWriteReport writeReport;
-	std::string errorText;
-
-	if (!setConfiguredEditSetupSettings(settings, &errorText)) {
-		postDialogError(errorPrefix + errorText);
-		return false;
-	}
-	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport)) {
-		postDialogError("Settings save failed: " + errorText);
-		return false;
-	}
-	mrLogSettingsWriteReport("visible edit setup update", writeReport);
-	for (MREditWindow *window : allEditWindowsInZOrder())
-		if (window != nullptr && window->getEditor() != nullptr) window->getEditor()->refreshConfiguredVisualSettings();
-	mrRefreshEditorApplicationUiSettingsSnapshot();
-	return true;
-}
-
-bool handleSetRightMargin() {
-	MREditSetupSettings settings = configuredEditSetupSettings();
-	NumericInputDialog::Layout layout = defaultNumericInputDialogLayout();
-	int minimumMargin = std::min(999, std::max(1, settings.leftMargin + 1));
-	int margin = settings.rightMargin > 0 ? settings.rightMargin : 78;
-
-	layout.width = 30;
-	layout.height = 8;
-	layout.inputLeft = 4;
-	layout.inputRight = 26;
-	layout.buttonY = 4;
-	layout.buttonLeft = 4;
-	layout.buttonGap = 2;
-	layout.showHelp = false;
-	if (margin < minimumMargin) margin = minimumMargin;
-	if (!promptIntegerValue("SET RIGHT MARGIN", "", "Set the global RIGHT_MARGIN used for editor formatting.", margin, minimumMargin, 999, margin, layout)) return true;
-	settings.rightMargin = margin;
-	settings.formatLine = synchronizeEditFormatLineMargins(settings.formatLine, settings.leftMargin, settings.rightMargin, settings.tabSize);
-	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Right margin update failed: ")) return true;
-	mrLogMessage(("Right margin set to " + std::to_string(margin) + ".").c_str());
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Right margin updated.", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
-	return true;
-}
-
-bool handleSetLeftMargin(MREditWindow *window) {
-	MREditSetupSettings settings = configuredEditSetupSettings();
-	int maximumMargin = std::max(1, settings.rightMargin - 1);
-	int margin = settings.leftMargin > 0 ? settings.leftMargin : 1;
-
-	static_cast<void>(window);
-	if (!promptIntegerValue("SET LEFT MARGIN", "~M~argin:", "Set the global LEFT_MARGIN used for editor formatting.", margin, 1, maximumMargin, margin)) return true;
-	settings.leftMargin = margin;
-	settings.formatLine = synchronizeEditFormatLineMargins(settings.formatLine, settings.leftMargin, settings.rightMargin, settings.tabSize);
-	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Left margin update failed: ")) return true;
-	mrLogMessage(("Left margin set to " + std::to_string(margin) + ".").c_str());
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Left margin updated.", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
-	return true;
-}
-
-bool handleToggleWordWrap() {
-	MREditSetupSettings settings = configuredEditSetupSettings();
-
-	settings.wordWrap = !settings.wordWrap;
-	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Word wrap update failed: ")) return true;
-	return true;
-}
-
-bool handleToggleFormatRuler() {
-	MREditSetupSettings settings = configuredEditSetupSettings();
-
-	settings.formatRuler = !settings.formatRuler;
-	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Format ruler update failed: ")) return true;
-	mrLogMessage(settings.formatRuler ? "Format ruler enabled." : "Format ruler disabled.");
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, settings.formatRuler ? "Format ruler: ON" : "Format ruler: OFF", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
-	return true;
-}
-
-bool handleReformatParagraph(MREditWindow *window) {
-	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-	const MREditSetupSettings settings = configuredEditSetupSettings();
-
-	if (editor == nullptr || window == nullptr || window->isReadOnly()) return false;
-	return editor->formatParagraph(settings.leftMargin, settings.rightMargin);
-}
-
-bool handleReformatDocument(MREditWindow *window) {
-	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-	const MREditSetupSettings settings = configuredEditSetupSettings();
-
-	if (editor == nullptr || window == nullptr || window->isReadOnly()) return false;
-	return editor->formatDocument(settings.leftMargin, settings.rightMargin);
-}
-
-bool handleJustifyParagraph(MREditWindow *window) {
-	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-	const MREditSetupSettings settings = configuredEditSetupSettings();
-
-	if (editor == nullptr || window == nullptr || window->isReadOnly()) return false;
-	return editor->justifyParagraph(settings.leftMargin, settings.rightMargin);
-}
-
-bool handleCenterLine(MREditWindow *window) {
-	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-	const MREditSetupSettings settings = configuredEditSetupSettings();
-
-	if (editor == nullptr || window == nullptr || window->isReadOnly()) return false;
-	return editor->centerCurrentLine(settings.leftMargin, settings.rightMargin);
 }
 
 bool handleForceSave(MREditWindow *window) {
@@ -3234,6 +3029,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrTextReformatParagraph:
 			return dispatchEditorCommand(cmMrTextReformatParagraph, true);
+
+		case cmMrTextPrettifyBlockOrFile:
+			return dispatchEditorCommand(cmMrTextPrettifyBlockOrFile, true);
 
 		case cmMrTextFileCompare:
 			return handleTextFileCompare();

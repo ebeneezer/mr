@@ -435,6 +435,8 @@ class MRFileEditor : public TScroller {
 
 		bool justifyParagraph(int leftMargin, int rightMargin);
 
+		bool prettifyBlockOrFile();
+
 		bool deleteCharsAtCursor(int count);
 
 		bool deleteCurrentLineText();
@@ -453,11 +455,21 @@ class MRFileEditor : public TScroller {
 
 		std::string automaticIndentFillForCursor() const;
 
+		int smartIndentTargetColumnForContext(std::size_t lineStart, std::size_t cursorInLine) const;
+		int smartIndentTargetColumnForContext(std::size_t lineStart, std::size_t cursorInLine, int baseColumn) const;
+		int smartIndentTargetColumnForContext(std::size_t lineStart, std::size_t cursorInLine, int baseColumn, MRSyntaxLanguage language) const;
+		int smartIndentTargetColumnForContext(std::size_t lineStart, std::size_t cursorInLine, int baseColumn, MRSyntaxLanguage language, bool useEditorIndentGuards) const;
+
 		std::string smartIndentFillForCursor();
 
 		bool applyCurrentLineLeadingIndent(int targetColumn);
 
 		std::string activeLatexRawTextEnvironmentBeforeLine(std::size_t lineStart) const;
+
+		int smartDedentTargetColumnForLine(std::size_t lineStart, int baseColumn) const;
+		int smartDedentTargetColumnForLine(std::size_t lineStart, int baseColumn, MRSyntaxLanguage language) const;
+		int smartDedentTargetColumnForLine(std::size_t lineStart, int baseColumn, MRSyntaxLanguage language, bool useEditorIndentGuards) const;
+		int smartDedentTargetColumnForLine(std::size_t lineStart, int baseColumn, MRSyntaxLanguage language, bool useEditorIndentGuards, const std::vector<std::size_t> &formattedLineStarts, const std::vector<int> &formattedColumns) const;
 
 		void applyLiveSmartDedentAfterTextInput(const std::string &insertedText);
 

@@ -1,5 +1,24 @@
 #include "MRFileEditor.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
+#include "../MREditWindow.hpp"
+
+#include <algorithm>
+#include <string_view>
+
+namespace {
+std::size_t leadingWhitespaceBytes(std::string_view text) noexcept {
+	std::size_t bytes = 0;
+
+	while (bytes < text.size() && (text[bytes] == ' ' || text[bytes] == '\t')) ++bytes;
+	return bytes;
+}
+
+bool containsNonWhitespace(std::string_view text) noexcept {
+	for (char ch : text)
+		if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') return true;
+	return false;
+}
+} // namespace
 
 bool MRFileEditor::formatParagraph(int rightMargin) {
 	return formatParagraph(effectiveEditSetupSettings().leftMargin, rightMargin);
@@ -98,6 +117,104 @@ bool MRFileEditor::justifyParagraph(int leftMargin, int rightMargin) {
 	std::string justifiedText = MRTextFormatting::justifyParagraphText(paragraphText, leftMargin, rightMargin);
 	if (justifiedText.empty()) return true;
 	return replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), justifiedText.data(), static_cast<uint>(justifiedText.size()));
+}
+
+bool MRFileEditor::prettifyBlockOrFile() {
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
+	const std::string indentStyle = upperAscii(settings.indentStyle);
+	const std::size_t length = mBufferModel.length();
+	MRSyntaxLanguage operationLanguage = mBufferModel.language();
+	std::string operationIndentStyle = indentStyle;
+	std::size_t rangeStart = 0;
+	std::size_t rangeEnd = length;
+
+	if (mReadOnly) return false;
+	if (operationLanguage != MRSyntaxLanguage::PlainText && operationIndentStyle != "SMART") operationIndentStyle = "SMART";
+	if (operationIndentStyle != "AUTOMATIC" && operationIndentStyle != "SMART") return true;
+	if (hasTextSelection()) {
+		rangeStart = selectionStartOffset();
+		rangeEnd = selectionEndOffset();
+	} else {
+		MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
+		if (window != nullptr && window->getEditor() == this && window->hasBlock()) {
+			const int firstBlockLine = window->blockLine1();
+			const int lastBlockLine = window->blockLine2();
+			const std::size_t lineCount = mBufferModel.lineCount();
+			if (firstBlockLine > 0 && lastBlockLine >= firstBlockLine && lineCount > 0) {
+				const std::size_t firstLineIndex = std::min<std::size_t>(static_cast<std::size_t>(firstBlockLine - 1), lineCount - 1);
+				const std::size_t lastLineIndex = std::min<std::size_t>(static_cast<std::size_t>(lastBlockLine - 1), lineCount - 1);
+				rangeStart = mBufferModel.lineStartByIndex(firstLineIndex);
+				rangeEnd = nextLineOffset(mBufferModel.lineStartByIndex(lastLineIndex));
+			}
+		}
+	}
+	if (length == 0) return true;
+
+	rangeStart = std::min(rangeStart, length);
+	rangeEnd = std::min(std::max(rangeEnd, rangeStart), length);
+	const std::size_t firstLineStart = lineStartOffset(rangeStart);
+	std::size_t lastProbe = rangeEnd;
+	if (lastProbe > firstLineStart && lastProbe > 0) --lastProbe;
+	else
+		lastProbe = firstLineStart;
+	const std::size_t lastLineStart = lineStartOffset(std::min(lastProbe, length));
+	std::size_t editEnd = nextLineOffset(lastLineStart);
+	if (editEnd <= firstLineStart) editEnd = length;
+
+	const bool wholeFile = firstLineStart == 0 && editEnd >= length;
+	bool haveNextSmartColumn = false;
+	bool firstNonBlankLine = true;
+	int nextSmartColumn = 1;
+	std::vector<std::size_t> formattedLineStarts;
+	std::vector<int> formattedColumns;
+	std::string originalText;
+	std::string formattedText;
+
+	originalText.reserve(editEnd - firstLineStart);
+	formattedText.reserve(editEnd - firstLineStart);
+	for (std::size_t pos = firstLineStart; pos < editEnd; ++pos)
+		originalText.push_back(charAtOffset(pos));
+
+	for (std::size_t lineStart = firstLineStart; lineStart < editEnd;) {
+		const std::size_t nextLineStart = nextLineOffset(lineStart);
+		const std::string lineText = mBufferModel.lineText(lineStart);
+		const bool hasContent = containsNonWhitespace(lineText);
+		const std::size_t leadingBytes = leadingWhitespaceBytes(lineText);
+		const std::size_t lineBodyEnd = std::min(lineStart + lineText.size(), nextLineStart);
+		std::string replacement;
+		std::string formattedLine;
+
+		if (hasContent) {
+			int targetColumn = leadingIndentColumnForLine(lineStart);
+			if (operationIndentStyle == "SMART") {
+				if (haveNextSmartColumn)
+					targetColumn = nextSmartColumn;
+				else if (firstNonBlankLine && wholeFile)
+					targetColumn = 1;
+				const int dedentColumn = smartDedentTargetColumnForLine(lineStart, targetColumn, operationLanguage, false, formattedLineStarts, formattedColumns);
+				if (dedentColumn > 0) targetColumn = dedentColumn;
+			}
+			replacement = buildEditIndentFill(settings, 1, std::max(1, targetColumn), settings.tabExpand);
+			formattedLineStarts.push_back(lineStart);
+			formattedColumns.push_back(std::max(1, targetColumn));
+			if (operationIndentStyle == "SMART") {
+				nextSmartColumn = smartIndentTargetColumnForContext(lineStart, lineText.size(), targetColumn, operationLanguage);
+				haveNextSmartColumn = true;
+				firstNonBlankLine = false;
+			}
+		}
+
+		formattedLine = replacement;
+		formattedLine.append(lineText.data() + leadingBytes, lineText.size() - leadingBytes);
+		formattedText += formattedLine;
+		for (std::size_t pos = lineBodyEnd; pos < nextLineStart && pos < editEnd; ++pos)
+			formattedText.push_back(charAtOffset(pos));
+		lineStart = nextLineStart;
+	}
+	if (formattedText == originalText) return true;
+	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "prettify-block-or-file");
+	transaction.replace(MRTextBufferModel::Range(firstLineStart, editEnd), formattedText);
+	return applyStagedTransaction(transaction, cursorOffset(), selectionStartOffset(), selectionEndOffset(), true).applied();
 }
 
 void MRFileEditor::effectiveFormatMargins(const MREditSetupSettings &settings, int &leftMargin, int &rightMargin) const noexcept {

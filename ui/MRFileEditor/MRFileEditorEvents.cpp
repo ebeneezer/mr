@@ -497,6 +497,9 @@ void MRFileEditor::handleCommand(TEvent &event) {
 				formatParagraph(settings.leftMargin, settings.rightMargin > 0 ? settings.rightMargin : 78);
 			}
 			break;
+		case cmMrTextPrettifyBlockOrFile:
+			if (!mReadOnly) prettifyBlockOrFile();
+			break;
 		case cmClear:
 			if (!mReadOnly) replaceSelectionText(std::string());
 			break;

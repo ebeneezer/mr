@@ -93,6 +93,7 @@ constexpr std::array catalogDefinitions{
     mr("MR_TEXT_CENTER_LINE", "Center current line"),
     mr("MR_TEXT_REFORMAT_PARAGRAPH", "Reformat paragraph"),
     mr("MR_TEXT_REFORMAT_DOCUMENT", "Reformat document"),
+    mr("PRETTIFY_BLOCK_OR_FILE", "Re-format code"),
     mr("MR_TEXT_FILE_COMPARE", "File compare"),
     mr("MR_TOGGLE_FORMAT_RULER", "Toggle format ruler"),
     mr("MR_TOGGLE_WORD_WRAP", "Toggle word wrap"),

@@ -3,6 +3,7 @@
 #include "../../app/MREditorApp.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <future>
@@ -22,6 +23,14 @@ static constexpr auto kSlowNavigationTraceThreshold = std::chrono::microseconds(
 
 bool isIndentWhitespace(char ch) noexcept {
 	return ch == ' ' || ch == '\t';
+}
+
+int formattedIndentColumnForLine(std::size_t lineStart, const std::vector<std::size_t> &formattedLineStarts, const std::vector<int> &formattedColumns, int fallbackColumn) noexcept {
+	const std::vector<std::size_t>::const_iterator it = std::lower_bound(formattedLineStarts.begin(), formattedLineStarts.end(), lineStart);
+	if (it == formattedLineStarts.end() || *it != lineStart) return fallbackColumn;
+	const std::size_t index = static_cast<std::size_t>(it - formattedLineStarts.begin());
+	if (index >= formattedColumns.size()) return fallbackColumn;
+	return formattedColumns[index];
 }
 
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
@@ -1687,15 +1696,24 @@ std::string MRFileEditor::automaticIndentFillForCursor() const {
 	return buildEditIndentFill(settings, 1, targetColumn, settings.tabExpand);
 }
 
-std::string MRFileEditor::smartIndentFillForCursor() {
+int MRFileEditor::smartIndentTargetColumnForContext(std::size_t lineStart, std::size_t cursorInLine) const {
+	return smartIndentTargetColumnForContext(lineStart, cursorInLine, leadingIndentColumnForLine(lineStart));
+}
+
+int MRFileEditor::smartIndentTargetColumnForContext(std::size_t lineStart, std::size_t cursorInLine, int baseColumn) const {
+	return smartIndentTargetColumnForContext(lineStart, cursorInLine, baseColumn, mBufferModel.language(), true);
+}
+
+int MRFileEditor::smartIndentTargetColumnForContext(std::size_t lineStart, std::size_t cursorInLine, int baseColumn, MRSyntaxLanguage language) const {
+	return smartIndentTargetColumnForContext(lineStart, cursorInLine, baseColumn, language, false);
+}
+
+int MRFileEditor::smartIndentTargetColumnForContext(std::size_t lineStart, std::size_t cursorInLine, int baseColumn, MRSyntaxLanguage language, bool useEditorIndentGuards) const {
 	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const MRUiIndentStyle uiIndentStyle = configuredUiIndentStyle();
-	const std::size_t cursor = cursorOffset();
-	const std::size_t lineStart = lineStartOffset(cursor);
-	const int baseColumn = leadingIndentColumnForLine(lineStart);
 	int targetColumn = baseColumn;
 	std::string lineText = mBufferModel.lineText(lineStart);
-	std::size_t cursorInLine = cursor > lineStart ? std::min(cursor - lineStart, lineText.size()) : 0;
+	cursorInLine = std::min(cursorInLine, lineText.size());
 	std::string_view beforeCursor(lineText.data(), cursorInLine);
 	std::string_view trimmedBeforeCursor = trimView(beforeCursor);
 	std::string previousLineText;
@@ -1703,8 +1721,7 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 	std::string_view previousTrimmed;
 	std::string previousUpperLine;
 	std::string previousPreviousUpperLine;
-	const MRSyntaxLanguage language = mBufferModel.language();
-	const bool smartEnabled = upperAscii(settings.indentStyle) == "SMART";
+	const bool smartEnabled = !useEditorIndentGuards || upperAscii(settings.indentStyle) == "SMART";
 	const bool neutralAutoScratchIndent = mBufferModel.languageAutomatic() && !hasPersistentFileName();
 	const auto braceIndentStepColumns = [&]() noexcept {
 		switch (uiIndentStyle) {
@@ -1741,8 +1758,8 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 		}
 	}
 
-	if (!smartEnabled) return buildEditIndentFill(settings, 1, targetColumn, settings.tabExpand);
-	if (neutralAutoScratchIndent) return automaticIndentFillForCursor();
+	if (!smartEnabled) return targetColumn;
+	if (useEditorIndentGuards && neutralAutoScratchIndent) return targetColumn;
 	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) {
 		const std::size_t last = lastSignificantByte(beforeCursor);
 		if (trimmedBeforeCursor == "{")
@@ -1950,45 +1967,63 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 		int markdownColumn = 0;
 		if (markdownContinuationColumn(beforeCursor, markdownColumn)) targetColumn = std::max(targetColumn, markdownColumn);
 	}
-	return buildEditIndentFill(settings, 1, targetColumn, settings.tabExpand);
+	return targetColumn;
 }
 
-void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &insertedText) {
+std::string MRFileEditor::smartIndentFillForCursor() {
 	const MREditSetupSettings settings = effectiveEditSetupSettings();
-	const MRSyntaxLanguage language = mBufferModel.language();
-	const bool smartEnabled = upperAscii(settings.indentStyle) == "SMART";
+	const std::size_t cursor = cursorOffset();
+	const std::size_t lineStart = lineStartOffset(cursor);
+	const std::string lineText = mBufferModel.lineText(lineStart);
+	const std::size_t cursorInLine = cursor > lineStart ? std::min(cursor - lineStart, lineText.size()) : 0;
 	const bool neutralAutoScratchIndent = mBufferModel.languageAutomatic() && !hasPersistentFileName();
 
-	if (!smartEnabled) return;
-	if (neutralAutoScratchIndent) return;
-	if (insertedText.find('\n') != std::string::npos || insertedText.find('\r') != std::string::npos) return;
-	if (language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp && language != MRSyntaxLanguage::JavaScript && language != MRSyntaxLanguage::Json && language != MRSyntaxLanguage::Python &&
-		    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Fish && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
-		    language != MRSyntaxLanguage::Rust && language != MRSyntaxLanguage::Go && language != MRSyntaxLanguage::Kotlin && language != MRSyntaxLanguage::CSharp &&
-		    language != MRSyntaxLanguage::Pascal && language != MRSyntaxLanguage::Systemd &&
-		    language != MRSyntaxLanguage::Xml && language != MRSyntaxLanguage::Latex)
-		return;
+	if (neutralAutoScratchIndent) return automaticIndentFillForCursor();
+	return buildEditIndentFill(settings, 1, smartIndentTargetColumnForContext(lineStart, cursorInLine), settings.tabExpand);
+}
 
-	const std::size_t lineStart = lineStartOffset(cursorOffset());
-	const int baseColumn = leadingIndentColumnForLine(lineStart);
-	if (baseColumn <= 1) return;
+int MRFileEditor::smartDedentTargetColumnForLine(std::size_t lineStart, int baseColumn) const {
+	return smartDedentTargetColumnForLine(lineStart, baseColumn, mBufferModel.language(), true);
+}
+
+int MRFileEditor::smartDedentTargetColumnForLine(std::size_t lineStart, int baseColumn, MRSyntaxLanguage language) const {
+	return smartDedentTargetColumnForLine(lineStart, baseColumn, language, false);
+}
+
+int MRFileEditor::smartDedentTargetColumnForLine(std::size_t lineStart, int baseColumn, MRSyntaxLanguage language, bool useEditorIndentGuards) const {
+	static const std::vector<std::size_t> kNoFormattedLineStarts;
+	static const std::vector<int> kNoFormattedColumns;
+	return smartDedentTargetColumnForLine(lineStart, baseColumn, language, useEditorIndentGuards, kNoFormattedLineStarts, kNoFormattedColumns);
+}
+
+int MRFileEditor::smartDedentTargetColumnForLine(std::size_t lineStart, int baseColumn, MRSyntaxLanguage language, bool useEditorIndentGuards, const std::vector<std::size_t> &formattedLineStarts, const std::vector<int> &formattedColumns) const {
+	const MREditSetupSettings settings = effectiveEditSetupSettings();
+	const bool smartEnabled = !useEditorIndentGuards || upperAscii(settings.indentStyle) == "SMART";
+	const bool neutralAutoScratchIndent = mBufferModel.languageAutomatic() && !hasPersistentFileName();
+
+	if (!smartEnabled) return 0;
+	if (useEditorIndentGuards && neutralAutoScratchIndent) return 0;
+	if (language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp && language != MRSyntaxLanguage::JavaScript && language != MRSyntaxLanguage::Json && language != MRSyntaxLanguage::Python &&
+	    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Fish && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
+	    language != MRSyntaxLanguage::Rust && language != MRSyntaxLanguage::Go && language != MRSyntaxLanguage::Kotlin && language != MRSyntaxLanguage::CSharp &&
+	    language != MRSyntaxLanguage::Pascal && language != MRSyntaxLanguage::Systemd &&
+	    language != MRSyntaxLanguage::Xml && language != MRSyntaxLanguage::Latex)
+		return 0;
+	if (baseColumn <= 1) return 0;
 
 	const std::string lineText = mBufferModel.lineText(lineStart);
 	const std::string_view trimmedLine = trimView(lineText);
-	if (language == MRSyntaxLanguage::Systemd && isSystemdSectionHeader(trimmedLine)) {
-		applyCurrentLineLeadingIndent(1);
-		return;
-	}
+	if (language == MRSyntaxLanguage::Systemd && isSystemdSectionHeader(trimmedLine)) return 1;
 	if (language == MRSyntaxLanguage::Latex) {
 		const std::string activeRawEnvironment = activeLatexRawTextEnvironmentBeforeLine(lineStart);
 		if (!activeRawEnvironment.empty()) {
 			std::string_view environmentName;
-			if (!parseLatexLeadingEndEnvironment(trimmedLine, environmentName) || environmentName != activeRawEnvironment) return;
+			if (!parseLatexLeadingEndEnvironment(trimmedLine, environmentName) || environmentName != activeRawEnvironment) return 0;
 		}
 	}
 	const SmartDedentRequest request = classifySmartDedentRequest(trimmedLine, language);
 
-	if (request.kind == SmartDedentKind::None) return;
+	if (request.kind == SmartDedentKind::None) return 0;
 
 	int targetColumn = 0;
 	std::size_t previousLineStart = lineStart;
@@ -2001,7 +2036,8 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 		const std::string_view candidateTrimmed = trimView(candidateLineText);
 		if (isDedentSearchSkippableLine(candidateTrimmed, language)) continue;
 
-		const int candidateColumn = leadingIndentColumnForLine(candidateLineStart);
+		const int originalCandidateColumn = leadingIndentColumnForLine(candidateLineStart);
+		const int candidateColumn = formattedIndentColumnForLine(candidateLineStart, formattedLineStarts, formattedColumns, originalCandidateColumn);
 		if (candidateColumn >= baseColumn) continue;
 
 		const std::string candidateUpperLine = upperAscii(std::string(candidateTrimmed));
@@ -2020,7 +2056,17 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 			targetColumn = prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	}
 
-	applyCurrentLineLeadingIndent(targetColumn);
+	return targetColumn;
+}
+
+void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &insertedText) {
+	if (insertedText.find('\n') != std::string::npos || insertedText.find('\r') != std::string::npos) return;
+
+	const std::size_t lineStart = lineStartOffset(cursorOffset());
+	const int baseColumn = leadingIndentColumnForLine(lineStart);
+	const int targetColumn = smartDedentTargetColumnForLine(lineStart, baseColumn);
+
+	if (targetColumn > 0) applyCurrentLineLeadingIndent(targetColumn);
 }
 
 bool MRFileEditor::newLineWithPreferredIndent() {

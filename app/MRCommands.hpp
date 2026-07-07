@@ -82,6 +82,7 @@ enum : ushort {
 	cmMrTextCenterLine,
 	cmMrTextTimeDateStamp,
 	cmMrTextReformatParagraph,
+	cmMrTextPrettifyBlockOrFile,
 	cmMrTextFileCompare,
 	cmMrTextUpperCasePlaceholder,
 	cmMrTextLowerCasePlaceholder,
