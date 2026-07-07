@@ -33,6 +33,8 @@ Before implementation, report:
 - new functions/types proposed,
 - abstractions deliberately avoided,
 - expected semantic impact,
+- expected churn quantity,
+- regression risk estimate,
 - build and regression plan.
 
 If protected architecture is touched incidentally, stop.
