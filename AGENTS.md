@@ -85,7 +85,7 @@ Before planning or implementing, report:
    - why touching them is necessary,
    - which architecture contract applies,
    - which invariants must remain intact,
-   - which regression checks and manual tests are required.
+   - which manual tests are required.
 
 If protected architecture is touched incidentally, stop and report. Do not implement.
 
@@ -104,7 +104,7 @@ The following areas are protected and must not be changed opportunistically:
 - TVision drawing/event mechanics,
 - keymap persistence and resolver semantics,
 - syntax analysis, Tree-sitter canonical parsing and derived syntax maps,
-- generated-file build model and regression checks.
+- generated-file build model.
 
 Workspace rule:
 
@@ -124,13 +124,15 @@ The plan must name:
 3. new functions/classes, if unavoidable,
 4. protected contracts touched,
 5. deliberately avoided abstractions,
-6. build and regression plan.
+6. build and manual test plan.
 
 ## Test policy
 
-- Existing required checks must be run when relevant to the touched area.
-- Protected architecture changes require a named check/regression plan before implementation.
-- Adding new regression checks, new structural checks or new test infrastructure requires explicit maintainer approval.
+- Existing required checks must be run only when relevant to the touched area and approved scope.
+- Protected architecture changes require a named manual test plan before implementation.
+- Regression checks are not protected architecture.
+- Regression checks are proposed only after implementation and sight review, not during preflight planning.
+- Adding, expanding or replacing regression checks, structural checks or test infrastructure requires explicit maintainer approval.
 - Do not treat “tests required” as permission to create new tests.
 
 ## Build rule

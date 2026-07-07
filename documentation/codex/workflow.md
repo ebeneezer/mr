@@ -35,7 +35,7 @@ Before implementation, report:
 - expected semantic impact,
 - expected churn quantity,
 - regression risk estimate,
-- build and regression plan.
+- build and manual test plan.
 
 If protected architecture is touched incidentally, stop.
 
@@ -62,15 +62,16 @@ After implementation:
 - summarize files changed,
 - explain why semantics did not change if the tranche is refactoring,
 - run `make clean all CXX=clang++`,
-- report warnings.
+- report warnings,
+- perform a sight review of the changed code,
+- propose regression checks only after that review, if they still look useful.
 
 A tranche is not complete until the build result is known.
 
 Bug fixes require a same-family impact audit before handoff.
 Treat a defect as evidence of a potentially affected class, not as an isolated symptom.
-Check the inverse path, sibling values or operations, alternate entry points, lifecycle transitions
-and existing regression coverage. The maintainer should not have to name the obvious adjacent
-checks one by one.
+Check the inverse path, sibling values or operations, alternate entry points and lifecycle transitions.
+Regression checks are not part of preflight planning. They may be proposed after the sight review and require explicit maintainer approval before implementation.
 
 ## Rejection formula
 

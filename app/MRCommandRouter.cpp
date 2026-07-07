@@ -2539,7 +2539,7 @@ bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &sett
 	return true;
 }
 
-bool handleWordstarSetRightMargin() {
+bool handleSetRightMargin() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	NumericInputDialog::Layout layout = defaultNumericInputDialogLayout();
 	int minimumMargin = std::min(999, std::max(1, settings.leftMargin + 1));
@@ -2563,7 +2563,7 @@ bool handleWordstarSetRightMargin() {
 	return true;
 }
 
-bool handleWordstarSetLeftMargin(MREditWindow *window) {
+bool handleSetLeftMargin(MREditWindow *window) {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	int maximumMargin = std::max(1, settings.rightMargin - 1);
 	int margin = settings.leftMargin > 0 ? settings.leftMargin : 1;
@@ -2578,7 +2578,7 @@ bool handleWordstarSetLeftMargin(MREditWindow *window) {
 	return true;
 }
 
-bool handleWordstarToggleWordWrap() {
+bool handleToggleWordWrap() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 
 	settings.wordWrap = !settings.wordWrap;
@@ -2596,7 +2596,7 @@ bool handleToggleFormatRuler() {
 	return true;
 }
 
-bool handleWordstarReformatParagraph(MREditWindow *window) {
+bool handleReformatParagraph(MREditWindow *window) {
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 
@@ -2612,7 +2612,7 @@ bool handleReformatDocument(MREditWindow *window) {
 	return editor->formatDocument(settings.leftMargin, settings.rightMargin);
 }
 
-bool handleWordstarJustifyParagraph(MREditWindow *window) {
+bool handleJustifyParagraph(MREditWindow *window) {
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 
@@ -2620,7 +2620,7 @@ bool handleWordstarJustifyParagraph(MREditWindow *window) {
 	return editor->justifyParagraph(settings.leftMargin, settings.rightMargin);
 }
 
-bool handleWordstarCenterLine(MREditWindow *window) {
+bool handleCenterLine(MREditWindow *window) {
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 
@@ -2628,7 +2628,7 @@ bool handleWordstarCenterLine(MREditWindow *window) {
 	return editor->centerCurrentLine(settings.leftMargin, settings.rightMargin);
 }
 
-bool handleWordstarForceSave(MREditWindow *window) {
+bool handleForceSave(MREditWindow *window) {
 	if (window == nullptr) return false;
 	if (window->isReadOnly()) {
 		postDialogWarning(kWindowReadOnlyMessage);
@@ -2643,7 +2643,7 @@ bool handleWordstarForceSave(MREditWindow *window) {
 	return true;
 }
 
-bool handleWordstarExitDirtySaveAll() {
+bool handleExitDirtySaveAll() {
 	std::vector<MREditWindow *> dirtyWindows;
 	std::vector<std::string> dirtyItems;
 
@@ -2831,27 +2831,27 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 				case KeymapCustomAction::GetRandomAccessMark:
 					return markIndex && mrvmUiGetRandomAccessMark(*markIndex);
 				case KeymapCustomAction::CenterLine:
-					return handleWordstarCenterLine(window);
+					return handleCenterLine(window);
 				case KeymapCustomAction::ReformatParagraph:
-					return handleWordstarReformatParagraph(window);
+					return handleReformatParagraph(window);
 				case KeymapCustomAction::ReformatDocument:
 					return handleReformatDocument(window);
 				case KeymapCustomAction::ToggleFormatRuler:
 					return handleToggleFormatRuler();
 				case KeymapCustomAction::ToggleWordWrap:
-					return handleWordstarToggleWordWrap();
+					return handleToggleWordWrap();
 				case KeymapCustomAction::SetLeftMargin:
-					return handleWordstarSetLeftMargin(window);
+					return handleSetLeftMargin(window);
 				case KeymapCustomAction::SetRightMargin:
-					return handleWordstarSetRightMargin();
+					return handleSetRightMargin();
 				case KeymapCustomAction::JustifyParagraph:
-					return handleWordstarJustifyParagraph(window);
+					return handleJustifyParagraph(window);
 				case KeymapCustomAction::SortColumnBlockToggle:
 					return runDisabledBlockAction();
 				case KeymapCustomAction::ForceSave:
-					return handleWordstarForceSave(window);
+					return handleForceSave(window);
 				case KeymapCustomAction::ExitDirtySaveAll:
-					return handleWordstarExitDirtySaveAll();
+					return handleExitDirtySaveAll();
 				case KeymapCustomAction::MoveCursorToNextPageBreak:
 					return handleBlockAction(mrvmUiMoveCursorToNextPageBreak(), "No next page break found.");
 				case KeymapCustomAction::MoveCursorToPrevPageBreak:

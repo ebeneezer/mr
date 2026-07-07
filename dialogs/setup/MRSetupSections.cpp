@@ -1703,7 +1703,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		                                   new TSItem("~W~indow Manager",
 		                                              new TSItem("~M~enuline messages",
 		                                                         new TSItem("~C~ycle virtual desktops",
-		                                                                    new TSItem("Track compiler ~w~arnings", new TSItem("Track compiler ~n~otes", new TSItem("File Compare panel R/~O~", nullptr)))))));
+		                                                                    new TSItem("Track compiler ~w~arnings", new TSItem("Track compiler ~n~otes", new TSItem("R/~O~ file comparing", nullptr)))))));
 
 		mOptionsField = cb;
 		addManaged(mOptionsField, mOptionsField->getBounds());

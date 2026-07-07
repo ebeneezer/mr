@@ -305,7 +305,10 @@ class MRBentoBox : public MREditWindow {
 	void refreshFileComparePanes();
 	void refreshFileComparePane(BentoLeaf &leaf);
 	void fileCompareEditableLineKindsForRole(MRBentoPaneRole role, std::vector<unsigned char> &lineKinds, std::vector<MRFileCompareMiniMapSlice> *miniMapSlices = nullptr) const;
-	void refreshFileCompareAfterSourceMutation();
+	void refreshFileCompareSourceSnapshot(MRBentoCompareSource &source, MREditWindow *window, std::vector<std::string> &lineCache, bool force);
+	void refreshFileCompareCachedSnapshots(MRBentoPaneRole changedRole, bool force);
+	void rebuildFileCompareProjectionCache();
+	void refreshFileCompareAfterSourceMutation(MRBentoPaneRole changedRole = bprSource);
 	void rebuildFileCompareChangeGroups();
 	[[nodiscard]] bool fileComparePanesEditable() const noexcept;
 	[[nodiscard]] std::size_t fileCompareGroupStartLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept;
@@ -418,6 +421,12 @@ class MRBentoBox : public MREditWindow {
 	MRBentoCompareSetup fileCompareSetup;
 	std::vector<mr::diff::MRDiffHunk> fileCompareHunks;
 	std::vector<FileCompareChangeGroup> fileCompareChangeGroups;
+	std::vector<std::string> fileCompareOriginalLines;
+	std::vector<std::string> fileCompareCompareLines;
+	std::vector<unsigned char> fileCompareOriginalLineKinds;
+	std::vector<unsigned char> fileCompareCompareLineKinds;
+	std::vector<MRFileCompareMiniMapSlice> fileCompareOriginalMiniMapSlices;
+	std::vector<MRFileCompareMiniMapSlice> fileCompareCompareMiniMapSlices;
 	std::uint64_t fileCompareTaskId;
 	bool fileCompareSourcesRestored;
 	bool fileCompareDiffReady;
