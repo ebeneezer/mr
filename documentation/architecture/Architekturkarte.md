@@ -77,7 +77,7 @@ Kritische Seiteneffekte: Hintergrund-Completion, staged UI commands, batching mi
 Schnittstellen: VM, UI, PieceTable/Editor, Message-Line.
 AGENTS-Grenzen: keine Änderung an Deferred-UI-Command-Fluss, Thread-Annahmen, Ownership/Lifetime, MacroCellGrid/MacroCellView.
 Nicht opportunistisch ändern: Gateway/View-Chain, Screen-Mutation-Epoch-Logik, batch boundaries.
-Bekannte technische Schulden: rein mechanische Routing-Typen existieren, sind aber durch Regression-Checks als Strukturvertrag fest verdrahtet.
+Bekannte technische Schulden: rein mechanische Routing-Typen existieren; ihre Schutzwuerdigkeit folgt aus dem Deferred-UI-Vertrag, nicht aus Regression-Checks.
 8. File-/Path-Utilities
 
 Zentrale Dateien: ￼app/utils/MRStringUtils.cpp, ￼app/utils/MRFileIOUtils.cpp, ￼config/MRDialogPaths.cpp, ￼ui/MRWindowSupport.cpp, ￼app/commands/MRExternalCommand.cpp.
@@ -92,13 +92,13 @@ Bekannte technische Schulden: es existieren weiterhin mehrere lokale Pfadhelfer 
 9. Build / Generated Files / Regression Checks
 
 Zentrale Dateien: ￼Makefile, ￼generate_help_markdown.sh, ￼generate_about_quotes.sh, ￼regression/mr-regression-checks.cpp
-Zentrale Klassen/Funktionen: Build-Regeln, generierte Header app/MRHelp.generated.hpp und app/MRAboutQuotes.generated.hpp, strukturelle Regression-Checks.
-Autoritativer Zustand: Makefile ist Build-Orchestrator; Regression-Checks kodieren zusätzliche Strukturverträge über bloßes Kompilieren hinaus.
-Wichtige Datenflüsse: Quellen/Skripte -> generierte Header -> Build; Quelltexte -> Regression-Checks -> Strukturfreigabe.
+Zentrale Klassen/Funktionen: Build-Regeln, generierte Header app/MRHelp.generated.hpp und app/MRAboutQuotes.generated.hpp, optionale Regression-Checks.
+Autoritativer Zustand: Makefile ist Build-Orchestrator; Regression-Checks sind optionale Verifikationswerkzeuge und keine protected Architektur.
+Wichtige Datenflüsse: Quellen/Skripte -> generierte Header -> Build; Quelltexte -> optionale Regression-Checks -> Bericht.
 Kritische Seiteneffekte: clean-Verhalten, generierte Dateien, textuelle Strukturprüfungen, Audio-Signale im Makefile.
 Schnittstellen: gesamtes Projekt.
 AGENTS-Grenzen: realer Clean-Build vor Handoff; paplay-Signale nicht brechen.
-Nicht opportunistisch ändern: generierte-Datei-Modell, Regression-Checks, TVision-Build-Pfad.
+Nicht opportunistisch ändern: generierte-Datei-Modell, TVision-Build-Pfad.
 Bekannte technische Schulden: versionierte generierte Header und Build-Generierung leben im Mischmodell; der Clean-Build-Fix musste dieses Modell ausdrücklich stabilisieren.
 A. High-Risk-Knoten
 

@@ -21,13 +21,13 @@ Deferred macro UI playback owns its local queue and screen-model transition stat
 - Do not change thread/UI-thread assumptions incidentally.
 - Do not change ownership/lifetime behavior incidentally.
 - Do not alter deferred UI command flow as cleanup.
-- Do not remove gateway/view chain elements if regression checks encode them as structure contract.
+- Do not remove gateway/view chain elements incidentally.
 - Do not change batch boundaries without a dedicated plan.
 
 ## Protected structure
 
-Some routing types may appear mechanical but are protected by regression checks.
-If a type is referenced by regression structure checks, removing it is not a local readability change.
+Some routing types may appear mechanical but are protected by this deferred-UI contract.
+Removing them is not a local readability change.
 
 ## Forbidden without explicit approval
 

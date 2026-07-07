@@ -301,6 +301,18 @@ void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lin
 }
 
 void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds, const std::vector<MRFileCompareMiniMapSlice> &miniMapSlices) {
+	if (mFileCompareLineKinds == lineKinds && mFileCompareMiniMapSlices.size() == miniMapSlices.size()) {
+		bool sameMiniMapSlices = true;
+		for (std::size_t i = 0; i < miniMapSlices.size(); ++i) {
+			const MRFileCompareMiniMapSlice &current = mFileCompareMiniMapSlices[i];
+			const MRFileCompareMiniMapSlice &next = miniMapSlices[i];
+			if (current.lineIndex != next.lineIndex || current.sliceStart != next.sliceStart || current.sliceEnd != next.sliceEnd || current.lineKind != next.lineKind || current.fullLine != next.fullLine) {
+				sameMiniMapSlices = false;
+				break;
+			}
+		}
+		if (sameMiniMapSlices) return;
+	}
 	mFileCompareLineKinds = lineKinds;
 	mFileCompareMiniMapSlices = miniMapSlices;
 	mMiniMapState.clearOverlayCache();

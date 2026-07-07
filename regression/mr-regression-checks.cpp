@@ -61,6 +61,12 @@
 #include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wunused-function"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
 class MRBentoBoxFileCompareRegressionHarness {
   public:
 	static bool seedDiffReadyState(MRBentoBox &bento, const std::vector<mr::diff::MRDiffHunk> &hunks) {
@@ -68,6 +74,7 @@ class MRBentoBoxFileCompareRegressionHarness {
 		bento.rebuildFileCompareChangeGroups();
 		bento.fileCompareDiffReady = true;
 		bento.fileCompareStale = false;
+		bento.rebuildFileCompareProjectionCache();
 		bento.refreshFileComparePanes();
 		return !bento.fileCompareChangeGroups.empty();
 	}
@@ -2738,7 +2745,7 @@ bool installRegressionKeymap(std::string_view source, std::string &failureReason
 	std::string errorMessage;
 
 	if (diagnosticsContainError(loaded.diagnostics)) {
-		failureReason = "WordStar keymap must load without error diagnostics.";
+		failureReason = "Regression keymap source must load without error diagnostics.";
 		for (const MRKeymapDiagnostic &diagnostic : loaded.diagnostics)
 			if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) {
 				failureReason += " ";
@@ -2798,32 +2805,32 @@ bool runRegressionProbeProcess(const char *probeName, std::string &failureReason
 	return false;
 }
 
-bool testWordStarBasicNavigationKeybindingsHarness(const std::string &wordstarKeymapContent, std::string &failureReason) {
+bool testConfiguredKeymapBasicNavigationHarness(const std::string &keymapContent, std::string &failureReason) {
 	ScopedRegressionKeymap restoreKeymap;
 	ScopedRegressionMacroDirectory macroDirectory(absolutePathFromCwd("mrmac/macros"));
 	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::BoundToText);
-	MREditWindow window(TRect(0, 0, 80, 16), "wordstar-basic-nav", 1032);
+	MREditWindow window(TRect(0, 0, 80, 16), "keymap-basic-nav", 1032);
 	MRFileEditor *editor = nullptr;
 
-	if (!installRegressionKeymap(wordstarKeymapContent, failureReason)) return false;
-	if (!window.replaceTextBuffer("abc\n", "wordstar-basic-nav")) {
-		failureReason = "Unable to seed window editor for WordStar basic navigation path.";
+	if (!installRegressionKeymap(keymapContent, failureReason)) return false;
+	if (!window.replaceTextBuffer("abc\n", "keymap-basic-nav")) {
+		failureReason = "Unable to seed window editor for configured keymap basic navigation path.";
 		return false;
 	}
 	editor = window.getEditor();
 	if (editor == nullptr) {
-		failureReason = "WordStar basic navigation path must have an editor.";
+		failureReason = "Configured keymap basic navigation path must have an editor.";
 		return false;
 	}
 	editor->setCursorOffset(0);
 	if (!sendWindowRawCtrl(window, 'D')) return false;
 	if (editor->cursorOffset() != 1) {
-		failureReason = "WordStar Ctrl-D from wordstar.mrmac must move the cursor right through the window key path.";
+		failureReason = "Configured keymap Ctrl-D must move the cursor right through the window key path.";
 		return false;
 	}
 	if (!sendWindowRawCtrl(window, 'S')) return false;
 	if (editor->cursorOffset() != 0) {
-		failureReason = "WordStar Ctrl-S from wordstar.mrmac must move the cursor left through the window key path.";
+		failureReason = "Configured keymap Ctrl-S must move the cursor left through the window key path.";
 		return false;
 	}
 
@@ -2831,7 +2838,7 @@ bool testWordStarBasicNavigationKeybindingsHarness(const std::string &wordstarKe
 	return true;
 }
 
-bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent, std::string &failureReason) {
+bool testConfiguredKeymapBlockBindingsHarness(const std::string &defaultKeymapContent, std::string &failureReason) {
 	ScopedRegressionKeymap restoreKeymap;
 	ScopedRegressionMacroDirectory macroDirectory(absolutePathFromCwd("mrmac/macros"));
 	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
@@ -2843,95 +2850,95 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 
 	if (!installRegressionKeymap(defaultKeymapContent, failureReason)) return false;
 	{
-		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-block", 1010);
-		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "wordstar-block")) {
+		MREditWindow window(TRect(0, 0, 80, 16), "keymap-block", 1010);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "keymap-block")) {
 			failureReason = "Unable to seed window editor for Ctrl-Y key path.";
 			return false;
 		}
 		if (!sendWindowRawCtrl(window, 'Y')) return false;
 		if (window.getEditor() == nullptr || window.getEditor()->snapshotText() != "beta\ngamma\n") {
-			failureReason = "Ctrl-Y must delete the current line through the WordStar keymap.";
+			failureReason = "Ctrl-Y must delete the current line through the configured keymap.";
 			return false;
 		}
 	}
 	{
-		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-stream-block", 1011);
-		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "wordstar-block")) {
+		MREditWindow window(TRect(0, 0, 80, 16), "keymap-stream-block", 1011);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "keymap-stream-block")) {
 			failureReason = "Unable to seed window editor for Ctrl-K stream block path.";
 			return false;
 		}
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowRawCtrl(window, 'B')) return false;
 		if (!sendWindowRawCtrl(window, 'D')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 1, "WordStar Ctrl-K Ctrl-B must not live-grow stream", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 1, "Configured keymap Ctrl-K Ctrl-B must not live-grow stream", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowRawCtrl(window, 'K')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K Ctrl-B/Ctrl-K Ctrl-K stream", failureReason)) return false;
-		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar committed stream overlay", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "Configured keymap Ctrl-K Ctrl-B/Ctrl-K Ctrl-K stream", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "Configured keymap committed stream overlay", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'D')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar persistent stream after cursor move", failureReason)) return false;
-		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar persistent stream overlay after cursor move", failureReason)) return false;
-		if (!expectWindowCommittedBlockRefreshesOverlay(window, rawCtrlKey('D'), 0, MREditWindow::bmStream, "WordStar committed stream overlay refresh after keybinding cursor move", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "Configured keymap persistent stream after cursor move", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "Configured keymap persistent stream overlay after cursor move", failureReason)) return false;
+		if (!expectWindowCommittedBlockRefreshesOverlay(window, rawCtrlKey('D'), 0, MREditWindow::bmStream, "Configured keymap committed stream overlay refresh after keybinding cursor move", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowKey(window, static_cast<ushort>('H'))) return false;
 		if (window.blockStatus() != MREditWindow::bmNone || window.hasBlock()) {
-			failureReason = "WordStar Ctrl-K H must hide the visible block.";
+			failureReason = "Configured keymap Ctrl-K H must hide the visible block.";
 			return false;
 		}
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowRawCtrl(window, 'H')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K Ctrl-H show", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "Configured keymap Ctrl-K Ctrl-H show", failureReason)) return false;
 	}
 	{
-		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-stream-block-plain", 1012);
-		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "wordstar-block-plain")) {
+		MREditWindow window(TRect(0, 0, 80, 16), "keymap-stream-block-plain", 1012);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "keymap-block-plain")) {
 			failureReason = "Unable to seed window editor for Ctrl-K B stream block path.";
 			return false;
 		}
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowKey(window, static_cast<ushort>('b'))) return false;
 		if (!sendWindowRawCtrl(window, 'D')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 1, "WordStar Ctrl-K B must not live-grow stream", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 1, "Configured keymap Ctrl-K B must not live-grow stream", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowKey(window, static_cast<ushort>('k'))) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K B/Ctrl-K K stream", failureReason)) return false;
-		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar committed plain stream overlay", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "Configured keymap Ctrl-K B/Ctrl-K K stream", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "Configured keymap committed plain stream overlay", failureReason)) return false;
 	}
 	{
-		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-stream-block-arrow", 1012);
-		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "wordstar-block-arrow")) {
+		MREditWindow window(TRect(0, 0, 80, 16), "keymap-stream-block-arrow", 1012);
+		if (!window.replaceTextBuffer("alpha\nbeta\ngamma\n", "keymap-block-arrow")) {
 			failureReason = "Unable to seed window editor for Ctrl-K B arrow stream block path.";
 			return false;
 		}
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowKey(window, static_cast<ushort>('b'))) return false;
 		if (!sendWindowKey(window, kbRight)) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "WordStar Ctrl-K B must remain marking after plain Right", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "Configured keymap Ctrl-K B must remain marking after plain Right", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowKey(window, static_cast<ushort>('k'))) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "WordStar Ctrl-K B/plain Right/Ctrl-K K stream", failureReason)) return false;
-		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "WordStar committed arrow stream overlay", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "Configured keymap Ctrl-K B/plain Right/Ctrl-K K stream", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmStream, "Configured keymap committed arrow stream overlay", failureReason)) return false;
 	}
 	{
-		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-column-block", 1013);
-		if (!window.replaceTextBuffer("alpha\n\nbeta\ngamma\n", "wordstar-column-block")) {
+		MREditWindow window(TRect(0, 0, 80, 16), "keymap-column-block", 1013);
+		if (!window.replaceTextBuffer("alpha\n\nbeta\ngamma\n", "keymap-column-block")) {
 			failureReason = "Unable to seed window editor for Ctrl-K N column block path.";
 			return false;
 		}
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowRawCtrl(window, 'N')) return false;
 		if (!sendWindowRawCtrl(window, 'D')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "WordStar Ctrl-K Ctrl-N must not live-grow column right", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "Configured keymap Ctrl-K Ctrl-N must not live-grow column right", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'X')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "WordStar Ctrl-K Ctrl-N must not live-grow column down over empty line", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 1, "Configured keymap Ctrl-K Ctrl-N must not live-grow column down over empty line", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'K')) return false;
 		if (!sendWindowRawCtrl(window, 'K')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 2, 1, 2, "WordStar Ctrl-K Ctrl-N/Ctrl-K Ctrl-K column", failureReason)) return false;
-		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "WordStar committed column overlay", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 2, 1, 2, "Configured keymap Ctrl-K Ctrl-N/Ctrl-K Ctrl-K column", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "Configured keymap committed column overlay", failureReason)) return false;
 		if (!sendWindowRawCtrl(window, 'D')) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 2, 1, 2, "WordStar persistent column after cursor move", failureReason)) return false;
-		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "WordStar persistent column overlay after cursor move", failureReason)) return false;
-		if (!expectWindowCommittedBlockRefreshesOverlay(window, rawCtrlKey('D'), 0, MREditWindow::bmColumn, "WordStar committed column overlay refresh after keybinding cursor move", failureReason)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, false, 1, 2, 1, 2, "Configured keymap persistent column after cursor move", failureReason)) return false;
+		if (!expectWindowBlockOverlay(window, MREditWindow::bmColumn, "Configured keymap persistent column overlay after cursor move", failureReason)) return false;
+		if (!expectWindowCommittedBlockRefreshesOverlay(window, rawCtrlKey('D'), 0, MREditWindow::bmColumn, "Configured keymap committed column overlay refresh after keybinding cursor move", failureReason)) return false;
 	}
 	{
 		MREditWindow window(TRect(0, 0, 80, 16), "mrmac-action-nonlive-column", 1014);
@@ -3251,14 +3258,14 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		}
 	}
 	{
-		MREditWindow window(TRect(0, 0, 80, 16), "wordstar-free-cursor", 1012);
-		if (!window.replaceTextBuffer("abc", "wordstar-free-cursor")) {
-			failureReason = "Unable to seed window editor for WordStar free-cursor path.";
+		MREditWindow window(TRect(0, 0, 80, 16), "keymap-free-cursor", 1012);
+		if (!window.replaceTextBuffer("abc", "keymap-free-cursor")) {
+			failureReason = "Unable to seed window editor for configured keymap free-cursor path.";
 			return false;
 		}
 		MRFileEditor *editor = window.getEditor();
 		if (editor == nullptr) {
-			failureReason = "WordStar free-cursor path must have an editor.";
+			failureReason = "Configured keymap free-cursor path must have an editor.";
 			return false;
 		}
 		const std::size_t lineEnd = editor->lineEndOffset(0);
@@ -3267,11 +3274,11 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		const int cursorXBefore = editor->cursor.x;
 		if (!sendWindowRawCtrl(window, 'D')) return false;
 		if (editor->cursorOffset() != lineEnd || editor->displayedCursorColumn() != before + 1) {
-			failureReason = "WordStar Ctrl-D must honor free cursor movement beyond EOL.";
+			failureReason = "Configured keymap Ctrl-D must honor free cursor movement beyond EOL.";
 			return false;
 		}
 		if (editor->cursor.x != cursorXBefore + 1) {
-			failureReason = "WordStar Ctrl-D must advance the visible editor caret beyond EOL.";
+			failureReason = "Configured keymap Ctrl-D must advance the visible editor caret beyond EOL.";
 			return false;
 		}
 		if (window.cursorColumnNumber() != static_cast<unsigned long>(before + 2)) {
@@ -3280,7 +3287,7 @@ bool testWordStarBlockKeybindingsHarness(const std::string &defaultKeymapContent
 		}
 		if (!sendWindowRawCtrl(window, 'S')) return false;
 		if (editor->cursorOffset() != lineEnd || editor->displayedCursorColumn() != before) {
-			failureReason = "WordStar Ctrl-S must step back through free cursor columns.";
+			failureReason = "Configured keymap Ctrl-S must step back through free cursor columns.";
 			return false;
 		}
 	}
@@ -3604,7 +3611,7 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 	std::string menuContent;
 	std::string keymapContent;
 	std::string defaultKeymapContent;
-	std::string wordstarKeymapContent;
+	std::string legacyProfileContent;
 	std::string vmContent;
 	std::string compilerContent;
 	std::string windowContent;
@@ -3635,7 +3642,7 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 		failureReason = "Unable to read MRDefaultKeymaps.mrmac for block marking harness: " + ioError;
 		return false;
 	}
-	if (!readTextFile(absolutePathFromCwd("mrmac/macros/keymaps/wordstar.mrmac"), wordstarKeymapContent, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("mrmac/macros/keymaps/wordstar.mrmac"), legacyProfileContent, ioError)) {
 		failureReason = "Unable to read wordstar.mrmac for block marking harness: " + ioError;
 		return false;
 	}
@@ -3669,8 +3676,8 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 	}
 	if (!mrfeBlockOpsRegressionHarness(failureReason)) return false;
 	if (!testBlockMarkingWindowInputHarness(failureReason)) return false;
-	if (!testWordStarBasicNavigationKeybindingsHarness(wordstarKeymapContent, failureReason)) return false;
-	if (!testWordStarBlockKeybindingsHarness(defaultKeymapContent, failureReason)) return false;
+	if (!testConfiguredKeymapBasicNavigationHarness(legacyProfileContent, failureReason)) return false;
+	if (!testConfiguredKeymapBlockBindingsHarness(defaultKeymapContent, failureReason)) return false;
 	if (routerContent.find("win->beginLineBlock();") == std::string::npos || routerContent.find("win->beginColumnBlock();") == std::string::npos || routerContent.find("win->beginStreamBlock();") == std::string::npos || routerContent.find("cmMrBlockToggleVisibility") == std::string::npos) {
 		failureReason = "Block marking commands must route to marking methods and visibility toggle.";
 		return false;
@@ -3687,8 +3694,8 @@ bool testBlockMarkingHarness(std::string &failureReason) {
 		failureReason = "Default keymaps must expose line, column and visibility block marking targets.";
 		return false;
 	}
-	if (wordstarKeymapContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN\" sequence=\"<Ctrl+K> <Ctrl+N>") == std::string::npos || wordstarKeymapContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN\" sequence=\"<Ctrl+K> <N>") == std::string::npos) {
-		failureReason = "WordStar keymap must expose Ctrl-K Ctrl-N and Ctrl-K N column block begins.";
+	if (legacyProfileContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN\" sequence=\"<Ctrl+K> <Ctrl+N>") == std::string::npos || legacyProfileContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN\" sequence=\"<Ctrl+K> <N>") == std::string::npos) {
+		failureReason = "Bundled legacy keymap profile must expose Ctrl-K Ctrl-N and Ctrl-K N column block begins.";
 		return false;
 	}
 	if (vmContent.find("mrvmUiBlockBeginLine()") == std::string::npos || vmContent.find("mrvmUiBlockBeginColumn()") == std::string::npos || vmContent.find("mrvmUiBlockBeginStream()") == std::string::npos || vmContent.find("mrvmUiBlockEndMarking()") == std::string::npos || vmContent.find("mrvmUiBlockTurnMarkingOff()") == std::string::npos || vmContent.find("mrvmUiBlockToggleVisibility()") == std::string::npos || compilerContent.find("BLOCK_BEGIN") == std::string::npos || compilerContent.find("COL_BLOCK_BEGIN") == std::string::npos || compilerContent.find("STR_BLOCK_BEGIN") == std::string::npos || compilerContent.find("BLOCK_END") == std::string::npos || compilerContent.find("BLOCK_OFF") == std::string::npos || compilerContent.find("BLOCK_TOGGLE_VISIBILITY") == std::string::npos) {
@@ -6167,7 +6174,7 @@ bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason
 }
 
 bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F, 0x3A, 0x4B, 0x5C, 0x6D, 0x7E, 0x8F, 0x9A};
+		static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F, 0x3A, 0x4B, 0x5C, 0x6D, 0x7E, 0x8F, 0x9A, 0xAB, 0xBC, 0xCD, 0xDE, 0xEF, 0xF1, 0x12, 0x23, 0x34, 0x45, 0x56};
 	struct CodeColorInventoryEntry {
 		const char *name;
 		const char *paletteMacro;
@@ -6197,11 +6204,22 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	    {"context menu", "kMrPaletteContextMenu", kMrPaletteContextMenu, false, false, true, false, false},
 	    {"context menu selector", "kMrPaletteContextMenuSelector", kMrPaletteContextMenuSelector, false, false, true, false, false},
 	    {"snippet sidekick frame", "kMrPaletteSnippetSidekickFrame", kMrPaletteSnippetSidekickFrame, false, true, false, false, false},
-	    {"snippet sidekick text", "kMrPaletteSnippetSidekickText", kMrPaletteSnippetSidekickText, false, true, false, false, false},
-	    {"snippet placeholder", "kMrPaletteSnippetPlaceholder", kMrPaletteSnippetPlaceholder, false, false, false, false, true},
-	    {"snippet active placeholder", "kMrPaletteSnippetActivePlaceholder", kMrPaletteSnippetActivePlaceholder, false, true, false, false, false},
-	    {"snippet default text", "kMrPaletteSnippetDefaultText", kMrPaletteSnippetDefaultText, false, true, false, false, false},
-	};
+		    {"snippet sidekick text", "kMrPaletteSnippetSidekickText", kMrPaletteSnippetSidekickText, false, true, false, false, false},
+		    {"snippet placeholder", "kMrPaletteSnippetPlaceholder", kMrPaletteSnippetPlaceholder, false, false, false, false, true},
+		    {"snippet active placeholder", "kMrPaletteSnippetActivePlaceholder", kMrPaletteSnippetActivePlaceholder, false, true, false, false, false},
+		    {"snippet default text", "kMrPaletteSnippetDefaultText", kMrPaletteSnippetDefaultText, false, true, false, false, false},
+		    {"outline file header", "kMrPaletteOutlineFileHeader", kMrPaletteOutlineFileHeader, false, false, true, false, false},
+		    {"outline level 1", "kMrPaletteOutlineLevel0", kMrPaletteOutlineLevel0, false, false, true, false, false},
+		    {"outline level 2", "kMrPaletteOutlineLevel1", kMrPaletteOutlineLevel1, false, false, true, false, false},
+		    {"outline level 3", "kMrPaletteOutlineLevel2", kMrPaletteOutlineLevel2, false, false, true, false, false},
+		    {"outline level 4", "kMrPaletteOutlineLevel3", kMrPaletteOutlineLevel3, false, false, true, false, false},
+		    {"outline level 5", "kMrPaletteOutlineLevel4", kMrPaletteOutlineLevel4, false, false, true, false, false},
+		    {"outline level 6", "kMrPaletteOutlineLevel5", kMrPaletteOutlineLevel5, false, false, true, false, false},
+		    {"outline level 7", "kMrPaletteOutlineLevel6", kMrPaletteOutlineLevel6, false, false, true, false, false},
+		    {"outline level 8", "kMrPaletteOutlineLevel7", kMrPaletteOutlineLevel7, false, false, true, false, false},
+		    {"outline level 9", "kMrPaletteOutlineLevel8", kMrPaletteOutlineLevel8, false, false, true, false, false},
+		    {"outline level 10", "kMrPaletteOutlineLevel9", kMrPaletteOutlineLevel9, false, false, true, false, false},
+		};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Code, itemCount);
@@ -8827,7 +8845,7 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 		failureReason = "Bento file-compare public surface changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(bentoProjection, {"{bprDiffOriginal, \"Diff Original\", true}", "{bprDiffCompare, \"Diff Compare\", true}", "bentoMode == bbmFileCompare && !bentoRoleIsDiff(role)", "if (bentoMode == bbmFileCompare)", "source.role = bprDiffOriginal", "configuredFileCompareStartConfiguration()", "mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, originalLines)", "payload->originalDocumentId != fileCompareSetup.original.documentId", "fileCompareSourceStillMatches(fileCompareSetup.original)", "appendDiffDisplayLine(text, lineKinds", "mrfclkMissing", "mrfclkInsert", "mrfclkOffset", "configuredFileCompareOriginalLeadingGutters()", "configuredFileCompareOriginalTrailingGutters()", "configuredFileCompareCompareLeadingGutters()", "configuredFileCompareCompareTrailingGutters()", "targetEditor->setFileCompareGutters(leadingGutters, trailingGutters)", "targetEditor->setFileCompareLineKinds(lineKinds)", "targetEditor->setMiniMapSuppressed(!miniMapConfigured)", "targetEditor->setFileCompareGutterVisible(true)", "syncFileCompareLinkedPaneFrom(activeLeafId)", "syncFileCompareLinkedPaneFrom(0)", "displayStartLine", "displayLineCount", "deletedLineCount", "insertedLineCount", "rebuildFileCompareChangeGroups();", "std::string MRBentoBox::fileCompareStatusForLeaf", "firstVisibleChange", "lastVisibleChange", "visibleDeletedLines", "visibleInsertedLines", "totalDeletedLines", "totalInsertedLines", "status += \"/\" + std::to_string(fileCompareChangeGroups.size())", "status += \" -\" + std::to_string(totalDeletedLines)", "bool MRBentoBox::applyFileCompareChange(bool originalToCompare)", "bool MRBentoBox::applyFileCompareChangeGroup(bool originalToCompare, const FileCompareChangeGroup &group)", "normalizeFileCompareHunks(originalLines, compareLines, fileCompareHunks);", "fileCompareJoinedLineRange", "fileCompareEditorLineRange", "targetEditor->replaceRangeAndSelect", "targetEditor->setSelectionOffsets(selectionEnd, selectionEnd, False)", "refreshFileCompareAfterSourceMutation();", "fileCompareHunks.clear();", "fileCompareDiffReady = false;", "kFileCompareActionApply", "apply diff", "cmMrFileComparePaneActionAccepted", "showFileCompareActionList(event.mouse.where, targetLeafId)", "fileCompareChangeGroupIndexAtLine", "fileCompareGroupNavigationLineForRole", "pendingFileCompareActionGroupIndex", "moveFileCompareEditorToGroup", "editor.moveCursorToDocumentLineTop(targetLine, 0)", "cursorGroupIndex", "targetIndex = next ?"}, missingNeedle)) {
+	if (!containsAllSubstrings(bentoProjection, {"{bprDiffOriginal, \"Diff Original\", true}", "{bprDiffCompare, \"Diff Compare\", true}", "bentoMode == bbmFileCompare && !bentoRoleIsDiff(role)", "if (bentoMode == bbmFileCompare)", "source.role = bprDiffOriginal", "configuredFileCompareStartConfiguration()", "refreshFileCompareCachedSnapshots(bprSource, true)", "mr::diff::mrSplitTextLinesForDiff(source.text, lineCache)", "mr::diff::mrSplitTextLinesForDiff(fileCompareSetup.original.text, fileCompareOriginalLines)", "originalLines = fileCompareOriginalLines, compareLines = fileCompareCompareLines", "payload->originalDocumentId != fileCompareSetup.original.documentId", "fileCompareSourceStillMatches(fileCompareSetup.original)", "appendDiffDisplayLine(text, lineKinds", "mrfclkMissing", "mrfclkInsert", "mrfclkOffset", "configuredFileCompareOriginalLeadingGutters()", "configuredFileCompareOriginalTrailingGutters()", "configuredFileCompareCompareLeadingGutters()", "configuredFileCompareCompareTrailingGutters()", "targetEditor->setFileCompareGutters(leadingGutters, trailingGutters)", "targetEditor->setFileCompareLineKinds(lineKinds)", "targetEditor->setMiniMapSuppressed(!miniMapConfigured)", "targetEditor->setFileCompareGutterVisible(true)", "syncFileCompareLinkedPaneFrom(activeLeafId)", "syncFileCompareLinkedPaneFrom(0)", "displayStartLine", "displayLineCount", "deletedLineCount", "insertedLineCount", "rebuildFileCompareChangeGroups();", "std::string MRBentoBox::fileCompareStatusForLeaf", "firstVisibleChange", "lastVisibleChange", "visibleDeletedLines", "visibleInsertedLines", "totalDeletedLines", "totalInsertedLines", "status += \"/\" + std::to_string(fileCompareChangeGroups.size())", "status += \" -\" + std::to_string(totalDeletedLines)", "bool MRBentoBox::applyFileCompareChange(bool originalToCompare)", "bool MRBentoBox::applyFileCompareChangeGroup(bool originalToCompare, const FileCompareChangeGroup &group)", "normalizeFileCompareHunks(fileCompareOriginalLines, fileCompareCompareLines, fileCompareHunks);", "fileCompareJoinedLineRange", "fileCompareEditorLineRange", "targetEditor->replaceRangeAndSelect", "targetEditor->setSelectionOffsets(selectionEnd, selectionEnd, False)", "refreshFileCompareAfterSourceMutation(targetRole);", "fileCompareHunks.clear();", "fileCompareDiffReady = false;", "kFileCompareActionApply", "apply diff", "cmMrFileComparePaneActionAccepted", "showFileCompareActionList(event.mouse.where, targetLeafId)", "fileCompareChangeGroupIndexAtLine", "fileCompareGroupNavigationLineForRole", "pendingFileCompareActionGroupIndex", "moveFileCompareEditorToGroup", "editor.moveCursorToDocumentLineTop(targetLine, 0)", "cursorGroupIndex", "targetIndex = next ?"}, missingNeedle)) {
 		failureReason = "Bento file-compare role/display/version wiring changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -8960,185 +8978,29 @@ void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 
 void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
-	runTest(ctx, "MRSETUP window color theme URI startup load", testMrsetupWindowColorThemeUriStartupLoad);
-	runTest(ctx, "settings.mrmac auto-create on missing file", testSettingsMacroAutoCreate);
 	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
-	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
 	runTest(ctx, "Extended settings roundtrip behavior", testExtendedSettingsRoundtripGuard);
 	runTest(ctx, "Keymap AUTOEXEC persistence + bootstrap harness", testKeymapAutoexecPersistenceAndBootstrapHarness);
 	runTest(ctx, "Keymap runtime macro dispatch harness", testKeymapMacroBindingDispatchHarness);
 	runTest(ctx, "Keymap macro diagnostics harness", testKeymapMacroBindingNegativeDiagnosticsHarness);
-	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);
 	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
-	runTest(ctx, "Effective C profile controls loaded editor", testEffectiveCProfileControlsLoadedEditorGuard);
-	runTest(ctx, "Legacy MREDITPROFILE drop-to-defaults", testLegacyEditProfileMacroDropToDefaultsGuard);
-	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
-	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
-	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
-	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
-	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "Compiler support macros compile guard", testCompilerSupportMacrosCompileGuard);
-	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
-	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
 	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
-	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
-	runTest(ctx, "Workspace autosave lazy wiring guard", testWorkspaceAutosaveLazyWiringGuard);
-	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
-	runTest(ctx, "Extended base palette initialization guard", testExtendedBasePaletteInitializationGuard);
 	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
-	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
-	runTest(ctx, "Current color theme invalid list rejection", testCurrentColorThemeInvalidListsDoNotMutateGuard);
-	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
-	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
 	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
-	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
-	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
 	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
 	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
-	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
-	runTest(ctx, "Communication viewer draw settings IO guard", testCommunicationViewerDrawDoesNotReadSettings);
-	runTest(ctx, "Application idle settings IO guard", testApplicationIdleDoesNotReadMenuSettings);
-	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
 	runTest(ctx, "Post-EOF clear-area guard", testEofVirtualLineColorGuard);
-	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
-	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
-	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
-	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
-	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
-	runTest(ctx, "File extension code-language choices guard", testFileExtensionCodeLanguageChoicesGuard);
-	runTest(ctx, "File extension folding controls guard", testFileExtensionFoldingControlsGuard);
 	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
-	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
-	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
-	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
-	runTest(ctx, "About animation harness", testAboutAnimationHarness);
-	runTest(ctx, "About quote README extraction guard", testAboutQuoteReadmeExtractionGuard);
-	runTest(ctx, "Block paste free-cursor target guard", testBlockPasteFreeCursorTargetGuard);
-	runTest(ctx, "Column indent/undent wiring guard", testColumnIndentUndentWiringGuard);
-	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
-	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
-	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
-	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
-	runTest(ctx, "CREATE_GLOBAL_STR operation + staging guards", testCreateGlobalStrOperation);
-	runTest(ctx, "Exec session staged conflict rejection guard", testExecSessionStagedConflictRejectionGuard);
-	runTest(ctx, "Exec session listener fanout guard", testExecSessionListenerFanoutGuard);
 	runTest(ctx, "Exec session owner cancellation guard", testExecSessionOwnerCancellationGuard);
-	runTest(ctx, "Exec session status consumer guard", testExecSessionStatusConsumerGuard);
-	runTest(ctx, "Runtime scheduler skip event guard", testRuntimeSchedulerSkipEventGuard);
-	runTest(ctx, "Exec session K/V access boundary guard", testExecSessionKvAccessBoundaryGuard);
-	runTest(ctx, "Exec session runtime store boundary guard", testExecSessionRuntimeStoreBoundaryGuard);
-	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
-	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
-	runTest(ctx, "UI_MESSAGEBOX proc guard / legacy UI-call removal guard", testUiMessageBoxProcGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
-	runTest(ctx, "Render sink classification guard", testRenderSinkClassificationGuard);
-	runTest(ctx, "Resize/KILL_BOX reprojection guard", testResizeKillBoxReprojectionGuard);
-	runTest(ctx, "CLEAR_SCREEN snapshot reset guard", testClearScreenSnapshotResetGuard);
-	runTest(ctx, "Line/column overlay replay guard", testLineColOverlayReplayGuard);
-	runTest(ctx, "Coprocessor screen-renderer boundary guard", testCoprocessorScreenRendererBoundaryGuard);
 }
 
 void runFullSuite(TestContext &ctx) {
-	runTest(ctx, "Path defaults from environment/OS", testPathDefaultsFromEnvironment);
-	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
-	runTest(ctx, "MRSETUP window color theme URI startup load", testMrsetupWindowColorThemeUriStartupLoad);
-	runTest(ctx, "settings.mrmac auto-create on missing file", testSettingsMacroAutoCreate);
-	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
-	runTest(ctx, "Dialog palette guard (no 32..63 overrides)", testDialogPaletteOverridesAbsent);
-	runTest(ctx, "WINDOWCOLORS targets blue window palette", testWindowColorGroupTargetsBlueWindowPalette);
-	runTest(ctx, "MENUDIALOGCOLORS targets menu + gray dialog palette", testMenuDialogColorGroupTargetsExpectedSlots);
-	runTest(ctx, "MENUDIALOGCOLORS legacy list upgrade behavior", testMenuDialogSemanticLabelsGuard);
-	runTest(ctx, "MENUDIALOGCOLORS hotkey selection alias guard", testMenuEntryHotkeySelectionAliasGuard);
-	runTest(ctx, "MENUDIALOGCOLORS dialog frame/background propagation guard", testDialogFrameAndBackgroundPropagationGuard);
-	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
-	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
-	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
-	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
-	runTest(ctx, "Extended settings roundtrip behavior", testExtendedSettingsRoundtripGuard);
-	runTest(ctx, "Keymap AUTOEXEC persistence + bootstrap harness", testKeymapAutoexecPersistenceAndBootstrapHarness);
-	runTest(ctx, "Keymap runtime macro dispatch harness", testKeymapMacroBindingDispatchHarness);
-	runTest(ctx, "Keymap macro diagnostics harness", testKeymapMacroBindingNegativeDiagnosticsHarness);
-	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);
-	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
-	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
-	runTest(ctx, "Effective C profile controls loaded editor", testEffectiveCProfileControlsLoadedEditorGuard);
-	runTest(ctx, "Legacy MREDITPROFILE drop-to-defaults", testLegacyEditProfileMacroDropToDefaultsGuard);
-	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
-	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
-	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
-	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
-	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
-	runTest(ctx, "Compiler support macros compile guard", testCompilerSupportMacrosCompileGuard);
-	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
-	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
-	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
-	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
-	runTest(ctx, "File compare Bento wiring guard", testFileCompareBentoWiringGuard);
-	runTest(ctx, "Workspace autosave lazy wiring guard", testWorkspaceAutosaveLazyWiringGuard);
-	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
-	runTest(ctx, "Extended base palette initialization guard", testExtendedBasePaletteInitializationGuard);
-	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
-	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
-	runTest(ctx, "Current color theme invalid list rejection", testCurrentColorThemeInvalidListsDoNotMutateGuard);
-	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
-	runTest(ctx, "File compare text color preserves background guard", testFileCompareTextColorPreservesBackgroundGuard);
-	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
-	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
-	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
-	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
-	runTest(ctx, "Communication viewer draw settings IO guard", testCommunicationViewerDrawDoesNotReadSettings);
-	runTest(ctx, "Application idle settings IO guard", testApplicationIdleDoesNotReadMenuSettings);
-	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);
-	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);
-	runTest(ctx, "Changed-text color wiring guard", testChangedTextColorWiringGuard);
-	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
-	runTest(ctx, "Post-EOF clear-area guard", testEofVirtualLineColorGuard);
-	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
-	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
-	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
-	runTest(ctx, "File extension right-margin sync guard", testFileExtensionRightMarginSyncGuard);
-	runTest(ctx, "File extension code-language choices guard", testFileExtensionCodeLanguageChoicesGuard);
-	runTest(ctx, "File extension folding controls guard", testFileExtensionFoldingControlsGuard);
-	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
-	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
-	runTest(ctx, "Edit insert mode routing guard", testEditInsertModeCommandRoutingGuard);
-	runTest(ctx, "Read-only SideKick geometry matrix", mrReadOnlySidekickGeometrySelfTestForRegression);
-	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
-	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
-	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
-	runTest(ctx, "About animation harness", testAboutAnimationHarness);
-	runTest(ctx, "About quote README extraction guard", testAboutQuoteReadmeExtractionGuard);
-	runTest(ctx, "Block paste free-cursor target guard", testBlockPasteFreeCursorTargetGuard);
-	runTest(ctx, "Column indent/undent wiring guard", testColumnIndentUndentWiringGuard);
-	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
-	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
-	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
-	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
-	runTest(ctx, "CREATE_GLOBAL_STR operation + staging guards", testCreateGlobalStrOperation);
-	runTest(ctx, "Exec session staged conflict rejection guard", testExecSessionStagedConflictRejectionGuard);
-	runTest(ctx, "Exec session listener fanout guard", testExecSessionListenerFanoutGuard);
-	runTest(ctx, "Exec session owner cancellation guard", testExecSessionOwnerCancellationGuard);
-	runTest(ctx, "Exec session status consumer guard", testExecSessionStatusConsumerGuard);
-	runTest(ctx, "Runtime scheduler skip event guard", testRuntimeSchedulerSkipEventGuard);
-	runTest(ctx, "Exec session K/V access boundary guard", testExecSessionKvAccessBoundaryGuard);
-	runTest(ctx, "Exec session runtime store boundary guard", testExecSessionRuntimeStoreBoundaryGuard);
-	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
-	runTest(ctx, "MARQUEE proc wiring guard", testMarqueeProcWiringGuard);
-	runTest(ctx, "Deferred UI mailbox playback guard", testDeferredUiPlaybackMailboxGuard);
-	runTest(ctx, "Deferred UI mutation-epoch guard", testDeferredUiMutationEpochGuard);
-	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
-	runTest(ctx, "UI_MESSAGEBOX proc guard / legacy UI-call removal guard", testUiMessageBoxProcGuard);
-	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
-	runTest(ctx, "Render sink classification guard", testRenderSinkClassificationGuard);
-	runTest(ctx, "Resize/KILL_BOX reprojection guard", testResizeKillBoxReprojectionGuard);
-	runTest(ctx, "CLEAR_SCREEN snapshot reset guard", testClearScreenSnapshotResetGuard);
-	runTest(ctx, "Line/column overlay replay guard", testLineColOverlayReplayGuard);
-	runTest(ctx, "Coprocessor screen-renderer boundary guard", testCoprocessorScreenRendererBoundaryGuard);
-	runTest(ctx, "Marquee color source guard", testMarqueeColorSourceGuard);
-	runTest(ctx, "OTHERCOLORS dedicated message slots guard", testOtherColorsDedicatedMessageSlotsGuard);
+	runCoreSuite(ctx);
 }
 
 } // namespace
