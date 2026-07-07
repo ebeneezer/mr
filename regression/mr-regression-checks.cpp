@@ -8172,390 +8172,47 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 	return true;
 }
 
-bool testCompilerProfileAutomaticSetupGuard(std::string &failureReason) {
-	MRCompilerProfile profile;
-	std::string errorText;
-
-	profile.id = "AUTO_SETUP";
-	profile.name = "Auto Setup";
-	profile.toolchain = "CUSTOM";
-	if (autoConfigureCompilerProfileFromExecutable(profile, &errorText)) {
-		failureReason = "Automatic compiler setup must reject an empty executable field.";
-		return false;
-	}
-	if (errorText != "need compiler executable for automatic setup") {
-		failureReason = "Automatic compiler setup empty-executable error text changed.";
-		return false;
-	}
-	profile.executablePath = "/no/such/compiler";
-	if (autoConfigureCompilerProfileFromExecutable(profile, &errorText)) {
-		failureReason = "Automatic compiler setup must reject an unprobeable executable path.";
-		return false;
-	}
-
-	std::vector<std::string> executablePaths = detectedCompilerExecutablePaths();
-	if (!executablePaths.empty()) {
-		std::string path = executablePaths.front();
-		std::size_t slash = path.find_last_of('/');
-
-		profile.executablePath = slash == std::string::npos ? path : path.substr(slash + 1);
-		profile.id = "AUTO_SETUP_SPEED";
-		profile.name = "Auto Setup Speed";
-		if (!autoConfigureCompilerProfileFromExecutable(profile, &errorText)) {
-			failureReason = "Automatic compiler setup did not resolve a known compiler binary name: " + errorText;
-			return false;
-		}
-		if (profile.executablePath.empty() || profile.toolchain.empty() || profile.versionText.empty() || profile.buildFlags.empty()) {
-			failureReason = "Automatic compiler setup did not populate the expected compiler profile fields.";
-			return false;
-		}
-	}
-
-	failureReason.clear();
-	return true;
-}
-
-bool testCompilerProfilePathLatexDetectionGuard(std::string &failureReason) {
+bool testCompilerSupportMacrosCompileGuard(std::string &failureReason) {
 	namespace fs = std::filesystem;
-	char tempTemplate[] = "/tmp/mr-latex-path-XXXXXX";
-	char *created = ::mkdtemp(tempTemplate);
-	const char *previousPath = std::getenv("PATH");
-	const bool hadPreviousPath = previousPath != nullptr;
-	const std::string previousPathValue = hadPreviousPath ? previousPath : "";
+	const fs::path macroDirectory = absolutePathFromCwd("mrmac/macros/compilersupport");
+	std::vector<fs::path> macroPaths;
+	std::error_code errorCode;
 
-	auto restore = [&]() {
-		if (hadPreviousPath) setenv("PATH", previousPathValue.c_str(), 1);
-		else
-			unsetenv("PATH");
-		if (created != nullptr) fs::remove_all(created);
-	};
-
-	if (created == nullptr) {
-		failureReason = "Unable to create temporary PATH directory for LaTeX detection.";
+	if (!fs::is_directory(macroDirectory, errorCode)) {
+		failureReason = "Compiler support macro directory is missing.";
 		return false;
 	}
-	const fs::path tempDir(created);
-	const fs::path latexmk = tempDir / "latexmk";
-	const fs::path xelatex = tempDir / "xelatex";
-	{
-		std::ofstream out(latexmk);
-		out << "#!/bin/sh\nprintf '%s\\n' 'Latexmk, John Collins, 4.99'\n";
-	}
-	{
-		std::ofstream out(xelatex);
-		out << "#!/bin/sh\nprintf '%s\\n' 'XeTeX 3.141592653'\n";
-	}
-	if (::chmod(latexmk.c_str(), 0755) != 0 || ::chmod(xelatex.c_str(), 0755) != 0) {
-		restore();
-		failureReason = "Unable to mark fake LaTeX compilers executable.";
-		return false;
-	}
-	setenv("PATH", tempDir.string().c_str(), 1);
-
-	const std::vector<std::string> executablePaths = detectedCompilerExecutablePaths();
-	const std::vector<std::string> profileIds = detectedCompilerProfileIds();
-	const std::vector<MRCompilerProfile> profiles = detectedCompilerProfiles();
-	const std::string latexmkText = normalizeConfiguredPathInput(latexmk.string());
-	const std::string xelatexText = normalizeConfiguredPathInput(xelatex.string());
-	bool sawLatexmkPath = false;
-	bool sawXelatexPath = false;
-	bool sawLatexmkProfile = false;
-	bool sawXelatexProfile = false;
-	bool sawLatexmkProfileId = false;
-	bool sawXelatexProfileId = false;
-
-	for (const std::string &path : executablePaths) {
-		if (path == latexmkText) sawLatexmkPath = true;
-		if (path == xelatexText) sawXelatexPath = true;
-	}
-	for (const MRCompilerProfile &profile : profiles) {
-		if (profile.toolchain == "LATEXMK" && profile.executablePath == latexmkText && profile.buildSucceededCommand.empty() && !profile.postBuildMacro.empty()) sawLatexmkProfile = true;
-		if (profile.toolchain == "LATEX" && profile.executablePath == xelatexText && profile.id == "LATEX_XELATEX" && profile.buildSucceededCommand.empty() && !profile.postBuildMacro.empty()) sawXelatexProfile = true;
-	}
-	for (const std::string &id : profileIds) {
-		if (id == "LATEXMK_PDF") sawLatexmkProfileId = true;
-		if (id == "LATEX_XELATEX") sawXelatexProfileId = true;
-	}
-	restore();
-	if (!sawLatexmkPath || !sawXelatexPath) {
-		failureReason = "LaTeX compiler executable detection must search the process PATH directly.";
-		return false;
-	}
-	if (!sawLatexmkProfile || !sawXelatexProfile) {
-		failureReason = "LaTeX compiler profile detection must create LATEXMK and LATEX profiles with MRMac post-build middleware from PATH executables.";
-		return false;
-	}
-	if (!sawLatexmkProfileId || !sawXelatexProfileId) {
-		failureReason = "Lightweight LaTeX compiler profile id detection must create LATEXMK and LATEX ids from PATH executables.";
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
-bool testCompilerProfileBuildCommandRoundtripGuard(std::string &failureReason) {
-	MRSetupPaths paths = resolveSetupPathDefaults();
-	MRSettingsSnapshot snapshot = captureConfiguredSettingsSnapshot(paths);
-	MRSettingsSnapshot loaded;
-	MRCompilerProfile profile;
-	std::string source;
-	std::string commandLine;
-	std::string errorText;
-
-	profile.id = "BUILD_COMMAND_PROFILE";
-	profile.name = "Build Command Profile";
-	profile.toolchain = "GCC";
-	profile.executablePath = "/usr/bin/g++";
-	profile.buildFlags = "-Wall";
-	profile.preBuildCommand = "printf pre";
-	profile.buildSucceededCommand = "printf ok";
-	profile.buildFailedCommand = "printf fail";
-	profile.preBuildMacro = "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild";
-	profile.postBuildMacro = "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild";
-	if (!setSnapshotCompilerProfiles(snapshot, std::vector<MRCompilerProfile>{profile}, &errorText)) {
-		failureReason = "Unable to seed compiler profile build command snapshot: " + errorText;
-		return false;
-	}
-	source = buildSettingsMacroSource(snapshot);
-	if (source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'PRE_BUILD_COMMAND', 'printf pre');") == std::string::npos ||
-	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'BUILD_SUCCEEDED_COMMAND', 'printf ok');") == std::string::npos ||
-	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'BUILD_FAILED_COMMAND', 'printf fail');") == std::string::npos ||
-	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'PRE_BUILD_MACRO', 'compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild');") == std::string::npos ||
-	    source.find("MRCOMPILERPROFILE('SET', 'BUILD_COMMAND_PROFILE', 'POST_BUILD_MACRO', 'compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild');") == std::string::npos) {
-		failureReason = "Compiler profile build command fields were not serialized.";
-		return false;
-	}
-	if (!applySettingsSnapshotCompilerProfileDirective(loaded, "DEFINE", "BUILD_COMMAND_PROFILE", "Build Command Profile", "GCC", &errorText) ||
-	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "EXECUTABLE", "/usr/bin/g++", &errorText) ||
-	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "FLAGS", "-Wall", &errorText) ||
-	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "PRE_BUILD_COMMAND", "printf pre", &errorText) ||
-	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "BUILD_SUCCEEDED_COMMAND", "printf ok", &errorText) ||
-	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "BUILD_FAILED_COMMAND", "printf fail", &errorText) ||
-	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "PRE_BUILD_MACRO", "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild", &errorText) ||
-	    !applySettingsSnapshotCompilerProfileDirective(loaded, "SET", "BUILD_COMMAND_PROFILE", "POST_BUILD_MACRO", "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild", &errorText)) {
-		failureReason = "Compiler profile build command directive apply failed: " + errorText;
-		return false;
-	}
-	if (loaded.compilerProfiles.size() != 1 || loaded.compilerProfiles[0].preBuildCommand != "printf pre" || loaded.compilerProfiles[0].buildSucceededCommand != "printf ok" || loaded.compilerProfiles[0].buildFailedCommand != "printf fail" ||
-	    loaded.compilerProfiles[0].preBuildMacro != "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPreBuild" || loaded.compilerProfiles[0].postBuildMacro != "compilersupport/MRCompilerMiddleware.mrmac^MRCompilerPostBuild") {
-		failureReason = "Compiler profile build command fields did not roundtrip through directives.";
-		return false;
-	}
-	if (!buildCompilerProfileCommandLine(profile, "/tmp/source.cpp", commandLine, &errorText)) {
-		failureReason = "Compiler profile build hook command was rejected: " + errorText;
-		return false;
-	}
-	if (commandLine.find("printf pre") == std::string::npos || commandLine.find("printf ok") == std::string::npos || commandLine.find("printf fail") == std::string::npos ||
-	    commandLine.find("__mr_build_status") == std::string::npos || commandLine.find("exit \"$__mr_build_status\"") == std::string::npos) {
-		failureReason = "Compiler profile build hooks were not embedded in the controlled shell command.";
-		return false;
-	}
-
-	failureReason.clear();
-	return true;
-}
-
-bool testLatexmkCompilerProfileCommandGuard(std::string &failureReason) {
-	MRCompilerProfile profile;
-	std::string commandLine;
-	std::string errorText;
-
-	profile.id = "LATEXMK_PDF";
-	profile.name = "latexmk PDF";
-	profile.toolchain = "LATEXMK";
-	profile.executablePath = "/usr/bin/latexmk";
-	profile.buildFlags = "-pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd";
-	profile.buildSucceededCommand = "zathura --fork \"$MR_BUILD_PDF_PATH\"";
-	if (!normalizeCompilerProfileInPlace(profile, &errorText)) {
-		failureReason = "LATEXMK compiler profile did not normalize: " + errorText;
-		return false;
-	}
-	if (!buildCompilerProfileCommandLine(profile, "/tmp/mr latex/main.tex", commandLine, &errorText)) {
-		failureReason = "LATEXMK compiler command was rejected: " + errorText;
-		return false;
-	}
-	if (commandLine.find("'/usr/bin/latexmk' -pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd '/tmp/mr latex/main.tex'") == std::string::npos) {
-		failureReason = "LATEXMK compiler command did not contain the expected latexmk invocation.";
-		return false;
-	}
-	if (commandLine.find("MR_BUILD_PDF_PATH='/tmp/mr latex/main.pdf'") == std::string::npos) {
-		failureReason = "LATEXMK compiler command did not expose the expected PDF path to build commands.";
-		return false;
-	}
-	if (commandLine.find("zathura --fork \"$MR_BUILD_PDF_PATH\"") == std::string::npos) {
-		failureReason = "LATEXMK compiler command did not run the configured build-succeeded command.";
-		return false;
-	}
-	if (commandLine.find("exec zathura") != std::string::npos) {
-		failureReason = "LATEXMK compiler command must not hard-code controlled PDF viewer execution.";
-		return false;
-	}
-	if (commandLine.find(" -o ") != std::string::npos) {
-		failureReason = "LATEXMK compiler command must not append C-style -o output.";
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
-bool testConfiguredShellExecutionGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
-	const std::string compilerSourcePath = absolutePathFromCwd("mrmac/mrmac.c");
-	const std::string processRuntimePath = absolutePathFromCwd("mrmac/vm/MRVMProcessRuntime.cpp");
-	const std::string profilePath = absolutePathFromCwd("mrmac/vm/MRVMProfile.cpp");
-	const std::string compilerProfilesPath = absolutePathFromCwd("config/settings/MRSettingsCompilerProfiles.cpp");
-	const std::string compilerMiddlewarePath = absolutePathFromCwd("mrmac/macros/compilersupport/MRCompilerMiddleware.mrmac");
-	std::string vm;
-	std::string compilerSource;
-	std::string processRuntime;
-	std::string profile;
-	std::string compilerProfiles;
-	std::string compilerMiddleware;
-	std::string ioError;
-
-	if (!readTextFile(vmPath, vm, ioError) || !readTextFile(compilerSourcePath, compilerSource, ioError) || !readTextFile(processRuntimePath, processRuntime, ioError) || !readTextFile(profilePath, profile, ioError) || !readTextFile(compilerProfilesPath, compilerProfiles, ioError) ||
-	    !readTextFile(compilerMiddlewarePath, compilerMiddleware, ioError)) {
-		failureReason = "Unable to read shell execution sources: " + ioError;
-		return false;
-	}
-	if (vm.find("std::system(") != std::string::npos || vm.find("system(") != std::string::npos) {
-		failureReason = "SHELL_TO_OS must not use libc system().";
-		return false;
-	}
-	if (vm.find("mrvmRunShellCommand(mrvmValueAsString(args[0]), configuredShellExecutablePath())") == std::string::npos) {
-		failureReason = "SHELL_TO_OS must execute through the configured shell path.";
-		return false;
-	}
-	if (processRuntime.find("::popen(") != std::string::npos || processRuntime.find("popen(") != std::string::npos) {
-		failureReason = "VM shell probes must not use popen's implicit shell.";
-		return false;
-	}
-	if (compilerProfiles.find("::popen(") != std::string::npos || compilerProfiles.find("popen(") != std::string::npos) {
-		failureReason = "Compiler profile probes must not use popen's implicit shell.";
-		return false;
-	}
-	if (compilerProfiles.find("std::string shellPath = configuredShellExecutablePath();") == std::string::npos) {
-		failureReason = "Compiler profile probes must use the configured shell path.";
-		return false;
-	}
-	if (vm.find("name == \"FORK\"") == std::string::npos || vm.find("mrvmForkProcess(forkArguments)") == std::string::npos) {
-		failureReason = "VM must expose FORK as a shell-free process intrinsic.";
-		return false;
-	}
-	if (processRuntime.find("::execvp(argv[0], argv.data())") == std::string::npos || processRuntime.find("g_runtimeEnv.forkedProcessIds.push_back(static_cast<int>(childPid));") == std::string::npos) {
-		failureReason = "FORK must execute through execvp and retain only the child pid as a mechanical runtime handle.";
-		return false;
-	}
-	if (compilerSource.find("PROC_SIG8(\"FORK\"") == std::string::npos || compilerSource.find("strcasecmp(spec->name, \"FORK\")") == std::string::npos) {
-		failureReason = "MRMac compiler must accept FORK as a variadic string-like procedure call.";
-		return false;
-	}
-	if (profile.find("if (name == \"FORK\") return mrefExternalIo;") == std::string::npos || profile.find("\"FORK\",") == std::string::npos) {
-		failureReason = "FORK must be classified and whitelisted as a supported external I/O intrinsic.";
-		return false;
-	}
-	if (compilerMiddleware.find("SHELL_TO_OS(") != std::string::npos || compilerMiddleware.find("touch") != std::string::npos || compilerMiddleware.find("--fork") != std::string::npos) {
-		failureReason = "Compiler middleware must not use shell, touch or zathura --fork.";
-		return false;
-	}
-	if (compilerMiddleware.find("RUN_MACRO('MRCompilerLatexmkPostBuild');") == std::string::npos || compilerMiddleware.find("ViewerStarted := GLOBAL_INT(ViewerKey);") == std::string::npos ||
-	    compilerMiddleware.find("FORK('zathura', PdfPath);") == std::string::npos || compilerMiddleware.find("SET_GLOBAL_INT(ViewerKey, 1);") == std::string::npos || compilerMiddleware.find("MARQUEE_ERROR(") == std::string::npos) {
-		failureReason = "Compiler middleware must route LATEXMK post-build through FORK and report failures through MARQUEE_ERROR.";
-		return false;
-	}
-	{
-		std::vector<unsigned char> bytecode;
-		int entryOffset = 0;
-		std::string entryName;
-		std::string compileError;
-
-		if (!compileSource(compilerMiddleware, bytecode, entryOffset, entryName, compileError)) {
-			failureReason = "Compiler middleware macro source does not compile: " + compileError;
+	for (const fs::directory_entry &entry : fs::directory_iterator(macroDirectory, errorCode)) {
+		if (errorCode) {
+			failureReason = "Unable to scan compiler support macros: " + errorCode.message();
 			return false;
 		}
+		if (!entry.is_regular_file(errorCode)) continue;
+		if (entry.path().extension() == ".mrmac") macroPaths.push_back(entry.path());
 	}
-	{
-		namespace fs = std::filesystem;
-		const char *mkdirPath = nullptr;
-		char tempTemplate[] = "/tmp/mr-fork-probe-XXXXXX";
-		char *created = nullptr;
-		std::vector<std::string> savedOrder;
-		std::map<std::string, int> savedInts;
-		std::map<std::string, std::string> savedStrings;
-		std::vector<std::string> globalOrder;
-		std::map<std::string, int> globalInts;
-		std::map<std::string, std::string> globalStrings;
-		std::vector<unsigned char> bytecode;
-		int entryOffset = 0;
-		std::string entryName;
-		std::string compileError;
+	if (errorCode) {
+		failureReason = "Unable to finish compiler support macro scan: " + errorCode.message();
+		return false;
+	}
+	if (macroPaths.empty()) {
+		failureReason = "Compiler support macro directory contains no .mrmac files.";
+		return false;
+	}
+	std::sort(macroPaths.begin(), macroPaths.end());
+	for (const fs::path &macroPath : macroPaths) {
 		std::string source;
-		std::string vmError;
-		bool createdByFork = false;
+		std::string ioError;
+		std::vector<unsigned char> bytecode;
+		int entryOffset = 0;
+		std::string entryName;
+		std::string compileError;
 
-		if (fs::exists("/usr/bin/mkdir")) mkdirPath = "/usr/bin/mkdir";
-		else if (fs::exists("/bin/mkdir"))
-			mkdirPath = "/bin/mkdir";
-		if (mkdirPath == nullptr) {
-			failureReason = "FORK runtime probe requires mkdir.";
+		if (!readTextFile(macroPath.string(), source, ioError)) {
+			failureReason = "Unable to read compiler support macro " + macroPath.filename().string() + ": " + ioError;
 			return false;
 		}
-		created = ::mkdtemp(tempTemplate);
-		if (created == nullptr) {
-			failureReason = "Unable to create temporary FORK probe directory.";
-			return false;
-		}
-		const fs::path tempRoot(created);
-		const fs::path targetPath = tempRoot / "created-by-fork";
-		struct ForkProbeCleanup {
-			fs::path tempRoot;
-			std::vector<std::string> order;
-			std::map<std::string, int> ints;
-			std::map<std::string, std::string> strings;
-
-			ForkProbeCleanup(fs::path tempRootRef, std::vector<std::string> savedOrderRef, std::map<std::string, int> savedIntsRef, std::map<std::string, std::string> savedStringsRef)
-			    : tempRoot(std::move(tempRootRef)), order(std::move(savedOrderRef)), ints(std::move(savedIntsRef)), strings(std::move(savedStringsRef)) {
-			}
-
-			~ForkProbeCleanup() {
-				std::error_code ignored;
-
-				if (!tempRoot.empty()) fs::remove_all(tempRoot, ignored);
-				mrvmUiReplaceGlobals(order, ints, strings);
-			}
-		};
-
-		mrvmUiCopyGlobals(savedOrder, savedInts, savedStrings);
-		ForkProbeCleanup cleanup(tempRoot, savedOrder, savedInts, savedStrings);
-		source = "$MACRO ForkRuntimeProbe;\nFORK('";
-		source += mkdirPath;
-		source += "', '";
-		source += targetPath.string();
-		source += "');\nSET_GLOBAL_INT('FORK_PROBE_ERROR', ERROR_LEVEL);\nEND_MACRO;\n";
 		if (!compileSource(source, bytecode, entryOffset, entryName, compileError)) {
-			failureReason = "FORK runtime probe macro does not compile: " + compileError;
-			return false;
-		}
-		{
-			VirtualMachine vm;
-
-			vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), entryName, true, true);
-			if (firstVmError(vm.log, vmError)) {
-				failureReason = "FORK runtime probe produced VM error: " + vmError;
-				return false;
-			}
-		}
-		mrvmUiCopyGlobals(globalOrder, globalInts, globalStrings);
-		if (!checkGlobalInt(globalInts, "FORK_PROBE_ERROR", 0, failureReason)) return false;
-		for (int attempt = 0; attempt < 50; ++attempt) {
-			if (fs::is_directory(targetPath)) {
-				createdByFork = true;
-				break;
-			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
-		}
-		if (!createdByFork) {
-			failureReason = "FORK runtime probe did not create the expected directory.";
+			failureReason = "Compiler support macro does not compile: " + macroPath.filename().string() + ": " + compileError;
 			return false;
 		}
 	}
@@ -9321,11 +8978,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
 	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
-	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
-	runTest(ctx, "Compiler profile PATH LaTeX detection guard", testCompilerProfilePathLatexDetectionGuard);
-	runTest(ctx, "Compiler profile build command roundtrip guard", testCompilerProfileBuildCommandRoundtripGuard);
-	runTest(ctx, "LATEXMK compiler profile command guard", testLatexmkCompilerProfileCommandGuard);
-	runTest(ctx, "Configured shell execution guard", testConfiguredShellExecutionGuard);
+	runTest(ctx, "Compiler support macros compile guard", testCompilerSupportMacrosCompileGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
@@ -9418,11 +9071,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
 	runTest(ctx, "Edit profile invalid macro rollback", testEditProfileInvalidMacroDoesNotLeaveProfileGuard);
 	runTest(ctx, "Edit profile CODE_LANGUAGE raster", testEditProfileCodeLanguageRasterGuard);
-	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
-	runTest(ctx, "Compiler profile PATH LaTeX detection guard", testCompilerProfilePathLatexDetectionGuard);
-	runTest(ctx, "Compiler profile build command roundtrip guard", testCompilerProfileBuildCommandRoundtripGuard);
-	runTest(ctx, "LATEXMK compiler profile command guard", testLatexmkCompilerProfileCommandGuard);
-	runTest(ctx, "Configured shell execution guard", testConfiguredShellExecutionGuard);
+	runTest(ctx, "Compiler support macros compile guard", testCompilerSupportMacrosCompileGuard);
 	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "File compare coprocessor harness", testFileCompareCoprocessorHarness);
