@@ -429,6 +429,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.pdfExportSettings = configuredPdfExportSettings();
 	snapshot.acquireSettings = configuredAcquireSettings();
 	snapshot.liveLogSettings = configuredLiveLogSettings();
+	snapshot.audioPlayerPath = configuredAudioPlayerPath();
 	snapshot.virtualDesktops = configuredVirtualDesktops();
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
@@ -615,6 +616,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('LIVE_LOG_SYNTAX_HIGHLIGHTING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.syntaxHighlighting)) + "');\n";
 	source += "MRSETUP('LIVE_LOG_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(snapshot.liveLogSettings.audioSignalUri) + "');\n";
 	appendHistoryRecords(source, "LIVE_LOG_JOURNAL_TAG_HISTORY", snapshot.liveLogSettings.journalAppTagHistory);
+	source += "MRSETUP('AUDIO_PLAYER', '" + escapeMrmacSingleQuotedLiteral(snapshot.audioPlayerPath) + "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";

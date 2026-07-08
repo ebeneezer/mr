@@ -25,6 +25,7 @@ std::string &configuredMacroDirectory();
 std::string &configuredHelpFile();
 std::string &configuredTempDirectory();
 std::string &configuredShellExecutable();
+std::string &configuredAudioPlayer();
 std::string &configuredLogFile();
 std::string &configuredColorThemeFile();
 std::string &configuredColorThemeDisplayNameValue();

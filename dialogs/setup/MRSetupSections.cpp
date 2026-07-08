@@ -31,6 +31,7 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/widgets/MRNumericSlider.hpp"
+#include "../../ui/widgets/MRDropList.hpp"
 #include "../../ui/widgets/MRSpinner.hpp"
 #include "../../ui/MRPalette.hpp"
 #include "../MRDirtyGating.hpp"
@@ -193,7 +194,10 @@ enum : ushort {
 	cmMrSetupPathsBrowseHelpUri,
 	cmMrSetupPathsBrowseTempPath,
 	cmMrSetupPathsBrowseShellUri,
-	cmMrSetupPathsBrowseLogUri
+	cmMrSetupPathsBrowseLogUri,
+	cmMrSetupPathsChooseAudioPlayer,
+	cmMrSetupPathsAcceptAudioPlayer,
+	cmMrSetupPathsBrowseAudioPlayer
 };
 
 enum {
@@ -207,6 +211,7 @@ struct PathsDialogRecord {
 	char helpFilePath[kPathFieldSize];
 	char tempDirectoryPath[kPathFieldSize];
 	char shellExecutablePath[kPathFieldSize];
+	char audioPlayerPath[kPathFieldSize];
 	char logFilePath[kPathFieldSize];
 	ushort logHandlingChoice;
 	char maxPathHistory[kHistoryNumberFieldSize];
@@ -415,7 +420,8 @@ bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &
 bool recordsEqual(const PathsDialogRecord &lhs, const PathsDialogRecord &rhs) {
 	return readRecordField(lhs.settingsMacroPath) == readRecordField(rhs.settingsMacroPath) && readRecordField(lhs.macroDirectoryPath) == readRecordField(rhs.macroDirectoryPath) &&
 	       readRecordField(lhs.helpFilePath) == readRecordField(rhs.helpFilePath) && readRecordField(lhs.tempDirectoryPath) == readRecordField(rhs.tempDirectoryPath) &&
-	       readRecordField(lhs.shellExecutablePath) == readRecordField(rhs.shellExecutablePath) && readRecordField(lhs.logFilePath) == readRecordField(rhs.logFilePath) && lhs.logHandlingChoice == rhs.logHandlingChoice &&
+	       readRecordField(lhs.shellExecutablePath) == readRecordField(rhs.shellExecutablePath) && readRecordField(lhs.audioPlayerPath) == readRecordField(rhs.audioPlayerPath) &&
+	       readRecordField(lhs.logFilePath) == readRecordField(rhs.logFilePath) && lhs.logHandlingChoice == rhs.logHandlingChoice &&
 	       readRecordField(lhs.maxPathHistory) == readRecordField(rhs.maxPathHistory) && readRecordField(lhs.maxFileHistory) == readRecordField(rhs.maxFileHistory) &&
 	       readRecordField(lhs.maxWorkspaceHistory) == readRecordField(rhs.maxWorkspaceHistory);
 }
@@ -437,6 +443,7 @@ void initPathsDialogRecord(PathsDialogRecord &record) {
 	writeRecordField(record.helpFilePath, sizeof(record.helpFilePath), configuredHelpFilePath());
 	writeRecordField(record.tempDirectoryPath, sizeof(record.tempDirectoryPath), configuredTempDirectoryPath());
 	writeRecordField(record.shellExecutablePath, sizeof(record.shellExecutablePath), configuredShellExecutablePath());
+	writeRecordField(record.audioPlayerPath, sizeof(record.audioPlayerPath), configuredAudioPlayerPath());
 	writeRecordField(record.logFilePath, sizeof(record.logFilePath), configuredLogFilePath());
 	record.logHandlingChoice = logHandlingChoiceFrom(configuredLogHandling());
 	writeRecordField(record.maxPathHistory, sizeof(record.maxPathHistory), std::to_string(configuredMaxPathHistory()));
@@ -451,6 +458,7 @@ bool validatePathsRecord(const PathsDialogRecord &record, std::string &errorText
 	std::string tempDir = normalizeConfiguredPathInput(readRecordField(record.tempDirectoryPath));
 	std::string shellPath = normalizeConfiguredPathInput(readRecordField(record.shellExecutablePath));
 	std::string logFile = normalizeConfiguredPathInput(readRecordField(record.logFilePath));
+	std::string audioPlayer = normalizeConfiguredPathInput(readRecordField(record.audioPlayerPath));
 	int maxPathHistory = 0;
 	int maxFileHistory = 0;
 	int maxWorkspaceHistory = 0;
@@ -460,6 +468,10 @@ bool validatePathsRecord(const PathsDialogRecord &record, std::string &errorText
 	if (!validateHelpFilePath(helpPath, &errorText)) return false;
 	if (!validateTempDirectoryPath(tempDir, &errorText)) return false;
 	if (!validateShellExecutablePath(shellPath, &errorText)) return false;
+	if (!audioPlayer.empty() && ::access(audioPlayer.c_str(), X_OK) != 0) {
+		errorText = "Audio player URI is missing or not executable.";
+		return false;
+	}
 	if (logHandlingFromChoice(record.logHandlingChoice) == MRLogHandling::Persist && !validateLogFilePath(logFile, &errorText)) return false;
 	if (!parseNonNegativeIntegerField(trimAscii(readRecordField(record.maxPathHistory)), maxPathHistory) || maxPathHistory < 5 || maxPathHistory > 50) {
 		errorText = "MAX_PATH_HISTORY must be within 5..50.";
@@ -477,6 +489,64 @@ bool validatePathsRecord(const PathsDialogRecord &record, std::string &errorText
 	return true;
 }
 
+void appendUniqueAudioPlayerPath(std::vector<std::string> &paths, const std::string &path) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+
+	if (normalized.empty()) return;
+	if (::access(normalized.c_str(), X_OK) != 0) return;
+	if (std::find(paths.begin(), paths.end(), normalized) == paths.end()) paths.push_back(normalized);
+}
+
+std::string pathJoinAudioExecutable(const std::string &directory, const char *name) {
+	std::string out = directory.empty() ? std::string(".") : directory;
+
+	if (!out.empty() && out.back() != '/') out.push_back('/');
+	out += name != nullptr ? name : "";
+	return out;
+}
+
+std::string audioExecutableFromPath(const char *name) {
+	const char *pathValue = std::getenv("PATH");
+	std::string path = pathValue != nullptr ? pathValue : "";
+	std::size_t start = 0;
+
+	while (start <= path.size()) {
+		std::size_t end = path.find(':', start);
+		std::string directory = end == std::string::npos ? path.substr(start) : path.substr(start, end - start);
+		std::string candidate = pathJoinAudioExecutable(directory, name);
+
+		if (::access(candidate.c_str(), X_OK) == 0) return normalizeConfiguredPathInput(candidate);
+		if (end == std::string::npos) break;
+		start = end + 1;
+	}
+	return std::string();
+}
+
+std::vector<std::string> detectedAudioPlayerPaths() {
+	static const char *const names[] = {
+	    "paplay",
+	    "pw-play",
+	    "aplay",
+	    "play",
+	    "mpg123",
+	    "mpg321",
+	    "ogg123",
+	    "flac123",
+	    "mpv",
+	    "mplayer",
+	    "cvlc",
+	    "ffplay",
+	    "canberra-gtk-play",
+	    "gst-play-1.0",
+	    "sndfile-play",
+	};
+	std::vector<std::string> paths;
+
+	for (const char *name : names)
+		appendUniqueAudioPlayerPath(paths, audioExecutableFromPath(name));
+	return paths;
+}
+
 bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &errorText) {
 	MRSetupPaths paths = pathsFromRecord(record);
 	MRSettingsWriteReport writeReport;
@@ -486,6 +556,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 	const std::string originalHelpPath = configuredHelpFilePath();
 	const std::string originalTempPath = configuredTempDirectoryPath();
 	const std::string originalShellPath = configuredShellExecutablePath();
+	const std::string originalAudioPlayer = configuredAudioPlayerPath();
 	const int originalMaxPathHistory = configuredMaxPathHistory();
 	const int originalMaxFileHistory = configuredMaxFileHistory();
 	const int originalMaxWorkspaceHistory = configuredMaxWorkspaceHistory();
@@ -495,6 +566,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 	const std::string maxFileHistoryText = trimAscii(readRecordField(record.maxFileHistory));
 	const std::string maxWorkspaceHistoryText = trimAscii(readRecordField(record.maxWorkspaceHistory));
 	const std::string logFileText = normalizeConfiguredPathInput(readRecordField(record.logFilePath));
+	const std::string audioPlayerText = normalizeConfiguredPathInput(readRecordField(record.audioPlayerPath));
 	const MRLogHandling newLogHandling = logHandlingFromChoice(record.logHandlingChoice);
 
 	if (!validatePathsRecord(record, errorText)) return false;
@@ -521,6 +593,14 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
 		return false;
 	}
+	if (!setConfiguredAudioPlayerPath(audioPlayerText, &errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
+		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		return false;
+	}
 	if (!setConfiguredLogHandling(newLogHandling, &errorText)) return false;
 	if (!setConfiguredLogFilePath(logFileText, &errorText)) {
 		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
@@ -528,6 +608,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
 		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
 		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredAudioPlayerPath(originalAudioPlayer, nullptr);
 		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
 		return false;
 	}
@@ -537,6 +618,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
 		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
 		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredAudioPlayerPath(originalAudioPlayer, nullptr);
 		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
 		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
 		return false;
@@ -547,6 +629,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
 		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
 		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredAudioPlayerPath(originalAudioPlayer, nullptr);
 		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
 		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
 		(void)applyConfiguredSettingsAssignment("MAX_PATH_HISTORY", std::to_string(originalMaxPathHistory), dummyPaths, nullptr);
@@ -558,6 +641,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
 		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
 		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredAudioPlayerPath(originalAudioPlayer, nullptr);
 		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
 		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
 		(void)applyConfiguredSettingsAssignment("MAX_PATH_HISTORY", std::to_string(originalMaxPathHistory), dummyPaths, nullptr);
@@ -570,6 +654,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
 		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
 		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredAudioPlayerPath(originalAudioPlayer, nullptr);
 		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
 		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
 		(void)applyConfiguredSettingsAssignment("MAX_PATH_HISTORY", std::to_string(originalMaxPathHistory), dummyPaths, nullptr);
@@ -710,6 +795,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (mAudioPlayerDropList.handleOpenListEvent(event)) return;
 		MRScrollableDialog::handleEvent(event);
 		updateLogFileFieldState();
 
@@ -748,6 +834,21 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 			case cmMrSetupPathsBrowseLogUri:
 				browseLogUri();
+				clearEvent(event);
+				return;
+
+			case cmMrSetupPathsChooseAudioPlayer:
+				mAudioPlayerDropList.toggle(*this, mAudioPlayerListAnchor, detectedAudioPlayerPaths(), inputLineValue(mAudioPlayerPathField), this, cmMrSetupPathsAcceptAudioPlayer, 8);
+				clearEvent(event);
+				return;
+
+			case cmMrSetupPathsAcceptAudioPlayer:
+				acceptAudioPlayerSelection();
+				clearEvent(event);
+				return;
+
+			case cmMrSetupPathsBrowseAudioPlayer:
+				browseAudioPlayer();
 				clearEvent(event);
 				return;
 
@@ -799,6 +900,11 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		int glyphRight = dialogWidth - 2;
 		int glyphLeft = glyphRight - glyphWidth;
 		int inputRight = glyphLeft;
+		int audioBrowseRight = glyphRight;
+		int audioBrowseLeft = audioBrowseRight - glyphWidth;
+		int audioDropRight = audioBrowseLeft;
+		int audioDropLeft = audioDropRight - glyphWidth;
+		int audioInputRight = audioDropLeft;
 		int buttonLeft = (dialogWidth - metrics.rowWidth) / 2;
 		int buttonTop = kVirtualDialogHeight - 3;
 
@@ -822,21 +928,27 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		mShellExecutablePathField = addInput(TRect(inputLeft, 10, inputRight, 11));
 		addBrowseButton(TRect(glyphLeft, 10, glyphRight, 11), cmMrSetupPathsBrowseShellUri);
 
-		mLogFilePathLabel = addLabel(TRect(labelLeft, 12, labelRight, 13), "Logfile URI: ");
-		mLogFilePathField = addInput(TRect(inputLeft, 12, inputRight, 13));
-		mLogFilePathBrowseButton = addBrowseButton(TRect(glyphLeft, 12, glyphRight, 13), cmMrSetupPathsBrowseLogUri);
+		addLabel(TRect(labelLeft, 12, labelRight, 13), "Audio player URI: ");
+		mAudioPlayerPathField = addInput(TRect(inputLeft, 12, audioInputRight, 13));
+		mAudioPlayerDropList.createButton(*this, TRect(audioDropLeft, 12, audioDropRight, 13), mAudioPlayerPathField, this, cmMrSetupPathsChooseAudioPlayer, true);
+		addBrowseButton(TRect(audioBrowseLeft, 12, audioBrowseRight, 13), cmMrSetupPathsBrowseAudioPlayer);
+		mAudioPlayerListAnchor = TRect(inputLeft, 12, audioBrowseRight - 3, 13);
 
-		addLabel(TRect(labelLeft, 14, labelRight, 15), "Path history: ");
-		mMaxPathHistorySlider = addNumericSlider(TRect(inputLeft, 14, inputRight, 15), 5, 50, 15, 1, 5);
+		mLogFilePathLabel = addLabel(TRect(labelLeft, 14, labelRight, 15), "Logfile URI: ");
+		mLogFilePathField = addInput(TRect(inputLeft, 14, inputRight, 15));
+		mLogFilePathBrowseButton = addBrowseButton(TRect(glyphLeft, 14, glyphRight, 15), cmMrSetupPathsBrowseLogUri);
 
-		addLabel(TRect(labelLeft, 16, labelRight, 17), "File history: ");
-		mMaxFileHistorySlider = addNumericSlider(TRect(inputLeft, 16, inputRight, 17), 5, 50, 15, 1, 5);
+		addLabel(TRect(labelLeft, 16, labelRight, 17), "Path history: ");
+		mMaxPathHistorySlider = addNumericSlider(TRect(inputLeft, 16, inputRight, 17), 5, 50, 15, 1, 5);
 
-		addLabel(TRect(labelLeft, 18, labelRight, 19), "Workspace history: ");
-		mMaxWorkspaceHistorySlider = addNumericSlider(TRect(inputLeft, 18, inputRight, 19), 5, 50, 15, 1, 5);
+		addLabel(TRect(labelLeft, 18, labelRight, 19), "File history: ");
+		mMaxFileHistorySlider = addNumericSlider(TRect(inputLeft, 18, inputRight, 19), 5, 50, 15, 1, 5);
 
-		addLabel(TRect(labelLeft, 20, dialogWidth - 2, 21), "Log handling:");
-		mLogHandlingField = addRadioGroup(TRect(labelLeft, 21, labelLeft + 20, 24), new TSItem("~V~olatile log", new TSItem("~L~og to file", new TSItem("Use ~J~ournalctl", nullptr))));
+		addLabel(TRect(labelLeft, 20, labelRight, 21), "Workspace history: ");
+		mMaxWorkspaceHistorySlider = addNumericSlider(TRect(inputLeft, 20, inputRight, 21), 5, 50, 15, 1, 5);
+
+		addLabel(TRect(labelLeft, 22, dialogWidth - 2, 23), "Log handling:");
+		mLogHandlingField = addRadioGroup(TRect(labelLeft, 23, labelLeft + 20, 26), new TSItem("~V~olatile log", new TSItem("~L~og to file", new TSItem("Use ~J~ournalctl", nullptr))));
 
 		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonTop, 0, buttons);
 	}
@@ -857,6 +969,15 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		writeRecordField(dest, destSize, readRecordField(buffer));
 	}
 
+	static std::string inputLineValue(TInputLine *inputLine) {
+		char buffer[kPathFieldSize];
+
+		if (inputLine == nullptr) return std::string();
+		std::memset(buffer, 0, sizeof(buffer));
+		inputLine->getData(buffer);
+		return readRecordField(buffer);
+	}
+
 	static int parseHistorySliderValueOrDefault(const char *value, int fallback) {
 		int parsed = fallback;
 		if (!parseNonNegativeIntegerField(trimAscii(readRecordField(value)), parsed)) parsed = fallback;
@@ -869,6 +990,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		setInputLineValue(mHelpFilePathField, record.helpFilePath);
 		setInputLineValue(mTempDirectoryPathField, record.tempDirectoryPath);
 		setInputLineValue(mShellExecutablePathField, record.shellExecutablePath);
+		setInputLineValue(mAudioPlayerPathField, record.audioPlayerPath);
 		setInputLineValue(mLogFilePathField, record.logFilePath);
 		if (mLogHandlingField != nullptr) mLogHandlingField->setData((void *)&record.logHandlingChoice);
 		if (mMaxPathHistorySlider != nullptr) {
@@ -895,6 +1017,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		readInputLineValue(mHelpFilePathField, record.helpFilePath, sizeof(record.helpFilePath));
 		readInputLineValue(mTempDirectoryPathField, record.tempDirectoryPath, sizeof(record.tempDirectoryPath));
 		readInputLineValue(mShellExecutablePathField, record.shellExecutablePath, sizeof(record.shellExecutablePath));
+		readInputLineValue(mAudioPlayerPathField, record.audioPlayerPath, sizeof(record.audioPlayerPath));
 		readInputLineValue(mLogFilePathField, record.logFilePath, sizeof(record.logFilePath));
 		if (mLogHandlingField != nullptr) mLogHandlingField->getData((void *)&record.logHandlingChoice);
 		if (mMaxPathHistorySlider != nullptr) mMaxPathHistorySlider->getData(&maxPathHistory);
@@ -962,6 +1085,37 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupShellExecutable, "SELECT SHELL EXECUTABLE URI", selected)) setInputValue(mShellExecutablePathField, selected);
 	}
 
+	void acceptAudioPlayerSelection() {
+		std::string selectedValue;
+
+		if (!mAudioPlayerDropList.acceptSelection(selectedValue)) return;
+		setInputValue(mAudioPlayerPathField, selectedValue);
+	}
+
+	void browseAudioPlayer() {
+		char fileName[MAXPATH] = {0};
+		const std::string currentPath = normalizeConfiguredPathInput(inputLineValue(mAudioPlayerPathField));
+		ushort result = cmCancel;
+
+		if (!currentPath.empty()) {
+			const std::size_t slashPos = currentPath.find_last_of('/');
+
+			if (slashPos != std::string::npos) {
+				std::string seed = currentPath.substr(0, slashPos + 1);
+				seed += "*.*";
+				writeRecordField(fileName, sizeof(fileName), seed);
+			} else
+				writeRecordField(fileName, sizeof(fileName), currentPath);
+		} else
+			writeRecordField(fileName, sizeof(fileName), "*.*");
+		result = execDialogWithDataCapture(new TFileDialog("*.*", "SELECT AUDIO PLAYER URI", "~N~ame", fdOpenButton, 0), fileName);
+		if (result == cmCancel) {
+			discardQueuedCancelEvent();
+			return;
+		}
+		setInputValue(mAudioPlayerPathField, normalizeConfiguredPathInput(fileName));
+	}
+
 	void browseLogUri() {
 		std::string selected;
 		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupLogFile, "SELECT LOGFILE URI", selected)) setInputValue(mLogFilePathField, selected);
@@ -979,15 +1133,18 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	PathsDialogRecord mCurrentRecord;
 	static const int kVirtualDialogWidth = 92;
-	static const int kVirtualDialogHeight = 28;
+	static const int kVirtualDialogHeight = 31;
 	TInputLine *mSettingsMacroPathField = nullptr;
 	TInputLine *mMacroDirectoryPathField = nullptr;
 	TInputLine *mHelpFilePathField = nullptr;
 	TInputLine *mTempDirectoryPathField = nullptr;
 	TInputLine *mShellExecutablePathField = nullptr;
+	TInputLine *mAudioPlayerPathField = nullptr;
 	TInputLine *mLogFilePathField = nullptr;
 	TInactiveStaticText *mLogFilePathLabel = nullptr;
 	TInlineGlyphButton *mLogFilePathBrowseButton = nullptr;
+	MRDropList mAudioPlayerDropList;
+	TRect mAudioPlayerListAnchor;
 	TRadioButtons *mLogHandlingField = nullptr;
 	MRNumericSlider *mMaxPathHistorySlider = nullptr;
 	MRNumericSlider *mMaxFileHistorySlider = nullptr;
@@ -2464,34 +2621,17 @@ bool liveLogsDialogRecordEqual(const LiveLogsDialogRecord &lhs, const LiveLogsDi
 	       std::strcmp(lhs.audioUri, rhs.audioUri) == 0;
 }
 
-bool paplayAvailable() {
-	const char *pathValue = std::getenv("PATH");
-	std::string path = pathValue != nullptr ? pathValue : "";
-	std::size_t start = 0;
-
-	while (start <= path.size()) {
-		std::size_t end = path.find(':', start);
-		std::string directory = end == std::string::npos ? path.substr(start) : path.substr(start, end - start);
-		std::string candidate;
-
-		if (directory.empty()) directory = ".";
-		candidate = directory;
-		if (!candidate.empty() && candidate.back() != '/') candidate.push_back('/');
-		candidate += "paplay";
-		if (::access(candidate.c_str(), X_OK) == 0) return true;
-		if (end == std::string::npos) break;
-		start = end + 1;
-	}
-	return false;
+bool audioPlayerAvailable() {
+	return !configuredAudioPlayerPath().empty();
 }
 
 class LiveLogsSetupDialog : public MRScrollableDialog {
   public:
-	LiveLogsSetupDialog() : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(66, 15), "LIVE LOGS", 64, 13, initSetupDialogFrame), messageLineField(nullptr), audioField(nullptr), scrollDirectionField(nullptr), lineNumbersField(nullptr), audioUriField(nullptr), audioAvailable(paplayAvailable()) {
+	LiveLogsSetupDialog() : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(66, 15), "LIVE LOGS", 64, 13, initSetupDialogFrame), messageLineField(nullptr), audioField(nullptr), scrollDirectionField(nullptr), lineNumbersField(nullptr), audioUriField(nullptr), audioAvailable(audioPlayerAvailable()) {
 		addManaged(new TStaticText(TRect(3, 2, 35, 3), "Search hits:"), TRect(3, 2, 35, 3));
 		messageLineField = new TCheckBoxes(TRect(3, 3, 34, 5), new TSItem("report on message line", new TSItem("system beep", nullptr)));
 		addManaged(messageLineField, TRect(3, 3, 34, 5));
-		audioField = new TCheckBoxes(TRect(3, 5, 34, 6), new TSItem("audible signal via paplay", nullptr));
+		audioField = new TCheckBoxes(TRect(3, 5, 34, 6), new TSItem("audible signal via player", nullptr));
 		addManaged(audioField, TRect(3, 5, 34, 6));
 		if (!audioAvailable) audioField->setState(sfDisabled, True);
 

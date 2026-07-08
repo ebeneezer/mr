@@ -30,6 +30,7 @@ struct MRSettingsSnapshot {
 	MRPdfExportSettings pdfExportSettings;
 	MRAcquireSettings acquireSettings;
 	MRLiveLogSettings liveLogSettings;
+	std::string audioPlayerPath;
 	int virtualDesktops{1};
 	bool cyclicVirtualDesktops{false};
 	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};

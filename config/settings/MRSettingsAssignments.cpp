@@ -252,6 +252,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"LIVE_LOG_SYNTAX_HIGHLIGHTING", MRSettingsKeyClass::Global, true},
     {"LIVE_LOG_AUDIO_URI", MRSettingsKeyClass::Global, true},
     {"LIVE_LOG_JOURNAL_TAG_HISTORY", MRSettingsKeyClass::Global, false},
+    {"AUDIO_PLAYER", MRSettingsKeyClass::Global, true},
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
@@ -701,6 +702,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredPdfExportSettings(MRPdfExportSettings(), errorMessage)) return false;
 	if (!setConfiguredAcquireSettings(MRAcquireSettings(), errorMessage)) return false;
 	if (!setConfiguredLiveLogSettings(MRLiveLogSettings(), errorMessage)) return false;
+	if (!setConfiguredAudioPlayerPath("", errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
@@ -1236,6 +1238,7 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				settings.journalAppTagHistory.push_back(value);
 				return setConfiguredLiveLogSettings(settings, errorMessage);
 			}
+			if (upper == "AUDIO_PLAYER") return setConfiguredAudioPlayerPath(value, errorMessage);
 			if (upper == "AUTOEXEC_MACRO") return addConfiguredAutoexecMacroEntry(value, errorMessage);
 			if (upper == "LASTFILEDIALOGPATH") return setConfiguredLastFileDialogPath(value, errorMessage);
 			if (upper == "WORKSPACE") {
@@ -1782,6 +1785,13 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "LIVE_LOG_JOURNAL_TAG_HISTORY") {
 				snapshot.liveLogSettings.journalAppTagHistory.push_back(value);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "AUDIO_PLAYER") {
+				snapshot.audioPlayerPath = normalizeConfiguredPathInput(value);
+				if (!snapshot.audioPlayerPath.empty()) snapshot.audioPlayerPath = makeAbsolutePath(snapshot.audioPlayerPath);
+				if (!snapshot.audioPlayerPath.empty() && !isExecutableFile(snapshot.audioPlayerPath)) snapshot.audioPlayerPath.clear();
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}

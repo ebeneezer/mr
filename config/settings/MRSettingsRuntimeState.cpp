@@ -306,6 +306,11 @@ std::string &configuredShellExecutable() {
 	return value;
 }
 
+std::string &configuredAudioPlayer() {
+	static std::string value;
+	return value;
+}
+
 std::string &configuredLogFile() {
 	static std::string value;
 	return value;
@@ -707,6 +712,24 @@ bool setConfiguredLiveLogSettings(const MRLiveLogSettings &settings, std::string
 MRLiveLogSettings configuredLiveLogSettings() {
 	recordSettingsRuntimeRead();
 	return g_liveLogSettings;
+}
+
+bool setConfiguredAudioPlayerPath(const std::string &path, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousPath = configuredAudioPlayer();
+
+	configuredAudioPlayer() = normalized.empty() ? std::string() : makeAbsolutePath(normalized);
+	if (previousPath != configuredAudioPlayer()) markConfiguredSettingsDirty();
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+std::string configuredAudioPlayerPath() {
+	const std::string &configured = configuredAudioPlayer();
+
+	recordSettingsRuntimeRead();
+	if (!configured.empty() && isExecutableFile(configured)) return makeAbsolutePath(configured);
+	return std::string();
 }
 
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {

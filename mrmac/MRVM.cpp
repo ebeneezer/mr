@@ -5087,6 +5087,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 									                         "LIVE_LOG_REPORT_MESSAGE_LINE, LIVE_LOG_REPORT_BEEP, LIVE_LOG_REPORT_AUDIO, "
 									                         "LIVE_LOG_SCROLL_DIRECTION, LIVE_LOG_LINE_NUMBERS, LIVE_LOG_TIMESTAMPS, "
 									                         "LIVE_LOG_SYNTAX_HIGHLIGHTING, LIVE_LOG_AUDIO_URI, LIVE_LOG_JOURNAL_TAG_HISTORY, "
+									                         "AUDIO_PLAYER, "
 									                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
 										                         "COMPILER_ERROR_MESSAGE_PLACEMENT, SCROLLBAR_VISIBILITY, TRACK_COMPILER_WARNINGS, TRACK_COMPILER_NOTES, "
 										                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, WINDOW_COLORTHEME_URI, "

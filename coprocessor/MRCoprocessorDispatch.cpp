@@ -329,6 +329,31 @@ long long roundedMilliseconds(double valueMs) {
 	return static_cast<long long>(valueMs + 0.5);
 }
 
+struct AudioPlayerInvocationSpec {
+	const char *name;
+	const char *args[4];
+};
+
+std::string fileNameFromPath(const std::string &path) {
+	const std::size_t slash = path.find_last_of('/');
+
+	return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+const AudioPlayerInvocationSpec *audioPlayerInvocationSpec(const std::string &name) {
+	static const AudioPlayerInvocationSpec specs[] = {
+	    {"ffplay", {"-nodisp", "-autoexit", "-loglevel", "quiet"}},
+	    {"mpv", {"--no-video", "--really-quiet", nullptr, nullptr}},
+	    {"mplayer", {"-really-quiet", nullptr, nullptr, nullptr}},
+	    {"cvlc", {"--play-and-exit", "--intf", "dummy", nullptr}},
+	    {"canberra-gtk-play", {"-f", nullptr, nullptr, nullptr}},
+	};
+
+	for (const AudioPlayerInvocationSpec &spec : specs)
+		if (name == spec.name) return &spec;
+	return nullptr;
+}
+
 void postMiniMapHeroEvent(const mr::coprocessor::TaskTiming &timing, const mr::coprocessor::MiniMapWarmupPayload &payload) {
 	if (payload.totalLines <= 1) return;
 	const long long totalMs = roundedMilliseconds(timing.totalMs());
@@ -341,11 +366,25 @@ void postMiniMapHeroEvent(const mr::coprocessor::TaskTiming &timing, const mr::c
 
 void playAudioSignal(const std::string &uri) {
 	pid_t childPid;
+	const std::string player = configuredAudioPlayerPath();
+	const std::string playerName = fileNameFromPath(player);
+	const AudioPlayerInvocationSpec *spec = audioPlayerInvocationSpec(playerName);
 
-	if (uri.empty()) return;
+	if (uri.empty() || player.empty()) return;
 	childPid = ::fork();
 	if (childPid != 0) return;
-	::execlp("paplay", "paplay", uri.c_str(), static_cast<char *>(nullptr));
+	{
+		const char *argv[8];
+		int argc = 0;
+
+		argv[argc++] = player.c_str();
+		if (spec != nullptr)
+			for (const char *arg : spec->args)
+				if (arg != nullptr) argv[argc++] = arg;
+		argv[argc++] = uri.c_str();
+		argv[argc] = nullptr;
+		::execv(player.c_str(), const_cast<char *const *>(argv));
+	}
 	::_exit(127);
 }
 

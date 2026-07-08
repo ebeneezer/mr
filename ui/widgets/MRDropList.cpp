@@ -224,16 +224,22 @@ void MRDropList::showValues(TGroup &owner, const TRect &anchor, const std::vecto
 
 void MRDropList::hide() {
 	if (listView == nullptr) return;
+	MRColumnListView *removedView = listView;
+	MRScrollableDialog *redrawScrollOwner = scrollOwner;
+	TGroup *redrawListOwner = listOwner;
+
 	if (scrollOwner != nullptr) {
-		if (scrollOwner->current == listView) scrollOwner->setCurrent(nullptr, TView::leaveSelect);
-		scrollOwner->removeManaged(listView);
-		scrollOwner = nullptr;
+		TGroup *content = scrollOwner->managedContent();
+
+		if (content != nullptr && content->current == removedView) content->setCurrent(nullptr, TView::leaveSelect);
+		if (scrollOwner->current == removedView) scrollOwner->setCurrent(nullptr, TView::leaveSelect);
+		scrollOwner->removeManaged(removedView);
 	} else if (listOwner != nullptr) {
-		if (listOwner->current == listView) listOwner->setCurrent(nullptr, TView::leaveSelect);
-		listOwner->remove(listView);
+		if (listOwner->current == removedView) listOwner->setCurrent(nullptr, TView::leaveSelect);
+		listOwner->remove(removedView);
 	}
-	TObject::destroy(listView);
 	listView = nullptr;
+	scrollOwner = nullptr;
 	listOwner = nullptr;
 	itemValues.clear();
 	speedSearchPrefix.clear();
@@ -242,6 +248,16 @@ void MRDropList::hide() {
 	activeAcceptCommand = 0;
 	activeMaxVisibleRows = 0;
 	if (linkedInput == nullptr) linkedInputCursor = -1;
+	TObject::destroy(removedView);
+	if (redrawScrollOwner != nullptr) {
+		TGroup *content = redrawScrollOwner->managedContent();
+
+		if (content != nullptr)
+			content->drawView();
+		else
+			redrawScrollOwner->drawView();
+	} else if (redrawListOwner != nullptr)
+		redrawListOwner->drawView();
 }
 
 bool MRDropList::handleLinkedInputEvent(TEvent &event, TGroup &owner, const TRect &anchor, const std::vector<std::string> &values, TInputLine *link, TView *relay, ushort acceptCommand, short maxVisibleRows) {

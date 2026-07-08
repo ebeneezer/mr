@@ -653,6 +653,8 @@ bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string
 [[nodiscard]] MRAcquireSettings configuredAcquireSettings();
 bool setConfiguredLiveLogSettings(const MRLiveLogSettings &settings, std::string *errorMessage = nullptr);
 [[nodiscard]] MRLiveLogSettings configuredLiveLogSettings();
+bool setConfiguredAudioPlayerPath(const std::string &path, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredAudioPlayerPath();
 void configuredMultiFilespecHistoryEntries(std::vector<std::string> &outValues);
 void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues);
 bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage = nullptr);
