@@ -109,11 +109,12 @@ bool MRFileEditor::justifyParagraph(int leftMargin, int rightMargin) {
 	}
 	if (start == end) return true;
 	paragraphText.reserve(end - start);
-	for (std::size_t current = start; current < end; current = mBufferModel.document().nextLine(current))
-		if (std::string chunk = mBufferModel.document().lineText(current); true) {
-			if (!paragraphText.empty()) paragraphText.push_back('\n');
-			paragraphText += chunk;
-		}
+	for (std::size_t current = start; current < end; current = mBufferModel.document().nextLine(current)) {
+		const std::string chunk = mBufferModel.document().lineText(current);
+
+		if (!paragraphText.empty()) paragraphText.push_back('\n');
+		paragraphText += chunk;
+	}
 	std::string justifiedText = MRTextFormatting::justifyParagraphText(paragraphText, leftMargin, rightMargin);
 	if (justifiedText.empty()) return true;
 	return replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), justifiedText.data(), static_cast<uint>(justifiedText.size()));

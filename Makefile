@@ -210,6 +210,8 @@ CXX_SOURCES = \
 	ui/MRFrame.cpp \
 	ui/MRBentoBox.cpp \
 	ui/MRBentoBoxDiagnostics.cpp \
+	ui/MRBentoBoxFileCompare.cpp \
+	ui/MRBentoBoxFileCompareView.cpp \
 	ui/MRBentoBoxOutline.cpp \
 	ui/MRBentoBoxPaneWindow.cpp \
 	ui/MRBentoBoxProjection.cpp \

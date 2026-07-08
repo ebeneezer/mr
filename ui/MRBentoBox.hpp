@@ -313,6 +313,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool fileComparePanesEditable() const noexcept;
 	[[nodiscard]] std::size_t fileCompareGroupStartLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept;
 	[[nodiscard]] std::size_t fileCompareGroupLineCountForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept;
+	[[nodiscard]] std::size_t fileCompareGroupEffectiveLineCountForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, bool editablePanes) const noexcept;
 	[[nodiscard]] std::size_t fileCompareGroupNavigationLineForRole(const FileCompareChangeGroup &group, MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const;
 	[[nodiscard]] std::size_t fileCompareMappedLineForRole(MRBentoPaneRole sourceRole, std::size_t sourceLine, const MRFileEditor &targetEditor, bool editablePanes) const noexcept;
 	[[nodiscard]] const FileCompareChangeGroup *fileCompareChangeGroupAtOrVisibleForRole(MRBentoPaneRole role, const MRFileEditor &editor, bool editablePanes) const noexcept;
