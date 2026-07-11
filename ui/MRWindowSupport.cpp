@@ -45,6 +45,7 @@ TFrame *initMrDialogFrame(TRect bounds) {
 std::string g_logBuffer;
 std::size_t g_logPersistedBytes = 0;
 std::string g_logPersistedPath;
+bool g_logWindowInitializing = false;
 bool g_keystrokeRecordingActive = false;
 bool g_keystrokeRecordingMarkerVisible = false;
 bool g_macroBrainMarkerActive = false;
@@ -319,7 +320,20 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 	MREditWindow *win = findWindowByTitle(kLogWindowTitle);
 
 	if (g_logBuffer.empty()) g_logBuffer = "MR/MEMAC log initialized.\n";
-	if (win == nullptr) win = createReadOnlyTextWindow(kLogWindowTitle.data(), g_logBuffer.c_str(), !activate);
+	if (win == nullptr) {
+		std::string refreshedText;
+
+		g_logWindowInitializing = true;
+		win = createReadOnlyTextWindow(kLogWindowTitle.data(), g_logBuffer.c_str(), !activate);
+		refreshedText = g_logBuffer;
+		if (win != nullptr) {
+			win->setReadOnly(false);
+			static_cast<void>(win->loadTextBuffer(refreshedText.c_str(), kLogWindowTitle.data()));
+			win->setReadOnly(true);
+			win->setFileChanged(false);
+		}
+		g_logWindowInitializing = false;
+	}
 	if (win == nullptr) return nullptr;
 	win->setWindowRole(MREditWindow::wrLog);
 	if (activate) static_cast<void>(mrActivateEditWindow(win));
@@ -517,6 +531,7 @@ void mrLogMessage(std::string_view message) {
 			g_logPersistedPath = path;
 		}
 	}
+	if (g_logWindowInitializing) return;
 	win = findWindowByTitle(kLogWindowTitle);
 	if (win == nullptr) {
 		win = ensureLogWindowInternal(false);

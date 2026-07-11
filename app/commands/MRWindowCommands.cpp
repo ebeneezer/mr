@@ -666,13 +666,16 @@ MRBentoBox *restoreFileCompareWorkspaceEntry(const WorkspaceEntry &entry, int vi
 	setup.compare = captureWorkspaceFileCompareSource(compareWindow);
 	title = fileCompareWorkspaceTitle(setup);
 	bentoBox = createFileCompareBentoBoxWindow(title.c_str());
+	if (bentoBox != nullptr) {
+		bentoBox->mVirtualDesktop = virtualDesktop;
+		applyWorkspaceEntryGeometry(bentoBox, entry);
+	}
 	if (bentoBox == nullptr || !bentoBox->initializeFileCompare(setup) || !bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)) {
 		closeWorkspaceWindow(bentoBox);
 		closeWorkspaceWindow(compareWindow);
 		closeWorkspaceWindow(originalWindow);
 		return nullptr;
 	}
-	bentoBox->mVirtualDesktop = virtualDesktop;
 	bentoBox->refreshFileCompareConfiguration();
 
 	taskId = submitWorkspaceFileCompareTask(bentoBox, setup);
@@ -775,12 +778,14 @@ void flushWorkspaceAutosave(bool force) {
 	if (runtimePreserveAutosavedWorkspace()) return;
 	if (!force && std::chrono::steady_clock::now() < g_workspaceAutosaveDue) return;
 	mrLogMessage(std::string("Workspace autosave flush begin force=") + (force ? "1" : "0") + ".");
+	mrLogMessage(std::string("Workspace autosave dirty true->false source=flush force=") + (force ? "1" : "0") + ".");
 	g_workspaceAutosaveDirty = false;
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		if (!persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)) {
 			g_workspaceAutosaveDirty = true;
 			g_workspaceAutosaveDue = std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay;
+			mrLogMessage("Workspace autosave dirty false->true source=flush-failed.");
 			if (!errorText.empty()) mrLogMessage("Workspace autosave failed: " + errorText);
 			return;
 		}
@@ -1348,7 +1353,7 @@ MREditWindow *createLogWindow(const char *title) {
 	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRLogWindow(bounds, title, nextEditorWindowNumber());
-	finishNewEditWindow(win);
+	finishNewEditWindow(win, false);
 	return win;
 }
 

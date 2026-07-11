@@ -506,7 +506,12 @@ class MacroLibraryListView : public TListViewer {
 		compileErrorFlags = errorFlags;
 		selectableItemCount = std::max<short>(0, selectableItems);
 		setRange(static_cast<short>(itemRows.size()));
-		if (itemRows.empty() || selectableItemCount <= 0) focusItemNum(0);
+		if (range <= 0) {
+			focused = 0;
+			topItem = 0;
+			return;
+		}
+		if (selectableItemCount <= 0) focusItemNum(0);
 		else if (focused >= range)
 			focusItemNum(range - 1);
 	}

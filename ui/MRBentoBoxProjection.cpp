@@ -5,12 +5,11 @@
 #include "MRWindowSupport.hpp"
 
 #include "../app/MRCommandRouter.hpp"
-#include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
-#include <cstring>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -503,39 +502,39 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 			layoutSplitPanes();
 			if (bentoRoleIsOutline(role)) refreshOutlinePanes(true);
 			if (bentoMode == bbmFileCompare) refreshFileComparePanes();
-			mrMarkWorkspaceAutosaveDirty();
+			mrMarkWorkspaceAutosaveDirty("bento pane role", this);
 			return true;
 		case bppSplitRight:
 			if (!bentoRoleIsOutline(role)) {
 				if (bentoMode == bbmFileCompare) {
 					const bool ok = splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
 					if (ok) refreshFileComparePanes();
-					if (ok) mrMarkWorkspaceAutosaveDirty();
+					if (ok) mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 					return ok;
 				}
 				const bool ok = splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
-				if (ok) mrMarkWorkspaceAutosaveDirty();
+				if (ok) mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 				return ok;
 			}
 			if (splitLeafNode(targetLeafId, bsoVertical, spec) < 0) return false;
 			refreshOutlinePanes(true);
-			mrMarkWorkspaceAutosaveDirty();
+			mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 			return true;
 		case bppSplitDown:
 			if (!bentoRoleIsOutline(role)) {
 				if (bentoMode == bbmFileCompare) {
 					const bool ok = splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
 					if (ok) refreshFileComparePanes();
-					if (ok) mrMarkWorkspaceAutosaveDirty();
+					if (ok) mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 					return ok;
 				}
 				const bool ok = splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
-				if (ok) mrMarkWorkspaceAutosaveDirty();
+				if (ok) mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 				return ok;
 			}
 			if (splitLeafNode(targetLeafId, bsoHorizontal, spec) < 0) return false;
 			refreshOutlinePanes(true);
-			mrMarkWorkspaceAutosaveDirty();
+			mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 			return true;
 		default:
 			return false;
@@ -682,12 +681,12 @@ bool MRBentoBox::splitActiveEditorPane(MRBentoPanePlacement placement) {
 	switch (placement) {
 		case bppSplitRight: {
 			const bool ok = splitLeafNode(activeLeafId, bsoVertical, spec) >= 0;
-			if (ok) mrMarkWorkspaceAutosaveDirty();
+			if (ok) mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 			return ok;
 		}
 		case bppSplitDown: {
 			const bool ok = splitLeafNode(activeLeafId, bsoHorizontal, spec) >= 0;
-			if (ok) mrMarkWorkspaceAutosaveDirty();
+			if (ok) mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 			return ok;
 		}
 		default:
@@ -1494,7 +1493,7 @@ void MRBentoBox::closePane(int leafId) noexcept {
 	collapseLeafNode(leafId);
 	if (activeLeafId == leafId || nodeIndexForLeaf(activeLeafId) < 0) setActivePane(0);
 	layoutSplitPanes();
-	mrMarkWorkspaceAutosaveDirty();
+	mrMarkWorkspaceAutosaveDirty("bento pane close", this);
 }
 
 void MRBentoBox::closeSecondaryPane() noexcept {
@@ -1507,7 +1506,7 @@ void MRBentoBox::closeSecondaryPane() noexcept {
 	}
 	setActivePane(0);
 	layoutSplitPanes();
-	if (changed) mrMarkWorkspaceAutosaveDirty();
+	if (changed) mrMarkWorkspaceAutosaveDirty("bento secondary pane", this);
 }
 
 void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
@@ -1726,7 +1725,7 @@ void MRBentoBox::setDividerPosition(int nodeIndex, int position) noexcept {
 	if (layoutTree[nodeIndex].dividerPosition == clampedPosition) return;
 	layoutTree[nodeIndex].dividerPosition = clampedPosition;
 	layoutSplitPanes();
-	mrMarkWorkspaceAutosaveDirty();
+	mrMarkWorkspaceAutosaveDirty("bento divider", this);
 }
 
 void MRBentoBox::setActivePane(int leafId) noexcept {
@@ -1763,7 +1762,7 @@ void MRBentoBox::toggleLeafMaximized(int leafId) noexcept {
 	maximizedLeafId = maximizedLeafId == leafId ? -1 : leafId;
 	setActivePane(leafId);
 	layoutSplitPanes();
-	mrMarkWorkspaceAutosaveDirty();
+	mrMarkWorkspaceAutosaveDirty("bento maximize", this);
 }
 
 bool MRBentoBox::handleDividerChromeMouse(TEvent &event) {
@@ -1984,6 +1983,7 @@ std::string MRBentoBox::paneTitleForLeaf(const BentoLeaf &leaf) const {
 	if (leaf.role == bprProblems && !compilerProblemsStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + compilerProblemsStatus + "]";
 	if (leaf.role == bprStructure && !structureOutlineStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + structureOutlineStatus + "]";
 	if (leaf.role == bprFunctions && !functionsOutlineStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + functionsOutlineStatus + "]";
+	if (leaf.role == bprDebuggerOutput && !macroDebuggerStatus.empty()) return std::string(bentoPaneRoleTitle(leaf.role)) + " [" + macroDebuggerStatus + "]";
 	if (!leaf.title.empty()) return leaf.title;
 	return bentoPaneRoleTitle(leaf.role);
 }

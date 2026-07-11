@@ -210,6 +210,15 @@ void appendMenuItem(TMenu *menu, TMenuItem *item) {
 	tail->next = item;
 }
 
+std::string visibleMenuText(const char *name) {
+	std::string text;
+
+	if (name == nullptr) return text;
+	for (const char *pos = name; *pos != '\0'; ++pos)
+		if (*pos != '~') text.push_back(*pos);
+	return text;
+}
+
 int hotkeyIndex(char ch) noexcept {
 	if (ch >= 'A' && ch <= 'Z') return ch - 'A';
 	if (ch >= '0' && ch <= '9') return 26 + (ch - '0');
@@ -385,6 +394,46 @@ int MRMenuBar::findRuntimeNodeIndex(const std::string &menuKey, const std::strin
 	return static_cast<int>(std::distance(mRuntimeNodes.begin(), it));
 }
 
+bool MRMenuBar::runtimeMenuGroupExists(const std::string &menuKey) const noexcept {
+	for (const RuntimeMenuNode &node : mRuntimeNodes)
+		if (node.menuKey == menuKey) return true;
+	return false;
+}
+
+bool MRMenuBar::appendRuntimeMenuNode(const RuntimeMenuNode &node, bool menuGroupExists) {
+	TMenuItem *groupItem = nullptr;
+	TMenu *submenu = nullptr;
+
+	if (menu == nullptr || node.menuKey.empty()) return false;
+	if (menuGroupExists) {
+		for (TMenuItem *item = menu->items; item != nullptr; item = item->next)
+			if (item->command == 0 && canonicalMenuToken(visibleMenuText(item->name)) == node.menuKey) {
+				groupItem = item;
+				break;
+			}
+		if (groupItem == nullptr || groupItem->subMenu == nullptr) return false;
+		submenu = groupItem->subMenu;
+	} else {
+		std::array<bool, 36> usedHotkeys{};
+		std::string groupTitle = node.menuTitle;
+		char groupHotkey = '\0';
+
+		for (const TMenuItem *item = menu->items; item != nullptr; item = item->next)
+			markUsedHotkey(usedHotkeys, markedHotkeyChar(item->name));
+		groupHotkey = chooseMenuHotkey(groupTitle, usedHotkeys);
+		groupTitle = menuTitleWithHotkeyMarker(groupTitle, groupHotkey);
+		submenu = new TMenu();
+		groupItem = new TMenuItem(groupTitle.c_str(), groupHotkey == '\0' ? TKey(kbNoKey) : TKey(static_cast<ushort>(groupHotkey), kbAltShift), submenu, hcNoContext);
+		appendMenuItem(menu, groupItem);
+	}
+	if (node.kind == RuntimeMenuNodeKind::Separator) {
+		appendMenuItem(submenu, &newLine());
+		return true;
+	}
+	appendMenuItem(submenu, new TMenuItem(node.itemTitle.c_str(), node.command, kbNoKey, hcNoContext, node.keyLabel.empty() ? nullptr : node.keyLabel.c_str()));
+	return true;
+}
+
 bool MRMenuBar::rebuildRuntimeMenu() {
 	struct RuntimeMenuGroup {
 		std::string menuKey;
@@ -429,9 +478,7 @@ bool MRMenuBar::rebuildRuntimeMenu() {
 				appendMenuItem(submenu, &newLine());
 				continue;
 			}
-			std::string keyLabel = mrvmUiMenuKeyLabelForMacroSpec(node->macroSpec);
-			if (keyLabel.empty()) keyLabel = mrvmUiMenuKeyLabelForMacroSpec(node->ownerSpec);
-			appendMenuItem(submenu, new TMenuItem(node->itemTitle.c_str(), node->command, kbNoKey, hcNoContext, keyLabel.empty() ? nullptr : keyLabel.c_str()));
+			appendMenuItem(submenu, new TMenuItem(node->itemTitle.c_str(), node->command, kbNoKey, hcNoContext, node->keyLabel.empty() ? nullptr : node->keyLabel.c_str()));
 		}
 		markUsedHotkey(usedHotkeys, groupHotkey);
 		groupTitle = menuTitleWithHotkeyMarker(groupTitle, groupHotkey);
@@ -447,6 +494,7 @@ bool MRMenuBar::rebuildRuntimeMenu() {
 
 bool MRMenuBar::registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage) {
 	RuntimeMenuNode node;
+	const bool menuGroupExists = runtimeMenuGroupExists(canonicalMenuToken(menuTitle));
 
 	node.menuTitle = trimAscii(menuTitle);
 	node.menuKey = canonicalMenuToken(menuTitle);
@@ -472,13 +520,49 @@ bool MRMenuBar::registerRuntimeMenuItem(const std::string &menuTitle, const std:
 	node.kind = node.itemTitle.empty() ? RuntimeMenuNodeKind::Separator : RuntimeMenuNodeKind::Item;
 	if (node.kind == RuntimeMenuNodeKind::Item && !allocateRuntimeCommand(node.command, errorMessage)) return false;
 	node.order = ++mNextRuntimeOrder;
-	mRuntimeNodes.push_back(std::move(node));
-	if (!rebuildRuntimeMenu()) {
+	mRuntimeNodes.push_back(node);
+	if (!appendRuntimeMenuNode(node, menuGroupExists)) {
 		mRuntimeNodes.pop_back();
-		if (errorMessage != nullptr) *errorMessage = "REGISTER_MENU_ITEM could not rebuild the menu bar.";
+		if (errorMessage != nullptr) *errorMessage = "REGISTER_MENU_ITEM could not update the menu bar.";
 		return false;
 	}
 	drawView();
+	return true;
+}
+
+bool MRMenuBar::setRuntimeMenuKeyLabelForMacroSpec(const std::string &macroSpec, const std::string &keyLabel) {
+	const std::string normalizedSpec = trimAscii(macroSpec);
+	bool changed = false;
+
+	if (normalizedSpec.empty()) return true;
+	for (RuntimeMenuNode &node : mRuntimeNodes) {
+		TMenuItem *item;
+
+		if (node.kind != RuntimeMenuNodeKind::Item) continue;
+		if (node.macroSpec != normalizedSpec && node.ownerSpec != normalizedSpec) continue;
+		if (node.keyLabel == keyLabel) continue;
+		node.keyLabel = keyLabel;
+		item = findMenuItemByCommand(menu, node.command);
+		if (item != nullptr) setMenuItemShortcut(item, TKey(kbNoKey), node.keyLabel.empty() ? nullptr : node.keyLabel.c_str());
+		changed = true;
+	}
+	if (changed) drawView();
+	return true;
+}
+
+bool MRMenuBar::clearRuntimeMenuKeyLabels() {
+	bool changed = false;
+
+	for (RuntimeMenuNode &node : mRuntimeNodes) {
+		TMenuItem *item;
+
+		if (node.keyLabel.empty()) continue;
+		node.keyLabel.clear();
+		item = findMenuItemByCommand(menu, node.command);
+		if (item != nullptr) setMenuItemShortcut(item, TKey(kbNoKey), nullptr);
+		changed = true;
+	}
+	if (changed) drawView();
 	return true;
 }
 

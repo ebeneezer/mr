@@ -1088,6 +1088,24 @@ bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec, std::strin
 	return returnWithDirectScreenMutation(menuBar->removeRuntimeNodesOwnedByFile(fileSpec, errorMessage));
 }
 
+bool mrvmUiSetRuntimeMenuKeyLabelForMacroSpec(const std::string &macroSpec, const std::string &keyLabel, std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (menuBar == nullptr) return true;
+	return returnWithDirectScreenMutation(menuBar->setRuntimeMenuKeyLabelForMacroSpec(macroSpec, keyLabel));
+}
+
+bool mrvmUiClearRuntimeMenuKeyLabels(std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (menuBar == nullptr) return true;
+	return returnWithDirectScreenMutation(menuBar->clearRuntimeMenuKeyLabels());
+}
+
 bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage) {
 	auto *app = dynamic_cast<TApplication *>(TProgram::application);
 	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;

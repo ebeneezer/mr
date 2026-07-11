@@ -114,6 +114,17 @@ Do not move theme or keymap application as part of bootstrap cleanup unless the 
 External theme and keymap files follow the same build-epoch version rule when
 they are loaded through bootstrap-related paths.
 
+## AUTOEXEC Macros
+
+`AUTOEXEC_MACRO` entries are configured selection. Bootstrap does not derive,
+add or otherwise decide which macros are marked for AUTOEXEC.
+
+Bootstrap attempts every configured entry. A missing or non-executable entry is
+logged and removed from the existing configured entry list. The mutation marks
+the runtime settings dirty; the central coalesced settings flush persists the
+filtered canonical source. This cleanup must not use the message line. A
+successfully executable entry remains configured.
+
 ## Transitional keymap exception
 
 Keymap is currently a tolerated staging exception inside the VM-centered bootstrap contract.

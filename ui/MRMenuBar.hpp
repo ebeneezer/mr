@@ -38,6 +38,8 @@ class MRMenuBar : public TMenuBar {
 	void setLineDrawingMenuState(bool enabled, bool doubleLines);
 	bool registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool refreshRuntimeMenus(std::string *errorMessage = nullptr);
+	bool setRuntimeMenuKeyLabelForMacroSpec(const std::string &macroSpec, const std::string &keyLabel);
+	bool clearRuntimeMenuKeyLabels();
 	bool removeRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool removeRuntimeNodesOwnedByFile(const std::string &fileSpec, std::string *errorMessage = nullptr);
@@ -100,6 +102,7 @@ class MRMenuBar : public TMenuBar {
 		std::string itemTitle;
 		std::string ownerSpec;
 		std::string macroSpec;
+		std::string keyLabel;
 		ushort command = 0;
 		std::uint32_t order = 0;
 	};
@@ -145,7 +148,9 @@ class MRMenuBar : public TMenuBar {
 	void applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const;
 	bool allocateRuntimeCommand(ushort &command, std::string *errorMessage);
 	bool rebuildRuntimeMenu();
+	bool appendRuntimeMenuNode(const RuntimeMenuNode &node, bool menuGroupExists);
 	int findRuntimeNodeIndex(const std::string &menuKey, const std::string &itemKey, const std::string &ownerSpec) const noexcept;
+	bool runtimeMenuGroupExists(const std::string &menuKey) const noexcept;
 
 	TMenu *mBaseMenu = nullptr;
 	std::vector<RuntimeMenuNode> mRuntimeNodes;

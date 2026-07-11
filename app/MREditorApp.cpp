@@ -64,7 +64,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <fnmatch.h>
 #include <glob.h>
 #include <map>
@@ -80,7 +79,6 @@ static constexpr std::chrono::milliseconds kRecordingBlinkInterval(450);
 static constexpr std::chrono::microseconds kCoprocessorIdlePumpBudget(1000);
 static constexpr std::chrono::seconds kFullscreenHintDuration(3);
 static constexpr const char *kFullscreenHintText = "F11/ESC exit Fullscreen   F10 Menu";
-
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
@@ -1822,10 +1820,9 @@ void MREditorApp::stopKeystrokeRecording() {
 
 void MREditorApp::bootstrapIndexedMacroBindings() {
 	std::vector<std::string> configuredEntries;
-	std::vector<std::string> retainedEntries;
 	std::vector<std::string> failedEntries;
+	std::vector<std::string> survivingEntries;
 	std::string directory = defaultMacroDirectoryPath();
-	bool filteredEntries = false;
 	std::size_t executedCount = 0;
 
 	clearConfiguredAutoexecMacroDiagnostics();
@@ -1844,31 +1841,21 @@ void MREditorApp::bootstrapIndexedMacroBindings() {
 		std::string errorText;
 
 		if (!std::filesystem::exists(resolvedPath)) {
-			filteredEntries = true;
-			mrLogMessage(("Autoexec bootstrap removed missing macro: " + fileName).c_str());
+			errorText = "Autoexec macro file not found.";
+			failedEntries.push_back(fileName);
+			rememberConfiguredAutoexecMacroDiagnostic(fileName, errorText);
+			mrLogMessage(("Autoexec bootstrap missing macro: " + fileName).c_str());
 			continue;
 		}
 		if (runMacroFileByPath(resolved.c_str(), &errorText, true)) {
-			retainedEntries.push_back(fileName);
 			++executedCount;
+			survivingEntries.push_back(fileName);
 			continue;
 		}
 
-		filteredEntries = true;
 		failedEntries.push_back(fileName);
 		rememberConfiguredAutoexecMacroDiagnostic(fileName, errorText.empty() ? "Autoexec execution failed." : errorText);
 		mrLogMessage(("Autoexec bootstrap failed for " + fileName + ": " + (errorText.empty() ? std::string("unknown error") : errorText)).c_str());
-	}
-
-	if (filteredEntries) {
-		std::string persistError;
-
-		if (setConfiguredAutoexecMacroEntries(retainedEntries, &persistError) && persistConfiguredSettingsSnapshot(&persistError)) {
-			mrLogMessage("Autoexec bootstrap updated AUTOEXEC_MACRO in settings.mrmac.");
-		} else {
-			setConfiguredAutoexecMacroEntries(configuredEntries, nullptr);
-			mrLogMessage(("Autoexec bootstrap could not persist filtered AUTOEXEC_MACRO: " + persistError).c_str());
-		}
 	}
 
 	{
@@ -1885,14 +1872,13 @@ void MREditorApp::bootstrapIndexedMacroBindings() {
 	}
 
 	if (!failedEntries.empty()) {
-		std::ostringstream summary;
+		std::string errorText;
 
-		summary << "Failed autoexec macros: ";
-		for (std::size_t i = 0; i < failedEntries.size(); ++i) {
-			if (i != 0) summary << ", ";
-			summary << failedEntries[i];
+		if (!setConfiguredAutoexecMacroEntries(survivingEntries, &errorText)) {
+			mrLogMessage(("Autoexec bootstrap could not remove failed entries: " + errorText).c_str());
+			return;
 		}
-		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, summary.str(), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		mrLogMessage(("Autoexec bootstrap removed " + std::to_string(failedEntries.size()) + " failed AUTOEXEC_MACRO entr" + (failedEntries.size() == 1 ? "y; settings persist is pending." : "ies; settings persist is pending.")).c_str());
 	}
 }
 

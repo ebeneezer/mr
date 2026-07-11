@@ -5443,6 +5443,16 @@ bool runKeymapAutoexecPersistenceAndBootstrapProbe(std::string &failureReason) {
 			failureReason = "AUTOEXEC bootstrap must retain the existing keymap macro and drop missing entries.";
 			return false;
 		}
+		if (!configuredSettingsDirty()) {
+			restore();
+			failureReason = "AUTOEXEC bootstrap must mark filtered settings for coalesced persistence.";
+			return false;
+		}
+		if (!persistConfiguredSettingsSnapshot(&errorText)) {
+			restore();
+			failureReason = "AUTOEXEC bootstrap filtered settings could not be persisted through the central flush: " + errorText;
+			return false;
+		}
 		if (!readTextFile(settingsPath, persistedSource, errorText)) {
 			restore();
 			failureReason = "Unable to read persisted settings after AUTOEXEC bootstrap: " + errorText;
@@ -9467,7 +9477,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 		failureReason = "Bento pane-aware window enumeration changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(windowCommandsSource, {"MREditWindow *createEditorWindow(const char *title)", "win = new MRBentoBox(bounds, title, nextEditorWindowNumber(), bbmDocumentViewports);", "MREditWindow *createHelpWindow(const char *title)", "win = new MRHelpWindow(bounds, title, nextEditorWindowNumber());", "MREditWindow *createLogWindow(const char *title)", "win = new MRLogWindow(bounds, title, nextEditorWindowNumber());", "MREditWindow *createCommunicationWindow(const char *title)", "win = new MRCommunicationWindow(bounds, title, nextEditorWindowNumber());"}, missingNeedle)) {
+	if (!containsAllSubstrings(windowCommandsSource, {"MREditWindow *createEditorWindow(const char *title)", "win = new MRBentoBox(bounds, title, nextEditorWindowNumber(), bbmDocumentViewports);", "MREditWindow *createHelpWindow(const char *title)", "win = new MRHelpWindow(bounds, title, nextEditorWindowNumber());", "MREditWindow *createLogWindow(const char *title)", "win = new MRLogWindow(bounds, title, nextEditorWindowNumber());", "finishNewEditWindow(win, false);", "MREditWindow *createCommunicationWindow(const char *title)", "win = new MRCommunicationWindow(bounds, title, nextEditorWindowNumber());"}, missingNeedle)) {
 		failureReason = "Document windows must default to Bento while special windows use explicit subtypes: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -9934,11 +9944,11 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read workspace autosave lazy wiring sources: " + ioError;
 		return false;
 	}
-	if (!containsAllSubstrings(windowCommandsHeader, {"void mrMarkWorkspaceAutosaveDirty();", "void mrFlushWorkspaceAutosaveIfDue();", "void mrFlushWorkspaceAutosaveNow();"}, missingNeedle)) {
+	if (!containsAllSubstrings(windowCommandsHeader, {"void mrMarkWorkspaceAutosaveDirty(const char *source, const MREditWindow *window = nullptr);", "void mrFlushWorkspaceAutosaveIfDue();", "void mrFlushWorkspaceAutosaveNow();"}, missingNeedle)) {
 		failureReason = "Workspace autosave lazy public wiring changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(windowCommands, {"g_workspaceAutosaveDirty", "kWorkspaceAutosaveDelay", "configuredAutosaveWorkspace()", "setRuntimePreserveAutosavedWorkspace(false)", "runtimePreserveAutosavedWorkspace()", "persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)", "mrLogSettingsWriteReport(\"workspace autosave\", report)"}, missingNeedle)) {
+	if (!containsAllSubstrings(windowCommands, {"g_workspaceAutosaveDirty", "kWorkspaceAutosaveDelay", "configuredAutosaveWorkspace()", "setRuntimePreserveAutosavedWorkspace(false)", "runtimePreserveAutosavedWorkspace()", "Workspace autosave dirty false->true source=", "Workspace autosave dirty true->false source=flush", "Workspace autosave dirty false->true source=flush-failed.", "persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)", "mrLogSettingsWriteReport(\"workspace autosave\", report)"}, missingNeedle)) {
 		failureReason = "Workspace autosave lazy persistence path changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -9976,6 +9986,12 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 		failureReason = "Workspace load must preserve autosaved source when no entries restore: missing " + missingNeedle + ".";
 		return false;
 	}
+	const std::size_t geometryApply = loadWorkspaceBody.find("applyWorkspaceEntryGeometry(win, entry)");
+	const std::size_t bentoRestore = loadWorkspaceBody.find("bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)");
+	if (geometryApply == std::string::npos || bentoRestore == std::string::npos || geometryApply > bentoRestore) {
+		failureReason = "Workspace load must apply outer Bento bounds before restoring the Bento snapshot.";
+		return false;
+	}
 	if (settingsStorageHeader.find("persistConfiguredSettingsSnapshotWithWorkspace") == std::string::npos) {
 		failureReason = "Settings storage must expose a dedicated workspace snapshot persist path.";
 		return false;
@@ -9984,11 +10000,11 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 		failureReason = "Settings persistence must separate normal settings writes from workspace autosave writes: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(windowList, {"void mrNotifyWindowTopologyChanged()", "mrMarkWorkspaceAutosaveDirty();"}, missingNeedle)) {
+	if (!containsAllSubstrings(windowList, {"void mrNotifyWindowTopologyChanged()", "mrMarkWorkspaceAutosaveDirty(\"window topology\");"}, missingNeedle)) {
 		failureReason = "Workspace topology changes must mark lazy autosave dirty: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(editWindow, {"const TRect previousBounds = getBounds();", "if (previousBounds != getBounds()) mrMarkWorkspaceAutosaveDirty();"}, missingNeedle)) {
+	if (!containsAllSubstrings(editWindow, {"const TRect previousBounds = getBounds();", "if (previousBounds != getBounds()) mrMarkWorkspaceAutosaveDirty(\"window bounds\", this);"}, missingNeedle)) {
 		failureReason = "Workspace window geometry changes must mark lazy autosave dirty: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -10004,7 +10020,7 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 		failureReason = "Workspace autoload prompt must preserve autosaved workspace before the user chooses.";
 		return false;
 	}
-	if (!containsAllSubstrings(bentoProjection, {"mrMarkWorkspaceAutosaveDirty();", "setDividerPosition", "toggleLeafMaximized", "closePane"}, missingNeedle)) {
+	if (!containsAllSubstrings(bentoProjection, {"mrMarkWorkspaceAutosaveDirty(\"bento divider\", this);", "mrMarkWorkspaceAutosaveDirty(\"bento maximize\", this);", "setDividerPosition", "toggleLeafMaximized", "closePane"}, missingNeedle)) {
 		failureReason = "Bento workspace geometry changes must mark lazy autosave dirty: missing " + missingNeedle + ".";
 		return false;
 	}

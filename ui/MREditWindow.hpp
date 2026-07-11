@@ -402,7 +402,10 @@ class MREditWindow : public TWindow {
 	}
 
 	void dragView(TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) override {
+		const TRect previousBounds = getBounds();
+
 		MRWindowLayout::handleDragView(this, event, mode, limits, minSize, maxSize);
+		if (previousBounds != getBounds() && !MRWindowLayout::isWindowMinimized(this)) mrMarkWorkspaceAutosaveDirty("window drag", this);
 	}
 
 	void sizeLimits(TPoint &minSize, TPoint &maxSize) override {
@@ -427,7 +430,7 @@ class MREditWindow : public TWindow {
 
 		mrDropSidekickForParent(this);
 		TWindow::changeBounds(bounds);
-		if (previousBounds != getBounds()) mrMarkWorkspaceAutosaveDirty();
+		if (previousBounds != getBounds() && (state & sfDragging) == 0) mrMarkWorkspaceAutosaveDirty("window bounds", this);
 		layoutEditorChrome();
 		if (mFullscreenPresentation) return;
 		if (MRWindowLayout::isWindowMinimized(this)) {

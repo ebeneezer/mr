@@ -71,7 +71,7 @@ A tranche is not complete until the build result is known.
 Bug fixes require a same-family impact audit before handoff.
 Treat a defect as evidence of a potentially affected class, not as an isolated symptom.
 Check the inverse path, sibling values or operations, alternate entry points and lifecycle transitions.
-Regression checks are not part of preflight planning. They may be proposed after the sight review and require explicit maintainer approval before implementation.
+Regression checks are not part of preflight planning. After implementation and sight review, they may be added without separate maintainer approval when they are directly tied to the current change and protect a stable invariant. Broad test infrastructure or regression-harness rewrites still require explicit maintainer scope.
 
 ## Rejection formula
 

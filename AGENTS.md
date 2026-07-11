@@ -132,8 +132,10 @@ The plan must name:
 - Protected architecture changes require a named manual test plan before implementation.
 - Regression checks are not protected architecture.
 - Regression checks are proposed only after implementation and sight review, not during preflight planning.
-- Adding, expanding or replacing regression checks, structural checks or test infrastructure requires explicit maintainer approval.
-- Do not treat “tests required” as permission to create new tests.
+- Adding, expanding or replacing regression checks does not require separate maintainer approval when it is directly tied to the current change.
+- Regression checks should be used sparingly and must protect stable behavior or structural invariants with low maintenance cost.
+- Do not add broad test infrastructure, generated-test frameworks or large regression harness rewrites unless the maintainer explicitly requests that scope.
+- Do not treat “tests required” as a mandate to create new tests.
 
 ## Build rule
 

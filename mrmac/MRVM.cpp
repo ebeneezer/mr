@@ -3445,6 +3445,19 @@ static bool executeExplicitKeyBinding(const TKey &pressed, int mode, std::vector
 	return false;
 }
 
+static bool projectRuntimeMenuKeyLabelsFromExplicitBindings(std::string *errorMessage) {
+	const int mode = currentUiMacroMode();
+
+	if (!mrvmUiClearRuntimeMenuKeyLabels(errorMessage)) return false;
+	for (const MRVMExplicitKeyBinding &binding : g_runtimeEnv.explicitKeyBindings) {
+		if (binding.kind != MRVMExplicitBindingKind::MacroSpec) continue;
+		if (!mrvmBindingModeMatches(binding.mode, mode)) continue;
+		if (!mrvmUiSetRuntimeMenuKeyLabelForMacroSpec(binding.macroSpec, mrvmMenuLabelFromBindingKey(binding.key), errorMessage)) return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
 static bool fileContainsOnlyTransientMacros(const LoadedMacroFile &file) {
 	if (file.macroNames.empty()) return false;
 	for (const auto &macroName : file.macroNames) {
@@ -3689,7 +3702,6 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	writeLoadedMacroFileByKey(newFile);
 	runtimeErrorLevel() = 0;
 	logMacroProfileLine("Loaded macro file", newFile);
-	static_cast<void>(mrvmUiRefreshRuntimeMenus(nullptr));
 	if (loadedFileKey != nullptr) *loadedFileKey = fileKey;
 	return true;
 }
@@ -5440,9 +5452,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid code colors.") : errorText));
 						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompare, defaults.fileCompareColors.data(), defaults.fileCompareColors.size(), &errorText))
 							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid file compare colors.") : errorText));
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Debugger, defaults.debuggerColors.data(), defaults.debuggerColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid debugger colors.") : errorText));
 						if (!setConfiguredColorThemeDisplayName("", &errorText)) throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid theme display name.") : errorText));
 						runtimeErrorLevel() = 0;
-					} else if (name == "THEME_NAME" || name == "WINDOWCOLORS" || name == "MENUDIALOGCOLORS" || name == "HELPCOLORS" || name == "OTHERCOLORS" || name == "MINIMAPCOLORS" || name == "FILECOMPAREMINIMAPCOLORS" || name == "CODECOLORS" || name == "FILECOMPARECOLORS") {
+					} else if (name == "THEME_NAME" || name == "WINDOWCOLORS" || name == "MENUDIALOGCOLORS" || name == "HELPCOLORS" || name == "OTHERCOLORS" || name == "MINIMAPCOLORS" || name == "FILECOMPAREMINIMAPCOLORS" || name == "CODECOLORS" || name == "FILECOMPARECOLORS" || name == "DEBUGGERCOLORS") {
 						std::string errorText;
 						if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
 						if (name == "THEME_NAME") {
@@ -5963,12 +5977,13 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					binding.kind = MRVMExplicitBindingKind::MacroSpec;
 					binding.macroSpec = mrvmValueAsString(args[1]);
 					g_runtimeEnv.explicitKeyBindings.push_back(binding);
-					if (!mrvmUiRefreshRuntimeMenus(&refreshError)) throw std::runtime_error("MACRO_TO_KEY could not refresh runtime menus: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
+					if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("MACRO_TO_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 					runtimeErrorLevel() = 0;
 				} else if (name == "CMD_TO_KEY") {
 					TKey key;
 					int mode = MACRO_MODE_EDIT;
 					MRVMExplicitKeyBinding binding;
+					std::string refreshError;
 					if (args.size() != 3 || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("CMD_TO_KEY expects (key, int, int).");
 					if (currentBackgroundEditSession() != nullptr) {
 						runtimeErrorLevel() = 1001;
@@ -5984,6 +5999,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					binding.kind = MRVMExplicitBindingKind::Command;
 					binding.commandId = mrvmValueAsInt(args[1]);
 					g_runtimeEnv.explicitKeyBindings.push_back(binding);
+					if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("CMD_TO_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 					runtimeErrorLevel() = 0;
 				} else if (name == "UNASSIGN_KEY") {
 					TKey key;
@@ -6000,7 +6016,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					}
 					mrvmRemoveExplicitBindingsForKey(g_runtimeEnv.explicitKeyBindings, key, mode);
 					clearRegisteredBindingsForKey(&key, mode, mode == MACRO_MODE_ALL);
-					if (!mrvmUiRefreshRuntimeMenus(&refreshError)) throw std::runtime_error("UNASSIGN_KEY could not refresh runtime menus: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
+					if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("UNASSIGN_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 					runtimeErrorLevel() = 0;
 				} else if (name == "UNASSIGN_ALL_KEYS") {
 					std::string refreshError;

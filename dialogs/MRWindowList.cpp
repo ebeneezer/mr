@@ -1188,6 +1188,6 @@ void mrRefreshManageWindowListDialog() {
 }
 
 void mrNotifyWindowTopologyChanged() {
-	mrMarkWorkspaceAutosaveDirty();
+	mrMarkWorkspaceAutosaveDirty("window topology");
 	if (g_manageWindowListDialog != nullptr) message(g_manageWindowListDialog, evBroadcast, cmMrWindowTopologyChanged, nullptr);
 }
