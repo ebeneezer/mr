@@ -27,6 +27,7 @@ vorhandener Runtime-Grundlagen:
 - staged input/result/commit flow,
 - deferred UI playback,
 - zentrale VM K/V Runtime Roots fuer macro-sichtbaren Zustand.
+- Source-Maps unter `MACROCATALOG`, Debugger-Daten unter `MACRODEBUGGER`.
 
 Nicht einfuehren:
 
@@ -35,6 +36,7 @@ Nicht einfuehren:
 - Bytecode-Injection-API am canonical compiler path vorbei,
 - debugger-private copy of staged editor state,
 - debugger-private global/runtime K/V store,
+- debugger-private Source-Map registry,
 - direct TVision rendering from debugger or execution-session code,
 - alternate deferred UI batching boundaries,
 - session-level shortcuts, die staged conflict checks umgehen,
@@ -73,8 +75,8 @@ Invarianten:
 - Kein Render-Seitenkanal fuer Debugger-Overlay.
 - Typed UI procedures und Macro-Screen-Operationen bleiben
   staged/projection-basiert, soweit sie nicht bereits UI-thread-only laufen.
-- Breakpoints bleiben im ersten Entwurf ephemeral pro Debug-Session und werden
-  nicht in Settings oder Workspace persistiert.
+- Breakpoints liegen im ersten Entwurf im zentralen VM K/V Store unter
+  `MACRODEBUGGER`. Sie werden nicht in Settings oder Workspace persistiert.
 
 ## Bestehende Ausfuehrungsrouten
 
@@ -223,7 +225,9 @@ Controls werden als Commands/Toolbar-/Menu-/Keymap-Aktionen geplant:
 - Step Into
 - Step Over
 - Step Out
-- Toggle Breakpoint
+- Toggle Breakpoint. Im ersten UI-Slice toggelt `F9` den Line-Breakpoint auf
+  der Quellzeile des Source-Cursors und meldet set/cleared/unbound im
+  Debugger-Output.
 
 Controls rendern nicht direkt. Sie aendern Debugger-Zustand; BentoBox und
 Editor-Projektion zeichnen TVision-konform.
@@ -245,23 +249,35 @@ Erforderlich:
 
 ## Source Map
 
-Der Compiler muss beim canonical bytecode generation path eine Source-Map
-erzeugen:
+Der normale Macro-Load erzeugt keine Source-Map. Wenn aus der Macro Library der
+Debug-Button fuer das fokussierte Macro ausgeloest wird, kompiliert der
+Debug-Start das geladene Macro-File mit Source-Map:
 
 - bytecode offset / instruction start,
 - source file path oder source identity,
+- source start offset,
+- source end offset,
 - source line,
-- source column oder source offset, soweit stabil verfuegbar,
+- source column, soweit der Lexer sie sauber mitfuehren kann,
 - macro name / macro entry range.
+- debuggable kind: macroEntry, statement, expression, call, branch, label.
 
-Die Source-Map gehoert zur letzten Compile-Operation oder zu einem expliziten
-Compile-Ergebnis fuer Debugging. Sie darf kein zweiter Compilerpfad werden.
+Die Source-Map gehoert nicht in eine zweite C++-Registry. Der Compiler darf
+mechanische Transferdaten fuer das Debug-Compile-Ergebnis liefern; die
+runtime-sichtbare Ablage erfolgt im zentralen VM K/V Store unter
+`MACROCATALOG` fuer geladene Macro-Dateien. Rein debugger-kontrollierte und
+generierte Daten liegen unter `MACRODEBUGGER`. Die Source-Map darf kein zweiter
+Compilerpfad werden.
 
-Breakpoints werden source-seitig, session-lokal, pro Macro-Source-Identity und
-line-basiert gesetzt. Der Debugger normalisiert auf die naechste debuggable
-instruction. Nicht debuggable Zeilen muessen sichtbar als disabled/unbound oder
-als gebundene naechste gueltige Zeile behandelt werden. Keine Bytecode-Heuristik
-in der UI.
+Die interne Source-Map ist token-/span-genau. Zeilen sind nur eine
+UI-kompatible Sicht auf diese Spans. Ein line breakpoint bindet im ersten
+UI-Slice an den ersten debuggable span der Zeile; spaetere UI kann mehrere
+debuggable spans in derselben Zeile unterscheiden.
+
+Breakpoints werden source-seitig und pro Macro-Key unter `MACRODEBUGGER`
+gesetzt. Der Debugger normalisiert auf debuggable spans. Nicht debuggable
+Positionen muessen sichtbar als disabled/unbound behandelt werden. Keine
+Bytecode-Heuristik in der UI.
 
 ## Debug Session Model
 
@@ -353,11 +369,167 @@ Continue/Step queued wieder Arbeit ueber die bestehende Macro-Ausfuehrung.
    - Dateien: `documentation/supergeiler-macro-debugger.md`, ggf. spaetere
      Architektur-Entscheidungsnotiz.
    - Ziel: Source-Map und Debug-Ausfuehrung festlegen, keine Codeaenderung.
+   - Ergebnis: reviewbarer Vertrag fuer Slice 2/3, nicht schon
+     Implementierung.
+
+   Zugplanung:
+
+   - Source-Map-Form festlegen:
+     - Owner bleibt der canonical compiler path in `mrmac/mrmac.c`.
+     - Inhalt: bytecode offset, source identity, start/end source offset, line,
+       optional column, macro name, debuggable kind.
+     - Interne Bindung ist token-/span-genau; line breakpoints sind nur ein
+       UI-kompatibler Normalisierungsmodus.
+     - Keine Opcode-Aenderung, kein zweiter Compilerpfad, keine
+       UI-Bytecode-Heuristik.
+   - Debug-Session-Grenze festlegen:
+     - Debug-Session besitzt Breakpoints, Step-Mode, Source-Map und
+       UI-Snapshots.
+     - Exec Session besitzt route, owner, lifetime, cancel/yield/result.
+     - VM besitzt Ausfuehrungszustand und Stop-Policy.
+   - Stop-Policy festlegen:
+     - Continue bis Breakpoint, Pause, Cancel, Error, Halt oder Budget.
+     - Step Into/Over/Out an source-mapped instruction boundaries.
+     - Kein Abbruch mitten in Intrinsic, I/O oder deferred playback.
+   - Registry-Binding festlegen:
+     - Debug-Ziel bleibt Registry-Macro.
+     - Macro muss auf Source-Identity und Macro-Entry abbildbar sein.
+     - Mehrere Macros pro Datei muessen unterscheidbar sein.
+   - Staged Preview ausschliessen:
+     - Erster Debugger ist live/normal.
+     - Staged Debugger bleibt eigene Architekturentscheidung.
+   - Abnahmekriterien:
+     - Source-Map-Struktur ist fuer Slice 2 konkret genug.
+     - Compile-Ergebnis und span-basierte Breakpoint-Normalisierung sind
+       beschrieben.
+     - Session/Debugger/VM-Verantwortung ist trennscharf.
+     - Keine Codeaenderung und kein Build fuer Slice 1.
 
 2. Compiler Source Map
    - Dateien: `mrmac/mrmac.c`, `mrmac/mrmac.h`, ggf. `mrmac/MRMacroRunner.*`.
    - Ziel: Source-Map im canonical compiler path erzeugen, Macro entries
      source-genau zuordnen, keine Grammar-/Opcode-Semantik aendern.
+   - Ergebnis: der canonical compiler path liefert Source-Map-Transferdaten;
+     RuntimeCatalog speichert die Source-Map im zentralen VM K/V Store.
+
+   Zugplanung:
+
+   - Datenmodell fuer Source-Map-Eintraege festlegen:
+     - `bytecodeOffset`
+     - `sourceStartOffset`
+     - `sourceEndOffset`
+     - `line`
+     - `column` als optionaler Wert, `0` falls nicht gepflegt
+     - `macroName`
+     - `debuggableKind`
+   - Compiler-Transfer statt Registry:
+     - `mrmac.c` darf Source-Map-Eintraege nur waehrend der aktuellen
+       Compilation als mechanische Transferdaten bereitstellen.
+     - Keine dauerhaft werttragende Source-Map-Struktur neben VM K/V.
+     - Keine Speicherung im Bytecode.
+  - Runtime-K/V-Ablage:
+    - Nur Debug-Starts erzeugen Source-Maps. Normaler Macro-Load und
+      Bytecode-Refresh bleiben SourceMap-frei.
+    - Geladene Macro-Dateien speichern debugger-erzeugte Source-Maps unter
+      `MACROCATALOG/files/byKey/<fileKey>/sourceMap`.
+     - Debugger-generierte Laufzeitdaten liegen unter
+       `MACRODEBUGGER/sessions/byId/<debugSessionId>`.
+     - Breakpoints liegen unter
+       `MACRODEBUGGER/breakpoints/byMacro/<macroKey>`.
+     - Debugger-Snapshots liegen unter
+       `MACRODEBUGGER/sessions/byId/<debugSessionId>/snapshots`.
+     - C++-Objekte sind nur Transfer-/Snapshot-Objekte und werden aus K/V
+       rebuilt.
+   - Lexer/Parser-Minimum:
+     - Token bekommt `sourceStartOffset`.
+     - Parser-Grenzen berechnen `sourceEndOffset` aus konsumierten Tokens.
+     - `line` bleibt vorhanden.
+     - `column` wird nur gesetzt, wenn ohne breiten Lexer-Umbau sauber
+       pflegbar; sonst bleibt sie `0`.
+   - Emission-Mapping:
+     - Map-Eintraege werden an debuggable emission boundaries geschrieben.
+     - Primaere Boundaries: macro entry, statement start, call/proc/intrinsic,
+       branch/goto/call-label operations.
+     - Labels selbst sind source spans, aber nicht zwingend stoppbare
+       Ausfuehrungspunkte.
+   - Macro-Zuordnung:
+     - Jeder Source-Map-Eintrag traegt den aktuellen Macro-/Closure-Namen.
+     - Macro entry ranges bleiben ueber bestehende compiled macro metadata
+       rekonstruierbar.
+  - RuntimeCatalog-Integration:
+    - Source-Map wird erst beim Debug-Start in `LoadedMacroFile` geschrieben
+      und gelesen.
+     - `LoadedMacroFile` darf eine Transferdarstellung tragen, bleibt aber
+       nicht authoritative; authoritative ist `MACROCATALOG`.
+   - Fehler-/Grenzfaelle:
+     - Bei Compile-Fehlern ist die Source-Map leer oder unvollstaendig und
+       nicht fuer Debugger-Binding zu verwenden.
+     - Nicht debuggable spans werden nicht geraten; die UI normalisiert spaeter
+       auf vorhandene debuggable spans.
+   - Abnahmekriterien:
+     - Mehrere Macros in einer Datei liefern unterscheidbare spans.
+     - Mehrere debuggable Tokens in einer Zeile bleiben unterscheidbar.
+     - Line breakpoint kann auf ersten debuggable span einer Zeile normalisiert
+       werden.
+     - Bytecode bleibt bitweise semantisch unveraendert.
+     - Existing macro compile/run bleibt unveraendert.
+     - Keine neue Source-Map-Registry ausserhalb von `MACROCATALOG`.
+     - Keine debugger-kontrollierten Daten ausserhalb von `MACRODEBUGGER`.
+
+   Slice 2b:
+
+   - `MRVMRuntimeCatalog` stellt Source-Map-Lookups pro Macro bereit.
+   - Die Zuordnung laeuft ueber `MACROCATALOG/macros/byName/<macroKey>` auf
+     `fileKey` und dann ueber
+     `MACROCATALOG/files/byKey/<fileKey>/sourceMap`.
+   - `mrvmRuntimeCatalogSourceMapForMacro(...)` liefert die source spans eines
+     Macros.
+   - `mrvmRuntimeCatalogFirstSourceMapSpanForLine(...)` bindet einen line
+     breakpoint an den ersten Source-Map-Span dieser Zeile.
+   - Der Lookup schreibt keine Breakpoints und erzeugt keine Debugger-Session.
+     Breakpoint-Zustand gehoert in spaeteren Slices unter `MACRODEBUGGER`.
+
+   Slice 2c:
+
+   - Line-Breakpoints liegen unter
+     `MACRODEBUGGER/breakpoints/byMacro/<macroKey>/byLine/<line>`.
+   - Der Breakpoint-Key wird aus dem normalisierten Macro-Key und der
+     UI-Source-Line gebildet; die Bindung auf Bytecode erfolgt ueber
+     `mrvmRuntimeCatalogFirstSourceMapSpanForLine(...)`.
+   - Ein Breakpoint-Eintrag enthaelt:
+     - `enabled`
+     - `line`
+     - `sourceStartOffset`
+     - `sourceEndOffset`
+     - `bytecodeOffset`
+     - `debuggableKind`
+     - optional `conditionText`
+   - Nicht bindbare Zeilen erzeugen keinen geratenen Bytecode-Offset. UI und
+     spaetere Command-Handler muessen den Zustand als unbound/disabled sichtbar
+     machen.
+   - Breakpoints werden nicht unter `EXECSESSIONS`, `MACROCATALOG`, Settings
+     oder Workspace-Persistenz gespeichert.
+
+   Slice 2d:
+
+   - `MRVMRuntimeDebugger` stellt read/write/erase fuer line breakpoints unter
+     `MACRODEBUGGER` bereit.
+   - `mrvmRuntimeDebuggerWriteLineBreakpoint(...)` bindet vor dem Schreiben
+     ueber `mrvmRuntimeCatalogFirstSourceMapSpanForLine(...)`.
+   - Nicht bindbare Zeilen werden nicht geschrieben.
+   - Das C++-Objekt `MRMacroDebuggerBreakpoint` ist nur Transferobjekt und wird
+     aus dem K/V Store rebuilt.
+   - Keine VM-Step-Hooks, keine Debug-Session-Objekte, keine UI.
+
+   Slice 2e:
+
+   - `MRVMRuntimeDebugger` liefert die Breakpoints eines Macros aus
+     `MACRODEBUGGER/breakpoints/byMacro/<macroKey>/byLine`.
+   - Aktivierte Breakpoints koennen als sortierte Bytecode-Offset-Liste fuer
+     die spaetere VM-Stop-Policy gelesen werden.
+   - Die Offset-Liste ist abgeleitet, nicht authoritative. Authoritative bleibt
+     der Breakpoint-K/V unter `MACRODEBUGGER`.
+   - Keine VM-Ausfuehrung, keine Debug-Session, keine UI.
 
 3. VM Debug Step Core
    - Dateien: `mrmac/MRVM.hpp`, `mrmac/MRVM.cpp`.
@@ -365,10 +537,68 @@ Continue/Step queued wieder Arbeit ueber die bestehende Macro-Ausfuehrung.
      stack, locals und globals erzeugen, normale Macro-Ausfuehrung unveraendert
      lassen.
 
+   Slice 3a:
+
+   - `VirtualMachine::executeDebugAt(...)` nutzt die bestehende
+     `executeAt(...)`-Schleife und stoppt kooperativ vor einer Instruktion,
+     deren Bytecode-Offset in der aktiven Debug-Offset-Liste liegt.
+   - `mrvmRunBytecodeDebugAt(...)` ist ein direkter Probe-/Transferpfad fuer
+     Bytecode plus Entry-Offset; er startet keine Exec Session und keine UI.
+   - Das Result enthaelt Stop-Grund, Instruktions-Offset, Stack-Tiefe,
+     VM-Log und read-only Variablen-Snapshot.
+   - Stopps passieren nur an VM-Instruktionsgrenzen. Intrinsics, externe I/O
+     und deferred UI playback werden nicht mitten in der C++-Ausfuehrung
+     unterbrochen.
+   - Kein Step Over/Out, kein Resume, keine Session-Parkung, keine
+     Snapshot-Persistenz.
+
+   Slice 3b:
+
+   - `VirtualMachine::continueDebug(...)` setzt eine pausierte Debug-VM ab dem
+     zuletzt gestoppten Bytecode-Offset fort.
+   - Der Resume ueberspringt den aktuellen Breakpoint genau einmal, damit die
+     gestoppte Instruktion ausgefuehrt wird und nicht sofort wieder stoppt.
+   - Der Parkzustand bleibt VM-lokal: Bytecode, IP, Call-Stack, Return-State
+     und Macro-Frame-Name sind mechanische Live-Handles, keine
+     `MACRODEBUGGER`-Werte.
+   - `MACRODEBUGGER` bleibt fuer user-sichtbare Debugger-Daten zustaendig;
+     pausierte VM-Objekte duerfen spaeter nur ueber Exec-Session-Lifetime
+     gehalten werden.
+   - Keine UI, keine Worker-Lane, keine Snapshot-Persistenz.
+
+   Slice 3c:
+
+   - Debug-Ausfuehrung kann eine `MRMacroExecutionSession` mit Route `Debug`
+     erzeugen.
+   - Eine an einem Breakpoint pausierte Debug-VM wird als mechanischer
+     Live-Handle an die Session-ID gebunden.
+   - `mrvmContinueDebugSession(...)` setzt die VM ueber die Session-ID fort und
+     publiziert bei terminalem Ende ein normales Execution-Session-Result.
+   - Der geparkte VM-Zustand wird nicht als Wert in `EXECSESSIONS` oder
+     `MACRODEBUGGER` gespiegelt. Sichtbare Debugger-Snapshots bleiben spaeter
+     eigener `MACRODEBUGGER`-Datenzug.
+   - Keine UI, keine Worker-Lane, keine Runner-Integration.
+
 4. Registry Debug Start
-   - Dateien: `mrmac/MRMacroRunner.*`, ggf. App command/router/menu-Dateien.
+   - Dateien: `mrmac/MRVM.hpp`, `mrmac/MRVM.cpp`, spaeter
+     `mrmac/MRMacroRunner.*`, ggf. App command/router/menu-Dateien.
    - Ziel: Registry-Macro als Debug-Ziel auswaehlen, Debug-Ausfuehrung starten,
      Fehler sichtbar melden.
+
+   Slice 4a:
+
+   - `mrvmStartDebugMacroByName(...)` startet Debugging aus einem geladenen
+     Registry-Macro statt aus einem direkten Bytecode-Probe.
+   - Der Start loest den normalisierten Macro-Key ueber `MACROCATALOG`, stellt
+     residenten Bytecode ueber den bestehenden Ladepfad sicher und startet dann
+     die vorhandene `MRMacroExecutionRoute::Debug`.
+   - Aktive Breakpoints werden aus `MACRODEBUGGER` als abgeleitete
+     Bytecode-Offset-Liste gelesen. Fehlt ein Breakpoint-Zweig, laeuft das
+     Macro ohne Breakpoints bis zum naechsten terminalen VM-Zustand.
+   - `firstRunPending` wird wie bei normaler Registry-Ausfuehrung verbraucht
+     und in die Debug-VM uebergeben.
+   - Kein Source-Marker im Macro, kein zweiter Compilerpfad, keine neue Lane,
+     keine zweite Registry und keine UI.
 
 5. Bento Debug UI
    - Dateien: `ui/MRBentoBox.hpp`, `ui/MRBentoBoxProjection.cpp`,
@@ -376,10 +606,157 @@ Continue/Step queued wieder Arbeit ueber die bestehende Macro-Ausfuehrung.
      `ui/MRFileEditor/*`.
    - Ziel: bestehende Rollen `Debugger Output`, `Variables`, `Watches`
      befuellen, Source-Ausfuehrungszeile und Breakpoints anzeigen.
+   - Erster Toggle-Slice:
+     - Debug-Bento merkt den normalisierten Macro-Key.
+     - `F9` toggelt den Line-Breakpoint der Source-Cursor-Zeile.
+     - UI schreibt nicht selbst in Breakpoint-Daten; sie ruft den VM-Bridge
+       gegen `MRVMRuntimeDebugger` und den zentralen Runtime-K/V.
+     - Debugger-Output zeigt `set`, `cleared` oder unbound-Fehlertext.
 
-6. Watches And Mutation
-   - Dateien: erst nach Review von Slice 2-5 festlegen.
-   - Ziel: Watch-Ausdruecke, spaeter typisierte Variable-Mutation.
+6. Debugger Color Group
+   - Dateien: spaeter festlegen; erwartete Beruehrung:
+     `config/settings/MRSettingsRuntime.hpp`,
+     `config/settings/MRSettingsThemesProfiles.cpp`,
+     `config/settings/MRSettingsSnapshotIO.cpp`,
+     `config/settings/MRSettingsAssignments.cpp`, `dialogs/MRColorSetup.cpp`
+     oder die jeweilige bestehende Color-Setup-Struktur sowie
+     `ui/MRFileEditor/*`, `ui/MRBentoBox*`.
+   - Ziel: Debugger bekommt eine eigene Color-Gruppe und eigene
+     Palette-Slots. Debugger-Panes und Source-Debug-Markierungen duerfen keine
+     Message-Line-, Warning-, Error-, Hero-, Diagnostic- oder Statusline-Slots
+     wiederverwenden.
+   - Strategische Einordnung: dieser Zwischenzug liegt vor weiteren
+     Debugger-UI-Slices fuer IP, Watches, Variables und Stack, weil diese
+     Oberflaechen sonst falsche semantische Farbcodes einschleppen.
+   - Vorgeschlagene Palette-Slots:
+     - `kMrPaletteDebuggerBreakpointActive`
+     - `kMrPaletteDebuggerBreakpointInactive`
+     - `kMrPaletteDebuggerBreakpointUnbound`
+     - `kMrPaletteDebuggerWatchpointActive`
+     - `kMrPaletteDebuggerWatchpointInactive`
+     - `kMrPaletteDebuggerWatchpointError`
+     - `kMrPaletteDebuggerInstructionPointer`
+     - `kMrPaletteDebuggerExecutionLine`
+     - `kMrPaletteDebuggerStackFrame`
+     - `kMrPaletteDebuggerValueChanged`
+     - `kMrPaletteDebuggerInputActive`
+     - `kMrPaletteDebuggerInputError`
+   - Default-Farben duerfen initial an bestehende Theme-Werte angelehnt sein,
+     aber nur als Default-Kopie bei der Palette-Initialisierung. Runtime- und
+     Rendering-Code muessen danach ausschliesslich die Debugger-Slots nutzen.
+   - Der aktuelle Breakpoint-Marker im Source-Editor muss von
+     `kMrPaletteMessageWarning` auf
+     `kMrPaletteDebuggerBreakpointActive` umgestellt werden.
+   - Inaktive oder unbound Breakpoints duerfen nicht durch dieselbe Farbe wie
+     aktive Breakpoints dargestellt werden. Der erste UI-Slice darf unbound nur
+     im Output melden; sobald unbound im Source-Pane sichtbar wird, muss der
+     eigene unbound Slot verwendet werden.
+   - Settings-/Theme-Persistenz bleibt zentral:
+     - keine Debugger-Farbregistry,
+     - keine Sidecar-Settings,
+     - keine Serialisierung an `settings.mrmac` vorbei,
+     - MRSETUP-/Theme-Export und Color-Setup muessen die neue Gruppe
+       konsistent fuehren.
+   - Geschuetzte Architektur:
+     - Die Implementierung beruehrt Settings-/Theme-Persistenz und braucht
+       eine eigene Protected-Architecture-Planung vor Codeaenderung.
+     - Keine opportunistische Aenderung an `MRSETUP`, `SAVE_SETTINGS` oder
+       Settings-Bootstrap innerhalb anderer Debugger-Slices.
+
+7. Watches And Mutation
+   - Dateien: `mrmac/mrmac.c`, `mrmac/mrmac.h`, `mrmac/MRVM.cpp`,
+     `mrmac/MRVM.hpp`, `mrmac/vm/MRVMRuntimeDebugger.*`,
+     `ui/MRBentoBox*`, `dialogs/MRMacroFile.cpp`.
+   - Ziel: read-only Watch-Ausdruecke gegen die pausierte Debug-VM und
+     typisierte Mutation vorhandener skalare Variablen.
+   - Definitionen liegen unter
+     `MACRODEBUGGER/watches/byMacro/<macroKey>/byExpression/<expression>`.
+     Sie enthalten nur Ausdruck und enabled-Zustand. Werte, Typen und Fehler
+     werden aus der Live-VM abgeleitet und nicht persistiert.
+   - Der kanonische Compiler erhaelt einen reinen Ausdrucksmodus. Er nutzt die
+     bestehende Ausdrucksgrammatik und den echten Local-Typkontext der
+     geparkten VM, aber akzeptiert keine Assignments, Procedures, UI-, Datei-
+     oder Prozess-Intrinsics. Kein zweiter Parser und kein zweiter Bytecode.
+   - Die VM evaluiert diesen Bytecode mit erhaltenem pausierten Local-, Hash-
+     und Debug-Zustand. Ein Fehler der Watch ist kein Fehler der Session.
+   - Bento Controls: `F7` legt einen Ausdruck an, `Shift+F7` entfernt ihn
+     ueber den bestehenden TVision-Input-Dialog. Die Watches-Pane wird nach
+     Start, Continue, Step, Stop und Reset aktualisiert.
+   - Wertzeilen verwenden `kMrPaletteDebuggerWatchpointActive`; Fehlerzeilen
+     verwenden `kMrPaletteDebuggerWatchpointError` ueber die bestehenden
+     Editor-Range-Marker.
+   - Fehlerfaelle: Syntax, unbekannter oder nicht mehr sichtbarer Name,
+     Typ-/Indexfehler, Division durch null, verbotene Intrinsic und fehlende
+     Live-Session.
+   - Mutation erfolgt per Klick auf eine skalare Wertzeile im Variables-Pane:
+     ein rahmenloser `TInputLine` ist mit dem alten Wert vorbelegt; Enter
+     schreibt, Escape verwirft. `int`, `real`, `str` und `char` sind
+     schreibbar; Arrays und Hashes bleiben read-only.
+   - Das Feld nutzt ausschliesslich `kMrPaletteDebuggerInputActive`; ein
+     abgewiesener Wert bleibt im Feld und nutzt
+     `kMrPaletteDebuggerInputError`. Die UI besitzt keinen schreibbaren
+     Variables-Shadow: Scope, Typ und Existenz werden beim VM-Write erneut
+     validiert; Closure-, Session- und App-Global-Werte verwenden ihre
+     bestehenden K/V-Backing-Stores.
+
+8. Workspace Debug Configuration Restore
+   - Dateien: spaeter festlegen; erwartete Beruehrung:
+     `ui/MRBentoBox*`, `app/commands/MRWindowCommands.cpp`,
+     Workspace-/`settings.mrmac`-Serialisierung und Debugger-K/V-Bruecke.
+   - Ziel: Debug-Bentos nach Workspace Load als kalte, arbeitsfaehige
+     Debug-Konfiguration wiederherstellen, ohne eine alte Live-Session zu
+     behaupten.
+   - Persistiert werden darf nur Debug-Konfiguration:
+     - Debug-Bento-Marker statt reinem Bento-Layout-Zufall,
+     - normalisierter Macro-Key,
+     - Macro-Display-Name,
+     - Source-Pfad oder Source-Spec,
+     - bestehendes Bento-Layout ueber `MRBentoWorkspaceSnapshot`,
+     - Breakpoint-Konfiguration pro Macro-Key: enabled, Source-Line,
+       optional spaeter conditionText und Source-Fingerprint,
+     - Watch-Ausdruecke, nicht deren Werte,
+     - Cursor und Viewport ueber vorhandene Workspace-Fensterdaten.
+   - Nicht persistiert werden:
+     - Session-ID,
+     - geparkter VM-Handle,
+     - Instruction Pointer,
+     - Call Stack,
+     - Locals-/Variables-Snapshot,
+     - Bytecode-Offsets als authoritative Zustand,
+     - Source-Map als dauerhafte Wahrheit,
+     - Debugger-Output als Live-Wahrheit,
+     - paused/running/completed als wiederbelebbarer Live-Status.
+   - Restore-Semantik:
+     - Workspace Load erzeugt einen Debug-Arbeitsplatz im Zustand
+       `Debug config restored, no live session`.
+     - `Continue` ist in diesem Zustand ungueltig.
+     - Der gueltige Startpunkt ist `Start Debug` oder `Restart Debug`.
+     - Beim Neustart wird das Macro-File geladen, mit Source-Map kompiliert,
+       persistierte Breakpoint-Konfiguration wird gegen die neue Source-Map
+       rebunden und wieder unter `MACRODEBUGGER` in den zentralen Runtime-K/V
+       geschrieben.
+   - Invarianten:
+     - Keine Wiederbelebung alter VM-Objekte.
+     - Keine zweite Registry fuer Debug-Konfiguration.
+     - Runtime-authoritative Breakpoints bleiben nach Restore
+       `MACRODEBUGGER`.
+     - Source-Maps bleiben generierte Debug-Start-Daten und werden nicht als
+       persistente Wahrheit gespeichert.
+     - Workspace-/Settings-Persistenz bleibt ein separater geschuetzter
+       Ausbauzug mit eigener Planung.
+
+9. Addendum: Workspace Dirty Flag Audit
+   - Dateien: spaeter festlegen; erwartete Beruehrung:
+     `app/commands/MRWindowCommands.cpp` und Workspace-dirty Call-Sites.
+   - Ziel: Window-Move darf `Workspace autosave marked dirty` nicht massenhaft
+     ohne echte Zustandsaenderung ausloesen.
+   - Jede Aenderung des Workspace-dirty Flags wird im `mr.log`
+     protokolliert: Quelle/Call-Site, vorher/nachher, autosave/preserve und
+     falls verfuegbar Window-Id und Geometrie.
+   - Kein Eingriff in `settings.mrmac`, `MRSETUP`, `SAVE_SETTINGS` oder
+     Workspace-Serialisierung ohne eigene Protected-Architecture-Planung.
+   - Keine zweite Dirty-Registry; die bestehende Dirty-Autoritaet bleibt
+     erhalten.
 
 ## Regression And Manual Checks
 
@@ -402,6 +779,8 @@ Pflicht bei relevanten Code-Slices:
   beruehrt
 - deferred UI playback ordering and batching, falls beruehrt
 - UI: Bento Pane placement, focus traversal, resize, redraw, modal open/close
+- UI: Debugger-Farbgruppe, aktive/inaktive/unbound Breakpoints, IP,
+  Watchpoints und geaenderte Werte ohne Message-Line-Farbcodes
 - Coprocessor/deferred UI checks, falls worker route oder playback beruehrt wird
 
 ## Open Decisions

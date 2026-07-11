@@ -258,6 +258,13 @@ static const MRColorSetupItem kFileCompareColorItems[] = {
     {"line numbers", kMrPaletteFileCompareLineNumbers}, {"focused pane border", kMrPaletteFileCompareFocusedPaneBorder},
 };
 
+static const MRColorSetupItem kDebuggerColorItems[] = {
+	{"breakpoint active", kMrPaletteDebuggerBreakpointActive}, {"breakpoint inactive", kMrPaletteDebuggerBreakpointInactive}, {"breakpoint unbound", kMrPaletteDebuggerBreakpointUnbound},
+	{"watchpoint active", kMrPaletteDebuggerWatchpointActive}, {"watchpoint inactive", kMrPaletteDebuggerWatchpointInactive}, {"watchpoint error", kMrPaletteDebuggerWatchpointError},
+	{"instruction pointer", kMrPaletteDebuggerInstructionPointer}, {"execution line", kMrPaletteDebuggerExecutionLine}, {"stack frame", kMrPaletteDebuggerStackFrame}, {"value changed", kMrPaletteDebuggerValueChanged},
+	{"input active", kMrPaletteDebuggerInputActive}, {"input error", kMrPaletteDebuggerInputError},
+};
+
 static const ColorGroupDefinition kColorGroups[] = {
     {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems, std::size(kWindowColorItems)},
     {MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems, std::size(kMenuDialogColorItems)},
@@ -267,6 +274,7 @@ static const ColorGroupDefinition kColorGroups[] = {
     {MRColorSetupGroup::FileCompareMiniMap, "FILE COMPARE MINIMAP COLORS", "FILECOMPAREMINIMAPCOLORS", kFileCompareMiniMapColorItems, std::size(kFileCompareMiniMapColorItems)},
     {MRColorSetupGroup::Code, "CODE COLORS", "CODECOLORS", kCodeColorItems, std::size(kCodeColorItems)},
     {MRColorSetupGroup::FileCompare, "FILE COMPARE COLORS", "FILECOMPARECOLORS", kFileCompareColorItems, std::size(kFileCompareColorItems)},
+    {MRColorSetupGroup::Debugger, "DEBUGGER COLORS", "DEBUGGERCOLORS", kDebuggerColorItems, std::size(kDebuggerColorItems)},
 };
 
 const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
@@ -390,6 +398,18 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteSpinnerDisplay) return defaultColorForSlot(kPaletteDialogInputLineNormal);
 	if (paletteIndex == kMrPaletteFocusedSpinnerHandles) return defaultColorForSlot(kPaletteDialogListFocused);
 	if (paletteIndex == kMrPaletteFocusedSpinnerDisplay) return defaultColorForSlot(kPaletteDialogInputLineSelected);
+	if (paletteIndex == kMrPaletteDebuggerBreakpointActive) return 0x4E;
+	if (paletteIndex == kMrPaletteDebuggerBreakpointInactive) return 0x18;
+	if (paletteIndex == kMrPaletteDebuggerBreakpointUnbound) return 0x4C;
+	if (paletteIndex == kMrPaletteDebuggerWatchpointActive) return 0x3E;
+	if (paletteIndex == kMrPaletteDebuggerWatchpointInactive) return 0x38;
+	if (paletteIndex == kMrPaletteDebuggerWatchpointError) return 0x4F;
+	if (paletteIndex == kMrPaletteDebuggerInstructionPointer) return 0xE0;
+	if (paletteIndex == kMrPaletteDebuggerExecutionLine) return 0x1E;
+	if (paletteIndex == kMrPaletteDebuggerStackFrame) return 0x3F;
+	if (paletteIndex == kMrPaletteDebuggerValueChanged) return 0x2E;
+	if (paletteIndex == kMrPaletteDebuggerInputActive) return 0x1B;
+	if (paletteIndex == kMrPaletteDebuggerInputError) return 0x4F;
 	if (paletteIndex == kMrPaletteDropListDescription) return defaults[57];
 	if (paletteIndex == kMrPaletteDropListSelectedInactive) return defaults[59];
 	if (paletteIndex == kMrPaletteDialogInactiveElements) return defaults[kPaletteDialogInactiveClusterGray];
@@ -418,6 +438,8 @@ MRColorSetupSettings defaultsFromColorGroups() {
 		settings.codeColors[i] = defaultColorForSlot(kCodeColorItems[i].paletteIndex);
 	for (std::size_t i = 0; i < settings.fileCompareColors.size(); ++i)
 		settings.fileCompareColors[i] = defaultColorForSlot(kFileCompareColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < settings.debuggerColors.size(); ++i)
+		settings.debuggerColors[i] = defaultColorForSlot(kDebuggerColorItems[i].paletteIndex);
 	return settings;
 }
 
@@ -477,6 +499,32 @@ template <std::size_t N> bool parseColorListLiteral(const std::string &literal, 
 	}
 	if (itemIndex != N) return setError(errorMessage, "Unexpected color list size.");
 	if (text.find(',', cursor) != std::string::npos) return setError(errorMessage, "Too many color values in list.");
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool parseDebuggerColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kDebuggerCount> &outValues, std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::vector<unsigned char> parsed;
+	unsigned char value = 0;
+
+	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0) text = text.substr(3);
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
+	while (cursor <= text.size()) {
+		const std::size_t comma = text.find(',', cursor);
+		const std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed.push_back(value);
+		if (comma == std::string::npos) break;
+		cursor = comma + 1;
+	}
+	if (parsed.size() != outValues.size() && parsed.size() != outValues.size() - 2) return setError(errorMessage, "Unexpected DEBUGGERCOLORS list size.");
+	for (std::size_t i = 0; i < outValues.size(); ++i)
+		outValues[i] = defaultColorForSlot(kDebuggerColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < parsed.size(); ++i)
+		outValues[i] = parsed[i];
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -941,6 +989,9 @@ bool applyColorSetupValueToGroup(MRColorSetupSettings &configured, const std::st
 		case MRColorSetupGroup::FileCompare:
 			if (!parseFileCompareColorListLiteral(value, configured.fileCompareColors, errorMessage)) return false;
 			break;
+		case MRColorSetupGroup::Debugger:
+			if (!parseDebuggerColorListLiteral(value, configured.debuggerColors, errorMessage)) return false;
+			break;
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -997,6 +1048,7 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 	if (!assignments.contains("FILECOMPAREMINIMAPCOLORS")) assignments["FILECOMPAREMINIMAPCOLORS"] = formatColorListLiteral(defaults.fileCompareMiniMapColors);
 	if (!assignments.contains("CODECOLORS")) assignments["CODECOLORS"] = formatColorListLiteral(defaults.codeColors);
 	if (!assignments.contains("FILECOMPARECOLORS")) assignments["FILECOMPARECOLORS"] = formatFileCompareColorListLiteral(defaults.fileCompareColors);
+	if (!assignments.contains("DEBUGGERCOLORS")) assignments["DEBUGGERCOLORS"] = formatColorListLiteral(defaults.debuggerColors);
 	if (upgradeRequired != nullptr) *upgradeRequired = localUpgradeRequired;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -1076,6 +1128,9 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 		case MRColorSetupGroup::FileCompare:
 			for (std::size_t i = 0; i < configured.fileCompareColors.size(); ++i) configured.fileCompareColors[i] = values[i];
 			break;
+		case MRColorSetupGroup::Debugger:
+			for (std::size_t i = 0; i < configured.debuggerColors.size(); ++i) configured.debuggerColors[i] = values[i];
+			break;
 	}
 	configuredColorThemeDisplayNameValue().clear();
 	recordSettingsRuntimeWrite();
@@ -1112,6 +1167,9 @@ void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *val
 			break;
 		case MRColorSetupGroup::FileCompare:
 			for (std::size_t i = 0; i < configured.fileCompareColors.size(); ++i) values[i] = configured.fileCompareColors[i];
+			break;
+		case MRColorSetupGroup::Debugger:
+			for (std::size_t i = 0; i < configured.debuggerColors.size(); ++i) values[i] = configured.debuggerColors[i];
 			break;
 	}
 }
@@ -1303,6 +1361,11 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 			value = configured.fileCompareColors[i];
 			return true;
 		}
+	for (std::size_t i = 0; i < std::size(kDebuggerColorItems); ++i)
+		if (kDebuggerColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.debuggerColors[i];
+			return true;
+		}
 	return false;
 }
 
@@ -1367,6 +1430,7 @@ std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors) {
 	source += "FILECOMPAREMINIMAPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.fileCompareMiniMapColors)) + "');\n";
 	source += "CODECOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.codeColors)) + "');\n";
 	source += "FILECOMPARECOLORS('" + escapeMrmacSingleQuotedLiteral(formatFileCompareColorListLiteral(colors.fileCompareColors)) + "');\n";
+	source += "DEBUGGERCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.debuggerColors)) + "');\n";
 	if (!themeName.empty()) source += "THEME_NAME('" + escapeMrmacSingleQuotedLiteral(themeName) + "');\n";
 	source += "END_MACRO;\n";
 	return source;

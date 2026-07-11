@@ -36,12 +36,25 @@ struct MacroRef {
 	MacroRef();
 };
 
+struct MRMacroSourceMapEntry {
+	std::size_t bytecodeOffset;
+	std::size_t sourceStartOffset;
+	std::size_t sourceEndOffset;
+	int line;
+	int column;
+	std::string macroName;
+	int debuggableKind;
+
+	MRMacroSourceMapEntry();
+};
+
 struct LoadedMacroFile {
 	std::string fileKey;
 	std::string displayName;
 	std::string resolvedPath;
 	std::vector<unsigned char> bytecode;
 	std::vector<std::string> macroNames;
+	std::vector<MRMacroSourceMapEntry> sourceMap;
 	MRMacroExecutionProfile profile;
 };
 
@@ -63,6 +76,8 @@ bool mrvmRuntimeCatalogReadLoadedMacro(MRVMRuntimeKv &runtimeKv, const std::stri
 bool mrvmRuntimeCatalogLoadedMacroExists(MRVMRuntimeKv &runtimeKv, const std::string &macroKey);
 void mrvmRuntimeCatalogWriteLoadedMacro(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, const MacroRef &macroRef);
 bool mrvmRuntimeCatalogEraseLoadedMacro(MRVMRuntimeKv &runtimeKv, const std::string &macroKey);
+bool mrvmRuntimeCatalogFirstSourceMapSpanForLine(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, int line, MRMacroSourceMapEntry &entry);
+bool mrvmRuntimeCatalogSourceMapSpanForBytecodeOffset(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, std::size_t bytecodeOffset, MRMacroSourceMapEntry &entry);
 
 std::vector<std::string> mrvmRuntimeCatalogMacroOrder(MRVMRuntimeKv &runtimeKv);
 void mrvmRuntimeCatalogWriteMacroOrder(MRVMRuntimeKv &runtimeKv, const std::vector<std::string> &orderValues);

@@ -304,6 +304,14 @@ class MRFileEditor : public TScroller {
 	void setCompilerDiagnosticRanges(const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges, const std::vector<std::pair<std::size_t, std::size_t>> &warningRanges);
 
 	void clearCompilerDiagnosticRanges();
+	void setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges);
+	void clearDebuggerBreakpointRanges();
+	void setDebuggerWatchpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges);
+	void clearDebuggerWatchpointRanges();
+	void setDebuggerVariableChangedRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
+	void clearDebuggerVariableChangedRanges();
+	void setDebuggerInstructionLine(std::size_t lineIndex);
+	void clearDebuggerInstructionLine();
 	void revealCursor(Boolean centerCursor = True);
 
 	void centerDocumentLocationInView(std::size_t lineIndex, int visualColumn);
@@ -565,6 +573,7 @@ class MRFileEditor : public TScroller {
 
 		void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineNumber, bool showNumber, int drawX, int width, bool zeroFill, std::size_t lineIndex);
 		void drawFileCompareGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineIndex);
+		void drawDebugGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineIndex);
 
 		void drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex);
 
@@ -579,6 +588,14 @@ class MRFileEditor : public TScroller {
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept;
 
 	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
+	bool debuggerBreakpointContainsOffset(std::size_t offset) const noexcept;
+	bool debuggerBreakpointInactiveContainsOffset(std::size_t offset) const noexcept;
+	bool debuggerWatchpointActiveContainsOffset(std::size_t offset) const noexcept;
+	bool debuggerWatchpointInactiveContainsOffset(std::size_t offset) const noexcept;
+	bool debuggerWatchpointErrorContainsOffset(std::size_t offset) const noexcept;
+	bool debuggerVariableChangedContainsOffset(std::size_t offset) const noexcept;
+	bool debuggerBreakpointLineAt(std::size_t lineIndex) const noexcept;
+	bool debuggerBreakpointInactiveLineAt(std::size_t lineIndex) const noexcept;
 	unsigned char fileCompareLineKindAt(std::size_t lineIndex) const noexcept;
 
 	MRMiniMapRenderer::Palette resolveMiniMapPalette();
@@ -795,7 +812,18 @@ class MRFileEditor : public TScroller {
 	std::vector<MRTextBufferModel::Range> mFindMarkerRanges;
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
 	std::vector<MRTextBufferModel::Range> mCompilerErrorRanges;
-	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;	LoadTiming mLastLoadTiming;
+	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;
+	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointRanges;
+	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointInactiveRanges;
+	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointActiveRanges;
+	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointInactiveRanges;
+	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointErrorRanges;
+	std::vector<MRTextBufferModel::Range> mDebuggerVariableChangedRanges;
+	std::vector<std::size_t> mDebuggerBreakpointLines;
+	std::vector<std::size_t> mDebuggerBreakpointInactiveLines;
+	bool mDebuggerInstructionLineValid = false;
+	std::size_t mDebuggerInstructionLine = 0;
+	LoadTiming mLastLoadTiming;
 	mutable std::size_t mCachedCursorLineDocumentId;
 	mutable std::size_t mCachedCursorLineVersion;
 	mutable std::size_t mCachedCursorLineOffset;

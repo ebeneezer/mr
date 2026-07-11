@@ -200,7 +200,8 @@ enum class MRColorSetupGroup : unsigned char {
 	MiniMap,
 	FileCompareMiniMap,
 	Code,
-	FileCompare
+	FileCompare,
+	Debugger
 };
 
 enum class MRLogHandling : unsigned char {
@@ -481,7 +482,19 @@ enum : unsigned char {
 	kMrPaletteSpinnerDisplay = 224,
 	kMrPaletteFocusedSpinnerHandles = 225,
 	kMrPaletteFocusedSpinnerDisplay = 226,
-	kMrPaletteMax = kMrPaletteFocusedSpinnerDisplay
+	kMrPaletteDebuggerBreakpointActive = 227,
+	kMrPaletteDebuggerBreakpointInactive = 228,
+	kMrPaletteDebuggerBreakpointUnbound = 229,
+	kMrPaletteDebuggerWatchpointActive = 230,
+	kMrPaletteDebuggerWatchpointInactive = 231,
+	kMrPaletteDebuggerWatchpointError = 232,
+	kMrPaletteDebuggerInstructionPointer = 233,
+	kMrPaletteDebuggerExecutionLine = 234,
+	kMrPaletteDebuggerStackFrame = 235,
+	kMrPaletteDebuggerValueChanged = 236,
+	kMrPaletteDebuggerInputActive = 237,
+	kMrPaletteDebuggerInputError = 238,
+	kMrPaletteMax = kMrPaletteDebuggerInputError
 };
 
 struct MRColorSetupSettings {
@@ -493,6 +506,7 @@ struct MRColorSetupSettings {
 	static const std::size_t kFileCompareMiniMapCount = 9;
 	static const std::size_t kCodeCount = 33;
 	static const std::size_t kFileCompareCount = 14;
+	static const std::size_t kDebuggerCount = 12;
 
 	std::array<unsigned char, kWindowCount> windowColors;
 	std::array<unsigned char, kMenuDialogCount> menuDialogColors;
@@ -502,8 +516,9 @@ struct MRColorSetupSettings {
 	std::array<unsigned char, kFileCompareMiniMapCount> fileCompareMiniMapColors;
 	std::array<unsigned char, kCodeCount> codeColors;
 	std::array<unsigned char, kFileCompareCount> fileCompareColors;
+	std::array<unsigned char, kDebuggerCount> debuggerColors;
 
-	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors(), miniMapColors(), fileCompareMiniMapColors(), codeColors(), fileCompareColors() {
+	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors(), miniMapColors(), fileCompareMiniMapColors(), codeColors(), fileCompareColors(), debuggerColors() {
 	}
 
 	auto operator==(const MRColorSetupSettings &) const noexcept -> bool = default;

@@ -136,6 +136,7 @@ typedef struct {
 	int ival;
 	double rval;
 	int line;
+	size_t source_start;
 } Token;
 
 typedef struct {
@@ -148,6 +149,10 @@ typedef struct {
 	Lexer lex;
 	Token tok;
 	int macro_file_seen;
+	MRMacSourceMapSink source_map_sink;
+	void *source_map_context;
+	const char *current_macro_name;
+	int watch_expression;
 } Parser;
 
 typedef struct {
@@ -553,9 +558,11 @@ static void lexer_next(Lexer *lex, Token *tok) {
 	tok->ival = 0;
 	tok->rval = 0.0;
 	tok->line = lex->line;
+	tok->source_start = (size_t)(lex->p - lex->src);
 
 	skip_ws_and_comments(lex);
 	tok->line = lex->line;
+	tok->source_start = (size_t)(lex->p - lex->src);
 
 	if (*lex->p == '\0') {
 		tok->kind = TOK_EOF;
@@ -907,9 +914,12 @@ static void lexer_next(Lexer *lex, Token *tok) {
 	}
 }
 
-static void parser_init(Parser *ps, const char *source) {
+static void parser_init(Parser *ps, const char *source, MRMacSourceMapSink source_map_sink, void *source_map_context) {
 	memset(ps, 0, sizeof(*ps));
 	lexer_init(&ps->lex, source);
+	ps->source_map_sink = source_map_sink;
+	ps->source_map_context = source_map_context;
+	ps->current_macro_name = NULL;
 	ps->tok.text = NULL;
 	lexer_next(&ps->lex, &ps->tok);
 }
@@ -933,6 +943,21 @@ static int parser_expect(Parser *ps, TokenKind kind, const char *msg) {
 	}
 	parser_next(ps);
 	return 0;
+}
+
+static void parser_record_source_map(Parser *ps, size_t bytecode_offset, size_t source_start, size_t source_end, int line, int kind) {
+	MRMacSourceMapEntry entry;
+
+	if (ps->source_map_sink == NULL || ps->current_macro_name == NULL) return;
+	if (source_end < source_start) source_end = source_start;
+	entry.bytecodeOffset = bytecode_offset;
+	entry.sourceStartOffset = source_start;
+	entry.sourceEndOffset = source_end;
+	entry.line = line;
+	entry.column = 0;
+	entry.macroName = ps->current_macro_name;
+	entry.debuggableKind = kind;
+	ps->source_map_sink(ps->source_map_context, &entry);
 }
 
 static int is_numeric_type(int type) {
@@ -1594,9 +1619,24 @@ static const IntrinsicSignature *find_intrinsic_signature(const char *name) {
 	return NULL;
 }
 
-static int try_emit_bare_intrinsic_call(const char *name, ExprInfo *out) {
+static int watch_intrinsic_allowed(const char *name) {
+	static const char *const allowed[] = {
+	    "STR", "CHAR", "UTF8", "ASCII", "CAPS", "COPY", "LENGTH", "LEN", "POS", "XPOS", "STR_DEL", "STR_INS", "REAL_I", "INT_R", "RSTR", "REMOVE_SPACE",
+	    "GET_EXTENSION", "GET_PATH", "TRUNCATE_EXTENSION", "TRUNCATE_PATH", "GLOBAL_STR", "GLOBAL_INT", "GLOBAL_HASH", "EXISTS", "HAS_VALUE", "KEYS", "VALUES", "PARSE_STR", "PARSE_INT"};
+	size_t index;
+
+	for (index = 0; index < sizeof(allowed) / sizeof(allowed[0]); ++index)
+		if (strcasecmp(name, allowed[index]) == 0) return 1;
+	return 0;
+}
+
+static int try_emit_bare_intrinsic_call(Parser *ps, const char *name, ExprInfo *out) {
 	const IntrinsicSignature *spec = find_intrinsic_signature(name);
 	if (spec == NULL || !spec->allow_without_parens || spec->argc != 0) return 0;
+	if (ps->watch_expression && !watch_intrinsic_allowed(name)) {
+		set_compile_error(ps->tok.line, "Intrinsic is not allowed in a watch expression.");
+		return -1;
+	}
 	emit_intrinsic_call(spec->name, 0);
 	out->type = spec->result_type;
 	return 1;
@@ -1773,6 +1813,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 	if (ps->tok.kind == TOK_IDENTIFIER) {
 		ExprInfo args[8];
 		int argc = 0;
+		int bare_intrinsic_result;
 		int line = ps->tok.line;
 		const IntrinsicSignature *spec;
 		name = xstrdup(ps->tok.text);
@@ -1801,20 +1842,31 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 			}
 		}
 
-		if (try_emit_bare_intrinsic_call(name, out)) {
+		bare_intrinsic_result = try_emit_bare_intrinsic_call(ps, name, out);
+		if (bare_intrinsic_result != 0) {
 			free(name);
-			return parse_collection_postfixes(ps, out);
+			return bare_intrinsic_result > 0 ? parse_collection_postfixes(ps, out) : -1;
 		}
 
 		if (parser_accept(ps, TOK_LPAREN)) {
 			int rc;
 			if (is_val_like_intrinsic(name)) {
+				if (ps->watch_expression) {
+					set_compile_error(line, "Intrinsic is not allowed in a watch expression.");
+					free(name);
+					return -1;
+				}
 				rc = parse_val_like_intrinsic_call(ps, name, line, out);
 				free(name);
 				return rc;
 			}
 
 			if (is_global_iterator_intrinsic(name)) {
+				if (ps->watch_expression) {
+					set_compile_error(line, "Intrinsic is not allowed in a watch expression.");
+					free(name);
+					return -1;
+				}
 				rc = parse_global_iterator_intrinsic_call(ps, name, out);
 				free(name);
 				return rc;
@@ -1832,6 +1884,11 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 			spec = find_intrinsic_signature(name);
 			if (spec == NULL) {
 				set_compile_error(line, "Type mismatch or syntax error.");
+				free(name);
+				return -1;
+			}
+			if (ps->watch_expression && !watch_intrinsic_allowed(name)) {
+				set_compile_error(line, "Intrinsic is not allowed in a watch expression.");
 				free(name);
 				return -1;
 			}
@@ -2454,6 +2511,7 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("FILECOMPAREMINIMAPCOLORS", CALL_ARG_STRINGLIKE, "FILECOMPAREMINIMAPCOLORS"),
     PROC_SIG1("CODECOLORS", CALL_ARG_STRINGLIKE, "CODECOLORS"),
     PROC_SIG1("FILECOMPARECOLORS", CALL_ARG_STRINGLIKE, "FILECOMPARECOLORS"),
+    PROC_SIG1("DEBUGGERCOLORS", CALL_ARG_STRINGLIKE, "DEBUGGERCOLORS"),
     PROC_SIG4("MRFEPROFILE", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "MRFEPROFILE"),
     PROC_SIG4("MRCOMPILERPROFILE", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "MRCOMPILERPROFILE"),
     PROC_SIG1("LOAD_MACRO_FILE", CALL_ARG_STRINGLIKE, "LOAD_MACRO_FILE"),
@@ -3056,10 +3114,22 @@ static int parse_keyword_statement(Parser *ps, int *out_handled) {
 	return 0;
 }
 
+static int source_map_kind_for_statement(const Parser *ps) {
+	if (ps->tok.kind == TOK_CALL) return MRMAC_SOURCE_MAP_CALL;
+	if (ps->tok.kind == TOK_GOTO || ps->tok.kind == TOK_IF || ps->tok.kind == TOK_WHILE) return MRMAC_SOURCE_MAP_BRANCH;
+	if (ps->tok.kind == TOK_IDENTIFIER) return MRMAC_SOURCE_MAP_STATEMENT;
+	return MRMAC_SOURCE_MAP_STATEMENT;
+}
+
 static int parse_statement(Parser *ps) {
 	int rc = 0;
 	int needs_semicolon = 1;
 	int keyword_handled = 0;
+	size_t bytecode_start = emit_get_pos();
+	size_t source_start = ps->tok.source_start;
+	size_t source_end = source_start;
+	int source_line = ps->tok.line;
+	int source_map_kind = source_map_kind_for_statement(ps);
 
 	switch (ps->tok.kind) {
 		case TOK_DEF_INT:
@@ -3083,9 +3153,15 @@ static int parse_statement(Parser *ps) {
 	}
 
 	if (rc != 0) return -1;
-	if (!needs_semicolon) return 0;
+	if (!needs_semicolon) {
+		if (emit_get_pos() > bytecode_start) parser_record_source_map(ps, bytecode_start, source_start, ps->tok.source_start, source_line, source_map_kind);
+		return 0;
+	}
 
-	return parser_expect(ps, TOK_SEMICOLON, "; expected.");
+	source_end = ps->tok.source_start + 1;
+	if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0) return -1;
+	if (emit_get_pos() > bytecode_start) parser_record_source_map(ps, bytecode_start, source_start, source_end, source_line, source_map_kind);
+	return 0;
 }
 
 static int parse_statement_list(Parser *ps, TokenKind end1, TokenKind end2, TokenKind end3) {
@@ -3188,6 +3264,10 @@ static int parse_macro_definition(Parser *ps) {
 	char *keyspec = NULL;
 	unsigned flags = 0;
 	int mode = MACRO_MODE_EDIT;
+	size_t name_start = 0;
+	size_t name_end = 0;
+	int name_line = 0;
+	size_t entry_pos = 0;
 
 	if (parser_expect(ps, TOK_MACRO, "Scommand expected.") != 0) return -1;
 	if (ps->tok.kind != TOK_IDENTIFIER) {
@@ -3195,6 +3275,9 @@ static int parse_macro_definition(Parser *ps) {
 		return -1;
 	}
 
+	name_start = ps->tok.source_start;
+	name_end = name_start + (ps->tok.text != NULL ? strlen(ps->tok.text) : 0);
+	name_line = ps->tok.line;
 	name = xstrdup(ps->tok.text);
 	if (name == NULL) {
 		set_compile_error(ps->tok.line, "Out of memory.");
@@ -3210,37 +3293,46 @@ static int parse_macro_definition(Parser *ps) {
 		return -1;
 	}
 
-	if (add_compiled_macro_info(name, (int)emit_get_pos(), flags, keyspec, mode, MRMAC_UNIT_MACRO, 0) != 0) {
+	entry_pos = emit_get_pos();
+	if (add_compiled_macro_info(name, (int)entry_pos, flags, keyspec, mode, MRMAC_UNIT_MACRO, 0) != 0) {
 		free(keyspec);
 		free(name);
 		return -1;
 	}
+	ps->current_macro_name = name;
+	parser_record_source_map(ps, entry_pos, name_start, name_end, name_line, MRMAC_SOURCE_MAP_MACRO_ENTRY);
 	free(keyspec);
 
 	if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 
 	if (parse_statement_list(ps, TOK_END_MACRO, TOK_EOF, TOK_EOF) != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 	if (parser_expect(ps, TOK_END_MACRO, "Premature end of file.") != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 	if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 
 	if (resolve_pending_refs() != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 
 	emit_byte(OP_HALT);
+	ps->current_macro_name = NULL;
 	free(name);
 	return 0;
 }
@@ -3269,6 +3361,10 @@ static int parse_closure_tick(Parser *ps, int *tick_ms) {
 static int parse_closure_definition(Parser *ps) {
 	char *name;
 	int tick_ms = 0;
+	size_t name_start = 0;
+	size_t name_end = 0;
+	int name_line = 0;
+	size_t entry_pos = 0;
 
 	if (parser_expect(ps, TOK_CLOSURE, "Scommand expected.") != 0) return -1;
 	if (ps->tok.kind != TOK_IDENTIFIER) {
@@ -3276,6 +3372,9 @@ static int parse_closure_definition(Parser *ps) {
 		return -1;
 	}
 
+	name_start = ps->tok.source_start;
+	name_end = name_start + (ps->tok.text != NULL ? strlen(ps->tok.text) : 0);
+	name_line = ps->tok.line;
 	name = xstrdup(ps->tok.text);
 	if (name == NULL) {
 		set_compile_error(ps->tok.line, "Out of memory.");
@@ -3294,28 +3393,36 @@ static int parse_closure_definition(Parser *ps) {
 		free(name);
 		return -1;
 	}
-	if (add_compiled_macro_info(name, (int)emit_get_pos(), 0, "", MACRO_MODE_EDIT, MRMAC_UNIT_CLOSURE, tick_ms) != 0) {
+	entry_pos = emit_get_pos();
+	if (add_compiled_macro_info(name, (int)entry_pos, 0, "", MACRO_MODE_EDIT, MRMAC_UNIT_CLOSURE, tick_ms) != 0) {
 		free(name);
 		return -1;
 	}
+	ps->current_macro_name = name;
+	parser_record_source_map(ps, entry_pos, name_start, name_end, name_line, MRMAC_SOURCE_MAP_MACRO_ENTRY);
 	if (parse_statement_list(ps, TOK_END_CLOSURE, TOK_EOF, TOK_EOF) != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 	if (parser_expect(ps, TOK_END_CLOSURE, "Premature end of file.") != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 	if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 	if (resolve_pending_refs() != 0) {
+		ps->current_macro_name = NULL;
 		free(name);
 		return -1;
 	}
 
 	emit_byte(OP_HALT);
+	ps->current_macro_name = NULL;
 	free(name);
 	return 0;
 }
@@ -3339,7 +3446,7 @@ static int parse_program(Parser *ps) {
 	return 0;
 }
 
-unsigned char *compile_macro_code(const char *source, size_t *out_size) {
+unsigned char *compile_macro_code_with_source_map(const char *source, size_t *out_size, MRMacSourceMapSink source_map_sink, void *source_map_context) {
 	Parser ps;
 	unsigned char *result = NULL;
 
@@ -3356,7 +3463,7 @@ unsigned char *compile_macro_code(const char *source, size_t *out_size) {
 		return NULL;
 	}
 
-	parser_init(&ps, source);
+	parser_init(&ps, source, source_map_sink, source_map_context);
 	if (parse_program(&ps) != 0 && g_last_error[0] == '\0') set_compile_error(ps.tok.line, "Compilation failed.");
 	token_free(&ps.tok);
 
@@ -3393,6 +3500,61 @@ unsigned char *compile_macro_code(const char *source, size_t *out_size) {
 
 	reset_code_buffer();
 	clear_symbols();
+	return result;
+}
+
+unsigned char *compile_macro_code(const char *source, size_t *out_size) {
+	return compile_macro_code_with_source_map(source, out_size, NULL, NULL);
+}
+
+unsigned char *compile_macro_watch_expression(const char *expression, const MRMacWatchSymbol *symbols, size_t symbol_count, size_t *out_size, int *out_type) {
+	Parser ps;
+	ExprInfo expression_info;
+	unsigned char *result = NULL;
+	size_t index;
+
+	if (out_size != NULL) *out_size = 0;
+	if (out_type != NULL) *out_type = 0;
+	reset_code_buffer();
+	clear_symbols();
+	reset_error_state();
+
+	if (expression == NULL || *expression == '\0') {
+		set_compile_error(0, "Watch expression expected.");
+		return NULL;
+	}
+	for (index = 0; index < symbol_count; ++index) {
+		if (symbols == NULL || add_symbol(symbols[index].name, symbols[index].type) != 0) goto finish;
+	}
+	parser_init(&ps, expression, NULL, NULL);
+	ps.watch_expression = 1;
+	if (parse_expression(&ps, 1, &expression_info) != 0) goto finish_token;
+	if (ps.tok.kind != TOK_EOF) {
+		set_compile_error(ps.tok.line, "Unexpected token after watch expression.");
+		goto finish_token;
+	}
+	emit_byte(OP_HALT);
+	if (g_last_error[0] != '\0') goto finish_token;
+	result = (unsigned char *)malloc(g_code_size);
+	if (result == NULL) {
+		set_compile_error(0, "Out of memory.");
+		goto finish_token;
+	}
+	memcpy(result, g_code, g_code_size);
+	if (out_size != NULL) *out_size = g_code_size;
+	if (out_type != NULL) *out_type = expression_info.type;
+
+finish_token:
+	token_free(&ps.tok);
+finish:
+	reset_code_buffer();
+	clear_symbols();
+	if (g_last_error[0] != '\0') {
+		free(result);
+		result = NULL;
+		if (out_size != NULL) *out_size = 0;
+		if (out_type != NULL) *out_type = 0;
+	}
 	return result;
 }
 

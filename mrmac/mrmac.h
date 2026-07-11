@@ -83,6 +83,31 @@
 #define MRMAC_UNIT_MACRO 0
 #define MRMAC_UNIT_CLOSURE 1
 
+/* Source-map entry kinds. Values are runtime metadata, not opcodes. */
+#define MRMAC_SOURCE_MAP_MACRO_ENTRY 1
+#define MRMAC_SOURCE_MAP_STATEMENT 2
+#define MRMAC_SOURCE_MAP_EXPRESSION 3
+#define MRMAC_SOURCE_MAP_CALL 4
+#define MRMAC_SOURCE_MAP_BRANCH 5
+#define MRMAC_SOURCE_MAP_LABEL 6
+
+typedef struct {
+	size_t bytecodeOffset;
+	size_t sourceStartOffset;
+	size_t sourceEndOffset;
+	int line;
+	int column;
+	const char *macroName;
+	int debuggableKind;
+} MRMacSourceMapEntry;
+
+typedef void (*MRMacSourceMapSink)(void *context, const MRMacSourceMapEntry *entry);
+
+typedef struct {
+	const char *name;
+	int type;
+} MRMacWatchSymbol;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -107,6 +132,8 @@ int lookup_symbol(const char *name, int *out_type);
 
 /* Main function for in-memory compilation */
 unsigned char *compile_macro_code(const char *source, size_t *out_size);
+unsigned char *compile_macro_code_with_source_map(const char *source, size_t *out_size, MRMacSourceMapSink source_map_sink, void *source_map_context);
+unsigned char *compile_macro_watch_expression(const char *expression, const MRMacWatchSymbol *symbols, size_t symbol_count, size_t *out_size, int *out_type);
 
 /* Information about the most recently compiled macro source. */
 int get_compiled_macro_count(void);

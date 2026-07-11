@@ -30,6 +30,8 @@
 #include "../mrmac/mrmac.h"
 #include "../mrmac/MRMacroExecutionSession.hpp"
 #include "../mrmac/MRVM.hpp"
+#include "../mrmac/vm/MRVMRuntimeCatalog.hpp"
+#include "../mrmac/vm/MRVMRuntimeDebugger.hpp"
 #include "../app/MRExecSessionStatus.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../app/MRCommandRouter.hpp"
@@ -58,8 +60,11 @@
 #include "../ui/MRDeskTop.hpp"
 #include "../ui/MRIndicator.hpp"
 #include "../ui/MRMenuBar.hpp"
+#include "../ui/MRStatusLine.hpp"
 #include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRWindowSupport.hpp"
+
+int runMacroDebuggerCrossSectionProbeMode();
 
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-function"
@@ -145,6 +150,21 @@ struct TestContext {
 
 bool runKeymapMacroBindingDispatchProbe(std::string &failureReason);
 bool runKeymapAutoexecPersistenceAndBootstrapProbe(std::string &failureReason);
+
+void collectRegressionSourceMapEntry(void *context, const MRMacSourceMapEntry *entry) {
+	std::vector<MRMacroSourceMapEntry> *entries = static_cast<std::vector<MRMacroSourceMapEntry> *>(context);
+	MRMacroSourceMapEntry mapped;
+
+	if (entries == nullptr || entry == nullptr) return;
+	mapped.bytecodeOffset = entry->bytecodeOffset;
+	mapped.sourceStartOffset = entry->sourceStartOffset;
+	mapped.sourceEndOffset = entry->sourceEndOffset;
+	mapped.line = entry->line;
+	mapped.column = entry->column;
+	mapped.macroName = entry->macroName != nullptr ? entry->macroName : std::string();
+	mapped.debuggableKind = entry->debuggableKind;
+	entries->push_back(mapped);
+}
 
 bool compileSource(const std::string &source, std::vector<unsigned char> &bytecode, int &entryOffset, std::string &entryName, std::string &errorText) {
 	unsigned char *compiled = nullptr;
@@ -418,6 +438,7 @@ bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, snapshot.colorSettings.miniMapColors.data(), snapshot.colorSettings.miniMapColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompareMiniMap, snapshot.colorSettings.fileCompareMiniMapColors.data(), snapshot.colorSettings.fileCompareMiniMapColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompare, snapshot.colorSettings.fileCompareColors.data(), snapshot.colorSettings.fileCompareColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Debugger, snapshot.colorSettings.debuggerColors.data(), snapshot.colorSettings.debuggerColors.size(), &errorText)) return false;
 	if (!setConfiguredColorThemeFilePath(snapshot.colorThemeFilePath, &errorText)) return false;
 	clearConfiguredAutoexecMacroDiagnostics();
 	errorText.clear();
@@ -1087,6 +1108,528 @@ bool testExecSessionRuntimeStoreBoundaryGuard(std::string &failureReason) {
 
 	failureReason.clear();
 	return true;
+}
+
+bool runMacroDebuggerBreakpointKvProbe(std::string &failureReason) {
+	static const char kSource[] = "$MACRO BreakpointProbe;\n"
+	                              "DEF_INT(X);\n"
+	                              "X := 1;\n"
+	                              "X := X + 1;\n"
+	                              "END_MACRO;\n";
+	static const int kBreakpointLine = 3;
+	static const int kDisabledBreakpointLine = 4;
+	static const char kMacroKey[] = "BREAKPOINTPROBE";
+	MRVMRuntimeKv runtimeKv;
+	LoadedMacroFile file;
+	MacroRef macroRef;
+	MRMacroSourceMapEntry expectedSpan;
+	MRMacroSourceMapEntry disabledSpan;
+	MRMacroSourceMapEntry interiorSpan;
+	MRMacroDebuggerBreakpoint breakpoint;
+	std::vector<MRMacroDebuggerBreakpoint> breakpoints;
+	std::vector<std::size_t> bytecodeOffsets;
+	MRMacroDebugRunResult debugResult;
+	MRMacroDebugRunResult steppedDebugResult;
+	MRMacroDebugRunResult resumedDebugResult;
+	MRMacroDebugRunResult finalDebugResult;
+	MRMacroDebugRunResult completedDebugResult;
+	MRMacroDebugRunResult sessionDebugResult;
+	MRMacroDebugRunResult sessionResumeResult;
+	MRMacroDebugRunResult sessionFinalResult;
+	MRMacroDebugRunResult scheduledPauseResult;
+	MRMacroDebugRunResult registryDebugResult;
+	MRMacroDebugRunResult registryStatementStepResult;
+	MRMacroDebugRunResult registryEntryStopResult;
+	MRMacroExecutionSession debugSession;
+	MRMacroExecutionSession scheduledPauseSession;
+	MRMacroExecutionSession registryDebugSession;
+	MRMacroExecutionSession registryStatementStepSession;
+	MRMacroExecutionSession registryEntryStopSession;
+	VirtualMachine debugVm;
+	std::vector<unsigned char> bytecode;
+	std::vector<MRMacroSourceMapEntry> sourceMap;
+	size_t bytecodeSize = 0;
+	unsigned char *compiled = compile_macro_code_with_source_map(kSource, &bytecodeSize, collectRegressionSourceMapEntry, &sourceMap);
+
+	if (compiled == nullptr) {
+		const char *errorText = get_last_compile_error();
+		failureReason = std::string("Macro debugger breakpoint probe failed to compile fixture: ") + (errorText != nullptr ? errorText : "");
+		return false;
+	}
+	bytecode.assign(compiled, compiled + bytecodeSize);
+	std::free(compiled);
+
+	if (bytecode.empty() || sourceMap.empty()) {
+		failureReason = "Macro debugger breakpoint probe needs bytecode and source-map entries.";
+		return false;
+	}
+	file.fileKey = "BREAKPOINT_PROBE_FILE";
+	file.displayName = "breakpoint_probe.mrmac";
+	file.resolvedPath = "/tmp/breakpoint_probe.mrmac";
+	file.bytecode = bytecode;
+	file.macroNames.push_back(kMacroKey);
+	file.sourceMap = sourceMap;
+	file.profile = mrvmAnalyzeBytecode(file.bytecode.data(), file.bytecode.size());
+
+	macroRef.fileKey = file.fileKey;
+	macroRef.displayName = "BreakpointProbe";
+	macroRef.entryOffset = static_cast<std::size_t>(get_compiled_macro_entry(0));
+	mrvmRuntimeCatalogWriteLoadedFile(runtimeKv, file);
+	mrvmRuntimeCatalogWriteLoadedMacro(runtimeKv, kMacroKey, macroRef);
+
+	if (!mrvmRuntimeCatalogFirstSourceMapSpanForLine(runtimeKv, kMacroKey, kBreakpointLine, expectedSpan)) {
+		failureReason = "Macro debugger breakpoint probe did not find the expected statement source span.";
+		return false;
+	}
+	if (!mrvmRuntimeCatalogFirstSourceMapSpanForLine(runtimeKv, kMacroKey, kDisabledBreakpointLine, disabledSpan)) {
+		failureReason = "Macro debugger breakpoint probe did not find the disabled statement source span.";
+		return false;
+	}
+		if (!mrvmRuntimeCatalogSourceMapSpanForBytecodeOffset(runtimeKv, kMacroKey, expectedSpan.bytecodeOffset, interiorSpan) || interiorSpan.bytecodeOffset != expectedSpan.bytecodeOffset ||
+		    interiorSpan.sourceStartOffset != expectedSpan.sourceStartOffset || interiorSpan.sourceEndOffset != expectedSpan.sourceEndOffset || interiorSpan.line != expectedSpan.line) {
+			failureReason = "Macro debugger breakpoint probe did not resolve the source line index bytecode key.";
+			return false;
+		}
+	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(runtimeKv, "BreakpointProbe", kBreakpointLine, true, "X > 0")) {
+		failureReason = "Macro debugger breakpoint probe could not write a source-bound line breakpoint.";
+		return false;
+	}
+	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(runtimeKv, kMacroKey, kDisabledBreakpointLine, false, "")) {
+		failureReason = "Macro debugger breakpoint probe could not write a disabled line breakpoint.";
+		return false;
+	}
+	if (!mrvmRuntimeDebuggerReadLineBreakpoint(runtimeKv, kMacroKey, kBreakpointLine, breakpoint)) {
+		failureReason = "Macro debugger breakpoint probe could not read the written line breakpoint.";
+		return false;
+	}
+	if (breakpoint.macroKey != kMacroKey || !breakpoint.enabled || breakpoint.line != kBreakpointLine || breakpoint.conditionText != "X > 0") {
+		failureReason = "Macro debugger breakpoint probe read mismatching breakpoint identity or condition.";
+		return false;
+	}
+	if (breakpoint.bytecodeOffset != expectedSpan.bytecodeOffset || breakpoint.sourceStartOffset != expectedSpan.sourceStartOffset || breakpoint.sourceEndOffset != expectedSpan.sourceEndOffset || breakpoint.debuggableKind != expectedSpan.debuggableKind) {
+		failureReason = "Macro debugger breakpoint probe did not persist the bound source-map span.";
+		return false;
+	}
+	if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(runtimeKv, kMacroKey, breakpoints) || breakpoints.size() != 2) {
+		failureReason = "Macro debugger breakpoint probe could not list both line breakpoints.";
+		return false;
+	}
+	if (breakpoints[0].line != kBreakpointLine || breakpoints[1].line != kDisabledBreakpointLine || breakpoints[1].enabled) {
+		failureReason = "Macro debugger breakpoint probe listed line breakpoints with wrong order or enabled state.";
+		return false;
+	}
+	if (!mrvmRuntimeDebuggerEnabledBreakpointOffsetsForMacro(runtimeKv, kMacroKey, bytecodeOffsets) || bytecodeOffsets.size() != 1 || bytecodeOffsets[0] != expectedSpan.bytecodeOffset) {
+		failureReason = "Macro debugger breakpoint probe did not return the active bytecode offset set.";
+		return false;
+	}
+	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(runtimeKv, kMacroKey, kDisabledBreakpointLine, true, "")) {
+		failureReason = "Macro debugger breakpoint probe could not enable the second line breakpoint.";
+		return false;
+	}
+	if (!mrvmRuntimeDebuggerEnabledBreakpointOffsetsForMacro(runtimeKv, kMacroKey, bytecodeOffsets) || bytecodeOffsets.size() != 2 || bytecodeOffsets[0] != expectedSpan.bytecodeOffset || bytecodeOffsets[1] != disabledSpan.bytecodeOffset) {
+		failureReason = "Macro debugger breakpoint probe did not return sorted active bytecode offsets.";
+		return false;
+	}
+	debugResult = debugVm.executeDebugAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, std::string(), macroRef.displayName, bytecodeOffsets);
+	if (debugResult.stopReason != mrdStopBreakpoint || debugResult.instructionOffset != expectedSpan.bytecodeOffset || debugResult.hadError || debugResult.cancelled || !debugResult.paused || !debugVm.hasPausedDebug()) {
+		failureReason = "Macro debugger breakpoint probe did not stop before the first active bytecode offset.";
+		return false;
+	}
+	{
+		bool sawX = false;
+		for (const MRMacroDebugVariableSnapshot &variable : debugResult.variables)
+			if (variable.name == "X") {
+				sawX = true;
+				if (variable.valueText != "0") {
+					failureReason = "Macro debugger breakpoint probe must snapshot variables before executing the stopped statement.";
+					return false;
+				}
+			}
+		if (!sawX) {
+			failureReason = "Macro debugger breakpoint probe did not snapshot declared variables.";
+			return false;
+		}
+	}
+	steppedDebugResult = debugVm.stepDebug(bytecodeOffsets);
+	if (steppedDebugResult.stopReason != mrdStopStep || steppedDebugResult.hadError || steppedDebugResult.cancelled || !steppedDebugResult.paused || !debugVm.hasPausedDebug()) {
+		failureReason = "Macro debugger breakpoint probe did not pause after one opcode step.";
+		return false;
+	}
+	if (steppedDebugResult.instructionOffset == debugResult.instructionOffset) {
+		failureReason = "Macro debugger breakpoint probe opcode step did not advance the instruction pointer.";
+		return false;
+	}
+	resumedDebugResult = debugVm.continueDebug(bytecodeOffsets);
+	if (resumedDebugResult.stopReason != mrdStopBreakpoint || resumedDebugResult.instructionOffset != disabledSpan.bytecodeOffset || resumedDebugResult.hadError || resumedDebugResult.cancelled || !resumedDebugResult.paused || !debugVm.hasPausedDebug()) {
+		failureReason = "Macro debugger breakpoint probe did not continue from a step stop to the second active bytecode offset.";
+		return false;
+	}
+	{
+		bool sawX = false;
+		for (const MRMacroDebugVariableSnapshot &variable : resumedDebugResult.variables)
+			if (variable.name == "X") {
+				sawX = true;
+				if (variable.valueText != "1") {
+					failureReason = "Macro debugger breakpoint probe did not execute the first stopped statement before continuing.";
+					return false;
+				}
+			}
+		if (!sawX) {
+			failureReason = "Macro debugger breakpoint probe did not snapshot resumed variables.";
+			return false;
+		}
+	}
+	finalDebugResult = debugVm.continueDebug(bytecodeOffsets);
+	if (finalDebugResult.stopReason != mrdStopCompleted || finalDebugResult.hadError || finalDebugResult.cancelled || finalDebugResult.paused || debugVm.hasPausedDebug()) {
+		failureReason = "Macro debugger breakpoint probe did not complete after continuing from the second breakpoint.";
+		return false;
+	}
+	{
+		bool sawX = false;
+		for (const MRMacroDebugVariableSnapshot &variable : finalDebugResult.variables)
+			if (variable.name == "X") {
+				sawX = true;
+				if (variable.valueText != "2") {
+					failureReason = "Macro debugger breakpoint probe did not snapshot final continued variable state.";
+					return false;
+				}
+			}
+		if (!sawX) {
+			failureReason = "Macro debugger breakpoint probe did not snapshot final continued variables.";
+			return false;
+		}
+	}
+	sessionDebugResult = mrvmStartDebugSessionAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, macroRef.displayName, MRMacroExecutionOwner(), bytecodeOffsets, &debugSession);
+	if (debugSession.sessionId == 0 || debugSession.route != MRMacroExecutionRoute::Debug || debugSession.state != MRMacroExecutionState::Yielded || sessionDebugResult.stopReason != mrdStopBreakpoint || !sessionDebugResult.paused) {
+		failureReason = "Macro debugger breakpoint probe did not bind the first debug stop to an execution session.";
+		return false;
+	}
+	{
+		MRMacroDebugVariableSnapshot variable;
+		std::vector<MRMacroDebugVariableSnapshot> updatedVariables;
+		std::string mutationError;
+		bool found = false;
+
+		for (const MRMacroDebugVariableSnapshot &candidate : sessionDebugResult.variables)
+			if (candidate.name == "X" && candidate.scope == mrdVariableLocal) {
+				variable = candidate;
+				found = true;
+				break;
+			}
+		if (!found || !mrvmWriteDebugScalarVariable(debugSession.sessionId, variable, "41", updatedVariables, &mutationError)) {
+			failureReason = "Macro debugger breakpoint probe could not write a paused scalar local: " + mutationError;
+			return false;
+		}
+		found = false;
+		for (const MRMacroDebugVariableSnapshot &candidate : updatedVariables)
+			if (candidate.name == "X" && candidate.scope == mrdVariableLocal) {
+				found = candidate.valueText == "41";
+				break;
+			}
+		if (!found) {
+			failureReason = "Macro debugger breakpoint probe did not return the written scalar local value.";
+			return false;
+		}
+		if (mrvmWriteDebugScalarVariable(debugSession.sessionId, variable, "not-an-int", updatedVariables, &mutationError) || mutationError.empty()) {
+			failureReason = "Macro debugger breakpoint probe accepted an invalid scalar local value.";
+			return false;
+		}
+	}
+	sessionResumeResult = mrvmContinueDebugSession(debugSession.sessionId, bytecodeOffsets);
+	if (sessionResumeResult.stopReason != mrdStopBreakpoint || sessionResumeResult.instructionOffset != disabledSpan.bytecodeOffset || !sessionResumeResult.paused) {
+		failureReason = "Macro debugger breakpoint probe did not continue the session-bound debug VM.";
+		return false;
+	}
+	sessionFinalResult = mrvmContinueDebugSession(debugSession.sessionId, bytecodeOffsets);
+	if (sessionFinalResult.stopReason != mrdStopCompleted || sessionFinalResult.paused || sessionFinalResult.hadError || sessionFinalResult.cancelled) {
+		failureReason = "Macro debugger breakpoint probe did not complete the session-bound debug VM.";
+		return false;
+	}
+	{
+		bool sawResult = false;
+		const std::vector<MRMacroExecutionResult> results = recentMacroExecutionResults();
+		for (const MRMacroExecutionResult &result : results)
+			if (result.session.sessionId == debugSession.sessionId && result.state == MRMacroExecutionState::Completed) sawResult = true;
+		if (!sawResult) {
+			failureReason = "Macro debugger breakpoint probe did not publish the completed debug execution-session result.";
+			return false;
+		}
+	}
+	scheduledPauseResult = mrvmStartDebugSessionAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, macroRef.displayName, MRMacroExecutionOwner(), bytecodeOffsets, &scheduledPauseSession);
+	if (scheduledPauseSession.sessionId == 0 || !scheduledPauseResult.paused || !mrvmScheduleDebugMacroContinue(scheduledPauseSession.sessionId, kMacroKey) || !mrvmRequestDebugPause(scheduledPauseSession.sessionId) ||
+	    !mrvmPumpDebugSession(scheduledPauseSession.sessionId, kMacroKey, scheduledPauseResult) || scheduledPauseResult.stopReason != mrdStopPaused || !scheduledPauseResult.paused) {
+		failureReason = "Macro debugger breakpoint probe did not pause a scheduled continue at an instruction boundary.";
+		return false;
+	}
+	scheduledPauseResult = mrvmContinueDebugSession(scheduledPauseSession.sessionId, bytecodeOffsets);
+	if (scheduledPauseResult.stopReason != mrdStopBreakpoint || !scheduledPauseResult.paused) {
+		failureReason = "Macro debugger breakpoint probe did not continue after a scheduled pause.";
+		return false;
+	}
+	if (!mrvmCloseDebugSession(scheduledPauseSession.sessionId)) {
+		failureReason = "Macro debugger breakpoint probe could not stop a scheduled debug session.";
+		return false;
+	}
+	completedDebugResult = mrvmRunBytecodeDebugAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, macroRef.displayName, std::vector<std::size_t>());
+	if (completedDebugResult.stopReason != mrdStopCompleted || completedDebugResult.hadError || completedDebugResult.cancelled) {
+		failureReason = "Macro debugger breakpoint probe did not complete without active bytecode offsets.";
+		return false;
+	}
+	{
+		bool sawX = false;
+		for (const MRMacroDebugVariableSnapshot &variable : completedDebugResult.variables)
+			if (variable.name == "X") {
+				sawX = true;
+				if (variable.valueText != "2") {
+					failureReason = "Macro debugger breakpoint probe did not snapshot completed variable state.";
+					return false;
+				}
+			}
+		if (!sawX) {
+			failureReason = "Macro debugger breakpoint probe did not snapshot completed variables.";
+			return false;
+		}
+	}
+	{
+		const std::string registryMacroName = "RegistryDebugProbe" + std::to_string(static_cast<long>(::getpid()));
+		const std::string registryMacroPath = "/tmp/mr_registry_debug_probe_" + std::to_string(static_cast<long>(::getpid())) + ".mrmac";
+		const std::string registrySource = "$MACRO " + registryMacroName + ";\n"
+		                                   "DEF_INT(X);\n"
+		                                   "X := 1;\n"
+		                                   "X := X + 1;\n"
+		                                   "END_MACRO;\n";
+		std::string registryError;
+
+		{
+			std::ofstream out(registryMacroPath.c_str(), std::ios::out | std::ios::trunc);
+			if (!out) {
+				failureReason = "Macro debugger breakpoint probe could not write registry macro fixture.";
+				return false;
+			}
+			out << registrySource;
+		}
+		if (!mrvmLoadMacroFile(registryMacroPath, &registryError)) {
+			(void)::remove(registryMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe could not load registry macro fixture: " + registryError;
+			return false;
+		}
+		registryDebugResult = mrvmStartDebugMacroByName(registryMacroName, MRMacroExecutionOwner(), &registryDebugSession, &registryError);
+		if (registryDebugSession.sessionId == 0 || registryDebugSession.route != MRMacroExecutionRoute::Debug || registryDebugSession.state != MRMacroExecutionState::Completed || registryDebugResult.stopReason != mrdStopCompleted || registryDebugResult.paused || registryDebugResult.hadError || registryDebugResult.cancelled) {
+			(void)::remove(registryMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe did not start and complete a registry macro debug session: " + registryError;
+			return false;
+		}
+		bool sawRegistryX = false;
+		for (const MRMacroDebugVariableSnapshot &variable : registryDebugResult.variables)
+			if (variable.name == "X") {
+				sawRegistryX = true;
+				if (variable.valueText != "2") {
+					(void)::remove(registryMacroPath.c_str());
+					failureReason = "Macro debugger breakpoint probe did not snapshot registry macro debug variable state.";
+					return false;
+				}
+			}
+		if (!sawRegistryX) {
+			(void)::remove(registryMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe did not snapshot registry macro debug variables.";
+			return false;
+		}
+		{
+			int beforeStepLine = 0;
+			int afterStepLine = 0;
+			std::size_t beforeStepStart = 0;
+			std::size_t beforeStepEnd = 0;
+			std::size_t afterStepStart = 0;
+			std::size_t afterStepEnd = 0;
+			bool breakpointEnabled = false;
+
+			if (!mrvmToggleDebugLineBreakpoint(registryMacroName, 3, &breakpointEnabled, &registryError) || !breakpointEnabled) {
+				(void)::remove(registryMacroPath.c_str());
+				failureReason = "Macro debugger breakpoint probe could not set registry statement-step breakpoint: " + registryError;
+				return false;
+			}
+			registryStatementStepResult = mrvmStartDebugMacroByName(registryMacroName, MRMacroExecutionOwner(), &registryStatementStepSession, &registryError);
+			if (registryStatementStepSession.sessionId == 0 || registryStatementStepSession.route != MRMacroExecutionRoute::Debug || registryStatementStepSession.state != MRMacroExecutionState::Yielded ||
+			    registryStatementStepResult.stopReason != mrdStopBreakpoint || !registryStatementStepResult.paused || registryStatementStepResult.hadError || registryStatementStepResult.cancelled) {
+				(void)::remove(registryMacroPath.c_str());
+				failureReason = "Macro debugger breakpoint probe did not pause registry statement-step fixture at line 3: " + registryError;
+				return false;
+			}
+			if (!mrvmDebugSourceLineForInstruction(registryMacroName, registryStatementStepResult.instructionOffset, &beforeStepLine, &beforeStepStart, &beforeStepEnd) || beforeStepLine != 3) {
+				(void)::remove(registryMacroPath.c_str());
+				failureReason = "Macro debugger breakpoint probe could not resolve registry statement-step starting span.";
+				return false;
+			}
+			registryStatementStepResult = mrvmStepDebugMacroByName(registryStatementStepSession.sessionId, registryMacroName, &registryError);
+			if (registryStatementStepResult.stopReason != mrdStopStep || !registryStatementStepResult.paused || registryStatementStepResult.hadError || registryStatementStepResult.cancelled) {
+				(void)::remove(registryMacroPath.c_str());
+				failureReason = "Macro debugger breakpoint probe did not perform a registry statement step: " + registryError;
+				return false;
+			}
+			if (!mrvmDebugSourceLineForInstruction(registryMacroName, registryStatementStepResult.instructionOffset, &afterStepLine, &afterStepStart, &afterStepEnd) || afterStepLine != 4 ||
+			    (afterStepStart == beforeStepStart && afterStepEnd == beforeStepEnd)) {
+				(void)::remove(registryMacroPath.c_str());
+				failureReason = "Macro debugger breakpoint probe statement step did not leave the original source span (before=" + std::to_string(beforeStepLine) + ", after=" + std::to_string(afterStepLine) + ", offset=" + std::to_string(registryStatementStepResult.instructionOffset) + ").";
+				return false;
+			}
+			if (!mrvmCloseDebugSession(registryStatementStepSession.sessionId)) {
+				(void)::remove(registryMacroPath.c_str());
+				failureReason = "Macro debugger breakpoint probe could not close the registry statement-step session.";
+				return false;
+			}
+			if (!mrvmToggleDebugLineBreakpoint(registryMacroName, 3, &breakpointEnabled, &registryError)) {
+				(void)::remove(registryMacroPath.c_str());
+				failureReason = "Macro debugger breakpoint probe could not clear registry statement-step breakpoint: " + registryError;
+				return false;
+			}
+		}
+		if (!mrvmLoadMacroFile(registryMacroPath, &registryError)) {
+			(void)::remove(registryMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe could not reload registry macro fixture for entry stop: " + registryError;
+			return false;
+		}
+		registryEntryStopResult = mrvmStartDebugMacroByName(registryMacroName, MRMacroExecutionOwner(), &registryEntryStopSession, &registryError, true);
+		(void)::remove(registryMacroPath.c_str());
+		if (registryEntryStopSession.sessionId == 0 || registryEntryStopSession.route != MRMacroExecutionRoute::Debug || registryEntryStopSession.state != MRMacroExecutionState::Yielded || registryEntryStopResult.stopReason != mrdStopBreakpoint || !registryEntryStopResult.paused || registryEntryStopResult.hadError || registryEntryStopResult.cancelled) {
+			failureReason = "Macro debugger breakpoint probe did not pause a registry macro at entry: " + registryError;
+			return false;
+		}
+		if (mrvmCloseDebugSession(registryEntryStopSession.sessionId)) {
+			const std::vector<MRMacroExecutionResult> results = recentMacroExecutionResults();
+			bool sawClosed = false;
+
+			for (const MRMacroExecutionResult &result : results)
+				if (result.session.sessionId == registryEntryStopSession.sessionId && result.state == MRMacroExecutionState::Cancelled) sawClosed = true;
+			if (!sawClosed) {
+				failureReason = "Macro debugger breakpoint probe did not publish the closed entry-stop debug session.";
+				return false;
+			}
+		} else {
+			failureReason = "Macro debugger breakpoint probe could not close the entry-stop debug session.";
+			return false;
+		}
+		bool fileBreakpointsEnabled = false;
+		if (!mrvmWriteDebugLineBreakpoint(registryMacroName, 3, true, &registryError) || !mrvmWriteDebugLineBreakpoint(registryMacroName, 4, true, &registryError)) {
+			failureReason = "Macro debugger breakpoint probe could not create file breakpoints for the enabled-state audit: " + registryError;
+			return false;
+		}
+		if (!mrvmToggleDebugLineBreakpointsEnabledForMacroFile(registryMacroName, &fileBreakpointsEnabled, &registryError) || fileBreakpointsEnabled) {
+			failureReason = "Macro debugger breakpoint probe did not disable all file breakpoints: " + registryError;
+			return false;
+		}
+		{
+			std::vector<MRMacroDebuggerBreakpoint> fileBreakpoints;
+
+			if (!mrvmDebugLineBreakpointsForMacro(registryMacroName, fileBreakpoints) || fileBreakpoints.size() != 2 || fileBreakpoints[0].enabled || fileBreakpoints[1].enabled) {
+				failureReason = "Macro debugger breakpoint probe did not retain disabled file breakpoints.";
+				return false;
+			}
+		}
+		if (!mrvmToggleDebugLineBreakpointsEnabledForMacroFile(registryMacroName, &fileBreakpointsEnabled, &registryError) || !fileBreakpointsEnabled) {
+			failureReason = "Macro debugger breakpoint probe did not enable all file breakpoints: " + registryError;
+			return false;
+		}
+		if (!mrvmEraseDebugLineBreakpointsForMacroFile(registryMacroName, &registryError)) {
+			failureReason = "Macro debugger breakpoint probe could not clear all file breakpoints: " + registryError;
+			return false;
+		}
+		{
+			std::vector<MRMacroDebuggerBreakpoint> fileBreakpoints;
+
+			if (mrvmDebugLineBreakpointsForMacro(registryMacroName, fileBreakpoints)) {
+				failureReason = "Macro debugger breakpoint probe retained a cleared file breakpoint.";
+				return false;
+			}
+		}
+	}
+	{
+		const std::string nestedMacroName = "NESTEDDEBUGPARENT" + std::to_string(static_cast<long>(::getpid()));
+		const std::string nestedChildName = "NESTEDDEBUGCHILD" + std::to_string(static_cast<long>(::getpid()));
+		const std::string nestedMacroPath = "/tmp/mr_nested_debug_probe_" + std::to_string(static_cast<long>(::getpid())) + ".mrmac";
+		const std::string nestedSource = "$MACRO " + nestedMacroName + ";\n"
+		                                       "RUN_MACRO('" + nestedChildName + "');\n"
+		                                       "END_MACRO;\n"
+		                                       "$MACRO " + nestedChildName + ";\n"
+		                                       "DEF_INT(X);\n"
+		                                       "X := 1;\n"
+		                                       "END_MACRO;\n";
+		MRMacroExecutionSession nestedSession;
+		MRMacroDebugRunResult nestedResult;
+		std::string nestedError;
+
+		{
+			std::ofstream out(nestedMacroPath.c_str(), std::ios::out | std::ios::trunc);
+			if (!out) {
+				failureReason = "Macro debugger breakpoint probe could not write nested debug fixture.";
+				return false;
+			}
+			out << nestedSource;
+		}
+		if (!mrvmLoadMacroFile(nestedMacroPath, &nestedError)) {
+			(void)::remove(nestedMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe could not load nested debug fixture: " + nestedError;
+			return false;
+		}
+		nestedResult = mrvmStartDebugMacroByName(nestedMacroName, MRMacroExecutionOwner(), &nestedSession, &nestedError, true);
+		if (nestedSession.sessionId == 0 || !nestedResult.paused || nestedResult.macroKey != nestedMacroName) {
+			(void)::remove(nestedMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe could not stop nested parent at entry: " + nestedError;
+			return false;
+		}
+		nestedResult = mrvmStepDebugMacroByName(nestedSession.sessionId, nestedMacroName, &nestedError);
+		if (!nestedResult.paused || nestedResult.macroKey != nestedChildName) {
+			(void)::remove(nestedMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe did not enter the RUN_MACRO child frame (macro=" + nestedResult.macroKey + ", offset=" + std::to_string(nestedResult.instructionOffset) + ", stop=" + std::to_string(static_cast<int>(nestedResult.stopReason)) + "): " + nestedError;
+			return false;
+		}
+		nestedResult = mrvmStepOutDebugMacroByName(nestedSession.sessionId, nestedMacroName, &nestedError);
+		if (!nestedResult.paused || nestedResult.macroKey != nestedMacroName) {
+			(void)::remove(nestedMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe did not return from the child frame: " + nestedError;
+			return false;
+		}
+		if (!mrvmCloseDebugSession(nestedSession.sessionId)) {
+			(void)::remove(nestedMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe could not close nested debug session.";
+			return false;
+		}
+		nestedSession = MRMacroExecutionSession();
+		nestedResult = mrvmStartDebugMacroByName(nestedMacroName, MRMacroExecutionOwner(), &nestedSession, &nestedError, true);
+		if (nestedSession.sessionId == 0 || !nestedResult.paused) {
+			(void)::remove(nestedMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe could not restart nested debug fixture: " + nestedError;
+			return false;
+		}
+		nestedResult = mrvmStepOverDebugMacroByName(nestedSession.sessionId, nestedMacroName, &nestedError);
+		(void)::remove(nestedMacroPath.c_str());
+		if (nestedResult.paused || nestedResult.macroKey != nestedMacroName || nestedResult.stopReason != mrdStopCompleted) {
+			failureReason = "Macro debugger breakpoint probe did not complete after stepping over the terminal RUN_MACRO child frame (macro=" + nestedResult.macroKey + ", stop=" + std::to_string(static_cast<int>(nestedResult.stopReason)) + "): " + nestedError;
+			return false;
+		}
+	}
+	if (mrvmRuntimeDebuggerWriteLineBreakpoint(runtimeKv, kMacroKey, 99, true, "")) {
+		failureReason = "Macro debugger breakpoint probe must reject unbound breakpoint lines.";
+		return false;
+	}
+	if (!mrvmRuntimeDebuggerEraseLineBreakpoint(runtimeKv, kMacroKey, kBreakpointLine)) {
+		failureReason = "Macro debugger breakpoint probe could not erase the written breakpoint.";
+		return false;
+	}
+	if (mrvmRuntimeDebuggerReadLineBreakpoint(runtimeKv, kMacroKey, kBreakpointLine, breakpoint)) {
+		failureReason = "Macro debugger breakpoint probe still sees breakpoint after erase.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+int runMacroDebuggerBreakpointKvProbeMode() {
+	std::string failure;
+
+	if (runMacroDebuggerBreakpointKvProbe(failure)) return 0;
+	if (!failure.empty()) std::cerr << failure << "\n";
+	return 1;
 }
 
 int runStagedNavProbeMode() {
@@ -2781,6 +3324,490 @@ void destroyRegressionWindow(MREditWindow *window) {
 	if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(nullptr, TView::leaveSelect);
 	TObject::destroy(window);
 	if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(nullptr, TView::leaveSelect);
+}
+
+int runMacroDebuggerF9RouteProbeMode() {
+	MREditorApp app;
+	MRBentoBox *bento = nullptr;
+	MREditWindow *debuggerOutput = nullptr;
+	MREditWindow *variables = nullptr;
+	MREditWindow *watches = nullptr;
+	MRFileEditor *sourceEditor = nullptr;
+	MRFileEditor *outputEditor = nullptr;
+	MRFileEditor *variablesEditor = nullptr;
+	MRStatusLine *mrStatusLine = nullptr;
+	MRMacroExecutionSession debugSession;
+	MRMacroDebugRunResult debugStartResult;
+	TEvent event;
+	TEvent commandEvent;
+	TEvent continueEvent;
+	TEvent stopEvent;
+	std::string outputText;
+	std::string sourceText;
+	std::string logText;
+	std::string logError;
+	std::string registryError;
+	const long probePid = static_cast<long>(::getpid());
+	const std::string macroName = "MacroDebuggerF9RouteProbe" + std::to_string(probePid);
+	const std::string macroPath = "/tmp/mr_macro_debugger_f9_route_probe_" + std::to_string(probePid) + ".mrmac";
+	const std::string logPath = "/tmp/mr_macro_debugger_f9_route_probe.log";
+
+	::unlink(logPath.c_str());
+	sourceText = "$MACRO " + macroName + ";\n"
+	             "DEF_INT(X);\n"
+	             "X := 1;\n"
+	             "X := X + 1;\n"
+	             "END_MACRO;\n";
+	{
+		std::ofstream out(macroPath.c_str(), std::ios::out | std::ios::trunc);
+		if (!out) {
+			std::cerr << "Unable to write macro debugger F9 route fixture.\n";
+			return 1;
+		}
+		out << sourceText;
+	}
+	if (!mrvmLoadMacroFile(macroPath, &registryError)) {
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to load macro debugger F9 route fixture: " << registryError << "\n";
+		return 1;
+	}
+	debugStartResult = mrvmStartDebugMacroByName(macroName, MRMacroExecutionOwner(), &debugSession, &registryError, true);
+	if (debugSession.sessionId == 0 || debugStartResult.stopReason != mrdStopBreakpoint || !debugStartResult.paused) {
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to start macro debugger F9 route fixture as debug session: " << registryError << "\n";
+		return 1;
+	}
+	if (TProgram::deskTop == nullptr) {
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Regression app has no desktop.\n";
+		return 1;
+	}
+	bento = new MRBentoBox(TRect(0, 0, 120, 32), "debug-f9-route", 1701, bbmToolWorkspace);
+	if (bento == nullptr) {
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to allocate debug Bento.\n";
+		return 1;
+	}
+	TProgram::deskTop->insert(bento);
+	TProgram::deskTop->setCurrent(bento, TView::enterSelect);
+	bento->setMacroDebuggerTarget(macroName, macroName);
+	bento->setMacroDebuggerSession(debugSession.sessionId);
+	if (!bento->replaceTextBuffer(sourceText.c_str(), "debug-f9-route.mrmac")) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Debug Bento source text could not be installed.\n";
+		return 1;
+	}
+	if (!bento->ensureMacroDebuggerPanes(debuggerOutput, variables, watches) || debuggerOutput == nullptr) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Debug Bento panes were not created.\n";
+		return 1;
+	}
+	bento->activatePrimaryPane();
+	sourceEditor = bento->getEditor();
+	if (sourceEditor == nullptr) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Debug Bento source editor is missing.\n";
+		return 1;
+	}
+	sourceEditor->setCursorOffset(sourceEditor->nextLineOffset(sourceEditor->nextLineOffset(0)));
+	if (sourceEditor->lineIndexOfOffset(sourceEditor->cursorOffset()) != 2) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Debug Bento source cursor did not move to line 3. cursor=" << sourceEditor->cursorOffset() << " line=" << (sourceEditor->lineIndexOfOffset(sourceEditor->cursorOffset()) + 1) << " text=" << sourceEditor->snapshotText() << "\n";
+		return 1;
+	}
+	mrStatusLine = dynamic_cast<MRStatusLine *>(TProgram::statusLine);
+	if (mrStatusLine == nullptr) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Regression app has no MRStatusLine.\n";
+		return 1;
+	}
+	mrStatusLine->setContextFunctionKeyLabels({{TKey(kbF9), cmMrOtherBuildCurrentFile, "~F9~ BP"}});
+	mrStatusLine->setContextFunctionKeysActive(true);
+	TView::enableCommand(cmMrOtherBuildCurrentFile);
+	std::memset(&event, 0, sizeof(event));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = kbF9;
+	mrStatusLine->handleEvent(event);
+	if (event.what != evCommand || event.message.command != cmMrOtherBuildCurrentFile) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Statusline F9 did not become the build command. what=" << event.what << " command=" << event.message.command << "\n";
+		return 1;
+	}
+	app.handleEvent(event);
+	if (event.what != evNothing) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Statusline F9 command was not consumed by the macro debugger route.\n";
+		return 1;
+	}
+	std::memset(&event, 0, sizeof(event));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = kbF9;
+	app.handleEvent(event);
+	if (event.what != evNothing) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Raw F9 was not consumed by the macro debugger route.\n";
+		return 1;
+	}
+	if (!mrAppendLogBufferToFile(logPath, &logError)) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to write macro debugger F9 route log: " << logError << "\n";
+		return 1;
+	}
+	outputEditor = debuggerOutput->getEditor();
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (outputText.find("Breakpoint:") == std::string::npos || outputText.find("Breakpoints:") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "F9 did not refresh Debugger Output. Output was: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&commandEvent, 0, sizeof(commandEvent));
+	commandEvent.what = evCommand;
+	commandEvent.message.command = cmMrOtherBuildCurrentFile;
+	app.handleEvent(commandEvent);
+	if (commandEvent.what != evNothing) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Build command was not consumed by the macro debugger route.\n";
+		return 1;
+	}
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (outputText.find("Breakpoints:") == std::string::npos || outputText.find("#3") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "F9 route did not leave an active line-3 breakpoint. Output was: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&event, 0, sizeof(event));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = kbF9;
+	event.keyDown.controlKeyState = kbShift;
+	app.handleEvent(event);
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (event.what != evNothing || outputText.find("Breakpoint: disabled") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Shift+F9 did not disable the source breakpoint. Output was: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&event, 0, sizeof(event));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = kbF9;
+	event.keyDown.controlKeyState = kbShift;
+	app.handleEvent(event);
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (event.what != evNothing || outputText.find("Breakpoint: enabled") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Shift+F9 did not re-enable the source breakpoint. Output was: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&event, 0, sizeof(event));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = kbF9;
+	event.keyDown.controlKeyState = static_cast<ushort>(kbAltShift | kbShift);
+	app.handleEvent(event);
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (event.what != evNothing || outputText.find("Breakpoints: all disabled") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Alt+Shift+F9 did not disable all source breakpoints. Output was: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&event, 0, sizeof(event));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = kbF9;
+	event.keyDown.controlKeyState = static_cast<ushort>(kbAltShift | kbShift);
+	app.handleEvent(event);
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (event.what != evNothing || outputText.find("Breakpoints: all enabled") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Alt+Shift+F9 did not re-enable all source breakpoints. Output was: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&event, 0, sizeof(event));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = kbF9;
+	event.keyDown.controlKeyState = static_cast<ushort>(kbCtrlShift | kbShift);
+	app.handleEvent(event);
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (event.what != evNothing || outputText.find("Breakpoints: all cleared") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Ctrl+Shift+F9 did not clear all source breakpoints. Output was: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&commandEvent, 0, sizeof(commandEvent));
+	commandEvent.what = evCommand;
+	commandEvent.message.command = cmMrOtherBuildCurrentFile;
+	app.handleEvent(commandEvent);
+	if (commandEvent.what != evNothing) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "F9 could not restore the cleared source breakpoint.\n";
+		return 1;
+	}
+	std::memset(&continueEvent, 0, sizeof(continueEvent));
+	continueEvent.what = evCommand;
+	continueEvent.message.command = cmMrMacroDebuggerContinue;
+	app.handleEvent(continueEvent);
+	if (continueEvent.what != evNothing) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Continue command was not consumed by the macro debugger route.\n";
+		return 1;
+	}
+	std::memset(&continueEvent, 0, sizeof(continueEvent));
+	continueEvent.what = evCommand;
+	continueEvent.message.command = cmMrMacroDebuggerContinue;
+	app.handleEvent(continueEvent);
+	if (continueEvent.what != evNothing) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Pause command was not consumed by the macro debugger route.\n";
+		return 1;
+	}
+	bento->pumpMacroDebuggerSession();
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (outputText.find("State: paused") == std::string::npos || outputText.find("Stop: paused") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "F5 pause did not stop the scheduled debug session. Output was: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&continueEvent, 0, sizeof(continueEvent));
+	continueEvent.what = evCommand;
+	continueEvent.message.command = cmMrMacroDebuggerContinue;
+	app.handleEvent(continueEvent);
+	if (continueEvent.what != evNothing) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Continue-after-pause command was not consumed by the macro debugger route.\n";
+		return 1;
+	}
+	bento->pumpMacroDebuggerSession();
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (outputText.find("State: paused") == std::string::npos || outputText.find("Stop: breakpoint") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "F5 continue did not stop at the active breakpoint. Output was: " << outputText << "\n";
+		return 1;
+	}
+	variablesEditor = variables != nullptr ? variables->getEditor() : nullptr;
+	outputText = variablesEditor != nullptr ? variablesEditor->snapshotText() : std::string();
+	if (outputText.find("Variables") == std::string::npos || outputText.find("Locals") == std::string::npos || outputText.find("X [int] = 0") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "F5 continue did not refresh the Variables pane with a typed local snapshot. Variables were: " << outputText << "\n";
+		return 1;
+	}
+	std::memset(&stopEvent, 0, sizeof(stopEvent));
+	stopEvent.what = evCommand;
+	stopEvent.message.command = cmMrMacroDebuggerStop;
+	app.handleEvent(stopEvent);
+	if (stopEvent.what != evNothing) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Stop command was not consumed by the macro debugger route.\n";
+		return 1;
+	}
+	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
+	if (outputText.find("State: stopped/no live session") == std::string::npos || outputText.find("F5 Pause/Continue unavailable") == std::string::npos || outputText.find("F8 Stop unavailable") == std::string::npos || outputText.find("F10 Step unavailable") == std::string::npos) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "F8 stop did not close the live debug session. Output was: " << outputText << "\n";
+		return 1;
+	}
+	if (!mrAppendLogBufferToFile(logPath, &logError)) {
+		destroyRegressionWindow(bento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to append macro debugger F9 command route log: " << logError << "\n";
+		return 1;
+	}
+	destroyRegressionWindow(bento);
+	(void)mrvmCloseDebugSession(debugSession.sessionId);
+	(void)::remove(macroPath.c_str());
+	if (!readTextFile(logPath, logText) || logText.find("MACRODBG key stage=app-macro-debugger-route") == std::string::npos || logText.find("MACRODBG key stage=bento-fkey") == std::string::npos || logText.find("MACRODBG key stage=bento-toggle") == std::string::npos) {
+		std::cerr << "Macro debugger F9 route log did not contain expected instrumentation.\n";
+		return 1;
+	}
+	if (logText.find("MACRODBG key stage=app-build-command") == std::string::npos) {
+		std::cerr << "Macro debugger F9 command route log did not contain expected instrumentation.\n";
+		return 1;
+	}
+	if (logText.find("MACRODBG key stage=app-continue-command") == std::string::npos || logText.find("MACRODBG key stage=bento-continue") == std::string::npos) {
+		std::cerr << "Macro debugger F5 continue route log did not contain expected instrumentation.\n";
+		return 1;
+	}
+	if (logText.find("MACRODBG key stage=app-stop-command") == std::string::npos || logText.find("MACRODBG key stage=bento-stop") == std::string::npos) {
+		std::cerr << "Macro debugger F8 stop route log did not contain expected instrumentation.\n";
+		return 1;
+	}
+	std::cout << "macro-debugger-f9-route consumed=1 output=1 log=" << logPath << "\n";
+	return 0;
+}
+
+int runMacroDebuggerWorkspaceBreakpointRoundtripProbeMode() {
+	MREditorApp app;
+	MRBentoBox *sourceBento = nullptr;
+	MRBentoBox *restoredBento = nullptr;
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	MRMacroDebuggerWorkspaceConfiguration configuration;
+	std::vector<MRMacroDebuggerBreakpoint> breakpoints;
+	std::string source;
+	std::string workspace;
+	std::string error;
+	const long probePid = static_cast<long>(::getpid());
+	const std::string macroName = "MacroDebuggerWorkspaceProbe" + std::to_string(probePid);
+	const std::string macroPath = "/tmp/mr_macro_debugger_workspace_probe_" + std::to_string(probePid) + ".mrmac";
+	const std::string workspacePath = "/tmp/mr_macro_debugger_workspace_probe_" + std::to_string(probePid) + ".workspace.mrmac";
+
+	auto hasWorkspaceBreakpoint = [](const MRMacroDebuggerWorkspaceConfiguration &candidate, int line, bool enabled) {
+		for (const MRMacroDebuggerWorkspaceBreakpoint &breakpoint : candidate.breakpoints)
+			if (breakpoint.line == line && breakpoint.enabled == enabled) return true;
+		return false;
+	};
+	auto hasRuntimeBreakpoint = [](const std::vector<MRMacroDebuggerBreakpoint> &candidate, int line, bool enabled) {
+		for (const MRMacroDebuggerBreakpoint &breakpoint : candidate)
+			if (breakpoint.line == line && breakpoint.enabled == enabled) return true;
+		return false;
+	};
+
+	source = "$MACRO " + macroName + ";\n"
+	         "DEF_INT(X);\n"
+	         "X := 1;\n"
+	         "X := X + 1;\n"
+	         "END_MACRO;\n";
+	{
+		std::ofstream out(macroPath.c_str(), std::ios::out | std::ios::trunc);
+		if (!out) {
+			std::cerr << "Unable to write macro debugger workspace fixture.\n";
+			return 1;
+		}
+		out << source;
+	}
+	if (TProgram::deskTop == nullptr) {
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Regression app has no desktop.\n";
+		return 1;
+	}
+	sourceBento = new MRBentoBox(TRect(0, 0, 120, 32), "debug-workspace-roundtrip", 1702, bbmToolWorkspace);
+	if (sourceBento == nullptr) {
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to allocate workspace debugger Bento.\n";
+		return 1;
+	}
+	TProgram::deskTop->insert(sourceBento);
+	if (sourceBento->getEditor() == nullptr || !sourceBento->getEditor()->loadMappedFile(macroPath.c_str(), error)) {
+		destroyRegressionWindow(sourceBento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to load workspace debugger fixture: " << error << "\n";
+		return 1;
+	}
+	sourceBento->setMacroDebuggerTarget(macroName, macroName);
+	MRMacroExecutionSession seedSession;
+	MRMacroDebugRunResult seedResult;
+
+	if (!mrvmLoadMacroFile(macroPath, &error)) {
+		destroyRegressionWindow(sourceBento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to load workspace debugger macro: " << error << "\n";
+		return 1;
+	}
+	seedResult = mrvmStartDebugMacroByName(macroName, MRMacroExecutionOwner(), &seedSession, &error, true);
+	if (seedSession.sessionId == 0 || !seedResult.paused || !mrvmCloseDebugSession(seedSession.sessionId) || !mrvmWriteDebugLineBreakpoint(macroName, 3, true, &error) || !mrvmWriteDebugLineBreakpoint(macroName, 4, false, &error)) {
+		destroyRegressionWindow(sourceBento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to seed workspace debugger breakpoints: " << error << "\n";
+		return 1;
+	}
+	if (!sourceBento->macroDebuggerWorkspaceConfiguration(configuration) || !hasWorkspaceBreakpoint(configuration, 3, true) || !hasWorkspaceBreakpoint(configuration, 4, false)) {
+		destroyRegressionWindow(sourceBento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Workspace debugger source configuration does not contain enabled and disabled breakpoints.\n";
+		return 1;
+	}
+	paths.settingsMacroUri = workspacePath;
+	workspace = buildSettingsMacroSourceWithWorkspace(paths);
+	if (workspace.find(" debug=v1") == std::string::npos || workspace.find(":3:1") == std::string::npos || workspace.find(":4:0") == std::string::npos) {
+		destroyRegressionWindow(sourceBento);
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Workspace serialization did not encode enabled and disabled breakpoint states.\n";
+		return 1;
+	}
+	{
+		std::ofstream out(workspacePath.c_str(), std::ios::out | std::ios::trunc);
+		if (!out) {
+			destroyRegressionWindow(sourceBento);
+			(void)::remove(macroPath.c_str());
+			std::cerr << "Unable to write debugger workspace fixture.\n";
+			return 1;
+		}
+		out << workspace;
+	}
+	if (!mrvmEraseDebugLineBreakpointsForMacroFile(macroName, &error)) {
+		destroyRegressionWindow(sourceBento);
+		(void)::remove(workspacePath.c_str());
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Unable to clear runtime breakpoints before workspace load: " << error << "\n";
+		return 1;
+	}
+	destroyRegressionWindow(sourceBento);
+	sourceBento = nullptr;
+	mrLoadWorkspace(workspacePath);
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		MRBentoBox *candidate = dynamic_cast<MRBentoBox *>(window);
+		MRMacroDebuggerWorkspaceConfiguration candidateConfiguration;
+
+		if (candidate != nullptr && candidate->macroDebuggerWorkspaceConfiguration(candidateConfiguration) && candidateConfiguration.macroKey == macroName) {
+			restoredBento = candidate;
+			configuration = candidateConfiguration;
+			break;
+		}
+	}
+	if (restoredBento == nullptr || !hasWorkspaceBreakpoint(configuration, 3, true) || !hasWorkspaceBreakpoint(configuration, 4, false)) {
+		(void)::remove(workspacePath.c_str());
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Workspace load did not restore enabled and disabled breakpoint configuration.\n";
+		return 1;
+	}
+	TProgram::deskTop->setCurrent(restoredBento, TView::enterSelect);
+	TEvent resetEvent;
+
+	std::memset(&resetEvent, 0, sizeof(resetEvent));
+	resetEvent.what = evCommand;
+	resetEvent.message.command = cmMrMacroDebuggerStop;
+	app.handleEvent(resetEvent);
+	if (resetEvent.what != evNothing) {
+		destroyRegressionWindow(restoredBento);
+		(void)::remove(workspacePath.c_str());
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Workspace-loaded debugger F8 reset route was not consumed.\n";
+		return 1;
+	}
+	if (!mrvmDebugLineBreakpointsForMacro(macroName, breakpoints) || !hasRuntimeBreakpoint(breakpoints, 3, true) || !hasRuntimeBreakpoint(breakpoints, 4, false)) {
+		destroyRegressionWindow(restoredBento);
+		(void)::remove(workspacePath.c_str());
+		(void)::remove(macroPath.c_str());
+		std::cerr << "Workspace-loaded debugger did not rebind enabled and disabled breakpoint states.\n";
+		return 1;
+	}
+	destroyRegressionWindow(restoredBento);
+	(void)mrvmEraseDebugLineBreakpointsForMacroFile(macroName, nullptr);
+	(void)::remove(workspacePath.c_str());
+	(void)::remove(macroPath.c_str());
+	std::cout << "macro-debugger-workspace-breakpoint-roundtrip serialized=1 restored=1 rebound=1\n";
+	return 0;
 }
 
 bool runRegressionProbeProcess(const char *probeName, std::string &failureReason) {
@@ -5590,6 +6617,7 @@ static const ColorGroupConformanceEntry kColorGroupConformanceEntries[] = {
     {MRColorSetupGroup::FileCompareMiniMap, "FILECOMPAREMINIMAPCOLORS", MRColorSetupSettings::kFileCompareMiniMapCount},
     {MRColorSetupGroup::Code, "CODECOLORS", MRColorSetupSettings::kCodeCount},
     {MRColorSetupGroup::FileCompare, "FILECOMPARECOLORS", MRColorSetupSettings::kFileCompareCount},
+    {MRColorSetupGroup::Debugger, "DEBUGGERCOLORS", MRColorSetupSettings::kDebuggerCount},
 };
 
 struct ColorGroupAliasEntry {
@@ -5653,6 +6681,10 @@ bool colorGroupValueAt(const MRColorSetupSettings &settings, MRColorSetupGroup g
 			if (index >= settings.fileCompareColors.size()) return false;
 			outValue = settings.fileCompareColors[index];
 			return true;
+		case MRColorSetupGroup::Debugger:
+			if (index >= settings.debuggerColors.size()) return false;
+			outValue = settings.debuggerColors[index];
+			return true;
 	}
 	return false;
 }
@@ -5675,6 +6707,8 @@ bool restoreColorGroupValues(MRColorSetupGroup group, const MRColorSetupSettings
 			return setConfiguredColorSetupGroupValues(group, settings.codeColors.data(), settings.codeColors.size(), &errorText);
 		case MRColorSetupGroup::FileCompare:
 			return setConfiguredColorSetupGroupValues(group, settings.fileCompareColors.data(), settings.fileCompareColors.size(), &errorText);
+		case MRColorSetupGroup::Debugger:
+			return setConfiguredColorSetupGroupValues(group, settings.debuggerColors.data(), settings.debuggerColors.size(), &errorText);
 	}
 	errorText = "Unknown color group.";
 	return false;
@@ -5684,6 +6718,7 @@ bool testColorThemeInventoryConformanceGuard(std::string &failureReason) {
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	MRColorSetupSettings defaults = resolveColorSetupDefaults();
 	std::string source = buildColorThemeMacroSource(defaults);
+	std::string colorSetupDialogSource;
 	std::string errorText;
 	std::string restoreError;
 	bool restored = true;
@@ -5765,6 +6800,17 @@ bool testColorThemeInventoryConformanceGuard(std::string &failureReason) {
 		}
 	}
 
+	if (!readTextFile(absolutePathFromCwd("dialogs/MRColorSetup.cpp"), colorSetupDialogSource, errorText)) {
+		restore();
+		failureReason = "Unable to read Color Setup dialog source for inventory guard: " + errorText;
+		return false;
+	}
+	if (colorSetupDialogSource.find("MRColorSetupGroup::Debugger") == std::string::npos) {
+		restore();
+		failureReason = "Color Setup dialog inventory must expose DEBUGGERCOLORS.";
+		return false;
+	}
+
 	restore();
 	if (!restored) {
 		failureReason = "Unable to restore color setup after inventory conformance: " + restoreError;
@@ -5779,7 +6825,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 	const std::string root = "/tmp/mr_regression_color_save_theme_" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string themePath = root + "/cfg/probe-theme.mrmac";
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::FileCompare};
+	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::FileCompare, MRColorSetupGroup::Debugger};
 	TColorAttr paletteData[kMrPaletteMax];
 	TPalette workingPalette(paletteData, static_cast<ushort>(kMrPaletteMax));
 	MRSetupPaths paths = resolveSetupPathDefaults();
@@ -5836,7 +6882,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 		failureReason = "Unable to read saved theme file after Color Setup save-theme probe: " + errorText;
 		return false;
 	}
-	if (content.find("WINDOWCOLORS('") == std::string::npos || content.find("MENUDIALOGCOLORS('") == std::string::npos || content.find("HELPCOLORS('") == std::string::npos || content.find("OTHERCOLORS('") == std::string::npos || content.find("MINIMAPCOLORS('") == std::string::npos || content.find("FILECOMPAREMINIMAPCOLORS") == std::string::npos || content.find("FILECOMPARECOLORS('") == std::string::npos) {
+	if (content.find("WINDOWCOLORS('") == std::string::npos || content.find("MENUDIALOGCOLORS('") == std::string::npos || content.find("HELPCOLORS('") == std::string::npos || content.find("OTHERCOLORS('") == std::string::npos || content.find("MINIMAPCOLORS('") == std::string::npos || content.find("FILECOMPAREMINIMAPCOLORS") == std::string::npos || content.find("FILECOMPARECOLORS('") == std::string::npos || content.find("DEBUGGERCOLORS('") == std::string::npos) {
 		restore();
 		failureReason = "Saved color theme must contain all color group assignments.";
 		return false;
@@ -5877,6 +6923,9 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 					case MRColorSetupGroup::FileCompare:
 						actual = configured.fileCompareColors[i];
 						break;
+					case MRColorSetupGroup::Debugger:
+						actual = configured.debuggerColors[i];
+						break;
 				}
 				if (actual != expected) {
 					restore();
@@ -5909,6 +6958,7 @@ static const InvalidCurrentColorListEntry kInvalidCurrentColorListEntries[] = {
 	{"FILECOMPAREMINIMAPCOLORS", "v1:21"},
 	{"CODECOLORS", "v1:21"},
 	{"FILECOMPARECOLORS", "v2:21"},
+	{"DEBUGGERCOLORS", "v1:21"},
 };
 
 bool testCurrentColorThemeInvalidListsDoNotMutateGuard(std::string &failureReason) {
@@ -9015,13 +10065,17 @@ int main(int argc, char **argv) {
 			if (std::strcmp(argv[2], "macro-screen-flush") == 0) return runMacroScreenFlushProbeMode();
 			if (std::strcmp(argv[2], "keymap-macro-dispatch") == 0) return runKeymapMacroDispatchProbeMode();
 			if (std::strcmp(argv[2], "keymap-autoexec-bootstrap") == 0) return runKeymapAutoexecBootstrapProbeMode();
+			if (std::strcmp(argv[2], "macro-debugger-breakpoint-kv") == 0) return runMacroDebuggerBreakpointKvProbeMode();
+			if (std::strcmp(argv[2], "macro-debugger-cross-section") == 0) return runMacroDebuggerCrossSectionProbeMode();
+			if (std::strcmp(argv[2], "macro-debugger-f9-route") == 0) return runMacroDebuggerF9RouteProbeMode();
+			if (std::strcmp(argv[2], "macro-debugger-workspace-breakpoint-roundtrip") == 0) return runMacroDebuggerWorkspaceBreakpointRoundtripProbeMode();
 		} else if (argc == 2 && std::strcmp(argv[1], "--full") == 0) {
 			runFull = true;
 		} else if (argc == 2 && std::strcmp(argv[1], "--core") == 0) {
 			runFull = false;
 		} else {
 			std::cerr << "usage: regression/mr-regression-checks "
-			             "[--core|--full|--probe staged-nav|staged-mark-page|macro-screen-flush|keymap-macro-dispatch|keymap-autoexec-bootstrap]\n";
+			             "[--core|--full|--probe staged-nav|staged-mark-page|macro-screen-flush|keymap-macro-dispatch|keymap-autoexec-bootstrap|macro-debugger-breakpoint-kv|macro-debugger-cross-section|macro-debugger-f9-route|macro-debugger-workspace-breakpoint-roundtrip]\n";
 			return 2;
 		}
 	}

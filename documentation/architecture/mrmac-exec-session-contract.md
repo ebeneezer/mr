@@ -110,6 +110,10 @@ runtime consumers, execution sessions, macro routing and coprocessor work items.
 - C++ may keep only mechanical runtime handles that cannot be represented as
   VM K/V values, such as function-pointer callbacks and suspended
   `VirtualMachine` ownership for foreground `DELAY`.
+- A paused macro debugger may keep suspended `VirtualMachine` ownership keyed
+  by execution-session id as a mechanical live handle. The VM object itself is
+  not `EXECSESSIONS` or `MACRODEBUGGER` value state; user-visible debug
+  snapshots must be represented separately through the approved K/V roots.
 - Exec sessions must not add a second closure registry, a second scheduler
   registry or a second persistence store.
 - Listener callback function pointers and suspended foreground VM ownership are

@@ -65,7 +65,7 @@ void setCurrentVirtualDesktop(int vd);
 void syncVirtualDesktopVisibility();
 [[nodiscard]] std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths);
 void mrSaveWorkspace(const std::string &filename);
-void mrMarkWorkspaceAutosaveDirty();
+void mrMarkWorkspaceAutosaveDirty(const char *source, const MREditWindow *window = nullptr);
 void mrFlushWorkspaceAutosaveIfDue();
 void mrFlushWorkspaceAutosaveNow();
 [[nodiscard]] bool mrWorkspaceRestoreInProgress();

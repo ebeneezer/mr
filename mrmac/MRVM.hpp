@@ -19,12 +19,76 @@
 
 class MREditWindow;
 class MRVMHashStore;
+struct MRMacroDebuggerBreakpoint;
 
 struct MRMacroExecUiCommandRequest {
 	std::string closureId;
 	std::string lvalue;
 	std::string target;
 	std::string command;
+};
+
+enum MRMacroDebugStopReason {
+	mrdStopNone = 0,
+	mrdStopBreakpoint,
+	mrdStopStep,
+	mrdStopPaused,
+	mrdStopBudget,
+	mrdStopCompleted,
+	mrdStopCancelled,
+	mrdStopError
+};
+
+enum MRMacroDebugStepMode : int {
+	mrdStepNone = 0,
+	mrdStepInto,
+	mrdStepOver,
+	mrdStepOut
+};
+
+enum MRMacroDebugVariableScope {
+	mrdVariableLocal = 0,
+	mrdVariableFileGlobal,
+	mrdVariableAppGlobal,
+	mrdVariableClosure,
+	mrdVariableSession
+};
+
+struct MRMacroDebugVariableSnapshot {
+	std::string name;
+	int type;
+	std::string valueText;
+	MRMacroDebugVariableScope scope;
+
+	MRMacroDebugVariableSnapshot() : name(), type(0), valueText(), scope(mrdVariableLocal) {
+	}
+};
+
+struct MRMacroDebugWatchSnapshot {
+	std::string expression;
+	int type;
+	std::string valueText;
+	std::string errorText;
+	bool enabled;
+
+	MRMacroDebugWatchSnapshot() : expression(), type(0), valueText(), errorText(), enabled(true) {
+	}
+};
+
+struct MRMacroDebugRunResult {
+	MRMacroDebugStopReason stopReason;
+	std::size_t instructionOffset;
+	std::size_t stackDepth;
+	std::vector<MRMacroDebugVariableSnapshot> variables;
+	std::vector<std::string> logLines;
+	std::string macroKey;
+	std::string sourcePath;
+	bool cancelled;
+	bool hadError;
+	bool paused;
+
+	MRMacroDebugRunResult() : stopReason(mrdStopNone), instructionOffset(0), stackDepth(0), variables(), logLines(), macroKey(), sourcePath(), cancelled(false), hadError(false), paused(false) {
+	}
 };
 
 class VirtualMachine {
@@ -71,6 +135,32 @@ class VirtualMachine {
 	std::uint64_t mAsyncDelayTaskId;
 	std::uint64_t mAsyncDelayGeneration;
 	int mAsyncDelayMillis;
+	bool mDebugRunActive;
+	bool mDebugStopped;
+	MRMacroDebugStopReason mDebugStopReason;
+	std::size_t mDebugStopOffset;
+	std::size_t mDebugStackDepth;
+	std::vector<std::size_t> mDebugBreakpointOffsets;
+	bool mDebugPaused;
+	std::vector<unsigned char> mDebugBytecode;
+	std::size_t mDebugLength;
+	std::size_t mDebugIp;
+	std::vector<std::size_t> mDebugCallStack;
+	int mDebugReturnInt;
+	std::string mDebugReturnStr;
+	int mDebugErrorLevel;
+	std::string mDebugSavedParameterString;
+	std::string mDebugMacroName;
+	bool mDebugFirstRun;
+	bool mDebugSkipCurrentOffset;
+	bool mDebugPauseRequested;
+	std::size_t mDebugInstructionBudget;
+	MRMacroDebugStepMode mDebugStepMode;
+	std::size_t mDebugStepOutDepth;
+	std::string mDebugMacroKey;
+	std::string mDebugSourcePath;
+	struct MRMacroDebugChildFrame;
+	std::unique_ptr<MRMacroDebugChildFrame> mDebugChildFrame;
 
 	void appendLogLine(const std::string &line, bool important = false);
 	void clearAsyncDelayState() noexcept;
@@ -100,6 +190,19 @@ class VirtualMachine {
 	const std::vector<MRMacroExecUiCommandRequest> &execUiCommandRequests() const noexcept;
 	void execute(const unsigned char *bytecode, size_t length);
 	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, bool resetState, bool firstRun);
+	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, bool resetState, bool firstRun, bool preserveExecutionState);
+	MRMacroDebugRunResult executeDebugAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, const std::vector<std::size_t> &breakpointOffsets, bool firstRun = false,
+	                                     const std::string &macroKey = std::string(), const std::string &sourcePath = std::string());
+	MRMacroDebugRunResult continueDebug(const std::vector<std::size_t> &breakpointOffsets, std::size_t instructionBudget = 0);
+	MRMacroDebugRunResult stepDebug(const std::vector<std::size_t> &breakpointOffsets, MRMacroDebugStepMode mode = mrdStepInto);
+	void requestDebugPause() noexcept {
+		mDebugPauseRequested = true;
+	}
+	MRMacroDebugWatchSnapshot evaluateDebugWatchExpression(const std::string &expression);
+	bool writeDebugScalarVariable(const MRMacroDebugVariableSnapshot &variable, const std::string &valueText, std::vector<MRMacroDebugVariableSnapshot> &updatedVariables, std::string &errorMessage);
+	bool hasPausedDebug() const noexcept {
+		return mDebugPaused;
+	}
 	void setAsyncDelayEnabled(bool enabled) noexcept {
 		mAsyncDelayEnabled = enabled;
 	}

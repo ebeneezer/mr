@@ -213,6 +213,8 @@ struct WorkspaceEntry {
 	bool minimized = false;
 	bool hasBentoSnapshot = false;
 	MRBentoWorkspaceSnapshot bentoSnapshot;
+	bool hasMacroDebuggerConfiguration = false;
+	MRMacroDebuggerWorkspaceConfiguration macroDebuggerConfiguration;
 	bool hasFileCompareSources = false;
 	std::string fileCompareOriginalUrl;
 	std::string fileCompareCompareUrl;
@@ -392,6 +394,58 @@ bool parseBentoWorkspaceSnapshot(const std::string &token, MRBentoWorkspaceSnaps
 	return !snapshot.nodes.empty() && !snapshot.leaves.empty();
 }
 
+std::string encodeMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration) {
+	std::ostringstream out;
+
+	out << "v1";
+	out << ",k:" << workspaceHexEncode(configuration.macroKey);
+	out << ",n:" << workspaceHexEncode(configuration.macroName);
+	out << ",b:";
+	for (std::size_t index = 0; index < configuration.breakpoints.size(); ++index) {
+		const MRMacroDebuggerWorkspaceBreakpoint &breakpoint = configuration.breakpoints[index];
+
+		if (index != 0) out << ".";
+		out << workspaceHexEncode(breakpoint.macroKey) << ":" << breakpoint.line << ":" << (breakpoint.enabled ? 1 : 0);
+	}
+	out << ",w:";
+	for (std::size_t index = 0; index < configuration.watches.size(); ++index) {
+		const MRMacroDebuggerWorkspaceWatch &watch = configuration.watches[index];
+
+		if (index != 0) out << ".";
+		out << workspaceHexEncode(watch.expression) << ":" << (watch.enabled ? 1 : 0);
+	}
+	return out.str();
+}
+
+bool parseMacroDebuggerWorkspaceConfiguration(const std::string &token, MRMacroDebuggerWorkspaceConfiguration &configuration) {
+	std::vector<std::string> fields = splitWorkspaceToken(token, ',');
+
+	configuration = MRMacroDebuggerWorkspaceConfiguration();
+	if (fields.size() != 5 || fields[0] != "v1" || fields[1].rfind("k:", 0) != 0 || fields[2].rfind("n:", 0) != 0 || fields[3].rfind("b:", 0) != 0 || fields[4].rfind("w:", 0) != 0) return false;
+	if (!workspaceHexDecode(fields[1].substr(2), configuration.macroKey) || !workspaceHexDecode(fields[2].substr(2), configuration.macroName) || configuration.macroKey.empty()) return false;
+	if (!fields[3].substr(2).empty())
+		for (const std::string &entry : splitWorkspaceToken(fields[3].substr(2), '.')) {
+			std::vector<std::string> values = splitWorkspaceToken(entry, ':');
+			MRMacroDebuggerWorkspaceBreakpoint breakpoint;
+			int enabled = 0;
+
+			if (values.size() != 3 || !workspaceHexDecode(values[0], breakpoint.macroKey) || !parseWorkspaceInt(values[1], breakpoint.line) || !parseWorkspaceInt(values[2], enabled) || breakpoint.macroKey.empty() || breakpoint.line <= 0 || (enabled != 0 && enabled != 1)) return false;
+			breakpoint.enabled = enabled != 0;
+			configuration.breakpoints.push_back(breakpoint);
+		}
+	if (!fields[4].substr(2).empty())
+		for (const std::string &entry : splitWorkspaceToken(fields[4].substr(2), '.')) {
+			std::vector<std::string> values = splitWorkspaceToken(entry, ':');
+			MRMacroDebuggerWorkspaceWatch watch;
+			int enabled = 0;
+
+			if (values.size() != 2 || !workspaceHexDecode(values[0], watch.expression) || !parseWorkspaceInt(values[1], enabled) || watch.expression.empty() || (enabled != 0 && enabled != 1)) return false;
+			watch.enabled = enabled != 0;
+			configuration.watches.push_back(watch);
+		}
+	return true;
+}
+
 int workspaceVirtualDesktopOrRandom(int savedDesktop) {
 	int maxDesktop = mrVirtualDesktopCountSnapshot();
 
@@ -405,7 +459,7 @@ int workspaceVirtualDesktopOrRandom(int savedDesktop) {
 
 bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 	static const std::regex linePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
-	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?(?: main=(0|1))?(?: bento=([^ ]+))?(?: fco=([0-9A-Fa-f]+) fcc=([0-9A-Fa-f]+))?$)", std::regex_constants::ECMAScript);
+	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?(?: main=(0|1))?(?: bento=([^ ]+))?(?: debug=([^ ]+))?(?: fco=([0-9A-Fa-f]+) fcc=([0-9A-Fa-f]+))?$)", std::regex_constants::ECMAScript);
 	std::smatch match;
 	std::smatch payloadMatch;
 	std::string payload;
@@ -439,14 +493,33 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 		entry.hasBentoSnapshot = parseBentoWorkspaceSnapshot(payloadMatch[15].str(), entry.bentoSnapshot);
 		if (!entry.hasBentoSnapshot) return false;
 	}
-	if (payloadMatch[16].matched || payloadMatch[17].matched) {
-		if (!payloadMatch[16].matched || !payloadMatch[17].matched) return false;
-		if (!workspaceHexDecode(payloadMatch[16].str(), entry.fileCompareOriginalUrl)) return false;
-		if (!workspaceHexDecode(payloadMatch[17].str(), entry.fileCompareCompareUrl)) return false;
+	if (payloadMatch[16].matched) {
+		entry.hasMacroDebuggerConfiguration = parseMacroDebuggerWorkspaceConfiguration(payloadMatch[16].str(), entry.macroDebuggerConfiguration);
+		if (!entry.hasMacroDebuggerConfiguration || !entry.hasBentoSnapshot) return false;
+	}
+	if (payloadMatch[17].matched || payloadMatch[18].matched) {
+		if (!payloadMatch[17].matched || !payloadMatch[18].matched) return false;
+		if (!workspaceHexDecode(payloadMatch[17].str(), entry.fileCompareOriginalUrl)) return false;
+		if (!workspaceHexDecode(payloadMatch[18].str(), entry.fileCompareCompareUrl)) return false;
 		entry.hasFileCompareSources = !entry.fileCompareOriginalUrl.empty() && !entry.fileCompareCompareUrl.empty();
 		if (!entry.hasFileCompareSources) return false;
 	}
 	return !entry.url.empty();
+}
+
+void applyWorkspaceEntryGeometry(MREditWindow *window, const WorkspaceEntry &entry) {
+	if (window == nullptr || entry.width <= 0 || entry.height <= 0 || entry.x < 0 || entry.y < 0) return;
+	const TRect bounds(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height);
+	const TRect restoreBounds(entry.restoreX, entry.restoreY, entry.restoreX + std::max(entry.restoreWidth, 1), entry.restoreY + std::max(entry.restoreHeight, 1));
+	std::ostringstream detail;
+
+	MRWindowLayout::applyWorkspaceState(window, bounds, restoreBounds, entry.minimized, false, false);
+	detail << "Workspace geometry restored window=" << window->number
+	       << " saved=" << bounds.a.x << "," << bounds.a.y << "," << bounds.b.x << "," << bounds.b.y
+	       << " restore=" << restoreBounds.a.x << "," << restoreBounds.a.y << "," << restoreBounds.b.x << "," << restoreBounds.b.y
+	       << " applied=" << window->getBounds().a.x << "," << window->getBounds().a.y << "," << window->getBounds().b.x << "," << window->getBounds().b.y
+	       << " min=" << (entry.minimized ? 1 : 0) << ".";
+	mrLogMessage(detail.str());
 }
 
 int countWorkspaceEntriesInSource(const std::string &source) {
@@ -669,11 +742,25 @@ std::string mrWorkspaceMainFilePath() {
 	return g_workspaceMainFilePath;
 }
 
-void mrMarkWorkspaceAutosaveDirty() {
+void mrMarkWorkspaceAutosaveDirty(const char *source, const MREditWindow *window) {
+	const bool wasDirty = g_workspaceAutosaveDirty;
+	const bool preserveBefore = runtimePreserveAutosavedWorkspace();
+	const char *reason = source != nullptr && *source != '\0' ? source : "unspecified";
+
 	g_workspaceAutosaveDirty = true;
 	g_workspaceAutosaveDue = std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay;
 	if (configuredAutosaveWorkspace()) setRuntimePreserveAutosavedWorkspace(false);
-	mrLogMessage(std::string("Workspace autosave marked dirty autosave=") + (configuredAutosaveWorkspace() ? "1" : "0") + " preserve=" + (runtimePreserveAutosavedWorkspace() ? "1" : "0") + ".");
+	if (!wasDirty) {
+		std::ostringstream detail;
+
+		detail << "Workspace autosave dirty false->true source=" << reason << " autosave=" << (configuredAutosaveWorkspace() ? 1 : 0) << " preserve=" << (preserveBefore ? 1 : 0) << "->" << (runtimePreserveAutosavedWorkspace() ? 1 : 0);
+		if (window != nullptr) {
+			const TRect bounds = window->getBounds();
+
+			detail << " window=" << window->number << " bounds=" << bounds.a.x << "," << bounds.a.y << "," << bounds.b.x << "," << bounds.b.y;
+		}
+		mrLogMessage(detail.str());
+	}
 }
 
 namespace {
@@ -742,6 +829,7 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		int vd = 1;
 		bool minimized = false;
 		std::string bentoPayload;
+		std::string macroDebuggerPayload;
 		std::string fileComparePayload;
 
 		if (win == nullptr || editor == nullptr) {
@@ -755,6 +843,9 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		}
 		if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win)) {
 			bentoPayload = encodeBentoWorkspaceSnapshot(bentoBox->workspaceSnapshot());
+			MRMacroDebuggerWorkspaceConfiguration macroDebuggerConfiguration;
+
+			if (bentoBox->macroDebuggerWorkspaceConfiguration(macroDebuggerConfiguration)) macroDebuggerPayload = " debug=" + encodeMacroDebuggerWorkspaceConfiguration(macroDebuggerConfiguration);
 			if (bentoBox->isFileCompareBox()) {
 				if (!bentoBox->fileCompareWorkspaceSourcePaths(fileCompareOriginalUrl, fileCompareCompareUrl)) {
 					mrLogMessage("Workspace serialize skipped file-compare Bento without source paths.");
@@ -775,7 +866,7 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		cursorLine = editor->currentLineNumber();
 		vd = win->mVirtualDesktop;
 		minimized = win->isMinimized();
-		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + (mrIsWorkspaceMainFile(win) ? std::string(" main=1") : std::string()) + (bentoPayload.empty() ? std::string() : " bento=" + bentoPayload) + fileComparePayload + "');\n");
+		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + (mrIsWorkspaceMainFile(win) ? std::string(" main=1") : std::string()) + (bentoPayload.empty() ? std::string() : " bento=" + bentoPayload) + macroDebuggerPayload + fileComparePayload + "');\n");
 		++writtenEntries;
 	}
 	mrLogMessage("Workspace serialize summary candidates=" + std::to_string(candidateWindows) + " entries=" + std::to_string(writtenEntries) + " settings=" + paths.settingsMacroUri + ".");
@@ -1150,14 +1241,27 @@ void mrLoadWorkspace(const std::string &filename) {
 				}
 				bentoUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
 			}
+			if (entry.hasMacroDebuggerConfiguration) {
+				MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
+				MREditWindow *debuggerOutput = nullptr;
+				MREditWindow *variables = nullptr;
+				MREditWindow *watches = nullptr;
 
-			win->mVirtualDesktop = resolvedVirtualDesktop;
-			if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0) {
-				const auto subStartedAt = std::chrono::steady_clock::now();
-				const TRect bounds(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height);
-				const TRect restoreBounds(entry.restoreX, entry.restoreY, entry.restoreX + std::max(entry.restoreWidth, 1), entry.restoreY + std::max(entry.restoreHeight, 1));
-				MRWindowLayout::applyWorkspaceState(win, bounds, restoreBounds, entry.minimized, false, false);
-				geometryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+				if (bentoBox == nullptr || !bentoBox->ensureMacroDebuggerPanes(debuggerOutput, variables, watches)) {
+					mrLogMessage("Workspace load failed debugger Bento restore url=" + entry.url + ".");
+					message(win, evCommand, cmClose, nullptr);
+					discardedWorkspaceEntries = true;
+					continue;
+				}
+				bentoBox->restoreMacroDebuggerWorkspaceConfiguration(entry.macroDebuggerConfiguration);
+			}
+			if (!entry.hasBentoSnapshot || entry.bentoSnapshot.mode != bbmFileCompare) {
+				win->mVirtualDesktop = resolvedVirtualDesktop;
+				{
+					const auto subStartedAt = std::chrono::steady_clock::now();
+					applyWorkspaceEntryGeometry(win, entry);
+					geometryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+				}
 			}
 			{
 				const auto subStartedAt = std::chrono::steady_clock::now();

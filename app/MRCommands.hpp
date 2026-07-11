@@ -150,7 +150,15 @@ enum : ushort {
 	cmMrFileGetLast,
 	cmMrTextToggleLineDrawing,
 	cmMrTextToggleDoubleLines,
-	cmMrOtherLocalOutline
+	cmMrOtherLocalOutline,
+	cmMrMacroDebuggerContinue,
+	cmMrMacroDebuggerStep,
+	cmMrMacroDebuggerStepOver,
+	cmMrMacroDebuggerStepOut,
+	cmMrMacroDebuggerStop,
+	cmMrMacroDebuggerAddWatch,
+	cmMrMacroDebuggerEraseWatch,
+	cmMrMacroDebuggerRunHere
 };
 
 #endif

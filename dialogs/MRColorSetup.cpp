@@ -462,7 +462,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 };
 
 TColorGroup *buildAllColorGroups() {
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::Code, MRColorSetupGroup::FileCompare};
+	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::Code, MRColorSetupGroup::FileCompare, MRColorSetupGroup::Debugger};
 	TColorGroup *head = nullptr;
 
 	for (std::size_t g = sizeof(groups) / sizeof(groups[0]); g-- > 0;) {

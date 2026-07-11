@@ -28,6 +28,7 @@
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRFrame.hpp"
+#include "../ui/MRBentoBox.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../ui/MREditWindow.hpp"
@@ -71,6 +72,7 @@ enum : ushort {
 	cmMRMacroLibraryAddAutoexec,
 	cmMRMacroLibraryRemoveAutoexec,
 	cmMRMacroLibraryPlayback,
+	cmMRMacroLibraryDebug,
 	cmMRMacroLibraryOpenEditor
 };
 
@@ -96,6 +98,88 @@ bool runMacroFileByPathWithColorRefresh(const char *path) {
 	if (!runMacroFileByPath(path)) return false;
 	if (beforeColors != configuredColorSetupSettings()) redrawAfterMacroColorChange();
 	return true;
+}
+
+const char *debugStopReasonText(MRMacroDebugStopReason reason) noexcept {
+	switch (reason) {
+		case mrdStopBreakpoint:
+			return "breakpoint";
+		case mrdStopStep:
+			return "step";
+		case mrdStopCompleted:
+			return "completed";
+		case mrdStopCancelled:
+			return "cancelled";
+		case mrdStopError:
+			return "error";
+		case mrdStopNone:
+		default:
+			return "none";
+	}
+}
+
+void appendDebuggerControls(std::ostringstream &out, bool liveSession) {
+	out << "\nControls:\n";
+	if (liveSession) {
+		out << "F5 Continue\n";
+		out << "F8 Stop\n";
+		out << "F10 Step\n";
+	} else
+		out << "F8 Reset\n";
+	out << "F9 Toggle Breakpoint\n";
+}
+
+std::string debuggerOutputText(const std::string &macroName, const MRMacroExecutionSession &session, const MRMacroDebugRunResult &debugResult) {
+	std::ostringstream out;
+
+	out << "Macro Debugger\n";
+	out << "Macro: " << macroName << "\n";
+	out << "Session: #" << session.sessionId << "\n";
+	out << "State: " << (debugResult.paused ? "paused" : "completed") << "\n";
+	out << "Stop: " << debugStopReasonText(debugResult.stopReason) << "\n";
+	out << "Instruction offset: " << debugResult.instructionOffset << "\n";
+	out << "Stack depth: " << debugResult.stackDepth << "\n";
+	appendDebuggerControls(out, debugResult.paused);
+	if (!debugResult.logLines.empty()) {
+		out << "\nLog:\n";
+		for (const std::string &line : debugResult.logLines)
+			out << line << "\n";
+	}
+	return out.str();
+}
+
+bool openMacroDebuggerBento(const std::string &debugPath, const std::string &debugMacroName, const MRMacroExecutionSession &session, const MRMacroDebugRunResult &debugResult) {
+	const std::string title = "DEBUG " + debugMacroName;
+	MRBentoBox *bentoBox = createBentoBoxWindow(title.c_str());
+	MREditWindow *debuggerOutput = nullptr;
+	MREditWindow *variables = nullptr;
+	MREditWindow *watches = nullptr;
+
+	if (bentoBox == nullptr) return false;
+	if (!bentoBox->loadFromFile(debugPath.c_str())) {
+		message(bentoBox, evCommand, cmClose, nullptr);
+		return false;
+	}
+	bentoBox->setMacroDebuggerTarget(upperAscii(debugMacroName), debugMacroName);
+	bentoBox->setMacroDebuggerSession(session.sessionId, debugResult.variables);
+	if (!bentoBox->ensureMacroDebuggerPanes(debuggerOutput, variables, watches)) {
+		message(bentoBox, evCommand, cmClose, nullptr);
+		return false;
+	}
+	if (debuggerOutput != nullptr) {
+		static_cast<void>(debuggerOutput->replaceTextBuffer(debuggerOutputText(debugMacroName, session, debugResult).c_str(), "Debugger Output"));
+		debuggerOutput->setReadOnly(true);
+		debuggerOutput->setFileChanged(false);
+	}
+	if (watches != nullptr) {
+		static_cast<void>(watches->replaceTextBuffer("Watches\n\n(none)\n", "Watches"));
+		watches->setReadOnly(true);
+		watches->setFileChanged(false);
+	}
+	bentoBox->refreshMacroDebuggerRunMarkers(debugResult);
+	bentoBox->refreshMacroDebuggerWatches();
+	bentoBox->activateSecondaryPane();
+	return mrActivateEditWindow(bentoBox);
 }
 
 struct MacroFileEntry {
@@ -533,7 +617,7 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 		const std::array topButtons{mr::dialogs::DialogButtonSpec{"~C~reate", cmMRMacroLibraryCreate, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMRMacroLibraryDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"C~o~py", cmMRMacroLibraryCopy, bfNormal}, mr::dialogs::DialogButtonSpec{"~E~dit", cmMRMacroLibraryEdit, bfNormal}, mr::dialogs::DialogButtonSpec{"~B~ind", cmMRMacroLibraryBind, bfNormal}};
 		const std::array addAutoexecButton{mr::dialogs::DialogButtonSpec{"~A~dd", cmMRMacroLibraryAddAutoexec, bfNormal}};
 		const std::array removeAutoexecButton{mr::dialogs::DialogButtonSpec{"~R~emove", cmMRMacroLibraryRemoveAutoexec, bfNormal}};
-		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~P~layback", cmMRMacroLibraryPlayback, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~P~layback", cmMRMacroLibraryPlayback, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~ebug", cmMRMacroLibraryDebug, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const int uniformButtonWidth = std::max({mr::dialogs::measureUniformButtonRow(topButtons, gap).buttonWidth, mr::dialogs::measureUniformButtonRow(addAutoexecButton, 0).buttonWidth, mr::dialogs::measureUniformButtonRow(removeAutoexecButton, 0).buttonWidth, mr::dialogs::measureUniformButtonRow(bottomButtons, gap).buttonWidth});
 		const mr::dialogs::DialogButtonRowMetrics topMetrics = mr::dialogs::measureUniformButtonRow(topButtons, gap, uniformButtonWidth);
 		const mr::dialogs::DialogButtonRowMetrics addAutoexecMetrics = mr::dialogs::measureUniformButtonRow(addAutoexecButton, 0, uniformButtonWidth);
@@ -585,6 +669,14 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 
 	const std::string &playbackPath() const noexcept {
 		return playbackPathValue;
+	}
+
+	const std::string &debugPath() const noexcept {
+		return debugPathValue;
+	}
+
+	const std::string &debugMacroName() const noexcept {
+		return debugMacroNameValue;
 	}
 
 	void activateFocusedEntry(bool fromAutoexecList) override {
@@ -683,6 +775,10 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 				break;
 			case cmMRMacroLibraryPlayback:
 				handlePlayback();
+				clearEvent(event);
+				break;
+			case cmMRMacroLibraryDebug:
+				handleDebug();
 				clearEvent(event);
 				break;
 			case cmOK:
@@ -969,6 +1065,22 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 		endModal(cmMRMacroLibraryPlayback);
 	}
 
+	void handleDebug() {
+		const MacroFileEntry *entry = selectedEntry();
+		if (entry == nullptr) return;
+		if (!entry->compileError.empty()) {
+			showSelectedEntryError();
+			return;
+		}
+		if (entry->macroName.empty()) {
+			postMacroDialogError("Macro file has no debuggable macro: " + entry->displayName);
+			return;
+		}
+		debugPathValue = entry->path;
+		debugMacroNameValue = entry->macroName;
+		endModal(cmMRMacroLibraryDebug);
+	}
+
 	void handleAddAutoexec() {
 		insertMacroIntoAutoexec(selectedIndex(), static_cast<int>(autoexecEntries.size()));
 	}
@@ -996,6 +1108,8 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 	TScrollBar *autoexecScrollBar;
 	std::string openPathValue;
 	std::string playbackPathValue;
+	std::string debugPathValue;
+	std::string debugMacroNameValue;
 	bool activeAutoexecList = false;
 };
 } // namespace
@@ -1023,6 +1137,8 @@ bool runMacroLibraryDialog() {
 	ushort result = cmCancel;
 	std::string openPath;
 	std::string playbackPath;
+	std::string debugPath;
+	std::string debugMacroName;
 
 	if (dialog == nullptr) return false;
 	dialog->finalizeLayout();
@@ -1030,10 +1146,40 @@ bool runMacroLibraryDialog() {
 	result = TProgram::deskTop->execView(dialog);
 	openPath = dialog->openPath();
 	playbackPath = dialog->playbackPath();
+	debugPath = dialog->debugPath();
+	debugMacroName = dialog->debugMacroName();
 	TObject::destroy(dialog);
 
 	if (result == cmMRMacroLibraryOpenEditor && !openPath.empty()) return openMacroSourceInEditor(openPath);
 	if (result == cmMRMacroLibraryPlayback && !playbackPath.empty()) return runMacroFileByPathWithColorRefresh(playbackPath.c_str());
+	if (result == cmMRMacroLibraryDebug && !debugPath.empty() && !debugMacroName.empty()) {
+		const MRColorSetupSettings beforeColors = configuredColorSetupSettings();
+		MRMacroExecutionSession session;
+		MRMacroDebugRunResult debugResult;
+		std::string errorText;
+
+		if (!mrvmLoadMacroFile(debugPath, &errorText)) {
+			forgetLoadDialogPath(MRDialogHistoryScope::MacroFile, debugPath.c_str());
+			postMacroDialogError(errorText.empty() ? "Unable to load macro file for debug." : errorText);
+			return false;
+		}
+		rememberLoadDialogPath(MRDialogHistoryScope::MacroFile, debugPath.c_str());
+		debugResult = mrvmStartDebugMacroByName(debugMacroName, MRMacroExecutionOwner(), &session, &errorText, true);
+		if (beforeColors != configuredColorSetupSettings()) redrawAfterMacroColorChange();
+		if (debugResult.hadError || debugResult.stopReason == mrdStopError) {
+			postMacroDialogError(errorText.empty() ? "Debug macro failed." : errorText);
+			return false;
+		}
+		if (debugResult.paused) {
+			if (!openMacroDebuggerBento(debugPath, debugMacroName, session, debugResult)) {
+				postMacroDialogError("Unable to open macro debugger UI.");
+				return false;
+			}
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Debug paused: " + debugMacroName + " session #" + std::to_string(session.sessionId), mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+		} else
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Debug completed: " + debugMacroName, mr::messageline::Kind::Success, mr::messageline::kPriorityMedium);
+		return true;
+	}
 	if (result == cmHelp) static_cast<void>(mrShowProjectHelp());
 	return result != cmCancel;
 }

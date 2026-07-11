@@ -212,6 +212,14 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrFileCompareApplyCompareToOriginal, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrFileCompareNextChange, state.hasFileCompareWindow);
 	setCommandEnabled(cmMrFileComparePreviousChange, state.hasFileCompareWindow);
+	setCommandEnabled(cmMrMacroDebuggerContinue, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerStep, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerStepOver, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerStepOut, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerStop, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerAddWatch, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerEraseWatch, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerRunHere, hasEditor);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
 	setCommandEnabled(cmMrOtherLocalOutline, hasEditor);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);

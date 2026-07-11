@@ -13,7 +13,8 @@ enum class MRMacroExecutionRoute {
 	UiThread,
 	ForegroundDelay,
 	Background,
-	StagedBackground
+	StagedBackground,
+	Debug
 };
 
 enum class MRMacroExecutionState {

@@ -67,6 +67,132 @@ void MRFileEditor::clearCompilerDiagnosticRanges() {
 	drawView();
 }
 
+void MRFileEditor::setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges) {
+	std::vector<MRTextBufferModel::Range> normalizedActive;
+	std::vector<MRTextBufferModel::Range> normalizedInactive;
+	std::vector<std::size_t> activeLines;
+	std::vector<std::size_t> inactiveLines;
+	const std::size_t length = mBufferModel.length();
+	auto appendRanges = [this, length](const std::vector<std::pair<std::size_t, std::size_t>> &source, std::vector<MRTextBufferModel::Range> &target, std::vector<std::size_t> &lines) {
+		target.reserve(source.size());
+		lines.reserve(source.size());
+		if (length == 0) return;
+		for (const std::pair<std::size_t, std::size_t> &rangePair : source) {
+			std::size_t start = std::min(rangePair.first, length);
+			std::size_t end = std::min(rangePair.second, length);
+
+			if (end < start) std::swap(start, end);
+			if (end == start) {
+				if (end < length) ++end;
+				else if (start > 0)
+					--start;
+			}
+			if (end > start) {
+				target.push_back(MRTextBufferModel::Range(start, end));
+				lines.push_back(mBufferModel.lineIndex(start));
+			}
+		}
+	};
+
+	appendRanges(activeRanges, normalizedActive, activeLines);
+	appendRanges(inactiveRanges, normalizedInactive, inactiveLines);
+	normalizeRangeList(normalizedActive);
+	normalizeRangeList(normalizedInactive);
+	mDebuggerBreakpointRanges.swap(normalizedActive);
+	mDebuggerBreakpointInactiveRanges.swap(normalizedInactive);
+	std::sort(activeLines.begin(), activeLines.end());
+	activeLines.erase(std::unique(activeLines.begin(), activeLines.end()), activeLines.end());
+	mDebuggerBreakpointLines.swap(activeLines);
+	std::sort(inactiveLines.begin(), inactiveLines.end());
+	inactiveLines.erase(std::unique(inactiveLines.begin(), inactiveLines.end()), inactiveLines.end());
+	mDebuggerBreakpointInactiveLines.swap(inactiveLines);
+	drawView();
+}
+
+void MRFileEditor::clearDebuggerBreakpointRanges() {
+	if (mDebuggerBreakpointRanges.empty() && mDebuggerBreakpointInactiveRanges.empty() && mDebuggerBreakpointLines.empty() && mDebuggerBreakpointInactiveLines.empty()) return;
+	mDebuggerBreakpointRanges.clear();
+	mDebuggerBreakpointInactiveRanges.clear();
+	mDebuggerBreakpointLines.clear();
+	mDebuggerBreakpointInactiveLines.clear();
+	drawView();
+}
+
+void MRFileEditor::setDebuggerWatchpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges) {
+	std::vector<MRTextBufferModel::Range> normalizedActive;
+	std::vector<MRTextBufferModel::Range> normalizedInactive;
+	std::vector<MRTextBufferModel::Range> normalizedErrors;
+	const std::size_t length = mBufferModel.length();
+	auto appendRanges = [length](const std::vector<std::pair<std::size_t, std::size_t>> &source, std::vector<MRTextBufferModel::Range> &target) {
+		target.reserve(source.size());
+		for (const std::pair<std::size_t, std::size_t> &rangePair : source) {
+			std::size_t start = std::min(rangePair.first, length);
+			std::size_t end = std::min(rangePair.second, length);
+
+			if (end < start) std::swap(start, end);
+			if (end == start && end < length) ++end;
+			if (end > start) target.push_back(MRTextBufferModel::Range(start, end));
+		}
+	};
+
+	appendRanges(activeRanges, normalizedActive);
+	appendRanges(inactiveRanges, normalizedInactive);
+	appendRanges(errorRanges, normalizedErrors);
+	normalizeRangeList(normalizedActive);
+	normalizeRangeList(normalizedInactive);
+	normalizeRangeList(normalizedErrors);
+	mDebuggerWatchpointActiveRanges.swap(normalizedActive);
+	mDebuggerWatchpointInactiveRanges.swap(normalizedInactive);
+	mDebuggerWatchpointErrorRanges.swap(normalizedErrors);
+	drawView();
+}
+
+void MRFileEditor::clearDebuggerWatchpointRanges() {
+	if (mDebuggerWatchpointActiveRanges.empty() && mDebuggerWatchpointInactiveRanges.empty() && mDebuggerWatchpointErrorRanges.empty()) return;
+	mDebuggerWatchpointActiveRanges.clear();
+	mDebuggerWatchpointInactiveRanges.clear();
+	mDebuggerWatchpointErrorRanges.clear();
+	drawView();
+}
+
+void MRFileEditor::setDebuggerVariableChangedRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
+	std::vector<MRTextBufferModel::Range> normalized;
+	const std::size_t length = mBufferModel.length();
+
+	normalized.reserve(ranges.size());
+	for (const std::pair<std::size_t, std::size_t> &rangePair : ranges) {
+		std::size_t start = std::min(rangePair.first, length);
+		std::size_t end = std::min(rangePair.second, length);
+
+		if (end < start) std::swap(start, end);
+		if (end == start && end < length) ++end;
+		if (end > start) normalized.push_back(MRTextBufferModel::Range(start, end));
+	}
+	normalizeRangeList(normalized);
+	mDebuggerVariableChangedRanges.swap(normalized);
+	drawView();
+}
+
+void MRFileEditor::clearDebuggerVariableChangedRanges() {
+	if (mDebuggerVariableChangedRanges.empty()) return;
+	mDebuggerVariableChangedRanges.clear();
+	drawView();
+}
+
+void MRFileEditor::setDebuggerInstructionLine(std::size_t lineIndex) {
+	if (mDebuggerInstructionLineValid && mDebuggerInstructionLine == lineIndex) return;
+	mDebuggerInstructionLine = lineIndex;
+	mDebuggerInstructionLineValid = true;
+	drawView();
+}
+
+void MRFileEditor::clearDebuggerInstructionLine() {
+	if (!mDebuggerInstructionLineValid) return;
+	mDebuggerInstructionLineValid = false;
+	mDebuggerInstructionLine = 0;
+	drawView();
+}
+
 void MRFileEditor::clearDirtyRanges() noexcept {
 	mDirtyRanges.clear();
 }

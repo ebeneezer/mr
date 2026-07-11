@@ -144,6 +144,8 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 	inputs.visibleRows = visibleTextRows();
 	inputs.deltaX = delta.x;
 	inputs.deltaY = delta.y;
+	inputs.debugGutterEnabled = mDebuggerInstructionLineValid || !mDebuggerBreakpointLines.empty();
+	inputs.debugGutterPosition = "LEADING";
 	if (foldingEnabled && settings.codeFolding) self->ensureVisibleFoldSpans(static_cast<std::size_t>(std::max(delta.y, 0)), inputs.visibleRows, mBufferModel.language());
 	inputs.codeFoldingColumns = foldingEnabled && settings.codeFolding ? self->visibleFoldGutterColumns() : 1;
 	inputs.exactLineCountKnown = !approximateLargeFileMetrics && mBufferModel.exactLineCountKnown();
@@ -398,6 +400,68 @@ bool MRFileEditor::findMarkerContainsOffset(std::size_t offset) const noexcept {
 		return true;
 	}
 	return false;
+}
+
+bool MRFileEditor::debuggerBreakpointContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mDebuggerBreakpointRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
+bool MRFileEditor::debuggerBreakpointInactiveContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mDebuggerBreakpointInactiveRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
+bool MRFileEditor::debuggerWatchpointActiveContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mDebuggerWatchpointActiveRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
+bool MRFileEditor::debuggerWatchpointInactiveContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mDebuggerWatchpointInactiveRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
+bool MRFileEditor::debuggerWatchpointErrorContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mDebuggerWatchpointErrorRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
+bool MRFileEditor::debuggerVariableChangedContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mDebuggerVariableChangedRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
+bool MRFileEditor::debuggerBreakpointLineAt(std::size_t lineIndex) const noexcept {
+	return std::binary_search(mDebuggerBreakpointLines.begin(), mDebuggerBreakpointLines.end(), lineIndex);
+}
+
+bool MRFileEditor::debuggerBreakpointInactiveLineAt(std::size_t lineIndex) const noexcept {
+	return std::binary_search(mDebuggerBreakpointInactiveLines.begin(), mDebuggerBreakpointInactiveLines.end(), lineIndex);
 }
 
 bool MRFileEditor::ratioCellActive(int numerator, int denominator, int cellIndex, int cellCount) noexcept {
@@ -767,6 +831,7 @@ void MRFileEditor::draw() {
 		}
 		if (drawLeadingDiffGutter) drawFileCompareGutter(buffer, viewport.fileCompareLeadingGutterX, viewport.fileCompareLeadingGutterWidth, currentLineIndex);
 		if (drawTrailingDiffGutter) drawFileCompareGutter(buffer, viewport.fileCompareTrailingGutterX, viewport.fileCompareTrailingGutterWidth, currentLineIndex);
+		drawDebugGutter(buffer, viewport.debugGutterX, viewport.debugGutterWidth, currentLineIndex);
 		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, isDocumentLine ? currentLinePtr : 0, currentLineIndex);
 		if (drawLeadingMiniMap) mMiniMapState.renderer().drawGutter(buffer, y, miniMapRows, size.x, miniMapViewportFor(true), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 		if (drawTrailingMiniMap) mMiniMapState.renderer().drawGutter(buffer, y, miniMapRows, size.x, miniMapViewportFor(false), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
@@ -820,6 +885,36 @@ void MRFileEditor::drawFileCompareGutter(TDrawBuffer &b, int drawX, int width, s
 	const unsigned char slot = fileCompareGutterPaletteSlot(lineKind);
 	if (slot != 0 && configuredColorSlotOverride(slot, configured)) color = static_cast<TColorAttr>(configured);
 	b.moveChar(static_cast<ushort>(drawX), fileCompareGutterGlyph(lineKind), color, 1);
+}
+
+void MRFileEditor::drawDebugGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineIndex) {
+	unsigned char configured = 0;
+	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
+	const bool instructionLine = mDebuggerInstructionLineValid && mDebuggerInstructionLine == lineIndex;
+	const bool breakpointLine = debuggerBreakpointLineAt(lineIndex);
+	const bool breakpointInactiveLine = debuggerBreakpointInactiveLineAt(lineIndex);
+
+	if (width <= 0) return;
+	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
+	if (!instructionLine && !breakpointLine && !breakpointInactiveLine) return;
+	if (instructionLine) {
+		if (configuredColorSlotOverride(kMrPaletteDebuggerInstructionPointer, configured)) color = static_cast<TColorAttr>(configured);
+		else
+			color = static_cast<TColorAttr>(0xE0);
+		b.moveChar(static_cast<ushort>(drawX), '\x10', color, 1);
+		return;
+	}
+	if (breakpointLine) {
+		if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointActive, configured)) color = static_cast<TColorAttr>(configured);
+		else
+			color = static_cast<TColorAttr>(0x4E);
+		b.moveChar(static_cast<ushort>(drawX), '\x07', color, 1);
+		return;
+	}
+	if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointInactive, configured)) color = static_cast<TColorAttr>(configured);
+	else
+		color = static_cast<TColorAttr>(0x18);
+	b.moveChar(static_cast<ushort>(drawX), '\x07', color, 1);
 }
 
 void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex) {
@@ -987,6 +1082,13 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	if (currentLineInBlock) basePair = getColor(0x0204);
 	else if (currentLine && diffLineKind == mrfclkNone)
 		basePair = getColor(0x0303);
+	if (mDebuggerInstructionLineValid && mDebuggerInstructionLine == lineIndex) {
+		unsigned char executionLineAttr = 0;
+
+		if (configuredColorSlotOverride(kMrPaletteDebuggerExecutionLine, executionLineAttr)) basePair = TAttrPair(executionLineAttr);
+		else
+			basePair = TAttrPair(0x1E);
+	}
 	if (diffLineKind != mrfclkNone) {
 		const unsigned char slot = fileCompareTextPaletteSlot(diffLineKind);
 			unsigned char configured = 0;
@@ -1035,6 +1137,12 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 			}
 			bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
 			bool findMarkedChar = !selected && findMarkerContainsOffset(documentPos);
+			bool debuggerBreakpointChar = !selected && debuggerBreakpointContainsOffset(documentPos);
+			bool debuggerBreakpointInactiveChar = !selected && debuggerBreakpointInactiveContainsOffset(documentPos);
+			bool debuggerWatchpointActiveChar = !selected && debuggerWatchpointActiveContainsOffset(documentPos);
+			bool debuggerWatchpointInactiveChar = !selected && debuggerWatchpointInactiveContainsOffset(documentPos);
+			bool debuggerWatchpointErrorChar = !selected && debuggerWatchpointErrorContainsOffset(documentPos);
+			bool debuggerVariableChangedChar = !selected && debuggerVariableChangedContainsOffset(documentPos);
 			TAttrPair effectivePair = changedChar ? changedPair : basePair;
 			TColorAttr unselectedColor = tokenColor(token, false, effectivePair);
 			TColorAttr selectedColor = tokenColor(token, true, selectionPair);
@@ -1045,6 +1153,42 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 				if (configuredColorSlotOverride(14, highlightedTextAttr)) color = static_cast<TColorAttr>(TAttrPair(highlightedTextAttr));
 				else
 					color = static_cast<TColorAttr>(getColor(3));
+			}
+			if (debuggerBreakpointChar) {
+				unsigned char breakpointAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointActive, breakpointAttr)) color = static_cast<TColorAttr>(TAttrPair(breakpointAttr));
+				else
+					color = static_cast<TColorAttr>(TAttrPair(0x4E));
+			}
+			if (debuggerBreakpointInactiveChar) {
+				unsigned char breakpointAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointInactive, breakpointAttr)) color = static_cast<TColorAttr>(TAttrPair(breakpointAttr));
+				else
+					color = static_cast<TColorAttr>(TAttrPair(0x18));
+			}
+			if (debuggerWatchpointActiveChar) {
+				unsigned char watchpointAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointActive, watchpointAttr)) color = static_cast<TColorAttr>(TAttrPair(watchpointAttr));
+				else
+					color = static_cast<TColorAttr>(TAttrPair(0x3E));
+			}
+			if (debuggerWatchpointInactiveChar) {
+				unsigned char watchpointAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointInactive, watchpointAttr)) color = static_cast<TColorAttr>(TAttrPair(watchpointAttr));
+				else
+					color = static_cast<TColorAttr>(TAttrPair(0x38));
+			}
+			if (debuggerWatchpointErrorChar) {
+				unsigned char watchpointAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointError, watchpointAttr)) color = static_cast<TColorAttr>(TAttrPair(watchpointAttr));
+				else
+					color = static_cast<TColorAttr>(TAttrPair(0x4F));
+			}
+			if (debuggerVariableChangedChar) {
+				unsigned char valueChangedAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerValueChanged, valueChangedAttr)) color = static_cast<TColorAttr>(TAttrPair(valueChangedAttr));
+				else
+					color = static_cast<TColorAttr>(TAttrPair(0x2E));
 			}
 			if (diffTextActive && !selected) color = diffTextColor;
 			if (!selected) unselectedColor = color;

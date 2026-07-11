@@ -14,6 +14,8 @@ class MRTextViewportLayout {
 		int deltaY = 0;
 		int codeFoldingColumns = 1;
 		bool fileCompareGutterEnabled = false;
+		bool debugGutterEnabled = false;
+		std::string debugGutterPosition = "LEADING";
 		bool gutterSidesConfigured = false;
 		std::string leadingGutters;
 		std::string trailingGutters;
@@ -30,6 +32,8 @@ class MRTextViewportLayout {
 		int lineNumberWidth = 0;
 		int codeFoldingX = 0;
 		int codeFoldingWidth = 0;
+		int debugGutterX = 0;
+		int debugGutterWidth = 0;
 		int fileCompareLeadingGutterX = 0;
 		int fileCompareLeadingGutterWidth = 0;
 		int fileCompareTrailingGutterX = 0;

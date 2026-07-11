@@ -311,6 +311,8 @@ TPalette buildColorSetupWorkingPalette() {
 
 		for (i = 0; i < kBaseSlots; ++i)
 			data[i] = static_cast<unsigned char>(cp[i]);
+		for (; i < kTotalSlots; ++i)
+			data[i] = data[1 - 1];
 		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
 		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
 		data[kMrPaletteChangedText - 1] = data[14 - 1];
@@ -375,6 +377,18 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteSpinnerDisplay - 1] = data[50 - 1];
 		data[kMrPaletteFocusedSpinnerHandles - 1] = data[58 - 1];
 		data[kMrPaletteFocusedSpinnerDisplay - 1] = data[51 - 1];
+		data[kMrPaletteDebuggerBreakpointActive - 1] = 0x4E;
+		data[kMrPaletteDebuggerBreakpointInactive - 1] = 0x18;
+		data[kMrPaletteDebuggerBreakpointUnbound - 1] = 0x4C;
+		data[kMrPaletteDebuggerWatchpointActive - 1] = 0x3E;
+		data[kMrPaletteDebuggerWatchpointInactive - 1] = 0x38;
+		data[kMrPaletteDebuggerWatchpointError - 1] = 0x4F;
+		data[kMrPaletteDebuggerInstructionPointer - 1] = 0xE0;
+		data[kMrPaletteDebuggerExecutionLine - 1] = 0x1E;
+		data[kMrPaletteDebuggerStackFrame - 1] = 0x3F;
+		data[kMrPaletteDebuggerValueChanged - 1] = 0x2E;
+		data[kMrPaletteDebuggerInputActive - 1] = 0x1B;
+		data[kMrPaletteDebuggerInputError - 1] = 0x4F;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	TPalette palette = basePalette;
@@ -388,7 +402,7 @@ TPalette buildColorSetupWorkingPalette() {
 }
 
 bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &errorText) {
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::Code, MRColorSetupGroup::FileCompare};
+	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::Code, MRColorSetupGroup::FileCompare, MRColorSetupGroup::Debugger};
 
 	for (auto group : groups) {
 		std::size_t count = 0;

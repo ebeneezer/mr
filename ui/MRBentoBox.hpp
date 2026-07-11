@@ -4,6 +4,7 @@
 #include "MREditWindow.hpp"
 #include "widgets/MRDropList.hpp"
 #include "MRDiff.hpp"
+#include "../mrmac/MRMacroExecutionSession.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -13,6 +14,9 @@
 
 class MRBentoBoxFileCompareRegressionHarness;
 class MRBentoPaneFrameView;
+class MRMacroDebuggerValueInput;
+struct MRMacroDebugRunResult;
+enum MRMacroDebugStepMode : int;
 namespace mr {
 namespace coprocessor {
 struct Result;
@@ -150,6 +154,30 @@ struct MRBentoWorkspaceSnapshot {
 	std::vector<MRBentoWorkspaceLeaf> leaves;
 };
 
+struct MRMacroDebuggerWorkspaceBreakpoint {
+	MRMacroDebuggerWorkspaceBreakpoint() noexcept;
+
+	std::string macroKey;
+	int line;
+	bool enabled;
+};
+
+struct MRMacroDebuggerWorkspaceWatch {
+	MRMacroDebuggerWorkspaceWatch() noexcept;
+
+	std::string expression;
+	bool enabled;
+};
+
+struct MRMacroDebuggerWorkspaceConfiguration {
+	MRMacroDebuggerWorkspaceConfiguration() noexcept;
+
+	std::string macroKey;
+	std::string macroName;
+	std::vector<MRMacroDebuggerWorkspaceBreakpoint> breakpoints;
+	std::vector<MRMacroDebuggerWorkspaceWatch> watches;
+};
+
 class MRPaneEditWindow : public MREditWindow {
 	friend class MRBentoBox;
 
@@ -180,21 +208,38 @@ class MRPaneEditWindow : public MREditWindow {
 
 class MRBentoBox : public MREditWindow {
 	friend class MRBentoBoxFileCompareRegressionHarness;
+	friend class MRMacroDebuggerValueInput;
 
   public:
 	MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode = bbmToolWorkspace);
 	virtual ~MRBentoBox() override;
 
 	[[nodiscard]] MREditWindow *secondaryEditWindow() const noexcept;
-	[[nodiscard]] MREditWindow *buildOutputPane() const noexcept;
-	[[nodiscard]] MREditWindow *problemsPane() const noexcept;
-	[[nodiscard]] MREditWindow *structurePane() const noexcept;
-	[[nodiscard]] MREditWindow *functionsPane() const noexcept;
-	[[nodiscard]] MREditWindow *paneForBufferId(int bufferId) const noexcept;
+		[[nodiscard]] MREditWindow *buildOutputPane() const noexcept;
+		[[nodiscard]] MREditWindow *problemsPane() const noexcept;
+		[[nodiscard]] MREditWindow *structurePane() const noexcept;
+		[[nodiscard]] MREditWindow *functionsPane() const noexcept;
+		[[nodiscard]] MREditWindow *debuggerOutputPane() const noexcept;
+		[[nodiscard]] MREditWindow *variablesPane() const noexcept;
+		[[nodiscard]] MREditWindow *watchesPane() const noexcept;
+		[[nodiscard]] MREditWindow *paneForBufferId(int bufferId) const noexcept;
 	void collectVisiblePaneWindows(std::vector<MREditWindow *> &windows) const noexcept;
 	void showSecondaryPane() noexcept;
-	[[nodiscard]] bool ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREditWindow *&problemsWindow);
-	void activatePrimaryPane() noexcept;
+		[[nodiscard]] bool ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREditWindow *&problemsWindow);
+		[[nodiscard]] bool ensureMacroDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow);
+		void setMacroDebuggerTarget(const std::string &macroKey, const std::string &macroName);
+		[[nodiscard]] bool macroDebuggerWorkspaceConfiguration(MRMacroDebuggerWorkspaceConfiguration &configuration) const;
+		void restoreMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration);
+		void setMacroDebuggerSession(MRMacroExecutionSessionId sessionId) noexcept;
+		void setMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const std::vector<MRMacroDebugVariableSnapshot> &variables);
+	void refreshMacroDebuggerRunMarkers(const MRMacroDebugRunResult &debugResult);
+	void refreshMacroDebuggerWatches();
+	[[nodiscard]] bool macroDebuggerFunctionKeysActive() const noexcept;
+	[[nodiscard]] bool macroDebuggerHasLiveSession() const noexcept;
+	[[nodiscard]] bool macroDebuggerSessionRunning() const noexcept;
+	void pumpMacroDebuggerSession();
+	[[nodiscard]] bool handleMacroDebuggerFunctionKey(TEvent &event);
+		void activatePrimaryPane() noexcept;
 	void activateSecondaryPane() noexcept;
 	[[nodiscard]] bool activatePaneWindow(MREditWindow *pane) noexcept;
 	void toggleActivePane() noexcept;
@@ -298,6 +343,24 @@ class MRBentoBox : public MREditWindow {
 	void acceptPaneActionChoice();
 	void acceptFileCompareActionChoice();
 	void refreshCompilerProblemsPane();
+	[[nodiscard]] bool toggleMacroDebuggerBreakpointAtCursor();
+	[[nodiscard]] bool toggleMacroDebuggerBreakpointEnabledAtCursor();
+	[[nodiscard]] bool toggleMacroDebuggerBreakpointsEnabled();
+	[[nodiscard]] bool eraseMacroDebuggerBreakpoints();
+	[[nodiscard]] bool continueMacroDebuggerSession();
+	[[nodiscard]] bool stepMacroDebuggerSession(MRMacroDebugStepMode mode);
+	[[nodiscard]] bool stopMacroDebuggerSession();
+	[[nodiscard]] bool resetMacroDebuggerSession();
+	[[nodiscard]] bool runMacroDebuggerToCursor();
+	[[nodiscard]] bool addMacroDebuggerWatch();
+	[[nodiscard]] bool eraseMacroDebuggerWatch();
+	void refreshMacroDebuggerVariables(const std::vector<MRMacroDebugVariableSnapshot> &variables);
+	[[nodiscard]] bool showMacroDebuggerValueInputAtCursor();
+	[[nodiscard]] bool macroDebuggerValueInputContains(const TPoint &point) const noexcept;
+	void commitMacroDebuggerValueInput();
+	void cancelMacroDebuggerValueInput() noexcept;
+	void refreshMacroDebuggerBreakpointRanges();
+	[[nodiscard]] bool startMacroDebuggerSession(int temporaryStopLine);
 	void refreshOutlinePanes(bool force = false);
 	bool refreshOutlinePane(MRBentoPaneRole role, bool force);
 	[[nodiscard]] bool jumpToOutlineAtCursor(MRBentoPaneRole role);
@@ -418,6 +481,19 @@ class MRBentoBox : public MREditWindow {
 	std::string compilerProblemsStatus;
 	std::string structureOutlineStatus;
 	std::string functionsOutlineStatus;
+	std::string macroDebuggerStatus;
+	std::string macroDebuggerMacroKey;
+	std::string macroDebuggerMacroName;
+	std::string macroDebuggerSourcePath;
+	std::string macroDebuggerProjectedMacroKey;
+	MRMacroExecutionSessionId macroDebuggerSessionId;
+	bool macroDebuggerExecutionRunning;
+	bool macroDebuggerActive;
+	MRMacroDebuggerWorkspaceConfiguration macroDebuggerWorkspacePending;
+	MRMacroDebuggerValueInput *macroDebuggerValueInput;
+	MRPaneEditWindow *macroDebuggerValueInputPane;
+	std::vector<MRMacroDebugVariableSnapshot> macroDebuggerVariables;
+	std::vector<std::pair<std::size_t, std::size_t>> macroDebuggerVariableRows;
 	std::vector<MRCompilerDiagnostic> compilerDiagnostics;
 	MRBentoCompareSetup fileCompareSetup;
 	std::vector<mr::diff::MRDiffHunk> fileCompareHunks;

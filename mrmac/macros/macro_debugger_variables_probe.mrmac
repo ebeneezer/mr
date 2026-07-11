@@ -1,0 +1,56 @@
+$MACRO DebuggerVariablesProbe;
+DEF_INT(MainCounter, GlobalCounter, HelperValue);
+DEF_REAL(MainRatio);
+DEF_STR(MainText, HelperText);
+DEF_CHAR(MainFlag);
+
+MainCounter := 10;
+MainRatio := 1.5;
+MainText := 'main-start';
+MainFlag := CHAR(65);
+
+SET_GLOBAL_INT('DBG_GLOBAL_COUNTER', MainCounter);
+SET_GLOBAL_STR('DBG_GLOBAL_TEXT', MainText);
+
+GlobalCounter := GLOBAL_INT('DBG_GLOBAL_COUNTER');
+GlobalCounter := GlobalCounter + 5;
+SET_GLOBAL_INT('DBG_GLOBAL_COUNTER', GlobalCounter);
+
+MPARM_STR := 'payload-from-main';
+RUN_MACRO('DebuggerVariablesFunction');
+
+HelperValue := RETURN_INT;
+HelperText := RETURN_STR;
+
+MainCounter := MainCounter + HelperValue;
+MainRatio := MainRatio + 0.25;
+MainText := MainText + ':' + HelperText;
+
+SET_GLOBAL_INT('DBG_FINAL_COUNTER', MainCounter);
+SET_GLOBAL_STR('DBG_FINAL_TEXT', MainText);
+END_MACRO;
+
+$MACRO DebuggerVariablesFunction;
+DEF_INT(FunctionBase, FunctionLocal, SeenGlobal);
+DEF_REAL(FunctionRatio);
+DEF_STR(FunctionText, SeenText);
+DEF_CHAR(FunctionFlag);
+
+FunctionBase := 7;
+FunctionLocal := FunctionBase * 3;
+FunctionRatio := 2.0;
+FunctionText := 'function-local';
+FunctionFlag := CHAR(66);
+
+SeenGlobal := GLOBAL_INT('DBG_GLOBAL_COUNTER');
+SeenText := GLOBAL_STR('DBG_GLOBAL_TEXT');
+
+FunctionLocal := FunctionLocal + SeenGlobal;
+FunctionText := FunctionText + ':' + MPARM_STR + ':' + SeenText;
+
+SET_GLOBAL_INT('DBG_FUNCTION_LOCAL', FunctionLocal);
+SET_GLOBAL_STR('DBG_FUNCTION_TEXT', FunctionText);
+
+RETURN_INT := FunctionLocal;
+RETURN_STR := FunctionText;
+END_MACRO;

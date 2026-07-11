@@ -161,6 +161,8 @@ const char *macroExecutionRouteName(MRMacroExecutionRoute route) noexcept {
 			return "background";
 		case MRMacroExecutionRoute::StagedBackground:
 			return "staged-background";
+		case MRMacroExecutionRoute::Debug:
+			return "debug";
 		case MRMacroExecutionRoute::Unknown:
 		default:
 			return "unknown";

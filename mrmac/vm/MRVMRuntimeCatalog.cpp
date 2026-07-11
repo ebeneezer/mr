@@ -3,6 +3,7 @@
 #include "MRVMHash.hpp"
 #include "MRVMKeymapRuntime.hpp"
 #include "MRVMMacroSpecRuntime.hpp"
+#include "MRVMValue.hpp"
 
 #include "../mrmac.h"
 #include "../MRVM.hpp"
@@ -162,6 +163,76 @@ std::vector<std::string> readStringVectorHash(MRVMRuntimeKv &runtimeKv, const Va
 	return values;
 }
 
+std::string lineKey(int line) {
+	return std::to_string(line);
+}
+
+void writeSourceMapEntryHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MRMacroSourceMapEntry &entry) {
+	hashWriteUint(runtimeKv, hash, "bytecodeOffset", entry.bytecodeOffset);
+	hashWriteUint(runtimeKv, hash, "sourceStartOffset", entry.sourceStartOffset);
+	hashWriteUint(runtimeKv, hash, "sourceEndOffset", entry.sourceEndOffset);
+	hashWriteInt(runtimeKv, hash, "line", entry.line);
+	hashWriteInt(runtimeKv, hash, "column", entry.column);
+	hashWriteString(runtimeKv, hash, "macroName", entry.macroName);
+	hashWriteInt(runtimeKv, hash, "debuggableKind", entry.debuggableKind);
+}
+
+MRMacroSourceMapEntry readSourceMapEntryHash(MRVMRuntimeKv &runtimeKv, const Value &hash) {
+	MRMacroSourceMapEntry entry;
+
+	entry.bytecodeOffset = static_cast<std::size_t>(hashReadUint(runtimeKv, hash, "bytecodeOffset", 0));
+	entry.sourceStartOffset = static_cast<std::size_t>(hashReadUint(runtimeKv, hash, "sourceStartOffset", 0));
+	entry.sourceEndOffset = static_cast<std::size_t>(hashReadUint(runtimeKv, hash, "sourceEndOffset", entry.sourceStartOffset));
+	entry.line = hashReadInt(runtimeKv, hash, "line", 0);
+	entry.column = hashReadInt(runtimeKv, hash, "column", 0);
+	entry.macroName = hashReadString(runtimeKv, hash, "macroName");
+	entry.debuggableKind = hashReadInt(runtimeKv, hash, "debuggableKind", 0);
+	return entry;
+}
+
+void writeSourceMapHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const std::vector<MRMacroSourceMapEntry> &entries) {
+	hashWriteInt(runtimeKv, hash, "count", static_cast<int>(entries.size()));
+	for (std::size_t index = 0; index < entries.size(); ++index) {
+		const MRMacroSourceMapEntry &entry = entries[index];
+
+		writeSourceMapEntryHash(runtimeKv, runtimeKv.replaceChild(hash, std::to_string(index + 1)), entry);
+	}
+}
+
+std::vector<MRMacroSourceMapEntry> readSourceMapHash(MRVMRuntimeKv &runtimeKv, const Value &hash) {
+	std::vector<MRMacroSourceMapEntry> entries;
+	const int count = hashReadInt(runtimeKv, hash, "count", 0);
+
+	for (int index = 1; index <= count; ++index) {
+		Value entryHash;
+
+		if (!runtimeKv.findChild(hash, std::to_string(index), entryHash)) continue;
+		entries.push_back(readSourceMapEntryHash(runtimeKv, entryHash));
+	}
+	return entries;
+}
+
+void writeSourceLineIndexEntry(MRVMRuntimeKv &runtimeKv, const Value &indexHash, const MRMacroSourceMapEntry &entry) {
+	Value byLine = runtimeKv.ensureChild(indexHash, "byLine");
+	Value byBytecode = runtimeKv.ensureChild(indexHash, "byBytecode");
+	Value existing;
+	MRMacroSourceMapEntry indexed = entry;
+	const std::string macroKey = mrvmUpperKey(entry.macroName);
+	const std::string key = lineKey(entry.line);
+	const std::string bytecodeKey = std::to_string(entry.bytecodeOffset);
+
+	if (macroKey.empty() || entry.line <= 0) return;
+	indexed.macroName = macroKey;
+	if (!runtimeKv.findChild(byLine, key, existing)) writeSourceMapEntryHash(runtimeKv, runtimeKv.replaceChild(byLine, key), indexed);
+	if (!runtimeKv.findChild(byBytecode, bytecodeKey, existing)) writeSourceMapEntryHash(runtimeKv, runtimeKv.replaceChild(byBytecode, bytecodeKey), indexed);
+}
+
+void writeSourceLineIndexHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const std::vector<MRMacroSourceMapEntry> &entries) {
+	hashWriteInt(runtimeKv, hash, "version", 1);
+	for (const MRMacroSourceMapEntry &entry : entries)
+		writeSourceLineIndexEntry(runtimeKv, hash, entry);
+}
+
 void writeExecutionProfileHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MRMacroExecutionProfile &profile) {
 	hashWriteUint(runtimeKv, hash, "flags", profile.flags);
 	hashWriteUint(runtimeKv, hash, "opcodeCount", profile.opcodeCount);
@@ -242,11 +313,14 @@ void writeLoadedFileHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const Load
 	hashWriteString(runtimeKv, hash, "resolvedPath", file.resolvedPath);
 	hashWriteString(runtimeKv, hash, "bytecode", bytecodeToString(file.bytecode));
 	writeStringVectorHash(runtimeKv, runtimeKv.replaceChild(hash, "macroNames"), file.macroNames);
+	writeSourceMapHash(runtimeKv, runtimeKv.replaceChild(hash, "sourceMap"), file.sourceMap);
+	writeSourceLineIndexHash(runtimeKv, runtimeKv.replaceChild(hash, "sourceLineIndex"), file.sourceMap);
 	writeExecutionProfileHash(runtimeKv, runtimeKv.replaceChild(hash, "profile"), file.profile);
 }
 
 bool readLoadedFileHash(MRVMRuntimeKv &runtimeKv, const Value &hash, LoadedMacroFile &file) {
 	Value macroNames;
+	Value sourceMap;
 	Value profile;
 
 	file.fileKey = hashReadString(runtimeKv, hash, "fileKey");
@@ -254,6 +328,7 @@ bool readLoadedFileHash(MRVMRuntimeKv &runtimeKv, const Value &hash, LoadedMacro
 	file.resolvedPath = hashReadString(runtimeKv, hash, "resolvedPath");
 	file.bytecode = stringToBytecode(hashReadString(runtimeKv, hash, "bytecode"));
 	if (runtimeKv.findChild(hash, "macroNames", macroNames)) file.macroNames = readStringVectorHash(runtimeKv, macroNames);
+	if (runtimeKv.findChild(hash, "sourceMap", sourceMap)) file.sourceMap = readSourceMapHash(runtimeKv, sourceMap);
 	if (runtimeKv.findChild(hash, "profile", profile)) file.profile = readExecutionProfileHash(runtimeKv, profile);
 	return !file.fileKey.empty();
 }
@@ -274,6 +349,9 @@ bool findLoadedMacroHash(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, 
 } // namespace
 
 MacroRef::MacroRef() : entryOffset(0), fromMode(MACRO_MODE_EDIT), hasAssignedKey(false), firstRunPending(true), transientAttr(false), dumpAttr(false), permAttr(false), closureUnit(false), tickMs(0), scheduledConsumerId(0) {
+}
+
+MRMacroSourceMapEntry::MRMacroSourceMapEntry() : bytecodeOffset(0), sourceStartOffset(0), sourceEndOffset(0), line(0), column(0), macroName(), debuggableKind(0) {
 }
 
 IndexedBoundMacroEntry::IndexedBoundMacroEntry() {
@@ -341,6 +419,42 @@ bool mrvmRuntimeCatalogEraseLoadedMacro(MRVMRuntimeKv &runtimeKv, const std::str
 
 	if (macroKey.empty() || !findCatalogChildPath(runtimeKv, {"macros", "byName"}, macros)) return false;
 	return runtimeKv.eraseChild(macros, macroKey);
+}
+
+bool mrvmRuntimeCatalogFirstSourceMapSpanForLine(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, int line, MRMacroSourceMapEntry &entry) {
+	MacroRef macroRef;
+	Value fileHash;
+	Value sourceLineIndex;
+	Value byLine;
+	Value entryHash;
+	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
+
+	if (normalizedMacroKey.empty() || line <= 0) return false;
+	if (!mrvmRuntimeCatalogReadLoadedMacro(runtimeKv, normalizedMacroKey, macroRef)) return false;
+	if (!findLoadedFileHash(runtimeKv, macroRef.fileKey, fileHash)) return false;
+	if (!runtimeKv.findChild(fileHash, "sourceLineIndex", sourceLineIndex)) return false;
+	if (!runtimeKv.findChild(sourceLineIndex, "byLine", byLine)) return false;
+	if (!runtimeKv.findChild(byLine, lineKey(line), entryHash)) return false;
+	entry = readSourceMapEntryHash(runtimeKv, entryHash);
+	return entry.line > 0 && !entry.macroName.empty();
+}
+
+bool mrvmRuntimeCatalogSourceMapSpanForBytecodeOffset(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, std::size_t bytecodeOffset, MRMacroSourceMapEntry &entry) {
+	MacroRef macroRef;
+	Value fileHash;
+	Value sourceLineIndex;
+	Value byBytecode;
+	Value entryHash;
+	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
+
+	if (normalizedMacroKey.empty()) return false;
+	if (!mrvmRuntimeCatalogReadLoadedMacro(runtimeKv, normalizedMacroKey, macroRef)) return false;
+	if (!findLoadedFileHash(runtimeKv, macroRef.fileKey, fileHash)) return false;
+	if (!runtimeKv.findChild(fileHash, "sourceLineIndex", sourceLineIndex)) return false;
+	if (!runtimeKv.findChild(sourceLineIndex, "byBytecode", byBytecode)) return false;
+	if (!runtimeKv.findChild(byBytecode, std::to_string(bytecodeOffset), entryHash)) return false;
+	entry = readSourceMapEntryHash(runtimeKv, entryHash);
+	return entry.line > 0 && !entry.macroName.empty();
 }
 
 std::vector<std::string> mrvmRuntimeCatalogMacroOrder(MRVMRuntimeKv &runtimeKv) {

@@ -131,6 +131,12 @@ bool splitCommandTargetsSecondaryPane(ushort command) noexcept {
 		case cmMrOtherClearOutput:
 		case cmMrOtherFindNextCompilerError:
 		case cmMrOtherFindPreviousCompilerError:
+		case cmMrMacroDebuggerContinue:
+		case cmMrMacroDebuggerStep:
+		case cmMrMacroDebuggerStop:
+		case cmMrMacroDebuggerAddWatch:
+		case cmMrMacroDebuggerEraseWatch:
+		case cmMrMacroDebuggerRunHere:
 			return false;
 		default:
 			return true;
@@ -335,6 +341,38 @@ bool MRBentoBox::ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREdit
 	outputWindow = buildOutputPane();
 	problemsWindow = problemsPane();
 	return outputWindow != nullptr && problemsWindow != nullptr;
+}
+
+bool MRBentoBox::ensureMacroDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow) {
+	int outputLeaf = leafIdForRole(bprDebuggerOutput);
+
+	if (bentoMode == bbmDocumentViewports) {
+		bentoMode = bbmToolWorkspace;
+		for (BentoLeaf &leaf : leaves) {
+			leaf.spec = paneSpecForRole(leaf.role);
+			leaf.title = bentoPaneRoleTitle(leaf.role);
+			if (leaf.pane != nullptr) leaf.pane->setPaneSpec(leaf.spec, getEditor());
+		}
+	}
+	if (outputLeaf < 0) outputLeaf = splitLeafNode(0, bsoHorizontal, bprDebuggerOutput);
+	if (outputLeaf < 0) return false;
+
+	int variablesLeaf = leafIdForRole(bprVariables);
+	if (variablesLeaf < 0) variablesLeaf = splitLeafNode(outputLeaf, bsoVertical, bprVariables);
+	if (variablesLeaf < 0) return false;
+
+	int watchesLeaf = leafIdForRole(bprWatches);
+	if (watchesLeaf < 0) watchesLeaf = splitLeafNode(variablesLeaf, bsoHorizontal, bprWatches);
+	if (watchesLeaf < 0) return false;
+
+	secondaryPaneVisible = firstToolLeafId() >= 0;
+	setActivePane(outputLeaf);
+	layoutSplitPanes();
+	outputWindow = debuggerOutputPane();
+	variablesWindow = variablesPane();
+	watchesWindow = watchesPane();
+	if (!macroDebuggerVariables.empty()) refreshMacroDebuggerVariables(macroDebuggerVariables);
+	return outputWindow != nullptr && variablesWindow != nullptr && watchesWindow != nullptr;
 }
 
 void MRBentoBox::activatePrimaryPane() noexcept {
@@ -585,6 +623,7 @@ bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapsh
 		}
 	}
 
+	cancelMacroDebuggerValueInput();
 	for (BentoLeaf &leaf : leaves) {
 		if (leaf.pane != nullptr) {
 			remove(leaf.pane);
@@ -675,12 +714,14 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 }
 
 void MRBentoBox::close() {
+	cancelMacroDebuggerValueInput();
 	restoreFileCompareSources();
 	windowCloseInProgress = true;
 	MREditWindow::close();
 }
 
 void MRBentoBox::shutDown() {
+	cancelMacroDebuggerValueInput();
 	restoreFileCompareSources();
 	windowCloseInProgress = true;
 	MREditWindow::shutDown();
@@ -759,6 +800,14 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		flushBentoProjection();
 		return;
 	}
+	if (macroDebuggerValueInput != nullptr && event.what == evMouseDown && !macroDebuggerValueInputContains(event.mouse.where)) {
+		cancelMacroDebuggerValueInput();
+		clearEvent(event);
+		bentoProjectionDirty |= bpdContent | bpdChrome;
+		flushBentoProjection();
+		return;
+	}
+	if (handleMacroDebuggerFunctionKey(event)) return;
 	if (bentoMode == bbmFileCompare && event.what == evKeyDown && bentoRoleIsDiff(roleForLeaf(activeLeafId))) {
 		const bool nextChangeKey = event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) == 0;
 		const bool previousChangeKey = event.keyDown.keyCode == kbShiftF8 || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0);
@@ -847,6 +896,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		const bool clickProblem = problemsPaneActive && event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0;
 		const bool enterOutline = outlinePaneActive && event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter;
 		const bool clickOutline = outlinePaneActive && event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0;
+		const bool clickDebuggerVariable = activeRole == bprVariables && event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0;
 		if (mouseEvent && !pointInRect(localMouse, contentBounds(targetBounds))) {
 			if (targetPane != nullptr) targetPane->handleEvent(event);
 			if (bentoMode == bbmFileCompare && bentoRoleIsDiff(activeRole)) syncFileCompareLinkedPaneFrom(activeLeafId);
@@ -886,6 +936,12 @@ void MRBentoBox::handleEvent(TEvent &event) {
 				bentoProjectionDirty |= bpdScrollBar;
 			} else
 				targetPane->handleEvent(event);
+		}
+		if (clickDebuggerVariable && showMacroDebuggerValueInputAtCursor()) {
+			clearEvent(event);
+			bentoProjectionDirty |= bpdContent | bpdChrome;
+			flushBentoProjection();
+			return;
 		}
 		if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
 		if (clickProblem) {

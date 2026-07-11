@@ -301,6 +301,8 @@ void MRFileEditor::shareContentStateFrom(const MRFileEditor &source) {
 	else
 		clearPersistentFileName();
 	clearFindMarkerRanges();
+	clearDebuggerBreakpointRanges();
+	clearDebuggerInstructionLine();
 	clearDirtyRanges();
 	syncFromEditorState(false);
 }
@@ -308,6 +310,8 @@ void MRFileEditor::shareContentStateFrom(const MRFileEditor &source) {
 void MRFileEditor::detachContentStateCopy() {
 	mBufferModel.detachContentStateCopy();
 	clearFindMarkerRanges();
+	clearDebuggerBreakpointRanges();
+	clearDebuggerInstructionLine();
 	clearDirtyRanges();
 	syncFromEditorState(false);
 }
