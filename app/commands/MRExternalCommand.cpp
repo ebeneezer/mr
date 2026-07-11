@@ -93,6 +93,21 @@ std::string sourceStemForPath(const std::string &sourcePath) {
 	return std::filesystem::path(sourcePath).stem().string();
 }
 
+std::string gambasProjectDirectoryForSource(const std::string &sourcePath) {
+	std::error_code error;
+	std::filesystem::path projectDirectory = std::filesystem::path(sourcePath).parent_path();
+
+	if (projectDirectory.empty()) projectDirectory = ".";
+	for (;;) {
+		if (std::filesystem::is_regular_file(projectDirectory / ".project", error)) return projectDirectory.string();
+		if (error) error.clear();
+		const std::filesystem::path parentDirectory = projectDirectory.parent_path();
+		if (parentDirectory.empty() || parentDirectory == projectDirectory) break;
+		projectDirectory = parentDirectory;
+	}
+	return std::string();
+}
+
 bool pathIsDirectory(const std::string &path) {
 	std::error_code error;
 
@@ -195,7 +210,13 @@ MRBuildHookContext buildCompilerProfileHookContext(const MRCompilerProfile &prof
 	context.sourceDir = directoryPathForSource(source);
 	context.sourceFile = fileNameForSource(source);
 	context.sourceStem = sourceStemForPath(source);
-	context.outputPath = profile.toolchain == "LATEXMK" || profile.toolchain == "LATEX" ? latexPdfOutputPathForSource(source) : compilerOutputPathForSource(source);
+	if (profile.toolchain == "LATEXMK" || profile.toolchain == "LATEX")
+		context.outputPath = latexPdfOutputPathForSource(source);
+	else if (profile.toolchain == "GAMBAS") {
+		context.outputPath = gambasProjectDirectoryForSource(source);
+		if (context.outputPath.empty()) context.outputPath = context.sourceDir;
+	} else
+		context.outputPath = compilerOutputPathForSource(source);
 	context.pdfPath = latexPdfOutputPathForSource(source);
 	context.profileId = profile.id;
 	context.profileName = profile.name;
@@ -245,11 +266,19 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	MRBuildHookContext context = buildCompilerProfileHookContext(profile, sourcePath);
 	std::ostringstream command;
 	std::string buildCommand;
+	std::string compilerWorkingDirectory;
 
 	commandLine.clear();
 	if (source.empty()) return setError(errorMessage, "No source file selected for build.");
 	if (profile.executablePath.empty()) return setError(errorMessage, "Compiler profile has no executable path.");
-	if (toolchain != "GCC" && toolchain != "CLANG" && toolchain != "SWIFT" && toolchain != "LATEXMK" && toolchain != "LATEX") return setError(errorMessage, "Build current file currently supports GCC, CLANG, SWIFT, LATEXMK and LATEX compiler profiles.");
+	if (toolchain != "GCC" && toolchain != "CLANG" && toolchain != "SWIFT" && toolchain != "FREEBASIC" && toolchain != "QB64PE" && toolchain != "GAMBAS" && toolchain != "LATEXMK" && toolchain != "LATEX") return setError(errorMessage, "Build current file currently supports GCC, CLANG, SWIFT, FREEBASIC, QB64PE, GAMBAS, LATEXMK and LATEX compiler profiles.");
+	if (toolchain == "QB64PE") {
+		std::error_code error;
+		const std::filesystem::path compilerPath = std::filesystem::canonical(profile.executablePath, error);
+		if (error || compilerPath.parent_path().empty() || !std::filesystem::is_directory(compilerPath.parent_path() / "internal", error))
+			return setError(errorMessage, "QB64-PE compiler installation is incomplete.");
+		compilerWorkingDirectory = compilerPath.parent_path().string();
+	}
 
 	command << shellQuote(profile.executablePath);
 	if (!profile.buildFlags.empty()) command << ' ' << profile.buildFlags;
@@ -265,17 +294,28 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
+	if (toolchain == "GAMBAS") {
+		const std::string projectDirectory = gambasProjectDirectoryForSource(source);
+		if (projectDirectory.empty()) return setError(errorMessage, "Gambas source must be inside a project directory containing .project.");
+		command << ' ' << shellQuote(projectDirectory);
+		commandLine = wrapBuildCommandWithProfileHooks(profile, command.str(), context);
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
 	for (const std::string &path : profile.includePaths)
-		if (!path.empty()) command << " -I" << shellQuote(path);
+		if (!path.empty()) command << (toolchain == "FREEBASIC" ? " -i" : " -I") << shellQuote(path);
 	for (const std::string &path : profile.libraryPaths)
-		if (!path.empty()) command << " -L" << shellQuote(path);
+		if (!path.empty()) command << (toolchain == "FREEBASIC" ? " -p" : " -L") << shellQuote(path);
 	if (toolchain == "SWIFT")
 		for (const std::string &path : profile.runtimePaths)
 			if (!path.empty() && pathIsDirectory(path)) command << " -Xlinker -rpath -Xlinker " << shellQuote(path);
 	command << ' ' << shellQuote(source);
-	command << " -o " << shellQuote(compilerOutputPathForSource(source));
+	if (toolchain == "FREEBASIC") command << " -x " << shellQuote(compilerOutputPathForSource(source));
+	else
+		command << " -o " << shellQuote(compilerOutputPathForSource(source));
 
 	buildCommand = command.str();
+	if (!compilerWorkingDirectory.empty()) buildCommand = "cd " + shellQuote(compilerWorkingDirectory) + " && " + buildCommand;
 	commandLine = wrapBuildCommandWithProfileHooks(profile, buildCommand, context);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;

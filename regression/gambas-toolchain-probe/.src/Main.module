@@ -1,0 +1,3 @@
+Public Sub Main()
+  Print "Gambas toolchain probe"
+End

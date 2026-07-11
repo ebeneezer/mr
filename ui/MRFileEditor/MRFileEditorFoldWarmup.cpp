@@ -1,4 +1,5 @@
 #include "MRFileEditor.hpp"
+#include "../MRSyntaxBasic.hpp"
 #include "../../outline/MROutlineFoldProducer.hpp"
 
 #include <algorithm>
@@ -27,7 +28,7 @@ bool isIndentWhitespace(char ch) noexcept {
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
 	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Latex || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
-	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Xml;
+	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Basic || language == MRSyntaxLanguage::Xml;
 }
 
 static constexpr auto kLargeFileViewportWarmupDebounce = std::chrono::milliseconds(180);
@@ -1310,6 +1311,7 @@ struct MRFoldOpenBlock {
 
 struct MRFoldScanOutput {
 	std::vector<MRFoldSpan> spans;
+	std::vector<MRFoldGutterBranch> branches;
 	int visibleMaxLevel = 1;
 };
 
@@ -1320,14 +1322,15 @@ struct MRFoldWarmupPayload final : mr::coprocessor::Payload {
 	int visibleGutterColumns;
 	std::vector<std::string> lineTexts;
 	std::vector<MRFoldSpan> spans;
+	std::vector<MRFoldGutterBranch> branches;
 
-	MRFoldWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), scanTopLine(0), scanBottomLine(0), visibleGutterColumns(1), lineTexts(), spans() {
+	MRFoldWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), scanTopLine(0), scanBottomLine(0), visibleGutterColumns(1), lineTexts(), spans(), branches() {
 	}
 
 	MRFoldWarmupPayload(MRSyntaxLanguage aLanguage, std::size_t aScanTopLine, std::size_t aScanBottomLine, int aVisibleGutterColumns, std::vector<std::string> aLineTexts,
-	                   std::vector<MRFoldSpan> aSpans)
+	                   std::vector<MRFoldSpan> aSpans, std::vector<MRFoldGutterBranch> aBranches)
 	    : language(aLanguage), scanTopLine(aScanTopLine), scanBottomLine(aScanBottomLine), visibleGutterColumns(std::max(1, aVisibleGutterColumns)), lineTexts(std::move(aLineTexts)),
-	      spans(std::move(aSpans)) {
+	      spans(std::move(aSpans)), branches(std::move(aBranches)) {
 	}
 };
 
@@ -1644,6 +1647,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const bool pascalEndLead = language == MRSyntaxLanguage::Pascal && isPascalEndLead(upperLine);
 		const bool pascalUntilLead = language == MRSyntaxLanguage::Pascal && isPascalUntilLead(upperLine);
 		const int pascalBlockKind = language == MRSyntaxLanguage::Pascal ? pascalIndentBlockKind(upperLine) : kPascalBlockNone;
+		const MRBasicBlockLine basicLine = language == MRSyntaxLanguage::Basic ? mrBasicClassifyBlockLine(trimmed) : MRBasicBlockLine {MRBasicBlockKind::None, MRBasicBlockDisposition::None};
 		std::string_view xmlLeadingOpenTagName;
 		const bool xmlLeadingOpenTag = language == MRSyntaxLanguage::Xml && parseXmlLeadingOpenTag(trimmed, xmlLeadingOpenTagName);
 		std::string_view xmlLeadingCloseTagName;
@@ -1871,6 +1875,44 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			}
 			openSiblingContinuation = true;
 		}
+		if (language == MRSyntaxLanguage::Basic && basicLine.disposition == MRBasicBlockDisposition::Continue) {
+			bool selectParentOpen = false;
+
+			if (basicLine.kind == MRBasicBlockKind::Select)
+				for (std::size_t index = openBlocks.size(); index-- > 0;)
+					if (openBlocks[index].languageBlockKind == static_cast<int>(MRBasicBlockKind::Select)) {
+						selectParentOpen = true;
+						break;
+					}
+			if (selectParentOpen) {
+				while (!openBlocks.empty()) {
+					const MRFoldOpenBlock &block = openBlocks.back();
+
+					if (block.languageBlockKind == static_cast<int>(MRBasicBlockKind::Select)) break;
+					appendVisibleSpan(block, lineIndex - 1);
+					openBlocks.pop_back();
+				}
+				if (!openBlocks.empty()) output.branches.push_back(MRFoldGutterBranch(lineIndex, openBlocks.back().level));
+			} else {
+				while (!openBlocks.empty()) {
+					const MRFoldOpenBlock &block = openBlocks.back();
+					appendVisibleSpan(block, lineIndex - 1);
+					const int closedKind = block.languageBlockKind;
+					openBlocks.pop_back();
+					if (closedKind == static_cast<int>(basicLine.kind)) break;
+				}
+				openSiblingContinuation = true;
+			}
+		}
+		if (language == MRSyntaxLanguage::Basic && basicLine.disposition == MRBasicBlockDisposition::Close) {
+			while (!openBlocks.empty()) {
+				const MRFoldOpenBlock &block = openBlocks.back();
+				appendVisibleSpan(block, block.languageBlockKind == static_cast<int>(basicLine.kind) ? lineIndex : lineIndex - 1);
+				const int closedKind = block.languageBlockKind;
+				openBlocks.pop_back();
+				if (closedKind == static_cast<int>(basicLine.kind)) break;
+			}
+		}
 		if (language == MRSyntaxLanguage::Xml && xmlLeadingCloseTag && !openBlocks.empty() && openBlocks.back().languageBlockKind == kXmlTagBlock &&
 		    openBlocks.back().xmlTagName == xmlLeadingCloseTagName) {
 			appendVisibleSpan(openBlocks.back(), lineIndex);
@@ -1976,7 +2018,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 						} else if (pascalEndLead && block.languageBlockKind != kPascalBlockRepeat) {
 							closeBlock = true;
 						}
-					} else if (language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Xml && currentIndent <= block.indent) {
+					} else if (language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Xml && language != MRSyntaxLanguage::Basic && currentIndent <= block.indent) {
 						closeBlock = true;
 						endLine = lineIndex - 1;
 					}
@@ -2095,6 +2137,13 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				else if (pascalBlockKind == kPascalBlockTry)
 					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kPascalBlockTry, std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
 				break;
+			case MRSyntaxLanguage::Basic:
+				if (basicLine.disposition == MRBasicBlockDisposition::Open)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, static_cast<int>(basicLine.kind), std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
+				else if (basicLine.disposition == MRBasicBlockDisposition::Continue && basicLine.kind != MRBasicBlockKind::Select)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0,
+					          static_cast<int>(basicLine.kind), std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
+				break;
 			case MRSyntaxLanguage::Xml:
 				if (xmlLeadingOpenTag)
 					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kXmlTagBlock, std::numeric_limits<std::size_t>::max(), openSiblingContinuation, xmlLeadingOpenTagName);
@@ -2180,6 +2229,8 @@ std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage l
 			else if (lineIndex > span.startLine && lineIndex < span.endLine)
 				gutter[span.level] = "\xE2\x94\x82";
 		}
+		for (const MRFoldGutterBranch &branch : scan.branches)
+			if (lineIndex == branch.line && branch.level < gutter.size()) gutter[branch.level] = "\xE2\x94\x9C";
 		char lineNumber[32];
 		std::snprintf(lineNumber, sizeof(lineNumber), "%6zu", lineIndex + 1);
 		output.append(lineNumber);
@@ -2251,6 +2302,7 @@ bool MRFileEditor::applyFoldWarmup(const mr::coprocessor::Payload &payload, std:
 	if (mBufferModel.language() != foldWarmup->language) return false;
 
 	visibleState.spans = foldWarmup->spans;
+	visibleState.branches = foldWarmup->branches;
 	visibleState.documentId = mBufferModel.documentId();
 	visibleState.version = expectedVersion;
 	visibleState.topLine = foldWarmup->scanTopLine;
@@ -2343,7 +2395,7 @@ void MRFileEditor::scheduleFoldWarmupIfNeeded(std::size_t scanTopLine, std::size
 		    const std::size_t actualBottomLine = scanTopLine + lineTexts.size();
 		    MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, scanTopLine, topLine, requestBottomLine, language, closedFoldSpans);
 		    result.status = mr::coprocessor::TaskStatus::Completed;
-		    result.payload = std::make_shared<MRFoldWarmupPayload>(language, scanTopLine, actualBottomLine, scan.visibleMaxLevel, std::move(lineTexts), std::move(scan.spans));
+		    result.payload = std::make_shared<MRFoldWarmupPayload>(language, scanTopLine, actualBottomLine, scan.visibleMaxLevel, std::move(lineTexts), std::move(scan.spans), std::move(scan.branches));
 		    return result;
 	    });
 	if (shouldTraceLargeFileWarmupDiagnostics()) {

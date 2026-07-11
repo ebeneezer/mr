@@ -104,6 +104,9 @@ REGRESSION_PROBE_SOURCE = regression/mr-regression-checks.cpp
 REGRESSION_PROBE_OBJECT = regression/mr-regression-checks.o
 MACRO_DEBUGGER_CROSS_SECTION_PROBE_SOURCE = regression/MRMacroDebuggerCrossSectionProbe.cpp
 MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT = regression/MRMacroDebuggerCrossSectionProbe.o
+BASIC_LANGUAGE_PROBE_TARGET = regression/mr_basic_language_probe
+BASIC_LANGUAGE_PROBE_SOURCE = regression/MRBasicLanguageProbe.cpp
+BASIC_LANGUAGE_PROBE_OBJECT = regression/MRBasicLanguageProbe.o
 MRFE_BLOCK_OPS_HARNESS_SOURCE = ui/MRFileEditor/MRFEBlockOpsTestHarness.cpp
 MRFE_BLOCK_OPS_HARNESS_OBJECT = ui/MRFileEditor/MRFEBlockOpsTestHarness.o
 PHASE1_REPRO_PROBE_TARGET = misc/mr_phase1_repro_probe
@@ -251,6 +254,8 @@ CXX_SOURCES = \
 	ui/MRPalette.cpp \
 	ui/MRWindowSupport.cpp \
 	ui/MRSyntax.cpp \
+	ui/MRSyntaxBasic.cpp \
+	ui/MRSyntaxBasicBlocks.cpp \
 	ui/syntax/MRSyntaxClassification.cpp \
 	ui/syntax/MRSyntaxMetadata.cpp \
 	coprocessor/MRCoprocessor.cpp \
@@ -270,7 +275,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full basic-language-probe mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -287,6 +292,7 @@ mrindenttrainer: $(MRINDENTTRAINER_TARGET)
 mroutlinetrainer: $(MROUTLINETRAINER_TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
+basic-language-probe: $(BASIC_LANGUAGE_PROBE_TARGET)
 phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
 workspace-service-context-probe: $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
@@ -504,14 +510,14 @@ ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor
 ui/MRFileEditor/MRFileEditorClipboard.o: ui/MRFileEditor/MRFileEditorClipboard.cpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorSave.o: ui/MRFileEditor/MRFileEditorSave.cpp ui/MRFileEditor/MRFileEditor.hpp config/settings/MRSettingsStorage.hpp
 ui/MRFileEditor/MRFileEditorMarkers.o: ui/MRFileEditor/MRFileEditorMarkers.cpp ui/MRFileEditor/MRFileEditor.hpp
-ui/MRFileEditor/MRFileEditorFoldWarmup.o: ui/MRFileEditor/MRFileEditorFoldWarmup.cpp ui/MRFileEditor/MRFileEditor.hpp outline/MROutlineFoldProducer.hpp
+ui/MRFileEditor/MRFileEditorFoldWarmup.o: ui/MRFileEditor/MRFileEditorFoldWarmup.cpp ui/MRFileEditor/MRFileEditor.hpp outline/MROutlineFoldProducer.hpp ui/MRSyntaxBasic.hpp
 ui/MRFileEditor/MRFileEditorNavigation.o: ui/MRFileEditor/MRFileEditorNavigation.cpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorFormatting.o: ui/MRFileEditor/MRFileEditorFormatting.cpp ui/MRFileEditor/MRFileEditor.hpp config/settings/MRSettingsStorage.hpp
 ui/MRFileEditor/MRFileEditorTextEditing.o: ui/MRFileEditor/MRFileEditorTextEditing.cpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorEvents.o: ui/MRFileEditor/MRFileEditorEvents.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp app/MREditorApp.hpp
 ui/MRFileEditor/MRFileEditorViewState.o: ui/MRFileEditor/MRFileEditorViewState.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp
 ui/MRFileEditor/MRFEBlockOps.o: ui/MRFileEditor/MRFEBlockOps.cpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRFileEditor.hpp
-ui/MRFileEditor/MRFileEditorIndent.o: ui/MRFileEditor/MRFileEditorIndent.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp
+ui/MRFileEditor/MRFileEditorIndent.o: ui/MRFileEditor/MRFileEditorIndent.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp ui/MRSyntaxBasic.hpp
 ui/MRFileEditor/MRFileEditorWarmup.o: ui/MRFileEditor/MRFileEditorWarmup.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp
 ui/MRFileEditor/MRFileEditorViewport.o: ui/MRFileEditor/MRFileEditorViewport.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp
 ui/MRFileEditor/MRMiniMap.o: ui/MRFileEditor/MRMiniMap.cpp ui/MRFileEditor/MRMiniMap.hpp piecetable/MRTextDocument.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp
@@ -565,19 +571,22 @@ ui/MRBentoBoxPaneWindow.o: ui/MRBentoBoxPaneWindow.cpp ui/MRBentoBox.hpp ui/MREd
 ui/MRBentoBoxProjection.o: ui/MRBentoBoxProjection.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRSidekickEditor.hpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRDropList.hpp
 ui/widgets/MRColumnListView.o: ui/widgets/MRColumnListView.cpp ui/widgets/MRColumnListView.hpp config/settings/MRSettingsRuntime.hpp
 ui/widgets/MRDropList.o: ui/widgets/MRDropList.cpp ui/widgets/MRDropList.hpp ui/widgets/MRColumnListView.hpp dialogs/setup/MRSetupCommon.hpp
-outline/MROutlineFoldProducer.o: outline/MROutlineFoldProducer.cpp outline/MROutlineFoldProducer.hpp outline/MROutlineModel.hpp derivedstate/MRFoldingDerivedState.hpp ui/MRSyntax.hpp ui/MRTextBufferModel.hpp app/utils/MRStringUtils.hpp
+outline/MROutlineFoldProducer.o: outline/MROutlineFoldProducer.cpp outline/MROutlineFoldProducer.hpp outline/MROutlineModel.hpp derivedstate/MRFoldingDerivedState.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp ui/MRTextBufferModel.hpp app/utils/MRStringUtils.hpp
 ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
+ui/MRSyntaxBasic.o: ui/MRSyntaxBasic.cpp ui/MRSyntax.hpp
+ui/MRSyntaxBasicBlocks.o: ui/MRSyntaxBasicBlocks.cpp ui/MRSyntaxBasic.hpp
 ui/MRSidekickEditor.o: ui/MRSidekickEditor.cpp ui/MRSidekickEditor.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp
 coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp diff/MRDiff.hpp
 diff/MRMyersDiff.o: diff/MRMyersDiff.cpp diff/MRDiff.hpp
 piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp piecetable/MRTextDocumentLineIndex.hpp
 piecetable/MRTextDocumentLineIndex.o: piecetable/MRTextDocumentLineIndex.cpp piecetable/MRTextDocumentLineIndex.hpp piecetable/MRTextDocument.hpp
 $(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
-$(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsRuntime.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
+$(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsRuntime.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp
 $(MROUTLINETRAINER_OBJECT): $(MROUTLINETRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(REGRESSION_PROBE_OBJECT): $(REGRESSION_PROBE_SOURCE) app/MRExecSessionStatus.hpp app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRVM.hpp piecetable/MRTextDocument.hpp
 $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT): $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_SOURCE) mrmac/MRMacroExecutionSession.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMRuntimeDebugger.hpp
+$(BASIC_LANGUAGE_PROBE_OBJECT): $(BASIC_LANGUAGE_PROBE_SOURCE) app/commands/MRExternalCommand.hpp config/settings/MRSettingsCompilerProfiles.hpp config/settings/MRSettingsRuntime.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp
 app/services/MRWorkspaceServiceContext.o: app/services/MRWorkspaceServiceContext.cpp app/services/MRWorkspaceServiceContext.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT): $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE) app/services/MRWorkspaceServiceContext.hpp
 # 3. Linker call
@@ -601,6 +610,9 @@ $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $
 $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
+$(BASIC_LANGUAGE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(BASIC_LANGUAGE_PROBE_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
 $(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(PHASE1_REPRO_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
@@ -622,6 +634,7 @@ clean:
 		$(MROUTLINETRAINER_OBJECT) $(MROUTLINETRAINER_TARGET) \
 		$(STAGE_PROFILE_PROBE_TARGET) \
 		$(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) \
+		$(BASIC_LANGUAGE_PROBE_OBJECT) $(BASIC_LANGUAGE_PROBE_TARGET) \
 		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
 		$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \

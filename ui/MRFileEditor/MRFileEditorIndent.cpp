@@ -1,4 +1,5 @@
 #include "MRFileEditor.hpp"
+#include "../MRSyntaxBasic.hpp"
 #include "../MREditWindow.hpp"
 #include "../../app/MREditorApp.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
@@ -1081,6 +1082,7 @@ enum class SmartDedentKind {
 	PascalTry,
 	PascalEnd,
 	PascalRepeat,
+	Basic,
 	XmlTag,
 	LatexEnvironment,
 	CLikeElse,
@@ -1091,6 +1093,7 @@ struct SmartDedentRequest {
 	SmartDedentKind kind = SmartDedentKind::None;
 	char closer = 0;
 	std::string_view tagName;
+	MRBasicBlockKind basicBlock = MRBasicBlockKind::None;
 };
 
 SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntaxLanguage language) noexcept {
@@ -1131,6 +1134,12 @@ SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntax
 			if (isPascalUntilLead(normalizedUpper)) return {SmartDedentKind::PascalRepeat, 0};
 			if (isPascalEndLead(normalizedUpper)) return {SmartDedentKind::PascalEnd, 0};
 			break;
+		case MRSyntaxLanguage::Basic: {
+			const MRBasicBlockLine basicLine = mrBasicClassifyBlockLine(normalizedTrimmed);
+			if (basicLine.disposition == MRBasicBlockDisposition::Continue || basicLine.disposition == MRBasicBlockDisposition::Close)
+				return {SmartDedentKind::Basic, 0, std::string_view(), basicLine.kind};
+			break;
+		}
 		case MRSyntaxLanguage::Xml: {
 			std::string_view tagName;
 			if (parseXmlLeadingCloseTag(normalizedTrimmed, tagName)) return {SmartDedentKind::XmlTag, 0, tagName};
@@ -1213,6 +1222,8 @@ bool isDedentSearchSkippableLine(std::string_view trimmed, MRSyntaxLanguage lang
 			return isCSharpCommentLikeLine(trimmed) || trimmed.starts_with("#");
 		case MRSyntaxLanguage::Pascal:
 			return isPascalCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Basic:
+			return mrBasicLineIsComment(trimmed);
 		case MRSyntaxLanguage::Systemd:
 			return isSystemdCommentLine(trimmed);
 		case MRSyntaxLanguage::Xml:
@@ -1279,6 +1290,11 @@ bool matchesSmartDedentAnchor(std::string_view trimmed, std::string_view upperLi
 			        isPascalFinallyLead(normalizedUpper));
 		case SmartDedentKind::PascalRepeat:
 			return language == MRSyntaxLanguage::Pascal && isPascalRepeatLead(normalizedUpper);
+		case SmartDedentKind::Basic: {
+			const MRBasicBlockLine basicLine = mrBasicClassifyBlockLine(trimmed);
+			return language == MRSyntaxLanguage::Basic && basicLine.kind == request.basicBlock &&
+			       (basicLine.disposition == MRBasicBlockDisposition::Open || basicLine.disposition == MRBasicBlockDisposition::Continue);
+		}
 		case SmartDedentKind::XmlTag: {
 			std::string_view tagName;
 			return language == MRSyntaxLanguage::Xml && parseXmlLeadingOpenTag(trimmed, tagName) && tagName == request.tagName;
@@ -1960,6 +1976,10 @@ int MRFileEditor::smartIndentTargetColumnForContext(std::size_t lineStart, std::
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		if (pascalIndentBlockKind(upperLine) != kPascalBlockNone)
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Basic) {
+		const MRBasicBlockLine basicLine = mrBasicClassifyBlockLine(trimmedBeforeCursor);
+		if (basicLine.disposition == MRBasicBlockDisposition::Open || basicLine.disposition == MRBasicBlockDisposition::Continue)
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Make) {
 		if (isMakeTargetLine(trimmedBeforeCursor) || isMakeDirectiveFoldStart(trimmedBeforeCursor))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
@@ -2006,7 +2026,7 @@ int MRFileEditor::smartDedentTargetColumnForLine(std::size_t lineStart, int base
 	if (language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp && language != MRSyntaxLanguage::JavaScript && language != MRSyntaxLanguage::Json && language != MRSyntaxLanguage::Python &&
 	    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Fish && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
 	    language != MRSyntaxLanguage::Rust && language != MRSyntaxLanguage::Go && language != MRSyntaxLanguage::Kotlin && language != MRSyntaxLanguage::CSharp &&
-	    language != MRSyntaxLanguage::Pascal && language != MRSyntaxLanguage::Systemd &&
+	    language != MRSyntaxLanguage::Pascal && language != MRSyntaxLanguage::Basic && language != MRSyntaxLanguage::Systemd &&
 	    language != MRSyntaxLanguage::Xml && language != MRSyntaxLanguage::Latex)
 		return 0;
 	if (baseColumn <= 1) return 0;

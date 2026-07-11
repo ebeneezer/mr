@@ -30,7 +30,8 @@ enum class MRSyntaxLanguage : unsigned char {
 	MRMAC,
 	Make,
 	Markdown,
-	Latex
+	Latex,
+	Basic
 };
 
 enum class MRSyntaxToken : unsigned char {
@@ -203,6 +204,11 @@ class MRCSharpSyntaxHighlighter final : public MRSyntaxHighlighter {
 };
 
 class MRPascalSyntaxHighlighter final : public MRSyntaxHighlighter {
+  public:
+	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
+};
+
+class MRBasicSyntaxHighlighter final : public MRSyntaxHighlighter {
   public:
 	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
 };

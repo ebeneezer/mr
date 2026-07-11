@@ -920,9 +920,9 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		if (normalized.empty()) normalized = "NONE";
 		if (normalized != "NONE" && normalized != "AUTO" && normalized != "C" && normalized != "CPP" && normalized != "PYTHON" && normalized != "JAVASCRIPT" && normalized != "TYPESCRIPT" && normalized != "TSX" &&
 			normalized != "BASH" && normalized != "ZSH" && normalized != "FISH" && normalized != "JSON" && normalized != "YAML" && normalized != "XML" && normalized != "PERL" && normalized != "SWIFT" &&
-			normalized != "RUST" && normalized != "GO" && normalized != "PASCAL" && normalized != "SYSTEMD" && normalized != "MAKE" && normalized != "MRMAC" && normalized != "MARKDOWN" && normalized != "LATEX" &&
+			normalized != "RUST" && normalized != "GO" && normalized != "PASCAL" && normalized != "BASIC" && normalized != "SYSTEMD" && normalized != "MAKE" && normalized != "MRMAC" && normalized != "MARKDOWN" && normalized != "LATEX" &&
 			normalized != "KOTLIN" && normalized != "CSHARP")
-			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, SYSTEMD, MAKE, MRMAC, MARKDOWN, LATEX, KOTLIN or CSHARP.");
+			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, BASIC, SYSTEMD, MAKE, MRMAC, MARKDOWN, LATEX, KOTLIN or CSHARP.");
 		current.codeLanguage = normalized;
 	} else if (upperKeyName == "CODE_COLORING") {
 		if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
@@ -1417,9 +1417,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (codeLanguage.empty()) codeLanguage = "NONE";
 	if (codeLanguage != "NONE" && codeLanguage != "AUTO" && codeLanguage != "C" && codeLanguage != "CPP" && codeLanguage != "PYTHON" && codeLanguage != "JAVASCRIPT" && codeLanguage != "TYPESCRIPT" && codeLanguage != "TSX" &&
 		codeLanguage != "BASH" && codeLanguage != "ZSH" && codeLanguage != "FISH" && codeLanguage != "JSON" && codeLanguage != "YAML" && codeLanguage != "XML" && codeLanguage != "PERL" && codeLanguage != "SWIFT" &&
-		codeLanguage != "RUST" && codeLanguage != "GO" && codeLanguage != "PASCAL" && codeLanguage != "SYSTEMD" && codeLanguage != "MAKE" && codeLanguage != "MRMAC" && codeLanguage != "MARKDOWN" &&
+		codeLanguage != "RUST" && codeLanguage != "GO" && codeLanguage != "PASCAL" && codeLanguage != "BASIC" && codeLanguage != "SYSTEMD" && codeLanguage != "MAKE" && codeLanguage != "MRMAC" && codeLanguage != "MARKDOWN" &&
 		codeLanguage != "LATEX" && codeLanguage != "KOTLIN" && codeLanguage != "CSHARP")
-		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, SYSTEMD, MAKE, MRMAC, MARKDOWN, LATEX, KOTLIN or CSHARP.");
+		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, BASIC, SYSTEMD, MAKE, MRMAC, MARKDOWN, LATEX, KOTLIN or CSHARP.");
 	if (fileType.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
 	if (lineNumbersPosition.empty()) lineNumbersPosition = settings.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
 	if (miniMapPosition.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");

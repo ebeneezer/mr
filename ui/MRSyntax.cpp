@@ -4821,6 +4821,10 @@ MRSyntaxLineResult tmrHighlightTextLine(MRSyntaxLanguage language, std::string_v
 			MRPascalSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
+		case MRSyntaxLanguage::Basic: {
+			MRBasicSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
 		case MRSyntaxLanguage::Systemd: {
 			MRSystemdSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);

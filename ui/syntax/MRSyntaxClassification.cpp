@@ -41,7 +41,7 @@ bool hasSystemdUnitSuffix(std::string_view lowerName) noexcept {
 	return false;
 }
 
-constexpr std::size_t kSyntaxLanguageCount = static_cast<std::size_t>(MRSyntaxLanguage::Latex) + 1;
+constexpr std::size_t kSyntaxLanguageCount = static_cast<std::size_t>(MRSyntaxLanguage::Basic) + 1;
 
 std::size_t syntaxLanguageIndex(MRSyntaxLanguage language) noexcept {
 	return static_cast<std::size_t>(language);
@@ -328,6 +328,7 @@ MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::str
 	if (ext == ".kt" || ext == ".kts") return MRSyntaxLanguage::Kotlin;
 	if (ext == ".cs" || ext == ".csx" || ext == ".cake") return MRSyntaxLanguage::CSharp;
 	if (ext == ".pas" || ext == ".pp" || ext == ".lpr" || ext == ".dpr") return MRSyntaxLanguage::Pascal;
+	if (ext == ".bas" || ext == ".bi" || ext == ".bm" || ext == ".qb" || ext == ".qbas" || ext == ".module" || ext == ".class") return MRSyntaxLanguage::Basic;
 	if (ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" || ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" ||
 	    ext == ".swap" || ext == ".device" || ext == ".link" || ext == ".netdev" || ext == ".network" || hasSystemdUnitSuffix(lowerName))
 		return MRSyntaxLanguage::Systemd;
@@ -351,6 +352,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const bool forceKotlinLanguageByExtension = ext == ".kt" || ext == ".kts";
 	const bool forceCSharpLanguageByExtension = ext == ".cs" || ext == ".csx" || ext == ".cake";
 	const bool forcePascalLanguageByExtension = ext == ".pas" || ext == ".pp" || ext == ".lpr" || ext == ".dpr";
+	const bool forceBasicLanguageByExtension = ext == ".bas" || ext == ".bi" || ext == ".bm" || ext == ".qb" || ext == ".qbas" || ext == ".module" || ext == ".class";
 	const bool forceLatexLanguageByExtension = ext == ".tex" || ext == ".ltx" || ext == ".sty" || ext == ".cls";
 	const std::string_view sample = classificationSample(text);
 	const std::string lowerSample = lowerCopyView(sample);
@@ -367,6 +369,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (forceKotlinLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Kotlin, 100);
 	if (forceCSharpLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::CSharp, 100);
 	if (forcePascalLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Pascal, 100);
+	if (forceBasicLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Basic, 100);
 	if (forceLatexLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Latex, 100);
 
 	const int includeLines = countLinePrefixMatches(lower, "#include", 8);
@@ -429,6 +432,11 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int latexDocumentLines = countMatches(lower, "\\documentclass", 4) + countMatches(lower, "\\begin{document}", 4) + countMatches(lower, "\\end{document}", 4);
 	const int latexSectionLines = countMatches(lower, "\\section", 12) + countMatches(lower, "\\subsection", 12) + countMatches(lower, "\\chapter", 8) + countMatches(lower, "\\part", 8);
 	const int latexEnvironmentLines = countMatches(lower, "\\begin{", 16) + countMatches(lower, "\\end{", 16);
+	const int basicOptionLines = countLinePrefixMatches(lower, "option ", 8);
+	const int basicProcedureLines = countLinePrefixMatches(lower, "sub ", 12) + countLinePrefixMatches(lower, "function ", 12) + countLinePrefixMatches(lower, "public sub ", 12) +
+	                                countLinePrefixMatches(lower, "private sub ", 12);
+	const int basicBlockLines = countLinePrefixMatches(lower, "end sub", 12) + countLinePrefixMatches(lower, "end function", 12) + countLinePrefixMatches(lower, "end if", 12) +
+	                            countLinePrefixMatches(lower, "end select", 12) + countLinePrefixMatches(lower, "select case", 12);
 	const int semicolonCount = countCharacter(sample, ';', 32);
 	const int braceCount = countCharacter(sample, '{', 32) + countCharacter(sample, '}', 32);
 	const int shellControlCount = countMatches(lower, "[[", 12) + countMatches(lower, "case ", 8) + countMatches(lower, "typeset ", 8) + countMatches(lower, "autoload ", 8) + countMatches(lower, "setopt ", 8);
@@ -681,6 +689,13 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (ext == ".cs" || ext == ".csx" || ext == ".cake") strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::CSharp)] += 2;
 	if (csharpTypeLines + csharpNamespaceLines > 0)
 		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::CSharp)] += std::min(4, csharpTypeLines + csharpNamespaceLines);
+
+	addClassificationScore(scores, MRSyntaxLanguage::Basic, basicOptionLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Basic, basicProcedureLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Basic, basicBlockLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Basic, countLinePrefixMatches(lower, "rem ", 8) * 3);
+	if (basicOptionLines + basicProcedureLines + basicBlockLines > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Basic)] += std::min(4, basicOptionLines + basicProcedureLines + basicBlockLines);
 
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "$macro", 8) * 5);
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "$macro_file", 8) * 5);

@@ -38,6 +38,17 @@ struct MRFoldSpan {
 	}
 };
 
+struct MRFoldGutterBranch {
+	std::size_t line;
+	unsigned short level;
+
+	MRFoldGutterBranch() noexcept : line(0), level(0) {
+	}
+
+	MRFoldGutterBranch(std::size_t aLine, unsigned short aLevel) noexcept : line(aLine), level(aLevel) {
+	}
+};
+
 class MRFoldingDerivedState : public MRDerivedStateBase {
   public:
 	struct WarmupState {
@@ -57,6 +68,7 @@ class MRFoldingDerivedState : public MRDerivedStateBase {
 		MRSyntaxLanguage language = MRSyntaxLanguage::PlainText;
 		int gutterColumns = 1;
 		std::vector<MRFoldSpan> spans;
+		std::vector<MRFoldGutterBranch> branches;
 		std::vector<unsigned short> displayLevels;
 		std::vector<std::string> lineTexts;
 	};

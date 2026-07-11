@@ -1,6 +1,7 @@
 #include "MROutlineFoldProducer.hpp"
 
 #include "../app/utils/MRStringUtils.hpp"
+#include "../ui/MRSyntaxBasic.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -487,6 +488,20 @@ void classifyFoldOutlineNode(MRSyntaxLanguage language, const MRFoldSpan &span, 
 		default:
 			break;
 	}
+	if (language == MRSyntaxLanguage::Basic) {
+		switch (mrBasicClassifyBlockLine(trimmed).kind) {
+			case MRBasicBlockKind::Procedure:
+				kind = mrokFunction;
+				confidence = mrocStructural;
+				return;
+			case MRBasicBlockKind::Type:
+				kind = mrokClass;
+				confidence = mrocStructural;
+				return;
+			default:
+				break;
+		}
+	}
 
 	for (const MROutlineLeadDescriptor &descriptor : kOutlineLeadDescriptors) {
 		if (descriptor.language == language && outlineLineStartsWithDescriptor(upperLine, descriptor.upperPrefix)) {
@@ -667,6 +682,13 @@ std::string outlineFunctionDisplayName(MRSyntaxLanguage language, std::string_vi
 	if (language == MRSyntaxLanguage::Pascal) {
 		static const char *kPascalTokens[] = {"PROCEDURE ", "FUNCTION ", "CONSTRUCTOR ", "DESTRUCTOR "};
 		for (const char *token : kPascalTokens) {
+			name = outlineNameAfterUpperToken(normalizedTrimmed, normalizedUpper, token);
+			if (!name.empty()) return name;
+		}
+	}
+	if (language == MRSyntaxLanguage::Basic) {
+		static const char *kBasicTokens[] = {"SUB ", "FUNCTION ", "PROPERTY ", "CONSTRUCTOR ", "DESTRUCTOR "};
+		for (const char *token : kBasicTokens) {
 			name = outlineNameAfterUpperToken(normalizedTrimmed, normalizedUpper, token);
 			if (!name.empty()) return name;
 		}

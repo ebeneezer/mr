@@ -1,6 +1,7 @@
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../../ui/MRSyntax.hpp"
+#include "../../ui/MRSyntaxBasic.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -93,6 +94,8 @@ bool parseLanguageName(const std::string &name, MRSyntaxLanguage &language) noex
 		language = MRSyntaxLanguage::Markdown;
 	else if (name == "latex" || name == "tex" || name == "ltx")
 		language = MRSyntaxLanguage::Latex;
+	else if (name == "basic" || name == "bas" || name == "fb" || name == "qb" || name == "gambas")
+		language = MRSyntaxLanguage::Basic;
 	else if (name == "bash" || name == "sh")
 		language = MRSyntaxLanguage::Bash;
 	else if (name == "zsh")
@@ -172,6 +175,8 @@ const char *languageName(MRSyntaxLanguage language) noexcept {
 			return "Markdown";
 		case MRSyntaxLanguage::Latex:
 			return "LaTeX";
+		case MRSyntaxLanguage::Basic:
+			return "BASIC";
 	}
 	return "PlainText";
 }
@@ -223,6 +228,8 @@ std::string languageSettingName(MRSyntaxLanguage language, bool automatic) {
 			return "MARKDOWN";
 		case MRSyntaxLanguage::Latex:
 			return "LATEX";
+		case MRSyntaxLanguage::Basic:
+			return "BASIC";
 		case MRSyntaxLanguage::PlainText:
 		default:
 			return "NONE";
@@ -260,6 +267,7 @@ std::vector<LanguageRun> allLanguageRuns() {
 		{MRSyntaxLanguage::Python, false},
 		{MRSyntaxLanguage::Markdown, false},
 		{MRSyntaxLanguage::Latex, false},
+		{MRSyntaxLanguage::Basic, false},
 		{MRSyntaxLanguage::Bash, false},
 		{MRSyntaxLanguage::Zsh, false},
 		{MRSyntaxLanguage::Fish, false},
@@ -771,6 +779,10 @@ bool mayNeedSmartDedentProbe(std::string_view lineText, MRSyntaxLanguage languag
 	if (trimmed.front() == '}' || trimmed.front() == ']' || trimmed.front() == ')') return true;
 
 	const std::string upper = upperAscii(std::string(trimmed));
+	if (language == MRSyntaxLanguage::Basic) {
+		const MRBasicBlockDisposition disposition = mrBasicClassifyBlockLine(trimmed).disposition;
+		return disposition == MRBasicBlockDisposition::Continue || disposition == MRBasicBlockDisposition::Close;
+	}
 	switch (language) {
 		case MRSyntaxLanguage::Bash:
 		case MRSyntaxLanguage::Zsh:
@@ -809,6 +821,7 @@ bool containsTrailingSmartSplitToken(std::string_view lineText, MRSyntaxLanguage
 	}
 
 	const std::string upper = upperAscii(std::string(lineText));
+	if (language == MRSyntaxLanguage::Basic) return mrBasicClassifyBlockLine(trimmed).disposition != MRBasicBlockDisposition::None;
 	switch (language) {
 		case MRSyntaxLanguage::Bash:
 		case MRSyntaxLanguage::Zsh:

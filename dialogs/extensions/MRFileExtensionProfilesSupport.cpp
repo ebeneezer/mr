@@ -52,6 +52,7 @@ const char *dialogCodeLanguageLabel(const std::string &codeLanguage) {
 	if (normalized == "RUST") return "Rust";
 	if (normalized == "GO") return "Go";
 	if (normalized == "PASCAL") return "Pascal";
+	if (normalized == "BASIC") return "BASIC";
 	if (normalized == "LATEX") return "LaTeX";
 	if (normalized == "KOTLIN") return "Kotlin";
 	if (normalized == "CSHARP") return "C#";
@@ -81,6 +82,7 @@ bool parseDialogCodeLanguage(const std::string &dialogValue, std::string &canoni
 	else if (normalized == "RUST") canonicalValue = "RUST";
 	else if (normalized == "GO") canonicalValue = "GO";
 	else if (normalized == "PASCAL") canonicalValue = "PASCAL";
+	else if (normalized == "BASIC" || normalized == "FREEBASIC" || normalized == "QB64" || normalized == "QB64PE" || normalized == "GAMBAS") canonicalValue = "BASIC";
 	else if (normalized == "LATEX" || normalized == "TEX") canonicalValue = "LATEX";
 	else if (normalized == "KOTLIN") canonicalValue = "KOTLIN";
 	else if (normalized == "C#" || normalized == "CSHARP") canonicalValue = "CSHARP";
@@ -159,7 +161,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
 	{
 		if (!parseDialogCodeLanguage(readRecordField(record.codeLanguage), settings.codeLanguage)) {
-			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, YAML, XML, Perl, Swift, Rust, Go, Pascal, LaTeX, Kotlin, C# or systemd et al..";
+			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, YAML, XML, Perl, Swift, Rust, Go, Pascal, BASIC, LaTeX, Kotlin, C# or systemd et al..";
 			return false;
 		}
 	}

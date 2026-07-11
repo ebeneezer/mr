@@ -319,6 +319,9 @@ std::string targetTriple(const std::string &compilerPath) {
 }
 
 std::string versionText(const std::string &compilerPath) {
+	const std::string executableName = upperAscii(baseNameOfPath(compilerPath));
+	if (executableName == "QB64PE") return "QB64-PE";
+
 	return trimAscii(commandFirstLine(shellQuote(compilerPath) + " --version 2>/dev/null"));
 }
 
@@ -327,6 +330,9 @@ std::string detectCompilerToolchain(const std::string &compilerPath, const std::
 	std::string versionUpper = upperAscii(version);
 
 	if (name.find("SWIFTC") != std::string::npos) return "SWIFT";
+	if (name == "FBC" || versionUpper.find("FREEBASIC") != std::string::npos) return "FREEBASIC";
+	if (name == "QB64PE" || versionUpper.find("QB64") != std::string::npos) return "QB64PE";
+	if (name == "GBC3" || versionUpper.find("GAMBAS COMPILER") != std::string::npos) return "GAMBAS";
 	if (name.find("LATEXMK") != std::string::npos || versionUpper.find("LATEXMK") != std::string::npos) return "LATEXMK";
 	if (name == "PDFLATEX" || name == "XELATEX" || name == "LUALATEX" || name == "LATEX" || name == "PLATEX" || name == "UPLATEX" || name == "DVILUALATEX") return "LATEX";
 	if (name.find("CLANG") != std::string::npos || versionUpper.find("CLANG") != std::string::npos) return "CLANG";
@@ -357,6 +363,21 @@ std::string defaultBuildFlagsForProfile(const std::string &toolchain, const MRCo
 		if (flavor == "SPEED") return "-std=c++20 -O3 -march=native -Wall";
 		if (flavor == "SIZE") return "-std=c++20 -Os -Wall";
 		return "-std=c++20 -O2 -Wall";
+	}
+	if (toolchain == "FREEBASIC") {
+		if (flavor == "DEBUG") return "-g -exx -O 0";
+		if (flavor == "SPEED") return "-O 3";
+		if (flavor == "SIZE") return "-O s -strip";
+		return "-O 2";
+	}
+	if (toolchain == "QB64PE") {
+		if (flavor == "DEBUG") return "-x -w";
+		return "-x -q";
+	}
+	if (toolchain == "GAMBAS") {
+		if (flavor == "DEBUG") return "-a -g -w";
+		if (flavor == "SPEED" || flavor == "SIZE") return "-a -x -w";
+		return "-a -w";
 	}
 	if (toolchain == "LATEXMK") return "-pdf -interaction=nonstopmode -file-line-error -synctex=1 -cd";
 	if (toolchain == "LATEX") return "-interaction=nonstopmode -file-line-error -synctex=1";
@@ -399,6 +420,16 @@ CompilerProbe probeLatexCompiler(const std::string &toolchain, const std::string
 	return probe;
 }
 
+CompilerProbe probeBasicCompiler(const std::string &toolchain, const std::string &compilerPath) {
+	CompilerProbe probe;
+
+	probe.toolchain = toolchain;
+	probe.executablePath = compilerPath;
+	probe.versionText = versionText(compilerPath);
+	if (toolchain == "FREEBASIC") probe.targetTriple = trimAscii(commandFirstLine(shellQuote(compilerPath) + " -print target 2>/dev/null"));
+	return probe;
+}
+
 std::string compilerPostBuildMacroSpec() {
 	return "compilersupport/MRCompilerMiddleware.mrmac^LatexMKPostBuild";
 }
@@ -425,9 +456,23 @@ void addDetectedCompilerProfileIdsForTool(std::vector<std::string> &ids, const s
 void addProfile(std::vector<MRCompilerProfile> &profiles, const CompilerProbe &probe, const std::string &suffix, const std::string &flags) {
 	MRCompilerProfile profile;
 	std::string idPrefix = probe.toolchain == "GCC" ? "GCC" : probe.toolchain;
+	const char *displayName = probe.toolchain.c_str();
+	struct CompilerDisplayName {
+		const char *toolchain;
+		const char *name;
+	};
+	static const CompilerDisplayName displayNames[] = {
+		{"GCC", "g++"}, {"CLANG", "clang++"}, {"SWIFT", "swiftc"}, {"FREEBASIC", "fbc"}, {"QB64PE", "qb64pe"}, {"GAMBAS", "gbc3"},
+	};
+
+	for (const CompilerDisplayName &candidate : displayNames)
+		if (probe.toolchain == candidate.toolchain) {
+			displayName = candidate.name;
+			break;
+		}
 
 	profile.id = idPrefix + "_" + upperAscii(suffix);
-	profile.name = (probe.toolchain == "GCC" ? "g++" : probe.toolchain == "CLANG" ? "clang++" : probe.toolchain == "SWIFT" ? "swiftc" : probe.toolchain) + std::string(" ") + suffix;
+	profile.name = std::string(displayName) + " " + suffix;
 	profile.toolchain = probe.toolchain;
 	profile.executablePath = probe.executablePath;
 	profile.versionText = probe.versionText;
@@ -446,6 +491,9 @@ std::string normalizeToolchain(const std::string &value) {
 	if (upper == "G++" || upper == "GCC" || upper == "GNU") return "GCC";
 	if (upper == "CLANG++" || upper == "CLANG" || upper == "LLVM") return "CLANG";
 	if (upper == "SWIFTC" || upper == "SWIFT") return "SWIFT";
+	if (upper == "FBC" || upper == "FREEBASIC") return "FREEBASIC";
+	if (upper == "QB64" || upper == "QB64PE") return "QB64PE";
+	if (upper == "GBC3" || upper == "GAMBAS") return "GAMBAS";
 	if (upper == "LATEXMK") return "LATEXMK";
 	if (upper == "LATEX") return "LATEX";
 	if (upper == "CUSTOM") return "CUSTOM";
@@ -531,7 +579,7 @@ bool normalizeCompilerProfileInPlace(MRCompilerProfile &profile, std::string *er
 	if (profile.id.empty()) return setError(errorMessage, "Compiler profile id may not be empty.");
 	if (profile.name.empty()) return setError(errorMessage, "Compiler profile name may not be empty.");
 	if (profile.toolchain.empty()) return setError(errorMessage, "Compiler profile toolchain may not be empty.");
-	if (profile.toolchain != "GCC" && profile.toolchain != "CLANG" && profile.toolchain != "SWIFT" && profile.toolchain != "LATEXMK" && profile.toolchain != "LATEX" && profile.toolchain != "CUSTOM") return setError(errorMessage, "Compiler profile toolchain must be GCC, CLANG, SWIFT, LATEXMK, LATEX or CUSTOM.");
+	if (profile.toolchain != "GCC" && profile.toolchain != "CLANG" && profile.toolchain != "SWIFT" && profile.toolchain != "FREEBASIC" && profile.toolchain != "QB64PE" && profile.toolchain != "GAMBAS" && profile.toolchain != "LATEXMK" && profile.toolchain != "LATEX" && profile.toolchain != "CUSTOM") return setError(errorMessage, "Compiler profile toolchain must be GCC, CLANG, SWIFT, FREEBASIC, QB64PE, GAMBAS, LATEXMK, LATEX or CUSTOM.");
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -633,6 +681,9 @@ std::vector<std::string> detectedCompilerExecutablePaths() {
 	appendUniquePath(paths, executableFromPath("g++"));
 	appendUniquePath(paths, executableFromPath("clang++"));
 	appendUniquePath(paths, executableFromPath("swiftc"));
+	appendUniquePath(paths, executableFromPath("fbc"));
+	appendUniquePath(paths, executableFromPath("qb64pe"));
+	appendUniquePath(paths, executableFromPath("gbc3"));
 	appendUniquePath(paths, executableFromPath("latexmk"));
 	appendUniquePath(paths, executableFromPath("pdflatex"));
 	appendUniquePath(paths, executableFromPath("xelatex"));
@@ -653,6 +704,9 @@ std::vector<std::string> detectedCompilerProfileIds() {
 	if (!executableFromPath("g++").empty()) addDetectedCompilerProfileIdsForTool(ids, "GCC", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
 	if (!executableFromPath("clang++").empty()) addDetectedCompilerProfileIdsForTool(ids, "CLANG", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
 	if (!executableFromPath("swiftc").empty()) addDetectedCompilerProfileIdsForTool(ids, "SWIFT", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("fbc").empty()) addDetectedCompilerProfileIdsForTool(ids, "FREEBASIC", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("qb64pe").empty()) addDetectedCompilerProfileIdsForTool(ids, "QB64PE", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("gbc3").empty()) addDetectedCompilerProfileIdsForTool(ids, "GAMBAS", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
 	if (!executableFromPath("latexmk").empty()) addDetectedCompilerProfileIdsForTool(ids, "LATEXMK", latexmkSuffixes, sizeof(latexmkSuffixes) / sizeof(latexmkSuffixes[0]));
 	for (const char *engine : latexEngines)
 		if (!executableFromPath(engine).empty()) {
@@ -672,6 +726,9 @@ std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 	std::string gcc = executableFromPath("g++");
 	std::string clang = executableFromPath("clang++");
 	std::string swift = executableFromPath("swiftc");
+	std::string freeBasic = executableFromPath("fbc");
+	std::string qb64pe = executableFromPath("qb64pe");
+	std::string gambas = executableFromPath("gbc3");
 	std::string latexmk = executableFromPath("latexmk");
 	const char *latexEngines[] = {"pdflatex", "xelatex", "lualatex", "latex", "platex", "uplatex", "dvilualatex"};
 	if (!gcc.empty()) {
@@ -694,6 +751,27 @@ std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 		addProfile(profiles, probe, "Normal", "-O");
 		addProfile(profiles, probe, "Speed", "-O -whole-module-optimization");
 		addProfile(profiles, probe, "Size", "-Osize");
+	}
+	if (!freeBasic.empty()) {
+		const CompilerProbe probe = probeBasicCompiler("FREEBASIC", freeBasic);
+		addProfile(profiles, probe, "Debug", "-g -exx -O 0");
+		addProfile(profiles, probe, "Normal", "-O 2");
+		addProfile(profiles, probe, "Speed", "-O 3");
+		addProfile(profiles, probe, "Size", "-O s -strip");
+	}
+	if (!qb64pe.empty()) {
+		const CompilerProbe probe = probeBasicCompiler("QB64PE", qb64pe);
+		addProfile(profiles, probe, "Debug", "-x -w");
+		addProfile(profiles, probe, "Normal", "-x -q");
+		addProfile(profiles, probe, "Speed", "-x -q");
+		addProfile(profiles, probe, "Size", "-x -q");
+	}
+	if (!gambas.empty()) {
+		const CompilerProbe probe = probeBasicCompiler("GAMBAS", gambas);
+		addProfile(profiles, probe, "Debug", "-a -g -w");
+		addProfile(profiles, probe, "Normal", "-a -w");
+		addProfile(profiles, probe, "Speed", "-a -x -w");
+		addProfile(profiles, probe, "Size", "-a -x -w");
 	}
 	if (!latexmk.empty()) {
 		const CompilerProbe probe = probeLatexCompiler("LATEXMK", latexmk);
@@ -728,6 +806,8 @@ bool autoConfigureCompilerProfileFromExecutable(MRCompilerProfile &profile, std:
 		probe = probeLatexCompiler("LATEXMK", compilerPath);
 	else if (toolchain == "LATEX")
 		probe = probeLatexCompiler("LATEX", compilerPath);
+	else if (toolchain == "FREEBASIC" || toolchain == "QB64PE" || toolchain == "GAMBAS")
+		probe = probeBasicCompiler(toolchain, compilerPath);
 	else
 		probe = probeCppCompiler(toolchain, compilerPath);
 

@@ -36,6 +36,8 @@ const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 			return "C#";
 		case MRSyntaxLanguage::Pascal:
 			return "Pascal";
+		case MRSyntaxLanguage::Basic:
+			return "BASIC";
 		case MRSyntaxLanguage::Systemd:
 			return "systemd";
 		case MRSyntaxLanguage::MRMAC:
@@ -87,6 +89,8 @@ const char *tmrSyntaxLanguageMarker(MRSyntaxLanguage language) noexcept {
 			return "C#";
 		case MRSyntaxLanguage::Pascal:
 			return "Pa";
+		case MRSyntaxLanguage::Basic:
+			return "BAS";
 		case MRSyntaxLanguage::Systemd:
 			return "Sd";
 		case MRSyntaxLanguage::MRMAC:
@@ -138,6 +142,8 @@ std::uint32_t tmrSyntaxLanguageMarkerRgb(MRSyntaxLanguage language) noexcept {
 			return 0x8BC34A;
 		case MRSyntaxLanguage::Pascal:
 			return 0xD49A57;
+		case MRSyntaxLanguage::Basic:
+			return 0x6FA8DC;
 		case MRSyntaxLanguage::Systemd:
 			return 0xB0B87A;
 		case MRSyntaxLanguage::MRMAC:

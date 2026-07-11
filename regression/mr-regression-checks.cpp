@@ -148,6 +148,44 @@ struct TestContext {
 	}
 };
 
+class ScopedRegressionConfigHome {
+  public:
+	ScopedRegressionConfigHome() : mPreviousValue(), mPath("/tmp/mr_regression_xdg_config_" + std::to_string(static_cast<long>(::getpid()))), mHadPrevious(false), mReady(false) {
+		const char *previous = std::getenv("XDG_CONFIG_HOME");
+		std::error_code error;
+
+		if (previous != nullptr) {
+			mPreviousValue = previous;
+			mHadPrevious = true;
+		}
+		std::filesystem::remove_all(mPath, error);
+		error.clear();
+		std::filesystem::create_directories(mPath, error);
+		if (error || ::setenv("XDG_CONFIG_HOME", mPath.c_str(), 1) != 0) return;
+		mReady = true;
+	}
+
+	~ScopedRegressionConfigHome() {
+		std::error_code error;
+
+		if (mHadPrevious)
+			::setenv("XDG_CONFIG_HOME", mPreviousValue.c_str(), 1);
+		else
+			::unsetenv("XDG_CONFIG_HOME");
+		if (mReady) std::filesystem::remove_all(mPath, error);
+	}
+
+	bool ready() const noexcept {
+		return mReady;
+	}
+
+  private:
+	std::string mPreviousValue;
+	std::string mPath;
+	bool mHadPrevious;
+	bool mReady;
+};
+
 bool runKeymapMacroBindingDispatchProbe(std::string &failureReason);
 bool runKeymapAutoexecPersistenceAndBootstrapProbe(std::string &failureReason);
 
@@ -10076,6 +10114,12 @@ int main(int argc, char **argv) {
 
 	if (argc >= 2) {
 		if (argc == 3 && std::strcmp(argv[1], "--probe") == 0) {
+			ScopedRegressionConfigHome configHome;
+
+			if (!configHome.ready()) {
+				std::cerr << "Unable to isolate regression probe configuration.\n";
+				return 1;
+			}
 			if (std::strcmp(argv[2], "staged-nav") == 0) return runStagedNavProbeMode();
 			if (std::strcmp(argv[2], "staged-mark-page") == 0) return runStagedMarkPageProbeMode();
 			if (std::strcmp(argv[2], "macro-screen-flush") == 0) return runMacroScreenFlushProbeMode();

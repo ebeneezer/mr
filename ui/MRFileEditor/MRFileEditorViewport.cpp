@@ -15,7 +15,7 @@ bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
 	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Latex || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
 	       language == MRSyntaxLanguage::Xml ||
-	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp || language == MRSyntaxLanguage::Pascal;
+	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Basic;
 }
 
 bool quitTailTraceActive() noexcept {
@@ -334,6 +334,8 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 				if (!glyphVisible) continue;
 				maxDisplayLevel = std::max(maxDisplayLevel, static_cast<int>(span.level));
 			}
+			for (const MRFoldGutterBranch &branch : visibleState.branches)
+				if (branch.line == documentLine) maxDisplayLevel = std::max(maxDisplayLevel, static_cast<int>(branch.level));
 		}
 		visibleState.gutterColumns = std::max(1, maxDisplayLevel + 1);
 		visibleState.displayLevels.clear();
@@ -955,6 +957,12 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 			glyph = "\xE2\x94\x82";
 		if (glyph == nullptr) continue;
 		b.moveStr(static_cast<ushort>(drawX + displayColumn), glyph, markerColor, 1);
+	}
+	for (const MRFoldGutterBranch &branch : mFoldState.visibleState().branches) {
+		const int displayColumn = displayColumnForLevel(branch.level);
+
+		if (branch.line != lineIndex || displayColumn < 0 || displayColumn >= width) continue;
+		b.moveStr(static_cast<ushort>(drawX + displayColumn), "\xE2\x94\x9C", markerColor, 1);
 	}
 }
 

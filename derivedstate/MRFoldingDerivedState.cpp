@@ -44,6 +44,7 @@ void MRFoldingDerivedState::clearWarmupState() noexcept {
 void MRFoldingDerivedState::clearVisibleState(bool preserveProjection) noexcept {
 	if (!preserveProjection) {
 		mVisible.spans.clear();
+		mVisible.branches.clear();
 		mVisible.displayLevels.clear();
 		mVisible.lineTexts.clear();
 		mVisible.topLine = 0;

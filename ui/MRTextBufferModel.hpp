@@ -444,6 +444,10 @@ class MRTextBufferModel {
 			mShared->language = MRSyntaxLanguage::Pascal;
 			return;
 		}
+		if (normalizedCodeLanguage == "BASIC" || normalizedCodeLanguage == "FREEBASIC" || normalizedCodeLanguage == "QB64" || normalizedCodeLanguage == "QB64PE" || normalizedCodeLanguage == "GAMBAS") {
+			mShared->language = MRSyntaxLanguage::Basic;
+			return;
+		}
 		if (normalizedCodeLanguage == "SYSTEMD") {
 			mShared->language = MRSyntaxLanguage::Systemd;
 			return;
