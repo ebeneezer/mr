@@ -5604,6 +5604,27 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					} else if (name == "UI_GRID") {
 						mrvmAddMacroUiGrid(g_runtimeEnv.runtimeKv, args);
 						runtimeErrorLevel() = 0;
+					} else if (name == "UI_TREE") {
+						mrvmAddMacroUiTree(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_TREE_CLEAR") {
+						mrvmClearMacroUiTree(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_TREE_NODE") {
+						mrvmAddMacroUiTreeNode(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_TABLE") {
+						mrvmAddMacroUiTable(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_TABLE_CLEAR") {
+						mrvmClearMacroUiTable(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_TABLE_COLUMN") {
+						mrvmAddMacroUiTableColumn(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
+					} else if (name == "UI_TABLE_ROW") {
+						mrvmAddMacroUiTableRow(g_runtimeEnv.runtimeKv, args);
+						runtimeErrorLevel() = 0;
 					} else if (name == "UI_LIST_CLEAR") {
 						mrvmClearMacroUiItemList(g_runtimeEnv.runtimeKv, args);
 						runtimeErrorLevel() = 0;

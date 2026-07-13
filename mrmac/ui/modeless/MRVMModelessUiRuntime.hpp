@@ -135,7 +135,7 @@ struct MacroUiSelectFieldSpec {
 	std::vector<std::string> options;
 };
 
-struct MacroUiListBoxSpec {
+struct MacroUiSelectionSpec {
 	int x = 0;
 	int y = 0;
 	int width = 20;
@@ -146,16 +146,10 @@ struct MacroUiListBoxSpec {
 	int start = 1;
 };
 
-struct MacroUiGridSpec {
-	int x = 0;
-	int y = 0;
-	int width = 20;
-	int height = 4;
-	int id = 0;
-	std::string label;
-	std::string itemSpec;
-	int start = 1;
-};
+using MacroUiListBoxSpec = MacroUiSelectionSpec;
+using MacroUiGridSpec = MacroUiSelectionSpec;
+using MacroUiTreeSpec = MacroUiSelectionSpec;
+using MacroUiTableSpec = MacroUiSelectionSpec;
 
 struct MacroUiDialogDefinition {
 	int x = 0;
@@ -178,6 +172,8 @@ struct MacroUiDialogDefinition {
 	std::vector<MacroUiSelectFieldSpec> selectFields;
 	std::vector<MacroUiListBoxSpec> listBoxes;
 	std::vector<MacroUiGridSpec> grids;
+	std::vector<MacroUiTreeSpec> trees;
+	std::vector<MacroUiTableSpec> tables;
 	std::map<int, std::string> modelessButtonMacros;
 };
 
@@ -204,6 +200,8 @@ bool mrvmModelessUiAppendSelectField(MRVMRuntimeKv &runtimeKv, const MacroUiSele
 bool mrvmModelessUiAppendSelectOption(MRVMRuntimeKv &runtimeKv, const std::string &fieldId, const std::string &option);
 void mrvmModelessUiAppendListBox(MRVMRuntimeKv &runtimeKv, const MacroUiListBoxSpec &listBox);
 void mrvmModelessUiAppendGrid(MRVMRuntimeKv &runtimeKv, const MacroUiGridSpec &grid);
+void mrvmModelessUiAppendTree(MRVMRuntimeKv &runtimeKv, const MacroUiTreeSpec &tree);
+void mrvmModelessUiAppendTable(MRVMRuntimeKv &runtimeKv, const MacroUiTableSpec &table);
 MacroUiDialogDefinition mrvmModelessUiReadDialogDefinition(MRVMRuntimeKv &runtimeKv);
 void mrvmModelessUiWriteModelessMacro(MRVMRuntimeKv &runtimeKv, int controlId, const std::string &macroSpec);
 bool mrvmModelessUiReadItemList(MRVMRuntimeKv &runtimeKv, const std::string &key, std::vector<std::string> &values);
@@ -227,6 +225,12 @@ bool mrvmModelessUiReadWindowLogFieldLines(MRVMRuntimeKv &runtimeKv, const std::
 bool mrvmModelessUiReadWindowLogFieldCount(MRVMRuntimeKv &runtimeKv, const std::string &windowId, const std::string &logId, int &count);
 bool mrvmModelessUiStoreWindowSelectFieldValue(MRVMRuntimeKv &runtimeKv, const std::string &windowId, const std::string &fieldId, const std::string &value);
 bool mrvmModelessUiReadWindowSelectFieldValue(MRVMRuntimeKv &runtimeKv, const std::string &windowId, const std::string &fieldId, std::string &value);
+bool mrvmModelessUiStoreWindowTreeSelection(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, const std::string &nodeId);
+bool mrvmModelessUiReadWindowTreeSelection(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, std::string &nodeId);
+bool mrvmModelessUiStoreWindowTreeExpansion(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, const std::string &nodeId, bool expanded);
+bool mrvmModelessUiReadWindowTreeExpansion(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, const std::string &nodeId, bool &expanded);
+bool mrvmModelessUiStoreWindowTableSelection(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, const std::string &rowId);
+bool mrvmModelessUiReadWindowTableSelection(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, std::string &rowId);
 void mrvmModelessUiStoreWindowLiveGeometry(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int x, int y, int width, int height);
 bool mrvmModelessUiReadWindowGeometry(MRVMRuntimeKv &runtimeKv, const std::string &windowId, MRMacroModelessWindowGeometry &geometry);
 void mrvmModelessUiStoreWindowDesktopState(MRVMRuntimeKv &runtimeKv, const std::string &windowId, const MRMacroModelessWindowDesktopState &state);
@@ -252,5 +256,11 @@ bool mrvmClearModelessWindowLogField(const std::string &windowId, const std::str
 bool mrvmReadModelessWindowLogFieldLines(const std::string &windowId, const std::string &logId, std::vector<std::string> &lines);
 bool mrvmStoreModelessWindowSelectFieldValue(const std::string &windowId, const std::string &fieldId, const std::string &value);
 bool mrvmReadModelessWindowSelectFieldValue(const std::string &windowId, const std::string &fieldId, std::string &value);
+bool mrvmStoreModelessWindowTreeSelection(const std::string &windowId, int controlId, const std::string &nodeId);
+bool mrvmReadModelessWindowTreeSelection(const std::string &windowId, int controlId, std::string &nodeId);
+bool mrvmStoreModelessWindowTreeExpansion(const std::string &windowId, int controlId, const std::string &nodeId, bool expanded);
+bool mrvmReadModelessWindowTreeExpansion(const std::string &windowId, int controlId, const std::string &nodeId, bool &expanded);
+bool mrvmStoreModelessWindowTableSelection(const std::string &windowId, int controlId, const std::string &rowId);
+bool mrvmReadModelessWindowTableSelection(const std::string &windowId, int controlId, std::string &rowId);
 
 #endif

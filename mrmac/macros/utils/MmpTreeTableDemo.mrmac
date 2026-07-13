@@ -1,0 +1,48 @@
+$MACRO_FILE MmpTreeTableDemo;
+
+$MACRO MmpTreeTableDemo FROM EDIT;
+DEF_STR(WindowId);
+
+WindowId := MMP_WINDOW_INSTANCE('MmpTreeTable');
+SET_GLOBAL_STR('MMP_TREE_TABLE_WINDOW', WindowId);
+
+UI_TREE_CLEAR('MmpProjectTree');
+UI_TREE_NODE('MmpProjectTree', 'root', '', 'MR project', 1);
+UI_TREE_NODE('MmpProjectTree', 'app', 'root', 'Application', 1);
+UI_TREE_NODE('MmpProjectTree', 'commands', 'app', 'Commands', 0);
+UI_TREE_NODE('MmpProjectTree', 'mrmac', 'root', 'MRMAC', 1);
+UI_TREE_NODE('MmpProjectTree', 'modeless', 'mrmac', 'Modeless UI', 0);
+UI_TREE_NODE('MmpProjectTree', 'docs', 'root', 'Documentation', 0);
+
+UI_TABLE_CLEAR('MmpJobsTable');
+UI_TABLE_COLUMN('MmpJobsTable', 'Target', 15);
+UI_TABLE_COLUMN('MmpJobsTable', 'State', 10);
+UI_TABLE_COLUMN('MmpJobsTable', 'Count', 6);
+UI_TABLE_ROW('MmpJobsTable', 'core', 'mr' + CHAR(9) + 'ready' + CHAR(9) + '22');
+UI_TABLE_ROW('MmpJobsTable', 'syntax', 'basic' + CHAR(9) + 'checked' + CHAR(9) + '30');
+UI_TABLE_ROW('MmpJobsTable', 'mmp', 'tree/table' + CHAR(9) + 'active' + CHAR(9) + '2');
+UI_TABLE_ROW('MmpJobsTable', 'tests', 'regression' + CHAR(9) + 'queued' + CHAR(9) + '1');
+UI_TABLE_ROW('MmpJobsTable', 'docs', 'contract' + CHAR(9) + 'ready' + CHAR(9) + '3');
+UI_TABLE_ROW('MmpJobsTable', 'build', 'clang' + CHAR(9) + 'ready' + CHAR(9) + '1');
+
+UI_DIALOG(3, 3, 72, 22, 'MMP TREE AND TABLE');
+UI_LABEL(2, 1, 'Common controls: modal and modeless use the same widget code.');
+UI_TREE(2, 3, 30, 8, 71, 'Project', 'MmpProjectTree', 1);
+UI_TABLE(36, 3, 34, 8, 72, 'Jobs', 'MmpJobsTable', 1);
+MMP_STATUS_FIELD(2, 13, 68, 'Event', 'Select a tree node or table row.');
+MMP_LOG_FIELD(2, 15, 68, 3, 'Events', 'Events', 8);
+UI_MODELESS_ON(71, 'MmpTreeTableDemo^MmpTreeTableTreeSelected');
+UI_MODELESS_ON(72, 'MmpTreeTableDemo^MmpTreeTableRowSelected');
+UI_MODELESS_SHOW(WindowId);
+MMP_LOG_APPEND(WindowId, 'Events', 'Tree/table demo initialized');
+END_MACRO;
+
+$MACRO MmpTreeTableTreeSelected;
+MMP_STATUS_SET(GLOBAL_STR('MMP_TREE_TABLE_WINDOW'), 'Event', 'Tree node: ' + UI_TEXT(71) + ' row ' + STR(UI_INDEX(71)));
+MMP_LOG_APPEND(GLOBAL_STR('MMP_TREE_TABLE_WINDOW'), 'Events', 'Tree: ' + UI_TEXT(71));
+END_MACRO;
+
+$MACRO MmpTreeTableRowSelected;
+MMP_STATUS_SET(GLOBAL_STR('MMP_TREE_TABLE_WINDOW'), 'Event', 'Table row: ' + UI_TEXT(72) + ' row ' + STR(UI_INDEX(72)));
+MMP_LOG_APPEND(GLOBAL_STR('MMP_TREE_TABLE_WINDOW'), 'Events', 'Table: ' + UI_TEXT(72));
+END_MACRO;

@@ -304,6 +304,14 @@ void mrvmModelessUiAppendGrid(MRVMRuntimeKv &runtimeKv, const MacroUiGridSpec &g
 	writeGridHash(runtimeKv, appendDialogSectionItem(runtimeKv, "grids"), grid);
 }
 
+void mrvmModelessUiAppendTree(MRVMRuntimeKv &runtimeKv, const MacroUiTreeSpec &tree) {
+	writeListBoxHash(runtimeKv, appendDialogSectionItem(runtimeKv, "trees"), tree);
+}
+
+void mrvmModelessUiAppendTable(MRVMRuntimeKv &runtimeKv, const MacroUiTableSpec &table) {
+	writeListBoxHash(runtimeKv, appendDialogSectionItem(runtimeKv, "tables"), table);
+}
+
 MacroUiDialogDefinition mrvmModelessUiReadDialogDefinition(MRVMRuntimeKv &runtimeKv) {
 	MacroUiDialogDefinition definition;
 	Value dialog;
@@ -443,6 +451,8 @@ MacroUiDialogDefinition mrvmModelessUiReadDialogDefinition(MRVMRuntimeKv &runtim
 	}
 	readListBoxSection(runtimeKv, dialog, "listBoxes", definition.listBoxes);
 	readGridSection(runtimeKv, dialog, "grids", definition.grids);
+	readListBoxSection(runtimeKv, dialog, "trees", definition.trees);
+	readListBoxSection(runtimeKv, dialog, "tables", definition.tables);
 	if (runtimeKv.findChild(dialog, "modelessButtonMacros", macros)) {
 		for (int index = 1; index <= hashReadInt(runtimeKv, macros, "count", 0); ++index) {
 			Value item;

@@ -20,8 +20,15 @@ void mrvmAddMacroUiDisplay(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMa
 void mrvmAddMacroUiInput(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
 void mrvmAddMacroUiListBox(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
 void mrvmAddMacroUiGrid(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
+void mrvmAddMacroUiTree(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
+void mrvmAddMacroUiTable(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
 void mrvmClearMacroUiItemList(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
 void mrvmAddMacroUiItemListValue(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
+void mrvmClearMacroUiTree(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
+void mrvmAddMacroUiTreeNode(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
+void mrvmClearMacroUiTable(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
+void mrvmAddMacroUiTableColumn(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
+void mrvmAddMacroUiTableRow(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
 void mrvmBindMacroModelessButton(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
 
 #endif

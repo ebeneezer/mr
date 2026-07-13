@@ -25,9 +25,9 @@
 
 namespace {
 
-class MRMacroModelessListView final : public TListViewer {
+class MRMacroUiListView final : public TListViewer {
   public:
-	MRMacroModelessListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command, std::string ownerWindowId, std::string ownerFieldId) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), items(std::move(values)), activateCommand(command), windowId(std::move(ownerWindowId)), fieldId(std::move(ownerFieldId)) {
+	MRMacroUiListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command, std::string ownerWindowId, std::string ownerFieldId) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), items(std::move(values)), activateCommand(command), windowId(std::move(ownerWindowId)), fieldId(std::move(ownerFieldId)) {
 		setRange(static_cast<short>(items.size()));
 	}
 
@@ -133,9 +133,9 @@ std::vector<MRMacroGridItem> parseGridItems(const std::vector<std::string> &valu
 	return items;
 }
 
-class MRMacroModelessGridView final : public TView {
+class MRMacroUiGridView final : public TView {
   public:
-	MRMacroModelessGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command) : TView(bounds), items(parseGridItems(values)), scrollBar(scrollBar), activateCommand(command) {
+	MRMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command) : TView(bounds), items(parseGridItems(values)), scrollBar(scrollBar), activateCommand(command) {
 		options |= ofSelectable;
 		eventMask |= evMouseDown | evMouseWheel | evKeyDown | evBroadcast;
 		updateCellWidth();
@@ -540,54 +540,58 @@ class MRMacroModelessBoolInput final : public TCheckBoxes {
 
 } // namespace
 
-TView *createMacroModelessListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command) {
-	return new MRMacroModelessListView(bounds, scrollBar, std::move(values), static_cast<ushort>(command), std::string(), std::string());
+TView *createMacroUiListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command) {
+	return new MRMacroUiListView(bounds, scrollBar, std::move(values), static_cast<ushort>(command), std::string(), std::string());
 }
 
-void setMacroModelessListItems(TView *view, std::vector<std::string> values, int start) {
-	MRMacroModelessListView *listView = dynamic_cast<MRMacroModelessListView *>(view);
+void setMacroUiListItems(TView *view, std::vector<std::string> values, int start) {
+	MRMacroUiListView *listView = dynamic_cast<MRMacroUiListView *>(view);
 
 	if (listView != nullptr) listView->setItems(std::move(values), start);
 }
 
-int macroModelessListSelectedIndex(const TView *view) {
-	const MRMacroModelessListView *listView = dynamic_cast<const MRMacroModelessListView *>(view);
+int macroUiListSelectedIndex(const TView *view) {
+	const MRMacroUiListView *listView = dynamic_cast<const MRMacroUiListView *>(view);
 
 	return listView != nullptr ? listView->selectedIndex() : 0;
 }
 
-std::string macroModelessListSelectedText(const TView *view) {
-	const MRMacroModelessListView *listView = dynamic_cast<const MRMacroModelessListView *>(view);
+std::string macroUiListSelectedText(const TView *view) {
+	const MRMacroUiListView *listView = dynamic_cast<const MRMacroUiListView *>(view);
 
 	return listView != nullptr ? listView->selectedText() : std::string();
 }
 
-TView *createMacroModelessGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command) {
-	return new MRMacroModelessGridView(bounds, scrollBar, std::move(values), static_cast<ushort>(command));
+TView *createMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command) {
+	return new MRMacroUiGridView(bounds, scrollBar, std::move(values), static_cast<ushort>(command));
 }
 
-void setMacroModelessGridItems(TView *view, std::vector<std::string> values, int start) {
-	MRMacroModelessGridView *gridView = dynamic_cast<MRMacroModelessGridView *>(view);
+void setMacroUiGridItems(TView *view, std::vector<std::string> values, int start) {
+	MRMacroUiGridView *gridView = dynamic_cast<MRMacroUiGridView *>(view);
 
 	if (gridView != nullptr) gridView->setItems(std::move(values), start);
 }
 
-void refreshMacroModelessGridItems(TView *view, std::vector<std::string> values) {
-	MRMacroModelessGridView *gridView = dynamic_cast<MRMacroModelessGridView *>(view);
+void refreshMacroUiGridItems(TView *view, std::vector<std::string> values) {
+	MRMacroUiGridView *gridView = dynamic_cast<MRMacroUiGridView *>(view);
 
 	if (gridView != nullptr) gridView->refreshItems(std::move(values));
 }
 
-int macroModelessGridSelectedIndex(const TView *view) {
-	const MRMacroModelessGridView *gridView = dynamic_cast<const MRMacroModelessGridView *>(view);
+int macroUiGridSelectedIndex(const TView *view) {
+	const MRMacroUiGridView *gridView = dynamic_cast<const MRMacroUiGridView *>(view);
 
 	return gridView != nullptr ? gridView->selectedIndexValue() : 0;
 }
 
-std::string macroModelessGridSelectedText(const TView *view) {
-	const MRMacroModelessGridView *gridView = dynamic_cast<const MRMacroModelessGridView *>(view);
+std::string macroUiGridSelectedText(const TView *view) {
+	const MRMacroUiGridView *gridView = dynamic_cast<const MRMacroUiGridView *>(view);
 
 	return gridView != nullptr ? gridView->selectedText() : std::string();
+}
+
+std::string macroUiGridItemText(const std::string &value) {
+	return parseGridItem(value).text;
 }
 
 TView *createMacroModelessTextInput(const TRect &bounds, int width, const std::string &windowId, const std::string &fieldId, const std::string &text) {
@@ -643,20 +647,20 @@ void redrawMacroModelessLogView(TView *view) {
 }
 
 TView *createMacroModelessSelectInput(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> options, const std::string &windowId, const std::string &fieldId, const std::string &value) {
-	MRMacroModelessListView *input = new MRMacroModelessListView(bounds, scrollBar, std::move(options), 0, windowId, fieldId);
+	MRMacroUiListView *input = new MRMacroUiListView(bounds, scrollBar, std::move(options), 0, windowId, fieldId);
 
 	if (input != nullptr && !input->setSelectedValue(value)) static_cast<void>(input->setSelectedValue(std::string()));
 	return input;
 }
 
 bool setMacroModelessSelectInputValue(TView *view, const std::string &value) {
-	MRMacroModelessListView *input = dynamic_cast<MRMacroModelessListView *>(view);
+	MRMacroUiListView *input = dynamic_cast<MRMacroUiListView *>(view);
 
 	return input != nullptr && input->setSelectedValue(value);
 }
 
 bool setMacroModelessSelectInputOptions(TView *view, std::vector<std::string> options, const std::string &value) {
-	MRMacroModelessListView *input = dynamic_cast<MRMacroModelessListView *>(view);
+	MRMacroUiListView *input = dynamic_cast<MRMacroUiListView *>(view);
 
 	if (input == nullptr) return false;
 	input->setItems(std::move(options), 1);

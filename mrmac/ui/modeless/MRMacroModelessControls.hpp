@@ -8,16 +8,34 @@ class TRect;
 class TScrollBar;
 class TView;
 
-TView *createMacroModelessListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command);
-void setMacroModelessListItems(TView *view, std::vector<std::string> values, int start);
-int macroModelessListSelectedIndex(const TView *view);
-std::string macroModelessListSelectedText(const TView *view);
+TView *createMacroUiListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command);
+void setMacroUiListItems(TView *view, std::vector<std::string> values, int start);
+int macroUiListSelectedIndex(const TView *view);
+std::string macroUiListSelectedText(const TView *view);
 
-TView *createMacroModelessGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command);
-void setMacroModelessGridItems(TView *view, std::vector<std::string> values, int start);
-void refreshMacroModelessGridItems(TView *view, std::vector<std::string> values);
-int macroModelessGridSelectedIndex(const TView *view);
-std::string macroModelessGridSelectedText(const TView *view);
+TView *createMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command);
+void setMacroUiGridItems(TView *view, std::vector<std::string> values, int start);
+void refreshMacroUiGridItems(TView *view, std::vector<std::string> values);
+int macroUiGridSelectedIndex(const TView *view);
+std::string macroUiGridSelectedText(const TView *view);
+std::string macroUiGridItemText(const std::string &value);
+
+std::string macroUiTreeNodeItem(const std::string &nodeId, const std::string &parentId, const std::string &text, bool expanded);
+bool macroUiTreeItemsValid(const std::vector<std::string> &values);
+TView *createMacroUiTreeView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command, const std::string &windowId = std::string(), int controlId = 0);
+void setMacroUiTreeItems(TView *view, std::vector<std::string> values, int start);
+void refreshMacroUiTreeItems(TView *view, std::vector<std::string> values);
+int macroUiTreeSelectedIndex(const TView *view);
+std::string macroUiTreeSelectedText(const TView *view);
+
+std::string macroUiTableColumnItem(const std::string &title, int width);
+std::string macroUiTableRowItem(const std::string &rowId, const std::string &cells);
+bool macroUiTableItemsValid(const std::vector<std::string> &values);
+TView *createMacroUiTableView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command, const std::string &windowId = std::string(), int controlId = 0);
+void setMacroUiTableItems(TView *view, std::vector<std::string> values, int start);
+void refreshMacroUiTableItems(TView *view, std::vector<std::string> values);
+int macroUiTableSelectedIndex(const TView *view);
+std::string macroUiTableSelectedText(const TView *view);
 
 TView *createMacroModelessTextInput(const TRect &bounds, int width, const std::string &windowId, const std::string &fieldId, const std::string &text);
 bool setMacroModelessTextInputValue(TView *view, const std::string &text);

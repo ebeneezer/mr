@@ -59,8 +59,12 @@ Current macro-visible UI primitive catalog:
 - `UI_INPUT(x, y, width, id, name, initialValue)` adds an input field to the current definition.
 - `UI_LISTBOX(x, y, width, height, id, label, itemSpec, start)` adds a listbox backed by a named item list.
 - `UI_GRID(x, y, width, height, id, label, itemSpec, start)` adds a grid backed by a named item list.
+- `UI_TREE(x, y, width, height, id, label, itemSpec, start)` adds a hierarchical tree backed by a named item list populated through `UI_TREE_CLEAR` and `UI_TREE_NODE`.
+- `UI_TABLE(x, y, width, height, id, label, itemSpec, start)` adds a column table backed by a named item list populated through `UI_TABLE_CLEAR`, `UI_TABLE_COLUMN` and `UI_TABLE_ROW`.
 - `UI_LIST_CLEAR(name)` clears a named runtime item list.
 - `UI_LIST_ADD(name, value)` appends one value to a named runtime item list.
+- `UI_TREE_CLEAR(name)` and `UI_TABLE_CLEAR(name)` clear their named shared control data.
+- `UI_TREE_NODE(name, nodeId, parentId, text, expanded)`, `UI_TABLE_COLUMN(name, title, width)` and `UI_TABLE_ROW(name, rowId, cells)` add validated typed tree and table entries to the central named item-list store.
 - `UI_MODELESS_ON(controlId, macroSpec)` binds a modeless control activation to a macro.
 - `UI_MODELESS_SHOW(windowId)` shows a modeless window and may select it through TVision focus/Z-order semantics.
 - `UI_MODELESS_UPDATE(windowId)` updates an existing modeless window without selecting it or promoting it in Z-order.
@@ -185,7 +189,8 @@ is only its live projection.
   selection-field definitions and options,
 - `MODELESSUI/staging/currentDialog/canvasHotspots` for staged canvas-local
   modeless callback regions,
-- `MODELESSUI/staging/itemLists/<listName>` for named UI list data,
+- `MODELESSUI/staging/itemLists/<listName>` for named UI list data, including
+  the typed tree and table data used by `UI_TREE` and `UI_TABLE`,
 - `MODELESSUI/counters/windowInstances` for runtime-only opaque MMP model-id
   allocation,
 - `MODELESSUI/windows/<windowId>` for retained modeless window definitions,
@@ -202,6 +207,10 @@ is only its live projection.
   definitions and a bounded chronological line ring,
 - `MODELESSUI/windows/<windowId>/selectFields/<fieldId>` for retained
   selection-field definitions, options and value,
+- `MODELESSUI/windows/<windowId>/treeState/<controlId>` for the retained
+  modeless tree selection and per-node expansion state,
+- `MODELESSUI/windows/<windowId>/tableState/<controlId>` for the retained
+  modeless table row selection,
 - `MODELESSUI/windows/<windowId>/desktop` for runtime-only virtual-desktop,
   manual-visibility, minimize and restore state of a desktop-managed modeless window.
 - `MODELESSUI/windows/<windowId>/canvases/<canvasId>/definition` for retained canvas geometry,

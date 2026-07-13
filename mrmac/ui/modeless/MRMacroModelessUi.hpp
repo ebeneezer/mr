@@ -131,18 +131,7 @@ struct MRMacroModelessCanvasScene {
 	std::vector<MRMacroModelessCanvasCommand> commands;
 };
 
-struct MRMacroModelessListBoxSpec {
-	int x = 0;
-	int y = 0;
-	int width = 20;
-	int height = 4;
-	int id = 0;
-	std::string label;
-	std::string itemSpec;
-	int start = 1;
-};
-
-struct MRMacroModelessGridSpec {
+struct MRMacroModelessSelectionSpec {
 	int x = 0;
 	int y = 0;
 	int width = 20;
@@ -153,6 +142,11 @@ struct MRMacroModelessGridSpec {
 	std::string macroSpec;
 	int start = 1;
 };
+
+using MRMacroModelessListBoxSpec = MRMacroModelessSelectionSpec;
+using MRMacroModelessGridSpec = MRMacroModelessSelectionSpec;
+using MRMacroModelessTreeSpec = MRMacroModelessSelectionSpec;
+using MRMacroModelessTableSpec = MRMacroModelessSelectionSpec;
 
 struct MRMacroModelessWindowDefinition {
 	int x = 0;
@@ -175,6 +169,8 @@ struct MRMacroModelessWindowDefinition {
 	std::vector<MRMacroModelessButtonSpec> buttons;
 	std::vector<MRMacroModelessListBoxSpec> listBoxes;
 	std::vector<MRMacroModelessGridSpec> grids;
+	std::vector<MRMacroModelessTreeSpec> trees;
+	std::vector<MRMacroModelessTableSpec> tables;
 };
 
 struct MRMacroModelessSelection {

@@ -356,32 +356,62 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 				clearEvent(event);
 				return;
 			}
+			std::map<ushort, int>::const_iterator treeIt = commandToTree.find(event.message.command);
+			if (treeIt != commandToTree.end()) {
+				std::map<int, MRMacroModelessTreeSpec>::const_iterator specIt = treeSpecs.find(treeIt->second);
+
+				selection = readSelection(treeIt->second);
+				if (specIt != treeSpecs.end()) runModelessMacro(definition.windowId, specIt->second.macroSpec);
+				clearEvent(event);
+				return;
+			}
+			std::map<ushort, int>::const_iterator tableIt = commandToTable.find(event.message.command);
+			if (tableIt != commandToTable.end()) {
+				std::map<int, MRMacroModelessTableSpec>::const_iterator specIt = tableSpecs.find(tableIt->second);
+
+				selection = readSelection(tableIt->second);
+				if (specIt != tableSpecs.end()) runModelessMacro(definition.windowId, specIt->second.macroSpec);
+				clearEvent(event);
+				return;
+			}
 		}
 	}
 
-	void refreshLists() {
+	void refreshSelectionControls() {
 		refreshDisplays();
 		for (std::map<int, TView *>::iterator entry = listViews.begin(); entry != listViews.end(); ++entry) {
 			std::map<int, MRMacroModelessListBoxSpec>::const_iterator specIt = listSpecs.find(entry->first);
 			TView *listView = entry->second;
-			const int oldIndex = macroModelessListSelectedIndex(listView);
+			const int oldIndex = macroUiListSelectedIndex(listView);
 
 			if (listView == nullptr || specIt == listSpecs.end()) continue;
-			setMacroModelessListItems(listView, resolveListItems(specIt->second.itemSpec), std::max(1, oldIndex));
+			setMacroUiListItems(listView, resolveListItems(specIt->second.itemSpec), std::max(1, oldIndex));
 		}
 		for (std::map<int, TView *>::iterator entry = gridViews.begin(); entry != gridViews.end(); ++entry) {
 			std::map<int, MRMacroModelessGridSpec>::const_iterator specIt = gridSpecs.find(entry->first);
 			TView *gridView = entry->second;
 
 			if (gridView == nullptr || specIt == gridSpecs.end()) continue;
-			refreshMacroModelessGridItems(gridView, resolveListItems(specIt->second.itemSpec));
+			refreshMacroUiGridItems(gridView, resolveListItems(specIt->second.itemSpec));
+		}
+		for (std::map<int, TView *>::iterator entry = treeViews.begin(); entry != treeViews.end(); ++entry) {
+			std::map<int, MRMacroModelessTreeSpec>::const_iterator specIt = treeSpecs.find(entry->first);
+
+			if (entry->second == nullptr || specIt == treeSpecs.end()) continue;
+			refreshMacroUiTreeItems(entry->second, resolveListItems(specIt->second.itemSpec));
+		}
+		for (std::map<int, TView *>::iterator entry = tableViews.begin(); entry != tableViews.end(); ++entry) {
+			std::map<int, MRMacroModelessTableSpec>::const_iterator specIt = tableSpecs.find(entry->first);
+
+			if (entry->second == nullptr || specIt == tableSpecs.end()) continue;
+			refreshMacroUiTableItems(entry->second, resolveListItems(specIt->second.itemSpec));
 		}
 		if (selection.controlId != 0) selection = readSelection(selection.controlId);
 	}
 
 	void updateDefinition(const MRMacroModelessWindowDefinition &nextDefinition) {
 		definition = nextDefinition;
-		refreshLists();
+		refreshSelectionControls();
 		refreshTextFields();
 		refreshBoolFields();
 		refreshIntFields();
@@ -595,9 +625,9 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			if (nextCommand >= cmMacroModelessMax) break;
 			if (!listBox.label.empty()) insert(new TStaticText(TRect(listBox.x, listBox.y, listBox.x + strwidth(listBox.label.c_str()), listBox.y + 1), listBox.label.c_str()));
 			insert(scrollBar);
-			listView = createMacroModelessListView(TRect(listBox.x, listTop, listBox.x + listBox.width - 1, listTop + listBox.height), scrollBar, items, nextCommand);
+			listView = createMacroUiListView(TRect(listBox.x, listTop, listBox.x + listBox.width - 1, listTop + listBox.height), scrollBar, items, nextCommand);
 			insert(listView);
-			setMacroModelessListItems(listView, items, listBox.start);
+			setMacroUiListItems(listView, items, listBox.start);
 			commandToList[nextCommand] = listBox.id;
 			listSpecs[listBox.id] = listBox;
 			listViews[listBox.id] = listView;
@@ -615,13 +645,53 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			if (nextCommand >= cmMacroModelessMax) break;
 			if (!grid.label.empty()) insert(new TStaticText(TRect(grid.x, grid.y, grid.x + strwidth(grid.label.c_str()), grid.y + 1), grid.label.c_str()));
 			insert(scrollBar);
-			gridView = createMacroModelessGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand);
+			gridView = createMacroUiGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand);
 			insert(gridView);
-			setMacroModelessGridItems(gridView, items, grid.start);
+			setMacroUiGridItems(gridView, items, grid.start);
 			commandToGrid[nextCommand] = grid.id;
 			gridSpecs[grid.id] = grid;
 			gridViews[grid.id] = gridView;
 			if (selection.controlId == 0) selection = readSelection(grid.id);
+			++nextCommand;
+		}
+
+		for (std::size_t treeIndex = 0; treeIndex < definition.trees.size(); ++treeIndex) {
+			const MRMacroModelessTreeSpec &tree = definition.trees[treeIndex];
+			const std::vector<std::string> items = resolveListItems(tree.itemSpec);
+			const int treeTop = tree.label.empty() ? tree.y : tree.y + 1;
+			TScrollBar *scrollBar = new TScrollBar(TRect(tree.x + tree.width - 1, treeTop, tree.x + tree.width, treeTop + tree.height));
+			TView *treeView = nullptr;
+
+			if (nextCommand >= cmMacroModelessMax) break;
+			if (!tree.label.empty()) insert(new TStaticText(TRect(tree.x, tree.y, tree.x + strwidth(tree.label.c_str()), tree.y + 1), tree.label.c_str()));
+			insert(scrollBar);
+			treeView = createMacroUiTreeView(TRect(tree.x, treeTop, tree.x + tree.width - 1, treeTop + tree.height), scrollBar, items, nextCommand, definition.windowId, tree.id);
+			insert(treeView);
+			setMacroUiTreeItems(treeView, items, tree.start);
+			commandToTree[nextCommand] = tree.id;
+			treeSpecs[tree.id] = tree;
+			treeViews[tree.id] = treeView;
+			if (selection.controlId == 0) selection = readSelection(tree.id);
+			++nextCommand;
+		}
+
+		for (std::size_t tableIndex = 0; tableIndex < definition.tables.size(); ++tableIndex) {
+			const MRMacroModelessTableSpec &table = definition.tables[tableIndex];
+			const std::vector<std::string> items = resolveListItems(table.itemSpec);
+			const int tableTop = table.label.empty() ? table.y : table.y + 1;
+			TScrollBar *scrollBar = new TScrollBar(TRect(table.x + table.width - 1, tableTop, table.x + table.width, tableTop + table.height));
+			TView *tableView = nullptr;
+
+			if (nextCommand >= cmMacroModelessMax) break;
+			if (!table.label.empty()) insert(new TStaticText(TRect(table.x, table.y, table.x + strwidth(table.label.c_str()), table.y + 1), table.label.c_str()));
+			insert(scrollBar);
+			tableView = createMacroUiTableView(TRect(table.x, tableTop, table.x + table.width - 1, tableTop + table.height), scrollBar, items, nextCommand, definition.windowId, table.id);
+			insert(tableView);
+			setMacroUiTableItems(tableView, items, table.start);
+			commandToTable[nextCommand] = table.id;
+			tableSpecs[table.id] = table;
+			tableViews[table.id] = tableView;
+			if (selection.controlId == 0) selection = readSelection(table.id);
 			++nextCommand;
 		}
 
@@ -720,16 +790,29 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 		MRMacroModelessSelection result;
 		std::map<int, TView *>::const_iterator it = listViews.find(controlId);
 		std::map<int, TView *>::const_iterator gridIt = gridViews.find(controlId);
+		std::map<int, TView *>::const_iterator treeIt = treeViews.find(controlId);
+		std::map<int, TView *>::const_iterator tableIt = tableViews.find(controlId);
 
 		result.controlId = controlId;
 		if (it != listViews.end() && it->second != nullptr) {
-			result.index = macroModelessListSelectedIndex(it->second);
-			result.text = macroModelessListSelectedText(it->second);
+			result.index = macroUiListSelectedIndex(it->second);
+			result.text = macroUiListSelectedText(it->second);
 			return result;
 		}
-		if (gridIt == gridViews.end() || gridIt->second == nullptr) return result;
-		result.index = macroModelessGridSelectedIndex(gridIt->second);
-		result.text = macroModelessGridSelectedText(gridIt->second);
+		if (gridIt != gridViews.end() && gridIt->second != nullptr) {
+			result.index = macroUiGridSelectedIndex(gridIt->second);
+			result.text = macroUiGridSelectedText(gridIt->second);
+			return result;
+		}
+		if (treeIt != treeViews.end() && treeIt->second != nullptr) {
+			result.index = macroUiTreeSelectedIndex(treeIt->second);
+			result.text = macroUiTreeSelectedText(treeIt->second);
+			return result;
+		}
+		if (tableIt != tableViews.end() && tableIt->second != nullptr) {
+			result.index = macroUiTableSelectedIndex(tableIt->second);
+			result.text = macroUiTableSelectedText(tableIt->second);
+		}
 		return result;
 	}
 
@@ -762,6 +845,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			selection = readSelection(listViews.begin()->first);
 		else if (!gridViews.empty())
 			selection = readSelection(gridViews.begin()->first);
+		else if (!treeViews.empty())
+			selection = readSelection(treeViews.begin()->first);
+		else if (!tableViews.empty())
+			selection = readSelection(tableViews.begin()->first);
 		runModelessMacro(windowId, it->second.macroSpec);
 	}
 
@@ -771,18 +858,24 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 		if (g_commandRunner != nullptr) g_commandRunner(windowId, selection.controlId, selection, macroSpec);
 		windowIt = g_windows.find(windowId);
 		if (windowIt == g_windows.end() || windowIt->second != this) return;
-		refreshLists();
+		refreshSelectionControls();
 	}
 
 	MRMacroModelessWindowDefinition definition;
 	std::map<ushort, int> commandToButton;
 	std::map<ushort, int> commandToList;
 	std::map<ushort, int> commandToGrid;
+	std::map<ushort, int> commandToTree;
+	std::map<ushort, int> commandToTable;
 	std::map<int, MRMacroModelessButtonSpec> buttons;
 	std::map<int, MRMacroModelessListBoxSpec> listSpecs;
 	std::map<int, MRMacroModelessGridSpec> gridSpecs;
+	std::map<int, MRMacroModelessTreeSpec> treeSpecs;
+	std::map<int, MRMacroModelessTableSpec> tableSpecs;
 	std::map<int, TView *> listViews;
 	std::map<int, TView *> gridViews;
+	std::map<int, TView *> treeViews;
+	std::map<int, TView *> tableViews;
 	std::vector<MRMacroModelessDisplayLine *> displayViews;
 	std::map<std::string, TView *> textFieldViews;
 	std::map<std::string, TView *> boolFieldViews;
@@ -835,7 +928,7 @@ bool showMacroModelessWindow(const MRMacroModelessWindowDefinition &definition) 
 	if (window == nullptr) return false;
 	g_windows[definition.windowId] = window;
 	TProgram::deskTop->insert(window);
-	window->refreshLists();
+	window->refreshSelectionControls();
 	window->storeLiveGeometry();
 	if (desktopState.virtualDesktop != currentVirtualDesktop() || desktopState.manuallyHidden) window->hide();
 	mrNotifyWindowTopologyChanged();
@@ -934,6 +1027,6 @@ void refreshMacroModelessWindows() {
 	for (std::map<std::string, MRMacroModelessWindow *>::iterator entry = g_windows.begin(); entry != g_windows.end(); ++entry)
 		if (entry->second != nullptr) {
 			entry->second->storeLiveGeometry();
-			entry->second->refreshLists();
+			entry->second->refreshSelectionControls();
 		}
 }

@@ -4454,28 +4454,166 @@ bool testMmpClientFocusDispatchHarness(std::string &failureReason) {
 	return true;
 }
 
-bool testMmpActionGridHarness(std::string &failureReason) {
+bool testMmpCollectionControlHarness(std::string &failureReason) {
 	TScrollBar *scrollBar = new TScrollBar(TRect(23, 0, 24, 4));
-	TView *gridView = createMacroModelessGridView(TRect(0, 0, 23, 4), scrollBar, {"Refresh\tREFRESH\tUpdate the activity field", "Close\tCLOSE\tClose the panel"}, 0);
+	TScrollBar *treeScrollBar = new TScrollBar(TRect(23, 0, 24, 4));
+	TScrollBar *tableScrollBar = new TScrollBar(TRect(23, 0, 24, 4));
+	TView *gridView = createMacroUiGridView(TRect(0, 0, 23, 4), scrollBar, {"Refresh\tREFRESH\tUpdate the activity field", "Close\tCLOSE\tClose the panel"}, 0);
+	TView *treeView = createMacroUiTreeView(TRect(0, 0, 23, 4), treeScrollBar, {"TREE\troot\t\tRoot\t1", "TREE\tapp\troot\tApplication\t0", "TREE\tcommands\tapp\tCommands\t0"}, 0);
+	TView *tableView = createMacroUiTableView(TRect(0, 0, 23, 4), tableScrollBar, {"TABLE_COLUMN\tName\t12", "TABLE_COLUMN\tState\t8", "TABLE_ROW\tone\tOne\tready", "TABLE_ROW\ttwo\tTwo\tready", "TABLE_ROW\tthree\tThree\tqueued"}, 0);
 	TEvent event{};
 	std::string sourceText;
+	std::string conventionalSource;
+	std::string modelessSource;
 	std::string ioError;
-	const bool initialSelection = gridView != nullptr && macroModelessGridSelectedIndex(gridView) == 1 && macroModelessGridSelectedText(gridView) == "REFRESH";
+	std::vector<unsigned char> bytecode;
+	std::string compileError;
+	MRVMRuntimeKv collectionRuntimeKv;
+	MRMacroModelessWindowDefinition collectionDefinition;
+	std::string selectedNodeId;
+	std::string selectedRowId;
+	bool nodeExpanded = false;
+	std::vector<std::string> globalOrder;
+	std::map<std::string, int> globalInts;
+	std::map<std::string, std::string> globalStrings;
+	std::vector<std::string> macroLog;
+	std::string demoWindowId;
+	std::string demoError;
+	TWindow *demoWindow = nullptr;
+	TView *demoTreeView = nullptr;
+	TView *demoTableView = nullptr;
+	const bool initialSelection = gridView != nullptr && macroUiGridSelectedIndex(gridView) == 1 && macroUiGridSelectedText(gridView) == "REFRESH";
 
 	if (initialSelection) {
 		event.what = evKeyDown;
 		event.keyDown.keyCode = kbRight;
 		gridView->handleEvent(event);
 	}
-	const bool nextSelection = initialSelection && event.what == evNothing && macroModelessGridSelectedIndex(gridView) == 2 && macroModelessGridSelectedText(gridView) == "CLOSE";
+	const bool nextSelection = initialSelection && event.what == evNothing && macroUiGridSelectedIndex(gridView) == 2 && macroUiGridSelectedText(gridView) == "CLOSE";
+	const bool initialTreeSelection = treeView != nullptr && macroUiTreeSelectedIndex(treeView) == 1 && macroUiTreeSelectedText(treeView) == "root";
+
+	if (initialTreeSelection) {
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbDown;
+		treeView->handleEvent(event);
+	}
+	const bool treeChildSelected = initialTreeSelection && event.what == evNothing && macroUiTreeSelectedIndex(treeView) == 2 && macroUiTreeSelectedText(treeView) == "app";
+	if (treeChildSelected) {
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbRight;
+		treeView->handleEvent(event);
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbDown;
+		treeView->handleEvent(event);
+	}
+	const bool treeExpandedAndSelected = treeChildSelected && event.what == evNothing && macroUiTreeSelectedIndex(treeView) == 3 && macroUiTreeSelectedText(treeView) == "commands";
+	const bool initialTableSelection = tableView != nullptr && macroUiTableSelectedIndex(tableView) == 1 && macroUiTableSelectedText(tableView) == "one";
+
+	if (initialTableSelection) {
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbDown;
+		tableView->handleEvent(event);
+	}
+	const bool nextTableSelection = initialTableSelection && event.what == evNothing && macroUiTableSelectedIndex(tableView) == 2 && macroUiTableSelectedText(tableView) == "two";
+	collectionDefinition.windowId = "MMP-COLLECTION-STATE";
+	collectionDefinition.width = 30;
+	collectionDefinition.height = 10;
+	mrvmModelessUiStoreWindowDefinition(collectionRuntimeKv, collectionDefinition);
+	const bool collectionStateRetained = mrvmModelessUiStoreWindowTreeSelection(collectionRuntimeKv, collectionDefinition.windowId, 71, "commands") && mrvmModelessUiStoreWindowTreeExpansion(collectionRuntimeKv, collectionDefinition.windowId, 71, "app", true) && mrvmModelessUiStoreWindowTableSelection(collectionRuntimeKv, collectionDefinition.windowId, 72, "two");
+	mrvmModelessUiStoreWindowDefinition(collectionRuntimeKv, collectionDefinition);
+	const bool collectionStateReadable = collectionStateRetained && mrvmModelessUiReadWindowTreeSelection(collectionRuntimeKv, collectionDefinition.windowId, 71, selectedNodeId) && selectedNodeId == "commands" && mrvmModelessUiReadWindowTreeExpansion(collectionRuntimeKv, collectionDefinition.windowId, 71, "app", nodeExpanded) && nodeExpanded && mrvmModelessUiReadWindowTableSelection(collectionRuntimeKv, collectionDefinition.windowId, 72, selectedRowId) && selectedRowId == "two";
+	const bool invalidCollectionsRejected = !macroUiTreeItemsValid({"TREE\tchild\tmissing\tChild\t0"}) && !macroUiTableItemsValid({"TABLE_COLUMN\tName\t8", "TABLE_ROW\tone\tOne\tready"});
+	const bool demoStarted = ensureRegressionEditorApp(failureReason) != nullptr && mrvmLoadMacroFile(absolutePathFromCwd("mrmac/macros/utils/MmpTreeTableDemo.mrmac"), &demoError) && mrvmRunMacroSpec("MmpTreeTableDemo^MmpTreeTableDemo", &demoError, &macroLog);
+
+	if (demoStarted) {
+		mrvmUiCopyGlobals(globalOrder, globalInts, globalStrings);
+		std::map<std::string, std::string>::const_iterator windowIdIt = globalStrings.find("MMP_TREE_TABLE_WINDOW");
+
+		if (windowIdIt != globalStrings.end()) demoWindowId = windowIdIt->second;
+		for (MRDesktopWindow *desktopWindow : allDesktopWindowsInZOrder()) {
+			TWindow *nativeWindow = desktopWindow != nullptr ? desktopWindow->desktopNativeWindow() : nullptr;
+			const char *title = nativeWindow != nullptr ? nativeWindow->getTitle(0) : nullptr;
+
+			if (title != nullptr && std::string(title) == "MMP TREE AND TABLE") demoWindow = nativeWindow;
+		}
+		if (demoWindow != nullptr) {
+			TGroup *group = static_cast<TGroup *>(demoWindow);
+			TView *firstChild = group->first();
+
+			for (TView *view = firstChild; view != nullptr; view = view->next) {
+				if (view->getBounds() == TRect(2, 4, 31, 12)) demoTreeView = view;
+				if (view->getBounds() == TRect(36, 4, 69, 12)) demoTableView = view;
+				if (view->next == firstChild) break;
+			}
+		}
+	}
+	bool liveModelessState = demoStarted && !demoWindowId.empty() && demoWindow != nullptr && demoTreeView != nullptr && demoTableView != nullptr;
+
+	if (liveModelessState) {
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbDown;
+		demoTreeView->handleEvent(event);
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbLeft;
+		demoTreeView->handleEvent(event);
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbRight;
+		demoTreeView->handleEvent(event);
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbRight;
+		demoTreeView->handleEvent(event);
+		liveModelessState = event.what == evNothing && mrvmReadModelessWindowTreeSelection(demoWindowId, 71, selectedNodeId) && selectedNodeId == "commands" && mrvmReadModelessWindowTreeExpansion(demoWindowId, 71, "app", nodeExpanded) && nodeExpanded;
+		event = TEvent{};
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbDown;
+		demoTableView->handleEvent(event);
+		liveModelessState = liveModelessState && event.what == evNothing && mrvmReadModelessWindowTableSelection(demoWindowId, 72, selectedRowId) && selectedRowId == "syntax";
+	}
+	if (demoWindow != nullptr) message(demoWindow, evCommand, cmClose, nullptr);
 	if (gridView != nullptr) TObject::destroy(gridView);
+	if (treeView != nullptr) TObject::destroy(treeView);
+	if (tableView != nullptr) TObject::destroy(tableView);
 	if (scrollBar != nullptr) TObject::destroy(scrollBar);
+	if (treeScrollBar != nullptr) TObject::destroy(treeScrollBar);
+	if (tableScrollBar != nullptr) TObject::destroy(tableScrollBar);
 	if (!initialSelection || !nextSelection) {
 		failureReason = "MMP action grids must retain full action values and keyboard selection.";
 		return false;
 	}
+	if (!initialTreeSelection || !treeChildSelected || !treeExpandedAndSelected || !initialTableSelection || !nextTableSelection) {
+		failureReason = "Shared tree and table controls must navigate stable node and row ids through their native key paths.";
+		return false;
+	}
+	if (!invalidCollectionsRejected) {
+		failureReason = "Tree and table item encodings must reject invalid parent and cell structures.";
+		return false;
+	}
+	if (!collectionStateReadable) {
+		failureReason = "Modeless tree and table selection state must remain in the window K/V model across a definition refresh.";
+		return false;
+	}
+	if (!liveModelessState) {
+		failureReason = "The tree/table demo must create shared controls whose native navigation synchronizes the live MMP K/V model: " + demoError + " started=" + std::to_string(demoStarted ? 1 : 0) + " id=" + demoWindowId + " window=" + std::to_string(demoWindow != nullptr ? 1 : 0) + " tree=" + std::to_string(demoTreeView != nullptr ? 1 : 0) + " table=" + std::to_string(demoTableView != nullptr ? 1 : 0);
+		return false;
+	}
 	if (!readTextFile(absolutePathFromCwd("mrmac/ui/modeless/MRMacroModelessControls.cpp"), sourceText, ioError) || sourceText.find("updateCellWidth()") == std::string::npos || sourceText.find("static constexpr int cellWidth = 4") != std::string::npos) {
 		failureReason = "MMP action grids must derive their cell width from their labels.";
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/ui/conventional/MRVMMacroDialogRuntime.cpp"), conventionalSource, ioError) || !readTextFile(absolutePathFromCwd("mrmac/ui/modeless/MRMacroModelessUi.cpp"), modelessSource, ioError) || conventionalSource.find("createMacroUiListView") == std::string::npos || conventionalSource.find("createMacroUiGridView") == std::string::npos || conventionalSource.find("createMacroUiTreeView") == std::string::npos || conventionalSource.find("createMacroUiTableView") == std::string::npos || modelessSource.find("createMacroUiListView") == std::string::npos || modelessSource.find("createMacroUiGridView") == std::string::npos || modelessSource.find("createMacroUiTreeView") == std::string::npos || modelessSource.find("createMacroUiTableView") == std::string::npos) {
+		failureReason = "Conventional dialogs and MMPs must project every collection control through the shared UI control factory.";
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/macros/utils/MmpTreeTableDemo.mrmac"), sourceText, ioError) || !compileBytecode(sourceText, bytecode, compileError)) {
+		failureReason = "The MMP tree/table demo must compile: " + (ioError.empty() ? compileError : ioError);
 		return false;
 	}
 	failureReason.clear();
@@ -11220,7 +11358,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Exec session owner and MMP canvas guard", testExecSessionOwnerCancellationGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "MMP client and hotspot dispatch harness", testMmpClientFocusDispatchHarness);
-	runTest(ctx, "MMP action grid harness", testMmpActionGridHarness);
+	runTest(ctx, "MMP common collection controls harness", testMmpCollectionControlHarness);
 }
 
 void runFullSuite(TestContext &ctx) {

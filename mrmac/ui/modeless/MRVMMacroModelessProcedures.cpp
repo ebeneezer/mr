@@ -618,6 +618,22 @@ bool mrvmDispatchMacroModelessIntrinsic(MRVMRuntimeKv &runtimeKv, const std::str
 	return true;
 }
 
+static MRMacroModelessSelectionSpec modelessSelectionSpec(const MacroUiSelectionSpec &source, const std::map<int, std::string> &macros) {
+	MRMacroModelessSelectionSpec target;
+	std::map<int, std::string>::const_iterator macroIt = macros.find(source.id);
+
+	target.x = source.x;
+	target.y = source.y;
+	target.width = source.width;
+	target.height = source.height;
+	target.id = source.id;
+	target.label = source.label;
+	target.itemSpec = source.itemSpec;
+	target.macroSpec = macroIt != macros.end() ? macroIt->second : std::string();
+	target.start = source.start;
+	return target;
+}
+
 MRMacroModelessWindowDefinition mrvmBuildMacroModelessDefinition(MRVMRuntimeKv &runtimeKv, const std::string &windowId) {
 	MRMacroModelessWindowDefinition definition;
 	MacroUiDialogDefinition dialog = mrvmModelessUiReadDialogDefinition(runtimeKv);
@@ -781,6 +797,10 @@ MRMacroModelessWindowDefinition mrvmBuildMacroModelessDefinition(MRVMRuntimeKv &
 		target.start = source.start;
 		definition.grids.push_back(target);
 	}
+	for (std::size_t index = 0; index < dialog.trees.size(); ++index)
+		definition.trees.push_back(modelessSelectionSpec(dialog.trees[index], dialog.modelessButtonMacros));
+	for (std::size_t index = 0; index < dialog.tables.size(); ++index)
+		definition.tables.push_back(modelessSelectionSpec(dialog.tables[index], dialog.modelessButtonMacros));
 	for (std::size_t index = 0; index < dialog.buttons.size(); ++index) {
 		const MacroUiButtonSpec &source = dialog.buttons[index];
 		MRMacroModelessButtonSpec target;

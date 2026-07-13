@@ -3,6 +3,22 @@
 MMP builds retained modeless UI from typed MRMAC procedures. A macro never
 receives a TVision view, window pointer or raw event.
 
+## Choosing conventional or modeless UI
+
+`UI_DIALOG` declares a common UI definition. The lifecycle is selected by the
+operation that consumes that definition: `UI_EXEC()` opens a conventional,
+modal dialog; `UI_MODELESS_SHOW(windowId)` projects it as a modeless MMP.
+
+| Choose conventional `UI_EXEC()` when... | Choose modeless `UI_MODELESS_SHOW()` when... |
+| --- | --- |
+| The macro asks for values, waits for one decision, then continues in the same linear flow. | The UI is a desktop tool or live surface that must remain usable while macros, timers or external work continue. |
+| The form is a one-shot confirmation, wizard or compact parameter dialog. | The UI is a persistent form, action panel, status/progress/log view, asynchronous monitor or may have multiple instances. |
+| The result is handled immediately after the dialog closes. | Each interaction is handled by a short `UI_MODELESS_ON` callback and retained MMP state. |
+
+The common controls (`UI_LISTBOX`, `UI_GRID`, `UI_TREE` and `UI_TABLE`) keep
+the same declaration and behaviour in both modes. Choose the lifecycle, not a
+different widget API. MMP window state is volatile across a program restart.
+
 ## Canvas v1
 
 Define the window with the established `UI_DIALOG` family and add a canvas
@@ -83,6 +99,44 @@ is its one-based selection index. Menu ids, labels and values must be non-empty
 and may not contain tab characters. `detail` may be empty. The action menu is
 declared before `UI_MODELESS_SHOW`; it exposes no TVision object, event or
 pointer.
+
+## Shared tree and table controls
+
+`UI_TREE` and `UI_TABLE` are common UI declarations: the identical calls create
+the same native controls in an ordinary `UI_DIALOG` and in a modeless window.
+They use the established numeric control id, `UI_TEXT(id)`, `UI_INDEX(id)` and
+`UI_MODELESS_ON(id, macroSpec)` contract. A modeless callback receives the
+selected stable node or row id through `UI_TEXT`; the one-based visible node or
+row index is available through `UI_INDEX`.
+
+```mrmac
+UI_TREE_CLEAR('ProjectTree');
+UI_TREE_NODE('ProjectTree', 'root', '', 'Project', 1);
+UI_TREE_NODE('ProjectTree', 'docs', 'root', 'Documentation', 0);
+UI_TREE(2, 3, 28, 8, 71, 'Project', 'ProjectTree', 1);
+UI_MODELESS_ON(71, 'Panel^TreeSelected');
+
+UI_TABLE_CLEAR('Jobs');
+UI_TABLE_COLUMN('Jobs', 'Target', 14);
+UI_TABLE_COLUMN('Jobs', 'State', 10);
+UI_TABLE_ROW('Jobs', 'core', 'mr' + CHAR(9) + 'ready');
+UI_TABLE(33, 3, 30, 8, 72, 'Jobs', 'Jobs', 1);
+UI_MODELESS_ON(72, 'Panel^JobSelected');
+```
+
+Tree parents must precede their children; node ids are unique. A table has one
+to sixteen columns, declared before rows; each row has a unique id and exactly
+one tab-separated cell per column (`CHAR(9)` creates a cell separator). Trees are bounded to 256 nodes, tables to
+512 rows. The controls use arrow keys, Home/End, Page Up/Down, mouse wheel,
+Enter and double-click consistently with `UI_LISTBOX` and `UI_GRID`. Their
+scrollbar is visible only when rows overflow.
+
+The named tree or table data remains in the central `MODELESSUI` item-list
+store. For a live MMP, selected tree/table ids and tree expansion are retained
+in that window's K/V state and survive `UI_MODELESS_UPDATE(WindowId)`. Rebuild
+the same named data with the common `UI_TREE_*` or `UI_TABLE_*` procedures and
+call `UI_MODELESS_UPDATE(WindowId)`. MMP state is volatile across a program
+restart. No tree, table, view or event handle enters MRMAC.
 
 ## Text fields
 

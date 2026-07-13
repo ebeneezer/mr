@@ -172,6 +172,7 @@ CXX_SOURCES = \
 	mrmac/ui/modeless/MRMacroModelessUi.cpp \
 	mrmac/ui/modeless/MRMacroModelessCanvas.cpp \
 	mrmac/ui/modeless/MRMacroModelessControls.cpp \
+	mrmac/ui/modeless/MRMacroUiCollections.cpp \
 	mrmac/MRMacroExecutionSession.cpp \
 	mrmac/MRMacroRunner.cpp \
 	app/commands/MRWindowCommands.cpp \
@@ -565,6 +566,8 @@ mrmac/vm/MRVMMacroSpecRuntime.o: mrmac/vm/MRVMMacroSpecRuntime.cpp mrmac/vm/MRVM
 mrmac/ui/modeless/MRVMModelessUiStorage.o: mrmac/ui/modeless/MRVMModelessUiStorage.cpp mrmac/ui/modeless/MRVMModelessUiStorage.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp mrmac/ui/modeless/MRMacroModelessUi.hpp mrmac/mrmac.h
 mrmac/ui/modeless/MRVMModelessUiRuntime.o: mrmac/ui/modeless/MRVMModelessUiRuntime.cpp mrmac/ui/modeless/MRVMModelessUiStorage.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/MRVM.hpp
 mrmac/ui/modeless/MRVMModelessWindowRuntime.o: mrmac/ui/modeless/MRVMModelessWindowRuntime.cpp mrmac/ui/modeless/MRVMModelessUiStorage.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/MRVM.hpp
+mrmac/ui/modeless/MRMacroModelessControls.o: mrmac/ui/modeless/MRMacroModelessControls.cpp mrmac/ui/modeless/MRMacroModelessControls.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp
+mrmac/ui/modeless/MRMacroUiCollections.o: mrmac/ui/modeless/MRMacroUiCollections.cpp mrmac/ui/modeless/MRMacroModelessControls.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp
 mrmac/vm/MRVMProcessRuntime.o: mrmac/vm/MRVMProcessRuntime.cpp mrmac/vm/MRVMProcessRuntime.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp app/utils/MRStringUtils.hpp
 mrmac/vm/MRVMRuntimeCatalog.o: mrmac/vm/MRVMRuntimeCatalog.cpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMProfile.hpp mrmac/MRVM.hpp app/MRRuntimeScheduler.hpp mrmac/mrmac.h
 mrmac/vm/MRVMRuntimeGlobals.o: mrmac/vm/MRVMRuntimeGlobals.cpp mrmac/vm/MRVMRuntimeGlobals.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp mrmac/mrmac.h

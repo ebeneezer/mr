@@ -9,6 +9,25 @@ std::recursive_mutex &mrvmExecutionMutex() noexcept;
 namespace {
 using Value = VirtualMachine::Value;
 constexpr int kMaximumCanvasCommandCount = 2048;
+
+bool findModelessWindowControlState(MRVMRuntimeKv &runtimeKv, const std::string &windowId, const char *kind, int controlId, Value &state, bool create) {
+	Value windows;
+	Value window;
+	Value controls;
+
+	if (windowId.empty() || kind == nullptr || controlId <= 0) return false;
+	if (create) {
+		windows = mr::modelessui::ensureModelessUiChildPath(runtimeKv, {"windows"});
+		window = runtimeKv.ensureChild(windows, windowId);
+		controls = runtimeKv.ensureChild(window, kind);
+		state = runtimeKv.ensureChild(controls, std::to_string(controlId));
+		return true;
+	}
+	if (!mr::modelessui::findModelessUiChildPath(runtimeKv, {"windows"}, windows)) return false;
+	if (!runtimeKv.findChild(windows, windowId, window)) return false;
+	if (!runtimeKv.findChild(window, kind, controls)) return false;
+	return runtimeKv.findChild(controls, std::to_string(controlId), state);
+}
 }
 
 using namespace mr::modelessui;
@@ -30,6 +49,8 @@ void mrvmModelessUiStoreWindowDefinition(MRVMRuntimeKv &runtimeKv, const MRMacro
 	Value buttons;
 	Value listBoxes;
 	Value grids;
+	Value trees;
+	Value tables;
 	int index = 0;
 
 	if (definition.windowId.empty()) return;
@@ -212,6 +233,22 @@ void mrvmModelessUiStoreWindowDefinition(MRVMRuntimeKv &runtimeKv, const MRMacro
 		writeModelessGridHash(runtimeKv, runtimeKv.replaceChild(grids, std::to_string(index)), definition.grids[gridIndex]);
 	}
 	hashWriteInt(runtimeKv, grids, "count", index);
+
+	index = 0;
+	trees = runtimeKv.replaceChild(window, "trees");
+	for (std::size_t treeIndex = 0; treeIndex < definition.trees.size(); ++treeIndex) {
+		++index;
+		writeModelessGridHash(runtimeKv, runtimeKv.replaceChild(trees, std::to_string(index)), definition.trees[treeIndex]);
+	}
+	hashWriteInt(runtimeKv, trees, "count", index);
+
+	index = 0;
+	tables = runtimeKv.replaceChild(window, "tables");
+	for (std::size_t tableIndex = 0; tableIndex < definition.tables.size(); ++tableIndex) {
+		++index;
+		writeModelessGridHash(runtimeKv, runtimeKv.replaceChild(tables, std::to_string(index)), definition.tables[tableIndex]);
+	}
+	hashWriteInt(runtimeKv, tables, "count", index);
 }
 
 bool mrvmModelessUiStoreWindowDisplay(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int displayIndex, const std::string &text) {
@@ -533,6 +570,66 @@ bool mrvmModelessUiReadWindowSelectFieldValue(MRVMRuntimeKv &runtimeKv, const st
 	return true;
 }
 
+bool mrvmModelessUiStoreWindowTreeSelection(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, const std::string &nodeId) {
+	Value state;
+
+	if (nodeId.empty() || !findModelessWindowControlState(runtimeKv, windowId, "treeState", controlId, state, true)) return false;
+	if (hashReadString(runtimeKv, state, "selection") == nodeId) return true;
+	hashWriteString(runtimeKv, state, "selection", nodeId);
+	return true;
+}
+
+bool mrvmModelessUiReadWindowTreeSelection(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, std::string &nodeId) {
+	Value state;
+
+	nodeId.clear();
+	if (!findModelessWindowControlState(runtimeKv, windowId, "treeState", controlId, state, false)) return false;
+	nodeId = hashReadString(runtimeKv, state, "selection");
+	return !nodeId.empty();
+}
+
+bool mrvmModelessUiStoreWindowTreeExpansion(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, const std::string &nodeId, bool expanded) {
+	Value state;
+	Value expandedNodes;
+
+	if (nodeId.empty() || !findModelessWindowControlState(runtimeKv, windowId, "treeState", controlId, state, true)) return false;
+	expandedNodes = runtimeKv.ensureChild(state, "expanded");
+	hashWriteInt(runtimeKv, expandedNodes, nodeId, expanded ? 1 : 0);
+	return true;
+}
+
+bool mrvmModelessUiReadWindowTreeExpansion(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, const std::string &nodeId, bool &expanded) {
+	Value state;
+	Value expandedNodes;
+	int storedValue = -1;
+
+	expanded = false;
+	if (nodeId.empty() || !findModelessWindowControlState(runtimeKv, windowId, "treeState", controlId, state, false)) return false;
+	if (!runtimeKv.findChild(state, "expanded", expandedNodes)) return false;
+	storedValue = hashReadInt(runtimeKv, expandedNodes, nodeId, -1);
+	if (storedValue < 0) return false;
+	expanded = storedValue != 0;
+	return true;
+}
+
+bool mrvmModelessUiStoreWindowTableSelection(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, const std::string &rowId) {
+	Value state;
+
+	if (rowId.empty() || !findModelessWindowControlState(runtimeKv, windowId, "tableState", controlId, state, true)) return false;
+	if (hashReadString(runtimeKv, state, "selection") == rowId) return true;
+	hashWriteString(runtimeKv, state, "selection", rowId);
+	return true;
+}
+
+bool mrvmModelessUiReadWindowTableSelection(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int controlId, std::string &rowId) {
+	Value state;
+
+	rowId.clear();
+	if (!findModelessWindowControlState(runtimeKv, windowId, "tableState", controlId, state, false)) return false;
+	rowId = hashReadString(runtimeKv, state, "selection");
+	return !rowId.empty();
+}
+
 void mrvmModelessUiStoreWindowLiveGeometry(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int x, int y, int width, int height) {
 	Value windows;
 	Value window;
@@ -770,6 +867,36 @@ bool mrvmStoreModelessWindowSelectFieldValue(const std::string &windowId, const 
 bool mrvmReadModelessWindowSelectFieldValue(const std::string &windowId, const std::string &fieldId, std::string &value) {
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	return mrvmModelessUiReadWindowSelectFieldValue(mrvmRuntimeKv(), windowId, fieldId, value);
+}
+
+bool mrvmStoreModelessWindowTreeSelection(const std::string &windowId, int controlId, const std::string &nodeId) {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	return mrvmModelessUiStoreWindowTreeSelection(mrvmRuntimeKv(), windowId, controlId, nodeId);
+}
+
+bool mrvmReadModelessWindowTreeSelection(const std::string &windowId, int controlId, std::string &nodeId) {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	return mrvmModelessUiReadWindowTreeSelection(mrvmRuntimeKv(), windowId, controlId, nodeId);
+}
+
+bool mrvmStoreModelessWindowTreeExpansion(const std::string &windowId, int controlId, const std::string &nodeId, bool expanded) {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	return mrvmModelessUiStoreWindowTreeExpansion(mrvmRuntimeKv(), windowId, controlId, nodeId, expanded);
+}
+
+bool mrvmReadModelessWindowTreeExpansion(const std::string &windowId, int controlId, const std::string &nodeId, bool &expanded) {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	return mrvmModelessUiReadWindowTreeExpansion(mrvmRuntimeKv(), windowId, controlId, nodeId, expanded);
+}
+
+bool mrvmStoreModelessWindowTableSelection(const std::string &windowId, int controlId, const std::string &rowId) {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	return mrvmModelessUiStoreWindowTableSelection(mrvmRuntimeKv(), windowId, controlId, rowId);
+}
+
+bool mrvmReadModelessWindowTableSelection(const std::string &windowId, int controlId, std::string &rowId) {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	return mrvmModelessUiReadWindowTableSelection(mrvmRuntimeKv(), windowId, controlId, rowId);
 }
 
 void mrvmStoreModelessWindowLiveGeometry(const std::string &windowId, int x, int y, int width, int height) {
