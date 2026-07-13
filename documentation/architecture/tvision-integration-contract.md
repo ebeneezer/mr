@@ -32,6 +32,22 @@ MR may extend TVision through standard TVision mechanisms only.
 - Do not use overlay hacks when a TVision-native route exists.
 - Do not change event routing as a side effect of layout cleanup.
 
+## Desktop-managed windows
+
+Top-level windows that participate in MR desktop operations implement the
+`MRDesktopWindow` role. It is the common polymorphic boundary for focusable,
+tileable desktop windows; window commands must not branch on MMP, editor or
+BentoBox concrete types.
+
+- The role exposes native TVision projection, virtual-desktop membership,
+  manual visibility, shared minimize/restore capability and geometry application.
+- Editor-specific actions such as save, revert, file comparison and workspace
+  ownership remain capabilities of `MREditWindow`; they are not desktop-window
+  operations.
+- A modeless MRMAC window participates through the same role while its
+  macro-visible value state remains under `MODELESSUI`.
+- Modal dialogs executed through `execView` are not desktop-managed windows.
+
 ## Allowed
 
 - TVision-compliant overrides.

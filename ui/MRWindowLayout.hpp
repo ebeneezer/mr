@@ -7,6 +7,7 @@
 #include <tvision/tv.h>
 
 class MREditWindow;
+class MRDesktopWindow;
 
 class MRWindowLayout {
   public:
@@ -27,25 +28,25 @@ class MRWindowLayout {
 		int reinsertEnd;
 	};
 
-	static void handleDragView(MREditWindow *window, TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize);
-	[[nodiscard]] static bool isWindowMinimized(const MREditWindow *window) noexcept;
+	static void handleDragView(MRDesktopWindow *window, TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize);
+	[[nodiscard]] static bool isWindowMinimized(const MRDesktopWindow *window) noexcept;
 	[[nodiscard]] static int minimizedDesktopRows() noexcept;
 	[[nodiscard]] static TRect usableDesktopBounds() noexcept;
 	[[nodiscard]] static TRect minimizedBoundsForWorkspace(const MREditWindow *window) noexcept;
 	[[nodiscard]] static TRect restoreBoundsForWorkspace(const MREditWindow *window) noexcept;
 	[[nodiscard]] static const MinimizedGlyphs &minimizedGlyphs() noexcept;
-	[[nodiscard]] static MinimizedLayout minimizedLayout(const MREditWindow *window, int width) noexcept;
-	[[nodiscard]] static const char *minimizedDisplayTitle(const MREditWindow *window) noexcept;
-	[[nodiscard]] static int minimizedDisplayTitleWidth(const MREditWindow *window) noexcept;
-	[[nodiscard]] static int minimizedWindowWidth(const MREditWindow *window) noexcept;
-	[[nodiscard]] static bool isMinimizedRestoreGlyphHit(const MREditWindow *window, TPoint local) noexcept;
-	[[nodiscard]] static bool isMinimizedReinsertGlyphHit(const MREditWindow *window, TPoint local) noexcept;
-	static void minimizeWindow(MREditWindow *window);
-	static void reinsertMinimizedWindow(MREditWindow *window);
-	static void restoreWindow(MREditWindow *window);
-	static void toggleMinimizedWindow(MREditWindow *window);
+	[[nodiscard]] static MinimizedLayout minimizedLayout(const MRDesktopWindow *window, int width) noexcept;
+	[[nodiscard]] static const char *minimizedDisplayTitle(const MRDesktopWindow *window) noexcept;
+	[[nodiscard]] static int minimizedDisplayTitleWidth(const MRDesktopWindow *window) noexcept;
+	[[nodiscard]] static int minimizedWindowWidth(const MRDesktopWindow *window) noexcept;
+	[[nodiscard]] static bool isMinimizedRestoreGlyphHit(const MRDesktopWindow *window, TPoint local) noexcept;
+	[[nodiscard]] static bool isMinimizedReinsertGlyphHit(const MRDesktopWindow *window, TPoint local) noexcept;
+	static void minimizeWindow(MRDesktopWindow *window);
+	static void reinsertMinimizedWindow(MRDesktopWindow *window);
+	static void restoreWindow(MRDesktopWindow *window);
+	static void toggleMinimizedWindow(MRDesktopWindow *window);
 	static void applyWorkspaceState(MREditWindow *window, const TRect &bounds, const TRect &restoreBounds, bool minimized, bool notifyTopology = true, bool projectNow = true);
-	static void applyBatchWindowBounds(MREditWindow *window, const TRect &bounds);
+	static void applyBatchWindowBounds(MRDesktopWindow *window, const TRect &bounds);
 	static void refreshDesktopProjection();
 	static void handleDesktopLayoutChange();
 };

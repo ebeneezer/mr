@@ -75,6 +75,11 @@ std::string execSessionLinePrefix(const char *prefix, const MRMacroExecutionSess
 		line += " buffer #";
 		line += std::to_string(session.owner.bufferId);
 	}
+	if (!session.owner.modelessWindowId.empty()) {
+		line += " modeless-window '";
+		line += session.owner.modelessWindowId;
+		line += "'";
+	}
 	if (!session.label.empty()) {
 		line += " '";
 		line += session.label;

@@ -39,7 +39,8 @@ MRMacroExecutionSession createMacroExecutionSession(const std::string &label, MR
 
 bool macroExecutionOwnerMatches(const MRMacroExecutionOwner &sessionOwner, const MRMacroExecutionOwner &owner) noexcept {
 	if (owner.hasBuffer) return sessionOwner.hasBuffer && sessionOwner.bufferId == owner.bufferId;
-	return !sessionOwner.hasBuffer;
+	if (!owner.modelessWindowId.empty()) return !sessionOwner.hasBuffer && sessionOwner.modelessWindowId == owner.modelessWindowId;
+	return !sessionOwner.hasBuffer && sessionOwner.modelessWindowId.empty();
 }
 
 void trackMacroExecutionSession(const MRMacroExecutionSession &session) {
@@ -206,6 +207,11 @@ std::string describeMacroExecutionSession(const MRMacroExecutionSession &session
 	if (session.owner.hasBuffer) {
 		line += " buffer #";
 		line += std::to_string(session.owner.bufferId);
+	}
+	if (!session.owner.modelessWindowId.empty()) {
+		line += " modeless-window '";
+		line += session.owner.modelessWindowId;
+		line += "'";
 	}
 	if (!session.label.empty()) {
 		line += " '";

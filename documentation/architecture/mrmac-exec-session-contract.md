@@ -146,6 +146,12 @@ Modeless MRMac UI, timers and event callbacks are also consumers of execution
 sessions. They may request execution, cancellation or status, but they do not
 own VM internals.
 
+A modeless control callback must request its target macro through an execution
+session. It must not execute a macro directly from a TVision event handler.
+The execution owner may name one modeless window id; that identity is runtime
+only and scopes lifecycle, status and later cancellation without becoming a
+persistence identity.
+
 ## Session Variables
 
 `DEF_*` declarations in a normal finite macro execution create VM-local
@@ -336,6 +342,15 @@ The runtime scheduler owns scheduled consumer behavior. Its scheduled consumer
 metadata such as owner, interval, macro spec or macro source package and
 overrun policy is runtime-only state under `EXECSESSIONS` and must not be
 serialized.
+
+An MMP timer identifies its consumer with the modeless execution owner and a
+logical timer key. The MMP API must never expose the scheduler consumer id.
+Closing the modeless window removes all scheduler consumers for that owner
+before requesting cooperative cancellation of that owner's active sessions.
+An MMP timer callback is explicitly routed by the macro runner to the UI
+thread execution path. It remains an execution session, but its dynamic
+`RUN_MACRO` launcher must not become a staged background session merely
+because an editor has focus.
 
 The scheduler does not execute bytecode directly. When a scheduled tick is
 allowed to run, it requests a normal execution session. The macro runner still

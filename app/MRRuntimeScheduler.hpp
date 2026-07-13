@@ -38,6 +38,7 @@ struct MRRuntimeScheduledConsumerConfig {
 	std::string macroSource;
 	std::string entryName;
 	std::string closureId;
+	std::string consumerKey;
 	MRRuntimeScheduleOverrunPolicy overrunPolicy = MRRuntimeScheduleOverrunPolicy::Skip;
 };
 
@@ -65,6 +66,8 @@ struct MRRuntimeSchedulerEvent {
 MRRuntimeScheduledConsumerId registerRuntimeScheduledConsumer(const MRRuntimeScheduledConsumerConfig &config);
 bool removeRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId);
 std::size_t removeRuntimeScheduledConsumersForMacroSpec(const std::string &macroSpec);
+std::size_t removeRuntimeScheduledConsumersForOwner(const MRMacroExecutionOwner &owner);
+std::size_t removeRuntimeScheduledConsumersForOwnerAndKey(const MRMacroExecutionOwner &owner, const std::string &consumerKey);
 std::vector<MRRuntimeScheduledConsumer> runtimeScheduledConsumers();
 std::vector<MRRuntimeSchedulerEvent> recentRuntimeSchedulerEvents();
 bool runtimeScheduledConsumerTickMayStart(MRRuntimeScheduledConsumerId consumerId, MRMacroExecutionSessionId *blockingSessionId);

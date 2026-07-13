@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "MRFrame.hpp"
+#include "MRDesktopWindow.hpp"
 #include "MRIndicator.hpp"
 #include "MRTextBuffer.hpp"
 #include "MRWindowLayout.hpp"
@@ -188,7 +189,7 @@ class MREditScrollBar : public TScrollBar {
 	TColorAttr mIndicatorColor;
 };
 
-class MREditWindow : public TWindow {
+class MREditWindow : public TWindow, public MRDesktopWindow {
 	friend class MRWindowLayout;
 
   public:
@@ -894,6 +895,76 @@ class MREditWindow : public TWindow {
 
 	void restoreWindow() {
 		MRWindowLayout::restoreWindow(this);
+	}
+
+	TWindow *desktopNativeWindow() override {
+		return this;
+	}
+
+	const TWindow *desktopNativeWindow() const override {
+		return this;
+	}
+
+	int desktopIndex() const override {
+		return mVirtualDesktop;
+	}
+
+	void setDesktopIndex(int index) override {
+		mVirtualDesktop = std::max(1, index);
+	}
+
+	bool desktopManuallyHidden() const override {
+		return mManuallyHidden;
+	}
+
+	void setDesktopManuallyHidden(bool hidden) override {
+		mManuallyHidden = hidden;
+	}
+
+	bool desktopMinimized() const override {
+		return mMinimized;
+	}
+
+	void readDesktopMinimizedState(MRDesktopMinimizedState &state) const override {
+		state.minimized = mMinimized;
+		state.bufferedBeforeMinimize = mBufferedBeforeMinimize;
+		state.restoreBounds = mRestoreBounds;
+		state.lastMinimizedBounds = mLastMinimizedBounds;
+	}
+
+	void storeDesktopMinimizedState(const MRDesktopMinimizedState &state) override {
+		mMinimized = state.minimized;
+		mBufferedBeforeMinimize = state.bufferedBeforeMinimize;
+		mRestoreBounds = state.restoreBounds;
+		mLastMinimizedBounds = state.lastMinimizedBounds;
+	}
+
+	const char *desktopMinimizedTitle() const override {
+		return currentFileName()[0] != '\0' ? currentFileName() : const_cast<MREditWindow *>(this)->getTitle(0);
+	}
+
+	void layoutDesktopContents() override {
+		layoutEditorChrome();
+	}
+
+	void synchronizeDesktopContents() override {
+		if (editor != nullptr) editor->syncFromEditorState();
+	}
+
+	void restoreDesktopWindow() override {
+		restoreWindow();
+	}
+
+	void applyDesktopBounds(const TRect &bounds) override {
+		freeBuffer();
+		setBounds(bounds);
+		clip = getExtent();
+		if (frame != nullptr) frame->setBounds(getExtent());
+		layoutEditorChrome();
+	}
+
+	bool desktopShowsFrameGrowHandle() const override {
+		return showsFrameGrowHandle();
 	}
 
 	void setFullscreenPresentation(bool enabled) {
@@ -2532,6 +2603,7 @@ class MREditWindow : public TWindow {
 	MRFileEditor *editor;
 	int mBufferId;
 	bool mFirstSaveDone;
+	bool mManuallyHidden = false;
 	bool mTemporaryFileUsed;
 	std::string mTemporaryFileName;
 	int mIndentLevel;

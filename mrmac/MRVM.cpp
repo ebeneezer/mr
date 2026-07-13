@@ -24,16 +24,18 @@
 #include <tvision/tv.h>
 
 #include "mrmac.h"
-#include "MRMacroModelessUi.hpp"
+#include "ui/modeless/MRMacroModelessUi.hpp"
+#include "MRMacroRunner.hpp"
 #include "MRVM.hpp"
 #include "MRVMDebugSession.hpp"
 #include "vm/MRVMExecSessions.hpp"
-#include "vm/MRVMDeferredUi.hpp"
+#include "ui/conventional/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
-#include "vm/MRVMMacroDialogRuntime.hpp"
+#include "ui/conventional/MRVMMacroDialogRuntime.hpp"
+#include "ui/modeless/MRVMMacroModelessProcedures.hpp"
 #include "vm/MRVMKeymapRuntime.hpp"
 #include "vm/MRVMMacroSpecRuntime.hpp"
-#include "vm/MRVMModelessUiRuntime.hpp"
+#include "ui/modeless/MRVMModelessUiRuntime.hpp"
 #include "vm/MRVMProcessRuntime.hpp"
 #include "vm/MRVMRuntimeCatalog.hpp"
 #include "vm/MRVMRuntimeDebugger.hpp"
@@ -41,7 +43,7 @@
 #include "vm/MRVMRuntimeKv.hpp"
 #include "vm/MRVMRuntimeState.hpp"
 #include "vm/MRVMValue.hpp"
-#include "vm/MRVMScreen.hpp"
+#include "ui/conventional/MRVMScreen.hpp"
 #include "vm/MRVMSettings.hpp"
 #include <algorithm>
 #include <array>
@@ -3032,14 +3034,18 @@ static std::vector<std::string> resolveMacroUiListItems(const std::string &itemS
 	return mrvmResolveMacroUiListItems(g_runtimeEnv.runtimeKv, itemSpec);
 }
 
-static void runMacroModelessCommand(const std::string &, int, const MRMacroModelessSelection &selection, const std::string &macroSpec) {
+static void runMacroModelessCommand(const std::string &windowId, int, const MRMacroModelessSelection &selection, const std::string &macroSpec) {
 	if (selection.controlId != 0) {
 		mrvmModelessUiWriteIndexValue(g_runtimeEnv.runtimeKv, selection.controlId, selection.index);
 		mrvmModelessUiWriteTextValue(g_runtimeEnv.runtimeKv, selection.controlId, selection.text);
 	}
 	if (!macroSpec.empty()) {
+		MRMacroExecutionOwner owner;
+		MRMacroExecutionSession session;
 		std::string errorText;
-		if (!mrvmRunMacroSpec(macroSpec, &errorText)) {
+
+		owner.modelessWindowId = windowId;
+		if (!runMacroSpecByNameAsExecutionSessionForOwner(macroSpec.c_str(), owner, &session, &errorText, false)) {
 			runtimeErrorLevel() = 1001;
 			if (!errorText.empty()) static_cast<void>(mrvmUiMarquee(2, errorText));
 		}
@@ -4254,6 +4260,10 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 	if (name == "UI_EXEC") return mrvmMakeInt(mrvmRunMacroUiDialogDefinition(g_runtimeEnv.runtimeKv));
 	if (name == "UI_TEXT") return mrvmMakeString(mrvmModelessUiReadTextValue(g_runtimeEnv.runtimeKv, mrvmValueAsInt(args[0])));
 	if (name == "UI_INDEX") return mrvmMakeInt(mrvmModelessUiReadIndexValue(g_runtimeEnv.runtimeKv, mrvmValueAsInt(args[0])));
+	{
+		Value modelessResult;
+		if (mrvmDispatchMacroModelessIntrinsic(g_runtimeEnv.runtimeKv, name, args, modelessResult)) return modelessResult;
+	}
 	if (name == "STRING_IN") {
 		if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("STRING_IN is not available in background mode.");
 		return mrvmMakeString(mrvmRunMacroStringInputIntrinsic(args));
@@ -5565,6 +5575,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 4 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || !mrvmIsStringLike(args[2]) || !mrvmIsStringLike(args[3])) throw std::runtime_error("MRCOMPILERPROFILE expects (string, string, string, string).");
 					if (!applyConfiguredCompilerProfileDirective(mrvmValueAsString(args[0]), mrvmValueAsString(args[1]), mrvmValueAsString(args[2]), mrvmValueAsString(args[3]), &errorText)) throw std::runtime_error("MRCOMPILERPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
 					runtimeErrorLevel() = 0;
+					} else if (name.size() >= 4 && name.compare(0, 4, "MMP_") == 0) {
+						int modelessReturnValue = 0;
+						std::string modelessError;
+
+						if (!mrvmDispatchMacroModelessProcedure(g_runtimeEnv.runtimeKv, name, args, modelessReturnValue, modelessError)) throw std::runtime_error("Unknown MMP procedure: " + name);
+						runtimeReturnInt() = modelessReturnValue;
+						runtimeErrorLevel() = modelessReturnValue != 0 ? 0 : 1001;
+						if (modelessReturnValue == 0 && !modelessError.empty()) throw std::runtime_error(modelessError);
 					} else if (name == "UI_DIALOG") {
 						mrvmBeginMacroUiDialog(g_runtimeEnv.runtimeKv, args);
 						runtimeErrorLevel() = 0;

@@ -9,7 +9,7 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
-#include "../mrmac.h"
+#include "../../mrmac.h"
 
 #include <algorithm>
 #include <atomic>
@@ -19,12 +19,12 @@
 #include <utility>
 #include <vector>
 
-#include "../../app/commands/MRWindowCommands.hpp"
-#include "../../ui/MREditWindow.hpp"
-#include "../../ui/MRMenuBar.hpp"
-#include "../../ui/MRMessageLineController.hpp"
-#include "../../ui/MRStatusLine.hpp"
-#include "../../ui/MRWindowSupport.hpp"
+#include "../../../app/commands/MRWindowCommands.hpp"
+#include "../../../ui/MREditWindow.hpp"
+#include "../../../ui/MRMenuBar.hpp"
+#include "../../../ui/MRMessageLineController.hpp"
+#include "../../../ui/MRStatusLine.hpp"
+#include "../../../ui/MRWindowSupport.hpp"
 
 namespace {
 using Value = VirtualMachine::Value;

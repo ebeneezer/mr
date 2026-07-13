@@ -31,6 +31,7 @@ enum class MRMacroExecutionState {
 struct MRMacroExecutionOwner {
 	bool hasBuffer = false;
 	int bufferId = 0;
+	std::string modelessWindowId;
 };
 
 struct MRMacroExecutionSession {

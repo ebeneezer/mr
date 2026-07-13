@@ -40,6 +40,7 @@
 #include "../../ui/widgets/MRScopedHistoryUI.hpp"
 #include "../../ui/MRWindowLayout.hpp"
 #include "../../ui/MRWindowSupport.hpp"
+#include "../../ui/MRDesktopWindow.hpp"
 #include "../../dialogs/MRWindowList.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
 
@@ -61,6 +62,13 @@ void collectEditWindowsInZOrder(TView *view, void *arg) {
 	MREditWindow *win = dynamic_cast<MREditWindow *>(view);
 
 	if (windows != nullptr && win != nullptr) windows->push_back(win);
+}
+
+void collectDesktopWindowsInZOrder(TView *view, void *arg) {
+	std::vector<MRDesktopWindow *> *windows = static_cast<std::vector<MRDesktopWindow *> *>(arg);
+	MRDesktopWindow *window = dynamic_cast<MRDesktopWindow *>(view);
+
+	if (windows != nullptr && window != nullptr) windows->push_back(window);
 }
 } // namespace
 
@@ -88,6 +96,18 @@ std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder() {
 		if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window)) bentoBox->collectVisiblePaneWindows(expanded);
 	}
 	return expanded;
+}
+
+std::vector<MRDesktopWindow *> allDesktopWindowsInZOrder() {
+	std::vector<MRDesktopWindow *> windows;
+
+	if (TProgram::deskTop == nullptr) return windows;
+	TProgram::deskTop->forEach(collectDesktopWindowsInZOrder, &windows);
+	return windows;
+}
+
+MRDesktopWindow *currentDesktopWindow() {
+	return TProgram::deskTop != nullptr ? dynamic_cast<MRDesktopWindow *>(TProgram::deskTop->current) : nullptr;
 }
 
 namespace {
@@ -182,7 +202,6 @@ bool MRWindowOpenBatch::active() const noexcept {
 static int g_currentVirtualDesktop = 1;
 static int g_virtualDesktopCountSnapshot = 1;
 static bool g_cyclicVirtualDesktopsSnapshot = false;
-static std::set<const MREditWindow *> g_manuallyHiddenWindows;
 static std::string g_workspaceMainFilePath;
 static bool g_workspaceAutosaveDirty = false;
 static bool g_workspaceRestoreInProgress = false;
@@ -283,19 +302,6 @@ std::string unescapeMrmacSingleQuotedLiteral(std::string_view value) {
 std::string workspaceDisplayName(const std::string &path) {
 	std::size_t pos = path.find_last_of("\\/");
 	return pos == std::string::npos ? path : path.substr(pos + 1);
-}
-
-void pruneManuallyHiddenWindows(const std::vector<MREditWindow *> &windows) {
-	std::set<const MREditWindow *> active;
-
-	for (MREditWindow *win : windows)
-		if (win != nullptr) active.insert(win);
-
-	for (auto it = g_manuallyHiddenWindows.begin(); it != g_manuallyHiddenWindows.end();) {
-		if (active.find(*it) == active.end()) it = g_manuallyHiddenWindows.erase(it);
-		else
-			++it;
-	}
 }
 
 std::vector<std::string> splitWorkspaceToken(const std::string &text, char delimiter) {
@@ -962,16 +968,13 @@ bool mrCyclicVirtualDesktopsSnapshot() {
 void setWindowManuallyHidden(MREditWindow *win, bool hidden) {
 	if (win == nullptr) return;
 	if (hidden == isWindowManuallyHidden(win)) return;
-	if (hidden) g_manuallyHiddenWindows.insert(win);
-	else
-		g_manuallyHiddenWindows.erase(win);
+	win->setDesktopManuallyHidden(hidden);
 	MRWindowLayout::handleDesktopLayoutChange();
 	mrNotifyWindowTopologyChanged();
 }
 
 bool isWindowManuallyHidden(const MREditWindow *win) {
-	if (win == nullptr) return false;
-	return g_manuallyHiddenWindows.find(win) != g_manuallyHiddenWindows.end();
+	return win != nullptr && win->desktopManuallyHidden();
 }
 
 namespace {
@@ -981,26 +984,23 @@ void postDesktopChangedMessage(int desktop) {
 } // namespace
 
 void syncVirtualDesktopVisibility() {
-	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-	MREditWindow *candidate = nullptr;
-	MREditWindow *current = TProgram::deskTop != nullptr ? dynamic_cast<MREditWindow *>(TProgram::deskTop->current) : nullptr;
+	std::vector<MRDesktopWindow *> windows = allDesktopWindowsInZOrder();
+	MRDesktopWindow *candidate = nullptr;
+	MRDesktopWindow *current = TProgram::deskTop != nullptr ? dynamic_cast<MRDesktopWindow *>(TProgram::deskTop->current) : nullptr;
 
-	pruneManuallyHiddenWindows(windows);
+	for (MRDesktopWindow *window : windows) {
+		TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+		const bool visible = window != nullptr && window->desktopIndex() == g_currentVirtualDesktop && !window->desktopManuallyHidden();
 
-	for (MREditWindow *win : windows) {
-		const bool manuallyHidden = isWindowManuallyHidden(win);
-
-		if (win == nullptr) continue;
-		if (win->mVirtualDesktop == g_currentVirtualDesktop) {
-			if (candidate == nullptr && !manuallyHidden) candidate = win;
-			if (!manuallyHidden && (win->state & sfVisible) == 0) win->show();
-			else if (manuallyHidden && (win->state & sfVisible) != 0)
-				win->hide();
-		} else if ((win->state & sfVisible) != 0)
-			win->hide();
+		if (nativeWindow == nullptr) continue;
+		if (visible) {
+			if (candidate == nullptr) candidate = window;
+			if ((nativeWindow->state & sfVisible) == 0) nativeWindow->show();
+		} else if ((nativeWindow->state & sfVisible) != 0)
+			nativeWindow->hide();
 	}
 
-	if (candidate != nullptr && (current == nullptr || current->mVirtualDesktop != g_currentVirtualDesktop || (current->state & sfVisible) == 0)) candidate->select();
+	if (candidate != nullptr && (current == nullptr || current->desktopIndex() != g_currentVirtualDesktop || (current->desktopNativeWindow()->state & sfVisible) == 0)) candidate->desktopNativeWindow()->select();
 
 	if (TProgram::deskTop != nullptr) {
 		TProgram::deskTop->redraw();
@@ -1023,12 +1023,12 @@ void setCurrentVirtualDesktop(int vd) {
 }
 
 void applyVirtualDesktopConfigurationChange(int count) {
-	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	std::vector<MRDesktopWindow *> windows = allDesktopWindowsInZOrder();
 	std::string ignoredError;
 
 	count = normalizedVirtualDesktopCount(count);
-	for (MREditWindow *win : windows)
-		if (win != nullptr && win->mVirtualDesktop > count) win->mVirtualDesktop = count;
+	for (MRDesktopWindow *window : windows)
+		if (window != nullptr && window->desktopIndex() > count) window->setDesktopIndex(count);
 
 	setConfiguredVirtualDesktops(count, &ignoredError);
 	mrRefreshVirtualDesktopSettingsSnapshot(count, configuredCyclicVirtualDesktops());
@@ -1036,20 +1036,19 @@ void applyVirtualDesktopConfigurationChange(int count) {
 }
 
 bool moveToNextVirtualDesktop() {
-	MREditWindow *win = currentEditWindow();
-	if (win == nullptr) return false;
+	MRDesktopWindow *window = TProgram::deskTop != nullptr ? dynamic_cast<MRDesktopWindow *>(TProgram::deskTop->current) : nullptr;
 	int maxVd = mrVirtualDesktopCountSnapshot();
-	if (win->mVirtualDesktop >= maxVd) return false;
-	win->mVirtualDesktop++;
+	if (window == nullptr || window->desktopIndex() >= maxVd) return false;
+	window->setDesktopIndex(window->desktopIndex() + 1);
 	syncVirtualDesktopVisibility();
 	return true;
 }
 
 bool moveToPrevVirtualDesktop() {
-	MREditWindow *win = currentEditWindow();
-	if (win == nullptr) return false;
-	if (win->mVirtualDesktop <= 1) return false;
-	win->mVirtualDesktop--;
+	MRDesktopWindow *window = TProgram::deskTop != nullptr ? dynamic_cast<MRDesktopWindow *>(TProgram::deskTop->current) : nullptr;
+
+	if (window == nullptr || window->desktopIndex() <= 1) return false;
+	window->setDesktopIndex(window->desktopIndex() - 1);
 	syncVirtualDesktopVisibility();
 	return true;
 }
@@ -1514,12 +1513,71 @@ bool activateRelativeEditWindow(int delta) {
 	return mrActivateEditWindow(windows.front());
 }
 
+bool activateRelativeDesktopWindow(int delta) {
+	std::vector<MRDesktopWindow *> windows = allDesktopWindowsInZOrder();
+	MRDesktopWindow *current = currentDesktopWindow();
+	std::size_t index = 0;
+
+	if (windows.empty()) return false;
+	if (current == nullptr) current = windows.front();
+	for (; index < windows.size(); ++index)
+		if (windows[index] == current) break;
+	if (index == windows.size()) index = 0;
+	int nextIndex = static_cast<int>(index) + delta;
+	const int count = static_cast<int>(windows.size());
+
+	while (nextIndex < 0)
+		nextIndex += count;
+	nextIndex %= count;
+	MRDesktopWindow *target = windows[static_cast<std::size_t>(nextIndex)];
+	TWindow *nativeWindow = target != nullptr ? target->desktopNativeWindow() : nullptr;
+
+	if (target == nullptr || nativeWindow == nullptr) return false;
+	if (target->desktopIndex() != currentVirtualDesktop()) setCurrentVirtualDesktop(target->desktopIndex());
+	if (target->desktopManuallyHidden()) {
+		target->setDesktopManuallyHidden(false);
+		mrNotifyWindowTopologyChanged();
+	}
+	syncVirtualDesktopVisibility();
+	nativeWindow->select();
+	return true;
+}
+
 bool hideCurrentEditWindow() {
 	MREditWindow *win = currentEditWindow();
 	if (win == nullptr) return false;
-	setWindowManuallyHidden(win, true);
-	win->hide();
+	return hideCurrentDesktopWindow();
+}
+
+bool hideCurrentDesktopWindow() {
+	MRDesktopWindow *window = currentDesktopWindow();
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+
+	if (nativeWindow == nullptr) return false;
+	window->setDesktopManuallyHidden(true);
+	nativeWindow->hide();
+	mrNotifyWindowTopologyChanged();
 	return mrEnsureUsableWorkWindow();
+}
+
+bool closeCurrentDesktopWindow() {
+	MRDesktopWindow *window = currentDesktopWindow();
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
+
+	if (editWindow != nullptr) return closeCurrentEditWindow();
+	if (nativeWindow == nullptr) return false;
+	message(nativeWindow, evCommand, cmClose, nativeWindow);
+	return true;
+}
+
+bool zoomCurrentDesktopWindow() {
+	MRDesktopWindow *window = currentDesktopWindow();
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+
+	if (nativeWindow == nullptr || (nativeWindow->flags & wfZoom) == 0) return false;
+	message(nativeWindow, evCommand, cmZoom, nativeWindow);
+	return true;
 }
 
 void mrUpdateAllWindowsColorTheme() {
@@ -1994,8 +2052,8 @@ bool saveCurrentEditWindowAs() {
 bool handleWindowCascade() {
 	const auto startedAt = std::chrono::steady_clock::now();
 	const auto enumerateStartedAt = startedAt;
-	std::vector<MREditWindow *> allWindows = allEditWindowsInZOrder();
-	std::vector<MREditWindow *> visibleWindows;
+	std::vector<MRDesktopWindow *> allWindows = allDesktopWindowsInZOrder();
+	std::vector<MRDesktopWindow *> visibleWindows;
 	TRect desktopBounds;
 	long long enumerateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - enumerateStartedAt).count();
 	long long filterUs = 0;
@@ -2008,9 +2066,10 @@ bool handleWindowCascade() {
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
-			MREditWindow *win = *it;
-			if (win != nullptr && (win->state & sfVisible) != 0 && !win->isMinimized()) {
-				visibleWindows.push_back(win);
+			MRDesktopWindow *window = *it;
+			TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+			if (nativeWindow != nullptr && (nativeWindow->options & ofTileable) != 0 && (nativeWindow->state & sfVisible) != 0 && !window->desktopMinimized()) {
+				visibleWindows.push_back(window);
 			}
 		}
 		filterUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
@@ -2022,14 +2081,14 @@ bool handleWindowCascade() {
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		TProgram::deskTop->lock();
-		for (MREditWindow *win : visibleWindows) {
+		for (MRDesktopWindow *window : visibleWindows) {
 			const auto windowStartedAt = std::chrono::steady_clock::now();
 			TRect bounds;
 			bounds.a.x = desktopBounds.a.x + cascadeIndex;
 			bounds.a.y = desktopBounds.a.y + cascadeIndex;
 			bounds.b.x = desktopBounds.b.x;
 			bounds.b.y = desktopBounds.b.y;
-			MRWindowLayout::applyBatchWindowBounds(win, bounds);
+			MRWindowLayout::applyBatchWindowBounds(window, bounds);
 			{
 				const long long windowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - windowStartedAt).count();
 				if (windowUs >= 10000) logWindowTiming("Window cascade bounds slow", windowUs, "index=" + std::to_string(cascadeIndex));
@@ -2054,8 +2113,8 @@ bool handleWindowCascade() {
 bool handleWindowTile() {
 	const auto startedAt = std::chrono::steady_clock::now();
 	const auto enumerateStartedAt = startedAt;
-	std::vector<MREditWindow *> allWindows = allEditWindowsInZOrder();
-	std::vector<MREditWindow *> visibleWindows;
+	std::vector<MRDesktopWindow *> allWindows = allDesktopWindowsInZOrder();
+	std::vector<MRDesktopWindow *> visibleWindows;
 	TRect desktopBounds;
 	long long enumerateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - enumerateStartedAt).count();
 	long long filterUs = 0;
@@ -2068,9 +2127,10 @@ bool handleWindowTile() {
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
-			MREditWindow *win = *it;
-			if (win != nullptr && (win->state & sfVisible) != 0 && !win->isMinimized()) {
-				visibleWindows.push_back(win);
+			MRDesktopWindow *window = *it;
+			TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+			if (nativeWindow != nullptr && (nativeWindow->options & ofTileable) != 0 && (nativeWindow->state & sfVisible) != 0 && !window->desktopMinimized()) {
+				visibleWindows.push_back(window);
 			}
 		}
 		filterUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();

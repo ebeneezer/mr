@@ -22,6 +22,7 @@
 #include <tvision/tv.h>
 
 #include "MRCommandRouter.hpp"
+#include "../ui/MRWindowLayout.hpp"
 #include "router/MRCommandRouterSearch.hpp"
 #include "router/MRCommandRouterSearchMultiFile.hpp"
 #include "router/MRCommandRouterText.hpp"
@@ -72,7 +73,7 @@
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/MRVM.hpp"
 #include "../mrmac/mrmac.h"
-#include "../mrmac/vm/MRVMEditor.hpp"
+#include "../mrmac/ui/conventional/MRVMEditor.hpp"
 #include "../mrmac/vm/MRVMHash.hpp"
 #include "../mrmac/vm/MRVMRuntimeKv.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
@@ -2902,7 +2903,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return true;
 
 		case cmMrWindowClose:
-			static_cast<void>(closeCurrentEditWindow());
+			static_cast<void>(closeCurrentDesktopWindow());
 			return true;
 
 		case cmMrWindowList: {
@@ -2917,27 +2918,27 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		}
 
 		case cmMrWindowNext:
-			static_cast<void>(activateRelativeEditWindow(1));
+			static_cast<void>(activateRelativeDesktopWindow(1));
 			return true;
 
 		case cmMrWindowPrevious:
-			static_cast<void>(activateRelativeEditWindow(-1));
+			static_cast<void>(activateRelativeDesktopWindow(-1));
 			return true;
 
 		case cmMrWindowHide:
-			static_cast<void>(hideCurrentEditWindow());
+			static_cast<void>(hideCurrentDesktopWindow());
 			return true;
 
 		case cmMrWindowZoom:
-			mrvmUiZoomCurrentWindow();
+			static_cast<void>(zoomCurrentDesktopWindow());
 			return true;
 
 		case cmMrWindowMinimize:
-			if (currentEditWindow() != nullptr) {
+			if (currentDesktopWindow() != nullptr) {
 				const auto startedAt = std::chrono::steady_clock::now();
-				MREditWindow *window = currentEditWindow();
-				const bool restore = window->isMinimized();
-				restore ? window->restoreWindow() : window->minimizeWindow();
+				MRDesktopWindow *window = currentDesktopWindow();
+				const bool restore = window->desktopMinimized();
+				MRWindowLayout::toggleMinimizedWindow(window);
 				{
 					const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
 					mrLogMessage(std::string("Window minimize command timing took_us=") + std::to_string(tookUs) + " restore=" + (restore ? "1" : "0"));
@@ -2946,7 +2947,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return true;
 
 		case cmMrWindowRestore:
-			if (currentEditWindow() != nullptr && currentEditWindow()->isMinimized()) currentEditWindow()->restoreWindow();
+			if (currentDesktopWindow() != nullptr && currentDesktopWindow()->desktopMinimized()) currentDesktopWindow()->restoreDesktopWindow();
 			return true;
 
 		case cmMrWindowCascade:

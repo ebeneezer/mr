@@ -1,20 +1,17 @@
-#include "MRVMModelessUiRuntime.hpp"
+#include "MRVMModelessUiStorage.hpp"
 
-#include "MRVMHash.hpp"
+#include "../../vm/MRVMHash.hpp"
 
-#include "../mrmac.h"
+#include "../../mrmac.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
-#include <mutex>
 
-MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
-std::recursive_mutex &mrvmExecutionMutex() noexcept;
-
-namespace {
+namespace mr {
+namespace modelessui {
 using Value = VirtualMachine::Value;
 
 std::string upperKey(std::string value) {
@@ -88,7 +85,7 @@ void hashWriteString(MRVMRuntimeKv &runtimeKv, const Value &hash, const std::str
 	mrvmHashWriteValue(store, store, hash, key, makeStringValue(value));
 }
 
-int hashReadInt(MRVMRuntimeKv &runtimeKv, const Value &hash, const std::string &key, int fallback = 0) {
+int hashReadInt(MRVMRuntimeKv &runtimeKv, const Value &hash, const std::string &key, int fallback) {
 	MRVMHashStore &store = runtimeKv.globalStore();
 
 	if (!mrvmHashContainsValue(store, store, hash, key)) return fallback;
@@ -178,6 +175,24 @@ void writeDisplayHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MacroUi
 	hashWriteString(runtimeKv, hash, "text", display.text);
 }
 
+void writeCanvasHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MacroUiCanvasSpec &canvas) {
+	hashWriteInt(runtimeKv, hash, "x", canvas.x);
+	hashWriteInt(runtimeKv, hash, "y", canvas.y);
+	hashWriteInt(runtimeKv, hash, "width", canvas.width);
+	hashWriteInt(runtimeKv, hash, "height", canvas.height);
+	hashWriteString(runtimeKv, hash, "canvasId", canvas.canvasId);
+}
+
+void writeCanvasHotspotHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MacroUiCanvasHotspotSpec &hotspot) {
+	hashWriteString(runtimeKv, hash, "canvasId", hotspot.canvasId);
+	hashWriteInt(runtimeKv, hash, "x", hotspot.x);
+	hashWriteInt(runtimeKv, hash, "y", hotspot.y);
+	hashWriteInt(runtimeKv, hash, "width", hotspot.width);
+	hashWriteInt(runtimeKv, hash, "height", hotspot.height);
+	hashWriteInt(runtimeKv, hash, "id", hotspot.id);
+	hashWriteString(runtimeKv, hash, "macroSpec", hotspot.macroSpec);
+}
+
 void writeInputHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MacroUiInputSpec &input) {
 	hashWriteInt(runtimeKv, hash, "x", input.x);
 	hashWriteInt(runtimeKv, hash, "y", input.y);
@@ -237,6 +252,30 @@ MacroUiDisplaySpec readDisplayHash(MRVMRuntimeKv &runtimeKv, const Value &hash) 
 	display.width = hashReadInt(runtimeKv, hash, "width", 20);
 	display.text = hashReadString(runtimeKv, hash, "text");
 	return display;
+}
+
+MacroUiCanvasSpec readCanvasHash(MRVMRuntimeKv &runtimeKv, const Value &hash) {
+	MacroUiCanvasSpec canvas;
+
+	canvas.x = hashReadInt(runtimeKv, hash, "x", 0);
+	canvas.y = hashReadInt(runtimeKv, hash, "y", 0);
+	canvas.width = hashReadInt(runtimeKv, hash, "width", 20);
+	canvas.height = hashReadInt(runtimeKv, hash, "height", 6);
+	canvas.canvasId = hashReadString(runtimeKv, hash, "canvasId");
+	return canvas;
+}
+
+MacroUiCanvasHotspotSpec readCanvasHotspotHash(MRVMRuntimeKv &runtimeKv, const Value &hash) {
+	MacroUiCanvasHotspotSpec hotspot;
+
+	hotspot.canvasId = hashReadString(runtimeKv, hash, "canvasId");
+	hotspot.x = hashReadInt(runtimeKv, hash, "x", 0);
+	hotspot.y = hashReadInt(runtimeKv, hash, "y", 0);
+	hotspot.width = hashReadInt(runtimeKv, hash, "width", 1);
+	hotspot.height = hashReadInt(runtimeKv, hash, "height", 1);
+	hotspot.id = hashReadInt(runtimeKv, hash, "id", 0);
+	hotspot.macroSpec = hashReadString(runtimeKv, hash, "macroSpec");
+	return hotspot;
 }
 
 MacroUiInputSpec readInputHash(MRVMRuntimeKv &runtimeKv, const Value &hash) {
@@ -309,6 +348,26 @@ void readDisplaySection(MRVMRuntimeKv &runtimeKv, const Value &dialog, const cha
 	}
 }
 
+void readCanvasSection(MRVMRuntimeKv &runtimeKv, const Value &dialog, const char *sectionName, std::vector<MacroUiCanvasSpec> &items) {
+	Value section;
+
+	if (!runtimeKv.findChild(dialog, sectionName, section)) return;
+	for (int index = 1; index <= hashReadInt(runtimeKv, section, "count", 0); ++index) {
+		Value item;
+		if (runtimeKv.findChild(section, std::to_string(index), item)) items.push_back(readCanvasHash(runtimeKv, item));
+	}
+}
+
+void readCanvasHotspotSection(MRVMRuntimeKv &runtimeKv, const Value &dialog, const char *sectionName, std::vector<MacroUiCanvasHotspotSpec> &items) {
+	Value section;
+
+	if (!runtimeKv.findChild(dialog, sectionName, section)) return;
+	for (int index = 1; index <= hashReadInt(runtimeKv, section, "count", 0); ++index) {
+		Value item;
+		if (runtimeKv.findChild(section, std::to_string(index), item)) items.push_back(readCanvasHotspotHash(runtimeKv, item));
+	}
+}
+
 void readInputSection(MRVMRuntimeKv &runtimeKv, const Value &dialog, const char *sectionName, std::vector<MacroUiInputSpec> &items) {
 	Value section;
 
@@ -352,6 +411,24 @@ void writeModelessDisplayHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const
 	hashWriteString(runtimeKv, hash, "text", display.text);
 }
 
+void writeModelessCanvasHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MRMacroModelessCanvasSpec &canvas) {
+	hashWriteInt(runtimeKv, hash, "x", canvas.x);
+	hashWriteInt(runtimeKv, hash, "y", canvas.y);
+	hashWriteInt(runtimeKv, hash, "width", canvas.width);
+	hashWriteInt(runtimeKv, hash, "height", canvas.height);
+	hashWriteString(runtimeKv, hash, "canvasId", canvas.canvasId);
+}
+
+void writeModelessCanvasHotspotHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MRMacroModelessCanvasHotspotSpec &hotspot) {
+	hashWriteString(runtimeKv, hash, "canvasId", hotspot.canvasId);
+	hashWriteInt(runtimeKv, hash, "x", hotspot.x);
+	hashWriteInt(runtimeKv, hash, "y", hotspot.y);
+	hashWriteInt(runtimeKv, hash, "width", hotspot.width);
+	hashWriteInt(runtimeKv, hash, "height", hotspot.height);
+	hashWriteInt(runtimeKv, hash, "id", hotspot.id);
+	hashWriteString(runtimeKv, hash, "macroSpec", hotspot.macroSpec);
+}
+
 void writeModelessButtonHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MRMacroModelessButtonSpec &button) {
 	hashWriteInt(runtimeKv, hash, "x", button.x);
 	hashWriteInt(runtimeKv, hash, "y", button.y);
@@ -383,294 +460,44 @@ void writeModelessGridHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MR
 	hashWriteString(runtimeKv, hash, "macroSpec", grid.macroSpec);
 	hashWriteInt(runtimeKv, hash, "start", grid.start);
 }
-} // namespace
 
-std::string mrvmModelessUiListKey(const std::string &name) {
-	return upperKey(trimAscii(name));
-}
-
-void mrvmModelessUiBeginDialog(MRVMRuntimeKv &runtimeKv, int x, int y, int width, int height, const std::string &title) {
-	Value staging = ensureModelessUiChildPath(runtimeKv, {"staging"});
-	Value dialog = runtimeKv.replaceChild(staging, "currentDialog");
-
-	hashWriteInt(runtimeKv, dialog, "x", x);
-	hashWriteInt(runtimeKv, dialog, "y", y);
-	hashWriteInt(runtimeKv, dialog, "width", width);
-	hashWriteInt(runtimeKv, dialog, "height", height);
-	hashWriteString(runtimeKv, dialog, "title", title);
-}
-
-void mrvmModelessUiWriteTextValue(MRVMRuntimeKv &runtimeKv, int id, const std::string &text) {
-	if (id <= 0) return;
-	hashWriteString(runtimeKv, ensureDialogSection(runtimeKv, "textValues"), std::to_string(id), text);
-}
-
-void mrvmModelessUiWriteIndexValue(MRVMRuntimeKv &runtimeKv, int id, int index) {
-	if (id <= 0) return;
-	hashWriteInt(runtimeKv, ensureDialogSection(runtimeKv, "indexValues"), std::to_string(id), index);
-}
-
-std::string mrvmModelessUiReadTextValue(MRVMRuntimeKv &runtimeKv, int id) {
-	Value dialog;
-	Value values;
-
-	if (id <= 0 || !findCurrentDialog(runtimeKv, dialog) || !runtimeKv.findChild(dialog, "textValues", values)) return std::string();
-	return hashReadString(runtimeKv, values, std::to_string(id));
-}
-
-int mrvmModelessUiReadIndexValue(MRVMRuntimeKv &runtimeKv, int id) {
-	Value dialog;
-	Value values;
-
-	if (id <= 0 || !findCurrentDialog(runtimeKv, dialog) || !runtimeKv.findChild(dialog, "indexValues", values)) return 0;
-	return hashReadInt(runtimeKv, values, std::to_string(id), 0);
-}
-
-void mrvmModelessUiAppendLabel(MRVMRuntimeKv &runtimeKv, const MacroUiLabelSpec &label) {
-	writeLabelHash(runtimeKv, appendDialogSectionItem(runtimeKv, "labels"), label);
-}
-
-void mrvmModelessUiAppendButton(MRVMRuntimeKv &runtimeKv, const MacroUiButtonSpec &button) {
-	writeButtonHash(runtimeKv, appendDialogSectionItem(runtimeKv, "buttons"), button);
-}
-
-void mrvmModelessUiAppendDisplay(MRVMRuntimeKv &runtimeKv, const MacroUiDisplaySpec &display) {
-	writeDisplayHash(runtimeKv, appendDialogSectionItem(runtimeKv, "displays"), display);
-}
-
-void mrvmModelessUiAppendInput(MRVMRuntimeKv &runtimeKv, const MacroUiInputSpec &input) {
-	mrvmModelessUiWriteTextValue(runtimeKv, input.id, input.text);
-	writeInputHash(runtimeKv, appendDialogSectionItem(runtimeKv, "inputs"), input);
-}
-
-void mrvmModelessUiAppendListBox(MRVMRuntimeKv &runtimeKv, const MacroUiListBoxSpec &listBox) {
-	writeListBoxHash(runtimeKv, appendDialogSectionItem(runtimeKv, "listBoxes"), listBox);
-}
-
-void mrvmModelessUiAppendGrid(MRVMRuntimeKv &runtimeKv, const MacroUiGridSpec &grid) {
-	writeGridHash(runtimeKv, appendDialogSectionItem(runtimeKv, "grids"), grid);
-}
-
-MacroUiDialogDefinition mrvmModelessUiReadDialogDefinition(MRVMRuntimeKv &runtimeKv) {
-	MacroUiDialogDefinition definition;
-	Value dialog;
-	Value macros;
-
-	if (!findCurrentDialog(runtimeKv, dialog)) return definition;
-	definition.x = hashReadInt(runtimeKv, dialog, "x", 0);
-	definition.y = hashReadInt(runtimeKv, dialog, "y", 0);
-	definition.width = hashReadInt(runtimeKv, dialog, "width", 40);
-	definition.height = hashReadInt(runtimeKv, dialog, "height", 12);
-	definition.title = hashReadString(runtimeKv, dialog, "title");
-	readLabelSection(runtimeKv, dialog, "labels", definition.labels);
-	readButtonSection(runtimeKv, dialog, "buttons", definition.buttons);
-	readDisplaySection(runtimeKv, dialog, "displays", definition.displays);
-	readInputSection(runtimeKv, dialog, "inputs", definition.inputs);
-	readListBoxSection(runtimeKv, dialog, "listBoxes", definition.listBoxes);
-	readGridSection(runtimeKv, dialog, "grids", definition.grids);
-	if (runtimeKv.findChild(dialog, "modelessButtonMacros", macros)) {
-		for (int index = 1; index <= hashReadInt(runtimeKv, macros, "count", 0); ++index) {
-			Value item;
-			if (!runtimeKv.findChild(macros, std::to_string(index), item)) continue;
-			definition.modelessButtonMacros[hashReadInt(runtimeKv, item, "id", 0)] = hashReadString(runtimeKv, item, "macroSpec");
-		}
-	}
-	return definition;
-}
-
-void mrvmModelessUiWriteModelessMacro(MRVMRuntimeKv &runtimeKv, int controlId, const std::string &macroSpec) {
-	Value macros;
-	Value item;
-	int count = 0;
-
-	if (controlId <= 0) return;
-	macros = ensureDialogSection(runtimeKv, "modelessButtonMacros");
-	count = hashReadInt(runtimeKv, macros, "count", 0);
-	for (int index = 1; index <= count; ++index) {
-		if (!runtimeKv.findChild(macros, std::to_string(index), item)) continue;
-		if (hashReadInt(runtimeKv, item, "id", 0) == controlId) {
-			hashWriteString(runtimeKv, item, "macroSpec", macroSpec);
-			return;
-		}
-	}
-	++count;
-	hashWriteInt(runtimeKv, macros, "count", count);
-	item = runtimeKv.replaceChild(macros, std::to_string(count));
-	hashWriteInt(runtimeKv, item, "id", controlId);
-	hashWriteString(runtimeKv, item, "macroSpec", macroSpec);
-}
-
-bool mrvmModelessUiReadItemList(MRVMRuntimeKv &runtimeKv, const std::string &key, std::vector<std::string> &values) {
-	Value lists;
-	Value list;
-
-	values.clear();
-	if (!findStagingChild(runtimeKv, "itemLists", lists)) return false;
-	if (!runtimeKv.findChild(lists, key, list)) return false;
-	for (int index = 1; index <= hashReadInt(runtimeKv, list, "count", 0); ++index)
-		values.push_back(hashReadString(runtimeKv, list, std::to_string(index)));
-	return true;
-}
-
-void mrvmModelessUiClearItemList(MRVMRuntimeKv &runtimeKv, const std::string &key) {
-	Value itemLists = ensureModelessUiChildPath(runtimeKv, {"staging", "itemLists"});
-	Value list = runtimeKv.replaceChild(itemLists, key);
-
-	hashWriteInt(runtimeKv, list, "count", 0);
-}
-
-void mrvmModelessUiAddItemListValue(MRVMRuntimeKv &runtimeKv, const std::string &key, const std::string &value) {
-	Value list = runtimeKv.ensureChild(ensureModelessUiChildPath(runtimeKv, {"staging", "itemLists"}), key);
-	int count = hashReadInt(runtimeKv, list, "count", 0) + 1;
-
-	hashWriteInt(runtimeKv, list, "count", count);
-	hashWriteString(runtimeKv, list, std::to_string(count), value);
-}
-
-void mrvmModelessUiStoreWindowDefinition(MRVMRuntimeKv &runtimeKv, const MRMacroModelessWindowDefinition &definition) {
-	Value windows = ensureModelessUiChildPath(runtimeKv, {"windows"});
-	Value window;
-	Value previousWindow;
-	Value previousLiveGeometry;
-	Value labels;
-	Value displays;
-	Value buttons;
-	Value listBoxes;
-	Value grids;
-	bool hasLiveGeometry = false;
-	int liveX = 0;
-	int liveY = 0;
-	int liveWidth = 0;
-	int liveHeight = 0;
-	int liveGeometryVersion = 0;
-	int index = 0;
-
-	if (definition.windowId.empty()) return;
-	if (runtimeKv.findChild(windows, definition.windowId, previousWindow) && runtimeKv.findChild(previousWindow, "liveGeometry", previousLiveGeometry)) {
-		hasLiveGeometry = hashReadInt(runtimeKv, previousLiveGeometry, "geometryVersion", 0) > 0;
-		liveX = hashReadInt(runtimeKv, previousLiveGeometry, "x", 0);
-		liveY = hashReadInt(runtimeKv, previousLiveGeometry, "y", 0);
-		liveWidth = hashReadInt(runtimeKv, previousLiveGeometry, "width", 0);
-		liveHeight = hashReadInt(runtimeKv, previousLiveGeometry, "height", 0);
-		liveGeometryVersion = hashReadInt(runtimeKv, previousLiveGeometry, "geometryVersion", 0);
-	}
-	window = runtimeKv.replaceChild(windows, definition.windowId);
-	hashWriteString(runtimeKv, window, "windowId", definition.windowId);
-	hashWriteString(runtimeKv, window, "title", definition.title);
-	hashWriteInt(runtimeKv, window, "x", definition.x);
-	hashWriteInt(runtimeKv, window, "y", definition.y);
-	hashWriteInt(runtimeKv, window, "width", definition.width);
-	hashWriteInt(runtimeKv, window, "height", definition.height);
-
-	if (hasLiveGeometry) {
-		Value liveGeometry = runtimeKv.ensureChild(window, "liveGeometry");
-		hashWriteInt(runtimeKv, liveGeometry, "x", liveX);
-		hashWriteInt(runtimeKv, liveGeometry, "y", liveY);
-		hashWriteInt(runtimeKv, liveGeometry, "width", liveWidth);
-		hashWriteInt(runtimeKv, liveGeometry, "height", liveHeight);
-		hashWriteInt(runtimeKv, liveGeometry, "geometryVersion", liveGeometryVersion);
-	}
-
-	labels = runtimeKv.ensureChild(window, "labels");
-	for (std::size_t labelIndex = 0; labelIndex < definition.labels.size(); ++labelIndex) {
-		++index;
-		writeModelessLabelHash(runtimeKv, runtimeKv.replaceChild(labels, std::to_string(index)), definition.labels[labelIndex]);
-	}
-	hashWriteInt(runtimeKv, labels, "count", index);
-
-	index = 0;
-	displays = runtimeKv.ensureChild(window, "displays");
-	for (std::size_t displayIndex = 0; displayIndex < definition.displays.size(); ++displayIndex) {
-		++index;
-		writeModelessDisplayHash(runtimeKv, runtimeKv.replaceChild(displays, std::to_string(index)), definition.displays[displayIndex]);
-	}
-	hashWriteInt(runtimeKv, displays, "count", index);
-
-	index = 0;
-	buttons = runtimeKv.ensureChild(window, "buttons");
-	for (std::size_t buttonIndex = 0; buttonIndex < definition.buttons.size(); ++buttonIndex) {
-		++index;
-		writeModelessButtonHash(runtimeKv, runtimeKv.replaceChild(buttons, std::to_string(index)), definition.buttons[buttonIndex]);
-	}
-	hashWriteInt(runtimeKv, buttons, "count", index);
-
-	index = 0;
-	listBoxes = runtimeKv.ensureChild(window, "listBoxes");
-	for (std::size_t listBoxIndex = 0; listBoxIndex < definition.listBoxes.size(); ++listBoxIndex) {
-		++index;
-		writeModelessListBoxHash(runtimeKv, runtimeKv.replaceChild(listBoxes, std::to_string(index)), definition.listBoxes[listBoxIndex]);
-	}
-	hashWriteInt(runtimeKv, listBoxes, "count", index);
-
-	index = 0;
-	grids = runtimeKv.ensureChild(window, "grids");
-	for (std::size_t gridIndex = 0; gridIndex < definition.grids.size(); ++gridIndex) {
-		++index;
-		writeModelessGridHash(runtimeKv, runtimeKv.replaceChild(grids, std::to_string(index)), definition.grids[gridIndex]);
-	}
-	hashWriteInt(runtimeKv, grids, "count", index);
-}
-
-bool mrvmModelessUiStoreWindowDisplay(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int displayIndex, const std::string &text) {
+bool findModelessCanvas(MRVMRuntimeKv &runtimeKv, const std::string &windowId, const std::string &canvasId, Value &canvas) {
 	Value windows;
 	Value window;
-	Value displays;
-	Value display;
+	Value canvases;
 
-	if (windowId.empty() || displayIndex <= 0) return false;
+	if (windowId.empty() || canvasId.empty()) return false;
 	if (!findModelessUiChildPath(runtimeKv, {"windows"}, windows)) return false;
 	if (!runtimeKv.findChild(windows, windowId, window)) return false;
-	if (!runtimeKv.findChild(window, "displays", displays)) return false;
-	if (!runtimeKv.findChild(displays, std::to_string(displayIndex), display)) return false;
-	if (hashReadString(runtimeKv, display, "text") == text) return true;
-	hashWriteString(runtimeKv, display, "text", text);
-	return true;
+	if (!runtimeKv.findChild(window, "canvases", canvases)) return false;
+	return runtimeKv.findChild(canvases, canvasId, canvas);
 }
 
-void mrvmModelessUiStoreWindowLiveGeometry(MRVMRuntimeKv &runtimeKv, const std::string &windowId, int x, int y, int width, int height) {
-	Value windows;
-	Value window;
-	Value liveGeometry;
-	int version = 0;
-
-	if (windowId.empty()) return;
-	windows = ensureModelessUiChildPath(runtimeKv, {"windows"});
-	window = runtimeKv.ensureChild(windows, windowId);
-	liveGeometry = runtimeKv.ensureChild(window, "liveGeometry");
-
-	if (hashReadInt(runtimeKv, liveGeometry, "x", x) == x && hashReadInt(runtimeKv, liveGeometry, "y", y) == y && hashReadInt(runtimeKv, liveGeometry, "width", width) == width && hashReadInt(runtimeKv, liveGeometry, "height", height) == height && hashReadInt(runtimeKv, liveGeometry, "geometryVersion", 0) > 0) return;
-	version = hashReadInt(runtimeKv, liveGeometry, "geometryVersion", 0) + 1;
-	hashWriteInt(runtimeKv, liveGeometry, "x", x);
-	hashWriteInt(runtimeKv, liveGeometry, "y", y);
-	hashWriteInt(runtimeKv, liveGeometry, "width", width);
-	hashWriteInt(runtimeKv, liveGeometry, "height", height);
-	hashWriteInt(runtimeKv, liveGeometry, "geometryVersion", version);
+void writeCanvasCommand(MRVMRuntimeKv &runtimeKv, const Value &hash, const MRMacroModelessCanvasCommand &command) {
+	hashWriteInt(runtimeKv, hash, "type", static_cast<int>(command.type));
+	hashWriteInt(runtimeKv, hash, "x", command.x);
+	hashWriteInt(runtimeKv, hash, "y", command.y);
+	hashWriteInt(runtimeKv, hash, "width", command.width);
+	hashWriteInt(runtimeKv, hash, "height", command.height);
+	hashWriteInt(runtimeKv, hash, "x2", command.x2);
+	hashWriteInt(runtimeKv, hash, "y2", command.y2);
+	hashWriteInt(runtimeKv, hash, "style", command.style);
+	hashWriteString(runtimeKv, hash, "text", command.text);
 }
 
-void mrvmModelessUiRemoveWindowDefinition(MRVMRuntimeKv &runtimeKv, const std::string &windowId) {
-	Value windows;
+MRMacroModelessCanvasCommand readCanvasCommand(MRVMRuntimeKv &runtimeKv, const Value &hash) {
+	MRMacroModelessCanvasCommand command;
 
-	if (windowId.empty()) return;
-	if (!findModelessUiChildPath(runtimeKv, {"windows"}, windows)) return;
-	static_cast<void>(runtimeKv.eraseChild(windows, windowId));
+	command.type = static_cast<MRMacroModelessCanvasCommandType>(hashReadInt(runtimeKv, hash, "type", static_cast<int>(MRMacroModelessCanvasCommandType::Clear)));
+	command.x = hashReadInt(runtimeKv, hash, "x", 0);
+	command.y = hashReadInt(runtimeKv, hash, "y", 0);
+	command.width = hashReadInt(runtimeKv, hash, "width", 0);
+	command.height = hashReadInt(runtimeKv, hash, "height", 0);
+	command.x2 = hashReadInt(runtimeKv, hash, "x2", 0);
+	command.y2 = hashReadInt(runtimeKv, hash, "y2", 0);
+	command.style = hashReadInt(runtimeKv, hash, "style", 0);
+	command.text = hashReadString(runtimeKv, hash, "text");
+	return command;
 }
-
-void mrvmStoreModelessWindowDefinition(const MRMacroModelessWindowDefinition &definition) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	mrvmModelessUiStoreWindowDefinition(mrvmRuntimeKv(), definition);
-}
-
-bool mrvmStoreModelessWindowDisplay(const std::string &windowId, int displayIndex, const std::string &text) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	return mrvmModelessUiStoreWindowDisplay(mrvmRuntimeKv(), windowId, displayIndex, text);
-}
-
-void mrvmStoreModelessWindowLiveGeometry(const std::string &windowId, int x, int y, int width, int height) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	mrvmModelessUiStoreWindowLiveGeometry(mrvmRuntimeKv(), windowId, x, y, width, height);
-}
-
-void mrvmRemoveModelessWindowDefinition(const std::string &windowId) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	mrvmModelessUiRemoveWindowDefinition(mrvmRuntimeKv(), windowId);
-}
+} // namespace modelessui
+} // namespace mr

@@ -1,8 +1,8 @@
 #include "MRVMDeferredUi.hpp"
-#include "MRVMRuntimeState.hpp"
-#include "MRVMValue.hpp"
+#include "../../vm/MRVMRuntimeState.hpp"
+#include "../../vm/MRVMValue.hpp"
 
-#include "../mrmac.h"
+#include "../../mrmac.h"
 
 #include <algorithm>
 #include <cstdio>

@@ -1,6 +1,7 @@
 #include "MRWindowLayout.hpp"
 
 #include "MREditWindow.hpp"
+#include "MRDesktopWindow.hpp"
 #include "MRWindowSupport.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
@@ -55,8 +56,8 @@ TRect fullDesktopBounds() noexcept {
 	return TProgram::deskTop->getExtent();
 }
 
-bool sameDesktopAndVisible(const MREditWindow *window, int virtualDesktop) {
-	return window != nullptr && window->mVirtualDesktop == virtualDesktop && !isWindowManuallyHidden(window);
+bool sameDesktopAndVisible(const MRDesktopWindow *window, int virtualDesktop) {
+	return window != nullptr && window->desktopIndex() == virtualDesktop && !window->desktopManuallyHidden();
 }
 
 std::size_t nextCodeUnitCount(const std::string &text, std::size_t index) noexcept {
@@ -64,12 +65,11 @@ std::size_t nextCodeUnitCount(const std::string &text, std::size_t index) noexce
 	return count == 0 ? 1 : count;
 }
 
-std::string baseNameForMinimizedTitle(const MREditWindow *window) {
+std::string baseNameForMinimizedTitle(const MRDesktopWindow *window) {
 	std::string title;
-	const char *windowTitle = window != nullptr ? const_cast<MREditWindow *>(window)->getTitle(0) : nullptr;
+	const char *windowTitle = window != nullptr ? window->desktopMinimizedTitle() : nullptr;
 
-	if (window != nullptr && window->currentFileName()[0] != '\0') title = window->currentFileName();
-	else if (windowTitle != nullptr)
+	if (windowTitle != nullptr)
 		title = windowTitle;
 	else
 		title = kMinimizedFallbackTitle;
@@ -121,7 +121,7 @@ std::string truncateDisplayWidthMiddle(const std::string &text, int maxWidth) {
 	return prefix + kMinimizedEllipsis + suffix;
 }
 
-std::string minimizedDisplayTitleString(const MREditWindow *window) {
+std::string minimizedDisplayTitleString(const MRDesktopWindow *window) {
 	return truncateDisplayWidthMiddle(baseNameForMinimizedTitle(window), kMinimizedTitleMaxWidth);
 }
 
@@ -137,15 +137,15 @@ int minimizedReinsertWidth() noexcept {
 	return strwidth(kMinimizedReinsertGlyph);
 }
 
-int minimizedTitleWidth(const MREditWindow *window) {
+int minimizedTitleWidth(const MRDesktopWindow *window) {
 	return strwidth(minimizedDisplayTitleString(window).c_str());
 }
 
-int minimizedWindowWidthValue(const MREditWindow *window) {
+int minimizedWindowWidthValue(const MRDesktopWindow *window) {
 	return std::max(kMinimizedMinWidth, minimizedMenuWidth() + 1 + minimizedTitleWidth(window) + 1 + minimizedRestoreWidth() + minimizedReinsertWidth() + kMinimizedRightPadding);
 }
 
-TRect normalizedMinimizedBounds(const MREditWindow *window, const TRect &bounds, const TRect &desktop) {
+TRect normalizedMinimizedBounds(const MRDesktopWindow *window, const TRect &bounds, const TRect &desktop) {
 	const int width = minimizedWindowWidthValue(window);
 	const int maxX = std::max(desktop.a.x, desktop.b.x - width);
 	const int maxY = std::max(desktop.a.y, desktop.b.y - kMinimizedHeight);
@@ -159,7 +159,7 @@ bool rectsOverlap(const TRect &lhs, const TRect &rhs) noexcept {
 	return lhs.a.x < rhs.b.x && rhs.a.x < lhs.b.x && lhs.a.y < rhs.b.y && rhs.a.y < lhs.b.y;
 }
 
-bool minimizedBoundsFitDesktop(const MREditWindow *window, const TRect &bounds) {
+bool minimizedBoundsFitDesktop(const MRDesktopWindow *window, const TRect &bounds) {
 	const TRect desktop = fullDesktopBounds();
 	const TRect normalized = normalizedMinimizedBounds(window, bounds, desktop);
 
@@ -171,10 +171,11 @@ int minimizedRowsForDesktop(int virtualDesktop) {
 	const int dockY = desktop.b.y - kMinimizedHeight;
 	int rows = 0;
 
-	for (MREditWindow *window : allEditWindowsInZOrder()) {
-		if (window == nullptr || !window->isMinimized() || !sameDesktopAndVisible(window, virtualDesktop)) continue;
-		if (window->getBounds().a.y != dockY) continue;
-		rows = std::max(rows, desktop.b.y - window->getBounds().a.y);
+	for (MRDesktopWindow *window : allDesktopWindowsInZOrder()) {
+		TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+		if (nativeWindow == nullptr || !window->desktopMinimized() || !sameDesktopAndVisible(window, virtualDesktop)) continue;
+		if (nativeWindow->getBounds().a.y != dockY) continue;
+		rows = std::max(rows, desktop.b.y - nativeWindow->getBounds().a.y);
 	}
 	return std::min(rows, std::max(1, desktop.b.y - desktop.a.y));
 }
@@ -201,31 +202,32 @@ TRect clampToBounds(const TRect &bounds, const TRect &limits) {
 	return TRect(x, y, x + width, y + height);
 }
 
-void placeVisibleWindow(MREditWindow *window, const TRect &bounds) {
+void placeVisibleWindow(MRDesktopWindow *window, const TRect &bounds) {
 	const auto startedAt = std::chrono::steady_clock::now();
 	long long locateUs = 0;
 	long long frameUs = 0;
 	long long syncUs = 0;
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
 
-	if (window == nullptr) return;
+	if (nativeWindow == nullptr) return;
 	TRect target = bounds;
-	if (window->getBounds() != target) {
+	if (nativeWindow->getBounds() != target) {
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->locate(target);
+		nativeWindow->locate(target);
 		locateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	} else {
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->changeBounds(target);
+		nativeWindow->changeBounds(target);
 		locateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
-	if (window->frame != nullptr) {
+	if (nativeWindow->frame != nullptr) {
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->frame->drawView();
+		nativeWindow->frame->drawView();
 		frameUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
-	if (window->getEditor() != nullptr && !window->isMinimized()) {
+	if (!window->desktopMinimized()) {
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->getEditor()->syncFromEditorState();
+		window->synchronizeDesktopContents();
 		syncUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 	{
@@ -233,21 +235,15 @@ void placeVisibleWindow(MREditWindow *window, const TRect &bounds) {
 		if (tookUs >= 10000) {
 			std::ostringstream detail;
 
-			detail << "locate_us=" << locateUs << " frame_us=" << frameUs << " sync_us=" << syncUs << " min=" << (window->isMinimized() ? 1 : 0);
+			detail << "locate_us=" << locateUs << " frame_us=" << frameUs << " sync_us=" << syncUs << " min=" << (window->desktopMinimized() ? 1 : 0);
 			logWindowLayoutTiming("Window layout place visible slow", tookUs, detail.str());
 		}
 	}
 }
 
-void setHiddenWindowBounds(MREditWindow *window, const TRect &bounds) {
+void setHiddenWindowBounds(MRDesktopWindow *window, const TRect &bounds) {
 	if (window == nullptr) return;
-	window->freeBuffer();
-	window->setBounds(bounds);
-	window->clip = window->getExtent();
-	if (window->frame != nullptr) {
-		const TRect extent = window->getExtent();
-		window->frame->setBounds(extent);
-	}
+	window->applyDesktopBounds(bounds);
 }
 
 void markLayoutDirty() noexcept {
@@ -258,7 +254,7 @@ void reflowMinimizedWindowsForDesktop(int virtualDesktop) {
 	const auto startedAt = std::chrono::steady_clock::now();
 	const TRect desktop = fullDesktopBounds();
 	const int dockY = desktop.b.y - kMinimizedHeight;
-	std::vector<MREditWindow *> windows;
+	std::vector<MRDesktopWindow *> windows;
 	int nextX = desktop.a.x;
 	int nextY = dockY;
 	long long collectUs = 0;
@@ -267,23 +263,27 @@ void reflowMinimizedWindowsForDesktop(int virtualDesktop) {
 
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		for (MREditWindow *window : allEditWindowsInZOrder())
-			if (window != nullptr && window->isMinimized() && sameDesktopAndVisible(window, virtualDesktop) && window->getBounds().a.y == dockY) windows.push_back(window);
+		for (MRDesktopWindow *window : allDesktopWindowsInZOrder()) {
+			TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+			if (nativeWindow != nullptr && window->desktopMinimized() && sameDesktopAndVisible(window, virtualDesktop) && nativeWindow->getBounds().a.y == dockY) windows.push_back(window);
+		}
 		collectUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		std::sort(windows.begin(), windows.end(), [](const MREditWindow *lhs, const MREditWindow *rhs) {
-			if (lhs->getBounds().a.y != rhs->getBounds().a.y) return lhs->getBounds().a.y > rhs->getBounds().a.y;
-			return lhs->getBounds().a.x < rhs->getBounds().a.x;
+		std::sort(windows.begin(), windows.end(), [](const MRDesktopWindow *lhs, const MRDesktopWindow *rhs) {
+			const TRect lhsBounds = lhs->desktopNativeWindow()->getBounds();
+			const TRect rhsBounds = rhs->desktopNativeWindow()->getBounds();
+			if (lhsBounds.a.y != rhsBounds.a.y) return lhsBounds.a.y > rhsBounds.a.y;
+			return lhsBounds.a.x < rhsBounds.a.x;
 		});
 		sortUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		for (MREditWindow *window : windows) {
+		for (MRDesktopWindow *window : windows) {
 			const int width = minimizedWindowWidthValue(window);
 			TRect target(nextX, nextY, nextX + width, nextY + kMinimizedHeight);
 
@@ -294,7 +294,7 @@ void reflowMinimizedWindowsForDesktop(int virtualDesktop) {
 			}
 
 			placeVisibleWindow(window, normalizedMinimizedBounds(window, target, desktop));
-			nextX = window->getBounds().b.x + kMinimizedGap;
+			nextX = window->desktopNativeWindow()->getBounds().b.x + kMinimizedGap;
 		}
 		placeUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
@@ -309,28 +309,33 @@ void reflowMinimizedWindowsForDesktop(int virtualDesktop) {
 	}
 }
 
-TRect nextMinimizedBounds(MREditWindow *window) {
+TRect nextMinimizedBounds(MRDesktopWindow *window) {
 	const TRect desktop = fullDesktopBounds();
 	const int dockY = desktop.b.y - kMinimizedHeight;
-	std::vector<MREditWindow *> windows;
+	std::vector<MRDesktopWindow *> windows;
 	int x = desktop.a.x;
 	int y = dockY;
 	const int width = minimizedWindowWidthValue(window);
 
-	for (MREditWindow *candidate : allEditWindowsInZOrder())
-		if (candidate != nullptr && candidate != window && candidate->isMinimized() && sameDesktopAndVisible(candidate, window->mVirtualDesktop) && candidate->getBounds().a.y == dockY) windows.push_back(candidate);
+	for (MRDesktopWindow *candidate : allDesktopWindowsInZOrder()) {
+		TWindow *nativeWindow = candidate != nullptr ? candidate->desktopNativeWindow() : nullptr;
+		if (nativeWindow != nullptr && candidate != window && candidate->desktopMinimized() && sameDesktopAndVisible(candidate, window->desktopIndex()) && nativeWindow->getBounds().a.y == dockY) windows.push_back(candidate);
+	}
 
-	std::sort(windows.begin(), windows.end(), [](const MREditWindow *lhs, const MREditWindow *rhs) {
-		if (lhs->getBounds().a.y != rhs->getBounds().a.y) return lhs->getBounds().a.y > rhs->getBounds().a.y;
-		return lhs->getBounds().a.x < rhs->getBounds().a.x;
+	std::sort(windows.begin(), windows.end(), [](const MRDesktopWindow *lhs, const MRDesktopWindow *rhs) {
+		const TRect lhsBounds = lhs->desktopNativeWindow()->getBounds();
+		const TRect rhsBounds = rhs->desktopNativeWindow()->getBounds();
+		if (lhsBounds.a.y != rhsBounds.a.y) return lhsBounds.a.y > rhsBounds.a.y;
+		return lhsBounds.a.x < rhsBounds.a.x;
 	});
 
-	for (MREditWindow *candidate : windows) {
-		if (candidate->getBounds().a.y != y) {
-			y = candidate->getBounds().a.y;
-			x = candidate->getBounds().b.x + kMinimizedGap;
+	for (MRDesktopWindow *candidate : windows) {
+		const TRect candidateBounds = candidate->desktopNativeWindow()->getBounds();
+		if (candidateBounds.a.y != y) {
+			y = candidateBounds.a.y;
+			x = candidateBounds.b.x + kMinimizedGap;
 		} else
-			x = std::max(x, candidate->getBounds().b.x + kMinimizedGap);
+			x = std::max(x, candidateBounds.b.x + kMinimizedGap);
 	}
 
 	if (x + width > desktop.b.x) {
@@ -341,11 +346,12 @@ TRect nextMinimizedBounds(MREditWindow *window) {
 	return normalizedMinimizedBounds(window, TRect(x, y, x + width, y + kMinimizedHeight), desktop);
 }
 
-bool minimizedBoundsConflict(MREditWindow *window, const TRect &bounds) {
+bool minimizedBoundsConflict(MRDesktopWindow *window, const TRect &bounds) {
 	if (!minimizedBoundsFitDesktop(window, bounds)) return true;
-	for (MREditWindow *candidate : allEditWindowsInZOrder()) {
-		if (candidate == nullptr || candidate == window || !candidate->isMinimized() || candidate->mVirtualDesktop != window->mVirtualDesktop || isWindowManuallyHidden(candidate)) continue;
-		if (rectsOverlap(bounds, candidate->getBounds())) return true;
+	for (MRDesktopWindow *candidate : allDesktopWindowsInZOrder()) {
+		TWindow *nativeWindow = candidate != nullptr ? candidate->desktopNativeWindow() : nullptr;
+		if (nativeWindow == nullptr || candidate == window || !candidate->desktopMinimized() || candidate->desktopIndex() != window->desktopIndex() || candidate->desktopManuallyHidden()) continue;
+		if (rectsOverlap(bounds, nativeWindow->getBounds())) return true;
 	}
 	return false;
 }
@@ -355,10 +361,12 @@ void clampWindowsToUsableDesktop() {
 	std::size_t considered = 0;
 	std::size_t placed = 0;
 
-	for (MREditWindow *window : allEditWindowsInZOrder()) {
-		if (window == nullptr || window->isMinimized() || isWindowManuallyHidden(window)) continue;
+	for (MRDesktopWindow *window : allDesktopWindowsInZOrder()) {
+		TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+
+		if (nativeWindow == nullptr || window->desktopMinimized() || window->desktopManuallyHidden()) continue;
 		++considered;
-		placeVisibleWindow(window, clampToBounds(window->getBounds(), usableDesktopBoundsForDesktop(window->mVirtualDesktop)));
+		window->applyDesktopBounds(clampToBounds(nativeWindow->getBounds(), usableDesktopBoundsForDesktop(window->desktopIndex())));
 		++placed;
 	}
 	{
@@ -407,16 +415,20 @@ void updateLayoutAfterStateChange() {
 
 } // namespace
 
-void MRWindowLayout::handleDragView(MREditWindow *window, TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) {
-	if (window == nullptr) return;
+void MRWindowLayout::handleDragView(MRDesktopWindow *window, TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) {
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+	MRDesktopMinimizedState minimizedState;
 
-	if (window->mMinimized && (mode & dmDragMove) != 0 && event.what == evMouseDown) {
+	if (nativeWindow == nullptr) return;
+	window->readDesktopMinimizedState(minimizedState);
+
+	if (minimizedState.minimized && (mode & dmDragMove) != 0 && event.what == evMouseDown) {
 		TRect trayLimits = fullDesktopBounds();
-		TRect originalBounds = window->getBounds();
-		TPoint offset = window->origin - event.mouse.where;
+		TRect originalBounds = nativeWindow->getBounds();
+		TPoint offset = nativeWindow->origin - event.mouse.where;
 		const int width = MRWindowLayout::minimizedWindowWidth(window);
 
-		window->setState(sfDragging, True);
+		nativeWindow->setState(sfDragging, True);
 		do {
 			TPoint currentMouse = event.mouse.where;
 			TPoint newOrigin = currentMouse + offset;
@@ -427,33 +439,34 @@ void MRWindowLayout::handleDragView(MREditWindow *window, TEvent &event, uchar m
 			targetBounds.a = newOrigin;
 			targetBounds.b.x = newOrigin.x + width;
 			targetBounds.b.y = newOrigin.y + kMinimizedHeight;
-			if (targetBounds != window->getBounds()) window->locate(targetBounds);
-		} while (window->mouseEvent(event, evMouseMove));
-		window->mLastMinimizedBounds = window->getBounds();
-		window->setState(sfDragging, False);
+			if (targetBounds != nativeWindow->getBounds()) nativeWindow->locate(targetBounds);
+		} while (nativeWindow->mouseEvent(event, evMouseMove));
+		minimizedState.lastMinimizedBounds = nativeWindow->getBounds();
+		window->storeDesktopMinimizedState(minimizedState);
+		nativeWindow->setState(sfDragging, False);
 		updateLayoutAfterStateChange();
 		return;
 	}
 
 	if (!configuredWindowManager() || (mode & dmDragMove) == 0 || event.what != evMouseDown) {
-		window->TWindow::dragView(event, mode, limits, minSize, maxSize);
+		nativeWindow->TWindow::dragView(event, mode, limits, minSize, maxSize);
 		return;
 	}
 
-	TRect dragLimits = window->mMinimized ? fullDesktopBounds() : usableDesktopBoundsForDesktop(window->mVirtualDesktop);
-	TRect originalBounds = window->getBounds();
-	TPoint offset = window->origin - event.mouse.where;
+	TRect dragLimits = minimizedState.minimized ? fullDesktopBounds() : usableDesktopBoundsForDesktop(window->desktopIndex());
+	TRect originalBounds = nativeWindow->getBounds();
+	TPoint offset = nativeWindow->origin - event.mouse.where;
 
-	window->setState(sfDragging, True);
+	nativeWindow->setState(sfDragging, True);
 
 	do {
 		TPoint currentMouse = event.mouse.where;
-		TPoint mouseLocal = window->owner->makeLocal(currentMouse);
+		TPoint mouseLocal = nativeWindow->owner->makeLocal(currentMouse);
 		TRect deskExtent = dragLimits;
 		bool snapped = false;
 		TRect targetBounds = originalBounds;
 
-		if (!window->mMinimized) {
+		if (!minimizedState.minimized) {
 			if (mouseLocal.x <= deskExtent.a.x) {
 				targetBounds.a.x = deskExtent.a.x;
 				targetBounds.a.y = deskExtent.a.y;
@@ -500,18 +513,19 @@ void MRWindowLayout::handleDragView(MREditWindow *window, TEvent &event, uchar m
 			targetBounds.b.y = newOrigin.y + originalSize.y;
 		}
 
-		if (targetBounds != window->getBounds()) window->locate(targetBounds);
-	} while (window->mouseEvent(event, evMouseMove));
+		if (targetBounds != nativeWindow->getBounds()) nativeWindow->locate(targetBounds);
+	} while (nativeWindow->mouseEvent(event, evMouseMove));
 
-	window->setState(sfDragging, False);
-	if (window->mMinimized) {
-		window->mLastMinimizedBounds = window->getBounds();
+	nativeWindow->setState(sfDragging, False);
+	if (minimizedState.minimized) {
+		minimizedState.lastMinimizedBounds = nativeWindow->getBounds();
+		window->storeDesktopMinimizedState(minimizedState);
 		updateLayoutAfterStateChange();
 	}
 }
 
-bool MRWindowLayout::isWindowMinimized(const MREditWindow *window) noexcept {
-	return window != nullptr && window->mMinimized;
+bool MRWindowLayout::isWindowMinimized(const MRDesktopWindow *window) noexcept {
+	return window != nullptr && window->desktopMinimized();
 }
 
 int MRWindowLayout::minimizedDesktopRows() noexcept {
@@ -523,14 +537,20 @@ TRect MRWindowLayout::usableDesktopBounds() noexcept {
 }
 
 TRect MRWindowLayout::minimizedBoundsForWorkspace(const MREditWindow *window) noexcept {
+	MRDesktopMinimizedState minimizedState;
+
 	if (window == nullptr) return TRect(0, 0, 1, 1);
-	if (window->mMinimized) return window->getBounds();
+	window->readDesktopMinimizedState(minimizedState);
+	if (minimizedState.minimized) return window->getBounds();
 	return normalizedMinimizedBounds(window, nextMinimizedBounds(const_cast<MREditWindow *>(window)), fullDesktopBounds());
 }
 
 TRect MRWindowLayout::restoreBoundsForWorkspace(const MREditWindow *window) noexcept {
+	MRDesktopMinimizedState minimizedState;
+
 	if (window == nullptr) return TRect(0, 0, 1, 1);
-	if (window->mMinimized) return window->mRestoreBounds;
+	window->readDesktopMinimizedState(minimizedState);
+	if (minimizedState.minimized) return minimizedState.restoreBounds;
 	return window->getBounds();
 }
 
@@ -539,7 +559,7 @@ const MRWindowLayout::MinimizedGlyphs &MRWindowLayout::minimizedGlyphs() noexcep
 	return glyphs;
 }
 
-MRWindowLayout::MinimizedLayout MRWindowLayout::minimizedLayout(const MREditWindow *window, int width) noexcept {
+MRWindowLayout::MinimizedLayout MRWindowLayout::minimizedLayout(const MRDesktopWindow *window, int width) noexcept {
 	const int menuWidth = minimizedMenuWidth();
 	const int restoreWidth = minimizedRestoreWidth();
 	const int reinsertWidth = minimizedReinsertWidth();
@@ -553,161 +573,115 @@ MRWindowLayout::MinimizedLayout MRWindowLayout::minimizedLayout(const MREditWind
 	return {0, menuWidth, titleStart, titleStart + titleWidth, restoreStart, restoreEnd, reinsertStart, reinsertEnd};
 }
 
-const char *MRWindowLayout::minimizedDisplayTitle(const MREditWindow *window) noexcept {
+const char *MRWindowLayout::minimizedDisplayTitle(const MRDesktopWindow *window) noexcept {
 	g_minimizedTitleBuffer = minimizedDisplayTitleString(window);
 	return g_minimizedTitleBuffer.c_str();
 }
 
-int MRWindowLayout::minimizedDisplayTitleWidth(const MREditWindow *window) noexcept {
+int MRWindowLayout::minimizedDisplayTitleWidth(const MRDesktopWindow *window) noexcept {
 	return minimizedTitleWidth(window);
 }
 
-int MRWindowLayout::minimizedWindowWidth(const MREditWindow *window) noexcept {
+int MRWindowLayout::minimizedWindowWidth(const MRDesktopWindow *window) noexcept {
 	return minimizedWindowWidthValue(window);
 }
 
-bool MRWindowLayout::isMinimizedRestoreGlyphHit(const MREditWindow *window, TPoint local) noexcept {
-	if (window == nullptr || !window->mMinimized || local.y != 0) return false;
-	const MinimizedLayout layout = minimizedLayout(window, window->size.x);
+bool MRWindowLayout::isMinimizedRestoreGlyphHit(const MRDesktopWindow *window, TPoint local) noexcept {
+	TWindow *nativeWindow = window != nullptr ? const_cast<MRDesktopWindow *>(window)->desktopNativeWindow() : nullptr;
+	if (nativeWindow == nullptr || !window->desktopMinimized() || local.y != 0) return false;
+	const MinimizedLayout layout = minimizedLayout(window, nativeWindow->size.x);
 	return local.x >= layout.restoreStart && local.x < layout.restoreEnd;
 }
 
-bool MRWindowLayout::isMinimizedReinsertGlyphHit(const MREditWindow *window, TPoint local) noexcept {
-	if (window == nullptr || !window->mMinimized || local.y != 0) return false;
-	const MinimizedLayout layout = minimizedLayout(window, window->size.x);
+bool MRWindowLayout::isMinimizedReinsertGlyphHit(const MRDesktopWindow *window, TPoint local) noexcept {
+	TWindow *nativeWindow = window != nullptr ? const_cast<MRDesktopWindow *>(window)->desktopNativeWindow() : nullptr;
+	if (nativeWindow == nullptr || !window->desktopMinimized() || local.y != 0) return false;
+	const MinimizedLayout layout = minimizedLayout(window, nativeWindow->size.x);
 	return local.x >= layout.reinsertStart && local.x < layout.reinsertEnd;
 }
 
-void MRWindowLayout::minimizeWindow(MREditWindow *window) {
-	const auto startedAt = std::chrono::steady_clock::now();
-	long long prepareUs = 0;
-	long long hideRefreshUs = 0;
-	long long geometryUs = 0;
-	long long showRefreshUs = 0;
-	long long layoutUs = 0;
-
-	if (window == nullptr || window->mMinimized) return;
+void MRWindowLayout::minimizeWindow(MRDesktopWindow *window) {
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+	MRDesktopMinimizedState minimizedState;
 	TRect target;
-	const bool wasVisible = (window->state & sfVisible) != 0;
-	const TRect oldBounds = window->getBounds();
-	const bool oldShadowWasSet = (window->state & sfShadow) != 0;
-	{
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->mRestoreBounds = clampToBounds(oldBounds, usableDesktopBoundsForDesktop(window->mVirtualDesktop));
-		if (window->mLastMinimizedBounds.a.x < window->mLastMinimizedBounds.b.x && window->mLastMinimizedBounds.a.y < window->mLastMinimizedBounds.b.y) {
-			target = normalizedMinimizedBounds(window, window->mLastMinimizedBounds, fullDesktopBounds());
-			if (minimizedBoundsConflict(window, target)) target = nextMinimizedBounds(window);
-		} else
-			target = nextMinimizedBounds(window);
-		prepareUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	const bool shouldFlushAfterHide = wasVisible && oldShadowWasSet;
+
+	if (nativeWindow == nullptr) return;
+	window->readDesktopMinimizedState(minimizedState);
+	if (minimizedState.minimized) return;
+	minimizedState.restoreBounds = clampToBounds(nativeWindow->getBounds(), usableDesktopBoundsForDesktop(window->desktopIndex()));
+	if (minimizedState.lastMinimizedBounds.a.x < minimizedState.lastMinimizedBounds.b.x && minimizedState.lastMinimizedBounds.a.y < minimizedState.lastMinimizedBounds.b.y) {
+		target = normalizedMinimizedBounds(window, minimizedState.lastMinimizedBounds, fullDesktopBounds());
+		if (minimizedBoundsConflict(window, target)) target = nextMinimizedBounds(window);
+	} else
+		target = nextMinimizedBounds(window);
+	const bool wasVisible = (nativeWindow->state & sfVisible) != 0;
+	const bool oldShadowWasSet = (nativeWindow->state & sfShadow) != 0;
 	if (wasVisible) {
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->hide();
+		nativeWindow->hide();
 		refreshDesktop();
-		if (shouldFlushAfterHide) TScreen::flushScreen();
-		hideRefreshUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+		if (oldShadowWasSet) TScreen::flushScreen();
 	}
-	{
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->mBufferedBeforeMinimize = (window->options & ofBuffered) != 0;
-		if (window->mBufferedBeforeMinimize) window->freeBuffer();
-		window->options &= ~ofBuffered;
-		window->mMinimized = true;
-		if ((window->state & sfShadow) != 0) window->setState(sfShadow, False);
-		setHiddenWindowBounds(window, target);
-		window->layoutEditorChrome();
-		if (wasVisible) window->show();
-		window->mLastMinimizedBounds = window->getBounds();
-		geometryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	{
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		refreshDesktop();
-		showRefreshUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	{
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		updateLayoutAfterStateChange();
-		layoutUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	{
-		std::ostringstream detail;
-		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
-
-		detail << "prepare_us=" << prepareUs << " hide_refresh_us=" << hideRefreshUs << " geometry_us=" << geometryUs << " show_refresh_us=" << showRefreshUs << " layout_us=" << layoutUs << " visible=" << (wasVisible ? 1 : 0);
-		logWindowLayoutTiming("Window minimize timing", tookUs, detail.str());
-	}
-}
-
-void MRWindowLayout::reinsertMinimizedWindow(MREditWindow *window) {
-	if (window == nullptr || !window->mMinimized) return;
-	placeVisibleWindow(window, nextMinimizedBounds(window));
-	window->mLastMinimizedBounds = window->getBounds();
+	minimizedState.bufferedBeforeMinimize = (nativeWindow->options & ofBuffered) != 0;
+	if (minimizedState.bufferedBeforeMinimize) nativeWindow->freeBuffer();
+	nativeWindow->options &= ~ofBuffered;
+	minimizedState.minimized = true;
+	window->storeDesktopMinimizedState(minimizedState);
+	if ((nativeWindow->state & sfShadow) != 0) nativeWindow->setState(sfShadow, False);
+	setHiddenWindowBounds(window, target);
+	window->layoutDesktopContents();
+	if (wasVisible) nativeWindow->show();
+	minimizedState.lastMinimizedBounds = nativeWindow->getBounds();
+	window->storeDesktopMinimizedState(minimizedState);
+	refreshDesktop();
 	updateLayoutAfterStateChange();
 }
 
-void MRWindowLayout::restoreWindow(MREditWindow *window) {
-	const auto startedAt = std::chrono::steady_clock::now();
-	long long prepareUs = 0;
-	long long hideRefreshUs = 0;
-	long long geometryUs = 0;
-	long long syncUs = 0;
-	long long layoutUs = 0;
+void MRWindowLayout::reinsertMinimizedWindow(MRDesktopWindow *window) {
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+	MRDesktopMinimizedState minimizedState;
 
-	if (window == nullptr || !window->mMinimized) return;
-	const bool wasVisible = (window->state & sfVisible) != 0;
-	TRect target;
-	{
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		target = clampToBounds(window->mRestoreBounds, usableDesktopBoundsForDesktop(window->mVirtualDesktop));
-		window->mLastMinimizedBounds = window->getBounds();
-		prepareUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	if (wasVisible) {
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->hide();
-		refreshDesktop();
-		hideRefreshUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	{
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->options = window->mBufferedBeforeMinimize ? ushort(window->options | ofBuffered) : ushort(window->options & ~ofBuffered);
-		window->freeBuffer();
-		window->mBufferedBeforeMinimize = false;
-		window->setState(sfShadow, True);
-		window->mMinimized = false;
-		setHiddenWindowBounds(window, target);
-		window->layoutEditorChrome();
-		if (wasVisible) {
-			window->show();
-			window->select();
-		}
-		geometryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	if (window->getEditor() != nullptr) {
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		window->getEditor()->syncFromEditorState();
-		syncUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	{
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		updateLayoutAfterStateChange();
-		layoutUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-	}
-	{
-		std::ostringstream detail;
-		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
-
-		detail << "prepare_us=" << prepareUs << " hide_refresh_us=" << hideRefreshUs << " geometry_us=" << geometryUs << " sync_us=" << syncUs << " layout_us=" << layoutUs << " visible=" << (wasVisible ? 1 : 0);
-		logWindowLayoutTiming("Window restore timing", tookUs, detail.str());
-	}
+	if (nativeWindow == nullptr) return;
+	window->readDesktopMinimizedState(minimizedState);
+	if (!minimizedState.minimized) return;
+	placeVisibleWindow(window, nextMinimizedBounds(window));
+	minimizedState.lastMinimizedBounds = nativeWindow->getBounds();
+	window->storeDesktopMinimizedState(minimizedState);
+	updateLayoutAfterStateChange();
 }
 
-void MRWindowLayout::toggleMinimizedWindow(MREditWindow *window) {
+void MRWindowLayout::restoreWindow(MRDesktopWindow *window) {
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+	MRDesktopMinimizedState minimizedState;
+
+	if (nativeWindow == nullptr) return;
+	window->readDesktopMinimizedState(minimizedState);
+	if (!minimizedState.minimized) return;
+	const bool wasVisible = (nativeWindow->state & sfVisible) != 0;
+	const TRect target = clampToBounds(minimizedState.restoreBounds, usableDesktopBoundsForDesktop(window->desktopIndex()));
+	minimizedState.lastMinimizedBounds = nativeWindow->getBounds();
+	if (wasVisible) {
+		nativeWindow->hide();
+		refreshDesktop();
+	}
+	nativeWindow->options = minimizedState.bufferedBeforeMinimize ? ushort(nativeWindow->options | ofBuffered) : ushort(nativeWindow->options & ~ofBuffered);
+	nativeWindow->freeBuffer();
+	minimizedState.bufferedBeforeMinimize = false;
+	minimizedState.minimized = false;
+	window->storeDesktopMinimizedState(minimizedState);
+	nativeWindow->setState(sfShadow, True);
+	setHiddenWindowBounds(window, target);
+	window->layoutDesktopContents();
+	if (wasVisible) {
+		nativeWindow->show();
+		nativeWindow->select();
+	}
+	window->synchronizeDesktopContents();
+	updateLayoutAfterStateChange();
+}
+
+void MRWindowLayout::toggleMinimizedWindow(MRDesktopWindow *window) {
 	if (window == nullptr) return;
-	if (window->mMinimized) restoreWindow(window);
+	if (window->desktopMinimized()) restoreWindow(window);
 	else
 		minimizeWindow(window);
 }
@@ -716,8 +690,12 @@ void MRWindowLayout::applyWorkspaceState(MREditWindow *window, const TRect &boun
 	if (window == nullptr) return;
 	TRect target;
 
-	window->mRestoreBounds = clampToBounds(restoreBounds, usableDesktopBoundsForDesktop(window->mVirtualDesktop));
-	window->mMinimized = minimized;
+	MRDesktopMinimizedState minimizedState;
+
+	window->readDesktopMinimizedState(minimizedState);
+	minimizedState.restoreBounds = clampToBounds(restoreBounds, usableDesktopBoundsForDesktop(window->desktopIndex()));
+	minimizedState.minimized = minimized;
+	window->storeDesktopMinimizedState(minimizedState);
 	window->setState(sfShadow, minimized ? False : True);
 	if (minimized) {
 		target = minimizedBoundsConflict(window, bounds) ? nextMinimizedBounds(window) : normalizedMinimizedBounds(window, bounds, fullDesktopBounds());
@@ -726,9 +704,11 @@ void MRWindowLayout::applyWorkspaceState(MREditWindow *window, const TRect &boun
 			setHiddenWindowBounds(window, target);
 			window->layoutEditorChrome();
 		}
-		window->mLastMinimizedBounds = window->getBounds();
+		window->readDesktopMinimizedState(minimizedState);
+		minimizedState.lastMinimizedBounds = window->getBounds();
+		window->storeDesktopMinimizedState(minimizedState);
 	} else {
-		target = clampToBounds(bounds, usableDesktopBoundsForDesktop(window->mVirtualDesktop));
+		target = clampToBounds(bounds, usableDesktopBoundsForDesktop(window->desktopIndex()));
 		if (projectNow) placeVisibleWindow(window, target);
 		else {
 			setHiddenWindowBounds(window, target);
@@ -739,10 +719,9 @@ void MRWindowLayout::applyWorkspaceState(MREditWindow *window, const TRect &boun
 	if (notifyTopology) mrNotifyWindowTopologyChanged();
 }
 
-void MRWindowLayout::applyBatchWindowBounds(MREditWindow *window, const TRect &bounds) {
+void MRWindowLayout::applyBatchWindowBounds(MRDesktopWindow *window, const TRect &bounds) {
 	if (window == nullptr) return;
-	setHiddenWindowBounds(window, bounds);
-	window->layoutEditorChrome();
+	window->applyDesktopBounds(bounds);
 }
 
 void MRWindowLayout::refreshDesktopProjection() {
@@ -766,8 +745,8 @@ void MRWindowLayout::handleDesktopLayoutChange() {
 	if (extentChanged) {
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		std::set<int> desktops;
-		for (MREditWindow *window : allEditWindowsInZOrder())
-			if (window != nullptr && window->mMinimized && !isWindowManuallyHidden(window)) desktops.insert(window->mVirtualDesktop);
+		for (MRDesktopWindow *window : allDesktopWindowsInZOrder())
+			if (window != nullptr && window->desktopMinimized() && !window->desktopManuallyHidden()) desktops.insert(window->desktopIndex());
 		desktopCount = desktops.size();
 		for (int virtualDesktop : desktops)
 			reflowMinimizedWindowsForDesktop(virtualDesktop);

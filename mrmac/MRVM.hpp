@@ -13,13 +13,14 @@
 
 #include "MRTextDocument.hpp"
 #include "MRMacroExecutionSession.hpp"
-#include "MRMacroModelessUi.hpp"
+#include "ui/modeless/MRMacroModelessUi.hpp"
 #include "../app/MRRuntimeScheduler.hpp"
 #include "vm/MRVMProfile.hpp"
 
 class MREditWindow;
 class MRVMHashStore;
 struct MRMacroDebuggerBreakpoint;
+struct MRMacroModelessWindowDesktopState;
 
 struct MRMacroExecUiCommandRequest {
 	std::string closureId;
@@ -298,6 +299,9 @@ MRRuntimeSchedulerEventId mrvmNextRuntimeSchedulerEventId();
 void mrvmStoreModelessWindowDefinition(const MRMacroModelessWindowDefinition &definition);
 bool mrvmStoreModelessWindowDisplay(const std::string &windowId, int displayIndex, const std::string &text);
 void mrvmStoreModelessWindowLiveGeometry(const std::string &windowId, int x, int y, int width, int height);
+bool mrvmReadModelessCanvasScene(const std::string &windowId, const std::string &canvasId, MRMacroModelessCanvasScene &scene);
+void mrvmStoreModelessWindowDesktopState(const std::string &windowId, const MRMacroModelessWindowDesktopState &state);
+bool mrvmReadModelessWindowDesktopState(const std::string &windowId, MRMacroModelessWindowDesktopState &state);
 void mrvmRemoveModelessWindowDefinition(const std::string &windowId);
 
 enum MRMacroDeferredUiCommandType {

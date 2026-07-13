@@ -7,6 +7,7 @@
 
 class MREditWindow;
 class MRBentoBox;
+class MRDesktopWindow;
 struct MRSetupPaths;
 
 class MRWindowOpenBatch {
@@ -33,14 +34,20 @@ class MRWindowOpenBatch {
 [[nodiscard]] MRBentoBox *convertEditWindowToBentoBox(MREditWindow *source);
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsInZOrder();
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder();
+[[nodiscard]] std::vector<MRDesktopWindow *> allDesktopWindowsInZOrder();
 [[nodiscard]] MREditWindow *currentEditWindow();
+[[nodiscard]] MRDesktopWindow *currentDesktopWindow();
 [[nodiscard]] MREditWindow *currentEditorCommandWindow();
 [[nodiscard]] MREditWindow *findEditWindowByBufferId(int bufferId);
 [[nodiscard]] bool isEmptyUntitledEditableWindow(MREditWindow *win);
 [[nodiscard]] MREditWindow *findReusableEmptyWindow(MREditWindow *preferred);
 [[nodiscard]] bool closeCurrentEditWindow();
+[[nodiscard]] bool closeCurrentDesktopWindow();
 [[nodiscard]] bool activateRelativeEditWindow(int delta);
+[[nodiscard]] bool activateRelativeDesktopWindow(int delta);
 [[nodiscard]] bool hideCurrentEditWindow();
+[[nodiscard]] bool hideCurrentDesktopWindow();
+[[nodiscard]] bool zoomCurrentDesktopWindow();
 void mrUpdateAllWindowsColorTheme();
 [[nodiscard]] bool handleWindowCascade();
 [[nodiscard]] bool handleWindowTile();

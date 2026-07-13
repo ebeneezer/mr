@@ -198,6 +198,11 @@ std::string runtimeSchedulerEventLine(const MRRuntimeSchedulerEvent &event) {
 		line += " buffer #";
 		line += std::to_string(event.owner.bufferId);
 	}
+	if (!event.owner.modelessWindowId.empty()) {
+		line += " modeless-window '";
+		line += event.owner.modelessWindowId;
+		line += "'";
+	}
 	if (event.sessionId != 0) {
 		line += " session #";
 		line += std::to_string(event.sessionId);
@@ -224,6 +229,24 @@ std::string runtimeSchedulerEventLine(const MRRuntimeSchedulerEvent &event) {
 	}
 	line += ".";
 	return line;
+}
+
+std::size_t removeRuntimeScheduledConsumersLocked(const std::string *macroSpec, const MRMacroExecutionOwner *owner, const std::string *consumerKey) {
+	std::vector<MRRuntimeScheduledConsumer> consumers = mrvmRuntimeScheduledConsumers();
+	std::size_t removed = 0;
+
+	for (std::size_t index = 0; index < consumers.size(); ++index) {
+		const MRRuntimeScheduledConsumer &consumer = consumers[index];
+
+		if (macroSpec != nullptr && consumer.config.macroSpec != *macroSpec) continue;
+		if (owner != nullptr && !macroExecutionOwnerMatches(consumer.config.owner, *owner)) continue;
+		if (consumerKey != nullptr && consumer.config.consumerKey != *consumerKey) continue;
+		recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::ConsumerRemoved, MRRuntimeSchedulerSkipReason::None, consumer.activeSessionId, 0, 0, 0, std::string());
+		mrvmRemoveRuntimeScheduledConsumer(consumer.consumerId);
+		++removed;
+	}
+	noteRuntimeSchedulerConsumersRemovedLocked(removed);
+	return removed;
 }
 } // namespace
 
@@ -255,19 +278,20 @@ bool removeRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId) {
 
 std::size_t removeRuntimeScheduledConsumersForMacroSpec(const std::string &macroSpec) {
 	std::lock_guard<std::mutex> lock(runtimeSchedulerMutex);
-	std::vector<MRRuntimeScheduledConsumer> consumers = mrvmRuntimeScheduledConsumers();
-	std::size_t removed = 0;
 
-	for (std::size_t index = 0; index < consumers.size(); ++index) {
-		const MRRuntimeScheduledConsumer &consumer = consumers[index];
+	return removeRuntimeScheduledConsumersLocked(&macroSpec, nullptr, nullptr);
+}
 
-		if (consumer.config.macroSpec != macroSpec) continue;
-		recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::ConsumerRemoved, MRRuntimeSchedulerSkipReason::None, consumer.activeSessionId, 0, 0, 0, std::string());
-		mrvmRemoveRuntimeScheduledConsumer(consumer.consumerId);
-		++removed;
-	}
-	noteRuntimeSchedulerConsumersRemovedLocked(removed);
-	return removed;
+std::size_t removeRuntimeScheduledConsumersForOwner(const MRMacroExecutionOwner &owner) {
+	std::lock_guard<std::mutex> lock(runtimeSchedulerMutex);
+
+	return removeRuntimeScheduledConsumersLocked(nullptr, &owner, nullptr);
+}
+
+std::size_t removeRuntimeScheduledConsumersForOwnerAndKey(const MRMacroExecutionOwner &owner, const std::string &consumerKey) {
+	std::lock_guard<std::mutex> lock(runtimeSchedulerMutex);
+
+	return removeRuntimeScheduledConsumersLocked(nullptr, &owner, &consumerKey);
 }
 
 std::vector<MRRuntimeScheduledConsumer> runtimeScheduledConsumers() {
@@ -375,8 +399,12 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 		MRMacroExecutionSession session;
 		std::string errorText;
 		bool accepted = false;
-		if (dueConsumer.config.macroSource.empty())
-			accepted = runMacroSpecByNameAsExecutionSessionForOwner(dueConsumer.config.macroSpec.c_str(), dueConsumer.config.owner, &session, &errorText, false);
+		if (dueConsumer.config.macroSource.empty()) {
+			if (dueConsumer.config.owner.modelessWindowId.empty())
+				accepted = runMacroSpecByNameAsExecutionSessionForOwner(dueConsumer.config.macroSpec.c_str(), dueConsumer.config.owner, &session, &errorText, false);
+			else
+				accepted = runMacroSpecByNameAsExecutionSessionForOwnerOnUiThread(dueConsumer.config.macroSpec.c_str(), dueConsumer.config.owner, &session, &errorText, false);
+		}
 		else if (dueConsumer.config.entryName.empty())
 			accepted = runMacroSourceTextAsExecutionSessionForOwner(dueConsumer.config.macroSpec.c_str(), dueConsumer.config.macroSource.c_str(), dueConsumer.config.owner, &session, &errorText, false);
 		else
@@ -413,9 +441,19 @@ std::vector<std::string> runtimeSchedulerStatusLines(std::size_t maxEvents) {
 			line += consumer.config.closureId;
 			line += "'";
 		}
+		if (!consumer.config.consumerKey.empty()) {
+			line += " key='";
+			line += consumer.config.consumerKey;
+			line += "'";
+		}
 		if (consumer.config.owner.hasBuffer) {
 			line += " buffer #";
 			line += std::to_string(consumer.config.owner.bufferId);
+		}
+		if (!consumer.config.owner.modelessWindowId.empty()) {
+			line += " modeless-window '";
+			line += consumer.config.owner.modelessWindowId;
+			line += "'";
 		}
 		if (consumer.activeSessionId != 0) {
 			line += " active-session #";

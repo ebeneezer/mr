@@ -40,6 +40,7 @@
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowLayout.hpp"
 #include "../ui/MRWindowSupport.hpp"
+#include "../ui/MRDesktopWindow.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 
 namespace {
@@ -122,14 +123,16 @@ void postWindowListActivate(TView *dialog) {
 
 struct WindowListEntry {
 	MREditWindow *window;
+	MRDesktopWindow *desktopWindow;
 	std::string statusLabel;
 	std::string desktopLabel;
 	std::string fileLabel;
 	std::string directoryLabel;
+	int virtualDesktop;
 	bool hidden;
 	bool minimized;
 
-	WindowListEntry() : window(nullptr), hidden(false), minimized(false) {
+	WindowListEntry() : window(nullptr), desktopWindow(nullptr), virtualDesktop(1), hidden(false), minimized(false) {
 	}
 };
 
@@ -541,7 +544,7 @@ class WindowListDialog : public MRDialogFoundation {
 		updateHideToggleState();
 		setDialogValidationHook([this]() {
 			DialogValidationResult result;
-			result.valid = currentSelection() != nullptr;
+			result.valid = mode == mrwlManageWindows ? currentEntry() != nullptr : currentSelection() != nullptr;
 			if (!result.valid) result.warningText = "Select window.";
 			return result;
 		});
@@ -591,15 +594,13 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void previewFocusedWindow() {
-		MREditWindow *win = currentSelection();
+		WindowListEntry *entry = currentEntry();
 
 		if (mode != mrwlManageWindows) return;
-		if (win == nullptr) return;
-		if (win->isMinimized()) return;
-		if (isWindowManuallyHidden(win)) return;
-		if (win->mVirtualDesktop != currentVirtualDesktop()) return;
-		if ((win->state & sfVisible) == 0) return;
-		static_cast<void>(mrActivateEditWindow(win));
+		if (entry == nullptr || entry->desktopWindow == nullptr || entry->desktopWindow->desktopNativeWindow() == nullptr) return;
+		if (entry->minimized || entry->hidden || entry->virtualDesktop != currentVirtualDesktop()) return;
+		if ((entry->desktopWindow->desktopNativeWindow()->state & sfVisible) == 0) return;
+		entry->desktopWindow->desktopNativeWindow()->select();
 		returnDialogToFront();
 	}
 
@@ -665,13 +666,19 @@ class WindowListDialog : public MRDialogFoundation {
 		}
 		if (event.what == evCommand && event.message.command == cmOK) {
 			selected = currentSelection();
-			if (selected == nullptr) {
+			if (mode != mrwlManageWindows && selected == nullptr) {
 				clearEvent(event);
 				return;
 			}
 			if (mode == mrwlManageWindows) {
-				if (selected->isMinimized()) selected->restoreWindow();
-				static_cast<void>(mrActivateEditWindow(selected));
+				WindowListEntry *entry = currentEntry();
+
+				if (entry == nullptr || entry->desktopWindow == nullptr || entry->desktopWindow->desktopNativeWindow() == nullptr) {
+					clearEvent(event);
+					return;
+				}
+				if (entry->desktopWindow->desktopMinimized()) entry->desktopWindow->restoreDesktopWindow();
+				entry->desktopWindow->desktopNativeWindow()->select();
 				clearEvent(event);
 				closeModelessWindowList();
 				return;
@@ -767,10 +774,10 @@ class WindowListDialog : public MRDialogFoundation {
 				clearEvent(event);
 				break;
 			case cmMRWindowListGet: {
-				MREditWindow *win = currentSelection();
-				if (win != nullptr && win->mVirtualDesktop != currentVirtualDesktop()) {
+				WindowListEntry *entry = currentEntry();
+				if (entry != nullptr && entry->virtualDesktop != currentVirtualDesktop()) {
 					TGroup *content = managedContent();
-					win->mVirtualDesktop = currentVirtualDesktop();
+					if (entry->desktopWindow != nullptr) entry->desktopWindow->setDesktopIndex(currentVirtualDesktop());
 					syncVirtualDesktopVisibility();
 					MRWindowLayout::handleDesktopLayoutChange();
 					mrNotifyWindowTopologyChanged();
@@ -838,7 +845,7 @@ class WindowListDialog : public MRDialogFoundation {
 	std::string renderRow(const WindowListEntry &entry) const {
 		std::string filePart = entry.fileLabel;
 		std::string dirPart = trimCopy(entry.directoryLabel);
-		return padRight(entry.statusLabel, 5) + " " + padRight(entry.desktopLabel, 2) + " " + (mrIsWorkspaceMainFile(entry.window) ? "♔ " : "  ") + padRight(filePart, 26) + " " + dirPart;
+		return padRight(entry.statusLabel, 5) + " " + padRight(entry.desktopLabel, 2) + " " + (entry.window != nullptr && mrIsWorkspaceMainFile(entry.window) ? "♔ " : "  ") + padRight(filePart, 26) + " " + dirPart;
 	}
 
 	void collectEntries() {
@@ -862,14 +869,37 @@ class WindowListDialog : public MRDialogFoundation {
 				if (mode == mrwlSelectFileCompareTarget && !isFileCompareWindowListCandidate(windows[i], current)) continue;
 
 				entry.window = windows[i];
+				entry.desktopWindow = windows[i];
 				entry.hidden = isWindowManuallyHidden(windows[i]);
 				entry.minimized = windows[i]->isMinimized();
 				entry.statusLabel = entry.minimized ? "[min]" : (entry.hidden ? "[hid]" : "");
-				entry.desktopLabel = std::to_string(windows[i]->mVirtualDesktop);
+				entry.virtualDesktop = windows[i]->mVirtualDesktop;
+				entry.desktopLabel = std::to_string(entry.virtualDesktop);
 				entry.fileLabel = fileName.empty() ? (titleText.empty() ? "?No-File" : baseNameOf(titleText)) : baseNameOf(fileName);
 				entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
 				entries.push_back(entry);
 				rows.push_back(renderRow(entry));
+			}
+			if (mode == mrwlManageWindows) {
+				const std::vector<MRDesktopWindow *> desktopWindows = allDesktopWindowsInZOrder();
+
+				for (std::size_t index = 0; index < desktopWindows.size(); ++index) {
+					MRDesktopWindow *desktopWindow = desktopWindows[index];
+					WindowListEntry entry;
+					TWindow *nativeWindow = desktopWindow != nullptr ? desktopWindow->desktopNativeWindow() : nullptr;
+					MREditWindow *editWindow = dynamic_cast<MREditWindow *>(desktopWindow);
+
+					if (nativeWindow == nullptr || editWindow != nullptr) continue;
+					entry.desktopWindow = desktopWindow;
+					entry.hidden = desktopWindow->desktopManuallyHidden();
+					entry.virtualDesktop = desktopWindow->desktopIndex();
+					entry.desktopLabel = std::to_string(entry.virtualDesktop);
+					entry.statusLabel = entry.hidden ? "[hid]" : "";
+					entry.fileLabel = nativeWindow->getTitle(0) != nullptr ? nativeWindow->getTitle(0) : "MRMac";
+					entry.directoryLabel = "Desktop";
+					entries.push_back(entry);
+					rows.push_back(renderRow(entry));
+				}
 			}
 			rowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 		}
@@ -962,11 +992,20 @@ class WindowListDialog : public MRDialogFoundation {
 		return entries[static_cast<std::size_t>(listView->focused)].window;
 	}
 
+	WindowListEntry *currentEntry() {
+		if (listView == nullptr || listView->focused < 0 || static_cast<std::size_t>(listView->focused) >= entries.size()) return nullptr;
+		return &entries[static_cast<std::size_t>(listView->focused)];
+	}
+
 	void handleDelete() {
-		MREditWindow *win = currentSelection();
-		if (win == nullptr) return;
-		closeWindow(win);
-		static_cast<void>(mrEnsureUsableWorkWindow(false));
+		WindowListEntry *entry = currentEntry();
+
+		if (entry == nullptr) return;
+		if (entry->window != nullptr) {
+			closeWindow(entry->window);
+			static_cast<void>(mrEnsureUsableWorkWindow(false));
+		} else if (entry->desktopWindow != nullptr && entry->desktopWindow->desktopNativeWindow() != nullptr)
+			message(entry->desktopWindow->desktopNativeWindow(), evCommand, cmClose, entry->desktopWindow->desktopNativeWindow());
 		refreshEntries();
 	}
 
@@ -1000,14 +1039,22 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void handleHide() {
-		MREditWindow *win = currentSelection();
+		WindowListEntry *entry = currentEntry();
 		std::string line;
-		if (win == nullptr) return;
-		if (win->isMinimized()) {
-			win->restoreWindow();
+		if (entry == nullptr) return;
+		if (entry->window != nullptr && entry->window->isMinimized()) {
+			entry->window->restoreWindow();
 			refreshEntries();
 			return;
 		}
+		if (entry->window == nullptr) {
+			if (entry->desktopWindow == nullptr) return;
+			entry->desktopWindow->setDesktopManuallyHidden(!entry->hidden);
+			syncVirtualDesktopVisibility();
+			refreshEntries();
+			return;
+		}
+		MREditWindow *win = entry->window;
 		line = "Window List handleHide";
 		line += (win->state & sfVisible) != 0 ? " hide " : " unhide ";
 		line += "'";
@@ -1040,18 +1087,18 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	bool canToggleCurrentSelection() const {
-		MREditWindow *win = currentSelection();
-		return win != nullptr;
+		return const_cast<WindowListDialog *>(this)->currentEntry() != nullptr;
 	}
 
 	void updateHideToggleState() {
 		const auto startedAt = std::chrono::steady_clock::now();
-		MREditWindow *win = currentSelection();
+		WindowListEntry *entry = currentEntry();
+		MREditWindow *win = entry != nullptr ? entry->window : nullptr;
 		const bool enabled = canToggleCurrentSelection();
-		const bool canGet = win != nullptr && win->mVirtualDesktop != currentVirtualDesktop();
+		const bool canGet = entry != nullptr && entry->virtualDesktop != currentVirtualDesktop();
 		if (hideToggleButton != nullptr) hideToggleButton->setState(sfDisabled, enabled ? False : True);
-		if (hideToggleButton != nullptr && win != nullptr) {
-			const char *title = win->isMinimized() ? kRestoreTitle : kHideToggleTitle;
+		if (hideToggleButton != nullptr && entry != nullptr) {
+			const char *title = win != nullptr && win->isMinimized() ? kRestoreTitle : kHideToggleTitle;
 			if (std::strcmp(hideToggleButton->title, title) != 0) {
 				delete[] (char *) hideToggleButton->title;
 				hideToggleButton->title = newStr(title);
@@ -1089,8 +1136,8 @@ class WindowListDialog : public MRDialogFoundation {
 			}
 		}
 		if (workspaceMainFileButton != nullptr) {
-			updateButtonTitle(workspaceMainFileButton, mrIsWorkspaceMainFile(win) ? kMainWorkspaceOnTitle : kMainWorkspaceOffTitle);
-			workspaceMainFileButton->setState(sfDisabled, False);
+			updateButtonTitle(workspaceMainFileButton, win != nullptr && mrIsWorkspaceMainFile(win) ? kMainWorkspaceOnTitle : kMainWorkspaceOffTitle);
+			workspaceMainFileButton->setState(sfDisabled, win != nullptr ? False : True);
 		}
 		if (counterView != nullptr) counterView->setCounter(listView != nullptr ? listView->focused : -1, entries.size());
 		lastFocusedIndex = listView != nullptr ? listView->focused : -1;
@@ -1102,12 +1149,18 @@ class WindowListDialog : public MRDialogFoundation {
 
 	void handleHideAll() {
 		std::vector<MREditWindow *> windows = allEditWindows();
-		if (currentSelection() != nullptr && currentSelection()->isMinimized()) {
+		std::vector<MRDesktopWindow *> desktopWindows = allDesktopWindowsInZOrder();
+		WindowListEntry *entry = currentEntry();
+
+		if (entry != nullptr && entry->window != nullptr && entry->window->isMinimized()) {
 			for (auto &window : windows)
 				if (window != nullptr && window->isMinimized()) window->restoreWindow();
 		} else {
 			for (auto &window : windows)
 				hideWindow(window);
+			for (std::size_t index = 0; index < desktopWindows.size(); ++index)
+				if (desktopWindows[index] != nullptr) desktopWindows[index]->setDesktopManuallyHidden(true);
+			syncVirtualDesktopVisibility();
 			static_cast<void>(mrEnsureUsableWorkWindow());
 		}
 		refreshEntries();

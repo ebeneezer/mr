@@ -1,12 +1,12 @@
 #include "MRVMMacroDialogRuntime.hpp"
 
-#include "MRVMModelessUiRuntime.hpp"
+#include "../modeless/MRVMModelessUiRuntime.hpp"
 #include "MRVMScreen.hpp"
-#include "MRVMValue.hpp"
+#include "../../vm/MRVMValue.hpp"
 
-#include "../../app/utils/MRStringUtils.hpp"
-#include "../../dialogs/setup/MRSetupCommon.hpp"
-#include "../../ui/MRWindowSupport.hpp"
+#include "../../../app/utils/MRStringUtils.hpp"
+#include "../../../dialogs/setup/MRSetupCommon.hpp"
+#include "../../../ui/MRWindowSupport.hpp"
 
 #define Uses_TButton
 #define Uses_TDeskTop
@@ -861,86 +861,6 @@ void mrvmBindMacroModelessButton(MRVMRuntimeKv &runtimeKv, const std::vector<Val
 
 	if (buttonId <= 0) throw std::runtime_error("UI_MODELESS_ON expects a positive control id.");
 	mrvmModelessUiWriteModelessMacro(runtimeKv, buttonId, macroSpec);
-}
-
-MRMacroModelessWindowDefinition mrvmBuildMacroModelessDefinition(MRVMRuntimeKv &runtimeKv, const std::string &windowId) {
-	MRMacroModelessWindowDefinition definition;
-	MacroUiDialogDefinition dialog = mrvmModelessUiReadDialogDefinition(runtimeKv);
-
-	definition.x = dialog.x;
-	definition.y = dialog.y;
-	definition.width = dialog.width;
-	definition.height = dialog.height;
-	definition.windowId = windowId;
-	definition.title = dialog.title;
-
-	for (std::size_t labelIndex = 0; labelIndex < dialog.labels.size(); ++labelIndex) {
-		const MacroUiLabelSpec &label = dialog.labels[labelIndex];
-		MRMacroModelessLabelSpec entry;
-		entry.x = label.x;
-		entry.y = label.y;
-		entry.text = label.text;
-		definition.labels.push_back(std::move(entry));
-	}
-
-	for (std::size_t displayIndex = 0; displayIndex < dialog.displays.size(); ++displayIndex) {
-		const MacroUiDisplaySpec &display = dialog.displays[displayIndex];
-		MRMacroModelessDisplaySpec entry;
-		entry.x = display.x;
-		entry.y = display.y;
-		entry.width = display.width;
-		entry.text = display.text;
-		definition.displays.push_back(std::move(entry));
-	}
-
-	for (std::size_t listBoxIndex = 0; listBoxIndex < dialog.listBoxes.size(); ++listBoxIndex) {
-		const MacroUiListBoxSpec &listBox = dialog.listBoxes[listBoxIndex];
-		MRMacroModelessListBoxSpec entry;
-		entry.x = listBox.x;
-		entry.y = listBox.y;
-		entry.width = listBox.width;
-		entry.height = listBox.height;
-		entry.id = listBox.id;
-		entry.label = listBox.label;
-		entry.itemSpec = listBox.itemSpec;
-		entry.start = listBox.start;
-		definition.listBoxes.push_back(std::move(entry));
-	}
-
-	for (std::size_t gridIndex = 0; gridIndex < dialog.grids.size(); ++gridIndex) {
-		const MacroUiGridSpec &grid = dialog.grids[gridIndex];
-		MRMacroModelessGridSpec entry;
-		std::map<int, std::string>::const_iterator macroIt;
-
-		entry.x = grid.x;
-		entry.y = grid.y;
-		entry.width = grid.width;
-		entry.height = grid.height;
-		entry.id = grid.id;
-		entry.label = grid.label;
-		entry.itemSpec = grid.itemSpec;
-		macroIt = dialog.modelessButtonMacros.find(grid.id);
-		entry.macroSpec = macroIt != dialog.modelessButtonMacros.end() ? macroIt->second : std::string();
-		entry.start = grid.start;
-		definition.grids.push_back(std::move(entry));
-	}
-
-	for (std::size_t buttonIndex = 0; buttonIndex < dialog.buttons.size(); ++buttonIndex) {
-		const MacroUiButtonSpec &button = dialog.buttons[buttonIndex];
-		MRMacroModelessButtonSpec entry;
-		std::map<int, std::string>::const_iterator macroIt;
-
-		entry.x = button.x;
-		entry.y = button.y;
-		entry.width = button.width;
-		entry.id = button.id;
-		entry.text = button.text;
-		macroIt = dialog.modelessButtonMacros.find(button.id);
-		entry.macroSpec = macroIt != dialog.modelessButtonMacros.end() ? macroIt->second : std::string();
-		definition.buttons.push_back(std::move(entry));
-	}
-
-	return definition;
 }
 
 int mrvmRunMacroUiDialogDefinition(MRVMRuntimeKv &runtimeKv) {

@@ -99,6 +99,7 @@ unsigned classifyPureOpcode(unsigned char opcode) {
 }
 
 unsigned classifyIntrinsicName(const std::string &name) {
+	if (name.size() >= 4 && name.compare(0, 4, "MMP_") == 0) return mrefUiAffinity;
 	if (name == "VERSION") return mrefBackgroundSafe;
 	if (name == "FILE_EXISTS" || name == "FIRST_FILE" || name == "NEXT_FILE" || name == "GET_ENVIRONMENT" || name == "SUBSHELL") return mrefExternalIo;
 	if (name == "FILE_ATTR" || name == "COPY_FILE" || name == "RENAME_FILE" || name == "SWITCH_FILE") return mrefUiAffinity | mrefExternalIo;
@@ -216,6 +217,7 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 }
 
 unsigned classifyProcName(const std::string &name) {
+	if (name.size() >= 4 && name.compare(0, 4, "MMP_") == 0) return mrefUiAffinity;
 	if (name == "MRSETUP" || name == "MRCOMPILERPROFILE") return mrefUiAffinity;
 	if (name == "MAKE_MESSAGE") return mrefUiAffinity;
 	if (name == "SET_CLIPBOARD_TEXT") return mrefUiAffinity;

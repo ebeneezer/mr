@@ -1,10 +1,9 @@
 #ifndef MRVM_MACRO_DIALOG_RUNTIME_HPP
 #define MRVM_MACRO_DIALOG_RUNTIME_HPP
 
-#include "MRVMRuntimeKv.hpp"
+#include "../../vm/MRVMRuntimeKv.hpp"
 
-#include "../MRMacroModelessUi.hpp"
-#include "../MRVM.hpp"
+#include "../../MRVM.hpp"
 
 #include <string>
 #include <vector>
@@ -24,6 +23,5 @@ void mrvmAddMacroUiGrid(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachi
 void mrvmClearMacroUiItemList(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
 void mrvmAddMacroUiItemListValue(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
 void mrvmBindMacroModelessButton(MRVMRuntimeKv &runtimeKv, const std::vector<VirtualMachine::Value> &args);
-MRMacroModelessWindowDefinition mrvmBuildMacroModelessDefinition(MRVMRuntimeKv &runtimeKv, const std::string &windowId);
 
 #endif

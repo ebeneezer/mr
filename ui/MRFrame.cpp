@@ -5,6 +5,7 @@
 #define Uses_TMenuItem
 #include "MRFrame.hpp"
 #include "MRBentoBox.hpp"
+#include "MRDesktopWindow.hpp"
 #include "MREditWindow.hpp"
 #include "MRWindowLayout.hpp"
 #include "../app/MRMenuFactory.hpp"
@@ -392,11 +393,11 @@ void MRFrame::draw() {
 		}
 	}
 
-	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
-	if (editWindow != nullptr && MRWindowLayout::isWindowMinimized(editWindow)) {
+	MRDesktopWindow *desktopWindow = dynamic_cast<MRDesktopWindow *>(window);
+	if (desktopWindow != nullptr && MRWindowLayout::isWindowMinimized(desktopWindow)) {
 		const MRWindowLayout::MinimizedGlyphs &glyphs = MRWindowLayout::minimizedGlyphs();
-		const MRWindowLayout::MinimizedLayout layout = MRWindowLayout::minimizedLayout(editWindow, width);
-		const char *title = MRWindowLayout::minimizedDisplayTitle(editWindow);
+		const MRWindowLayout::MinimizedLayout layout = MRWindowLayout::minimizedLayout(desktopWindow, width);
+		const char *title = MRWindowLayout::minimizedDisplayTitle(desktopWindow);
 
 		b.moveChar(0, ' ', cTitle, size.x);
 		if (layout.menuEnd > layout.menuStart) b.moveStr(static_cast<ushort>(layout.menuStart), glyphs.menu, cTitle, layout.menuEnd - layout.menuStart);
@@ -416,7 +417,7 @@ void MRFrame::draw() {
 
 	bool controlsVisible = isFocused;
 	const bool hasZoomButton = window != nullptr && (window->flags & wfZoom) != 0;
-	const bool hasMinimizeButton = editWindow != nullptr;
+	const bool hasMinimizeButton = desktopWindow != nullptr;
 	const int minimizeStart = hasMinimizeButton ? normalRightControlStart(width, kMinimizeIcon) : width;
 	const int zoomStart = hasZoomButton ? normalZoomStart(width, hasMinimizeButton) : width;
 	const int controlClusterStart = hasZoomButton ? zoomStart : minimizeStart;
@@ -530,7 +531,7 @@ void MRFrame::draw() {
 		writeLine(0, i, size.x, 1, b);
 	}
 	drawFrameLine(b, size.y - 1, f + 6, cFrame);
-	const bool showGrowHandle = editWindow == nullptr || editWindow->showsFrameGrowHandle();
+	const bool showGrowHandle = desktopWindow == nullptr || desktopWindow->desktopShowsFrameGrowHandle();
 	if (isFocused && window != nullptr && (window->flags & wfGrow) != 0 && showGrowHandle) {
 		b.moveCStr(0, f == 9 ? kFocusedDragLeftIcon : kDragLeftIcon, cFrame);
 		b.moveCStr(width - 2, f == 9 ? kFocusedDragIcon : kDragIcon, cFrame);
@@ -562,15 +563,15 @@ void MRFrame::handleEvent(TEvent &event) {
 	if (event.what == evMouseDown) {
 		TPoint mouse = makeLocal(event.mouse.where);
 		TWindow *window = static_cast<TWindow *>(owner);
-		MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
+		MRDesktopWindow *desktopWindow = dynamic_cast<MRDesktopWindow *>(window);
 		if (mouse.y == 0 && window != nullptr) {
-			if (editWindow != nullptr && MRWindowLayout::isWindowMinimized(editWindow)) {
-				const MRWindowLayout::MinimizedLayout layout = MRWindowLayout::minimizedLayout(editWindow, size.x);
+			if (desktopWindow != nullptr && MRWindowLayout::isWindowMinimized(desktopWindow)) {
+				const MRWindowLayout::MinimizedLayout layout = MRWindowLayout::minimizedLayout(desktopWindow, size.x);
 				if (mouse.x >= layout.menuStart && mouse.x < layout.menuEnd) {
 					TMenuItem *items = createMRWindowMenuPopupItems();
 					if (items != nullptr) popupMenu(event.mouse.where, *items, owner);
 					clearEvent(event);
-				} else if (MRWindowLayout::isMinimizedReinsertGlyphHit(editWindow, mouse)) {
+				} else if (MRWindowLayout::isMinimizedReinsertGlyphHit(desktopWindow, mouse)) {
 					event.what = evCommand;
 					event.message.command = cmResize;
 					event.message.infoPtr = owner;
@@ -582,7 +583,7 @@ void MRFrame::handleEvent(TEvent &event) {
 					event.message.infoPtr = owner;
 					putEvent(event);
 					clearEvent(event);
-				} else if (MRWindowLayout::isMinimizedRestoreGlyphHit(editWindow, mouse)) {
+				} else if (MRWindowLayout::isMinimizedRestoreGlyphHit(desktopWindow, mouse)) {
 					event.what = evCommand;
 					event.message.command = cmMrWindowMinimize;
 					event.message.infoPtr = owner;
@@ -594,7 +595,7 @@ void MRFrame::handleEvent(TEvent &event) {
 			}
 			bool controlsVisible = isFrameFocused(this);
 			const bool hasZoomButton = (window->flags & wfZoom) != 0;
-			const bool hasMinimizeButton = editWindow != nullptr;
+			const bool hasMinimizeButton = desktopWindow != nullptr;
 			const int minimizeStart = hasMinimizeButton ? normalRightControlStart(size.x, kMinimizeIcon) : size.x;
 			const int zoomStart = normalZoomStart(size.x, hasMinimizeButton);
 			MarkerState state = markerState();

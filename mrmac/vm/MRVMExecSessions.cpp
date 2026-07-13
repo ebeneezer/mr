@@ -169,6 +169,7 @@ void writeRuntimeScheduledConsumerConfigHash(MRVMRuntimeKv &runtimeKv, const Val
 	hashWriteString(runtimeKv, hash, "macroSource", config.macroSource);
 	hashWriteString(runtimeKv, hash, "entryName", config.entryName);
 	hashWriteString(runtimeKv, hash, "closureId", config.closureId);
+	hashWriteString(runtimeKv, hash, "consumerKey", config.consumerKey);
 	hashWriteInt(runtimeKv, hash, "overrunPolicy", static_cast<int>(config.overrunPolicy));
 	mrvmExecSessionsWriteOwner(runtimeKv, owner, config.owner);
 }
@@ -182,6 +183,7 @@ MRRuntimeScheduledConsumerConfig readRuntimeScheduledConsumerConfigHash(MRVMRunt
 	config.macroSource = hashReadString(runtimeKv, hash, "macroSource");
 	config.entryName = hashReadString(runtimeKv, hash, "entryName");
 	config.closureId = hashReadString(runtimeKv, hash, "closureId");
+	config.consumerKey = hashReadString(runtimeKv, hash, "consumerKey");
 	config.overrunPolicy = static_cast<MRRuntimeScheduleOverrunPolicy>(hashReadInt(runtimeKv, hash, "overrunPolicy", static_cast<int>(MRRuntimeScheduleOverrunPolicy::Skip)));
 	if (runtimeKv.findChild(hash, "owner", owner)) config.owner = mrvmExecSessionsReadOwner(runtimeKv, owner);
 	return config;
@@ -303,6 +305,7 @@ std::uint64_t mrvmExecSessionsNextCounter(MRVMRuntimeKv &runtimeKv, const std::s
 void mrvmExecSessionsWriteOwner(MRVMRuntimeKv &runtimeKv, const Value &hash, const MRMacroExecutionOwner &owner) {
 	hashWriteInt(runtimeKv, hash, "hasBuffer", owner.hasBuffer ? 1 : 0);
 	hashWriteInt(runtimeKv, hash, "bufferId", owner.bufferId);
+	hashWriteString(runtimeKv, hash, "modelessWindowId", owner.modelessWindowId);
 }
 
 MRMacroExecutionOwner mrvmExecSessionsReadOwner(MRVMRuntimeKv &runtimeKv, const Value &hash) {
@@ -310,6 +313,7 @@ MRMacroExecutionOwner mrvmExecSessionsReadOwner(MRVMRuntimeKv &runtimeKv, const 
 
 	owner.hasBuffer = hashReadInt(runtimeKv, hash, "hasBuffer") != 0;
 	owner.bufferId = hashReadInt(runtimeKv, hash, "bufferId");
+	owner.modelessWindowId = hashReadString(runtimeKv, hash, "modelessWindowId");
 	return owner;
 }
 

@@ -1,6 +1,11 @@
 #include "../app/MRVersion.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
+#define Uses_TCheckBoxes
+#define Uses_TGroup
+#define Uses_TInputLine
 #define Uses_TKeys
+#define Uses_TListViewer
+#define Uses_TWindow
 #include <tvision/tv.h>
 
 #include <algorithm>
@@ -29,9 +34,15 @@
 
 #include "../mrmac/mrmac.h"
 #include "../mrmac/MRMacroExecutionSession.hpp"
+#include "../mrmac/MRMacroRunner.hpp"
+#include "../mrmac/ui/modeless/MRMacroModelessControls.hpp"
+#include "../mrmac/ui/modeless/MRMacroModelessUi.hpp"
 #include "../mrmac/MRVM.hpp"
+#include "../mrmac/ui/modeless/MRVMMacroModelessProcedures.hpp"
+#include "../mrmac/ui/modeless/MRVMModelessUiRuntime.hpp"
 #include "../mrmac/vm/MRVMRuntimeCatalog.hpp"
 #include "../mrmac/vm/MRVMRuntimeDebugger.hpp"
+#include "../mrmac/vm/MRVMValue.hpp"
 #include "../app/MRExecSessionStatus.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../app/MRCommandRouter.hpp"
@@ -62,6 +73,7 @@
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRStatusLine.hpp"
 #include "../ui/MRSidekickEditor.hpp"
+#include "../ui/MRDesktopWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 int runMacroDebuggerCrossSectionProbeMode();
@@ -711,12 +723,178 @@ bool testExecSessionOwnerCancellationGuard(std::string &failureReason) {
 	MRMacroExecutionSession otherSession;
 	std::vector<MRMacroExecutionSession> ownedSessions;
 	std::vector<MRMacroExecutionSession> activeSessions;
+	MRMacroModelessWindowDefinition canvasWindow;
+	MRMacroModelessWindowDefinition selectDefinition;
+	MRMacroModelessCanvasSpec canvas;
+	MRMacroModelessTextFieldSpec textField;
+	MRMacroModelessBoolFieldSpec boolField;
+	MRMacroModelessIntFieldSpec intField;
+	MRMacroModelessProgressFieldSpec progressField;
+	MRMacroModelessLogFieldSpec logField;
+	MRMacroModelessSelectFieldSpec selectField;
+	MRMacroModelessCanvasCommand canvasCommand;
+	MRMacroModelessCanvasScene canvasScene;
+	MacroUiCanvasSpec stagedCanvas;
+	MacroUiCanvasHotspotSpec stagedHotspot;
+	MacroUiDialogDefinition stagedDefinition;
+	std::vector<VirtualMachine::Value> actionButtonArgs;
+	std::vector<VirtualMachine::Value> menuClearArgs;
+	std::vector<VirtualMachine::Value> menuItemArgs;
+	std::vector<VirtualMachine::Value> actionMenuArgs;
+	std::vector<VirtualMachine::Value> textFieldArgs;
+	std::vector<VirtualMachine::Value> boolFieldArgs;
+	std::vector<VirtualMachine::Value> intFieldArgs;
+	std::vector<VirtualMachine::Value> progressFieldArgs;
+	std::vector<VirtualMachine::Value> logFieldArgs;
+	std::vector<VirtualMachine::Value> logCountArgs;
+	std::vector<VirtualMachine::Value> selectFieldArgs;
+	std::vector<VirtualMachine::Value> selectOptionArgs;
+	std::vector<VirtualMachine::Value> statusFieldArgs;
+	std::vector<VirtualMachine::Value> unknownTextSetArgs;
+	std::vector<VirtualMachine::Value> unknownBoolSetArgs;
+	std::vector<VirtualMachine::Value> unknownIntSetArgs;
+	std::vector<VirtualMachine::Value> unknownProgressSetArgs;
+	std::vector<VirtualMachine::Value> unknownLogAppendArgs;
+	std::vector<VirtualMachine::Value> unknownSelectSetArgs;
+	std::vector<VirtualMachine::Value> invalidIntSetArgs;
+	std::vector<VirtualMachine::Value> intValueArgs;
+	std::vector<VirtualMachine::Value> invalidProgressSetArgs;
+	std::vector<VirtualMachine::Value> progressValueArgs;
+	std::vector<VirtualMachine::Value> invalidSelectSetArgs;
+	std::vector<VirtualMachine::Value> selectValueArgs;
+	std::vector<VirtualMachine::Value> unknownStatusSetArgs;
+	MRMacroModelessWindowGeometry geometry;
+	MRMacroModelessWindowDesktopState desktopState;
+	MRMacroModelessWindowDesktopState storedDesktopState;
+	MRVMRuntimeKv canvasRuntimeKv;
+	std::vector<std::string> menuItems;
+	std::vector<unsigned char> mmpBytecode;
+	std::string compileError;
+	std::string sourceText;
+	std::string ioError;
+	MRMacroExecutionProfile mmpProfile;
+	int actionButtonReturnValue = 0;
+	std::string actionButtonError;
+	int menuClearReturnValue = 0;
+	std::string menuClearError;
+	int menuItemReturnValue = 0;
+	std::string menuItemError;
+	int actionMenuReturnValue = 0;
+	std::string actionMenuError;
+	int textFieldReturnValue = 0;
+	std::string textFieldError;
+	int boolFieldReturnValue = 0;
+	std::string boolFieldError;
+	int selectFieldReturnValue = 0;
+	std::string selectFieldError;
+	int selectOptionReturnValue = 0;
+	std::string selectOptionError;
+	int statusFieldReturnValue = 0;
+	std::string statusFieldError;
+	int unknownTextSetReturnValue = 0;
+	std::string unknownTextSetError;
+	int unknownBoolSetReturnValue = 0;
+	std::string unknownBoolSetError;
+	int intFieldReturnValue = 0;
+	std::string intFieldError;
+	int progressFieldReturnValue = 0;
+	std::string progressFieldError;
+	int logFieldReturnValue = 0;
+	std::string logFieldError;
+	int unknownIntSetReturnValue = 0;
+	std::string unknownIntSetError;
+	int unknownProgressSetReturnValue = 0;
+	std::string unknownProgressSetError;
+	int unknownLogAppendReturnValue = 0;
+	std::string unknownLogAppendError;
+	int invalidIntSetReturnValue = 0;
+	std::string invalidIntSetError;
+	int invalidProgressSetReturnValue = 0;
+	std::string invalidProgressSetError;
+	int unknownSelectSetReturnValue = 0;
+	std::string unknownSelectSetError;
+	int invalidSelectSetReturnValue = 0;
+	std::string invalidSelectSetError;
+	int unknownStatusSetReturnValue = 0;
+	std::string unknownStatusSetError;
+	int statusDisplayIndex = 0;
+	std::string textFieldValue;
+	bool boolFieldValue = false;
+	int intFieldValue = 0;
+	int progressTotal = 0;
+	int progressValue = 0;
+	int logFieldCount = 0;
+	std::vector<std::string> logLines;
+	std::string selectFieldValue;
+	VirtualMachine::Value intValueResult;
+	VirtualMachine::Value progressValueResult;
+	VirtualMachine::Value logCountResult;
+	VirtualMachine::Value selectValueResult;
 	bool ownedTaskStillActive = false;
+	static const char kMmpSource[] = "$MACRO MmpProbe;\n"
+	                                 "DEF_STR(WindowId);\n"
+	                                 "WindowId := MMP_WINDOW_INSTANCE('Probe');\n"
+	                                 "MMP_CANVAS(1, 1, 20, 4, 'Main');\n"
+	                                 "MMP_CANVAS_CLEAR('Window', 'Main', MMP_STYLE_SURFACE());\n"
+	                                 "MMP_CANVAS_FILL('Window', 'Main', 1, 1, 18, 2, MMP_STYLE_MUTED());\n"
+	                                 "MMP_CANVAS_BOX('Window', 'Main', 0, 0, 20, 4, MMP_STYLE_ACCENT());\n"
+	                                 "MMP_CANVAS_TEXT('Window', 'Main', 1, 1, MMP_STYLE_TEXT(), 'text');\n"
+	                                 "MMP_CANVAS_GLYPH('Window', 'Main', 1, 2, MMP_STYLE_TEXT(), '*');\n"
+	                                 "MMP_CANVAS_LINE('Window', 'Main', 1, 2, 18, 2, MMP_STYLE_ACCENT(), '-');\n"
+	                                 "MMP_CANVAS_HOTSPOT('Main', 1, 1, 18, 1, 71, 'MmpProbe^Activate');\n"
+	                                 "MMP_ACTION_BUTTON(1, 6, 10, 72, '~A~ctivate', 'MmpProbe^Activate');\n"
+	                                 "MMP_MENU_CLEAR('Actions');\n"
+	                                 "MMP_MENU_ITEM('Actions', 'Activate', 'ACTIVATE', 'Run the action');\n"
+	                                 "MMP_ACTION_MENU(1, 8, 18, 4, 73, 'Actions', 'Actions', 'MmpProbe^Activate');\n"
+	                                 "MMP_TEXT_FIELD(1, 12, 18, 'Name', 'Name', 'Ready');\n"
+	                                 "MMP_TEXT_SET('Window', 'Name', 'Updated');\n"
+	                                 "MMP_BOOL_FIELD(1, 14, 'Enabled', '~E~nabled', 1);\n"
+	                                 "MMP_BOOL_SET('Window', 'Enabled', 0);\n"
+	                                 "MMP_INT_FIELD(1, 16, 8, 'Retries', 'Retries', 3, 0, 9);\n"
+	                                 "MMP_INT_SET('Window', 'Retries', 5);\n"
+	                                 "MMP_PROGRESS_FIELD(1, 18, 16, 'Scan', 'Scan', 100, 25);\n"
+	                                 "MMP_PROGRESS_SET('Window', 'Scan', 50);\n"
+	                                 "MMP_LOG_FIELD(1, 20, 18, 3, 'Events', 'Events', 4);\n"
+	                                 "MMP_LOG_APPEND('Window', 'Events', 'Started');\n"
+	                                 "MMP_LOG_CLEAR('Window', 'Events');\n"
+	                                 "MMP_SELECT_FIELD(1, 20, 18, 3, 'Mode', 'Mode', 'Normal');\n"
+	                                 "MMP_SELECT_OPTION('Mode', 'Normal');\n"
+	                                 "MMP_SELECT_OPTION('Mode', 'Safe');\n"
+	                                 "MMP_SELECT_SET('Window', 'Mode', 'Safe');\n"
+	                                 "MMP_STATUS_FIELD(1, 7, 18, 'Activity', 'Ready');\n"
+	                                 "MMP_STATUS_SET('Window', 'Activity', 'Updated');\n"
+	                                 "DEF_STR(Name);\n"
+	                                 "Name := MMP_TEXT_VALUE('Window', 'Name');\n"
+	                                 "DEF_INT(Enabled);\n"
+	                                 "Enabled := MMP_BOOL_VALUE('Window', 'Enabled');\n"
+	                                 "DEF_INT(Retries);\n"
+	                                 "Retries := MMP_INT_VALUE('Window', 'Retries');\n"
+	                                 "DEF_INT(Scan);\n"
+	                                 "Scan := MMP_PROGRESS_VALUE('Window', 'Scan');\n"
+	                                 "DEF_INT(EventCount);\n"
+	                                 "EventCount := MMP_LOG_COUNT('Window', 'Events');\n"
+	                                 "DEF_STR(Mode);\n"
+	                                 "Mode := MMP_SELECT_VALUE('Window', 'Mode');\n"
+	                                 "MMP_CANVAS_COMMIT('Window', 'Main');\n"
+	                                 "MMP_TIMER_START('Window', 'Refresh', 100, 'MmpProbe^Refresh');\n"
+	                                 "MMP_TIMER_STOP('Window', 'Refresh');\n"
+	                                 "DEF_INT(Width);\n"
+	                                 "Width := MMP_WINDOW_WIDTH('Window');\n"
+	                                 "END_MACRO;\n";
 
 	owner.hasBuffer = true;
 	owner.bufferId = 21;
 	otherOwner.hasBuffer = true;
 	otherOwner.bufferId = 22;
+	MRMacroExecutionOwner modelessOwner;
+	MRMacroExecutionOwner otherModelessOwner;
+
+	modelessOwner.modelessWindowId = "MMP-OWNER";
+	otherModelessOwner.modelessWindowId = "MMP-OTHER";
+	if (!macroExecutionOwnerMatches(modelessOwner, modelessOwner) || macroExecutionOwnerMatches(otherModelessOwner, modelessOwner) || macroExecutionOwnerMatches(modelessOwner, MRMacroExecutionOwner())) {
+		failureReason = "Exec-session owner matching must be exact for modeless window owners.";
+		return false;
+	}
 
 	ownedSession = createMacroExecutionSession("exec-session-owned-cancel", MRMacroExecutionRoute::Background, owner);
 	ownedSession.taskId = kOwnedTaskId;
@@ -771,6 +949,474 @@ bool testExecSessionOwnerCancellationGuard(std::string &failureReason) {
 
 	publishMacroExecutionResultForTask(kOwnedTaskId, MRMacroExecutionState::Cancelled, "cleanup");
 	publishMacroExecutionResultForTask(kOtherTaskId, MRMacroExecutionState::Cancelled, "cleanup");
+
+	canvasWindow.windowId = "MMP-CANVAS-PROBE";
+	canvasWindow.width = 30;
+	canvasWindow.height = 10;
+	canvas.canvasId = "MAIN";
+	canvas.x = 2;
+	canvas.y = 2;
+	canvas.width = 20;
+	canvas.height = 4;
+	canvasWindow.canvases.push_back(canvas);
+	stagedCanvas.x = 2;
+	stagedCanvas.y = 2;
+	stagedCanvas.width = 20;
+	stagedCanvas.height = 4;
+	stagedCanvas.canvasId = "MAIN";
+	stagedHotspot.canvasId = "MAIN";
+	stagedHotspot.x = 1;
+	stagedHotspot.y = 1;
+	stagedHotspot.width = 18;
+	stagedHotspot.height = 1;
+	stagedHotspot.id = 71;
+	stagedHotspot.macroSpec = "MmpProbe^Activate";
+	mrvmModelessUiBeginDialog(canvasRuntimeKv, 0, 0, 30, 10, "MMP CANVAS PROBE");
+	mrvmModelessUiAppendCanvas(canvasRuntimeKv, stagedCanvas);
+	stagedHotspot.x = stagedCanvas.width;
+	if (mrvmModelessUiAppendCanvasHotspot(canvasRuntimeKv, stagedHotspot)) {
+		failureReason = "MMP canvas hotspot must not extend beyond its retained canvas.";
+		return false;
+	}
+	stagedHotspot.x = 1;
+	if (!mrvmModelessUiAppendCanvasHotspot(canvasRuntimeKv, stagedHotspot)) {
+		failureReason = "MMP canvas hotspot must attach to a declared retained canvas.";
+		return false;
+	}
+	actionButtonArgs.push_back(mrvmMakeInt(2));
+	actionButtonArgs.push_back(mrvmMakeInt(7));
+	actionButtonArgs.push_back(mrvmMakeInt(12));
+	actionButtonArgs.push_back(mrvmMakeInt(72));
+	actionButtonArgs.push_back(mrvmMakeString("~A~ctivate"));
+	actionButtonArgs.push_back(mrvmMakeString("MmpProbe^Activate"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_ACTION_BUTTON", actionButtonArgs, actionButtonReturnValue, actionButtonError) || actionButtonReturnValue != 1 || !actionButtonError.empty()) {
+		failureReason = "MMP action buttons must compose the staged button and callback binding.";
+		return false;
+	}
+	menuClearArgs.push_back(mrvmMakeString("Actions"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_MENU_CLEAR", menuClearArgs, menuClearReturnValue, menuClearError) || menuClearReturnValue != 1 || !menuClearError.empty()) {
+		failureReason = "MMP action menus must clear their named item list through the existing runtime path.";
+		return false;
+	}
+	menuItemArgs.push_back(mrvmMakeString("Actions"));
+	menuItemArgs.push_back(mrvmMakeString("Activate"));
+	menuItemArgs.push_back(mrvmMakeString("ACTIVATE"));
+	menuItemArgs.push_back(mrvmMakeString("Run the action"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_MENU_ITEM", menuItemArgs, menuItemReturnValue, menuItemError) || menuItemReturnValue != 1 || !menuItemError.empty()) {
+		failureReason = "MMP action menus must append typed menu items through the existing runtime path.";
+		return false;
+	}
+	if (!mrvmModelessUiReadItemList(canvasRuntimeKv, "ACTIONS", menuItems) || menuItems.size() != 1 || menuItems[0] != "Activate\tACTIVATE\tRun the action") {
+		failureReason = "MMP action menu items must use the existing named item-list representation.";
+		return false;
+	}
+	actionMenuArgs.push_back(mrvmMakeInt(2));
+	actionMenuArgs.push_back(mrvmMakeInt(8));
+	actionMenuArgs.push_back(mrvmMakeInt(18));
+	actionMenuArgs.push_back(mrvmMakeInt(4));
+	actionMenuArgs.push_back(mrvmMakeInt(73));
+	actionMenuArgs.push_back(mrvmMakeString("Actions"));
+	actionMenuArgs.push_back(mrvmMakeString("Actions"));
+	actionMenuArgs.push_back(mrvmMakeString("MmpProbe^Activate"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_ACTION_MENU", actionMenuArgs, actionMenuReturnValue, actionMenuError) || actionMenuReturnValue != 1 || !actionMenuError.empty()) {
+		failureReason = "MMP action menus must compose the staged grid and callback binding.";
+		return false;
+	}
+	textFieldArgs.push_back(mrvmMakeInt(2));
+	textFieldArgs.push_back(mrvmMakeInt(12));
+	textFieldArgs.push_back(mrvmMakeInt(18));
+	textFieldArgs.push_back(mrvmMakeString("Name"));
+	textFieldArgs.push_back(mrvmMakeString("Name"));
+	textFieldArgs.push_back(mrvmMakeString("Ready"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_TEXT_FIELD", textFieldArgs, textFieldReturnValue, textFieldError) || textFieldReturnValue != 1 || !textFieldError.empty()) {
+		failureReason = "MMP text fields must compose a named native input definition.";
+		return false;
+	}
+	boolFieldArgs.push_back(mrvmMakeInt(2));
+	boolFieldArgs.push_back(mrvmMakeInt(14));
+	boolFieldArgs.push_back(mrvmMakeString("Enabled"));
+	boolFieldArgs.push_back(mrvmMakeString("~E~nabled"));
+	boolFieldArgs.push_back(mrvmMakeInt(1));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_BOOL_FIELD", boolFieldArgs, boolFieldReturnValue, boolFieldError) || boolFieldReturnValue != 1 || !boolFieldError.empty()) {
+		failureReason = "MMP boolean fields must compose a named native checkbox definition.";
+		return false;
+	}
+	intFieldArgs.push_back(mrvmMakeInt(2));
+	intFieldArgs.push_back(mrvmMakeInt(16));
+	intFieldArgs.push_back(mrvmMakeInt(8));
+	intFieldArgs.push_back(mrvmMakeString("Retries"));
+	intFieldArgs.push_back(mrvmMakeString("Retries"));
+	intFieldArgs.push_back(mrvmMakeInt(3));
+	intFieldArgs.push_back(mrvmMakeInt(0));
+	intFieldArgs.push_back(mrvmMakeInt(9));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_INT_FIELD", intFieldArgs, intFieldReturnValue, intFieldError) || intFieldReturnValue != 1 || !intFieldError.empty()) {
+		failureReason = "MMP integer fields must compose a named bounded input definition.";
+		return false;
+	}
+	progressFieldArgs.push_back(mrvmMakeInt(2));
+	progressFieldArgs.push_back(mrvmMakeInt(18));
+	progressFieldArgs.push_back(mrvmMakeInt(16));
+	progressFieldArgs.push_back(mrvmMakeString("Scan"));
+	progressFieldArgs.push_back(mrvmMakeString("Scan"));
+	progressFieldArgs.push_back(mrvmMakeInt(100));
+	progressFieldArgs.push_back(mrvmMakeInt(25));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_PROGRESS_FIELD", progressFieldArgs, progressFieldReturnValue, progressFieldError) || progressFieldReturnValue != 1 || !progressFieldError.empty()) {
+		failureReason = "MMP progress fields must compose a named retained progress definition.";
+		return false;
+	}
+	logFieldArgs.push_back(mrvmMakeInt(2));
+	logFieldArgs.push_back(mrvmMakeInt(20));
+	logFieldArgs.push_back(mrvmMakeInt(18));
+	logFieldArgs.push_back(mrvmMakeInt(3));
+	logFieldArgs.push_back(mrvmMakeString("Events"));
+	logFieldArgs.push_back(mrvmMakeString("Events"));
+	logFieldArgs.push_back(mrvmMakeInt(4));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_LOG_FIELD", logFieldArgs, logFieldReturnValue, logFieldError) || logFieldReturnValue != 1 || !logFieldError.empty()) {
+		failureReason = "MMP log fields must compose a named bounded event-log definition.";
+		return false;
+	}
+	selectFieldArgs.push_back(mrvmMakeInt(2));
+	selectFieldArgs.push_back(mrvmMakeInt(16));
+	selectFieldArgs.push_back(mrvmMakeInt(18));
+	selectFieldArgs.push_back(mrvmMakeInt(3));
+	selectFieldArgs.push_back(mrvmMakeString("Mode"));
+	selectFieldArgs.push_back(mrvmMakeString("Mode"));
+	selectFieldArgs.push_back(mrvmMakeString("Unknown"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_SELECT_FIELD", selectFieldArgs, selectFieldReturnValue, selectFieldError) || selectFieldReturnValue != 1 || !selectFieldError.empty()) {
+		failureReason = "MMP selection fields must compose a named native selection definition.";
+		return false;
+	}
+	selectOptionArgs.push_back(mrvmMakeString("Mode"));
+	selectOptionArgs.push_back(mrvmMakeString("Normal"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_SELECT_OPTION", selectOptionArgs, selectOptionReturnValue, selectOptionError) || selectOptionReturnValue != 1 || !selectOptionError.empty()) {
+		failureReason = "MMP selection fields must retain their first declared option.";
+		return false;
+	}
+	selectOptionArgs[1] = mrvmMakeString("Safe");
+	selectOptionReturnValue = 0;
+	selectOptionError.clear();
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_SELECT_OPTION", selectOptionArgs, selectOptionReturnValue, selectOptionError) || selectOptionReturnValue != 1 || !selectOptionError.empty()) {
+		failureReason = "MMP selection fields must retain further declared options.";
+		return false;
+	}
+	statusFieldArgs.push_back(mrvmMakeInt(2));
+	statusFieldArgs.push_back(mrvmMakeInt(8));
+	statusFieldArgs.push_back(mrvmMakeInt(18));
+	statusFieldArgs.push_back(mrvmMakeString("Activity"));
+	statusFieldArgs.push_back(mrvmMakeString("Ready"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_STATUS_FIELD", statusFieldArgs, statusFieldReturnValue, statusFieldError) || statusFieldReturnValue != 1 || !statusFieldError.empty()) {
+		failureReason = "MMP status fields must compose a display with its logical id.";
+		return false;
+	}
+	stagedDefinition = mrvmModelessUiReadDialogDefinition(canvasRuntimeKv);
+	if (stagedDefinition.canvasHotspots.size() != 1 || stagedDefinition.canvasHotspots[0].canvasId != "MAIN" || stagedDefinition.canvasHotspots[0].id != 71 || stagedDefinition.canvasHotspots[0].macroSpec != "MmpProbe^Activate") {
+		failureReason = "MMP canvas hotspot must remain typed MODELESSUI definition state.";
+		return false;
+	}
+	if (stagedDefinition.buttons.size() != 1 || stagedDefinition.buttons[0].id != 72 || stagedDefinition.buttons[0].text != "~A~ctivate" || stagedDefinition.modelessButtonMacros[72] != "MmpProbe^Activate") {
+		failureReason = "MMP action buttons must retain the native button and its callback binding together.";
+		return false;
+	}
+	if (stagedDefinition.grids.size() != 1 || stagedDefinition.grids[0].id != 73 || stagedDefinition.grids[0].label != "Actions" || stagedDefinition.grids[0].itemSpec != "Actions" || stagedDefinition.grids[0].start != 1 || stagedDefinition.modelessButtonMacros[73] != "MmpProbe^Activate") {
+		failureReason = "MMP action menus must retain the native grid and its callback binding together.";
+		return false;
+	}
+	if (stagedDefinition.textFields.size() != 1 || stagedDefinition.textFields[0].fieldId != "NAME" || stagedDefinition.textFields[0].input.label != "Name" || stagedDefinition.textFields[0].input.text != "Ready") {
+		failureReason = "MMP text fields must retain their logical id and native input definition together.";
+		return false;
+	}
+	if (stagedDefinition.boolFields.size() != 1 || stagedDefinition.boolFields[0].fieldId != "ENABLED" || stagedDefinition.boolFields[0].caption != "~E~nabled" || !stagedDefinition.boolFields[0].value) {
+		failureReason = "MMP boolean fields must retain their logical id and native checkbox definition together.";
+		return false;
+	}
+	if (stagedDefinition.intFields.size() != 1 || stagedDefinition.intFields[0].fieldId != "RETRIES" || stagedDefinition.intFields[0].label != "Retries" || stagedDefinition.intFields[0].value != 3 || stagedDefinition.intFields[0].minimum != 0 || stagedDefinition.intFields[0].maximum != 9) {
+		failureReason = "MMP integer fields must retain their logical id, value and inclusive range together.";
+		return false;
+	}
+	if (stagedDefinition.progressFields.size() != 1 || stagedDefinition.progressFields[0].fieldId != "SCAN" || stagedDefinition.progressFields[0].label != "Scan" || stagedDefinition.progressFields[0].total != 100 || stagedDefinition.progressFields[0].value != 25) {
+		failureReason = "MMP progress fields must retain their logical id, total and current value together.";
+		return false;
+	}
+	if (stagedDefinition.logFields.size() != 1 || stagedDefinition.logFields[0].logId != "EVENTS" || stagedDefinition.logFields[0].label != "Events" || stagedDefinition.logFields[0].height != 3 || stagedDefinition.logFields[0].capacity != 4) {
+		failureReason = "MMP log fields must retain their logical id, visible height and bounded capacity together.";
+		return false;
+	}
+	if (stagedDefinition.selectFields.size() != 1 || stagedDefinition.selectFields[0].fieldId != "MODE" || stagedDefinition.selectFields[0].label != "Mode" || stagedDefinition.selectFields[0].value != "Unknown" || stagedDefinition.selectFields[0].options.size() != 2 || stagedDefinition.selectFields[0].options[1] != "Safe") {
+		failureReason = "MMP selection fields must retain their logical id, options and initial value together.";
+		return false;
+	}
+	selectDefinition = mrvmBuildMacroModelessDefinition(canvasRuntimeKv, "MMP-SELECT-PROBE");
+	if (selectDefinition.selectFields.size() != 1 || selectDefinition.selectFields[0].value != "Normal") {
+		failureReason = "MMP selection fields must fall back to their first declared option.";
+		return false;
+	}
+	if (stagedDefinition.displays.size() != 1 || stagedDefinition.displays[0].text != "Ready" || stagedDefinition.statusDisplayIndices["ACTIVITY"] != 1) {
+		failureReason = "MMP status fields must retain a logical id mapped to their display.";
+		return false;
+	}
+	canvasWindow.displays.push_back(MRMacroModelessDisplaySpec());
+	canvasWindow.displays[0].x = 2;
+	canvasWindow.displays[0].y = 8;
+	canvasWindow.displays[0].width = 18;
+	canvasWindow.displays[0].text = "Ready";
+	canvasWindow.statusDisplayIndices["ACTIVITY"] = 1;
+	textField.x = 2;
+	textField.y = 12;
+	textField.width = 18;
+	textField.fieldId = "NAME";
+	textField.label = "Name";
+	textField.text = "Ready";
+	canvasWindow.textFields.push_back(textField);
+	boolField.x = 2;
+	boolField.y = 14;
+	boolField.fieldId = "ENABLED";
+	boolField.caption = "~E~nabled";
+	boolField.value = true;
+	canvasWindow.boolFields.push_back(boolField);
+	intField.x = 2;
+	intField.y = 16;
+	intField.width = 8;
+	intField.fieldId = "RETRIES";
+	intField.label = "Retries";
+	intField.minimum = 0;
+	intField.maximum = 9;
+	intField.value = 3;
+	canvasWindow.intFields.push_back(intField);
+	progressField.x = 2;
+	progressField.y = 18;
+	progressField.width = 16;
+	progressField.fieldId = "SCAN";
+	progressField.label = "Scan";
+	progressField.total = 100;
+	progressField.value = 25;
+	canvasWindow.progressFields.push_back(progressField);
+	logField.x = 2;
+	logField.y = 20;
+	logField.width = 18;
+	logField.height = 3;
+	logField.logId = "EVENTS";
+	logField.label = "Events";
+	logField.capacity = 4;
+	canvasWindow.logFields.push_back(logField);
+	selectField.x = 2;
+	selectField.y = 16;
+	selectField.width = 18;
+	selectField.height = 3;
+	selectField.fieldId = "MODE";
+	selectField.label = "Mode";
+	selectField.value = "Normal";
+	selectField.options.push_back("Normal");
+	selectField.options.push_back("Safe");
+	canvasWindow.selectFields.push_back(selectField);
+	mrvmModelessUiStoreWindowDefinition(canvasRuntimeKv, canvasWindow);
+	if (!mrvmModelessUiWindowExists(canvasRuntimeKv, canvasWindow.windowId) || !mrvmModelessUiReadWindowGeometry(canvasRuntimeKv, canvasWindow.windowId, geometry) || geometry.width != canvasWindow.width || geometry.height != canvasWindow.height) {
+		failureReason = "MMP canvas window definition must remain in MODELESSUI with typed geometry.";
+		return false;
+	}
+	if (!mrvmModelessUiReadWindowStatusDisplayIndex(canvasRuntimeKv, canvasWindow.windowId, "ACTIVITY", statusDisplayIndex) || statusDisplayIndex != 1 || mrvmModelessUiReadWindowStatusDisplayIndex(canvasRuntimeKv, canvasWindow.windowId, "UNKNOWN", statusDisplayIndex)) {
+		failureReason = "MMP status ids must resolve only through the retained window model.";
+		return false;
+	}
+	if (!mrvmModelessUiReadWindowTextFieldValue(canvasRuntimeKv, canvasWindow.windowId, "NAME", textFieldValue) || textFieldValue != "Ready" || !mrvmModelessUiStoreWindowTextFieldValue(canvasRuntimeKv, canvasWindow.windowId, "NAME", "Updated") || !mrvmModelessUiReadWindowTextFieldValue(canvasRuntimeKv, canvasWindow.windowId, "NAME", textFieldValue) || textFieldValue != "Updated") {
+		failureReason = "MMP text fields must retain and update their values through the window model.";
+		return false;
+	}
+	if (!mrvmModelessUiReadWindowBoolFieldValue(canvasRuntimeKv, canvasWindow.windowId, "ENABLED", boolFieldValue) || !boolFieldValue || !mrvmModelessUiStoreWindowBoolFieldValue(canvasRuntimeKv, canvasWindow.windowId, "ENABLED", false) || !mrvmModelessUiReadWindowBoolFieldValue(canvasRuntimeKv, canvasWindow.windowId, "ENABLED", boolFieldValue) || boolFieldValue) {
+		failureReason = "MMP boolean fields must retain and update their values through the window model.";
+		return false;
+	}
+	if (!mrvmModelessUiReadWindowIntFieldValue(canvasRuntimeKv, canvasWindow.windowId, "RETRIES", intFieldValue) || intFieldValue != 3 || !mrvmModelessUiStoreWindowIntFieldValue(canvasRuntimeKv, canvasWindow.windowId, "RETRIES", 5) || !mrvmModelessUiReadWindowIntFieldValue(canvasRuntimeKv, canvasWindow.windowId, "RETRIES", intFieldValue) || intFieldValue != 5 || mrvmModelessUiStoreWindowIntFieldValue(canvasRuntimeKv, canvasWindow.windowId, "RETRIES", 10)) {
+		failureReason = "MMP integer fields must retain only values inside their declared range through the window model.";
+		return false;
+	}
+	intValueArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	intValueArgs.push_back(mrvmMakeString("RETRIES"));
+	if (!mrvmDispatchMacroModelessIntrinsic(canvasRuntimeKv, "MMP_INT_VALUE", intValueArgs, intValueResult) || intValueResult.type != TYPE_INT || intValueResult.i != 5) {
+		failureReason = "MMP integer fields must expose their retained value as an integer intrinsic.";
+		return false;
+	}
+	invalidIntSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	invalidIntSetArgs.push_back(mrvmMakeString("RETRIES"));
+	invalidIntSetArgs.push_back(mrvmMakeInt(10));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_INT_SET", invalidIntSetArgs, invalidIntSetReturnValue, invalidIntSetError) || invalidIntSetReturnValue != 0 || invalidIntSetError != "MMP_INT_SET value is outside the declared range.") {
+		failureReason = "MMP integer updates must reject values outside their declared range.";
+		return false;
+	}
+	if (!mrvmModelessUiReadWindowProgressFieldValue(canvasRuntimeKv, canvasWindow.windowId, "SCAN", progressTotal, progressValue) || progressTotal != 100 || progressValue != 25 || !mrvmModelessUiStoreWindowProgressFieldValue(canvasRuntimeKv, canvasWindow.windowId, "SCAN", 50) || !mrvmModelessUiReadWindowProgressFieldValue(canvasRuntimeKv, canvasWindow.windowId, "SCAN", progressTotal, progressValue) || progressTotal != 100 || progressValue != 50 || mrvmModelessUiStoreWindowProgressFieldValue(canvasRuntimeKv, canvasWindow.windowId, "SCAN", 101)) {
+		failureReason = "MMP progress fields must retain only values inside their declared range through the window model.";
+		return false;
+	}
+	progressValueArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	progressValueArgs.push_back(mrvmMakeString("SCAN"));
+	if (!mrvmDispatchMacroModelessIntrinsic(canvasRuntimeKv, "MMP_PROGRESS_VALUE", progressValueArgs, progressValueResult) || progressValueResult.type != TYPE_INT || progressValueResult.i != 50) {
+		failureReason = "MMP progress fields must expose their retained value as an integer intrinsic.";
+		return false;
+	}
+	invalidProgressSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	invalidProgressSetArgs.push_back(mrvmMakeString("SCAN"));
+	invalidProgressSetArgs.push_back(mrvmMakeInt(101));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_PROGRESS_SET", invalidProgressSetArgs, invalidProgressSetReturnValue, invalidProgressSetError) || invalidProgressSetReturnValue != 0 || invalidProgressSetError != "MMP_PROGRESS_SET value is outside the declared range.") {
+		failureReason = "MMP progress updates must reject values outside their declared range.";
+		return false;
+	}
+	if (!mrvmModelessUiAppendWindowLogFieldLine(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", "One") || !mrvmModelessUiAppendWindowLogFieldLine(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", "Two") || !mrvmModelessUiAppendWindowLogFieldLine(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", "Three") || !mrvmModelessUiAppendWindowLogFieldLine(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", "Four") || !mrvmModelessUiAppendWindowLogFieldLine(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", "Five") || !mrvmModelessUiReadWindowLogFieldLines(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", logLines) || logLines.size() != 4 || logLines[0] != "Two" || logLines[3] != "Five" || !mrvmModelessUiReadWindowLogFieldCount(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", logFieldCount) || logFieldCount != 4) {
+		failureReason = "MMP log fields must retain a bounded chronological ring through the window model.";
+		return false;
+	}
+	mrvmModelessUiStoreWindowDefinition(canvasRuntimeKv, canvasWindow);
+	if (!mrvmModelessUiReadWindowLogFieldLines(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", logLines) || logLines.size() != 4 || logLines[0] != "Two" || logLines[3] != "Five") {
+		failureReason = "MMP log field updates must preserve retained lines when their capacity is unchanged.";
+		return false;
+	}
+	logCountArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	logCountArgs.push_back(mrvmMakeString("EVENTS"));
+	if (!mrvmDispatchMacroModelessIntrinsic(canvasRuntimeKv, "MMP_LOG_COUNT", logCountArgs, logCountResult) || logCountResult.type != TYPE_INT || logCountResult.i != 4 || !mrvmModelessUiClearWindowLogField(canvasRuntimeKv, canvasWindow.windowId, "EVENTS") || !mrvmModelessUiReadWindowLogFieldCount(canvasRuntimeKv, canvasWindow.windowId, "EVENTS", logFieldCount) || logFieldCount != 0) {
+		failureReason = "MMP log fields must expose their retained count and clear only their addressed ring.";
+		return false;
+	}
+	if (!mrvmModelessUiReadWindowSelectFieldValue(canvasRuntimeKv, canvasWindow.windowId, "MODE", selectFieldValue) || selectFieldValue != "Normal" || !mrvmModelessUiStoreWindowSelectFieldValue(canvasRuntimeKv, canvasWindow.windowId, "MODE", "Safe") || !mrvmModelessUiReadWindowSelectFieldValue(canvasRuntimeKv, canvasWindow.windowId, "MODE", selectFieldValue) || selectFieldValue != "Safe" || mrvmModelessUiStoreWindowSelectFieldValue(canvasRuntimeKv, canvasWindow.windowId, "MODE", "Unknown")) {
+		failureReason = "MMP selection fields must retain only their declared option values through the window model.";
+		return false;
+	}
+	selectValueArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	selectValueArgs.push_back(mrvmMakeString("MODE"));
+	if (!mrvmDispatchMacroModelessIntrinsic(canvasRuntimeKv, "MMP_SELECT_VALUE", selectValueArgs, selectValueResult) || selectValueResult.type != TYPE_STR || selectValueResult.s != "Safe") {
+		failureReason = "MMP selection fields must expose their retained value as a string intrinsic.";
+		return false;
+	}
+	invalidSelectSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	invalidSelectSetArgs.push_back(mrvmMakeString("MODE"));
+	invalidSelectSetArgs.push_back(mrvmMakeString("Unknown"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_SELECT_SET", invalidSelectSetArgs, invalidSelectSetReturnValue, invalidSelectSetError) || invalidSelectSetReturnValue != 0 || invalidSelectSetError != "MMP_SELECT_SET value is not a declared option.") {
+		failureReason = "MMP selection updates must reject an undeclared option value.";
+		return false;
+	}
+	unknownTextSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	unknownTextSetArgs.push_back(mrvmMakeString("Unknown"));
+	unknownTextSetArgs.push_back(mrvmMakeString("Updated"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_TEXT_SET", unknownTextSetArgs, unknownTextSetReturnValue, unknownTextSetError) || unknownTextSetReturnValue != 0 || unknownTextSetError != "MMP_TEXT_SET target does not exist.") {
+		failureReason = "MMP text updates must reject an unknown logical field id.";
+		return false;
+	}
+	unknownBoolSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	unknownBoolSetArgs.push_back(mrvmMakeString("Unknown"));
+	unknownBoolSetArgs.push_back(mrvmMakeInt(1));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_BOOL_SET", unknownBoolSetArgs, unknownBoolSetReturnValue, unknownBoolSetError) || unknownBoolSetReturnValue != 0 || unknownBoolSetError != "MMP_BOOL_SET target does not exist.") {
+		failureReason = "MMP boolean updates must reject an unknown logical field id.";
+		return false;
+	}
+	unknownIntSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	unknownIntSetArgs.push_back(mrvmMakeString("Unknown"));
+	unknownIntSetArgs.push_back(mrvmMakeInt(5));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_INT_SET", unknownIntSetArgs, unknownIntSetReturnValue, unknownIntSetError) || unknownIntSetReturnValue != 0 || unknownIntSetError != "MMP_INT_SET target does not exist.") {
+		failureReason = "MMP integer updates must reject an unknown logical field id.";
+		return false;
+	}
+	unknownProgressSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	unknownProgressSetArgs.push_back(mrvmMakeString("Unknown"));
+	unknownProgressSetArgs.push_back(mrvmMakeInt(50));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_PROGRESS_SET", unknownProgressSetArgs, unknownProgressSetReturnValue, unknownProgressSetError) || unknownProgressSetReturnValue != 0 || unknownProgressSetError != "MMP_PROGRESS_SET target does not exist.") {
+		failureReason = "MMP progress updates must reject an unknown logical field id.";
+		return false;
+	}
+	unknownLogAppendArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	unknownLogAppendArgs.push_back(mrvmMakeString("Unknown"));
+	unknownLogAppendArgs.push_back(mrvmMakeString("Updated"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_LOG_APPEND", unknownLogAppendArgs, unknownLogAppendReturnValue, unknownLogAppendError) || unknownLogAppendReturnValue != 0 || unknownLogAppendError != "MMP_LOG_APPEND target does not exist.") {
+		failureReason = "MMP log updates must reject an unknown logical log id.";
+		return false;
+	}
+	unknownSelectSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	unknownSelectSetArgs.push_back(mrvmMakeString("Unknown"));
+	unknownSelectSetArgs.push_back(mrvmMakeString("Normal"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_SELECT_SET", unknownSelectSetArgs, unknownSelectSetReturnValue, unknownSelectSetError) || unknownSelectSetReturnValue != 0 || unknownSelectSetError != "MMP_SELECT_SET target does not exist.") {
+		failureReason = "MMP selection updates must reject an unknown logical field id.";
+		return false;
+	}
+	unknownStatusSetArgs.push_back(mrvmMakeString(canvasWindow.windowId));
+	unknownStatusSetArgs.push_back(mrvmMakeString("Unknown"));
+	unknownStatusSetArgs.push_back(mrvmMakeString("Updated"));
+	if (!mrvmDispatchMacroModelessProcedure(canvasRuntimeKv, "MMP_STATUS_SET", unknownStatusSetArgs, unknownStatusSetReturnValue, unknownStatusSetError) || unknownStatusSetReturnValue != 0 || unknownStatusSetError != "MMP_STATUS_SET target does not exist.") {
+		failureReason = "MMP status updates must reject an unknown logical status id.";
+		return false;
+	}
+	canvasCommand.type = MRMacroModelessCanvasCommandType::Text;
+	canvasCommand.x = 1;
+	canvasCommand.y = 1;
+	canvasCommand.style = 1;
+	canvasCommand.text = "retained";
+	if (!mrvmModelessUiCanvasClear(canvasRuntimeKv, canvasWindow.windowId, canvas.canvasId, 0) || !mrvmModelessUiCanvasAppendCommand(canvasRuntimeKv, canvasWindow.windowId, canvas.canvasId, canvasCommand) || !mrvmModelessUiCommitCanvas(canvasRuntimeKv, canvasWindow.windowId, canvas.canvasId) || !mrvmModelessUiReadCanvasScene(canvasRuntimeKv, canvasWindow.windowId, canvas.canvasId, canvasScene)) {
+		failureReason = "MMP canvas scene operations must use the retained MODELESSUI canvas.";
+		return false;
+	}
+	if (canvasScene.generation != 1 || canvasScene.commands.size() != 2 || canvasScene.commands[1].type != MRMacroModelessCanvasCommandType::Text || canvasScene.commands[1].style != 1 || canvasScene.commands[1].text != "retained") {
+		failureReason = "MMP canvas commit must preserve a typed retained scene.";
+		return false;
+	}
+	desktopState.virtualDesktop = 3;
+	desktopState.manuallyHidden = true;
+	desktopState.minimized = true;
+	desktopState.bufferedBeforeMinimize = true;
+	desktopState.restoreX = 2;
+	desktopState.restoreY = 3;
+	desktopState.restoreWidth = 40;
+	desktopState.restoreHeight = 12;
+	desktopState.lastMinimizedX = 4;
+	desktopState.lastMinimizedY = 20;
+	desktopState.lastMinimizedWidth = 18;
+	desktopState.lastMinimizedHeight = 1;
+	desktopState.assigned = true;
+	mrvmModelessUiStoreWindowDesktopState(canvasRuntimeKv, canvasWindow.windowId, desktopState);
+	if (!mrvmModelessUiReadWindowDesktopState(canvasRuntimeKv, canvasWindow.windowId, storedDesktopState) || storedDesktopState.virtualDesktop != 3 || !storedDesktopState.manuallyHidden || !storedDesktopState.minimized || !storedDesktopState.bufferedBeforeMinimize || storedDesktopState.restoreX != 2 || storedDesktopState.restoreY != 3 || storedDesktopState.restoreWidth != 40 || storedDesktopState.restoreHeight != 12 || storedDesktopState.lastMinimizedX != 4 || storedDesktopState.lastMinimizedY != 20 || storedDesktopState.lastMinimizedWidth != 18 || storedDesktopState.lastMinimizedHeight != 1 || !storedDesktopState.assigned) {
+		failureReason = "MMP desktop, minimize and restore state must remain in the MODELESSUI window model.";
+		return false;
+	}
+	if (mrvmModelessUiCreateWindowInstanceId(canvasRuntimeKv, "MMP") == mrvmModelessUiCreateWindowInstanceId(canvasRuntimeKv, "MMP")) {
+		failureReason = "MMP window instance ids must be unique within the runtime.";
+		return false;
+	}
+	if (!compileBytecode(kMmpSource, mmpBytecode, compileError)) {
+		failureReason = "MMP canvas procedures must compile: " + compileError;
+		return false;
+	}
+	mmpProfile = mrvmAnalyzeBytecode(mmpBytecode.data(), mmpBytecode.size());
+	if (std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_CANVAS") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_ACTION_BUTTON") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_MENU_CLEAR") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_MENU_ITEM") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_ACTION_MENU") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_TEXT_FIELD") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_TEXT_SET") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_TEXT_VALUE") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_BOOL_FIELD") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_BOOL_SET") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_BOOL_VALUE") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_INT_FIELD") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_INT_SET") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_INT_VALUE") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_PROGRESS_FIELD") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_PROGRESS_SET") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_PROGRESS_VALUE") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_LOG_FIELD") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_LOG_APPEND") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_LOG_CLEAR") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_LOG_COUNT") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_SELECT_FIELD") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_SELECT_OPTION") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_SELECT_SET") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_SELECT_VALUE") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_STATUS_FIELD") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_STATUS_SET") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_TIMER_START") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_TIMER_STOP") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_WINDOW_WIDTH") == mmpProfile.uiAffinitySymbols.end() || std::find(mmpProfile.uiAffinitySymbols.begin(), mmpProfile.uiAffinitySymbols.end(), "MMP_WINDOW_INSTANCE") == mmpProfile.uiAffinitySymbols.end()) {
+		failureReason = "MMP canvas, action-button, action-menu, form-field, status and timer primitives must remain UI-affine.";
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/macros/utils/MmpCanvasDemo.mrmac"), sourceText, ioError) || !compileBytecode(sourceText, mmpBytecode, compileError)) {
+		failureReason = "MMP canvas demonstration macro must compile";
+		if (!ioError.empty()) failureReason += ": " + ioError;
+		else if (!compileError.empty()) failureReason += ": " + compileError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/MRVM.cpp"), sourceText, ioError)) {
+		failureReason = "Unable to read MRVM.cpp for modeless callback session guard: " + ioError;
+		return false;
+	}
+	const std::size_t callbackStart = sourceText.find("static void runMacroModelessCommand");
+	const std::size_t callbackEnd = callbackStart == std::string::npos ? std::string::npos : sourceText.find("static void showMacroModelessDialog", callbackStart);
+	const std::string callbackSource = callbackStart == std::string::npos ? std::string() : sourceText.substr(callbackStart, callbackEnd == std::string::npos ? std::string::npos : callbackEnd - callbackStart);
+	if (callbackSource.find("runMacroSpecByNameAsExecutionSessionForOwner") == std::string::npos || callbackSource.find("owner.modelessWindowId = windowId") == std::string::npos || callbackSource.find("mrvmRunMacroSpec(macroSpec") != std::string::npos) {
+		failureReason = "Modeless callbacks must enter through a window-owned execution session.";
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("app/commands/MRWindowCommands.cpp"), sourceText, ioError) || sourceText.find("allDesktopWindowsInZOrder") == std::string::npos || sourceText.find("MRDesktopWindow") == std::string::npos || sourceText.find("MRMacroModeless") != std::string::npos) {
+		failureReason = "Desktop window commands must use the shared desktop-window role without MMP special cases.";
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRFrame.cpp"), sourceText, ioError) || sourceText.find("desktopShowsFrameGrowHandle") == std::string::npos || sourceText.find("minimizedLayout(desktopWindow") == std::string::npos) {
+		failureReason = "MRFrame must use the shared desktop-window role for MMP minimize and grow-glyph behavior.";
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/ui/modeless/MRMacroModelessUi.cpp"), sourceText, ioError) || sourceText.find("if (event.what == evMouseDown)") == std::string::npos || sourceText.find("TProgram::deskTop->setCurrent(this, TView::normalSelect)") == std::string::npos || sourceText.find("frame->drawView()") == std::string::npos || sourceText.find("runCanvasHotspot(makeLocal(event.mouse.where))") == std::string::npos || sourceText.find("runModelessMacro(definition.windowId, hotspot.macroSpec)") == std::string::npos || sourceText.find("removeRuntimeScheduledConsumersForOwner(executionOwner)") == std::string::npos || sourceText.find("requestMacroExecutionCancellationForOwner(executionOwner)") == std::string::npos) {
+		failureReason = "MMP clicks, hotspots and close cleanup must remain window-owned.";
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/ui/modeless/MRVMMacroModelessProcedures.cpp"), sourceText, ioError) || sourceText.find("mrvmAddMacroUiGrid(runtimeKv, gridArgs)") == std::string::npos || sourceText.find("mrvmBindMacroModelessButton(runtimeKv, bindingArgs)") == std::string::npos || sourceText.find("mrvmModelessUiReadWindowTextFieldValue") == std::string::npos || sourceText.find("updateMacroModelessTextField(windowId, fieldId") == std::string::npos || sourceText.find("mrvmModelessUiReadWindowBoolFieldValue") == std::string::npos || sourceText.find("updateMacroModelessBoolField(windowId, fieldId") == std::string::npos || sourceText.find("mrvmModelessUiReadWindowIntFieldValue") == std::string::npos || sourceText.find("updateMacroModelessIntField(windowId, fieldId") == std::string::npos || sourceText.find("mrvmModelessUiReadWindowProgressFieldValue") == std::string::npos || sourceText.find("updateMacroModelessProgressField(windowId, fieldId") == std::string::npos || sourceText.find("mrvmModelessUiReadWindowSelectFieldValue") == std::string::npos || sourceText.find("updateMacroModelessSelectField(windowId, fieldId") == std::string::npos || sourceText.find("mrvmModelessUiReadWindowStatusDisplayIndex") == std::string::npos || sourceText.find("updateMacroModelessDisplay(windowId, displayIndex") == std::string::npos) {
+		failureReason = "MMP actions, form fields and status updates must compose their existing modeless routes.";
+		return false;
+	}
 	failureReason.clear();
 	return true;
 }
@@ -847,6 +1493,7 @@ bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
 	bool sawDispatchResult = false;
 	bool sawSkippedLine = false;
 	bool sawSourcePackageLine = false;
+	bool sawConsumerKeyLine = false;
 
 	invalidConfig.intervalMs = 0;
 	invalidConfig.macroSpec = "runtime-scheduler-invalid";
@@ -860,6 +1507,7 @@ bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
 	config.intervalMs = 1000;
 	config.macroSpec = "runtime-scheduler-overrun-skip";
 	config.macroSource = "$MACRO RuntimeSchedulerRegression;\nDEF_INT(ProbeValue);\nProbeValue := GLOBAL_INT('RUNTIME_SCHEDULER_REGRESSION');\nEND_MACRO;\n";
+	config.consumerKey = "SCHEDULER-KEY";
 	config.overrunPolicy = MRRuntimeScheduleOverrunPolicy::Skip;
 	consumerId = registerRuntimeScheduledConsumer(config);
 	if (consumerId == 0) {
@@ -926,6 +1574,7 @@ bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
 	for (const std::string &line : lines) {
 		if (line.find("tick-skipped") != std::string::npos && line.find("blocking-session #700301") != std::string::npos) sawSkippedLine = true;
 		if (line.find("source-package") != std::string::npos) sawSourcePackageLine = true;
+		if (line.find("key='SCHEDULER-KEY'") != std::string::npos) sawConsumerKeyLine = true;
 	}
 	if (!sawSkippedLine) {
 		removeRuntimeScheduledConsumer(consumerId);
@@ -935,6 +1584,11 @@ bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
 	if (!sawSourcePackageLine) {
 		removeRuntimeScheduledConsumer(consumerId);
 		failureReason = "Runtime scheduler status lines must expose source-package scheduled consumers.";
+		return false;
+	}
+	if (!sawConsumerKeyLine) {
+		removeRuntimeScheduledConsumer(consumerId);
+		failureReason = "Runtime scheduler status lines must expose logical consumer keys.";
 		return false;
 	}
 	if (!noteRuntimeScheduledConsumerStarted(consumerId, kSessionId)) {
@@ -991,6 +1645,49 @@ bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
 	if (!removeRuntimeScheduledConsumer(consumerId) || removeRuntimeScheduledConsumer(consumerId)) {
 		failureReason = "Runtime scheduler consumer removal must be acknowledged once.";
 		return false;
+	}
+	{
+		MRMacroExecutionOwner modelessOwner;
+		MRMacroExecutionOwner otherModelessOwner;
+		MRRuntimeScheduledConsumerConfig modelessConfig;
+		MRRuntimeScheduledConsumerId refreshConsumerId = 0;
+		MRRuntimeScheduledConsumerId keepConsumerId = 0;
+		MRRuntimeScheduledConsumerId otherConsumerId = 0;
+
+		modelessOwner.modelessWindowId = "REGRESSION-MMP-TIMER";
+		otherModelessOwner.modelessWindowId = "REGRESSION-MMP-OTHER";
+		modelessConfig.owner = modelessOwner;
+		modelessConfig.intervalMs = 100;
+		modelessConfig.macroSpec = "RegressionMmp^Refresh";
+		modelessConfig.consumerKey = "Refresh";
+		refreshConsumerId = registerRuntimeScheduledConsumer(modelessConfig);
+		modelessConfig.consumerKey = "Keep";
+		keepConsumerId = registerRuntimeScheduledConsumer(modelessConfig);
+		modelessConfig.owner = otherModelessOwner;
+		modelessConfig.consumerKey = "Refresh";
+		otherConsumerId = registerRuntimeScheduledConsumer(modelessConfig);
+		if (refreshConsumerId == 0 || keepConsumerId == 0 || otherConsumerId == 0) {
+			removeRuntimeScheduledConsumer(refreshConsumerId);
+			removeRuntimeScheduledConsumer(keepConsumerId);
+			removeRuntimeScheduledConsumer(otherConsumerId);
+			failureReason = "Runtime scheduler must register logical MMP timer consumers.";
+			return false;
+		}
+		if (removeRuntimeScheduledConsumersForOwnerAndKey(modelessOwner, "Refresh") != 1) {
+			removeRuntimeScheduledConsumer(keepConsumerId);
+			removeRuntimeScheduledConsumer(otherConsumerId);
+			failureReason = "MMP timer stop must remove only its owner's named consumer.";
+			return false;
+		}
+		if (removeRuntimeScheduledConsumersForOwner(modelessOwner) != 1) {
+			removeRuntimeScheduledConsumer(otherConsumerId);
+			failureReason = "MMP window close must remove all remaining owner consumers.";
+			return false;
+		}
+		if (removeRuntimeScheduledConsumersForOwner(otherModelessOwner) != 1) {
+			failureReason = "MMP timer ownership must not remove a different modeless window's consumers.";
+			return false;
+		}
 	}
 
 	failureReason.clear();
@@ -1072,7 +1769,7 @@ bool testExecSessionRuntimeStoreBoundaryGuard(std::string &failureReason) {
 	    {"mrmac/MRMacroRunner.cpp", kMacroRunnerAllowed, sizeof(kMacroRunnerAllowed) / sizeof(kMacroRunnerAllowed[0])},
 	    {"app/MRRuntimeScheduler.cpp", nullptr, 0},
 	    {"app/MRExecSessionStatus.cpp", nullptr, 0},
-	    {"mrmac/MRMacroModelessUi.cpp", kModelessUiAllowed, sizeof(kModelessUiAllowed) / sizeof(kModelessUiAllowed[0])},
+	    {"mrmac/ui/modeless/MRMacroModelessUi.cpp", kModelessUiAllowed, sizeof(kModelessUiAllowed) / sizeof(kModelessUiAllowed[0])},
 	};
 	static const char *kForbiddenStoreNeedles[] = {"std::map<", "std::unordered_map<", "std::vector<", "std::deque<", "std::list<", "std::set<", "std::unordered_set<"};
 	const std::size_t fileCount = sizeof(kFiles) / sizeof(kFiles[0]);
@@ -1122,7 +1819,7 @@ bool testExecSessionRuntimeStoreBoundaryGuard(std::string &failureReason) {
 			failureReason = "Unable to read MRVM.cpp for modeless UI staging store guard: " + ioError;
 			return false;
 		}
-		if (!readTextFile((rootPath / "mrmac/vm/MRVMModelessUiRuntime.cpp").string(), modelessUiRuntimeSource, ioError)) {
+		if (!readTextFile((rootPath / "mrmac/ui/modeless/MRVMModelessUiRuntime.cpp").string(), modelessUiRuntimeSource, ioError)) {
 			failureReason = "Unable to read MRVMModelessUiRuntime.cpp for modeless UI staging store guard: " + ioError;
 			return false;
 		}
@@ -3362,6 +4059,427 @@ void destroyRegressionWindow(MREditWindow *window) {
 	if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(nullptr, TView::leaveSelect);
 	TObject::destroy(window);
 	if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(nullptr, TView::leaveSelect);
+}
+
+bool testMmpClientFocusDispatchHarness(std::string &failureReason) {
+	const std::string suffix = std::to_string(static_cast<long>(::getpid()));
+	const std::string firstId = "REGRESSIONMMPCANVASFOCUSA" + suffix;
+	const std::string secondId = "REGRESSIONMMPCANVASFOCUSB" + suffix;
+	MRMacroModelessWindowDefinition firstDefinition;
+	MRMacroModelessWindowDefinition secondDefinition;
+	MRMacroModelessCanvasSpec canvas;
+	MRMacroModelessCanvasHotspotSpec hotspot;
+	MRMacroModelessDisplaySpec statusDisplay;
+	MRMacroModelessTextFieldSpec textField;
+	MRMacroModelessBoolFieldSpec boolField;
+	MRMacroModelessIntFieldSpec intField;
+	MRMacroModelessProgressFieldSpec progressField;
+	MRMacroModelessProgressFieldSpec tickProgressField;
+	MRMacroModelessLogFieldSpec logField;
+	MRMacroModelessSelectFieldSpec selectField;
+	MRRuntimeScheduledConsumerConfig timerConfig;
+	MRRuntimeScheduledConsumerConfig focusTimerConfig;
+	MREditWindow *timerEditor = nullptr;
+	TWindow *firstWindow = nullptr;
+	TWindow *secondWindow = nullptr;
+	TView *canvasView = nullptr;
+	TView *textInput = nullptr;
+	TView *boolInput = nullptr;
+	TView *intInput = nullptr;
+	TView *progressView = nullptr;
+	TView *logView = nullptr;
+	TView *selectInput = nullptr;
+	MRRuntimeScheduledConsumerId timerConsumerId = 0;
+	MRRuntimeScheduledConsumerId focusTimerConsumerId = 0;
+
+	if (ensureRegressionEditorApp(failureReason) == nullptr || TProgram::deskTop == nullptr) return false;
+	firstDefinition.x = 2;
+	firstDefinition.y = 2;
+	firstDefinition.width = 30;
+	firstDefinition.height = 24;
+	firstDefinition.windowId = firstId;
+	firstDefinition.title = "MMP CANVAS FOCUS A";
+	canvas.x = 2;
+	canvas.y = 2;
+	canvas.width = 20;
+	canvas.height = 4;
+	canvas.canvasId = "MAIN";
+	firstDefinition.canvases.push_back(canvas);
+	hotspot.canvasId = "MAIN";
+	hotspot.x = 10;
+	hotspot.y = 1;
+	hotspot.width = 8;
+	hotspot.height = 1;
+	hotspot.id = 7901;
+	hotspot.macroSpec = "RegressionMmp^Hotspot";
+	firstDefinition.canvasHotspots.push_back(hotspot);
+	statusDisplay.x = 2;
+	statusDisplay.y = 6;
+	statusDisplay.width = 24;
+	statusDisplay.text = "Ready";
+	firstDefinition.displays.push_back(statusDisplay);
+	firstDefinition.statusDisplayIndices["ACTIVITY"] = 1;
+	textField.x = 2;
+	textField.y = 7;
+	textField.width = 12;
+	textField.fieldId = "NAME";
+	textField.label = "Name";
+	textField.text = "Initial";
+	firstDefinition.textFields.push_back(textField);
+	boolField.x = 2;
+	boolField.y = 9;
+	boolField.fieldId = "ENABLED";
+	boolField.caption = "Enabled";
+	boolField.value = true;
+	firstDefinition.boolFields.push_back(boolField);
+	intField.x = 2;
+	intField.y = 11;
+	intField.width = 8;
+	intField.fieldId = "RETRIES";
+	intField.label = "Retries";
+	intField.minimum = 0;
+	intField.maximum = 9;
+	intField.value = 3;
+	firstDefinition.intFields.push_back(intField);
+	progressField.x = 2;
+	progressField.y = 17;
+	progressField.width = 10;
+	progressField.fieldId = "SCAN";
+	progressField.label = "Scan";
+	progressField.total = 100;
+	progressField.value = 25;
+	firstDefinition.progressFields.push_back(progressField);
+	tickProgressField.x = 15;
+	tickProgressField.y = 17;
+	tickProgressField.width = 8;
+	tickProgressField.fieldId = "TICKS";
+	tickProgressField.label = "Ticks";
+	tickProgressField.total = 10;
+	tickProgressField.value = 0;
+	firstDefinition.progressFields.push_back(tickProgressField);
+	logField.x = 2;
+	logField.y = 19;
+	logField.width = 18;
+	logField.height = 3;
+	logField.logId = "EVENTS";
+	logField.label = "Events";
+	logField.capacity = 4;
+	firstDefinition.logFields.push_back(logField);
+	selectField.x = 2;
+	selectField.y = 13;
+	selectField.width = 18;
+	selectField.height = 3;
+	selectField.fieldId = "MODE";
+	selectField.label = "Mode";
+	selectField.value = "Normal";
+	selectField.options.push_back("Normal");
+	selectField.options.push_back("Safe");
+	selectField.options.push_back("Fast");
+	firstDefinition.selectFields.push_back(selectField);
+	secondDefinition = firstDefinition;
+	secondDefinition.x = 40;
+	secondDefinition.windowId = secondId;
+	secondDefinition.title = "MMP CANVAS FOCUS B";
+	if (!showMacroModelessWindow(firstDefinition) || !showMacroModelessWindow(secondDefinition)) {
+		failureReason = "MMP canvas focus harness could not create both modeless windows.";
+		return false;
+	}
+	mrvmStoreModelessWindowDefinition(firstDefinition);
+	mrvmStoreModelessWindowDefinition(secondDefinition);
+	for (MRDesktopWindow *desktopWindow : allDesktopWindowsInZOrder()) {
+		TWindow *nativeWindow = desktopWindow != nullptr ? desktopWindow->desktopNativeWindow() : nullptr;
+		const char *title = nativeWindow != nullptr ? nativeWindow->getTitle(0) : nullptr;
+
+		if (title == nullptr) continue;
+		if (firstDefinition.title == title) firstWindow = nativeWindow;
+		if (secondDefinition.title == title) secondWindow = nativeWindow;
+	}
+	if (firstWindow != nullptr) {
+		TGroup *group = static_cast<TGroup *>(firstWindow);
+		TView *firstChild = group->first();
+
+		for (TView *view = firstChild; view != nullptr; view = view->next) {
+			if (view->getBounds() == TRect(canvas.x, canvas.y, canvas.x + canvas.width, canvas.y + canvas.height)) canvasView = view;
+			if (view->getBounds() == TRect(textField.x + 6, textField.y, textField.x + 6 + textField.width, textField.y + 1)) textInput = view;
+			if (view->getBounds() == TRect(boolField.x, boolField.y, boolField.x + strwidth(boolField.caption.c_str()) + 5, boolField.y + 1)) boolInput = view;
+			if (view->getBounds() == TRect(intField.x + 9, intField.y, intField.x + 9 + intField.width, intField.y + 1)) intInput = view;
+			if (view->getBounds() == TRect(progressField.x + 6, progressField.y, progressField.x + 6 + progressField.width, progressField.y + 1)) progressView = view;
+			if (view->getBounds() == TRect(logField.x, logField.y + 1, logField.x + logField.width, logField.y + 1 + logField.height)) logView = view;
+			if (view->getBounds() == TRect(selectField.x, selectField.y + 1, selectField.x + selectField.width - 1, selectField.y + 1 + selectField.height)) selectInput = view;
+			if (view->next == firstChild) break;
+		}
+	}
+	if (firstWindow == nullptr || secondWindow == nullptr || canvasView == nullptr || textInput == nullptr || boolInput == nullptr || intInput == nullptr || progressView == nullptr || logView == nullptr || selectInput == nullptr) {
+		if (firstWindow != nullptr) message(firstWindow, evCommand, cmClose, nullptr);
+		if (secondWindow != nullptr) message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP canvas focus harness could not locate the modeless canvas view.";
+		return false;
+	}
+	std::string textValue;
+	bool boolFieldValue = false;
+	std::string selectFieldValue;
+	TInputLine *inputLine = dynamic_cast<TInputLine *>(textInput);
+	const bool textFieldUpdated = inputLine != nullptr && updateMacroModelessTextField(firstId, "NAME", "Updated") && mrvmReadModelessWindowTextFieldValue(firstId, "NAME", textValue) && textValue == "Updated" && std::strcmp(inputLine->data, "Updated") == 0;
+	TEvent textInputEvent{};
+	bool typedTextStored = false;
+
+	if (textFieldUpdated) {
+		static_cast<TGroup *>(firstWindow)->setCurrent(inputLine, TView::normalSelect);
+		inputLine->selectAll(True);
+		textInputEvent.what = evKeyDown;
+		textInputEvent.keyDown.keyCode = static_cast<ushort>('X');
+		textInputEvent.keyDown.text[0] = 'X';
+		textInputEvent.keyDown.textLength = 1;
+		inputLine->handleEvent(textInputEvent);
+		typedTextStored = mrvmReadModelessWindowTextFieldValue(firstId, "NAME", textValue) && textValue == "X";
+	}
+	if (!textFieldUpdated || !typedTextStored) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP text fields must synchronize native edits and retained values together.";
+		return false;
+	}
+	TCheckBoxes *checkBoxes = dynamic_cast<TCheckBoxes *>(boolInput);
+	ushort checked = 0;
+	const bool boolFieldUpdated = checkBoxes != nullptr && updateMacroModelessBoolField(firstId, "ENABLED", false) && mrvmReadModelessWindowBoolFieldValue(firstId, "ENABLED", boolFieldValue) && !boolFieldValue;
+	if (checkBoxes != nullptr) checkBoxes->getData(&checked);
+	const bool nativeBoolFieldUpdated = checked == 0;
+	TEvent boolInputEvent{};
+	bool toggledBoolStored = false;
+
+	if (boolFieldUpdated && nativeBoolFieldUpdated) {
+		firstWindow->makeFirst();
+		TProgram::deskTop->setCurrent(firstWindow, TView::normalSelect);
+		static_cast<TGroup *>(firstWindow)->setCurrent(checkBoxes, TView::normalSelect);
+		boolInputEvent.what = evKeyDown;
+		boolInputEvent.keyDown.keyCode = static_cast<ushort>(' ');
+		boolInputEvent.keyDown.text[0] = ' ';
+		boolInputEvent.keyDown.textLength = 1;
+		checkBoxes->handleEvent(boolInputEvent);
+		checkBoxes->getData(&checked);
+		toggledBoolStored = checked == 1 && mrvmReadModelessWindowBoolFieldValue(firstId, "ENABLED", boolFieldValue) && boolFieldValue;
+	}
+	if (!boolFieldUpdated || !nativeBoolFieldUpdated || !toggledBoolStored) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP boolean fields must synchronize native checkbox changes and retained values together.";
+		return false;
+	}
+	TInputLine *intInputLine = dynamic_cast<TInputLine *>(intInput);
+	int intFieldValue = 0;
+	const bool intFieldUpdated = intInputLine != nullptr && mrvmStoreModelessWindowIntFieldValue(firstId, "RETRIES", 5) && updateMacroModelessIntField(firstId, "RETRIES", 5) && mrvmReadModelessWindowIntFieldValue(firstId, "RETRIES", intFieldValue) && intFieldValue == 5 && std::strcmp(intInputLine->data, "5") == 0;
+	TEvent intInputEvent{};
+	bool typedIntStored = false;
+	bool invalidIntRestored = false;
+
+	if (intFieldUpdated) {
+		firstWindow->makeFirst();
+		TProgram::deskTop->setCurrent(firstWindow, TView::normalSelect);
+		static_cast<TGroup *>(firstWindow)->setCurrent(intInputLine, TView::normalSelect);
+		intInputLine->selectAll(True);
+		intInputEvent.what = evKeyDown;
+		intInputEvent.keyDown.keyCode = static_cast<ushort>('7');
+		intInputEvent.keyDown.text[0] = '7';
+		intInputEvent.keyDown.textLength = 1;
+		intInputLine->handleEvent(intInputEvent);
+		typedIntStored = mrvmReadModelessWindowIntFieldValue(firstId, "RETRIES", intFieldValue) && intFieldValue == 7;
+		intInputLine->selectAll(True);
+		intInputEvent = TEvent{};
+		intInputEvent.what = evKeyDown;
+		intInputEvent.keyDown.keyCode = static_cast<ushort>('X');
+		intInputEvent.keyDown.text[0] = 'X';
+		intInputEvent.keyDown.textLength = 1;
+		intInputLine->handleEvent(intInputEvent);
+		intInputEvent = TEvent{};
+		intInputEvent.what = evBroadcast;
+		intInputEvent.message.command = cmReleasedFocus;
+		intInputLine->handleEvent(intInputEvent);
+		invalidIntRestored = mrvmReadModelessWindowIntFieldValue(firstId, "RETRIES", intFieldValue) && intFieldValue == 7 && std::strcmp(intInputLine->data, "7") == 0;
+	}
+	if (!intFieldUpdated || !typedIntStored || !invalidIntRestored) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP integer fields must retain valid native edits and restore an invalid focus-leaving value.";
+		return false;
+	}
+	int progressTotal = 0;
+	int progressValue = 0;
+	const bool progressFieldUpdated = (progressView->options & ofSelectable) == 0 && mrvmStoreModelessWindowProgressFieldValue(firstId, "SCAN", 50) && updateMacroModelessProgressField(firstId, "SCAN") && mrvmReadModelessWindowProgressFieldValue(firstId, "SCAN", progressTotal, progressValue) && progressTotal == 100 && progressValue == 50;
+	if (!progressFieldUpdated) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP progress fields must redraw only their non-selectable retained projection.";
+		return false;
+	}
+	std::vector<std::string> logLines;
+	const bool logFieldUpdated = (logView->options & ofSelectable) == 0 && mrvmAppendModelessWindowLogFieldLine(firstId, "EVENTS", "One") && mrvmAppendModelessWindowLogFieldLine(firstId, "EVENTS", "Two") && updateMacroModelessLogField(firstId, "EVENTS") && mrvmReadModelessWindowLogFieldLines(firstId, "EVENTS", logLines) && logLines.size() == 2 && logLines[0] == "One" && logLines[1] == "Two";
+	if (!logFieldUpdated) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP log fields must redraw only their non-selectable retained projection.";
+		return false;
+	}
+	TListViewer *selectList = dynamic_cast<TListViewer *>(selectInput);
+	char firstSelectText[16] = {};
+	char lastSelectText[16] = {};
+	const bool selectItemsPresent = selectList != nullptr && (selectList->getText(firstSelectText, 0, static_cast<short>(sizeof(firstSelectText))), std::strcmp(firstSelectText, "Normal") == 0) && (selectList->getText(lastSelectText, 2, static_cast<short>(sizeof(lastSelectText))), std::strcmp(lastSelectText, "Fast") == 0);
+	const bool selectFieldUpdated = selectItemsPresent && updateMacroModelessSelectField(firstId, "MODE", "Safe") && !updateMacroModelessSelectField(firstId, "MODE", "Unknown") && mrvmReadModelessWindowSelectFieldValue(firstId, "MODE", selectFieldValue) && selectFieldValue == "Safe";
+	TEvent selectInputEvent{};
+	bool selectedOptionStored = false;
+
+	if (selectFieldUpdated) {
+		firstWindow->makeFirst();
+		TProgram::deskTop->setCurrent(firstWindow, TView::normalSelect);
+		static_cast<TGroup *>(firstWindow)->setCurrent(selectList, TView::normalSelect);
+		selectInputEvent.what = evKeyDown;
+		selectInputEvent.keyDown.keyCode = kbDown;
+		selectList->handleEvent(selectInputEvent);
+		selectedOptionStored = mrvmReadModelessWindowSelectFieldValue(firstId, "MODE", selectFieldValue) && selectFieldValue == "Fast";
+	}
+	if (!selectItemsPresent || !selectFieldUpdated || !selectedOptionStored) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP selection fields must project their declared items and synchronize native selection changes with retained values.";
+		return false;
+	}
+	std::string timerError;
+	const std::string timerSetupSource = "$MACRO MmpTimerFocusSetup;\nSET_GLOBAL_STR('MMP_CANVAS_DEMO_WINDOW', '" + firstId + "');\nSET_GLOBAL_INT('MMP_CANVAS_DEMO_TICKS', 0);\nEND_MACRO;\n";
+	const bool demoMacroReady = mrvmLoadMacroFile(absolutePathFromCwd("mrmac/macros/utils/MmpCanvasDemo.mrmac"), &timerError) && runMacroSourceText("MmpTimerFocusSetup", timerSetupSource.c_str(), &timerError, false);
+
+	if (!demoMacroReady) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP timer focus harness could not prepare the demo callback: " + timerError;
+		return false;
+	}
+	std::vector<std::string> directTimerLog;
+	const bool directTimerCallbackCompleted = mrvmRunMacroSpec("MmpCanvasDemo^MmpCanvasDemoTick", &timerError, &directTimerLog);
+	bool directTimerCallbackErrored = false;
+
+	for (const std::string &line : directTimerLog)
+		if (line.rfind("VM Error: ", 0) == 0) {
+			timerError = line;
+			directTimerCallbackErrored = true;
+			break;
+		}
+	if (!directTimerCallbackCompleted || directTimerCallbackErrored) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP timer focus harness could not resolve the demo callback: " + timerError;
+		return false;
+	}
+	timerEditor = createEditorWindow("mmp-timer-focus");
+	if (timerEditor == nullptr || !mrActivateEditWindow(timerEditor)) {
+		if (timerEditor != nullptr) destroyRegressionWindow(timerEditor);
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP timer focus harness could not activate an editor window.";
+		return false;
+	}
+	focusTimerConfig.owner.modelessWindowId = firstId;
+	focusTimerConfig.consumerKey = "EditorFocus";
+	focusTimerConfig.intervalMs = 100;
+	focusTimerConfig.macroSpec = "MmpCanvasDemo^MmpCanvasDemoTick";
+	focusTimerConsumerId = registerRuntimeScheduledConsumer(focusTimerConfig);
+	const bool timerDue = focusTimerConsumerId != 0 && pumpRuntimeScheduler(runtimeTimerSourceNowMs()) != 0;
+	int tickTotal = 0;
+	int tickValue = 0;
+	std::vector<std::string> timerLogLines;
+	const bool timerUpdatedWhileEditorFocused = timerDue && mrvmReadModelessWindowProgressFieldValue(firstId, "TICKS", tickTotal, tickValue) && tickTotal == 10 && tickValue == 2 && mrvmReadModelessWindowLogFieldLines(firstId, "EVENTS", timerLogLines) && !timerLogLines.empty() && timerLogLines.back() == "Timer tick 2";
+
+	if (focusTimerConsumerId != 0) removeRuntimeScheduledConsumer(focusTimerConsumerId);
+	destroyRegressionWindow(timerEditor);
+	if (!timerUpdatedWhileEditorFocused) {
+		std::string timerDiagnostic;
+
+		for (const MRRuntimeSchedulerEvent &event : recentRuntimeSchedulerEvents()) {
+			if (event.consumerId != focusTimerConsumerId) continue;
+			timerDiagnostic += event.message;
+			timerDiagnostic += " ";
+		}
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "An MMP timer must update its retained model while an editor window has focus: due=" + std::to_string(timerDue ? 1 : 0) + " ticks=" + std::to_string(tickValue) + " log-count=" + std::to_string(timerLogLines.size()) + " scheduler=" + timerDiagnostic;
+		return false;
+	}
+	timerConfig.owner.modelessWindowId = firstId;
+	timerConfig.consumerKey = "CloseCleanup";
+	timerConfig.intervalMs = 100;
+	timerConfig.macroSpec = "RegressionMmp^CloseCleanup";
+	timerConsumerId = registerRuntimeScheduledConsumer(timerConfig);
+	if (timerConsumerId == 0) {
+		message(firstWindow, evCommand, cmClose, nullptr);
+		message(secondWindow, evCommand, cmClose, nullptr);
+		failureReason = "MMP close harness could not register a window-owned timer consumer.";
+		return false;
+	}
+	secondWindow->makeFirst();
+	TProgram::deskTop->setCurrent(secondWindow, TView::normalSelect);
+	TEvent event{};
+
+	event.what = evMouseDown;
+	event.mouse.where = firstWindow->makeGlobal(TPoint(firstDefinition.width - 3, firstDefinition.height - 3));
+	event.mouse.buttons = mbLeftButton;
+	firstWindow->handleEvent(event);
+	const bool focused = TProgram::deskTop->current == firstWindow && (firstWindow->state & sfSelected) != 0 && (firstWindow->state & sfFocused) != 0 && firstWindow->frame != nullptr;
+	TEvent hotspotEvent{};
+
+	setMacroModelessCommandRunner(nullptr);
+	secondWindow->makeFirst();
+	TProgram::deskTop->setCurrent(secondWindow, TView::normalSelect);
+	hotspotEvent.what = evMouseDown;
+	hotspotEvent.mouse.where = firstWindow->makeGlobal(TPoint(canvas.x + hotspot.x + 1, canvas.y + hotspot.y));
+	hotspotEvent.mouse.buttons = mbLeftButton;
+	firstWindow->handleEvent(hotspotEvent);
+	const bool hotspotDispatched = TProgram::deskTop->current == firstWindow && hotspotEvent.what == evNothing;
+	message(firstWindow, evCommand, cmClose, nullptr);
+	message(secondWindow, evCommand, cmClose, nullptr);
+	bool timerRemoved = true;
+	for (const MRRuntimeScheduledConsumer &consumer : runtimeScheduledConsumers())
+		if (consumer.consumerId == timerConsumerId) timerRemoved = false;
+	if (!focused) {
+		failureReason = "A client-area click outside the canvas must make its MMP window the focused desktop window immediately.";
+		return false;
+	}
+	if (!hotspotDispatched) {
+		failureReason = "A canvas hotspot must activate its MMP window and consume the click before TVision frame routing.";
+		return false;
+	}
+	if (!timerRemoved) {
+		removeRuntimeScheduledConsumer(timerConsumerId);
+		failureReason = "Closing an MMP window must remove its scheduler consumers.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testMmpActionGridHarness(std::string &failureReason) {
+	TScrollBar *scrollBar = new TScrollBar(TRect(23, 0, 24, 4));
+	TView *gridView = createMacroModelessGridView(TRect(0, 0, 23, 4), scrollBar, {"Refresh\tREFRESH\tUpdate the activity field", "Close\tCLOSE\tClose the panel"}, 0);
+	TEvent event{};
+	std::string sourceText;
+	std::string ioError;
+	const bool initialSelection = gridView != nullptr && macroModelessGridSelectedIndex(gridView) == 1 && macroModelessGridSelectedText(gridView) == "REFRESH";
+
+	if (initialSelection) {
+		event.what = evKeyDown;
+		event.keyDown.keyCode = kbRight;
+		gridView->handleEvent(event);
+	}
+	const bool nextSelection = initialSelection && event.what == evNothing && macroModelessGridSelectedIndex(gridView) == 2 && macroModelessGridSelectedText(gridView) == "CLOSE";
+	if (gridView != nullptr) TObject::destroy(gridView);
+	if (scrollBar != nullptr) TObject::destroy(scrollBar);
+	if (!initialSelection || !nextSelection) {
+		failureReason = "MMP action grids must retain full action values and keyboard selection.";
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("mrmac/ui/modeless/MRMacroModelessControls.cpp"), sourceText, ioError) || sourceText.find("updateCellWidth()") == std::string::npos || sourceText.find("static constexpr int cellWidth = 4") != std::string::npos) {
+		failureReason = "MMP action grids must derive their cell width from their labels.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
 }
 
 int runMacroDebuggerF9RouteProbeMode() {
@@ -8636,8 +9754,8 @@ bool testDeferredUiPlaybackMailboxGuard(std::string &failureReason) {
 bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/MRVM.hpp");
-	const std::string screenPath = absolutePathFromCwd("mrmac/vm/MRVMScreen.cpp");
-	const std::string editorBridgePath = absolutePathFromCwd("mrmac/vm/MRVMEditor.cpp");
+	const std::string screenPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMScreen.cpp");
+	const std::string editorBridgePath = absolutePathFromCwd("mrmac/ui/conventional/MRVMEditor.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string menuBarPath = absolutePathFromCwd("ui/MRMenuBar.cpp");
@@ -8727,8 +9845,8 @@ bool testUiMessageBoxProcGuard(std::string &failureReason) {
 	const std::string headerPath = absolutePathFromCwd("mrmac/mrmac.h");
 	const std::string compilerPath = absolutePathFromCwd("mrmac/mrmac.c");
 	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
-	const std::string deferredHeaderPath = absolutePathFromCwd("mrmac/vm/MRVMDeferredUi.hpp");
-	const std::string deferredPath = absolutePathFromCwd("mrmac/vm/MRVMDeferredUi.cpp");
+	const std::string deferredHeaderPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMDeferredUi.hpp");
+	const std::string deferredPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMDeferredUi.cpp");
 	const std::string syntaxPath = absolutePathFromCwd("ui/MRSyntax.cpp");
 	std::string headerContent;
 	std::string compilerContent;
@@ -8803,8 +9921,8 @@ bool testUiMessageBoxProcGuard(std::string &failureReason) {
 
 bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
 	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
-	const std::string editorPath = absolutePathFromCwd("mrmac/vm/MRVMEditor.cpp");
-	const std::string screenPath = absolutePathFromCwd("mrmac/vm/MRVMScreen.cpp");
+	const std::string editorPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMEditor.cpp");
+	const std::string screenPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMScreen.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	std::string vmContent;
 	std::string editorContent;
@@ -8868,8 +9986,8 @@ bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
 
 bool testRenderSinkClassificationGuard(std::string &failureReason) {
 	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
-	const std::string editorPath = absolutePathFromCwd("mrmac/vm/MRVMEditor.cpp");
-	const std::string screenPath = absolutePathFromCwd("mrmac/vm/MRVMScreen.cpp");
+	const std::string editorPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMEditor.cpp");
+	const std::string screenPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMScreen.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
@@ -8979,7 +10097,7 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 }
 
 bool testResizeKillBoxReprojectionGuard(std::string &failureReason) {
-	const std::string screenPath = absolutePathFromCwd("mrmac/vm/MRVMScreen.cpp");
+	const std::string screenPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMScreen.cpp");
 	std::string screenContent;
 	std::string ioError;
 	std::string missingNeedle;
@@ -9011,7 +10129,7 @@ bool testResizeKillBoxReprojectionGuard(std::string &failureReason) {
 }
 
 bool testClearScreenSnapshotResetGuard(std::string &failureReason) {
-	const std::string screenPath = absolutePathFromCwd("mrmac/vm/MRVMScreen.cpp");
+	const std::string screenPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMScreen.cpp");
 	std::string screenContent;
 	std::string ioError;
 
@@ -9064,7 +10182,7 @@ bool testClearScreenSnapshotResetGuard(std::string &failureReason) {
 }
 
 bool testLineColOverlayReplayGuard(std::string &failureReason) {
-	const std::string screenPath = absolutePathFromCwd("mrmac/vm/MRVMScreen.cpp");
+	const std::string screenPath = absolutePathFromCwd("mrmac/ui/conventional/MRVMScreen.cpp");
 	std::string screenContent;
 	std::string ioError;
 	std::string missingNeedle;
@@ -10099,8 +11217,10 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
 	runTest(ctx, "Post-EOF clear-area guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
-	runTest(ctx, "Exec session owner cancellation guard", testExecSessionOwnerCancellationGuard);
+	runTest(ctx, "Exec session owner and MMP canvas guard", testExecSessionOwnerCancellationGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
+	runTest(ctx, "MMP client and hotspot dispatch harness", testMmpClientFocusDispatchHarness);
+	runTest(ctx, "MMP action grid harness", testMmpActionGridHarness);
 }
 
 void runFullSuite(TestContext &ctx) {
