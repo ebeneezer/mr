@@ -222,6 +222,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrMacroDebuggerAddWatch, hasEditor);
 	setCommandEnabled(cmMrMacroDebuggerEraseWatch, hasEditor);
 	setCommandEnabled(cmMrMacroDebuggerRunHere, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerEvaluate, hasEditor);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
 	setCommandEnabled(cmMrOtherLocalOutline, hasEditor);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);

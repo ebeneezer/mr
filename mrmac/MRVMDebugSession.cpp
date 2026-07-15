@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <utility>
 
 namespace {
 
@@ -32,6 +33,46 @@ static void completeDebugSession(std::map<MRMacroExecutionSessionId, DebugSessio
 	mrvmFinalizeDebugSession(session, result, cleanup);
 }
 
+static void appendDebugStackFrame(std::vector<MRMacroDebugStackFrame> &callStack, const std::string &macroKey, const std::string &sourcePath, std::size_t instructionOffset, MRMacroDebugStackFrameKind kind) {
+	MRMacroDebugStackFrame frame;
+	MRMacroSourceMapEntry sourceMapEntry;
+
+	frame.macroKey = macroKey;
+	frame.sourcePath = sourcePath;
+	frame.instructionOffset = instructionOffset;
+	frame.kind = kind;
+	if (!macroKey.empty() && mrvmRuntimeCatalogSourceMapSpanForBytecodeOffset(g_runtimeEnv.runtimeKv, macroKey, instructionOffset, sourceMapEntry)) {
+		frame.line = sourceMapEntry.line;
+		frame.column = sourceMapEntry.column;
+	}
+	callStack.push_back(std::move(frame));
+}
+
+}
+
+void VirtualMachine::appendDebugCallStack(MRMacroDebugRunResult &result) const {
+	static constexpr std::size_t kCallInstructionSize = sizeof(unsigned char) + sizeof(int);
+
+	result.callStack.clear();
+	if (!result.paused) return;
+	appendDebugStackFrame(result.callStack, mDebugMacroKey, mDebugSourcePath, result.instructionOffset, mrdStackFrameCurrent);
+	for (std::vector<std::size_t>::const_reverse_iterator frame = mDebugCallStack.rbegin(); frame != mDebugCallStack.rend(); ++frame) {
+		const std::size_t callInstructionOffset = *frame >= kCallInstructionSize ? *frame - kCallInstructionSize : *frame;
+
+		appendDebugStackFrame(result.callStack, mDebugMacroKey, mDebugSourcePath, callInstructionOffset, mrdStackFrameCall);
+	}
+}
+
+void VirtualMachine::appendDebugParentCallStack(MRMacroDebugRunResult &result, std::size_t parentInstructionOffset) const {
+	static constexpr std::size_t kCallInstructionSize = sizeof(unsigned char) + sizeof(int);
+
+	if (!result.paused) return;
+	appendDebugStackFrame(result.callStack, mDebugMacroKey, mDebugSourcePath, parentInstructionOffset, mrdStackFrameRunMacro);
+	for (std::vector<std::size_t>::const_reverse_iterator frame = mDebugCallStack.rbegin(); frame != mDebugCallStack.rend(); ++frame) {
+		const std::size_t callInstructionOffset = *frame >= kCallInstructionSize ? *frame - kCallInstructionSize : *frame;
+
+		appendDebugStackFrame(result.callStack, mDebugMacroKey, mDebugSourcePath, callInstructionOffset, mrdStackFrameCall);
+	}
 }
 
 MRMacroDebugRunResult mrvmRunBytecodeDebugAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::vector<std::size_t> &breakpointOffsets) {
@@ -41,11 +82,11 @@ MRMacroDebugRunResult mrvmRunBytecodeDebugAt(const unsigned char *bytecode, std:
 }
 
 MRMacroDebugRunResult mrvmStartDebugSessionAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const MRMacroExecutionOwner &owner, const std::vector<std::size_t> &breakpointOffsets, MRMacroExecutionSession *sessionOut, bool firstRun,
-                                               const std::string &macroKey, const std::string &sourcePath) {
+	                                           const std::string &macroKey, const std::string &sourcePath, const std::string &parameterString) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	MRMacroExecutionSession session = createMacroExecutionSession(macroName, MRMacroExecutionRoute::Debug, owner);
 	std::unique_ptr<VirtualMachine> vm = std::make_unique<VirtualMachine>();
-	MRMacroDebugRunResult result = vm->executeDebugAt(bytecode, length, entryOffset, std::string(), macroName, breakpointOffsets, firstRun, macroKey, sourcePath);
+	MRMacroDebugRunResult result = vm->executeDebugAt(bytecode, length, entryOffset, parameterString, macroName, breakpointOffsets, firstRun, macroKey, sourcePath);
 
 	if (result.paused) {
 		DebugSessionVmHandle handle;
@@ -98,6 +139,25 @@ bool mrvmDebugWatchSnapshots(MRMacroExecutionSessionId sessionId, const std::str
 		snapshot.enabled = watch.enabled;
 		snapshots.push_back(snapshot);
 	}
+	return true;
+}
+
+bool mrvmEvaluateDebugExpression(MRMacroExecutionSessionId sessionId, const std::string &expression, MRMacroDebugWatchSnapshot &snapshot, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	std::map<MRMacroExecutionSessionId, DebugSessionVmHandle>::iterator sessionHandle;
+
+	snapshot = MRMacroDebugWatchSnapshot();
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (sessionId == 0) {
+		if (errorMessage != nullptr) *errorMessage = "No live debug session.";
+		return false;
+	}
+	sessionHandle = g_debugSessionVmHandles.find(sessionId);
+	if (sessionHandle == g_debugSessionVmHandles.end() || sessionHandle->second.vm == nullptr || !sessionHandle->second.vm->hasPausedDebug()) {
+		if (errorMessage != nullptr) *errorMessage = "Debug session is not paused.";
+		return false;
+	}
+	snapshot = sessionHandle->second.vm->evaluateDebugWatchExpression(expression);
 	return true;
 }
 

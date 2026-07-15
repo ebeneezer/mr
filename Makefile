@@ -225,6 +225,7 @@ CXX_SOURCES = \
 	ui/MRBentoBox.cpp \
 	ui/MRBentoBoxDiagnostics.cpp \
 	ui/MRBentoBoxDebugger.cpp \
+	ui/MRBentoBoxDebuggerStatus.cpp \
 	ui/MRBentoBoxFileCompare.cpp \
 	ui/MRBentoBoxFileCompareView.cpp \
 	ui/MRBentoBoxOutline.cpp \
@@ -578,7 +579,8 @@ mrmac/ui/conventional/MRVMScreen.o: mrmac/ui/conventional/MRVMScreen.cpp mrmac/u
 ui/MRPalette.o: ui/MRPalette.cpp ui/MRPalette.hpp
 ui/MRBentoBox.o: ui/MRBentoBox.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/widgets/MRDropList.hpp
 ui/MRBentoBoxDiagnostics.o: ui/MRBentoBoxDiagnostics.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRSidekickEditor.hpp config/settings/MRSettingsRuntime.hpp
-ui/MRBentoBoxDebugger.o: ui/MRBentoBoxDebugger.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMRuntimeDebugger.hpp app/commands/MRWindowCommands.hpp
+ui/MRBentoBoxDebugger.o: ui/MRBentoBoxDebugger.cpp ui/MRBentoBox.hpp ui/MRBentoBoxDebuggerStatus.hpp ui/MREditWindow.hpp ui/MRFrame.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMRuntimeDebugger.hpp app/commands/MRWindowCommands.hpp
+ui/MRBentoBoxDebuggerStatus.o: ui/MRBentoBoxDebuggerStatus.cpp ui/MRBentoBoxDebuggerStatus.hpp mrmac/MRVM.hpp mrmac/vm/MRVMRuntimeDebugger.hpp
 ui/MRBentoBoxOutline.o: ui/MRBentoBoxOutline.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp
 ui/MRBentoBoxPaneWindow.o: ui/MRBentoBoxPaneWindow.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp config/settings/MRSettingsRuntime.hpp
 ui/MRBentoBoxProjection.o: ui/MRBentoBoxProjection.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRSidekickEditor.hpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRDropList.hpp

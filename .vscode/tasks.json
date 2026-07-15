@@ -113,6 +113,20 @@
                 "reveal": "always",
                 "clear": true
             }
+        },
+        {
+            "label": "MRMAC Reference im externen PDF-Viewer öffnen",
+            "type": "shell",
+            "command": "xdg-open",
+            "args": [
+                "${workspaceFolder}/documentation/manuals/mr-macro-reference.pdf"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "never",
+                "clear": false
+            }
         }
     ]
 }

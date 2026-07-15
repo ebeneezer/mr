@@ -3712,6 +3712,49 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	return true;
 }
 
+static bool resolveDebugMacroSpec(const std::string &spec, std::string &macroKey, std::string &parameterString, LoadedMacroFile &file, std::string &errorMessage) {
+	std::string filePart;
+	std::string macroPart;
+	std::string targetFileKey;
+	MacroRef macroRef;
+
+	macroKey.clear();
+	parameterString.clear();
+	errorMessage.clear();
+	if (!mrvmParseRunMacroSpec(spec, filePart, macroPart, parameterString)) {
+		errorMessage = "Debug macro specification is invalid.";
+		return false;
+	}
+	macroKey = mrvmUpperKey(macroPart);
+	if (macroKey.empty()) {
+		errorMessage = "Debug macro name is empty.";
+		return false;
+	}
+	if (!filePart.empty()) targetFileKey = resolveLoadedFileKeyForSpec(filePart);
+	if (!filePart.empty() && targetFileKey.empty()) targetFileKey = mrvmMakeMacroFileKey(filePart);
+	if (!readLoadedMacroByKey(macroKey, macroRef) || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
+		if (!filePart.empty()) {
+			if (!loadMacroFileIntoRegistry(filePart, &targetFileKey)) {
+				errorMessage = "Debug macro file could not be loaded: " + filePart;
+				return false;
+			}
+		} else if (!loadMacroFileIntoRegistry(macroPart, &targetFileKey)) {
+			errorMessage = "Debug macro is not loaded: " + macroKey;
+			return false;
+		}
+		static_cast<void>(readLoadedMacroByKey(macroKey, macroRef));
+	}
+	if (macroRef.displayName.empty() || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
+		errorMessage = "Debug macro is not loaded: " + macroKey;
+		return false;
+	}
+	if (!readLoadedMacroFileByKey(macroRef.fileKey, file)) {
+		errorMessage = "Debug macro file is not loaded: " + macroRef.fileKey;
+		return false;
+	}
+	return true;
+}
+
 static bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, MacroRef &macroRef, LoadedMacroFile &file, std::vector<std::size_t> &breakpointOffsets, bool &firstRun,
 	                                  std::string &errorMessage) {
 	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
@@ -4485,10 +4528,11 @@ struct VirtualMachine::MRMacroDebugChildFrame {
 	MRMacroDebugRunResult result;
 	std::string macroKey;
 	std::string fileKey;
+	std::size_t parentInstructionOffset;
 	bool unloadAfterCompletion;
 	bool evictTransientAfterCompletion;
 
-	MRMacroDebugChildFrame() : vm(), result(), macroKey(), fileKey(), unloadAfterCompletion(false), evictTransientAfterCompletion(false) {
+	MRMacroDebugChildFrame() : vm(), result(), macroKey(), fileKey(), parentInstructionOffset(0), unloadAfterCompletion(false), evictTransientAfterCompletion(false) {
 	}
 };
 
@@ -5000,6 +5044,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					break;
 				}
 			}
+			const std::size_t instructionOffset = ip;
 			unsigned char opcode = bytecode[ip++];
 
 			if (opcode == OP_PUSH_I) {
@@ -6404,6 +6449,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							mDebugChildFrame->result = childResult;
 							mDebugChildFrame->macroKey = macroKey;
 							mDebugChildFrame->fileKey = childRef.fileKey;
+							mDebugChildFrame->parentInstructionOffset = instructionOffset;
 							mDebugChildFrame->unloadAfterCompletion = childRef.dumpAttr;
 							mDebugChildFrame->evictTransientAfterCompletion = childRef.transientAttr;
 							mDebugStopped = true;
@@ -6614,6 +6660,8 @@ MRMacroDebugRunResult VirtualMachine::executeDebugAt(const unsigned char *byteco
 	executeAt(bytecode, length, entryOffset, parameterString, macroName, true, firstRun);
 	if (mDebugChildFrame != nullptr) {
 		result = mDebugChildFrame->result;
+		appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
+		mDebugChildFrame->result = result;
 		mDebugRunActive = false;
 		mAsyncDelayEnabled = savedAsyncDelayEnabled;
 		return result;
@@ -6643,6 +6691,7 @@ MRMacroDebugRunResult VirtualMachine::executeDebugAt(const unsigned char *byteco
 	result.paused = mDebugPaused;
 	appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+	appendDebugCallStack(result);
 
 	mDebugRunActive = false;
 	mAsyncDelayEnabled = savedAsyncDelayEnabled;
@@ -6671,6 +6720,7 @@ MRMacroDebugRunResult VirtualMachine::executeDebugAt(const unsigned char *byteco
 		result.paused = true;
 		appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 		appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+		appendDebugCallStack(result);
 		return result;
 	}
 	mDebugRunActive = true;
@@ -6691,6 +6741,8 @@ MRMacroDebugRunResult VirtualMachine::executeDebugAt(const unsigned char *byteco
 		result = mDebugChildFrame->vm->continueDebug(childBreakpointOffsets);
 		mDebugChildFrame->result = result;
 		if (result.paused) {
+			appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
+			mDebugChildFrame->result = result;
 			mDebugRunActive = false;
 			mAsyncDelayEnabled = savedAsyncDelayEnabled;
 			return result;
@@ -6707,6 +6759,8 @@ MRMacroDebugRunResult VirtualMachine::executeDebugAt(const unsigned char *byteco
 	executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
 	if (mDebugChildFrame != nullptr) {
 		result = mDebugChildFrame->result;
+		appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
+		mDebugChildFrame->result = result;
 		mDebugRunActive = false;
 		mDebugStepMode = mrdStepNone;
 		mAsyncDelayEnabled = savedAsyncDelayEnabled;
@@ -6737,6 +6791,7 @@ MRMacroDebugRunResult VirtualMachine::executeDebugAt(const unsigned char *byteco
 	result.paused = mDebugPaused;
 	appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+	appendDebugCallStack(result);
 
 	mDebugRunActive = false;
 	mAsyncDelayEnabled = savedAsyncDelayEnabled;
@@ -6769,6 +6824,8 @@ MRMacroDebugRunResult VirtualMachine::stepDebug(const std::vector<std::size_t> &
 		result = mDebugChildFrame->vm->stepDebug(childBreakpointOffsets, mode);
 		mDebugChildFrame->result = result;
 		if (result.paused) {
+			appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
+			mDebugChildFrame->result = result;
 			mDebugRunActive = false;
 			mDebugStepMode = mrdStepNone;
 			mAsyncDelayEnabled = savedAsyncDelayEnabled;
@@ -6796,6 +6853,7 @@ MRMacroDebugRunResult VirtualMachine::stepDebug(const std::vector<std::size_t> &
 		result.paused = true;
 		appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 		appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+		appendDebugCallStack(result);
 		mDebugRunActive = false;
 		mDebugStepMode = mrdStepNone;
 		mAsyncDelayEnabled = savedAsyncDelayEnabled;
@@ -6805,6 +6863,8 @@ MRMacroDebugRunResult VirtualMachine::stepDebug(const std::vector<std::size_t> &
 	executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
 	if (mDebugChildFrame != nullptr) {
 		result = mDebugChildFrame->result;
+		appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
+		mDebugChildFrame->result = result;
 		mDebugRunActive = false;
 		mDebugStepMode = mrdStepNone;
 		mAsyncDelayEnabled = savedAsyncDelayEnabled;
@@ -6835,6 +6895,7 @@ MRMacroDebugRunResult VirtualMachine::stepDebug(const std::vector<std::size_t> &
 	result.paused = mDebugPaused;
 	appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+	appendDebugCallStack(result);
 
 	mDebugRunActive = false;
 	mDebugStepMode = mrdStepNone;
@@ -6851,7 +6912,8 @@ void mrvmFinalizeDebugSession(MRMacroExecutionSession &session, const MRMacroDeb
 	publishMacroExecutionResult(session, session.state, result.hadError ? "Debug macro failed." : "Debug macro completed.");
 }
 
-MRMacroDebugRunResult mrvmStartDebugMacroByName(const std::string &macroKey, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool stopAtEntry, int temporaryStopLine) {
+static MRMacroDebugRunResult startDebugMacroByKey(const std::string &macroKey, const std::string &parameterString, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool stopAtEntry,
+                                                  int temporaryStopLine) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	MRMacroDebugRunResult result;
 	MacroRef macroRef;
@@ -6884,7 +6946,7 @@ MRMacroDebugRunResult mrvmStartDebugMacroByName(const std::string &macroKey, con
 		std::sort(breakpointOffsets.begin(), breakpointOffsets.end());
 		breakpointOffsets.erase(std::unique(breakpointOffsets.begin(), breakpointOffsets.end()), breakpointOffsets.end());
 	}
-	result = mrvmStartDebugSessionAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, macroRef.displayName, owner, breakpointOffsets, &debugSession, firstRun, normalizedMacroKey, file.resolvedPath);
+	result = mrvmStartDebugSessionAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, macroRef.displayName, owner, breakpointOffsets, &debugSession, firstRun, normalizedMacroKey, file.resolvedPath, parameterString);
 	if (sessionOut != nullptr) *sessionOut = debugSession;
 	if (result.paused) {
 		MRVMDebugSessionCleanup cleanup;
@@ -6899,6 +6961,47 @@ MRMacroDebugRunResult mrvmStartDebugMacroByName(const std::string &macroKey, con
 	else if (macroRef.transientAttr)
 		evictTransientFileImage(macroRef.fileKey);
 	return result;
+}
+
+MRMacroDebugRunResult mrvmStartDebugMacroByName(const std::string &macroKey, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool stopAtEntry, int temporaryStopLine) {
+	return startDebugMacroByKey(macroKey, std::string(), owner, sessionOut, errorMessage, stopAtEntry, temporaryStopLine);
+}
+
+MRMacroDebugRunResult mrvmStartDebugMacroBySpec(const std::string &spec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	MRMacroDebugRunResult result;
+	LoadedMacroFile file;
+	std::string macroKey;
+	std::string parameterString;
+	std::string resolutionError;
+
+	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (!resolveDebugMacroSpec(spec, macroKey, parameterString, file, resolutionError)) {
+		result.stopReason = mrdStopError;
+		result.hadError = true;
+		result.logLines.push_back("VM Error: " + resolutionError);
+		if (errorMessage != nullptr) *errorMessage = resolutionError;
+		return result;
+	}
+	return startDebugMacroByKey(macroKey, parameterString, owner, sessionOut, errorMessage, false, 0);
+}
+
+bool mrvmMacroSpecHasEnabledDebugBreakpoint(const std::string &spec, std::string *sourcePath) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	LoadedMacroFile file;
+	std::vector<MRMacroDebuggerBreakpoint> breakpoints;
+	std::string macroKey;
+	std::string parameterString;
+	std::string resolutionError;
+
+	if (sourcePath != nullptr) sourcePath->clear();
+	if (!resolveDebugMacroSpec(spec, macroKey, parameterString, file, resolutionError)) return false;
+	if (sourcePath != nullptr) *sourcePath = file.resolvedPath;
+	if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, macroKey, breakpoints)) return false;
+	for (const MRMacroDebuggerBreakpoint &breakpoint : breakpoints)
+		if (breakpoint.enabled) return true;
+	return false;
 }
 
 bool mrvmToggleDebugLineBreakpoint(const std::string &macroKey, int line, bool *enabledOut, std::string *errorMessage) {

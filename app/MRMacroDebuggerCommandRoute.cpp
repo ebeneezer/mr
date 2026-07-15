@@ -5,6 +5,7 @@
 #include "MRMacroDebuggerCommandRoute.hpp"
 
 #include "MRCommands.hpp"
+#include "commands/MRWindowCommands.hpp"
 
 #include "../ui/MRBentoBox.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -22,6 +23,7 @@ struct MacroDebuggerCommandDescriptor {
 
 static const MacroDebuggerCommandDescriptor kMacroDebuggerCommands[] = {
 	{cmMrOtherBuildCurrentFile, kbF9, 0, "MACRODBG key stage=app-build-command"},
+	{cmMrMacroDebuggerEvaluate, kbF4, 0, nullptr},
 	{cmMrMacroDebuggerContinue, kbF5, 0, "MACRODBG key stage=app-continue-command"},
 	{cmMrMacroDebuggerStep, kbF10, 0, nullptr},
 	{cmMrMacroDebuggerStepOver, kbF11, 0, nullptr},
@@ -65,4 +67,23 @@ bool mrHandleMacroDebuggerCommand(MRBentoBox *bentoBox, TEvent &event) {
 	if (descriptor->logMessage != nullptr) mrLogMessage(descriptor->logMessage);
 	event.what = evNothing;
 	return true;
+}
+
+bool mrMacroDebuggerObservesSourcePath(const std::string &sourcePath) {
+	if (sourcePath.empty()) return false;
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+
+		if (bentoBox != nullptr && bentoBox->macroDebuggerObservesSourcePath(sourcePath)) return true;
+	}
+	return false;
+}
+
+bool mrAttachScheduledMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult) {
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+
+		if (bentoBox != nullptr && bentoBox->acceptScheduledMacroDebuggerSession(sessionId, debugResult)) return true;
+	}
+	return false;
 }

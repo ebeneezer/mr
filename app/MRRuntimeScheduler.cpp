@@ -1,5 +1,6 @@
 #include "MRRuntimeScheduler.hpp"
 
+#include "MRMacroDebuggerCommandRoute.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/MRVM.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -400,7 +401,18 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 		std::string errorText;
 		bool accepted = false;
 		if (dueConsumer.config.macroSource.empty()) {
-			if (dueConsumer.config.owner.modelessWindowId.empty())
+			std::string debugSourcePath;
+
+			if (mrvmMacroSpecHasEnabledDebugBreakpoint(dueConsumer.config.macroSpec, &debugSourcePath) && mrMacroDebuggerObservesSourcePath(debugSourcePath)) {
+				const MRMacroDebugRunResult debugResult = mrvmStartDebugMacroBySpec(dueConsumer.config.macroSpec, dueConsumer.config.owner, &session, &errorText);
+
+				accepted = !debugResult.hadError && !debugResult.cancelled;
+				if (debugResult.paused && !mrAttachScheduledMacroDebuggerSession(session.sessionId, debugResult)) {
+					static_cast<void>(mrvmCloseDebugSession(session.sessionId));
+					errorText = "Scheduled debug session has no observing debugger.";
+					accepted = false;
+				}
+			} else if (dueConsumer.config.owner.modelessWindowId.empty())
 				accepted = runMacroSpecByNameAsExecutionSessionForOwner(dueConsumer.config.macroSpec.c_str(), dueConsumer.config.owner, &session, &errorText, false);
 			else
 				accepted = runMacroSpecByNameAsExecutionSessionForOwnerOnUiThread(dueConsumer.config.macroSpec.c_str(), dueConsumer.config.owner, &session, &errorText, false);

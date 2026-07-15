@@ -2040,6 +2040,19 @@ bool runMacroDebuggerBreakpointKvProbe(std::string &failureReason) {
 		return false;
 	}
 	{
+		MRMacroDebugWatchSnapshot evaluation;
+		std::string evaluationError;
+
+		if (!mrvmEvaluateDebugExpression(debugSession.sessionId, "X + 1", evaluation, &evaluationError) || !evaluation.errorText.empty() || evaluation.type != TYPE_INT || evaluation.valueText != "1") {
+			failureReason = "Macro debugger breakpoint probe could not evaluate a paused pure expression: " + evaluationError + " / " + evaluation.errorText;
+			return false;
+		}
+		if (!mrvmEvaluateDebugExpression(debugSession.sessionId, "X := 9", evaluation, &evaluationError) || evaluation.errorText.empty()) {
+			failureReason = "Macro debugger breakpoint probe accepted a mutating evaluate expression.";
+			return false;
+		}
+	}
+	{
 		MRMacroDebugVariableSnapshot variable;
 		std::vector<MRMacroDebugVariableSnapshot> updatedVariables;
 		std::string mutationError;
@@ -2315,6 +2328,12 @@ bool runMacroDebuggerBreakpointKvProbe(std::string &failureReason) {
 		if (!nestedResult.paused || nestedResult.macroKey != nestedChildName) {
 			(void)::remove(nestedMacroPath.c_str());
 			failureReason = "Macro debugger breakpoint probe did not enter the RUN_MACRO child frame (macro=" + nestedResult.macroKey + ", offset=" + std::to_string(nestedResult.instructionOffset) + ", stop=" + std::to_string(static_cast<int>(nestedResult.stopReason)) + "): " + nestedError;
+			return false;
+		}
+		if (nestedResult.callStack.size() < 2 || nestedResult.callStack[0].macroKey != nestedChildName || nestedResult.callStack[0].kind != mrdStackFrameCurrent || nestedResult.callStack[1].macroKey != nestedMacroName ||
+		    nestedResult.callStack[1].kind != mrdStackFrameRunMacro) {
+			(void)::remove(nestedMacroPath.c_str());
+			failureReason = "Macro debugger breakpoint probe did not snapshot the current child and parent RUN_MACRO frames.";
 			return false;
 		}
 		nestedResult = mrvmStepOutDebugMacroByName(nestedSession.sessionId, nestedMacroName, &nestedError);
@@ -4079,6 +4098,7 @@ bool testMmpClientFocusDispatchHarness(std::string &failureReason) {
 	MRMacroModelessSelectFieldSpec selectField;
 	MRRuntimeScheduledConsumerConfig timerConfig;
 	MRRuntimeScheduledConsumerConfig focusTimerConfig;
+	MRRuntimeScheduledConsumerConfig debugTimerConfig;
 	MREditWindow *timerEditor = nullptr;
 	TWindow *firstWindow = nullptr;
 	TWindow *secondWindow = nullptr;
@@ -4091,6 +4111,7 @@ bool testMmpClientFocusDispatchHarness(std::string &failureReason) {
 	TView *selectInput = nullptr;
 	MRRuntimeScheduledConsumerId timerConsumerId = 0;
 	MRRuntimeScheduledConsumerId focusTimerConsumerId = 0;
+	MRRuntimeScheduledConsumerId debugTimerConsumerId = 0;
 
 	if (ensureRegressionEditorApp(failureReason) == nullptr || TProgram::deskTop == nullptr) return false;
 	firstDefinition.x = 2;
@@ -4401,6 +4422,68 @@ bool testMmpClientFocusDispatchHarness(std::string &failureReason) {
 		message(secondWindow, evCommand, cmClose, nullptr);
 		failureReason = "An MMP timer must update its retained model while an editor window has focus: due=" + std::to_string(timerDue ? 1 : 0) + " ticks=" + std::to_string(tickValue) + " log-count=" + std::to_string(timerLogLines.size()) + " scheduler=" + timerDiagnostic;
 		return false;
+	}
+	{
+		const std::string demoMacroPath = absolutePathFromCwd("mrmac/macros/utils/MmpCanvasDemo.mrmac");
+		const std::string debugMacroName = "MmpCanvasDemoTick";
+		MRBentoBox *debuggerBento = nullptr;
+		MRMacroExecutionSession seedSession;
+		MRMacroDebugRunResult seedResult;
+		MRMacroExecutionSessionId debugSessionId = 0;
+		MREditWindow *debuggerOutput = nullptr;
+		MREditWindow *debuggerVariables = nullptr;
+		MREditWindow *debuggerWatches = nullptr;
+		std::string debugError;
+		bool debugTimerDue = false;
+		bool debuggerAttached = false;
+		bool schedulerSkippedPausedCallback = false;
+		bool callbackContinued = false;
+		bool callbackCompleted = false;
+		int debugTickTotal = 0;
+		int debugTickValue = 0;
+
+		debuggerBento = new MRBentoBox(TRect(0, 0, 100, 30), "mmp-timer-debugger", 1703, bbmToolWorkspace);
+		if (debuggerBento != nullptr) {
+			TProgram::deskTop->insert(debuggerBento);
+			TProgram::deskTop->setCurrent(debuggerBento, TView::enterSelect);
+		}
+		if (debuggerBento != nullptr && debuggerBento->getEditor() != nullptr && debuggerBento->getEditor()->loadMappedFile(demoMacroPath.c_str(), debugError)) {
+			debuggerBento->setMacroDebuggerTarget(debugMacroName, debugMacroName);
+			seedResult = mrvmStartDebugMacroByName(debugMacroName, MRMacroExecutionOwner(), &seedSession, &debugError, true);
+			if (seedSession.sessionId != 0 && seedResult.paused && mrvmCloseDebugSession(seedSession.sessionId) && mrvmWriteDebugLineBreakpoint(debugMacroName, 71, true, &debugError) && debuggerBento->ensureMacroDebuggerPanes(debuggerOutput, debuggerVariables, debuggerWatches)) {
+				debugTimerConfig.owner.modelessWindowId = firstId;
+				debugTimerConfig.consumerKey = "DebuggerBreakpoint";
+				debugTimerConfig.intervalMs = 100;
+				debugTimerConfig.macroSpec = "MmpCanvasDemo^MmpCanvasDemoTick";
+				debugTimerConsumerId = registerRuntimeScheduledConsumer(debugTimerConfig);
+				debugTimerDue = debugTimerConsumerId != 0 && pumpRuntimeScheduler(runtimeTimerSourceNowMs()) != 0;
+				for (const MRRuntimeScheduledConsumer &consumer : runtimeScheduledConsumers())
+					if (consumer.consumerId == debugTimerConsumerId) debugSessionId = consumer.activeSessionId;
+				debuggerAttached = debugTimerDue && debugSessionId != 0 && debuggerBento->macroDebuggerHasLiveSession() && !debuggerBento->macroDebuggerSessionRunning() && mrvmReadModelessWindowProgressFieldValue(firstId, "TICKS", debugTickTotal, debugTickValue) && debugTickTotal == 10 && debugTickValue == 2;
+				schedulerSkippedPausedCallback = debuggerAttached && pumpRuntimeScheduler(runtimeTimerSourceNowMs() + debugTimerConfig.intervalMs) != 0 && mrvmReadModelessWindowProgressFieldValue(firstId, "TICKS", debugTickTotal, debugTickValue) && debugTickValue == 2;
+				if (schedulerSkippedPausedCallback) {
+					TEvent continueEvent{};
+
+					continueEvent.what = evKeyDown;
+					continueEvent.keyDown.keyCode = kbF5;
+					callbackContinued = debuggerBento->handleMacroDebuggerFunctionKey(continueEvent) && continueEvent.what == evNothing;
+					for (int pumpCount = 0; callbackContinued && debuggerBento->macroDebuggerHasLiveSession() && pumpCount < 4; ++pumpCount)
+						debuggerBento->pumpMacroDebuggerSession();
+					callbackCompleted = callbackContinued && !debuggerBento->macroDebuggerHasLiveSession() && mrvmReadModelessWindowProgressFieldValue(firstId, "TICKS", debugTickTotal, debugTickValue) && debugTickTotal == 10 && debugTickValue == 3;
+				}
+			}
+		}
+		if (debugSessionId != 0) static_cast<void>(mrvmCloseDebugSession(debugSessionId));
+		if (debugTimerConsumerId != 0) removeRuntimeScheduledConsumer(debugTimerConsumerId);
+		static_cast<void>(mrvmEraseDebugLineBreakpointsForMacroFile(debugMacroName, nullptr));
+		if (debuggerBento != nullptr) destroyRegressionWindow(debuggerBento);
+		debuggerBento = nullptr;
+		if (!debuggerAttached || !schedulerSkippedPausedCallback || !callbackCompleted) {
+			message(firstWindow, evCommand, cmClose, nullptr);
+			message(secondWindow, evCommand, cmClose, nullptr);
+			failureReason = "An MMP timer breakpoint must pause in its observing debugger and resume through F5: due=" + std::to_string(debugTimerDue ? 1 : 0) + " attached=" + std::to_string(debuggerAttached ? 1 : 0) + " skipped=" + std::to_string(schedulerSkippedPausedCallback ? 1 : 0) + " continued=" + std::to_string(callbackContinued ? 1 : 0) + " completed=" + std::to_string(callbackCompleted ? 1 : 0) + " error=" + debugError;
+			return false;
+		}
 	}
 	timerConfig.owner.modelessWindowId = firstId;
 	timerConfig.consumerKey = "CloseCleanup";
@@ -4916,7 +4999,7 @@ int runMacroDebuggerF9RouteProbeMode() {
 		return 1;
 	}
 	outputText = outputEditor != nullptr ? outputEditor->snapshotText() : std::string();
-	if (outputText.find("State: stopped/no live session") == std::string::npos || outputText.find("F5 Pause/Continue unavailable") == std::string::npos || outputText.find("F8 Stop unavailable") == std::string::npos || outputText.find("F10 Step unavailable") == std::string::npos) {
+	if (outputText.find("State: stopped/no live session") == std::string::npos || outputText.find("F5 Pause/Continue unavailable") != std::string::npos || outputText.find("F8 Stop unavailable") != std::string::npos || outputText.find("F10 Step unavailable") != std::string::npos) {
 		destroyRegressionWindow(bento);
 		(void)::remove(macroPath.c_str());
 		std::cerr << "F8 stop did not close the live debug session. Output was: " << outputText << "\n";
@@ -10741,6 +10824,10 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	}
 	if (!containsAllSubstrings(source, {"MRPaneEditWindow::MRPaneEditWindow", "state &= static_cast<ushort>(~sfShadow);", "eventMask = 0;", "const bool withControls = focused;", "leaf.id == 0 && bentoMode != bbmDocumentViewports", "toggleLeafMaximized(int leafId) noexcept", "leafId == 0 && bentoMode != bbmDocumentViewports"}, missingNeedle)) {
 		failureReason = "Document viewport pane chrome and dispatcher ownership changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"class MRBentoPaneFrameView : public TView", "insertBefore(view, nullptr);", "view->hide();", "view->show();", "paneFrameViews[i]->drawView();", "TColorAttr MRBentoBox::paneFrameColor(bool focused)"}, missingNeedle)) {
+		failureReason = "Bento pane chrome must remain an attached, buffer-backed view: missing " + missingNeedle + ".";
 		return false;
 	}
 	if (!containsAllSubstrings(source, {"void MRBentoBox::drawSharedEditorPanes() noexcept", "leaf.spec.bufferPolicy == bpbSharedSourceBuffer", "targetPane->handleEvent(event);", "drawSharedEditorPanes();"}, missingNeedle)) {

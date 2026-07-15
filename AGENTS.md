@@ -66,6 +66,7 @@ Architecture contracts:
 - `documentation/architecture/settings-bootstrap-contract.md`
 - `documentation/architecture/settings-persistence-contract.md`
 - `documentation/architecture/mrmac-language-contract.md`
+- `documentation/architecture/mrmac-reference-manual-contract.md`
 - `documentation/architecture/vm-deferred-ui-contract.md`
 - `documentation/architecture/keymap-contract.md`
 - `documentation/architecture/coprocessor-deferred-ui-contract.md`
