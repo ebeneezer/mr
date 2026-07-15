@@ -7,6 +7,7 @@
 
 class MREditWindow;
 class MRBentoBox;
+class MRBentoHexEditor;
 class MRDesktopWindow;
 struct MRSetupPaths;
 
@@ -15,6 +16,7 @@ class MRWindowOpenBatch {
 	MRWindowOpenBatch();
 	void begin();
 	[[nodiscard]] MREditWindow *createEditorWindow(const char *title);
+	[[nodiscard]] MRBentoHexEditor *createHexEditorWindow(const char *title);
 	void finish(bool syncVisibility, bool notifyTopology);
 	[[nodiscard]] bool active() const noexcept;
 
@@ -32,6 +34,8 @@ class MRWindowOpenBatch {
 [[nodiscard]] MRBentoBox *createBentoBoxWindow(const char *title);
 [[nodiscard]] MRBentoBox *createFileCompareBentoBoxWindow(const char *title);
 [[nodiscard]] MRBentoBox *convertEditWindowToBentoBox(MREditWindow *source);
+[[nodiscard]] MRBentoHexEditor *convertEditWindowToHexEditor(MREditWindow *source);
+[[nodiscard]] bool mrDispatchDeferredWindowClose(MREditWindow *window);
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsInZOrder();
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsAndBentoPanesInZOrder();
 [[nodiscard]] std::vector<MRDesktopWindow *> allDesktopWindowsInZOrder();
@@ -49,6 +53,7 @@ class MRWindowOpenBatch {
 [[nodiscard]] bool hideCurrentDesktopWindow();
 [[nodiscard]] bool zoomCurrentDesktopWindow();
 void mrUpdateAllWindowsColorTheme();
+void mrRefreshAllHexEditorProjections();
 [[nodiscard]] bool handleWindowCascade();
 [[nodiscard]] bool handleWindowTile();
 void applyVirtualDesktopConfigurationChange(int count);

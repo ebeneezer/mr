@@ -87,6 +87,7 @@
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRBentoBox.hpp"
+#include "../ui/hex/MRBentoHexEditor.hpp"
 #include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../ui/widgets/MRColumnListView.hpp"
@@ -2990,6 +2991,16 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return bentoBox->splitActiveEditorPane(bppSplitRight);
 		}
 
+		case cmMrTextHexEditor: {
+			MREditWindow *window = currentEditWindow();
+
+			if (window == nullptr || convertEditWindowToHexEditor(window) == nullptr) postDialogWarning("Hex editor requires an editable document window without running external I/O.");
+			return true;
+		}
+
+		case cmMrDeferredWindowClose:
+			return mrDispatchDeferredWindowClose(static_cast<MREditWindow *>(commandInfo));
+
 		case cmMrWindowNextDesktop:
 			return viewportRight();
 
@@ -3014,6 +3025,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrSetupSearchAndReplaceDefaults: {
 			if (runSetupDialogCommand(command)) {
 				mrRefreshEditorApplicationUiSettingsSnapshot();
+				mrRefreshAllHexEditorProjections();
 				return true;
 			}
 			return false;

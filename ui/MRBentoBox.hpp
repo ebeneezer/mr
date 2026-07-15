@@ -35,7 +35,9 @@ enum MRBentoPaneRole {
 	bprFunctions,
 	bprSplitEditor,
 	bprDiffOriginal,
-	bprDiffCompare
+	bprDiffCompare,
+	bprExtensionFirst,
+	bprExtensionLast = bprExtensionFirst + 15
 };
 
 enum MRBentoPanePlacement {
@@ -184,15 +186,22 @@ class MRPaneEditWindow : public MREditWindow {
   public:
 	[[nodiscard]] bool paneOwned() const noexcept;
 	[[nodiscard]] MRBentoPaneRole paneRole() const noexcept;
-
-  private:
-	MRPaneEditWindow(const TRect &bounds, const char *title, int number);
 	virtual ~MRPaneEditWindow() override;
+
+  protected:
+	MRPaneEditWindow(const TRect &bounds, const char *title, int number);
 
 		virtual void changeBounds(const TRect &bounds) override;
 		virtual void draw() override;
 		virtual TColorAttr mapColor(uchar index) override;
 		virtual Boolean valid(ushort command) override;
+		virtual void cancelTransientInput() noexcept;
+		[[nodiscard]] virtual bool completeTransientInput() noexcept;
+		[[nodiscard]] virtual bool usesNativeEditorChrome() const noexcept;
+		[[nodiscard]] virtual bool ownsPaneWheelEvents() const noexcept;
+		static TFrame *initFrame(TRect bounds);
+
+  private:
 
 	void setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept;
 		void setPaneFocused(bool focused) noexcept;
@@ -200,7 +209,6 @@ class MRPaneEditWindow : public MREditWindow {
 		void layoutPaneChrome() noexcept;
 		void configurePaneScrollBarColors() noexcept;
 		void drawPaneScrollBars() noexcept;
-		static TFrame *initFrame(TRect bounds);
 
 	MRBentoPaneSpec mPaneSpec;
 	bool mPaneFocused;
@@ -280,6 +288,22 @@ class MRBentoBox : public MREditWindow {
 	virtual MREditWindow *editorCommandTarget() noexcept override;
 	virtual const MREditWindow *editorCommandTarget() const noexcept override;
 	virtual bool showsFrameGrowHandle() const noexcept override;
+
+  protected:
+	[[nodiscard]] virtual MRPaneEditWindow *createPaneWindow(const TRect &bounds, const char *title, int number, const MRBentoPaneSpec &spec);
+	[[nodiscard]] virtual bool primaryPaneUsesDedicatedWindow() const noexcept;
+	[[nodiscard]] virtual bool acceptsPaneRole(MRBentoPaneRole role) const noexcept;
+	[[nodiscard]] virtual const char *titleForPaneRole(MRBentoPaneRole role) const noexcept;
+	[[nodiscard]] virtual MRBentoPaneSpec paneSpecForRole(MRBentoPaneRole role) const noexcept;
+	virtual void activePaneRoleChanged(MRBentoPaneRole role) noexcept;
+	[[nodiscard]] virtual bool paneCloseActionEnabled() const noexcept;
+	[[nodiscard]] virtual bool paneMaximizeActionEnabled() const noexcept;
+	[[nodiscard]] virtual bool projectPaneDividerPosition(int nodeIndex, int position) noexcept;
+	void refreshPaneContentProjection() noexcept;
+	[[nodiscard]] int paneDividerPosition(int nodeIndex) const noexcept;
+	[[nodiscard]] bool setPaneDividerPositionForLayout(int nodeIndex, int position) noexcept;
+	[[nodiscard]] TRect paneLayoutBounds() const noexcept;
+	static TFrame *initFrame(TRect bounds);
 
   private:
 	enum BentoLayoutNodeKind {
@@ -403,7 +427,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] short paneRoleIndexAt(TPoint globalMouse);
 	void dragDivider(TEvent &event, int nodeIndex) noexcept;
 	void setDividerY(int y) noexcept;
-	void setDividerPosition(int nodeIndex, int position) noexcept;
+	void setDividerPosition(int nodeIndex, int position, bool markWorkspace) noexcept;
 	void setDividerPosition(int position) noexcept;
 	void setActivePane(int leafId) noexcept;
 	void updateActivePaneFrame() noexcept;
@@ -429,7 +453,6 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] int nodeIndexForLeaf(int leafId) const noexcept;
 	[[nodiscard]] int parentNodeOf(int childNodeIndex) const noexcept;
 	[[nodiscard]] int viewportNumberForLeaf(int leafId) const noexcept;
-	[[nodiscard]] TRect paneLayoutBounds() const noexcept;
 	[[nodiscard]] TRect nodeBounds(int nodeIndex) const noexcept;
 	[[nodiscard]] TRect contentBounds(const TRect &paneBounds) const noexcept;
 	[[nodiscard]] int createToolLeaf(MRBentoPaneRole role);
@@ -440,14 +463,11 @@ class MRBentoBox : public MREditWindow {
 	void collapseLeafNode(int leafId) noexcept;
 	void layoutNode(int nodeIndex, const TRect &bounds);
 	void ensurePaneFrameViews();
-	[[nodiscard]] MRBentoPaneSpec paneSpecForRole(MRBentoPaneRole role) const noexcept;
 	[[nodiscard]] std::string paneTitleForLeaf(const BentoLeaf &leaf) const;
 	[[nodiscard]] std::string fileCompareTextForRole(MRBentoPaneRole role, std::vector<unsigned char> *lineKinds = nullptr) const;
 	[[nodiscard]] std::vector<std::string> paneRoleChoices() const;
 	[[nodiscard]] std::vector<std::string> paneActionChoices() const;
 	[[nodiscard]] MRBentoPanePlacement panePlacementForAction(const std::string &action) const noexcept;
-
-	static TFrame *initFrame(TRect bounds);
 
 	struct BentoLeaf {
 		BentoLeaf() noexcept;

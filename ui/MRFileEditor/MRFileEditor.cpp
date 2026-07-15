@@ -54,7 +54,7 @@ MRFileEditor::DestructionProbe::~DestructionProbe() {
 }
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mLineDrawingEnabled(false), mLineDrawingDoubleLines(false), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualLine(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxState(), mFoldState(), mMiniMapState(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
+    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mForceBinarySave(false), mInsertMode(true), mLineDrawingEnabled(false), mLineDrawingDoubleLines(false), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualLine(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxState(), mFoldState(), mMiniMapState(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
       mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMouseSelectionColumnsValid(false), mMouseSelectionLinesValid(false), mMouseSelectionAnchorColumn(0), mMouseSelectionCursorColumn(0), mMouseSelectionAnchorLine(0), mMouseSelectionCursorLine(0), mMouseSelectionModifiers(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackCursor(false), mBlockOverlayColumnAnchor(-1), mBlockOverlayColumnEnd(-1), mBlockOverlayLineRangeValid(false), mBlockOverlayLine1(0), mBlockOverlayLine2(0), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
@@ -86,6 +86,14 @@ void MRFileEditor::setReadOnly(bool readOnly) {
 		if (mReadOnly) setDocumentModified(false);
 		syncFromEditorState(false);
 	}
+}
+
+void MRFileEditor::setForceBinarySave(bool enabled) noexcept {
+	mForceBinarySave = enabled;
+}
+
+bool MRFileEditor::forceBinarySave() const noexcept {
+	return mForceBinarySave;
 }
 
 const char *MRFileEditor::persistentFileName() const noexcept {

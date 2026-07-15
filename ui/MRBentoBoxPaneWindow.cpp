@@ -54,7 +54,7 @@ void MRPaneEditWindow::changeBounds(const TRect &bounds) {
 
 void MRPaneEditWindow::draw() {
 	MREditWindow::draw();
-	drawPaneScrollBars();
+	if (usesNativeEditorChrome()) drawPaneScrollBars();
 }
 
 TColorAttr MRPaneEditWindow::mapColor(uchar index) {
@@ -70,6 +70,22 @@ TColorAttr MRPaneEditWindow::mapColor(uchar index) {
 Boolean MRPaneEditWindow::valid(ushort command) {
 	if (command == cmClose) return True;
 	return MREditWindow::valid(command);
+}
+
+void MRPaneEditWindow::cancelTransientInput() noexcept {
+}
+
+bool MRPaneEditWindow::completeTransientInput() noexcept {
+	cancelTransientInput();
+	return true;
+}
+
+bool MRPaneEditWindow::usesNativeEditorChrome() const noexcept {
+	return true;
+}
+
+bool MRPaneEditWindow::ownsPaneWheelEvents() const noexcept {
+	return false;
 }
 
 void MRPaneEditWindow::setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept {
@@ -101,6 +117,7 @@ void MRPaneEditWindow::applyPanePolicy(const MRFileEditor *sourceEditor) noexcep
 }
 
 void MRPaneEditWindow::layoutPaneChrome() noexcept {
+	if (!usesNativeEditorChrome()) return;
 	TRect editorBounds(getExtent());
 	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
 	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
@@ -191,6 +208,7 @@ void MRPaneEditWindow::configurePaneScrollBarColors() noexcept {
 }
 
 void MRPaneEditWindow::drawPaneScrollBars() noexcept {
+	if (!usesNativeEditorChrome()) return;
 	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
 	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
 	const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;

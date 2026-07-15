@@ -37,6 +37,7 @@ template <class Duration> long long traceMicros(Duration duration) {
 
 bool MRFileEditor::resolveSaveOptionsForPath(const char *path, MRTextSaveOptions &options, std::size_t *optionsHash) const {
 	options = effectiveTextSaveOptionsForPath(path != nullptr ? path : "", optionsHash);
+	if (mForceBinarySave) options.binaryMode = true;
 	return true;
 }
 
