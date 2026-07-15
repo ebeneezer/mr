@@ -6,7 +6,7 @@
 #include <tvision/tv.h>
 
 #include "MRVMScreen.hpp"
-#include "../../ui/MREditWindow.hpp"
+#include "../../../ui/MREditWindow.hpp"
 
 bool mrvmUiSetCurrentWindow(const void *windowKey) {
 	MREditWindow *win;

@@ -2,6 +2,8 @@
 #define Uses_TInputLine
 #include "MRBentoBox.hpp"
 
+#include "MRBentoBoxDebuggerStatus.hpp"
+
 #include "MRFrame.hpp"
 
 #include "../app/commands/MRWindowCommands.hpp"
@@ -60,28 +62,6 @@ class MRMacroDebuggerValueInput : public TInputLine {
 
 namespace {
 
-const char *macroDebuggerStopReasonText(MRMacroDebugStopReason reason) noexcept {
-	switch (reason) {
-		case mrdStopBreakpoint:
-			return "breakpoint";
-		case mrdStopStep:
-			return "step";
-		case mrdStopPaused:
-			return "paused";
-		case mrdStopBudget:
-			return "running";
-		case mrdStopCompleted:
-			return "completed";
-		case mrdStopCancelled:
-			return "cancelled";
-		case mrdStopError:
-			return "error";
-		case mrdStopNone:
-		default:
-			return "none";
-	}
-}
-
 const char *macroDebuggerVariableTypeText(int type) noexcept {
 	switch (type) {
 		case TYPE_INT:
@@ -121,53 +101,6 @@ static const MacroDebuggerVariableGroup kMacroDebuggerVariableGroups[] = {
 	{mrdVariableClosure, "Closure"},
 	{mrdVariableSession, "Session"},
 };
-
-void appendMacroDebuggerControls(std::ostringstream &out, bool liveSession) {
-	out << "\nControls:\n";
-	if (liveSession) {
-		out << "F5 Pause/Continue\n";
-		out << "F8 Stop\n";
-		out << "F10 Into\n";
-		out << "F11 Over\n";
-		out << "Shift+F11 Out\n";
-	} else {
-		out << "F5 Pause/Continue unavailable\n";
-		out << "F6 Run Here\n";
-		out << "F8 Stop unavailable / Reset\n";
-		out << "F10 Step unavailable\n";
-	}
-	out << "F9 Toggle Breakpoint\n";
-	out << "Shift+F9 Enable/Disable Breakpoint\n";
-	out << "Alt+Shift+F9 Enable/Disable All Breakpoints\n";
-	out << "Ctrl+Shift+F9 Clear All Breakpoints\n";
-	out << "F7 Add Watch\n";
-	out << "Shift+F7 Remove Watch\n";
-}
-
-std::string macroDebuggerOutputText(const std::string &macroName, MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult, const std::string &errorMessage) {
-	std::ostringstream out;
-
-	out << "Macro Debugger\n";
-	out << "Macro: " << macroName << "\n";
-	if (sessionId != 0) out << "Session: #" << sessionId << "\n";
-	else
-		out << "Session: none\n";
-	out << "State: " << (debugResult.hadError ? "error" : (debugResult.cancelled ? "cancelled" : (debugResult.paused ? "paused" : "completed"))) << "\n";
-	out << "Stop: " << macroDebuggerStopReasonText(debugResult.stopReason) << "\n";
-	out << "Instruction offset: " << debugResult.instructionOffset << "\n";
-	out << "Stack depth: " << debugResult.stackDepth << "\n";
-	appendMacroDebuggerControls(out, debugResult.paused);
-	if (!errorMessage.empty()) {
-		out << "\nError:\n";
-		out << errorMessage << "\n";
-	}
-	if (!debugResult.logLines.empty()) {
-		out << "\nLog:\n";
-		for (const std::string &line : debugResult.logLines)
-			out << line << "\n";
-	}
-	return out.str();
-}
 
 std::string macroDebuggerWatchesText(const std::vector<MRMacroDebugWatchSnapshot> &snapshots, std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges,
 	                                 std::vector<std::pair<std::size_t, std::size_t>> &errorRanges) {
@@ -213,7 +146,8 @@ enum MacroDebuggerFunctionKeyAction {
 	mdfkaBreakpointAllToggle,
 	mdfkaBreakpointClearAll,
 	mdfkaAddWatch,
-	mdfkaEraseWatch
+	mdfkaEraseWatch,
+	mdfkaEvaluate
 };
 
 struct MacroDebuggerFunctionKeyDescriptor {
@@ -224,6 +158,7 @@ struct MacroDebuggerFunctionKeyDescriptor {
 };
 
 static const MacroDebuggerFunctionKeyDescriptor kMacroDebuggerFunctionKeys[] = {
+	{kbF4, 0, mdfkaEvaluate, true},
 	{kbF5, 0, mdfkaContinue, true},
 	{kbF6, 0, mdfkaRunHere, false},
 	{kbF8, 0, mdfkaStop, false},
@@ -239,6 +174,46 @@ static const MacroDebuggerFunctionKeyDescriptor kMacroDebuggerFunctionKeys[] = {
 };
 
 } // namespace
+
+bool MRBentoBox::macroDebuggerObservesSourcePath(const std::string &sourcePath) const noexcept {
+	return macroDebuggerActive && macroDebuggerSessionId == 0 && !macroDebuggerExecutionRunning && !sourcePath.empty() && macroDebuggerSourcePath == sourcePath;
+}
+
+bool MRBentoBox::acceptScheduledMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult) {
+	if (sessionId == 0 || !debugResult.paused || !macroDebuggerObservesSourcePath(debugResult.sourcePath)) return false;
+	macroDebuggerSessionId = sessionId;
+	macroDebuggerExecutionRunning = false;
+	cancelMacroDebuggerValueInput();
+	refreshMacroDebuggerVariables(debugResult.variables);
+	refreshMacroDebuggerRunMarkers(debugResult);
+	writeMacroDebuggerStatus(debugResult, std::string());
+	refreshMacroDebuggerBreakpointRanges();
+	refreshMacroDebuggerWatches();
+	bentoProjectionDirty |= bpdContent | bpdChrome;
+	flushBentoProjection();
+	return true;
+}
+
+void MRBentoBox::writeMacroDebuggerStatus(const MRMacroDebugRunResult &debugResult, const std::string &errorMessage) {
+	MREditWindow *outputWindow = debuggerOutputPane();
+	const std::string displayName = macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName;
+	const MRMacroExecutionSessionId displayedSessionId = debugResult.paused || debugResult.hadError ? macroDebuggerSessionId : 0;
+
+	if (outputWindow == nullptr) return;
+	static_cast<void>(outputWindow->replaceTextBuffer(mrMacroDebuggerStatusText(displayName, displayedSessionId, debugResult, errorMessage).c_str(), "Debugger Output"));
+	outputWindow->setReadOnly(true);
+	outputWindow->setFileChanged(false);
+}
+
+void MRBentoBox::writeMacroDebuggerNotice(const std::string &message) {
+	MREditWindow *outputWindow = debuggerOutputPane();
+	const std::string displayName = macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName;
+
+	if (outputWindow == nullptr) return;
+	static_cast<void>(outputWindow->replaceTextBuffer(mrMacroDebuggerNoticeText(displayName, macroDebuggerSessionId, message).c_str(), "Debugger Output"));
+	outputWindow->setReadOnly(true);
+	outputWindow->setFileChanged(false);
+}
 
 bool MRBentoBox::toggleMacroDebuggerBreakpointAtCursor() {
 	MRFileEditor *sourceEditor = getEditor();
@@ -285,7 +260,6 @@ bool MRBentoBox::toggleMacroDebuggerBreakpointAtCursor() {
 		}
 	}
 	if (activeBreakpointCount == 0) out << "  none\n";
-	appendMacroDebuggerControls(out, macroDebuggerSessionId != 0);
 	if (outputWindow != nullptr) {
 		static_cast<void>(outputWindow->replaceTextBuffer(out.str().c_str(), "Debugger Output"));
 		outputWindow->setReadOnly(true);
@@ -309,7 +283,6 @@ bool MRBentoBox::toggleMacroDebuggerBreakpointEnabledAtCursor() {
 	mrMarkWorkspaceAutosaveDirty("debugger breakpoint enabled", this);
 	refreshMacroDebuggerBreakpointRanges();
 	output << "Macro Debugger\nMacro: " << (macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName) << "\nSource line: " << line << "\nBreakpoint: " << (enabled ? "enabled" : "disabled") << "\n";
-	appendMacroDebuggerControls(output, macroDebuggerSessionId != 0);
 	if (outputWindow != nullptr) {
 		static_cast<void>(outputWindow->replaceTextBuffer(output.str().c_str(), "Debugger Output"));
 		outputWindow->setReadOnly(true);
@@ -330,7 +303,6 @@ bool MRBentoBox::toggleMacroDebuggerBreakpointsEnabled() {
 	mrMarkWorkspaceAutosaveDirty("debugger breakpoint toggle all", this);
 	refreshMacroDebuggerBreakpointRanges();
 	output << "Macro Debugger\nMacro: " << (macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName) << "\nBreakpoints: all " << (enabled ? "enabled" : "disabled") << "\n";
-	appendMacroDebuggerControls(output, macroDebuggerSessionId != 0);
 	if (outputWindow != nullptr) {
 		static_cast<void>(outputWindow->replaceTextBuffer(output.str().c_str(), "Debugger Output"));
 		outputWindow->setReadOnly(true);
@@ -350,7 +322,6 @@ bool MRBentoBox::eraseMacroDebuggerBreakpoints() {
 	mrMarkWorkspaceAutosaveDirty("debugger breakpoint clear all", this);
 	refreshMacroDebuggerBreakpointRanges();
 	output << "Macro Debugger\nMacro: " << (macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName) << "\nBreakpoints: all cleared\n";
-	appendMacroDebuggerControls(output, macroDebuggerSessionId != 0);
 	if (outputWindow != nullptr) {
 		static_cast<void>(outputWindow->replaceTextBuffer(output.str().c_str(), "Debugger Output"));
 		outputWindow->setReadOnly(true);
@@ -550,40 +521,48 @@ bool MRBentoBox::eraseMacroDebuggerWatch() {
 	return true;
 }
 
+bool MRBentoBox::evaluateMacroDebuggerExpression() {
+	char expression[256] = {};
+	MRMacroDebugWatchSnapshot snapshot;
+	std::ostringstream output;
+	std::string errorMessage;
+
+	if (!macroDebuggerActive || macroDebuggerSessionId == 0) return false;
+	if (macroDebuggerExecutionRunning) {
+		writeMacroDebuggerNotice("Evaluate requires a paused session.");
+		return false;
+	}
+	if (inputBox("MACRO DEBUGGER", "Evaluate expression", expression, sizeof(expression) - 1) == cmCancel) return true;
+	if (!mrvmEvaluateDebugExpression(macroDebuggerSessionId, expression, snapshot, &errorMessage)) {
+		writeMacroDebuggerNotice("Evaluate:\n" + (errorMessage.empty() ? "Debug session is not paused." : errorMessage));
+		return false;
+	}
+	output << "Evaluate:\n" << snapshot.expression << " = ";
+	if (!snapshot.errorText.empty())
+		output << "[error] " << snapshot.errorText;
+	else
+		output << "[" << macroDebuggerVariableTypeText(snapshot.type) << "] " << snapshot.valueText;
+	writeMacroDebuggerNotice(output.str());
+	return snapshot.errorText.empty();
+}
+
 bool MRBentoBox::continueMacroDebuggerSession() {
-	MREditWindow *outputWindow = debuggerOutputPane();
 	MRMacroDebugRunResult debugResult;
 	std::ostringstream log;
 	std::string errorMessage;
 	const std::string displayName = macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName;
-	const MRMacroExecutionSessionId renderedSessionId = macroDebuggerSessionId;
 
 	if (!macroDebuggerActive || macroDebuggerMacroKey.empty()) return false;
 	cancelMacroDebuggerValueInput();
 	if (macroDebuggerSessionId == 0) {
 		macroDebuggerStatus = "no live session";
-		if (outputWindow != nullptr) {
-			std::ostringstream out;
-
-			out << "Macro Debugger\n";
-			out << "Macro: " << displayName << "\n";
-			out << "Session: none\n";
-			out << "State: no live session\n";
-			appendMacroDebuggerControls(out, false);
-			static_cast<void>(outputWindow->replaceTextBuffer(out.str().c_str(), "Debugger Output"));
-			outputWindow->setReadOnly(true);
-			outputWindow->setFileChanged(false);
-		}
+		writeMacroDebuggerNotice("State: no live session");
 		return false;
 	}
 	if (macroDebuggerExecutionRunning) {
 		if (!mrvmRequestDebugPause(macroDebuggerSessionId, &errorMessage)) return false;
 		macroDebuggerStatus = "pause requested #" + std::to_string(macroDebuggerSessionId);
-		if (outputWindow != nullptr) {
-			static_cast<void>(outputWindow->replaceTextBuffer(("Macro Debugger\nMacro: " + displayName + "\nSession: #" + std::to_string(macroDebuggerSessionId) + "\nState: pause requested\n").c_str(), "Debugger Output"));
-			outputWindow->setReadOnly(true);
-			outputWindow->setFileChanged(false);
-		}
+		writeMacroDebuggerNotice("State: pause requested");
 		return true;
 	}
 	if (!mrvmScheduleDebugMacroContinue(macroDebuggerSessionId, macroDebuggerMacroKey, &errorMessage)) return false;
@@ -592,32 +571,21 @@ bool MRBentoBox::continueMacroDebuggerSession() {
 	log << "MACRODBG key stage=bento-continue macro=" << displayName << " session=" << macroDebuggerSessionId << " scheduled=yes";
 	if (!errorMessage.empty()) log << " error=" << errorMessage;
 	mrLogMessage(log.str());
-	if (outputWindow != nullptr) {
-		static_cast<void>(outputWindow->replaceTextBuffer(("Macro Debugger\nMacro: " + displayName + "\nSession: #" + std::to_string(renderedSessionId) + "\nState: running\nStop: running\n\nControls:\nF5 Pause\nF8 Stop\n").c_str(), "Debugger Output"));
-		outputWindow->setReadOnly(true);
-		outputWindow->setFileChanged(false);
-	}
+	writeMacroDebuggerNotice("State: running\nStop: running");
 	return true;
 }
 
 void MRBentoBox::pumpMacroDebuggerSession() {
-	MREditWindow *outputWindow = debuggerOutputPane();
 	MRMacroDebugRunResult debugResult;
 	std::string errorMessage;
-	const std::string displayName = macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName;
-	const MRMacroExecutionSessionId renderedSessionId = macroDebuggerSessionId;
 
 	if (!macroDebuggerExecutionRunning || macroDebuggerSessionId == 0) return;
 	if (!mrvmPumpDebugSession(macroDebuggerSessionId, macroDebuggerMacroKey, debugResult, &errorMessage)) return;
 	if (debugResult.stopReason == mrdStopBudget) return;
 	macroDebuggerExecutionRunning = false;
-	if (outputWindow != nullptr) {
-		static_cast<void>(outputWindow->replaceTextBuffer(macroDebuggerOutputText(displayName, renderedSessionId, debugResult, errorMessage).c_str(), "Debugger Output"));
-		outputWindow->setReadOnly(true);
-		outputWindow->setFileChanged(false);
-	}
 	refreshMacroDebuggerVariables(debugResult.variables);
 	refreshMacroDebuggerRunMarkers(debugResult);
+	writeMacroDebuggerStatus(debugResult, errorMessage);
 	refreshMacroDebuggerBreakpointRanges();
 	refreshMacroDebuggerWatches();
 	if (!debugResult.paused && !debugResult.hadError) macroDebuggerSessionId = 0;
@@ -626,30 +594,17 @@ void MRBentoBox::pumpMacroDebuggerSession() {
 }
 
 bool MRBentoBox::stepMacroDebuggerSession(MRMacroDebugStepMode mode) {
-	MREditWindow *outputWindow = debuggerOutputPane();
 	MRMacroDebugRunResult debugResult;
 	std::ostringstream log;
 	std::string errorMessage;
 	const std::string displayName = macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName;
-	const MRMacroExecutionSessionId renderedSessionId = macroDebuggerSessionId;
 
 	if (!macroDebuggerActive || macroDebuggerMacroKey.empty()) return false;
 	if (macroDebuggerExecutionRunning) return false;
 	cancelMacroDebuggerValueInput();
 	if (macroDebuggerSessionId == 0) {
 		macroDebuggerStatus = "no live session";
-		if (outputWindow != nullptr) {
-			std::ostringstream out;
-
-			out << "Macro Debugger\n";
-			out << "Macro: " << displayName << "\n";
-			out << "Session: none\n";
-			out << "State: no live session\n";
-			appendMacroDebuggerControls(out, false);
-			static_cast<void>(outputWindow->replaceTextBuffer(out.str().c_str(), "Debugger Output"));
-			outputWindow->setReadOnly(true);
-			outputWindow->setFileChanged(false);
-		}
+		writeMacroDebuggerNotice("State: no live session");
 		return false;
 	}
 	if (mode == mrdStepOver)
@@ -658,16 +613,12 @@ bool MRBentoBox::stepMacroDebuggerSession(MRMacroDebugStepMode mode) {
 		debugResult = mrvmStepOutDebugMacroByName(macroDebuggerSessionId, macroDebuggerMacroKey, &errorMessage);
 	else
 		debugResult = mrvmStepDebugMacroByName(macroDebuggerSessionId, macroDebuggerMacroKey, &errorMessage);
-	log << "MACRODBG key stage=bento-step-" << (mode == mrdStepOver ? "over" : (mode == mrdStepOut ? "out" : "into")) << " macro=" << displayName << " session=" << macroDebuggerSessionId << " paused=" << (debugResult.paused ? "yes" : "no") << " stop=" << macroDebuggerStopReasonText(debugResult.stopReason);
+	log << "MACRODBG key stage=bento-step-" << (mode == mrdStepOver ? "over" : (mode == mrdStepOut ? "out" : "into")) << " macro=" << displayName << " session=" << macroDebuggerSessionId << " paused=" << (debugResult.paused ? "yes" : "no") << " stop=" << mrMacroDebuggerStopReasonText(debugResult.stopReason);
 	if (!errorMessage.empty()) log << " error=" << errorMessage;
 	mrLogMessage(log.str());
-	if (outputWindow != nullptr) {
-		static_cast<void>(outputWindow->replaceTextBuffer(macroDebuggerOutputText(displayName, renderedSessionId, debugResult, errorMessage).c_str(), "Debugger Output"));
-		outputWindow->setReadOnly(true);
-		outputWindow->setFileChanged(false);
-	}
 	refreshMacroDebuggerVariables(debugResult.variables);
 	refreshMacroDebuggerRunMarkers(debugResult);
+	writeMacroDebuggerStatus(debugResult, errorMessage);
 	refreshMacroDebuggerBreakpointRanges();
 	refreshMacroDebuggerWatches();
 	if (!debugResult.paused && !debugResult.hadError) macroDebuggerSessionId = 0;
@@ -675,7 +626,6 @@ bool MRBentoBox::stepMacroDebuggerSession(MRMacroDebugStepMode mode) {
 }
 
 bool MRBentoBox::stopMacroDebuggerSession() {
-	MREditWindow *outputWindow = debuggerOutputPane();
 	MREditWindow *variablesWindow = variablesPane();
 	MRFileEditor *sourceEditor = getEditor();
 	std::ostringstream log;
@@ -693,18 +643,7 @@ bool MRBentoBox::stopMacroDebuggerSession() {
 	refreshMacroDebuggerBreakpointRanges();
 	log << "MACRODBG key stage=bento-stop macro=" << displayName << " session=" << stoppedSessionId << " closed=" << (closed ? "yes" : "no");
 	mrLogMessage(log.str());
-	if (outputWindow != nullptr) {
-		std::ostringstream out;
-
-		out << "Macro Debugger\n";
-		out << "Macro: " << displayName << "\n";
-		out << "Session: none\n";
-		out << "State: stopped/no live session\n";
-		appendMacroDebuggerControls(out, false);
-		static_cast<void>(outputWindow->replaceTextBuffer(out.str().c_str(), "Debugger Output"));
-		outputWindow->setReadOnly(true);
-		outputWindow->setFileChanged(false);
-	}
+	writeMacroDebuggerNotice("State: stopped/no live session");
 	if (variablesWindow != nullptr) {
 		static_cast<void>(variablesWindow->replaceTextBuffer("Variables\n\n(no live session)\n", "Variables"));
 		variablesWindow->setReadOnly(true);
@@ -718,7 +657,6 @@ bool MRBentoBox::stopMacroDebuggerSession() {
 }
 
 bool MRBentoBox::startMacroDebuggerSession(int temporaryStopLine) {
-	MREditWindow *outputWindow = debuggerOutputPane();
 	MRMacroExecutionSession session;
 	MRMacroDebugRunResult debugResult;
 	std::ostringstream log;
@@ -772,36 +710,21 @@ bool MRBentoBox::startMacroDebuggerSession(int temporaryStopLine) {
 	if (temporaryStopLine > 0) log << " line=" << temporaryStopLine;
 	if (!errorMessage.empty()) log << " error=" << errorMessage;
 	mrLogMessage(log.str());
-	if (outputWindow != nullptr) {
-		static_cast<void>(outputWindow->replaceTextBuffer(macroDebuggerOutputText(displayName, session.sessionId, debugResult, errorMessage).c_str(), "Debugger Output"));
-		outputWindow->setReadOnly(true);
-		outputWindow->setFileChanged(false);
-	}
 	refreshMacroDebuggerVariables(debugResult.variables);
 	refreshMacroDebuggerRunMarkers(debugResult);
+	writeMacroDebuggerStatus(debugResult, errorMessage);
 	refreshMacroDebuggerWatches();
 	return !debugResult.hadError;
 }
 
 void MRBentoBox::restoreMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration) {
-	MREditWindow *outputWindow = debuggerOutputPane();
 	MREditWindow *variablesWindow = variablesPane();
-	std::ostringstream output;
 
 	macroDebuggerWorkspacePending = configuration;
 	setMacroDebuggerTarget(configuration.macroKey, configuration.macroName);
 	macroDebuggerSessionId = 0;
 	macroDebuggerStatus = "config restored/no-live";
-	output << "Macro Debugger\n";
-	output << "Macro: " << (macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName) << "\n";
-	output << "Session: none\n";
-	output << "State: debug config restored, no live session\n";
-	appendMacroDebuggerControls(output, false);
-	if (outputWindow != nullptr) {
-		static_cast<void>(outputWindow->replaceTextBuffer(output.str().c_str(), "Debugger Output"));
-		outputWindow->setReadOnly(true);
-		outputWindow->setFileChanged(false);
-	}
+	writeMacroDebuggerNotice("State: debug config restored, no live session");
 	if (variablesWindow != nullptr) {
 		static_cast<void>(variablesWindow->replaceTextBuffer("Variables\n\n(no live session)\n", "Variables"));
 		variablesWindow->setReadOnly(true);
@@ -843,7 +766,7 @@ void MRBentoBox::refreshMacroDebuggerRunMarkers(const MRMacroDebugRunResult &deb
 		else if (debugResult.stopReason == mrdStopCompleted)
 			status << "completed/no-live";
 		else {
-			status << macroDebuggerStopReasonText(debugResult.stopReason);
+			status << mrMacroDebuggerStopReasonText(debugResult.stopReason);
 			status << "/no-live";
 		}
 		status << " #" << macroDebuggerSessionId;
@@ -919,6 +842,9 @@ bool MRBentoBox::handleMacroDebuggerFunctionKey(TEvent &event) {
 		return true;
 	}
 	switch (descriptor->action) {
+		case mdfkaEvaluate:
+			static_cast<void>(evaluateMacroDebuggerExpression());
+			break;
 		case mdfkaContinue:
 			static_cast<void>(continueMacroDebuggerSession());
 			break;

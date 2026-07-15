@@ -1,12 +1,13 @@
 #include "MRVMMacroDialogRuntime.hpp"
 
-#include "MRVMModelessUiRuntime.hpp"
+#include "../modeless/MRMacroModelessControls.hpp"
+#include "../modeless/MRVMModelessUiRuntime.hpp"
 #include "MRVMScreen.hpp"
-#include "MRVMValue.hpp"
+#include "../../vm/MRVMValue.hpp"
 
-#include "../../app/utils/MRStringUtils.hpp"
-#include "../../dialogs/setup/MRSetupCommon.hpp"
-#include "../../ui/MRWindowSupport.hpp"
+#include "../../../app/utils/MRStringUtils.hpp"
+#include "../../../dialogs/setup/MRSetupCommon.hpp"
+#include "../../../ui/MRWindowSupport.hpp"
 
 #define Uses_TButton
 #define Uses_TDeskTop
@@ -53,12 +54,6 @@ struct MacroStringInputRequest {
 struct MacroUiButtonCaption {
 	std::string displayLabel;
 	std::vector<ushort> hotKeys;
-};
-
-struct MacroUiGridItem {
-	std::string label;
-	std::string text;
-	std::string detail;
 };
 
 ushort macroNamedHotKeyCode(const std::string &name) noexcept {
@@ -285,292 +280,6 @@ std::string runMacroStringInputDialog(const MacroStringInputRequest &request) {
 	return value;
 }
 
-class MacroUiListView final : public TListViewer {
-  public:
-	MacroUiListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> items, ushort command) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), items(std::move(items)), command(command) {
-		setRange(static_cast<short>(this->items.size()));
-	}
-
-	void getText(char *dest, short item, short maxLen) override {
-		if (dest == nullptr || maxLen <= 0) return;
-		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) {
-			dest[0] = EOS;
-			return;
-		}
-		std::strncpy(dest, items[static_cast<std::size_t>(item)].c_str(), static_cast<std::size_t>(maxLen - 1));
-		dest[maxLen - 1] = EOS;
-	}
-
-	void handleEvent(TEvent &event) override {
-		TListViewer::handleEvent(event);
-		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && owner != nullptr) {
-			message(owner, evCommand, command, this);
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evMouseDown && (event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr) {
-			message(owner, evCommand, command, this);
-			clearEvent(event);
-		}
-	}
-
-	const std::vector<std::string> &values() const noexcept {
-		return items;
-	}
-
-  private:
-	std::vector<std::string> items;
-	ushort command = 0;
-};
-
-MacroUiGridItem parseMacroUiGridItem(const std::string &source) {
-	MacroUiGridItem item;
-	const std::size_t firstTab = source.find('\t');
-	const std::size_t secondTab = firstTab != std::string::npos ? source.find('\t', firstTab + 1) : std::string::npos;
-
-	if (firstTab == std::string::npos) {
-		item.label = source;
-		item.text = source;
-		return item;
-	}
-	item.label = source.substr(0, firstTab);
-	if (secondTab == std::string::npos) {
-		item.text = source.substr(firstTab + 1);
-		return item;
-	}
-	item.text = source.substr(firstTab + 1, secondTab - firstTab - 1);
-	item.detail = source.substr(secondTab + 1);
-	return item;
-}
-
-std::vector<MacroUiGridItem> parseMacroUiGridItems(const std::vector<std::string> &values) {
-	std::vector<MacroUiGridItem> items;
-
-	items.reserve(values.size());
-	for (std::size_t index = 0; index < values.size(); ++index)
-		items.push_back(parseMacroUiGridItem(values[index]));
-	return items;
-}
-
-class MacroUiGridView final : public TView {
-  public:
-	MacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command) : TView(bounds), items(parseMacroUiGridItems(values)), scrollBar(scrollBar), command(command) {
-		options |= ofSelectable;
-		eventMask |= evMouseDown | evMouseWheel | evKeyDown | evBroadcast;
-		updateScrollBar();
-	}
-
-	void draw() override {
-		TDrawBuffer row;
-		const TColorAttr normal = getColor(1);
-		const TColorAttr selected = getColor(3);
-		const short blankRow = size.y > 1 ? size.y - 2 : 0;
-		const short detailRow = size.y > 0 ? size.y - 1 : 0;
-
-		updateScrollBar();
-		for (short y = 0; y < size.y; ++y) {
-			row.moveChar(0, ' ', normal, size.x);
-			writeLine(0, y, size.x, 1, row);
-		}
-		for (std::size_t index = 0; index < items.size(); ++index) {
-			const int rowIndex = static_cast<int>(index) / columns() - scrollOffset;
-			const int colIndex = static_cast<int>(index) % columns();
-			const short x = static_cast<short>(gridLeftOffset() + colIndex * cellWidth);
-			const short y = static_cast<short>(rowIndex);
-			if (y < 0 || y >= blankRow || x >= size.x) continue;
-			drawCell(index, x, y, index == selectedIndex ? selected : normal);
-		}
-		drawDetail(detailRow, normal);
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evMouseDown && containsMouse(event)) {
-			TPoint local = makeLocal(event.mouse.where);
-			const int gridLeft = gridLeftOffset();
-			if (local.x >= gridLeft && local.x < gridLeft + gridWidth()) {
-				const int col = cellWidth > 0 ? (local.x - gridLeft) / cellWidth : 0;
-				const int row = local.y + scrollOffset;
-				const std::size_t index = static_cast<std::size_t>(row * columns() + col);
-				if (index < items.size()) {
-					selectedIndex = index;
-					ensureSelectedVisible();
-					drawView();
-					if ((event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr) message(owner, evCommand, command, this);
-				}
-			}
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evMouseWheel && containsMouse(event)) {
-			const int step = event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft ? -1 : 1;
-			setScrollOffset(scrollOffset + step);
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evKeyDown) {
-			const ushort arrow = ctrlToArrow(event.keyDown.keyCode);
-			if (moveSelection(arrow)) {
-				clearEvent(event);
-				return;
-			}
-			if (arrow == kbEnter && owner != nullptr) {
-				message(owner, evCommand, command, this);
-				clearEvent(event);
-				return;
-			}
-		}
-		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged && event.message.infoPtr == scrollBar) {
-			setScrollOffset(scrollBar != nullptr ? scrollBar->value : 0);
-			clearEvent(event);
-			return;
-		}
-		TView::handleEvent(event);
-	}
-
-	void focusIndex(int start) {
-		if (items.empty()) {
-			selectedIndex = 0;
-			scrollOffset = 0;
-		} else
-			selectedIndex = static_cast<std::size_t>(std::clamp(start, 1, static_cast<int>(items.size())) - 1);
-		ensureSelectedVisible();
-		drawView();
-	}
-
-	[[nodiscard]] int selectedIndexValue() const noexcept {
-		return items.empty() ? 0 : static_cast<int>(selectedIndex + 1);
-	}
-
-	[[nodiscard]] std::string selectedText() const {
-		return selectedIndex < items.size() ? items[selectedIndex].text : std::string();
-	}
-
-  private:
-	[[nodiscard]] int columns() const noexcept {
-		return std::max(1, (static_cast<int>(size.x) - 1) / cellWidth);
-	}
-
-	[[nodiscard]] int gridWidth() const noexcept {
-		return std::max(0, columns() * cellWidth);
-	}
-
-	[[nodiscard]] int gridLeftOffset() const noexcept {
-		return std::max(0, (static_cast<int>(size.x) - gridWidth()) / 2);
-	}
-
-	void drawCell(std::size_t index, short x, short y, TColorAttr attr) {
-		TDrawBuffer cell;
-		std::string text = items[index].label;
-		if (static_cast<int>(text.size()) + 1 < cellWidth) text = " " + text;
-		cell.moveChar(0, ' ', attr, static_cast<ushort>(cellWidth));
-		cell.moveStr(0, text.c_str(), attr, static_cast<ushort>(cellWidth));
-		writeLine(x, y, static_cast<short>(std::min(cellWidth, static_cast<int>(size.x - x))), 1, cell);
-	}
-
-	void drawDetail(short y, TColorAttr attr) {
-		if (items.empty() || y < 0 || y >= size.y) return;
-		TDrawBuffer row;
-		std::string text = items[selectedIndex].label;
-		if (!items[selectedIndex].detail.empty()) {
-			if (!text.empty()) text += " ";
-			text += items[selectedIndex].detail;
-		}
-		const int detailWidth = strwidth(text.c_str());
-		const int start = std::max(0, (static_cast<int>(size.x) - detailWidth) / 2);
-		row.moveChar(0, ' ', attr, size.x);
-		row.moveStr(static_cast<ushort>(start), text.c_str(), attr, static_cast<ushort>(std::max(0, size.x - start)));
-		writeLine(0, y, size.x, 1, row);
-	}
-
-	bool moveSelection(ushort keyCode) {
-		if (items.empty()) return false;
-		std::size_t next = selectedIndex;
-		const int cols = columns();
-		const int pageStep = std::max(cols, cols * 4);
-
-		switch (keyCode) {
-			case kbLeft:
-				next = selectedIndex == 0 ? items.size() - 1 : selectedIndex - 1;
-				break;
-			case kbRight:
-				next = (selectedIndex + 1) % items.size();
-				break;
-			case kbUp:
-				next = selectedIndex < static_cast<std::size_t>(cols) ? selectedIndex : selectedIndex - static_cast<std::size_t>(cols);
-				break;
-			case kbDown:
-				next = std::min(items.size() - 1, selectedIndex + static_cast<std::size_t>(cols));
-				break;
-			case kbHome:
-				next = 0;
-				break;
-			case kbEnd:
-				next = items.size() - 1;
-				break;
-			case kbPgUp:
-				next = selectedIndex < static_cast<std::size_t>(pageStep) ? 0 : selectedIndex - static_cast<std::size_t>(pageStep);
-				break;
-			case kbPgDn:
-				next = std::min(items.size() - 1, selectedIndex + static_cast<std::size_t>(pageStep));
-				break;
-			default:
-				return false;
-		}
-		if (next != selectedIndex) {
-			selectedIndex = next;
-			ensureSelectedVisible();
-			drawView();
-		}
-		return true;
-	}
-
-	[[nodiscard]] int totalRows() const noexcept {
-		const int cols = columns();
-		return cols <= 0 ? 0 : static_cast<int>((items.size() + static_cast<std::size_t>(cols - 1)) / static_cast<std::size_t>(cols));
-	}
-
-	[[nodiscard]] int visibleRows() const noexcept {
-		return std::max(1, static_cast<int>(size.y) - 2);
-	}
-
-	[[nodiscard]] int maxScrollOffset() const noexcept {
-		return std::max(0, totalRows() - visibleRows());
-	}
-
-	void setScrollOffset(int offset) {
-		const int clamped = std::max(0, std::min(offset, maxScrollOffset()));
-		if (clamped == scrollOffset) return;
-		scrollOffset = clamped;
-		updateScrollBar();
-		drawView();
-	}
-
-	void updateScrollBar() {
-		if (scrollBar == nullptr) return;
-		scrollBar->setParams(scrollOffset, 0, maxScrollOffset(), visibleRows(), 1);
-	}
-
-	void ensureSelectedVisible() {
-		if (items.empty()) {
-			scrollOffset = 0;
-			updateScrollBar();
-			return;
-		}
-		const int row = static_cast<int>(selectedIndex) / columns();
-		if (row < scrollOffset) scrollOffset = row;
-		else if (row >= scrollOffset + visibleRows())
-			scrollOffset = row - visibleRows() + 1;
-		scrollOffset = std::max(0, std::min(scrollOffset, maxScrollOffset()));
-		updateScrollBar();
-	}
-
-	std::vector<MacroUiGridItem> items;
-	TScrollBar *scrollBar = nullptr;
-	ushort command = 0;
-	std::size_t selectedIndex = 0;
-	int scrollOffset = 0;
-	static constexpr int cellWidth = 4;
-};
 
 class MacroUiDisplayLine final : public TView {
   public:
@@ -629,14 +338,14 @@ class MacroUiDialog final : public MRDialogFoundation {
 			const std::vector<std::string> items = mrvmResolveMacroUiListItems(runtimeKv, listBox.itemSpec);
 			const int listTop = listBox.label.empty() ? listBox.y : listBox.y + 1;
 			TScrollBar *scrollBar = nullptr;
-			MacroUiListView *listView = nullptr;
+			TView *listView = nullptr;
 
 			if (!listBox.label.empty()) insert(new TStaticText(TRect(listBox.x, listBox.y, listBox.x + strwidth(listBox.label.c_str()), listBox.y + 1), listBox.label.c_str()));
 			scrollBar = new TScrollBar(TRect(listBox.x + listBox.width - 1, listTop, listBox.x + listBox.width, listTop + listBox.height));
 			insert(scrollBar);
-			listView = new MacroUiListView(TRect(listBox.x, listTop, listBox.x + listBox.width - 1, listTop + listBox.height), scrollBar, items, nextCommand);
+			listView = createMacroUiListView(TRect(listBox.x, listTop, listBox.x + listBox.width - 1, listTop + listBox.height), scrollBar, items, nextCommand);
 			insert(listView);
-			if (!items.empty()) listView->focusItemNum(static_cast<short>(std::clamp(listBox.start, 1, static_cast<int>(items.size())) - 1));
+			setMacroUiListItems(listView, items, listBox.start);
 			commandToId[nextCommand] = listBox.id;
 			listViews.emplace_back(listBox.id, listView);
 			++nextCommand;
@@ -647,16 +356,50 @@ class MacroUiDialog final : public MRDialogFoundation {
 			const std::vector<std::string> items = mrvmResolveMacroUiListItems(runtimeKv, grid.itemSpec);
 			const int gridTop = grid.label.empty() ? grid.y : grid.y + 1;
 			TScrollBar *scrollBar = nullptr;
-			MacroUiGridView *gridView = nullptr;
+			TView *gridView = nullptr;
 
 			if (!grid.label.empty()) insert(new TStaticText(TRect(grid.x, grid.y, grid.x + strwidth(grid.label.c_str()), grid.y + 1), grid.label.c_str()));
 			scrollBar = new TScrollBar(TRect(grid.x + grid.width - 1, gridTop, grid.x + grid.width, gridTop + grid.height));
 			insert(scrollBar);
-			gridView = new MacroUiGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand);
+			gridView = createMacroUiGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand);
 			insert(gridView);
-			gridView->focusIndex(grid.start);
+			setMacroUiGridItems(gridView, items, grid.start);
 			commandToId[nextCommand] = grid.id;
 			gridViews.emplace_back(grid.id, gridView);
+			++nextCommand;
+		}
+
+		for (std::size_t index = 0; index < definition.trees.size(); ++index) {
+			const MacroUiTreeSpec &tree = definition.trees[index];
+			const std::vector<std::string> items = mrvmResolveMacroUiListItems(runtimeKv, tree.itemSpec);
+			const int treeTop = tree.label.empty() ? tree.y : tree.y + 1;
+			TScrollBar *scrollBar = new TScrollBar(TRect(tree.x + tree.width - 1, treeTop, tree.x + tree.width, treeTop + tree.height));
+			TView *treeView = nullptr;
+
+			if (!tree.label.empty()) insert(new TStaticText(TRect(tree.x, tree.y, tree.x + strwidth(tree.label.c_str()), tree.y + 1), tree.label.c_str()));
+			insert(scrollBar);
+			treeView = createMacroUiTreeView(TRect(tree.x, treeTop, tree.x + tree.width - 1, treeTop + tree.height), scrollBar, items, nextCommand);
+			insert(treeView);
+			setMacroUiTreeItems(treeView, items, tree.start);
+			commandToId[nextCommand] = tree.id;
+			treeViews.emplace_back(tree.id, treeView);
+			++nextCommand;
+		}
+
+		for (std::size_t index = 0; index < definition.tables.size(); ++index) {
+			const MacroUiTableSpec &table = definition.tables[index];
+			const std::vector<std::string> items = mrvmResolveMacroUiListItems(runtimeKv, table.itemSpec);
+			const int tableTop = table.label.empty() ? table.y : table.y + 1;
+			TScrollBar *scrollBar = new TScrollBar(TRect(table.x + table.width - 1, tableTop, table.x + table.width, tableTop + table.height));
+			TView *tableView = nullptr;
+
+			if (!table.label.empty()) insert(new TStaticText(TRect(table.x, table.y, table.x + strwidth(table.label.c_str()), table.y + 1), table.label.c_str()));
+			insert(scrollBar);
+			tableView = createMacroUiTableView(TRect(table.x, tableTop, table.x + table.width - 1, tableTop + table.height), scrollBar, items, nextCommand);
+			insert(tableView);
+			setMacroUiTableItems(tableView, items, table.start);
+			commandToId[nextCommand] = table.id;
+			tableViews.emplace_back(table.id, tableView);
 			++nextCommand;
 		}
 
@@ -718,19 +461,31 @@ class MacroUiDialog final : public MRDialogFoundation {
 		}
 		for (std::size_t rowIndex = 0; rowIndex < listViews.size(); ++rowIndex) {
 			const int id = listViews[rowIndex].first;
-			MacroUiListView *listView = listViews[rowIndex].second;
-			const int selectedIndex = listView != nullptr ? listView->focused + 1 : 0;
+			TView *listView = listViews[rowIndex].second;
+			const int selectedIndex = macroUiListSelectedIndex(listView);
 			indexValues[id] = std::max(0, selectedIndex);
-			if (listView != nullptr && selectedIndex > 0 && static_cast<std::size_t>(selectedIndex - 1) < listView->values().size()) textValues[id] = listView->values()[static_cast<std::size_t>(selectedIndex - 1)];
-			else
-				textValues[id].clear();
+			textValues[id] = macroUiListSelectedText(listView);
 		}
 		for (std::size_t rowIndex = 0; rowIndex < gridViews.size(); ++rowIndex) {
 			const int id = gridViews[rowIndex].first;
-			MacroUiGridView *gridView = gridViews[rowIndex].second;
-			const int selectedIndex = gridView != nullptr ? gridView->selectedIndexValue() : 0;
+			TView *gridView = gridViews[rowIndex].second;
+			const int selectedIndex = macroUiGridSelectedIndex(gridView);
 			indexValues[id] = std::max(0, selectedIndex);
-			textValues[id] = gridView != nullptr ? gridView->selectedText() : std::string();
+			textValues[id] = macroUiGridSelectedText(gridView);
+		}
+		for (std::size_t rowIndex = 0; rowIndex < treeViews.size(); ++rowIndex) {
+			const int id = treeViews[rowIndex].first;
+			TView *treeView = treeViews[rowIndex].second;
+
+			indexValues[id] = macroUiTreeSelectedIndex(treeView);
+			textValues[id] = macroUiTreeSelectedText(treeView);
+		}
+		for (std::size_t rowIndex = 0; rowIndex < tableViews.size(); ++rowIndex) {
+			const int id = tableViews[rowIndex].first;
+			TView *tableView = tableViews[rowIndex].second;
+
+			indexValues[id] = macroUiTableSelectedIndex(tableView);
+			textValues[id] = macroUiTableSelectedText(tableView);
 		}
 	}
 
@@ -739,8 +494,10 @@ class MacroUiDialog final : public MRDialogFoundation {
 	std::map<ushort, int> commandToId;
 	std::vector<std::pair<ushort, ushort>> buttonHotKeys;
 	std::vector<std::pair<int, TInputLine *>> inputLines;
-	std::vector<std::pair<int, MacroUiListView *>> listViews;
-	std::vector<std::pair<int, MacroUiGridView *>> gridViews;
+	std::vector<std::pair<int, TView *>> listViews;
+	std::vector<std::pair<int, TView *>> gridViews;
+	std::vector<std::pair<int, TView *>> treeViews;
+	std::vector<std::pair<int, TView *>> tableViews;
 };
 
 }
@@ -754,7 +511,7 @@ std::vector<std::string> mrvmResolveMacroUiListItems(MRVMRuntimeKv &runtimeKv, c
 }
 
 std::string mrvmMacroUiGridItemText(const std::string &source) {
-	return parseMacroUiGridItem(source).text;
+	return macroUiGridItemText(source);
 }
 
 void mrvmBeginMacroUiDialog(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
@@ -803,19 +560,26 @@ void mrvmAddMacroUiInput(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &arg
 	mrvmModelessUiAppendInput(runtimeKv, spec);
 }
 
+static MacroUiSelectionSpec macroUiSelectionSpec(const std::vector<Value> &args, int minimumHeight) {
+	MacroUiSelectionSpec spec;
+
+	spec.x = mrvmValueAsInt(args[0]);
+	spec.y = mrvmValueAsInt(args[1]);
+	spec.width = std::max(8, mrvmValueAsInt(args[2]));
+	spec.height = std::max(minimumHeight, mrvmValueAsInt(args[3]));
+	spec.id = mrvmValueAsInt(args[4]);
+	spec.label = mrvmValueAsString(args[5]);
+	spec.itemSpec = mrvmValueAsString(args[6]);
+	spec.start = std::max(1, mrvmValueAsInt(args[7]));
+	return spec;
+}
+
 void mrvmAddMacroUiListBox(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
 	MacroUiListBoxSpec spec;
 	const std::vector<std::string> items = mrvmResolveMacroUiListItems(runtimeKv, mrvmValueAsString(args[6]));
 	int selectedIndex = 0;
 
-	spec.x = mrvmValueAsInt(args[0]);
-	spec.y = mrvmValueAsInt(args[1]);
-	spec.width = std::max(8, mrvmValueAsInt(args[2]));
-	spec.height = std::max(2, mrvmValueAsInt(args[3]));
-	spec.id = mrvmValueAsInt(args[4]);
-	spec.label = mrvmValueAsString(args[5]);
-	spec.itemSpec = mrvmValueAsString(args[6]);
-	spec.start = std::max(1, mrvmValueAsInt(args[7]));
+	spec = macroUiSelectionSpec(args, 2);
 	if (!items.empty()) selectedIndex = std::min(static_cast<int>(items.size()), spec.start);
 	mrvmModelessUiWriteIndexValue(runtimeKv, spec.id, selectedIndex);
 	mrvmModelessUiWriteTextValue(runtimeKv, spec.id, selectedIndex > 0 ? items[static_cast<std::size_t>(selectedIndex - 1)] : std::string());
@@ -827,18 +591,37 @@ void mrvmAddMacroUiGrid(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args
 	const std::vector<std::string> items = mrvmResolveMacroUiListItems(runtimeKv, mrvmValueAsString(args[6]));
 	int selectedIndex = 0;
 
-	spec.x = mrvmValueAsInt(args[0]);
-	spec.y = mrvmValueAsInt(args[1]);
-	spec.width = std::max(8, mrvmValueAsInt(args[2]));
-	spec.height = std::max(3, mrvmValueAsInt(args[3]));
-	spec.id = mrvmValueAsInt(args[4]);
-	spec.label = mrvmValueAsString(args[5]);
-	spec.itemSpec = mrvmValueAsString(args[6]);
-	spec.start = std::max(1, mrvmValueAsInt(args[7]));
+	spec = macroUiSelectionSpec(args, 3);
 	if (!items.empty()) selectedIndex = std::min(static_cast<int>(items.size()), spec.start);
 	mrvmModelessUiWriteIndexValue(runtimeKv, spec.id, selectedIndex);
 	mrvmModelessUiWriteTextValue(runtimeKv, spec.id, selectedIndex > 0 ? mrvmMacroUiGridItemText(items[static_cast<std::size_t>(selectedIndex - 1)]) : std::string());
 	mrvmModelessUiAppendGrid(runtimeKv, spec);
+}
+
+void mrvmAddMacroUiTree(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
+	MacroUiTreeSpec spec = macroUiSelectionSpec(args, 2);
+	const std::vector<std::string> items = mrvmResolveMacroUiListItems(runtimeKv, spec.itemSpec);
+	const int selectedIndex = items.empty() ? 0 : std::min(static_cast<int>(items.size()), spec.start);
+
+	if (!macroUiTreeItemsValid(items)) throw std::runtime_error("UI_TREE expects a tree created with UI_TREE_NODE.");
+	mrvmModelessUiWriteIndexValue(runtimeKv, spec.id, selectedIndex);
+	mrvmModelessUiWriteTextValue(runtimeKv, spec.id, std::string());
+	mrvmModelessUiAppendTree(runtimeKv, spec);
+}
+
+void mrvmAddMacroUiTable(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
+	MacroUiTableSpec spec = macroUiSelectionSpec(args, 3);
+	const std::vector<std::string> items = mrvmResolveMacroUiListItems(runtimeKv, spec.itemSpec);
+	int rowCount = 0;
+
+	for (std::size_t index = 0; index < items.size(); ++index)
+		if (items[index].compare(0, 10, "TABLE_ROW\t") == 0) ++rowCount;
+	const int selectedIndex = rowCount > 0 ? std::min(rowCount, spec.start) : 0;
+
+	if (!macroUiTableItemsValid(items)) throw std::runtime_error("UI_TABLE expects columns and rows created with UI_TABLE_COLUMN and UI_TABLE_ROW.");
+	mrvmModelessUiWriteIndexValue(runtimeKv, spec.id, selectedIndex);
+	mrvmModelessUiWriteTextValue(runtimeKv, spec.id, std::string());
+	mrvmModelessUiAppendTable(runtimeKv, spec);
 }
 
 void mrvmClearMacroUiItemList(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
@@ -855,92 +638,65 @@ void mrvmAddMacroUiItemListValue(MRVMRuntimeKv &runtimeKv, const std::vector<Val
 	mrvmModelessUiAddItemListValue(runtimeKv, key, mrvmValueAsString(args[1]));
 }
 
+void mrvmClearMacroUiTree(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
+	const std::string key = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
+
+	if (key.empty()) throw std::runtime_error("UI_TREE_CLEAR expects a non-empty tree name.");
+	mrvmModelessUiClearItemList(runtimeKv, key);
+}
+
+void mrvmAddMacroUiTreeNode(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
+	const std::string key = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
+	const std::string nodeId = mrvmValueAsString(args[1]);
+	const std::string parentId = mrvmValueAsString(args[2]);
+	const std::string text = mrvmValueAsString(args[3]);
+	std::vector<std::string> values;
+
+	if (key.empty() || nodeId.empty() || text.empty() || nodeId.find('\t') != std::string::npos || parentId.find('\t') != std::string::npos || text.find('\t') != std::string::npos) throw std::runtime_error("UI_TREE_NODE expects a tree name, node id and text without tab characters.");
+	static_cast<void>(mrvmModelessUiReadItemList(runtimeKv, key, values));
+	values.push_back(macroUiTreeNodeItem(nodeId, parentId, text, mrvmValueAsInt(args[4]) != 0));
+	if (!macroUiTreeItemsValid(values)) throw std::runtime_error("UI_TREE_NODE expects unique nodes whose parent was declared earlier in the same tree.");
+	mrvmModelessUiAddItemListValue(runtimeKv, key, values.back());
+}
+
+void mrvmClearMacroUiTable(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
+	const std::string key = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
+
+	if (key.empty()) throw std::runtime_error("UI_TABLE_CLEAR expects a non-empty table name.");
+	mrvmModelessUiClearItemList(runtimeKv, key);
+}
+
+void mrvmAddMacroUiTableColumn(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
+	const std::string key = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
+	const std::string title = mrvmValueAsString(args[1]);
+	std::vector<std::string> values;
+
+	if (key.empty() || title.empty() || title.find('\t') != std::string::npos || mrvmValueAsInt(args[2]) < 1 || mrvmValueAsInt(args[2]) > 80) throw std::runtime_error("UI_TABLE_COLUMN expects a table name, title without tabs and a width from 1 through 80.");
+	static_cast<void>(mrvmModelessUiReadItemList(runtimeKv, key, values));
+	values.push_back(macroUiTableColumnItem(title, mrvmValueAsInt(args[2])));
+	if (!macroUiTableItemsValid(values)) throw std::runtime_error("UI_TABLE_COLUMN must precede all rows and a table is limited to 16 columns.");
+	mrvmModelessUiAddItemListValue(runtimeKv, key, values.back());
+}
+
+void mrvmAddMacroUiTableRow(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
+	const std::string key = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
+	const std::string rowId = mrvmValueAsString(args[1]);
+	const std::string cells = mrvmValueAsString(args[2]);
+	std::vector<std::string> values;
+
+	if (key.empty() || rowId.empty() || rowId.find('\t') != std::string::npos) throw std::runtime_error("UI_TABLE_ROW expects a table name and row id without tabs.");
+	static_cast<void>(mrvmModelessUiReadItemList(runtimeKv, key, values));
+	values.push_back(macroUiTableRowItem(rowId, cells));
+	if (!macroUiTableItemsValid(values)) throw std::runtime_error("UI_TABLE_ROW expects exactly one tab-separated cell per declared column and at most 512 rows.");
+	mrvmModelessUiAddItemListValue(runtimeKv, key, values.back());
+}
+
 void mrvmBindMacroModelessButton(MRVMRuntimeKv &runtimeKv, const std::vector<Value> &args) {
 	const int buttonId = mrvmValueAsInt(args[0]);
 	const std::string macroSpec = mrvmValueAsString(args[1]);
 
 	if (buttonId <= 0) throw std::runtime_error("UI_MODELESS_ON expects a positive control id.");
 	mrvmModelessUiWriteModelessMacro(runtimeKv, buttonId, macroSpec);
-}
-
-MRMacroModelessWindowDefinition mrvmBuildMacroModelessDefinition(MRVMRuntimeKv &runtimeKv, const std::string &windowId) {
-	MRMacroModelessWindowDefinition definition;
-	MacroUiDialogDefinition dialog = mrvmModelessUiReadDialogDefinition(runtimeKv);
-
-	definition.x = dialog.x;
-	definition.y = dialog.y;
-	definition.width = dialog.width;
-	definition.height = dialog.height;
-	definition.windowId = windowId;
-	definition.title = dialog.title;
-
-	for (std::size_t labelIndex = 0; labelIndex < dialog.labels.size(); ++labelIndex) {
-		const MacroUiLabelSpec &label = dialog.labels[labelIndex];
-		MRMacroModelessLabelSpec entry;
-		entry.x = label.x;
-		entry.y = label.y;
-		entry.text = label.text;
-		definition.labels.push_back(std::move(entry));
-	}
-
-	for (std::size_t displayIndex = 0; displayIndex < dialog.displays.size(); ++displayIndex) {
-		const MacroUiDisplaySpec &display = dialog.displays[displayIndex];
-		MRMacroModelessDisplaySpec entry;
-		entry.x = display.x;
-		entry.y = display.y;
-		entry.width = display.width;
-		entry.text = display.text;
-		definition.displays.push_back(std::move(entry));
-	}
-
-	for (std::size_t listBoxIndex = 0; listBoxIndex < dialog.listBoxes.size(); ++listBoxIndex) {
-		const MacroUiListBoxSpec &listBox = dialog.listBoxes[listBoxIndex];
-		MRMacroModelessListBoxSpec entry;
-		entry.x = listBox.x;
-		entry.y = listBox.y;
-		entry.width = listBox.width;
-		entry.height = listBox.height;
-		entry.id = listBox.id;
-		entry.label = listBox.label;
-		entry.itemSpec = listBox.itemSpec;
-		entry.start = listBox.start;
-		definition.listBoxes.push_back(std::move(entry));
-	}
-
-	for (std::size_t gridIndex = 0; gridIndex < dialog.grids.size(); ++gridIndex) {
-		const MacroUiGridSpec &grid = dialog.grids[gridIndex];
-		MRMacroModelessGridSpec entry;
-		std::map<int, std::string>::const_iterator macroIt;
-
-		entry.x = grid.x;
-		entry.y = grid.y;
-		entry.width = grid.width;
-		entry.height = grid.height;
-		entry.id = grid.id;
-		entry.label = grid.label;
-		entry.itemSpec = grid.itemSpec;
-		macroIt = dialog.modelessButtonMacros.find(grid.id);
-		entry.macroSpec = macroIt != dialog.modelessButtonMacros.end() ? macroIt->second : std::string();
-		entry.start = grid.start;
-		definition.grids.push_back(std::move(entry));
-	}
-
-	for (std::size_t buttonIndex = 0; buttonIndex < dialog.buttons.size(); ++buttonIndex) {
-		const MacroUiButtonSpec &button = dialog.buttons[buttonIndex];
-		MRMacroModelessButtonSpec entry;
-		std::map<int, std::string>::const_iterator macroIt;
-
-		entry.x = button.x;
-		entry.y = button.y;
-		entry.width = button.width;
-		entry.id = button.id;
-		entry.text = button.text;
-		macroIt = dialog.modelessButtonMacros.find(button.id);
-		entry.macroSpec = macroIt != dialog.modelessButtonMacros.end() ? macroIt->second : std::string();
-		definition.buttons.push_back(std::move(entry));
-	}
-
-	return definition;
 }
 
 int mrvmRunMacroUiDialogDefinition(MRVMRuntimeKv &runtimeKv) {

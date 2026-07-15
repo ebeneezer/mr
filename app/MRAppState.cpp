@@ -10,6 +10,7 @@
 namespace {
 struct AppCommandState {
 	MREditWindow *window;
+	MRDesktopWindow *desktopWindow;
 	std::size_t windowCount;
 	bool isMinimizedWindow;
 	bool hasEditableWindow;
@@ -33,7 +34,7 @@ struct AppCommandState {
 	bool hasCompilerProblems;
 	bool hasFileCompareWindow;
 
-	AppCommandState() : window(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false), hasFileCompareWindow(false) {
+	AppCommandState() : window(nullptr), desktopWindow(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false), hasFileCompareWindow(false) {
 	}
 };
 
@@ -49,12 +50,14 @@ AppCommandState appCommandState() {
 	MREditWindow *editorWin = currentEditorCommandWindow();
 
 	state.window = win;
-	state.windowCount = allEditWindowsInZOrder().size();
+	state.desktopWindow = currentDesktopWindow();
+	state.windowCount = allDesktopWindowsInZOrder().size();
 	for (MREditWindow *window : allEditWindowsInZOrder())
 		if (window != nullptr && window->isFileChanged() && !window->isReadOnly()) {
 			state.hasAnyDirtyWindow = true;
 			break;
 		}
+	state.isMinimizedWindow = state.desktopWindow != nullptr && state.desktopWindow->desktopMinimized();
 	if (win == nullptr) return state;
 	MREditWindow *externalWin = win;
 	for (TView *view = win; view != nullptr; view = view->owner) {
@@ -78,7 +81,6 @@ AppCommandState appCommandState() {
 		if (bentoBox->buildOutputPane() != nullptr) externalWin = bentoBox->buildOutputPane();
 	}
 
-	state.isMinimizedWindow = win->isMinimized();
 	state.hasReadOnlyWindow = editorWin == nullptr || editorWin->isReadOnly();
 	state.hasEditableWindow = !state.hasReadOnlyWindow;
 	state.hasDirtyWindow = editorWin != nullptr && editorWin->isFileChanged();
@@ -102,8 +104,8 @@ AppCommandState appCommandState() {
 
 void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	AppCommandState state = appCommandState();
-	bool hasWindow = state.window != nullptr;
-	bool hasEditor = hasWindow;
+	bool hasWindow = state.desktopWindow != nullptr;
+	bool hasEditor = state.window != nullptr;
 	bool canModify = hasEditor && state.hasEditableWindow;
 	bool canSaveAs = hasEditor && (state.hasEditableWindow || state.isLogWindow);
 	bool hasMultipleWindows = state.windowCount > 1;
@@ -149,13 +151,13 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrWindowRestore, hasWindow && state.isMinimizedWindow);
 	setCommandEnabled(cmMrWindowCascade, hasWindow);
 	setCommandEnabled(cmMrWindowTile, hasWindow);
-	setCommandEnabled(cmMrWindowSplitHorizontal, hasWindow);
-	setCommandEnabled(cmMrWindowSplitVertical, hasWindow);
+	setCommandEnabled(cmMrWindowSplitHorizontal, hasEditor);
+	setCommandEnabled(cmMrWindowSplitVertical, hasEditor);
 	{
 		const int currentDesktop = currentVirtualDesktop();
 		const bool hasMultipleDesktops = desktopCount > 1;
 		const bool cyclicViewport = hasMultipleDesktops && cyclicVirtualDesktops;
-		const int windowDesktop = hasWindow ? state.window->mVirtualDesktop : 1;
+		const int windowDesktop = hasWindow ? state.desktopWindow->desktopIndex() : 1;
 
 		setCommandEnabled(cmMrWindowNextDesktop, hasMultipleDesktops && (currentDesktop < desktopCount || cyclicViewport));
 		setCommandEnabled(cmMrWindowPrevDesktop, hasMultipleDesktops && (currentDesktop > 1 || cyclicViewport));
@@ -163,7 +165,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 		setCommandEnabled(cmMrWindowMoveToPrevDesktop, hasWindow && hasMultipleDesktops && windowDesktop > 1);
 	}
 	setCommandEnabled(cmMrWindowLink, hasMultipleWindows && hasEditor);
-	setCommandEnabled(cmMrWindowUnlink, hasWindow);
+	setCommandEnabled(cmMrWindowUnlink, hasEditor);
 
 	setCommandEnabled(cmMrBlockCopy, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockMove, canModify && state.hasBlock);
@@ -220,6 +222,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrMacroDebuggerAddWatch, hasEditor);
 	setCommandEnabled(cmMrMacroDebuggerEraseWatch, hasEditor);
 	setCommandEnabled(cmMrMacroDebuggerRunHere, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerEvaluate, hasEditor);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
 	setCommandEnabled(cmMrOtherLocalOutline, hasEditor);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);

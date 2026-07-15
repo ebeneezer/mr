@@ -1,6 +1,6 @@
 #include "MRVMKeymapRuntime.hpp"
 
-#include "MRVMEditor.hpp"
+#include "../ui/conventional/MRVMEditor.hpp"
 #include "MRVMValue.hpp"
 
 #include "../../app/utils/MRStringUtils.hpp"

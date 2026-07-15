@@ -1,0 +1,84 @@
+$MACRO_FILE MmpCanvasDemo;
+
+$MACRO MmpCanvasDemo FROM EDIT;
+DEF_STR(FirstWindow, SecondWindow, MenuWindow);
+
+FirstWindow := MMP_WINDOW_INSTANCE('MmpCanvas');
+SET_GLOBAL_STR('MMP_CANVAS_DEMO_WINDOW', FirstWindow);
+SET_GLOBAL_INT('MMP_CANVAS_DEMO_TICKS', 0);
+UI_DIALOG(2, 2, 38, 24, 'MMP CANVAS ONE');
+UI_LABEL(2, 1, 'Retained modeless canvas');
+MMP_CANVAS(2, 3, 34, 6, 'Main');
+MMP_STATUS_FIELD(2, 10, 34, 'Activity', 'Use Refresh or the canvas action');
+MMP_CANVAS_HOTSPOT('Main', 2, 4, 12, 1, 41, 'MmpCanvasDemo^MmpCanvasDemoHit');
+MMP_ACTION_BUTTON(2, 12, 12, 42, '~R~efresh', 'MmpCanvasDemo^MmpCanvasDemoHit');
+MMP_PROGRESS_FIELD(2, 14, 16, 'Ticks', 'Ticks', 10, 0);
+MMP_LOG_FIELD(2, 16, 34, 4, 'Events', 'Events', 8);
+UI_MODELESS_SHOW(FirstWindow);
+MMP_TIMER_START(FirstWindow, 'Status', 1000, 'MmpCanvasDemo^MmpCanvasDemoTick');
+MMP_LOG_APPEND(FirstWindow, 'Events', 'Timer started');
+
+MMP_CANVAS_CLEAR(FirstWindow, 'Main', MMP_STYLE_SURFACE());
+MMP_CANVAS_FILL(FirstWindow, 'Main', 1, 1, 32, 3, MMP_STYLE_MUTED());
+MMP_CANVAS_BOX(FirstWindow, 'Main', 0, 0, 34, 6, MMP_STYLE_ACCENT());
+MMP_CANVAS_TEXT(FirstWindow, 'Main', 2, 1, MMP_STYLE_TEXT(), 'MRMAC modeless primitives');
+MMP_CANVAS_LINE(FirstWindow, 'Main', 2, 3, 31, 3, MMP_STYLE_ACCENT(), '-');
+MMP_CANVAS_TEXT(FirstWindow, 'Main', 2, 4, MMP_STYLE_TEXT(), 'Instance one');
+MMP_CANVAS_COMMIT(FirstWindow, 'Main');
+
+SecondWindow := MMP_WINDOW_INSTANCE('MmpCanvas');
+UI_DIALOG(40, 4, 38, 14, 'MMP CANVAS TWO');
+UI_LABEL(2, 1, 'Independent retained canvas');
+MMP_CANVAS(2, 3, 34, 6, 'Main');
+UI_MODELESS_SHOW(SecondWindow);
+
+MMP_CANVAS_CLEAR(SecondWindow, 'Main', MMP_STYLE_SURFACE());
+MMP_CANVAS_FILL(SecondWindow, 'Main', 1, 1, 32, 3, MMP_STYLE_MUTED());
+MMP_CANVAS_BOX(SecondWindow, 'Main', 0, 0, 34, 6, MMP_STYLE_ACCENT());
+MMP_CANVAS_TEXT(SecondWindow, 'Main', 2, 1, MMP_STYLE_TEXT(), 'MRMAC modeless primitives');
+MMP_CANVAS_LINE(SecondWindow, 'Main', 2, 3, 31, 3, MMP_STYLE_ACCENT(), '-');
+MMP_CANVAS_TEXT(SecondWindow, 'Main', 2, 4, MMP_STYLE_TEXT(), 'Instance two');
+MMP_CANVAS_COMMIT(SecondWindow, 'Main');
+
+MenuWindow := MMP_WINDOW_INSTANCE('MmpMenu');
+SET_GLOBAL_STR('MMP_CANVAS_DEMO_MENU_WINDOW', MenuWindow);
+MMP_MENU_CLEAR('MmpDemoActions');
+MMP_MENU_ITEM('MmpDemoActions', 'Refresh', 'REFRESH', 'Update the activity field');
+MMP_MENU_ITEM('MmpDemoActions', 'Close', 'CLOSE', 'Demonstrate a stable action value');
+UI_DIALOG(40, 19, 38, 30, 'MMP ACTION MENU');
+MMP_ACTION_MENU(2, 2, 34, 8, 61, 'Actions', 'MmpDemoActions', 'MmpCanvasDemo^MmpCanvasDemoMenu');
+MMP_TEXT_FIELD(2, 11, 24, 'Note', 'Note', 'Type a note');
+MMP_STATUS_FIELD(2, 13, 34, 'Selection', 'Choose an action');
+MMP_BOOL_FIELD(2, 15, 'Verbose', '~V~erbose callbacks', 1);
+MMP_SELECT_FIELD(2, 17, 34, 3, 'Mode', 'Mode', 'Normal');
+MMP_SELECT_OPTION('Mode', 'Normal');
+MMP_SELECT_OPTION('Mode', 'Verbose');
+MMP_SELECT_OPTION('Mode', 'Quiet');
+MMP_INT_FIELD(2, 21, 6, 'Retries', 'Retries', 3, 0, 9);
+MMP_LOG_FIELD(2, 23, 34, 4, 'Events', 'Events', 8);
+UI_MODELESS_SHOW(MenuWindow);
+MMP_LOG_APPEND(MenuWindow, 'Events', 'Action menu initialized');
+END_MACRO;
+
+$MACRO MmpCanvasDemoHit;
+MMP_STATUS_SET(GLOBAL_STR('MMP_CANVAS_DEMO_WINDOW'), 'Activity', 'Canvas/action activated');
+MMP_LOG_APPEND(GLOBAL_STR('MMP_CANVAS_DEMO_WINDOW'), 'Events', 'Canvas/action activated');
+END_MACRO;
+
+$MACRO MmpCanvasDemoTick;
+DEF_INT(Ticks);
+
+Ticks := GLOBAL_INT('MMP_CANVAS_DEMO_TICKS') + 1;
+IF Ticks > 10 THEN
+    Ticks := 0;
+END;
+SET_GLOBAL_INT('MMP_CANVAS_DEMO_TICKS', Ticks);
+MMP_STATUS_SET(GLOBAL_STR('MMP_CANVAS_DEMO_WINDOW'), 'Activity', 'Timer tick ' + STR(Ticks));
+MMP_PROGRESS_SET(GLOBAL_STR('MMP_CANVAS_DEMO_WINDOW'), 'Ticks', Ticks);
+MMP_LOG_APPEND(GLOBAL_STR('MMP_CANVAS_DEMO_WINDOW'), 'Events', 'Timer tick ' + STR(Ticks));
+END_MACRO;
+
+$MACRO MmpCanvasDemoMenu;
+MMP_STATUS_SET(GLOBAL_STR('MMP_CANVAS_DEMO_MENU_WINDOW'), 'Selection', MMP_TEXT_VALUE(GLOBAL_STR('MMP_CANVAS_DEMO_MENU_WINDOW'), 'Note') + ': ' + UI_TEXT(61) + ' verbose=' + STR(MMP_BOOL_VALUE(GLOBAL_STR('MMP_CANVAS_DEMO_MENU_WINDOW'), 'Verbose')) + ' mode=' + MMP_SELECT_VALUE(GLOBAL_STR('MMP_CANVAS_DEMO_MENU_WINDOW'), 'Mode') + ' retries=' + STR(MMP_INT_VALUE(GLOBAL_STR('MMP_CANVAS_DEMO_MENU_WINDOW'), 'Retries')));
+MMP_LOG_APPEND(GLOBAL_STR('MMP_CANVAS_DEMO_MENU_WINDOW'), 'Events', 'Action: ' + UI_TEXT(61));
+END_MACRO;

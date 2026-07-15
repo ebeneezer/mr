@@ -612,14 +612,10 @@ void cancelForegroundMacroDelays() {
 	}
 }
 
-std::size_t requestMacroExecutionCancellationForBuffer(int bufferId) {
-	MRMacroExecutionOwner owner;
+std::size_t requestMacroExecutionCancellationForOwner(const MRMacroExecutionOwner &owner) {
 	std::vector<MRMacroExecutionSession> activeSessions;
 	std::size_t cancelledCount = 0;
 
-	if (bufferId <= 0) return 0;
-	owner.hasBuffer = true;
-	owner.bufferId = bufferId;
 	activeSessions = activeMacroExecutionSessionsForOwner(owner);
 	for (std::size_t index = 0; index < activeSessions.size(); ++index) {
 		const MRMacroExecutionSession &session = activeSessions[index];
@@ -631,6 +627,15 @@ std::size_t requestMacroExecutionCancellationForBuffer(int bufferId) {
 	}
 	cancelledCount += cancelForegroundMacroDelaysForOwner(owner);
 	return cancelledCount;
+}
+
+std::size_t requestMacroExecutionCancellationForBuffer(int bufferId) {
+	MRMacroExecutionOwner owner;
+
+	if (bufferId <= 0) return 0;
+	owner.hasBuffer = true;
+	owner.bufferId = bufferId;
+	return requestMacroExecutionCancellationForOwner(owner);
 }
 
 bool runMacroFileByPathRouted(const char *path, bool forceUiThread, std::string *errorMessage, bool showErrorDialogs) {
@@ -790,9 +795,11 @@ bool runMacroSpecByNameAsExecutionSession(const char *macroSpec, MRMacroExecutio
 	return true;
 }
 
-bool runMacroSpecByNameAsExecutionSessionForOwner(const char *macroSpec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
+namespace {
+bool runMacroSpecByNameAsExecutionSessionForOwnerRouted(const char *macroSpec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs, bool forceUiThread) {
 	std::string spec = macroSpec != nullptr ? trimPathInput(macroSpec) : std::string();
 	std::string runnerSource;
+	MRMacroExecutionProfile uiThreadProfile;
 
 	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
 	if (errorMessage != nullptr) errorMessage->clear();
@@ -802,12 +809,21 @@ bool runMacroSpecByNameAsExecutionSessionForOwner(const char *macroSpec, const M
 		return false;
 	}
 	runnerSource = "$MACRO ScheduledMacroLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(spec) + "');\nEND_MACRO;\n";
-	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), nullptr, errorMessage, showErrorDialogs, sessionOut, &owner, nullptr, nullptr, false)) {
+	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), forceUiThread ? &uiThreadProfile : nullptr, errorMessage, showErrorDialogs, sessionOut, &owner, nullptr, nullptr, false)) {
 		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
 		return false;
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
+}
+} // namespace
+
+bool runMacroSpecByNameAsExecutionSessionForOwner(const char *macroSpec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
+	return runMacroSpecByNameAsExecutionSessionForOwnerRouted(macroSpec, owner, sessionOut, errorMessage, showErrorDialogs, false);
+}
+
+bool runMacroSpecByNameAsExecutionSessionForOwnerOnUiThread(const char *macroSpec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
+	return runMacroSpecByNameAsExecutionSessionForOwnerRouted(macroSpec, owner, sessionOut, errorMessage, showErrorDialogs, true);
 }
 
 bool runMacroFileByPath(const char *path) {

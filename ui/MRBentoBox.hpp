@@ -232,6 +232,8 @@ class MRBentoBox : public MREditWindow {
 		void restoreMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration);
 		void setMacroDebuggerSession(MRMacroExecutionSessionId sessionId) noexcept;
 		void setMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const std::vector<MRMacroDebugVariableSnapshot> &variables);
+		[[nodiscard]] bool macroDebuggerObservesSourcePath(const std::string &sourcePath) const noexcept;
+		[[nodiscard]] bool acceptScheduledMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult);
 	void refreshMacroDebuggerRunMarkers(const MRMacroDebugRunResult &debugResult);
 	void refreshMacroDebuggerWatches();
 	[[nodiscard]] bool macroDebuggerFunctionKeysActive() const noexcept;
@@ -331,8 +333,8 @@ class MRBentoBox : public MREditWindow {
 		void configureSourcePaneScrollBarColors() noexcept;
 		void drawSourcePaneScrollBars() noexcept;
 		void drawSharedEditorPanes() noexcept;
+		TColorAttr paneFrameColor(bool focused);
 	void drawPaneFrames() noexcept;
-	void drawPaneFrame(std::size_t leafIndex) noexcept;
 	void postCloseCommand() noexcept;
 	void closePane(int leafId) noexcept;
 	void closeSecondaryPane() noexcept;
@@ -354,11 +356,14 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool runMacroDebuggerToCursor();
 	[[nodiscard]] bool addMacroDebuggerWatch();
 	[[nodiscard]] bool eraseMacroDebuggerWatch();
+	[[nodiscard]] bool evaluateMacroDebuggerExpression();
 	void refreshMacroDebuggerVariables(const std::vector<MRMacroDebugVariableSnapshot> &variables);
 	[[nodiscard]] bool showMacroDebuggerValueInputAtCursor();
 	[[nodiscard]] bool macroDebuggerValueInputContains(const TPoint &point) const noexcept;
 	void commitMacroDebuggerValueInput();
 	void cancelMacroDebuggerValueInput() noexcept;
+	void writeMacroDebuggerStatus(const MRMacroDebugRunResult &debugResult, const std::string &errorMessage);
+	void writeMacroDebuggerNotice(const std::string &message);
 	void refreshMacroDebuggerBreakpointRanges();
 	[[nodiscard]] bool startMacroDebuggerSession(int temporaryStopLine);
 	void refreshOutlinePanes(bool force = false);

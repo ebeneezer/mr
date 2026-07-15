@@ -159,18 +159,20 @@ class MRBentoPaneFrameView : public TView {
 		hitMaximize
 	};
 
-	explicit MRBentoPaneFrameView(const TRect &bounds) noexcept : TView(bounds), leafId(-1), focused(false), source(false), maximized(false), roleListTitleOpen(false), roleListTitleX(0), roleListTitleWidth(0), title("Pane") {
-		eventMask = evMouseDown;
+	explicit MRBentoPaneFrameView(const TRect &bounds) noexcept : TView(bounds), leafId(-1), focused(false), source(false), maximized(false), roleListTitleOpen(false), roleListTitleX(0), roleListTitleWidth(0), borderColor(0), title("Pane") {
+		eventMask = 0;
+		options &= static_cast<ushort>(~(ofSelectable | ofTopSelect));
 	}
 
-	void setPane(int nextLeafId, const char *nextTitle, bool isSource, bool isFocused, bool isMaximized) {
+	void setPane(int nextLeafId, const char *nextTitle, bool isSource, bool isFocused, bool isMaximized, TColorAttr nextBorderColor) {
 		std::string newTitle = nextTitle != nullptr && *nextTitle != '\0' ? nextTitle : "Pane";
-		if (leafId == nextLeafId && title == newTitle && source == isSource && focused == isFocused && maximized == isMaximized) return;
+		if (leafId == nextLeafId && title == newTitle && source == isSource && focused == isFocused && maximized == isMaximized && borderColor == nextBorderColor) return;
 		leafId = nextLeafId;
 		title = newTitle;
 		source = isSource;
 		focused = isFocused;
 		maximized = isMaximized;
+		borderColor = nextBorderColor;
 	}
 
 	int paneLeafId() const noexcept {
@@ -207,7 +209,7 @@ class MRBentoPaneFrameView : public TView {
 
 	virtual void draw() override {
 		TDrawBuffer buffer;
-		const TAttrPair frameColor = TAttrPair(owner != nullptr ? owner->mapColor(focused ? 13 : 1) : mapColor(1));
+		const TAttrPair frameColor = TAttrPair(borderColor);
 		const Layout layout = paneChromeLayout();
 
 		for (int y = 0; y < size.y; ++y) {
@@ -292,6 +294,7 @@ class MRBentoPaneFrameView : public TView {
 	bool roleListTitleOpen;
 	int roleListTitleX;
 	int roleListTitleWidth;
+	TColorAttr borderColor;
 	std::string title;
 };
 
@@ -1050,6 +1053,8 @@ void MRBentoBox::initializeLayoutTree() noexcept {
 void MRBentoBox::ensurePaneFrameViews() {
 	while (paneFrameViews.size() < leaves.size()) {
 		MRBentoPaneFrameView *view = new MRBentoPaneFrameView(TRect(0, 0, 0, 0));
+		view->hide();
+		insertBefore(view, nullptr);
 		paneFrameViews.push_back(view);
 	}
 }
@@ -1063,6 +1068,8 @@ void MRBentoBox::layoutSplitPanes() {
 			if (leaf.id == 0) leaf.bounds = inner;
 			if (leaf.pane != nullptr) leaf.pane->hide();
 		}
+		for (MRBentoPaneFrameView *view : paneFrameViews)
+			if (view != nullptr) view->hide();
 		activeLeafId = 0;
 		maximizedLeafId = -1;
 		secondaryPaneVisible = false;
@@ -1096,20 +1103,23 @@ void MRBentoBox::layoutSplitPanes() {
 		MRBentoPaneFrameView *view = i < paneFrameViews.size() ? paneFrameViews[i] : nullptr;
 		if (leaf.visible) {
 			const TRect content = contentBounds(leaf.bounds);
+			const bool focused = leaf.id == activeLeafId && (state & sfFocused) != 0;
 			if (leaf.id == 0) {
 				layoutSourcePaneChrome(content);
 			} else if (leaf.pane != nullptr) {
-				leaf.pane->setPaneFocused(leaf.id == activeLeafId && (state & sfFocused) != 0);
+				leaf.pane->setPaneFocused(focused);
 				leaf.pane->show();
 				leaf.pane->changeBounds(content);
 			}
 			if (view != nullptr) {
 				view->changeBounds(leaf.bounds);
-				view->setPane(leaf.id, paneTitleForLeaf(leaf).c_str(), leaf.id == 0 && bentoMode != bbmDocumentViewports, leaf.id == activeLeafId && (state & sfFocused) != 0, leaf.id == maximizedLeafId);
+				view->setPane(leaf.id, paneTitleForLeaf(leaf).c_str(), leaf.id == 0 && bentoMode != bbmDocumentViewports, focused, leaf.id == maximizedLeafId, paneFrameColor(focused));
+				view->show();
 			}
 		} else {
 			if (leaf.id == 0) hideSourcePaneChrome();
 			if (leaf.pane != nullptr) leaf.pane->hide();
+			if (view != nullptr) view->hide();
 		}
 	}
 	if (frame != nullptr) frame->drawView();
@@ -1365,85 +1375,30 @@ void MRBentoBox::drawSharedEditorPanes() noexcept {
 		if (leaf.visible && leaf.pane != nullptr && leaf.spec.bufferPolicy == bpbSharedSourceBuffer) leaf.pane->drawView();
 }
 
+TColorAttr MRBentoBox::paneFrameColor(bool focused) {
+	TColorAttr color = MREditWindow::mapColor(focused ? 13 : 1);
+
+	if (bentoMode == bbmFileCompare) {
+		unsigned char configuredColor = 0;
+		const unsigned char paletteIndex = focused ? kMrPaletteFileCompareFocusedPaneBorder : kMrPaletteFileComparePaneBorder;
+
+		if (configuredColorSlotOverride(paletteIndex, configuredColor)) color = static_cast<TColorAttr>(configuredColor);
+	}
+	return color;
+}
+
 void MRBentoBox::drawPaneFrames() noexcept {
 	if (windowCloseInProgress || !hasPaneSplit()) return;
 	for (BentoLeaf &leaf : leaves)
 		if (leaf.visible && leaf.pane != nullptr) leaf.pane->drawPaneScrollBars();
 	for (std::size_t i = 0; i < leaves.size(); ++i)
-		if (leaves[i].visible) drawPaneFrame(i);
+		if (leaves[i].visible && i < paneFrameViews.size() && paneFrameViews[i] != nullptr) paneFrameViews[i]->drawView();
 }
 
 void MRBentoBox::refreshBentoColorTheme() noexcept {
 	if (windowCloseInProgress || (state & sfVisible) == 0) return;
 	drawSourcePaneScrollBars();
 	drawPaneFrames();
-}
-
-void MRBentoBox::drawPaneFrame(std::size_t leafIndex) noexcept {
-	if (leafIndex >= leaves.size()) return;
-	const BentoLeaf &leaf = leaves[leafIndex];
-	const TRect bounds = leaf.bounds;
-	const int width = bounds.b.x - bounds.a.x;
-	const int height = bounds.b.y - bounds.a.y;
-	if (width <= 0 || height <= 0) return;
-
-	const bool focused = leaf.id == activeLeafId && (state & sfFocused) != 0;
-	const bool maximized = leaf.id == maximizedLeafId;
-	const bool withControls = focused;
-	TColorAttr frameAttr = MREditWindow::mapColor(focused ? 13 : 1);
-	unsigned char fileComparePaneColor = 0;
-	TDrawBuffer buffer;
-
-	if (bentoMode == bbmFileCompare && focused && configuredColorSlotOverride(kMrPaletteFileCompareFocusedPaneBorder, fileComparePaneColor)) frameAttr = static_cast<TColorAttr>(fileComparePaneColor);
-	else if (bentoMode == bbmFileCompare && configuredColorSlotOverride(kMrPaletteFileComparePaneBorder, fileComparePaneColor))
-		frameAttr = static_cast<TColorAttr>(fileComparePaneColor);
-	const TAttrPair frameColor = TAttrPair(frameAttr);
-
-	buffer.moveChar(0, kBentoFrameGlyphs.singleHorizontal, frameColor, static_cast<ushort>(width));
-	buffer.putChar(0, '\xDA');
-	if (width > 1) buffer.putChar(static_cast<ushort>(width - 1), '\xBF');
-
-	const int closeLeftX = kPaneChromeFrameRest;
-	const int maximizeRightX = width - kPaneChromeFrameRest;
-	const int closeWidth = withControls && width >= closeLeftX + kPaneCloseButtonWidth ? kPaneCloseButtonWidth : 0;
-	const int closeX = closeWidth > 0 ? closeLeftX : 0;
-	const int maximizeWidth = withControls && maximizeRightX >= kPaneMaximizeButtonWidth ? kPaneMaximizeButtonWidth : 0;
-	const int maximizeX = maximizeWidth > 0 ? maximizeRightX - kPaneMaximizeButtonWidth : width;
-	const int leftContentX = closeLeftX + (withControls ? kPaneCloseButtonWidth + kPaneChromeGap : 0);
-	const int titleRightX = maximizeWidth > 0 ? maximizeX - kPaneChromeGap : std::max(0, width - kPaneChromeFrameRest);
-	const int boundedTitleRightX = std::min(titleRightX, std::max(0, width - kPaneChromeFrameRest));
-	int titleAvailable = std::max(0, boundedTitleRightX - leftContentX);
-	std::string title = std::string("[") + paneTitleForLeaf(leaf) + "]";
-	int titleWidth = std::min(static_cast<int>(title.size()), titleAvailable);
-	int titleX = boundedTitleRightX - titleWidth;
-
-	if (withControls && paneRoleDropList.visible() && pendingPaneRoleTargetLeafId == leaf.id) {
-		titleX = std::clamp<int>(paneRoleListAnchor.a.x - bounds.a.x - 1, leftContentX, std::max(leftContentX, titleRightX - 2));
-		titleWidth = std::clamp<int>(paneRoleListAnchor.b.x - paneRoleListAnchor.a.x + 2, 2, std::max(2, titleRightX - titleX));
-		title.assign(static_cast<std::size_t>(titleWidth), ' ');
-		title.front() = '[';
-		title.back() = ']';
-	}
-
-	if (withControls && closeWidth > 0) buffer.moveStr(static_cast<ushort>(closeX), kPaneCloseIcon, frameColor, closeWidth);
-	if (titleWidth > 0) buffer.moveStr(static_cast<ushort>(titleX), title.c_str(), frameColor, titleWidth);
-	if (withControls && maximizeWidth > 0) buffer.moveStr(static_cast<ushort>(maximizeX), maximized ? kPaneRestoreIcon : kPaneMaximizeIcon, frameColor, maximizeWidth);
-	writeBuf(bounds.a.x, bounds.a.y, static_cast<short>(width), 1, buffer);
-
-	if (height > 1) {
-		buffer.moveChar(0, kBentoFrameGlyphs.singleHorizontal, frameColor, static_cast<ushort>(width));
-		buffer.putChar(0, '\xC0');
-		if (width > 1) buffer.putChar(static_cast<ushort>(width - 1), '\xD9');
-		writeBuf(bounds.a.x, bounds.b.y - 1, static_cast<short>(width), 1, buffer);
-	}
-
-	if (height > 2) {
-		buffer.moveChar(0, kBentoFrameGlyphs.singleVertical, frameColor, 1);
-		for (int y = bounds.a.y + 1; y < bounds.b.y - 1; ++y) {
-			writeBuf(bounds.a.x, static_cast<short>(y), 1, 1, buffer);
-			if (width > 1) writeBuf(bounds.b.x - 1, static_cast<short>(y), 1, 1, buffer);
-		}
-	}
 }
 
 void MRBentoBox::layoutNode(int nodeIndex, const TRect &bounds) {
@@ -1747,8 +1702,9 @@ void MRBentoBox::updateActivePaneFrame() noexcept {
 	for (std::size_t i = 0; i < leaves.size() && i < paneFrameViews.size(); ++i) {
 		MRBentoPaneFrameView *view = paneFrameViews[i];
 		if (view == nullptr || !leaves[i].visible) continue;
-		if (leaves[i].pane != nullptr) leaves[i].pane->setPaneFocused(leaves[i].id == activeLeafId && (state & sfFocused) != 0);
-		view->setPane(leaves[i].id, paneTitleForLeaf(leaves[i]).c_str(), leaves[i].id == 0 && bentoMode != bbmDocumentViewports, leaves[i].id == activeLeafId && (state & sfFocused) != 0, leaves[i].id == maximizedLeafId);
+		const bool focused = leaves[i].id == activeLeafId && (state & sfFocused) != 0;
+		if (leaves[i].pane != nullptr) leaves[i].pane->setPaneFocused(focused);
+		view->setPane(leaves[i].id, paneTitleForLeaf(leaves[i]).c_str(), leaves[i].id == 0 && bentoMode != bbmDocumentViewports, focused, leaves[i].id == maximizedLeafId, paneFrameColor(focused));
 	}
 }
 

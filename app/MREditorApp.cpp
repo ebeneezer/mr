@@ -260,6 +260,7 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &editorFunctionKeyLabels() {
 	} else if (!diagnosticsActive && !fileCompareActive && !bentoToolPaneActive && !readOnlyActive)
 		labels[6] = {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"};
 	if (macroDebuggerActive) {
+		labels[3] = {TKey(kbF4), cmMrMacroDebuggerEvaluate, macroDebuggerLive && !macroDebuggerRunning ? "~F4~ Eval" : ""};
 		labels[4] = {TKey(kbF5), cmMrMacroDebuggerContinue, macroDebuggerRunning ? "~F5~ Pause" : (macroDebuggerLive ? "~F5~ Cont" : "")};
 		labels[5] = {TKey(kbF6), cmMrMacroDebuggerRunHere, "~F6~ RunHere"};
 		labels[6] = {TKey(kbF7), cmMrMacroDebuggerAddWatch, "~F7~ Watch +/-"};

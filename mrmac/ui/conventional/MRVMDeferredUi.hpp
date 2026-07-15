@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "../MRVM.hpp"
+#include "../../MRVM.hpp"
 
 bool dispatchDeferredVisualUiProcedure(const std::string &name, const std::vector<VirtualMachine::Value> &args, int &errorCode);
 bool dispatchDeferredMenuUiProcedure(const std::string &name, const std::vector<VirtualMachine::Value> &args, int &errorCode);

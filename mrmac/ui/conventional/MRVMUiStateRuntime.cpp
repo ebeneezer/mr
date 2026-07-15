@@ -1,9 +1,9 @@
-#include "MRVMRuntimeCatalog.hpp"
-#include "MRVMRuntimeGlobals.hpp"
-#include "MRVMRuntimeState.hpp"
-#include "MRVMValue.hpp"
+#include "../../vm/MRVMRuntimeCatalog.hpp"
+#include "../../vm/MRVMRuntimeGlobals.hpp"
+#include "../../vm/MRVMRuntimeState.hpp"
+#include "../../vm/MRVMValue.hpp"
 
-#include "../mrmac.h"
+#include "../../mrmac.h"
 
 #include <set>
 
