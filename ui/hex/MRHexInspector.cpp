@@ -11,6 +11,21 @@
 
 namespace {
 
+using InspectorLineFormatter = std::string (*)(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool littleEndian);
+
+enum InspectorLineValueKind {
+	ilvFormatted = 0,
+	ilvUnsigned,
+	ilvSigned
+};
+
+struct InspectorLineDescriptor {
+	const char *label;
+	InspectorLineValueKind valueKind;
+	InspectorLineFormatter formatter;
+	std::size_t byteCount;
+};
+
 bool readUnsigned(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, std::size_t byteCount, bool littleEndian, std::uint64_t &value) {
 	if (byteCount == 0 || byteCount > sizeof(value) || offset > snapshot.length() || byteCount > snapshot.length() - offset) return false;
 	value = 0;
@@ -43,7 +58,7 @@ std::string signedText(const MRTextBufferModel::ReadSnapshot &snapshot, std::siz
 	return readUnsigned(snapshot, offset, byteCount, littleEndian, value) ? std::to_string(signedValue(value, byteCount)) : "End of File";
 }
 
-std::string binaryText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset) {
+std::string binaryText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool) {
 	if (offset >= snapshot.length()) return "End of File";
 	const unsigned char value = static_cast<unsigned char>(snapshot.charAt(offset));
 	char text[9] = {0};
@@ -52,7 +67,7 @@ std::string binaryText(const MRTextBufferModel::ReadSnapshot &snapshot, std::siz
 	return text;
 }
 
-std::string octalText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset) {
+std::string octalText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool) {
 	if (offset >= snapshot.length()) return "End of File";
 	char text[8] = {0};
 
@@ -125,7 +140,7 @@ std::string float64Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::si
 	return doubleText(value);
 }
 
-std::string uleb128Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset) {
+std::string uleb128Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool) {
 	std::uint64_t value = 0;
 
 	for (std::size_t index = 0; index < 10; ++index) {
@@ -139,7 +154,7 @@ std::string uleb128Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::si
 	return "Invalid";
 }
 
-std::string sleb128Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset) {
+std::string sleb128Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool) {
 	std::uint64_t value = 0;
 	unsigned shift = 0;
 
@@ -173,19 +188,19 @@ std::string guidText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_
 	return text;
 }
 
-std::string asciiText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset) {
+std::string asciiText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool) {
 	if (offset >= snapshot.length()) return "End of File";
 	const unsigned char value = static_cast<unsigned char>(snapshot.charAt(offset));
 
 	return value >= 0x20 && value <= 0x7E ? std::string(1, static_cast<char>(value)) : "<control>";
 }
 
-std::string utf8Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset) {
+std::string utf8Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool) {
 	if (offset >= snapshot.length()) return "End of File";
 	const unsigned char first = static_cast<unsigned char>(snapshot.charAt(offset));
 	std::size_t width = 0;
 
-	if (first < 0x80) return asciiText(snapshot, offset);
+	if (first < 0x80) return asciiText(snapshot, offset, false);
 	if (!mrHexUtf8CodePointAt(snapshot, offset, width)) return "<invalid>";
 	std::string value;
 
@@ -212,42 +227,61 @@ std::string utf16Text(const MRTextBufferModel::ReadSnapshot &snapshot, std::size
 	return value;
 }
 
-std::string legacyEncodingText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset) {
+std::string legacyEncodingText(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool) {
 	if (offset >= snapshot.length()) return "End of File";
 	const unsigned char value = static_cast<unsigned char>(snapshot.charAt(offset));
 
 	return value >= 0x20 && value <= 0x7E ? std::string(1, static_cast<char>(value)) : "<profile required>";
 }
 
+constexpr InspectorLineDescriptor kInspectorLineDescriptors[] = {
+	{"binary", ilvFormatted, binaryText, 0},
+	{"octal", ilvFormatted, octalText, 0},
+	{"uint8", ilvUnsigned, nullptr, 1},
+	{"int8", ilvSigned, nullptr, 1},
+	{"uint16", ilvUnsigned, nullptr, 2},
+	{"int16", ilvSigned, nullptr, 2},
+	{"uint24", ilvUnsigned, nullptr, 3},
+	{"int24", ilvSigned, nullptr, 3},
+	{"uint32", ilvUnsigned, nullptr, 4},
+	{"int32", ilvSigned, nullptr, 4},
+	{"uint64", ilvUnsigned, nullptr, 8},
+	{"int64", ilvSigned, nullptr, 8},
+	{"ULEB128", ilvFormatted, uleb128Text, 0},
+	{"SLEB128", ilvFormatted, sleb128Text, 0},
+	{"float16", ilvFormatted, float16Text, 0},
+	{"bfloat16", ilvFormatted, bfloat16Text, 0},
+	{"float32", ilvFormatted, float32Text, 0},
+	{"float64", ilvFormatted, float64Text, 0},
+	{"GUID", ilvFormatted, guidText, 0},
+	{"ASCII", ilvFormatted, asciiText, 0},
+	{"UTF-8", ilvFormatted, utf8Text, 0},
+	{"UTF-16", ilvFormatted, utf16Text, 0},
+	{"GB18030", ilvFormatted, legacyEncodingText, 0},
+	{"BIG5", ilvFormatted, legacyEncodingText, 0},
+	{"SHIFT-JIS", ilvFormatted, legacyEncodingText, 0},
+};
+
 } // namespace
 
 void mrBuildHexInspectorLines(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t offset, bool littleEndian, std::vector<MRHexInspectorLine> &lines) {
 	lines.clear();
-	lines.reserve(27);
-	lines.push_back({"binary", binaryText(snapshot, offset)});
-	lines.push_back({"octal", octalText(snapshot, offset)});
-	lines.push_back({"uint8", unsignedText(snapshot, offset, 1, littleEndian)});
-	lines.push_back({"int8", signedText(snapshot, offset, 1, littleEndian)});
-	lines.push_back({"uint16", unsignedText(snapshot, offset, 2, littleEndian)});
-	lines.push_back({"int16", signedText(snapshot, offset, 2, littleEndian)});
-	lines.push_back({"uint24", unsignedText(snapshot, offset, 3, littleEndian)});
-	lines.push_back({"int24", signedText(snapshot, offset, 3, littleEndian)});
-	lines.push_back({"uint32", unsignedText(snapshot, offset, 4, littleEndian)});
-	lines.push_back({"int32", signedText(snapshot, offset, 4, littleEndian)});
-	lines.push_back({"uint64", unsignedText(snapshot, offset, 8, littleEndian)});
-	lines.push_back({"int64", signedText(snapshot, offset, 8, littleEndian)});
-	lines.push_back({"ULEB128", uleb128Text(snapshot, offset)});
-	lines.push_back({"SLEB128", sleb128Text(snapshot, offset)});
-	lines.push_back({"float16", float16Text(snapshot, offset, littleEndian)});
-	lines.push_back({"bfloat16", bfloat16Text(snapshot, offset, littleEndian)});
-	lines.push_back({"float32", float32Text(snapshot, offset, littleEndian)});
-	lines.push_back({"float64", float64Text(snapshot, offset, littleEndian)});
-	lines.push_back({"GUID", guidText(snapshot, offset, littleEndian)});
-	lines.push_back({"ASCII", asciiText(snapshot, offset)});
-	lines.push_back({"UTF-8", utf8Text(snapshot, offset)});
-	lines.push_back({"UTF-16", utf16Text(snapshot, offset, littleEndian)});
-	lines.push_back({"GB18030", legacyEncodingText(snapshot, offset)});
-	lines.push_back({"BIG5", legacyEncodingText(snapshot, offset)});
-	lines.push_back({"SHIFT-JIS", legacyEncodingText(snapshot, offset)});
+	lines.reserve(sizeof(kInspectorLineDescriptors) / sizeof(kInspectorLineDescriptors[0]) + 1);
+	for (const InspectorLineDescriptor &descriptor : kInspectorLineDescriptors) {
+		std::string value;
+
+		switch (descriptor.valueKind) {
+			case ilvFormatted:
+				value = descriptor.formatter(snapshot, offset, littleEndian);
+				break;
+			case ilvUnsigned:
+				value = unsignedText(snapshot, offset, descriptor.byteCount, littleEndian);
+				break;
+			case ilvSigned:
+				value = signedText(snapshot, offset, descriptor.byteCount, littleEndian);
+				break;
+		}
+		lines.push_back({descriptor.label, value});
+	}
 	lines.push_back({littleEndian ? "[x] Little endian" : "[ ] Little endian", std::string()});
 }

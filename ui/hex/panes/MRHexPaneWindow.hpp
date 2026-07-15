@@ -10,11 +10,8 @@ class MRHexPaneView;
 class MRHexPaneWindow final : public MRPaneEditWindow {
   public:
 	MRHexPaneWindow(const TRect &bounds, const char *title, int number, MRBentoHexEditor &editor, MRHexPaneRole role);
-	virtual ~MRHexPaneWindow() override;
 
-	[[nodiscard]] MRHexPaneRole hexRole() const noexcept;
-
-	protected:
+  protected:
 	virtual void changeBounds(const TRect &bounds) override;
 	virtual void draw() override;
 	virtual void handleEvent(TEvent &event) override;

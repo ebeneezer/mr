@@ -329,9 +329,10 @@ void MRHexPaneView::draw() {
 			const int x = kOffsetWidth + column * layout.fieldWidth;
 			const bool selectedByte = mRole != MRHexPaneRole::Inspector && offset == cursor;
 			const bool visibleByte = offset < length && offset < recordStart + layout.recordLength;
-			const MRHexStringCell stringCell = mRole == MRHexPaneRole::Strings && visibleByte && !editContainsByte(offset) ? mrHexStringCellAt(snapshot, offset) : MRHexStringCell{MRHexStringSpanKind::Hidden, {'\0'}};
-			const std::string text = editContainsByte(offset) ? editTextForByte(offset) : (mRole == MRHexPaneRole::Strings ? stringCell.text : (visibleByte ? byteText(mRole, static_cast<unsigned char>(snapshot.charAt(offset))) : std::string()));
 			const bool editedByte = editContainsByte(offset);
+			const MRHexStringCell stringCell = mRole == MRHexPaneRole::Strings && visibleByte && !editedByte ? mrHexStringCellAt(snapshot, offset) : MRHexStringCell{MRHexStringSpanKind::Hidden, {'\0'}};
+			const std::string displayedText = mRole == MRHexPaneRole::Strings ? stringCell.text : (visibleByte ? byteText(mRole, static_cast<unsigned char>(snapshot.charAt(offset))) : std::string());
+			const std::string text = editedByte ? editTextForByte(offset) : displayedText;
 			const bool highlightedByte = selectedByte || editedByte;
 			TAttrPair color = editedByte ? changed : (highlightedByte ? highlighted : normal);
 			const int textWidth = layout.fieldWidth - (mRole == MRHexPaneRole::Strings ? 0 : 1);

@@ -17,13 +17,6 @@ MRHexPaneWindow::MRHexPaneWindow(const TRect &bounds, const char *title, int num
 	layoutHexScrollBars();
 }
 
-MRHexPaneWindow::~MRHexPaneWindow() {
-}
-
-MRHexPaneRole MRHexPaneWindow::hexRole() const noexcept {
-	return mRole;
-}
-
 void MRHexPaneWindow::changeBounds(const TRect &bounds) {
 	TWindow::changeBounds(bounds);
 	layoutHexScrollBars();

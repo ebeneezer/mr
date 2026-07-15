@@ -13,6 +13,28 @@ namespace {
 constexpr int kMainColumnsNode = 0;
 constexpr int kRemainingColumnsNode = 2;
 
+struct HexPaneDescriptor {
+	MRBentoPaneRole bentoRole;
+	MRHexPaneRole hexRole;
+	const char *title;
+	bool readOnly;
+};
+
+constexpr HexPaneDescriptor kHexPaneDescriptors[] = {
+	{static_cast<MRBentoPaneRole>(bprExtensionFirst + 0), MRHexPaneRole::Hex, "HEX", false},
+	{static_cast<MRBentoPaneRole>(bprExtensionFirst + 1), MRHexPaneRole::Strings, "Strings", false},
+	{static_cast<MRBentoPaneRole>(bprExtensionFirst + 2), MRHexPaneRole::Inspector, "Inspector", true},
+	{static_cast<MRBentoPaneRole>(bprExtensionFirst + 3), MRHexPaneRole::Decimal, "Decimal", false},
+	{static_cast<MRBentoPaneRole>(bprExtensionFirst + 4), MRHexPaneRole::Binary, "Binary", false},
+	{static_cast<MRBentoPaneRole>(bprExtensionFirst + 5), MRHexPaneRole::Octal, "Octal", false},
+};
+
+const HexPaneDescriptor *hexPaneDescriptorForBentoRole(MRBentoPaneRole role) noexcept {
+	for (const HexPaneDescriptor &descriptor : kHexPaneDescriptors)
+		if (descriptor.bentoRole == role) return &descriptor;
+	return nullptr;
+}
+
 MRBentoWorkspaceLeaf hexWorkspaceLeaf(int id, MRBentoPaneRole role) {
 	MRBentoWorkspaceLeaf leaf;
 
@@ -60,54 +82,25 @@ MRBentoWorkspaceSnapshot initialHexWorkspaceSnapshot() {
 	snapshot.nodes.push_back(hexWorkspacePaneNode(4));
 	snapshot.nodes.push_back(hexWorkspacePaneNode(2));
 	snapshot.nodes.push_back(hexWorkspacePaneNode(5));
-	snapshot.leaves.push_back(hexWorkspaceLeaf(0, static_cast<MRBentoPaneRole>(bprExtensionFirst + 0)));
-	snapshot.leaves.push_back(hexWorkspaceLeaf(1, static_cast<MRBentoPaneRole>(bprExtensionFirst + 1)));
-	snapshot.leaves.push_back(hexWorkspaceLeaf(2, static_cast<MRBentoPaneRole>(bprExtensionFirst + 2)));
-	snapshot.leaves.push_back(hexWorkspaceLeaf(3, static_cast<MRBentoPaneRole>(bprExtensionFirst + 3)));
-	snapshot.leaves.push_back(hexWorkspaceLeaf(4, static_cast<MRBentoPaneRole>(bprExtensionFirst + 4)));
-	snapshot.leaves.push_back(hexWorkspaceLeaf(5, static_cast<MRBentoPaneRole>(bprExtensionFirst + 5)));
+	for (std::size_t index = 0; index < sizeof(kHexPaneDescriptors) / sizeof(kHexPaneDescriptors[0]); ++index)
+		snapshot.leaves.push_back(hexWorkspaceLeaf(static_cast<int>(index), kHexPaneDescriptors[index].bentoRole));
 	return snapshot;
-}
-
-bool hexPaneRoleForBentoRole(MRBentoPaneRole bentoRole, MRHexPaneRole &hexRole) noexcept {
-	switch (static_cast<int>(bentoRole) - bprExtensionFirst) {
-		case 0:
-			hexRole = MRHexPaneRole::Hex;
-			return true;
-		case 1:
-			hexRole = MRHexPaneRole::Strings;
-			return true;
-		case 2:
-			hexRole = MRHexPaneRole::Inspector;
-			return true;
-		case 3:
-			hexRole = MRHexPaneRole::Decimal;
-			return true;
-		case 4:
-			hexRole = MRHexPaneRole::Binary;
-			return true;
-		case 5:
-			hexRole = MRHexPaneRole::Octal;
-			return true;
-		default:
-			return false;
-	}
 }
 
 } // namespace
 
 MRBentoHexEditor::MRBentoHexEditor(const TRect &bounds, const char *title, int number)
-	: TWindowInit(&MRBentoBox::initFrame), MRBentoBox(bounds, title, number), mByteCursor(0), mCursorProjectionRevision(1), mLittleEndian(true), mInsertMode(getEditor() != nullptr && getEditor()->insertModeEnabled()), mActiveRole(MRHexPaneRole::Hex) {
+	: TWindowInit(&MRBentoBox::initFrame), MRBentoBox(bounds, title, number), mByteCursor(0), mCursorProjectionRevision(1), mLittleEndian(true), mActiveRole(MRHexPaneRole::Hex) {
 	if (MRFileEditor *editor = getEditor(); editor != nullptr) editor->setForceBinarySave(true);
 	static_cast<void>(restoreWorkspaceSnapshot(initialHexWorkspaceSnapshot()));
 }
 
 bool MRBentoHexEditor::matchesWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapshot) noexcept {
-	if (snapshot.leaves.size() != 6) return false;
-	for (int expected = 0; expected < 6; ++expected) {
-		const MRBentoWorkspaceLeaf &leaf = snapshot.leaves[static_cast<std::size_t>(expected)];
+	if (snapshot.leaves.size() != sizeof(kHexPaneDescriptors) / sizeof(kHexPaneDescriptors[0])) return false;
+	for (std::size_t index = 0; index < snapshot.leaves.size(); ++index) {
+		const MRBentoWorkspaceLeaf &leaf = snapshot.leaves[index];
 
-		if (leaf.id != expected || static_cast<int>(leaf.role) != bprExtensionFirst + expected) return false;
+		if (leaf.id != static_cast<int>(index) || leaf.role != kHexPaneDescriptors[index].bentoRole) return false;
 	}
 	return true;
 }
@@ -121,7 +114,6 @@ void MRBentoHexEditor::synchronizePaneDocumentState() {
 }
 
 void MRBentoHexEditor::synchronizeByteCursorFromDocument() noexcept {
-	mInsertMode = getEditor() != nullptr && getEditor()->insertModeEnabled();
 	mByteCursor = getEditor() != nullptr ? std::min(getEditor()->cursorOffset(), byteSnapshot().length()) : 0;
 	noteByteCursorChanged();
 }
@@ -141,10 +133,10 @@ void MRBentoHexEditor::handleEvent(TEvent &event) {
 }
 
 MRPaneEditWindow *MRBentoHexEditor::createPaneWindow(const TRect &bounds, const char *title, int number, const MRBentoPaneSpec &spec) {
-	MRHexPaneRole role = MRHexPaneRole::Hex;
+	const HexPaneDescriptor *descriptor = hexPaneDescriptorForBentoRole(spec.role);
 
-	if (!hexPaneRoleForBentoRole(spec.role, role)) return nullptr;
-	return new MRHexPaneWindow(bounds, title, number, *this, role);
+	if (descriptor == nullptr) return nullptr;
+	return new MRHexPaneWindow(bounds, title, number, *this, descriptor->hexRole);
 }
 
 bool MRBentoHexEditor::primaryPaneUsesDedicatedWindow() const noexcept {
@@ -152,31 +144,20 @@ bool MRBentoHexEditor::primaryPaneUsesDedicatedWindow() const noexcept {
 }
 
 bool MRBentoHexEditor::acceptsPaneRole(MRBentoPaneRole role) const noexcept {
-	return static_cast<int>(role) >= bprExtensionFirst && static_cast<int>(role) < bprExtensionFirst + 6;
+	return hexPaneDescriptorForBentoRole(role) != nullptr;
 }
 
 const char *MRBentoHexEditor::titleForPaneRole(MRBentoPaneRole role) const noexcept {
-	switch (static_cast<int>(role) - bprExtensionFirst) {
-		case 0:
-			return "HEX";
-		case 1:
-			return "Strings";
-		case 2:
-			return "Inspector";
-		case 3:
-			return "Decimal";
-		case 4:
-			return "Binary";
-		case 5:
-			return "Octal";
-		default:
-			return MRBentoBox::titleForPaneRole(role);
-	}
+	const HexPaneDescriptor *descriptor = hexPaneDescriptorForBentoRole(role);
+
+	return descriptor != nullptr ? descriptor->title : MRBentoBox::titleForPaneRole(role);
 }
 
 MRBentoPaneSpec MRBentoHexEditor::paneSpecForRole(MRBentoPaneRole role) const noexcept {
-	if (!acceptsPaneRole(role)) return MRBentoBox::paneSpecForRole(role);
-	return MRBentoPaneSpec(role, bpbSharedSourceBuffer, static_cast<int>(role) == bprExtensionFirst + 2, true, true, false, nullptr);
+	const HexPaneDescriptor *descriptor = hexPaneDescriptorForBentoRole(role);
+
+	if (descriptor == nullptr) return MRBentoBox::paneSpecForRole(role);
+	return MRBentoPaneSpec(role, bpbSharedSourceBuffer, descriptor->readOnly, true, true, false, nullptr);
 }
 
 bool MRBentoHexEditor::paneCloseActionEnabled() const noexcept {
@@ -199,11 +180,11 @@ bool MRBentoHexEditor::projectPaneDividerPosition(int nodeIndex, int position) n
 }
 
 void MRBentoHexEditor::activePaneRoleChanged(MRBentoPaneRole role) noexcept {
-	MRHexPaneRole hexRole = MRHexPaneRole::Hex;
+	const HexPaneDescriptor *descriptor = hexPaneDescriptorForBentoRole(role);
 
-	if (!hexPaneRoleForBentoRole(role, hexRole)) return;
-	mActiveRole = hexRole;
-	if (hexRole != MRHexPaneRole::Strings) mr::messageline::clearOwner(mr::messageline::Owner::HexEditor);
+	if (descriptor == nullptr) return;
+	mActiveRole = descriptor->hexRole;
+	if (descriptor->hexRole != MRHexPaneRole::Strings) mr::messageline::clearOwner(mr::messageline::Owner::HexEditor);
 }
 
 TColorAttr MRBentoHexEditor::mapColor(uchar index) {
@@ -253,13 +234,8 @@ void MRBentoHexEditor::toggleEndian() {
 	mLittleEndian = !mLittleEndian;
 }
 
-bool MRBentoHexEditor::insertModeEnabled() const noexcept {
-	return mInsertMode;
-}
-
 void MRBentoHexEditor::toggleInsertMode() {
-	mInsertMode = !mInsertMode;
-	if (MRFileEditor *editor = getEditor(); editor != nullptr) editor->setInsertModeEnabled(mInsertMode);
+	if (MRFileEditor *editor = getEditor(); editor != nullptr) editor->setInsertModeEnabled(!editor->insertModeEnabled());
 }
 
 void MRBentoHexEditor::selectByte(std::size_t offset) noexcept {
@@ -292,7 +268,7 @@ bool MRBentoHexEditor::replaceBytes(std::size_t offset, const std::string &bytes
 
 	if (editor == nullptr || isReadOnly() || bytes.empty()) return false;
 	offset = std::min(offset, length);
-	const std::size_t end = mInsertMode ? offset : std::min(length, offset + overwriteLength);
+	const std::size_t end = editor->insertModeEnabled() ? offset : std::min(length, offset + overwriteLength);
 	if (!editor->replaceRangeAndSelect(static_cast<uint>(offset), static_cast<uint>(end), bytes.data(), static_cast<uint>(bytes.size()))) return false;
 	mByteCursor = offset + bytes.size();
 	noteByteCursorChanged();

@@ -42,7 +42,6 @@ class MRBentoHexEditor final : public MRBentoBox {
 	[[nodiscard]] int recordLength() const;
 	[[nodiscard]] bool littleEndian() const noexcept;
 	void toggleEndian();
-	[[nodiscard]] bool insertModeEnabled() const noexcept;
 	void toggleInsertMode();
 	void selectByte(std::size_t offset) noexcept;
 	void moveByteCursor(std::ptrdiff_t delta) noexcept;
@@ -53,7 +52,6 @@ class MRBentoHexEditor final : public MRBentoBox {
 	std::size_t mByteCursor;
 	std::size_t mCursorProjectionRevision;
 	bool mLittleEndian;
-	bool mInsertMode;
 	MRHexPaneRole mActiveRole;
 };
 
