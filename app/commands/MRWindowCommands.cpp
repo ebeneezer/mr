@@ -1367,6 +1367,10 @@ MREditWindow *createEditorWindow(const char *title) {
 	return win;
 }
 
+MRBentoHexEditor *createHexEditorWindow(const char *title) {
+	return createHexEditorWindowWithNumber(title, nextEditorWindowNumber(), true);
+}
+
 MREditWindow *createHelpWindow(const char *title) {
 	TRect bounds;
 	MREditWindow *win;
@@ -1804,6 +1808,27 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 	}
 	return false;
 }
+
+[[nodiscard]] bool shouldAutoOpenHexEditor(const std::string &resolvedPath) {
+	return configuredAutoDetectBinaryFiles() && fileContainsNulInBoundarySamples(resolvedPath);
+}
+
+MREditWindow *createFileLoadWindow(MRWindowOpenBatch &openBatch, bool useBatch, bool useHexEditor) {
+	if (useBatch) return useHexEditor ? static_cast<MREditWindow *>(openBatch.createHexEditorWindow("?No-File?")) : openBatch.createEditorWindow("?No-File?");
+	return useHexEditor ? static_cast<MREditWindow *>(createHexEditorWindow("?No-File?")) : createEditorWindow("?No-File?");
+}
+
+MREditWindow *applyAutoDetectedHexEditor(MREditWindow *window, bool useHexEditor) {
+	MRBentoHexEditor *hexEditor = nullptr;
+
+	if (!useHexEditor || window == nullptr) return window;
+	hexEditor = dynamic_cast<MRBentoHexEditor *>(window);
+	if (hexEditor != nullptr) return hexEditor;
+	hexEditor = convertEditWindowToHexEditor(window);
+	if (hexEditor != nullptr) return hexEditor;
+	postWindowCommandError("Could not activate Hex editor for detected binary file.");
+	return window;
+}
 } // namespace
 
 bool promptForPath(MRDialogHistoryScope scope, const char *title, char *fileName, std::size_t fileNameSize) {
@@ -1893,6 +1918,9 @@ bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPa
 		postWindowCommandError("Unable to load file: " + resolvedPath);
 		return false;
 	}
+	if (MRBentoHexEditor *hexEditor = dynamic_cast<MRBentoHexEditor *>(win); hexEditor != nullptr) {
+		hexEditor->synchronizePaneDocumentState();
+	}
 	const MRFileEditor::LoadTiming timing = win->lastLoadTiming();
 	std::size_t bytes = win->bufferLength();
 	std::size_t lines = 0;
@@ -1931,15 +1959,12 @@ bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 	const bool useBatch = resolvedPaths.size() > 1;
 
 	for (const std::string &resolvedPath : resolvedPaths) {
+		const bool useHexEditor = shouldAutoOpenHexEditor(resolvedPath);
 		MREditWindow *target = findReusableEmptyWindow(current);
 		bool createdTarget = false;
 
 		if (target == nullptr) {
-			if (useBatch) {
-				if (!openBatch.active()) openBatch.begin();
-				target = openBatch.createEditorWindow("?No-File?");
-			} else
-				target = createEditorWindow("?No-File?");
+			target = createFileLoadWindow(openBatch, useBatch, useHexEditor);
 			createdTarget = true;
 		}
 		if (target == nullptr) continue;
@@ -1949,6 +1974,11 @@ bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 			if (target != nullptr && isEmptyUntitledEditableWindow(target) && current != target && current != nullptr) static_cast<void>(mrActivateEditWindow(current));
 			continue;
 		}
+		MREditWindow *loadedTarget = applyAutoDetectedHexEditor(target, useHexEditor);
+
+		if (previousActive == target) previousActive = loadedTarget;
+		if (current == target) current = loadedTarget;
+		target = loadedTarget;
 		rememberLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
 		lastLoadedWindow = target;
 		current = target;
@@ -1972,27 +2002,22 @@ bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 	const bool useBatch = resolvedPaths.size() > 1;
 
 	if (resolvedPaths.empty()) return false;
-	if (target == nullptr) {
-		if (useBatch) {
-			openBatch.begin();
-			target = openBatch.createEditorWindow("?No-File?");
-		} else
-			target = createEditorWindow("?No-File?");
-		createdTarget = true;
-	} else if (!target->confirmAbandonForReload())
+	if (target != nullptr && !target->confirmAbandonForReload())
 		return false;
 	for (const std::string &resolvedPath : resolvedPaths) {
-		MREditWindow *loadTarget = target;
+		const bool useHexEditor = shouldAutoOpenHexEditor(resolvedPath);
+		MREditWindow *loadTarget = first ? target : nullptr;
 		bool createdLoadTarget = false;
 
-		if (!first) {
+		if (first && loadTarget == nullptr) {
+			loadTarget = createFileLoadWindow(openBatch, useBatch, useHexEditor);
+			createdTarget = true;
+			createdLoadTarget = true;
+			target = loadTarget;
+		} else if (!first) {
 			loadTarget = findReusableEmptyWindow(nullptr);
 			if (loadTarget == nullptr) {
-				if (useBatch) {
-					if (!openBatch.active()) openBatch.begin();
-					loadTarget = openBatch.createEditorWindow("?No-File?");
-				} else
-					loadTarget = createEditorWindow("?No-File?");
+				loadTarget = createFileLoadWindow(openBatch, useBatch, useHexEditor);
 				createdLoadTarget = true;
 			}
 		}
@@ -2007,6 +2032,11 @@ bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 			first = false;
 			continue;
 		}
+		MREditWindow *loadedTarget = applyAutoDetectedHexEditor(loadTarget, useHexEditor);
+
+		if (previousActive == loadTarget) previousActive = loadedTarget;
+		if (first) target = loadedTarget;
+		loadTarget = loadedTarget;
 		rememberLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 		lastLoadedWindow = loadTarget;
 		first = false;

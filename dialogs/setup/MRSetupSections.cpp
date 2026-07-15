@@ -1870,11 +1870,11 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 		int const yStart = 2;
 
-		TCheckBoxes *cb = new TCheckBoxes(TRect(3, yStart, 36, yStart + 6),
+		TCheckBoxes *cb = new TCheckBoxes(TRect(3, yStart, 36, yStart + 7),
 		                                   new TSItem("~W~indow Manager",
 		                                              new TSItem("~M~enuline messages",
 		                                                         new TSItem("~C~ycle virtual desktops",
-		                                                                    new TSItem("Track compiler ~w~arnings", new TSItem("Track compiler ~n~otes", new TSItem("R/~O~ file comparing", nullptr)))))));
+		                                                                    new TSItem("Track compiler ~w~arnings", new TSItem("Track compiler ~n~otes", new TSItem("R/~O~ file comparing", new TSItem("~A~utodetect binary files", nullptr))))))));
 
 		mOptionsField = cb;
 		addManaged(mOptionsField, mOptionsField->getBounds());
@@ -1970,6 +1970,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			if ((visualFlags & 0x0004) != 0) data->flags |= 0x0004;
 			data->compilerDiagnosticFlags = static_cast<ushort>((visualFlags >> 3) & 0x0003);
 			if ((visualFlags & 0x0020) != 0) data->flags |= 0x0008;
+			if ((visualFlags & 0x0040) != 0) data->flags |= 0x0010;
 		}
 		if (mVirtualDesktopsSlider != nullptr) {
 			int32_t val = 1;
@@ -1996,6 +1997,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			if ((data->flags & 0x0004) != 0) visualFlags |= 0x0004;
 			visualFlags |= static_cast<ushort>((data->compilerDiagnosticFlags & 0x0003) << 3);
 			if ((data->flags & 0x0008) != 0) visualFlags |= 0x0020;
+			if ((data->flags & 0x0010) != 0) visualFlags |= 0x0040;
 			mOptionsField->setData(&visualFlags);
 		}
 		if (mVirtualDesktopsSlider != nullptr) {
@@ -2446,6 +2448,7 @@ void runUserInterfaceSettingsDialogFlow() {
 	while (running) {
 		bool currentWm = configuredWindowManager();
 		bool currentMm = configuredMenulineMessages();
+		bool currentAutoDetectBinaryFiles = configuredAutoDetectBinaryFiles();
 		int currentVd = configuredVirtualDesktops();
 		bool currentCv = configuredCyclicVirtualDesktops();
 		MRCursorBehaviour currentCb = configuredCursorBehaviour();
@@ -2470,6 +2473,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		if (currentMm) dialogData.flags |= 2;
 		if (currentCv) dialogData.flags |= 4;
 		if (currentFileCompareComparePanelReadOnly) dialogData.flags |= 8;
+		if (currentAutoDetectBinaryFiles) dialogData.flags |= 16;
 
 		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
 		dialogData.cursorBehaviourChoice = currentCb == MRCursorBehaviour::FreeMovement ? 0 : 1;
@@ -2491,6 +2495,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		bool newMm = (dialogData.flags & 2) != 0;
 		bool newCv = (dialogData.flags & 4) != 0;
 		bool newFileCompareComparePanelReadOnly = (dialogData.flags & 8) != 0;
+		bool newAutoDetectBinaryFiles = (dialogData.flags & 16) != 0;
 		int newVd = static_cast<int>(dialogData.virtualDesktops);
 		MRCursorBehaviour newCb = dialogData.cursorBehaviourChoice == 0 ? MRCursorBehaviour::FreeMovement : MRCursorBehaviour::BoundToText;
 		MRCompilerErrorMessagePlacement newCemp = dialogData.compilerErrorMessageChoice == 0 ? MRCompilerErrorMessagePlacement::UnderCode : MRCompilerErrorMessagePlacement::RightMargin;
@@ -2563,6 +2568,7 @@ void runUserInterfaceSettingsDialogFlow() {
 			}
 			setConfiguredWindowManager(newWm, &errorText);
 			setConfiguredMenulineMessages(newMm, &errorText);
+			setConfiguredAutoDetectBinaryFiles(newAutoDetectBinaryFiles, &errorText);
 			setConfiguredCyclicVirtualDesktops(newCv, &errorText);
 			applyVirtualDesktopConfigurationChange(newVd);
 			for (MREditWindow *window : allEditWindowsInZOrder())

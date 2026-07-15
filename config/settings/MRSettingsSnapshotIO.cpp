@@ -422,6 +422,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.paths = paths;
 	snapshot.windowManagerEnabled = configuredWindowManager();
 	snapshot.menulineMessagesEnabled = configuredMenulineMessages();
+	snapshot.autoDetectBinaryFiles = configuredAutoDetectBinaryFiles();
 	snapshot.searchDialogOptions = configuredSearchDialogOptions();
 	snapshot.sarDialogOptions = configuredSarDialogOptions();
 	snapshot.multiSearchDialogOptions = configuredMultiSearchDialogOptions();
@@ -561,6 +562,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
 	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.windowManagerEnabled)) + "');\n";
 	source += "MRSETUP('MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.menulineMessagesEnabled)) + "');\n";
+	source += "MRSETUP('AUTODETECT_BINARY_FILES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoDetectBinaryFiles)) + "');\n";
 	source += "MRSETUP('SEARCH_TEXT_TYPE', '" + escapeMrmacSingleQuotedLiteral(formatSearchTextType(snapshot.searchDialogOptions.textType)) + "');\n";
 	source += "MRSETUP('SEARCH_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatSearchDirection(snapshot.searchDialogOptions.direction)) + "');\n";
 	source += "MRSETUP('SEARCH_MODE', '" + escapeMrmacSingleQuotedLiteral(formatSearchMode(snapshot.searchDialogOptions.mode)) + "');\n";

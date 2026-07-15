@@ -18,9 +18,11 @@
 #include <utility>
 #include <vector>
 
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRWindowSupport.hpp"
+#include "../../ui/hex/MRBentoHexEditor.hpp"
 #include "../MREditorApp.hpp"
 #include "../commands/MRFileCommands.hpp"
 #include "../commands/MRWindowCommands.hpp"
@@ -59,6 +61,14 @@ void logDiscardedSessionWindowPointer(const MultiFileSearchFileResult &file, MRE
 	mrLogMessage(line.str());
 }
 
+void synchronizeHexEditorSelection(MREditWindow *window) {
+	MRBentoHexEditor *hexEditor = dynamic_cast<MRBentoHexEditor *>(window);
+
+	if (hexEditor == nullptr) return;
+	hexEditor->synchronizeByteCursorFromDocument();
+	hexEditor->refreshHexProjection();
+}
+
 bool ensureWindowLoadedForSessionFile(MultiFileSearchFileResult &file, bool activate, std::string &errorText) {
 	MREditWindow *window = findOpenWindowForNormalizedPath(file.normalizedPath);
 
@@ -66,7 +76,9 @@ bool ensureWindowLoadedForSessionFile(MultiFileSearchFileResult &file, bool acti
 	file.window = window;
 	if (window != nullptr) file.temporaryWindow = false;
 	if (window == nullptr) {
-		window = createEditorWindow(file.normalizedPath.c_str());
+		const bool useHexEditor = configuredAutoDetectBinaryFiles() && fileContainsNulInBoundarySamples(file.normalizedPath);
+
+		window = useHexEditor ? static_cast<MREditWindow *>(createHexEditorWindow(file.normalizedPath.c_str())) : createEditorWindow(file.normalizedPath.c_str());
 		if (window == nullptr) {
 			errorText = "Unable to create editor window.";
 			return false;
@@ -266,6 +278,7 @@ bool activateSessionCurrentMatch(MultiFileSearchSession &session) {
 		file->window->getEditor()->setCursorOffset(start);
 		file->window->getEditor()->setSelectionOffsets(start, end);
 		file->window->getEditor()->revealCursor(True);
+		synchronizeHexEditorSelection(file->window);
 		syncVmLastSearch(file->window, true, start, end, start);
 		cursorUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
@@ -329,6 +342,7 @@ bool previewSessionCurrentMatch(MultiFileSearchSession &session) {
 		editor->setCursorOffset(start);
 		editor->setSelectionOffsets(start, end);
 		editor->centerDocumentLocationInView(editor->lineIndexOfOffset(start), static_cast<int>(editor->columnOfOffset(start)));
+		synchronizeHexEditorSelection(file->window);
 		centerUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 	{
@@ -391,6 +405,7 @@ bool replaceCurrentSessionMatch(MultiFileSearchSession &session, bool advanceAft
 	editor->setCursorOffset(cursorEnd);
 	editor->setSelectionOffsets(cursorEnd, cursorEnd);
 	editor->revealCursor(True);
+	synchronizeHexEditorSelection(file->window);
 	syncVmLastSearch(file->window, true, cursorStart, cursorEnd, editor->cursorOffset());
 	if (!refreshMatchesForSessionFile(session, currentFileIndex, errorText)) return false;
 	if (currentFileIndex >= session.files.size()) {

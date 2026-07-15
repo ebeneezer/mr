@@ -190,6 +190,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"SHELLPATH", MRSettingsKeyClass::Path, true},
     {"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
     {"MESSAGES", MRSettingsKeyClass::Global, true},
+    {"AUTODETECT_BINARY_FILES", MRSettingsKeyClass::Global, true},
     {"SEARCH_TEXT_TYPE", MRSettingsKeyClass::Global, true},
     {"SEARCH_DIRECTION", MRSettingsKeyClass::Global, true},
     {"SEARCH_MODE", MRSettingsKeyClass::Global, true},
@@ -804,6 +805,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredMenulineMessages(parsed, errorMessage);
 			}
+			if (upper == "AUTODETECT_BINARY_FILES") {
+				bool parsed = true;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredAutoDetectBinaryFiles(parsed, errorMessage);
+			}
 			if (upper == "SEARCH_TEXT_TYPE") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
 				if (!parseSearchTextTypeLiteral(value, options.textType, errorMessage)) return false;
@@ -1390,6 +1396,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "MESSAGES") {
 				if (!parseBooleanLiteral(value, snapshot.menulineMessagesEnabled, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "AUTODETECT_BINARY_FILES") {
+				if (!parseBooleanLiteral(value, snapshot.autoDetectBinaryFiles, errorMessage)) return false;
 				return true;
 			}
 			if (upper == "SEARCH_TEXT_TYPE") {

@@ -23,6 +23,7 @@ struct MRSettingsSnapshot {
 	MRSetupPaths paths;
 	bool windowManagerEnabled{true};
 	bool menulineMessagesEnabled{true};
+	bool autoDetectBinaryFiles{true};
 	MRSearchDialogOptions searchDialogOptions;
 	MRSarDialogOptions sarDialogOptions;
 	MRMultiSearchDialogOptions multiSearchDialogOptions;

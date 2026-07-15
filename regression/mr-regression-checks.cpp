@@ -426,6 +426,7 @@ struct RuntimeSettingsSnapshot {
 	std::string tempDirectoryPath;
 	std::string shellExecutablePath;
 	std::string colorThemeFilePath;
+	bool autoDetectBinaryFiles = true;
 	std::vector<std::string> autoexecMacros;
 	MREditSetupSettings editSettings;
 	std::vector<MREditExtensionProfile> editExtensionProfiles;
@@ -465,6 +466,7 @@ RuntimeSettingsSnapshot captureRuntimeSettingsSnapshot() {
 	snapshot.tempDirectoryPath = configuredTempDirectoryPath();
 	snapshot.shellExecutablePath = configuredShellExecutablePath();
 	snapshot.colorThemeFilePath = configuredColorThemeFilePath();
+	snapshot.autoDetectBinaryFiles = configuredAutoDetectBinaryFiles();
 	configuredAutoexecMacroEntries(snapshot.autoexecMacros);
 	snapshot.editSettings = configuredEditSetupSettings();
 	snapshot.editExtensionProfiles = configuredEditExtensionProfiles();
@@ -478,6 +480,7 @@ bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std
 	if (!setConfiguredHelpFilePath(snapshot.helpFilePath, &errorText)) return false;
 	if (!setConfiguredTempDirectoryPath(snapshot.tempDirectoryPath, &errorText)) return false;
 	if (!setConfiguredShellExecutablePath(snapshot.shellExecutablePath, &errorText)) return false;
+	if (!setConfiguredAutoDetectBinaryFiles(snapshot.autoDetectBinaryFiles, &errorText)) return false;
 	if (!setConfiguredAutoexecMacroEntries(snapshot.autoexecMacros, &errorText)) return false;
 	if (!setConfiguredEditSetupSettings(snapshot.editSettings, &errorText)) return false;
 	if (!setConfiguredEditExtensionProfiles(snapshot.editExtensionProfiles, &errorText)) return false;
@@ -2560,6 +2563,10 @@ bool validateMrsetupEditorSettings(std::string &failureReason) {
 }
 
 bool validateMrsetupGlobalSettings(std::string &failureReason) {
+	if (configuredAutoDetectBinaryFiles()) {
+		failureReason = "Startup context should apply AUTODETECT_BINARY_FILES='false'.";
+		return false;
+	}
 	if (configuredCursorBehaviour() != MRCursorBehaviour::FreeMovement) {
 		failureReason = "Startup context should apply CURSOR_BEHAVIOUR='FREE_MOVEMENT'.";
 		return false;
@@ -2649,6 +2656,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
 	                           "MRSETUP('CURSOR_BEHAVIOUR', 'FREE_MOVEMENT');\n"
 	                           "MRSETUP('SCROLLBAR_VISIBILITY', 'ALWAYS');\n"
+	                           "MRSETUP('AUTODETECT_BINARY_FILES', 'false');\n"
 	                           "MRSETUP('FILE_COMPARE_ORIGINAL_LEADING_GUTTERS', 'L');\n"
 	                           "MRSETUP('FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS', 'M');\n"
 	                           "MRSETUP('FILE_COMPARE_COMPARE_LEADING_GUTTERS', 'LD');\n"
@@ -2693,6 +2701,41 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 
 	if (!validateMrsetupRuntimeRejection(bytecode, entryOffset, macroName, failureReason)) return false;
 
+	failureReason.clear();
+	return true;
+}
+
+bool testBinaryBoundaryProbe(std::string &failureReason) {
+	const std::string path = "/tmp/mr_binary_boundary_probe_" + std::to_string(static_cast<long>(::getpid()));
+	std::string content(24576, 'x');
+	auto cleanup = [&]() { static_cast<void>(::remove(path.c_str())); };
+
+	if (!writeTextFile(path, content) || fileContainsNulInBoundarySamples(path)) {
+		cleanup();
+		failureReason = "Binary boundary probe misclassified plain text.";
+		return false;
+	}
+	content[0] = '\0';
+	if (!writeTextFile(path, content) || !fileContainsNulInBoundarySamples(path)) {
+		cleanup();
+		failureReason = "Binary boundary probe missed a leading NUL.";
+		return false;
+	}
+	content[0] = 'x';
+	content.back() = '\0';
+	if (!writeTextFile(path, content) || !fileContainsNulInBoundarySamples(path)) {
+		cleanup();
+		failureReason = "Binary boundary probe missed a trailing NUL.";
+		return false;
+	}
+	content.back() = 'x';
+	content[12288] = '\0';
+	if (!writeTextFile(path, content) || fileContainsNulInBoundarySamples(path)) {
+		cleanup();
+		failureReason = "Binary boundary probe read outside its boundary samples.";
+		return false;
+	}
+	cleanup();
 	failureReason.clear();
 	return true;
 }
@@ -6396,6 +6439,11 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 		failureReason = "Unable to seed edit-settings roundtrip probe: " + errorText;
 		return false;
 	}
+	if (!setConfiguredAutoDetectBinaryFiles(false, &errorText)) {
+		restore();
+		failureReason = "Unable to seed binary-autodetect roundtrip probe: " + errorText;
+		return false;
+	}
 
 	paths.settingsMacroUri = settingsPath;
 	paths.macroPath = "/tmp";
@@ -6403,7 +6451,7 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	paths.tempPath = "/tmp";
 	paths.shellUri = "/bin/sh";
 	source = buildSettingsMacroSource(paths);
-	if (source.find("MRSETUP('DISPLAY_TABS', 'true');") == std::string::npos || source.find("MRSETUP('TAB_SIZE', '") == std::string::npos || source.find("MRSETUP('LINE_NUMBERS_POSITION', '") == std::string::npos) {
+	if (source.find("MRSETUP('AUTODETECT_BINARY_FILES', 'false');") == std::string::npos || source.find("MRSETUP('DISPLAY_TABS', 'true');") == std::string::npos || source.find("MRSETUP('TAB_SIZE', '") == std::string::npos || source.find("MRSETUP('LINE_NUMBERS_POSITION', '") == std::string::npos) {
 		restore();
 		failureReason = "Edit-settings roundtrip source did not use canonical edit-setting keys.";
 		return false;
@@ -6417,6 +6465,11 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
 		restore();
 		failureReason = "Unable to reset edit settings before roundtrip apply: " + errorText;
+		return false;
+	}
+	if (!setConfiguredAutoDetectBinaryFiles(true, &errorText)) {
+		restore();
+		failureReason = "Unable to reset binary autodetection before roundtrip apply: " + errorText;
 		return false;
 	}
 	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
@@ -6494,6 +6547,11 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	if (loaded.lineNumbersPosition != "LEADING" || !loaded.showLineNumbers) {
 		restore();
 		failureReason = "Line-number position/show flag mismatch after roundtrip.";
+		return false;
+	}
+	if (configuredAutoDetectBinaryFiles()) {
+		restore();
+		failureReason = "AUTODETECT_BINARY_FILES mismatch after roundtrip.";
 		return false;
 	}
 
@@ -11425,6 +11483,7 @@ void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 
 void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
+	runTest(ctx, "binary boundary probe", testBinaryBoundaryProbe);
 	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
 	runTest(ctx, "Extended settings roundtrip behavior", testExtendedSettingsRoundtripGuard);
 	runTest(ctx, "Keymap AUTOEXEC persistence + bootstrap harness", testKeymapAutoexecPersistenceAndBootstrapHarness);

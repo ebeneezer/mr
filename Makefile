@@ -121,6 +121,27 @@ ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
 HELP_MARKDOWN_GENERATOR = ./generate_help_markdown.sh
 HELP_MARKDOWN_SOURCE = app/mrhelp.md
 HELP_MARKDOWN_GENERATED = app/MRHelp.generated.hpp
+MANUAL_DIRECTORY = documentation/manuals
+PDFLATEX ?= pdflatex
+MAKEINDEX ?= makeindex
+MANUAL_AUXILIARIES = \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.aux \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.cb \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.cb2 \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.idx \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.ilg \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.ind \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.log \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.out \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.toc \
+	$(MANUAL_DIRECTORY)/mr-technical-manual.aux \
+	$(MANUAL_DIRECTORY)/mr-technical-manual.log \
+	$(MANUAL_DIRECTORY)/mr-technical-manual.out \
+	$(MANUAL_DIRECTORY)/mr-technical-manual.toc \
+	$(MANUAL_DIRECTORY)/mr-users-manual.aux \
+	$(MANUAL_DIRECTORY)/mr-users-manual.log \
+	$(MANUAL_DIRECTORY)/mr-users-manual.out \
+	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
@@ -294,6 +315,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-sync-safe tvision-status \
 	pcre2-check \
 	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full basic-language-probe mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
+	compile-manuals \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -321,6 +343,17 @@ regression-check-full: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET) regression-probe
 	$(MRMAC_V1_SUITE_SCRIPT)
+
+compile-manuals:
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-macro-reference.tex
+	cd $(MANUAL_DIRECTORY) && $(MAKEINDEX) mr-macro-reference
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-macro-reference.tex
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-macro-reference.tex
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-technical-manual.tex
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-technical-manual.tex
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-users-manual.tex
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-users-manual.tex
+	rm -f $(MANUAL_AUXILIARIES)
 
 CONTEXT_ARCHIVE ?= codebase-context.tar.bzip2
 CONTEXT_GIT_INFO_NAME ?= CONTEXT_GIT_INFO.txt

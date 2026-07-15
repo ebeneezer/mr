@@ -1749,35 +1749,14 @@ bool handleFileOpen() {
 		FileNameBufferSize = MAXPATH
 	};
 	char fileName[FileNameBufferSize];
-	MREditWindow *target;
-	MREditWindow *current = currentEditWindow();
 	std::string resolvedPath;
-	std::string logLine;
-	bool createdTarget = false;
 
 	if (!promptForPath("OPEN FILE", fileName, sizeof(fileName))) return true;
 	if (!resolveReadableExistingPath(MRDialogHistoryScope::OpenFile, fileName, resolvedPath)) {
 		forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, fileName);
 		return true;
 	}
-
-	target = findReusableEmptyWindow(current);
-	if (target == nullptr) {
-		target = createEditorWindow("?No-File?");
-		createdTarget = true;
-	}
-	if (!loadResolvedFileIntoWindow(target, resolvedPath, "Open file")) {
-		forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
-		if (createdTarget && target != nullptr) message(target, evCommand, cmClose, nullptr);
-		if (target != nullptr && isEmptyUntitledEditableWindow(target) && current != target && current != nullptr) static_cast<void>(mrActivateEditWindow(current));
-		return true;
-	}
-	rememberLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
-	static_cast<void>(mrActivateEditWindow(target));
-	logLine = "Opened file: ";
-	logLine += target->currentFileName();
-	if (target->isReadOnly()) logLine += " [read-only]";
-	mrLogMessage(logLine.c_str());
+	if (!openResolvedFilesIntoWindows(std::vector<std::string>{resolvedPath})) forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
 	return true;
 }
 
@@ -1786,32 +1765,14 @@ bool handleFileLoad() {
 		FileNameBufferSize = MAXPATH
 	};
 	char fileName[FileNameBufferSize];
-	MREditWindow *target = currentEditWindow();
 	std::string resolvedPath;
-	std::string logLine;
-	bool createdTarget = false;
 
 	if (!promptForPath("LOAD FILE", fileName, sizeof(fileName))) return true;
 	if (!resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, fileName, resolvedPath)) {
 		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, fileName);
 		return true;
 	}
-	if (target == nullptr) {
-		target = createEditorWindow("?No-File?");
-		createdTarget = true;
-	} else if (!target->confirmAbandonForReload())
-		return true;
-	if (!loadResolvedFileIntoWindow(target, resolvedPath, "Load file")) {
-		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
-		if (createdTarget && target != nullptr) message(target, evCommand, cmClose, nullptr);
-		return true;
-	}
-	rememberLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
-	static_cast<void>(mrActivateEditWindow(target));
-	logLine = "Loaded file into active window: ";
-	logLine += target->currentFileName();
-	if (target->isReadOnly()) logLine += " [read-only]";
-	mrLogMessage(logLine.c_str());
+	if (!loadResolvedFilesIntoWindows(std::vector<std::string>{resolvedPath})) forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 	return true;
 }
 

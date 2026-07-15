@@ -2,9 +2,16 @@
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "MRStringUtils.hpp"
 #include <algorithm>
+#include <array>
+#include <cerrno>
 #include <cstdint>
+#include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <sstream>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__))
 #include <immintrin.h>
@@ -15,6 +22,18 @@
 namespace {
 
 constexpr unsigned char kCtrlZ = 0x1Au;
+constexpr std::size_t kBinaryFileProbeSampleSize = 8192;
+
+bool boundarySampleContainsNul(int fd, off_t offset, std::size_t length, std::array<char, kBinaryFileProbeSampleSize> &buffer) noexcept {
+	ssize_t count = 0;
+
+	if (length == 0) return false;
+	for (;;) {
+		count = ::pread(fd, buffer.data(), length, offset);
+		if (count >= 0 || errno != EINTR) break;
+	}
+	return count > 0 && std::memchr(buffer.data(), '\0', static_cast<std::size_t>(count)) != nullptr;
+}
 
 bool readTextFileWithOptionalError(const std::string &path, std::string &out, std::string *outError) {
 	std::ifstream file(path, std::ios::in | std::ios::binary);
@@ -265,6 +284,30 @@ bool writeTextFile(std::string_view path, std::string_view content) {
 
 bool writeTextFile(const std::string &path, const std::string &content) {
 	return writeTextFile(std::string_view(path), std::string_view(content));
+}
+
+bool fileContainsNulInBoundarySamples(const std::string &path) noexcept {
+	std::array<char, kBinaryFileProbeSampleSize> buffer{};
+	struct stat st {};
+	int fd = -1;
+	bool detected = false;
+
+	if (path.empty()) return false;
+	fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0) return false;
+	if (::fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
+		const std::size_t headLength = static_cast<std::size_t>(std::min<off_t>(st.st_size, static_cast<off_t>(kBinaryFileProbeSampleSize)));
+
+		detected = boundarySampleContainsNul(fd, 0, headLength, buffer);
+		if (!detected && st.st_size > static_cast<off_t>(kBinaryFileProbeSampleSize)) {
+			const off_t tailOffset = std::max<off_t>(static_cast<off_t>(kBinaryFileProbeSampleSize), st.st_size - static_cast<off_t>(kBinaryFileProbeSampleSize));
+			const std::size_t tailLength = static_cast<std::size_t>(st.st_size - tailOffset);
+
+			detected = boundarySampleContainsNul(fd, tailOffset, tailLength, buffer);
+		}
+	}
+	::close(fd);
+	return detected;
 }
 
 MRTextSaveOptions textSaveOptionsFromEditSettings(const MREditSetupSettings &settings) {

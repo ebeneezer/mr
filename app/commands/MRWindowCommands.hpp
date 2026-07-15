@@ -28,6 +28,7 @@ class MRWindowOpenBatch {
 };
 
 [[nodiscard]] MREditWindow *createEditorWindow(const char *title);
+[[nodiscard]] MRBentoHexEditor *createHexEditorWindow(const char *title);
 [[nodiscard]] MREditWindow *createHelpWindow(const char *title);
 [[nodiscard]] MREditWindow *createLogWindow(const char *title);
 [[nodiscard]] MREditWindow *createCommunicationWindow(const char *title);

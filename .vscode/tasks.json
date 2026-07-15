@@ -85,6 +85,21 @@
             }
         },
         {
+            "label": "Compile Manuals",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "compile-manuals"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
             "label": "Make context tar archive",
             "type": "shell",
             "command": "make",

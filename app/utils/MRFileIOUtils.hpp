@@ -29,6 +29,7 @@ bool readTextFile(const std::string &path, std::string &out);
 bool readTextFile(const std::string &path, std::string &out, std::string &outError);
 bool writeTextFile(std::string_view path, std::string_view content);
 bool writeTextFile(const std::string &path, const std::string &content);
+[[nodiscard]] bool fileContainsNulInBoundarySamples(const std::string &path) noexcept;
 MRTextSaveOptions textSaveOptionsFromEditSettings(const MREditSetupSettings &settings);
 MRTextSaveOptions effectiveTextSaveOptionsForPath(std::string_view path, std::size_t *outOptionsHash = nullptr);
 std::size_t hashTextSaveOptions(const MRTextSaveOptions &options);

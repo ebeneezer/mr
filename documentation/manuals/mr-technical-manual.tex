@@ -1,0 +1,1083 @@
+\documentclass[a4paper,10pt,twoside,openany]{book}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage[margin=20mm,inner=19mm,outer=19mm,marginparwidth=12mm,marginparsep=4mm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{capt-of}
+\usepackage{needspace}
+\usepackage{hyperref}
+
+\newcommand{\mr}{\textsc{MR}}
+
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=black,pdftitle={MR Technical Manual},pdfauthor={MR Project}}
+\setlength{\emergencystretch}{7em}
+\renewcommand{\arraystretch}{1.16}
+
+\title{\mr{} Technical Manual}
+\author{Dr.\ Michael 'iDoc' Raus}
+\date{15 July 2026}
+
+\begin{document}
+\begin{titlepage}
+\begin{center}
+\vspace*{\fill}
+{\LARGE \mr{} Technical Manual\par}
+\vspace{0.25\baselineskip}
+{\large Architecture, Runtime and Development\par}
+\vspace{3\baselineskip}
+{\large Dr.\ Michael 'iDoc' Raus\par}
+\vspace{2\baselineskip}
+{\large 15 July 2026\par}
+\end{center}
+\vspace*{\fill}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\part{Direction and System Shape}
+
+\chapter{Purpose, Origin and Design Direction}
+
+\section{What MR is for}
+
+\mr{} is a Linux-terminal reimplementation and continuation of the
+programmer's editor Multi-Edit.  Its point is not to imitate a modern graphical
+editor inside a terminal.  It is to make a dense, fast, keyboard-capable
+programmer's environment available where a terminal is the natural working
+surface: local and remote systems, source trees, build logs, compiler output
+and long-lived technical work.
+
+The project has three equally important goals.
+
+\begin{itemize}
+\item Preserve the directness of the classic Multi-Edit workflow: macros,
+  key bindings, blocks, windows, workspaces and a terminal-native user
+  interface are first-class capabilities rather than optional add-ons.
+\item Remain responsive on very large files.  File acquisition, text editing,
+  line navigation, syntax work and minimap production must not turn a large
+  document into an unavoidable foreground pause.
+\item Provide deep automation without a plugin-marketplace architecture.
+  MRMAC is a compact macro language with a canonical compiler and virtual
+  machine.  It automates editing, interaction and toolchain work while staying
+  inside explicit runtime and UI boundaries.
+\end{itemize}
+
+This explains several choices that may otherwise look unusually strict.  MR
+uses a piece table instead of repeatedly moving a complete document; keeps one
+macro-visible runtime value store instead of several convenient registries; and
+does not allow worker threads or macros to write directly into TVision screen
+state.  These are not stylistic preferences.  They preserve a debuggable
+answer to three questions: where is the current value, which version of a
+document was changed, and which thread is allowed to project it to the user.
+
+\section{Design principles}
+
+\begin{description}
+\item[One owner for each semantic value.] Settings have one runtime model.
+  Macro-visible runtime values have one VM K/V store.  TVision owns focus,
+  Z-order, view lifetime and draw dispatch.  A second store may cache a
+  mechanical object, but it may not become competing truth.
+\item[Model before projection.] A document, an MMP window definition or a macro
+  screen command is first represented as data.  A UI projection consumes that
+  data on the UI thread.  The same model can be validated, staged, inspected
+  and discarded without guessing about a live view.
+\item[Work away from the event loop; apply at an explicit boundary.] Long
+  calculations use the coprocessor, but only versioned results reach the UI
+  pump.  The application either accepts a result against live state or rejects
+  it.  It never quietly rebases old output onto an unrelated edit.
+\item[Keep the canonical path canonical.] MRMAC has one compiler frontend and
+  the VM owns bytecode semantics.  Settings are finally applied by the VM in
+  controlled startup mode.  This is less clever duplication and more
+  diagnosable behaviour.
+\item[Keep roles visible.] Staging, validation, final apply, persistence and
+  rendering are distinct roles.  They are deliberately not collapsed into a
+  generic work helper.
+\end{description}
+
+\section{Scope and authority}
+
+This manual is a technical description of the implementation in this source
+tree.  It is not an API stability promise and it is not a language reference;
+the MRMAC Reference Manual describes macro syntax and individual primitives.
+Where a design note and executable code differ, code and the binding
+architecture contracts win.  In particular, this manual distinguishes an
+implemented route from a prepared but currently unconnected one.
+
+The introductory goals in this chapter are derived from the project README.
+The component boundaries and ownership rules are derived from the architecture
+map and contracts.  The remaining chapters connect those documents to the
+concrete classes and data flows used at runtime.
+
+\chapter{System Map and Authority}
+
+\section{The major subsystems}
+
+\begin{longtable}{p{0.22\textwidth}p{0.34\textwidth}p{0.34\textwidth}}
+\toprule
+\textbf{Subsystem} & \textbf{Primary responsibility} & \textbf{Authoritative state}\\
+\midrule
+\endhead
+App, command router and dialogs & User commands, window operations and
+configuration editing & Editor and window state in the app/UI layer; dialog
+buffers are temporary only\\
+\addlinespace
+TVision integration & Focus, Z-order, event routing, drawing and view
+lifetime & TVision desktop and view hierarchy\\
+\addlinespace
+Text document & Mutable logical text, versioning, snapshots and edit
+transactions & \texttt{mr::editor::TextDocument}\\
+\addlinespace
+MRMAC compiler and VM & Source compilation, bytecode execution, intrinsics and
+macro values & Canonical compiler frontend and VM execution state\\
+\addlinespace
+Runtime K/V & Macro catalog, globals, sessions, modeless UI and debugger data &
+\texttt{MRVMRuntimeKv} and its global hash store\\
+\addlinespace
+Coprocessor & Queueing, workers, lane state and completed task delivery &
+\texttt{Coprocessor} lane queues and result queue\\
+\addlinespace
+Deferred UI playback & Ordered UI-thread application of deferred macro screen
+commands & Local playback queue and its screen-model transition state\\
+\addlinespace
+Settings & Current-version configuration and controlled persistence &
+central in-memory settings model\\
+\bottomrule
+\end{longtable}
+
+The table is intentionally not a class diagram.  It identifies ownership, which
+is more useful than inheritance when diagnosing a defect.  For example, a
+modeless macro window has a live TVision projection, but its macro-visible
+definition belongs under the \texttt{MODELESSUI} K/V root.  Destroying a view
+does not transfer ownership of semantic state to the UI.
+
+\section{The principal data routes}
+
+\begin{verbatim}
+user input
+    -> TVision event
+    -> MREditorApp / command router
+    -> document, settings, macro runner, or UI operation
+
+MRMAC source
+    -> canonical compiler
+    -> bytecode + unit metadata
+    -> VirtualMachine / Macro Runner
+    -> foreground, background, or staged route
+
+worker result
+    -> Coprocessor result queue
+    -> MREditorApp::idle() pump on the UI thread
+    -> version/conflict validation
+    -> model commit and TVision projection
+\end{verbatim}
+
+The important distinction is between a request and an observable effect.  A
+background macro can request a text transaction or a UI command; it does not
+own an editor window or a TVision view.  A dialog can collect a setting value;
+it does not become the settings model.  This makes the application less
+magical when several operations overlap.
+
+\part{Document Engine}
+
+\chapter{Piece Tables, Add Buffers and Snapshots}
+
+\section{The document is a sequence of references}
+
+The editor's mutable document is \texttt{mr::editor::TextDocument}.  It is a
+piece table: logical text is represented by an ordered vector of pieces, not
+by moving the suffix of one monolithic string for every insertion.  A piece
+contains a source kind and a span.
+
+\begin{verbatim}
+logical text:
+    [ Original: 0..12 ] [ Add: 0..5 ] [ Original: 12..end ]
+
+sources:
+    Original -> immutable initial text, often an mmap-backed file
+    Add      -> append-only text introduced by edits
+\end{verbatim}
+
+For an unedited mapped file, one piece can refer to the whole original file.
+The original is opened read-only through \texttt{MappedFileSource}; on
+supported regular files that avoids eagerly copying the complete file into a
+mutable buffer.  Non-mapped and constructed documents use an owned original
+string.  Both forms present the same piece-table interface to callers.
+
+\section{The append buffer}
+
+\texttt{AppendBuffer} is the add buffer of the piece table.  Insertion and the
+replacement text of a replace operation are appended once.  The document then
+inserts a piece that points at the newly appended span.  Existing add-buffer
+text is not shifted or rewritten merely because another edit happened before
+it.  Deletion normally removes pieces or portions of pieces; it does not need
+to erase historic bytes from the add buffer.
+
+This is the practical reason for the name add buffer, rather than a second
+general-purpose text buffer.  It has one semantic role: retain inserted text
+for pieces that reference it.  \texttt{compactPieces()} can merge adjacent
+pieces that refer to contiguous spans of the same source.  It reduces metadata
+fragmentation without silently rewriting the two source stores.
+
+There is a separate \texttt{StagedAddBuffer}.  It belongs to a
+\texttt{StagedEditTransaction}, not to the live document.  A worker can append
+its proposed insertions there and return spans with its proposed operations.
+The UI thread copies those spans into the live add buffer only after accepting
+the transaction.  This keeps speculative text out of the live document.
+
+\section{Edit operations and versioning}
+
+The document exposes insert, erase and replace operations, plus
+\texttt{EditTransaction} and \texttt{StagedEditTransaction}.  A normal
+transaction is applied synchronously.  A staged transaction carries the base
+document version from the snapshot from which it was created.
+
+\begin{verbatim}
+snapshot(version N) -> worker creates staged transaction
+                                   |
+                                   v
+live document at version N ? -> apply transaction -> version N + 1
+                           \
+                            -> reject; never rebase silently
+\end{verbatim}
+
+Every successful text mutation advances the document version.  The result of
+\texttt{tryApply()} reports whether a proposed transaction was committed or
+rejected.  The version is therefore a correctness boundary, not a performance
+counter.  A background operation that saw old text cannot overwrite input that
+arrived while it was running.
+
+\section{Read snapshots and copy-on-write}
+
+\texttt{readSnapshot()} produces a \texttt{ReadSnapshot} containing the
+document identity, version, logical length, original source, add-buffer
+storage, piece vector and indexing state.  The snapshot shares immutable
+source storage with the document.  Before a live edit changes the shared piece
+vector or owned original text, the document makes its own copy.  Thus a worker
+can read one coherent logical document while the user edits a newer live
+version.
+
+This is intentionally not a lock-free writable shared document.  The snapshot
+is a read model.  It provides piece-wise character, line and range access and
+is suitable for indexing, syntax analysis, minimap generation and staged macro
+execution.  Its result must still pass the version check before it changes
+visible state.
+
+\section{Line navigation without mandatory full indexing}
+
+Large-file usability also depends on line navigation.  The document maintains
+two complementary forms of line knowledge.
+
+\begin{itemize}
+\item For directly addressable text, it can build an initial line index
+  efficiently.
+\item For large mapped and piece-wise documents, it keeps lazy checkpoints.
+  A query advances indexing in bounded strides; an estimate is available before
+  the exact total is known.
+\item After edits, an exact edited-line-start index can be maintained where it
+  is useful.  Insert and erase update or rebuild the affected portion rather
+  than pretending that old checkpoints remain exact.
+\end{itemize}
+
+The line index is an acceleration structure, not another document authority.
+It can be invalidated and regenerated from pieces.  Warmup results carry a
+document version and are adopted only when they describe the still-live
+document.
+
+\section{Normalization is a deliberate escape valve}
+
+An mmap-backed original with many edits is normally excellent: the original
+file stays mapped and new text lives in the add buffer.  At a large-size and
+piece-count threshold, however, traversing a very fragmented list becomes less
+attractive than materializing current logical text once.  The document has a
+guarded normalization path for that case.  It creates one Add-backed piece from
+current content and releases the mapping.
+
+That is not a contradiction of the piece-table design.  It is a bounded
+trade-off against unbounded metadata and traversal cost.  The normal case
+remains references into original and add storage; normalization is reserved for
+the sufficiently large, sufficiently fragmented case.
+
+\chapter{Document Consumers and Background Analysis}
+
+\section{Consumers read snapshots, not half-mutated text}
+
+The document model feeds editors, file saving, syntax analysis, folding,
+minimap production and background macros.  Background consumers receive
+document id, base version and a \texttt{ReadSnapshot}.  They return a typed
+payload to the coprocessor result queue.  The UI-side dispatcher finds the
+target document and applies the payload only when document id and base version
+still match.
+
+This rule prevents a familiar editor race: a syntax or minimap computation
+finishes correctly for yesterday's text and paints it over today's text.
+Discarding a stale result is preferable to producing visually convincing but
+wrong editor state.
+
+\section{Syntax, folds and minimap}
+
+Syntax analysis has canonical parsing and derived projection maps.  Token runs,
+structural line information, fold ranges and indentation hints are derived
+data; they are not a second parser hidden in the UI.  Budgeted analysis means
+the application may expose a partial quality level while more work is queued,
+not that it is allowed to invent a different syntax interpretation.
+
+The minimap similarly derives a compact screen projection from document and
+viewport state.  Both syntax and minimap warmups run through the coprocessor
+and return versioned payloads.  The editor draw path consumes accepted
+projection; it does not turn a cache miss into a syntax worker.
+
+\section{Saving and undo boundaries}
+
+Saving serializes current logical document text, not the historical layout of
+its pieces.  A piece table is an editing representation, not a file format.
+Undo and redo operate at the editor/domain layer using document operations and
+snapshots as appropriate; the add buffer itself is not an undo stack.  Keeping
+these roles separate prevents storage history from becoming accidental
+user-visible command history.
+
+\part{MRMAC Runtime}
+
+\chapter{Compiler, Bytecode and Macro Catalog}
+
+\section{One canonical compiler}
+
+MRMAC source is compiled in memory by the C frontend in
+\texttt{mrmac/mrmac.c}.  It emits the bytecode consumed by the VM and records
+unit metadata such as macro name, entry offset, flags, assigned key, mode and
+closure tick interval.  The compiler is the canonical frontend for normal
+macros, source text, debug-source-map compilation and restricted watch
+expressions.  A second parser or a bytecode-injection shortcut would produce
+two semantic authorities and is therefore not part of the architecture.
+
+\begin{verbatim}
+.mrmac source -> canonical compiler -> bytecode + unit metadata
+                                      |
+                                      v
+                               VM executeAt(entry offset)
+\end{verbatim}
+
+\section{Loaded files and resident bytecode}
+
+The runtime macro catalog lives below the \texttt{MACROCATALOG} K/V root.
+Files are addressed by a normalized file key; macros are addressed by a
+normalized macro key.  The catalog records loaded-file information, resident
+bytecode, execution profile, macro names, source maps when a debug start
+creates them, macro metadata and enumeration order.
+
+The catalog is the source of truth for loaded macro runtime data.  C++ transfer
+objects such as \texttt{LoadedMacroFile}, \texttt{MacroRef} and
+\texttt{IndexedBoundMacroEntry} are reconstructed from that root.  They are
+not a hidden second registry.  This matters for reload, unload, debugging and
+macro-visible inspection: there must be one place in which the runtime answers
+what is actually loaded.
+
+\section{On-demand loading and compilation}
+
+MR avoids compiling every candidate macro file merely to start the editor.
+When a macro specification names an unloaded file, the runtime resolves the
+file, reads its source, invokes the canonical compiler and registers the
+result.  A later invocation uses resident bytecode while that loaded file
+remains in the catalog.  An assigned key first checks explicitly bound actions
+and already loaded macros; it may then resolve an indexed binding and load its
+file before dispatching again.
+
+This is on-demand compilation in the operational sense used by MR: source is
+compiled when the runtime needs the file, then retained as resident bytecode
+for the loaded lifetime.  It is not a separate persistent bytecode cache or a
+second compiler format.
+
+\section{Indexed bindings and the pre-use caveat}
+
+The repository contains an indexed-binding preparation route:
+\texttt{mrvmBootstrapBoundMacroIndex()} scans macro files for binding headers,
+stores candidate files and bindings below
+\texttt{MACROCATALOG/indexed}, and
+\texttt{mrvmWarmLoadNextIndexedMacroFile()} can resident-load one candidate at
+a time.  This is the closest implemented concept to pre-use or prewarmup.
+
+There is an important current-state qualification.  No source symbol named
+\texttt{preuse} exists.  Moreover,
+\texttt{MREditorApp::warmIndexedMacroBindings()} is presently empty and the
+bootstrap function has no application call site.  The mechanism is therefore
+prepared code, not an active startup or idle-time performance feature.  This
+manual records the route because it establishes useful ownership and storage
+rules, but it must not be advertised as a currently active preloading
+guarantee.  The active and reliable path is direct on-demand loading through
+the canonical compiler.
+
+\section{Execution profiles}
+
+Before selecting a route, the runtime analyzes bytecode into an
+\texttt{MRMacroExecutionProfile}.  The profile classifies operations by thread
+and side-effect requirements.  It decides whether a macro is safe for
+background execution, acceptable for staged background execution, or must stay
+on the UI thread.  This analysis is reused by execution sessions instead of
+being reimplemented by every consumer such as a timer, modeless callback or
+debugger.
+
+\chapter{The Virtual Machine and Its Runtime Store}
+
+\section{The VM owns execution semantics}
+
+\texttt{VirtualMachine} owns instruction execution, local variables, operand
+and call state, intrinsic dispatch and bytecode errors.  Normal bytecode is
+executed through \texttt{VirtualMachine::executeAt}; execution sessions add
+lifetime and routing around that call, not a competing interpreter.
+
+The VM is also a controlled bridge to selected application capabilities.  Typed
+intrinsics may request editor actions, dialogs, modeless controls or screen
+operations.  They are intentionally typed and explicit.  A generic call into
+TVision would turn macro code into an unreviewable pointer and event API and
+would break the UI boundary described later in this manual.
+
+\section{Why there is one central macro-visible K/V store}
+
+\texttt{MRVMRuntimeKv} owns one global hash store.  It gives the macro runtime
+a single K/V universe for values representable as VM scalars, strings, arrays
+and hashes.  The rule is not that every C++ object must be encoded as a hash.
+The rule is that macro-visible semantic data must not have two owners.
+
+\begin{itemize}
+\item A debugger, a macro and a status view inspect the same session or global
+  value rather than three copies whose synchronization order is unknowable.
+\item Reload and destruction have a visible lifetime operation: remove the
+  relevant K/V subtree.  There is no forgotten C++ map quietly keeping an old
+  value alive.
+\item Background staging can copy or replace explicit runtime value data at a
+  named boundary rather than mutate a private registry behind the UI.
+\item K/V roots are runtime-only unless a separate persistence contract says
+  otherwise.  They do not leak transient sessions or modeless windows into
+  settings and workspace serialization.
+\end{itemize}
+
+\section{Runtime roots}
+
+\begin{longtable}{p{0.23\textwidth}p{0.67\textwidth}}
+\toprule
+\textbf{Root} & \textbf{Role}\\
+\midrule
+\endhead
+\texttt{MACROGLOBALS} & Explicit MRMAC global scalars, strings, arrays and
+hashes, including enumeration state.  Ordinary \texttt{DEF\_*} variables do
+not belong here.\\
+\addlinespace
+\texttt{MACROCATALOG} & Loaded macro files, resident bytecode, profiles,
+macro metadata, catalog order, indexed bindings and debug-created source maps.\\
+\addlinespace
+\texttt{EXECSESSIONS} & Execution-session counters, active and pending
+sessions, terminal results, long-lived variables, closures, scheduler
+consumers, scheduler events and console state.\\
+\addlinespace
+\texttt{MODELESSUI} & Staged dialog definitions, named item lists, retained
+modeless window state, fields, canvas scenes and logical desktop state.\\
+\addlinespace
+\texttt{MACRODEBUGGER} & Debugger-owned sessions, normalized breakpoints,
+watches and generated snapshots.\\
+\addlinespace
+\texttt{MACROSNIPPETS} & Recognized macro-visible runtime root for snippet
+state; it remains runtime data rather than a project-maintained parallel
+catalog.\\
+\bottomrule
+\end{longtable}
+
+Roots are grouped by runtime role below their top-level name.  A new feature
+must add a meaningful subtree, not a flat sibling with opaque lifetime.  Keys
+are normalized where the language contract requires it; explicit global names,
+for example, are not derived from macro file paths.
+
+\section{The necessary exceptions: local VM stores and mechanical handles}
+
+One store does not mean one giant global object with every byte of process
+state.  It applies to values that are part of observable macro runtime
+semantics.  The following local state is necessary and does not violate the
+rule.
+
+\begin{description}
+\item[Live VM frames and operand stacks.] A \texttt{DEF\_*} variable in a
+  finite invocation belongs to that invocation's VM frame.  Making every local
+  a process-global K/V entry would give it the wrong lifetime, expose
+  intermediate execution state and make concurrent VMs alias one another.
+\item[Local VM hash storage.] A VM may use local hash storage for local values
+  while it executes.  The VM explicitly distinguishes local from global-backed
+  values when reading or copying them.  A value becomes runtime-global only
+  through the defined global, session or closure routes.
+\item[Long-lived session and closure variables.] The exception ends when a
+  value must survive an immediate frame.  Session-persistent \texttt{DEF\_*}
+  values live under \texttt{EXECSESSIONS}; closure state does as well.  This
+  gives them a defined owner and cleanup point.
+\item[Mechanical process handles.] Live TVision pointers, callback function
+  pointers, coprocessor task handles, listener callbacks and suspended
+  \texttt{VirtualMachine} ownership cannot be represented as MRMAC values.
+  C++ may retain them, but their ids, owner, status and user-visible metadata
+  remain in the K/V store.
+\item[Short-lived staging structures.] A \texttt{BackgroundEditSession}, a
+  staged transaction and a deferred-playback screen model are local mechanics
+  for one route.  They become semantic only through an accepted transaction,
+  K/V result or ordered deferred command sequence.
+\end{description}
+
+The test is simple: if a macro, debugger or another runtime consumer needs to
+observe a value as program semantics, it belongs in the central K/V model.  If
+it is a non-representable resource or an ephemeral interpreter mechanism, it
+may remain local, provided it never becomes a secret value store.
+
+\chapter{Execution Sessions, Delays and Scheduling}
+
+\section{A session names one logical macro execution}
+
+An \texttt{MRMacroExecutionSession} gives one macro execution an id, owner,
+route, state, task id and label.  It owns lifecycle metadata, routing,
+cooperative cancellation, yield/resume state and terminal-result publication.
+It does not change bytecode semantics.  Debuggers, timers, modeless controls
+and event callbacks consume sessions instead of creating macro-runner side
+channels.
+
+\begin{longtable}{p{0.24\textwidth}p{0.66\textwidth}}
+\toprule
+\textbf{Route} & \textbf{Meaning}\\
+\midrule
+\endhead
+UI thread & The macro needs live UI-affine state and executes through the
+ordinary foreground path.\\
+\addlinespace
+Foreground delay & A foreground macro reached cooperative \texttt{DELAY}; the
+session is retained and resumed by the application idle pump.\\
+\addlinespace
+Background & The bytecode profile is background-safe and runs on
+\texttt{Lane::Macro}.\\
+\addlinespace
+Staged background & The profile is eligible for the snapshot, transaction,
+conflict-check, commit and deferred-playback route.\\
+\addlinespace
+Debug & The debugger controls a session at cooperative VM instruction
+boundaries; it does not create a different bytecode machine.\\
+\bottomrule
+\end{longtable}
+
+Cancellation and pause are cooperative.  They are observed at defined VM
+boundaries, not injected into the middle of an intrinsic, external I/O
+operation or UI playback.  This makes state transitions explainable and avoids
+tearing a C++ operation in half merely to make a Stop button appear immediate.
+
+\section{Ownership, closures and the runtime scheduler}
+
+An execution owner may name a buffer or a modeless window.  It is a routing and
+lifetime identity, not a persistence identity.  Closing an MMP window removes
+its scheduler consumers before requesting cancellation of its active sessions.
+Removing a session removes its session variables; a later run of the same
+source file must not inherit a previous invocation's locals by accident.
+
+A \texttt{\$CLOSURE} unit with \texttt{DEF\_TICK} is compiled as a normal MRMAC
+unit with an entry offset and tick interval; it introduces no new opcode.  The
+scheduler supplies monotonic ticks and asks the macro runner to create a normal
+session.  It does not execute bytecode directly.
+
+The approved overrun policy is skip.  If a previous session for a consumer is
+active when the next tick is due, the scheduler records a \texttt{TickSkipped}
+event with the blocking session id.  It does not queue a second copy, replace
+current work or overlap two executions.  This bounded policy is important for
+callbacks that mutate retained UI state or request external work.
+
+\part{Concurrency, Staging and Safe Projection}
+
+\chapter{The Coprocessor and Its Lanes}
+
+\section{What the coprocessor owns}
+
+The coprocessor owns task queues, worker threads, lane state, cancellation
+requests and completed-result delivery.  It does not own editor windows,
+TVision views, settings authority or macro-visible K/V truth.  A task contains
+an id, lane, kind, document id, base version, label and cancellation state; a
+typed payload carries its completed result.
+
+\begin{longtable}{p{0.18\textwidth}p{0.72\textwidth}}
+\toprule
+\textbf{Lane} & \textbf{Typical work}\\
+\midrule
+\endhead
+\texttt{Io} & File-oriented work and operations whose scheduling policy should
+not compete with document computation.\\
+\addlinespace
+\texttt{Compute} & Line-index warmup, syntax analysis, fold work, save
+normalization and comparable document calculations.\\
+\addlinespace
+\texttt{MiniMap} & Minimap generation, isolated so a visual summary does not
+starve higher-value editor work.\\
+\addlinespace
+\texttt{Macro} & Bytecode macros classified as background-safe or eligible for
+the staged background route.\\
+\addlinespace
+\texttt{Extern} & External I/O sources such as files, journals, devices,
+networks and pipes.\\
+\bottomrule
+\end{longtable}
+
+Lanes separate classes of work rather than merely giving a pool of threads
+decorative names.  They have their own queue state and workers.  The
+coprocessor can coalesce work whose older result has become useless, record
+timing and cancel work cooperatively.  A lane is not permission to touch every
+part of the application from a worker thread.
+
+\section{Completion delivery is intentionally pumped}
+
+Workers enqueue \texttt{Result} objects.  The application consumes them through
+\texttt{globalCoprocessor().pumpFor(...)} from
+\texttt{MREditorApp::idle()}.  Completion handlers therefore run at the UI
+thread boundary, where they can find a window, test a document version, commit
+accepted state and ask TVision to redraw through ordinary mechanisms.
+
+A worker may finish at any time; the UI must not be entered at any time.  The
+result queue turns asynchronous completion into ordinary serialized application
+work.
+
+\chapter{Staged Macro Execution}
+
+\section{Why staging exists}
+
+A macro can be expensive enough to benefit from a worker while still requesting
+editor-related effects.  Running it directly against live editor objects would
+make its result depend on concurrent input and would let a background thread
+cross into UI state.  Staging preserves useful concurrency while keeping one
+final apply point.
+
+\begin{verbatim}
+live editor
+    -> ReadSnapshot + base version + runtime conflict snapshot
+    -> Lane::Macro worker
+    -> staged edits, staged runtime changes, deferred UI commands
+    -> UI-thread result dispatch
+    -> validate live state
+       -> commit once, then queue UI commands
+       -> or reject without rebase
+\end{verbatim}
+
+The runner builds \texttt{MRMacroStagedExecutionInput} from a document snapshot
+and relevant editor/runtime state: cursor, selection, blocks, buffer and window
+identity, geometry, macro globals, loaded macro names, search state, options,
+marks, insert and indentation state, file state and screen geometry.  The VM
+records proposed text edits as a \texttt{StagedEditTransaction}; suitable
+screen operations become deferred UI commands.
+
+\section{Commit is all-or-reject}
+
+The UI-side coprocessor dispatcher locates the target editor by buffer id and
+checks document version plus the macro conflict snapshot.  Only then can it
+commit the staged transaction and applicable staged runtime state.  Deferred UI
+playback is queued after a successful commit.  A conflict rejects the result;
+there is no silent rebase path.
+
+\begin{description}
+\item[Text safety.] A worker result cannot overwrite a newer document merely
+  because it finished later.
+\item[Runtime safety.] Cursor, selection, search and related state are checked
+  as one route-specific snapshot, rather than independently patched from an
+  obsolete worker view.
+\item[UI truthfulness.] A deferred message or macro-screen change is not played
+  for edits that failed to commit.  What the user sees corresponds to accepted
+  live state.
+\end{description}
+
+\section{What staging does not do}
+
+Staging is not a general transaction framework and it is not a replacement for
+the UI thread.  Macros that need live UI interaction remain on the foreground
+route.  Staging does not create a new macro lane, change deferred UI batching,
+or use a debugger-specific editor copy.  It is a narrow, explicit bridge from
+snapshot computation to validated final application.
+
+\chapter{UI Pump, Deferred Playback and Screen Safety}
+
+\section{The idle pump is the synchronization point}
+
+\texttt{MREditorApp::idle()} is the controlled point at which runtime progress
+becomes visible.  After TVision's own idle handling, and only when interactive
+mouse capture is not active, the application pumps timers, foreground macro
+delays, debugger sessions, status indicators, coprocessor results and deferred
+macro UI.  The coprocessor result pump has a small time budget; deferred macro
+playback has both a command budget and a time slice.
+
+\begin{verbatim}
+TVision idle
+    -> timer and foreground-delay progress
+    -> debugger session progress
+    -> bounded coprocessor result pump
+    -> bounded deferred macro UI playback
+    -> ordinary status, autosave and display updates
+\end{verbatim}
+
+\begin{description}
+\item[Z-order safe.] TVision remains the authority for focus, Z-order, event
+  routing, drawing and view lifetime.  A worker does not draw over a window or
+  promote a view.  Deferred commands are projected on the UI thread through the
+  established screen/model/view chain.
+\item[Blocking safe.] Work is sliced instead of draining an unbounded result or
+  command queue in one idle turn.  A deferred \texttt{DELAY} records a resume
+  time and yields the pump; foreground delays are cooperative as well.  The
+  system preserves opportunities for ordinary events between chunks of deferred
+  work.  It does not claim that an inherently modal foreground operation is
+  non-blocking.
+\item[UI safe.] The worker produces data only.  The dispatcher validates and
+  commits it, and the playback queue applies it from the UI thread.  This keeps
+  TVision single-threaded draw and event assumptions intact.
+\end{description}
+
+\section{Deferred macro screen playback}
+
+Deferred macro screen commands are appended in macro order to a local FIFO
+playback queue.  The queue processes its front entry only, preserving the
+sequence produced by a macro.  Each playback owns a
+\texttt{MacroScreenModel}; it seeds from current runtime screen state and
+observes the screen mutation epoch.  If another render path changed the base,
+the model invalidates its assumptions before continuing.
+
+Playback begins and ends one macro-screen batch with
+\texttt{mrvmUiBeginMacroScreenBatch()} and
+\texttt{mrvmUiEndMacroScreenBatch()}.  The batch boundary is architectural:
+it avoids a flickering stream of partial projections and preserves the existing
+gateway/view ordering.  It is not incidental performance code to be removed
+when the route looks mechanically verbose.
+
+The playback model decides whether a command should still be rendered and
+projected.  The renderer uses the VM UI facade; it does not write a terminal
+screen buffer directly.  A render failure invalidates the local model and is
+logged rather than concealed by a broad desktop repaint.
+
+\section{Deferred commands and MMP are different models}
+
+Deferred macro-screen commands are an ordered projection stream for
+screen-affine operations.  MMP is a retained model for modeless macro windows.
+Both use the UI-thread boundary, but they solve different problems:
+
+\begin{itemize}
+\item a deferred command says apply this accepted screen operation in this
+  order;
+\item an MMP model says this logical window, control, field or canvas scene
+  currently has this value.
+\end{itemize}
+
+Combining them into one UI cache would blur ordering, retained state, TVision
+lifetime and macro-visible values.  MR keeps the models separate and projects
+both through TVision-native mechanisms.
+
+\part{User Interface and Modeless Macro UI}
+
+\chapter{TVision, Desktop Windows and Conventional Dialogs}
+
+\section{TVision is the UI authority}
+
+MR is built on the C++ Turbo Vision implementation.  TVision owns focus,
+Z-order, event routing, view lifetime and draw dispatch.  MR extends it with
+ordinary view classes, dialogs, frames and desktop roles.  It does not make
+direct writes to \texttt{TScreen::screenBuffer}, install an overlay side
+channel, or change event routing merely to simulate a visual property.
+
+This decision is less glamorous than raw terminal drawing, but it makes expose,
+resize, focus traversal, modal handling and window ordering remain the
+responsibility of one UI system.  Macro code can influence UI only through
+typed procedures and controlled projection bridges.
+
+\section{Desktop-managed windows}
+
+\texttt{MRDesktopWindow} is the polymorphic desktop role for focusable,
+tileable, visible/minimized/restorable top-level windows.  An editor window, a
+BentoBox and an MMP window can participate in desktop operations without
+forcing command code to branch on each concrete type.  Editor-specific
+capabilities such as saving, comparison, workspace ownership and document
+operations remain with \texttt{MREditWindow}.
+
+Modal dialogs are different.  A dialog executed through TVision's modal path
+is not a desktop-managed window.  Its input buffers, validation state and view
+state are transient.  A dialog may request a settings update or command, but
+it does not become the authoritative settings store.
+
+\section{Dirty projection}
+
+Compound views use dirty bits to schedule projection work such as content,
+chrome, scrollbar, layout and overlay updates.  Dirty bits say that a
+projection is needed; they do not encode a semantic state transition.  The
+owning model changes first, then the view is marked dirty.  A full layout may
+consume narrower dirty bits as part of its normal layout path.
+
+\chapter{MMP: Retained Modeless Macro Programs}
+
+\section{Why MMP exists}
+
+Conventional macro dialogs are ideal for a linear question: declare controls,
+execute the dialog, receive values and continue.  A modeless macro program has
+a different lifecycle.  It may be a persistent tool, status panel, monitor,
+form, timer-driven display or multi-instance desktop surface that remains
+usable while other work continues.
+
+MMP supplies that lifecycle without exposing a TVision pointer, raw event,
+window handle or drawing context to MRMAC.  A macro declares a typed UI model;
+the runtime retains it under \texttt{MODELESSUI}; TVision projects it as a
+desktop-managed modeless window.
+
+\begin{verbatim}
+MRMAC typed declaration
+    -> MODELESSUI/staging/currentDialog
+    -> retained MODELESSUI/windows/<window id>
+    -> TVision native controls and views
+    -> callback requests an execution session
+\end{verbatim}
+
+\section{A two-layer API}
+
+The core layer provides a small set of typed safe operations: dialogs, labels,
+buttons, displays, inputs, lists, trees, tables, retained canvases and modeless
+callback bindings.  It is sufficient for custom interfaces.
+
+The composed MMP layer packages recurring interaction patterns:
+
+\begin{itemize}
+\item action buttons and action menus;
+\item named text, boolean, bounded integer and selection fields;
+\item status and progress fields;
+\item bounded event logs;
+\item canvas scenes, palette-relative styles and canvas-local hotspots;
+\item timers owned by a modeless window.
+\end{itemize}
+
+The point of composed controls is not cosmetic.  A macro author should not
+rebuild focus handling, callback ownership, timer lifetime, canvas geometry and
+TVision mechanics merely to create an ordinary interactive panel.
+
+\section{Retained state and projection}
+
+A modeless definition is staged below
+\texttt{MODELESSUI/staging/currentDialog}; showing it retains a window model
+below \texttt{MODELESSUI/windows/<window id>}.  Fields store logical values
+there.  A native checkbox, input, list or progress view is a projection of that
+value, not an alternative value store.
+
+For example, a named integer field retains its value and inclusive range.  A
+user may temporarily type non-integer text into the native input, but callbacks
+and timers read the last valid retained integer.  A bounded log retains a
+chronological ring of lines; its view displays the newest visible lines.  A
+canvas stores a retained command scene and a generation; a commit redraws
+exactly that canvas and does not select or raise the MMP window.
+
+\section{Callbacks and timers}
+
+\texttt{UI\_MODELESS\_ON}, action buttons, menus and canvas hotspots request
+their target macro through the existing window-owned execution-session route.
+They do not execute a macro directly from a TVision event handler.  The
+callback reads typed values through MMP and conventional UI primitives, while
+MMP retains ownership of underlying UI state.
+
+An MMP timer is represented as scheduler state under \texttt{EXECSESSIONS};
+\texttt{MODELESSUI} does not mirror it.  Its logical timer id is scoped to the
+window.  A running callback causes the next tick to be skipped under the
+scheduler's normal overrun rule.  Closing the window removes its timers and
+requests cooperative cancellation of its owner-scoped sessions.
+
+\section{What MMP excludes}
+
+MMP never gives macro source an object pointer, a TVision view, a raw event or
+a generic drawing escape hatch.  It does not persist across a program restart.
+It does not make a second modeless-state registry in C++.  Those exclusions
+are why a window can interact with the normal desktop safely while preserving
+macro-level inspection and lifecycle rules.
+
+\part{Configuration and Supporting Services}
+
+\chapter{Settings, Persistence and Workspaces}
+
+\section{One settings model}
+
+The central in-memory settings model is the authority for current
+configuration.  \texttt{settings.mrmac} is serialized transport and bootstrap
+input; it is not a second runtime truth.  Dialogs may hold temporary buffers,
+selections and validation state, but applying a dialog writes the defined
+settings path rather than preserving the dialog object as a shadow model.
+
+\section{VM-centered bootstrap}
+
+Startup is a sequence with explicit roles:
+
+\begin{verbatim}
+ensure file -> read source -> verify and normalize
+            -> add current defaults and derive canonical source
+            -> reset runtime settings model
+            -> compile and execute canonical source in startup MRSETUP mode
+            -> post-apply work -> clear dirty state
+\end{verbatim}
+
+An older or partial file is input to normalization.  Unknown and obsolete keys
+are dropped; missing known keys receive current defaults.  The final canonical
+source uses the running build epoch.  The VM performs final startup application
+in controlled \texttt{MRSETUP} mode.  Loader staging may use settings data as a
+working medium, but it must not be mistaken for final apply.
+
+\section{Persistence and workspace}
+
+Saving writes the current runtime model in canonical current-version form.  It
+does not reload settings, merge file contents as authority, or preserve a stale
+version marker.  \texttt{SAVE\_SETTINGS} is a protected VM boundary for this
+existing behavior.
+
+Workspace serialization is an explicitly separate extension.  It may use
+\texttt{MRSETUP}-compatible \texttt{WORKSPACE} lines in
+\texttt{settings.mrmac}, but it is not canonical core settings state and does
+not license arbitrary persistence side channels.  This separation is important
+because a window layout has different ownership and lifecycle from a theme,
+keymap or runtime session.
+
+\chapter{Keymaps, Syntax and File Services}
+
+\section{Keymaps}
+
+Configured keymap profiles and the active profile belong to the settings
+model.  The resolver is a runtime projection of canonicalized profile data,
+not a rival settings registry.  The keymap trie and action catalog provide
+fast runtime resolution; the profile loader owns source-format parsing,
+canonicalization and diagnostics.  The \texttt{DEFAULT} fallback and payload
+semantics are behavioural contracts, not presentation details.
+
+\section{Syntax analysis}
+
+The syntax subsystem uses canonical parsing and derives token maps, structural
+state, folding and indentation information from it.  The UI paints accepted
+derived maps.  When refresh is expensive, the coprocessor and versioned pumped
+apply route perform it.  A cache miss is not authority to make the UI thread a
+syntax worker or to create a second parser with slightly different answers.
+
+\section{Paths and external work}
+
+Path handling, trimming, expansion, normalization and validation are shared
+domain mechanics.  They are reused instead of being reimplemented in dialogs,
+settings and external-command paths.  External sources and command output enter
+through the coprocessor external-I/O path; they do not smuggle a worker callback
+into an editor view.
+
+\part{Development and Verification}
+
+\chapter{Build Model and Generated Files}
+
+\section{The Makefile is the build orchestrator}
+
+MR is built as C++20, with a deliberately conservative C++18-oriented code
+style.  The Makefile owns the project build, TVision build integration,
+generated-header prerequisites and optional probes.  A successful clean build
+is the baseline verification:
+
+\begin{verbatim}
+make clean all CXX=clang++
+\end{verbatim}
+
+The command is more meaningful than a partial object build.  It checks that
+generated sources are recreated in the correct order and that the whole
+translation-unit graph still compiles.  Existing audio completion signals in
+the Makefile are part of build behaviour and must not disappear as collateral
+cleanup.
+
+\section{Generated sources and manuals}
+
+Help Markdown and the project quote source generate C++ headers consumed by
+the application.  Generated files are part of the declared build model, not an
+invitation to hand-edit their output after every source change.  The mixed
+versioned/generated model is historical but explicit: change the source or its
+generator, then let the build reproduce the header.
+
+The \texttt{compile-manuals} target runs LaTeX for the MRMAC reference, this
+technical manual and the user manual.  This manual needs two LaTeX passes so
+that the table of contents settles.  Documentation is an executable artifact
+in a modest sense: an otherwise correct explanation is incomplete if its
+tables, source fragments or page layout do not render.
+
+\chapter{Diagnostics and Regression Philosophy}
+
+\section{Diagnostics are part of the runtime story}
+
+MR records task timings, queue delay, result status and significant background
+events.  The message line, logs, macro execution results and debugger snapshots
+are projections for different consumers.  The architecture does not require
+each subsystem to invent a private diagnostic registry; observation state
+follows the same ownership rules as the runtime it observes.
+
+The macro debugger illustrates this approach.  It consumes execution sessions,
+catalog source maps and K/V runtime roots.  Breakpoints and watches are stored
+under \texttt{MACRODEBUGGER}; source maps created for a debug start remain with
+the loaded file under \texttt{MACROCATALOG}.  The debugger pauses a live session
+cooperatively and inspects it, but it does not introduce a debugger-only
+runner, lane, staging model or value store.
+
+\section{Regression checks protect stable boundaries}
+
+Regression checks are intentionally selective.  They protect established
+behaviour and structural invariants with low maintenance cost: macro execution,
+staging, settings gating, UI bridges, keymaps and editor operations where the
+cost of accidental change is high.  They are not a license to create a second
+application implementation in the test suite.
+
+Manual testing remains necessary at boundaries that depend on terminal and UI
+behaviour.  Relevant examples include focus traversal, resize/expose drawing,
+modal open/close, deferred playback order and batching, background macro
+conflict rejection, successful staged commit, foreground delay resume/cancel,
+and startup/save/restart behaviour for settings.
+
+\appendix
+
+\chapter{Technical Reference}
+
+\section{Source landmarks}
+
+\begin{longtable}{p{0.35\textwidth}p{0.55\textwidth}}
+\toprule
+\textbf{Area} & \textbf{Primary source locations}\\
+\midrule
+\endhead
+Piece table and document transactions &
+\texttt{piecetable/MRTextDocument.*}, \texttt{piecetable/MRTextDocumentLineIndex.*}\\
+\addlinespace
+Macro compiler & \texttt{mrmac/mrmac.c}, \texttt{mrmac/mrmac.h}\\
+\addlinespace
+VM and macro runner & \texttt{mrmac/MRVM.*}, \texttt{mrmac/MRMacroRunner.*}\\
+\addlinespace
+Runtime K/V and catalog & \texttt{mrmac/vm/MRVMRuntimeKv.*},
+\texttt{MRVMRuntimeCatalog.*}, \texttt{MRVMExecSessions.*}\\
+\addlinespace
+Conventional and modeless macro UI &
+\texttt{mrmac/ui/conventional/*}, \texttt{mrmac/ui/modeless/*}\\
+\addlinespace
+Coprocessor and deferred playback &
+\texttt{coprocessor/MRCoprocessor.*},
+\texttt{coprocessor/MRCoprocessorDispatch.*}\\
+\addlinespace
+Application idle pump & \texttt{app/MREditorApp.cpp}\\
+\addlinespace
+TVision integration and windows & \texttt{ui/*}, \texttt{dialogs/*}\\
+\addlinespace
+Settings and bootstrap & \texttt{config/*}, \texttt{app/MREditorApp.cpp}\\
+\bottomrule
+\end{longtable}
+
+\section{Questions to ask before changing a subsystem}
+
+\begin{enumerate}
+\item Which component owns the semantic value now, and would the change create
+  a mirror?
+\item Is this operation a stage, a validation, a final apply, a persistence
+  write or a projection?  If it is more than one, should the roles remain
+  visibly separated?
+\item Does the result carry a document version, an execution owner or another
+  lifetime proof appropriate to its route?
+\item Could this code run from a worker?  If so, does it produce data only and
+  return through the UI pump?
+\item Does the proposed UI effect preserve TVision focus, Z-order, event and
+  lifetime ownership?
+\item Is an existing compiler, VM, catalog, K/V root, settings model or
+  coprocessor route already the correct carrier for the behavior?
+\end{enumerate}
+
+These questions are intentionally conservative.  They encode the project's
+main lesson: a feature is finished only when its state, lifetime, concurrency
+and user-visible projection have one explainable route.
+
+\end{document}

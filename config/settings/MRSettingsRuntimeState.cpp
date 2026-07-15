@@ -22,6 +22,7 @@ namespace {
 
 bool g_windowManagerEnabled = true;
 bool g_menulineMessagesEnabled = true;
+bool g_autoDetectBinaryFiles = true;
 MRSearchDialogOptions g_searchDialogOptions;
 MRSarDialogOptions g_sarDialogOptions;
 MRMultiSearchDialogOptions g_multiSearchDialogOptions;
@@ -611,6 +612,18 @@ bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
 bool configuredMenulineMessages() {
 	recordSettingsRuntimeRead();
 	return g_menulineMessagesEnabled;
+}
+
+bool setConfiguredAutoDetectBinaryFiles(bool enabled, std::string *errorMessage) {
+	if (g_autoDetectBinaryFiles != enabled) markConfiguredSettingsDirty();
+	g_autoDetectBinaryFiles = enabled;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool configuredAutoDetectBinaryFiles() {
+	recordSettingsRuntimeRead();
+	return g_autoDetectBinaryFiles;
 }
 
 bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options, std::string *errorMessage) {
