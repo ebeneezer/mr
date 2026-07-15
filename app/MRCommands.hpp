@@ -159,7 +159,9 @@ enum : ushort {
 	cmMrMacroDebuggerAddWatch,
 	cmMrMacroDebuggerEraseWatch,
 	cmMrMacroDebuggerRunHere,
-	cmMrMacroDebuggerEvaluate
+	cmMrMacroDebuggerEvaluate,
+	cmMrDeferredWindowClose,
+	cmMrTextHexEditor
 };
 
 #endif

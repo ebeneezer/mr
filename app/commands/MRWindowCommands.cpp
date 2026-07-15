@@ -30,13 +30,16 @@
 #include <vector>
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../coprocessor/MRCoprocessor.hpp"
+#include "../utils/MRFileIOUtils.hpp"
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRMenuBar.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRFrame.hpp"
 #include "../../ui/MRBentoBox.hpp"
+#include "../../ui/hex/MRBentoHexEditor.hpp"
 #include "../../ui/widgets/MRScopedHistoryUI.hpp"
 #include "../../ui/MRWindowLayout.hpp"
 #include "../../ui/MRWindowSupport.hpp"
@@ -55,6 +58,19 @@ void logWindowTiming(const std::string &label, long long tookUs, const std::stri
 
 void postWindowCommandError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
+
+void postDeferredWindowClose(MREditWindow &window) noexcept {
+	TEvent event{};
+
+	if (TProgram::application == nullptr) {
+		window.close();
+		return;
+	}
+	event.what = evCommand;
+	event.message.command = cmMrDeferredWindowClose;
+	event.message.infoPtr = &window;
+	TProgram::application->putEvent(event);
 }
 
 void collectEditWindowsInZOrder(TView *view, void *arg) {
@@ -157,6 +173,18 @@ MREditWindow *createEditorWindowWithNumber(const char *title, short number, bool
 	finishNewEditWindow(win, notifyTopology);
 	return win;
 }
+
+MRBentoHexEditor *createHexEditorWindowWithNumber(const char *title, short number, bool notifyTopology) {
+	TRect bounds;
+	MRBentoHexEditor *win;
+
+	if (TProgram::deskTop == nullptr) return nullptr;
+	bounds = MRWindowLayout::usableDesktopBounds();
+	bounds.grow(-2, -1);
+	win = new MRBentoHexEditor(bounds, title, number);
+	finishNewEditWindow(win, notifyTopology);
+	return win;
+}
 } // namespace
 
 MRWindowOpenBatch::MRWindowOpenBatch() : usedNumbers(), mActive(false), mDesktopLocked(false), mCreatedCount(0) {
@@ -183,6 +211,15 @@ MREditWindow *MRWindowOpenBatch::createEditorWindow(const char *title) {
 	return window;
 }
 
+MRBentoHexEditor *MRWindowOpenBatch::createHexEditorWindow(const char *title) {
+	MRBentoHexEditor *window = nullptr;
+
+	if (!mActive) begin();
+	window = createHexEditorWindowWithNumber(title, nextEditorWindowNumberFromSet(usedNumbers), false);
+	if (window != nullptr) ++mCreatedCount;
+	return window;
+}
+
 void MRWindowOpenBatch::finish(bool syncVisibility, bool notifyTopology) {
 	if (!mActive) return;
 	if (mDesktopLocked && TProgram::deskTop != nullptr) TProgram::deskTop->unlock();
@@ -195,9 +232,6 @@ void MRWindowOpenBatch::finish(bool syncVisibility, bool notifyTopology) {
 bool MRWindowOpenBatch::active() const noexcept {
 	return mActive;
 }
-
-#include "../utils/MRFileIOUtils.hpp"
-#include "../config/settings/MRSettingsStorage.hpp"
 
 static int g_currentVirtualDesktop = 1;
 static int g_virtualDesktopCountSnapshot = 1;
@@ -392,7 +426,7 @@ bool parseBentoWorkspaceSnapshot(const std::string &token, MRBentoWorkspaceSnaps
 		if (!parseWorkspaceInt(values[0], leaf.id)) return false;
 		if (!parseWorkspaceInt(values[1], role)) return false;
 		if (!parseWorkspaceInt(values[2], visible)) return false;
-		if (role < bprSource || role > bprDiffCompare || (visible != 0 && visible != 1)) return false;
+		if (role < bprSource || role > bprExtensionLast || (visible != 0 && visible != 1)) return false;
 		leaf.role = static_cast<MRBentoPaneRole>(role);
 		leaf.visible = visible != 0;
 		snapshot.leaves.push_back(leaf);
@@ -1217,7 +1251,7 @@ void mrLoadWorkspace(const std::string &filename) {
 			} else {
 				{
 					const auto subStartedAt = std::chrono::steady_clock::now();
-					win = openBatch.createEditorWindow(entry.url.c_str());
+					win = entry.hasBentoSnapshot && MRBentoHexEditor::matchesWorkspaceSnapshot(entry.bentoSnapshot) ? static_cast<MREditWindow *>(openBatch.createHexEditorWindow(entry.url.c_str())) : openBatch.createEditorWindow(entry.url.c_str());
 					createUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
 				}
 				editor = win != nullptr ? win->getEditor() : nullptr;
@@ -1231,6 +1265,14 @@ void mrLoadWorkspace(const std::string &filename) {
 						continue;
 					}
 					fileLoadUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+				}
+			}
+			if (!entry.hasBentoSnapshot || entry.bentoSnapshot.mode != bbmFileCompare) {
+				win->mVirtualDesktop = resolvedVirtualDesktop;
+				{
+					const auto subStartedAt = std::chrono::steady_clock::now();
+					applyWorkspaceEntryGeometry(win, entry);
+					geometryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
 				}
 			}
 			if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode != bbmFileCompare) {
@@ -1259,18 +1301,11 @@ void mrLoadWorkspace(const std::string &filename) {
 				}
 				bentoBox->restoreMacroDebuggerWorkspaceConfiguration(entry.macroDebuggerConfiguration);
 			}
-			if (!entry.hasBentoSnapshot || entry.bentoSnapshot.mode != bbmFileCompare) {
-				win->mVirtualDesktop = resolvedVirtualDesktop;
-				{
-					const auto subStartedAt = std::chrono::steady_clock::now();
-					applyWorkspaceEntryGeometry(win, entry);
-					geometryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
-				}
-			}
 			{
-				const auto subStartedAt = std::chrono::steady_clock::now();
-				restoreEditorCursor(editor, entry.line, entry.column);
-				cursorUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+			const auto subStartedAt = std::chrono::steady_clock::now();
+			restoreEditorCursor(editor, entry.line, entry.column);
+			if (MRBentoHexEditor *hexEditor = dynamic_cast<MRBentoHexEditor *>(win); hexEditor != nullptr) hexEditor->synchronizeByteCursorFromDocument();
+			cursorUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
 			}
 			if (entry.mainFile && !loadedMainFile) {
 				static_cast<void>(mrSetWorkspaceMainFile(win));
@@ -1439,10 +1474,71 @@ MRBentoBox *convertEditWindowToBentoBox(MREditWindow *source) {
 	source->getEditor()->detachContentStateCopy();
 	source->setFileChanged(false);
 	setWindowManuallyHidden(source, false);
-	message(source, evCommand, cmClose, nullptr);
 	static_cast<void>(mrActivateEditWindow(win));
 	mrNotifyWindowTopologyChanged();
+	postDeferredWindowClose(*source);
 	return win;
+}
+
+MRBentoHexEditor *convertEditWindowToHexEditor(MREditWindow *source) {
+	MRBentoHexEditor *existingHexEditor;
+	MRBentoHexEditor *win;
+	TRect bounds;
+	const char *title;
+	MREditWindow::WindowRole role;
+	std::string roleDetail;
+	bool readOnly;
+	bool changed;
+	bool insertMode;
+	int virtualDesktop;
+	short windowNumber;
+
+	if (source == nullptr || TProgram::deskTop == nullptr || source->getEditor() == nullptr) return nullptr;
+	existingHexEditor = dynamic_cast<MRBentoHexEditor *>(source);
+	if (existingHexEditor != nullptr) return existingHexEditor;
+	if (!source->allowsDocumentViewportSplit() || source->hasTrackedExternalIoTasks()) return nullptr;
+
+	bounds = source->getBounds();
+	title = source->getTitle(0);
+	role = source->windowRole();
+	roleDetail = source->windowRoleDetail();
+	readOnly = source->isReadOnly();
+	changed = source->isFileChanged();
+	insertMode = source->insertModeEnabled();
+	virtualDesktop = source->mVirtualDesktop;
+	windowNumber = source->number;
+
+	win = new MRBentoHexEditor(bounds, title != nullptr && *title != '\0' ? title : "Untitled", windowNumber);
+	TProgram::deskTop->insert(win);
+	win->mVirtualDesktop = virtualDesktop;
+	win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
+	if (win->getEditor() != nullptr) {
+		win->getEditor()->shareContentStateFrom(*source->getEditor());
+		win->getEditor()->setInsertModeEnabled(insertMode);
+		win->synchronizePaneDocumentState();
+	}
+	win->setWindowRole(role, roleDetail);
+	win->setReadOnly(readOnly);
+	if (source->currentFileName()[0] == '\0') win->setDisplayTitle(title);
+	win->setFileChanged(changed);
+	win->activatePrimaryPane();
+
+	source->getEditor()->detachContentStateCopy();
+	source->setFileChanged(false);
+	setWindowManuallyHidden(source, false);
+	static_cast<void>(mrActivateEditWindow(win));
+	mrNotifyWindowTopologyChanged();
+	postDeferredWindowClose(*source);
+	return win;
+}
+
+bool mrDispatchDeferredWindowClose(MREditWindow *window) {
+	for (MREditWindow *candidate : allEditWindowsInZOrder()) {
+		if (candidate != window) continue;
+		candidate->close();
+		return true;
+	}
+	return false;
 }
 
 MREditWindow *currentEditWindow() {
@@ -1587,6 +1683,14 @@ void mrUpdateAllWindowsColorTheme() {
 			window->applyWindowColorThemeForPath(window->currentFileName());
 			if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window); bentoBox != nullptr) bentoBox->refreshBentoColorTheme();
 		}
+	}
+}
+
+void mrRefreshAllHexEditorProjections() {
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		MRBentoHexEditor *hexEditor = dynamic_cast<MRBentoHexEditor *>(window);
+
+		if (hexEditor != nullptr) hexEditor->refreshHexProjection();
 	}
 }
 

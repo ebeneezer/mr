@@ -229,8 +229,19 @@ CXX_SOURCES = \
 	ui/MRBentoBoxFileCompare.cpp \
 	ui/MRBentoBoxFileCompareView.cpp \
 	ui/MRBentoBoxOutline.cpp \
+	ui/MRBentoPaneFrameView.cpp \
 	ui/MRBentoBoxPaneWindow.cpp \
+	ui/MRBentoBoxEvents.cpp \
+	ui/MRBentoBoxLayout.cpp \
+	ui/MRBentoBoxChrome.cpp \
 	ui/MRBentoBoxProjection.cpp \
+	ui/MRBentoBoxRoleSupport.cpp \
+	ui/hex/MRBentoHexEditor.cpp \
+	ui/hex/MRHexInspector.cpp \
+	ui/hex/MRHexStrings.cpp \
+	ui/hex/MRHexUtf8.cpp \
+	ui/hex/panes/MRHexPaneWindow.cpp \
+	ui/hex/panes/MRHexPaneView.cpp \
 	ui/widgets/MRColumnListView.cpp \
 	ui/widgets/MRDropList.cpp \
 	ui/MRFileEditor/MRFileEditor.cpp \

@@ -108,6 +108,8 @@ class MRFileEditor : public TScroller {
 	void setWindowEofMarkerColorOverride(bool enabled, TColorAttr color = 0);
 
 	void setReadOnly(bool readOnly);
+	void setForceBinarySave(bool enabled) noexcept;
+	[[nodiscard]] bool forceBinarySave() const noexcept;
 
 	const char *persistentFileName() const noexcept;
 
@@ -745,6 +747,7 @@ class MRFileEditor : public TScroller {
 
 	TIndicator *mIndicator;
 	bool mReadOnly;
+	bool mForceBinarySave;
 	bool mCustomWindowEofMarkerColorOverrideValid = false;
 	TColorAttr mCustomWindowEofMarkerColorOverride = 0;
 	bool mCommunicationViewerMode = false;

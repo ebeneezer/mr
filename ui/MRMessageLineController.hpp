@@ -24,7 +24,8 @@ enum class Owner : unsigned char {
 	MacroMarquee,
 	MacroBrain,
 	DialogValidation,
-	DialogInteraction
+	DialogInteraction,
+	HexEditor
 };
 
 struct VisibleMessage {
