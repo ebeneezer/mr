@@ -33,7 +33,7 @@
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 #include "../ui/MRDeskTop.hpp"
-#include "../ui/MRBentoBox.hpp"
+#include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRMessageLineController.hpp"

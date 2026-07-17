@@ -47,12 +47,13 @@
   - printing via PDF exports
   - acquire files from the output of shell commands or pipes
   - compiler profiles with automatic setup and error tracking in code
+  - hex edit mode with synchonous hex, dec, oct, strings and binary view plus additional data inspector
 
 ## Why? Who needs this?
 
 - noone needs this - there are many good TUI editors out there
 - everybody needs this - because none of the console editors around are this elegant and feature rich. Mr tries to be around in every situation you're in need of a TUI editor to manage your system, files and codebases or want an editor with IDE features in your terminal
-- why you ask? I always wanted my Multi-Edit back - but only the TUI version inspired me back in the days. I had ideas for this project for years and after i retired in 2024 i found time to export all of these ideas out of my brain and into code. Also I wanted to test what all the fuzz is about with AI and coding assistants - except I was and am not interested in vibe coding, I wanted assistance for the tedious parts. Tried several coding assistants and found Codex to best meet my needs and style of interacting
+- why you ask? I always wanted Multi-Edit back - but only the TUI version inspired me back in the days. I had ideas for this project for years and after i retired in 2024 i had time to export all of these ideas out of my head and into code. I wanted to test what all the fuzz is about with AI and coding assistants - except I was and am not interested in vibe coding, I wanted assistance for the tedious parts. Tried several coding assistants and found Codex to best meet my needs and style of interacting
 
 ## Showtime
 

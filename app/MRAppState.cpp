@@ -3,7 +3,7 @@
 #include "router/MRCommandRouterSearchMultiFile.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
-#include "../ui/MRBentoBox.hpp"
+#include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "MRCommands.hpp"
 

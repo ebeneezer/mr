@@ -64,7 +64,7 @@
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../diff/MRDiff.hpp"
 #include "../piecetable/MRTextDocument.hpp"
-#include "../ui/MRBentoBox.hpp"
+#include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
@@ -8574,8 +8574,8 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 
 bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason) {
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
-	const std::string paneWindowPath = absolutePathFromCwd("ui/MRBentoBoxPaneWindow.cpp");
-	const std::string projectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	const std::string paneWindowPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxPaneWindow.cpp");
+	const std::string projectionPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxProjection.cpp");
 	std::string viewportContent;
 	std::string paneWindowContent;
 	std::string projectionContent;
@@ -10759,19 +10759,19 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	std::size_t verticalOrientationPos = std::string::npos;
 	std::size_t horizontalOrientationPos = std::string::npos;
 
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox.cpp"), source, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBox.cpp"), source, ioError)) {
 		failureReason = "Unable to read MRBentoBox.cpp: " + ioError;
 		return false;
 	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxDiagnostics.cpp"), diagnosticsSource, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxDiagnostics.cpp"), diagnosticsSource, ioError)) {
 		failureReason = "Unable to read MRBentoBoxDiagnostics.cpp: " + ioError;
 		return false;
 	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxPaneWindow.cpp"), paneWindowSource, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxPaneWindow.cpp"), paneWindowSource, ioError)) {
 		failureReason = "Unable to read MRBentoBoxPaneWindow.cpp: " + ioError;
 		return false;
 	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxProjection.cpp"), projectionSource, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxProjection.cpp"), projectionSource, ioError)) {
 		failureReason = "Unable to read MRBentoBoxProjection.cpp: " + ioError;
 		return false;
 	}
@@ -10781,7 +10781,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	source += paneWindowSource;
 	source += "\n";
 	source += projectionSource;
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox.hpp"), header, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBox.hpp"), header, ioError)) {
 		failureReason = "Unable to read MRBentoBox.hpp: " + ioError;
 		return false;
 	}
@@ -11292,8 +11292,8 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
 	const std::string windowListHeaderPath = absolutePathFromCwd("dialogs/MRWindowList.hpp");
 	const std::string windowListPath = absolutePathFromCwd("dialogs/MRWindowList.cpp");
-	const std::string bentoHeaderPath = absolutePathFromCwd("ui/MRBentoBox.hpp");
-	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	const std::string bentoHeaderPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBox.hpp");
+	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxProjection.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	const std::string catalogPath = absolutePathFromCwd("keymap/MRKeymapActionCatalog.cpp");
 	std::string commands;
@@ -11363,7 +11363,7 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 	const std::string windowListPath = absolutePathFromCwd("dialogs/MRWindowList.cpp");
 	const std::string editWindowPath = absolutePathFromCwd("ui/MREditWindow.hpp");
 	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
-	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxProjection.cpp");
 	const std::string settingsStorageHeaderPath = absolutePathFromCwd("config/settings/MRSettingsStorage.hpp");
 	const std::string settingsRuntimePath = absolutePathFromCwd("config/settings/MRSettingsRuntime.cpp");
 	std::string windowCommandsHeader;

@@ -371,7 +371,8 @@ class MRTextBufferModel {
 			return;
 		}
 		if (normalizedCodeLanguage == "AUTO") {
-			const MRSyntaxClassification classification = tmrClassifySyntaxLanguage(mShared->syntaxPathHint, mShared->syntaxTitleHint, text());
+			const std::string sample = syntaxClassificationSample();
+			const MRSyntaxClassification classification = tmrClassifySyntaxLanguage(mShared->syntaxPathHint, mShared->syntaxTitleHint, sample);
 			mShared->languageConfidence = classification.confidence;
 			mShared->language = classification.language != MRSyntaxLanguage::PlainText ? classification.language : detectedByPath;
 			return;
@@ -528,6 +529,23 @@ class MRTextBufferModel {
 	}
 
   private:
+	std::string syntaxClassificationSample() const {
+		static constexpr std::size_t maximumLength = 64 * 1024;
+		const std::size_t documentLength = mShared->document.length();
+		const std::size_t sampleLength = documentLength < maximumLength ? documentLength : maximumLength;
+		std::string sample;
+
+		sample.reserve(sampleLength);
+		for (std::size_t index = 0; index < mShared->document.pieceCount() && sample.size() < sampleLength; ++index) {
+			const mr::editor::PieceChunkView chunk = mShared->document.pieceChunk(index);
+			if (chunk.data == nullptr || chunk.length == 0) continue;
+			const std::size_t remainingLength = sampleLength - sample.size();
+			const std::size_t copyLength = chunk.length < remainingLength ? chunk.length : remainingLength;
+			sample.append(chunk.data, copyLength);
+		}
+		return sample;
+	}
+
 	std::size_t clampOffset(std::size_t pos) const noexcept {
 		return mShared->document.clampOffset(pos);
 	}

@@ -7,7 +7,7 @@
 #include "MRCommands.hpp"
 #include "commands/MRWindowCommands.hpp"
 
-#include "../ui/MRBentoBox.hpp"
+#include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 #include <cstring>

@@ -31,7 +31,7 @@
 #include "../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../ui/MRIndicator.hpp"
 #include "../ui/MREditWindow.hpp"
-#include "../ui/MRBentoBox.hpp"
+#include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {

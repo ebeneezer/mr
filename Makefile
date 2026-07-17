@@ -243,26 +243,26 @@ CXX_SOURCES = \
 	mrmac/vm/MRVMSettings.cpp \
 	mrmac/ui/conventional/MRVMScreen.cpp \
 	ui/MRFrame.cpp \
-	ui/MRBentoBox.cpp \
-	ui/MRBentoBoxDiagnostics.cpp \
-	ui/MRBentoBoxDebugger.cpp \
-	ui/MRBentoBoxDebuggerStatus.cpp \
-	ui/MRBentoBoxFileCompare.cpp \
-	ui/MRBentoBoxFileCompareView.cpp \
-	ui/MRBentoBoxOutline.cpp \
-	ui/MRBentoPaneFrameView.cpp \
-	ui/MRBentoBoxPaneWindow.cpp \
-	ui/MRBentoBoxEvents.cpp \
-	ui/MRBentoBoxLayout.cpp \
-	ui/MRBentoBoxChrome.cpp \
-	ui/MRBentoBoxProjection.cpp \
-	ui/MRBentoBoxRoleSupport.cpp \
-	ui/hex/MRBentoHexEditor.cpp \
-	ui/hex/MRHexInspector.cpp \
-	ui/hex/MRHexStrings.cpp \
-	ui/hex/MRHexUtf8.cpp \
-	ui/hex/panes/MRHexPaneWindow.cpp \
-	ui/hex/panes/MRHexPaneView.cpp \
+	ui/MRBentoBox/MRBentoBox.cpp \
+	ui/MRBentoBox/MRBentoBoxDiagnostics.cpp \
+	ui/MRBentoBox/MRBentoBoxDebugger.cpp \
+	ui/MRBentoBox/MRBentoBoxDebuggerStatus.cpp \
+	ui/MRBentoBox/MRBentoBoxFileCompare.cpp \
+	ui/MRBentoBox/MRBentoBoxFileCompareView.cpp \
+	ui/MRBentoBox/MRBentoBoxOutline.cpp \
+	ui/MRBentoBox/MRBentoPaneFrameView.cpp \
+	ui/MRBentoBox/MRBentoBoxPaneWindow.cpp \
+	ui/MRBentoBox/MRBentoBoxEvents.cpp \
+	ui/MRBentoBox/MRBentoBoxLayout.cpp \
+	ui/MRBentoBox/MRBentoBoxChrome.cpp \
+	ui/MRBentoBox/MRBentoBoxProjection.cpp \
+	ui/MRBentoBox/MRBentoBoxRoleSupport.cpp \
+	ui/MRBentoHexEditor/MRBentoHexEditor.cpp \
+	ui/MRBentoHexEditor/MRHexInspector.cpp \
+	ui/MRBentoHexEditor/MRHexStrings.cpp \
+	ui/MRBentoHexEditor/MRHexUtf8.cpp \
+	ui/MRBentoHexEditor/panes/MRHexPaneWindow.cpp \
+	ui/MRBentoHexEditor/panes/MRHexPaneView.cpp \
 	ui/widgets/MRColumnListView.cpp \
 	ui/widgets/MRDropList.cpp \
 	ui/MRFileEditor/MRFileEditor.cpp \
@@ -349,8 +349,8 @@ compile-manuals:
 	cd $(MANUAL_DIRECTORY) && $(MAKEINDEX) mr-macro-reference
 	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-macro-reference.tex
 	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-macro-reference.tex
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-technical-manual.tex
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-technical-manual.tex
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -shell-escape -interaction=nonstopmode mr-technical-manual.tex
+	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -shell-escape -interaction=nonstopmode mr-technical-manual.tex
 	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-users-manual.tex
 	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-users-manual.tex
 	rm -f $(MANUAL_AUXILIARIES)
@@ -533,7 +533,7 @@ mrmac/mrmac.o: mrmac/mrmac.c mrmac/mrmac.h
 $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 
 mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
-app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox.hpp
+app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp
 app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp app/router/MRCommandRouterText.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMRuntimeKv.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/router/MRCommandRouterText.o: app/router/MRCommandRouterText.cpp app/router/MRCommandRouterText.hpp app/commands/MRWindowCommands.hpp app/utils/MRStringUtils.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp dialogs/setup/MRSetupCommon.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFrame.hpp ui/MRMessageLineController.hpp ui/MRWindowSupport.hpp app/MREditorApp.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/MRMenuBar.hpp
@@ -545,7 +545,7 @@ app/MRExecSessionSmoke.o: app/MRExecSessionSmoke.cpp app/MRExecSessionSmoke.hpp 
 app/MRRuntimeScheduler.o: app/MRRuntimeScheduler.cpp app/MRRuntimeScheduler.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRWindowSupport.hpp
 app/MRRuntimeTimerSource.o: app/MRRuntimeTimerSource.cpp app/MRRuntimeTimerSource.hpp app/MRRuntimeScheduler.hpp
 app/MREditorApp.o: app/MREditorApp.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp app/MRMenuFactory.hpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/MRDeskTop.hpp ui/MRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
-app/MRMacroDebuggerCommandRoute.o: app/MRMacroDebuggerCommandRoute.cpp app/MRMacroDebuggerCommandRoute.hpp app/MRCommands.hpp ui/MRBentoBox.hpp ui/MRWindowSupport.hpp
+app/MRMacroDebuggerCommandRoute.o: app/MRMacroDebuggerCommandRoute.cpp app/MRMacroDebuggerCommandRoute.hpp app/MRCommands.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRWindowSupport.hpp
 dialogs/MRAbout.o: dialogs/MRAbout.cpp dialogs/MRAbout.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
 dialogs/MRDirtyGating.o: dialogs/MRDirtyGating.cpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp
 dialogs/MRColorSetup.o: dialogs/MRColorSetup.cpp dialogs/setup/MRSetup.hpp dialogs/setup/MRSetupCommon.hpp app/MRCommands.hpp
@@ -595,7 +595,7 @@ config/settings/MRSettingsRuntime.o: config/settings/MRSettingsRuntime.cpp confi
 config/settings/MRSettingsStorage.o: config/settings/MRSettingsStorage.cpp config/settings/MRSettingsStorage.hpp config/settings/MRSettingsRuntime.hpp
 app/commands/MRExternalCommand.o: app/commands/MRExternalCommand.cpp app/commands/MRExternalCommand.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRPerformance.o: coprocessor/MRPerformance.cpp coprocessor/MRPerformance.hpp coprocessor/MRCoprocessor.hpp
-coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp
+coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp
 mrmac/MRVM.o: mrmac/MRVM.cpp mrmac/MRVM.hpp mrmac/MRVMDebugSession.hpp mrmac/vm/MRVMExecSessions.hpp mrmac/ui/conventional/MRVMDeferredUi.hpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/vm/MRVMHash.hpp mrmac/ui/conventional/MRVMMacroDialogRuntime.hpp mrmac/ui/modeless/MRVMMacroModelessProcedures.hpp mrmac/vm/MRVMMacroSpecRuntime.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeGlobals.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMSettings.hpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/mrmac.h dialogs/MRWindowList.hpp ui/MRWindowSupport.hpp ui/MREditWindow.hpp ui/MRTextBuffer.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRTextBufferModel.hpp ui/MRSyntax.hpp piecetable/MRTextDocument.hpp
 mrmac/MRVMDebugSession.o: mrmac/MRVMDebugSession.cpp mrmac/MRVMDebugSession.hpp mrmac/MRVM.hpp mrmac/MRMacroExecutionSession.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeDebugger.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp
 mrmac/vm/MRVMProfile.o: mrmac/vm/MRVMProfile.cpp mrmac/vm/MRVMProfile.hpp mrmac/mrmac.h
@@ -621,13 +621,13 @@ mrmac/ui/conventional/MRVMUiStateRuntime.o: mrmac/ui/conventional/MRVMUiStateRun
 mrmac/vm/MRVMSettings.o: mrmac/vm/MRVMSettings.cpp mrmac/vm/MRVMSettings.hpp mrmac/MRVM.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp keymap/MRKeymapProfile.hpp
 mrmac/ui/conventional/MRVMScreen.o: mrmac/ui/conventional/MRVMScreen.cpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/MRVM.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRWindowSupport.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRPalette.o: ui/MRPalette.cpp ui/MRPalette.hpp
-ui/MRBentoBox.o: ui/MRBentoBox.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/widgets/MRDropList.hpp
-ui/MRBentoBoxDiagnostics.o: ui/MRBentoBoxDiagnostics.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRSidekickEditor.hpp config/settings/MRSettingsRuntime.hpp
-ui/MRBentoBoxDebugger.o: ui/MRBentoBoxDebugger.cpp ui/MRBentoBox.hpp ui/MRBentoBoxDebuggerStatus.hpp ui/MREditWindow.hpp ui/MRFrame.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMRuntimeDebugger.hpp app/commands/MRWindowCommands.hpp
-ui/MRBentoBoxDebuggerStatus.o: ui/MRBentoBoxDebuggerStatus.cpp ui/MRBentoBoxDebuggerStatus.hpp mrmac/MRVM.hpp mrmac/vm/MRVMRuntimeDebugger.hpp
-ui/MRBentoBoxOutline.o: ui/MRBentoBoxOutline.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp
-ui/MRBentoBoxPaneWindow.o: ui/MRBentoBoxPaneWindow.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp config/settings/MRSettingsRuntime.hpp
-ui/MRBentoBoxProjection.o: ui/MRBentoBoxProjection.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRSidekickEditor.hpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRDropList.hpp
+ui/MRBentoBox/MRBentoBox.o: ui/MRBentoBox/MRBentoBox.cpp ui/MRBentoBox/MRBentoBox.hpp ui/MREditWindow.hpp ui/widgets/MRDropList.hpp
+ui/MRBentoBox/MRBentoBoxDiagnostics.o: ui/MRBentoBox/MRBentoBoxDiagnostics.cpp ui/MRBentoBox/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRSidekickEditor.hpp config/settings/MRSettingsRuntime.hpp
+ui/MRBentoBox/MRBentoBoxDebugger.o: ui/MRBentoBox/MRBentoBoxDebugger.cpp ui/MRBentoBox/MRBentoBox.hpp ui/MRBentoBox/MRBentoBoxDebuggerStatus.hpp ui/MREditWindow.hpp ui/MRFrame.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMRuntimeDebugger.hpp app/commands/MRWindowCommands.hpp
+ui/MRBentoBox/MRBentoBoxDebuggerStatus.o: ui/MRBentoBox/MRBentoBoxDebuggerStatus.cpp ui/MRBentoBox/MRBentoBoxDebuggerStatus.hpp mrmac/MRVM.hpp mrmac/vm/MRVMRuntimeDebugger.hpp
+ui/MRBentoBox/MRBentoBoxOutline.o: ui/MRBentoBox/MRBentoBoxOutline.cpp ui/MRBentoBox/MRBentoBox.hpp ui/MREditWindow.hpp
+ui/MRBentoBox/MRBentoBoxPaneWindow.o: ui/MRBentoBox/MRBentoBoxPaneWindow.cpp ui/MRBentoBox/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp config/settings/MRSettingsRuntime.hpp
+ui/MRBentoBox/MRBentoBoxProjection.o: ui/MRBentoBox/MRBentoBoxProjection.cpp ui/MRBentoBox/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRSidekickEditor.hpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRDropList.hpp
 ui/widgets/MRColumnListView.o: ui/widgets/MRColumnListView.cpp ui/widgets/MRColumnListView.hpp config/settings/MRSettingsRuntime.hpp
 ui/widgets/MRDropList.o: ui/widgets/MRDropList.cpp ui/widgets/MRDropList.hpp ui/widgets/MRColumnListView.hpp dialogs/setup/MRSetupCommon.hpp
 outline/MROutlineFoldProducer.o: outline/MROutlineFoldProducer.cpp outline/MROutlineFoldProducer.hpp outline/MROutlineModel.hpp derivedstate/MRFoldingDerivedState.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp ui/MRTextBufferModel.hpp app/utils/MRStringUtils.hpp

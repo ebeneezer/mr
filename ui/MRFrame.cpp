@@ -4,7 +4,7 @@
 #define Uses_TDialog
 #define Uses_TMenuItem
 #include "MRFrame.hpp"
-#include "MRBentoBox.hpp"
+#include "MRBentoBox/MRBentoBox.hpp"
 #include "MRDesktopWindow.hpp"
 #include "MREditWindow.hpp"
 #include "MRWindowLayout.hpp"
