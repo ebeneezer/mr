@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -22,7 +24,7 @@ class MRStatusLine : public TStatusLine {
 		std::string text;
 	};
 
-	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextHintLabels(), mMacroFunctionLabels() {
+	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextFunctionLabelTransitions(), mFunctionKeyLabelRandomState(static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0x4D52464Bu), mContextHintLabels(), mMacroFunctionLabels() {
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -51,18 +53,97 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void setContextFunctionKeyLabels(const std::vector<FunctionKeyLabel> &labels) {
-		if (mContextFunctionKeyLabels.size() == labels.size()) {
-			bool same = true;
-			for (std::size_t i = 0; i < labels.size(); ++i) {
+		bool same = mContextFunctionKeyLabels.size() == labels.size();
+
+		if (same)
+			for (std::size_t i = 0; i < labels.size(); ++i)
 				if (!(mContextFunctionKeyLabels[i].keyCode == labels[i].keyCode) || mContextFunctionKeyLabels[i].command != labels[i].command || mContextFunctionKeyLabels[i].text != labels[i].text) {
 					same = false;
 					break;
 				}
+		if (same) return;
+		if (mContextFunctionKeyLabels.size() != labels.size() || mContextFunctionLabelTransitions.size() != labels.size()) {
+			mContextFunctionKeyLabels = labels;
+			mContextFunctionLabelTransitions.assign(labels.size(), FunctionKeyLabelTransition());
+			drawView();
+			return;
+		}
+
+		const auto now = std::chrono::steady_clock::now();
+		for (std::size_t i = 0; i < labels.size(); ++i) {
+			FunctionKeyLabelTransition &transition = mContextFunctionLabelTransitions[i];
+			const std::string &oldText = mContextFunctionKeyLabels[i].text;
+			const std::string &newText = labels[i].text;
+
+			if (oldText == newText) continue;
+			if (transition.phase == FunctionKeyLabelTransitionPhase::Outgoing) {
+				if (transition.outgoingText == newText) {
+					transition.phase = FunctionKeyLabelTransitionPhase::Stable;
+					transition.outgoingText.clear();
+					transition.startedAt = std::chrono::steady_clock::time_point::min();
+				}
+				continue;
 			}
-			if (same) return;
+			transition.outgoingText = oldText;
+			transition.phase = oldText.empty() ? FunctionKeyLabelTransitionPhase::Incoming : FunctionKeyLabelTransitionPhase::Outgoing;
+			transition.startedAt = now + nextFunctionKeyLabelStartDelay();
 		}
 		mContextFunctionKeyLabels = labels;
 		drawView();
+	}
+
+	void tickFunctionKeyLabelTransitions() {
+		const auto now = std::chrono::steady_clock::now();
+
+		for (std::size_t i = 0; i < mContextFunctionLabelTransitions.size(); ++i) {
+			FunctionKeyLabelTransition &transition = mContextFunctionLabelTransitions[i];
+
+			if (transition.phase == FunctionKeyLabelTransitionPhase::Stable) continue;
+			if (transition.startedAt == std::chrono::steady_clock::time_point::min()) {
+				transition.phase = FunctionKeyLabelTransitionPhase::Stable;
+				transition.outgoingText.clear();
+				continue;
+			}
+
+			auto elapsed = now - transition.startedAt;
+			if (transition.phase == FunctionKeyLabelTransitionPhase::Outgoing && elapsed >= functionKeyLabelTransitionDuration()) {
+				transition.outgoingText.clear();
+				if (i >= mContextFunctionKeyLabels.size() || mContextFunctionKeyLabels[i].text.empty()) {
+					transition.phase = FunctionKeyLabelTransitionPhase::Stable;
+					transition.startedAt = std::chrono::steady_clock::time_point::min();
+				} else {
+					transition.phase = FunctionKeyLabelTransitionPhase::EntryPause;
+					transition.startedAt += functionKeyLabelTransitionDuration();
+					elapsed = now - transition.startedAt;
+				}
+			}
+			if (transition.phase == FunctionKeyLabelTransitionPhase::EntryPause && elapsed >= functionKeyLabelEntryPauseDuration()) {
+				transition.phase = FunctionKeyLabelTransitionPhase::Incoming;
+				transition.startedAt += functionKeyLabelEntryPauseDuration();
+				elapsed = now - transition.startedAt;
+			}
+			if (transition.phase == FunctionKeyLabelTransitionPhase::Incoming && elapsed >= functionKeyLabelTransitionDuration()) {
+				transition.phase = FunctionKeyLabelTransitionPhase::Stable;
+				transition.startedAt = std::chrono::steady_clock::time_point::min();
+			}
+		}
+		if (!mShowFunctionKeyLabels || !mContextFunctionKeysActive || mContextHintLabelsActive || (state & sfVisible) == 0) return;
+
+		std::vector<int> indexes = contextFunctionVisibleLabelIndexes();
+		const int segmentCount = static_cast<int>(indexes.size());
+		const int segmentWidth = segmentCount > 0 ? std::max(1, size.x / segmentCount) : size.x;
+
+		for (int segment = 0; segment < segmentCount; ++segment) {
+			const std::size_t labelIndex = static_cast<std::size_t>(indexes[static_cast<std::size_t>(segment)]);
+			const FunctionKeyLabelTransition &transition = mContextFunctionLabelTransitions[labelIndex];
+			const int width = segment == segmentCount - 1 ? size.x - segment * segmentWidth : segmentWidth;
+			const int shift = functionKeyLabelTransitionShift(transition, width, now);
+
+			if (transition.drawnPhase != transition.phase || transition.drawnShift != shift) {
+				drawView();
+				break;
+			}
+		}
 	}
 
 	void setContextFunctionKeysActive(bool active) {
@@ -147,6 +228,48 @@ class MRStatusLine : public TStatusLine {
 	}
 
   private:
+	enum class FunctionKeyLabelTransitionPhase : unsigned char {
+		Stable,
+		Outgoing,
+		EntryPause,
+		Incoming
+	};
+
+	struct FunctionKeyLabelTransition {
+		FunctionKeyLabelTransitionPhase phase = FunctionKeyLabelTransitionPhase::Stable;
+		FunctionKeyLabelTransitionPhase drawnPhase = FunctionKeyLabelTransitionPhase::Stable;
+		std::string outgoingText;
+		std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::time_point::min();
+		int drawnShift = 0;
+	};
+
+	static constexpr std::chrono::milliseconds functionKeyLabelTransitionDuration() {
+		return std::chrono::milliseconds(1000);
+	}
+	static constexpr std::chrono::milliseconds functionKeyLabelEntryPauseDuration() {
+		return std::chrono::milliseconds(300);
+	}
+
+	std::chrono::milliseconds nextFunctionKeyLabelStartDelay() {
+		mFunctionKeyLabelRandomState = mFunctionKeyLabelRandomState * 1664525u + 1013904223u;
+		return std::chrono::milliseconds(mFunctionKeyLabelRandomState % 701u);
+	}
+
+	static int functionKeyLabelTransitionShift(const FunctionKeyLabelTransition &transition, int width, std::chrono::steady_clock::time_point now) {
+		const long long durationMs = functionKeyLabelTransitionDuration().count();
+		long long elapsedMs = 0;
+
+		if (width <= 0 || transition.phase == FunctionKeyLabelTransitionPhase::Stable || transition.startedAt == std::chrono::steady_clock::time_point::min()) return 0;
+		elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - transition.startedAt).count();
+		if (elapsedMs < 0) elapsedMs = 0;
+		if (elapsedMs > durationMs) elapsedMs = durationMs;
+		if (transition.phase == FunctionKeyLabelTransitionPhase::Outgoing) return static_cast<int>((static_cast<long long>(width) * elapsedMs + durationMs - 1) / durationMs);
+		if (transition.phase == FunctionKeyLabelTransitionPhase::EntryPause) return width;
+
+		const long long remainingMs = durationMs - elapsedMs;
+		return static_cast<int>((static_cast<long long>(width) * remainingMs + durationMs - 1) / durationMs);
+	}
+
 	std::vector<int> contextVisibleLabelIndexes(int count) const {
 		std::vector<int> indexes;
 
@@ -202,15 +325,22 @@ class MRStatusLine : public TStatusLine {
 		std::vector<int> indexes = contextFunctionVisibleLabelIndexes();
 		const int segmentCount = static_cast<int>(indexes.size());
 		const int segmentWidth = segmentCount > 0 ? std::max(1, size.x / segmentCount) : size.x;
+		const auto now = std::chrono::steady_clock::now();
 
 		buffer.moveChar(0, ' ', backgroundColor, size.x);
 		for (int segment = 0; segment < segmentCount; ++segment) {
+			const std::size_t labelIndex = static_cast<std::size_t>(indexes[static_cast<std::size_t>(segment)]);
+			FunctionKeyLabelTransition &transition = mContextFunctionLabelTransitions[labelIndex];
 			int x = segment * segmentWidth;
 			int width = segment == segmentCount - 1 ? size.x - x : segmentWidth;
-			std::string text = mContextFunctionKeyLabels[static_cast<std::size_t>(indexes[static_cast<std::size_t>(segment)])].text;
+			const std::string *text = &mContextFunctionKeyLabels[labelIndex].text;
+			int shift = functionKeyLabelTransitionShift(transition, width, now);
 
 			if (width <= 0) continue;
-			buffer.moveCStr(static_cast<ushort>(x), text.c_str(), labelColor, static_cast<ushort>(width));
+			if (transition.phase == FunctionKeyLabelTransitionPhase::Outgoing) text = &transition.outgoingText;
+			if (shift < width) buffer.moveCStr(static_cast<ushort>(x + shift), text->c_str(), labelColor, static_cast<ushort>(width - shift));
+			transition.drawnPhase = transition.phase;
+			transition.drawnShift = shift;
 		}
 		writeLine(0, 0, size.x, 1, buffer);
 	}
@@ -280,6 +410,8 @@ class MRStatusLine : public TStatusLine {
 	bool mContextFunctionKeysActive;
 	bool mContextHintLabelsActive;
 	std::vector<FunctionKeyLabel> mContextFunctionKeyLabels;
+	std::vector<FunctionKeyLabelTransition> mContextFunctionLabelTransitions;
+	std::uint32_t mFunctionKeyLabelRandomState;
 	std::vector<std::string> mContextHintLabels;
 	std::vector<std::string> mMacroFunctionLabels;
 };
