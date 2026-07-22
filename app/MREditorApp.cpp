@@ -2152,6 +2152,7 @@ void MREditorApp::idle() {
 	MRWindowLayout::handleDesktopLayoutChange();
 	updateAppCommandState(virtualDesktopCount, cyclicVirtualDesktopsEnabled);
 	syncFunctionKeyState();
+	if (auto *mrStatus = dynamic_cast<MRStatusLine *>(statusLine)) mrStatus->tickFunctionKeyLabelTransitions();
 }
 
 TPalette &MREditorApp::getPalette() const {
