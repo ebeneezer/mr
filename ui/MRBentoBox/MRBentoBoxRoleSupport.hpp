@@ -15,6 +15,7 @@ constexpr ushort cmFileComparePaneActionAccepted = 0x7A22;
 const char *paneRoleTitle(MRBentoPaneRole role) noexcept;
 bool paneRoleIsOutline(MRBentoPaneRole role) noexcept;
 bool paneRoleIsDiff(MRBentoPaneRole role) noexcept;
+bool paneRoleAllowsMultipleInstances(MRBentoPaneRole role) noexcept;
 MRBentoPaneRole paneRoleForTitle(const std::string &title) noexcept;
 const MRBentoPaneTitleMenuSpec *paneRoleTitleMenu(MRBentoBoxMode mode) noexcept;
 const char *paneActionReplace() noexcept;

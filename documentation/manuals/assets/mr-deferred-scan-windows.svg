@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="1080" height="1100" viewBox="0 0 1080 1100">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 20px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .axis { fill: none; stroke: #3f4b54; stroke-width: 1.6; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .cached { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .anchor { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .visible { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.8; }
+      .prefetch { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .missing { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <text x="40" y="35" class="title">MOVING SCAN WINDOWS AND THE WARMED-RANGE LEDGER</text>
+  <text x="40" y="59" class="small">Syntax warm-up for one document and language; all intervals are half-open [top, bottom).</text>
+
+  <!-- Step 1 -->
+  <rect x="40" y="82" width="1000" height="260" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">Initial viewport establishes the first warm interval</text>
+
+  <text x="70" y="157" class="heading">DOCUMENT POSITION</text>
+  <line x1="72" y1="202" x2="694" y2="202" class="axis" marker-end="url(#arrow)"/>
+  <text x="70" y="188" class="small">BOF</text>
+  <text x="667" y="188" class="small">EOF</text>
+  <line x1="267" y1="177" x2="212" y2="177" class="flow"/>
+  <text x="197" y="164" class="small">towards BOF</text>
+  <line x1="538" y1="177" x2="600" y2="177" class="flow"/>
+  <text x="530" y="164" class="small">towards EOF</text>
+
+  <rect x="270" y="186" width="92" height="34" class="anchor"/>
+  <rect x="362" y="186" width="112" height="34" class="visible"/>
+  <rect x="474" y="186" width="130" height="34" class="prefetch"/>
+  <text x="316" y="207" class="small" text-anchor="middle">state anchor</text>
+  <text x="418" y="207" class="small" text-anchor="middle">viewport</text>
+  <text x="539" y="207" class="small" text-anchor="middle">prefetch</text>
+  <text x="270" y="239" class="code">9,920</text>
+  <text x="354" y="239" class="code">10,000</text>
+  <text x="466" y="239" class="code">10,060</text>
+  <text x="574" y="239" class="code">10,180</text>
+  <text x="70" y="280" class="body">Accepted payload records the complete produced interval, including its state prelude.</text>
+  <text x="70" y="307" class="code">rememberWarmedLineRange(9,920, 10,180)</text>
+
+  <rect x="730" y="145" width="280" height="166" rx="5" fill="#eef4f3" stroke="#317c70" stroke-width="1.4"/>
+  <text x="750" y="171" class="heading">VALID-RANGE LEDGER</text>
+  <text x="750" y="199" class="code">owner = doc 42 · XML</text>
+  <text x="750" y="228" class="code">validRanges = {</text>
+  <text x="770" y="253" class="code">[9,920, 10,180)</text>
+  <text x="750" y="278" class="code">}</text>
+  <text x="750" y="292" class="small">Result gate: task · doc · version N</text>
+  <text x="750" y="307" class="small">and language must match.</text>
+
+  <path d="M540 343 L540 376" class="flow-blue"/>
+  <text x="557" y="366" class="small">large cursor jump</text>
+
+  <!-- Step 2 -->
+  <rect x="40" y="385" width="1000" height="280" rx="8" class="box"/>
+  <circle cx="72" cy="417" r="20" fill="#2f6fa3"/>
+  <text x="72" y="424" class="badge">2</text>
+  <text x="105" y="423" class="panel-title">The active window moves; the first interval remains valid</text>
+
+  <text x="70" y="461" class="heading">SAME DOCUMENT · SAME LANGUAGE · SAME VERSION</text>
+  <line x1="72" y1="512" x2="694" y2="512" class="axis" marker-end="url(#arrow)"/>
+  <text x="70" y="498" class="small">BOF</text>
+  <text x="667" y="498" class="small">EOF</text>
+  <rect x="145" y="496" width="114" height="34" class="cached"/>
+  <text x="202" y="517" class="small" text-anchor="middle">warm A</text>
+  <line x1="280" y1="512" x2="455" y2="512" stroke="#8c979e" stroke-width="1.5" stroke-dasharray="7 6"/>
+  <rect x="455" y="496" width="72" height="34" class="anchor"/>
+  <rect x="527" y="496" width="70" height="34" class="visible"/>
+  <rect x="597" y="496" width="78" height="34" class="prefetch"/>
+  <text x="491" y="517" class="small" text-anchor="middle">anchor</text>
+  <text x="562" y="517" class="small" text-anchor="middle">view B</text>
+  <text x="636" y="517" class="small" text-anchor="middle">prefetch</text>
+  <text x="438" y="551" class="code">7,790,751</text>
+  <text x="520" y="575" class="code">7,790,831</text>
+  <text x="596" y="551" class="code">7,791,011</text>
+
+  <text x="70" y="605" class="body">If the previous task is still pending, no duplicate is submitted.</text>
+  <text x="70" y="629" class="small">After dispatch clears that task, the scheduler recomputes the request from viewport B.</text>
+
+  <rect x="730" y="448" width="280" height="184" rx="5" fill="#eef4f3" stroke="#317c70" stroke-width="1.4"/>
+  <text x="750" y="475" class="heading">NORMALIZED LEDGER</text>
+  <text x="750" y="503" class="code">validRanges = {</text>
+  <text x="770" y="529" class="code">[9,920, 10,180),</text>
+  <text x="770" y="555" class="code">[7,790,751,</text>
+  <text x="789" y="579" class="code">7,791,011)</text>
+  <text x="750" y="605" class="code">}</text>
+  <text x="750" y="624" class="small">Disjoint intervals remain retained.</text>
+
+  <path d="M540 666 L540 699" class="flow-blue"/>
+  <text x="557" y="690" class="small">return or overlapping request</text>
+
+  <!-- Step 3 -->
+  <rect x="40" y="708" width="1000" height="294" rx="8" class="box"/>
+  <circle cx="72" cy="740" r="20" fill="#2f6fa3"/>
+  <text x="72" y="747" class="badge">3</text>
+  <text x="105" y="746" class="panel-title">Coverage is queried, verified, trimmed, and merged</text>
+
+  <text x="70" y="783" class="heading">REQUEST [10,120, 10,300)</text>
+  <line x1="72" y1="829" x2="694" y2="829" class="axis" marker-end="url(#arrow)"/>
+  <rect x="215" y="813" width="224" height="34" class="cached"/>
+  <rect x="365" y="806" width="74" height="48" fill="none" stroke="#2f6fa3" stroke-width="2.3"/>
+  <rect x="439" y="806" width="148" height="48" class="missing"/>
+  <text x="327" y="835" class="small" text-anchor="middle">recorded valid interval</text>
+  <text x="402" y="875" class="small" text-anchor="middle">cached prefix</text>
+  <text x="513" y="835" class="small" text-anchor="middle">worker tail</text>
+  <text x="350" y="895" class="code">10,120</text>
+  <text x="427" y="895" class="code">10,180</text>
+  <text x="560" y="895" class="code">10,300</text>
+
+  <rect x="70" y="918" width="610" height="59" rx="4" fill="#f7f8f8" stroke="#59656e" stroke-width="1.2"/>
+  <text x="88" y="942" class="body">1. Interval gate: validRangeCovered or a covered prefix.</text>
+  <text x="88" y="966" class="body">2. State gate: tokenCache must preserve the stateIn → stateOut chain.</text>
+
+  <rect x="730" y="774" width="280" height="203" rx="5" fill="#eef4f3" stroke="#317c70" stroke-width="1.4"/>
+  <text x="750" y="801" class="heading">AFTER WORKER TAIL</text>
+  <text x="750" y="829" class="code">push [10,180, 10,300)</text>
+  <text x="750" y="857" class="code">sort + merge touching</text>
+  <line x1="750" y1="872" x2="985" y2="872" stroke="#8c979e" stroke-width="1"/>
+  <text x="750" y="899" class="code">validRanges = {</text>
+  <text x="770" y="925" class="code">[9,920, 10,300),</text>
+  <text x="770" y="951" class="code">[7,790,751, 7,791,011)</text>
+  <text x="750" y="972" class="code">}</text>
+
+  <!-- Invariants -->
+  <rect x="40" y="1023" width="1000" height="56" rx="5" fill="#e8f0f2" stroke="#27313a" stroke-width="1.2"/>
+  <text x="60" y="1047" class="heading">INVALIDATION RULES</text>
+  <text x="60" y="1069" class="small">Cursor movement retains the ledger · an edit truncates it from the first changed line · a document or language change clears it.</text>
+</svg>

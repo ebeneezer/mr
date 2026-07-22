@@ -22,12 +22,14 @@ void MRFileEditor::setFindMarkerRanges(const std::vector<std::pair<std::size_t, 
 	}
 	normalizeRangeList(normalized);
 	mFindMarkerRanges.swap(normalized);
+	mMiniMapState.setFindRanges(mFindMarkerRanges);
 	drawView();
 }
 
 void MRFileEditor::clearFindMarkerRanges() {
 	if (mFindMarkerRanges.empty()) return;
 	mFindMarkerRanges.clear();
+	mMiniMapState.setFindRanges(mFindMarkerRanges);
 	drawView();
 }
 
@@ -55,16 +57,24 @@ void MRFileEditor::setCompilerDiagnosticRanges(const std::vector<std::pair<std::
 	appendRanges(warningRanges, normalizedWarnings);
 	normalizeRangeList(normalizedErrors);
 	normalizeRangeList(normalizedWarnings);
-	mCompilerErrorRanges.swap(normalizedErrors);
-	mCompilerWarningRanges.swap(normalizedWarnings);
+	adoptCompilerDiagnosticRanges(std::make_shared<const std::vector<MRTextBufferModel::Range>>(std::move(normalizedErrors)),
+	                              std::make_shared<const std::vector<MRTextBufferModel::Range>>(std::move(normalizedWarnings)));
+}
+
+void MRFileEditor::adoptCompilerDiagnosticRanges(const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &errorRanges,
+	                                              const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &warningRanges) {
+	mCompilerErrorRanges = errorRanges != nullptr ? errorRanges : std::make_shared<const std::vector<MRTextBufferModel::Range>>();
+	mCompilerWarningRanges = warningRanges != nullptr ? warningRanges : std::make_shared<const std::vector<MRTextBufferModel::Range>>();
+	mMiniMapState.adoptCompilerRanges(mCompilerErrorRanges, mCompilerWarningRanges);
 	drawView();
 }
 
 void MRFileEditor::clearCompilerDiagnosticRanges() {
-	if (mCompilerErrorRanges.empty() && mCompilerWarningRanges.empty()) return;
-	mCompilerErrorRanges.clear();
-	mCompilerWarningRanges.clear();
-	drawView();
+	if ((mCompilerErrorRanges == nullptr || mCompilerErrorRanges->empty()) &&
+	    (mCompilerWarningRanges == nullptr || mCompilerWarningRanges->empty()))
+		return;
+	adoptCompilerDiagnosticRanges(std::make_shared<const std::vector<MRTextBufferModel::Range>>(),
+	                              std::make_shared<const std::vector<MRTextBufferModel::Range>>());
 }
 
 void MRFileEditor::setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges) {
@@ -193,8 +203,9 @@ void MRFileEditor::clearDebuggerInstructionLine() {
 	drawView();
 }
 
-void MRFileEditor::clearDirtyRanges() noexcept {
+void MRFileEditor::clearDirtyRanges() {
 	mDirtyRanges.clear();
+	mMiniMapState.setDirtyRanges(mDirtyRanges);
 }
 
 void MRFileEditor::normalizePairRangeList(std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
@@ -281,7 +292,10 @@ void MRFileEditor::remapDirtyRangesForAppliedChange(const MRTextBufferModel::Doc
 }
 
 void MRFileEditor::addDirtyRange(MRTextBufferModel::Range range) {
-	if (mBufferModel.length() == 0) return;
+	if (mBufferModel.length() == 0) {
+		mMiniMapState.setDirtyRanges(mDirtyRanges);
+		return;
+	}
 	range = range.clamped(mBufferModel.length());
 	range.normalize();
 	if (range.empty()) {
@@ -290,6 +304,7 @@ void MRFileEditor::addDirtyRange(MRTextBufferModel::Range range) {
 	}
 	mDirtyRanges.push_back(range);
 	normalizeDirtyRanges();
+	mMiniMapState.setDirtyRanges(mDirtyRanges);
 }
 
 bool MRFileEditor::isDirtyOffset(std::size_t pos) const noexcept {

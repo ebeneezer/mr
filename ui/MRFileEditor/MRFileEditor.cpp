@@ -53,9 +53,9 @@ MRFileEditor::DestructionProbe::~DestructionProbe() {
 	appendDirectProbeLog(line.str());
 }
 
-MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mForceBinarySave(false), mInsertMode(true), mLineDrawingEnabled(false), mLineDrawingDoubleLines(false), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualLine(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxState(), mFoldState(), mMiniMapState(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
-      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMouseSelectionColumnsValid(false), mMouseSelectionLinesValid(false), mMouseSelectionAnchorColumn(0), mMouseSelectionCursorColumn(0), mMouseSelectionAnchorLine(0), mMouseSelectionCursorLine(0), mMouseSelectionModifiers(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackCursor(false), mBlockOverlayColumnAnchor(-1), mBlockOverlayColumnEnd(-1), mBlockOverlayLineRangeValid(false), mBlockOverlayLine1(0), mBlockOverlayLine2(0), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0) {
+MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName,
+                           mr::coprocessor::ExecutionOwnerKind executionOwnerKind, std::size_t executionOwnerLocalId) noexcept
+	: TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mForceBinarySave(false), mInsertMode(true), mLineDrawingEnabled(false), mLineDrawingDoubleLines(false), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualLine(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupState(), mLineIndexGenerationCounter(1), mSuppressLargeFileLineIndexWarmup(false), mDisplayWidthWarmupState(), mDisplayWidthGenerationCounter(1), mDisplayWidthPublishedLimit(1), mExecutionOwnerKind(executionOwnerKind), mExecutionOwnerLocalId(executionOwnerLocalId), mSyntaxWarmupState(), mSyntaxGenerationCounter(1), mSyntaxState(), mFoldCanonicalContextState(), mFoldWarmupState(), mFoldLevelOperationState(), mFoldGenerationCounter(1), mFoldState(), mFoldOutlineInputCache(), mMiniMapState(), mFileCompareLineKinds(std::make_shared<const std::vector<unsigned char>>()), mFileCompareMiniMapSlices(std::make_shared<const std::vector<MRFileCompareMiniMapSlice>>()), mSaveNormalizationCache(), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMouseSelectionColumnsValid(false), mMouseSelectionLinesValid(false), mMouseSelectionAnchorColumn(0), mMouseSelectionCursorColumn(0), mMouseSelectionAnchorLine(0), mMouseSelectionCursorLine(0), mMouseSelectionModifiers(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackCursor(false), mBlockOverlayColumnAnchor(-1), mBlockOverlayColumnEnd(-1), mBlockOverlayLineRangeValid(false), mBlockOverlayLine1(0), mBlockOverlayLine2(0), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0), mCachedCursorLineExact(false) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
 	eventMask |= evMouse | evKeyboard | evCommand;
@@ -68,6 +68,14 @@ MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScroll
 MRFileEditor::~MRFileEditor() {
 	mDestructionProbe.arm(static_cast<int>(mBufferModel.documentId()), persistentFileName(), mBufferModel.length(), mBufferModel.document().addBufferLength(), mBufferModel.document().pieceCount(),
 	                     mBufferModel.undoStackDepth(), mBufferModel.redoStackDepth());
+	for (const LineIndexPacketState &packet : mLineIndexWarmupState.packets) {
+		if (packet.taskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(packet.taskId));
+		mBufferModel.releaseLineIndexScanReservation(packet.reservationId);
+	}
+	for (const DisplayWidthPacketState &packet : mDisplayWidthWarmupState.packets)
+		if (packet.taskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(packet.taskId));
+	static_cast<void>(cancelSyntaxWarmup());
+	static_cast<void>(cancelFoldWarmup());
 }
 
 bool MRFileEditor::isReadOnly() const {
@@ -112,14 +120,14 @@ void MRFileEditor::setPersistentFileName(TStringView name) noexcept {
 	strnzcpy(fileName, name, sizeof(fileName));
 	refreshEditorSettingsSnapshot();
 	refreshSyntaxContext();
-	scheduleSaveNormalizationWarmupIfNeeded();
+	invalidateSaveNormalizationCache();
 }
 
 void MRFileEditor::clearPersistentFileName() noexcept {
 	fileName[0] = EOS;
 	refreshEditorSettingsSnapshot();
 	refreshSyntaxContext();
-	scheduleSaveNormalizationWarmupIfNeeded();
+	invalidateSaveNormalizationCache();
 }
 
 bool MRFileEditor::isDocumentModified() const noexcept {
@@ -188,39 +196,123 @@ std::size_t MRFileEditor::selectionLength() const noexcept {
 }
 
 std::uint64_t MRFileEditor::pendingLineIndexWarmupTaskId() const noexcept {
-	return mLineIndexWarmupTaskId;
+	for (const LineIndexPacketState &packet : mLineIndexWarmupState.packets)
+		if (packet.taskId != 0) return packet.taskId;
+	return 0;
+}
+
+std::size_t MRFileEditor::pendingLineIndexWarmupTaskCount() const noexcept {
+	std::size_t count = 0;
+	for (const LineIndexPacketState &packet : mLineIndexWarmupState.packets)
+		if (packet.taskId != 0) ++count;
+	return count;
+}
+
+bool MRFileEditor::ownsLineIndexWarmupTask(std::uint64_t taskId) const noexcept {
+	if (taskId == 0) return false;
+	for (const LineIndexPacketState &packet : mLineIndexWarmupState.packets)
+		if (packet.taskId == taskId) return true;
+	return false;
+}
+
+std::size_t MRFileEditor::pendingDisplayWidthWarmupTaskCount() const noexcept {
+	std::size_t count = 0;
+	for (const DisplayWidthPacketState &packet : mDisplayWidthWarmupState.packets)
+		if (packet.taskId != 0) ++count;
+	return count;
+}
+
+bool MRFileEditor::ownsDisplayWidthWarmupTask(std::uint64_t taskId) const noexcept {
+	if (taskId == 0) return false;
+	for (const DisplayWidthPacketState &packet : mDisplayWidthWarmupState.packets)
+		if (packet.taskId == taskId) return true;
+	return false;
 }
 
 std::uint64_t MRFileEditor::pendingSyntaxWarmupTaskId() const noexcept {
-	return mSyntaxState.warmupState().taskId;
+	for (const SyntaxPacketState &packet : mSyntaxWarmupState.packets)
+		if (packet.taskId != 0) return packet.taskId;
+	return 0;
+}
+
+std::size_t MRFileEditor::pendingSyntaxWarmupTaskCount() const noexcept {
+	std::size_t count = 0;
+	for (const SyntaxPacketState &packet : mSyntaxWarmupState.packets)
+		if (packet.taskId != 0) ++count;
+	return count;
+}
+
+bool MRFileEditor::ownsSyntaxWarmupTask(std::uint64_t taskId) const noexcept {
+	if (taskId == 0) return false;
+	for (const SyntaxPacketState &packet : mSyntaxWarmupState.packets)
+		if (packet.taskId == taskId) return true;
+	return false;
 }
 
 std::uint64_t MRFileEditor::pendingFoldWarmupTaskId() const noexcept {
-	return mFoldState.warmupState().taskId;
+	for (const FoldCanonicalPacketState &packet : mFoldCanonicalContextState.packets)
+		if (packet.taskId != 0) return packet.taskId;
+	for (const FoldPacketState &packet : mFoldWarmupState.packets)
+		if (packet.taskId != 0) return packet.taskId;
+	for (const FoldLevelPacketState &packet : mFoldLevelOperationState.packets)
+		if (packet.taskId != 0) return packet.taskId;
+	if (mFoldLevelOperationState.projectionTaskId != 0) return mFoldLevelOperationState.projectionTaskId;
+	return 0;
+}
+
+std::size_t MRFileEditor::pendingFoldWarmupTaskCount() const noexcept {
+	std::size_t count = 0;
+	for (const FoldCanonicalPacketState &packet : mFoldCanonicalContextState.packets)
+		if (packet.taskId != 0) ++count;
+	for (const FoldPacketState &packet : mFoldWarmupState.packets)
+		if (packet.taskId != 0) ++count;
+	for (const FoldLevelPacketState &packet : mFoldLevelOperationState.packets)
+		if (packet.taskId != 0) ++count;
+	if (mFoldLevelOperationState.projectionTaskId != 0) ++count;
+	return count;
+}
+
+bool MRFileEditor::ownsFoldWarmupTask(std::uint64_t taskId) const noexcept {
+	if (taskId == 0) return false;
+	if (ownsCanonicalFoldContextTask(taskId)) return true;
+	for (const FoldPacketState &packet : mFoldWarmupState.packets)
+		if (packet.taskId == taskId) return true;
+	for (const FoldLevelPacketState &packet : mFoldLevelOperationState.packets)
+		if (packet.taskId == taskId) return true;
+	if (mFoldLevelOperationState.projectionTaskId == taskId) return true;
+	return false;
 }
 
 std::uint64_t MRFileEditor::pendingMiniMapWarmupTaskId() const noexcept {
 	return mMiniMapState.renderer().pendingWarmupTaskId();
 }
 
-std::uint64_t MRFileEditor::pendingSaveNormalizationWarmupTaskId() const noexcept {
-	return mSaveNormalizationWarmupTaskId;
+std::size_t MRFileEditor::pendingMiniMapWarmupTaskCount() const noexcept {
+	return mMiniMapState.renderer().pendingWarmupTaskCount();
+}
+
+bool MRFileEditor::ownsMiniMapWarmupTask(std::uint64_t taskId) const noexcept {
+	return mMiniMapState.renderer().ownsWarmupTask(taskId);
+}
+
+bool MRFileEditor::miniMapProjectionAvailable() const noexcept {
+	return mMiniMapState.renderer().hasAnyProjection();
 }
 
 std::size_t MRFileEditor::syntaxWarmupTopLine() const noexcept {
-	return mSyntaxState.warmupState().topLine;
+	return mSyntaxWarmupState.visibleTopLine;
 }
 
 std::size_t MRFileEditor::syntaxWarmupBottomLine() const noexcept {
-	return mSyntaxState.warmupState().bottomLine;
+	return mSyntaxWarmupState.visibleBottomLine;
 }
 
 std::size_t MRFileEditor::syntaxPrefetchTargetBottomLine() const noexcept {
-	return mSyntaxState.prefetchState().targetBottomLine;
+	return mSyntaxWarmupState.targetBottomLine;
 }
 
 std::size_t MRFileEditor::syntaxPrefetchReachedBottomLine() const noexcept {
-	return mSyntaxState.prefetchState().reachedBottomLine;
+	return mSyntaxWarmupState.reachedBottomLine;
 }
 
 bool MRFileEditor::shouldReportMiniMapInitialRender() const noexcept {
@@ -236,19 +328,15 @@ const std::string &MRFileEditor::lastUiHotpathTrace() const noexcept {
 }
 
 bool MRFileEditor::lineIndexWarmupPending() const noexcept {
-	return mLineIndexWarmupTaskId != 0;
+	return pendingLineIndexWarmupTaskCount() != 0;
 }
 
 bool MRFileEditor::syntaxWarmupPending() const noexcept {
-	return mSyntaxState.warmupState().taskId != 0;
+	return pendingSyntaxWarmupTaskCount() != 0;
 }
 
 bool MRFileEditor::miniMapWarmupPending() const noexcept {
 	return mMiniMapState.renderer().pendingWarmupTaskId() != 0;
-}
-
-bool MRFileEditor::saveNormalizationWarmupPending() const noexcept {
-	return mSaveNormalizationWarmupTaskId != 0;
 }
 
 bool MRFileEditor::usesApproximateMetrics() const noexcept {
@@ -313,6 +401,7 @@ void MRFileEditor::shareContentStateFrom(const MRFileEditor &source) {
 	clearDebuggerInstructionLine();
 	clearDirtyRanges();
 	syncFromEditorState(false);
+	scheduleLineIndexWarmupIfNeeded();
 }
 
 void MRFileEditor::detachContentStateCopy() {
@@ -322,6 +411,7 @@ void MRFileEditor::detachContentStateCopy() {
 	clearDebuggerInstructionLine();
 	clearDirtyRanges();
 	syncFromEditorState(false);
+	scheduleLineIndexWarmupIfNeeded();
 }
 
 std::string MRFileEditor::snapshotText() const {

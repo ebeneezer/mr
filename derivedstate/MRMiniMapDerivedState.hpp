@@ -7,26 +7,11 @@
 
 #include <chrono>
 #include <cstddef>
+#include <memory>
+#include <vector>
 
 class MRMiniMapDerivedState : public MRDerivedStateBase {
   public:
-	struct OverlayCache {
-		std::size_t documentId = 0;
-		std::size_t documentVersion = 0;
-		std::size_t totalLines = 0;
-		int viewportWidth = 0;
-		int bodyWidth = 0;
-		bool braille = true;
-		std::size_t selectionStart = 0;
-		std::size_t selectionEnd = 0;
-		std::uint64_t findSignature = 0;
-		std::uint64_t dirtySignature = 0;
-		std::uint64_t errorSignature = 0;
-		std::uint64_t warningSignature = 0;
-		std::uint64_t diffSignature = 0;
-		MRMiniMapRenderer::OverlayState overlay;
-	};
-
 	MRMiniMapDerivedState() noexcept;
 
 	MRMiniMapRenderer &renderer() noexcept;
@@ -39,15 +24,20 @@ class MRMiniMapDerivedState : public MRDerivedStateBase {
 	void setLastEditAt(std::chrono::steady_clock::time_point value) noexcept;
 	void clearLastEditAt() noexcept;
 
-	OverlayCache &overlayCache() noexcept;
-	const OverlayCache &overlayCache() const noexcept;
-	void clearOverlayCache() noexcept;
+	const MRMiniMapRenderer::OverlaySources &overlaySources() const noexcept;
+	void setFindRanges(const std::vector<mr::editor::Range> &ranges);
+	void setDirtyRanges(const std::vector<mr::editor::Range> &ranges);
+	void setCompilerRanges(const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges);
+	void adoptCompilerRanges(const std::shared_ptr<const std::vector<mr::editor::Range>> &errorRanges,
+	                         const std::shared_ptr<const std::vector<mr::editor::Range>> &warningRanges);
+	void adoptFileCompareRanges(const std::shared_ptr<const std::vector<unsigned char>> &lineKinds,
+	                           const std::shared_ptr<const std::vector<MRFileCompareMiniMapSlice>> &slices);
 
   private:
 	MRMiniMapRenderer mRenderer;
 	std::size_t mInitialRenderReportedDocumentId;
 	std::chrono::steady_clock::time_point mLastEditAt;
-	OverlayCache mOverlayCache;
+	MRMiniMapRenderer::OverlaySources mOverlaySources;
 };
 
 #endif

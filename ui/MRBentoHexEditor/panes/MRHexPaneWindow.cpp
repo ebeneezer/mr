@@ -6,15 +6,46 @@
 #include <algorithm>
 
 MRHexPaneWindow::MRHexPaneWindow(const TRect &bounds, const char *title, int number, MRBentoHexEditor &editor, MRHexPaneRole role)
-	: TWindowInit(&MRPaneEditWindow::initFrame), MRPaneEditWindow(bounds, title, number), mHexView(nullptr), mRole(role), mSynchronizingScrollBars(false) {
+	: TWindowInit(&MRPaneEditWindow::initFrame), MRPaneEditWindow(bounds, title, number), mEditor(editor), mHexView(nullptr), mRole(role),
+	  mSynchronizingScrollBars(false) {
 	if (MRFileEditor *nativeEditor = getEditor(); nativeEditor != nullptr) nativeEditor->hide();
 	if (horizontalEditorScrollBar() != nullptr) horizontalEditorScrollBar()->hide();
 	if (verticalEditorScrollBar() != nullptr) verticalEditorScrollBar()->hide();
 	if (editorIndicator() != nullptr) editorIndicator()->hide();
-	mHexView = new MRHexPaneView(getExtent(), editor, role);
+	mHexView = new MRHexPaneView(getExtent(), editor, role, static_cast<std::size_t>(bufferId()));
 	insert(mHexView);
 	setCurrent(mHexView, TView::normalSelect);
 	layoutHexScrollBars();
+}
+
+void MRHexPaneWindow::requestHexProjection() noexcept {
+	if (mHexView != nullptr) mHexView->requestProjection();
+	synchronizeHexScrollBars();
+}
+
+int MRHexPaneWindow::hexViewportRowCapacity() const noexcept {
+	return mHexView != nullptr ? std::max(0, static_cast<int>(mHexView->size.y)) : 0;
+}
+
+int MRHexPaneWindow::hexViewportColumnCapacity() const noexcept {
+	if (mHexView == nullptr || mRole == MRHexPaneRole::Inspector) return 0;
+	return std::max(0, (static_cast<int>(mHexView->size.x) - kMrHexPaneOffsetWidth) / mrHexPaneFieldWidth(mRole));
+}
+
+bool MRHexPaneWindow::applyHexProjectionResult(const mr::coprocessor::Result &result) noexcept {
+	if (result.task.executionOwnerKind != mr::coprocessor::ExecutionOwnerKind::HexPane ||
+	    result.task.executionOwnerLocalId != static_cast<std::size_t>(bufferId()) || mHexView == nullptr)
+		return false;
+	return mHexView->applyProjectionResult(result);
+}
+
+void MRHexPaneWindow::refreshHexCursor(std::size_t previousOffset, std::size_t currentOffset, bool viewportChanged) noexcept {
+	if (mHexView != nullptr) mHexView->refreshCursor(previousOffset, currentOffset, viewportChanged);
+	if (viewportChanged) synchronizeHexScrollBars();
+}
+
+void MRHexPaneWindow::refreshHexFocus() noexcept {
+	if (mHexView != nullptr) mHexView->refreshFocus();
 }
 
 void MRHexPaneWindow::changeBounds(const TRect &bounds) {
@@ -25,12 +56,16 @@ void MRHexPaneWindow::changeBounds(const TRect &bounds) {
 void MRHexPaneWindow::draw() {
 	layoutHexScrollBars();
 	if (mHexView != nullptr) mHexView->drawView();
-	synchronizeHexScrollBars();
 	TWindow::draw();
 	drawHexScrollBars();
 }
 
 void MRHexPaneWindow::handleEvent(TEvent &event) {
+	if (event.what == evBroadcast && event.message.command == cmMrEditorDocumentCommitted) {
+		mEditor.refreshAfterDocumentCommit();
+		clearEvent(event);
+		return;
+	}
 	if (event.what == evBroadcast && (event.message.command == cmScrollBarClicked || event.message.command == cmScrollBarChanged) && handlesHexScrollBar(event)) {
 		if (event.message.command == cmScrollBarChanged && !mSynchronizingScrollBars) acceptHexScrollBarChange(static_cast<TScrollBar *>(event.message.infoPtr));
 		clearEvent(event);
@@ -50,17 +85,13 @@ void MRHexPaneWindow::handleEvent(TEvent &event) {
 		}
 	}
 	if (event.what == evMouseWheel) {
-		if (mHexView != nullptr) {
-			mHexView->scrollByWheel(event.mouse.wheel);
-			mHexView->drawView();
-		}
-		synchronizeHexScrollBars();
-		drawHexScrollBars();
+		if (mHexView != nullptr) mHexView->scrollByWheel(event.mouse.wheel);
+		if (mRole == MRHexPaneRole::Inspector) synchronizeHexScrollBars();
 		clearEvent(event);
 		return;
 	}
 	if (mHexView != nullptr) mHexView->handleEvent(event);
-	synchronizeHexScrollBars();
+	if (mRole == MRHexPaneRole::Inspector) synchronizeHexScrollBars();
 }
 
 void MRHexPaneWindow::cancelTransientInput() noexcept {
@@ -80,6 +111,10 @@ bool MRHexPaneWindow::usesNativeEditorChrome() const noexcept {
 }
 
 bool MRHexPaneWindow::ownsPaneWheelEvents() const noexcept {
+	return true;
+}
+
+bool MRHexPaneWindow::projectsPaneContentLocally() const noexcept {
 	return true;
 }
 
@@ -172,6 +207,5 @@ void MRHexPaneWindow::acceptHexScrollBarChange(TScrollBar *scrollBar) noexcept {
 	if (scrollBar == horizontalEditorScrollBar()) mHexView->setHorizontalScrollBarValue(scrollBar->value);
 	else if (scrollBar == verticalEditorScrollBar())
 		mHexView->setVerticalScrollBarValue(scrollBar->value);
-	mHexView->drawView();
 	drawHexScrollBars();
 }

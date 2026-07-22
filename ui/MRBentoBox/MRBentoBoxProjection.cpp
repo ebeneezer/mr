@@ -190,6 +190,9 @@ bool MRBentoBox::paneMaximizeActionEnabled() const noexcept {
 	return true;
 }
 
+void MRBentoBox::paneLayoutChanged() noexcept {
+}
+
 bool MRBentoBox::activatePaneWindow(MREditWindow *pane) noexcept {
 	if (pane == nullptr) return false;
 	if (pane == this) {
@@ -212,12 +215,21 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 	MRPaneEditWindow *targetPane = paneWindowForLeaf(targetLeafId);
 	const MRBentoPaneSpec spec = paneSpecForRole(role);
 	const MRBentoPaneRole previousRole = roleForLeaf(targetLeafId);
+	const int existingRoleLeafId = leafIdForRole(role);
 
 	if (bentoMode == bbmFileCompare && !mr::bento::paneRoleIsDiff(role)) return false;
 	if (targetLeafId == 0 && placement == bppReplace && bentoMode != bbmFileCompare) return false;
+	if (!mr::bento::paneRoleAllowsMultipleInstances(role) && existingRoleLeafId >= 0) {
+		if (placement == bppReplace && existingRoleLeafId == targetLeafId) {
+			setActivePane(targetLeafId);
+			return true;
+		}
+		return false;
+	}
 	switch (placement) {
 		case bppReplace:
 			if (targetLeafId != 0 && targetPane == nullptr) return false;
+			if (previousRole != role && targetPane != nullptr) cancelBentoProjectionForPane(targetPane->bufferId());
 			if (targetPane != nullptr) targetPane->setPaneSpec(spec, getEditor());
 			for (BentoLeaf &leaf : leaves) {
 				if (leaf.id == targetLeafId) {
@@ -240,11 +252,11 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 				if (!previousRoleStillVisible) {
 					if (previousRole == bprStructure) {
 						structureOutlineStatus.clear();
-						structureOutlineEntries.clear();
+						structureOutlineEntries = std::make_shared<const std::vector<MRBentoOutlineEntry>>();
 						structureOutlineState = MRBentoOutlinePaneState();
 					} else if (previousRole == bprFunctions) {
 						functionsOutlineStatus.clear();
-						functionsOutlineEntries.clear();
+						functionsOutlineEntries = std::make_shared<const std::vector<MRBentoOutlineEntry>>();
 						functionsOutlineState = MRBentoOutlinePaneState();
 					}
 				}
@@ -252,6 +264,7 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 			setActivePane(targetLeafId);
 			layoutSplitPanes();
 			if (mr::bento::paneRoleIsOutline(role)) refreshOutlinePanes(true);
+			if (role == bprProblems || role == bprCompilerOutput) static_cast<void>(refreshCompilerProblemsPane());
 			if (bentoMode == bbmFileCompare) refreshFileComparePanes();
 			mrMarkWorkspaceAutosaveDirty("bento pane role", this);
 			return true;
@@ -264,6 +277,7 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 					return ok;
 				}
 				const bool ok = splitLeafNode(targetLeafId, bsoVertical, spec) >= 0;
+				if (ok && (role == bprProblems || role == bprCompilerOutput)) static_cast<void>(refreshCompilerProblemsPane());
 				if (ok) mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 				return ok;
 			}
@@ -280,6 +294,7 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 					return ok;
 				}
 				const bool ok = splitLeafNode(targetLeafId, bsoHorizontal, spec) >= 0;
+				if (ok && (role == bprProblems || role == bprCompilerOutput)) static_cast<void>(refreshCompilerProblemsPane());
 				if (ok) mrMarkWorkspaceAutosaveDirty("bento pane split", this);
 				return ok;
 			}
@@ -314,6 +329,7 @@ MRBentoWorkspaceSnapshot MRBentoBox::workspaceSnapshot() const {
 		workspaceLeaf.id = leaf.id;
 		workspaceLeaf.role = leaf.role;
 		workspaceLeaf.visible = leaf.visible;
+		workspaceLeaf.widgetMask = leaf.spec.widgetMask;
 		snapshot.leaves.push_back(workspaceLeaf);
 	}
 	return snapshot;
@@ -328,7 +344,7 @@ bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapsh
 	if (snapshot.rootNode < 0 || snapshot.rootNode >= static_cast<int>(snapshot.nodes.size())) return false;
 
 	for (const MRBentoWorkspaceLeaf &leaf : snapshot.leaves) {
-		if (leaf.id < 0 || !bentoWorkspaceRoleIsValid(static_cast<int>(leaf.role)) || !acceptsPaneRole(leaf.role)) return false;
+		if (leaf.id < 0 || !bentoWorkspaceRoleIsValid(static_cast<int>(leaf.role)) || !acceptsPaneRole(leaf.role) || !MRBentoPaneSpec::widgetMaskIsValid(leaf.widgetMask)) return false;
 		if (leaf.id == 0) hasSourceLeaf = true;
 		for (const MRBentoWorkspaceLeaf &other : snapshot.leaves)
 			if (&leaf != &other && leaf.id == other.id) return false;
@@ -374,6 +390,7 @@ bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapsh
 	}
 
 	cancelMacroDebuggerValueInput();
+	cancelAllBentoProjectionTasks();
 	for (BentoLeaf &leaf : leaves) {
 		if (leaf.pane != nullptr) {
 			remove(leaf.pane);
@@ -401,6 +418,8 @@ bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapsh
 		leaf.id = workspaceLeaf.id;
 		leaf.role = workspaceLeaf.role;
 		leaf.spec = paneSpecForRole(workspaceLeaf.role);
+		leaf.spec.widgetMask = workspaceLeaf.widgetMask;
+		leaf.spec.suppressMiniMap = (workspaceLeaf.widgetMask & static_cast<std::uint32_t>(bpwMiniMap)) == 0;
 		leaf.title = bentoMode == bbmDocumentViewports ? "" : titleForPaneRole(workspaceLeaf.role);
 		leaf.visible = workspaceLeaf.visible;
 		if (leaf.id != 0 || primaryPaneUsesDedicatedWindow()) {
@@ -410,7 +429,8 @@ bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapsh
 			leaf.pane->setPaneSpec(leaf.spec, getEditor());
 			insert(leaf.pane);
 			if (leaf.id != 0 && secondaryPane == nullptr && leaf.visible) secondaryPane = leaf.pane;
-		}
+		} else if (getEditor() != nullptr)
+			getEditor()->setMiniMapSuppressed(leaf.spec.suppressMiniMap);
 		leaves.push_back(leaf);
 	}
 
@@ -423,8 +443,9 @@ bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapsh
 	paneRoleDropList.hide();
 	paneActionDropList.hide();
 	layoutSplitPanes();
+	setActivePane(activeLeafId);
 	refreshOutlinePanes(true);
-	activePaneRoleChanged(roleForLeaf(activeLeafId));
+	static_cast<void>(refreshCompilerProblemsPane());
 	return true;
 }
 
@@ -467,6 +488,7 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 
 void MRBentoBox::close() {
 	cancelMacroDebuggerValueInput();
+	cancelAllBentoProjectionTasks();
 	restoreFileCompareSources();
 	windowCloseInProgress = true;
 	MREditWindow::close();
@@ -474,6 +496,7 @@ void MRBentoBox::close() {
 
 void MRBentoBox::shutDown() {
 	cancelMacroDebuggerValueInput();
+	cancelAllBentoProjectionTasks();
 	restoreFileCompareSources();
 	windowCloseInProgress = true;
 	MREditWindow::shutDown();

@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <set>
 #include <string_view>
 
 namespace {
@@ -99,7 +100,17 @@ struct MROutlineAcceptedKey {
 	std::size_t line = 0;
 	MROutlineKind kind = mrokUnknown;
 	std::string name;
+
+	bool operator<(const MROutlineAcceptedKey &other) const noexcept {
+		if (line != other.line) return line < other.line;
+		if (kind != other.kind) return kind < other.kind;
+		return name < other.name;
+	}
 };
+
+bool outlineBuildCancelled(const std::atomic_bool *cancelFlag) noexcept {
+	return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire);
+}
 
 bool outlineIsIndentWhitespace(char ch) noexcept {
 	return ch == ' ' || ch == '\t';
@@ -897,10 +908,10 @@ std::string mrBuildOutlineTrainingAsciiForFoldSpans(const std::vector<std::strin
 
 bool mrBuildFoldOutlineSnapshotFromFoldState(MRSyntaxLanguage language, std::size_t documentId, std::size_t version, std::size_t topLine, std::size_t bottomLine, bool complete,
                                              const std::vector<std::string> &lineTexts, const std::vector<MRFoldSpan> &spans, const MRTextBufferModel::ReadSnapshot &readSnapshot,
-                                             const MROutlineRequest &request, MROutlineSnapshot &snapshot) {
+                                             const MROutlineRequest &request, MROutlineSnapshot &snapshot, const std::atomic_bool *cancelFlag) {
 	std::vector<std::uint32_t> levelLast;
 	std::vector<std::uint32_t> lastChild;
-	std::vector<MROutlineAcceptedKey> acceptedKeys;
+	std::set<MROutlineAcceptedKey> acceptedKeys;
 	std::vector<MRFoldSpan> orderedSpans = spans;
 
 	snapshot.documentId = documentId;
@@ -912,12 +923,14 @@ bool mrBuildFoldOutlineSnapshotFromFoldState(MRSyntaxLanguage language, std::siz
 	snapshot.textPool.clear();
 	if (bottomLine <= topLine) return false;
 	if (!request.allowPartial && !complete) return false;
+	if (outlineBuildCancelled(cancelFlag)) return false;
 
 	std::stable_sort(orderedSpans.begin(), orderedSpans.end(), [](const MRFoldSpan &lhs, const MRFoldSpan &rhs) {
 		if (lhs.startLine != rhs.startLine) return lhs.startLine < rhs.startLine;
 		return lhs.level < rhs.level;
 	});
 	for (const MRFoldSpan &span : orderedSpans) {
+		if (outlineBuildCancelled(cancelFlag)) return false;
 		if (span.startLine < topLine || span.startLine >= bottomLine) continue;
 		const std::size_t lineTextIndex = span.startLine - topLine;
 		if (lineTextIndex >= lineTexts.size()) continue;
@@ -936,8 +949,7 @@ bool mrBuildFoldOutlineSnapshotFromFoldState(MRSyntaxLanguage language, std::siz
 
 		const std::string name = outlineDisplayName(language, trimmed, endTrimmed, kind);
 		if (name == "(unnamed)") continue;
-		if (acceptedKeyExists(acceptedKeys, span.startLine, kind, name)) continue;
-		acceptedKeys.push_back({span.startLine, kind, name});
+		if (!acceptedKeys.insert(MROutlineAcceptedKey{span.startLine, kind, name}).second) continue;
 		const std::size_t startOffset = readSnapshot.lineStartByIndex(span.startLine);
 		const std::size_t endOffset = readSnapshot.lineEnd(readSnapshot.lineStartByIndex(span.endLine));
 		const std::size_t nameColumn = std::min(outlineLeadingIndentBytes(lineText), lineText.size());
@@ -987,4 +999,10 @@ bool mrBuildFoldOutlineSnapshotFromFoldState(MRSyntaxLanguage language, std::siz
 		lastChild.push_back(MROutlineNode::npos);
 	}
 	return true;
+}
+
+bool mrBuildFoldOutlineSnapshot(const MRFoldOutlineInputSnapshot &input, MROutlineSnapshot &snapshot, const std::atomic_bool *cancelFlag) {
+	if (input.lineTexts == nullptr || input.spans == nullptr || input.readSnapshot == nullptr) return false;
+	return mrBuildFoldOutlineSnapshotFromFoldState(input.language, input.documentId, input.version, input.topLine, input.bottomLine, input.complete,
+	                                               *input.lineTexts, *input.spans, *input.readSnapshot, input.request, snapshot, cancelFlag);
 }

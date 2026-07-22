@@ -4,6 +4,7 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <ctime>
 #include <fstream>
 #include <memory>
@@ -188,8 +189,30 @@ class MRTextBufferModel {
 		return result;
 	}
 
+	CommitResult adoptReadOnlyProjectionText(const std::shared_ptr<const std::string> &text, std::size_t expectedDocumentId, std::size_t expectedVersion) {
+		CommitResult result = mShared->document.adoptReadOnlyProjectionText(text, expectedDocumentId, expectedVersion);
+		if (result.applied()) {
+			mShared->modified = false;
+			clearUndoRedo();
+			clampState();
+		}
+		return result;
+	}
+
 	bool adoptLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept {
 		return mShared->document.adoptLineIndexWarmup(warmup, expectedVersion);
+	}
+
+	std::vector<mr::editor::LineIndexScanReservation> reserveLineIndexScanSpans(std::size_t focusOffset, std::size_t maximumCount, std::size_t targetSpanLength) {
+		return mShared->document.reserveLineIndexScanSpans(focusOffset, maximumCount, targetSpanLength);
+	}
+
+	void releaseLineIndexScanReservation(std::uint64_t reservationId) noexcept {
+		mShared->document.releaseLineIndexScanReservation(reservationId);
+	}
+
+	bool adoptLineIndexScanPacket(const mr::editor::LineIndexScanPacket &packet, std::size_t expectedVersion) noexcept {
+		return mShared->document.adoptLineIndexScanPacket(packet, expectedVersion);
 	}
 
 	std::size_t cursor() const noexcept {
@@ -508,8 +531,16 @@ class MRTextBufferModel {
 		return mShared->document.lineIndex(pos);
 	}
 
+	std::size_t estimatedLineIndex(std::size_t pos) const noexcept {
+		return mShared->document.estimatedLineIndex(pos);
+	}
+
 	std::size_t lineStartByIndex(std::size_t index) const noexcept {
 		return mShared->document.lineStartByIndex(index);
+	}
+
+	bool lineStartByIndexKnown(std::size_t index) const noexcept {
+		return mShared->document.lineStartByIndexKnown(index);
 	}
 
 	std::size_t estimatedLineCount() const noexcept {

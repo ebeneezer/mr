@@ -31,6 +31,14 @@ void MRBentoBox::setState(ushort aState, Boolean enable) {
 	}
 }
 
+void MRBentoBox::layoutDesktopContents() {
+	if (hasPaneSplit() && !isMinimized()) {
+		layoutSplitPanes();
+		return;
+	}
+	MREditWindow::layoutDesktopContents();
+}
+
 void MRBentoBox::initializeLayoutTree() noexcept {
 	layoutTree.clear();
 	leaves.clear();
@@ -60,9 +68,9 @@ void MRBentoBox::ensurePaneFrameViews() {
 	while (paneFrameViews.size() < leaves.size()) {
 		MRBentoPaneFrameView *view = new MRBentoPaneFrameView(TRect(0, 0, 0, 0));
 		view->hide();
-		// Pane chrome is an overlay. It must precede pane windows in TVision's
-		// view order, otherwise their opaque bounds clip the frame writes.
-		insertBefore(view, first());
+		// Pane chrome spans the leaf rectangle. Keep it behind pane content so
+		// TVision does not classify the editor canvas as geometrically hidden.
+		insertBefore(view, frame);
 		paneFrameViews.push_back(view);
 	}
 }
@@ -97,12 +105,15 @@ void MRBentoBox::layoutSplitPanes() {
 		if (primaryEditor != nullptr && paneWindowForLeaf(0) == nullptr) primaryEditor->drawView();
 		for (BentoLeaf &leaf : leaves)
 			if (leaf.visible && leaf.pane != nullptr) leaf.pane->drawView();
+		paneLayoutChanged();
 		bentoProjectionDirty = bpdNone;
 		return;
 	}
 	ensurePaneFrameViews();
 	for (BentoLeaf &leaf : leaves) leaf.visible = false;
 	if (maximizedLeafId >= 0 && nodeIndexForLeaf(maximizedLeafId) >= 0) {
+		if (rootNode >= 0) layoutNode(rootNode, inner);
+		for (BentoLeaf &leaf : leaves) leaf.visible = false;
 		for (BentoLeaf &leaf : leaves) {
 			if (leaf.id == maximizedLeafId) {
 				leaf.bounds = inner;
@@ -137,10 +148,14 @@ void MRBentoBox::layoutSplitPanes() {
 			}
 		} else {
 			if (leaf.id == 0) hideSourcePaneChrome();
-			if (leaf.pane != nullptr) leaf.pane->hide();
+			if (leaf.pane != nullptr) {
+				leaf.pane->hide();
+				if (maximizedLeafId >= 0 && nodeIndexForLeaf(leaf.id) >= 0) leaf.pane->changeBounds(contentBounds(leaf.bounds));
+			}
 			if (view != nullptr) view->hide();
 		}
 	}
+	paneLayoutChanged();
 	if (frame != nullptr) frame->drawView();
 	if (primaryEditor != nullptr && paneWindowForLeaf(0) == nullptr) {
 		primaryEditor->drawView();
@@ -397,6 +412,12 @@ void MRBentoBox::drawSharedEditorPanes() noexcept {
 void MRBentoBox::refreshPaneContentProjection() noexcept {
 	if (windowCloseInProgress || !hasPaneSplit()) return;
 	bentoProjectionDirty |= bpdContent | bpdChrome;
+	flushBentoProjection();
+}
+
+void MRBentoBox::refreshPaneChromeProjection() noexcept {
+	if (windowCloseInProgress || !hasPaneSplit()) return;
+	bentoProjectionDirty |= bpdChrome;
 	flushBentoProjection();
 }
 

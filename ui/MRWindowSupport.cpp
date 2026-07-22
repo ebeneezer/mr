@@ -545,6 +545,16 @@ void mrLogMessage(std::string_view message) {
 	if (win != nullptr) win->setWindowRole(MREditWindow::wrLog);
 }
 
+void mrTraceDiagnosticMessage(std::string_view message) {
+	const std::string line = normalizeLogLine(message);
+	const std::string path = configuredLogFilePath();
+	std::string chunk;
+
+	if (line.empty() || path.empty()) return;
+	chunk = "[" + currentTimestamp() + "] " + line + "\n";
+	appendLogChunkToFile(path, chunk, nullptr);
+}
+
 bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage) {
 	const std::string_view chunk = path == g_logPersistedPath && g_logPersistedBytes <= g_logBuffer.size() ? std::string_view(g_logBuffer.data() + g_logPersistedBytes, g_logBuffer.size() - g_logPersistedBytes) : std::string_view(g_logBuffer.data(), g_logBuffer.size());
 

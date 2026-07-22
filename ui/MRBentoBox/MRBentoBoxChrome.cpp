@@ -56,7 +56,7 @@ void MRBentoBox::postCloseCommand() noexcept {
 	putEvent(event);
 }
 
-void MRBentoBox::closePane(int leafId) noexcept {
+void MRBentoBox::closePane(int leafId) {
 	if (leafId == 0) {
 		postCloseCommand();
 		return;
@@ -68,7 +68,7 @@ void MRBentoBox::closePane(int leafId) noexcept {
 	mrMarkWorkspaceAutosaveDirty("bento pane close", this);
 }
 
-void MRBentoBox::closeSecondaryPane() noexcept {
+void MRBentoBox::closeSecondaryPane() {
 	int toolLeaf = firstToolLeafId();
 	bool changed = false;
 	while (toolLeaf >= 0) {
@@ -85,10 +85,11 @@ void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
 	const int listWidth = 17;
 	const int listHeight = 6;
 	const bool openingRoleList = !paneRoleDropList.visible();
+	const std::vector<std::string> choices = paneRoleChoices();
 	TRect paneRect = paneBoundsForLeaf(targetLeafId);
 	MRBentoPaneFrameView *chromeView = nullptr;
 
-	if (!titleMenuEnabledForLeaf(targetLeafId)) return;
+	if (!titleMenuEnabledForLeaf(targetLeafId) || choices.empty()) return;
 	for (MRBentoPaneFrameView *view : paneFrameViews)
 		if (view != nullptr && view->paneLeafId() == targetLeafId) chromeView = view;
 	TRect localAnchor = chromeView != nullptr ? chromeView->paneRoleListAnchor(listWidth) : TRect(1, 0, 1 + listWidth, 0);
@@ -100,7 +101,7 @@ void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
 	pendingPaneRoleTargetLeafId = targetLeafId;
 	paneRoleListAnchor = TRect(left, top, left + listWidth, top);
 	if (openingRoleList && chromeView != nullptr) chromeView->setPaneRoleListTitleOpen(true, paneRoleListAnchor);
-	paneRoleDropList.toggle(*this, paneRoleListAnchor, paneRoleChoices(), mr::bento::paneRoleTitle(roleForLeaf(targetLeafId)), this, mr::bento::cmPaneRoleAccepted, listHeight);
+	paneRoleDropList.toggle(*this, paneRoleListAnchor, choices, mr::bento::paneRoleTitle(roleForLeaf(targetLeafId)), this, mr::bento::cmPaneRoleAccepted, listHeight);
 	if (!openingRoleList) updatePaneRoleListChrome();
 }
 
@@ -178,13 +179,24 @@ void MRBentoBox::acceptFileCompareActionChoice() {
 	if (action == mr::bento::fileCompareActionApply()) {
 		const MRBentoPaneRole role = roleForLeaf(pendingFileCompareActionLeafId);
 		const bool originalToCompare = role == bprDiffOriginal;
-		const std::size_t groupIndex = pendingFileCompareActionGroupIndex >= 0 ? static_cast<std::size_t>(pendingFileCompareActionGroupIndex) : fileCompareChangeGroups.size();
-		if (groupIndex < fileCompareChangeGroups.size())
-			static_cast<void>(applyFileCompareChangeGroup(originalToCompare, fileCompareChangeGroups[groupIndex]));
+		const std::shared_ptr<const std::vector<MRBentoFileCompareChangeGroup>> groups =
+			fileComparePipeline.diff != nullptr ? fileComparePipeline.diff->changeGroups : std::shared_ptr<const std::vector<MRBentoFileCompareChangeGroup>>();
+		const std::size_t groupIndex = pendingFileCompareActionGroupIndex >= 0 ? static_cast<std::size_t>(pendingFileCompareActionGroupIndex) : (groups != nullptr ? groups->size() : 0);
+		if (groups != nullptr && groupIndex < groups->size())
+			static_cast<void>(applyFileCompareChangeGroup(originalToCompare, (*groups)[groupIndex]));
 		else
 			static_cast<void>(applyFileCompareChange(originalToCompare));
 		pendingFileCompareActionGroupIndex = -1;
 	}
+}
+
+void MRBentoBox::dismissPaneMenus() noexcept {
+	if (!paneRoleDropList.visible() && !paneActionDropList.visible() && !fileCompareActionDropList.visible()) return;
+	paneRoleDropList.hide();
+	paneActionDropList.hide();
+	fileCompareActionDropList.hide();
+	updatePaneRoleListChrome();
+	flushBentoProjection();
 }
 
 bool MRBentoBox::handlePaneDropListEvent(TEvent &event) {
@@ -510,6 +522,10 @@ MRPaneEditWindow *MRBentoBox::paneWindowForLeaf(int leafId) const noexcept {
 	return nullptr;
 }
 
+MRPaneEditWindow *MRBentoBox::paneWindowForRole(MRBentoPaneRole role) const noexcept {
+	return paneWindowForLeaf(leafIdForRole(role));
+}
+
 MRBentoPaneRole MRBentoBox::roleForLeaf(int leafId) const noexcept {
 	for (const BentoLeaf &leaf : leaves)
 		if (leaf.id == leafId) return leaf.role;
@@ -530,7 +546,7 @@ int MRBentoBox::firstToolLeafId() const noexcept {
 
 int MRBentoBox::leafIdForRole(MRBentoPaneRole role) const noexcept {
 	for (const BentoLeaf &leaf : leaves)
-		if (leaf.visible && leaf.role == role) return leaf.id;
+		if (leaf.role == role && nodeIndexForLeaf(leaf.id) >= 0) return leaf.id;
 	return -1;
 }
 
@@ -655,6 +671,8 @@ int MRBentoBox::createToolLeaf(MRBentoPaneRole role) {
 }
 
 int MRBentoBox::createPaneLeaf(const MRBentoPaneSpec &spec) {
+	if (!mr::bento::paneRoleAllowsMultipleInstances(spec.role) && leafIdForRole(spec.role) >= 0) return -1;
+
 	BentoLeaf leaf;
 	leaf.id = nextLeafId++;
 	leaf.role = spec.role;
@@ -687,6 +705,7 @@ int MRBentoBox::splitLeafNode(int leafId, BentoSplitOrientation orientation, con
 	int targetNode = nodeIndexForLeaf(leafId);
 	if (targetNode < 0) return -1;
 	int newLeaf = createPaneLeaf(spec);
+	if (newLeaf < 0) return -1;
 	int existingLeafNode = createLeafNode(leafId);
 	int newLeafNode = createLeafNode(newLeaf);
 	BentoLayoutNode &target = layoutTree[targetNode];
@@ -701,11 +720,13 @@ int MRBentoBox::splitLeafNode(int leafId, BentoSplitOrientation orientation, con
 	return newLeaf;
 }
 
-void MRBentoBox::collapseLeafNode(int leafId) noexcept {
+void MRBentoBox::collapseLeafNode(int leafId) {
 	int leafNode = nodeIndexForLeaf(leafId);
 	if (leafNode < 0) return;
 	int parent = parentNodeOf(leafNode);
 	if (parent < 0) return;
+	MRPaneEditWindow *closingPane = paneWindowForLeaf(leafId);
+	if (closingPane != nullptr) cancelBentoProjectionForPane(closingPane->bufferId());
 	int survivor = layoutTree[parent].firstChild == leafNode ? layoutTree[parent].secondChild : layoutTree[parent].firstChild;
 	layoutTree[parent] = layoutTree[survivor];
 	for (BentoLeaf &leaf : leaves) {
@@ -725,7 +746,17 @@ void MRBentoBox::collapseLeafNode(int leafId) noexcept {
 }
 
 std::vector<std::string> MRBentoBox::paneRoleChoices() const {
-	return mr::bento::paneRoleChoices(bentoMode);
+	const std::vector<std::string> choices = mr::bento::paneRoleChoices(bentoMode);
+	std::vector<std::string> available;
+
+	available.reserve(choices.size());
+	for (const std::string &choice : choices) {
+		const MRBentoPaneRole role = mr::bento::paneRoleForTitle(choice);
+
+		if (!mr::bento::paneRoleAllowsMultipleInstances(role) && leafIdForRole(role) >= 0) continue;
+		available.push_back(choice);
+	}
+	return available;
 }
 
 std::vector<std::string> MRBentoBox::paneActionChoices() const {

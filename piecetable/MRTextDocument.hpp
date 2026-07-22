@@ -3,8 +3,8 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
-#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -382,6 +382,47 @@ struct LineIndexWarmupData {
 	}
 };
 
+enum class LineIndexScanDirection : unsigned char {
+	Bof,
+	Eof
+};
+
+struct LineIndexScanCheckpoint {
+	Offset offset;
+	std::size_t lineBreakCount;
+
+	LineIndexScanCheckpoint() noexcept : offset(0), lineBreakCount(0) {
+	}
+
+	LineIndexScanCheckpoint(Offset anOffset, std::size_t aLineBreakCount) noexcept : offset(anOffset), lineBreakCount(aLineBreakCount) {
+	}
+};
+
+struct LineIndexScanPacket {
+	std::uint64_t reservationId;
+	Offset startOffset;
+	Offset endOffset;
+	std::size_t lineBreakCount;
+	std::vector<LineIndexScanCheckpoint> checkpoints;
+
+	LineIndexScanPacket() noexcept : reservationId(0), startOffset(0), endOffset(0), lineBreakCount(0), checkpoints() {
+	}
+};
+
+struct LineIndexScanReservation {
+	std::uint64_t reservationId;
+	Offset startOffset;
+	Offset endOffset;
+	LineIndexScanDirection direction;
+
+	LineIndexScanReservation() noexcept : reservationId(0), startOffset(0), endOffset(0), direction(LineIndexScanDirection::Eof) {
+	}
+
+	LineIndexScanReservation(std::uint64_t anId, Offset aStartOffset, Offset anEndOffset, LineIndexScanDirection aDirection) noexcept
+	    : reservationId(anId), startOffset(aStartOffset), endOffset(anEndOffset), direction(aDirection) {
+	}
+};
+
 class ReadSnapshot {
  public:
 	ReadSnapshot() noexcept;
@@ -418,14 +459,16 @@ class ReadSnapshot {
 	[[nodiscard]] Offset nextLine(Offset pos) const noexcept;
 	[[nodiscard]] Offset prevLine(Offset pos) const noexcept;
 	[[nodiscard]] std::size_t lineIndex(Offset pos) const noexcept;
+	[[nodiscard]] std::size_t estimatedLineIndex(Offset pos) const noexcept;
 	[[nodiscard]] Offset lineStartByIndex(std::size_t index) const noexcept;
 	[[nodiscard]] std::size_t estimatedLineCount() const noexcept;
 	[[nodiscard]] bool exactLineCountKnown() const noexcept;
 	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
 	[[nodiscard]] std::string lineText(Offset pos) const;
 	[[nodiscard]] LineIndexWarmupData completeLineIndexWarmup() const;
-	bool warmLineIndexChunk(LineIndexWarmupData &warmup, std::size_t maxStrides, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
-	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
+	bool warmLineIndexChunk(LineIndexWarmupData &warmup, std::size_t maxStrides, const std::atomic_bool *cancelFlag = nullptr) const;
+	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, const std::atomic_bool *cancelFlag = nullptr) const;
+	bool scanLineIndexSpan(LineIndexScanPacket &packet, std::uint64_t reservationId, Offset startOffset, Offset endOffset, const std::atomic_bool *cancelFlag = nullptr) const;
 	void dropExactLineStartIndex() noexcept;
 
  private:
@@ -440,8 +483,6 @@ class ReadSnapshot {
 	bool directAdvanceLine(Offset &offset) const noexcept;
 	void ensureLazyIndexSeeded() const noexcept;
 	void advanceLazyIndexByStride() const noexcept;
-	void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
-	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
 	void ensureLazyIndexComplete() const noexcept;
 	const char *originalData() const noexcept;
 	std::string pieceText(const Piece &piece) const;
@@ -468,6 +509,10 @@ class TextDocument {
  public:
 	TextDocument() noexcept;
 	explicit TextDocument(std::string_view text);
+	TextDocument(const TextDocument &source);
+	TextDocument &operator=(const TextDocument &source);
+	TextDocument(TextDocument &&source) noexcept = default;
+	TextDocument &operator=(TextDocument &&source) noexcept = default;
 
 	[[nodiscard]] const std::string &text() const noexcept;
 	[[nodiscard]] Offset length() const noexcept;
@@ -477,6 +522,9 @@ class TextDocument {
 	[[nodiscard]] ReadSnapshot readSnapshot() const;
 	void restoreFromSnapshot(const ReadSnapshot &snapshot);
 	[[nodiscard]] bool adoptLineIndexWarmup(const LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept;
+	[[nodiscard]] std::vector<LineIndexScanReservation> reserveLineIndexScanSpans(Offset focusOffset, std::size_t maximumCount, Offset targetSpanLength);
+	void releaseLineIndexScanReservation(std::uint64_t reservationId) noexcept;
+	[[nodiscard]] bool adoptLineIndexScanPacket(const LineIndexScanPacket &packet, std::size_t expectedVersion) noexcept;
 
 	[[nodiscard]] std::size_t version() const noexcept {
 		return mVersion;
@@ -518,6 +566,7 @@ class TextDocument {
 	[[nodiscard]] PieceChunkView pieceChunk(std::size_t index) const noexcept;
 
 	void setText(std::string_view text);
+	[[nodiscard]] CommitResult adoptReadOnlyProjectionText(const std::shared_ptr<const std::string> &text, std::size_t expectedDocumentId, std::size_t expectedVersion);
 	void apply(const EditTransaction &transaction);
 	[[nodiscard]] CommitResult tryApply(const EditTransaction &transaction, std::size_t expectedVersion);
 	[[nodiscard]] CommitResult tryApply(const StagedEditTransaction &transaction);
@@ -535,7 +584,9 @@ class TextDocument {
 	[[nodiscard]] Offset nextLine(Offset pos) const noexcept;
 	[[nodiscard]] Offset prevLine(Offset pos) const noexcept;
 	[[nodiscard]] std::size_t lineIndex(Offset pos) const noexcept;
+	[[nodiscard]] std::size_t estimatedLineIndex(Offset pos) const noexcept;
 	[[nodiscard]] Offset lineStartByIndex(std::size_t index) const noexcept;
+	[[nodiscard]] bool lineStartByIndexKnown(std::size_t index) const noexcept;
 	[[nodiscard]] std::size_t estimatedLineCount() const noexcept;
 	[[nodiscard]] bool exactLineCountKnown() const noexcept;
 	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
@@ -567,11 +618,11 @@ class TextDocument {
 	bool directAdvanceLine(Offset &offset) const noexcept;
 	void ensureLazyIndexSeeded() const noexcept;
 	void advanceLazyIndexByStride() const noexcept;
-	void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
-	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
 	void ensureLazyIndexComplete() const noexcept;
 	void shiftLazyLineIndexForInsertWithoutLineBreak(Offset offset, Offset length) noexcept;
+	void shiftLazyLineIndexForEraseWithoutLineBreak(Offset offset, Offset length) noexcept;
 	void invalidateLazyLineIndexFrom(Offset offset) noexcept;
+	void clearLineIndexScanLedger() noexcept;
 	void ensureUniqueOriginalBuffer();
 	void ensureUniquePieces();
 
@@ -580,7 +631,7 @@ class TextDocument {
 	bool insertAddSpanNoVersionBump(Offset offset, TextSpan span);
 	void compactPieces();
 
-	std::shared_ptr<std::string> mOriginalBuffer;
+	std::shared_ptr<const std::string> mOriginalBuffer;
 	MappedFileSource mMappedOriginal;
 	AppendBuffer mAddBuffer;
 	std::shared_ptr<std::vector<Piece>> mPieces;
@@ -594,6 +645,9 @@ class TextDocument {
 	mutable std::size_t mLazyIndexedLine;
 	mutable bool mLazyLineIndexComplete;
 	mutable std::size_t mLazyTotalLineCount;
+	std::vector<LineIndexScanPacket> mPendingLineIndexScanPackets;
+	std::vector<LineIndexScanReservation> mLineIndexScanReservations;
+	std::uint64_t mNextLineIndexScanReservationId;
 	std::shared_ptr<std::vector<Offset>> mEditedLineStarts;
 };
 

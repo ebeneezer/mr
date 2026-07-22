@@ -4,7 +4,6 @@
 #include "MRTextDocument.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -17,13 +16,6 @@ namespace lineindex {
 inline constexpr std::size_t kLazyLineIndexStride = 4096;
 inline constexpr std::size_t kPiecewiseLineIndexCheckpointStride = 64;
 inline constexpr std::size_t kLazyLineStartCatchupWindow = 256;
-inline constexpr auto kSlowDocumentTraceThreshold = std::chrono::microseconds(2000);
-
-void appendDocumentTrace(std::string_view message);
-
-template <class Duration> long long traceMicros(Duration duration) {
-	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
-}
 
 Offset directFindNextLineBreak(const char *data, Offset length, Offset start) noexcept;
 Offset directFindPrevLineBreak(const char *data, Offset endExclusive) noexcept;
@@ -69,6 +61,7 @@ template <class Doc> std::size_t piecewiseCountLineBreaksInRange(const Doc &doc,
 		if (takeEnd > takeStart) count += countLineBreaksChunk(chunk.data + (takeStart - chunkStart), takeEnd - takeStart, prevWasCR);
 		logical = chunkEnd;
 	}
+	if (count > 0 && end < doc.length() && end > start && piecewiseCharAt(doc, end) == '\n' && piecewiseCharAt(doc, end - 1) == '\r') --count;
 	return count;
 }
 
@@ -86,6 +79,7 @@ template <class Doc> std::size_t piecewiseLineCount(const Doc &doc) noexcept {
 template <class Doc> Offset piecewiseLineStart(const Doc &doc, Offset pos) noexcept {
 	pos = doc.clampOffset(pos);
 	if (pos == 0) return 0;
+	if (pos < doc.length() && piecewiseCharAt(doc, pos) == '\n' && piecewiseCharAt(doc, pos - 1) == '\r') --pos;
 
 	Offset logicalEnd = doc.length();
 	for (std::size_t i = doc.pieceCount(); i > 0; --i) {

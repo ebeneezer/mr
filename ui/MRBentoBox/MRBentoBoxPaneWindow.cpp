@@ -28,7 +28,8 @@ class MRPaneFrame : public MRFrame {
 
 }
 
-MRPaneEditWindow::MRPaneEditWindow(const TRect &bounds, const char *title, int number) : TWindowInit(&MRPaneEditWindow::initFrame), MREditWindow(bounds, title, number), mPaneSpec(), mPaneFocused(false) {
+MRPaneEditWindow::MRPaneEditWindow(const TRect &bounds, const char *title, int number)
+	: TWindowInit(&MRPaneEditWindow::initFrame), MREditWindow(bounds, title, number, mr::coprocessor::ExecutionOwnerKind::BentoPane), mPaneSpec(), mPaneFocused(false) {
 	flags = 0;
 	state &= static_cast<ushort>(~sfShadow);
 	options &= static_cast<ushort>(~(ofTileable | ofTopSelect));
@@ -55,6 +56,18 @@ void MRPaneEditWindow::changeBounds(const TRect &bounds) {
 void MRPaneEditWindow::draw() {
 	MREditWindow::draw();
 	if (usesNativeEditorChrome()) drawPaneScrollBars();
+}
+
+void MRPaneEditWindow::handleEvent(TEvent &event) {
+	MRFileEditor *committedEditor = event.what == evBroadcast && event.message.command == cmMrEditorDocumentCommitted
+	                                    ? static_cast<MRFileEditor *>(event.message.infoPtr)
+	                                    : nullptr;
+	const bool relaySourceCommit = mPaneSpec.role == bprSplitEditor && mPaneSpec.bufferPolicy == bpbSharedSourceBuffer &&
+	                               committedEditor != nullptr && committedEditor == getEditor();
+
+	MREditWindow::handleEvent(event);
+	if (relaySourceCommit)
+		if (MRBentoBox *bento = dynamic_cast<MRBentoBox *>(owner)) bento->handleCommittedSourceEditor(committedEditor);
 }
 
 TColorAttr MRPaneEditWindow::mapColor(uchar index) {
@@ -88,8 +101,12 @@ bool MRPaneEditWindow::ownsPaneWheelEvents() const noexcept {
 	return false;
 }
 
+bool MRPaneEditWindow::projectsPaneContentLocally() const noexcept {
+	return false;
+}
+
 void MRPaneEditWindow::setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept {
-	const bool sameSpec = mPaneSpec.role == spec.role && mPaneSpec.bufferPolicy == spec.bufferPolicy && mPaneSpec.readOnly == spec.readOnly && mPaneSpec.suppressMiniMap == spec.suppressMiniMap && mPaneSpec.suppressWordWrap == spec.suppressWordWrap && mPaneSpec.scrollBarsAlwaysVisible == spec.scrollBarsAlwaysVisible && mPaneSpec.titleMenu == spec.titleMenu;
+	const bool sameSpec = mPaneSpec.role == spec.role && mPaneSpec.bufferPolicy == spec.bufferPolicy && mPaneSpec.readOnly == spec.readOnly && mPaneSpec.widgetMask == spec.widgetMask && mPaneSpec.suppressMiniMap == spec.suppressMiniMap && mPaneSpec.suppressWordWrap == spec.suppressWordWrap && mPaneSpec.scrollBarsAlwaysVisible == spec.scrollBarsAlwaysVisible && mPaneSpec.titleMenu == spec.titleMenu;
 	const MRBentoPaneBufferPolicy oldBufferPolicy = mPaneSpec.bufferPolicy;
 	mPaneSpec = spec;
 	if (oldBufferPolicy == bpbSharedSourceBuffer && spec.bufferPolicy == bpbOwnBuffer && getEditor() != nullptr) getEditor()->detachContentStateCopy();

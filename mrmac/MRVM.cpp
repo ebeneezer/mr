@@ -43,6 +43,7 @@
 #include "vm/MRVMRuntimeKv.hpp"
 #include "vm/MRVMRuntimeState.hpp"
 #include "vm/MRVMValue.hpp"
+#include "ui/conventional/MRVMEditor.hpp"
 #include "ui/conventional/MRVMScreen.hpp"
 #include "vm/MRVMSettings.hpp"
 #include <algorithm>
@@ -87,7 +88,6 @@
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../keymap/MRKeymapProfile.hpp"
 #include "../ui/MRWindowSupport.hpp"
-#include "../coprocessor/MRCoprocessor.hpp"
 
 MREditWindow *createEditorWindow(const char *title);
 std::vector<MREditWindow *> allEditWindowsInZOrder();
@@ -102,7 +102,6 @@ void applyVirtualDesktopConfigurationChange(int count);
 RuntimeEnvironment g_runtimeEnv;
 std::recursive_mutex g_vmExecutionMutex;
 thread_local BackgroundEditSession *g_backgroundEditSession = nullptr;
-thread_local const std::stop_token *g_backgroundMacroStopToken = nullptr;
 thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
 thread_local ExecutionState *g_executionState = nullptr;
 thread_local MRMacroExecutionSessionId g_executionSessionId = 0;
@@ -339,8 +338,7 @@ MREditWindow *activeMacroEditWindow() {
 }
 
 MRFileEditor *currentEditor() {
-	MREditWindow *win = activeMacroEditWindow();
-	return win != nullptr ? win->getEditor() : nullptr;
+	return mrvmEditorCurrentEditor();
 }
 
 static BackgroundEditSession *currentBackgroundEditSession() noexcept {
@@ -381,7 +379,7 @@ static char normalizeSearchChar(char c, bool ignoreCase) noexcept {
 }
 
 static bool backgroundMacroCancelRequested() noexcept {
-	return (g_backgroundMacroStopToken != nullptr && g_backgroundMacroStopToken->stop_requested()) || (g_backgroundMacroCancelFlag != nullptr && g_backgroundMacroCancelFlag->load(std::memory_order_acquire));
+	return g_backgroundMacroCancelFlag != nullptr && g_backgroundMacroCancelFlag->load(std::memory_order_acquire);
 }
 
 static bool currentRuntimeIgnoreCase() noexcept {
@@ -673,7 +671,7 @@ static bool searchEditorBackward(MRFileEditor *editor, const std::string &needle
 }
 
 static bool replaceLastSearch(MRFileEditor *editor, const std::string &replacement) {
-	MREditWindow *win = activeMacroEditWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	const char *fileName;
 	if (editor == nullptr || !g_runtimeEnv.lastSearchValid) return false;
 	if (win == nullptr || g_runtimeEnv.lastSearchWindow != win) return false;
@@ -903,14 +901,14 @@ static int expandedTabsAdjustedIndex(const std::string &value, int index) {
 }
 
 static int currentEditorIndentLevel() {
-	MREditWindow *win = activeMacroEditWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (win != nullptr) return win->indentLevel();
 	return session != nullptr ? session->indentLevel : 1;
 }
 
 static bool setCurrentEditorIndentLevel(int level) {
-	MREditWindow *win = activeMacroEditWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (win != nullptr) {
 		win->setIndentLevel(level);
@@ -1197,7 +1195,7 @@ static bool setEditorCursor(MRFileEditor *editor, uint target, int requestedVisu
 	if (requestedVisualColumn >= 0) editor->setCursorOffsetAtVisualColumn(target, requestedVisualColumn);
 	else
 		editor->setCursorOffset(target, 0);
-	win = activeMacroEditWindow();
+	win = currentEditorCommandWindow();
 	if (win != nullptr && win->isBlockMarking()) win->refreshBlockVisual();
 	else
 		editor->revealCursor(True);
@@ -1619,7 +1617,7 @@ static int blockCol2Value(MREditWindow *win, MRFileEditor *editor) {
 }
 
 bool beginCurrentBlockMode(int mode) {
-	MREditWindow *win = activeMacroEditWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	if (win == nullptr) return false;
 	if (mode == MREditWindow::bmColumn) win->beginColumnBlock();
 	else if (mode == MREditWindow::bmStream)
@@ -1630,7 +1628,7 @@ bool beginCurrentBlockMode(int mode) {
 }
 
 bool endCurrentBlockMode() {
-	MREditWindow *win = activeMacroEditWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->endBlock();
 	return true;
@@ -1639,7 +1637,7 @@ bool endCurrentBlockMode() {
 bool clearCurrentBlockMode() {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (session != nullptr) session->clearSelection();
-	MREditWindow *win = activeMacroEditWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	if (win != nullptr) win->clearBlock();
 	return true;
 }
@@ -2084,7 +2082,7 @@ bool deleteCurrentEditWindow() {
 
 bool eraseCurrentEditWindow() {
 	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = currentEditor();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr && session == nullptr) return false;
 	if (!replaceEditorBuffer(editor, std::string(), 0)) return false;
@@ -2301,27 +2299,27 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return mrvmMakeInt(y2);
 	}
 	if (key == "BLOCK_STAT") {
-		MREditWindow *win = activeMacroEditWindow();
+		MREditWindow *win = currentEditorCommandWindow();
 		return mrvmMakeInt(blockStatusValue(win));
 	}
 	if (key == "BLOCK_LINE1") {
-		MREditWindow *win = activeMacroEditWindow();
+		MREditWindow *win = currentEditorCommandWindow();
 		return mrvmMakeInt(blockLine1Value(win, currentEditor()));
 	}
 	if (key == "BLOCK_LINE2") {
-		MREditWindow *win = activeMacroEditWindow();
+		MREditWindow *win = currentEditorCommandWindow();
 		return mrvmMakeInt(blockLine2Value(win, currentEditor()));
 	}
 	if (key == "BLOCK_COL1") {
-		MREditWindow *win = activeMacroEditWindow();
+		MREditWindow *win = currentEditorCommandWindow();
 		return mrvmMakeInt(blockCol1Value(win, currentEditor()));
 	}
 	if (key == "BLOCK_COL2") {
-		MREditWindow *win = activeMacroEditWindow();
+		MREditWindow *win = currentEditorCommandWindow();
 		return mrvmMakeInt(blockCol2Value(win, currentEditor()));
 	}
 	if (key == "MARKING") {
-		MREditWindow *win = activeMacroEditWindow();
+		MREditWindow *win = currentEditorCommandWindow();
 		return mrvmMakeInt(blockMarkingValue(win) ? 1 : 0);
 	}
 	if (key == "LAST_FILE_NAME") return mrvmMakeString(g_runtimeEnv.lastFileName);
@@ -3388,7 +3386,7 @@ static bool executeBoundCommand(int commandId) {
 		case macdFirstWord:
 			return moveEditorFirstWord(editor);
 		case macdGotoMark:
-			return gotoEditorMark(activeMacroEditWindow(), editor);
+			return gotoEditorMark(currentEditorCommandWindow(), editor);
 		case macdHome:
 			return moveEditorHome(editor);
 		case macdIndent:
@@ -3400,7 +3398,7 @@ static bool executeBoundCommand(int commandId) {
 		case macdLeft:
 			return moveEditorLeft(editor);
 		case macdMarkPos:
-			return markEditorPosition(activeMacroEditWindow(), editor);
+			return markEditorPosition(currentEditorCommandWindow(), editor);
 		case macdMoveBlock:
 			return true;
 		case macdNextPageBreak:
@@ -4093,7 +4091,7 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 			session->selectionStart = matchStart;
 			session->selectionEnd = matchEnd;
 		}
-		win = activeMacroEditWindow();
+		win = currentEditorCommandWindow();
 		if (session != nullptr) {
 			session->lastSearchValid = true;
 			session->lastSearchStart = matchStart;
@@ -4140,7 +4138,7 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 			session->selectionStart = matchStart;
 			session->selectionEnd = matchEnd;
 		}
-		win = activeMacroEditWindow();
+		win = currentEditorCommandWindow();
 		if (session != nullptr) {
 			session->lastSearchValid = true;
 			session->lastSearchStart = matchStart;
@@ -4334,14 +4332,6 @@ bool mrvmHasActiveBackgroundEditSession() noexcept {
 
 std::string mrvmEditorExpandUserPath(const std::string &path) {
 	return mrvmProcessExpandUserPath(path);
-}
-
-MREditWindow *mrvmEditorActiveWindow() {
-	return activeMacroEditWindow();
-}
-
-MRFileEditor *mrvmEditorCurrentEditor() {
-	return currentEditor();
 }
 
 bool mrvmEditorMarkPosition(MREditWindow *win, MRFileEditor *editor) {
@@ -4538,7 +4528,7 @@ struct VirtualMachine::MRMacroDebugChildFrame {
 
 VirtualMachine::VirtualMachine()
     : mHashStore(std::make_unique<MRVMHashStore>()), mClosureId(), mClosureVariableNames(), mExecutionSessionId(0), mSessionVariableNames(), verboseLogging(true), logTruncated(false), mAsyncDelayPending(false),
-      mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayTaskId(0), mAsyncDelayGeneration(0),
+	  mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayDeadline(), mAsyncDelayGeneration(0),
       mAsyncDelayMillis(0), mDebugRunActive(false), mDebugStopped(false), mDebugStopReason(mrdStopNone), mDebugStopOffset(0), mDebugStackDepth(0), mDebugBreakpointOffsets(), mDebugPaused(false), mDebugBytecode(),
 	  mDebugLength(0), mDebugIp(0), mDebugCallStack(), mDebugReturnInt(0), mDebugReturnStr(), mDebugErrorLevel(0), mDebugSavedParameterString(), mDebugMacroName(), mDebugFirstRun(false), mDebugSkipCurrentOffset(false), mDebugPauseRequested(false), mDebugInstructionBudget(0), mDebugStepMode(mrdStepNone),
 	  mDebugStepOutDepth(0), mDebugMacroKey(), mDebugSourcePath(), mDebugChildFrame(),
@@ -4619,31 +4609,6 @@ VirtualMachine::Value VirtualMachine::pop() {
 	return mrvmMakeInt(0);
 }
 
-int VirtualMachine::normalizeDelayMillis(int millis) noexcept {
-	static const int kMaxDelayMillis = 60 * 60 * 1000; // 1 hour hard cap.
-	if (millis <= 0) return 0;
-	if (millis > kMaxDelayMillis) return kMaxDelayMillis;
-	return millis;
-}
-
-void VirtualMachine::clearAsyncDelayState() noexcept {
-	mAsyncDelayPending = false;
-	mAsyncDelayReady = false;
-	mAsyncBytecode.clear();
-	mAsyncCallStack.clear();
-	mAsyncLength = 0;
-	mAsyncIp = 0;
-	mAsyncReturnInt = 0;
-	mAsyncReturnStr.clear();
-	mAsyncErrorLevel = 0;
-	mAsyncSavedParameterString.clear();
-	mAsyncMacroFramePushed = false;
-	mAsyncDelayReadyFlag.reset();
-	mAsyncDelayCancelledFlag.reset();
-	mAsyncDelayTaskId = 0;
-	mAsyncDelayMillis = 0;
-}
-
 namespace {
 struct VmDelayYield {
 	int millis;
@@ -4665,41 +4630,6 @@ static bool sleepDelayBlocking(int millis) {
 	return true;
 }
 } // namespace
-
-void VirtualMachine::execute(const unsigned char *bytecode, size_t length) {
-	cancelPendingDelay();
-	clearAsyncDelayState();
-	executeAt(bytecode, length, 0, std::string(), std::string(), true, false);
-}
-
-bool VirtualMachine::resumePendingDelay() {
-	if (!mAsyncDelayPending) return false;
-	if (!mAsyncDelayReady || mAsyncDelayReadyFlag == nullptr || !mAsyncDelayReadyFlag->load(std::memory_order_acquire)) return true;
-	if (mAsyncDelayCancelledFlag != nullptr && mAsyncDelayCancelledFlag->load(std::memory_order_acquire)) {
-		cancelledExecution = true;
-		appendLogLine("VM Notice: DELAY cancelled before resume.", true);
-		runtimeErrorLevel() = 5007;
-		if (mAsyncMacroFramePushed && !g_runtimeEnv.macroStack.empty()) g_runtimeEnv.macroStack.pop_back();
-		clearAsyncDelayState();
-		return false;
-	}
-	executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
-	return mAsyncDelayPending;
-}
-
-bool VirtualMachine::cancelPendingDelay() {
-	bool hadPending = mAsyncDelayPending;
-
-	if (!hadPending) return false;
-	if (mAsyncDelayCancelledFlag != nullptr) mAsyncDelayCancelledFlag->store(true, std::memory_order_release);
-	if (mAsyncDelayTaskId != 0) (void)mr::coprocessor::globalCoprocessor().cancelTask(mAsyncDelayTaskId);
-	if (mAsyncMacroFramePushed && !g_runtimeEnv.macroStack.empty()) g_runtimeEnv.macroStack.pop_back();
-	cancelledExecution = true;
-	runtimeErrorLevel() = 5007;
-	appendLogLine("VM Notice: pending DELAY cancelled.", true);
-	clearAsyncDelayState();
-	return true;
-}
 
 MRMacroDebugWatchSnapshot VirtualMachine::evaluateDebugWatchExpression(const std::string &expression) {
 	MRMacroDebugWatchSnapshot snapshot;
@@ -4923,7 +4853,6 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		state.errorLevel = mAsyncErrorLevel;
 		pushedMacroFrame = mAsyncMacroFramePushed;
 		mAsyncDelayReady = false;
-		mAsyncDelayTaskId = 0;
 	} else {
 		if (bytecode == nullptr || length == 0 || entryOffset >= length) return;
 		savedParameterString = parentState != nullptr ? parentState->parameterString : g_runtimeEnv.parameterString;
@@ -4964,7 +4893,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		activeFirstRun = firstRun;
 		state.parameterString = parameterString;
 	}
-	allowAsyncDelay = (mAsyncDelayEnabled && parentState == nullptr && currentBackgroundEditSession() == nullptr && g_backgroundMacroStopToken == nullptr);
+	allowAsyncDelay = (mAsyncDelayEnabled && parentState == nullptr && currentBackgroundEditSession() == nullptr && g_backgroundMacroCancelFlag == nullptr);
 	if (allowAsyncDelay && !resumeFromDelay) {
 		mAsyncBytecode.assign(bytecode, bytecode + length);
 		mAsyncLength = length;
@@ -5444,7 +5373,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						request.target = mrvmValueAsString(args[0]);
 						request.command = mrvmValueAsString(args[1]);
 						request.lvalue = mrvmValueAsString(args[2]);
-						if (currentBackgroundEditSession() != nullptr || g_backgroundMacroStopToken != nullptr) {
+						if (currentBackgroundEditSession() != nullptr || g_backgroundMacroCancelFlag != nullptr) {
 							mExecUiCommandRequests.push_back(request);
 							runtimeErrorLevel() = 0;
 						} else {
@@ -5899,14 +5828,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					g_runtimeEnv.lastFileName = win->currentFileName();
 					runtimeErrorLevel() = 0;
 				} else if (name == "LOAD_BLOCK") {
-					MREditWindow *win = activeMacroEditWindow();
+					MREditWindow *win = currentEditorCommandWindow();
 					std::string path;
 					if (args.empty()) {
 						if (currentBackgroundEditSession() != nullptr) {
 							runtimeErrorLevel() = 1001;
 							continue;
 						}
-						runtimeErrorLevel() = dispatchMRKeymapAction("MR_LOAD_BLOCK_FROM_FILE") ? 0 : 1001;
+						runtimeErrorLevel() = dispatchMRKeymapAction("MR_LOAD_BLOCK_FROM_FILE", "", currentEditorCommandWindow()) ? 0 : 1001;
 						continue;
 					}
 					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("LOAD_BLOCK expects zero or one string argument.");
@@ -5935,7 +5864,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					g_runtimeEnv.lastFileName = win->currentFileName();
 					runtimeErrorLevel() = 0;
 				} else if (name == "SAVE_BLOCK") {
-					MREditWindow *win = activeMacroEditWindow();
+					MREditWindow *win = currentEditorCommandWindow();
 					MRFileEditor *editor = currentEditor();
 					std::string path;
 					if (args.empty()) {
@@ -5943,7 +5872,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							runtimeErrorLevel() = 1001;
 							continue;
 						}
-						runtimeErrorLevel() = dispatchMRKeymapAction("MR_SAVE_BLOCK_TO_FILE") ? 0 : 1001;
+						runtimeErrorLevel() = dispatchMRKeymapAction("MR_SAVE_BLOCK_TO_FILE", "", currentEditorCommandWindow()) ? 0 : 1001;
 						continue;
 					}
 					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
@@ -6214,7 +6143,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					runtimeErrorLevel() = dispatchMRKeymapAction(actionId) ? 0 : 1001;
+					runtimeErrorLevel() = dispatchMRKeymapAction(actionId, "", currentEditorCommandWindow()) ? 0 : 1001;
 				} else if (name == "SET_RANDOM_MARK" || name == "GET_RANDOM_MARK") {
 					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error((name + " expects one integer argument.").c_str());
 					if (currentBackgroundEditSession() != nullptr) {
@@ -6222,14 +6151,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						continue;
 					}
 					const std::string sequenceText = "<" + std::to_string(args[0].i) + ">";
-					runtimeErrorLevel() = dispatchMRKeymapAction(name == "SET_RANDOM_MARK" ? "MRMAC_MARK_SET_RANDOM_ACCESS" : "MRMAC_MARK_GET_RANDOM_ACCESS", sequenceText) ? 0 : 1001;
+					runtimeErrorLevel() = dispatchMRKeymapAction(name == "SET_RANDOM_MARK" ? "MRMAC_MARK_SET_RANDOM_ACCESS" : "MRMAC_MARK_GET_RANDOM_ACCESS", sequenceText, currentEditorCommandWindow()) ? 0 : 1001;
 				} else if (name == "EXTEND_BLOCK_BY_MOTION") {
 					if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("EXTEND_BLOCK_BY_MOTION expects one key sequence string argument.");
 					if (currentBackgroundEditSession() != nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_BLOCK_EXTEND_BY_MOTION", mrvmValueAsString(args[0])) ? 0 : 1001;
+					runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_BLOCK_EXTEND_BY_MOTION", mrvmValueAsString(args[0]), currentEditorCommandWindow()) ? 0 : 1001;
 				} else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "INDENT" || name == "UNDENT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "BLOCK_TOGGLE_VISIBILITY" || name == "BLOCK_STAT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
 				           name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS") {
 					MRFileEditor *editor = currentEditor();
@@ -6266,11 +6195,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					else if (name == "FIRST_WORD")
 						ok = moveEditorFirstWord(editor);
 					else if (name == "MARK_POS")
-						ok = markEditorPosition(activeMacroEditWindow(), editor);
+						ok = markEditorPosition(currentEditorCommandWindow(), editor);
 					else if (name == "GOTO_MARK")
-						ok = gotoEditorMark(activeMacroEditWindow(), editor);
+						ok = gotoEditorMark(currentEditorCommandWindow(), editor);
 					else if (name == "POP_MARK")
-						ok = popEditorMark(activeMacroEditWindow());
+						ok = popEditorMark(currentEditorCommandWindow());
 					else if (name == "PAGE_UP")
 						ok = moveEditorPageUp(editor);
 					else if (name == "PAGE_DOWN")
@@ -6301,7 +6230,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						ok = mrvmUiBlockToggleVisibility();
 					} else if (name == "BLOCK_STAT") {
 						ok = true;
-						runtimeReturnInt() = blockStatusValue(activeMacroEditWindow());
+						runtimeReturnInt() = blockStatusValue(currentEditorCommandWindow());
 					} else if (name == "COPY_BLOCK")
 						ok = true;
 					else if (name == "MOVE_BLOCK")
@@ -6353,7 +6282,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							runtimeErrorLevel() = 1001;
 							continue;
 						}
-						runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_CURSOR_GOTO_LINE") ? 0 : 1001;
+						runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_CURSOR_GOTO_LINE", "", currentEditorCommandWindow()) ? 0 : 1001;
 						continue;
 					}
 					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("GOTO_LINE expects zero or one integer argument.");
@@ -6489,7 +6418,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				throw std::runtime_error(std::string("Unknown opcode ") + hexOp);
 			}
 
-			if (g_backgroundMacroStopToken == nullptr && currentBackgroundEditSession() == nullptr) syncLinkedWindowsFrom(activeMacroEditWindow());
+			if (g_backgroundMacroCancelFlag == nullptr && currentBackgroundEditSession() == nullptr) syncLinkedWindowsFrom(activeMacroEditWindow());
 			if (mDebugRunActive && (mDebugStepMode == mrdStepInto || mDebugStepMode == mrdStepOver || (mDebugStepMode == mrdStepOut && call_stack.size() < mDebugStepOutDepth))) {
 				mDebugStopped = true;
 				mDebugStopReason = mrdStopStep;
@@ -6530,38 +6459,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		}
 	} catch (const VmDelayYield &yield) {
 		int millis = normalizeDelayMillis(yield.millis);
-		std::uint64_t taskId = 0;
-		std::shared_ptr<std::atomic_bool> ready = std::make_shared<std::atomic_bool>(false);
-		std::shared_ptr<std::atomic_bool> cancelled = std::make_shared<std::atomic_bool>(false);
 		std::uint64_t generation = mAsyncDelayGeneration + 1;
-
-		taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::Custom, 0, generation, "macro-delay", [ready, cancelled, millis](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
-			mr::coprocessor::Result result;
-			result.task = info;
-			if (millis > 0) {
-				const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(millis);
-				while (std::chrono::steady_clock::now() < deadline) {
-					if (stopToken.stop_requested() || info.cancelRequested()) {
-						cancelled->store(true, std::memory_order_release);
-						ready->store(true, std::memory_order_release);
-						result.status = mr::coprocessor::TaskStatus::Cancelled;
-						return result;
-					}
-					auto remaining = deadline - std::chrono::steady_clock::now();
-					auto slice = std::chrono::duration_cast<std::chrono::milliseconds>(remaining);
-					if (slice > std::chrono::milliseconds(10)) slice = std::chrono::milliseconds(10);
-					if (slice.count() <= 0) break;
-					std::this_thread::sleep_for(slice);
-				}
-			}
-			ready->store(true, std::memory_order_release);
-			result.status = mr::coprocessor::TaskStatus::Completed;
-			return result;
-		});
-		if (taskId == 0 || ready == nullptr || cancelled == nullptr) throw std::runtime_error("DELAY scheduling failed.");
 		appendLogLine("VM Notice: DELAY(" + std::to_string(millis) + ") yielded [gen " + std::to_string(generation) + "].", true);
 		mAsyncDelayPending = true;
 		mAsyncDelayReady = true;
+		mAsyncDelayDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(millis);
 		mAsyncIp = ip;
 		mAsyncCallStack = call_stack;
 		mAsyncReturnInt = state.returnInt;
@@ -6569,9 +6471,6 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		mAsyncErrorLevel = state.errorLevel;
 		mAsyncSavedParameterString = savedParameterString;
 		mAsyncMacroFramePushed = pushedMacroFrame;
-		mAsyncDelayReadyFlag = ready;
-		mAsyncDelayCancelledFlag = cancelled;
-		mAsyncDelayTaskId = taskId;
 		mAsyncDelayGeneration = generation;
 		mAsyncDelayMillis = millis;
 		if (parentState != nullptr) {

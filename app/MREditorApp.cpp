@@ -1033,11 +1033,12 @@ std::vector<std::string> collectStartupFilesFromRequest(const StartupLoadRequest
 	return paths;
 }
 
-std::size_t loadStartupFilesFromCommandLine() {
+std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles) {
 	StartupLoadRequest request = parseStartupLoadRequest();
 	std::vector<std::string> files;
+	std::vector<MREditWindow *> restoredWindows;
 	std::size_t loadedCount = 0;
-	MREditWindow *lastLoadedWindow = nullptr;
+	MREditWindow *lastStartupWindow = nullptr;
 	MRWindowOpenBatch openBatch;
 
 	if (request.specs.empty()) return 0;
@@ -1047,8 +1048,25 @@ std::size_t loadStartupFilesFromCommandLine() {
 		mrLogMessage("No readable startup files matched command-line arguments.");
 		return 0;
 	}
+	if (focusRestoredWorkspaceFiles) restoredWindows = allEditWindowsInZOrder();
 	if (files.size() > 1) openBatch.begin();
 	for (const std::string &file : files) {
+		bool restoredFileFound = false;
+
+		if (focusRestoredWorkspaceFiles) {
+			for (MREditWindow *candidate : restoredWindows) {
+				MRFileEditor *candidateEditor = candidate != nullptr ? candidate->getEditor() : nullptr;
+				const char *candidatePath = candidateEditor != nullptr ? candidateEditor->persistentFileName() : nullptr;
+
+				if (candidatePath == nullptr || *candidatePath == '\0') continue;
+				if (normalizePathForLoad(std::filesystem::path(candidatePath)) != file) continue;
+				lastStartupWindow = candidate;
+				restoredFileFound = true;
+				mrLogMessage(("Startup file resolved to restored workspace window: " + file).c_str());
+				break;
+			}
+		}
+		if (restoredFileFound) continue;
 		MREditWindow *win = openBatch.active() ? openBatch.createEditorWindow(file.c_str()) : createEditorWindow(file.c_str());
 		if (win == nullptr) {
 			mrLogMessage("Startup load aborted: unable to create editor window.");
@@ -1058,11 +1076,11 @@ std::size_t loadStartupFilesFromCommandLine() {
 			message(win, evCommand, cmClose, nullptr);
 			continue;
 		}
-		lastLoadedWindow = win;
+		lastStartupWindow = win;
 		++loadedCount;
 	}
 	if (openBatch.active()) openBatch.finish(true, loadedCount != 0);
-	if (lastLoadedWindow != nullptr) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
+	if (lastStartupWindow != nullptr) static_cast<void>(mrActivateEditWindow(lastStartupWindow));
 	return loadedCount;
 }
 
@@ -1189,7 +1207,7 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), snippetSidekickHintsActive(false), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), snippetSidekickHintsActive(false), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false) {
 	const auto startupStartedAt = std::chrono::steady_clock::now();
 	auto phaseStartedAt = startupStartedAt;
 	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
@@ -1215,7 +1233,14 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	logStartupPhase("display_layout_initial");
 	bootstrapIndexedMacroBindings();
 	logStartupPhase("autoexec_macros");
-	static_cast<void>(loadStartupFilesFromCommandLine());
+	const bool autoloadWorkspace = configuredAutoloadWorkspace();
+	if (autoloadWorkspace) {
+		applyConfiguredDisplayLayout();
+		logStartupPhase("display_layout_final");
+		mrLoadWorkspace("");
+		logStartupPhase("workspace_autoload");
+	}
+	static_cast<void>(loadStartupFilesFromCommandLine(autoloadWorkspace));
 	logStartupPhase("startup_files");
 	startupQuitPending = runStartupAutomationFromCommandLine();
 	runExecSessionSmokeRoutedMacroIfEnabled();
@@ -1223,8 +1248,10 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	logExecSessionSmokeSnapshotIfEnabled();
 	logRuntimeSchedulerStatusIfEnabled();
 	logStartupPhase("startup_automation");
-	applyConfiguredDisplayLayout();
-	logStartupPhase("display_layout_final");
+	if (!autoloadWorkspace) {
+		applyConfiguredDisplayLayout();
+		logStartupPhase("display_layout_final");
+	}
 	static_cast<void>(mrEnsureLogWindow(false));
 	logStartupPhase("log_window");
 	syncRecordingUiState();
@@ -1238,9 +1265,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	}
 	logStartupPhase("menu_state");
 
-	if (configuredAutoloadWorkspace()) {
-		mrLoadWorkspace("");
-	} else if (mrSettingsFileHasAutosavedWorkspace()) {
+	if (!autoloadWorkspace && mrSettingsFileHasAutosavedWorkspace()) {
 		setRuntimePreserveAutosavedWorkspace(true);
 		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Restore workspace", "Restore autosaved workspace?", configuredSettingsMacroFilePath().c_str(), "Discard workspace");
 
@@ -1252,7 +1277,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 			static_cast<void>(mrClearAutosavedWorkspace());
 		}
 	}
-	logStartupPhase("workspace_autoload");
+	if (!autoloadWorkspace) logStartupPhase("workspace_autoload");
 	mrLogMessage("Editor session started.");
 	updateAppCommandState(virtualDesktopCount, cyclicVirtualDesktopsEnabled);
 	syncFunctionKeyState();
@@ -1364,13 +1389,13 @@ void MREditorApp::togglePerformancePanel() {
 }
 
 void MREditorApp::updatePerformancePanel() {
-	static constexpr std::chrono::milliseconds kPanelRefreshInterval(120);
+	static constexpr std::chrono::milliseconds kPanelRefreshInterval(250);
 	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
 	if (!performancePanelVisible || performancePanel == nullptr) return;
 	if (now < performancePanelRefreshAt) return;
 	performancePanelRefreshAt = now + kPanelRefreshInterval;
-	performancePanel->setAnimationFrame(++performancePanelFrame);
+	performancePanel->refresh();
 }
 
 void MREditorApp::updateFullscreenHint() {
@@ -1891,6 +1916,33 @@ void MREditorApp::handleEvent(TEvent &event) {
 	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
 	clearTransientSearchSelectionOnUserInput(event);
+	if (event.what == evKeyDown) {
+		const TKey pressed(event.keyDown);
+		bool functionKey = false;
+
+		switch (pressed.code) {
+			case kbF1:
+			case kbF2:
+			case kbF3:
+			case kbF4:
+			case kbF5:
+			case kbF6:
+			case kbF7:
+			case kbF8:
+			case kbF9:
+			case kbF10:
+			case kbF11:
+			case kbF12:
+				functionKey = true;
+				break;
+			default:
+				break;
+		}
+		if (functionKey) {
+			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+			if (bentoBox != nullptr) bentoBox->dismissPaneMenus();
+		}
+	}
 	if (event.what == evMouseWheel) {
 		TView *top = TopView();
 		const bool modalViewActive = top != nullptr && top != this && (top->state & sfModal) != 0;

@@ -2,12 +2,11 @@
 #include "MRBentoBox.hpp"
 
 #include "../MRSidekickEditor.hpp"
+#include "../MRMessageLineController.hpp"
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
-#include <cctype>
-#include <cstring>
 #include <filesystem>
 #include <sstream>
 #include <string>
@@ -16,6 +15,7 @@
 namespace {
 
 static const char *kBentoProblemsPaneTitle = "Problems";
+static constexpr std::uint64_t kEmptyProjectionTextHash = 1469598103934665603ULL;
 
 std::string pathBaseName(const std::string &path) {
 	std::filesystem::path fsPath(path);
@@ -51,266 +51,6 @@ bool compilerDiagnosticPathMatches(const std::string &candidatePath, const std::
 	return pathBaseName(candidate) == pathBaseName(source);
 }
 
-bool parseUnsignedField(const std::string &text, std::size_t start, std::size_t end, std::size_t &value) {
-	std::size_t parsed = 0;
-
-	if (start >= end || std::isdigit(static_cast<unsigned char>(text[start])) == 0) return false;
-	value = 0;
-	while (start + parsed < end && std::isdigit(static_cast<unsigned char>(text[start + parsed])) != 0) {
-		value = value * 10 + static_cast<std::size_t>(text[start + parsed] - '0');
-		++parsed;
-	}
-	return parsed != 0 && start + parsed == end;
-}
-
-struct DiagnosticSeverityMarker {
-	const char *marker;
-	const char *severity;
-};
-
-bool parseCompilerDiagnosticLine(const std::string &line, const std::string &sourcePath, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
-	static const DiagnosticSeverityMarker markers[] = {{": fatal error:", "fatal error"}, {": error:", "error"}, {": warning:", "warning"}, {": note:", "note"}};
-	std::size_t markerPos = std::string::npos;
-	const DiagnosticSeverityMarker *matchedMarker = nullptr;
-
-	for (const DiagnosticSeverityMarker &marker : markers) {
-		const std::size_t pos = line.find(marker.marker);
-		if (pos != std::string::npos && (matchedMarker == nullptr || pos < markerPos)) {
-			markerPos = pos;
-			matchedMarker = &marker;
-		}
-	}
-	if (matchedMarker == nullptr) return false;
-
-	const std::string location = line.substr(0, markerPos);
-	const std::size_t lastColon = location.rfind(':');
-	std::size_t lineColon = std::string::npos;
-	std::size_t sourceLine = 0;
-	std::size_t sourceColumn = 1;
-
-	if (lastColon == std::string::npos) return false;
-	if (parseUnsignedField(location, lastColon + 1, location.size(), sourceColumn)) {
-		lineColon = location.rfind(':', lastColon - 1);
-		if (lineColon == std::string::npos) return false;
-		if (!parseUnsignedField(location, lineColon + 1, lastColon, sourceLine)) return false;
-	} else {
-		lineColon = lastColon;
-		if (!parseUnsignedField(location, lineColon + 1, location.size(), sourceLine)) return false;
-		sourceColumn = 1;
-	}
-	if (sourceLine == 0 || sourceColumn == 0) return false;
-	const std::string diagnosticPath = location.substr(0, lineColon);
-
-	diagnostic.sourcePath = diagnosticPath;
-	diagnostic.sourceLine = sourceLine;
-	diagnostic.sourceColumn = sourceColumn;
-	diagnostic.severity = matchedMarker->severity;
-	diagnostic.text = line.substr(markerPos + std::strlen(matchedMarker->marker));
-	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
-		diagnostic.text.erase(diagnostic.text.begin());
-	diagnostic.sourceOffset = 0;
-	diagnostic.outputOffset = outputOffset;
-	diagnostic.problemOffset = 0;
-	diagnostic.sourceAvailable = compilerDiagnosticPathMatches(diagnosticPath, sourcePath);
-	return true;
-}
-
-bool parseLatexSourceDiagnosticLine(const std::string &line, const std::string &sourcePath, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
-	std::size_t lineColon = std::string::npos;
-	std::size_t textColon = std::string::npos;
-	std::size_t sourceLine = 0;
-
-	for (std::size_t colon = line.find(':'); colon != std::string::npos; colon = line.find(':', colon + 1)) {
-		const std::size_t nextColon = line.find(':', colon + 1);
-
-		if (nextColon == std::string::npos) return false;
-		if (!parseUnsignedField(line, colon + 1, nextColon, sourceLine)) continue;
-		lineColon = colon;
-		textColon = nextColon;
-		break;
-	}
-	if (lineColon == std::string::npos || textColon == std::string::npos || sourceLine == 0) return false;
-
-	const std::string diagnosticPath = line.substr(0, lineColon);
-	if (!compilerDiagnosticPathMatches(diagnosticPath, sourcePath)) return false;
-
-	diagnostic.sourcePath = diagnosticPath;
-	diagnostic.sourceLine = sourceLine;
-	diagnostic.sourceColumn = 1;
-	diagnostic.text = line.substr(textColon + 1);
-	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
-		diagnostic.text.erase(diagnostic.text.begin());
-	if (diagnostic.text.empty()) return false;
-	diagnostic.severity = diagnostic.text.find("Warning:") != std::string::npos ? "warning" : "error";
-	diagnostic.sourceOffset = 0;
-	diagnostic.outputOffset = outputOffset;
-	diagnostic.problemOffset = 0;
-	diagnostic.sourceAvailable = true;
-	return true;
-}
-
-bool parseCompilerDriverDiagnosticLine(const std::string &line, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
-	static const DiagnosticSeverityMarker markers[] = {{"warning:", "warning"}, {"note:", "note"}};
-	std::size_t markerPos = std::string::npos;
-	const DiagnosticSeverityMarker *matchedMarker = nullptr;
-
-	for (const DiagnosticSeverityMarker &marker : markers) {
-		const std::size_t pos = line.find(marker.marker);
-		if (pos != std::string::npos && (matchedMarker == nullptr || pos < markerPos)) {
-			markerPos = pos;
-			matchedMarker = &marker;
-		}
-	}
-	if (matchedMarker == nullptr || markerPos == 0) return false;
-
-	diagnostic.sourcePath = line.substr(0, markerPos);
-	while (!diagnostic.sourcePath.empty() && diagnostic.sourcePath.back() == ' ')
-		diagnostic.sourcePath.pop_back();
-	if (!diagnostic.sourcePath.empty() && diagnostic.sourcePath.back() == ':') diagnostic.sourcePath.pop_back();
-	while (!diagnostic.sourcePath.empty() && diagnostic.sourcePath.back() == ' ')
-		diagnostic.sourcePath.pop_back();
-	diagnostic.sourceLine = 0;
-	diagnostic.sourceColumn = 0;
-	diagnostic.severity = matchedMarker->severity;
-	diagnostic.text = line.substr(markerPos + std::strlen(matchedMarker->marker));
-	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
-		diagnostic.text.erase(diagnostic.text.begin());
-	diagnostic.sourceOffset = 0;
-	diagnostic.outputOffset = outputOffset;
-	diagnostic.problemOffset = 0;
-	diagnostic.sourceAvailable = false;
-	return true;
-}
-
-bool parseLatexBangDiagnosticLine(const std::string &line, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
-	if (line.rfind("! ", 0) != 0) return false;
-	std::string text = line.substr(2);
-
-	while (!text.empty() && text.front() == ' ')
-		text.erase(text.begin());
-	if (text.empty()) return false;
-	if (text.rfind("==>", 0) == 0 || text == "Emergency stop.") return false;
-
-	diagnostic.sourcePath = "LaTeX";
-	diagnostic.sourceLine = 0;
-	diagnostic.sourceColumn = 0;
-	diagnostic.severity = "error";
-	diagnostic.text = text;
-	diagnostic.sourceOffset = 0;
-	diagnostic.outputOffset = outputOffset;
-	diagnostic.problemOffset = 0;
-	diagnostic.sourceAvailable = false;
-	return true;
-}
-
-bool parseLatexBuildWarningLine(const std::string &line, const std::string &sourcePath, std::size_t outputOffset, MRCompilerDiagnostic &diagnostic) {
-	static const DiagnosticSeverityMarker markers[] = {{"LaTeX Warning:", "LaTeX"}, {"Package ", "Package"}, {"Class ", "Class"}};
-	const DiagnosticSeverityMarker *matchedMarker = nullptr;
-	std::size_t markerPos = std::string::npos;
-	std::size_t warningPos = std::string::npos;
-
-	for (const DiagnosticSeverityMarker &marker : markers) {
-		if (line.rfind(marker.marker, 0) != 0) continue;
-		matchedMarker = &marker;
-		markerPos = std::strlen(marker.marker);
-		break;
-	}
-	if (matchedMarker == nullptr) return false;
-	if (std::strcmp(matchedMarker->marker, "LaTeX Warning:") == 0) {
-		diagnostic.sourcePath = matchedMarker->severity;
-		diagnostic.text = line.substr(markerPos);
-	} else {
-		warningPos = line.find(" Warning:", markerPos);
-		if (warningPos == std::string::npos) return false;
-		diagnostic.sourcePath = line.substr(0, warningPos);
-		diagnostic.text = line.substr(warningPos + std::strlen(" Warning:"));
-	}
-	while (!diagnostic.text.empty() && diagnostic.text.front() == ' ')
-		diagnostic.text.erase(diagnostic.text.begin());
-	if (diagnostic.text.empty()) return false;
-	diagnostic.sourceLine = 0;
-	diagnostic.sourceColumn = 0;
-	const std::string inputLineMarker = " on input line ";
-	const std::size_t inputLine = diagnostic.text.find(inputLineMarker);
-	if (inputLine != std::string::npos) {
-		const std::size_t lineStart = inputLine + inputLineMarker.size();
-		std::size_t lineEnd = lineStart;
-		while (lineEnd < diagnostic.text.size() && std::isdigit(static_cast<unsigned char>(diagnostic.text[lineEnd])) != 0)
-			++lineEnd;
-		std::size_t sourceLine = 0;
-		if (parseUnsignedField(diagnostic.text, lineStart, lineEnd, sourceLine) && sourceLine > 0) {
-			diagnostic.sourceLine = sourceLine;
-			diagnostic.sourceColumn = 1;
-		}
-	}
-	diagnostic.severity = "warning";
-	diagnostic.sourceOffset = 0;
-	diagnostic.outputOffset = outputOffset;
-	diagnostic.problemOffset = 0;
-	diagnostic.sourceAvailable = diagnostic.sourceLine > 0 && !sourcePath.empty();
-	if (diagnostic.sourceAvailable) diagnostic.sourcePath = sourcePath;
-	return true;
-}
-
-bool compilerDiagnosticSeverityEnabled(const MRCompilerDiagnostic &diagnostic) {
-	if (diagnostic.severity == "error" || diagnostic.severity == "fatal error") return true;
-	if (diagnostic.severity == "warning") return configuredTrackCompilerWarnings();
-	if (diagnostic.severity == "note") return configuredTrackCompilerNotes();
-	return false;
-}
-
-std::size_t sourceOffsetForCompilerColumn(MRFileEditor *editor, std::size_t lineStart, std::size_t lineEnd, std::size_t column) {
-	std::size_t offset = lineStart;
-
-	for (std::size_t currentColumn = 1; currentColumn < column && offset < lineEnd; ++currentColumn)
-		offset = editor->nextCharOffset(offset);
-	return offset;
-}
-
-std::size_t lineColumnForOffset(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t lineStart, std::size_t offset) {
-	return offset >= lineStart ? offset - lineStart + 1 : 1;
-}
-
-bool editTouchesDiagnosticLine(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t diagnosticOffset, std::size_t editStart, std::size_t editEnd) {
-	const std::size_t lineStart = snapshot.lineStart(diagnosticOffset);
-	const std::size_t lineEnd = snapshot.lineEnd(diagnosticOffset);
-
-	if (editEnd > editStart) return editStart < lineEnd && editEnd > lineStart;
-	return editStart >= lineStart && editStart <= lineEnd;
-}
-
-std::vector<MRCompilerDiagnostic> parseCompilerDiagnostics(const std::string &text, const std::string &sourcePath) {
-	std::vector<MRCompilerDiagnostic> diagnostics;
-	const std::size_t textLength = text.size();
-	std::size_t lineStart = 0;
-
-	while (lineStart < textLength) {
-		std::size_t lineEnd = text.find('\n', lineStart);
-		MRCompilerDiagnostic diagnostic;
-
-		if (lineEnd == std::string::npos) lineEnd = textLength;
-		const std::string line = text.substr(lineStart, lineEnd - lineStart);
-		if (parseCompilerDiagnosticLine(line, sourcePath, lineStart, diagnostic) || parseLatexSourceDiagnosticLine(line, sourcePath, lineStart, diagnostic) || parseCompilerDriverDiagnosticLine(line, lineStart, diagnostic) ||
-		    parseLatexBangDiagnosticLine(line, lineStart, diagnostic) || parseLatexBuildWarningLine(line, sourcePath, lineStart, diagnostic))
-			diagnostics.push_back(std::move(diagnostic));
-		if (lineEnd == textLength) break;
-		lineStart = lineEnd + 1;
-	}
-	return diagnostics;
-}
-
-std::string compilerDiagnosticProblemLine(const MRCompilerDiagnostic &diagnostic) {
-	std::ostringstream line;
-
-	line << diagnostic.severity << " ";
-	if (diagnostic.sourceLine == 0)
-		line << (diagnostic.sourcePath.empty() ? "build" : diagnostic.sourcePath);
-	else
-		line << pathBaseName(diagnostic.sourcePath) << ":" << diagnostic.sourceLine << ":" << diagnostic.sourceColumn;
-	if (!diagnostic.text.empty()) line << " " << diagnostic.text;
-	return line.str();
-}
-
 std::string compilerDiagnosticDetailText(const MRCompilerDiagnostic &diagnostic) {
 	std::ostringstream text;
 
@@ -322,6 +62,10 @@ std::string compilerDiagnosticDetailText(const MRCompilerDiagnostic &diagnostic)
 	return text.str();
 }
 
+void postCompilerProblemNavigationUnavailable() {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "No compiler diagnostic location found.",
+	                               mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+}
 
 }
 
@@ -340,16 +84,57 @@ void MRBentoBox::setCompilerOutputStatus(const char *status) {
 void MRBentoBox::clearCompilerDiagnostics() {
 	MREditWindow *problemsWindow = problemsPane();
 	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
+	const std::shared_ptr<const std::string> emptyText = std::make_shared<const std::string>();
 
-	compilerDiagnostics.clear();
+	cancelBentoProjectionTask(diagnosticsProjectionTask);
+	pendingCompilerProblemNavigation = 0;
+	compilerDiagnostics = std::make_shared<const std::vector<MRCompilerDiagnostic>>();
+	compilerDiagnosticSourceChanges.reset();
+	compilerDiagnosticsParseSourceSnapshot = std::make_shared<const MRTextBufferModel::ReadSnapshot>(buffer().readSnapshot());
+	compilerDiagnosticsDocumentId = documentId();
+	compilerDiagnosticsVersion = documentVersion();
+	MREditWindow *outputWindow = buildOutputPane();
+	compilerDiagnosticsOutputDocumentId = outputWindow != nullptr ? outputWindow->documentId() : 0;
+	compilerDiagnosticsOutputVersion = outputWindow != nullptr ? outputWindow->documentVersion() : 0;
+	compilerDiagnosticsOutputBufferId = outputWindow != nullptr ? outputWindow->bufferId() : 0;
 	compilerProblemsStatus.clear();
+	compilerProblemsTargetDocumentId = 0;
+	compilerProblemsTargetVersion = 0;
+	compilerProblemsTargetBufferId = 0;
+	compilerProblemsTextLength = 0;
+	compilerProblemsTextHash = 0;
+	compilerDiagnosticsParseRequired = true;
+	compilerDiagnosticsSourceInvalidated = false;
+	diagnosticsProjectionTask.sourcePath = currentFileName();
 	clearTrackedCompilerSidekick(true);
 	if (problemsEditor != nullptr) problemsEditor->clearFindMarkerRanges();
 	if (getEditor() != nullptr) getEditor()->clearCompilerDiagnosticRanges();
 	if (problemsWindow != nullptr) {
-		static_cast<void>(problemsWindow->replaceTextBuffer("", kBentoProblemsPaneTitle));
-		problemsWindow->setReadOnly(true);
+		const std::size_t expectedDocumentId = problemsWindow->documentId();
+		const std::size_t expectedVersion = problemsWindow->documentVersion();
+
+		const bool textCleared = adoptBentoProjectionText(problemsWindow, emptyText, expectedDocumentId, expectedVersion, kBentoProblemsPaneTitle);
+		if (textCleared) {
+			compilerProblemsTargetDocumentId = problemsWindow->documentId();
+			compilerProblemsTargetVersion = problemsWindow->documentVersion();
+			compilerProblemsTargetBufferId = problemsWindow->bufferId();
+			compilerProblemsTextHash = kEmptyProjectionTextHash;
+		}
 		problemsWindow->setFileChanged(false);
+		diagnosticsProjectionTask.sourceDocumentId = documentId();
+		diagnosticsProjectionTask.sourceVersion = documentVersion();
+		diagnosticsProjectionTask.inputDocumentId = outputWindow != nullptr ? outputWindow->documentId() : 0;
+		diagnosticsProjectionTask.inputVersion = outputWindow != nullptr ? outputWindow->documentVersion() : 0;
+		diagnosticsProjectionTask.inputBufferId = outputWindow != nullptr ? outputWindow->bufferId() : 0;
+		diagnosticsProjectionTask.targetDocumentId = problemsWindow->documentId();
+		diagnosticsProjectionTask.targetVersion = problemsWindow->documentVersion();
+		diagnosticsProjectionTask.targetBufferId = problemsWindow->bufferId();
+		diagnosticsProjectionTask.sourcePath = currentFileName();
+		diagnosticsProjectionTask.trackWarnings = configuredTrackCompilerWarnings();
+		diagnosticsProjectionTask.trackNotes = configuredTrackCompilerNotes();
+		diagnosticsProjectionTask.diagnosticsRequest = bdprFormatExisting;
+		diagnosticsProjectionTask.projectionCurrent = true;
+		diagnosticsProjectionTask.retryBlocked = false;
 	}
 	if (hasPaneSplit()) {
 		bentoProjectionDirty |= bpdLayout;
@@ -358,70 +143,145 @@ void MRBentoBox::clearCompilerDiagnostics() {
 }
 
 bool MRBentoBox::hasCompilerProblems() const noexcept {
-	return !compilerDiagnostics.empty();
+	return compilerDiagnostics != nullptr && !compilerDiagnostics->empty();
 }
 
-void MRBentoBox::refreshCompilerProblemsPane() {
+bool MRBentoBox::refreshCompilerProblemsPane() {
+	MREditWindow *outputWindow = buildOutputPane();
+
+	if (compilerDiagnosticsSourceInvalidated || outputWindow == nullptr || problemsPane() == nullptr) return false;
+	BentoDiagnosticsProjectionRequest request = compilerDiagnosticSourceChanges == nullptr ? bdprFormatExisting : bdprRemapExisting;
+	if (compilerDiagnosticsParseRequired || compilerDiagnosticsOutputDocumentId != outputWindow->documentId() ||
+	    compilerDiagnosticsOutputVersion != outputWindow->documentVersion() || compilerDiagnosticsOutputBufferId != outputWindow->bufferId())
+		request = bdprParseOutput;
+	if (request == bdprParseOutput) return refreshCompilerDiagnosticsFromOutput();
+	return submitCompilerDiagnosticsProjection(request);
+}
+
+bool MRBentoBox::submitCompilerDiagnosticsProjection(BentoDiagnosticsProjectionRequest request) {
+	MREditWindow *outputWindow = buildOutputPane();
 	MREditWindow *problemsWindow = problemsPane();
-	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
-	std::ostringstream problemText;
-	std::ostringstream statusText;
-	std::size_t problemOffset = 0;
-	int errorCount = 0;
-	int warningCount = 0;
-	int noteCount = 0;
-
-	for (MRCompilerDiagnostic &diagnostic : compilerDiagnostics) {
-		const std::string line = compilerDiagnosticProblemLine(diagnostic);
-		if (diagnostic.severity == "error" || diagnostic.severity == "fatal error")
-			++errorCount;
-		else if (diagnostic.severity == "warning")
-			++warningCount;
-		else if (diagnostic.severity == "note")
-			++noteCount;
-		diagnostic.problemOffset = problemOffset;
-		problemText << line << '\n';
-		problemOffset += line.size() + 1;
-	}
-	if (errorCount > 0) statusText << errorCount << " error" << (errorCount == 1 ? "" : "s");
-	if (warningCount > 0) {
-		if (statusText.tellp() > 0) statusText << ", ";
-		statusText << warningCount << " warning" << (warningCount == 1 ? "" : "s");
-	}
-	if (noteCount > 0) {
-		if (statusText.tellp() > 0) statusText << ", ";
-		statusText << noteCount << " note" << (noteCount == 1 ? "" : "s");
-	}
-	compilerProblemsStatus = statusText.str();
-	if (problemsWindow != nullptr) {
-		static_cast<void>(problemsWindow->replaceTextBuffer(problemText.str().c_str(), kBentoProblemsPaneTitle));
-		problemsWindow->setReadOnly(true);
-		problemsWindow->setFileChanged(false);
-	}
-	if (problemsEditor != nullptr) problemsEditor->clearFindMarkerRanges();
-	refreshSourceCompilerDiagnosticRanges();
-	updateActivePaneFrame();
-	if (hasPaneSplit()) {
-		bentoProjectionDirty |= bpdLayout;
-		flushBentoProjection();
-	}
-}
-
-void MRBentoBox::refreshSourceCompilerDiagnosticRanges() {
 	MRFileEditor *sourceEditor = getEditor();
-	std::vector<std::pair<std::size_t, std::size_t>> errorRanges;
-	std::vector<std::pair<std::size_t, std::size_t>> warningRanges;
+	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
 
-	if (sourceEditor == nullptr) return;
-	for (const MRCompilerDiagnostic &diagnostic : compilerDiagnostics) {
-		if (!diagnostic.sourceAvailable) continue;
-		const std::size_t start = diagnostic.sourceOffset;
-		const std::size_t end = sourceEditor->nextCharOffset(start);
-		if (diagnostic.severity == "warning" || diagnostic.severity == "note") warningRanges.push_back(std::make_pair(start, end));
-		else if (diagnostic.severity == "error" || diagnostic.severity == "fatal error")
-			errorRanges.push_back(std::make_pair(start, end));
+	if (request == bdprNone || outputWindow == nullptr || problemsWindow == nullptr || sourceEditor == nullptr || problemsEditor == nullptr) return false;
+	const std::size_t sourceDocumentId = sourceEditor->documentId();
+	const std::size_t sourceVersion = sourceEditor->documentVersion();
+	const std::size_t outputDocumentId = outputWindow->documentId();
+	const std::size_t outputVersion = outputWindow->documentVersion();
+	const int outputBufferId = outputWindow->bufferId();
+	const std::size_t targetDocumentId = problemsEditor->documentId();
+	const std::size_t targetVersion = problemsEditor->documentVersion();
+	const std::string sourcePath = currentFileName();
+	const bool trackWarnings = configuredTrackCompilerWarnings();
+	const bool trackNotes = configuredTrackCompilerNotes();
+	const std::size_t activeSourceDocumentId = diagnosticsProjectionTask.diagnosticSourceChanges != nullptr
+	                                               ? diagnosticsProjectionTask.diagnosticSourceChanges->newSnapshot.documentId()
+	                                               : diagnosticsProjectionTask.sourceDocumentId;
+	const std::size_t activeSourceVersion = diagnosticsProjectionTask.diagnosticSourceChanges != nullptr
+	                                          ? diagnosticsProjectionTask.diagnosticSourceChanges->newSnapshot.version()
+	                                          : diagnosticsProjectionTask.sourceVersion;
+	const bool activeInputMatches = activeSourceDocumentId == sourceDocumentId && activeSourceVersion == sourceVersion &&
+	                                diagnosticsProjectionTask.inputDocumentId == outputDocumentId &&
+	                                diagnosticsProjectionTask.inputVersion == outputVersion && diagnosticsProjectionTask.inputBufferId == outputBufferId &&
+	                                diagnosticsProjectionTask.targetDocumentId == targetDocumentId &&
+	                                diagnosticsProjectionTask.targetVersion == targetVersion &&
+	                                diagnosticsProjectionTask.targetBufferId == problemsWindow->bufferId() &&
+	                                diagnosticsProjectionTask.sourcePath == sourcePath && diagnosticsProjectionTask.trackWarnings == trackWarnings &&
+	                                diagnosticsProjectionTask.trackNotes == trackNotes;
+
+	if (diagnosticsProjectionTask.taskId != 0) {
+		if (activeInputMatches && request == bdprFormatExisting && diagnosticsProjectionTask.diagnosticsRequest == bdprParseOutput) return true;
+		if (activeInputMatches && request == diagnosticsProjectionTask.diagnosticsRequest) return true;
+		diagnosticsProjectionTask.pending = true;
+		if (request > diagnosticsProjectionTask.pendingDiagnosticsRequest)
+			diagnosticsProjectionTask.pendingDiagnosticsRequest = request;
+		return true;
 	}
-	sourceEditor->setCompilerDiagnosticRanges(errorRanges, warningRanges);
+	if (diagnosticsProjectionTask.retryBlocked && activeInputMatches) return false;
+	if (diagnosticsProjectionTask.projectionCurrent && activeInputMatches && diagnosticsProjectionTask.diagnosticsRequest == request) return true;
+	const std::shared_ptr<const MRBentoDiagnosticSourceChange> requestedSourceChanges =
+	    request == bdprRemapExisting || request == bdprParseOutput ? compilerDiagnosticSourceChanges : std::shared_ptr<const MRBentoDiagnosticSourceChange>();
+	const MRTextBufferModel::ReadSnapshot sourceSnapshot = buffer().readSnapshot();
+	const MRTextBufferModel::ReadSnapshot diagnosticSourceSnapshot =
+	    request == bdprParseOutput && compilerDiagnosticsParseSourceSnapshot != nullptr ? *compilerDiagnosticsParseSourceSnapshot : sourceSnapshot;
+	const MRTextBufferModel::ReadSnapshot outputSnapshot = outputWindow->buffer().readSnapshot();
+	if (outputSnapshot.documentId() != outputDocumentId || outputSnapshot.version() != outputVersion) return false;
+	if (sourceSnapshot.documentId() != sourceDocumentId || sourceSnapshot.version() != sourceVersion) return false;
+	if (requestedSourceChanges != nullptr && (requestedSourceChanges->newSnapshot.documentId() != sourceDocumentId ||
+	                                         requestedSourceChanges->newSnapshot.version() != sourceVersion))
+		return false;
+	if (request == bdprParseOutput && requestedSourceChanges != nullptr) {
+		const MRBentoDiagnosticSourceChange *oldestSourceChange = requestedSourceChanges.get();
+		while (oldestSourceChange->previous != nullptr)
+			oldestSourceChange = oldestSourceChange->previous.get();
+		if (oldestSourceChange->oldSnapshot.documentId() != diagnosticSourceSnapshot.documentId() ||
+		    oldestSourceChange->oldSnapshot.version() != diagnosticSourceSnapshot.version())
+			return false;
+	}
+	if (request == bdprParseOutput && requestedSourceChanges == nullptr &&
+	    (diagnosticSourceSnapshot.documentId() != sourceSnapshot.documentId() || diagnosticSourceSnapshot.version() != sourceSnapshot.version()))
+		return false;
+
+	if (diagnosticsProjectionTask.generationCounter == 0) diagnosticsProjectionTask.generationCounter = 1;
+	const std::uint64_t generation = diagnosticsProjectionTask.generationCounter++;
+	const bool parseOutput = request == bdprParseOutput;
+	const std::shared_ptr<const std::vector<MRCompilerDiagnostic>> diagnostics = parseOutput ? std::shared_ptr<const std::vector<MRCompilerDiagnostic>>() : compilerDiagnostics;
+	const std::shared_ptr<const MRBentoDiagnosticSourceChange> sourceChanges = requestedSourceChanges;
+	const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submitPacket(
+	    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::BentoDiagnosticsProjection,
+	    sourceSnapshot.documentId(), sourceSnapshot.version(), mr::coprocessor::ExecutionOwnerKind::BentoPane,
+	    static_cast<std::size_t>(problemsWindow->bufferId()), generation, mr::coprocessor::WorkDirection::None, 0,
+	    static_cast<std::uint64_t>(outputSnapshot.length()), "bento diagnostics",
+	    [sourceSnapshot, diagnosticSourceSnapshot, outputSnapshot, targetDocumentId, targetVersion, generation, sourcePath, trackWarnings, trackNotes,
+	     parseOutput, diagnostics, sourceChanges](const mr::coprocessor::TaskInfo &info) {
+		    mr::coprocessor::Result result;
+		    std::string errorMessage;
+
+		    result.task = info;
+		    if (info.cancelRequested()) {
+			    result.status = mr::coprocessor::TaskStatus::Cancelled;
+			    return result;
+		    }
+		    result.payload = mrBuildBentoDiagnosticsProjection(sourceSnapshot, diagnosticSourceSnapshot, outputSnapshot, targetDocumentId, targetVersion,
+		                                                         generation, sourcePath, trackWarnings, trackNotes, parseOutput,
+		                                                         diagnostics, sourceChanges, info.cancelFlag.get(), &errorMessage);
+		    if (result.payload != nullptr)
+			    result.status = mr::coprocessor::TaskStatus::Completed;
+		    else if (info.cancelRequested())
+			    result.status = mr::coprocessor::TaskStatus::Cancelled;
+		    else {
+			    result.status = mr::coprocessor::TaskStatus::Failed;
+			    result.error = errorMessage.empty() ? "diagnostics projection failed" : errorMessage;
+		    }
+		    return result;
+	    });
+	if (taskId == 0) return false;
+
+	diagnosticsProjectionTask.taskId = taskId;
+	diagnosticsProjectionTask.activeGeneration = generation;
+	diagnosticsProjectionTask.sourceDocumentId = sourceSnapshot.documentId();
+	diagnosticsProjectionTask.sourceVersion = sourceSnapshot.version();
+	diagnosticsProjectionTask.inputDocumentId = outputSnapshot.documentId();
+	diagnosticsProjectionTask.inputVersion = outputSnapshot.version();
+	diagnosticsProjectionTask.inputBufferId = outputBufferId;
+	diagnosticsProjectionTask.targetDocumentId = targetDocumentId;
+	diagnosticsProjectionTask.targetVersion = targetVersion;
+	diagnosticsProjectionTask.targetBufferId = problemsWindow->bufferId();
+	diagnosticsProjectionTask.sourcePath = sourcePath;
+	diagnosticsProjectionTask.trackWarnings = trackWarnings;
+	diagnosticsProjectionTask.trackNotes = trackNotes;
+	diagnosticsProjectionTask.diagnosticsRequest = request;
+	diagnosticsProjectionTask.diagnosticSourceChanges = requestedSourceChanges;
+	diagnosticsProjectionTask.diagnosticBaseDocumentId = request == bdprRemapExisting ? compilerDiagnosticsDocumentId : 0;
+	diagnosticsProjectionTask.diagnosticBaseVersion = request == bdprRemapExisting ? compilerDiagnosticsVersion : 0;
+	diagnosticsProjectionTask.pending = false;
+	diagnosticsProjectionTask.pendingDiagnosticsRequest = bdprNone;
+	diagnosticsProjectionTask.projectionCurrent = false;
+	diagnosticsProjectionTask.retryBlocked = false;
+	diagnosticsProjectionTask.requestedAt = std::chrono::steady_clock::now();
+	trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::BentoDiagnosticsProjection, "bento diagnostics");
+	return true;
 }
 
 void MRBentoBox::clearTrackedCompilerSidekick(bool dropSidekick) noexcept {
@@ -449,12 +309,12 @@ void MRBentoBox::updateTrackedCompilerSidekick() {
 		clearTrackedCompilerSidekick(false);
 		return;
 	}
-	if (sourceEditor == nullptr || compilerSidekickDiagnosticIndex >= compilerDiagnostics.size()) {
+	if (sourceEditor == nullptr || compilerDiagnostics == nullptr || compilerSidekickDiagnosticIndex >= compilerDiagnostics->size()) {
 		clearTrackedCompilerSidekick(true);
 		return;
 	}
 
-	const MRCompilerDiagnostic &diagnostic = compilerDiagnostics[compilerSidekickDiagnosticIndex];
+	const MRCompilerDiagnostic &diagnostic = (*compilerDiagnostics)[compilerSidekickDiagnosticIndex];
 	if (!diagnostic.sourceAvailable || !compilerDiagnosticPathMatches(diagnostic.sourcePath, currentFileName())) {
 		clearTrackedCompilerSidekick(true);
 		return;
@@ -486,65 +346,97 @@ void MRBentoBox::updateTrackedCompilerSidekick() {
 }
 
 bool MRBentoBox::refreshCompilerDiagnosticsFromOutput() {
-	MREditWindow *outputWindow = buildOutputPane();
-	MREditWindow *problemsWindow = problemsPane();
-	std::vector<MRCompilerDiagnostic> diagnostics;
-	std::vector<MRCompilerDiagnostic> filteredDiagnostics;
-	MRFileEditor *sourceEditor = getEditor();
-	MRTextBufferModel::ReadSnapshot sourceSnapshot;
-
-	if (outputWindow == nullptr || problemsWindow == nullptr || sourceEditor == nullptr) return false;
-	sourceSnapshot = buffer().readSnapshot();
-	diagnostics = parseCompilerDiagnostics(outputWindow->buffer().readSnapshot().text(), currentFileName());
-	for (MRCompilerDiagnostic &diagnostic : diagnostics) {
-		if (!compilerDiagnosticSeverityEnabled(diagnostic)) continue;
-		if (diagnostic.sourceAvailable) {
-			const std::size_t lineStart = sourceSnapshot.lineStartByIndex(diagnostic.sourceLine > 0 ? diagnostic.sourceLine - 1 : 0);
-			const std::size_t lineEnd = sourceSnapshot.lineEnd(lineStart);
-			diagnostic.sourceOffset = sourceOffsetForCompilerColumn(sourceEditor, lineStart, lineEnd, diagnostic.sourceColumn);
+	compilerDiagnosticsParseRequired = true;
+	if (compilerDiagnosticsSourceInvalidated) {
+		if (pendingCompilerProblemNavigation != 0) {
+			pendingCompilerProblemNavigation = 0;
+			postCompilerProblemNavigationUnavailable();
 		}
-		filteredDiagnostics.push_back(std::move(diagnostic));
+		return false;
 	}
-	compilerDiagnostics = std::move(filteredDiagnostics);
-	clearTrackedCompilerSidekick(true);
-	refreshCompilerProblemsPane();
+	MREditWindow *outputWindow = buildOutputPane();
+	if (outputWindow != nullptr && outputWindow->hasTrackedExternalIoTasks()) return true;
+	diagnosticsProjectionTask.retryBlocked = false;
+	const bool submitted = submitCompilerDiagnosticsProjection(bdprParseOutput);
+	if (!submitted && pendingCompilerProblemNavigation != 0) {
+		pendingCompilerProblemNavigation = 0;
+		postCompilerProblemNavigationUnavailable();
+	}
+	return submitted;
+}
+
+bool MRBentoBox::requestCompilerProblemNavigation(bool forward) {
+	pendingCompilerProblemNavigation = forward ? 1 : -1;
+	diagnosticsProjectionTask.retryBlocked = false;
+	if (!refreshCompilerProblemsPane()) {
+		if (pendingCompilerProblemNavigation != 0) {
+			pendingCompilerProblemNavigation = 0;
+			postCompilerProblemNavigationUnavailable();
+		}
+		return true;
+	}
+	if (!compilerDiagnosticsCurrent()) return true;
+
+	const int navigation = pendingCompilerProblemNavigation;
+	pendingCompilerProblemNavigation = 0;
+	const bool navigated = navigation > 0 ? jumpToNextProblem() : jumpToPreviousProblem();
+	if (!navigated) postCompilerProblemNavigationUnavailable();
 	return true;
 }
 
 void MRBentoBox::syncCompilerDiagnosticsAfterSourceMutation(const MRTextBufferModel::ReadSnapshot &oldSnapshot, const MRTextBufferModel::DocumentChangeSet &changeSet) {
-	MRTextBufferModel::ReadSnapshot newSnapshot;
-	std::size_t newLength = 0;
-	const std::size_t editStart = changeSet.touchedRange.start;
-	std::size_t oldEditEnd = std::min(changeSet.touchedRange.end, changeSet.oldLength);
-
-	if (compilerDiagnostics.empty() || !changeSet.changed || changeSet.oldVersion != oldSnapshot.version()) return;
+	if (!changeSet.changed || changeSet.oldVersion != oldSnapshot.version()) return;
 	clearTrackedCompilerSidekick(true);
-	newSnapshot = buffer().readSnapshot();
+	const MRTextBufferModel::ReadSnapshot newSnapshot = buffer().readSnapshot();
 	if (changeSet.newVersion != newSnapshot.version()) return;
-	newLength = newSnapshot.length();
-	const long long delta = static_cast<long long>(changeSet.newLength) - static_cast<long long>(changeSet.oldLength);
-	if (delta > 0 && changeSet.touchedRange.end - editStart == static_cast<std::size_t>(delta)) oldEditEnd = editStart;
-
-	std::vector<MRCompilerDiagnostic> remapped;
-	for (MRCompilerDiagnostic diagnostic : compilerDiagnostics) {
-		if (!diagnostic.sourceAvailable) {
-			remapped.push_back(std::move(diagnostic));
-			continue;
+	const bool diagnosticsTaskActive = diagnosticsProjectionTask.taskId != 0;
+	if ((compilerDiagnostics == nullptr || compilerDiagnostics->empty()) && !diagnosticsTaskActive && !compilerDiagnosticsParseRequired) return;
+	if (compilerDiagnosticSourceChanges == nullptr) {
+		const std::size_t baseDocumentId = diagnosticsTaskActive && diagnosticsProjectionTask.diagnosticsRequest == bdprParseOutput
+		                                       ? diagnosticsProjectionTask.sourceDocumentId
+		                                       : compilerDiagnosticsDocumentId;
+		const std::size_t baseVersion = diagnosticsTaskActive && diagnosticsProjectionTask.diagnosticsRequest == bdprParseOutput
+		                                  ? diagnosticsProjectionTask.sourceVersion
+		                                  : compilerDiagnosticsVersion;
+		if (baseDocumentId != oldSnapshot.documentId() || baseVersion != oldSnapshot.version()) {
+			compilerDiagnosticsSourceInvalidated = true;
+			compilerDiagnosticsParseRequired = false;
+			return;
 		}
-		if (editTouchesDiagnosticLine(oldSnapshot, diagnostic.sourceOffset, editStart, oldEditEnd)) continue;
-		if (diagnostic.sourceOffset >= oldEditEnd) {
-			const long long shifted = static_cast<long long>(diagnostic.sourceOffset) + delta;
-			if (shifted < 0 || static_cast<std::size_t>(shifted) > newLength) continue;
-			diagnostic.sourceOffset = static_cast<std::size_t>(shifted);
+	} else {
+		const MRTextBufferModel::ReadSnapshot &previous = compilerDiagnosticSourceChanges->newSnapshot;
+		if (previous.documentId() != oldSnapshot.documentId() || previous.version() != oldSnapshot.version()) {
+			compilerDiagnosticsSourceInvalidated = true;
+			compilerDiagnosticsParseRequired = false;
+			return;
 		}
-		const std::size_t lineIndex = newSnapshot.lineIndex(diagnostic.sourceOffset);
-		const std::size_t lineStart = newSnapshot.lineStartByIndex(lineIndex);
-		diagnostic.sourceLine = lineIndex + 1;
-		diagnostic.sourceColumn = lineColumnForOffset(newSnapshot, lineStart, diagnostic.sourceOffset);
-		remapped.push_back(std::move(diagnostic));
 	}
-	compilerDiagnostics = std::move(remapped);
-	refreshCompilerProblemsPane();
+	compilerDiagnosticSourceChanges = std::make_shared<const MRBentoDiagnosticSourceChange>(oldSnapshot, newSnapshot, changeSet, compilerDiagnosticSourceChanges);
+	if (compilerDiagnosticsParseRequired) {
+		if (diagnosticsProjectionTask.taskId != 0 && diagnosticsProjectionTask.diagnosticsRequest == bdprParseOutput)
+			static_cast<void>(submitCompilerDiagnosticsProjection(bdprRemapExisting));
+		return;
+	}
+	if (compilerDiagnostics == nullptr || compilerDiagnostics->empty()) return;
+	static_cast<void>(submitCompilerDiagnosticsProjection(bdprRemapExisting));
+}
+
+bool MRBentoBox::compilerDiagnosticsCurrent() const {
+	MREditWindow *outputWindow = buildOutputPane();
+	MREditWindow *problemsWindow = problemsPane();
+	MRFileEditor *sourceEditor = getEditor();
+	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
+
+	if (compilerDiagnosticsParseRequired || compilerDiagnosticsSourceInvalidated || compilerDiagnosticSourceChanges != nullptr ||
+	    diagnosticsProjectionTask.taskId != 0 || !diagnosticsProjectionTask.projectionCurrent || compilerDiagnostics == nullptr ||
+	    outputWindow == nullptr || problemsWindow == nullptr || sourceEditor == nullptr || problemsEditor == nullptr)
+		return false;
+	return compilerDiagnosticsDocumentId == sourceEditor->documentId() && compilerDiagnosticsVersion == sourceEditor->documentVersion() &&
+	       compilerDiagnosticsOutputDocumentId == outputWindow->documentId() && compilerDiagnosticsOutputVersion == outputWindow->documentVersion() &&
+	       compilerDiagnosticsOutputBufferId == outputWindow->bufferId() && compilerProblemsTargetDocumentId == problemsEditor->documentId() &&
+	       compilerProblemsTargetVersion == problemsEditor->documentVersion() && compilerProblemsTargetBufferId == problemsWindow->bufferId() &&
+	       diagnosticsProjectionTask.sourcePath == currentFileName() && diagnosticsProjectionTask.trackWarnings == configuredTrackCompilerWarnings() &&
+	       diagnosticsProjectionTask.trackNotes == configuredTrackCompilerNotes();
 }
 
 bool MRBentoBox::jumpToProblemAtCursor() {
@@ -558,10 +450,11 @@ bool MRBentoBox::jumpToProblemAtCursor() {
 	const MRCompilerDiagnostic *selected = nullptr;
 	std::size_t selectedIndex = 0;
 
-	if (sourceEditor == nullptr || problemsEditor == nullptr || outputEditor == nullptr) return false;
+	if (sourceEditor == nullptr || problemsEditor == nullptr || outputEditor == nullptr || !compilerDiagnosticsCurrent()) return false;
 	cursorOffset = problemsEditor->cursorOffset();
-	for (std::size_t i = 0; i < compilerDiagnostics.size(); ++i) {
-		const MRCompilerDiagnostic &diagnostic = compilerDiagnostics[i];
+	if (compilerDiagnostics == nullptr) return false;
+	for (std::size_t i = 0; i < compilerDiagnostics->size(); ++i) {
+		const MRCompilerDiagnostic &diagnostic = (*compilerDiagnostics)[i];
 		const std::size_t lineEnd = problemsEditor->lineEndOffset(diagnostic.problemOffset);
 		if (cursorOffset >= diagnostic.problemOffset && cursorOffset <= lineEnd) {
 			selected = &diagnostic;
@@ -608,14 +501,14 @@ bool MRBentoBox::jumpToNextProblem() {
 	std::size_t cursorOffset;
 	const MRCompilerDiagnostic *next = nullptr;
 
-	if (problemsEditor == nullptr || compilerDiagnostics.empty()) return false;
+	if (problemsEditor == nullptr || compilerDiagnostics == nullptr || compilerDiagnostics->empty() || !compilerDiagnosticsCurrent()) return false;
 	cursorOffset = problemsEditor->cursorOffset();
-	for (const MRCompilerDiagnostic &diagnostic : compilerDiagnostics)
+	for (const MRCompilerDiagnostic &diagnostic : *compilerDiagnostics)
 		if (diagnostic.problemOffset > cursorOffset) {
 			next = &diagnostic;
 			break;
 		}
-	if (next == nullptr) next = &compilerDiagnostics.front();
+	if (next == nullptr) next = &compilerDiagnostics->front();
 	problemsEditor->setCursorOffset(next->problemOffset);
 	problemsEditor->setSelectionOffsets(next->problemOffset, problemsEditor->lineEndOffset(next->problemOffset));
 	return jumpToProblemAtCursor();
@@ -627,13 +520,13 @@ bool MRBentoBox::jumpToPreviousProblem() {
 	std::size_t cursorOffset;
 	const MRCompilerDiagnostic *previous = nullptr;
 
-	if (problemsEditor == nullptr || compilerDiagnostics.empty()) return false;
+	if (problemsEditor == nullptr || compilerDiagnostics == nullptr || compilerDiagnostics->empty() || !compilerDiagnosticsCurrent()) return false;
 	cursorOffset = problemsEditor->cursorOffset();
-	for (const MRCompilerDiagnostic &diagnostic : compilerDiagnostics) {
+	for (const MRCompilerDiagnostic &diagnostic : *compilerDiagnostics) {
 		if (diagnostic.problemOffset >= cursorOffset) break;
 		previous = &diagnostic;
 	}
-	if (previous == nullptr) previous = &compilerDiagnostics.back();
+	if (previous == nullptr) previous = &compilerDiagnostics->back();
 	problemsEditor->setCursorOffset(previous->problemOffset);
 	problemsEditor->setSelectionOffsets(previous->problemOffset, problemsEditor->lineEndOffset(previous->problemOffset));
 	return jumpToProblemAtCursor();

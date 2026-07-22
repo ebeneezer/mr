@@ -14,7 +14,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -240,7 +239,6 @@ struct ExecutionState {
 extern RuntimeEnvironment g_runtimeEnv;
 extern std::recursive_mutex g_vmExecutionMutex;
 extern thread_local BackgroundEditSession *g_backgroundEditSession;
-extern thread_local const std::stop_token *g_backgroundMacroStopToken;
 extern thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
 extern thread_local ExecutionState *g_executionState;
 extern thread_local MRMacroExecutionSessionId g_executionSessionId;

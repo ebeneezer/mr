@@ -5,6 +5,8 @@
 
 #include <cstddef>
 
+constexpr std::size_t kMrHexMaximumStringProbe = 512;
+
 enum class MRHexStringSpanKind {
 	Hidden,
 	Ascii,

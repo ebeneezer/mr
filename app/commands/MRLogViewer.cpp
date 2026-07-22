@@ -275,7 +275,7 @@ void postExternalChunk(const mr::coprocessor::TaskInfo &info, std::size_t source
 	mr::coprocessor::globalCoprocessor().post(std::move(chunkResult));
 }
 
-mr::coprocessor::Result runFileTailTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t sourceId, std::size_t targetBufferId, const std::string &path, LogSearchSnapshot search, MRLiveLogSettings liveLogSettings) {
+mr::coprocessor::Result runFileTailTask(const mr::coprocessor::TaskInfo &info, std::size_t sourceId, std::size_t targetBufferId, const std::string &path, LogSearchSnapshot search, MRLiveLogSettings liveLogSettings) {
 	mr::coprocessor::Result result;
 	std::array<char, 8192> buffer{};
 	pcre2_code *searchCode = nullptr;
@@ -288,8 +288,9 @@ mr::coprocessor::Result runFileTailTask(const mr::coprocessor::TaskInfo &info, s
 	bool lineStart = true;
 
 	result.task = info;
+	result.payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(sourceId, -1, false, 0, targetBufferId);
 	if (!search.pattern.empty()) compileSearchRegex(buildSearchPatternExpression(search.pattern, search.options.textType), !search.options.caseSensitive, &searchCode, regexError);
-	while (!stopToken.stop_requested() && !info.cancelRequested()) {
+	while (!info.cancelRequested()) {
 		struct stat st {};
 
 		if (fd < 0) {
@@ -317,6 +318,7 @@ mr::coprocessor::Result runFileTailTask(const mr::coprocessor::TaskInfo &info, s
 		}
 
 		for (;;) {
+			if (info.cancelRequested()) break;
 			ssize_t count = ::pread(fd, buffer.data(), buffer.size(), offset);
 			if (count > 0) {
 				std::string chunkText = decorateLogChunk(std::string_view(buffer.data(), static_cast<std::size_t>(count)), liveLogSettings.showTimestamps, lineStart);
@@ -334,7 +336,7 @@ mr::coprocessor::Result runFileTailTask(const mr::coprocessor::TaskInfo &info, s
 		}
 
 		reportSearchHits = true;
-		for (int i = 0; i < 5 && !stopToken.stop_requested() && !info.cancelRequested(); ++i)
+		for (int i = 0; i < 5 && !info.cancelRequested(); ++i)
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 
@@ -344,13 +346,14 @@ mr::coprocessor::Result runFileTailTask(const mr::coprocessor::TaskInfo &info, s
 	return result;
 }
 
-mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t sourceId, std::size_t targetBufferId, const std::string &appTag, LogSearchSnapshot search, MRLiveLogSettings liveLogSettings) {
+mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, std::size_t sourceId, std::size_t targetBufferId, const std::string &appTag, LogSearchSnapshot search, MRLiveLogSettings liveLogSettings) {
 	mr::coprocessor::Result result;
 	pcre2_code *searchCode = nullptr;
 	std::string regexError;
 	int pipeFds[2] = {-1, -1};
 	pid_t childPid = -1;
 	int waitStatus = 0;
+	int readFlags = -1;
 	bool childExited = false;
 	bool pipeOpen = true;
 	int stopPolls = 0;
@@ -358,6 +361,7 @@ mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, st
 	std::array<char, 4096> buffer{};
 
 	result.task = info;
+	result.payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(sourceId, -1, false, 0, targetBufferId);
 	if (!search.pattern.empty()) compileSearchRegex(buildSearchPatternExpression(search.pattern, search.options.textType), !search.options.caseSensitive, &searchCode, regexError);
 	if (::pipe(pipeFds) != 0) {
 		if (searchCode != nullptr) pcre2_code_free(searchCode);
@@ -388,15 +392,28 @@ mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, st
 
 	::close(pipeFds[1]);
 	::setpgid(childPid, childPid);
-	while (pipeOpen || !childExited) {
+	readFlags = ::fcntl(pipeFds[0], F_GETFL, 0);
+	if (readFlags < 0 || ::fcntl(pipeFds[0], F_SETFL, readFlags | O_NONBLOCK) < 0) {
+		result.status = mr::coprocessor::TaskStatus::Failed;
+		result.error = std::string("fcntl failed: ") + std::strerror(errno);
+	}
+	while (!result.failed() && (pipeOpen || !childExited)) {
 		struct pollfd pfd;
 		int pollResult;
 
-		if ((stopToken.stop_requested() || info.cancelRequested()) && !childExited) {
-			if (stopPolls == 0) ::kill(-childPid, SIGTERM);
-			else if (stopPolls > 10)
-				::kill(-childPid, SIGKILL);
+		if (info.cancelRequested() && (pipeOpen || !childExited)) {
+			if (stopPolls == 0) {
+				if (::kill(-childPid, SIGTERM) != 0 && !childExited) ::kill(childPid, SIGTERM);
+			} else if (stopPolls > 10) {
+				if (::kill(-childPid, SIGKILL) != 0 && !childExited) ::kill(childPid, SIGKILL);
+				break;
+			}
 			++stopPolls;
+		}
+		if (info.cancelRequested() && pipeOpen) {
+			::close(pipeFds[0]);
+			pipeFds[0] = -1;
+			pipeOpen = false;
 		}
 
 		pfd.fd = pipeFds[0];
@@ -410,6 +427,12 @@ mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, st
 		}
 		if (pipeOpen && pollResult > 0) {
 			for (;;) {
+				if (info.cancelRequested()) {
+					::close(pipeFds[0]);
+					pipeFds[0] = -1;
+					pipeOpen = false;
+					break;
+				}
 				ssize_t count = ::read(pipeFds[0], buffer.data(), buffer.size());
 				if (count > 0) {
 					std::string chunkText = decorateLogChunk(std::string_view(buffer.data(), static_cast<std::size_t>(count)), liveLogSettings.showTimestamps, lineStart);
@@ -427,7 +450,8 @@ mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, st
 				break;
 			}
 		}
-		if (!childExited) {
+		if (!pipeOpen && !childExited) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		if (!childExited && !info.cancelRequested() && !result.failed()) {
 			pid_t waited = ::waitpid(childPid, &waitStatus, WNOHANG);
 			if (waited == childPid) childExited = true;
 			else if (waited < 0 && errno != EINTR) {
@@ -438,7 +462,9 @@ mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, st
 		}
 	}
 
+	if (info.cancelRequested() && childPid > 0 && ::kill(-childPid, SIGKILL) != 0 && !childExited) ::kill(childPid, SIGKILL);
 	if (pipeFds[0] >= 0) ::close(pipeFds[0]);
+	if (!childExited && childPid > 0 && result.failed() && ::kill(-childPid, SIGKILL) != 0) ::kill(childPid, SIGKILL);
 	if (!childExited && childPid > 0) {
 		while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
 			;
@@ -447,7 +473,7 @@ mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, st
 		if (searchCode != nullptr) pcre2_code_free(searchCode);
 		return result;
 	}
-	if (stopToken.stop_requested() || info.cancelRequested()) {
+	if (info.cancelRequested()) {
 		if (searchCode != nullptr) pcre2_code_free(searchCode);
 		result.status = mr::coprocessor::TaskStatus::Cancelled;
 		return result;
@@ -514,7 +540,7 @@ bool openLiveLogViewer() {
 	else
 		message(win, evCommand, cmTextEnd, nullptr);
 	const std::size_t targetBufferId = static_cast<std::size_t>(win->bufferId());
-	if (!startLogViewerWindow(win, mr::coprocessor::ExternalSourceKind::File, resolvedPath, title, liveLogSettings, [resolvedPath, targetBufferId, search, liveLogSettings](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runFileTailTask(info, stopToken, info.documentId, targetBufferId, resolvedPath, search, liveLogSettings); })) {
+	if (!startLogViewerWindow(win, mr::coprocessor::ExternalSourceKind::File, resolvedPath, title, liveLogSettings, [resolvedPath, targetBufferId, search, liveLogSettings](const mr::coprocessor::TaskInfo &info) { return runFileTailTask(info, info.documentId, targetBufferId, resolvedPath, search, liveLogSettings); })) {
 		message(win, evCommand, cmClose, nullptr);
 		postLogViewerError("Unable to start live log worker.");
 	}
@@ -551,7 +577,7 @@ bool openJournalViewer() {
 		return true;
 	}
 	const std::size_t targetBufferId = static_cast<std::size_t>(win->bufferId());
-	if (!startLogViewerWindow(win, mr::coprocessor::ExternalSourceKind::Journal, appTag, title, liveLogSettings, [appTag, targetBufferId, search, liveLogSettings](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runJournalTask(info, stopToken, info.documentId, targetBufferId, appTag, search, liveLogSettings); })) {
+	if (!startLogViewerWindow(win, mr::coprocessor::ExternalSourceKind::Journal, appTag, title, liveLogSettings, [appTag, targetBufferId, search, liveLogSettings](const mr::coprocessor::TaskInfo &info) { return runJournalTask(info, info.documentId, targetBufferId, appTag, search, liveLogSettings); })) {
 		message(win, evCommand, cmClose, nullptr);
 		postLogViewerError("Unable to start journal worker.");
 	}

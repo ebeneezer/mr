@@ -38,22 +38,77 @@ bool splitEventTargetsSecondaryPane(const TEvent &event) noexcept {
 
 } // namespace
 
+bool MRBentoBox::compilerDiagnosticsContextEstablished() const noexcept {
+	return (buildOutputPane() != nullptr && problemsPane() != nullptr) || diagnosticsProjectionTask.taskId != 0 ||
+	       compilerDiagnosticsParseSourceSnapshot != nullptr || compilerDiagnosticsOutputBufferId != 0 ||
+	       compilerDiagnosticSourceChanges != nullptr || (compilerDiagnostics != nullptr && !compilerDiagnostics->empty());
+}
+
+void MRBentoBox::handleCommittedSourceEditor(MRFileEditor *committedEditor) {
+	MRFileEditor *sourceEditor = getEditor();
+	const bool sourceCommitted = sourceEditor != nullptr && committedEditor != nullptr &&
+	                             (committedEditor == sourceEditor || committedEditor->documentId() == sourceEditor->documentId());
+
+	if (!sourceCommitted || bentoSourceMutationTrackingActive) return;
+	if (compilerDiagnosticsContextEstablished()) {
+		const int pendingNavigation = pendingCompilerProblemNavigation;
+		clearCompilerDiagnostics();
+		compilerDiagnosticsParseSourceSnapshot.reset();
+		compilerDiagnosticsParseRequired = false;
+		compilerDiagnosticsSourceInvalidated = true;
+		diagnosticsProjectionTask.projectionCurrent = false;
+		if (pendingNavigation != 0) {
+			pendingCompilerProblemNavigation = pendingNavigation;
+			static_cast<void>(requestCompilerProblemNavigation(pendingNavigation > 0));
+		}
+	}
+	refreshOutlinePanes(false);
+	bentoProjectionDirty |= bpdContent | bpdChrome | bpdOverlay;
+	flushBentoProjection();
+}
+
 void MRBentoBox::handleEvent(TEvent &event) {
 	const bool mouseEvent = (event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0;
 	const TPoint localMouse = mouseEvent ? makeLocal(event.mouse.where) : TPoint();
 
+	if (bentoProjectionAdoptionActive && event.what == evBroadcast &&
+	    (event.message.command == cmMrEditorDocumentCommitted || event.message.command == cmUpdateTitle)) {
+		MREditWindow::handleEvent(event);
+		return;
+	}
+	if (event.what == evBroadcast && event.message.command == cmMrEditorDocumentCommitted) {
+		MRFileEditor *committedEditor = static_cast<MRFileEditor *>(event.message.infoPtr);
+
+		MREditWindow::handleEvent(event);
+		handleCommittedSourceEditor(committedEditor);
+		return;
+	}
 	if (!hasPaneSplit()) {
 		MRFileEditor *sourceEditor = getEditor();
-		const bool trackSourceMutation = !compilerDiagnostics.empty() && sourceEditor != nullptr;
+		MREditWindow *outputWindow = buildOutputPane();
+		const bool compilerOutputActive = outputWindow != nullptr && outputWindow->hasTrackedExternalIoTasks();
+		const bool trackSourceMutation = sourceEditor != nullptr && ((compilerDiagnosticsParseSourceSnapshot != nullptr && (compilerDiagnosticsParseRequired || compilerOutputActive)) ||
+		                                                          (compilerDiagnostics != nullptr && !compilerDiagnostics->empty()) ||
+		                                                          compilerDiagnosticSourceChanges != nullptr || diagnosticsProjectionTask.taskId != 0);
 		MRTextBufferModel::ReadSnapshot oldSnapshot;
 		if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
+		const bool trackingWasActive = bentoSourceMutationTrackingActive;
+		bentoSourceMutationTrackingActive = true;
 		MREditWindow::handleEvent(event);
+		bentoSourceMutationTrackingActive = trackingWasActive;
 		if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
 		return;
 	}
 	const int mouseLeafId = mouseEvent ? leafAt(localMouse) : -1;
 	if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
+		const bool diagnosticsContext = compilerDiagnosticsContextEstablished();
 		MREditWindow::handleEvent(event);
+		if (!bentoSourceMutationTrackingActive) {
+			if (diagnosticsContext && diagnosticsProjectionTask.sourcePath != currentFileName())
+				handleCommittedSourceEditor(getEditor());
+			else if (diagnosticsContext)
+				static_cast<void>(refreshCompilerProblemsPane());
+		}
 		refreshOutlinePanes(false);
 		bentoProjectionDirty |= bpdContent | bpdChrome;
 		flushBentoProjection();
@@ -137,13 +192,13 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		flushBentoProjection();
 		return;
 	}
-	if (event.what == evKeyDown && !compilerDiagnostics.empty()) {
+	if (event.what == evKeyDown && buildOutputPane() != nullptr && problemsPane() != nullptr) {
 		const bool nextProblemKey = event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) == 0;
 		const bool previousProblemKey = event.keyDown.keyCode == kbShiftF8 || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0);
 		if (nextProblemKey || previousProblemKey) {
 			MREditWindow *targetWindow = editorCommandTarget();
 			if (mrHandleRuntimeKeymapEvent(event, targetWindow != nullptr && targetWindow->isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, targetWindow)) return;
-			static_cast<void>(nextProblemKey ? jumpToNextProblem() : jumpToPreviousProblem());
+			static_cast<void>(requestCompilerProblemNavigation(nextProblemKey));
 			clearEvent(event);
 			bentoProjectionDirty |= bpdContent | bpdChrome | bpdOverlay;
 			flushBentoProjection();
@@ -151,17 +206,17 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		}
 	}
 	if (event.what == evMouseDown) {
+		if (handleDividerChromeMouse(event)) {
+			clearEvent(event);
+			bentoProjectionDirty |= bpdChrome;
+			flushBentoProjection();
+			return;
+		}
 		const int dividerNode = nodeAtDivider(localMouse);
 		if (dividerNode >= 0 && (event.mouse.buttons & mbLeftButton) != 0) {
 			dragDivider(event, dividerNode);
 			clearEvent(event);
 			bentoProjectionDirty |= bpdLayout;
-			flushBentoProjection();
-			return;
-		}
-		if (handleDividerChromeMouse(event)) {
-			clearEvent(event);
-			bentoProjectionDirty |= bpdChrome;
 			flushBentoProjection();
 			return;
 		}
@@ -196,6 +251,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			}
 		}
 	}
+	const int previousActiveLeafId = activeLeafId;
 	if (event.what == evMouseDown) setActivePaneForMouse(event.mouse.where);
 	const int targetLeafId = event.what == evMouseWheel && mouseLeafId >= 0 ? mouseLeafId : activeLeafId;
 	const bool mouseTargetsTargetPane = !mouseEvent || mouseLeafId == targetLeafId;
@@ -203,6 +259,8 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	if (targetPane != nullptr && mouseTargetsTargetPane && splitEventTargetsSecondaryPane(event)) {
 		TRect targetBounds = paneBoundsForLeaf(targetLeafId);
 		const MRBentoPaneRole activeRole = roleForLeaf(targetLeafId);
+		const bool targetProjectsContentLocally = targetPane->projectsPaneContentLocally();
+		const bool targetFocusChanged = previousActiveLeafId != activeLeafId;
 		const bool problemsPaneActive = activeRole == bprProblems;
 		const bool outlinePaneActive = mr::bento::paneRoleIsOutline(activeRole);
 		const bool enterProblem = problemsPaneActive && event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter;
@@ -213,7 +271,8 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		if (mouseEvent && !pointInRect(localMouse, contentBounds(targetBounds))) {
 			if (targetPane != nullptr) targetPane->handleEvent(event);
 			if (bentoMode == bbmFileCompare && mr::bento::paneRoleIsDiff(activeRole)) syncFileCompareLinkedPaneFrom(targetLeafId);
-			bentoProjectionDirty |= bpdContent | bpdChrome;
+			if (!targetProjectsContentLocally) bentoProjectionDirty |= bpdContent;
+			bentoProjectionDirty |= bpdChrome;
 			flushBentoProjection();
 			return;
 		}
@@ -232,7 +291,14 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			return;
 		}
 		MRFileEditor *sourceEditor = getEditor();
-		const bool trackSourceMutation = !compilerDiagnostics.empty() && sourceEditor != nullptr;
+		MRFileEditor *targetEditor = targetPane->getEditor();
+		const bool targetSharesSource = activeRole == bprSplitEditor;
+		MREditWindow *outputWindow = buildOutputPane();
+		const bool compilerOutputActive = outputWindow != nullptr && outputWindow->hasTrackedExternalIoTasks();
+		const bool trackSourceMutation = targetSharesSource && sourceEditor != nullptr && targetEditor != nullptr &&
+		                                 ((compilerDiagnosticsParseSourceSnapshot != nullptr && (compilerDiagnosticsParseRequired || compilerOutputActive)) ||
+		                                  (compilerDiagnostics != nullptr && !compilerDiagnostics->empty()) ||
+		                                  compilerDiagnosticSourceChanges != nullptr || diagnosticsProjectionTask.taskId != 0);
 		MRTextBufferModel::ReadSnapshot oldSnapshot;
 		TScrollBar *targetHorizontalScrollBar = targetPane != nullptr ? targetPane->horizontalEditorScrollBar() : nullptr;
 		TScrollBar *targetVerticalScrollBar = targetPane != nullptr ? targetPane->verticalEditorScrollBar() : nullptr;
@@ -241,14 +307,17 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		std::size_t fileCompareVersionBefore = 0;
 		if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
 		if (targetPane != nullptr) {
-			MRFileEditor *targetEditor = targetPane->getEditor();
 			if (trackFileCompareMutation && targetEditor != nullptr) fileCompareVersionBefore = targetEditor->documentVersion();
 			if (event.what == evMouseWheel && targetEditor != nullptr && !targetPane->ownsPaneWheelEvents()) {
 				static_cast<void>(targetEditor->scrollWindowByWheel(event.mouse.wheel));
 				clearEvent(event);
 				bentoProjectionDirty |= bpdScrollBar;
-			} else
+			} else {
+				const bool trackingWasActive = bentoSourceMutationTrackingActive;
+				if (targetSharesSource) bentoSourceMutationTrackingActive = true;
 				targetPane->handleEvent(event);
+				bentoSourceMutationTrackingActive = trackingWasActive;
+			}
 		}
 		if (clickDebuggerVariable && showMacroDebuggerValueInputAtCursor()) {
 			clearEvent(event);
@@ -256,7 +325,8 @@ void MRBentoBox::handleEvent(TEvent &event) {
 			flushBentoProjection();
 			return;
 		}
-		if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
+		if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, targetEditor->lastDocumentChangeSet());
+		if (targetSharesSource) refreshOutlinePanes(false);
 		if (clickProblem) {
 			static_cast<void>(jumpToProblemAtCursor());
 			clearEvent(event);
@@ -280,8 +350,11 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		const bool fileCompareMutated = trackFileCompareMutation && targetPane != nullptr && targetPane->getEditor() != nullptr && targetPane->getEditor()->documentVersion() != fileCompareVersionBefore;
 		if (fileCompareMutated) refreshFileCompareAfterSourceMutation(activeRole);
 		if (bentoMode == bbmFileCompare && mr::bento::paneRoleIsDiff(activeRole)) syncFileCompareLinkedPaneFrom(targetLeafId);
-		bentoProjectionDirty |= bpdContent;
-		if (!fileCompareMutated || targetRangeChanged) bentoProjectionDirty |= bpdChrome;
+		if (!targetProjectsContentLocally) {
+			bentoProjectionDirty |= bpdContent;
+			if (!fileCompareMutated || targetRangeChanged) bentoProjectionDirty |= bpdChrome;
+		} else if (targetRangeChanged || targetFocusChanged)
+			bentoProjectionDirty |= bpdChrome;
 		flushBentoProjection();
 		return;
 	}
@@ -289,13 +362,17 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		MRFileEditor *sourceEditor = getEditor();
 		static_cast<void>(sourceEditor->scrollWindowByWheel(event.mouse.wheel));
 		clearEvent(event);
-		bentoProjectionDirty |= bpdScrollBar | bpdChrome | bpdOverlay;
+		bentoProjectionDirty |= bpdContent | bpdScrollBar | bpdChrome | bpdOverlay;
 		syncFileCompareLinkedPaneFrom(0);
 		flushBentoProjection();
 		return;
 	}
 	MRFileEditor *sourceEditor = getEditor();
-	const bool trackSourceMutation = !compilerDiagnostics.empty() && sourceEditor != nullptr;
+	MREditWindow *outputWindow = buildOutputPane();
+	const bool compilerOutputActive = outputWindow != nullptr && outputWindow->hasTrackedExternalIoTasks();
+	const bool trackSourceMutation = sourceEditor != nullptr && ((compilerDiagnosticsParseSourceSnapshot != nullptr && (compilerDiagnosticsParseRequired || compilerOutputActive)) ||
+	                                                          (compilerDiagnostics != nullptr && !compilerDiagnostics->empty()) ||
+	                                                          compilerDiagnosticSourceChanges != nullptr || diagnosticsProjectionTask.taskId != 0);
 	const bool trackFileCompareMutation = bentoMode == bbmFileCompare && fileComparePanesEditable() && mr::bento::paneRoleIsDiff(roleForLeaf(0)) && sourceEditor != nullptr;
 	const std::size_t fileCompareVersionBefore = trackFileCompareMutation ? sourceEditor->documentVersion() : 0;
 	TScrollBar *sourceHorizontalScrollBar = horizontalEditorScrollBar();
@@ -303,7 +380,10 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	const std::pair<bool, bool> sourceRangeBefore = std::make_pair(sourceHorizontalScrollBar != nullptr && sourceHorizontalScrollBar->maxVal > sourceHorizontalScrollBar->minVal, sourceVerticalScrollBar != nullptr && sourceVerticalScrollBar->maxVal > sourceVerticalScrollBar->minVal);
 	MRTextBufferModel::ReadSnapshot oldSnapshot;
 	if (trackSourceMutation) oldSnapshot = buffer().readSnapshot();
+	const bool trackingWasActive = bentoSourceMutationTrackingActive;
+	bentoSourceMutationTrackingActive = true;
 	MREditWindow::handleEvent(event);
+	bentoSourceMutationTrackingActive = trackingWasActive;
 	const bool fileCompareMutated = trackFileCompareMutation && sourceEditor->documentVersion() != fileCompareVersionBefore;
 	if (fileCompareMutated) refreshFileCompareAfterSourceMutation(roleForLeaf(0));
 	syncFileCompareLinkedPaneFrom(0);

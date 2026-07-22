@@ -161,7 +161,8 @@ enum : ushort {
 	cmMrMacroDebuggerRunHere,
 	cmMrMacroDebuggerEvaluate,
 	cmMrDeferredWindowClose,
-	cmMrTextHexEditor
+	cmMrTextHexEditor,
+	cmMrEditorDocumentCommitted
 };
 
 #endif

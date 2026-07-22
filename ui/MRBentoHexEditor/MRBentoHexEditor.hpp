@@ -17,6 +17,7 @@ class MRBentoHexEditor final : public MRBentoBox {
 	[[nodiscard]] static bool matchesWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapshot) noexcept;
 	void synchronizePaneDocumentState();
 	void synchronizeByteCursorFromDocument() noexcept;
+	void refreshAfterDocumentCommit() noexcept;
 	void refreshHexProjection() noexcept;
 
   protected:
@@ -28,6 +29,7 @@ class MRBentoHexEditor final : public MRBentoBox {
 	[[nodiscard]] virtual bool paneCloseActionEnabled() const noexcept override;
 	[[nodiscard]] virtual bool paneMaximizeActionEnabled() const noexcept override;
 	[[nodiscard]] virtual bool projectPaneDividerPosition(int nodeIndex, int position) noexcept override;
+	virtual void paneLayoutChanged() noexcept override;
 	virtual void handleEvent(TEvent &event) override;
 	virtual TColorAttr mapColor(uchar index) override;
 	virtual MREditWindow *editorCommandTarget() noexcept override;
@@ -39,19 +41,30 @@ class MRBentoHexEditor final : public MRBentoBox {
 	[[nodiscard]] std::size_t byteCursor() const noexcept;
 	[[nodiscard]] std::size_t cursorProjectionRevision() const noexcept;
 	[[nodiscard]] bool inputPaneIsActive(MRHexPaneRole role) const noexcept;
+	[[nodiscard]] std::size_t dataFirstRecord() const noexcept;
+	[[nodiscard]] std::size_t dataFirstColumn() const noexcept;
 	[[nodiscard]] int recordLength() const;
 	[[nodiscard]] bool littleEndian() const noexcept;
+	bool setDataViewport(std::size_t firstRecord, std::size_t firstColumn) noexcept;
 	void toggleEndian();
 	void toggleInsertMode();
 	void selectByte(std::size_t offset) noexcept;
+	void selectRecordColumn(std::size_t record, std::size_t column) noexcept;
 	void moveByteCursor(std::ptrdiff_t delta) noexcept;
 	bool replaceBytes(std::size_t offset, const std::string &bytes, std::size_t overwriteLength);
-	void activateNextInputPane() noexcept;
+	void activateAdjacentInputPane(int direction) noexcept;
 	void noteByteCursorChanged() noexcept;
+	void refreshHexCursorTransition(std::size_t previousCursor) noexcept;
+	void refreshHexFocusProjection() noexcept;
+	bool synchronizeDataViewportToCursor() noexcept;
 
 	std::size_t mByteCursor;
 	std::size_t mCursorProjectionRevision;
+	std::size_t mViewportCursorProjectionRevision;
+	std::size_t mDataFirstRecord;
+	std::size_t mDataFirstColumn;
 	bool mLittleEndian;
+	bool mApplyingHexEdit;
 	MRHexPaneRole mActiveRole;
 };
 

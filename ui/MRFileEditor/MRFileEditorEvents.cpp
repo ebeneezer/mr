@@ -767,50 +767,9 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	};
 	auto toggleFoldColumnsFromPoint = [this, &local, &viewport]() -> bool {
 		const std::vector<unsigned short> &displayLevels = mFoldState.visibleState().displayLevels;
-		const std::vector<MRFoldSpan> &visibleSpans = mFoldState.visibleState().spans;
-		std::map<std::size_t, MRFoldSpan> &closedFoldSpans = mFoldState.closedFoldSpans();
 		const int displayColumn = local.x - viewport.codeFoldingX;
 		if (displayColumn < 0 || static_cast<std::size_t>(displayColumn) >= displayLevels.size()) return false;
-		const unsigned short level = displayLevels[static_cast<std::size_t>(displayColumn)];
-		bool anyOpen = false;
-		for (const MRFoldSpan &span : visibleSpans)
-			if (span.level >= level && span.open) {
-				anyOpen = true;
-				break;
-			}
-		bool changed = false;
-		std::size_t cursorLine = mBufferModel.lineIndex(mBufferModel.cursor());
-		std::size_t foldCursorTarget = cursorLine;
-		bool foldCursorTargetValid = false;
-
-		for (const MRFoldSpan &span : visibleSpans) {
-			if (anyOpen) {
-				if (span.level < level) continue;
-				if (!span.open) continue;
-				closedFoldSpans[span.startLine] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
-				if (cursorLine > span.startLine && cursorLine <= span.endLine && (!foldCursorTargetValid || span.startLine < foldCursorTarget)) {
-					foldCursorTarget = span.startLine;
-					foldCursorTargetValid = true;
-				}
-			} else {
-				if (span.level != level) continue;
-				if (span.open) continue;
-				closedFoldSpans.erase(span.startLine);
-			}
-			changed = true;
-		}
-		if (!changed) return false;
-		mFoldState.rebuildEffectiveClosedFolds();
-		if (foldCursorTargetValid) moveCursor(mBufferModel.lineStartByIndex(foldCursorTarget), false, false);
-		if (mFoldState.warmupState().taskId != 0) {
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
-			clearFoldWarmupTask(mFoldState.warmupState().taskId);
-		}
-		invalidateFoldCache(true);
-		updateMetrics();
-		drawView();
-		updateIndicator();
-		return true;
+		return toggleDocumentFoldLevel(displayLevels[static_cast<std::size_t>(displayColumn)]);
 	};
 
 	if ((event.mouse.buttons & (mbLeftButton | mbRightButton)) == 0) return;

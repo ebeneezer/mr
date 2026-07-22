@@ -119,7 +119,7 @@ bool mrfeRenderedColumnOverlayColumnsForRegression(MRFileEditor &editor, std::si
 	const TColorAttr selectedColor = editor.tokenColor(MRSyntaxToken::Text, true, editor.getColor(0x0201));
 	col1 = -1;
 	col2 = -1;
-	editor.formatSyntaxLine(buffer, lineStart, syntaxLine, 0, width, 0, documentLine, false, false);
+	editor.formatSyntaxLine(buffer, lineStart, lineIndex, syntaxLine, 0, width, 0, documentLine, false, false);
 	for (int column = 0; column < width; ++column) {
 		if (buffer.attrAt(column) == selectedColor) {
 			if (col1 < 0) col1 = column;
@@ -130,8 +130,9 @@ bool mrfeRenderedColumnOverlayColumnsForRegression(MRFileEditor &editor, std::si
 }
 
 unsigned char MRFileEditor::fileCompareLineKindAt(std::size_t lineIndex) const noexcept {
-	if (lineIndex >= mFileCompareLineKinds.size()) return mrfclkNone;
-	return mFileCompareLineKinds[lineIndex];
+	if (mFileCompareGuttersConfigured && mFileCompareLineKinds->empty()) return mrfclkEqual;
+	if (lineIndex >= mFileCompareLineKinds->size()) return mrfclkNone;
+	return (*mFileCompareLineKinds)[lineIndex];
 }
 
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const MREditSetupSettings &settings) const noexcept {
@@ -167,7 +168,7 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 		inputs.gutterSidesConfigured = true;
 		inputs.leadingGutters = mFileCompareLeftGutters;
 		inputs.trailingGutters = mFileCompareRightGutters;
-		inputs.fileCompareGutterEnabled = mFileCompareGutterVisible && (fileCompareGuttersContain(mFileCompareLeftGutters, 'D') || fileCompareGuttersContain(mFileCompareRightGutters, 'D')) && !mFileCompareLineKinds.empty();
+		inputs.fileCompareGutterEnabled = mFileCompareGutterVisible && (fileCompareGuttersContain(mFileCompareLeftGutters, 'D') || fileCompareGuttersContain(mFileCompareRightGutters, 'D')) && !mFileCompareLineKinds->empty();
 	}
 	if (mCommunicationViewerMode) {
 		viewportSettings.showLineNumbers = mCommunicationViewerLineNumbers;
@@ -213,6 +214,7 @@ int MRFileEditor::textViewportWidth() const {
 }
 
 void MRFileEditor::invalidateFoldCache(bool preserveVisibleProjection) noexcept {
+	mFoldOutlineInputCache.reset();
 	mFoldState.clearVisibleState(preserveVisibleProjection);
 }
 
@@ -221,43 +223,17 @@ int MRFileEditor::visibleFoldGutterColumns() const noexcept {
 }
 
 std::size_t MRFileEditor::documentLineForVisibleLine(std::size_t visibleLine) const noexcept {
-	const std::vector<MRFoldSpan> &effectiveClosedFoldSpans = mFoldState.effectiveClosedFoldSpans();
-	if (effectiveClosedFoldSpans.empty()) return visibleLine;
-	std::size_t documentLine = visibleLine;
-	std::size_t hiddenBefore = 0;
-
-	for (const MRFoldSpan &span : effectiveClosedFoldSpans) {
-		const std::size_t hiddenLength = span.endLine > span.startLine ? span.endLine - span.startLine : 0;
-		const std::size_t visibleStart = span.startLine - hiddenBefore;
-		if (visibleLine <= visibleStart) break;
-		documentLine += hiddenLength;
-		hiddenBefore += hiddenLength;
-	}
-	return documentLine;
+	const std::size_t totalLines = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : std::max<std::size_t>(1, mBufferModel.estimatedLineCount());
+	return mFoldState.documentLineForVisibleLine(visibleLine, totalLines);
 }
 
 std::size_t MRFileEditor::visibleLineForDocumentLine(std::size_t documentLine) const noexcept {
-	const std::vector<MRFoldSpan> &effectiveClosedFoldSpans = mFoldState.effectiveClosedFoldSpans();
-	if (effectiveClosedFoldSpans.empty()) return documentLine;
-	std::size_t hiddenBefore = 0;
-
-	for (const MRFoldSpan &span : effectiveClosedFoldSpans) {
-		const std::size_t hiddenLength = span.endLine > span.startLine ? span.endLine - span.startLine : 0;
-		if (documentLine > span.startLine && documentLine <= span.endLine) return span.startLine - hiddenBefore;
-		if (span.endLine < documentLine) hiddenBefore += hiddenLength;
-		else
-			break;
-	}
-	return documentLine - hiddenBefore;
+	return mFoldState.visibleLineForDocumentLine(documentLine);
 }
 
 std::size_t MRFileEditor::foldedVisibleLineCount() const noexcept {
-	const std::vector<MRFoldSpan> &effectiveClosedFoldSpans = mFoldState.effectiveClosedFoldSpans();
-	std::size_t total = std::max<std::size_t>(1, mBufferModel.lineCount());
-
-	for (const MRFoldSpan &span : effectiveClosedFoldSpans)
-		if (span.endLine > span.startLine) total -= (span.endLine - span.startLine);
-	return std::max<std::size_t>(1, total);
+	std::size_t total = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : std::max<std::size_t>(1, mBufferModel.estimatedLineCount());
+	return mFoldState.foldedLineCount(total);
 }
 
 bool MRFileEditor::toggleFoldAtLine(std::size_t lineIndex) {
@@ -265,18 +241,22 @@ bool MRFileEditor::toggleFoldAtLine(std::size_t lineIndex) {
 	std::map<std::size_t, MRFoldSpan> &closedFoldSpans = mFoldState.closedFoldSpans();
 	for (const MRFoldSpan &span : visibleFoldSpans) {
 		if (span.startLine != lineIndex) continue;
-		if (span.open) closedFoldSpans[lineIndex] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
+		const bool closing = span.open;
+		if (mFoldState.documentFoldLevelContains(lineIndex)) {
+			const bool projectionCloses = mFoldState.documentFoldLevelCloses(lineIndex);
+			if (!closing) closedFoldSpans.erase(lineIndex);
+			if (closing != projectionCloses) static_cast<void>(mFoldState.toggleDocumentFoldLevelSpan(lineIndex));
+		} else if (closing)
+			closedFoldSpans[lineIndex] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
 		else
 			closedFoldSpans.erase(lineIndex);
 		mFoldState.rebuildEffectiveClosedFolds();
-		if (span.open) {
+		mFoldState.refreshVisibleFoldOpenStates();
+		if (closing) {
 			const std::size_t cursorLine = mBufferModel.lineIndex(mBufferModel.cursor());
 			if (cursorLine > span.startLine && cursorLine <= span.endLine) moveCursor(mBufferModel.lineStartByIndex(span.startLine), false, false);
 		}
-		if (mFoldState.warmupState().taskId != 0) {
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
-			clearFoldWarmupTask(mFoldState.warmupState().taskId);
-		}
+		static_cast<void>(cancelViewportFoldWarmup());
 		invalidateFoldCache(true);
 		return true;
 	}
@@ -296,10 +276,7 @@ bool MRFileEditor::foldingGutterHit(TPoint local, std::size_t *lineIndexOut) con
 
 void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language) {
 	if (!foldingPipelineEnabled()) {
-		if (mFoldState.warmupState().taskId != 0) {
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
-			clearFoldWarmupTask(mFoldState.warmupState().taskId);
-		}
+		static_cast<void>(cancelFoldWarmup());
 		invalidateFoldCache();
 		return;
 	}
@@ -309,6 +286,7 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
 
 	if (rowCount <= 0) {
+		static_cast<void>(cancelViewportFoldWarmup());
 		invalidateFoldCache();
 		return;
 	}
@@ -320,6 +298,17 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	if (exactLineCountKnown && topLine >= exactLineCount) topLine = exactLineCount - 1;
 	std::size_t requestBottomLine = documentLineForVisibleLine(visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount))) + 1;
 	if (exactLineCountKnown && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
+	std::size_t foldRequestBottomLine = requestBottomLine;
+	if (mFoldState.documentFoldLevelActive()) {
+		const std::size_t localLineBudget = static_cast<std::size_t>(std::max(rowCount * 8, 2048));
+		const std::size_t localBottomLine = topLine > std::numeric_limits<std::size_t>::max() - localLineBudget ? std::numeric_limits<std::size_t>::max() : topLine + localLineBudget;
+		foldRequestBottomLine = std::min(foldRequestBottomLine, localBottomLine);
+		if (mFoldLevelOperationState.generation != 0 && mFoldLevelOperationState.documentId == docId && mFoldLevelOperationState.version == version &&
+		    mFoldLevelOperationState.language == language && foldRequestBottomLine > mFoldLevelOperationState.projectionTargetBottomLine) {
+			mFoldLevelOperationState.projectionTargetBottomLine = foldRequestBottomLine;
+			scheduleDocumentFoldLevelProjection();
+		}
+	}
 	auto updateVisibleFoldGutterColumnsForViewport = [&]() noexcept {
 		int maxDisplayLevel = -1;
 		const std::size_t visibleBottomLine = visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount));
@@ -343,22 +332,29 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 		for (int level = 0; level < visibleState.gutterColumns; ++level)
 			visibleState.displayLevels.push_back(static_cast<unsigned short>(level));
 	};
-	if (visibleState.documentId == docId && visibleState.version == version && visibleState.language == language && topLine >= visibleState.topLine && requestBottomLine <= visibleState.bottomLine) {
+	if (visibleState.documentId == docId && visibleState.version == version && visibleState.language == language && topLine >= visibleState.topLine &&
+	    foldRequestBottomLine <= visibleState.bottomLine) {
+		mFoldCanonicalContextState.requestValid = false;
+		const bool currentWarmupCoversViewport = mFoldWarmupState.generation != 0 && mFoldWarmupState.documentId == docId && mFoldWarmupState.version == version &&
+		                                           mFoldWarmupState.language == language && topLine >= mFoldWarmupState.visibleTopLine &&
+		                                           foldRequestBottomLine <= mFoldWarmupState.visibleBottomLine;
+		if (mFoldWarmupState.generation != 0 && !currentWarmupCoversViewport) supersedeViewportFoldWarmup();
 		updateVisibleFoldGutterColumnsForViewport();
 		return;
 	}
 
 	const int safeRowCount = std::max(1, rowCount);
 	static constexpr std::size_t kCompleteLatexFoldLineBudget = 20000;
-	const std::size_t viewportMargin = approximateLargeFileMetrics ? static_cast<std::size_t>(std::max(safeRowCount * 2, 64)) : static_cast<std::size_t>(std::max(safeRowCount * 2, 32));
+	std::size_t viewportMargin = approximateLargeFileMetrics ? static_cast<std::size_t>(std::max(safeRowCount * 2, 64)) : static_cast<std::size_t>(std::max(safeRowCount * 2, 32));
+	if (language == MRSyntaxLanguage::Xml) viewportMargin = std::max<std::size_t>(viewportMargin, 512);
 	std::size_t scanTopLine = topLine > viewportMargin ? topLine - viewportMargin : 0;
-	std::size_t scanBottomLine = requestBottomLine + viewportMargin;
+	std::size_t scanBottomLine = foldRequestBottomLine + viewportMargin;
 	if (exactLineCountKnown && scanBottomLine > exactLineCount) scanBottomLine = exactLineCount;
 	if (language == MRSyntaxLanguage::Latex && exactLineCountKnown && exactLineCount <= kCompleteLatexFoldLineBudget) {
 		scanTopLine = 0;
 		scanBottomLine = exactLineCount;
 	}
-	scheduleFoldWarmupIfNeeded(scanTopLine, scanBottomLine, topLine, requestBottomLine, language);
+	scheduleFoldWarmupIfNeeded(scanTopLine, scanBottomLine, topLine, foldRequestBottomLine, language);
 	if (visibleState.documentId == docId && visibleState.version == version && visibleState.language == language) updateVisibleFoldGutterColumnsForViewport();
 }
 
@@ -375,10 +371,6 @@ const char *MRFileEditor::lineIndexWarmupTaskLabel() noexcept {
 
 const char *MRFileEditor::syntaxWarmupTaskLabel() noexcept {
 	return "syntax-warmup";
-}
-
-const char *MRFileEditor::saveNormalizationWarmupTaskLabel() noexcept {
-	return "save-normalization";
 }
 
 const char *MRFileEditor::foldWarmupTaskLabel() noexcept {
@@ -540,29 +532,32 @@ bool MRFileEditor::confirmOverwriteForSaveAs(const char *targetPath) const {
 }
 
 std::size_t MRFileEditor::lineStartForIndex(std::size_t index) const noexcept {
-	return mBufferModel.lineStartByIndex(index);
-}
+	const std::size_t cursorLine = cachedCursorLineIndex();
+	std::size_t lineStart = mBufferModel.lineStart(mBufferModel.cursor());
+	const std::size_t distance = index > cursorLine ? index - cursorLine : cursorLine - index;
+	static constexpr std::size_t kLocalLineWalkLimit = 1024;
 
-int MRFileEditor::longestLineWidth() const noexcept {
-	std::size_t pos = 0;
-	std::size_t len = mBufferModel.length();
-	const MREditSetupSettings settings = effectiveEditSetupSettings();
-	int maxWidth = 1;
-
-	while (true) {
-		int width = displayWidthForText(mBufferModel.lineText(pos), settings);
-		maxWidth = std::max(maxWidth, width + 1);
-		if (pos >= len) break;
-		std::size_t next = mBufferModel.nextLine(pos);
-		if (next <= pos) break;
-		pos = next;
+	if (distance <= kLocalLineWalkLimit) {
+		if (index < cursorLine) {
+			for (std::size_t line = cursorLine; line > index; --line)
+				lineStart = mBufferModel.prevLine(lineStart);
+		} else {
+			for (std::size_t line = cursorLine; line < index && lineStart < mBufferModel.length(); ++line)
+				lineStart = mBufferModel.nextLine(lineStart);
+		}
+		return lineStart;
 	}
-	return maxWidth;
+	if (mBufferModel.exactLineCountKnown()) return mBufferModel.lineStartByIndex(index);
+
+	const std::size_t estimatedLines = std::max<std::size_t>(1, mBufferModel.estimatedLineCount());
+	const long double ratio = static_cast<long double>(std::min(index, estimatedLines - 1)) / static_cast<long double>(estimatedLines);
+	const std::size_t estimatedOffset = static_cast<std::size_t>(ratio * static_cast<long double>(mBufferModel.length()));
+	return mBufferModel.lineStart(estimatedOffset);
 }
 
 bool MRFileEditor::useApproximateLargeFileMetrics() const noexcept {
 	const MRTextBufferModel::Document &document = mBufferModel.document();
-	return document.hasMappedOriginal() && document.length() >= static_cast<std::size_t>(8) * 1024 * 1024;
+	return document.length() >= static_cast<std::size_t>(8) * 1024 * 1024;
 }
 
 int MRFileEditor::dynamicLargeFileLineLimit() const noexcept {
@@ -669,7 +664,7 @@ void MRFileEditor::draw() {
 		syncScrollBarsToState();
 		return;
 	}
-	if (!mFileCompareLineKinds.empty()) hideCursor();
+	if (!mFileCompareLineKinds->empty()) hideCursor();
 	syncScrollBarsToState();
 	MREditSetupSettings editSettings = effectiveEditSetupSettings();
 	const bool foldingEnabled = foldingPipelineEnabled();
@@ -692,11 +687,13 @@ void MRFileEditor::draw() {
 	const bool drawMiniMap = drawLeadingMiniMap || drawTrailingMiniMap;
 	const bool miniMapUseBraille = MRMiniMapRenderer::useBrailleRenderer();
 	std::string viewportMarkerGlyph = MRMiniMapRenderer::normalizedViewportMarkerGlyph(editSettings.miniMapMarkerGlyph);
-	const bool foldedView = foldingEnabled && !mFoldState.closedFoldSpans().empty();
+	const bool foldedView = foldingEnabled && mFoldState.hasEffectiveClosedFolds();
 	const int miniMapRows = std::max(0, visibleTextRows());
 	const int textRows = std::max(0, visibleTextRows());
 	const TColorAttr editorTextFill = editorTextFillColor();
-	if (mBufferModel.exactLineCountKnown()) totalLines = foldedView ? foldedVisibleLineCount() : std::max<std::size_t>(1, mBufferModel.lineCount());
+	const bool exactLineCountKnown = mBufferModel.exactLineCountKnown();
+	const std::size_t exactLineCount = exactLineCountKnown ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
+	if (exactLineCountKnown) totalLines = foldedView ? foldedVisibleLineCount() : exactLineCount;
 	else
 		totalLines = std::max<std::size_t>(1, std::max<std::size_t>(mBufferModel.estimatedLineCount(), static_cast<std::size_t>(std::max(delta.y, 0)) + static_cast<std::size_t>(std::max(miniMapRows, 1))));
 	if (!foldedView) {
@@ -705,95 +702,27 @@ void MRFileEditor::draw() {
 	}
 	std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
 	if (topLine >= totalLines) topLine = totalLines - 1;
-	std::size_t linePtr = mBufferModel.lineStartByIndex(documentLineForVisibleLine(topLine));
 	std::size_t lineIndex = documentLineForVisibleLine(topLine);
+	std::size_t linePtr = lineStartForIndex(lineIndex);
 	const auto miniMapViewportFor = [&](bool leadingSide) noexcept {
 		if (leadingSide) return MRMiniMapRenderer::Viewport{viewport.width, viewport.miniMapLeadingBodyX, viewport.miniMapBodyWidth, viewport.miniMapLeadingInfoX, viewport.miniMapLeadingSeparatorX};
 		return MRMiniMapRenderer::Viewport{viewport.width, viewport.miniMapTrailingBodyX, viewport.miniMapBodyWidth, viewport.miniMapTrailingInfoX, viewport.miniMapTrailingSeparatorX};
 	};
 	const MRMiniMapRenderer::Viewport miniMapViewport = miniMapViewportFor(drawLeadingMiniMap);
 	if (drawMiniMap) {
-		const std::uint64_t previousMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
-		MRMiniMapRenderer::Signals miniMapSignals = mMiniMapState.renderer().scheduleWarmupIfNeeded(miniMapViewport, miniMapRows, miniMapUseBraille, totalLines, topLine, mBufferModel.documentId(), mBufferModel.version(),
-		                                                                                      mBufferModel.readSnapshot(), editSettings, useApproximateLargeFileMetrics());
-		const std::uint64_t currentMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
-		if (shouldTraceLargeFileWarmupDiagnostics() && (currentMiniMapTaskId != previousMiniMapTaskId || miniMapSignals.notifyTaskStateChanged)) {
-			std::string detail = "action=" + std::string(currentMiniMapTaskId == 0 ? "idle" : (currentMiniMapTaskId == previousMiniMapTaskId ? "reuse" : "schedule")) + " task=" +
-			                     std::to_string(currentMiniMapTaskId) + " top_line=" + std::to_string(topLine) + " rows=" + std::to_string(miniMapRows) + " total_lines=" + std::to_string(totalLines);
-			traceLargeFileWarmup(mLastMiniMapWarmupTrace, "minimap", std::move(detail));
-		}
+		MRMiniMapRenderer::Signals miniMapSignals = mMiniMapState.renderer().scheduleWarmupIfNeeded(miniMapViewport, miniMapRows, miniMapUseBraille, totalLines, topLine, mBufferModel.documentId(), mBufferModel.version(), mExecutionOwnerKind, mExecutionOwnerLocalId,
+		                                                                                      mBufferModel.readSnapshot(), editSettings, mMiniMapState.overlaySources(), selection);
 		applyMiniMapSignals(miniMapSignals);
 	}
-	MRMiniMapRenderer::OverlayState miniMapOverlay;
-	if (drawMiniMap) {
-		auto rangeSignature = [](const std::vector<MRTextBufferModel::Range> &ranges) noexcept {
-			std::uint64_t signature = 1469598103934665603ULL;
-			auto mixValue = [&signature](std::size_t value) noexcept {
-				signature ^= static_cast<std::uint64_t>(value) + 0x9E3779B97F4A7C15ULL + (signature << 6) + (signature >> 2);
-			};
-			for (const MRTextBufferModel::Range &range : ranges) {
-				mixValue(range.start);
-				mixValue(range.end);
-			}
-			return signature;
-		};
-		const std::uint64_t findSignature = rangeSignature(mFindMarkerRanges);
-		const std::uint64_t dirtySignature = rangeSignature(mDirtyRanges);
-		const std::uint64_t errorSignature = rangeSignature(mCompilerErrorRanges);
-		const std::uint64_t warningSignature = rangeSignature(mCompilerWarningRanges);
-		std::uint64_t diffSignature = 1469598103934665603ULL;
-		for (unsigned char kind : mFileCompareLineKinds)
-			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(kind)) * 1099511628211ULL;
-		for (const MRFileCompareMiniMapSlice &slice : mFileCompareMiniMapSlices) {
-			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.lineIndex)) * 1099511628211ULL;
-			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.sliceStart)) * 1099511628211ULL;
-			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.sliceEnd)) * 1099511628211ULL;
-			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.lineKind)) * 1099511628211ULL;
-			diffSignature = (diffSignature ^ static_cast<std::uint64_t>(slice.fullLine ? 1 : 0)) * 1099511628211ULL;
-		}
-		const bool miniMapOverlayCacheCompatible = mMiniMapState.overlayCache().documentId == mBufferModel.documentId() &&
-		                                           mMiniMapState.overlayCache().documentVersion == mBufferModel.version() && mMiniMapState.overlayCache().totalLines == totalLines &&
-		                                           mMiniMapState.overlayCache().viewportWidth == viewport.width && mMiniMapState.overlayCache().bodyWidth == viewport.miniMapBodyWidth &&
-		                                           mMiniMapState.overlayCache().braille == miniMapUseBraille && mMiniMapState.overlayCache().selectionStart == selection.start &&
-		                                           mMiniMapState.overlayCache().selectionEnd == selection.end && mMiniMapState.overlayCache().findSignature == findSignature &&
-		                                           mMiniMapState.overlayCache().dirtySignature == dirtySignature && mMiniMapState.overlayCache().errorSignature == errorSignature &&
-		                                           mMiniMapState.overlayCache().warningSignature == warningSignature &&
-		                                           mMiniMapState.overlayCache().diffSignature == diffSignature;
-
-		if (miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
-		else {
-			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, mCompilerErrorRanges, mCompilerWarningRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings,
-			                                                              mFileCompareLineKinds, mFileCompareMiniMapSlices);
-			mMiniMapState.overlayCache().documentId = mBufferModel.documentId();
-			mMiniMapState.overlayCache().documentVersion = mBufferModel.version();
-			mMiniMapState.overlayCache().totalLines = totalLines;
-			mMiniMapState.overlayCache().viewportWidth = viewport.width;
-			mMiniMapState.overlayCache().bodyWidth = viewport.miniMapBodyWidth;
-			mMiniMapState.overlayCache().braille = miniMapUseBraille;
-			mMiniMapState.overlayCache().selectionStart = selection.start;
-			mMiniMapState.overlayCache().selectionEnd = selection.end;
-			mMiniMapState.overlayCache().findSignature = findSignature;
-			mMiniMapState.overlayCache().dirtySignature = dirtySignature;
-			mMiniMapState.overlayCache().errorSignature = errorSignature;
-			mMiniMapState.overlayCache().warningSignature = warningSignature;
-			mMiniMapState.overlayCache().diffSignature = diffSignature;
-			mMiniMapState.overlayCache().overlay = miniMapOverlay;
-		}
-	}
+	const MRMiniMapRenderer::OverlayState &miniMapOverlay = mMiniMapState.renderer().overlayProjection();
 	if (size.x > 0 && size.y > 0) {
 		const std::size_t nonDocumentLineIndex = std::numeric_limits<std::size_t>::max();
 		const std::size_t documentRows = topLine < totalLines ? std::min<std::size_t>(static_cast<std::size_t>(textRows), totalLines - topLine) : 0;
 		bool eofDocumentLineVisible = false;
 
-		if (editSettings.showEofMarker) {
-			for (int y = 0; y < static_cast<int>(documentRows); ++y) {
-				const std::size_t visibleLineIndex = topLine + static_cast<std::size_t>(y);
-				const std::size_t currentLineIndex = documentLineForVisibleLine(visibleLineIndex);
-				if (currentLineIndex < mBufferModel.lineCount() && mBufferModel.lineStartByIndex(currentLineIndex) == mBufferModel.length()) {
-					eofDocumentLineVisible = true;
-					break;
-				}
-			}
+		if (editSettings.showEofMarker && exactLineCountKnown && documentRows > 0) {
+			const std::size_t lastVisibleDocumentLine = documentLineForVisibleLine(topLine + documentRows - 1);
+			eofDocumentLineVisible = lastVisibleDocumentLine < exactLineCount && lineStartForIndex(lastVisibleDocumentLine) == mBufferModel.length();
 		}
 
 		for (int y = static_cast<int>(documentRows); y < textRows; ++y) {
@@ -808,7 +737,7 @@ void MRFileEditor::draw() {
 			if (drawCodeFolding) drawCodeFoldingGutter(gutterBackground, viewport.codeFoldingX, viewport.codeFoldingWidth, 0, nonDocumentLineIndex);
 			if (drawLeadingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(true), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 			if (drawTrailingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(false), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
-			if (drawEofMarker) formatSyntaxLine(gutterBackground, virtualLineIndex, MRSyntaxLineResult(), delta.x, textWidth, viewport.textLeft, false, true, editSettings.showEofMarkerEmoji);
+			if (drawEofMarker) formatSyntaxLine(gutterBackground, virtualLineIndex, virtualLineIndex, MRSyntaxLineResult(), delta.x, textWidth, viewport.textLeft, false, true, editSettings.showEofMarkerEmoji);
 			writeBuf(0, y + viewport.topInset, size.x, 1, gutterBackground);
 		}
 	}
@@ -817,9 +746,9 @@ void MRFileEditor::draw() {
 		TDrawBuffer buffer;
 		const std::size_t visibleLineIndex = topLine + static_cast<std::size_t>(y);
 		if (visibleLineIndex >= totalLines) break;
-		const std::size_t currentLineIndex = foldedView ? documentLineForVisibleLine(visibleLineIndex) : lineIndex;
-		const bool isDocumentLine = currentLineIndex < mBufferModel.lineCount();
-		const std::size_t currentLinePtr = isDocumentLine ? (foldedView ? mBufferModel.lineStartByIndex(currentLineIndex) : linePtr) : currentLineIndex;
+		const std::size_t currentLineIndex = lineIndex;
+		const bool isDocumentLine = exactLineCountKnown ? currentLineIndex < exactLineCount : (linePtr < mBufferModel.length() || (mBufferModel.length() == 0 && currentLineIndex == 0));
+		const std::size_t currentLinePtr = isDocumentLine ? linePtr : currentLineIndex;
 		MRSyntaxLineResult syntaxLine;
 		buffer.moveChar(0, ' ', editorTextFill, static_cast<ushort>(std::max(0, size.x)));
 		if (showLineNumbers) {
@@ -844,15 +773,18 @@ void MRFileEditor::draw() {
 			if (found != mSyntaxState.tokenCache().end() && statefulCacheReady) syntaxLine = found->second.syntaxLine;
 		}
 		const bool drawEofMarker = editSettings.showEofMarker && isDocumentLine && currentLinePtr == mBufferModel.length();
-		formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarker && editSettings.showEofMarkerEmoji);
+		formatSyntaxLine(buffer, currentLinePtr, currentLineIndex, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarker && editSettings.showEofMarkerEmoji);
 		writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
-		if (!foldedView) {
+		const MRFoldSpan *closedFold = foldedView ? mFoldState.effectiveClosedFoldStartingAt(lineIndex) : nullptr;
+		if (closedFold != nullptr) {
+			lineIndex = closedFold->endLine + 1;
+			linePtr = lineStartForIndex(lineIndex);
+		} else {
 			if (isDocumentLine && linePtr < mBufferModel.length()) linePtr = mBufferModel.nextLine(linePtr);
 			++lineIndex;
 		}
 	}
 	if (syntaxEnabled) scheduleSyntaxWarmupIfNeeded();
-	scheduleSaveNormalizationWarmupIfNeeded();
 	updateIndicator();
 }
 
@@ -1003,7 +935,7 @@ TColorAttr MRFileEditor::tokenColor(MRSyntaxToken token, bool selected, TAttrPai
 	}
 }
 
-void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const MRSyntaxLineResult &syntaxLine, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji) {
+void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::size_t lineIndex, const MRSyntaxLineResult &syntaxLine, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji) {
 	TAttrPair basePair = getColor(0x0201);
 	TAttrPair changedPair = getColor(0x0505);
 	TAttrPair selectionPair = getColor(0x0201);
@@ -1011,7 +943,6 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	std::size_t documentLength = mBufferModel.length();
 	std::size_t lineEnd = lineStart;
 	std::size_t cursorPos = 0;
-	std::size_t lineIndex = 0;
 	bool currentLine = false;
 	bool currentLineInBlock = false;
 	bool overlayActive = false;
@@ -1060,22 +991,23 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 	TStringView line(lineText.data(), lineText.size());
 	selection = mBufferModel.selection().range();
 	lineEnd = mBufferModel.nextLine(lineStart);
-	lineIndex = mBufferModel.lineIndex(lineStart);
 	cursorPos = mBufferModel.cursor();
 	overlayActive = mBlockOverlayActive;
-	overlayMode = mBlockOverlayMode;
-	overlayStart = mBlockOverlayAnchor;
-	overlayEnd = mBlockOverlayTrackCursor ? mBufferModel.cursor() : mBlockOverlayEnd;
-	if (overlayStart > overlayEnd) std::swap(overlayStart, overlayEnd);
-	overlayEnd = renderedBlockOverlayEndForViewport(mBufferModel, overlayStart, overlayEnd, overlayMode);
-	if (overlayMode == 2 && mBlockOverlayLineRangeValid) {
-		overlayLine1 = mBlockOverlayLine1;
-		overlayLine2 = mBlockOverlayLine2;
-	} else {
-		overlayLine1 = mBufferModel.lineIndex(overlayStart);
-		overlayLine2 = mBufferModel.lineIndex(overlayEnd);
+	if (overlayActive) {
+		overlayMode = mBlockOverlayMode;
+		overlayStart = mBlockOverlayAnchor;
+		overlayEnd = mBlockOverlayTrackCursor ? mBufferModel.cursor() : mBlockOverlayEnd;
+		if (overlayStart > overlayEnd) std::swap(overlayStart, overlayEnd);
+		overlayEnd = renderedBlockOverlayEndForViewport(mBufferModel, overlayStart, overlayEnd, overlayMode);
+		if (overlayMode == 2 && mBlockOverlayLineRangeValid) {
+			overlayLine1 = mBlockOverlayLine1;
+			overlayLine2 = mBlockOverlayLine2;
+		} else {
+			overlayLine1 = mBufferModel.lineIndex(overlayStart);
+			overlayLine2 = mBufferModel.lineIndex(overlayEnd);
+		}
+		if (overlayLine1 > overlayLine2) std::swap(overlayLine1, overlayLine2);
 	}
-	if (overlayLine1 > overlayLine2) std::swap(overlayLine1, overlayLine2);
 	overlayCol1 = std::min(mBlockOverlayColumnAnchor, mBlockOverlayColumnEnd);
 	overlayCol2Exclusive = std::max(mBlockOverlayColumnAnchor, mBlockOverlayColumnEnd);
 	const bool emptyEofDocumentLine = lineStart == documentLength && lineEnd == documentLength;
@@ -1308,9 +1240,9 @@ void MRFileEditor::updateMetrics() {
 	const int textRows = std::max(1, visibleTextRows());
 	const bool quitTail = quitTailTraceActive();
 
+	limitX = displayWidthLimitExact() ? provisionalDisplayWidthLimit() : std::max(dynamicLargeFileWidthLimit(), provisionalDisplayWidthLimit());
 	if (useApproximateLargeFileMetrics() || quitTail || !mBufferModel.exactLineCountKnown()) {
 		const auto lineLimitStartedAt = std::chrono::steady_clock::now();
-		limitX = dynamicLargeFileWidthLimit();
 		limitY = dynamicLargeFileLineLimit();
 		if (shouldTraceLargeFileWarmupDiagnostics()) {
 			const auto totalUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
@@ -1319,7 +1251,6 @@ void MRFileEditor::updateMetrics() {
 			                      " est_lines=" + std::to_string(mBufferModel.estimatedLineCount()) + " limitY=" + std::to_string(limitY);
 		}
 	} else {
-		limitX = longestLineWidth();
 		limitY = foldingPipelineEnabled() ? std::max<int>(1, static_cast<int>(foldedVisibleLineCount())) : std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
 		mLastUiHotpathTrace.clear();
 	}

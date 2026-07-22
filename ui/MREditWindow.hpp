@@ -22,6 +22,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -216,7 +217,9 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		wrHelp
 	};
 
-	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
+	MREditWindow(const TRect &bounds, const char *title, int aNumber,
+	             mr::coprocessor::ExecutionOwnerKind executionOwnerKind = mr::coprocessor::ExecutionOwnerKind::EditorWindow)
+	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -261,7 +264,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		TRect r(getExtent());
 		r.grow(-1, -1);
 
-		editor = createEditor(r, "");
+		editor = createEditor(r, "", executionOwnerKind);
 		insert(editor);
 		resetWindowColorsToConfiguredDefaults();
 		refreshSyntaxContext();
@@ -960,7 +963,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		setBounds(bounds);
 		clip = getExtent();
 		if (frame != nullptr) frame->setBounds(getExtent());
-		layoutEditorChrome();
+		layoutDesktopContents();
 	}
 
 	bool desktopShowsFrameGrowHandle() const override {
@@ -1105,6 +1108,13 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	bool replaceTextBuffer(const char *text, const char *title = nullptr) {
 		if (editor == nullptr || !editor->replaceBufferText(text)) return false;
+		if (title != nullptr && *title != '\0') setDisplayTitle(title);
+		return true;
+	}
+
+	bool adoptReadOnlyProjectionText(const std::shared_ptr<const std::string> &text, std::size_t expectedDocumentId, std::size_t expectedVersion, const char *title = nullptr) {
+		if (editor == nullptr || !editor->adoptReadOnlyProjectionText(text, expectedDocumentId, expectedVersion)) return false;
+		setReadOnly(true);
 		if (title != nullptr && *title != '\0') setDisplayTitle(title);
 		return true;
 	}
@@ -1260,9 +1270,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				case mr::coprocessor::TaskKind::ExternalIo:
 					line = "Program";
 					break;
-				case mr::coprocessor::TaskKind::IndicatorBlink:
-					line = "Indicator";
-					break;
 				case mr::coprocessor::TaskKind::SyntaxWarmup:
 					line = "Syntax";
 					break;
@@ -1272,11 +1279,17 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				case mr::coprocessor::TaskKind::MiniMapWarmup:
 					line = "Mini map";
 					break;
-				case mr::coprocessor::TaskKind::SaveNormalizationWarmup:
-					line = "Save cache";
-					break;
 				case mr::coprocessor::TaskKind::LineIndexWarmup:
 					line = "Line index";
+					break;
+				case mr::coprocessor::TaskKind::DisplayWidthWarmup:
+					line = "Display width";
+					break;
+				case mr::coprocessor::TaskKind::BentoDiagnosticsProjection:
+					line = "Bento diagnostics";
+					break;
+				case mr::coprocessor::TaskKind::BentoOutlineProjection:
+					line = "Bento outline";
 					break;
 				case mr::coprocessor::TaskKind::Custom:
 				default:
@@ -1291,16 +1304,22 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			lines.push_back(line);
 		}
 		if (editor != nullptr) {
-			const bool lineIndexPending = editor->pendingLineIndexWarmupTaskId() != 0;
-			const bool syntaxPending = editor->pendingSyntaxWarmupTaskId() != 0;
-			const bool foldPending = editor->pendingFoldWarmupTaskId() != 0;
+			const std::size_t lineIndexPending = editor->pendingLineIndexWarmupTaskCount();
+			const std::size_t displayWidthPending = editor->pendingDisplayWidthWarmupTaskCount();
+			const std::size_t syntaxPending = editor->pendingSyntaxWarmupTaskCount();
+			const std::size_t foldPending = editor->pendingFoldWarmupTaskCount();
+			const std::size_t miniMapPending = editor->pendingMiniMapWarmupTaskCount();
 
-			if (lineIndexPending && trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0) lines.push_back(bullet + " " + lineIndexWarmingLabel());
-			if (syntaxPending && trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0) lines.push_back(bullet + " " + syntaxWarmingLabel());
-			if (foldPending && trackedTaskCount(mr::coprocessor::TaskKind::FoldWarmup) == 0) lines.push_back(bullet + " Folding");
-			if (editor->pendingMiniMapWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0) lines.push_back(bullet + " " + miniMapRenderingLabel());
-			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::SaveNormalizationWarmup) == 0) lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
-
+			if (lineIndexPending != 0 && trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0) lines.push_back(bullet + " " + lineIndexWarmingLabel() + " (" + std::to_string(lineIndexPending) + ")");
+			if (displayWidthPending != 0 && trackedTaskCount(mr::coprocessor::TaskKind::DisplayWidthWarmup) == 0) lines.push_back(bullet + " Display width (" + std::to_string(displayWidthPending) + ")");
+				if (syntaxPending != 0 && trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0) {
+					lines.push_back(bullet + " " + syntaxWarmingLabel() + " (" + std::to_string(syntaxPending) + ")");
+				}
+				if (foldPending != 0 && trackedTaskCount(mr::coprocessor::TaskKind::FoldWarmup) == 0) {
+					lines.push_back(bullet + " Folding (" + std::to_string(foldPending) + ")");
+				}
+			if (miniMapPending != 0 && trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0)
+				lines.push_back(bullet + " " + miniMapRenderingLabel() + " (" + std::to_string(miniMapPending) + ")");
 			{
 				std::string line = "Syntax cov: ";
 				line += std::to_string(syntaxPrefetchReachedBottomLine());
@@ -1428,40 +1447,16 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		}
 		mTrackedCoprocessorTasks.clear();
 		if (editor != nullptr) {
-			std::uint64_t lineIndexTaskId = editor->pendingLineIndexWarmupTaskId();
-			if (lineIndexTaskId != 0) {
-				mrTraceCoprocessorTaskCancel(mBufferId, lineIndexTaskId);
-				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(lineIndexTaskId));
-				editor->clearLineIndexWarmupTask(lineIndexTaskId);
-				++clearedCount;
-			}
-			std::uint64_t syntaxTaskId = editor->pendingSyntaxWarmupTaskId();
-			if (syntaxTaskId != 0) {
-				mrTraceCoprocessorTaskCancel(mBufferId, syntaxTaskId);
-				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(syntaxTaskId));
-				editor->clearSyntaxWarmupTask(syntaxTaskId);
-				++clearedCount;
-			}
-			std::uint64_t foldTaskId = editor->pendingFoldWarmupTaskId();
-			if (foldTaskId != 0) {
-				mrTraceCoprocessorTaskCancel(mBufferId, foldTaskId);
-				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(foldTaskId));
-				editor->clearFoldWarmupTask(foldTaskId);
-				++clearedCount;
-			}
-			std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId();
-			if (miniMapTaskId != 0) {
+			clearedCount += editor->cancelDisplayWidthWarmup();
+			clearedCount += editor->cancelLineIndexWarmup();
+			clearedCount += editor->cancelSyntaxWarmup();
+				clearedCount += editor->cancelFoldWarmup();
+			clearedCount += editor->pendingMiniMapWarmupTaskCount();
+			for (std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId(); miniMapTaskId != 0;
+			     miniMapTaskId = editor->pendingMiniMapWarmupTaskId()) {
 				mrTraceCoprocessorTaskCancel(mBufferId, miniMapTaskId);
 				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapTaskId));
 				editor->clearMiniMapWarmupTask(miniMapTaskId);
-				++clearedCount;
-			}
-			std::uint64_t saveNormalizationTaskId = editor->pendingSaveNormalizationWarmupTaskId();
-			if (saveNormalizationTaskId != 0) {
-				mrTraceCoprocessorTaskCancel(mBufferId, saveNormalizationTaskId);
-				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(saveNormalizationTaskId));
-				editor->clearSaveNormalizationWarmupTask(saveNormalizationTaskId);
-				++clearedCount;
 			}
 		}
 		updateTaskMarkers();
@@ -1509,8 +1504,16 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		return editor != nullptr ? editor->pendingLineIndexWarmupTaskId() : 0;
 	}
 
+	std::size_t pendingLineIndexWarmupTaskCount() const noexcept {
+		return editor != nullptr ? editor->pendingLineIndexWarmupTaskCount() : 0;
+	}
+
 	std::uint64_t pendingSyntaxWarmupTaskId() const noexcept {
 		return editor != nullptr ? editor->pendingSyntaxWarmupTaskId() : 0;
+	}
+
+	std::size_t pendingSyntaxWarmupTaskCount() const noexcept {
+		return editor != nullptr ? editor->pendingSyntaxWarmupTaskCount() : 0;
 	}
 
 	std::uint64_t pendingFoldWarmupTaskId() const noexcept {
@@ -1521,8 +1524,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		return editor != nullptr ? editor->pendingMiniMapWarmupTaskId() : 0;
 	}
 
-	std::uint64_t pendingSaveNormalizationWarmupTaskId() const noexcept {
-		return editor != nullptr ? editor->pendingSaveNormalizationWarmupTaskId() : 0;
+	std::size_t pendingMiniMapWarmupTaskCount() const noexcept {
+		return editor != nullptr ? editor->pendingMiniMapWarmupTaskCount() : 0;
 	}
 
 	std::size_t syntaxWarmupTopLine() const noexcept {
@@ -2090,8 +2093,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		if (editor != nullptr) editor->drawView();
 	}
 
-	MRFileEditor *createEditor(const TRect &bounds, const char *fileName) {
-		MRFileEditor *created = new MRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "");
+	MRFileEditor *createEditor(const TRect &bounds, const char *fileName, mr::coprocessor::ExecutionOwnerKind executionOwnerKind) {
+		MRFileEditor *created = new MRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "", executionOwnerKind, static_cast<std::size_t>(mBufferId));
 		created->setPreferredIndentColumn(mIndentLevel);
 		return created;
 	}
@@ -2419,11 +2422,11 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	void updateTaskMarkers() {
 		std::size_t taskCount = mTrackedCoprocessorTasks.size();
 		if (editor != nullptr) {
-			if (editor->pendingLineIndexWarmupTaskId() != 0) ++taskCount;
-			if (editor->pendingSyntaxWarmupTaskId() != 0) ++taskCount;
-			if (editor->pendingFoldWarmupTaskId() != 0) ++taskCount;
-			if (editor->pendingMiniMapWarmupTaskId() != 0) ++taskCount;
-			if (editor->pendingSaveNormalizationWarmupTaskId() != 0) ++taskCount;
+			taskCount += editor->pendingLineIndexWarmupTaskCount();
+			taskCount += editor->pendingDisplayWidthWarmupTaskCount();
+			taskCount += editor->pendingSyntaxWarmupTaskCount();
+				taskCount += editor->pendingFoldWarmupTaskCount();
+			taskCount += editor->pendingMiniMapWarmupTaskCount();
 		}
 		if (indicator != nullptr) indicator->setTaskCount(taskCount);
 	}
@@ -2504,20 +2507,22 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		switch (kind) {
 			case mr::coprocessor::TaskKind::LineIndexWarmup:
 				return "LineIndex";
+			case mr::coprocessor::TaskKind::DisplayWidthWarmup:
+				return "DisplayWidth";
 			case mr::coprocessor::TaskKind::SyntaxWarmup:
 				return "Syntax";
 			case mr::coprocessor::TaskKind::FoldWarmup:
 				return "Folding";
 			case mr::coprocessor::TaskKind::MiniMapWarmup:
 				return "MiniMap";
-			case mr::coprocessor::TaskKind::SaveNormalizationWarmup:
-				return "SaveCache";
-			case mr::coprocessor::TaskKind::IndicatorBlink:
-				return "Indicator";
 			case mr::coprocessor::TaskKind::ExternalIo:
 				return "ExternalIO";
 			case mr::coprocessor::TaskKind::MacroJob:
 				return "Macro";
+			case mr::coprocessor::TaskKind::BentoDiagnosticsProjection:
+				return "BDIAG";
+			case mr::coprocessor::TaskKind::BentoOutlineProjection:
+				return "BOUT";
 			case mr::coprocessor::TaskKind::Custom:
 			default:
 				return "Task";
@@ -2570,10 +2575,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	static const char *miniMapRenderingLabel() noexcept {
 		return "Mini map rendering";
-	}
-
-	static const char *saveNormalizationWarmingLabel() noexcept {
-		return "Save cache warming";
 	}
 
 	  public:

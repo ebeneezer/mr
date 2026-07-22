@@ -119,6 +119,7 @@ placing its results in the editor model remains with \mr{}.
 \part{The document as workspace}
 
 \chapter{A gigabyte file in five milliseconds}
+\label{ch:large-files}
 
 The striking number needs to be told accurately. The \texttt{enwik9} file
 used in the repository contains exactly 1,000,000,000 bytes and 13,147,025
@@ -161,78 +162,545 @@ area remain usable. The enwik9 milestone was therefore not satisfied by a fast
 editing, and discarding. Only that sequence demonstrates that the fast start
 is not a demonstration effect.
 
-The performance work also taught a more general lesson about hot paths. Line
-navigation, line numbering, index warm-up, and Piece Table scans repeatedly
-ask the same small questions: where is the next or previous line break, and
-how many breaks lie in this byte range? Optimising each caller would merely
-duplicate effort. \mr{} instead concentrates the work in the line-index core.
-On x86 builds with SSE2, that core loads sixteen bytes at a time, compares them
-with carriage return and line feed, and turns the resulting bit masks into
-positions and counts. The implementation is deliberately written as SSE2
-intrinsics rather than a hand-written \texttt{.S} file: it expresses the
-instruction-level operation to the compiler while retaining a scalar fallback
-for platforms without that path.
+\section{Non-blocking deferred scans}
 
-This is not a shortcut that only works for LF-only demonstration files. The
-scanner carries CRLF state across vector blocks and handles the scalar tail, so
-the line model remains correct at every boundary. The same counting primitive
-serves direct mapped text and individual Piece Table chunks; the direct path
-also uses the vector search in both directions. Parallel warm-up can divide a
-large direct document into line-aligned chunks, while SIMD accelerates the
-inner scan of each chunk. A small machine-close core therefore improves every
-feature that needs to understand lines around it, without making the rest of
-the editor depend on a second text engine.
+Deferred scanning is not one pass over the document. The editor runs separate
+line-index, syntax, fold, and minimap pipelines. Each pipeline captures a
+versioned \texttt{ReadSnapshot}, defines a half-open line interval
+\([top,bottom)\), and submits work to the appropriate coprocessor lane. The UI
+thread does not wait for that work. It continues to draw from the currently
+valid projection while the worker produces a typed result.
+
+The line-index pipeline is the global forward scan. A worker invocation calls
+\texttt{warmLineIndexChunk} with a budget of two index strides. The returned
+\texttt{LineIndexWarmupData} contains the accumulated
+\texttt{LineIndexCheckpoint} entries, \texttt{lazyIndexedOffset},
+\texttt{lazyIndexedLine}, the completion flag, and the total line count when
+known. An accepted result schedules the next bounded invocation until the
+indexed boundary reaches EOF. BOF is already the fixed index origin; this
+pipeline does not perform a second backward warm-up. Backward navigation uses
+the available checkpoints and the reverse line-break primitive.
+
+Viewport-derived pipelines use a different topology. Their scan interval is a
+bounded window around the active viewport, not necessarily the complete
+document. The viewport is the focus interval, the lower scan bound points
+towards BOF, and the upper bound points towards EOF. Moving the viewport may
+therefore replace a pending request with a new window. A request already
+covering the required interval is reused.
+
+Fold acquisition divides the requested interval into chunks of 256 lines. It
+constructs the focus chunk and the adjacent chunks above and below it, bounded
+by \texttt{scanTopLine} and \texttt{scanBottomLine}. Before structural
+evaluation, the chunks are ordered by their document position and concatenated.
+This ordering is mandatory: nesting, closing markers, sibling continuations,
+and branch levels depend on the state produced by preceding lines. The fold
+result retains the actual scan bounds, the source line texts, fold spans,
+gutter branches, and the maximum visible nesting width. A complete outline is
+available only when the retained fold interval covers BOF through EOF; a
+viewport-local result is explicitly a partial outline source.
+
+Minimap acquisition starts at the viewport anchor inside its sampling window.
+It obtains line texts first from the anchor towards the window's EOF-side end
+with \texttt{nextLine}, then from the anchor towards the BOF-side start with
+\texttt{prevLine}. It does not retain those texts as a second document model.
+The worker reduces them to Braille cell patterns and records, for every minimap
+row, the corresponding document-line start and end. The fixed sampling window
+therefore supplies both pixels and the inverse mapping required for viewport
+and overlay placement.
+
+Syntax warm-up is forward because lexical state flows from an earlier line to
+a later line. For a stateful language, a request above the viewport locates the
+nearest valid syntax checkpoint or a bounded prelude towards BOF. Analysis then
+runs forward through the visible range and continues in bounded prefetch bursts
+towards EOF. Every cached line retains its input state, token runs, and output
+state. A cached prefix is reusable only while the state chain remains equal;
+the first mismatch terminates that reusable prefix.
+
+Figure~\ref{fig:coprocessor-warming-projections} shows the four derived
+projections at one viewport position together with their task telemetry. The
+numbered callouts identify rendered consumers and instrumentation, not
+additional scan stages.
+
+\begin{figure}[htbp]
+  \centering
+  \begingroup
+  \setlength{\unitlength}{0.00098\textwidth}
+  \begin{picture}(1000,540)
+    \put(0,0){\includegraphics[width=0.98\textwidth]{../pngsjpegs/COPRO_warming.png}}
+    \put(790,500){\makebox(0,0){\Large\textcircled{\normalsize\textbf{1}}}}
+    \put(45,360){\makebox(0,0){\Large\textcircled{\normalsize\textbf{2}}}}
+    \put(190,330){\makebox(0,0){\Large\textcircled{\normalsize\textbf{3}}}}
+    \put(520,360){\makebox(0,0){\Large\textcircled{\normalsize\textbf{4}}}}
+    \put(960,300){\makebox(0,0){\Large\textcircled{\normalsize\textbf{5}}}}
+  \end{picture}
+  \endgroup
+  \caption{Deferred projections while viewing enwik9 near line 7,790,831:
+  (1) coprocessor task and timing telemetry, (2) line-number projection,
+  (3) fold spans and branch continuations in the gutter, (4) syntax token
+  projection in the editor body, and (5) the viewport-anchored Braille
+  minimap.}
+  \label{fig:coprocessor-warming-projections}
+\end{figure}
+
+\section{Retained information and render consumers}
+
+The payloads and caches preserve only the information required by their
+consumers:
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{|p{0.18\textwidth}|p{0.42\textwidth}|p{0.30\textwidth}|}
+  \hline
+  \textbf{Projection} & \textbf{Retained information} & \textbf{Direct consumer} \\
+  \hline
+  Line index & byte/line checkpoints, indexed byte and line frontier,
+  completion state, exact total when complete & line numbers, byte-to-line and
+  line-to-byte navigation, scrollbar and document metrics \\
+  \hline
+  Syntax & line start, \texttt{stateIn}, token runs with column, length and
+  token class, and \texttt{stateOut} & coloured editor text and the state
+  checkpoint chain for subsequent lines \\
+  \hline
+  Folding and outline & scan bounds, line texts, fold start/end, nesting
+  level, source kind, open state, sibling continuation, gutter branches and
+  visible gutter width & fold gutter, closed-line projection and partial or
+  complete outline generation \\
+  \hline
+  Minimap & total line count, sampling-window bounds, viewport width, Braille
+  row patterns and document-line interval per row & minimap cells, viewport
+  marker and line-based overlays \\
+  \hline
+  Performance view & task kind, lane, queue/run/total duration, throughput and
+  processed line range & observability only; never a semantic input to an
+  editor projection \\
+  \hline
+\end{tabular}
+\end{center}
+
+Every result remains provisional until dispatch. Adoption requires the pending
+task identifier, document identity, base version, and---where applicable---the
+language and render geometry to match the current editor state. A mismatch
+discards the result. The UI thread is the only point at which a valid result is
+installed into a derived-state cache and made visible.
+
+\section{Moving windows and the warmed-range ledger}
+\label{sec:warmed-range-ledger}
+
+Large-file syntax warm-up maintains one active request window and a separate
+record of all accepted warm intervals. \texttt{WarmupState} identifies the
+currently submitted \([topLine,bottomLine)\) task.
+\texttt{PrefetchState} records the EOF-side target and the line reached for the
+current viewport. A large cursor jump recomputes both bounds from the new
+viewport; it does not translate the old window through the document.
+
+Only one viewport-local syntax task for the same document, version, and
+language may be pending. If the cursor moves while that task is running,
+\texttt{scheduleSyntaxWarmupIfNeeded} defers the new submission. Dispatch first
+applies or rejects the pending result and clears its task identifier; the
+subsequent continuation evaluates the then-current viewport and submits its
+window. An identical recently completed request is additionally suppressed by
+the 180 millisecond large-file burst debounce.
+
+Accepted line results are stored in the token cache and their produced line
+interval is passed to \texttt{rememberWarmedLineRange}. The valid-range ledger
+is owned by document identity and syntax language. Cursor movement does not
+clear it, so a large jump can leave multiple disjoint intervals. Each insertion
+is sorted and normalized: overlapping or touching intervals are merged, while
+gaps remain explicit.
+
+A ledger hit is necessary but not sufficient for reuse. The requested interval
+must be covered without a gap, and \texttt{syntaxCachedCoveragePrefix} must
+also reproduce the cached \texttt{stateIn}/\texttt{stateOut} chain from the
+required initial state. Full coverage suppresses the worker request. Partial
+coverage removes the verified prefix and submits only the missing tail; the
+accepted tail is then merged into the ledger. An edit truncates valid ranges,
+token entries, and checkpoints from the first affected line. A document or
+language change clears the ledger. Worker adoption still performs the
+independent task, document, version, and language checks.
+
+Figure~\ref{fig:deferred-scan-windows} shows the window movement and range
+normalization for an initial viewport, a large cursor jump, and an overlapping
+return request.
+
+\clearpage
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{assets/mr-deferred-scan-windows.pdf}
+  \caption{Viewport-local syntax warm-up and its persistent range ledger.
+  Step 1 records the first produced interval. Step 2 relocates the active scan
+  window after a cursor jump while retaining the disjoint earlier interval.
+  Step 3 verifies a cached prefix, scans only the missing tail, and merges the
+  accepted result with the touching interval.}
+  \label{fig:deferred-scan-windows}
+\end{figure}
+
+\section{Line-break scan primitives}
+
+Line navigation, line numbering, index warm-up, and Piece Table scans require
+the same three operations: locate the next line break, locate the previous line
+break, and count line breaks in a byte range. These operations are implemented
+in the line-index core. On x86 builds with SSE2, the core loads sixteen bytes at
+a time, compares them with carriage return and line feed, and converts the
+resulting bit masks into positions and counts. A scalar implementation is the
+fallback for platforms without the vector path.
+
+The scanner carries CRLF state across vector blocks and handles the scalar
+tail, preserving the same line model at vector and chunk boundaries. The
+counting primitive operates on direct mapped text and on individual Piece Table
+chunks; the direct path also uses vector search in both directions. A large
+direct document may be divided into line-aligned warm-up chunks, while SIMD
+performs the inner scan of each chunk. All derived pipelines therefore consume
+one line model rather than maintaining feature-specific text indexes.
 
 \chapter{Derived work must not stop the editor}
+\label{ch:coprocessor-derived-work}
 
-A large document creates follow-on costs: the line index, syntax, folding,
-outline, minimap, and save normalisation. The obvious but wrong response would
-be to recompute all of them in the UI thread after every edit. The coprocessor
-exists to prevent precisely that.
+The coprocessor is a lane scheduler with one result boundary, not a general
+executor from which a worker may call back into the application. It separates
+derived CPU work, minimap projection, macro execution, ordered command I/O,
+and independent live sources because these workloads have different ordering
+and starvation requirements. Figure~\ref{fig:coprocessor-lanes} shows the
+complete path from submission to an accepted derived state. Markers 1--5 in
+the figure identify the concrete lanes described below.
 
-Work is requested from a coherent read snapshot. Its result carries the
-document identity and base version back with it. The UI pump only delivers a
-bounded mailbox entry; the owning domain then checks whether the result still
-belongs to this document and this version. If it does not, the result is
-discarded; it is not quietly reinterpreted for newer text. This all-or-reject
-rule is less convenient than automatic rebasing, but it keeps cause and effect
-understandable.
+\clearpage
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.94\textwidth]{assets/mr-coprocessor-lanes.pdf}
+  \caption{Coprocessor execution and result adoption. A submission carries a
+  data-only task envelope into one lane. Workers produce typed results but do
+  not mutate TVision state. All lanes converge on one result mailbox; the UI
+  thread drains it within a count or time budget and delegates the final
+  acceptance decision to the owning domain.}
+  \label{fig:coprocessor-lanes}
+\end{figure}
+\clearpage
 
-The need for that discipline was not discovered on a whiteboard. Instrumenting
-the central K/V access path revealed roughly 30,000 accesses in a problematic
-path. Without measurement, the cause would have remained a general feeling of
-``lag''. This is a recurring MR lesson: performance is not the assertion that
-something ought to be fast. It is a chain of measurement, cause,
-intervention, and behaviour that can be observed again.
+\section{Task envelope and scheduling boundary}
 
-The lanes are not an anonymous worker-pool metaphor either. There are distinct
-responsibilities for I/O, compute, minimap, macro work, and external processes.
-The macro lane has one worker; the compute lane may have several depending on
-the hardware. Results still never go straight to the screen. They enter a
-protected result mailbox, which the UI thread processes within a bounded
-budget.
+\texttt{submit} and \texttt{submitCoalesced} construct a \texttt{TaskInfo}
+with a unique task identifier, lane, task kind, document identity, base
+version, diagnostic label, and shared cancellation flag. The request also
+contains the task function, its submission timestamp, and---for compute
+work---its priority. Document-derived submitters capture the coherent read
+snapshot or copied input on which the task operates; \texttt{documentId} and
+\texttt{baseVersion} are the ticket by which the eventual result is compared
+with live state, not permission for the worker to read the view.
+
+If a non-empty coalescing key is supplied, a newer request removes queued,
+not-yet-running requests with the same task kind and key from that lane. An
+active request is not pre-empted by coalescing. \texttt{MacroJob} is explicitly
+excluded because two macro executions are distinct events even when their
+labels or inputs resemble one another. Current editor warm-up producers also
+keep their own pending-task discipline, as described by the moving-window
+mechanics in Chapter~\ref{ch:large-files}.
+
+Worker cardinality belongs to a lane, not to the coprocessor as a whole. The
+four static lanes provide four through six workers in total: one each for
+\texttt{Io}, \texttt{MiniMap}, and \texttt{Macro}, plus one through three for
+\texttt{Compute}. Every registered external source can add its own worker.
+
+Before executing a task function, every worker activation binds the current
+worker thread round-robin to one CPU from the process affinity mask. One task
+therefore executes on one eligible CPU at a time, but neither the lane nor the
+worker owns that CPU exclusively or permanently. The next activation advances
+the shared affinity slot and may place the same worker on another CPU. The task
+function receives both the shared task cancellation state and a
+\texttt{stop\_token}; cancellation remains cooperative.
+
+\section{Lane responsibilities and use cases}
+
+\subsection{1 --- I/O lane}
+
+The static \texttt{Io} lane is one FIFO with one worker. Its current application
+use is ordered external-command and build-process execution initiated by the
+command router. A task may post \texttt{ExternalIoChunkPayload} results while
+the process is running and finally return an
+\texttt{ExternalIoFinishedPayload} containing exit, signal, build-context, and
+post-build information. Serial execution is intentional here: conventional
+command I/O has one application-level ordering point. Independent permanent or
+streaming sources use lane 5 instead.
+
+\subsection{2 --- Compute lane}
+
+The \texttt{Compute} lane owns three FIFO priority queues. Line-index warm-up
+and indicator timing are high priority. Syntax, folding and outline acquisition,
+save-normalisation warm-up, and file comparison are normal priority. Custom
+work, currently including the macro-delay helper, is low priority. Within one
+priority the queue order remains FIFO.
+
+Worker count follows the reported hardware concurrency: one worker below four
+hardware threads, two from four through seven, and three from eight upwards.
+On a multi-worker lane, if high-priority work is already active while normal
+work is waiting, the next selection admits normal work instead of allowing
+high-priority tasks to occupy every available worker. High work retains the
+first preference; normal derived work retains forward progress.
+
+The resulting payloads are domain-specific: line checkpoints, syntax runs and
+state, fold structure, normalisation metadata, diff hunks, or an indicator
+generation. The deferred scan windows and their retained information are the
+principal editor use case detailed in Chapter~\ref{ch:large-files}.
+
+\subsection{3 --- MiniMap lane}
+
+The \texttt{MiniMap} lane is a dedicated FIFO with one worker and accepts
+\texttt{MiniMapWarmup}. It prevents repeated minimap sampling from competing
+with line-index and syntax work in the compute queues. Its payload contains the
+sampling geometry, total and sampled line ranges, Braille row patterns, and
+the document-line start and end represented by each minimap row. Chapter~\ref{ch:minimap}
+describes how this derived projection is rendered and overlaid.
+
+\subsection{4 --- Macro lane}
+
+The \texttt{Macro} lane is a dedicated FIFO with one worker. Background and
+staged-background Execution Sessions submit \texttt{MacroJob}; jobs are not
+coalesced, and the single worker preserves their lane order. An ordinary
+background result returns logs and UI-command requests as data. A staged result
+additionally carries the edit transaction, runtime values, cursor and selection
+state, a conflict snapshot, and deferred UI commands. None of those objects is
+installed by the worker. Chapters~\ref{ch:execution-sessions}
+and~\ref{ch:macro-staging} describe session routing and staged commit.
+
+\subsection{5 --- Dynamic external-source lanes}
+
+\texttt{Extern} does not denote one global fifth queue. Registering a file,
+journal, device, network, or pipe source creates an external-source state with
+its own \texttt{LaneState}; the single worker for that source is started lazily
+on its first \texttt{submitExternal}. Consequently, a blocked device or quiet
+file cannot serialize unrelated live sources behind itself.
+
+An external task uses \texttt{ExternalIo}, with the source identifier carried
+in the task's document-identity field and base version zero. Chunk results feed
+the target live-log or communication buffer on the UI thread. The source state
+also records received bytes, activity sequence, and a bounded stream sample for
+the performance projection. Completion or failure releases and unregisters the
+dynamic lane.
+
+\section{Worker completion and the result mailbox}
+
+The worker loop removes one request under the lane lock, records it as active,
+performs the affinity placement, and invokes the task outside the lock.
+Exceptions are converted into a failed \texttt{Result}; a cancellation observed
+before execution produces a cancelled result. Completion records queue, run,
+and total duration in microseconds. The active entry is then removed and the
+result appended to the mutex-protected central FIFO. No lane has a private path
+to the screen.
+
+\texttt{pump(maxResults)} drains at most the requested count---eight by
+default---whereas \texttt{pumpFor} stops after the supplied time budget once a
+result has been handled. Both invoke the installed result handler on the UI
+thread. The central \texttt{handleCoprocessorResult} performs payload dispatch;
+it does not replace the owning domain's validation.
+
+For line index, syntax, fold, minimap, and save-normalisation results, dispatch
+locates matching editors and admits completed data only against the current
+document and base version. The editor then applies its remaining task-ID,
+language, geometry, or options checks. File Compare validates both document
+versions through its Bento owner. A staged macro compares its captured conflict
+state before committing. External chunks and indicator generations likewise
+become visible only through their UI-thread owners. A mismatch clears the
+pending task state and discards the payload; it is never rebased implicitly.
+
+\section{Cancellation and observability}
+
+\texttt{cancelTask} sets the shared flag and wakes all lane condition variables;
+it cannot forcibly interrupt an arbitrary task function. Long-running task
+functions must therefore inspect the cancellation flag or stop token at safe
+points. Shutdown additionally requests worker stop and clears pending queues.
+
+\texttt{snapshot} exposes the pending-result count and, for each static lane,
+its worker count, active tasks with current queue/run times, and queued tasks.
+External-source snapshots add kind, tag, running state, received bytes,
+activity sequence, and stream sample. Completed results provide the measured
+queue, run, and total times recorded by the performance view. These measurements
+are observability outputs only; they never become semantic inputs to an editor
+projection.
 
 \chapter{A minimap with eight dots per character}
+\label{ch:minimap}
 
-A terminal cell need not stand for one coarse pixel. Unicode Braille characters
-contain a two-column by four-row grid: eight independently addressable dots.
-\mr{} uses them as a sub-character renderer. A visible minimap cell can encode
-four source-line samples and two horizontal sampling columns.
+The minimap is a viewport-anchored derived projection in an editor gutter. It
+has two data paths. The coprocessor produces compact text-density patterns for
+a bounded line window; the UI thread produces current overlay masks from
+selection, search, edit, diagnostic, and File Compare state. The paths meet
+only in \texttt{drawGutter}. Figure~\ref{fig:minimap-ui} identifies the three
+visible components, and Figure~\ref{fig:minimap-function-flow} follows the
+complete data path.
 
-This is not merely a decorative narrow scrollbar. The renderer compresses text
-density into dot patterns and layers selection, search hits, changed regions,
-compiler errors, warnings, and file-compare markings over them in priority
-order. Its calculation runs in the dedicated minimap lane. It is requested
-with document version, visible area, and dimensions, and is projected only
-when the response still matches. Thus, even for large files, the minimap
-remains part of responsiveness rather than its enemy.
+\begin{figure}[htbp]
+  \centering
+  \begingroup
+  \setlength{\unitlength}{0.00098\textwidth}
+  \begin{picture}(1000,543)
+    \put(0,0){\includegraphics[width=0.98\textwidth]{../pngsjpegs/UI_minimap.png}}
+    \put(946,365){\makebox(0,0){\Large\textcircled{\normalsize\textbf{1}}}}
+    \put(925,315){\makebox(0,0){\Large\textcircled{\normalsize\textbf{2}}}}
+    \put(982,260){\makebox(0,0){\Large\textcircled{\normalsize\textbf{3}}}}
+  \end{picture}
+  \endgroup
+  \caption{Trailing minimap in the editor: (1) the Braille pattern body,
+  (2) the separate viewport-marker column, and (3) the native TVision
+  scrollbar. The minimap is a projection gutter, not a replacement input
+  mechanism for the scrollbar.}
+  \label{fig:minimap-ui}
+\end{figure}
 
-TVision receives no abstract image description in the end, but its ordinary
-DrawBuffer projection. This matters: the minimap is a model of patterns and
-overlays; the view is a TVision projection. The same separation explains the
-deliberate dirty projection of Bento views. Content, frame, scrollbar, layout,
-and overlay are distinct reasons to redraw; none may become hidden semantic
-state.
+\clearpage
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.94\textwidth]{assets/mr-minimap-function-flow.pdf}
+  \caption{Minimap function flow. Geometry and a document/version ticket define
+  the sampling request. The single-worker minimap lane reduces copied line
+  text to Braille patterns. After UI-thread adoption, cached patterns and
+  current overlay masks are combined into an ordinary TVision
+  \texttt{TDrawBuffer}.}
+  \label{fig:minimap-function-flow}
+\end{figure}
+\clearpage
+
+\section{Geometry and the sampling window}
+
+The effective edit settings select \texttt{OFF}, \texttt{LEADING}, or
+\texttt{TRAILING}, a total minimap width from 2 through 20 cells, and a
+single-cell viewport-marker glyph. \texttt{TextViewportGeometry} reserves the
+body, marker, and optional separator columns. The body receives all but one
+cell of the configured width; the marker occupies the independent
+\texttt{infoX} column. The normal and File Compare palettes provide separate
+colours without changing the generated patterns.
+
+At the start of an editor draw, the renderer receives the body geometry,
+visible text-row count, viewport width, top line, exact or estimated total line
+count, document identity and version, and a read snapshot. Braille mode is used
+only when TVision reports the full Braille glyph as one terminal cell. Otherwise
+the renderer falls back to one block cell per sample.
+
+\texttt{samplingWindowFor} assigns four source-line samples to every minimap
+row in Braille mode and one in fallback mode. For $R$ minimap rows, its capacity
+is therefore $4R$ or $R$ lines. A document no larger than that capacity uses
+the interval $[0,totalLines)$. A larger document uses a capacity-sized window
+centred on \texttt{topLine}, clamped first at BOF and then at EOF. The minimap
+therefore describes the cursor-near region at useful resolution rather than
+compressing an arbitrarily large document into the same fixed row count.
+
+The render-cache key contains document identity and version, row and body
+dimensions, viewport width, renderer mode, and the exact sampling interval. A
+matching cache avoids submission. An identical pending request is reused. For
+large files with approximate metrics, a pending same-document window may also
+remain useful when it still contains the requested visible interval and either
+the focus moved by at most one viewport or the requested interval remains
+inside its guard band. Otherwise the pending task is cooperatively cancelled
+and a new one submitted. Repetition of the same approximate-file window within
+180 milliseconds is suppressed.
+
+\section{Worker-side Braille reduction}
+
+\texttt{MiniMapWarmup} runs in the dedicated one-worker minimap lane. The task
+closure owns the read snapshot, geometry, settings, sampling window, and source
+ticket. \texttt{buildViewportAnchoredLineTexts} reads the focus line first,
+continues with \texttt{nextLine} towards the window's EOF side, and then uses
+\texttt{prevLine} towards its BOF side. Only the bounded window texts are
+copied; no second document model is constructed.
+
+For every sampled line, the worker walks display characters with TVision's
+UTF-8 width calculation and the configured tab-stop calculation. Whitespace
+does not set density bits. Every occupied display-column span is scaled from
+the editor viewport width into the minimap's horizontal dot columns. Braille
+mode has twice as many dot columns as body cells; the line mask is a
+\texttt{uint64\_t}, so at most 64 horizontal dot columns are retained.
+
+Four line masks and two adjacent dot columns form one Braille cell. Source
+lines zero through three select the four dot rows; the left column sets bits
+\texttt{01}, \texttt{02}, \texttt{04}, and \texttt{40}, while the right column
+sets \texttt{08}, \texttt{10}, \texttt{20}, and \texttt{80}. The resulting
+byte indexes the prebuilt glyph table at Unicode code point
+\texttt{U+2800 + pattern}. The worker does not create glyph strings in its
+payload. It returns the bytes in \texttt{rowPatterns}, plus the document-line
+start and end represented by every minimap row, the sampling bounds, total
+lines, geometry, and renderer mode.
+
+\section{Result adoption and cache continuity}
+
+The result enters the common coprocessor mailbox. Dispatch considers only a
+completed \texttt{MiniMapWarmupPayload} for editors with the same document and
+base version. \texttt{applyWarmup} then requires the renderer's source ticket
+to match and normally requires the expected pending task identifier. A result
+that is no longer the current pending task may populate only a missing visible
+projection, and only while the current renderer ticket still names the same
+document and version. It may not overwrite an existing valid projection merely
+because its dimensions happen to match.
+
+Adoption replaces the pattern cache and its line mapping, clears the matching
+task state, and requests a redraw only when the visual data changed. During a
+new request, \texttt{drawGutter} may retain geometry-compatible patterns for
+the same sampling interval while the valid cache is unavailable. This stale
+pattern fallback prevents the gutter from flashing empty; the source ticket
+still governs final adoption of the replacement.
+
+\section{Retained ranges and the present parallelism boundary}
+
+The minimap cache must not be confused with the syntax warmed-range ledger in
+Section~\ref{sec:warmed-range-ledger}. Syntax retains accepted token data for
+multiple normalized line intervals. Its ledger can therefore contain disjoint
+regions left by large cursor jumps, and later coverage checks can reuse a
+verified prefix or suppress a request completely. One viewport-local syntax
+task per editor state is pending at a time, although unrelated compute work can
+execute on the Compute lane's other workers.
+
+The minimap renderer instead owns exactly one \texttt{RenderCache} and one
+\texttt{warmupTaskId}. The cache describes one exact sampling window for one
+document version, renderer mode, row count, body width, and viewport width.
+\texttt{rowLineStarts} and \texttt{rowLineEnds} are the inverse mapping from a
+produced minimap row to its source-line interval; they are required for
+overlays and the viewport marker, but they are not a coverage ledger. Accepted
+warm-up data replaces the complete cache. No earlier minimap window remains
+registered for later range reuse, and overlapping results are not merged.
+
+The MiniMap lane's one worker executes one complete sampling-window reduction
+per task. This lane-local count does not imply that the coprocessor has only
+one worker: the other static lanes and dynamic external-source lanes have their
+own workers, and task activations receive the round-robin CPU placement
+described in Chapter~\ref{ch:coprocessor-derived-work}. Merely increasing the
+MiniMap lane's worker count could run complete requests from different editors
+concurrently, but it would not divide or accelerate one editor's current
+window. Because each renderer retains only one pending identifier, a replaced
+request is cooperatively cancelled, and a completed result replaces one cache,
+additional lane workers could instead overlap obsolete and replacement work
+without creating reusable coverage.
+
+A minimap design that benefits from multiple workers would require a bounded
+projection or line-chunk cache rather than the syntax ledger unchanged. A
+reusable entry must be keyed by document version, window alignment, viewport
+and body geometry, renderer mode, and all settings that affect display-column
+reduction. Independent chunk results would additionally require aggregation,
+ordered UI-thread adoption, stale-result rejection, and a strict memory and
+eviction policy. Only measurements of queue, run, and total time across single
+and multiple simultaneous editors can justify that additional mechanism. It
+is not part of the current implementation.
+
+\section{Overlay masks and TVision projection}
+
+Overlay calculation remains on the UI thread because its inputs are current UI
+and domain state: the selection and find ranges, dirty ranges, compiler errors
+and warnings, and File Compare line kinds or intra-line slices. Byte ranges are
+converted to document-line masks using the same display-width and horizontal
+scaling rules as the pattern worker. Masks for the same line are sorted and
+OR-normalised. A signature cache keyed by document/version, geometry,
+selection, and the range collections avoids rebuilding unchanged masks.
+
+For each body cell, \texttt{drawGutter} reads the cached pattern and tests the
+line masks represented by that row. Colour priority is fixed: error, warning,
+File Compare missing, insert, offset, equal, find or selection, changed, then
+normal. An overlay may colour an otherwise empty pattern cell so that a blank
+changed or diagnostic line remains visible.
+
+The viewport marker is computed independently from the visible interval within
+the sampling window and written to \texttt{infoX}. It spans at least three rows
+when the gutter height permits. Finally the renderer writes the Braille glyph,
+fallback block, separator, and marker into the editor row's ordinary
+\texttt{TDrawBuffer}. Leading and trailing placement use the same projection;
+the adjacent TVision scrollbar remains an independent view with its own event
+semantics.
 
 \part{A coordinated workspace}
 
@@ -347,6 +815,7 @@ secret debug compiler. One compiler, one bytecode model, and additional cost
 only where the user actually requests it.
 
 \chapter{From a broken macro clock to Execution Sessions}
+\label{ch:execution-sessions}
 
 The macro clock was a small experiment with a large lesson. Repeating macro
 work looked like concurrency, but it had no independent Execution Session.
@@ -394,6 +863,7 @@ convenience-driven restriction. It protects retained UI state and external
 work from overlaps that cannot be explained afterwards.
 
 \chapter{Coprocessor, staging, and the UI thread}
+\label{ch:macro-staging}
 
 The VM must not alter a TVision view from a worker thread. For macro work that
 is suitable for the background, it therefore produces a staging result: text

@@ -2,7 +2,7 @@
 #define MRDIFF_HPP
 
 #include <cstddef>
-#include <stop_token>
+#include <atomic>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -29,7 +29,7 @@ struct MRDiffHunk {
 	}
 };
 
-bool mrComputeMyersDiff(const std::vector<std::string> &leftLines, const std::vector<std::string> &rightLines, std::vector<MRDiffHunk> &hunks, std::string *errorText = nullptr, std::stop_token stopToken = std::stop_token());
+bool mrComputeMyersDiff(const std::vector<std::string> &leftLines, const std::vector<std::string> &rightLines, std::vector<MRDiffHunk> &hunks, std::string *errorText = nullptr, const std::atomic_bool *cancelFlag = nullptr);
 void mrSplitTextLinesForDiff(std::string_view text, std::vector<std::string> &lines);
 
 } // namespace diff

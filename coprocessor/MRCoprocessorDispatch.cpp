@@ -4,6 +4,7 @@
 #include <tvision/tv.h>
 
 #include "MRCoprocessorDispatch.hpp"
+#include "MRCoprocessorBentoDispatch.hpp"
 
 #include <array>
 #include <algorithm>
@@ -29,19 +30,30 @@
 #include "../mrmac/MRVM.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRFileEditor/MRFileEditor.hpp"
-#include "../ui/MRIndicator.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
+#include "../ui/MRBentoHexEditor/panes/MRHexPaneWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {
 const char *kLineIndexWarmAction = "Line index warming";
+const char *kDisplayWidthWarmAction = "Display width warming";
 const char *kSyntaxWarmAction = "Syntax warming";
 const char *kFoldWarmAction = "Fold warming";
 const char *kMiniMapRenderAction = "Mini map rendering";
-const char *kSaveNormalizationWarmAction = "Save normalization warming";
+const char *kHexPaneProjectionAction = "Hex pane projection";
 constexpr std::size_t kMacroUiPlaybackBudgetCommands = 48;
 const std::chrono::milliseconds kMacroUiPlaybackBudgetSlice(2);
+
+MREditWindow *textWarmupOwnerWindow(const mr::coprocessor::Result &result) noexcept {
+	switch (result.task.executionOwnerKind) {
+		case mr::coprocessor::ExecutionOwnerKind::EditorWindow:
+		case mr::coprocessor::ExecutionOwnerKind::BentoPane:
+			return findEditWindowByBufferId(static_cast<int>(result.task.executionOwnerLocalId));
+		default:
+			return nullptr;
+	}
+}
 
 bool traceWarmupCancelEnabled() noexcept {
 	static const bool enabled = []() noexcept {
@@ -55,12 +67,12 @@ const char *warmupTaskKindName(mr::coprocessor::TaskKind kind) noexcept {
 	switch (kind) {
 		case mr::coprocessor::TaskKind::LineIndexWarmup:
 			return "LineIndexWarmup";
+		case mr::coprocessor::TaskKind::DisplayWidthWarmup:
+			return "DisplayWidthWarmup";
 		case mr::coprocessor::TaskKind::SyntaxWarmup:
 			return "SyntaxWarmup";
 		case mr::coprocessor::TaskKind::MiniMapWarmup:
 			return "MiniMapWarmup";
-		case mr::coprocessor::TaskKind::SaveNormalizationWarmup:
-			return "SaveNormalizationWarmup";
 		default:
 			break;
 	}
@@ -81,7 +93,7 @@ void logWarmupCancelFinish(const mr::coprocessor::Result &result) {
 		line << " status=failed";
 	else
 		line << " status=unknown";
-	mrLogMessage(line.str().c_str());
+	mrTraceDiagnosticMessage(line.str());
 }
 
 constexpr std::array<const char *, mrducDelay + 1> kDeferredUiCommandNames{
@@ -217,10 +229,8 @@ std::string detailWithLineRange(const std::string &detail, const std::string &li
 }
 
 std::string syntaxLineRangeDetail(const mr::coprocessor::SyntaxWarmupPayload &syntax, MRFileEditor *editor, const mr::coprocessor::TaskInfo &task) {
-	if (editor == nullptr || syntax.lines.empty()) return taskLabelLineRange(task);
-	const std::size_t topLine = editor->lineIndexOfOffset(syntax.lines.front().lineStart);
-	const std::size_t bottomLine = editor->lineIndexOfOffset(syntax.lines.back().lineStart) + 1;
-	return lineRangeText(topLine, bottomLine);
+	if (syntax.endLine <= syntax.startLine) return taskLabelLineRange(task);
+	return lineRangeText(syntax.startLine, syntax.endLine);
 }
 
 std::string miniMapLineRangeDetail(const mr::coprocessor::MiniMapWarmupPayload &miniMap) {
@@ -253,6 +263,7 @@ void handleFileCompareResult(const mr::coprocessor::Result &result) {
 		if (payload != nullptr) bytes = payload->originalLineCount + payload->compareLineCount;
 	}
 	recordTaskPerformance(result, "File compare", target, result.task.documentId, bytes, result.task.label, applied);
+	mr::coprocessor::globalCoprocessor().noteResultAdoption(result, applied);
 	if (target == nullptr && result.failed()) mrLogMessage((std::string("File compare failed: ") + result.error).c_str());
 }
 
@@ -984,135 +995,116 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		handleFileCompareResult(result);
 		return;
 	}
+	if (result.task.kind == mr::coprocessor::TaskKind::BentoDiagnosticsProjection || result.task.kind == mr::coprocessor::TaskKind::BentoOutlineProjection) {
+		mrDispatchBentoProjectionResult(result);
+		return;
+	}
+	if (result.task.kind == mr::coprocessor::TaskKind::HexPaneProjection) {
+		MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.executionOwnerLocalId));
+		MRHexPaneWindow *targetPane = dynamic_cast<MRHexPaneWindow *>(targetWindow);
+		const bool adopted = targetPane != nullptr && targetPane->applyHexProjectionResult(result);
+		const std::size_t bytes = result.task.hasPacketSpan && result.task.packetEnd >= result.task.packetStart
+		                              ? static_cast<std::size_t>(result.task.packetEnd - result.task.packetStart)
+		                              : 0;
+
+		recordTaskPerformance(result, kHexPaneProjectionAction, targetWindow, result.task.documentId, bytes, result.task.label, adopted);
+		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, adopted);
+		if (result.failed()) mrLogMessage((std::string("Hex pane projection failed: ") + result.error).c_str());
+		return;
+	}
 	if (result.completed()) {
-		const mr::coprocessor::IndicatorBlinkPayload *blink = dynamic_cast<const mr::coprocessor::IndicatorBlinkPayload *>(result.payload.get());
-		if (blink != nullptr) {
-			MRIndicator::applyBlinkUpdate(blink->indicatorId, blink->channel, blink->generation, blink->visible);
+		const mr::coprocessor::LineIndexWarmupPayload *warmup = dynamic_cast<const mr::coprocessor::LineIndexWarmupPayload *>(result.payload.get());
+		if (warmup != nullptr) {
+			MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+			MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+			bool adopted = false;
+			if (targetEditor != nullptr && targetEditor->documentId() == result.task.documentId && targetEditor->documentVersion() == result.task.baseVersion &&
+			    targetEditor->ownsLineIndexWarmupTask(result.task.id))
+				adopted = targetEditor->applyLineIndexWarmup(warmup->packet, result.task.baseVersion, result.task.id);
+			if (targetEditor != nullptr) targetEditor->clearLineIndexWarmupTask(result.task.id);
+			if (adopted && targetEditor != nullptr) targetEditor->continueComputeWarmupIfNeeded("after-line-index");
+			if (targetEditor != nullptr)
+				recordTaskPerformance(result, kLineIndexWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(), targetWindow->currentFileName(), adopted);
+			else
+				recordTaskPerformance(result, kLineIndexWarmAction, nullptr, result.task.documentId, 0, result.task.label, false);
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, adopted);
 			return;
 		}
 
-		const mr::coprocessor::LineIndexWarmupPayload *warmup = dynamic_cast<const mr::coprocessor::LineIndexWarmupPayload *>(result.payload.get());
-		if (warmup != nullptr) {
-				std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-			bool recorded = false;
-			for (auto &window : windows) {
-				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-				if (editor == nullptr) continue;
-				if (editor->documentId() != result.task.documentId) {
-					editor->clearLineIndexWarmupTask(result.task.id);
-					continue;
-				}
-				bool applied = false;
-				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applyLineIndexWarmup(warmup->warmup, result.task.baseVersion);
-				if (!applied) editor->clearLineIndexWarmupTask(result.task.id);
-				else editor->continueComputeWarmupIfNeeded("after-line-index");
-				if (!recorded) {
-					recordTaskPerformance(result, kLineIndexWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName(), applied);
-					recorded = true;
-				}
-			}
-			if (!recorded) recordTaskPerformance(result, kLineIndexWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+		const mr::coprocessor::DisplayWidthWarmupPayload *displayWidth = dynamic_cast<const mr::coprocessor::DisplayWidthWarmupPayload *>(result.payload.get());
+		if (displayWidth != nullptr) {
+			MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+			MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+			bool adopted = false;
+			if (targetEditor != nullptr && targetEditor->documentId() == result.task.documentId && targetEditor->documentVersion() == result.task.baseVersion &&
+			    targetEditor->ownsDisplayWidthWarmupTask(result.task.id))
+				adopted = targetEditor->applyDisplayWidthWarmup(*displayWidth, result.task.baseVersion, result.task.id);
+			if (targetEditor != nullptr && !adopted) targetEditor->clearDisplayWidthWarmupTask(result.task.id);
+			if (targetWindow != nullptr && targetEditor != nullptr)
+				recordTaskPerformance(result, kDisplayWidthWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(), targetWindow->currentFileName(), adopted);
+			else
+				recordTaskPerformance(result, kDisplayWidthWarmAction, nullptr, result.task.documentId, 0, result.task.label, false);
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, adopted);
 			return;
 		}
 
 		const mr::coprocessor::SyntaxWarmupPayload *syntax = dynamic_cast<const mr::coprocessor::SyntaxWarmupPayload *>(result.payload.get());
 		if (syntax != nullptr) {
-				std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-			bool recorded = false;
-			for (auto &window : windows) {
-				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-				if (editor == nullptr) continue;
-				if (editor->documentId() != result.task.documentId) {
-					editor->clearSyntaxWarmupTask(result.task.id);
-					continue;
-				}
-				bool applied = false;
-				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id);
-				if (!applied) editor->clearSyntaxWarmupTask(result.task.id);
-				else editor->continueComputeWarmupIfNeeded("after-syntax");
-				if (!recorded) {
-					recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), syntaxLineRangeDetail(*syntax, editor, result.task)), applied);
-					recorded = true;
-				}
+			MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+			MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+			bool accepted = false;
+			if (targetEditor != nullptr && targetEditor->documentId() == result.task.documentId && targetEditor->documentVersion() == result.task.baseVersion &&
+			    targetEditor->ownsSyntaxWarmupTask(result.task.id))
+				accepted = targetEditor->applySyntaxWarmup(*syntax, result);
+			if (targetEditor != nullptr && !accepted) targetEditor->clearSyntaxWarmupTask(result.task.id);
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, accepted);
+			if (targetEditor != nullptr) {
+				targetEditor->continueComputeWarmupIfNeeded("after-syntax");
+				recordTaskPerformance(result, kSyntaxWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(),
+				                      detailWithLineRange(targetWindow->currentFileName(), syntaxLineRangeDetail(*syntax, targetEditor, result.task)), false);
+			} else {
+				recordTaskPerformance(result, kSyntaxWarmAction, nullptr, result.task.documentId, 0, result.task.label, false);
 			}
-			if (!recorded) recordTaskPerformance(result, kSyntaxWarmAction, nullptr, result.task.documentId, 0, result.task.label);
 			return;
 		}
 
 		if (result.task.kind == mr::coprocessor::TaskKind::FoldWarmup && result.payload != nullptr) {
-				std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-			bool recorded = false;
-			for (auto &window : windows) {
-				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-				if (editor == nullptr) continue;
-				if (editor->documentId() != result.task.documentId) {
-					editor->clearFoldWarmupTask(result.task.id);
-					continue;
-				}
-				bool applied = false;
-				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applyFoldWarmup(*result.payload, result.task.baseVersion, result.task.id);
-				if (!applied) editor->clearFoldWarmupTask(result.task.id);
-				if (!recorded) {
-					recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)), applied);
-					recorded = true;
-				}
-			}
-			if (!recorded) recordTaskPerformance(result, kFoldWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+			MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+			MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+			bool accepted = false;
+			if (targetEditor != nullptr && targetEditor->documentId() == result.task.documentId && targetEditor->documentVersion() == result.task.baseVersion &&
+			    targetEditor->ownsFoldWarmupTask(result.task.id))
+				accepted = targetEditor->applyFoldWarmup(*result.payload, result);
+			if (targetEditor != nullptr && !accepted) targetEditor->clearFoldWarmupTask(result.task.id);
+			if (targetEditor != nullptr)
+				recordTaskPerformance(result, kFoldWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(),
+				                      detailWithLineRange(targetWindow->currentFileName(), taskLabelLineRange(result.task)), false);
+			else
+				recordTaskPerformance(result, kFoldWarmAction, nullptr, result.task.documentId, 0, result.task.label, false);
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, accepted);
 			return;
 		}
 
-		const mr::coprocessor::MiniMapWarmupPayload *miniMap = dynamic_cast<const mr::coprocessor::MiniMapWarmupPayload *>(result.payload.get());
-		if (miniMap != nullptr) {
-				std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-			bool recorded = false;
-			bool postedHero = false;
-			for (auto &window : windows) {
-				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-				if (editor == nullptr) continue;
-				if (editor->documentId() != result.task.documentId) {
-					editor->clearMiniMapWarmupTask(result.task.id);
-					continue;
+		if (result.task.kind == mr::coprocessor::TaskKind::MiniMapWarmup && result.payload != nullptr) {
+			MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+			MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+			bool accepted = false;
+			if (targetEditor != nullptr && targetEditor->documentId() == result.task.documentId && targetEditor->documentVersion() == result.task.baseVersion &&
+			    targetEditor->ownsMiniMapWarmupTask(result.task.id))
+				accepted = targetEditor->applyMiniMapWarmup(*result.payload, result);
+			if (targetEditor != nullptr && !accepted) targetEditor->clearMiniMapWarmupTask(result.task.id);
+			const mr::coprocessor::MiniMapWarmupPayload *miniMap = dynamic_cast<const mr::coprocessor::MiniMapWarmupPayload *>(result.payload.get());
+			if (targetEditor != nullptr) {
+				const std::string detail = miniMap != nullptr ? miniMapLineRangeDetail(*miniMap) : result.task.label;
+				recordTaskPerformance(result, kMiniMapRenderAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(),
+				                      detailWithLineRange(targetWindow->currentFileName(), detail), accepted);
+				if (accepted && miniMap != nullptr && targetEditor->miniMapProjectionAvailable() && targetEditor->shouldReportMiniMapInitialRender()) {
+					targetEditor->markMiniMapInitialRenderReported();
+					postMiniMapHeroEvent(result.timing, *miniMap);
 				}
-				bool applied = false;
-				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applyMiniMapWarmup(*miniMap, result.task.baseVersion, result.task.id);
-				if (!applied) editor->clearMiniMapWarmupTask(result.task.id);
-				if (applied) {
-					const bool shouldPostHero = editor->shouldReportMiniMapInitialRender();
-					editor->markMiniMapInitialRenderReported();
-					if (shouldPostHero && !postedHero) {
-						postMiniMapHeroEvent(result.timing, *miniMap);
-						postedHero = true;
-					}
-				}
-				if (!recorded) {
-					recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), miniMapLineRangeDetail(*miniMap)), applied);
-					recorded = true;
-				}
-			}
-			if (!recorded) recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0, result.task.label);
-			return;
-		}
-
-		const mr::coprocessor::SaveNormalizationWarmupPayload *saveNormalization = dynamic_cast<const mr::coprocessor::SaveNormalizationWarmupPayload *>(result.payload.get());
-		if (saveNormalization != nullptr) {
-			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-			bool recorded = false;
-			for (auto &window : windows) {
-				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-				if (editor == nullptr) continue;
-				if (editor->documentId() != result.task.documentId) {
-					editor->clearSaveNormalizationWarmupTask(result.task.id);
-					continue;
-				}
-				bool applied = false;
-				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applySaveNormalizationWarmup(*saveNormalization, result.task.baseVersion, result.task.id, static_cast<double>(result.timing.runMicros));
-				if (!applied) editor->clearSaveNormalizationWarmupTask(result.task.id);
-				if (!recorded) {
-					recordTaskPerformance(result, kSaveNormalizationWarmAction, window, editor->documentId(), saveNormalization->sourceBytes, window->currentFileName());
-					recorded = true;
-				}
-			}
-			if (!recorded) recordTaskPerformance(result, kSaveNormalizationWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+			} else
+				recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0, result.task.label);
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, accepted);
 			return;
 		}
 
@@ -1138,6 +1130,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (MRBentoBox *split = dynamic_cast<MRBentoBox *>(win->owner); split != nullptr && split->buildOutputPane() == win) static_cast<void>(split->refreshCompilerDiagnosticsFromOutput());
 				reportLiveLogSearchHits(searchMatches, win, chunk->text);
 			}
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, win != nullptr);
 			return;
 		}
 
@@ -1164,6 +1157,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				playAudioSignal(finished->failureAudioUri);
 			runExternalIoPostBuildMacro(result, *finished);
 			mrTraceCoprocessorTaskRelease(static_cast<int>(finished->channelId), result.task.id, "finished");
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 			if (result.task.lane == mr::coprocessor::Lane::Extern) mr::coprocessor::globalCoprocessor().unregisterExternalSource(result.task.documentId);
 			statusLine << "Communication session #" << finished->channelId << " ";
 			if (finished->signaled) statusLine << "terminated by signal " << finished->signalNumber;
@@ -1243,6 +1237,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			if (!accepted || textChanged || staged->hadError || !staged->deferredUiCommands.empty()) mrLogMessage(statusSummary.c_str());
 			publishMacroExecutionResultForTask(result.task.id, accepted ? MRMacroExecutionState::Completed : MRMacroExecutionState::Rejected, statusSummary);
 			appendMacroLogLines(staged->logLines);
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, accepted);
 			return;
 		}
 		if (macro != nullptr) {
@@ -1262,13 +1257,30 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			mrLogMessage(statusSummary.c_str());
 			publishMacroExecutionResultForTask(result.task.id, MRMacroExecutionState::Completed, statusSummary);
 			appendMacroLogLines(macro->logLines);
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 			return;
 		}
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::ExternalIo) {
 		const mr::coprocessor::ExternalIoFinishedPayload *finished = dynamic_cast<const mr::coprocessor::ExternalIoFinishedPayload *>(result.payload.get());
-		MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+		std::size_t targetBufferId = finished != nullptr && finished->targetBufferId != 0 ? finished->targetBufferId : result.task.documentId;
+		MREditWindow *targetWindow = nullptr;
+		if (finished == nullptr && result.task.lane == mr::coprocessor::Lane::Extern) {
+			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
+			for (MREditWindow *window : windows) {
+				if (window == nullptr) continue;
+				for (std::size_t taskIndex = 0; taskIndex < window->trackedCoprocessorTaskCount(); ++taskIndex) {
+					if (window->trackedCoprocessorTaskId(taskIndex) != result.task.id) continue;
+					targetWindow = window;
+					targetBufferId = static_cast<std::size_t>(window->bufferId());
+					break;
+				}
+				if (targetWindow != nullptr) break;
+			}
+		} else {
+			targetWindow = findEditWindowByBufferId(static_cast<int>(targetBufferId));
+		}
 		if (targetWindow != nullptr) {
 			targetWindow->releaseCoprocessorTask(result.task.id);
 			if (result.cancelled()) {
@@ -1284,9 +1296,9 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		}
 		recordTaskPerformance(result, "External command", targetWindow, targetWindow != nullptr ? targetWindow->documentId() : 0, targetWindow != nullptr ? targetWindow->bufferLength() : 0, externalIoDisplayName(result.task));
 		if (finished != nullptr) runExternalIoPostBuildMacro(result, *finished);
-		if (result.cancelled()) mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "cancelled");
+		if (result.cancelled()) mrTraceCoprocessorTaskRelease(static_cast<int>(targetBufferId), result.task.id, "cancelled");
 		else if (result.failed())
-			mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "failed");
+			mrTraceCoprocessorTaskRelease(static_cast<int>(targetBufferId), result.task.id, "failed");
 		if (result.task.lane == mr::coprocessor::Lane::Extern) mr::coprocessor::globalCoprocessor().unregisterExternalSource(result.task.documentId);
 	}
 
@@ -1318,81 +1330,64 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::LineIndexWarmup) {
-			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-		bool recorded = false;
-		for (auto &window : windows) {
-			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-			if (editor == nullptr) continue;
-			if (!recorded && editor->documentId() == result.task.documentId) {
-				recordTaskPerformance(result, kLineIndexWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
-				recorded = true;
-			}
-			editor->clearLineIndexWarmupTask(result.task.id);
-		}
-		if (!recorded) recordTaskPerformance(result, kLineIndexWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+		MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		if (targetEditor != nullptr) targetEditor->clearLineIndexWarmupTask(result.task.id);
+		if (targetWindow != nullptr && targetEditor != nullptr)
+			recordTaskPerformance(result, kLineIndexWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(), targetWindow->currentFileName());
+		else
+			recordTaskPerformance(result, kLineIndexWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+	}
+
+	if (result.task.kind == mr::coprocessor::TaskKind::DisplayWidthWarmup) {
+		MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		if (targetEditor != nullptr) targetEditor->clearDisplayWidthWarmupTask(result.task.id);
+		if (targetWindow != nullptr && targetEditor != nullptr)
+			recordTaskPerformance(result, kDisplayWidthWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(), targetWindow->currentFileName());
+		else
+			recordTaskPerformance(result, kDisplayWidthWarmAction, nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::SyntaxWarmup) {
-			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-		bool recorded = false;
-		for (auto &window : windows) {
-			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-			if (editor == nullptr) continue;
-			if (!recorded && editor->documentId() == result.task.documentId) {
-				recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)));
-				recorded = true;
-			}
-			editor->clearSyntaxWarmupTask(result.task.id);
-		}
-		if (!recorded) recordTaskPerformance(result, kSyntaxWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+		MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		const bool owned = targetEditor != nullptr && targetEditor->ownsSyntaxWarmupTask(result.task.id);
+		if (owned) {
+			targetEditor->clearSyntaxWarmupTask(result.task.id);
+			targetEditor->continueComputeWarmupIfNeeded("after-syntax-failure");
+			recordTaskPerformance(result, kSyntaxWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(), detailWithLineRange(targetWindow->currentFileName(), taskLabelLineRange(result.task)));
+		} else
+			recordTaskPerformance(result, kSyntaxWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, false);
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::FoldWarmup) {
-			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-		bool recorded = false;
-		for (auto &window : windows) {
-			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-			if (editor == nullptr) continue;
-			if (!recorded && editor->documentId() == result.task.documentId) {
-				recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)));
-				recorded = true;
-			}
-			editor->clearFoldWarmupTask(result.task.id);
-		}
-		if (!recorded) recordTaskPerformance(result, kFoldWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+		MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		const bool owned = targetEditor != nullptr && targetEditor->ownsFoldWarmupTask(result.task.id);
+		if (owned) {
+			targetEditor->clearFoldWarmupTask(result.task.id);
+			recordTaskPerformance(result, kFoldWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(), detailWithLineRange(targetWindow->currentFileName(), taskLabelLineRange(result.task)));
+		} else
+			recordTaskPerformance(result, kFoldWarmAction, nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::MiniMapWarmup) {
-			std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-		bool recorded = false;
-		for (auto &window : windows) {
-			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-			if (editor == nullptr) continue;
-			if (!recorded && editor->documentId() == result.task.documentId) {
-				recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)));
-				recorded = true;
-			}
-			editor->clearMiniMapWarmupTask(result.task.id);
-		}
-		if (!recorded) recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0, result.task.label);
+		MREditWindow *targetWindow = textWarmupOwnerWindow(result);
+		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+		const bool owned = targetEditor != nullptr && targetEditor->ownsMiniMapWarmupTask(result.task.id);
+		if (owned) {
+			targetEditor->clearMiniMapWarmupTask(result.task.id);
+			recordTaskPerformance(result, kMiniMapRenderAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(), detailWithLineRange(targetWindow->currentFileName(), taskLabelLineRange(result.task)));
+		} else
+			recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0, result.task.label);
 	}
 
-	if (result.task.kind == mr::coprocessor::TaskKind::SaveNormalizationWarmup) {
-		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-		bool recorded = false;
-		for (auto &window : windows) {
-			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-			if (editor == nullptr) continue;
-			if (!recorded && editor->documentId() == result.task.documentId) {
-				recordTaskPerformance(result, kSaveNormalizationWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
-				recorded = true;
-			}
-			editor->clearSaveNormalizationWarmupTask(result.task.id);
-		}
-		if (!recorded) recordTaskPerformance(result, kSaveNormalizationWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+	if (!result.failed()) {
+		if (result.completed()) mr::coprocessor::globalCoprocessor().noteResultAdoption(result, false);
+		return;
 	}
-
-	if (!result.failed()) return;
 
 	std::ostringstream line;
 	line << "Coprocessor[" << coprocessorLaneName(result.task.lane) << "] " << (result.task.label.empty() ? "task" : result.task.label) << " failed";

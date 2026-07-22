@@ -25,30 +25,53 @@ struct BentoPaneRoleDescriptor {
 	MRBentoPaneRole role;
 	const char *title;
 	bool listed;
+	bool multipleInstances;
 };
 
 static const BentoPaneRoleDescriptor kPaneRoles[] = {
-	{bprSource, "Source", false},
-	{bprCompilerOutput, "Compiler Output", true},
-	{bprAppOutput, "App Output", true},
-	{bprProblems, "Problems", true},
-	{bprDebuggerOutput, "Debugger Output", true},
-	{bprWatches, "Watches", true},
-	{bprVariables, "Variables", true},
-	{bprStructure, "Structure", true},
-	{bprFunctions, "Functions", true},
-	{bprSplitEditor, "Split editor", true},
-	{bprDiffOriginal, "Diff Original", true},
-	{bprDiffCompare, "Diff Compare", true},
+	{bprSource, "Source", false, false},
+	{bprCompilerOutput, "Compiler Output", true, false},
+	{bprAppOutput, "App Output", true, false},
+	{bprProblems, "Problems", true, false},
+	{bprDebuggerOutput, "Debugger Output", true, false},
+	{bprWatches, "Watches", true, false},
+	{bprVariables, "Variables", true, false},
+	{bprStructure, "Structure", true, false},
+	{bprFunctions, "Functions", true, false},
+	{bprSplitEditor, "Split editor", true, true},
+	{bprDiffOriginal, "Diff Original", true, false},
+	{bprDiffCompare, "Diff Compare", true, false},
 };
 
 } // namespace
 
-MRBentoPaneSpec::MRBentoPaneSpec() noexcept : role(bprCompilerOutput), bufferPolicy(bpbOwnBuffer), readOnly(true), suppressMiniMap(true), suppressWordWrap(true), scrollBarsAlwaysVisible(true), titleMenu(&kPaneRoleTitleMenu) {
+MRBentoPaneSpec::MRBentoPaneSpec() noexcept : role(bprCompilerOutput), bufferPolicy(bpbOwnBuffer), readOnly(true), widgetMask(bpwNone), suppressMiniMap(true), suppressWordWrap(true), scrollBarsAlwaysVisible(true), titleMenu(&kPaneRoleTitleMenu) {
 }
 
 MRBentoPaneSpec::MRBentoPaneSpec(MRBentoPaneRole aRole, MRBentoPaneBufferPolicy aBufferPolicy, bool aReadOnly, bool aSuppressMiniMap, bool aSuppressWordWrap, bool aScrollBarsAlwaysVisible, const MRBentoPaneTitleMenuSpec *aTitleMenu) noexcept
-    : role(aRole), bufferPolicy(aBufferPolicy), readOnly(aReadOnly), suppressMiniMap(aSuppressMiniMap), suppressWordWrap(aSuppressWordWrap), scrollBarsAlwaysVisible(aScrollBarsAlwaysVisible), titleMenu(aTitleMenu) {
+    : role(aRole), bufferPolicy(aBufferPolicy), readOnly(aReadOnly), widgetMask(defaultWidgetMask(aRole)), suppressMiniMap(aSuppressMiniMap), suppressWordWrap(aSuppressWordWrap), scrollBarsAlwaysVisible(aScrollBarsAlwaysVisible), titleMenu(aTitleMenu) {
+	if (aSuppressMiniMap)
+		widgetMask &= ~static_cast<std::uint32_t>(bpwMiniMap);
+	else
+		widgetMask |= static_cast<std::uint32_t>(bpwMiniMap);
+}
+
+std::uint32_t MRBentoPaneSpec::defaultWidgetMask(MRBentoPaneRole role) noexcept {
+	switch (role) {
+		case bprSource:
+		case bprSplitEditor:
+			return static_cast<std::uint32_t>(bpwFoldGutter) | static_cast<std::uint32_t>(bpwMiniMap);
+		case bprDiffCompare:
+			return static_cast<std::uint32_t>(bpwMiniMap);
+		default:
+			return static_cast<std::uint32_t>(bpwNone);
+	}
+}
+
+bool MRBentoPaneSpec::widgetMaskIsValid(std::uint32_t mask) noexcept {
+	const std::uint32_t knownMask = static_cast<std::uint32_t>(bpwFoldGutter) | static_cast<std::uint32_t>(bpwMiniMap);
+
+	return (mask & ~knownMask) == 0;
 }
 
 namespace mr::bento {
@@ -65,6 +88,12 @@ bool paneRoleIsOutline(MRBentoPaneRole role) noexcept {
 
 bool paneRoleIsDiff(MRBentoPaneRole role) noexcept {
 	return role == bprDiffOriginal || role == bprDiffCompare;
+}
+
+bool paneRoleAllowsMultipleInstances(MRBentoPaneRole role) noexcept {
+	for (const BentoPaneRoleDescriptor &descriptor : kPaneRoles)
+		if (descriptor.role == role) return descriptor.multipleInstances;
+	return false;
 }
 
 MRBentoPaneRole paneRoleForTitle(const std::string &title) noexcept {

@@ -20,6 +20,7 @@ void mrScheduleWindowActivation(MREditWindow *win);
 [[nodiscard]] bool mrEnsureUsableWorkWindow(bool allowCreateFallback = true);
 [[nodiscard]] bool mrClearLogWindow();
 void mrLogMessage(std::string_view message);
+void mrTraceDiagnosticMessage(std::string_view message);
 bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage = nullptr);
 void mrLogSettingsWriteReport(std::string_view reason, const MRSettingsWriteReport &report);
 bool mrKeyTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &outToken);

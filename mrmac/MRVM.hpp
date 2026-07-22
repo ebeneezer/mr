@@ -3,11 +3,11 @@
 
 #include <cstddef>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <set>
-#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -150,9 +150,7 @@ class VirtualMachine {
 	int mAsyncErrorLevel;
 	std::string mAsyncSavedParameterString;
 	bool mAsyncMacroFramePushed;
-	std::shared_ptr<std::atomic_bool> mAsyncDelayReadyFlag;
-	std::shared_ptr<std::atomic_bool> mAsyncDelayCancelledFlag;
-	std::uint64_t mAsyncDelayTaskId;
+	std::chrono::steady_clock::time_point mAsyncDelayDeadline;
 	std::uint64_t mAsyncDelayGeneration;
 	int mAsyncDelayMillis;
 	bool mDebugRunActive;
@@ -256,8 +254,8 @@ struct MRMacroJobResult {
 	}
 };
 
-MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
-MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, MRMacroExecutionSessionId sessionId = 0, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, MRMacroExecutionSessionId sessionId = 0, std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 MRMacroDebugRunResult mrvmRunBytecodeDebugAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::vector<std::size_t> &breakpointOffsets);
 MRMacroDebugRunResult mrvmStartDebugSessionAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const MRMacroExecutionOwner &owner, const std::vector<std::size_t> &breakpointOffsets, MRMacroExecutionSession *sessionOut = nullptr, bool firstRun = false,
 	                                             const std::string &macroKey = std::string(), const std::string &sourcePath = std::string(), const std::string &parameterString = std::string());
@@ -508,7 +506,7 @@ struct MRMacroStagedJobResult {
 	}
 };
 
-MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, MRMacroExecutionSessionId sessionId = 0, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, MRMacroExecutionSessionId sessionId = 0, std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 
 std::vector<std::size_t> mrvmUiCopyWindowMarkStack(const void *windowKey);
 void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets);

@@ -4,17 +4,14 @@
 
 namespace {
 
-constexpr std::size_t kMaximumStringProbe = 512;
-
 bool isPrintableAscii(unsigned char value) noexcept {
 	return value >= 0x20 && value <= 0x7E;
 }
 
 MRHexStringCell hiddenCell() noexcept {
-	MRHexStringCell cell;
+	MRHexStringCell cell{};
 
 	cell.kind = MRHexStringSpanKind::Hidden;
-	cell.text[0] = '\0';
 	return cell;
 }
 
@@ -32,7 +29,7 @@ bool utf8SpanAt(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t off
 		if (mrHexUtf8CodePointAt(snapshot, candidate, previousWidth) && candidate + previousWidth == first) first = candidate;
 	}
 	last = first;
-	while (last < snapshot.length() && last - first < kMaximumStringProbe && mrHexUtf8CodePointAt(snapshot, last, codePointWidth)) {
+	while (last < snapshot.length() && last - first < kMrHexMaximumStringProbe && mrHexUtf8CodePointAt(snapshot, last, codePointWidth)) {
 		last += codePointWidth;
 		++codePointCount;
 	}
@@ -45,8 +42,8 @@ bool asciiSpanAt(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t of
 	if (offset >= length || !isPrintableAscii(static_cast<unsigned char>(snapshot.charAt(offset)))) return false;
 	first = offset;
 	last = offset + 1;
-	while (first > 0 && offset - first < kMaximumStringProbe && isPrintableAscii(static_cast<unsigned char>(snapshot.charAt(first - 1)))) --first;
-	while (last < length && last - offset < kMaximumStringProbe && isPrintableAscii(static_cast<unsigned char>(snapshot.charAt(last)))) ++last;
+	while (first > 0 && offset - first < kMrHexMaximumStringProbe && isPrintableAscii(static_cast<unsigned char>(snapshot.charAt(first - 1)))) --first;
+	while (last < length && last - offset < kMrHexMaximumStringProbe && isPrintableAscii(static_cast<unsigned char>(snapshot.charAt(last)))) ++last;
 	return last - first >= 4;
 }
 

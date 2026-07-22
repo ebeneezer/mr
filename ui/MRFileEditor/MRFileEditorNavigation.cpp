@@ -1,5 +1,7 @@
 #include "MRFileEditor.hpp"
 
+#include <algorithm>
+
 bool MRFileEditor::freeCursorMovementEnabled() const noexcept {
 	return mCursorBehaviour == MRCursorBehaviour::FreeMovement;
 }
@@ -36,13 +38,17 @@ std::size_t MRFileEditor::cachedCursorLineIndex() const noexcept {
 	const std::size_t documentId = mBufferModel.documentId();
 	const std::size_t version = mBufferModel.version();
 	const std::size_t cursor = mBufferModel.cursor();
+	const bool exact = mBufferModel.exactLineCountKnown();
+	const bool useEstimatedLine = !exact && useApproximateLargeFileMetrics();
+	const bool cachedValueExact = !useEstimatedLine;
 
-	if (mCachedCursorLineDocumentId == documentId && mCachedCursorLineVersion == version && mCachedCursorLineOffset == cursor) return mCachedCursorLineIndexValue;
+	if (mCachedCursorLineDocumentId == documentId && mCachedCursorLineVersion == version && mCachedCursorLineOffset == cursor && mCachedCursorLineExact == cachedValueExact) return mCachedCursorLineIndexValue;
 
 	mCachedCursorLineDocumentId = documentId;
 	mCachedCursorLineVersion = version;
 	mCachedCursorLineOffset = cursor;
-	mCachedCursorLineIndexValue = mBufferModel.lineIndex(cursor);
+	mCachedCursorLineExact = cachedValueExact;
+	mCachedCursorLineIndexValue = useEstimatedLine ? mBufferModel.estimatedLineIndex(cursor) : mBufferModel.lineIndex(cursor);
 	return mCachedCursorLineIndexValue;
 }
 
@@ -162,7 +168,6 @@ bool MRFileEditor::scrollWindowByLines(int deltaRows) {
 
 bool MRFileEditor::scrollWindowByWheel(int wheel) {
 	const int oldDeltaY = delta.y;
-	const int cursorRow = std::max(0, std::min(static_cast<int>(visibleLineForDocumentLine(cachedCursorLineIndex())) - oldDeltaY, std::max(1, visibleTextRows()) - 1));
 	const int cursorColumn = displayedCursorColumn();
 	int targetX = delta.x;
 	int targetY = delta.y;
@@ -193,9 +198,7 @@ bool MRFileEditor::scrollWindowByWheel(int wheel) {
 	if (targetX == delta.x && targetY == delta.y) return false;
 	scrollTo(targetX, targetY);
 	if (targetY != oldDeltaY) {
-		const std::size_t targetVisibleLine = static_cast<std::size_t>(std::max(0, targetY + cursorRow));
-		const std::size_t targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
-		const std::size_t targetOffset = charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), cursorColumn);
+		const std::size_t targetOffset = lineMoveOffset(mBufferModel.cursor(), targetY - oldDeltaY, cursorColumn);
 		moveCursor(targetOffset, false, false, cursorColumn);
 	} else {
 		scheduleSyntaxWarmupIfNeeded();
@@ -277,18 +280,71 @@ std::size_t MRFileEditor::prevCharOffset(std::size_t pos) noexcept {
 std::size_t MRFileEditor::lineMoveOffset(std::size_t pos, int deltaLines, int targetVisualColumn) noexcept {
 	const std::size_t clampedPos = std::min(pos, mBufferModel.length());
 	const bool virtualFreeCursor = freeCursorMovementEnabled() && clampedPos == mBufferModel.cursor() && (!mBufferModel.hasSelection() || mCursorVisualLine > cachedCursorLineIndex());
+	if (targetVisualColumn < 0) targetVisualColumn = charColumn(mBufferModel.lineStart(pos), clampedPos);
+	if (!virtualFreeCursor && !mFoldState.hasEffectiveClosedFolds()) {
+		std::size_t targetLineStart = mBufferModel.lineStart(clampedPos);
+
+		if (deltaLines < 0) {
+			for (int line = 0; line > deltaLines && targetLineStart > 0; --line) {
+				const std::size_t previousLineStart = mBufferModel.prevLine(targetLineStart);
+				if (previousLineStart >= targetLineStart) break;
+				targetLineStart = previousLineStart;
+			}
+		} else {
+			for (int line = 0; line < deltaLines && targetLineStart < mBufferModel.length(); ++line) {
+				const std::size_t nextLineStart = mBufferModel.nextLine(targetLineStart);
+				if (nextLineStart <= targetLineStart) break;
+				targetLineStart = nextLineStart;
+			}
+		}
+		return charPtrOffset(targetLineStart, targetVisualColumn);
+	}
+	if (!virtualFreeCursor) {
+		std::size_t targetLine = clampedPos == mBufferModel.cursor() ? cachedCursorLineIndex() : mBufferModel.lineIndex(clampedPos);
+		std::size_t targetLineStart = mBufferModel.lineStart(clampedPos);
+
+		if (deltaLines < 0) {
+			for (int line = 0; line > deltaLines && targetLine > 0; --line) {
+				const MRFoldSpan *folded = mFoldState.effectiveClosedFoldEndingAt(targetLine - 1);
+				if (folded != nullptr) {
+					targetLine = folded->startLine;
+					targetLineStart = lineStartForIndex(targetLine);
+					continue;
+				}
+				const std::size_t previousLineStart = mBufferModel.prevLine(targetLineStart);
+				if (previousLineStart >= targetLineStart) break;
+				targetLineStart = previousLineStart;
+				--targetLine;
+			}
+		} else {
+			for (int line = 0; line < deltaLines && targetLineStart < mBufferModel.length(); ++line) {
+				const MRFoldSpan *folded = mFoldState.effectiveClosedFoldStartingAt(targetLine);
+				if (folded != nullptr) {
+					targetLine = folded->endLine + 1;
+					if (mBufferModel.exactLineCountKnown() && targetLine >= mBufferModel.lineCount()) return mBufferModel.length();
+					targetLineStart = lineStartForIndex(targetLine);
+					continue;
+				}
+				const std::size_t nextLineStart = mBufferModel.nextLine(targetLineStart);
+				if (nextLineStart <= targetLineStart) break;
+				targetLineStart = nextLineStart;
+				++targetLine;
+			}
+		}
+		return charPtrOffset(targetLineStart, targetVisualColumn);
+	}
+
 	const std::size_t currentDocumentLine = virtualFreeCursor ? std::max(cachedCursorLineIndex(), mCursorVisualLine) : mBufferModel.lineIndex(clampedPos);
 	const std::size_t currentVisibleLine = visibleLineForDocumentLine(currentDocumentLine);
 	std::size_t targetVisibleLine = currentVisibleLine;
 	std::size_t targetDocumentLine = currentDocumentLine;
 
-	if (targetVisualColumn < 0) targetVisualColumn = charColumn(mBufferModel.lineStart(pos), clampedPos);
 	if (deltaLines < 0) targetVisibleLine = currentVisibleLine > static_cast<std::size_t>(-deltaLines) ? currentVisibleLine - static_cast<std::size_t>(-deltaLines) : 0;
 	else
 		targetVisibleLine = currentVisibleLine + static_cast<std::size_t>(deltaLines);
 	targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
 	if (virtualFreeCursor) mCursorVisualLine = std::max(cachedCursorLineIndex(), targetDocumentLine);
-	if (targetDocumentLine >= mBufferModel.lineCount()) return mBufferModel.length();
+	if (mBufferModel.exactLineCountKnown() && targetDocumentLine >= mBufferModel.lineCount()) return mBufferModel.length();
 	return charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), targetVisualColumn);
 }
 
@@ -371,9 +427,10 @@ void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool cen
 	} else {
 		if (configuredPersistentBlocksSetting() && mBufferModel.hasSelection()) mBufferModel.setCursor(target);
 		else
-			mBufferModel.setCursorAndSelection(target, target, target);
+		mBufferModel.setCursorAndSelection(target, target, target);
 		mSelectionAnchor = target;
 	}
+	scheduleLineIndexWarmupIfNeeded();
 	if (!freeCursorMovementEnabled() || target != mBufferModel.length()) mCursorVisualLine = cachedCursorLineIndex();
 	else
 		mCursorVisualLine = std::max(mCursorVisualLine, cachedCursorLineIndex());

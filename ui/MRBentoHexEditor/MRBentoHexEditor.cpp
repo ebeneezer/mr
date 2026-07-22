@@ -1,11 +1,13 @@
 #include "MRBentoHexEditor.hpp"
 
+#include "panes/MRHexPaneProjection.hpp"
 #include "panes/MRHexPaneWindow.hpp"
 
 #include "../MRFileEditor/MRFileEditor.hpp"
 #include "../MRMessageLineController.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 namespace {
@@ -29,9 +31,23 @@ constexpr HexPaneDescriptor kHexPaneDescriptors[] = {
 	{static_cast<MRBentoPaneRole>(bprExtensionFirst + 5), MRHexPaneRole::Octal, "Octal", false},
 };
 
+constexpr MRHexPaneRole kHexInputPaneOrder[] = {
+	MRHexPaneRole::Hex,
+	MRHexPaneRole::Decimal,
+	MRHexPaneRole::Strings,
+	MRHexPaneRole::Binary,
+	MRHexPaneRole::Octal,
+};
+
 const HexPaneDescriptor *hexPaneDescriptorForBentoRole(MRBentoPaneRole role) noexcept {
 	for (const HexPaneDescriptor &descriptor : kHexPaneDescriptors)
 		if (descriptor.bentoRole == role) return &descriptor;
+	return nullptr;
+}
+
+const HexPaneDescriptor *hexPaneDescriptorForHexRole(MRHexPaneRole role) noexcept {
+	for (const HexPaneDescriptor &descriptor : kHexPaneDescriptors)
+		if (descriptor.hexRole == role) return &descriptor;
 	return nullptr;
 }
 
@@ -90,9 +106,11 @@ MRBentoWorkspaceSnapshot initialHexWorkspaceSnapshot() {
 } // namespace
 
 MRBentoHexEditor::MRBentoHexEditor(const TRect &bounds, const char *title, int number)
-	: TWindowInit(&MRBentoBox::initFrame), MRBentoBox(bounds, title, number), mByteCursor(0), mCursorProjectionRevision(1), mLittleEndian(true), mActiveRole(MRHexPaneRole::Hex) {
+	: TWindowInit(&MRBentoBox::initFrame), MRBentoBox(bounds, title, number), mByteCursor(0), mCursorProjectionRevision(1), mViewportCursorProjectionRevision(0), mDataFirstRecord(0),
+	  mDataFirstColumn(0), mLittleEndian(true), mApplyingHexEdit(false), mActiveRole(MRHexPaneRole::Hex) {
 	if (MRFileEditor *editor = getEditor(); editor != nullptr) editor->setForceBinarySave(true);
 	static_cast<void>(restoreWorkspaceSnapshot(initialHexWorkspaceSnapshot()));
+	refreshHexProjection();
 }
 
 bool MRBentoHexEditor::matchesWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapshot) noexcept {
@@ -110,22 +128,54 @@ void MRBentoHexEditor::synchronizePaneDocumentState() {
 
 	if (!restoreWorkspaceSnapshot(snapshot)) return;
 	synchronizeByteCursorFromDocument();
-	refreshHexProjection();
 }
 
 void MRBentoHexEditor::synchronizeByteCursorFromDocument() noexcept {
-	mByteCursor = getEditor() != nullptr ? std::min(getEditor()->cursorOffset(), byteSnapshot().length()) : 0;
-	noteByteCursorChanged();
+	const std::size_t nextCursor = getEditor() != nullptr ? std::min(getEditor()->cursorOffset(), byteSnapshot().length()) : 0;
+
+	if (mByteCursor != nextCursor) {
+		mByteCursor = nextCursor;
+		noteByteCursorChanged();
+	}
+	mViewportCursorProjectionRevision = 0;
+	static_cast<void>(setDataViewport(mDataFirstRecord, mDataFirstColumn));
+	refreshHexProjection();
+}
+
+void MRBentoHexEditor::refreshAfterDocumentCommit() noexcept {
+	const std::size_t length = byteSnapshot().length();
+	const std::size_t nextCursor = std::min(mByteCursor, length);
+
+	if (mByteCursor != nextCursor) {
+		mByteCursor = nextCursor;
+		noteByteCursorChanged();
+	}
+	static_cast<void>(setDataViewport(mDataFirstRecord, mDataFirstColumn));
+	refreshHexProjection();
 }
 
 void MRBentoHexEditor::refreshHexProjection() noexcept {
-	refreshPaneContentProjection();
+	static_cast<void>(synchronizeDataViewportToCursor());
+	for (const HexPaneDescriptor &descriptor : kHexPaneDescriptors) {
+		MRHexPaneWindow *pane = dynamic_cast<MRHexPaneWindow *>(paneWindowForRole(descriptor.bentoRole));
+
+		if (pane != nullptr) pane->requestHexProjection();
+	}
 }
 
 void MRBentoHexEditor::handleEvent(TEvent &event) {
-	if (event.what == evKeyDown && event.keyDown.keyCode == kbTab) {
-		activateNextInputPane();
-		refreshHexProjection();
+	if (event.what == evBroadcast && event.message.command == cmMrEditorDocumentCommitted) {
+		if (!mApplyingHexEdit) refreshAfterDocumentCommit();
+		clearEvent(event);
+		return;
+	}
+	const bool nextInputPane = event.what == evKeyDown && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbTab);
+	const bool previousInputPane = event.what == evKeyDown && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab);
+	if (nextInputPane || previousInputPane) {
+		const MRHexPaneRole previousRole = mActiveRole;
+
+		activateAdjacentInputPane(previousInputPane ? -1 : 1);
+		if (mActiveRole != previousRole) refreshPaneChromeProjection();
 		clearEvent(event);
 		return;
 	}
@@ -179,12 +229,22 @@ bool MRBentoHexEditor::projectPaneDividerPosition(int nodeIndex, int position) n
 	return setPaneDividerPositionForLayout(kRemainingColumnsNode, remainingDivider) || changed;
 }
 
+void MRBentoHexEditor::paneLayoutChanged() noexcept {
+	mViewportCursorProjectionRevision = 0;
+	refreshHexProjection();
+}
+
 void MRBentoHexEditor::activePaneRoleChanged(MRBentoPaneRole role) noexcept {
 	const HexPaneDescriptor *descriptor = hexPaneDescriptorForBentoRole(role);
 
 	if (descriptor == nullptr) return;
+	const bool roleChanged = mActiveRole != descriptor->hexRole;
 	mActiveRole = descriptor->hexRole;
 	if (descriptor->hexRole != MRHexPaneRole::Strings) mr::messageline::clearOwner(mr::messageline::Owner::HexEditor);
+	if (!roleChanged) return;
+	mViewportCursorProjectionRevision = 0;
+	refreshHexProjection();
+	refreshHexFocusProjection();
 }
 
 TColorAttr MRBentoHexEditor::mapColor(uchar index) {
@@ -218,6 +278,14 @@ bool MRBentoHexEditor::inputPaneIsActive(MRHexPaneRole role) const noexcept {
 	return role != MRHexPaneRole::Inspector && role == mActiveRole;
 }
 
+std::size_t MRBentoHexEditor::dataFirstRecord() const noexcept {
+	return mDataFirstRecord;
+}
+
+std::size_t MRBentoHexEditor::dataFirstColumn() const noexcept {
+	return mDataFirstColumn;
+}
+
 int MRBentoHexEditor::recordLength() const {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	const char *path = currentFileName();
@@ -230,8 +298,21 @@ bool MRBentoHexEditor::littleEndian() const noexcept {
 	return mLittleEndian;
 }
 
+bool MRBentoHexEditor::setDataViewport(std::size_t firstRecord, std::size_t firstColumn) noexcept {
+	const MRTextBufferModel::ReadSnapshot snapshot = byteSnapshot();
+	const std::size_t normalizedRecordLength = static_cast<std::size_t>(std::max(1, recordLength()));
+	const std::size_t nextFirstRecord = std::min(firstRecord, snapshot.length() / normalizedRecordLength);
+	const std::size_t nextFirstColumn = std::min(firstColumn, normalizedRecordLength - 1);
+
+	if (mDataFirstRecord == nextFirstRecord && mDataFirstColumn == nextFirstColumn) return false;
+	mDataFirstRecord = nextFirstRecord;
+	mDataFirstColumn = nextFirstColumn;
+	return true;
+}
+
 void MRBentoHexEditor::toggleEndian() {
 	mLittleEndian = !mLittleEndian;
+	refreshHexProjection();
 }
 
 void MRBentoHexEditor::toggleInsertMode() {
@@ -240,10 +321,31 @@ void MRBentoHexEditor::toggleInsertMode() {
 
 void MRBentoHexEditor::selectByte(std::size_t offset) noexcept {
 	const std::size_t length = byteSnapshot().length();
+	const std::size_t nextCursor = std::min(offset, length);
+	const std::size_t previousCursor = mByteCursor;
 
-	mByteCursor = std::min(offset, length);
+	if (mByteCursor == nextCursor) return;
+	mByteCursor = nextCursor;
 	noteByteCursorChanged();
-	refreshHexProjection();
+	refreshHexCursorTransition(previousCursor);
+}
+
+void MRBentoHexEditor::selectRecordColumn(std::size_t record, std::size_t column) noexcept {
+	const std::size_t length = byteSnapshot().length();
+	const std::size_t normalizedRecordLength = static_cast<std::size_t>(std::max(1, recordLength()));
+	const std::size_t lastSelectableRecord = length / normalizedRecordLength;
+
+	if (record > lastSelectableRecord || record > std::numeric_limits<std::size_t>::max() / normalizedRecordLength) {
+		selectByte(length);
+		return;
+	}
+	const std::size_t recordStart = record * normalizedRecordLength;
+	if (recordStart > length) {
+		selectByte(length);
+		return;
+	}
+	const std::size_t available = std::min(normalizedRecordLength, length - recordStart);
+	selectByte(recordStart + std::min(column, available));
 }
 
 void MRBentoHexEditor::moveByteCursor(std::ptrdiff_t delta) noexcept {
@@ -259,32 +361,108 @@ void MRBentoHexEditor::moveByteCursor(std::ptrdiff_t delta) noexcept {
 	}
 	if (mByteCursor == previousCursor) return;
 	noteByteCursorChanged();
-	refreshHexProjection();
+	refreshHexCursorTransition(previousCursor);
 }
 
 bool MRBentoHexEditor::replaceBytes(std::size_t offset, const std::string &bytes, std::size_t overwriteLength) {
 	MRFileEditor *editor = getEditor();
 	const std::size_t length = byteSnapshot().length();
+	bool replaced = false;
 
 	if (editor == nullptr || isReadOnly() || bytes.empty()) return false;
 	offset = std::min(offset, length);
-	const std::size_t end = editor->insertModeEnabled() ? offset : std::min(length, offset + overwriteLength);
-	if (!editor->replaceRangeAndSelect(static_cast<uint>(offset), static_cast<uint>(end), bytes.data(), static_cast<uint>(bytes.size()))) return false;
+	if (bytes.size() > std::numeric_limits<std::size_t>::max() - offset) return false;
+	const std::size_t end = editor->insertModeEnabled() ? offset : (overwriteLength > length - offset ? length : offset + overwriteLength);
+	mApplyingHexEdit = true;
+	try {
+		replaced = editor->replaceRangeAndSelect(offset, end, bytes.data(), bytes.size());
+	} catch (...) {
+		mApplyingHexEdit = false;
+		throw;
+	}
+	mApplyingHexEdit = false;
+	if (!replaced) return false;
 	mByteCursor = offset + bytes.size();
 	noteByteCursorChanged();
 	return true;
 }
 
-void MRBentoHexEditor::activateNextInputPane() noexcept {
-	for (int attempt = 0; attempt < 6; ++attempt) {
-		const MRHexPaneRole previousRole = mActiveRole;
+void MRBentoHexEditor::activateAdjacentInputPane(int direction) noexcept {
+	const int paneCount = static_cast<int>(sizeof(kHexInputPaneOrder) / sizeof(kHexInputPaneOrder[0]));
+	int currentIndex = direction < 0 ? 0 : -1;
 
-		toggleActivePane();
-		if (mActiveRole == previousRole) return;
-		if (mActiveRole != MRHexPaneRole::Inspector) return;
+	for (int index = 0; index < paneCount; ++index)
+		if (kHexInputPaneOrder[index] == mActiveRole) currentIndex = index;
+	for (int step = 1; step <= paneCount; ++step) {
+		const int candidateIndex = (currentIndex + paneCount + direction * step) % paneCount;
+		const HexPaneDescriptor *descriptor = hexPaneDescriptorForHexRole(kHexInputPaneOrder[candidateIndex]);
+		MRPaneEditWindow *pane = descriptor != nullptr ? paneWindowForRole(descriptor->bentoRole) : nullptr;
+
+		if (pane != nullptr && activatePaneWindow(pane)) return;
 	}
 }
 
 void MRBentoHexEditor::noteByteCursorChanged() noexcept {
 	++mCursorProjectionRevision;
+	if (mCursorProjectionRevision == 0) ++mCursorProjectionRevision;
+}
+
+void MRBentoHexEditor::refreshHexCursorTransition(std::size_t previousCursor) noexcept {
+	const bool viewportChanged = synchronizeDataViewportToCursor();
+
+	for (const HexPaneDescriptor &descriptor : kHexPaneDescriptors) {
+		MRHexPaneWindow *pane = dynamic_cast<MRHexPaneWindow *>(paneWindowForRole(descriptor.bentoRole));
+
+		if (pane == nullptr) continue;
+		pane->refreshHexCursor(previousCursor, mByteCursor, viewportChanged);
+	}
+}
+
+void MRBentoHexEditor::refreshHexFocusProjection() noexcept {
+	for (const HexPaneDescriptor &descriptor : kHexPaneDescriptors) {
+		MRHexPaneWindow *pane = dynamic_cast<MRHexPaneWindow *>(paneWindowForRole(descriptor.bentoRole));
+
+		if (pane != nullptr) pane->refreshHexFocus();
+	}
+}
+
+bool MRBentoHexEditor::synchronizeDataViewportToCursor() noexcept {
+	if (mViewportCursorProjectionRevision == mCursorProjectionRevision) return false;
+	mViewportCursorProjectionRevision = mCursorProjectionRevision;
+	const MRTextBufferModel::ReadSnapshot snapshot = byteSnapshot();
+	const std::size_t length = snapshot.length();
+	const std::size_t normalizedRecordLength = static_cast<std::size_t>(std::max(1, recordLength()));
+	const std::size_t cursor = std::min(mByteCursor, length);
+	const std::size_t cursorRecord = cursor / normalizedRecordLength;
+	const std::size_t cursorColumn = cursor % normalizedRecordLength;
+	int activeRows = 0;
+	int activeColumns = 0;
+
+	for (const HexPaneDescriptor &descriptor : kHexPaneDescriptors) {
+		if (descriptor.hexRole != mActiveRole || descriptor.hexRole == MRHexPaneRole::Inspector) continue;
+		const MRHexPaneWindow *pane = dynamic_cast<const MRHexPaneWindow *>(paneWindowForRole(descriptor.bentoRole));
+
+		if (pane != nullptr) {
+			activeRows = pane->hexViewportRowCapacity();
+			activeColumns = pane->hexViewportColumnCapacity();
+		}
+		break;
+	}
+	std::size_t firstRecord = mDataFirstRecord;
+	std::size_t firstColumn = mDataFirstColumn;
+	if (activeRows > 0) {
+		const std::size_t visibleRows = static_cast<std::size_t>(activeRows);
+
+		if (cursorRecord < firstRecord) firstRecord = cursorRecord;
+		else if (cursorRecord - firstRecord >= visibleRows)
+			firstRecord = cursorRecord - visibleRows + 1;
+	}
+	if (activeColumns > 0) {
+		const std::size_t visibleColumns = static_cast<std::size_t>(activeColumns);
+
+		if (cursorColumn < firstColumn) firstColumn = cursorColumn;
+		else if (cursorColumn - firstColumn >= visibleColumns)
+			firstColumn = cursorColumn - visibleColumns + 1;
+	}
+	return setDataViewport(firstRecord, firstColumn);
 }
