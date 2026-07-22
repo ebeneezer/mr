@@ -5,9 +5,7 @@
 
 #include "../ui/MRSyntax.hpp"
 
-#include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <map>
 #include <utility>
 #include <vector>
@@ -37,23 +35,6 @@ struct MRSyntaxCheckpointEntry {
 
 class MRSyntaxDerivedState : public MRDerivedStateBase {
   public:
-	struct WarmupState {
-		std::uint64_t taskId = 0;
-		std::size_t documentId = 0;
-		std::size_t version = 0;
-		std::size_t topLine = 0;
-		std::size_t bottomLine = 0;
-		MRSyntaxLanguage language = MRSyntaxLanguage::PlainText;
-	};
-
-	struct PrefetchState {
-		std::size_t documentId = 0;
-		std::size_t version = 0;
-		std::size_t targetBottomLine = 0;
-		std::size_t reachedBottomLine = 0;
-		MRSyntaxLanguage language = MRSyntaxLanguage::PlainText;
-	};
-
 	MRSyntaxDerivedState() noexcept;
 
 	void resetState(bool clearCache) noexcept;
@@ -63,18 +44,6 @@ class MRSyntaxDerivedState : public MRDerivedStateBase {
 
 	std::map<std::size_t, MRSyntaxCheckpointEntry> &checkpoints() noexcept;
 	const std::map<std::size_t, MRSyntaxCheckpointEntry> &checkpoints() const noexcept;
-
-	WarmupState &warmupState() noexcept;
-	const WarmupState &warmupState() const noexcept;
-
-	PrefetchState &prefetchState() noexcept;
-	const PrefetchState &prefetchState() const noexcept;
-
-	void clearScheduledRequest() noexcept;
-	void rememberScheduledRequest(std::size_t topLine, std::size_t bottomLine, std::chrono::steady_clock::time_point scheduledAt) noexcept;
-	std::size_t lastScheduledTopLine() const noexcept;
-	std::size_t lastScheduledBottomLine() const noexcept;
-	std::chrono::steady_clock::time_point lastScheduledAt() const noexcept;
 
 	void clearWarmedLineRanges() noexcept;
 	void rememberWarmedLineRange(std::size_t documentId, MRSyntaxLanguage language, std::size_t startLine, std::size_t endLine) noexcept;
@@ -89,11 +58,6 @@ class MRSyntaxDerivedState : public MRDerivedStateBase {
   private:
 	std::map<std::size_t, MRSyntaxCacheEntry> mTokenCache;
 	std::map<std::size_t, MRSyntaxCheckpointEntry> mCheckpoints;
-	WarmupState mWarmup;
-	PrefetchState mPrefetch;
-	std::size_t mLastScheduledTopLine;
-	std::size_t mLastScheduledBottomLine;
-	std::chrono::steady_clock::time_point mLastScheduledAt;
 	std::size_t mWarmedLineRangesDocumentId;
 	MRSyntaxLanguage mWarmedLineRangesLanguage;
 };

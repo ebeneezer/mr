@@ -45,7 +45,8 @@ If two referenced documents appear to conflict, stop and ask for explicit mainta
 
 ## Language
 
-- Explanations, plans, reviews, PR summaries and commit messages are written in German.
+- Explanations, plans, reviews and PR summaries are written in German.
+- Commit messages are written in English.
 - Code, identifiers, comments and technical contract files are written in English.
 - Address the maintainer formally.
 - Prefer precise technical objections over reassuring language.

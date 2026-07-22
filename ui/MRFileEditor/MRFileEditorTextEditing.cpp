@@ -197,6 +197,7 @@ bool MRFileEditor::appendLogViewerData(const char *data, uint length, const std:
 			if (end > start) mFindMarkerRanges.push_back(MRTextBufferModel::Range(start, end));
 		}
 		normalizeRangeList(mFindMarkerRanges);
+		mMiniMapState.setFindRanges(mFindMarkerRanges);
 	}
 	if (follow) {
 		const int maxY = std::max(0, static_cast<int>(std::max<std::size_t>(1, mBufferModel.lineCount())) - visibleRows);
@@ -233,6 +234,7 @@ bool MRFileEditor::prependLogViewerData(const char *data, uint length, const std
 			if (end > start) mFindMarkerRanges.push_back(MRTextBufferModel::Range(start, end));
 		}
 		normalizeRangeList(mFindMarkerRanges);
+		mMiniMapState.setFindRanges(mFindMarkerRanges);
 	}
 	if (follow) scrollTo(oldDeltaX, 0);
 	else
@@ -306,7 +308,7 @@ unsigned short MRFileEditor::lastMouseSelectionModifiers() const noexcept {
 	return mMouseSelectionModifiers;
 }
 
-bool MRFileEditor::replaceRangeAndSelect(uint start, uint end, const char *data, uint length) {
+bool MRFileEditor::replaceRangeAndSelect(std::size_t start, std::size_t end, const char *data, std::size_t length) {
 	std::string text;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "replace-range-select");
 	MRTextBufferModel::Range range;
@@ -406,8 +408,9 @@ bool MRFileEditor::materializeLineDrawingRows(std::size_t line1, std::size_t lin
 		}
 		if (!result.applied()) return false;
 	}
+	lineStart = mBufferModel.lineStartByIndex(line1);
 	for (std::size_t line = line1; line <= line2 && line < mBufferModel.lineCount(); ++line) {
-		lineStart = mBufferModel.lineStartByIndex(line);
+		const std::size_t nextLineStart = mBufferModel.nextLine(lineStart);
 		lineEnd = lineEndOffset(lineStart);
 		lineText.clear();
 		lineText.reserve(lineEnd - lineStart);
@@ -442,7 +445,10 @@ bool MRFileEditor::materializeLineDrawingRows(std::size_t line1, std::size_t lin
 			replacement.append(static_cast<std::size_t>(rightVisualColumn - visualColumn), ' ');
 			paddedLine = true;
 		}
-		if (!expandedTab && !paddedLine) continue;
+		if (!expandedTab && !paddedLine) {
+			lineStart = nextLineStart;
+			continue;
+		}
 		edits.push_back(LineDrawingCellEdit{lineStart, lineStart + prefixEnd, replacement});
 		if (lineDrawingTraceEnabled()) {
 			std::ostringstream trace;
@@ -450,6 +456,7 @@ bool MRFileEditor::materializeLineDrawingRows(std::size_t line1, std::size_t lin
 			      << " replacementSize=" << replacement.size() << " expandedTab=" << expandedTab << " paddedLine=" << paddedLine;
 			appendLineDrawingTrace(trace.str());
 		}
+		lineStart = nextLineStart;
 	}
 	if (edits.empty()) return false;
 	std::sort(edits.begin(), edits.end(), [](const LineDrawingCellEdit &lhs, const LineDrawingCellEdit &rhs) {

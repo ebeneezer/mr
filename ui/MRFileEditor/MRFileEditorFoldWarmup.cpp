@@ -1,4 +1,4 @@
-#include "MRFileEditor.hpp"
+#include "MRFoldWarmupPayload.hpp"
 #include "../MRSyntaxBasic.hpp"
 #include "../../outline/MROutlineFoldProducer.hpp"
 
@@ -20,6 +20,8 @@
 namespace {
 
 static constexpr std::size_t kLargeFileWarmupTraceBytes = static_cast<std::size_t>(8) * 1024 * 1024;
+static constexpr std::size_t kCompleteOutlineFoldLineBudget = 20000;
+static constexpr std::size_t kOutlineCaptureByteBudget = static_cast<std::size_t>(8) * 1024 * 1024;
 
 bool isIndentWhitespace(char ch) noexcept {
 	return ch == ' ' || ch == '\t';
@@ -824,6 +826,23 @@ std::size_t skipXmlName(std::string_view text, std::size_t pos) noexcept {
 	return pos;
 }
 
+bool xmlLineContainsMatchingCloseTag(std::string_view text, std::size_t pos, std::string_view tagName) noexcept {
+	while (pos < text.size()) {
+		const std::size_t closeStart = text.find("</", pos);
+		if (closeStart == std::string_view::npos) return false;
+		const std::size_t nameStart = closeStart + 2;
+		std::size_t nameEnd = skipXmlName(text, nameStart);
+
+		if (nameEnd > nameStart && text.substr(nameStart, nameEnd - nameStart) == tagName) {
+			while (nameEnd < text.size() && std::isspace(static_cast<unsigned char>(text[nameEnd])) != 0)
+				++nameEnd;
+			if (nameEnd < text.size() && text[nameEnd] == '>') return true;
+		}
+		pos = nameStart;
+	}
+	return false;
+}
+
 bool parseXmlLeadingOpenTag(std::string_view trimmed, std::string_view &tagName) noexcept {
 	const std::string_view normalized = trimView(trimmed);
 	std::size_t pos = 0;
@@ -855,6 +874,7 @@ bool parseXmlLeadingOpenTag(std::string_view trimmed, std::string_view &tagName)
 	}
 	if (closePos == std::string_view::npos || quote != '\0') return false;
 	if (lastNonSpace != std::string_view::npos && normalized[lastNonSpace] == '/') return false;
+	if (xmlLineContainsMatchingCloseTag(normalized, closePos + 1, tagName)) return false;
 	return true;
 }
 
@@ -1294,50 +1314,13 @@ bool isMakeDirectiveFoldSibling(std::string_view trimmed) noexcept {
 	return trimmed == "else";
 }
 
-struct MRFoldOpenBlock {
-	std::size_t startLine = 0;
-	std::size_t indent = 0;
-	unsigned short level = 0;
-	MRFoldSourceKind sourceKind = MRFoldSourceKind::Generic;
-	char closer = 0;
-	char marker = 0;
-	std::size_t markerLength = 0;
-	int headingLevel = 0;
-	int languageBlockKind = 0;
-	bool siblingContinuation = false;
-	std::size_t lastContentLine = std::numeric_limits<std::size_t>::max();
-	std::string xmlTagName;
-};
+using MRFoldOpenBlock = MRFoldOpenBlockState;
 
 struct MRFoldScanOutput {
 	std::vector<MRFoldSpan> spans;
 	std::vector<MRFoldGutterBranch> branches;
+	MRFoldAnalysisState stateOut;
 	int visibleMaxLevel = 1;
-};
-
-struct MRFoldWarmupPayload final : mr::coprocessor::Payload {
-	MRSyntaxLanguage language;
-	std::size_t scanTopLine;
-	std::size_t scanBottomLine;
-	int visibleGutterColumns;
-	std::vector<std::string> lineTexts;
-	std::vector<MRFoldSpan> spans;
-	std::vector<MRFoldGutterBranch> branches;
-
-	MRFoldWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), scanTopLine(0), scanBottomLine(0), visibleGutterColumns(1), lineTexts(), spans(), branches() {
-	}
-
-	MRFoldWarmupPayload(MRSyntaxLanguage aLanguage, std::size_t aScanTopLine, std::size_t aScanBottomLine, int aVisibleGutterColumns, std::vector<std::string> aLineTexts,
-	                   std::vector<MRFoldSpan> aSpans, std::vector<MRFoldGutterBranch> aBranches)
-	    : language(aLanguage), scanTopLine(aScanTopLine), scanBottomLine(aScanBottomLine), visibleGutterColumns(std::max(1, aVisibleGutterColumns)), lineTexts(std::move(aLineTexts)),
-	      spans(std::move(aSpans)), branches(std::move(aBranches)) {
-	}
-};
-
-struct MRViewportScanChunk {
-	std::size_t startLine = 0;
-	std::size_t endLine = 0;
-	std::vector<std::string> lineTexts;
 };
 
 void appendFoldScanLineTexts(std::vector<std::string> &target, const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t startLine, std::size_t endLine) {
@@ -1351,58 +1334,6 @@ void appendFoldScanLineTexts(std::vector<std::string> &target, const MRTextBuffe
 		if (nextLineStart <= lineStart) break;
 		lineStart = nextLineStart;
 	}
-}
-
-std::vector<MRViewportScanChunk> planViewportScanChunks(std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine, std::size_t focusBottomLine) {
-	static constexpr std::size_t chunkLineCount = 256;
-	std::vector<MRViewportScanChunk> chunks;
-
-	if (scanBottomLine <= scanTopLine) return chunks;
-	focusTopLine = std::clamp(focusTopLine, scanTopLine, scanBottomLine);
-	focusBottomLine = std::clamp(focusBottomLine, focusTopLine, scanBottomLine);
-	if (focusBottomLine <= focusTopLine) focusBottomLine = std::min(scanBottomLine, focusTopLine + chunkLineCount);
-	chunks.push_back(MRViewportScanChunk{focusTopLine, focusBottomLine, {}});
-	std::size_t aboveLine = focusTopLine;
-	std::size_t belowLine = focusBottomLine;
-
-	while (aboveLine > scanTopLine || belowLine < scanBottomLine) {
-		if (aboveLine > scanTopLine) {
-			const std::size_t chunkStartLine = aboveLine > chunkLineCount ? std::max(scanTopLine, aboveLine - chunkLineCount) : scanTopLine;
-			chunks.push_back(MRViewportScanChunk{chunkStartLine, aboveLine, {}});
-			aboveLine = chunkStartLine;
-		}
-		if (belowLine < scanBottomLine) {
-			const std::size_t chunkEndLine = std::min(scanBottomLine, belowLine + chunkLineCount);
-			chunks.push_back(MRViewportScanChunk{belowLine, chunkEndLine, {}});
-			belowLine = chunkEndLine;
-		}
-	}
-	std::sort(chunks.begin(), chunks.end(), [](const MRViewportScanChunk &lhs, const MRViewportScanChunk &rhs) { return lhs.startLine < rhs.startLine; });
-	return chunks;
-}
-
-std::vector<std::string> buildViewportScanLineTextsFromChunks(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
-                                                                std::size_t focusBottomLine) {
-	std::vector<MRViewportScanChunk> chunks = planViewportScanChunks(scanTopLine, scanBottomLine, focusTopLine, focusBottomLine);
-	std::vector<std::string> lineTexts;
-
-	if (chunks.empty()) return lineTexts;
-	if (chunks.size() == 1) {
-		lineTexts.reserve(chunks.front().endLine - chunks.front().startLine);
-		appendFoldScanLineTexts(lineTexts, snapshot, chunks.front().startLine, chunks.front().endLine);
-		return lineTexts;
-	}
-
-	std::size_t reservedLines = 0;
-	for (MRViewportScanChunk &chunk : chunks) {
-		chunk.lineTexts.reserve(chunk.endLine > chunk.startLine ? chunk.endLine - chunk.startLine : 0);
-		appendFoldScanLineTexts(chunk.lineTexts, snapshot, chunk.startLine, chunk.endLine);
-		reservedLines += chunk.lineTexts.size();
-	}
-	lineTexts.reserve(reservedLines);
-	for (MRViewportScanChunk &chunk : chunks)
-		std::move(chunk.lineTexts.begin(), chunk.lineTexts.end(), std::back_inserter(lineTexts));
-	return lineTexts;
 }
 
 std::vector<std::string> splitFoldTrainingLines(const std::string &text) {
@@ -1422,18 +1353,25 @@ std::vector<std::string> splitFoldTrainingLines(const std::string &text) {
 	return lines;
 }
 
-MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &lineTexts, std::size_t baseLineIndex, std::size_t topLine, std::size_t requestBottomLine, MRSyntaxLanguage language,
-                                              const std::map<std::size_t, MRFoldSpan> &closedFoldSpans) {
+MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &lineTexts, std::size_t processedLineCount, std::size_t baseLineIndex, std::size_t topLine,
+	                                              std::size_t requestBottomLine, MRSyntaxLanguage language, const std::map<std::size_t, MRFoldSpan> &closedFoldSpans,
+	                                              const MRFoldAnalysisState &inputState, bool finalizeAtDocumentEnd) {
 	MRFoldScanOutput output;
 	std::size_t currentLineIndex = baseLineIndex;
+	processedLineCount = std::min(processedLineCount, lineTexts.size());
 
-	if (lineTexts.empty()) return output;
+	if (processedLineCount == 0) {
+		output.stateOut = inputState;
+		return output;
+	}
 
-	std::vector<MRFoldOpenBlock> openBlocks;
-	std::string previousLineText;
-	std::string previousUpperLine;
-	std::string previousPreviousLineText;
-	std::string previousPreviousUpperLine;
+	std::vector<MRFoldOpenBlock> openBlocks = inputState.openBlocks;
+	std::string previousLineText = inputState.previousLineText;
+	std::string previousUpperLine = inputState.previousUpperLine;
+	std::string previousPreviousLineText = inputState.previousPreviousLineText;
+	std::string previousPreviousUpperLine = inputState.previousPreviousUpperLine;
+	const std::vector<std::string> inputRecentLineTexts = inputState.recentLineTexts;
+	std::vector<std::string> recentLineTexts = inputRecentLineTexts;
 	enum : int {
 		kLanguageBlockNone = 0,
 		kMRMACIfBlock = 1,
@@ -1475,37 +1413,53 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		openBlocks.push_back(block);
 	};
 
+	auto recentText = [&](std::size_t localLineIndex, std::size_t distance) noexcept -> const std::string * {
+		if (distance <= localLineIndex) return &lineTexts[localLineIndex - distance];
+		const std::size_t historyDistance = distance - localLineIndex;
+		if (historyDistance == 0 || historyDistance > inputRecentLineTexts.size()) return nullptr;
+		return &inputRecentLineTexts[inputRecentLineTexts.size() - historyDistance];
+	};
+	auto recentLineIndex = [&](std::size_t distance) noexcept -> std::size_t {
+		return distance <= currentLineIndex ? currentLineIndex - distance : currentLineIndex;
+	};
+	auto rememberRecentLine = [&](const std::string &lineText) {
+		static constexpr std::size_t kFoldRecentLineLimit = 80;
+		if (recentLineTexts.size() == kFoldRecentLineLimit) recentLineTexts.erase(recentLineTexts.begin());
+		recentLineTexts.push_back(lineText);
+	};
+
 	auto findRecentJavaScriptStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
-		const std::size_t scanStart = localLineIndex > 4 ? localLineIndex - 4 : 0;
-		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+		for (std::size_t distance = 0; distance <= 4; ++distance) {
+			const std::string *candidateText = recentText(localLineIndex, distance);
+			if (candidateText == nullptr) break;
+			const std::string_view candidateTrimmed = trimView(*candidateText);
 			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
-			if (isJavaScriptStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
-			if (isJavaScriptArrowFunctionLeadLine(candidateTrimmed)) return baseLineIndex + candidate;
-			if (candidate == 0) break;
+			if (isJavaScriptStructuralLeadLine(candidateUpper)) return recentLineIndex(distance);
+			if (isJavaScriptArrowFunctionLeadLine(candidateTrimmed)) return recentLineIndex(distance);
 		}
 		return currentLineIndex;
 	};
 
 	auto findRecentCLikeStructuralLeadLine = [&](std::size_t localLineIndex, MRSyntaxLanguage currentLanguage) noexcept -> std::size_t {
-		const std::size_t scanStart = localLineIndex > 80 ? localLineIndex - 80 : 0;
-		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+		for (std::size_t distance = 0; distance <= 80; ++distance) {
+			const std::string *candidateText = recentText(localLineIndex, distance);
+			if (candidateText == nullptr) break;
+			const std::string_view candidateTrimmed = trimView(*candidateText);
 			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
 			if (isCLikeStructuralLeadLine(candidateTrimmed, candidateUpper, currentLanguage)) {
-				if (currentLanguage != MRSyntaxLanguage::Cpp) return baseLineIndex + candidate;
-				std::size_t headCandidate = candidate;
-				while (headCandidate > scanStart) {
-					const std::size_t previousCandidate = headCandidate - 1;
-					const std::string_view previousCandidateTrimmed = trimView(lineTexts[previousCandidate]);
+				if (currentLanguage != MRSyntaxLanguage::Cpp) return recentLineIndex(distance);
+				std::size_t headDistance = distance;
+				while (headDistance < 80) {
+					const std::string *previousCandidateText = recentText(localLineIndex, headDistance + 1);
+					if (previousCandidateText == nullptr) break;
+					const std::string_view previousCandidateTrimmed = trimView(*previousCandidateText);
 					if (previousCandidateTrimmed.empty() || isCLikeCommentLikeLine(previousCandidateTrimmed) || previousCandidateTrimmed.front() == '#') break;
 					const std::string previousCandidateUpper = upperAscii(std::string(previousCandidateTrimmed));
 					if (!isCppTemplatePrefixLead(previousCandidateTrimmed, previousCandidateUpper)) break;
-					headCandidate = previousCandidate;
+					++headDistance;
 				}
-				return baseLineIndex + headCandidate;
+				return recentLineIndex(headDistance);
 			}
-			if (candidate == 0) break;
 		}
 		return currentLineIndex;
 	};
@@ -1513,96 +1467,95 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 	auto findRecentCBraceStartLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
 		const std::size_t structuralLeadLine = findRecentCLikeStructuralLeadLine(localLineIndex, MRSyntaxLanguage::C);
 		if (structuralLeadLine != currentLineIndex) return structuralLeadLine;
-		const std::size_t scanStart = localLineIndex > 80 ? localLineIndex - 80 : 0;
-		for (std::size_t candidate = localLineIndex; candidate-- > scanStart;) {
-			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+		for (std::size_t distance = 1; distance <= 80; ++distance) {
+			const std::string *candidateText = recentText(localLineIndex, distance);
+			if (candidateText == nullptr) break;
+			const std::string_view candidateTrimmed = trimView(*candidateText);
 			if (candidateTrimmed.empty() || isCLikeCommentLikeLine(candidateTrimmed)) {
-				if (candidate == 0) break;
 				continue;
 			}
 			if (candidateTrimmed.front() == '#') break;
-			return baseLineIndex + candidate;
+			return recentLineIndex(distance);
 		}
 		return currentLineIndex;
 	};
 
 	auto findRecentSwiftStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
-		const std::size_t scanStart = localLineIndex > 4 ? localLineIndex - 4 : 0;
-		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+		for (std::size_t distance = 0; distance <= 4; ++distance) {
+			const std::string *candidateText = recentText(localLineIndex, distance);
+			if (candidateText == nullptr) break;
+			const std::string_view candidateTrimmed = trimView(*candidateText);
 			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
-			if (isSwiftStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
-			if (candidate == 0) break;
+			if (isSwiftStructuralLeadLine(candidateUpper)) return recentLineIndex(distance);
 		}
 		return currentLineIndex;
 	};
 
 	auto findRecentRustStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
-		const std::size_t scanStart = localLineIndex > 6 ? localLineIndex - 6 : 0;
-		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+		for (std::size_t distance = 0; distance <= 6; ++distance) {
+			const std::string *candidateText = recentText(localLineIndex, distance);
+			if (candidateText == nullptr) break;
+			const std::string_view candidateTrimmed = trimView(*candidateText);
 			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
-			if (isRustStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
-			if (candidate == 0) break;
+			if (isRustStructuralLeadLine(candidateUpper)) return recentLineIndex(distance);
 		}
 		return currentLineIndex;
 	};
 
 		auto findRecentGoStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
-			const std::size_t scanStart = localLineIndex > 6 ? localLineIndex - 6 : 0;
-			for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-				const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			for (std::size_t distance = 0; distance <= 6; ++distance) {
+				const std::string *candidateText = recentText(localLineIndex, distance);
+				if (candidateText == nullptr) break;
+				const std::string_view candidateTrimmed = trimView(*candidateText);
 			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
-			if (isGoStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
-			if (candidate == 0) break;
+			if (isGoStructuralLeadLine(candidateUpper)) return recentLineIndex(distance);
 			}
 			return currentLineIndex;
 		};
 
 		auto findRecentKotlinStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
-			const std::size_t scanStart = localLineIndex > 6 ? localLineIndex - 6 : 0;
-			for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-				const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			for (std::size_t distance = 0; distance <= 6; ++distance) {
+				const std::string *candidateText = recentText(localLineIndex, distance);
+				if (candidateText == nullptr) break;
+				const std::string_view candidateTrimmed = trimView(*candidateText);
 				const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
-				if (isKotlinStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
-				if (candidate == 0) break;
+				if (isKotlinStructuralLeadLine(candidateUpper)) return recentLineIndex(distance);
 			}
 			return currentLineIndex;
 		};
 
 		auto findRecentCSharpStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
-			const std::size_t scanStart = localLineIndex > 8 ? localLineIndex - 8 : 0;
-			for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-				const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			for (std::size_t distance = 0; distance <= 8; ++distance) {
+				const std::string *candidateText = recentText(localLineIndex, distance);
+				if (candidateText == nullptr) break;
+				const std::string_view candidateTrimmed = trimView(*candidateText);
 				const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
-				if (isCSharpStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
-				if (candidate == 0) break;
+				if (isCSharpStructuralLeadLine(candidateUpper)) return recentLineIndex(distance);
 			}
 			return currentLineIndex;
 		};
 
 		auto findRecentShellStructuralLeadLine = [&](std::size_t localLineIndex, std::string_view trimmed, std::string_view upperLine) noexcept -> std::size_t {
-		const std::size_t scanStart = localLineIndex > 8 ? localLineIndex - 8 : 0;
 		const bool braceLine = trimView(trimmed) == "{";
 		const bool thenLead = upperLine == "THEN" || upperLine.ends_with(" THEN");
 		const bool doLead = upperLine == "DO" || upperLine.ends_with(" DO");
-		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+		for (std::size_t distance = 0; distance <= 8; ++distance) {
+			const std::string *candidateText = recentText(localLineIndex, distance);
+			if (candidateText == nullptr) break;
+			const std::string_view candidateTrimmed = trimView(*candidateText);
 			if (candidateTrimmed.empty() || candidateTrimmed.starts_with("#")) {
-				if (candidate == 0) break;
 				continue;
 			}
 			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
-			if (braceLine && isShellFunctionHeadLine(candidateTrimmed, candidateUpper)) return baseLineIndex + candidate;
-			if (thenLead && (candidateUpper.starts_with("IF ") || candidateUpper.starts_with("ELIF "))) return baseLineIndex + candidate;
+			if (braceLine && isShellFunctionHeadLine(candidateTrimmed, candidateUpper)) return recentLineIndex(distance);
+			if (thenLead && (candidateUpper.starts_with("IF ") || candidateUpper.starts_with("ELIF "))) return recentLineIndex(distance);
 			if (doLead && (candidateUpper.starts_with("FOR ") || candidateUpper.starts_with("WHILE ") || candidateUpper.starts_with("UNTIL ") || candidateUpper.starts_with("SELECT ")))
-				return baseLineIndex + candidate;
-			if (candidate == 0) break;
+				return recentLineIndex(distance);
 		}
 		return currentLineIndex;
 	};
 
-	for (std::size_t localLineIndex = 0; localLineIndex < lineTexts.size(); ++localLineIndex) {
+	for (std::size_t localLineIndex = 0; localLineIndex < processedLineCount; ++localLineIndex) {
 		const std::size_t lineIndex = baseLineIndex + localLineIndex;
 		currentLineIndex = lineIndex;
 		const std::string &lineText = lineTexts[localLineIndex];
@@ -1622,6 +1575,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			previousPreviousUpperLine = previousUpperLine;
 			previousLineText = lineText;
 			previousUpperLine = upperLine;
+			rememberRecentLine(lineText);
 			continue;
 		}
 		const std::string *nextLineTextPtr = localLineIndex + 1 < lineTexts.size() ? &lineTexts[localLineIndex + 1] : nullptr;
@@ -1650,8 +1604,6 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const MRBasicBlockLine basicLine = language == MRSyntaxLanguage::Basic ? mrBasicClassifyBlockLine(trimmed) : MRBasicBlockLine {MRBasicBlockKind::None, MRBasicBlockDisposition::None};
 		std::string_view xmlLeadingOpenTagName;
 		const bool xmlLeadingOpenTag = language == MRSyntaxLanguage::Xml && parseXmlLeadingOpenTag(trimmed, xmlLeadingOpenTagName);
-		std::string_view xmlLeadingCloseTagName;
-		const bool xmlLeadingCloseTag = language == MRSyntaxLanguage::Xml && parseXmlLeadingCloseTag(trimmed, xmlLeadingCloseTagName);
 		std::string_view latexBeginEnvironmentName;
 		const bool latexBeginEnvironment = language == MRSyntaxLanguage::Latex && parseLatexLeadingBeginEnvironment(trimmed, latexBeginEnvironmentName);
 		std::string_view latexEndEnvironmentName;
@@ -1758,7 +1710,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 					break;
 				}
 
-		if (nonEmpty && lineIndex > baseLineIndex) {
+		if (nonEmpty && lineIndex > 0) {
 			std::size_t closerIndex = 0;
 			while (!openBlocks.empty() && closerIndex < trimmed.size() && openBlocks.back().sourceKind == MRFoldSourceKind::Delimiter && openBlocks.back().closer != 0 &&
 			       trimmed[closerIndex] == openBlocks.back().closer) {
@@ -1768,7 +1720,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			}
 			if (perlSiblingAfterLeadingCloser || javascriptSiblingAfterLeadingCloser || cLikeSiblingAfterLeadingCloser) openSiblingContinuation = true;
 		}
-		if (nonEmpty && lineIndex > baseLineIndex) {
+		if (language != MRSyntaxLanguage::Xml && nonEmpty && lineIndex > 0) {
 			const std::size_t splitOffset = trailingSmartDedentSplitOffset(lineText, language);
 			if (splitOffset != std::string_view::npos) {
 				const std::string_view trailingDedent = trimView(std::string_view(lineText).substr(splitOffset));
@@ -1783,13 +1735,13 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			}
 		}
 
-		if (mrmacMacroStart && lineIndex > baseLineIndex) {
+		if (mrmacMacroStart && lineIndex > 0) {
 			while (!openBlocks.empty()) {
 				appendVisibleSpan(openBlocks.back(), lineIndex - 1);
 				openBlocks.pop_back();
 			}
 		}
-		if (mrmacMacroEnd && lineIndex > baseLineIndex) {
+		if (mrmacMacroEnd && lineIndex > 0) {
 			while (!openBlocks.empty() && openBlocks.back().sourceKind != MRFoldSourceKind::Macro) {
 				appendVisibleSpan(openBlocks.back(), lineIndex - 1);
 				openBlocks.pop_back();
@@ -1913,8 +1865,8 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				if (closedKind == static_cast<int>(basicLine.kind)) break;
 			}
 		}
-		if (language == MRSyntaxLanguage::Xml && xmlLeadingCloseTag && !openBlocks.empty() && openBlocks.back().languageBlockKind == kXmlTagBlock &&
-		    openBlocks.back().xmlTagName == xmlLeadingCloseTagName) {
+		while (language == MRSyntaxLanguage::Xml && !openBlocks.empty() && openBlocks.back().languageBlockKind == kXmlTagBlock &&
+		       xmlLineContainsMatchingCloseTag(trimmed, 0, openBlocks.back().xmlTagName)) {
 			appendVisibleSpan(openBlocks.back(), lineIndex);
 			openBlocks.pop_back();
 		}
@@ -2188,29 +2140,36 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		previousPreviousUpperLine = previousUpperLine;
 		previousLineText = lineText;
 		previousUpperLine = upperLine;
+		rememberRecentLine(lineText);
 	}
 
-	const std::size_t finalLine = baseLineIndex + lineTexts.size() - 1;
-	for (const MRFoldOpenBlock &block : openBlocks)
-		if (language == MRSyntaxLanguage::Latex && block.languageBlockKind == kLatexEnvironmentBlock)
-			continue;
-		else if (language == MRSyntaxLanguage::Systemd && block.sourceKind == MRFoldSourceKind::Section && block.lastContentLine != std::numeric_limits<std::size_t>::max() && block.lastContentLine > block.startLine)
-			appendVisibleSpan(block, block.lastContentLine);
-		else
-			appendVisibleSpan(block, finalLine);
+	output.stateOut.openBlocks = openBlocks;
+	output.stateOut.previousLineText = previousLineText;
+	output.stateOut.previousUpperLine = previousUpperLine;
+	output.stateOut.previousPreviousLineText = previousPreviousLineText;
+	output.stateOut.previousPreviousUpperLine = previousPreviousUpperLine;
+	output.stateOut.recentLineTexts = recentLineTexts;
+	if (finalizeAtDocumentEnd) {
+		const std::size_t finalLine = baseLineIndex + processedLineCount - 1;
+		for (const MRFoldOpenBlock &block : openBlocks)
+			if (language == MRSyntaxLanguage::Xml && block.languageBlockKind == kXmlTagBlock)
+				continue;
+			else if (language == MRSyntaxLanguage::Latex && block.languageBlockKind == kLatexEnvironmentBlock)
+				continue;
+			else if (language == MRSyntaxLanguage::Systemd && block.sourceKind == MRFoldSourceKind::Section && block.lastContentLine != std::numeric_limits<std::size_t>::max() && block.lastContentLine > block.startLine)
+				appendVisibleSpan(block, block.lastContentLine);
+			else
+				appendVisibleSpan(block, finalLine);
+	}
 	return output;
 }
 
 } // namespace
 
-std::vector<std::string> mrBuildViewportScanLineTextsParallel(const mr::editor::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
-                                                              std::size_t focusBottomLine) {
-	return buildViewportScanLineTextsFromChunks(snapshot, scanTopLine, scanBottomLine, focusTopLine, focusBottomLine);
-}
-
 std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language) {
 	const std::vector<std::string> lineTexts = splitFoldTrainingLines(text);
-	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, 0, 0, lineTexts.size(), language, std::map<std::size_t, MRFoldSpan>());
+	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, lineTexts.size(), 0, 0, lineTexts.size(), language, std::map<std::size_t, MRFoldSpan>(),
+	                                                         MRFoldAnalysisState(), true);
 	std::string output;
 	auto branchContinuesAtSameLevel = [&scan](const MRFoldSpan &span) noexcept {
 		for (const MRFoldSpan &candidate : scan.spans)
@@ -2246,14 +2205,13 @@ std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage l
 
 std::string mrBuildOutlineTrainingAscii(const std::string &text, MRSyntaxLanguage language) {
 	const std::vector<std::string> lineTexts = splitFoldTrainingLines(text);
-	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, 0, 0, lineTexts.size(), language, std::map<std::size_t, MRFoldSpan>());
+	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, lineTexts.size(), 0, 0, lineTexts.size(), language, std::map<std::size_t, MRFoldSpan>(),
+	                                                         MRFoldAnalysisState(), true);
 	return mrBuildOutlineTrainingAsciiForFoldSpans(lineTexts, scan.spans, language);
 }
 
 bool MRFileEditor::buildFoldOutlineSnapshot(const MROutlineRequest &request, MROutlineSnapshot &snapshot) const {
-	const MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
-	std::size_t exactLineCount = 0;
-	bool complete = false;
+	MRFoldOutlineInputSnapshot input;
 
 	snapshot.documentId = mBufferModel.documentId();
 	snapshot.version = mBufferModel.version();
@@ -2262,148 +2220,166 @@ bool MRFileEditor::buildFoldOutlineSnapshot(const MROutlineRequest &request, MRO
 	snapshot.complete = false;
 	snapshot.nodes.clear();
 	snapshot.textPool.clear();
-	if (visibleState.documentId != snapshot.documentId || visibleState.version != snapshot.version || visibleState.bottomLine <= visibleState.topLine) return false;
-	snapshot.topLine = visibleState.topLine;
-	snapshot.bottomLine = visibleState.bottomLine;
+	if (!captureFoldOutlineInput(request, input)) return false;
+	return mrBuildFoldOutlineSnapshot(input, snapshot);
+}
+
+bool MRFileEditor::captureFoldOutlineInput(const MROutlineRequest &request, MRFoldOutlineInputSnapshot &input) const {
+	const MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
+	std::size_t exactLineCount = 0;
+	bool complete = false;
+
+	const std::size_t documentId = mBufferModel.documentId();
+	const std::size_t version = mBufferModel.version();
+	if (visibleState.documentId != documentId || visibleState.version != version || visibleState.bottomLine <= visibleState.topLine) return false;
 	if (mBufferModel.exactLineCountKnown()) {
 		exactLineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
-		complete = snapshot.topLine == 0 && snapshot.bottomLine >= exactLineCount;
+		complete = visibleState.topLine == 0 && visibleState.bottomLine >= exactLineCount;
 	}
 	if (!request.allowPartial && !complete) return false;
-	return mrBuildFoldOutlineSnapshotFromFoldState(visibleState.language, snapshot.documentId, snapshot.version, visibleState.topLine, visibleState.bottomLine, complete,
-	                                              visibleState.lineTexts, visibleState.spans, mBufferModel.readSnapshot(), request, snapshot);
+	std::size_t captureBytes = 0;
+	for (const std::string &lineText : visibleState.lineTexts) {
+		if (lineText.size() > kOutlineCaptureByteBudget - std::min(captureBytes, kOutlineCaptureByteBudget)) return false;
+		captureBytes += lineText.size();
+	}
+	const bool cacheMatches = mFoldOutlineInputCache != nullptr && mFoldOutlineInputCache->documentId == documentId &&
+	                          mFoldOutlineInputCache->version == version && mFoldOutlineInputCache->visibleRevision == visibleState.revision &&
+	                          mFoldOutlineInputCache->topLine == visibleState.topLine && mFoldOutlineInputCache->bottomLine == visibleState.bottomLine &&
+	                          mFoldOutlineInputCache->complete == complete;
+	if (!cacheMatches) {
+		std::shared_ptr<MRFoldOutlineInputSnapshot> captured = std::make_shared<MRFoldOutlineInputSnapshot>();
+
+		captured->language = visibleState.language;
+		captured->documentId = documentId;
+		captured->version = version;
+		captured->topLine = visibleState.topLine;
+		captured->bottomLine = visibleState.bottomLine;
+		captured->visibleRevision = visibleState.revision;
+		captured->complete = complete;
+		captured->lineTexts = std::make_shared<const std::vector<std::string>>(visibleState.lineTexts);
+		captured->spans = std::make_shared<const std::vector<MRFoldSpan>>(visibleState.spans);
+		captured->readSnapshot = std::make_shared<const MRTextBufferModel::ReadSnapshot>(mBufferModel.readSnapshot());
+		if (captured->readSnapshot->documentId() != documentId || captured->readSnapshot->version() != version) return false;
+		mFoldOutlineInputCache = captured;
+	}
+	input = *mFoldOutlineInputCache;
+	input.request = request;
+	return input.readSnapshot != nullptr && input.readSnapshot->documentId() == input.documentId && input.readSnapshot->version() == input.version;
+}
+
+std::uint64_t MRFileEditor::foldOutlineInputRevision() const noexcept {
+	const MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
+
+	if (visibleState.documentId != mBufferModel.documentId() || visibleState.version != mBufferModel.version() || visibleState.bottomLine <= visibleState.topLine)
+		return 0;
+	return visibleState.revision;
+}
+
+bool MRFileEditor::completeFoldOutlineInputAvailable() const noexcept {
+	const MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
+	const std::size_t documentId = mBufferModel.documentId();
+	const std::size_t version = mBufferModel.version();
+
+	if (!mBufferModel.exactLineCountKnown()) return false;
+	const std::size_t lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+	return visibleState.documentId == documentId && visibleState.version == version && visibleState.language == mBufferModel.language() &&
+	       visibleState.topLine == 0 && visibleState.bottomLine >= lineCount;
+}
+
+bool MRFileEditor::canRequestCompleteFoldOutlineWarmup() const {
+	if (!foldingPipelineEnabled()) return false;
+	if (useApproximateLargeFileMetrics()) return false;
+	if (mBufferModel.length() > kOutlineCaptureByteBudget) return false;
+	if (!mBufferModel.exactLineCountKnown()) return true;
+	return std::max<std::size_t>(1, mBufferModel.lineCount()) <= kCompleteOutlineFoldLineBudget;
 }
 
 bool MRFileEditor::requestCompleteFoldOutlineWarmup() {
-	static constexpr std::size_t kCompleteOutlineFoldLineBudget = 20000;
-	const std::size_t documentId = mBufferModel.documentId();
-	const std::size_t version = mBufferModel.version();
 	const MRSyntaxLanguage language = mBufferModel.language();
-	const MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
 	std::size_t lineCount = 0;
 
-	if (!foldingPipelineEnabled()) return false;
-	if (useApproximateLargeFileMetrics()) return false;
+	if (!canRequestCompleteFoldOutlineWarmup()) return false;
 	if (!mBufferModel.exactLineCountKnown()) return false;
 	lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
-	if (lineCount > kCompleteOutlineFoldLineBudget) return false;
-	if (visibleState.documentId == documentId && visibleState.version == version && visibleState.language == language && visibleState.topLine == 0 && visibleState.bottomLine >= lineCount) return true;
+	if (completeFoldOutlineInputAvailable()) return true;
 	scheduleFoldWarmupIfNeeded(0, lineCount, 0, lineCount, language);
 	return true;
 }
 
-bool MRFileEditor::applyFoldWarmup(const mr::coprocessor::Payload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId) {
-	MRFoldingDerivedState::WarmupState &warmupState = mFoldState.warmupState();
-	MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
-	if (expectedTaskId == 0 || warmupState.taskId != expectedTaskId) return false;
-	if (mBufferModel.documentId() != warmupState.documentId || mBufferModel.version() != expectedVersion) return false;
-	const MRFoldWarmupPayload *foldWarmup = dynamic_cast<const MRFoldWarmupPayload *>(&payload);
-	if (foldWarmup == nullptr) return false;
-	if (mBufferModel.language() != foldWarmup->language) return false;
-
-	visibleState.spans = foldWarmup->spans;
-	visibleState.branches = foldWarmup->branches;
-	visibleState.documentId = mBufferModel.documentId();
-	visibleState.version = expectedVersion;
-	visibleState.topLine = foldWarmup->scanTopLine;
-	visibleState.bottomLine = foldWarmup->scanBottomLine;
-	visibleState.language = foldWarmup->language;
-	visibleState.lineTexts = foldWarmup->lineTexts;
-	visibleState.displayLevels.clear();
-	visibleState.gutterColumns = std::max(1, foldWarmup->visibleGutterColumns);
-	clearFoldWarmupTask(expectedTaskId);
-	drawView();
-	return true;
-}
-
-void MRFileEditor::clearFoldWarmupTask(std::uint64_t expectedTaskId) noexcept {
-	MRFoldingDerivedState::WarmupState &warmupState = mFoldState.warmupState();
-	if (expectedTaskId != 0 && warmupState.taskId != expectedTaskId) return;
-	if (warmupState.taskId == 0) return;
-	mFoldState.clearWarmupState();
-	notifyWindowTaskStateChanged();
+bool MRFileEditor::foldConfirmedStateForPacket(const FoldPacketState &packet, MRFoldAnalysisState &state) const noexcept {
+	for (const FoldCheckpointState &checkpoint : mFoldWarmupState.checkpoints)
+		if (checkpoint.generation == packet.generation && checkpoint.line == packet.startLine) {
+			state = checkpoint.state;
+			return true;
+		}
+	return false;
 }
 
 bool MRFileEditor::shouldTraceLargeFileWarmupDiagnostics() const noexcept {
 	return mBufferModel.document().length() >= kLargeFileWarmupTraceBytes;
 }
 
-void MRFileEditor::traceLargeFileWarmup(std::string &slot, const char *stage, std::string detail) {
-	if (!shouldTraceLargeFileWarmupDiagnostics()) return;
-	std::string line = "Large-file warmup ";
-	line += stage != nullptr ? stage : "unknown";
-	line += ": doc=" + std::to_string(mBufferModel.documentId());
-	line += " ver=" + std::to_string(mBufferModel.version());
-	if (hasPersistentFileName()) line += " file='" + std::string(fileName) + "'";
-	if (!detail.empty()) line += " " + detail;
-	if (line == slot) return;
-	slot = line;
-	mrLogMessage(line);
+std::shared_ptr<const mr::coprocessor::Payload> MRFileEditor::buildFoldWarmupPayload(const MRTextBufferModel::ReadSnapshot &snapshot, MRSyntaxLanguage language, std::uint64_t generation,
+	                                                                                   mr::coprocessor::WorkDirection direction, std::size_t startLine, std::size_t endLine,
+	                                                                                   std::size_t totalLines, bool documentEndKnown, const MRFoldAnalysisState &inputState,
+	                                                                                   const std::map<std::size_t, MRFoldSpan> &closedFoldSpans, const std::shared_ptr<std::atomic_bool> &cancelFlag,
+	                                                                                   bool retainProjectionData, int retainedFoldLevel) {
+	auto shouldStop = [&]() noexcept { return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire); };
+	if (shouldStop()) return std::shared_ptr<const mr::coprocessor::Payload>();
+	const std::size_t lookaheadEndLine = endLine < totalLines ? endLine + 1 : endLine;
+	std::vector<std::string> lineTexts;
+	lineTexts.reserve(lookaheadEndLine > startLine ? lookaheadEndLine - startLine : 0);
+	appendFoldScanLineTexts(lineTexts, snapshot, startLine, lookaheadEndLine);
+	if (shouldStop()) return std::shared_ptr<const mr::coprocessor::Payload>();
+	const std::size_t processedLineCount = std::min(endLine - startLine, lineTexts.size());
+	MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, processedLineCount, startLine, startLine, endLine, language, closedFoldSpans, inputState,
+	                                                   documentEndKnown && endLine >= totalLines);
+	if (retainedFoldLevel >= 0)
+		scan.spans.erase(std::remove_if(scan.spans.begin(), scan.spans.end(), [retainedFoldLevel](const MRFoldSpan &span) { return static_cast<int>(span.level) != retainedFoldLevel; }), scan.spans.end());
+	if (lineTexts.size() > processedLineCount) lineTexts.resize(processedLineCount);
+	if (!retainProjectionData) {
+		lineTexts.clear();
+		scan.spans.clear();
+		scan.branches.clear();
+	}
+	return std::make_shared<MRFoldWarmupPayload>(generation, direction, language, startLine, startLine + processedLineCount, scan.visibleMaxLevel, inputState, std::move(scan.stateOut),
+	                                           std::move(lineTexts), std::move(scan.spans), std::move(scan.branches));
 }
 
+std::shared_ptr<const mr::coprocessor::Payload> MRFileEditor::buildFoldLineAcquisitionPayload(const MRTextBufferModel::ReadSnapshot &snapshot, MRSyntaxLanguage language,
+	                                                                                           std::uint64_t generation, std::size_t startLine, std::size_t endLine,
+	                                                                                           std::size_t totalLines, const std::shared_ptr<std::atomic_bool> &cancelFlag) {
+	auto shouldStop = [&]() noexcept { return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire); };
+	if (shouldStop() || endLine <= startLine) return std::shared_ptr<const mr::coprocessor::Payload>();
+	const std::size_t lookaheadEndLine = endLine < totalLines ? endLine + 1 : endLine;
+	std::shared_ptr<std::vector<std::string>> lineTexts = std::make_shared<std::vector<std::string>>();
+	lineTexts->reserve(lookaheadEndLine - startLine);
+	appendFoldScanLineTexts(*lineTexts, snapshot, startLine, lookaheadEndLine);
+	if (shouldStop() || lineTexts->size() < endLine - startLine) return std::shared_ptr<const mr::coprocessor::Payload>();
+	return std::make_shared<FoldLineAcquisitionPayload>(generation, language, startLine, endLine, lineTexts);
+}
 
-void MRFileEditor::scheduleFoldWarmupIfNeeded(std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t topLine, std::size_t requestBottomLine, MRSyntaxLanguage language) {
-	if (!foldingPipelineEnabled()) {
-		if (mFoldState.warmupState().taskId != 0) {
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
-			clearFoldWarmupTask(mFoldState.warmupState().taskId);
-		}
-		invalidateFoldCache();
-		return;
+std::shared_ptr<const mr::coprocessor::Payload> MRFileEditor::buildFoldValidationPayload(const std::shared_ptr<const std::vector<std::string>> &lineTexts, MRSyntaxLanguage language,
+	                                                                                      std::uint64_t generation, std::size_t startLine, std::size_t endLine,
+	                                                                                      std::size_t totalLines, const MRFoldAnalysisState &inputState, bool retainFoldSpans,
+	                                                                                      unsigned short retainedFoldLevel, const std::shared_ptr<std::atomic_bool> &cancelFlag) {
+	auto shouldStop = [&]() noexcept { return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire); };
+	if (shouldStop() || lineTexts == nullptr || endLine <= startLine || lineTexts->size() < endLine - startLine)
+		return std::shared_ptr<const mr::coprocessor::Payload>();
+	const std::size_t processedLineCount = endLine - startLine;
+	MRFoldScanOutput scan = computeFoldSpansForLineTexts(*lineTexts, processedLineCount, startLine, startLine, endLine, language, std::map<std::size_t, MRFoldSpan>(), inputState,
+	                                                   retainFoldSpans && endLine >= totalLines);
+	if (shouldStop()) return std::shared_ptr<const mr::coprocessor::Payload>();
+	if (retainFoldSpans) {
+		// Closing the selected-level parents also hides every deeper descendant. The
+		// effective projection exposes the next descendant level only when a parent is opened explicitly.
+		scan.spans.erase(std::remove_if(scan.spans.begin(), scan.spans.end(), [retainedFoldLevel](const MRFoldSpan &span) { return span.level != retainedFoldLevel; }),
+		                 scan.spans.end());
+	} else {
+		scan.spans.clear();
 	}
-	MRFoldingDerivedState::WarmupState &warmupState = mFoldState.warmupState();
-	MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
-	if (scanBottomLine <= scanTopLine) {
-		clearFoldWarmupTask();
-		return;
-	}
-
-	const std::size_t docId = mBufferModel.documentId();
-	const std::size_t version = mBufferModel.version();
-	if (warmupState.taskId != 0 && warmupState.documentId == docId && warmupState.version == version && warmupState.language == language && scanTopLine >= warmupState.topLine &&
-	    scanBottomLine <= warmupState.bottomLine)
-		return;
-
-	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
-
-	std::uint64_t previousTaskId = warmupState.taskId;
-	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
-	warmupState.documentId = docId;
-	warmupState.version = version;
-	warmupState.topLine = scanTopLine;
-	warmupState.bottomLine = scanBottomLine;
-	warmupState.language = language;
-	std::string foldTaskLabel = std::string(foldWarmupTaskLabel()) + " lines " + std::to_string(scanTopLine + 1) + "-" + std::to_string(scanBottomLine);
-	warmupState.taskId = mr::coprocessor::globalCoprocessor().submit(
-	    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FoldWarmup, docId, version, foldTaskLabel,
-	    [snapshot, language, scanTopLine, scanBottomLine, topLine, requestBottomLine, closedFoldSpans = mFoldState.closedFoldSpans()](const mr::coprocessor::TaskInfo &info,
-	                                                                                                                                                                               std::stop_token stopToken) {
-		    mr::coprocessor::Result result;
-		    auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
-		    result.task = info;
-		    if (shouldStop()) {
-			    result.status = mr::coprocessor::TaskStatus::Cancelled;
-			    return result;
-		    }
-
-		    std::vector<std::string> lineTexts = mrBuildViewportScanLineTextsParallel(snapshot, scanTopLine, scanBottomLine, topLine, requestBottomLine);
-		    if (shouldStop()) {
-			    result.status = mr::coprocessor::TaskStatus::Cancelled;
-			    return result;
-		    }
-
-		    const std::size_t actualBottomLine = scanTopLine + lineTexts.size();
-		    MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, scanTopLine, topLine, requestBottomLine, language, closedFoldSpans);
-		    result.status = mr::coprocessor::TaskStatus::Completed;
-		    result.payload = std::make_shared<MRFoldWarmupPayload>(language, scanTopLine, actualBottomLine, scan.visibleMaxLevel, std::move(lineTexts), std::move(scan.spans), std::move(scan.branches));
-		    return result;
-	    });
-	if (shouldTraceLargeFileWarmupDiagnostics()) {
-		std::string detail = "action=schedule task=" + std::to_string(warmupState.taskId) + " top=" + std::to_string(scanTopLine) + " bottom=" + std::to_string(scanBottomLine) + " cached=" +
-		                     std::to_string(visibleState.topLine) + "/" + std::to_string(visibleState.bottomLine);
-		traceLargeFileWarmup(mLastComputeWarmupTrace, "fold", std::move(detail));
-	}
-	if (warmupState.taskId != previousTaskId) notifyWindowTaskStateChanged();
+	return std::make_shared<MRFoldWarmupPayload>(generation, mr::coprocessor::WorkDirection::Eof, language, startLine, endLine, scan.visibleMaxLevel, inputState,
+	                                           std::move(scan.stateOut), std::vector<std::string>(), std::move(scan.spans), std::vector<MRFoldGutterBranch>());
 }
 
 

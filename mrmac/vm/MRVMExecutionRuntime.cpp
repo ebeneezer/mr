@@ -14,31 +14,28 @@ static void appendUniqueString(std::vector<std::string> &values, const std::stri
 
 struct MRVMStagedExecutionContext {
 	const MRMacroStagedExecutionInput &input;
-	const std::stop_token &stopToken;
 	std::shared_ptr<std::atomic_bool> cancelFlag;
 	BackgroundEditSession session;
 
 	struct InstallGuard {
 		BackgroundEditSession *previousSession;
-		const std::stop_token *previousStopToken;
 		std::shared_ptr<std::atomic_bool> previousCancelFlag;
 
 		explicit InstallGuard(MRVMStagedExecutionContext &context) noexcept
-		    : previousSession(g_backgroundEditSession), previousStopToken(g_backgroundMacroStopToken), previousCancelFlag(g_backgroundMacroCancelFlag) {
+		    : previousSession(g_backgroundEditSession), previousCancelFlag(g_backgroundMacroCancelFlag) {
 			g_backgroundEditSession = &context.session;
-			g_backgroundMacroStopToken = &context.stopToken;
 			g_backgroundMacroCancelFlag = context.cancelFlag;
 		}
 
 		~InstallGuard() {
 			g_backgroundEditSession = previousSession;
-			g_backgroundMacroStopToken = previousStopToken;
 			g_backgroundMacroCancelFlag = previousCancelFlag;
 		}
 	};
 
-	MRVMStagedExecutionContext(const MRMacroStagedExecutionInput &stagedInput, const std::stop_token &stagedStopToken, std::shared_ptr<std::atomic_bool> stagedCancelFlag)
-	    : input(stagedInput), stopToken(stagedStopToken), cancelFlag(std::move(stagedCancelFlag)), session() {
+	MRVMStagedExecutionContext(const MRMacroStagedExecutionInput &stagedInput, std::shared_ptr<std::atomic_bool> stagedCancelFlag)
+	    : input(stagedInput), cancelFlag(std::move(stagedCancelFlag)), session() {
+		if (cancelFlag == nullptr) cancelFlag = std::make_shared<std::atomic_bool>(false);
 	}
 
 	void initializeSession() {
@@ -170,23 +167,21 @@ struct MRVMStagedExecutionContext {
 };
 }
 
-MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, MRMacroExecutionSessionId sessionId, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
+MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, MRMacroExecutionSessionId sessionId, std::shared_ptr<std::atomic_bool> cancelFlag) {
 	MRMacroJobResult result;
 	VirtualMachine vm;
 	struct CancelGuard {
-		const std::stop_token *savedToken;
 		std::shared_ptr<std::atomic_bool> savedFlag;
 
-		CancelGuard(const std::stop_token *token, std::shared_ptr<std::atomic_bool> flag) : savedToken(g_backgroundMacroStopToken), savedFlag(g_backgroundMacroCancelFlag) {
-			g_backgroundMacroStopToken = token;
+		explicit CancelGuard(std::shared_ptr<std::atomic_bool> flag) : savedFlag(g_backgroundMacroCancelFlag) {
+			if (flag == nullptr) flag = std::make_shared<std::atomic_bool>(false);
 			g_backgroundMacroCancelFlag = std::move(flag);
 		}
 
 		~CancelGuard() {
-			g_backgroundMacroStopToken = savedToken;
 			g_backgroundMacroCancelFlag = savedFlag;
 		}
-	} cancelGuard(&stopToken, std::move(cancelFlag));
+	} cancelGuard(std::move(cancelFlag));
 
 	vm.setVerboseLogging(false);
 	vm.setExecutionSessionContext(sessionId);
@@ -204,13 +199,13 @@ MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std:
 	return result;
 }
 
-MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
-	return mrvmRunBytecodeBackgroundAt(bytecode, length, 0, std::string(), std::string(), 0, stopToken, std::move(cancelFlag));
+MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::shared_ptr<std::atomic_bool> cancelFlag) {
+	return mrvmRunBytecodeBackgroundAt(bytecode, length, 0, std::string(), std::string(), 0, std::move(cancelFlag));
 }
 
-MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, MRMacroExecutionSessionId sessionId, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
+MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, MRMacroExecutionSessionId sessionId, std::shared_ptr<std::atomic_bool> cancelFlag) {
 	VirtualMachine vm;
-	MRVMStagedExecutionContext context(input, stopToken, std::move(cancelFlag));
+	MRVMStagedExecutionContext context(input, std::move(cancelFlag));
 
 	context.initializeSession();
 	MRVMStagedExecutionContext::InstallGuard installGuard(context);

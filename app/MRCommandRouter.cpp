@@ -86,8 +86,8 @@
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRMenuBar.hpp"
-#include "../ui/MRBentoBox.hpp"
-#include "../ui/hex/MRBentoHexEditor.hpp"
+#include "../ui/MRBentoBox/MRBentoBox.hpp"
+#include "../ui/MRBentoHexEditor/MRBentoHexEditor.hpp"
 #include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../ui/widgets/MRColumnListView.hpp"
@@ -1722,25 +1722,10 @@ bool handleSearchGotoLineNumber() {
 	MREditWindow *win = currentEditWindow();
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	long lineNumber = 0;
-	std::size_t offset = 0;
-	std::size_t line = 1;
-	std::size_t length = 0;
 
 	if (editor == nullptr) return true;
 	if (!promptGotoLineNumber(lineNumber)) return true;
-
-	length = editor->bufferLength();
-	offset = 0;
-	line = 1;
-	while (line < static_cast<std::size_t>(lineNumber) && offset < length) {
-		std::size_t next = editor->nextLineOffset(offset);
-		if (next <= offset) break;
-		offset = next;
-		++line;
-	}
-	editor->setCursorOffset(offset);
-	editor->setSelectionOffsets(offset, offset);
-	editor->revealCursor(True);
+	editor->requestDocumentLineNavigation(static_cast<std::size_t>(lineNumber - 1));
 	return true;
 }
 
@@ -1919,11 +1904,7 @@ bool handleCompilerErrorNavigation(void *commandInfo, bool forward) {
 		postDialogWarning("Compiler error navigation requires an active Bento build window.");
 		return true;
 	}
-	static_cast<void>(bentoBox->refreshCompilerDiagnosticsFromOutput());
-	if (!(forward ? bentoBox->jumpToNextProblem() : bentoBox->jumpToPreviousProblem())) {
-		postDialogWarning("No compiler diagnostic location found.");
-		return true;
-	}
+	static_cast<void>(bentoBox->requestCompilerProblemNavigation(forward));
 	return true;
 }
 
@@ -1962,7 +1943,7 @@ MRBentoCompareSource captureFileCompareSource(MREditWindow *window) {
 	source.wasVisible = (window->state & sfVisible) != 0;
 	source.wasManuallyHidden = isWindowManuallyHidden(window);
 	source.title = fileCompareSourceTitle(window);
-	if (window->getEditor() != nullptr) source.text = window->getEditor()->snapshotText();
+	if (window->getEditor() != nullptr) source.snapshot = window->getEditor()->readSnapshot();
 	return source;
 }
 
@@ -1973,37 +1954,11 @@ std::string fileCompareWindowTitle(const MRBentoCompareSetup &setup) {
 	return title;
 }
 
-std::uint64_t submitFileCompareTask(MRBentoBox *bentoBox, const MRBentoCompareSetup &setup) {
-	std::vector<std::string> originalLines;
-	std::vector<std::string> compareLines;
-
-	if (bentoBox == nullptr) return 0;
-	mr::diff::mrSplitTextLinesForDiff(setup.original.text, originalLines);
-	mr::diff::mrSplitTextLinesForDiff(setup.compare.text, compareLines);
-
-	return mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, setup.original.documentId, setup.original.version, "file compare", [originalLines, compareLines, originalDocumentId = setup.original.documentId, originalVersion = setup.original.version, compareDocumentId = setup.compare.documentId, compareVersion = setup.compare.version](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
-		mr::coprocessor::Result result;
-		std::vector<mr::diff::MRDiffHunk> hunks;
-		std::string errorText;
-
-		result.task = task;
-		if (!mr::diff::mrComputeMyersDiff(originalLines, compareLines, hunks, &errorText, stopToken)) {
-			result.status = stopToken.stop_requested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Failed;
-			result.error = errorText;
-			return result;
-		}
-		result.status = mr::coprocessor::TaskStatus::Completed;
-		result.payload = std::make_shared<mr::coprocessor::FileComparePayload>(originalDocumentId, originalVersion, compareDocumentId, compareVersion, originalLines.size(), compareLines.size(), std::move(hunks));
-		return result;
-	});
-}
-
 bool handleTextFileCompare() {
 	MREditWindow *originalWindow = currentEditWindow();
 	MREditWindow *compareWindow;
 	MRBentoBox *compareBento;
 	MRBentoCompareSetup setup;
-	std::uint64_t taskId;
 	std::string title;
 
 	if (!isFileCompareWindowCandidate(originalWindow)) {
@@ -2025,20 +1980,17 @@ bool handleTextFileCompare() {
 		postDialogWarning("Unable to create file compare BentoBox.");
 		return true;
 	}
-	if (!compareBento->initializeFileCompare(setup)) {
+	if (!compareBento->initializeFileCompare(std::move(setup))) {
 		message(compareBento, evCommand, cmClose, nullptr);
 		postDialogWarning("Unable to initialize file compare BentoBox.");
 		return true;
 	}
 
-	taskId = submitFileCompareTask(compareBento, setup);
-	if (taskId == 0) {
+	if (!compareBento->startFileCompareProjection()) {
 		message(compareBento, evCommand, cmClose, nullptr);
-		postDialogWarning("Unable to start file compare worker.");
+		postDialogWarning("Unable to start file compare pipeline.");
 		return true;
 	}
-	compareBento->setFileCompareTask(taskId);
-	compareBento->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::FileCompare, "file compare");
 	static_cast<void>(mrActivateEditWindow(compareBento));
 	return true;
 }
@@ -2145,7 +2097,7 @@ bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandL
 	win->setWindowRole(MREditWindow::wrCommunicationCommand, commandLine);
 	if (activate) static_cast<void>(mrActivateEditWindow(win));
 
-	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, static_cast<std::size_t>(win->bufferId()), 0, std::string("external-io: ") + commandLine, [commandLine, channelId = static_cast<std::size_t>(win->bufferId()), successAudioUri, failureAudioUri, buildContext](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) { return runExternalCommandTask(info, stopToken, channelId, commandLine, buildContext, successAudioUri, failureAudioUri); });
+	taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, static_cast<std::size_t>(win->bufferId()), 0, mr::coprocessor::ExecutionOwnerKind::ProcessChannel, static_cast<std::size_t>(win->bufferId()), std::string("external-io: ") + commandLine, [commandLine, channelId = static_cast<std::size_t>(win->bufferId()), successAudioUri, failureAudioUri, buildContext](const mr::coprocessor::TaskInfo &info) { return runExternalCommandTask(info, channelId, commandLine, buildContext, successAudioUri, failureAudioUri); });
 	if (taskId == 0) {
 		if (closeOnFailure) message(win, evCommand, cmClose, nullptr);
 		postSearchError("Unable to start external command worker.");
@@ -2450,6 +2402,7 @@ bool handleStopCurrentProgram() {
 bool handleRestartCurrentProgram() {
 	MREditWindow *current = currentEditWindow();
 	MREditWindow *win = currentExternalOutputWindow();
+	MRBentoBox *diagnosticsBento = win != nullptr ? dynamic_cast<MRBentoBox *>(win->owner) : nullptr;
 	const bool splitOutputTarget = win != nullptr && win != current;
 	std::string titleOverride;
 
@@ -2464,6 +2417,7 @@ bool handleRestartCurrentProgram() {
 		return true;
 	}
 	if (splitOutputTarget && win->getTitle(0) != nullptr) titleOverride = win->getTitle(0);
+	if (diagnosticsBento != nullptr && diagnosticsBento->buildOutputPane() == win) diagnosticsBento->clearCompilerDiagnostics();
 	startExternalCommandInWindow(win, win->windowRoleDetail(), true, !splitOutputTarget, false, titleOverride);
 	if (splitOutputTarget && current != nullptr) static_cast<void>(mrActivateEditWindow(current));
 	return true;
@@ -2494,7 +2448,10 @@ bool handleClearCurrentOutput() {
 	}
 	win->setReadOnly(true);
 	win->setFileChanged(false);
-	if (MRBentoBox *split = dynamic_cast<MRBentoBox *>(win->owner); split != nullptr && split->buildOutputPane() == win) split->clearCompilerDiagnostics();
+	if (MRBentoBox *split = dynamic_cast<MRBentoBox *>(win->owner); split != nullptr && split->buildOutputPane() == win) {
+		split->clearCompilerDiagnostics();
+		static_cast<void>(split->refreshCompilerDiagnosticsFromOutput());
+	}
 	setSplitDiagnosticsStatusForOutput(win, "idle");
 	line << "Cleared communication window #" << win->bufferId() << ".";
 	mrLogMessage(line.str().c_str());
@@ -2503,9 +2460,11 @@ bool handleClearCurrentOutput() {
 
 bool handleCompilerProblemsNavigation(MREditWindow *targetWindow, bool forward) {
 	MRBentoBox *bentoBox = compilerProblemsBentoBoxForWindow(targetWindow);
-	const bool handled = bentoBox != nullptr && (forward ? bentoBox->jumpToNextProblem() : bentoBox->jumpToPreviousProblem());
 
-	if (!handled) postDialogWarning("No compiler problems available.");
+	if (bentoBox == nullptr)
+		postDialogWarning("No compiler problems available.");
+	else
+		static_cast<void>(bentoBox->requestCompilerProblemNavigation(forward));
 	return true;
 }
 

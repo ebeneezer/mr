@@ -4,9 +4,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
-#include <chrono>
 #include <cstring>
-#include <sstream>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -15,11 +13,9 @@
 namespace mr {
 namespace editor {
 
-using lineindex::appendDocumentTrace;
-using lineindex::kSlowDocumentTraceThreshold;
-using lineindex::traceMicros;
-
 namespace {
+constexpr Offset kLazyLineIndexEraseProbeLimit = 4096;
+
 std::size_t allocateDocumentId() noexcept {
 	static std::atomic<std::size_t> nextId(1);
 	return nextId.fetch_add(1, std::memory_order_relaxed);
@@ -250,17 +246,45 @@ void StagedEditTransaction::replace(Range range, std::string_view text) {
 StagedEditTransaction::StagedEditTransaction(const ReadSnapshot &snapshot, std::string_view label) : mBaseVersion(snapshot.version()), mLabel(label) {
 }
 
-TextDocument::TextDocument() noexcept : mOriginalBuffer(std::make_shared<std::string>()), mLength(0), mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(false), mLazyTotalLineCount(1) {
+TextDocument::TextDocument() noexcept : mOriginalBuffer(std::make_shared<std::string>()), mLength(0), mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(false), mLazyTotalLineCount(1), mPendingLineIndexScanPackets(), mLineIndexScanReservations(), mNextLineIndexScanReservationId(1) {
 	mPieces = std::make_shared<std::vector<Piece>>();
 	resetLazyLineIndex();
 	mEditedLineStarts = std::make_shared<std::vector<Offset>>(1, 0);
 }
 
-TextDocument::TextDocument(std::string_view text) : mOriginalBuffer(std::make_shared<std::string>()), mLength(0), mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(false), mLazyTotalLineCount(1) {
+TextDocument::TextDocument(std::string_view text) : mOriginalBuffer(std::make_shared<std::string>()), mLength(0), mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(false), mLazyTotalLineCount(1), mPendingLineIndexScanPackets(), mLineIndexScanReservations(), mNextLineIndexScanReservationId(1) {
 	mPieces = std::make_shared<std::vector<Piece>>();
 	resetLazyLineIndex();
 	mEditedLineStarts = std::make_shared<std::vector<Offset>>(1, 0);
 	initializeFromOriginal(text, true);
+}
+
+TextDocument::TextDocument(const TextDocument &source)
+    : mOriginalBuffer(source.mOriginalBuffer), mMappedOriginal(source.mMappedOriginal), mAddBuffer(source.mAddBuffer), mPieces(source.mPieces), mLength(source.mLength), mDocumentId(source.mDocumentId),
+      mVersion(source.mVersion), mCacheDirty(source.mCacheDirty), mMaterializedText(source.mMaterializedText), mLineIndexCheckpoints(source.mLineIndexCheckpoints),
+      mLazyIndexedOffset(source.mLazyIndexedOffset), mLazyIndexedLine(source.mLazyIndexedLine), mLazyLineIndexComplete(source.mLazyLineIndexComplete), mLazyTotalLineCount(source.mLazyTotalLineCount),
+      mPendingLineIndexScanPackets(), mLineIndexScanReservations(), mNextLineIndexScanReservationId(1), mEditedLineStarts(source.mEditedLineStarts) {
+}
+
+TextDocument &TextDocument::operator=(const TextDocument &source) {
+	if (this == &source) return *this;
+	mOriginalBuffer = source.mOriginalBuffer;
+	mMappedOriginal = source.mMappedOriginal;
+	mAddBuffer = source.mAddBuffer;
+	mPieces = source.mPieces;
+	mLength = source.mLength;
+	mDocumentId = source.mDocumentId;
+	mVersion = source.mVersion;
+	mCacheDirty = source.mCacheDirty;
+	mMaterializedText = source.mMaterializedText;
+	mLineIndexCheckpoints = source.mLineIndexCheckpoints;
+	mLazyIndexedOffset = source.mLazyIndexedOffset;
+	mLazyIndexedLine = source.mLazyIndexedLine;
+	mLazyLineIndexComplete = source.mLazyLineIndexComplete;
+	mLazyTotalLineCount = source.mLazyTotalLineCount;
+	clearLineIndexScanLedger();
+	mEditedLineStarts = source.mEditedLineStarts;
+	return *this;
 }
 
 const std::string &TextDocument::text() const noexcept {
@@ -305,6 +329,41 @@ void TextDocument::setText(std::string_view text) {
 	if (setTextNoVersionBump(text)) bumpVersion();
 }
 
+CommitResult TextDocument::adoptReadOnlyProjectionText(const std::shared_ptr<const std::string> &text, std::size_t expectedDocumentId, std::size_t expectedVersion) {
+	CommitResult result;
+	result.expectedVersion = expectedVersion;
+	result.actualVersion = mVersion;
+	if (text == nullptr) return result;
+	if (mDocumentId != expectedDocumentId || !matchesVersion(expectedVersion)) {
+		result.status = CommitStatus::VersionConflict;
+		return result;
+	}
+
+	const Offset oldLength = mLength;
+	const std::size_t oldVersion = mVersion;
+	mOriginalBuffer = text;
+	mMappedOriginal.reset();
+	mAddBuffer.clear();
+	mPieces = std::make_shared<std::vector<Piece>>();
+	mLength = text->size();
+	if (mLength != 0) mPieces->push_back(Piece(BufferKind::Original, TextSpan(0, mLength)));
+	mMaterializedText.clear();
+	mCacheDirty = mLength != 0;
+	resetLazyLineIndex();
+	mEditedLineStarts.reset();
+	bumpVersion();
+
+	result.status = CommitStatus::Applied;
+	result.actualVersion = mVersion;
+	result.change.changed = true;
+	result.change.touchedRange = Range(0, std::max(oldLength, mLength));
+	result.change.oldLength = oldLength;
+	result.change.newLength = mLength;
+	result.change.oldVersion = oldVersion;
+	result.change.newVersion = mVersion;
+	return result;
+}
+
 void TextDocument::apply(const EditTransaction &transaction) {
 	const std::vector<EditOperation> &ops = transaction.operations();
 	bool mutated = false;
@@ -315,7 +374,6 @@ void TextDocument::apply(const EditTransaction &transaction) {
 }
 
 CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::size_t expectedVersion) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	CommitResult result;
 	result.expectedVersion = expectedVersion;
 	result.actualVersion = mVersion;
@@ -365,19 +423,10 @@ CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::siz
 	result.change.oldLength = oldLength;
 	result.change.newLength = mLength;
 	if (touched) result.change.touchedRange = Range(touchStart, touchEnd).normalized();
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowDocumentTraceThreshold) {
-		std::ostringstream line;
-		line << "Phase1 doc tryApply total_us=" << traceMicros(totalElapsed) << " ops=" << ops.size() << " old_len=" << oldLength << " new_len=" << mLength << " add=" << mAddBuffer.size()
-		     << " pieces=" << pieceCount() << " exact_lines=" << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0) << " lazy_checkpoints=" << mLineIndexCheckpoints.size();
-		if (touched) line << " touch_start=" << touchStart << " touch_end=" << touchEnd;
-		appendDocumentTrace(line.str());
-	}
 	return result;
 }
 
 CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	CommitResult result;
 	result.expectedVersion = transaction.baseVersion();
 	result.actualVersion = mVersion;
@@ -427,14 +476,6 @@ CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 	result.change.oldLength = oldLength;
 	result.change.newLength = mLength;
 	if (touched) result.change.touchedRange = Range(touchStart, touchEnd).normalized();
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowDocumentTraceThreshold) {
-		std::ostringstream line;
-		line << "Phase1 doc tryApplyStaged total_us=" << traceMicros(totalElapsed) << " ops=" << ops.size() << " old_len=" << oldLength << " new_len=" << mLength << " add=" << mAddBuffer.size()
-		     << " pieces=" << pieceCount() << " exact_lines=" << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0) << " lazy_checkpoints=" << mLineIndexCheckpoints.size();
-		if (touched) line << " touch_start=" << touchStart << " touch_end=" << touchEnd;
-		appendDocumentTrace(line.str());
-	}
 	return result;
 }
 
@@ -589,95 +630,48 @@ std::size_t TextDocument::splitAt(Offset offset) {
 }
 
 bool TextDocument::eraseNoVersionBump(Range range) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	Range bounded = range.clamped(mLength);
 	if (bounded.empty()) return false;
+	bool preserveLazyLineIndex = false;
+	if (!hasEditedLineStartIndex() && mLazyLineIndexComplete && bounded.length() <= kLazyLineIndexEraseProbeLimit) {
+		const char *directData = directTextData();
+		const std::size_t removedLineBreaks = directData != nullptr ? lineindex::directCountLineBreaksInRange(directData, mLength, bounded.start, bounded.end)
+		                                                            : lineindex::piecewiseCountLineBreaksInRange(*this, bounded.start, bounded.end);
+		const bool createsCrLf = bounded.start > 0 && bounded.end < mLength && charAt(bounded.start - 1) == '\r' && charAt(bounded.end) == '\n';
+		preserveLazyLineIndex = removedLineBreaks == 0 && !createsCrLf;
+	}
 
-	std::chrono::steady_clock::duration splitElapsed{};
-	std::chrono::steady_clock::duration eraseElapsed{};
-	std::chrono::steady_clock::duration compactElapsed{};
-	std::chrono::steady_clock::duration invalidateElapsed{};
-	std::chrono::steady_clock::duration lineIndexElapsed{};
-	const std::size_t piecesBefore = pieceCount();
-	const std::size_t exactLinesBefore = hasEditedLineStartIndex() ? mEditedLineStarts->size() : 0;
 	std::size_t startIndex = splitAt(bounded.start);
 	std::size_t endIndex = splitAt(bounded.end);
-	splitElapsed = std::chrono::steady_clock::now() - startedAt;
-
-	{
-		const auto eraseStartedAt = std::chrono::steady_clock::now();
-		if (startIndex < endIndex) mPieces->erase(mPieces->begin() + static_cast<std::ptrdiff_t>(startIndex), mPieces->begin() + static_cast<std::ptrdiff_t>(endIndex));
-		eraseElapsed = std::chrono::steady_clock::now() - eraseStartedAt;
-	}
+	if (startIndex < endIndex) mPieces->erase(mPieces->begin() + static_cast<std::ptrdiff_t>(startIndex), mPieces->begin() + static_cast<std::ptrdiff_t>(endIndex));
 	mLength -= bounded.end - bounded.start;
-	{
-		const auto compactStartedAt = std::chrono::steady_clock::now();
-		compactPieces();
-		compactElapsed = std::chrono::steady_clock::now() - compactStartedAt;
-	}
-	{
-		const auto invalidateStartedAt = std::chrono::steady_clock::now();
+	compactPieces();
+	if (preserveLazyLineIndex) shiftLazyLineIndexForEraseWithoutLineBreak(bounded.start, bounded.length());
+	else
 		invalidateLazyLineIndexFrom(bounded.start);
-		invalidateElapsed = std::chrono::steady_clock::now() - invalidateStartedAt;
-	}
-	{
-		const auto lineIndexStartedAt = std::chrono::steady_clock::now();
-		if (hasEditedLineStartIndex()) updateEditedLineStartIndexForErase(bounded);
-		lineIndexElapsed = std::chrono::steady_clock::now() - lineIndexStartedAt;
-	}
+	if (hasEditedLineStartIndex()) updateEditedLineStartIndexForErase(bounded);
 	markDirty();
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowDocumentTraceThreshold) {
-		std::ostringstream line;
-		line << "Phase1 doc eraseNoVersionBump total_us=" << traceMicros(totalElapsed) << " split_us=" << traceMicros(splitElapsed) << " erase_us=" << traceMicros(eraseElapsed)
-		     << " compact_us=" << traceMicros(compactElapsed) << " invalidate_us=" << traceMicros(invalidateElapsed) << " line_index_us=" << traceMicros(lineIndexElapsed)
-		     << " start=" << bounded.start << " end=" << bounded.end << " erased_bytes=" << bounded.length() << " pieces_before=" << piecesBefore << " pieces_after=" << pieceCount()
-		     << " exact_lines_before=" << exactLinesBefore << " exact_lines_after=" << (hasEditedLineStartIndex() ? mEditedLineStarts->size() : 0) << " len=" << mLength
-		     << " add=" << mAddBuffer.size();
-		appendDocumentTrace(line.str());
-	}
 	return true;
 }
 
 bool TextDocument::replaceNoVersionBump(Range range, std::string_view text) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	Range bounded = range.clamped(mLength);
-	const auto eraseStartedAt = std::chrono::steady_clock::now();
 	bool removed = eraseNoVersionBump(bounded);
-	const auto eraseElapsed = std::chrono::steady_clock::now() - eraseStartedAt;
 	bool inserted = false;
-	std::chrono::steady_clock::duration insertElapsed{};
-	if (!text.empty()) {
-		const auto insertStartedAt = std::chrono::steady_clock::now();
-		inserted = insertAddSpanNoVersionBump(bounded.start, mAddBuffer.append(text));
-		insertElapsed = std::chrono::steady_clock::now() - insertStartedAt;
-	}
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowDocumentTraceThreshold) {
-		std::ostringstream line;
-		line << "Phase1 doc replaceNoVersionBump total_us=" << traceMicros(totalElapsed) << " erase_us=" << traceMicros(eraseElapsed) << " insert_us=" << traceMicros(insertElapsed)
-		     << " start=" << bounded.start << " end=" << bounded.end << " removed_bytes=" << bounded.length() << " inserted_bytes=" << text.size() << " len=" << mLength
-		     << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " exact_lines=" << (hasEditedLineStartIndex() ? mEditedLineStarts->size() : 0);
-		appendDocumentTrace(line.str());
-	}
+	if (!text.empty()) inserted = insertAddSpanNoVersionBump(bounded.start, mAddBuffer.append(text));
 	return inserted || removed;
 }
 
 bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	Offset logical = clampOffset(offset);
-	const auto splitStartedAt = std::chrono::steady_clock::now();
 	std::size_t index = splitAt(logical);
-	const auto splitElapsed = std::chrono::steady_clock::now() - splitStartedAt;
 
 	if (!span.empty()) mPieces->insert(mPieces->begin() + static_cast<std::ptrdiff_t>(index), Piece(BufferKind::Add, span));
 	else
 		return false;
 
 	mLength += span.length;
-	const auto compactStartedAt = std::chrono::steady_clock::now();
 	compactPieces();
-	const auto compactElapsed = std::chrono::steady_clock::now() - compactStartedAt;
 	std::string_view inserted(mAddBuffer.text().data() + span.start, span.length);
 	bool insertedLineBreak = false;
 	for (char ch : inserted) {
@@ -686,23 +680,11 @@ bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
 			break;
 		}
 	}
-	const auto invalidateStartedAt = std::chrono::steady_clock::now();
 	if (insertedLineBreak) invalidateLazyLineIndexFrom(logical);
 	else
 		shiftLazyLineIndexForInsertWithoutLineBreak(logical, span.length);
-	const auto invalidateElapsed = std::chrono::steady_clock::now() - invalidateStartedAt;
-	const auto indexStartedAt = std::chrono::steady_clock::now();
 	if (hasEditedLineStartIndex()) updateEditedLineStartIndexForInsert(logical, inserted);
-	const auto indexElapsed = std::chrono::steady_clock::now() - indexStartedAt;
 	markDirty();
-	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
-	if (totalElapsed >= kSlowDocumentTraceThreshold) {
-		std::ostringstream line;
-		line << "Phase1 doc insertAddSpanNoVersionBump total_us=" << traceMicros(totalElapsed) << " split_us=" << traceMicros(splitElapsed) << " compact_us=" << traceMicros(compactElapsed)
-		     << " invalidate_us=" << traceMicros(invalidateElapsed) << " line_index_us=" << traceMicros(indexElapsed) << " offset=" << offset << " logical=" << logical << " bytes=" << span.length
-		     << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " exact_lines=" << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0);
-		appendDocumentTrace(line.str());
-	}
 	return true;
 }
 

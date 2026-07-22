@@ -36,7 +36,7 @@
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MREditWindow.hpp"
-#include "../ui/MRBentoBox.hpp"
+#include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowLayout.hpp"
 #include "../ui/MRWindowSupport.hpp"

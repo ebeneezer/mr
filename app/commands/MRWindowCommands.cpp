@@ -8,6 +8,7 @@
 #define Uses_TScreen
 #include <tvision/tv.h>
 
+#include "MRBentoWorkspaceCodec.hpp"
 #include "MRFileCommands.hpp"
 #include "MRWindowCommands.hpp"
 
@@ -38,8 +39,8 @@
 #include "../../ui/MRMenuBar.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRFrame.hpp"
-#include "../../ui/MRBentoBox.hpp"
-#include "../../ui/hex/MRBentoHexEditor.hpp"
+#include "../../ui/MRBentoBox/MRBentoBox.hpp"
+#include "../../ui/MRBentoHexEditor/MRBentoHexEditor.hpp"
 #include "../../ui/widgets/MRScopedHistoryUI.hpp"
 #include "../../ui/MRWindowLayout.hpp"
 #include "../../ui/MRWindowSupport.hpp"
@@ -357,83 +358,6 @@ bool parseWorkspaceInt(const std::string &text, int &value) {
 	return true;
 }
 
-bool parseWorkspacePrefixedInt(const std::string &text, const char *prefix, int &value) {
-	const std::string expected(prefix);
-
-	if (text.rfind(expected, 0) != 0) return false;
-	return parseWorkspaceInt(text.substr(expected.size()), value);
-}
-
-std::string encodeBentoWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapshot) {
-	std::ostringstream out;
-
-	out << "v1";
-	out << ",m:" << static_cast<int>(snapshot.mode);
-	out << ",r:" << snapshot.rootNode;
-	out << ",a:" << snapshot.activeLeafId;
-	out << ",x:" << snapshot.maximizedLeafId;
-	out << ",n:";
-	for (std::size_t i = 0; i < snapshot.nodes.size(); ++i) {
-		const MRBentoWorkspaceNode &node = snapshot.nodes[i];
-		if (i != 0) out << ".";
-		out << node.kind << ":" << node.orientation << ":" << node.dividerPosition << ":" << node.firstChild << ":" << node.secondChild << ":" << node.leafId;
-	}
-	out << ",l:";
-	for (std::size_t i = 0; i < snapshot.leaves.size(); ++i) {
-		const MRBentoWorkspaceLeaf &leaf = snapshot.leaves[i];
-		if (i != 0) out << ".";
-		out << leaf.id << ":" << static_cast<int>(leaf.role) << ":" << (leaf.visible ? 1 : 0);
-	}
-	return out.str();
-}
-
-bool parseBentoWorkspaceSnapshot(const std::string &token, MRBentoWorkspaceSnapshot &snapshot) {
-	std::vector<std::string> fields = splitWorkspaceToken(token, ',');
-	int mode = 0;
-
-	if (fields.size() != 7 || fields[0] != "v1") return false;
-	if (!parseWorkspacePrefixedInt(fields[1], "m:", mode)) return false;
-	if (!parseWorkspacePrefixedInt(fields[2], "r:", snapshot.rootNode)) return false;
-	if (!parseWorkspacePrefixedInt(fields[3], "a:", snapshot.activeLeafId)) return false;
-	if (!parseWorkspacePrefixedInt(fields[4], "x:", snapshot.maximizedLeafId)) return false;
-	if (mode < bbmToolWorkspace || mode > bbmFileCompare) return false;
-	snapshot.mode = static_cast<MRBentoBoxMode>(mode);
-
-	if (fields[5].rfind("n:", 0) != 0 || fields[6].rfind("l:", 0) != 0) return false;
-	snapshot.nodes.clear();
-	snapshot.leaves.clear();
-
-	for (const std::string &nodeText : splitWorkspaceToken(fields[5].substr(2), '.')) {
-		std::vector<std::string> values = splitWorkspaceToken(nodeText, ':');
-		MRBentoWorkspaceNode node;
-
-		if (values.size() != 6) return false;
-		if (!parseWorkspaceInt(values[0], node.kind)) return false;
-		if (!parseWorkspaceInt(values[1], node.orientation)) return false;
-		if (!parseWorkspaceInt(values[2], node.dividerPosition)) return false;
-		if (!parseWorkspaceInt(values[3], node.firstChild)) return false;
-		if (!parseWorkspaceInt(values[4], node.secondChild)) return false;
-		if (!parseWorkspaceInt(values[5], node.leafId)) return false;
-		snapshot.nodes.push_back(node);
-	}
-	for (const std::string &leafText : splitWorkspaceToken(fields[6].substr(2), '.')) {
-		std::vector<std::string> values = splitWorkspaceToken(leafText, ':');
-		MRBentoWorkspaceLeaf leaf;
-		int role = 0;
-		int visible = 0;
-
-		if (values.size() != 3) return false;
-		if (!parseWorkspaceInt(values[0], leaf.id)) return false;
-		if (!parseWorkspaceInt(values[1], role)) return false;
-		if (!parseWorkspaceInt(values[2], visible)) return false;
-		if (role < bprSource || role > bprExtensionLast || (visible != 0 && visible != 1)) return false;
-		leaf.role = static_cast<MRBentoPaneRole>(role);
-		leaf.visible = visible != 0;
-		snapshot.leaves.push_back(leaf);
-	}
-	return !snapshot.nodes.empty() && !snapshot.leaves.empty();
-}
-
 std::string encodeMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration) {
 	std::ostringstream out;
 
@@ -497,12 +421,13 @@ int workspaceVirtualDesktopOrRandom(int savedDesktop) {
 	return distribution(generator);
 }
 
-bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
+bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry, bool logBootstrapNormalization = false) {
 	static const std::regex linePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
 	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?(?: main=(0|1))?(?: bento=([^ ]+))?(?: debug=([^ ]+))?(?: fco=([0-9A-Fa-f]+) fcc=([0-9A-Fa-f]+))?$)", std::regex_constants::ECMAScript);
 	std::smatch match;
 	std::smatch payloadMatch;
 	std::string payload;
+	std::vector<std::string> bootstrapLogMessages;
 
 	if (!std::regex_search(line, match, linePattern)) return false;
 	payload = unescapeMrmacSingleQuotedLiteral(match[1].str());
@@ -530,7 +455,7 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 	}
 	entry.mainFile = payloadMatch[14].matched && payloadMatch[14].str() == "1";
 	if (payloadMatch[15].matched) {
-		entry.hasBentoSnapshot = parseBentoWorkspaceSnapshot(payloadMatch[15].str(), entry.bentoSnapshot);
+		entry.hasBentoSnapshot = mr::workspace::parseBentoSnapshot(payloadMatch[15].str(), entry.bentoSnapshot, &bootstrapLogMessages);
 		if (!entry.hasBentoSnapshot) return false;
 	}
 	if (payloadMatch[16].matched) {
@@ -544,7 +469,11 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 		entry.hasFileCompareSources = !entry.fileCompareOriginalUrl.empty() && !entry.fileCompareCompareUrl.empty();
 		if (!entry.hasFileCompareSources) return false;
 	}
-	return !entry.url.empty();
+	if (entry.url.empty()) return false;
+	if (logBootstrapNormalization)
+		for (const std::string &message : bootstrapLogMessages)
+			mrLogMessage(message);
+	return true;
 }
 
 void applyWorkspaceEntryGeometry(MREditWindow *window, const WorkspaceEntry &entry) {
@@ -632,7 +561,7 @@ MRBentoCompareSource captureWorkspaceFileCompareSource(MREditWindow *window) {
 	source.wasVisible = (window->state & sfVisible) != 0;
 	source.wasManuallyHidden = isWindowManuallyHidden(window);
 	source.title = fileCompareSourceTitle(window);
-	if (window->getEditor() != nullptr) source.text = window->getEditor()->snapshotText();
+	if (window->getEditor() != nullptr) source.snapshot = window->getEditor()->readSnapshot();
 	return source;
 }
 
@@ -641,31 +570,6 @@ std::string fileCompareWorkspaceTitle(const MRBentoCompareSetup &setup) {
 
 	if (title.size() > 72) title = title.substr(0, 69) + "...";
 	return title;
-}
-
-std::uint64_t submitWorkspaceFileCompareTask(MRBentoBox *bentoBox, const MRBentoCompareSetup &setup) {
-	std::vector<std::string> originalLines;
-	std::vector<std::string> compareLines;
-
-	if (bentoBox == nullptr) return 0;
-	mr::diff::mrSplitTextLinesForDiff(setup.original.text, originalLines);
-	mr::diff::mrSplitTextLinesForDiff(setup.compare.text, compareLines);
-
-	return mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, setup.original.documentId, setup.original.version, "file compare", [originalLines, compareLines, originalDocumentId = setup.original.documentId, originalVersion = setup.original.version, compareDocumentId = setup.compare.documentId, compareVersion = setup.compare.version](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
-		mr::coprocessor::Result result;
-		std::vector<mr::diff::MRDiffHunk> hunks;
-		std::string errorText;
-
-		result.task = task;
-		if (!mr::diff::mrComputeMyersDiff(originalLines, compareLines, hunks, &errorText, stopToken)) {
-			result.status = stopToken.stop_requested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Failed;
-			result.error = errorText;
-			return result;
-		}
-		result.status = mr::coprocessor::TaskStatus::Completed;
-		result.payload = std::make_shared<mr::coprocessor::FileComparePayload>(originalDocumentId, originalVersion, compareDocumentId, compareVersion, originalLines.size(), compareLines.size(), std::move(hunks));
-		return result;
-	});
 }
 
 void closeWorkspaceWindow(MREditWindow *win) {
@@ -692,7 +596,6 @@ MRBentoBox *restoreFileCompareWorkspaceEntry(const WorkspaceEntry &entry, int vi
 	MREditWindow *compareWindow = nullptr;
 	MRBentoBox *bentoBox = nullptr;
 	MRBentoCompareSetup setup;
-	std::uint64_t taskId = 0;
 	std::string title;
 
 	if (!entry.hasBentoSnapshot || entry.bentoSnapshot.mode != bbmFileCompare || !entry.hasFileCompareSources) return nullptr;
@@ -710,18 +613,18 @@ MRBentoBox *restoreFileCompareWorkspaceEntry(const WorkspaceEntry &entry, int vi
 		bentoBox->mVirtualDesktop = virtualDesktop;
 		applyWorkspaceEntryGeometry(bentoBox, entry);
 	}
-	if (bentoBox == nullptr || !bentoBox->initializeFileCompare(setup) || !bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)) {
+	if (bentoBox == nullptr || !bentoBox->initializeFileCompare(std::move(setup)) || !bentoBox->restoreWorkspaceSnapshot(entry.bentoSnapshot)) {
 		closeWorkspaceWindow(bentoBox);
 		closeWorkspaceWindow(compareWindow);
 		closeWorkspaceWindow(originalWindow);
 		return nullptr;
 	}
 	bentoBox->refreshFileCompareConfiguration();
-
-	taskId = submitWorkspaceFileCompareTask(bentoBox, setup);
-	if (taskId != 0) {
-		bentoBox->setFileCompareTask(taskId);
-		bentoBox->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::FileCompare, "file compare");
+	if (!bentoBox->startFileCompareProjection()) {
+		closeWorkspaceWindow(bentoBox);
+		closeWorkspaceWindow(compareWindow);
+		closeWorkspaceWindow(originalWindow);
+		return nullptr;
 	}
 	static_cast<void>(mrActivateEditWindow(bentoBox));
 	return bentoBox;
@@ -887,7 +790,7 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 			continue;
 		}
 		if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win)) {
-			bentoPayload = encodeBentoWorkspaceSnapshot(bentoBox->workspaceSnapshot());
+			bentoPayload = mr::workspace::encodeBentoSnapshot(bentoBox->workspaceSnapshot());
 			MRMacroDebuggerWorkspaceConfiguration macroDebuggerConfiguration;
 
 			if (bentoBox->macroDebuggerWorkspaceConfiguration(macroDebuggerConfiguration)) macroDebuggerPayload = " debug=" + encodeMacroDebuggerWorkspaceConfiguration(macroDebuggerConfiguration);
@@ -1225,7 +1128,7 @@ void mrLoadWorkspace(const std::string &filename) {
 			long long geometryUs = 0;
 			long long cursorUs = 0;
 
-				if (!parseWorkspaceEntry(line, entry)) continue;
+				if (!parseWorkspaceEntry(line, entry, true)) continue;
 				++parsedWorkspaceEntries;
 				if (g_workspaceRestoreInProgress) {
 					const auto now = std::chrono::steady_clock::now();

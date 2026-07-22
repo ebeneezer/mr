@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1850" viewBox="0 0 1200 1850" role="img" aria-labelledby="title description">
+  <title id="title">Settings bootstrap: from persisted source to editor UI</title>
+  <desc id="description">A vertical nine-stage flow from settings.mrmac through normalization, canonical compilation and VM application to the configured editor UI.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#3F4B54"/></marker>
+    <style>
+      .heading { font-family: "Latin Modern Sans", "DejaVu Sans", sans-serif; fill: #27313A; }
+      .label { font-family: "Latin Modern Sans", "DejaVu Sans", sans-serif; font-size: 12px; font-weight: bold; fill: #53616A; letter-spacing: .4px; }
+      .box-title { font-family: "Latin Modern Sans", "DejaVu Sans", sans-serif; font-size: 17px; font-weight: bold; fill: #27313A; }
+      .box-copy { font-family: "Latin Modern Sans", "DejaVu Sans", sans-serif; font-size: 12px; fill: #53616A; }
+      .note-title { font-family: "Latin Modern Sans", "DejaVu Sans", sans-serif; font-size: 12px; font-weight: bold; fill: #27313A; }
+      .note-copy { font-family: "Latin Modern Sans", "DejaVu Sans", sans-serif; font-size: 11.5px; fill: #27313A; }
+      .number { font-family: "Latin Modern Sans", "DejaVu Sans", sans-serif; font-size: 18px; font-weight: bold; fill: #FFFFFF; text-anchor: middle; dominant-baseline: middle; }
+      .flow { stroke: #3F4B54; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+      .side { stroke: #7B8790; stroke-width: 1.1; fill: none; stroke-dasharray: 5 4; }
+    </style>
+  </defs>
+  <rect width="1200" height="1850" fill="#FFFFFF"/>
+  <text x="50" y="52" class="heading" font-size="18" font-weight="bold">SETTINGS BOOTSTRAP: FROM PERSISTED SOURCE TO EDITOR UI</text>
+  <text x="50" y="80" class="heading" font-size="12" fill="#53616A">Each numbered phase is the reference point for the following technical explanation.</text>
+  <line x1="50" y1="98" x2="1150" y2="98" stroke="#AEB8BE"/>
+
+  <text x="200" y="137" class="label">PERSISTED INPUT</text>
+  <circle cx="137" cy="192" r="27" fill="#27313A"/><text x="137" y="192" class="number">1</text>
+  <rect x="200" y="150" width="570" height="86" fill="#F7F8F8" stroke="#27313A" stroke-width="1.2"/>
+  <text x="218" y="184" class="box-title">Ensure a settings source exists</text>
+  <text x="218" y="208" class="box-copy">Missing file: create current defaults.</text>
+
+  <circle cx="137" cy="297" r="27" fill="#27313A"/><text x="137" y="297" class="number">2</text>
+  <rect x="200" y="255" width="570" height="86" fill="#F7F8F8" stroke="#27313A" stroke-width="1.2"/>
+  <text x="218" y="289" class="box-title">Read the persisted source</text>
+  <text x="218" y="313" class="box-copy">An unreadable source becomes empty normalization input.</text>
+  <path d="M485 236 V255" class="flow"/>
+
+  <text x="200" y="362" class="label">BOOTSTRAP: STAGING AND CANONICALIZATION</text>
+  <circle cx="137" cy="417" r="27" fill="#9B651D"/><text x="137" y="417" class="number">3</text>
+  <rect x="200" y="370" width="570" height="112" fill="#F3E8D1" stroke="#9B651D" stroke-width="1.2"/>
+  <text x="218" y="403" class="box-title">Parse, version-gate, and stage a complete snapshot</text>
+  <text x="218" y="427" class="box-copy">Reject future Build Epochs; retain known values; discard unknown or</text>
+  <text x="218" y="445" class="box-copy">obsolete tokens; supply defaults.</text>
+  <path d="M485 341 V370" class="flow"/>
+
+  <circle cx="137" cy="555" r="27" fill="#9B651D"/><text x="137" y="555" class="number">4</text>
+  <rect x="200" y="505" width="570" height="100" fill="#F3E8D1" stroke="#9B651D" stroke-width="1.2"/>
+  <text x="218" y="540" class="box-title">Derive the canonical current-version MRMAC source</text>
+  <text x="218" y="564" class="box-copy">Rewrite only when normalisation changed the persisted input.</text>
+  <path d="M485 482 V505" class="flow"/>
+  <rect x="810" y="495" width="310" height="82" fill="#F7F8F8" stroke="#AEB8BE"/>
+  <text x="823" y="520" class="note-title">WORKSPACE</text>
+  <text x="823" y="541" class="note-copy">Protected persistence extension. It is not</text>
+  <text x="823" y="557" class="note-copy">absorbed into the canonical core model.</text>
+  <path d="M770 545 H810" class="side"/>
+
+  <circle cx="137" cy="677" r="27" fill="#9B651D"/><text x="137" y="677" class="number">5</text>
+  <rect x="200" y="635" width="570" height="92" fill="#F3E8D1" stroke="#9B651D" stroke-width="1.2"/>
+  <text x="218" y="670" class="box-title">Reset the runtime settings model to current defaults</text>
+  <text x="218" y="694" class="box-copy">This is preload reset, not the final authoritative apply.</text>
+  <path d="M485 605 V635" class="flow"/>
+  <rect x="810" y="625" width="310" height="92" fill="#F7F8F8" stroke="#AEB8BE"/>
+  <text x="823" y="650" class="note-title">KEYMAP</text>
+  <text x="823" y="671" class="note-copy">Tolerated staging exception for canonical</text>
+  <text x="823" y="687" class="note-copy">serialization. The VM establishes final authority.</text>
+  <path d="M770 681 H810" class="side"/>
+
+  <circle cx="137" cy="852" r="27" fill="#4C7582"/><text x="137" y="852" class="number">6</text>
+  <rect x="200" y="810" width="570" height="94" fill="#E8F0F2" stroke="#4C7582" stroke-width="1.2"/>
+  <text x="218" y="845" class="box-title">Compile the canonical source</text>
+  <text x="218" y="869" class="box-copy">The canonical compiler produces bytecode; compile failure stops startup application.</text>
+  <path d="M485 727 V810" class="flow"/>
+
+  <text x="200" y="1017" class="label">FINAL VM APPLY</text>
+  <circle cx="137" cy="1082" r="27" fill="#4C7582"/><text x="137" y="1082" class="number">7</text>
+  <rect x="200" y="1035" width="570" height="102" fill="#E8F0F2" stroke="#4C7582" stroke-width="1.2"/>
+  <text x="218" y="1070" class="box-title">Execute the compiled source in VM startup-settings mode</text>
+  <text x="218" y="1094" class="box-copy">MRSETUP applies only canonical source. Runtime errors stop the startup apply.</text>
+  <path d="M485 904 V1035" class="flow"/>
+
+  <circle cx="137" cy="1207" r="27" fill="#2F7770"/><text x="137" y="1207" class="number">8</text>
+  <rect x="200" y="1155" width="570" height="104" fill="#DCEDEB" stroke="#2F7770" stroke-width="1.2"/>
+  <text x="218" y="1190" class="box-title">Flush the startup keymap batch; clear dirty state</text>
+  <text x="218" y="1214" class="box-copy">Only after successful VM application is the central runtime model authoritative.</text>
+  <path d="M485 1137 V1155" class="flow"/>
+  <rect x="810" y="1150" width="310" height="112" fill="#F7F8F8" stroke="#AEB8BE"/>
+  <text x="823" y="1175" class="note-title">AUTHORITY CHANGES HERE</text>
+  <text x="823" y="1196" class="note-copy">Bootstrap owns accepted source. The VM performs</text>
+  <text x="823" y="1212" class="note-copy">final apply. The runtime model owns all settings.</text>
+  <text x="823" y="1228" class="note-copy">UI is a consumer, never a settings store.</text>
+  <path d="M770 1207 H810" class="side"/>
+
+  <text x="200" y="1487" class="label">APPLICATION AND UI PROJECTION</text>
+  <circle cx="137" cy="1542" r="27" fill="#2F7770"/><text x="137" y="1542" class="number">9</text>
+  <rect x="200" y="1495" width="570" height="100" fill="#DCEDEB" stroke="#2F7770" stroke-width="1.2"/>
+  <text x="218" y="1530" class="box-title">Refresh the UI settings snapshot and apply display layout</text>
+  <text x="218" y="1554" class="box-copy">The editor UI consumes configuration from the authoritative runtime model.</text>
+  <path d="M485 1259 V1495" class="flow"/>
+
+  <rect x="200" y="1650" width="570" height="88" fill="#F7F8F8" stroke="#27313A" stroke-width="1.4"/>
+  <text x="485" y="1687" class="heading" font-size="18" font-weight="bold" text-anchor="middle">EDITOR UI</text>
+  <text x="485" y="1712" class="heading" font-size="12" fill="#53616A" text-anchor="middle">TVision projection of the configured application state</text>
+  <path d="M485 1595 V1650" class="flow"/>
+
+  <rect x="200" y="1780" width="570" height="38" fill="#F7F8F8" stroke="#AEB8BE"/>
+  <text x="213" y="1804" class="note-copy">The normal save path is deliberately absent: persistence is separate from bootstrap application.</text>
+</svg>

@@ -43,8 +43,10 @@ void MRFileEditor::refreshConfiguredVisualSettings() {
 	if (auto *mrIndicator = dynamic_cast<MRIndicator *>(mIndicator)) mrIndicator->setCursorPositionMarkerFormat(configuredCursorPositionMarker());
 	syncDisplayedCursorColumnFromCursor(true);
 	refreshSyntaxContext();
+	static_cast<void>(cancelViewportFoldWarmup());
 	invalidateFoldCache();
 	syncIndicatorVisualSettings();
+	scheduleDisplayWidthWarmupIfNeeded();
 	updateMetrics();
 	scheduleSyntaxWarmupIfNeeded();
 	updateIndicator();
@@ -57,8 +59,20 @@ void MRFileEditor::revealCursor(Boolean centerCursor) {
 	drawView();
 }
 
+void MRFileEditor::requestDocumentLineNavigation(std::size_t lineIndex) {
+	mPendingDocumentLineNavigationState.active = true;
+	mPendingDocumentLineNavigationState.documentId = mBufferModel.documentId();
+	mPendingDocumentLineNavigationState.version = mBufferModel.version();
+	mPendingDocumentLineNavigationState.targetLine = lineIndex;
+	mPendingDocumentLineNavigationState.cursorOffset = mBufferModel.cursor();
+	mPendingDocumentLineNavigationState.selectionStart = mBufferModel.selectionStart();
+	mPendingDocumentLineNavigationState.selectionEnd = mBufferModel.selectionEnd();
+
+	if (!continuePendingDocumentLineNavigation()) scheduleLineIndexWarmupIfNeeded();
+}
+
 void MRFileEditor::centerDocumentLocationInView(std::size_t lineIndex, int visualColumn) {
-	const std::size_t lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+	const std::size_t lineCount = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : std::max<std::size_t>(1, mBufferModel.estimatedLineCount());
 	const std::size_t documentLine = std::min(lineIndex, lineCount - 1);
 	const std::size_t visibleLine = visibleLineForDocumentLine(documentLine);
 	const int textRows = std::max(1, visibleTextRows());
@@ -74,7 +88,7 @@ void MRFileEditor::centerDocumentLocationInView(std::size_t lineIndex, int visua
 }
 
 void MRFileEditor::moveCursorToDocumentLineTop(std::size_t lineIndex, int visualColumn) {
-	const std::size_t lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+	const std::size_t lineCount = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : std::max<std::size_t>(1, mBufferModel.estimatedLineCount());
 	const std::size_t documentLine = std::min(lineIndex, lineCount - 1);
 	const std::size_t visibleLine = visibleLineForDocumentLine(documentLine);
 	const int targetLine = static_cast<int>(std::min<std::size_t>(visibleLine, static_cast<std::size_t>(INT_MAX)));
@@ -86,7 +100,7 @@ void MRFileEditor::moveCursorToDocumentLineTop(std::size_t lineIndex, int visual
 }
 
 void MRFileEditor::restoreCursorViewState(std::size_t lineIndex, int visualColumn) {
-	const std::size_t lineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+	const std::size_t lineCount = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : std::max<std::size_t>(1, mBufferModel.estimatedLineCount());
 	const std::size_t documentLine = std::min(lineIndex, lineCount - 1);
 	const std::size_t visibleLine = visibleLineForDocumentLine(documentLine);
 	const int targetLine = static_cast<int>(std::min<std::size_t>(visibleLine, static_cast<std::size_t>(INT_MAX)));
@@ -114,6 +128,7 @@ void MRFileEditor::update(uchar) {
 void MRFileEditor::syncFromEditorState(bool) {
 	syncDisplayedCursorColumnFromCursor(true);
 	refreshSyntaxContext();
+	scheduleDisplayWidthWarmupIfNeeded();
 	updateMetrics();
 	syncIndicatorVisualSettings();
 	updateIndicator();
@@ -133,23 +148,6 @@ void MRFileEditor::notifyWindowTaskStateChanged() {
 }
 
 
-void MRFileEditor::clearLineIndexWarmupTask(std::uint64_t expectedTaskId) noexcept {
-	if (expectedTaskId != 0 && mLineIndexWarmupTaskId != expectedTaskId) return;
-	if (mLineIndexWarmupTaskId == 0) return;
-	mLineIndexWarmupTaskId = 0;
-	mLineIndexWarmupDocumentId = 0;
-	mLineIndexWarmupVersion = 0;
-	notifyWindowTaskStateChanged();
-}
-
-void MRFileEditor::clearSyntaxWarmupTask(std::uint64_t expectedTaskId) noexcept {
-	MRSyntaxDerivedState::WarmupState &warmupState = mSyntaxState.warmupState();
-	if (expectedTaskId != 0 && warmupState.taskId != expectedTaskId) return;
-	if (warmupState.taskId == 0) return;
-	warmupState = MRSyntaxDerivedState::WarmupState();
-	notifyWindowTaskStateChanged();
-}
-
 void MRFileEditor::clearMiniMapWarmupTask(std::uint64_t expectedTaskId) noexcept {
 	applyMiniMapSignals(mMiniMapState.renderer().clearWarmupTask(expectedTaskId));
 }
@@ -157,18 +155,6 @@ void MRFileEditor::clearMiniMapWarmupTask(std::uint64_t expectedTaskId) noexcept
 void MRFileEditor::applyMiniMapSignals(const MRMiniMapRenderer::Signals &signals) {
 	if (signals.notifyTaskStateChanged) notifyWindowTaskStateChanged();
 	if (signals.redraw) drawView();
-}
-
-void MRFileEditor::clearSaveNormalizationWarmupTask(std::uint64_t expectedTaskId) noexcept {
-	if (expectedTaskId != 0 && mSaveNormalizationWarmupTaskId != expectedTaskId) return;
-	if (mSaveNormalizationWarmupTaskId == 0) return;
-	mSaveNormalizationWarmupTaskId = 0;
-	mSaveNormalizationWarmupDocumentId = 0;
-	mSaveNormalizationWarmupVersion = 0;
-	mSaveNormalizationWarmupOptionsHash = 0;
-	mSaveNormalizationWarmupSourceBytes = 0;
-	mSaveNormalizationWarmupStartedAt = std::chrono::steady_clock::time_point();
-	notifyWindowTaskStateChanged();
 }
 
 void MRFileEditor::setSyntaxTitleHint(const std::string &title) {
@@ -294,36 +280,24 @@ void MRFileEditor::setScrollBarsAlwaysVisible(bool visible) noexcept {
 	refreshViewState();
 }
 
-void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds) {
-	static const std::vector<MRFileCompareMiniMapSlice> emptyMiniMapSlices;
-
-	setFileCompareLineKinds(lineKinds, emptyMiniMapSlices);
-}
-
-void MRFileEditor::setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds, const std::vector<MRFileCompareMiniMapSlice> &miniMapSlices) {
-	if (mFileCompareLineKinds == lineKinds && mFileCompareMiniMapSlices.size() == miniMapSlices.size()) {
-		bool sameMiniMapSlices = true;
-		for (std::size_t i = 0; i < miniMapSlices.size(); ++i) {
-			const MRFileCompareMiniMapSlice &current = mFileCompareMiniMapSlices[i];
-			const MRFileCompareMiniMapSlice &next = miniMapSlices[i];
-			if (current.lineIndex != next.lineIndex || current.sliceStart != next.sliceStart || current.sliceEnd != next.sliceEnd || current.lineKind != next.lineKind || current.fullLine != next.fullLine) {
-				sameMiniMapSlices = false;
-				break;
-			}
-		}
-		if (sameMiniMapSlices) return;
-	}
-	mFileCompareLineKinds = lineKinds;
-	mFileCompareMiniMapSlices = miniMapSlices;
-	mMiniMapState.clearOverlayCache();
+void MRFileEditor::adoptFileCompareLineKinds(const std::shared_ptr<const std::vector<unsigned char>> &lineKinds,
+	                                          const std::shared_ptr<const std::vector<MRFileCompareMiniMapSlice>> &miniMapSlices) {
+	const std::shared_ptr<const std::vector<unsigned char>> nextLineKinds =
+		lineKinds != nullptr ? lineKinds : std::make_shared<const std::vector<unsigned char>>();
+	const std::shared_ptr<const std::vector<MRFileCompareMiniMapSlice>> nextMiniMapSlices =
+		miniMapSlices != nullptr ? miniMapSlices : std::make_shared<const std::vector<MRFileCompareMiniMapSlice>>();
+	if (mFileCompareLineKinds == nextLineKinds && mFileCompareMiniMapSlices == nextMiniMapSlices) return;
+	mFileCompareLineKinds = nextLineKinds;
+	mFileCompareMiniMapSlices = nextMiniMapSlices;
+	mMiniMapState.adoptFileCompareRanges(mFileCompareLineKinds, mFileCompareMiniMapSlices);
 	refreshViewState();
 }
 
 void MRFileEditor::clearFileCompareLineKinds() {
-	if (mFileCompareLineKinds.empty() && mFileCompareMiniMapSlices.empty()) return;
-	mFileCompareLineKinds.clear();
-	mFileCompareMiniMapSlices.clear();
-	mMiniMapState.clearOverlayCache();
+	if (mFileCompareLineKinds->empty() && mFileCompareMiniMapSlices->empty()) return;
+	mFileCompareLineKinds = std::make_shared<const std::vector<unsigned char>>();
+	mFileCompareMiniMapSlices = std::make_shared<const std::vector<MRFileCompareMiniMapSlice>>();
+	mMiniMapState.adoptFileCompareRanges(mFileCompareLineKinds, mFileCompareMiniMapSlices);
 	refreshViewState();
 }
 

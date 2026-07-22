@@ -1,6 +1,7 @@
 #ifndef MRCOPROCESSOR_HPP
 #define MRCOPROCESSOR_HPP
 
+#include <array>
 #include <condition_variable>
 #include <chrono>
 #include <cstddef>
@@ -10,7 +11,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <stop_token>
 #include <string>
 #include <thread>
 #include <atomic>
@@ -46,21 +46,75 @@ enum class ExternalSourceKind : unsigned char {
 enum class TaskKind : unsigned char {
 	Custom,
 	LineIndexWarmup,
+	DisplayWidthWarmup,
 	SyntaxWarmup,
 	FoldWarmup,
 	MiniMapWarmup,
-	SaveNormalizationWarmup,
 	FileCompare,
-	IndicatorBlink,
 	ExternalIo,
-	MacroJob
+	MacroJob,
+	HexPaneProjection,
+	BentoDiagnosticsProjection,
+	BentoOutlineProjection
 };
+
+constexpr std::size_t kTaskKindCount = static_cast<std::size_t>(TaskKind::BentoOutlineProjection) + 1;
 
 enum class TaskStatus : unsigned char {
 	Completed,
 	Cancelled,
 	Failed
 };
+
+enum class ExecutionOwnerKind : unsigned char {
+	Unspecified,
+	EditorWindow,
+	BentoPane,
+	HexPane,
+	ExternalSource,
+	MacroSession,
+	ProcessChannel,
+	Worker
+};
+
+constexpr std::size_t kExecutionOwnerKindCount = static_cast<std::size_t>(ExecutionOwnerKind::Worker) + 1;
+
+enum class WorkDirection : unsigned char {
+	None,
+	Bof,
+	Eof
+};
+
+enum class WorkerLifecycleState : unsigned char {
+	Created,
+	Assigned,
+	Idle,
+	Queued,
+	Running,
+	ResultReady,
+	Accepted,
+	Adopted,
+	Discarded,
+	Stopping,
+	Finished
+};
+
+enum class LifecycleReason : unsigned char {
+	None,
+	TaskCompleted,
+	TaskCancelled,
+	TaskFailed,
+	ResultAccepted,
+	ResultAdopted,
+	ResultRejected,
+	AcceptedResultAdopted,
+	AcceptedResultRejected,
+	StreamChunk,
+	StopRequested,
+	WorkerFinished
+};
+
+constexpr std::uint64_t kInvalidWorkerOrdinal = static_cast<std::uint64_t>(-1);
 
 struct TaskInfo {
 	std::uint64_t id;
@@ -70,8 +124,20 @@ struct TaskInfo {
 	std::size_t baseVersion;
 	std::string label;
 	std::shared_ptr<std::atomic_bool> cancelFlag;
+	std::uint64_t workerOrdinal;
+	std::uint64_t osThreadId;
+	int assignedCore;
+	int affinityResult;
+	ExecutionOwnerKind executionOwnerKind;
+	std::size_t executionOwnerLocalId;
+	bool finiteWorker;
+	std::uint64_t generation;
+	WorkDirection direction;
+	bool hasPacketSpan;
+	std::uint64_t packetStart;
+	std::uint64_t packetEnd;
 
-	TaskInfo() noexcept : id(0), lane(Lane::Compute), kind(TaskKind::Custom), documentId(0), baseVersion(0), label(), cancelFlag() {
+	TaskInfo() noexcept : id(0), lane(Lane::Compute), kind(TaskKind::Custom), documentId(0), baseVersion(0), label(), cancelFlag(), workerOrdinal(kInvalidWorkerOrdinal), osThreadId(0), assignedCore(-1), affinityResult(-1), executionOwnerKind(ExecutionOwnerKind::Unspecified), executionOwnerLocalId(0), finiteWorker(false), generation(0), direction(WorkDirection::None), hasPacketSpan(false), packetStart(0), packetEnd(0) {
 	}
 
 	[[nodiscard]] bool cancelRequested() const noexcept {
@@ -92,20 +158,7 @@ enum class IndicatorBlinkChannel : unsigned char {
 	StatusNotice
 };
 
-struct IndicatorBlinkPayload final : Payload {
-	std::size_t indicatorId;
-	std::size_t generation;
-	bool visible;
-	IndicatorBlinkChannel channel;
-
-	IndicatorBlinkPayload() noexcept : indicatorId(0), generation(0), visible(true), channel(IndicatorBlinkChannel::ReadOnly) {
-	}
-
-	IndicatorBlinkPayload(std::size_t aIndicatorId, std::size_t aGeneration, bool aVisible, IndicatorBlinkChannel aChannel = IndicatorBlinkChannel::ReadOnly) noexcept : indicatorId(aIndicatorId), generation(aGeneration), visible(aVisible), channel(aChannel) {
-	}
-};
-
-struct FileComparePayload final : Payload {
+struct FileComparePayload : Payload {
 	std::size_t originalDocumentId;
 	std::size_t originalBaseVersion;
 	std::size_t compareDocumentId;
@@ -122,41 +175,84 @@ struct FileComparePayload final : Payload {
 };
 
 struct LineIndexWarmupPayload final : Payload {
-	mr::editor::LineIndexWarmupData warmup;
+	mr::editor::LineIndexScanPacket packet;
 
-	LineIndexWarmupPayload() noexcept : warmup() {
+	LineIndexWarmupPayload() noexcept : packet() {
 	}
 
-	explicit LineIndexWarmupPayload(const mr::editor::LineIndexWarmupData &aWarmup) : warmup(aWarmup) {
+	explicit LineIndexWarmupPayload(mr::editor::LineIndexScanPacket aPacket) : packet(std::move(aPacket)) {
+	}
+};
+
+struct DisplayWidthWarmupPayload final : Payload {
+	std::uint64_t generation;
+	std::uint64_t startLine;
+	std::uint64_t endLine;
+	int maximumWidth;
+
+	DisplayWidthWarmupPayload() noexcept : generation(0), startLine(0), endLine(0), maximumWidth(1) {
+	}
+
+	DisplayWidthWarmupPayload(std::uint64_t aGeneration, std::uint64_t aStartLine, std::uint64_t aEndLine, int aMaximumWidth) noexcept : generation(aGeneration), startLine(aStartLine), endLine(aEndLine), maximumWidth(aMaximumWidth) {
 	}
 };
 
 struct SyntaxWarmLine {
 	std::size_t lineStart;
+	std::size_t lineIndex;
+	MRSyntaxLineState stateIn;
 	MRSyntaxLineResult syntaxLine;
 
-	SyntaxWarmLine() noexcept : lineStart(0), syntaxLine() {
+	SyntaxWarmLine() noexcept : lineStart(0), lineIndex(0), stateIn(), syntaxLine() {
 	}
 
-	SyntaxWarmLine(std::size_t aLineStart, MRSyntaxLineResult aSyntaxLine) : lineStart(aLineStart), syntaxLine(std::move(aSyntaxLine)) {
+	SyntaxWarmLine(std::size_t aLineStart, std::size_t aLineIndex, MRSyntaxLineState aStateIn, MRSyntaxLineResult aSyntaxLine)
+	    : lineStart(aLineStart), lineIndex(aLineIndex), stateIn(aStateIn), syntaxLine(std::move(aSyntaxLine)) {
+	}
+};
+
+struct SyntaxWarmCheckpoint {
+	std::size_t lineStart;
+	std::size_t lineIndex;
+	MRSyntaxLineState stateIn;
+
+	SyntaxWarmCheckpoint() noexcept : lineStart(0), lineIndex(0), stateIn() {
+	}
+
+	SyntaxWarmCheckpoint(std::size_t aLineStart, std::size_t aLineIndex, MRSyntaxLineState aStateIn) noexcept : lineStart(aLineStart), lineIndex(aLineIndex), stateIn(aStateIn) {
 	}
 };
 
 struct SyntaxWarmupPayload final : Payload {
+	std::uint64_t generation;
 	MRSyntaxLanguage language;
+	std::size_t startLine;
+	std::size_t endLine;
+	std::size_t materializedStartLine;
+	std::size_t materializedEndLine;
+	MRSyntaxLineState stateIn;
+	std::vector<SyntaxWarmCheckpoint> checkpoints;
 	std::vector<SyntaxWarmLine> lines;
 
-	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), lines() {
+	SyntaxWarmupPayload() noexcept
+	    : generation(0), language(MRSyntaxLanguage::PlainText), startLine(0), endLine(0), materializedStartLine(0), materializedEndLine(0), stateIn(), checkpoints(), lines() {
 	}
 
-	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines) : language(aLanguage), lines(std::move(aLines)) {
+	SyntaxWarmupPayload(std::uint64_t aGeneration, MRSyntaxLanguage aLanguage, std::size_t aStartLine, std::size_t aEndLine, std::size_t aMaterializedStartLine,
+	                    std::size_t aMaterializedEndLine, MRSyntaxLineState aStateIn, std::vector<SyntaxWarmCheckpoint> aCheckpoints,
+	                    std::vector<SyntaxWarmLine> aLines)
+	    : generation(aGeneration), language(aLanguage), startLine(aStartLine), endLine(aEndLine), materializedStartLine(aMaterializedStartLine), materializedEndLine(aMaterializedEndLine),
+	      stateIn(aStateIn), checkpoints(std::move(aCheckpoints)), lines(std::move(aLines)) {
 	}
 };
 
 struct MiniMapWarmupPayload final : Payload {
+	std::uint64_t generation;
 	bool braille;
 	int rowCount;
 	int bodyWidth;
+	int packetRowStart;
+	int packetRowEnd;
 	std::size_t totalLines;
 	std::size_t windowStartLine;
 	std::size_t windowLineCount;
@@ -165,21 +261,17 @@ struct MiniMapWarmupPayload final : Payload {
 	std::vector<std::size_t> rowLineStarts;
 	std::vector<std::size_t> rowLineEnds;
 
-	MiniMapWarmupPayload() noexcept : braille(true), rowCount(0), bodyWidth(0), totalLines(1), windowStartLine(0), windowLineCount(1), viewportWidth(1), rowPatterns(), rowLineStarts(), rowLineEnds() {
+	MiniMapWarmupPayload() noexcept
+	    : generation(0), braille(true), rowCount(0), bodyWidth(0), packetRowStart(0), packetRowEnd(0), totalLines(1), windowStartLine(0), windowLineCount(1), viewportWidth(1),
+	      rowPatterns(), rowLineStarts(), rowLineEnds() {
 	}
 
-	MiniMapWarmupPayload(bool aBraille, int aRowCount, int aBodyWidth, std::size_t aTotalLines, std::size_t aWindowStartLine, std::size_t aWindowLineCount, int aViewportWidth, std::vector<unsigned char> aRowPatterns, std::vector<std::size_t> aRowLineStarts, std::vector<std::size_t> aRowLineEnds) : braille(aBraille), rowCount(aRowCount), bodyWidth(aBodyWidth), totalLines(aTotalLines), windowStartLine(aWindowStartLine), windowLineCount(aWindowLineCount), viewportWidth(aViewportWidth), rowPatterns(std::move(aRowPatterns)), rowLineStarts(std::move(aRowLineStarts)), rowLineEnds(std::move(aRowLineEnds)) {
-	}
-};
-
-struct SaveNormalizationWarmupPayload final : Payload {
-	std::size_t optionsHash;
-	std::size_t sourceBytes;
-
-	SaveNormalizationWarmupPayload() noexcept : optionsHash(0), sourceBytes(0) {
-	}
-
-	SaveNormalizationWarmupPayload(std::size_t aOptionsHash, std::size_t aSourceBytes) noexcept : optionsHash(aOptionsHash), sourceBytes(aSourceBytes) {
+	MiniMapWarmupPayload(std::uint64_t aGeneration, bool aBraille, int aRowCount, int aBodyWidth, int aPacketRowStart, int aPacketRowEnd, std::size_t aTotalLines,
+	                     std::size_t aWindowStartLine, std::size_t aWindowLineCount, int aViewportWidth, std::vector<unsigned char> aRowPatterns,
+	                     std::vector<std::size_t> aRowLineStarts, std::vector<std::size_t> aRowLineEnds)
+	    : generation(aGeneration), braille(aBraille), rowCount(aRowCount), bodyWidth(aBodyWidth), packetRowStart(aPacketRowStart), packetRowEnd(aPacketRowEnd), totalLines(aTotalLines),
+	      windowStartLine(aWindowStartLine), windowLineCount(aWindowLineCount), viewportWidth(aViewportWidth), rowPatterns(std::move(aRowPatterns)),
+	      rowLineStarts(std::move(aRowLineStarts)), rowLineEnds(std::move(aRowLineEnds)) {
 	}
 };
 
@@ -302,8 +394,10 @@ struct Result {
 	std::string error;
 	std::shared_ptr<const Payload> payload;
 	TaskTiming timing;
+	mutable bool dispositionRecorded;
+	std::uint64_t resultReadyMicros;
 
-	Result() noexcept : task(), status(TaskStatus::Completed), error(), payload(), timing() {
+	Result() noexcept : task(), status(TaskStatus::Completed), error(), payload(), timing(), dispositionRecorded(false), resultReadyMicros(0) {
 	}
 
 	[[nodiscard]] bool completed() const noexcept {
@@ -316,6 +410,111 @@ struct Result {
 
 	[[nodiscard]] bool failed() const noexcept {
 		return status == TaskStatus::Failed;
+	}
+};
+
+struct DeferredResultLifecycle {
+	TaskInfo task;
+	TaskStatus taskStatus;
+	TaskTiming timing;
+	std::uint64_t resultReadyMicros;
+	bool valid;
+
+	DeferredResultLifecycle() noexcept : task(), taskStatus(TaskStatus::Completed), timing(), resultReadyMicros(0), valid(false) {
+	}
+};
+
+struct WorkerLifecycleEvent {
+	std::uint64_t sequence;
+	std::uint64_t monotonicMicros;
+	WorkerLifecycleState state;
+	LifecycleReason reason;
+	TaskStatus taskStatus;
+	std::uint64_t workerOrdinal;
+	std::uint64_t osThreadId;
+	int assignedCore;
+	int affinityResult;
+	ExecutionOwnerKind executionOwnerKind;
+	std::size_t executionOwnerLocalId;
+	Lane lane;
+	TaskKind taskKind;
+	std::uint64_t taskId;
+	std::size_t documentId;
+	std::size_t baseVersion;
+	std::uint64_t generation;
+	WorkDirection direction;
+	bool hasPacketSpan;
+	std::uint64_t packetStart;
+	std::uint64_t packetEnd;
+	std::uint64_t queueMicros;
+	std::uint64_t runMicros;
+	std::uint64_t totalMicros;
+	std::uint64_t acceptanceMicros;
+	std::uint64_t adoptionMicros;
+
+	WorkerLifecycleEvent() noexcept : sequence(0), monotonicMicros(0), state(WorkerLifecycleState::Created), reason(LifecycleReason::None), taskStatus(TaskStatus::Completed), workerOrdinal(kInvalidWorkerOrdinal), osThreadId(0), assignedCore(-1), affinityResult(-1), executionOwnerKind(ExecutionOwnerKind::Unspecified), executionOwnerLocalId(0), lane(Lane::Compute), taskKind(TaskKind::Custom), taskId(0), documentId(0), baseVersion(0), generation(0), direction(WorkDirection::None), hasPacketSpan(false), packetStart(0), packetEnd(0), queueMicros(0), runMicros(0), totalMicros(0), acceptanceMicros(0), adoptionMicros(0) {
+	}
+};
+
+struct WorkerSnapshot {
+	std::uint64_t workerOrdinal;
+	std::uint64_t osThreadId;
+	int assignedCore;
+	int affinityResult;
+	ExecutionOwnerKind executionOwnerKind;
+	std::size_t executionOwnerLocalId;
+	Lane lane;
+	WorkerLifecycleState state;
+	TaskInfo task;
+	std::size_t queuedTaskCount;
+	std::uint64_t queueMicros;
+	std::uint64_t runMicros;
+
+	WorkerSnapshot() noexcept : workerOrdinal(kInvalidWorkerOrdinal), osThreadId(0), assignedCore(-1), affinityResult(-1), executionOwnerKind(ExecutionOwnerKind::Unspecified), executionOwnerLocalId(0), lane(Lane::Compute), state(WorkerLifecycleState::Created), task(), queuedTaskCount(0), queueMicros(0), runMicros(0) {
+	}
+};
+
+struct WorkerActivitySnapshot {
+	std::uint64_t windowMicros;
+	std::uint64_t peakActiveCount;
+	std::uint64_t peakQueuedCount;
+	std::uint64_t peakResultCount;
+	std::uint64_t createdCount;
+	std::uint64_t finishedCount;
+	std::uint64_t queuedCount;
+	std::uint64_t completedCount;
+	std::uint64_t cancelledCount;
+	std::uint64_t failedCount;
+	std::uint64_t acceptedCount;
+	std::uint64_t adoptedCount;
+	std::uint64_t discardedCount;
+	std::uint64_t queueMicros;
+	std::uint64_t runMicros;
+	std::uint64_t acceptanceMicros;
+	std::uint64_t adoptionMicros;
+
+	WorkerActivitySnapshot() noexcept
+	    : windowMicros(1000000), peakActiveCount(0), peakQueuedCount(0), peakResultCount(0), createdCount(0), finishedCount(0), queuedCount(0), completedCount(0), cancelledCount(0), failedCount(0), acceptedCount(0), adoptedCount(0), discardedCount(0), queueMicros(0), runMicros(0), acceptanceMicros(0), adoptionMicros(0) {
+	}
+};
+
+struct WorkerTelemetrySnapshot {
+	std::vector<int> allowedCoreIds;
+	std::vector<WorkerSnapshot> workers;
+	std::vector<WorkerLifecycleEvent> recentEvents;
+	WorkerActivitySnapshot recentActivity;
+	std::uint64_t latestEventSequence;
+	std::uint64_t createdCount;
+	std::uint64_t finishedCount;
+	std::uint64_t affinityFailureCount;
+	std::array<std::uint64_t, kTaskKindCount> oneShotCreatedByTaskKind;
+	std::array<std::uint64_t, kTaskKindCount> oneShotFinishedByTaskKind;
+	std::array<std::uint64_t, kExecutionOwnerKindCount> oneShotCreatedByOwnerKind;
+	std::array<std::uint64_t, kExecutionOwnerKindCount> oneShotFinishedByOwnerKind;
+
+	WorkerTelemetrySnapshot() noexcept
+	    : allowedCoreIds(), workers(), recentEvents(), recentActivity(), latestEventSequence(0), createdCount(0), finishedCount(0), affinityFailureCount(0), oneShotCreatedByTaskKind(),
+	      oneShotFinishedByTaskKind(), oneShotCreatedByOwnerKind(), oneShotFinishedByOwnerKind() {
 	}
 };
 
@@ -369,7 +568,7 @@ struct Snapshot {
 	}
 };
 
-using TaskFn = std::function<Result(const TaskInfo &, std::stop_token)>;
+using TaskFn = std::function<Result(const TaskInfo &)>;
 using ResultHandler = std::function<void(const Result &)>;
 
 class Coprocessor {
@@ -381,8 +580,11 @@ class Coprocessor {
 	Coprocessor &operator=(const Coprocessor &) = delete;
 
 	void setResultHandler(ResultHandler handler);
-	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn);
-	std::uint64_t submitCoalesced(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn);
+	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, ExecutionOwnerKind ownerKind, std::size_t ownerLocalId, std::string_view label, TaskFn fn);
+	std::uint64_t submitPacket(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, ExecutionOwnerKind ownerKind, std::size_t ownerLocalId, std::uint64_t generation, WorkDirection direction, std::uint64_t packetStart, std::uint64_t packetEnd, std::string_view label, TaskFn fn);
+	std::uint64_t registerWorker(Lane lane, ExecutionOwnerKind ownerKind, std::size_t ownerLocalId);
+	void unregisterWorker(std::uint64_t workerOrdinal);
+	std::uint64_t submitWorker(std::uint64_t workerOrdinal, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn);
 	std::size_t registerExternalSource(ExternalSourceKind kind, std::string_view displayName);
 	std::uint64_t submitExternal(std::size_t sourceId, std::string_view label, TaskFn fn);
 	bool cancelExternalSource(std::size_t sourceId);
@@ -396,21 +598,19 @@ class Coprocessor {
 	void shutdown(bool drainResults = false);
 	void cancelPending();
 	[[nodiscard]] Snapshot snapshot() const;
+	[[nodiscard]] WorkerTelemetrySnapshot telemetrySnapshot(std::size_t maxEvents = 32) const;
+	[[nodiscard]] std::size_t allowedCoreCount() const noexcept;
+	void noteResultAdoption(const Result &result, bool adopted);
+	DeferredResultLifecycle acceptResultForDeferredAdoption(const Result &result);
+	void resolveDeferredResultAdoption(DeferredResultLifecycle &lifecycle, bool adopted);
 
   private:
-	enum class ComputePriority : unsigned char {
-		High,
-		Normal,
-		Low
-	};
 	struct Request {
 		TaskInfo task;
 		TaskFn fn;
-		std::string coalescingKey;
 		std::uint64_t submittedMicros;
-		ComputePriority computePriority;
 
-		Request() noexcept : task(), fn(), coalescingKey(), submittedMicros(0), computePriority(ComputePriority::Normal) {
+		Request() noexcept : task(), fn(), submittedMicros(0) {
 		}
 	};
 
@@ -419,25 +619,34 @@ class Coprocessor {
 		TaskInfo task;
 		std::uint64_t submittedMicros;
 		std::uint64_t startedMicros;
-		ComputePriority computePriority;
 
-		ActiveTaskState() noexcept : workerSlot(0), task(), submittedMicros(0), startedMicros(0), computePriority(ComputePriority::Normal) {
+		ActiveTaskState() noexcept : workerSlot(0), task(), submittedMicros(0), startedMicros(0) {
 		}
 	};
 
 	struct LaneState {
 		Lane lane;
-		std::size_t externalSourceId;
+		bool retireAfterTask;
+		bool retired;
+		std::atomic_bool stopRequested;
+		std::uint64_t workerOrdinal;
+		std::uint64_t osThreadId;
+		int assignedCore;
+		int affinityResult;
+		ExecutionOwnerKind executionOwnerKind;
+		std::size_t executionOwnerLocalId;
+		WorkerLifecycleState lifecycleState;
+		TaskInfo currentTask;
+		std::uint64_t submittedMicros;
+		std::uint64_t startedMicros;
+		std::uint64_t finishedMicros;
 		mutable std::mutex mutex;
-		std::condition_variable_any cv;
+		std::condition_variable cv;
 		std::deque<Request> queue;
-		std::deque<Request> highQueue;
-		std::deque<Request> normalQueue;
-		std::deque<Request> lowQueue;
 		std::vector<ActiveTaskState> activeTasks;
-		std::vector<std::jthread> workers;
+		std::thread worker;
 
-		explicit LaneState(Lane aLane, std::size_t aExternalSourceId = 0) noexcept : lane(aLane), externalSourceId(aExternalSourceId), mutex(), cv(), queue(), highQueue(), normalQueue(), lowQueue(), activeTasks(), workers() {
+		explicit LaneState(Lane aLane, bool retire, ExecutionOwnerKind ownerKind, std::size_t ownerLocalId) noexcept : lane(aLane), retireAfterTask(retire), retired(false), stopRequested(false), workerOrdinal(kInvalidWorkerOrdinal), osThreadId(0), assignedCore(-1), affinityResult(-1), executionOwnerKind(ownerKind), executionOwnerLocalId(ownerLocalId), lifecycleState(WorkerLifecycleState::Created), currentTask(), submittedMicros(0), startedMicros(0), finishedMicros(0), mutex(), cv(), queue(), activeTasks(), worker() {
 		}
 	};
 
@@ -460,18 +669,26 @@ class Coprocessor {
 	};
 
 	void startLane(LaneState &lane);
-	void workerLoop(LaneState &lane, std::size_t workerSlot, std::stop_token stopToken);
-	std::uint64_t submitToLaneState(LaneState &targetLaneState, Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn);
+	void workerLoop(LaneState &lane, std::uint64_t workerOrdinal);
+	void requestLaneStop(LaneState &lane);
+	std::uint64_t submitToLaneState(LaneState &targetLaneState, Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::uint64_t generation, WorkDirection direction, bool hasPacketSpan, std::uint64_t packetStart, std::uint64_t packetEnd, std::string_view label, TaskFn fn);
+	std::uint64_t submitOneShot(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, ExecutionOwnerKind ownerKind, std::size_t ownerLocalId, std::uint64_t generation, WorkDirection direction, bool hasPacketSpan, std::uint64_t packetStart, std::uint64_t packetEnd, std::string_view label, TaskFn fn);
+	void reapRetiredWorkers();
 	void enqueueResult(Result result);
 	void forgetTask(std::uint64_t taskId);
 	void noteExternalResult(const Result &result);
+	void recordWorkerLifecycle(WorkerLifecycleState state, const LaneState &lane, const TaskInfo *task, TaskStatus taskStatus, const TaskTiming *timing = nullptr, LifecycleReason reason = LifecycleReason::None);
+	void recordTaskLifecycle(WorkerLifecycleState state, const TaskInfo &task, TaskStatus taskStatus, const TaskTiming *timing = nullptr, LifecycleReason reason = LifecycleReason::None, std::uint64_t decisionMicros = 0);
+	void recordOneShotWorkerCreated(TaskKind taskKind, ExecutionOwnerKind ownerKind) noexcept;
+	void recordOneShotWorkerFinished(TaskKind taskKind, ExecutionOwnerKind ownerKind) noexcept;
+	void markLaneStopping(LaneState &lane);
+	[[nodiscard]] static std::vector<int> detectAllowedCoreIds() noexcept;
+	[[nodiscard]] int assignCurrentWorkerCore(std::uint64_t workerOrdinal, int &assignedCore, std::uint64_t &osThreadId) const noexcept;
 	ExternalSourceState *findExternalSourceLocked(std::size_t sourceId) noexcept;
 	const ExternalSourceState *findExternalSourceLocked(std::size_t sourceId) const noexcept;
-	LaneState &laneState(Lane lane) noexcept;
-	ComputePriority computePriorityForTask(TaskKind kind) const noexcept;
+	LaneState *findWorkerLocked(std::uint64_t workerOrdinal) noexcept;
 	bool laneHasQueuedWorkLocked(const LaneState &lane) const noexcept;
 	bool popNextRequestLocked(LaneState &lane, Request &request) noexcept;
-	std::size_t laneWorkerCount(Lane lane) const noexcept;
 
 	mutable std::mutex resultMutex;
 	std::deque<Result> results;
@@ -480,18 +697,33 @@ class Coprocessor {
 	ResultHandler resultHandler;
 
 	std::atomic<std::uint64_t> nextTaskId;
+	std::atomic<std::uint64_t> nextWorkerOrdinal;
 	std::mutex taskCancelMutex;
 	std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>> taskCancelFlags;
 	std::atomic<bool> shuttingDown;
 
-	LaneState ioLane;
-	LaneState computeLane;
-	LaneState miniMapLane;
-	LaneState macroLane;
+	std::vector<int> allowedCoreIds;
+	mutable std::mutex workerMutex;
+	std::vector<std::unique_ptr<LaneState>> workers;
+	std::vector<std::unique_ptr<LaneState>> retiringWorkers;
 	std::atomic<std::uint64_t> nextExternalSourceId;
 	std::atomic<std::uint64_t> nextExternalActivitySequence;
 	mutable std::mutex externalMutex;
 	std::vector<ExternalSourceState> externalSources;
+
+	mutable std::mutex telemetryMutex;
+	std::deque<WorkerLifecycleEvent> lifecycleEvents;
+	std::uint64_t nextLifecycleSequence;
+	std::uint64_t createdWorkerCount;
+	std::uint64_t finishedWorkerCount;
+	std::uint64_t affinityFailureCount;
+	std::array<std::uint64_t, kTaskKindCount> oneShotCreatedByTaskKind;
+	std::array<std::uint64_t, kTaskKindCount> oneShotFinishedByTaskKind;
+	std::array<std::uint64_t, kExecutionOwnerKindCount> oneShotCreatedByOwnerKind;
+	std::array<std::uint64_t, kExecutionOwnerKindCount> oneShotFinishedByOwnerKind;
+	std::uint64_t telemetryActiveTaskCount;
+	std::uint64_t telemetryQueuedTaskCount;
+	std::uint64_t telemetryResultCount;
 };
 
 Coprocessor &globalCoprocessor();

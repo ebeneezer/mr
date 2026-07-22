@@ -23,7 +23,7 @@
 #include "../keymap/MRKeymapResolver.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/MRVM.hpp"
-#include "MRBentoBox.hpp"
+#include "MRBentoBox/MRBentoBox.hpp"
 #include "MRWindowSupport.hpp"
 
 void mrvmUiInvalidateScreenBase() noexcept;

@@ -321,7 +321,7 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	return true;
 }
 
-mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t channelId, const std::string &command, const MRBuildHookContext &buildContext, const std::string &successAudioUri, const std::string &failureAudioUri) {
+mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::size_t channelId, const std::string &command, const MRBuildHookContext &buildContext, const std::string &successAudioUri, const std::string &failureAudioUri) {
 	mr::coprocessor::Result result;
 	int pipeFds[2] = {-1, -1};
 	pid_t childPid = -1;
@@ -371,7 +371,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 		struct pollfd pfd;
 		int pollResult;
 
-		if ((stopToken.stop_requested() || info.cancelRequested()) && !childExited) {
+		if (info.cancelRequested() && !childExited) {
 			cancellationRequested = true;
 			if (stopPolls == 0) ::kill(-childPid, SIGTERM);
 			else if (stopPolls > 10)
@@ -435,7 +435,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 		result.payload = makeFinishedPayload(channelId, childExited && WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1, childExited && WIFSIGNALED(waitStatus) != 0, childExited && WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, buildContext, successAudioUri, failureAudioUri);
 		return result;
 	}
-	if (cancellationRequested || stopToken.stop_requested() || info.cancelRequested()) {
+	if (cancellationRequested || info.cancelRequested()) {
 		result.status = mr::coprocessor::TaskStatus::Cancelled;
 		result.payload = makeFinishedPayload(channelId, childExited && WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -2, childExited && WIFSIGNALED(waitStatus) != 0, childExited && WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, buildContext, successAudioUri, failureAudioUri);
 		return result;

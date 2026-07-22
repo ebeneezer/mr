@@ -6,7 +6,18 @@
 #include <tvision/tv.h>
 
 #include "MRVMScreen.hpp"
+#include "../../../app/commands/MRWindowCommands.hpp"
 #include "../../../ui/MREditWindow.hpp"
+
+MREditWindow *mrvmEditorActiveWindow() {
+	return currentEditWindow();
+}
+
+MRFileEditor *mrvmEditorCurrentEditor() {
+	MREditWindow *win = currentEditorCommandWindow();
+
+	return win != nullptr ? win->getEditor() : nullptr;
+}
 
 bool mrvmUiSetCurrentWindow(const void *windowKey) {
 	MREditWindow *win;
@@ -44,58 +55,58 @@ bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2) {
 }
 
 bool mrvmUiPushMarker() {
-	return mrvmEditorMarkPosition(mrvmEditorActiveWindow(), mrvmEditorCurrentEditor());
+	return mrvmEditorMarkPosition(currentEditorCommandWindow(), mrvmEditorCurrentEditor());
 }
 
 bool mrvmUiGetMarker() {
-	return mrvmEditorGotoMark(mrvmEditorActiveWindow(), mrvmEditorCurrentEditor());
+	return mrvmEditorGotoMark(currentEditorCommandWindow(), mrvmEditorCurrentEditor());
 }
 
 bool mrvmUiSetRandomAccessMark(int index) {
-	return mrvmEditorSetRandomAccessMark(mrvmEditorActiveWindow(), mrvmEditorCurrentEditor(), index);
+	return mrvmEditorSetRandomAccessMark(currentEditorCommandWindow(), mrvmEditorCurrentEditor(), index);
 }
 
 bool mrvmUiGetRandomAccessMark(int index) {
-	return mrvmEditorGotoRandomAccessMark(mrvmEditorActiveWindow(), mrvmEditorCurrentEditor(), index);
+	return mrvmEditorGotoRandomAccessMark(currentEditorCommandWindow(), mrvmEditorCurrentEditor(), index);
 }
 
 bool mrvmUiBlockBeginLine() {
-	MREditWindow *win = mrvmEditorActiveWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->beginLineBlock();
 	return true;
 }
 
 bool mrvmUiBlockBeginColumn() {
-	MREditWindow *win = mrvmEditorActiveWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->beginColumnBlock();
 	return true;
 }
 
 bool mrvmUiBlockBeginStream() {
-	MREditWindow *win = mrvmEditorActiveWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->beginStreamBlock();
 	return true;
 }
 
 bool mrvmUiBlockEndMarking() {
-	MREditWindow *win = mrvmEditorActiveWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->endBlock();
 	return true;
 }
 
 bool mrvmUiBlockTurnMarkingOff() {
-	MREditWindow *win = mrvmEditorActiveWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->clearBlock();
 	return true;
 }
 
 bool mrvmUiBlockToggleVisibility() {
-	MREditWindow *win = mrvmEditorActiveWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	return win != nullptr && win->toggleBlockVisibility();
 }
 
@@ -108,7 +119,7 @@ bool mrvmUiMoveBlock() {
 }
 
 bool mrvmUiDeleteBlock() {
-	MREditWindow *win = mrvmEditorActiveWindow();
+	MREditWindow *win = currentEditorCommandWindow();
 	std::string errorText;
 
 	if (win == nullptr) return false;

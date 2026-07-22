@@ -8,14 +8,12 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../coprocessor/MRCoprocessor.hpp"
 #include "../../piecetable/MRTextDocument.hpp"
-
-std::vector<std::string> mrBuildViewportScanLineTextsParallel(const mr::editor::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
-                                                              std::size_t focusBottomLine);
 
 enum MRFileCompareLineKind : unsigned char {
 	mrfclkNone = 0,
@@ -35,6 +33,15 @@ struct MRFileCompareMiniMapSlice {
 
 class MRMiniMapRenderer {
   public:
+	enum OverlayComponentMask : unsigned int {
+		overlayFind = 1U << 0,
+		overlayDirty = 1U << 1,
+		overlayError = 1U << 2,
+		overlayWarning = 1U << 3,
+		overlayDiff = 1U << 4,
+		overlayAll = overlayFind | overlayDirty | overlayError | overlayWarning | overlayDiff
+	};
+
 	struct Palette {
 		TColorAttr normal = 0;
 		TColorAttr viewport = 0;
@@ -53,14 +60,30 @@ class MRMiniMapRenderer {
 			std::size_t lineIndex = 0;
 			std::uint64_t dotColumnBits = 0;
 		};
-		std::vector<LineMask> errorLineMasks;
-		std::vector<LineMask> warningLineMasks;
-		std::vector<LineMask> findLineMasks;
-		std::vector<LineMask> dirtyLineMasks;
-		std::vector<LineMask> diffEqualLineMasks;
-		std::vector<LineMask> diffMissingLineMasks;
-		std::vector<LineMask> diffInsertLineMasks;
-		std::vector<LineMask> diffOffsetLineMasks;
+		using LineMasks = std::vector<LineMask>;
+
+		std::shared_ptr<const LineMasks> errorLineMasks;
+		std::shared_ptr<const LineMasks> warningLineMasks;
+		std::shared_ptr<const LineMasks> findLineMasks;
+		std::shared_ptr<const LineMasks> dirtyLineMasks;
+		std::shared_ptr<const LineMasks> diffEqualLineMasks;
+		std::shared_ptr<const LineMasks> diffMissingLineMasks;
+		std::shared_ptr<const LineMasks> diffInsertLineMasks;
+		std::shared_ptr<const LineMasks> diffOffsetLineMasks;
+
+		OverlayState();
+	};
+
+	struct OverlaySources {
+		std::uint64_t revision;
+		std::shared_ptr<const std::vector<mr::editor::Range>> findRanges;
+		std::shared_ptr<const std::vector<mr::editor::Range>> dirtyRanges;
+		std::shared_ptr<const std::vector<mr::editor::Range>> errorRanges;
+		std::shared_ptr<const std::vector<mr::editor::Range>> warningRanges;
+		std::shared_ptr<const std::vector<unsigned char>> fileCompareLineKinds;
+		std::shared_ptr<const std::vector<MRFileCompareMiniMapSlice>> fileCompareMiniMapSlices;
+
+		OverlaySources();
 	};
 
 	struct Viewport {
@@ -96,19 +119,34 @@ class MRMiniMapRenderer {
 	static std::string normalizedViewportMarkerGlyph(const std::string &configuredGlyph);
 
 	std::uint64_t pendingWarmupTaskId() const noexcept;
+	std::size_t pendingWarmupTaskCount() const noexcept;
+	bool ownsWarmupTask(std::uint64_t taskId) const noexcept;
 	bool hasProjection(int rowCount, int bodyWidth) const noexcept;
+	bool hasAnyProjection() const noexcept;
 	Signals clearWarmupTask(std::uint64_t expectedTaskId) noexcept;
 	Signals invalidate(bool cancelTask, std::size_t documentId) noexcept;
-	ApplyWarmupResult applyWarmup(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId, std::size_t documentId, std::size_t version) noexcept;
-	Signals scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version, const mr::editor::ReadSnapshot &snapshot,
-	                              const MREditSetupSettings &settings, bool preservePendingTaskForSameDocument = false);
-	OverlayState computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges,
-	                                 const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges, std::size_t totalLines,
-	                                 int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings, const std::vector<unsigned char> &fileCompareLineKinds,
-	                                 const std::vector<MRFileCompareMiniMapSlice> &fileCompareMiniMapSlices) const;
+	ApplyWarmupResult applyWarmup(const mr::coprocessor::Payload &payload, const mr::coprocessor::Result &result, std::size_t documentId, std::size_t version) noexcept;
+	Signals scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version,
+	                              mr::coprocessor::ExecutionOwnerKind executionOwnerKind, std::size_t executionOwnerLocalId, const mr::editor::ReadSnapshot &snapshot,
+	                              const MREditSetupSettings &settings, const OverlaySources &overlaySources, const mr::editor::Range &selection);
+	const OverlayState &overlayProjection() const noexcept;
 	void drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, int viewWidth, const Viewport &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const Palette &palette, const OverlayState &overlay) const;
+
+	static std::shared_ptr<const OverlayState> computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const OverlaySources &sources,
+	                                                               std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille,
+	                                                               const MREditSetupSettings &settings, unsigned int componentMask);
 
   private:
 	struct RendererState;
 	std::unique_ptr<RendererState> mState;
+};
+
+struct MRMiniMapOverlayPacketPayload final : mr::coprocessor::Payload {
+	std::uint64_t generation;
+	unsigned int componentMask;
+	std::shared_ptr<const MRMiniMapRenderer::OverlayState> projection;
+
+	MRMiniMapOverlayPacketPayload(std::uint64_t aGeneration, unsigned int aComponentMask, std::shared_ptr<const MRMiniMapRenderer::OverlayState> aProjection) noexcept
+	    : generation(aGeneration), componentMask(aComponentMask), projection(std::move(aProjection)) {
+	}
 };

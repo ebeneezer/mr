@@ -128,6 +128,18 @@ std::string formatWarmupState(const char *label, std::uint64_t taskId, bool exac
 	return out.str();
 }
 
+std::string formatWarmupCountState(const char *label, std::size_t taskCount, bool exactReady = false) {
+	std::ostringstream out;
+
+	out << label << ": ";
+	if (taskCount != 0) out << "running (" << taskCount << " packets)";
+	else if (exactReady)
+		out << "idle (exact)";
+	else
+		out << "idle";
+	return out.str();
+}
+
 const char *blockModeLabel(MREditWindow *win) {
 	if (win == nullptr) return "None";
 	switch (win->blockStatus()) {
@@ -280,7 +292,7 @@ std::vector<FileInformationPage> buildFileInformationPages(MREditWindow *win) {
 	page2.lines.push_back(std::string("Cancel rule   : ") + (win != nullptr ? shortenForDialog(win->macroCancelPolicySummary(), 64) : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Macro stats   : ") + (win != nullptr ? win->macroCounterSummary() : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Macro recent  : ") + (win != nullptr ? shortenForDialog(win->lastMacroSummary(), 64) : std::string("<n/a>")));
-	page2.lines.push_back(formatWarmupState("Line index", win != nullptr ? win->pendingLineIndexWarmupTaskId() : 0, win != nullptr && win->exactLineCountKnown()));
+	page2.lines.push_back(formatWarmupCountState("Line index", win != nullptr ? win->pendingLineIndexWarmupTaskCount() : 0, win != nullptr && win->exactLineCountKnown()));
 	page2.lines.push_back(formatWarmupState("Syntax", win != nullptr ? win->pendingSyntaxWarmupTaskId() : 0));
 	page2.lines.push_back(formatWarmupState("Mini map", win != nullptr ? win->pendingMiniMapWarmupTaskId() : 0));
 	page2.lines.push_back(std::string("Result queue  : ") + std::to_string(mr::coprocessor::globalCoprocessor().pendingResults()) + " pending result(s)");

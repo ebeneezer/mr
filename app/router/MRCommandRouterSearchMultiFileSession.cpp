@@ -22,7 +22,7 @@
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRWindowSupport.hpp"
-#include "../../ui/hex/MRBentoHexEditor.hpp"
+#include "../../ui/MRBentoHexEditor/MRBentoHexEditor.hpp"
 #include "../MREditorApp.hpp"
 #include "../commands/MRFileCommands.hpp"
 #include "../commands/MRWindowCommands.hpp"

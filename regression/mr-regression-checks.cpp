@@ -9,6 +9,7 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cerrno>
 #include <cstdio>
@@ -26,6 +27,7 @@
 #include <string>
 #include <system_error>
 #include <sys/stat.h>
+#include <sched.h>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
@@ -64,7 +66,7 @@
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../diff/MRDiff.hpp"
 #include "../piecetable/MRTextDocument.hpp"
-#include "../ui/MRBentoBox.hpp"
+#include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
@@ -6053,6 +6055,43 @@ bool testTextDocumentPieceTableMutationHarness(std::string &failureReason) {
 	return true;
 }
 
+bool testDeferredLargeLineIndexHarness(std::string &failureReason) {
+	static constexpr std::size_t kLargeBytes = static_cast<std::size_t>(8) * 1024 * 1024 + 4096;
+	std::string text;
+	text.reserve(kLargeBytes + 80);
+	while (text.size() < kLargeBytes) {
+		text.append(79, 'x');
+		text.push_back('\n');
+	}
+	mr::editor::TextDocument document(text);
+	if (document.exactLineCountKnown()) {
+		failureReason = "large direct documents must not build the complete line index during construction.";
+		return false;
+	}
+	const std::size_t estimatedLines = document.estimatedLineCount();
+	if (estimatedLines < 2) {
+		failureReason = "large deferred line index must provide a nontrivial estimate.";
+		return false;
+	}
+	static_cast<void>(document.lineStartByIndex(estimatedLines / 2));
+	if (document.exactLineCountKnown()) {
+		failureReason = "a large line-number jump must not force complete synchronous indexing.";
+		return false;
+	}
+	mr::editor::ReadSnapshot snapshot = document.readSnapshot();
+	mr::editor::LineIndexWarmupData warmup;
+	if (!snapshot.warmLineIndexChunk(warmup, 2) || warmup.lazyIndexedLine == 0 || warmup.lazyLineIndexComplete) {
+		failureReason = "bounded line-index warmup must advance without completing the large document in one task.";
+		return false;
+	}
+	if (!document.adoptLineIndexWarmup(warmup, document.version())) {
+		failureReason = "version-matched deferred line-index progress must be adoptable.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testBlockMarkingHarness(std::string &failureReason) {
 	std::string routerContent;
 	std::string menuContent;
@@ -8574,8 +8613,8 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 
 bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason) {
 	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
-	const std::string paneWindowPath = absolutePathFromCwd("ui/MRBentoBoxPaneWindow.cpp");
-	const std::string projectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	const std::string paneWindowPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxPaneWindow.cpp");
+	const std::string projectionPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxProjection.cpp");
 	std::string viewportContent;
 	std::string paneWindowContent;
 	std::string projectionContent;
@@ -9063,7 +9102,7 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 	}
 	if (content.find("if (visibleLineIndex >= totalLines) break;") == std::string::npos ||
 	    content.find("const bool drawEofMarker = editSettings.showEofMarker && isDocumentLine && currentLinePtr == mBufferModel.length();") == std::string::npos ||
-	    content.find("formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarker && editSettings.showEofMarkerEmoji);") == std::string::npos) {
+	    content.find("formatSyntaxLine(buffer, currentLinePtr, currentLineIndex, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarker && editSettings.showEofMarkerEmoji);") == std::string::npos) {
 		failureReason = "Draw path must stop semantic document rendering at EOF.";
 		return false;
 	}
@@ -9085,9 +9124,9 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 		return false;
 	}
 	if (content.find("bool eofDocumentLineVisible = false;") == std::string::npos ||
-	    content.find("if (currentLineIndex < mBufferModel.lineCount() && mBufferModel.lineStartByIndex(currentLineIndex) == mBufferModel.length())") == std::string::npos ||
+	    content.find("eofDocumentLineVisible = lastVisibleDocumentLine < exactLineCount && lineStartForIndex(lastVisibleDocumentLine) == mBufferModel.length();") == std::string::npos ||
 	    content.find("const bool drawEofMarker = editSettings.showEofMarker && !eofDocumentLineVisible && y == static_cast<int>(documentRows);") == std::string::npos ||
-	    content.find("formatSyntaxLine(gutterBackground, virtualLineIndex, MRSyntaxLineResult(), delta.x, textWidth, viewport.textLeft, false, true, editSettings.showEofMarkerEmoji);") == std::string::npos ||
+	    content.find("formatSyntaxLine(gutterBackground, virtualLineIndex, virtualLineIndex, MRSyntaxLineResult(), delta.x, textWidth, viewport.textLeft, false, true, editSettings.showEofMarkerEmoji);") == std::string::npos ||
 	    content.find("if (drawEofMarker) drawEofMarkerGlyph(b, hScroll, width, drawX, basePair, drawEofMarkerAsEmoji);") == std::string::npos) {
 		failureReason = "EOF marker must be drawn once on the EOF line or first visible post-EOF line without extending scroll range.";
 		return false;
@@ -10759,19 +10798,19 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	std::size_t verticalOrientationPos = std::string::npos;
 	std::size_t horizontalOrientationPos = std::string::npos;
 
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox.cpp"), source, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBox.cpp"), source, ioError)) {
 		failureReason = "Unable to read MRBentoBox.cpp: " + ioError;
 		return false;
 	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxDiagnostics.cpp"), diagnosticsSource, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxDiagnostics.cpp"), diagnosticsSource, ioError)) {
 		failureReason = "Unable to read MRBentoBoxDiagnostics.cpp: " + ioError;
 		return false;
 	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxPaneWindow.cpp"), paneWindowSource, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxPaneWindow.cpp"), paneWindowSource, ioError)) {
 		failureReason = "Unable to read MRBentoBoxPaneWindow.cpp: " + ioError;
 		return false;
 	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBoxProjection.cpp"), projectionSource, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxProjection.cpp"), projectionSource, ioError)) {
 		failureReason = "Unable to read MRBentoBoxProjection.cpp: " + ioError;
 		return false;
 	}
@@ -10781,7 +10820,7 @@ bool testBentoBoxFoundationGuard(std::string &failureReason) {
 	source += paneWindowSource;
 	source += "\n";
 	source += projectionSource;
-	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox.hpp"), header, ioError)) {
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox/MRBentoBox.hpp"), header, ioError)) {
 		failureReason = "Unable to read MRBentoBox.hpp: " + ioError;
 		return false;
 	}
@@ -11068,14 +11107,14 @@ bool testFileCompareCoprocessorHarness(std::string &failureReason) {
 		captured = true;
 	});
 
-	const std::uint64_t taskId = coprocessor.submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, originalDocumentId, originalBaseVersion, "file compare regression", [leftLines, rightLines, originalDocumentId, originalBaseVersion, compareDocumentId, compareBaseVersion](const mr::coprocessor::TaskInfo &task, std::stop_token stopToken) {
+	const std::uint64_t taskId = coprocessor.submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FileCompare, originalDocumentId, originalBaseVersion, mr::coprocessor::ExecutionOwnerKind::Worker, 9001, "file compare regression", [leftLines, rightLines, originalDocumentId, originalBaseVersion, compareDocumentId, compareBaseVersion](const mr::coprocessor::TaskInfo &task) {
 		mr::coprocessor::Result result;
 		std::vector<mr::diff::MRDiffHunk> hunks;
 		std::string errorText;
 
 		result.task = task;
-		if (!mr::diff::mrComputeMyersDiff(leftLines, rightLines, hunks, &errorText, stopToken)) {
-			result.status = stopToken.stop_requested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Failed;
+		if (!mr::diff::mrComputeMyersDiff(leftLines, rightLines, hunks, &errorText, task.cancelFlag.get())) {
+			result.status = task.cancelRequested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Failed;
 			result.error = errorText;
 			return result;
 		}
@@ -11134,6 +11173,188 @@ bool testFileCompareCoprocessorHarness(std::string &failureReason) {
 		return false;
 	}
 
+	failureReason.clear();
+	return true;
+}
+
+bool testCoprocessorPacketMetadataHarness(std::string &failureReason) {
+	static constexpr std::uint64_t kGeneration = 47;
+	static constexpr std::uint64_t kPacketStart = 100;
+	static constexpr std::uint64_t kPacketEnd = 240;
+	cpu_set_t originalCoreSet;
+	cpu_set_t probeCoreSet;
+	bool coreSetRestricted = false;
+
+	CPU_ZERO(&originalCoreSet);
+	CPU_ZERO(&probeCoreSet);
+	if (sched_getaffinity(0, sizeof(originalCoreSet), &originalCoreSet) == 0) {
+		std::size_t selectedCoreCount = 0;
+		for (int core = 0; core < CPU_SETSIZE && selectedCoreCount < 2; ++core) {
+			if (!CPU_ISSET(core, &originalCoreSet)) continue;
+			CPU_SET(core, &probeCoreSet);
+			++selectedCoreCount;
+		}
+		if (selectedCoreCount != 0 && sched_setaffinity(0, sizeof(probeCoreSet), &probeCoreSet) == 0) coreSetRestricted = true;
+	}
+
+	mr::coprocessor::Coprocessor coprocessor;
+	if (coreSetRestricted && sched_setaffinity(0, sizeof(originalCoreSet), &originalCoreSet) != 0) {
+		coprocessor.shutdown();
+		failureReason = "could not restore the process CPU affinity after constructing the modulo probe.";
+		return false;
+	}
+	const mr::coprocessor::WorkerTelemetrySnapshot initialTelemetry = coprocessor.telemetrySnapshot();
+	if (initialTelemetry.allowedCoreIds.empty()) {
+		coprocessor.shutdown();
+		failureReason = "coprocessor reported no allowed CPU cores.";
+		return false;
+	}
+	const std::size_t finiteWorkerCount = initialTelemetry.allowedCoreIds.size() + 3;
+	mr::coprocessor::Result capturedResult;
+	mr::coprocessor::WorkerTelemetrySnapshot telemetry;
+	std::uint64_t metadataTaskId = 0;
+	std::uint64_t persistentWorkerOrdinal = mr::coprocessor::kInvalidWorkerOrdinal;
+	std::size_t completedResultCount = 0;
+	std::atomic<std::size_t> finiteWorkerStartCount(0);
+	std::atomic_bool releaseFiniteWorkers(false);
+	bool captured = false;
+	std::atomic_bool persistentWorkerEntered(false);
+	bool persistentResultCancelled = false;
+
+	coprocessor.setResultHandler([&capturedResult, &captured, &metadataTaskId, &persistentWorkerOrdinal, &completedResultCount, &persistentResultCancelled](const mr::coprocessor::Result &result) {
+		++completedResultCount;
+		if (result.task.id == metadataTaskId) {
+			capturedResult = result;
+			captured = true;
+		}
+		if (result.task.workerOrdinal == persistentWorkerOrdinal && result.cancelled()) persistentResultCancelled = true;
+	});
+	for (std::size_t workerIndex = 0; workerIndex < finiteWorkerCount; ++workerIndex) {
+		const bool metadataPacket = workerIndex == 0;
+		const std::uint64_t taskId = coprocessor.submitPacket(
+		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::DisplayWidthWarmup, 313, 17, mr::coprocessor::ExecutionOwnerKind::EditorWindow, 313, metadataPacket ? kGeneration : 0, metadataPacket ? mr::coprocessor::WorkDirection::Eof : mr::coprocessor::WorkDirection::None, metadataPacket ? kPacketStart : 0, metadataPacket ? kPacketEnd : 0, "packet modulo regression",
+		    [&finiteWorkerStartCount, &releaseFiniteWorkers](const mr::coprocessor::TaskInfo &task) {
+			    finiteWorkerStartCount.fetch_add(1, std::memory_order_acq_rel);
+			    while (!releaseFiniteWorkers.load(std::memory_order_acquire) && !task.cancelRequested()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			    mr::coprocessor::Result result;
+			    result.task = task;
+			    result.status = task.cancelRequested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Completed;
+			    return result;
+		    });
+		if (taskId == 0) {
+			releaseFiniteWorkers.store(true, std::memory_order_release);
+			coprocessor.shutdown();
+			failureReason = "finite packet worker was not submitted.";
+			return false;
+		}
+		if (metadataPacket) metadataTaskId = taskId;
+	}
+
+	const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+	while (finiteWorkerStartCount.load(std::memory_order_acquire) < finiteWorkerCount && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	if (finiteWorkerStartCount.load(std::memory_order_acquire) != finiteWorkerCount) {
+		releaseFiniteWorkers.store(true, std::memory_order_release);
+		coprocessor.shutdown();
+		failureReason = "same-lane finite workers were serialized before the common release barrier.";
+		return false;
+	}
+	releaseFiniteWorkers.store(true, std::memory_order_release);
+	while (completedResultCount < finiteWorkerCount && std::chrono::steady_clock::now() < deadline) {
+		coprocessor.pumpFor(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
+	while (completedResultCount == finiteWorkerCount && std::chrono::steady_clock::now() < deadline) {
+		telemetry = coprocessor.telemetrySnapshot();
+		if (telemetry.finishedCount == finiteWorkerCount) break;
+		coprocessor.pumpFor(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	telemetry = coprocessor.telemetrySnapshot();
+	if (completedResultCount != finiteWorkerCount || telemetry.finishedCount != finiteWorkerCount) {
+		coprocessor.shutdown();
+		failureReason = "finite packet workers did not complete and finish before the deadline.";
+		return false;
+	}
+
+	persistentWorkerOrdinal = coprocessor.registerWorker(mr::coprocessor::Lane::Compute, mr::coprocessor::ExecutionOwnerKind::Worker, 777);
+	if (persistentWorkerOrdinal == mr::coprocessor::kInvalidWorkerOrdinal) {
+		coprocessor.shutdown();
+		failureReason = "persistent worker was not registered.";
+		return false;
+	}
+	const std::uint64_t persistentTaskId = coprocessor.submitWorker(
+	    persistentWorkerOrdinal, mr::coprocessor::TaskKind::Custom, 0, 0, "persistent stop and join regression",
+	    [&persistentWorkerEntered](const mr::coprocessor::TaskInfo &task) {
+		    persistentWorkerEntered.store(true, std::memory_order_release);
+		    while (!task.cancelRequested()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		    mr::coprocessor::Result result;
+		    result.task = task;
+		    result.status = mr::coprocessor::TaskStatus::Cancelled;
+		    return result;
+	    });
+	if (persistentTaskId == 0) {
+		coprocessor.unregisterWorker(persistentWorkerOrdinal);
+		coprocessor.shutdown();
+		failureReason = "persistent worker task was not submitted.";
+		return false;
+	}
+	const std::chrono::steady_clock::time_point persistentDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+	while (!persistentWorkerEntered.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < persistentDeadline) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	if (!persistentWorkerEntered.load(std::memory_order_acquire)) {
+		coprocessor.unregisterWorker(persistentWorkerOrdinal);
+		coprocessor.shutdown();
+		failureReason = "persistent worker did not enter its task before the deadline.";
+		return false;
+	}
+	coprocessor.unregisterWorker(persistentWorkerOrdinal);
+	const std::chrono::steady_clock::time_point stopDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+	while ((!persistentResultCancelled || coprocessor.telemetrySnapshot().finishedCount != finiteWorkerCount + 1) && std::chrono::steady_clock::now() < stopDeadline) {
+		coprocessor.pumpFor(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	coprocessor.shutdown(true);
+	telemetry = coprocessor.telemetrySnapshot(4096);
+	if (!persistentResultCancelled || telemetry.createdCount != finiteWorkerCount + 1 || telemetry.finishedCount != finiteWorkerCount + 1 || !telemetry.workers.empty()) {
+		failureReason = "persistent worker stop did not produce a cancelled result and a balanced joined lifecycle.";
+		return false;
+	}
+
+	std::vector<bool> assignedOrdinals(finiteWorkerCount + 1, false);
+	std::vector<bool> finishedOrdinals(finiteWorkerCount + 1, false);
+	bool sawPersistentStop = false;
+	for (const mr::coprocessor::WorkerLifecycleEvent &event : telemetry.recentEvents) {
+		if (event.workerOrdinal >= assignedOrdinals.size()) continue;
+		if (event.state == mr::coprocessor::WorkerLifecycleState::Assigned) {
+			const int expectedCore = telemetry.allowedCoreIds[static_cast<std::size_t>(event.workerOrdinal % telemetry.allowedCoreIds.size())];
+			if (event.assignedCore != expectedCore || event.affinityResult != 0 || event.osThreadId == 0) {
+				failureReason = "worker ordinal was not assigned to the exact modulo-selected CPU core.";
+				return false;
+			}
+			assignedOrdinals[static_cast<std::size_t>(event.workerOrdinal)] = true;
+		}
+		if (event.state != mr::coprocessor::WorkerLifecycleState::Finished) continue;
+		finishedOrdinals[static_cast<std::size_t>(event.workerOrdinal)] = true;
+		if (event.workerOrdinal == persistentWorkerOrdinal && event.reason == mr::coprocessor::LifecycleReason::StopRequested) sawPersistentStop = true;
+	}
+	for (std::size_t workerIndex = 0; workerIndex < assignedOrdinals.size(); ++workerIndex) {
+		if (assignedOrdinals[workerIndex] && finishedOrdinals[workerIndex]) continue;
+		failureReason = "worker lifecycle omitted an assigned or finished event.";
+		return false;
+	}
+	if (!sawPersistentStop) {
+		failureReason = "persistent worker lifecycle omitted the explicit stop-requested finish reason.";
+		return false;
+	}
+	if (!captured || !capturedResult.completed()) {
+		failureReason = "packet metadata task did not complete.";
+		return false;
+	}
+	const mr::coprocessor::TaskInfo &task = capturedResult.task;
+	if (task.id != metadataTaskId || task.kind != mr::coprocessor::TaskKind::DisplayWidthWarmup || task.generation != kGeneration || task.direction != mr::coprocessor::WorkDirection::Eof || !task.hasPacketSpan ||
+	    task.packetStart != kPacketStart || task.packetEnd != kPacketEnd) {
+		failureReason = "packet task metadata was not preserved through worker execution.";
+		return false;
+	}
 	failureReason.clear();
 	return true;
 }
@@ -11292,8 +11513,8 @@ bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
 	const std::string windowListHeaderPath = absolutePathFromCwd("dialogs/MRWindowList.hpp");
 	const std::string windowListPath = absolutePathFromCwd("dialogs/MRWindowList.cpp");
-	const std::string bentoHeaderPath = absolutePathFromCwd("ui/MRBentoBox.hpp");
-	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	const std::string bentoHeaderPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBox.hpp");
+	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxProjection.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	const std::string catalogPath = absolutePathFromCwd("keymap/MRKeymapActionCatalog.cpp");
 	std::string commands;
@@ -11363,7 +11584,7 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 	const std::string windowListPath = absolutePathFromCwd("dialogs/MRWindowList.cpp");
 	const std::string editWindowPath = absolutePathFromCwd("ui/MREditWindow.hpp");
 	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
-	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBoxProjection.cpp");
+	const std::string bentoProjectionPath = absolutePathFromCwd("ui/MRBentoBox/MRBentoBoxProjection.cpp");
 	const std::string settingsStorageHeaderPath = absolutePathFromCwd("config/settings/MRSettingsStorage.hpp");
 	const std::string settingsRuntimePath = absolutePathFromCwd("config/settings/MRSettingsRuntime.cpp");
 	std::string windowCommandsHeader;
@@ -11468,6 +11689,59 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
+	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
+	std::string editorApp;
+	std::string ioError;
+	std::string missingNeedle;
+	std::string startupLoadBody;
+	std::string constructorBody;
+	std::size_t startupLoadStart = std::string::npos;
+	std::size_t startupLoadEnd = std::string::npos;
+	std::size_t constructorStart = std::string::npos;
+	std::size_t constructorEnd = std::string::npos;
+	std::size_t autoloadFlag = std::string::npos;
+	std::size_t workspaceRestore = std::string::npos;
+	std::size_t startupFiles = std::string::npos;
+
+	if (!readTextFile(editorAppPath, editorApp, ioError)) {
+		failureReason = "Unable to read workspace command-line startup source: " + ioError;
+		return false;
+	}
+	startupLoadStart = editorApp.find("std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles)");
+	startupLoadEnd = editorApp.find("\nstd::string buildTopRightCursorStatus", startupLoadStart);
+	if (startupLoadStart == std::string::npos || startupLoadEnd == std::string::npos) {
+		failureReason = "Unable to isolate command-line startup file loading.";
+		return false;
+	}
+	startupLoadBody = editorApp.substr(startupLoadStart, startupLoadEnd - startupLoadStart);
+	if (!containsAllSubstrings(startupLoadBody, {"restoredWindows = allEditWindowsInZOrder()", "candidateEditor->persistentFileName()", "normalizePathForLoad(std::filesystem::path(candidatePath)) != file", "Startup file resolved to restored workspace window:", "if (restoredFileFound) continue;", "createEditorWindow(file.c_str())", "mrActivateEditWindow(lastStartupWindow)"}, missingNeedle)) {
+		failureReason = "Workspace command-line focus reuse changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	constructorStart = editorApp.find("MREditorApp::MREditorApp()");
+	constructorEnd = editorApp.find("\nbool MREditorApp::quitPrepared()", constructorStart);
+	if (constructorStart == std::string::npos || constructorEnd == std::string::npos) {
+		failureReason = "Unable to isolate editor startup ordering.";
+		return false;
+	}
+	constructorBody = editorApp.substr(constructorStart, constructorEnd - constructorStart);
+	autoloadFlag = constructorBody.find("const bool autoloadWorkspace = configuredAutoloadWorkspace()");
+	workspaceRestore = constructorBody.find("mrLoadWorkspace(\"\")", autoloadFlag);
+	startupFiles = constructorBody.find("loadStartupFilesFromCommandLine(autoloadWorkspace)", workspaceRestore);
+	if (autoloadFlag == std::string::npos || workspaceRestore == std::string::npos || startupFiles == std::string::npos || !(autoloadFlag < workspaceRestore && workspaceRestore < startupFiles)) {
+		failureReason = "Automatic workspace restore must precede command-line file focus and loading.";
+		return false;
+	}
+	if (constructorBody.find("if (!autoloadWorkspace && mrSettingsFileHasAutosavedWorkspace())") == std::string::npos) {
+		failureReason = "Manual workspace restore prompt must remain outside automatic command-line reconciliation.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 	std::string failure;
 
@@ -11492,11 +11766,14 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
 	runTest(ctx, "Compiler support macros compile guard", testCompilerSupportMacrosCompileGuard);
+	runTest(ctx, "DELAY deadline resume harness", testDelayProcWiringGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
+	runTest(ctx, "Coprocessor packet metadata harness", testCoprocessorPacketMetadataHarness);
 	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
 	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
 	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
+	runTest(ctx, "Deferred large line-index harness", testDeferredLargeLineIndexHarness);
 	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
 	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
 	runTest(ctx, "Post-EOF clear-area guard", testEofVirtualLineColorGuard);
@@ -11505,6 +11782,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "MMP client and hotspot dispatch harness", testMmpClientFocusDispatchHarness);
 	runTest(ctx, "MMP common collection controls harness", testMmpCollectionControlHarness);
+	runTest(ctx, "Workspace command-line autoload focus guard", testWorkspaceCommandLineAutoloadFocusGuard);
 }
 
 void runFullSuite(TestContext &ctx) {

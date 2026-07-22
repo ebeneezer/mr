@@ -7,39 +7,53 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
+#include <array>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <string>
-#include <vector>
+
+namespace mr {
+namespace coprocessor {
+struct WorkerTelemetrySnapshot;
+}
+}
 
 class MRPerformancePanel : public TView {
   public:
-	static constexpr int kPreferredHeight = 10;
+	static constexpr int kPreferredHeight = 7;
 
 	explicit MRPerformancePanel(const TRect &bounds) noexcept;
 
-	void setAnimationFrame(unsigned frame) noexcept;
+	void refresh() noexcept;
 	virtual void draw() override;
 	virtual TPalette &getPalette() const override;
 
   private:
-	struct PanelSegment {
-		std::string text;
+	static constexpr std::size_t kWorkerEventSlotCount = 4;
+
+	struct WorkerEventSlot {
+		bool occupied;
+		std::uint64_t workerOrdinal;
+		std::uint64_t eventSequence;
+		std::string line;
 		TColorAttr color;
+
+		WorkerEventSlot() noexcept;
 	};
 
-	struct HeldLaneDisplay {
-		std::string queueText;
-		unsigned queueUntilFrame;
-		std::string workerText;
-		unsigned workerUntilFrame;
-
-		HeldLaneDisplay() noexcept : queueText(), queueUntilFrame(0), workerText(), workerUntilFrame(0) {
-		}
-	};
-
-	void writePanelLine(int y, const std::string &line, TColorAttr color);
-	void writePanelSegments(int y, const std::vector<PanelSegment> &segments, TColorAttr fillColor);
-	unsigned mAnimationFrame;
-	std::vector<HeldLaneDisplay> mLaneDisplayHold;
+	void updateActivityScale(std::size_t peakValue, TColorAttr peakColor, std::chrono::steady_clock::time_point now) noexcept;
+	void updateWorkerEventLog(const mr::coprocessor::WorkerTelemetrySnapshot &telemetry);
+	void drawActivityMeter(std::size_t activeCount, std::size_t queuedCount, std::size_t resultCount);
+	void writePanelLine(int y, const char *label, const std::string &line, TColorAttr color);
+	bool mRefreshInitialized;
+	std::uint64_t mLastRefreshSignature;
+	std::size_t mActivityScale;
+	TColorAttr mActivityScaleColor;
+	std::chrono::steady_clock::time_point mScaleDecreaseAt;
+	std::uint64_t mLastWorkerEventSequence;
+	std::uint64_t mWorkerEventTimeOriginMicros;
+	std::array<WorkerEventSlot, kWorkerEventSlotCount> mWorkerEventSlots;
 };
 
 #endif

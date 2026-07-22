@@ -51,6 +51,7 @@
 #include "../MRWindowSupport.hpp"
 
 class MREditWindow;
+struct MRFoldOutlineInputSnapshot;
 
 std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language);
 std::string mrBuildOutlineTrainingAscii(const std::string &text, MRSyntaxLanguage language);
@@ -99,7 +100,9 @@ class MRFileEditor : public TScroller {
 		~DestructionProbe();
 	};
 
-	MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept;
+	MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName,
+	             mr::coprocessor::ExecutionOwnerKind executionOwnerKind = mr::coprocessor::ExecutionOwnerKind::EditorWindow,
+	             std::size_t executionOwnerLocalId = 0) noexcept;
 
 	virtual ~MRFileEditor() override;
 
@@ -152,14 +155,24 @@ class MRFileEditor : public TScroller {
 	std::size_t selectionLength() const noexcept;
 
 	std::uint64_t pendingLineIndexWarmupTaskId() const noexcept;
+	std::size_t pendingLineIndexWarmupTaskCount() const noexcept;
+	bool ownsLineIndexWarmupTask(std::uint64_t taskId) const noexcept;
+
+	std::size_t pendingDisplayWidthWarmupTaskCount() const noexcept;
+	bool ownsDisplayWidthWarmupTask(std::uint64_t taskId) const noexcept;
 
 	std::uint64_t pendingSyntaxWarmupTaskId() const noexcept;
+	std::size_t pendingSyntaxWarmupTaskCount() const noexcept;
+	bool ownsSyntaxWarmupTask(std::uint64_t taskId) const noexcept;
 
 	std::uint64_t pendingFoldWarmupTaskId() const noexcept;
+	std::size_t pendingFoldWarmupTaskCount() const noexcept;
+	bool ownsFoldWarmupTask(std::uint64_t taskId) const noexcept;
 
 	std::uint64_t pendingMiniMapWarmupTaskId() const noexcept;
-
-	std::uint64_t pendingSaveNormalizationWarmupTaskId() const noexcept;
+	std::size_t pendingMiniMapWarmupTaskCount() const noexcept;
+	bool ownsMiniMapWarmupTask(std::uint64_t taskId) const noexcept;
+	bool miniMapProjectionAvailable() const noexcept;
 
 	std::size_t syntaxWarmupTopLine() const noexcept;
 
@@ -180,8 +193,6 @@ class MRFileEditor : public TScroller {
 	bool syntaxWarmupPending() const noexcept;
 
 	bool miniMapWarmupPending() const noexcept;
-
-	bool saveNormalizationWarmupPending() const noexcept;
 
 	bool usesApproximateMetrics() const noexcept;
 
@@ -209,6 +220,7 @@ class MRFileEditor : public TScroller {
 
 	void refreshConfiguredVisualSettings();
 	void refreshEditorSettingsSnapshot();
+	void requestDocumentLineNavigation(std::size_t lineIndex);
 	void moveCursorToDocumentLineTop(std::size_t lineIndex, int visualColumn);
 	void restoreCursorViewState(std::size_t lineIndex, int visualColumn);
 	void setCommunicationViewerMode(bool enabled, bool lineNumbers, MRLiveLogScrollDirection scrollDirection = MRLiveLogScrollDirection::Down);
@@ -217,8 +229,8 @@ class MRFileEditor : public TScroller {
 	void setMiniMapSuppressed(bool suppressed) noexcept;
 	void setWordWrapSuppressed(bool suppressed) noexcept;
 	void setScrollBarsAlwaysVisible(bool visible) noexcept;
-	void setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds);
-	void setFileCompareLineKinds(const std::vector<unsigned char> &lineKinds, const std::vector<MRFileCompareMiniMapSlice> &miniMapSlices);
+	void adoptFileCompareLineKinds(const std::shared_ptr<const std::vector<unsigned char>> &lineKinds,
+	                               const std::shared_ptr<const std::vector<MRFileCompareMiniMapSlice>> &miniMapSlices);
 	void clearFileCompareLineKinds();
 	void setFileCompareGutters(const std::string &leftGutters, const std::string &rightGutters);
 	void setFileCompareGutterVisible(bool visible) noexcept;
@@ -304,6 +316,8 @@ class MRFileEditor : public TScroller {
 	void clearFindMarkerRanges();
 
 	void setCompilerDiagnosticRanges(const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges, const std::vector<std::pair<std::size_t, std::size_t>> &warningRanges);
+	void adoptCompilerDiagnosticRanges(const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &errorRanges,
+	                                   const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &warningRanges);
 
 	void clearCompilerDiagnosticRanges();
 	void setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges);
@@ -366,27 +380,32 @@ class MRFileEditor : public TScroller {
 
 	LoadTiming lastLoadTiming() const noexcept;
 
-	bool applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup, std::size_t expectedVersion);
+	bool applyLineIndexWarmup(const mr::editor::LineIndexScanPacket &packet, std::size_t expectedVersion, std::uint64_t expectedTaskId);
 
-	bool applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload &warmup, std::size_t expectedVersion, std::uint64_t expectedTaskId);
+	bool applyDisplayWidthWarmup(const mr::coprocessor::DisplayWidthWarmupPayload &warmup, std::size_t sourceVersion, std::uint64_t expectedTaskId);
 
-	bool applyMiniMapWarmup(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId);
+	bool applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload &warmup, const mr::coprocessor::Result &result);
 
-	bool applySaveNormalizationWarmup(const mr::coprocessor::SaveNormalizationWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId, double runMicros);
+	bool applyMiniMapWarmup(const mr::coprocessor::Payload &payload, const mr::coprocessor::Result &result);
 
-	bool applyFoldWarmup(const mr::coprocessor::Payload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId);
+	bool applyFoldWarmup(const mr::coprocessor::Payload &payload, const mr::coprocessor::Result &result);
 
 	void clearLineIndexWarmupTask(std::uint64_t expectedTaskId) noexcept;
+	std::size_t cancelLineIndexWarmup() noexcept;
+
+	void clearDisplayWidthWarmupTask(std::uint64_t expectedTaskId) noexcept;
+
+	std::size_t cancelDisplayWidthWarmup() noexcept;
 
 	void clearSyntaxWarmupTask(std::uint64_t expectedTaskId) noexcept;
+	std::size_t cancelSyntaxWarmup() noexcept;
 
 	void clearMiniMapWarmupTask(std::uint64_t expectedTaskId) noexcept;
 
 	void applyMiniMapSignals(const MRMiniMapRenderer::Signals &signals);
 
-	void clearSaveNormalizationWarmupTask(std::uint64_t expectedTaskId = 0) noexcept;
-
-	void clearFoldWarmupTask(std::uint64_t expectedTaskId = 0) noexcept;
+	void clearFoldWarmupTask(std::uint64_t expectedTaskId = 0);
+	std::size_t cancelFoldWarmup() noexcept;
 
 	void setSyntaxTitleHint(const std::string &title);
 
@@ -397,6 +416,10 @@ class MRFileEditor : public TScroller {
 	bool syntaxLanguageAutomatic() const noexcept;
 
 	bool buildFoldOutlineSnapshot(const MROutlineRequest &request, MROutlineSnapshot &snapshot) const;
+	bool captureFoldOutlineInput(const MROutlineRequest &request, MRFoldOutlineInputSnapshot &input) const;
+	std::uint64_t foldOutlineInputRevision() const noexcept;
+	bool completeFoldOutlineInputAvailable() const noexcept;
+	bool canRequestCompleteFoldOutlineWarmup() const;
 	bool requestCompleteFoldOutlineWarmup();
 
 		bool canSaveInPlace() const;
@@ -417,13 +440,15 @@ class MRFileEditor : public TScroller {
 
 		bool replaceBufferText(const char *text);
 
+		bool adoptReadOnlyProjectionText(const std::shared_ptr<const std::string> &text, std::size_t expectedDocumentId, std::size_t expectedVersion);
+
 		bool appendBufferData(const char *data, uint length);
 
 		bool appendBufferText(const char *text);
 		bool appendLogViewerData(const char *data, uint length, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr);
 		bool prependLogViewerData(const char *data, uint length, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr);
 
-		bool replaceRangeAndSelect(uint start, uint end, const char *data, uint length);
+		bool replaceRangeAndSelect(std::size_t start, std::size_t end, const char *data, std::size_t length);
 
 		int paddingColumnsBeforeInsertAtCursor() const noexcept;
 
@@ -535,14 +560,312 @@ class MRFileEditor : public TScroller {
 
 	bool shouldTraceLargeFileWarmupDiagnostics() const noexcept;
 
-	void traceLargeFileWarmup(std::string &slot, const char *stage, std::string detail);
-
 	struct SaveNormalizationCache {
 		bool valid = false;
 		std::size_t documentId = 0;
 		std::size_t version = 0;
 		std::size_t optionsHash = 0;
 		std::size_t sourceBytes = 0;
+	};
+
+	struct LineIndexPacketState {
+		std::uint64_t taskId;
+		std::uint64_t reservationId;
+		std::uint64_t generation;
+		mr::coprocessor::WorkDirection direction;
+		std::size_t startOffset;
+		std::size_t endOffset;
+
+		LineIndexPacketState() noexcept
+		    : taskId(0), reservationId(0), generation(0), direction(mr::coprocessor::WorkDirection::None), startOffset(0), endOffset(0) {
+		}
+	};
+
+	struct LineIndexWarmupState {
+		std::size_t documentId;
+		std::size_t version;
+		std::size_t focusBucket;
+		std::size_t focusOffset;
+		std::uint64_t generation;
+		std::vector<LineIndexPacketState> packets;
+
+		LineIndexWarmupState() noexcept : documentId(0), version(0), focusBucket(static_cast<std::size_t>(-1)), focusOffset(0), generation(0), packets() {
+		}
+	};
+
+	struct PendingDocumentLineNavigationState {
+		bool active;
+		std::size_t documentId;
+		std::size_t version;
+		std::size_t targetLine;
+		std::size_t cursorOffset;
+		std::size_t selectionStart;
+		std::size_t selectionEnd;
+
+		PendingDocumentLineNavigationState() noexcept
+		    : active(false), documentId(0), version(0), targetLine(0), cursorOffset(0), selectionStart(0), selectionEnd(0) {
+		}
+	};
+
+	struct DisplayWidthPacketState {
+		std::uint64_t taskId;
+		std::size_t documentVersion;
+		std::uint64_t generation;
+		std::size_t startLine;
+		std::size_t endLine;
+		bool adopted;
+
+		DisplayWidthPacketState() noexcept : taskId(0), documentVersion(0), generation(0), startLine(0), endLine(0), adopted(false) {
+		}
+	};
+
+	struct DisplayWidthWarmupState {
+		std::size_t documentId;
+		std::size_t version;
+		std::size_t totalLines;
+		std::size_t appendStartLine;
+		std::uint64_t generation;
+		int maximumWidth;
+		int tabSize;
+		int leftMargin;
+		int rightMargin;
+		std::string formatLine;
+		bool complete;
+		bool appendTailPending;
+		std::vector<DisplayWidthPacketState> packets;
+
+		DisplayWidthWarmupState() noexcept : documentId(0), version(0), totalLines(0), appendStartLine(0), generation(0), maximumWidth(1), tabSize(0), leftMargin(0), rightMargin(0), formatLine(), complete(false), appendTailPending(false), packets() {
+		}
+	};
+
+	struct SyntaxPacketState {
+		std::uint64_t taskId;
+		std::uint64_t generation;
+		mr::coprocessor::WorkDirection direction;
+		std::size_t startLine;
+		std::size_t endLine;
+		std::size_t materializedStartLine;
+		std::size_t materializedEndLine;
+		bool inputStateConfirmed;
+		bool resultReady;
+		MRSyntaxLineState inputState;
+		mr::coprocessor::DeferredResultLifecycle resultLifecycle;
+		std::vector<mr::coprocessor::SyntaxWarmCheckpoint> checkpoints;
+		std::vector<mr::coprocessor::SyntaxWarmLine> lines;
+
+		SyntaxPacketState() noexcept
+		    : taskId(0), generation(0), direction(mr::coprocessor::WorkDirection::None), startLine(0), endLine(0), materializedStartLine(0), materializedEndLine(0),
+		      inputStateConfirmed(false), resultReady(false), inputState(), resultLifecycle(), checkpoints(), lines() {
+		}
+	};
+
+	struct SyntaxWarmupState {
+		std::size_t documentId;
+		std::size_t version;
+		MRSyntaxLanguage language;
+		std::uint64_t generation;
+		std::size_t visibleTopLine;
+		std::size_t visibleBottomLine;
+		std::size_t targetBottomLine;
+		std::size_t reachedBottomLine;
+		bool waitingForReservedPackets;
+		std::vector<SyntaxPacketState> packets;
+
+		SyntaxWarmupState() noexcept
+		    : documentId(0), version(0), language(MRSyntaxLanguage::PlainText), generation(0), visibleTopLine(0), visibleBottomLine(0), targetBottomLine(0), reachedBottomLine(0),
+		      waitingForReservedPackets(false), packets() {
+		}
+	};
+
+	struct FoldPacketState {
+		std::uint64_t taskId;
+		std::uint64_t generation;
+		mr::coprocessor::WorkDirection direction;
+		std::size_t startLine;
+		std::size_t endLine;
+		bool contextOnly;
+		bool inputStateConfirmed;
+		bool resultReady;
+		MRFoldAnalysisState inputState;
+		MRFoldAnalysisState outputState;
+		mr::coprocessor::DeferredResultLifecycle resultLifecycle;
+		std::vector<std::string> lineTexts;
+		std::vector<MRFoldSpan> spans;
+		std::vector<MRFoldGutterBranch> branches;
+
+		FoldPacketState() noexcept
+		    : taskId(0), generation(0), direction(mr::coprocessor::WorkDirection::None), startLine(0), endLine(0), contextOnly(false), inputStateConfirmed(false), resultReady(false), inputState(),
+		      outputState(), resultLifecycle(), lineTexts(), spans(), branches() {
+		}
+	};
+
+	struct FoldCheckpointState {
+		std::uint64_t generation;
+		std::size_t line;
+		MRFoldAnalysisState state;
+
+		FoldCheckpointState() noexcept : generation(0), line(0), state() {
+		}
+	};
+
+	struct FoldValidatedSegment {
+		std::uint64_t generation;
+		std::size_t startLine;
+		std::size_t endLine;
+		std::vector<std::string> lineTexts;
+		std::vector<MRFoldSpan> spans;
+		std::vector<MRFoldGutterBranch> branches;
+
+		FoldValidatedSegment() noexcept : generation(0), startLine(0), endLine(0), lineTexts(), spans(), branches() {
+		}
+	};
+
+	struct FoldWarmupState {
+		std::size_t documentId;
+		std::size_t version;
+		MRSyntaxLanguage language;
+		std::uint64_t generation;
+		std::size_t scanTopLine;
+		std::size_t scanBottomLine;
+		std::size_t visibleTopLine;
+		std::size_t visibleBottomLine;
+		std::vector<FoldPacketState> packets;
+		std::vector<FoldCheckpointState> checkpoints;
+		std::vector<FoldValidatedSegment> segments;
+		bool failureLatched;
+
+		FoldWarmupState() noexcept
+		    : documentId(0), version(0), language(MRSyntaxLanguage::PlainText), generation(0), scanTopLine(0), scanBottomLine(0), visibleTopLine(0), visibleBottomLine(0), packets(),
+		      checkpoints(), segments(), failureLatched(false) {
+		}
+	};
+
+	enum class FoldCanonicalPacketStage : unsigned char {
+		AwaitingAcquisition,
+		Acquiring,
+		Acquired,
+		Validating
+	};
+
+	struct FoldCanonicalPacketState {
+		std::uint64_t taskId;
+		std::uint64_t generation;
+		std::size_t startLine;
+		std::size_t endLine;
+		FoldCanonicalPacketStage stage;
+		std::shared_ptr<const std::vector<std::string>> lineTexts;
+
+		FoldCanonicalPacketState() noexcept
+		    : taskId(0), generation(0), startLine(0), endLine(0), stage(FoldCanonicalPacketStage::AwaitingAcquisition), lineTexts() {
+		}
+	};
+
+	struct FoldCanonicalContextState {
+		std::size_t documentId;
+		std::size_t version;
+		MRSyntaxLanguage language;
+		std::uint64_t generation;
+		std::size_t totalLines;
+		std::size_t requestedScanTopLine;
+		std::size_t requestedScanBottomLine;
+		std::size_t requestedVisibleTopLine;
+		std::size_t requestedVisibleBottomLine;
+		std::size_t targetLine;
+		std::size_t nextPacketStartLine;
+		bool waitingForLineIndex;
+		bool requestValid;
+		bool failureLatched;
+		std::vector<FoldCanonicalPacketState> packets;
+		std::vector<FoldCheckpointState> checkpoints;
+
+		FoldCanonicalContextState() noexcept
+		    : documentId(0), version(0), language(MRSyntaxLanguage::PlainText), generation(0), totalLines(0), requestedScanTopLine(0), requestedScanBottomLine(0),
+		      requestedVisibleTopLine(0), requestedVisibleBottomLine(0), targetLine(0), nextPacketStartLine(0), waitingForLineIndex(false), requestValid(false), failureLatched(false), packets(), checkpoints() {
+		}
+	};
+
+	struct FoldLevelProjectionPayload final : mr::coprocessor::Payload {
+		std::uint64_t generation;
+		unsigned short level;
+		std::size_t segmentCount;
+		bool complete;
+		std::shared_ptr<const MRFoldClosedProjection> projection;
+
+		FoldLevelProjectionPayload() noexcept : generation(0), level(0), segmentCount(0), complete(false), projection() {
+		}
+
+		FoldLevelProjectionPayload(std::uint64_t aGeneration, unsigned short aLevel, std::size_t aSegmentCount, bool isComplete,
+		                           std::shared_ptr<const MRFoldClosedProjection> aProjection) noexcept
+		    : generation(aGeneration), level(aLevel), segmentCount(aSegmentCount), complete(isComplete), projection(std::move(aProjection)) {
+		}
+	};
+
+	struct FoldLineAcquisitionPayload final : mr::coprocessor::Payload {
+		std::uint64_t generation;
+		MRSyntaxLanguage language;
+		std::size_t startLine;
+		std::size_t endLine;
+		std::shared_ptr<const std::vector<std::string>> lineTexts;
+
+		FoldLineAcquisitionPayload() noexcept : generation(0), language(MRSyntaxLanguage::PlainText), startLine(0), endLine(0), lineTexts() {
+		}
+
+		FoldLineAcquisitionPayload(std::uint64_t aGeneration, MRSyntaxLanguage aLanguage, std::size_t aStartLine, std::size_t anEndLine,
+		                           std::shared_ptr<const std::vector<std::string>> acquiredLineTexts) noexcept
+		    : generation(aGeneration), language(aLanguage), startLine(aStartLine), endLine(anEndLine), lineTexts(std::move(acquiredLineTexts)) {
+		}
+	};
+
+	enum class FoldLevelPacketStage : unsigned char {
+		AwaitingAcquisition,
+		Acquiring,
+		Acquired,
+		Validating
+	};
+
+	struct FoldLevelPacketState {
+		std::uint64_t taskId;
+		std::uint64_t generation;
+		std::size_t startLine;
+		std::size_t endLine;
+		FoldLevelPacketStage stage;
+		bool projectionOnly;
+		MRFoldAnalysisState confirmedInputState;
+		std::shared_ptr<const std::vector<std::string>> lineTexts;
+
+		FoldLevelPacketState() noexcept
+		    : taskId(0), generation(0), startLine(0), endLine(0), stage(FoldLevelPacketStage::AwaitingAcquisition), projectionOnly(false), confirmedInputState(), lineTexts() {
+		}
+	};
+
+	struct FoldLevelOperationState {
+		std::size_t documentId;
+		std::size_t version;
+		MRSyntaxLanguage language;
+		std::uint64_t generation;
+		unsigned short level;
+		unsigned short resolvedLevel;
+		std::size_t totalLines;
+		std::size_t contextAnchorLine;
+		std::size_t nextPacketStartLine;
+		std::size_t nextProjectionPacketStartLine;
+		std::size_t confirmedLine;
+		std::size_t projectedLine;
+		std::size_t projectionTargetBottomLine;
+		std::uint64_t projectionTaskId;
+		bool waitingForLineIndex;
+		bool levelResolved;
+		MRFoldAnalysisState viewportAnchorState;
+		MRFoldAnalysisState confirmedState;
+		std::vector<FoldLevelPacketState> packets;
+		std::vector<FoldCheckpointState> checkpoints;
+		std::vector<std::shared_ptr<const FoldValidatedSegment>> segments;
+
+		FoldLevelOperationState() noexcept
+		    : documentId(0), version(0), language(MRSyntaxLanguage::PlainText), generation(0), level(0), resolvedLevel(0), totalLines(0), contextAnchorLine(0), nextPacketStartLine(0),
+		      nextProjectionPacketStartLine(0), confirmedLine(0), projectedLine(0), projectionTargetBottomLine(0), projectionTaskId(0), waitingForLineIndex(false), levelResolved(false),
+		      viewportAnchorState(), confirmedState(), packets(), checkpoints(), segments() {
+		}
 	};
 
 	using TextViewportGeometry = MRTextViewportLayout::Geometry;
@@ -581,9 +904,9 @@ class MRFileEditor : public TScroller {
 
 	static const char *lineIndexWarmupTaskLabel() noexcept;
 
-	static const char *syntaxWarmupTaskLabel() noexcept;
+	static const char *displayWidthWarmupTaskLabel() noexcept;
 
-	static const char *saveNormalizationWarmupTaskLabel() noexcept;
+	static const char *syntaxWarmupTaskLabel() noexcept;
 
 	static const char *foldWarmupTaskLabel() noexcept;
 
@@ -622,27 +945,74 @@ class MRFileEditor : public TScroller {
 
 	std::size_t lineStartForIndex(std::size_t index) const noexcept;
 
-	int longestLineWidth() const noexcept;
-
 	bool useApproximateLargeFileMetrics() const noexcept;
 
 	int dynamicLargeFileLineLimit() const noexcept;
 
 	int dynamicLargeFileWidthLimit() const;
 
+	int provisionalDisplayWidthLimit() const noexcept;
+
+	bool displayWidthLimitExact() const noexcept;
+
 	void scheduleLineIndexWarmupIfNeeded();
+	bool continuePendingDocumentLineNavigation();
+
+	void scheduleDisplayWidthWarmupIfNeeded();
+
+	bool prepareDisplayWidthWarmupForAppend(const MRTextBufferModel::DocumentChangeSet &changeSet);
+
+	void resetDisplayWidthWarmup() noexcept;
 
 	void scheduleSyntaxWarmupIfNeeded();
 
 	void scheduleFoldWarmupIfNeeded(std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t topLine, std::size_t requestBottomLine, MRSyntaxLanguage language);
+	bool canonicalFoldContextForViewport(std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t topLine, std::size_t requestBottomLine, MRSyntaxLanguage language,
+	                                     std::size_t &anchorLine, MRFoldAnalysisState &anchorState);
+	void continueCanonicalFoldContextIfNeeded();
+	bool applyCanonicalFoldContext(const mr::coprocessor::Payload &payload, const mr::coprocessor::Result &result);
+	std::size_t cancelCanonicalFoldContext() noexcept;
+	void clearCanonicalFoldContextTask(std::uint64_t expectedTaskId) noexcept;
+	bool ownsCanonicalFoldContextTask(std::uint64_t taskId) const noexcept;
+	void appendCanonicalFoldContextPackets();
+	void submitCanonicalFoldContextPackets();
+	void submitCanonicalFoldAcquisition(FoldCanonicalPacketState &packet, const MRTextBufferModel::ReadSnapshot &snapshot);
+	void submitCanonicalFoldValidation(FoldCanonicalPacketState &packet);
+	void rememberCanonicalFoldCheckpoint(std::size_t line, const MRFoldAnalysisState &state);
+	void resumeCanonicalFoldViewportIfReady();
+	static std::shared_ptr<const mr::coprocessor::Payload> buildFoldWarmupPayload(const MRTextBufferModel::ReadSnapshot &snapshot, MRSyntaxLanguage language, std::uint64_t generation,
+	                                                                            mr::coprocessor::WorkDirection direction, std::size_t startLine, std::size_t endLine,
+	                                                                            std::size_t totalLines, bool documentEndKnown, const MRFoldAnalysisState &inputState,
+	                                                                            const std::map<std::size_t, MRFoldSpan> &closedFoldSpans,
+	                                                                            const std::shared_ptr<std::atomic_bool> &cancelFlag, bool retainProjectionData = true,
+	                                                                            int retainedFoldLevel = -1);
+	static std::shared_ptr<const mr::coprocessor::Payload> buildFoldLineAcquisitionPayload(const MRTextBufferModel::ReadSnapshot &snapshot, MRSyntaxLanguage language,
+	                                                                                     std::uint64_t generation, std::size_t startLine, std::size_t endLine,
+	                                                                                     std::size_t totalLines, const std::shared_ptr<std::atomic_bool> &cancelFlag);
+	static std::shared_ptr<const mr::coprocessor::Payload> buildFoldValidationPayload(const std::shared_ptr<const std::vector<std::string>> &lineTexts, MRSyntaxLanguage language,
+	                                                                                std::uint64_t generation, std::size_t startLine, std::size_t endLine,
+	                                                                                std::size_t totalLines, const MRFoldAnalysisState &inputState, bool retainFoldSpans,
+	                                                                                unsigned short retainedFoldLevel, const std::shared_ptr<std::atomic_bool> &cancelFlag);
+
+	bool toggleDocumentFoldLevel(unsigned short level);
+	void continueDocumentFoldLevelOperationIfNeeded();
+	std::size_t cancelViewportFoldWarmup() noexcept;
+	void supersedeViewportFoldWarmup() noexcept;
+	std::size_t cancelDocumentFoldLevelOperation() noexcept;
+	void clearDocumentFoldLevelTask(std::uint64_t expectedTaskId) noexcept;
+	void appendDocumentFoldLevelPackets();
+	void submitDocumentFoldLevelPackets();
+	void submitDocumentFoldLevelAcquisition(FoldLevelPacketState &packet, const MRTextBufferModel::ReadSnapshot &snapshot);
+	void submitDocumentFoldLevelValidation(FoldLevelPacketState &packet);
+	bool resolveDocumentFoldLevelTarget();
+	void scheduleDocumentFoldLevelProjection();
+	bool applyDocumentFoldLevelProjection(const FoldLevelProjectionPayload &payload, const mr::coprocessor::Result &result);
 
 	bool resolveSaveOptionsForPath(const char *path, MRTextSaveOptions &options, std::size_t *optionsHash = nullptr) const;
 
 	void invalidateSaveNormalizationCache() noexcept;
 
 	void noteSaveNormalizationThroughput(std::size_t sourceBytes, double runMicros) noexcept;
-
-	void scheduleSaveNormalizationWarmupIfNeeded();
 
 	void updateIndicator();
 
@@ -712,8 +1082,6 @@ class MRFileEditor : public TScroller {
 
 		bool syntaxWarmedLineRangeCovered(std::size_t startLine, std::size_t endLine) const noexcept;
 
-		void refreshVisibleSyntaxCacheForImmediateDraw();
-
 	void invalidateFoldCache(bool preserveVisibleProjection = false) noexcept;
 
 	void ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language);
@@ -726,19 +1094,26 @@ class MRFileEditor : public TScroller {
 
 	std::size_t foldedVisibleLineCount() const noexcept;
 
-		std::vector<std::size_t> syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const;
-
 		bool syntaxCheckpointForLine(std::size_t lineIndex, MRSyntaxCheckpointEntry &checkpoint) const;
 
 		void rememberSyntaxCheckpoint(std::size_t lineStart, std::size_t lineIndex, const MRSyntaxLineState &stateIn) noexcept;
 
-		MRSyntaxLineState syntaxWarmupInitialState(std::size_t lineStart) const noexcept;
+		bool syntaxConfirmedStateForLine(std::size_t lineIndex, MRSyntaxLineState &stateIn) const noexcept;
 
-		bool hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState = MRSyntaxLineState()) const;
+		bool adoptReadySyntaxPackets(bool &tokensChanged);
 
-		std::size_t syntaxCachedCoveragePrefix(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState, MRSyntaxLineState *stateOut = nullptr) const;
+		void submitSyntaxPacket(SyntaxPacketState &packet, const MRTextBufferModel::ReadSnapshot &snapshot);
 
-		void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const MRSyntaxLineResult &syntaxLine, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji);
+		bool foldConfirmedStateForPacket(const FoldPacketState &packet, MRFoldAnalysisState &state) const noexcept;
+
+		bool adoptReadyFoldPackets();
+
+		bool publishCurrentFoldProjection();
+
+		void submitFoldPacket(FoldPacketState &packet, const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t totalLines, bool documentEndKnown);
+		void submitFoldPackets(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t totalLines, bool documentEndKnown);
+
+		void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::size_t lineIndex, const MRSyntaxLineResult &syntaxLine, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji);
 
 		void drawEofMarkerGlyph(TDrawBuffer &b, int hScroll, int width, int drawX, TAttrPair basePair, bool drawEmoji);
 
@@ -772,26 +1147,32 @@ class MRFileEditor : public TScroller {
 	std::size_t mCursorVisualLine;
 	int mCursorVisualColumn;
 	bool mIndicatorUpdateInProgress;
-	std::uint64_t mLineIndexWarmupTaskId;
-	std::size_t mLineIndexWarmupDocumentId;
-	std::size_t mLineIndexWarmupVersion;
+	LineIndexWarmupState mLineIndexWarmupState;
+	PendingDocumentLineNavigationState mPendingDocumentLineNavigationState;
+	std::uint64_t mLineIndexGenerationCounter;
 	bool mSuppressLargeFileLineIndexWarmup;
+	DisplayWidthWarmupState mDisplayWidthWarmupState;
+	std::uint64_t mDisplayWidthGenerationCounter;
+	int mDisplayWidthPublishedLimit;
+	mr::coprocessor::ExecutionOwnerKind mExecutionOwnerKind;
+	std::size_t mExecutionOwnerLocalId;
+	SyntaxWarmupState mSyntaxWarmupState;
+	std::uint64_t mSyntaxGenerationCounter;
 	MRSyntaxDerivedState mSyntaxState;
+	FoldCanonicalContextState mFoldCanonicalContextState;
+	FoldWarmupState mFoldWarmupState;
+	FoldLevelOperationState mFoldLevelOperationState;
+	std::uint64_t mFoldGenerationCounter;
 	MRFoldingDerivedState mFoldState;
+	mutable std::shared_ptr<const MRFoldOutlineInputSnapshot> mFoldOutlineInputCache;
 	MRMiniMapDerivedState mMiniMapState;
-	std::vector<unsigned char> mFileCompareLineKinds;
-	std::vector<MRFileCompareMiniMapSlice> mFileCompareMiniMapSlices;
+	std::shared_ptr<const std::vector<unsigned char>> mFileCompareLineKinds;
+	std::shared_ptr<const std::vector<MRFileCompareMiniMapSlice>> mFileCompareMiniMapSlices;
 	std::string mFileCompareLeftGutters;
 	std::string mFileCompareRightGutters;
 	bool mFileCompareGuttersConfigured = false;
 	bool mFileCompareGutterVisible = true;
 	SaveNormalizationCache mSaveNormalizationCache;
-	std::uint64_t mSaveNormalizationWarmupTaskId;
-	std::size_t mSaveNormalizationWarmupDocumentId;
-	std::size_t mSaveNormalizationWarmupVersion;
-	std::size_t mSaveNormalizationWarmupOptionsHash;
-	std::size_t mSaveNormalizationWarmupSourceBytes;
-	std::chrono::steady_clock::time_point mSaveNormalizationWarmupStartedAt;
 	double mSaveNormalizationThroughputBytesPerMicro;
 	std::size_t mSaveNormalizationThroughputSamples;
 	bool mMouseSelectionColumnsValid;
@@ -814,8 +1195,8 @@ class MRFileEditor : public TScroller {
 	int mPreferredIndentColumn;
 	std::vector<MRTextBufferModel::Range> mFindMarkerRanges;
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
-	std::vector<MRTextBufferModel::Range> mCompilerErrorRanges;
-	std::vector<MRTextBufferModel::Range> mCompilerWarningRanges;
+	std::shared_ptr<const std::vector<MRTextBufferModel::Range>> mCompilerErrorRanges;
+	std::shared_ptr<const std::vector<MRTextBufferModel::Range>> mCompilerWarningRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointInactiveRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointActiveRanges;
@@ -831,13 +1212,10 @@ class MRFileEditor : public TScroller {
 	mutable std::size_t mCachedCursorLineVersion;
 	mutable std::size_t mCachedCursorLineOffset;
 	mutable std::size_t mCachedCursorLineIndexValue;
-	std::string mLastLineIndexWarmupTrace;
-	std::string mLastSyntaxWarmupTrace;
-	std::string mLastMiniMapWarmupTrace;
-	std::string mLastComputeWarmupTrace;
+	mutable bool mCachedCursorLineExact;
 	std::string mLastUiHotpathTrace;
 
-	void clearDirtyRanges() noexcept;
+	void clearDirtyRanges();
 
 	static void normalizePairRangeList(std::vector<std::pair<std::size_t, std::size_t>> &ranges);
 

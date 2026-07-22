@@ -77,7 +77,6 @@ class MREditorApp : public TApplication {
 	bool performancePanelVisible;
 	MRPerformancePanel *performancePanel;
 	TView *fullscreenHint;
-	unsigned performancePanelFrame;
 	std::chrono::steady_clock::time_point performancePanelRefreshAt;
 	std::chrono::steady_clock::time_point fullscreenHintVisibleUntil;
 	bool startupQuitPending;

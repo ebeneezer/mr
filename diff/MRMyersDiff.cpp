@@ -83,7 +83,7 @@ void mrSplitTextLinesForDiff(std::string_view text, std::vector<std::string> &li
 	if (!text.empty() && text[text.size() - 1] == '\n') lines.push_back(std::string());
 }
 
-bool mrComputeMyersDiff(const std::vector<std::string> &leftLines, const std::vector<std::string> &rightLines, std::vector<MRDiffHunk> &hunks, std::string *errorText, std::stop_token stopToken) {
+bool mrComputeMyersDiff(const std::vector<std::string> &leftLines, const std::vector<std::string> &rightLines, std::vector<MRDiffHunk> &hunks, std::string *errorText, const std::atomic_bool *cancelFlag) {
 	hunks.clear();
 	if (errorText != nullptr) errorText->clear();
 
@@ -104,7 +104,7 @@ bool mrComputeMyersDiff(const std::vector<std::string> &leftLines, const std::ve
 	v[vectorIndex(1, offset)] = 0;
 
 	for (int distance = 0; distance <= maxDistance; ++distance) {
-		if (stopToken.stop_requested()) {
+		if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire)) {
 			setError(errorText, "Diff computation was cancelled.");
 			return false;
 		}

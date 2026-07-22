@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -49,18 +50,54 @@ struct MRFoldGutterBranch {
 	}
 };
 
+struct MRFoldOpenBlockState {
+	std::size_t startLine;
+	std::size_t indent;
+	unsigned short level;
+	MRFoldSourceKind sourceKind;
+	char closer;
+	char marker;
+	std::size_t markerLength;
+	int headingLevel;
+	int languageBlockKind;
+	bool siblingContinuation;
+	std::size_t lastContentLine;
+	std::string xmlTagName;
+
+	MRFoldOpenBlockState() noexcept;
+	bool operator==(const MRFoldOpenBlockState &other) const noexcept;
+};
+
+struct MRFoldAnalysisState {
+	std::vector<MRFoldOpenBlockState> openBlocks;
+	std::string previousLineText;
+	std::string previousUpperLine;
+	std::string previousPreviousLineText;
+	std::string previousPreviousUpperLine;
+	std::vector<std::string> recentLineTexts;
+
+	bool operator==(const MRFoldAnalysisState &other) const noexcept;
+	bool operator!=(const MRFoldAnalysisState &other) const noexcept;
+};
+
+struct MRFoldClosedProjection {
+	std::vector<MRFoldSpan> spans;
+	std::vector<std::size_t> hiddenLinePrefix;
+
+	MRFoldClosedProjection() noexcept;
+	void finalize();
+	std::size_t hiddenLineCount() const noexcept;
+	std::size_t hiddenLineCountBefore(std::size_t documentLine) const noexcept;
+	std::size_t hiddenLineCountInRange(std::size_t startLine, std::size_t endLine) const noexcept;
+	const MRFoldSpan *spanStartingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *spanEndingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *spanContaining(std::size_t documentLine) const noexcept;
+};
+
 class MRFoldingDerivedState : public MRDerivedStateBase {
   public:
-	struct WarmupState {
-		std::uint64_t taskId = 0;
-		std::size_t documentId = 0;
-		std::size_t version = 0;
-		std::size_t topLine = 0;
-		std::size_t bottomLine = 0;
-		MRSyntaxLanguage language = MRSyntaxLanguage::PlainText;
-	};
-
 	struct VisibleState {
+		std::uint64_t revision = 0;
 		std::size_t documentId = 0;
 		std::size_t version = 0;
 		std::size_t topLine = 0;
@@ -75,9 +112,6 @@ class MRFoldingDerivedState : public MRDerivedStateBase {
 
 	MRFoldingDerivedState() noexcept;
 
-	WarmupState &warmupState() noexcept;
-	const WarmupState &warmupState() const noexcept;
-
 	VisibleState &visibleState() noexcept;
 	const VisibleState &visibleState() const noexcept;
 
@@ -87,17 +121,60 @@ class MRFoldingDerivedState : public MRDerivedStateBase {
 	std::vector<MRFoldSpan> &effectiveClosedFoldSpans() noexcept;
 	const std::vector<MRFoldSpan> &effectiveClosedFoldSpans() const noexcept;
 
-	void clearWarmupState() noexcept;
 	void clearVisibleState(bool preserveProjection) noexcept;
 	void clearClosedFolds() noexcept;
 	void rebuildEffectiveClosedFolds() noexcept;
 	int visibleGutterColumns() const noexcept;
 
+	void beginDocumentFoldLevel(unsigned short level, std::shared_ptr<const MRFoldClosedProjection> preview);
+	void adoptDocumentFoldLevelProjection(unsigned short level, std::size_t canonicalEndLine, bool complete, std::shared_ptr<const MRFoldClosedProjection> projection);
+	bool refreshDocumentFoldLevelViewportProjection();
+	void clearDocumentFoldLevel() noexcept;
+	bool documentFoldLevelActive() const noexcept;
+	unsigned short documentFoldLevel() const noexcept;
+	bool documentFoldLevelContains(std::size_t startLine) const noexcept;
+	bool documentFoldLevelCloses(std::size_t startLine) const noexcept;
+	bool toggleDocumentFoldLevelSpan(std::size_t startLine);
+	void refreshVisibleFoldOpenStates() noexcept;
+
+	bool hasEffectiveClosedFolds() const noexcept;
+	std::size_t foldedLineCount(std::size_t totalLines) const noexcept;
+	std::size_t documentLineForVisibleLine(std::size_t visibleLine, std::size_t totalLines) const noexcept;
+	std::size_t visibleLineForDocumentLine(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *effectiveClosedFoldStartingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *effectiveClosedFoldEndingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *effectiveClosedFoldContaining(std::size_t documentLine) const noexcept;
+
   private:
-	WarmupState mWarmup;
+	bool documentProjectionSpanOpen(std::size_t startLine) const noexcept;
+	const MRFoldSpan *documentCanonicalProjectionSpanStartingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *documentCanonicalProjectionSpanEndingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *documentCanonicalProjectionSpanContaining(std::size_t documentLine) const noexcept;
+	std::size_t documentCanonicalProjectionHiddenBefore(std::size_t documentLine) const noexcept;
+	std::size_t documentCanonicalProjectionHiddenInRange(std::size_t startLine, std::size_t endLine) const noexcept;
+	std::size_t documentCanonicalProjectionHiddenLineCount() const noexcept;
+	const MRFoldSpan *documentBaseProjectionSpanStartingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *documentProjectionSpanStartingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *documentProjectionSpanEndingAt(std::size_t documentLine) const noexcept;
+	const MRFoldSpan *documentProjectionSpanContaining(std::size_t documentLine) const noexcept;
+	std::size_t documentProjectionHiddenBefore(std::size_t documentLine) const noexcept;
+	std::size_t documentProjectionHiddenInRange(std::size_t startLine, std::size_t endLine) const noexcept;
+	std::size_t effectiveHiddenBefore(std::size_t documentLine) const noexcept;
+	bool documentProjectionCovers(const MRFoldSpan &span) const noexcept;
+
 	VisibleState mVisible;
 	std::map<std::size_t, MRFoldSpan> mClosedFoldSpans;
 	std::vector<MRFoldSpan> mEffectiveClosedFoldSpans;
+	bool mDocumentFoldLevelActive;
+	unsigned short mDocumentFoldLevel;
+	std::size_t mDocumentFoldCanonicalEndLine;
+	std::vector<std::shared_ptr<const MRFoldClosedProjection>> mDocumentFoldCanonicalProjections;
+	std::vector<std::size_t> mDocumentFoldCanonicalLastStartLines;
+	std::vector<std::size_t> mDocumentFoldCanonicalLastEndLines;
+	std::vector<std::size_t> mDocumentFoldCanonicalHiddenPrefix;
+	std::shared_ptr<const MRFoldClosedProjection> mDocumentFoldViewportProjection;
+	std::shared_ptr<const MRFoldClosedProjection> mDocumentFoldDescendantProjection;
+	std::vector<MRFoldSpan> mDocumentFoldOpenSpans;
 };
 
 #endif
