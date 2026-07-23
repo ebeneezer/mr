@@ -1,3 +1,90 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns="http://www.w3.org/2000/svg" style="background: transparent; background-color: transparent; color-scheme: light;" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="1193px" height="444px" viewBox="0 0 1193 444"><defs/><g><g data-cell-id="0"><g data-cell-id="1"><g data-cell-id="lane1"><g transform="translate(0.5,0.5)"><rect x="0" y="0" width="210" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#53616A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="13px" style="fill: light-dark(rgb(83, 97, 106), rgb(146, 158, 166));"><text x="2" y="15.5">PRODUCERS</text></g></g></g><g data-cell-id="lane2"><g transform="translate(0.5,0.5)"><rect x="245" y="0" width="210" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#53616A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="13px" style="fill: light-dark(rgb(83, 97, 106), rgb(146, 158, 166));"><text x="247" y="15.5">RUNNER</text></g></g></g><g data-cell-id="lane3"><g transform="translate(0.5,0.5)"><rect x="490" y="0" width="210" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#53616A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="13px" style="fill: light-dark(rgb(83, 97, 106), rgb(146, 158, 166));"><text x="492" y="15.5">EXECUTION SESSION</text></g></g></g><g data-cell-id="lane4"><g transform="translate(0.5,0.5)"><rect x="735" y="0" width="210" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#53616A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="13px" style="fill: light-dark(rgb(83, 97, 106), rgb(146, 158, 166));"><text x="737" y="15.5">ROUTE</text></g></g></g><g data-cell-id="lane5"><g transform="translate(0.5,0.5)"><rect x="980" y="0" width="210" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#53616A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="13px" style="fill: light-dark(rgb(83, 97, 106), rgb(146, 158, 166));"><text x="982" y="15.5">UI BOUNDARY</text></g></g></g><g data-cell-id="rule"><g transform="translate(0.5,0.5)"><path d="M 0 26.5 L 1190 26.5" fill="none" stroke="#aeb8be" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(174, 184, 190), rgb(73, 82, 87));"/></g></g><g data-cell-id="v1"><g transform="translate(0.5,0.5)"><path d="M 225 215 L 226 215" fill="none" stroke="#d6dcdf" stroke-miterlimit="10" stroke-dasharray="3 4" pointer-events="all" style="stroke: light-dark(rgb(214, 220, 223), rgb(45, 50, 53));"/></g></g><g data-cell-id="v2"><g transform="translate(0.5,0.5)"><path d="M 470 215 L 471 215" fill="none" stroke="#d6dcdf" stroke-miterlimit="10" stroke-dasharray="3 4" pointer-events="all" style="stroke: light-dark(rgb(214, 220, 223), rgb(45, 50, 53));"/></g></g><g data-cell-id="v3"><g transform="translate(0.5,0.5)"><path d="M 715 215 L 716 215" fill="none" stroke="#d6dcdf" stroke-miterlimit="10" stroke-dasharray="3 4" pointer-events="all" style="stroke: light-dark(rgb(214, 220, 223), rgb(45, 50, 53));"/></g></g><g data-cell-id="v4"><g transform="translate(0.5,0.5)"><path d="M 960 215 L 961 215" fill="none" stroke="#d6dcdf" stroke-miterlimit="10" stroke-dasharray="3 4" pointer-events="all" style="stroke: light-dark(rgb(214, 220, 223), rgb(45, 50, 53));"/></g></g><g data-cell-id="producers"><g transform="translate(0.5,0.5)"><rect x="0" y="128" width="190" height="84" fill="#f7f8f8" stroke="#27313a" stroke-width="1.2" pointer-events="all" style="fill: light-dark(rgb(247, 248, 248), rgb(23, 24, 24)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#27313A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"><text x="95" y="177.5">Timer · MMP · keymap</text></g></g></g><g data-cell-id="runner"><g transform="translate(0.5,0.5)"><rect x="245" y="128" width="190" height="84" fill="#e8f0f2" stroke="#27313a" stroke-width="1.2" pointer-events="all" style="fill: light-dark(rgb(232, 240, 242), rgb(27, 34, 36)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#27313A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"><text x="340" y="167.5">Macro runner</text><text x="340" y="187.5">profile classification</text></g></g></g><g data-cell-id="session"><g transform="translate(0.5,0.5)"><rect x="490" y="128" width="190" height="84" fill="#e8f0f2" stroke="#27313a" stroke-width="1.2" pointer-events="all" style="fill: light-dark(rgb(232, 240, 242), rgb(27, 34, 36)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#27313A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"><text x="585" y="167.5">Execution Session</text><text x="585" y="187.5">ID · owner · state</text></g></g></g><g data-cell-id="uiRoute"><g transform="translate(0.5,0.5)"><rect x="735" y="68" width="190" height="84" fill="#e8f0f2" stroke="#27313a" stroke-width="1.2" pointer-events="all" style="fill: light-dark(rgb(232, 240, 242), rgb(27, 34, 36)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#27313A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="16px" style="fill: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"><text x="830" y="98">UI-affine</text><text x="830" y="117">UI thread /</text><text x="830" y="136">foreground delay</text></g></g></g><g data-cell-id="macroLane"><g transform="translate(0.5,0.5)"><rect x="735" y="268" width="190" height="84" fill="#dcedeb" stroke="#27313a" stroke-width="1.2" pointer-events="all" style="fill: light-dark(rgb(220, 237, 235), rgb(25, 40, 38)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#27313A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="16px" style="fill: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"><text x="830" y="307.5">Lane::Macro</text><text x="830" y="326.5">1 worker · CPU affinity</text></g></g></g><g data-cell-id="mailbox"><g transform="translate(0.5,0.5)"><rect x="980" y="268" width="190" height="84" fill="#f7f8f8" stroke="#27313a" stroke-width="1.2" pointer-events="all" style="fill: light-dark(rgb(247, 248, 248), rgb(23, 24, 24)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#27313A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="16px" style="fill: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"><text x="1075" y="307.5">Result mailbox</text><text x="1075" y="326.5">staged data only</text></g></g></g><g data-cell-id="adoption"><g transform="translate(0.5,0.5)"><rect x="980" y="68" width="190" height="84" fill="#f3e8d1" stroke="#27313a" stroke-width="1.2" pointer-events="all" style="fill: light-dark(rgb(243, 232, 209), rgb(46, 36, 17)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#27313A" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="16px" style="fill: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"><text x="1075" y="107.5">Domain acceptance</text><text x="1075" y="126.5">exact match or reject</text></g></g></g><g data-cell-id="note"><g transform="translate(0.5,0.5)"><rect x="0" y="406" width="1170" height="36" fill="#f7f8f8" stroke="#aeb8be" pointer-events="all" style="fill: light-dark(rgb(247, 248, 248), rgb(23, 24, 24)); stroke: light-dark(rgb(174, 184, 190), rgb(73, 82, 87));"/></g><g><g fill="#27313A" font-family="'Latin Modern Sans'" text-anchor="start" font-size="14px" style="fill: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"><text x="16" y="430">The scheduler adds interval and skip policy; the runner, not the timer, selects the route.</text></g></g></g><g data-cell-id="e1"><g><path d="M 190 170 L 235.82 170" fill="none" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 243.32 170 L 235.82 172.5 L 235.82 167.5 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e2"><g><path d="M 435 170 L 480.82 170" fill="none" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 488.32 170 L 480.82 172.5 L 480.82 167.5 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e3"><g><path d="M 680 157.4 L 705 157.4 L 830 158 L 830 161.18" fill="none" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 830 153.68 L 832.5 161.18 L 827.5 161.18 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e4"><g><path d="M 680 182.6 L 705 182.6 L 830 182 L 830 258.82" fill="none" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 830 266.32 L 827.5 258.82 L 832.5 258.82 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e5"><g><path d="M 925 310 L 970.82 310" fill="none" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 978.32 310 L 970.82 312.5 L 970.82 307.5 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e6"><g><path d="M 1075 268 L 1075 161.18" fill="none" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 1075 153.68 L 1077.5 161.18 L 1072.5 161.18 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g></g></g></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="900" viewBox="0 0 1080 900" role="img" aria-labelledby="title desc">
+  <title id="title">MRMAC execution-session routes</title>
+  <desc id="desc">Four numbered panels show event producers and logical sessions, runner route selection, UI-affine versus finite one-shot background execution, and staged result adoption without a retained worker.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 20px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="900" fill="#ffffff"/>
+  <text x="40" y="35" class="title">MRMAC EXECUTION SESSION ROUTES</text>
+  <text x="40" y="59" class="small">The logical session owns execution state; a finite background job owns only one worker lifetime.</text>
+
+  <rect x="40" y="82" width="1000" height="164" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">A producer creates or resumes one logical Execution Session</text>
+  <rect x="70" y="151" width="285" height="65" rx="6" class="blue"/>
+  <text x="212" y="180" class="panel-title" text-anchor="middle">PRODUCERS</text>
+  <text x="212" y="203" class="small" text-anchor="middle">keymap · timer · MMP callback</text>
+  <path d="M355 183 L415 183" class="flow"/>
+  <rect x="415" y="151" width="595" height="65" rx="6" class="gold"/>
+  <text x="712" y="180" class="panel-title" text-anchor="middle">EXECUTION SESSION</text>
+  <text x="712" y="203" class="small" text-anchor="middle">session ID · owner · route · state · closure · pending adoption</text>
+
+  <path d="M540 246 L540 272" class="flow-blue"/>
+
+  <rect x="40" y="277" width="1000" height="154" rx="8" class="box"/>
+  <circle cx="72" cy="309" r="20" fill="#2f6fa3"/>
+  <text x="72" y="316" class="badge">2</text>
+  <text x="105" y="315" class="panel-title">The macro runner classifies bytecode and selects the route</text>
+  <rect x="70" y="346" width="940" height="55" rx="6" class="purple"/>
+  <text x="90" y="371" class="code">ordinary UI · foreground delay · background · staged background</text>
+  <text x="90" y="392" class="small">The scheduler controls due time and overlap policy; it does not decide thread affinity.</text>
+
+  <path d="M540 431 L540 457" class="flow-blue"/>
+
+  <rect x="40" y="462" width="1000" height="231" rx="8" class="box"/>
+  <circle cx="72" cy="494" r="20" fill="#2f6fa3"/>
+  <text x="72" y="501" class="badge">3</text>
+  <text x="105" y="500" class="panel-title">UI-affine and background routes retain distinct lifetimes</text>
+  <rect x="70" y="531" width="430" height="125" rx="6" class="blue"/>
+  <text x="285" y="562" class="panel-title" text-anchor="middle">UI THREAD ROUTE</text>
+  <text x="285" y="589" class="body" text-anchor="middle">ordinary execution or foreground delay</text>
+  <text x="285" y="615" class="small" text-anchor="middle">event-loop continuation · no coprocessor worker</text>
+  <text x="285" y="638" class="small" text-anchor="middle">typed UI work remains staged/projection-based</text>
+  <rect x="580" y="531" width="430" height="125" rx="6" class="green"/>
+  <text x="795" y="562" class="panel-title" text-anchor="middle">FINITE MACROJOB</text>
+  <text x="795" y="589" class="body" text-anchor="middle">one one-shot worker · Macro classification lane</text>
+  <text x="795" y="615" class="code" text-anchor="middle">workerOrdinal % allowedCoreCount</text>
+  <text x="795" y="638" class="small" text-anchor="middle">worker ends after result-ready</text>
+  <text x="70" y="680" class="small">A paused session or a session waiting for UI adoption does not keep an OS thread blocked.</text>
+
+  <path d="M795 693 L795 719" class="flow-blue"/>
+
+  <rect x="40" y="724" width="1000" height="145" rx="8" class="box"/>
+  <circle cx="72" cy="756" r="20" fill="#2f6fa3"/>
+  <text x="72" y="763" class="badge">4</text>
+  <text x="105" y="762" class="panel-title">Background data returns through exact domain acceptance</text>
+  <rect x="70" y="793" width="285" height="50" rx="6" class="green"/>
+  <text x="212" y="824" class="panel-title" text-anchor="middle">RESULT MAILBOX</text>
+  <path d="M355 818 L415 818" class="flow"/>
+  <rect x="415" y="793" width="285" height="50" rx="6" class="gold"/>
+  <text x="557" y="824" class="panel-title" text-anchor="middle">CONFLICT GATE</text>
+  <path d="M700 818 L760 818" class="flow"/>
+  <rect x="760" y="793" width="250" height="50" rx="6" class="lime"/>
+  <text x="885" y="824" class="panel-title" text-anchor="middle">SESSION RESUMES</text>
+  <text x="70" y="860" class="small">A rejected staged result is discarded as a whole; the session is never silently rebased onto newer state.</text>
+</svg>

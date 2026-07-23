@@ -1,145 +1,125 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="940" height="1320" viewBox="0 0 940 1320" role="img" aria-labelledby="title desc">
-  <title id="title">MR coprocessor lane and result-adoption pipeline</title>
-  <desc id="desc">A vertical technical diagram showing task submission, the IO, Compute, MiniMap, Macro, and dynamic external lanes, the result mailbox, bounded UI pumping, domain acceptance checks, and derived-state consumers.</desc>
+  <title id="title">MR coprocessor execution and result-adoption pipeline</title>
+  <desc id="desc">Five numbered panels show domain submission, non-serial lane classification, independently pinned one-shot workers, the bounded result mailbox, and exact domain adoption. A side card shows the persistent external-source exception.</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#26364a"/>
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
     </marker>
-    <marker id="arrowLight" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
     </marker>
     <style>
-      .sans { font-family: "DejaVu Sans", Arial, sans-serif; fill: #162235; }
-      .mono { font-family: "DejaVu Sans Mono", Consolas, monospace; fill: #162235; }
-      .title { font-size: 23px; font-weight: 700; letter-spacing: .5px; }
-      .head { font-size: 18px; font-weight: 700; }
-      .lane { font-size: 18px; font-weight: 700; }
-      .body { font-size: 15px; }
-      .small { font-size: 13px; }
-      .inverse { fill: #ffffff; }
-      .muted { fill: #516174; }
-      .card { fill: #ffffff; stroke: #a8b3c1; stroke-width: 1.5; }
-      .flow { fill: none; stroke: #26364a; stroke-width: 2.2; marker-end: url(#arrow); }
-      .branch { fill: none; stroke: #64748b; stroke-width: 1.8; marker-end: url(#arrowLight); }
-      .bus { fill: none; stroke: #64748b; stroke-width: 2; }
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
     </style>
   </defs>
 
-  <rect width="940" height="1320" fill="#f4f6f8"/>
+  <rect width="940" height="1320" fill="#ffffff"/>
+  <text x="35" y="35" class="title">COPROCESSOR EXECUTION AND RESULT ADOPTION</text>
+  <text x="35" y="59" class="small">Lanes classify work. Finite work units execute independently. Only the UI thread may adopt a result.</text>
 
-  <rect x="35" y="24" width="870" height="76" rx="8" fill="#162235"/>
-  <text x="470" y="55" text-anchor="middle" class="sans title inverse">SUBMISSION BOUNDARY</text>
-  <text x="470" y="82" text-anchor="middle" class="sans body inverse">editor warm-up · commands · minimap · macro runner · live-source registration</text>
+  <rect x="35" y="82" width="870" height="142" rx="8" class="box"/>
+  <circle cx="67" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="67" y="121" class="badge">1</text>
+  <text x="100" y="120" class="panel-title">The domain submits a data-only packet</text>
+  <rect x="67" y="143" width="806" height="55" rx="5" class="blue"/>
+  <text x="87" y="168" class="code">TaskInfo + TaskFn + immutable input</text>
+  <text x="87" y="189" class="small">task · owner kind/local id · lane · document/version · generation · BOF|EOF · half-open span · cancel state</text>
 
-  <path d="M470 100 L470 120" class="flow"/>
-  <rect x="85" y="124" width="770" height="82" rx="8" class="card"/>
-  <text x="110" y="151" class="mono head">TaskInfo + TaskFn</text>
-  <text x="110" y="177" class="mono body">id · lane · kind · documentId · baseVersion · label · shared cancel flag</text>
-  <text x="110" y="197" class="sans small muted">submit() · optional queued coalescing · submitExternal(sourceId)</text>
+  <path d="M470 224 L470 250" class="flow-blue"/>
 
-  <path d="M470 206 L470 232" class="flow"/>
-  <rect x="35" y="236" width="870" height="548" rx="10" fill="#e9edf2" stroke="#758396" stroke-width="1.7"/>
-  <text x="65" y="268" class="sans head">LANE SCHEDULER</text>
-  <text x="875" y="268" text-anchor="end" class="sans small muted">worker owns execution; UI state is out of bounds</text>
+  <rect x="35" y="255" width="870" height="225" rx="8" class="box"/>
+  <circle cx="67" cy="287" r="20" fill="#2f6fa3"/>
+  <text x="67" y="294" class="badge">2</text>
+  <text x="100" y="293" class="panel-title">The lane records a workload class, not a serial queue</text>
+  <text x="67" y="330" class="heading">FINITE CLASSIFICATIONS</text>
+  <rect x="67" y="346" width="154" height="74" rx="5" class="gold"/>
+  <text x="144" y="375" class="panel-title" text-anchor="middle">I/O</text>
+  <text x="144" y="399" class="small" text-anchor="middle">command/process task</text>
+  <rect x="234" y="346" width="154" height="74" rx="5" class="blue"/>
+  <text x="311" y="375" class="panel-title" text-anchor="middle">COMPUTE</text>
+  <text x="311" y="399" class="small" text-anchor="middle">IDX · WIDTH · SYN · FOLD</text>
+  <rect x="401" y="346" width="154" height="74" rx="5" class="green"/>
+  <text x="478" y="375" class="panel-title" text-anchor="middle">MINIMAP</text>
+  <text x="478" y="399" class="small" text-anchor="middle">text + overlay packets</text>
+  <rect x="568" y="346" width="154" height="74" rx="5" fill="#eee7f5" stroke="#7452a6" stroke-width="1.4"/>
+  <text x="645" y="375" class="panel-title" text-anchor="middle">MACRO</text>
+  <text x="645" y="399" class="small" text-anchor="middle">finite MacroJob</text>
+  <rect x="735" y="346" width="138" height="74" rx="5" class="lime"/>
+  <text x="804" y="375" class="panel-title" text-anchor="middle">BENTO</text>
+  <text x="804" y="399" class="small" text-anchor="middle">HEX · BDIAG · BOUT</text>
+  <text x="67" y="447" class="body">Independent editors, panes, sessions, and generations never wait behind one lane worker.</text>
+  <text x="873" y="469" text-anchor="end" class="small">Equivalent successor requests are coalesced only by their domain owner.</text>
 
-  <path d="M64 286 L64 708" class="bus"/>
-  <path d="M876 286 L876 708" class="bus"/>
+  <path d="M470 480 L470 505" class="flow-blue"/>
 
-  <!-- 1: IO -->
-  <circle cx="64" cy="327" r="18" fill="#c86422"/>
-  <text x="64" y="333" text-anchor="middle" class="sans head inverse">1</text>
-  <path d="M82 327 L94 327" class="branch"/>
-  <rect x="98" y="288" width="758" height="78" rx="7" fill="#fff8f2" stroke="#c86422" stroke-width="1.8"/>
-  <rect x="98" y="288" width="176" height="78" rx="7" fill="#c86422"/>
-  <text x="118" y="318" class="sans lane inverse">IO</text>
-  <text x="118" y="343" class="sans body inverse">FIFO · 1 worker</text>
-  <text x="294" y="316" class="mono body">ExternalIo</text>
-  <text x="294" y="341" class="sans body">external commands and build processes</text>
-  <text x="836" y="358" text-anchor="end" class="sans small muted">chunks / exit result</text>
-  <path d="M856 327 L876 327" class="branch"/>
+  <rect x="35" y="510" width="870" height="260" rx="8" class="box"/>
+  <circle cx="67" cy="542" r="20" fill="#2f6fa3"/>
+  <text x="67" y="549" class="badge">3</text>
+  <text x="100" y="548" class="panel-title">Each finite work unit receives one stable worker execution</text>
+  <rect x="67" y="578" width="250" height="104" rx="6" class="blue"/>
+  <text x="87" y="606" class="panel-title">W103 · cpu:7</text>
+  <text x="87" y="632" class="code">ED:42 · SYN · gen 17</text>
+  <text x="87" y="657" class="small">created → running → result-ready</text>
+  <rect x="345" y="578" width="250" height="104" rx="6" class="green"/>
+  <text x="365" y="606" class="panel-title">W104 · cpu:8</text>
+  <text x="365" y="632" class="code">ED:77 · MAP · gen 5</text>
+  <text x="365" y="657" class="small">created → running → result-ready</text>
+  <rect x="623" y="578" width="250" height="104" rx="6" class="gold"/>
+  <text x="643" y="606" class="panel-title">W105 · cpu:9</text>
+  <text x="643" y="632" class="code">HX:12 · HEX · gen 9</text>
+  <text x="643" y="657" class="small">created → running → result-ready</text>
+  <text x="67" y="715" class="code">assignedCore = allowedCoreIds[workerOrdinal % allowedCoreIds.size()]</text>
+  <text x="67" y="743" class="body">The number of workers is not capped by core count; assignments continue strictly modulo.</text>
 
-  <!-- 2: Compute -->
-  <circle cx="64" cy="409" r="18" fill="#2d69a6"/>
-  <text x="64" y="415" text-anchor="middle" class="sans head inverse">2</text>
-  <path d="M82 409 L94 409" class="branch"/>
-  <rect x="98" y="370" width="758" height="78" rx="7" fill="#f3f8fd" stroke="#2d69a6" stroke-width="1.8"/>
-  <rect x="98" y="370" width="176" height="78" rx="7" fill="#2d69a6"/>
-  <text x="118" y="399" class="sans lane inverse">COMPUTE</text>
-  <text x="118" y="424" class="sans body inverse">H/N/L · 1–3 workers</text>
-  <text x="294" y="394" class="sans body"><tspan font-weight="700">H</tspan> line index, indicator   <tspan font-weight="700">N</tspan> syntax, fold, save, diff</text>
-  <text x="294" y="419" class="sans body"><tspan font-weight="700">L</tspan> custom work · normal-work reservation under high load</text>
-  <text x="836" y="440" text-anchor="end" class="sans small muted">derived document payloads</text>
-  <path d="M856 409 L876 409" class="branch"/>
+  <path d="M470 770 L470 795" class="flow-blue"/>
 
-  <!-- 3: MiniMap -->
-  <circle cx="64" cy="491" r="18" fill="#218779"/>
-  <text x="64" y="497" text-anchor="middle" class="sans head inverse">3</text>
-  <path d="M82 491 L94 491" class="branch"/>
-  <rect x="98" y="452" width="758" height="78" rx="7" fill="#f1fbf8" stroke="#218779" stroke-width="1.8"/>
-  <rect x="98" y="452" width="176" height="78" rx="7" fill="#218779"/>
-  <text x="118" y="481" class="sans lane inverse">MINIMAP</text>
-  <text x="118" y="506" class="sans body inverse">FIFO · 1 worker</text>
-  <text x="294" y="480" class="mono body">MiniMapWarmup</text>
-  <text x="294" y="505" class="sans body">Braille row patterns + document-line mapping</text>
-  <text x="836" y="522" text-anchor="end" class="sans small muted">render projection data</text>
-  <path d="M856 491 L876 491" class="branch"/>
+  <rect x="35" y="800" width="870" height="143" rx="8" class="box"/>
+  <circle cx="67" cy="832" r="20" fill="#2f6fa3"/>
+  <text x="67" y="839" class="badge">4</text>
+  <text x="100" y="838" class="panel-title">Immutable results converge on one bounded UI mailbox</text>
+  <rect x="67" y="861" width="806" height="55" rx="5" class="green"/>
+  <text x="87" y="886" class="code">Result = TaskInfo + status + typed payload + lifecycle ticket</text>
+  <text x="87" y="907" class="small">pump(maxResults) / pumpFor(time budget) · no worker may mutate TVision or the live document</text>
 
-  <!-- 4: Macro -->
-  <circle cx="64" cy="573" r="18" fill="#7452a6"/>
-  <text x="64" y="579" text-anchor="middle" class="sans head inverse">4</text>
-  <path d="M82 573 L94 573" class="branch"/>
-  <rect x="98" y="534" width="758" height="78" rx="7" fill="#f8f4fc" stroke="#7452a6" stroke-width="1.8"/>
-  <rect x="98" y="534" width="176" height="78" rx="7" fill="#7452a6"/>
-  <text x="118" y="563" class="sans lane inverse">MACRO</text>
-  <text x="118" y="588" class="sans body inverse">FIFO · 1 worker</text>
-  <text x="294" y="562" class="mono body">MacroJob</text>
-  <text x="294" y="587" class="sans body">background VM or staged transaction · never coalesced</text>
-  <text x="836" y="604" text-anchor="end" class="sans small muted">runtime / commit data</text>
-  <path d="M856 573 L876 573" class="branch"/>
+  <path d="M470 943 L470 968" class="flow-blue"/>
 
-  <!-- 5: Extern -->
-  <circle cx="64" cy="655" r="18" fill="#44754a"/>
-  <text x="64" y="661" text-anchor="middle" class="sans head inverse">5</text>
-  <path d="M82 655 L94 655" class="branch"/>
-  <rect x="98" y="616" width="758" height="78" rx="7" fill="#f4faf3" stroke="#44754a" stroke-width="1.8"/>
-  <rect x="98" y="616" width="176" height="78" rx="7" fill="#44754a"/>
-  <text x="118" y="645" class="sans lane inverse">EXTERN × N</text>
-  <text x="118" y="670" class="sans body inverse">FIFO · 1 worker/source</text>
-  <text x="294" y="644" class="sans body">lazy one-worker lane for each registered source</text>
-  <text x="294" y="669" class="sans body">file · journal · device · network · pipe</text>
-  <text x="836" y="686" text-anchor="end" class="sans small muted">live chunks / finish</text>
-  <path d="M856 655 L876 655" class="branch"/>
+  <rect x="35" y="973" width="870" height="245" rx="8" class="box"/>
+  <circle cx="67" cy="1005" r="20" fill="#2f6fa3"/>
+  <text x="67" y="1012" class="badge">5</text>
+  <text x="100" y="1011" class="panel-title">The exact domain owner accepts, adopts, or discards</text>
+  <rect x="67" y="1042" width="250" height="96" rx="6" class="green"/>
+  <text x="192" y="1073" class="panel-title" text-anchor="middle">ACCEPTED</text>
+  <text x="192" y="1098" class="small" text-anchor="middle">owner · task · version · span</text>
+  <text x="192" y="1120" class="small" text-anchor="middle">ledger may retain the result</text>
+  <path d="M317 1090 L345 1090" class="flow"/>
+  <rect x="345" y="1042" width="250" height="96" rx="6" class="blue"/>
+  <text x="470" y="1073" class="panel-title" text-anchor="middle">ADOPTED</text>
+  <text x="470" y="1098" class="small" text-anchor="middle">domain state confirms publication</text>
+  <text x="470" y="1120" class="small" text-anchor="middle">model first · projection second</text>
+  <rect x="623" y="1042" width="250" height="96" rx="6" class="red"/>
+  <text x="748" y="1073" class="panel-title" text-anchor="middle">DISCARDED</text>
+  <text x="748" y="1098" class="small" text-anchor="middle">mismatch · cancellation · stale state</text>
+  <text x="748" y="1120" class="small" text-anchor="middle">never silently rebased</text>
+  <rect x="67" y="1158" width="806" height="39" rx="5" fill="#e8f0f2" stroke="#27313a" stroke-width="1.2"/>
+  <text x="87" y="1183" class="small">Lifecycle remains visible through accepted/adopted/discarded and the worker's independent finished event.</text>
 
-  <rect x="98" y="714" width="758" height="47" rx="7" fill="#dce3eb"/>
-  <text x="477" y="743" text-anchor="middle" class="sans body">Each task activation binds its worker round-robin to a CPU in the process affinity mask.</text>
-
-  <path d="M876 708 L876 810 L470 810 L470 830" class="flow"/>
-  <rect x="74" y="834" width="792" height="90" rx="9" fill="#ffffff" stroke="#26364a" stroke-width="2"/>
-  <text x="100" y="864" class="sans head">RESULT MAILBOX</text>
-  <text x="100" y="889" class="mono body">Result = TaskInfo + Completed|Cancelled|Failed + error + typed payload</text>
-  <text x="100" y="912" class="mono body">TaskTiming = queueMicros + runMicros + totalMicros</text>
-  <text x="838" y="864" text-anchor="end" class="sans small muted">mutex-protected FIFO</text>
-
-  <path d="M470 924 L470 956" class="flow"/>
-  <line x1="35" y1="963" x2="905" y2="963" stroke="#b03a3a" stroke-width="2.2" stroke-dasharray="9 7"/>
-  <rect x="346" y="950" width="248" height="27" rx="13" fill="#f4f6f8" stroke="#b03a3a"/>
-  <text x="470" y="969" text-anchor="middle" class="sans small" fill="#8f2929">UI THREAD BOUNDARY</text>
-
-  <rect x="74" y="991" width="792" height="77" rx="9" fill="#fff8e5" stroke="#b78316" stroke-width="1.8"/>
-  <text x="100" y="1021" class="mono head">pump(maxResults) / pumpFor(time budget)</text>
-  <text x="100" y="1048" class="mono body">bounded dequeue → handleCoprocessorResult(Result)</text>
-  <text x="838" y="1021" text-anchor="end" class="sans small muted">default count: 8</text>
-
-  <path d="M470 1068 L470 1093" class="flow"/>
-  <rect x="74" y="1097" width="792" height="92" rx="9" fill="#ffffff" stroke="#2d69a6" stroke-width="1.8"/>
-  <text x="100" y="1127" class="sans head">DOMAIN ACCEPTANCE GATE</text>
-  <text x="100" y="1152" class="sans body">status and payload type → owner → task/document/base-version check</text>
-  <text x="100" y="1176" class="sans body">then language / geometry / options / conflict checks as required</text>
-  <text x="838" y="1127" text-anchor="end" class="sans small" fill="#8f2929">mismatch = discard</text>
-
-  <path d="M470 1189 L470 1214" class="flow"/>
-  <rect x="35" y="1218" width="870" height="78" rx="9" fill="#162235"/>
-  <text x="470" y="1246" text-anchor="middle" class="sans head inverse">ACCEPTED DERIVED STATE — MODEL FIRST, PROJECTION SECOND</text>
-  <text x="470" y="1273" text-anchor="middle" class="sans body inverse">line index · syntax/fold · minimap · save cache · diff · log/build buffers · macro commit/UI playback</text>
+  <rect x="35" y="1234" width="870" height="77" rx="6" class="lime"/>
+  <text x="55" y="1258" class="heading">LIFETIME-BOUND EXCEPTION</text>
+  <text x="55" y="1280" class="small">A blocking file, journal, device, network, pipe, or process source may keep one exclusive worker.</text>
+  <text x="55" y="1302" class="small">EOF, close, cancel, error, or process end must wake, terminate, and join that source lifetime.</text>
 </svg>

@@ -1,3 +1,80 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns="http://www.w3.org/2000/svg" style="background: transparent; background-color: transparent; color-scheme: light;" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="1113px" height="329px" viewBox="0 0 1113 329"><defs/><g><g data-cell-id="0"><g data-cell-id="1"><g data-cell-id="h1"><g transform="translate(0.5,0.5)"><rect x="0" y="0" width="180" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#59656E" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="14px" style="fill: light-dark(rgb(89, 101, 110), rgb(143, 154, 161));"><text x="2" y="16">ORIGINAL DATA</text></g></g></g><g data-cell-id="h2"><g transform="translate(0.5,0.5)"><rect x="230" y="0" width="180" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#59656E" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="14px" style="fill: light-dark(rgb(89, 101, 110), rgb(143, 154, 161));"><text x="232" y="16">LIVE MODEL</text></g></g></g><g data-cell-id="h3"><g transform="translate(0.5,0.5)"><rect x="460" y="0" width="180" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#59656E" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="14px" style="fill: light-dark(rgb(89, 101, 110), rgb(143, 154, 161));"><text x="462" y="16">SNAPSHOT</text></g></g></g><g data-cell-id="h4"><g transform="translate(0.5,0.5)"><rect x="690" y="0" width="180" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#59656E" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="14px" style="fill: light-dark(rgb(89, 101, 110), rgb(143, 154, 161));"><text x="692" y="16">BACKGROUND WORK</text></g></g></g><g data-cell-id="h5"><g transform="translate(0.5,0.5)"><rect x="920" y="0" width="180" height="20" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#59656E" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="start" font-size="14px" style="fill: light-dark(rgb(89, 101, 110), rgb(143, 154, 161));"><text x="922" y="16">UI BOUNDARY</text></g></g></g><g data-cell-id="original"><g transform="translate(0.5,0.5)"><rect x="0" y="54" width="190" height="78" fill="#f7f8f8" stroke="#27313a" stroke-width="1.4" pointer-events="all" style="fill: light-dark(rgb(247, 248, 248), rgb(23, 24, 24)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#182128" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(24, 33, 40), rgb(204, 212, 218));"><text x="95" y="90.5">Original file</text><text x="95" y="110.5">mmap or owned text</text></g></g></g><g data-cell-id="append"><g transform="translate(0.5,0.5)"><rect x="0" y="184" width="190" height="78" fill="#f7f8f8" stroke="#27313a" stroke-width="1.4" pointer-events="all" style="fill: light-dark(rgb(247, 248, 248), rgb(23, 24, 24)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#182128" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(24, 33, 40), rgb(204, 212, 218));"><text x="95" y="220.5">Add buffer</text><text x="95" y="240.5">new bytes only</text></g></g></g><g data-cell-id="document"><g transform="translate(0.5,0.5)"><rect x="230" y="119" width="190" height="78" fill="#e8f0f2" stroke="#27313a" stroke-width="1.4" pointer-events="all" style="fill: light-dark(rgb(232, 240, 242), rgb(27, 34, 36)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#182128" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(24, 33, 40), rgb(204, 212, 218));"><text x="325" y="155.5">TextDocument</text><text x="325" y="175.5">Piece Table · version N</text></g></g></g><g data-cell-id="snapshot"><g transform="translate(0.5,0.5)"><rect x="460" y="119" width="190" height="78" fill="#f7f8f8" stroke="#27313a" stroke-width="1.4" pointer-events="all" style="fill: light-dark(rgb(247, 248, 248), rgb(23, 24, 24)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#182128" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(24, 33, 40), rgb(204, 212, 218));"><text x="555" y="155.5">ReadSnapshot</text><text x="555" y="175.5">document · base version</text></g></g></g><g data-cell-id="worker"><g transform="translate(0.5,0.5)"><rect x="690" y="119" width="190" height="78" fill="#dcedeb" stroke="#27313a" stroke-width="1.4" pointer-events="all" style="fill: light-dark(rgb(220, 237, 235), rgb(25, 40, 38)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#182128" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(24, 33, 40), rgb(204, 212, 218));"><text x="785" y="155.5">Derived result</text><text x="785" y="175.5">or staged edit</text></g></g></g><g data-cell-id="adoption"><g transform="translate(0.5,0.5)"><rect x="920" y="119" width="190" height="78" fill="#f3e8d1" stroke="#27313a" stroke-width="1.4" pointer-events="all" style="fill: light-dark(rgb(243, 232, 209), rgb(46, 36, 17)); stroke: light-dark(rgb(39, 49, 58), rgb(189, 198, 206));"/></g><g><g fill="#182128" font-family="'Latin Modern Sans'" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(24, 33, 40), rgb(204, 212, 218));"><text x="1015" y="155.5">Accept exact match</text><text x="1015" y="175.5">or discard</text></g></g></g><g data-cell-id="note"><g transform="translate(0.5,0.5)"><rect x="230" y="304" width="880" height="24" fill="none" stroke="none" pointer-events="all"/></g><g><g fill="#3F4B54" font-family="'Latin Modern Sans'" text-anchor="start" font-size="15px" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"><text x="232" y="322.5">Only the UI may adopt a staged edit. A different document or base version is never rebased silently.</text></g></g></g><g data-cell-id="e1"><g><path d="M 190 93 L 210 93 L 210 158 L 220.61 158" fill="none" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 228.21 158 L 220.61 160.53 L 220.61 155.47 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e2"><g><path d="M 190 223 L 210 223 L 210 158 L 220.61 158" fill="none" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 228.21 158 L 220.61 160.53 L 220.61 155.47 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e3"><g><path d="M 420 158 L 450.61 158" fill="none" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 458.21 158 L 450.61 160.53 L 450.61 155.47 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e4"><g><path d="M 650 158 L 680.61 158" fill="none" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 688.21 158 L 680.61 160.53 L 680.61 155.47 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g><g data-cell-id="e5"><g><path d="M 880 158 L 910.61 158" fill="none" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/><path d="M 918.21 158 L 910.61 160.53 L 910.61 155.47 Z" fill="#3f4b54" stroke="#3f4b54" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(63, 75, 84), rgb(166, 176, 184)); stroke: light-dark(rgb(63, 75, 84), rgb(166, 176, 184));"/></g></g></g></g></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="720" viewBox="0 0 1080 720" role="img" aria-labelledby="title desc">
+  <title id="title">Piece Table ownership and snapshot boundary</title>
+  <desc id="desc">Three numbered panels show immutable and append-only byte sources, the versioned live Piece Table and ReadSnapshot, and background derivation followed by exact UI-thread adoption.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 20px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="720" fill="#ffffff"/>
+  <text x="40" y="35" class="title">PIECE TABLE OWNERSHIP AND SNAPSHOT BOUNDARY</text>
+  <text x="40" y="59" class="small">Original bytes remain immutable; edits change references and append data; background work receives a version ticket.</text>
+
+  <rect x="40" y="82" width="1000" height="174" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">The live document owns two byte sources</text>
+  <rect x="70" y="151" width="420" height="75" rx="6" class="blue"/>
+  <text x="280" y="181" class="panel-title" text-anchor="middle">ORIGINAL FILE</text>
+  <text x="280" y="207" class="small" text-anchor="middle">private read-only mmap or owned immutable text</text>
+  <rect x="590" y="151" width="420" height="75" rx="6" class="green"/>
+  <text x="800" y="181" class="panel-title" text-anchor="middle">ADD BUFFER</text>
+  <text x="800" y="207" class="small" text-anchor="middle">append-only bytes created by edits</text>
+
+  <path d="M540 256 L540 282" class="flow-blue"/>
+
+  <rect x="40" y="287" width="1000" height="175" rx="8" class="box"/>
+  <circle cx="72" cy="319" r="20" fill="#2f6fa3"/>
+  <text x="72" y="326" class="badge">2</text>
+  <text x="105" y="325" class="panel-title">The Piece Table defines one live version and one immutable read view</text>
+  <rect x="70" y="355" width="420" height="76" rx="6" class="gold"/>
+  <text x="280" y="384" class="panel-title" text-anchor="middle">TextDocument · version N</text>
+  <text x="280" y="410" class="small" text-anchor="middle">piece references · line state · canonical mutable owner</text>
+  <path d="M490 393 L590 393" class="flow"/>
+  <rect x="590" y="355" width="420" height="76" rx="6" class="blue"/>
+  <text x="800" y="384" class="panel-title" text-anchor="middle">ReadSnapshot</text>
+  <text x="800" y="410" class="small" text-anchor="middle">document identity · base version · immutable sources</text>
+
+  <path d="M540 462 L540 488" class="flow-blue"/>
+
+  <rect x="40" y="493" width="1000" height="171" rx="8" class="box"/>
+  <circle cx="72" cy="525" r="20" fill="#2f6fa3"/>
+  <text x="72" y="532" class="badge">3</text>
+  <text x="105" y="531" class="panel-title">Background work derives data; only the UI thread may adopt it</text>
+  <rect x="70" y="562" width="360" height="72" rx="6" class="green"/>
+  <text x="250" y="591" class="panel-title" text-anchor="middle">DERIVED RESULT</text>
+  <text x="250" y="615" class="small" text-anchor="middle">projection, ledger packet, or staged edit</text>
+  <path d="M430 598 L495 598" class="flow"/>
+  <rect x="495" y="562" width="230" height="72" rx="6" class="gold"/>
+  <text x="610" y="591" class="panel-title" text-anchor="middle">EXACT GATE</text>
+  <text x="610" y="615" class="small" text-anchor="middle">identity + base version</text>
+  <path d="M725 598 L790 598" class="flow"/>
+  <rect x="790" y="562" width="220" height="72" rx="6" class="lime"/>
+  <text x="900" y="591" class="panel-title" text-anchor="middle">ADOPT</text>
+  <text x="900" y="615" class="small" text-anchor="middle">model first · project later</text>
+
+  <rect x="40" y="684" width="1000" height="26" rx="5" fill="#e8f0f2" stroke="#27313a" stroke-width="1.2"/>
+  <text x="60" y="702" class="small">A result from a different document or base version is discarded; it is never silently rebased.</text>
+</svg>

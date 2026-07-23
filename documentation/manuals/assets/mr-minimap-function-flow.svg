@@ -1,138 +1,117 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="940" height="1320" viewBox="0 0 940 1320" role="img" aria-labelledby="title desc">
-  <title id="title">MR minimap functional pipeline</title>
-  <desc id="desc">Vertical technical diagram of minimap geometry, its single-window cache, sampling-window selection, one-worker background Braille reduction with per-activation CPU placement, UI-thread result adoption, overlay masks, and TVision projection.</desc>
+  <title id="title">MR minimap warm-window and projection flow</title>
+  <desc id="desc">Six numbered panels show request geometry, bounded ledger planning, finite text packets, immutable overlay packets, exact visible-window adoption, and pure TVision drawing.</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#26364a"/>
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
     </marker>
-    <marker id="arrowLight" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
     </marker>
     <style>
-      .sans { font-family: "DejaVu Sans", Arial, sans-serif; fill: #162235; }
-      .mono { font-family: "DejaVu Sans Mono", Consolas, monospace; fill: #162235; }
-      .title { font-size: 23px; font-weight: 700; letter-spacing: .5px; }
-      .head { font-size: 18px; font-weight: 700; }
-      .stage { font-size: 17px; font-weight: 700; }
-      .body { font-size: 14px; }
-      .small { font-size: 12px; }
-      .inverse { fill: #ffffff; }
-      .muted { fill: #516174; }
-      .card { fill: #ffffff; stroke: #9daaba; stroke-width: 1.6; }
-      .flow { fill: none; stroke: #26364a; stroke-width: 2.2; marker-end: url(#arrow); }
-      .branch { fill: none; stroke: #64748b; stroke-width: 1.8; marker-end: url(#arrowLight); }
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
     </style>
   </defs>
 
-  <rect width="940" height="1320" fill="#f4f6f8"/>
+  <rect width="940" height="1320" fill="#ffffff"/>
+  <text x="35" y="35" class="title">MINIMAP WARM-WINDOW AND PROJECTION FLOW</text>
+  <text x="35" y="59" class="small">Text density and overlays are immutable derived state; draw() consumes adopted projections only.</text>
 
-  <rect x="35" y="22" width="870" height="72" rx="8" fill="#162235"/>
-  <text x="470" y="52" text-anchor="middle" class="mono title inverse">MRFileEditor::draw()</text>
-  <text x="470" y="78" text-anchor="middle" class="sans body inverse">request derived patterns · compose live overlays · project through TVision</text>
+  <rect x="35" y="82" width="870" height="142" rx="8" class="box"/>
+  <circle cx="67" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="67" y="121" class="badge">1</text>
+  <text x="100" y="120" class="panel-title">Semantic or viewport change defines the exact key</text>
+  <rect x="67" y="143" width="806" height="55" rx="5" class="blue"/>
+  <text x="87" y="168" class="code">ED owner · document/version · rows/body width · viewport width · mode · source span</text>
+  <text x="87" y="189" class="small">Braille: four source lines per row · fallback: one line per row · no request originates in draw()</text>
 
-  <path d="M470 94 L470 112" class="flow"/>
-  <rect x="70" y="116" width="800" height="82" rx="8" class="card"/>
-  <circle cx="96" cy="142" r="17" fill="#2d69a6"/>
-  <text x="96" y="148" text-anchor="middle" class="sans stage inverse">1</text>
-  <text x="124" y="143" class="sans stage">GEOMETRY AND SOURCE TICKET</text>
-  <text x="124" y="168" class="mono body">position · bodyX/bodyWidth · infoX · rows · viewportWidth · marker glyph · palette</text>
-  <text x="124" y="188" class="mono body">documentId/version · topLine · exact/estimated totalLines · ReadSnapshot</text>
+  <path d="M470 224 L470 250" class="flow-blue"/>
 
-  <path d="M470 198 L470 216" class="flow"/>
-  <rect x="70" y="220" width="800" height="100" rx="8" fill="#f3f8fd" stroke="#2d69a6" stroke-width="1.7"/>
-  <circle cx="96" cy="247" r="17" fill="#2d69a6"/>
-  <text x="96" y="253" text-anchor="middle" class="sans stage inverse">2</text>
-  <text x="124" y="248" class="mono stage">samplingWindowFor(totalLines, topLine, rows, braille)</text>
-  <text x="124" y="275" class="mono body">S = rows × (Braille ? 4 : 1)</text>
-  <text x="124" y="298" class="mono body">total ≤ S : [0,total)   else : start = clamp(top − ⌊S/2⌋, 0, total − S)</text>
+  <rect x="35" y="255" width="870" height="211" rx="8" class="box"/>
+  <circle cx="67" cy="287" r="20" fill="#2f6fa3"/>
+  <text x="67" y="294" class="badge">2</text>
+  <text x="100" y="293" class="panel-title">The editor-local ledger plans one directional acquisition window</text>
+  <line x1="67" y1="357" x2="873" y2="357" stroke="#3f4b54" stroke-width="1.6"/>
+  <rect x="111" y="340" width="178" height="34" class="green"/>
+  <rect x="289" y="340" width="120" height="34" class="gold"/>
+  <rect x="409" y="340" width="142" height="34" class="blue"/>
+  <rect x="551" y="340" width="238" height="34" class="lime"/>
+  <text x="200" y="361" class="small" text-anchor="middle">confirmed warm window</text>
+  <text x="349" y="361" class="small" text-anchor="middle">BOF guard</text>
+  <text x="480" y="361" class="small" text-anchor="middle">visible window</text>
+  <text x="670" y="361" class="small" text-anchor="middle">directional prewarm</text>
+  <text x="67" y="407" class="code">capacity = max(8, 4 * allowedCoreCount) visible windows</text>
+  <text x="67" y="437" class="body">Confirmed coverage and active reservations are subtracted; small movement creates no new wave.</text>
 
-  <path d="M470 320 L470 338" class="flow"/>
-  <rect x="70" y="342" width="800" height="108" rx="8" fill="#fff8e5" stroke="#b78316" stroke-width="1.7"/>
-  <circle cx="96" cy="369" r="17" fill="#b78316"/>
-  <text x="96" y="375" text-anchor="middle" class="sans stage inverse">3</text>
-  <text x="124" y="370" class="sans stage">CACHE AND PENDING-REQUEST GATE</text>
-  <text x="124" y="396" class="mono body">cache key = doc/version + rows/bodyWidth/viewportWidth + renderer + window</text>
-  <text x="124" y="420" class="sans body">one exact-window RenderCache; rowLineStarts/Ends map rows — no warmed-range ledger</text>
-  <text x="124" y="442" class="sans body">cache hit or useful pending → reuse; else cancel + submit; approximate repeat &lt; 180 ms → debounce</text>
+  <path d="M470 466 L470 492" class="flow-blue"/>
 
-  <path d="M470 450 L470 470" class="flow"/>
-  <rect x="35" y="474" width="870" height="330" rx="10" fill="#e7f4f1" stroke="#218779" stroke-width="1.8"/>
-  <text x="65" y="504" class="sans head" fill="#17685e">MINIMAP LANE · FIFO · 1 WORKER</text>
-  <text x="875" y="504" text-anchor="end" class="sans small muted">activation → eligible CPU round-robin · no exclusive core</text>
+  <rect x="35" y="497" width="870" height="230" rx="8" class="box"/>
+  <circle cx="67" cy="529" r="20" fill="#2f6fa3"/>
+  <text x="67" y="536" class="badge">3</text>
+  <text x="100" y="535" class="panel-title">At most one finite text packet per allowed core executes independently</text>
+  <rect x="67" y="566" width="250" height="104" rx="6" class="blue"/>
+  <text x="87" y="594" class="panel-title">W221 · MAP · BOF</text>
+  <text x="87" y="620" class="code">[7,790,560, 7,790,720)</text>
+  <text x="87" y="645" class="small">line masks + inverse row mapping</text>
+  <rect x="345" y="566" width="250" height="104" rx="6" class="green"/>
+  <text x="365" y="594" class="panel-title">W222 · MAP · EOF</text>
+  <text x="365" y="620" class="code">[7,790,720, 7,790,880)</text>
+  <text x="365" y="645" class="small">line masks + inverse row mapping</text>
+  <rect x="623" y="566" width="250" height="104" rx="6" class="lime"/>
+  <text x="643" y="594" class="panel-title">W223 · MAP · EOF</text>
+  <text x="643" y="620" class="code">[7,790,880, 7,791,040)</text>
+  <text x="643" y="645" class="small">line masks + inverse row mapping</text>
+  <text x="67" y="700" class="body">Four display-line masks and two horizontal dot columns form each Braille cell pattern.</text>
 
-  <rect x="70" y="522" width="800" height="72" rx="7" fill="#ffffff" stroke="#218779" stroke-width="1.5"/>
-  <circle cx="96" cy="548" r="17" fill="#218779"/>
-  <text x="96" y="554" text-anchor="middle" class="sans stage inverse">4</text>
-  <text x="124" y="548" class="mono stage">buildViewportAnchoredLineTexts()</text>
-  <text x="124" y="574" class="sans body">read focus line → nextLine toward window EOF → prevLine toward window BOF</text>
-  <text x="845" y="574" text-anchor="end" class="sans small muted">bounded copied line texts</text>
+  <path d="M470 727 L470 753" class="flow-blue"/>
 
-  <path d="M470 594 L470 612" class="flow"/>
-  <rect x="70" y="616" width="800" height="136" rx="7" fill="#ffffff" stroke="#218779" stroke-width="1.5"/>
-  <circle cx="96" cy="643" r="17" fill="#218779"/>
-  <text x="96" y="649" text-anchor="middle" class="sans stage inverse">5</text>
-  <text x="124" y="643" class="sans stage">DISPLAY-COLUMN REDUCTION</text>
-  <text x="124" y="670" class="sans body">UTF-8 width + tab stops; whitespace ignored</text>
-  <text x="124" y="693" class="sans body">occupied display span → normalized dot columns</text>
-  <text x="124" y="716" class="mono body">uint64 mask / line · max 64 dot columns</text>
+  <rect x="35" y="758" width="870" height="180" rx="8" class="box"/>
+  <circle cx="67" cy="790" r="20" fill="#2f6fa3"/>
+  <text x="67" y="797" class="badge">4</text>
+  <text x="100" y="796" class="panel-title">Revisioned overlay sources create independent component packets</text>
+  <rect x="67" y="827" width="250" height="76" rx="6" class="gold"/>
+  <text x="192" y="856" class="panel-title" text-anchor="middle">SEARCH / SELECTION</text>
+  <text x="192" y="881" class="small" text-anchor="middle">only this component changes</text>
+  <rect x="345" y="827" width="250" height="76" rx="6" class="red"/>
+  <text x="470" y="856" class="panel-title" text-anchor="middle">DIRTY / DIAGNOSTICS</text>
+  <text x="470" y="881" class="small" text-anchor="middle">immutable range vectors</text>
+  <rect x="623" y="827" width="250" height="76" rx="6" class="green"/>
+  <text x="748" y="856" class="panel-title" text-anchor="middle">FILE COMPARE</text>
+  <text x="748" y="881" class="small" text-anchor="middle">line kinds + slices</text>
+  <text x="67" y="925" class="small">No range signatures, document-wide scans, or overlay construction remain in draw().</text>
 
-  <text x="585" y="642" class="mono small">lines</text>
-  <text x="682" y="642" class="mono small">Braille bits</text>
-  <text x="590" y="666" class="mono body">L0</text>
-  <text x="590" y="687" class="mono body">L1</text>
-  <text x="590" y="708" class="mono body">L2</text>
-  <text x="590" y="729" class="mono body">L3</text>
-  <rect x="640" y="651" width="112" height="88" rx="5" fill="#f3f8fd" stroke="#2d69a6"/>
-  <text x="660" y="673" class="mono body">01</text><text x="708" y="673" class="mono body">08</text>
-  <text x="660" y="694" class="mono body">02</text><text x="708" y="694" class="mono body">10</text>
-  <text x="660" y="715" class="mono body">04</text><text x="708" y="715" class="mono body">20</text>
-  <text x="660" y="736" class="mono body">40</text><text x="708" y="736" class="mono body">80</text>
-  <text x="780" y="683" class="mono small">pattern byte</text>
-  <text x="780" y="708" class="mono small">→ U+2800</text>
-  <text x="780" y="730" class="mono small">+ pattern</text>
+  <path d="M470 938 L470 964" class="flow-blue"/>
 
-  <path d="M470 752 L470 766" class="flow"/>
-  <rect x="120" y="770" width="700" height="58" rx="7" fill="#d8eee9" stroke="#218779"/>
-  <text x="470" y="794" text-anchor="middle" class="mono stage">MiniMapWarmupPayload</text>
-  <text x="470" y="816" text-anchor="middle" class="mono small">rowPatterns · rowLineStarts/Ends (row mapping) · window · geometry · totalLines · renderer</text>
+  <rect x="35" y="969" width="870" height="174" rx="8" class="box"/>
+  <circle cx="67" cy="1001" r="20" fill="#2f6fa3"/>
+  <text x="67" y="1008" class="badge">5</text>
+  <text x="100" y="1007" class="panel-title">Exact visible coverage may be adopted before prewarming finishes</text>
+  <rect x="67" y="1038" width="806" height="75" rx="6" class="green"/>
+  <text x="87" y="1066" class="code">task + ED owner + generation + document/version + geometry + mode + source span</text>
+  <text x="87" y="1092" class="body">Older finite packets may enlarge the ledger but cannot replace a newer viewport projection.</text>
+  <text x="67" y="1132" class="small">Bounded retention: max(4, 2 * allowedCoreCount) complete warm windows.</text>
 
-  <path d="M470 828 L470 846" class="flow"/>
-  <rect x="120" y="850" width="700" height="56" rx="7" fill="#ffffff" stroke="#26364a" stroke-width="1.8"/>
-  <text x="470" y="875" text-anchor="middle" class="sans stage">CENTRAL RESULT MAILBOX</text>
-  <text x="470" y="896" text-anchor="middle" class="mono small">TaskInfo + status + payload + queue/run/total timing</text>
+  <path d="M470 1143 L470 1169" class="flow-blue"/>
 
-  <path d="M470 906 L470 930" class="flow"/>
-  <line x1="35" y1="936" x2="905" y2="936" stroke="#b03a3a" stroke-width="2.2" stroke-dasharray="9 7"/>
-  <rect x="348" y="923" width="244" height="27" rx="13" fill="#f4f6f8" stroke="#b03a3a"/>
-  <text x="470" y="942" text-anchor="middle" class="sans small" fill="#8f2929">UI THREAD BOUNDARY</text>
-
-  <rect x="70" y="964" width="800" height="80" rx="8" fill="#f3f8fd" stroke="#2d69a6" stroke-width="1.7"/>
-  <circle cx="96" cy="990" r="17" fill="#2d69a6"/>
-  <text x="96" y="996" text-anchor="middle" class="sans stage inverse">6</text>
-  <text x="124" y="990" class="mono stage">handleCoprocessorResult() → applyWarmup()</text>
-  <text x="124" y="1016" class="sans body">completed + document/base-version match + pending task (or missing visible projection)</text>
-  <text x="845" y="1036" text-anchor="end" class="sans small muted">adopt cache · clear task · redraw if changed</text>
-
-  <path d="M275 1044 L275 1062" class="flow"/>
-  <path d="M665 1044 L665 1062" class="branch"/>
-  <rect x="70" y="1066" width="390" height="94" rx="8" fill="#ffffff" stroke="#218779" stroke-width="1.6"/>
-  <text x="95" y="1093" class="sans stage">PATTERN CACHE</text>
-  <text x="95" y="1118" class="mono body">rowPatterns + row line mapping</text>
-  <text x="95" y="1141" class="sans small muted">single window · replaced as a unit · no span merge</text>
-
-  <rect x="480" y="1066" width="390" height="94" rx="8" fill="#fff8e5" stroke="#b78316" stroke-width="1.6"/>
-  <text x="505" y="1093" class="sans stage">LIVE OVERLAY MASKS</text>
-  <text x="505" y="1118" class="sans body">selection/find · dirty · error/warning · diff slices</text>
-  <text x="505" y="1141" class="sans small muted">signature-cached; OR-normalized per document line</text>
-
-  <path d="M275 1160 L275 1180 L445 1180" class="branch"/>
-  <path d="M665 1160 L665 1180 L495 1180" class="branch"/>
-  <rect x="70" y="1190" width="800" height="108" rx="8" fill="#162235"/>
-  <circle cx="96" cy="1217" r="17" fill="#ffffff"/>
-  <text x="96" y="1223" text-anchor="middle" class="sans stage">7</text>
-  <text x="124" y="1218" class="mono stage inverse">drawGutter() → TDrawBuffer</text>
-  <text x="124" y="1245" class="sans body inverse">priority: error &gt; warning &gt; diff missing/insert/offset/equal &gt; find/selection &gt; changed &gt; normal</text>
-  <text x="124" y="1269" class="sans body inverse">Braille/block glyph + color · independent viewport marker at infoX (minimum 3 rows)</text>
-  <text x="124" y="1291" class="sans small inverse">leading or trailing editor gutter; adjacent TVision scrollbar remains a separate view</text>
+  <rect x="35" y="1174" width="870" height="122" rx="8" class="box"/>
+  <circle cx="67" cy="1206" r="20" fill="#2f6fa3"/>
+  <text x="67" y="1213" class="badge">6</text>
+  <text x="100" y="1212" class="panel-title">drawGutter projects adopted data through ordinary TVision buffers</text>
+  <rect x="67" y="1238" width="806" height="37" rx="5" fill="#e8f0f2" stroke="#27313a" stroke-width="1.2"/>
+  <text x="87" y="1262" class="small">Braille pattern · overlay colour priority · viewport marker · separator · native scrollbar remains independent</text>
 </svg>
