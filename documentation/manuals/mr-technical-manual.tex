@@ -6,6 +6,7 @@
 \usepackage[margin=22mm,inner=21mm,outer=19mm]{geometry}
 \usepackage{microtype}
 \usepackage{graphicx}
+\usepackage[font=footnotesize,skip=2pt]{caption}
 \usepackage{hyperref}
 
 \newcommand{\mr}{\textsc{MR}}
@@ -19,6 +20,10 @@
   pdfauthor={Dr. Michael 'iDoc' Raus}
 }
 \setlength{\emergencystretch}{4em}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.12}
+\raggedbottom
 
 \title{\mr{} Technical Manual\\\large A technical history of boundaries, speed, and extensibility}
 \author{Dr.\ Michael 'iDoc' Raus}
@@ -140,12 +145,13 @@ text. It changes piece boundaries and adds new data to the add buffer. This
 model serves more than load time: it makes editing, snapshots, undo boundaries,
 and later derived work variations of the same data economy.
 
-Figure~\ref{fig:piece-table-snapshot-boundary} makes the ownership boundary
+Figure~\ref{fig:piece-table-snapshot-boundary} on
+page~\pageref{fig:piece-table-snapshot-boundary} makes the ownership boundary
 explicit. A background task receives a versioned read snapshot, never the
 mutable live object. It may return a derived result or a staged edit, but it
 cannot adopt that work itself.
 
-\begin{figure}[htbp]
+\begin{figure}[tb]
   \centering
   \includegraphics[width=\textwidth]{assets/mr-piece-table-snapshots.pdf}
   \caption{Piece Table ownership and the snapshot boundary. The mapped or
@@ -208,23 +214,26 @@ acquisition window. Selection, search, dirty, diagnostic, and File Compare
 overlays are also immutable worker projections; \texttt{draw()} merely
 consumes adopted data.
 
-Figure~\ref{fig:coprocessor-warming-projections} shows the four derived
+Figure~\ref{fig:coprocessor-warming-projections} on
+page~\pageref{fig:coprocessor-warming-projections} shows the four derived
 projections at one viewport position together with their task telemetry. The
 numbered callouts identify rendered consumers and instrumentation, not
 additional scan stages.
 
-\begin{figure}[htbp]
+\begin{figure}[tb]
   \centering
   \begingroup
-  \setlength{\unitlength}{0.00098\textwidth}
+  \setlength{\unitlength}{0.001\textwidth}
+  \makebox[\textwidth][c]{%
   \begin{picture}(1000,540)
-    \put(0,0){\includegraphics[width=0.98\textwidth]{../pngsjpegs/COPRO_warming.png}}
+    \put(0,0){\includegraphics[width=\textwidth]{../pngsjpegs/COPRO_warming.png}}
     \put(790,500){\makebox(0,0){\Large\textcircled{\normalsize\textbf{1}}}}
     \put(45,360){\makebox(0,0){\Large\textcircled{\normalsize\textbf{2}}}}
     \put(190,330){\makebox(0,0){\Large\textcircled{\normalsize\textbf{3}}}}
     \put(520,360){\makebox(0,0){\Large\textcircled{\normalsize\textbf{4}}}}
     \put(960,300){\makebox(0,0){\Large\textcircled{\normalsize\textbf{5}}}}
-  \end{picture}
+  \end{picture}%
+  }
   \endgroup
   \caption{Deferred projections while viewing enwik9 near line 7,790,831.
   The uniformly annotated plate identifies (1) lifecycle and packet telemetry,
@@ -283,12 +292,13 @@ never an implicit rebase. The UI thread alone performs bounded adoption.
 \section{Moving windows, checkpoints, and ledgers}
 \label{sec:warmed-range-ledger}
 
-Figure~\ref{fig:deferred-scan-windows} shows the common shape without erasing
-the domain differences. A viewport demand creates a generation and reserves
-only uncovered packet spans. Finite workers may complete out of order and may
-remain useful after a cursor jump. The ledger first accepts matching results;
-the domain then advances its confirmed frontier or visible window as its
-ordering rule allows.
+Figure~\ref{fig:deferred-scan-windows} on
+page~\pageref{fig:deferred-scan-windows} shows the common shape without
+erasing the domain differences. A viewport demand creates a generation and
+reserves only uncovered packet spans. Finite workers may complete out of order
+and may remain useful after a cursor jump. The ledger first accepts matching
+results; the domain then advances its confirmed frontier or visible window as
+its ordering rule allows.
 
 For syntax, BOF direction means context acquisition before the viewport, never
 backward lexical evaluation. A confirmed line state may serve directly as the
@@ -308,10 +318,9 @@ inside the warmed region therefore creates no new worker wave. An edit,
 language change, geometry change, or incompatible document version invalidates
 only the state whose key includes that dimension.
 
-\clearpage
-\begin{figure}[htbp]
+\begin{figure}[tb]
   \centering
-  \includegraphics[width=0.92\textwidth]{assets/mr-deferred-scan-windows.pdf}
+  \includegraphics[width=\textwidth]{assets/mr-deferred-scan-windows.pdf}
   \caption{Finite packet planning and ordered publication. The viewport demand
   reserves uncovered spans; independently pinned workers return immutable
   packet results; the owner ledger accepts exact matches and publishes only a
@@ -345,13 +354,13 @@ The coprocessor is a lifecycle and delivery boundary, not a fixed worker pool
 and not a general executor from which a worker may call back into the
 application. Lanes classify I/O, compute, minimap, macro, and external-source
 work for telemetry and dispatch. They do not serialize independent owners.
-Figure~\ref{fig:coprocessor-lanes} shows the complete path from a domain packet
-to an adopted result.
+Figure~\ref{fig:coprocessor-lanes} on
+page~\pageref{fig:coprocessor-lanes} shows the complete path from a domain
+packet to an adopted result.
 
-\clearpage
-\begin{figure}[p]
+\begin{figure}[tb]
   \centering
-  \includegraphics[width=0.94\textwidth]{assets/mr-coprocessor-lanes.pdf}
+  \includegraphics[width=\textwidth]{assets/mr-coprocessor-lanes.pdf}
   \caption{Coprocessor execution and result adoption. A lane classifies a
   data-only packet but does not own a serial worker. Every finite work unit
   receives an independently pinned one-shot worker. Results converge on the
@@ -360,7 +369,6 @@ to an adopted result.
   worker exception.}
   \label{fig:coprocessor-lanes}
 \end{figure}
-\clearpage
 
 \section{Task envelope and scheduling boundary}
 
@@ -467,20 +475,23 @@ The minimap is a viewport-anchored derived projection in an editor gutter. It
 has two worker-produced data paths: compact text-density patterns from bounded
 line windows, and immutable overlay components from selection, search, edit,
 diagnostic, and File Compare state. The UI thread performs only bounded
-adoption and ordinary TVision projection. Figure~\ref{fig:minimap-ui}
-identifies the three visible components, and
-Figure~\ref{fig:minimap-function-flow} follows the complete data path.
+adoption and ordinary TVision projection. Figure~\ref{fig:minimap-ui} on
+page~\pageref{fig:minimap-ui} identifies the three visible components, and
+Figure~\ref{fig:minimap-function-flow} on
+page~\pageref{fig:minimap-function-flow} follows the complete data path.
 
-\begin{figure}[htbp]
+\begin{figure}[tb]
   \centering
   \begingroup
-  \setlength{\unitlength}{0.00098\textwidth}
+  \setlength{\unitlength}{0.001\textwidth}
+  \makebox[\textwidth][c]{%
   \begin{picture}(1000,543)
-    \put(0,0){\includegraphics[width=0.98\textwidth]{../pngsjpegs/UI_minimap.png}}
+    \put(0,0){\includegraphics[width=\textwidth]{../pngsjpegs/UI_minimap.png}}
     \put(946,365){\makebox(0,0){\Large\textcircled{\normalsize\textbf{1}}}}
     \put(925,315){\makebox(0,0){\Large\textcircled{\normalsize\textbf{2}}}}
     \put(982,260){\makebox(0,0){\Large\textcircled{\normalsize\textbf{3}}}}
-  \end{picture}
+  \end{picture}%
+  }
   \endgroup
   \caption{Trailing minimap in the editor: (1) the Braille pattern body,
   (2) the separate viewport-marker column, and (3) the native TVision
@@ -489,17 +500,15 @@ Figure~\ref{fig:minimap-function-flow} follows the complete data path.
   \label{fig:minimap-ui}
 \end{figure}
 
-\clearpage
-\begin{figure}[p]
+\begin{figure}[tb]
   \centering
-  \includegraphics[width=0.94\textwidth]{assets/mr-minimap-function-flow.pdf}
+  \includegraphics[width=\textwidth]{assets/mr-minimap-function-flow.pdf}
   \caption{Minimap function flow. An editor owner plans uncovered spans from
   its bounded warm-window ledger. Independently pinned text and overlay
   packets return immutable projections; an exact visible window is adopted
   before \texttt{drawGutter} writes ordinary TVision buffers.}
   \label{fig:minimap-function-flow}
 \end{figure}
-\clearpage
 
 \section{Geometry and the sampling window}
 
@@ -805,12 +814,13 @@ lane classifies the job but does not serialize unrelated macro owners behind a
 single lane worker. UI-affine and foreground-delay sessions do not enter this
 path, and a session paused for UI adoption retains no worker.
 
-Figure~\ref{fig:mrmac-session-routes} separates the routes and their lifetimes.
-The runner makes the routing decision; the scheduler is concerned with
-interval and overlap policy, while the coprocessor owns only the finite worker
-execution and result delivery.
+Figure~\ref{fig:mrmac-session-routes} on
+page~\pageref{fig:mrmac-session-routes} separates the routes and their
+lifetimes. The runner makes the routing decision; the scheduler is concerned
+with interval and overlap policy, while the coprocessor owns only the finite
+worker execution and result delivery.
 
-\begin{figure}[htbp]
+\begin{figure}[tb]
   \centering
   \includegraphics[width=\textwidth]{assets/mrmac-exec-session-scheduler-routes.pdf}
   \caption{Execution-session routing. UI-affine and foreground-delay work
@@ -890,15 +900,16 @@ canonical core settings contract.
 
 \chapter{The settings bootstrap: canonical source and VM authority}
 
-Figure~\ref{fig:settings-bootstrap-flow} is the technical spine of this
+Figure~\ref{fig:settings-bootstrap-flow} on
+page~\pageref{fig:settings-bootstrap-flow} is the technical spine of this
 chapter. It begins with the actual entry condition, not with a save or backup:
-the bootstrap ensures that a settings source exists. Each numbered phase names
-the responsibility, data form, and authority boundary that the following
+the bootstrap ensures that a settings source exists. Each numbered phase
+names the responsibility, data form, and authority boundary that the following
 sections explain in detail.
 
-\begin{figure}[htbp]
+\begin{figure}[tb]
   \centering
-  \includegraphics[width=0.82\textwidth]{assets/mr-settings-bootstrap-flow.pdf}
+  \includegraphics[width=\textwidth]{assets/mr-settings-bootstrap-flow.pdf}
   \caption{VM-centred settings bootstrap. A persisted source is checked,
   normalised, and made canonical before the VM performs the final startup
   \texttt{MRSETUP} apply. Only the successful VM route makes the central
