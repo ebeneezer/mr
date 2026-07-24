@@ -25,6 +25,7 @@
 #include "../ui/MRWindowLayout.hpp"
 #include "router/MRCommandRouterSearch.hpp"
 #include "router/MRCommandRouterSearchMultiFile.hpp"
+#include "router/MRCommandRouterGit.hpp"
 #include "router/MRCommandRouterText.hpp"
 #include "export/MRPdfTextExporter.hpp"
 
@@ -2111,6 +2112,43 @@ bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandL
 	return true;
 }
 
+bool handleGitChanges() {
+	MREditWindow *win = currentEditorCommandWindow();
+	MRGitChangesCommand command;
+	MREditWindow *outputWindow;
+	std::string initialText;
+
+	if (win == nullptr || !win->hasPersistentFileName()) {
+		postDialogWarning("Git changes require a file-backed editor window.");
+		return true;
+	}
+	if (win->isFileChanged()) {
+		const ushort answer = messageBox(mfConfirmation | mfYesButton | mfNoButton, "Save the focused file before showing Git changes?");
+		if (answer != cmYes) return true;
+		if (!win->saveCurrentFile()) {
+			postDialogWarning("Unable to save the focused file.");
+			return true;
+		}
+	}
+	if (!prepareMRGitChangesCommand(win->currentFileName(), command)) {
+		postDialogWarning("Unable to prepare Git changes for the focused file.");
+		return true;
+	}
+	outputWindow = createCommunicationWindow(command.title.c_str());
+	if (outputWindow == nullptr) {
+		postDialogWarning("Unable to create Git changes output window.");
+		return true;
+	}
+	initialText = "$ git changes -- " + std::string(win->currentFileName()) + "\n\n";
+	if (!outputWindow->replaceTextBuffer(initialText.c_str(), command.title.c_str())) {
+		message(outputWindow, evCommand, cmClose, nullptr);
+		postDialogWarning("Unable to prepare Git changes output window.");
+		return true;
+	}
+	static_cast<void>(startExternalCommandInWindow(outputWindow, command.commandLine, false, true, true, command.title));
+	return true;
+}
+
 bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
 	MREditWindow *win = currentEditorCommandWindow();
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
@@ -2991,6 +3029,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherBuildCurrentFile:
 			return handleBuildCurrentFile();
+
+		case cmMrOtherGitChanges:
+			return handleGitChanges();
 
 		case cmMrOtherStopProgram:
 			return handleStopCurrentProgram();

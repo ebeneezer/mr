@@ -205,6 +205,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrTextPrettifyBlockOrFile, canModify);
 	setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows);
 	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasBuildSourceFile);
+	setCommandEnabled(cmMrOtherGitChanges, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
 	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail);
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));

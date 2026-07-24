@@ -59,7 +59,7 @@ TMenuItem *createInstallationAndSetupMenuItem() {
 }
 
 TSubMenu *createOtherMenu() {
-	return &(*new TSubMenu("~O~ther", kbAltO) + *createInstallationAndSetupMenuItem() + newLine() + *new TMenuItem("~B~uild current file", cmMrOtherBuildCurrentFile, kbF9, hcNoContext, "F9") + *new TMenuItem("~S~top current program", cmMrOtherStopProgram, kbNoKey, hcNoContext) + *new TMenuItem("~R~estart current program", cmMrOtherRestartProgram, kbNoKey, hcNoContext) + *new TMenuItem("~C~lear current output", cmMrOtherClearOutput, kbNoKey, hcNoContext) + *new TMenuItem("next compiler error", cmMrOtherFindNextCompilerError, kbNoKey, hcNoContext) + *new TMenuItem("prev compiler error", cmMrOtherFindPreviousCompilerError, kbNoKey, hcNoContext) + *new TMenuItem("match ~P~arenthesis", cmMrOtherMatchBraceOrParen, kbAltP, hcNoContext, "AltP"));
+	return &(*new TSubMenu("~O~ther", kbAltO) + *createInstallationAndSetupMenuItem() + newLine() + *new TMenuItem("~B~uild current file", cmMrOtherBuildCurrentFile, kbF9, hcNoContext, "F9") + *new TMenuItem("~G~it changes", cmMrOtherGitChanges, kbNoKey, hcNoContext) + *new TMenuItem("~S~top current program", cmMrOtherStopProgram, kbNoKey, hcNoContext) + *new TMenuItem("~R~estart current program", cmMrOtherRestartProgram, kbNoKey, hcNoContext) + *new TMenuItem("~C~lear current output", cmMrOtherClearOutput, kbNoKey, hcNoContext) + *new TMenuItem("next compiler error", cmMrOtherFindNextCompilerError, kbNoKey, hcNoContext) + *new TMenuItem("prev compiler error", cmMrOtherFindPreviousCompilerError, kbNoKey, hcNoContext) + *new TMenuItem("match ~P~arenthesis", cmMrOtherMatchBraceOrParen, kbAltP, hcNoContext, "AltP"));
 }
 
 TSubMenu *createMacroMenu() {

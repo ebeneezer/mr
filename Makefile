@@ -151,6 +151,7 @@ CXX_SOURCES = \
 	mr.cpp \
 	app/MRAppState.cpp \
 	app/MRCommandRouter.cpp \
+	app/router/MRCommandRouterGit.cpp \
 	app/router/MRCommandRouterSearch.cpp \
 	app/router/MRCommandRouterSearchCore.cpp \
 	app/router/MRCommandRouterSearchMultiFile.cpp \
@@ -552,7 +553,8 @@ $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 
 mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp
-app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp app/router/MRCommandRouterText.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMRuntimeKv.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp app/router/MRCommandRouterGit.hpp app/router/MRCommandRouterText.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMRuntimeKv.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/router/MRCommandRouterGit.o: app/router/MRCommandRouterGit.cpp app/router/MRCommandRouterGit.hpp app/commands/MRExternalCommand.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/router/MRCommandRouterText.o: app/router/MRCommandRouterText.cpp app/router/MRCommandRouterText.hpp app/commands/MRWindowCommands.hpp app/utils/MRStringUtils.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp dialogs/setup/MRSetupCommon.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFrame.hpp ui/MRMessageLineController.hpp ui/MRWindowSupport.hpp app/MREditorApp.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/MRMenuBar.hpp
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
@@ -623,7 +625,7 @@ config/settings/MRSettingsRuntime.o: config/settings/MRSettingsRuntime.cpp confi
 config/settings/MRSettingsStorage.o: config/settings/MRSettingsStorage.cpp config/settings/MRSettingsStorage.hpp config/settings/MRSettingsRuntime.hpp
 app/commands/MRExternalCommand.o: app/commands/MRExternalCommand.cpp app/commands/MRExternalCommand.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRPerformance.o: coprocessor/MRPerformance.cpp coprocessor/MRPerformance.hpp coprocessor/MRCoprocessor.hpp
-coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRCoprocessorBentoDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRBentoHexEditor/panes/MRHexPaneWindow.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp
+coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRCoprocessorBentoDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp app/router/MRCommandRouterGit.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRBentoHexEditor/panes/MRHexPaneWindow.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp
 coprocessor/MRCoprocessorBentoDispatch.o: coprocessor/MRCoprocessorBentoDispatch.cpp coprocessor/MRCoprocessorBentoDispatch.hpp coprocessor/MRCoprocessor.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRWindowSupport.hpp
 mrmac/MRVM.o: mrmac/MRVM.cpp mrmac/MRVM.hpp mrmac/MRVMDebugSession.hpp mrmac/vm/MRVMExecSessions.hpp mrmac/ui/conventional/MRVMDeferredUi.hpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/vm/MRVMHash.hpp mrmac/ui/conventional/MRVMMacroDialogRuntime.hpp mrmac/ui/modeless/MRVMMacroModelessProcedures.hpp mrmac/vm/MRVMMacroSpecRuntime.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeGlobals.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMSettings.hpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/mrmac.h dialogs/MRWindowList.hpp ui/MRWindowSupport.hpp ui/MREditWindow.hpp ui/MRTextBuffer.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRTextBufferModel.hpp ui/MRSyntax.hpp piecetable/MRTextDocument.hpp
 mrmac/vm/MRVMDelayRuntime.o: mrmac/vm/MRVMDelayRuntime.cpp mrmac/MRVM.hpp mrmac/vm/MRVMRuntimeState.hpp

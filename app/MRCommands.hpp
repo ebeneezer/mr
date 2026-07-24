@@ -95,7 +95,7 @@ enum : ushort {
 	cmMrOtherClearOutput,
 	cmMrOtherFindNextCompilerError,
 	cmMrOtherMatchBraceOrParen,
-	cmMrOtherReservedSlot,
+	cmMrOtherGitChanges,
 
 	cmMrMacroToggleRecording,
 

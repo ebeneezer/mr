@@ -46,6 +46,7 @@ class MRFrame : public TFrame {
   public:
 	struct MarkerState {
 		bool modified;
+		bool gitChanged;
 		bool insertMode;
 		bool insertModeVisible;
 		bool wordWrap;
@@ -65,11 +66,11 @@ class MRFrame : public TFrame {
 		const char *languageMarker;
 		std::uint32_t languageMarkerRgb;
 
-		MarkerState() noexcept : modified(false), insertMode(false), insertModeVisible(false), wordWrap(false), wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false), readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false), macroBrainVisible(false), language(false), languageVisible(false), workspaceMainFile(false), workspaceMainFileVisible(false), languageMarker(nullptr), languageMarkerRgb(0) {
+		MarkerState() noexcept : modified(false), gitChanged(false), insertMode(false), insertModeVisible(false), wordWrap(false), wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false), readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false), macroBrainVisible(false), language(false), languageVisible(false), workspaceMainFile(false), workspaceMainFileVisible(false), languageMarker(nullptr), languageMarkerRgb(0) {
 		}
 
-		MarkerState(bool aModified, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap, bool aWordWrapVisible, bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain, bool aMacroBrainVisible, bool aLanguage, bool aLanguageVisible, bool aWorkspaceMainFile, bool aWorkspaceMainFileVisible, const char *aLanguageMarker, std::uint32_t aLanguageMarkerRgb) noexcept
-		    : modified(aModified), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible), wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground), backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible), recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain), macroBrainVisible(aMacroBrainVisible), language(aLanguage), languageVisible(aLanguageVisible), workspaceMainFile(aWorkspaceMainFile), workspaceMainFileVisible(aWorkspaceMainFileVisible), languageMarker(aLanguageMarker), languageMarkerRgb(aLanguageMarkerRgb) {
+		MarkerState(bool aModified, bool aGitChanged, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap, bool aWordWrapVisible, bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain, bool aMacroBrainVisible, bool aLanguage, bool aLanguageVisible, bool aWorkspaceMainFile, bool aWorkspaceMainFileVisible, const char *aLanguageMarker, std::uint32_t aLanguageMarkerRgb) noexcept
+		    : modified(aModified), gitChanged(aGitChanged), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible), wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground), backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible), recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain), macroBrainVisible(aMacroBrainVisible), language(aLanguage), languageVisible(aLanguageVisible), workspaceMainFile(aWorkspaceMainFile), workspaceMainFileVisible(aWorkspaceMainFileVisible), languageMarker(aLanguageMarker), languageMarkerRgb(aLanguageMarkerRgb) {
 		}
 	};
 
@@ -94,8 +95,10 @@ class MRFrame : public TFrame {
 	void dragWindow(TEvent &event, uchar mode);
 	MarkerState markerState() const;
 	int markerStartColumn() const noexcept;
+	int gitMarkerColumn(const MarkerState &state) const noexcept;
 	int taskMarkerColumn(const MarkerState &state) const noexcept;
 	int markersEndColumn(const MarkerState &state) const noexcept;
+	bool gitMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept;
 	bool taskMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept;
 	bool markerHintAt(TPoint localMouse, const MarkerState &state, std::string &text, int &column) const;
 	void showMarkerHint(const std::string &text, int markerColumn);

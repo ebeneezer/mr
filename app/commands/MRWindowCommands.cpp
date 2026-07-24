@@ -11,6 +11,7 @@
 #include "MRBentoWorkspaceCodec.hpp"
 #include "MRFileCommands.hpp"
 #include "MRWindowCommands.hpp"
+#include "../router/MRCommandRouterGit.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1231,6 +1232,7 @@ void mrLoadWorkspace(const std::string &filename) {
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		syncVirtualDesktopVisibility();
+		requestMRGitStatusProbe(currentEditWindow());
 		if (loadedWorkspaceEntries != 0) mrNotifyWindowTopologyChanged();
 		visibilityUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}

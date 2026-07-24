@@ -38,6 +38,7 @@
 #include "MRFileEditor/MRFEBlockOps.hpp"
 #include "../app/MRCommands.hpp"
 #include "../app/MRCommandRouter.hpp"
+#include "../app/router/MRCommandRouterGit.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../keymap/MRKeymapContext.hpp"
 #include "../keymap/MRKeymapToken.hpp"
@@ -192,6 +193,8 @@ class MREditScrollBar : public TScrollBar {
 
 class MREditWindow : public TWindow, public MRDesktopWindow {
 	friend class MRWindowLayout;
+	friend void requestMRGitStatusProbe(MREditWindow *window);
+	friend bool dispatchMRGitStatusResult(const mr::coprocessor::Result &result);
 
   public:
 	struct TrackedTask {
@@ -219,7 +222,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	MREditWindow(const TRect &bounds, const char *title, int aNumber,
 	             mr::coprocessor::ExecutionOwnerKind executionOwnerKind = mr::coprocessor::ExecutionOwnerKind::EditorWindow)
-	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
+	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mGitStatusKnown(false), mGitChanged(false), mGitStatusGeneration(0), mGitStatusTaskId(0), mGitStatusPath(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -256,7 +259,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				const bool showRecordingIcon = showRecordingSlot && mrIsKeystrokeRecordingMarkerVisible();
 				const bool showMacroBrainSlot = isActiveWindow && mrIsMacroBrainMarkerActive();
 				const bool showMacroBrainIcon = showMacroBrainSlot && mrIsMacroBrainMarkerVisible();
-				return MRFrame::MarkerState(isFileChanged(), hasInsertSlot, showInsertIcon, hasWordWrapSlot, showWordWrapIcon, hasTaskSlot, showTaskIcon, hasReadOnlySlot, showReadOnlyIcon, showRecordingSlot, showRecordingIcon, showMacroBrainSlot, showMacroBrainIcon, showLanguageSlot, showLanguageSlot, showWorkspaceMainFileSlot, showWorkspaceMainFileSlot, languageMarker, languageMarkerRgb);
+				return MRFrame::MarkerState(isFileChanged(), isActiveWindow && gitChangesMarkerVisible(), hasInsertSlot, showInsertIcon, hasWordWrapSlot, showWordWrapIcon, hasTaskSlot, showTaskIcon, hasReadOnlySlot, showReadOnlyIcon, showRecordingSlot, showRecordingIcon, showMacroBrainSlot, showMacroBrainIcon, showLanguageSlot, showLanguageSlot, showWorkspaceMainFileSlot, showWorkspaceMainFileSlot, languageMarker, languageMarkerRgb);
 			});
 			mrFrame->setTaskOverviewProvider([this]() { return describeRunningTasks(); });
 		}
@@ -387,7 +390,12 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	}
 
 	void setState(ushort aState, Boolean enable) override {
+		const bool wasFocused = (state & sfFocused) != 0;
 		TWindow::setState(aState, enable);
+		if (!wasFocused && (state & sfFocused) != 0) {
+			invalidateGitStatus();
+			requestMRGitStatusProbe(this);
+		}
 		if (mFullscreenPresentation) {
 			if (editor != nullptr) editor->drawView();
 			return;
@@ -660,7 +668,37 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 					mrFrame->updateTaskHover(TPoint(), true);
 			}
 
+			bool replacedNonPersistentBlock = false;
+			std::size_t replacementUndoDepthBefore = 0;
+			MRTextBufferModel::CustomUndoRecord replacementBlockState;
+			if (shouldReplaceNonPersistentBlockBeforeEditorInput(event)) {
+				const bool columnBlock = mBlockOps.mGeometry.mode == MRFEBlockMode::Column;
+				const int replacementColumn = mBlockOps.mGeometry.col1;
+				std::string errorText;
+
+				replacementUndoDepthBefore = editor->bufferModel().undoStackDepth();
+				replacementBlockState.blockMode = blockStatus();
+				replacementBlockState.blockAnchor = blockAnchorPtr();
+				replacementBlockState.blockEnd = blockEffectiveEndPtr();
+				replacementBlockState.blockAnchorColumn = columnBlock ? std::max(0, blockCol1() - 1) : -1;
+				replacementBlockState.blockEndColumn = columnBlock ? std::max(0, blockCol2() - 1) : -1;
+				replacementBlockState.blockMarkingOn = true;
+				replacedNonPersistentBlock = deleteBlock(&errorText);
+				if (!replacedNonPersistentBlock && !errorText.empty()) mrLogMessage(errorText.c_str());
+				if (replacedNonPersistentBlock && columnBlock) {
+					const std::size_t lineStart = editor->lineStartOffset(editor->cursorOffset());
+					const std::size_t replacementOffset = editor->charPtrOffset(lineStart, replacementColumn);
+					editor->setCursorOffsetAtVisualColumn(replacementOffset, replacementColumn);
+				}
+			}
+
 			TWindow::handleEvent(event);
+			if (replacedNonPersistentBlock && editor != nullptr) {
+				MRTextBufferModel &buffer = editor->bufferModel();
+				while (buffer.undoStackDepth() > replacementUndoDepthBefore + 1)
+					buffer.popUndoSnapshot();
+				if (buffer.undoStackDepth() > replacementUndoDepthBefore) buffer.updateUndoTopBlockState(replacementBlockState);
+			}
 			if (editor != nullptr) {
 				if (originalEvent == evMouseDown) {
 					if (!originalEditorDoubleClick || !handleEditorDoubleClickBlockExpansion()) {
@@ -701,6 +739,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 		if (!editor->loadMappedFile(expandedName.c_str(), loadError)) return false;
 
+		invalidateGitStatus();
 		applyWindowColorThemeForPath(expandedName);
 		resetTransientEditorState();
 		setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
@@ -709,6 +748,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		setWindowRole(wrFile);
 		updateTitleFromEditor();
 		if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
+		if ((state & sfFocused) != 0) requestMRGitStatusProbe(this);
 		return true;
 	}
 
@@ -724,6 +764,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		mTemporaryFileUsed = false;
 		mTemporaryFileName.clear();
 		editor->clearPersistentFileName();
+		invalidateGitStatus();
 		setWindowRole(wrText);
 		if (title != nullptr && *title != '\0') setDisplayTitle(title);
 		else
@@ -743,6 +784,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			mTemporaryFileName.clear();
 			setWindowRole(wrFile);
 			updateTitleFromEditor();
+			invalidateGitStatus();
+			if ((state & sfFocused) != 0) requestMRGitStatusProbe(this);
 		}
 		return ok;
 	}
@@ -761,6 +804,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			setWindowRole(wrFile);
 			updateTitleFromEditor();
 			if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
+			invalidateGitStatus();
+			if ((state & sfFocused) != 0) requestMRGitStatusProbe(this);
 		}
 		return ok;
 	}
@@ -779,6 +824,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			setWindowRole(wrFile);
 			updateTitleFromEditor();
 			if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
+			invalidateGitStatus();
+			if ((state & sfFocused) != 0) requestMRGitStatusProbe(this);
 		}
 		return ok;
 	}
@@ -1099,6 +1146,10 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		updateTitleFromEditor();
 		refreshSyntaxContext();
 		if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
+		if (oldFileName != currentFileName()) {
+			invalidateGitStatus();
+			if ((state & sfFocused) != 0) requestMRGitStatusProbe(this);
+		}
 	}
 
 	bool confirmAbandonForReload() {
@@ -1441,6 +1492,13 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	std::size_t prepareCoprocessorTasksForShutdown() {
 		std::size_t clearedCount = mTrackedCoprocessorTasks.size();
 
+		if (mGitStatusTaskId != 0) {
+			++clearedCount;
+			mrTraceCoprocessorTaskCancel(mBufferId, mGitStatusTaskId);
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mGitStatusTaskId));
+			mGitStatusTaskId = 0;
+			++mGitStatusGeneration;
+		}
 		for (std::size_t i = 0; i < mTrackedCoprocessorTasks.size(); ++i) {
 			mrTraceCoprocessorTaskCancel(mBufferId, mTrackedCoprocessorTasks[i].id);
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mTrackedCoprocessorTasks[i].id));
@@ -2242,10 +2300,16 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		if (editor != nullptr) editor->setSyntaxTitleHint(displayTitle);
 	}
 
-		bool shouldCollapseSelectionBeforeEditorInput(const TEvent &event) const {
-			(void)event;
-			return false;
-		}
+	bool shouldReplaceNonPersistentBlockBeforeEditorInput(const TEvent &event) const {
+		if (event.what != evKeyDown || editor == nullptr || editor->isReadOnly() || !mBlockOps.hasVisibleBlock() || configuredPersistentBlocksSetting()) return false;
+
+		const ushort modifiers = event.keyDown.controlKeyState;
+		const unsigned char charCode = static_cast<unsigned char>(event.keyDown.charScan.charCode);
+		const bool pastedText = (modifiers & kbPaste) != 0;
+		const bool singleByteText = charCode >= 32 && charCode < 255;
+		const bool newLine = ctrlToArrow(event.keyDown.keyCode) == kbEnter;
+		return pastedText || singleByteText || newLine;
+	}
 
 	bool plainEditorRightClick(const TEvent &event) const {
 		if (event.what != evMouseDown || editor == nullptr) return false;
@@ -2598,6 +2662,62 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	}
 
   private:
+	bool gitChangesMarkerVisible() const noexcept {
+		return mGitStatusKnown && mGitChanged;
+	}
+
+	bool gitStatusProbeCurrentFor(const std::string &filePath) const noexcept {
+		return mGitStatusPath == filePath && (mGitStatusKnown || mGitStatusTaskId != 0);
+	}
+
+	std::uint64_t beginGitStatusProbe(const std::string &filePath) {
+		invalidateGitStatus();
+		mGitStatusPath = filePath;
+		return mGitStatusGeneration;
+	}
+
+	void attachGitStatusProbeTask(std::uint64_t taskId, std::uint64_t generation, const std::string &filePath) {
+		if (taskId == 0) return;
+		if (generation == mGitStatusGeneration && filePath == mGitStatusPath && filePath == currentFileName()) {
+			mGitStatusTaskId = taskId;
+			return;
+		}
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(taskId));
+	}
+
+	void abandonGitStatusProbe(std::uint64_t generation, const std::string &filePath) {
+		if (generation != mGitStatusGeneration || filePath != mGitStatusPath) return;
+		mGitStatusTaskId = 0;
+		mGitStatusPath.clear();
+	}
+
+	bool adoptGitStatusProbe(std::uint64_t taskId, std::uint64_t generation, const std::string &filePath, bool available, bool changed) {
+		if (taskId == 0 || taskId != mGitStatusTaskId || generation != mGitStatusGeneration ||
+		    filePath != mGitStatusPath || filePath != currentFileName())
+			return false;
+
+		const bool markerWasVisible = gitChangesMarkerVisible();
+		mGitStatusTaskId = 0;
+		mGitStatusKnown = available;
+		mGitChanged = available && changed;
+		if (markerWasVisible != gitChangesMarkerVisible() && frame != nullptr) frame->drawView();
+		return true;
+	}
+
+	void invalidateGitStatus() {
+		const bool markerWasVisible = gitChangesMarkerVisible();
+		if (mGitStatusTaskId != 0) {
+			mrTraceCoprocessorTaskCancel(mBufferId, mGitStatusTaskId);
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mGitStatusTaskId));
+		}
+		mGitStatusTaskId = 0;
+		++mGitStatusGeneration;
+		mGitStatusKnown = false;
+		mGitChanged = false;
+		mGitStatusPath.clear();
+		if (markerWasVisible && frame != nullptr) frame->drawView();
+	}
+
 		TScrollBar *vScrollBar;
 	TScrollBar *hScrollBar;
 	MRIndicator *indicator;
@@ -2613,6 +2733,11 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	bool mCursorGestureBlockMarking;
 	bool mFullscreenPresentation;
 	std::vector<TrackedTask> mTrackedCoprocessorTasks;
+	bool mGitStatusKnown;
+	bool mGitChanged;
+	std::uint64_t mGitStatusGeneration;
+	std::uint64_t mGitStatusTaskId;
+	std::string mGitStatusPath;
 	WindowRole mWindowRole;
 	std::string mWindowRoleDetail;
 	std::size_t mMacroQueuedCount;

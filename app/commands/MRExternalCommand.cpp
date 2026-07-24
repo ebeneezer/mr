@@ -27,6 +27,18 @@
 MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
 std::recursive_mutex &mrvmExecutionMutex() noexcept;
 
+std::string quoteShellArgument(const std::string &value) {
+	std::string out = "'";
+
+	for (char ch : value) {
+		if (ch == '\'') out += "'\\''";
+		else
+			out.push_back(ch);
+	}
+	out.push_back('\'');
+	return out;
+}
+
 namespace {
 [[nodiscard]] std::string trimPathInput(std::string_view path) {
 	std::size_t start = 0;
@@ -40,18 +52,6 @@ namespace {
 	std::string result(path.substr(start, end - start));
 	if (result.size() >= 2 && ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\''))) result = result.substr(1, result.size() - 2);
 	return result;
-}
-
-std::string shellQuote(const std::string &value) {
-	std::string out = "'";
-
-	for (char ch : value) {
-		if (ch == '\'') out += "'\\''";
-		else
-			out.push_back(ch);
-	}
-	out.push_back('\'');
-	return out;
 }
 
 bool setError(std::string *errorMessage, const std::string &message) {
@@ -130,7 +130,7 @@ void appendShellCommandGroup(std::ostringstream &out, const std::string &command
 }
 
 void appendShellVariableAssignment(std::ostringstream &out, const char *name, const std::string &value) {
-	out << name << "=" << shellQuote(value) << "; export " << name << "; ";
+	out << name << "=" << quoteShellArgument(value) << "; export " << name << "; ";
 }
 
 void appendBuildShellContext(std::ostringstream &out, const MRBuildHookContext &context) {
@@ -280,16 +280,16 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 		compilerWorkingDirectory = compilerPath.parent_path().string();
 	}
 
-	command << shellQuote(profile.executablePath);
+	command << quoteShellArgument(profile.executablePath);
 	if (!profile.buildFlags.empty()) command << ' ' << profile.buildFlags;
 	if (toolchain == "LATEXMK") {
-		command << ' ' << shellQuote(source);
+		command << ' ' << quoteShellArgument(source);
 		commandLine = wrapBuildCommandWithProfileHooks(profile, command.str(), context);
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (toolchain == "LATEX") {
-		command << ' ' << shellQuote(source);
+		command << ' ' << quoteShellArgument(source);
 		commandLine = wrapBuildCommandWithProfileHooks(profile, command.str(), context);
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
@@ -297,31 +297,31 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	if (toolchain == "GAMBAS") {
 		const std::string projectDirectory = gambasProjectDirectoryForSource(source);
 		if (projectDirectory.empty()) return setError(errorMessage, "Gambas source must be inside a project directory containing .project.");
-		command << ' ' << shellQuote(projectDirectory);
+		command << ' ' << quoteShellArgument(projectDirectory);
 		commandLine = wrapBuildCommandWithProfileHooks(profile, command.str(), context);
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	for (const std::string &path : profile.includePaths)
-		if (!path.empty()) command << (toolchain == "FREEBASIC" ? " -i" : " -I") << shellQuote(path);
+		if (!path.empty()) command << (toolchain == "FREEBASIC" ? " -i" : " -I") << quoteShellArgument(path);
 	for (const std::string &path : profile.libraryPaths)
-		if (!path.empty()) command << (toolchain == "FREEBASIC" ? " -p" : " -L") << shellQuote(path);
+		if (!path.empty()) command << (toolchain == "FREEBASIC" ? " -p" : " -L") << quoteShellArgument(path);
 	if (toolchain == "SWIFT")
 		for (const std::string &path : profile.runtimePaths)
-			if (!path.empty() && pathIsDirectory(path)) command << " -Xlinker -rpath -Xlinker " << shellQuote(path);
-	command << ' ' << shellQuote(source);
-	if (toolchain == "FREEBASIC") command << " -x " << shellQuote(compilerOutputPathForSource(source));
+			if (!path.empty() && pathIsDirectory(path)) command << " -Xlinker -rpath -Xlinker " << quoteShellArgument(path);
+	command << ' ' << quoteShellArgument(source);
+	if (toolchain == "FREEBASIC") command << " -x " << quoteShellArgument(compilerOutputPathForSource(source));
 	else
-		command << " -o " << shellQuote(compilerOutputPathForSource(source));
+		command << " -o " << quoteShellArgument(compilerOutputPathForSource(source));
 
 	buildCommand = command.str();
-	if (!compilerWorkingDirectory.empty()) buildCommand = "cd " + shellQuote(compilerWorkingDirectory) + " && " + buildCommand;
+	if (!compilerWorkingDirectory.empty()) buildCommand = "cd " + quoteShellArgument(compilerWorkingDirectory) + " && " + buildCommand;
 	commandLine = wrapBuildCommandWithProfileHooks(profile, buildCommand, context);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::size_t channelId, const std::string &command, const MRBuildHookContext &buildContext, const std::string &successAudioUri, const std::string &failureAudioUri) {
+mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::size_t channelId, const std::string &command, const MRBuildHookContext &buildContext, const std::string &successAudioUri, const std::string &failureAudioUri, bool streamOutput) {
 	mr::coprocessor::Result result;
 	int pipeFds[2] = {-1, -1};
 	pid_t childPid = -1;
@@ -393,11 +393,13 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 			for (;;) {
 				ssize_t count = ::read(pipeFds[0], buffer.data(), buffer.size());
 				if (count > 0) {
-					mr::coprocessor::Result chunkResult;
-					chunkResult.task = info;
-					chunkResult.status = mr::coprocessor::TaskStatus::Completed;
-					chunkResult.payload = std::make_shared<mr::coprocessor::ExternalIoChunkPayload>(channelId, std::string(buffer.data(), static_cast<std::size_t>(count)));
-					mr::coprocessor::globalCoprocessor().post(std::move(chunkResult));
+					if (streamOutput) {
+						mr::coprocessor::Result chunkResult;
+						chunkResult.task = info;
+						chunkResult.status = mr::coprocessor::TaskStatus::Completed;
+						chunkResult.payload = std::make_shared<mr::coprocessor::ExternalIoChunkPayload>(channelId, std::string(buffer.data(), static_cast<std::size_t>(count)));
+						mr::coprocessor::globalCoprocessor().post(std::move(chunkResult));
+					}
 					continue;
 				}
 				if (count == 0) {

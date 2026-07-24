@@ -8,6 +8,7 @@
 #include "MRDesktopWindow.hpp"
 #include "MREditWindow.hpp"
 #include "MRWindowLayout.hpp"
+#include "../app/MRCommands.hpp"
 #include "../app/MRMenuFactory.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 
@@ -36,6 +37,7 @@ static const char *kFocusedDragIcon = "\xCD\xBC";
 static const char *kFocusedDragLeftIcon = "\xC8\xCD";
 
 static constexpr char kDirtyMarkerIcon[] = "✎";
+static constexpr char kGitMarkerIcon[] = "⇆";
 static constexpr char kRecordingMarkerIcon[] = "📼";
 static constexpr char kActivityMarkerIcon[] = "⌬";
 static constexpr const char *kTaskMarkerIcon = kActivityMarkerIcon;
@@ -46,6 +48,7 @@ static constexpr char kInsertMarkerIcon[] = "⌶";
 static constexpr char kWordWrapMarkerIcon[] = "┊↵┊"; // ┆↵┆
 static constexpr int kLanguageMarkerSlotWidth = 1;
 static constexpr int kDirtyMarkerSlotWidth = 2;
+static constexpr int kGitMarkerSlotWidth = 2;
 static constexpr int kRecordingMarkerSlotWidth = 2;
 static constexpr int kTaskMarkerSlotWidth = 2;
 static constexpr int kMacroBrainMarkerSlotWidth = 2;
@@ -88,7 +91,7 @@ int normalZoomStart(int width, bool hasMinimizeButton) noexcept {
 }
 
 bool hasMarkerBlock(const MRFrame::MarkerState &state) noexcept {
-	return state.modified || state.insertMode || state.wordWrap || state.language || state.workspaceMainFile || state.recording || state.macroBrain || state.background || state.readOnly;
+	return state.modified || state.gitChanged || state.insertMode || state.wordWrap || state.language || state.workspaceMainFile || state.recording || state.macroBrain || state.background || state.readOnly;
 }
 
 bool isFrameFocused(const MRFrame *frame) noexcept {
@@ -238,9 +241,16 @@ int MRFrame::markerStartColumn() const noexcept {
 	return 2;
 }
 
+int MRFrame::gitMarkerColumn(const MarkerState &state) const noexcept {
+	int x = markerStartColumn();
+	if (state.modified) x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
+	return state.gitChanged ? x : -1;
+}
+
 int MRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
 	if (state.modified) x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
+	if (state.gitChanged) x = advanceMarkerX(x, kGitMarkerIcon, kGitMarkerSlotWidth);
 	if (state.insertMode) x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
 	if (state.wordWrap) x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
 	if (state.language) x = advanceMarkerX(x, state.languageMarker != nullptr ? state.languageMarker : "", kLanguageMarkerSlotWidth);
@@ -255,6 +265,7 @@ int MRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
 	bool hasMarkers = false;
 	if (state.modified) x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth), hasMarkers = true;
+	if (state.gitChanged) x = advanceMarkerX(x, kGitMarkerIcon, kGitMarkerSlotWidth), hasMarkers = true;
 	if (state.insertMode) x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth), hasMarkers = true;
 	if (state.wordWrap) x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth), hasMarkers = true;
 	if (state.language) x = advanceMarkerX(x, state.languageMarker != nullptr ? state.languageMarker : "", kLanguageMarkerSlotWidth), hasMarkers = true;
@@ -264,6 +275,12 @@ int MRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	if (state.background) x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth), hasMarkers = true;
 	if (state.readOnly) x = advanceMarkerX(x, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth), hasMarkers = true;
 	return hasMarkers ? x - kMarkerGap : x;
+}
+
+bool MRFrame::gitMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept {
+	const int gitX = gitMarkerColumn(state);
+
+	return gitX >= 0 && localMouse.y == 0 && localMouse.x >= gitX && localMouse.x < gitX + markerSpan(kGitMarkerIcon, kGitMarkerSlotWidth);
 }
 
 bool MRFrame::taskMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept {
@@ -285,6 +302,7 @@ bool MRFrame::markerHintAt(TPoint localMouse, const MarkerState &state, std::str
 	if (state.language) languageHint = std::string("▲ Language: ") + languageMarker;
 	const Candidate candidates[] = {
 	    {state.modified, kDirtyMarkerIcon, kDirtyMarkerSlotWidth, "▲ Changed", false},
+	    {state.gitChanged, kGitMarkerIcon, kGitMarkerSlotWidth, "▲ Git changes", false},
 	    {state.insertMode, kInsertMarkerIcon, kInsertMarkerSlotWidth, "▲ Insert mode", false},
 	    {state.wordWrap, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth, "▲ Word wrap", false},
 	    {state.language, languageMarker, kLanguageMarkerSlotWidth, languageHint.c_str(), false},
@@ -450,6 +468,12 @@ void MRFrame::draw() {
 		b.moveStr(static_cast<ushort>(markerX), kDirtyMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
 	}
+	if (markers.gitChanged) {
+		int span = markerSpan(kGitMarkerIcon, kGitMarkerSlotWidth);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		b.moveStr(static_cast<ushort>(markerX), kGitMarkerIcon, cTitle, span);
+		markerX = advanceMarkerX(markerX, kGitMarkerIcon, kGitMarkerSlotWidth);
+	}
 	if (markers.insertMode) {
 		int span = markerSpan(kInsertMarkerIcon, kInsertMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
@@ -599,7 +623,13 @@ void MRFrame::handleEvent(TEvent &event) {
 			const int minimizeStart = hasMinimizeButton ? normalRightControlStart(size.x, kMinimizeIcon) : size.x;
 			const int zoomStart = normalZoomStart(size.x, hasMinimizeButton);
 			MarkerState state = markerState();
-			if (taskMarkerHit(mouse, state) && mTaskOverviewProvider) {
+			if (gitMarkerHit(mouse, state)) {
+				event.what = evCommand;
+				event.message.command = cmMrOtherGitChanges;
+				event.message.infoPtr = owner;
+				putEvent(event);
+				clearEvent(event);
+			} else if (taskMarkerHit(mouse, state) && mTaskOverviewProvider) {
 				if (mTaskOverviewPopup != nullptr && mTaskOverviewPinned) hideTaskOverview();
 				else {
 					mTaskOverviewPinned = true;
