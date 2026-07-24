@@ -22,6 +22,7 @@ struct MRRouterIntegerInputLayout {
 [[nodiscard]] bool handleSetRightMargin();
 [[nodiscard]] bool handleSetLeftMargin(MREditWindow *window);
 [[nodiscard]] bool handleToggleWordWrap();
+[[nodiscard]] bool handleTogglePersistentBlocks();
 [[nodiscard]] bool handleToggleFormatRuler();
 [[nodiscard]] bool handleReformatParagraph(MREditWindow *window);
 [[nodiscard]] bool handleReformatDocument(MREditWindow *window);

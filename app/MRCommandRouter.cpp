@@ -2816,7 +2816,7 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		}
 
 		case cmMrBlockPersistent:
-			return runDisabledBlockAction();
+			return handleTogglePersistentBlocks();
 
 		case cmMrWindowOpen:
 			static_cast<void>(createEditorWindow("?No-File?"));

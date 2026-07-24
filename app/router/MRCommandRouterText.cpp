@@ -188,6 +188,16 @@ bool handleToggleWordWrap() {
 	return true;
 }
 
+bool handleTogglePersistentBlocks() {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+
+	settings.persistentBlocks = !settings.persistentBlocks;
+	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Persistent blocks update failed: ")) return true;
+	mrLogMessage(settings.persistentBlocks ? "Persistent blocks enabled." : "Persistent blocks disabled.");
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, settings.persistentBlocks ? "Persistent blocks: ON" : "Persistent blocks: OFF", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	return true;
+}
+
 bool handleToggleFormatRuler() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 
