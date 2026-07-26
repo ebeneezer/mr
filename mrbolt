@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mrbolt_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+mrbolt_build_root=build/bolt
+mrbolt_cohort_dir=build/bolt/clang/7a13517f6c92257e3cea426648bc1bcf1d288408
+exec env MR_BOLT_BUILD_DIR="$mrbolt_build_root" MR_BOLT_COHORT_DIR="$mrbolt_cohort_dir" "$mrbolt_root/misc/mr-bolt-workflow.sh" record -- "$@"
