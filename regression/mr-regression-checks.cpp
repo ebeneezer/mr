@@ -6037,10 +6037,10 @@ bool testTextDocumentPieceTableMutationHarness(std::string &failureReason) {
 		}
 		expected = restored.text();
 		mr::editor::ReadSnapshot snapshot = restored.readSnapshot();
-		snapshot.dropExactLineStartIndex();
+		snapshot.compactLineIndexForUndo(13);
 		restored.setText("temporary\n");
 		restored.restoreFromSnapshot(snapshot);
-		if (!pieceTableHarnessCheckDocument(restored, expected, "snapshot restore after dropped exact line index", failureReason)) return false;
+		if (!pieceTableHarnessCheckDocument(restored, expected, "snapshot restore after compacted exact line index", failureReason)) return false;
 		mr::editor::EditTransaction afterUndo("snapshot-restore-type");
 		afterUndo.insert(0, "s");
 		if (!restored.tryApply(afterUndo, restored.version()).applied()) {

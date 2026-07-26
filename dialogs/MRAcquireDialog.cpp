@@ -16,10 +16,14 @@
 #include "MRAcquireDialog.hpp"
 
 #include "../app/MRCommands.hpp"
+#include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../coprocessor/MRCoprocessor.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../ui/widgets/MRDropList.hpp"
+#include "../ui/widgets/MRNumericSlider.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -27,14 +31,11 @@
 
 #include <algorithm>
 #include <array>
-#include <cerrno>
+#include <chrono>
 #include <cstring>
-#include <fcntl.h>
 #include <set>
 #include <string>
 #include <string_view>
-#include <sys/wait.h>
-#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -104,7 +105,10 @@ class AcquireListView final : public TListViewer {
 		if (dest == nullptr || maxLen <= 0) return;
 		dest[0] = '\0';
 		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) return;
-		strnzcpy(dest, items[static_cast<std::size_t>(item)].c_str(), static_cast<std::size_t>(maxLen) + 1);
+		const std::string ordinal = std::to_string(item + 1);
+		const std::size_t ordinalWidth = std::to_string(items.size()).size();
+		const std::string text = std::string(ordinalWidth - ordinal.size(), ' ') + ordinal + "  " + items[static_cast<std::size_t>(item)];
+		strnzcpy(dest, text.c_str(), static_cast<std::size_t>(maxLen) + 1);
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -125,6 +129,33 @@ class AcquireListView final : public TListViewer {
 
   private:
 	std::vector<std::string> &items;
+};
+
+class AcquireCountView final : public TView {
+  public:
+	explicit AcquireCountView(const TRect &bounds) noexcept : TView(bounds) {
+	}
+
+	void setCount(std::size_t value) {
+		const std::string next = std::to_string(value);
+
+		if (next == text) return;
+		text = next;
+		drawView();
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+		const TColorAttr color = getColor(1);
+		const int start = std::max(0, size.x - static_cast<int>(text.size()));
+
+		buffer.moveChar(0, ' ', color, size.x);
+		if (!text.empty()) buffer.moveStr(static_cast<ushort>(start), text.c_str(), color, size.x - start);
+		writeLine(0, 0, size.x, 1, buffer);
+	}
+
+  private:
+	std::string text;
 };
 
 [[nodiscard]] int computeDialogHeight() {
@@ -163,52 +194,110 @@ class AcquireListView final : public TListViewer {
 	return trimmed;
 }
 
-bool captureShellStdout(const std::string &commandLine, std::string &output) {
-	int pipeFds[2] = {-1, -1};
-	pid_t childPid = -1;
-	int waitStatus = 0;
-	std::array<char, 4096> buffer{};
-	std::string shellPath = configuredShellExecutablePath();
-
-	output.clear();
-	if (commandLine.empty()) return true;
-	if (::pipe(pipeFds) != 0) return false;
-	childPid = ::fork();
-	if (childPid < 0) {
-		::close(pipeFds[0]);
-		::close(pipeFds[1]);
-		return false;
-	}
-	if (childPid == 0) {
-		int nullFd = ::open("/dev/null", O_WRONLY);
-
-		::dup2(pipeFds[1], STDOUT_FILENO);
-		if (nullFd >= 0) {
-			::dup2(nullFd, STDERR_FILENO);
-			::close(nullFd);
+class AcquireLoadAllDialog final : public MRDialogFoundation {
+  public:
+	AcquireLoadAllDialog(MRAcquireMode aMode, const std::vector<std::string> &aPaths, MREditWindow *aBackgroundRestoreWindow, MRWindowOpenBatch &aOpenBatch)
+	    : TWindowInit(initMrDialogFrame),
+	      MRDialogFoundation(mr::dialogs::centeredDialogRect(72, 7), "LOAD ALL", 72, 7, initMrDialogFrame),
+	      mode(aMode),
+	      paths(aPaths),
+	      backgroundRestoreWindow(aBackgroundRestoreWindow),
+	      openBatch(aOpenBatch) {
+		eventMask |= evBroadcast;
+		mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
+		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
+		progressView = new MRProgressSlider(TRect(2, 2, 70, 3));
+		insert(progressView);
+		{
+			const std::array buttons{mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfDefault}};
+			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
+			mr::dialogs::insertUniformButtonRow(*this, (72 - metrics.rowWidth) / 2, 4, 0, buttons);
 		}
-		::close(pipeFds[0]);
-		::close(pipeFds[1]);
-		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", commandLine.c_str(), static_cast<char *>(nullptr));
-		::_exit(127);
+		progressView->setProgress(0, paths.size(), "0/" + std::to_string(paths.size()));
 	}
-	::close(pipeFds[1]);
-	for (;;) {
-		const ssize_t count = ::read(pipeFds[0], buffer.data(), buffer.size());
 
-		if (count > 0) {
-			output.append(buffer.data(), static_cast<std::size_t>(count));
-			continue;
+	void endModal(ushort command) override {
+		if (command == cmCancel || command == cmClose) {
+			finishLoad(cmCancel);
+			return;
 		}
-		if (count == 0) break;
-		if (errno == EINTR) continue;
-		break;
+		MRDialogFoundation::endModal(command);
 	}
-	::close(pipeFds[0]);
-	while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
-		;
-	return WIFEXITED(waitStatus) != 0;
-}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evCommand && (event.message.command == cmCancel || event.message.command == cmClose)) {
+			endModal(cmCancel);
+			clearEvent(event);
+			return;
+		}
+		if (workTimer != nullptr && event.what == evBroadcast && event.message.command == cmTimerExpired && event.message.infoPtr == workTimer) {
+			workTimer = nullptr;
+			loadNextPath();
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evNothing) {
+			armWorkTimer();
+			clearEvent(event);
+			return;
+		}
+		MRDialogFoundation::handleEvent(event);
+	}
+
+  private:
+	void armWorkTimer() {
+		if (workTimer == nullptr && owner != nullptr) workTimer = setTimer(1);
+	}
+
+	void stopWorkTimer() {
+		if (workTimer == nullptr) return;
+		killTimer(workTimer);
+		workTimer = nullptr;
+	}
+
+	void loadNextPath() {
+		if (completedCount >= paths.size()) {
+			finishLoad(cmOK);
+			return;
+		}
+
+		const std::vector<std::string> path{paths[completedCount]};
+		const bool loaded = mode == MRAcquireMode::LoadFile
+		                        ? loadResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow, MRFileLoadMessages::Suppressed, openBatch)
+		                        : openResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow, MRFileLoadMessages::Suppressed, openBatch);
+		if (loaded) ++loadedCount;
+		++completedCount;
+		progressView->setProgress(completedCount, paths.size(), std::to_string(completedCount) + "/" + std::to_string(paths.size()));
+
+		if (completedCount >= paths.size()) {
+			finishLoad(cmOK);
+			return;
+		}
+		armWorkTimer();
+	}
+
+	void finishLoad(ushort command) {
+		if (finished) return;
+		finished = true;
+		stopWorkTimer();
+		const long long elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt).count();
+		const std::string message = std::to_string(loadedCount) + " files loaded in " + std::to_string(elapsedMs) + " ms";
+
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, message, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+		MRDialogFoundation::endModal(command);
+	}
+
+	MRAcquireMode mode;
+	const std::vector<std::string> &paths;
+	MREditWindow *backgroundRestoreWindow = nullptr;
+	MRWindowOpenBatch &openBatch;
+	std::size_t completedCount = 0;
+	std::size_t loadedCount = 0;
+	MRProgressSlider *progressView = nullptr;
+	TTimerId workTimer = nullptr;
+	std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::now();
+	bool finished = false;
+};
 
 class TAcquireDialog final : public MRDialogFoundation {
  public:
@@ -234,18 +323,24 @@ class TAcquireDialog final : public MRDialogFoundation {
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 		const MRAcquireSettings settings = configuredAcquireSettings();
 
+		eventMask |= evBroadcast;
 		mCommandField = new TInputLine(TRect(kCommandInputLeft, 2, historyButtonLeft, 3), 255);
 		insert(mCommandField);
 		insert(new TAcquireCommandEnterInterceptor(mCommandField));
-		insert(new TButton(TRect(kExecButtonLeft, 2, kExecButtonRight, 4), "~E~xec:", cmMrAcquireExec, bfNormal));
+		mExecButton = new TButton(TRect(kExecButtonLeft, 2, kExecButtonRight, 4), "~E~xec:", cmMrAcquireExec, bfNormal);
+		insert(mExecButton);
 		commandHistoryAnchor = mCommandField->getBounds();
 		commandHistoryAnchor.move(1, 1);
 		commandHistoryDropList.createButton(*this, TRect(historyButtonLeft, 2, commandButtonRight, 3), mCommandField, this, cmMrAcquireChooseHistory, false);
 
+		mStatusView = new MRProgressSlider(TRect(2, 3, listRight, 4));
+		insert(mStatusView);
 		mScrollBar = new TScrollBar(TRect(scrollBarLeft, kListTop, scrollBarLeft + 1, listBottom));
 		insert(mScrollBar);
 		mListView = new AcquireListView(TRect(2, kListTop, 2 + listWidth, listBottom), mScrollBar, resolvedPaths);
 		insert(mListView);
+		mCountView = new AcquireCountView(TRect(2, listBottom, listRight, listBottom + 1));
+		insert(mCountView);
 
 		mr::dialogs::insertUniformButtonRow(*this, buttonLeft, buttonTop, 1, buttons, 0, &buttonsRow);
 		finalizeLayout();
@@ -253,16 +348,35 @@ class TAcquireDialog final : public MRDialogFoundation {
 		commandHistory = settings.commandHistory;
 		mr::dialogs::writeRecordField(commandBuffer, sizeof(commandBuffer), settings.commandLine);
 		mCommandField->setData(commandBuffer);
+		updateStatus();
 		updateButtons();
 		mCommandField->select();
 	}
 
 	Boolean valid(ushort command) override {
-		if (command == cmCancel || command == cmClose) persistSettings();
+		if (command == cmCancel || command == cmClose) {
+			persistSettings();
+			cancelPendingLoad();
+			if (taskId != 0) {
+				closePending = true;
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(taskId));
+				if (mStatusView != nullptr) mStatusView->setText("Closing: stopping subshell...");
+				updateButtons();
+				return False;
+			}
+		}
 		return TDialog::valid(command);
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evBroadcast && event.message.command == cmMrCoprocessorDialogResult && event.message.infoPtr != nullptr) {
+			const mr::coprocessor::Result &result = *static_cast<const mr::coprocessor::Result *>(event.message.infoPtr);
+			if (result.task.id == taskId && taskId != 0) {
+				handleAcquireResult(result);
+				clearEvent(event);
+				return;
+			}
+		}
 		if (commandHistoryDropList.handleLinkedInputEvent(event, *this, commandHistoryAnchor, commandHistory, mCommandField, this, cmMrAcquireAcceptHistory, commandHistoryVisibleRows())) return;
 		if (event.what == evNothing && loadPending) {
 			performPendingLoad();
@@ -306,12 +420,14 @@ class TAcquireDialog final : public MRDialogFoundation {
 	void updateButtons() {
 		const bool hasSelection = mListView != nullptr && !mListView->selectedValue().empty();
 		const bool hasEntries = !resolvedPaths.empty();
-		const bool enabled = !loadPending;
+		const bool enabled = !loadPending && taskId == 0 && !closePending;
 
 		if (buttonsRow.size() >= 2) {
 			buttonsRow[0]->setState(sfDisabled, !enabled || !hasEntries);
 			buttonsRow[1]->setState(sfDisabled, !enabled || !hasSelection);
 		}
+		if (mExecButton != nullptr) mExecButton->setState(sfDisabled, !enabled);
+		if (mCommandField != nullptr) mCommandField->setState(sfDisabled, !enabled);
 	}
 
 	void persistSettings() {
@@ -333,68 +449,160 @@ class TAcquireDialog final : public MRDialogFoundation {
 		if (commandHistory.size() > 15) commandHistory.resize(15);
 	}
 
-	void refreshResolvedPaths(const std::string &output) {
-		std::set<std::string> seen;
-		std::size_t pos = 0;
+	void addResolvedPath(std::string_view line) {
 		const MRDialogHistoryScope scope = mode == MRAcquireMode::LoadFile ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
+		const std::string candidate = decodeAcquirePathCandidate(line);
+		std::string resolvedPath;
 
-		resolvedPaths.clear();
-		while (pos <= output.size()) {
-			const std::size_t end = output.find('\n', pos);
-			const std::string_view line = end == std::string::npos ? std::string_view(output).substr(pos) : std::string_view(output).substr(pos, end - pos);
-			const std::string candidate = decodeAcquirePathCandidate(line);
-			std::string resolvedPath;
+		if (!candidate.empty() && resolveReadableExistingPath(scope, candidate.c_str(), resolvedPath, false) && seenPaths.insert(resolvedPath).second) resolvedPaths.push_back(std::move(resolvedPath));
+	}
 
-			if (!candidate.empty() && resolveReadableExistingPath(scope, candidate.c_str(), resolvedPath, false) && seen.insert(resolvedPath).second) resolvedPaths.push_back(resolvedPath);
+	void acceptAcquireOutput(std::string_view output, bool flush) {
+		stdoutTail.append(output.data(), output.size());
+		std::size_t consumed = 0;
+		for (;;) {
+			const std::size_t end = stdoutTail.find('\n', consumed);
 			if (end == std::string::npos) break;
-			pos = end + 1;
+			addResolvedPath(std::string_view(stdoutTail).substr(consumed, end - consumed));
+			consumed = end + 1;
 		}
+		if (flush && consumed < stdoutTail.size()) addResolvedPath(std::string_view(stdoutTail).substr(consumed));
+		if (consumed != 0) stdoutTail.erase(0, consumed);
+		if (flush) stdoutTail.clear();
 		if (mListView != nullptr) mListView->updateItems();
+		updateStatus();
 		updateButtons();
 	}
 
 	void executeAcquireCommand() {
 		char buffer[sizeof(commandBuffer)] = {0};
-		std::string output;
+		std::string commandLine;
 
+		if (taskId != 0 || loadPending || closePending) return;
 		if (mCommandField != nullptr) mCommandField->getData(buffer);
-		rememberCommand(buffer);
+		commandLine = trimAscii(buffer);
+		rememberCommand(commandLine);
 		persistSettings();
-		if (!captureShellStdout(trimAscii(buffer), output)) output.clear();
-		refreshResolvedPaths(output);
+		resolvedPaths.clear();
+		seenPaths.clear();
+		stdoutTail.clear();
+		if (mListView != nullptr) mListView->updateItems();
+		if (commandLine.empty()) {
+			updateStatus();
+			updateButtons();
+			return;
+		}
+		const std::size_t ownerId = reinterpret_cast<std::size_t>(this);
+		taskId = mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, 0, 0, mr::coprocessor::ExecutionOwnerKind::Dialog, ownerId, "acquire",
+		    [commandLine, ownerId](const mr::coprocessor::TaskInfo &info) {
+			    return runExternalCommandTask(info, ownerId, commandLine, MRBuildHookContext(), std::string(), std::string(), true, false);
+		    });
+		if (taskId == 0) {
+			if (mStatusView != nullptr) mStatusView->setText("Unable to start subshell.");
+		} else if (mStatusView != nullptr) {
+			mStatusView->setText("Running");
+		}
+		updateButtons();
+	}
+
+	void handleAcquireResult(const mr::coprocessor::Result &result) {
+		const mr::coprocessor::ExternalIoChunkPayload *chunk = dynamic_cast<const mr::coprocessor::ExternalIoChunkPayload *>(result.payload.get());
+		if (chunk != nullptr) {
+			if (!closePending) acceptAcquireOutput(chunk->text, false);
+			return;
+		}
+
+		const mr::coprocessor::ExternalIoFinishedPayload *finished = dynamic_cast<const mr::coprocessor::ExternalIoFinishedPayload *>(result.payload.get());
+		const bool success = result.completed() && finished != nullptr && finished->exitCode == 0;
+		if (!closePending) acceptAcquireOutput(std::string_view(), true);
+		taskId = 0;
+		if (closePending) {
+			closePending = false;
+			endModal(cmCancel);
+			return;
+		}
+		if (success) updateStatus();
+		else if (result.cancelled()) mStatusView->setText("Cancelled");
+		else
+			mStatusView->setText("Command failed");
+		updateButtons();
 	}
 
 	void loadSelectedPaths(bool loadAll) {
 		std::vector<std::string> paths;
 
-		if (loadAll) paths = resolvedPaths;
-		else if (mListView != nullptr) {
+		if (loadAll) {
+			MRWindowOpenBatch openBatch;
+
+			if (resolvedPaths.empty()) return;
+			persistSettings();
+			openBatch.beginInteractive();
+			static_cast<void>(mr::dialogs::execDialog(new AcquireLoadAllDialog(mode, resolvedPaths, backgroundRestoreWindow, openBatch)));
+			openBatch.finish(true, true);
+			reactivateAfterBackgroundLoad();
+			updateStatus();
+			updateButtons();
+			return;
+		}
+		if (mListView != nullptr) {
 			const std::string selected = mListView->selectedValue();
 			if (!selected.empty()) paths.push_back(selected);
 		}
 		if (paths.empty()) return;
 		persistSettings();
 		pendingPaths = std::move(paths);
+		pendingPathIndex = 0;
 		loadPending = true;
+		updateStatus();
 		updateButtons();
 	}
 
 	void performPendingLoad() {
-		std::vector<std::string> paths;
-
-		if (!loadPending || pendingPaths.empty()) {
+		if (!loadPending || pendingPathIndex >= pendingPaths.size()) {
 			loadPending = false;
 			pendingPaths.clear();
+			pendingPathIndex = 0;
+			updateStatus();
 			updateButtons();
 			return;
 		}
-		paths.swap(pendingPaths);
-		loadPending = false;
-		updateButtons();
-		if (mode == MRAcquireMode::LoadFile) static_cast<void>(loadResolvedFilesIntoWindows(paths, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow));
+		const std::vector<std::string> path{pendingPaths[pendingPathIndex]};
+		if (mode == MRAcquireMode::LoadFile) static_cast<void>(loadResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow));
 		else
-			static_cast<void>(openResolvedFilesIntoWindows(paths, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow));
+			static_cast<void>(openResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow));
+		++pendingPathIndex;
+		updateStatus();
+		if (pendingPathIndex >= pendingPaths.size()) {
+			loadPending = false;
+			pendingPaths.clear();
+			pendingPathIndex = 0;
+			updateStatus();
+			updateButtons();
+		}
 		reactivateAfterBackgroundLoad();
+	}
+
+	void cancelPendingLoad() {
+		loadPending = false;
+		pendingPaths.clear();
+		pendingPathIndex = 0;
+		updateStatus();
+		updateButtons();
+	}
+
+	void updateStatus() {
+		if (mCountView != nullptr) mCountView->setCount(resolvedPaths.size());
+		if (mStatusView == nullptr) return;
+		if (loadPending) {
+			mStatusView->setText("Loading " + std::to_string(std::min(pendingPathIndex + 1, pendingPaths.size())) + "/" + std::to_string(pendingPaths.size()));
+			return;
+		}
+		if (taskId != 0) {
+			mStatusView->setText("Running");
+			return;
+		}
+		mStatusView->setText(std::string());
 	}
 
 	void reactivateAfterBackgroundLoad() {
@@ -436,16 +644,24 @@ class TAcquireDialog final : public MRDialogFoundation {
 	MRAcquireMode mode;
 	char commandBuffer[256]{};
 	TInputLine *mCommandField = nullptr;
+	TButton *mExecButton = nullptr;
+	MRProgressSlider *mStatusView = nullptr;
 	TScrollBar *mScrollBar = nullptr;
 	AcquireListView *mListView = nullptr;
+	AcquireCountView *mCountView = nullptr;
 	std::vector<TButton *> buttonsRow;
 	std::vector<std::string> commandHistory;
 	std::vector<std::string> resolvedPaths;
+	std::set<std::string> seenPaths;
+	std::string stdoutTail;
 	std::vector<std::string> pendingPaths;
+	std::size_t pendingPathIndex = 0;
 	TRect commandHistoryAnchor;
 	MRDropList commandHistoryDropList;
 	MREditWindow *backgroundRestoreWindow = nullptr;
+	std::uint64_t taskId = 0;
 	bool loadPending = false;
+	bool closePending = false;
 };
 
 } // namespace

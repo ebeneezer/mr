@@ -382,9 +382,25 @@ bool ReadSnapshot::exactLineCountKnown() const noexcept {
 	return mLazyLineIndexComplete;
 }
 
-void ReadSnapshot::dropExactLineStartIndex() noexcept {
+void ReadSnapshot::compactLineIndexForUndo(Offset focusOffset) noexcept {
+	if (!hasEditedLineStartIndex()) return;
+
+	LineIndexCheckpoint anchor(0, 0);
+
+	focusOffset = clampOffset(focusOffset);
+	const Offset lookupOffset = focusOffset == mLength && mLength > 0 ? mLength - 1 : focusOffset;
+	const std::size_t focusLine = lineIndexFromExactStarts(*mEditedLineStarts, lookupOffset);
+	anchor.lineIndex = focusLine > kLazyLineIndexStride ? focusLine - kLazyLineIndexStride : 0;
+	anchor.offset = lineStartFromExactStarts(*mEditedLineStarts, anchor.lineIndex);
+
 	mEditedLineStarts.reset();
-	resetLazyLineIndex();
+	mLineIndexCheckpoints.clear();
+	mLineIndexCheckpoints.push_back(LineIndexCheckpoint(0, 0));
+	if (anchor.offset != 0 || anchor.lineIndex != 0) mLineIndexCheckpoints.push_back(anchor);
+	mLazyIndexedOffset = anchor.offset;
+	mLazyIndexedLine = anchor.lineIndex;
+	mLazyLineIndexComplete = (mLength == 0);
+	mLazyTotalLineCount = std::max<std::size_t>(1, anchor.lineIndex + 1);
 }
 
 std::size_t ReadSnapshot::column(Offset pos) const noexcept {

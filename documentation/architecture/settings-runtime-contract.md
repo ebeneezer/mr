@@ -4,69 +4,55 @@
 
 Applies to:
 
-- `config/MRDialogPaths.cpp`
-- `config/MRDialogPaths.hpp`
-- `config/MRSettingsLoader.cpp`
-- settings-related paths in `app/MREditorApp.cpp`
-- settings-related VM intrinsics in `mrmac/MRVM.cpp`.
+- `config/settings/MRSettingsRuntime.*`,
+- `config/settings/MRSettingsRuntimeState.*`,
+- `config/settings/MRSettingsAssignments.*`,
+- domain-specific settings accessors under `config/settings/`,
+- settings-related App, dialog and VM call sites.
 
 ## Authority
 
-There is one authoritative runtime settings model: the central in-memory model in the settings configuration layer.
+The settings configuration layer owns one authoritative in-memory runtime
+model. Dialog buffers, parsed source models and `MRSettingsSnapshot` values are
+input or transfer state, not competing runtime authorities.
 
-`settings.mrmac` is serialization and bootstrap input.
-It is not the runtime authority.
-
-The runtime model is the complete current-version settings model.
-
-Older or partial settings inputs must be upgraded by bootstrap normalization
-into that complete current model before final authoritative startup apply.
-
-The current-version model is defined by the running build's `MR_BUILD_EPOCH`,
-not by a long-lived schema constant.
+`settings.mrmac` is bootstrap input and serialization. It is not runtime state.
 
 ## Invariants
 
-- No shadow settings stores.
-- No parallel key/value registries.
-- No save/reload workaround loops.
-- No duplicate ownership for the same setting.
-- Unknown/obsolete keys are not semantically carried forward.
-- Missing current keys are supplied from defaults.
-- Known valid older settings are carried forward into the current model by
-  canonical meaning.
-- Settings keys must have one canonical spelling and one canonical meaning.
-- Persisted versions lower than the running `MR_BUILD_EPOCH` are upgrade input.
-- Persisted versions higher than the running `MR_BUILD_EPOCH` are invalid.
+- Reset establishes the complete current defaults.
+- Applying an accepted assignment changes the central runtime model.
+- One setting has one owner, one canonical spelling and one canonical meaning.
+- Dirty state changes only when the authoritative value changes.
+- Runtime consumers read the central model; they do not reconstruct it from
+  persisted source.
+- Staging and snapshots must not become shadow settings stores.
+- Keymap, theme and workspace state keep the ownership defined by their
+  respective contracts.
 
-## MRSETUP
+Input versioning, normalization and final VM apply belong to the
+[Settings Bootstrap contract](settings-bootstrap-contract.md). Source
+generation and file writes belong to the
+[Settings Persistence contract](settings-persistence-contract.md).
 
-`MRSETUP(...)` is the serialized settings transport and executable startup semantic inside the VM.
+## Boundaries
 
-MRSETUP keys must not be renamed, repurposed or made ambiguous without an explicit migration decision.
+Without explicit maintainer approval:
 
-## Runtime model
+- No second runtime settings model or parallel settings registry.
+- No save/reload loop used to apply runtime state.
+- No dialog-owned or file-merge authority.
+- No persistence from an unapproved call path.
 
-Resetting the settings model establishes defaults.
-Applying settings overwrites defaults.
-Serialization writes the current model.
+## Related contracts
 
-## Forbidden without explicit approval
+- [Settings Bootstrap](settings-bootstrap-contract.md)
+- [Settings Persistence](settings-persistence-contract.md)
+- [Keymap](keymap-contract.md)
 
-- Adding a second runtime model.
-- Treating a dialog buffer as authoritative.
-- Persisting from an unapproved code path.
-- Reconstructing the runtime model by file merging.
-- Reintroducing obsolete semantic keys.
+## Required manual tests
 
-## Required tests
-
-For runtime settings changes, test:
-
-- fresh default startup,
-- partial settings file,
-- obsolete keys,
-- unknown keys,
-- duplicate keys,
-- save and restart,
-- dirty-state behavior.
+- Reset to current defaults.
+- Apply one valid assignment and reject one invalid assignment.
+- Apply the same value twice and verify clean dirty gating.
+- Read the changed value through its normal runtime consumer.

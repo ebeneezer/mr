@@ -26,6 +26,82 @@ std::string escapeRegexLiteral(std::string_view value) {
 	return escaped;
 }
 
+int cancelRegexCallout(pcre2_callout_block *, void *data) {
+	const std::atomic_bool *cancelFlag = static_cast<const std::atomic_bool *>(data);
+	return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire) ? PCRE2_ERROR_CALLOUT : 0;
+}
+
+RegexCollectOutcome collectRegexMatchesWithCancel(const std::string &text, pcre2_code *code, std::vector<SearchMatchEntry> &outMatches, const std::atomic_bool *cancelFlag) {
+	pcre2_match_data *matchData = nullptr;
+	pcre2_match_context *matchContext = nullptr;
+	std::size_t seek = 0;
+	std::size_t lineScan = 0;
+	std::size_t lineStart = 0;
+	std::size_t currentLine = 1;
+
+	outMatches.clear();
+	matchData = pcre2_match_data_create_from_pattern(code, nullptr);
+	if (matchData == nullptr) return RegexCollectOutcome::Error;
+	if (cancelFlag != nullptr) {
+		matchContext = pcre2_match_context_create(nullptr);
+		if (matchContext == nullptr) {
+			pcre2_match_data_free(matchData);
+			return RegexCollectOutcome::Error;
+		}
+		pcre2_set_callout(matchContext, cancelRegexCallout, const_cast<std::atomic_bool *>(cancelFlag));
+	}
+	while (seek <= text.size()) {
+		if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire)) {
+			pcre2_match_context_free(matchContext);
+			pcre2_match_data_free(matchData);
+			return RegexCollectOutcome::Cancelled;
+		}
+		int rc = pcre2_match(code, reinterpret_cast<PCRE2_SPTR>(text.data()), static_cast<PCRE2_SIZE>(text.size()), static_cast<PCRE2_SIZE>(seek), 0, matchData, matchContext);
+		PCRE2_SIZE *ovector = nullptr;
+		std::size_t start = 0;
+		std::size_t end = 0;
+		SearchMatchEntry entry;
+
+		if (rc == PCRE2_ERROR_CALLOUT && cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire)) {
+			pcre2_match_context_free(matchContext);
+			pcre2_match_data_free(matchData);
+			return RegexCollectOutcome::Cancelled;
+		}
+		if (rc < 0) break;
+		ovector = pcre2_get_ovector_pointer(matchData);
+		start = static_cast<std::size_t>(ovector[0]);
+		end = static_cast<std::size_t>(ovector[1]);
+		if (end < start || end > text.size()) break;
+		while (lineScan < start) {
+			const void *nextBreak = std::memchr(text.data() + lineScan, '\n', start - lineScan);
+			if (nextBreak == nullptr) {
+				lineScan = start;
+				break;
+			}
+			lineScan = static_cast<const char *>(nextBreak) - text.data() + 1;
+			lineStart = lineScan;
+			++currentLine;
+		}
+		entry.start = start;
+		entry.end = end;
+		entry.line = currentLine;
+		entry.column = start - lineStart + 1;
+		{
+			SearchPreviewParts preview = previewForMatch(text, start, end);
+			entry.preview = preview.text;
+			entry.previewMatchOffset = preview.matchOffset;
+			entry.previewMatchLength = preview.matchLength;
+		}
+		outMatches.push_back(std::move(entry));
+		if (end > seek) seek = end;
+		else
+			++seek;
+	}
+	pcre2_match_context_free(matchContext);
+	pcre2_match_data_free(matchData);
+	return RegexCollectOutcome::Success;
+}
+
 } // namespace
 
 std::string buildSearchPatternExpression(const std::string &pattern, MRSearchTextType type) {
@@ -122,43 +198,18 @@ void lineColumnForOffset(const std::string &text, std::size_t offset, std::size_
 }
 
 bool collectRegexMatches(const std::string &text, pcre2_code *code, std::vector<SearchMatchEntry> &outMatches) {
-	pcre2_match_data *matchData = nullptr;
-	std::size_t seek = 0;
+	return collectRegexMatchesWithCancel(text, code, outMatches, nullptr) != RegexCollectOutcome::Error;
+}
 
-	outMatches.clear();
-	matchData = pcre2_match_data_create_from_pattern(code, nullptr);
-	if (matchData == nullptr) return false;
-	while (seek <= text.size()) {
-		int rc = pcre2_match(code, reinterpret_cast<PCRE2_SPTR>(text.data()), static_cast<PCRE2_SIZE>(text.size()), static_cast<PCRE2_SIZE>(seek), 0, matchData, nullptr);
-		PCRE2_SIZE *ovector = nullptr;
-		std::size_t start = 0;
-		std::size_t end = 0;
-		SearchMatchEntry entry;
-
-		if (rc < 0) break;
-		ovector = pcre2_get_ovector_pointer(matchData);
-		start = static_cast<std::size_t>(ovector[0]);
-		end = static_cast<std::size_t>(ovector[1]);
-		if (end < start || end > text.size()) break;
-		entry.start = start;
-		entry.end = end;
-		lineColumnForOffset(text, start, entry.line, entry.column);
-		{
-			SearchPreviewParts preview = previewForMatch(text, start, end);
-			entry.preview = preview.text;
-			entry.previewMatchOffset = preview.matchOffset;
-			entry.previewMatchLength = preview.matchLength;
-		}
-		outMatches.push_back(entry);
-		if (end > seek) seek = end;
-		else
-			++seek;
-	}
-	pcre2_match_data_free(matchData);
-	return true;
+RegexCollectOutcome collectRegexMatchesCancellable(const std::string &text, pcre2_code *code, std::vector<SearchMatchEntry> &outMatches, const std::atomic_bool &cancelFlag) {
+	return collectRegexMatchesWithCancel(text, code, outMatches, &cancelFlag);
 }
 
 bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, pcre2_code **outCode, std::string &errorText) {
+	return compileSearchRegex(patternExpression, ignoreCase, outCode, errorText, false);
+}
+
+bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, pcre2_code **outCode, std::string &errorText, bool automaticCallouts) {
 	int errorCode = 0;
 	int jitCode = 0;
 	PCRE2_SIZE errorOffset = 0;
@@ -168,6 +219,7 @@ bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, p
 
 	*outCode = nullptr;
 	if (ignoreCase) options |= PCRE2_CASELESS;
+	if (automaticCallouts) options |= PCRE2_AUTO_CALLOUT;
 	*outCode = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(patternExpression.c_str()), static_cast<PCRE2_SIZE>(patternExpression.size()), options, &errorCode, &errorOffset, nullptr);
 	if (*outCode != nullptr) {
 		jitCode = pcre2_jit_compile(*outCode, PCRE2_JIT_COMPLETE);

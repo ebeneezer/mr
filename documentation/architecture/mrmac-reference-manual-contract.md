@@ -154,7 +154,13 @@ The reference describes only behavior present in the checked source tree.
 Planned UI primitives, debugger capabilities and runtime features belong in
 planning documents, not in the reference manual.
 
-## Required Documentation Checks
+## Related contracts
+
+- [MRMAC Language / Compiler](mrmac-language-contract.md)
+- [MRMac Execution Session](mrmac-exec-session-contract.md)
+- [VM / Intrinsics / Deferred UI](vm-deferred-ui-contract.md)
+
+## Required documentation checks
 
 Before handoff of a manual change, run the LaTeX sequence:
 
@@ -166,5 +172,4 @@ pdflatex -interaction=nonstopmode mr-macro-reference.tex
 ```
 
 Visually inspect the resulting PDF for page format, table of contents, command
-index, change bars, footnotes, code listings and overfull text. Apply the root
-build rule before handoff as well.
+index, change bars, footnotes, code listings and overfull text.

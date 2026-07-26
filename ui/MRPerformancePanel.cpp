@@ -142,6 +142,8 @@ const char *ownerName(mr::coprocessor::ExecutionOwnerKind kind) noexcept {
 			return "MA";
 		case mr::coprocessor::ExecutionOwnerKind::ProcessChannel:
 			return "PC";
+		case mr::coprocessor::ExecutionOwnerKind::Dialog:
+			return "DL";
 		case mr::coprocessor::ExecutionOwnerKind::Worker:
 			return "WK";
 		case mr::coprocessor::ExecutionOwnerKind::Unspecified:
@@ -424,6 +426,7 @@ void MRPerformancePanel::draw() {
 	std::size_t externalOwnerCount = 0;
 	std::size_t macroOwnerCount = 0;
 	std::size_t processOwnerCount = 0;
+	std::size_t dialogOwnerCount = 0;
 	std::vector<std::pair<mr::coprocessor::ExecutionOwnerKind, std::size_t>> distinctOwners;
 	int y = 0;
 
@@ -476,6 +479,9 @@ void MRPerformancePanel::draw() {
 			case mr::coprocessor::ExecutionOwnerKind::ProcessChannel:
 				++processOwnerCount;
 				break;
+			case mr::coprocessor::ExecutionOwnerKind::Dialog:
+				++dialogOwnerCount;
+				break;
 			case mr::coprocessor::ExecutionOwnerKind::Unspecified:
 			case mr::coprocessor::ExecutionOwnerKind::Worker:
 			default:
@@ -506,7 +512,7 @@ void MRPerformancePanel::draw() {
 	line += "  EXT:" + std::to_string(externalWorkerCount);
 	line += "  OWNERS ED:" + std::to_string(editorOwnerCount) + " BE:" + std::to_string(bentoOwnerCount);
 	line += " HX:" + std::to_string(hexOwnerCount) + " EX:" + std::to_string(externalOwnerCount);
-	line += " MA:" + std::to_string(macroOwnerCount) + " PC:" + std::to_string(processOwnerCount);
+	line += " MA:" + std::to_string(macroOwnerCount) + " PC:" + std::to_string(processOwnerCount) + " DL:" + std::to_string(dialogOwnerCount);
 	line += "  IO/min VM-hash:" + std::to_string(hashIoRate.readsPerMinute) + "/" + std::to_string(hashIoRate.writesPerMinute);
 	line += "  settings:" + std::to_string(settingsIoRate.readsPerMinute) + "/" + std::to_string(settingsIoRate.writesPerMinute);
 	writePanelLine(y++, "LANES", line, kPanelColor);

@@ -469,7 +469,7 @@ class ReadSnapshot {
 	bool warmLineIndexChunk(LineIndexWarmupData &warmup, std::size_t maxStrides, const std::atomic_bool *cancelFlag = nullptr) const;
 	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, const std::atomic_bool *cancelFlag = nullptr) const;
 	bool scanLineIndexSpan(LineIndexScanPacket &packet, std::uint64_t reservationId, Offset startOffset, Offset endOffset, const std::atomic_bool *cancelFlag = nullptr) const;
-	void dropExactLineStartIndex() noexcept;
+	void compactLineIndexForUndo(Offset focusOffset) noexcept;
 
  private:
 	friend class TextDocument;
@@ -570,6 +570,7 @@ class TextDocument {
 	void apply(const EditTransaction &transaction);
 	[[nodiscard]] CommitResult tryApply(const EditTransaction &transaction, std::size_t expectedVersion);
 	[[nodiscard]] CommitResult tryApply(const StagedEditTransaction &transaction);
+	[[nodiscard]] CommitResult tryApplyReplacements(const std::vector<Range> &ranges, std::string_view replacement, std::size_t expectedVersion);
 	void insert(Offset offset, std::string_view text);
 	void erase(Range range);
 	void replace(Range range, std::string_view text);

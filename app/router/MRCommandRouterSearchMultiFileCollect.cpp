@@ -1,16 +1,8 @@
-#define Uses_TApplication
-#define Uses_TDeskTop
-#define Uses_TDialog
-#define Uses_TObject
-#define Uses_TEvent
-#define Uses_TRect
-#define Uses_TView
-#include <tvision/tv.h>
-
 #include "MRCommandRouterSearchMultiFileCollect.hpp"
 #include "MRCommandRouterSearchCore.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fnmatch.h>
@@ -22,34 +14,43 @@
 
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRWindowSupport.hpp"
-#include "../commands/MRWindowCommands.hpp"
 #include "../utils/MRFileIOUtils.hpp"
 #include "../utils/MRStringUtils.hpp"
 
 namespace {
 
+constexpr std::size_t kSnapshotCopyChunkSize = 64 * 1024;
+constexpr std::chrono::milliseconds kProgressInterval(50);
+
 struct MultiFileSearchCandidate {
 	std::string normalizedPath;
-	MREditWindow *window = nullptr;
 	bool inMemory = false;
+	std::size_t documentId = 0;
+	std::size_t version = 0;
+	mr::editor::ReadSnapshot snapshot;
 };
 
-bool shouldCancelLongRunningSearch() {
-	auto pollEscFromTarget = [](TView *target) {
-		TEvent event;
-		if (target == nullptr) return false;
-		while (target->eventAvail()) {
-			target->getEvent(event);
-			if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc)) return true;
-			target->putEvent(event);
-			break;
-		}
-		return false;
-	};
+class SearchProgressReporter {
+  public:
+	explicit SearchProgressReporter(const mr::coprocessor::TaskInfo &taskInfo) : taskInfo(taskInfo), lastPostAt(std::chrono::steady_clock::now() - kProgressInterval) {
+	}
 
-	if (pollEscFromTarget(TProgram::application != nullptr ? static_cast<TView *>(TProgram::application) : static_cast<TView *>(TProgram::deskTop))) return true;
-	return pollEscFromTarget(static_cast<TView *>(TProgram::deskTop));
-}
+	void post(std::string phase, std::size_t completed, std::size_t total, std::size_t hits, bool force = false) {
+		const auto now = std::chrono::steady_clock::now();
+		if (!force && now - lastPostAt < kProgressInterval) return;
+
+		mr::coprocessor::Result result;
+		result.task = taskInfo;
+		result.status = mr::coprocessor::TaskStatus::Completed;
+		result.payload = std::make_shared<mr::coprocessor::TaskProgressPayload>(completed, total, hits, std::move(phase));
+		mr::coprocessor::globalCoprocessor().post(std::move(result));
+		lastPostAt = now;
+	}
+
+  private:
+	const mr::coprocessor::TaskInfo &taskInfo;
+	std::chrono::steady_clock::time_point lastPostAt;
+};
 
 std::vector<std::string> splitFilespecTokens(std::string_view literal) {
 	std::vector<std::string> tokens;
@@ -70,10 +71,13 @@ std::vector<std::string> splitFilespecTokens(std::string_view literal) {
 bool filespecMatchesPath(const std::filesystem::path &candidatePath, const std::filesystem::path &startingPath, const std::vector<std::string> &tokens) {
 	std::string baseName = candidatePath.filename().string();
 	std::error_code relEc;
-	std::filesystem::path relativePath = std::filesystem::relative(candidatePath, startingPath, relEc);
-	std::string relativeText = relEc ? std::string() : relativePath.lexically_normal().string();
-	std::string fullText = normalizedSearchPath(candidatePath);
+	std::string relativeText;
+	std::string fullText;
 
+	if (!startingPath.empty()) {
+		const std::filesystem::path relativePath = std::filesystem::relative(candidatePath, startingPath, relEc);
+		if (!relEc) relativeText = relativePath.lexically_normal().string();
+	}
 	for (char &ch : relativeText)
 		if (ch == '\\') ch = '/';
 	for (const std::string &token : tokens) {
@@ -82,8 +86,10 @@ bool filespecMatchesPath(const std::filesystem::path &candidatePath, const std::
 
 		if (hasPathSeparator) {
 			if (!relativeText.empty() && relativeText != "." && relativeText.rfind("../", 0) != 0 && relativeText != "..") subject = relativeText.c_str();
-			else
+			else {
+				if (fullText.empty()) fullText = normalizedSearchPath(candidatePath);
 				subject = fullText.c_str();
+			}
 		} else
 			subject = baseName.c_str();
 		if (subject != nullptr && fnmatch(token.c_str(), subject, 0) == 0) return true;
@@ -91,112 +97,220 @@ bool filespecMatchesPath(const std::filesystem::path &candidatePath, const std::
 	return false;
 }
 
-void appendCandidateUnique(const std::filesystem::path &path, bool inMemory, MREditWindow *window, std::vector<MultiFileSearchCandidate> &outCandidates, std::map<std::string, std::size_t> &seen) {
-	const std::string normalized = normalizedSearchPath(path);
+void appendCandidateUnique(const std::filesystem::path &path, const MultiFileSearchMemorySource *memorySource, std::vector<MultiFileSearchCandidate> &outCandidates, std::map<std::string, std::size_t> &seen) {
+	const std::string normalized = memorySource != nullptr ? memorySource->normalizedPath : normalizedSearchPath(path);
 	auto it = seen.find(normalized);
 
 	if (normalized.empty()) return;
 	if (it != seen.end()) {
-		MultiFileSearchCandidate &entry = outCandidates[it->second];
-		if (inMemory) {
-			entry.inMemory = true;
-			if (entry.window == nullptr) entry.window = window;
+		if (memorySource != nullptr) {
+			MultiFileSearchCandidate &candidate = outCandidates[it->second];
+			candidate.inMemory = true;
+			candidate.documentId = memorySource->documentId;
+			candidate.version = memorySource->version;
+			candidate.snapshot = memorySource->snapshot;
 		}
 		return;
 	}
+
+	MultiFileSearchCandidate candidate;
+	candidate.normalizedPath = normalized;
+	if (memorySource != nullptr) {
+		candidate.inMemory = true;
+		candidate.documentId = memorySource->documentId;
+		candidate.version = memorySource->version;
+		candidate.snapshot = memorySource->snapshot;
+	}
 	seen.emplace(normalized, outCandidates.size());
-	outCandidates.push_back(MultiFileSearchCandidate{normalized, window, inMemory});
+	outCandidates.push_back(std::move(candidate));
 }
 
-std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRMultiSearchDialogOptions &options) {
-	std::vector<MultiFileSearchCandidate> candidates;
+bool collectMultiFileSearchCandidates(const MRMultiSearchDialogOptions &options, const std::vector<MultiFileSearchMemorySource> &memorySources, const mr::coprocessor::TaskInfo &info, SearchProgressReporter &progress, std::vector<MultiFileSearchCandidate> &candidates) {
 	std::map<std::string, std::size_t> seen;
-	std::filesystem::path startingPath = normalizeConfiguredPathInput(options.startingPath);
-	std::vector<std::string> filespecTokens = splitFilespecTokens(options.filespec);
+	const std::vector<std::string> filespecTokens = splitFilespecTokens(options.filespec);
+	std::filesystem::path startingPath;
 	std::error_code ec;
-	const auto startedAt = std::chrono::steady_clock::now();
-	std::size_t workspaceWindowsSeen = 0;
-	std::size_t workspaceWindowsAccepted = 0;
-	std::size_t filesystemEntriesSeen = 0;
 
-	if (startingPath.empty()) {
-		startingPath = std::filesystem::current_path(ec);
-		if (ec) startingPath = ".";
-	}
-	startingPath = startingPath.lexically_normal();
+	candidates.clear();
+	progress.post("Collecting", 0, 0, 0, true);
+
 	if (options.restrictToWorkspace) {
-		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-		const std::string normalizedStart = normalizedSearchPath(startingPath);
-		for (MREditWindow *window : windows) {
-			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-			std::filesystem::path windowPath;
-			std::string normalizedWindowPath;
-
-			++workspaceWindowsSeen;
-			if (editor == nullptr || !editor->hasPersistentFileName()) continue;
-			windowPath = editor->persistentFileName();
-			if (windowPath.empty()) continue;
-			normalizedWindowPath = normalizedSearchPath(windowPath);
-			if (!normalizedStart.empty() && normalizedWindowPath != normalizedStart && (normalizedWindowPath.size() <= normalizedStart.size() || normalizedWindowPath.compare(0, normalizedStart.size(), normalizedStart) != 0 || normalizedWindowPath[normalizedStart.size()] != '/')) continue;
-			if (!filespecMatchesPath(windowPath, startingPath, filespecTokens)) continue;
-			++workspaceWindowsAccepted;
-			appendCandidateUnique(windowPath, true, window, candidates, seen);
+		for (const MultiFileSearchMemorySource &source : memorySources) {
+			if (info.cancelRequested()) return false;
+			if (!filespecMatchesPath(source.normalizedPath, std::filesystem::path(), filespecTokens)) continue;
+			appendCandidateUnique(source.normalizedPath, &source, candidates, seen);
+			progress.post("Collecting", candidates.size(), 0, 0);
 		}
-	} else if (std::filesystem::is_regular_file(startingPath, ec) && !ec) {
-		if (filespecMatchesPath(startingPath, startingPath.parent_path(), filespecTokens)) appendCandidateUnique(startingPath, false, nullptr, candidates, seen);
-	} else if (std::filesystem::is_directory(startingPath, ec) && !ec) {
-		if (options.searchSubdirectories) {
-			std::filesystem::recursive_directory_iterator it(startingPath, std::filesystem::directory_options::skip_permission_denied, ec);
-			const std::filesystem::recursive_directory_iterator end;
-			for (; !ec && it != end; it.increment(ec)) {
-				++filesystemEntriesSeen;
-				if (!it->is_regular_file(ec) || ec) {
-					ec.clear();
-					continue;
-				}
-				if (!filespecMatchesPath(it->path(), startingPath, filespecTokens)) continue;
-				appendCandidateUnique(it->path(), false, nullptr, candidates, seen);
-			}
+	} else {
+		startingPath = normalizeConfiguredPathInput(options.startingPath);
+		if (startingPath.empty()) {
+			startingPath = std::filesystem::current_path(ec);
+			if (ec) startingPath = ".";
+		}
+		startingPath = startingPath.lexically_normal();
+		if (std::filesystem::is_regular_file(startingPath, ec) && !ec) {
+			if (filespecMatchesPath(startingPath, startingPath.parent_path(), filespecTokens)) appendCandidateUnique(startingPath, nullptr, candidates, seen);
 		} else {
-			std::filesystem::directory_iterator it(startingPath, std::filesystem::directory_options::skip_permission_denied, ec);
-			const std::filesystem::directory_iterator end;
-			for (; !ec && it != end; it.increment(ec)) {
-				++filesystemEntriesSeen;
-				if (!it->is_regular_file(ec) || ec) {
-					ec.clear();
-					continue;
+			ec.clear();
+			if (std::filesystem::is_directory(startingPath, ec) && !ec) {
+				if (options.searchSubdirectories) {
+					std::filesystem::recursive_directory_iterator it(startingPath, std::filesystem::directory_options::skip_permission_denied, ec);
+					const std::filesystem::recursive_directory_iterator end;
+					for (; !ec && it != end; it.increment(ec)) {
+						if (info.cancelRequested()) return false;
+						if (!it->is_regular_file(ec) || ec) {
+							ec.clear();
+							continue;
+						}
+						if (filespecMatchesPath(it->path(), startingPath, filespecTokens)) appendCandidateUnique(it->path(), nullptr, candidates, seen);
+						progress.post("Collecting", candidates.size(), 0, 0);
+					}
+				} else {
+					std::filesystem::directory_iterator it(startingPath, std::filesystem::directory_options::skip_permission_denied, ec);
+					const std::filesystem::directory_iterator end;
+					for (; !ec && it != end; it.increment(ec)) {
+						if (info.cancelRequested()) return false;
+						if (!it->is_regular_file(ec) || ec) {
+							ec.clear();
+							continue;
+						}
+						if (filespecMatchesPath(it->path(), startingPath, filespecTokens)) appendCandidateUnique(it->path(), nullptr, candidates, seen);
+						progress.post("Collecting", candidates.size(), 0, 0);
+					}
 				}
-				if (!filespecMatchesPath(it->path(), startingPath, filespecTokens)) continue;
-				appendCandidateUnique(it->path(), false, nullptr, candidates, seen);
+			}
+		}
+
+		if (options.searchFilesInMemory) {
+			for (const MultiFileSearchMemorySource &source : memorySources) {
+				if (info.cancelRequested()) return false;
+				if (!filespecMatchesPath(source.normalizedPath, startingPath, filespecTokens)) continue;
+				appendCandidateUnique(source.normalizedPath, &source, candidates, seen);
 			}
 		}
 	}
+	std::sort(candidates.begin(), candidates.end(), [](const MultiFileSearchCandidate &lhs, const MultiFileSearchCandidate &rhs) { return lhs.normalizedPath < rhs.normalizedPath; });
+	progress.post("Collecting", candidates.size(), candidates.size(), 0, true);
+	return !info.cancelRequested();
+}
 
-	if (!options.restrictToWorkspace && options.searchFilesInMemory) {
-		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-		for (MREditWindow *window : windows) {
-			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-			std::filesystem::path windowPath;
-			if (editor == nullptr || !editor->hasPersistentFileName()) continue;
-			windowPath = editor->persistentFileName();
-			if (windowPath.empty()) continue;
-			if (!filespecMatchesPath(windowPath, startingPath, filespecTokens)) continue;
-			appendCandidateUnique(windowPath, true, window, candidates, seen);
+bool materializeSnapshotCancellable(const mr::editor::ReadSnapshot &snapshot, const std::atomic_bool &cancelFlag, std::string &text) {
+	text.clear();
+	text.reserve(snapshot.length());
+	for (std::size_t pieceIndex = 0; pieceIndex < snapshot.pieceCount(); ++pieceIndex) {
+		const mr::editor::PieceChunkView piece = snapshot.pieceChunk(pieceIndex);
+		std::size_t offset = 0;
+
+		while (offset < piece.length) {
+			if (cancelFlag.load(std::memory_order_acquire)) {
+				text.clear();
+				return false;
+			}
+			const std::size_t length = std::min(kSnapshotCopyChunkSize, piece.length - offset);
+			text.append(piece.data + offset, length);
+			offset += length;
 		}
 	}
+	return !cancelFlag.load(std::memory_order_acquire);
+}
 
-	std::sort(candidates.begin(), candidates.end(), [](const MultiFileSearchCandidate &lhs, const MultiFileSearchCandidate &rhs) { return lhs.normalizedPath < rhs.normalizedPath; });
-	{
-		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
-		std::ostringstream line;
+MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session, const MRMultiSearchDialogOptions &options, const std::vector<MultiFileSearchMemorySource> &memorySources, const std::string &pattern, const std::string &replacement, bool replaceMode, bool keepFilesOpen, const mr::coprocessor::TaskInfo &info, std::string &errorText) {
+	std::atomic_bool fallbackCancel(false);
+	const std::atomic_bool &cancelFlag = info.cancelFlag != nullptr ? *info.cancelFlag : fallbackCancel;
+	SearchProgressReporter progress(info);
+	std::vector<MultiFileSearchCandidate> candidates;
+	pcre2_code *code = nullptr;
+	std::string regexError;
+	const MRSearchTextType textType = options.wholeWords ? MRSearchTextType::Word : (options.regularExpressions ? MRSearchTextType::Pcre : MRSearchTextType::Literal);
+	const std::string patternExpression = buildSearchPatternExpression(pattern, textType);
+	std::size_t filesSearched = 0;
+	std::size_t totalHits = 0;
 
-		line << "MFS candidates took_us=" << tookUs << " count=" << candidates.size() << " restrict_workspace=" << (options.restrictToWorkspace ? 1 : 0) << " filespec=\"" << options.filespec << "\" start=\"" << startingPath.generic_string() << "\"";
-		if (options.restrictToWorkspace) line << " workspace_windows_seen=" << workspaceWindowsSeen << " accepted=" << workspaceWindowsAccepted;
-		else
-			line << " filesystem_entries_seen=" << filesystemEntriesSeen << " recursive=" << (options.searchSubdirectories ? 1 : 0) << " in_memory=" << (options.searchFilesInMemory ? 1 : 0);
-		mrLogMessage(line.str());
+	session = MultiFileSearchSession();
+	session.pattern = pattern;
+	session.replacement = replacement;
+	session.caseSensitive = options.caseSensitive;
+	session.wholeWords = options.wholeWords;
+	session.regularExpressions = options.regularExpressions;
+	session.replaceMode = replaceMode;
+	session.keepFilesOpen = keepFilesOpen;
+
+	if (!compileSearchRegex(patternExpression, !options.caseSensitive, &code, regexError, true)) {
+		errorText = "Invalid search pattern: " + regexError;
+		return MultiFileCollectOutcome::Error;
 	}
-	return candidates;
+	if (code == nullptr) {
+		errorText = "Unable to compile search pattern.";
+		return MultiFileCollectOutcome::Error;
+	}
+	if (!collectMultiFileSearchCandidates(options, memorySources, info, progress, candidates)) {
+		pcre2_code_free(code);
+		errorText.clear();
+		return MultiFileCollectOutcome::Cancelled;
+	}
+
+	progress.post("Searching", 0, candidates.size(), 0, true);
+	for (const MultiFileSearchCandidate &candidate : candidates) {
+		MultiFileSearchFileResult file;
+		std::string text;
+		std::string readError;
+		std::vector<SearchMatchEntry> matches;
+		bool readCancelled = false;
+
+		if (info.cancelRequested()) {
+			pcre2_code_free(code);
+			errorText.clear();
+			return MultiFileCollectOutcome::Cancelled;
+		}
+		if (candidate.inMemory) {
+			if (!materializeSnapshotCancellable(candidate.snapshot, cancelFlag, text)) {
+				pcre2_code_free(code);
+				errorText.clear();
+				return MultiFileCollectOutcome::Cancelled;
+			}
+		} else if (!readTextFileCancellable(candidate.normalizedPath, text, readError, cancelFlag, readCancelled)) {
+			pcre2_code_free(code);
+			if (readCancelled) {
+				errorText.clear();
+				return MultiFileCollectOutcome::Cancelled;
+			}
+			errorText = readError.empty() ? "Unable to read file: " + candidate.normalizedPath : readError;
+			return MultiFileCollectOutcome::Error;
+		}
+		++filesSearched;
+		const RegexCollectOutcome matchOutcome = collectRegexMatchesCancellable(text, code, matches, cancelFlag);
+		if (matchOutcome == RegexCollectOutcome::Cancelled) {
+			pcre2_code_free(code);
+			errorText.clear();
+			return MultiFileCollectOutcome::Cancelled;
+		}
+		if (matchOutcome == RegexCollectOutcome::Error) {
+			pcre2_code_free(code);
+			errorText = "Unable to allocate regex match state.";
+			return MultiFileCollectOutcome::Error;
+		}
+		totalHits += matches.size();
+		if (!matches.empty()) {
+			file.normalizedPath = candidate.normalizedPath;
+			file.fileName = baseNameFromPath(candidate.normalizedPath);
+			file.matches.swap(matches);
+			file.startedInMemory = candidate.inMemory;
+			file.startedDocumentId = candidate.documentId;
+			file.startedDocumentVersion = candidate.version;
+			session.files.push_back(std::move(file));
+		}
+		progress.post("Searching", filesSearched, candidates.size(), totalHits);
+	}
+	pcre2_code_free(code);
+	progress.post("Searching", filesSearched, candidates.size(), totalHits, true);
+	if (session.files.empty()) {
+		errorText.clear();
+		return MultiFileCollectOutcome::NoHits;
+	}
+	session.valid = true;
+	session.selectedFileIndex = 0;
+	errorText.clear();
+	return MultiFileCollectOutcome::Success;
 }
 
 } // namespace
@@ -216,111 +330,41 @@ std::string normalizedSearchPath(const std::filesystem::path &path) {
 	return result;
 }
 
-MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session, const MRMultiSearchDialogOptions &options, const std::string &pattern, const std::string &replacement, bool replaceMode, bool keepFilesOpen, std::string &errorText) {
-	const auto collectStartedAt = std::chrono::steady_clock::now();
-	std::vector<MultiFileSearchCandidate> candidates = collectMultiFileSearchCandidates(options);
-	pcre2_code *code = nullptr;
-	std::string regexError;
-	const MRSearchTextType textType = options.wholeWords ? MRSearchTextType::Word : (options.regularExpressions ? MRSearchTextType::Pcre : MRSearchTextType::Literal);
-	const std::string patternExpression = buildSearchPatternExpression(pattern, textType);
-	std::size_t filesSearched = 0;
-	std::size_t totalHits = 0;
-	std::size_t totalBytes = 0;
-	std::size_t slowFiles = 0;
-	bool cancelled = false;
-	auto lastProgressAt = std::chrono::steady_clock::now();
+void captureMultiFileSearchMemorySources(std::vector<MultiFileSearchMemorySource> &outSources) {
+	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	std::map<std::string, std::size_t> seen;
 
-	session = MultiFileSearchSession();
-	session.pattern = pattern;
-	session.replacement = replacement;
-	session.caseSensitive = options.caseSensitive;
-	session.wholeWords = options.wholeWords;
-	session.regularExpressions = options.regularExpressions;
-	session.replaceMode = replaceMode;
-	session.keepFilesOpen = keepFilesOpen;
+	outSources.clear();
+	outSources.reserve(windows.size());
+	for (MREditWindow *window : windows) {
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		if (editor == nullptr || !editor->hasPersistentFileName()) continue;
+		const std::string normalizedPath = normalizedSearchPath(editor->persistentFileName());
+		if (normalizedPath.empty() || seen.find(normalizedPath) != seen.end()) continue;
 
-	if (!compileSearchRegex(patternExpression, !options.caseSensitive, &code, regexError)) {
-		errorText = "Invalid search pattern: " + regexError;
-		return MultiFileCollectOutcome::Error;
+		MultiFileSearchMemorySource source;
+		source.normalizedPath = normalizedPath;
+		source.documentId = editor->documentId();
+		source.version = editor->documentVersion();
+		source.snapshot = editor->readSnapshot();
+		seen.emplace(normalizedPath, outSources.size());
+		outSources.push_back(std::move(source));
 	}
-	if (code == nullptr) {
-		errorText = "Unable to compile search pattern.";
-		return MultiFileCollectOutcome::Error;
-	}
-	for (const MultiFileSearchCandidate &candidate : candidates) {
-		MultiFileSearchFileResult file;
-		std::string text;
-		std::string readError;
-		std::vector<SearchMatchEntry> matches;
-		const auto fileStartedAt = std::chrono::steady_clock::now();
-		long long loadUs = 0;
-		long long matchUs = 0;
+}
 
-		if (shouldCancelLongRunningSearch()) {
-			cancelled = true;
-			break;
-		}
-		{
-			const auto loadStartedAt = std::chrono::steady_clock::now();
-			if (candidate.window != nullptr && candidate.window->getEditor() != nullptr) text = candidate.window->getEditor()->snapshotText();
-			else if (!readTextFile(candidate.normalizedPath, text, readError)) {
-				if (readError.empty()) readError = "Unable to read file: " + candidate.normalizedPath;
-				errorText = readError;
-				pcre2_code_free(code);
-				return MultiFileCollectOutcome::Error;
-			}
-			loadUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - loadStartedAt).count();
-		}
-		++filesSearched;
-		totalBytes += text.size();
-		{
-			const auto matchStartedAt = std::chrono::steady_clock::now();
-			static_cast<void>(collectRegexMatches(text, code, matches));
-			matchUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - matchStartedAt).count();
-		}
-		totalHits += matches.size();
-		{
-			const long long fileUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - fileStartedAt).count();
-			if (fileUs >= 20000) {
-				++slowFiles;
-				std::ostringstream line;
+mr::coprocessor::Result runMultiFileSearchTask(const mr::coprocessor::TaskInfo &info, const MRMultiSearchDialogOptions &options, const std::vector<MultiFileSearchMemorySource> &memorySources, const std::string &pattern, const std::string &replacement, bool replaceMode, bool keepFilesOpen) {
+	mr::coprocessor::Result result;
+	std::shared_ptr<MultiFileSearchSession> session = std::make_shared<MultiFileSearchSession>();
+	std::string errorText;
+	const MultiFileCollectOutcome outcome = collectMultiFileSession(*session, options, memorySources, pattern, replacement, replaceMode, keepFilesOpen, info, errorText);
 
-				line << "MFS collect file slow took_us=" << fileUs << " load_us=" << loadUs << " match_us=" << matchUs << " bytes=" << text.size() << " hits=" << matches.size() << " in_memory=" << (candidate.inMemory ? 1 : 0) << " path=\"" << candidate.normalizedPath << "\"";
-				mrLogMessage(line.str());
-			}
-		}
-		{
-			const auto now = std::chrono::steady_clock::now();
-			if (now - lastProgressAt >= std::chrono::seconds(5)) {
-				postMultiSearchProgress(filesSearched, totalHits);
-				lastProgressAt = now;
-			}
-		}
-		if (matches.empty()) continue;
-		file.normalizedPath = candidate.normalizedPath;
-		file.fileName = baseNameFromPath(candidate.normalizedPath);
-		file.matches.swap(matches);
-		file.selectedMatchIndex = 0;
-		file.startedInMemory = candidate.inMemory;
-		file.window = candidate.window;
-		session.files.push_back(file);
-	}
-	if (code != nullptr) pcre2_code_free(code);
-	postMultiSearchProgress(filesSearched, totalHits);
-	if (cancelled) postSearchCancelledError();
-	{
-		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - collectStartedAt).count();
-		std::ostringstream line;
-
-		line << "MFS collect summary took_us=" << tookUs << " candidates=" << candidates.size() << " files_searched=" << filesSearched << " result_files=" << session.files.size() << " hits=" << totalHits << " bytes=" << totalBytes << " slow_files=" << slowFiles << " cancelled=" << (cancelled ? 1 : 0) << " replace=" << (replaceMode ? 1 : 0) << " whole_words=" << (options.wholeWords ? 1 : 0) << " regex=" << (options.regularExpressions ? 1 : 0) << " case=" << (options.caseSensitive ? 1 : 0) << " pattern_len=" << pattern.size();
-		mrLogMessage(line.str());
-	}
-	if (session.files.empty()) {
-		errorText.clear();
-		return cancelled ? MultiFileCollectOutcome::Cancelled : MultiFileCollectOutcome::NoHits;
-	}
-	session.valid = true;
-	session.selectedFileIndex = 0;
-	errorText.clear();
-	return cancelled ? MultiFileCollectOutcome::Cancelled : MultiFileCollectOutcome::Success;
+	result.task = info;
+	if (outcome == MultiFileCollectOutcome::Cancelled) result.status = mr::coprocessor::TaskStatus::Cancelled;
+	else if (outcome == MultiFileCollectOutcome::Error) {
+		result.status = mr::coprocessor::TaskStatus::Failed;
+		result.error = errorText;
+	} else
+		result.status = mr::coprocessor::TaskStatus::Completed;
+	result.payload = std::make_shared<MultiFileSearchFinishedPayload>(outcome, std::move(session), std::move(errorText));
+	return result;
 }

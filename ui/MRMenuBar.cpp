@@ -336,6 +336,16 @@ void MRMenuBar::setAutoMarqueeStatusSegments(const std::vector<MarqueeSegment> &
 	}
 }
 
+void MRMenuBar::setAutoMarqueeStatusImmediate(const std::string &status, MarqueeKind kind) {
+	mAutoMarqueeStatus = status;
+	mAutoMarqueeKind = kind;
+	mAutoMarqueeSegments.clear();
+	resetMarqueeState();
+	mMarqueeActiveText = status;
+	mMarqueeActiveKind = kind;
+	drawView();
+}
+
 void MRMenuBar::handleEvent(TEvent &event) {
 	if (mrHandleRuntimeKeymapEvent(event, MRKeymapContext::Menu, nullptr)) return;
 	if (event.what == evKeyDown && currentEditWindow() != nullptr && runtimeKeymapResolver().hasPending(MRKeymapContext::Edit)) return;

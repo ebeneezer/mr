@@ -4,9 +4,9 @@
 
 Applies to:
 
-- `app/utils/MRStringUtils.cpp`
-- `app/utils/MRFileIOUtils.cpp`
-- `config/MRDialogPaths.cpp`
+- `app/utils/MRStringUtils.*`
+- `app/utils/MRFileIOUtils.*`
+- path operations under `config/settings/`
 - `ui/MRWindowSupport.cpp`
 - `app/commands/MRExternalCommand.cpp`
 - local path helpers in dialogs and commands.
@@ -32,13 +32,9 @@ However, some setters using them may update history, dirty state or settings.
 - Do not introduce new local duplicates for path expansion, trimming or file checks.
 - Do not centralize a helper unless semantics are proven identical or deliberately changed.
 
-## Allowed
+## Boundaries
 
-- Reuse existing utilities when semantics are proven identical.
-- Remove dead helpers.
-- Replace duplicate file-existence checks with standard library calls where behavior matches.
-
-## Forbidden without explicit approval
+Without explicit maintainer approval:
 
 - Changing path history semantics.
 - Changing `~` expansion behavior.
@@ -46,7 +42,12 @@ However, some setters using them may update history, dirty state or settings.
 - Creating a new universal path helper from non-identical local helpers.
 - Treating string trim and path normalization as the same operation.
 
-## Required tests
+## Related contracts
+
+- [App / UI / Dialogs](app-ui-dialogs-contract.md)
+- [Settings Runtime](settings-runtime-contract.md)
+
+## Required manual tests
 
 For path utility changes, test:
 

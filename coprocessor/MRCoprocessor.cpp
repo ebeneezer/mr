@@ -48,15 +48,16 @@ std::uint64_t Coprocessor::submitWorker(std::uint64_t workerOrdinal, TaskKind ki
 std::uint64_t Coprocessor::submitOneShot(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, ExecutionOwnerKind ownerKind, std::size_t ownerLocalId, std::uint64_t generation, WorkDirection direction, bool hasPacketSpan, std::uint64_t packetStart, std::uint64_t packetEnd, std::string_view label, TaskFn fn) {
 	std::uint64_t workerOrdinal = kInvalidWorkerOrdinal;
 	std::uint64_t taskId = 0;
+	reapRetiredWorkers();
 	{
 		std::lock_guard<std::mutex> lock(workerMutex);
 		if (shuttingDown.load(std::memory_order_acquire)) return 0;
 		std::unique_ptr<LaneState> worker = std::make_unique<LaneState>(lane, true, ownerKind, ownerLocalId);
 		startLane(*worker);
 		workerOrdinal = worker->workerOrdinal;
+		LaneState *registeredWorker = worker.get();
 		workers.push_back(std::move(worker));
 		recordOneShotWorkerCreated(kind, ownerKind);
-		LaneState *registeredWorker = findWorkerLocked(workerOrdinal);
 		if (registeredWorker != nullptr)
 			taskId = submitToLaneState(*registeredWorker, lane, kind, documentId, baseVersion, generation, direction, hasPacketSpan, packetStart, packetEnd, label, std::move(fn));
 	}
@@ -318,7 +319,7 @@ void Coprocessor::enqueueResult(Result result) {
 	LifecycleReason reason = LifecycleReason::TaskCompleted;
 
 	result.resultReadyMicros = nowMicros();
-	if (dynamic_cast<const ExternalIoChunkPayload *>(result.payload.get()) != nullptr) {
+	if (dynamic_cast<const ExternalIoChunkPayload *>(result.payload.get()) != nullptr || dynamic_cast<const TaskProgressPayload *>(result.payload.get()) != nullptr) {
 		reason = LifecycleReason::StreamChunk;
 	} else {
 		switch (result.status) {

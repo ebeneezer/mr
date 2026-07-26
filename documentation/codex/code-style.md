@@ -22,7 +22,8 @@ A shorter expression is a regression if it makes local behavior harder to unders
 C++20 syntax is not a style target by itself. Prefer C++18-era code when the result
 is equally clear and efficient.
 
-Allowed C++20 exceptions:
+The following C++20 exceptions are technically admissible when the
+root-required maintainer approval has been given:
 
 - `std::jthread` and `std::stop_token` for existing cooperative cancellation and background work,
 - `std::span` where it avoids copying and represents a bounded view explicitly,

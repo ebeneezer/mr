@@ -20,9 +20,12 @@
 #include "MRCommandRouterSearchMultiFileCollect.hpp"
 #include "MRCommandRouterSearchMultiFileSession.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
@@ -30,6 +33,7 @@
 #include "../../dialogs/setup/MRSetup.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
 #include "../../ui/MRFrame.hpp"
+#include "../../ui/widgets/MRNumericSlider.hpp"
 #include "../MRCommands.hpp"
 
 namespace {
@@ -53,28 +57,229 @@ enum : ushort {
 
 constexpr const char *kSearchTextRequiredMessage = "Search text must not be empty.";
 
+TAttrPair inactiveDialogColor(TView *view) {
+	unsigned char biosAttr = 0;
+
+	if (configuredColorSlotOverride(kMrPaletteDialogInactiveElements, biosAttr)) return TAttrPair(biosAttr);
+	return view != nullptr ? view->getColor(1) : TAttrPair(0x70);
+}
+
+class GhostedInputLine final : public TInputLine {
+  public:
+	GhostedInputLine(const TRect &bounds, int maxLen) noexcept : TInputLine(bounds, maxLen) {
+	}
+
+	void draw() override {
+		if ((state & sfDisabled) == 0) {
+			TInputLine::draw();
+			return;
+		}
+
+		TDrawBuffer buffer;
+		const TAttrPair color = inactiveDialogColor(this);
+
+		buffer.moveChar(0, ' ', color, size.x);
+		if (size.x > 1) buffer.moveStr(1, data, color, size.x - 1, firstPos);
+		writeLine(0, 0, size.x, size.y, buffer);
+		setCursor(0, 0);
+	}
+
+	void setState(ushort aState, Boolean enable) override {
+		const ushort oldState = state;
+
+		TInputLine::setState(aState, enable);
+		if (oldState != state && (aState & (sfFocused | sfDisabled | sfSelected | sfActive))) drawView();
+	}
+};
+
+class GhostedLabel final : public TLabel {
+  public:
+	GhostedLabel(const TRect &bounds, const char *text, TView *link) noexcept : TLabel(bounds, text, link) {
+	}
+
+	void draw() override {
+		if ((state & sfDisabled) == 0) {
+			TLabel::draw();
+			return;
+		}
+
+		TDrawBuffer buffer;
+		const TAttrPair inactive = inactiveDialogColor(this);
+		const TAttrPair color(inactive[0], inactive[0]);
+
+		buffer.moveChar(0, ' ', inactive, size.x);
+		if (text != nullptr) buffer.moveCStr(1, text, color, size.x > 1 ? size.x - 1 : 0);
+		if (showMarkers) buffer.putChar(0, specialChars[4]);
+		writeLine(0, 0, size.x, 1, buffer);
+	}
+
+	void setState(ushort aState, Boolean enable) override {
+		const ushort oldState = state;
+
+		TLabel::setState(aState, enable);
+		if (oldState != state && (aState & (sfFocused | sfDisabled | sfSelected | sfActive))) drawView();
+	}
+};
+
+class WorkspaceOptionsCheckBoxes final : public TCheckBoxes {
+  public:
+	WorkspaceOptionsCheckBoxes(const TRect &bounds, TSItem *items, ushort restrictMask) noexcept : TCheckBoxes(bounds, items), restrictMask(restrictMask) {
+	}
+
+	void setStartPathViews(TLabel *label, TInputLine *field) noexcept {
+		startPathLabel = label;
+		startPathField = field;
+		updateStartPathState();
+	}
+
+	void press(int item) override {
+		TCheckBoxes::press(item);
+		updateStartPathState();
+	}
+
+	void setData(void *record) override {
+		TCheckBoxes::setData(record);
+		updateStartPathState();
+	}
+
+	void updateStartPathState() {
+		const Boolean disabled = (value & restrictMask) != 0 ? True : False;
+
+		if (startPathLabel != nullptr) startPathLabel->setState(sfDisabled, disabled);
+		if (startPathField != nullptr) startPathField->setState(sfDisabled, disabled);
+	}
+
+  private:
+	const ushort restrictMask;
+	TLabel *startPathLabel = nullptr;
+	TInputLine *startPathField = nullptr;
+};
+
 class SubmitInterceptDialog : public MRDialogFoundation {
   public:
 	using SubmitHook = std::function<void()>;
+	using ResultHook = std::function<void(const mr::coprocessor::Result &)>;
 
 	SubmitInterceptDialog(const char *title, int virtualWidth, int virtualHeight) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(virtualWidth, virtualHeight), title, virtualWidth, virtualHeight, initMrDialogFrame) {
+		eventMask |= evBroadcast;
 	}
 
 	void setSubmitHook(SubmitHook hook) {
 		submitHook = std::move(hook);
 	}
 
+	void setResultHook(ResultHook hook) {
+		resultHook = std::move(hook);
+	}
+
+	void setSubmitButton(TButton *button) noexcept {
+		submitButton = button;
+	}
+
+	void setProgressView(MRProgressSlider *view) noexcept {
+		progressView = view;
+	}
+
+	void addTaskBlockedView(TView *view) {
+		if (view != nullptr) taskBlockedViews.push_back(view);
+	}
+
+	void beginTask(std::uint64_t id) {
+		taskId = id;
+		cancelRequested = false;
+		if (taskId == 0) {
+			clearProgress();
+			postSearchError("Unable to start search.");
+			return;
+		}
+		if (progressView != nullptr) progressView->setProgress(0, 0, "0/?");
+		setSubmitTitle("~C~ancel");
+		for (TView *view : taskBlockedViews)
+			view->setState(sfDisabled, True);
+	}
+
+	void finishTask() {
+		taskId = 0;
+		cancelRequested = false;
+		setSubmitTitle("~S~earch");
+		if (submitButton != nullptr) submitButton->setState(sfDisabled, False);
+		for (TView *view : taskBlockedViews)
+			view->setState(sfDisabled, False);
+		if (closeAfterTask) endModal(cmCancel);
+	}
+
+	void clearProgress() {
+		if (progressView != nullptr) progressView->setText(std::string());
+	}
+
+	[[nodiscard]] bool closeRequested() const noexcept {
+		return closeAfterTask;
+	}
+
+	Boolean valid(ushort command) override {
+		if ((command == cmCancel || command == cmClose) && taskId != 0) {
+			closeAfterTask = true;
+			cancelTask();
+			return False;
+		}
+		return MRDialogFoundation::valid(command);
+	}
+
 	void handleEvent(TEvent &event) override {
+		if (event.what == evBroadcast && event.message.command == cmMrCoprocessorDialogResult && event.message.infoPtr != nullptr) {
+			const mr::coprocessor::Result &result = *static_cast<const mr::coprocessor::Result *>(event.message.infoPtr);
+			if (taskId != 0 && result.task.id == taskId) {
+				const mr::coprocessor::TaskProgressPayload *progress = dynamic_cast<const mr::coprocessor::TaskProgressPayload *>(result.payload.get());
+				if (progress != nullptr) {
+					updateProgress(*progress);
+				} else if (resultHook)
+					resultHook(result);
+				clearEvent(event);
+				return;
+			}
+		}
 		if (event.what == evCommand && event.message.command == cmOK) {
 			clearEvent(event);
-			if (submitHook) submitHook();
+			if (taskId != 0) cancelTask();
+			else if (submitHook)
+				submitHook();
 			return;
 		}
 		MRDialogFoundation::handleEvent(event);
 	}
 
   private:
+	void setSubmitTitle(const char *title) {
+		if (submitButton == nullptr || title == nullptr) return;
+		delete[] const_cast<char *>(submitButton->title);
+		submitButton->title = newStr(title);
+		submitButton->drawView();
+	}
+
+	void cancelTask() {
+		if (taskId == 0 || cancelRequested) return;
+		if (!mr::coprocessor::globalCoprocessor().cancelTask(taskId)) return;
+		cancelRequested = true;
+		if (submitButton != nullptr) submitButton->setState(sfDisabled, True);
+	}
+
+	void updateProgress(const mr::coprocessor::TaskProgressPayload &progress) {
+		if (progress.phase == "Collecting") {
+			if (progressView != nullptr) progressView->setProgress(progress.completedUnits, 0, std::to_string(progress.completedUnits) + "/?");
+			return;
+		}
+		if (progressView != nullptr)
+			progressView->setProgress(progress.completedUnits, progress.totalUnits, std::to_string(progress.completedUnits) + "/" + std::to_string(progress.totalUnits));
+	}
+
 	SubmitHook submitHook;
+	ResultHook resultHook;
+	std::vector<TView *> taskBlockedViews;
+	TButton *submitButton = nullptr;
+	MRProgressSlider *progressView = nullptr;
+	std::uint64_t taskId = 0;
+	bool cancelRequested = false;
+	bool closeAfterTask = false;
 };
 
 struct MultiPreviewLine {
@@ -353,7 +558,11 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	TInputLine *filespecField = nullptr;
 	TInputLine *searchField = nullptr;
 	TInputLine *pathField = nullptr;
-	TCheckBoxes *optionsField = nullptr;
+	WorkspaceOptionsCheckBoxes *optionsField = nullptr;
+	TLabel *pathLabel = nullptr;
+	TButton *searchButton = nullptr;
+	MRProgressSlider *progressView = nullptr;
+	MRMultiSearchDialogOptions pendingOptions = options;
 	std::vector<std::string> filespecHistory;
 	std::vector<std::string> pathHistory;
 
@@ -392,16 +601,28 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Se~a~rch:", searchField));
 	dialog->insert(searchField);
 	dialog->insert(new TStaticText(TRect(3, 6, 13, 7), "Options:"));
-	optionsField = new TCheckBoxes(TRect(3, 7, 34, 13), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("whole wor~d~s", new TSItem("search editor ~w~indows", new TSItem("restrict to wor~k~space", nullptr)))))));
+	optionsField = new WorkspaceOptionsCheckBoxes(TRect(3, 7, 34, 13), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("whole wor~d~s", new TSItem("include loaded ~w~indows", new TSItem("restrict to wor~k~space", nullptr)))))), 0x0020);
 	dialog->insert(optionsField);
-	pathField = new TInputLine(TRect(14, 14, 96, 15), kPathBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 14, 14, 15), "Start a~t~:", pathField));
+	pathField = new GhostedInputLine(TRect(14, 14, 96, 15), kPathBufferSize - 1);
+	pathLabel = new GhostedLabel(TRect(2, 14, 14, 15), "Start a~t~:", pathField);
+	dialog->insert(pathLabel);
 	dialog->insert(pathField);
+	optionsField->setStartPathViews(pathLabel, pathField);
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~S~earch", cmOK, bfDefault}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 16, 0, buttons);
+		std::vector<TButton *> insertedButtons;
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 16, 0, buttons, 0, &insertedButtons);
+		if (!insertedButtons.empty()) searchButton = insertedButtons.front();
 	}
+	progressView = new MRProgressSlider(TRect(2, 15, 100, 16));
+	dialog->insert(progressView);
+	dialog->setSubmitButton(searchButton);
+	dialog->setProgressView(progressView);
+	dialog->addTaskBlockedView(filespecField);
+	dialog->addTaskBlockedView(searchField);
+	dialog->addTaskBlockedView(pathField);
+	dialog->addTaskBlockedView(optionsField);
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
 	pathField->setData(pathInput);
@@ -421,8 +642,7 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 		char currentPath[kPathBufferSize] = {0};
 		ushort currentMask = 0;
 		MRMultiSearchDialogOptions currentOptions = options;
-		MultiFileSearchSession session;
-		std::string errorText;
+		std::vector<MultiFileSearchMemorySource> memorySources;
 
 		if (filespecField == nullptr || searchField == nullptr || pathField == nullptr || optionsField == nullptr) return;
 
@@ -450,24 +670,51 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
 		persistSearchDialogSettingsSnapshot();
 
+		pendingOptions = currentOptions;
+		captureMultiFileSearchMemorySources(memorySources);
 		postMultiSearchStartedWarning();
-		switch (collectMultiFileSession(session, currentOptions, currentOptions.searchText, "", false, false, errorText)) {
-			case MultiFileCollectOutcome::Error:
-				static_cast<void>(showMultiFileSessionCollectionError(errorText));
-				return;
-			case MultiFileCollectOutcome::NoHits:
-				postNoHitsWarning();
-				return;
-			case MultiFileCollectOutcome::Cancelled:
-				if (session.files.empty()) return;
-				break;
-			case MultiFileCollectOutcome::Success:
-				break;
+		const std::size_t ownerId = reinterpret_cast<std::size_t>(dialog);
+		const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::Custom, 0, 0, mr::coprocessor::ExecutionOwnerKind::Dialog, ownerId, "multi-file-search",
+		    [currentOptions, memorySources = std::move(memorySources)](const mr::coprocessor::TaskInfo &info) {
+			    return runMultiFileSearchTask(info, currentOptions, memorySources, currentOptions.searchText, std::string(), false, false);
+		    });
+		dialog->beginTask(taskId);
+	});
+	dialog->setResultHook([&](const mr::coprocessor::Result &result) {
+		const MultiFileSearchFinishedPayload *finished = dynamic_cast<const MultiFileSearchFinishedPayload *>(result.payload.get());
+		const bool closeRequested = dialog->closeRequested();
+
+		dialog->finishTask();
+		dialog->clearProgress();
+		optionsField->updateStartPathState();
+		if (closeRequested) return;
+		if (finished == nullptr || finished->session == nullptr) {
+			postSearchError(result.error.empty() ? "Multi-file search failed." : result.error);
+			return;
+		}
+		if (finished->outcome == MultiFileCollectOutcome::Cancelled) {
+			postSearchCancelledError();
+			return;
+		}
+		if (finished->outcome == MultiFileCollectOutcome::Error) {
+			static_cast<void>(showMultiFileSessionCollectionError(finished->errorText));
+			return;
+		}
+		if (finished->outcome == MultiFileCollectOutcome::NoHits) {
+			postNoHitsWarning();
+			return;
 		}
 
-		options = currentOptions;
-		pattern = currentOptions.searchText;
-		outSession = session;
+		MultiFileSearchSession session = std::move(*finished->session);
+		std::string errorText;
+		if (!validateMultiFileSessionSources(session, errorText)) {
+			postSearchError(errorText);
+			return;
+		}
+		options = pendingOptions;
+		pattern = pendingOptions.searchText;
+		outSession = std::move(session);
 		dialog->endModal(cmOK);
 	});
 	dialog->finalizeLayout();
@@ -495,7 +742,11 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	TInputLine *searchField = nullptr;
 	TInputLine *replacementField = nullptr;
 	TInputLine *pathField = nullptr;
-	TCheckBoxes *optionsField = nullptr;
+	WorkspaceOptionsCheckBoxes *optionsField = nullptr;
+	TLabel *pathLabel = nullptr;
+	TButton *searchButton = nullptr;
+	MRProgressSlider *progressView = nullptr;
+	MRMultiSarDialogOptions pendingOptions = options;
 	std::vector<std::string> filespecHistory;
 	std::vector<std::string> pathHistory;
 
@@ -542,16 +793,29 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	dialog->insert(new TLabel(TRect(2, 6, 14, 7), "Replac~e~:", replacementField));
 	dialog->insert(replacementField);
 	dialog->insert(new TStaticText(TRect(3, 8, 13, 9), "Options:"));
-	optionsField = new TCheckBoxes(TRect(3, 9, 34, 16), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("whole wor~d~s", new TSItem("search files in ~m~emory", new TSItem("~K~eep all files open", new TSItem("restrict to wor~k~space", nullptr))))))));
+	optionsField = new WorkspaceOptionsCheckBoxes(TRect(3, 9, 34, 16), new TSItem("recursive ~S~earch", new TSItem("~C~ase sensitive", new TSItem("~R~egular expressions", new TSItem("whole wor~d~s", new TSItem("include loaded ~w~indows", new TSItem("~K~eep all files open", new TSItem("restrict to wor~k~space", nullptr))))))), 0x0040);
 	dialog->insert(optionsField);
-	pathField = new TInputLine(TRect(14, 18, 96, 19), kPathBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 18, 16, 19), "Start ~a~t:", pathField));
+	pathField = new GhostedInputLine(TRect(14, 18, 96, 19), kPathBufferSize - 1);
+	pathLabel = new GhostedLabel(TRect(2, 18, 16, 19), "Start ~a~t:", pathField);
+	dialog->insert(pathLabel);
 	dialog->insert(pathField);
+	optionsField->setStartPathViews(pathLabel, pathField);
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~S~earch", cmOK, bfDefault}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 20, 0, buttons);
+		std::vector<TButton *> insertedButtons;
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 20, 0, buttons, 0, &insertedButtons);
+		if (!insertedButtons.empty()) searchButton = insertedButtons.front();
 	}
+	progressView = new MRProgressSlider(TRect(2, 19, 100, 20));
+	dialog->insert(progressView);
+	dialog->setSubmitButton(searchButton);
+	dialog->setProgressView(progressView);
+	dialog->addTaskBlockedView(filespecField);
+	dialog->addTaskBlockedView(searchField);
+	dialog->addTaskBlockedView(replacementField);
+	dialog->addTaskBlockedView(pathField);
+	dialog->addTaskBlockedView(optionsField);
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
 	replacementField->setData(replacementInput);
@@ -574,8 +838,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 		ushort currentMask = 0;
 		MRMultiSarDialogOptions currentOptions = options;
 		MRMultiSearchDialogOptions searchOptions;
-		MultiFileSearchSession session;
-		std::string errorText;
+		std::vector<MultiFileSearchMemorySource> memorySources;
 
 		if (filespecField == nullptr || searchField == nullptr || replacementField == nullptr || pathField == nullptr || optionsField == nullptr) return;
 
@@ -615,25 +878,52 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 		searchOptions.filespec = currentOptions.filespec;
 		searchOptions.startingPath = currentOptions.startingPath;
 
+		pendingOptions = currentOptions;
+		captureMultiFileSearchMemorySources(memorySources);
 		postMultiSearchStartedWarning();
-		switch (collectMultiFileSession(session, searchOptions, currentOptions.searchText, currentOptions.replacementText, true, currentOptions.keepFilesOpen, errorText)) {
-			case MultiFileCollectOutcome::Error:
-				static_cast<void>(showMultiFileSessionCollectionError(errorText));
-				return;
-			case MultiFileCollectOutcome::NoHits:
-				postNoHitsWarning();
-				return;
-			case MultiFileCollectOutcome::Cancelled:
-				if (session.files.empty()) return;
-				break;
-			case MultiFileCollectOutcome::Success:
-				break;
+		const std::size_t ownerId = reinterpret_cast<std::size_t>(dialog);
+		const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::Custom, 0, 0, mr::coprocessor::ExecutionOwnerKind::Dialog, ownerId, "multi-file-search-replace",
+		    [searchOptions, currentOptions, memorySources = std::move(memorySources)](const mr::coprocessor::TaskInfo &info) {
+			    return runMultiFileSearchTask(info, searchOptions, memorySources, currentOptions.searchText, currentOptions.replacementText, true, currentOptions.keepFilesOpen);
+		    });
+		dialog->beginTask(taskId);
+	});
+	dialog->setResultHook([&](const mr::coprocessor::Result &result) {
+		const MultiFileSearchFinishedPayload *finished = dynamic_cast<const MultiFileSearchFinishedPayload *>(result.payload.get());
+		const bool closeRequested = dialog->closeRequested();
+
+		dialog->finishTask();
+		dialog->clearProgress();
+		optionsField->updateStartPathState();
+		if (closeRequested) return;
+		if (finished == nullptr || finished->session == nullptr) {
+			postSearchError(result.error.empty() ? "Multi-file search and replace failed." : result.error);
+			return;
+		}
+		if (finished->outcome == MultiFileCollectOutcome::Cancelled) {
+			postSearchCancelledError();
+			return;
+		}
+		if (finished->outcome == MultiFileCollectOutcome::Error) {
+			static_cast<void>(showMultiFileSessionCollectionError(finished->errorText));
+			return;
+		}
+		if (finished->outcome == MultiFileCollectOutcome::NoHits) {
+			postNoHitsWarning();
+			return;
 		}
 
-		options = currentOptions;
-		pattern = currentOptions.searchText;
-		replacement = currentOptions.replacementText;
-		outSession = session;
+		MultiFileSearchSession session = std::move(*finished->session);
+		std::string errorText;
+		if (!validateMultiFileSessionSources(session, errorText)) {
+			postSearchError(errorText);
+			return;
+		}
+		options = pendingOptions;
+		pattern = pendingOptions.searchText;
+		replacement = pendingOptions.replacementText;
+		outSession = std::move(session);
 		dialog->endModal(cmOK);
 	});
 	dialog->finalizeLayout();

@@ -17,7 +17,6 @@
 #include <tvision/tv.h>
 
 #include "MRCommandRouterSearchMultiFile.hpp"
-#include "MRCommandRouterSearchMultiFileCollect.hpp"
 #include "MRCommandRouterSearchMultiFileSession.hpp"
 
 #include <chrono>
@@ -62,12 +61,6 @@ void postMultiSearchStartedWarning() {
 
 void postSearchCancelledError() {
 	mr::messageline::postTimed(mr::messageline::Owner::HeroEventFollowup, "search cancelled", mr::messageline::Kind::Error, std::chrono::seconds(5), mr::messageline::kPriorityHigh);
-}
-
-void postMultiSearchProgress(std::size_t filesSearched, std::size_t totalHits) {
-	if (filesSearched == 0 && totalHits == 0) return;
-	const std::string message = "files searched: " + std::to_string(filesSearched) + ", " + std::to_string(totalHits) + " hits";
-	mr::messageline::postTimed(mr::messageline::Owner::HeroEventFollowup, message, mr::messageline::Kind::Info, std::chrono::seconds(5), mr::messageline::kPriorityMedium);
 }
 
 bool hasPreviousMultiFileSearchResults() {
@@ -146,42 +139,7 @@ bool handleMultiFileSearchDialog(const std::string &patternSeed) {
 
 bool handleWorkspaceMultiFileSearchDialog(const std::string &patternSeed, const std::string &startingPath) {
 	MRMultiSearchDialogOptions options = workspaceMultiSearchOptions(patternSeed, startingPath);
-	MultiFileSearchSession session;
-	std::string errorText;
-	MREditWindow *previousWindow = currentEditWindow();
-
-	postMultiSearchStartedWarning();
-	switch (collectMultiFileSession(session, options, options.searchText, "", false, false, errorText)) {
-		case MultiFileCollectOutcome::Error:
-			static_cast<void>(showMultiFileSessionCollectionError(errorText));
-			return true;
-		case MultiFileCollectOutcome::NoHits:
-			postNoHitsWarning();
-			return true;
-		case MultiFileCollectOutcome::Cancelled:
-			if (session.files.empty()) return true;
-			break;
-		case MultiFileCollectOutcome::Success:
-			break;
-	}
-	g_lastMultiFileSearchSession = session;
-	switch (runMultiFileResultsDialog(g_lastMultiFileSearchSession)) {
-		case MultiDialogAction::Load:
-			static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
-			return true;
-		case MultiDialogAction::LoadAll:
-			if (!loadAllSessionFiles(g_lastMultiFileSearchSession, errorText)) {
-				if (!errorText.empty()) postSearchError(errorText);
-				closeTemporaryWindowsForSession(g_lastMultiFileSearchSession);
-				return true;
-			}
-			static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
-			return true;
-		default:
-			break;
-	}
-	if (previousWindow != nullptr) static_cast<void>(mrActivateEditWindow(previousWindow));
-	return true;
+	return handleMultiFileSearchDialogWithOptions(patternSeed, options);
 }
 
 bool handleLastMultiFileSearchListDialog() {
@@ -214,7 +172,9 @@ bool handleMultiFileSearchReplaceDialogWithOptions(const std::string &patternSee
 		MultiFileSearchSession session;
 		std::string errorText;
 		std::size_t replacedCount = 0;
+		std::size_t revertedCount = 0;
 		bool returnToSearchDialog = false;
+		bool replaceAllAborted = false;
 
 		if (!promptMultiFileSarValues(patternSeed, replacementSeed, pattern, replacement, sarOptions, session)) return true;
 
@@ -230,13 +190,25 @@ bool handleMultiFileSearchReplaceDialogWithOptions(const std::string &patternSee
 				continue;
 			}
 			if (action == MultiDialogAction::ReplaceAll) {
-				while (!session.files.empty()) {
-					if (!replaceCurrentSessionMatch(session, false, errorText)) {
+				std::size_t replaceAllCount = 0;
+				const MultiReplaceAllOutcome outcome = runMultiFileReplaceAllDialog(session, replaceAllCount, errorText);
+
+				switch (outcome) {
+					case MultiReplaceAllOutcome::Reverted:
+						revertedCount = replaceAllCount;
+						break;
+					case MultiReplaceAllOutcome::Aborted:
+						replaceAllAborted = true;
+						replacedCount += replaceAllCount;
+						break;
+					case MultiReplaceAllOutcome::Completed:
+						replacedCount += replaceAllCount;
+						break;
+					case MultiReplaceAllOutcome::Error:
+						if (replaceAllCount != 0) errorText += " " + std::to_string(replaceAllCount) + " replacements retained.";
 						if (!errorText.empty()) postSearchError(errorText);
 						closeTemporaryWindowsForSession(session);
 						return true;
-					}
-					++replacedCount;
 				}
 				break;
 			}
@@ -252,7 +224,15 @@ bool handleMultiFileSearchReplaceDialogWithOptions(const std::string &patternSee
 		closeTemporaryWindowsForSession(session);
 		if (returnToSearchDialog) continue;
 		g_lastMultiFileSearchSession = session;
-		if (replacedCount == 0) postSearchWarning("No replacements.");
+		if (revertedCount != 0) {
+			std::string message = std::to_string(revertedCount) + " Replace All replacements reverted";
+			if (replacedCount != 0) message += "; " + std::to_string(replacedCount) + " earlier replacements retained";
+			postSearchWarning(message);
+		}
+		else if (replaceAllAborted && replacedCount != 0)
+			postSearchWarning(std::to_string(replacedCount) + " replacements retained");
+		else if (replacedCount == 0)
+			postSearchWarning("No replacements.");
 		else
 			postSearchWarning(std::to_string(replacedCount) + " replacements");
 		return true;

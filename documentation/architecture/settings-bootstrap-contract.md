@@ -2,173 +2,101 @@
 
 ## Scope
 
-Protected functions include:
+Protected paths include:
 
-- `loadStartupSettingsMacro`
-- `buildCanonicalSettingsSource`
-- `normalizeSettingsMacroToCurrentModel`
-- `applySettingsSourceViaVm`
-- `loadAndNormalizeSettingsSource`
-- `resetConfiguredSettingsModel`
-- `applyConfiguredSettingsAssignment`
-- VM `MRSETUP`
-- VM `SAVE_SETTINGS`
-- `buildSettingsMacroSourceWithWorkspace`
+- `app/MREditorApp.cpp`: `loadStartupSettingsMacro` and
+  `applySettingsSourceViaVm`,
+- `config/settings/MRSettingsNormalize.*`,
+- `config/settings/MRSettingsSnapshotIO.*`,
+- `buildCanonicalSettingsSource`,
+- `prepareStartupSettingsSource`,
+- `loadAndNormalizeSettingsSource`,
+- `resetConfiguredSettingsModel`,
+- `applyConfiguredSettingsAssignment`,
+- VM `MRSETUP` startup handling.
 
-## Contract
+## Authority
 
-The settings bootstrap is VM-centered.
+Bootstrap owns the accepted, canonical current-version source used at startup.
+The VM is the final startup-apply actor. The central runtime settings model
+becomes authoritative only after canonical source compiles and executes
+successfully in startup settings mode.
 
-`settings.mrmac` is a verified and canonicalized macro source.
+The canonical persistence version is the running build's `MR_BUILD_EPOCH`.
 
-The bootstrap owns the valid version of the settings source.
+## Input normalization
 
-The canonical persistence version is the current `MR_BUILD_EPOCH` of the
-running build.
+- A lower persisted version is upgrade input.
+- A higher persisted version is rejected as future input.
+- Current known keys retain their canonical meaning.
+- Missing current keys receive current defaults.
+- Unknown, obsolete and retired keys are dropped silently.
+- A retired-token compatibility list or accepted no-op spelling must not be
+  introduced.
+- Canonical source is generated from the complete normalized current model and
+  carries the current build epoch.
+- The final VM apply receives only canonical current-source settings.
 
-An older or partial settings file is input to bootstrap normalization, not an
-authority over the accepted settings version.
+## Bootstrap sequence
 
-Known settings from older sources are carried forward by meaning into the
-current model where still valid.
+1. Ensure the settings file exists.
+2. Read the source.
+3. Parse, validate and normalize into staging state.
+4. Retain valid current meanings and supply missing defaults.
+5. Generate canonical current-version source.
+6. Rewrite that source when normalization requires it.
+7. Reset the runtime settings model.
+8. Compile and execute canonical source in VM startup settings mode.
+9. Perform explicit post-apply work.
+10. Clear dirty state and expose the runtime model as authoritative.
 
-Unknown or obsolete settings are dropped during normalization.
+Staging, canonicalization and final apply must remain visible as distinct
+roles. A staging implementation may use the runtime model as a temporary
+working medium only where the current code requires it; that write is not
+final apply.
 
-Missing settings required by the current model are supplied from current
-defaults.
+## Transitional keymap staging
 
-The bootstrap derives the current canonical settings source from that complete
-normalized model.
+The loader may validate and canonicalize keymap input and stage that result in
+the runtime settings model because canonical source generation currently reads
+the configured keymap projection. Final authoritative keymap application still
+occurs through VM startup execution.
 
-When canonical rewrite is performed, the rewritten source must use the current
-canonical settings version rather than preserve the older source version.
+This exception is limited to keymap staging and must not spread to another
+settings domain.
 
-## Obsolete And Unknown Keys
+## AUTOEXEC macros
 
-The bootstrap must not keep a retired-token compatibility list.
+`AUTOEXEC_MACRO` entries are configured selection. Bootstrap attempts every
+configured entry but does not invent entries.
 
-Any `MRSETUP` token that is not known to the running build is obsolete or
-unknown input. It must be dropped silently during bootstrap normalization and
-must not be applied to the staging snapshot or final runtime model.
+A missing or non-executable entry is logged, removed from the configured list,
+marks settings dirty and is persisted through the existing coalesced flush.
+This cleanup does not use the message line. A successfully executable entry
+remains configured.
 
-The current build supplies hardcoded defaults for every setting token it knows.
-Known tokens from the settings source may overwrite those defaults. Missing
-known tokens keep the current build defaults.
+## Boundaries
 
-The final canonical settings source is generated only from the complete current
-model. Therefore unknown, obsolete or retired tokens disappear because they are
-not part of the current model, not because a save path filters a growing list of
-legacy spellings.
+Without explicit maintainer approval:
 
-Do not reintroduce removed settings as accepted no-op keys. If a token is no
-longer canonical, it must become unknown to the bootstrap classifier.
+- Do not remove or bypass final VM startup apply.
+- Do not move `MRSETUP` out of the VM or alter its startup gating here.
+- Do not change key meanings or dirty-state semantics as bootstrap cleanup.
+- `SAVE_SETTINGS`, theme persistence and workspace serialization remain outside
+  bootstrap ownership.
 
-The final VM startup apply must receive only the canonicalized current-source
-settings. The VM may reject unknown `MRSETUP` keys; unknown and obsolete input
-must be eliminated before the final VM apply.
+## Related contracts
 
-Any persisted settings source with a version lower than the running
-`MR_BUILD_EPOCH` is upgrade-required input.
+- [Settings Runtime](settings-runtime-contract.md)
+- [Settings Persistence](settings-persistence-contract.md)
+- [Keymap](keymap-contract.md)
+- [VM / Intrinsics / Deferred UI](vm-deferred-ui-contract.md)
 
-Any persisted settings source with a version higher than the running
-`MR_BUILD_EPOCH` must be rejected as a future-version source.
+## Required manual tests
 
-The VM is the final startup apply actor.
-
-The loader may stage, verify and canonicalize settings. It may currently use the settings model as a working medium for this staging pass. That staging state is not the final runtime authority.
-
-The final authoritative startup application occurs only after the canonical source has been compiled and executed by the VM in startup MRSETUP mode.
-
-After successful VM application, the central in-memory settings model is authoritative.
-
-## Stages
-
-The intended conceptual sequence is:
-
-1. ensure settings file exists,
-2. read source,
-3. verify and normalize source,
-4. keep known still-valid settings and drop obsolete/unknown entries as specified,
-5. supply missing current settings from defaults,
-6. derive canonical current-version source,
-7. optionally rewrite canonical source,
-8. reset runtime settings model,
-9. compile canonical source,
-10. execute VM in startup settings mode,
-11. perform explicit post-apply steps,
-12. clear dirty state,
-13. mark runtime model authoritative.
-
-## Current transitional rule
-
-A staging function may internally touch the settings model if current code requires that.
-This must not be described as final apply.
-
-Do not “simplify” the bootstrap by collapsing staging and final VM application into one generic load helper.
-
-## Theme and keymap
-
-Theme and keymap behavior are separate contracts.
-Do not move theme or keymap application as part of bootstrap cleanup unless the task explicitly targets that contract.
-
-External theme and keymap files follow the same build-epoch version rule when
-they are loaded through bootstrap-related paths.
-
-## AUTOEXEC Macros
-
-`AUTOEXEC_MACRO` entries are configured selection. Bootstrap does not derive,
-add or otherwise decide which macros are marked for AUTOEXEC.
-
-Bootstrap attempts every configured entry. A missing or non-executable entry is
-logged and removed from the existing configured entry list. The mutation marks
-the runtime settings dirty; the central coalesced settings flush persists the
-filtered canonical source. This cleanup must not use the message line. A
-successfully executable entry remains configured.
-
-## Transitional keymap exception
-
-Keymap is currently a tolerated staging exception inside the VM-centered bootstrap contract.
-
-The loader may canonicalize keymap data and write that canonicalized result into the runtime settings model before the final VM apply.
-
-This exception exists because `buildSettingsMacroSource(...)` currently serializes keymap data from `configuredKeymapProfiles()` and `configuredActiveKeymapProfile()`.
-
-That loader-side keymap write is not the final authoritative runtime state.
-
-The final authoritative keymap state still arises only after the canonical source has been compiled and executed by the VM in startup mode.
-
-Do not extend this exception to other settings areas without an explicit contract decision.
-
-## SAVE_SETTINGS
-
-`SAVE_SETTINGS` is not part of the bootstrap cleanup contract.
-Do not move or rewrite it incidentally.
-
-## Workspace
-
-Workspace serialization is not part of the canonical settings core unless a separate workspace contract change is approved.
-
-## Forbidden without explicit approval
-
-- Removing final VM startup apply.
-- Applying canonical settings only through the loader.
-- Moving `MRSETUP` out of the VM.
-- Moving `SAVE_SETTINGS` as part of bootstrap cleanup.
-- Changing startup gating for `MRSETUP`.
-- Changing key meanings during bootstrap refactoring.
-- Changing dirty-state behavior without a dedicated plan.
-- Moving workspace lines into the canonical core.
-
-## Required checks
-
-For bootstrap changes, run:
-
-- `make clean all CXX=clang++`,
-- regression checks,
-- startup with empty settings file,
-- startup with partial settings file,
-- startup with non-canonical but valid settings file,
-- startup with obsolete/unknown keys,
-- theme-related startup probe,
-- keymap-related startup probe,
-- save/restart probe.
+- Start with an absent, empty and partial settings file.
+- Start with valid older, current and future-version input.
+- Start with unknown, obsolete, duplicate and invalid assignments.
+- Verify final VM application, dirty clearing and canonical rewrite.
+- Probe theme, keymap and AUTOEXEC post-normalization behavior.
+- Save, restart and compare the resulting runtime settings.

@@ -29,6 +29,15 @@ MAKEFLAGS += -j$(NPROC)
 CLANG_TIDY ?= clang-tidy
 BEAR ?= bear
 LINT_FILE ?= mrmac/MRVM.cpp
+BOLT_WORKFLOW ?= ./misc/mr-bolt-workflow.sh
+BOLT_BUILD_DIR ?= build/bolt
+BOLT_CXX ?= clang++
+BOLT_RUN_ARGS ?=
+LLVM_BOLT ?= llvm-bolt
+PERF2BOLT ?= perf2bolt
+MERGE_FDATA ?= merge-fdata
+PERF ?= perf
+STRIP ?= strip
 MR_BUILD_EPOCH := $(shell date +%s)
 TMP_BASE_DIR ?= /dev/shm
 TMP_COMPILER_LAUNCHER := $(abspath ./misc/mr-compiler-temp.sh)
@@ -153,10 +162,12 @@ CXX_SOURCES = \
 	app/MRCommandRouter.cpp \
 	app/router/MRCommandRouterGit.cpp \
 	app/router/MRCommandRouterSearch.cpp \
+	app/router/MRCommandRouterSearchDialogs.cpp \
 	app/router/MRCommandRouterSearchCore.cpp \
 	app/router/MRCommandRouterSearchMultiFile.cpp \
 	app/router/MRCommandRouterSearchMultiFileCollect.cpp \
 	app/router/MRCommandRouterSearchMultiFileDialog.cpp \
+	app/router/MRCommandRouterSearchMultiFileReplaceAllDialog.cpp \
 	app/router/MRCommandRouterSearchMultiFileSession.cpp \
 	app/router/MRCommandRouterText.cpp \
 	app/MRMenuFactory.cpp \
@@ -334,6 +345,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-sync-safe tvision-status \
 	pcre2-check \
 	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full basic-language-probe mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
+	bolt-seed bolt-seed-gcc bolt-seed-clang bolt-record bolt-optimize bolt-clean \
 	compile-manuals \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
@@ -354,6 +366,18 @@ regression-probe: $(REGRESSION_PROBE_TARGET)
 basic-language-probe: $(BASIC_LANGUAGE_PROBE_TARGET)
 phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
 workspace-service-context-probe: $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET)
+bolt-seed:
+	@MR_BOLT_BUILD_DIR="$(BOLT_BUILD_DIR)" MR_BOLT_CXX="$(BOLT_CXX)" $(BOLT_WORKFLOW) seed
+bolt-seed-gcc:
+	@MR_BOLT_BUILD_DIR="$(BOLT_BUILD_DIR)" MR_BOLT_CXX="g++" $(BOLT_WORKFLOW) seed
+bolt-seed-clang:
+	@MR_BOLT_BUILD_DIR="$(BOLT_BUILD_DIR)" MR_BOLT_CXX="clang++" $(BOLT_WORKFLOW) seed
+bolt-record:
+	@MR_BOLT_BUILD_DIR="$(BOLT_BUILD_DIR)" MR_BOLT_PERF="$(PERF)" $(BOLT_WORKFLOW) record -- $(BOLT_RUN_ARGS)
+bolt-optimize:
+	@MR_BOLT_BUILD_DIR="$(BOLT_BUILD_DIR)" MR_BOLT_PERF2BOLT="$(PERF2BOLT)" MR_BOLT_MERGE_FDATA="$(MERGE_FDATA)" MR_BOLT_LLVM_BOLT="$(LLVM_BOLT)" MR_BOLT_STRIP="$(STRIP)" $(BOLT_WORKFLOW) optimize
+bolt-clean:
+	@MR_BOLT_BUILD_DIR="$(BOLT_BUILD_DIR)" $(BOLT_WORKFLOW) clean
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)

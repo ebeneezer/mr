@@ -2,14 +2,17 @@
 
 ## Scope
 
-Applies to future changes that introduce or modify MRMac execution sessions,
-including:
+Applies to MRMac execution-session lifetime and consumers, including:
 
+- `mrmac/MRMacroExecutionSession.*`
 - `mrmac/MRMacroRunner.cpp`
 - `mrmac/MRMacroRunner.hpp`
 - `mrmac/MRVM.cpp`
 - `mrmac/MRVM.hpp`
-- `mrmac/vm/MRVMProfile.*`
+- `mrmac/vm/MRVMExecSessions.*`
+- `mrmac/MRVMDebugSession.*`
+- `app/MRRuntimeScheduler.*`
+- `app/MRExecSessionStatus.*`
 - `coprocessor/MRCoprocessor.*`
 - `coprocessor/MRCoprocessorDispatch.*`
 - foreground macro delay pumping
@@ -43,11 +46,12 @@ It may be backed by:
 - foreground UI-thread execution,
 - foreground execution suspended on cooperative `DELAY`,
 - background-safe `Lane::Macro` execution,
-- staged background execution with existing commit and deferred playback.
+- staged background execution with existing commit and deferred playback,
+- debug execution with a session-owned parked VM handle.
 
 An execution result is the typed completion record of a session. It may report
 completion, cancellation, failure, VM log lines, staged edits, deferred UI
-commands or future debugger snapshots according to the selected route.
+commands or debugger status according to the selected route.
 
 An execution owner identifies the UI/runtime owner of a session, such as a
 buffer id, window role or later debugger session id. Ownership is for routing
@@ -66,26 +70,26 @@ runtime consumers, execution sessions, macro routing and coprocessor work items.
 
 ## Invariants
 
-- Normal macro semantics remain owned by the existing compiler and VM.
-- Exec sessions must not introduce a second compiler frontend.
-- Exec sessions must not renumber opcodes or change bytecode semantics.
-- Exec sessions must not bypass `VirtualMachine::executeAt` for normal bytecode
-  execution.
+- Normal compiler, bytecode and VM semantics remain governed by the
+  [MRMAC Language / Compiler contract](mrmac-language-contract.md).
 - Exec sessions must reuse the existing route classification from
   `MRMacroExecutionProfile` unless a dedicated architecture decision changes it.
 - Exec sessions must reuse `Lane::Macro` for background macro work unless a
   dedicated architecture decision adds a lane.
-- Exec sessions must not change deferred UI playback ordering or batching.
-- Exec sessions must not add direct TVision screen writes.
-- Exec sessions must not add new settings or workspace persistence.
+- Deferred UI ordering, batching and rendering remain governed by the
+  [Coprocessor / Deferred UI contract](coprocessor-deferred-ui-contract.md).
+- Settings and workspace persistence remain governed by the settings
+  contracts.
 - Exec session state is runtime state. It must not be serialized through
   `settings.mrmac` or workspace files without a dedicated persistence decision.
 - Exec-session runtime state is stored in the central VM K/V hash under the
   top-level key `EXECSESSIONS`.
 - `runtime-only` means that this state is not serialized. It does not permit a
   second value-bearing C++ registry beside the central VM K/V store.
-- C++ snapshots of `EXECSESSIONS` data are transfer objects only. They must be
-  rebuilt from the K/V store and must not become the authoritative store.
+- C++ snapshots of `EXECSESSIONS` data are transfer objects rebuilt from the
+  K/V store. C++ may retain only mechanical handles that VM values cannot
+  represent, including callback pointers and suspended `VirtualMachine`
+  ownership.
 - Closure variable state, active session metadata, recent terminal results,
   foreground `DELAY` metadata, session-persistent `DEF_*` variables, scheduler
   consumers, scheduler events, status generations and listener ids belong under
@@ -107,18 +111,8 @@ runtime consumers, execution sessions, macro routing and coprocessor work items.
   - `EXECSESSIONS/console/*` for execution-session console state.
   New runtime data must be placed under a meaningful branch instead of adding
   flat siblings directly below `EXECSESSIONS`.
-- C++ may keep only mechanical runtime handles that cannot be represented as
-  VM K/V values, such as function-pointer callbacks and suspended
-  `VirtualMachine` ownership for foreground `DELAY`.
-- A paused macro debugger may keep suspended `VirtualMachine` ownership keyed
-  by execution-session id as a mechanical live handle. The VM object itself is
-  not `EXECSESSIONS` or `MACRODEBUGGER` value state; user-visible debug
-  snapshots must be represented separately through the approved K/V roots.
 - Exec sessions must not add a second closure registry, a second scheduler
   registry or a second persistence store.
-- Listener callback function pointers and suspended foreground VM ownership are
-  mechanical process handles. Their ids, ownership, status and user-visible
-  metadata remain K/V state.
 - `MRSETUP` and `SAVE_SETTINGS` behavior must remain governed by the VM and
   settings contracts.
 - Cancellation and pause are cooperative. A session must not interrupt execution
@@ -272,29 +266,17 @@ is background-safe.
 Staged execution may run on `Lane::Macro` only through the existing staged input,
 staged result, conflict check, commit and deferred playback route.
 
+Debug execution is an execution-session route. A paused debug VM is a
+mechanical handle keyed by session id; user-visible debugger state remains
+under `MACRODEBUGGER`.
+
 Exec sessions may name these routes and expose status for them. They must not
 merge route semantics into a generic path that hides staging, validation,
 canonical execution, final apply or rendering.
 
-## Allowed
+## Boundaries
 
-- Introducing session metadata that describes existing macro execution routes.
-- Moving foreground pending `DELAY` ownership into explicit session state while
-  preserving behavior.
-- Attaching session ids to existing background and staged macro results.
-- Adding typed runtime-only status and result snapshots for UI consumers.
-- Adding runtime-only change hooks that let consumers refresh those snapshots.
-- Adding runtime-only snapshot dirty generations driven by those hooks.
-- Adding multiple runtime-only change listeners with explicit registration ids
-  and deregistration.
-- Adding owner-based runtime filters for status and cooperative cancellation
-  requests.
-- Adding opt-in startup smoke consumers that install hooks without starting
-  macro execution.
-- Adding cancellation/status commands that route through existing cooperative
-  cancellation mechanisms.
-
-## Forbidden without explicit approval
+Without explicit maintainer approval:
 
 - New macro execution lanes.
 - New opcode semantics.
@@ -302,7 +284,7 @@ canonical execution, final apply or rendering.
 - Persisting sessions, breakpoints or runtime state in settings/workspace files.
 - Direct TVision rendering from sessions or consumers.
 - Debugger-only state baked into the base session model.
-- A modeless widget or TVision binding API in the first session tranche.
+- Modeless widget or raw TVision binding APIs in the session layer.
 - New deferred UI batching boundaries.
 - Replacing staged macro conflict checks with session-level shortcuts.
 - Single-listener overwrite semantics for execution-session change consumers.
@@ -398,11 +380,17 @@ publish `Cancelled`.
 Owner-scoped cancellation must match only the explicit owner identity. A buffer
 owner must not match ownerless sessions or sessions for another buffer.
 
-## Required tests
+## Related contracts
+
+- [MRMAC Language / Compiler](mrmac-language-contract.md)
+- [VM / Intrinsics / Deferred UI](vm-deferred-ui-contract.md)
+- [Coprocessor Runtime](coprocessor-runtime-contract.md)
+- [Coprocessor / Deferred UI](coprocessor-deferred-ui-contract.md)
+
+## Required manual tests
 
 For execution-session code changes, test:
 
-- `make clean all CXX=clang++`
 - representative macro compile and run
 - foreground UI-thread macro execution
 - foreground `DELAY` yield, resume and cancel
@@ -413,7 +401,3 @@ For execution-session code changes, test:
 - MRSETUP allowed and forbidden contexts if touched
 - SAVE_SETTINGS behavior if touched
 - relevant regression probes and structure checks
-
-Documentation-only changes to this contract do not require runtime regression
-tests, but any later code tranche must name the affected route and tests before
-implementation.

@@ -10,7 +10,6 @@
 #define Uses_TProgram
 #define Uses_TRect
 #define Uses_TScrollBar
-#define Uses_TStaticText
 #define Uses_TDrawBuffer
 #define Uses_TFileDialog
 #include <tvision/tv.h>
@@ -448,7 +447,7 @@ class WindowListDialog : public MRDialogFoundation {
 	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent), initMrDialogFrame), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), workspaceMainFileButton(nullptr), autosaveWorkspaceButton(nullptr), autoloadWorkspaceButton(nullptr), counterView(nullptr), selected(nullptr), lastFocusedIndex(-1) {
 		int width = computeWidth();
 		int height = computeHeight(aMode, aCurrent);
-		int listTop = 6;
+		int listTop = 7;
 		int listBottom = height - 6;
 		const int topButtonY = 2;
 		const int actionButtonY = 4;
@@ -496,7 +495,6 @@ class WindowListDialog : public MRDialogFoundation {
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
 		insert(scrollBar);
-		insert(new TStaticText(TRect(2, listTop - 1, width - 3, listTop), "State VD M File                       Directory"));
 		listView = new WindowListView(TRect(2, listTop, width - 3, listBottom), scrollBar, std::vector<std::string>());
 		insert(listView);
 

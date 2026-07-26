@@ -381,6 +381,116 @@ bool loadAllSessionFiles(MultiFileSearchSession &session, std::string &errorText
 	return true;
 }
 
+bool validateMultiFileSessionSources(MultiFileSearchSession &session, std::string &errorText) {
+	for (MultiFileSearchFileResult &file : session.files) {
+		if (!file.startedInMemory) continue;
+		MREditWindow *window = findOpenWindowForNormalizedPath(file.normalizedPath);
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+
+		if (editor == nullptr || editor->documentId() != file.startedDocumentId || editor->documentVersion() != file.startedDocumentVersion) {
+			errorText = "An editor source changed during search: " + file.normalizedPath;
+			session.valid = false;
+			return false;
+		}
+		file.window = window;
+	}
+	errorText.clear();
+	return true;
+}
+
+bool validateSessionFileReplaceCheckpoint(const MultiFileSearchSession &session, std::size_t fileIndex, const MultiFileReplaceCheckpoint &checkpoint, std::string &errorText) {
+	if (fileIndex >= session.files.size() || checkpoint.window == nullptr) {
+		errorText = "Invalid replace checkpoint.";
+		return false;
+	}
+
+	const MultiFileSearchFileResult &file = session.files[fileIndex];
+	MREditWindow *window = findOpenWindowForNormalizedPath(file.normalizedPath);
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	const std::size_t expectedUndoDepth = checkpoint.undoDepth + (checkpoint.replacements != 0 ? 1 : 0);
+
+	if (window != checkpoint.window || editor == nullptr || editor->documentId() != checkpoint.documentId || editor->documentVersion() != checkpoint.expectedVersion ||
+	    editor->bufferModel().undoStackDepth() != expectedUndoDepth) {
+		errorText = "An editor changed during Replace All: " + file.normalizedPath;
+		return false;
+	}
+	errorText.clear();
+	return true;
+}
+
+bool replaceAllSessionMatchesInFile(MultiFileSearchSession &session, std::size_t fileIndex, MultiFileReplaceCheckpoint &checkpoint, std::size_t &replacementCount, std::string &errorText) {
+	replacementCount = 0;
+	if (fileIndex >= session.files.size() || session.files[fileIndex].matches.empty()) {
+		errorText = "No replacement match.";
+		return false;
+	}
+
+	MultiFileSearchFileResult &file = session.files[fileIndex];
+	if (checkpoint.window == nullptr) {
+		if (!ensureWindowLoadedForSessionFile(file, false, errorText)) return false;
+		MRFileEditor *editor = file.window != nullptr ? file.window->getEditor() : nullptr;
+		if (editor == nullptr) {
+			errorText = "No editor window.";
+			return false;
+		}
+		checkpoint.window = file.window;
+		checkpoint.documentId = editor->documentId();
+		checkpoint.expectedVersion = editor->documentVersion();
+		checkpoint.undoDepth = editor->bufferModel().undoStackDepth();
+		checkpoint.temporaryWindow = file.temporaryWindow;
+	}
+	if (!validateSessionFileReplaceCheckpoint(session, fileIndex, checkpoint, errorText)) return false;
+
+	MRFileEditor *editor = checkpoint.window->getEditor();
+	std::vector<MRTextBufferModel::Range> ranges;
+	ranges.reserve(file.matches.size());
+	for (const SearchMatchEntry &match : file.matches)
+		ranges.push_back(MRTextBufferModel::Range(match.start, match.end));
+
+	const SearchMatchEntry lastAppliedMatch = file.matches.front();
+	replacementCount = file.matches.size();
+	if (!editor->replaceRangesAndCollapse(ranges, session.replacement.data(), session.replacement.size())) {
+		replacementCount = 0;
+		errorText = "Replace failed.";
+		return false;
+	}
+
+	checkpoint.replacements = replacementCount;
+	checkpoint.expectedVersion = editor->documentVersion();
+	file.temporaryWindow = false;
+	if (editor->documentId() != checkpoint.documentId || editor->bufferModel().undoStackDepth() != checkpoint.undoDepth + 1) {
+		errorText = "Unexpected undo history change during Replace All: " + file.normalizedPath;
+		return false;
+	}
+
+	const std::size_t cursorEnd = lastAppliedMatch.start + session.replacement.size();
+	synchronizeHexEditorSelection(checkpoint.window);
+	syncVmLastSearch(checkpoint.window, true, lastAppliedMatch.start, cursorEnd, editor->cursorOffset());
+	file.matches.clear();
+	file.selectedMatchIndex = 0;
+	errorText.clear();
+	return true;
+}
+
+bool revertSessionFileReplacements(MultiFileSearchSession &session, std::size_t fileIndex, MultiFileReplaceCheckpoint &checkpoint, std::string &errorText) {
+	if (checkpoint.replacements == 0) {
+		errorText.clear();
+		return true;
+	}
+	if (!validateSessionFileReplaceCheckpoint(session, fileIndex, checkpoint, errorText)) return false;
+
+	MRFileEditor *editor = checkpoint.window->getEditor();
+	if (editor == nullptr || !editor->revertUndoSuffix(checkpoint.undoDepth)) {
+		errorText = "Unable to revert Replace All: " + session.files[fileIndex].normalizedPath;
+		return false;
+	}
+	checkpoint.expectedVersion = editor->documentVersion();
+	checkpoint.replacements = 0;
+	session.files[fileIndex].temporaryWindow = checkpoint.temporaryWindow;
+	errorText.clear();
+	return true;
+}
+
 bool replaceCurrentSessionMatch(MultiFileSearchSession &session, bool advanceAfterReplace, std::string &errorText) {
 	MultiFileSearchFileResult *file = currentSessionFile(session);
 	SearchMatchEntry *match = currentSessionMatch(session);

@@ -2394,6 +2394,7 @@ bool handleForceSave(MREditWindow *window) {
 bool handleExitDirtySaveAll() {
 	std::vector<MREditWindow *> dirtyWindows;
 	std::vector<std::string> dirtyItems;
+	std::string headline;
 
 	for (MREditWindow *window : allEditWindowsInZOrder()) {
 		if (window == nullptr || !window->isFileChanged()) continue;
@@ -2401,7 +2402,8 @@ bool handleExitDirtySaveAll() {
 		dirtyItems.push_back(window->currentFileName()[0] != '\0' ? window->currentFileName() : window->getTitle(0));
 	}
 	if (dirtyWindows.empty()) return dispatchApplicationCommandEvent(cmQuit);
-	switch (mr::dialogs::runDialogDirtyListGating("EXIT MR", "Unsaved windows exist.", "Dirty windows:", dirtyItems, "Save all")) {
+	headline = std::to_string(dirtyWindows.size()) + " unsaved windows exist.";
+	switch (mr::dialogs::runDialogDirtyListGating("EXIT MR", headline.c_str(), "Dirty windows:", dirtyItems, "Save all", "Discard all")) {
 		case mr::dialogs::UnsavedChangesChoice::Save:
 			for (MREditWindow *window : dirtyWindows) {
 				static_cast<void>(mrActivateEditWindow(window));
@@ -2409,6 +2411,8 @@ bool handleExitDirtySaveAll() {
 			}
 			return dispatchApplicationCommandEvent(cmQuit);
 		case mr::dialogs::UnsavedChangesChoice::Discard:
+			for (MREditWindow *window : dirtyWindows)
+				if (window != nullptr) window->setFileChanged(false);
 			return dispatchApplicationCommandEvent(cmQuit);
 		case mr::dialogs::UnsavedChangesChoice::Cancel:
 		default:
@@ -2551,6 +2555,10 @@ bool handleEditCutToSystemClipboard(MREditWindow *targetWindow) {
 
 } // namespace
 
+bool requestMRExitWithDirtyGating() {
+	return handleExitDirtySaveAll();
+}
+
 bool showMREditorContextMenu(MREditWindow *targetWindow, TPoint where) {
 	return showEditorContextMenuForWindow(targetWindow, where);
 }
@@ -2606,7 +2614,7 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 				case KeymapCustomAction::ForceSave:
 					return handleForceSave(window);
 				case KeymapCustomAction::ExitDirtySaveAll:
-					return handleExitDirtySaveAll();
+					return requestMRExitWithDirtyGating();
 				case KeymapCustomAction::MoveCursorToNextPageBreak:
 					return handleBlockAction(mrvmUiMoveCursorToNextPageBreak(), "No next page break found.");
 				case KeymapCustomAction::MoveCursorToPrevPageBreak:

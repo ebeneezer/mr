@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <utility>
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
 
@@ -298,4 +299,59 @@ void MRNumericSlider::drag(TEvent &event) noexcept {
 
 void MRNumericSlider::notifyChanged() noexcept {
 	if (owner) message(owner, evBroadcast, changedCmd, this);
+}
+
+MRProgressSlider::MRProgressSlider(const TRect &bounds) : MRNumericSlider(bounds, 0, kSliderScale, 0) {
+	options &= ~ofSelectable;
+	eventMask &= ~evMouse;
+}
+
+void MRProgressSlider::setText(std::string value) {
+	if (!progressMode && value == text) return;
+	progressMode = false;
+	text = std::move(value);
+	MRNumericSlider::setValue(0);
+}
+
+void MRProgressSlider::setProgress(std::size_t aCompleted, std::size_t aTotal, std::string label) {
+	aCompleted = std::min(aCompleted, aTotal);
+	if (progressMode && aCompleted == completed && aTotal == total && label == text) return;
+	progressMode = true;
+	completed = aCompleted;
+	total = aTotal;
+	text = std::move(label);
+	const int32_t sliderValue = total == 0 ? 0 : static_cast<int32_t>(static_cast<long double>(completed) * kSliderScale / static_cast<long double>(total));
+	MRNumericSlider::setValue(sliderValue);
+}
+
+void MRProgressSlider::draw() {
+	TDrawBuffer buffer;
+	const TAttrPair textColor = owner != nullptr ? TAttrPair(owner->mapColor(1)) : TAttrPair(0x70);
+
+	if (!progressMode) {
+		buffer.moveChar(0, ' ', textColor, size.x);
+		if (!text.empty()) buffer.moveStr(0, text.c_str(), textColor, size.x);
+		writeLine(0, 0, size.x, 1, buffer);
+		return;
+	}
+
+	const TAttrPair normalColor = owner != nullptr ? TAttrPair(owner->mapColor(kDialogInputLineNormalColor)) : TAttrPair(0x3F);
+	const TAttrPair selectedColor = owner != nullptr ? TAttrPair(owner->mapColor(kDialogInputLineSelectedColor)) : TAttrPair(0x3E);
+	const std::size_t width = static_cast<std::size_t>(std::max(0, size.x));
+	const std::size_t filled = total == 0 ? 0 : (completed / total) * width + ((completed % total) * width) / total;
+	const std::size_t labelLength = std::min(width, text.size());
+	const std::size_t labelLeft = (width - labelLength) / 2;
+	const std::size_t selectedLabelLength = labelLeft >= filled ? 0 : std::min(labelLength, filled - labelLeft);
+
+	buffer.moveChar(0, ' ', normalColor, size.x);
+	if (filled != 0) buffer.moveChar(0, ' ', selectedColor, static_cast<int>(filled));
+	if (selectedLabelLength != 0) buffer.moveStr(static_cast<ushort>(labelLeft), text.c_str(), selectedColor, static_cast<ushort>(selectedLabelLength));
+	if (selectedLabelLength < labelLength)
+		buffer.moveStr(static_cast<ushort>(labelLeft + selectedLabelLength), text.c_str() + selectedLabelLength, normalColor, static_cast<ushort>(labelLength - selectedLabelLength));
+	writeLine(0, 0, size.x, 1, buffer);
+}
+
+void MRProgressSlider::handleEvent(TEvent &event) {
+	if ((event.what & evMouse) != 0) return;
+	TView::handleEvent(event);
 }

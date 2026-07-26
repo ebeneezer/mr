@@ -275,6 +275,50 @@ bool readTextFile(const std::string &path, std::string &out, std::string &outErr
 	return readTextFileWithOptionalError(path, out, &outError);
 }
 
+bool readTextFileCancellable(const std::string &path, std::string &out, std::string &outError, const std::atomic_bool &cancelFlag, bool &cancelled) {
+	constexpr std::size_t kReadChunkSize = 64 * 1024;
+	std::array<char, kReadChunkSize> buffer{};
+	struct stat st {};
+	int fd = -1;
+
+	out.clear();
+	outError.clear();
+	cancelled = false;
+	if (cancelFlag.load(std::memory_order_acquire)) {
+		cancelled = true;
+		return false;
+	}
+	fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+	if (fd < 0) {
+		outError = "Could not open file: " + path;
+		return false;
+	}
+	if (::fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) out.reserve(static_cast<std::size_t>(st.st_size));
+	for (;;) {
+		ssize_t count = 0;
+
+		if (cancelFlag.load(std::memory_order_acquire)) {
+			cancelled = true;
+			out.clear();
+			::close(fd);
+			return false;
+		}
+		count = ::read(fd, buffer.data(), buffer.size());
+		if (count > 0) {
+			out.append(buffer.data(), static_cast<std::size_t>(count));
+			continue;
+		}
+		if (count == 0) break;
+		if (errno == EINTR) continue;
+		out.clear();
+		outError = "Error while reading file: " + path;
+		::close(fd);
+		return false;
+	}
+	::close(fd);
+	return true;
+}
+
 bool writeTextFile(std::string_view path, std::string_view content) {
 	std::ofstream file(std::string(path), std::ios::out | std::ios::trunc | std::ios::binary);
 	if (!file.is_open()) return false;

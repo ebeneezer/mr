@@ -10,6 +10,12 @@
                 "clang++"
             ],
             "default": "g++"
+        },
+        {
+            "id": "boltRunArguments",
+            "type": "promptString",
+            "description": "Optionale Argumente für den profilierten MR-Lauf:",
+            "default": ""
         }
     ],
     "tasks": [
@@ -92,6 +98,81 @@
                 "compile-manuals"
             ],
             "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "BOLT: GCC Seed bauen",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "bolt-seed-gcc"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "BOLT: Clang Seed bauen",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "bolt-seed-clang"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "BOLT: Profil aufzeichnen",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "bolt-record",
+                "BOLT_RUN_ARGS=${input:boltRunArguments}"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "BOLT: Binary optimieren",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "bolt-optimize"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "BOLT: Artefakte löschen",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "bolt-clean"
+            ],
             "problemMatcher": [],
             "presentation": {
                 "echo": true,

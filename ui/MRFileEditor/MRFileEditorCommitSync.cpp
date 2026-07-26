@@ -85,7 +85,10 @@ bool MRFileEditor::adoptReadOnlyProjectionText(const std::shared_ptr<const std::
 MRTextBufferModel::CommitResult MRFileEditor::applyStagedTransaction(const MRTextBufferModel::StagedTransaction &transaction, std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState) {
 	pushUndoSnapshot();
 	MRTextBufferModel::CommitResult result = mBufferModel.tryApplyStagedTransaction(transaction);
-	if (result.applied()) syncAfterCommittedDocument(cursorPos, selStart, selEnd, modifiedState, &result.change);
+	if (result.applied()) {
+		mBufferModel.updateUndoTopChangeSet(result.change);
+		syncAfterCommittedDocument(cursorPos, selStart, selEnd, modifiedState, &result.change);
+	}
 	else
 		mBufferModel.popUndoSnapshot();
 	return result;

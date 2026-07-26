@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #define Uses_TView
 #define Uses_TEvent
@@ -13,7 +14,7 @@
 
 constexpr ushort cmMRNumericSliderChanged = 0x7A10;
 
-class MRNumericSlider final : public TView {
+class MRNumericSlider : public TView {
   public:
 	enum Format : uchar {
 		fmtRaw,
@@ -81,6 +82,27 @@ class MRNumericSlider final : public TView {
 	Format format;
 	ushort changedCmd;
 	Boolean clusterPalette;
+};
+
+class MRProgressSlider final : public MRNumericSlider {
+  public:
+	explicit MRProgressSlider(const TRect &bounds);
+
+	void setText(std::string value);
+	void setProgress(std::size_t completed, std::size_t total, std::string label);
+
+	void draw() override;
+	void handleEvent(TEvent &event) override;
+
+  private:
+	static constexpr int32_t kSliderScale = 1000;
+	static constexpr uchar kDialogInputLineNormalColor = 19;
+	static constexpr uchar kDialogInputLineSelectedColor = 20;
+
+	std::string text;
+	std::size_t completed = 0;
+	std::size_t total = 0;
+	bool progressMode = false;
 };
 
 #endif

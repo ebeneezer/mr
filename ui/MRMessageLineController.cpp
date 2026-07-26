@@ -11,7 +11,7 @@ namespace mr {
 namespace messageline {
 namespace {
 
-constexpr std::size_t kOwnerCount = static_cast<std::size_t>(Owner::DialogInteraction) + 1;
+constexpr std::size_t kOwnerCount = static_cast<std::size_t>(Owner::WorkspaceRestore) + 1;
 
 struct Slot {
 	bool active = false;
