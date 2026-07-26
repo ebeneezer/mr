@@ -1804,9 +1804,12 @@ END_MACRO;
 \begin{verbatim}
 PRINT_MARGIN
 \end{verbatim}
-Parameters: None. Result: integer value.
+Parameters: None. Result: read-only integer value.
 
-Provides the current runtime value named print margin.
+Returns the configured right boundary for PDF text output in columns.  The
+value applies when the current file or a marked block is exported.  A value of
+zero disables the column limit, leaving the printable page width as the only
+horizontal boundary.  Assigning to this variable is a runtime error.
 
 \paragraph{Example macro.}
 \begin{verbatim}
@@ -11620,7 +11623,6 @@ Primitive & Role & Purpose & Reference \\
 \primitiveoverview{SETUP\_KEYMAP}{procedure-setup-keymap}{procedure}{MR command bridge.}
 \primitiveoverview{SETUP\_LIVE\_LOGS}{procedure-setup-live-logs}{procedure}{MR command bridge.}
 \primitiveoverview{SETUP\_PATHS}{procedure-setup-paths}{procedure}{MR command bridge.}
-\primitiveoverview{SETUP\_SEARCH\_REPLACE\_DEFAULTS}{procedure-setup-search-replace-defaults}{procedure}{MR command bridge.}
 \primitiveoverview{SETUP\_USER\_INTERFACE}{procedure-setup-user-interface}{procedure}{MR command bridge.}
 \primitiveoverview{QUIT}{procedure-quit}{procedure}{MR command bridge.}
 \primitiveoverview{REST\_OS\_SCREEN}{procedure-rest-os-screen}{procedure}{MR command bridge.}
@@ -11983,26 +11985,6 @@ Opens the corresponding MR setup dialog through the application command route.
 \begin{verbatim}
 $MACRO REFERENCE_SETUP_PATHS FROM EDIT;
     SETUP_PATHS;
-END_MACRO;
-\end{verbatim}
-\end{mrmacextension}
-
-\begin{mrmacextension}
-\phantomsection
-\label{prim:procedure-setup-search-replace-defaults}
-\subsection*{SETUP\_SEARCH\_REPLACE\_DEFAULTS}
-\index{SETUP\_SEARCH\_REPLACE\_DEFAULTS@\texttt{SETUP\_SEARCH\_REPLACE\_DEFAULTS}}
-\begin{verbatim}
-SETUP_SEARCH_REPLACE_DEFAULTS;
-\end{verbatim}
-Parameters: None.
-
-Opens the corresponding MR setup dialog through the application command route.
-
-\paragraph{Example macro.}
-\begin{verbatim}
-$MACRO REFERENCE_SETUP_SEARCH_REPLACE_DEFAULTS FROM EDIT;
-    SETUP_SEARCH_REPLACE_DEFAULTS;
 END_MACRO;
 \end{verbatim}
 \end{mrmacextension}

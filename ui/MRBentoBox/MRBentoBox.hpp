@@ -587,6 +587,7 @@ class MRBentoBox : public MREditWindow {
 	bool fileCompareSourcesRestored;
 	bool fileCompareDiffReady;
 	bool fileCompareStale;
+	bool fileCompareLinkedPaneSyncActive;
 	MRBentoOutlinePaneState structureOutlineState;
 	MRBentoOutlinePaneState functionsOutlineState;
 	BentoProjectionTaskState diagnosticsProjectionTask;

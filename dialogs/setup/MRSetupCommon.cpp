@@ -71,6 +71,7 @@ bool deferRememberingLoadDialogPath(MRDialogHistoryScope scope) {
 		case MRDialogHistoryScope::KeymapProfileLoad:
 		case MRDialogHistoryScope::WorkspaceLoad:
 		case MRDialogHistoryScope::SetupThemeLoad:
+		case MRDialogHistoryScope::PdfExport:
 			return true;
 		default:
 			return false;

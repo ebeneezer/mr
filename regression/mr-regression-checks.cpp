@@ -88,20 +88,40 @@ int runMacroDebuggerCrossSectionProbeMode();
 
 class MRBentoBoxFileCompareRegressionHarness {
   public:
-	static bool seedDiffReadyState(MRBentoBox &bento, const std::vector<mr::diff::MRDiffHunk> &hunks) {
-		bento.fileCompareHunks = hunks;
-		bento.rebuildFileCompareChangeGroups();
+	static bool seedDiffReadyState(MRBentoBox &bento) {
+		static constexpr std::uint64_t kGeneration = 1;
+		const std::shared_ptr<const MRBentoFileCompareAcquisitionPayload> originalAcquisition =
+			mrBuildBentoFileCompareAcquisition(bento.fileCompareSetup.original.snapshot, kGeneration, true, nullptr);
+		const std::shared_ptr<const MRBentoFileCompareAcquisitionPayload> compareAcquisition =
+			mrBuildBentoFileCompareAcquisition(bento.fileCompareSetup.compare.snapshot, kGeneration, false, nullptr);
+		std::string errorText;
+		const std::shared_ptr<const MRBentoFileCompareDiffPayload> diff =
+			mrBuildBentoFileCompareDiff(originalAcquisition, compareAcquisition, nullptr, errorText);
+		const bool editable = bento.fileComparePanesEditable();
+		const std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> originalProjection =
+			mrBuildBentoFileComparePaneProjection(diff, true, editable, nullptr);
+		const std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> compareProjection =
+			mrBuildBentoFileComparePaneProjection(diff, false, editable, nullptr);
+
+		if (originalAcquisition == nullptr || compareAcquisition == nullptr || diff == nullptr ||
+		    originalProjection == nullptr || compareProjection == nullptr || diff->changeGroups == nullptr)
+			return false;
+		bento.fileComparePipeline.activeGeneration = kGeneration;
+		bento.fileComparePipeline.originalAcquisition = originalAcquisition;
+		bento.fileComparePipeline.compareAcquisition = compareAcquisition;
+		bento.fileComparePipeline.diff = diff;
+		bento.fileComparePipeline.originalProjection = originalProjection;
+		bento.fileComparePipeline.compareProjection = compareProjection;
 		bento.fileCompareDiffReady = true;
 		bento.fileCompareStale = false;
-		bento.rebuildFileCompareProjectionCache();
 		bento.refreshFileComparePanes();
-		return !bento.fileCompareChangeGroups.empty();
+		return !diff->changeGroups->empty();
 	}
 
-	static bool activateComparePane(MRBentoBox &bento) {
-		const int compareLeaf = bento.leafIdForRole(bprDiffCompare);
-		if (compareLeaf < 0) return false;
-		bento.setActivePane(compareLeaf);
+	static bool activatePane(MRBentoBox &bento, MRBentoPaneRole role) {
+		const int leafId = bento.leafIdForRole(role);
+		if (leafId < 0) return false;
+		bento.setActivePane(leafId);
 		return true;
 	}
 
@@ -127,9 +147,20 @@ class MRBentoBoxFileCompareRegressionHarness {
 	}
 
 	static unsigned char lineKindAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
-		std::vector<unsigned char> lineKinds;
-		bento.fileCompareEditableLineKindsForRole(role, lineKinds, nullptr);
-		return lineIndex < lineKinds.size() ? lineKinds[lineIndex] : mrfclkNone;
+		std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> projection;
+
+		switch (role) {
+			case bprDiffOriginal:
+				projection = bento.fileComparePipeline.originalProjection;
+				break;
+			case bprDiffCompare:
+				projection = bento.fileComparePipeline.compareProjection;
+				break;
+			default:
+				return mrfclkNone;
+		}
+		if (projection == nullptr || projection->lineKinds == nullptr || lineIndex >= projection->lineKinds->size()) return mrfclkNone;
+		return (*projection->lineKinds)[lineIndex];
 	}
 
 	static bool markedDiffLineAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
@@ -11369,7 +11400,6 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 	MREditWindow compareWindow(TRect(0, 0, 80, 20), "compare", 102);
 	MRBentoBox bento(TRect(0, 0, 160, 40), "file compare", 103, bbmFileCompare);
 	MRBentoCompareSetup setup;
-	std::vector<mr::diff::MRDiffHunk> hunks;
 	bool ok = true;
 
 	editSettings.formatRuler = true;
@@ -11387,20 +11417,12 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 		setup.original.bufferId = originalWindow.bufferId();
 		setup.original.documentId = originalWindow.documentId();
 		setup.original.version = originalWindow.documentVersion();
-		setup.original.text = originalText;
+		setup.original.snapshot = originalWindow.getEditor()->readSnapshot();
 		setup.compare.window = &compareWindow;
 		setup.compare.bufferId = compareWindow.bufferId();
 		setup.compare.documentId = compareWindow.documentId();
 		setup.compare.version = compareWindow.documentVersion();
-		setup.compare.text = compareText;
-
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 0, 0, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Delete, 1, 1, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Insert, 2, 1, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 2, 2, 2));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Delete, 4, 4, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Insert, 5, 4, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 5, 5, 1));
+		setup.compare.snapshot = compareWindow.getEditor()->readSnapshot();
 	}
 
 	if (ok && !bento.initializeFileCompare(setup)) {
@@ -11413,13 +11435,13 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 		ok = false;
 	}
 
-	if (ok && !MRBentoBoxFileCompareRegressionHarness::seedDiffReadyState(bento, hunks)) {
+	if (ok && !MRBentoBoxFileCompareRegressionHarness::seedDiffReadyState(bento)) {
 		failureReason = "File compare navigation harness did not build change groups.";
 		ok = false;
 	}
 
 	if (ok) {
-		if (!MRBentoBoxFileCompareRegressionHarness::activateComparePane(bento)) {
+		if (!MRBentoBoxFileCompareRegressionHarness::activatePane(bento, bprDiffCompare)) {
 			failureReason = "File compare navigation harness could not activate the compare pane.";
 			ok = false;
 		}
@@ -11489,6 +11511,25 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 				const int contextGroupIndex = MRBentoBoxFileCompareRegressionHarness::showContextAtDocumentLine(bento, bprDiffCompare, 1);
 				if (contextGroupIndex != 0) {
 					failureReason = "File compare compare-pane context hit-test should select first diff group, got " + std::to_string(contextGroupIndex) + ".";
+					ok = false;
+				}
+			}
+
+			if (ok && !MRBentoBoxFileCompareRegressionHarness::activatePane(bento, bprDiffOriginal)) {
+				failureReason = "File compare navigation harness could not activate the original pane.";
+				ok = false;
+			} else if (ok && !bento.navigateFileCompareChange(true)) {
+				failureReason = "File compare original-pane next-diff navigation failed.";
+				ok = false;
+			} else if (ok) {
+				const std::size_t originalCursorLine = originalEditor->lineIndexOfOffset(originalEditor->cursorOffset());
+				const std::size_t compareCursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
+
+				if (originalCursorLine != 4) {
+					failureReason = "File compare next-diff original cursor line mismatch: expected 4, got " + std::to_string(originalCursorLine) + ".";
+					ok = false;
+				} else if (compareCursorLine != 4) {
+					failureReason = "File compare next-diff synced compare cursor line mismatch: expected 4, got " + std::to_string(compareCursorLine) + ".";
 					ok = false;
 				}
 			}

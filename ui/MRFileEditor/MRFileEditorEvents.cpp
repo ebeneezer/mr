@@ -215,7 +215,7 @@ void MRFileEditor::scrollDraw() {
 
 		delta.x = newDeltaX;
 		delta.y = newDeltaY;
-		if (verticalMoved) {
+		if (verticalMoved && drawLock == 0) {
 			const std::size_t targetVisibleLine = static_cast<std::size_t>(std::max(0, newDeltaY + cursorRow));
 			const std::size_t targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
 			const std::size_t targetOffset = charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), cursorColumn);

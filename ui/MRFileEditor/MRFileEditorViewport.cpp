@@ -152,6 +152,7 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 	inputs.exactLineCountKnown = !approximateLargeFileMetrics && mBufferModel.exactLineCountKnown();
 	inputs.exactLineCount = inputs.exactLineCountKnown ? mBufferModel.lineCount() : 0;
 	inputs.estimatedLineCount = mBufferModel.estimatedLineCount();
+	if (!inputs.exactLineCountKnown) inputs.estimatedLineCount = std::max(inputs.estimatedLineCount, mLineNumberGutterLineCount);
 	if (mFileCompareGuttersConfigured) {
 		const bool lineNumbersLeading = fileCompareGuttersContain(mFileCompareLeftGutters, 'L');
 		const bool lineNumbersTrailing = fileCompareGuttersContain(mFileCompareRightGutters, 'L');
@@ -182,7 +183,9 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 		viewportSettings.codeFolding = false;
 		viewportSettings.codeFoldingPosition = "OFF";
 	}
-	return MRTextViewportLayout::geometryFor(viewportSettings, inputs);
+	TextViewportGeometry viewport = MRTextViewportLayout::geometryFor(viewportSettings, inputs);
+	if (inputs.exactLineCountKnown) mLineNumberGutterLineCount = inputs.exactLineCount;
+	return viewport;
 }
 
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometry() const noexcept {

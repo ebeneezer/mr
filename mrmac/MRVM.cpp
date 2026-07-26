@@ -2254,7 +2254,7 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 	if (key == "PARAM_COUNT") return mrvmMakeInt(static_cast<int>(g_runtimeEnv.processArgs.size()));
 	if (key == "CPU") return mrvmMakeInt(mrvmDetectCpuCode());
 	if (key == "DOC_MODE") return mrvmMakeInt(g_runtimeEnv.docMode);
-	if (key == "PRINT_MARGIN") return mrvmMakeInt(g_runtimeEnv.printMargin);
+	if (key == "PRINT_MARGIN") return mrvmMakeInt(std::atoi(configuredPdfExportSettings().textWidth.c_str()));
 	if (key == "C_COL") return mrvmMakeInt(currentEditorColumn(currentEditor()));
 	if (key == "C_LINE") return mrvmMakeInt(currentEditorLineNumber(currentEditor()));
 	if (key == "C_ROW") return mrvmMakeInt(currentEditorRow(currentEditor()));
@@ -2549,10 +2549,6 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 		g_runtimeEnv.docMode = mrvmValueAsInt(value) != 0 ? 1 : 0;
 		return true;
 	}
-	if (key == "PRINT_MARGIN") {
-		g_runtimeEnv.printMargin = std::max(0, mrvmValueAsInt(value));
-		return true;
-	}
 	if (key == "FORMAT_LINE") return applyConfiguredEditSetupValue("FORMAT_LINE", mrvmValueAsString(value), nullptr);
 	if (key == "DEFAULT_FORMAT") {
 		g_runtimeEnv.defaultFormat = mrvmValueAsString(value);
@@ -2591,7 +2587,7 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 		setConfiguredCyclicVirtualDesktops(mrvmValueAsInt(value) != 0, nullptr);
 		return true;
 	}
-	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" || key == "LAST_FILE_NAME" || key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" || key == "C_LINE" || key == "C_ROW" || key == "C_PAGE" || key == "PG_LINE" || key == "AT_EOF" || key == "AT_EOL" || key == "CUR_WINDOW" || key == "LINK_STAT" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" || key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "KEY1" || key == "KEY2" || key == "BLOCK_STAT" || key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" || key == "BLOCK_COL2" || key == "MARKING" || key == "FIRST_SAVE" || key == "BUFFER_ID" || key == "TMP_FILE" || key == "TMP_FILE_NAME" || key == "LAST_FILE_ATTR" || key == "LAST_FILE_SIZE" || key == "LAST_FILE_TIME" || key == "CUR_FILE_ATTR" || key == "CUR_FILE_SIZE" || key == "READ_ONLY" || key == "FOUND_STR" || key == "SEARCH_FILE" || key == "FOUND_X" || key == "FOUND_Y" || key == "COMSPEC" || key == "TEMP_PATH" || key == "MR_PATH" ||
+	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" || key == "LAST_FILE_NAME" || key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" || key == "C_LINE" || key == "C_ROW" || key == "C_PAGE" || key == "PG_LINE" || key == "AT_EOF" || key == "AT_EOL" || key == "CUR_WINDOW" || key == "LINK_STAT" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" || key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "KEY1" || key == "KEY2" || key == "BLOCK_STAT" || key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" || key == "BLOCK_COL2" || key == "MARKING" || key == "FIRST_SAVE" || key == "BUFFER_ID" || key == "TMP_FILE" || key == "TMP_FILE_NAME" || key == "LAST_FILE_ATTR" || key == "LAST_FILE_SIZE" || key == "LAST_FILE_TIME" || key == "CUR_FILE_ATTR" || key == "CUR_FILE_SIZE" || key == "READ_ONLY" || key == "FOUND_STR" || key == "SEARCH_FILE" || key == "FOUND_X" || key == "FOUND_Y" || key == "COMSPEC" || key == "TEMP_PATH" || key == "MR_PATH" || key == "PRINT_MARGIN" ||
 	    key == "OS_VERSION" || key == "PARAM_COUNT" || key == "CPU" || key == "DISPLAY_TABS")
 		throw std::runtime_error("Attempt to assign to read-only system variable.");
 	return false;

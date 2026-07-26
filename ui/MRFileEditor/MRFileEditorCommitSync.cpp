@@ -2,10 +2,14 @@
 
 bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState, const MRTextBufferModel::DocumentChangeSet *changeSet) {
 	const MRTextBufferModel::Document &document = mBufferModel.document();
+	const bool documentChanged = mCachedCursorLineDocumentId != 0 && mCachedCursorLineDocumentId != document.documentId();
+	const bool wholeDocumentChanged = changeSet != nullptr && changeSet->changed && changeSet->touchedRange.start == 0 &&
+	                                  changeSet->touchedRange.end >= std::max(changeSet->oldLength, changeSet->newLength);
 	const bool preserveStaleMiniMapDuringEdit = changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics();
 	const bool pieceTableOnly = pieceTableOnlyPhaseActive();
 	const bool miniMapEnabled = miniMapPipelineEnabled();
 
+	if (documentChanged || wholeDocumentChanged) mLineNumberGutterLineCount = 0;
 	mLastDocumentChangeSet = changeSet != nullptr ? *changeSet : MRTextBufferModel::DocumentChangeSet();
 	cursorPos = std::min(cursorPos, document.length());
 	selStart = std::min(selStart, document.length());

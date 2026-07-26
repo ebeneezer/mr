@@ -6,7 +6,13 @@
 #include <cstdint>
 #include <cstring>
 
+enum MRPdfExportSource : ushort {
+	pdfExportCurrentFile = 0,
+	pdfExportMarkedBlock = 1
+};
+
 struct MRPdfExportDialogData {
+	ushort source;
 	char outputPath[512];
 	char pageSeparatorLiteral[64];
 	char fontFamily[128];
@@ -19,7 +25,7 @@ struct MRPdfExportDialogData {
 	char topMarginPoints[16];
 	char bottomMarginPoints[16];
 
-	MRPdfExportDialogData() noexcept : outputPath(), pageSeparatorLiteral(), fontFamily(), fontSizePoints(10), headerLine(), footerLine(), textWidth(), leftMarginPoints(), rightMarginPoints(), topMarginPoints(), bottomMarginPoints() {
+	MRPdfExportDialogData() noexcept : source(pdfExportCurrentFile), outputPath(), pageSeparatorLiteral(), fontFamily(), fontSizePoints(10), headerLine(), footerLine(), textWidth(), leftMarginPoints(), rightMarginPoints(), topMarginPoints(), bottomMarginPoints() {
 		std::memset(outputPath, 0, sizeof(outputPath));
 		std::memset(pageSeparatorLiteral, 0, sizeof(pageSeparatorLiteral));
 		std::memset(fontFamily, 0, sizeof(fontFamily));
@@ -33,6 +39,6 @@ struct MRPdfExportDialogData {
 	}
 };
 
-[[nodiscard]] ushort runPdfExportDialog(MRPdfExportDialogData &data);
+[[nodiscard]] ushort runPdfExportDialog(MRPdfExportDialogData &data, bool markedBlockAvailable);
 
 #endif

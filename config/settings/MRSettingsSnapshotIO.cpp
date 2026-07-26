@@ -584,6 +584,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('MULTI_SEARCH_SUBDIRECTORIES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.searchSubdirectories)) + "');\n";
 	source += "MRSETUP('MULTI_SEARCH_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.caseSensitive)) + "');\n";
 	source += "MRSETUP('MULTI_SEARCH_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.regularExpressions)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_WHOLE_WORDS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.wholeWords)) + "');\n";
 	source += "MRSETUP('MULTI_SEARCH_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.searchFilesInMemory)) + "');\n";
 	source += "MRSETUP('MULTI_SEARCH_RESTRICT_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.restrictToWorkspace)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_FILESPEC', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSarDialogOptions.filespec) + "');\n";
@@ -593,6 +594,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('MULTI_SAR_SUBDIRECTORIES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.searchSubdirectories)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.caseSensitive)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.regularExpressions)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_WHOLE_WORDS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.wholeWords)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.searchFilesInMemory)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.keepFilesOpen)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_RESTRICT_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.restrictToWorkspace)) + "');\n";

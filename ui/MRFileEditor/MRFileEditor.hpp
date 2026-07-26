@@ -1213,6 +1213,7 @@ class MRFileEditor : public TScroller {
 	mutable std::size_t mCachedCursorLineOffset;
 	mutable std::size_t mCachedCursorLineIndexValue;
 	mutable bool mCachedCursorLineExact;
+	mutable std::size_t mLineNumberGutterLineCount = 0;
 	std::string mLastUiHotpathTrace;
 
 	void clearDirtyRanges();
