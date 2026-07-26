@@ -49,6 +49,7 @@
 #include "MRCommands.hpp"
 #include "MRExecSessionSmoke.hpp"
 #include "MRExecSessionStatus.hpp"
+#include "MRFunctionKeyBindings.hpp"
 #include "MRMenuFactory.hpp"
 #include "MRMacroDebuggerCommandRoute.hpp"
 #include "MRRuntimeScheduler.hpp"
@@ -126,232 +127,10 @@ bool isBuildCurrentFileDefaultKey(const TEvent &event) noexcept {
 	return normalized == TKey(kbF9);
 }
 
-bool compilerDiagnosticsFunctionKeysActive() {
-	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
-
-	return bentoBox != nullptr && bentoBox->problemsPane() != nullptr && bentoBox->hasCompilerProblems();
-}
-
 bool topNonEditorDesktopViewContains(TPoint where) {
 	TView *desktopTop = TProgram::deskTop != nullptr ? TProgram::deskTop->TopView() : nullptr;
 
 	return desktopTop != nullptr && dynamic_cast<MREditWindow *>(desktopTop) == nullptr && (desktopTop->state & sfVisible) != 0 && desktopTop->mouseInView(where);
-}
-
-MRBentoBox *currentFileCompareBentoBox() {
-	MREditWindow *window = currentEditWindow();
-
-	for (TView *view = window; view != nullptr; view = view->owner) {
-		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
-		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) return bentoBox;
-	}
-	if (window != nullptr)
-		for (MREditWindow *candidate : allEditWindowsInZOrder()) {
-			MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(candidate);
-			if (bentoBox != nullptr && bentoBox->isFileCompareBox() && bentoBox->containsFileCompareSourceWindow(window)) return bentoBox;
-		}
-	return nullptr;
-}
-
-bool fileCompareFunctionKeysActive() {
-	return currentFileCompareBentoBox() != nullptr;
-}
-
-bool bentoToolPaneFunctionKeysActive() {
-	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
-
-	return bentoBox != nullptr && bentoBox->secondaryEditWindow() != nullptr && !compilerDiagnosticsFunctionKeysActive() && !fileCompareFunctionKeysActive();
-}
-
-MRBentoBox *currentMacroDebuggerBentoBox() {
-	TView *view = TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr;
-
-	for (; view != nullptr; view = view->owner) {
-		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
-
-		if (bentoBox != nullptr && bentoBox->macroDebuggerFunctionKeysActive()) return bentoBox;
-	}
-	return nullptr;
-}
-
-const std::vector<MRStatusLine::FunctionKeyLabel> &startupFunctionKeyLabels() {
-	static const std::vector<MRStatusLine::FunctionKeyLabel> labels{
-	    {TKey(kbF1), cmMrHelpContents, "~F1~ Help"},
-	    {TKey(kbF2), cmMrFileLoad, "~F2~ Load"},
-	    {TKey(kbF3), cmMrFileOpen, "~F3~ Open"},
-	    {TKey(kbF4), cmMrFileAcquire, "~F4~ Acquire"},
-	    {TKey(kbF5), cmMrSearchMultiFileSearch, "~F5~ MFS"},
-	    {TKey(kbF6), cmMrWindowOpen, "~F6~ Win"},
-	    {TKey(kbF7), cmMrSearchMultiFileSearchReplace, "~F7~ MFSAR"},
-	    {TKey(kbF8), cmMrFileOpenLiveLog, "~F8~ Log"},
-	    {TKey(kbF9), cmMrFileOpenJournal, "~F9~ Journal"},
-	    {TKey(kbF10), cmMenu, "~F10~ Menu"},
-	    {TKey(kbF11), cmMrToggleFullscreen, "~F11~ Flscr"},
-	    {TKey(kbF12), cmMrSetupUserInterfaceSettings, "~F12~ Setup"},
-	};
-	return labels;
-}
-
-const std::vector<MRStatusLine::FunctionKeyLabel> &editorFunctionKeyLabels() {
-	static const std::vector<MRStatusLine::FunctionKeyLabel> baseLabels{
-	    {TKey(kbF1), cmMrHelpContents, "~F1~ Help"},
-	    {TKey(kbF2), cmMrFileSave, "~F2~ Save"},
-	    {TKey(kbF3), cmMrBlockLoadFromDisk, "~F3~ LoadBlk"},
-	    {TKey(kbF4), cmMrBlockSaveToDisk, "~F4~ SaveBlk"},
-	    {TKey(kbF5), cmMrWindowCascade, "~F5~ Casc"},
-	    {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"},
-	    {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"},
-	    {TKey(kbF8), cmMrBlockCopy, "~F8~ CopyBlk"},
-	    {TKey(kbF9), cmMrOtherBuildCurrentFile, "~F9~ Build"},
-	    {TKey(kbF10), cmMenu, "~F10~ Menu"},
-	    {TKey(kbF11), cmMrToggleFullscreen, "~F11~ Flscr"},
-	    {TKey(kbF12), cmMrSetupUserInterfaceSettings, "~F12~ Setup"},
-	};
-	static std::vector<MRStatusLine::FunctionKeyLabel> labels = baseLabels;
-	MREditWindow *window = currentEditorCommandWindow();
-	const bool diagnosticsActive = compilerDiagnosticsFunctionKeysActive();
-	const bool fileCompareActive = fileCompareFunctionKeysActive();
-	const bool bentoToolPaneActive = bentoToolPaneFunctionKeysActive();
-	MRBentoBox *macroDebuggerBento = currentMacroDebuggerBentoBox();
-	const bool macroDebuggerActive = macroDebuggerBento != nullptr;
-	const bool macroDebuggerLive = macroDebuggerBento != nullptr && macroDebuggerBento->macroDebuggerHasLiveSession();
-	const bool macroDebuggerRunning = macroDebuggerBento != nullptr && macroDebuggerBento->macroDebuggerSessionRunning();
-	const bool readOnlyActive = window != nullptr && window->isReadOnly();
-
-	labels = baseLabels;
-	if (fileCompareActive) {
-		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
-		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
-		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
-		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
-		labels[6] = {TKey(kbShiftF8), cmMrFileComparePreviousChange, "~sF8~ Prev"};
-		labels[7] = {TKey(kbF8), cmMrFileCompareNextChange, "~F8~ Next"};
-	} else if (bentoToolPaneActive) {
-		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
-		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
-		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
-		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
-		labels[6] = {TKey(kbF7), cmMrSearchGotoLineNumber, "~F7~ Goto"};
-		labels[7] = {TKey(kbF8), cmMrSearchRepeatPrevious, "~F8~ Repeat"};
-	} else if (readOnlyActive) {
-		labels[2] = {TKey(kbF3), cmMrFileSaveAs, "~F3~ SaveAs"};
-		labels[3] = {TKey(kbF4), cmMrSearchFindText, "~F4~ Find"};
-		labels[4] = {TKey(kbF5), cmMrSearchMultiFileSearch, "~F5~ MFS"};
-		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
-		labels[6] = {TKey(kbF7), cmMrSearchGotoLineNumber, "~F7~ Goto"};
-		labels[7] = {TKey(kbF8), cmMrSearchRepeatPrevious, "~F8~ Repeat"};
-	}
-	if (diagnosticsActive) {
-		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
-		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
-		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
-		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
-		labels[6] = {TKey(kbF7), cmMrOtherFindPreviousCompilerError, "~F7~ PrevErr"};
-		labels[7] = {TKey(kbF8), cmMrOtherFindNextCompilerError, "~F8~ NextErr"};
-	} else if (!fileCompareActive && !bentoToolPaneActive && !readOnlyActive) {
-		labels[2] = {TKey(kbF3), cmMrBlockLoadFromDisk, "~F3~ LoadBlk"};
-		labels[3] = {TKey(kbF4), cmMrBlockSaveToDisk, "~F4~ SaveBlk"};
-		labels[4] = {TKey(kbF5), cmMrWindowCascade, "~F5~ Casc"};
-		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
-		labels[7] = {TKey(kbF8), cmMrBlockCopy, "~F8~ CopyBlk"};
-	}
-	if (!diagnosticsActive && !fileCompareActive && !bentoToolPaneActive && !readOnlyActive && window != nullptr && window->isBlockMarking()) {
-		labels[6] = {TKey(kbF7), cmMrBlockEndMarking, "~F7~ EndMark"};
-	} else if (!diagnosticsActive && !fileCompareActive && !bentoToolPaneActive && !readOnlyActive)
-		labels[6] = {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"};
-	if (macroDebuggerActive) {
-		labels[3] = {TKey(kbF4), cmMrMacroDebuggerEvaluate, macroDebuggerLive && !macroDebuggerRunning ? "~F4~ Eval" : ""};
-		labels[4] = {TKey(kbF5), cmMrMacroDebuggerContinue, macroDebuggerRunning ? "~F5~ Pause" : (macroDebuggerLive ? "~F5~ Cont" : "")};
-		labels[5] = {TKey(kbF6), cmMrMacroDebuggerRunHere, "~F6~ RunHere"};
-		labels[6] = {TKey(kbF7), cmMrMacroDebuggerAddWatch, "~F7~ Watch +/-"};
-		labels[7] = {TKey(kbF8), cmMrMacroDebuggerStop, macroDebuggerLive ? "~F8~ Stop" : "~F8~ Reset"};
-		labels[8] = {TKey(kbF9), cmMrOtherBuildCurrentFile, "~F9~ BP"};
-		labels[9] = {TKey(kbF10), cmMrMacroDebuggerStep, macroDebuggerLive && !macroDebuggerRunning ? "~F10~ Into" : ""};
-		labels[10] = {TKey(kbF11), cmMrMacroDebuggerStepOver, macroDebuggerLive && !macroDebuggerRunning ? "~F11~ Over" : ""};
-		labels[11] = {TKey(kbShiftF11), cmMrMacroDebuggerStepOut, macroDebuggerLive && !macroDebuggerRunning ? "~S-F11~ Out" : ""};
-	}
-	return labels;
-}
-
-const std::vector<std::string> &snippetSidekickHintLabels() {
-	static const std::vector<std::string> labels{
-	    "~A-Enter~ Insert",
-	    "~Esc~ Cancel",
-	    "~Tab~ Next",
-	    "~sTab~ Prev",
-	    "~Enter~ NewLn",
-	};
-	return labels;
-}
-
-bool editorFunctionKeyContextActive() {
-	MREditWindow *editorWindow = currentEditorCommandWindow();
-
-	return currentEditWindow() != nullptr && editorWindow != nullptr;
-}
-
-bool handleStartupFunctionKey(TEvent &event) {
-	const TKey pressed(event.keyDown);
-
-	for (const MRStatusLine::FunctionKeyLabel &label : startupFunctionKeyLabels()) {
-		if (!(pressed == label.keyCode) || !TView::commandEnabled(label.command)) continue;
-		if (label.command == cmMenu) return false;
-		if (label.command == cmQuit) {
-			event.what = evCommand;
-			event.message.command = cmQuit;
-			event.message.infoPtr = nullptr;
-			return false;
-		}
-		return handleMRCommand(label.command);
-	}
-	return false;
-}
-
-bool handleEditorFunctionKey(TEvent &event) {
-	const TKey pressed(event.keyDown);
-
-	if (fileCompareFunctionKeysActive() && (pressed == TKey(kbF8) || pressed == TKey(kbShiftF8) || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0))) return false;
-	for (const MRStatusLine::FunctionKeyLabel &label : editorFunctionKeyLabels()) {
-		if (!(pressed == label.keyCode)) continue;
-		if (label.command == cmMenu) return false;
-		if (!TView::commandEnabled(label.command)) return false;
-		static_cast<void>(handleMRCommand(label.command));
-		return true;
-	}
-	return false;
-}
-
-bool handleFileCompareFunctionKey(TEvent &event) {
-	if (event.what != evKeyDown) return false;
-	const TKey pressed(event.keyDown);
-	const bool fileCompareNavigationKey = pressed == TKey(kbF8) || pressed == TKey(kbShiftF8) || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0);
-	const bool nextChange = event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) == 0;
-
-	if (!fileCompareNavigationKey) return false;
-	MRBentoBox *bentoBox = currentFileCompareBentoBox();
-	if (bentoBox == nullptr) return false;
-	if (!bentoBox->navigateFileCompareChange(nextChange)) return false;
-
-	event.what = evNothing;
-	return true;
-}
-
-bool handleFileCompareCommand(TEvent &event) {
-	if (event.what != evCommand) return false;
-	const bool nextChange = event.message.command == cmMrFileCompareNextChange;
-	const bool previousChange = event.message.command == cmMrFileComparePreviousChange;
-	const bool applyOriginalToCompare = event.message.command == cmMrFileCompareApplyOriginalToCompare;
-	const bool applyCompareToOriginal = event.message.command == cmMrFileCompareApplyCompareToOriginal;
-
-	if (!nextChange && !previousChange && !applyOriginalToCompare && !applyCompareToOriginal) return false;
-	MRBentoBox *bentoBox = currentFileCompareBentoBox();
-	if (bentoBox != nullptr) {
-		if (nextChange || previousChange) static_cast<void>(bentoBox->navigateFileCompareChange(nextChange));
-		else
-			static_cast<void>(bentoBox->applyFileCompareChange(applyOriginalToCompare));
-	}
-	event.what = evNothing;
-	return true;
 }
 
 void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event) {
@@ -1207,7 +986,7 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), snippetSidekickHintsActive(false), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), snippetSidekickHintsActive(false), functionKeyModifiers(0), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false) {
 	const auto startupStartedAt = std::chrono::steady_clock::now();
 	auto phaseStartedAt = startupStartedAt;
 	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
@@ -1485,20 +1264,20 @@ void MREditorApp::toggleFullscreenPresentation() {
 
 void MREditorApp::syncFunctionKeyState() {
 	const bool startupActive = currentEditWindow() == nullptr;
-	const bool editorActive = !startupActive && editorFunctionKeyContextActive();
+	const bool editorActive = !startupActive && mrEditorFunctionKeyContextActive();
 
 	if (auto *mrStatus = dynamic_cast<MRStatusLine *>(statusLine)) {
 		if (snippetSidekickHintsActive) {
 			mrStatus->setContextFunctionKeysActive(false);
-			mrStatus->setContextHintLabels(snippetSidekickHintLabels());
+			mrStatus->setContextHintLabels(mrSnippetSidekickHintLabels());
 			mrStatus->setContextHintLabelsActive(true);
 		} else if (startupActive) {
 			mrStatus->setContextHintLabelsActive(false);
-			mrStatus->setContextFunctionKeyLabels(startupFunctionKeyLabels());
+			mrStatus->setContextFunctionKeyLabels(mrStartupFunctionKeyLabels(functionKeyModifiers));
 			mrStatus->setContextFunctionKeysActive(true);
 		} else if (editorActive) {
 			mrStatus->setContextHintLabelsActive(false);
-			mrStatus->setContextFunctionKeyLabels(editorFunctionKeyLabels());
+			mrStatus->setContextFunctionKeyLabels(mrEditorFunctionKeyLabels(functionKeyModifiers));
 			mrStatus->setContextFunctionKeysActive(true);
 		} else {
 			mrStatus->setContextHintLabelsActive(false);
@@ -1913,6 +1692,23 @@ void MREditorApp::warmIndexedMacroBindings() {
 
 void MREditorApp::handleEvent(TEvent &event) {
 	const ushort originalWhat = event.what;
+
+	if (event.what == evKeyState) {
+		const ushort rawModifiers = event.keyState.controlKeyState;
+		ushort modifiers = 0;
+
+		if ((rawModifiers & kbShift) != 0) modifiers |= kbShift;
+		if ((rawModifiers & kbCtrlShift) != 0) modifiers |= kbCtrlShift;
+		if ((rawModifiers & kbAltShift) != 0) modifiers |= kbAltShift;
+		if ((rawModifiers & kbSuperShift) != 0) modifiers |= kbSuperShift;
+
+		if (functionKeyModifiers != modifiers) {
+			functionKeyModifiers = modifiers;
+			syncFunctionKeyState();
+		}
+		clearEvent(event);
+		return;
+	}
 	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
 	clearTransientSearchSelectionOnUserInput(event);
@@ -2032,8 +1828,8 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
-	if (handleFileCompareCommand(event)) return;
-	if (mrHandleMacroDebuggerCommand(currentMacroDebuggerBentoBox(), event)) return;
+	if (mrHandleFileCompareCommand(event)) return;
+	if (mrHandleMacroDebuggerCommand(mrCurrentMacroDebuggerBentoBox(), event)) return;
 	if (event.what == evKeyDown && currentEditWindow() == nullptr) {
 		std::string executedMacroName;
 		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {
@@ -2041,21 +1837,21 @@ void MREditorApp::handleEvent(TEvent &event) {
 			clearEvent(event);
 			return;
 		}
-		if (handleStartupFunctionKey(event)) {
+		if (mrHandleStartupFunctionKey(event)) {
 			traceCalculatorHotkeyEvent("app-startup-fkey-consumed", event);
 			clearEvent(event);
 			return;
 		}
 	}
-	if (event.what == evKeyDown && handleFileCompareFunctionKey(event)) {
+	if (event.what == evKeyDown && mrHandleFileCompareFunctionKey(event)) {
 		traceCalculatorHotkeyEvent("app-file-compare-fkey-consumed", event);
 		return;
 	}
-	if (event.what == evKeyDown && mrHandleMacroDebuggerFunctionKey(currentMacroDebuggerBentoBox(), event)) {
+	if (event.what == evKeyDown && mrHandleMacroDebuggerFunctionKey(mrCurrentMacroDebuggerBentoBox(), event)) {
 		traceCalculatorHotkeyEvent("app-macro-debugger-fkey-consumed", event);
 		return;
 	}
-	if (event.what == evKeyDown && editorFunctionKeyContextActive() && handleEditorFunctionKey(event)) {
+	if (event.what == evKeyDown && mrEditorFunctionKeyContextActive() && mrHandleEditorFunctionKey(event)) {
 		traceCalculatorHotkeyEvent("app-editor-fkey-consumed", event);
 		clearEvent(event);
 		return;

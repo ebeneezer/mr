@@ -244,15 +244,15 @@ class MRStatusLine : public TStatusLine {
 	};
 
 	static constexpr std::chrono::milliseconds functionKeyLabelTransitionDuration() {
-		return std::chrono::milliseconds(1000);
+		return std::chrono::milliseconds(262);
 	}
 	static constexpr std::chrono::milliseconds functionKeyLabelEntryPauseDuration() {
-		return std::chrono::milliseconds(300);
+		return std::chrono::milliseconds(78);
 	}
 
 	std::chrono::milliseconds nextFunctionKeyLabelStartDelay() {
 		mFunctionKeyLabelRandomState = mFunctionKeyLabelRandomState * 1664525u + 1013904223u;
-		return std::chrono::milliseconds(mFunctionKeyLabelRandomState % 701u);
+		return std::chrono::milliseconds(mFunctionKeyLabelRandomState % 184u);
 	}
 
 	static int functionKeyLabelTransitionShift(const FunctionKeyLabelTransition &transition, int width, std::chrono::steady_clock::time_point now) {

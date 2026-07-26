@@ -13,6 +13,8 @@ inline bool operator==(const TEvent &a, const TEvent &b)
         return false;
     if (a.what == evNothing)
         return true;
+    if (a.what == evKeyState)
+        return a.keyState.controlKeyState == b.keyState.controlKeyState;
     if (a.what & evKeyboard)
         return
             a.keyDown.keyCode == b.keyDown.keyCode &&
@@ -37,7 +39,9 @@ inline std::ostream &operator<<(std::ostream &os, const TEvent &ev)
     os << "{";
     printEventCode(os, ev.what);
     os << ", ";
-    if (ev.what & evKeyboard)
+    if (ev.what == evKeyState)
+        printControlKeyState(os, ev.keyState.controlKeyState);
+    else if (ev.what & evKeyboard)
     {
         os << "{";
         printKeyCode(os, ev.keyDown.keyCode);
@@ -94,6 +98,14 @@ inline TEvent keyDownEv(ushort keyCode, ushort controlKeyState, TStringView text
         ev.keyDown.text[ev.keyDown.textLength] = text[ev.keyDown.textLength];
         ++ev.keyDown.textLength;
     }
+    return ev;
+}
+
+inline TEvent keyStateEv(ushort controlKeyState)
+{
+    TEvent ev {};
+    ev.what = evKeyState;
+    ev.keyState.controlKeyState = controlKeyState;
     return ev;
 }
 

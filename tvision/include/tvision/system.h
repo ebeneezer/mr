@@ -32,6 +32,7 @@ const int evMouseMove = 0x0004;
 const int evMouseAuto = 0x0008;
 const int evMouseWheel= 0x0020;
 const int evKeyDown   = 0x0010;
+const int evKeyState  = 0x0040;
 const int evCommand   = 0x0100;
 const int evBroadcast = 0x0200;
 
@@ -204,6 +205,11 @@ struct KeyDownEvent
     operator TKey() const;
 };
 
+struct KeyStateEvent
+{
+    ushort controlKeyState;
+};
+
 inline TStringView KeyDownEvent::getText() const
 {
     return TStringView(text, textLength);
@@ -245,6 +251,7 @@ struct TEvent
     {
         MouseEventType mouse;
         KeyDownEvent keyDown;
+        KeyStateEvent keyState;
         MessageEvent message;
     };
 

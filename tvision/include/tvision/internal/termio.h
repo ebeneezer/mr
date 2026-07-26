@@ -17,6 +17,32 @@ struct Far2lState
     bool enabled {false};
 };
 
+enum KittyKeyboardPhase : uchar
+{
+    kkpDisabled,
+    kkpQuerying,
+    kkpEnablePending,
+    kkpVerifying,
+    kkpActive,
+    kkpDisablePending
+};
+
+struct KittyKeyboardState
+{
+    enum { maxPendingText = 12 };
+
+    KittyKeyboardPhase phase {kkpDisabled};
+    uint reportedFlags {0};
+    ushort modifiers {0};
+    uint32_t pendingText[maxPendingText] {};
+    uint pendingTextModifiers {1};
+    uchar pendingTextIndex {0};
+    uchar pendingTextCount {0};
+    bool queryAnswered {false};
+    bool pushed {false};
+    bool stateEventPending {false};
+};
+
 struct InputState
 {
     uchar buttons {0};
@@ -24,6 +50,7 @@ struct InputState
     wchar_t surrogate {0};
 #endif
     Far2lState far2l;
+    KittyKeyboardState kittyKeyboard;
     bool hasFullOsc52 {false};
     bool bracketedPaste {false};
     bool gotDsrResponse {false};
@@ -110,11 +137,12 @@ struct CSIData
     // - .getValue(3, <a default value>): 789
 
     // CSIs can be longer, but this is the largest we need for now.
-    enum { maxLength = 6 };
+    enum { maxLength = 16 };
 
     uint length {0};
     uint _values[maxLength];
     char _separators[maxLength - 1];
+    char prefix {0};
     char terminator {0};
 
     bool readFrom(GetChBuf &buf) noexcept;
@@ -142,8 +170,9 @@ namespace TermIO
 {
     void mouseOn(ConsoleCtl &) noexcept;
     void mouseOff(ConsoleCtl &) noexcept;
-    void keyModsOn(ConsoleCtl &) noexcept;
-    void keyModsOff(ConsoleCtl &) noexcept;
+    void keyModsOn(ConsoleCtl &, InputState &) noexcept;
+    void keyModsOff(ConsoleCtl &, InputState &) noexcept;
+    void applyPendingKeyMods(ConsoleCtl &, InputState &) noexcept;
 
     void normalizeKey(KeyDownEvent &keyDown) noexcept;
 
@@ -156,7 +185,7 @@ namespace TermIO
     ParseResult parseSGRMouse(GetChBuf&, TEvent&, InputState&) noexcept;
     ParseResult parseCSIKey(const CSIData &csi, TEvent&, InputState&) noexcept;
     ParseResult parseSS3Key(GetChBuf&, TEvent&) noexcept;
-    ParseResult parseKittyKey(const CSIData &csi, TEvent&) noexcept;
+    ParseResult parseKittyKey(const CSIData &csi, TEvent&, InputState&) noexcept;
     ParseResult parseDCS(GetChBuf&, InputState&) noexcept;
     ParseResult parseOSC(GetChBuf&, InputState&) noexcept;
     ParseResult parseCPR(const CSIData &csi, InputState&) noexcept;

@@ -293,6 +293,7 @@ NcursesInput::NcursesInput( ConsoleCtl &aCon, NcursesDisplay &,
      * special key sequences, I believe. */
     set_escdelay(getEnv<int>("ESCDELAY", 10));
 
+    TermIO::keyModsOn(con, state);
     if (mouseEnabled)
         TermIO::mouseOn(con);
 }
@@ -301,6 +302,7 @@ NcursesInput::~NcursesInput()
 {
     if (mouseEnabled)
         TermIO::mouseOff(con);
+    TermIO::keyModsOff(con, state);
     TermIO::consumeUnprocessedInput(con, in, state);
 }
 
@@ -314,13 +316,18 @@ int NcursesInput::getChNb() noexcept
 
 bool NcursesInput::hasPendingEvents() noexcept
 {
-    return in.pendingCount > 0;
+    KittyKeyboardState &kitty = state.kittyKeyboard;
+    return in.pendingCount > 0 ||
+           kitty.stateEventPending ||
+           kitty.pendingTextIndex < kitty.pendingTextCount;
 }
 
 bool NcursesInput::getEvent(TEvent &ev) noexcept
 {
     GetChBuf buf(in);
-    switch (TermIO::parseEvent(buf, ev, state))
+    ParseResult parseResult = TermIO::parseEvent(buf, ev, state);
+    TermIO::applyPendingKeyMods(con, state);
+    switch (parseResult)
     {
         case Rejected: buf.reject(); break;
         case Accepted: return true;

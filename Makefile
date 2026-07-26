@@ -159,6 +159,7 @@ CXX_SOURCES = \
 	app/router/MRCommandRouterSearchMultiFileDialog.cpp \
 	app/router/MRCommandRouterSearchMultiFileSession.cpp \
 	app/router/MRCommandRouterText.cpp \
+	app/MRFunctionKeyBindings.cpp \
 	app/MRMenuFactory.cpp \
 	app/MRMacroDebuggerCommandRoute.cpp \
 	app/MRVersion.cpp \
@@ -554,6 +555,7 @@ $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp
 app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp app/router/MRCommandRouterGit.hpp app/router/MRCommandRouterText.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMRuntimeKv.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MRFunctionKeyBindings.o: app/MRFunctionKeyBindings.cpp app/MRFunctionKeyBindings.hpp app/MRCommandRouter.hpp app/MRCommands.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRStatusLine.hpp ui/MRWindowSupport.hpp
 app/router/MRCommandRouterGit.o: app/router/MRCommandRouterGit.cpp app/router/MRCommandRouterGit.hpp app/commands/MRExternalCommand.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/router/MRCommandRouterText.o: app/router/MRCommandRouterText.cpp app/router/MRCommandRouterText.hpp app/commands/MRWindowCommands.hpp app/utils/MRStringUtils.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp dialogs/setup/MRSetupCommon.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFrame.hpp ui/MRMessageLineController.hpp ui/MRWindowSupport.hpp app/MREditorApp.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/MRMenuBar.hpp
@@ -564,7 +566,7 @@ app/MRExecSessionStatus.o: app/MRExecSessionStatus.cpp app/MRExecSessionStatus.h
 app/MRExecSessionSmoke.o: app/MRExecSessionSmoke.cpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRMacroRunner.hpp ui/MRWindowSupport.hpp
 app/MRRuntimeScheduler.o: app/MRRuntimeScheduler.cpp app/MRRuntimeScheduler.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRWindowSupport.hpp
 app/MRRuntimeTimerSource.o: app/MRRuntimeTimerSource.cpp app/MRRuntimeTimerSource.hpp app/MRRuntimeScheduler.hpp
-app/MREditorApp.o: app/MREditorApp.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp app/MRMenuFactory.hpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/MRDeskTop.hpp ui/MRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MREditorApp.o: app/MREditorApp.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp app/MRFunctionKeyBindings.hpp app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp app/MRMenuFactory.hpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/MRDeskTop.hpp ui/MRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRMacroDebuggerCommandRoute.o: app/MRMacroDebuggerCommandRoute.cpp app/MRMacroDebuggerCommandRoute.hpp app/MRCommands.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRWindowSupport.hpp
 dialogs/MRAbout.o: dialogs/MRAbout.cpp dialogs/MRAbout.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
 dialogs/MRDirtyGating.o: dialogs/MRDirtyGating.cpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp

@@ -217,4 +217,189 @@ TEST(TermIO, ShouldReadKittyKeys)
     }
 }
 
+TEST(TermIO, ShouldReadEnhancedKittyKeyEvents)
+{
+    static const TestCase<TStringView, std::vector<TEvent>> testCases[] =
+    {
+        {
+            "\x1B[97;1:1;97u"
+            "\x1B[97;1:2;97u"
+            "\x1B[97;1:3u",
+            {
+                keyDownEv(0x0061, 0x0000, "a"),
+                keyDownEv(0x0061, 0x0000, "a"),
+            },
+        },
+        {
+            "\x1B[15;1:1~"
+            "\x1B[15;1:2~"
+            "\x1B[15;1:3~",
+            {
+                keyDownEv(kbF5, 0x0000),
+                keyDownEv(kbF5, 0x0000),
+            },
+        },
+        {
+            "\x1B[1;1:1Q"
+            "\x1B[1;1:2Q"
+            "\x1B[1;1:3Q",
+            {
+                keyDownEv(kbF2, 0x0000),
+                keyDownEv(kbF2, 0x0000),
+            },
+        },
+        {
+            "\x1B[0;1:1;97:98u",
+            {
+                keyDownEv(0x0061, 0x0000, "a"),
+                keyDownEv(0x0062, 0x0000, "b"),
+            },
+        },
+        {
+            "\x1B[0;1:1;8364:128578u",
+            {
+                keyDownEv(kbNoKey, 0x0000, "€"),
+                keyDownEv(kbNoKey, 0x0000, "🙂"),
+            },
+        },
+    };
+
+    for (auto &testCase : testCases)
+    {
+        StrInputGetter in(testCase.input);
+        std::vector<TEvent> actual {};
+        InputState state {};
+        state.kittyKeyboard.phase = kkpActive;
+        while (true)
+        {
+            GetChBuf buf(in);
+            TEvent ev {};
+            ParseResult result = TermIO::parseEvent(buf, ev, state);
+            if (result == Accepted)
+                actual.push_back(ev);
+            else if (result == Rejected)
+                break;
+        }
+        expectResultMatches(actual, testCase);
+    }
+}
+
+TEST(TermIO, ShouldTrackEnhancedKittyModifierState)
+{
+    TStringView input =
+        "\x1B[57441;2:1u" // Left Shift pressed.
+        "\x1B[57441;2:2u" // Left Shift repeated.
+        "\x1B[57447;2:1u" // Right Shift pressed.
+        "\x1B[57441;2:3u" // Left Shift released.
+        "\x1B[57447;1:3u" // Right Shift released.
+        "\x1B[57442;5:1u" // Left Ctrl pressed.
+        "\x1B[57443;7:1u" // Left Alt pressed.
+        "\x1B[57442;3:3u" // Left Ctrl released.
+        "\x1B[57443;1:3u"; // Left Alt released.
+    std::vector<TEvent> expected =
+    {
+        keyStateEv(kbShift),
+        keyStateEv(0x0000),
+        keyStateEv(kbLeftCtrl),
+        keyStateEv(kbLeftCtrl | kbLeftAlt),
+        keyStateEv(kbLeftAlt),
+        keyStateEv(0x0000),
+    };
+
+    StrInputGetter in(input);
+    std::vector<TEvent> actual {};
+    InputState state {};
+    state.kittyKeyboard.phase = kkpActive;
+    while (true)
+    {
+        GetChBuf buf(in);
+        TEvent ev {};
+        ParseResult result = TermIO::parseEvent(buf, ev, state);
+        if (result == Accepted)
+            actual.push_back(ev);
+        else if (result == Rejected)
+            break;
+    }
+    EXPECT_EQ(actual, expected);
+    EXPECT_EQ(state.kittyKeyboard.modifiers, 0x0000);
+}
+
+TEST(TermIO, ShouldNegotiateEnhancedKittyKeyboardProtocol)
+{
+    {
+        StrInputGetter in("\x1B[?0u\x1B[?1;2c");
+        InputState state {};
+        state.kittyKeyboard.phase = kkpQuerying;
+        for (int i = 0; i < 2; ++i)
+        {
+            GetChBuf buf(in);
+            TEvent ev {};
+            EXPECT_EQ(TermIO::parseEvent(buf, ev, state), Ignored);
+        }
+        EXPECT_EQ(state.kittyKeyboard.phase, kkpEnablePending);
+    }
+    {
+        StrInputGetter in("\x1B[?1;2c");
+        InputState state {};
+        state.kittyKeyboard.phase = kkpQuerying;
+        GetChBuf buf(in);
+        TEvent ev {};
+        EXPECT_EQ(TermIO::parseEvent(buf, ev, state), Ignored);
+        EXPECT_EQ(state.kittyKeyboard.phase, kkpDisabled);
+    }
+    {
+        StrInputGetter in(
+            "\x1B[57441;2:1u"
+            "\x1B[?31u"
+            "\x1B[?1;2c"
+        );
+        InputState state {};
+        state.kittyKeyboard.phase = kkpVerifying;
+        state.kittyKeyboard.pushed = true;
+        for (int i = 0; i < 3; ++i)
+        {
+            GetChBuf buf(in);
+            TEvent ev {};
+            EXPECT_EQ(TermIO::parseEvent(buf, ev, state), Ignored);
+        }
+        EXPECT_EQ(state.kittyKeyboard.phase, kkpActive);
+
+        GetChBuf buf(in);
+        TEvent ev {};
+        EXPECT_EQ(TermIO::parseEvent(buf, ev, state), Accepted);
+        EXPECT_EQ(ev, keyStateEv(kbShift));
+    }
+    {
+        StrInputGetter in("\x1B[?31u\x1B[?1;2c");
+        InputState state {};
+        state.kittyKeyboard.phase = kkpVerifying;
+        state.kittyKeyboard.pushed = true;
+        for (int i = 0; i < 2; ++i)
+        {
+            GetChBuf buf(in);
+            TEvent ev {};
+            EXPECT_EQ(TermIO::parseEvent(buf, ev, state), Ignored);
+        }
+        EXPECT_EQ(state.kittyKeyboard.phase, kkpActive);
+
+        GetChBuf buf(in);
+        TEvent ev {};
+        EXPECT_EQ(TermIO::parseEvent(buf, ev, state), Accepted);
+        EXPECT_EQ(ev, keyStateEv(0));
+    }
+    {
+        StrInputGetter in("\x1B[?15u\x1B[?1;2c");
+        InputState state {};
+        state.kittyKeyboard.phase = kkpVerifying;
+        state.kittyKeyboard.pushed = true;
+        for (int i = 0; i < 2; ++i)
+        {
+            GetChBuf buf(in);
+            TEvent ev {};
+            EXPECT_EQ(TermIO::parseEvent(buf, ev, state), Ignored);
+        }
+        EXPECT_EQ(state.kittyKeyboard.phase, kkpDisablePending);
+    }
+}
+
 } // namespace tvision

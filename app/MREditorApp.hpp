@@ -89,6 +89,7 @@ class MREditorApp : public TApplication {
 	bool persistentBlocksMenuEnabled;
 	bool menulineMessagesEnabled;
 	bool snippetSidekickHintsActive;
+	ushort functionKeyModifiers;
 	int virtualDesktopCount;
 	bool cyclicVirtualDesktopsEnabled;
 };
