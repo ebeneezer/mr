@@ -37,6 +37,7 @@ bool mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(MRVMRuntimeKv &runtimeKv, c
 bool mrvmRuntimeDebuggerEnabledBreakpointOffsetsForMacro(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, std::vector<std::size_t> &bytecodeOffsets);
 bool mrvmRuntimeDebuggerWriteWatch(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, const std::string &expression, bool enabled);
 bool mrvmRuntimeDebuggerEraseWatch(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, const std::string &expression);
+bool mrvmRuntimeDebuggerEraseWatchesForMacro(MRVMRuntimeKv &runtimeKv, const std::string &macroKey);
 bool mrvmRuntimeDebuggerWatchesForMacro(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, std::vector<MRMacroDebuggerWatch> &watches);
 
 #endif

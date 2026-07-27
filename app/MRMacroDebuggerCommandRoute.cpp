@@ -79,11 +79,30 @@ bool mrMacroDebuggerObservesSourcePath(const std::string &sourcePath) {
 	return false;
 }
 
+MRBentoBox *mrMacroDebuggerForSourcePath(const std::string &sourcePath, const MRBentoBox *excluded) {
+	if (sourcePath.empty()) return nullptr;
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+
+		if (bentoBox != nullptr && bentoBox != excluded && bentoBox->macroDebuggerTargetsSourcePath(sourcePath)) return bentoBox;
+	}
+	return nullptr;
+}
+
 bool mrAttachScheduledMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult) {
 	for (MREditWindow *window : allEditWindowsInZOrder()) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
 
 		if (bentoBox != nullptr && bentoBox->acceptScheduledMacroDebuggerSession(sessionId, debugResult)) return true;
+	}
+	return false;
+}
+
+bool mrApplyMacroDebuggerWorkerResult(MRMacroExecutionSessionId sessionId, std::uint64_t taskId, const MRMacroDebugRunResult &debugResult, const std::string &errorMessage) {
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+
+		if (bentoBox != nullptr && bentoBox->acceptMacroDebuggerWorkerResult(sessionId, taskId, debugResult, errorMessage)) return true;
 	}
 	return false;
 }

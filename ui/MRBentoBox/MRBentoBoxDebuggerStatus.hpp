@@ -6,7 +6,7 @@
 #include "../../mrmac/MRVM.hpp"
 
 const char *mrMacroDebuggerStopReasonText(MRMacroDebugStopReason reason) noexcept;
-std::string mrMacroDebuggerStatusText(const std::string &macroName, MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult, const std::string &errorMessage);
-std::string mrMacroDebuggerNoticeText(const std::string &macroName, MRMacroExecutionSessionId sessionId, const std::string &message);
+std::string mrMacroDebuggerStatusText(const std::string &macroName, const std::string &sourcePath, MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult, const std::string &errorMessage);
+std::string mrMacroDebuggerNoticeText(const std::string &macroName, const std::string &sourcePath, MRMacroExecutionSessionId sessionId, const std::string &message);
 
 #endif

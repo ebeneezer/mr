@@ -1,6 +1,8 @@
 #include "MRBentoBoxDebuggerStatus.hpp"
 
+#include "../../mrmac/vm/MRVMMacroSpecRuntime.hpp"
 #include "../../mrmac/vm/MRVMRuntimeDebugger.hpp"
+#include "../../mrmac/vm/MRVMValue.hpp"
 
 #include <array>
 #include <sstream>
@@ -42,20 +44,21 @@ void appendVariableCounts(std::ostringstream &out, const std::vector<MRMacroDebu
 		const char *label;
 		int count;
 	};
-	std::array<ScopeCount, 5> counts{{
+	std::array<ScopeCount, 4> counts{{
 	    {mrdVariableLocal, "locals", 0},
-	    {mrdVariableFileGlobal, "file", 0},
 	    {mrdVariableAppGlobal, "app", 0},
 	    {mrdVariableClosure, "closure", 0},
 	    {mrdVariableSession, "session", 0},
 	}};
 
-	for (const MRMacroDebugVariableSnapshot &variable : variables)
-		for (ScopeCount &count : counts)
-			if (variable.scope == count.scope) {
-				++count.count;
-				break;
-			}
+	for (const MRMacroDebugVariableSnapshot &variable : variables) {
+		if (variable.depth != 0) continue;
+		for (ScopeCount &count : counts) {
+			if (variable.scope != count.scope) continue;
+			++count.count;
+			break;
+		}
+	}
 	out << "Variables:";
 	for (const ScopeCount &count : counts)
 		out << " " << count.label << " " << count.count;
@@ -100,6 +103,12 @@ void appendLogTail(std::ostringstream &out, const std::vector<std::string> &line
 		out << lines[index] << "\n";
 }
 
+void appendSourceIdentity(std::ostringstream &out, const std::string &sourcePath, const std::string &macroName) {
+	const std::string fileName = mrvmStripMrmacExtension(mrvmTruncatePathPart(sourcePath));
+
+	out << "Source: " << (fileName.empty() ? "<source unavailable>" : fileName) << "^" << macroName << "\n";
+}
+
 }
 
 const char *mrMacroDebuggerStopReasonText(MRMacroDebugStopReason reason) noexcept {
@@ -124,12 +133,13 @@ const char *mrMacroDebuggerStopReasonText(MRMacroDebugStopReason reason) noexcep
 	}
 }
 
-std::string mrMacroDebuggerStatusText(const std::string &macroName, MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult, const std::string &errorMessage) {
+std::string mrMacroDebuggerStatusText(const std::string &macroName, const std::string &sourcePath, MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult, const std::string &errorMessage) {
 	std::ostringstream out;
 	const std::string macroKey = debugResult.macroKey.empty() ? macroName : debugResult.macroKey;
 
 	out << "Macro Debugger\n";
 	out << "Macro: " << macroName << "\n";
+	appendSourceIdentity(out, sourcePath, macroName);
 	if (sessionId != 0) out << "Session: #" << sessionId << "\n";
 	else
 		out << "Session: none\n";
@@ -149,11 +159,12 @@ std::string mrMacroDebuggerStatusText(const std::string &macroName, MRMacroExecu
 	return out.str();
 }
 
-std::string mrMacroDebuggerNoticeText(const std::string &macroName, MRMacroExecutionSessionId sessionId, const std::string &message) {
+std::string mrMacroDebuggerNoticeText(const std::string &macroName, const std::string &sourcePath, MRMacroExecutionSessionId sessionId, const std::string &message) {
 	std::ostringstream out;
 
 	out << "Macro Debugger\n";
 	out << "Macro: " << macroName << "\n";
+	appendSourceIdentity(out, sourcePath, macroName);
 	if (sessionId != 0) out << "Session: #" << sessionId << "\n";
 	else
 		out << "Session: none\n";

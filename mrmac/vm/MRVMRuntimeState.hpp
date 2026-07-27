@@ -242,4 +242,7 @@ extern thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFla
 extern thread_local ExecutionState *g_executionState;
 extern thread_local MRMacroExecutionSessionId g_executionSessionId;
 
+void mrvmInitializeBackgroundEditSession(BackgroundEditSession &session, const MRMacroStagedExecutionInput &input);
+MRMacroStagedJobResult mrvmBuildStagedJobResult(const VirtualMachine &vm, const BackgroundEditSession &session);
+
 #endif

@@ -16,5 +16,6 @@ struct MRVMDebugSessionCleanup {
 bool mrvmCollectDebugBreakpointOffsetsForLoadedFile(const std::string &macroKey, std::vector<std::size_t> &breakpointOffsets);
 bool mrvmConfigureDebugSessionCleanup(MRMacroExecutionSessionId sessionId, const MRVMDebugSessionCleanup &cleanup);
 void mrvmFinalizeDebugSession(MRMacroExecutionSession &session, const MRMacroDebugRunResult &result, const MRVMDebugSessionCleanup &cleanup);
+void mrvmRejectDebugSession(MRMacroExecutionSession &session, const MRVMDebugSessionCleanup &cleanup, const std::string &message);
 
 #endif

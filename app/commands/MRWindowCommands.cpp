@@ -11,6 +11,7 @@
 #include "MRBentoWorkspaceCodec.hpp"
 #include "MRFileCommands.hpp"
 #include "MRWindowCommands.hpp"
+#include "../MRMacroDebuggerCommandRoute.hpp"
 #include "../router/MRCommandRouterGit.hpp"
 
 #include <algorithm>
@@ -359,56 +360,44 @@ bool parseWorkspaceInt(const std::string &text, int &value) {
 	return true;
 }
 
-std::string encodeMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration) {
-	std::ostringstream out;
+bool parseWorkspaceIntPair(const std::string &text, int &first, int &second) {
+	const std::size_t comma = text.find(',');
 
-	out << "v1";
-	out << ",k:" << workspaceHexEncode(configuration.macroKey);
-	out << ",n:" << workspaceHexEncode(configuration.macroName);
-	out << ",b:";
-	for (std::size_t index = 0; index < configuration.breakpoints.size(); ++index) {
-		const MRMacroDebuggerWorkspaceBreakpoint &breakpoint = configuration.breakpoints[index];
-
-		if (index != 0) out << ".";
-		out << workspaceHexEncode(breakpoint.macroKey) << ":" << breakpoint.line << ":" << (breakpoint.enabled ? 1 : 0);
-	}
-	out << ",w:";
-	for (std::size_t index = 0; index < configuration.watches.size(); ++index) {
-		const MRMacroDebuggerWorkspaceWatch &watch = configuration.watches[index];
-
-		if (index != 0) out << ".";
-		out << workspaceHexEncode(watch.expression) << ":" << (watch.enabled ? 1 : 0);
-	}
-	return out.str();
+	if (comma == std::string::npos || text.find(',', comma + 1) != std::string::npos) return false;
+	return parseWorkspaceInt(text.substr(0, comma), first) && parseWorkspaceInt(text.substr(comma + 1), second);
 }
 
-bool parseMacroDebuggerWorkspaceConfiguration(const std::string &token, MRMacroDebuggerWorkspaceConfiguration &configuration) {
-	std::vector<std::string> fields = splitWorkspaceToken(token, ',');
+enum class WorkspaceOptionKind : unsigned char {
+	Minimized,
+	RestoreSize,
+	RestorePosition,
+	MainFile,
+	Bento,
+	Debugger,
+	FileCompareOriginal,
+	FileCompareCompare,
+};
 
-	configuration = MRMacroDebuggerWorkspaceConfiguration();
-	if (fields.size() != 5 || fields[0] != "v1" || fields[1].rfind("k:", 0) != 0 || fields[2].rfind("n:", 0) != 0 || fields[3].rfind("b:", 0) != 0 || fields[4].rfind("w:", 0) != 0) return false;
-	if (!workspaceHexDecode(fields[1].substr(2), configuration.macroKey) || !workspaceHexDecode(fields[2].substr(2), configuration.macroName) || configuration.macroKey.empty()) return false;
-	if (!fields[3].substr(2).empty())
-		for (const std::string &entry : splitWorkspaceToken(fields[3].substr(2), '.')) {
-			std::vector<std::string> values = splitWorkspaceToken(entry, ':');
-			MRMacroDebuggerWorkspaceBreakpoint breakpoint;
-			int enabled = 0;
+struct WorkspaceOptionDescriptor {
+	const char *key;
+	WorkspaceOptionKind kind;
+};
 
-			if (values.size() != 3 || !workspaceHexDecode(values[0], breakpoint.macroKey) || !parseWorkspaceInt(values[1], breakpoint.line) || !parseWorkspaceInt(values[2], enabled) || breakpoint.macroKey.empty() || breakpoint.line <= 0 || (enabled != 0 && enabled != 1)) return false;
-			breakpoint.enabled = enabled != 0;
-			configuration.breakpoints.push_back(breakpoint);
-		}
-	if (!fields[4].substr(2).empty())
-		for (const std::string &entry : splitWorkspaceToken(fields[4].substr(2), '.')) {
-			std::vector<std::string> values = splitWorkspaceToken(entry, ':');
-			MRMacroDebuggerWorkspaceWatch watch;
-			int enabled = 0;
+static const WorkspaceOptionDescriptor kWorkspaceOptionDescriptors[] = {
+	{"min", WorkspaceOptionKind::Minimized},
+	{"restore", WorkspaceOptionKind::RestoreSize},
+	{"rpos", WorkspaceOptionKind::RestorePosition},
+	{"main", WorkspaceOptionKind::MainFile},
+	{"bento", WorkspaceOptionKind::Bento},
+	{"debug", WorkspaceOptionKind::Debugger},
+	{"fco", WorkspaceOptionKind::FileCompareOriginal},
+	{"fcc", WorkspaceOptionKind::FileCompareCompare},
+};
 
-			if (values.size() != 2 || !workspaceHexDecode(values[0], watch.expression) || !parseWorkspaceInt(values[1], enabled) || watch.expression.empty() || (enabled != 0 && enabled != 1)) return false;
-			watch.enabled = enabled != 0;
-			configuration.watches.push_back(watch);
-		}
-	return true;
+const WorkspaceOptionDescriptor *workspaceOptionDescriptor(const std::string &key) noexcept {
+	for (const WorkspaceOptionDescriptor &descriptor : kWorkspaceOptionDescriptors)
+		if (key == descriptor.key) return &descriptor;
+	return nullptr;
 }
 
 int workspaceVirtualDesktopOrRandom(int savedDesktop) {
@@ -424,11 +413,15 @@ int workspaceVirtualDesktopOrRandom(int savedDesktop) {
 
 bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry, bool logBootstrapNormalization = false) {
 	static const std::regex linePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
-	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?(?: main=(0|1))?(?: bento=([^ ]+))?(?: debug=([^ ]+))?(?: fco=([0-9A-Fa-f]+) fcc=([0-9A-Fa-f]+))?$)", std::regex_constants::ECMAScript);
+	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: (.*))?$)", std::regex_constants::ECMAScript);
 	std::smatch match;
 	std::smatch payloadMatch;
 	std::string payload;
 	std::vector<std::string> bootstrapLogMessages;
+	std::string fileCompareOriginalToken;
+	std::string fileCompareCompareToken;
+	bool restoreSizeSeen = false;
+	bool restorePositionSeen = false;
 
 	if (!std::regex_search(line, match, linePattern)) return false;
 	payload = unescapeMrmacSingleQuotedLiteral(match[1].str());
@@ -442,33 +435,93 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry, bool lo
 	entry.column = std::stoi(payloadMatch[6].str());
 	entry.line = std::stoi(payloadMatch[7].str());
 	entry.vd = std::stoi(payloadMatch[8].str());
-	entry.minimized = payloadMatch[9].matched && payloadMatch[9].str() == "1";
-	if (payloadMatch[10].matched && payloadMatch[11].matched && payloadMatch[12].matched && payloadMatch[13].matched) {
-		entry.restoreWidth = std::stoi(payloadMatch[10].str());
-		entry.restoreHeight = std::stoi(payloadMatch[11].str());
-		entry.restoreX = std::stoi(payloadMatch[12].str());
-		entry.restoreY = std::stoi(payloadMatch[13].str());
-	} else {
+	entry.restoreWidth = entry.width;
+	entry.restoreHeight = entry.height;
+	entry.restoreX = entry.x;
+	entry.restoreY = entry.y;
+	if (payloadMatch[9].matched)
+		for (const std::string &optionText : splitWorkspaceToken(payloadMatch[9].str(), ' ')) {
+			const std::size_t equals = optionText.find('=');
+			const std::string key = equals == std::string::npos ? optionText : optionText.substr(0, equals);
+			const std::string value = equals == std::string::npos ? std::string() : optionText.substr(equals + 1);
+			const WorkspaceOptionDescriptor *descriptor = workspaceOptionDescriptor(key);
+			bool accepted = descriptor != nullptr && equals != std::string::npos;
+
+			if (accepted)
+				switch (descriptor->kind) {
+					case WorkspaceOptionKind::Minimized:
+						accepted = value == "0" || value == "1";
+						if (accepted) entry.minimized = value == "1";
+						break;
+					case WorkspaceOptionKind::RestoreSize:
+						{
+							int width = entry.width;
+							int height = entry.height;
+
+							accepted = parseWorkspaceIntPair(value, width, height);
+							if (accepted) {
+								entry.restoreWidth = width;
+								entry.restoreHeight = height;
+							}
+						}
+						restoreSizeSeen = accepted;
+						break;
+					case WorkspaceOptionKind::RestorePosition:
+						{
+							int x = entry.x;
+							int y = entry.y;
+
+							accepted = parseWorkspaceIntPair(value, x, y);
+							if (accepted) {
+								entry.restoreX = x;
+								entry.restoreY = y;
+							}
+						}
+						restorePositionSeen = accepted;
+						break;
+					case WorkspaceOptionKind::MainFile:
+						accepted = value == "0" || value == "1";
+						if (accepted) entry.mainFile = value == "1";
+						break;
+					case WorkspaceOptionKind::Bento:
+						entry.hasBentoSnapshot = mr::workspace::parseBentoSnapshot(value, entry.bentoSnapshot, &bootstrapLogMessages);
+						accepted = entry.hasBentoSnapshot;
+						break;
+					case WorkspaceOptionKind::Debugger:
+						entry.hasMacroDebuggerConfiguration = mr::workspace::parseMacroDebuggerConfiguration(value, entry.macroDebuggerConfiguration);
+						accepted = entry.hasMacroDebuggerConfiguration;
+						break;
+					case WorkspaceOptionKind::FileCompareOriginal:
+						fileCompareOriginalToken = value;
+						break;
+					case WorkspaceOptionKind::FileCompareCompare:
+						fileCompareCompareToken = value;
+						break;
+				}
+			if (!accepted) bootstrapLogMessages.push_back("Workspace bootstrap dropped unknown or unsupported option key=" + key + ".");
+		}
+	if (restoreSizeSeen != restorePositionSeen) {
 		entry.restoreWidth = entry.width;
 		entry.restoreHeight = entry.height;
 		entry.restoreX = entry.x;
 		entry.restoreY = entry.y;
+		bootstrapLogMessages.push_back("Workspace bootstrap dropped incomplete restore geometry.");
 	}
-	entry.mainFile = payloadMatch[14].matched && payloadMatch[14].str() == "1";
-	if (payloadMatch[15].matched) {
-		entry.hasBentoSnapshot = mr::workspace::parseBentoSnapshot(payloadMatch[15].str(), entry.bentoSnapshot, &bootstrapLogMessages);
-		if (!entry.hasBentoSnapshot) return false;
+	if (entry.hasMacroDebuggerConfiguration && !entry.hasBentoSnapshot) {
+		entry.hasMacroDebuggerConfiguration = false;
+		entry.macroDebuggerConfiguration = MRMacroDebuggerWorkspaceConfiguration();
+		bootstrapLogMessages.push_back("Workspace bootstrap dropped debugger configuration without Bento layout.");
 	}
-	if (payloadMatch[16].matched) {
-		entry.hasMacroDebuggerConfiguration = parseMacroDebuggerWorkspaceConfiguration(payloadMatch[16].str(), entry.macroDebuggerConfiguration);
-		if (!entry.hasMacroDebuggerConfiguration || !entry.hasBentoSnapshot) return false;
-	}
-	if (payloadMatch[17].matched || payloadMatch[18].matched) {
-		if (!payloadMatch[17].matched || !payloadMatch[18].matched) return false;
-		if (!workspaceHexDecode(payloadMatch[17].str(), entry.fileCompareOriginalUrl)) return false;
-		if (!workspaceHexDecode(payloadMatch[18].str(), entry.fileCompareCompareUrl)) return false;
-		entry.hasFileCompareSources = !entry.fileCompareOriginalUrl.empty() && !entry.fileCompareCompareUrl.empty();
-		if (!entry.hasFileCompareSources) return false;
+	if (!fileCompareOriginalToken.empty() || !fileCompareCompareToken.empty()) {
+		entry.hasFileCompareSources = !fileCompareOriginalToken.empty() && !fileCompareCompareToken.empty() &&
+		                              workspaceHexDecode(fileCompareOriginalToken, entry.fileCompareOriginalUrl) &&
+		                              workspaceHexDecode(fileCompareCompareToken, entry.fileCompareCompareUrl) &&
+		                              !entry.fileCompareOriginalUrl.empty() && !entry.fileCompareCompareUrl.empty();
+		if (!entry.hasFileCompareSources) {
+			entry.fileCompareOriginalUrl.clear();
+			entry.fileCompareCompareUrl.clear();
+			bootstrapLogMessages.push_back("Workspace bootstrap dropped incomplete or invalid file-compare source configuration.");
+		}
 	}
 	if (entry.url.empty()) return false;
 	if (logBootstrapNormalization)
@@ -794,7 +847,7 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 			bentoPayload = mr::workspace::encodeBentoSnapshot(bentoBox->workspaceSnapshot());
 			MRMacroDebuggerWorkspaceConfiguration macroDebuggerConfiguration;
 
-			if (bentoBox->macroDebuggerWorkspaceConfiguration(macroDebuggerConfiguration)) macroDebuggerPayload = " debug=" + encodeMacroDebuggerWorkspaceConfiguration(macroDebuggerConfiguration);
+			if (bentoBox->macroDebuggerWorkspaceConfiguration(macroDebuggerConfiguration)) macroDebuggerPayload = " debug=" + mr::workspace::encodeMacroDebuggerConfiguration(macroDebuggerConfiguration);
 			if (bentoBox->isFileCompareBox()) {
 				if (!bentoBox->fileCompareWorkspaceSourcePaths(fileCompareOriginalUrl, fileCompareCompareUrl)) {
 					mrLogMessage("Workspace serialize skipped file-compare Bento without source paths.");
@@ -1196,6 +1249,7 @@ void mrLoadWorkspace(const std::string &filename) {
 				MREditWindow *debuggerOutput = nullptr;
 				MREditWindow *variables = nullptr;
 				MREditWindow *watches = nullptr;
+				MRMacroDebuggerWorkspaceConfiguration configuration = entry.macroDebuggerConfiguration;
 
 				if (bentoBox == nullptr || !bentoBox->ensureMacroDebuggerPanes(debuggerOutput, variables, watches)) {
 					mrLogMessage("Workspace load failed debugger Bento restore url=" + entry.url + ".");
@@ -1203,7 +1257,12 @@ void mrLoadWorkspace(const std::string &filename) {
 					discardedWorkspaceEntries = true;
 					continue;
 				}
-				bentoBox->restoreMacroDebuggerWorkspaceConfiguration(entry.macroDebuggerConfiguration);
+				if (mrMacroDebuggerForSourcePath(entry.url, bentoBox) != nullptr) {
+					mrLogMessage("Workspace bootstrap dropped duplicate debugger owner url=" + entry.url + ".");
+				} else {
+					if (configuration.sourcePath.empty()) configuration.sourcePath = entry.url;
+					bentoBox->restoreMacroDebuggerWorkspaceConfiguration(configuration);
+				}
 			}
 			{
 			const auto subStartedAt = std::chrono::steady_clock::now();

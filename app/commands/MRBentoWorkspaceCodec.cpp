@@ -28,7 +28,41 @@ std::vector<std::string> splitBentoToken(const std::string &text, char delimiter
 	std::istringstream input(text);
 
 	while (std::getline(input, part, delimiter)) parts.push_back(part);
+	if (!text.empty() && text.back() == delimiter) parts.emplace_back();
 	return parts;
+}
+
+std::string debuggerHexEncode(const std::string &value) {
+	static constexpr char hex[] = "0123456789ABCDEF";
+	std::string encoded;
+
+	encoded.reserve(value.size() * 2);
+	for (unsigned char ch : value) {
+		encoded.push_back(hex[(ch >> 4) & 0x0F]);
+		encoded.push_back(hex[ch & 0x0F]);
+	}
+	return encoded;
+}
+
+int debuggerHexDigit(char ch) noexcept {
+	if (ch >= '0' && ch <= '9') return ch - '0';
+	if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+	if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+	return -1;
+}
+
+bool debuggerHexDecode(const std::string &value, std::string &decoded) {
+	decoded.clear();
+	if ((value.size() & 1U) != 0) return false;
+	decoded.reserve(value.size() / 2);
+	for (std::size_t index = 0; index < value.size(); index += 2) {
+		const int high = debuggerHexDigit(value[index]);
+		const int low = debuggerHexDigit(value[index + 1]);
+
+		if (high < 0 || low < 0) return false;
+		decoded.push_back(static_cast<char>((high << 4) | low));
+	}
+	return true;
 }
 
 bool parseBentoInt(const std::string &text, int &value) {
@@ -242,6 +276,77 @@ bool parseBentoSnapshot(const std::string &token, MRBentoWorkspaceSnapshot &snap
 		snapshot.leaves.push_back(leaf);
 	}
 	return !snapshot.nodes.empty() && !snapshot.leaves.empty() && normalizeBentoSnapshotForBootstrap(snapshot, bootstrapLogMessages);
+}
+
+std::string encodeMacroDebuggerConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration) {
+	std::ostringstream out;
+
+	out << "v2";
+	out << ",k:" << debuggerHexEncode(configuration.macroKey);
+	out << ",n:" << debuggerHexEncode(configuration.macroName);
+	out << ",i:" << debuggerHexEncode(configuration.sourceIdentity);
+	out << ",p:" << debuggerHexEncode(configuration.sourcePath);
+	out << ",b:";
+	for (std::size_t index = 0; index < configuration.breakpoints.size(); ++index) {
+		const MRMacroDebuggerWorkspaceBreakpoint &breakpoint = configuration.breakpoints[index];
+
+		if (index != 0) out << ".";
+		out << debuggerHexEncode(breakpoint.macroKey) << ":" << debuggerHexEncode(breakpoint.sourceIdentity) << ":" << breakpoint.line << ":" << (breakpoint.enabled ? 1 : 0) << ":" << debuggerHexEncode(breakpoint.conditionText);
+	}
+	out << ",w:";
+	for (std::size_t index = 0; index < configuration.watches.size(); ++index) {
+		const MRMacroDebuggerWorkspaceWatch &watch = configuration.watches[index];
+
+		if (index != 0) out << ".";
+		out << debuggerHexEncode(watch.expression) << ":" << (watch.enabled ? 1 : 0);
+	}
+	return out.str();
+}
+
+bool parseMacroDebuggerConfiguration(const std::string &token, MRMacroDebuggerWorkspaceConfiguration &configuration) {
+	const std::vector<std::string> fields = splitBentoToken(token, ',');
+	const bool legacy = !fields.empty() && fields[0] == "v1";
+
+	configuration = MRMacroDebuggerWorkspaceConfiguration();
+	if (legacy) {
+		if (fields.size() != 5 || fields[1].rfind("k:", 0) != 0 || fields[2].rfind("n:", 0) != 0 || fields[3].rfind("b:", 0) != 0 || fields[4].rfind("w:", 0) != 0) return false;
+		if (!debuggerHexDecode(fields[1].substr(2), configuration.macroKey) || !debuggerHexDecode(fields[2].substr(2), configuration.macroName) || configuration.macroKey.empty()) return false;
+	} else {
+		if (fields.size() != 7 || fields.empty() || fields[0] != "v2" || fields[1].rfind("k:", 0) != 0 || fields[2].rfind("n:", 0) != 0 || fields[3].rfind("i:", 0) != 0 || fields[4].rfind("p:", 0) != 0 || fields[5].rfind("b:", 0) != 0 || fields[6].rfind("w:", 0) != 0) return false;
+		if (!debuggerHexDecode(fields[1].substr(2), configuration.macroKey) || !debuggerHexDecode(fields[2].substr(2), configuration.macroName) ||
+		    !debuggerHexDecode(fields[3].substr(2), configuration.sourceIdentity) || !debuggerHexDecode(fields[4].substr(2), configuration.sourcePath) || configuration.macroKey.empty())
+			return false;
+	}
+	const std::string breakpointField = fields[legacy ? 3 : 5].substr(2);
+	const std::string watchField = fields[legacy ? 4 : 6].substr(2);
+	if (!breakpointField.empty())
+		for (const std::string &entry : splitBentoToken(breakpointField, '.')) {
+			const std::vector<std::string> values = splitBentoToken(entry, ':');
+			MRMacroDebuggerWorkspaceBreakpoint breakpoint;
+			int enabled = 0;
+
+			if (legacy) {
+				if (values.size() != 3 || !debuggerHexDecode(values[0], breakpoint.macroKey) || !parseBentoInt(values[1], breakpoint.line) || !parseBentoInt(values[2], enabled)) return false;
+			} else {
+				if (values.size() != 5 || !debuggerHexDecode(values[0], breakpoint.macroKey) || !debuggerHexDecode(values[1], breakpoint.sourceIdentity) ||
+				    !parseBentoInt(values[2], breakpoint.line) || !parseBentoInt(values[3], enabled) || !debuggerHexDecode(values[4], breakpoint.conditionText))
+					return false;
+			}
+			if (breakpoint.macroKey.empty() || breakpoint.line <= 0 || (enabled != 0 && enabled != 1)) return false;
+			breakpoint.enabled = enabled != 0;
+			configuration.breakpoints.push_back(breakpoint);
+		}
+	if (!watchField.empty())
+		for (const std::string &entry : splitBentoToken(watchField, '.')) {
+			const std::vector<std::string> values = splitBentoToken(entry, ':');
+			MRMacroDebuggerWorkspaceWatch watch;
+			int enabled = 0;
+
+			if (values.size() != 2 || !debuggerHexDecode(values[0], watch.expression) || !parseBentoInt(values[1], enabled) || watch.expression.empty() || (enabled != 0 && enabled != 1)) return false;
+			watch.enabled = enabled != 0;
+			configuration.watches.push_back(watch);
+		}
+	return true;
 }
 
 } // namespace workspace

@@ -23,6 +23,7 @@
 #include "MRWindowCommands.hpp"
 
 #include "../app/commands/MRExternalCommand.hpp"
+#include "../app/MRMacroDebuggerCommandRoute.hpp"
 #include "../app/router/MRCommandRouterGit.hpp"
 #include "../app/router/MRCommandRouterSearch.hpp"
 #include "../app/router/MRCommandRouterSearchCore.hpp"
@@ -1169,6 +1170,16 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			return;
 		}
 
+		const mr::coprocessor::MacroDebugWorkerPausedPayload *debugPaused = dynamic_cast<const mr::coprocessor::MacroDebugWorkerPausedPayload *>(result.payload.get());
+		if (debugPaused != nullptr) {
+			MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+			const bool accepted = mrApplyMacroDebuggerWorkerResult(debugPaused->sessionId, result.task.id, debugPaused->debugResult, debugPaused->errorMessage);
+
+			if (targetWindow != nullptr) targetWindow->releaseCoprocessorTask(result.task.id);
+			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, accepted);
+			return;
+		}
+
 		const mr::coprocessor::MacroJobFinishedPayload *macro = dynamic_cast<const mr::coprocessor::MacroJobFinishedPayload *>(result.payload.get());
 		const mr::coprocessor::MacroJobStagedPayload *staged = dynamic_cast<const mr::coprocessor::MacroJobStagedPayload *>(result.payload.get());
 		if (staged != nullptr) {
@@ -1237,7 +1248,11 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				releaseMacroTask(targetWindow, result, "conflict");
 			}
 			if (!accepted || textChanged || staged->hadError || !staged->deferredUiCommands.empty()) mrLogMessage(statusSummary.c_str());
-			publishMacroExecutionResultForTask(result.task.id, accepted ? MRMacroExecutionState::Completed : MRMacroExecutionState::Rejected, statusSummary);
+			if (staged->debugSessionId != 0) {
+				static_cast<void>(mrvmFinalizeStagedDebugSession(staged->debugSessionId, staged->debugResult, accepted, statusSummary));
+				static_cast<void>(mrApplyMacroDebuggerWorkerResult(staged->debugSessionId, result.task.id, staged->debugResult, accepted ? std::string() : statusSummary));
+			} else
+				publishMacroExecutionResultForTask(result.task.id, accepted ? MRMacroExecutionState::Completed : MRMacroExecutionState::Rejected, statusSummary);
 			appendMacroLogLines(staged->logLines);
 			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, accepted);
 			return;
@@ -1248,6 +1263,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			std::string statusSummary;
 			const std::size_t acceptedUiRequests = applyMacroExecUiCommandRequests(macro->execUiCommandRequests);
 
+			if (macro->debugSessionId != 0) static_cast<void>(mrApplyMacroDebuggerWorkerResult(macro->debugSessionId, result.task.id, macro->debugResult, std::string()));
 			recordMacroPerformance(result, targetWindow, targetWindow != nullptr ? targetWindow->documentId() : 0, targetWindow != nullptr ? targetWindow->bufferLength() : 0, macro->displayName);
 			statusLine << "Background macro '" << macro->displayName << "' finished";
 			if (macro->hadError) statusLine << " with VM errors";

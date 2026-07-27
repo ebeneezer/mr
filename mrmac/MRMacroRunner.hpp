@@ -6,6 +6,11 @@
 #include <cstddef>
 #include <string>
 
+class MREditWindow;
+struct MacroCommitConflictSnapshot;
+struct MRMacroStagedExecutionInput;
+
+bool captureMacroStagedExecutionInput(MREditWindow *window, MRMacroStagedExecutionInput &input, MacroCommitConflictSnapshot &conflictSnapshot);
 bool runMacroFileByPath(const char *path);
 bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showErrorDialogs = true);
 bool runMacroFileByPathOnUiThread(const char *path, std::string *errorMessage = nullptr, bool showErrorDialogs = true);

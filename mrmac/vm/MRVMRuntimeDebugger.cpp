@@ -295,6 +295,17 @@ bool mrvmRuntimeDebuggerEraseWatch(MRVMRuntimeKv &runtimeKv, const std::string &
 	return runtimeKv.eraseChild(byExpression, expression);
 }
 
+bool mrvmRuntimeDebuggerEraseWatchesForMacro(MRVMRuntimeKv &runtimeKv, const std::string &macroKey) {
+	Value byMacro;
+	Value existing;
+	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
+
+	if (normalizedMacroKey.empty()) return false;
+	if (!findDebuggerChildPath(runtimeKv, {"watches", "byMacro"}, byMacro)) return true;
+	if (!runtimeKv.findChild(byMacro, normalizedMacroKey, existing)) return true;
+	return runtimeKv.eraseChild(byMacro, normalizedMacroKey);
+}
+
 bool mrvmRuntimeDebuggerWatchesForMacro(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, std::vector<MRMacroDebuggerWatch> &watches) {
 	Value byExpression;
 	std::vector<std::string> keys;

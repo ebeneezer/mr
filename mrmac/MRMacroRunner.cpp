@@ -25,6 +25,75 @@
 #include <string>
 #include <vector>
 
+bool captureMacroStagedExecutionInput(MREditWindow *window, MRMacroStagedExecutionInput &input, MacroCommitConflictSnapshot &conflictSnapshot) {
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+
+	input = MRMacroStagedExecutionInput();
+	conflictSnapshot = MacroCommitConflictSnapshot();
+	if (window == nullptr || editor == nullptr) return false;
+	input.document = editor->documentCopy();
+	input.baseVersion = editor->documentVersion();
+	input.cursorOffset = editor->cursorOffset();
+	input.selectionStart = editor->selectionStartOffset();
+	input.selectionEnd = editor->selectionEndOffset();
+	input.blockMode = window->blockStatus();
+	input.blockMarkingOn = window->isBlockMarking();
+	input.blockAnchor = window->blockAnchorPtr();
+	input.blockEnd = window->blockEffectiveEndPtr();
+	input.firstSave = window->hasBeenSavedInSession();
+	input.eofInMemory = window->eofInMemory();
+	input.bufferId = window->bufferId();
+	input.temporaryFile = window->isTemporaryFile();
+	input.temporaryFileName = window->temporaryFileName();
+	input.currentWindow = mrvmUiCurrentWindowIndex(window);
+	input.linkStatus = mrvmUiLinkStatus(window);
+	input.windowCount = mrvmUiWindowCount();
+	input.windowGeometryValid = mrvmUiWindowGeometry(window, input.windowX1, input.windowY1, input.windowX2, input.windowY2);
+	mrvmUiCopyGlobals(input.globalOrder, input.globalInts, input.globalStrings);
+	mrvmUiCopyLoadedMacros(input.macroOrder, input.macroDisplayNames);
+	input.fileName = window->currentFileName();
+	input.fileChanged = window->isFileChanged();
+	input.lastSearchValid = mrvmUiCopyWindowLastSearch(window, input.fileName, input.lastSearchStart, input.lastSearchEnd, input.lastSearchCursor);
+	mrvmUiCopyRuntimeOptions(input.ignoreCase, input.tabExpand);
+	input.markStack = mrvmUiCopyWindowMarkStack(window);
+	input.insertMode = editor->insertModeEnabled();
+	input.indentLevel = window->indentLevel();
+	input.pageLines = std::max(1, editor->size.y - 1);
+	input.screenWidth = mrvmUiScreenWidth();
+	input.screenHeight = mrvmUiScreenHeight();
+	static_cast<void>(mrvmUiCursorPosition(input.screenCursorX, input.screenCursorY));
+	conflictSnapshot.cursorOffset = input.cursorOffset;
+	conflictSnapshot.selectionStart = input.selectionStart;
+	conflictSnapshot.selectionEnd = input.selectionEnd;
+	conflictSnapshot.blockMode = input.blockMode;
+	conflictSnapshot.blockMarkingOn = input.blockMarkingOn;
+	conflictSnapshot.blockAnchor = input.blockAnchor;
+	conflictSnapshot.blockEnd = input.blockEnd;
+	conflictSnapshot.insertMode = input.insertMode;
+	conflictSnapshot.indentLevel = input.indentLevel;
+	conflictSnapshot.fileName = input.fileName;
+	conflictSnapshot.fileChanged = input.fileChanged;
+	conflictSnapshot.globalOrder = input.globalOrder;
+	conflictSnapshot.globalInts = input.globalInts;
+	conflictSnapshot.globalStrings = input.globalStrings;
+	conflictSnapshot.lastSearchValid = input.lastSearchValid;
+	conflictSnapshot.lastSearchStart = input.lastSearchStart;
+	conflictSnapshot.lastSearchEnd = input.lastSearchEnd;
+	conflictSnapshot.lastSearchCursor = input.lastSearchCursor;
+	conflictSnapshot.ignoreCase = input.ignoreCase;
+	conflictSnapshot.tabExpand = input.tabExpand;
+	conflictSnapshot.markStack = input.markStack;
+	conflictSnapshot.bufferId = input.bufferId;
+	conflictSnapshot.linkStatus = input.linkStatus;
+	conflictSnapshot.windowCount = input.windowCount;
+	conflictSnapshot.windowGeometryValid = input.windowGeometryValid;
+	conflictSnapshot.windowX1 = input.windowX1;
+	conflictSnapshot.windowY1 = input.windowY1;
+	conflictSnapshot.windowX2 = input.windowX2;
+	conflictSnapshot.windowY2 = input.windowY2;
+	return true;
+}
+
 namespace {
 struct PendingForegroundMacro {
 	MRMacroExecutionSessionId sessionId = 0;
@@ -337,84 +406,17 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 		MacroCommitConflictSnapshot conflictSnapshot;
 		MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
-		if (win != nullptr && editor != nullptr) {
+		if (win != nullptr && editor != nullptr && captureMacroStagedExecutionInput(win, stagedInput, conflictSnapshot)) {
 			MRMacroExecutionSession session = makeMacroExecutionSessionForOwner(label, MRMacroExecutionRoute::StagedBackground, win, ownerOverride);
 			const std::string routeLogLine = buildExecutionRouteLogLine(label, "staged", profile) + sessionLogSuffix(session);
+
 			if (logRoute) mrLogMessage(routeLogLine.c_str());
 			bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 			std::free(bytecode);
 			bytecode = nullptr;
 
-			stagedInput.document = editor->documentCopy();
-			stagedInput.baseVersion = editor->documentVersion();
-			stagedInput.cursorOffset = editor->cursorOffset();
-			stagedInput.selectionStart = editor->selectionStartOffset();
-			stagedInput.selectionEnd = editor->selectionEndOffset();
-			stagedInput.blockMode = win->blockStatus();
-			stagedInput.blockMarkingOn = win->isBlockMarking();
-			stagedInput.blockAnchor = win->blockAnchorPtr();
-			stagedInput.blockEnd = win->blockEffectiveEndPtr();
-			stagedInput.firstSave = win->hasBeenSavedInSession();
-			stagedInput.eofInMemory = win->eofInMemory();
-			stagedInput.bufferId = win->bufferId();
-			stagedInput.temporaryFile = win->isTemporaryFile();
-			stagedInput.temporaryFileName = win->temporaryFileName();
-			stagedInput.currentWindow = mrvmUiCurrentWindowIndex(win);
-			stagedInput.linkStatus = mrvmUiLinkStatus(win);
-			stagedInput.windowCount = mrvmUiWindowCount();
-			stagedInput.windowGeometryValid = mrvmUiWindowGeometry(win, stagedInput.windowX1, stagedInput.windowY1, stagedInput.windowX2, stagedInput.windowY2);
-			mrvmUiCopyGlobals(stagedInput.globalOrder, stagedInput.globalInts, stagedInput.globalStrings);
-			mrvmUiCopyLoadedMacros(stagedInput.macroOrder, stagedInput.macroDisplayNames);
-			stagedInput.fileName = win->currentFileName();
-			stagedInput.fileChanged = win->isFileChanged();
-			stagedInput.lastSearchValid = mrvmUiCopyWindowLastSearch(win, stagedInput.fileName, stagedInput.lastSearchStart, stagedInput.lastSearchEnd, stagedInput.lastSearchCursor);
-			mrvmUiCopyRuntimeOptions(stagedInput.ignoreCase, stagedInput.tabExpand);
-			stagedInput.markStack = mrvmUiCopyWindowMarkStack(win);
-			stagedInput.insertMode = editor->insertModeEnabled();
-			stagedInput.indentLevel = win->indentLevel();
-			stagedInput.pageLines = std::max(1, editor->size.y - 1);
-			stagedInput.screenWidth = mrvmUiScreenWidth();
-			stagedInput.screenHeight = mrvmUiScreenHeight();
-			{
-				int cursorX = 1;
-				int cursorY = 1;
-				if (mrvmUiCursorPosition(cursorX, cursorY)) {
-					stagedInput.screenCursorX = cursorX;
-					stagedInput.screenCursorY = cursorY;
-				}
-			}
-			conflictSnapshot.cursorOffset = stagedInput.cursorOffset;
-			conflictSnapshot.selectionStart = stagedInput.selectionStart;
-			conflictSnapshot.selectionEnd = stagedInput.selectionEnd;
-			conflictSnapshot.blockMode = stagedInput.blockMode;
-			conflictSnapshot.blockMarkingOn = stagedInput.blockMarkingOn;
-			conflictSnapshot.blockAnchor = stagedInput.blockAnchor;
-			conflictSnapshot.blockEnd = stagedInput.blockEnd;
-			conflictSnapshot.insertMode = stagedInput.insertMode;
-			conflictSnapshot.indentLevel = stagedInput.indentLevel;
-			conflictSnapshot.fileName = stagedInput.fileName;
-			conflictSnapshot.fileChanged = stagedInput.fileChanged;
-			conflictSnapshot.globalOrder = stagedInput.globalOrder;
-			conflictSnapshot.globalInts = stagedInput.globalInts;
-			conflictSnapshot.globalStrings = stagedInput.globalStrings;
-			conflictSnapshot.lastSearchValid = stagedInput.lastSearchValid;
-			conflictSnapshot.lastSearchStart = stagedInput.lastSearchStart;
-			conflictSnapshot.lastSearchEnd = stagedInput.lastSearchEnd;
-			conflictSnapshot.lastSearchCursor = stagedInput.lastSearchCursor;
-			conflictSnapshot.ignoreCase = stagedInput.ignoreCase;
-			conflictSnapshot.tabExpand = stagedInput.tabExpand;
-			conflictSnapshot.markStack = stagedInput.markStack;
-			conflictSnapshot.bufferId = stagedInput.bufferId;
-			conflictSnapshot.linkStatus = stagedInput.linkStatus;
-			conflictSnapshot.windowCount = stagedInput.windowCount;
-			conflictSnapshot.windowGeometryValid = stagedInput.windowGeometryValid;
-			conflictSnapshot.windowX1 = stagedInput.windowX1;
-			conflictSnapshot.windowY1 = stagedInput.windowY1;
-			conflictSnapshot.windowX2 = stagedInput.windowX2;
-			conflictSnapshot.windowY2 = stagedInput.windowY2;
-
 			taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob, static_cast<std::size_t>(win->bufferId()), stagedInput.baseVersion,
-			                                                     mr::coprocessor::ExecutionOwnerKind::MacroSession, static_cast<std::size_t>(session.sessionId), std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), stagedInput = std::move(stagedInput), conflictSnapshot = std::move(conflictSnapshot), sessionId = session.sessionId](const mr::coprocessor::TaskInfo &info) mutable {
+			                                                   mr::coprocessor::ExecutionOwnerKind::MacroSession, static_cast<std::size_t>(session.sessionId), std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), stagedInput = std::move(stagedInput), conflictSnapshot = std::move(conflictSnapshot), sessionId = session.sessionId](const mr::coprocessor::TaskInfo &info) mutable {
 				mr::coprocessor::Result result;
 				MRMacroStagedJobResult runResult;
 

@@ -19,6 +19,7 @@ class MRBentoPaneFrameView;
 class MRMacroDebuggerValueInput;
 struct MRMacroDebugRunResult;
 enum MRMacroDebugStepMode : int;
+enum MRMacroDebugWorkerAction : int;
 namespace mr {
 namespace coprocessor {
 struct Result;
@@ -155,8 +156,10 @@ struct MRMacroDebuggerWorkspaceBreakpoint {
 	MRMacroDebuggerWorkspaceBreakpoint() noexcept;
 
 	std::string macroKey;
+	std::string sourceIdentity;
 	int line;
 	bool enabled;
+	std::string conditionText;
 };
 
 struct MRMacroDebuggerWorkspaceWatch {
@@ -171,6 +174,8 @@ struct MRMacroDebuggerWorkspaceConfiguration {
 
 	std::string macroKey;
 	std::string macroName;
+	std::string sourceIdentity;
+	std::string sourcePath;
 	std::vector<MRMacroDebuggerWorkspaceBreakpoint> breakpoints;
 	std::vector<MRMacroDebuggerWorkspaceWatch> watches;
 };
@@ -238,8 +243,11 @@ class MRBentoBox : public MREditWindow {
 		void restoreMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration);
 		void setMacroDebuggerSession(MRMacroExecutionSessionId sessionId) noexcept;
 		void setMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const std::vector<MRMacroDebugVariableSnapshot> &variables);
+		[[nodiscard]] bool macroDebuggerTargetsSourcePath(const std::string &sourcePath) const noexcept;
+		[[nodiscard]] const std::string &macroDebuggerSourceIdentityValue() const noexcept;
 		[[nodiscard]] bool macroDebuggerObservesSourcePath(const std::string &sourcePath) const noexcept;
 		[[nodiscard]] bool acceptScheduledMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult);
+		[[nodiscard]] bool acceptMacroDebuggerWorkerResult(MRMacroExecutionSessionId sessionId, std::uint64_t taskId, const MRMacroDebugRunResult &debugResult, const std::string &errorMessage);
 	void refreshMacroDebuggerRunMarkers(const MRMacroDebugRunResult &debugResult);
 	void refreshMacroDebuggerWatches();
 	[[nodiscard]] bool macroDebuggerFunctionKeysActive() const noexcept;
@@ -434,6 +442,8 @@ class MRBentoBox : public MREditWindow {
 	void writeMacroDebuggerStatus(const MRMacroDebugRunResult &debugResult, const std::string &errorMessage);
 	void writeMacroDebuggerNotice(const std::string &message);
 	void refreshMacroDebuggerBreakpointRanges();
+	void invalidateMacroDebuggerRuntime();
+	[[nodiscard]] bool scheduleMacroDebuggerWorkerAction(MRMacroDebugWorkerAction action);
 	[[nodiscard]] bool startMacroDebuggerSession(int temporaryStopLine);
 	void refreshOutlinePanes(bool force = false);
 	bool refreshOutlinePane(MRBentoPaneRole role, bool force);
@@ -557,8 +567,10 @@ class MRBentoBox : public MREditWindow {
 	std::string macroDebuggerMacroKey;
 	std::string macroDebuggerMacroName;
 	std::string macroDebuggerSourcePath;
+	std::string macroDebuggerSourceIdentity;
 	std::string macroDebuggerProjectedMacroKey;
 	MRMacroExecutionSessionId macroDebuggerSessionId;
+	MRMacroExecutionRoute macroDebuggerExecutionRoute;
 	bool macroDebuggerExecutionRunning;
 	bool macroDebuggerActive;
 	MRMacroDebuggerWorkspaceConfiguration macroDebuggerWorkspacePending;

@@ -320,7 +320,8 @@ class MRFileEditor : public TScroller {
 	                                   const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &warningRanges);
 
 	void clearCompilerDiagnosticRanges();
-	void setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges);
+	void setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &unboundRanges,
+	                                 const std::vector<std::size_t> &unboundLines);
 	void clearDebuggerBreakpointRanges();
 	void setDebuggerWatchpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges);
 	void clearDebuggerWatchpointRanges();
@@ -915,12 +916,14 @@ class MRFileEditor : public TScroller {
 	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerBreakpointContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerBreakpointInactiveContainsOffset(std::size_t offset) const noexcept;
+	bool debuggerBreakpointUnboundContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerWatchpointActiveContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerWatchpointInactiveContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerWatchpointErrorContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerVariableChangedContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerBreakpointLineAt(std::size_t lineIndex) const noexcept;
 	bool debuggerBreakpointInactiveLineAt(std::size_t lineIndex) const noexcept;
+	bool debuggerBreakpointUnboundLineAt(std::size_t lineIndex) const noexcept;
 	unsigned char fileCompareLineKindAt(std::size_t lineIndex) const noexcept;
 
 	MRMiniMapRenderer::Palette resolveMiniMapPalette();
@@ -1199,12 +1202,14 @@ class MRFileEditor : public TScroller {
 	std::shared_ptr<const std::vector<MRTextBufferModel::Range>> mCompilerWarningRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointInactiveRanges;
+	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointUnboundRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointActiveRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointInactiveRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointErrorRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerVariableChangedRanges;
 	std::vector<std::size_t> mDebuggerBreakpointLines;
 	std::vector<std::size_t> mDebuggerBreakpointInactiveLines;
+	std::vector<std::size_t> mDebuggerBreakpointUnboundLines;
 	bool mDebuggerInstructionLineValid = false;
 	std::size_t mDebuggerInstructionLine = 0;
 	LoadTiming mLastLoadTiming;

@@ -488,6 +488,7 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 
 void MRBentoBox::close() {
 	cancelMacroDebuggerValueInput();
+	invalidateMacroDebuggerRuntime();
 	cancelAllBentoProjectionTasks();
 	restoreFileCompareSources();
 	windowCloseInProgress = true;
@@ -496,6 +497,7 @@ void MRBentoBox::close() {
 
 void MRBentoBox::shutDown() {
 	cancelMacroDebuggerValueInput();
+	invalidateMacroDebuggerRuntime();
 	cancelAllBentoProjectionTasks();
 	restoreFileCompareSources();
 	windowCloseInProgress = true;
