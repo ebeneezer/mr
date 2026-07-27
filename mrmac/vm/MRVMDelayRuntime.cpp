@@ -1,5 +1,27 @@
 #include "../MRVM.hpp"
+#include "MRVMExecutionInternal.hpp"
+#include "MRVMRuntimeInternal.hpp"
 #include "MRVMRuntimeState.hpp"
+
+#include <thread>
+
+namespace mrvm_execution {
+
+bool sleepDelayBlocking(int millis) {
+	if (millis <= 0) return true;
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(millis);
+	while (std::chrono::steady_clock::now() < deadline) {
+		if (mrvm_runtime::backgroundMacroCancelRequested()) return false;
+		auto remaining = deadline - std::chrono::steady_clock::now();
+		auto slice = std::chrono::duration_cast<std::chrono::milliseconds>(remaining);
+		if (slice > std::chrono::milliseconds(10)) slice = std::chrono::milliseconds(10);
+		if (slice.count() <= 0) break;
+		std::this_thread::sleep_for(slice);
+	}
+	return true;
+}
+
+} // namespace mrvm_execution
 
 int VirtualMachine::normalizeDelayMillis(int millis) noexcept {
 	static const int kMaxDelayMillis = 60 * 60 * 1000;

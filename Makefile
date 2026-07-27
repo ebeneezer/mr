@@ -223,27 +223,41 @@ CXX_SOURCES = \
 	coprocessor/MRCoprocessorDispatch.cpp \
 	coprocessor/MRCoprocessorBentoDispatch.cpp \
 	mrmac/MRVM.cpp \
+	mrmac/MRVMDebugExecution.cpp \
+	mrmac/MRVMProcedureConfiguration.cpp \
+	mrmac/MRVMProcedureEditor.cpp \
+	mrmac/MRVMProcedureExecution.cpp \
+	mrmac/MRVMProcedureMacro.cpp \
+	mrmac/MRVMProcedureRuntime.cpp \
 	mrmac/MRVMDebugSession.cpp \
 	mrmac/vm/MRVMProfile.cpp \
 	mrmac/ui/conventional/MRVMDeferredUi.cpp \
+	mrmac/ui/conventional/MRVMEditorOperations.cpp \
 	mrmac/ui/conventional/MRVMEditor.cpp \
+	mrmac/ui/conventional/MRVMEditorState.cpp \
+	mrmac/vm/MRVMExecution.cpp \
 	mrmac/vm/MRVMExecutionRuntime.cpp \
 	mrmac/vm/MRVMDelayRuntime.cpp \
 	mrmac/vm/MRVMExecSessions.cpp \
 	mrmac/vm/MRVMHash.cpp \
+	mrmac/vm/MRVMIntrinsics.cpp \
 	mrmac/vm/MRVMKeymapRuntime.cpp \
 	mrmac/ui/conventional/MRVMMacroDialogRuntime.cpp \
+	mrmac/vm/MRVMMacroLoading.cpp \
+	mrmac/vm/MRVMMacroRuntime.cpp \
 	mrmac/ui/modeless/MRVMMacroModelessProcedures.cpp \
 	mrmac/vm/MRVMMacroSpecRuntime.cpp \
 	mrmac/ui/modeless/MRVMModelessUiStorage.cpp \
 	mrmac/ui/modeless/MRVMModelessUiRuntime.cpp \
 	mrmac/ui/modeless/MRVMModelessWindowRuntime.cpp \
 	mrmac/vm/MRVMProcessRuntime.cpp \
+	mrmac/vm/MRVMProcedureCatalog.cpp \
 	mrmac/vm/MRVMRuntimeCatalog.cpp \
 	mrmac/vm/MRVMRuntimeDebugger.cpp \
 	mrmac/vm/MRVMRuntimeGlobals.cpp \
 	mrmac/vm/MRVMRuntimeKv.cpp \
 	mrmac/ui/conventional/MRVMUiStateRuntime.cpp \
+	mrmac/vm/MRVMSystemVariables.cpp \
 	mrmac/vm/MRVMValue.cpp \
 	mrmac/vm/MRVMSettings.cpp \
 	mrmac/ui/conventional/MRVMScreen.cpp \
@@ -630,16 +644,28 @@ coprocessor/MRPerformance.o: coprocessor/MRPerformance.cpp coprocessor/MRPerform
 coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRCoprocessorBentoDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp app/router/MRCommandRouterGit.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRBentoHexEditor/panes/MRHexPaneWindow.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp
 coprocessor/MRCoprocessorBentoDispatch.o: coprocessor/MRCoprocessorBentoDispatch.cpp coprocessor/MRCoprocessorBentoDispatch.hpp coprocessor/MRCoprocessor.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRWindowSupport.hpp
 mrmac/MRVM.o: mrmac/MRVM.cpp mrmac/MRVM.hpp mrmac/MRVMDebugSession.hpp mrmac/vm/MRVMExecSessions.hpp mrmac/ui/conventional/MRVMDeferredUi.hpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/vm/MRVMHash.hpp mrmac/ui/conventional/MRVMMacroDialogRuntime.hpp mrmac/ui/modeless/MRVMMacroModelessProcedures.hpp mrmac/vm/MRVMMacroSpecRuntime.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeGlobals.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMSettings.hpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/mrmac.h dialogs/MRWindowList.hpp ui/MRWindowSupport.hpp ui/MREditWindow.hpp ui/MRTextBuffer.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRTextBufferModel.hpp ui/MRSyntax.hpp piecetable/MRTextDocument.hpp
-mrmac/vm/MRVMDelayRuntime.o: mrmac/vm/MRVMDelayRuntime.cpp mrmac/MRVM.hpp mrmac/vm/MRVMRuntimeState.hpp
+mrmac/MRVMDebugExecution.o: mrmac/MRVMDebugExecution.cpp mrmac/MRVM.hpp mrmac/MRVMDebugSession.hpp mrmac/vm/MRVMExecutionInternal.hpp mrmac/vm/MRVMExecSessions.hpp mrmac/vm/MRVMMacroSpecRuntime.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeDebugger.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/mrmac.h
+mrmac/MRVMProcedureConfiguration.o: mrmac/MRVMProcedureConfiguration.cpp mrmac/MRVM.hpp mrmac/vm/MRVMExecutionInternal.hpp mrmac/vm/MRVMExecSessions.hpp mrmac/ui/conventional/MRVMDeferredUi.hpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/ui/conventional/MRVMMacroDialogRuntime.hpp mrmac/ui/modeless/MRVMMacroModelessProcedures.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/vm/MRVMProcedureCatalog.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMSettings.hpp mrmac/vm/MRVMValue.hpp mrmac/mrmac.h
+mrmac/MRVMProcedureEditor.o: mrmac/MRVMProcedureEditor.cpp mrmac/MRVM.hpp mrmac/vm/MRVMExecutionInternal.hpp mrmac/ui/conventional/MRVMDeferredUi.hpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/vm/MRVMProcedureCatalog.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMValue.hpp mrmac/mrmac.h
+mrmac/MRVMProcedureExecution.o: mrmac/MRVMProcedureExecution.cpp mrmac/MRVM.hpp mrmac/vm/MRVMExecutionInternal.hpp mrmac/vm/MRVMProcedureCatalog.hpp
+mrmac/MRVMProcedureMacro.o: mrmac/MRVMProcedureMacro.cpp mrmac/MRVM.hpp mrmac/vm/MRVMExecutionInternal.hpp mrmac/vm/MRVMMacroSpecRuntime.hpp mrmac/vm/MRVMProcedureCatalog.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/mrmac.h
+mrmac/MRVMProcedureRuntime.o: mrmac/MRVMProcedureRuntime.cpp mrmac/MRVM.hpp mrmac/vm/MRVMExecutionInternal.hpp mrmac/vm/MRVMKeymapRuntime.hpp mrmac/vm/MRVMProcedureCatalog.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/mrmac.h
+mrmac/vm/MRVMDelayRuntime.o: mrmac/vm/MRVMDelayRuntime.cpp mrmac/vm/MRVMExecutionInternal.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/MRVM.hpp mrmac/vm/MRVMRuntimeState.hpp
 mrmac/MRVMDebugSession.o: mrmac/MRVMDebugSession.cpp mrmac/MRVMDebugSession.hpp mrmac/MRVM.hpp mrmac/MRMacroExecutionSession.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeDebugger.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp
 mrmac/vm/MRVMProfile.o: mrmac/vm/MRVMProfile.cpp mrmac/vm/MRVMProfile.hpp mrmac/mrmac.h
 mrmac/ui/conventional/MRVMDeferredUi.o: mrmac/ui/conventional/MRVMDeferredUi.cpp mrmac/ui/conventional/MRVMDeferredUi.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp
-mrmac/ui/conventional/MRVMEditor.o: mrmac/ui/conventional/MRVMEditor.cpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp
+mrmac/ui/conventional/MRVMEditorOperations.o: mrmac/ui/conventional/MRVMEditorOperations.cpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp
+mrmac/ui/conventional/MRVMEditor.o: mrmac/ui/conventional/MRVMEditor.cpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/vm/MRVMProcessRuntime.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp
+mrmac/ui/conventional/MRVMEditorState.o: mrmac/ui/conventional/MRVMEditorState.cpp mrmac/ui/conventional/MRVMEditor.hpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp
+mrmac/vm/MRVMExecution.o: mrmac/vm/MRVMExecution.cpp mrmac/vm/MRVMExecutionInternal.hpp mrmac/vm/MRVMExecSessions.hpp mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMIntrinsics.hpp mrmac/vm/MRVMProcedureCatalog.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMSystemVariables.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp mrmac/mrmac.h app/utils/MRConstants.hpp
 mrmac/vm/MRVMExecutionRuntime.o: mrmac/vm/MRVMExecutionRuntime.cpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp mrmac/mrmac.h
 mrmac/vm/MRVMExecSessions.o: mrmac/vm/MRVMExecSessions.cpp mrmac/vm/MRVMExecSessions.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp mrmac/MRMacroExecutionSession.hpp mrmac/mrmac.h
 mrmac/vm/MRVMHash.o: mrmac/vm/MRVMHash.cpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp
+mrmac/vm/MRVMIntrinsics.o: mrmac/vm/MRVMIntrinsics.cpp mrmac/vm/MRVMIntrinsics.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMProcessRuntime.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp mrmac/ui/conventional/MRVMMacroDialogRuntime.hpp mrmac/ui/modeless/MRVMMacroModelessProcedures.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
 mrmac/vm/MRVMKeymapRuntime.o: mrmac/vm/MRVMKeymapRuntime.cpp mrmac/vm/MRVMKeymapRuntime.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp mrmac/mrmac.h
 mrmac/ui/conventional/MRVMMacroDialogRuntime.o: mrmac/ui/conventional/MRVMMacroDialogRuntime.cpp mrmac/ui/conventional/MRVMMacroDialogRuntime.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp dialogs/setup/MRSetupCommon.hpp ui/MRWindowSupport.hpp
+mrmac/vm/MRVMMacroLoading.o: mrmac/vm/MRVMMacroLoading.cpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMExecSessions.hpp mrmac/vm/MRVMKeymapRuntime.hpp mrmac/vm/MRVMProfile.hpp mrmac/vm/MRVMRuntimeDebugger.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/MRVM.hpp mrmac/mrmac.h app/MRRuntimeScheduler.hpp app/utils/MRFileIOUtils.hpp
+mrmac/vm/MRVMMacroRuntime.o: mrmac/vm/MRVMMacroRuntime.cpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMExecSessions.hpp mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMKeymapRuntime.hpp mrmac/vm/MRVMMacroSpecRuntime.hpp mrmac/vm/MRVMProcessRuntime.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeGlobals.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp mrmac/MRMacroRunner.hpp mrmac/ui/modeless/MRMacroModelessUi.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp app/MRCommandRouter.hpp app/MRRuntimeScheduler.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
 mrmac/ui/modeless/MRVMMacroModelessProcedures.o: mrmac/ui/modeless/MRVMMacroModelessProcedures.cpp mrmac/ui/modeless/MRVMMacroModelessProcedures.hpp mrmac/ui/conventional/MRVMMacroDialogRuntime.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/vm/MRVMValue.hpp mrmac/ui/modeless/MRMacroModelessUi.hpp mrmac/MRVM.hpp
 mrmac/vm/MRVMMacroSpecRuntime.o: mrmac/vm/MRVMMacroSpecRuntime.cpp mrmac/vm/MRVMMacroSpecRuntime.hpp mrmac/vm/MRVMValue.hpp app/utils/MRStringUtils.hpp
 mrmac/ui/modeless/MRVMModelessUiStorage.o: mrmac/ui/modeless/MRVMModelessUiStorage.cpp mrmac/ui/modeless/MRVMModelessUiStorage.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp mrmac/ui/modeless/MRMacroModelessUi.hpp mrmac/mrmac.h
@@ -648,10 +674,12 @@ mrmac/ui/modeless/MRVMModelessWindowRuntime.o: mrmac/ui/modeless/MRVMModelessWin
 mrmac/ui/modeless/MRMacroModelessControls.o: mrmac/ui/modeless/MRMacroModelessControls.cpp mrmac/ui/modeless/MRMacroModelessControls.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp
 mrmac/ui/modeless/MRMacroUiCollections.o: mrmac/ui/modeless/MRMacroUiCollections.cpp mrmac/ui/modeless/MRMacroModelessControls.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp
 mrmac/vm/MRVMProcessRuntime.o: mrmac/vm/MRVMProcessRuntime.cpp mrmac/vm/MRVMProcessRuntime.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp app/utils/MRStringUtils.hpp
+mrmac/vm/MRVMProcedureCatalog.o: mrmac/vm/MRVMProcedureCatalog.cpp mrmac/vm/MRVMProcedureCatalog.hpp
 mrmac/vm/MRVMRuntimeCatalog.o: mrmac/vm/MRVMRuntimeCatalog.cpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMProfile.hpp mrmac/MRVM.hpp app/MRRuntimeScheduler.hpp mrmac/mrmac.h
 mrmac/vm/MRVMRuntimeGlobals.o: mrmac/vm/MRVMRuntimeGlobals.cpp mrmac/vm/MRVMRuntimeGlobals.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp mrmac/mrmac.h
 mrmac/vm/MRVMRuntimeKv.o: mrmac/vm/MRVMRuntimeKv.cpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp mrmac/mrmac.h
 mrmac/ui/conventional/MRVMUiStateRuntime.o: mrmac/ui/conventional/MRVMUiStateRuntime.cpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMRuntimeGlobals.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp mrmac/mrmac.h
+mrmac/vm/MRVMSystemVariables.o: mrmac/vm/MRVMSystemVariables.cpp mrmac/vm/MRVMSystemVariables.hpp mrmac/vm/MRVMRuntimeInternal.hpp mrmac/vm/MRVMRuntimeCatalog.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp mrmac/MRVM.hpp config/settings/MRSettingsRuntime.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
 mrmac/vm/MRVMSettings.o: mrmac/vm/MRVMSettings.cpp mrmac/vm/MRVMSettings.hpp mrmac/MRVM.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp keymap/MRKeymapProfile.hpp
 mrmac/ui/conventional/MRVMScreen.o: mrmac/ui/conventional/MRVMScreen.cpp mrmac/ui/conventional/MRVMScreen.hpp mrmac/MRVM.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRWindowSupport.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRPalette.o: ui/MRPalette.cpp ui/MRPalette.hpp

@@ -15,6 +15,7 @@
 #include "MRMacroExecutionSession.hpp"
 #include "ui/modeless/MRMacroModelessUi.hpp"
 #include "../app/MRRuntimeScheduler.hpp"
+#include "vm/MRVMProcedureCatalog.hpp"
 #include "vm/MRVMProfile.hpp"
 
 class MREditWindow;
@@ -179,12 +180,23 @@ class VirtualMachine {
 	std::string mDebugSourcePath;
 	struct MRMacroDebugChildFrame;
 	std::unique_ptr<MRMacroDebugChildFrame> mDebugChildFrame;
+	enum class InstructionFlow : unsigned char {
+		Completed,
+		SkipPostInstruction,
+		FinishExecution,
+	};
+	struct ExecutionFrame;
 
 	void appendLogLine(const std::string &line, bool important = false);
 	void appendDebugCallStack(MRMacroDebugRunResult &result) const;
 	void appendDebugParentCallStack(MRMacroDebugRunResult &result, std::size_t parentInstructionOffset) const;
 	void clearAsyncDelayState() noexcept;
 	static int normalizeDelayMillis(int millis) noexcept;
+	InstructionFlow executeProcedure(ExecutionFrame &frame, const std::string &name, const std::vector<Value> &args, std::size_t instructionOffset);
+	InstructionFlow executeConfigurationProcedure(MRVMProcedureCatalog::Procedure procedure, const std::string &name, const std::vector<Value> &args);
+	InstructionFlow executeRuntimeProcedure(MRVMProcedureCatalog::Procedure procedure, const std::string &name, const std::vector<Value> &args, bool allowAsyncDelay);
+	InstructionFlow executeEditorProcedure(MRVMProcedureCatalog::Procedure procedure, const std::string &name, const std::vector<Value> &args);
+	InstructionFlow executeMacroProcedure(ExecutionFrame &frame, MRVMProcedureCatalog::Procedure procedure, const std::string &name, const std::vector<Value> &args, std::size_t instructionOffset);
 
 	void push(const Value &value);
 	Value pop();

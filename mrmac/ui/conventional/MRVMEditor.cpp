@@ -6,6 +6,8 @@
 #include <tvision/tv.h>
 
 #include "MRVMScreen.hpp"
+#include "../../vm/MRVMProcessRuntime.hpp"
+#include "../../vm/MRVMRuntimeInternal.hpp"
 #include "../../../app/commands/MRWindowCommands.hpp"
 #include "../../../ui/MREditWindow.hpp"
 
@@ -218,4 +220,176 @@ bool mrvmUiRedrawCurrentWindow() {
 
 bool mrvmUiNewScreen() {
 	return returnWithDirectScreenMutation(mrvmEditorRedrawEntireScreen());
+}
+
+std::string mrvmEditorExpandUserPath(const std::string &path) {
+	return mrvmProcessExpandUserPath(path);
+}
+
+bool mrvmEditorMarkPosition(MREditWindow *win, MRFileEditor *editor) {
+	return mrvm_runtime::markEditorPosition(win, editor);
+}
+
+bool mrvmEditorGotoMark(MREditWindow *win, MRFileEditor *editor) {
+	return mrvm_runtime::gotoEditorMark(win, editor);
+}
+
+bool mrvmEditorSetRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
+	return mrvm_runtime::setEditorRandomAccessMark(win, editor, index);
+}
+
+bool mrvmEditorGotoRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
+	return mrvm_runtime::gotoEditorRandomAccessMark(win, editor, index);
+}
+
+bool mrvmEditorBeginBlockMode(int mode) {
+	return mrvm_runtime::beginCurrentBlockMode(mode);
+}
+
+bool mrvmEditorEndBlockMode() {
+	return mrvm_runtime::endCurrentBlockMode();
+}
+
+bool mrvmEditorClearBlockMode() {
+	return mrvm_runtime::clearCurrentBlockMode();
+}
+
+bool mrvmEditorMoveCursorToNextPageBreak(MRFileEditor *editor) {
+	return mrvm_runtime::moveEditorNextPageBreak(editor);
+}
+
+bool mrvmEditorMoveCursorToPrevPageBreak(MRFileEditor *editor) {
+	return mrvm_runtime::moveEditorLastPageBreak(editor);
+}
+
+bool mrvmEditorMoveCursorTabRight(MRFileEditor *editor) {
+	return mrvm_runtime::moveEditorTabRight(editor);
+}
+
+bool mrvmEditorMoveCursorTabLeft(MRFileEditor *editor) {
+	return mrvm_runtime::moveEditorTabLeft(editor);
+}
+
+bool mrvmEditorIndentCursor(MRFileEditor *editor) {
+	return mrvm_runtime::indentEditor(editor);
+}
+
+bool mrvmEditorUndentCursor(MRFileEditor *editor) {
+	return mrvm_runtime::undentEditor(editor);
+}
+
+bool mrvmEditorCopyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
+	(void)win;
+	(void)editor;
+	return true;
+}
+
+bool mrvmEditorMoveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
+	(void)win;
+	(void)editor;
+	return true;
+}
+
+bool mrvmEditorDeleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace) {
+	(void)win;
+	(void)editor;
+	(void)leaveColumnSpace;
+	return true;
+}
+
+bool mrvmEditorExtractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out) {
+	(void)win;
+	(void)editor;
+	out.clear();
+	return false;
+}
+
+bool mrvmEditorIndentBlock(MREditWindow *win, MRFileEditor *editor) {
+	(void)win;
+	(void)editor;
+	return true;
+}
+
+bool mrvmEditorUndentBlock(MREditWindow *win, MRFileEditor *editor) {
+	(void)win;
+	(void)editor;
+	return true;
+}
+
+MREditWindow *mrvmEditorWindowByIndex(int index) {
+	return mrvm_runtime::editWindowByIndex(index);
+}
+
+bool mrvmEditorCopyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
+	(void)srcWin;
+	(void)srcEditor;
+	(void)destWin;
+	(void)destEditor;
+	return true;
+}
+
+bool mrvmEditorMoveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
+	(void)srcWin;
+	(void)srcEditor;
+	(void)destWin;
+	(void)destEditor;
+	return true;
+}
+
+bool mrvmEditorShouldLeaveColumnSpaceForDelete(MREditWindow *win) {
+	(void)win;
+	return false;
+}
+
+bool mrvmEditorLoadBlockFromFile(MREditWindow *win, const std::string &path) {
+	return win != nullptr && win->loadStreamBlockFromFile(path);
+}
+
+bool mrvmEditorSaveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path) {
+	(void)editor;
+	return win != nullptr && win->saveStreamBlockToFile(path);
+}
+
+bool mrvmEditorLinkCurrentWindow() {
+	return mrvm_runtime::linkCurrentEditWindow();
+}
+
+bool mrvmEditorUnlinkCurrentWindow() {
+	return mrvm_runtime::unlinkCurrentEditWindow();
+}
+
+bool mrvmEditorRedrawCurrentWindow() {
+	return mrvm_runtime::redrawCurrentEditWindow();
+}
+
+bool mrvmEditorRedrawEntireScreen() {
+	return mrvm_runtime::redrawEntireScreen();
+}
+
+bool mrvmEditorZoomCurrentWindow() {
+	return mrvm_runtime::zoomCurrentEditWindow();
+}
+
+bool mrvmEditorCreateWindow() {
+	return mrvm_runtime::createEditWindow();
+}
+
+bool mrvmEditorSwitchWindow(int index) {
+	return mrvm_runtime::switchEditWindow(index);
+}
+
+bool mrvmEditorSizeCurrentWindow(int x1, int y1, int x2, int y2) {
+	return mrvm_runtime::sizeCurrentEditWindow(x1, y1, x2, y2);
+}
+
+bool mrvmEditorDeleteCurrentWindow() {
+	return mrvm_runtime::deleteCurrentEditWindow();
+}
+
+bool mrvmEditorEraseCurrentWindow() {
+	return mrvm_runtime::eraseCurrentEditWindow();
+}
+
+bool mrvmEditorModifyCurrentWindow() {
+	return mrvm_runtime::modifyCurrentEditWindow();
 }
