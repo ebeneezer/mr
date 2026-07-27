@@ -7,8 +7,9 @@ MR bekommt einen source-genauen Debugger fuer Macros aus der Macro-Registry:
 - Registry-Macro zum Debuggen starten.
 - Source-genaue Breakpoints setzen und treffen.
 - Step Into, Step Over, Step Out, Continue, Pause und Stop.
-- Variablen zunaechst read-only inspizieren.
-- Locals, file globals und weitere Runtime-Bereiche im Variables-Pane zeigen.
+- Alle tatsaechlichen Variablenscopes inspizieren und pausiert mutieren.
+- Locals, Closure-, Session- und App-Globals im Variables-Pane zeigen; ein
+  File-Global-Scope existiert in MRMAC nicht.
 - Bestehende BentoBox-Panes fuer Source, Debugger Output, Variables und Watches
   nutzen.
 - Execution Sessions beobachtbar machen, ohne die base Session Runtime zu einem
@@ -75,8 +76,10 @@ Invarianten:
 - Kein Render-Seitenkanal fuer Debugger-Overlay.
 - Typed UI procedures und Macro-Screen-Operationen bleiben
   staged/projection-basiert, soweit sie nicht bereits UI-thread-only laufen.
-- Breakpoints liegen im ersten Entwurf im zentralen VM K/V Store unter
-  `MACRODEBUGGER`. Sie werden nicht in Settings oder Workspace persistiert.
+- Live gebundene Breakpoints und Watches liegen im zentralen VM K/V Store unter
+  `MACRODEBUGGER`. Der Workspace darf die kalte Definition eines
+  Debugger-Bentos persistieren; Session, VM, Source-Map, Bytecode-Bindung und
+  Werte bleiben runtime-only.
 
 ## Bestehende Ausfuehrungsrouten
 
@@ -201,9 +204,11 @@ Die VM laeuft bis zu einer Stop-Policy:
 - HALT / macro complete,
 - execution budget exhausted.
 
-Side effects bleiben im ersten Debugger-Slice real. Ein staged preview debugger
-ist nicht Teil des ersten Plans, weil Breakpoints, Variablen, Editorzustand und
-deferred UI dann vor finalem Commit beobachtet werden muessten.
+Side effects bleiben real. Der Debugger waehlt denselben natuerlichen
+Ausfuehrungsweg wie der normale Runner: background-safe Bytecode laeuft in
+endlichen Macro-Worker-Zuegen, staged-faehiger Bytecode auf dem vorhandenen
+Snapshot/Conflict/Commit-Pfad, und verbleibender UI-affiner Bytecode
+budgetiert im UI-Pump. Es gibt keinen separaten Preview-Modus.
 
 ## UX
 
@@ -321,34 +326,40 @@ Step-Semantik:
 
 ## Variables Pane
 
-Erster Umfang: read-only Inspector.
+Der Inspector zeigt und mutiert die tatsaechliche pausierte VM.
 
 Gruppen:
 
 - Locals
-- File globals
 - App globals
-- Weitere Runtime-Globals, falls im VM-Modell vorhanden
+- Closure variables
+- Execution-session variables
 - Stack optional nur fuer Diagnose, nicht als Standard-UX
 
 Darstellung:
 
 - Aufklappbare Gruppen.
 - Eingerueckte Variablen.
-- Hashes und Arrays rekursiv aufklappbar, aber budgetiert.
+- Hashes und Arrays rekursiv und vollstaendig hierarchisch dargestellt.
+- Zyklen werden als Referenzen markiert; es gibt keine willkuerliche
+  Snapshot-Groessengrenze.
 - Detailansicht bei Auswahl einer Variable.
 
-Mutation bleibt spaeterer Slice und muss typisiert, validiert und an
-VM-Speichergrenzen gebunden sein. Hashes, Arrays und globale Runtime-Stores
-duerfen nicht ueber UI-Schattenzustand mutiert werden.
+Mutation ist typisiert, validiert und an die VM-Speichergrenzen gebunden:
+skalare Werte werden typgleich ersetzt, Hash-Eintraege koennen hinzugefuegt,
+umbenannt oder entfernt und Array-Elemente angehaengt oder entfernt werden.
+Jeder Write validiert Root, Scope, Typ und kompletten Collection-Pfad neu.
+Hashes, Arrays und Runtime-Stores werden nie ueber UI-Schattenzustand mutiert.
 
 ## Threading And Pumping
 
 Der Debugger darf den UI-Thread nicht durch lange Macro-Ausfuehrung blockieren.
 
-Zulaessige Richtung:
+Festgelegte Richtung:
 
-- VM laeuft budgetiert oder workergefuehrt.
+- UI-affine VM-Ausfuehrung laeuft budgetiert im UI-Pump.
+- Background-safe und staged Ausfuehrung laeuft in endlichen Worker-Zuegen auf
+  der bestehenden Macro-Lane.
 - Debug-Events und Snapshots gehen kontrolliert an den UI-Thread.
 - UI zeichnet TVision-konform ueber vorhandene Views/Panes.
 
@@ -359,9 +370,12 @@ Nicht zulaessig:
 - versteckte UI-Side-Effects aus generischen VM-Intrinsics,
 - neue deferred playback boundaries als Nebeneffekt.
 
-Eine pausierte Debug-Session darf keinen Worker blockieren. Bei Breakpoint oder
+Eine pausierte Debug-Session blockiert keinen Worker. Bei Breakpoint oder
 Step-Ende wird die VM als Session-Zustand geparkt, der Worker gibt frei, und
 Continue/Step queued wieder Arbeit ueber die bestehende Macro-Ausfuehrung.
+Pause und Stop setzen kooperative Kontrollflags, ohne auf den VM-Lock des
+laufenden Workers zu warten. Intrinsics, externes I/O und deferred playback
+bleiben atomare Blackboxes fuer Step/Pause.
 
 ## Implementation Slices
 
@@ -395,9 +409,10 @@ Continue/Step queued wieder Arbeit ueber die bestehende Macro-Ausfuehrung.
      - Debug-Ziel bleibt Registry-Macro.
      - Macro muss auf Source-Identity und Macro-Entry abbildbar sein.
      - Mehrere Macros pro Datei muessen unterscheidbar sein.
-   - Staged Preview ausschliessen:
-     - Erster Debugger ist live/normal.
-     - Staged Debugger bleibt eigene Architekturentscheidung.
+   - Natuerliche Route festlegen:
+     - Debugger klassifiziert Bytecode wie der normale Runner.
+     - Staged Debugging verwendet denselben Input-, Konflikt-, Commit- und
+       Deferred-Playback-Pfad; es gibt keinen Preview-Sonderweg.
    - Abnahmekriterien:
      - Source-Map-Struktur ist fuer Slice 2 konkret genug.
      - Compile-Ergebnis und span-basierte Breakpoint-Normalisierung sind
@@ -688,10 +703,12 @@ Continue/Step queued wieder Arbeit ueber die bestehende Macro-Ausfuehrung.
    - Fehlerfaelle: Syntax, unbekannter oder nicht mehr sichtbarer Name,
      Typ-/Indexfehler, Division durch null, verbotene Intrinsic und fehlende
      Live-Session.
-   - Mutation erfolgt per Klick auf eine skalare Wertzeile im Variables-Pane:
-     ein rahmenloser `TInputLine` ist mit dem alten Wert vorbelegt; Enter
-     schreibt, Escape verwirft. `int`, `real`, `str` und `char` sind
-     schreibbar; Arrays und Hashes bleiben read-only.
+   - Mutation erfolgt per Klick auf eine Wertzeile im Variables-Pane:
+     ein rahmenloser `TInputLine` ist bei Skalaren mit dem alten Wert
+     vorbelegt; Enter schreibt, Escape verwirft. `int`, `real`, `str` und
+     `char` sind typgleich schreibbar. Hash- und Array-Zeilen bieten
+     ergonomische Kommandos fuer Einfuegen, Anhaengen, Loeschen und
+     Hash-Key-Rename; verschachtelte Werte verwenden denselben Pfad.
    - Das Feld nutzt ausschliesslich `kMrPaletteDebuggerInputActive`; ein
      abgewiesener Wert bleibt im Feld und nutzt
      `kMrPaletteDebuggerInputError`. Die UI besitzt keinen schreibbaren
@@ -770,8 +787,9 @@ Pflicht bei relevanten Code-Slices:
 - Debug run: Continue, Pause, Stop
 - Step Into, Step Over, Step Out
 - Step Into ueber `RUN_MACRO(...)`
-- Locals/file globals/app globals im Variables-Pane
-- Hash/Array read-only Darstellung
+- Locals/Closure/Session/App Globals im Variables-Pane; kein erfundener
+  File-Global-Scope
+- vollstaendige rekursive Hash-/Array-Darstellung und strukturelle Mutation
 - foreground UI-thread macro execution
 - foreground `DELAY` yield, resume and cancel, falls beruehrt
 - background-safe `Lane::Macro` execution, falls beruehrt
@@ -783,19 +801,30 @@ Pflicht bei relevanten Code-Slices:
   Watchpoints und geaenderte Werte ohne Message-Line-Farbcodes
 - Coprocessor/deferred UI checks, falls worker route oder playback beruehrt wird
 
-## Open Decisions
+## Entschiedene Punkte
 
-- Separate Architekturvertragsdatei fuer Macro Debugging vor VM-/Compiler-Code?
-- Debug-Ausfuehrung budgetiert im UI-Pump oder workergefuehrt auf der
-  bestehenden Macro-Lane?
-- Wie werden file globals im vorhandenen Runtime-Modell von app globals
-  abgegrenzt?
-- Wie wird ein Registry-Macro eindeutig auf Source-Pfad und Source-Map-Version
-  gebunden?
-- Welche Intrinsics gelten beim Debuggen als nicht step-in-faehige black boxes?
-- Wie gross darf der Snapshot fuer Hashes/Arrays im Variables-Pane sein?
-- Welche minimale Session-Snapshot-Hook-Schnittstelle braucht die VM, ohne
-  debugger-only state in das base session model zu backen?
+- Es gibt keine separate Debugger-Vertragsdatei; die Entscheidungen sind in
+  Language-, Execution-Session-, Deferred-UI- und Persistence-Vertrag
+  integriert.
+- Die Debug-Ausfuehrung folgt dem normalen Profil: UI-Pump, Background oder
+  staged Background.
+- MRMAC besitzt keine File Globals. Sichtbar sind Locals, Closure-, Session-
+  und App-Globals.
+- Die interne Source-Identitaet ist normalisierter aufgeloester Pfad plus
+  Macro-Name; die UI zeigt `Filename^Makroname`.
+- Intrinsics, externes I/O und deferred playback sind nicht step-in-faehige
+  Blackboxes.
+- Collection-Snapshots haben keine kuenstliche Groessengrenze.
+- Pro Source-Identitaet ist genau ein Debugger-Bento zulaessig.
+- Ein nicht mehr bindbarer Breakpoint bleibt sichtbar, wird geloggt und bei
+  spaeterem Debug-Start erneut gebunden; seine eigene Farbe liegt in der
+  Setup-Gruppe Debugger.
+- Workspace-Restore erzeugt einen kalten Debugger mit Layout, Source,
+  Breakpoint-Definitionen und Watches. Alles, was ein neuer Debug-Lauf erzeugt,
+  bleibt unpersistiert.
+- Das Schliessen des Debugger-Fensters invalidiert dessen Runtime-Anteile im
+  zentralen K/V Store; laeuft ein Worker, erfolgt die Bereinigung kooperativ
+  nach dessen Ende.
 
 ## Contract References
 

@@ -138,21 +138,42 @@ menu lookup must not create source maps. Source maps that belong to loaded macro
 files remain under `MACROCATALOG`.
 Debugger breakpoints must store normalized source-map binding data under
 `MACRODEBUGGER`, including enabled state, source line, source span, bytecode
-offset and debuggable kind. Breakpoint data must not be stored under
-`EXECSESSIONS`, `MACROCATALOG`, settings or workspace persistence.
+offset and debuggable kind. This live binding data must not be stored under
+`EXECSESSIONS`, `MACROCATALOG` or settings. A debugger Bento may persist only
+the cold breakpoint definition in its protected `WORKSPACE` extension:
+normalized macro key, source identity, source line, enabled state and optional
+condition text. Restore must recompile the source map and rebind that
+definition into `MACRODEBUGGER`; bytecode offsets, source spans and generated
+source maps are never persistence truth.
 Watch definitions contain the source expression and enabled state only. Watch
 values and errors are derived from the paused live VM and must not become
-persisted debugger truth. A watch expression uses the canonical compiler
-frontend in a restricted pure-expression mode; it must not introduce a second
-parser, a second bytecode format, procedures, assignments, UI operations or
-file/process side effects.
+persisted debugger truth. The cold expression and enabled state may be stored
+with the debugger Bento's `WORKSPACE` configuration and must be written back to
+`MACRODEBUGGER` on a later debug start. A watch expression uses the canonical
+compiler frontend in a restricted pure-expression mode; it must not introduce
+a second parser, a second bytecode format, procedures, assignments, UI
+operations or file/process side effects.
 
 Debugger variable mutation is live-session state, never debugger persistence.
-Only a paused debug VM may change an existing scalar `int`, `real`, `str` or
-`char` variable. The VM validates the projected name, scope and type again at
-write time, writes the existing closure/session/global backing store where
-applicable, and returns a fresh variable snapshot. Arrays and hashes remain
-read-only. The UI keeps no writable variable copy.
+Only a paused debug VM may change an existing value. The VM validates the
+projected root name, scope, type and complete hash/array path again at write
+time, writes the existing local, closure, session or application-global
+backing store where applicable, and returns a fresh full variable snapshot.
+Scalars may be replaced with a value of their existing type. Hash entries may
+be added, renamed or removed; array elements may be appended or removed; and
+nested scalar values may be replaced. The debugger exposes the complete
+hierarchical hash/array projection, including cycle markers, rather than a
+value-bearing UI shadow. The UI keeps no writable variable copy.
+
+MRMac has no file-global variable scope. `DEF_*` variables are local, closure
+or execution-session state according to their actual execution context;
+explicit globals are application globals under `MACROGLOBALS`. The debugger
+must show these actual scopes and must not invent a file-global category.
+
+The stable source identity is the normalized resolved source path plus macro
+name. The UI may render its familiar form as `Filename^MacroName`; internal
+ownership, breakpoint rebinding and the one-debugger-per-source rule use the
+normalized identity.
 C++ debugger objects are transfer objects only. They must be rebuilt from
 `MACRODEBUGGER` and must not become a second value-bearing debugger registry.
 

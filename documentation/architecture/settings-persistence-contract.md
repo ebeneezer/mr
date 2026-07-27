@@ -41,6 +41,11 @@ When persistence writes external theme files, it must write the current
 
 Workspace serialization is a separate extension to the settings source, not a license to add arbitrary serialization side channels.
 
+The debugger Bento extension may serialize cold source identity, breakpoint
+definitions and watch definitions through the existing `WORKSPACE` line.
+Session ids, VM handles, routes, current locations, call stacks, values,
+outputs and generated source maps remain runtime-only and must not be written.
+
 ## SAVE_SETTINGS
 
 `SAVE_SETTINGS` is currently a VM intrinsic that persists settings.

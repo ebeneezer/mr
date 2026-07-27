@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="990" viewBox="0 0 1080 990" role="img" aria-labelledby="title desc">
+  <title id="title">MR lifetime-bound external source lifecycle</title>
+  <desc id="desc">Four numbered panels show source registration, the file-tail and journal acquisition routes, bounded chunk adoption, and owner-scoped cancellation with process-group termination.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="990" fill="#ffffff"/>
+  <text x="40" y="35" class="title">LIFETIME-BOUND EXTERNAL SOURCES</text>
+  <text x="40" y="59" class="small">A blocking wait may retain one worker; result routing and UI adoption remain exact and bounded.</text>
+
+  <rect x="40" y="82" width="1000" height="142" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">Registration creates one source owner and one exclusive worker</text>
+  <rect x="70" y="151" width="940" height="48" rx="6" class="blue"/>
+  <text x="90" y="181" class="code">sourceId · source kind · source name · targetBufferId · cancel state · tracked task</text>
+  <text x="70" y="216" class="small">The worker may wait for this source; it may never carry a second viewer's work.</text>
+
+  <path d="M540 224 L540 250" class="flow-blue"/>
+
+  <rect x="40" y="255" width="1000" height="290" rx="8" class="box"/>
+  <circle cx="72" cy="287" r="20" fill="#2f6fa3"/>
+  <text x="72" y="294" class="badge">2</text>
+  <text x="105" y="293" class="panel-title">Two acquisition routes share the same ownership boundary</text>
+
+  <rect x="70" y="330" width="455" height="177" rx="7" class="green"/>
+  <text x="298" y="361" class="panel-title" text-anchor="middle">FILE TAIL</text>
+  <text x="92" y="391" class="code">device + inode + byte offset</text>
+  <text x="92" y="417" class="small">bounded pread · append from last offset</text>
+  <text x="92" y="440" class="small">replacement or truncation → close and reopen</text>
+  <text x="92" y="463" class="small">optional timestamp at logical line start</text>
+  <rect x="92" y="477" width="411" height="20" rx="3" fill="#ffffff" stroke="#317c70" stroke-width="1"/>
+  <text x="298" y="492" class="small" text-anchor="middle">one tail loop until close or cancellation</text>
+
+  <rect x="555" y="330" width="455" height="177" rx="7" class="gold"/>
+  <text x="783" y="361" class="panel-title" text-anchor="middle">JOURNAL</text>
+  <text x="577" y="391" class="code">journalctl -f · own process group</text>
+  <text x="577" y="417" class="small">stdout/stderr → non-blocking pipe</text>
+  <text x="577" y="440" class="small">bounded poll · read · waitpid state checks</text>
+  <text x="577" y="463" class="small">child and descendants share one source lifetime</text>
+  <rect x="577" y="477" width="411" height="20" rx="3" fill="#ffffff" stroke="#a77b2f" stroke-width="1"/>
+  <text x="783" y="492" class="small" text-anchor="middle">one pipe reader until end, failure, or cancellation</text>
+
+  <path d="M298 507 L298 530 L500 530 L500 570" class="flow"/>
+  <path d="M783 507 L783 530 L580 530 L580 570" class="flow"/>
+
+  <rect x="40" y="575" width="1000" height="205" rx="8" class="box"/>
+  <circle cx="72" cy="607" r="20" fill="#2f6fa3"/>
+  <text x="72" y="614" class="badge">3</text>
+  <text x="105" y="613" class="panel-title">Bounded chunks return through the central result mailbox</text>
+  <rect x="70" y="649" width="280" height="93" rx="6" class="purple"/>
+  <text x="210" y="679" class="panel-title" text-anchor="middle">CHUNK RESULT</text>
+  <text x="210" y="705" class="code" text-anchor="middle">sourceId + targetBufferId</text>
+  <text x="210" y="727" class="small" text-anchor="middle">owned text · bounded chunk</text>
+  <path d="M350 696 L400 696" class="flow"/>
+  <rect x="400" y="649" width="280" height="93" rx="6" class="blue"/>
+  <text x="540" y="679" class="panel-title" text-anchor="middle">UI DISPATCH</text>
+  <text x="540" y="705" class="small" text-anchor="middle">find exact communication window</text>
+  <text x="540" y="727" class="small" text-anchor="middle">discard if owner has closed</text>
+  <path d="M680 696 L730 696" class="flow"/>
+  <rect x="730" y="649" width="280" height="93" rx="6" class="lime"/>
+  <text x="870" y="679" class="panel-title" text-anchor="middle">LIVE PROJECTION</text>
+  <text x="870" y="705" class="small" text-anchor="middle">append/prepend · search ranges</text>
+  <text x="870" y="727" class="small" text-anchor="middle">message · bell · audio policy</text>
+  <text x="70" y="766" class="small">Workers publish data. Only the UI thread mutates the read-only viewer and its current highlight projection.</text>
+
+  <path d="M540 780 L540 806" class="flow-blue"/>
+
+  <rect x="40" y="811" width="1000" height="149" rx="8" class="box"/>
+  <circle cx="72" cy="843" r="20" fill="#2f6fa3"/>
+  <text x="72" y="850" class="badge">4</text>
+  <text x="105" y="849" class="panel-title">Close invalidates the owner before the source worker is joined</text>
+  <rect x="70" y="883" width="205" height="50" rx="6" class="red"/>
+  <text x="173" y="914" class="body" text-anchor="middle">cancel exact source</text>
+  <path d="M275 908 L325 908" class="flow"/>
+  <rect x="325" y="883" width="230" height="50" rx="6" class="gold"/>
+  <text x="440" y="903" class="small" text-anchor="middle">file: bounded wake</text>
+  <text x="440" y="923" class="small" text-anchor="middle">journal: close read side</text>
+  <path d="M555 908 L605 908" class="flow"/>
+  <rect x="605" y="883" width="205" height="50" rx="6" class="red"/>
+  <text x="708" y="903" class="small" text-anchor="middle">TERM → bounded polls</text>
+  <text x="708" y="923" class="small" text-anchor="middle">KILL if required</text>
+  <path d="M810 908 L860 908" class="flow"/>
+  <rect x="860" y="883" width="150" height="50" rx="6" class="green"/>
+  <text x="935" y="903" class="small" text-anchor="middle">reap child</text>
+  <text x="935" y="923" class="small" text-anchor="middle">join worker</text>
+</svg>

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" role="img" aria-labelledby="title desc">
+  <title id="title">MRMAC canonical compiler and runtime value ownership</title>
+  <desc id="desc">The upper half shows normal, source-map, and watch-expression products from one compiler. The lower half shows VM-local and central hash stores, chained lvalues, recursive cloning across storage domains, and actual runtime scopes.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1080" fill="#ffffff"/>
+  <text x="40" y="35" class="title">MRMAC COMPILER AND VALUE OWNERSHIP</text>
+  <text x="40" y="59" class="small">One compiler produces ordinary bytecode, optional debug mapping, and restricted watch bytecode.</text>
+
+  <rect x="40" y="82" width="1000" height="438" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">Three deliberate entry modes share one language implementation</text>
+
+  <rect x="70" y="158" width="250" height="83" rx="7" class="blue"/>
+  <text x="195" y="187" class="panel-title" text-anchor="middle">NORMAL SOURCE</text>
+  <text x="195" y="213" class="small" text-anchor="middle">macro file · closures · settings</text>
+  <text x="195" y="232" class="small" text-anchor="middle">ordinary compile cost</text>
+
+  <rect x="70" y="263" width="250" height="83" rx="7" class="purple"/>
+  <text x="195" y="292" class="panel-title" text-anchor="middle">DEBUG SOURCE</text>
+  <text x="195" y="318" class="small" text-anchor="middle">same source + SourceMapSink</text>
+  <text x="195" y="337" class="small" text-anchor="middle">only on debugger start</text>
+
+  <rect x="70" y="368" width="250" height="104" rx="7" class="gold"/>
+  <text x="195" y="397" class="panel-title" text-anchor="middle">WATCH EXPRESSION</text>
+  <text x="195" y="423" class="small" text-anchor="middle">typed paused symbols</text>
+  <text x="195" y="445" class="small" text-anchor="middle">no assignment, procedure, UI</text>
+  <text x="195" y="465" class="small" text-anchor="middle">or file/process side effects</text>
+
+  <path d="M320 200 L395 200" class="flow"/>
+  <path d="M320 305 L365 305 L365 250 L395 250" class="flow"/>
+  <path d="M320 420 L365 420 L365 300 L395 300" class="flow"/>
+
+  <rect x="395" y="158" width="310" height="188" rx="8" class="green"/>
+  <text x="550" y="190" class="panel-title" text-anchor="middle">CANONICAL FRONTEND</text>
+  <text x="550" y="219" class="code" text-anchor="middle">mrmac.c</text>
+  <text x="550" y="250" class="small" text-anchor="middle">scanner · parser · symbols</text>
+  <text x="550" y="274" class="small" text-anchor="middle">type checks · intrinsic signatures</text>
+  <text x="550" y="298" class="small" text-anchor="middle">one bytecode emitter</text>
+  <rect x="423" y="316" width="254" height="19" rx="3" fill="#ffffff" stroke="#317c70" stroke-width="1"/>
+  <text x="550" y="331" class="small" text-anchor="middle">no Flex/Bison or debug compiler track</text>
+
+  <path d="M705 205 L760 205" class="flow"/>
+  <path d="M705 252 L760 252" class="flow"/>
+  <path d="M705 300 L760 300" class="flow"/>
+
+  <rect x="760" y="158" width="250" height="83" rx="7" class="blue"/>
+  <text x="885" y="187" class="panel-title" text-anchor="middle">BYTECODE + ENTRIES</text>
+  <text x="885" y="213" class="small" text-anchor="middle">Macro Catalog → normal VM</text>
+
+  <rect x="760" y="263" width="250" height="83" rx="7" class="purple"/>
+  <text x="885" y="292" class="panel-title" text-anchor="middle">BYTECODE + MAP</text>
+  <text x="885" y="318" class="small" text-anchor="middle">instruction ↔ source span</text>
+
+  <rect x="760" y="368" width="250" height="104" rx="7" class="gold"/>
+  <text x="885" y="397" class="panel-title" text-anchor="middle">PURE BYTECODE</text>
+  <text x="885" y="423" class="small" text-anchor="middle">expression result type</text>
+  <text x="885" y="445" class="small" text-anchor="middle">allowed intrinsic subset</text>
+  <text x="885" y="465" class="code" text-anchor="middle">... OP_HALT</text>
+
+  <path d="M540 520 L540 546" class="flow-blue"/>
+
+  <rect x="40" y="551" width="1000" height="499" rx="8" class="box"/>
+  <circle cx="72" cy="583" r="20" fill="#2f6fa3"/>
+  <text x="72" y="590" class="badge">2</text>
+  <text x="105" y="589" class="panel-title">Hash values name an explicit storage domain</text>
+
+  <rect x="70" y="626" width="300" height="132" rx="7" class="blue"/>
+  <text x="220" y="657" class="panel-title" text-anchor="middle">VM-LOCAL STORE</text>
+  <text x="220" y="684" class="code" text-anchor="middle">Value { type, handle, local }</text>
+  <text x="220" y="711" class="small" text-anchor="middle">finite locals · VM lifetime</text>
+  <text x="220" y="734" class="small" text-anchor="middle">unreachable trees clear independently</text>
+
+  <rect x="710" y="626" width="300" height="132" rx="7" class="green"/>
+  <text x="860" y="657" class="panel-title" text-anchor="middle">CENTRAL GLOBAL STORE</text>
+  <text x="860" y="684" class="code" text-anchor="middle">Value { type, handle, global }</text>
+  <text x="860" y="711" class="small" text-anchor="middle">K/V roots · process runtime</text>
+  <text x="860" y="734" class="small" text-anchor="middle">never settings/workspace persistence</text>
+
+  <rect x="410" y="626" width="260" height="132" rx="7" class="gold"/>
+  <text x="540" y="657" class="panel-title" text-anchor="middle">STORE BOUNDARY</text>
+  <text x="540" y="684" class="small" text-anchor="middle">same domain → retain handle</text>
+  <text x="540" y="709" class="small" text-anchor="middle">cross domain → recursive clone</text>
+  <text x="540" y="733" class="small" text-anchor="middle">nested hashes + hash arrays</text>
+  <path d="M370 692 L410 692" class="flow"/>
+  <path d="M670 692 L710 692" class="flow"/>
+
+  <rect x="70" y="794" width="940" height="101" rx="7" class="purple"/>
+  <text x="540" y="824" class="panel-title" text-anchor="middle">CHAINED HASH LVALUE</text>
+  <text x="540" y="851" class="code" text-anchor="middle">root['C']['KEY'] := value</text>
+  <text x="540" y="877" class="small" text-anchor="middle">load root handle → resolve intermediate hash → validate final key → store typed leaf</text>
+
+  <rect x="70" y="921" width="215" height="83" rx="7" class="blue"/>
+  <text x="178" y="950" class="panel-title" text-anchor="middle">VM LOCAL</text>
+  <text x="178" y="977" class="small" text-anchor="middle">finite DEF_* values</text>
+  <rect x="305" y="921" width="215" height="83" rx="7" class="gold"/>
+  <text x="413" y="950" class="panel-title" text-anchor="middle">CLOSURE</text>
+  <text x="413" y="977" class="small" text-anchor="middle">recurring identity</text>
+  <rect x="540" y="921" width="215" height="83" rx="7" class="purple"/>
+  <text x="648" y="950" class="panel-title" text-anchor="middle">SESSION</text>
+  <text x="648" y="977" class="small" text-anchor="middle">EXECSESSIONS owner</text>
+  <rect x="775" y="921" width="235" height="83" rx="7" class="green"/>
+  <text x="893" y="950" class="panel-title" text-anchor="middle">APPLICATION GLOBAL</text>
+  <text x="893" y="977" class="small" text-anchor="middle">MACROGLOBALS · no file scope</text>
+  <text x="70" y="1032" class="small">Debugger inspection and mutation return through these actual stores; the UI keeps no writable value shadow.</text>
+</svg>

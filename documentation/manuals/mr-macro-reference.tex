@@ -12171,8 +12171,12 @@ END_MACRO;
 
 The MRMAC debugger starts a loaded macro from the macro catalog and compiles it
 with source-map information only for that debug run. Normal macro loading does
-not create source maps. A debugger session runs real MRMAC semantics: file,
-editor and UI side effects are not a preview.
+not create source maps. A debugger session runs real MRMAC semantics and keeps
+the macro's normal execution profile. Background-safe code runs in finite
+Macro workers, staged code keeps the normal snapshot, conflict and UI-thread
+commit path, and remaining UI-affine code advances in bounded UI-pump slices.
+File, editor and UI side effects are therefore not a preview, but none of
+these routes may monopolise the UI thread.
 \end{mrmacextension}
 
 \debuggerscreenshot{DBG_overview.png}{fig:debugger-library}{The Macro Library holds loaded macros. Select the macro to inspect, then choose Debug to create a debugger session for that macro.}
@@ -12206,7 +12210,19 @@ first debuggable source span.
 
 Breakpoints and watches are debugger state, separate from the general settings.
 Their definitions are stored with the debugger Bento's workspace configuration
-and rebound when that workspace is restored.
+and rebound when that workspace is restored. The persisted definition contains
+the source and macro identity, source line, enabled state, optional condition
+and watch expression. It contains no live session, instruction pointer, call
+stack, variable value, generated source map or bytecode offset. Restore
+therefore creates a cold debugger with its breakpoints and watches, not a
+resurrected paused VM.
+
+Exactly one debugger may own a source identity at a time. Internally that
+identity is the normalized resolved source path plus the macro name; the UI
+shows the familiar \texttt{Filename\textasciicircum MacroName} form. If a
+stored breakpoint cannot bind to a debuggable span after the source is
+recompiled, it remains visible with the Debugger group's unbound colour, is
+logged, and is retried by a later debug start.
 \end{mrmacextension}
 
 \debuggerscreenshot{DBG_BP_with_running_MMP.png}{fig:debugger-breakpoint}{A breakpoint pauses the macro at the marked source span while the displayed modeless window remains the real UI created by that session.}
@@ -12235,6 +12251,14 @@ error or normal completion. Nested local calls and starts of loaded macros
 contribute frames to the displayed debug location when source mapping is
 available.
 
+Intrinsics, external I/O and deferred UI playback are black boxes for stepping
+and cooperative pause. The debugger never interrupts one halfway through.
+When background or staged execution reaches a breakpoint, pause or step stop,
+its finite worker ends and the VM remains parked with the Execution Session;
+the paused debugger consumes no worker. Continue or Step starts another finite
+worker action. UI-affine execution uses the same stop policy in bounded
+event-pump slices.
+
 At every pause, the source pane follows the mapped instruction, marks its
 source span and centres the line. Debugger Output reports the macro, session,
 state, stop reason, instruction offset, frame count, location, variable and
@@ -12256,22 +12280,43 @@ location when available.
 \begin{mrmacextension}
 \section{Variables and collections}
 
-The debugger panes show locals, file globals, application globals, closures and
-session values. While a session is paused, select an existing integer, real,
-string or character scalar in Variables to open its inline value field. Enter
-validates and writes the new value, then refreshes Variables and Watches; Esc
-cancels the edit. Names, types, hashes and arrays remain read-only in the
-debugger.
+The debugger panes show the scopes that MRMAC actually implements: locals,
+application globals, closure variables and execution-session variables.
+MRMAC has no file-global scope; a \texttt{DEF\_*} declaration belongs to its
+current VM, closure or long-lived session, while an explicit global belongs to
+the process-wide application-global store.
+
+While a session is paused, select an existing integer, real, string or
+character scalar in Variables to open its inline value field. Enter validates
+and writes the new value, then refreshes the complete Variables tree and
+Watches; Esc cancels the edit. The VM validates the root name, actual scope,
+type and complete collection path again at the write boundary. The pane is not
+a writable shadow of VM state.
 \end{mrmacextension}
 
 \debuggerscreenshot{DBG_var_editing.png}{fig:debugger-variable}{The source span and Variables pane identify the same scalar. Existing scalar values may be changed while the session is paused.}
 
 \begin{mrmacextension}
-Hashes and arrays appear as typed collection summaries. They may be inspected at
-a pause, but the debugger does not permit collection mutation.
+Hashes and arrays appear as complete indented trees, including nested
+collections and explicit cycle references. A container row still shows its
+type and size, but every key or one-based array element follows as its own
+selectable row; there is no arbitrary collection snapshot limit.
+
+Selecting a hash container opens an insertion field. Enter
+\texttt{key=value} for a string entry, or
+\texttt{key:type=value} where \texttt{type} is \texttt{int},
+\texttt{real}, \texttt{str}, \texttt{char}, \texttt{hash},
+\texttt{int[]}, \texttt{real[]}, \texttt{str[]}, \texttt{char[]} or
+\texttt{hash[]}. Selecting an array container appends one element of that
+array's declared type. On a non-root element, \texttt{:delete} removes it;
+\texttt{:rename=newKey} renames a hash entry. Nested scalar rows use the normal
+typed scalar edit. To store a scalar string beginning with one colon, enter
+two leading colons. Every successful structural change is applied to the
+paused VM's local, closure, session or application-global backing store and is
+then projected afresh.
 \end{mrmacextension}
 
-\debuggerscreenshot{DBG_multilevel_hashes.png}{fig:debugger-hash}{A hash is shown as a typed key-count summary in Variables. The corresponding source assignments and collection are visible at the paused location.}
+\debuggerscreenshot{DBG_multilevel_hashes.png}{fig:debugger-hash}{A nested hash is projected as a typed hierarchy in Variables. Container summaries remain visible while keys and nested values are individually selectable at the paused location.}
 
 \begin{mrmacextension}
 \section{Watches and expression evaluation}

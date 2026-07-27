@@ -51,6 +51,11 @@ Any `MRSETUP` token that is not known to the running build is obsolete or
 unknown input. It must be dropped silently during bootstrap normalization and
 must not be applied to the staging snapshot or final runtime model.
 
+Here, silently means that bootstrap continues without a modal error, failed
+startup or invented compatibility behavior. The drop is recorded in the
+normal bootstrap log/load report so that configuration loss remains
+diagnosable.
+
 The current build supplies hardcoded defaults for every setting token it knows.
 Known tokens from the settings source may overwrite those defaults. Missing
 known tokens keep the current build defaults.
@@ -147,6 +152,13 @@ Do not move or rewrite it incidentally.
 ## Workspace
 
 Workspace serialization is not part of the canonical settings core unless a separate workspace contract change is approved.
+
+The approved debugger extension stores only cold debugger Bento configuration
+in `WORKSPACE`: source identity/path, macro identity, breakpoint definitions
+and watch definitions. It does not serialize a debugger session or VM state.
+Unknown `WORKSPACE` option keys are dropped and logged without blocking the
+remaining workspace entry; malformed values of known options are likewise
+local failures rather than permission to reject unrelated known fields.
 
 ## Forbidden without explicit approval
 

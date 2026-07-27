@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="930" viewBox="0 0 1080 930" role="img" aria-labelledby="title desc">
+  <title id="title">MRMAC modeless macro program runtime</title>
+  <desc id="desc">Four numbered panels show typed MRMAC construction, authoritative MODELESSUI state, native TVision projection, callback routing through Execution Sessions, and owner-scoped close cleanup.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="930" fill="#ffffff"/>
+  <text x="40" y="35" class="title">MODELESS MACRO PROGRAM RUNTIME</text>
+  <text x="40" y="59" class="small">MRMAC owns typed intent and retained values; TVision owns live views, events, focus and lifetime.</text>
+
+  <rect x="40" y="82" width="1000" height="165" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">A macro declares a model, not TVision objects</text>
+  <rect x="70" y="150" width="940" height="67" rx="6" class="blue"/>
+  <text x="90" y="177" class="code">UI_DIALOG · MMP_*_FIELD · MMP_ACTION_* · MMP_CANVAS_* · MMP_TIMER_START</text>
+  <text x="90" y="201" class="small">logical window and field ids · bounded values · palette-relative canvas roles · callback macro specs</text>
+
+  <path d="M540 247 L540 273" class="flow-blue"/>
+
+  <rect x="40" y="278" width="1000" height="210" rx="8" class="box"/>
+  <circle cx="72" cy="310" r="20" fill="#2f6fa3"/>
+  <text x="72" y="317" class="badge">2</text>
+  <text x="105" y="316" class="panel-title">The central K/V tree is the value-bearing authority</text>
+  <rect x="70" y="348" width="450" height="105" rx="6" class="gold"/>
+  <text x="295" y="379" class="panel-title" text-anchor="middle">MODELESSUI</text>
+  <text x="295" y="405" class="code" text-anchor="middle">staging/currentDialog</text>
+  <text x="295" y="429" class="code" text-anchor="middle">windows/&lt;windowId&gt;/...</text>
+  <path d="M520 400 L560 400" class="flow"/>
+  <rect x="560" y="348" width="450" height="105" rx="6" class="green"/>
+  <text x="785" y="379" class="panel-title" text-anchor="middle">RETAINED VALUES</text>
+  <text x="785" y="405" class="small" text-anchor="middle">fields · selections · logs · tree/table state</text>
+  <text x="785" y="429" class="small" text-anchor="middle">canvas scene + generation · live geometry</text>
+  <text x="70" y="476" class="small">C++ definition objects are short-lived transfer artifacts; there is no second value-bearing widget registry.</text>
+
+  <path d="M540 488 L540 514" class="flow-blue"/>
+
+  <rect x="40" y="519" width="1000" height="222" rx="8" class="box"/>
+  <circle cx="72" cy="551" r="20" fill="#2f6fa3"/>
+  <text x="72" y="558" class="badge">3</text>
+  <text x="105" y="557" class="panel-title">Projection and callbacks cross two explicit boundaries</text>
+  <rect x="70" y="590" width="280" height="112" rx="6" class="purple"/>
+  <text x="210" y="621" class="panel-title" text-anchor="middle">TVISION PROJECTION</text>
+  <text x="210" y="647" class="small" text-anchor="middle">native controls · normal draw()</text>
+  <text x="210" y="671" class="small" text-anchor="middle">focus · Z order · event dispatch</text>
+  <path d="M350 646 L400 646" class="flow"/>
+  <rect x="400" y="590" width="280" height="112" rx="6" class="blue"/>
+  <text x="540" y="621" class="panel-title" text-anchor="middle">TYPED EVENT REQUEST</text>
+  <text x="540" y="647" class="small" text-anchor="middle">window owner · control/timer id</text>
+  <text x="540" y="671" class="small" text-anchor="middle">macro spec · no direct VM call</text>
+  <path d="M680 646 L730 646" class="flow"/>
+  <rect x="730" y="590" width="280" height="112" rx="6" class="lime"/>
+  <text x="870" y="621" class="panel-title" text-anchor="middle">EXECUTION SESSION</text>
+  <text x="870" y="647" class="small" text-anchor="middle">owner-scoped route + result</text>
+  <text x="870" y="671" class="small" text-anchor="middle">scheduler tick or callback</text>
+  <text x="70" y="728" class="small">A canvas commit redraws only its existing view; a callback never executes bytecode inside the TVision event handler.</text>
+
+  <path d="M540 741 L540 767" class="flow-blue"/>
+
+  <rect x="40" y="772" width="1000" height="128" rx="8" class="box"/>
+  <circle cx="72" cy="804" r="20" fill="#2f6fa3"/>
+  <text x="72" y="811" class="badge">4</text>
+  <text x="105" y="810" class="panel-title">Window close invalidates the whole owner lifetime</text>
+  <rect x="70" y="839" width="250" height="40" rx="5" class="red"/>
+  <text x="195" y="865" class="body" text-anchor="middle">TVision close event</text>
+  <path d="M320 859 L370 859" class="flow"/>
+  <rect x="370" y="839" width="290" height="40" rx="5" class="gold"/>
+  <text x="515" y="865" class="body" text-anchor="middle">remove timers + callbacks</text>
+  <path d="M660 859 L710 859" class="flow"/>
+  <rect x="710" y="839" width="300" height="40" rx="5" class="green"/>
+  <text x="860" y="865" class="body" text-anchor="middle">cancel sessions + erase K/V owner</text>
+</svg>

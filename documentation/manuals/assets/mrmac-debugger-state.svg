@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="930" viewBox="0 0 1080 930" role="img" aria-labelledby="title desc">
+  <title id="title">MRMAC debugger state and persistence boundaries</title>
+  <desc id="desc">Four numbered panels distinguish source identity, cold workspace configuration, regenerated runtime binding and full hierarchical live value inspection.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="930" fill="#ffffff"/>
+  <text x="40" y="35" class="title">DEBUGGER STATE: PERSIST DEFINITIONS, REBUILD EXECUTION</text>
+  <text x="40" y="59" class="small">A cold debugger is useful after restore; a serialized live VM would be fiction.</text>
+
+  <rect x="40" y="82" width="1000" height="132" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">Source identity is stable and exclusive</text>
+  <rect x="70" y="151" width="610" height="42" rx="5" class="blue"/>
+  <text x="375" y="178" class="code" text-anchor="middle">normalized resolved path + macro name</text>
+  <path d="M680 172 L730 172" class="flow"/>
+  <rect x="730" y="151" width="280" height="42" rx="5" class="gold"/>
+  <text x="870" y="178" class="body" text-anchor="middle">one debugger owner</text>
+
+  <path d="M540 214 L540 240" class="flow-blue"/>
+
+  <rect x="40" y="245" width="1000" height="218" rx="8" class="box"/>
+  <circle cx="72" cy="277" r="20" fill="#2f6fa3"/>
+  <text x="72" y="284" class="badge">2</text>
+  <text x="105" y="283" class="panel-title">Workspace stores only cold, human-meaningful definitions</text>
+  <rect x="70" y="315" width="450" height="112" rx="6" class="green"/>
+  <text x="295" y="346" class="panel-title" text-anchor="middle">PERSISTED</text>
+  <text x="295" y="372" class="small" text-anchor="middle">Bento layout · source/macro identity</text>
+  <text x="295" y="396" class="small" text-anchor="middle">line · enabled · condition · watch expression</text>
+  <rect x="560" y="315" width="450" height="112" rx="6" class="red"/>
+  <text x="785" y="346" class="panel-title" text-anchor="middle">NEVER PERSISTED</text>
+  <text x="785" y="372" class="small" text-anchor="middle">session · VM · route · IP · frames · values</text>
+  <text x="785" y="396" class="small" text-anchor="middle">bytecode offsets · source map · output</text>
+  <text x="70" y="451" class="small">Unknown workspace options are dropped and logged locally; known fields in the same entry remain restorable.</text>
+
+  <path d="M540 463 L540 489" class="flow-blue"/>
+
+  <rect x="40" y="494" width="1000" height="176" rx="8" class="box"/>
+  <circle cx="72" cy="526" r="20" fill="#2f6fa3"/>
+  <text x="72" y="533" class="badge">3</text>
+  <text x="105" y="532" class="panel-title">A new debug start regenerates and rebinds runtime truth</text>
+  <rect x="70" y="564" width="250" height="70" rx="6" class="blue"/>
+  <text x="195" y="593" class="panel-title" text-anchor="middle">COMPILE</text>
+  <text x="195" y="616" class="small" text-anchor="middle">fresh source map</text>
+  <path d="M320 599 L370 599" class="flow"/>
+  <rect x="370" y="564" width="300" height="70" rx="6" class="gold"/>
+  <text x="520" y="593" class="panel-title" text-anchor="middle">REBIND</text>
+  <text x="520" y="616" class="small" text-anchor="middle">source line → debuggable span</text>
+  <path d="M670 599 L720 599" class="flow"/>
+  <rect x="720" y="564" width="290" height="70" rx="6" class="green"/>
+  <text x="865" y="593" class="panel-title" text-anchor="middle">MACRODEBUGGER K/V</text>
+  <text x="865" y="616" class="small" text-anchor="middle">live bindings + watches</text>
+  <text x="70" y="657" class="small">An unbound definition stays visible in its own Debugger colour, is logged, and is retried later.</text>
+
+  <path d="M540 670 L540 696" class="flow-blue"/>
+
+  <rect x="40" y="701" width="1000" height="199" rx="8" class="box"/>
+  <circle cx="72" cy="733" r="20" fill="#2f6fa3"/>
+  <text x="72" y="740" class="badge">4</text>
+  <text x="105" y="739" class="panel-title">Paused values are projected completely and mutated at the VM boundary</text>
+  <rect x="70" y="772" width="280" height="93" rx="6" class="purple"/>
+  <text x="210" y="801" class="panel-title" text-anchor="middle">ACTUAL SCOPES</text>
+  <text x="210" y="827" class="small" text-anchor="middle">local · closure · session</text>
+  <text x="210" y="849" class="small" text-anchor="middle">application global · no file global</text>
+  <path d="M350 818 L400 818" class="flow"/>
+  <rect x="400" y="772" width="280" height="93" rx="6" class="blue"/>
+  <text x="540" y="801" class="panel-title" text-anchor="middle">FULL VALUE TREE</text>
+  <text x="540" y="827" class="small" text-anchor="middle">hash keys · 1-based arrays</text>
+  <text x="540" y="849" class="small" text-anchor="middle">nested values · cycle markers</text>
+  <path d="M680 818 L730 818" class="flow"/>
+  <rect x="730" y="772" width="280" height="93" rx="6" class="lime"/>
+  <text x="870" y="801" class="panel-title" text-anchor="middle">VALIDATED MUTATION</text>
+  <text x="870" y="827" class="small" text-anchor="middle">root + scope + type + path</text>
+  <text x="870" y="849" class="small" text-anchor="middle">fresh snapshot after write</text>
+  <text x="70" y="887" class="small">Closing the debugger erases its runtime K/V share immediately or cooperatively after its current worker action.</text>
+</svg>
