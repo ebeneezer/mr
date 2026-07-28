@@ -24,10 +24,6 @@ std::string extensionPart(const std::string &value) {
 	return pos == std::string::npos ? std::string() : lowerCopy(name.substr(pos));
 }
 
-bool endsWithText(std::string_view text, std::string_view suffix) noexcept {
-	return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
-}
-
 bool hasSystemdUnitSuffix(std::string_view lowerName) noexcept {
 	static constexpr std::string_view kSystemdSuffixes[] = {
 		".service",   ".socket", ".timer", ".mount",  ".automount", ".target", ".path",   ".slice", ".scope",
@@ -37,7 +33,7 @@ bool hasSystemdUnitSuffix(std::string_view lowerName) noexcept {
 	};
 
 	for (std::string_view suffix : kSystemdSuffixes)
-		if (endsWithText(lowerName, suffix)) return true;
+		if (lowerName.ends_with(suffix)) return true;
 	return false;
 }
 
@@ -67,10 +63,6 @@ int countMatches(std::string_view haystack, std::string_view needle, int maxCoun
 		pos += needle.size();
 	}
 	return count;
-}
-
-bool startsWithText(std::string_view text, std::string_view prefix) noexcept {
-	return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
 }
 
 std::string_view firstLineView(std::string_view text) noexcept {
@@ -129,7 +121,7 @@ int countLinePrefixMatches(std::string_view text, std::string_view prefix, int m
 
 	while (pos < text.size() && count < maxCount) {
 		const std::string_view line = trimWhitespaceView(nextLineView(text, pos));
-		if (startsWithText(line, prefix)) ++count;
+		if (line.starts_with(prefix)) ++count;
 	}
 	return count;
 }
@@ -143,7 +135,7 @@ bool isCLikeFunctionHeaderLine(std::string_view line) noexcept {
 	line = trimWhitespaceView(line);
 	if (line.empty()) return false;
 	for (std::string_view prefix : kPrefixes) {
-		if (!startsWithText(line, prefix)) continue;
+		if (!line.starts_with(prefix)) continue;
 		const std::size_t lparen = line.find('(');
 		const std::size_t rparen = line.find(')', lparen == std::string_view::npos ? 0 : lparen + 1);
 		if (lparen == std::string_view::npos || rparen == std::string_view::npos || lparen == 0) return false;
@@ -172,7 +164,7 @@ bool isPythonBlockHeader(std::string_view line) noexcept {
 	line = trimWhitespaceView(line);
 	if (line.empty() || line.back() != ':') return false;
 	for (std::string_view prefix : prefixes)
-		if (startsWithText(line, prefix)) return true;
+		if (line.starts_with(prefix)) return true;
 	return false;
 }
 
@@ -242,7 +234,7 @@ int countPerlSigilDeclLines(std::string_view text, int maxCount = INT_MAX) noexc
 
 	while (pos < text.size() && count < maxCount) {
 		const std::string_view line = trimWhitespaceView(nextLineView(text, pos));
-		if (startsWithText(line, "my $") || startsWithText(line, "my @") || startsWithText(line, "my %") || startsWithText(line, "our $") || startsWithText(line, "our @") || startsWithText(line, "our %")) ++count;
+		if (line.starts_with("my $") || line.starts_with("my @") || line.starts_with("my %") || line.starts_with("our $") || line.starts_with("our @") || line.starts_with("our %")) ++count;
 	}
 	return count;
 }
@@ -257,7 +249,7 @@ bool isMakeTargetLikeLine(std::string_view line) noexcept {
 	if (colon == std::string_view::npos || colon == 0) return false;
 	if (line.find("://") != std::string_view::npos) return false;
 	if (colon + 1 < line.size() && line[colon + 1] == '=') return false;
-	if (startsWithText(line, "case ") || startsWithText(line, "default:")) return false;
+	if (line.starts_with("case ") || line.starts_with("default:")) return false;
 	for (std::size_t i = 0; i < colon; ++i) {
 		const char ch = line[i];
 		if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-' || ch == '.' || ch == '/' || ch == '%' || ch == '$' || ch == '(' || ch == ')' || ch == '{' || ch == '}' || ch == '*' || ch == '+' || ch == '?' || ch == ' ') {
@@ -296,7 +288,7 @@ int countMarkdownStructureLines(std::string_view text, int maxCount = INT_MAX) n
 	while (pos < text.size() && count < maxCount) {
 		const std::string_view line = trimWhitespaceView(nextLineView(text, pos));
 		if (line.empty()) continue;
-		if (startsWithText(line, "#") || startsWithText(line, ">") || startsWithText(line, "```") || startsWithText(line, "~~~") || startsWithText(line, "- ") || startsWithText(line, "* ") || startsWithText(line, "+ ") || startsWithText(line, "1. ") || containsText(line, "](") || containsText(line, "![") || containsText(line, "| ---")) ++count;
+		if (line.starts_with("#") || line.starts_with(">") || line.starts_with("```") || line.starts_with("~~~") || line.starts_with("- ") || line.starts_with("* ") || line.starts_with("+ ") || line.starts_with("1. ") || containsText(line, "](") || containsText(line, "![") || containsText(line, "| ---")) ++count;
 	}
 	return count;
 }
@@ -444,7 +436,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (detectedByPath == MRSyntaxLanguage::Systemd && systemdSectionLines > 0) return MRSyntaxClassification(MRSyntaxLanguage::Systemd, 96);
 	if (systemdSectionLines > 0 && systemdDirectiveLines > 0) return MRSyntaxClassification(MRSyntaxLanguage::Systemd, 94);
 
-	if (startsWithText(lowerShebang, "#!")) {
+	if (lowerShebang.starts_with("#!")) {
 		if (containsText(lowerShebang, "python")) addClassificationScore(scores, MRSyntaxLanguage::Python, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Python)] += 2;
 		if (containsText(lowerShebang, "perl")) addClassificationScore(scores, MRSyntaxLanguage::Perl, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] += 2;
 		if (containsText(lowerShebang, "zsh")) addClassificationScore(scores, MRSyntaxLanguage::Zsh, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += 2;
@@ -477,7 +469,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	}
 	if (ext == ".pl" || ext == ".pm") addClassificationScore(scores, MRSyntaxLanguage::Perl, 6), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] += 1;
 	if (lowerName == "makefile" || lowerName == "gnumakefile") addClassificationScore(scores, MRSyntaxLanguage::Make, 10), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Make)] += 2;
-	if (lowerName == "readme" || startsWithText(lowerName, "readme.")) addClassificationScore(scores, MRSyntaxLanguage::Markdown, 6), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Markdown)] += 1;
+	if (lowerName == "readme" || lowerName.starts_with("readme.")) addClassificationScore(scores, MRSyntaxLanguage::Markdown, 6), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Markdown)] += 1;
 
 	addClassificationScore(scores, MRSyntaxLanguage::C, includeLines * 5);
 	addClassificationScore(scores, MRSyntaxLanguage::C, cStdHeaderIncludes * 4);
