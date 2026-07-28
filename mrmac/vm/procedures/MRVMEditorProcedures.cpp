@@ -29,7 +29,6 @@
 #include "MRVM.hpp"
 #include "MRVMDebugSession.hpp"
 #include "vm/MRVMExecSessions.hpp"
-#include "vm/MRVMExecutionInternal.hpp"
 #include "ui/conventional/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
 #include "vm/MRVMIntrinsics.hpp"
@@ -40,6 +39,7 @@
 #include "ui/modeless/MRVMModelessUiRuntime.hpp"
 #include "vm/MRVMProcessRuntime.hpp"
 #include "vm/MRVMProcedureCatalog.hpp"
+#include "vm/MRVMProcedureExecution.hpp"
 #include "vm/MRVMRuntimeCatalog.hpp"
 #include "vm/MRVMRuntimeDebugger.hpp"
 #include "vm/MRVMRuntimeGlobals.hpp"
@@ -96,7 +96,7 @@
 
 using namespace mrvm_runtime;
 
-VirtualMachine::InstructionFlow VirtualMachine::executeEditorProcedure(MRVMProcedure procedure, const std::string &name, const std::vector<Value> &args) {
+VirtualMachine::InstructionFlow VirtualMachine::EditorProcedures::execute(MRVMProcedure procedure, const std::string &name, const std::vector<Value> &args) {
 	switch (procedure) {
 		case MRVMProcedure::PutLine: {
 			MRFileEditor *editor;

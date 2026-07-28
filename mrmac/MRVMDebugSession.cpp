@@ -1,5 +1,6 @@
 #include "MRVMDebugSession.hpp"
 
+#include "vm/MRVMDebugExecution.hpp"
 #include "vm/MRVMRuntimeCatalog.hpp"
 #include "vm/MRVMRuntimeDebugger.hpp"
 #include "vm/MRVMRuntimeState.hpp"
@@ -50,28 +51,28 @@ static void appendDebugStackFrame(std::vector<MRMacroDebugStackFrame> &callStack
 
 }
 
-void VirtualMachine::appendDebugCallStack(MRMacroDebugRunResult &result) const {
+void VirtualMachine::DebugExecution::appendCallStack(MRMacroDebugRunResult &result) const {
 	static constexpr std::size_t kCallInstructionSize = sizeof(unsigned char) + sizeof(int);
 
 	result.callStack.clear();
 	if (!result.paused) return;
-	appendDebugStackFrame(result.callStack, mDebugMacroKey, mDebugSourcePath, result.instructionOffset, mrdStackFrameCurrent);
-	for (std::vector<std::size_t>::const_reverse_iterator frame = mDebugCallStack.rbegin(); frame != mDebugCallStack.rend(); ++frame) {
+	appendDebugStackFrame(result.callStack, vm.debugState.macroKey, vm.debugState.sourcePath, result.instructionOffset, mrdStackFrameCurrent);
+	for (std::vector<std::size_t>::const_reverse_iterator frame = vm.debugState.callStack.rbegin(); frame != vm.debugState.callStack.rend(); ++frame) {
 		const std::size_t callInstructionOffset = *frame >= kCallInstructionSize ? *frame - kCallInstructionSize : *frame;
 
-		appendDebugStackFrame(result.callStack, mDebugMacroKey, mDebugSourcePath, callInstructionOffset, mrdStackFrameCall);
+		appendDebugStackFrame(result.callStack, vm.debugState.macroKey, vm.debugState.sourcePath, callInstructionOffset, mrdStackFrameCall);
 	}
 }
 
-void VirtualMachine::appendDebugParentCallStack(MRMacroDebugRunResult &result, std::size_t parentInstructionOffset) const {
+void VirtualMachine::DebugExecution::appendParentCallStack(MRMacroDebugRunResult &result, std::size_t parentInstructionOffset) const {
 	static constexpr std::size_t kCallInstructionSize = sizeof(unsigned char) + sizeof(int);
 
 	if (!result.paused) return;
-	appendDebugStackFrame(result.callStack, mDebugMacroKey, mDebugSourcePath, parentInstructionOffset, mrdStackFrameRunMacro);
-	for (std::vector<std::size_t>::const_reverse_iterator frame = mDebugCallStack.rbegin(); frame != mDebugCallStack.rend(); ++frame) {
+	appendDebugStackFrame(result.callStack, vm.debugState.macroKey, vm.debugState.sourcePath, parentInstructionOffset, mrdStackFrameRunMacro);
+	for (std::vector<std::size_t>::const_reverse_iterator frame = vm.debugState.callStack.rbegin(); frame != vm.debugState.callStack.rend(); ++frame) {
 		const std::size_t callInstructionOffset = *frame >= kCallInstructionSize ? *frame - kCallInstructionSize : *frame;
 
-		appendDebugStackFrame(result.callStack, mDebugMacroKey, mDebugSourcePath, callInstructionOffset, mrdStackFrameCall);
+		appendDebugStackFrame(result.callStack, vm.debugState.macroKey, vm.debugState.sourcePath, callInstructionOffset, mrdStackFrameCall);
 	}
 }
 

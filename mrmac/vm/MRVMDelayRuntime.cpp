@@ -1,5 +1,5 @@
 #include "../MRVM.hpp"
-#include "MRVMExecutionInternal.hpp"
+#include "MRVMDelayRuntime.hpp"
 #include "MRVMRuntimeInternal.hpp"
 #include "MRVMRuntimeState.hpp"
 
@@ -23,6 +23,25 @@ bool sleepDelayBlocking(int millis) {
 
 } // namespace mrvm_execution
 
+VirtualMachine::DelayState::DelayState() noexcept : pending(false), ready(false), enabled(true), bytecode(), length(0), ip(0), callStack(), returnInt(0), returnStr(), errorLevel(0), savedParameterString(), macroFramePushed(false), deadline(), generation(0), millis(0) {
+}
+
+void VirtualMachine::DelayState::clear() noexcept {
+	pending = false;
+	ready = false;
+	bytecode.clear();
+	callStack.clear();
+	length = 0;
+	ip = 0;
+	returnInt = 0;
+	returnStr.clear();
+	errorLevel = 0;
+	savedParameterString.clear();
+	macroFramePushed = false;
+	deadline = std::chrono::steady_clock::time_point();
+	millis = 0;
+}
+
 int VirtualMachine::normalizeDelayMillis(int millis) noexcept {
 	static const int kMaxDelayMillis = 60 * 60 * 1000;
 	if (millis <= 0) return 0;
@@ -31,19 +50,7 @@ int VirtualMachine::normalizeDelayMillis(int millis) noexcept {
 }
 
 void VirtualMachine::clearAsyncDelayState() noexcept {
-	mAsyncDelayPending = false;
-	mAsyncDelayReady = false;
-	mAsyncBytecode.clear();
-	mAsyncCallStack.clear();
-	mAsyncLength = 0;
-	mAsyncIp = 0;
-	mAsyncReturnInt = 0;
-	mAsyncReturnStr.clear();
-	mAsyncErrorLevel = 0;
-	mAsyncSavedParameterString.clear();
-	mAsyncMacroFramePushed = false;
-	mAsyncDelayDeadline = std::chrono::steady_clock::time_point();
-	mAsyncDelayMillis = 0;
+	delayState.clear();
 }
 
 void VirtualMachine::execute(const unsigned char *bytecode, size_t length) {
@@ -53,15 +60,15 @@ void VirtualMachine::execute(const unsigned char *bytecode, size_t length) {
 }
 
 bool VirtualMachine::resumePendingDelay() {
-	if (!mAsyncDelayPending) return false;
-	if (!mAsyncDelayReady || std::chrono::steady_clock::now() < mAsyncDelayDeadline) return true;
+	if (!delayState.pending) return false;
+	if (!delayState.ready || std::chrono::steady_clock::now() < delayState.deadline) return true;
 	executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
-	return mAsyncDelayPending;
+	return delayState.pending;
 }
 
 bool VirtualMachine::cancelPendingDelay() {
-	if (!mAsyncDelayPending) return false;
-	if (mAsyncMacroFramePushed && !g_runtimeEnv.macroStack.empty()) g_runtimeEnv.macroStack.pop_back();
+	if (!delayState.pending) return false;
+	if (delayState.macroFramePushed && !g_runtimeEnv.macroStack.empty()) g_runtimeEnv.macroStack.pop_back();
 	cancelledExecution = true;
 	g_runtimeEnv.errorLevel = 5007;
 	appendLogLine("VM Notice: pending DELAY cancelled.", true);

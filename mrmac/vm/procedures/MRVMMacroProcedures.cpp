@@ -29,7 +29,6 @@
 #include "MRVM.hpp"
 #include "MRVMDebugSession.hpp"
 #include "vm/MRVMExecSessions.hpp"
-#include "vm/MRVMExecutionInternal.hpp"
 #include "ui/conventional/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
 #include "vm/MRVMIntrinsics.hpp"
@@ -40,6 +39,9 @@
 #include "ui/modeless/MRVMModelessUiRuntime.hpp"
 #include "vm/MRVMProcessRuntime.hpp"
 #include "vm/MRVMProcedureCatalog.hpp"
+#include "vm/MRVMProcedureExecution.hpp"
+#include "vm/MRVMBytecodeExecution.hpp"
+#include "vm/MRVMDebugExecution.hpp"
 #include "vm/MRVMRuntimeCatalog.hpp"
 #include "vm/MRVMRuntimeDebugger.hpp"
 #include "vm/MRVMRuntimeGlobals.hpp"
@@ -96,15 +98,18 @@
 
 using namespace mrvm_runtime;
 
-VirtualMachine::InstructionFlow VirtualMachine::executeMacroProcedure(ExecutionFrame &frame, MRVMProcedure procedure, const std::string &name, const std::vector<Value> &args, std::size_t instructionOffset) {
-	const unsigned char *bytecode = frame.bytecode;
-	const std::size_t length = frame.length;
-	std::size_t &ip = frame.ip;
-	std::vector<std::size_t> &call_stack = frame.callStack;
-	ExecutionState &state = frame.state;
-	const std::string &savedParameterString = frame.savedParameterString;
-	const std::string &activeMacroName = frame.activeMacroName;
-	const bool activeFirstRun = frame.activeFirstRun;
+VirtualMachine::MacroProcedures::MacroProcedures(VirtualMachine &machine, BytecodeExecution &bytecodeExecution) noexcept : vm(machine), execution(bytecodeExecution) {
+}
+
+VirtualMachine::InstructionFlow VirtualMachine::MacroProcedures::execute(MRVMProcedure procedure, const std::string &name, const std::vector<Value> &args, std::size_t instructionOffset) {
+	const unsigned char *bytecode = execution.bytecode;
+	const std::size_t length = execution.length;
+	std::size_t &ip = execution.ip;
+	std::vector<std::size_t> &call_stack = execution.callStack;
+	ExecutionState &state = execution.state;
+	const std::string &savedParameterString = execution.savedParameterString;
+	const std::string &activeMacroName = execution.activeMacroName;
+	const bool activeFirstRun = execution.activeFirstRun;
 
 	switch (procedure) {
 		case MRVMProcedure::RunMacro: {
@@ -146,7 +151,7 @@ VirtualMachine::InstructionFlow VirtualMachine::executeMacroProcedure(ExecutionF
 				runtimeErrorLevel() = 5001;
 				return InstructionFlow::SkipPostInstruction;
 			}
-			if (mDebugRunActive) {
+			if (vm.debugState.runActive) {
 				MacroRef childRef;
 				LoadedMacroFile childFile;
 				std::vector<std::size_t> childBreakpointOffsets;
@@ -155,43 +160,33 @@ VirtualMachine::InstructionFlow VirtualMachine::executeMacroProcedure(ExecutionF
 				std::unique_ptr<VirtualMachine> childVm;
 				MRMacroDebugRunResult childResult;
 
-				if (!prepareDebugMacroByKey(macroKey, mDebugStepMode == mrdStepInto, childRef, childFile, childBreakpointOffsets, childFirstRun, childError)) throw std::runtime_error(childError);
+				if (!prepareDebugMacroByKey(macroKey, vm.debugState.stepMode == mrdStepInto, childRef, childFile, childBreakpointOffsets, childFirstRun, childError)) throw std::runtime_error(childError);
 				childVm = std::make_unique<VirtualMachine>();
 				childVm->setExecutionSessionContext(currentExecutionSessionId());
 				if (childRef.closureUnit) childVm->setClosureContext(childRef.closureId);
 				childResult = childVm->executeDebugAt(childFile.bytecode.data(), childFile.bytecode.size(), childRef.entryOffset, paramPart, childRef.displayName, childBreakpointOffsets, childFirstRun, macroKey, childFile.resolvedPath);
 				if (childResult.paused) {
-					mDebugChildFrame = std::make_unique<MRMacroDebugChildFrame>();
-					mDebugChildFrame->vm = std::move(childVm);
-					mDebugChildFrame->result = childResult;
-					mDebugChildFrame->macroKey = macroKey;
-					mDebugChildFrame->fileKey = childRef.fileKey;
-					mDebugChildFrame->parentInstructionOffset = instructionOffset;
-					mDebugChildFrame->unloadAfterCompletion = childRef.dumpAttr;
-					mDebugChildFrame->evictTransientAfterCompletion = childRef.transientAttr;
-					mDebugStopped = true;
-					mDebugStopReason = childResult.stopReason;
-					mDebugStopOffset = ip;
-					mDebugStackDepth = call_stack.size();
-					mDebugPaused = true;
-					mDebugBytecode.assign(bytecode, bytecode + length);
-					mDebugLength = length;
-					mDebugIp = ip;
-					mDebugCallStack = call_stack;
-					mDebugReturnInt = state.returnInt;
-					mDebugReturnStr = state.returnStr;
-					mDebugErrorLevel = state.errorLevel;
-					mDebugSavedParameterString = savedParameterString;
-					mDebugMacroName = activeMacroName;
-					mDebugFirstRun = activeFirstRun;
+					vm.debugState.childFrame = std::make_unique<MRMacroDebugChildFrame>();
+					vm.debugState.childFrame->vm = std::move(childVm);
+					vm.debugState.childFrame->result = childResult;
+					vm.debugState.childFrame->macroKey = macroKey;
+					vm.debugState.childFrame->fileKey = childRef.fileKey;
+					vm.debugState.childFrame->parentInstructionOffset = instructionOffset;
+					vm.debugState.childFrame->unloadAfterCompletion = childRef.dumpAttr;
+					vm.debugState.childFrame->evictTransientAfterCompletion = childRef.transientAttr;
+					vm.debugState.stopped = true;
+					vm.debugState.stopReason = childResult.stopReason;
+					vm.debugState.stopOffset = ip;
+					vm.debugState.stackDepth = call_stack.size();
+					vm.debugState.capturePausedExecution(bytecode, length, ip, call_stack, state, savedParameterString, activeMacroName, activeFirstRun);
 					return InstructionFlow::FinishExecution;
 				}
-				log.insert(log.end(), childVm->log.begin(), childVm->log.end());
+				vm.log.insert(vm.log.end(), childVm->log.begin(), childVm->log.end());
 				if (childRef.dumpAttr) unloadMacroFromRegistry(macroKey);
 				else if (childRef.transientAttr)
 					evictTransientFileImage(childRef.fileKey);
 				runtimeErrorLevel() = 0;
-			} else if (!executeLoadedMacroWithConfiguredKeymapBatch(macroKey, paramPart, &log))
+			} else if (!executeLoadedMacroWithConfiguredKeymapBatch(macroKey, paramPart, &vm.log))
 				return InstructionFlow::SkipPostInstruction;
 		} break;
 		case MRVMProcedure::ExpandTabs:

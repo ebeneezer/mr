@@ -29,7 +29,6 @@
 #include "MRVM.hpp"
 #include "MRVMDebugSession.hpp"
 #include "vm/MRVMExecSessions.hpp"
-#include "vm/MRVMExecutionInternal.hpp"
 #include "ui/conventional/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
 #include "vm/MRVMIntrinsics.hpp"
@@ -40,6 +39,8 @@
 #include "ui/modeless/MRVMModelessUiRuntime.hpp"
 #include "vm/MRVMProcessRuntime.hpp"
 #include "vm/MRVMProcedureCatalog.hpp"
+#include "vm/MRVMProcedureExecution.hpp"
+#include "vm/MRVMDelayRuntime.hpp"
 #include "vm/MRVMRuntimeCatalog.hpp"
 #include "vm/MRVMRuntimeDebugger.hpp"
 #include "vm/MRVMRuntimeGlobals.hpp"
@@ -96,13 +97,16 @@
 
 using namespace mrvm_runtime;
 
-VirtualMachine::InstructionFlow VirtualMachine::executeRuntimeProcedure(MRVMProcedure procedure, const std::string &name, const std::vector<Value> &args, bool allowAsyncDelay) {
+VirtualMachine::RuntimeProcedures::RuntimeProcedures(VirtualMachine &machine) noexcept : vm(machine) {
+}
+
+VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMProcedure procedure, const std::string &name, const std::vector<Value> &args, bool allowAsyncDelay) {
 	switch (procedure) {
 		case MRVMProcedure::Delay: {
 			int millis = 0;
 			BackgroundEditSession *session = nullptr;
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("DELAY expects one integer argument.");
-			millis = normalizeDelayMillis(mrvmValueAsInt(args[0]));
+			millis = vm.normalizeDelayMillis(mrvmValueAsInt(args[0]));
 			if (millis == 0) {
 				runtimeErrorLevel() = 0;
 				return InstructionFlow::SkipPostInstruction;
@@ -115,8 +119,8 @@ VirtualMachine::InstructionFlow VirtualMachine::executeRuntimeProcedure(MRVMProc
 			}
 			if (allowAsyncDelay) throw mrvm_execution::DelayYield(millis);
 			if (!mrvm_execution::sleepDelayBlocking(millis)) {
-				cancelledExecution = true;
-				appendLogLine("VM Notice: DELAY interrupted by cancellation.", true);
+				vm.cancelledExecution = true;
+				vm.appendLogLine("VM Notice: DELAY interrupted by cancellation.", true);
 				runtimeErrorLevel() = 5007;
 				return InstructionFlow::FinishExecution;
 			}
@@ -492,7 +496,7 @@ VirtualMachine::InstructionFlow VirtualMachine::executeRuntimeProcedure(MRVMProc
 				runtimeErrorLevel() = 1010;
 				return InstructionFlow::SkipPostInstruction;
 			}
-			if (executeExplicitKeyBinding(key, mode, &log)) {
+			if (executeExplicitKeyBinding(key, mode, &vm.log)) {
 				runtimeErrorLevel() = 0;
 				return InstructionFlow::SkipPostInstruction;
 			}

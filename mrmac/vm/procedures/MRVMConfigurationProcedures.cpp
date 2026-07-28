@@ -29,7 +29,6 @@
 #include "MRVM.hpp"
 #include "MRVMDebugSession.hpp"
 #include "vm/MRVMExecSessions.hpp"
-#include "vm/MRVMExecutionInternal.hpp"
 #include "ui/conventional/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
 #include "vm/MRVMIntrinsics.hpp"
@@ -40,6 +39,7 @@
 #include "ui/modeless/MRVMModelessUiRuntime.hpp"
 #include "vm/MRVMProcessRuntime.hpp"
 #include "vm/MRVMProcedureCatalog.hpp"
+#include "vm/MRVMProcedureExecution.hpp"
 #include "vm/MRVMRuntimeCatalog.hpp"
 #include "vm/MRVMRuntimeDebugger.hpp"
 #include "vm/MRVMRuntimeGlobals.hpp"
@@ -96,26 +96,29 @@
 
 using namespace mrvm_runtime;
 
-VirtualMachine::InstructionFlow VirtualMachine::executeConfigurationProcedure(MRVMProcedure procedure, const std::string &name, const std::vector<Value> &args) {
+VirtualMachine::ConfigurationProcedures::ConfigurationProcedures(VirtualMachine &machine) noexcept : vm(machine) {
+}
+
+VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute(MRVMProcedure procedure, const std::string &name, const std::vector<Value> &args) {
 	switch (procedure) {
 		case MRVMProcedure::ExecAssign: {
 			MRMacroExecUiCommandRequest request;
 			bool accepted = false;
 
 			if (args.size() != 3 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || !mrvmIsStringLike(args[2])) throw std::runtime_error("EXEC expects (target, command).");
-			request.closureId = mClosureId;
+			request.closureId = vm.mClosureId;
 			request.target = mrvmValueAsString(args[0]);
 			request.command = mrvmValueAsString(args[1]);
 			request.lvalue = mrvmValueAsString(args[2]);
 			if (currentBackgroundEditSession() != nullptr || g_backgroundMacroCancelFlag != nullptr) {
-				mExecUiCommandRequests.push_back(request);
+				vm.mExecUiCommandRequests.push_back(request);
 				runtimeErrorLevel() = 0;
 			} else {
 				accepted = mrvmApplyExecUiCommandRequest(request);
-				variables[request.lvalue] = mrvmMakeInt(accepted ? 1 : 0);
-				if (!mClosureId.empty() && mClosureVariableNames.find(request.lvalue) != mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, request.lvalue, variables[request.lvalue], *mHashStore);
-				else if (currentExecutionSessionId() != 0 && mSessionVariableNames.find(request.lvalue) != mSessionVariableNames.end())
-					mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), request.lvalue, variables[request.lvalue], *mHashStore);
+				vm.variables[request.lvalue] = mrvmMakeInt(accepted ? 1 : 0);
+				if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(request.lvalue) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, request.lvalue, vm.variables[request.lvalue], *vm.mHashStore);
+				else if (currentExecutionSessionId() != 0 && vm.mSessionVariableNames.find(request.lvalue) != vm.mSessionVariableNames.end())
+					mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), request.lvalue, vm.variables[request.lvalue], *vm.mHashStore);
 				runtimeErrorLevel() = accepted ? 0 : 1001;
 			}
 		} break;
@@ -384,7 +387,7 @@ VirtualMachine::InstructionFlow VirtualMachine::executeConfigurationProcedure(MR
 		} break;
 		case MRVMProcedure::SetGlobalHash: {
 			if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_HASH) throw std::runtime_error("SET_GLOBAL_HASH expects (string, hash).");
-			setGlobalValueFromStore(mrvmValueAsString(args[0]), TYPE_HASH, args[1], *mHashStore);
+			setGlobalValueFromStore(mrvmValueAsString(args[0]), TYPE_HASH, args[1], *vm.mHashStore);
 		} break;
 		case MRVMProcedure::Marquee:
 		case MRVMProcedure::MarqueeWarning:

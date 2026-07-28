@@ -22,6 +22,7 @@ class MREditWindow;
 class MRVMHashStore;
 struct MRMacroDebuggerBreakpoint;
 struct MRMacroModelessWindowDesktopState;
+struct ExecutionState;
 
 struct MRMacroExecUiCommandRequest {
 	std::string closureId;
@@ -129,6 +130,78 @@ class VirtualMachine {
 	};
 
   private:
+	struct MRMacroDebugChildFrame;
+	class BytecodeExecution;
+	class DebugExecution;
+	class ProcedureExecution;
+	class ConfigurationProcedures;
+	class RuntimeProcedures;
+	class EditorProcedures;
+	class MacroProcedures;
+	class DelayState final {
+		friend class VirtualMachine;
+		friend class BytecodeExecution;
+		friend class DebugExecution;
+
+	 private:
+		bool pending;
+		bool ready;
+		bool enabled;
+		std::vector<unsigned char> bytecode;
+		std::size_t length;
+		std::size_t ip;
+		std::vector<std::size_t> callStack;
+		int returnInt;
+		std::string returnStr;
+		int errorLevel;
+		std::string savedParameterString;
+		bool macroFramePushed;
+		std::chrono::steady_clock::time_point deadline;
+		std::uint64_t generation;
+		int millis;
+
+		DelayState() noexcept;
+		void clear() noexcept;
+	};
+	class DebugState final {
+		friend class VirtualMachine;
+		friend class BytecodeExecution;
+		friend class DebugExecution;
+		friend class MacroProcedures;
+
+	 private:
+		bool runActive;
+		bool stopped;
+		MRMacroDebugStopReason stopReason;
+		std::size_t stopOffset;
+		std::size_t stackDepth;
+		std::vector<std::size_t> breakpointOffsets;
+		bool paused;
+		std::vector<unsigned char> bytecode;
+		std::size_t length;
+		std::size_t ip;
+		std::vector<std::size_t> callStack;
+		int returnInt;
+		std::string returnStr;
+		int errorLevel;
+		std::string savedParameterString;
+		std::string macroName;
+		bool firstRun;
+		bool skipCurrentOffset;
+		bool pauseRequested;
+		std::size_t instructionBudget;
+		MRMacroDebugStepMode stepMode;
+		std::size_t stepOutDepth;
+		std::string macroKey;
+		std::string sourcePath;
+		std::unique_ptr<MRMacroDebugChildFrame> childFrame;
+
+		DebugState() noexcept;
+		~DebugState();
+		void capturePausedExecution(const unsigned char *sourceBytecode, std::size_t sourceLength, std::size_t sourceIp, const std::vector<std::size_t> &sourceCallStack, const ExecutionState &executionState, const std::string &sourceSavedParameterString, const std::string &sourceMacroName, bool sourceFirstRun);
+		void clearPausedExecution() noexcept;
+	};
+
 	std::vector<Value> stack;
 	std::map<std::string, Value> variables;
 	std::unique_ptr<MRVMHashStore> mHashStore;
@@ -139,64 +212,17 @@ class VirtualMachine {
 	std::vector<MRMacroExecUiCommandRequest> mExecUiCommandRequests;
 	bool verboseLogging;
 	bool logTruncated;
-	bool mAsyncDelayPending;
-	bool mAsyncDelayReady;
-	bool mAsyncDelayEnabled;
-	std::vector<unsigned char> mAsyncBytecode;
-	std::size_t mAsyncLength;
-	std::size_t mAsyncIp;
-	std::vector<std::size_t> mAsyncCallStack;
-	int mAsyncReturnInt;
-	std::string mAsyncReturnStr;
-	int mAsyncErrorLevel;
-	std::string mAsyncSavedParameterString;
-	bool mAsyncMacroFramePushed;
-	std::chrono::steady_clock::time_point mAsyncDelayDeadline;
-	std::uint64_t mAsyncDelayGeneration;
-	int mAsyncDelayMillis;
-	bool mDebugRunActive;
-	bool mDebugStopped;
-	MRMacroDebugStopReason mDebugStopReason;
-	std::size_t mDebugStopOffset;
-	std::size_t mDebugStackDepth;
-	std::vector<std::size_t> mDebugBreakpointOffsets;
-	bool mDebugPaused;
-	std::vector<unsigned char> mDebugBytecode;
-	std::size_t mDebugLength;
-	std::size_t mDebugIp;
-	std::vector<std::size_t> mDebugCallStack;
-	int mDebugReturnInt;
-	std::string mDebugReturnStr;
-	int mDebugErrorLevel;
-	std::string mDebugSavedParameterString;
-	std::string mDebugMacroName;
-	bool mDebugFirstRun;
-	bool mDebugSkipCurrentOffset;
-	bool mDebugPauseRequested;
-	std::size_t mDebugInstructionBudget;
-	MRMacroDebugStepMode mDebugStepMode;
-	std::size_t mDebugStepOutDepth;
-	std::string mDebugMacroKey;
-	std::string mDebugSourcePath;
-	struct MRMacroDebugChildFrame;
-	std::unique_ptr<MRMacroDebugChildFrame> mDebugChildFrame;
+	DelayState delayState;
+	DebugState debugState;
 	enum class InstructionFlow : unsigned char {
 		Completed,
 		SkipPostInstruction,
 		FinishExecution,
 	};
-	struct ExecutionFrame;
 
 	void appendLogLine(const std::string &line, bool important = false);
-	void appendDebugCallStack(MRMacroDebugRunResult &result) const;
-	void appendDebugParentCallStack(MRMacroDebugRunResult &result, std::size_t parentInstructionOffset) const;
 	void clearAsyncDelayState() noexcept;
 	static int normalizeDelayMillis(int millis) noexcept;
-	InstructionFlow executeProcedure(ExecutionFrame &frame, const std::string &name, const std::vector<Value> &args, std::size_t instructionOffset);
-	InstructionFlow executeConfigurationProcedure(MRVMProcedureCatalog::Procedure procedure, const std::string &name, const std::vector<Value> &args);
-	InstructionFlow executeRuntimeProcedure(MRVMProcedureCatalog::Procedure procedure, const std::string &name, const std::vector<Value> &args, bool allowAsyncDelay);
-	InstructionFlow executeEditorProcedure(MRVMProcedureCatalog::Procedure procedure, const std::string &name, const std::vector<Value> &args);
-	InstructionFlow executeMacroProcedure(ExecutionFrame &frame, MRVMProcedureCatalog::Procedure procedure, const std::string &name, const std::vector<Value> &args, std::size_t instructionOffset);
 
 	void push(const Value &value);
 	Value pop();
@@ -228,18 +254,18 @@ class VirtualMachine {
 	MRMacroDebugRunResult continueDebug(const std::vector<std::size_t> &breakpointOffsets, std::size_t instructionBudget = 0);
 	MRMacroDebugRunResult stepDebug(const std::vector<std::size_t> &breakpointOffsets, MRMacroDebugStepMode mode = mrdStepInto);
 	void requestDebugPause() noexcept {
-		mDebugPauseRequested = true;
+		debugState.pauseRequested = true;
 	}
 	MRMacroDebugWatchSnapshot evaluateDebugWatchExpression(const std::string &expression);
 	bool writeDebugScalarVariable(const MRMacroDebugVariableSnapshot &variable, const std::string &valueText, std::vector<MRMacroDebugVariableSnapshot> &updatedVariables, std::string &errorMessage);
 	bool hasPausedDebug() const noexcept {
-		return mDebugPaused;
+		return debugState.paused;
 	}
 	void setAsyncDelayEnabled(bool enabled) noexcept {
-		mAsyncDelayEnabled = enabled;
+		delayState.enabled = enabled;
 	}
 	bool hasPendingDelay() const noexcept {
-		return mAsyncDelayPending;
+		return delayState.pending;
 	}
 	bool resumePendingDelay();
 	bool cancelPendingDelay();

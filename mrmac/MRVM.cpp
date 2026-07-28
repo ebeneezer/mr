@@ -29,7 +29,6 @@
 #include "MRVM.hpp"
 #include "MRVMDebugSession.hpp"
 #include "vm/MRVMExecSessions.hpp"
-#include "vm/MRVMExecutionInternal.hpp"
 #include "ui/conventional/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
 #include "vm/MRVMIntrinsics.hpp"
@@ -259,7 +258,7 @@ std::vector<std::string> mrvmProcessArguments() {
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), c(0), hashHandle(0), arrayElementType(TYPE_INT), arrayValues(), globalStorage(false) {
 }
 
-VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), mClosureId(), mClosureVariableNames(), mExecutionSessionId(0), mSessionVariableNames(), verboseLogging(true), logTruncated(false), mAsyncDelayPending(false), mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayDeadline(), mAsyncDelayGeneration(0), mAsyncDelayMillis(0), mDebugRunActive(false), mDebugStopped(false), mDebugStopReason(mrdStopNone), mDebugStopOffset(0), mDebugStackDepth(0), mDebugBreakpointOffsets(), mDebugPaused(false), mDebugBytecode(), mDebugLength(0), mDebugIp(0), mDebugCallStack(), mDebugReturnInt(0), mDebugReturnStr(), mDebugErrorLevel(0), mDebugSavedParameterString(), mDebugMacroName(), mDebugFirstRun(false), mDebugSkipCurrentOffset(false), mDebugPauseRequested(false), mDebugInstructionBudget(0), mDebugStepMode(mrdStepNone), mDebugStepOutDepth(0), mDebugMacroKey(), mDebugSourcePath(), mDebugChildFrame(), cancelledExecution(false) {
+VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), mClosureId(), mClosureVariableNames(), mExecutionSessionId(0), mSessionVariableNames(), verboseLogging(true), logTruncated(false), delayState(), debugState(), cancelledExecution(false) {
 }
 
 VirtualMachine::~VirtualMachine() = default;

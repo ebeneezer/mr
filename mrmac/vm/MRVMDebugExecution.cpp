@@ -29,7 +29,7 @@
 #include "MRVM.hpp"
 #include "MRVMDebugSession.hpp"
 #include "vm/MRVMExecSessions.hpp"
-#include "vm/MRVMExecutionInternal.hpp"
+#include "vm/MRVMDebugExecution.hpp"
 #include "ui/conventional/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
 #include "vm/MRVMIntrinsics.hpp"
@@ -96,24 +96,68 @@
 
 using namespace mrvm_runtime;
 
+VirtualMachine::DebugState::DebugState() noexcept : runActive(false), stopped(false), stopReason(mrdStopNone), stopOffset(0), stackDepth(0), breakpointOffsets(), paused(false), bytecode(), length(0), ip(0), callStack(), returnInt(0), returnStr(), errorLevel(0), savedParameterString(), macroName(), firstRun(false), skipCurrentOffset(false), pauseRequested(false), instructionBudget(0), stepMode(mrdStepNone), stepOutDepth(0), macroKey(), sourcePath(), childFrame() {
+}
+
+VirtualMachine::DebugState::~DebugState() = default;
+
+void VirtualMachine::DebugState::capturePausedExecution(const unsigned char *sourceBytecode, std::size_t sourceLength, std::size_t sourceIp, const std::vector<std::size_t> &sourceCallStack, const ExecutionState &executionState, const std::string &sourceSavedParameterString, const std::string &sourceMacroName, bool sourceFirstRun) {
+	paused = true;
+	bytecode.assign(sourceBytecode, sourceBytecode + sourceLength);
+	length = sourceLength;
+	ip = sourceIp;
+	callStack = sourceCallStack;
+	returnInt = executionState.returnInt;
+	returnStr = executionState.returnStr;
+	errorLevel = executionState.errorLevel;
+	savedParameterString = sourceSavedParameterString;
+	macroName = sourceMacroName;
+	firstRun = sourceFirstRun;
+}
+
+void VirtualMachine::DebugState::clearPausedExecution() noexcept {
+	paused = false;
+	bytecode.clear();
+	length = 0;
+	ip = 0;
+	callStack.clear();
+	returnInt = 0;
+	returnStr.clear();
+	errorLevel = 0;
+	savedParameterString.clear();
+	macroName.clear();
+	firstRun = false;
+	skipCurrentOffset = false;
+	pauseRequested = false;
+	instructionBudget = 0;
+	stepMode = mrdStepNone;
+}
+
+VirtualMachine::DebugExecution::DebugExecution(VirtualMachine &machine) noexcept : vm(machine) {
+}
+
 MRMacroDebugWatchSnapshot VirtualMachine::evaluateDebugWatchExpression(const std::string &expression) {
+	return DebugExecution(*this).evaluateWatchExpression(expression);
+}
+
+MRMacroDebugWatchSnapshot VirtualMachine::DebugExecution::evaluateWatchExpression(const std::string &expression) {
 	MRMacroDebugWatchSnapshot snapshot;
 	std::vector<MRMacWatchSymbol> symbols;
 	std::vector<unsigned char> bytecode;
 	std::size_t bytecodeSize = 0;
 	int resultType = 0;
 	unsigned char *compiled = nullptr;
-	const std::vector<VirtualMachine::Value> savedStack = stack;
-	const std::vector<std::string> savedLog = log;
-	const bool savedLogTruncated = logTruncated;
-	const bool savedCancelledExecution = cancelledExecution;
+	const std::vector<VirtualMachine::Value> savedStack = vm.stack;
+	const std::vector<std::string> savedLog = vm.log;
+	const bool savedLogTruncated = vm.logTruncated;
+	const bool savedCancelledExecution = vm.cancelledExecution;
 	const int savedReturnInt = g_runtimeEnv.returnInt;
 	const std::string savedReturnStr = g_runtimeEnv.returnStr;
 	const int savedErrorLevel = g_runtimeEnv.errorLevel;
 	const std::string savedParameterString = g_runtimeEnv.parameterString;
 
 	snapshot.expression = expression;
-	for (const std::pair<const std::string, VirtualMachine::Value> &entry : variables)
+	for (const std::pair<const std::string, VirtualMachine::Value> &entry : vm.variables)
 		symbols.push_back(MRMacWatchSymbol{entry.first.c_str(), entry.second.type});
 	compiled = compile_macro_watch_expression(expression.c_str(), symbols.empty() ? nullptr : symbols.data(), symbols.size(), &bytecodeSize, &resultType);
 	if (compiled == nullptr) {
@@ -124,23 +168,23 @@ MRMacroDebugWatchSnapshot VirtualMachine::evaluateDebugWatchExpression(const std
 	}
 	bytecode.assign(compiled, compiled + bytecodeSize);
 	std::free(compiled);
-	executeAt(bytecode.data(), bytecode.size(), 0, std::string(), std::string(), false, false, true);
-	for (std::size_t index = savedLog.size(); index < log.size(); ++index)
-		if (log[index].rfind("VM Error: ", 0) == 0) {
-			snapshot.errorText = log[index].substr(std::strlen("VM Error: "));
+	vm.executeAt(bytecode.data(), bytecode.size(), 0, std::string(), std::string(), false, false, true);
+	for (std::size_t index = savedLog.size(); index < vm.log.size(); ++index)
+		if (vm.log[index].rfind("VM Error: ", 0) == 0) {
+			snapshot.errorText = vm.log[index].substr(std::strlen("VM Error: "));
 			break;
 		}
 	if (snapshot.errorText.empty()) {
-		if (stack.size() != 1) snapshot.errorText = "Watch expression did not produce one value.";
+		if (vm.stack.size() != 1) snapshot.errorText = "Watch expression did not produce one value.";
 		else {
 			snapshot.type = resultType;
-			snapshot.valueText = macroDebugValueText(stack.back(), *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+			snapshot.valueText = macroDebugValueText(vm.stack.back(), *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 		}
 	}
-	stack = savedStack;
-	log = savedLog;
-	logTruncated = savedLogTruncated;
-	cancelledExecution = savedCancelledExecution;
+	vm.stack = savedStack;
+	vm.log = savedLog;
+	vm.logTruncated = savedLogTruncated;
+	vm.cancelledExecution = savedCancelledExecution;
 	g_runtimeEnv.returnInt = savedReturnInt;
 	g_runtimeEnv.returnStr = savedReturnStr;
 	g_runtimeEnv.errorLevel = savedErrorLevel;
@@ -149,6 +193,10 @@ MRMacroDebugWatchSnapshot VirtualMachine::evaluateDebugWatchExpression(const std
 }
 
 bool VirtualMachine::writeDebugScalarVariable(const MRMacroDebugVariableSnapshot &variable, const std::string &valueText, std::vector<MRMacroDebugVariableSnapshot> &updatedVariables, std::string &errorMessage) {
+	return DebugExecution(*this).writeScalarVariable(variable, valueText, updatedVariables, errorMessage);
+}
+
+bool VirtualMachine::DebugExecution::writeScalarVariable(const MRMacroDebugVariableSnapshot &variable, const std::string &valueText, std::vector<MRMacroDebugVariableSnapshot> &updatedVariables, std::string &errorMessage) {
 	Value replacement;
 	Value previous;
 	std::map<std::string, Value>::iterator local;
@@ -157,7 +205,7 @@ bool VirtualMachine::writeDebugScalarVariable(const MRMacroDebugVariableSnapshot
 
 	updatedVariables.clear();
 	errorMessage.clear();
-	if (!mDebugPaused) {
+	if (!vm.debugState.paused) {
 		errorMessage = "Debug session is not paused.";
 		return false;
 	}
@@ -212,12 +260,12 @@ bool VirtualMachine::writeDebugScalarVariable(const MRMacroDebugVariableSnapshot
 		}
 		mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, variable.name, variable.type, replacement);
 	} else {
-		local = variables.find(variable.name);
-		if (local == variables.end()) {
+		local = vm.variables.find(variable.name);
+		if (local == vm.variables.end()) {
 			errorMessage = "Variable no longer exists in the paused debug session.";
 			return false;
 		}
-		actualScope = macroDebugVariableScope(local->first, local->second, mClosureVariableNames, mSessionVariableNames);
+		actualScope = macroDebugVariableScope(local->first, local->second, vm.mClosureVariableNames, vm.mSessionVariableNames);
 		if (actualScope != variable.scope || local->second.type != variable.type) {
 			errorMessage = "Variable no longer matches the debugger projection.";
 			return false;
@@ -225,14 +273,14 @@ bool VirtualMachine::writeDebugScalarVariable(const MRMacroDebugVariableSnapshot
 		previous = local->second;
 		replacement.globalStorage = previous.globalStorage;
 		local->second = replacement;
-		if (actualScope == mrdVariableClosure && !mClosureId.empty()) {
-			if (!mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, variable.name, replacement, *mHashStore)) {
+		if (actualScope == mrdVariableClosure && !vm.mClosureId.empty()) {
+			if (!mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, variable.name, replacement, *vm.mHashStore)) {
 				local->second = previous;
 				errorMessage = "Closure variable could not be stored.";
 				return false;
 			}
-		} else if (actualScope == mrdVariableSession && mExecutionSessionId != 0) {
-			if (!mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, mExecutionSessionId, variable.name, replacement, *mHashStore)) {
+		} else if (actualScope == mrdVariableSession && vm.mExecutionSessionId != 0) {
+			if (!mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, vm.mExecutionSessionId, variable.name, replacement, *vm.mHashStore)) {
 				local->second = previous;
 				errorMessage = "Session variable could not be stored.";
 				return false;
@@ -242,7 +290,7 @@ bool VirtualMachine::writeDebugScalarVariable(const MRMacroDebugVariableSnapshot
 	{
 		MRMacroDebugRunResult snapshot;
 
-		appendMacroDebugVariableSnapshots(snapshot, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+		appendMacroDebugVariableSnapshots(snapshot, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 		appendMacroDebugAppGlobalSnapshots(snapshot, g_runtimeEnv.runtimeKv.globalStore());
 		updatedVariables = std::move(snapshot.variables);
 	}
@@ -250,271 +298,283 @@ bool VirtualMachine::writeDebugScalarVariable(const MRMacroDebugVariableSnapshot
 }
 
 MRMacroDebugRunResult VirtualMachine::executeDebugAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, const std::vector<std::size_t> &breakpointOffsets, bool firstRun, const std::string &macroKey, const std::string &sourcePath) {
+	return DebugExecution(*this).start(bytecode, length, entryOffset, parameterString, macroName, breakpointOffsets, firstRun, macroKey, sourcePath);
+}
+
+MRMacroDebugRunResult VirtualMachine::DebugExecution::start(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, const std::vector<std::size_t> &breakpointOffsets, bool firstRun, const std::string &macroKey, const std::string &sourcePath) {
 	MRMacroDebugRunResult result;
-	const bool savedAsyncDelayEnabled = mAsyncDelayEnabled;
+	const bool savedAsyncDelayEnabled = vm.delayState.enabled;
 	bool hadError = false;
 
-	mDebugRunActive = true;
-	mDebugStopped = false;
-	mDebugStopReason = mrdStopNone;
-	mDebugStopOffset = 0;
-	mDebugStackDepth = 0;
-	mDebugPaused = false;
-	mDebugBytecode.clear();
-	mDebugLength = 0;
-	mDebugIp = 0;
-	mDebugCallStack.clear();
-	mDebugSkipCurrentOffset = false;
-	mDebugPauseRequested = false;
-	mDebugInstructionBudget = 0;
-	mDebugStepMode = mrdStepNone;
-	mDebugStepOutDepth = 0;
-	mDebugMacroKey = macroKey.empty() ? mrvmUpperKey(macroName) : macroKey;
-	mDebugSourcePath = sourcePath;
-	mDebugChildFrame.reset();
-	mDebugBreakpointOffsets = breakpointOffsets;
-	std::sort(mDebugBreakpointOffsets.begin(), mDebugBreakpointOffsets.end());
-	mDebugBreakpointOffsets.erase(std::unique(mDebugBreakpointOffsets.begin(), mDebugBreakpointOffsets.end()), mDebugBreakpointOffsets.end());
-	mAsyncDelayEnabled = false;
+	vm.debugState.runActive = true;
+	vm.debugState.stopped = false;
+	vm.debugState.stopReason = mrdStopNone;
+	vm.debugState.stopOffset = 0;
+	vm.debugState.stackDepth = 0;
+	vm.debugState.paused = false;
+	vm.debugState.bytecode.clear();
+	vm.debugState.length = 0;
+	vm.debugState.ip = 0;
+	vm.debugState.callStack.clear();
+	vm.debugState.skipCurrentOffset = false;
+	vm.debugState.pauseRequested = false;
+	vm.debugState.instructionBudget = 0;
+	vm.debugState.stepMode = mrdStepNone;
+	vm.debugState.stepOutDepth = 0;
+	vm.debugState.macroKey = macroKey.empty() ? mrvmUpperKey(macroName) : macroKey;
+	vm.debugState.sourcePath = sourcePath;
+	vm.debugState.childFrame.reset();
+	vm.debugState.breakpointOffsets = breakpointOffsets;
+	std::sort(vm.debugState.breakpointOffsets.begin(), vm.debugState.breakpointOffsets.end());
+	vm.debugState.breakpointOffsets.erase(std::unique(vm.debugState.breakpointOffsets.begin(), vm.debugState.breakpointOffsets.end()), vm.debugState.breakpointOffsets.end());
+	vm.delayState.enabled = false;
 
-	executeAt(bytecode, length, entryOffset, parameterString, macroName, true, firstRun);
-	if (mDebugChildFrame != nullptr) {
-		result = mDebugChildFrame->result;
-		appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
-		mDebugChildFrame->result = result;
-		mDebugRunActive = false;
-		mAsyncDelayEnabled = savedAsyncDelayEnabled;
+	vm.executeAt(bytecode, length, entryOffset, parameterString, macroName, true, firstRun);
+	if (vm.debugState.childFrame != nullptr) {
+		result = vm.debugState.childFrame->result;
+		appendParentCallStack(result, vm.debugState.childFrame->parentInstructionOffset);
+		vm.debugState.childFrame->result = result;
+		vm.debugState.runActive = false;
+		vm.delayState.enabled = savedAsyncDelayEnabled;
 		return result;
 	}
 
-	for (const std::string &line : log)
+	for (const std::string &line : vm.log)
 		if (line.rfind("VM Error:", 0) == 0) {
 			hadError = true;
 			break;
 		}
 
-	if (mDebugStopped) result.stopReason = mDebugStopReason;
-	else if (cancelledExecution)
+	if (vm.debugState.stopped) result.stopReason = vm.debugState.stopReason;
+	else if (vm.cancelledExecution)
 		result.stopReason = mrdStopCancelled;
 	else if (hadError)
 		result.stopReason = mrdStopError;
 	else
 		result.stopReason = mrdStopCompleted;
-	result.instructionOffset = mDebugStopOffset;
-	result.stackDepth = mDebugStackDepth;
-	result.logLines = log;
-	result.macroKey = mDebugMacroKey;
-	result.sourcePath = mDebugSourcePath;
-	result.cancelled = cancelledExecution;
+	result.instructionOffset = vm.debugState.stopOffset;
+	result.stackDepth = vm.debugState.stackDepth;
+	result.logLines = vm.log;
+	result.macroKey = vm.debugState.macroKey;
+	result.sourcePath = vm.debugState.sourcePath;
+	result.cancelled = vm.cancelledExecution;
 	result.hadError = hadError;
-	result.paused = mDebugPaused;
-	appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+	result.paused = vm.debugState.paused;
+	appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
-	appendDebugCallStack(result);
+	appendCallStack(result);
 
-	mDebugRunActive = false;
-	mAsyncDelayEnabled = savedAsyncDelayEnabled;
+	vm.debugState.runActive = false;
+	vm.delayState.enabled = savedAsyncDelayEnabled;
 	return result;
 }
 
 MRMacroDebugRunResult VirtualMachine::continueDebug(const std::vector<std::size_t> &breakpointOffsets, std::size_t instructionBudget) {
+	return DebugExecution(*this).continueExecution(breakpointOffsets, instructionBudget);
+}
+
+MRMacroDebugRunResult VirtualMachine::DebugExecution::continueExecution(const std::vector<std::size_t> &breakpointOffsets, std::size_t instructionBudget) {
 	MRMacroDebugRunResult result;
-	const bool savedAsyncDelayEnabled = mAsyncDelayEnabled;
-	const MRMacroDebugStopReason previousStopReason = mDebugStopReason;
+	const bool savedAsyncDelayEnabled = vm.delayState.enabled;
+	const MRMacroDebugStopReason previousStopReason = vm.debugState.stopReason;
 	bool hadError = false;
 
-	if (!mDebugPaused) return result;
-	if (mDebugPauseRequested) {
-		mDebugStopped = true;
-		mDebugStopReason = mrdStopPaused;
-		mDebugStopOffset = mDebugIp;
-		mDebugStackDepth = mDebugCallStack.size();
-		mDebugPauseRequested = false;
+	if (!vm.debugState.paused) return result;
+	if (vm.debugState.pauseRequested) {
+		vm.debugState.stopped = true;
+		vm.debugState.stopReason = mrdStopPaused;
+		vm.debugState.stopOffset = vm.debugState.ip;
+		vm.debugState.stackDepth = vm.debugState.callStack.size();
+		vm.debugState.pauseRequested = false;
 		result.stopReason = mrdStopPaused;
-		result.instructionOffset = mDebugStopOffset;
-		result.stackDepth = mDebugStackDepth;
-		result.logLines = log;
-		result.macroKey = mDebugMacroKey;
-		result.sourcePath = mDebugSourcePath;
+		result.instructionOffset = vm.debugState.stopOffset;
+		result.stackDepth = vm.debugState.stackDepth;
+		result.logLines = vm.log;
+		result.macroKey = vm.debugState.macroKey;
+		result.sourcePath = vm.debugState.sourcePath;
 		result.paused = true;
-		appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+		appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 		appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
-		appendDebugCallStack(result);
+		appendCallStack(result);
 		return result;
 	}
-	mDebugRunActive = true;
-	mDebugStopped = false;
-	mDebugStopReason = mrdStopNone;
-	mDebugStackDepth = 0;
-	mDebugBreakpointOffsets = breakpointOffsets;
-	std::sort(mDebugBreakpointOffsets.begin(), mDebugBreakpointOffsets.end());
-	mDebugBreakpointOffsets.erase(std::unique(mDebugBreakpointOffsets.begin(), mDebugBreakpointOffsets.end()), mDebugBreakpointOffsets.end());
-	mDebugSkipCurrentOffset = previousStopReason == mrdStopBreakpoint || previousStopReason == mrdStopPaused;
-	mDebugStepMode = mrdStepNone;
-	mDebugInstructionBudget = instructionBudget;
-	mAsyncDelayEnabled = false;
-	if (mDebugChildFrame != nullptr) {
+	vm.debugState.runActive = true;
+	vm.debugState.stopped = false;
+	vm.debugState.stopReason = mrdStopNone;
+	vm.debugState.stackDepth = 0;
+	vm.debugState.breakpointOffsets = breakpointOffsets;
+	std::sort(vm.debugState.breakpointOffsets.begin(), vm.debugState.breakpointOffsets.end());
+	vm.debugState.breakpointOffsets.erase(std::unique(vm.debugState.breakpointOffsets.begin(), vm.debugState.breakpointOffsets.end()), vm.debugState.breakpointOffsets.end());
+	vm.debugState.skipCurrentOffset = previousStopReason == mrdStopBreakpoint || previousStopReason == mrdStopPaused;
+	vm.debugState.stepMode = mrdStepNone;
+	vm.debugState.instructionBudget = instructionBudget;
+	vm.delayState.enabled = false;
+	if (vm.debugState.childFrame != nullptr) {
 		std::vector<std::size_t> childBreakpointOffsets;
 
-		static_cast<void>(mrvmCollectDebugBreakpointOffsetsForLoadedFile(mDebugChildFrame->macroKey, childBreakpointOffsets));
-		result = mDebugChildFrame->vm->continueDebug(childBreakpointOffsets);
-		mDebugChildFrame->result = result;
+		static_cast<void>(mrvmCollectDebugBreakpointOffsetsForLoadedFile(vm.debugState.childFrame->macroKey, childBreakpointOffsets));
+		result = vm.debugState.childFrame->vm->continueDebug(childBreakpointOffsets);
+		vm.debugState.childFrame->result = result;
 		if (result.paused) {
-			appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
-			mDebugChildFrame->result = result;
-			mDebugRunActive = false;
-			mAsyncDelayEnabled = savedAsyncDelayEnabled;
+			appendParentCallStack(result, vm.debugState.childFrame->parentInstructionOffset);
+			vm.debugState.childFrame->result = result;
+			vm.debugState.runActive = false;
+			vm.delayState.enabled = savedAsyncDelayEnabled;
 			return result;
 		}
-		log.insert(log.end(), mDebugChildFrame->vm->log.begin(), mDebugChildFrame->vm->log.end());
-		if (mDebugChildFrame->unloadAfterCompletion) unloadMacroFromRegistry(mDebugChildFrame->macroKey);
-		else if (mDebugChildFrame->evictTransientAfterCompletion)
-			evictTransientFileImage(mDebugChildFrame->fileKey);
-		mDebugChildFrame.reset();
-		mDebugSkipCurrentOffset = false;
+		vm.log.insert(vm.log.end(), vm.debugState.childFrame->vm->log.begin(), vm.debugState.childFrame->vm->log.end());
+		if (vm.debugState.childFrame->unloadAfterCompletion) unloadMacroFromRegistry(vm.debugState.childFrame->macroKey);
+		else if (vm.debugState.childFrame->evictTransientAfterCompletion)
+			evictTransientFileImage(vm.debugState.childFrame->fileKey);
+		vm.debugState.childFrame.reset();
+		vm.debugState.skipCurrentOffset = false;
 	}
 
-	executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
-	if (mDebugChildFrame != nullptr) {
-		result = mDebugChildFrame->result;
-		appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
-		mDebugChildFrame->result = result;
-		mDebugRunActive = false;
-		mDebugStepMode = mrdStepNone;
-		mAsyncDelayEnabled = savedAsyncDelayEnabled;
+	vm.executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
+	if (vm.debugState.childFrame != nullptr) {
+		result = vm.debugState.childFrame->result;
+		appendParentCallStack(result, vm.debugState.childFrame->parentInstructionOffset);
+		vm.debugState.childFrame->result = result;
+		vm.debugState.runActive = false;
+		vm.debugState.stepMode = mrdStepNone;
+		vm.delayState.enabled = savedAsyncDelayEnabled;
 		return result;
 	}
 
-	for (const std::string &line : log)
+	for (const std::string &line : vm.log)
 		if (line.rfind("VM Error:", 0) == 0) {
 			hadError = true;
 			break;
 		}
 
-	if (mDebugStopped) result.stopReason = mDebugStopReason;
-	else if (cancelledExecution)
+	if (vm.debugState.stopped) result.stopReason = vm.debugState.stopReason;
+	else if (vm.cancelledExecution)
 		result.stopReason = mrdStopCancelled;
 	else if (hadError)
 		result.stopReason = mrdStopError;
 	else
 		result.stopReason = mrdStopCompleted;
-	result.instructionOffset = mDebugStopOffset;
-	result.stackDepth = mDebugStackDepth;
-	result.logLines = log;
-	result.macroKey = mDebugMacroKey;
-	result.sourcePath = mDebugSourcePath;
-	result.cancelled = cancelledExecution;
+	result.instructionOffset = vm.debugState.stopOffset;
+	result.stackDepth = vm.debugState.stackDepth;
+	result.logLines = vm.log;
+	result.macroKey = vm.debugState.macroKey;
+	result.sourcePath = vm.debugState.sourcePath;
+	result.cancelled = vm.cancelledExecution;
 	result.hadError = hadError;
-	result.paused = mDebugPaused;
-	appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+	result.paused = vm.debugState.paused;
+	appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
-	appendDebugCallStack(result);
+	appendCallStack(result);
 
-	mDebugRunActive = false;
-	mAsyncDelayEnabled = savedAsyncDelayEnabled;
+	vm.debugState.runActive = false;
+	vm.delayState.enabled = savedAsyncDelayEnabled;
 	return result;
 }
 
 MRMacroDebugRunResult VirtualMachine::stepDebug(const std::vector<std::size_t> &breakpointOffsets, MRMacroDebugStepMode mode) {
+	return DebugExecution(*this).step(breakpointOffsets, mode);
+}
+
+MRMacroDebugRunResult VirtualMachine::DebugExecution::step(const std::vector<std::size_t> &breakpointOffsets, MRMacroDebugStepMode mode) {
 	MRMacroDebugRunResult result;
-	const bool savedAsyncDelayEnabled = mAsyncDelayEnabled;
-	const MRMacroDebugStopReason previousStopReason = mDebugStopReason;
+	const bool savedAsyncDelayEnabled = vm.delayState.enabled;
+	const MRMacroDebugStopReason previousStopReason = vm.debugState.stopReason;
 	bool hadError = false;
 
-	if (!mDebugPaused) return result;
-	mDebugRunActive = true;
-	mDebugStopped = false;
-	mDebugStopReason = mrdStopNone;
-	mDebugStackDepth = 0;
-	mDebugBreakpointOffsets = breakpointOffsets;
-	std::sort(mDebugBreakpointOffsets.begin(), mDebugBreakpointOffsets.end());
-	mDebugBreakpointOffsets.erase(std::unique(mDebugBreakpointOffsets.begin(), mDebugBreakpointOffsets.end()), mDebugBreakpointOffsets.end());
-	mDebugSkipCurrentOffset = previousStopReason == mrdStopBreakpoint;
-	mDebugStepMode = mode;
-	mDebugInstructionBudget = 0;
-	mDebugStepOutDepth = mDebugCallStack.size();
-	mAsyncDelayEnabled = false;
-	if (mDebugChildFrame != nullptr) {
+	if (!vm.debugState.paused) return result;
+	vm.debugState.runActive = true;
+	vm.debugState.stopped = false;
+	vm.debugState.stopReason = mrdStopNone;
+	vm.debugState.stackDepth = 0;
+	vm.debugState.breakpointOffsets = breakpointOffsets;
+	std::sort(vm.debugState.breakpointOffsets.begin(), vm.debugState.breakpointOffsets.end());
+	vm.debugState.breakpointOffsets.erase(std::unique(vm.debugState.breakpointOffsets.begin(), vm.debugState.breakpointOffsets.end()), vm.debugState.breakpointOffsets.end());
+	vm.debugState.skipCurrentOffset = previousStopReason == mrdStopBreakpoint;
+	vm.debugState.stepMode = mode;
+	vm.debugState.instructionBudget = 0;
+	vm.debugState.stepOutDepth = vm.debugState.callStack.size();
+	vm.delayState.enabled = false;
+	if (vm.debugState.childFrame != nullptr) {
 		std::vector<std::size_t> childBreakpointOffsets;
 
-		static_cast<void>(mrvmCollectDebugBreakpointOffsetsForLoadedFile(mDebugChildFrame->macroKey, childBreakpointOffsets));
-		result = mDebugChildFrame->vm->stepDebug(childBreakpointOffsets, mode);
-		mDebugChildFrame->result = result;
+		static_cast<void>(mrvmCollectDebugBreakpointOffsetsForLoadedFile(vm.debugState.childFrame->macroKey, childBreakpointOffsets));
+		result = vm.debugState.childFrame->vm->stepDebug(childBreakpointOffsets, mode);
+		vm.debugState.childFrame->result = result;
 		if (result.paused) {
-			appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
-			mDebugChildFrame->result = result;
-			mDebugRunActive = false;
-			mDebugStepMode = mrdStepNone;
-			mAsyncDelayEnabled = savedAsyncDelayEnabled;
+			appendParentCallStack(result, vm.debugState.childFrame->parentInstructionOffset);
+			vm.debugState.childFrame->result = result;
+			vm.debugState.runActive = false;
+			vm.debugState.stepMode = mrdStepNone;
+			vm.delayState.enabled = savedAsyncDelayEnabled;
 			return result;
 		}
-		log.insert(log.end(), mDebugChildFrame->vm->log.begin(), mDebugChildFrame->vm->log.end());
-		if (mDebugChildFrame->unloadAfterCompletion) unloadMacroFromRegistry(mDebugChildFrame->macroKey);
-		else if (mDebugChildFrame->evictTransientAfterCompletion)
-			evictTransientFileImage(mDebugChildFrame->fileKey);
-		mDebugChildFrame.reset();
-		mDebugStopped = true;
-		mDebugStopReason = mrdStopStep;
-		mDebugStopOffset = mDebugIp;
-		mDebugStackDepth = mDebugCallStack.size();
-		mDebugPaused = true;
+		vm.log.insert(vm.log.end(), vm.debugState.childFrame->vm->log.begin(), vm.debugState.childFrame->vm->log.end());
+		if (vm.debugState.childFrame->unloadAfterCompletion) unloadMacroFromRegistry(vm.debugState.childFrame->macroKey);
+		else if (vm.debugState.childFrame->evictTransientAfterCompletion)
+			evictTransientFileImage(vm.debugState.childFrame->fileKey);
+		vm.debugState.childFrame.reset();
+		vm.debugState.stopped = true;
+		vm.debugState.stopReason = mrdStopStep;
+		vm.debugState.stopOffset = vm.debugState.ip;
+		vm.debugState.stackDepth = vm.debugState.callStack.size();
+		vm.debugState.paused = true;
 		result.stopReason = mrdStopStep;
-		result.instructionOffset = mDebugStopOffset;
-		result.stackDepth = mDebugStackDepth;
-		result.logLines = log;
-		result.macroKey = mDebugMacroKey;
-		result.sourcePath = mDebugSourcePath;
+		result.instructionOffset = vm.debugState.stopOffset;
+		result.stackDepth = vm.debugState.stackDepth;
+		result.logLines = vm.log;
+		result.macroKey = vm.debugState.macroKey;
+		result.sourcePath = vm.debugState.sourcePath;
 		result.cancelled = false;
 		result.hadError = false;
 		result.paused = true;
-		appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+		appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 		appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
-		appendDebugCallStack(result);
-		mDebugRunActive = false;
-		mDebugStepMode = mrdStepNone;
-		mAsyncDelayEnabled = savedAsyncDelayEnabled;
+		appendCallStack(result);
+		vm.debugState.runActive = false;
+		vm.debugState.stepMode = mrdStepNone;
+		vm.delayState.enabled = savedAsyncDelayEnabled;
 		return result;
 	}
 
-	executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
-	if (mDebugChildFrame != nullptr) {
-		result = mDebugChildFrame->result;
-		appendDebugParentCallStack(result, mDebugChildFrame->parentInstructionOffset);
-		mDebugChildFrame->result = result;
-		mDebugRunActive = false;
-		mDebugStepMode = mrdStepNone;
-		mAsyncDelayEnabled = savedAsyncDelayEnabled;
+	vm.executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
+	if (vm.debugState.childFrame != nullptr) {
+		result = vm.debugState.childFrame->result;
+		appendParentCallStack(result, vm.debugState.childFrame->parentInstructionOffset);
+		vm.debugState.childFrame->result = result;
+		vm.debugState.runActive = false;
+		vm.debugState.stepMode = mrdStepNone;
+		vm.delayState.enabled = savedAsyncDelayEnabled;
 		return result;
 	}
 
-	for (const std::string &line : log)
+	for (const std::string &line : vm.log)
 		if (line.rfind("VM Error:", 0) == 0) {
 			hadError = true;
 			break;
 		}
 
-	if (mDebugStopped) result.stopReason = mDebugStopReason;
-	else if (cancelledExecution)
+	if (vm.debugState.stopped) result.stopReason = vm.debugState.stopReason;
+	else if (vm.cancelledExecution)
 		result.stopReason = mrdStopCancelled;
 	else if (hadError)
 		result.stopReason = mrdStopError;
 	else
 		result.stopReason = mrdStopCompleted;
-	result.instructionOffset = mDebugStopOffset;
-	result.stackDepth = mDebugStackDepth;
-	result.logLines = log;
-	result.macroKey = mDebugMacroKey;
-	result.sourcePath = mDebugSourcePath;
-	result.cancelled = cancelledExecution;
+	result.instructionOffset = vm.debugState.stopOffset;
+	result.stackDepth = vm.debugState.stackDepth;
+	result.logLines = vm.log;
+	result.macroKey = vm.debugState.macroKey;
+	result.sourcePath = vm.debugState.sourcePath;
+	result.cancelled = vm.cancelledExecution;
 	result.hadError = hadError;
-	result.paused = mDebugPaused;
-	appendMacroDebugVariableSnapshots(result, variables, mClosureVariableNames, mSessionVariableNames, *mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+	result.paused = vm.debugState.paused;
+	appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
 	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
-	appendDebugCallStack(result);
+	appendCallStack(result);
 
-	mDebugRunActive = false;
-	mDebugStepMode = mrdStepNone;
-	mAsyncDelayEnabled = savedAsyncDelayEnabled;
+	vm.debugState.runActive = false;
+	vm.debugState.stepMode = mrdStepNone;
+	vm.delayState.enabled = savedAsyncDelayEnabled;
 	return result;
 }
 
