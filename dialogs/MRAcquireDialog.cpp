@@ -10,12 +10,12 @@
 #define Uses_TRect
 #define Uses_TScrollBar
 #define Uses_TView
-#define Uses_MsgBox
 #include <tvision/tv.h>
 
 #include "MRAcquireDialog.hpp"
 
 #include "../app/MRCommands.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
@@ -234,6 +234,7 @@ class TAcquireDialog final : public MRDialogFoundation {
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 		const MRAcquireSettings settings = configuredAcquireSettings();
 
+		helpCtx = hcDialogAcquire;
 		mCommandField = new TInputLine(TRect(kCommandInputLeft, 2, historyButtonLeft, 3), 255);
 		insert(mCommandField);
 		insert(new TAcquireCommandEnterInterceptor(mCommandField));
@@ -291,11 +292,6 @@ class TAcquireDialog final : public MRDialogFoundation {
 		}
 		if (event.what == evCommand && event.message.command == cmMrAcquireLoadAll) {
 			loadSelectedPaths(true);
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evCommand && event.message.command == cmHelp) {
-			showAcquireHelp();
 			clearEvent(event);
 			return;
 		}
@@ -427,10 +423,6 @@ class TAcquireDialog final : public MRDialogFoundation {
 		strnzcpy(mCommandField->data, value.c_str(), mCommandField->maxLen + 1);
 		mCommandField->selectAll(True);
 		mCommandField->drawView();
-	}
-
-	void showAcquireHelp() {
-		messageBox(mfInformation | mfOKButton, "Exec runs the shell command hidden and collects readable file paths from stdout.\nLoad opens the selected file.\nLoad all opens all listed files.");
 	}
 
 	MRAcquireMode mode;

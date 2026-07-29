@@ -70,6 +70,7 @@ struct MRFoldOpenBlockState {
 
 struct MRFoldAnalysisState {
 	std::vector<MRFoldOpenBlockState> openBlocks;
+	MRSyntaxLineState syntaxState;
 	std::string previousLineText;
 	std::string previousUpperLine;
 	std::string previousPreviousLineText;

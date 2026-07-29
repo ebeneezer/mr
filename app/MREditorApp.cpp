@@ -5,6 +5,7 @@
 #define Uses_TDialog
 #define Uses_TStaticText
 #define Uses_TFileDialog
+#define Uses_TButton
 #define Uses_TObject
 #define Uses_TApplication
 #define Uses_TEvent
@@ -54,6 +55,7 @@
 #include "MRMacroDebuggerCommandRoute.hpp"
 #include "MRRuntimeScheduler.hpp"
 #include "MRRuntimeTimerSource.hpp"
+#include "MRHelpTopics.generated.hpp"
 
 #include <algorithm>
 #include <ctime>
@@ -166,13 +168,30 @@ void postAppError(std::string_view text) {
 
 class TMacroBindCaptureDialog : public MRDialogFoundation {
   public:
-	TMacroBindCaptureDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), "BIND RECORDED MACRO KEY", 52, 8, initMrDialogFrame), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+	TMacroBindCaptureDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(52, 10), "BIND RECORDED MACRO KEY", 52, 10, initMrDialogFrame), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+		helpCtx = hcDialogMacroBindCapture;
 		insert(new TStaticText(TRect(2, 2, 50, 6), "Press key to bind the recorded macro.\nEsc = no binding."));
+		insert(new TButton(TRect(39, 7, 50, 9), "~H~elp", cmHelp, bfNormal));
 	}
 
 	virtual void handleEvent(TEvent &event) override {
 		if (event.what == evKeyDown) {
 			TKey pressed(event.keyDown);
+			if (pressed == TKey(kbF1)) {
+				static_cast<void>(mrShowProjectHelp(hcDialogMacroBindCapture));
+				clearEvent(event);
+				return;
+			}
+			if (pressed == TKey(kbShiftF1)) {
+				static_cast<void>(mrShowProjectHelp(hcDetailedIndex));
+				clearEvent(event);
+				return;
+			}
+			if (pressed == TKey(kbAltF1)) {
+				static_cast<void>(mrShowPreviousProjectHelp());
+				clearEvent(event);
+				return;
+			}
 			if (pressed == TKey(kbEsc)) {
 				endModal(cmCancel);
 				clearEvent(event);
@@ -977,7 +996,7 @@ TMenuBar *MREditorApp::initMRMenuBar(TRect r) {
 
 TStatusLine *MREditorApp::initMRStatusLine(TRect r) {
 	r.a.y = r.b.y - 1;
-	return new MRStatusLine(r, *new TStatusDef(0, 0xFFFF) + *new TStatusItem("~F1~ Help", kbF1, cmMrHelpContents) + *new TStatusItem("~F10~ Menu", kbF10, cmMenu) + *new TStatusItem("~Alt-F10~ Rec", kbAltF10, cmMrMacroToggleRecording) + *new TStatusItem("~Alt-X~ Exit", kbAltX, cmQuit));
+	return new MRStatusLine(r, *new TStatusDef(0, 0xFFFF) + *new TStatusItem("~F1~ Help", kbF1, cmHelp) + *new TStatusItem("~F10~ Menu", kbF10, cmMenu) + *new TStatusItem("~Alt-F10~ Rec", kbAltF10, cmMrMacroToggleRecording) + *new TStatusItem("~Alt-X~ Exit", kbAltX, cmQuit));
 }
 
 TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
@@ -1688,6 +1707,40 @@ void MREditorApp::bootstrapIndexedMacroBindings() {
 }
 
 void MREditorApp::warmIndexedMacroBindings() {
+}
+
+void MREditorApp::getEvent(TEvent &event) {
+	TApplication::getEvent(event);
+	if (event.what != evCommand) return;
+
+	switch (event.message.command) {
+		case cmHelp:
+			static_cast<void>(helpSystem.showTopic(getHelpCtx()));
+			break;
+		case cmMrHelpContents:
+			static_cast<void>(helpSystem.showTopic(hcContents));
+			break;
+		case cmMrHelpKeys:
+			static_cast<void>(helpSystem.showTopic(hcKeys));
+			break;
+		case cmMrHelpDetailedIndex:
+			static_cast<void>(helpSystem.showTopic(hcDetailedIndex));
+			break;
+		case cmMrHelpPreviousTopic:
+			static_cast<void>(helpSystem.showPreviousTopic());
+			break;
+		default:
+			return;
+	}
+	clearEvent(event);
+}
+
+bool MREditorApp::showHelpTopic(ushort context) {
+	return helpSystem.showTopic(context);
+}
+
+bool MREditorApp::showPreviousHelpTopic() {
+	return helpSystem.showPreviousTopic();
 }
 
 void MREditorApp::handleEvent(TEvent &event) {

@@ -12,6 +12,7 @@
 
 #include "MRFileCommands.hpp"
 #include "MRWindowCommands.hpp"
+#include "../MRHelpTopics.generated.hpp"
 #include "../router/MRCommandRouterSearch.hpp"
 #include "../router/MRCommandRouterSearchCore.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
@@ -124,6 +125,7 @@ class JournalTagDialog : public TDialog {
 	JournalTagDialog(const std::vector<std::string> &historyValues, const std::vector<std::string> &identifierValues)
 	    : TWindowInit(initFrame), TDialog(TRect(0, 0, 62, 18), "OPEN JOURNAL"), tagField(nullptr), history(historyValues), identifiers(identifierValues) {
 		options |= ofCentered;
+		helpCtx = hcDialogJournalTag;
 		tagField = new TInputLine(TRect(14, 3, 51, 4), 127);
 		insert(new TLabel(TRect(3, 3, 13, 4), "App ~t~ag:", tagField));
 		insert(tagField);
@@ -134,7 +136,8 @@ class JournalTagDialog : public TDialog {
 		identifierList = new MRColumnListView(TRect(3, 6, 55, 14), identifierScrollBar, this, cmJournalTagSelectionChanged, cmJournalTagSelectionAccepted);
 		insert(identifierList);
 		setIdentifierRows();
-		insert(new TButton(TRect(26, 15, 36, 17), "~O~K", cmOK, bfDefault));
+		insert(new TButton(TRect(20, 15, 30, 17), "~O~K", cmOK, bfDefault));
+		insert(new TButton(TRect(32, 15, 43, 17), "~H~elp", cmHelp, bfNormal));
 		selectNext(False);
 	}
 

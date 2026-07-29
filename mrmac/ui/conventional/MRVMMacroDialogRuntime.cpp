@@ -8,6 +8,7 @@
 #include "../../../app/utils/MRStringUtils.hpp"
 #include "../../../dialogs/setup/MRSetupCommon.hpp"
 #include "../../../ui/MRWindowSupport.hpp"
+#include "../../../app/MRHelpTopics.generated.hpp"
 
 #define Uses_TButton
 #define Uses_TDeskTop
@@ -187,25 +188,18 @@ int runMacroMenuDialog(const MacroMenuRequest &request) {
 		MacroMenuDialog(const MacroMenuRequest &menuRequest) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(macroMenuDialogWidth(menuRequest), macroMenuDialogHeight(menuRequest), menuRequest.x, menuRequest.y), menuRequest.title.empty() ? (menuRequest.horizontal ? "BAR MENU" : "V MENU") : menuRequest.title.c_str(), macroMenuDialogWidth(menuRequest), macroMenuDialogHeight(menuRequest)), menuRequestItems(parseMacroMenuItems(menuRequest.menuSpec)) {
 			int width = size.x;
 			int height = size.y;
+			const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 
+			helpCtx = hcDialogMacroMenu;
 			scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
 			insert(scrollBar);
 			listView = new MacroMenuListView(TRect(2, 2, width - 3, height - 4), scrollBar, menuRequestItems);
 			insert(listView);
-			insert(new TButton(TRect(width - 30, height - 3, width - 21, height - 1), "~D~one", cmOK, bfDefault));
-			insert(new TButton(TRect(width - 20, height - 3, width - 9, height - 1), "~C~ancel", cmCancel, bfNormal));
-			insert(new TButton(TRect(width - 8, height - 3, width - 2, height - 1), "~H~elp", cmHelp, bfNormal));
+			mr::dialogs::insertUniformButtonRow(*this, (width - metrics.rowWidth) / 2, height - 3, 1, buttons);
 			if (!menuRequestItems.empty()) {
 				int index = std::clamp(menuRequest.start, 1, static_cast<int>(menuRequestItems.size())) - 1;
 				listView->focusItemNum(static_cast<short>(index));
-			}
-		}
-
-		void handleEvent(TEvent &event) override {
-			MRDialogFoundation::handleEvent(event);
-			if (event.what == evCommand && event.message.command == cmHelp) {
-				static_cast<void>(mrShowProjectHelp());
-				clearEvent(event);
 			}
 		}
 
@@ -238,24 +232,17 @@ std::string runMacroStringInputDialog(const MacroStringInputRequest &request) {
 		MacroStringInputDialog(const MacroStringInputRequest &inputRequest) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(std::max(34, inputRequest.width + 10), 9, inputRequest.x, inputRequest.y), inputRequest.title.empty() ? "STRING INPUT" : inputRequest.title.c_str(), std::max(34, inputRequest.width + 10), 9) {
 			int width = size.x;
 			char *buffer = newStr(inputRequest.initialValue.c_str());
+			const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 
+			helpCtx = hcDialogMacroStringInput;
 			inputLine = new TInputLine(TRect(13, 2, width - 3, 3), std::max(1, inputRequest.width));
 			insert(new TLabel(TRect(2, 2, 12, 3), "Value:", inputLine));
 			insert(inputLine);
 			inputLine->setData(buffer);
 			delete[] buffer;
-			insert(new TButton(TRect(width - 30, 6, width - 21, 8), "~D~one", cmOK, bfDefault));
-			insert(new TButton(TRect(width - 20, 6, width - 9, 8), "~C~ancel", cmCancel, bfNormal));
-			insert(new TButton(TRect(width - 8, 6, width - 2, 8), "~H~elp", cmHelp, bfNormal));
+			mr::dialogs::insertUniformButtonRow(*this, (width - metrics.rowWidth) / 2, 6, 1, buttons);
 			selectNext(False);
-		}
-
-		void handleEvent(TEvent &event) override {
-			MRDialogFoundation::handleEvent(event);
-			if (event.what == evCommand && event.message.command == cmHelp) {
-				static_cast<void>(mrShowProjectHelp());
-				clearEvent(event);
-			}
 		}
 
 		std::string value() const {
@@ -311,6 +298,7 @@ class MacroUiDialog final : public MRDialogFoundation {
 	MacroUiDialog(const MacroUiDialogDefinition &definition, MRVMRuntimeKv &aRuntimeKv) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(definition.width, definition.height, definition.x, definition.y), definition.title.empty() ? "DIALOG" : definition.title.c_str(), definition.width, definition.height), runtimeKv(aRuntimeKv) {
 		ushort nextCommand = 41000;
 
+		helpCtx = hcDialogMacroUi;
 		for (std::size_t index = 0; index < definition.labels.size(); ++index) {
 			const MacroUiLabelSpec &label = definition.labels[index];
 			insert(new TStaticText(TRect(label.x, label.y, label.x + strwidth(label.text.c_str()), label.y + 1), label.text.c_str()));

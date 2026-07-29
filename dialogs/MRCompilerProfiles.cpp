@@ -18,6 +18,7 @@
 #include <tvision/tv.h>
 
 #include "MRCompilerProfiles.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
@@ -317,6 +318,7 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		const int bottomTop = 26;
 
 		options |= ofCentered;
+		helpCtx = hcDialogCompilerProfiles;
 
 		insert(new TStaticText(TRect(left, 2, left + 18, 3), "Profiles:"));
 		scrollBar = new TScrollBar(TRect(listRight, 3, scrollRight, 23));
@@ -382,6 +384,7 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		insert(new TButton(TRect(left + 12, buttonTop, left + 22, buttonTop + 2), "~C~opy", cmCompilerProfilesCopy, bfNormal));
 		insert(new TButton(TRect(left + 24, buttonTop, scrollRight, buttonTop + 2), "De~l~ete", cmCompilerProfilesDelete, bfNormal));
 		insert(new TButton(TRect(46, bottomTop, 65, bottomTop + 2), "Automatic Setup", cmCompilerProfilesAutomaticSetup, bfNormal));
+		insert(new TButton(TRect(67, bottomTop, 78, bottomTop + 2), "~H~elp", cmHelp, bfNormal));
 
 		currentIndex = preferredCompilerProfileIndexForCurrentEditor(profiles);
 		if (currentIndex < 0) currentIndex = profiles.empty() ? -1 : 0;

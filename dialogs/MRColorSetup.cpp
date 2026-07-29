@@ -21,6 +21,7 @@
 #include "setup/MRSetup.hpp"
 
 #include "../app/MRCommands.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/widgets/MRDropList.hpp"
@@ -212,6 +213,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	static const int kDialogHeight = 21;
 
 	TUnifiedColorSetupDialog(const char *title, TColorGroup *groupsHead) noexcept : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kDialogHeight), title, kDialogWidth, kDialogHeight, initSetupDialogFrame), mGroupsHead(groupsHead) {
+		helpCtx = hcDialogColorSetup;
 		for (TColorGroup *group = groupsHead; group != nullptr; group = group->next)
 			group->index = 0;
 		buildViews(groupsHead);
@@ -403,7 +405,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	}
 
 	void buildViews(TColorGroup *groupsHead) {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 
@@ -414,11 +416,11 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 		mGroupField->createDropListButton(*this, TRect(57, 2, 58, 3), this, cmMrColorGroupChoose, false);
 		mGroupListAnchor = TRect(3, 3, 58, 4);
 
-		mItemScroll = new TScrollBar(TRect(57, 3, 58, 14));
-		addManaged(mItemScroll, TRect(57, 3, 58, 14));
+		mItemScroll = new TScrollBar(TRect(57, 3, 58, 16));
+		addManaged(mItemScroll, TRect(57, 3, 58, 16));
 
-		mItemList = new TRelayColorItemList(TRect(3, 3, 57, 14), mItemScroll, groupsHead->items, this);
-		addManaged(mItemList, TRect(3, 3, 57, 14));
+		mItemList = new TRelayColorItemList(TRect(3, 3, 57, 16), mItemScroll, groupsHead->items, this);
+		addManaged(mItemList, TRect(3, 3, 57, 16));
 
 		mForSel = new TColorSelector(TRect(60, 3, 72, 7), TColorSelector::csForeground);
 		addManaged(mForSel, TRect(60, 3, 72, 7));
@@ -438,10 +440,10 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 		mMonoLabel = addCaption(TRect(58, 2, 64, 3), "Color");
 		mMonoLabel->hide();
 
-		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, 16, 2, buttons);
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, 17, 2, buttons);
 
-		mThemeField = new TThemeNameField(TRect(5, 18, 71, 19), configuredColorThemeDisplayName());
-		addManaged(mThemeField, TRect(5, 18, 71, 19));
+		mThemeField = new TThemeNameField(TRect(5, 19, 71, 20), configuredColorThemeDisplayName());
+		addManaged(mThemeField, TRect(5, 19, 71, 20));
 	}
 
 	TPalette *mPal = nullptr;

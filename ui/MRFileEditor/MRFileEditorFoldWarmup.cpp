@@ -1372,6 +1372,8 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 	std::string previousPreviousUpperLine = inputState.previousPreviousUpperLine;
 	const std::vector<std::string> inputRecentLineTexts = inputState.recentLineTexts;
 	std::vector<std::string> recentLineTexts = inputRecentLineTexts;
+	MRSyntaxLineState syntaxState = inputState.syntaxState;
+	std::string structuralLineText;
 	enum : int {
 		kLanguageBlockNone = 0,
 		kMRMACIfBlock = 1,
@@ -1559,7 +1561,22 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const std::size_t lineIndex = baseLineIndex + localLineIndex;
 		currentLineIndex = lineIndex;
 		const std::string &lineText = lineTexts[localLineIndex];
-		const std::string_view trimmed = trimView(lineText);
+		std::string_view structuralLine = lineText;
+		if (language == MRSyntaxLanguage::Zsh) {
+			MRSyntaxLineResult syntaxLine = tmrHighlightTextLine(language, lineText, syntaxState);
+
+			structuralLineText.assign(lineText);
+			for (const MRSyntaxTokenRun &run : syntaxLine.tokenRuns) {
+				if (run.token != MRSyntaxToken::String && run.token != MRSyntaxToken::Comment && run.token != MRSyntaxToken::Directive) continue;
+				const std::size_t start = std::min<std::size_t>(run.column, structuralLineText.size());
+				const std::size_t end = std::min<std::size_t>(start + run.length, structuralLineText.size());
+
+				std::fill(structuralLineText.begin() + static_cast<std::ptrdiff_t>(start), structuralLineText.begin() + static_cast<std::ptrdiff_t>(end), ' ');
+			}
+			syntaxState = syntaxLine.stateOut;
+			structuralLine = structuralLineText;
+		}
+		const std::string_view trimmed = trimView(structuralLine);
 		const std::string_view previousTrimmed = trimView(previousLineText);
 		const std::string_view previousPreviousTrimmed = trimView(previousPreviousLineText);
 		const std::size_t currentIndent = leadingIndentBytes(lineText);
@@ -2138,12 +2155,13 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 
 		previousPreviousLineText = previousLineText;
 		previousPreviousUpperLine = previousUpperLine;
-		previousLineText = lineText;
+		previousLineText.assign(structuralLine.begin(), structuralLine.end());
 		previousUpperLine = upperLine;
-		rememberRecentLine(lineText);
+		rememberRecentLine(previousLineText);
 	}
 
 	output.stateOut.openBlocks = openBlocks;
+	output.stateOut.syntaxState = syntaxState;
 	output.stateOut.previousLineText = previousLineText;
 	output.stateOut.previousUpperLine = previousUpperLine;
 	output.stateOut.previousPreviousLineText = previousPreviousLineText;

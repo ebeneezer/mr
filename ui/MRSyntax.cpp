@@ -776,15 +776,19 @@ static std::size_t consumeCSharpVerbatimStringLiteral(std::string_view line, std
 	return line.size();
 }
 
-static std::size_t findStringContinuationEnd(std::string_view line, std::size_t start, char quote) {
+static std::size_t findStringContinuationEnd(std::string_view line, std::size_t start, char quote, bool *closed = nullptr, bool backslashEscapes = true) {
 	std::size_t i = start;
+	if (closed != nullptr) *closed = false;
 
 	while (i < line.size()) {
-		if (line[i] == '\\') {
+		if (line[i] == '\\' && backslashEscapes) {
 			i += (i + 1 < line.size()) ? 2 : 1;
 			continue;
 		}
-		if (line[i] == quote) return i + 1;
+		if (line[i] == quote) {
+			if (closed != nullptr) *closed = true;
+			return i + 1;
+		}
 		++i;
 	}
 	return line.size();
@@ -1024,14 +1028,18 @@ static bool isMarkdownTableSeparatorLine(std::string_view line, std::size_t star
 	return sawDash;
 }
 
-static std::size_t consumeZshStringLiteral(std::string_view line, std::size_t start, char quote) {
+static std::size_t consumeZshStringLiteral(std::string_view line, std::size_t start, char quote, bool *closed = nullptr) {
 	std::size_t i = start + 1;
+	if (closed != nullptr) *closed = false;
 	while (i < line.size()) {
 		if (line[i] == '\\' && quote != '\'' && i + 1 < line.size()) {
 			i += 2;
 			continue;
 		}
-		if (line[i] == quote) return i + 1;
+		if (line[i] == quote) {
+			if (closed != nullptr) *closed = true;
+			return i + 1;
+		}
 		++i;
 	}
 	return line.size();
@@ -2417,6 +2425,7 @@ MRSyntaxLineResult MRZshSyntaxHighlighter::highlightLine(std::string_view line, 
 	MRSyntaxLineResult result;
 	result.stateOut = MRSyntaxLineState();
 	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
+	std::size_t scanStart = 0;
 
 	if (previousState.mode == MRSyntaxMode::HereDocument) {
 		if (lineMatchesHereDocumentEnd(line, previousState)) {
@@ -2432,15 +2441,17 @@ MRSyntaxLineResult MRZshSyntaxHighlighter::highlightLine(std::string_view line, 
 
 	if (previousState.mode == MRSyntaxMode::QuotedString) {
 		const char quote = static_cast<char>(previousState.payload);
-		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		bool quoteClosed = false;
+		const std::size_t end = findStringContinuationEnd(line, 0, quote, &quoteClosed, quote != '\'');
 
 		paint(tokens, 0, end, MRSyntaxToken::String);
-		if (end == line.size()) {
+		if (!quoteClosed) {
 			result.stateOut.mode = MRSyntaxMode::QuotedString;
 			result.stateOut.payload = previousState.payload;
 			result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
 			return result;
 		}
+		scanStart = end;
 		if (end < line.size()) {
 			MRSyntaxTokenMap suffixTokens(line.size() - end, MRSyntaxToken::Text);
 			tokenizeZsh(suffixTokens, std::string(line.substr(end)));
@@ -2450,11 +2461,12 @@ MRSyntaxLineResult MRZshSyntaxHighlighter::highlightLine(std::string_view line, 
 	} else
 		tokenizeZsh(tokens, std::string(line));
 
-	for (std::size_t i = 0; i < line.size();) {
+	for (std::size_t i = scanStart; i < line.size();) {
 		if (isZshCommentStart(line, i)) break;
 		if (line[i] == '\'' || line[i] == '"' || line[i] == '`') {
-			const std::size_t end = consumeZshStringLiteral(line, i, line[i]);
-			if (end == line.size()) {
+			bool quoteClosed = false;
+			const std::size_t end = consumeZshStringLiteral(line, i, line[i], &quoteClosed);
+			if (!quoteClosed) {
 				paint(tokens, i, end, MRSyntaxToken::String);
 				result.stateOut.mode = MRSyntaxMode::QuotedString;
 				result.stateOut.payload = static_cast<std::uint32_t>(line[i]);

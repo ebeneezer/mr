@@ -31,6 +31,7 @@
 #include "../../dialogs/setup/MRSetupCommon.hpp"
 #include "../../ui/MRFrame.hpp"
 #include "../MRCommands.hpp"
+#include "../MRHelpTopics.generated.hpp"
 
 namespace {
 
@@ -385,6 +386,7 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	if (options.restrictToWorkspace) optionMask |= 0x0020;
 
 	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH", 102, 19);
+	dialog->helpCtx = hcDialogMultiFileSearch;
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
@@ -398,9 +400,9 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	dialog->insert(new TLabel(TRect(2, 14, 14, 15), "Start a~t~:", pathField));
 	dialog->insert(pathField);
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 16, 0, buttons);
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 16, 2, buttons);
 	}
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
@@ -532,6 +534,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	if (options.restrictToWorkspace) optionMask |= 0x0040;
 
 	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH AND REPLACE", 102, 23);
+	dialog->helpCtx = hcDialogMultiFileSearch;
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
@@ -548,9 +551,9 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	dialog->insert(new TLabel(TRect(2, 18, 16, 19), "Start ~a~t:", pathField));
 	dialog->insert(pathField);
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 20, 0, buttons);
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 20, 2, buttons);
 	}
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
@@ -652,6 +655,7 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 			const short listTop = 2;
 			const short listBottom = static_cast<short>(listTop + rows);
 			const int gap = 2;
+			helpCtx = hcDialogMultiFileResults;
 			listScrollBar = new TScrollBar(TRect(29, listTop, 30, listBottom));
 			addManaged(listScrollBar, TRect(29, listTop, 30, listBottom));
 			listView = new MultiFileListView(TRect(2, listTop, 29, listBottom), listScrollBar, session, this, pendingListCommand);
@@ -661,12 +665,13 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 			previewHeaderView = new MultiPreviewHeaderView(TRect(32, 1, 116, 2), session);
 			addManaged(previewHeaderView, TRect(32, 1, 116, 2));
 			if (session.replaceMode) {
-				const std::array buttons{mr::dialogs::DialogButtonSpec{"~R~eplace", cmMrMultiReplace, bfDefault}, mr::dialogs::DialogButtonSpec{"Replace ~A~ll", cmMrMultiReplaceAll, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~kip", cmMrMultiSkip, bfNormal}};
+				const std::array buttons{mr::dialogs::DialogButtonSpec{"~R~eplace", cmMrMultiReplace, bfDefault}, mr::dialogs::DialogButtonSpec{"Replace ~A~ll", cmMrMultiReplaceAll, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~kip", cmMrMultiSkip, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 				const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 				mr::dialogs::addManagedUniformButtonRow(*this, (118 - metrics.rowWidth) / 2, buttonTop, gap, buttons);
 			} else {
 				const std::array buttons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrMultiLoad, bfDefault},
-				                         mr::dialogs::DialogButtonSpec{"Load ~A~ll", cmMrMultiLoadAll, bfNormal}};
+				                         mr::dialogs::DialogButtonSpec{"Load ~A~ll", cmMrMultiLoadAll, bfNormal},
+				                         mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 				const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 				mr::dialogs::addManagedUniformButtonRow(*this, (118 - metrics.rowWidth) / 2, buttonTop, gap, buttons);
 			}

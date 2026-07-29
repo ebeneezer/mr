@@ -612,22 +612,3 @@ ushort execDialogWithData(TDialog *dialog, void *data) {
 void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text) {
 	dialog->insert(new TStaticText(TRect(x, y, x + std::strlen(text) + 1, y + 1), text));
 }
-
-TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height, const std::vector<std::string> &lines, bool showOkCancelHelp) {
-	MRDialogFoundation *dialog = new MRDialogFoundation(centeredSetupDialogRect(width, height), title, width, height);
-	int y = 2;
-
-	if (dialog == nullptr) return nullptr;
-	for (std::vector<std::string>::const_iterator it = lines.begin(); it != lines.end(); ++it, ++y)
-		dialog->insert(new TStaticText(TRect(2, y, 2 + std::strlen(it->c_str()) + 1, y + 1), it->c_str()));
-
-	if (showOkCancelHelp) {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
-		const int buttonLeft = (width - metrics.rowWidth) / 2;
-		mr::dialogs::insertUniformButtonRow(*dialog, buttonLeft, height - 3, 1, buttons);
-	}
-
-	dialog->finalizeLayout();
-	return dialog;
-}

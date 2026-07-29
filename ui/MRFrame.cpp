@@ -33,7 +33,7 @@ static const char *kUnZoomIcon = "[▴]";
 static const char *kMinimizeIcon = "[▾]";
 static const char *kDragIcon = "\xC4\xD9";
 static const char *kDragLeftIcon = "\xC0\xC4";
-static const char *kFocusedDragIcon = "\xCD\xBC";
+static const char *kFocusedDragIcon = "═╝";
 static const char *kFocusedDragLeftIcon = "\xC8\xCD";
 
 static constexpr char kDirtyMarkerIcon[] = "✎";

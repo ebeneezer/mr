@@ -23,6 +23,7 @@
 #include "../MRFrame.hpp"
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../app/MRHelpTopics.generated.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -40,6 +41,22 @@ enum : ushort {
 
 TFrame *initScopedHistoryDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
+}
+
+ushort fileDialogHelpContext(MRDialogHistoryScope scope) noexcept {
+	switch (scope) {
+		case MRDialogHistoryScope::General:
+			return hcDialogCompilerFile;
+		case MRDialogHistoryScope::WorkspaceLoad:
+		case MRDialogHistoryScope::WorkspaceSave:
+			return hcDialogWorkspaceFile;
+		case MRDialogHistoryScope::SetupThemeLoad:
+		case MRDialogHistoryScope::SetupThemeSave:
+		case MRDialogHistoryScope::ExtensionThemeFile:
+			return hcDialogColorThemeFile;
+		default:
+			return hcDialogFileChooser;
+	}
 }
 
 const char *const kMonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -150,7 +167,8 @@ class TFileDialogEnterInterceptor final : public TView {
 
 class TWheelFileDialog final : public TFileDialog {
  public:
-	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TFileDialog(wildCard, title, inputName, options, 0), scope(aScope), dialogOptions(options) {
+	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TFileDialog(wildCard, title, inputName, options | fdHelpButton, 0), scope(aScope), dialogOptions(options) {
+		helpCtx = fileDialogHelpContext(scope);
 		insert(new TFileDialogEnterInterceptor(fileName));
 		replaceHistoryView(static_cast<TInputLine *>(fileName));
 		replaceInfoPane();
@@ -349,7 +367,8 @@ class TWheelFileDialog final : public TFileDialog {
 
 class TWheelChDirDialog final : public TChDirDialog {
  public:
-	TWheelChDirDialog(MRDialogHistoryScope aScope, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TChDirDialog(options, 0), scope(aScope) {
+	TWheelChDirDialog(MRDialogHistoryScope aScope, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TChDirDialog(options | cdHelpButton, 0), scope(aScope) {
+		helpCtx = hcDialogDirectoryChooser;
 		replaceHistoryView(findInputLine(TRect(3, 3, 42, 4)));
 	}
 

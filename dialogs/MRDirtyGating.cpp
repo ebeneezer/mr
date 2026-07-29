@@ -9,6 +9,7 @@
 #include <tvision/tv.h>
 
 #include "MRDirtyGating.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 
 #include "setup/MRSetupCommon.hpp"
 #include "../ui/MRFrame.hpp"
@@ -117,10 +118,11 @@ std::string joinCommaSeparatedItems(const std::vector<std::string> &values) {
 class TDirtyItemDialog : public MRDialogFoundation {
   public:
 	TDirtyItemDialog(const char *dialogTitle, const char *headline, const char *itemsLabel, const char *joinedItems, const char *primaryLabel) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(74, 11), dialogTitle != nullptr ? dialogTitle : "UNSAVED CHANGES", 74, 11, initMrDialogFrame) {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{primaryLabel != nullptr ? primaryLabel : "~S~ave", cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~iscard", cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{primaryLabel != nullptr ? primaryLabel : "~S~ave", cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~iscard", cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 3);
 		const int buttonLeft = (74 - metrics.rowWidth) / 2;
 
+		helpCtx = hcDialogConfirm;
 		insert(new TStaticText(TRect(2, 2, 70, 3), headline != nullptr ? headline : "Discard changed items?"));
 		insert(new TStaticText(TRect(2, 4, 70, 5), itemsLabel != nullptr ? itemsLabel : "Dirty items:"));
 		insert(new TStaticText(TRect(2, 5, 70, 7), joinedItems != nullptr ? joinedItems : ""));
@@ -151,7 +153,7 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 		textLines.insert(textLines.end(), detailLines.begin(), detailLines.end());
 	}
 
-	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{cancelButtonLabel.c_str(), cmCancel, bfNormal}};
+	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{cancelButtonLabel.c_str(), cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 	const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
@@ -159,6 +161,7 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), "CONFIRM", width, height);
 	int y = 2;
 
+	dialog->helpCtx = hcDialogConfirm;
 	for (const std::string &line : textLines)
 		insertStaticLine(dialog, 3, y++, line);
 	mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, height - 3, gap, buttons);
@@ -189,7 +192,7 @@ UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const cha
 		textLines.insert(textLines.end(), detailLines.begin(), detailLines.end());
 	}
 
-	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}};
+	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 	const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
@@ -197,6 +200,7 @@ UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const cha
 	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), "CONFIRM", width, height);
 	int y = 2;
 
+	dialog->helpCtx = hcDialogConfirm;
 	for (const std::string &line : textLines)
 		insertStaticLine(dialog, 3, y++, line);
 	mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, height - 3, gap, buttons);
@@ -229,7 +233,7 @@ bool runDialogConfirm(const char *headline, const char *confirmLabel, const char
 		textLines.insert(textLines.end(), detailLines.begin(), detailLines.end());
 	}
 
-	const std::array buttons{mr::dialogs::DialogButtonSpec{confirmButtonLabel.c_str(), cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{cancelButtonLabel.c_str(), cmCancel, bfNormal}};
+	const std::array buttons{mr::dialogs::DialogButtonSpec{confirmButtonLabel.c_str(), cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{cancelButtonLabel.c_str(), cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 	const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
@@ -237,6 +241,7 @@ bool runDialogConfirm(const char *headline, const char *confirmLabel, const char
 	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), dialogTitle != nullptr ? dialogTitle : "CONFIRM", width, height);
 	int y = 2;
 
+	dialog->helpCtx = hcDialogConfirm;
 	for (const std::string &line : textLines)
 		insertStaticLine(dialog, 3, y++, line);
 	mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, height - 3, gap, buttons);

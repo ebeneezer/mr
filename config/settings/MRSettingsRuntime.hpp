@@ -500,7 +500,7 @@ enum : unsigned char {
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 14;
 	static const std::size_t kMenuDialogCount = 32;
-	static const std::size_t kHelpCount = 9;
+	static const std::size_t kHelpCount = 10;
 	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 6;
 	static const std::size_t kFileCompareMiniMapCount = 9;

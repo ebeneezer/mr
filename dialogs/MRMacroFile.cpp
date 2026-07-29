@@ -27,6 +27,7 @@
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MRMessageLineController.hpp"
@@ -641,6 +642,7 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 		const int removeAutoexecLeft = centerLeft + std::max(0, (12 - removeAutoexecMetrics.rowWidth) / 2);
 		const int bottomLeft = 3 + std::max(0, (width - 6 - bottomMetrics.rowWidth) / 2);
 
+		helpCtx = hcDialogMacroLibrary;
 		mr::dialogs::insertUniformButtonRow(*this, topLeft, 2, gap, topButtons, uniformButtonWidth);
 
 		insert(new TStaticText(TRect(leftListLeft, 5, leftListLeft + 8, 6), "Macros:"));
@@ -740,10 +742,6 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 						return;
 					}
 					break;
-				case kbF1:
-					static_cast<void>(mrShowProjectHelp());
-					clearEvent(event);
-					return;
 			}
 		}
 
@@ -795,10 +793,6 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 					activateFocusedEntry(false);
 					clearEvent(event);
 				}
-				break;
-			case cmHelp:
-				static_cast<void>(mrShowProjectHelp());
-				clearEvent(event);
 				break;
 		}
 
@@ -1185,6 +1179,5 @@ bool runMacroLibraryDialog() {
 			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Debug completed: " + debugMacroName, mr::messageline::Kind::Success, mr::messageline::kPriorityMedium);
 		return true;
 	}
-	if (result == cmHelp) static_cast<void>(mrShowProjectHelp());
 	return result != cmCancel;
 }

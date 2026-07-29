@@ -71,6 +71,7 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../MREditorApp.hpp"
 #include "../MRCommands.hpp"
+#include "../MRHelpTopics.generated.hpp"
 
 namespace {
 struct SearchUiState {
@@ -262,6 +263,7 @@ bool showFoundListDialog(MREditWindow *win, const std::string &pattern, const MR
 
 	if (TProgram::deskTop == nullptr || matches.empty()) return false;
 	dialog = mr::dialogs::createScrollableDialog("FOUND LIST", width, height);
+	dialog->helpCtx = hcDialogFoundList;
 	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
 	dialog->insert(scrollBar);
 	listView = new FoundListView(TRect(2, 2, width - 3, height - 4), scrollBar, win, matches, pattern, options);
@@ -269,7 +271,7 @@ bool showFoundListDialog(MREditWindow *win, const std::string &pattern, const MR
 	listView->previewFocusedItem();
 	dialog->insert(listView);
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1, buttons);
 	}
@@ -375,9 +377,10 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 
 	if (TProgram::deskTop == nullptr) return PromptReplaceDecision::Cancel;
 	dialog = mr::dialogs::createScrollableDialog(title.c_str(), 88, 10);
+	dialog->helpCtx = hcDialogReplacePrompt;
 	dialog->insert(new PromptPreviewView(TRect(2, 2, 86, 5), preview, replacement));
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~R~eplace", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~S~kip", cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"Replace ~A~ll", cmYes, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~R~eplace", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~S~kip", cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"Replace ~A~ll", cmYes, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
 		mr::dialogs::insertUniformButtonRow(*dialog, (88 - metrics.rowWidth) / 2, 6, 2, buttons);
 	}
@@ -434,9 +437,10 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 
 	if (TProgram::deskTop == nullptr) return PromptSearchDecision::Cancel;
 	dialog = mr::dialogs::createScrollableDialog("SEARCH", 88, 10);
+	dialog->helpCtx = hcDialogSearchContinue;
 	dialog->insert(new SearchPromptPreviewView(TRect(2, 2, 86, 5), preview));
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~N~ext", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~S~top", cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~N~ext", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~S~top", cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
 		mr::dialogs::insertUniformButtonRow(*dialog, (88 - metrics.rowWidth) / 2, 6, 2, buttons);
 	}
@@ -503,6 +507,7 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	if (options.searchAllWindows) optionMask |= 0x0008;
 
 	dialog = mr::dialogs::createScrollableDialog("SEARCH", 96, 22);
+	dialog->helpCtx = hcDialogSearch;
 	patternField = new TInputLine(TRect(15, 2, 93, 3), kInputBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 15, 3), "Search ~f~or:", patternField));
 	dialog->insert(patternField);
@@ -519,7 +524,7 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	optionsField = new TCheckBoxes(TRect(3, 11, 40, 16), new TSItem("~C~ase sensitive", new TSItem("~G~lobal search", new TSItem("~R~estrict to marked block", new TSItem("Search all ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 3);
 		mr::dialogs::insertUniformButtonRow(*dialog, (76 - metrics.rowWidth) / 2, 18, 3, buttons);
 	}
@@ -623,6 +628,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	if (options.searchAllWindows) optionMask |= 0x0008;
 
 	dialog = mr::dialogs::createScrollableDialog("SEARCH AND REPLACE", 92, 24);
+	dialog->helpCtx = hcDialogSearchReplace;
 	patternField = new TInputLine(TRect(17, 2, 89, 3), kPatternBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 16, 3), "Search ~f~or:", patternField));
 	dialog->insert(patternField);
@@ -645,7 +651,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	optionsField = new TCheckBoxes(TRect(39, 13, 72, 18), new TSItem("~C~ase sensitive", new TSItem("~G~lobal search", new TSItem("~R~estrict to marked block", new TSItem("Search all ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
 	{
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 3);
 		mr::dialogs::insertUniformButtonRow(*dialog, (92 - metrics.rowWidth) / 2, 20, 3, buttons);
 	}

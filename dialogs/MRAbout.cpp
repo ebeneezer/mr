@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "../app/MRVersion.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../app/MRAboutQuotes.generated.hpp"
 
 namespace {
@@ -348,6 +349,7 @@ class MRAbout : public MRDialogFoundation {
   public:
 	MRAbout() noexcept : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16, initMrDialogFrame), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false) {
 		eventMask |= evBroadcast;
+		helpCtx = hcDialogAbout;
 		insertCenteredStaticLine(this, size.x, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());
 		insertCenteredStaticLine(this, size.x, 3, "Dr. Michael H. Raus & Codex AI");
 
@@ -358,10 +360,10 @@ class MRAbout : public MRDialogFoundation {
 		if (!mQuoteSeen.empty()) mQuoteSeen[0] = 1;
 		mQuoteRandomState = static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0xA39F1D5Bu;
 
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~P~ress", cmAboutDone, bfDefault}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~P~ress", cmAboutDone, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		std::vector<TButton *> buttonViews;
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-		mr::dialogs::insertUniformButtonRow(*this, (size.x - metrics.rowWidth) / 2, 13, 0, buttons, 0, &buttonViews);
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
+		mr::dialogs::insertUniformButtonRow(*this, (size.x - metrics.rowWidth) / 2, 13, 2, buttons, 0, &buttonViews);
 		if (!buttonViews.empty()) mDoneButton = buttonViews.front();
 	}
 

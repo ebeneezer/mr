@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "MRCommandRouter.hpp"
+#include "../ui/MRHelpSystem.hpp"
 
 class MRPerformancePanel;
 class MREditWindow;
@@ -26,9 +27,12 @@ class MREditorApp : public TApplication {
 	MREditorApp();
 	~MREditorApp() override;
 
+	void getEvent(TEvent &event) override;
 	void handleEvent(TEvent &event) override;
 	void idle() override;
 	TPalette &getPalette() const override;
+	[[nodiscard]] bool showHelpTopic(ushort context);
+	[[nodiscard]] bool showPreviousHelpTopic();
 	bool quitPrepared() const noexcept;
 	void beginInteractiveMouseCapture() noexcept;
 	void endInteractiveMouseCapture() noexcept;
@@ -92,6 +96,7 @@ class MREditorApp : public TApplication {
 	ushort functionKeyModifiers;
 	int virtualDesktopCount;
 	bool cyclicVirtualDesktopsEnabled;
+	MRHelpSystem helpSystem;
 };
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.

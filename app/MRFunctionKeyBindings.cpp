@@ -78,7 +78,7 @@ MRBentoBox *mrCurrentMacroDebuggerBentoBox() {
 
 const std::vector<MRStatusLine::FunctionKeyLabel> &mrStartupFunctionKeyLabels(ushort modifiers) {
 	static const std::vector<MRStatusLine::FunctionKeyLabel> baseLabels{
-	    {TKey(kbF1), cmMrHelpContents, "~F1~ Help"},
+	    {TKey(kbF1), cmHelp, "~F1~ Help"},
 	    {TKey(kbF2), cmMrFileLoad, "~F2~ Load"},
 	    {TKey(kbF3), cmMrFileOpen, "~F3~ Open"},
 	    {TKey(kbF4), cmMrFileAcquire, "~F4~ Acquire"},
@@ -152,7 +152,7 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &mrStartupFunctionKeyLabels(us
 
 const std::vector<MRStatusLine::FunctionKeyLabel> &mrEditorFunctionKeyLabels(ushort modifiers) {
 	static const std::vector<MRStatusLine::FunctionKeyLabel> baseLabels{
-	    {TKey(kbF1), cmMrHelpContents, "~F1~ Help"},
+	    {TKey(kbF1), cmHelp, "~F1~ Help"},
 	    {TKey(kbF2), cmMrFileSave, "~F2~ Save"},
 	    {TKey(kbF3), cmMrBlockLoadFromDisk, "~F3~ LoadBlk"},
 	    {TKey(kbF4), cmMrBlockSaveToDisk, "~F4~ SaveBlk"},

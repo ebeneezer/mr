@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "../app/export/MRPdfTextExporter.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../ui/widgets/MRDropList.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/widgets/MRNumericSlider.hpp"
@@ -122,8 +123,9 @@ class TPdfExportDialog final : public MRDialogFoundation {
 	TPdfExportDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, kDialogHeight), "EXPORT TO PDF", kDialogWidth, kDialogHeight, initMrDialogFrame) {
 		static constexpr std::array buttons{
 		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal},
 		};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 		const int outputHistoryLeft = kFieldRight;
 		const int outputBrowseLeft = outputHistoryLeft + kDropButtonWidth;
@@ -138,6 +140,7 @@ class TPdfExportDialog final : public MRDialogFoundation {
 		const int marginRightLeft = marginCenterX + kMarginAxisGap;
 		const int marginRightRight = marginRightLeft + kMarginFieldWidth;
 
+		helpCtx = hcDialogPdfExport;
 		mOutputPath = new TInputLine(TRect(kInputLeft, 2, kFieldRight, 3), sizeof(MRPdfExportDialogData::outputPath) - 1);
 		insert(mOutputPath);
 		insert(new TLabel(TRect(kLabelLeft, 2, kInputLeft, 3), "~O~utput URI:", mOutputPath));

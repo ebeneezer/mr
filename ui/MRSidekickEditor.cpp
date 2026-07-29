@@ -1,5 +1,6 @@
 #define Uses_TDrawBuffer
 #define Uses_TDeskTop
+#define Uses_TButton
 #define Uses_TDialog
 #define Uses_TEvent
 #define Uses_TGroup
@@ -18,6 +19,7 @@
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../app/MRCommands.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
@@ -359,7 +361,7 @@ TRect snippetSidekickBoundsFor(MREditWindow *parent, const std::string &text, st
 	const int maxWidth = std::max(32, desktopWidth - 2);
 	const int maxHeight = std::max(6, desktopHeight - 2);
 	int wantedWidth = std::clamp(sidekickMaxLineLength(lines) + 8, 48, maxWidth);
-	int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()) + 4, 8, maxHeight);
+	int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()) + 6, 10, maxHeight);
 	int x = desktop.a.x + 2;
 	int y = desktop.a.y + 2;
 
@@ -387,14 +389,20 @@ class MRSnippetSidekickDialog : public TDialog {
   public:
 	MRSnippetSidekickDialog(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, const std::string &text, const std::string &title, const std::vector<MRSidekickSpan> &placeholders)
 	    : TWindowInit(initSnippetSidekickFrame), TDialog(bounds, title.c_str()), mEditor(nullptr) {
+		TButton *helpButton;
+
 		flags |= wfMove | wfGrow | wfClose;
 		growMode = gfGrowHiX | gfGrowHiY;
-		mEditor = new MRSidekickEditor(TRect(1, 1, std::max<short>(2, size.x - 1), std::max<short>(2, size.y - 1)), parentBufferId, replaceStart, replaceEnd, text, title, placeholders, false, true, true);
+		helpCtx = hcDialogSnippetSidekick;
+		mEditor = new MRSidekickEditor(TRect(1, 1, std::max<short>(2, size.x - 1), std::max<short>(2, size.y - 3)), parentBufferId, replaceStart, replaceEnd, text, title, placeholders, false, true, true);
 		if (mEditor != nullptr) {
 			mEditor->growMode = gfGrowHiX | gfGrowHiY;
 			insert(mEditor);
 			mEditor->select();
 		}
+		helpButton = new TButton(TRect(std::max<short>(2, size.x - 12), std::max<short>(2, size.y - 3), std::max<short>(3, size.x - 1), std::max<short>(4, size.y - 1)), "~H~elp", cmHelp, bfNormal);
+		helpButton->growMode = gfGrowAll;
+		insert(helpButton);
 	}
 
 	[[nodiscard]] MRSidekickEditor *snippetSidekick() const noexcept {
@@ -404,7 +412,7 @@ class MRSnippetSidekickDialog : public TDialog {
 	void sizeLimits(TPoint &min, TPoint &max) override {
 		TDialog::sizeLimits(min, max);
 		min.x = std::max<short>(min.x, 32);
-		min.y = std::max<short>(min.y, 6);
+		min.y = std::max<short>(min.y, 10);
 	}
 
 	TPalette &getPalette() const override {
@@ -1188,7 +1196,7 @@ void MRSidekickEditor::resizeSnippetSidekickForContent() {
 	const int maxWidth = std::max(32, desktopWidth - 2);
 	const int maxHeight = std::max(6, desktopHeight - 2);
 	const int wantedWidth = std::clamp(sidekickMaxLineLength(mLines) + 8, 32, maxWidth);
-	const int wantedHeight = std::clamp<int>(static_cast<int>(mLines.size()) + 4, 6, maxHeight);
+	const int wantedHeight = std::clamp<int>(static_cast<int>(mLines.size()) + 6, 10, maxHeight);
 	const int currentWidth = std::max(1, bounds.b.x - bounds.a.x);
 	const int currentHeight = std::max(1, bounds.b.y - bounds.a.y);
 	const int newWidth = std::max(currentWidth, wantedWidth);
@@ -1202,7 +1210,7 @@ void MRSidekickEditor::resizeSnippetSidekickForContent() {
 	if (bounds.b.y > desktop.b.y) bounds.move(0, desktop.b.y - bounds.b.y);
 	if (bounds.a.y < desktop.a.y) bounds.move(0, desktop.a.y - bounds.a.y);
 	owner->locate(bounds);
-	TRect editorBounds(1, 1, std::max<short>(2, owner->size.x - 1), std::max<short>(2, owner->size.y - 1));
+	TRect editorBounds(1, 1, std::max<short>(2, owner->size.x - 1), std::max<short>(2, owner->size.y - 3));
 	locate(editorBounds);
 	owner->drawView();
 }

@@ -5,7 +5,6 @@
 #define Uses_TButton
 #define Uses_TInputLine
 #define Uses_TLabel
-#define Uses_MsgBox
 #include <tvision/tv.h>
 
 #include "MRCommandRouterText.hpp"
@@ -28,6 +27,7 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "../MREditorApp.hpp"
+#include "../MRHelpTopics.generated.hpp"
 
 namespace {
 TFrame *initMrDialogFrame(TRect bounds) {
@@ -40,20 +40,17 @@ void postTextCommandError(std::string_view text) {
 
 class NumericInputDialog final : public MRDialogFoundation {
   public:
-	NumericInputDialog(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, const MRRouterIntegerInputLayout &layout) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height), title, layout.width, layout.height, initMrDialogFrame), mHelpText(helpText != nullptr ? helpText : ""), mMinValue(minValue), mMaxValue(maxValue) {
+	NumericInputDialog(const char *title, const char *label, ushort helpContext, int initialValue, int minValue, int maxValue, const MRRouterIntegerInputLayout &layout) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height), title, layout.width, layout.height, initMrDialogFrame), mMinValue(minValue), mMaxValue(maxValue) {
 		char buffer[32] = {0};
 
+		helpCtx = helpContext;
 		std::snprintf(buffer, sizeof(buffer), "%d", initialValue);
 		mInputField = new TInputLine(TRect(layout.inputLeft, 2, layout.inputRight, 3), layout.inputRight - layout.inputLeft);
 		if (label != nullptr && label[0] != '\0') insert(new TLabel(TRect(2, 2, layout.inputLeft, 3), label, mInputField));
 		insert(mInputField);
-		if (layout.showHelp) {
-			const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
-			mr::dialogs::insertUniformButtonRow(*this, layout.buttonLeft, layout.buttonY, layout.buttonGap, buttons);
-		} else {
-			const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
-			mr::dialogs::insertUniformButtonRow(*this, layout.buttonLeft, layout.buttonY, layout.buttonGap, buttons);
-		}
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, layout.buttonGap);
+		mr::dialogs::insertUniformButtonRow(*this, (layout.width - metrics.rowWidth) / 2, layout.buttonY, layout.buttonGap, buttons);
 		mInputField->setData(buffer);
 		setDialogValidationHook([this]() {
 			MRScrollableDialog::DialogValidationResult result;
@@ -64,15 +61,6 @@ class NumericInputDialog final : public MRDialogFoundation {
 			return result;
 		});
 		finalizeLayout();
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evCommand && event.message.command == cmHelp) {
-			messageBox(mfInformation | mfOKButton, "%s", mHelpText.c_str());
-			clearEvent(event);
-			return;
-		}
-		MRDialogFoundation::handleEvent(event);
 	}
 
 	[[nodiscard]] bool tryReadValue(int &outValue) const {
@@ -90,7 +78,6 @@ class NumericInputDialog final : public MRDialogFoundation {
 	}
 
   private:
-	std::string mHelpText;
 	TInputLine *mInputField = nullptr;
 	int mMinValue = 0;
 	int mMaxValue = 0;
@@ -120,12 +107,12 @@ MRRouterIntegerInputLayout defaultRouterIntegerInputLayout() {
 	return MRRouterIntegerInputLayout{};
 }
 
-bool promptRouterIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue) {
-	return promptRouterIntegerValue(title, label, helpText, initialValue, minValue, maxValue, outValue, defaultRouterIntegerInputLayout());
+bool promptRouterIntegerValue(const char *title, const char *label, ushort helpContext, int initialValue, int minValue, int maxValue, int &outValue) {
+	return promptRouterIntegerValue(title, label, helpContext, initialValue, minValue, maxValue, outValue, defaultRouterIntegerInputLayout());
 }
 
-bool promptRouterIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue, const MRRouterIntegerInputLayout &layout) {
-	NumericInputDialog *dialog = new NumericInputDialog(title, label, helpText, initialValue, minValue, maxValue, layout);
+bool promptRouterIntegerValue(const char *title, const char *label, ushort helpContext, int initialValue, int minValue, int maxValue, int &outValue, const MRRouterIntegerInputLayout &layout) {
+	NumericInputDialog *dialog = new NumericInputDialog(title, label, helpContext, initialValue, minValue, maxValue, layout);
 	bool accepted = false;
 	ushort result = cmCancel;
 
@@ -147,16 +134,14 @@ bool handleSetRightMargin() {
 	int minimumMargin = std::min(999, std::max(1, settings.leftMargin + 1));
 	int margin = settings.rightMargin > 0 ? settings.rightMargin : 78;
 
-	layout.width = 30;
+	layout.width = 38;
 	layout.height = 8;
 	layout.inputLeft = 4;
-	layout.inputRight = 26;
+	layout.inputRight = 34;
 	layout.buttonY = 4;
-	layout.buttonLeft = 4;
 	layout.buttonGap = 2;
-	layout.showHelp = false;
 	if (margin < minimumMargin) margin = minimumMargin;
-	if (!promptRouterIntegerValue("SET RIGHT MARGIN", "", "Set the global RIGHT_MARGIN used for editor formatting.", margin, minimumMargin, 999, margin, layout)) return true;
+	if (!promptRouterIntegerValue("SET RIGHT MARGIN", "", hcDialogRightMargin, margin, minimumMargin, 999, margin, layout)) return true;
 	settings.rightMargin = margin;
 	settings.formatLine = synchronizeEditFormatLineMargins(settings.formatLine, settings.leftMargin, settings.rightMargin, settings.tabSize);
 	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Right margin update failed: ")) return true;
@@ -171,7 +156,7 @@ bool handleSetLeftMargin(MREditWindow *window) {
 	int margin = settings.leftMargin > 0 ? settings.leftMargin : 1;
 
 	static_cast<void>(window);
-	if (!promptRouterIntegerValue("SET LEFT MARGIN", "~M~argin:", "Set the global LEFT_MARGIN used for editor formatting.", margin, 1, maximumMargin, margin)) return true;
+	if (!promptRouterIntegerValue("SET LEFT MARGIN", "~M~argin:", hcDialogLeftMargin, margin, 1, maximumMargin, margin)) return true;
 	settings.leftMargin = margin;
 	settings.formatLine = synchronizeEditFormatLineMargins(settings.formatLine, settings.leftMargin, settings.rightMargin, settings.tabSize);
 	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Left margin update failed: ")) return true;

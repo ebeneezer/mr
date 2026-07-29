@@ -15,7 +15,6 @@ enum class MRKeymapContext : unsigned char;
 [[nodiscard]] bool mrActivateEditWindow(MREditWindow *win);
 void mrScheduleWindowActivation(MREditWindow *win);
 [[nodiscard]] bool mrDispatchDeferredWindowActivation();
-[[nodiscard]] bool mrShowProjectHelp();
 [[nodiscard]] bool mrEnsureLogWindow(bool activate = true);
 [[nodiscard]] bool mrEnsureUsableWorkWindow(bool allowCreateFallback = true);
 [[nodiscard]] bool mrClearLogWindow();

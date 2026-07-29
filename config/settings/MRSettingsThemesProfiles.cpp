@@ -185,6 +185,7 @@ static const unsigned char kPaletteDialogInactiveClusterGray = 62;
 static const unsigned char kPaletteDialogInactiveClusterBlue = 94;
 static const unsigned char kPaletteDialogInactiveClusterCyan = 126;
 static const unsigned char kPaletteHelpFrame = 128;
+static const unsigned char kPaletteHelpWindowControls = 130;
 static const unsigned char kPaletteHelpText = 133;
 static const unsigned char kPaletteHelpHighlight = 134;
 static const unsigned char kPaletteHelpChapter = 135;
@@ -231,7 +232,7 @@ static const MRColorSetupItem kMenuDialogColorItems[] = {
 };
 
 static const MRColorSetupItem kHelpColorItems[] = {
-    {"Help-Text", kPaletteHelpText}, {"help-Highlight", kPaletteHelpHighlight}, {"help-Chapter", kPaletteHelpChapter}, {"help-Border", kPaletteHelpFrame}, {"help-Link", kPaletteHelpHighlight}, {"help-F-keys", kPaletteHelpChapter}, {"help-attr-1", kPaletteHelpText}, {"help-attr-2", kPaletteHelpHighlight}, {"help-attr-3", kPaletteHelpChapter},
+    {"Help-Text", kPaletteHelpText}, {"help-Highlight", kPaletteHelpHighlight}, {"help-Chapter", kPaletteHelpChapter}, {"help-Border", kPaletteHelpFrame}, {"help-Link", kPaletteHelpHighlight}, {"help-F-keys", kPaletteHelpChapter}, {"help-attr-1", kPaletteHelpText}, {"help-attr-2", kPaletteHelpHighlight}, {"help-attr-3", kPaletteHelpChapter}, {"help-window controls", kPaletteHelpWindowControls},
 };
 
 static const MRColorSetupItem kOtherColorItems[] = {
@@ -306,6 +307,7 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	    0x00, 0x71, 0x70, 0x78, 0x74, 0x20, 0x28, 0x24, 0x17, 0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71, 0x1F, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x21, 0x3F, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x7F, 0x7E, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30, 0x3F, 0x3E, 0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00, 0x17, 0x1F, 0x1A, 0x71, 0x71, 0x1E, 0x17, 0x1F, 0x1E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x10, 0x30, 0x3F, 0x3E, 0x70, 0x2F, 0x7A, 0x20, 0x12, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x30, 0x3F, 0x3E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x30, 0x70, 0x7F, 0x7E, 0x1F, 0x2F, 0x1A, 0x20, 0x32, 0x31, 0x71, 0x70, 0x2F, 0x7E, 0x71, 0x13, 0x78, 0x00, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x30, 0x3E, 0x1E,
 	};
 
+	if (paletteIndex == kPaletteHelpWindowControls) return 0x37;
 	if (paletteIndex == kMrPaletteCurrentLine) return defaults[10];
 	if (paletteIndex == kMrPaletteCurrentLineInBlock) return defaults[12];
 	if (paletteIndex == kMrPaletteChangedText) return defaults[14];
@@ -499,6 +501,21 @@ template <std::size_t N> bool parseColorListLiteral(const std::string &literal, 
 	}
 	if (itemIndex != N) return setError(errorMessage, "Unexpected color list size.");
 	if (text.find(',', cursor) != std::string::npos) return setError(errorMessage, "Too many color values in list.");
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool parseHelpColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kHelpCount> &outValues, std::string *errorMessage) {
+	std::array<unsigned char, MRColorSetupSettings::kHelpCount - 1> legacyValues;
+
+	if (parseColorListLiteral(literal, outValues, nullptr)) {
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (!parseColorListLiteral(literal, legacyValues, errorMessage)) return false;
+	for (std::size_t i = 0; i < legacyValues.size(); ++i)
+		outValues[i] = legacyValues[i];
+	outValues[legacyValues.size()] = legacyValues[3];
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -972,7 +989,7 @@ bool applyColorSetupValueToGroup(MRColorSetupSettings &configured, const std::st
 			if (!parseMenuDialogColorListLiteral(value, configured.menuDialogColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::Help:
-			if (!parseColorListLiteral(value, configured.helpColors, errorMessage)) return false;
+			if (!parseHelpColorListLiteral(value, configured.helpColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::Other:
 			if (!parseOtherColorListLiteral(value, configured.otherColors, errorMessage)) return false;

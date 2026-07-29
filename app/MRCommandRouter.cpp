@@ -96,6 +96,8 @@
 #include "../ui/MRMessageLineController.hpp"
 #include "MREditorApp.hpp"
 #include "MRCommands.hpp"
+#include "MRHelpTopics.generated.hpp"
+#include "../ui/MRHelpSystem.hpp"
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
@@ -189,9 +191,11 @@ class GetLastDialog final : public MRDialogFoundation {
 	    : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(width, height), "GET LAST", width, height, initMrDialogFrame), fileValues(files), folderValues(folders), workspaceValues(workspaces) {
 		short y = 1;
 
+		helpCtx = hcDialogGetLast;
 		fileList = insertLabeledList("Files:", cmMrGetLastFilesActivate, fileValues, y, width, fileRows);
 		folderList = insertLabeledList("Folders:", cmMrGetLastFoldersActivate, folderValues, y, width, folderRows);
 		workspaceList = insertLabeledList("Workspaces:", cmMrGetLastWorkspacesActivate, workspaceValues, y, width, workspaceRows);
+		insert(new TButton(TRect(width - 13, height - 3, width - 2, height - 1), "~H~elp", cmHelp, bfNormal));
 	}
 
 	void selectInitialList() {
@@ -1706,15 +1710,13 @@ bool promptGotoLineNumber(long &lineNumber) {
 	const int kMaxLineNumber = 999999999;
 	int value = 0;
 
-	layout.width = 30;
+	layout.width = 38;
 	layout.height = 8;
 	layout.inputLeft = 4;
-	layout.inputRight = 26;
+	layout.inputRight = 34;
 	layout.buttonY = 4;
-	layout.buttonLeft = 4;
 	layout.buttonGap = 2;
-	layout.showHelp = false;
-	if (!promptRouterIntegerValue("GOTO LINE NUMBER", "", "Enter the target line number.", static_cast<int>(std::max<long>(kMinLineNumber, std::min<long>(lineNumber > 0 ? lineNumber : 1, kMaxLineNumber))), kMinLineNumber, kMaxLineNumber, value, layout)) return false;
+	if (!promptRouterIntegerValue("GOTO LINE NUMBER", "", hcDialogGotoLine, static_cast<int>(std::max<long>(kMinLineNumber, std::min<long>(lineNumber > 0 ? lineNumber : 1, kMaxLineNumber))), kMinLineNumber, kMaxLineNumber, value, layout)) return false;
 	lineNumber = value;
 	return true;
 }
@@ -1820,7 +1822,7 @@ bool handleFileGetLast() {
 	const short fileRows = getLastListHeight(files.size());
 	const short folderRows = getLastListHeight(folders.size());
 	const short workspaceRows = getLastListHeight(workspaces.size());
-	const short height = static_cast<short>(fileRows + folderRows + workspaceRows + 8);
+	const short height = static_cast<short>(fileRows + folderRows + workspaceRows + 11);
 
 	if (TProgram::deskTop == nullptr) return true;
 	dialog = new GetLastDialog(files, folders, workspaces, width, height, fileRows, folderRows, workspaceRows);
@@ -3016,11 +3018,23 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return true;
 
 		case cmMrHelpContents:
+			static_cast<void>(mrShowProjectHelp(hcContents));
+			return true;
+
 		case cmMrHelpKeys:
+			static_cast<void>(mrShowProjectHelp(hcKeys));
+			return true;
+
 		case cmMrHelpDetailedIndex:
+			static_cast<void>(mrShowProjectHelp(hcDetailedIndex));
+			return true;
+
 		case cmMrHelpPreviousTopic:
+			static_cast<void>(mrShowPreviousProjectHelp());
+			return true;
+
 		case cmHelp:
-			static_cast<void>(mrShowProjectHelp());
+			static_cast<void>(mrShowProjectHelp(TProgram::application != nullptr ? TProgram::application->getHelpCtx() : hcContents));
 			return true;
 
 		case cmMrHelpAbout:

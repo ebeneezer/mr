@@ -75,7 +75,7 @@ TVISION_CMAKE_FLAGS = \
 	-DCMAKE_CXX_STANDARD=20 \
 	-DCMAKE_CXX_STANDARD_REQUIRED=ON \
 	-DCMAKE_CXX_EXTENSIONS=ON \
-	-DTV_BUILD_EXAMPLES=OFF \
+	-DTV_BUILD_EXAMPLES=ON \
 	-DTV_BUILD_TESTS=OFF \
 	-DTV_BUILD_AVSCOLOR=OFF \
 	-DTV_OPTIMIZE_BUILD=OFF
@@ -121,6 +121,38 @@ ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
 HELP_MARKDOWN_GENERATOR = ./generate_help_markdown.sh
 HELP_MARKDOWN_SOURCE = app/mrhelp.md
 HELP_MARKDOWN_GENERATED = app/MRHelp.generated.hpp
+HELP_HYPERTEXT_GENERATOR = ./generate_tvision_help.sh
+HELP_HYPERTEXT_SOURCE = documentation/help/mrhelp.txt
+HELP_HYPERTEXT_COMPILED = mr.hlp
+HELP_TOPICS_GENERATED = app/MRHelpTopics.generated.hpp
+TVHC_TOOL = $(TVISION_BUILD_DIR)/tvhc
+TVHC_BUILD_STAMP = $(TVISION_BUILD_DIR)/.mr-tvhc
+HELP_CONTEXT_OBJECTS = \
+	app/MRCommandRouter.o \
+	app/MREditorApp.o \
+	app/MRMenuFactory.o \
+	app/commands/MRLogViewer.o \
+	app/router/MRCommandRouterSearch.o \
+	app/router/MRCommandRouterSearchMultiFileDialog.o \
+	app/router/MRCommandRouterText.o \
+	dialogs/MRAbout.o \
+	dialogs/MRAcquireDialog.o \
+	dialogs/MRColorSetup.o \
+	dialogs/MRCompilerProfiles.o \
+	dialogs/MRDirtyGating.o \
+	dialogs/MRFileInformation.o \
+	dialogs/MRKeymapManager.o \
+	dialogs/MRMacroFile.o \
+	dialogs/MRPdfExportDialog.o \
+	dialogs/MRWindowList.o \
+	dialogs/extensions/MRFileExtensionProfiles.o \
+	dialogs/setup/MRSetupSections.o \
+	mrmac/ui/conventional/MRVMMacroDialogRuntime.o \
+	ui/MRHelpSystem.o \
+	ui/MRMenuBar.o \
+	ui/MRSidekickEditor.o \
+	ui/MRWindowSupport.o \
+	ui/widgets/MRScopedHistoryUI.o
 MANUAL_DIRECTORY = documentation/manuals
 PDFLATEX ?= pdflatex
 MAKEINDEX ?= makeindex
@@ -317,6 +349,7 @@ CXX_SOURCES = \
 	ui/MRMessageLineController.cpp \
 	ui/MRPerformancePanel.cpp \
 	ui/MRSidekickEditor.cpp \
+	ui/MRHelpSystem.cpp \
 	ui/widgets/MRScopedHistoryUI.cpp \
 	ui/MRWindowLayout.cpp \
 	ui/widgets/MRNumericSlider.cpp \
@@ -400,6 +433,7 @@ CONTEXT_ARCHIVE_ITEMS = \
 	Makefile \
 	README.md \
 	generate_about_quotes.sh \
+	generate_tvision_help.sh \
 	mr.cpp \
 	mr.hlp \
 	app \
@@ -512,6 +546,11 @@ tvision-build: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source
 $(TVISION_LIB): tvision-build
 	@test -f $(TVISION_LIB)
 
+$(TVHC_BUILD_STAMP): Makefile $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt $(TVISION_LOCAL_PATCH_STAMP) $(TMP_COMPILER_LAUNCHER) | $(TVISION_LIB)
+	+$(CMAKE) --build $(TVISION_BUILD_DIR) --target tvhc
+	@test -x $(TVHC_TOOL)
+	@touch $@
+
 pcre2-check:
 	@test -f $(PCRE2_LIB)
 	@test -f $(PCRE2_HEADER)
@@ -560,11 +599,15 @@ $(HELP_MARKDOWN_GENERATED): $(HELP_MARKDOWN_SOURCE) $(HELP_MARKDOWN_GENERATOR)
 	@mkdir -p $(dir $@)
 	bash $(HELP_MARKDOWN_GENERATOR) $(HELP_MARKDOWN_SOURCE) $@
 
+$(HELP_HYPERTEXT_COMPILED) $(HELP_TOPICS_GENERATED) &: $(HELP_HYPERTEXT_SOURCE) $(HELP_HYPERTEXT_GENERATOR) $(TVHC_BUILD_STAMP)
+	bash $(HELP_HYPERTEXT_GENERATOR) $(TVHC_TOOL) $(HELP_HYPERTEXT_SOURCE) $(HELP_HYPERTEXT_COMPILED) $(HELP_TOPICS_GENERATED)
+
 # 1. Dependencies for C compilation
 mrmac/mrmac.o: mrmac/mrmac.c mrmac/mrmac.h
 
 # 2. Dependencies for C++ compilation
 $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
+$(HELP_CONTEXT_OBJECTS): $(HELP_TOPICS_GENERATED)
 
 mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp
@@ -721,7 +764,7 @@ $(BASIC_LANGUAGE_PROBE_OBJECT): $(BASIC_LANGUAGE_PROBE_SOURCE) app/commands/MREx
 app/services/MRWorkspaceServiceContext.o: app/services/MRWorkspaceServiceContext.cpp app/services/MRWorkspaceServiceContext.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT): $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE) app/services/MRWorkspaceServiceContext.hpp
 # 3. Linker call
-$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
+$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check $(HELP_HYPERTEXT_COMPILED)
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
 	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true

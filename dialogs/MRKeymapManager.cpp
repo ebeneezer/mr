@@ -18,6 +18,7 @@
 #include <tvision/tv.h>
 
 #include "MRKeymapManager.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 
 #include "MRDirtyGating.hpp"
 #include "setup/MRSetup.hpp"
@@ -55,8 +56,7 @@
 namespace {
 
 enum : ushort {
-	cmMrSetupKeymapHelp = 3920,
-	cmMrSetupKeymapLoad,
+	cmMrSetupKeymapLoad = 3921,
 	cmMrSetupKeymapSave,
 	cmMrSetupKeymapSaveAs,
 	cmMrSetupKeymapProfileSelectionChanged,
@@ -64,12 +64,10 @@ enum : ushort {
 	cmMrSetupKeymapProfileAdd,
 	cmMrSetupKeymapProfileEdit,
 	cmMrSetupKeymapProfileDelete,
-	cmMrSetupKeymapProfileHelp,
 	cmMrSetupKeymapBindingAdd,
 	cmMrSetupKeymapBindingEdit,
 	cmMrSetupKeymapBindingDelete,
 	cmMrSetupKeymapBindingCapture,
-	cmMrSetupKeymapBindingHelp,
 	cmMrSetupKeymapBindingTargetFilterChanged,
 	cmMrSetupKeymapBindingFilterChanged
 };
@@ -830,6 +828,7 @@ std::vector<MRColumnListView::Row> buildBindingRows(const MRKeymapProfile *profi
 class TBindingEditorDialog : public MRDialogFoundation {
   public:
 	TBindingEditorDialog(const MRKeymapBindingRecord &binding) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(96, 18), "EDIT BINDING", 96, 18, initMrDialogFrame), draft(binding) {
+		helpCtx = hcDialogKeymapBinding;
 		buildViews();
 		if (frame != nullptr)
 			if (MRFrame *mrFrame = dynamic_cast<MRFrame *>(frame))
@@ -881,10 +880,6 @@ class TBindingEditorDialog : public MRDialogFoundation {
 				toggleSequenceRecording();
 				clearEvent(event);
 				return;
-			case cmMrSetupKeymapBindingHelp:
-				endModal(cmMrSetupKeymapBindingHelp);
-				clearEvent(event);
-				return;
 			default:
 				break;
 		}
@@ -934,7 +929,7 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		const int sequenceGlyphLeft = 92;
 		const int buttonTop = 15;
 		const int buttonGap = 2;
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapBindingHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, buttonGap);
 		const int buttonLeft = (96 - metrics.rowWidth) / 2;
 
@@ -1239,6 +1234,7 @@ class TBindingEditorDialog : public MRDialogFoundation {
 class TProfileEditorDialog : public MRDialogFoundation {
   public:
 	TProfileEditorDialog(const MRKeymapProfile &profile, std::vector<std::string> peerNames) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(74, 12), "EDIT PROFILE", 74, 12, initMrDialogFrame), draft(profile), peerProfileNames(std::move(peerNames)) {
+		helpCtx = hcDialogKeymapProfile;
 		buildViews();
 		loadDraftToFields();
 		setDialogValidationHook([this]() { return validateValues(); });
@@ -1250,18 +1246,6 @@ class TProfileEditorDialog : public MRDialogFoundation {
 		saveFieldsToDraft();
 		outProfile = draft;
 		return result;
-	}
-
-	void handleEvent(TEvent &event) override {
-		const ushort originalWhat = event.what;
-		const ushort originalCommand = event.what == evCommand ? event.message.command : 0;
-
-		MRDialogFoundation::handleEvent(event);
-		if (originalWhat != evCommand) return;
-		if (originalCommand == cmMrSetupKeymapProfileHelp) {
-			endModal(cmMrSetupKeymapProfileHelp);
-			clearEvent(event);
-		}
 	}
 
   private:
@@ -1283,7 +1267,7 @@ class TProfileEditorDialog : public MRDialogFoundation {
 		const int fieldRight = 69;
 		const int buttonTop = 7;
 		const int buttonGap = 2;
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapProfileHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, buttonGap);
 		const int buttonLeft = (72 - metrics.rowWidth) / 2;
 
@@ -1340,39 +1324,10 @@ class TProfileEditorDialog : public MRDialogFoundation {
 	TInputLine *mDescriptionField = nullptr;
 };
 
-void showBindingEditorHelpDialog() {
-	std::vector<std::string> lines;
-
-	lines.push_back("BINDING EDITOR HELP");
-	lines.push_back("");
-	lines.push_back("Type is Action or Macro.");
-	lines.push_back("Context is one resolved runtime context such as EDIT or DIALOG.");
-	lines.push_back("Sequence is recorded live in canonical keymap syntax.");
-	lines.push_back("ALT-F10 ends recording. ESC aborts recording.");
-	TDialog *dialog = createSetupSimplePreviewDialog("BINDING EDITOR HELP", 78, 10, lines, false);
-	if (dialog != nullptr) {
-		TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-	}
-}
-
-void showProfileEditorHelpDialog() {
-	std::vector<std::string> lines;
-
-	lines.push_back("PROFILE EDITOR HELP");
-	lines.push_back("");
-	lines.push_back("Name is the stable keymap profile identifier.");
-	lines.push_back("Description is shown in the profile list.");
-	TDialog *dialog = createSetupSimplePreviewDialog("PROFILE EDITOR HELP", 72, 8, lines, false);
-	if (dialog != nullptr) {
-		TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-	}
-}
-
 class TKeymapManagerDialog : public MRScrollableDialog {
  public:
 	TKeymapManagerDialog(const KeymapManagerDraft &baseline, const std::string &initialFileUri) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "KEY MANAGER", kDialogWidth, kVirtualHeight, initMrDialogFrame), persistedBaselineDraft(baseline), workingDraft(baseline), fileUri(initialFileUri), persistedFileUri(initialFileUri) {
+		helpCtx = hcDialogKeymapManager;
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		viewedProfileName = preferredViewedProfileName();
@@ -1458,10 +1413,6 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 				deleteSelectedBinding();
 				clearEvent(event);
 				return;
-			case cmMrSetupKeymapHelp:
-				endModal(cmMrSetupKeymapHelp);
-				clearEvent(event);
-				return;
 			default:
 				break;
 		}
@@ -1510,7 +1461,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		const std::array bindingButtons{mr::dialogs::DialogButtonSpec{"~N~ew", cmMrSetupKeymapBindingAdd, bfNormal}, mr::dialogs::DialogButtonSpec{"~E~dit", cmMrSetupKeymapBindingEdit, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMrSetupKeymapBindingDelete, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics bindingMetrics = mr::dialogs::measureUniformButtonRow(bindingButtons, bindingButtonGap);
 		const int bindingButtonLeft = bindingLeft + std::max(0, ((bindingScrollLeft - bindingLeft) - bindingMetrics.rowWidth) / 2);
-		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrSetupKeymapLoad, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMrSetupKeymapSave, bfNormal}, mr::dialogs::DialogButtonSpec{"Save ~A~s", cmMrSetupKeymapSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapHelp, bfNormal}};
+		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrSetupKeymapLoad, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMrSetupKeymapSave, bfNormal}, mr::dialogs::DialogButtonSpec{"Save ~A~s", cmMrSetupKeymapSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics bottomMetrics = mr::dialogs::measureUniformButtonRow(bottomButtons, gap);
 		const int filterLabelWidth = 8;
 		const int filterFieldWidth = 28;
@@ -1689,33 +1640,28 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 
 	bool editProfileWithDialog(MRKeymapProfile &profile, std::size_t editedIndex) {
 		std::vector<std::string> peerNames;
+		TProfileEditorDialog *dialog;
+		MRKeymapProfile edited;
+		ushort result;
 
 		peerNames.reserve(workingDraft.profiles.size());
 		for (std::size_t i = 0; i < workingDraft.profiles.size(); ++i)
 			if (i != editedIndex) peerNames.push_back(workingDraft.profiles[i].name);
-		for (;;) {
-			TProfileEditorDialog *dialog = new TProfileEditorDialog(profile, peerNames);
-			MRKeymapProfile edited = profile;
-			ushort result = cmCancel;
-
-			suspendVisualFocus();
-			result = dialog != nullptr ? dialog->run(edited) : cmCancel;
-			resumeVisualFocus();
-			if (dialog != nullptr) TObject::destroy(dialog);
-			if (result == cmMrSetupKeymapProfileHelp) {
-				showProfileEditorHelpDialog();
-				continue;
-			}
-			if (result == cmOK) {
-				const std::string previousName = profile.name;
-				profile = std::move(edited);
-				if (profile.name != previousName)
-					for (MRKeymapBindingRecord &binding : profile.bindings)
-						binding.profileName = profile.name;
-				return true;
-			}
-			return false;
+		dialog = new TProfileEditorDialog(profile, peerNames);
+		edited = profile;
+		suspendVisualFocus();
+		result = dialog != nullptr ? dialog->run(edited) : cmCancel;
+		resumeVisualFocus();
+		if (dialog != nullptr) TObject::destroy(dialog);
+		if (result == cmOK) {
+			const std::string previousName = profile.name;
+			profile = std::move(edited);
+			if (profile.name != previousName)
+				for (MRKeymapBindingRecord &binding : profile.bindings)
+					binding.profileName = profile.name;
+			return true;
 		}
+		return false;
 	}
 
 	void addProfile() {
@@ -1777,25 +1723,19 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	}
 
 	bool editBindingWithDialog(MRKeymapBindingRecord &binding) {
-		for (;;) {
-			TBindingEditorDialog *dialog = new TBindingEditorDialog(binding);
-			MRKeymapBindingRecord edited = binding;
-			ushort result = cmCancel;
+		TBindingEditorDialog *dialog = new TBindingEditorDialog(binding);
+		MRKeymapBindingRecord edited = binding;
+		ushort result = cmCancel;
 
-			suspendVisualFocus();
-			result = dialog != nullptr ? dialog->run(edited) : cmCancel;
-			resumeVisualFocus();
-			if (dialog != nullptr) TObject::destroy(dialog);
-			if (result == cmMrSetupKeymapBindingHelp) {
-				showBindingEditorHelpDialog();
-				continue;
-			}
-			if (result == cmOK) {
-				binding = std::move(edited);
-				return true;
-			}
-			return false;
+		suspendVisualFocus();
+		result = dialog != nullptr ? dialog->run(edited) : cmCancel;
+		resumeVisualFocus();
+		if (dialog != nullptr) TObject::destroy(dialog);
+		if (result == cmOK) {
+			binding = std::move(edited);
+			return true;
 		}
+		return false;
 	}
 
 	void addBinding() {
@@ -1945,25 +1885,6 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	bool visualFocusedViewWasFocused = false;
 };
 
-void showKeymapManagerHelpDialog() {
-	std::vector<std::string> lines;
-
-	lines.push_back("KEY MANAGER HELP");
-	lines.push_back("");
-	lines.push_back("Select a profile in the left list to inspect or edit its bindings.");
-	lines.push_back("Use marks the selected profile as active.");
-	lines.push_back("The right list shows token, translated description and key sequence.");
-	lines.push_back("Load reads an external keymap/profile macro file.");
-	lines.push_back("Save and Save As write the external keymap/profile macro file.");
-	lines.push_back("Restart persistence comes only from AUTOEXEC_MACRO under MACROPATH.");
-	lines.push_back("If no active profile is set, built-in key handling remains active.");
-	TDialog *dialog = createSetupSimplePreviewDialog("KEY MANAGER HELP", 82, 13, lines, false);
-	if (dialog != nullptr) {
-		TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-	}
-}
-
 KeymapManagerDraft currentConfiguredKeymapDraft() {
 	KeymapManagerDraft draft;
 
@@ -1994,9 +1915,6 @@ void runKeymapManagerDialogFlow() {
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineDraft, workingDraft, [](const auto &lhs, const auto &rhs) { return lhs == rhs; });
 
 		switch (result) {
-			case cmMrSetupKeymapHelp:
-				showKeymapManagerHelpDialog();
-				break;
 			case cmOK:
 				applyCommitCanonicalization(workingDraft, "Keymap done");
 				if (!applyKeymapDraftToConfiguredState(workingDraft, errorText)) {

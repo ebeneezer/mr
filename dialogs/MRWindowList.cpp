@@ -19,6 +19,7 @@
 #include "MRDirtyGating.hpp"
 #include "setup/MRSetupCommon.hpp"
 #include "../app/MRCommands.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 
 #include <algorithm>
 #include <array>
@@ -461,6 +462,7 @@ class WindowListDialog : public MRDialogFoundation {
 		int topButtonWidth = 0;
 		auto centeredRowStart = [width](int contentWidth) { return std::max(2, (width - contentWidth) / 2); };
 
+		helpCtx = hcDialogWindowList;
 		{
 			const std::array topButtons{mr::dialogs::DialogButtonSpec{"~D~elete", cmMRWindowListDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMRWindowListSave, bfNormal}, mr::dialogs::DialogButtonSpec{kHideToggleTitle, cmMRWindowListHide, bfNormal}, mr::dialogs::DialogButtonSpec{kHideAllTitle, cmMRWindowListHideAll, bfNormal}};
 			const std::array widthCandidates{kHideToggleTitle, kHideAllTitle, kRestoreTitle, kRestoreAllTitle, "Save ~a~ll", "Save a~s~", "~R~evert", kGetTitle, kMainWorkspaceOnTitle};
@@ -735,10 +737,6 @@ class WindowListDialog : public MRDialogFoundation {
 					loadWorkspaceWithDialog();
 					clearEvent(event);
 					return;
-				case kbF1:
-					static_cast<void>(mrShowProjectHelp());
-					clearEvent(event);
-					return;
 			}
 		}
 
@@ -821,10 +819,6 @@ class WindowListDialog : public MRDialogFoundation {
 				clearEvent(event);
 				break;
 			}
-			case cmHelp:
-				static_cast<void>(mrShowProjectHelp());
-				clearEvent(event);
-				break;
 		}
 	}
 
@@ -1227,10 +1221,6 @@ MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *curren
 	}
 	TObject::destroy(dialog);
 
-	if (result == cmHelp) {
-		static_cast<void>(mrShowProjectHelp());
-		return nullptr;
-	}
 	if (result == cmCancel && mode == mrwlManageWindows && selected != nullptr) return selected;
 	if (result != cmOK) return nullptr;
 	return selected;

@@ -112,17 +112,6 @@ std::string_view nextLineView(std::string_view text, std::size_t &pos) noexcept 
 	return line;
 }
 
-int countCharacter(std::string_view text, char needle, int maxCount = INT_MAX) noexcept {
-	int count = 0;
-
-	for (char ch : text) {
-		if (ch != needle) continue;
-		++count;
-		if (count >= maxCount) break;
-	}
-	return count;
-}
-
 int countLinePrefixMatches(std::string_view text, std::string_view prefix, int maxCount = INT_MAX) noexcept {
 	int count = 0;
 	std::size_t pos = 0;
@@ -214,37 +203,206 @@ int countXmlTagLikeLines(std::string_view text, int maxCount = INT_MAX) noexcept
 	return count;
 }
 
-int countShellAssignmentLines(std::string_view text, int maxCount = INT_MAX) noexcept {
-	int count = 0;
-	std::size_t pos = 0;
-
-	while (pos < text.size() && count < maxCount) {
-		std::string_view line = trimWhitespaceView(nextLineView(text, pos));
-		std::size_t eq = line.find('=');
-		if (eq == std::string_view::npos || eq == 0) continue;
-		if (line.find(' ') != std::string_view::npos && line.find(' ') < eq) continue;
-		if (line.find('\t') != std::string_view::npos && line.find('\t') < eq) continue;
-		if (!(std::isalpha(static_cast<unsigned char>(line.front())) || line.front() == '_')) continue;
-		bool valid = true;
-		for (std::size_t i = 1; i < eq; ++i)
-			if (!(std::isalnum(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
-				valid = false;
-				break;
-			}
-		if (valid) ++count;
-	}
-	return count;
+bool classificationWordInTable(std::string_view word, const std::string_view *table, std::size_t count) noexcept {
+	for (std::size_t i = 0; i < count; ++i)
+		if (word == table[i]) return true;
+	return false;
 }
 
-int countPerlSigilDeclLines(std::string_view text, int maxCount = INT_MAX) noexcept {
-	int count = 0;
+bool isClassificationWordChar(char ch) noexcept {
+	return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_';
+}
+
+struct ShellPerlClassificationSignals {
+	int shellAssignments = 0;
+	int shellGrammar = 0;
+	int shellExpansions = 0;
+	int zshCommands = 0;
+	int zshExpansions = 0;
+	int perlDeclarations = 0;
+	int perlGrammar = 0;
+	int perlBindings = 0;
+	int perlDereferences = 0;
+	int perlQuoteOperators = 0;
+	int perlPod = 0;
+};
+
+// Embedded strings, here-documents and POD bodies must not vote for their payload language.
+ShellPerlClassificationSignals scanShellPerlClassificationSignals(std::string_view text) {
+	static constexpr std::string_view kZshCommands[] = {
+		"autoload", "bindkey", "compdef", "compinit", "emulate", "float", "integer", "nocorrect", "rehash", "repeat", "setopt", "unfunction", "unsetopt", "whence", "zcompile", "zle", "zmodload", "zstyle"
+	};
+	static constexpr std::string_view kShellGrammarWords[] = {
+		"do", "done", "elif", "else", "esac", "fi", "function", "repeat", "select", "then", "typeset"
+	};
+	static constexpr std::string_view kPerlGrammarWords[] = {
+		"elsif", "package", "strict", "unless", "warnings"
+	};
+	static constexpr std::string_view kPerlDeclarationWords[] = {"my", "our", "state"};
+	static constexpr std::string_view kPerlQuoteWords[] = {"m", "q", "qq", "qr", "qw", "qx", "s", "tr", "y"};
+	static constexpr std::string_view kPerlPodDirectives[] = {"=begin", "=cut", "=encoding", "=for", "=head1", "=head2", "=head3", "=head4", "=item", "=over", "=pod"};
+	ShellPerlClassificationSignals signals;
+	std::string_view hereDocumentLabel;
+	bool stripHereDocumentTabs = false;
+	bool inPerlPod = false;
+	bool inShellConditional = false;
+	char quote = '\0';
+	int quoteSegments = 0;
 	std::size_t pos = 0;
 
-	while (pos < text.size() && count < maxCount) {
-		const std::string_view line = trimWhitespaceView(nextLineView(text, pos));
-		if (startsWithText(line, "my $") || startsWithText(line, "my @") || startsWithText(line, "my %") || startsWithText(line, "our $") || startsWithText(line, "our @") || startsWithText(line, "our %")) ++count;
+	while (pos < text.size()) {
+		const std::string_view line = nextLineView(text, pos);
+		const std::string_view trimmed = trimWhitespaceView(line);
+		if (!hereDocumentLabel.empty()) {
+			std::string_view candidate = line;
+			if (stripHereDocumentTabs)
+				while (!candidate.empty() && candidate.front() == '\t')
+					candidate.remove_prefix(1);
+			if (trimWhitespaceView(candidate) == hereDocumentLabel) hereDocumentLabel = std::string_view();
+			continue;
+		}
+		if (inPerlPod) {
+			if (startsWithText(trimmed, "=cut") && (trimmed.size() == 4 || std::isspace(static_cast<unsigned char>(trimmed[4])) != 0)) inPerlPod = false;
+			continue;
+		}
+		if (!trimmed.empty() && trimmed.front() == '=') {
+			for (std::string_view directive : kPerlPodDirectives) {
+				if (!startsWithText(trimmed, directive) || (trimmed.size() > directive.size() && std::isspace(static_cast<unsigned char>(trimmed[directive.size()])) == 0)) continue;
+				++signals.perlPod;
+				inPerlPod = directive != "=cut";
+				break;
+			}
+			if (signals.perlPod > 0 && inPerlPod) continue;
+		}
+		if (trimmed == "__data__" || trimmed == "__end__") {
+			signals.perlPod += 2;
+			continue;
+		}
+
+		bool commandPosition = true;
+		bool perlDeclarationPending = false;
+		int perlSubStage = 0;
+		for (std::size_t i = 0; i < line.size();) {
+			const char ch = line[i];
+			if (quote != '\0') {
+				if (ch == '\\' && i + 1 < line.size()) {
+					i += 2;
+					continue;
+				}
+				if (ch == quote && --quoteSegments == 0) quote = '\0';
+				++i;
+				continue;
+			}
+			if (ch == '#') break;
+			if (ch == '\'' || ch == '"' || ch == '`') {
+				quote = ch;
+				quoteSegments = 1;
+				++i;
+				continue;
+			}
+			if (ch == '\\' && i + 1 < line.size()) {
+				i += 2;
+				continue;
+			}
+			if (i + 2 < line.size() && line.substr(i, 3) == "${(") {
+				++signals.zshExpansions;
+				i += 3;
+				continue;
+			}
+			if (i + 1 < line.size() && line.substr(i, 2) == "[[") {
+				++signals.shellGrammar;
+				inShellConditional = true;
+				i += 2;
+				continue;
+			}
+			if (i + 1 < line.size() && line.substr(i, 2) == "]]") { inShellConditional = false; i += 2; continue; }
+			if (i + 1 < line.size() && (line.substr(i, 2) == "<(" || line.substr(i, 2) == ">(")) {
+				++signals.shellExpansions;
+				i += 2;
+				continue;
+			}
+			if (i + 1 < line.size() && (line.substr(i, 2) == "=~" || line.substr(i, 2) == "!~")) {
+				if (inShellConditional) ++signals.shellGrammar;
+				else ++signals.perlBindings;
+				i += 2;
+				continue;
+			}
+			if (i + 1 < line.size() && (line.substr(i, 2) == "->" || line.substr(i, 2) == "=>")) {
+				++signals.perlDereferences;
+				i += 2;
+				continue;
+			}
+			if (i + 1 < line.size() && line.substr(i, 2) == "<<" && (i + 2 >= line.size() || line[i + 2] != '<')) {
+				std::size_t marker = i + 2;
+				stripHereDocumentTabs = marker < line.size() && line[marker] == '-';
+				if (stripHereDocumentTabs) ++marker;
+				while (marker < line.size() && (line[marker] == ' ' || line[marker] == '\t'))
+					++marker;
+				char markerQuote = '\0';
+				if (marker < line.size() && (line[marker] == '\'' || line[marker] == '"')) markerQuote = line[marker++];
+				const std::size_t labelStart = marker;
+				while (marker < line.size() && isClassificationWordChar(line[marker]))
+					++marker;
+				if (marker > labelStart && (markerQuote == '\0' || (marker < line.size() && line[marker] == markerQuote))) {
+					hereDocumentLabel = line.substr(labelStart, marker - labelStart);
+					i = marker + (markerQuote == '\0' ? 0 : 1);
+					continue;
+				}
+			}
+			if (perlDeclarationPending && (ch == '$' || ch == '@' || ch == '%')) {
+				++signals.perlDeclarations;
+				perlDeclarationPending = false;
+				++i;
+				continue;
+			}
+			if ((ch == '@' || ch == '%') && i + 1 < line.size() && (std::isalpha(static_cast<unsigned char>(line[i + 1])) != 0 || line[i + 1] == '_')) {
+				++signals.perlDereferences;
+				++i;
+				continue;
+			}
+			if (std::isalpha(static_cast<unsigned char>(ch)) != 0 || ch == '_') {
+				const std::size_t wordStart = i++;
+				while (i < line.size() && isClassificationWordChar(line[i]))
+					++i;
+				const std::string_view word = line.substr(wordStart, i - wordStart);
+				if (classificationWordInTable(word, kPerlDeclarationWords, std::size(kPerlDeclarationWords))) perlDeclarationPending = true;
+				if (word == "sub")
+					perlSubStage = 1;
+				else if (perlSubStage == 1)
+					perlSubStage = 2;
+				if (classificationWordInTable(word, kPerlGrammarWords, std::size(kPerlGrammarWords))) ++signals.perlGrammar;
+				if (classificationWordInTable(word, kPerlQuoteWords, std::size(kPerlQuoteWords)) && i < line.size() && !isClassificationWordChar(line[i]) && std::isspace(static_cast<unsigned char>(line[i])) == 0) {
+					++signals.perlQuoteOperators;
+					const char delimiter = line[i++];
+					quote = delimiter == '(' ? ')' : delimiter == '[' ? ']' : delimiter == '{' ? '}' : delimiter == '<' ? '>' : delimiter;
+					quoteSegments = word == "s" || word == "tr" || word == "y" ? 2 : 1;
+					commandPosition = false;
+					continue;
+				}
+				const bool shellGrammarWord = commandPosition && classificationWordInTable(word, kShellGrammarWords, std::size(kShellGrammarWords));
+				if (shellGrammarWord) ++signals.shellGrammar;
+				if (commandPosition && classificationWordInTable(word, kZshCommands, std::size(kZshCommands))) ++signals.zshCommands;
+				if (i < line.size() && line[i] == '=') {
+					++signals.shellAssignments;
+					commandPosition = true;
+				} else
+					commandPosition = shellGrammarWord && (word == "do" || word == "elif" || word == "else" || word == "function" || word == "then");
+				continue;
+			}
+			if (ch == '{' && perlSubStage > 0) {
+				signals.perlGrammar += perlSubStage;
+				perlSubStage = 0;
+			}
+			if (ch == ';' && perlSubStage == 2) {
+				++signals.perlGrammar;
+				perlSubStage = 0;
+			}
+			if (ch == ';' || ch == '|' || ch == '&' || ch == '(' || ch == ')') commandPosition = true;
+			if (!std::isspace(static_cast<unsigned char>(ch)) && ch != '(' && ch != ',') perlDeclarationPending = false;
+			++i;
+		}
 	}
-	return count;
+	return signals;
 }
 
 bool isMakeTargetLikeLine(std::string_view line) noexcept {
@@ -357,6 +515,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const std::string_view sample = classificationSample(text);
 	const std::string lowerSample = lowerCopyView(sample);
 	const std::string_view lower = lowerSample;
+	const ShellPerlClassificationSignals shellPerlSignals = scanShellPerlClassificationSignals(lower);
 	const std::string_view firstLine = firstLineView(sample);
 	const std::string lowerFirstLine = lowerCopyView(firstLine);
 	const std::string_view lowerShebang = lowerFirstLine;
@@ -394,14 +553,14 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int pythonBlockHeaders = countPythonBlockHeaders(sample, 16);
 	const int jsonKeyLines = countJsonKeyLikeLines(sample, 32);
 	const int xmlTagLines = countXmlTagLikeLines(sample, 32);
-	const int shellAssignmentLines = countShellAssignmentLines(sample, 16);
+	const int shellAssignmentLines = shellPerlSignals.shellAssignments;
 	const int fishFunctionLines = countLinePrefixMatches(lower, "function ", 12);
 	const int fishSetLines = countLinePrefixMatches(lower, "set ", 16) + countLinePrefixMatches(lower, "set -", 16);
 	const int fishSwitchLines = countLinePrefixMatches(lower, "switch ", 12) + countLinePrefixMatches(lower, "case ", 16);
 	const int fishBlockLines =
 	    countLinePrefixMatches(lower, "begin", 12) + countLinePrefixMatches(lower, "if ", 16) + countLinePrefixMatches(lower, "else if ", 16) + countLinePrefixMatches(lower, "else", 8) +
 	    countLinePrefixMatches(lower, "for ", 12) + countLinePrefixMatches(lower, "while ", 12) + countLinePrefixMatches(lower, "end", 24);
-	const int perlSigilDeclLines = countPerlSigilDeclLines(sample, 16);
+	const int perlSigilDeclLines = shellPerlSignals.perlDeclarations;
 	const int rustFunctionLines = countLinePrefixMatches(lower, "fn ", 12) + countLinePrefixMatches(lower, "pub fn ", 12) + countLinePrefixMatches(lower, "async fn ", 8) +
 	                              countLinePrefixMatches(lower, "pub async fn ", 8);
 	const int rustConcreteBlockLines = countLinePrefixMatches(lower, "impl ", 12);
@@ -437,9 +596,10 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	                                countLinePrefixMatches(lower, "private sub ", 12);
 	const int basicBlockLines = countLinePrefixMatches(lower, "end sub", 12) + countLinePrefixMatches(lower, "end function", 12) + countLinePrefixMatches(lower, "end if", 12) +
 	                            countLinePrefixMatches(lower, "end select", 12) + countLinePrefixMatches(lower, "select case", 12);
-	const int semicolonCount = countCharacter(sample, ';', 32);
-	const int braceCount = countCharacter(sample, '{', 32) + countCharacter(sample, '}', 32);
-	const int shellControlCount = countMatches(lower, "[[", 12) + countMatches(lower, "case ", 8) + countMatches(lower, "typeset ", 8) + countMatches(lower, "autoload ", 8) + countMatches(lower, "setopt ", 8);
+	const int semicolonCount = countMatches(sample, ";", 32);
+	const int braceCount = countMatches(sample, "{", 32) + countMatches(sample, "}", 32);
+	const int shellControlCount = shellPerlSignals.shellGrammar + shellPerlSignals.shellExpansions + shellPerlSignals.zshCommands + shellPerlSignals.zshExpansions;
+	const bool zshSpecificContext = detectedByPath == MRSyntaxLanguage::Zsh || containsText(lowerShebang, "zsh") || shellPerlSignals.zshCommands > 0 || shellPerlSignals.zshExpansions > 0;
 
 	if (detectedByPath == MRSyntaxLanguage::Systemd && systemdSectionLines > 0) return MRSyntaxClassification(MRSyntaxLanguage::Systemd, 96);
 	if (systemdSectionLines > 0 && systemdDirectiveLines > 0) return MRSyntaxClassification(MRSyntaxLanguage::Systemd, 94);
@@ -463,7 +623,8 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		    ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs" || ext == ".ts" || ext == ".tsx" || ext == ".json" || ext == ".jsonc" || ext == ".pl" || ext == ".pm" ||
 		    ext == ".pod" || ext == ".swift" || ext == ".rs" || ext == ".go" || ext == ".kt" || ext == ".kts" || ext == ".cs" || ext == ".csx" || ext == ".cake" || ext == ".xml" ||
 		    ext == ".xsd" || ext == ".xsl" || ext == ".xslt" || ext == ".svg" || ext == ".mrmac" || ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" ||
-		    ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" || ext == ".swap" || ext == ".device" || ext == ".link" ||
+		    ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" || ext == ".swap" || ext == ".device" || ext == ".link" || ext == ".bashrc" ||
+		    ext == ".bash_profile" || ext == ".profile" || ext == ".zprofile" || ext == ".zshrc" || ext == ".zshenv" || ext == ".zlogin" || ext == ".zlogout" ||
 		    ext == ".netdev" || ext == ".network" || ext == ".tex" || ext == ".ltx" || ext == ".sty" || ext == ".cls")
 			pathBias = 14;
 		if (detectedByPath == MRSyntaxLanguage::Systemd)
@@ -548,30 +709,22 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (containsText(lower, "<?xml") || containsText(lower, "<![cdata[") || containsText(lower, "<!doctype")) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)] += 2;
 	if (xmlTagLines >= 2) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)] += std::min(3, xmlTagLines);
 
-	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "[[", 12) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "${", 16));
-	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "$(", 16));
-	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "case ", 8));
-	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, " in\n", 8));
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, shellPerlSignals.shellGrammar * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, shellPerlSignals.shellExpansions * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "declare ", 8) * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "readonly ", 8) * 2);
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "shopt ", 8) * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "source ", 8) * 2);
-	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "<<", 8));
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, shellAssignmentLines * 2);
-	if (countMatches(lower, "shopt ", 8) + shellAssignmentLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Bash)] += std::min(4, countMatches(lower, "shopt ", 8) + shellAssignmentLines);
+	if (shellPerlSignals.shellGrammar + shellPerlSignals.shellExpansions + countMatches(lower, "shopt ", 8) + shellAssignmentLines > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Bash)] += std::min(4, shellPerlSignals.shellGrammar + shellPerlSignals.shellExpansions + countMatches(lower, "shopt ", 8) + shellAssignmentLines);
 
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "[[", 12) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "${", 16));
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "$(", 16));
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "case ", 8));
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, " in\n", 8));
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "typeset ", 8) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "autoload ", 8) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "setopt ", 8) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "<<", 8));
-	addClassificationScore(scores, MRSyntaxLanguage::Zsh, shellAssignmentLines * 2);
-	if (shellControlCount + shellAssignmentLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += std::min(4, shellControlCount + shellAssignmentLines);
+	addClassificationScore(scores, MRSyntaxLanguage::Zsh, zshSpecificContext ? shellPerlSignals.shellGrammar * 4 : 0);
+	addClassificationScore(scores, MRSyntaxLanguage::Zsh, zshSpecificContext ? shellPerlSignals.shellExpansions * 3 : 0);
+	addClassificationScore(scores, MRSyntaxLanguage::Zsh, shellPerlSignals.zshCommands * 8);
+	addClassificationScore(scores, MRSyntaxLanguage::Zsh, shellPerlSignals.zshExpansions * 8);
+	addClassificationScore(scores, MRSyntaxLanguage::Zsh, zshSpecificContext ? shellAssignmentLines * 2 : 0);
+	if (zshSpecificContext && shellControlCount + shellAssignmentLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += std::min(4, shellControlCount + shellAssignmentLines);
 
 	addClassificationScore(scores, MRSyntaxLanguage::Fish, fishFunctionLines * 4);
 	addClassificationScore(scores, MRSyntaxLanguage::Fish, fishSetLines * 3);
@@ -597,22 +750,14 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (systemdSectionLines + countLinePrefixMatches(lower, "execstart=", 12) > 0)
 		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Systemd)] += 3;
 
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "my ", 12) * 2);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "our ", 8) * 2);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "sub ", 8) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "package ", 8) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "use ", 8));
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "=pod", 4) * 4);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "=cut", 4) * 4);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "qr/", 8) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "tr/", 8) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "y/", 8) * 3);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "s/", 8) * 2);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(sample, "$", 24) >= 3 ? 3 : 0);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(sample, "@", 24) >= 2 ? 2 : 0);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(sample, "%", 24) >= 2 ? 2 : 0);
-	addClassificationScore(scores, MRSyntaxLanguage::Perl, perlSigilDeclLines * 3);
-	if (perlSigilDeclLines > 0 || containsText(lower, "=pod") || containsText(lower, "package ")) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] += std::min(4, perlSigilDeclLines + (containsText(lower, "=pod") ? 1 : 0) + (containsText(lower, "package ") ? 1 : 0));
+	addClassificationScore(scores, MRSyntaxLanguage::Perl, shellPerlSignals.perlDeclarations * 8);
+	addClassificationScore(scores, MRSyntaxLanguage::Perl, shellPerlSignals.perlGrammar * 5);
+	addClassificationScore(scores, MRSyntaxLanguage::Perl, shellPerlSignals.perlBindings * 8);
+	addClassificationScore(scores, MRSyntaxLanguage::Perl, shellPerlSignals.perlDereferences * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Perl, shellPerlSignals.perlQuoteOperators * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Perl, shellPerlSignals.perlPod * 8);
+	strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] +=
+	    std::min(4, shellPerlSignals.perlDeclarations + shellPerlSignals.perlGrammar / 2 + shellPerlSignals.perlBindings + shellPerlSignals.perlQuoteOperators / 2 + shellPerlSignals.perlPod * 2);
 
 	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "import ", 12));
 	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "func ", 12) * 3);
@@ -787,7 +932,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		addClassificationScore(scores, MRSyntaxLanguage::Markdown, -2);
 		addClassificationScore(scores, MRSyntaxLanguage::Json, -3);
 	}
-	if (shellControlCount >= 2) {
+	if (zshSpecificContext && shellControlCount >= 2) {
 		addClassificationScore(scores, MRSyntaxLanguage::Zsh, 4);
 		++strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)];
 		addClassificationScore(scores, MRSyntaxLanguage::Perl, -2);

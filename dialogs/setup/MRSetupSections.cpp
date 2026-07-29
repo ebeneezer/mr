@@ -23,6 +23,7 @@
 
 #include "../../app/MRCommands.hpp"
 #include "../../app/MRCommandRouter.hpp"
+#include "../../app/MRHelpTopics.generated.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../ui/MRFrame.hpp"
@@ -109,7 +110,6 @@ ushort execDialogWithDataCapture(TDialog *dialog, void *data) {
 	result = TProgram::deskTop->execView(dialog);
 	if (data != nullptr) dialog->getData(data);
 	TObject::destroy(dialog);
-	if (result == cmHelp) static_cast<void>(mrShowProjectHelp());
 	return result;
 }
 
@@ -188,8 +188,7 @@ bool chooseThemeFileForSave(MRDialogHistoryScope scope, std::string &selectedUri
 }
 
 enum : ushort {
-	cmMrSetupPathsHelp = 3800,
-	cmMrSetupPathsBrowseSettingsUri,
+	cmMrSetupPathsBrowseSettingsUri = 3801,
 	cmMrSetupPathsBrowseMacroPath,
 	cmMrSetupPathsBrowseHelpUri,
 	cmMrSetupPathsBrowseTempPath,
@@ -795,6 +794,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	TPathsSetupDialog(const PathsDialogRecord &initialRecord)
 	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight), "PATHS", kVirtualDialogWidth, kVirtualDialogHeight, initSetupDialogFrame), mCurrentRecord(initialRecord) {
+		helpCtx = hcDialogPaths;
 		buildViews();
 		loadFieldsFromRecord(mCurrentRecord);
 		setDialogValidationHook([this]() { return validateDialogValues(); });
@@ -816,11 +816,6 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		if (event.what != evCommand) return;
 
 		switch (event.message.command) {
-			case cmMrSetupPathsHelp:
-				endModal(event.message.command);
-				clearEvent(event);
-				return;
-
 			case cmMrSetupPathsBrowseSettingsUri:
 				browseSettingsMacroUri();
 				clearEvent(event);
@@ -904,7 +899,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 	}
 
 	void buildViews() {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupPathsHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
 		int dialogWidth = kVirtualDialogWidth;
 		int labelLeft = 2;
@@ -1122,7 +1117,9 @@ class TPathsSetupDialog : public MRScrollableDialog {
 				writeRecordField(fileName, sizeof(fileName), currentPath);
 		} else
 			writeRecordField(fileName, sizeof(fileName), "*.*");
-		result = execDialogWithDataCapture(new TFileDialog("*.*", "SELECT AUDIO PLAYER URI", "~N~ame", fdOpenButton, 0), fileName);
+		TFileDialog *dialog = new TFileDialog("*.*", "SELECT AUDIO PLAYER URI", "~N~ame", fdOpenButton | fdHelpButton, 0);
+		dialog->helpCtx = hcDialogCompilerFile;
+		result = execDialogWithDataCapture(dialog, fileName);
 		if (result == cmCancel) {
 			discardQueuedCancelEvent();
 			return;
@@ -1165,20 +1162,8 @@ class TPathsSetupDialog : public MRScrollableDialog {
 	MRNumericSlider *mMaxWorkspaceHistorySlider = nullptr;
 };
 
-void showPathsHelpDialog() {
-	std::vector<std::string> lines;
-	lines.push_back("PATHS HELP");
-	lines.push_back("");
-	lines.push_back("Path setup overview.");
-	lines.push_back("Configure settings URI, macro path, help URI, temp path and shell URI.");
-	lines.push_back("Set max path/file/workspace history sizes (5..50, default 15).");
-	lines.push_back("Close or Escape asks for confirmation when fields were modified.");
-	(void)mr::dialogs::execDialog(createSetupSimplePreviewDialog("PATHS HELP", 74, 10, lines, false));
-}
-
 enum : ushort {
-	cmMrSetupBackupsAutosaveHelp = 3810,
-	cmMrSetupBackupsAutosaveBrowseDirectory,
+	cmMrSetupBackupsAutosaveBrowseDirectory = 3811,
 	cmMrSetupFieldChanged
 };
 
@@ -1336,18 +1321,6 @@ class TNotifyingInputLine : public TInputLine {
 	ushort mChangeCommand = 0;
 };
 
-void showBackupsAutosaveHelpDialog() {
-	std::vector<std::string> lines;
-	lines.push_back("BACKUPS & AUTOSAVE HELP");
-	lines.push_back("");
-	lines.push_back("This dialog models global backup and autosave policy.");
-	lines.push_back("Backup method covers Off, create-backup-file and move-to-backup-path.");
-	lines.push_back("Backup file extension and backup path are modeled separately.");
-	lines.push_back("Autosave is modeled as keyboard inactivity and an absolute interval.");
-	lines.push_back("A value of 0 turns the respective autosave trigger off.");
-	(void)mr::dialogs::execDialog(createSetupSimplePreviewDialog("BACKUPS & AUTOSAVE HELP", 88, 11, lines, false));
-}
-
 class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
   public:
 	class TInlineGlyphButton : public TView {
@@ -1406,6 +1379,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 
 	TBackupsAutosaveSetupDialog(const BackupsAutosaveDialogRecord &initialRecord)
 	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight), "BACKUPS & AUTOSAVE", kVirtualDialogWidth, kVirtualDialogHeight, initSetupDialogFrame), mCurrentRecord(initialRecord) {
+		helpCtx = hcDialogBackups;
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		loadFieldsFromRecord(mCurrentRecord);
@@ -1488,11 +1462,6 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 
 		if (event.what == evCommand) {
 			switch (event.message.command) {
-				case cmMrSetupBackupsAutosaveHelp:
-					endModal(event.message.command);
-					clearEvent(event);
-					return;
-
 				case cmMrSetupBackupsAutosaveBrowseDirectory:
 					browseBackupDirectory();
 					updateBackupFieldState();
@@ -1545,7 +1514,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 	}
 
 	void buildViews() {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupBackupsAutosaveHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
 		const int dialogWidth = kVirtualDialogWidth;
 		const int leftGroupLeft = 2;
@@ -1869,7 +1838,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 32), "USER INTERFACE SETTINGS", 86, 32, initSetupDialogFrame) {
 
 		int const yStart = 2;
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
 
+		helpCtx = hcDialogUserInterface;
 		TCheckBoxes *cb = new TCheckBoxes(TRect(3, yStart, 36, yStart + 7),
 		                                   new TSItem("~W~indow Manager",
 		                                              new TSItem("~M~enuline messages",
@@ -1916,6 +1888,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		addManaged(mIndentStyleField, TRect(3, 20, 23, 29));
 		mIndentStylePreview = new TIndentStylePreview(TRect(25, 20, 47, 29));
 		addManaged(mIndentStylePreview, TRect(25, 20, 47, 29));
+		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 29, 0, buttons);
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		mInitialCompilerErrorMessageChoice = initialCompilerErrorMessagePlacement == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
@@ -2325,11 +2298,6 @@ void runBackupsAutosaveDialogFlow() {
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineRecord, editedRecord, [](const BackupsAutosaveDialogRecord &lhs, const BackupsAutosaveDialogRecord &rhs) { return recordsEqual(lhs, rhs); });
 
 		switch (result) {
-			case cmMrSetupBackupsAutosaveHelp:
-				workingRecord = editedRecord;
-				showBackupsAutosaveHelpDialog();
-				break;
-
 			case cmOK:
 				workingRecord = editedRecord;
 				if (!persistBackupsAutosaveRecord(workingRecord, errorText)) {
@@ -2394,11 +2362,6 @@ void runPathsSetupDialogFlow() {
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineRecord, editedRecord, [](const PathsDialogRecord &lhs, const PathsDialogRecord &rhs) { return recordsEqual(lhs, rhs); });
 
 		switch (result) {
-			case cmMrSetupPathsHelp:
-				workingRecord = editedRecord;
-				showPathsHelpDialog();
-				break;
-
 			case cmOK:
 				workingRecord = editedRecord;
 				if (!saveAndReloadPathsRecord(workingRecord, errorText)) {
@@ -2648,6 +2611,10 @@ bool audioPlayerAvailable() {
 class LiveLogsSetupDialog : public MRScrollableDialog {
   public:
 	LiveLogsSetupDialog() : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(66, 15), "LIVE LOGS", 64, 13, initSetupDialogFrame), messageLineField(nullptr), audioField(nullptr), scrollDirectionField(nullptr), lineNumbersField(nullptr), audioUriField(nullptr), audioAvailable(audioPlayerAvailable()) {
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
+
+		helpCtx = hcDialogLiveLogs;
 		addManaged(new TStaticText(TRect(3, 2, 35, 3), "Search hits:"), TRect(3, 2, 35, 3));
 		messageLineField = new TCheckBoxes(TRect(3, 3, 34, 5), new TSItem("report on message line", new TSItem("system beep", nullptr)));
 		addManaged(messageLineField, TRect(3, 3, 34, 5));
@@ -2667,6 +2634,7 @@ class LiveLogsSetupDialog : public MRScrollableDialog {
 		addManaged(new TLabel(TRect(36, 9, 54, 10), "~A~udio URI:", audioUriField), TRect(36, 9, 54, 10));
 		addManaged(audioUriField, TRect(36, 10, 62, 11));
 		if (!audioAvailable) audioUriField->setState(sfDisabled, True);
+		mr::dialogs::addManagedUniformButtonRow(*this, (64 - metrics.rowWidth) / 2, 11, 0, buttons);
 
 		selectContent();
 	}

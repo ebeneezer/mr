@@ -24,6 +24,7 @@
 
 #include "../app/MRCommands.hpp"
 #include "../app/MRCommandRouter.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
@@ -31,11 +32,11 @@
 #include "../keymap/MRKeymapResolver.hpp"
 #include "../keymap/MRKeymapToken.hpp"
 #include "MRFrame.hpp"
+#include "MRHelpSystem.hpp"
 #include "MRMessageLineController.hpp"
 #include "MREditWindow.hpp"
 
 namespace {
-constexpr std::string_view kHelpWindowTitle = "MR HELP";
 constexpr std::string_view kLogWindowTitle = "MR LOG";
 
 TFrame *initMrDialogFrame(TRect bounds) {
@@ -51,8 +52,6 @@ bool g_keystrokeRecordingMarkerVisible = false;
 bool g_macroBrainMarkerActive = false;
 bool g_macroBrainMarkerVisible = false;
 MREditWindow *g_deferredActivationWindow = nullptr;
-[[nodiscard]] std::string baseNameOf(std::string_view path);
-
 bool runtimeKeymapDebugEnabled() noexcept {
 	static int cached = -1;
 
@@ -132,14 +131,31 @@ std::string describeDesktopCurrentView() {
 
 class TBindingKeyCaptureDialog : public MRDialogFoundation {
   public:
-	TBindingKeyCaptureDialog(const char *title, const char *prompt) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), title != nullptr ? title : "BIND KEY", 52, 8, initMrDialogFrame), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+	TBindingKeyCaptureDialog(const char *title, const char *prompt) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(52, 10), title != nullptr ? title : "BIND KEY", 52, 10, initMrDialogFrame), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+		helpCtx = hcDialogBindingKeyCapture;
 		insert(new TStaticText(TRect(2, 2, 50, 6), prompt != nullptr ? prompt : "Press key to bind.\nEsc = cancel."));
+		insert(new TButton(TRect(39, 7, 50, 9), "~H~elp", cmHelp, bfNormal));
 	}
 
 	void handleEvent(TEvent &event) override {
 		if (event.what == evKeyDown) {
 			const TKey pressed(event.keyDown);
 
+			if (pressed == TKey(kbF1)) {
+				static_cast<void>(mrShowProjectHelp(hcDialogBindingKeyCapture));
+				clearEvent(event);
+				return;
+			}
+			if (pressed == TKey(kbShiftF1)) {
+				static_cast<void>(mrShowProjectHelp(hcDetailedIndex));
+				clearEvent(event);
+				return;
+			}
+			if (pressed == TKey(kbAltF1)) {
+				static_cast<void>(mrShowPreviousProjectHelp());
+				clearEvent(event);
+				return;
+			}
 			if (pressed == TKey(kbEsc)) {
 				endModal(cmCancel);
 				clearEvent(event);
@@ -181,43 +197,6 @@ void postWindowSupportWarning(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 }
 
-[[nodiscard]] std::string currentWorkingDirectory() {
-	std::array<char, 1024> cwd{};
-	if (::getcwd(cwd.data(), cwd.size()) == nullptr) return std::string();
-	return std::string(cwd.data());
-}
-
-[[nodiscard]] std::string executableDirectory() {
-	std::array<char, 4096> path{};
-	const ssize_t len = ::readlink("/proc/self/exe", path.data(), path.size() - 1);
-	std::size_t pos;
-
-	if (len <= 0) return std::string();
-	path[static_cast<std::size_t>(len)] = '\0';
-	pos = std::string_view(path.data()).find_last_of('/');
-	if (pos == std::string_view::npos) return std::string();
-	return std::string(path.data(), pos);
-}
-
-[[nodiscard]] std::string resolveHelpFilePath() {
-	const std::string configured = configuredHelpFilePath();
-	const std::string fromCwd = currentWorkingDirectory();
-	const std::string fromExe = executableDirectory();
-	std::string candidate;
-	const std::string configuredName = baseNameOf(configured);
-
-	if (!configured.empty() && ::access(configured.c_str(), R_OK) == 0) return configured;
-	if (!fromCwd.empty()) {
-		candidate = fromCwd + "/" + configuredName;
-		if (::access(candidate.c_str(), R_OK) == 0) return candidate;
-	}
-	if (!fromExe.empty()) {
-		candidate = fromExe + "/" + configuredName;
-		if (::access(candidate.c_str(), R_OK) == 0) return candidate;
-	}
-	return configured;
-}
-
 [[nodiscard]] std::string currentTimestamp() {
 	std::array<char, 32> buffer{};
 	const std::time_t now = std::time(nullptr);
@@ -251,12 +230,6 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 	return line;
 }
 
-[[nodiscard]] std::string baseNameOf(std::string_view path) {
-	const std::size_t pos = path.find_last_of("\\/");
-	if (pos == std::string_view::npos) return std::string(path);
-	return std::string(path.substr(pos + 1));
-}
-
 [[nodiscard]] MREditWindow *findWindowByTitle(std::string_view title) {
 	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	for (MREditWindow *window : windows) {
@@ -268,7 +241,7 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 
 [[nodiscard]] bool isReservedUtilityWindow(MREditWindow *win) {
 	const char *title = win != nullptr ? win->getTitle(0) : nullptr;
-	return title != nullptr && (kHelpWindowTitle == title || kLogWindowTitle == title);
+	return title != nullptr && kLogWindowTitle == title;
 }
 
 [[nodiscard]] MREditWindow *chooseFallbackWorkWindow() {
@@ -439,38 +412,6 @@ bool mrDispatchDeferredWindowActivation() {
 	line += " hidden=";
 	line += isWindowManuallyHidden(win) ? "1" : "0";
 	mrLogMessage(line);
-	return true;
-}
-
-bool mrShowProjectHelp() {
-	MREditWindow *win;
-	const std::string helpPath = resolveHelpFilePath();
-
-	if (TProgram::deskTop == nullptr) return false;
-
-	win = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
-	if (win != nullptr) {
-		const std::string currentFile = win->currentFileName();
-		const char *title = win->getTitle(0);
-		if ((!currentFile.empty() && baseNameOf(currentFile) == baseNameOf(helpPath)) || (title != nullptr && kHelpWindowTitle == title)) return true;
-	}
-
-	win = findWindowByTitle(kHelpWindowTitle);
-	if (win == nullptr) {
-		win = createHelpWindow(kHelpWindowTitle.data());
-		if (win == nullptr) return false;
-
-		if (!win->loadFromFile(helpPath.c_str())) {
-			postWindowSupportError("Unable to load help file: " + helpPath);
-			message(win, evCommand, cmClose, nullptr);
-			return false;
-		}
-
-		win->setReadOnly(true);
-		win->setFileChanged(false);
-	}
-	win->setWindowRole(MREditWindow::wrHelp, helpPath);
-	static_cast<void>(mrActivateEditWindow(win));
 	return true;
 }
 

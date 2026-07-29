@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "../app/MRCommands.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../keymap/MRKeymapContext.hpp"
@@ -423,7 +424,7 @@ bool MRMenuBar::appendRuntimeMenuNode(const RuntimeMenuNode &node, bool menuGrou
 		groupHotkey = chooseMenuHotkey(groupTitle, usedHotkeys);
 		groupTitle = menuTitleWithHotkeyMarker(groupTitle, groupHotkey);
 		submenu = new TMenu();
-		groupItem = new TMenuItem(groupTitle.c_str(), groupHotkey == '\0' ? TKey(kbNoKey) : TKey(static_cast<ushort>(groupHotkey), kbAltShift), submenu, hcNoContext);
+		groupItem = new TMenuItem(groupTitle.c_str(), groupHotkey == '\0' ? TKey(kbNoKey) : TKey(static_cast<ushort>(groupHotkey), kbAltShift), submenu, hcMenuRuntimeMacro);
 		appendMenuItem(menu, groupItem);
 	}
 	if (node.kind == RuntimeMenuNodeKind::Separator) {
@@ -482,7 +483,7 @@ bool MRMenuBar::rebuildRuntimeMenu() {
 		}
 		markUsedHotkey(usedHotkeys, groupHotkey);
 		groupTitle = menuTitleWithHotkeyMarker(groupTitle, groupHotkey);
-		appendMenuItem(rebuilt, new TMenuItem(groupTitle.c_str(), groupHotkey == '\0' ? TKey(kbNoKey) : TKey(static_cast<ushort>(groupHotkey), kbAltShift), submenu, hcNoContext));
+		appendMenuItem(rebuilt, new TMenuItem(groupTitle.c_str(), groupHotkey == '\0' ? TKey(kbNoKey) : TKey(static_cast<ushort>(groupHotkey), kbAltShift), submenu, hcMenuRuntimeMacro));
 	}
 
 	current = nullptr;

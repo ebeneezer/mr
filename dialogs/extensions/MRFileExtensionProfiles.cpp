@@ -26,6 +26,7 @@
 #include "../../app/utils/MRStringUtils.hpp"
 
 #include "../../app/MREditorApp.hpp"
+#include "../../app/MRHelpTopics.generated.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRWindowSupport.hpp"
@@ -55,8 +56,7 @@ TFrame *initMrDialogFrame(TRect bounds) {
 }
 
 enum : ushort {
-	cmMrSetupFilenameProfilesHelp = 3820,
-	cmMrSetupFilenameProfilesAdd,
+	cmMrSetupFilenameProfilesAdd = 3821,
 	cmMrSetupFilenameProfilesCopy,
 	cmMrSetupFilenameProfilesDelete,
 	cmMrSetupFilenameProfilesBrowseColorTheme,
@@ -459,6 +459,7 @@ int focusedEditorProfileIndex(const std::vector<EditProfileDraft> &drafts) {
 class TEditProfilesDialog : public MRScrollableDialog {
   public:
 	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS", kDialogWidth, kVirtualHeight, initMrDialogFrame), draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37, 56, kDialogWidth - 2, 7)) {
+		helpCtx = hcDialogFileExtensions;
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		mCurrentIndex = focusedEditorProfileIndex(draftList);
@@ -566,10 +567,6 @@ class TEditProfilesDialog : public MRScrollableDialog {
 					browseCurrentDefaultPath();
 					clearEvent(event);
 					return;
-				case cmMrSetupFilenameProfilesHelp:
-					endModal(event.message.command);
-					clearEvent(event);
-					return;
 				case cmMrSetupFilenameProfilesAdd:
 					addProfile();
 					clearEvent(event);
@@ -635,7 +632,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void buildViews() {
 		const std::array listButtons{mr::dialogs::DialogButtonSpec{"Ne~w~", cmMrSetupFilenameProfilesAdd, bfNormal}, mr::dialogs::DialogButtonSpec{"Cop~y~", cmMrSetupFilenameProfilesCopy, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMrSetupFilenameProfilesDelete, bfNormal}};
-		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupFilenameProfilesHelp, bfNormal}};
+		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		std::vector<TButton *> listButtonViews;
 		const mr::dialogs::DialogButtonRowMetrics bottomMetrics = mr::dialogs::measureUniformButtonRow(bottomButtons, 0);
 		const int listLeft = 2;
@@ -944,22 +941,6 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	FileExtensionEditorSettingsPanel editorSettingsPanel;
 };
 
-void showEditProfilesHelpDialog() {
-	std::vector<std::string> lines;
-	lines.push_back("FILENAME EXTENSIONS HELP");
-	lines.push_back("");
-	lines.push_back("DEFAULT contains the global edit settings and cannot be deleted.");
-	lines.push_back("Each additional profile has its own ID, description and exact extension list.");
-	lines.push_back("Extension matching is exact and case-sensitive.");
-	lines.push_back("Margins, format ruler, word wrap, macros and default path are profile-specific.");
-	lines.push_back("Close or Escape asks for confirmation when fields were modified.");
-	TDialog *dialog = createSetupSimplePreviewDialog("FILENAME EXTENSIONS HELP", 78, 11, lines, false);
-	if (dialog != nullptr) {
-		TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-	}
-}
-
 } // namespace
 
 void runFileExtensionProfilesDialogFlow() {
@@ -988,10 +969,6 @@ void runFileExtensionProfilesDialogFlow() {
 		TObject::destroy(dialog);
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineDrafts, editedDrafts, draftListsEqual);
 		switch (result) {
-			case cmMrSetupFilenameProfilesHelp:
-				showEditProfilesHelpDialog();
-				break;
-
 			case cmOK:
 				workingDrafts = editedDrafts;
 				if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {

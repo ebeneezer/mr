@@ -11,14 +11,12 @@ struct MRRouterIntegerInputLayout {
 	short inputLeft = 18;
 	short inputRight = 48;
 	short buttonY = 6;
-	short buttonLeft = 8;
 	short buttonGap = 2;
-	bool showHelp = true;
 };
 
 [[nodiscard]] MRRouterIntegerInputLayout defaultRouterIntegerInputLayout();
-[[nodiscard]] bool promptRouterIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue);
-[[nodiscard]] bool promptRouterIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue, const MRRouterIntegerInputLayout &layout);
+[[nodiscard]] bool promptRouterIntegerValue(const char *title, const char *label, ushort helpContext, int initialValue, int minValue, int maxValue, int &outValue);
+[[nodiscard]] bool promptRouterIntegerValue(const char *title, const char *label, ushort helpContext, int initialValue, int minValue, int maxValue, int &outValue, const MRRouterIntegerInputLayout &layout);
 [[nodiscard]] bool handleSetRightMargin();
 [[nodiscard]] bool handleSetLeftMargin(MREditWindow *window);
 [[nodiscard]] bool handleToggleWordWrap();

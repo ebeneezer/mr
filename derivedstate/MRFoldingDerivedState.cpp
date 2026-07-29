@@ -15,7 +15,7 @@ bool MRFoldOpenBlockState::operator==(const MRFoldOpenBlockState &other) const n
 }
 
 bool MRFoldAnalysisState::operator==(const MRFoldAnalysisState &other) const noexcept {
-	return openBlocks == other.openBlocks && previousLineText == other.previousLineText && previousUpperLine == other.previousUpperLine &&
+	return openBlocks == other.openBlocks && syntaxState == other.syntaxState && previousLineText == other.previousLineText && previousUpperLine == other.previousUpperLine &&
 	       previousPreviousLineText == other.previousPreviousLineText && previousPreviousUpperLine == other.previousPreviousUpperLine && recentLineTexts == other.recentLineTexts;
 }
 
