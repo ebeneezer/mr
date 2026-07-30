@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="1320" viewBox="0 0 940 1320" role="img" aria-labelledby="title desc">
+  <title id="title">MRMAC virtual-machine execution and state boundaries</title>
+  <desc id="desc">Five numbered panels show canonical compilation and catalog ownership, execution-profile routing, the bytecode interpreter, value-storage lifetimes, and route-specific completion or suspension.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .box-title { font: 700 16px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; text-anchor: middle; }
+      .heading { font: 700 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .small-center { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; text-anchor: middle; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .code-center { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; text-anchor: middle; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="940" height="1320" fill="#ffffff"/>
+  <text x="35" y="35" class="title">INSIDE THE MRMAC VIRTUAL MACHINE</text>
+  <text x="35" y="59" class="small">One bytecode model, explicit value lifetimes, and route-specific publication boundaries.</text>
+
+  <rect x="35" y="82" width="870" height="164" rx="8" class="box"/>
+  <circle cx="67" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="67" y="121" class="badge">1</text>
+  <text x="100" y="120" class="panel-title">Canonical source becomes one catalogued bytecode image</text>
+  <rect x="67" y="147" width="210" height="68" rx="5" class="blue"/>
+  <text x="172" y="174" class="box-title">MRMAC SOURCE</text>
+  <text x="172" y="197" class="small-center">macro · closure · settings</text>
+  <path d="M277 181 L326 181" class="flow"/>
+  <rect x="327" y="147" width="252" height="68" rx="5" class="green"/>
+  <text x="453" y="174" class="box-title">CANONICAL COMPILER</text>
+  <text x="453" y="197" class="code-center">mrmac.c</text>
+  <path d="M579 181 L628 181" class="flow"/>
+  <rect x="629" y="147" width="244" height="68" rx="5" class="gold"/>
+  <text x="751" y="174" class="box-title">MACROCATALOG</text>
+  <text x="751" y="195" class="small-center">bytecode · entries · profile</text>
+  <text x="751" y="211" class="small-center">source map only on debug start</text>
+
+  <path d="M470 246 L470 270" class="flow-blue"/>
+
+  <rect x="35" y="275" width="870" height="177" rx="8" class="box"/>
+  <circle cx="67" cy="307" r="20" fill="#2f6fa3"/>
+  <text x="67" y="314" class="badge">2</text>
+  <text x="100" y="313" class="panel-title">The execution profile selects the legal application projection</text>
+  <rect x="67" y="342" width="250" height="78" rx="5" class="purple"/>
+  <text x="192" y="370" class="box-title">UI-AFFINE</text>
+  <text x="192" y="393" class="small-center">live editor + TVision state</text>
+  <text x="192" y="412" class="small-center">UI thread</text>
+  <rect x="345" y="342" width="250" height="78" rx="5" class="green"/>
+  <text x="470" y="370" class="box-title">BACKGROUND-SAFE</text>
+  <text x="470" y="393" class="small-center">finite MacroJob</text>
+  <text x="470" y="412" class="small-center">coprocessor worker</text>
+  <rect x="623" y="342" width="250" height="78" rx="5" class="gold"/>
+  <text x="748" y="370" class="box-title">STAGED BACKGROUND</text>
+  <text x="748" y="393" class="small-center">snapshot + conflict basis</text>
+  <text x="748" y="412" class="small-center">transaction + deferred UI</text>
+  <text x="67" y="443" class="small">The route changes available application state, not the compiler or opcode set.</text>
+
+  <path d="M470 452 L470 476" class="flow-blue"/>
+
+  <rect x="35" y="481" width="870" height="270" rx="8" class="box"/>
+  <circle cx="67" cy="513" r="20" fill="#2f6fa3"/>
+  <text x="67" y="520" class="badge">3</text>
+  <text x="100" y="519" class="panel-title">BytecodeExecution owns the explicit interpreter state</text>
+  <rect x="67" y="550" width="190" height="62" rx="5" class="blue"/>
+  <text x="162" y="576" class="box-title">BYTECODE + IP</text>
+  <text x="162" y="594" class="small-center">entry offset</text>
+  <text x="162" y="609" class="small-center">encoded operands</text>
+  <path d="M257 581 L295 581" class="flow"/>
+  <rect x="296" y="550" width="160" height="62" rx="5" class="green"/>
+  <text x="376" y="576" class="box-title">FETCH</text>
+  <text x="376" y="598" class="small-center">opcode + operands</text>
+  <path d="M456 581 L494 581" class="flow"/>
+  <rect x="495" y="550" width="160" height="62" rx="5" class="gold"/>
+  <text x="575" y="576" class="box-title">DECODE</text>
+  <text x="575" y="598" class="small-center">validate instruction</text>
+  <path d="M655 581 L693 581" class="flow"/>
+  <rect x="694" y="550" width="179" height="62" rx="5" class="purple"/>
+  <text x="783" y="576" class="box-title">EXECUTE</text>
+  <text x="783" y="598" class="small-center">advance / branch / stop</text>
+
+  <rect x="67" y="636" width="245" height="66" rx="5" class="blue"/>
+  <text x="189" y="662" class="box-title">OPERAND STACK</text>
+  <text x="189" y="685" class="small-center">typed temporary values</text>
+  <rect x="347" y="636" width="245" height="66" rx="5" class="green"/>
+  <text x="469" y="662" class="box-title">VARIABLE MAP</text>
+  <text x="469" y="685" class="small-center">locals · closure/session names</text>
+  <rect x="628" y="636" width="245" height="66" rx="5" class="gold"/>
+  <text x="750" y="662" class="box-title">CALL STACK</text>
+  <text x="750" y="685" class="small-center">validated return offsets</text>
+
+  <text x="67" y="727" class="code">pure opcode  |  intrinsic → typed value  |  procedure → configuration · runtime · editor · macro</text>
+  <text x="67" y="745" class="small">One recursive execution lock protects the process-wide VM environment and global K/V roots.</text>
+
+  <path d="M470 751 L470 775" class="flow-blue"/>
+
+  <rect x="35" y="780" width="870" height="232" rx="8" class="box"/>
+  <circle cx="67" cy="812" r="20" fill="#2f6fa3"/>
+  <text x="67" y="819" class="badge">4</text>
+  <text x="100" y="818" class="panel-title">Typed values name their storage domain and lifetime</text>
+  <rect x="67" y="849" width="250" height="107" rx="5" class="blue"/>
+  <text x="192" y="877" class="box-title">VM LOCAL</text>
+  <text x="192" y="901" class="code-center">Value { type, payload }</text>
+  <text x="192" y="924" class="small-center">DEF_* · operand values</text>
+  <text x="192" y="945" class="small-center">local hash handles</text>
+  <rect x="345" y="849" width="250" height="107" rx="5" class="purple"/>
+  <text x="470" y="877" class="box-title">EXECUTION IDENTITY</text>
+  <text x="470" y="901" class="code-center">EXECSESSIONS</text>
+  <text x="470" y="924" class="small-center">closure + session variables</text>
+  <text x="470" y="945" class="small-center">parked live VM ownership</text>
+  <rect x="623" y="849" width="250" height="107" rx="5" class="green"/>
+  <text x="748" y="877" class="box-title">PROCESS RUNTIME K/V</text>
+  <text x="748" y="901" class="code-center">Value { hash, global }</text>
+  <text x="748" y="924" class="small-center">MACROGLOBALS · CATALOG</text>
+  <text x="748" y="945" class="small-center">MODELESSUI · DEBUGGER</text>
+  <path d="M317 902 L344 902" class="flow"/>
+  <path d="M595 902 L622 902" class="flow"/>
+  <text x="67" y="985" class="small">Cross-store hash values are recursively copied; C++ transfer objects never become a second value registry.</text>
+
+  <path d="M470 1012 L470 1036" class="flow-blue"/>
+
+  <rect x="35" y="1041" width="870" height="234" rx="8" class="box"/>
+  <circle cx="67" cy="1073" r="20" fill="#2f6fa3"/>
+  <text x="67" y="1080" class="badge">5</text>
+  <text x="100" y="1079" class="panel-title">Completion, publication, and suspension remain different outcomes</text>
+  <rect x="67" y="1110" width="250" height="106" rx="5" class="green"/>
+  <text x="192" y="1138" class="box-title">NORMAL RESULT</text>
+  <text x="192" y="1162" class="small-center">return state · log</text>
+  <text x="192" y="1184" class="small-center">explicit UI requests</text>
+  <text x="192" y="1206" class="small-center">caller owns publication</text>
+  <rect x="345" y="1110" width="250" height="106" rx="5" class="gold"/>
+  <text x="470" y="1138" class="box-title">STAGED RESULT</text>
+  <text x="470" y="1162" class="small-center">transaction · state delta</text>
+  <text x="470" y="1184" class="small-center">deferred UI · conflict basis</text>
+  <text x="470" y="1206" class="small-center">UI thread accepts or rejects</text>
+  <rect x="623" y="1110" width="250" height="106" rx="5" class="purple"/>
+  <text x="748" y="1138" class="box-title">PARKED VM</text>
+  <text x="748" y="1162" class="small-center">delay or debugger stop</text>
+  <text x="748" y="1184" class="small-center">IP · stacks · live values</text>
+  <text x="748" y="1206" class="small-center">session outlives worker</text>
+  <rect x="67" y="1234" width="806" height="25" rx="4" class="red"/>
+  <text x="470" y="1252" class="small-center">Cancellation and debugger pause are observed at safe VM boundaries; no half-applied procedure is published.</text>
+
+  <text x="35" y="1301" class="small">The VM owns executable state. TVision owns live views. Domain owners decide whether a result becomes visible.</text>
+</svg>

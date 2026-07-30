@@ -35,6 +35,7 @@
 #include "../app/commands/MRFileCommands.hpp"
 #include "../ui/MRDeskTop.hpp"
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
+#include "../ui/MRBentoHexEditor/MRBentoHexEditor.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRMessageLineController.hpp"
@@ -865,7 +866,14 @@ std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles) {
 			}
 		}
 		if (restoredFileFound) continue;
-		MREditWindow *win = openBatch.active() ? openBatch.createEditorWindow(file.c_str()) : createEditorWindow(file.c_str());
+		const bool useHexEditor = configuredAutoDetectBinaryFiles() && fileContainsNulInBoundarySamples(file);
+		MREditWindow *win = nullptr;
+
+		if (useHexEditor) {
+			win = openBatch.active() ? static_cast<MREditWindow *>(openBatch.createHexEditorWindow(file.c_str())) : static_cast<MREditWindow *>(createHexEditorWindow(file.c_str()));
+		} else {
+			win = openBatch.active() ? openBatch.createEditorWindow(file.c_str()) : createEditorWindow(file.c_str());
+		}
 		if (win == nullptr) {
 			mrLogMessage("Startup load aborted: unable to create editor window.");
 			break;
