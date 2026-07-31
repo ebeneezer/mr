@@ -1,6 +1,7 @@
 #include "MRMacroModelessControls.hpp"
 
 #include "MRVMModelessUiRuntime.hpp"
+#include "../../../ui/widgets/MRNumericSlider.hpp"
 
 #define Uses_TDrawBuffer
 #define Uses_TCheckBoxes
@@ -458,16 +459,12 @@ class MRMacroModelessProgressView final : public TView {
 		int value = 0;
 		const int width = size.x;
 		const int interiorWidth = std::max(0, width - 2);
-		int completedWidth = 0;
 
 		static_cast<void>(mrvmReadModelessWindowProgressFieldValue(windowId, fieldId, total, value));
-		if (total > 0 && value > 0) completedWidth = static_cast<int>((static_cast<long long>(value) * interiorWidth) / total);
 		buffer.moveChar(0, ' ', getColor(1), static_cast<ushort>(width));
 		if (width > 0) buffer.moveChar(0, '[', getColor(1), 1);
-		if (interiorWidth > 0) {
-			buffer.moveChar(1, '#', getColor(2), static_cast<ushort>(completedWidth));
-			buffer.moveChar(static_cast<ushort>(1 + completedWidth), '-', getColor(1), static_cast<ushort>(interiorWidth - completedWidth));
-		}
+		MRProgressSlider::drawProgress(buffer, 1, interiorWidth, static_cast<std::size_t>(std::max(0, value)), static_cast<std::size_t>(std::max(0, total)), std::string(), getColor(1), getColor(2),
+		                               MRProgressSlider::Direction::LeftToRight, '-', '#');
 		if (width > 1) buffer.moveChar(static_cast<ushort>(width - 1), ']', getColor(1), 1);
 		writeLine(0, 0, width, 1, buffer);
 	}

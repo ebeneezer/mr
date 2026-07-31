@@ -45,11 +45,22 @@ The authoritative Static Mode semaphore is the central runtime K/V value
 - The menu bar may retain only the current numeric progress projection.
 - Progress uses the dynamically derived message lane, Warning color and a
   centered `completed/total` label without marquee transitions.
+- All progress-bar consumers use the common `MRProgressSlider` renderer.
+  Dialog and MMP projections retain their left-to-right direction; Static Mode
+  fills the message lane from right to left.
 - Leaving Static Mode clears the projected content before ordinary animated
   messages resume.
 - While active, the status line shows only `Esc Abort`; F1 through F12 are not
   dispatched. Its pre-entry F-key presentation is retained until Static Mode
   ends. Escape remains owned by the active operation.
+
+## Message-line normal mode
+
+- A message enters from the right through the normal marquee intro.
+- After the intro has completed, the fully visible message remains stable for
+  at least two seconds before a pending replacement may start the outro.
+- The presentation retains at most one pending replacement. A later non-empty
+  replacement may coalesce it; no unbounded message queue is introduced.
 
 ## Desktop-managed windows
 

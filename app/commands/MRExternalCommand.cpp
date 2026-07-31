@@ -332,6 +332,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	bool cancellationRequested = false;
 	int stopPolls = 0;
 	std::array<char, 4096> buffer{};
+	std::string shellPath;
 
 	result.task = info;
 	if (::pipe(pipeFds) != 0) {
@@ -341,6 +342,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 		return result;
 	}
 
+	shellPath = configuredShellExecutablePath();
 	childPid = ::fork();
 	if (childPid < 0) {
 		::close(pipeFds[0]);
@@ -352,7 +354,6 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	}
 
 	if (childPid == 0) {
-		std::string shellPath = configuredShellExecutablePath();
 		::setpgid(0, 0);
 		::dup2(pipeFds[1], STDOUT_FILENO);
 		if (mergeStandardError) {

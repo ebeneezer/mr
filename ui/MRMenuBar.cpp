@@ -829,18 +829,7 @@ void MRMenuBar::draw() {
 		auto now = std::chrono::steady_clock::now();
 		mMarqueeLaneWidth = newLaneWidth;
 		if (staticProgressVisible) {
-			const unsigned char warningAttribute = mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(MarqueeKind::Warning), mr_menu_drawing::marqueeFallbackAttribute(MarqueeKind::Warning));
-			const TColorAttr warningColor = TColorAttr(static_cast<unsigned char>((warningAttribute << 4) | (warningAttribute >> 4)));
-			const std::size_t laneWidth = static_cast<std::size_t>(newLaneWidth);
-			const std::size_t filled = staticProgressTotal == 0 ? 0 : (staticProgressCompleted / staticProgressTotal) * laneWidth + ((staticProgressCompleted % staticProgressTotal) * laneWidth) / staticProgressTotal;
-			const std::string label = std::to_string(staticProgressCompleted) + "/" + std::to_string(staticProgressTotal);
-			const std::size_t labelLength = std::min(laneWidth, label.size());
-			const std::size_t labelLeft = (laneWidth - labelLength) / 2;
-			const std::size_t warningLabelLength = labelLeft >= filled ? 0 : std::min(labelLength, filled - labelLeft);
-
-			if (filled != 0) b.moveChar(static_cast<ushort>(laneStart), ' ', warningColor, static_cast<ushort>(filled));
-			if (warningLabelLength != 0) b.moveStr(static_cast<ushort>(laneStart + labelLeft), label.c_str(), warningColor, static_cast<ushort>(warningLabelLength));
-			if (warningLabelLength < labelLength) b.moveStr(static_cast<ushort>(laneStart + labelLeft + warningLabelLength), label.c_str() + warningLabelLength, cNormal, static_cast<ushort>(labelLength - warningLabelLength));
+			drawStaticProgress(b, laneStart, newLaneWidth, staticProgressCompleted, staticProgressTotal, TColorAttr(cNormal));
 		} else {
 			const std::vector<MarqueeSegment> targetSegments = mManualMarqueeStatus.empty() ? mAutoMarqueeSegments : std::vector<MarqueeSegment>();
 			if (targetText == mMarqueeActiveText && targetMarqueeKind == mMarqueeActiveKind && targetSegments == mMarqueeActiveSegments) {
@@ -856,71 +845,18 @@ void MRMenuBar::draw() {
 					mMarqueeOutroStartShift = 0;
 					mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
 					mMarqueeScrollNextAt = !mMarqueeActiveText.empty() && static_cast<int>(mMarqueeActiveText.size()) > mMarqueeLaneWidth ? now + marqueeScrollStartDelay() : std::chrono::steady_clock::time_point::min();
+					mMarqueeStableUntil = now + marqueeMinimumStableDuration();
 				}
 			} else {
-				mMarqueeHasPending = true;
-				mMarqueePendingText = targetText;
-				mMarqueePendingSegments = targetSegments;
-				mMarqueePendingKind = targetMarqueeKind;
-				if (mMarqueeActiveText.empty()) {
-					mMarqueeActiveText = mMarqueePendingText;
-					mMarqueeActiveSegments = mMarqueePendingSegments;
-					mMarqueeActiveKind = mMarqueePendingKind;
-					mMarqueeHasPending = false;
-					mMarqueePendingText.clear();
-					mMarqueePendingSegments.clear();
-					mMarqueePendingKind = MarqueeKind::Info;
-					mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
-					mMarqueeDirection = -1;
-					mMarqueeOutroActive = false;
-					mMarqueeOutroShift = 0;
-					mMarqueeOutroStartShift = 0;
-					mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
-					if (!mMarqueeActiveText.empty()) {
-						mMarqueeIntroActive = true;
-						mMarqueeIntroStartShift = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
-						mMarqueeIntroShift = mMarqueeIntroStartShift;
-						mMarqueeIntroStartedAt = now;
-						mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
-					} else {
-						mMarqueeIntroActive = false;
-						mMarqueeIntroShift = 0;
-						mMarqueeIntroStartShift = 0;
-						mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
-						mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
-					}
-				} else if (!mMarqueeOutroActive) {
-					const int visibleShiftSpan = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
-					mMarqueeOutroActive = true;
-					mMarqueeOutroStartShift = mMarqueeIntroActive ? mMarqueeIntroShift : 0;
-					if (mMarqueeOutroStartShift < 0) mMarqueeOutroStartShift = 0;
-					if (mMarqueeOutroStartShift > visibleShiftSpan) mMarqueeOutroStartShift = visibleShiftSpan;
-					mMarqueeOutroShift = mMarqueeOutroStartShift;
-					mMarqueeOutroStartedAt = now;
-					mMarqueeIntroActive = false;
-					mMarqueeIntroShift = 0;
-					mMarqueeIntroStartShift = 0;
-					mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
-					mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
+				const bool retainPendingMessage = targetText.empty() && mMarqueeHasPending && !mMarqueePendingText.empty();
+
+				if (!retainPendingMessage) {
+					mMarqueeHasPending = true;
+					mMarqueePendingText = targetText;
+					mMarqueePendingSegments = targetSegments;
+					mMarqueePendingKind = targetMarqueeKind;
 				}
-			}
-			if (mMarqueeActiveText.empty() && mMarqueeHasPending && !mMarqueeOutroActive) {
-				mMarqueeActiveText = mMarqueePendingText;
-				mMarqueeActiveSegments = mMarqueePendingSegments;
-				mMarqueeActiveKind = mMarqueePendingKind;
-				mMarqueeHasPending = false;
-				mMarqueePendingText.clear();
-				mMarqueePendingSegments.clear();
-				mMarqueePendingKind = MarqueeKind::Info;
-				mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
-				mMarqueeDirection = -1;
-				if (!mMarqueeActiveText.empty()) {
-					mMarqueeIntroActive = true;
-					mMarqueeIntroStartShift = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
-					mMarqueeIntroShift = mMarqueeIntroStartShift;
-					mMarqueeIntroStartedAt = now;
-					mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
-				}
+				if (mMarqueeActiveText.empty() && mMarqueeHasPending && !mMarqueeOutroActive) activatePendingMarquee(now);
 			}
 			cMarquee = TColorAttr(mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(mMarqueeActiveKind), mr_menu_drawing::marqueeFallbackAttribute(mMarqueeActiveKind)));
 			auto colorForMarqueeKind = [](MarqueeKind kind) -> TColorAttr { return TColorAttr(mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(kind), mr_menu_drawing::marqueeFallbackAttribute(kind))); };

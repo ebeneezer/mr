@@ -122,6 +122,9 @@ class MRMenuBar : public TMenuBar {
 	static constexpr std::chrono::milliseconds marqueeScrollStartDelay() {
 		return std::chrono::milliseconds(3000);
 	}
+	static constexpr std::chrono::milliseconds marqueeMinimumStableDuration() {
+		return std::chrono::milliseconds(2000);
+	}
 	void resetMarqueeState() {
 		mMarqueeOffset = 0;
 		mMarqueeDirection = -1;
@@ -142,7 +145,11 @@ class MRMenuBar : public TMenuBar {
 		mMarqueeOutroShift = 0;
 		mMarqueeOutroStartShift = 0;
 		mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
+		mMarqueeStableUntil = std::chrono::steady_clock::time_point::min();
 	}
+	void activatePendingMarquee(std::chrono::steady_clock::time_point now);
+	void beginMarqueeOutro(std::chrono::steady_clock::time_point now);
+	static void drawStaticProgress(TDrawBuffer &buffer, int laneStart, int laneWidth, std::size_t completed, std::size_t total, TColorAttr normalColor);
 	static std::string canonicalMenuToken(const std::string &value);
 	static std::string trimAscii(std::string value);
 	static bool ownerSpecMatchesFile(const std::string &ownerSpec, const std::string &fileSpec) noexcept;
@@ -184,6 +191,7 @@ class MRMenuBar : public TMenuBar {
 	int mMarqueeOutroShift = 0;
 	int mMarqueeOutroStartShift = 0;
 	std::chrono::steady_clock::time_point mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
+	std::chrono::steady_clock::time_point mMarqueeStableUntil = std::chrono::steady_clock::time_point::min();
 };
 
 #endif

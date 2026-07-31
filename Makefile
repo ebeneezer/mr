@@ -737,6 +737,8 @@ ui/MRFileEditor/MRMiniMap.o: ui/MRFileEditor/MRMiniMap.cpp ui/MRFileEditor/MRMin
 ui/MRFileEditor/MRMiniMapOverlay.o: ui/MRFileEditor/MRMiniMapOverlay.cpp ui/MRFileEditor/MRMiniMap.hpp piecetable/MRTextDocument.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp
 ui/MRFileEditor/MRTextFormatting.o: ui/MRFileEditor/MRTextFormatting.cpp ui/MRFileEditor/MRTextFormatting.hpp config/settings/MRSettingsRuntime.hpp
 ui/MRFileEditor/MRTextViewport.o: ui/MRFileEditor/MRTextViewport.cpp ui/MRFileEditor/MRTextViewport.hpp config/settings/MRSettingsRuntime.hpp
+ui/MRMenuBar.o: ui/MRMenuBar.cpp ui/MRMenuBar.hpp ui/MRMenuBarDrawingInternal.hpp ui/MRMessageLineController.hpp
+ui/MRMenuBarDrawing.o: ui/MRMenuBarDrawing.cpp ui/MRMenuBar.hpp ui/MRMenuBarDrawingInternal.hpp ui/MRMessageLineController.hpp ui/widgets/MRNumericSlider.hpp
 ui/widgets/MRScopedHistoryUI.o: ui/widgets/MRScopedHistoryUI.cpp ui/widgets/MRScopedHistoryUI.hpp dialogs/MRAcquireDialog.hpp config/settings/MRSettingsRuntime.hpp ui/MRFrame.hpp ui/widgets/MRDropList.hpp
 ui/widgets/MRNumericSlider.o: ui/widgets/MRNumericSlider.cpp ui/widgets/MRNumericSlider.hpp config/settings/MRSettingsRuntime.hpp
 ui/widgets/MRSpinner.o: ui/widgets/MRSpinner.cpp ui/widgets/MRSpinner.hpp config/settings/MRSettingsRuntime.hpp
@@ -790,7 +792,7 @@ mrmac/vm/MRVMMacroSpecRuntime.o: mrmac/vm/MRVMMacroSpecRuntime.cpp mrmac/vm/MRVM
 mrmac/ui/modeless/MRVMModelessUiStorage.o: mrmac/ui/modeless/MRVMModelessUiStorage.cpp mrmac/ui/modeless/MRVMModelessUiStorage.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp mrmac/ui/modeless/MRMacroModelessUi.hpp mrmac/mrmac.h
 mrmac/ui/modeless/MRVMModelessUiRuntime.o: mrmac/ui/modeless/MRVMModelessUiRuntime.cpp mrmac/ui/modeless/MRVMModelessUiStorage.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/MRVM.hpp
 mrmac/ui/modeless/MRVMModelessWindowRuntime.o: mrmac/ui/modeless/MRVMModelessWindowRuntime.cpp mrmac/ui/modeless/MRVMModelessUiStorage.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp mrmac/MRVM.hpp
-mrmac/ui/modeless/MRMacroModelessControls.o: mrmac/ui/modeless/MRMacroModelessControls.cpp mrmac/ui/modeless/MRMacroModelessControls.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp
+mrmac/ui/modeless/MRMacroModelessControls.o: mrmac/ui/modeless/MRMacroModelessControls.cpp mrmac/ui/modeless/MRMacroModelessControls.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp ui/widgets/MRNumericSlider.hpp
 mrmac/ui/modeless/MRMacroUiCollections.o: mrmac/ui/modeless/MRMacroUiCollections.cpp mrmac/ui/modeless/MRMacroModelessControls.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp
 mrmac/vm/MRVMProcessRuntime.o: mrmac/vm/MRVMProcessRuntime.cpp mrmac/vm/MRVMProcessRuntime.hpp mrmac/vm/MRVMRuntimeState.hpp mrmac/vm/MRVMValue.hpp app/utils/MRStringUtils.hpp
 mrmac/vm/MRVMProcedureCatalog.o: mrmac/vm/MRVMProcedureCatalog.cpp mrmac/vm/MRVMProcedureCatalog.hpp

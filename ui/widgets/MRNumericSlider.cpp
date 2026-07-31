@@ -324,6 +324,29 @@ void MRProgressSlider::setProgress(std::size_t aCompleted, std::size_t aTotal, s
 	MRNumericSlider::setValue(sliderValue);
 }
 
+void MRProgressSlider::drawProgress(TDrawBuffer &buffer, int left, int width, std::size_t aCompleted, std::size_t aTotal, const std::string &label, TColorAttr normalColor,
+                                    TColorAttr completedColor, Direction direction, char normalGlyph, char completedGlyph) {
+	const std::size_t barWidth = static_cast<std::size_t>(std::max(0, width));
+	const std::size_t completed = std::min(aCompleted, aTotal);
+	const std::size_t filled =
+	    aTotal == 0 ? 0 : std::min(barWidth, static_cast<std::size_t>((static_cast<long double>(completed) * static_cast<long double>(barWidth)) / static_cast<long double>(aTotal)));
+	const std::size_t filledLeft = direction == Direction::RightToLeft ? barWidth - filled : 0;
+	const std::size_t labelLength = std::min(barWidth, label.size());
+	const std::size_t labelLeft = (barWidth - labelLength) / 2;
+	const std::size_t labelRight = labelLeft + labelLength;
+	const std::size_t filledRight = filledLeft + filled;
+	const std::size_t overlapLeft = std::max(labelLeft, filledLeft);
+	const std::size_t overlapRight = std::min(labelRight, filledRight);
+
+	if (barWidth == 0) return;
+	buffer.moveChar(static_cast<ushort>(left), normalGlyph, normalColor, static_cast<ushort>(barWidth));
+	if (filled != 0) buffer.moveChar(static_cast<ushort>(left + filledLeft), completedGlyph, completedColor, static_cast<ushort>(filled));
+	if (labelLength == 0) return;
+	buffer.moveStr(static_cast<ushort>(left + labelLeft), label.c_str(), normalColor, static_cast<ushort>(labelLength));
+	if (overlapRight > overlapLeft)
+		buffer.moveStr(static_cast<ushort>(left + overlapLeft), label.c_str() + overlapLeft - labelLeft, completedColor, static_cast<ushort>(overlapRight - overlapLeft));
+}
+
 void MRProgressSlider::draw() {
 	TDrawBuffer buffer;
 	const TAttrPair textColor = owner != nullptr ? TAttrPair(owner->mapColor(1)) : TAttrPair(0x70);
@@ -337,17 +360,7 @@ void MRProgressSlider::draw() {
 
 	const TAttrPair normalColor = owner != nullptr ? TAttrPair(owner->mapColor(kDialogInputLineNormalColor)) : TAttrPair(0x3F);
 	const TAttrPair selectedColor = owner != nullptr ? TAttrPair(owner->mapColor(kDialogInputLineSelectedColor)) : TAttrPair(0x3E);
-	const std::size_t width = static_cast<std::size_t>(std::max(0, size.x));
-	const std::size_t filled = total == 0 ? 0 : (completed / total) * width + ((completed % total) * width) / total;
-	const std::size_t labelLength = std::min(width, text.size());
-	const std::size_t labelLeft = (width - labelLength) / 2;
-	const std::size_t selectedLabelLength = labelLeft >= filled ? 0 : std::min(labelLength, filled - labelLeft);
-
-	buffer.moveChar(0, ' ', normalColor, size.x);
-	if (filled != 0) buffer.moveChar(0, ' ', selectedColor, static_cast<int>(filled));
-	if (selectedLabelLength != 0) buffer.moveStr(static_cast<ushort>(labelLeft), text.c_str(), selectedColor, static_cast<ushort>(selectedLabelLength));
-	if (selectedLabelLength < labelLength)
-		buffer.moveStr(static_cast<ushort>(labelLeft + selectedLabelLength), text.c_str() + selectedLabelLength, normalColor, static_cast<ushort>(labelLength - selectedLabelLength));
+	drawProgress(buffer, 0, size.x, completed, total, text, TColorAttr(normalColor), TColorAttr(selectedColor), Direction::LeftToRight);
 	writeLine(0, 0, size.x, 1, buffer);
 }
 

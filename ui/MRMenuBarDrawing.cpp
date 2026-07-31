@@ -3,7 +3,9 @@
 #include <tvision/tv.h>
 
 #include "MRMenuBar.hpp"
+#include "MRMenuBarDrawingInternal.hpp"
 #include "MRMessageLineController.hpp"
+#include "widgets/MRNumericSlider.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -27,6 +29,59 @@ void MRMenuBar::setStaticProgressMode(bool active) {
 	static_cast<void>(active);
 	resetMarqueeState();
 	drawView();
+}
+
+void MRMenuBar::drawStaticProgress(TDrawBuffer &buffer, int laneStart, int laneWidth, std::size_t completed, std::size_t total, TColorAttr normalColor) {
+	const unsigned char warningAttribute =
+	    mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(MarqueeKind::Warning), mr_menu_drawing::marqueeFallbackAttribute(MarqueeKind::Warning));
+	const TColorAttr warningColor = TColorAttr(static_cast<unsigned char>((warningAttribute << 4) | (warningAttribute >> 4)));
+	const std::string label = std::to_string(completed) + "/" + std::to_string(total);
+
+	MRProgressSlider::drawProgress(buffer, laneStart, laneWidth, completed, total, label, normalColor, warningColor, MRProgressSlider::Direction::RightToLeft);
+}
+
+void MRMenuBar::activatePendingMarquee(std::chrono::steady_clock::time_point now) {
+	mMarqueeActiveText = mMarqueePendingText;
+	mMarqueeActiveSegments = mMarqueePendingSegments;
+	mMarqueeActiveKind = mMarqueePendingKind;
+	mMarqueeHasPending = false;
+	mMarqueePendingText.clear();
+	mMarqueePendingSegments.clear();
+	mMarqueePendingKind = MarqueeKind::Info;
+	mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
+	mMarqueeDirection = -1;
+	mMarqueeOutroActive = false;
+	mMarqueeOutroShift = 0;
+	mMarqueeOutroStartShift = 0;
+	mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
+	if (!mMarqueeActiveText.empty()) {
+		mMarqueeIntroActive = true;
+		mMarqueeIntroStartShift = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
+		mMarqueeIntroShift = mMarqueeIntroStartShift;
+		mMarqueeIntroStartedAt = now;
+		mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
+		mMarqueeStableUntil = std::chrono::steady_clock::time_point::max();
+	} else {
+		mMarqueeIntroActive = false;
+		mMarqueeIntroShift = 0;
+		mMarqueeIntroStartShift = 0;
+		mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
+		mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
+		mMarqueeStableUntil = std::chrono::steady_clock::time_point::min();
+	}
+}
+
+void MRMenuBar::beginMarqueeOutro(std::chrono::steady_clock::time_point now) {
+	mMarqueeOutroActive = true;
+	mMarqueeOutroStartShift = 0;
+	mMarqueeOutroShift = 0;
+	mMarqueeOutroStartedAt = now;
+	mMarqueeIntroActive = false;
+	mMarqueeIntroShift = 0;
+	mMarqueeIntroStartShift = 0;
+	mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
+	mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
+	mMarqueeStableUntil = std::chrono::steady_clock::time_point::min();
 }
 
 void MRMenuBar::setStartupFunctionKeysActive(bool active) {
@@ -68,30 +123,7 @@ void MRMenuBar::tickMarquee() {
 				mMarqueeOutroShift = 0;
 				mMarqueeOutroStartShift = 0;
 				mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
-				if (mMarqueeHasPending) {
-					mMarqueeActiveText = mMarqueePendingText;
-					mMarqueeActiveSegments = mMarqueePendingSegments;
-					mMarqueeActiveKind = mMarqueePendingKind;
-					mMarqueeHasPending = false;
-					mMarqueePendingText.clear();
-					mMarqueePendingSegments.clear();
-					mMarqueePendingKind = MarqueeKind::Info;
-					mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
-					mMarqueeDirection = -1;
-					if (!mMarqueeActiveText.empty()) {
-						mMarqueeIntroActive = true;
-						mMarqueeIntroStartShift = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
-						mMarqueeIntroShift = mMarqueeIntroStartShift;
-						mMarqueeIntroStartedAt = now;
-						mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
-					} else {
-						mMarqueeIntroActive = false;
-						mMarqueeIntroShift = 0;
-						mMarqueeIntroStartShift = 0;
-						mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
-						mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
-					}
-				}
+				if (mMarqueeHasPending) activatePendingMarquee(now);
 				drawView();
 				return;
 			}
@@ -114,13 +146,16 @@ void MRMenuBar::tickMarquee() {
 		if (mMarqueeIntroStartedAt == std::chrono::steady_clock::time_point::min()) {
 			mMarqueeIntroActive = false;
 			mMarqueeIntroShift = 0;
+			mMarqueeStableUntil = now + marqueeMinimumStableDuration();
 		} else {
 			const auto elapsed = now - mMarqueeIntroStartedAt;
 			if (elapsed >= duration) {
 				bool changed = mMarqueeIntroShift != 0;
+
 				mMarqueeIntroActive = false;
 				mMarqueeIntroShift = 0;
 				mMarqueeScrollNextAt = textLen > mMarqueeLaneWidth ? now + marqueeScrollStartDelay() : std::chrono::steady_clock::time_point::min();
+				mMarqueeStableUntil = now + marqueeMinimumStableDuration();
 				if (changed) drawView();
 				return;
 			}
@@ -135,6 +170,11 @@ void MRMenuBar::tickMarquee() {
 			}
 			return;
 		}
+	}
+	if (mMarqueeHasPending && now >= mMarqueeStableUntil) {
+		beginMarqueeOutro(now);
+		drawView();
+		return;
 	}
 	if (textLen <= mMarqueeLaneWidth) return;
 	if (mMarqueeScrollNextAt == std::chrono::steady_clock::time_point::min()) {

@@ -86,10 +86,17 @@ class MRNumericSlider : public TView {
 
 class MRProgressSlider final : public MRNumericSlider {
   public:
+	enum class Direction : unsigned char {
+		LeftToRight,
+		RightToLeft
+	};
+
 	explicit MRProgressSlider(const TRect &bounds);
 
 	void setText(std::string value);
 	void setProgress(std::size_t completed, std::size_t total, std::string label);
+	static void drawProgress(TDrawBuffer &buffer, int left, int width, std::size_t completed, std::size_t total, const std::string &label, TColorAttr normalColor, TColorAttr completedColor,
+	                         Direction direction, char normalGlyph = ' ', char completedGlyph = ' ');
 
 	void draw() override;
 	void handleEvent(TEvent &event) override;
