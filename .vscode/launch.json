@@ -2,26 +2,6 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Debug mr (GDB)",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${workspaceFolder}/mr",
-			"args": [],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "Enable pretty-printing for gdb",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			],
-			"preLaunchTask": "Rebuild mr (Clean & Neu)"
-		},
-		{
 			"name": "Debug mr (LLDB)",
 			"type": "lldb",
 			"request": "launch",

@@ -3,56 +3,1766 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage[english]{babel}
-\usepackage[margin=20mm,inner=19mm,outer=19mm,marginparwidth=12mm,marginparsep=4mm]{geometry}
+\usepackage[margin=22mm,inner=21mm,outer=19mm]{geometry}
+\usepackage{microtype}
 \usepackage{array}
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{graphicx}
-\usepackage{capt-of}
+\usepackage[font=footnotesize,skip=3pt]{caption}
 \usepackage{needspace}
+\usepackage{makeidx}
 \usepackage{hyperref}
 
 \newcommand{\mr}{\textsc{MR}}
+\newcommand{\mrmac}{\textsc{MRMAC}}
+\newcommand{\menu}[1]{\textsf{#1}\index{#1@\textsf{#1}}}
+\newcommand{\key}[1]{\texttt{#1}\index{keyboard!#1@\texttt{#1}}}
+\newcommand{\setting}[1]{\texttt{#1}\index{settings!#1@\texttt{#1}}}
+\newcommand{\field}[1]{\textsf{#1}\index{dialog fields!#1@\textsf{#1}}}
+\newenvironment{usernote}{\begin{quote}\small\textbf{Note.}\ }{\end{quote}}
+\newenvironment{usersafety}{\begin{quote}\small\textbf{Before changing data.}\ }{\end{quote}}
+\newcommand{\manualscreenshot}[3]{%
+  \Needspace{0.43\textheight}%
+  \begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth,height=0.62\textheight,keepaspectratio]{assets/#1}
+    \caption{#3}
+    \label{#2}
+  \end{figure}
+}
 
-\hypersetup{colorlinks=true,linkcolor=black,urlcolor=black,pdftitle={MR Users Manual},pdfauthor={MR Project}}
-\setlength{\emergencystretch}{7em}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=black,
+  pdftitle={MR Users Manual},
+  pdfauthor={Dr. Michael 'iDoc' Raus}
+}
+\makeindex
+\setlength{\emergencystretch}{5em}
 \renewcommand{\arraystretch}{1.16}
+\renewcommand{\topfraction}{0.88}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.10}
+\raggedbottom
 
-\title{\mr{} Users Manual}
+\title{\mr{} Users Manual\\\large Editing, navigation, automation, and tools}
 \author{Dr.\ Michael 'iDoc' Raus}
-\date{15 July 2026}
+\date{30 July 2026}
 
 \begin{document}
+\frontmatter
+
 \begin{titlepage}
 \begin{center}
 \vspace*{\fill}
 {\LARGE \mr{} Users Manual\par}
-\vspace{0.25\baselineskip}
-{\large Editing with Multi-Edit Revisited\par}
+\vspace{0.5\baselineskip}
+{\large Editing, navigation, automation, and tools\par}
 \vspace{3\baselineskip}
 {\large Dr.\ Michael 'iDoc' Raus\par}
 \vspace{2\baselineskip}
-{\large 15 July 2026\par}
+{\large 30 July 2026\par}
 \end{center}
-\vspace*{\fill}
+
+\vfill
+\begin{minipage}{0.82\textwidth}
+\small
+This manual explains the current \mr{} application. Its sequence is inspired
+by the original Multi-Edit User's Guide, but every description has been
+reconsidered for the present Linux terminal editor. Historical names are used
+only where the modern feature still carries the same working idea.
+\end{minipage}
+\vspace*{1.5cm}
 \end{titlepage}
 
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+
+\mr{} is a terminal-native programmer's editor with a window system, a large
+document model, configurable editing profiles, and an in-memory macro
+language. The application deliberately does not make the user choose between
+the immediacy of a text-mode editor and the facilities normally associated
+with an IDE. Files, output, searches, workspaces, binary data, compiler
+diagnostics, and macros all live in the same TVision desktop.
+
+The original Multi-Edit manual supplied a particularly practical order: begin
+with the screen and cursor, proceed through text and blocks, and only then
+introduce automation. This book follows that route without treating the
+historical program as a specification. DOS shells, printer drivers, page-break
+formatters, and other facilities that do not exist in \mr{} have no chapter
+here. Their place is taken only where a current feature solves the same user
+problem.
+
+The screenshots were taken from real \mr{} sessions in a PTY. They are not
+mock-ups. The active colors, available profiles, filenames, and function-key
+labels therefore reflect an installed development configuration; another
+installation may use a different theme or keymap. The operation names and
+dialog structure are the stable part.
+
+This is a task-oriented manual. The \mrmac{} Reference Manual remains the
+authority for language syntax and individual primitives, while the Technical
+Manual explains implementation boundaries and performance design.
+
 \tableofcontents
-\clearpage
 
-\part{Using MR}
-\chapter{Getting Started}
-\chapter{Files and Editing}
-\chapter{Windows, Panes and Workspaces}
-\chapter{Search and Navigation}
-\chapter{Tools and Output}
+\mainmatter
 
-\part{Adapting MR}
-\chapter{Settings and Profiles}
-\chapter{Keyboard and Macros}
-\chapter{Troubleshooting}
+\part{The editing environment}
 
-\appendix
-\chapter{Command Reference}
+\chapter{Basic Concepts}
+\index{basic concepts}
+
+\section{The desktop, windows, and documents}
+
+\mr{} starts inside a terminal but does not behave like a single-buffer
+full-screen program. TVision supplies a desktop on which editor windows,
+Bento workspaces, modeless macro tools, Help, and modal dialogs coexist.
+\index{TVision}\index{desktop}\index{window}\index{document}
+A window is the visible and interactive container; a document is the text or
+binary content behind an editor. More than one viewport may refer to the same
+document, and a workspace may restore several different documents and their
+geometry.
+
+The active window has a highlighted frame. Its title identifies the persistent
+file when one exists. Frame markers report properties such as modification,
+read-only state, insert mode, language, workspace-main status, macro recording,
+or background work. Line and column information appears in the configured
+cursor-position marker. The editor's left and right projections can contain
+line numbers, fold markers, difference markers, or a minimap.
+\index{window!frame markers}\index{cursor position marker}
+\index{minimap}\index{code folding}
+
+\manualscreenshot{mr-users-overview.png}{fig:users-overview}{A normal editor
+window showing syntax-aware text, line numbers, folding, minimap, window
+markers, message area, and context-sensitive function-key labels.}
+
+\section{Menus and the status line}
+
+The menu line is the complete compiled command map. Press \key{F10} to
+activate it, move with the arrow keys, and press \key{Enter} to execute a
+selection. A highlighted letter is the menu mnemonic. The mouse can also
+select menus and buttons when terminal mouse reporting is available.
+\index{menu line}\index{mouse}
+
+The status line at the bottom shows the current function-key assignments.
+Those labels are contextual rather than decorative. Startup, ordinary
+editing, compiler diagnostics, file comparison, Bento panes, and the macro
+debugger may assign different meanings to the same function key. When this
+manual and the live status line disagree about a function key, the live status
+line wins.\index{status line}\index{function keys!context-sensitive}
+
+\begin{usernote}
+Most commands are reachable through both a menu and a keymap action. A key
+shown in a screenshot belongs to the captured profile and context; it is not a
+promise that every keymap uses the same sequence.
+\end{usernote}
+
+\section{Help and explanatory messages}
+
+\key{F1} opens context-sensitive Help for the active dialog or menu.
+\key{Shift+F1} opens the detailed Help index. Inside Help, \key{Tab} and
+\key{Shift+Tab} select references, \key{Enter} follows one, and
+\key{Backspace} or \key{Alt+F1} returns to the previous topic.
+\index{Help}\index{Help!context-sensitive}\index{Help!history}
+
+\mr{} uses the menu line for transient information as well. Success,
+information, warning, and error messages have separate priorities and colors.
+Long-running work can post progress without replacing a more important error.
+The log window retains diagnostic detail that is too long-lived for the
+message line. Use \menu{File > Open live log}, \menu{File > Open journal}, or
+the configured log viewer when a short notice is insufficient.
+\index{message line}\index{log window}\index{journal}
+
+\section{Editor modes}
+
+Insert and overwrite determine how ordinary typing affects existing text.
+Read-only state prevents text mutation but still permits navigation, search,
+copying, and inspection. A binary file may open as a Bento hex editor instead
+of being decoded as text. File comparison and compiler output are also
+specialized workspaces rather than ordinary editable buffers.
+\index{insert mode}\index{overwrite mode}\index{read-only}
+\index{binary file}\index{Bento workspace}
+
+The editor is UTF-8 capable. Display columns and byte positions are therefore
+not interchangeable concepts. Commands operate on the logical document and
+the active editor projection; users should avoid treating a displayed glyph as
+necessarily one byte or one terminal cell.
+\index{UTF-8}\index{display columns}\index{bytes}
+
+\section{A productive first session}
+
+A useful first exploration is deliberately small:
+\begin{enumerate}
+\item Open a source file with \menu{File > Open}.
+\item Move with the cursor and page keys and observe the line/column marker.
+\item Press \key{F10} and inspect the top-level menus.
+\item Open \menu{Help > Keys} and compare it with the function-key line.
+\item Mark several lines, copy them, and undo the copy destination.
+\item Open \menu{Window > List} to see the managed-window model.
+\item Inspect \menu{Other > Installation and setup} without changing a draft.
+\end{enumerate}
+This route establishes the three recurring ideas of the manual: commands are
+contextual, visible UI state is authoritative, and setup dialogs stage changes
+before they become runtime settings.
+
+\chapter{Cursor Control and Navigation}
+\index{cursor control}\index{navigation}
+
+\section{Character, line, and page motion}
+
+The arrow keys move by one logical editing position. \key{PageUp} and
+\key{PageDown} move by approximately one viewport. \key{Home} and \key{End}
+move to meaningful boundaries according to the active keymap, while dedicated
+top-of-file and bottom-of-file actions are available in the action catalog.
+Word-left and word-right use the configured word delimiters rather than an
+ASCII-only assumption.\index{word delimiters}\index{PageUp}\index{PageDown}
+
+The editor permits horizontal navigation beyond the currently visible
+columns. A horizontal scrollbar indicates the projection offset. Very long
+lines are not reformatted merely because they do not fit on screen.
+\index{horizontal scrolling}\index{long lines}
+
+\begin{usernote}
+Keymap profiles may emulate WordStar, Emacs, Nano, or a personal scheme.
+Consequently this manual names navigation actions more often than fixed
+sequences. Use \menu{Help > Keys} and the status line for the current binding.
+\end{usernote}
+
+\section{Going directly to a line}
+
+\menu{Search > Goto line number} opens a one-based line-number dialog. The
+accepted range is based on the document's known line state. On very large
+files the line index may still be completing in the background; \mr{} reports
+estimated state until the exact result is available rather than freezing the
+editor.\index{Goto line number}\index{large files!line index}
+
+The minimap is another direct navigation surface. Its viewport marker shows
+which fraction of the document is visible, and mouse selection can move the
+editor to a distant region. Search hits, changed regions, or diagnostics may
+add their own markers to the minimap.\index{minimap!navigation}
+
+\section{Position markers}
+
+\menu{Search > Push position} stores the current document location on the
+marker stack. \menu{Search > Get position} returns to the most recent valid
+entry. This is useful before following a declaration, compiler diagnostic, or
+search result. Invalid locations are skipped when their windows or documents
+no longer exist.\index{position marker}\index{marker stack}
+
+Random-access marks provide named or indexed destinations where the active
+keymap exposes them. They differ from the push/pop stack: retrieving one does
+not mean ``return to the immediately preceding place.'' Use the stack for
+temporary excursions and random-access marks for landmarks that should remain
+available during a longer editing operation.
+
+\section{Matching and structural motion}
+
+\menu{Other > Match parenthesis} moves between matching brackets or
+parentheses. Language-aware folding and outline commands provide larger-scale
+structural navigation. Their results depend on the detected language and the
+current syntax state; plain text remains navigable even when no structural
+producer is available.\index{parenthesis matching}\index{outline}
+
+Fold markers represent collapsible ranges without deleting text. Opening or
+closing a fold changes only the projection. Search, save, block operations,
+and MRMAC continue to address the underlying document.
+\index{code folding!projection}
+
+\section{Mouse navigation}
+
+The mouse can place the cursor, select menu entries, drag scrollbars, and
+activate dialog controls. Exact behavior depends on the terminal emulator and
+whether it forwards mouse events. Keyboard navigation remains complete and is
+the reliable fallback over remote or restricted terminal connections.
+\index{mouse!terminal support}
+
+\chapter{Installation and Setup}
+\index{installation and setup}
+
+\section{One application, staged configuration}
+
+\mr{} has no separate setup executable. \menu{Other > Installation and setup}
+opens the configuration areas for colors, keymaps, filename extensions,
+compiler profiles, paths, backups, interface behavior, search defaults, and
+live logs. Each dialog edits a working draft. Accepting the dialog applies
+validated settings; cancelling it abandons the draft.
+\index{settings!draft}\index{settings!validation}
+
+Persisted settings are represented in \texttt{settings.mrmac}. Users should
+change them through the dialogs or documented MRMAC settings operations.
+Directly editing serialized lines is possible for recovery and review, but it
+bypasses field validation and is not the normal setup path.
+\index{settings.mrmac@\texttt{settings.mrmac}}
+
+\section{Keymap profiles}
+
+\menu{Installation and setup > Key mapping} manages profiles and their
+bindings. A binding has a context, a target type, a target action or macro, a
+key sequence, and a description. Context prevents an editing binding from
+silently taking over a dialog or menu. Multi-key sequences are supported where
+the resolver and profile define them.\index{keymap}\index{key sequence}
+
+\manualscreenshot{mr-users-keymap.png}{fig:users-keymap}{The Key Manager with
+WordStar, Emacs, and Nano profiles. The binding list belongs to the selected
+draft; \textsf{Use} makes a profile active.}
+
+\menu{Use} activates the selected profile. \menu{Add}, \menu{Ren}, and
+\menu{Del} manage profile drafts; \menu{New}, \menu{Edit}, and \menu{Delete}
+manage bindings. \menu{Load}, \menu{Save}, and \menu{Save As} exchange profile
+files. Capturing a key is safer than spelling a sequence by hand because Help
+keys and reserved interactions are filtered by the capture dialog.
+
+\begin{usersafety}
+Do not delete or rewrite the only bindings needed to reach setup until the new
+profile has been tested. Keep a loadable known-good keymap file when
+experimenting with stateful or multi-key emulations.
+\end{usersafety}
+
+\section{Colors and themes}
+
+\menu{Installation and setup > Color setup} groups palette roles by domain.
+Foreground, background, monochrome attributes, and the preview describe one
+selected role. Theme files can be loaded into the working palette and saved
+for reuse.\index{color setup}\index{theme}
+
+Filename-extension profiles may select a theme automatically. This allows a
+different visual treatment for code, prose, logs, or comparison work without
+creating a second global color registry. A loaded theme remains part of the
+dialog draft until the surrounding setup flow accepts it.
+
+\section{Paths}
+
+The Paths dialog configures the settings macro, macro directory, Help file,
+temporary directory, shell executable, audio player, and log destination.
+History limits control the retained file, path, and workspace entries.
+\index{paths setup}\index{history limits}
+
+Use absolute paths for infrastructure whose meaning must not depend on the
+launch directory. The temporary directory is for disposable products; do not
+point it at a source directory. The settings macro path must include a
+filename, not merely a directory.
+
+\section{Backups and autosave}
+
+Backup policy selects no backup, a sibling backup file, or movement to a
+backup directory. Frequency may be first save only or every save. Autosave can
+be driven by keyboard inactivity and by an interval; zero disables the
+respective trigger.\index{backup}\index{autosave}
+
+Workspace autosave is a distinct concern. It preserves window topology and
+workspace membership, while document autosave protects changed text.
+Restoring one does not imply that every dirty document has already been
+written to its persistent file.
+
+\section{User-interface and live-log settings}
+
+User-interface settings control the window manager, message line, cyclic
+virtual desktops, diagnostic adoption, binary autodetection, cursor behavior,
+scrollbars, comparison gutters, indentation preview, and desktop count.
+\index{user-interface settings}\index{binary autodetection}
+
+Live-log settings control search-hit notices, beep or audio behavior, viewer
+line numbers, timestamps, syntax highlighting, and scroll direction. Audio is
+optional; unavailable controls are disabled instead of being silently
+accepted.
+
+\chapter{Command-Line Use}
+\index{command line}
+
+\section{Starting with files}
+
+Pass one or more file paths after the executable name:
+\begin{verbatim}
+./mr README.md Makefile src/main.cpp
+\end{verbatim}
+Each readable file becomes an editor window. The last loaded window is active.
+Relative paths are interpreted from the launch directory and normalized before
+loading.\index{startup files}
+
+Shell glob patterns are accepted:
+\begin{verbatim}
+./mr '*.md' 'src/*.cpp'
+\end{verbatim}
+Quote a pattern when \mr{}, rather than the invoking shell, should expand it.
+Flat glob loading does not recurse into descendants.
+\index{glob patterns}
+
+\section{Recursive loading}
+
+\texttt{--load-recursive} and its short form \texttt{-lr} enable recursive
+startup loading. A directory argument loads readable files below that
+directory. A wildcard argument recursively matches below the non-wildcard
+root.
+\begin{verbatim}
+./mr --load-recursive documentation
+./mr -lr 'src/*.cpp'
+\end{verbatim}
+\index{--load-recursive@\texttt{--load-recursive}}
+
+Recursive loading can create many windows. Prefer a narrow filespec or a
+workspace when the repository contains build trees, vendored dependencies, or
+generated output that should not become part of the session.
+
+\section{Help}
+
+\texttt{--help} and \texttt{-h} print command-line help and exit:
+\begin{verbatim}
+./mr --help
+\end{verbatim}
+The command-line help is intentionally narrower than the in-application Help.
+It describes startup parsing, while \key{F1} explains the running editor.
+
+\section{Startup macro automation}
+
+Advanced workflows may run an MRMAC file after settings, AUTOEXEC macros, the
+workspace, and startup files have been loaded:
+\begin{verbatim}
+./mr README.md --run-macro=macros/session-start.mrmac
+\end{verbatim}
+The two-part form is also accepted:
+\begin{verbatim}
+./mr --run-macro macros/session-start.mrmac
+\end{verbatim}
+Multiple options run in argument order. The option
+\texttt{--exit-after-\allowbreak run-macro} requests termination after at
+least one startup macro has been processed.
+\index{--run-macro@\texttt{--run-macro}}
+\index{--exit-after-run-macro@\texttt{--exit-after-run-macro}}
+
+This facility is useful for deterministic demonstrations, batch-like editor
+automation, and test sessions. It still runs through the normal MRMAC loader
+and UI-thread execution route; it is not a second command language.
+
+\section{Binary files at startup}
+
+When binary autodetection is enabled, boundary samples are checked before a
+startup file is assigned an ordinary editor. A detected binary is opened in
+the Bento hex editor. This prevents NUL-rich data from being rendered as
+meaningless text.\index{binary file!command line}
+
+\begin{usernote}
+Autodetection is a policy setting, not a claim that every non-text format is
+perfectly classified. The \menu{Text > Hex editor} command remains available
+for an explicitly chosen text-to-hex transition.
+\end{usernote}
+
+\chapter{Loading and Saving Files}
+\index{loading files}\index{saving files}
+
+\section{Open, Load, and Get Last}
+
+\menu{File > Open} creates a new editor window for the chosen file.
+\menu{File > Load} replaces the contents of the current suitable editor
+window. Use Open when both the current and new document should remain
+available; use Load when the present window is intentionally being reused.
+\index{Open command}\index{Load command}
+
+\menu{File > Get last} lists recently used files, folders, and workspaces.
+Empty groups are skipped when initial focus is chosen. Selecting a row performs
+the operation appropriate to its type rather than treating every history entry
+as a file.\index{Get Last dialog}\index{recent files}
+
+\section{Acquire, live logs, and the journal}
+
+\menu{File > Acquire} accepts a directory specification or an executable
+command. Results are presented as selectable paths, and \menu{Load all} opens
+every eligible entry. This is useful when the file set is discovered by a
+tool rather than known in advance.\index{Acquire dialog}
+
+\menu{File > Open live log} follows a text file as it grows. \menu{File > Open
+journal} reads \texttt{systemd} journal output, optionally restricted by an
+application tag. These are communication or log roles with lifecycle rules
+different from an ordinary source buffer.\index{live log}\index{systemd journal}
+
+\section{Text and binary loading}
+
+Ordinary text files use the piece-table-backed editor. Binary files can use the
+Bento hex editor, whose synchronized panes show hexadecimal, decimal, binary,
+octal, strings, and typed inspector values.\index{hex editor}
+
+\manualscreenshot{mr-users-hex-editor.png}{fig:users-hex-editor}{A binary
+executable opened from the command line. Hexadecimal, strings, inspector,
+decimal, binary, and octal panes share one position.}
+
+The hex editor is not a cosmetic mode applied to decoded text. It is a
+specialized workspace with panes that project the same binary source.
+Navigation in one pane updates the others. Use the inspector to interpret the
+selected bytes as signed and unsigned integer widths and related data forms.
+
+\section{Save, Save As, Save All, and Revert}
+
+\menu{File > Save} writes the current document to its persistent path.
+\menu{File > Save As} chooses another path and updates the window's persistent
+identity. \menu{File > Save all} collects dirty windows and stops if a save is
+cancelled or fails.\index{Save command}\index{Save As command}
+\index{Save All command}
+
+\menu{File > Revert} reloads the saved file and discards unsaved document
+changes after confirmation. It requires a persistent file. A read-only window
+cannot be saved as ordinary editable content, although supported log roles may
+offer their own snapshot save path.
+
+\begin{usersafety}
+Revert, closing a dirty window, loading a workspace over active state, and
+exiting are dirty-gated operations. Read the confirmation detail: Save,
+Discard, and Cancel are intentionally different lifecycle decisions.
+\end{usersafety}
+
+\section{File information}
+
+\menu{File > Info} reports document identity, persistent path, size, line and
+cursor state, encoding-related editor state, window role, and runtime
+metadata. Use it when a file behaves differently than expected: the dialog is
+more reliable than inferring state from the filename alone.
+\index{File Information dialog}
+
+\section{Workspaces}
+
+A workspace records managed windows, paths, virtual desktops, geometry,
+visibility, main-file status, and supported Bento configuration.
+\menu{File > Open workspace} loads such a description. The Window List offers
+workspace save/load controls and autosave/autoload toggles.
+\index{workspace}\index{workspace!autoload}\index{workspace!autosave}
+
+Workspace state does not replace file persistence. Saving a workspace records
+where and how documents are arranged; saving a document records its text or
+binary changes. A robust session workflow does both.
+
+\chapter{Inserting Text}
+\index{inserting text}
+
+\section{Insert and overwrite}
+
+In insert mode, typed text is added at the cursor and existing content moves
+logically to the right. In overwrite mode, eligible existing characters are
+replaced. The frame and menu state indicate the current mode.
+\menu{Edit > Insert} toggles it.\index{insert mode}\index{overwrite mode}
+
+New text enters the piece table's add buffer. This implementation detail is
+visible to the user only through its consequence: inserting into a very large
+file does not require moving all later bytes in memory.
+
+\section{Lines and line endings}
+
+\key{Enter} inserts a line boundary using the active editor behavior.
+Filename-extension settings can require a final line ending, preserve or
+normalize relevant conventions, and control the EOF marker. Avoid assuming
+that a visually blank final row is the same as a stored final newline.
+\index{line ending}\index{EOF marker}
+
+The \field{CR/LF at EOF} and related profile fields describe save policy, not
+an extra character painted into the text. \menu{File > Info} helps distinguish
+document content from its projection.
+
+\section{Clipboard input}
+
+\menu{Edit > Paste} inserts the current editor clipboard at the cursor.
+\menu{Edit > Append} and \menu{Edit > Cut and append} build a larger clipboard
+payload from several blocks. Terminal or operating-system clipboard exchange
+is available through the corresponding editor actions and MRMAC primitives.
+\index{clipboard}\index{Paste command}
+
+Pasting into a column or line-oriented workflow should be preceded by a check
+of the current block state and insert mode. A persistent block can remain
+active after navigation; the highlighted projection is the warning that the
+next block-aware command may not act only at the cursor.
+
+\section{Unicode input}
+
+\mr{} stores and displays UTF-8 text. A character may occupy several bytes,
+and a glyph may occupy zero, one, or more terminal cells depending on Unicode
+and terminal behavior. Cursor motion, column blocks, and formatting therefore
+use editor and display-column rules rather than byte offsets.
+\index{Unicode}\index{UTF-8!input}
+
+The MRMAC ASCII and Emoji tools can copy a selected character to the
+clipboard. They are convenient for characters that are awkward to enter with
+the terminal's compose or input method.
+
+\section{Snippets and macro-generated text}
+
+The Snippet SideKick is a controlled editing surface for macro-generated
+expansion. \key{Tab} and \key{Shift+Tab} move among placeholders;
+\key{Ctrl+Enter} or \key{Alt+Enter} commits, while \key{Esc} cancels. The
+parent document changes only at commit.\index{Snippet SideKick}
+
+This separation matters: a macro can prepare a complex expansion without
+mutating the document behind every intermediate keystroke.
+
+\chapter{Deleting Text}
+\index{deleting text}
+
+\section{Character deletion}
+
+Backspace removes the logical character before the cursor; Delete removes the
+eligible character at the cursor. At line boundaries the operation may join
+lines. UTF-8 sequences are treated as editor characters rather than a request
+to delete one arbitrary byte.
+
+Read-only windows reject mutation. If a delete command appears inert, inspect
+the read-only marker, current window role, active block, and command state
+before assuming that input was lost.
+
+\section{Selections and blocks}
+
+\menu{Block > Delete} removes the marked block. \menu{Edit > Cut} also removes
+the selection but retains it in the clipboard. Choose Delete when no paste is
+intended and Cut when the text is being transferred.\index{Delete block}
+\index{Cut command}
+
+Line, column, and stream blocks have different shapes. Deleting a column block
+removes a rectangular range on each participating line; deleting a stream
+block removes one continuous logical range; deleting a line block removes
+complete lines.
+
+\section{Deleting across windows}
+
+\menu{Block > Window move} transfers the block to another editor window and
+removes it from the source after a successful destination operation.
+\menu{Window copy} leaves the source in place. Use the explicit inter-window
+commands instead of assuming that an active clipboard implicitly names a
+destination.\index{Window move block}\index{Window copy block}
+
+\section{Recovering a deletion}
+
+Deletion is recorded in the document's undo history. Use Undo immediately when
+the wrong range was removed, or traverse the history deliberately as described
+in Chapter~\ref{ch:undo}. Saving does not erase the in-memory history by
+definition, but closing or replacing the document ends the current editor
+lifecycle.
+
+\begin{usernote}
+A backup file and Undo solve different problems. Undo reverses an in-session
+edit; a backup protects a previous persistent version. Configure both
+according to the cost of losing work.
+\end{usernote}
+
+\chapter{Tabs and Virtual Space}
+\index{tabs}\index{virtual space}
+
+\section{Tab width and expansion policy}
+
+The active filename-extension profile supplies the tab size and expansion
+policy. \field{Use tabs} inserts or preserves tab characters according to the
+operation; \field{Spaces} expands indentation into spaces. Tab size determines
+display stops and indentation width but does not change the byte value of an
+existing tab.\index{tab size}\index{tab expansion}
+
+Mixed indentation is particularly sensitive to this distinction. Two lines
+can align visually under one tab width and diverge under another. Use
+language-appropriate profiles and code-formatting tools before performing
+large mechanical indentation changes.
+
+\section{Typing beyond end of line}
+
+Virtual space permits the cursor to occupy a display column beyond the stored
+end of line. When text is inserted there, the gap is materialized using the
+active tab and space policy. Merely moving through virtual space does not add
+bytes to the document.\index{virtual space!materialization}
+
+This behavior is useful for column work and diagrams, but it can create
+unexpected whitespace when a cursor is placed far to the right accidentally.
+The \field{Truncate whitespace} profile option controls save-time treatment of
+unwanted trailing space.
+
+\section{Tab-aware blocks}
+
+Column blocks use display columns. A tab can span several cells, so a
+rectangular selection may intersect displayed tab space rather than a
+one-byte-per-column grid. Inspect the result after column moves, sorting, or
+indentation in tab-heavy files.\index{column block!tabs}
+
+\section{Indent and Undent}
+
+\menu{Block > Indent} and \menu{Block > Undent} apply the configured indentation
+to selected lines. Smart indentation may also use the language and nearby
+syntax. The operation is block-based and undoable; it is not a permanent
+rewrite of the profile.
+
+\section{Format line and margins}
+
+The format line provides a compact visual representation of tab stops and
+margins. It is covered in detail in Chapter~\ref{ch:format-line}. Tab setup,
+left and right margins, paragraph formatting, and centering should be treated
+as one formatting policy rather than unrelated numbers.
+
+\chapter{Block Operations}
+\index{block operations}
+
+\section{Three block shapes}
+
+\mr{} supports line, column, and stream blocks. A line block contains complete
+logical lines. A column block is rectangular in display coordinates. A stream
+block is one continuous range from its start position to its end position.
+The distinction determines what copy, move, delete, indentation, case
+conversion, and save-block operations receive.\index{line block}
+\index{column block}\index{stream block}
+
+\menu{Block > Mark lines}, \menu{Mark columns}, and \menu{Mark stream} start the
+respective mode. \menu{End marking} commits the current range. \menu{Turn
+marking off} removes it. \menu{Hide/show block mark} changes only whether the
+selection is projected; the block still exists when hidden.
+\index{block!marking}\index{block!visibility}
+
+\manualscreenshot{mr-users-stream-block.png}{fig:users-stream-block}{A stream
+block across several Markdown lines. The selected range ends at the cursor;
+the minimap and status information remain live.}
+
+\section{Marking state and cursor motion}
+
+An actively extending block and a committed block are different states.
+Cursor motion extends an active selection. After commit, ordinary cursor
+movement may preserve or clear it according to the persistent-block setting.
+\menu{Block > Persistent blocks} reports and changes that runtime policy.
+\index{persistent blocks}
+
+The current block is a first-class editor state. A command may act on it even
+when the cursor has moved away or the visible highlight has been hidden.
+Before a destructive block command, verify the marked shape and endpoints.
+
+\begin{usersafety}
+Hidden selection is not absent selection. If a copy, delete, format, or case
+conversion affects more text than expected, turn block visibility on and
+inspect the persistent-block state.
+\end{usersafety}
+
+\section{Copy, move, and delete}
+
+\menu{Block > Copy} inserts a copy at the command's destination while retaining
+the source. \menu{Move} transfers the range. \menu{Delete} removes it.
+Equivalent Edit-menu commands use the clipboard when appropriate.
+\index{block!copy}\index{block!move}\index{block!delete}
+
+Every successful mutation enters undo history as an editor operation. A large
+block does not need to be flattened into a second complete document merely to
+be moved; the piece-table model can express changes as new ranges and
+references.
+
+\section{Inter-window transfer}
+
+\menu{Block > Window copy} and \menu{Window move} explicitly transfer between
+editor windows. The target must support the requested mutation and must remain
+valid throughout the operation. A read-only or specialized target may reject
+the transfer.\index{block!inter-window}
+
+Use ordinary clipboard copy when the destination is outside \mr{} or when the
+transfer should survive closing the source. Use the window commands when the
+relationship between two managed editor windows is the important part.
+
+\section{Indent, Undent, and transformations}
+
+\menu{Block > Indent} and \menu{Undent} operate on selected lines using the
+active indentation profile. \menu{Text > Upper case} and \menu{Lower case}
+transform the applicable marked text. Code formatting may consume the block
+or the whole file according to the formatter command and profile.
+\index{block!indentation}\index{case conversion}
+
+Column-block sorting is available through its command or keymap action. The
+sort key is the selected rectangular slice, while complete participating
+lines remain the records being reordered. Confirm tab and display-column
+interpretation before sorting mixed-width data.\index{column block!sorting}
+
+\section{Loading and saving blocks}
+
+\menu{Block > Load block} inserts text read from a file at the block position.
+\menu{Save block} writes only the marked range. These commands are useful for
+reusable fragments and for exchanging data without replacing or saving the
+whole document.\index{Load block}\index{Save block}
+
+A saved block is plain selected content, not a workspace or editor-state
+serialization. Its block shape, cursor location, theme, and profile are not
+encoded in the block file.
+
+\chapter{Undo and Redo}
+\label{ch:undo}
+\index{Undo}\index{Redo}
+
+\section{Document-local history}
+
+Undo and Redo traverse the active editor's change history. Each document owns
+its history; changing windows changes which history the commands address.
+Read-only views can be navigated but do not gain a mutation history merely
+because Undo is invoked.
+
+An undo entry represents an accepted editing operation, not every internal
+piece-table step. Text insertion, deletion, block operations, formatting, and
+supported macro edits therefore reverse at meaningful editor boundaries.
+\index{undo history!operation boundary}
+
+\section{Traversing the history}
+
+\menu{Edit > Undo} moves one step toward the earlier document state.
+\menu{Edit > Redo} reapplies a step that was undone. A new mutation after Undo
+normally establishes a new forward history; do not assume that the abandoned
+redo branch remains selectable.\index{redo branch}
+
+Watch the modified marker while traversing. Returning to content equal to the
+last saved snapshot can clear the dirty relationship even though the document
+has a non-empty history.
+
+\section{Undo and large files}
+
+The document model stores snapshots and piece relationships rather than
+copying the entire file for every operation. This makes practical undo depth
+possible even when the original mapping is large. It does not make history
+free: inserted text, metadata, and retained snapshots still consume memory.
+\index{large files!undo}
+
+Background syntax, folding, minimap, or line-index results are derived state.
+When Undo changes the document version, stale results are rejected and fresh
+work is scheduled. Undo therefore restores document semantics; derived
+projections catch up without owning the edit.
+
+\section{Undo versus persistent recovery}
+
+Undo exists only in the running document lifecycle. Backups, autosave, and
+version control protect different time horizons. Closing a document,
+restarting \mr{}, or reverting from disk is not a substitute for explicitly
+saving an important state.\index{recovery}
+
+\begin{usernote}
+For risky transformations, combine a saved file or version-control checkpoint
+with Undo. One protects the persistent baseline; the other supports rapid
+in-session experimentation.
+\end{usernote}
+
+\section{Macros and undo}
+
+MRMAC editor procedures route mutations through the same editor model.
+A macro can group work according to its operations, and the user can undo
+accepted changes. A macro that performs external I/O, launches a process, or
+changes settings cannot make those external effects disappear through text
+Undo.\index{MRMAC!undo}
+
+\chapter{Windows, Virtual Desktops, and Workspaces}
+\index{window management}\index{virtual desktops}
+
+\section{Creating, closing, and selecting windows}
+
+\menu{Window > Open} creates another editor window. \menu{Close} closes the
+active managed window after dirty-state handling. \menu{Next} and
+\menu{Previous} traverse neighboring desktop windows. \menu{List} opens the
+complete control dialog.\index{Window List dialog}
+
+The Window List reports minimized or hidden state, virtual-desktop number,
+workspace-main status, file, and directory. It also offers Delete, Save, Save
+all, Save as, Revert, Hide, Get, and workspace commands. Use it when direct
+cycling is no longer an adequate model of the session.
+
+\section{Hide, minimize, and zoom}
+
+Hide removes a window from ordinary selection without closing it. Minimize
+reduces a supported window to its one-line desktop representation. Zoom
+toggles maximized geometry. These states are distinct and are shown
+differently in the Window List.\index{window!hidden}\index{window!minimized}
+\index{window!zoomed}
+
+Restoring a minimized window returns it to stored normal geometry. Unhiding a
+window returns it to selection. Neither operation reloads the file or creates
+a new document.
+
+\section{Cascade, tile, and split}
+
+\menu{Window > Organize > Cascade} overlaps eligible ordinary desktop windows.
+\menu{Tile} partitions the usable desktop among them. Modal dialogs and Help
+do not participate.\index{window!cascade}\index{window!tile}
+
+Horizontal and vertical split create another viewport of the same supported
+document. Edits are shared because both panes refer to one document; cursor
+and scroll state belong to the individual viewport where supported.
+\index{split view}
+
+\section{Virtual desktops}
+
+\mr{} supports one through nine virtual desktops. Viewport-left and
+viewport-right commands select the neighboring desktop. Move-window-left and
+move-window-right change the active window's membership and select the target
+desktop.\index{virtual desktop!navigation}
+
+Cyclic navigation is configurable. With cycling disabled, commands stop at the
+first or last desktop. With cycling enabled, navigation wraps. The live command
+state disables operations that cannot currently produce a valid transition.
+
+\section{Links}
+
+\menu{Window > Link} and \menu{Unlink} control the MRMAC window link used by
+editor procedures. A link is not the same as a split viewport or file
+comparison. It gives macro operations an explicit related window without
+creating a second document ownership model.\index{window link}
+
+\section{Workspace lifecycle}
+
+Workspaces combine window identity, geometry, visibility, virtual desktops,
+main-file designation, and supported Bento state. The Window List can mark the
+main workspace file, save or load a workspace, and toggle autosave or autoload.
+\index{workspace!main file}
+
+\menu{Get} in the Window List moves a window from another virtual desktop into
+the current one. This is a topology change, not a file reload. Workspace load
+validates entries before adopting them; missing or invalid files are reported
+instead of being silently converted into unrelated empty windows.
+
+\begin{usersafety}
+Save dirty documents before replacing the active topology with a workspace.
+Workspace persistence records session organization; it is not a bulk Save
+command for document contents.
+\end{usersafety}
+
+\chapter{File Formatting}
+\index{file formatting}
+
+\section{Formatting scope}
+
+Formatting commands distinguish the active line, paragraph, marked block, and
+whole file. The presence of a block can change the intended scope. Before
+running a formatter, make the selection visible and confirm the active
+filename-extension profile.\index{formatting!scope}
+
+\menu{Text > Upper case} and \menu{Lower case} transform selected text.
+\menu{Center line} uses the configured left and right margins.
+\menu{Re-format paragraph} wraps prose according to the formatting policy.
+\menu{Re-format code} invokes the language formatter configured for the file.
+
+\section{Paragraph reformatting}
+
+Paragraph formatting is for textual layout, not language syntax. It joins and
+wraps the current paragraph within the active margins while respecting
+paragraph boundaries. It should not be used as a source-code pretty printer.
+\index{paragraph formatting}
+
+The left and right margins can be changed through their dialogs. Both values
+are one-based and must form a valid range. They are synchronized with the
+persisted format-line settings.
+
+\section{Code reformatting}
+
+Code reformatting delegates to the configured formatter pipeline for the
+detected language and file profile. A formatter may operate on the block or
+file and may be an external program. Its output is adopted through the editor
+mutation path so that successful changes remain undoable.
+\index{code formatter}\index{external formatter}
+
+Do not run a formatter on unsaved generated output or an incorrectly detected
+language without first checking the profile. When the operation has external
+requirements, missing tools or invalid output are reported rather than treated
+as valid empty formatting.
+
+\section{Whitespace policy}
+
+Filename-extension profiles control tab expansion, tab size, truncation of
+trailing whitespace, final line behavior, margins, and formatting commands.
+Formatting should be viewed as an application of that policy, not a universal
+style hard-coded into the editor.\index{whitespace policy}
+
+\section{Exporting to PDF}
+
+\menu{File > Export to PDF} replaces the historical idea of direct printer
+control with a portable output artifact. The dialog selects output path,
+header, footer, page separator, font family and size, text width, and page
+margins.\index{PDF export}
+
+The export path is separate from the source path. Header and footer are
+repeated page text. The page separator is a literal document string that
+forces a page boundary when encountered. Margins are PDF point values; text
+width is a formatted column count.
+
+\begin{usernote}
+PDF export is a text export, not a screenshot of the terminal theme. Syntax
+colors, minimap, window frame, and dialog chrome are not the printable
+document.
+\end{usernote}
+
+\section{File comparison}
+
+\menu{Text > File compare} opens a comparison Bento from two suitable editor
+windows. Difference markers and minimaps present structure; next/previous
+change navigates it. Apply-original-to-compare and
+apply-compare-to-original transfer the selected difference in an explicit
+direction.\index{file comparison}
+
+Read-only comparison policy can prevent accidental mutation of the compare
+side. The direction names are deliberately verbose: verify them before
+applying a large change.
+
+\chapter{The Format Line and Margins}
+\label{ch:format-line}
+\index{format line}
+
+\section{Purpose}
+
+The format line is a compact ruler stored in the filename-extension profile.
+It communicates tab stops and formatting margins to commands that need them.
+Unlike a drawn ruler in the document, it is editor configuration and does not
+become file content.
+
+\section{Reading the ruler}
+
+A typical format line uses visible markers separated by repeated filler
+characters. Exact glyphs are theme and configuration details; their positions
+are what matter. The current tab size, left margin, and right margin are also
+shown as explicit fields in the Filename Extensions dialog.
+
+Use the ruler to detect a mismatch between expected and active formatting
+before indenting or wrapping a large range. A C++ profile and a prose profile
+will often have intentionally different policies.
+
+\section{Left and right margins}
+
+\menu{Text > Set left margin} accepts a one-based value smaller than the right
+margin. \menu{Set right margin} accepts a value greater than the left margin.
+Centering and paragraph wrapping use this interval.\index{left margin}
+\index{right margin}
+
+Margins do not truncate long lines on load. They guide formatting operations.
+Text beyond the right margin remains part of the document unless a command
+explicitly wraps or changes it.
+
+\section{Tabs and the format line}
+
+Tab size and expansion policy interact with the ruler. A displayed stop is a
+column concept, while a literal tab is one character in the file. Changing the
+profile can change alignment without changing stored bytes.
+
+For code, prefer the language and repository's indentation policy. For tables
+or diagrams, verify alignment in the actual terminal width and with the
+intended tab settings.\index{format line!tab stops}
+
+\section{Profile inheritance}
+
+The DEFAULT filename-extension profile supplies global fallback settings.
+A matching named profile overrides the relevant values. Consequently a
+format line that appears to ``change by itself'' usually indicates that the
+active file matched a different extension profile.
+\index{DEFAULT profile}
+
+\chapter{Search and Replace}
+\index{search}\index{replace}
+
+\section{The search dialog}
+
+\menu{Search > Search for text} opens the single-document search form. Search
+text may be a literal, a PCRE2 regular expression, or a word/phrase according
+to \field{Type}. Direction is forward or backward. Mode stops on the first
+occurrence, prompts for the next, or lists all occurrences.
+\index{PCRE2}\index{regular expression}
+
+\manualscreenshot{mr-users-search-dialog.png}{fig:users-search}{Single-document
+Search with literal, PCRE2, word/phrase, direction, result mode, and scope
+controls.}
+
+\field{Case sensitive} changes comparison. \field{Global search} controls
+boundary behavior. \field{Restrict to marked block} limits the range.
+\field{Search all windows} extends traversal to eligible editor windows.
+Cancelling preserves the previously accepted search specification.
+
+\section{Literal, word, and regular-expression searches}
+
+Literal search treats the entered text as text. Word/phrase mode applies word
+boundaries using editor rules. PCRE mode delegates pattern semantics to PCRE2.
+Do not escape a literal as though it were a regular expression unless PCRE
+mode is actually selected.\index{search!literal}\index{search!word}
+
+Regular expressions are powerful enough to match empty strings or very broad
+ranges. Test a pattern with stop-on-first or list mode before combining it
+with replace-all.
+
+\section{Replace}
+
+\menu{Search > Search and replace} adds replacement text, policy, and cursor
+placement. Mode can replace the first match, prompt for each, or replace all.
+In prompt mode, Replace, Skip, Replace All, and Cancel make the decision for
+the current and remaining matches.\index{replace!confirmation}
+
+Regular-expression replacement syntax is active only with the corresponding
+search mode. Preview lines in the confirmation dialog are not an editable
+buffer.
+
+\begin{usersafety}
+Before Replace All, use list mode or a restricted marked block and inspect
+representative matches. For multi-file work, commit or back up the affected
+files first.
+\end{usersafety}
+
+\section{Repeating and continuing}
+
+\menu{Search > Repeat previous search} reuses the last accepted specification
+without reopening the form. Continuation prompts distinguish Next, Stop, and
+Cancel. Search state is not rebuilt from partially edited fields in a cancelled
+dialog.\index{Repeat previous search}
+
+\section{Results and navigation}
+
+List mode produces a Found List. Each row identifies document and location.
+Activating it loads or focuses the document and moves to the match. Push the
+current position first when following results should be a reversible
+excursion.\index{Found List}
+
+Search hits may be shown on the minimap and message line. The result location
+is resolved against the current document version; stale results are not
+allowed to overwrite or misdirect a newer document silently.
+
+\section{Multiple-file search}
+
+\menu{Search > Multiple file search} selects filespec, root, recursion, search
+text, matching rules, editor-window inclusion, and optional workspace
+restriction. The request is immutable after submission and runs in the
+background.\index{multiple-file search}
+
+\field{Search editor windows} includes already loaded documents.
+\field{Restrict to workspace} limits candidates to the active workspace.
+Whole-word mode takes precedence over regular-expression mode when both
+controls would otherwise be selected.
+
+\section{Multiple-file search and replace}
+
+The replace variant adds replacement text, review actions, and
+\field{Keep all files open}. Results are collected before UI adoption.
+Review permits Replace, Replace All, and Skip. Files need not all remain open
+unless that option is selected.\index{multiple-file replace}
+
+Workspace restriction is especially useful in repositories with vendored or
+generated trees. A filespec alone describes names; workspace membership
+describes the intended project set.
+
+\chapter{Keystroke Macros}
+\index{keystroke macros}\index{macro recording}
+
+\section{Recording}
+
+\menu{Macro > Recording start/stop} captures eligible key activity into a new
+macro source. The frame displays a recording marker. Stopping the recording
+offers to bind the result to a key.\index{recording marker}
+
+Help-navigation keys and the recording toggle itself are treated specially so
+that a macro does not accidentally record the command that terminates its own
+capture. Modal interactions may be represented by resulting commands rather
+than raw terminal bytes.
+
+\section{Naming and binding the result}
+
+A recorded macro becomes a normal MRMAC definition that can be inspected and
+edited. The binding dialog captures a key or modified sequence; \key{Esc}
+leaves the macro unbound. Binding is separate from creation, so a useful macro
+need not consume a key.\index{macro binding}
+
+Use the Key Manager to review conflicts. If more than one profile or context
+defines a sequence, the active resolver semantics determine which target is
+eligible. Descriptions should state what the macro does, not merely repeat its
+filename.
+
+\section{The Macro Library}
+
+\menu{Macro > Macro Library} lists indexed files, definitions, bindings, and
+AUTOEXEC membership. Create, Delete, Copy, Edit, and Bind operate on the
+selected definition. AUTOEXEC Add and Remove control which macro files run
+during startup.\index{Macro Library}\index{AUTOEXEC}
+
+Playback runs the selected macro normally. Debug starts it in the MRMAC
+debugger, where breakpoints, watches, evaluation, stepping, and execution
+state are visible. Use Debug for authored logic; use ordinary Playback for a
+known routine.
+
+\section{What recording does not capture}
+
+Recording is not a video or terminal-event dump. It produces a macro that
+replays supported editor meaning. External program state, wall-clock timing,
+network responses, and files changed by another process are not automatically
+made deterministic.
+
+When a recorded sequence becomes a maintained tool, edit its source to add
+validation and explicit error handling. Repeatedly recording a longer sequence
+is less reviewable than turning stable behavior into a named MRMAC routine.
+
+\section{Saving and reloading}
+
+Macro files live under the configured macro directory or another chosen path.
+The library indexes available definitions. A saved keymap binding and an
+AUTOEXEC entry refer to macro identity; moving or renaming sources can
+invalidate those references.\index{macro directory}
+
+\chapter{Line Drawing}
+\index{line drawing}
+
+\section{Enabling the mode}
+
+\menu{Text > Line drawing} toggles line-drawing mode for the active editor.
+The menu reports ON or OFF. \menu{Double lines} is available only while line
+drawing is enabled and selects the preferred double-line style.
+\index{line drawing!double lines}
+
+Line drawing inserts Unicode box-drawing glyphs into the document. It is not a
+temporary screen overlay. Saving the file preserves those characters as UTF-8.
+
+\section{Drawing with cursor motion}
+
+With line drawing active, the supported modified cursor gesture draws between
+the old and new positions. Existing adjacent line-drawing cells are inspected
+so that corners, tees, crossings, and mixed single/double connections receive
+an appropriate glyph.\index{box-drawing characters}
+
+The editor can materialize rows and virtual columns when drawing beyond
+existing text. This is useful for diagrams but can add whitespace and new
+lines. Undo remains available for each accepted drawing operation.
+
+\section{Drawing with the mouse}
+
+A plain left-button drag draws a connected path. Direction changes are
+resolved into orthogonal segments. Fast collinear motion is coalesced so the
+document receives the final intended line instead of every intermediate mouse
+sample.\index{line drawing!mouse}
+
+Terminal mouse support must be active. Over remote connections with unreliable
+mouse reporting, cursor-based drawing is more predictable.
+
+\section{Rectangles from column blocks}
+
+In line-drawing mode, an eligible column-block gesture can produce a rectangle
+whose corners are the block bounds. The operation materializes empty rows or
+columns as needed and consumes the drawing selection after the box is
+committed.\index{line drawing!rectangle}
+
+\section{Single and double intersections}
+
+Double-line preference applies to the new connection. When a new segment
+meets existing line-drawing text, \mr{} preserves supported neighboring
+connections and chooses a same-style or mixed glyph. Unsupported arbitrary
+characters are not guessed into a box-drawing topology.
+
+\begin{usernote}
+Line drawing works best in a monospaced terminal font with complete Unicode
+box-drawing coverage. Misaligned display can be a font or terminal-cell issue
+even when the saved UTF-8 characters are correct.
+\end{usernote}
+
+\chapter{Calculator}
+\index{calculator}
+
+\section{Opening the calculator}
+
+The bundled desktop-utilities macro adds \menu{Tools > Calculator}. Its
+default binding is \key{Alt+Shift+C}. Because the tool is supplied by
+\mrmac{}, the menu item is available after the corresponding utility macro
+has been loaded and registered. An installation that deliberately omits that
+macro will not show the command.
+
+The calculator is a modal work surface: the active document remains visible
+behind it, but editor input resumes only after the dialog is closed or its
+value is pasted. The upper display is the current input; the second display
+shows the memory register.
+
+\manualscreenshot{mr-users-calculator.png}{fig:users-calculator}{The bundled
+\mrmac{} calculator in a real \mr{} PTY session.}
+
+\section{Entering values}
+
+The digit buttons enter a value in the current base. \field{Base} cycles
+through decimal, hexadecimal, and binary representation while preserving the
+numeric value.\index{calculator!number base}\index{hexadecimal}
+\index{binary notation}\index{decimal notation}
+
+Hexadecimal output uses a leading dollar sign, for example \texttt{\$2A}.
+The buttons A through F are accepted only in base 16. In binary mode, only
+zero and one are valid. \field{+/-} changes the sign of the current input;
+\field{Clr} clears the input and clears memory when the displayed value is
+already zero.
+
+If a stream or line block contains a valid decimal integer when the calculator
+opens, that number seeds the input. Whitespace is ignored for this purpose.
+Column blocks and non-numeric selections are left untouched and the
+calculator starts at zero.\index{calculator!selected text}
+
+\section{Arithmetic and logical operations}
+
+The four arithmetic operators perform integer addition, subtraction,
+multiplication, and division. Division is integer division. \field{And},
+\field{Or}, and \field{Xor} operate bitwise on integer operands.
+\index{calculator!arithmetic}\index{calculator!bitwise operations}
+
+The interaction follows a conventional accumulator:
+
+\begin{enumerate}
+  \item enter the first operand;
+  \item choose an operator;
+  \item enter the second operand;
+  \item choose another operator to continue, or \field{=} to display the
+        result.
+\end{enumerate}
+
+The calculator rejects division by zero, invalid digits for the selected
+base, and malformed pasted input. A rejected operation leaves the dialog open
+so the value can be corrected.
+
+\section{Memory and pasting the result}
+
+\field{Mem Sto} copies the current numeric value to the memory register;
+\field{Mem Rcl} recalls it in the active base. The memory display is
+right-aligned beneath the input display.\index{calculator!memory}
+
+\field{Paste} inserts the displayed representation at the current editor
+position and closes the calculator. This is a document edit and participates
+in normal Undo and Redo. In hexadecimal mode the inserted text includes the
+dollar prefix; change the base before pasting if the destination expects
+another notation.\index{calculator!paste}
+
+\begin{usernote}
+The calculator is an integer tool, not a floating-point expression evaluator.
+For repeatable calculations embedded in an editing workflow, an authored
+\mrmac{} routine is usually the clearer instrument.
+\end{usernote}
+
+\chapter{Character Tables}
+\index{character table}\index{ASCII table}\index{Emoji table}
+
+\section{ASCII and Latin-1}
+
+\menu{Tools > ASCII table}, normally bound to \key{Alt+Shift+A}, opens a
+modeless table. Each row contains the visible form, its decimal code, and the
+range name. Codes 0 through 127 are the ASCII range; codes 160 through 255
+are presented as Latin-1. The unused C1 interval from 128 through 159 is not
+listed.\index{ASCII}\index{Latin-1}
+
+Control codes receive readable labels. For example, code 1 appears as
+\texttt{\^{}A}, space appears as \texttt{SP}, delete as \texttt{\^{}?}, and
+non-breaking space as \texttt{NBSP}.\index{control characters}
+\index{non-breaking space}
+
+\manualscreenshot{mr-users-ascii-table.png}{fig:users-ascii-table}{The
+modeless ASCII and Latin-1 table; the decimal code is shown beside each
+character.}
+
+Choosing an entry copies the corresponding character to the system clipboard
+and closes the table. Paste it with the active keymap's clipboard command.
+The selected row is remembered when the table is opened again during the same
+session.\index{clipboard!character table}
+
+\section{Emoji and Unicode symbols}
+
+\menu{Tools > Emoji table}, normally bound to \key{Alt+Shift+E}, works in the
+same way. It presents selected Unicode symbol and emoji ranges, including
+technical symbols, dingbats, regional indicators, pictographs, emoticons,
+transport symbols, and newer symbol blocks. The right-hand column gives the
+\texttt{U+} code point.\index{Unicode}\index{code point}
+
+Selecting a row copies the UTF-8 character to the clipboard. Whether the
+glyph is visible in the table and editor depends on the terminal font and its
+fallback fonts. A missing-glyph box is a rendering limitation; it does not
+mean that the copied UTF-8 sequence is invalid.\index{terminal font}
+
+\begin{usernote}
+The table inserts a character, not an ASCII escape notation. To write a
+literal numeric escape such as \texttt{\textbackslash u263A}, enter that
+source-language syntax directly.
+\end{usernote}
+
+\chapter{Dense Display and Information Projection}
+\index{dense display}\index{information projection}
+
+\section{Keeping document space visible}
+
+The historical idea of a condensed display is more useful in \mr{} as a
+choice of information density. The editor can project line numbers, folding
+controls, difference markers, a minimap, scrollbars, a status line, and
+function-key assignments around the document. These elements do not become
+part of the file.\index{gutter}\index{status line}
+\index{function-key line}
+
+Use \menu{Other > Installation and setup > User interface settings} to choose
+the global projection. Filename-extension profiles can then adapt relevant
+editor behavior to a file class. Keep enough context to navigate safely, but
+do not spend half a narrow terminal describing the other half.
+
+\section{Gutters}
+
+Gutter slots are ordered projections. Their setup codes are:
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Code & Projection \\
+\midrule
+\texttt{L} & line numbers \\
+\texttt{C} & code-folding controls \\
+\texttt{D} & difference markers in compare views \\
+\texttt{M} & minimap \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The left-to-right order in the setup dialog is significant. A blank slot
+removes that projection. Line numbers refer to document lines, while a
+folding control describes structural state derived for the current language.
+\index{line numbers}\index{code folding!gutter}
+\index{file compare!difference markers}
+
+\section{The minimap}
+
+The minimap is a sub-character overview of the whole document. It provides
+orientation in files much taller than the viewport and can project notable
+regions such as diagnostics or changes. Selecting or dragging in it moves the
+editor viewport without changing the document.\index{minimap}
+\index{viewport!minimap navigation}
+
+The minimap is deliberately a summary, not a second editor. Use it to answer
+``where am I?'' and use the primary viewport to inspect exact text. Syntax and
+document changes may be computed asynchronously; a newly loaded large file
+can therefore acquire its complete overview progressively.
+
+\section{Folding and zoom}
+
+Code folding hides the interior of a derived structural region while
+retaining its lead line. Fold and unfold commands affect only the view.
+Edits, saves, searches, and builds continue to operate on the underlying
+document.\index{code folding}\index{code folding!projection}
+
+\menu{Window > Zoom} maximizes or restores the active desktop window.
+\menu{Window > Minimize/restore} changes it to or from its one-line desktop
+representation. \menu{Window > Hide} removes the window from normal selection
+without closing it. These are window-state operations; none discards unsaved
+text.\index{window!zoom}\index{window!minimize}\index{window!hide}
+
+\section{Terminal size and remote sessions}
+
+When the terminal becomes smaller, prioritize the editor viewport and retain
+only the projections needed for the task. Function-key labels and the message
+line are valuable when learning a keymap; experienced users may prefer more
+document columns. On a remote connection, disabling visually busy projections
+can also reduce terminal traffic without changing editor semantics.
+\index{remote session}\index{terminal size}
+
+\chapter{Filename-Extension Profiles}
+\index{filename-extension profile}
+
+\section{Why profiles exist}
+
+A filename suffix is more than a syntax-color hint. In \mr{}, a
+filename-extension profile groups the behavior expected for a class of files:
+language, indentation, tabs, margins, display, block behavior, compiler
+profile, color theme, path, and optional lifecycle macros. This keeps a C++
+source file, a Makefile, and a plain-text note from sharing inappropriate
+defaults merely because they occupy the same desktop.
+
+\menu{Other > Installation and setup > Filename extensions} opens the profile
+editor. The dialog works on a draft. Its Help describes the selected fields
+without applying the draft.\index{Installation and setup}
+
+\manualscreenshot{mr-users-file-extensions.png}{fig:users-file-extensions}{
+Filename-extension profiles combine matching, language, editor, and build
+choices.}
+
+\section{Identity and matching}
+
+\field{Profile ID} is the stable settings key; \field{Description} is the
+human-readable name. \field{Extension} contains the exact, case-sensitive
+extension list used for matching.\index{filename-extension profile!matching}
+\index{case-sensitive matching}
+
+The \texttt{DEFAULT} profile supplies global fallback settings. Its identity
+and extension selector cannot be edited. Specific profiles override the
+fallback when their selectors match. Avoid selectors that differ only by an
+easy-to-miss case unless the filesystem convention genuinely requires that
+distinction.
+
+\begin{usersafety}
+Changing a profile selector changes which future file loads receive that
+profile. It does not rewrite filenames, and it should not be used as a batch
+conversion mechanism.
+\end{usersafety}
+
+\section{Language and editor behavior}
+
+The profile controls language recognition and associated editor choices,
+including indentation, tab behavior, margins, format-line state, display,
+blocks, and editing modes. These choices establish a starting configuration;
+commands used in the active editor may still alter view or session state.
+\index{language detection}\index{tabs!profile setting}
+\index{margins!profile setting}
+
+Binary detection is a separate concern. When \field{Autodetect binary files}
+is enabled in User Interface Settings, a binary file is directed to the Bento
+hex editor instead of being interpreted as ordinary text. That applies to
+files supplied on the command line as well as those opened later.
+\index{binary detection}\index{Bento hex editor}
+
+\section{Build and lifecycle integration}
+
+\field{Compiler profile} associates matching files with a build description.
+\menu{Other > Build current file} uses that relationship to choose a
+toolchain. A missing or incorrect association can therefore produce the
+wrong build command even when language highlighting looks correct.
+\index{compiler profile!filename association}
+
+\field{Post-load macro} names a \mrmac{} file to run after a matching file has
+loaded. \field{Pre-save macro} runs before it is saved. Typical uses include
+project-specific normalization or generated annotations, but these hooks are
+executable policy: keep them small, deterministic, and reviewable.
+\index{post-load macro}\index{pre-save macro}
+
+\field{Default path} supplies the initial directory for relevant file
+operations. \field{Colortheme} selects the palette associated with the
+profile.\index{default path}\index{color theme}
+
+\section{Managing profile drafts}
+
+\field{New} creates a profile, \field{Copy} starts from the selected profile,
+and \field{Delete} removes a draft profile. Copying is the safest way to
+create a close variant because the full behavioral set remains visible for
+review. Accept the outer setup flow to make intended changes effective;
+Cancel leaves the runtime configuration unchanged.
+
+\chapter{Indenting Styles}
+\index{indentation}\index{indent style}
+
+\section{Automatic indentation}
+
+Smart indentation derives the leading whitespace for a new line from the
+active language and nearby structure. The filename-extension profile selects
+the relevant indentation behavior, while User Interface Settings offers an
+indent-style preview.\index{smart indentation}
+
+Automatic indentation is assistance, not a parser rewrite. It acts at the
+editing boundary and leaves already existing lines alone. This matters when
+opening generated code, patches, or files whose local style intentionally
+deviates from the project default.
+
+\section{Tabs, spaces, and visual columns}
+
+An indentation policy must distinguish three concepts:
+
+\begin{itemize}
+  \item the number of visual columns in one indentation step;
+  \item whether newly produced indentation uses tabs, spaces, or a defined
+        combination;
+  \item the display width assigned to an existing tab character.
+\end{itemize}
+
+These values often coincide in simple profiles but they are not equivalent.
+Changing tab display width can change alignment on screen without changing a
+single byte. Replacing tabs with spaces changes the document and should be a
+deliberate formatting operation.\index{tabs!indentation}
+\index{spaces!indentation}\index{visual columns}
+
+\section{Indenting and undenting blocks}
+
+\menu{Block > Indent} and \menu{Block > Undent} adjust the lines intersecting
+the selected block by the configured indentation step. A stream selection
+therefore operates on all touched lines; a line selection makes the intended
+scope explicit.\index{block!indent}\index{block!undent}
+
+Undent removes only eligible leading indentation. It does not delete
+arbitrary non-whitespace text to force a visual column. The operation is
+undoable as a document edit.
+
+\section{Language-sensitive structure}
+
+For brace-oriented languages, smart indentation observes opening and closing
+structure. For indentation-oriented languages, leading whitespace itself is
+semantically significant and deserves more caution. Macro sources, shell
+languages, markup, and plain text each have distinct structural cues.
+\index{brace matching}\index{indentation-sensitive language}
+
+When imported text has mixed indentation, first inspect tabs visibly and
+select the correct profile. Repeatedly pressing Indent to make the screen look
+right can preserve hidden inconsistencies. Use code formatting where a
+trusted formatter profile exists.
+
+\begin{usernote}
+If an indentation result is surprising, check the active filename-extension
+profile before changing global settings. A local profile mismatch is much
+more common than a universal indentation rule suddenly becoming philosophical.
+\end{usernote}
+
+\chapter{Language-Specific Features}
+\index{language-specific features}
+
+\section{Detection and syntax projection}
+
+The matched filename-extension profile establishes the language used by the
+editor. Language selection drives syntax highlighting, structural folding,
+smart indentation, outline production, and other derived views. Plain text
+remains a valid explicit fallback.\index{syntax highlighting}
+\index{language detection}\index{plain text}
+
+Syntax colors and fold markers are projections derived from a document
+snapshot. They are not stored in the file and are not part of Undo. On a
+large document, the visible area is prioritized while background work
+completes the wider derived state.\index{derived state}
+
+\manualscreenshot{mr-users-mrmac-source.png}{fig:users-mrmac-source}{A
+\mrmac{} source file with language-aware highlighting, folding controls, and
+the minimap.}
+
+\section{Code folding and outlines}
+
+Folding regions reflect structural constructs appropriate to the language:
+functions, types, sections, macro bodies, build targets, markup elements, or
+indentation scopes. Fold-level commands provide a coarse overview; individual
+gutter controls expose local structure.\index{outline}\index{code folding}
+
+An outline is a navigation model, not a second copy of the source. Its entries
+identify relevant document locations and may distinguish functions, methods,
+types, modules, sections, and other structural kinds. After edits, allow the
+derived state to catch up before assuming that a temporarily absent entry has
+been deleted from the document.
+
+\section{Parentheses and structural navigation}
+
+\menu{Other > Match parenthesis} moves between a supported matching pair near
+the cursor. It is preferable to a text search because it follows the
+language-aware structural pair rather than the next identical glyph.
+\index{matching parentheses}
+
+Search markers, compiler diagnostics, fold outlines, and the marker stack
+provide complementary navigation. Use the narrowest semantic operation
+available: a diagnostic command for a compiler error, matching for a bracket,
+and search for textual occurrences.
+
+\section{Formatting source code}
+
+\menu{Text > Re-format code} invokes the formatter configured for the active
+language or profile. This is distinct from paragraph reflow: a source
+formatter understands language syntax and can change whitespace throughout
+the applicable scope.\index{code formatting}
+
+\begin{usersafety}
+Review formatter output as a real document change. Save or commit a clean
+baseline before reformatting a large file, and use Undo immediately if the
+wrong profile or formatter was selected.
+\end{usersafety}
+
+\section{Compiler profiles and diagnostics}
+
+\menu{Other > Build current file} chooses the compiler profile associated
+with the active file. A compiler profile describes the executable,
+toolchain, version and target constraints, build flags, include and library
+arguments, runtime arguments, pre-build command, result commands, and optional
+\mrmac{} hooks.\index{compiler profile}\index{build current file}
+
+\menu{Other > Next compiler error} and \menu{Previous compiler error} navigate
+adopted diagnostics. User Interface Settings controls whether warnings and
+notes are tracked in addition to errors and how diagnostic messages are
+presented. The minimap can provide long-range orientation, but the diagnostic
+navigation command remains authoritative for the next adopted location.
+\index{compiler diagnostics}\index{compiler error!navigation}
+\index{compiler warning}
+
+\section{File comparison}
+
+\menu{Text > File compare} opens a compare view. Difference gutters and the
+minimap summarize changes, while \menu{Apply original to compare} and
+\menu{Apply compare to original} transfer the selected difference in the
+named direction.\index{file compare}
+
+Read-only comparison can be enabled in User Interface Settings. Direction
+matters: the two apply commands are intentionally explicit because a compact
+``accept'' command would conceal which document is being changed.
+
+\chapter{The MRMAC Interface}
+\index{MRMAC}
+
+\section{What MRMAC contributes}
+
+\mrmac{} is the integrated macro language for editor automation and runtime
+UI extension. Its compiler runs in memory and supports both precompiled and
+on-demand macro files. A macro can edit text, inspect editor state, register
+menu items and keys, construct dialogs or modeless tools, start asynchronous
+work, and cooperate with the application's window system.
+\index{MRMAC!compiler}\index{MRMAC!runtime UI}
+
+The calculator and character tables in Chapters 17 and 18 are concrete
+examples: they are application-quality utilities implemented as macros, not
+hard-coded simulations in this manual.
+
+\section{Macro files and definitions}
+
+A source begins with a macro-file identity and contains named macro
+definitions. The Macro Library indexes those definitions independently of
+their key bindings. One file can therefore provide several commands, shared
+helper routines, and a startup registration macro.\index{macro file}
+\index{macro definition}
+
+Use \menu{Macro > Macro Library} to create, inspect, copy, delete, edit, bind,
+play, or debug indexed definitions. The editor provides syntax highlighting,
+folding, and outline support for \texttt{.mrmac} sources just as it does for
+other supported languages.
+
+\section{Execution contexts}
+
+A definition declares the context from which it may run. Editor procedures
+operate through the current macro/editor linkage; application procedures can
+address wider runtime facilities. A window may be explicitly linked or
+unlinked through the Window menu for procedures that need an editor target.
+\index{MRMAC!execution context}\index{window!macro link}
+
+Macro execution is scheduled alongside interactive work. Long-running
+operations should use the language's cooperative facilities and explicit
+asynchronous interfaces instead of blocking the UI. Multiple jobs may be
+active, but shared document and UI effects still require deterministic
+ordering from the macro author's point of view.
+
+\section{Menus, dialogs, and modeless tools}
+
+Runtime menu registration adds commands owned by the defining macro. A
+conventional macro dialog is assembled, executed, and read as one interaction.
+A modeless macro tool stays on the desktop and can receive subsequent events
+while other windows remain usable.\index{modeless macro UI}
+\index{runtime menu}
+
+Labels in a macro-created UI describe the macro's contract; \mr{} does not
+invent semantics for them. Use the context Help available to the runtime UI
+where supplied, and consult the owning macro when a command is project
+specific.
+
+\section{Keys, recording, and AUTOEXEC}
+
+\texttt{MACRO\_TO\_KEY} and the Key Manager associate a macro definition with
+a key sequence and dispatch context. The Macro Library exposes the same
+relationship at a user level. Recorded keystroke macros become ordinary
+source definitions and can be refined after recording.
+\index{MACRO TO KEY@\texttt{MACRO\_TO\_KEY}}
+\index{keymap!macro binding}
+
+AUTOEXEC membership identifies macro files that run during startup. It is
+appropriate for menu registration, stable bindings, and deliberate session
+initialization. It is not a substitute for settings persistence, and startup
+macros should not silently rewrite unrelated configuration.
+\index{AUTOEXEC}\index{startup macro}
+
+\section{Running a macro from the command line}
+
+The command-line option \texttt{--run-macro=FILE} loads and executes a macro
+after application startup. It is useful for repeatable demonstrations,
+project entry actions, and controlled automation. The ordinary application
+environment still applies: the named file must be readable, any required
+editor target must exist, and errors are reported through the normal macro
+runtime.\index{command line!--run-macro}
+
+This manual's screenshots use that mechanism to open deterministic UI states
+inside real PTY sessions. The resulting dialogs were not painted into the
+images afterward.
+
+\section{Debugging and reference material}
+
+Choose Debug in the Macro Library to start a definition under the integrated
+debugger. Breakpoints, stepping, watches, expression evaluation, and execution
+state are intended for authored logic whose behavior cannot be understood
+from one playback.\index{MRMAC debugger}\index{breakpoint}
+
+The \mrmac{} Reference Manual defines lexical rules, types, control flow,
+procedures, editor primitives, UI primitives, and runtime behavior. Treat it
+as the language authority. The present chapter explains how an editor user
+encounters the language; it deliberately does not duplicate the reference
+catalog.
+
+\begin{usernote}
+Keep maintained automation as readable source under version control. A macro
+that edits valuable files deserves the same review discipline as a small
+program---because that is exactly what it is.
+\end{usernote}
+
+\backmatter
+\cleardoublepage
+\printindex
 
 \end{document}

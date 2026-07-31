@@ -2,16 +2,6 @@
     "version": "2.0.0",
     "inputs": [
         {
-            "id": "compilerSelection",
-            "type": "pickString",
-            "description": "Wählen Sie den Compiler für diesen Durchlauf:",
-            "options": [
-                "g++",
-                "clang++"
-            ],
-            "default": "g++"
-        },
-        {
             "id": "boltRunArguments",
             "type": "promptString",
             "description": "Optionale Argumente für den profilierten MR-Lauf:",
@@ -24,7 +14,8 @@
             "type": "shell",
             "command": "make",
             "args": [
-                "CXX=${input:compilerSelection}"
+                "CXX=clang++",
+                "CC=clang"
             ],
             "group": "build",
             "problemMatcher": [
@@ -42,7 +33,8 @@
             "command": "make",
             "args": [
                 "TVISION_AUTO_SYNC=1",
-                "CXX=${input:compilerSelection}"
+                "CXX=clang++",
+                "CC=clang"
             ],
             "group": "build",
             "problemMatcher": [
@@ -60,7 +52,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "make clean CXX=${input:compilerSelection} && make -j16 all CXX=${input:compilerSelection}"
+                "make clean CXX=clang++ CC=clang && make -j16 all CXX=clang++ CC=clang"
             ],
             "group": "build",
             "problemMatcher": [
@@ -78,7 +70,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "make clean TVISION_AUTO_SYNC=1 CXX=${input:compilerSelection} && make -j16 all TVISION_AUTO_SYNC=1 CXX=${input:compilerSelection}"
+                "make clean TVISION_AUTO_SYNC=1 CXX=clang++ CC=clang && make -j16 all TVISION_AUTO_SYNC=1 CXX=clang++ CC=clang"
             ],
             "group": "build",
             "problemMatcher": [

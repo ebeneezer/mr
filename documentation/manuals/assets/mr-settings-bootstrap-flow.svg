@@ -50,7 +50,8 @@
   <text x="87" y="385" class="heading">COMPLETE STAGED SNAPSHOT</text>
   <text x="87" y="414" class="body">Reject future Build Epochs.</text>
   <text x="87" y="440" class="body">Keep known values; discard obsolete or unknown tokens.</text>
-  <text x="87" y="466" class="body">Supply defaults and rewrite only when normalization changed input.</text>
+  <text x="87" y="463" class="body">Supply defaults; rewrite only when normalization</text>
+  <text x="87" y="485" class="body">changed the input.</text>
   <rect x="623" y="356" width="250" height="62" rx="6" class="green"/>
   <text x="643" y="382" class="panel-title">WORKSPACE</text>
   <text x="643" y="404" class="small">protected persistence extension</text>

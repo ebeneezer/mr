@@ -170,13 +170,13 @@ UI-thread full scan.
 
 \section{Finite packets instead of deferred serial work}
 
-Deferred work is not one background pass and a lane is not one worker. The
-editor has separate line-index, display-width, syntax, fold, and minimap
-pipelines. Each executable work unit receives a finite packet, a concrete
-execution owner, a versioned \texttt{ReadSnapshot}, and its own one-shot
-worker. A generation may materialise up to the number of allowed cores at
-once, while different editors, panes, pipelines, and older finite generations
-remain independent. Focus loss is not a pause signal.
+The general task envelope, one-shot worker model, and adoption path are
+described in Chapter~\ref{ch:coprocessor-derived-work}. For large documents,
+the relevant domain fact is that line index, display width, syntax, folding,
+and minimap are separate pipelines. Their finite packets carry a concrete
+execution owner and a versioned \texttt{ReadSnapshot}; their domain ledgers,
+ordering rules, and retained results are deliberately different. Focus loss
+is not a pause signal.
 
 Line-index packets are arithmetic byte windows of eight MiB. The UI does not
 search for line boundaries before submission. A document-bound ledger records
@@ -206,13 +206,10 @@ range. Folding similarly publishes a checkpoint containing its structural
 stack and bounded language look-back. Neither pipeline invents a closing state
 at a packet boundary.
 
-The minimap uses finite text and overlay projection packets. Its bounded,
-editor-local warm-window ledger reuses version- and geometry-compatible spans
-from earlier or still-running generations. A visible subwindow may be adopted
-as soon as it is complete, without waiting for the whole directional
-acquisition window. Selection, search, dirty, diagnostic, and File Compare
-overlays are also immutable worker projections; \texttt{draw()} merely
-consumes adopted data.
+The minimap likewise uses finite text and overlay projection packets. Its
+editor-local windowing, reuse, and rendering rules belong to
+Chapter~\ref{ch:minimap}; here it matters that the minimap consumes the common
+line-addressing basis without becoming another line or syntax index.
 
 Figure~\ref{fig:coprocessor-warming-projections} on
 page~\pageref{fig:coprocessor-warming-projections} shows the four derived
@@ -282,12 +279,10 @@ consumers:
 \end{tabular}
 \end{center}
 
-Every result remains provisional until dispatch. Matching owner, task,
-document, base version, generation, and domain-specific geometry or state is
-mandatory. Stateful pipelines distinguish a result that has been
-\emph{accepted} into their ledger from one that has been \emph{adopted} into
-the visible projection. A later state mismatch produces a reasoned discard,
-never an implicit rebase. The UI thread alone performs bounded adoption.
+The coprocessor adoption contract in
+Chapter~\ref{ch:coprocessor-derived-work} applies to every row. The table names
+the extra domain state that a result must satisfy before its direct consumer
+may use it.
 
 \section{Moving windows, checkpoints, and ledgers}
 \label{sec:warmed-range-ledger}
@@ -352,8 +347,9 @@ line model rather than maintaining feature-specific text indexes.
 
 The coprocessor is a lifecycle and delivery boundary, not a fixed worker pool
 and not a general executor from which a worker may call back into the
-application. Lanes classify I/O, compute, minimap, macro, and external-source
-work for telemetry and dispatch. They do not serialize independent owners.
+application. Four finite-work lanes classify I/O, compute, minimap, and macro
+work for telemetry and dispatch. Registered external sources use a separate
+lifetime-bound route. Neither mechanism serializes independent owners.
 Figure~\ref{fig:coprocessor-lanes} on
 page~\pageref{fig:coprocessor-lanes} shows the complete path from a domain
 packet to an adopted result.
@@ -361,12 +357,12 @@ packet to an adopted result.
 \begin{figure}[tb]
   \centering
   \includegraphics[width=\textwidth]{assets/mr-coprocessor-lanes.pdf}
-  \caption{Coprocessor execution and result adoption. A lane classifies a
-  data-only packet but does not own a serial worker. Every finite work unit
-  receives an independently pinned one-shot worker. Results converge on the
-  bounded UI mailbox, where the exact domain owner accepts, adopts, or
-  discards them. A blocking external source is the explicit lifetime-bound
-  worker exception.}
+  \caption{Coprocessor execution and result adoption. The four finite lanes
+  classify distinct workload and result contracts; they are not queues or
+  priorities. Every finite work unit receives an independently pinned one-shot
+  worker. Results converge on the bounded UI mailbox, where the exact domain
+  owner accepts, adopts, or discards them. A blocking external source is the
+  explicit lifetime-bound worker exception.}
   \label{fig:coprocessor-lanes}
 \end{figure}
 
@@ -402,12 +398,51 @@ all cores already have an assignment.
 
 \section{Lanes classify work; owners define independence}
 
-The \texttt{Io} lane classifies finite command and process work. The
-\texttt{Compute} lane carries line index, display width, syntax, folding,
-Bento, HexBento, and File Compare packets. The \texttt{MiniMap} lane identifies
-text and overlay projection packets, and the \texttt{Macro} lane identifies
-finite \texttt{MacroJob} executions. None of these names denotes a shared
-single-worker FIFO.
+Exactly four ordinary lanes appear in the coprocessor snapshot and Performance
+Panel: \texttt{Io}, \texttt{Compute}, \texttt{MiniMap}, and \texttt{Macro}.
+Four is not a CPU topology, a concurrency limit, or a priority ladder. The
+number follows from four observably different finite-work contracts. Collapsing
+them would hide why work exists and which result path must validate it; adding
+a lane for every feature would merely duplicate task kind and owner identity.
+
+\paragraph{I/O.}
+The \texttt{Io} lane classifies finite command, Git, process, and similar
+operating-system work whose dominant uncertainty is external latency. Its
+normal result describes command completion, output, or failure rather than a
+document-derived projection. The classification keeps such latency and error
+behaviour visible without granting a finite command the lifetime semantics of
+a registered stream.
+
+\paragraph{Compute.}
+The \texttt{Compute} lane carries deterministic derived work over immutable
+input: line-index and display-width packets, syntax and folding, Bento
+diagnostics and outlines, HexBento projections, and File Compare stages. These
+results are normally accepted against document identity, version, generation,
+span, pane role, or another domain checkpoint. Bento is therefore a task kind
+and pane owner on \texttt{Compute}, not a fifth lane.
+
+\paragraph{MiniMap.}
+The \texttt{MiniMap} lane identifies per-editor text-density and overlay
+projection packets. They are computational, but their demand is driven by
+viewport movement, geometry, visible row windows, and rapidly changing overlay
+state. Keeping this class separate makes minimap churn, coverage, and adoption
+visible independently of canonical line, syntax, and fold preparation. It does
+not give the minimap a privileged worker or a private result mailbox.
+
+\paragraph{Macro.}
+The \texttt{Macro} lane identifies finite \texttt{MacroJob} executions. Their
+owner is an Execution Session, and their results differ from document
+projections by carrying macro log, session, or staged-effect state. VM
+profiling and session routing are described in
+Chapters~\ref{ch:mrmac-vm} and~\ref{ch:execution-sessions}. A paused macro
+holds its VM/session state but no lane worker.
+
+The distinction is thus semantic and operational. The lane name gives
+telemetry and dispatch the first workload category; \texttt{TaskKind}
+identifies the concrete operation; execution-owner kind and owner-local ID name
+whose work it is; document/version and generation fields decide whether a
+result may still be used. No one of those axes can replace the other three.
+None of the four lane names denotes a shared single-worker FIFO.
 
 An editor window, Bento pane, Execution Session, external source, or channel is
 an execution owner. Several packets may belong to one owner, and the same
@@ -417,7 +452,10 @@ clear or adopt one another's work.
 
 The deliberate exception is a technically blocking source whose lifetime
 consists of \texttt{poll()}, \texttt{read()}, process wait, or an equivalent
-external wait. A registered file, journal, device, network, or pipe source may
+external wait. The implementation tags this route as \texttt{Lane::Extern},
+but does not include it among the four finite lane snapshots. Registered
+sources have their own source snapshot and lifetime because they are not
+one-shot work. A registered file, journal, device, network, or pipe source may
 keep one exclusive worker until EOF, close, cancellation, error, or process
 termination. It never carries another owner's work. Journal cancellation
 closes the local read side, terminates and reaps the process group with bounded
@@ -791,6 +829,344 @@ the debugging path, not for every ordinary macro execution. There is no second,
 secret debug compiler. One compiler, one bytecode model, and additional cost
 only where the user actually requests it.
 
+\chapter{Inside the MRMAC virtual machine}
+\label{ch:mrmac-vm}
+
+The virtual machine is the point at which \mrmac{} stops being source text and
+becomes editor behaviour. It is a compact stack machine, but ``stack machine''
+is only the beginning of the useful explanation. The VM also gives values
+their storage lifetime, separates local and process-wide runtime state,
+dispatches typed language operations into the application, preserves a paused
+execution, and produces results that another owner may adopt. Treating it as a
+loop over opcodes would miss most of its contract.
+
+Figure~\ref{fig:mrmac-vm-execution-flow} on
+page~\pageref{fig:mrmac-vm-execution-flow} follows one compiled macro through
+that contract. The compiler, catalog, runner, VM, runtime K/V tree, and UI
+thread remain distinct owners. In particular, the diagram does not turn the VM
+into a general application object registry: macro-visible runtime values live
+in the VM storage model, while live TVision objects and document adoption stay
+outside it.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mrmac-vm-execution-flow.pdf}
+  \caption{The MRMAC virtual-machine boundary. Canonical bytecode enters
+  through an execution-profile route, the VM interprets it with explicit
+  stacks and typed values, and each result leaves through a route whose owner
+  can validate it. VM-local values, Execution Session state, and process-wide
+  K/V roots have deliberately different lifetimes.}
+  \label{fig:mrmac-vm-execution-flow}
+\end{figure}
+
+\section{The bytecode image and execution loop}
+
+\texttt{mrmac.c} emits one byte stream containing executable units and their
+entry offsets. Integer and real literals are encoded directly behind their
+push opcodes; strings and symbolic operation names are zero-terminated
+operands. Branch and call instructions carry bytecode offsets. The loaded
+image is therefore not an abstract syntax tree retained for later
+interpretation. It is the canonical executable form held by the Macro Catalog.
+
+\texttt{VirtualMachine::BytecodeExecution} starts at a selected entry offset
+and maintains an instruction pointer, an operand stack, and a return-offset
+stack. Push, load, arithmetic, comparison, logic, hash, and array instructions
+transform typed operands. \texttt{GOTO} and \texttt{JZ} alter the instruction
+pointer; \texttt{CALL} saves the next offset before entering its target, and
+\texttt{RET} restores it. Invalid targets, stack underflow, malformed operands,
+and type mismatches become VM errors rather than unchecked jumps through the
+byte stream.
+
+This design makes the hot path direct. There is no node allocation or visitor
+dispatch per source construct, and a normal run does not carry source spans
+beside every instruction. The debugger requests a source map from the same
+compiler only when a debug start needs the relation between instruction
+offsets and source spans. Watch expressions use that frontend in a restricted
+expression mode and end in \texttt{HALT}; they are not handed to a second
+parser or a general-purpose evaluator.
+
+The complete bytecode run holds the recursive VM execution lock. This is a
+semantic boundary, not a claim that a Macro-lane worker is the only worker in
+the coprocessor. Runtime environment fields and the global K/V tree are
+process-wide, so two independently owned \texttt{MacroJob} workers must not
+mutate them concurrently. Worker identity, core assignment, and result
+delivery remain independent even where VM state access itself is serialised.
+
+\section{One value model, several lifetimes}
+
+A VM value records its type and the matching payload: integer, real, string,
+character, array, or hash handle. Arrays retain typed elements. A hash value
+also records whether its handle belongs to the VM-local hash store or to the
+central global store. That storage bit is small but decisive: a numeric handle
+without its storage domain would not identify a value.
+
+Finite \texttt{DEF\_*} variables normally live in the VM's variable map and
+local hash store. Clearing the execution clears unreachable local value trees.
+A recurring closure instead restores its declared values from its closure
+state, and a long-lived Execution Session restores session variables from
+\texttt{EXECSESSIONS}. These are language lifetimes, not namespaces inferred
+from source file names. Two macro files do not acquire private globals merely
+because they came from different paths.
+
+Process-wide macro state uses the central runtime K/V store. Its named roots
+separate responsibilities:
+\texttt{MACROGLOBALS} contains explicit application globals,
+\texttt{MACROCATALOG} contains loaded macro and bytecode metadata,
+\texttt{EXECSESSIONS} contains session and closure state,
+\texttt{MODELESSUI} contains retained modeless UI values, and
+\texttt{MACRODEBUGGER} contains debugger definitions and live debugger
+bookkeeping. These roots share a storage substrate, but they are not one
+undifferentiated dictionary.
+
+Hash and hash-array values may cross a storage boundary. In that case the VM
+recursively copies the reachable value tree into the target store and marks
+the resulting handles with the target domain. Within one store, it may retain
+the existing handle. This prevents a global value from referring accidentally
+to a local hash that disappears when a finite VM ends. It also explains why
+C++ records used during transfer are not allowed to become a second
+value-bearing registry beside the K/V tree.
+
+\section{Opcodes end at typed application boundaries}
+
+Pure bytecode operations are only one instruction family.
+\texttt{OP\_INTRINSIC} carries a symbolic name and argument count, pops the
+arguments in source order, and pushes the typed result returned by
+\texttt{MRVMIntrinsics}. Hash inspection, string conversion, environment
+queries, search operations, and typed UI inquiries enter through this value
+returning boundary.
+
+\texttt{OP\_PROC} similarly carries a name and arguments, but dispatches a
+side-effecting procedure. The procedure catalog classifies the operation into
+configuration, runtime, editor, or macro families before the corresponding
+executor handles it. Variable procedures such as tab expansion have a
+separate opcode because their destination is an existing VM variable rather
+than an ordinary return value. System variables are reached through the normal
+load and store instructions, which gives the VM one place to enforce
+read-only state, type rules, and route restrictions.
+
+Symbolic names in bytecode are deliberate. They keep the compiler's signature
+tables, the execution profiler, and the VM dispatch vocabulary aligned without
+exposing C++ function addresses as language state. They do not make the calls
+untyped: the compiler checks signatures, and the VM validates the values again
+where runtime state determines what is legal.
+
+The VM is consequently integrated, not sandboxed. An editor procedure may
+move a cursor or stage a text mutation; a runtime procedure may start another
+macro; a typed UI procedure may update retained modeless state. Integration
+does not erase ownership. A worker-side VM receives immutable or copied input
+and records a result; it does not gain permission to mutate a TVision view or
+publish a document version.
+
+\section{The execution profile chooses the legal route}
+
+Before execution, \texttt{mrvmAnalyzeBytecode} scans the same byte stream and
+classifies its opcodes, intrinsics, procedures, and system-variable accesses.
+Pure computation is background-safe. Editor and TVision-affine operations
+require the UI thread. A bounded subset of editor operations is eligible for
+staged background execution, while external I/O remains explicitly visible in
+the profile. This analysis is conservative: an unknown or unsupported
+operation does not become background-safe by optimism.
+
+The runner turns that profile into the routes whose session lifetimes are
+shown in Chapter~\ref{ch:execution-sessions}. At the VM boundary, a UI-affine
+macro may use live editor state, a background-safe macro becomes a finite
+\texttt{MacroJob}, and a staged-background macro receives a document snapshot,
+cursor and selection state, relevant runtime values, and a conflict basis.
+Its VM writes a staged edit transaction and deferred UI commands as data.
+
+The route therefore changes the available projection of the application, not
+the bytecode language. The same opcode may read a live system variable on the
+UI route or its captured staged equivalent on the worker route. Unsupported
+UI-affine operations are rejected from staged execution instead of quietly
+calling across the thread boundary. The UI thread accepts a staged result only
+while its owner and conflict basis still match, changes the model before
+projecting deferred UI effects, and discards the whole result on mismatch.
+There is no partial repair or implicit rebase.
+
+\section{Yielding, debugging, cancellation, and completion}
+
+A foreground \texttt{DELAY} and a debugger stop both suspend execution without
+pretending that the bytecode has completed. The VM preserves the bytecode
+image, instruction pointer, call stack, return values, parameter string, and
+the route-specific state needed for continuation. A debug stop additionally
+records its source identity, stop reason, breakpoints, step policy, and live
+variables. Continuing resumes that same execution state; it does not replay
+the macro from its first instruction.
+
+The parked VM belongs to the logical Execution Session. It does not justify a
+blocked coprocessor worker while a user inspects variables or while a delay
+waits for its deadline. A later scheduler or debugger action creates the next
+finite execution action. This distinction is what lets session lifetime be
+longer than worker lifetime without turning the Macro lane into a collection
+of sleeping threads.
+
+Cancellation is cooperative. The bytecode loop checks the active cancellation
+request at instruction boundaries, and longer operations must provide their
+own bounded checks where interruption is supported. The VM does not terminate
+a thread at an arbitrary machine instruction. Likewise, a debugger pause is a
+request observed at a safe VM boundary; an intrinsic or procedure is not
+half-applied merely to make the pause appear instantaneous.
+
+Completion yields typed effects rather than ownership transfer. A foreground
+run leaves its return state and log with the caller. A background run returns
+log lines and explicitly requested UI commands. A staged run returns its
+transaction, state deltas, deferred UI commands, and conflict basis. A debug
+run returns a stop or completion snapshot while the live paused VM remains
+owned by its session. In every case, the consumer decides whether and how that
+result becomes application-visible.
+
+\section{Bytecode calls and macro calls are different operations}
+
+\texttt{CALL} and \texttt{RET} are intra-image control-flow instructions.
+They use the current VM, variable map, operand stack, and bytecode image, and
+their return stack contains byte offsets only. They are suitable for compiler
+generated control flow whose target is already part of the executable image.
+No catalog lookup, source resolution, or new macro identity occurs at that
+boundary.
+
+\texttt{RUN\_MACRO} is a language-level macro invocation. Its file-qualified
+specification is normalised and resolved through the Macro Catalog, which
+provides the target file, entry offset, attributes, execution profile, and
+resident bytecode image. The invocation creates a child VM, supplies the
+parameter string, propagates the current Execution Session identity, and
+selects closure state when the target is a closure unit. The child's log is
+joined to the caller's log after execution; transient and dump attributes are
+then applied to the catalogued image rather than to the caller's bytecode
+stack.
+
+This distinction prevents a source-level macro call from becoming an
+unchecked offset jump into whichever image happens to be resident. It also
+keeps \texttt{FIRST\_RUN} meaningful per catalogued macro definition and keeps
+parameters scoped to the invoked macro. The parent parameter context is
+restored after the child finishes, while return and error outputs propagate
+through the guarded execution state.
+
+Staged background execution tightens the boundary. It cannot perform an
+unplanned lazy file load from a worker. A child macro must already be resident
+and included in the captured staged execution context; otherwise the call
+fails through the normal runtime error path. This avoids turning a seemingly
+finite staged transaction into hidden filesystem I/O and prevents its
+execution basis from changing after submission.
+
+Debug execution preserves the same distinction. Stepping into
+\texttt{RUN\_MACRO} starts a child debug VM with the target's own source map.
+If the child stops, the debugger retains a child frame together with the
+parent instruction offset and paused parent VM. Continue and step-out can
+therefore return to the real parent execution rather than reconstructing a
+synthetic source stack from macro names.
+
+\section{Authority, persistence, and failure containment}
+
+Several parts of this path deliberately know less than their neighbours. The
+compiler knows symbols, signatures, source positions, and bytecode layout, but
+does not own runtime values. The Macro Catalog knows loaded files, definition
+metadata, entry offsets, profiles, and resident images, but does not own a live
+instruction pointer. A VM owns one executable state, while an Execution
+Session owns the logical identity and lifetime in which that state runs or is
+parked. The UI consumes results and debugger projections, but does not keep a
+writable copy of VM truth.
+
+The runtime K/V store extends beyond one VM without becoming persistence by
+default. Explicit macro globals, modeless values, session state, catalog
+metadata, and debugger state are process-runtime data. The workspace boundary
+in Chapter~\ref{ch:workspaces} consequently persists domain state, never a VM
+instruction pointer, stack, live hash handle, source map, or paused execution.
+
+Settings are a deliberately narrower exception to the usual runtime-only
+story. Chapter~\ref{ch:settings-bootstrap} describes the controlled
+\texttt{MRSETUP} route from persisted macro source to the authoritative
+settings model. It does not make general VM K/V roots serialisable or turn a
+runtime global hash into an alternative settings file.
+
+TVision remains on the other side of the same boundary. Typed MMP procedures
+may write retained macro-visible values under \texttt{MODELESSUI}; the
+projection described in Chapter~\ref{ch:mmp} leaves live windows, focus, Z
+order, event dispatch, and drawing lifetime with TVision. A parked VM never
+keeps a view pointer alive.
+
+Runtime failure is contained at the execution boundary. Invalid bytecode
+operands, type errors, bounds errors, unknown operations, and exceptions from
+application procedures end the current run and produce a VM error line. A
+background result consequently carries failure instead of throwing through
+the result mailbox into the UI loop. The manual does not promise stable
+numeric error codes where the implementation provides diagnostic text and
+route state.
+
+There are also explicit costs. The process-wide execution lock limits
+concurrent VM mutation even when the coprocessor can run many unrelated
+non-macro tasks in parallel. Cooperative cancellation cannot interrupt the
+middle of an opaque operating-system call. Staged execution supports only the
+operations for which captured input and an accountable commit can preserve
+semantics. These limits are preferable to three misleading claims: that a
+worker implies concurrent VM state, that every procedure can be rolled back,
+or that every running macro is safe to move off the UI thread.
+
+\section{Why this is a VM rather than a callback catalogue}
+
+A catalogue of application callbacks could expose editor operations with much
+less machinery, but it would not provide a language runtime. Control flow,
+expressions, typed locals, arrays, nested hashes, macro calls, closures,
+sessions, and debugger continuation would then have to be recreated by the
+host around every callback. More importantly, no single executable object
+would exist that could be profiled before execution or parked at an exact
+instruction.
+
+The bytecode boundary makes source-independent questions answerable. The
+runner can count opcodes and named calls, identify UI affinity and external
+I/O, and decide whether staging is possible without executing the macro. The
+catalog can keep an immutable resident image and exact entry offsets. The
+debugger can bind a source span to a bytecode offset and later verify that a
+paused VM is still stopped at that offset. These capabilities follow from one
+canonical representation; they are not metadata heuristically reconstructed
+from a series of callbacks.
+
+The VM also makes extension disciplined. Adding an intrinsic or procedure is
+not merely adding a C++ function to a public registry. Its compiler signature,
+runtime type checks, execution-profile classification, background/staging
+behaviour, error semantics, and documentation must agree. A typed operation
+may be powerful---it can start a process, mutate a document, or describe a
+modeless window---but the instruction still crosses a named point at which
+those obligations can be reviewed.
+
+This is why direct TVision escape hatches would be particularly damaging.
+Passing a view pointer or paint callback through a generic VM value would evade
+storage lifetime, route profiling, staged-result validation, debugger
+inspection, and workspace rules at once. Logical identifiers and retained
+typed values are less superficially flexible, but they keep a macro
+explainable after the original call has returned.
+
+Nor is bytecode treated as a portable interchange format. Opcode numbers and
+operand layout are an internal compiler/VM contract in the current executable
+and repository. The Macro Catalog may retain a compiled image for the process
+lifetime, but settings and workspaces persist source-level or domain-level
+state, not an opaque VM snapshot. This keeps evolution tied to the canonical
+compiler rather than creating a bytecode migration problem beside it.
+
+\section{Observability without a shadow runtime}
+
+The VM exposes several different forms of evidence because they answer
+different questions. Its execution log records important notices and failures;
+ordinary instruction tracing can be disabled for background work, and the log
+is bounded to 256 collected lines before one truncation notice is added. Return
+integer, return string, error level, parameter string, and macro stack belong
+to the active execution state. They describe language execution and are not
+substitutes for coprocessor timing or UI messages.
+
+The coprocessor records the surrounding worker lifecycle: submission, assigned
+core, running interval, result readiness, acceptance, adoption, discard, and
+finish. An Execution Session records logical macro state and recent outcome.
+The debugger records source-bound breakpoints and watches, while values shown
+at a stop are freshly projected from the live VM, closure/session backing
+store, and application globals. A scalar debugger write is validated again by
+scope and type at the VM boundary and returns a new snapshot; the variable
+pane does not become writable runtime storage.
+
+The global hash store has its own optional read/write-rate and hotspot
+instrumentation. That telemetry can show whether runtime K/V access has become
+a cost centre without placing counters inside macro-visible hashes or changing
+their values. Likewise, execution-profile flags describe possible behaviour
+found in bytecode; they do not record what a particular run happened to do.
+
 \chapter{From a broken macro clock to Execution Sessions}
 \label{ch:execution-sessions}
 
@@ -806,13 +1182,11 @@ itself decide whether bytecode is UI-affine or suitable for the background.
 The runner selects the route: ordinary UI execution, foreground delay,
 background, or staged background.
 
-The background routes also give the story a concrete hardware dimension. Each
-finite background or staged Execution Session submits a \texttt{MacroJob} in
-the macro lane. That work unit receives its own one-shot worker, monotone
-\texttt{workerOrdinal}, and stable modulo assignment to an allowed core. The
-lane classifies the job but does not serialize unrelated macro owners behind a
-single lane worker. UI-affine and foreground-delay sessions do not enter this
-path, and a session paused for UI adoption retains no worker.
+Each background or staged Execution Session submits a finite
+\texttt{MacroJob} in the Macro lane. Chapter~\ref{ch:coprocessor-derived-work}
+defines that worker and core-assignment path; the session contributes logical
+identity and lifetime, not another scheduler. UI-affine and foreground-delay
+sessions do not enter the lane, and a paused session retains no worker.
 
 Figure~\ref{fig:mrmac-session-routes} on
 page~\pageref{fig:mrmac-session-routes} separates the routes and their
@@ -837,26 +1211,8 @@ not blindly place a second due execution next to the first is not a
 convenience-driven restriction. It protects retained UI state and external
 work from overlaps that cannot be explained afterwards.
 
-\chapter{Coprocessor, staging, and the UI thread}
-\label{ch:macro-staging}
-
-The VM must not alter a TVision view from a worker thread. For macro work that
-is suitable for the background, it therefore produces a staging result: text
-transactions, runtime state, and deferred UI commands are first collected as
-data. Only the UI thread evaluates the commit conditions against the current
-document and runtime state.
-
-An accepted commit changes the model first and then provides the deferred UI
-projection. A rejected commit is not partly repaired or rewritten for a newer
-version. This boundary explains why the UI pump does not ``validate'' in a
-general sense. It drains a bounded result mailbox; each result carries its own
-domain-specific acceptance check.
-
-This is what decoupling means technically in \mr{}: not arbitrary threads
-being permitted to do things, but work whose result may become visible at an
-explicit boundary with an accountable owner.
-
-\chapter{MMP and a debugger for a real runtime}
+\chapter{MMP: retained UI without a second object world}
+\label{ch:mmp}
 
 MMP, the Modeless Macro Programs, were another point at which an apparently
 quick shortcut was rejected. Macros were not given raw TVision pointers,
@@ -865,26 +1221,34 @@ retained UI state in the VM K/V model; TVision projects that state as windows,
 controls, and input. Timers use the session scheduler, and closing a window
 removes its associated timers and callbacks with their owner.
 
-The integrated \mrmac{} debugger is a consequence of that runtime
-architecture. It offers breakpoints, pause, stepping, continue, cancellation,
-variables, and watches not only for a synchronously started file. It works
-with session identity and can therefore also account for Exec Sessions and
-asynchronous closures. Source, debug state, watches, and output meet in a
-Bento workspace without the debug view itself inventing execution truth.
-
-A macro debugger that understood only the simple, straight-line path would be
-cosmetic here. This debugger demonstrates that session, route, source map, and
-runtime values are genuinely parts of one model.
+The same boundary lets MMP state and the debugger meet in a Bento workspace
+without either view inventing execution truth. Debugger continuation, session
+identity, and value ownership remain the VM concerns described in
+Chapter~\ref{ch:mrmac-vm}.
 
 \part{The editor as a personal environment}
 
-\chapter{settings.mrmac: configuration as executable state}
+\chapter{settings.mrmac: canonical bootstrap and executable state}
+\label{ch:settings-bootstrap}
 
 \mr{} does not store its configuration as a JSON or YAML data heap.
 \texttt{settings.mrmac} is controlled bootstrap source in the language that
 belongs to the compiled application. The bootstrap reads the existing state,
 checks and normalises it, drops unknown or obsolete ends, adds current defaults,
 and writes canonical source with the current Build Epoch.
+
+Figure~\ref{fig:settings-bootstrap-flow} summarises the authority change from
+persisted source to the final VM apply.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mr-settings-bootstrap-flow.pdf}
+  \caption{VM-centred settings bootstrap. A persisted source is checked,
+  normalised, and made canonical before the VM performs the final startup
+  \texttt{MRSETUP} apply. Only the successful VM route makes the central
+  runtime settings model authoritative; the editor UI consumes that model.}
+  \label{fig:settings-bootstrap-flow}
+\end{figure}
 
 The file is not then the live runtime owner. The VM executes the startup
 \texttt{MRSETUP} path; only the central in-memory settings state governs the
@@ -897,25 +1261,6 @@ while loading. It is not a hidden second authority, but a bounded exception
 because serialisation accesses the canonical keymap model. \texttt{WORKSPACE},
 too, is a protected extension of persistence, not an unnoticed part of the
 canonical core settings contract.
-
-\chapter{The settings bootstrap: canonical source and VM authority}
-
-Figure~\ref{fig:settings-bootstrap-flow} on
-page~\pageref{fig:settings-bootstrap-flow} is the technical spine of this
-chapter. It begins with the actual entry condition, not with a save or backup:
-the bootstrap ensures that a settings source exists. Each numbered phase
-names the responsibility, data form, and authority boundary that the following
-sections explain in detail.
-
-\begin{figure}[tb]
-  \centering
-  \includegraphics[width=\textwidth]{assets/mr-settings-bootstrap-flow.pdf}
-  \caption{VM-centred settings bootstrap. A persisted source is checked,
-  normalised, and made canonical before the VM performs the final startup
-  \texttt{MRSETUP} apply. Only the successful VM route makes the central
-  runtime settings model authoritative; the editor UI consumes that model.}
-  \label{fig:settings-bootstrap-flow}
-\end{figure}
 
 \chapter{Keymaps as a programmable input language}
 
@@ -1009,6 +1354,7 @@ made of the same language as the editor feature.
 \part{Spaces and the Unix world}
 
 \chapter{Virtual desktops and resumable workspaces}
+\label{ch:workspaces}
 
 A terminal editor need not be reduced to a single document window. \mr{}
 assigns every desktop-capable window to a virtual desktop. When changing
@@ -1096,20 +1442,14 @@ Both stories belong in the manual because discarding work can be a technical
 ability. A system remains coherent not by saving every line once written, but
 by being able to remove the wrong boundaries again.
 
-\chapter{Observability, not wishful thinking}
+\chapter{Measured limits, not wishful thinking}
+\label{ch:measured-limits}
 
-The enwik9 measurement, K/V instrumentation, performance panels, execution
-status, live log, and trainers have one purpose in common: they make technical
-claims open to challenge. A slow operation should not end as a vague user
-report, but become visible as a measurable duration, request, result, or
-discarded version.
-
-The redesigned performance panel makes the worker lifecycle concrete. Stable
-slots correlate owner, task, worker ordinal, assigned core, OS thread,
-generation, direction, packet span, and lifecycle state. Separate counts show
-one-shot creation and completion; the recent-time strip distinguishes active,
-waiting, result-ready, accepted, and adopted work. A zero queue is therefore a
-measured state rather than an inference from an idle-looking editor.
+The subsystem evidence described in
+Chapters~\ref{ch:coprocessor-derived-work} and~\ref{ch:mrmac-vm}, together with
+trainers and the live log, makes technical claims open to challenge. This
+chapter records measured outcomes and limits rather than defining those
+telemetry contracts a second time.
 
 The correction train also preserved quantitative counterexamples. Repeated
 random line addressing made the original enwik9 display-width pass run for
