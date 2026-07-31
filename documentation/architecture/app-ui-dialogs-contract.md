@@ -24,9 +24,25 @@ Dialogs may hold:
 - TVision view state,
 - validation state.
 
-Authoritative settings state belongs to the settings runtime model.
+Authoritative settings state belongs to `SETTINGS/runtime` in the central VM
+K/V.
 
-Window/editor state belongs to the App/UI layer.
+Semantic application/UI runtime state belongs to the App/UI layer under the
+central K/V root `APPLICATIONUI`. Live TVision objects may retain their own
+view-local mechanics, geometry and pointers; they must not become a parallel
+store for K/V-representable application state.
+
+The established branches include:
+
+| Branch | Ownership |
+|---|---|
+| `APPLICATIONUI/messageLine` | Message slots, sequence counters, enable state, Static Mode semaphore and Static Mode progress |
+| `APPLICATIONUI/workspace` | Workspace identity, restore and autosave coordination |
+| `APPLICATIONUI/virtualDesktops` | Current desktop and configuration projection |
+| `APPLICATIONUI/search` | Search dialog, result and multi-file search state |
+| `APPLICATIONUI/log` | Runtime log buffer and persistence cursor |
+| `APPLICATIONUI/indicators` | Recording and Macro Brain marker state |
+| `APPLICATIONUI/performance` | Runtime performance events |
 
 ## Data flow
 
@@ -44,6 +60,8 @@ Dialogs may trigger:
 
 - Dialogs must remain TVision-native.
 - Dialogs must not create shadow settings stores.
+- Dialog and application code must not add semantic file globals or
+  function-static histories beside `APPLICATIONUI` or `SETTINGS/history`.
 - Dialogs must not persist settings through ad hoc paths.
 - Dialog validators must not display blocking error dialogs.
 - Message-line or marquee feedback is preferred for validation warnings.

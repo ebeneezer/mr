@@ -3,7 +3,6 @@
 #include "app/MRHelp.generated.hpp"
 #include "config/settings/MRSettingsRuntime.hpp"
 #include "mrmac/vm/MRVMProcessRuntime.hpp"
-#include "ui/MRPalette.hpp"
 
 #include <cstring>
 #include <ctime>
@@ -42,7 +41,6 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 	mrvmSetProcessContext(argc, argv);
-	loadDefaultMultiEditPalette();
 	const auto appScopeStartedAt = std::chrono::steady_clock::now();
 	{
 		MREditorApp app;

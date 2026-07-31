@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <optional>
@@ -260,7 +261,9 @@ bool markEditorPosition(MREditWindow *win, MRFileEditor *editor) {
 		return true;
 	}
 	if (win == nullptr) return false;
-	g_runtimeEnv.markStacks[win].push_back(editor->cursorOffset());
+	std::vector<std::size_t> marks = mrvmUiCopyWindowMarkStack(win);
+	marks.push_back(editor->cursorOffset());
+	mrvmUiReplaceWindowMarkStack(win, marks);
 	return true;
 }
 
@@ -269,8 +272,8 @@ static bool validRandomAccessMarkIndex(int index) noexcept {
 }
 
 bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor) {
-	std::map<const void *, std::vector<uint>>::iterator it;
 	uint pos;
+	std::vector<std::size_t> marks;
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr) {
 		if (session == nullptr || session->markStack.empty()) return false;
@@ -279,24 +282,26 @@ bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor) {
 		return setEditorCursor(nullptr, pos);
 	}
 	if (win == nullptr) return false;
-	it = g_runtimeEnv.markStacks.find(win);
-	if (it == g_runtimeEnv.markStacks.end() || it->second.empty()) return false;
-	pos = it->second.back();
-	it->second.pop_back();
+	marks = mrvmUiCopyWindowMarkStack(win);
+	if (marks.empty()) return false;
+	pos = static_cast<uint>(marks.back());
+	marks.pop_back();
+	mrvmUiReplaceWindowMarkStack(win, marks);
 	return setEditorCursor(editor, pos);
 }
 
 bool popEditorMark(MREditWindow *win) {
-	std::map<const void *, std::vector<uint>>::iterator it;
+	std::vector<std::size_t> marks;
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (win == nullptr) {
 		if (session == nullptr || session->markStack.empty()) return false;
 		session->markStack.pop_back();
 		return true;
 	}
-	it = g_runtimeEnv.markStacks.find(win);
-	if (it == g_runtimeEnv.markStacks.end() || it->second.empty()) return false;
-	it->second.pop_back();
+	marks = mrvmUiCopyWindowMarkStack(win);
+	if (marks.empty()) return false;
+	marks.pop_back();
+	mrvmUiReplaceWindowMarkStack(win, marks);
 	return true;
 }
 
@@ -310,13 +315,15 @@ bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int inde
 		return true;
 	}
 	if (win == nullptr) return false;
-	g_runtimeEnv.randomAccessMarks[win][static_cast<std::size_t>(index)] = editor->cursorOffset();
+	std::vector<std::string> marks = mrvmRuntimeStateStringList("randomAccessMarks", std::to_string(win->bufferId()));
+	if (marks.size() < 10) marks.resize(10);
+	marks[static_cast<std::size_t>(index)] = std::to_string(editor->cursorOffset());
+	mrvmStoreRuntimeStateStringList("randomAccessMarks", std::to_string(win->bufferId()), marks);
 	return true;
 }
 
 bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
-	std::map<const void *, std::array<std::optional<uint>, 10>>::iterator it;
 
 	if (!validRandomAccessMarkIndex(index)) return false;
 	if (editor == nullptr) {
@@ -325,10 +332,11 @@ bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int ind
 		return pos.has_value() ? setEditorCursor(nullptr, *pos) : false;
 	}
 	if (win == nullptr) return false;
-	it = g_runtimeEnv.randomAccessMarks.find(win);
-	if (it == g_runtimeEnv.randomAccessMarks.end()) return false;
-	const std::optional<uint> &pos = it->second[static_cast<std::size_t>(index)];
-	return pos.has_value() ? setEditorCursor(editor, *pos) : false;
+	const std::vector<std::string> marks = mrvmRuntimeStateStringList("randomAccessMarks", std::to_string(win->bufferId()));
+	if (static_cast<std::size_t>(index) >= marks.size() || marks[static_cast<std::size_t>(index)].empty()) return false;
+	char *end = nullptr;
+	const unsigned long pos = std::strtoul(marks[static_cast<std::size_t>(index)].c_str(), &end, 10);
+	return end != marks[static_cast<std::size_t>(index)].c_str() && *end == '\0' ? setEditorCursor(editor, static_cast<uint>(pos)) : false;
 }
 
 bool moveEditorPageUp(MRFileEditor *editor) {
@@ -530,35 +538,30 @@ std::vector<MREditWindow *> allEditWindows() {
 
 void cleanupWindowLinkGroups() {
 	std::vector<MREditWindow *> windows = allEditWindows();
-	std::set<const void *> live;
+	std::set<std::string> live;
 	std::map<int, int> counts;
-	std::map<const void *, int>::iterator it;
+	std::vector<std::string> keys = mrvmRuntimeStateKeys("windowLinkGroups");
 
 	for (std::size_t index = 0; index < windows.size(); ++index)
-		live.insert(windows[index]);
+		live.insert(std::to_string(windows[index]->bufferId()));
 
-	for (it = g_runtimeEnv.windowLinkGroups.begin(); it != g_runtimeEnv.windowLinkGroups.end();) {
-		if (live.find(it->first) == live.end()) it = g_runtimeEnv.windowLinkGroups.erase(it);
-		else {
-			++counts[it->second];
-			++it;
+	for (const std::string &key : keys) {
+		if (live.find(key) == live.end()) {
+			static_cast<void>(mrvmEraseRuntimeStateValue("windowLinkGroups", key));
+			continue;
 		}
+		++counts[mrvmRuntimeStateInt("windowLinkGroups", key)];
 	}
 
-	for (it = g_runtimeEnv.windowLinkGroups.begin(); it != g_runtimeEnv.windowLinkGroups.end();) {
-		if (counts[it->second] < 2) it = g_runtimeEnv.windowLinkGroups.erase(it);
-		else
-			++it;
-	}
+	keys = mrvmRuntimeStateKeys("windowLinkGroups");
+	for (const std::string &key : keys)
+		if (counts[mrvmRuntimeStateInt("windowLinkGroups", key)] < 2) static_cast<void>(mrvmEraseRuntimeStateValue("windowLinkGroups", key));
 }
 
 int windowLinkGroupOf(MREditWindow *win) {
-	std::map<const void *, int>::const_iterator it;
 	if (win == nullptr) return 0;
 	cleanupWindowLinkGroups();
-	it = g_runtimeEnv.windowLinkGroups.find(win);
-	if (it == g_runtimeEnv.windowLinkGroups.end()) return 0;
-	return it->second;
+	return mrvmRuntimeStateInt("windowLinkGroups", std::to_string(win->bufferId()));
 }
 
 bool isWindowLinked(MREditWindow *win) {
@@ -601,7 +604,6 @@ bool assignLinkedWindows(MREditWindow *a, MREditWindow *b) {
 	int groupA;
 	int groupB;
 	int targetGroup;
-	std::map<const void *, int>::iterator it;
 
 	if (a == nullptr || b == nullptr || a == b) return false;
 
@@ -611,15 +613,18 @@ bool assignLinkedWindows(MREditWindow *a, MREditWindow *b) {
 	if (groupA != 0 && groupA == groupB) return true;
 
 	targetGroup = groupA != 0 ? groupA : groupB;
-	if (targetGroup == 0) targetGroup = g_runtimeEnv.nextWindowLinkGroupId++;
-
-	if (groupA != 0 && groupB != 0 && groupA != groupB) {
-		for (it = g_runtimeEnv.windowLinkGroups.begin(); it != g_runtimeEnv.windowLinkGroups.end(); ++it)
-			if (it->second == groupB) it->second = targetGroup;
+	if (targetGroup == 0) {
+		targetGroup = mrvmRuntimeStateInt("windowLinks", "nextGroupId", 1);
+		mrvmStoreRuntimeStateInt("windowLinks", "nextGroupId", targetGroup + 1);
 	}
 
-	g_runtimeEnv.windowLinkGroups[a] = targetGroup;
-	g_runtimeEnv.windowLinkGroups[b] = targetGroup;
+	if (groupA != 0 && groupB != 0 && groupA != groupB) {
+		for (const std::string &key : mrvmRuntimeStateKeys("windowLinkGroups"))
+			if (mrvmRuntimeStateInt("windowLinkGroups", key) == groupB) mrvmStoreRuntimeStateInt("windowLinkGroups", key, targetGroup);
+	}
+
+	mrvmStoreRuntimeStateInt("windowLinkGroups", std::to_string(a->bufferId()), targetGroup);
+	mrvmStoreRuntimeStateInt("windowLinkGroups", std::to_string(b->bufferId()), targetGroup);
 	cleanupWindowLinkGroups();
 	return true;
 }
@@ -673,7 +678,7 @@ bool unlinkCurrentEditWindow() {
 	MREditWindow *current = activeMacroEditWindow();
 	if (current == nullptr) return false;
 	cleanupWindowLinkGroups();
-	g_runtimeEnv.windowLinkGroups.erase(current);
+	static_cast<void>(mrvmEraseRuntimeStateValue("windowLinkGroups", std::to_string(current->bufferId())));
 	cleanupWindowLinkGroups();
 	return true;
 }

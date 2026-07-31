@@ -152,10 +152,10 @@ MRMacroDebugWatchSnapshot VirtualMachine::DebugExecution::evaluateWatchExpressio
 	const std::vector<std::string> savedLog = vm.log;
 	const bool savedLogTruncated = vm.logTruncated;
 	const bool savedCancelledExecution = vm.cancelledExecution;
-	const int savedReturnInt = g_runtimeEnv.returnInt;
-	const std::string savedReturnStr = g_runtimeEnv.returnStr;
-	const int savedErrorLevel = g_runtimeEnv.errorLevel;
-	const std::string savedParameterString = g_runtimeEnv.parameterString;
+	const int savedReturnInt = runtimeReturnInt();
+	const std::string savedReturnStr = runtimeReturnStr();
+	const int savedErrorLevel = runtimeErrorLevel();
+	const std::string savedParameterString = runtimeParameterString();
 
 	snapshot.expression = expression;
 	for (const std::pair<const std::string, VirtualMachine::Value> &entry : vm.variables)
@@ -179,17 +179,17 @@ MRMacroDebugWatchSnapshot VirtualMachine::DebugExecution::evaluateWatchExpressio
 		if (vm.stack.size() != 1) snapshot.errorText = "Watch expression did not produce one value.";
 		else {
 			snapshot.type = resultType;
-			snapshot.valueText = macroDebugValueText(vm.stack.back(), *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
+			snapshot.valueText = macroDebugValueText(vm.stack.back(), *vm.mHashStore, mrvmRuntimeKv().globalStore());
 		}
 	}
 	vm.stack = savedStack;
 	vm.log = savedLog;
 	vm.logTruncated = savedLogTruncated;
 	vm.cancelledExecution = savedCancelledExecution;
-	g_runtimeEnv.returnInt = savedReturnInt;
-	g_runtimeEnv.returnStr = savedReturnStr;
-	g_runtimeEnv.errorLevel = savedErrorLevel;
-	g_runtimeEnv.parameterString = savedParameterString;
+	setRuntimeReturnInt(savedReturnInt);
+	setRuntimeReturnStr(savedReturnStr);
+	setRuntimeErrorLevel(savedErrorLevel);
+	setRuntimeParameterString(savedParameterString);
 	return snapshot;
 }
 
@@ -513,7 +513,7 @@ static MRMacroDebugRunResult startDebugMacroByKey(const std::string &macroKey, c
 		return result;
 	}
 	if (temporaryStopLine > 0) {
-		if (!mrvmRuntimeCatalogFirstSourceMapSpanForLine(g_runtimeEnv.runtimeKv, normalizedMacroKey, temporaryStopLine, temporaryStopSpan)) {
+		if (!mrvmRuntimeCatalogFirstSourceMapSpanForLine(mrvmRuntimeKv(), normalizedMacroKey, temporaryStopLine, temporaryStopSpan)) {
 			result.stopReason = mrdStopError;
 			result.hadError = true;
 			result.logLines.push_back("VM Error: debug source line is not debuggable: " + std::to_string(temporaryStopLine));
@@ -601,7 +601,7 @@ bool mrvmMacroSpecHasEnabledDebugBreakpoint(const std::string &spec, std::string
 	if (!resolveDebugMacroSpec(spec, macroKey, parameterString, file, resolutionError)) return false;
 	if (sourcePath != nullptr) *sourcePath = file.resolvedPath;
 	if (macroKeyOut != nullptr) *macroKeyOut = macroKey;
-	if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, macroKey, breakpoints)) return false;
+	if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(mrvmRuntimeKv(), macroKey, breakpoints)) return false;
 	for (const MRMacroDebuggerBreakpoint &breakpoint : breakpoints)
 		if (breakpoint.enabled) return true;
 	return false;
@@ -636,14 +636,14 @@ bool mrvmToggleDebugLineBreakpoint(const std::string &macroKey, int line, bool *
 		if (errorMessage != nullptr) *errorMessage = "Debug breakpoint line is invalid.";
 		return false;
 	}
-	if (mrvmRuntimeDebuggerReadLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line, breakpoint)) {
-		if (!mrvmRuntimeDebuggerEraseLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line)) {
+	if (mrvmRuntimeDebuggerReadLineBreakpoint(mrvmRuntimeKv(), normalizedMacroKey, line, breakpoint)) {
+		if (!mrvmRuntimeDebuggerEraseLineBreakpoint(mrvmRuntimeKv(), normalizedMacroKey, line)) {
 			if (errorMessage != nullptr) *errorMessage = "Debug breakpoint could not be cleared.";
 			return false;
 		}
 		return true;
 	}
-	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line, true, std::string())) {
+	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(mrvmRuntimeKv(), normalizedMacroKey, line, true, std::string())) {
 		if (errorMessage != nullptr) *errorMessage = "No debuggable source span for breakpoint line.";
 		return false;
 	}
@@ -662,15 +662,15 @@ bool mrvmToggleDebugLineBreakpointEnabled(const std::string &macroKey, int line,
 		if (errorMessage != nullptr) *errorMessage = "Debug breakpoint is invalid.";
 		return false;
 	}
-	if (!mrvmRuntimeDebuggerReadLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line, breakpoint)) {
-		if (!mrvmRuntimeDebuggerWriteLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line, true, std::string())) {
+	if (!mrvmRuntimeDebuggerReadLineBreakpoint(mrvmRuntimeKv(), normalizedMacroKey, line, breakpoint)) {
+		if (!mrvmRuntimeDebuggerWriteLineBreakpoint(mrvmRuntimeKv(), normalizedMacroKey, line, true, std::string())) {
 			if (errorMessage != nullptr) *errorMessage = "No debuggable source span for breakpoint line.";
 			return false;
 		}
 		if (enabledOut != nullptr) *enabledOut = true;
 		return true;
 	}
-	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line, !breakpoint.enabled, breakpoint.conditionText)) {
+	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(mrvmRuntimeKv(), normalizedMacroKey, line, !breakpoint.enabled, breakpoint.conditionText)) {
 		if (errorMessage != nullptr) *errorMessage = "Debug breakpoint could not be updated.";
 		return false;
 	}
@@ -687,7 +687,7 @@ bool mrvmWriteDebugLineBreakpoint(const std::string &macroKey, int line, bool en
 		if (errorMessage != nullptr) *errorMessage = "Debug breakpoint is invalid.";
 		return false;
 	}
-	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line, enabled, conditionText)) {
+	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(mrvmRuntimeKv(), normalizedMacroKey, line, enabled, conditionText)) {
 		if (errorMessage != nullptr) *errorMessage = "No debuggable source span for breakpoint line.";
 		return false;
 	}
@@ -707,7 +707,7 @@ bool mrvmDebugLineBreakpointsForMacro(const std::string &macroKey, std::vector<M
 	for (const std::string &fileMacroKey : file.macroNames) {
 		std::vector<MRMacroDebuggerBreakpoint> macroBreakpoints;
 
-		if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, fileMacroKey, macroBreakpoints)) continue;
+		if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(mrvmRuntimeKv(), fileMacroKey, macroBreakpoints)) continue;
 		breakpoints.insert(breakpoints.end(), macroBreakpoints.begin(), macroBreakpoints.end());
 	}
 	std::sort(breakpoints.begin(), breakpoints.end(), [](const MRMacroDebuggerBreakpoint &left, const MRMacroDebuggerBreakpoint &right) {
@@ -735,7 +735,7 @@ bool mrvmToggleDebugLineBreakpointsEnabledForMacroFile(const std::string &macroK
 	for (const std::string &fileMacroKey : file.macroNames) {
 		std::vector<MRMacroDebuggerBreakpoint> macroBreakpoints;
 
-		if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, fileMacroKey, macroBreakpoints)) continue;
+		if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(mrvmRuntimeKv(), fileMacroKey, macroBreakpoints)) continue;
 		breakpoints.insert(breakpoints.end(), macroBreakpoints.begin(), macroBreakpoints.end());
 	}
 	for (const MRMacroDebuggerBreakpoint &breakpoint : breakpoints)
@@ -744,7 +744,7 @@ bool mrvmToggleDebugLineBreakpointsEnabledForMacroFile(const std::string &macroK
 			break;
 		}
 	for (const std::string &fileMacroKey : file.macroNames)
-		if (!mrvmRuntimeDebuggerSetLineBreakpointsEnabledForMacro(g_runtimeEnv.runtimeKv, fileMacroKey, enable)) {
+		if (!mrvmRuntimeDebuggerSetLineBreakpointsEnabledForMacro(mrvmRuntimeKv(), fileMacroKey, enable)) {
 			if (errorMessage != nullptr) *errorMessage = "Debug breakpoints could not be updated.";
 			return false;
 		}
@@ -764,7 +764,7 @@ bool mrvmEraseDebugLineBreakpointsForMacroFile(const std::string &macroKey, std:
 		return false;
 	}
 	for (const std::string &fileMacroKey : file.macroNames)
-		if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, fileMacroKey)) {
+		if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(mrvmRuntimeKv(), fileMacroKey)) {
 			if (errorMessage != nullptr) *errorMessage = "Debug breakpoints could not be cleared.";
 			return false;
 		}
@@ -783,7 +783,7 @@ bool mrvmEraseDebugRuntimeForMacroFile(const std::string &macroKey, std::string 
 		return false;
 	}
 	for (const std::string &fileMacroKey : file.macroNames)
-		if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, fileMacroKey) || !mrvmRuntimeDebuggerEraseWatchesForMacro(g_runtimeEnv.runtimeKv, fileMacroKey)) {
+		if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(mrvmRuntimeKv(), fileMacroKey) || !mrvmRuntimeDebuggerEraseWatchesForMacro(mrvmRuntimeKv(), fileMacroKey)) {
 			if (errorMessage != nullptr) *errorMessage = "Debug runtime state could not be cleared.";
 			return false;
 		}
@@ -799,7 +799,7 @@ bool mrvmEraseDebugRuntimeForMacro(const std::string &macroKey, std::string *err
 		if (errorMessage != nullptr) *errorMessage = "Debug macro name is empty.";
 		return false;
 	}
-	if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, normalizedMacroKey) || !mrvmRuntimeDebuggerEraseWatchesForMacro(g_runtimeEnv.runtimeKv, normalizedMacroKey)) {
+	if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(mrvmRuntimeKv(), normalizedMacroKey) || !mrvmRuntimeDebuggerEraseWatchesForMacro(mrvmRuntimeKv(), normalizedMacroKey)) {
 		if (errorMessage != nullptr) *errorMessage = "Debug runtime state could not be cleared.";
 		return false;
 	}
@@ -825,7 +825,7 @@ bool mrvmWriteDebugWatch(const std::string &macroKey, const std::string &express
 		if (errorMessage != nullptr) *errorMessage = compileError != nullptr && *compileError != '\0' ? compileError : "Watch expression is invalid.";
 		return false;
 	}
-	if (!mrvmRuntimeDebuggerWriteWatch(g_runtimeEnv.runtimeKv, normalizedMacroKey, expression, enabled)) {
+	if (!mrvmRuntimeDebuggerWriteWatch(mrvmRuntimeKv(), normalizedMacroKey, expression, enabled)) {
 		if (errorMessage != nullptr) *errorMessage = "Watch expression could not be stored.";
 		return false;
 	}
@@ -858,7 +858,7 @@ bool mrvmEraseDebugWatch(const std::string &macroKey, const std::string &express
 		if (errorMessage != nullptr) *errorMessage = "Watch expression is empty.";
 		return false;
 	}
-	if (!mrvmRuntimeDebuggerEraseWatch(g_runtimeEnv.runtimeKv, normalizedMacroKey, expression)) {
+	if (!mrvmRuntimeDebuggerEraseWatch(mrvmRuntimeKv(), normalizedMacroKey, expression)) {
 		if (errorMessage != nullptr) *errorMessage = "Watch expression was not found.";
 		return false;
 	}
@@ -874,7 +874,7 @@ bool mrvmDebugSourceLineForInstruction(const std::string &macroKey, std::size_t 
 	if (sourceStartOut != nullptr) *sourceStartOut = 0;
 	if (sourceEndOut != nullptr) *sourceEndOut = 0;
 	if (normalizedMacroKey.empty()) return false;
-	if (!mrvmRuntimeCatalogSourceMapSpanForBytecodeOffset(g_runtimeEnv.runtimeKv, normalizedMacroKey, bytecodeOffset, entry)) return false;
+	if (!mrvmRuntimeCatalogSourceMapSpanForBytecodeOffset(mrvmRuntimeKv(), normalizedMacroKey, bytecodeOffset, entry)) return false;
 	if (lineOut != nullptr) *lineOut = entry.line;
 	if (sourceStartOut != nullptr) *sourceStartOut = entry.sourceStartOffset;
 	if (sourceEndOut != nullptr) *sourceEndOut = entry.sourceEndOffset;

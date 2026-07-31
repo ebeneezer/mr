@@ -4,6 +4,8 @@
 #include "../../keymap/MRKeymapResolver.hpp"
 #include "../../mrmac/MRMacroRunner.hpp"
 #include "../../ui/MRWindowSupport.hpp"
+#include "MRSettingsColorInternal.hpp"
+#include "MRSettingsPaletteSlots.hpp"
 #include "MRSettingsHistory.hpp"
 #include "MRSettingsRuntime.hpp"
 #include "MRSettingsRuntimeState.hpp"
@@ -28,167 +30,6 @@ bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr) *errorMessage = message;
 	return false;
 }
-
-std::string toUpperHexByte(unsigned char value);
-
-std::string summarizeConfiguredKeymapsForLog(const std::vector<MRKeymapProfile> &profiles, std::string_view activeProfileName) {
-	std::string text = "Keymap configured state: active='" + std::string(activeProfileName) + "' profiles=" + std::to_string(profiles.size());
-
-	for (const MRKeymapProfile &profile : profiles)
-		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
-	return text;
-}
-
-std::string fileNamePartOf(std::string_view path) {
-	std::size_t sep = path.find_last_of("/\\");
-	if (sep == std::string_view::npos) return std::string(path);
-	return std::string(path.substr(sep + 1));
-}
-
-std::string appendFileName(std::string_view directory, const char *fileName) {
-	std::string result(directory);
-
-	if (!result.empty() && result.back() != '/' && result.back() != '\\') result.push_back('/');
-	result += fileName;
-	return result;
-}
-
-std::string builtInTempDirectoryPath() {
-	std::string cwd;
-
-	if (isWritableDirectory("/tmp")) return "/tmp";
-	cwd = currentWorkingDirectory();
-	if (!cwd.empty() && isWritableDirectory(cwd)) return cwd;
-	return "/tmp";
-}
-
-std::string toUpperHexByte(unsigned char value) {
-	static constexpr char digits[] = "0123456789ABCDEF";
-	std::string text(2, '0');
-
-	text[0] = digits[(value >> 4) & 0x0F];
-	text[1] = digits[value & 0x0F];
-	return text;
-}
-
-std::string escapeMrmacSingleQuotedLiteral(const std::string &value) {
-	std::string out;
-
-	out.reserve(value.size());
-	for (char ch : value) {
-		if (ch == '\'') out.push_back('\'');
-		out.push_back(ch);
-	}
-	return out;
-}
-
-std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
-	std::string out;
-
-	out.reserve(value.size());
-	for (std::size_t i = 0; i < value.size(); ++i) {
-		if (value[i] == '\'' && i + 1 < value.size() && value[i + 1] == '\'') {
-			out.push_back('\'');
-			++i;
-		} else
-			out.push_back(value[i]);
-	}
-	return out;
-}
-
-bool ensureDirectoryTree(const std::string &directoryPath, std::string *errorMessage) {
-	struct stat st;
-	std::string parentPath;
-
-	if (directoryPath.empty() || directoryPath == "." || directoryPath == "/") {
-		if (errorMessage != nullptr) errorMessage->clear();
-		return true;
-	}
-	if (::stat(directoryPath.c_str(), &st) == 0) {
-		if (S_ISDIR(st.st_mode)) {
-			if (errorMessage != nullptr) errorMessage->clear();
-			return true;
-		}
-		if (errorMessage != nullptr) *errorMessage = "Path exists and is not a path container: " + directoryPath;
-		return false;
-	}
-	parentPath = directoryPartOf(directoryPath);
-	if (!parentPath.empty() && parentPath != directoryPath)
-		if (!ensureDirectoryTree(parentPath, errorMessage)) return false;
-	if (::mkdir(directoryPath.c_str(), 0755) != 0 && errno != EEXIST) {
-		if (errorMessage != nullptr) *errorMessage = "Unable to create path container: " + directoryPath;
-		return false;
-	}
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-static const unsigned char kPaletteMenuDescription = 2;
-static const unsigned char kPaletteMenuGhostedDescription = 3;
-static const unsigned char kPaletteMenuHotkey = 4;
-static const unsigned char kPaletteMenuSelector = 5;
-static const unsigned char kPaletteMenuGhostedSelector = 6;
-static const unsigned char kPaletteMenuSelectedHotkey = 7;
-
-static const unsigned char kPaletteBlueWindowFrame = 8;
-static const unsigned char kPaletteBlueWindowBold = 9;
-static const unsigned char kPaletteBlueWindowText = 13;
-static const unsigned char kPaletteBlueWindowHighlight = 14;
-
-static const unsigned char kPaletteGrayDialogBackground = 32;
-static const unsigned char kPaletteGrayDialogFrame = 33;
-static const unsigned char kPaletteGrayDialogFrameAccent = 34;
-static const unsigned char kPaletteGrayDialogText = 37;
-static const unsigned char kPaletteDialogButtonDescription = 41;
-static const unsigned char kPaletteDialogButtonDefault = 42;
-static const unsigned char kPaletteDialogButtonSelected = 43;
-static const unsigned char kPaletteDialogButtonDisabled = 44;
-static const unsigned char kPaletteDialogButtonHotkey = 45;
-static const unsigned char kPaletteDialogButtonShadow = 46;
-static const unsigned char kPaletteDialogClusterHotkey = 49;
-static const unsigned char kPaletteDialogInputLineNormal = 50;
-static const unsigned char kPaletteDialogInputLineSelected = 51;
-static const unsigned char kPaletteDialogInputLineArrows = 52;
-static const unsigned char kPaletteDialogHistoryArrow = 53;
-static const unsigned char kPaletteDialogHistorySides = 54;
-static const unsigned char kPaletteDialogListFrameLegacyPrimary = 24;
-static const unsigned char kPaletteDialogListFrameLegacySecondary = 25;
-static const unsigned char kPaletteDialogListNormalLegacy = 26;
-static const unsigned char kPaletteDialogListFocusedLegacy = 27;
-static const unsigned char kPaletteDialogListSelectedLegacy = 28;
-static const unsigned char kPaletteDialogListTextLegacy = 29;
-static const unsigned char kPaletteDialogListFrameExtendedPrimary = 55;
-static const unsigned char kPaletteDialogListFrameExtendedSecondary = 56;
-static const unsigned char kPaletteDialogListNormal = 57;
-static const unsigned char kPaletteDialogListFocused = 58;
-static const unsigned char kPaletteDialogListSelectedInactive = 59;
-static const unsigned char kPaletteDialogListText = 60;
-static const unsigned char kPaletteBlueDialogBackground = 64;
-static const unsigned char kPaletteBlueDialogFrame = 65;
-static const unsigned char kPaletteBlueDialogFrameAccent = 66;
-static const unsigned char kPaletteBlueDialogText = 69;
-static const unsigned char kPaletteBlueDialogInputLineNormal = 82;
-static const unsigned char kPaletteBlueDialogInputLineSelected = 83;
-static const unsigned char kPaletteBlueDialogInputLineArrows = 84;
-static const unsigned char kPaletteBlueDialogHistoryArrow = 85;
-static const unsigned char kPaletteBlueDialogHistorySides = 86;
-static const unsigned char kPaletteCyanDialogBackground = 96;
-static const unsigned char kPaletteCyanDialogFrame = 97;
-static const unsigned char kPaletteCyanDialogFrameAccent = 98;
-static const unsigned char kPaletteCyanDialogText = 101;
-static const unsigned char kPaletteCyanDialogInputLineNormal = 114;
-static const unsigned char kPaletteCyanDialogInputLineSelected = 115;
-static const unsigned char kPaletteCyanDialogInputLineArrows = 116;
-static const unsigned char kPaletteCyanDialogHistoryArrow = 117;
-static const unsigned char kPaletteCyanDialogHistorySides = 118;
-static const unsigned char kPaletteDialogInactiveClusterGray = 62;
-static const unsigned char kPaletteDialogInactiveClusterBlue = 94;
-static const unsigned char kPaletteDialogInactiveClusterCyan = 126;
-static const unsigned char kPaletteHelpFrame = 128;
-static const unsigned char kPaletteHelpWindowControls = 130;
-static const unsigned char kPaletteHelpText = 133;
-static const unsigned char kPaletteHelpHighlight = 134;
-static const unsigned char kPaletteHelpChapter = 135;
 
 enum : std::size_t {
 	kMenuDialogIndexButtonDescription = 5,
@@ -458,28 +299,6 @@ bool parseHexColorToken(const std::string &token, unsigned char &outValue) {
 	return true;
 }
 
-template <std::size_t N> std::string formatColorListLiteral(const std::array<unsigned char, N> &values) {
-	std::string out = "v1:";
-
-	for (std::size_t i = 0; i < values.size(); ++i) {
-		if (i != 0) out.push_back(',');
-		out += toUpperHexByte(values[i]);
-	}
-	return out;
-}
-
-std::string formatWindowColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
-	std::string out = formatColorListLiteral(values);
-	out[1] = '7';
-	return out;
-}
-
-std::string formatFileCompareColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kFileCompareCount> &values) {
-	std::string out = formatColorListLiteral(values);
-	out[1] = '2';
-	return out;
-}
-
 template <std::size_t N> bool parseColorListLiteral(const std::string &literal, std::array<unsigned char, N> &outValues, std::string *errorMessage) {
 	std::string text = trimAscii(literal);
 
@@ -676,185 +495,6 @@ bool parseFileCompareColorListLiteral(const std::string &literal, std::array<uns
 	return true;
 }
 
-bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage) {
-	std::string text = trimAscii(literal);
-	std::size_t cursor = 0;
-	std::vector<unsigned char> parsed;
-	const unsigned char defaultEofMarker = defaultColorForSlot(kMrPaletteEofMarker);
-	const unsigned char defaultLineNumbers = defaultColorForSlot(kMrPaletteLineNumbers);
-	const unsigned char defaultCodeFolding = defaultColorForSlot(kMrPaletteCodeFolding);
-	const unsigned char defaultCodeFoldingMarker = defaultColorForSlot(kMrPaletteCodeFoldingMarker);
-	const unsigned char defaultFormatRuler = defaultColorForSlot(kMrPaletteFormatRuler);
-	const unsigned char defaultFocusedPaneBorder = defaultColorForSlot(kMrPaletteFocusedPaneBorder);
-	unsigned char value = 0;
-	bool v7Format = false;
-	bool v6Format = false;
-	bool v5Format = false;
-	bool v4Format = false;
-	bool v3Format = false;
-	bool v2Format = false;
-	auto resetWindowColorDefaults = [&]() {
-		for (std::size_t i = 0; i < outValues.size(); ++i)
-			outValues[i] = defaultColorForSlot(kWindowColorItems[i].paletteIndex);
-	};
-
-	if (text.rfind("v7:", 0) == 0 || text.rfind("V7:", 0) == 0) {
-		text = text.substr(3);
-		v7Format = true;
-	} else if (text.rfind("v6:", 0) == 0 || text.rfind("V6:", 0) == 0) {
-		text = text.substr(3);
-		v6Format = true;
-	} else if (text.rfind("v5:", 0) == 0 || text.rfind("V5:", 0) == 0) {
-		text = text.substr(3);
-		v5Format = true;
-	} else if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
-		text = text.substr(3);
-		v4Format = true;
-	} else if (text.rfind("v3:", 0) == 0 || text.rfind("V3:", 0) == 0) {
-		text = text.substr(3);
-		v3Format = true;
-	} else if (text.rfind("v2:", 0) == 0 || text.rfind("V2:", 0) == 0) {
-		text = text.substr(3);
-		v2Format = true;
-	} else if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
-		text = text.substr(3);
-	if (text.empty()) return setError(errorMessage, "Empty color list.");
-
-	while (cursor <= text.size()) {
-		std::size_t comma = text.find(',', cursor);
-		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
-
-		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
-		parsed.push_back(value);
-		if (comma == std::string::npos) break;
-		cursor = comma + 1;
-	}
-
-	if (v7Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v7.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < outValues.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (v6Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v6.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (v5Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (v4Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 3) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (v3Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 4) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (v2Format) {
-		if (parsed.size() != 8) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
-		resetWindowColorDefaults();
-		outValues[0] = parsed[0];
-		outValues[1] = parsed[1];
-		outValues[2] = parsed[2];
-		outValues[3] = defaultEofMarker;
-		outValues[4] = parsed[3];
-		outValues[5] = parsed[4];
-		outValues[6] = parsed[5];
-		outValues[7] = parsed[6];
-		outValues[8] = defaultLineNumbers;
-		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < outValues.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 5) {
-		resetWindowColorDefaults();
-		outValues[0] = parsed[0];
-		outValues[1] = parsed[1];
-		outValues[2] = parsed[2];
-		outValues[3] = parsed[3];
-		outValues[4] = parsed[4];
-		outValues[5] = parsed[5];
-		outValues[6] = parsed[6];
-		outValues[7] = parsed[7];
-		outValues[8] = defaultLineNumbers;
-		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 6) {
-		resetWindowColorDefaults();
-		outValues[0] = parsed[0];
-		outValues[1] = parsed[1];
-		outValues[2] = parsed[2];
-		outValues[3] = parsed[3];
-		outValues[4] = parsed[4];
-		outValues[5] = parsed[5];
-		outValues[6] = parsed[6];
-		outValues[7] = parsed[7];
-		outValues[8] = defaultLineNumbers;
-		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 7) {
-		resetWindowColorDefaults();
-		outValues[0] = parsed[0];
-		outValues[1] = parsed[1];
-		outValues[2] = parsed[2];
-		outValues[3] = defaultEofMarker;
-		outValues[4] = parsed[3];
-		outValues[5] = parsed[4];
-		outValues[6] = parsed[5];
-		outValues[7] = parsed[6];
-		outValues[8] = defaultLineNumbers;
-		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else {
-		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
-	}
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
 bool parseMenuDialogColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kMenuDialogCount> &outValues, std::string *errorMessage) {
 	std::string text = trimAscii(literal);
 	std::size_t cursor = 0;
@@ -1016,65 +656,17 @@ bool applyColorSetupValueToGroup(MRColorSetupSettings &configured, const std::st
 
 } // namespace
 
+unsigned char mrDefaultColorForSlot(unsigned char paletteIndex) {
+	return defaultColorForSlot(paletteIndex);
+}
+
 bool applyColorSetupValueInternal(MRColorSetupSettings &configured, const std::string &key, const std::string &value, std::string *errorMessage) {
 	return applyColorSetupValueToGroup(configured, key, value, errorMessage);
 }
 
-std::string defaultColorThemePathForSettings(std::string_view settingsPath) {
-	std::string dir = directoryPartOf(makeAbsolutePath(std::string(settingsPath)));
-	if (dir.empty()) dir = builtInTempDirectoryPath();
-	return appendFileName(dir, "default-theme.mrmac");
-}
-
-bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments, bool *upgradeRequired, std::string *errorMessage) {
-	static const std::regex pattern("(?:MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)|([A-Z_][A-Z0-9_]*)\\s*\\(\\s*'((?:''|[^'])*)'\\s*\\))", std::regex::icase);
-	bool localUpgradeRequired = false;
-	assignments.clear();
-
-	auto begin = std::sregex_iterator(source.begin(), source.end(), pattern);
-	auto end = std::sregex_iterator();
-
-	for (auto it = begin; it != end; ++it) {
-		const bool mrsetupRecord = (*it)[1].matched;
-		std::string key = trimAscii(unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? (*it)[1].str() : (*it)[3].str()));
-		std::string value = unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? (*it)[2].str() : (*it)[4].str());
-		if (key.empty()) continue;
-		assignments[upperAscii(key)] = value;
-	}
-	{
-		const auto versionIt = assignments.find(std::string(mrThemeVersionSetupKey()));
-		const std::uint64_t currentVersion = mrCurrentPersistenceVersion();
-
-		if (versionIt == assignments.end()) localUpgradeRequired = true;
-		else {
-			const std::string versionLiteral = trimAscii(versionIt->second);
-			std::uint64_t parsedVersion = 0;
-
-			if (!mrParsePersistenceVersion(versionLiteral, parsedVersion)) return setError(errorMessage, mrInvalidPersistenceVersionMessage("theme file"));
-			if (parsedVersion > currentVersion) return setError(errorMessage, mrFuturePersistenceVersionMessage("Theme file", versionLiteral));
-			if (parsedVersion < currentVersion) localUpgradeRequired = true;
-		}
-	}
-
-	MRColorSetupSettings defaults = resolveColorSetupDefaults();
-	if (!assignments.contains("WINDOWCOLORS")) assignments["WINDOWCOLORS"] = formatWindowColorListLiteral(defaults.windowColors);
-	if (!assignments.contains("MENUDIALOGCOLORS")) assignments["MENUDIALOGCOLORS"] = formatColorListLiteral(defaults.menuDialogColors);
-	if (!assignments.contains("HELPCOLORS")) assignments["HELPCOLORS"] = formatColorListLiteral(defaults.helpColors);
-	if (!assignments.contains("OTHERCOLORS")) assignments["OTHERCOLORS"] = formatColorListLiteral(defaults.otherColors);
-	if (!assignments.contains("MINIMAPCOLORS")) assignments["MINIMAPCOLORS"] = formatColorListLiteral(defaults.miniMapColors);
-	if (!assignments.contains("FILECOMPAREMINIMAPCOLORS")) assignments["FILECOMPAREMINIMAPCOLORS"] = formatColorListLiteral(defaults.fileCompareMiniMapColors);
-	if (!assignments.contains("CODECOLORS")) assignments["CODECOLORS"] = formatColorListLiteral(defaults.codeColors);
-	if (!assignments.contains("FILECOMPARECOLORS")) assignments["FILECOMPARECOLORS"] = formatFileCompareColorListLiteral(defaults.fileCompareColors);
-	if (!assignments.contains("DEBUGGERCOLORS")) assignments["DEBUGGERCOLORS"] = formatColorListLiteral(defaults.debuggerColors);
-	if (upgradeRequired != nullptr) *upgradeRequired = localUpgradeRequired;
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
 void ensureConfiguredColorSettingsInitialized() {
 	if (configuredColorSettingsInitialized()) return;
-	configuredColorSettings() = resolveColorSetupDefaults();
-	configuredColorSettingsInitialized() = true;
+	storeConfiguredColorSettings(resolveColorSetupDefaults());
 }
 
 MRColorSetupSettings resolveColorSetupDefaults() {
@@ -1109,9 +701,10 @@ const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_
 
 bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count, std::string *errorMessage) {
 	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
-	MRColorSetupSettings &configured = configuredColorSettings();
+	MRColorSetupSettings configured;
 
 	ensureConfiguredColorSettingsInitialized();
+	configured = configuredColorSettings();
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup group.");
 	if (values == nullptr) return setError(errorMessage, "Unexpected color setup group value count.");
 	if (group == MRColorSetupGroup::Code) {
@@ -1149,7 +742,8 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 			for (std::size_t i = 0; i < configured.debuggerColors.size(); ++i) configured.debuggerColors[i] = values[i];
 			break;
 	}
-	configuredColorThemeDisplayNameValue().clear();
+	storeConfiguredColorSettings(configured);
+	storeConfiguredColorThemeDisplayNameValue(std::string());
 	recordSettingsRuntimeWrite();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -1195,9 +789,8 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 	MRColorSetupSettings configured = configuredColorSetupSettings();
 
 	if (!applyColorSetupValueInternal(configured, key, value, errorMessage)) return false;
-	configuredColorSettings() = configured;
-	configuredColorSettingsInitialized() = true;
-	if (clearThemeDisplayName) configuredColorThemeDisplayNameValue().clear();
+	storeConfiguredColorSettings(configured);
+	if (clearThemeDisplayName) storeConfiguredColorThemeDisplayNameValue(std::string());
 	recordSettingsRuntimeWrite();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -1205,7 +798,7 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 
 bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value) {
 	ensureConfiguredColorSettingsInitialized();
-	const MRColorSetupSettings &configured = configuredColorSettings();
+	const MRColorSetupSettings configured = configuredColorSettings();
 	unsigned char dialogFrame = 0;
 	unsigned char dialogText = 0;
 	unsigned char dialogBackground = 0;
@@ -1384,255 +977,4 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 			return true;
 		}
 	return false;
-}
-
-std::string defaultColorThemeFilePath() {
-	return defaultColorThemePathForSettings(configuredSettingsMacroFilePath());
-}
-
-bool validateColorThemeFilePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	struct stat st;
-
-	if (normalized.empty()) return setError(errorMessage, "Empty color theme URI.");
-	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) return setError(errorMessage, "Color theme URI must include a filename.");
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool setConfiguredColorThemeFilePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-
-	if (!validateColorThemeFilePath(path, errorMessage)) return false;
-	configuredColorThemeFile() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeLoad, configuredColorThemeFile(), nullptr));
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredColorThemeFilePath() {
-	const std::string &configured = configuredColorThemeFile();
-
-	recordSettingsRuntimeRead();
-	if (!configured.empty()) return makeAbsolutePath(configured);
-	return defaultColorThemeFilePath();
-}
-
-std::string configuredColorThemeDisplayName() {
-	std::string name = trimAscii(configuredColorThemeDisplayNameValue());
-
-	recordSettingsRuntimeRead();
-	if (name.empty()) return std::string("default");
-	return name;
-}
-
-bool setConfiguredColorThemeDisplayName(const std::string &name, std::string *errorMessage) {
-	configuredColorThemeDisplayNameValue() = trimAscii(name);
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors) {
-	std::string source;
-	const std::string themeName = trimAscii(configuredColorThemeDisplayNameValue());
-
-	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
-	source += "THEME_RESET();\n";
-	source += "THEME_VERSION('" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
-	source += "WINDOWCOLORS('" + escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) + "');\n";
-	source += "MENUDIALOGCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
-	source += "HELPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";
-	source += "OTHERCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) + "');\n";
-	source += "MINIMAPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) + "');\n";
-	source += "FILECOMPAREMINIMAPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.fileCompareMiniMapColors)) + "');\n";
-	source += "CODECOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.codeColors)) + "');\n";
-	source += "FILECOMPARECOLORS('" + escapeMrmacSingleQuotedLiteral(formatFileCompareColorListLiteral(colors.fileCompareColors)) + "');\n";
-	source += "DEBUGGERCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.debuggerColors)) + "');\n";
-	if (!themeName.empty()) source += "THEME_NAME('" + escapeMrmacSingleQuotedLiteral(themeName) + "');\n";
-	source += "END_MACRO;\n";
-	return source;
-}
-
-bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage) {
-	std::string themePath = normalizeConfiguredPathInput(themeUri);
-	std::string themeDir = directoryPartOf(themePath);
-	std::string source;
-
-	if (!validateColorThemeFilePath(themePath, errorMessage)) return false;
-	if (!ensureDirectoryTree(themeDir, errorMessage)) return false;
-	source = buildColorThemeMacroSource(configuredColorSetupSettings());
-	if (!writeTextFile(themePath, source)) return setError(errorMessage, "Unable to write color theme file: " + themePath);
-	if (!setConfiguredColorThemeFilePath(themePath, errorMessage)) return false;
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(themeUri);
-	std::string themeDir = directoryPartOf(normalized);
-	struct stat st;
-
-	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
-	if (::stat(normalized.c_str(), &st) == 0) {
-		if (S_ISDIR(st.st_mode)) return setError(errorMessage, "Color theme URI must include a filename.");
-		if (errorMessage != nullptr) errorMessage->clear();
-		return true;
-	}
-	if (!ensureDirectoryTree(themeDir, errorMessage)) return false;
-	if (!writeTextFile(normalized, buildColorThemeMacroSource(resolveColorSetupDefaults()))) return setError(errorMessage, "Unable to write color theme file: " + normalized);
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(themeUri);
-	std::string source;
-	std::map<std::string, std::string> assignments;
-	MRColorSetupSettings colors = resolveColorSetupDefaults();
-	bool upgradeRequired = false;
-	std::string themeName;
-
-	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
-	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
-	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, &upgradeRequired, errorMessage)) return false;
-	(void)upgradeRequired;
-	for (const ColorGroupDefinition &group : kColorGroups)
-		if (!applyColorSetupValueInternal(colors, group.key, assignments[group.key], errorMessage)) return false;
-	configuredColorSettings() = colors;
-	configuredColorSettingsInitialized() = true;
-	themeName = trimAscii(assignments["THEME_NAME"]);
-	if (themeName.empty()) themeName = fileNamePartOf(normalized);
-	if (!setConfiguredColorThemeDisplayName(themeName, errorMessage)) return false;
-	if (!setConfiguredColorThemeFilePath(normalized, errorMessage)) return false;
-	recordSettingsRuntimeWrite();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(themeUri);
-	std::string source;
-	std::map<std::string, std::string> assignments;
-	bool upgradeRequired = false;
-
-	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
-	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
-	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, &upgradeRequired, errorMessage)) return false;
-	(void)upgradeRequired;
-	if (!parseWindowColorListLiteral(assignments["WINDOWCOLORS"], outValues, errorMessage)) return false;
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredDefaultProfileDescription() {
-	recordSettingsRuntimeRead();
-	return configuredDefaultProfileDescriptionValue();
-}
-
-bool setConfiguredDefaultProfileDescription(const std::string &value, std::string *errorMessage) {
-	const std::string normalized = trimAscii(value);
-
-	if (configuredDefaultProfileDescriptionValue() != normalized) {
-		configuredDefaultProfileDescriptionValue() = normalized;
-		markConfiguredSettingsDirty();
-	}
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-const std::vector<MRKeymapProfile> &configuredKeymapProfiles() {
-	recordSettingsRuntimeRead();
-	return configuredKeymapProfilesValue();
-}
-
-bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, std::string *errorMessage) {
-	std::vector<MRKeymapProfile> normalized = profiles;
-	std::string normalizedActiveProfile = configuredActiveKeymapProfileValue();
-	std::string runtimeError;
-	const std::vector<MRKeymapProfile> previousProfiles = configuredKeymapProfilesValue();
-	const std::string previousActiveProfile = configuredActiveKeymapProfileValue();
-
-	for (MRKeymapProfile &profile : normalized) {
-		profile.name = trimAscii(profile.name);
-		profile.description = trimAscii(profile.description);
-		for (MRKeymapBindingRecord &binding : profile.bindings) {
-			binding.profileName = trimAscii(binding.profileName);
-			binding.target.target = trimAscii(binding.target.target);
-			binding.description = trimAscii(binding.description);
-		}
-	}
-	bool activeProfileExists = false;
-	for (const MRKeymapProfile &profile : normalized) {
-		if (profile.name == normalizedActiveProfile) {
-			activeProfileExists = true;
-			break;
-		}
-	}
-	if (normalizedActiveProfile.empty() || !activeProfileExists) normalizedActiveProfile.clear();
-
-	const auto diagnostics = validateKeymapProfiles(normalized);
-	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
-		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return setError(errorMessage, diagnostic.message);
-	if (!runtimeKeymapResolver().rebuild(normalized, normalizedActiveProfile, &runtimeError)) return setError(errorMessage, runtimeError);
-
-	configuredKeymapProfilesValue() = normalized;
-	configuredActiveKeymapProfileValue() = normalizedActiveProfile;
-	if (previousProfiles != configuredKeymapProfilesValue() || previousActiveProfile != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
-	mrLogMessage(summarizeConfiguredKeymapsForLog(configuredKeymapProfilesValue(), configuredActiveKeymapProfileValue()));
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredKeymapFilePath() {
-	const std::string &configured = configuredKeymapFileValue();
-
-	recordSettingsRuntimeRead();
-	return configured.empty() ? std::string() : makeAbsolutePath(configured);
-}
-
-bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	struct stat st;
-
-	if (normalized.empty()) {
-		if (!configuredKeymapFileValue().empty()) configuredKeymapFileValue().clear();
-		if (errorMessage != nullptr) errorMessage->clear();
-		return true;
-	}
-	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) return setError(errorMessage, "Keymap URI must include a filename.");
-	configuredKeymapFileValue() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileLoad, configuredKeymapFileValue(), nullptr));
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileSave, configuredKeymapFileValue(), nullptr));
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredActiveKeymapProfile() {
-	recordSettingsRuntimeRead();
-	return configuredActiveKeymapProfileValue();
-}
-
-bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *errorMessage) {
-	std::string normalized = trimAscii(value);
-	std::string runtimeError;
-	const std::string previousActiveProfile = configuredActiveKeymapProfileValue();
-
-	bool activeProfileExists = false;
-	for (const MRKeymapProfile &profile : configuredKeymapProfilesValue()) {
-		if (profile.name == normalized) {
-			activeProfileExists = true;
-			break;
-		}
-	}
-	if (!normalized.empty() && !activeProfileExists) normalized.clear();
-	if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
-	configuredActiveKeymapProfileValue() = normalized;
-	if (previousActiveProfile != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
-	if (normalized.empty()) mrLogMessage("Keymap active profile cleared; built-in key handling remains active.");
-	else
-		mrLogMessage("Keymap active profile set to '" + normalized + "'.");
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
 }

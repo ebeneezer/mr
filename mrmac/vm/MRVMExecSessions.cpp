@@ -538,6 +538,19 @@ std::vector<MRRuntimeScheduledConsumer> mrvmExecSessionsRuntimeScheduledConsumer
 	return result;
 }
 
+std::uint64_t mrvmExecSessionsRuntimeSchedulerNextPumpMs(MRVMRuntimeKv &runtimeKv) {
+	Value scheduler;
+
+	if (!mrvmExecSessionsFindChildPath(runtimeKv, {"scheduler"}, scheduler)) return 0;
+	return hashReadUint(runtimeKv, scheduler, "nextPumpMs");
+}
+
+void mrvmExecSessionsStoreRuntimeSchedulerNextPumpMs(MRVMRuntimeKv &runtimeKv, std::uint64_t nextPumpMs) {
+	const Value scheduler = mrvmExecSessionsEnsureChildPath(runtimeKv, {"scheduler"});
+
+	hashWriteUint(runtimeKv, scheduler, "nextPumpMs", nextPumpMs);
+}
+
 void mrvmExecSessionsRecordRuntimeSchedulerEvent(MRVMRuntimeKv &runtimeKv, const MRRuntimeSchedulerEvent &event) {
 	Value events = mrvmExecSessionsEnsureChildPath(runtimeKv, {"scheduler", "events", "recent"});
 	Value eventHash;
@@ -833,6 +846,16 @@ bool mrvmReadRuntimeScheduledConsumerSchedule(MRRuntimeScheduledConsumerId consu
 std::vector<MRRuntimeScheduledConsumer> mrvmRuntimeScheduledConsumers() {
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	return mrvmExecSessionsRuntimeScheduledConsumers(mrvmRuntimeKv());
+}
+
+std::uint64_t mrvmRuntimeSchedulerNextPumpMs() {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	return mrvmExecSessionsRuntimeSchedulerNextPumpMs(mrvmRuntimeKv());
+}
+
+void mrvmStoreRuntimeSchedulerNextPumpMs(std::uint64_t nextPumpMs) {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	mrvmExecSessionsStoreRuntimeSchedulerNextPumpMs(mrvmRuntimeKv(), nextPumpMs);
 }
 
 MRRuntimeSchedulerEventId mrvmNextRuntimeSchedulerEventId() {

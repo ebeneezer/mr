@@ -59,14 +59,14 @@ bool refreshLoadedFileBytecode(const std::string &fileKey) {
 
 	if (!readLoadedMacroFileByKey(fileKey, file)) return false;
 	if (file.resolvedPath.empty() || !readTextFile(file.resolvedPath, source)) {
-		runtimeErrorLevel() = 5001;
+		setRuntimeErrorLevel(5001);
 		return false;
 	}
 
 	file.sourceMap.clear();
 	compiled = compile_macro_code(source.c_str(), &compiledSize);
 	if (compiled == nullptr) {
-		runtimeErrorLevel() = 5005;
+		setRuntimeErrorLevel(5005);
 		return false;
 	}
 
@@ -112,7 +112,7 @@ bool refreshLoadedFileBytecode(const std::string &fileKey) {
 			config.entryName = displayName;
 			config.closureId = macroSpec;
 			macroRef.closureId = macroSpec;
-			mrvmExecSessionsEnsureClosureState(g_runtimeEnv.runtimeKv, config.closureId, static_cast<int>(macroRef.tickMs));
+			mrvmExecSessionsEnsureClosureState(mrvmRuntimeKv(), config.closureId, static_cast<int>(macroRef.tickMs));
 			macroRef.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
 		}
 		macroRef.hasAssignedKey = false;
@@ -121,7 +121,7 @@ bool refreshLoadedFileBytecode(const std::string &fileKey) {
 	}
 
 	writeLoadedMacroFileByKey(file);
-	runtimeErrorLevel() = 0;
+	setRuntimeErrorLevel(0);
 	logMacroProfileLine("Refreshed macro file", file);
 	return true;
 }
@@ -163,7 +163,7 @@ bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileK
 	if (loadedFileKey != nullptr) loadedFileKey->clear();
 
 	if (resolvedPath.empty() || !readTextFile(resolvedPath, source)) {
-		runtimeErrorLevel() = 5001;
+		setRuntimeErrorLevel(5001);
 		return false;
 	}
 
@@ -171,7 +171,7 @@ bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileK
 	if (hasExistingFile) {
 		for (const auto &macroName : existingFile.macroNames)
 			if (macroIsRunning(macroName)) {
-				runtimeErrorLevel() = 5006;
+				setRuntimeErrorLevel(5006);
 				return false;
 			}
 	}
@@ -179,7 +179,7 @@ bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileK
 	newFile.sourceMap.clear();
 	compiled = compile_macro_code(source.c_str(), &compiledSize);
 	if (compiled == nullptr) {
-		runtimeErrorLevel() = 5005;
+		setRuntimeErrorLevel(5005);
 		return false;
 	}
 
@@ -195,7 +195,7 @@ bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileK
 		if (readLoadedMacroByKey(macroKey, existingMacro)) {
 			if (macroIsRunning(macroKey) || existingMacro.permAttr) {
 				std::free(compiled);
-				runtimeErrorLevel() = 5006;
+				setRuntimeErrorLevel(5006);
 				return false;
 			}
 		}
@@ -250,7 +250,7 @@ bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileK
 			config.entryName = displayName;
 			config.closureId = macroSpec;
 			ref.closureId = macroSpec;
-			mrvmExecSessionsEnsureClosureState(g_runtimeEnv.runtimeKv, config.closureId, static_cast<int>(ref.tickMs));
+			mrvmExecSessionsEnsureClosureState(mrvmRuntimeKv(), config.closureId, static_cast<int>(ref.tickMs));
 			ref.scheduledConsumerId = registerRuntimeScheduledConsumer(config);
 		}
 		writeLoadedMacroByKey(macroKey, ref);
@@ -259,7 +259,7 @@ bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileK
 	}
 
 	writeLoadedMacroFileByKey(newFile);
-	runtimeErrorLevel() = 0;
+	setRuntimeErrorLevel(0);
 	logMacroProfileLine("Loaded macro file", newFile);
 	if (loadedFileKey != nullptr) *loadedFileKey = fileKey;
 	return true;
@@ -394,11 +394,11 @@ bool unloadMacroFromRegistry(const std::string &macroName) {
 	std::string macroKey = mrvmUpperKey(trimAscii(macroName));
 	if (macroKey.empty()) return false;
 	if (macroIsRunning(macroKey)) {
-		runtimeErrorLevel() = 5006;
+		setRuntimeErrorLevel(5006);
 		return false;
 	}
 	if (!removeMacroFromRegistryByKey(macroKey)) return false;
-	runtimeErrorLevel() = 0;
+	setRuntimeErrorLevel(0);
 	return true;
 }
 
@@ -416,7 +416,7 @@ bool mrvmCollectDebugBreakpointOffsetsForLoadedFile(const std::string &macroKey,
 	for (const std::string &fileMacroKey : file.macroNames) {
 		std::vector<std::size_t> macroOffsets;
 
-		if (!mrvmRuntimeDebuggerEnabledBreakpointOffsetsForMacro(g_runtimeEnv.runtimeKv, fileMacroKey, macroOffsets)) continue;
+		if (!mrvmRuntimeDebuggerEnabledBreakpointOffsetsForMacro(mrvmRuntimeKv(), fileMacroKey, macroOffsets)) continue;
 		breakpointOffsets.insert(breakpointOffsets.end(), macroOffsets.begin(), macroOffsets.end());
 	}
 	std::sort(breakpointOffsets.begin(), breakpointOffsets.end());

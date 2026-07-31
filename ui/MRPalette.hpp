@@ -8,7 +8,4 @@ struct MRPalette {
 	char menuPopup[7];
 };
 
-extern MRPalette currentPalette;
-void loadDefaultMultiEditPalette();
-
 #endif

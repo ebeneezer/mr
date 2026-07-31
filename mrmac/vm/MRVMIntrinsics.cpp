@@ -125,7 +125,7 @@ bool MRVMIntrinsics::applyHash(const std::string &name, const std::vector<Value>
 			GlobalEntry entry;
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("GLOBAL_HASH expects one string argument.");
 			if (!readGlobalValue(mrvmValueAsString(args[0]), entry) || entry.type != TYPE_HASH || entry.value.type != TYPE_HASH) {
-				Value value = mrvmMakeHash(g_runtimeEnv.runtimeKv.globalStore().createHash(), true);
+				Value value = mrvmMakeHash(mrvmRuntimeKv().globalStore().createHash(), true);
 				setGlobalValue(mrvmValueAsString(args[0]), TYPE_HASH, value);
 				out = value;
 				return true;
@@ -135,23 +135,23 @@ bool MRVMIntrinsics::applyHash(const std::string &name, const std::vector<Value>
 		}
 		case MRVMIntrinsic::Exists: {
 			if (args.size() != 2 || args[0].type != TYPE_HASH || !mrvmIsStringLike(args[1])) throw std::runtime_error("EXISTS expects (hash, string).");
-			out = mrvmMakeInt(mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0], mrvmValueAsString(args[1])) ? 1 : 0);
+			out = mrvmMakeInt(mrvmHashContainsValue(vm.localHashStore(), mrvmRuntimeKv().globalStore(), args[0], mrvmValueAsString(args[1])) ? 1 : 0);
 			return true;
 		}
 		case MRVMIntrinsic::HasValue: {
 			if (args.size() != 2 || args[0].type != TYPE_HASH || !mrvmIsStringLike(args[1])) throw std::runtime_error("HAS_VALUE expects (hash, string).");
 			const std::string key = mrvmValueAsString(args[1]);
-			if (!mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0], key)) {
+			if (!mrvmHashContainsValue(vm.localHashStore(), mrvmRuntimeKv().globalStore(), args[0], key)) {
 				out = mrvmMakeInt(0);
 				return true;
 			}
-			out = mrvmMakeInt(mrvmValueHasContent(mrvmHashReadValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0], key)) ? 1 : 0);
+			out = mrvmMakeInt(mrvmValueHasContent(mrvmHashReadValue(vm.localHashStore(), mrvmRuntimeKv().globalStore(), args[0], key)) ? 1 : 0);
 			return true;
 		}
 		case MRVMIntrinsic::Keys: {
 			Value result = mrvmMakeArrayValue(TYPE_STR);
 			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("KEYS expects one hash argument.");
-			for (const std::string &key : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0]).keys(args[0].hashHandle))
+			for (const std::string &key : mrvmHashRuntimeStoreForValue(vm.localHashStore(), mrvmRuntimeKv().globalStore(), args[0]).keys(args[0].hashHandle))
 				result.arrayValues.push_back(mrvmMakeString(key));
 			out = result;
 			return true;
@@ -159,7 +159,7 @@ bool MRVMIntrinsics::applyHash(const std::string &name, const std::vector<Value>
 		case MRVMIntrinsic::Values: {
 			Value result = mrvmMakeArrayValue(TYPE_STR);
 			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("VALUES expects one hash argument.");
-			for (const Value &value : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.runtimeKv.globalStore(), args[0]).values(args[0].hashHandle))
+			for (const Value &value : mrvmHashRuntimeStoreForValue(vm.localHashStore(), mrvmRuntimeKv().globalStore(), args[0]).values(args[0].hashHandle))
 				result.arrayValues.push_back(mrvmMakeString(mrvmValueAsString(value)));
 			out = result;
 			return true;
@@ -329,10 +329,10 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 			int attr = 0;
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("FILE_ATTR expects one string argument.");
 			if (!mrvmReadFileMetadata(mrvmValueAsString(args[0]), &attr, nullptr, nullptr)) {
-				runtimeErrorLevel() = errno != 0 ? errno : 1;
+				setRuntimeErrorLevel(errno != 0 ? errno : 1);
 				return mrvmMakeInt(0);
 			}
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 			return mrvmMakeInt(attr);
 		}
 		case MRVMIntrinsic::FirstFile: {
@@ -347,7 +347,7 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 			MRVMSubshellResult subshell;
 			if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SUBSHELL expects (string, int).");
 			subshell = mrvmRunSubshellCapture(mrvmValueAsString(args[0]), mrvmValueAsInt(args[1]), configuredShellExecutablePath());
-			runtimeErrorLevel() = subshell.errorLevel;
+			setRuntimeErrorLevel(subshell.errorLevel);
 			return mrvmMakeString(subshell.output);
 		}
 		case MRVMIntrinsic::SearchFwd: {
@@ -358,17 +358,18 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 			BackgroundEditSession *session;
 			if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SEARCH_FWD expects (string, int).");
 			if (mrvmValueAsString(args[0]).empty()) {
-				runtimeErrorLevel() = 1010;
+				setRuntimeErrorLevel(1010);
 				return mrvmMakeInt(0);
 			}
 			editor = currentEditor();
 			session = currentBackgroundEditSession();
+			win = currentEditorCommandWindow();
 			if (editor == nullptr && session == nullptr) return mrvmMakeInt(0);
 			if (!searchEditorForward(editor, mrvmValueAsString(args[0]), mrvmValueAsInt(args[1]), currentRuntimeIgnoreCase(), matchStart, matchEnd)) {
 				if (session != nullptr) session->clearLastSearch();
 				else
-					g_runtimeEnv.lastSearchValid = false;
-				runtimeErrorLevel() = 0;
+					mrvmUiReplaceWindowLastSearch(win, win != nullptr ? std::string(win->currentFileName()) : std::string(), false, 0, 0, 0);
+				setRuntimeErrorLevel(0);
 				return mrvmMakeInt(0);
 			}
 			if (editor != nullptr) {
@@ -387,14 +388,9 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 				session->lastSearchEnd = matchEnd;
 				session->lastSearchCursor = matchStart;
 			} else {
-				g_runtimeEnv.lastSearchValid = true;
-				g_runtimeEnv.lastSearchWindow = win;
-				g_runtimeEnv.lastSearchFileName = win != nullptr ? std::string(win->currentFileName()) : std::string();
-				g_runtimeEnv.lastSearchStart = matchStart;
-				g_runtimeEnv.lastSearchEnd = matchEnd;
-				g_runtimeEnv.lastSearchCursor = matchStart;
+				mrvmUiReplaceWindowLastSearch(win, win != nullptr ? std::string(win->currentFileName()) : std::string(), true, matchStart, matchEnd, matchStart);
 			}
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 			return mrvmMakeInt(1);
 		}
 		case MRVMIntrinsic::SearchBwd: {
@@ -405,17 +401,18 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 			BackgroundEditSession *session;
 			if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SEARCH_BWD expects (string, int).");
 			if (mrvmValueAsString(args[0]).empty()) {
-				runtimeErrorLevel() = 1010;
+				setRuntimeErrorLevel(1010);
 				return mrvmMakeInt(0);
 			}
 			editor = currentEditor();
 			session = currentBackgroundEditSession();
+			win = currentEditorCommandWindow();
 			if (editor == nullptr && session == nullptr) return mrvmMakeInt(0);
 			if (!searchEditorBackward(editor, mrvmValueAsString(args[0]), mrvmValueAsInt(args[1]), currentRuntimeIgnoreCase(), matchStart, matchEnd)) {
 				if (session != nullptr) session->clearLastSearch();
 				else
-					g_runtimeEnv.lastSearchValid = false;
-				runtimeErrorLevel() = 0;
+					mrvmUiReplaceWindowLastSearch(win, win != nullptr ? std::string(win->currentFileName()) : std::string(), false, 0, 0, 0);
+				setRuntimeErrorLevel(0);
 				return mrvmMakeInt(0);
 			}
 			if (editor != nullptr) {
@@ -434,14 +431,9 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 				session->lastSearchEnd = matchEnd;
 				session->lastSearchCursor = matchStart;
 			} else {
-				g_runtimeEnv.lastSearchValid = true;
-				g_runtimeEnv.lastSearchWindow = win;
-				g_runtimeEnv.lastSearchFileName = win != nullptr ? std::string(win->currentFileName()) : std::string();
-				g_runtimeEnv.lastSearchStart = matchStart;
-				g_runtimeEnv.lastSearchEnd = matchEnd;
-				g_runtimeEnv.lastSearchCursor = matchStart;
+				mrvmUiReplaceWindowLastSearch(win, win != nullptr ? std::string(win->currentFileName()) : std::string(), true, matchStart, matchEnd, matchStart);
 			}
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 			return mrvmMakeInt(1);
 		}
 		case MRVMIntrinsic::GetEnvironment: {
@@ -457,11 +449,12 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 		}
 		case MRVMIntrinsic::ParamStr: {
 			int index;
+			const std::vector<std::string> processArgs = mrvmRuntimeStateStringList("process", "arguments");
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("PARAM_STR expects one integer argument.");
 			index = mrvmValueAsInt(args[0]);
-			if (index == 0) return mrvmMakeString(g_runtimeEnv.startupCommand);
-			if (index < 0 || static_cast<std::size_t>(index) > g_runtimeEnv.processArgs.size()) return mrvmMakeString("");
-			return mrvmMakeString(g_runtimeEnv.processArgs[static_cast<std::size_t>(index - 1)]);
+			if (index == 0) return mrvmMakeString(mrvmRuntimeStateString("process", "startupCommand"));
+			if (index < 0 || static_cast<std::size_t>(index) > processArgs.size()) return mrvmMakeString("");
+			return mrvmMakeString(processArgs[static_cast<std::size_t>(index - 1)]);
 		}
 		case MRVMIntrinsic::GlobalStr: {
 			GlobalEntry entry;
@@ -537,11 +530,11 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 			in.open(source.c_str(), std::ios::in | std::ios::binary);
 			out.open(target.c_str(), (append ? (std::ios::out | std::ios::binary | std::ios::app) : (std::ios::out | std::ios::binary | std::ios::trunc)));
 			if (!in || !out) {
-				runtimeErrorLevel() = errno != 0 ? errno : 1;
+				setRuntimeErrorLevel(errno != 0 ? errno : 1);
 				return mrvmMakeInt(runtimeErrorLevel());
 			}
 			out << in.rdbuf();
-			runtimeErrorLevel() = (in.good() || in.eof()) && out.good() ? 0 : (errno != 0 ? errno : 1);
+			setRuntimeErrorLevel((in.good() || in.eof()) && out.good() ? 0 : (errno != 0 ? errno : 1));
 			return mrvmMakeInt(runtimeErrorLevel());
 		}
 		case MRVMIntrinsic::RenameFile: {
@@ -550,7 +543,7 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 			if (args.size() != 2 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1])) throw std::runtime_error("RENAME_FILE expects (string, string).");
 			source = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
 			target = mrvmProcessExpandUserPath(mrvmValueAsString(args[1]));
-			runtimeErrorLevel() = ::rename(source.c_str(), target.c_str()) == 0 ? 0 : (errno != 0 ? errno : 1);
+			setRuntimeErrorLevel(::rename(source.c_str(), target.c_str()) == 0 ? 0 : (errno != 0 ? errno : 1));
 			return mrvmMakeInt(runtimeErrorLevel());
 		}
 		case MRVMIntrinsic::SwitchFile: {
@@ -560,10 +553,10 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 			for (MREditWindow *window : allEditWindowsInZOrder()) {
 				if (window == nullptr) continue;
 				if (target != mrvmProcessExpandUserPath(window->currentFileName())) continue;
-				runtimeErrorLevel() = mrActivateEditWindow(window) ? 0 : 1001;
+				setRuntimeErrorLevel(mrActivateEditWindow(window) ? 0 : 1001);
 				return mrvmMakeInt(runtimeErrorLevel() == 0 ? 1 : 0);
 			}
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 			return mrvmMakeInt(0);
 		}
 		case MRVMIntrinsic::ScreenLength:
@@ -596,11 +589,11 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 			return mrvmMakeInt(mrvmRunMacroMenuIntrinsic(name, args));
 		}
 		case MRVMIntrinsic::UiExec:
-			return mrvmMakeInt(mrvmRunMacroUiDialogDefinition(g_runtimeEnv.runtimeKv));
+			return mrvmMakeInt(mrvmRunMacroUiDialogDefinition(mrvmRuntimeKv()));
 		case MRVMIntrinsic::UiText:
-			return mrvmMakeString(mrvmModelessUiReadTextValue(g_runtimeEnv.runtimeKv, mrvmValueAsInt(args[0])));
+			return mrvmMakeString(mrvmModelessUiReadTextValue(mrvmRuntimeKv(), mrvmValueAsInt(args[0])));
 		case MRVMIntrinsic::UiIndex:
-			return mrvmMakeInt(mrvmModelessUiReadIndexValue(g_runtimeEnv.runtimeKv, mrvmValueAsInt(args[0])));
+			return mrvmMakeInt(mrvmModelessUiReadIndexValue(mrvmRuntimeKv(), mrvmValueAsInt(args[0])));
 		case MRVMIntrinsic::StringIn:
 		case MRVMIntrinsic::Unknown:
 		default:
@@ -609,7 +602,7 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 
 	{
 		Value modelessResult;
-		if (mrvmDispatchMacroModelessIntrinsic(g_runtimeEnv.runtimeKv, name, args, modelessResult)) return modelessResult;
+		if (mrvmDispatchMacroModelessIntrinsic(mrvmRuntimeKv(), name, args, modelessResult)) return modelessResult;
 	}
 	if (intrinsic == MRVMIntrinsic::StringIn) {
 		if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("STRING_IN is not available in background mode.");

@@ -2,6 +2,9 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "MRSettingsHistory.hpp"
 #include "MRSettingsRuntimeState.hpp"
+#include "../../mrmac/mrmac.h"
+#include "../../mrmac/vm/MRVMRuntimeKv.hpp"
+#include "../../mrmac/vm/MRVMValue.hpp"
 
 #include <algorithm>
 #include <array>
@@ -18,38 +21,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-namespace {
+MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
+std::recursive_mutex &mrvmExecutionMutex() noexcept;
 
-bool g_windowManagerEnabled = true;
-bool g_menulineMessagesEnabled = true;
-bool g_autoDetectBinaryFiles = true;
-MRSearchDialogOptions g_searchDialogOptions;
-MRSarDialogOptions g_sarDialogOptions;
-MRMultiSearchDialogOptions g_multiSearchDialogOptions;
-MRMultiSarDialogOptions g_multiSarDialogOptions;
-MRPdfExportSettings g_pdfExportSettings;
-MRAcquireSettings g_acquireSettings;
-MRLiveLogSettings g_liveLogSettings;
-int g_virtualDesktops = 1;
-bool g_cyclicVirtualDesktops = false;
-MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
-MRCompilerErrorMessagePlacement g_compilerErrorMessagePlacement = MRCompilerErrorMessagePlacement::RightMargin;
-MRScrollbarVisibility g_scrollbarVisibility = MRScrollbarVisibility::Smart;
-bool g_trackCompilerWarnings = false;
-bool g_trackCompilerNotes = false;
-MRUiIndentStyle g_uiIndentStyle = MRUiIndentStyle::KandR;
-std::string g_cursorPositionMarker = "R:C";
-std::string g_fileCompareOriginalLeadingGutters = "L";
-std::string g_fileCompareOriginalTrailingGutters = "M";
-std::string g_fileCompareCompareLeadingGutters = "LD";
-std::string g_fileCompareCompareTrailingGutters;
-MRFileCompareStartConfiguration g_fileCompareStartConfiguration = MRFileCompareStartConfiguration::OriginalCompare;
-bool g_fileCompareComparePanelReadOnly = true;
-bool g_autosaveWorkspace = false;
-bool g_runtimePreserveAutosavedWorkspace = false;
-bool g_autoloadWorkspace = false;
-MRLogHandling g_logHandling = MRLogHandling::Volatile;
-std::map<std::string, std::string> g_autoexecMacroDiagnostics;
+namespace {
 
 struct SettingsIoBucket {
 	std::uint64_t second;
@@ -95,6 +70,208 @@ void recordSettingsRuntimeIo(bool write) {
 bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr) *errorMessage = message;
 	return false;
+}
+
+VirtualMachine::Value settingsRuntimeRoot(MRVMRuntimeKv &runtimeKv) {
+	VirtualMachine::Value settings = runtimeKv.ensureRoot("SETTINGS");
+	return runtimeKv.ensureChild(settings, "runtime");
+}
+
+VirtualMachine::Value settingsBranch(MRVMRuntimeKv &runtimeKv, const char *branch) {
+	return runtimeKv.ensureChild(settingsRuntimeRoot(runtimeKv), branch);
+}
+
+int readSettingsInt(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, int fallback) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	if (!mrvmHashContainsValue(store, store, parent, key)) return fallback;
+	VirtualMachine::Value value = mrvmHashReadValue(store, store, parent, key);
+	return value.type == TYPE_INT ? value.i : fallback;
+}
+
+std::string readSettingsString(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, const std::string &fallback = std::string()) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	if (!mrvmHashContainsValue(store, store, parent, key)) return fallback;
+	VirtualMachine::Value value = mrvmHashReadValue(store, store, parent, key);
+	return value.type == TYPE_STR ? value.s : fallback;
+}
+
+std::vector<std::string> readSettingsStringArray(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	std::vector<std::string> values;
+
+	if (!mrvmHashContainsValue(store, store, parent, key)) return values;
+	VirtualMachine::Value value = mrvmHashReadValue(store, store, parent, key);
+	if (value.type != TYPE_STR_ARRAY) return values;
+	for (const VirtualMachine::Value &element : value.arrayValues)
+		if (element.type == TYPE_STR) values.push_back(element.s);
+	return values;
+}
+
+void writeSettingsInt(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, int value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeInt(value));
+}
+
+void writeSettingsString(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, const std::string &value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeString(value));
+}
+
+void writeSettingsStringArray(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, const std::vector<std::string> &values) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	VirtualMachine::Value array = mrvmMakeArrayValue(TYPE_STR);
+	array.globalStorage = true;
+	for (const std::string &value : values)
+		array.arrayValues.push_back(mrvmMakeString(value));
+	mrvmHashWriteValue(store, store, parent, key, array);
+}
+
+void readSearchDialogOptions(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, MRSearchDialogOptions &options) {
+	options.textType = static_cast<MRSearchTextType>(readSettingsInt(runtimeKv, parent, "textType", static_cast<int>(options.textType)));
+	options.direction = static_cast<MRSearchDirection>(readSettingsInt(runtimeKv, parent, "direction", static_cast<int>(options.direction)));
+	options.mode = static_cast<MRSearchMode>(readSettingsInt(runtimeKv, parent, "mode", static_cast<int>(options.mode)));
+	options.caseSensitive = readSettingsInt(runtimeKv, parent, "caseSensitive", options.caseSensitive ? 1 : 0) != 0;
+	options.globalSearch = readSettingsInt(runtimeKv, parent, "globalSearch", options.globalSearch ? 1 : 0) != 0;
+	options.restrictToMarkedBlock = readSettingsInt(runtimeKv, parent, "restrictToMarkedBlock", options.restrictToMarkedBlock ? 1 : 0) != 0;
+	options.searchAllWindows = readSettingsInt(runtimeKv, parent, "searchAllWindows", options.searchAllWindows ? 1 : 0) != 0;
+}
+
+void writeSearchDialogOptions(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const MRSearchDialogOptions &options) {
+	writeSettingsInt(runtimeKv, parent, "textType", static_cast<int>(options.textType));
+	writeSettingsInt(runtimeKv, parent, "direction", static_cast<int>(options.direction));
+	writeSettingsInt(runtimeKv, parent, "mode", static_cast<int>(options.mode));
+	writeSettingsInt(runtimeKv, parent, "caseSensitive", options.caseSensitive ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "globalSearch", options.globalSearch ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "restrictToMarkedBlock", options.restrictToMarkedBlock ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "searchAllWindows", options.searchAllWindows ? 1 : 0);
+}
+
+int configuredRuntimeInt(const char *key, int fallback) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsInt(runtimeKv, settingsBranch(runtimeKv, "general"), key, fallback);
+}
+
+void storeConfiguredRuntimeInt(const char *key, int value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsInt(runtimeKv, settingsBranch(runtimeKv, "general"), key, value);
+}
+
+std::string configuredRuntimeString(const char *key, const std::string &fallback = std::string()) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsString(runtimeKv, settingsBranch(runtimeKv, "general"), key, fallback);
+}
+
+void storeConfiguredRuntimeString(const char *key, const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsString(runtimeKv, settingsBranch(runtimeKv, "general"), key, value);
+}
+
+MRSarDialogOptions readSarDialogOptions() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, "sarDialog");
+	MRSarDialogOptions options;
+
+	options.textType = static_cast<MRSearchTextType>(readSettingsInt(runtimeKv, parent, "textType", static_cast<int>(options.textType)));
+	options.direction = static_cast<MRSearchDirection>(readSettingsInt(runtimeKv, parent, "direction", static_cast<int>(options.direction)));
+	options.mode = static_cast<MRSarMode>(readSettingsInt(runtimeKv, parent, "mode", static_cast<int>(options.mode)));
+	options.leaveCursorAt = static_cast<MRSarLeaveCursor>(readSettingsInt(runtimeKv, parent, "leaveCursorAt", static_cast<int>(options.leaveCursorAt)));
+	options.caseSensitive = readSettingsInt(runtimeKv, parent, "caseSensitive", options.caseSensitive ? 1 : 0) != 0;
+	options.globalSearch = readSettingsInt(runtimeKv, parent, "globalSearch", options.globalSearch ? 1 : 0) != 0;
+	options.restrictToMarkedBlock = readSettingsInt(runtimeKv, parent, "restrictToMarkedBlock", options.restrictToMarkedBlock ? 1 : 0) != 0;
+	options.searchAllWindows = readSettingsInt(runtimeKv, parent, "searchAllWindows", options.searchAllWindows ? 1 : 0) != 0;
+	return options;
+}
+
+void storeSarDialogOptions(const MRSarDialogOptions &options) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, "sarDialog");
+
+	writeSettingsInt(runtimeKv, parent, "textType", static_cast<int>(options.textType));
+	writeSettingsInt(runtimeKv, parent, "direction", static_cast<int>(options.direction));
+	writeSettingsInt(runtimeKv, parent, "mode", static_cast<int>(options.mode));
+	writeSettingsInt(runtimeKv, parent, "leaveCursorAt", static_cast<int>(options.leaveCursorAt));
+	writeSettingsInt(runtimeKv, parent, "caseSensitive", options.caseSensitive ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "globalSearch", options.globalSearch ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "restrictToMarkedBlock", options.restrictToMarkedBlock ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "searchAllWindows", options.searchAllWindows ? 1 : 0);
+}
+
+MRMultiSearchDialogOptions readMultiSearchDialogOptions(const char *branch) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, branch);
+	MRMultiSearchDialogOptions options;
+
+	options.searchSubdirectories = readSettingsInt(runtimeKv, parent, "searchSubdirectories", options.searchSubdirectories ? 1 : 0) != 0;
+	options.caseSensitive = readSettingsInt(runtimeKv, parent, "caseSensitive", options.caseSensitive ? 1 : 0) != 0;
+	options.wholeWords = readSettingsInt(runtimeKv, parent, "wholeWords", options.wholeWords ? 1 : 0) != 0;
+	options.regularExpressions = readSettingsInt(runtimeKv, parent, "regularExpressions", options.regularExpressions ? 1 : 0) != 0;
+	options.searchFilesInMemory = readSettingsInt(runtimeKv, parent, "searchFilesInMemory", options.searchFilesInMemory ? 1 : 0) != 0;
+	options.restrictToWorkspace = readSettingsInt(runtimeKv, parent, "restrictToWorkspace", options.restrictToWorkspace ? 1 : 0) != 0;
+	options.filespec = readSettingsString(runtimeKv, parent, "filespec", options.filespec);
+	options.startingPath = readSettingsString(runtimeKv, parent, "startingPath");
+	options.searchText = readSettingsString(runtimeKv, parent, "searchText");
+	return options;
+}
+
+void storeMultiSearchDialogOptions(const char *branch, const MRMultiSearchDialogOptions &options) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, branch);
+
+	writeSettingsInt(runtimeKv, parent, "searchSubdirectories", options.searchSubdirectories ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "caseSensitive", options.caseSensitive ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "wholeWords", options.wholeWords ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "regularExpressions", options.regularExpressions ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "searchFilesInMemory", options.searchFilesInMemory ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "restrictToWorkspace", options.restrictToWorkspace ? 1 : 0);
+	writeSettingsString(runtimeKv, parent, "filespec", options.filespec);
+	writeSettingsString(runtimeKv, parent, "startingPath", options.startingPath);
+	writeSettingsString(runtimeKv, parent, "searchText", options.searchText);
+}
+
+MRMultiSarDialogOptions readMultiSarDialogOptions() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, "multiSarDialog");
+	MRMultiSarDialogOptions options;
+
+	options.searchSubdirectories = readSettingsInt(runtimeKv, parent, "searchSubdirectories", options.searchSubdirectories ? 1 : 0) != 0;
+	options.caseSensitive = readSettingsInt(runtimeKv, parent, "caseSensitive", options.caseSensitive ? 1 : 0) != 0;
+	options.wholeWords = readSettingsInt(runtimeKv, parent, "wholeWords", options.wholeWords ? 1 : 0) != 0;
+	options.regularExpressions = readSettingsInt(runtimeKv, parent, "regularExpressions", options.regularExpressions ? 1 : 0) != 0;
+	options.searchFilesInMemory = readSettingsInt(runtimeKv, parent, "searchFilesInMemory", options.searchFilesInMemory ? 1 : 0) != 0;
+	options.keepFilesOpen = readSettingsInt(runtimeKv, parent, "keepFilesOpen", options.keepFilesOpen ? 1 : 0) != 0;
+	options.restrictToWorkspace = readSettingsInt(runtimeKv, parent, "restrictToWorkspace", options.restrictToWorkspace ? 1 : 0) != 0;
+	options.filespec = readSettingsString(runtimeKv, parent, "filespec", options.filespec);
+	options.startingPath = readSettingsString(runtimeKv, parent, "startingPath");
+	options.searchText = readSettingsString(runtimeKv, parent, "searchText");
+	options.replacementText = readSettingsString(runtimeKv, parent, "replacementText");
+	return options;
+}
+
+void storeMultiSarDialogOptions(const MRMultiSarDialogOptions &options) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, "multiSarDialog");
+
+	writeSettingsInt(runtimeKv, parent, "searchSubdirectories", options.searchSubdirectories ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "caseSensitive", options.caseSensitive ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "wholeWords", options.wholeWords ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "regularExpressions", options.regularExpressions ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "searchFilesInMemory", options.searchFilesInMemory ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "keepFilesOpen", options.keepFilesOpen ? 1 : 0);
+	writeSettingsInt(runtimeKv, parent, "restrictToWorkspace", options.restrictToWorkspace ? 1 : 0);
+	writeSettingsString(runtimeKv, parent, "filespec", options.filespec);
+	writeSettingsString(runtimeKv, parent, "startingPath", options.startingPath);
+	writeSettingsString(runtimeKv, parent, "searchText", options.searchText);
+	writeSettingsString(runtimeKv, parent, "replacementText", options.replacementText);
 }
 
 bool normalizeFileCompareGutters(const std::string &value, std::string &out, std::string *errorMessage) {
@@ -145,71 +322,6 @@ void normalizeLiveLogSettings(MRLiveLogSettings &settings) {
 		if (normalizedHistory.size() >= kJournalAppTagHistoryLimit) break;
 	}
 	settings.journalAppTagHistory = std::move(normalizedHistory);
-}
-
-std::string pathFromEnvironment(const char *name) {
-	const char *value = std::getenv(name);
-	return value != nullptr && *value != '\0' ? makeAbsolutePath(normalizeDialogPath(expandUserPath(value).c_str())) : std::string();
-}
-
-std::string firstWritableDirectoryFromEnvironment() {
-	for (const char *name : {"TMPDIR", "TEMP", "TMP"}) {
-		std::string value = pathFromEnvironment(name);
-		if (isWritableDirectory(value)) return value;
-	}
-	return std::string();
-}
-
-std::string shellFromUserDatabase() {
-	struct passwd *entry = ::getpwuid(::geteuid());
-	return entry != nullptr && entry->pw_shell != nullptr ? normalizeDialogPath(entry->pw_shell) : std::string();
-}
-
-std::string builtInTempDirectoryPath() {
-	std::string env = firstWritableDirectoryFromEnvironment();
-	std::string cwd;
-
-	if (!env.empty()) return env;
-	if (isWritableDirectory("/tmp")) return "/tmp";
-	cwd = currentWorkingDirectory();
-	if (!cwd.empty() && isWritableDirectory(cwd)) return cwd;
-	return "/tmp";
-}
-
-std::string appendFileName(std::string_view directory, const char *fileName) {
-	if (directory.empty()) return normalizeDialogPath(fileName);
-	std::string result(directory);
-	if (!result.empty() && result.back() != '/') result.push_back('/');
-	result += fileName != nullptr ? fileName : "";
-	return normalizeDialogPath(result.c_str());
-}
-
-std::string appendPathSegment(std::string_view base, const char *segment) {
-	if (base.empty()) return normalizeDialogPath(segment);
-	std::string result(base);
-	if (!result.empty() && result.back() != '/') result.push_back('/');
-	result += segment != nullptr ? segment : "";
-	return normalizeDialogPath(result.c_str());
-}
-
-std::string executableDirectory() {
-	char exePath[4096];
-	ssize_t length = ::readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-
-	if (length <= 0) return std::string();
-	exePath[length] = '\0';
-	return directoryPartOf(normalizeDialogPath(exePath));
-}
-
-std::string builtInShellExecutablePath() {
-	std::string shell = pathFromEnvironment("SHELL");
-	if (isExecutableFile(shell)) return shell;
-	shell = shellFromUserDatabase();
-	if (isExecutableFile(shell)) return shell;
-	shell = "/bin/bash";
-	if (isExecutableFile(shell)) return shell;
-	if (isExecutableFile("/bin/sh")) return "/bin/sh";
-	return shell;
 }
 
 bool normalizeCursorPositionMarker(const std::string &value, std::string &out, std::string *errorMessage) {
@@ -267,333 +379,133 @@ MRSettingsRuntimeIoRateSnapshot settingsRuntimeIoRateSnapshot() {
 	return snapshot;
 }
 
-std::vector<std::string> &configuredAutoexecMacroStorage() {
-	static std::vector<std::string> value;
-	return value;
+std::vector<std::string> configuredAutoexecMacroStorage() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsStringArray(runtimeKv, settingsBranch(runtimeKv, "autoexec"), "entries");
 }
 
-bool &configuredSettingsDirtyFlag() {
-	static bool value = false;
-	return value;
+void storeConfiguredAutoexecMacroStorage(const std::vector<std::string> &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsStringArray(runtimeKv, settingsBranch(runtimeKv, "autoexec"), "entries", value);
+}
+
+bool configuredSettingsDirtyFlag() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsInt(runtimeKv, settingsRuntimeRoot(runtimeKv), "dirty", 0) != 0;
+}
+
+void storeConfiguredSettingsDirtyFlag(bool value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsInt(runtimeKv, settingsRuntimeRoot(runtimeKv), "dirty", value ? 1 : 0);
 }
 
 void markConfiguredSettingsDirty() {
 	recordSettingsRuntimeWrite();
-	configuredSettingsDirtyFlag() = true;
+	storeConfiguredSettingsDirtyFlag(true);
 }
 
-std::string &configuredSettingsMacroFile() {
-	static std::string value;
-	return value;
+std::string configuredSettingsMacroFile() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "settingsMacroFile");
 }
 
-std::string &configuredMacroDirectory() {
-	static std::string value;
-	return value;
+void storeConfiguredSettingsMacroFile(const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "settingsMacroFile", value);
 }
 
-std::string &configuredHelpFile() {
-	static std::string value;
-	return value;
+std::string configuredMacroDirectory() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "macroDirectory");
 }
 
-std::string &configuredTempDirectory() {
-	static std::string value;
-	return value;
+void storeConfiguredMacroDirectory(const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "macroDirectory", value);
 }
 
-std::string &configuredShellExecutable() {
-	static std::string value;
-	return value;
+std::string configuredHelpFile() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "helpFile");
 }
 
-std::string &configuredAudioPlayer() {
-	static std::string value;
-	return value;
+void storeConfiguredHelpFile(const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "helpFile", value);
 }
 
-std::string &configuredLogFile() {
-	static std::string value;
-	return value;
+std::string configuredTempDirectory() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "tempDirectory");
 }
 
-std::string &configuredColorThemeFile() {
-	static std::string value;
-	return value;
+void storeConfiguredTempDirectory(const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "tempDirectory", value);
 }
 
-std::string &configuredColorThemeDisplayNameValue() {
-	static std::string value;
-	return value;
+std::string configuredShellExecutable() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "shellExecutable");
 }
 
-MREditSetupSettings &configuredEditSettings() {
-	static MREditSetupSettings value;
-	return value;
+void storeConfiguredShellExecutable(const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "shellExecutable", value);
 }
 
-std::vector<MREditExtensionProfile> &configuredEditProfiles() {
-	static std::vector<MREditExtensionProfile> value;
-	return value;
+std::string configuredAudioPlayer() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "audioPlayer");
 }
 
-std::vector<MRCompilerProfile> &configuredCompilerProfilesValue() {
-	static std::vector<MRCompilerProfile> value;
-	return value;
+void storeConfiguredAudioPlayer(const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "audioPlayer", value);
 }
 
-std::vector<MRKeymapProfile> &configuredKeymapProfilesValue() {
-	static std::vector<MRKeymapProfile> value;
-	return value;
+std::string configuredLogFile() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "logFile");
 }
 
-std::string &configuredDefaultProfileDescriptionValue() {
-	static std::string value = "Global defaults";
-	return value;
-}
-
-std::string &configuredKeymapFileValue() {
-	static std::string value;
-	return value;
-}
-
-std::string &configuredActiveKeymapProfileValue() {
-	static std::string value;
-	return value;
-}
-
-MRColorSetupSettings &configuredColorSettings() {
-	static MRColorSetupSettings value;
-	return value;
-}
-
-bool &configuredColorSettingsInitialized() {
-	static bool initialized = false;
-	return initialized;
-}
-
-std::string normalizeDialogPath(const char *path) {
-	std::string result = path != nullptr ? path : "";
-	for (char &ch : result)
-		if (ch == '\\') ch = '/';
-	if (!result.empty()) result = std::filesystem::path(result).lexically_normal().generic_string();
-	return result;
-}
-
-std::string expandUserPath(std::string_view input) {
-	std::string path = trimAscii(input);
-
-	if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
-		const char *home = std::getenv("HOME");
-		if (home != nullptr && *home != '\0') return std::string(home) + path.substr(1);
-	}
-	return path;
-}
-
-bool isReadableDirectory(std::string_view path) {
-	const std::string pathString(path);
-	struct stat st;
-	if (path.empty()) return false;
-	if (::stat(pathString.c_str(), &st) != 0) return false;
-	if (!S_ISDIR(st.st_mode)) return false;
-	return ::access(pathString.c_str(), R_OK | X_OK) == 0;
-}
-
-bool isWritableDirectory(std::string_view path) {
-	const std::string pathString(path);
-	struct stat st;
-	if (path.empty()) return false;
-	if (::stat(pathString.c_str(), &st) != 0) return false;
-	if (!S_ISDIR(st.st_mode)) return false;
-	return ::access(pathString.c_str(), R_OK | W_OK | X_OK) == 0;
-}
-
-bool isReadableFile(std::string_view path) {
-	const std::string pathString(path);
-	struct stat st;
-	if (path.empty()) return false;
-	if (::stat(pathString.c_str(), &st) != 0) return false;
-	if (!S_ISREG(st.st_mode)) return false;
-	return ::access(pathString.c_str(), R_OK) == 0;
-}
-
-bool isExecutableFile(std::string_view path) {
-	const std::string pathString(path);
-	struct stat st;
-	if (path.empty()) return false;
-	if (::stat(pathString.c_str(), &st) != 0) return false;
-	if (!S_ISREG(st.st_mode)) return false;
-	return ::access(pathString.c_str(), X_OK) == 0;
-}
-
-bool isWritableRegularFile(std::string_view path) {
-	const std::string pathString(path);
-	struct stat st;
-	if (path.empty()) return false;
-	if (::stat(pathString.c_str(), &st) != 0) return false;
-	if (!S_ISREG(st.st_mode)) return false;
-	return ::access(pathString.c_str(), W_OK) == 0;
-}
-
-std::string directoryPartOf(std::string_view path) {
-	if (path.empty()) return std::string();
-	std::size_t pos = path.find_last_of('/');
-	if (pos == std::string::npos) return std::string();
-	if (pos == 0) return "/";
-	return std::string(path.substr(0, pos));
-}
-
-bool hasDirectorySeparator(std::string_view path) {
-	return path.find('/') != std::string::npos;
-}
-
-std::string normalizeAutoexecMacroEntry(std::string_view value) {
-	return trimAscii(value);
-}
-
-bool validateAutoexecMacroEntry(const std::string &value, std::string *errorMessage) {
-	const std::string normalized = normalizeDialogPath(normalizeAutoexecMacroEntry(value).c_str());
-	std::filesystem::path relativePath;
-
-	if (normalized.empty()) return setError(errorMessage, "Autoexec macro name must not be empty.");
-	if (normalized.find(':') != std::string::npos) return setError(errorMessage, "Autoexec macro must be a relative path under MACROPATH.");
-	relativePath = std::filesystem::path(normalized);
-	if (relativePath.is_absolute()) return setError(errorMessage, "Autoexec macro must be a relative path under MACROPATH.");
-	for (const std::filesystem::path &part : relativePath)
-		if (part == "..") return setError(errorMessage, "Autoexec macro must stay under MACROPATH.");
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-void copyToBuffer(char *buffer, std::size_t bufferSize, const std::string &value) {
-	if (buffer == nullptr || bufferSize == 0) return;
-	std::memset(buffer, 0, bufferSize);
-	std::strncpy(buffer, value.c_str(), bufferSize - 1);
-	buffer[bufferSize - 1] = '\0';
-}
-
-std::string currentWorkingDirectory() {
-	char cwd[4096];
-
-	if (::getcwd(cwd, sizeof(cwd)) == nullptr) return std::string();
-	return normalizeDialogPath(cwd);
-}
-
-bool isAbsolutePath(std::string_view path) {
-	return !path.empty() && path[0] == '/';
-}
-
-std::string makeAbsolutePath(const std::string &path) {
-	std::string normalized = normalizeDialogPath(path.c_str());
-	std::string cwd;
-
-	if (normalized.empty() || isAbsolutePath(normalized)) return normalized;
-	cwd = currentWorkingDirectory();
-	if (cwd.empty()) return normalized;
-	if (cwd.back() != '/') cwd.push_back('/');
-	cwd += normalized;
-	return normalizeDialogPath(cwd.c_str());
-}
-
-std::string normalizedDialogDirectoryFromPath(const std::string &path) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	std::string dir;
-
-	if (normalized.empty()) return std::string();
-	if (isReadableDirectory(normalized)) return normalized;
-	dir = directoryPartOf(normalized);
-	if (dir.empty()) return std::string();
-	dir = makeAbsolutePath(dir);
-	return isReadableDirectory(dir) ? dir : std::string();
-}
-
-std::string fallbackRememberedLoadDirectory() {
-	std::string macroDir = makeAbsolutePath(configuredMacroDirectory());
-	std::string cwd = currentWorkingDirectory();
-
-	if (isReadableDirectory(macroDir)) return macroDir;
-	if (isReadableDirectory(cwd)) return cwd;
-	return std::string();
-}
-
-std::string normalizeConfiguredPathInput(std::string_view input) {
-	return makeAbsolutePath(normalizeDialogPath(expandUserPath(input).c_str()));
-}
-
-MRSetupPaths resolveSetupPathDefaults() {
-	MRSetupPaths defaults;
-	std::string xdgConfig = pathFromEnvironment("XDG_CONFIG_HOME");
-	const char *homeEnv = std::getenv("HOME");
-	std::string home = (homeEnv != nullptr && *homeEnv != '\0') ? makeAbsolutePath(normalizeDialogPath(homeEnv)) : std::string();
-	std::string cwd = currentWorkingDirectory();
-	std::string exeDir = makeAbsolutePath(executableDirectory());
-	std::string candidate;
-	std::string configBase;
-
-	defaults.tempPath = builtInTempDirectoryPath();
-	if (defaults.tempPath.empty()) defaults.tempPath = "/tmp";
-
-	if (!xdgConfig.empty()) defaults.settingsMacroUri = appendFileName(appendPathSegment(xdgConfig, "mr"), "settings.mrmac");
-	else if (!home.empty()) {
-		configBase = appendPathSegment(home, ".config");
-		defaults.settingsMacroUri = appendFileName(appendPathSegment(configBase, "mr"), "settings.mrmac");
-	} else if (!cwd.empty()) {
-		configBase = appendPathSegment(cwd, ".config");
-		defaults.settingsMacroUri = appendFileName(appendPathSegment(configBase, "mr"), "settings.mrmac");
-	} else if (!exeDir.empty()) {
-		configBase = appendPathSegment(exeDir, ".config");
-		defaults.settingsMacroUri = appendFileName(appendPathSegment(configBase, "mr"), "settings.mrmac");
-	} else
-		defaults.settingsMacroUri = appendFileName(defaults.tempPath, "settings.mrmac");
-
-	if (!cwd.empty()) {
-		candidate = appendPathSegment(appendPathSegment(cwd, "mrmac"), "macros");
-		if (isReadableDirectory(candidate)) defaults.macroPath = candidate;
-	}
-	if (defaults.macroPath.empty() && !exeDir.empty()) {
-		candidate = appendPathSegment(appendPathSegment(exeDir, "mrmac"), "macros");
-		if (isReadableDirectory(candidate)) defaults.macroPath = candidate;
-	}
-	if (defaults.macroPath.empty() && !cwd.empty() && isReadableDirectory(cwd)) defaults.macroPath = cwd;
-	if (defaults.macroPath.empty()) defaults.macroPath = defaults.tempPath;
-
-	if (!cwd.empty()) {
-		candidate = appendFileName(cwd, "mr.hlp");
-		if (isReadableFile(candidate)) defaults.helpUri = candidate;
-	}
-	if (defaults.helpUri.empty() && !exeDir.empty()) {
-		candidate = appendFileName(exeDir, "mr.hlp");
-		if (isReadableFile(candidate)) defaults.helpUri = candidate;
-	}
-	if (defaults.helpUri.empty() && !cwd.empty()) defaults.helpUri = appendFileName(cwd, "mr.hlp");
-	if (defaults.helpUri.empty() && !exeDir.empty()) defaults.helpUri = appendFileName(exeDir, "mr.hlp");
-	if (defaults.helpUri.empty()) defaults.helpUri = appendFileName(defaults.tempPath, "mr.hlp");
-
-	defaults.shellUri = builtInShellExecutablePath();
-	if (defaults.shellUri.empty()) defaults.shellUri = "/bin/sh";
-
-	defaults.settingsMacroUri = makeAbsolutePath(defaults.settingsMacroUri);
-	defaults.macroPath = makeAbsolutePath(defaults.macroPath);
-	defaults.helpUri = makeAbsolutePath(defaults.helpUri);
-	defaults.tempPath = makeAbsolutePath(defaults.tempPath);
-	defaults.shellUri = makeAbsolutePath(defaults.shellUri);
-	return defaults;
+void storeConfiguredLogFile(const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeSettingsString(runtimeKv, settingsBranch(runtimeKv, "paths"), "logFile", value);
 }
 
 bool setConfiguredWindowManager(bool enabled, std::string *errorMessage) {
-	if (g_windowManagerEnabled != enabled) markConfiguredSettingsDirty();
-	g_windowManagerEnabled = enabled;
+	if (configuredWindowManager() != enabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("windowManagerEnabled", enabled ? 1 : 0);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredWindowManager() {
 	recordSettingsRuntimeRead();
-	return g_windowManagerEnabled;
+	return configuredRuntimeInt("windowManagerEnabled", 1) != 0;
 }
 
 bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
-	const bool previous = g_menulineMessagesEnabled;
+	const bool previous = configuredMenulineMessages();
 
 	if (!enabled) {
 		mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
@@ -603,95 +515,135 @@ bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
 	}
-	g_menulineMessagesEnabled = enabled;
-	if (previous != g_menulineMessagesEnabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("menulineMessagesEnabled", enabled ? 1 : 0);
+	if (previous != enabled) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredMenulineMessages() {
 	recordSettingsRuntimeRead();
-	return g_menulineMessagesEnabled;
+	return configuredRuntimeInt("menulineMessagesEnabled", 1) != 0;
 }
 
 bool setConfiguredAutoDetectBinaryFiles(bool enabled, std::string *errorMessage) {
-	if (g_autoDetectBinaryFiles != enabled) markConfiguredSettingsDirty();
-	g_autoDetectBinaryFiles = enabled;
+	if (configuredAutoDetectBinaryFiles() != enabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("autoDetectBinaryFiles", enabled ? 1 : 0);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredAutoDetectBinaryFiles() {
 	recordSettingsRuntimeRead();
-	return g_autoDetectBinaryFiles;
+	return configuredRuntimeInt("autoDetectBinaryFiles", 1) != 0;
 }
 
 bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options, std::string *errorMessage) {
-	if (g_searchDialogOptions != options) markConfiguredSettingsDirty();
-	g_searchDialogOptions = options;
+	if (configuredSearchDialogOptions() != options) markConfiguredSettingsDirty();
+	{
+		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+		writeSearchDialogOptions(runtimeKv, settingsBranch(runtimeKv, "searchDialog"), options);
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRSearchDialogOptions configuredSearchDialogOptions() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRSearchDialogOptions options;
+
 	recordSettingsRuntimeRead();
-	return g_searchDialogOptions;
+	readSearchDialogOptions(runtimeKv, settingsBranch(runtimeKv, "searchDialog"), options);
+	return options;
 }
 
 bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::string *errorMessage) {
-	if (g_sarDialogOptions != options) markConfiguredSettingsDirty();
-	g_sarDialogOptions = options;
+	if (configuredSarDialogOptions() != options) markConfiguredSettingsDirty();
+	storeSarDialogOptions(options);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRSarDialogOptions configuredSarDialogOptions() {
 	recordSettingsRuntimeRead();
-	return g_sarDialogOptions;
+	return readSarDialogOptions();
 }
 
 bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &options, std::string *errorMessage) {
-	if (g_multiSearchDialogOptions != options) markConfiguredSettingsDirty();
-	g_multiSearchDialogOptions = options;
+	if (configuredMultiSearchDialogOptions() != options) markConfiguredSettingsDirty();
+	storeMultiSearchDialogOptions("multiSearchDialog", options);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRMultiSearchDialogOptions configuredMultiSearchDialogOptions() {
 	recordSettingsRuntimeRead();
-	return g_multiSearchDialogOptions;
+	return readMultiSearchDialogOptions("multiSearchDialog");
 }
 
 bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options, std::string *errorMessage) {
-	if (g_multiSarDialogOptions != options) markConfiguredSettingsDirty();
-	g_multiSarDialogOptions = options;
+	if (configuredMultiSarDialogOptions() != options) markConfiguredSettingsDirty();
+	storeMultiSarDialogOptions(options);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRMultiSarDialogOptions configuredMultiSarDialogOptions() {
 	recordSettingsRuntimeRead();
-	return g_multiSarDialogOptions;
+	return readMultiSarDialogOptions();
 }
 
 bool setConfiguredPdfExportSettings(const MRPdfExportSettings &settings, std::string *errorMessage) {
-	const MRPdfExportSettings previousSettings = g_pdfExportSettings;
+	const MRPdfExportSettings previousSettings = configuredPdfExportSettings();
 	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::PdfExport);
 
-	g_pdfExportSettings = settings;
+	{
+		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+		VirtualMachine::Value parent = settingsBranch(runtimeKv, "pdfExport");
+		writeSettingsString(runtimeKv, parent, "outputPath", settings.outputPath);
+		writeSettingsString(runtimeKv, parent, "pageSeparatorLiteral", settings.pageSeparatorLiteral);
+		writeSettingsString(runtimeKv, parent, "fontFamily", settings.fontFamily);
+		writeSettingsInt(runtimeKv, parent, "fontSizePoints", settings.fontSizePoints);
+		writeSettingsString(runtimeKv, parent, "headerLine", settings.headerLine);
+		writeSettingsString(runtimeKv, parent, "footerLine", settings.footerLine);
+		writeSettingsString(runtimeKv, parent, "textWidth", settings.textWidth);
+		writeSettingsString(runtimeKv, parent, "leftMarginPoints", settings.leftMarginPoints);
+		writeSettingsString(runtimeKv, parent, "rightMarginPoints", settings.rightMarginPoints);
+		writeSettingsString(runtimeKv, parent, "topMarginPoints", settings.topMarginPoints);
+		writeSettingsString(runtimeKv, parent, "bottomMarginPoints", settings.bottomMarginPoints);
+	}
 	if (!trimAscii(settings.outputPath).empty()) static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::PdfExport, settings.outputPath, nullptr));
-	if (previousSettings != g_pdfExportSettings || previousHistory != dialogHistoryState(MRDialogHistoryScope::PdfExport)) markConfiguredSettingsDirty();
+	if (previousSettings != settings || previousHistory != dialogHistoryState(MRDialogHistoryScope::PdfExport)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRPdfExportSettings configuredPdfExportSettings() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, "pdfExport");
+	MRPdfExportSettings settings;
+
+	settings.outputPath = readSettingsString(runtimeKv, parent, "outputPath");
+	settings.pageSeparatorLiteral = readSettingsString(runtimeKv, parent, "pageSeparatorLiteral", settings.pageSeparatorLiteral);
+	settings.fontFamily = readSettingsString(runtimeKv, parent, "fontFamily", settings.fontFamily);
+	settings.fontSizePoints = readSettingsInt(runtimeKv, parent, "fontSizePoints", settings.fontSizePoints);
+	settings.headerLine = readSettingsString(runtimeKv, parent, "headerLine");
+	settings.footerLine = readSettingsString(runtimeKv, parent, "footerLine");
+	settings.textWidth = readSettingsString(runtimeKv, parent, "textWidth", settings.textWidth);
+	settings.leftMarginPoints = readSettingsString(runtimeKv, parent, "leftMarginPoints", settings.leftMarginPoints);
+	settings.rightMarginPoints = readSettingsString(runtimeKv, parent, "rightMarginPoints", settings.rightMarginPoints);
+	settings.topMarginPoints = readSettingsString(runtimeKv, parent, "topMarginPoints", settings.topMarginPoints);
+	settings.bottomMarginPoints = readSettingsString(runtimeKv, parent, "bottomMarginPoints", settings.bottomMarginPoints);
 	recordSettingsRuntimeRead();
-	return g_pdfExportSettings;
+	return settings;
 }
 
 bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string *errorMessage) {
-	const MRAcquireSettings previousSettings = g_acquireSettings;
+	const MRAcquireSettings previousSettings = configuredAcquireSettings();
 	MRAcquireSettings normalized = settings;
 
 	normalized.commandLine = trimAscii(normalized.commandLine);
@@ -701,44 +653,85 @@ bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string
 		normalized.commandHistory.insert(normalized.commandHistory.begin(), normalized.commandLine);
 		normalizeAcquireCommandHistory(normalized.commandHistory);
 	}
-	g_acquireSettings = std::move(normalized);
-	if (previousSettings != g_acquireSettings) markConfiguredSettingsDirty();
+	{
+		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+		VirtualMachine::Value parent = settingsBranch(runtimeKv, "acquire");
+		writeSettingsString(runtimeKv, parent, "commandLine", normalized.commandLine);
+		writeSettingsStringArray(runtimeKv, parent, "commandHistory", normalized.commandHistory);
+	}
+	if (previousSettings != normalized) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRAcquireSettings configuredAcquireSettings() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, "acquire");
+	MRAcquireSettings settings;
+
+	settings.commandLine = readSettingsString(runtimeKv, parent, "commandLine");
+	settings.commandHistory = readSettingsStringArray(runtimeKv, parent, "commandHistory");
 	recordSettingsRuntimeRead();
-	return g_acquireSettings;
+	return settings;
 }
 
 bool setConfiguredLiveLogSettings(const MRLiveLogSettings &settings, std::string *errorMessage) {
 	MRLiveLogSettings normalized = settings;
 
 	normalizeLiveLogSettings(normalized);
-	if (g_liveLogSettings != normalized) markConfiguredSettingsDirty();
-	g_liveLogSettings = normalized;
+	if (configuredLiveLogSettings() != normalized) markConfiguredSettingsDirty();
+	{
+		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+		VirtualMachine::Value parent = settingsBranch(runtimeKv, "liveLog");
+		writeSettingsInt(runtimeKv, parent, "reportSearchHitsOnMessageLine", normalized.reportSearchHitsOnMessageLine ? 1 : 0);
+		writeSettingsInt(runtimeKv, parent, "reportSearchHitsWithSystemBeep", normalized.reportSearchHitsWithSystemBeep ? 1 : 0);
+		writeSettingsInt(runtimeKv, parent, "reportSearchHitsWithAudioSignal", normalized.reportSearchHitsWithAudioSignal ? 1 : 0);
+		writeSettingsInt(runtimeKv, parent, "scrollDirection", static_cast<int>(normalized.scrollDirection));
+		writeSettingsInt(runtimeKv, parent, "showLineNumbers", normalized.showLineNumbers ? 1 : 0);
+		writeSettingsInt(runtimeKv, parent, "showTimestamps", normalized.showTimestamps ? 1 : 0);
+		writeSettingsInt(runtimeKv, parent, "syntaxHighlighting", normalized.syntaxHighlighting ? 1 : 0);
+		writeSettingsString(runtimeKv, parent, "audioSignalUri", normalized.audioSignalUri);
+		writeSettingsStringArray(runtimeKv, parent, "journalAppTagHistory", normalized.journalAppTagHistory);
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRLiveLogSettings configuredLiveLogSettings() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value parent = settingsBranch(runtimeKv, "liveLog");
+	MRLiveLogSettings settings;
+
+	settings.reportSearchHitsOnMessageLine = readSettingsInt(runtimeKv, parent, "reportSearchHitsOnMessageLine", settings.reportSearchHitsOnMessageLine ? 1 : 0) != 0;
+	settings.reportSearchHitsWithSystemBeep = readSettingsInt(runtimeKv, parent, "reportSearchHitsWithSystemBeep", settings.reportSearchHitsWithSystemBeep ? 1 : 0) != 0;
+	settings.reportSearchHitsWithAudioSignal = readSettingsInt(runtimeKv, parent, "reportSearchHitsWithAudioSignal", settings.reportSearchHitsWithAudioSignal ? 1 : 0) != 0;
+	settings.scrollDirection = static_cast<MRLiveLogScrollDirection>(readSettingsInt(runtimeKv, parent, "scrollDirection", static_cast<int>(settings.scrollDirection)));
+	settings.showLineNumbers = readSettingsInt(runtimeKv, parent, "showLineNumbers", settings.showLineNumbers ? 1 : 0) != 0;
+	settings.showTimestamps = readSettingsInt(runtimeKv, parent, "showTimestamps", settings.showTimestamps ? 1 : 0) != 0;
+	settings.syntaxHighlighting = readSettingsInt(runtimeKv, parent, "syntaxHighlighting", settings.syntaxHighlighting ? 1 : 0) != 0;
+	settings.audioSignalUri = readSettingsString(runtimeKv, parent, "audioSignalUri");
+	settings.journalAppTagHistory = readSettingsStringArray(runtimeKv, parent, "journalAppTagHistory");
 	recordSettingsRuntimeRead();
-	return g_liveLogSettings;
+	return settings;
 }
 
 bool setConfiguredAudioPlayerPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	const std::string previousPath = configuredAudioPlayer();
 
-	configuredAudioPlayer() = normalized.empty() ? std::string() : makeAbsolutePath(normalized);
-	if (previousPath != configuredAudioPlayer()) markConfiguredSettingsDirty();
+	const std::string configured = normalized.empty() ? std::string() : makeAbsolutePath(normalized);
+	storeConfiguredAudioPlayer(configured);
+	if (previousPath != configured) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredAudioPlayerPath() {
-	const std::string &configured = configuredAudioPlayer();
+	const std::string configured = configuredAudioPlayer();
 
 	recordSettingsRuntimeRead();
 	if (!configured.empty() && isExecutableFile(configured)) return makeAbsolutePath(configured);
@@ -748,508 +741,241 @@ std::string configuredAudioPlayerPath() {
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
 	if (count < 1) count = 1;
 	if (count > 9) count = 9;
-	if (g_virtualDesktops != count) markConfiguredSettingsDirty();
-	g_virtualDesktops = count;
+	if (configuredVirtualDesktops() != count) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("virtualDesktops", count);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 int configuredVirtualDesktops() {
 	recordSettingsRuntimeRead();
-	return g_virtualDesktops;
+	return configuredRuntimeInt("virtualDesktops", 1);
 }
 
 bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage) {
-	if (g_cyclicVirtualDesktops != enabled) markConfiguredSettingsDirty();
-	g_cyclicVirtualDesktops = enabled;
+	if (configuredCyclicVirtualDesktops() != enabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("cyclicVirtualDesktops", enabled ? 1 : 0);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredCyclicVirtualDesktops() {
 	recordSettingsRuntimeRead();
-	return g_cyclicVirtualDesktops;
+	return configuredRuntimeInt("cyclicVirtualDesktops", 0) != 0;
 }
 
 bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *errorMessage) {
-	if (g_cursorBehaviour != behaviour) markConfiguredSettingsDirty();
-	g_cursorBehaviour = behaviour;
+	if (configuredCursorBehaviour() != behaviour) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("cursorBehaviour", static_cast<int>(behaviour));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRCursorBehaviour configuredCursorBehaviour() {
 	recordSettingsRuntimeRead();
-	return g_cursorBehaviour;
+	return static_cast<MRCursorBehaviour>(configuredRuntimeInt("cursorBehaviour", static_cast<int>(MRCursorBehaviour::BoundToText)));
 }
 
 bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement placement, std::string *errorMessage) {
-	if (g_compilerErrorMessagePlacement != placement) markConfiguredSettingsDirty();
-	g_compilerErrorMessagePlacement = placement;
+	if (configuredCompilerErrorMessagePlacement() != placement) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("compilerErrorMessagePlacement", static_cast<int>(placement));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement() {
 	recordSettingsRuntimeRead();
-	return g_compilerErrorMessagePlacement;
+	return static_cast<MRCompilerErrorMessagePlacement>(configuredRuntimeInt("compilerErrorMessagePlacement", static_cast<int>(MRCompilerErrorMessagePlacement::RightMargin)));
 }
 
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage) {
-	if (g_scrollbarVisibility != visibility) markConfiguredSettingsDirty();
-	g_scrollbarVisibility = visibility;
+	if (configuredScrollbarVisibility() != visibility) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("scrollbarVisibility", static_cast<int>(visibility));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRScrollbarVisibility configuredScrollbarVisibility() {
 	recordSettingsRuntimeRead();
-	return g_scrollbarVisibility;
+	return static_cast<MRScrollbarVisibility>(configuredRuntimeInt("scrollbarVisibility", static_cast<int>(MRScrollbarVisibility::Smart)));
 }
 
 bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage) {
-	if (g_trackCompilerWarnings != enabled) markConfiguredSettingsDirty();
-	g_trackCompilerWarnings = enabled;
+	if (configuredTrackCompilerWarnings() != enabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("trackCompilerWarnings", enabled ? 1 : 0);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredTrackCompilerWarnings() {
 	recordSettingsRuntimeRead();
-	return g_trackCompilerWarnings;
+	return configuredRuntimeInt("trackCompilerWarnings", 0) != 0;
 }
 
 bool setConfiguredTrackCompilerNotes(bool enabled, std::string *errorMessage) {
-	if (g_trackCompilerNotes != enabled) markConfiguredSettingsDirty();
-	g_trackCompilerNotes = enabled;
+	if (configuredTrackCompilerNotes() != enabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("trackCompilerNotes", enabled ? 1 : 0);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredTrackCompilerNotes() {
 	recordSettingsRuntimeRead();
-	return g_trackCompilerNotes;
+	return configuredRuntimeInt("trackCompilerNotes", 0) != 0;
 }
 
 bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage) {
-	if (g_uiIndentStyle != style) markConfiguredSettingsDirty();
-	g_uiIndentStyle = style;
+	if (configuredUiIndentStyle() != style) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("uiIndentStyle", static_cast<int>(style));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRUiIndentStyle configuredUiIndentStyle() {
 	recordSettingsRuntimeRead();
-	return g_uiIndentStyle;
+	return static_cast<MRUiIndentStyle>(configuredRuntimeInt("uiIndentStyle", static_cast<int>(MRUiIndentStyle::KandR)));
 }
 
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
 	if (!normalizeCursorPositionMarker(value, normalized, errorMessage)) return false;
-	if (g_cursorPositionMarker != normalized) markConfiguredSettingsDirty();
-	g_cursorPositionMarker = normalized;
+	if (configuredCursorPositionMarker() != normalized) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeString("cursorPositionMarker", normalized);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredCursorPositionMarker() {
 	recordSettingsRuntimeRead();
-	return g_cursorPositionMarker;
+	return configuredRuntimeString("cursorPositionMarker", "R:C");
 }
 
 bool setConfiguredFileCompareOriginalLeadingGutters(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
 	if (!normalizeFileCompareGutters(value, normalized, errorMessage)) return false;
-	if (g_fileCompareOriginalLeadingGutters != normalized) markConfiguredSettingsDirty();
-	g_fileCompareOriginalLeadingGutters = normalized;
+	if (configuredFileCompareOriginalLeadingGutters() != normalized) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeString("fileCompareOriginalLeadingGutters", normalized);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredFileCompareOriginalLeadingGutters() {
 	recordSettingsRuntimeRead();
-	return g_fileCompareOriginalLeadingGutters;
+	return configuredRuntimeString("fileCompareOriginalLeadingGutters", "L");
 }
 
 bool setConfiguredFileCompareOriginalTrailingGutters(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
 	if (!normalizeFileCompareGutters(value, normalized, errorMessage)) return false;
-	if (g_fileCompareOriginalTrailingGutters != normalized) markConfiguredSettingsDirty();
-	g_fileCompareOriginalTrailingGutters = normalized;
+	if (configuredFileCompareOriginalTrailingGutters() != normalized) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeString("fileCompareOriginalTrailingGutters", normalized);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredFileCompareOriginalTrailingGutters() {
 	recordSettingsRuntimeRead();
-	return g_fileCompareOriginalTrailingGutters;
+	return configuredRuntimeString("fileCompareOriginalTrailingGutters", "M");
 }
 
 bool setConfiguredFileCompareCompareLeadingGutters(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
 	if (!normalizeFileCompareGutters(value, normalized, errorMessage)) return false;
-	if (g_fileCompareCompareLeadingGutters != normalized) markConfiguredSettingsDirty();
-	g_fileCompareCompareLeadingGutters = normalized;
+	if (configuredFileCompareCompareLeadingGutters() != normalized) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeString("fileCompareCompareLeadingGutters", normalized);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredFileCompareCompareLeadingGutters() {
 	recordSettingsRuntimeRead();
-	return g_fileCompareCompareLeadingGutters;
+	return configuredRuntimeString("fileCompareCompareLeadingGutters", "LD");
 }
 
 bool setConfiguredFileCompareCompareTrailingGutters(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
 	if (!normalizeFileCompareGutters(value, normalized, errorMessage)) return false;
-	if (g_fileCompareCompareTrailingGutters != normalized) markConfiguredSettingsDirty();
-	g_fileCompareCompareTrailingGutters = normalized;
+	if (configuredFileCompareCompareTrailingGutters() != normalized) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeString("fileCompareCompareTrailingGutters", normalized);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredFileCompareCompareTrailingGutters() {
 	recordSettingsRuntimeRead();
-	return g_fileCompareCompareTrailingGutters;
+	return configuredRuntimeString("fileCompareCompareTrailingGutters");
 }
 
 bool setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration configuration, std::string *errorMessage) {
-	if (g_fileCompareStartConfiguration != configuration) markConfiguredSettingsDirty();
-	g_fileCompareStartConfiguration = configuration;
+	if (configuredFileCompareStartConfiguration() != configuration) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("fileCompareStartConfiguration", static_cast<int>(configuration));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRFileCompareStartConfiguration configuredFileCompareStartConfiguration() {
 	recordSettingsRuntimeRead();
-	return g_fileCompareStartConfiguration;
+	return static_cast<MRFileCompareStartConfiguration>(configuredRuntimeInt("fileCompareStartConfiguration", static_cast<int>(MRFileCompareStartConfiguration::OriginalCompare)));
 }
 
 bool setConfiguredFileCompareComparePanelReadOnly(bool enabled, std::string *errorMessage) {
-	if (g_fileCompareComparePanelReadOnly != enabled) markConfiguredSettingsDirty();
-	g_fileCompareComparePanelReadOnly = enabled;
+	if (configuredFileCompareComparePanelReadOnly() != enabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("fileCompareComparePanelReadOnly", enabled ? 1 : 0);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredFileCompareComparePanelReadOnly() {
 	recordSettingsRuntimeRead();
-	return g_fileCompareComparePanelReadOnly;
+	return configuredRuntimeInt("fileCompareComparePanelReadOnly", 1) != 0;
 }
 
 bool setConfiguredAutosaveWorkspace(bool enabled, std::string *errorMessage) {
-	if (g_autosaveWorkspace != enabled) markConfiguredSettingsDirty();
-	g_autosaveWorkspace = enabled;
+	if (configuredAutosaveWorkspace() != enabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("autosaveWorkspace", enabled ? 1 : 0);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredAutosaveWorkspace() {
 	recordSettingsRuntimeRead();
-	return g_autosaveWorkspace;
+	return configuredRuntimeInt("autosaveWorkspace", 0) != 0;
 }
 
 void setRuntimePreserveAutosavedWorkspace(bool enabled) {
-	g_runtimePreserveAutosavedWorkspace = enabled;
+	storeConfiguredRuntimeInt("preserveAutosavedWorkspace", enabled ? 1 : 0);
 }
 
 bool runtimePreserveAutosavedWorkspace() {
 	recordSettingsRuntimeRead();
-	return g_runtimePreserveAutosavedWorkspace;
+	return configuredRuntimeInt("preserveAutosavedWorkspace", 0) != 0;
 }
 
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage) {
-	if (g_autoloadWorkspace != enabled) markConfiguredSettingsDirty();
-	g_autoloadWorkspace = enabled;
+	if (configuredAutoloadWorkspace() != enabled) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("autoloadWorkspace", enabled ? 1 : 0);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool configuredAutoloadWorkspace() {
 	recordSettingsRuntimeRead();
-	return g_autoloadWorkspace;
+	return configuredRuntimeInt("autoloadWorkspace", 0) != 0;
 }
 
 bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage) {
-	if (g_logHandling != handling) markConfiguredSettingsDirty();
-	g_logHandling = handling;
+	if (configuredLogHandling() != handling) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("logHandling", static_cast<int>(handling));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRLogHandling configuredLogHandling() {
 	recordSettingsRuntimeRead();
-	return g_logHandling;
-}
-
-void configuredAutoexecMacroEntries(std::vector<std::string> &outValues) {
-	recordSettingsRuntimeRead();
-	outValues = configuredAutoexecMacroStorage();
-}
-
-bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values, std::string *errorMessage) {
-	std::vector<std::string> normalizedValues;
-	const std::vector<std::string> previousValues = configuredAutoexecMacroStorage();
-
-	for (const std::string &value : values) {
-		const std::string normalized = normalizeAutoexecMacroEntry(value);
-		if (!validateAutoexecMacroEntry(normalized, errorMessage)) return false;
-		if (std::find(normalizedValues.begin(), normalizedValues.end(), normalized) == normalizedValues.end()) normalizedValues.push_back(normalized);
-	}
-	configuredAutoexecMacroStorage() = std::move(normalizedValues);
-	if (previousValues != configuredAutoexecMacroStorage()) markConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool addConfiguredAutoexecMacroEntry(const std::string &value, std::string *errorMessage) {
-	const std::string normalized = normalizeAutoexecMacroEntry(value);
-	std::vector<std::string> values = configuredAutoexecMacroStorage();
-
-	if (!validateAutoexecMacroEntry(normalized, errorMessage)) return false;
-	if (std::find(values.begin(), values.end(), normalized) == values.end()) values.push_back(normalized);
-	return setConfiguredAutoexecMacroEntries(values, errorMessage);
-}
-
-void clearConfiguredAutoexecMacroDiagnostics() {
-	g_autoexecMacroDiagnostics.clear();
-}
-
-void rememberConfiguredAutoexecMacroDiagnostic(const std::string &fileName, const std::string &errorText) {
-	std::string key = trimAscii(fileName);
-	for (char &ch : key)
-		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-	if (key.empty()) return;
-	g_autoexecMacroDiagnostics[key] = errorText;
-}
-
-bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName, std::string &errorText) {
-	std::string key = trimAscii(fileName);
-	for (char &ch : key)
-		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-	auto it = g_autoexecMacroDiagnostics.find(key);
-
-	recordSettingsRuntimeRead();
-	errorText.clear();
-	if (it == g_autoexecMacroDiagnostics.end()) return false;
-	errorText = it->second;
-	return true;
-}
-
-void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern) {
-	initRememberedLoadDialogPath(MRDialogHistoryScope::General, buffer, bufferSize, pattern);
-}
-
-void rememberLoadDialogPath(const char *path) {
-	rememberLoadDialogPath(MRDialogHistoryScope::General, path);
-}
-
-bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	struct stat st;
-
-	if (normalized.empty()) return setError(errorMessage, "Empty settings macro URI.");
-	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) return setError(errorMessage, "Settings macro URI must include a filename.");
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	const std::string previousPath = configuredSettingsMacroFile();
-	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::SetupSettingsMacro);
-
-	if (!validateSettingsMacroFilePath(path, errorMessage)) return false;
-	configuredSettingsMacroFile() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupSettingsMacro, configuredSettingsMacroFile(), nullptr));
-	if (previousPath != configuredSettingsMacroFile() || previousHistory != dialogHistoryState(MRDialogHistoryScope::SetupSettingsMacro)) markConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredSettingsMacroFilePath() {
-	const std::string &configured = configuredSettingsMacroFile();
-
-	recordSettingsRuntimeRead();
-	if (!configured.empty()) return makeAbsolutePath(configured);
-	return resolveSetupPathDefaults().settingsMacroUri;
-}
-
-bool validateMacroDirectoryPath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-
-	if (normalized.empty()) return setError(errorMessage, "Empty macro path.");
-	if (!isReadableDirectory(normalized)) return setError(errorMessage, "Macro path is missing or not readable: " + normalized);
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	const std::string previousPath = configuredMacroDirectory();
-	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::General);
-
-	if (!validateMacroDirectoryPath(path, errorMessage)) return false;
-	configuredMacroDirectory() = makeAbsolutePath(normalized);
-	MRScopedDialogHistoryState &generalDialogHistory = dialogHistoryState(MRDialogHistoryScope::General);
-	if (generalDialogHistory.pathHistory.empty() && isReadableDirectory(configuredMacroDirectory())) addHistoryEntry(generalDialogHistory.pathHistory, configuredMacroDirectory(), configuredPathHistoryLimit());
-	if (previousPath != configuredMacroDirectory() || previousHistory != dialogHistoryState(MRDialogHistoryScope::General)) markConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredMacroDirectoryPath() {
-	const std::string &configured = configuredMacroDirectory();
-	std::string absoluteConfigured = makeAbsolutePath(configured);
-
-	recordSettingsRuntimeRead();
-	if (!isReadableDirectory(absoluteConfigured)) return std::string();
-	return absoluteConfigured;
-}
-
-bool validateHelpFilePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-
-	if (normalized.empty()) return setError(errorMessage, "Empty help URI.");
-	if (hasDirectorySeparator(normalized) && !isReadableFile(normalized)) return setError(errorMessage, "Help URI is missing or not readable: " + normalized);
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool setConfiguredHelpFilePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	const std::string previousPath = configuredHelpFile();
-	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::SetupHelpFile);
-
-	if (!validateHelpFilePath(path, errorMessage)) return false;
-	configuredHelpFile() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupHelpFile, configuredHelpFile(), nullptr));
-	if (previousPath != configuredHelpFile() || previousHistory != dialogHistoryState(MRDialogHistoryScope::SetupHelpFile)) markConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredHelpFilePath() {
-	const std::string &configured = configuredHelpFile();
-
-	recordSettingsRuntimeRead();
-	if (!configured.empty()) return makeAbsolutePath(configured);
-	return resolveSetupPathDefaults().helpUri;
-}
-
-bool validateTempDirectoryPath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-
-	if (normalized.empty()) return setError(errorMessage, "Empty temp path.");
-	if (!isWritableDirectory(normalized)) return setError(errorMessage, "Temp path is missing or not writable: " + normalized);
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool setConfiguredTempDirectoryPath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	const std::string previousPath = configuredTempDirectory();
-
-	if (!validateTempDirectoryPath(path, errorMessage)) return false;
-	configuredTempDirectory() = makeAbsolutePath(normalized);
-	if (previousPath != configuredTempDirectory()) markConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredTempDirectoryPath() {
-	const std::string &configured = configuredTempDirectory();
-	std::string absoluteConfigured = makeAbsolutePath(configured);
-	std::string builtIn = resolveSetupPathDefaults().tempPath;
-
-	recordSettingsRuntimeRead();
-	if (isWritableDirectory(absoluteConfigured)) return absoluteConfigured;
-	if (isWritableDirectory(builtIn)) return builtIn;
-	return "/tmp";
-}
-
-bool validateShellExecutablePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-
-	if (normalized.empty()) return setError(errorMessage, "Empty shell executable URI.");
-	if (!isExecutableFile(normalized)) return setError(errorMessage, "Shell executable URI is missing or not executable: " + normalized);
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool setConfiguredShellExecutablePath(const std::string &path, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(path);
-	const std::string previousPath = configuredShellExecutable();
-	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::SetupShellExecutable);
-
-	if (!validateShellExecutablePath(path, errorMessage)) return false;
-	configuredShellExecutable() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupShellExecutable, configuredShellExecutable(), nullptr));
-	if (previousPath != configuredShellExecutable() || previousHistory != dialogHistoryState(MRDialogHistoryScope::SetupShellExecutable)) markConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredShellExecutablePath() {
-	const std::string &configured = configuredShellExecutable();
-	std::string absoluteConfigured = makeAbsolutePath(configured);
-	std::string builtIn = resolveSetupPathDefaults().shellUri;
-
-	recordSettingsRuntimeRead();
-	if (isExecutableFile(absoluteConfigured)) return absoluteConfigured;
-	if (isExecutableFile(builtIn)) return builtIn;
-	return "/bin/sh";
-}
-
-bool validateLogFilePath(const std::string &path, std::string *errorMessage) {
-	const std::string normalized = normalizeConfiguredPathInput(path);
-	std::string directory;
-	struct stat st;
-
-	if (normalized.empty()) return setError(errorMessage, "Empty log file URI.");
-	if (isReadableDirectory(normalized)) return setError(errorMessage, "Log file URI points to a directory: " + normalized);
-	if (::stat(normalized.c_str(), &st) == 0 && !S_ISREG(st.st_mode)) return setError(errorMessage, "Log file URI must point to a regular file: " + normalized);
-	if (!isWritableRegularFile(normalized) && ::stat(normalized.c_str(), &st) == 0) return setError(errorMessage, "Log file is not writable: " + normalized);
-	directory = directoryPartOf(normalized);
-	if (directory.empty()) directory = currentWorkingDirectory();
-	if (directory.empty() || !isWritableDirectory(makeAbsolutePath(directory))) return setError(errorMessage, "Log file path is missing or parent directory is not writable: " + normalized);
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool setConfiguredLogFilePath(const std::string &path, std::string *errorMessage) {
-	const std::string normalized = normalizeConfiguredPathInput(path);
-	const std::string previousPath = configuredLogFile();
-	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::SetupLogFile);
-
-	if (!validateLogFilePath(path, errorMessage)) return false;
-	configuredLogFile() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupLogFile, configuredLogFile(), nullptr));
-	if (previousPath != configuredLogFile() || previousHistory != dialogHistoryState(MRDialogHistoryScope::SetupLogFile)) markConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-std::string configuredLogFilePath() {
-	const std::string &configured = configuredLogFile();
-
-	recordSettingsRuntimeRead();
-	if (!configured.empty()) return makeAbsolutePath(configured);
-	return appendFileName(configuredTempDirectoryPath(), "mr.log");
-}
-
-std::string defaultSettingsMacroFilePath() {
-	return configuredSettingsMacroFilePath();
-}
-
-std::string defaultMacroDirectoryPath() {
-	std::string configured = configuredMacroDirectoryPath();
-
-	if (!configured.empty()) return configured;
-	return resolveSetupPathDefaults().macroPath;
+	return static_cast<MRLogHandling>(configuredRuntimeInt("logHandling", static_cast<int>(MRLogHandling::Volatile)));
 }

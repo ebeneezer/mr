@@ -614,9 +614,9 @@ bool translateEditFormatLine(const std::string &value, int tabSize, int leftMarg
 [[nodiscard]] int resolvedEditFormatIndentColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin, int preferredColumn);
 [[nodiscard]] std::string buildEditIndentFill(const MREditSetupSettings &settings, int startColumn, int targetColumn, bool preferTabs);
 MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, const MREditSetupOverrides &overrides);
-const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles();
+std::vector<MREditExtensionProfile> configuredEditExtensionProfiles();
 bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage = nullptr);
-const std::vector<MRCompilerProfile> &configuredCompilerProfiles();
+std::vector<MRCompilerProfile> configuredCompilerProfiles();
 bool setConfiguredCompilerProfiles(const std::vector<MRCompilerProfile> &profiles, std::string *errorMessage = nullptr);
 bool applyConfiguredCompilerProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage = nullptr);
 [[nodiscard]] std::vector<MRCompilerProfile> detectedCompilerProfiles();
@@ -626,7 +626,7 @@ bool applyConfiguredCompilerProfileDirective(const std::string &operation, const
 [[nodiscard]] bool compilerProfileIdExists(const std::string &profileId);
 [[nodiscard]] std::string configuredDefaultProfileDescription();
 bool setConfiguredDefaultProfileDescription(const std::string &value, std::string *errorMessage = nullptr);
-const std::vector<MRKeymapProfile> &configuredKeymapProfiles();
+std::vector<MRKeymapProfile> configuredKeymapProfiles();
 bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredKeymapFilePath();
 bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMessage = nullptr);

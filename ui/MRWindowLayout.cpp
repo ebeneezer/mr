@@ -6,6 +6,7 @@
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../dialogs/MRWindowList.hpp"
+#include "../mrmac/vm/MRVMRuntimeState.hpp"
 
 #define Uses_TApplication
 #define Uses_TDeskTop
@@ -37,11 +38,6 @@ constexpr char kMinimizedReinsertGlyph[] = "▾";
 
 constexpr char kMinimizedEllipsis[] = "…";
 constexpr char kMinimizedFallbackTitle[] = "?No-File";
-
-bool g_layoutDirty = true;
-bool g_lastDesktopExtentValid = false;
-TRect g_lastDesktopExtent;
-std::string g_minimizedTitleBuffer;
 
 void logWindowLayoutTiming(const std::string &label, long long tookUs, const std::string &detail) {
 	std::ostringstream line;
@@ -246,8 +242,8 @@ void setHiddenWindowBounds(MRDesktopWindow *window, const TRect &bounds) {
 	window->applyDesktopBounds(bounds);
 }
 
-void markLayoutDirty() noexcept {
-	g_layoutDirty = true;
+void markLayoutDirty() {
+	mrvmStoreRuntimeStateInt("windowLayout", "dirty", 1);
 }
 
 void reflowMinimizedWindowsForDesktop(int virtualDesktop) {
@@ -573,9 +569,8 @@ MRWindowLayout::MinimizedLayout MRWindowLayout::minimizedLayout(const MRDesktopW
 	return {0, menuWidth, titleStart, titleStart + titleWidth, restoreStart, restoreEnd, reinsertStart, reinsertEnd};
 }
 
-const char *MRWindowLayout::minimizedDisplayTitle(const MRDesktopWindow *window) noexcept {
-	g_minimizedTitleBuffer = minimizedDisplayTitleString(window);
-	return g_minimizedTitleBuffer.c_str();
+std::string MRWindowLayout::minimizedDisplayTitle(const MRDesktopWindow *window) {
+	return minimizedDisplayTitleString(window);
 }
 
 int MRWindowLayout::minimizedDisplayTitleWidth(const MRDesktopWindow *window) noexcept {
@@ -738,9 +733,15 @@ void MRWindowLayout::handleDesktopLayoutChange() {
 	if (TProgram::deskTop == nullptr) return;
 
 	const TRect currentDesktopExtent = fullDesktopBounds();
-	const bool extentChanged = !g_lastDesktopExtentValid || currentDesktopExtent != g_lastDesktopExtent;
+	const bool lastDesktopExtentValid = mrvmRuntimeStateInt("windowLayout", "lastDesktopExtentValid", 0) != 0;
+	const TRect lastDesktopExtent(
+	    mrvmRuntimeStateInt("windowLayout", "lastDesktopX1"),
+	    mrvmRuntimeStateInt("windowLayout", "lastDesktopY1"),
+	    mrvmRuntimeStateInt("windowLayout", "lastDesktopX2"),
+	    mrvmRuntimeStateInt("windowLayout", "lastDesktopY2"));
+	const bool extentChanged = !lastDesktopExtentValid || currentDesktopExtent != lastDesktopExtent;
 
-	if (!extentChanged && !g_layoutDirty) return;
+	if (!extentChanged && mrvmRuntimeStateInt("windowLayout", "dirty", 1) == 0) return;
 
 	if (extentChanged) {
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
@@ -758,9 +759,12 @@ void MRWindowLayout::handleDesktopLayoutChange() {
 	clampWindowsToUsableDesktop();
 		clampUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
-	g_lastDesktopExtent = currentDesktopExtent;
-	g_lastDesktopExtentValid = true;
-	g_layoutDirty = false;
+	mrvmStoreRuntimeStateInt("windowLayout", "lastDesktopX1", currentDesktopExtent.a.x);
+	mrvmStoreRuntimeStateInt("windowLayout", "lastDesktopY1", currentDesktopExtent.a.y);
+	mrvmStoreRuntimeStateInt("windowLayout", "lastDesktopX2", currentDesktopExtent.b.x);
+	mrvmStoreRuntimeStateInt("windowLayout", "lastDesktopY2", currentDesktopExtent.b.y);
+	mrvmStoreRuntimeStateInt("windowLayout", "lastDesktopExtentValid", 1);
+	mrvmStoreRuntimeStateInt("windowLayout", "dirty", 0);
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 	refreshDesktop();

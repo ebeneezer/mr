@@ -1,12 +1,63 @@
 #include "MRKeymapResolver.hpp"
 
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../mrmac/mrmac.h"
+#include "../mrmac/vm/MRVMRuntimeKv.hpp"
+#include "../mrmac/vm/MRVMRuntimeState.hpp"
+#include "../mrmac/vm/MRVMValue.hpp"
 
-#include <array>
 #include <algorithm>
+#include <mutex>
 
 namespace {
 MRKeymapResolver g_runtimeKeymapResolver;
+
+using Value = VirtualMachine::Value;
+
+Value pendingKeymapRoot(MRVMRuntimeKv &runtimeKv) {
+	Value keymap = runtimeKv.ensureRoot("KEYMAP");
+	Value runtime = runtimeKv.ensureChild(keymap, "runtime");
+	return runtimeKv.ensureChild(runtime, "pending");
+}
+
+std::vector<MRKeymapToken> pendingTokens(MRKeymapContext context) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	Value pending;
+	std::vector<MRKeymapToken> tokens;
+	const std::string key = std::to_string(static_cast<std::size_t>(context));
+
+	if (!runtimeKv.findRoot("KEYMAP", pending) || !runtimeKv.findChild(pending, "runtime", pending) || !runtimeKv.findChild(pending, "pending", pending) || !mrvmHashContainsValue(store, store, pending, key)) return tokens;
+	const Value stored = mrvmHashReadValue(store, store, pending, key);
+	if (stored.type != TYPE_STR_ARRAY) return tokens;
+	tokens.reserve(stored.arrayValues.size());
+	for (const Value &value : stored.arrayValues) {
+		if (value.type != TYPE_STR) continue;
+		const std::optional<MRKeymapToken> token = MRKeymapToken::parse(value.s);
+		if (token) tokens.push_back(*token);
+	}
+	return tokens;
+}
+
+void storePendingTokens(MRKeymapContext context, const std::vector<MRKeymapToken> &tokens) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	const Value pending = pendingKeymapRoot(runtimeKv);
+	const std::string key = std::to_string(static_cast<std::size_t>(context));
+
+	if (tokens.empty()) {
+		if (mrvmHashContainsValue(store, store, pending, key)) mrvmHashEraseValue(store, store, pending, key);
+		return;
+	}
+	Value stored = mrvmMakeArrayValue(TYPE_STR);
+	stored.globalStorage = true;
+	stored.arrayValues.reserve(tokens.size());
+	for (const MRKeymapToken &token : tokens)
+		stored.arrayValues.push_back(mrvmMakeString(token.toString()));
+	mrvmHashWriteValue(store, store, pending, key, stored);
+}
 
 const MRKeymapProfile *findActiveProfile(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName) noexcept {
 	for (const MRKeymapProfile &profile : profiles)
@@ -17,10 +68,6 @@ const MRKeymapProfile *findActiveProfile(std::span<const MRKeymapProfile> profil
 
 bool MRKeymapResolver::isAbortToken(const MRKeymapToken &token) noexcept {
 	return token.baseKey() == MRKeymapBaseKey::Esc && token.modifiers() == 0;
-}
-
-std::size_t MRKeymapResolver::contextIndex(MRKeymapContext context) noexcept {
-	return static_cast<std::size_t>(context);
 }
 
 std::string MRKeymapResolver::sequenceText(std::span<const MRKeymapToken> tokens) {
@@ -41,54 +88,60 @@ bool MRKeymapResolver::rebuild(std::span<const MRKeymapProfile> profiles, std::s
 
 MRKeymapResolver::Result MRKeymapResolver::resolve(MRKeymapContext context, const MRKeymapToken &token) {
 	Result result;
-	PendingState *state = nullptr;
+	std::vector<MRKeymapToken> tokens;
 
 	result.context = context;
 	if (context == MRKeymapContext::None) return result;
-	state = &pendingStates[contextIndex(context)];
-	if (!state->tokens.empty() && isAbortToken(token)) {
+	tokens = pendingTokens(context);
+	if (!tokens.empty() && isAbortToken(token)) {
 		result.kind = ResultKind::Aborted;
-		result.sequenceText = sequenceText(state->tokens);
-		state->tokens.clear();
+		result.sequenceText = sequenceText(tokens);
+		storePendingTokens(context, std::vector<MRKeymapToken>());
 		return result;
 	}
 
-	state->tokens.push_back(token);
-	result.sequenceText = sequenceText(state->tokens);
+	tokens.push_back(token);
+	result.sequenceText = sequenceText(tokens);
 
-	const MRKeymapTrie::Decision decision = trie.decide(context, state->tokens);
+	const MRKeymapTrie::Decision decision = trie.decide(context, tokens);
 	switch (decision.kind) {
 		case MRKeymapTrie::DecisionKind::Matched:
 			result.kind = ResultKind::Matched;
 			result.target = decision.target;
 			result.description = decision.description;
-			state->tokens.clear();
+			storePendingTokens(context, std::vector<MRKeymapToken>());
 			return result;
 		case MRKeymapTrie::DecisionKind::Pending:
 			result.kind = ResultKind::Pending;
+			storePendingTokens(context, tokens);
 			return result;
 		case MRKeymapTrie::DecisionKind::NoMatch:
-			if (state->tokens.size() == 1) {
-				state->tokens.clear();
+			if (tokens.size() == 1) {
+				storePendingTokens(context, std::vector<MRKeymapToken>());
 				result.kind = ResultKind::NoMatch;
 				return result;
 			}
-			state->tokens.clear();
+			storePendingTokens(context, std::vector<MRKeymapToken>());
 			result.kind = ResultKind::Invalid;
 			return result;
 	}
-	state->tokens.clear();
+	storePendingTokens(context, std::vector<MRKeymapToken>());
 	return result;
 }
 
-bool MRKeymapResolver::hasPending(MRKeymapContext context) const noexcept {
+bool MRKeymapResolver::hasPending(MRKeymapContext context) const {
 	if (context == MRKeymapContext::None) return false;
-	return !pendingStates[contextIndex(context)].tokens.empty();
+	return !pendingTokens(context).empty();
 }
 
-void MRKeymapResolver::resetPending() noexcept {
-	for (PendingState &state : pendingStates)
-		state.tokens.clear();
+void MRKeymapResolver::resetPending() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	Value keymap;
+	Value runtime;
+
+	if (!runtimeKv.findRoot("KEYMAP", keymap) || !runtimeKv.findChild(keymap, "runtime", runtime)) return;
+	static_cast<void>(runtimeKv.eraseChild(runtime, "pending"));
 }
 
 MRKeymapResolver &runtimeKeymapResolver() noexcept {

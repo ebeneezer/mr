@@ -21,7 +21,7 @@ inline MRFileExtensionEditorSettings mergeFileExtensionEditorSettings(const MRFi
 	return mergeEditSetupSettings(defaults, overrides);
 }
 
-inline const std::vector<MRFileExtensionProfile> &configuredFileExtensionProfiles() {
+inline std::vector<MRFileExtensionProfile> configuredFileExtensionProfiles() {
 	return configuredEditExtensionProfiles();
 }
 

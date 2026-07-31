@@ -313,7 +313,7 @@ int runMacroDebuggerCrossSectionProbeMode() {
 
 	if (!startAtSourceLine(kMutationLine, rollbackSession, result, errorMessage) ||
 	    !findVariableNode(result.variables, "MainHash", "[\"leaf\"]", 2, TYPE_INT, "7", nestedLeaf) ||
-	    !mrvmExecSessionsEraseSessionRuntimeState(g_runtimeEnv.runtimeKv, rollbackSession.sessionId)) {
+	    !mrvmExecSessionsEraseSessionRuntimeState(mrvmRuntimeKv(), rollbackSession.sessionId)) {
 		std::cerr << "Macro debugger cross-section probe could not prepare the failed dual-store mutation audit.\n";
 		return 1;
 	}

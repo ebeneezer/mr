@@ -61,6 +61,7 @@ void setRuntimeMessageLineEnabled(bool enabled);
 void setStaticMode(bool active);
 [[nodiscard]] bool staticModeActive();
 void setStaticProgress(std::size_t completed, std::size_t total);
+[[nodiscard]] bool currentStaticProgress(std::size_t &completed, std::size_t &total);
 [[nodiscard]] bool currentVisibleMessage(VisibleMessage &out);
 [[nodiscard]] bool currentOwnerMessage(Owner owner, VisibleMessage &out);
 

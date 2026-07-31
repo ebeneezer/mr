@@ -408,6 +408,8 @@ bool mrvmRemoveRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId)
 std::vector<MRRuntimeScheduledConsumerId> mrvmRuntimeScheduledConsumerIds();
 bool mrvmReadRuntimeScheduledConsumerSchedule(MRRuntimeScheduledConsumerId consumerId, std::uint64_t &intervalMs, MRMacroExecutionSessionId &activeSessionId, std::uint64_t &nextDueMs);
 std::vector<MRRuntimeScheduledConsumer> mrvmRuntimeScheduledConsumers();
+std::uint64_t mrvmRuntimeSchedulerNextPumpMs();
+void mrvmStoreRuntimeSchedulerNextPumpMs(std::uint64_t nextPumpMs);
 void mrvmRecordRuntimeSchedulerEvent(const MRRuntimeSchedulerEvent &event);
 std::vector<MRRuntimeSchedulerEvent> mrvmRecentRuntimeSchedulerEvents();
 MRRuntimeSchedulerEventId mrvmNextRuntimeSchedulerEventId();

@@ -5,30 +5,167 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <deque>
+#include <cstdlib>
 #include <mutex>
 #include <string_view>
 
+#include "../mrmac/mrmac.h"
+#include "../mrmac/vm/MRVMRuntimeKv.hpp"
+#include "../mrmac/vm/MRVMRuntimeState.hpp"
+#include "../mrmac/vm/MRVMValue.hpp"
 #include "../ui/MRMessageLineController.hpp"
 
 namespace mr {
 namespace performance {
 namespace {
 
-struct EventStore {
-	std::mutex mutex;
-	std::deque<Event> events;
-	std::uint64_t nextSequence;
-
-	EventStore() noexcept : nextSequence(1) {
-	}
-};
+using Value = VirtualMachine::Value;
 
 static constexpr std::size_t kMaxEvents = 64;
 
-EventStore &eventStore() {
-	static EventStore instance;
-	return instance;
+Value performanceRoot(MRVMRuntimeKv &runtimeKv) {
+	Value applicationUi = runtimeKv.ensureRoot("APPLICATIONUI");
+	return runtimeKv.ensureChild(applicationUi, "performance");
+}
+
+Value performanceEvents(MRVMRuntimeKv &runtimeKv) {
+	return runtimeKv.ensureChild(performanceRoot(runtimeKv), "events");
+}
+
+bool readValue(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, Value &value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+
+	if (!mrvmHashContainsValue(store, store, parent, key)) return false;
+	value = mrvmHashReadValue(store, store, parent, key);
+	return true;
+}
+
+int readInt(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, int fallback = 0) {
+	Value value;
+
+	if (!readValue(runtimeKv, parent, key, value) || value.type != TYPE_INT) return fallback;
+	return value.i;
+}
+
+std::uint64_t parseUnsigned(const std::string &text) {
+	char *end = nullptr;
+	const unsigned long long value = std::strtoull(text.c_str(), &end, 10);
+
+	return end != text.c_str() && *end == '\0' ? static_cast<std::uint64_t>(value) : 0;
+}
+
+std::uint64_t readUnsigned(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key) {
+	Value value;
+
+	if (!readValue(runtimeKv, parent, key, value)) return 0;
+	if (value.type == TYPE_INT) return value.i > 0 ? static_cast<std::uint64_t>(value.i) : 0;
+	if (value.type == TYPE_STR) return parseUnsigned(value.s);
+	return 0;
+}
+
+double readReal(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key) {
+	Value value;
+
+	if (!readValue(runtimeKv, parent, key, value)) return 0.0;
+	if (value.type == TYPE_REAL) return value.r;
+	if (value.type == TYPE_INT) return value.i;
+	return 0.0;
+}
+
+std::string readString(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key) {
+	Value value;
+
+	if (!readValue(runtimeKv, parent, key, value) || value.type != TYPE_STR) return std::string();
+	return value.s;
+}
+
+void writeInt(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, int value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeInt(value));
+}
+
+void writeUnsigned(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, std::uint64_t value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeString(std::to_string(value)));
+}
+
+void writeReal(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, double value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeReal(value));
+}
+
+void writeString(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, const std::string &value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeString(value));
+}
+
+void writeEvent(MRVMRuntimeKv &runtimeKv, const Value &parent, const Event &event) {
+	writeUnsigned(runtimeKv, parent, "sequence", event.sequence);
+	writeUnsigned(runtimeKv, parent, "wallClock", static_cast<std::uint64_t>(event.wallClock));
+	writeInt(runtimeKv, parent, "scope", static_cast<int>(event.scope));
+	writeInt(runtimeKv, parent, "outcome", static_cast<int>(event.outcome));
+	writeInt(runtimeKv, parent, "lane", static_cast<int>(event.lane));
+	writeString(runtimeKv, parent, "action", event.action);
+	writeString(runtimeKv, parent, "detail", event.detail);
+	writeUnsigned(runtimeKv, parent, "bufferId", event.bufferId);
+	writeUnsigned(runtimeKv, parent, "documentId", event.documentId);
+	writeUnsigned(runtimeKv, parent, "bytes", event.bytes);
+	writeReal(runtimeKv, parent, "queueMs", event.queueMs);
+	writeReal(runtimeKv, parent, "runMs", event.runMs);
+	writeReal(runtimeKv, parent, "totalMs", event.totalMs);
+	writeInt(runtimeKv, parent, "derivedStateApplied", event.derivedStateApplied ? 1 : 0);
+}
+
+Event readEvent(MRVMRuntimeKv &runtimeKv, const Value &parent) {
+	Event event;
+
+	event.sequence = readUnsigned(runtimeKv, parent, "sequence");
+	event.wallClock = static_cast<std::time_t>(readUnsigned(runtimeKv, parent, "wallClock"));
+	event.scope = static_cast<Scope>(readInt(runtimeKv, parent, "scope"));
+	event.outcome = static_cast<Outcome>(readInt(runtimeKv, parent, "outcome"));
+	event.lane = static_cast<mr::coprocessor::Lane>(readInt(runtimeKv, parent, "lane", static_cast<int>(mr::coprocessor::Lane::Compute)));
+	event.action = readString(runtimeKv, parent, "action");
+	event.detail = readString(runtimeKv, parent, "detail");
+	event.bufferId = static_cast<std::size_t>(readUnsigned(runtimeKv, parent, "bufferId"));
+	event.documentId = static_cast<std::size_t>(readUnsigned(runtimeKv, parent, "documentId"));
+	event.bytes = static_cast<std::size_t>(readUnsigned(runtimeKv, parent, "bytes"));
+	event.queueMs = readReal(runtimeKv, parent, "queueMs");
+	event.runMs = readReal(runtimeKv, parent, "runMs");
+	event.totalMs = readReal(runtimeKv, parent, "totalMs");
+	event.derivedStateApplied = readInt(runtimeKv, parent, "derivedStateApplied") != 0;
+	return event;
+}
+
+std::vector<std::uint64_t> eventSequences(MRVMRuntimeKv &runtimeKv, const Value &events) {
+	std::vector<std::uint64_t> sequences;
+	const std::vector<std::string> keys = runtimeKv.globalStore().keys(events.hashHandle);
+
+	sequences.reserve(keys.size());
+	for (const std::string &key : keys) {
+		const std::uint64_t sequence = parseUnsigned(key);
+		if (sequence != 0) sequences.push_back(sequence);
+	}
+	std::sort(sequences.begin(), sequences.end(), std::greater<std::uint64_t>());
+	return sequences;
+}
+
+std::vector<Event> recentEvents(std::size_t maxCount) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	Value applicationUi;
+	Value performance;
+	Value events;
+	std::vector<Event> result;
+
+	if (!runtimeKv.findRoot("APPLICATIONUI", applicationUi) || !runtimeKv.findChild(applicationUi, "performance", performance) || !runtimeKv.findChild(performance, "events", events)) return result;
+	const std::vector<std::uint64_t> sequences = eventSequences(runtimeKv, events);
+	result.reserve(std::min(maxCount, sequences.size()));
+	for (std::size_t i = 0; i < sequences.size() && result.size() < maxCount; ++i) {
+		Value eventNode;
+		if (!runtimeKv.findChild(events, std::to_string(sequences[i]), eventNode)) continue;
+		result.push_back(readEvent(runtimeKv, eventNode));
+	}
+	return result;
 }
 
 std::string_view leafNameOf(std::string_view path) {
@@ -80,19 +217,25 @@ std::string formatWallClock(std::time_t when) {
 	return buffer.data();
 }
 
-void appendEvent(EventStore &store, Event event) {
-	event.sequence = store.nextSequence++;
+void appendEvent(Event event) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	const Value root = performanceRoot(runtimeKv);
+	const Value events = performanceEvents(runtimeKv);
+	const std::uint64_t sequence = readUnsigned(runtimeKv, root, "nextSequence") + 1;
+
+	event.sequence = sequence;
 	event.wallClock = std::time(nullptr);
-	store.events.push_front(std::move(event));
-	while (store.events.size() > kMaxEvents)
-		store.events.pop_back();
+	writeUnsigned(runtimeKv, root, "nextSequence", sequence);
+	writeEvent(runtimeKv, runtimeKv.replaceChild(events, std::to_string(sequence)), event);
+	const std::vector<std::uint64_t> sequences = eventSequences(runtimeKv, events);
+	for (std::size_t i = kMaxEvents; i < sequences.size(); ++i)
+		static_cast<void>(runtimeKv.eraseChild(events, std::to_string(sequences[i])));
 }
 
 } // namespace
 
 void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, double totalMs, std::string_view detail, Outcome outcome) {
-	EventStore &store = eventStore();
-	std::lock_guard<std::mutex> lock(store.mutex);
 	Event event;
 
 	event.scope = Scope::Ui;
@@ -105,7 +248,7 @@ void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t do
 	event.bytes = bytes;
 	event.runMs = totalMs;
 	event.totalMs = totalMs;
-	appendEvent(store, event);
+	appendEvent(event);
 }
 
 void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, std::string_view detail) {
@@ -119,8 +262,6 @@ void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr
 
 void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
                            std::string_view detail, bool derivedStateApplied) {
-	EventStore &store = eventStore();
-	std::lock_guard<std::mutex> lock(store.mutex);
 	Event event;
 
 	event.scope = Scope::Background;
@@ -135,15 +276,14 @@ void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr
 	event.runMs = timing.runMs();
 	event.totalMs = timing.totalMs();
 	event.derivedStateApplied = derivedStateApplied;
-	appendEvent(store, event);
+	appendEvent(event);
 }
 
 std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount) {
-	EventStore &store = eventStore();
+	const std::vector<Event> events = recentEvents(kMaxEvents);
 	std::vector<Event> result;
-	std::lock_guard<std::mutex> lock(store.mutex);
 
-	for (const auto &event : store.events) {
+	for (const Event &event : events) {
 		bool matchesBuffer = bufferId != 0 && event.bufferId != 0 && event.bufferId == bufferId;
 		bool matchesDocument = documentId != 0 && event.documentId != 0 && event.documentId == documentId;
 
@@ -155,13 +295,7 @@ std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId,
 }
 
 std::vector<Event> recentGlobal(std::size_t maxCount) {
-	EventStore &store = eventStore();
-	std::vector<Event> result;
-	std::lock_guard<std::mutex> lock(store.mutex);
-
-	for (std::deque<Event>::const_iterator it = store.events.begin(); it != store.events.end() && result.size() < maxCount; ++it)
-		result.push_back(*it);
-	return result;
+	return recentEvents(maxCount);
 }
 
 bool currentMessageLineNotice(MessageLineNotice &out) {

@@ -23,35 +23,86 @@
 #include <unistd.h>
 #include <vector>
 
+namespace {
+
+std::vector<MRVMForkedProcess> runtimeForkedProcesses() {
+	const std::vector<int> pids = mrvmRuntimeStateIntList("forkedProcesses", "pids");
+	const std::vector<std::string> sourcePaths = mrvmRuntimeStateStringList("forkedProcesses", "sourcePaths");
+	const std::vector<std::string> pdfPaths = mrvmRuntimeStateStringList("forkedProcesses", "pdfPaths");
+	std::vector<MRVMForkedProcess> processes;
+
+	processes.reserve(pids.size());
+	for (std::size_t i = 0; i < pids.size(); ++i) {
+		MRVMForkedProcess process;
+		process.pid = pids[i];
+		if (i < sourcePaths.size()) process.sourcePath = sourcePaths[i];
+		if (i < pdfPaths.size()) process.pdfPath = pdfPaths[i];
+		process.ownerBufferIds = mrvmRuntimeStateIntList("forkedProcessOwners", std::to_string(i));
+		processes.push_back(process);
+	}
+	return processes;
+}
+
+void storeRuntimeForkedProcesses(const std::vector<MRVMForkedProcess> &processes) {
+	std::vector<int> pids;
+	std::vector<std::string> sourcePaths;
+	std::vector<std::string> pdfPaths;
+
+	pids.reserve(processes.size());
+	sourcePaths.reserve(processes.size());
+	pdfPaths.reserve(processes.size());
+	mrvmClearRuntimeStateBranch("forkedProcessOwners");
+	for (std::size_t i = 0; i < processes.size(); ++i) {
+		const MRVMForkedProcess &process = processes[i];
+		pids.push_back(process.pid);
+		sourcePaths.push_back(process.sourcePath);
+		pdfPaths.push_back(process.pdfPath);
+		mrvmStoreRuntimeStateIntList("forkedProcessOwners", std::to_string(i), process.ownerBufferIds);
+	}
+	mrvmStoreRuntimeStateIntList("forkedProcesses", "pids", pids);
+	mrvmStoreRuntimeStateStringList("forkedProcesses", "sourcePaths", sourcePaths);
+	mrvmStoreRuntimeStateStringList("forkedProcesses", "pdfPaths", pdfPaths);
+}
+
+} // namespace
+
 void mrvmProcessRuntimeSetContext(int argc, char **argv) {
-	g_runtimeEnv.startupCommand.clear();
-	g_runtimeEnv.processArgs.clear();
-	if (argc > 0 && argv != nullptr && argv[0] != nullptr) g_runtimeEnv.startupCommand = argv[0];
+	std::string startupCommand;
+	std::vector<std::string> processArgs;
+	std::string executablePath;
+	std::string shellPath;
+
+	if (argc > 0 && argv != nullptr && argv[0] != nullptr) startupCommand = argv[0];
 	for (int i = 1; argv != nullptr && i < argc; ++i)
-		g_runtimeEnv.processArgs.push_back(argv[i] != nullptr ? std::string(argv[i]) : std::string());
-	g_runtimeEnv.executablePath = mrvmDetectExecutablePathFromProc();
-	if (g_runtimeEnv.executablePath.empty() && !g_runtimeEnv.startupCommand.empty()) g_runtimeEnv.executablePath = g_runtimeEnv.startupCommand;
-	g_runtimeEnv.executableDir = mrvmDetectExecutableDir(g_runtimeEnv.startupCommand);
-	g_runtimeEnv.shellPath = mrvmDetectShellPath();
-	g_runtimeEnv.shellVersion = mrvmDetectShellVersion(g_runtimeEnv.shellPath);
+		processArgs.push_back(argv[i] != nullptr ? std::string(argv[i]) : std::string());
+	executablePath = mrvmDetectExecutablePathFromProc();
+	if (executablePath.empty() && !startupCommand.empty()) executablePath = startupCommand;
+	shellPath = mrvmDetectShellPath();
+	mrvmStoreRuntimeStateString("process", "startupCommand", startupCommand);
+	mrvmStoreRuntimeStateStringList("process", "arguments", processArgs);
+	mrvmStoreRuntimeStateString("process", "executablePath", executablePath);
+	mrvmStoreRuntimeStateString("process", "executableDir", mrvmDetectExecutableDir(startupCommand));
+	mrvmStoreRuntimeStateString("process", "shellPath", shellPath);
+	mrvmStoreRuntimeStateString("process", "shellVersion", mrvmDetectShellVersion(shellPath));
 }
 
 std::vector<std::string> mrvmProcessRuntimeArguments() {
-	return g_runtimeEnv.processArgs;
+	return mrvmRuntimeStateStringList("process", "arguments");
 }
 
 static void mrvmReapForkedProcesses() {
+	const std::vector<MRVMForkedProcess> processes = runtimeForkedProcesses();
 	std::vector<MRVMForkedProcess> live;
 
-	live.reserve(g_runtimeEnv.forkedProcesses.size());
-	for (const MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses) {
+	live.reserve(processes.size());
+	for (const MRVMForkedProcess &process : processes) {
 		int waitStatus = 0;
 		const pid_t pid = static_cast<pid_t>(process.pid);
 		const pid_t waited = ::waitpid(pid, &waitStatus, WNOHANG);
 
 		if (waited == 0 || (waited < 0 && errno == EINTR)) live.push_back(process);
 	}
-	g_runtimeEnv.forkedProcesses.swap(live);
+	storeRuntimeForkedProcesses(live);
 }
 
 static bool processHasOwner(const MRVMForkedProcess &process, int ownerBufferId) {
@@ -92,17 +143,18 @@ static void removeOwnerFromProcess(MRVMForkedProcess &process, int ownerBufferId
 }
 
 static void removeOwnerFromMismatchedPdfProcesses(int ownerBufferId, const std::string &pdfPath) {
+	std::vector<MRVMForkedProcess> processes = runtimeForkedProcesses();
 	std::vector<MRVMForkedProcess> live;
 
 	if (ownerBufferId <= 0 || pdfPath.empty()) return;
-	live.reserve(g_runtimeEnv.forkedProcesses.size());
-	for (MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses) {
+	live.reserve(processes.size());
+	for (MRVMForkedProcess &process : processes) {
 		if (processHasOwner(process, ownerBufferId) && process.pdfPath != pdfPath) removeOwnerFromProcess(process, ownerBufferId);
 		if (!process.ownerBufferIds.empty() || process.pdfPath.empty()) live.push_back(process);
 		else
 			terminateForkedProcess(process.pid);
 	}
-	g_runtimeEnv.forkedProcesses.swap(live);
+	storeRuntimeForkedProcesses(live);
 }
 
 int mrvmForkProcess(const std::vector<std::string> &arguments, int ownerBufferId, const std::string &sourcePath, const std::string &pdfPath) {
@@ -123,9 +175,11 @@ int mrvmForkProcess(const std::vector<std::string> &arguments, int ownerBufferId
 	mrvmReapForkedProcesses();
 	removeOwnerFromMismatchedPdfProcesses(ownerBufferId, pdfPath);
 	if (!pdfPath.empty()) {
-		for (MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses) {
+		std::vector<MRVMForkedProcess> processes = runtimeForkedProcesses();
+		for (MRVMForkedProcess &process : processes) {
 			if (process.pdfPath != pdfPath) continue;
 			addProcessOwner(process, ownerBufferId);
+			storeRuntimeForkedProcesses(processes);
 			return 0;
 		}
 	}
@@ -194,31 +248,36 @@ int mrvmForkProcess(const std::vector<std::string> &arguments, int ownerBufferId
 		process.sourcePath = sourcePath;
 		process.pdfPath = pdfPath;
 		addProcessOwner(process, ownerBufferId);
-		g_runtimeEnv.forkedProcesses.push_back(process);
+		std::vector<MRVMForkedProcess> processes = runtimeForkedProcesses();
+		processes.push_back(process);
+		storeRuntimeForkedProcesses(processes);
 	}
 	return 0;
 }
 
 void mrvmCloseForksForOwner(int ownerBufferId) {
+	std::vector<MRVMForkedProcess> processes;
 	std::vector<MRVMForkedProcess> live;
 
 	if (ownerBufferId <= 0) return;
 	mrvmReapForkedProcesses();
-	live.reserve(g_runtimeEnv.forkedProcesses.size());
-	for (MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses) {
+	processes = runtimeForkedProcesses();
+	live.reserve(processes.size());
+	for (MRVMForkedProcess &process : processes) {
 		removeOwnerFromProcess(process, ownerBufferId);
 		if (!process.ownerBufferIds.empty() || process.pdfPath.empty()) live.push_back(process);
 		else
 			terminateForkedProcess(process.pid);
 	}
-	g_runtimeEnv.forkedProcesses.swap(live);
+	storeRuntimeForkedProcesses(live);
 }
 
 void mrvmCloseAllForkedProcesses() {
 	mrvmReapForkedProcesses();
-	for (const MRVMForkedProcess &process : g_runtimeEnv.forkedProcesses)
+	const std::vector<MRVMForkedProcess> processes = runtimeForkedProcesses();
+	for (const MRVMForkedProcess &process : processes)
 		terminateForkedProcess(process.pid);
-	g_runtimeEnv.forkedProcesses.clear();
+	storeRuntimeForkedProcesses(std::vector<MRVMForkedProcess>());
 }
 
 std::string mrvmCommandFirstLine(const std::string &command) {

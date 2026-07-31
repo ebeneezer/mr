@@ -14,15 +14,18 @@ Worker ownership and scheduling follow the
 
 ## Authority
 
-Deferred macro UI playback owns its local queue, playback order and
-screen-model transition state. The VM produces typed commands; the UI-thread
-playback path applies them.
+Deferred macro UI playback owns its authoritative queue, playback order and
+screen-model transition state under `DEFERREDUI/playbackQueue` in the central
+VM K/V. The VM produces typed commands; the UI-thread playback path rebuilds
+short-lived C++ transfer objects and applies them.
 
 ## Invariants
 
 - Staged macro UI commands are applied only after their owning staged result is
   accepted.
 - Queue ownership, order and UI-thread assumptions remain explicit.
+- C++ playback objects are snapshots only; no parallel deque or playback
+  registry may retain authoritative values.
 - `mrvmUiBeginMacroScreenBatch` and `mrvmUiEndMacroScreenBatch` delimit the
   existing playback batch.
 - MacroScreenModel, MacroScreenView and DeferredUiRenderGateway are protected

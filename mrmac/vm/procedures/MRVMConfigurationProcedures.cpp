@@ -112,21 +112,21 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 			request.lvalue = mrvmValueAsString(args[2]);
 			if (currentBackgroundEditSession() != nullptr || g_backgroundMacroCancelFlag != nullptr) {
 				vm.mExecUiCommandRequests.push_back(request);
-				runtimeErrorLevel() = 0;
+				setRuntimeErrorLevel(0);
 			} else {
 				accepted = mrvmApplyExecUiCommandRequest(request);
 				vm.variables[request.lvalue] = mrvmMakeInt(accepted ? 1 : 0);
-				if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(request.lvalue) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, request.lvalue, vm.variables[request.lvalue], *vm.mHashStore);
+				if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(request.lvalue) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(mrvmRuntimeKv(), vm.mClosureId, request.lvalue, vm.variables[request.lvalue], *vm.mHashStore);
 				else if (currentExecutionSessionId() != 0 && vm.mSessionVariableNames.find(request.lvalue) != vm.mSessionVariableNames.end())
-					mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), request.lvalue, vm.variables[request.lvalue], *vm.mHashStore);
-				runtimeErrorLevel() = accepted ? 0 : 1001;
+					mrvmExecSessionsWriteSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), request.lvalue, vm.variables[request.lvalue], *vm.mHashStore);
+				setRuntimeErrorLevel(accepted ? 0 : 1001);
 			}
 		} break;
 		case MRVMProcedure::KeymapReset: {
 			if (!args.empty()) throw std::runtime_error("KEYMAP_RESET expects no arguments.");
 			if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), nullptr)) throw std::runtime_error("KEYMAP_RESET failed: invalid keymap state.");
 			if (!setConfiguredActiveKeymapProfile("", nullptr)) throw std::runtime_error("KEYMAP_RESET failed: invalid active keymap profile.");
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::KeymapVersion:
 		case MRVMProcedure::ThemeVersion: {
@@ -138,25 +138,25 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 			if (!mrParsePersistenceVersion(versionLiteral, parsedVersion)) throw std::runtime_error(name + " failed: invalid persistence version.");
 			if (parsedVersion > mrCurrentPersistenceVersion()) throw std::runtime_error(name + " failed: future build version " + versionLiteral + " is not supported.");
 			if (parsedVersion < mrCurrentPersistenceVersion()) mrLogMessage((artifactLabel + " file version upgrade required: " + versionLiteral).c_str());
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::KeymapProfile: {
 			std::string errorText;
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("KEYMAP_PROFILE expects (string).");
 			if (!mrvmApplyConfiguredKeymapProfilePayload(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("KEYMAP_PROFILE failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::KeymapBind: {
 			std::string errorText;
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("KEYMAP_BIND expects (string).");
 			if (!mrvmApplyConfiguredKeymapBindingPayload(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("KEYMAP_BIND failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::ActiveKeymapProfile: {
 			std::string errorText;
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("ACTIVE_KEYMAP_PROFILE expects (string).");
 			if (!mrvmApplyConfiguredActiveKeymapProfilePayload(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("ACTIVE_KEYMAP_PROFILE failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::ThemeReset: {
 			std::string errorText;
@@ -172,7 +172,7 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 			if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompare, defaults.fileCompareColors.data(), defaults.fileCompareColors.size(), &errorText)) throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid file compare colors.") : errorText));
 			if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Debugger, defaults.debuggerColors.data(), defaults.debuggerColors.size(), &errorText)) throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid debugger colors.") : errorText));
 			if (!setConfiguredColorThemeDisplayName("", &errorText)) throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid theme display name.") : errorText));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::ThemeName:
 		case MRVMProcedure::WindowColors:
@@ -190,7 +190,7 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 				if (!setConfiguredColorThemeDisplayName(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("THEME_NAME failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 			} else if (!applyConfiguredColorSetupValue(name, mrvmValueAsString(args[0]), &errorText, false))
 				throw std::runtime_error(name + " failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::MrSetup: {
 			std::string setupKey;
@@ -201,7 +201,7 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 			setupKey = mrvmUpperKey(trimAscii(mrvmValueAsString(args[0])));
 			if (setupKey == "FILECOMPAREMINIMAPCOLORS" && !mrvmIsStartupSettingsMode()) {
 				if (!applyConfiguredColorSetupValue(setupKey, mrvmValueAsString(args[1]), &errorText, false)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-				runtimeErrorLevel() = 0;
+				setRuntimeErrorLevel(0);
 				return InstructionFlow::FinishExecution;
 			}
 			if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRSETUP is only allowed in settings.mrmac during startup.");
@@ -267,96 +267,96 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 							BackgroundEditSession *session = currentBackgroundEditSession();
 							if (session != nullptr) session->tabExpand = configuredTabExpandSetting();
 							else
-								g_runtimeEnv.tabExpand = configuredTabExpandSetting();
+								mrvmStoreRuntimeStateInt("options", "tabExpand", configuredTabExpandSetting() ? 1 : 0);
 						}
 						break;
 					case MRSettingsKeyClass::ColorInline:
 						if (!applyConfiguredColorSetupValue(setupKey, mrvmValueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 						break;
 				}
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::MrFeProfile: {
 			std::string errorText;
 			if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRFEPROFILE is only allowed in settings.mrmac during startup.");
 			if (args.size() != 4 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || !mrvmIsStringLike(args[2]) || !mrvmIsStringLike(args[3])) throw std::runtime_error("MRFEPROFILE expects (string, string, string, string).");
 			if (!applyConfiguredEditExtensionProfileDirective(mrvmValueAsString(args[0]), mrvmValueAsString(args[1]), mrvmValueAsString(args[2]), mrvmValueAsString(args[3]), &errorText)) throw std::runtime_error("MRFEPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::MrCompilerProfile: {
 			std::string errorText;
 			if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRCOMPILERPROFILE is only allowed in settings.mrmac during startup.");
 			if (args.size() != 4 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1]) || !mrvmIsStringLike(args[2]) || !mrvmIsStringLike(args[3])) throw std::runtime_error("MRCOMPILERPROFILE expects (string, string, string, string).");
 			if (!applyConfiguredCompilerProfileDirective(mrvmValueAsString(args[0]), mrvmValueAsString(args[1]), mrvmValueAsString(args[2]), mrvmValueAsString(args[3]), &errorText)) throw std::runtime_error("MRCOMPILERPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiDialog: {
-			mrvmBeginMacroUiDialog(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmBeginMacroUiDialog(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiLabel: {
-			mrvmAddMacroUiLabel(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiLabel(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiButton: {
-			mrvmAddMacroUiButton(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiButton(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiDisplay: {
-			mrvmAddMacroUiDisplay(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiDisplay(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiInput: {
-			mrvmAddMacroUiInput(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiInput(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiListBox: {
-			mrvmAddMacroUiListBox(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiListBox(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiGrid: {
-			mrvmAddMacroUiGrid(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiGrid(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiTree: {
-			mrvmAddMacroUiTree(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiTree(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiTreeClear: {
-			mrvmClearMacroUiTree(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmClearMacroUiTree(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiTreeNode: {
-			mrvmAddMacroUiTreeNode(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiTreeNode(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiTable: {
-			mrvmAddMacroUiTable(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiTable(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiTableClear: {
-			mrvmClearMacroUiTable(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmClearMacroUiTable(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiTableColumn: {
-			mrvmAddMacroUiTableColumn(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiTableColumn(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiTableRow: {
-			mrvmAddMacroUiTableRow(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiTableRow(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiListClear: {
-			mrvmClearMacroUiItemList(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmClearMacroUiItemList(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiListAdd: {
-			mrvmAddMacroUiItemListValue(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmAddMacroUiItemListValue(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiModelessOn: {
-			mrvmBindMacroModelessButton(g_runtimeEnv.runtimeKv, args);
-			runtimeErrorLevel() = 0;
+			mrvmBindMacroModelessButton(mrvmRuntimeKv(), args);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UiModelessShow: {
 			showMacroModelessDialog(args);
@@ -408,7 +408,7 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 		case MRVMProcedure::KillBox: {
 			int deferredError = 0;
 			if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
-				runtimeErrorLevel() = deferredError;
+				setRuntimeErrorLevel(deferredError);
 				return InstructionFlow::SkipPostInstruction;
 			}
 		} break;
@@ -416,7 +416,7 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 		case MRVMProcedure::RemoveMenuItem: {
 			int deferredError = 0;
 			if (dispatchDeferredMenuUiProcedure(name, args, deferredError)) {
-				runtimeErrorLevel() = deferredError;
+				setRuntimeErrorLevel(deferredError);
 				return InstructionFlow::SkipPostInstruction;
 			}
 		} break;

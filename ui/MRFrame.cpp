@@ -415,13 +415,13 @@ void MRFrame::draw() {
 	if (desktopWindow != nullptr && MRWindowLayout::isWindowMinimized(desktopWindow)) {
 		const MRWindowLayout::MinimizedGlyphs &glyphs = MRWindowLayout::minimizedGlyphs();
 		const MRWindowLayout::MinimizedLayout layout = MRWindowLayout::minimizedLayout(desktopWindow, width);
-		const char *title = MRWindowLayout::minimizedDisplayTitle(desktopWindow);
+		const std::string title = MRWindowLayout::minimizedDisplayTitle(desktopWindow);
 
 		b.moveChar(0, ' ', cTitle, size.x);
 		if (layout.menuEnd > layout.menuStart) b.moveStr(static_cast<ushort>(layout.menuStart), glyphs.menu, cTitle, layout.menuEnd - layout.menuStart);
 		if (layout.menuEnd < width) b.putChar(static_cast<ushort>(layout.menuEnd), '[');
-		if (title != nullptr && layout.titleEnd > layout.titleStart) {
-			b.moveStr(static_cast<ushort>(layout.titleStart), title, cTitle, layout.titleEnd - layout.titleStart);
+		if (!title.empty() && layout.titleEnd > layout.titleStart) {
+			b.moveStr(static_cast<ushort>(layout.titleStart), title.c_str(), cTitle, layout.titleEnd - layout.titleStart);
 		}
 		if (layout.titleEnd < layout.restoreStart) b.putChar(static_cast<ushort>(layout.titleEnd), ']');
 		if (layout.restoreEnd > layout.restoreStart) b.moveStr(static_cast<ushort>(layout.restoreStart), glyphs.restore, cTitle, layout.restoreEnd - layout.restoreStart);

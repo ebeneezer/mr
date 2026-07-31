@@ -12,21 +12,27 @@ Applies to:
 
 ## Authority
 
-The settings configuration layer owns one authoritative in-memory runtime
-model. Dialog buffers, parsed source models and `MRSettingsSnapshot` values are
-input or transfer state, not competing runtime authorities.
+The central VM K/V store owns the authoritative in-memory settings model under
+`SETTINGS/runtime`. Dialog buffers, parsed source models and
+`MRSettingsSnapshot` values are input or transfer state, not competing runtime
+authorities.
+
+Dialog histories belong under `SETTINGS/history`. Bootstrap working state
+belongs under `SETTINGS/staging`; neither branch may mirror authoritative
+values after its operation has ended.
 
 `settings.mrmac` is bootstrap input and serialization. It is not runtime state.
 
 ## Invariants
 
 - Reset establishes the complete current defaults.
-- Applying an accepted assignment changes the central runtime model.
+- Applying an accepted assignment changes `SETTINGS/runtime`.
 - One setting has one owner, one canonical spelling and one canonical meaning.
 - Dirty state changes only when the authoritative value changes.
 - Runtime consumers read the central model; they do not reconstruct it from
   persisted source.
-- Staging and snapshots must not become shadow settings stores.
+- Staging, C++ snapshots and accessor return values must not become shadow
+  settings stores.
 - Keymap, theme and workspace state keep the ownership defined by their
   respective contracts.
 

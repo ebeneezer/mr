@@ -8,16 +8,10 @@
 namespace {
 std::mutex execSessionStatusConsumerMutex;
 MRMacroExecutionSessionListenerId execSessionStatusConsumerListenerId = 0;
-std::uint64_t execSessionStatusConsumerGenerationValue = 0;
 
 bool execSessionStatusEnabled() noexcept {
 	const char *value = std::getenv("MR_EXEC_SESSION_STATUS");
 	return value != nullptr && value[0] == '1' && value[1] == '\0';
-}
-
-void noteExecSessionStatusConsumerChanged() {
-	std::lock_guard<std::mutex> lock(execSessionStatusConsumerMutex);
-	++execSessionStatusConsumerGenerationValue;
 }
 
 const char *execSessionRouteText(MRMacroExecutionRoute route) noexcept {
@@ -93,7 +87,7 @@ MRMacroExecutionSessionListenerId installExecSessionStatusConsumer() {
 	std::lock_guard<std::mutex> lock(execSessionStatusConsumerMutex);
 
 	if (execSessionStatusConsumerListenerId != 0) return execSessionStatusConsumerListenerId;
-	execSessionStatusConsumerListenerId = addMacroExecutionSessionListener(noteExecSessionStatusConsumerChanged);
+	execSessionStatusConsumerListenerId = installMacroExecutionSessionStatusHook();
 	return execSessionStatusConsumerListenerId;
 }
 
@@ -104,8 +98,7 @@ void installExecSessionStatusConsumerIfEnabled() {
 }
 
 std::uint64_t execSessionStatusConsumerGeneration() {
-	std::lock_guard<std::mutex> lock(execSessionStatusConsumerMutex);
-	return execSessionStatusConsumerGenerationValue;
+	return macroExecutionSessionStatusGeneration();
 }
 
 MRExecSessionStatusSnapshot execSessionStatusSnapshot() {

@@ -19,6 +19,22 @@
 
 using GlobalEntry = MRVMRuntimeGlobalEntry;
 
+MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
+std::recursive_mutex &mrvmExecutionMutex() noexcept;
+int mrvmRuntimeStateInt(const char *branch, const std::string &key, int fallback = 0);
+void mrvmStoreRuntimeStateInt(const char *branch, const std::string &key, int value);
+std::size_t mrvmRuntimeStateSize(const char *branch, const std::string &key, std::size_t fallback = 0);
+void mrvmStoreRuntimeStateSize(const char *branch, const std::string &key, std::size_t value);
+std::string mrvmRuntimeStateString(const char *branch, const std::string &key, const std::string &fallback = std::string());
+void mrvmStoreRuntimeStateString(const char *branch, const std::string &key, const std::string &value);
+std::vector<int> mrvmRuntimeStateIntList(const char *branch, const std::string &key);
+void mrvmStoreRuntimeStateIntList(const char *branch, const std::string &key, const std::vector<int> &values);
+std::vector<std::string> mrvmRuntimeStateStringList(const char *branch, const std::string &key);
+void mrvmStoreRuntimeStateStringList(const char *branch, const std::string &key, const std::vector<std::string> &values);
+std::vector<std::string> mrvmRuntimeStateKeys(const char *branch);
+bool mrvmEraseRuntimeStateValue(const char *branch, const std::string &key);
+void mrvmClearRuntimeStateBranch(const char *branch);
+
 struct MacroStackFrame {
 	std::string macroName;
 	bool firstRun;
@@ -30,6 +46,11 @@ struct MacroStackFrame {
 	}
 };
 
+std::vector<MacroStackFrame> mrvmRuntimeMacroStack();
+void mrvmStoreRuntimeMacroStack(const std::vector<MacroStackFrame> &frames);
+void mrvmPushRuntimeMacroFrame(const std::string &macroName, bool firstRun);
+void mrvmPopRuntimeMacroFrame();
+
 struct MacroKeyCodePair {
 	int key1 = 0;
 	int key2 = 0;
@@ -40,6 +61,9 @@ struct MacroFunctionLabelFrame {
 	std::array<std::string, 49> shellLabels;
 };
 
+std::vector<MacroFunctionLabelFrame> mrvmRuntimeFunctionLabelStack();
+void mrvmStoreRuntimeFunctionLabelStack(const std::vector<MacroFunctionLabelFrame> &frames);
+
 struct MRVMForkedProcess {
 	int pid;
 	std::string sourcePath;
@@ -49,6 +73,9 @@ struct MRVMForkedProcess {
 	MRVMForkedProcess() : pid(0), sourcePath(), pdfPath(), ownerBufferIds() {
 	}
 };
+
+std::vector<MRVMExplicitKeyBinding> mrvmRuntimeExplicitKeyBindings();
+void mrvmStoreRuntimeExplicitKeyBindings(const std::vector<MRVMExplicitKeyBinding> &bindings);
 
 enum MacroAssignableCommandId {
 	macdBackSpace = 0x7001,
@@ -87,66 +114,6 @@ enum MacroAssignableCommandId {
 	macdUp = 0x7022,
 	macdWordLeft = 0x7023,
 	macdWordRight = 0x7024
-};
-
-struct RuntimeEnvironment {
-	MRVMRuntimeKv runtimeKv;
-	std::string parameterString;
-	int returnInt;
-	std::string returnStr;
-	int errorLevel;
-	std::vector<MacroStackFrame> macroStack;
-	std::vector<std::string> fileMatches;
-	std::size_t fileMatchIndex;
-	std::string lastFileName;
-	std::map<const void *, std::vector<unsigned int>> markStacks;
-	std::map<const void *, std::array<std::optional<unsigned int>, 10>> randomAccessMarks;
-	std::string startupCommand;
-	std::vector<std::string> processArgs;
-	std::string executablePath;
-	std::string executableDir;
-	std::string shellPath;
-	std::string shellVersion;
-	std::vector<MRVMForkedProcess> forkedProcesses;
-	int docMode;
-	int shadowChar;
-	int refresh;
-	int mouse;
-	int logoScreen;
-	int explosions;
-	bool ignoreCase;
-	int formatStat;
-	int undoStat;
-	int memAlloc;
-	int insCursor;
-	int ovrCursor;
-	int ctrlHelp;
-	int mouseHSense;
-	int mouseVSense;
-	int statusRow;
-	int messageRow;
-	int maxWindowRow;
-	int minWindowRow;
-	int nameLine;
-	std::string defaultFormat;
-	bool tabExpand;
-	bool lastSearchValid;
-	const void *lastSearchWindow;
-	std::string lastSearchFileName;
-	std::size_t lastSearchStart;
-	std::size_t lastSearchEnd;
-	std::size_t lastSearchCursor;
-	int key1;
-	int key2;
-	std::deque<MacroKeyCodePair> pushedKeys;
-	std::vector<MacroFunctionLabelFrame> functionLabelStack;
-	std::vector<MRVMExplicitKeyBinding> explicitKeyBindings;
-	std::map<const void *, int> windowLinkGroups;
-	int nextWindowLinkGroupId;
-
-	RuntimeEnvironment() : returnInt(0), errorLevel(0), fileMatchIndex(0), docMode(0), shadowChar(176), refresh(1), mouse(1), logoScreen(0), explosions(0), ignoreCase(false), formatStat(0), undoStat(1), memAlloc(0), insCursor(0), ovrCursor(3), ctrlHelp(0), mouseHSense(8), mouseVSense(8), statusRow(-1), messageRow(-1), maxWindowRow(-1), minWindowRow(-1), nameLine(0), tabExpand(true), lastSearchValid(false), lastSearchWindow(nullptr), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), key1(0), key2(0), nextWindowLinkGroupId(1) {
-		functionLabelStack.emplace_back();
-	}
 };
 
 struct BackgroundEditSession {
@@ -235,7 +202,6 @@ struct ExecutionState {
 	}
 };
 
-extern RuntimeEnvironment g_runtimeEnv;
 extern std::recursive_mutex g_vmExecutionMutex;
 extern thread_local BackgroundEditSession *g_backgroundEditSession;
 extern thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;

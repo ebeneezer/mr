@@ -19,17 +19,37 @@ the VM global K/V store under approved top-level roots.
 For screen operations, the VM produces typed staged commands or facade
 mutations. TVision-facing code consumes and projects that state.
 
+The central runtime roots touched by application execution are:
+
+| Root | Ownership |
+|---|---|
+| `SETTINGS` | Settings runtime, histories and bootstrap staging |
+| `APPLICATIONUI` | Semantic App/UI state |
+| `KEYMAP` | Pending runtime key sequences |
+| `DEFERREDUI` | Deferred playback queue and retained playback model |
+| `MRMACRUNTIME` | VM runtime state not assigned to a more specific root |
+| `EXECSESSIONS` | Execution sessions, scheduler and closure state |
+| `MACROGLOBALS` | Explicit language globals |
+| `MACROCATALOG` | Loaded macro catalog |
+| `MACRODEBUGGER` | Debugger runtime state |
+| `MODELESSUI` | Modeless UI definitions and retained values |
+
 ## Invariants
 
 - A VM-representable runtime value must not live in a second value-bearing C++
   registry.
 - C++ may retain only mechanical handles such as live TVision pointers,
   callbacks, suspended VM ownership and coprocessor task handles.
+- Mutexes, instrumentation meters and rebuildable lookup/projection caches are
+  mechanical state. They must not retain an authoritative semantic value.
 - MacroCellGrid, MacroCellView and UI-facade bridges form one screen projection
   path; competing write paths are not allowed.
 - Producer, retained model, deferred command and TVision projection roles
   remain distinct.
 - VM error text is observable behavior.
+- Macro-screen cells, box snapshots, overlay coordinates, batching flags and
+  mutation generations belong under `MRMACRUNTIME/macroScreen`. A live
+  `MacroCellView` pointer is only a projection handle.
 
 ## Settings intrinsics
 

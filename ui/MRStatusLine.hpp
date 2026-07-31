@@ -26,7 +26,7 @@ class MRStatusLine : public TStatusLine {
 		std::string text;
 	};
 
-	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextFunctionLabelTransitions(), mFunctionKeyLabelRandomState(static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0x4D52464Bu), mContextHintLabels(), mMacroFunctionLabels(), mStaticModePresentation(false) {
+	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextFunctionLabelTransitions(), mFunctionKeyLabelRandomState(static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0x4D52464Bu), mContextHintLabels(), mMacroFunctionLabels() {
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -43,21 +43,21 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void setShowFunctionKeyLabels(bool enabled) {
-		if (mStaticModePresentation) return;
+		if (mr::messageline::staticModeActive()) return;
 		if (mShowFunctionKeyLabels == enabled) return;
 		mShowFunctionKeyLabels = enabled;
 		drawView();
 	}
 
 	void setMacroFunctionLabels(const std::vector<std::string> &labels) {
-		if (mStaticModePresentation) return;
+		if (mr::messageline::staticModeActive()) return;
 		if (mMacroFunctionLabels == labels) return;
 		mMacroFunctionLabels = labels;
 		drawView();
 	}
 
 	void setContextFunctionKeyLabels(const std::vector<FunctionKeyLabel> &labels) {
-		if (mStaticModePresentation) return;
+		if (mr::messageline::staticModeActive()) return;
 		bool same = mContextFunctionKeyLabels.size() == labels.size();
 
 		if (same)
@@ -98,7 +98,7 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void tickFunctionKeyLabelTransitions() {
-		if (mStaticModePresentation) return;
+		if (mr::messageline::staticModeActive()) return;
 		const auto now = std::chrono::steady_clock::now();
 
 		for (std::size_t i = 0; i < mContextFunctionLabelTransitions.size(); ++i) {
@@ -153,29 +153,28 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void setContextFunctionKeysActive(bool active) {
-		if (mStaticModePresentation) return;
+		if (mr::messageline::staticModeActive()) return;
 		if (mContextFunctionKeysActive == active) return;
 		mContextFunctionKeysActive = active;
 		drawView();
 	}
 
 	void setContextHintLabels(const std::vector<std::string> &labels) {
-		if (mStaticModePresentation) return;
+		if (mr::messageline::staticModeActive()) return;
 		if (mContextHintLabels == labels) return;
 		mContextHintLabels = labels;
 		drawView();
 	}
 
 	void setContextHintLabelsActive(bool active) {
-		if (mStaticModePresentation) return;
+		if (mr::messageline::staticModeActive()) return;
 		if (mContextHintLabelsActive == active) return;
 		mContextHintLabelsActive = active;
 		drawView();
 	}
 
 	void setStaticModePresentation(bool active) {
-		if (mStaticModePresentation == active) return;
-		mStaticModePresentation = active;
+		static_cast<void>(active);
 		drawView();
 	}
 
@@ -448,6 +447,5 @@ class MRStatusLine : public TStatusLine {
 	std::uint32_t mFunctionKeyLabelRandomState;
 	std::vector<std::string> mContextHintLabels;
 	std::vector<std::string> mMacroFunctionLabels;
-	bool mStaticModePresentation;
 };
 #endif

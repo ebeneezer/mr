@@ -107,7 +107,7 @@ void VirtualMachine::BytecodeExecution::run() {
 		activeFirstRun = vm.debugState.firstRun;
 		vm.debugState.paused = false;
 		if (!activeMacroName.empty()) {
-			g_runtimeEnv.macroStack.emplace_back(activeMacroName, activeFirstRun);
+			mrvmPushRuntimeMacroFrame(activeMacroName, activeFirstRun);
 			pushedMacroFrame = true;
 		}
 	} else if (resumeFromDelay) {
@@ -123,16 +123,16 @@ void VirtualMachine::BytecodeExecution::run() {
 		vm.delayState.ready = false;
 	} else {
 		if (bytecode == nullptr || length == 0 || entryOffset >= length) return;
-		savedParameterString = parentState != nullptr ? parentState->parameterString : g_runtimeEnv.parameterString;
+		savedParameterString = parentState != nullptr ? parentState->parameterString : runtimeParameterString();
 		state.parameterString = savedParameterString;
 		if (parentState != nullptr) {
 			state.returnInt = parentState->returnInt;
 			state.returnStr = parentState->returnStr;
 			state.errorLevel = parentState->errorLevel;
 		} else {
-			state.returnInt = g_runtimeEnv.returnInt;
-			state.returnStr = g_runtimeEnv.returnStr;
-			state.errorLevel = g_runtimeEnv.errorLevel;
+			state.returnInt = runtimeReturnInt();
+			state.returnStr = runtimeReturnStr();
+			state.errorLevel = runtimeErrorLevel();
 		}
 
 		if (!preserveExecutionState) {
@@ -154,7 +154,7 @@ void VirtualMachine::BytecodeExecution::run() {
 		}
 
 		if (!macroName.empty()) {
-			g_runtimeEnv.macroStack.emplace_back(macroName, firstRun);
+			mrvmPushRuntimeMacroFrame(macroName, firstRun);
 			pushedMacroFrame = true;
 		}
 		activeMacroName = macroName;
@@ -183,7 +183,7 @@ void VirtualMachine::BytecodeExecution::run() {
 			if (backgroundMacroCancelRequested()) {
 				vm.cancelledExecution = true;
 				vm.appendLogLine("VM Notice: Background macro cancelled.", true);
-				runtimeErrorLevel() = 5007;
+				setRuntimeErrorLevel(5007);
 				break;
 			}
 			if (vm.debugState.runActive && std::binary_search(vm.debugState.breakpointOffsets.begin(), vm.debugState.breakpointOffsets.end(), ip)) {
@@ -230,25 +230,25 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (!vm.mClosureId.empty()) {
 						bool restored = false;
 						vm.mClosureVariableNames.insert(varName);
-						if (mrvmExecSessionsReadClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, varName, value)) {
+						if (mrvmExecSessionsReadClosureVariable(mrvmRuntimeKv(), vm.mClosureId, varName, value)) {
 							vm.variables[varName] = mrvmCoerceForStore(value, varType);
 							restored = true;
 						} else if (varType == TYPE_HASH)
 							vm.variables[varName] = mrvmMakeHash(vm.mHashStore->createHash());
 						else
 							vm.variables[varName] = mrvmDefaultValueForType(varType);
-						if (!restored) static_cast<void>(mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, varName, vm.variables[varName], *vm.mHashStore));
+						if (!restored) static_cast<void>(mrvmExecSessionsWriteClosureVariable(mrvmRuntimeKv(), vm.mClosureId, varName, vm.variables[varName], *vm.mHashStore));
 					} else if (currentExecutionSessionId() != 0) {
 						bool restored = false;
 						vm.mSessionVariableNames.insert(varName);
-						if (mrvmExecSessionsReadSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, value)) {
+						if (mrvmExecSessionsReadSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), varName, value)) {
 							vm.variables[varName] = mrvmCoerceForStore(value, varType);
 							restored = true;
 						} else if (varType == TYPE_HASH)
 							vm.variables[varName] = mrvmMakeHash(vm.mHashStore->createHash());
 						else
 							vm.variables[varName] = mrvmDefaultValueForType(varType);
-						if (!restored) static_cast<void>(mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, vm.variables[varName], *vm.mHashStore));
+						if (!restored) static_cast<void>(mrvmExecSessionsWriteSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), varName, vm.variables[varName], *vm.mHashStore));
 					} else if (varType == TYPE_HASH)
 						vm.variables[varName] = mrvmMakeHash(vm.mHashStore->createHash());
 					else
@@ -276,9 +276,9 @@ void VirtualMachine::BytecodeExecution::run() {
 					Value value = mrvmCoerceForStore(vm.pop(), targetType);
 					if (value.type == TYPE_STR) mrvmEnforceStringLength(value.s);
 					if (!MRVMSystemVariables::store(varName, value)) vm.variables[varName] = value;
-					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, varName, value, *vm.mHashStore);
+					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(mrvmRuntimeKv(), vm.mClosureId, varName, value, *vm.mHashStore);
 					else if (currentExecutionSessionId() != 0 && vm.mSessionVariableNames.find(varName) != vm.mSessionVariableNames.end())
-						mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, value, *vm.mHashStore);
+						mrvmExecSessionsWriteSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), varName, value, *vm.mHashStore);
 					vm.appendLogLine("Store variable: " + varName);
 				} break;
 				case OP_HASH_LOAD: {
@@ -290,7 +290,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
 					it = vm.variables.find(varName);
 					if (it == vm.variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
-					vm.push(mrvmHashReadValue(*vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore(), it->second, mrvmValueAsString(key)));
+					vm.push(mrvmHashReadValue(*vm.mHashStore, mrvmRuntimeKv().globalStore(), it->second, mrvmValueAsString(key)));
 					vm.appendLogLine("Load hash value: " + varName);
 				} break;
 				case OP_HASH_LOAD_VALUE: {
@@ -300,7 +300,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					hash = vm.pop();
 					if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 					if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
-					vm.push(mrvmHashReadValue(*vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore(), hash, mrvmValueAsString(key)));
+					vm.push(mrvmHashReadValue(*vm.mHashStore, mrvmRuntimeKv().globalStore(), hash, mrvmValueAsString(key)));
 					vm.appendLogLine("Load hash value from expression.");
 				} break;
 				case OP_HASH_STORE: {
@@ -315,10 +315,10 @@ void VirtualMachine::BytecodeExecution::run() {
 					it = vm.variables.find(varName);
 					if (it == vm.variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 					if (value.type == TYPE_STR) mrvmEnforceStringLength(value.s);
-					mrvmHashWriteValue(*vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore(), it->second, mrvmValueAsString(key), value);
-					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, varName, it->second, *vm.mHashStore);
+					mrvmHashWriteValue(*vm.mHashStore, mrvmRuntimeKv().globalStore(), it->second, mrvmValueAsString(key), value);
+					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(mrvmRuntimeKv(), vm.mClosureId, varName, it->second, *vm.mHashStore);
 					else if (currentExecutionSessionId() != 0 && vm.mSessionVariableNames.find(varName) != vm.mSessionVariableNames.end())
-						mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, it->second, *vm.mHashStore);
+						mrvmExecSessionsWriteSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), varName, it->second, *vm.mHashStore);
 					vm.appendLogLine("Store hash value: " + varName);
 				} break;
 				case OP_HASH_STORE_VALUE: {
@@ -331,7 +331,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 					if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
 					if (value.type == TYPE_STR) mrvmEnforceStringLength(value.s);
-					mrvmHashWriteValue(*vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore(), hash, mrvmValueAsString(key), value);
+					mrvmHashWriteValue(*vm.mHashStore, mrvmRuntimeKv().globalStore(), hash, mrvmValueAsString(key), value);
 					vm.appendLogLine("Store hash value from expression.");
 				} break;
 				case OP_ARRAY_LOAD: {
@@ -366,10 +366,10 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
 					it = vm.variables.find(varName);
 					if (it == vm.variables.end() || !mrvmValueIsArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
-					mrvmArrayWriteValue(it->second, index.i, value, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
-					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, varName, it->second, *vm.mHashStore);
+					mrvmArrayWriteValue(it->second, index.i, value, *vm.mHashStore, mrvmRuntimeKv().globalStore());
+					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(mrvmRuntimeKv(), vm.mClosureId, varName, it->second, *vm.mHashStore);
 					else if (currentExecutionSessionId() != 0 && vm.mSessionVariableNames.find(varName) != vm.mSessionVariableNames.end())
-						mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, currentExecutionSessionId(), varName, it->second, *vm.mHashStore);
+						mrvmExecSessionsWriteSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), varName, it->second, *vm.mHashStore);
 					vm.appendLogLine("Store array value: " + varName);
 				} break;
 				case OP_GOTO: {
@@ -701,10 +701,10 @@ void VirtualMachine::BytecodeExecution::run() {
 			parentState->errorLevel = state.errorLevel;
 			parentState->parameterString = savedParameterString;
 		} else {
-			g_runtimeEnv.returnInt = state.returnInt;
-			g_runtimeEnv.returnStr = state.returnStr;
-			g_runtimeEnv.errorLevel = state.errorLevel;
-			g_runtimeEnv.parameterString = savedParameterString;
+			setRuntimeReturnInt(state.returnInt);
+			setRuntimeReturnStr(state.returnStr);
+			setRuntimeErrorLevel(state.errorLevel);
+			setRuntimeParameterString(savedParameterString);
 		}
 		return;
 	} catch (const std::exception &ex) {
@@ -719,10 +719,10 @@ void VirtualMachine::BytecodeExecution::run() {
 		parentState->errorLevel = state.errorLevel;
 		parentState->parameterString = savedParameterString;
 	} else {
-		g_runtimeEnv.returnInt = state.returnInt;
-		g_runtimeEnv.returnStr = state.returnStr;
-		g_runtimeEnv.errorLevel = state.errorLevel;
-		g_runtimeEnv.parameterString = savedParameterString;
+		setRuntimeReturnInt(state.returnInt);
+		setRuntimeReturnStr(state.returnStr);
+		setRuntimeErrorLevel(state.errorLevel);
+		setRuntimeParameterString(savedParameterString);
 	}
 	vm.clearAsyncDelayState();
 	if (vm.debugState.runActive && !vm.debugState.stopped) {
@@ -730,5 +730,5 @@ void VirtualMachine::BytecodeExecution::run() {
 		vm.debugState.stackDepth = callStack.size();
 		vm.debugState.clearPausedExecution();
 	}
-	if (pushedMacroFrame) g_runtimeEnv.macroStack.pop_back();
+	if (pushedMacroFrame) mrvmPopRuntimeMacroFrame();
 }

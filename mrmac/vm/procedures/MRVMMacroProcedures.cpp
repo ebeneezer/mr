@@ -126,7 +126,7 @@ VirtualMachine::InstructionFlow VirtualMachine::MacroProcedures::execute(MRVMPro
 
 			spec = mrvmValueAsString(args[0]);
 			if (!mrvmParseRunMacroSpec(spec, filePart, macroPart, paramPart)) {
-				runtimeErrorLevel() = 5001;
+				setRuntimeErrorLevel(5001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 
@@ -136,7 +136,7 @@ VirtualMachine::InstructionFlow VirtualMachine::MacroProcedures::execute(MRVMPro
 
 			if (!readLoadedMacroByKey(macroKey, macroRef) || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
 				if (backgroundStaged) {
-					runtimeErrorLevel() = 5001;
+					setRuntimeErrorLevel(5001);
 					return InstructionFlow::SkipPostInstruction;
 				}
 				if (!filePart.empty()) {
@@ -148,7 +148,7 @@ VirtualMachine::InstructionFlow VirtualMachine::MacroProcedures::execute(MRVMPro
 			}
 
 			if (macroRef.displayName.empty() || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
-				runtimeErrorLevel() = 5001;
+				setRuntimeErrorLevel(5001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (vm.debugState.runActive) {
@@ -185,7 +185,7 @@ VirtualMachine::InstructionFlow VirtualMachine::MacroProcedures::execute(MRVMPro
 				if (childRef.dumpAttr) unloadMacroFromRegistry(macroKey);
 				else if (childRef.transientAttr)
 					evictTransientFileImage(childRef.fileKey);
-				runtimeErrorLevel() = 0;
+				setRuntimeErrorLevel(0);
 			} else if (!executeLoadedMacroWithConfiguredKeymapBatch(macroKey, paramPart, &vm.log))
 				return InstructionFlow::SkipPostInstruction;
 		} break;
@@ -197,17 +197,17 @@ VirtualMachine::InstructionFlow VirtualMachine::MacroProcedures::execute(MRVMPro
 				int modelessReturnValue = 0;
 				std::string modelessError;
 
-				if (!mrvmDispatchMacroModelessProcedure(g_runtimeEnv.runtimeKv, name, args, modelessReturnValue, modelessError)) throw std::runtime_error("Unknown MMP procedure: " + name);
-				runtimeReturnInt() = modelessReturnValue;
-				runtimeErrorLevel() = modelessReturnValue != 0 ? 0 : 1001;
+				if (!mrvmDispatchMacroModelessProcedure(mrvmRuntimeKv(), name, args, modelessReturnValue, modelessError)) throw std::runtime_error("Unknown MMP procedure: " + name);
+				setRuntimeReturnInt(modelessReturnValue);
+				setRuntimeErrorLevel(modelessReturnValue != 0 ? 0 : 1001);
 				if (modelessReturnValue == 0 && !modelessError.empty()) throw std::runtime_error(modelessError);
 			} else if (const char *actionId = mrvmKeymapActionIdForMacroCommand(name)) {
 				if (!args.empty()) throw std::runtime_error((name + " expects no arguments.").c_str());
 				if (currentBackgroundEditSession() != nullptr) {
-					runtimeErrorLevel() = 1001;
+					setRuntimeErrorLevel(1001);
 					return InstructionFlow::SkipPostInstruction;
 				}
-				runtimeErrorLevel() = dispatchMRKeymapAction(actionId, "", currentEditorCommandWindow()) ? 0 : 1001;
+				setRuntimeErrorLevel(dispatchMRKeymapAction(actionId, "", currentEditorCommandWindow()) ? 0 : 1001);
 			} else {
 				throw std::runtime_error("Unknown procedure: " + name);
 			}

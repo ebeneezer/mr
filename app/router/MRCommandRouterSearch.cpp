@@ -25,29 +25,17 @@
 #include "MRCommandRouterSearchCore.hpp"
 #include "MRCommandRouterSearchDialogs.hpp"
 #include "MRCommandRouterSearchMultiFile.hpp"
+#include "MRCommandRouterSearchState.hpp"
 #include "../MRCommandRouter.hpp"
 
 #include <algorithm>
 #include <array>
-#include <chrono>
-#include <cstdlib>
 #include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #include <cstring>
-#include <filesystem>
-#include <fnmatch.h>
-#include <functional>
-#include <iomanip>
-#include <map>
-#include <optional>
-#include <sstream>
-#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
-
 #include "../../dialogs/MRFileInformation.hpp"
 #include "../../dialogs/MRAbout.hpp"
 #include "../../dialogs/setup/MRSetup.hpp"
@@ -60,6 +48,7 @@
 #include "../../keymap/MRKeymapSequence.hpp"
 #include "../../mrmac/MRMacroRunner.hpp"
 #include "../../mrmac/MRVM.hpp"
+#include "../../mrmac/mrmac.h"
 #include "../commands/MRExternalCommand.hpp"
 #include "../commands/MRFileCommands.hpp"
 #include "../commands/MRWindowCommands.hpp"
@@ -75,56 +64,17 @@
 #include "../MRHelpTopics.generated.hpp"
 
 namespace {
-struct SearchUiState {
-	bool hasPrevious = false;
-	bool hasAcceptedPattern = false;
-	std::string pattern;
-	std::string acceptedPattern;
-	std::string replacement;
-	std::size_t lastStart = 0;
-	std::size_t lastEnd = 0;
-	MRSearchDialogOptions acceptedOptions;
-	MRSearchDialogOptions lastOptions;
-};
-
-SearchUiState g_searchUiState;
-
-enum class SearchResultsContextKind : unsigned char {
-	None = 0,
-	SingleFile = 1,
-	MultiFile = 2
-};
-
-struct SearchResultsContext {
-	SearchResultsContextKind kind = SearchResultsContextKind::None;
-	MREditWindow *window = nullptr;
-};
-
-SearchResultsContext g_searchResultsContext;
-
-struct PendingTransientSelectionClear {
-	bool active = false;
-	std::string normalizedPath;
-	std::size_t start = 0;
-	std::size_t end = 0;
-};
-
-PendingTransientSelectionClear g_pendingTransientSelectionClear;
-
-std::string normalizedSearchPath(const std::filesystem::path &path) {
-	std::error_code ec;
-	std::filesystem::path normalized = std::filesystem::weakly_canonical(path, ec);
-
-	if (ec || normalized.empty()) {
-		ec.clear();
-		normalized = std::filesystem::absolute(path, ec);
-	}
-	if (ec || normalized.empty()) normalized = path.lexically_normal();
-	std::string result = normalized.lexically_normal().string();
-	for (char &ch : result)
-		if (ch == '\\') ch = '/';
-	return result;
-}
+using mr::search_runtime::PendingTransientSelectionClear;
+using mr::search_runtime::SearchResultsContext;
+using mr::search_runtime::SearchResultsContextKind;
+using mr::search_runtime::SearchUiState;
+using mr::search_runtime::pendingTransientSelectionClear;
+using mr::search_runtime::normalizedSearchPath;
+using mr::search_runtime::searchResultsContext;
+using mr::search_runtime::searchUiState;
+using mr::search_runtime::storePendingTransientSelectionClear;
+using mr::search_runtime::storeSearchResultsContext;
+using mr::search_runtime::storeSearchUiState;
 
 const char *wrappedSearchMessage(MRSearchDirection direction) {
 	return direction == MRSearchDirection::Backward ? "search wrapped to EOF" : "search wrapped to TOF";
@@ -298,15 +248,16 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	TRadioButtons *directionField = nullptr;
 	TRadioButtons *modeField = nullptr;
 	TCheckBoxes *optionsField = nullptr;
+	const SearchUiState uiState = searchUiState();
 
 	std::memset(patternInput, 0, sizeof(patternInput));
 	if (TProgram::deskTop == nullptr) return false;
 	selectionSeed = searchSeedFromCurrentSelection();
 	if (!selectionSeed.empty()) strnzcpy(patternInput, selectionSeed.c_str(), sizeof(patternInput));
-	else if (!g_searchUiState.acceptedPattern.empty())
-		strnzcpy(patternInput, g_searchUiState.acceptedPattern.c_str(), sizeof(patternInput));
-	else if (!g_searchUiState.pattern.empty())
-		strnzcpy(patternInput, g_searchUiState.pattern.c_str(), sizeof(patternInput));
+	else if (!uiState.acceptedPattern.empty())
+		strnzcpy(patternInput, uiState.acceptedPattern.c_str(), sizeof(patternInput));
+	else if (!uiState.pattern.empty())
+		strnzcpy(patternInput, uiState.pattern.c_str(), sizeof(patternInput));
 
 	switch (options.textType) {
 		case MRSearchTextType::Literal:
@@ -388,9 +339,11 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 		options.globalSearch = (optionMask & 0x0002) != 0;
 		options.restrictToMarkedBlock = (optionMask & 0x0004) != 0;
 		options.searchAllWindows = (optionMask & 0x0008) != 0;
-		g_searchUiState.hasAcceptedPattern = true;
-		g_searchUiState.acceptedPattern = pattern;
-		g_searchUiState.acceptedOptions = options;
+		SearchUiState updated = searchUiState();
+		updated.hasAcceptedPattern = true;
+		updated.acceptedPattern = pattern;
+		updated.acceptedOptions = options;
+		storeSearchUiState(updated);
 		static_cast<void>(setConfiguredSearchDialogOptions(options));
 	}
 	TObject::destroy(dialog);
@@ -419,15 +372,16 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	TRadioButtons *modeField = nullptr;
 	TRadioButtons *leaveCursorField = nullptr;
 	TCheckBoxes *optionsField = nullptr;
+	const SearchUiState uiState = searchUiState();
 
 	std::memset(patternInput, 0, sizeof(patternInput));
 	std::memset(replacementInput, 0, sizeof(replacementInput));
 	if (TProgram::deskTop == nullptr) return false;
 	selectionSeed = searchSeedFromCurrentSelection();
 	if (!selectionSeed.empty()) strnzcpy(patternInput, selectionSeed.c_str(), sizeof(patternInput));
-	else if (!g_searchUiState.pattern.empty())
-		strnzcpy(patternInput, g_searchUiState.pattern.c_str(), sizeof(patternInput));
-	if (!g_searchUiState.replacement.empty()) strnzcpy(replacementInput, g_searchUiState.replacement.c_str(), sizeof(replacementInput));
+	else if (!uiState.pattern.empty())
+		strnzcpy(patternInput, uiState.pattern.c_str(), sizeof(patternInput));
+	if (!uiState.replacement.empty()) strnzcpy(replacementInput, uiState.replacement.c_str(), sizeof(replacementInput));
 
 	switch (options.textType) {
 		case MRSearchTextType::Literal:
@@ -526,31 +480,37 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	TObject::destroy(dialog);
 	return result != cmCancel;
 }
-MREditWindow *resolveSearchResultsWindow(MREditWindow *window) {
-	if (window == nullptr) return nullptr;
+MREditWindow *resolveSearchResultsWindow(int bufferId) {
+	if (bufferId == 0) return nullptr;
 	for (MREditWindow *candidate : allEditWindowsInZOrder())
-		if (candidate == window) return candidate;
+		if (candidate != nullptr && candidate->bufferId() == bufferId) return candidate;
 	return nullptr;
 }
 
 void rememberSingleSearchResultContext(MREditWindow *window, const std::string &pattern, const MRSearchDialogOptions &options, std::size_t start, std::size_t end) {
-	g_searchUiState.hasPrevious = true;
-	g_searchUiState.pattern = pattern;
-	g_searchUiState.lastStart = start;
-	g_searchUiState.lastEnd = end;
-	g_searchUiState.lastOptions = options;
-	g_searchResultsContext.kind = SearchResultsContextKind::SingleFile;
-	g_searchResultsContext.window = window;
+	SearchUiState uiState = searchUiState();
+	SearchResultsContext context;
+
+	uiState.hasPrevious = true;
+	uiState.pattern = pattern;
+	uiState.lastStart = start;
+	uiState.lastEnd = end;
+	uiState.lastOptions = options;
+	context.kind = SearchResultsContextKind::SingleFile;
+	context.bufferId = window != nullptr ? window->bufferId() : 0;
+	storeSearchUiState(uiState);
+	storeSearchResultsContext(context);
 }
 
 void rememberMultiFileSearchResultContext() {
+	SearchResultsContext context;
+
 	if (!hasPreviousMultiFileSearchResults()) {
-		g_searchResultsContext.kind = SearchResultsContextKind::None;
-		g_searchResultsContext.window = nullptr;
+		storeSearchResultsContext(context);
 		return;
 	}
-	g_searchResultsContext.kind = SearchResultsContextKind::MultiFile;
-	g_searchResultsContext.window = nullptr;
+	context.kind = SearchResultsContextKind::MultiFile;
+	storeSearchResultsContext(context);
 }
 
 void activateMatch(MREditWindow *win, const SearchMatchEntry &match, const std::string &pattern, const MRSearchDialogOptions &options) {
@@ -747,12 +707,14 @@ bool handleSearchFindText() {
 }
 
 bool handleSearchRepeatPrevious() {
-	MREditWindow *win = resolveSearchResultsWindow(g_searchResultsContext.window);
+	const SearchResultsContext context = searchResultsContext();
+	const SearchUiState uiState = searchUiState();
+	MREditWindow *win = resolveSearchResultsWindow(context.bufferId);
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	std::size_t startOffset = 0;
 	bool wrapped = false;
 
-	if (!g_searchUiState.hasPrevious || g_searchUiState.pattern.empty()) {
+	if (!uiState.hasPrevious || uiState.pattern.empty()) {
 		postDialogWarning(kNoPreviousSearchMessage);
 		return true;
 	}
@@ -760,15 +722,15 @@ bool handleSearchRepeatPrevious() {
 		postDialogWarning(kNoPreviousSearchMessage);
 		return true;
 	}
-	if (g_searchUiState.lastOptions.direction == MRSearchDirection::Backward) startOffset = g_searchUiState.lastStart;
+	if (uiState.lastOptions.direction == MRSearchDirection::Backward) startOffset = uiState.lastStart;
 	else {
-		startOffset = g_searchUiState.lastEnd;
-		if (g_searchUiState.lastEnd <= g_searchUiState.lastStart) startOffset = std::min(editor->bufferLength(), g_searchUiState.lastStart + 1);
+		startOffset = uiState.lastEnd;
+		if (uiState.lastEnd <= uiState.lastStart) startOffset = std::min(editor->bufferLength(), uiState.lastStart + 1);
 	}
-	if (!performSearch(win, g_searchUiState.pattern, startOffset, true, g_searchUiState.lastOptions, true, &wrapped)) return true;
+	if (!performSearch(win, uiState.pattern, startOffset, true, uiState.lastOptions, true, &wrapped)) return true;
 	if (win != currentEditWindow()) static_cast<void>(mrActivateEditWindow(win));
-	updateMiniMapFindMarkers(win, g_searchUiState.pattern, g_searchUiState.lastOptions);
-	if (wrapped) mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, wrappedSearchMessage(g_searchUiState.lastOptions.direction), mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	updateMiniMapFindMarkers(win, uiState.pattern, uiState.lastOptions);
+	if (wrapped) mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, wrappedSearchMessage(uiState.lastOptions.direction), mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
 	return true;
 }
 
@@ -947,7 +909,9 @@ bool handleSearchReplace() {
 		}
 		editor->revealCursor(True);
 
-		g_searchUiState.replacement = replacement;
+		SearchUiState uiState = searchUiState();
+		uiState.replacement = replacement;
+		storeSearchUiState(uiState);
 		rememberSingleSearchResultContext(win, pattern, searchOptions, cursorTargetStart, cursorTargetEnd);
 		syncVmLastSearch(win, true, cursorTargetStart, cursorTargetEnd, editor->cursorOffset());
 		if (cancelledByUser) {
@@ -961,7 +925,7 @@ bool handleSearchReplace() {
 
 bool handleSearchMultiFileSearch() {
 	const bool hadPrevious = hasPreviousMultiFileSearchResults();
-	const bool handled = handleMultiFileSearchDialog(g_searchUiState.pattern);
+	const bool handled = handleMultiFileSearchDialog(searchUiState().pattern);
 
 	if (hadPrevious || hasPreviousMultiFileSearchResults()) rememberMultiFileSearchResultContext();
 	return handled;
@@ -977,7 +941,8 @@ bool handleSearchListFilesFromLastSearch() {
 
 bool handleSearchMultiFileSearchReplace() {
 	const bool hadPrevious = hasPreviousMultiFileSearchResults();
-	const bool handled = handleMultiFileSearchReplaceDialog(g_searchUiState.pattern, g_searchUiState.replacement);
+	const SearchUiState uiState = searchUiState();
+	const bool handled = handleMultiFileSearchReplaceDialog(uiState.pattern, uiState.replacement);
 
 	if (hadPrevious || hasPreviousMultiFileSearchResults()) rememberMultiFileSearchResultContext();
 	return handled;
@@ -985,7 +950,7 @@ bool handleSearchMultiFileSearchReplace() {
 
 
 bool handleSearchResultsNext() {
-	switch (g_searchResultsContext.kind) {
+	switch (searchResultsContext().kind) {
 		case SearchResultsContextKind::SingleFile:
 			return handleSearchRepeatPrevious();
 		case SearchResultsContextKind::MultiFile:
@@ -998,17 +963,20 @@ bool handleSearchResultsNext() {
 }
 
 void clearTransientSelectionIfPending(const TEvent &event) {
-	if (!g_pendingTransientSelectionClear.active || event.what != evKeyDown) return;
-	g_pendingTransientSelectionClear.active = false;
+	PendingTransientSelectionClear pending = pendingTransientSelectionClear();
+
+	if (!pending.active || event.what != evKeyDown) return;
+	pending.active = false;
+	storePendingTransientSelectionClear(pending);
 	for (MREditWindow *window : allEditWindowsInZOrder()) {
 		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 		if (editor == nullptr || !editor->hasPersistentFileName()) continue;
-		if (normalizedSearchPath(editor->persistentFileName()) != g_pendingTransientSelectionClear.normalizedPath) continue;
+		if (normalizedSearchPath(editor->persistentFileName()) != pending.normalizedPath) continue;
 		{
 			std::size_t selStart = editor->selectionStartOffset();
 			std::size_t selEnd = editor->selectionEndOffset();
 			if (selEnd < selStart) std::swap(selStart, selEnd);
-			if (selStart != g_pendingTransientSelectionClear.start || selEnd != g_pendingTransientSelectionClear.end) break;
+			if (selStart != pending.start || selEnd != pending.end) break;
 		}
 		{
 			const std::size_t cursor = editor->cursorOffset();
@@ -1019,11 +987,13 @@ void clearTransientSelectionIfPending(const TEvent &event) {
 }
 
 void currentSearchPatternSnapshot(std::string &pattern, MRSearchDialogOptions &options) {
-	if (g_searchUiState.hasAcceptedPattern) {
-		pattern = g_searchUiState.acceptedPattern;
-		options = g_searchUiState.acceptedOptions;
+	const SearchUiState uiState = searchUiState();
+
+	if (uiState.hasAcceptedPattern) {
+		pattern = uiState.acceptedPattern;
+		options = uiState.acceptedOptions;
 		return;
 	}
-	pattern = g_searchUiState.pattern;
-	options = g_searchUiState.hasPrevious ? g_searchUiState.lastOptions : configuredSearchDialogOptions();
+	pattern = uiState.pattern;
+	options = uiState.hasPrevious ? uiState.lastOptions : configuredSearchDialogOptions();
 }

@@ -16,6 +16,10 @@ Configured keymap profiles and the selected active profile belong to the
 settings runtime model. The resolver and trie are runtime projections of that
 model. External keymap files are versioned persistence artifacts.
 
+Pending multi-key sequences belong under `KEYMAP/runtime/pending`. The C++
+resolver and trie may retain only their rebuildable derived lookup projection;
+they are not authoritative profile, selection or pending-sequence stores.
+
 The running build's `MR_BUILD_EPOCH` is the canonical persisted keymap version.
 
 ## Data flow
@@ -33,6 +37,8 @@ trie -> runtime key handling.
   stable.
 - Sequence conflict handling, canonical ordering and resolver rebuild
   semantics are part of the keymap contract.
+- Pending sequences are read from and written to `KEYMAP/runtime/pending`; the
+  resolver must not mirror them in C++ members or globals.
 - Diagnostic text and severity are observable UI behavior.
 - Loader, dialog and resolver roles remain distinct.
 - An older external version is upgrade input; a newer external version is

@@ -61,19 +61,19 @@ std::vector<int> currentGlobalHashRoots() {
 }
 
 Value ensureGlobalHashRoot(const std::string &name) {
-	return g_runtimeEnv.runtimeKv.ensureRoot(name);
+	return mrvmRuntimeKv().ensureRoot(name);
 }
 
 Value ensureGlobalHashChild(const Value &parent, const std::string &key) {
-	return g_runtimeEnv.runtimeKv.ensureChild(parent, key);
+	return mrvmRuntimeKv().ensureChild(parent, key);
 }
 
 Value replaceGlobalHashChild(const Value &parent, const std::string &key) {
-	return g_runtimeEnv.runtimeKv.replaceChild(parent, key);
+	return mrvmRuntimeKv().replaceChild(parent, key);
 }
 
 bool readRuntimeGlobalValueDirect(const std::string &name, GlobalEntry &entry) {
-	return mrvmRuntimeGlobalRead(g_runtimeEnv.runtimeKv, name, entry);
+	return mrvmRuntimeGlobalRead(mrvmRuntimeKv(), name, entry);
 }
 
 std::string runtimeGlobalStringValue(const std::string &name) {
@@ -91,19 +91,19 @@ int runtimeGlobalIntValue(const std::string &name) {
 }
 
 std::vector<std::string> macroGlobalOrderValues() {
-	return mrvmRuntimeGlobalOrderValues(g_runtimeEnv.runtimeKv);
+	return mrvmRuntimeGlobalOrderValues(mrvmRuntimeKv());
 }
 
 std::size_t macroGlobalEnumIndex() {
-	return mrvmRuntimeGlobalEnumIndex(g_runtimeEnv.runtimeKv);
+	return mrvmRuntimeGlobalEnumIndex(mrvmRuntimeKv());
 }
 
 void setMacroGlobalEnumIndex(std::size_t index) {
-	mrvmRuntimeGlobalSetEnumIndex(g_runtimeEnv.runtimeKv, index);
+	mrvmRuntimeGlobalSetEnumIndex(mrvmRuntimeKv(), index);
 }
 
 void writeRuntimeGlobalValueDirect(const std::string &name, int type, const Value &value) {
-	mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, name, type, value);
+	mrvmRuntimeGlobalWrite(mrvmRuntimeKv(), name, type, value);
 }
 
 bool isMacroVisibleRuntimeRootName(const std::string &key) {
@@ -135,7 +135,7 @@ void setGlobalValueFromStore(const std::string &name, int type, const Value &val
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	Value stored = value;
 
-	if (type == TYPE_HASH || mrvmValueIsArrayType(type)) stored = mrvmHashCopyValueForStore(value, localStore, g_runtimeEnv.runtimeKv.globalStore(), g_runtimeEnv.runtimeKv.globalStore(), true);
+	if (type == TYPE_HASH || mrvmValueIsArrayType(type)) stored = mrvmHashCopyValueForStore(value, localStore, mrvmRuntimeKv().globalStore(), mrvmRuntimeKv().globalStore(), true);
 	else
 		stored.globalStorage = true;
 	if (session != nullptr && type != TYPE_HASH && !mrvmValueIsArrayType(type)) {
@@ -202,91 +202,91 @@ std::string macroDebugValueText(const Value &value, const MRVMHashStore &localSt
 }
 
 void hashWriteInt(const Value &hash, const std::string &key, int value) {
-	mrvmHashWriteValue(g_runtimeEnv.runtimeKv.globalStore(), g_runtimeEnv.runtimeKv.globalStore(), hash, key, mrvmMakeInt(value));
+	mrvmHashWriteValue(mrvmRuntimeKv().globalStore(), mrvmRuntimeKv().globalStore(), hash, key, mrvmMakeInt(value));
 }
 
 Value ensureExecSessionsChildPath(std::initializer_list<const char *> keys) {
-	return mrvmExecSessionsEnsureChildPath(g_runtimeEnv.runtimeKv, keys);
+	return mrvmExecSessionsEnsureChildPath(mrvmRuntimeKv(), keys);
 }
 
 bool findExecSessionsChildPath(std::initializer_list<const char *> keys, Value &child) {
-	return mrvmExecSessionsFindChildPath(g_runtimeEnv.runtimeKv, keys, child);
+	return mrvmExecSessionsFindChildPath(mrvmRuntimeKv(), keys, child);
 }
 
 bool readLoadedMacroFileByKey(const std::string &fileKey, LoadedMacroFile &file) {
-	return mrvmRuntimeCatalogReadLoadedFile(g_runtimeEnv.runtimeKv, fileKey, file);
+	return mrvmRuntimeCatalogReadLoadedFile(mrvmRuntimeKv(), fileKey, file);
 }
 
 bool loadedMacroFileExists(const std::string &fileKey) {
-	return mrvmRuntimeCatalogLoadedFileExists(g_runtimeEnv.runtimeKv, fileKey);
+	return mrvmRuntimeCatalogLoadedFileExists(mrvmRuntimeKv(), fileKey);
 }
 
 void writeLoadedMacroFileByKey(const LoadedMacroFile &file) {
-	mrvmRuntimeCatalogWriteLoadedFile(g_runtimeEnv.runtimeKv, file);
+	mrvmRuntimeCatalogWriteLoadedFile(mrvmRuntimeKv(), file);
 }
 
 bool eraseLoadedMacroFileByKey(const std::string &fileKey) {
-	return mrvmRuntimeCatalogEraseLoadedFile(g_runtimeEnv.runtimeKv, fileKey);
+	return mrvmRuntimeCatalogEraseLoadedFile(mrvmRuntimeKv(), fileKey);
 }
 
 std::vector<std::string> loadedMacroFileKeys() {
-	return mrvmRuntimeCatalogLoadedFileKeys(g_runtimeEnv.runtimeKv);
+	return mrvmRuntimeCatalogLoadedFileKeys(mrvmRuntimeKv());
 }
 
 bool readLoadedMacroByKey(const std::string &macroKey, MacroRef &macroRef) {
-	return mrvmRuntimeCatalogReadLoadedMacro(g_runtimeEnv.runtimeKv, macroKey, macroRef);
+	return mrvmRuntimeCatalogReadLoadedMacro(mrvmRuntimeKv(), macroKey, macroRef);
 }
 
 bool loadedMacroExists(const std::string &macroKey) {
-	return mrvmRuntimeCatalogLoadedMacroExists(g_runtimeEnv.runtimeKv, macroKey);
+	return mrvmRuntimeCatalogLoadedMacroExists(mrvmRuntimeKv(), macroKey);
 }
 
 void writeLoadedMacroByKey(const std::string &macroKey, const MacroRef &macroRef) {
-	mrvmRuntimeCatalogWriteLoadedMacro(g_runtimeEnv.runtimeKv, macroKey, macroRef);
+	mrvmRuntimeCatalogWriteLoadedMacro(mrvmRuntimeKv(), macroKey, macroRef);
 }
 
 bool eraseLoadedMacroByKey(const std::string &macroKey) {
-	return mrvmRuntimeCatalogEraseLoadedMacro(g_runtimeEnv.runtimeKv, macroKey);
+	return mrvmRuntimeCatalogEraseLoadedMacro(mrvmRuntimeKv(), macroKey);
 }
 
 std::vector<std::string> macroCatalogMacroOrder() {
-	return mrvmRuntimeCatalogMacroOrder(g_runtimeEnv.runtimeKv);
+	return mrvmRuntimeCatalogMacroOrder(mrvmRuntimeKv());
 }
 
 void appendMacroCatalogMacroOrder(const std::string &macroKey) {
-	mrvmRuntimeCatalogAppendMacroOrder(g_runtimeEnv.runtimeKv, macroKey);
+	mrvmRuntimeCatalogAppendMacroOrder(mrvmRuntimeKv(), macroKey);
 }
 
 void removeMacroCatalogMacroOrder(const std::string &macroKey) {
-	mrvmRuntimeCatalogRemoveMacroOrder(g_runtimeEnv.runtimeKv, macroKey);
+	mrvmRuntimeCatalogRemoveMacroOrder(mrvmRuntimeKv(), macroKey);
 }
 
 std::size_t macroCatalogMacroEnumIndex() {
-	return mrvmRuntimeCatalogMacroEnumIndex(g_runtimeEnv.runtimeKv);
+	return mrvmRuntimeCatalogMacroEnumIndex(mrvmRuntimeKv());
 }
 
 void setMacroCatalogMacroEnumIndex(std::size_t index) {
-	mrvmRuntimeCatalogSetMacroEnumIndex(g_runtimeEnv.runtimeKv, index);
+	mrvmRuntimeCatalogSetMacroEnumIndex(mrvmRuntimeKv(), index);
 }
 
 std::size_t macroCatalogLoadedMacroCount() {
-	return mrvmRuntimeCatalogLoadedMacroCount(g_runtimeEnv.runtimeKv);
+	return mrvmRuntimeCatalogLoadedMacroCount(mrvmRuntimeKv());
 }
 
 std::vector<IndexedBoundMacroEntry> macroCatalogIndexedBindings() {
-	return mrvmRuntimeCatalogIndexedBindings(g_runtimeEnv.runtimeKv);
+	return mrvmRuntimeCatalogIndexedBindings(mrvmRuntimeKv());
 }
 
 void writeMacroCatalogIndexedBindings(const std::vector<IndexedBoundMacroEntry> &bindings) {
-	mrvmRuntimeCatalogWriteIndexedBindings(g_runtimeEnv.runtimeKv, bindings);
+	mrvmRuntimeCatalogWriteIndexedBindings(mrvmRuntimeKv(), bindings);
 }
 
 bool markMacroCatalogIndexedWarmupAttempted(const std::string &fileKey) {
-	return mrvmRuntimeCatalogMarkIndexedWarmupAttempted(g_runtimeEnv.runtimeKv, fileKey);
+	return mrvmRuntimeCatalogMarkIndexedWarmupAttempted(mrvmRuntimeKv(), fileKey);
 }
 
 std::size_t macroCatalogIndexedBindingCount() {
-	return mrvmRuntimeCatalogIndexedBindingCount(g_runtimeEnv.runtimeKv);
+	return mrvmRuntimeCatalogIndexedBindingCount(mrvmRuntimeKv());
 }
 
 std::string loadedFileBasenameKey(const LoadedMacroFile &file) {
@@ -322,7 +322,7 @@ bool fileSpecMatchesLoadedFileKey(const std::string &fileSpec, const std::string
 }
 
 bool macroIsRunning(const std::string &macroKey) {
-	for (auto &i : g_runtimeEnv.macroStack)
+	for (const MacroStackFrame &i : mrvmRuntimeMacroStack())
 		if (mrvmUpperKey(i.macroName) == macroKey) return true;
 	return false;
 }
@@ -354,8 +354,8 @@ bool removeMacroFromRegistryByKey(const std::string &macroKey) {
 }
 
 static void storeLastKeyPair(int key1, int key2) noexcept {
-	g_runtimeEnv.key1 = key1;
-	g_runtimeEnv.key2 = key2;
+	mrvmStoreRuntimeStateInt("keyInput", "key1", key1);
+	mrvmStoreRuntimeStateInt("keyInput", "key2", key2);
 }
 
 static bool keyPairFromEvent(const TEvent &event, int &key1, int &key2) noexcept {
@@ -366,19 +366,23 @@ static bool keyPairFromEvent(const TEvent &event, int &key1, int &key2) noexcept
 }
 
 static bool popQueuedKeyPair(int &key1, int &key2) noexcept {
-	if (g_runtimeEnv.pushedKeys.empty()) return false;
-	const MacroKeyCodePair pair = g_runtimeEnv.pushedKeys.front();
-	g_runtimeEnv.pushedKeys.pop_front();
-	key1 = pair.key1;
-	key2 = pair.key2;
+	std::vector<int> queued = mrvmRuntimeStateIntList("keyInput", "queue");
+	if (queued.size() < 2) return false;
+	key1 = queued[0];
+	key2 = queued[1];
+	queued.erase(queued.begin(), queued.begin() + 2);
+	mrvmStoreRuntimeStateIntList("keyInput", "queue", queued);
 	storeLastKeyPair(key1, key2);
 	return true;
 }
 
 bool pushQueuedKeyPair(int key1, int key2) noexcept {
 	static constexpr std::size_t maxQueuedKeys = 16;
-	if (g_runtimeEnv.pushedKeys.size() >= maxQueuedKeys) return false;
-	g_runtimeEnv.pushedKeys.push_back({key1, key2});
+	std::vector<int> queued = mrvmRuntimeStateIntList("keyInput", "queue");
+	if (queued.size() / 2 >= maxQueuedKeys) return false;
+	queued.push_back(key1);
+	queued.push_back(key2);
+	mrvmStoreRuntimeStateIntList("keyInput", "queue", queued);
 	return true;
 }
 
@@ -404,14 +408,19 @@ bool readMacroKeyPair(bool blocking, int &key1, int &key2) {
 	return pollUiForKeyPair(blocking, key1, key2);
 }
 
-MacroFunctionLabelFrame &currentFunctionLabelFrame() {
-	if (g_runtimeEnv.functionLabelStack.empty()) g_runtimeEnv.functionLabelStack.emplace_back();
-	return g_runtimeEnv.functionLabelStack.back();
+MacroFunctionLabelFrame currentFunctionLabelFrame() {
+	return mrvmRuntimeFunctionLabelStack().back();
+}
+
+void storeCurrentFunctionLabelFrame(const MacroFunctionLabelFrame &frame) {
+	std::vector<MacroFunctionLabelFrame> frames = mrvmRuntimeFunctionLabelStack();
+	frames.back() = frame;
+	mrvmStoreRuntimeFunctionLabelStack(frames);
 }
 
 std::vector<std::string> visibleFunctionLabelsForMode(int mode) {
 	static constexpr std::array<int, 13> supportedKeys = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 41, 42};
-	const MacroFunctionLabelFrame &frame = currentFunctionLabelFrame();
+	const MacroFunctionLabelFrame frame = currentFunctionLabelFrame();
 	const auto &source = mode == MACRO_MODE_DOS_SHELL ? frame.shellLabels : frame.editLabels;
 	std::vector<std::string> labels(source.size());
 
@@ -435,14 +444,14 @@ std::vector<std::string> resolveMacroUiListItems(const std::string &itemSpec) {
 	const std::string key = mrvmModelessUiListKey(itemSpec);
 	std::vector<std::string> values;
 
-	if (mrvmModelessUiReadItemList(g_runtimeEnv.runtimeKv, key, values)) return values;
-	return mrvmResolveMacroUiListItems(g_runtimeEnv.runtimeKv, itemSpec);
+	if (mrvmModelessUiReadItemList(mrvmRuntimeKv(), key, values)) return values;
+	return mrvmResolveMacroUiListItems(mrvmRuntimeKv(), itemSpec);
 }
 
 void runMacroModelessCommand(const std::string &windowId, int, const MRMacroModelessSelection &selection, const std::string &macroSpec) {
 	if (selection.controlId != 0) {
-		mrvmModelessUiWriteIndexValue(g_runtimeEnv.runtimeKv, selection.controlId, selection.index);
-		mrvmModelessUiWriteTextValue(g_runtimeEnv.runtimeKv, selection.controlId, selection.text);
+		mrvmModelessUiWriteIndexValue(mrvmRuntimeKv(), selection.controlId, selection.index);
+		mrvmModelessUiWriteTextValue(mrvmRuntimeKv(), selection.controlId, selection.text);
 	}
 	if (!macroSpec.empty()) {
 		MRMacroExecutionOwner owner;
@@ -451,7 +460,7 @@ void runMacroModelessCommand(const std::string &windowId, int, const MRMacroMode
 
 		owner.modelessWindowId = windowId;
 		if (!runMacroSpecByNameAsExecutionSessionForOwner(macroSpec.c_str(), owner, &session, &errorText, false)) {
-			runtimeErrorLevel() = 1001;
+			setRuntimeErrorLevel(1001);
 			if (!errorText.empty()) static_cast<void>(mrvmUiMarquee(2, errorText));
 		}
 	}
@@ -463,8 +472,8 @@ void showMacroModelessDialog(const std::vector<Value> &args) {
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_SHOW expects a non-empty window id.");
 	setMacroModelessListResolver(resolveMacroUiListItems);
 	setMacroModelessCommandRunner(runMacroModelessCommand);
-	runtimeReturnInt() = showMacroModelessWindow(mrvmBuildMacroModelessDefinition(g_runtimeEnv.runtimeKv, windowId)) ? 1 : 0;
-	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
+	setRuntimeReturnInt(showMacroModelessWindow(mrvmBuildMacroModelessDefinition(mrvmRuntimeKv(), windowId)) ? 1 : 0);
+	setRuntimeErrorLevel(runtimeReturnInt() == 1 ? 0 : 1001);
 }
 
 void updateMacroModelessDialog(const std::vector<Value> &args) {
@@ -473,8 +482,8 @@ void updateMacroModelessDialog(const std::vector<Value> &args) {
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_UPDATE expects a non-empty window id.");
 	setMacroModelessListResolver(resolveMacroUiListItems);
 	setMacroModelessCommandRunner(runMacroModelessCommand);
-	runtimeReturnInt() = updateMacroModelessWindow(mrvmBuildMacroModelessDefinition(g_runtimeEnv.runtimeKv, windowId)) ? 1 : 0;
-	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
+	setRuntimeReturnInt(updateMacroModelessWindow(mrvmBuildMacroModelessDefinition(mrvmRuntimeKv(), windowId)) ? 1 : 0);
+	setRuntimeErrorLevel(runtimeReturnInt() == 1 ? 0 : 1001);
 }
 
 void updateMacroModelessDisplayLine(const std::vector<Value> &args) {
@@ -483,16 +492,16 @@ void updateMacroModelessDisplayLine(const std::vector<Value> &args) {
 
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_DISPLAY expects a non-empty window id.");
 	if (displayIndex <= 0) throw std::runtime_error("UI_MODELESS_DISPLAY expects a positive display index.");
-	runtimeReturnInt() = updateMacroModelessDisplay(windowId, displayIndex, mrvmValueAsString(args[2])) ? 1 : 0;
-	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
+	setRuntimeReturnInt(updateMacroModelessDisplay(windowId, displayIndex, mrvmValueAsString(args[2])) ? 1 : 0);
+	setRuntimeErrorLevel(runtimeReturnInt() == 1 ? 0 : 1001);
 }
 
 void closeMacroModelessDialog(const std::vector<Value> &args) {
 	const std::string windowId = mrvmModelessUiListKey(mrvmValueAsString(args[0]));
 
 	if (windowId.empty()) throw std::runtime_error("UI_MODELESS_CLOSE expects a non-empty window id.");
-	runtimeReturnInt() = closeMacroModelessWindow(windowId) ? 1 : 0;
-	runtimeErrorLevel() = runtimeReturnInt() == 1 ? 0 : 1001;
+	setRuntimeReturnInt(closeMacroModelessWindow(windowId) ? 1 : 0);
+	setRuntimeErrorLevel(runtimeReturnInt() == 1 ? 0 : 1001);
 }
 
 void listExecSessionClosures(const std::vector<Value> &args) {
@@ -506,7 +515,7 @@ void listExecSessionClosures(const std::vector<Value> &args) {
 	if (currentBackgroundEditSession() != nullptr) throw std::runtime_error("EXEC_SESSION_LIST is not available in background mode.");
 	if (key.empty()) throw std::runtime_error("EXEC_SESSION_LIST expects a non-empty list name.");
 
-	mrvmModelessUiClearItemList(g_runtimeEnv.runtimeKv, key);
+	mrvmModelessUiClearItemList(mrvmRuntimeKv(), key);
 	if (!findExecSessionsChildPath({"console"}, consoleRoot)) consoleRoot = ensureExecSessionsChildPath({"console"});
 	consoleList = replaceGlobalHashChild(consoleRoot, key);
 	ids = ensureGlobalHashChild(consoleList, "ids");
@@ -526,11 +535,11 @@ void listExecSessionClosures(const std::vector<Value> &args) {
 		line += std::to_string(consumer.config.intervalMs);
 		line += "  ";
 		line += consumer.config.entryName.empty() ? consumer.config.closureId : consumer.config.entryName;
-		mrvmModelessUiAddItemListValue(g_runtimeEnv.runtimeKv, key, line);
+		mrvmModelessUiAddItemListValue(mrvmRuntimeKv(), key, line);
 	}
 	hashWriteInt(consoleList, "count", row);
-	runtimeReturnInt() = row;
-	runtimeErrorLevel() = 0;
+	setRuntimeReturnInt(row);
+	setRuntimeErrorLevel(0);
 }
 
 void stopExecSessionClosure(const std::vector<Value> &args) {
@@ -549,9 +558,9 @@ void stopExecSessionClosure(const std::vector<Value> &args) {
 		}
 		removed = removeRuntimeScheduledConsumer(static_cast<MRRuntimeScheduledConsumerId>(requestedId));
 	}
-	if (removed && !closureId.empty()) static_cast<void>(mrvmExecSessionsEraseClosureState(g_runtimeEnv.runtimeKv, closureId));
-	runtimeReturnInt() = removed ? 1 : 0;
-	runtimeErrorLevel() = removed ? 0 : 1001;
+	if (removed && !closureId.empty()) static_cast<void>(mrvmExecSessionsEraseClosureState(mrvmRuntimeKv(), closureId));
+	setRuntimeReturnInt(removed ? 1 : 0);
+	setRuntimeErrorLevel(removed ? 0 : 1001);
 }
 
 int currentUiMacroMode() {
@@ -575,25 +584,25 @@ bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPar
 	std::string childFileKey;
 
 	if (!readLoadedMacroByKey(macroKey, macroRef)) {
-		runtimeErrorLevel() = 5001;
+		setRuntimeErrorLevel(5001);
 		return false;
 	}
 
 	if (!readLoadedMacroFileByKey(macroRef.fileKey, file)) {
-		runtimeErrorLevel() = 5001;
+		setRuntimeErrorLevel(5001);
 		return false;
 	}
 
 	if (backgroundStaged) {
 		if (file.bytecode.empty() || !currentBackgroundChildMacroAllowed(file)) {
-			runtimeErrorLevel() = 5001;
+			setRuntimeErrorLevel(5001);
 			return false;
 		}
 	} else if (!ensureLoadedFileResident(macroRef.fileKey))
 		return false;
 
 	if (!readLoadedMacroFileByKey(macroRef.fileKey, file) || file.bytecode.empty()) {
-		runtimeErrorLevel() = 5001;
+		setRuntimeErrorLevel(5001);
 		return false;
 	}
 
@@ -611,7 +620,7 @@ bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPar
 	if (childDump) unloadMacroFromRegistry(macroKey);
 	else if (childTransient)
 		evictTransientFileImage(childFileKey);
-	runtimeErrorLevel() = 0;
+	setRuntimeErrorLevel(0);
 	return true;
 }
 
@@ -632,7 +641,7 @@ bool executeLoadedMacroWithConfiguredKeymapBatch(const std::string &macroKey, co
 	if (configuredKeymapBatch) mrvmBeginConfiguredKeymapBatch();
 	const bool executed = executeLoadedMacro(macroKey, paramPart, logSink);
 	if (configuredKeymapBatch && !mrvmEndConfiguredKeymapBatch(&keymapBatchError)) {
-		runtimeErrorLevel() = 1001;
+		setRuntimeErrorLevel(1001);
 		if (logSink != nullptr) logSink->push_back("VM Error: keymap batch flush failed: " + (keymapBatchError.empty() ? std::string("invalid keymap batch.") : keymapBatchError));
 		return false;
 	}
@@ -672,7 +681,7 @@ bool executeRuntimeMacroSpec(const std::string &spec, std::vector<std::string> *
 	MacroRef macroRef;
 
 	if (!mrvmParseRunMacroSpec(spec, filePart, macroPart, paramPart)) {
-		runtimeErrorLevel() = 5001;
+		setRuntimeErrorLevel(5001);
 		return false;
 	}
 
@@ -690,14 +699,15 @@ bool executeRuntimeMacroSpec(const std::string &spec, std::vector<std::string> *
 	}
 
 	if (macroRef.displayName.empty() || (!targetFileKey.empty() && macroRef.fileKey != targetFileKey)) {
-		runtimeErrorLevel() = 5001;
+		setRuntimeErrorLevel(5001);
 		return false;
 	}
 	return executeLoadedMacroWithConfiguredKeymapBatch(macroKey, paramPart, logLines);
 }
 
 bool currentExecutingMacroSpecFromRuntimeStack(std::string &macroSpec) {
-	const std::string macroDisplayName = !g_runtimeEnv.macroStack.empty() ? trimAscii(g_runtimeEnv.macroStack.back().macroName) : std::string();
+	const std::vector<MacroStackFrame> macroStack = mrvmRuntimeMacroStack();
+	const std::string macroDisplayName = !macroStack.empty() ? trimAscii(macroStack.back().macroName) : std::string();
 	MacroRef macroRef;
 	LoadedMacroFile file;
 	std::string fileDisplayName;
@@ -841,15 +851,16 @@ bool executeBoundCommand(int commandId) {
 }
 
 bool executeExplicitKeyBinding(const TKey &pressed, int mode, std::vector<std::string> *logLines) {
+	const std::vector<MRVMExplicitKeyBinding> bindings = mrvmRuntimeExplicitKeyBindings();
 	mrvmLogCalculatorHotkeyState("vm-explicit-enter", pressed);
-	for (std::size_t i = g_runtimeEnv.explicitKeyBindings.size(); i > 0; --i) {
-		const MRVMExplicitKeyBinding &binding = g_runtimeEnv.explicitKeyBindings[i - 1];
+	for (std::size_t i = bindings.size(); i > 0; --i) {
+		const MRVMExplicitKeyBinding &binding = bindings[i - 1];
 		if (!mrvmBindingKeysEqual(binding.key, pressed) || !mrvmBindingModeMatches(binding.mode, mode)) continue;
 		if (binding.kind == MRVMExplicitBindingKind::MacroSpec) mrvmLogCalculatorHotkeyState("vm-explicit-match", pressed, binding.macroSpec);
 		else
 			mrvmLogCalculatorHotkeyState("vm-explicit-match-cmd", pressed);
 		if (binding.kind == MRVMExplicitBindingKind::MacroSpec) return executeRuntimeMacroSpec(binding.macroSpec, logLines);
-		runtimeErrorLevel() = executeBoundCommand(binding.commandId) ? 0 : 1001;
+		setRuntimeErrorLevel(executeBoundCommand(binding.commandId) ? 0 : 1001);
 		return runtimeErrorLevel() == 0;
 	}
 	return false;
@@ -857,9 +868,10 @@ bool executeExplicitKeyBinding(const TKey &pressed, int mode, std::vector<std::s
 
 bool projectRuntimeMenuKeyLabelsFromExplicitBindings(std::string *errorMessage) {
 	const int mode = currentUiMacroMode();
+	const std::vector<MRVMExplicitKeyBinding> bindings = mrvmRuntimeExplicitKeyBindings();
 
 	if (!mrvmUiClearRuntimeMenuKeyLabels(errorMessage)) return false;
-	for (const MRVMExplicitKeyBinding &binding : g_runtimeEnv.explicitKeyBindings) {
+	for (const MRVMExplicitKeyBinding &binding : bindings) {
 		if (binding.kind != MRVMExplicitBindingKind::MacroSpec) continue;
 		if (!mrvmBindingModeMatches(binding.mode, mode)) continue;
 		if (!mrvmUiSetRuntimeMenuKeyLabelForMacroSpec(binding.macroSpec, mrvmMenuLabelFromBindingKey(binding.key), errorMessage)) return false;

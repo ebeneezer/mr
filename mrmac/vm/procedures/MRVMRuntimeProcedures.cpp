@@ -108,29 +108,29 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("DELAY expects one integer argument.");
 			millis = vm.normalizeDelayMillis(mrvmValueAsInt(args[0]));
 			if (millis == 0) {
-				runtimeErrorLevel() = 0;
+				setRuntimeErrorLevel(0);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			session = currentBackgroundEditSession();
 			if (session != nullptr) {
 				session->deferredUiCommands.emplace_back(mrducDelay, millis);
-				runtimeErrorLevel() = 0;
+				setRuntimeErrorLevel(0);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (allowAsyncDelay) throw mrvm_execution::DelayYield(millis);
 			if (!mrvm_execution::sleepDelayBlocking(millis)) {
 				vm.cancelledExecution = true;
 				vm.appendLogLine("VM Notice: DELAY interrupted by cancellation.", true);
-				runtimeErrorLevel() = 5007;
+				setRuntimeErrorLevel(5007);
 				return InstructionFlow::FinishExecution;
 			}
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::Beep: {
 			if (!args.empty()) throw std::runtime_error("BEEP expects no arguments.");
 			static_cast<void>(::write(STDOUT_FILENO, "\a", 1));
 			static_cast<void>(::fsync(STDOUT_FILENO));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::LoadMacroFile: {
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("LOAD_MACRO_FILE expects one string argument.");
@@ -142,15 +142,15 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 		} break;
 		case MRVMProcedure::ChangeDir: {
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("CHANGE_DIR expects one string argument.");
-			if (mrvmChangeDirectoryPath(mrvmValueAsString(args[0]))) runtimeErrorLevel() = 0;
+			if (mrvmChangeDirectoryPath(mrvmValueAsString(args[0]))) setRuntimeErrorLevel(0);
 			else
-				runtimeErrorLevel() = errno != 0 ? errno : 1;
+				setRuntimeErrorLevel(errno != 0 ? errno : 1);
 		} break;
 		case MRVMProcedure::DelFile: {
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("DEL_FILE expects one string argument.");
-			if (mrvmDeleteFilePath(mrvmValueAsString(args[0]))) runtimeErrorLevel() = 0;
+			if (mrvmDeleteFilePath(mrvmValueAsString(args[0]))) setRuntimeErrorLevel(0);
 			else
-				runtimeErrorLevel() = errno != 0 ? errno : 1;
+				setRuntimeErrorLevel(errno != 0 ? errno : 1);
 		} break;
 		case MRVMProcedure::SetFileAttr: {
 			struct stat st;
@@ -159,26 +159,26 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SET_FILE_ATTR expects (string, int).");
 			path = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
 			if (::stat(path.c_str(), &st) != 0) {
-				runtimeErrorLevel() = errno != 0 ? errno : 1;
+				setRuntimeErrorLevel(errno != 0 ? errno : 1);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			modeBits = st.st_mode;
 			if ((mrvmValueAsInt(args[1]) & 0x01) != 0) modeBits &= static_cast<mode_t>(~(S_IWUSR | S_IWGRP | S_IWOTH));
 			else
 				modeBits |= static_cast<mode_t>(S_IWUSR);
-			runtimeErrorLevel() = ::chmod(path.c_str(), modeBits) == 0 ? 0 : (errno != 0 ? errno : 1);
+			setRuntimeErrorLevel(::chmod(path.c_str(), modeBits) == 0 ? 0 : (errno != 0 ? errno : 1));
 		} break;
 		case MRVMProcedure::ShellToOs: {
 			int exitCode = 0;
 			if (args.size() != 2 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SHELL_TO_OS expects (string, int).");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			(void)mrvmUiNewScreen();
 			exitCode = mrvmRunShellCommand(mrvmValueAsString(args[0]), configuredShellExecutablePath());
 			(void)mrvmUiNewScreen();
-			runtimeErrorLevel() = exitCode;
+			setRuntimeErrorLevel(exitCode);
 		} break;
 		case MRVMProcedure::Fork: {
 			std::vector<std::string> forkArguments;
@@ -188,31 +188,31 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 				if (!mrvmIsStringLike(arg)) throw std::runtime_error("FORK expects string arguments.");
 				forkArguments.push_back(mrvmValueAsString(arg));
 			}
-			runtimeErrorLevel() = mrvmForkProcess(forkArguments, runtimeGlobalIntValue("MR_BUILD_SOURCE_BUFFER_ID"), runtimeGlobalStringValue("MR_BUILD_SOURCE_PATH"), runtimeGlobalStringValue("MR_BUILD_PDF_PATH"));
+			setRuntimeErrorLevel(mrvmForkProcess(forkArguments, runtimeGlobalIntValue("MR_BUILD_SOURCE_BUFFER_ID"), runtimeGlobalStringValue("MR_BUILD_SOURCE_PATH"), runtimeGlobalStringValue("MR_BUILD_PDF_PATH")));
 		} break;
 		case MRVMProcedure::WriteSod: {
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("WRITE_SOD expects one string argument.");
 			mrLogMessage(mrvmValueAsString(args[0]));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::SaveOsScreen: {
 			if (!args.empty()) throw std::runtime_error("SAVE_OS_SCREEN expects no arguments.");
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::RestOsScreen: {
 			if (!args.empty()) throw std::runtime_error("REST_OS_SCREEN expects no arguments.");
 			(void)mrvmUiNewScreen();
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::Quit: {
 			int returnCode = 0;
 			if (args.size() > 1 || (args.size() == 1 && args[0].type != TYPE_INT)) throw std::runtime_error("QUIT expects zero or one integer argument.");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (!args.empty()) returnCode = mrvmValueAsInt(args[0]);
-			runtimeErrorLevel() = returnCode;
+			setRuntimeErrorLevel(returnCode);
 			(void)dispatchApplicationCommandEvent(cmQuit);
 		} break;
 		case MRVMProcedure::LoadFile: {
@@ -222,57 +222,57 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			path = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
 			win = activeMacroEditWindow();
 			if (win == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (!mrvmFileExistsPath(path)) {
-				runtimeErrorLevel() = 3002;
+				setRuntimeErrorLevel(3002);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (!win->loadFromFile(path.c_str())) {
-				runtimeErrorLevel() = 3002;
+				setRuntimeErrorLevel(3002);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			g_runtimeEnv.lastFileName = win->currentFileName();
-			runtimeErrorLevel() = 0;
+			mrvmStoreRuntimeStateString("fileEnumeration", "lastFileName", win->currentFileName());
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::LoadBlock: {
 			MREditWindow *win = currentEditorCommandWindow();
 			std::string path;
 			if (args.empty()) {
 				if (currentBackgroundEditSession() != nullptr) {
-					runtimeErrorLevel() = 1001;
+					setRuntimeErrorLevel(1001);
 					return InstructionFlow::SkipPostInstruction;
 				}
-				runtimeErrorLevel() = dispatchMRKeymapAction("MR_LOAD_BLOCK_FROM_FILE", "", currentEditorCommandWindow()) ? 0 : 1001;
+				setRuntimeErrorLevel(dispatchMRKeymapAction("MR_LOAD_BLOCK_FROM_FILE", "", currentEditorCommandWindow()) ? 0 : 1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("LOAD_BLOCK expects zero or one string argument.");
 			if (win == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			path = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
 			if (!mrvmFileExistsPath(path) || !mrvmEditorLoadBlockFromFile(win, path)) {
-				runtimeErrorLevel() = 3002;
+				setRuntimeErrorLevel(3002);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			g_runtimeEnv.lastFileName = path;
-			runtimeErrorLevel() = 0;
+			mrvmStoreRuntimeStateString("fileEnumeration", "lastFileName", path);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::SaveFile: {
 			MREditWindow *win = activeMacroEditWindow();
 			if (!args.empty()) throw std::runtime_error("SAVE_FILE expects no arguments.");
 			if (win == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (!win->saveCurrentFile()) {
-				runtimeErrorLevel() = 2002;
+				setRuntimeErrorLevel(2002);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			g_runtimeEnv.lastFileName = win->currentFileName();
-			runtimeErrorLevel() = 0;
+			mrvmStoreRuntimeStateString("fileEnumeration", "lastFileName", win->currentFileName());
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::SaveBlock: {
 			MREditWindow *win = currentEditorCommandWindow();
@@ -280,28 +280,28 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			std::string path;
 			if (args.empty()) {
 				if (currentBackgroundEditSession() != nullptr) {
-					runtimeErrorLevel() = 1001;
+					setRuntimeErrorLevel(1001);
 					return InstructionFlow::SkipPostInstruction;
 				}
-				runtimeErrorLevel() = dispatchMRKeymapAction("MR_SAVE_BLOCK_TO_FILE", "", currentEditorCommandWindow()) ? 0 : 1001;
+				setRuntimeErrorLevel(dispatchMRKeymapAction("MR_SAVE_BLOCK_TO_FILE", "", currentEditorCommandWindow()) ? 0 : 1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
 			if (win == nullptr || editor == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			path = mrvmProcessExpandUserPath(mrvmValueAsString(args[0]));
 			if (!mrvmEditorSaveCurrentBlockToFile(win, editor, path)) {
-				runtimeErrorLevel() = errno != 0 ? errno : 1010;
+				setRuntimeErrorLevel(errno != 0 ? errno : 1010);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			g_runtimeEnv.lastFileName = path;
-			runtimeErrorLevel() = 0;
+			mrvmStoreRuntimeStateString("fileEnumeration", "lastFileName", path);
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::SetIndentLevel: {
 			if (!args.empty()) throw std::runtime_error("SET_INDENT_LEVEL expects no arguments.");
-			runtimeErrorLevel() = setCurrentEditorIndentLevel(currentEditorColumn(currentEditor())) ? 0 : 1001;
+			setRuntimeErrorLevel(setCurrentEditorIndentLevel(currentEditorColumn(currentEditor())) ? 0 : 1001);
 		} break;
 		case MRVMProcedure::Replace: {
 			MRFileEditor *editor;
@@ -311,171 +311,189 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			editor = currentEditor();
 			session = currentBackgroundEditSession();
 			if (editor == nullptr && session == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (editor != nullptr) replaced = replaceLastSearch(editor, mrvmValueAsString(args[0]));
 			else
 				replaced = replaceLastSearchBackground(mrvmValueAsString(args[0]));
-			runtimeErrorLevel() = replaced ? 0 : 1010;
+			setRuntimeErrorLevel(replaced ? 0 : 1010);
 		} break;
 		case MRVMProcedure::Text: {
 			MRFileEditor *editor;
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("TEXT expects one string argument.");
 			editor = currentEditor();
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			insertEditorText(editor, mrvmValueAsString(args[0]));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::SetClipboardText: {
 			std::string text;
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("SET_CLIPBOARD_TEXT expects one string argument.");
 			text = mrvmValueAsString(args[0]);
 			TClipboard::setText(TStringView(text.data(), text.size()));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::KeyIn: {
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("KEY_IN expects one string argument.");
 			if (!mrvmReplayKeyInputSequence(mrvmValueAsString(args[0]))) {
-				runtimeErrorLevel() = currentBackgroundEditSession() != nullptr ? 1010 : 1001;
+				setRuntimeErrorLevel(currentBackgroundEditSession() != nullptr ? 1010 : 1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::ReadKey: {
 			int key1 = 0;
 			int key2 = 0;
 			if (!args.empty()) throw std::runtime_error("READ_KEY expects no arguments.");
 			if (!readMacroKeyPair(true, key1, key2)) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::PushKey: {
 			if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT) throw std::runtime_error("PUSH_KEY expects two integer arguments.");
-			runtimeErrorLevel() = pushQueuedKeyPair(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1])) ? 0 : 1010;
+			setRuntimeErrorLevel(pushQueuedKeyPair(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1])) ? 0 : 1010);
 		} break;
 		case MRVMProcedure::PassKey: {
 			if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT) throw std::runtime_error("PASS_KEY expects two integer arguments.");
-			runtimeErrorLevel() = mrvmPassMacroKeyPairToUi(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1])) ? 0 : 1010;
+			setRuntimeErrorLevel(mrvmPassMacroKeyPairToUi(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1])) ? 0 : 1010);
 		} break;
 		case MRVMProcedure::PushLabels: {
+			std::vector<MacroFunctionLabelFrame> frames;
 			if (!args.empty()) throw std::runtime_error("PUSH_LABELS expects no arguments.");
-			g_runtimeEnv.functionLabelStack.emplace_back();
+			frames = mrvmRuntimeFunctionLabelStack();
+			frames.emplace_back();
+			mrvmStoreRuntimeFunctionLabelStack(frames);
 			applyFunctionLabelState();
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::PopLabels: {
+			std::vector<MacroFunctionLabelFrame> frames;
 			if (!args.empty()) throw std::runtime_error("POP_LABELS expects no arguments.");
-			if (g_runtimeEnv.functionLabelStack.size() > 1) g_runtimeEnv.functionLabelStack.pop_back();
+			frames = mrvmRuntimeFunctionLabelStack();
+			if (frames.size() > 1) {
+				frames.pop_back();
+				mrvmStoreRuntimeFunctionLabelStack(frames);
+			}
 			applyFunctionLabelState();
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::FLabel: {
 			int keyNumber;
 			int mode;
-			MacroFunctionLabelFrame &frame = currentFunctionLabelFrame();
+			MacroFunctionLabelFrame frame = currentFunctionLabelFrame();
 			if (args.size() != 3 || !mrvmIsStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("FLABEL expects (string, int, int).");
 			keyNumber = mrvmValueAsInt(args[1]);
 			mode = mrvmValueAsInt(args[2]);
 			if (keyNumber <= 0 || keyNumber >= 49) {
-				runtimeErrorLevel() = 1010;
+				setRuntimeErrorLevel(1010);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (mode == 255) mode = currentUiMacroMode();
 			if (mode == MACRO_MODE_DOS_SHELL) frame.shellLabels[static_cast<std::size_t>(keyNumber)] = mrvmValueAsString(args[0]);
 			else
 				frame.editLabels[static_cast<std::size_t>(keyNumber)] = mrvmValueAsString(args[0]);
+			storeCurrentFunctionLabelFrame(frame);
 			applyFunctionLabelState();
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::MacroToKey: {
 			TKey key;
 			int mode = MACRO_MODE_EDIT;
 			MRVMExplicitKeyBinding binding;
+			std::vector<MRVMExplicitKeyBinding> bindings;
 			std::string refreshError;
 			if (args.size() != 3 || !mrvmIsStringLike(args[1]) || args[2].type != TYPE_INT) throw std::runtime_error("MACRO_TO_KEY expects (key, string, int).");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (!mrvmParseBindingKeyValue(args[0], key) || !mrvmParseBindingModeValue(mrvmValueAsInt(args[2]), mode)) {
-				runtimeErrorLevel() = 1010;
+				setRuntimeErrorLevel(1010);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			mrvmRemoveExplicitBindingsForKey(g_runtimeEnv.explicitKeyBindings, key, mode);
+			bindings = mrvmRuntimeExplicitKeyBindings();
+			mrvmRemoveExplicitBindingsForKey(bindings, key, mode);
 			binding.key = key;
 			binding.mode = mode;
 			binding.kind = MRVMExplicitBindingKind::MacroSpec;
 			binding.macroSpec = mrvmValueAsString(args[1]);
-			g_runtimeEnv.explicitKeyBindings.push_back(binding);
+			bindings.push_back(binding);
+			mrvmStoreRuntimeExplicitKeyBindings(bindings);
 			if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("MACRO_TO_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::CmdToKey: {
 			TKey key;
 			int mode = MACRO_MODE_EDIT;
 			MRVMExplicitKeyBinding binding;
+			std::vector<MRVMExplicitKeyBinding> bindings;
 			std::string refreshError;
 			if (args.size() != 3 || args[1].type != TYPE_INT || args[2].type != TYPE_INT) throw std::runtime_error("CMD_TO_KEY expects (key, int, int).");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (!mrvmParseBindingKeyValue(args[0], key) || !mrvmParseBindingModeValue(mrvmValueAsInt(args[2]), mode)) {
-				runtimeErrorLevel() = 1010;
+				setRuntimeErrorLevel(1010);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			mrvmRemoveExplicitBindingsForKey(g_runtimeEnv.explicitKeyBindings, key, mode);
+			bindings = mrvmRuntimeExplicitKeyBindings();
+			mrvmRemoveExplicitBindingsForKey(bindings, key, mode);
 			binding.key = key;
 			binding.mode = mode;
 			binding.kind = MRVMExplicitBindingKind::Command;
 			binding.commandId = mrvmValueAsInt(args[1]);
-			g_runtimeEnv.explicitKeyBindings.push_back(binding);
+			bindings.push_back(binding);
+			mrvmStoreRuntimeExplicitKeyBindings(bindings);
 			if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("CMD_TO_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UnassignKey: {
 			TKey key;
 			int mode = MACRO_MODE_EDIT;
+			std::vector<MRVMExplicitKeyBinding> bindings;
 			std::string refreshError;
 			if (args.size() != 2 || args[1].type != TYPE_INT) throw std::runtime_error("UNASSIGN_KEY expects (key, int).");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (!mrvmParseBindingKeyValue(args[0], key) || !mrvmParseBindingModeValue(mrvmValueAsInt(args[1]), mode)) {
-				runtimeErrorLevel() = 1010;
+				setRuntimeErrorLevel(1010);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			mrvmRemoveExplicitBindingsForKey(g_runtimeEnv.explicitKeyBindings, key, mode);
+			bindings = mrvmRuntimeExplicitKeyBindings();
+			mrvmRemoveExplicitBindingsForKey(bindings, key, mode);
+			mrvmStoreRuntimeExplicitKeyBindings(bindings);
 			clearRegisteredBindingsForKey(&key, mode, mode == MACRO_MODE_ALL);
 			if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("UNASSIGN_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UnassignAllKeys: {
 			std::string refreshError;
 			if (!args.empty()) throw std::runtime_error("UNASSIGN_ALL_KEYS expects no arguments.");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			g_runtimeEnv.explicitKeyBindings.clear();
+			mrvmStoreRuntimeExplicitKeyBindings(std::vector<MRVMExplicitKeyBinding>());
 			clearRegisteredBindingsForKey(nullptr, MACRO_MODE_ALL, true);
 			if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("UNASSIGN_ALL_KEYS could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::KeyRecord: {
 			if (!args.empty()) throw std::runtime_error("KEY_RECORD expects no arguments.");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			runtimeErrorLevel() = dispatchApplicationCommandEvent(cmMrMacroToggleRecording) ? 0 : 1001;
+			setRuntimeErrorLevel(dispatchApplicationCommandEvent(cmMrMacroToggleRecording) ? 0 : 1001);
 		} break;
 		case MRVMProcedure::PlayKeyMacro: {
 			TKey key;
@@ -485,22 +503,22 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			int mode = currentUiMacroMode();
 			if ((args.size() != 2 && args.size() != 3) || args[0].type != TYPE_INT || args[1].type != TYPE_INT || (args.size() == 3 && args[2].type != TYPE_INT)) throw std::runtime_error("PLAY_KEY_MACRO expects (int, int[, int]).");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (args.size() == 3 && !mrvmParseBindingModeValue(mrvmValueAsInt(args[2]), mode)) {
-				runtimeErrorLevel() = 1010;
+				setRuntimeErrorLevel(1010);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (!mrvmKeyPairToTKey(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1]), key, text, textLength, textByte)) {
-				runtimeErrorLevel() = 1010;
+				setRuntimeErrorLevel(1010);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (executeExplicitKeyBinding(key, mode, &vm.log)) {
-				runtimeErrorLevel() = 0;
+				setRuntimeErrorLevel(0);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			runtimeErrorLevel() = 1001;
+			setRuntimeErrorLevel(1001);
 		} break;
 		default:
 			throw std::runtime_error("Procedure does not belong to the runtime family.");

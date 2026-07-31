@@ -1,4 +1,5 @@
 #include "MRVMSystemVariables.hpp"
+#include "MRVMSystemVariableCatalog.hpp"
 
 #include "MRVMProcessRuntime.hpp"
 #include "MRVMRuntimeInternal.hpp"
@@ -55,7 +56,8 @@ static int encodeBackupMode(const std::string &method) {
 }
 
 static std::string defaultFormatLineValue() {
-	if (!g_runtimeEnv.defaultFormat.empty()) return g_runtimeEnv.defaultFormat;
+	const std::string configured = mrvmRuntimeStateString("system", "defaultFormat");
+	if (!configured.empty()) return configured;
 	return resolveEditSetupDefaults().formatLine;
 }
 
@@ -99,25 +101,29 @@ static bool writeOtherColorValue(std::size_t index, int value) {
 }
 
 static int currentStatusRowValue() {
-	if (g_runtimeEnv.statusRow >= 0) return g_runtimeEnv.statusRow;
+	const int configured = mrvmRuntimeStateInt("system", "statusRow", -1);
+	if (configured >= 0) return configured;
 	if (TProgram::statusLine == nullptr) return 0;
 	return TProgram::statusLine->getBounds().a.y + 1;
 }
 
 static int currentMessageRowValue() {
-	if (g_runtimeEnv.messageRow >= 0) return g_runtimeEnv.messageRow;
+	const int configured = mrvmRuntimeStateInt("system", "messageRow", -1);
+	if (configured >= 0) return configured;
 	if (TProgram::menuBar == nullptr) return 0;
 	return TProgram::menuBar->getBounds().a.y + 1;
 }
 
 static int currentMaxWindowRowValue() {
-	if (g_runtimeEnv.maxWindowRow >= 0) return g_runtimeEnv.maxWindowRow;
+	const int configured = mrvmRuntimeStateInt("system", "maxWindowRow", -1);
+	if (configured >= 0) return configured;
 	if (TProgram::deskTop == nullptr) return 0;
 	return TProgram::deskTop->getBounds().b.y;
 }
 
 static int currentMinWindowRowValue() {
-	if (g_runtimeEnv.minWindowRow >= 0) return g_runtimeEnv.minWindowRow;
+	const int configured = mrvmRuntimeStateInt("system", "minWindowRow", -1);
+	if (configured >= 0) return configured;
 	if (TProgram::deskTop == nullptr) return 0;
 	return TProgram::deskTop->getBounds().a.y + 1;
 }
@@ -165,235 +171,6 @@ static std::string formatCurrentTime() {
 	return out;
 }
 
-enum class MRVMSystemVariable {
-	Unknown,
-	AtEof,
-	AtEol,
-	Autosave,
-	Backups,
-	BackColor,
-	BlockCol1,
-	BlockCol2,
-	BlockLine1,
-	BlockLine2,
-	BlockStat,
-	BufferId,
-	ChangeColor,
-	Comspec,
-	Cpu,
-	CtrlHelp,
-	CurChar,
-	CurFileAttr,
-	CurFileSize,
-	CurWindow,
-	CyclicVirtualDesktops,
-	CCol,
-	CLine,
-	CPage,
-	CRow,
-	Date,
-	DefaultFormat,
-	DisplayTabs,
-	DocMode,
-	ErrorColor,
-	ErrorLevel,
-	Explosions,
-	FileChanged,
-	FileName,
-	FirstMacro,
-	FirstRun,
-	FirstSave,
-	FormatLine,
-	FormatRuler,
-	FormatStat,
-	FoundStr,
-	FoundX,
-	FoundY,
-	GetLine,
-	IgnoreCase,
-	IndentLevel,
-	IndentStyle,
-	InsertMode,
-	InsCursor,
-	Key1,
-	Key2,
-	LastFileAttr,
-	LastFileName,
-	LastFileSize,
-	LastFileTime,
-	LeftMargin,
-	LinkStat,
-	LogoScreen,
-	Marking,
-	MaxWindowRow,
-	MemAlloc,
-	MenuColor,
-	Messages,
-	MessageRow,
-	MinWindowRow,
-	Mouse,
-	MouseHSense,
-	MouseVSense,
-	MparmStr,
-	MrPath,
-	NameLine,
-	NextMacro,
-	OsVersion,
-	OvrCursor,
-	PageStr,
-	ParamCount,
-	PgLine,
-	PrintMargin,
-	ReadOnly,
-	Refresh,
-	RegExpStat,
-	ReturnInt,
-	ReturnStr,
-	RightMargin,
-	SearchFile,
-	ShadowChar,
-	ShadowColor,
-	StatusRow,
-	StatColor,
-	TabExpand,
-	TempPath,
-	TextColor,
-	Time,
-	TmpFile,
-	TmpFileName,
-	TruncateSpaces,
-	UndoStat,
-	VirtualDesktops,
-	WindowAttr,
-	WindowCount,
-	WinX1,
-	WinX2,
-	WinY1,
-	WinY2,
-	WordDelimits,
-	WrapStat,
-};
-
-struct MRVMSystemVariableEntry {
-	const char *name;
-	MRVMSystemVariable variable;
-};
-
-static MRVMSystemVariable classifySystemVariable(const std::string &name) {
-	static constexpr MRVMSystemVariableEntry entries[] = {
-	    {"AT_EOF", MRVMSystemVariable::AtEof},
-	    {"AT_EOL", MRVMSystemVariable::AtEol},
-	    {"AUTOSAVE", MRVMSystemVariable::Autosave},
-	    {"BACKUPS", MRVMSystemVariable::Backups},
-	    {"BACK_COLOR", MRVMSystemVariable::BackColor},
-	    {"BLOCK_COL1", MRVMSystemVariable::BlockCol1},
-	    {"BLOCK_COL2", MRVMSystemVariable::BlockCol2},
-	    {"BLOCK_LINE1", MRVMSystemVariable::BlockLine1},
-	    {"BLOCK_LINE2", MRVMSystemVariable::BlockLine2},
-	    {"BLOCK_STAT", MRVMSystemVariable::BlockStat},
-	    {"BUFFER_ID", MRVMSystemVariable::BufferId},
-	    {"CHANGE_COLOR", MRVMSystemVariable::ChangeColor},
-	    {"COMSPEC", MRVMSystemVariable::Comspec},
-	    {"CPU", MRVMSystemVariable::Cpu},
-	    {"CTRL_HELP", MRVMSystemVariable::CtrlHelp},
-	    {"CUR_CHAR", MRVMSystemVariable::CurChar},
-	    {"CUR_FILE_ATTR", MRVMSystemVariable::CurFileAttr},
-	    {"CUR_FILE_SIZE", MRVMSystemVariable::CurFileSize},
-	    {"CUR_WINDOW", MRVMSystemVariable::CurWindow},
-	    {"CYCLIC_VIRTUAL_DESKTOPS", MRVMSystemVariable::CyclicVirtualDesktops},
-	    {"C_COL", MRVMSystemVariable::CCol},
-	    {"C_LINE", MRVMSystemVariable::CLine},
-	    {"C_PAGE", MRVMSystemVariable::CPage},
-	    {"C_ROW", MRVMSystemVariable::CRow},
-	    {"DATE", MRVMSystemVariable::Date},
-	    {"DEFAULT_FORMAT", MRVMSystemVariable::DefaultFormat},
-	    {"DISPLAY_TABS", MRVMSystemVariable::DisplayTabs},
-	    {"DOC_MODE", MRVMSystemVariable::DocMode},
-	    {"ERROR_COLOR", MRVMSystemVariable::ErrorColor},
-	    {"ERROR_LEVEL", MRVMSystemVariable::ErrorLevel},
-	    {"EXPLOSIONS", MRVMSystemVariable::Explosions},
-	    {"FILE_CHANGED", MRVMSystemVariable::FileChanged},
-	    {"FILE_NAME", MRVMSystemVariable::FileName},
-	    {"FIRST_MACRO", MRVMSystemVariable::FirstMacro},
-	    {"FIRST_RUN", MRVMSystemVariable::FirstRun},
-	    {"FIRST_SAVE", MRVMSystemVariable::FirstSave},
-	    {"FORMAT_LINE", MRVMSystemVariable::FormatLine},
-	    {"FORMAT_RULER", MRVMSystemVariable::FormatRuler},
-	    {"FORMAT_STAT", MRVMSystemVariable::FormatStat},
-	    {"FOUND_STR", MRVMSystemVariable::FoundStr},
-	    {"FOUND_X", MRVMSystemVariable::FoundX},
-	    {"FOUND_Y", MRVMSystemVariable::FoundY},
-	    {"GET_LINE", MRVMSystemVariable::GetLine},
-	    {"IGNORE_CASE", MRVMSystemVariable::IgnoreCase},
-	    {"INDENT_LEVEL", MRVMSystemVariable::IndentLevel},
-	    {"INDENT_STYLE", MRVMSystemVariable::IndentStyle},
-	    {"INSERT_MODE", MRVMSystemVariable::InsertMode},
-	    {"INS_CURSOR", MRVMSystemVariable::InsCursor},
-	    {"KEY1", MRVMSystemVariable::Key1},
-	    {"KEY2", MRVMSystemVariable::Key2},
-	    {"LAST_FILE_ATTR", MRVMSystemVariable::LastFileAttr},
-	    {"LAST_FILE_NAME", MRVMSystemVariable::LastFileName},
-	    {"LAST_FILE_SIZE", MRVMSystemVariable::LastFileSize},
-	    {"LAST_FILE_TIME", MRVMSystemVariable::LastFileTime},
-	    {"LEFT_MARGIN", MRVMSystemVariable::LeftMargin},
-	    {"LINK_STAT", MRVMSystemVariable::LinkStat},
-	    {"LOGO_SCREEN", MRVMSystemVariable::LogoScreen},
-	    {"MARKING", MRVMSystemVariable::Marking},
-	    {"MAX_WINDOW_ROW", MRVMSystemVariable::MaxWindowRow},
-	    {"MEM_ALLOC", MRVMSystemVariable::MemAlloc},
-	    {"MENU_COLOR", MRVMSystemVariable::MenuColor},
-	    {"MESSAGES", MRVMSystemVariable::Messages},
-	    {"MESSAGE_ROW", MRVMSystemVariable::MessageRow},
-	    {"MIN_WINDOW_ROW", MRVMSystemVariable::MinWindowRow},
-	    {"MOUSE", MRVMSystemVariable::Mouse},
-	    {"MOUSE_H_SENSE", MRVMSystemVariable::MouseHSense},
-	    {"MOUSE_V_SENSE", MRVMSystemVariable::MouseVSense},
-	    {"MPARM_STR", MRVMSystemVariable::MparmStr},
-	    {"MR_PATH", MRVMSystemVariable::MrPath},
-	    {"NAME_LINE", MRVMSystemVariable::NameLine},
-	    {"NEXT_MACRO", MRVMSystemVariable::NextMacro},
-	    {"OS_VERSION", MRVMSystemVariable::OsVersion},
-	    {"OVR_CURSOR", MRVMSystemVariable::OvrCursor},
-	    {"PAGE_STR", MRVMSystemVariable::PageStr},
-	    {"PARAM_COUNT", MRVMSystemVariable::ParamCount},
-	    {"PG_LINE", MRVMSystemVariable::PgLine},
-	    {"PRINT_MARGIN", MRVMSystemVariable::PrintMargin},
-	    {"READ_ONLY", MRVMSystemVariable::ReadOnly},
-	    {"REFRESH", MRVMSystemVariable::Refresh},
-	    {"REG_EXP_STAT", MRVMSystemVariable::RegExpStat},
-	    {"RETURN_INT", MRVMSystemVariable::ReturnInt},
-	    {"RETURN_STR", MRVMSystemVariable::ReturnStr},
-	    {"RIGHT_MARGIN", MRVMSystemVariable::RightMargin},
-	    {"SEARCH_FILE", MRVMSystemVariable::SearchFile},
-	    {"SHADOW_CHAR", MRVMSystemVariable::ShadowChar},
-	    {"SHADOW_COLOR", MRVMSystemVariable::ShadowColor},
-	    {"STATUS_ROW", MRVMSystemVariable::StatusRow},
-	    {"STAT_COLOR", MRVMSystemVariable::StatColor},
-	    {"TAB_EXPAND", MRVMSystemVariable::TabExpand},
-	    {"TEMP_PATH", MRVMSystemVariable::TempPath},
-	    {"TEXT_COLOR", MRVMSystemVariable::TextColor},
-	    {"TIME", MRVMSystemVariable::Time},
-	    {"TMP_FILE", MRVMSystemVariable::TmpFile},
-	    {"TMP_FILE_NAME", MRVMSystemVariable::TmpFileName},
-	    {"TRUNCATE_SPACES", MRVMSystemVariable::TruncateSpaces},
-	    {"UNDO_STAT", MRVMSystemVariable::UndoStat},
-	    {"VIRTUAL_DESKTOPS", MRVMSystemVariable::VirtualDesktops},
-	    {"WINDOW_ATTR", MRVMSystemVariable::WindowAttr},
-	    {"WINDOW_COUNT", MRVMSystemVariable::WindowCount},
-	    {"WIN_X1", MRVMSystemVariable::WinX1},
-	    {"WIN_X2", MRVMSystemVariable::WinX2},
-	    {"WIN_Y1", MRVMSystemVariable::WinY1},
-	    {"WIN_Y2", MRVMSystemVariable::WinY2},
-	    {"WORD_DELIMITS", MRVMSystemVariable::WordDelimits},
-	    {"WRAP_STAT", MRVMSystemVariable::WrapStat},
-	};
-	const MRVMSystemVariableEntry *first = entries;
-	const MRVMSystemVariableEntry *last = entries + sizeof(entries) / sizeof(entries[0]);
-	const MRVMSystemVariableEntry *found = std::lower_bound(first, last, name, [](const MRVMSystemVariableEntry &entry, const std::string &value) { return std::strcmp(entry.name, value.c_str()) < 0; });
-
-	if (found == last || name != found->name) return MRVMSystemVariable::Unknown;
-	return found->variable;
-}
 
 } // namespace mrvm_runtime
 
@@ -419,17 +196,17 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 		case MRVMSystemVariable::DisplayTabs:
 			return mrvmMakeInt(configuredDisplayTabsSetting() ? 1 : 0);
 		case MRVMSystemVariable::ShadowChar:
-			return mrvmMakeInt(g_runtimeEnv.shadowChar);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "shadowChar", 176));
 		case MRVMSystemVariable::Refresh:
-			return mrvmMakeInt(g_runtimeEnv.refresh);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "refresh", 1));
 		case MRVMSystemVariable::Messages:
 			return mrvmMakeInt(configuredMenulineMessages() ? 1 : 0);
 		case MRVMSystemVariable::Mouse:
-			return mrvmMakeInt(g_runtimeEnv.mouse);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "mouse", 1));
 		case MRVMSystemVariable::LogoScreen:
-			return mrvmMakeInt(g_runtimeEnv.logoScreen);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "logoScreen"));
 		case MRVMSystemVariable::Explosions:
-			return mrvmMakeInt(g_runtimeEnv.explosions);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "explosions"));
 		case MRVMSystemVariable::TruncateSpaces:
 			return mrvmMakeInt(configuredEditSetupSettings().truncateSpaces ? 1 : 0);
 		case MRVMSystemVariable::Backups: {
@@ -442,13 +219,13 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 			return mrvmMakeInt((settings.autosaveInactivitySeconds > 0 || settings.autosaveIntervalSeconds > 0) ? 1 : 0);
 		}
 		case MRVMSystemVariable::UndoStat:
-			return mrvmMakeInt(g_runtimeEnv.undoStat);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "undoStat", 1));
 		case MRVMSystemVariable::FormatStat:
-			return mrvmMakeInt(g_runtimeEnv.formatStat);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "formatStat"));
 		case MRVMSystemVariable::WrapStat:
 			return mrvmMakeInt(configuredEditSetupSettings().wordWrap ? 1 : 0);
 		case MRVMSystemVariable::MemAlloc:
-			return mrvmMakeInt(g_runtimeEnv.memAlloc);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "memAlloc"));
 		case MRVMSystemVariable::LeftMargin:
 			return mrvmMakeInt(configuredEditSetupSettings().leftMargin);
 		case MRVMSystemVariable::RightMargin:
@@ -458,15 +235,15 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 		case MRVMSystemVariable::IndentStyle:
 			return mrvmMakeInt(encodeIndentStyle(configuredEditSetupSettings().indentStyle));
 		case MRVMSystemVariable::InsCursor:
-			return mrvmMakeInt(g_runtimeEnv.insCursor);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "insCursor"));
 		case MRVMSystemVariable::OvrCursor:
-			return mrvmMakeInt(g_runtimeEnv.ovrCursor);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "ovrCursor", 3));
 		case MRVMSystemVariable::CtrlHelp:
-			return mrvmMakeInt(g_runtimeEnv.ctrlHelp);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "ctrlHelp"));
 		case MRVMSystemVariable::MouseHSense:
-			return mrvmMakeInt(g_runtimeEnv.mouseHSense);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "mouseHSense", 8));
 		case MRVMSystemVariable::MouseVSense:
-			return mrvmMakeInt(g_runtimeEnv.mouseVSense);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "mouseVSense", 8));
 		case MRVMSystemVariable::WindowAttr:
 			return mrvmMakeInt(currentWindowAttrValue());
 		case MRVMSystemVariable::TextColor:
@@ -492,7 +269,7 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 		case MRVMSystemVariable::MinWindowRow:
 			return mrvmMakeInt(currentMinWindowRowValue());
 		case MRVMSystemVariable::NameLine:
-			return mrvmMakeInt(g_runtimeEnv.nameLine);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "nameLine"));
 		case MRVMSystemVariable::InsertMode:
 			return mrvmMakeInt(currentEditorInsertMode() ? 1 : 0);
 		case MRVMSystemVariable::IndentLevel:
@@ -504,19 +281,19 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 		case MRVMSystemVariable::Time:
 			return mrvmMakeString(formatCurrentTime());
 		case MRVMSystemVariable::Comspec:
-			return mrvmMakeString(g_runtimeEnv.shellPath);
+			return mrvmMakeString(mrvmRuntimeStateString("process", "shellPath"));
 		case MRVMSystemVariable::TempPath:
 			return mrvmMakeString(configuredTempDirectoryPath());
 		case MRVMSystemVariable::MrPath:
-			return mrvmMakeString(g_runtimeEnv.executableDir);
+			return mrvmMakeString(mrvmRuntimeStateString("process", "executableDir"));
 		case MRVMSystemVariable::OsVersion:
-			return mrvmMakeString(g_runtimeEnv.shellVersion);
+			return mrvmMakeString(mrvmRuntimeStateString("process", "shellVersion"));
 		case MRVMSystemVariable::ParamCount:
-			return mrvmMakeInt(static_cast<int>(g_runtimeEnv.processArgs.size()));
+			return mrvmMakeInt(static_cast<int>(mrvmRuntimeStateStringList("process", "arguments").size()));
 		case MRVMSystemVariable::Cpu:
 			return mrvmMakeInt(mrvmDetectCpuCode());
 		case MRVMSystemVariable::DocMode:
-			return mrvmMakeInt(g_runtimeEnv.docMode);
+			return mrvmMakeInt(mrvmRuntimeStateInt("system", "docMode"));
 		case MRVMSystemVariable::PrintMargin:
 			return mrvmMakeInt(std::atoi(configuredPdfExportSettings().textWidth.c_str()));
 		case MRVMSystemVariable::CCol:
@@ -540,16 +317,16 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 		case MRVMSystemVariable::WindowCount:
 			return mrvmMakeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->windowCount : countEditWindows());
 		case MRVMSystemVariable::Key1:
-			return mrvmMakeInt(g_runtimeEnv.key1);
+			return mrvmMakeInt(mrvmRuntimeStateInt("keyInput", "key1"));
 		case MRVMSystemVariable::Key2:
-			return mrvmMakeInt(g_runtimeEnv.key2);
+			return mrvmMakeInt(mrvmRuntimeStateInt("keyInput", "key2"));
 		case MRVMSystemVariable::LastFileAttr:
 		case MRVMSystemVariable::LastFileSize:
 		case MRVMSystemVariable::LastFileTime: {
 			int attr = 0;
 			int size = 0;
 			int packedTime = 0;
-			if (!mrvmReadFileMetadata(g_runtimeEnv.lastFileName, &attr, &size, &packedTime)) return mrvmMakeInt(0);
+			if (!mrvmReadFileMetadata(mrvmRuntimeStateString("fileEnumeration", "lastFileName"), &attr, &size, &packedTime)) return mrvmMakeInt(0);
 			switch (variable) {
 				case MRVMSystemVariable::LastFileAttr:
 					return mrvmMakeInt(attr);
@@ -617,7 +394,7 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 			return mrvmMakeInt(blockMarkingValue(win) ? 1 : 0);
 		}
 		case MRVMSystemVariable::LastFileName:
-			return mrvmMakeString(g_runtimeEnv.lastFileName);
+			return mrvmMakeString(mrvmRuntimeStateString("fileEnumeration", "lastFileName"));
 		case MRVMSystemVariable::FoundStr:
 		case MRVMSystemVariable::SearchFile:
 		case MRVMSystemVariable::FoundX:
@@ -666,7 +443,8 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 		case MRVMSystemVariable::ReadOnly:
 			return loadCurrentFileState(key);
 		case MRVMSystemVariable::FirstRun: {
-			if (!g_runtimeEnv.macroStack.empty()) return mrvmMakeInt(g_runtimeEnv.macroStack.back().firstRun ? 1 : 0);
+			const std::vector<MacroStackFrame> macroStack = mrvmRuntimeMacroStack();
+			if (!macroStack.empty()) return mrvmMakeInt(macroStack.back().firstRun ? 1 : 0);
 			return mrvmMakeInt(0);
 		}
 		case MRVMSystemVariable::FirstMacro: {
@@ -722,23 +500,23 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 	std::string key = mrvmUpperKey(name);
 	switch (classifySystemVariable(key)) {
 		case MRVMSystemVariable::ReturnInt: {
-			runtimeReturnInt() = mrvmValueAsInt(value);
+			setRuntimeReturnInt(mrvmValueAsInt(value));
 			return true;
 		}
 		case MRVMSystemVariable::ReturnStr: {
-			runtimeReturnStr() = mrvmValueAsString(value);
+			setRuntimeReturnStr(mrvmValueAsString(value));
 			mrvmEnforceStringLength(runtimeReturnStr());
 			return true;
 		}
 		case MRVMSystemVariable::ErrorLevel: {
-			runtimeErrorLevel() = mrvmValueAsInt(value);
+			setRuntimeErrorLevel(mrvmValueAsInt(value));
 			return true;
 		}
 		case MRVMSystemVariable::IgnoreCase: {
 			BackgroundEditSession *session = currentBackgroundEditSession();
 			if (session != nullptr) session->ignoreCase = mrvmValueAsInt(value) != 0;
 			else
-				g_runtimeEnv.ignoreCase = mrvmValueAsInt(value) != 0;
+				mrvmStoreRuntimeStateInt("options", "ignoreCase", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::RegExpStat:
@@ -747,29 +525,29 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 			BackgroundEditSession *session = currentBackgroundEditSession();
 			if (session != nullptr) session->tabExpand = mrvmValueAsInt(value) != 0;
 			else
-				g_runtimeEnv.tabExpand = mrvmValueAsInt(value) != 0;
+				mrvmStoreRuntimeStateInt("options", "tabExpand", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::ShadowChar: {
-			g_runtimeEnv.shadowChar = std::clamp(mrvmValueAsInt(value), 0, 255);
+			mrvmStoreRuntimeStateInt("system", "shadowChar", std::clamp(mrvmValueAsInt(value), 0, 255));
 			return true;
 		}
 		case MRVMSystemVariable::Refresh: {
-			g_runtimeEnv.refresh = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "refresh", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::Messages:
 			return setConfiguredMenulineMessages(mrvmValueAsInt(value) != 0, nullptr);
 		case MRVMSystemVariable::Mouse: {
-			g_runtimeEnv.mouse = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "mouse", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::LogoScreen: {
-			g_runtimeEnv.logoScreen = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "logoScreen", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::Explosions: {
-			g_runtimeEnv.explosions = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "explosions", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::TruncateSpaces:
@@ -805,17 +583,17 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 			return setConfiguredEditSetupSettings(settings, nullptr);
 		}
 		case MRVMSystemVariable::UndoStat: {
-			g_runtimeEnv.undoStat = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "undoStat", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::FormatStat: {
-			g_runtimeEnv.formatStat = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "formatStat", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::WrapStat:
 			return applyConfiguredEditSetupValue("WORD_WRAP", mrvmValueAsInt(value) != 0 ? "TRUE" : "FALSE", nullptr);
 		case MRVMSystemVariable::MemAlloc: {
-			g_runtimeEnv.memAlloc = std::max(0, mrvmValueAsInt(value));
+			mrvmStoreRuntimeStateInt("system", "memAlloc", std::max(0, mrvmValueAsInt(value)));
 			return true;
 		}
 		case MRVMSystemVariable::LeftMargin:
@@ -827,23 +605,23 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 		case MRVMSystemVariable::IndentStyle:
 			return applyConfiguredEditSetupValue("INDENT_STYLE", decodeIndentStyle(mrvmValueAsInt(value)), nullptr);
 		case MRVMSystemVariable::InsCursor: {
-			g_runtimeEnv.insCursor = std::clamp(mrvmValueAsInt(value), 0, 3);
+			mrvmStoreRuntimeStateInt("system", "insCursor", std::clamp(mrvmValueAsInt(value), 0, 3));
 			return true;
 		}
 		case MRVMSystemVariable::OvrCursor: {
-			g_runtimeEnv.ovrCursor = std::clamp(mrvmValueAsInt(value), 0, 3);
+			mrvmStoreRuntimeStateInt("system", "ovrCursor", std::clamp(mrvmValueAsInt(value), 0, 3));
 			return true;
 		}
 		case MRVMSystemVariable::CtrlHelp: {
-			g_runtimeEnv.ctrlHelp = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "ctrlHelp", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::MouseHSense: {
-			g_runtimeEnv.mouseHSense = std::max(0, mrvmValueAsInt(value));
+			mrvmStoreRuntimeStateInt("system", "mouseHSense", std::max(0, mrvmValueAsInt(value)));
 			return true;
 		}
 		case MRVMSystemVariable::MouseVSense: {
-			g_runtimeEnv.mouseVSense = std::max(0, mrvmValueAsInt(value));
+			mrvmStoreRuntimeStateInt("system", "mouseVSense", std::max(0, mrvmValueAsInt(value)));
 			return true;
 		}
 		case MRVMSystemVariable::WindowAttr:
@@ -863,23 +641,23 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 		case MRVMSystemVariable::ShadowColor:
 			return writeMenuDialogColorValue(7, mrvmValueAsInt(value));
 		case MRVMSystemVariable::StatusRow: {
-			g_runtimeEnv.statusRow = std::max(0, mrvmValueAsInt(value));
+			mrvmStoreRuntimeStateInt("system", "statusRow", std::max(0, mrvmValueAsInt(value)));
 			return true;
 		}
 		case MRVMSystemVariable::MessageRow: {
-			g_runtimeEnv.messageRow = std::max(0, mrvmValueAsInt(value));
+			mrvmStoreRuntimeStateInt("system", "messageRow", std::max(0, mrvmValueAsInt(value)));
 			return true;
 		}
 		case MRVMSystemVariable::MaxWindowRow: {
-			g_runtimeEnv.maxWindowRow = std::max(0, mrvmValueAsInt(value));
+			mrvmStoreRuntimeStateInt("system", "maxWindowRow", std::max(0, mrvmValueAsInt(value)));
 			return true;
 		}
 		case MRVMSystemVariable::MinWindowRow: {
-			g_runtimeEnv.minWindowRow = std::max(0, mrvmValueAsInt(value));
+			mrvmStoreRuntimeStateInt("system", "minWindowRow", std::max(0, mrvmValueAsInt(value)));
 			return true;
 		}
 		case MRVMSystemVariable::NameLine: {
-			g_runtimeEnv.nameLine = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "nameLine", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::InsertMode:
@@ -887,19 +665,20 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 		case MRVMSystemVariable::IndentLevel:
 			return setCurrentEditorIndentLevel(mrvmValueAsInt(value));
 		case MRVMSystemVariable::MparmStr: {
-			runtimeParameterString() = mrvmValueAsString(value);
+			setRuntimeParameterString(mrvmValueAsString(value));
 			mrvmEnforceStringLength(runtimeParameterString());
 			return true;
 		}
 		case MRVMSystemVariable::DocMode: {
-			g_runtimeEnv.docMode = mrvmValueAsInt(value) != 0 ? 1 : 0;
+			mrvmStoreRuntimeStateInt("system", "docMode", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
 		case MRVMSystemVariable::FormatLine:
 			return applyConfiguredEditSetupValue("FORMAT_LINE", mrvmValueAsString(value), nullptr);
 		case MRVMSystemVariable::DefaultFormat: {
-			g_runtimeEnv.defaultFormat = mrvmValueAsString(value);
-			mrvmEnforceStringLength(g_runtimeEnv.defaultFormat);
+			const std::string format = mrvmValueAsString(value);
+			mrvmEnforceStringLength(format);
+			mrvmStoreRuntimeStateString("system", "defaultFormat", format);
 			return true;
 		}
 		case MRVMSystemVariable::PageStr:

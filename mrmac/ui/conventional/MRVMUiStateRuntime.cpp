@@ -4,37 +4,57 @@
 #include "../../vm/MRVMValue.hpp"
 
 #include "../../mrmac.h"
+#include "../../../ui/MREditWindow.hpp"
 
+#include <cstdlib>
 #include <set>
+
+namespace {
+
+int runtimeWindowBufferId(const void *windowKey) {
+	const MREditWindow *window = static_cast<const MREditWindow *>(windowKey);
+	return window != nullptr ? window->bufferId() : 0;
+}
+
+std::string runtimeWindowStateKey(const void *windowKey) {
+	const int bufferId = runtimeWindowBufferId(windowKey);
+	return bufferId > 0 ? std::to_string(bufferId) : std::string();
+}
+
+} // namespace
 
 std::vector<std::size_t> mrvmUiCopyWindowMarkStack(const void *windowKey) {
 	std::vector<std::size_t> out;
-	std::map<const void *, std::vector<unsigned int>>::const_iterator it;
+	const std::string key = runtimeWindowStateKey(windowKey);
+	const std::vector<std::string> stored = mrvmRuntimeStateStringList("markStacks", key);
 
-	if (windowKey == nullptr) return out;
-	it = g_runtimeEnv.markStacks.find(windowKey);
-	if (it == g_runtimeEnv.markStacks.end()) return out;
-	out.reserve(it->second.size());
-	for (unsigned int i : it->second)
-		out.push_back(static_cast<std::size_t>(i));
+	if (key.empty()) return out;
+	out.reserve(stored.size());
+	for (const std::string &value : stored) {
+		char *end = nullptr;
+		const unsigned long long offset = std::strtoull(value.c_str(), &end, 10);
+		if (end != value.c_str() && *end == '\0') out.push_back(static_cast<std::size_t>(offset));
+	}
 	return out;
 }
 
 bool mrvmUiCopyWindowLastSearch(const void *windowKey, const std::string &fileName, std::size_t &start, std::size_t &end, std::size_t &cursor) {
+	const int bufferId = runtimeWindowBufferId(windowKey);
+
 	start = 0;
 	end = 0;
 	cursor = 0;
-	if (!g_runtimeEnv.lastSearchValid || windowKey == nullptr) return false;
-	if (g_runtimeEnv.lastSearchWindow != windowKey) return false;
-	if (g_runtimeEnv.lastSearchFileName != fileName) return false;
-	start = g_runtimeEnv.lastSearchStart;
-	end = g_runtimeEnv.lastSearchEnd;
-	cursor = g_runtimeEnv.lastSearchCursor;
+	if (mrvmRuntimeStateInt("lastSearch", "valid") == 0 || bufferId <= 0) return false;
+	if (mrvmRuntimeStateInt("lastSearch", "bufferId") != bufferId) return false;
+	if (mrvmRuntimeStateString("lastSearch", "fileName") != fileName) return false;
+	start = mrvmRuntimeStateSize("lastSearch", "start");
+	end = mrvmRuntimeStateSize("lastSearch", "end");
+	cursor = mrvmRuntimeStateSize("lastSearch", "cursor");
 	return true;
 }
 
 void mrvmUiCopyGlobals(std::vector<std::string> &order, std::map<std::string, int> &ints, std::map<std::string, std::string> &strings) {
-	const std::vector<std::string> orderValues = mrvmRuntimeGlobalOrderValues(g_runtimeEnv.runtimeKv);
+	const std::vector<std::string> orderValues = mrvmRuntimeGlobalOrderValues(mrvmRuntimeKv());
 
 	order.clear();
 	ints.clear();
@@ -43,7 +63,7 @@ void mrvmUiCopyGlobals(std::vector<std::string> &order, std::map<std::string, in
 	for (std::size_t i = 0; i < orderValues.size(); ++i) {
 		const std::string &key = orderValues[i];
 		GlobalEntry entry;
-		if (!mrvmRuntimeGlobalRead(g_runtimeEnv.runtimeKv, key, entry)) continue;
+		if (!mrvmRuntimeGlobalRead(mrvmRuntimeKv(), key, entry)) continue;
 		order.push_back(key);
 		if (entry.type == TYPE_INT) ints[key] = mrvmValueAsInt(entry.value);
 		else if (entry.type == TYPE_STR)
@@ -52,7 +72,7 @@ void mrvmUiCopyGlobals(std::vector<std::string> &order, std::map<std::string, in
 }
 
 void mrvmUiCopyLoadedMacros(std::vector<std::string> &order, std::map<std::string, std::string> &displayNames) {
-	const std::vector<std::string> orderValues = mrvmRuntimeCatalogMacroOrder(g_runtimeEnv.runtimeKv);
+	const std::vector<std::string> orderValues = mrvmRuntimeCatalogMacroOrder(mrvmRuntimeKv());
 
 	order.clear();
 	displayNames.clear();
@@ -60,49 +80,45 @@ void mrvmUiCopyLoadedMacros(std::vector<std::string> &order, std::map<std::strin
 	for (std::size_t i = 0; i < orderValues.size(); ++i) {
 		const std::string &key = orderValues[i];
 		MacroRef macroRef;
-		if (!mrvmRuntimeCatalogReadLoadedMacro(g_runtimeEnv.runtimeKv, key, macroRef)) continue;
+		if (!mrvmRuntimeCatalogReadLoadedMacro(mrvmRuntimeKv(), key, macroRef)) continue;
 		order.push_back(key);
 		displayNames[key] = macroRef.displayName;
 	}
 }
 
 void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand) {
-	ignoreCase = g_runtimeEnv.ignoreCase;
-	tabExpand = g_runtimeEnv.tabExpand;
+	ignoreCase = mrvmRuntimeStateInt("options", "ignoreCase") != 0;
+	tabExpand = mrvmRuntimeStateInt("options", "tabExpand", 1) != 0;
 }
 
 void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets) {
-	std::vector<unsigned int> marks;
+	const std::string key = runtimeWindowStateKey(windowKey);
+	std::vector<std::string> marks;
 
-	if (windowKey == nullptr) return;
+	if (key.empty()) return;
 	if (offsets.empty()) {
-		g_runtimeEnv.markStacks.erase(windowKey);
+		static_cast<void>(mrvmEraseRuntimeStateValue("markStacks", key));
 		return;
 	}
 	marks.reserve(offsets.size());
-	for (unsigned long offset : offsets)
-		marks.push_back(static_cast<unsigned int>(offset));
-	g_runtimeEnv.markStacks[windowKey] = marks;
+	for (std::size_t offset : offsets)
+		marks.push_back(std::to_string(offset));
+	mrvmStoreRuntimeStateStringList("markStacks", key, marks);
 }
 
 void mrvmUiReplaceWindowLastSearch(const void *windowKey, const std::string &fileName, bool valid, std::size_t start, std::size_t end, std::size_t cursor) {
+	const int bufferId = runtimeWindowBufferId(windowKey);
+
 	if (!valid) {
-		if (g_runtimeEnv.lastSearchWindow == windowKey) {
-			g_runtimeEnv.lastSearchValid = false;
-			g_runtimeEnv.lastSearchWindow = nullptr;
-			g_runtimeEnv.lastSearchFileName.clear();
-			g_runtimeEnv.lastSearchStart = 0;
-			g_runtimeEnv.lastSearchEnd = 0;
-			g_runtimeEnv.lastSearchCursor = 0;
-		}
+		if (mrvmRuntimeStateInt("lastSearch", "bufferId") == bufferId) mrvmClearRuntimeStateBranch("lastSearch");
 		return;
 	}
-	g_runtimeEnv.lastSearchValid = true;
-	g_runtimeEnv.lastSearchWindow = windowKey;
-	g_runtimeEnv.lastSearchFileName = fileName;
-	g_runtimeEnv.lastSearchStart = start;
-	g_runtimeEnv.lastSearchEnd = end;
-	g_runtimeEnv.lastSearchCursor = cursor;
+	mrvmStoreRuntimeStateInt("lastSearch", "valid", 1);
+	mrvmStoreRuntimeStateInt("lastSearch", "bufferId", bufferId);
+	mrvmStoreRuntimeStateString("lastSearch", "fileName", fileName);
+	mrvmStoreRuntimeStateSize("lastSearch", "start", start);
+	mrvmStoreRuntimeStateSize("lastSearch", "end", end);
+	mrvmStoreRuntimeStateSize("lastSearch", "cursor", cursor);
 }
 
 void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<std::string, int> &ints, const std::map<std::string, std::string> &strings) {
@@ -110,11 +126,11 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<
 	std::vector<std::string> preservedHashOrder;
 	std::set<std::string> finalKeys;
 	std::set<std::string> seen;
-	const std::vector<std::string> oldOrder = mrvmRuntimeGlobalOrderValues(g_runtimeEnv.runtimeKv);
+	const std::vector<std::string> oldOrder = mrvmRuntimeGlobalOrderValues(mrvmRuntimeKv());
 
 	for (const std::string &key : oldOrder) {
 		GlobalEntry entry;
-		if (!mrvmRuntimeGlobalRead(g_runtimeEnv.runtimeKv, key, entry) || entry.type != TYPE_HASH) continue;
+		if (!mrvmRuntimeGlobalRead(mrvmRuntimeKv(), key, entry) || entry.type != TYPE_HASH) continue;
 		if (ints.find(key) != ints.end() || strings.find(key) != strings.end()) continue;
 		preservedHashOrder.push_back(key);
 		preservedHashes[key] = entry;
@@ -131,9 +147,9 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<
 		finalKeys.insert(mrvmUpperKey(string.first));
 
 	for (const std::string &key : oldOrder) {
-		if (finalKeys.find(key) == finalKeys.end()) static_cast<void>(mrvmRuntimeGlobalErase(g_runtimeEnv.runtimeKv, key));
+		if (finalKeys.find(key) == finalKeys.end()) static_cast<void>(mrvmRuntimeGlobalErase(mrvmRuntimeKv(), key));
 	}
-	mrvmRuntimeGlobalClearOrderAndEnumeration(g_runtimeEnv.runtimeKv);
+	mrvmRuntimeGlobalClearOrderAndEnumeration(mrvmRuntimeKv());
 
 	for (const auto &i : order) {
 		const std::string key = mrvmUpperKey(i);
@@ -142,23 +158,23 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<
 		if (!seen.insert(key).second) continue;
 		intIt = ints.find(key);
 		if (intIt != ints.end()) {
-			mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, key, TYPE_INT, mrvmMakeInt(intIt->second));
+			mrvmRuntimeGlobalWrite(mrvmRuntimeKv(), key, TYPE_INT, mrvmMakeInt(intIt->second));
 		} else {
 			strIt = strings.find(key);
 			if (strIt == strings.end()) continue;
-			mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, key, TYPE_STR, mrvmMakeString(strIt->second));
+			mrvmRuntimeGlobalWrite(mrvmRuntimeKv(), key, TYPE_STR, mrvmMakeString(strIt->second));
 		}
 	}
 
 	for (const auto &i : ints) {
 		const std::string key = mrvmUpperKey(i.first);
 		if (!seen.insert(key).second) continue;
-		mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, key, TYPE_INT, mrvmMakeInt(i.second));
+		mrvmRuntimeGlobalWrite(mrvmRuntimeKv(), key, TYPE_INT, mrvmMakeInt(i.second));
 	}
 	for (const auto &string : strings) {
 		const std::string key = mrvmUpperKey(string.first);
 		if (!seen.insert(key).second) continue;
-		mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, key, TYPE_STR, mrvmMakeString(string.second));
+		mrvmRuntimeGlobalWrite(mrvmRuntimeKv(), key, TYPE_STR, mrvmMakeString(string.second));
 	}
 
 	for (const std::string &key : preservedHashOrder) {
@@ -166,11 +182,11 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<
 		if (!seen.insert(key).second) continue;
 		hashIt = preservedHashes.find(key);
 		if (hashIt == preservedHashes.end()) continue;
-		mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, key, hashIt->second.type, hashIt->second.value);
+		mrvmRuntimeGlobalWrite(mrvmRuntimeKv(), key, hashIt->second.type, hashIt->second.value);
 	}
 }
 
 void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand) {
-	g_runtimeEnv.ignoreCase = ignoreCase;
-	g_runtimeEnv.tabExpand = tabExpand;
+	mrvmStoreRuntimeStateInt("options", "ignoreCase", ignoreCase ? 1 : 0);
+	mrvmStoreRuntimeStateInt("options", "tabExpand", tabExpand ? 1 : 0);
 }

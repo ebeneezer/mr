@@ -103,89 +103,89 @@ VirtualMachine::InstructionFlow VirtualMachine::EditorProcedures::execute(MRVMPr
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("PUT_LINE expects one string argument.");
 			editor = currentEditor();
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			replaceEditorLine(editor, mrvmValueAsString(args[0]));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::Cr: {
 			MRFileEditor *editor = currentEditor();
 			if (!args.empty()) throw std::runtime_error("CR expects no arguments.");
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			carriageReturnEditor(editor);
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::DelChar: {
 			MRFileEditor *editor = currentEditor();
 			if (!args.empty()) throw std::runtime_error("DEL_CHAR expects no arguments.");
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			deleteEditorChars(editor, 1);
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::DelChars: {
 			MRFileEditor *editor = currentEditor();
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("DEL_CHARS expects one integer argument.");
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			deleteEditorChars(editor, mrvmValueAsInt(args[0]));
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::DelLine: {
 			MRFileEditor *editor = currentEditor();
 			if (!args.empty()) throw std::runtime_error("DEL_LINE expects no arguments.");
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			deleteEditorLine(editor);
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::BackSpace: {
 			MRFileEditor *editor = currentEditor();
 			if (!args.empty()) throw std::runtime_error("BACK_SPACE expects no arguments.");
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			backspaceEditor(editor);
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::WordWrapLine: {
 			MRFileEditor *editor = currentEditor();
 			if (!args.empty()) throw std::runtime_error("WORD_WRAP_LINE expects no arguments.");
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			wordWrapEditorLine(editor);
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::SetRandomMark:
 		case MRVMProcedure::GetRandomMark: {
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error((name + " expects one integer argument.").c_str());
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			const std::string sequenceText = "<" + std::to_string(args[0].i) + ">";
-			runtimeErrorLevel() = dispatchMRKeymapAction(name == "SET_RANDOM_MARK" ? "MRMAC_MARK_SET_RANDOM_ACCESS" : "MRMAC_MARK_GET_RANDOM_ACCESS", sequenceText, currentEditorCommandWindow()) ? 0 : 1001;
+			setRuntimeErrorLevel(dispatchMRKeymapAction(name == "SET_RANDOM_MARK" ? "MRMAC_MARK_SET_RANDOM_ACCESS" : "MRMAC_MARK_GET_RANDOM_ACCESS", sequenceText, currentEditorCommandWindow()) ? 0 : 1001);
 		} break;
 		case MRVMProcedure::ExtendBlockByMotion: {
 			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("EXTEND_BLOCK_BY_MOTION expects one key sequence string argument.");
 			if (currentBackgroundEditSession() != nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_BLOCK_EXTEND_BY_MOTION", mrvmValueAsString(args[0]), currentEditorCommandWindow()) ? 0 : 1001;
+			setRuntimeErrorLevel(dispatchMRKeymapAction("MRMAC_BLOCK_EXTEND_BY_MOTION", mrvmValueAsString(args[0]), currentEditorCommandWindow()) ? 0 : 1001);
 		} break;
 		case MRVMProcedure::Left:
 		case MRVMProcedure::Right:
@@ -242,11 +242,11 @@ VirtualMachine::InstructionFlow VirtualMachine::EditorProcedures::execute(MRVMPr
 			int deferredError = 0;
 			if (!args.empty()) throw std::runtime_error((name + " expects no arguments.").c_str());
 			if (queueDeferredUiProcedure(name, args, deferredError)) {
-				runtimeErrorLevel() = deferredError;
+				setRuntimeErrorLevel(deferredError);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr && name != "CREATE_WINDOW" && name != "BLOCK_STAT" && name != "SAVE_SETTINGS") {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			switch (procedure) {
@@ -338,7 +338,7 @@ VirtualMachine::InstructionFlow VirtualMachine::EditorProcedures::execute(MRVMPr
 					break;
 				case MRVMProcedure::BlockStat:
 					ok = true;
-					runtimeReturnInt() = blockStatusValue(currentEditorCommandWindow());
+					setRuntimeReturnInt(blockStatusValue(currentEditorCommandWindow()));
 					break;
 				case MRVMProcedure::CopyBlock:
 				case MRVMProcedure::MoveBlock:
@@ -403,56 +403,56 @@ VirtualMachine::InstructionFlow VirtualMachine::EditorProcedures::execute(MRVMPr
 				default:
 					break;
 			}
-			runtimeErrorLevel() = ok ? 0 : 1001;
+			setRuntimeErrorLevel(ok ? 0 : 1001);
 		} break;
 		case MRVMProcedure::GotoLine: {
 			MRFileEditor *editor = currentEditor();
 			if (args.empty()) {
 				if (currentBackgroundEditSession() != nullptr) {
-					runtimeErrorLevel() = 1001;
+					setRuntimeErrorLevel(1001);
 					return InstructionFlow::SkipPostInstruction;
 				}
-				runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_CURSOR_GOTO_LINE", "", currentEditorCommandWindow()) ? 0 : 1001;
+				setRuntimeErrorLevel(dispatchMRKeymapAction("MRMAC_CURSOR_GOTO_LINE", "", currentEditorCommandWindow()) ? 0 : 1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("GOTO_LINE expects zero or one integer argument.");
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			runtimeErrorLevel() = gotoEditorLine(editor, mrvmValueAsInt(args[0])) ? 0 : 1010;
+			setRuntimeErrorLevel(gotoEditorLine(editor, mrvmValueAsInt(args[0])) ? 0 : 1010);
 		} break;
 		case MRVMProcedure::GotoCol: {
 			MRFileEditor *editor = currentEditor();
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("GOTO_COL expects one integer argument.");
 			if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
-				runtimeErrorLevel() = 1001;
+				setRuntimeErrorLevel(1001);
 				return InstructionFlow::SkipPostInstruction;
 			}
-			runtimeErrorLevel() = gotoEditorCol(editor, mrvmValueAsInt(args[0])) ? 0 : 1010;
+			setRuntimeErrorLevel(gotoEditorCol(editor, mrvmValueAsInt(args[0])) ? 0 : 1010);
 		} break;
 		case MRVMProcedure::SwitchWindow: {
 			int deferredError = 0;
 			if (queueDeferredUiProcedure(name, args, deferredError)) {
-				runtimeErrorLevel() = deferredError;
+				setRuntimeErrorLevel(deferredError);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("SWITCH_WINDOW expects one integer argument.");
-			runtimeErrorLevel() = mrvmUiSwitchWindow(mrvmValueAsInt(args[0])) ? 0 : 1001;
+			setRuntimeErrorLevel(mrvmUiSwitchWindow(mrvmValueAsInt(args[0])) ? 0 : 1001);
 		} break;
 		case MRVMProcedure::SizeWindow: {
 			int deferredError = 0;
 			if (queueDeferredUiProcedure(name, args, deferredError)) {
-				runtimeErrorLevel() = deferredError;
+				setRuntimeErrorLevel(deferredError);
 				return InstructionFlow::SkipPostInstruction;
 			}
 			if (args.size() != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT) throw std::runtime_error("SIZE_WINDOW expects four integer arguments.");
-			runtimeErrorLevel() = mrvmUiSizeCurrentWindow(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1]), mrvmValueAsInt(args[2]), mrvmValueAsInt(args[3])) ? 0 : 1010;
+			setRuntimeErrorLevel(mrvmUiSizeCurrentWindow(mrvmValueAsInt(args[0]), mrvmValueAsInt(args[1]), mrvmValueAsInt(args[2]), mrvmValueAsInt(args[3])) ? 0 : 1010);
 		} break;
 		case MRVMProcedure::WindowCopy:
 		case MRVMProcedure::WindowMove: {
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error((name + " expects one integer argument.").c_str());
-			runtimeErrorLevel() = 0;
+			setRuntimeErrorLevel(0);
 		} break;
 		default:
 			throw std::runtime_error("Procedure does not belong to the editor family.");

@@ -1,16 +1,113 @@
 #include "../../app/utils/MRStringUtils.hpp"
 #include "MRSettingsHistory.hpp"
 #include "MRSettingsRuntimeState.hpp"
+#include "../../mrmac/mrmac.h"
+#include "../../mrmac/vm/MRVMRuntimeKv.hpp"
+#include "../../mrmac/vm/MRVMValue.hpp"
 
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <mutex>
+
+MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
+std::recursive_mutex &mrvmExecutionMutex() noexcept;
 
 namespace {
 
 bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr) *errorMessage = message;
 	return false;
+}
+
+VirtualMachine::Value settingsHistoryRoot(MRVMRuntimeKv &runtimeKv) {
+	VirtualMachine::Value settings = runtimeKv.ensureRoot("SETTINGS");
+	return runtimeKv.ensureChild(settings, "history");
+}
+
+int readInt(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, int fallback) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	if (!mrvmHashContainsValue(store, store, parent, key)) return fallback;
+	VirtualMachine::Value value = mrvmHashReadValue(store, store, parent, key);
+	return value.type == TYPE_INT ? value.i : fallback;
+}
+
+long long readLongLong(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, long long fallback) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	if (!mrvmHashContainsValue(store, store, parent, key)) return fallback;
+	VirtualMachine::Value value = mrvmHashReadValue(store, store, parent, key);
+	if (value.type != TYPE_STR) return fallback;
+	try {
+		std::size_t consumed = 0;
+		const long long parsed = std::stoll(value.s, &consumed, 10);
+		return consumed == value.s.size() ? parsed : fallback;
+	} catch (...) {
+		return fallback;
+	}
+}
+
+std::string readString(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	if (!mrvmHashContainsValue(store, store, parent, key)) return std::string();
+	VirtualMachine::Value value = mrvmHashReadValue(store, store, parent, key);
+	return value.type == TYPE_STR ? value.s : std::string();
+}
+
+void writeInt(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, int value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeInt(value));
+}
+
+void writeLongLong(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, long long value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeString(std::to_string(value)));
+}
+
+void writeString(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, const std::string &value) {
+	MRVMHashStore &store = runtimeKv.globalStore();
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeString(value));
+}
+
+std::vector<MRDialogHistoryEntry> readHistoryEntries(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key) {
+	std::vector<MRDialogHistoryEntry> entries;
+	VirtualMachine::Value list;
+
+	if (!runtimeKv.findChild(parent, key, list)) return entries;
+	const int count = readInt(runtimeKv, list, "count", 0);
+	for (int index = 0; index < count; ++index) {
+		VirtualMachine::Value stored;
+		if (!runtimeKv.findChild(list, std::to_string(index), stored)) continue;
+		entries.push_back(MRDialogHistoryEntry{readString(runtimeKv, stored, "value"), readLongLong(runtimeKv, stored, "epoch", 0)});
+	}
+	return entries;
+}
+
+void writeHistoryEntries(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, const std::vector<MRDialogHistoryEntry> &entries) {
+	VirtualMachine::Value list = runtimeKv.replaceChild(parent, key);
+	writeInt(runtimeKv, list, "count", static_cast<int>(entries.size()));
+	for (std::size_t index = 0; index < entries.size(); ++index) {
+		VirtualMachine::Value stored = runtimeKv.ensureChild(list, std::to_string(index));
+		writeString(runtimeKv, stored, "value", entries[index].value);
+		writeLongLong(runtimeKv, stored, "epoch", entries[index].epoch);
+	}
+}
+
+MRScopedDialogHistoryState readScopedHistory(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &scopes, std::size_t index) {
+	VirtualMachine::Value stored;
+	MRScopedDialogHistoryState state;
+
+	if (!runtimeKv.findChild(scopes, std::to_string(index), stored)) return state;
+	state.lastPath = readString(runtimeKv, stored, "lastPath");
+	state.pathHistory = readHistoryEntries(runtimeKv, stored, "pathHistory");
+	state.fileHistory = readHistoryEntries(runtimeKv, stored, "fileHistory");
+	return state;
+}
+
+void writeScopedHistory(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &scopes, std::size_t index, const MRScopedDialogHistoryState &state) {
+	VirtualMachine::Value stored = runtimeKv.ensureChild(scopes, std::to_string(index));
+	writeString(runtimeKv, stored, "lastPath", state.lastPath);
+	writeHistoryEntries(runtimeKv, stored, "pathHistory", state.pathHistory);
+	writeHistoryEntries(runtimeKv, stored, "fileHistory", state.fileHistory);
 }
 
 } // namespace
@@ -45,17 +142,43 @@ const std::array<MRDialogHistoryScopeSpec, static_cast<std::size_t>(MRDialogHist
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionDefaultPath, "EXTENSION_DEFAULT_PATH"},
 };
 
-std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> &configuredDialogHistoryStorage() {
-	static std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> value;
-	return value;
+std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> configuredDialogHistoryStorage() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value scopes = runtimeKv.ensureChild(settingsHistoryRoot(runtimeKv), "scopes");
+	std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> states;
+
+	for (std::size_t index = 0; index < states.size(); ++index)
+		states[index] = readScopedHistory(runtimeKv, scopes, index);
+	return states;
+}
+
+void storeConfiguredDialogHistoryStorage(const std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> &states) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value history = settingsHistoryRoot(runtimeKv);
+	VirtualMachine::Value scopes = runtimeKv.replaceChild(history, "scopes");
+
+	for (std::size_t index = 0; index < states.size(); ++index)
+		writeScopedHistory(runtimeKv, scopes, index, states[index]);
 }
 
 std::size_t dialogHistoryScopeIndex(MRDialogHistoryScope scope) noexcept {
 	return static_cast<std::size_t>(scope);
 }
 
-MRScopedDialogHistoryState &dialogHistoryState(MRDialogHistoryScope scope) {
-	return configuredDialogHistoryStorage()[dialogHistoryScopeIndex(scope)];
+MRScopedDialogHistoryState dialogHistoryState(MRDialogHistoryScope scope) {
+	const auto states = configuredDialogHistoryStorage();
+	const std::size_t index = dialogHistoryScopeIndex(scope);
+	return index < states.size() ? states[index] : MRScopedDialogHistoryState();
+}
+
+void storeDialogHistoryState(MRDialogHistoryScope scope, const MRScopedDialogHistoryState &state) {
+	auto states = configuredDialogHistoryStorage();
+	const std::size_t index = dialogHistoryScopeIndex(scope);
+	if (index >= states.size()) return;
+	states[index] = state;
+	storeConfiguredDialogHistoryStorage(states);
 }
 
 const MRDialogHistoryScopeSpec *findDialogHistoryScopeSpec(MRDialogHistoryScope scope) noexcept {
@@ -74,29 +197,64 @@ const char *dialogHistoryScopeName(MRDialogHistoryScope scope) noexcept {
 	return spec != nullptr ? spec->name : "GENERAL";
 }
 
-std::vector<MRDialogHistoryEntry> &configuredMultiFilespecHistoryStorage() {
-	static std::vector<MRDialogHistoryEntry> value;
-	return value;
+std::vector<MRDialogHistoryEntry> configuredMultiFilespecHistoryStorage() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readHistoryEntries(runtimeKv, settingsHistoryRoot(runtimeKv), "multiFilespec");
 }
 
-std::vector<MRDialogHistoryEntry> &configuredMultiPathHistoryStorage() {
-	static std::vector<MRDialogHistoryEntry> value;
-	return value;
+void storeConfiguredMultiFilespecHistoryStorage(const std::vector<MRDialogHistoryEntry> &entries) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeHistoryEntries(runtimeKv, settingsHistoryRoot(runtimeKv), "multiFilespec", entries);
 }
 
-int &configuredPathHistoryLimit() {
-	static int value = kHistoryLimitDefault;
-	return value;
+std::vector<MRDialogHistoryEntry> configuredMultiPathHistoryStorage() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readHistoryEntries(runtimeKv, settingsHistoryRoot(runtimeKv), "multiPath");
 }
 
-int &configuredFileHistoryLimit() {
-	static int value = kHistoryLimitDefault;
-	return value;
+void storeConfiguredMultiPathHistoryStorage(const std::vector<MRDialogHistoryEntry> &entries) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeHistoryEntries(runtimeKv, settingsHistoryRoot(runtimeKv), "multiPath", entries);
 }
 
-int &configuredWorkspaceHistoryLimit() {
-	static int value = kHistoryLimitDefault;
-	return value;
+int configuredPathHistoryLimit() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readInt(runtimeKv, settingsHistoryRoot(runtimeKv), "pathLimit", kHistoryLimitDefault);
+}
+
+void storeConfiguredPathHistoryLimit(int value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeInt(runtimeKv, settingsHistoryRoot(runtimeKv), "pathLimit", value);
+}
+
+int configuredFileHistoryLimit() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readInt(runtimeKv, settingsHistoryRoot(runtimeKv), "fileLimit", kHistoryLimitDefault);
+}
+
+void storeConfiguredFileHistoryLimit(int value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeInt(runtimeKv, settingsHistoryRoot(runtimeKv), "fileLimit", value);
+}
+
+int configuredWorkspaceHistoryLimit() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readInt(runtimeKv, settingsHistoryRoot(runtimeKv), "workspaceLimit", kHistoryLimitDefault);
+}
+
+void storeConfiguredWorkspaceHistoryLimit(int value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeInt(runtimeKv, settingsHistoryRoot(runtimeKv), "workspaceLimit", value);
 }
 
 int configuredFileHistoryLimitForScope(MRDialogHistoryScope scope) {
@@ -109,15 +267,23 @@ int configuredFileHistoryLimitForScope(MRDialogHistoryScope scope) {
 	}
 }
 
-long long &configuredHistoryEpochCounter() {
-	static long long value = 0;
-	return value;
+long long configuredHistoryEpochCounter() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readLongLong(runtimeKv, settingsHistoryRoot(runtimeKv), "epoch", 0);
+}
+
+void storeConfiguredHistoryEpochCounter(long long value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	writeLongLong(runtimeKv, settingsHistoryRoot(runtimeKv), "epoch", value);
 }
 
 long long nextHistoryEpoch() {
 	long long nowEpoch = static_cast<long long>(std::time(nullptr));
-	long long &counter = configuredHistoryEpochCounter();
+	long long counter = configuredHistoryEpochCounter();
 	counter = std::max(counter + 1, nowEpoch);
+	storeConfiguredHistoryEpochCounter(counter);
 	return counter;
 }
 
@@ -194,41 +360,47 @@ bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::stri
 
 bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage) {
 	const int previousLimit = configuredPathHistoryLimit();
-	const auto previousStates = configuredDialogHistoryStorage();
+	auto states = configuredDialogHistoryStorage();
+	const auto previousStates = states;
 
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_PATH_HISTORY must be within 5..50.");
-	configuredPathHistoryLimit() = value;
-	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage())
+	storeConfiguredPathHistoryLimit(value);
+	for (MRScopedDialogHistoryState &state : states)
 		trimHistoryToLimit(state.pathHistory, value);
-	if (previousLimit != configuredPathHistoryLimit() || previousStates != configuredDialogHistoryStorage()) markConfiguredSettingsDirty();
+	storeConfiguredDialogHistoryStorage(states);
+	if (previousLimit != value || previousStates != states) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage) {
 	const int previousLimit = configuredFileHistoryLimit();
-	const auto previousStates = configuredDialogHistoryStorage();
+	auto states = configuredDialogHistoryStorage();
+	const auto previousStates = states;
 
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
-	configuredFileHistoryLimit() = value;
-	for (std::size_t i = 0; i < configuredDialogHistoryStorage().size(); ++i) {
+	storeConfiguredFileHistoryLimit(value);
+	for (std::size_t i = 0; i < states.size(); ++i) {
 		const MRDialogHistoryScope scope = static_cast<MRDialogHistoryScope>(i);
-		if (scope != MRDialogHistoryScope::WorkspaceLoad && scope != MRDialogHistoryScope::WorkspaceSave) trimHistoryToLimit(configuredDialogHistoryStorage()[i].fileHistory, value);
+		if (scope != MRDialogHistoryScope::WorkspaceLoad && scope != MRDialogHistoryScope::WorkspaceSave) trimHistoryToLimit(states[i].fileHistory, value);
 	}
-	if (previousLimit != configuredFileHistoryLimit() || previousStates != configuredDialogHistoryStorage()) markConfiguredSettingsDirty();
+	storeConfiguredDialogHistoryStorage(states);
+	if (previousLimit != value || previousStates != states) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredWorkspaceHistoryLimitValue(int value, std::string *errorMessage) {
 	const int previousLimit = configuredWorkspaceHistoryLimit();
-	const auto previousStates = configuredDialogHistoryStorage();
+	auto states = configuredDialogHistoryStorage();
+	const auto previousStates = states;
 
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_WORKSPACE_HISTORY must be within 5..50.");
-	configuredWorkspaceHistoryLimit() = value;
-	trimHistoryToLimit(dialogHistoryState(MRDialogHistoryScope::WorkspaceLoad).fileHistory, value);
-	trimHistoryToLimit(dialogHistoryState(MRDialogHistoryScope::WorkspaceSave).fileHistory, value);
-	if (previousLimit != configuredWorkspaceHistoryLimit() || previousStates != configuredDialogHistoryStorage()) markConfiguredSettingsDirty();
+	storeConfiguredWorkspaceHistoryLimit(value);
+	trimHistoryToLimit(states[dialogHistoryScopeIndex(MRDialogHistoryScope::WorkspaceLoad)].fileHistory, value);
+	trimHistoryToLimit(states[dialogHistoryScopeIndex(MRDialogHistoryScope::WorkspaceSave)].fileHistory, value);
+	storeConfiguredDialogHistoryStorage(states);
+	if (previousLimit != value || previousStates != states) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -246,43 +418,51 @@ int configuredMaxWorkspaceHistory() {
 }
 
 void configuredPathHistoryEntries(std::vector<std::string> &outValues) {
+	const MRScopedDialogHistoryState state = dialogHistoryState(MRDialogHistoryScope::General);
 	outValues.clear();
-	for (const MRDialogHistoryEntry &entry : dialogHistoryState(MRDialogHistoryScope::General).pathHistory)
+	for (const MRDialogHistoryEntry &entry : state.pathHistory)
 		outValues.push_back(entry.value);
 }
 
 void configuredFileHistoryEntries(std::vector<std::string> &outValues) {
+	const MRScopedDialogHistoryState state = dialogHistoryState(MRDialogHistoryScope::General);
 	outValues.clear();
-	for (const MRDialogHistoryEntry &entry : dialogHistoryState(MRDialogHistoryScope::General).fileHistory)
+	for (const MRDialogHistoryEntry &entry : state.fileHistory)
 		outValues.push_back(entry.value);
 }
 
 void configuredMultiFilespecHistoryEntries(std::vector<std::string> &outValues) {
+	const std::vector<MRDialogHistoryEntry> entries = configuredMultiFilespecHistoryStorage();
 	outValues.clear();
-	for (const MRDialogHistoryEntry &entry : configuredMultiFilespecHistoryStorage())
+	for (const MRDialogHistoryEntry &entry : entries)
 		outValues.push_back(entry.value);
 }
 
 void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues) {
+	const std::vector<MRDialogHistoryEntry> entries = configuredMultiPathHistoryStorage();
 	outValues.clear();
-	for (const MRDialogHistoryEntry &entry : configuredMultiPathHistoryStorage())
+	for (const MRDialogHistoryEntry &entry : entries)
 		outValues.push_back(entry.value);
 }
 
 bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage) {
-	const auto previous = configuredMultiFilespecHistoryStorage();
+	std::vector<MRDialogHistoryEntry> entries = configuredMultiFilespecHistoryStorage();
+	const auto previous = entries;
 
-	addHistoryEntry(configuredMultiFilespecHistoryStorage(), trimAscii(value), configuredFileHistoryLimit());
-	if (previous != configuredMultiFilespecHistoryStorage()) markConfiguredSettingsDirty();
+	addHistoryEntry(entries, trimAscii(value), configuredFileHistoryLimit());
+	storeConfiguredMultiFilespecHistoryStorage(entries);
+	if (previous != entries) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool addConfiguredMultiPathHistoryEntry(const std::string &value, std::string *errorMessage) {
-	const auto previous = configuredMultiPathHistoryStorage();
+	std::vector<MRDialogHistoryEntry> entries = configuredMultiPathHistoryStorage();
+	const auto previous = entries;
 
-	addHistoryEntry(configuredMultiPathHistoryStorage(), normalizeConfiguredPathInput(value), configuredPathHistoryLimit());
-	if (previous != configuredMultiPathHistoryStorage()) markConfiguredSettingsDirty();
+	addHistoryEntry(entries, normalizeConfiguredPathInput(value), configuredPathHistoryLimit());
+	storeConfiguredMultiPathHistoryStorage(entries);
+	if (previous != entries) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -290,7 +470,7 @@ bool addConfiguredMultiPathHistoryEntry(const std::string &value, std::string *e
 bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string directory;
-	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+	MRScopedDialogHistoryState state = dialogHistoryState(scope);
 	const MRScopedDialogHistoryState previous = state;
 
 	if (!normalized.empty() && isReadableDirectory(normalized)) {
@@ -310,6 +490,7 @@ bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path
 			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());
 		}
 	}
+	storeDialogHistoryState(scope, state);
 	if (previous != state) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -335,16 +516,18 @@ void rememberLoadDialogPath(MRDialogHistoryScope scope, const char *path) {
 
 void forgetLoadDialogPath(MRDialogHistoryScope scope, const char *path) {
 	const std::string normalized = normalizeConfiguredPathInput(path != nullptr ? path : "");
-	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+	MRScopedDialogHistoryState state = dialogHistoryState(scope);
 	const MRScopedDialogHistoryState previous = state;
 
 	if (normalized.empty()) return;
 	state.fileHistory.erase(std::remove_if(state.fileHistory.begin(), state.fileHistory.end(), [&](const MRDialogHistoryEntry &entry) { return normalizeConfiguredPathInput(entry.value) == normalized; }), state.fileHistory.end());
+	storeDialogHistoryState(scope, state);
 	if (previous != state) markConfiguredSettingsDirty();
 }
 
 std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope) {
-	return latestHistoryValue(dialogHistoryState(scope).fileHistory);
+	const MRScopedDialogHistoryState state = dialogHistoryState(scope);
+	return latestHistoryValue(state.fileHistory);
 }
 
 std::string configuredLastFileDialogPath(MRDialogHistoryScope scope) {
@@ -352,14 +535,16 @@ std::string configuredLastFileDialogPath(MRDialogHistoryScope scope) {
 }
 
 void configuredScopedDialogFileHistoryEntries(MRDialogHistoryScope scope, std::vector<std::string> &outValues) {
+	const MRScopedDialogHistoryState state = dialogHistoryState(scope);
 	outValues.clear();
-	for (const MRDialogHistoryEntry &entry : dialogHistoryState(scope).fileHistory)
+	for (const MRDialogHistoryEntry &entry : state.fileHistory)
 		outValues.push_back(entry.value);
 }
 
 void configuredScopedDialogPathHistoryEntries(MRDialogHistoryScope scope, std::vector<std::string> &outValues) {
+	const MRScopedDialogHistoryState state = dialogHistoryState(scope);
 	outValues.clear();
-	for (const MRDialogHistoryEntry &entry : dialogHistoryState(scope).pathHistory)
+	for (const MRDialogHistoryEntry &entry : state.pathHistory)
 		outValues.push_back(entry.value);
 }
 

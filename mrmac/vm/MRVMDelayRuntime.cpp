@@ -68,9 +68,9 @@ bool VirtualMachine::resumePendingDelay() {
 
 bool VirtualMachine::cancelPendingDelay() {
 	if (!delayState.pending) return false;
-	if (delayState.macroFramePushed && !g_runtimeEnv.macroStack.empty()) g_runtimeEnv.macroStack.pop_back();
+	if (delayState.macroFramePushed) mrvmPopRuntimeMacroFrame();
 	cancelledExecution = true;
-	g_runtimeEnv.errorLevel = 5007;
+	mrvm_runtime::setRuntimeErrorLevel(5007);
 	appendLogLine("VM Notice: pending DELAY cancelled.", true);
 	clearAsyncDelayState();
 	return true;

@@ -112,6 +112,7 @@ runtime consumers, execution sessions, macro routing and coprocessor work items.
   - `EXECSESSIONS/listeners/registered/<listenerId>` for listener ids,
   - `EXECSESSIONS/scheduler/consumers/<consumerId>` for scheduler consumers,
   - `EXECSESSIONS/scheduler/events/recent/<eventId>` for scheduler events,
+  - `EXECSESSIONS/scheduler/nextPumpMs` for the next scheduler pump deadline,
   - `EXECSESSIONS/closures/<closureId>/state/<variableName>` for closure
     variable state,
   - `EXECSESSIONS/console/*` for execution-session console state.
@@ -325,6 +326,10 @@ process exit.
 Notification must copy the registered callbacks under the listener lock and call
 them after releasing that lock. Listener callbacks must not depend on holding
 the listener lock.
+
+Only callback pointers and their mutex may remain in C++. Listener ids and the
+status generation are authoritative under `EXECSESSIONS`; status consumers
+must not mirror either value.
 
 Convenience installers for process-lifetime listeners must be idempotent unless
 they explicitly document that repeated registration is intended.

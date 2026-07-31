@@ -3,6 +3,7 @@
 #include "../MRVM.hpp"
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../config/settings/MRSettingsRuntimeState.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../keymap/MRKeymapProfile.hpp"
 
@@ -11,52 +12,33 @@
 #include <vector>
 
 namespace {
-thread_local bool g_startupSettingsMode = false;
-thread_local int g_configuredKeymapBatchDepth = 0;
-
-struct KeymapBatchState {
-	bool initialized = false;
-	bool profilesDirty = false;
-	bool activeDirty = false;
-	std::vector<MRKeymapProfile> profiles;
-	std::string activeProfile;
-};
-
-KeymapBatchState &keymapBatchState() {
-	static KeymapBatchState state;
-	return state;
-}
-
 void clearKeymapBatchState() noexcept {
-	KeymapBatchState &state = keymapBatchState();
-
-	state.initialized = false;
-	state.profilesDirty = false;
-	state.activeDirty = false;
-	state.profiles.clear();
-	state.activeProfile.clear();
+	clearConfiguredKeymapBatchStateValue();
 }
 
 bool configuredKeymapBatchActive() noexcept {
-	return g_startupSettingsMode || g_configuredKeymapBatchDepth > 0;
+	return settingsStartupModeValue() || settingsKeymapBatchDepthValue() > 0;
 }
 
-void ensureKeymapBatchInitialized() {
-	KeymapBatchState &state = keymapBatchState();
+MRConfiguredKeymapBatchState initializedKeymapBatchState() {
+	MRConfiguredKeymapBatchState state = configuredKeymapBatchStateValue();
 
-	if (state.initialized) return;
-	state.profiles = configuredKeymapProfiles();
-	state.activeProfile = configuredActiveKeymapProfile();
-	state.initialized = true;
+	if (!state.initialized) {
+		state.profiles = configuredKeymapProfiles();
+		state.activeProfile = configuredActiveKeymapProfile();
+		state.initialized = true;
+		storeConfiguredKeymapBatchStateValue(state);
+	}
+	return state;
 }
 
 bool hasPendingKeymapBatch() noexcept {
-	const KeymapBatchState &state = keymapBatchState();
+	const MRConfiguredKeymapBatchState state = configuredKeymapBatchStateValue();
 	return state.initialized && (state.profilesDirty || state.activeDirty);
 }
 
 bool flushKeymapBatch(std::string *errorMessage) {
-	KeymapBatchState &state = keymapBatchState();
+	const MRConfiguredKeymapBatchState state = configuredKeymapBatchStateValue();
 
 	if (!state.initialized) {
 		if (errorMessage != nullptr) errorMessage->clear();
@@ -91,27 +73,30 @@ bool assignKeymapPayloadError(std::string *errorMessage, std::string message) {
 } // namespace
 
 void mrvmSetStartupSettingsMode(bool enabled) noexcept {
-	g_startupSettingsMode = enabled;
+	storeSettingsStartupModeValue(enabled);
 	if (enabled) clearKeymapBatchState();
-	else if (g_configuredKeymapBatchDepth == 0 && hasPendingKeymapBatch())
+	else if (settingsKeymapBatchDepthValue() == 0 && hasPendingKeymapBatch())
 		clearKeymapBatchState();
 }
 
 bool mrvmIsStartupSettingsMode() noexcept {
-	return g_startupSettingsMode;
+	return settingsStartupModeValue();
 }
 
 void mrvmBeginConfiguredKeymapBatch() noexcept {
-	++g_configuredKeymapBatchDepth;
+	storeSettingsKeymapBatchDepthValue(settingsKeymapBatchDepthValue() + 1);
 }
 
 bool mrvmEndConfiguredKeymapBatch(std::string *errorMessage) {
-	if (g_configuredKeymapBatchDepth <= 0) {
+	int depth = settingsKeymapBatchDepthValue();
+
+	if (depth <= 0) {
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
-	--g_configuredKeymapBatchDepth;
-	if (g_configuredKeymapBatchDepth > 0 || g_startupSettingsMode) {
+	--depth;
+	storeSettingsKeymapBatchDepthValue(depth);
+	if (depth > 0 || settingsStartupModeValue()) {
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
@@ -129,10 +114,10 @@ bool mrvmApplyConfiguredActiveKeymapProfilePayload(const std::string &payload, s
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
 	bool ok = false;
 	if (configuredKeymapBatchActive()) {
-		ensureKeymapBatchInitialized();
-		KeymapBatchState &state = keymapBatchState();
+		MRConfiguredKeymapBatchState state = initializedKeymapBatchState();
 		state.activeProfile = activeProfileRecord.name;
 		state.activeDirty = true;
+		storeConfiguredKeymapBatchStateValue(state);
 		ok = true;
 		if (errorMessage != nullptr) errorMessage->clear();
 	} else
@@ -147,16 +132,16 @@ bool mrvmApplyConfiguredKeymapProfilePayload(const std::string &payload, std::st
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
 	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
 	if (configuredKeymapBatchActive()) {
-		ensureKeymapBatchInitialized();
-		profiles = keymapBatchState().profiles;
+		profiles = initializedKeymapBatchState().profiles;
 	}
 	for (MRKeymapProfile &existing : profiles)
 		if (existing.name == profile.name) {
 			existing = profile;
 			if (configuredKeymapBatchActive()) {
-				KeymapBatchState &state = keymapBatchState();
+				MRConfiguredKeymapBatchState state = initializedKeymapBatchState();
 				state.profiles = std::move(profiles);
 				state.profilesDirty = true;
+				storeConfiguredKeymapBatchStateValue(state);
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
@@ -164,9 +149,10 @@ bool mrvmApplyConfiguredKeymapProfilePayload(const std::string &payload, std::st
 		}
 	profiles.push_back(profile);
 	if (configuredKeymapBatchActive()) {
-		KeymapBatchState &state = keymapBatchState();
+		MRConfiguredKeymapBatchState state = initializedKeymapBatchState();
 		state.profiles = std::move(profiles);
 		state.profilesDirty = true;
+		storeConfiguredKeymapBatchStateValue(state);
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
@@ -180,16 +166,16 @@ bool mrvmApplyConfiguredKeymapBindingPayload(const std::string &payload, std::st
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
 	if (configuredKeymapBatchActive()) {
-		ensureKeymapBatchInitialized();
-		profiles = keymapBatchState().profiles;
+		profiles = initializedKeymapBatchState().profiles;
 	}
 	for (MRKeymapProfile &profile : profiles)
 		if (profile.name == binding.profileName) {
 			profile.bindings.push_back(binding);
 			if (configuredKeymapBatchActive()) {
-				KeymapBatchState &state = keymapBatchState();
+				MRConfiguredKeymapBatchState state = initializedKeymapBatchState();
 				state.profiles = std::move(profiles);
 				state.profilesDirty = true;
+				storeConfiguredKeymapBatchStateValue(state);
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}

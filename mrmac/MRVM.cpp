@@ -103,7 +103,6 @@ void mrSaveWorkspace(const std::string &filename);
 void mrLoadWorkspace(const std::string &filename);
 void applyVirtualDesktopConfigurationChange(int count);
 
-RuntimeEnvironment g_runtimeEnv;
 std::recursive_mutex g_vmExecutionMutex;
 thread_local BackgroundEditSession *g_backgroundEditSession = nullptr;
 thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
@@ -182,9 +181,9 @@ std::string getEnvironmentValue(const std::string &entryName) {
 	std::string direct = mrvmGetenvValue(key);
 	if (!direct.empty()) return direct;
 	std::string up = mrvmUpperKey(key);
-	if (up == "MR_PATH") return g_runtimeEnv.executableDir;
-	if (up == "COMSPEC") return g_runtimeEnv.shellPath;
-	if (up == "OS_VERSION") return g_runtimeEnv.shellVersion;
+	if (up == "MR_PATH") return mrvmRuntimeStateString("process", "executableDir");
+	if (up == "COMSPEC") return mrvmRuntimeStateString("process", "shellPath");
+	if (up == "OS_VERSION") return mrvmRuntimeStateString("process", "shellVersion");
 	return std::string();
 }
 
@@ -192,27 +191,30 @@ int findFirstFileMatch(const std::string &pattern) {
 	glob_t g;
 	std::string expanded = mrvmProcessExpandUserPath(trimAscii(pattern));
 	int rc;
+	std::vector<std::string> fileMatches;
 
-	g_runtimeEnv.fileMatches.clear();
-	g_runtimeEnv.fileMatchIndex = 0;
-	g_runtimeEnv.lastFileName.clear();
+	mrvmStoreRuntimeStateStringList("fileEnumeration", "matches", fileMatches);
+	mrvmStoreRuntimeStateSize("fileEnumeration", "index", 0);
+	mrvmStoreRuntimeStateString("fileEnumeration", "lastFileName", std::string());
 
 	std::memset(&g, 0, sizeof(g));
 	rc = ::glob(expanded.c_str(), 0, nullptr, &g);
 	if (rc == 0) {
 		for (std::size_t i = 0; i < g.gl_pathc; ++i)
-			g_runtimeEnv.fileMatches.emplace_back(g.gl_pathv[i]);
+			fileMatches.emplace_back(g.gl_pathv[i]);
 		::globfree(&g);
-		if (!g_runtimeEnv.fileMatches.empty()) {
-			g_runtimeEnv.lastFileName = g_runtimeEnv.fileMatches[0];
+		if (!fileMatches.empty()) {
+			mrvmStoreRuntimeStateStringList("fileEnumeration", "matches", fileMatches);
+			mrvmStoreRuntimeStateString("fileEnumeration", "lastFileName", fileMatches[0]);
 			return 0;
 		}
 	} else
 		::globfree(&g);
 
 	if (mrvmFileExistsPath(expanded)) {
-		g_runtimeEnv.fileMatches.push_back(expanded);
-		g_runtimeEnv.lastFileName = expanded;
+		fileMatches.push_back(expanded);
+		mrvmStoreRuntimeStateStringList("fileEnumeration", "matches", fileMatches);
+		mrvmStoreRuntimeStateString("fileEnumeration", "lastFileName", expanded);
 		return 0;
 	}
 
@@ -220,10 +222,14 @@ int findFirstFileMatch(const std::string &pattern) {
 }
 
 int findNextFileMatch() {
-	if (g_runtimeEnv.fileMatches.empty()) return 18;
-	if (g_runtimeEnv.fileMatchIndex + 1 >= g_runtimeEnv.fileMatches.size()) return 18;
-	++g_runtimeEnv.fileMatchIndex;
-	g_runtimeEnv.lastFileName = g_runtimeEnv.fileMatches[g_runtimeEnv.fileMatchIndex];
+	const std::vector<std::string> fileMatches = mrvmRuntimeStateStringList("fileEnumeration", "matches");
+	std::size_t index = mrvmRuntimeStateSize("fileEnumeration", "index");
+
+	if (fileMatches.empty()) return 18;
+	if (index + 1 >= fileMatches.size()) return 18;
+	++index;
+	mrvmStoreRuntimeStateSize("fileEnumeration", "index", index);
+	mrvmStoreRuntimeStateString("fileEnumeration", "lastFileName", fileMatches[index]);
 	return 0;
 }
 
@@ -236,7 +242,8 @@ bool currentExecutingMacroSpec(std::string &macroSpec) {
 }
 
 MRVMRuntimeKv &mrvmRuntimeKv() noexcept {
-	return g_runtimeEnv.runtimeKv;
+	static MRVMRuntimeKv runtimeKv;
+	return runtimeKv;
 }
 
 std::recursive_mutex &mrvmExecutionMutex() noexcept {
@@ -398,11 +405,12 @@ std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec) {
 		return mrvmUpperKey(macroPart);
 	}();
 	const int mode = currentUiMacroMode();
+	const std::vector<MRVMExplicitKeyBinding> explicitBindings = mrvmRuntimeExplicitKeyBindings();
 
 	if (targetMacroKey.empty()) return std::string();
 	if (!filePart.empty()) targetFileKey = resolveLoadedFileKeyForSpec(filePart);
 	if (!filePart.empty() && targetFileKey.empty()) targetFileKey = mrvmMakeMacroFileKey(filePart);
-	for (auto it = g_runtimeEnv.explicitKeyBindings.rbegin(); it != g_runtimeEnv.explicitKeyBindings.rend(); ++it) {
+	for (auto it = explicitBindings.rbegin(); it != explicitBindings.rend(); ++it) {
 		if (it->kind != MRVMExplicitBindingKind::MacroSpec || !mrvmBindingModeMatches(it->mode, mode)) continue;
 		if (!macroSpecTargetsLoadedMacro(it->macroSpec, targetFileKey, targetMacroKey)) continue;
 		return mrvmMenuLabelFromBindingKey(it->key);
@@ -457,7 +465,7 @@ bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage, std::v
 	}
 	if (errorMessage == nullptr) return false;
 
-	switch (g_runtimeEnv.errorLevel) {
+	switch (runtimeErrorLevel()) {
 		case 5001:
 			*errorMessage = "Macro specification could not be resolved.";
 			break;
@@ -510,7 +518,8 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 	if (mrvmKeyReplayActive()) return false;
 	if (traceSnippetKey) {
 		char line[512];
-		std::snprintf(line, sizeof(line), "KEYDBG vm assigned-key rawCode=0x%04X rawMods=0x%04X code=0x%04X mods=0x%04X mode=%d explicit=%zu loaded=%zu indexed=%zu", static_cast<unsigned>(keyCode), static_cast<unsigned>(controlKeyState), static_cast<unsigned>(pressed.code), static_cast<unsigned>(pressed.mods), mode, g_runtimeEnv.explicitKeyBindings.size(), macroCatalogLoadedMacroCount(), macroCatalogIndexedBindingCount());
+		const std::size_t explicitBindingCount = mrvmRuntimeExplicitKeyBindings().size();
+		std::snprintf(line, sizeof(line), "KEYDBG vm assigned-key rawCode=0x%04X rawMods=0x%04X code=0x%04X mods=0x%04X mode=%d explicit=%zu loaded=%zu indexed=%zu", static_cast<unsigned>(keyCode), static_cast<unsigned>(controlKeyState), static_cast<unsigned>(pressed.code), static_cast<unsigned>(pressed.mods), mode, explicitBindingCount, macroCatalogLoadedMacroCount(), macroCatalogIndexedBindingCount());
 		mrLogMessage(line);
 	}
 	mrvmLogCalculatorHotkeyState("vm-enter", pressed);

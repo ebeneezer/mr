@@ -6,6 +6,8 @@
 #define Uses_TPoint
 #include <tvision/tv.h>
 
+#include <string>
+
 class MREditWindow;
 class MRDesktopWindow;
 
@@ -36,7 +38,7 @@ class MRWindowLayout {
 	[[nodiscard]] static TRect restoreBoundsForWorkspace(const MREditWindow *window) noexcept;
 	[[nodiscard]] static const MinimizedGlyphs &minimizedGlyphs() noexcept;
 	[[nodiscard]] static MinimizedLayout minimizedLayout(const MRDesktopWindow *window, int width) noexcept;
-	[[nodiscard]] static const char *minimizedDisplayTitle(const MRDesktopWindow *window) noexcept;
+	[[nodiscard]] static std::string minimizedDisplayTitle(const MRDesktopWindow *window);
 	[[nodiscard]] static int minimizedDisplayTitleWidth(const MRDesktopWindow *window) noexcept;
 	[[nodiscard]] static int minimizedWindowWidth(const MRDesktopWindow *window) noexcept;
 	[[nodiscard]] static bool isMinimizedRestoreGlyphHit(const MRDesktopWindow *window, TPoint local) noexcept;

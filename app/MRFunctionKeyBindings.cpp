@@ -76,7 +76,7 @@ MRBentoBox *mrCurrentMacroDebuggerBentoBox() {
 	return nullptr;
 }
 
-const std::vector<MRStatusLine::FunctionKeyLabel> &mrStartupFunctionKeyLabels(ushort modifiers) {
+std::vector<MRStatusLine::FunctionKeyLabel> mrStartupFunctionKeyLabels(ushort modifiers) {
 	static const std::vector<MRStatusLine::FunctionKeyLabel> baseLabels{
 	    {TKey(kbF1), cmHelp, "~F1~ Help"},
 	    {TKey(kbF2), cmMrFileLoad, "~F2~ Load"},
@@ -133,8 +133,6 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &mrStartupFunctionKeyLabels(us
 	    {TKey(kbF11, kbAltShift), 0, ""},
 	    {TKey(kbF12, kbAltShift), 0, ""},
 	};
-	static std::vector<MRStatusLine::FunctionKeyLabel> labels;
-
 	switch (modifiers) {
 		case 0:
 			return baseLabels;
@@ -145,12 +143,11 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &mrStartupFunctionKeyLabels(us
 		case kbAltShift:
 			return altLabels;
 		default:
-			labels = emptyFunctionKeyLabels(modifiers);
-			return labels;
+			return emptyFunctionKeyLabels(modifiers);
 	}
 }
 
-const std::vector<MRStatusLine::FunctionKeyLabel> &mrEditorFunctionKeyLabels(ushort modifiers) {
+std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort modifiers) {
 	static const std::vector<MRStatusLine::FunctionKeyLabel> baseLabels{
 	    {TKey(kbF1), cmHelp, "~F1~ Help"},
 	    {TKey(kbF2), cmMrFileSave, "~F2~ Save"},
@@ -207,7 +204,7 @@ const std::vector<MRStatusLine::FunctionKeyLabel> &mrEditorFunctionKeyLabels(ush
 	    {TKey(kbF11, kbAltShift), 0, ""},
 	    {TKey(kbF12, kbAltShift), 0, ""},
 	};
-	static std::vector<MRStatusLine::FunctionKeyLabel> labels;
+	std::vector<MRStatusLine::FunctionKeyLabel> labels;
 	MREditWindow *window = currentEditorCommandWindow();
 	const bool diagnosticsActive = compilerDiagnosticsFunctionKeysActive();
 	const bool fileCompareActive = fileCompareFunctionKeysActive();

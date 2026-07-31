@@ -17,6 +17,7 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <unistd.h>
@@ -31,10 +32,16 @@
 #include "../dialogs/setup/MRSetupCommon.hpp"
 #include "../keymap/MRKeymapResolver.hpp"
 #include "../keymap/MRKeymapToken.hpp"
+#include "../mrmac/mrmac.h"
+#include "../mrmac/vm/MRVMRuntimeKv.hpp"
+#include "../mrmac/vm/MRVMValue.hpp"
 #include "MRFrame.hpp"
 #include "MRHelpSystem.hpp"
 #include "MRMessageLineController.hpp"
 #include "MREditWindow.hpp"
+
+MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
+std::recursive_mutex &mrvmExecutionMutex() noexcept;
 
 namespace {
 constexpr std::string_view kLogWindowTitle = "MR LOG";
@@ -43,23 +50,78 @@ TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
 
-std::string g_logBuffer;
-std::size_t g_logPersistedBytes = 0;
-std::string g_logPersistedPath;
 bool g_logWindowInitializing = false;
-bool g_keystrokeRecordingActive = false;
-bool g_keystrokeRecordingMarkerVisible = false;
-bool g_macroBrainMarkerActive = false;
-bool g_macroBrainMarkerVisible = false;
 MREditWindow *g_deferredActivationWindow = nullptr;
-bool runtimeKeymapDebugEnabled() noexcept {
-	static int cached = -1;
 
-	if (cached < 0) {
-		const char *value = std::getenv("MR_KEY_DEBUG");
-		cached = (value != nullptr && *value != '\0' && std::strcmp(value, "0") != 0) ? 1 : 0;
+VirtualMachine::Value applicationUiStateBranch(MRVMRuntimeKv &runtimeKv, const char *branch) {
+	VirtualMachine::Value applicationUi = runtimeKv.ensureRoot("APPLICATIONUI");
+	return runtimeKv.ensureChild(applicationUi, branch);
+}
+
+int applicationUiStateInt(const char *branch, const char *key, int fallback = 0) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	VirtualMachine::Value parent = applicationUiStateBranch(runtimeKv, branch);
+	if (!mrvmHashContainsValue(store, store, parent, key)) return fallback;
+	VirtualMachine::Value stored = mrvmHashReadValue(store, store, parent, key);
+	return stored.type == TYPE_INT ? stored.i : fallback;
+}
+
+void storeApplicationUiStateInt(const char *branch, const char *key, int value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	VirtualMachine::Value parent = applicationUiStateBranch(runtimeKv, branch);
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeInt(value));
+}
+
+std::size_t applicationUiStateSize(const char *branch, const char *key) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	VirtualMachine::Value parent = applicationUiStateBranch(runtimeKv, branch);
+	if (!mrvmHashContainsValue(store, store, parent, key)) return 0;
+	VirtualMachine::Value stored = mrvmHashReadValue(store, store, parent, key);
+	if (stored.type != TYPE_STR) return 0;
+	try {
+		std::size_t consumed = 0;
+		const unsigned long long parsed = std::stoull(stored.s, &consumed, 10);
+		return consumed == stored.s.size() ? static_cast<std::size_t>(parsed) : 0;
+	} catch (...) {
+		return 0;
 	}
-	return cached == 1;
+}
+
+void storeApplicationUiStateSize(const char *branch, const char *key, std::size_t value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	VirtualMachine::Value parent = applicationUiStateBranch(runtimeKv, branch);
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeString(std::to_string(value)));
+}
+
+std::string applicationUiStateString(const char *branch, const char *key) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	VirtualMachine::Value parent = applicationUiStateBranch(runtimeKv, branch);
+	if (!mrvmHashContainsValue(store, store, parent, key)) return std::string();
+	VirtualMachine::Value stored = mrvmHashReadValue(store, store, parent, key);
+	return stored.type == TYPE_STR ? stored.s : std::string();
+}
+
+void storeApplicationUiStateString(const char *branch, const char *key, const std::string &value) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	VirtualMachine::Value parent = applicationUiStateBranch(runtimeKv, branch);
+	mrvmHashWriteValue(store, store, parent, key, mrvmMakeString(value));
+}
+
+bool runtimeKeymapDebugEnabled() noexcept {
+	const char *value = std::getenv("MR_KEY_DEBUG");
+	return value != nullptr && *value != '\0' && std::strcmp(value, "0") != 0;
 }
 
 const char *runtimeKeymapContextName(MRKeymapContext context) noexcept {
@@ -291,14 +353,18 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 
 [[nodiscard]] MREditWindow *ensureLogWindowInternal(bool activate) {
 	MREditWindow *win = findWindowByTitle(kLogWindowTitle);
+	std::string logBuffer = applicationUiStateString("log", "buffer");
 
-	if (g_logBuffer.empty()) g_logBuffer = "MR/MEMAC log initialized.\n";
+	if (logBuffer.empty()) {
+		logBuffer = "MR/MEMAC log initialized.\n";
+		storeApplicationUiStateString("log", "buffer", logBuffer);
+	}
 	if (win == nullptr) {
 		std::string refreshedText;
 
 		g_logWindowInitializing = true;
-		win = createReadOnlyTextWindow(kLogWindowTitle.data(), g_logBuffer.c_str(), !activate);
-		refreshedText = g_logBuffer;
+		win = createReadOnlyTextWindow(kLogWindowTitle.data(), logBuffer.c_str(), !activate);
+		refreshedText = logBuffer;
 		if (win != nullptr) {
 			win->setReadOnly(false);
 			static_cast<void>(win->loadTextBuffer(refreshedText.c_str(), kLogWindowTitle.data()));
@@ -421,11 +487,12 @@ bool mrEnsureLogWindow(bool activate) {
 
 bool mrClearLogWindow() {
 	MREditWindow *win;
+	const std::string logBuffer = "MR/MEMAC log initialized.\n";
 
-	g_logBuffer = "MR/MEMAC log initialized.\n";
+	storeApplicationUiStateString("log", "buffer", logBuffer);
 	win = ensureLogWindowInternal(false);
 	if (win == nullptr) return false;
-	if (!win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data())) return false;
+	if (!win->replaceTextBuffer(logBuffer.c_str(), kLogWindowTitle.data())) return false;
 	win->setWindowRole(MREditWindow::wrLog);
 	win->setReadOnly(true);
 	win->setFileChanged(false);
@@ -451,25 +518,27 @@ bool mrEnsureUsableWorkWindow(bool allowCreateFallback) {
 
 void mrLogMessage(std::string_view message) {
 	const std::string line = normalizeLogLine(message);
+	std::string logBuffer = applicationUiStateString("log", "buffer");
 	MREditWindow *win;
 	std::size_t persistedStart = 0;
 	std::string_view appendedChunk;
 	std::string chunkText;
 
 	if (line.empty()) return;
-	persistedStart = g_logBuffer.size();
-	if (!g_logBuffer.empty() && g_logBuffer[g_logBuffer.size() - 1] != '\n') g_logBuffer += '\n';
-	g_logBuffer += "[" + currentTimestamp() + "] " + line + "\n";
-	appendedChunk = std::string_view(g_logBuffer.data() + persistedStart, g_logBuffer.size() - persistedStart);
+	persistedStart = logBuffer.size();
+	if (!logBuffer.empty() && logBuffer[logBuffer.size() - 1] != '\n') logBuffer += '\n';
+	logBuffer += "[" + currentTimestamp() + "] " + line + "\n";
+	storeApplicationUiStateString("log", "buffer", logBuffer);
+	appendedChunk = std::string_view(logBuffer.data() + persistedStart, logBuffer.size() - persistedStart);
 	chunkText.assign(appendedChunk);
 	if (configuredLogHandling() == MRLogHandling::Persist) {
 		const std::string path = configuredLogFilePath();
-		const bool pathChanged = g_logPersistedPath != path;
-		const std::string_view chunk = pathChanged ? std::string_view(g_logBuffer.data(), g_logBuffer.size()) : appendedChunk;
+		const bool pathChanged = applicationUiStateString("log", "persistedPath") != path;
+		const std::string_view chunk = pathChanged ? std::string_view(logBuffer.data(), logBuffer.size()) : appendedChunk;
 
 		if (!path.empty() && !chunk.empty() && appendLogChunkToFile(path, chunk, nullptr)) {
-			g_logPersistedBytes = g_logBuffer.size();
-			g_logPersistedPath = path;
+			storeApplicationUiStateSize("log", "persistedBytes", logBuffer.size());
+			storeApplicationUiStateString("log", "persistedPath", path);
 		}
 	}
 	if (g_logWindowInitializing) return;
@@ -478,7 +547,7 @@ void mrLogMessage(std::string_view message) {
 		win = ensureLogWindowInternal(false);
 	} else {
 		if (!win->appendLogViewerText(chunkText.c_str())) {
-			win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
+			win->replaceTextBuffer(logBuffer.c_str(), kLogWindowTitle.data());
 			win->setReadOnly(true);
 			win->setFileChanged(false);
 		}
@@ -497,15 +566,18 @@ void mrTraceDiagnosticMessage(std::string_view message) {
 }
 
 bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage) {
-	const std::string_view chunk = path == g_logPersistedPath && g_logPersistedBytes <= g_logBuffer.size() ? std::string_view(g_logBuffer.data() + g_logPersistedBytes, g_logBuffer.size() - g_logPersistedBytes) : std::string_view(g_logBuffer.data(), g_logBuffer.size());
+	const std::string logBuffer = applicationUiStateString("log", "buffer");
+	const std::string persistedPath = applicationUiStateString("log", "persistedPath");
+	const std::size_t persistedBytes = applicationUiStateSize("log", "persistedBytes");
+	const std::string_view chunk = path == persistedPath && persistedBytes <= logBuffer.size() ? std::string_view(logBuffer.data() + persistedBytes, logBuffer.size() - persistedBytes) : std::string_view(logBuffer.data(), logBuffer.size());
 
 	if (chunk.empty()) {
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (!appendLogChunkToFile(path, chunk, errorMessage)) return false;
-	g_logPersistedBytes = g_logBuffer.size();
-	g_logPersistedPath = path;
+	storeApplicationUiStateSize("log", "persistedBytes", logBuffer.size());
+	storeApplicationUiStateString("log", "persistedPath", path);
 	return true;
 }
 
@@ -645,35 +717,35 @@ bool mrCaptureBindingKeySpec(const char *title, const char *prompt, std::string 
 }
 
 void mrSetKeystrokeRecordingActive(bool active) {
-	g_keystrokeRecordingActive = active;
-	if (!active) g_keystrokeRecordingMarkerVisible = false;
+	storeApplicationUiStateInt("indicators", "keystrokeRecordingActive", active ? 1 : 0);
+	if (!active) storeApplicationUiStateInt("indicators", "keystrokeRecordingMarkerVisible", 0);
 }
 
 bool mrIsKeystrokeRecordingActive() {
-	return g_keystrokeRecordingActive;
+	return applicationUiStateInt("indicators", "keystrokeRecordingActive") != 0;
 }
 
 void mrSetKeystrokeRecordingMarkerVisible(bool visible) {
-	g_keystrokeRecordingMarkerVisible = visible;
+	storeApplicationUiStateInt("indicators", "keystrokeRecordingMarkerVisible", visible ? 1 : 0);
 }
 
 bool mrIsKeystrokeRecordingMarkerVisible() {
-	return g_keystrokeRecordingMarkerVisible;
+	return applicationUiStateInt("indicators", "keystrokeRecordingMarkerVisible") != 0;
 }
 
 void mrSetMacroBrainMarkerActive(bool active) {
-	g_macroBrainMarkerActive = active;
-	if (!active) g_macroBrainMarkerVisible = false;
+	storeApplicationUiStateInt("indicators", "macroBrainMarkerActive", active ? 1 : 0);
+	if (!active) storeApplicationUiStateInt("indicators", "macroBrainMarkerVisible", 0);
 }
 
 bool mrIsMacroBrainMarkerActive() {
-	return g_macroBrainMarkerActive;
+	return applicationUiStateInt("indicators", "macroBrainMarkerActive") != 0;
 }
 
 void mrSetMacroBrainMarkerVisible(bool visible) {
-	g_macroBrainMarkerVisible = visible;
+	storeApplicationUiStateInt("indicators", "macroBrainMarkerVisible", visible ? 1 : 0);
 }
 
 bool mrIsMacroBrainMarkerVisible() {
-	return g_macroBrainMarkerVisible;
+	return applicationUiStateInt("indicators", "macroBrainMarkerVisible") != 0;
 }

@@ -12,8 +12,6 @@ namespace {
 std::mutex runtimeSchedulerMutex;
 std::mutex runtimeSchedulerSessionListenerMutex;
 MRMacroExecutionSessionListenerId runtimeSchedulerSessionListenerId = 0;
-std::size_t runtimeSchedulerKnownConsumerCount = 0;
-std::uint64_t runtimeSchedulerNextPumpMs = 0;
 
 struct RuntimeSchedulerDueConsumer {
 	MRRuntimeScheduledConsumerId consumerId = 0;
@@ -33,22 +31,16 @@ std::string runtimeSchedulerSmokeSource() {
 
 std::string runtimeSchedulerEventLine(const MRRuntimeSchedulerEvent &event);
 
-void noteRuntimeSchedulerConsumerRegisteredLocked() noexcept {
-	++runtimeSchedulerKnownConsumerCount;
-	runtimeSchedulerNextPumpMs = 0;
+void noteRuntimeSchedulerConsumerRegisteredLocked() {
+	mrvmStoreRuntimeSchedulerNextPumpMs(0);
 }
 
-void noteRuntimeSchedulerConsumersRemovedLocked(std::size_t removed) noexcept {
-	if (removed >= runtimeSchedulerKnownConsumerCount)
-		runtimeSchedulerKnownConsumerCount = 0;
-	else
-		runtimeSchedulerKnownConsumerCount -= removed;
-	runtimeSchedulerNextPumpMs = 0;
+void noteRuntimeSchedulerConsumersRemovedLocked(std::size_t) {
+	mrvmStoreRuntimeSchedulerNextPumpMs(0);
 }
 
-void noteRuntimeSchedulerObservedConsumersLocked(std::size_t count) noexcept {
-	runtimeSchedulerKnownConsumerCount = count;
-	if (count == 0) runtimeSchedulerNextPumpMs = 0;
+void noteRuntimeSchedulerObservedConsumersLocked(std::size_t count) {
+	if (count == 0) mrvmStoreRuntimeSchedulerNextPumpMs(0);
 }
 
 void noteRuntimeSchedulerNextDue(std::uint64_t &nextDueCandidate, std::uint64_t nextDueMs) noexcept {
@@ -350,12 +342,15 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 	std::vector<RuntimeSchedulerDueConsumer> dueConsumers;
 	{
 		std::lock_guard<std::mutex> lock(runtimeSchedulerMutex);
-		if (runtimeSchedulerKnownConsumerCount == 0) return 0;
-		if (runtimeSchedulerNextPumpMs != 0 && nowMs < runtimeSchedulerNextPumpMs) return 0;
-
 		std::vector<MRRuntimeScheduledConsumerId> consumerIds = mrvmRuntimeScheduledConsumerIds();
+		const std::uint64_t nextPumpMs = mrvmRuntimeSchedulerNextPumpMs();
 		std::uint64_t nextDueCandidate = 0;
 
+		if (consumerIds.empty()) {
+			noteRuntimeSchedulerObservedConsumersLocked(0);
+			return 0;
+		}
+		if (nextPumpMs != 0 && nowMs < nextPumpMs) return 0;
 		noteRuntimeSchedulerObservedConsumersLocked(consumerIds.size());
 		for (std::size_t consumerIndex = 0; consumerIndex < consumerIds.size(); ++consumerIndex) {
 			const MRRuntimeScheduledConsumerId consumerId = consumerIds[consumerIndex];
@@ -388,7 +383,7 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 			dueConsumer.observedAtMs = nowMs;
 			dueConsumers.push_back(dueConsumer);
 		}
-		runtimeSchedulerNextPumpMs = nextDueCandidate;
+		mrvmStoreRuntimeSchedulerNextPumpMs(nextDueCandidate);
 	}
 	for (std::size_t eventIndex = 0; eventIndex < logEvents.size(); ++eventIndex) {
 		const MRRuntimeSchedulerEvent &event = logEvents[eventIndex];

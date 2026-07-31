@@ -16,9 +16,9 @@ Applies to:
 
 ## Authority
 
-Persistence serializes a snapshot of the authoritative runtime settings model
-to `settings.mrmac`. It does not own runtime values and must not invent a
-second source of truth.
+Persistence rebuilds a transfer snapshot from authoritative
+`SETTINGS/runtime` values and serializes it to `settings.mrmac`. It does not own
+runtime values and must not retain that snapshot as a second source of truth.
 
 Canonical settings and external theme artifacts carry the running build's
 `MR_BUILD_EPOCH`.
@@ -27,8 +27,8 @@ Canonical settings and external theme artifacts carry the running build's
 
 - Saving is separate from bootstrap and runtime application.
 - A save neither reloads settings nor rebuilds runtime state from a file.
-- Canonical settings source is generated from the current runtime snapshot,
-  not through file-merge authority.
+- Canonical settings source is generated from a fresh `SETTINGS/runtime`
+  snapshot, not through file-merge authority.
 - A successful write clears dirty state only according to the existing
   persistence path's contract.
 - Failed or partial writes must not be reported as successful persistence.

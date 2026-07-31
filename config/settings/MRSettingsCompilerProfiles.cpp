@@ -717,12 +717,10 @@ std::vector<std::string> detectedCompilerProfileIds() {
 }
 
 std::vector<MRCompilerProfile> detectedCompilerProfiles() {
-	static std::vector<MRCompilerProfile> cachedProfiles;
-	static std::string cachedKey;
 	std::vector<MRCompilerProfile> profiles;
 	const std::string key = processPathSearchKey() + "\n" + configuredShellExecutablePath();
 
-	if (cachedKey == key) return cachedProfiles;
+	if (detectedCompilerProfilesCacheKey() == key) return detectedCompilerProfilesCacheValue();
 	std::string gcc = executableFromPath("g++");
 	std::string clang = executableFromPath("clang++");
 	std::string swift = executableFromPath("swiftc");
@@ -783,8 +781,7 @@ std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 		const CompilerProbe probe = probeLatexCompiler("LATEX", path);
 		addProfile(profiles, probe, engine, "-interaction=nonstopmode -file-line-error -synctex=1");
 	}
-	cachedProfiles = profiles;
-	cachedKey = key;
+	storeDetectedCompilerProfilesCache(key, profiles);
 	return profiles;
 }
 
@@ -822,7 +819,7 @@ bool autoConfigureCompilerProfileFromExecutable(MRCompilerProfile &profile, std:
 	return normalizeCompilerProfileInPlace(profile, errorMessage);
 }
 
-const std::vector<MRCompilerProfile> &configuredCompilerProfiles() {
+std::vector<MRCompilerProfile> configuredCompilerProfiles() {
 	recordSettingsRuntimeRead();
 	return configuredCompilerProfilesValue();
 }
@@ -834,7 +831,7 @@ bool setConfiguredCompilerProfiles(const std::vector<MRCompilerProfile> &profile
 	for (MRCompilerProfile &profile : normalized)
 		if (!normalizeCompilerProfileInPlace(profile, errorMessage)) return false;
 	if (!validateCompilerProfiles(normalized, errorMessage)) return false;
-	configuredCompilerProfilesValue() = normalized;
+	storeConfiguredCompilerProfilesValue(normalized);
 	if (previous != normalized) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -851,9 +848,13 @@ bool compilerProfileIdExists(const std::string &profileId) {
 
 bool applyConfiguredCompilerProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage) {
 	bool changed = false;
+	std::vector<MRCompilerProfile> profiles = configuredCompilerProfilesValue();
 
-	if (!applyCompilerProfileDirectiveToVector(configuredCompilerProfilesValue(), operation, profileId, arg3, arg4, &changed, errorMessage)) return false;
-	if (changed) markConfiguredSettingsDirty();
+	if (!applyCompilerProfileDirectiveToVector(profiles, operation, profileId, arg3, arg4, &changed, errorMessage)) return false;
+	if (changed) {
+		storeConfiguredCompilerProfilesValue(profiles);
+		markConfiguredSettingsDirty();
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

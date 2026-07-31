@@ -23,6 +23,7 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "../../ui/MRBentoHexEditor/MRBentoHexEditor.hpp"
+#include "../../mrmac/vm/MRVMRuntimeState.hpp"
 #include "../MREditorApp.hpp"
 #include "../commands/MRFileCommands.hpp"
 #include "../commands/MRWindowCommands.hpp"
@@ -307,7 +308,7 @@ bool activateSessionCurrentMatch(MultiFileSearchSession &session) {
 }
 
 bool previewSessionCurrentMatch(MultiFileSearchSession &session) {
-	static std::size_t previewSequence = 0;
+	std::size_t previewSequence = mrvmRuntimeStateSize("multiFileSearch", "previewSequence");
 	const auto startedAt = std::chrono::steady_clock::now();
 	MultiFileSearchFileResult *file = currentSessionFile(session);
 	SearchMatchEntry *match = currentSessionMatch(session);
@@ -321,6 +322,7 @@ bool previewSessionCurrentMatch(MultiFileSearchSession &session) {
 
 	if (file == nullptr || match == nullptr) return false;
 	++previewSequence;
+	mrvmStoreRuntimeStateSize("multiFileSearch", "previewSequence", previewSequence);
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		if (!ensureWindowLoadedForSessionFile(*file, false, errorText)) {

@@ -18,9 +18,10 @@ Protected paths include:
 ## Authority
 
 Bootstrap owns the accepted, canonical current-version source used at startup.
-The VM is the final startup-apply actor. The central runtime settings model
-becomes authoritative only after canonical source compiles and executes
-successfully in startup settings mode.
+Its transient typed working state is stored under `SETTINGS/staging`. The VM is
+the final startup-apply actor. `SETTINGS/runtime` becomes authoritative only
+after canonical source compiles and executes successfully in startup settings
+mode.
 
 The canonical persistence version is the running build's `MR_BUILD_EPOCH`.
 
@@ -51,16 +52,13 @@ The canonical persistence version is the running build's `MR_BUILD_EPOCH`.
 10. Clear dirty state and expose the runtime model as authoritative.
 
 Staging, canonicalization and final apply must remain visible as distinct
-roles. A staging implementation may use the runtime model as a temporary
-working medium only where the current code requires it; that write is not
-final apply.
+roles. Staging must not write temporary values into `SETTINGS/runtime`.
 
 ## Transitional keymap staging
 
-The loader may validate and canonicalize keymap input and stage that result in
-the runtime settings model because canonical source generation currently reads
-the configured keymap projection. Final authoritative keymap application still
-occurs through VM startup execution.
+The loader may validate and canonicalize keymap input under
+`SETTINGS/staging/keymap`. Final authoritative keymap application still occurs
+through VM startup execution into `SETTINGS/runtime`.
 
 This exception is limited to keymap staging and must not spread to another
 settings domain.

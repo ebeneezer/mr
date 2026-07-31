@@ -3,6 +3,7 @@
 #include "MRExecSessionStatus.hpp"
 #include "../mrmac/MRMacroExecutionSession.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
+#include "../mrmac/vm/MRVMRuntimeState.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 #include <cstdlib>
@@ -18,11 +19,13 @@ bool execSessionSmokePackageEnabled() noexcept {
 } // namespace
 
 void installExecSessionSmokePackageIfEnabled() {
-	static MRMacroExecutionSessionListenerId listenerId = 0;
-
 	if (!execSessionSmokePackageEnabled()) return;
 
-	if (listenerId == 0) listenerId = installMacroExecutionSessionStatusHook();
+	MRMacroExecutionSessionListenerId listenerId = static_cast<MRMacroExecutionSessionListenerId>(mrvmRuntimeStateSize("execSessionSmoke", "listenerId"));
+	if (listenerId == 0) {
+		listenerId = installMacroExecutionSessionStatusHook();
+		mrvmStoreRuntimeStateSize("execSessionSmoke", "listenerId", listenerId);
+	}
 	{
 		std::ostringstream line;
 		line << "MRMac exec session smoke package installed listener=" << listenerId << " generation=" << macroExecutionSessionStatusGeneration() << ".";

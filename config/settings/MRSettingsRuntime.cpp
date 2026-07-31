@@ -131,7 +131,7 @@ bool mr::settings::storage::configuredSettingsDirtyInStorage() {
 }
 
 void mr::settings::storage::clearConfiguredSettingsDirtyInStorage() {
-	configuredSettingsDirtyFlag() = false;
+	storeConfiguredSettingsDirtyFlag(false);
 }
 
 bool persistConfiguredSettingsSnapshotWithMode(bool includeWorkspace, std::string *errorMessage, MRSettingsWriteReport *report) {

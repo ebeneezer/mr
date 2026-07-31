@@ -49,24 +49,56 @@ MRMacroExecutionSessionId currentExecutionSessionId() noexcept {
 	return g_executionSessionId;
 }
 
-std::string &runtimeParameterString() noexcept {
+std::string runtimeParameterString() {
 	ExecutionState *state = currentExecutionState();
-	return state != nullptr ? state->parameterString : g_runtimeEnv.parameterString;
+	return state != nullptr ? state->parameterString : mrvmRuntimeStateString("execution", "parameterString");
 }
 
-int &runtimeReturnInt() noexcept {
+void setRuntimeParameterString(const std::string &value) {
 	ExecutionState *state = currentExecutionState();
-	return state != nullptr ? state->returnInt : g_runtimeEnv.returnInt;
+	if (state != nullptr)
+		state->parameterString = value;
+	else
+		mrvmStoreRuntimeStateString("execution", "parameterString", value);
 }
 
-std::string &runtimeReturnStr() noexcept {
+int runtimeReturnInt() {
 	ExecutionState *state = currentExecutionState();
-	return state != nullptr ? state->returnStr : g_runtimeEnv.returnStr;
+	return state != nullptr ? state->returnInt : mrvmRuntimeStateInt("execution", "returnInt");
 }
 
-int &runtimeErrorLevel() noexcept {
+void setRuntimeReturnInt(int value) {
 	ExecutionState *state = currentExecutionState();
-	return state != nullptr ? state->errorLevel : g_runtimeEnv.errorLevel;
+	if (state != nullptr)
+		state->returnInt = value;
+	else
+		mrvmStoreRuntimeStateInt("execution", "returnInt", value);
+}
+
+std::string runtimeReturnStr() {
+	ExecutionState *state = currentExecutionState();
+	return state != nullptr ? state->returnStr : mrvmRuntimeStateString("execution", "returnStr");
+}
+
+void setRuntimeReturnStr(const std::string &value) {
+	ExecutionState *state = currentExecutionState();
+	if (state != nullptr)
+		state->returnStr = value;
+	else
+		mrvmStoreRuntimeStateString("execution", "returnStr", value);
+}
+
+int runtimeErrorLevel() {
+	ExecutionState *state = currentExecutionState();
+	return state != nullptr ? state->errorLevel : mrvmRuntimeStateInt("execution", "errorLevel");
+}
+
+void setRuntimeErrorLevel(int value) {
+	ExecutionState *state = currentExecutionState();
+	if (state != nullptr)
+		state->errorLevel = value;
+	else
+		mrvmStoreRuntimeStateInt("execution", "errorLevel", value);
 }
 
 static char normalizeSearchChar(char c, bool ignoreCase) noexcept {
@@ -80,7 +112,7 @@ bool backgroundMacroCancelRequested() noexcept {
 
 bool currentRuntimeIgnoreCase() noexcept {
 	BackgroundEditSession *session = currentBackgroundEditSession();
-	return session != nullptr ? session->ignoreCase : g_runtimeEnv.ignoreCase;
+	return session != nullptr ? session->ignoreCase : mrvmRuntimeStateInt("options", "ignoreCase") != 0;
 }
 
 int currentRegexStatusValue() {
@@ -111,7 +143,7 @@ bool setCurrentRegexStatus(bool enabled) {
 
 bool currentRuntimeTabExpand() noexcept {
 	BackgroundEditSession *session = currentBackgroundEditSession();
-	return session != nullptr ? session->tabExpand : g_runtimeEnv.tabExpand;
+	return session != nullptr ? session->tabExpand : mrvmRuntimeStateInt("options", "tabExpand", 1) != 0;
 }
 
 void computeLineColumnForOffset(const std::string &text, std::size_t offset, int &line, int &column) {
@@ -141,17 +173,20 @@ SearchMatchSnapshot currentSearchMatchSnapshot() {
 		return snapshot;
 	}
 
-	MREditWindow *win = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(g_runtimeEnv.lastSearchWindow));
+	const int bufferId = mrvmRuntimeStateInt("lastSearch", "bufferId");
+	const std::size_t searchStart = mrvmRuntimeStateSize("lastSearch", "start");
+	const std::size_t searchEnd = mrvmRuntimeStateSize("lastSearch", "end");
+	MREditWindow *win = findEditWindowByBufferId(bufferId);
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
-	if (!g_runtimeEnv.lastSearchValid || editor == nullptr) return snapshot;
+	if (mrvmRuntimeStateInt("lastSearch", "valid") == 0 || editor == nullptr) return snapshot;
 
 	const std::string text = editor->snapshotText();
-	if (g_runtimeEnv.lastSearchEnd < g_runtimeEnv.lastSearchStart || g_runtimeEnv.lastSearchEnd > text.size()) return snapshot;
+	if (searchEnd < searchStart || searchEnd > text.size()) return snapshot;
 
 	snapshot.valid = true;
-	snapshot.fileName = g_runtimeEnv.lastSearchFileName;
-	snapshot.foundText = text.substr(g_runtimeEnv.lastSearchStart, g_runtimeEnv.lastSearchEnd - g_runtimeEnv.lastSearchStart);
-	computeLineColumnForOffset(text, g_runtimeEnv.lastSearchStart, snapshot.foundY, snapshot.foundX);
+	snapshot.fileName = mrvmRuntimeStateString("lastSearch", "fileName");
+	snapshot.foundText = text.substr(searchStart, searchEnd - searchStart);
+	computeLineColumnForOffset(text, searchStart, snapshot.foundY, snapshot.foundX);
 	return snapshot;
 }
 
@@ -361,18 +396,20 @@ bool searchEditorBackward(MRFileEditor *editor, const std::string &needle, int n
 bool replaceLastSearch(MRFileEditor *editor, const std::string &replacement) {
 	MREditWindow *win = currentEditorCommandWindow();
 	const char *fileName;
-	if (editor == nullptr || !g_runtimeEnv.lastSearchValid) return false;
-	if (win == nullptr || g_runtimeEnv.lastSearchWindow != win) return false;
+	const int bufferId = mrvmRuntimeStateInt("lastSearch", "bufferId");
+	const std::size_t searchStart = mrvmRuntimeStateSize("lastSearch", "start");
+	const std::size_t searchEnd = mrvmRuntimeStateSize("lastSearch", "end");
+	const std::size_t searchCursor = mrvmRuntimeStateSize("lastSearch", "cursor");
+	if (editor == nullptr || mrvmRuntimeStateInt("lastSearch", "valid") == 0) return false;
+	if (win == nullptr || bufferId != win->bufferId()) return false;
 	fileName = win->currentFileName();
-	if (g_runtimeEnv.lastSearchFileName != std::string(fileName != nullptr ? fileName : "")) return false;
-	if (editor->cursorOffset() != g_runtimeEnv.lastSearchCursor) return false;
-	if (g_runtimeEnv.lastSearchEnd < g_runtimeEnv.lastSearchStart || g_runtimeEnv.lastSearchEnd > editor->bufferLength()) return false;
+	if (mrvmRuntimeStateString("lastSearch", "fileName") != std::string(fileName != nullptr ? fileName : "")) return false;
+	if (editor->cursorOffset() != searchCursor) return false;
+	if (searchEnd < searchStart || searchEnd > editor->bufferLength()) return false;
 
-	if (!editor->replaceRangeAndSelect(static_cast<uint>(g_runtimeEnv.lastSearchStart), static_cast<uint>(g_runtimeEnv.lastSearchEnd), replacement.c_str(), static_cast<uint>(replacement.size()))) return false;
+	if (!editor->replaceRangeAndSelect(static_cast<uint>(searchStart), static_cast<uint>(searchEnd), replacement.c_str(), static_cast<uint>(replacement.size()))) return false;
 
-	g_runtimeEnv.lastSearchEnd = g_runtimeEnv.lastSearchStart + replacement.size();
-	g_runtimeEnv.lastSearchCursor = g_runtimeEnv.lastSearchStart;
-	g_runtimeEnv.lastSearchValid = false;
+	mrvmUiReplaceWindowLastSearch(win, fileName, false, searchStart, searchStart + replacement.size(), searchStart);
 	return true;
 }
 
