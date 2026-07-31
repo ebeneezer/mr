@@ -53,12 +53,12 @@ enum : ushort {
 };
 
 constexpr int kDialogWidth = 78;
-constexpr int kMinDialogHeight = 14;
-constexpr int kMaxDialogHeight = 20;
+constexpr int kMinDialogHeight = 15;
+constexpr int kMaxDialogHeight = 21;
 constexpr int kExecButtonLeft = 2;
 constexpr int kExecButtonRight = 11;
 constexpr int kCommandInputLeft = 13;
-constexpr int kListTop = 4;
+constexpr int kListTop = 5;
 
 class TAcquireCommandEnterInterceptor final : public TView {
   public:
@@ -160,7 +160,7 @@ class AcquireCountView final : public TView {
 
 [[nodiscard]] int computeDialogHeight() {
 	if (TProgram::deskTop == nullptr) return kMaxDialogHeight;
-	return std::max(kMinDialogHeight, std::min(kMaxDialogHeight, static_cast<int>(TProgram::deskTop->size.y / 2)));
+	return std::max(kMinDialogHeight, std::min(kMaxDialogHeight, static_cast<int>(TProgram::deskTop->size.y / 2) + 1));
 }
 
 [[nodiscard]] MREditWindow *chooseAcquireBackgroundRestoreWindow() {
@@ -229,7 +229,7 @@ class TAcquireDialog final : public MRDialogFoundation {
 		commandHistoryAnchor.move(1, 1);
 		commandHistoryDropList.createButton(*this, TRect(historyButtonLeft, 2, commandButtonRight, 3), mCommandField, this, cmMrAcquireChooseHistory, false);
 
-		mStatusView = new MRProgressSlider(TRect(2, 3, listRight, 4));
+		mStatusView = new MRProgressSlider(TRect(2, 4, listRight, 5));
 		insert(mStatusView);
 		mScrollBar = new TScrollBar(TRect(scrollBarLeft, kListTop, scrollBarLeft + 1, listBottom));
 		insert(mScrollBar);

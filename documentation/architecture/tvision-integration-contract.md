@@ -50,9 +50,13 @@ The authoritative Static Mode semaphore is the central runtime K/V value
   fills the message lane from right to left.
 - Leaving Static Mode clears the projected content before ordinary animated
   messages resume.
-- While active, the status line shows only `Esc Abort`; F1 through F12 are not
-  dispatched. Its pre-entry F-key presentation is retained until Static Mode
-  ends. Escape remains owned by the active operation.
+- Entry and exit use the existing function-key label transitions. Entry
+  animates the previous labels out and `Esc Abort` in; exit reverses that
+  transition and restores the captured pre-entry presentation.
+- F1 through F12 cease dispatch as soon as Static Mode is active, including
+  while their outgoing labels remain visible. After the entry transition the
+  status line shows only `Esc Abort`. Escape remains owned by the active
+  operation.
 
 ## Message-line normal mode
 

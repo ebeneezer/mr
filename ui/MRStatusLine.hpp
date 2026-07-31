@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 void mrvmUiInvalidateScreenBase() noexcept;
@@ -26,7 +27,7 @@ class MRStatusLine : public TStatusLine {
 		std::string text;
 	};
 
-	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextFunctionLabelTransitions(), mFunctionKeyLabelRandomState(static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0x4D52464Bu), mContextHintLabels(), mMacroFunctionLabels() {
+	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextFunctionLabelTransitions(), mFunctionKeyLabelRandomState(static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0x4D52464Bu), mContextHintLabels(), mMacroFunctionLabels(), mStaticModeRestoreFunctionKeyLabels(), mStaticModeFunctionKeysCaptured(false), mStaticModeRestoreTransitionActive(false) {
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -43,62 +44,25 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void setShowFunctionKeyLabels(bool enabled) {
-		if (mr::messageline::staticModeActive()) return;
+		if (mr::messageline::staticModeActive() || mStaticModeRestoreTransitionActive) return;
 		if (mShowFunctionKeyLabels == enabled) return;
 		mShowFunctionKeyLabels = enabled;
 		drawView();
 	}
 
 	void setMacroFunctionLabels(const std::vector<std::string> &labels) {
-		if (mr::messageline::staticModeActive()) return;
+		if (mr::messageline::staticModeActive() || mStaticModeRestoreTransitionActive) return;
 		if (mMacroFunctionLabels == labels) return;
 		mMacroFunctionLabels = labels;
 		drawView();
 	}
 
 	void setContextFunctionKeyLabels(const std::vector<FunctionKeyLabel> &labels) {
-		if (mr::messageline::staticModeActive()) return;
-		bool same = mContextFunctionKeyLabels.size() == labels.size();
-
-		if (same)
-			for (std::size_t i = 0; i < labels.size(); ++i)
-				if (!(mContextFunctionKeyLabels[i].keyCode == labels[i].keyCode) || mContextFunctionKeyLabels[i].command != labels[i].command || mContextFunctionKeyLabels[i].text != labels[i].text) {
-					same = false;
-					break;
-				}
-		if (same) return;
-		if (mContextFunctionKeyLabels.size() != labels.size() || mContextFunctionLabelTransitions.size() != labels.size()) {
-			mContextFunctionKeyLabels = labels;
-			mContextFunctionLabelTransitions.assign(labels.size(), FunctionKeyLabelTransition());
-			drawView();
-			return;
-		}
-
-		const auto now = std::chrono::steady_clock::now();
-		for (std::size_t i = 0; i < labels.size(); ++i) {
-			FunctionKeyLabelTransition &transition = mContextFunctionLabelTransitions[i];
-			const std::string &oldText = mContextFunctionKeyLabels[i].text;
-			const std::string &newText = labels[i].text;
-
-			if (oldText == newText) continue;
-			if (transition.phase == FunctionKeyLabelTransitionPhase::Outgoing) {
-				if (transition.outgoingText == newText) {
-					transition.phase = FunctionKeyLabelTransitionPhase::Stable;
-					transition.outgoingText.clear();
-					transition.startedAt = std::chrono::steady_clock::time_point::min();
-				}
-				continue;
-			}
-			transition.outgoingText = oldText;
-			transition.phase = oldText.empty() ? FunctionKeyLabelTransitionPhase::Incoming : FunctionKeyLabelTransitionPhase::Outgoing;
-			transition.startedAt = now + nextFunctionKeyLabelStartDelay();
-		}
-		mContextFunctionKeyLabels = labels;
-		drawView();
+		if (mr::messageline::staticModeActive() || mStaticModeRestoreTransitionActive) return;
+		applyContextFunctionKeyLabels(labels);
 	}
 
 	void tickFunctionKeyLabelTransitions() {
-		if (mr::messageline::staticModeActive()) return;
 		const auto now = std::chrono::steady_clock::now();
 
 		for (std::size_t i = 0; i < mContextFunctionLabelTransitions.size(); ++i) {
@@ -133,8 +97,24 @@ class MRStatusLine : public TStatusLine {
 				transition.startedAt = std::chrono::steady_clock::time_point::min();
 			}
 		}
-		if (!mShowFunctionKeyLabels || !mContextFunctionKeysActive || mContextHintLabelsActive || (state & sfVisible) == 0) return;
+		if (mStaticModeRestoreTransitionActive) {
+			bool transitionActive = false;
 
+			for (const FunctionKeyLabelTransition &transition : mContextFunctionLabelTransitions)
+				if (transition.phase != FunctionKeyLabelTransitionPhase::Stable) {
+					transitionActive = true;
+					break;
+				}
+			if (!transitionActive) {
+				mStaticModeRestoreTransitionActive = false;
+				drawView();
+				return;
+			}
+		}
+		const bool staticModePresentationActive = mr::messageline::staticModeActive() || mStaticModeRestoreTransitionActive;
+
+		if ((state & sfVisible) == 0) return;
+		if (!staticModePresentationActive && (!mShowFunctionKeyLabels || !mContextFunctionKeysActive || mContextHintLabelsActive)) return;
 		std::vector<int> indexes = contextFunctionVisibleLabelIndexes();
 		const int segmentCount = static_cast<int>(indexes.size());
 		const int segmentWidth = segmentCount > 0 ? std::max(1, size.x / segmentCount) : size.x;
@@ -153,34 +133,61 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void setContextFunctionKeysActive(bool active) {
-		if (mr::messageline::staticModeActive()) return;
+		if (mr::messageline::staticModeActive() || mStaticModeRestoreTransitionActive) return;
 		if (mContextFunctionKeysActive == active) return;
 		mContextFunctionKeysActive = active;
 		drawView();
 	}
 
 	void setContextHintLabels(const std::vector<std::string> &labels) {
-		if (mr::messageline::staticModeActive()) return;
+		if (mr::messageline::staticModeActive() || mStaticModeRestoreTransitionActive) return;
 		if (mContextHintLabels == labels) return;
 		mContextHintLabels = labels;
 		drawView();
 	}
 
 	void setContextHintLabelsActive(bool active) {
-		if (mr::messageline::staticModeActive()) return;
+		if (mr::messageline::staticModeActive() || mStaticModeRestoreTransitionActive) return;
 		if (mContextHintLabelsActive == active) return;
 		mContextHintLabelsActive = active;
 		drawView();
 	}
 
 	void setStaticModePresentation(bool active) {
-		static_cast<void>(active);
-		drawView();
+		if (active) {
+			if (mStaticModeFunctionKeysCaptured) return;
+			mStaticModeRestoreFunctionKeyLabels = mContextFunctionKeyLabels;
+			mStaticModeFunctionKeysCaptured = true;
+			mStaticModeRestoreTransitionActive = false;
+			std::vector<FunctionKeyLabel> labels = mContextFunctionKeyLabels;
+
+			if (labels.empty())
+				labels.push_back(FunctionKeyLabel{TKey(kbEsc), 0, "~Esc~ Abort"});
+			else {
+				for (FunctionKeyLabel &label : labels) {
+					label.command = 0;
+					label.text.clear();
+				}
+				labels.front().keyCode = TKey(kbEsc);
+				labels.front().text = "~Esc~ Abort";
+			}
+			applyContextFunctionKeyLabels(labels);
+			return;
+		}
+		if (!mStaticModeFunctionKeysCaptured) {
+			drawView();
+			return;
+		}
+		std::vector<FunctionKeyLabel> labels = std::move(mStaticModeRestoreFunctionKeyLabels);
+
+		mStaticModeFunctionKeysCaptured = false;
+		mStaticModeRestoreTransitionActive = true;
+		applyContextFunctionKeyLabels(labels);
 	}
 
 	virtual void draw() override {
-		if (mr::messageline::staticModeActive()) {
-			drawStaticModeHint();
+		if (mr::messageline::staticModeActive() || mStaticModeRestoreTransitionActive) {
+			drawContextFunctionLabels();
 			mrvmUiInvalidateScreenBase();
 			return;
 		}
@@ -250,7 +257,7 @@ class MRStatusLine : public TStatusLine {
 		TStatusLine::handleEvent(event);
 	}
 
-  private:
+ private:
 	enum class FunctionKeyLabelTransitionPhase : unsigned char {
 		Stable,
 		Outgoing,
@@ -265,6 +272,46 @@ class MRStatusLine : public TStatusLine {
 		std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::time_point::min();
 		int drawnShift = 0;
 	};
+
+	void applyContextFunctionKeyLabels(const std::vector<FunctionKeyLabel> &labels) {
+		bool same = mContextFunctionKeyLabels.size() == labels.size();
+
+		if (same)
+			for (std::size_t i = 0; i < labels.size(); ++i)
+				if (!(mContextFunctionKeyLabels[i].keyCode == labels[i].keyCode) || mContextFunctionKeyLabels[i].command != labels[i].command || mContextFunctionKeyLabels[i].text != labels[i].text) {
+					same = false;
+					break;
+				}
+		if (same) return;
+		if (mContextFunctionKeyLabels.size() != labels.size() || mContextFunctionLabelTransitions.size() != labels.size()) {
+			mContextFunctionKeyLabels = labels;
+			mContextFunctionLabelTransitions.assign(labels.size(), FunctionKeyLabelTransition());
+			drawView();
+			return;
+		}
+
+		const auto now = std::chrono::steady_clock::now();
+		for (std::size_t i = 0; i < labels.size(); ++i) {
+			FunctionKeyLabelTransition &transition = mContextFunctionLabelTransitions[i];
+			const std::string &oldText = mContextFunctionKeyLabels[i].text;
+			const std::string &newText = labels[i].text;
+
+			if (oldText == newText) continue;
+			if (transition.phase == FunctionKeyLabelTransitionPhase::Outgoing) {
+				if (transition.outgoingText == newText) {
+					transition.phase = FunctionKeyLabelTransitionPhase::Stable;
+					transition.outgoingText.clear();
+					transition.startedAt = std::chrono::steady_clock::time_point::min();
+				}
+				continue;
+			}
+			transition.outgoingText = oldText;
+			transition.phase = oldText.empty() ? FunctionKeyLabelTransitionPhase::Incoming : FunctionKeyLabelTransitionPhase::Outgoing;
+			transition.startedAt = now + nextFunctionKeyLabelStartDelay();
+		}
+		mContextFunctionKeyLabels = labels;
+		drawView();
+	}
 
 	static constexpr std::chrono::milliseconds functionKeyLabelTransitionDuration() {
 		return std::chrono::milliseconds(262);
@@ -368,16 +415,6 @@ class MRStatusLine : public TStatusLine {
 		writeLine(0, 0, size.x, 1, buffer);
 	}
 
-	void drawStaticModeHint() {
-		TDrawBuffer buffer;
-		TColorAttr backgroundColor = getColor(1);
-		TAttrPair labelColor = getColor(0x0403);
-
-		buffer.moveChar(0, ' ', backgroundColor, size.x);
-		buffer.moveCStr(0, "~Esc~ Abort", labelColor, size.x);
-		writeLine(0, 0, size.x, 1, buffer);
-	}
-
 	void drawContextHintLabels() {
 		TDrawBuffer buffer;
 		TColorAttr backgroundColor = getColor(1);
@@ -447,5 +484,8 @@ class MRStatusLine : public TStatusLine {
 	std::uint32_t mFunctionKeyLabelRandomState;
 	std::vector<std::string> mContextHintLabels;
 	std::vector<std::string> mMacroFunctionLabels;
+	std::vector<FunctionKeyLabel> mStaticModeRestoreFunctionKeyLabels;
+	bool mStaticModeFunctionKeysCaptured;
+	bool mStaticModeRestoreTransitionActive;
 };
 #endif

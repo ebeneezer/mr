@@ -739,6 +739,7 @@ ui/MRFileEditor/MRTextFormatting.o: ui/MRFileEditor/MRTextFormatting.cpp ui/MRFi
 ui/MRFileEditor/MRTextViewport.o: ui/MRFileEditor/MRTextViewport.cpp ui/MRFileEditor/MRTextViewport.hpp config/settings/MRSettingsRuntime.hpp
 ui/MRMenuBar.o: ui/MRMenuBar.cpp ui/MRMenuBar.hpp ui/MRMenuBarDrawingInternal.hpp ui/MRMessageLineController.hpp
 ui/MRMenuBarDrawing.o: ui/MRMenuBarDrawing.cpp ui/MRMenuBar.hpp ui/MRMenuBarDrawingInternal.hpp ui/MRMessageLineController.hpp ui/widgets/MRNumericSlider.hpp
+ui/MRMessageLineController.o: ui/MRMessageLineController.cpp ui/MRMessageLineController.hpp ui/MRMenuBar.hpp ui/MRStatusLine.hpp config/settings/MRSettingsRuntime.hpp mrmac/vm/MRVMRuntimeKv.hpp mrmac/vm/MRVMValue.hpp
 ui/widgets/MRScopedHistoryUI.o: ui/widgets/MRScopedHistoryUI.cpp ui/widgets/MRScopedHistoryUI.hpp dialogs/MRAcquireDialog.hpp config/settings/MRSettingsRuntime.hpp ui/MRFrame.hpp ui/widgets/MRDropList.hpp
 ui/widgets/MRNumericSlider.o: ui/widgets/MRNumericSlider.cpp ui/widgets/MRNumericSlider.hpp config/settings/MRSettingsRuntime.hpp
 ui/widgets/MRSpinner.o: ui/widgets/MRSpinner.cpp ui/widgets/MRSpinner.hpp config/settings/MRSettingsRuntime.hpp
