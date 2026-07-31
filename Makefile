@@ -6,8 +6,8 @@
 # - no variant/object-dir refactor
 
 PKG_CONFIG ?= pkg-config
-CXX = g++
-CC = gcc
+CXX = clang++
+CC = clang
 CMAKE ?= cmake
 GIT ?= git
 PATCH ?= patch
@@ -56,9 +56,9 @@ INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./u
 CXXSTD ?= gnu++20
 PTHREAD_FLAGS ?= -pthread
 
-# Debug flags: -g for symbols, -O0 disables optimizations
-CXXFLAGS = -Wall -g -O0 -std=$(CXXSTD) $(PTHREAD_FLAGS) $(INCLUDES)
-CFLAGS = -Wall -g -O0 $(INCLUDES)
+# Optimized debug flags: keep symbols and enable full optimization
+CXXFLAGS = -Wall -g -O3 -std=$(CXXSTD) $(PTHREAD_FLAGS) $(INCLUDES)
+CFLAGS = -Wall -g -O3 $(INCLUDES)
 
 TVISION_BUILD_DIR = $(TVISION_ACTIVE_BUILD_DIR)
 TVISION_LIB = $(TVISION_BUILD_DIR)/libtvision.a
@@ -68,6 +68,8 @@ TVISION_CXX_COMPILER := $(shell command -v $(CXX) 2>/dev/null || echo $(CXX))
 TVISION_TOOLCHAIN_SIGNATURE := $(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)|$(TMP_COMPILER_LAUNCHER)
 TVISION_CMAKE_FLAGS = \
 	-DCMAKE_BUILD_TYPE=Debug \
+	-DCMAKE_C_FLAGS_DEBUG="-g -O3" \
+	-DCMAKE_CXX_FLAGS_DEBUG="-g -O3" \
 	-DCMAKE_C_COMPILER=$(TVISION_C_COMPILER) \
 	-DCMAKE_CXX_COMPILER=$(TVISION_CXX_COMPILER) \
 	-DCMAKE_C_COMPILER_LAUNCHER=$(TMP_COMPILER_LAUNCHER) \
@@ -156,6 +158,16 @@ HELP_CONTEXT_OBJECTS = \
 MANUAL_DIRECTORY = documentation/manuals
 PDFLATEX ?= pdflatex
 MAKEINDEX ?= makeindex
+RSVG_CONVERT ?= rsvg-convert
+MANUAL_SVG_ASSETS = \
+	$(MANUAL_DIRECTORY)/assets/mr-coprocessor-lanes.svg \
+	$(MANUAL_DIRECTORY)/assets/mr-deferred-scan-windows.svg \
+	$(MANUAL_DIRECTORY)/assets/mr-minimap-function-flow.svg \
+	$(MANUAL_DIRECTORY)/assets/mr-piece-table-snapshots.svg \
+	$(MANUAL_DIRECTORY)/assets/mr-settings-bootstrap-flow.svg \
+	$(MANUAL_DIRECTORY)/assets/mrmac-exec-session-scheduler-routes.svg \
+	$(MANUAL_DIRECTORY)/assets/mrmac-vm-execution-flow.svg
+MANUAL_PDF_ASSETS = $(wildcard $(MANUAL_DIRECTORY)/assets/*.pdf) $(MANUAL_SVG_ASSETS:.svg=.pdf)
 MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-macro-reference.aux \
 	$(MANUAL_DIRECTORY)/mr-macro-reference.cb \
@@ -171,9 +183,13 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-technical-manual.out \
 	$(MANUAL_DIRECTORY)/mr-technical-manual.toc \
 	$(MANUAL_DIRECTORY)/mr-users-manual.aux \
+	$(MANUAL_DIRECTORY)/mr-users-manual.idx \
+	$(MANUAL_DIRECTORY)/mr-users-manual.ilg \
+	$(MANUAL_DIRECTORY)/mr-users-manual.ind \
 	$(MANUAL_DIRECTORY)/mr-users-manual.log \
 	$(MANUAL_DIRECTORY)/mr-users-manual.out \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
+MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
@@ -360,6 +376,7 @@ CXX_SOURCES = \
 	ui/MRSyntaxBasic.cpp \
 	ui/MRSyntaxBasicBlocks.cpp \
 	ui/syntax/MRSyntaxClassification.cpp \
+	ui/syntax/MRSyntaxXmlNucleus.cpp \
 	ui/syntax/MRSyntaxMetadata.cpp \
 	coprocessor/MRCoprocessor.cpp \
 	coprocessor/MRCoprocessorWorkerLifecycle.cpp \
@@ -412,15 +429,23 @@ mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET) regression-probe
 	$(MRMAC_V1_SUITE_SCRIPT)
 
 compile-manuals:
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-macro-reference.tex
-	cd $(MANUAL_DIRECTORY) && $(MAKEINDEX) mr-macro-reference
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-macro-reference.tex
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-macro-reference.tex
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -shell-escape -interaction=nonstopmode mr-technical-manual.tex
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -shell-escape -interaction=nonstopmode mr-technical-manual.tex
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-users-manual.tex
-	cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -interaction=nonstopmode mr-users-manual.tex
-	rm -f $(MANUAL_AUXILIARIES)
+	@set -e; \
+	cleanup() { rm -f $(MANUAL_BUILD_ARTIFACTS); }; \
+	trap cleanup EXIT INT TERM HUP; \
+	for svg in $(MANUAL_SVG_ASSETS); do \
+		pdf=$${svg%.svg}.pdf; \
+		$(RSVG_CONVERT) -f pdf -o "$$pdf" "$$svg"; \
+	done; \
+	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -interaction=nonstopmode mr-macro-reference.tex); \
+	(cd $(MANUAL_DIRECTORY) && $(MAKEINDEX) mr-macro-reference); \
+	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -interaction=nonstopmode mr-macro-reference.tex); \
+	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -interaction=nonstopmode mr-macro-reference.tex); \
+	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -shell-escape -interaction=nonstopmode mr-technical-manual.tex); \
+	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -shell-escape -interaction=nonstopmode mr-technical-manual.tex); \
+	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -interaction=nonstopmode mr-users-manual.tex); \
+	(cd $(MANUAL_DIRECTORY) && $(MAKEINDEX) mr-users-manual); \
+	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -interaction=nonstopmode mr-users-manual.tex); \
+	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -interaction=nonstopmode mr-users-manual.tex)
 
 CONTEXT_ARCHIVE ?= codebase-context.tar.bzip2
 CONTEXT_GIT_INFO_NAME ?= CONTEXT_GIT_INFO.txt

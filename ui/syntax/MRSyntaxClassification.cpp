@@ -1,4 +1,5 @@
 #include "../MRSyntax.hpp"
+#include "MRSyntaxXmlNucleus.hpp"
 
 #include <array>
 #include <climits>
@@ -186,19 +187,6 @@ int countJsonKeyLikeLines(std::string_view text, int maxCount = INT_MAX) noexcep
 		const std::size_t colon = line.find(':', quoteEnd + 1);
 		if (colon == std::string_view::npos) continue;
 		++count;
-	}
-	return count;
-}
-
-int countXmlTagLikeLines(std::string_view text, int maxCount = INT_MAX) noexcept {
-	int count = 0;
-	std::size_t pos = 0;
-
-	while (pos < text.size() && count < maxCount) {
-		const std::string_view line = trimWhitespaceView(nextLineView(text, pos));
-		if (line.size() < 3 || line.front() != '<' || line.find('>') == std::string_view::npos) continue;
-		const char second = line[1];
-		if (second == '?' || second == '!' || second == '/' || std::isalpha(static_cast<unsigned char>(second)) != 0 || second == '_' || second == ':') ++count;
 	}
 	return count;
 }
@@ -515,10 +503,12 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const std::string_view sample = classificationSample(text);
 	const std::string lowerSample = lowerCopyView(sample);
 	const std::string_view lower = lowerSample;
-	const ShellPerlClassificationSignals shellPerlSignals = scanShellPerlClassificationSignals(lower);
 	const std::string_view firstLine = firstLineView(sample);
 	const std::string lowerFirstLine = lowerCopyView(firstLine);
 	const std::string_view lowerShebang = lowerFirstLine;
+	const bool bashShebang = startsWithText(lowerShebang, "#!") && (containsText(lowerShebang, "bash") || containsText(lowerShebang, "/sh") ||
+	                                                              containsText(lowerShebang, "env sh") || containsText(lowerShebang, "env -s sh") ||
+	                                                              containsText(lowerShebang, "dash") || containsText(lowerShebang, "ksh"));
 	const MRSyntaxLanguage detectedByPath = tmrDetectSyntaxLanguage(path, title);
 
 	if (forceCLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::C, 100);
@@ -531,6 +521,13 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (forceBasicLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Basic, 100);
 	if (forceLatexLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Latex, 100);
 
+	if (bashShebang) return MRSyntaxClassification(MRSyntaxLanguage::Bash, 100);
+
+	const MRSyntaxXmlNucleusEvidence xmlNucleus = tmrAnalyzeSyntaxXmlNucleus(sample);
+	const bool contentMaySelectXml = detectedByPath == MRSyntaxLanguage::PlainText || detectedByPath == MRSyntaxLanguage::Xml;
+	if (contentMaySelectXml && xmlNucleus.decisive) return MRSyntaxClassification(MRSyntaxLanguage::Xml, 100);
+
+	const ShellPerlClassificationSignals shellPerlSignals = scanShellPerlClassificationSignals(lower);
 	const int includeLines = countLinePrefixMatches(lower, "#include", 8);
 	const int cStdHeaderIncludes = countMatches(lower, "<assert.h>", 4) + countMatches(lower, "<ctype.h>", 4) + countMatches(lower, "<errno.h>", 4) + countMatches(lower, "<float.h>", 4) +
 	                               countMatches(lower, "<limits.h>", 4) + countMatches(lower, "<math.h>", 4) + countMatches(lower, "<setjmp.h>", 4) + countMatches(lower, "<signal.h>", 4) +
@@ -552,7 +549,6 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int pythonClassLines = countLinePrefixMatches(lower, "class ", 8);
 	const int pythonBlockHeaders = countPythonBlockHeaders(sample, 16);
 	const int jsonKeyLines = countJsonKeyLikeLines(sample, 32);
-	const int xmlTagLines = countXmlTagLikeLines(sample, 32);
 	const int shellAssignmentLines = shellPerlSignals.shellAssignments;
 	const int fishFunctionLines = countLinePrefixMatches(lower, "function ", 12);
 	const int fishSetLines = countLinePrefixMatches(lower, "set ", 16) + countLinePrefixMatches(lower, "set -", 16);
@@ -608,7 +604,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		if (containsText(lowerShebang, "python")) addClassificationScore(scores, MRSyntaxLanguage::Python, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Python)] += 2;
 		if (containsText(lowerShebang, "perl")) addClassificationScore(scores, MRSyntaxLanguage::Perl, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] += 2;
 		if (containsText(lowerShebang, "zsh")) addClassificationScore(scores, MRSyntaxLanguage::Zsh, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += 2;
-		if (containsText(lowerShebang, "bash") || containsText(lowerShebang, "/sh")) addClassificationScore(scores, MRSyntaxLanguage::Bash, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Bash)] += 2;
+		if (bashShebang) addClassificationScore(scores, MRSyntaxLanguage::Bash, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Bash)] += 2;
 		if (containsText(lowerShebang, "fish")) addClassificationScore(scores, MRSyntaxLanguage::Fish, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Fish)] += 2;
 		if (containsText(lowerShebang, "node")) addClassificationScore(scores, MRSyntaxLanguage::JavaScript, 12), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::JavaScript)] += 2;
 		if (containsText(lowerShebang, "make")) addClassificationScore(scores, MRSyntaxLanguage::Make, 8), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Make)] += 1;
@@ -705,9 +701,11 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "=\"", 16) * 2);
 	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "<![cdata[", 4) * 4);
 	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "<!doctype", 4) * 4);
-	addClassificationScore(scores, MRSyntaxLanguage::Xml, xmlTagLines * 2);
+	if (contentMaySelectXml) {
+		addClassificationScore(scores, MRSyntaxLanguage::Xml, xmlNucleus.score);
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)] += xmlNucleus.strongSignals;
+	}
 	if (containsText(lower, "<?xml") || containsText(lower, "<![cdata[") || containsText(lower, "<!doctype")) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)] += 2;
-	if (xmlTagLines >= 2) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)] += std::min(3, xmlTagLines);
 
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, shellPerlSignals.shellGrammar * 4);
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, shellPerlSignals.shellExpansions * 3);
@@ -885,7 +883,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		addClassificationScore(scores, MRSyntaxLanguage::Zsh, -3);
 		addClassificationScore(scores, MRSyntaxLanguage::Perl, -5);
 	}
-	if (xmlTagLines >= 3) {
+	if (contentMaySelectXml && xmlNucleus.structuralTags >= 3) {
 		addClassificationScore(scores, MRSyntaxLanguage::Xml, 6);
 		++strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)];
 		addClassificationScore(scores, MRSyntaxLanguage::Json, -4);

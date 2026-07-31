@@ -50,15 +50,17 @@
   <text x="465" y="212" class="small" text-anchor="middle">viewport</text>
   <text x="592" y="212" class="small" text-anchor="middle">prefetch</text>
   <line x1="248" y1="208" x2="315" y2="208" stroke="#8c979e" stroke-width="1.5" stroke-dasharray="7 6"/>
-  <text x="70" y="268" class="body">The owner subtracts confirmed coverage and active reservations before packet creation.</text>
-  <text x="70" y="300" class="code">submitPacket(owner, generation, BOF|EOF, [start, end))</text>
-  <rect x="730" y="145" width="280" height="166" rx="5" fill="#eef4f3" stroke="#317c70" stroke-width="1.4"/>
-  <text x="750" y="171" class="heading">DOMAIN LEDGER</text>
-  <text x="750" y="199" class="code">confirmed = {[0, 8192)}</text>
-  <text x="750" y="226" class="code">accepted = {[12288, 16384)}</text>
-  <text x="750" y="253" class="code">reserved = {[16384, 20480)}</text>
-  <text x="750" y="282" class="small">No focus gate · no duplicate span</text>
-  <text x="750" y="302" class="small">Older finite generations may remain useful.</text>
+  <text x="70" y="260" class="body">The owner subtracts confirmed coverage and active reservations</text>
+  <text x="70" y="282" class="body">before packet creation.</text>
+  <text x="70" y="317" class="code">submitPacket(owner, generation, BOF|EOF, [start, end))</text>
+  <rect x="730" y="140" width="280" height="190" rx="5" fill="#eef4f3" stroke="#317c70" stroke-width="1.4"/>
+  <text x="750" y="167" class="heading">DOMAIN LEDGER</text>
+  <text x="750" y="196" class="code">confirmed = {[0, 8192)}</text>
+  <text x="750" y="223" class="code">accepted = {[12288, 16384)}</text>
+  <text x="750" y="250" class="code">reserved = {[16384, 20480)}</text>
+  <text x="750" y="279" class="small">No focus gate · no duplicate span</text>
+  <text x="750" y="302" class="small">Older finite generations</text>
+  <text x="750" y="322" class="small">may remain useful.</text>
 
   <path d="M540 343 L540 376" class="flow-blue"/>
   <text x="557" y="366" class="small">independent execution</text>
@@ -88,7 +90,8 @@
   <text x="760" y="592" class="small">result-ready third</text>
 
   <text x="70" y="641" class="code">assignedCore = allowedCoreIds[workerOrdinal % allowedCoreIds.size()]</text>
-  <text x="754" y="641" class="small">More workers than cores continue modulo.</text>
+  <text x="760" y="630" class="small">More workers than cores</text>
+  <text x="760" y="649" class="small">continue modulo.</text>
 
   <path d="M540 666 L540 699" class="flow-blue"/>
   <text x="557" y="690" class="small">bounded UI mailbox</text>
@@ -111,12 +114,14 @@
   <text x="875" y="835" class="panel-title" text-anchor="middle">ADOPTED</text>
   <text x="875" y="860" class="small" text-anchor="middle">immutable visible projection</text>
 
-  <rect x="70" y="907" width="605" height="62" rx="5" fill="#eef4f3" stroke="#317c70" stroke-width="1.4"/>
-  <text x="90" y="934" class="body">Stateless packets may publish out of order; stateful syntax and folding advance in order.</text>
-  <text x="90" y="958" class="small">A matching older packet may enlarge the ledger without replacing the current viewport.</text>
-  <rect x="730" y="907" width="280" height="62" rx="5" class="missing"/>
-  <text x="750" y="934" class="panel-title">DISCARDED</text>
-  <text x="750" y="958" class="small">mismatch or invalid stateIn · never rebase</text>
+  <rect x="70" y="895" width="605" height="96" rx="5" fill="#eef4f3" stroke="#317c70" stroke-width="1.4"/>
+  <text x="90" y="922" class="body">Stateless packets may publish out of order;</text>
+  <text x="90" y="947" class="body">stateful syntax and folding advance in order.</text>
+  <text x="90" y="974" class="small">Older matching packets extend the ledger, not the current viewport.</text>
+  <rect x="730" y="895" width="280" height="96" rx="5" class="missing"/>
+  <text x="750" y="924" class="panel-title">DISCARDED</text>
+  <text x="750" y="951" class="small">mismatch or invalid stateIn</text>
+  <text x="750" y="975" class="small">never rebase</text>
 
   <rect x="40" y="1023" width="1000" height="56" rx="5" fill="#e8f0f2" stroke="#27313a" stroke-width="1.2"/>
   <text x="60" y="1047" class="heading">INVALIDATION RULES</text>

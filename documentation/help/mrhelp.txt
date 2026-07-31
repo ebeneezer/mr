@@ -3,14 +3,19 @@
 
 American Cybernetics (makers of Multi-Edit) went out of business in 2020 and stopped development of the TUI version of Multi-Edit years bevor.
 
-Mr is a rewrite of the classic programmers editor Multi-Edit by American Cybernetics for Linux terminals. It is constructed aroud a macro language processor, that compiles macro files based on the MEMAC script language. 
-Now called MRMAC the language is backwards code compatible towards the MEMAC dialect but renewed and extended for modern systems. 
-Compilation happens in-RAM through the MRMAC compiler that supports both precompiled and on-demand compiled macro files for maximum speed. 
+Mr is a rewrite of the classic programmers editor Multi-Edit by American Cybernetics for Linux terminals. It is constructed aroud a macro language processor, that compiles macro files based on the MEMAC script language.
+Now called MRMAC the language is backwards code compatible towards the MEMAC dialect but renewed and extended for modern systems.
+Compilation happens in-RAM through the MRMAC compiler that supports both precompiled and on-demand compiled macro files for maximum speed.
 
 Dependencies:
   - the Turbo Visison C++ rewrite TVISION from magiblot on GitHub. TVISION can also be steered from mrmac macros - just like it was in the old days with Multi-Edit
-  - advanced data processing models like piecetables, addbuffers, tries and more to edit files larger than system memory and provide file I/O with blazing speed: It loads 1 GB text und under one single second und indexes the whole text in under 800 milliseconds (no BS)
-  - a build in coprocessor for handling mrmac bytecode macros that can manipulate text in parallel to the user in the same window (no BS). The coprocessor supports running multiple macro jobs in parallel in different windows or multiple macrojobs in one window or both at the same time. Thecoprocessor uses multiple computes lanes in parallel: I/O, COMPUTE, MACRO and MINIMAP
+  - advanced data processing models like piecetables, addbuffers, tries and more to edit files
+    larger than system memory and provide file I/O with blazing speed: It loads 1 GB text und
+    under one single second und indexes the whole text in under 800 milliseconds (no BS)
+  - a build in coprocessor for handling mrmac bytecode macros that can manipulate text in parallel
+    to the user in the same window (no BS). The coprocessor supports running multiple macro jobs
+    in parallel in different windows or multiple macrojobs in one window or both at the same time.
+    Thecoprocessor uses multiple computes lanes in parallel: I/O, COMPUTE, MACRO and MINIMAP
   - ncursesw and is UTF8 capable
 
 Features (among others):
@@ -36,7 +41,7 @@ Features (among others):
   - hex edit mode with synchonous hex, dec, oct, strings and binary view plus additional data inspector
 
 Press Tab or Shift-Tab to select a highlighted reference and Enter to follow it. A reference can also
-be selected with the mouse.  Press Backspace or Alt-F1 for the previous topic and Esc to close Help.
+be selected with the mouse. Press Backspace or Alt-F1 for the previous topic and Esc to close Help.
 
 Main menu chapters
 
@@ -62,14 +67,14 @@ Reference chapters
 F1 opens context-sensitive Help for the active menu or dialog.
 Shift-F1 opens the detailed Help index.
 Alt-F1 or BACKSPACE returns to the previously referenced Help topic.
-F10 activates the menu bar.  
+F10 activates the menu bar.
 
 Within Help, Tab and Shift-Tab move between references, Enter follows the
 selected reference, Backspace returns to the previous topic, and Esc closes
 the Help window.
 
 Function-key assignments shown on the status line are authoritative for the
-current editor mode.  They may change for startup, normal editing, file
+current editor mode. They may change for startup, normal editing, file
 comparison, compiler diagnostics, and macro debugging.
 
 See also {Help menu:MenuHelp}.
@@ -100,18 +105,18 @@ See also {Help menu:MenuHelp}.
 .topic MenuFile=10
  FILE MENU
 
-Open loads a file in a new editor window.  Load replaces the contents of the
-current suitable editor window.  Get last lists recently used files, folders,
-and workspaces.  Acquire scans a directory or runs a command and presents the
+Open loads a file in a new editor window. Load replaces the contents of the
+current suitable editor window. Get last lists recently used files, folders,
+and workspaces. Acquire scans a directory or runs a command and presents the
 resulting files for selection.
 
-Open live log follows a text file as it grows.  Open journal reads systemd
-journal output, optionally filtered by application tag.  Open workspace
+Open live log follows a text file as it grows. Open journal reads systemd
+journal output, optionally filtered by application tag. Open workspace
 loads an MR workspace description.
 
-Save writes the current document.  Save as selects another URI.  Save all
-offers to write all modified documents.  Info displays document, file, and
-editor metadata.  Export to PDF opens the PDF export settings.  Exit closes
+Save writes the current document. Save as selects another URI. Save all
+offers to write all modified documents. Info displays document, file, and
+editor metadata. Export to PDF opens the PDF export settings. Exit closes
 MR after dirty documents and settings have been handled.
 
 Related dialogs: {Get Last:DialogGetLast}, {Acquire:DialogAcquire},
@@ -122,22 +127,22 @@ Related dialogs: {Get Last:DialogGetLast}, {Acquire:DialogAcquire},
 
 Undo and Redo traverse the editor's change history.
 
-Mark all selects the complete document.  Cut removes the selection and puts
-it in the editor buffer.  Copy leaves the source unchanged.  Append adds the
-selection to the existing buffer.  Cut and append combines removal with
-append.  Paste inserts the current buffer.
+Mark all selects the complete document. Cut removes the selection and puts
+it in the editor buffer. Copy leaves the source unchanged. Append adds the
+selection to the existing buffer. Cut and append combines removal with
+append. Paste inserts the current buffer.
 
-Insert toggles insert and overwrite mode.  The displayed ON or OFF state is
+Insert toggles insert and overwrite mode. The displayed ON or OFF state is
 the state that will be used for subsequent text entry.
 
 .topic MenuWindow=12
  WINDOW MENU
 
-Open creates another editor window.  Close closes the active window.  List
+Open creates another editor window. Close closes the active window. List
 opens the complete window and workspace control dialog.
 
-Next and Previous select neighboring desktop windows.  Hide removes a window
-from normal selection without closing it.  Zoom toggles maximized geometry.
+Next and Previous select neighboring desktop windows. Hide removes a window
+from normal selection without closing it. Zoom toggles maximized geometry.
 Minimize/restore changes between the normal window and its one-line desktop
 representation.
 
@@ -149,29 +154,29 @@ See {Organize submenu:MenuWindowOrganize} and {Window List:DialogWindowList}.
 .topic MenuWindowOrganize=13
  WINDOW - ORGANIZE SUBMENU
 
-Cascade overlaps ordinary desktop windows.  Tile partitions the usable
-desktop among them.  Split window horizontal or vertical creates another
+Cascade overlaps ordinary desktop windows. Tile partitions the usable
+desktop among them. Split window horizontal or vertical creates another
 viewport of the same supported document.
 
-Move viewport right or left changes the visible virtual desktop.  Move window
+Move viewport right or left changes the visible virtual desktop. Move window
 to right or left desktop changes the active window's membership and then
 selects the target desktop.
 
-These operations apply only to TVision-managed desktop windows.  Modal
+These operations apply only to TVision-managed desktop windows. Modal
 dialogs and the Help window do not participate.
 
 .topic MenuBlock=14
  BLOCK MENU
 
-Copy, Move, and Delete operate on the marked block.  Load block reads text
+Copy, Move, and Delete operate on the marked block. Load block reads text
 from disk into the block position; Save block writes only the marked block.
 Indent and Undent adjust the selected lines by the configured indentation.
 
 Window copy and Window move transfer a block between editor windows.
 
 Mark lines selects complete lines, Mark columns selects a rectangle, and Mark
-stream selects a continuous character range.  Hide/show block mark changes
-only the projection.  End marking completes the current mark.  Turn marking
+stream selects a continuous character range. Hide/show block mark changes
+only the projection. End marking completes the current mark. Turn marking
 off removes it.
 
 Persistent blocks controls whether a completed block survives cursor movement.
@@ -180,16 +185,16 @@ The ON or OFF suffix reports the current runtime setting.
 .topic MenuSearch=15
  SEARCH MENU
 
-Search for text opens the single-document search form.  Search and replace
-adds replacement text and replacement policy.  Repeat previous search uses
+Search for text opens the single-document search form. Search and replace
+adds replacement text and replacement policy. Repeat previous search uses
 the last accepted search specification without reopening the form.
 
-Multiple file search scans the selected file set.  List files from last
-search reopens the previous result set.  Multiple file search and replace
+Multiple file search scans the selected file set. List files from last
+search reopens the previous result set. Multiple file search and replace
 adds controlled replacement and per-hit review.
 
-Push position stores the current location on the marker stack.  Get position
-returns to the most recently stored valid location.  Goto line number moves
+Push position stores the current location on the marker stack. Get position
+returns to the most recently stored valid location. Goto line number moves
 to a one-based document line.
 
 Related dialogs: {Search:DialogSearch}, {Search and Replace:DialogSearchReplace},
@@ -200,13 +205,13 @@ Related dialogs: {Search:DialogSearch}, {Search and Replace:DialogSearchReplace}
 
 Push and Get position expose the same marker-stack operations as Search.
 Line drawing changes typed line characters; Double lines selects the double
-line set.  Hex editor opens the current file in the Bento hex editor.
+line set. Hex editor opens the current file in the Bento hex editor.
 
 Upper case and Lower case transform the selected block or applicable text.
-Center line uses the configured margins.  Re-format paragraph wraps the
-current paragraph.  Re-format code invokes the configured language formatter.
+Center line uses the configured margins. Re-format paragraph wraps the
+current paragraph. Re-format code invokes the configured language formatter.
 
-File compare opens a compare view.  Apply original to compare and Apply
+File compare opens a compare view. Apply original to compare and Apply
 compare to original transfer the currently selected difference in the named
 direction.
 
@@ -217,8 +222,8 @@ Installation and setup contains color, keymap, filename-extension, compiler,
 path, backup, user-interface, and live-log configuration.
 
 Build current file chooses the matching compiler profile and starts its build
-pipeline.  Git changes presents repository changes.  Stop current program and
-Restart current program control the active run session.  Clear current output
+pipeline. Git changes presents repository changes. Stop current program and
+Restart current program control the active run session. Clear current output
 clears the associated output view.
 
 Next and previous compiler error navigate the current build diagnostics.
@@ -229,14 +234,14 @@ See {Installation and Setup:MenuInstallationSetup}.
 .topic MenuInstallationSetup=18
  INSTALLATION AND SETUP SUBMENU
 
-Color setup edits palette groups and theme files.  Key mapping edits profiles
-and bindings.  Filename extensions associates language and editor behavior
-with file patterns.  Compiler profiles describes toolchains and build hooks.
+Color setup edits palette groups and theme files. Key mapping edits profiles
+and bindings. Filename extensions associates language and editor behavior
+with file patterns. Compiler profiles describes toolchains and build hooks.
 
 Paths selects settings, macro, Help, temporary, shell, and log locations.
-Backups / Autosave configures backup and workspace safety behavior.  User
+Backups / Autosave configures backup and workspace safety behavior. User
 interface settings controls window, cursor, scrollbar, compare, and indentation
-projection.  Live logs controls result messages, sounds, and log viewers.
+projection. Live logs controls result messages, sounds, and log viewers.
 
 Every setup dialog has its own Help page explaining each field.
 
@@ -244,7 +249,7 @@ Every setup dialog has its own Help page explaining each field.
  MACRO MENU
 
 Macro Library lists available macro files, definitions, bindings, and
-AUTOEXEC membership.  Playback runs the selected macro normally; Debug starts
+AUTOEXEC membership. Playback runs the selected macro normally; Debug starts
 it in the macro debugger.
 
 Recording start/stop captures eligible key activity into a new macro source.
@@ -256,31 +261,31 @@ Runtime-created macro menu groups are explained in
 .topic MenuHelp=20
  HELP MENU
 
-Table of contents opens the main Help page.  Keys opens the keyboard reference.
-Detailed index opens an alphabetical subject index.  Previous topic returns
+Table of contents opens the main Help page. Keys opens the keyboard reference.
+Detailed index opens an alphabetical subject index. Previous topic returns
 to the last topic referenced during the current MR session.
 
 Performance panel toggles the runtime scheduling and coprocessor diagnostic
-panel.  About displays build and product information.
+panel. About displays build and product information.
 
-F1 is context-sensitive.  Shift-F1 opens the index and Alt-F1 opens the
+F1 is context-sensitive. Shift-F1 opens the index and Alt-F1 opens the
 previous topic.
 
 .topic MenuRuntimeMacro=21
  RUNTIME MACRO MENUS
 
-MRMAC code may add menu groups and commands at runtime.  Their labels and
+MRMAC code may add menu groups and commands at runtime. Their labels and
 behavior are defined by the owning macro, not by the compiled MR command set.
 The macro file is therefore the authority for command-specific semantics.
 
-Selecting a runtime item executes its registered macro specification.  Help
+Selecting a runtime item executes its registered macro specification. Help
 for creating such entries belongs to the MRMAC reference manual.
 
 .topic Editor=30
  EDITOR WINDOW
 
-The editor window displays one document or one Bento workspace.  F1 opens the
-main Help contents when no more specific view context is active.  Use the
+The editor window displays one document or one Bento workspace. F1 opens the
+main Help contents when no more specific view context is active. Use the
 top-level menu chapters for command descriptions and the status line for the
 active function-key assignments.
 
@@ -333,11 +338,11 @@ See {Table of contents:Contents}.
 .topic DialogGetLast=100
  GET LAST DIALOG
 
-Files lists recently opened or saved document URIs.  Folders lists recent
-directory locations.  Workspaces lists recent workspace files.  Empty groups
+Files lists recently opened or saved document URIs. Folders lists recent
+directory locations. Workspaces lists recent workspace files. Empty groups
 are skipped during initial focus selection.
 
-Select a row and press Enter or double-click it.  The row type determines
+Select a row and press Enter or double-click it. The row type determines
 whether MR opens a file, changes the relevant folder, or loads a workspace.
 Esc closes the dialog without selecting anything.
 
@@ -345,92 +350,92 @@ Esc closes the dialog without selecting anything.
  BIND RECORDED MACRO KEY
 
 Press the key or modified key combination that shall invoke the recorded
-macro.  Esc leaves the macro unbound.  Alt-F10 is ignored here so that the
+macro. Esc leaves the macro unbound. Alt-F10 is ignored here so that the
 recording toggle cannot accidentally become its own binding.
 
-F1 and the Help button reopen this page.  Shift-F1 opens the index and Alt-F1
+F1 and the Help button reopen this page. Shift-F1 opens the index and Alt-F1
 returns to the previous topic; these reserved Help keys are not recorded.
 
 .topic DialogJournalTag=102
  OPEN JOURNAL DIALOG
 
 App tag is the systemd journal identifier used to filter the opened stream.
-The history control offers previously accepted tags.  Journal identifiers
+The history control offers previously accepted tags. Journal identifiers
 lists identifiers currently discovered from the journal.
 
-Choose an identifier or type a tag and select OK.  An empty tag opens the
+Choose an identifier or type a tag and select OK. An empty tag opens the
 unfiltered journal command configured by MR.
 
 .topic DialogFoundList=103
  FOUND LIST DIALOG
 
-The list contains matches from the most recent search operation.  Each row
-identifies the matching document and location.  Activate a row to load or
-focus its document at the match.  Done closes the list; Cancel abandons the
+The list contains matches from the most recent search operation. Each row
+identifies the matching document and location. Activate a row to load or
+focus its document at the match. Done closes the list; Cancel abandons the
 current list interaction.
 
 .topic DialogReplacePrompt=104
  REPLACE CONFIRMATION
 
-Replace changes the current match.  Skip leaves this match unchanged and
-continues.  Replace All applies the accepted replacement policy to all
-remaining matches.  Cancel stops replacement.
+Replace changes the current match. Skip leaves this match unchanged and
+continues. Replace All applies the accepted replacement policy to all
+remaining matches. Cancel stops replacement.
 
 The surrounding lines are a preview, not an editable buffer.
 
 .topic DialogSearchContinue=105
  SEARCH CONTINUATION
 
-Next continues the search from the current boundary.  Stop keeps the current
-position and terminates this search.  Cancel abandons the continuation
+Next continues the search from the current boundary. Stop keeps the current
+position and terminates this search. Cancel abandons the continuation
 request.
 
 .topic DialogSearch=106
  SEARCH DIALOG
 
-Search text is the literal or pattern to locate.  Case sensitivity, whole
+Search text is the literal or pattern to locate. Case sensitivity, whole
 word/phrase, PCRE, and direction controls determine how it is interpreted.
-Mode selects stop on first, prompt for next, or list all.  Global search,
+Mode selects stop on first, prompt for next, or list all. Global search,
 marked-block restriction, and all-windows search determine traversal scope.
 
-Go starts the operation with the displayed settings.  Cancel leaves the
+Go starts the operation with the displayed settings. Cancel leaves the
 previous accepted search specification unchanged.
 
 .topic DialogSearchReplace=107
  SEARCH AND REPLACE DIALOG
 
-Search text identifies matches.  Replacement text is inserted for an
+Search text identifies matches. Replacement text is inserted for an
 accepted match; regular-expression replacement syntax is enabled only when
 the corresponding search mode is active.
 
-Type and direction use the Search dialog semantics.  Mode selects replace
-first, prompt for each, or replace all.  Leave cursor at selects the start or
-end of the accepted replacement.  Global, marked-block, and all-windows
-options determine scope.  Go starts the operation.  Cancel preserves the
+Type and direction use the Search dialog semantics. Mode selects replace
+first, prompt for each, or replace all. Leave cursor at selects the start or
+end of the accepted replacement. Global, marked-block, and all-windows
+options determine scope. Go starts the operation. Cancel preserves the
 previous accepted search specification.
 
 .topic DialogMultiFileSearch=108
  MULTIPLE FILE SEARCH
 
-Filespec selects candidate names; an empty value becomes *.*.  Start at is
-the search root.  Recursive search includes descendants.  Search names the
-text or expression.  Case sensitive, regular expressions, and whole words
+Filespec selects candidate names; an empty value becomes *.*. Start at is
+the search root. Recursive search includes descendants. Search names the
+text or expression. Case sensitive, regular expressions, and whole words
 select matching rules; whole words takes precedence over regular expressions.
 
 Search editor windows or search files in memory includes already loaded
-documents.  Restrict to workspace limits candidates to the active workspace.
+documents. Restrict to workspace limits candidates to the active workspace.
 In replace mode, Keep all files open prevents processed files from being
 closed after replacement.
 
-Replace is the replacement text in replace mode.  Done submits the immutable
-search request.  Results are collected in the background and later adopted
+Replace is the replacement text in replace mode. Done submits the immutable
+search request. Results are collected in the background and later adopted
 by the UI.
 
 .topic DialogMultiFileResults=109
  MULTIPLE FILE SEARCH RESULTS
 
-Each row represents one accepted result with file and location.  Load opens
-the selected result; Load All opens all eligible result files.  In replace
+Each row represents one accepted result with file and location. Load opens
+the selected result; Load All opens all eligible result files. In replace
 review, Replace changes the selected hit, Replace All accepts the remaining
 eligible hits, and Skip advances without changing the current hit.
 
@@ -438,65 +443,65 @@ eligible hits, and Skip advances without changing the current hit.
  GOTO LINE NUMBER
 
 Enter a one-based document line number within the displayed valid range.
-Done moves the current editor to that line.  Cancel leaves the cursor where
+Done moves the current editor to that line. Cancel leaves the cursor where
 it is.
 
 .topic DialogRightMargin=111
  SET RIGHT MARGIN
 
-Enter the one-based right formatting margin.  It must be greater than the
-current left margin.  Paragraph formatting, centering, and the format ruler
-use this value.  Changing it also synchronizes the persisted format-line
+Enter the one-based right formatting margin. It must be greater than the
+current left margin. Paragraph formatting, centering, and the format ruler
+use this value. Changing it also synchronizes the persisted format-line
 settings.
 
 .topic DialogLeftMargin=112
  SET LEFT MARGIN
 
-Margin is the one-based left formatting margin.  It must be smaller than the
-current right margin.  Paragraph formatting and centering use the accepted
+Margin is the one-based left formatting margin. It must be smaller than the
+current right margin. Paragraph formatting and centering use the accepted
 value.
 
 .topic DialogAbout=113
  ABOUT DIALOG
 
-About displays the MR build identity and rotating project quotations.  Press
-closes the dialog; holding it activates the quotation animation.  Help opens
+About displays the MR build identity and rotating project quotations. Press
+closes the dialog; holding it activates the quotation animation. Help opens
 this description.
 
 .topic DialogAcquire=114
  ACQUIRE DIALOG
 
 The source field is either a directory specification or an executable command,
-depending on the selected acquire mode.  Exec runs the entered command.
+depending on the selected acquire mode. Exec runs the entered command.
 The result list contains discovered paths.
 
-Load opens the selected entry.  Load all opens every eligible entry.  Help
+Load opens the selected entry. Load all opens every eligible entry. Help
 explains the active mode without changing the current source or selection.
 
 .topic DialogColorSetup=115
  COLOR SETUP
 
-The group list selects a palette domain.  The item list selects one color
-role in that domain.  Foreground and Background edit the selected color;
-Display previews the result.  Monochrome controls the monochrome attribute.
+The group list selects a palette domain. The item list selects one color
+role in that domain. Foreground and Background edit the selected color;
+Display previews the result. Monochrome controls the monochrome attribute.
 
 In HELP COLORS, help-window controls sets the color of the window-button
 glyphs and draggable frame corners.
 
-Load Theme reads a theme file into the working palette.  Save Theme writes
-the working palette.  Theme URI is the selected source or destination.  The
+Load Theme reads a theme file into the working palette. Save Theme writes
+the working palette. Theme URI is the selected source or destination. The
 running settings change only when the dialog flow accepts changed data.
 
 .topic DialogCompilerProfiles=116
  COMPILER PROFILES
 
-Profile ID is the stable settings key.  Name is the displayed name.  Toolchain
-describes the compiler family.  Executable is the program URI.  Version and
-Target constrain profile matching.  Build flags are passed to the build.
+Profile ID is the stable settings key. Name is the displayed name. Toolchain
+describes the compiler family. Executable is the program URI. Version and
+Target constrain profile matching. Build flags are passed to the build.
 
-Pre build cmd runs before compilation.  Build succeeded cmd and Build failed
-cmd run after the corresponding result.  Their audio fields name sound files.
-Pre build macro and Post build macro name MRMAC files.  Includes, Libraries,
+Pre build cmd runs before compilation. Build succeeded cmd and Build failed
+cmd run after the corresponding result. Their audio fields name sound files.
+Pre build macro and Post build macro name MRMAC files. Includes, Libraries,
 and Runtime carry toolchain-specific arguments.
 
 Add creates a profile, Copy duplicates the selected profile, Delete removes
@@ -507,7 +512,7 @@ it, and Automatic Setup probes supported local compilers.
 
 The headline and detail describe the pending operation and affected data.
 Save or the operation-specific primary button preserves or applies the data.
-Discard intentionally drops the named changes.  Cancel returns without
+Discard intentionally drops the named changes. Cancel returns without
 performing the requested transition.
 
 Read the detail before choosing: Help never selects a confirmation result.
@@ -517,141 +522,141 @@ Read the detail before choosing: Help never selects a confirmation result.
 
 The pages report document identity, persistent URI, size, line and cursor
 state, encoding-related editor state, window role, and relevant runtime
-metadata.  Prev and Next move between pages.  Done closes the dialog.
+metadata. Prev and Next move between pages. Done closes the dialog.
 
 .topic DialogKeymapBinding=119
  BINDING EDITOR
 
-Type selects Action or Macro.  Context selects Menu, Dialog, Listbox, List,
-Readonly, or Edit dispatch.  Target identifies the catalog action or macro;
-Filter narrows that list.  Sequence is the recorded key or multi-key sequence.
+Type selects Action or Macro. Context selects Menu, Dialog, Listbox, List,
+Readonly, or Edit dispatch. Target identifies the catalog action or macro;
+Filter narrows that list. Sequence is the recorded key or multi-key sequence.
 Description is the text shown for the binding.
 
-Use the capture controls to record a key safely.  Done validates and accepts
-the working binding.  Help does not modify it.
+Use the capture controls to record a key safely. Done validates and accepts
+the working binding. Help does not modify it.
 
 .topic DialogKeymapProfile=120
  PROFILE EDITOR
 
-Name is the unique profile name.  Description is the explanatory text shown
-with that profile.  Empty or duplicate names are rejected.
+Name is the unique profile name. Description is the explanatory text shown
+with that profile. Empty or duplicate names are rejected.
 
 Done accepts the working profile after validation.
 
 .topic DialogKeymapManager=121
  KEY MANAGER
 
-Profiles selects the working keymap profile.  Use makes it active.  Add, Ren,
-and Del create, rename, or delete profiles.  Bindings shows the selected
+Profiles selects the working keymap profile. Use makes it active. Add, Ren,
+and Del create, rename, or delete profiles. Bindings shows the selected
 profile's entries; Filter narrows that list, and New, Edit, and Delete modify
 the working bindings.
 
-Load reads a keymap profile file.  Save writes the current URI.  Save As
-selects a different URI.  Changes remain in the dialog draft until the outer
+Load reads a keymap profile file. Save writes the current URI. Save As
+selects a different URI. Changes remain in the dialog draft until the outer
 flow accepts them.
 
 .topic DialogMacroLibrary=122
  MACRO LIBRARY
 
-The macro list shows indexed macro definitions.  Create, Delete, Copy, Edit,
-and Bind operate on the selected definition.  AUTOEXEC controls show which
+The macro list shows indexed macro definitions. Create, Delete, Copy, Edit,
+and Bind operate on the selected definition. AUTOEXEC controls show which
 macro files run during startup; Add and Remove change that working list.
 
-Playback runs the selected macro normally.  Debug starts it in the macro
-debugger.  Help leaves selection and working state unchanged.
+Playback runs the selected macro normally. Debug starts it in the macro
+debugger. Help leaves selection and working state unchanged.
 
 .topic DialogPdfExport=123
  EXPORT TO PDF
 
-Output URI is the destination PDF.  Header and Footer are repeated page text.
-Page separator is the literal that forces a page boundary.  Font family and
-Font size select Pango font properties.  Text width is the formatted text
+Output URI is the destination PDF. Header and Footer are repeated page text.
+Page separator is the literal that forces a page boundary. Font family and
+Font size select Pango font properties. Text width is the formatted text
 column count.
 
-Top, left, right, and bottom margins are PDF point values.  Done validates
+Top, left, right, and bottom margins are PDF point values. Done validates
 the fields and then opens the destination chooser or performs export as
 required by the dialog flow.
 
 .topic DialogWindowList=124
  WINDOW LIST
 
-The list shows managed editor and Bento windows.  State is [min] for minimized
-or [hid] for manually hidden.  VD is the virtual-desktop number.  M contains
-a crown for the main workspace file.  File and Directory identify the window.
+The list shows managed editor and Bento windows. State is [min] for minimized
+or [hid] for manually hidden. VD is the virtual-desktop number. M contains
+a crown for the main workspace file. File and Directory identify the window.
 
-Delete closes an eligible window.  Save, Save all, Save as, and Revert perform
-the named document operation.  Hide and Hide all change manual visibility.
+Delete closes an eligible window. Save, Save all, Save as, and Revert perform
+the named document operation. Hide and Hide all change manual visibility.
 Get moves a window from another virtual desktop into the current desktop.
 
-Main workspace selects the workspace's main file.  Autosave workspace and
-Autoload workspace toggle their settings.  Save workspace and Load workspace
+Main workspace selects the workspace's main file. Autosave workspace and
+Autoload workspace toggle their settings. Save workspace and Load workspace
 open the corresponding file dialogs.
 
 .topic DialogFileExtensions=125
  FILENAME EXTENSIONS
 
-Profiles selects a filename-extension profile.  Profile ID is its stable key;
-Description is its display text.  Extension contains the exact, case-sensitive
-extension list.  DEFAULT supplies global settings and its ID and Extension
-cannot be edited.  Compiler profile selects the build profile for matching
+Profiles selects a filename-extension profile. Profile ID is its stable key;
+Description is its display text. Extension contains the exact, case-sensitive
+extension list. DEFAULT supplies global settings and its ID and Extension
+cannot be edited. Compiler profile selects the build profile for matching
 files.
 
-Colortheme selects the palette file.  Post-load macro runs after a matching
-file is loaded; Pre-save macro runs before it is saved.  Default path supplies
-the initial directory.  Editor and language controls define indentation,
+Colortheme selects the palette file. Post-load macro runs after a matching
+file is loaded; Pre-save macro runs before it is saved. Default path supplies
+the initial directory. Editor and language controls define indentation,
 formatting, display, block, mode, and related per-profile behavior.
 
-New, Copy, and Delete manage profile drafts.  Help explains the draft without
+New, Copy, and Delete manage profile drafts. Help explains the draft without
 applying it.
 
 .topic DialogPaths=126
  PATHS
 
-Settings macro URI is the canonical settings.mrmac location.  Macro directory
-contains indexed MRMAC sources.  Help file URI names the compiled TVision
-mr.hlp file.  Temporary directory holds disposable working files.
+Settings macro URI is the canonical settings.mrmac location. Macro directory
+contains indexed MRMAC sources. Help file URI names the compiled TVision
+mr.hlp file. Temporary directory holds disposable working files.
 
-Shell executable URI is the program used for shell commands.  Audio player URI
-is the executable used for audible signals.  Logfile URI is enabled when Log
+Shell executable URI is the program used for shell commands. Audio player URI
+is the executable used for audible signals. Logfile URI is enabled when Log
 to file is selected and names the persistent MR log destination.
 
 Path history, File history, and Workspace history are the retained entry
-counts, each from 5 through 50.  Log handling selects a volatile in-memory log,
-the named file, or journalctl.  Browse buttons select a file or directory for
+counts, each from 5 through 50. Log handling selects a volatile in-memory log,
+the named file, or journalctl. Browse buttons select a file or directory for
 the corresponding field.
 
-Paths may be absolute or accepted normalized inputs.  Applying this dialog
+Paths may be absolute or accepted normalized inputs. Applying this dialog
 updates the central runtime settings model; it never writes settings directly.
 
 .topic DialogBackups=127
  BACKUPS AND AUTOSAVE
 
-Backup method selects Off, create Backup file, or move to backup Path.  Backup
-frequency selects First save only or Every save.  Backup file ext. is used by
-the backup-file method.  Backup path is enabled by the move-to-path method.
+Backup method selects Off, create Backup file, or move to backup Path. Backup
+frequency selects First save only or Every save. Backup file ext. is used by
+the backup-file method. Backup path is enabled by the move-to-path method.
 
 Keyboard inactivity starts autosave after 5 through 100 idle seconds.
-Intervall auto save starts it every 100 through 300 seconds.  Zero disables
-the respective trigger.  The sliders and labels display seconds.
+Intervall auto save starts it every 100 through 300 seconds. Zero disables
+the respective trigger. The sliders and labels display seconds.
 
 .topic DialogUserInterface=128
  USER INTERFACE SETTINGS
 
-Window Manager enables MR desktop window management.  Menuline messages
-controls message display.  Cycle virtual desktops wraps navigation at the
-ends.  Track compiler warnings and Track compiler notes select which
-diagnostics are adopted.  R/O file comparing makes the compare panel read
-only.  Autodetect binary files enables binary-file detection.
+Window Manager enables MR desktop window management. Menuline messages
+controls message display. Cycle virtual desktops wraps navigation at the
+ends. Track compiler warnings and Track compiler notes select which
+diagnostics are adopted. R/O file comparing makes the compare panel read
+only. Autodetect binary files enables binary-file detection.
 
 Virtual desktops is the number of desktops, from 1 through 9.
 
-Cursor behaviour selects cursor tracking.  Scrollbars controls visibility.
-Compiler errors selects diagnostic message presentation.  Start configuration
-selects file-compare startup layout.  Cursor position marker is the status
+Cursor behaviour selects cursor tracking. Scrollbars controls visibility.
+Compiler errors selects diagnostic message presentation. Start configuration
+selects file-compare startup layout. Cursor position marker is the status
 format, where R and C expand to row and column.
 
 File compare gutters control the leading and trailing projections of each
-panel.  Each spinner is blank or M = mini map, D = difference marker,
+panel. Each spinner is blank or M = mini map, D = difference marker,
 L = line numbers, C = code folding; left-to-right order is significant.
 Indent style selects indentation rules and the adjacent pane previews them.
 
@@ -659,84 +664,84 @@ Indent style selects indentation rules and the adjacent pane previews them.
  LIVE LOGS
 
 Search hits controls message-line reporting, system beep, and an audible
-signal through the configured player.  Viewer controls line numbers, time
-stamps, and syntax highlighting.  Scroll direction selects whether new
+signal through the configured player. Viewer controls line numbers, time
+stamps, and syntax highlighting. Scroll direction selects whether new
 records appear toward the top or bottom.
 
 Audio URI is the sound player or sound resource selected by the current
-configuration.  Unavailable audio controls are disabled rather than silently
+configuration. Unavailable audio controls are disabled rather than silently
 accepted.
 
 .topic DialogFileChooser=130
  FILE CHOOSER
 
-Name is the selected file URI or filespec.  The history button recalls recent
-values for this operation.  Files lists entries in the current directory.
+Name is the selected file URI or filespec. The history button recalls recent
+values for this operation. Files lists entries in the current directory.
 The information pane describes the selected entry.
 
-Open or OK accepts the selected URI.  Replace permits replacement when offered.
-Cancel returns without changing the caller's accepted path.  Help explains
+Open or OK accepts the selected URI. Replace permits replacement when offered.
+Cancel returns without changing the caller's accepted path. Help explains
 the chooser and preserves its current directory, input, and selection.
 
 .topic DialogDirectoryChooser=131
  DIRECTORY CHOOSER
 
-Directory name is the candidate directory.  Directory tree browses available
-directories.  Chdir enters the selected directory.  Revert returns to the
-directory from which the dialog was opened.  OK accepts the current directory.
+Directory name is the candidate directory. Directory tree browses available
+directories. Chdir enters the selected directory. Revert returns to the
+directory from which the dialog was opened. OK accepts the current directory.
 
 .topic DialogBindingKeyCapture=132
  CAPTURE BINDING KEY
 
-Press the key combination to store in the binding editor.  Esc cancels capture.
-F1 and the Help button open this page.  Shift-F1 opens the index and Alt-F1
+Press the key combination to store in the binding editor. Esc cancels capture.
+F1 and the Help button open this page. Shift-F1 opens the index and Alt-F1
 returns to the previous topic; these reserved Help keys are never recorded.
 
 .topic DialogSnippetSidekick=133
  SNIPPET SIDEKICK
 
-The SideKick editor previews and edits snippet expansion.  Tab and Shift-Tab
-move through placeholders.  Enter inserts a line break.  Ctrl-Enter or
+The SideKick editor previews and edits snippet expansion. Tab and Shift-Tab
+move through placeholders. Enter inserts a line break. Ctrl-Enter or
 Alt-Enter commits the edited expansion; Esc cancels the snippet session.
 The parent document changes only through this explicit commit path.
 
 .topic DialogMacroMenu=134
  MACRO MENU DIALOG
 
-This menu was created by MRMAC.  The owning macro defines the meaning of its
-rows.  Done accepts the current row, Cancel returns no selection, and Help
+This menu was created by MRMAC. The owning macro defines the meaning of its
+rows. Done accepts the current row, Cancel returns no selection, and Help
 describes the generic runtime dialog.
 
 .topic DialogMacroStringInput=135
  MACRO STRING INPUT
 
-Enter the string requested by the owning MRMAC procedure.  Done returns the
-text to that macro.  Cancel returns no accepted value.  The prompt and macro
+Enter the string requested by the owning MRMAC procedure. Done returns the
+text to that macro. Cancel returns no accepted value. The prompt and macro
 source are authoritative for value-specific syntax.
 
 .topic DialogMacroUi=136
  MACRO-DEFINED DIALOG
 
-This dialog and its labels were constructed at runtime by MRMAC.  The owning
-macro defines field meaning, accepted syntax, and button behavior.  F1 opens
-this generic page.  MR cannot infer domain semantics from arbitrary labels.
+This dialog and its labels were constructed at runtime by MRMAC. The owning
+macro defines field meaning, accepted syntax, and button behavior. F1 opens
+this generic page. MR cannot infer domain semantics from arbitrary labels.
 
 .topic DialogColorThemeFile=137
  THEME FILE SELECTION
 
-Select the MRMAC theme file to load or save.  Loading changes only the current
-working palette until its containing setup flow accepts it.  Saving writes
+Select the MRMAC theme file to load or save. Loading changes only the current
+working palette until its containing setup flow accepts it. Saving writes
 the working palette to the selected URI.
 
 .topic DialogCompilerFile=138
  COMPILER PROFILE FILE SELECTION
 
 Select the compiler executable, audio resource, or macro file named by the
-calling Compiler Profiles field.  The chooser does not run the selected file.
+calling Compiler Profiles field. The chooser does not run the selected file.
 
 .topic DialogWorkspaceFile=139
  WORKSPACE FILE SELECTION
 
-Select an MRMAC workspace file.  Loading validates workspace entries before
-adoption.  Saving writes MRSETUP-compatible workspace lines without merging
+Select an MRMAC workspace file. Loading validates workspace entries before
+adoption. Saving writes MRSETUP-compatible workspace lines without merging
 workspace state into canonical core settings.
