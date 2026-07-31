@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1030" viewBox="0 0 1080 1030" role="img" aria-labelledby="title desc">
+  <title id="title">MR block geometry and staged mutation pipeline</title>
+  <desc id="desc">Four numbered panels show the block lifecycle, line column and stream geometry, staged block mutation, and the boundary between cross-window transfer and the system clipboard.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1030" fill="#ffffff"/>
+  <text x="40" y="35" class="title">BLOCK GEOMETRY AND STAGED MUTATION</text>
+  <text x="40" y="59" class="small">The persistent block is authoritative; native selection, overlays and clipboard text are projections.</text>
+
+  <rect x="40" y="82" width="1000" height="160" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">One explicit lifecycle separates marking from committed work</text>
+  <rect x="70" y="157" width="230" height="53" rx="6" class="red"/>
+  <text x="185" y="189" class="panel-title" text-anchor="middle">INACTIVE</text>
+  <path d="M300 184 L375 184" class="flow"/>
+  <rect x="375" y="157" width="230" height="53" rx="6" class="gold"/>
+  <text x="490" y="180" class="panel-title" text-anchor="middle">MARKING</text>
+  <text x="490" y="201" class="small" text-anchor="middle">fixed anchor + live cursor</text>
+  <path d="M605 184 L680 184" class="flow"/>
+  <rect x="680" y="157" width="330" height="53" rx="6" class="green"/>
+  <text x="845" y="180" class="panel-title" text-anchor="middle">COMMITTED</text>
+  <text x="845" y="201" class="small" text-anchor="middle">visible or hidden · geometry retained</text>
+  <path d="M845 210 C845 232 185 232 185 212" class="flow"/>
+
+  <path d="M540 242 L540 268" class="flow-blue"/>
+
+  <rect x="40" y="273" width="1000" height="267" rx="8" class="box"/>
+  <circle cx="72" cy="305" r="20" fill="#2f6fa3"/>
+  <text x="72" y="312" class="badge">2</text>
+  <text x="105" y="311" class="panel-title">The geometry preserves byte, line, and display-cell meaning</text>
+
+  <rect x="70" y="348" width="293" height="135" rx="7" class="blue"/>
+  <text x="217" y="379" class="panel-title" text-anchor="middle">LINE</text>
+  <text x="92" y="409" class="code">line1..line2</text>
+  <text x="92" y="433" class="code">rangeStart..rangeEnd</text>
+  <text x="92" y="461" class="small">whole logical lines including separators</text>
+
+  <rect x="393" y="348" width="294" height="135" rx="7" class="purple"/>
+  <text x="540" y="379" class="panel-title" text-anchor="middle">COLUMN</text>
+  <text x="415" y="409" class="code">line1..line2</text>
+  <text x="415" y="433" class="code">col1..col2 in display cells</text>
+  <text x="415" y="461" class="small">tabs + UTF-8 width → rectangular payload</text>
+
+  <rect x="717" y="348" width="293" height="135" rx="7" class="green"/>
+  <text x="864" y="379" class="panel-title" text-anchor="middle">STREAM</text>
+  <text x="739" y="409" class="code">anchor ↔ cursor</text>
+  <text x="739" y="433" class="code">rangeStart..rangeEnd</text>
+  <text x="739" y="461" class="small">continuous byte interval across lines</text>
+
+  <rect x="70" y="499" width="940" height="21" rx="3" fill="#e8f0f2" stroke="#27313a" stroke-width="1"/>
+  <text x="540" y="515" class="small" text-anchor="middle">documentVersion + DocumentChangeSet remap · selection and column overlay are derived projections</text>
+
+  <path d="M540 540 L540 566" class="flow-blue"/>
+
+  <rect x="40" y="571" width="1000" height="222" rx="8" class="box"/>
+  <circle cx="72" cy="603" r="20" fill="#2f6fa3"/>
+  <text x="72" y="610" class="badge">3</text>
+  <text x="105" y="609" class="panel-title">Every local operation crosses one snapshot/version adoption boundary</text>
+  <rect x="70" y="646" width="210" height="100" rx="6" class="gold"/>
+  <text x="175" y="675" class="panel-title" text-anchor="middle">OPERATION</text>
+  <text x="175" y="702" class="small" text-anchor="middle">copy · move · delete</text>
+  <text x="175" y="724" class="small" text-anchor="middle">indent · undent</text>
+  <path d="M280 696 L330 696" class="flow"/>
+  <rect x="330" y="646" width="220" height="100" rx="6" class="purple"/>
+  <text x="440" y="675" class="panel-title" text-anchor="middle">TYPED PAYLOAD</text>
+  <text x="440" y="702" class="small" text-anchor="middle">mode · rows · width</text>
+  <text x="440" y="724" class="small" text-anchor="middle">owned bytes · target policy</text>
+  <path d="M550 696 L600 696" class="flow"/>
+  <rect x="600" y="646" width="220" height="100" rx="6" class="blue"/>
+  <text x="710" y="675" class="panel-title" text-anchor="middle">STAGED EDIT</text>
+  <text x="710" y="702" class="code" text-anchor="middle">ReadSnapshot</text>
+  <text x="710" y="724" class="small" text-anchor="middle">bottom-up replacements</text>
+  <path d="M820 696 L870 696" class="flow"/>
+  <rect x="870" y="646" width="140" height="100" rx="6" class="green"/>
+  <text x="940" y="675" class="panel-title" text-anchor="middle">ADOPT</text>
+  <text x="940" y="702" class="small" text-anchor="middle">Piece Table</text>
+  <text x="940" y="724" class="small" text-anchor="middle">new geometry</text>
+  <text x="70" y="776" class="small">Column replacements are staged from the final line upward; visual state changes only after transaction acceptance.</text>
+
+  <path d="M540 793 L540 819" class="flow-blue"/>
+
+  <rect x="40" y="824" width="1000" height="176" rx="8" class="box"/>
+  <circle cx="72" cy="856" r="20" fill="#2f6fa3"/>
+  <text x="72" y="863" class="badge">4</text>
+  <text x="105" y="862" class="panel-title">Transfer geometry and clipboard text remain deliberately different</text>
+  <rect x="70" y="899" width="425" height="73" rx="6" class="blue"/>
+  <text x="283" y="926" class="panel-title" text-anchor="middle">CROSS-WINDOW TRANSFER</text>
+  <text x="283" y="950" class="small" text-anchor="middle">TransferMessage · target insert first · source remove second</text>
+  <path d="M495 936 L585 936" class="flow"/>
+  <rect x="585" y="899" width="425" height="73" rx="6" class="lime"/>
+  <text x="798" y="926" class="panel-title" text-anchor="middle">SYSTEM CLIPBOARD</text>
+  <text x="798" y="950" class="small" text-anchor="middle">plain transferable text · TVision request/event route</text>
+  <text x="540" y="993" class="small" text-anchor="middle">No internal clipboard shadow owns persistent block geometry.</text>
+</svg>

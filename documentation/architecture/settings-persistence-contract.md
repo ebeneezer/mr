@@ -44,6 +44,11 @@ Workspace-aware persistence may replace it only through
 `buildSettingsMacroSourceWithWorkspace`. This exception does not authorize
 another serialization side channel.
 
+The debugger Bento extension may serialize cold source identity, breakpoint
+definitions and watch definitions through the existing `WORKSPACE` line.
+Session ids, VM handles, routes, current locations, call stacks, values,
+outputs and generated source maps remain runtime-only and must not be written.
+
 ## SAVE_SETTINGS
 
 `SAVE_SETTINGS` is a VM intrinsic that invokes the approved persistence path.

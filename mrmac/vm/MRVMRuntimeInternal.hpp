@@ -184,7 +184,7 @@ void setMacroGlobalEnumIndex(std::size_t index);
 void setGlobalValue(const std::string &name, int type, const Value &value);
 void setGlobalValueFromStore(const std::string &name, int type, const Value &value, MRVMHashStore &localStore);
 bool readGlobalValue(const std::string &name, GlobalEntry &entry);
-MRMacroDebugVariableScope macroDebugVariableScope(const std::string &name, const Value &value, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames);
+MRMacroDebugVariableScope macroDebugVariableScope(const std::string &name, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames);
 std::string macroDebugValueText(const Value &value, const MRVMHashStore &localStore, const MRVMHashStore &globalStore);
 void appendMacroDebugVariableSnapshots(MRMacroDebugRunResult &result, const std::map<std::string, Value> &variableStore, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames, const MRVMHashStore &localStore, const MRVMHashStore &globalStore);
 void appendMacroDebugAppGlobalSnapshots(MRMacroDebugRunResult &result, const MRVMHashStore &globalStore);

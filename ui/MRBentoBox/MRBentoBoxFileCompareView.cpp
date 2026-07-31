@@ -152,6 +152,7 @@ void MRBentoBox::refreshFileComparePanes() {
 
 void MRBentoBox::syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor) {
 	if (bentoMode != bbmFileCompare) return;
+	if (fileCompareLinkedPaneSyncActive) return;
 
 	const MRBentoPaneRole sourceRole = roleForLeaf(sourceLeafId);
 	if (!fileCompareRoleIsDiff(sourceRole)) return;
@@ -164,10 +165,18 @@ void MRBentoBox::syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor
 	MRFileEditor *sourceEditor = sourceWindow != nullptr ? sourceWindow->getEditor() : nullptr;
 	MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
 	if (sourceEditor == nullptr || targetEditor == nullptr) return;
+	fileCompareLinkedPaneSyncActive = true;
 	auto mappedTargetLine = [this, sourceRole, targetEditor](std::size_t sourceLine) {
 		return fileCompareMappedLineForRole(sourceRole, sourceLine, *targetEditor, fileComparePanesEditable());
 	};
 
+	{
+		const std::size_t sourceScrollLine = static_cast<std::size_t>(std::max(0, sourceEditor->delta.y));
+		const std::size_t targetScrollLine = mappedTargetLine(sourceScrollLine);
+		const int targetScrollY = static_cast<int>(std::min(targetScrollLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
+
+		targetEditor->scrollTo(std::max(0, sourceEditor->delta.x), targetScrollY);
+	}
 	if (syncCursor) {
 		const std::size_t sourceLine = sourceEditor->lineIndexOfOffset(sourceEditor->cursorOffset());
 		const std::size_t targetLine = mappedTargetLine(sourceLine);
@@ -177,13 +186,7 @@ void MRBentoBox::syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor
 
 		targetEditor->setCursorOffsetAtVisualColumn(targetOffset, visualColumn);
 	}
-	{
-		const std::size_t sourceScrollLine = static_cast<std::size_t>(std::max(0, sourceEditor->delta.y));
-		const std::size_t targetScrollLine = mappedTargetLine(sourceScrollLine);
-		const int targetScrollY = static_cast<int>(std::min(targetScrollLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
-
-		targetEditor->scrollTo(std::max(0, sourceEditor->delta.x), targetScrollY);
-	}
 	targetEditor->refreshViewState();
 	if (targetWindow != nullptr) targetWindow->drawView();
+	fileCompareLinkedPaneSyncActive = false;
 }

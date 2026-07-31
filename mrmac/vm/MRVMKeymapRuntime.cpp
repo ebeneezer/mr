@@ -156,7 +156,6 @@ const char *mrvmKeymapActionIdForMacroCommand(const std::string &name) noexcept 
 	    MacroKeymapActionCommand{"SETUP_COMPILER_PROFILES", "MR_SETUP_COMPILER_PROFILES"},
 	    MacroKeymapActionCommand{"SETUP_PATHS", "MR_SETUP_PATHS"},
 	    MacroKeymapActionCommand{"SETUP_BACKUPS_AUTOSAVE", "MR_SETUP_BACKUPS_AUTOSAVE"},
-	    MacroKeymapActionCommand{"SETUP_SEARCH_REPLACE_DEFAULTS", "MR_SETUP_SEARCH_REPLACE_DEFAULTS"},
 	    MacroKeymapActionCommand{"SETUP_USER_INTERFACE", "MR_SETUP_USER_INTERFACE"},
 	    MacroKeymapActionCommand{"SETUP_LIVE_LOGS", "MR_SETUP_LIVE_LOGS"},
 	    MacroKeymapActionCommand{"EXIT_SAVE_ALL", "MR_EXIT_DIRTY_SAVE_ALL"}};

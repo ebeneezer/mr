@@ -4,7 +4,9 @@
 #define Uses_TLabel
 #define Uses_TObject
 #define Uses_TProgram
+#define Uses_TRadioButtons
 #define Uses_TStaticText
+#define Uses_TSItem
 #include <tvision/tv.h>
 
 #include "MRPdfExportDialog.hpp"
@@ -39,16 +41,19 @@ enum : ushort {
 };
 
 constexpr int kDialogWidth = 78;
-constexpr int kDialogHeight = 19;
+constexpr int kDialogHeight = 22;
 constexpr int kLabelLeft = 2;
-constexpr int kInputLeft = 22;
-constexpr int kFieldWidth = 48;
+constexpr int kInputLeft = 25;
+constexpr int kFieldWidth = 45;
 constexpr int kFieldRight = kInputLeft + kFieldWidth;
 constexpr int kDropButtonWidth = 3;
 constexpr int kBrowseButtonWidth = 2;
-constexpr int kTextWidthY = 8;
+constexpr int kSourceHeadingY = 2;
+constexpr int kSourceOptionsY = 3;
+constexpr int kFieldsY = 5;
+constexpr int kTextWidthY = kFieldsY + 6;
 constexpr int kMarginFieldWidth = 4;
-constexpr int kMarginAxisY = 12;
+constexpr int kMarginAxisY = 16;
 constexpr int kMarginAxisGap = 8;
 
 bool parseRangeInt(std::string_view text, int minValue, int maxValue, int &value) {
@@ -120,7 +125,7 @@ class TInlineGlyphButton final : public TView {
 
 class TPdfExportDialog final : public MRDialogFoundation {
   public:
-	TPdfExportDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, kDialogHeight), "EXPORT TO PDF", kDialogWidth, kDialogHeight, initMrDialogFrame) {
+	explicit TPdfExportDialog(bool markedBlockAvailable) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, kDialogHeight), "EXPORT TO PDF", kDialogWidth, kDialogHeight, initMrDialogFrame), mMarkedBlockAvailable(markedBlockAvailable) {
 		static constexpr std::array buttons{
 		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
 		    mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal},
@@ -141,40 +146,45 @@ class TPdfExportDialog final : public MRDialogFoundation {
 		const int marginRightRight = marginRightLeft + kMarginFieldWidth;
 
 		helpCtx = hcDialogPdfExport;
-		mOutputPath = new TInputLine(TRect(kInputLeft, 2, kFieldRight, 3), sizeof(MRPdfExportDialogData::outputPath) - 1);
+		insert(new TStaticText(TRect(kLabelLeft, kSourceHeadingY, kInputLeft, kSourceHeadingY + 1), "Source:"));
+		mSource = new TRadioButtons(TRect(kLabelLeft + 1, kSourceOptionsY, kInputLeft + 18, kSourceOptionsY + 2), new TSItem(" ~C~urrent file ", new TSItem(" ~M~arked block ", nullptr)));
+		insert(mSource);
+		if (!mMarkedBlockAvailable) mSource->setButtonState(0x0002, False);
+
+		mOutputPath = new TInputLine(TRect(kInputLeft, kFieldsY, kFieldRight, kFieldsY + 1), sizeof(MRPdfExportDialogData::outputPath) - 1);
 		insert(mOutputPath);
-		insert(new TLabel(TRect(kLabelLeft, 2, kInputLeft, 3), "~O~utput URI:", mOutputPath));
-		mOutputPathListAnchor = TRect(kInputLeft, 2, kFieldRight, 3);
-		outputPathDropList.createButton(*this, TRect(outputHistoryLeft, 2, outputBrowseLeft, 3), mOutputPath, this, cmMrPdfExportChooseOutputPath, false);
-		insert(new TInlineGlyphButton(TRect(outputBrowseLeft, 2, outputBrowseRight, 3), "🔎", cmMrPdfExportBrowseOutputPath));
+		insert(new TLabel(TRect(kLabelLeft, kFieldsY, kInputLeft, kFieldsY + 1), "~O~utput URI:", mOutputPath));
+		mOutputPathListAnchor = TRect(kInputLeft, kFieldsY, kFieldRight, kFieldsY + 1);
+		outputPathDropList.createButton(*this, TRect(outputHistoryLeft, kFieldsY, outputBrowseLeft, kFieldsY + 1), mOutputPath, this, cmMrPdfExportChooseOutputPath, false);
+		insert(new TInlineGlyphButton(TRect(outputBrowseLeft, kFieldsY, outputBrowseRight, kFieldsY + 1), "🔎", cmMrPdfExportBrowseOutputPath));
 
-		mHeaderLine = new TInputLine(TRect(kInputLeft, 3, kFieldRight, 4), sizeof(MRPdfExportDialogData::headerLine) - 1);
+		mHeaderLine = new TInputLine(TRect(kInputLeft, kFieldsY + 1, kFieldRight, kFieldsY + 2), sizeof(MRPdfExportDialogData::headerLine) - 1);
 		insert(mHeaderLine);
-		insert(new TLabel(TRect(kLabelLeft, 3, kInputLeft, 4), "~H~eader:", mHeaderLine));
+		insert(new TLabel(TRect(kLabelLeft, kFieldsY + 1, kInputLeft, kFieldsY + 2), "~H~eader:", mHeaderLine));
 
-		mFooterLine = new TInputLine(TRect(kInputLeft, 4, kFieldRight, 5), sizeof(MRPdfExportDialogData::footerLine) - 1);
+		mFooterLine = new TInputLine(TRect(kInputLeft, kFieldsY + 2, kFieldRight, kFieldsY + 3), sizeof(MRPdfExportDialogData::footerLine) - 1);
 		insert(mFooterLine);
-		insert(new TLabel(TRect(kLabelLeft, 4, kInputLeft, 5), "~F~ooter:", mFooterLine));
+		insert(new TLabel(TRect(kLabelLeft, kFieldsY + 2, kInputLeft, kFieldsY + 3), "~F~ooter:", mFooterLine));
 
-		mPageSeparator = new TInputLine(TRect(kInputLeft, 5, kFieldRight, 6), sizeof(MRPdfExportDialogData::pageSeparatorLiteral) - 1);
+		mPageSeparator = new TInputLine(TRect(kInputLeft, kFieldsY + 3, kFieldRight, kFieldsY + 4), sizeof(MRPdfExportDialogData::pageSeparatorLiteral) - 1);
 		insert(mPageSeparator);
-		insert(new TLabel(TRect(kLabelLeft, 5, kInputLeft, 6), "~P~age separator:", mPageSeparator));
+		insert(new TLabel(TRect(kLabelLeft, kFieldsY + 3, kInputLeft, kFieldsY + 4), "~P~age separator:", mPageSeparator));
 
-		mFontFamily = new TInputLine(TRect(kInputLeft, 6, kFieldRight, 7), sizeof(MRPdfExportDialogData::fontFamily) - 1);
+		mFontFamily = new TInputLine(TRect(kInputLeft, kFieldsY + 4, kFieldRight, kFieldsY + 5), sizeof(MRPdfExportDialogData::fontFamily) - 1);
 		insert(mFontFamily);
-		insert(new TLabel(TRect(kLabelLeft, 6, kInputLeft, 7), "Font ~f~amily:", mFontFamily));
+		insert(new TLabel(TRect(kLabelLeft, kFieldsY + 4, kInputLeft, kFieldsY + 5), "Font ~f~amily:", mFontFamily));
 		mFontFamilyListAnchor = mFontFamily->getBounds();
-		fontFamilyDropList.createButton(*this, TRect(fontHistoryLeft, 6, fontHistoryRight, 7), mFontFamily, this, cmMrPdfExportChooseFontFamily, false);
+		fontFamilyDropList.createButton(*this, TRect(fontHistoryLeft, kFieldsY + 4, fontHistoryRight, kFieldsY + 5), mFontFamily, this, cmMrPdfExportChooseFontFamily, false);
 
-		mFontSize = new MRNumericSlider(TRect(kInputLeft, 7, kFieldRight, 8), 1, 40, 10, 1, 5, MRNumericSlider::fmtRaw);
+		mFontSize = new MRNumericSlider(TRect(kInputLeft, kFieldsY + 5, kFieldRight, kFieldsY + 6), 1, 40, 10, 1, 5, MRNumericSlider::fmtRaw);
 		insert(mFontSize);
-		insert(new TLabel(TRect(kLabelLeft, 7, kInputLeft, 8), "Font si~z~e:", mFontSize));
+		insert(new TLabel(TRect(kLabelLeft, kFieldsY + 5, kInputLeft, kFieldsY + 6), "Font si~z~e:", mFontSize));
 
 		mTextWidth = new TInputLine(TRect(kInputLeft, kTextWidthY, kInputLeft + 5, kTextWidthY + 1), 4);
 		insert(mTextWidth);
-		insert(new TLabel(TRect(kLabelLeft, kTextWidthY, kInputLeft, kTextWidthY + 1), "~T~ext width:", mTextWidth));
+		insert(new TLabel(TRect(kLabelLeft, kTextWidthY, kInputLeft, kTextWidthY + 1), "~R~ight margin (column):", mTextWidth));
 
-		insert(new TStaticText(TRect(kLabelLeft + 1, kMarginAxisY, kInputLeft, kMarginAxisY + 1), "Margins:"));
+		insert(new TStaticText(TRect(kLabelLeft, kMarginAxisY - 3, kInputLeft + 8, kMarginAxisY - 2), "Page margins (points):"));
 
 		mTopMargin = new TInputLine(TRect(marginTopLeft, kMarginAxisY - 2, marginTopRight, kMarginAxisY - 1), 4);
 		insert(mTopMargin);
@@ -203,6 +213,7 @@ class TPdfExportDialog final : public MRDialogFoundation {
 		int32_t fontSize = 10;
 
 		if (data == nullptr) return;
+		if (mSource != nullptr) mSource->getData(&data->source);
 		if (mOutputPath != nullptr) mOutputPath->getData(data->outputPath);
 		if (mPageSeparator != nullptr) mPageSeparator->getData(data->pageSeparatorLiteral);
 		if (mFontFamily != nullptr) mFontFamily->getData(data->fontFamily);
@@ -220,8 +231,11 @@ class TPdfExportDialog final : public MRDialogFoundation {
 	void setData(void *rec) override {
 		MRPdfExportDialogData *data = static_cast<MRPdfExportDialogData *>(rec);
 		int32_t fontSize = 10;
+		ushort source = pdfExportCurrentFile;
 
 		if (data == nullptr) return;
+		source = mMarkedBlockAvailable && data->source == pdfExportMarkedBlock ? pdfExportMarkedBlock : pdfExportCurrentFile;
+		if (mSource != nullptr) mSource->setData(&source);
 		if (mOutputPath != nullptr) mOutputPath->setData(data->outputPath);
 		if (mPageSeparator != nullptr) mPageSeparator->setData(data->pageSeparatorLiteral);
 		if (mFontFamily != nullptr) mFontFamily->setData(data->fontFamily);
@@ -275,7 +289,7 @@ class TPdfExportDialog final : public MRDialogFoundation {
 		if (!parseRangeInt(inputLineValue(mTextWidth), 0, 9999, parsed)) {
 			result.valid = false;
 			result.error = true;
-			result.warningText = "Text width must be an integer within 0..9999.";
+			result.warningText = "Right margin column must be an integer within 0..9999.";
 			return result;
 		}
 		if (!parseRangeInt(inputLineValue(mTopMargin), 0, 9999, parsed) || !parseRangeInt(inputLineValue(mLeftMargin), 0, 9999, parsed) ||
@@ -376,6 +390,7 @@ class TPdfExportDialog final : public MRDialogFoundation {
 		if (mFontFamily != nullptr) mFontFamily->selectAll(True);
 	}
 
+	TRadioButtons *mSource = nullptr;
 	TInputLine *mOutputPath = nullptr;
 	TInputLine *mPageSeparator = nullptr;
 	TInputLine *mFontFamily = nullptr;
@@ -391,19 +406,24 @@ class TPdfExportDialog final : public MRDialogFoundation {
 	TRect mFontFamilyListAnchor;
 	MRDropList outputPathDropList;
 	MRDropList fontFamilyDropList;
+	bool mMarkedBlockAvailable;
 };
 
 } // namespace
 
-ushort runPdfExportDialog(MRPdfExportDialogData &data) {
-	TPdfExportDialog *dialog = new TPdfExportDialog();
+ushort runPdfExportDialog(MRPdfExportDialogData &data, bool markedBlockAvailable) {
+	MRPdfExportDialogData draft = data;
+	TPdfExportDialog *dialog = new TPdfExportDialog(markedBlockAvailable);
 	ushort result = cmCancel;
 
 	if (dialog == nullptr || TProgram::deskTop == nullptr) return cmCancel;
-	dialog->setData(&data);
+	dialog->setData(&draft);
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
-	dialog->getData(&data);
+	if (result == cmOK) {
+		dialog->getData(&draft);
+		data = draft;
+	}
 	TObject::destroy(dialog);
 	return result;
 }

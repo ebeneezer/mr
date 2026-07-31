@@ -3,11 +3,18 @@ DEF_INT(MainCounter, GlobalCounter, HelperValue);
 DEF_REAL(MainRatio);
 DEF_STR(MainText, HelperText);
 DEF_CHAR(MainFlag);
+DEF_HASH(MainHash, NestedHash);
+DEF_INT(MainNumbers[]);
 
 MainCounter := 10;
 MainRatio := 1.5;
 MainText := 'main-start';
 MainFlag := CHAR(65);
+NestedHash['leaf'] := 7;
+MainHash['title'] := 'root';
+MainHash['nested'] := NestedHash;
+MainNumbers[1] := 10;
+MainNumbers[2] := 20;
 
 SET_GLOBAL_INT('DBG_GLOBAL_COUNTER', MainCounter);
 SET_GLOBAL_STR('DBG_GLOBAL_TEXT', MainText);

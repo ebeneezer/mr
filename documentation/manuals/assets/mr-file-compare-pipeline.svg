@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="930" viewBox="0 0 1080 930" role="img" aria-labelledby="title desc">
+  <title id="title">MR File Compare finite pipeline</title>
+  <desc id="desc">A two-to-one-to-two worker generation acquires both source snapshots, computes one Myers diff, builds two immutable pane projections, and reaches a joint exact adoption gate.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#ad563e"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .flow-red { fill: none; stroke: #ad563e; stroke-width: 1.8; marker-end: url(#arrowRed); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="930" fill="#ffffff"/>
+  <text x="40" y="35" class="title">FILE COMPARE: ONE FINITE 2 → 1 → 2 GENERATION</text>
+  <text x="40" y="59" class="small">Only the Myers frontier is ordered. Other Bento owners and Compute work remain independent.</text>
+
+  <rect x="40" y="82" width="1000" height="672" rx="8" class="box"/>
+  <text x="70" y="116" class="heading">GENERATION G · EXACT DOCUMENT/VERSION TICKETS</text>
+
+  <rect x="70" y="145" width="300" height="83" rx="7" class="blue"/>
+  <text x="220" y="174" class="panel-title" text-anchor="middle">ORIGINAL SNAPSHOT</text>
+  <text x="220" y="200" class="code" text-anchor="middle">doc O · version VO</text>
+  <text x="220" y="219" class="small" text-anchor="middle">immutable ReadSnapshot</text>
+
+  <rect x="710" y="145" width="300" height="83" rx="7" class="blue"/>
+  <text x="860" y="174" class="panel-title" text-anchor="middle">COMPARE SNAPSHOT</text>
+  <text x="860" y="200" class="code" text-anchor="middle">doc C · version VC</text>
+  <text x="860" y="219" class="small" text-anchor="middle">immutable ReadSnapshot</text>
+
+  <path d="M220 228 L220 270" class="flow-blue"/>
+  <path d="M860 228 L860 270" class="flow-blue"/>
+
+  <rect x="70" y="275" width="300" height="100" rx="7" class="green"/>
+  <circle cx="100" cy="305" r="18" fill="#317c70"/>
+  <text x="100" y="311" class="badge">1</text>
+  <text x="220" y="305" class="panel-title" text-anchor="middle">ACQUIRE ORIGINAL</text>
+  <text x="220" y="333" class="small" text-anchor="middle">pane-owned finite worker</text>
+  <text x="220" y="355" class="small" text-anchor="middle">split lines + source ticket</text>
+
+  <rect x="710" y="275" width="300" height="100" rx="7" class="green"/>
+  <circle cx="740" cy="305" r="18" fill="#317c70"/>
+  <text x="740" y="311" class="badge">1</text>
+  <text x="860" y="305" class="panel-title" text-anchor="middle">ACQUIRE COMPARE</text>
+  <text x="860" y="333" class="small" text-anchor="middle">pane-owned finite worker</text>
+  <text x="860" y="355" class="small" text-anchor="middle">split lines + source ticket</text>
+
+  <path d="M220 375 L220 409 L455 409 L455 435" class="flow"/>
+  <path d="M860 375 L860 409 L625 409 L625 435" class="flow"/>
+
+  <rect x="385" y="440" width="310" height="113" rx="7" class="gold"/>
+  <circle cx="415" cy="470" r="18" fill="#a77b2f"/>
+  <text x="415" y="476" class="badge">2</text>
+  <text x="540" y="470" class="panel-title" text-anchor="middle">ORDERED MYERS WORKER</text>
+  <text x="540" y="499" class="small" text-anchor="middle">edit path → normalised hunks</text>
+  <text x="540" y="522" class="small" text-anchor="middle">change groups + both source identities</text>
+  <text x="540" y="544" class="small" text-anchor="middle">one frontier for this comparison only</text>
+
+  <path d="M455 553 L455 581 L220 581 L220 606" class="flow"/>
+  <path d="M625 553 L625 581 L860 581 L860 606" class="flow"/>
+
+  <rect x="70" y="611" width="300" height="103" rx="7" class="purple"/>
+  <circle cx="100" cy="641" r="18" fill="#7452a6"/>
+  <text x="100" y="647" class="badge">3</text>
+  <text x="220" y="641" class="panel-title" text-anchor="middle">PROJECT ORIGINAL</text>
+  <text x="220" y="669" class="small" text-anchor="middle">pane text · line kinds</text>
+  <text x="220" y="691" class="small" text-anchor="middle">minimap slices</text>
+
+  <rect x="710" y="611" width="300" height="103" rx="7" class="purple"/>
+  <circle cx="740" cy="641" r="18" fill="#7452a6"/>
+  <text x="740" y="647" class="badge">3</text>
+  <text x="860" y="641" class="panel-title" text-anchor="middle">PROJECT COMPARE</text>
+  <text x="860" y="669" class="small" text-anchor="middle">pane text · line kinds</text>
+  <text x="860" y="691" class="small" text-anchor="middle">minimap slices</text>
+
+  <path d="M220 714 L220 778 L455 778 L455 793" class="flow"/>
+  <path d="M860 714 L860 778 L625 778 L625 793" class="flow"/>
+
+  <rect x="295" y="798" width="490" height="91" rx="8" class="lime"/>
+  <circle cx="327" cy="828" r="18" fill="#588646"/>
+  <text x="327" y="834" class="badge">4</text>
+  <text x="540" y="828" class="panel-title" text-anchor="middle">JOINT UI ADOPTION GATE</text>
+  <text x="540" y="855" class="code" text-anchor="middle">G · O/VO · C/VC · editable policy · both projections</text>
+  <text x="540" y="877" class="small" text-anchor="middle">publish panes, groups, colours and minimap only after the complete match</text>
+
+  <rect x="40" y="900" width="1000" height="22" rx="4" class="red"/>
+  <text x="540" y="916" class="small" text-anchor="middle">navigation: adopted groups only · mutation: cancel G → edit one source → capture new snapshots → generation G+1</text>
+  <path d="M295 844 C190 844 150 802 150 756" class="flow-red"/>
+</svg>

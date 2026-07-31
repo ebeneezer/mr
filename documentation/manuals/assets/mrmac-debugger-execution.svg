@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="930" viewBox="0 0 1080 930" role="img" aria-labelledby="title desc">
+  <title id="title">MRMAC debugger execution routes</title>
+  <desc id="desc">Five numbered panels show source-map start, normal route classification, UI-pump versus finite worker execution, cooperative controls and a parked VM with no worker.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="930" fill="#ffffff"/>
+  <text x="40" y="35" class="title">DEBUGGER EXECUTION: ONE SESSION, NATURAL ROUTES</text>
+  <text x="40" y="59" class="small">The debugger adds stop policy and inspection; it does not replace the macro runner, staging, or the UI pump.</text>
+
+  <rect x="40" y="82" width="1000" height="130" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">Debug start uses the canonical compiler and creates source maps on demand</text>
+  <rect x="70" y="151" width="940" height="40" rx="5" class="blue"/>
+  <text x="90" y="177" class="code">resolved path + macro name → bytecode entry + source spans → one Execution Session</text>
+
+  <path d="M540 212 L540 238" class="flow-blue"/>
+
+  <rect x="40" y="243" width="1000" height="132" rx="8" class="box"/>
+  <circle cx="72" cy="275" r="20" fill="#2f6fa3"/>
+  <text x="72" y="282" class="badge">2</text>
+  <text x="105" y="281" class="panel-title">The existing bytecode profile chooses the normal route</text>
+  <rect x="70" y="312" width="286" height="42" rx="5" class="purple"/>
+  <text x="213" y="339" class="body" text-anchor="middle">UI-affine</text>
+  <rect x="397" y="312" width="286" height="42" rx="5" class="green"/>
+  <text x="540" y="339" class="body" text-anchor="middle">background-safe</text>
+  <rect x="724" y="312" width="286" height="42" rx="5" class="gold"/>
+  <text x="867" y="339" class="body" text-anchor="middle">staged background</text>
+
+  <path d="M540 375 L540 401" class="flow-blue"/>
+
+  <rect x="40" y="406" width="1000" height="207" rx="8" class="box"/>
+  <circle cx="72" cy="438" r="20" fill="#2f6fa3"/>
+  <text x="72" y="445" class="badge">3</text>
+  <text x="105" y="444" class="panel-title">Execution remains finite and the UI remains available</text>
+  <rect x="70" y="475" width="286" height="105" rx="6" class="purple"/>
+  <text x="213" y="506" class="panel-title" text-anchor="middle">UI PUMP</text>
+  <text x="213" y="532" class="small" text-anchor="middle">bounded instruction budget</text>
+  <text x="213" y="556" class="small" text-anchor="middle">event loop between slices</text>
+  <rect x="397" y="475" width="286" height="105" rx="6" class="green"/>
+  <text x="540" y="506" class="panel-title" text-anchor="middle">MACRO WORKER</text>
+  <text x="540" y="532" class="small" text-anchor="middle">one finite continue/step action</text>
+  <text x="540" y="556" class="small" text-anchor="middle">returns at budget or stop</text>
+  <rect x="724" y="475" width="286" height="105" rx="6" class="gold"/>
+  <text x="867" y="506" class="panel-title" text-anchor="middle">STAGED WORKER</text>
+  <text x="867" y="532" class="small" text-anchor="middle">captured input + conflict snapshot</text>
+  <text x="867" y="556" class="small" text-anchor="middle">normal UI-thread commit gate</text>
+  <text x="70" y="601" class="small">Intrinsics, external I/O and deferred playback are cooperative black boxes; no control stops them halfway through.</text>
+
+  <path d="M540 613 L540 639" class="flow-blue"/>
+
+  <rect x="40" y="644" width="1000" height="117" rx="8" class="box"/>
+  <circle cx="72" cy="676" r="20" fill="#2f6fa3"/>
+  <text x="72" y="683" class="badge">4</text>
+  <text x="105" y="682" class="panel-title">Pause and Stop remain non-blocking control requests</text>
+  <rect x="70" y="713" width="940" height="28" rx="5" class="red"/>
+  <text x="540" y="733" class="small" text-anchor="middle">atomic pause/cancel request → checked at VM boundaries → no wait for the worker-owned VM lock</text>
+
+  <path d="M540 761 L540 787" class="flow-blue"/>
+
+  <rect x="40" y="792" width="1000" height="108" rx="8" class="box"/>
+  <circle cx="72" cy="824" r="20" fill="#2f6fa3"/>
+  <text x="72" y="831" class="badge">5</text>
+  <text x="105" y="830" class="panel-title">A stop parks the VM and releases the execution resource</text>
+  <rect x="70" y="859" width="300" height="25" rx="4" class="blue"/>
+  <text x="220" y="877" class="small" text-anchor="middle">parked VM + source location</text>
+  <path d="M370 871 L420 871" class="flow"/>
+  <rect x="420" y="859" width="250" height="25" rx="4" class="lime"/>
+  <text x="545" y="877" class="small" text-anchor="middle">inspect + mutate</text>
+  <path d="M670 871 L720 871" class="flow"/>
+  <rect x="720" y="859" width="290" height="25" rx="4" class="green"/>
+  <text x="865" y="877" class="small" text-anchor="middle">Continue creates next finite action</text>
+</svg>

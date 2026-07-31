@@ -10,8 +10,8 @@ namespace {
 
 static const char kMainMacroName[] = "DebuggerVariablesProbe";
 static const char kChildMacroKey[] = "DEBUGGERVARIABLESFUNCTION";
-static const int kMutationLine = 12;
-static const int kRunMacroLine = 20;
+static const int kMutationLine = 19;
+static const int kRunMacroLine = 27;
 
 bool findVariable(const std::vector<MRMacroDebugVariableSnapshot> &variables, const char *name, int type, MRMacroDebugVariableScope scope, MRMacroDebugVariableSnapshot &variable) {
 	for (const MRMacroDebugVariableSnapshot &candidate : variables)
@@ -28,6 +28,17 @@ bool variableHasValue(const std::vector<MRMacroDebugVariableSnapshot> &variables
 	return findVariable(variables, name, type, scope, variable) && variable.valueText == valueText;
 }
 
+bool findVariableNode(const std::vector<MRMacroDebugVariableSnapshot> &variables, const char *rootName, const char *displayName, int depth, int type, const char *valueText,
+	                  MRMacroDebugVariableSnapshot &variable) {
+	for (const MRMacroDebugVariableSnapshot &candidate : variables)
+		if (candidate.name == rootName && candidate.displayName == displayName && candidate.depth == depth && candidate.type == type &&
+		    (valueText == nullptr || candidate.valueText == valueText)) {
+			variable = candidate;
+			return true;
+		}
+	return false;
+}
+
 bool findWatch(const std::vector<MRMacroDebugWatchSnapshot> &watches, const char *expression, MRMacroDebugWatchSnapshot &watch) {
 	for (const MRMacroDebugWatchSnapshot &candidate : watches)
 		if (candidate.expression == expression) {
@@ -39,6 +50,18 @@ bool findWatch(const std::vector<MRMacroDebugWatchSnapshot> &watches, const char
 
 bool startAtSourceLine(int line, MRMacroExecutionSession &session, MRMacroDebugRunResult &result, std::string &errorMessage) {
 	result = mrvmStartDebugMacroByName(kMainMacroName, MRMacroExecutionOwner(), &session, &errorMessage, false, line);
+	for (int pumpCount = 0; pumpCount < 64 && result.stopReason == mrdStopBudget; ++pumpCount)
+		if (session.route == MRMacroExecutionRoute::Background || session.route == MRMacroExecutionRoute::StagedBackground) {
+			const MRMacroDebugWorkerResult workerResult =
+			    mrvmRunDebugSessionWorkerAction(session.sessionId, kMainMacroName, mrdWorkerContinue, 256, std::shared_ptr<std::atomic_bool>());
+
+			result = workerResult.debugResult;
+			if (!workerResult.accepted) {
+				errorMessage = workerResult.errorMessage;
+				return false;
+			}
+		} else if (!mrvmPumpDebugSession(session.sessionId, kMainMacroName, result, &errorMessage))
+			return false;
 	return session.sessionId != 0 && result.stopReason == mrdStopBreakpoint && result.paused && !result.hadError && !result.cancelled;
 }
 
@@ -71,6 +94,11 @@ int runMacroDebuggerCrossSectionProbeMode() {
 	MRMacroDebugVariableSnapshot mainRatio;
 	MRMacroDebugVariableSnapshot mainText;
 	MRMacroDebugVariableSnapshot mainFlag;
+	MRMacroDebugVariableSnapshot mainHash;
+	MRMacroDebugVariableSnapshot nestedLeaf;
+	MRMacroDebugVariableSnapshot mainNumbers;
+	MRMacroDebugVariableSnapshot collectionNode;
+	MRMacroDebugValueMutation collectionMutation;
 	MRMacroDebugWatchSnapshot watch;
 	std::vector<MRMacroDebugVariableSnapshot> updatedVariables;
 	std::vector<MRMacroDebugWatchSnapshot> watches;
@@ -108,18 +136,67 @@ int runMacroDebuggerCrossSectionProbeMode() {
 	}
 
 	if (!startAtSourceLine(kMutationLine, mutationSession, result, errorMessage) ||
-	    !findVariable(result.variables, "MainCounter", TYPE_INT, mrdVariableLocal, mainCounter) ||
-	    !findVariable(result.variables, "MainRatio", TYPE_REAL, mrdVariableLocal, mainRatio) ||
-	    !findVariable(result.variables, "MainText", TYPE_STR, mrdVariableLocal, mainText) ||
-	    !findVariable(result.variables, "MainFlag", TYPE_CHAR, mrdVariableLocal, mainFlag)) {
+	    !findVariable(result.variables, "MainCounter", TYPE_INT, mrdVariableSession, mainCounter) ||
+	    !findVariable(result.variables, "MainRatio", TYPE_REAL, mrdVariableSession, mainRatio) ||
+	    !findVariable(result.variables, "MainText", TYPE_STR, mrdVariableSession, mainText) ||
+	    !findVariable(result.variables, "MainFlag", TYPE_CHAR, mrdVariableSession, mainFlag)) {
 		std::cerr << "Macro debugger cross-section probe did not expose all scalar variable types: " << errorMessage << "\n";
 		return 1;
 	}
-	if (!mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainCounter, "41", updatedVariables, &errorMessage) || !variableHasValue(updatedVariables, "MainCounter", TYPE_INT, mrdVariableLocal, "41") ||
-	    !mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainRatio, "2.5", updatedVariables, &errorMessage) || !variableHasValue(updatedVariables, "MainRatio", TYPE_REAL, mrdVariableLocal, "2.5") ||
-	    !mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainText, "edited", updatedVariables, &errorMessage) || !variableHasValue(updatedVariables, "MainText", TYPE_STR, mrdVariableLocal, "edited") ||
-	    !mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainFlag, "Q", updatedVariables, &errorMessage) || !variableHasValue(updatedVariables, "MainFlag", TYPE_CHAR, mrdVariableLocal, "Q")) {
+	if (!mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainCounter, "41", updatedVariables, &errorMessage) || !variableHasValue(updatedVariables, "MainCounter", TYPE_INT, mrdVariableSession, "41") ||
+	    !mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainRatio, "2.5", updatedVariables, &errorMessage) || !variableHasValue(updatedVariables, "MainRatio", TYPE_REAL, mrdVariableSession, "2.5") ||
+	    !mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainText, "edited", updatedVariables, &errorMessage) || !variableHasValue(updatedVariables, "MainText", TYPE_STR, mrdVariableSession, "edited") ||
+	    !mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainFlag, "Q", updatedVariables, &errorMessage) || !variableHasValue(updatedVariables, "MainFlag", TYPE_CHAR, mrdVariableSession, "Q")) {
 		std::cerr << "Macro debugger cross-section probe could not mutate every scalar type: " << errorMessage << "\n";
+		return 1;
+	}
+	if (!findVariableNode(result.variables, "MainHash", "MainHash", 0, TYPE_HASH, "hash{2 keys}", mainHash) || !mainHash.hasChildren ||
+	    !findVariableNode(result.variables, "MainHash", "[\"leaf\"]", 2, TYPE_INT, "7", nestedLeaf) ||
+	    !findVariableNode(result.variables, "MainNumbers", "MainNumbers", 0, TYPE_INT_ARRAY, "int[2]", mainNumbers) || !mainNumbers.hasChildren ||
+	    !findVariableNode(result.variables, "MainNumbers", "[2]", 1, TYPE_INT, "20", collectionNode)) {
+		std::cerr << "Macro debugger cross-section probe did not expose the eager collection tree.\n";
+		return 1;
+	}
+	if (!mrvmWriteDebugScalarVariable(mutationSession.sessionId, nestedLeaf, "99", updatedVariables, &errorMessage) ||
+	    !findVariableNode(updatedVariables, "MainHash", "[\"leaf\"]", 2, TYPE_INT, "99", collectionNode)) {
+		std::cerr << "Macro debugger cross-section probe could not mutate a nested hash scalar: " << errorMessage << "\n";
+		return 1;
+	}
+	collectionMutation = MRMacroDebugValueMutation();
+	collectionMutation.action = mrdValueAddHashEntry;
+	collectionMutation.target = mainHash;
+	collectionMutation.key = "added";
+	collectionMutation.valueType = TYPE_INT;
+	collectionMutation.valueText = "42";
+	if (!mrvmMutateDebugValue(mutationSession.sessionId, collectionMutation, updatedVariables, &errorMessage) ||
+	    !findVariableNode(updatedVariables, "MainHash", "[\"added\"]", 1, TYPE_INT, "42", collectionNode)) {
+		std::cerr << "Macro debugger cross-section probe could not add a typed hash entry: " << errorMessage << "\n";
+		return 1;
+	}
+	collectionMutation = MRMacroDebugValueMutation();
+	collectionMutation.action = mrdValueRenameHashKey;
+	collectionMutation.target = collectionNode;
+	collectionMutation.key = "renamed";
+	if (!mrvmMutateDebugValue(mutationSession.sessionId, collectionMutation, updatedVariables, &errorMessage) ||
+	    !findVariableNode(updatedVariables, "MainHash", "[\"renamed\"]", 1, TYPE_INT, "42", collectionNode)) {
+		std::cerr << "Macro debugger cross-section probe could not rename a hash key: " << errorMessage << "\n";
+		return 1;
+	}
+	collectionMutation = MRMacroDebugValueMutation();
+	collectionMutation.action = mrdValueEraseElement;
+	collectionMutation.target = collectionNode;
+	if (!mrvmMutateDebugValue(mutationSession.sessionId, collectionMutation, updatedVariables, &errorMessage) ||
+	    findVariableNode(updatedVariables, "MainHash", "[\"renamed\"]", 1, TYPE_INT, nullptr, collectionNode)) {
+		std::cerr << "Macro debugger cross-section probe could not erase a hash entry: " << errorMessage << "\n";
+		return 1;
+	}
+	collectionMutation = MRMacroDebugValueMutation();
+	collectionMutation.action = mrdValueAppendArrayElement;
+	collectionMutation.target = mainNumbers;
+	collectionMutation.valueText = "30";
+	if (!mrvmMutateDebugValue(mutationSession.sessionId, collectionMutation, updatedVariables, &errorMessage) ||
+	    !findVariableNode(updatedVariables, "MainNumbers", "[3]", 1, TYPE_INT, "30", collectionNode)) {
+		std::cerr << "Macro debugger cross-section probe could not append an array element: " << errorMessage << "\n";
 		return 1;
 	}
 	if (mrvmWriteDebugScalarVariable(mutationSession.sessionId, mainCounter, "not-an-int", updatedVariables, &errorMessage) || errorMessage.empty() ||
@@ -148,8 +225,8 @@ int runMacroDebuggerCrossSectionProbeMode() {
 	}
 	result = mrvmContinueDebugMacroByName(mutationSession.sessionId, kMainMacroName, &errorMessage);
 	if (result.stopReason != mrdStopCompleted || result.paused || result.hadError || result.cancelled || !completedDebugSessionWasPublished(mutationSession.sessionId) ||
-	    !variableHasValue(result.variables, "MainCounter", TYPE_INT, mrdVariableLocal, "108") || !variableHasValue(result.variables, "MainRatio", TYPE_REAL, mrdVariableLocal, "2.75") ||
-	    !variableHasValue(result.variables, "MainText", TYPE_STR, mrdVariableLocal, "edited:function-local::edited") || !variableHasValue(result.variables, "MainFlag", TYPE_CHAR, mrdVariableLocal, "Q") ||
+	    !variableHasValue(result.variables, "MainCounter", TYPE_INT, mrdVariableSession, "108") || !variableHasValue(result.variables, "MainRatio", TYPE_REAL, mrdVariableSession, "2.75") ||
+	    !variableHasValue(result.variables, "MainText", TYPE_STR, mrdVariableSession, "edited:function-local::edited") || !variableHasValue(result.variables, "MainFlag", TYPE_CHAR, mrdVariableSession, "Q") ||
 	    !variableHasValue(result.variables, "DBG_FINAL_COUNTER", TYPE_INT, mrdVariableAppGlobal, "108") || !variableHasValue(result.variables, "DBG_FINAL_TEXT", TYPE_STR, mrdVariableAppGlobal, "edited:function-local::edited")) {
 		std::cerr << "Macro debugger cross-section probe did not preserve scalar mutations through completion: " << errorMessage << "\n";
 		return 1;
@@ -189,6 +266,6 @@ int runMacroDebuggerCrossSectionProbeMode() {
 		return 1;
 	}
 
-	std::cout << "macro-debugger-cross-section scalar=4 watches=3 pause=1 steps=3 stop=1\n";
+	std::cout << "macro-debugger-cross-section scalar=4 collections=5 watches=3 pause=1 steps=3 stop=1\n";
 	return 0;
 }

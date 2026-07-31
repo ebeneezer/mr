@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="910" viewBox="0 0 1080 910" role="img" aria-labelledby="title desc">
+  <title id="title">MR Bento dirty projection pump</title>
+  <desc id="desc">Four numbered panels show semantic owners, projection dirty classes, the layout-dominant flush, and native TVision projection without hidden model state.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3f4b54"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2f6fa3"/>
+    </marker>
+    <style>
+      .title { font: 700 25px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .panel-title { font: 700 19px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .heading { font: 700 14px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #59656e; letter-spacing: 0.4px; }
+      .body { font: 15px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #182128; }
+      .small { font: 13px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #3f4b54; }
+      .code { font: 14px 'Latin Modern Mono', 'DejaVu Sans Mono', monospace; fill: #182128; }
+      .badge { font: 700 18px 'Latin Modern Sans', 'DejaVu Sans', sans-serif; fill: #ffffff; text-anchor: middle; }
+      .box { fill: #f7f8f8; stroke: #27313a; stroke-width: 1.4; }
+      .flow { fill: none; stroke: #3f4b54; stroke-width: 1.8; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2f6fa3; stroke-width: 2; marker-end: url(#arrowBlue); }
+      .blue { fill: #dce8f4; stroke: #2f6fa3; stroke-width: 1.6; }
+      .green { fill: #dcedeb; stroke: #317c70; stroke-width: 1.4; }
+      .lime { fill: #e5f0dd; stroke: #588646; stroke-width: 1.4; }
+      .gold { fill: #f3e8d1; stroke: #a77b2f; stroke-width: 1.4; }
+      .purple { fill: #eee7f5; stroke: #7452a6; stroke-width: 1.4; }
+      .red { fill: #f4dfd9; stroke: #ad563e; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="910" fill="#ffffff"/>
+  <text x="40" y="35" class="title">BENTO DIRTY-PROJECTION PUMP</text>
+  <text x="40" y="59" class="small">Semantic state changes first. Dirty bits only coalesce the native TVision work needed to show it.</text>
+
+  <rect x="40" y="82" width="1000" height="168" rx="8" class="box"/>
+  <circle cx="72" cy="114" r="20" fill="#2f6fa3"/>
+  <text x="72" y="121" class="badge">1</text>
+  <text x="105" y="120" class="panel-title">Domain owners mutate their own truth</text>
+  <rect x="70" y="157" width="215" height="57" rx="6" class="blue"/>
+  <text x="178" y="180" class="panel-title" text-anchor="middle">DOCUMENT</text>
+  <text x="178" y="201" class="small" text-anchor="middle">cursor · selection · text</text>
+  <rect x="305" y="157" width="215" height="57" rx="6" class="gold"/>
+  <text x="413" y="180" class="panel-title" text-anchor="middle">DIAGNOSTICS</text>
+  <text x="413" y="201" class="small" text-anchor="middle">problems · outline</text>
+  <rect x="540" y="157" width="215" height="57" rx="6" class="green"/>
+  <text x="648" y="180" class="panel-title" text-anchor="middle">COMPARE</text>
+  <text x="648" y="201" class="small" text-anchor="middle">generation · groups</text>
+  <rect x="775" y="157" width="235" height="57" rx="6" class="purple"/>
+  <text x="893" y="180" class="panel-title" text-anchor="middle">DEBUGGER / LAYOUT</text>
+  <text x="893" y="201" class="small" text-anchor="middle">session view · split tree</text>
+  <text x="70" y="238" class="small">No dirty bit is allowed to stand in for one of these models.</text>
+
+  <path d="M540 250 L540 276" class="flow-blue"/>
+
+  <rect x="40" y="281" width="1000" height="169" rx="8" class="box"/>
+  <circle cx="72" cy="313" r="20" fill="#2f6fa3"/>
+  <text x="72" y="320" class="badge">2</text>
+  <text x="105" y="319" class="panel-title">Events and result adoption OR pending projection classes</text>
+  <rect x="70" y="356" width="176" height="57" rx="6" class="blue"/>
+  <text x="158" y="380" class="panel-title" text-anchor="middle">CONTENT</text>
+  <text x="158" y="401" class="code" text-anchor="middle">1 &lt;&lt; 0</text>
+  <rect x="261" y="356" width="176" height="57" rx="6" class="gold"/>
+  <text x="349" y="380" class="panel-title" text-anchor="middle">CHROME</text>
+  <text x="349" y="401" class="code" text-anchor="middle">1 &lt;&lt; 1</text>
+  <rect x="452" y="356" width="176" height="57" rx="6" class="green"/>
+  <text x="540" y="380" class="panel-title" text-anchor="middle">SCROLLBAR</text>
+  <text x="540" y="401" class="code" text-anchor="middle">1 &lt;&lt; 2</text>
+  <rect x="643" y="356" width="176" height="57" rx="6" class="red"/>
+  <text x="731" y="380" class="panel-title" text-anchor="middle">LAYOUT</text>
+  <text x="731" y="401" class="code" text-anchor="middle">1 &lt;&lt; 3</text>
+  <rect x="834" y="356" width="176" height="57" rx="6" class="purple"/>
+  <text x="922" y="380" class="panel-title" text-anchor="middle">OVERLAY</text>
+  <text x="922" y="401" class="code" text-anchor="middle">1 &lt;&lt; 4</text>
+  <text x="70" y="438" class="small">Several causes collapse into one mask until the controlled flush point.</text>
+
+  <path d="M540 450 L540 476" class="flow-blue"/>
+
+  <rect x="40" y="481" width="1000" height="230" rx="8" class="box"/>
+  <circle cx="72" cy="513" r="20" fill="#2f6fa3"/>
+  <text x="72" y="520" class="badge">3</text>
+  <text x="105" y="519" class="panel-title">Flush takes and clears the mask, then follows one of two paths</text>
+  <rect x="70" y="556" width="265" height="113" rx="7" class="red"/>
+  <text x="203" y="586" class="panel-title" text-anchor="middle">LAYOUT DIRTY?</text>
+  <text x="203" y="613" class="small" text-anchor="middle">yes dominates content, chrome</text>
+  <text x="203" y="635" class="small" text-anchor="middle">and scrollbar projection</text>
+  <path d="M335 612 L400 612" class="flow"/>
+  <rect x="400" y="544" width="270" height="137" rx="7" class="blue"/>
+  <text x="535" y="574" class="panel-title" text-anchor="middle">FULL LAYOUT PATH</text>
+  <text x="535" y="602" class="code" text-anchor="middle">layoutSplitPanes()</text>
+  <text x="535" y="626" class="small" text-anchor="middle">native bounds + panes + frames</text>
+  <text x="535" y="648" class="small" text-anchor="middle">optional Sidekick + open lists</text>
+  <text x="535" y="670" class="small" text-anchor="middle">return: dominated bits consumed</text>
+  <path d="M203 669 L203 694 L805 694 L805 681" class="flow"/>
+  <rect x="720" y="544" width="290" height="137" rx="7" class="green"/>
+  <text x="865" y="574" class="panel-title" text-anchor="middle">NARROW PATH</text>
+  <text x="865" y="602" class="small" text-anchor="middle">content → shared editor panes</text>
+  <text x="865" y="626" class="small" text-anchor="middle">scrollbar → source bars</text>
+  <text x="865" y="648" class="small" text-anchor="middle">overlay → Sidekick update</text>
+  <text x="865" y="670" class="small" text-anchor="middle">chrome → pane frame views</text>
+
+  <path d="M540 711 L540 737" class="flow-blue"/>
+
+  <rect x="40" y="742" width="1000" height="138" rx="8" class="box"/>
+  <circle cx="72" cy="774" r="20" fill="#2f6fa3"/>
+  <text x="72" y="781" class="badge">4</text>
+  <text x="105" y="780" class="panel-title">TVision remains the only projection and lifetime authority</text>
+  <rect x="70" y="817" width="940" height="38" rx="5" class="lime"/>
+  <text x="540" y="841" class="body" text-anchor="middle">ordinary drawView · frame views · scrollbars · focus/Z-order unchanged</text>
+  <text x="70" y="872" class="small">Window close suppresses flushing; view destruction has already become the dominant operation.</text>
+</svg>

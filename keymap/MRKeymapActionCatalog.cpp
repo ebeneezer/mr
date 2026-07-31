@@ -135,7 +135,6 @@ constexpr std::array catalogDefinitions{
     mr("MR_SETUP_COMPILER_PROFILES", "Setup compiler profiles"),
     mr("MR_SETUP_PATHS", "Setup paths"),
     mr("MR_SETUP_BACKUPS_AUTOSAVE", "Setup backups / autosave"),
-    mr("MR_SETUP_SEARCH_REPLACE_DEFAULTS", "Setup search and replace defaults"),
     mr("MR_SETUP_USER_INTERFACE", "Setup user interface"),
     mr("MR_SETUP_LIVE_LOGS", "Setup live logs"),
 };

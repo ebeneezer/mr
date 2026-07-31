@@ -48,7 +48,6 @@ bool runSetupDialogCommand(unsigned short command) {
 			runBackupsAutosaveDialogFlow();
 			return true;
 
-		case cmMrSetupSearchAndReplaceDefaults:
 		case cmMrSetupUserInterfaceSettings:
 			runUserInterfaceSettingsDialogFlow();
 			return true;

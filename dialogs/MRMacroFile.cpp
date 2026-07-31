@@ -26,6 +26,7 @@
 #include "../mrmac/MRVM.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
+#include "../app/MRMacroDebuggerCommandRoute.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/MRHelpTopics.generated.hpp"
 #include "../ui/MRFrame.hpp"
@@ -101,54 +102,6 @@ bool runMacroFileByPathWithColorRefresh(const char *path) {
 	return true;
 }
 
-const char *debugStopReasonText(MRMacroDebugStopReason reason) noexcept {
-	switch (reason) {
-		case mrdStopBreakpoint:
-			return "breakpoint";
-		case mrdStopStep:
-			return "step";
-		case mrdStopCompleted:
-			return "completed";
-		case mrdStopCancelled:
-			return "cancelled";
-		case mrdStopError:
-			return "error";
-		case mrdStopNone:
-		default:
-			return "none";
-	}
-}
-
-void appendDebuggerControls(std::ostringstream &out, bool liveSession) {
-	out << "\nControls:\n";
-	if (liveSession) {
-		out << "F5 Continue\n";
-		out << "F8 Stop\n";
-		out << "F10 Step\n";
-	} else
-		out << "F8 Reset\n";
-	out << "F9 Toggle Breakpoint\n";
-}
-
-std::string debuggerOutputText(const std::string &macroName, const MRMacroExecutionSession &session, const MRMacroDebugRunResult &debugResult) {
-	std::ostringstream out;
-
-	out << "Macro Debugger\n";
-	out << "Macro: " << macroName << "\n";
-	out << "Session: #" << session.sessionId << "\n";
-	out << "State: " << (debugResult.paused ? "paused" : "completed") << "\n";
-	out << "Stop: " << debugStopReasonText(debugResult.stopReason) << "\n";
-	out << "Instruction offset: " << debugResult.instructionOffset << "\n";
-	out << "Stack depth: " << debugResult.stackDepth << "\n";
-	appendDebuggerControls(out, debugResult.paused);
-	if (!debugResult.logLines.empty()) {
-		out << "\nLog:\n";
-		for (const std::string &line : debugResult.logLines)
-			out << line << "\n";
-	}
-	return out.str();
-}
-
 bool openMacroDebuggerBento(const std::string &debugPath, const std::string &debugMacroName, const MRMacroExecutionSession &session, const MRMacroDebugRunResult &debugResult) {
 	const std::string title = "DEBUG " + debugMacroName;
 	MRBentoBox *bentoBox = createBentoBoxWindow(title.c_str());
@@ -162,23 +115,15 @@ bool openMacroDebuggerBento(const std::string &debugPath, const std::string &deb
 		return false;
 	}
 	bentoBox->setMacroDebuggerTarget(upperAscii(debugMacroName), debugMacroName);
-	bentoBox->setMacroDebuggerSession(session.sessionId, debugResult.variables);
 	if (!bentoBox->ensureMacroDebuggerPanes(debuggerOutput, variables, watches)) {
 		message(bentoBox, evCommand, cmClose, nullptr);
 		return false;
 	}
-	if (debuggerOutput != nullptr) {
-		static_cast<void>(debuggerOutput->replaceTextBuffer(debuggerOutputText(debugMacroName, session, debugResult).c_str(), "Debugger Output"));
-		debuggerOutput->setReadOnly(true);
-		debuggerOutput->setFileChanged(false);
+	if (!bentoBox->acceptScheduledMacroDebuggerSession(session.sessionId, debugResult)) {
+		static_cast<void>(mrvmCloseDebugSession(session.sessionId));
+		message(bentoBox, evCommand, cmClose, nullptr);
+		return false;
 	}
-	if (watches != nullptr) {
-		static_cast<void>(watches->replaceTextBuffer("Watches\n\n(none)\n", "Watches"));
-		watches->setReadOnly(true);
-		watches->setFileChanged(false);
-	}
-	bentoBox->refreshMacroDebuggerRunMarkers(debugResult);
-	bentoBox->refreshMacroDebuggerWatches();
 	bentoBox->activateSecondaryPane();
 	return mrActivateEditWindow(bentoBox);
 }
@@ -1156,7 +1101,13 @@ bool runMacroLibraryDialog() {
 		MRMacroExecutionSession session;
 		MRMacroDebugRunResult debugResult;
 		std::string errorText;
+		MRBentoBox *existingDebugger = mrMacroDebuggerForSourcePath(debugPath);
 
+		if (existingDebugger != nullptr) {
+			static_cast<void>(mrActivateEditWindow(existingDebugger));
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Debugger already open for source: " + debugPath, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+			return true;
+		}
 		if (!mrvmLoadMacroFile(debugPath, &errorText)) {
 			forgetLoadDialogPath(MRDialogHistoryScope::MacroFile, debugPath.c_str());
 			postMacroDialogError(errorText.empty() ? "Unable to load macro file for debug." : errorText);

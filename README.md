@@ -23,31 +23,38 @@
 - mr is a rewrite of the classic programmers editor Multi-Edit by American Cybernetics for Linux terminals
 - mr is constructed aroud a macro language processor, that compiles macro files based on the MEMAC script language. Now called MRMAC the language is backwards code compatible towards the MEMAC dialect but renewed and extended for modern systems. Compilation happens in-RAM through the custom mrmac compiler and supports both precompiled and on-demand compiled macro files for maximum speed. See screenshot: mr is running a utility calculator written in MRMAC
 - mr uses
-  - the Turbo Visison C++ rewrite TVISION from magiblot on GitHub. TVISION can also be steered from mrmac macros - just like it was in the old days with Multi-Edit
+  - the Turbo Vision C++ rewrite TVISION from magiblot on GitHub.
   - advanced data processing models like piecetables, addbuffers, tries and more to edit files larger than system memory and provide file I/O with blazing speed: It loads 1 GB text und under one single second und indexes the whole text in under 800 milliseconds (no BS)
-  - a build in coprocessor for handling mrmac bytecode macros that can manipulate text in parallel to the user in the same window (no BS). The coprocessor supports running multiple macro jobs in parallel in different windows or multiple macrojobs in one window or both at the same time. Thecoprocessor uses multiple computes lanes in parallel: I/O, COMPUTE, MACRO and MINIMAP
+  - a build in coprocessor for handling mrmac bytecode macros that can manipulate text in parallel to the user in the same window. The coprocessor supports running multiple macro jobs in parallel in different windows or multiple macrojobs in one window or both at the same time. The coprocessor uses multiple computes lanes in parallel: I/O, COMPUTE, MACRO and MINIMAP
+  - a build in virtual machine to execute its macro language MRMAC in automated precompiled bytestream form
   - ncursesw and is UTF8 capable
 - mr supports
-  - automated syntax highlighting, code folding and smart indenting for all known programming languages (except the marsian X!/&%/:-P language)
-  - a macro manager for recording macros and binding them to hotkeys. You can also create, manage, edit and bind .mrmac files from inside the manager
+  - automated syntax highlighting, code folding and smart indenting for all known programming languages
+  - a macro manager for recording macros and binding them to hotkeys. You can create, manage, edit and bind .mrmac files from inside the manager
   - virtual desktops
   - workspaces: Loading, saving, autoloading,autosaving, workspace-wide multifile search & replace.
-  - a window manager that can tile, minimize and cascade windows
-  - recursive multi file search & search and replace
+  - a window manager that can tile, minimize, cascade, close, hide/unhide, save and discard  windows
+  - recursive multi file search & multi file search and replace
   - full Perl regex PCRE2
   - a sub character minimap display
   - inter window copy & paste and copy & paste with the OS
   - stream block, line blocks and colum blocks including sorting of the marked block
-  - an key mapping manager and loadable key mapping to emulate other stateless editors like Emacs, Nano or Wordstar
+  - a key mapping manager and loadable key mapping to emulate other stateless editors like Emacs, Nano or WordStar
   - profiles per file extension or group of file extensions: You can setup the handling of code files depending of the code you edit
   - color theme loading and saving from file extension profiles
-  - automatic language detection
+  - automatic language detection with syntax highlighting
   - automatic multi-level graphical code folding
   - smart indenting and undenting
+  - Myers file compare with colored hunks and bi-directional edit function
+  - internal git changes display
   - printing via PDF exports
+  - line drawing inside your documents with boxes and single and double line auto connecting drawing
   - acquire files from the output of shell commands or pipes
   - compiler profiles with automatic setup and error tracking in code
-  - hex edit mode with synchonous hex, dec, oct, strings and binary view plus additional data inspector
+  - coding snippets
+  - hex editors with synchonous hex, dec, oct, strings and binary view plus additional data inspector
+  - a vast range of configuration options for your UX
+  - and many, many more features
 
 ## Why? Who needs this?
 

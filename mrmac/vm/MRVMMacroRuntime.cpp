@@ -165,10 +165,9 @@ bool readGlobalValue(const std::string &name, GlobalEntry &entry) {
 	return false;
 }
 
-MRMacroDebugVariableScope macroDebugVariableScope(const std::string &name, const Value &value, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames) {
+MRMacroDebugVariableScope macroDebugVariableScope(const std::string &name, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames) {
 	if (closureVariableNames.find(name) != closureVariableNames.end()) return mrdVariableClosure;
 	if (sessionVariableNames.find(name) != sessionVariableNames.end()) return mrdVariableSession;
-	if (value.globalStorage) return mrdVariableFileGlobal;
 	return mrdVariableLocal;
 }
 
@@ -215,7 +214,7 @@ void appendMacroDebugVariableSnapshots(MRMacroDebugRunResult &result, const std:
 		variable.name = entry.first;
 		variable.type = entry.second.type;
 		variable.valueText = macroDebugValueText(entry.second, localStore, globalStore);
-		variable.scope = macroDebugVariableScope(entry.first, entry.second, closureVariableNames, sessionVariableNames);
+		variable.scope = macroDebugVariableScope(entry.first, closureVariableNames, sessionVariableNames);
 		result.variables.push_back(variable);
 	}
 }

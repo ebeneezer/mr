@@ -334,14 +334,16 @@ struct MacroJobFinishedPayload final : Payload {
 	std::vector<std::string> logLines;
 	std::vector<MRMacroExecUiCommandRequest> execUiCommandRequests;
 	bool hadError;
+	MRMacroExecutionSessionId debugSessionId;
+	MRMacroDebugRunResult debugResult;
 
-	MacroJobFinishedPayload() noexcept : displayName(), logLines(), execUiCommandRequests(), hadError(false) {
+	MacroJobFinishedPayload() noexcept : displayName(), logLines(), execUiCommandRequests(), hadError(false), debugSessionId(0), debugResult() {
 	}
 
-	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError) : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), execUiCommandRequests(), hadError(aHadError) {
+	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError) : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), execUiCommandRequests(), hadError(aHadError), debugSessionId(0), debugResult() {
 	}
 
-	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, std::vector<MRMacroExecUiCommandRequest> requests, bool aHadError) : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), execUiCommandRequests(std::move(requests)), hadError(aHadError) {
+	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, std::vector<MRMacroExecUiCommandRequest> requests, bool aHadError) : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), execUiCommandRequests(std::move(requests)), hadError(aHadError), debugSessionId(0), debugResult() {
 	}
 };
 
@@ -373,12 +375,27 @@ struct MacroJobStagedPayload final : Payload {
 	int indentLevel;
 	std::string fileName;
 	bool fileChanged;
+	MRMacroExecutionSessionId debugSessionId;
+	MRMacroDebugRunResult debugResult;
 
-	MacroJobStagedPayload() noexcept : displayName(), logLines(), hadError(false), conflictSnapshot(), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), globalOrder(), globalInts(), globalStrings(), deferredUiCommands(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
+	MacroJobStagedPayload() noexcept : displayName(), logLines(), hadError(false), conflictSnapshot(), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), globalOrder(), globalInts(), globalStrings(), deferredUiCommands(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), fileName(), fileChanged(false), debugSessionId(0), debugResult() {
 	}
 
 	MacroJobStagedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError, MacroCommitConflictSnapshot aConflictSnapshot, mr::editor::StagedEditTransaction aTransaction, std::size_t aCursorOffset, std::size_t aSelectionStart, std::size_t aSelectionEnd, int aBlockMode, bool aBlockMarkingOn, std::size_t aBlockAnchor, std::size_t aBlockEnd, std::vector<std::string> aGlobalOrder, std::map<std::string, int> aGlobalInts, std::map<std::string, std::string> aGlobalStrings, std::vector<MRMacroDeferredUiCommand> aDeferredUiCommands, bool aLastSearchValid, std::size_t aLastSearchStart, std::size_t aLastSearchEnd, std::size_t aLastSearchCursor, bool anIgnoreCase, bool aTabExpand, std::vector<std::size_t> aMarkStack, bool aInsertMode, int anIndentLevel, std::string aFileName, bool aFileChanged)
-	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError), conflictSnapshot(std::move(aConflictSnapshot)), transaction(std::move(aTransaction)), cursorOffset(aCursorOffset), selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), blockMode(aBlockMode), blockMarkingOn(aBlockMarkingOn), blockAnchor(aBlockAnchor), blockEnd(aBlockEnd), globalOrder(std::move(aGlobalOrder)), globalInts(std::move(aGlobalInts)), globalStrings(std::move(aGlobalStrings)), deferredUiCommands(std::move(aDeferredUiCommands)), lastSearchValid(aLastSearchValid), lastSearchStart(aLastSearchStart), lastSearchEnd(aLastSearchEnd), lastSearchCursor(aLastSearchCursor), ignoreCase(anIgnoreCase), tabExpand(aTabExpand), markStack(std::move(aMarkStack)), insertMode(aInsertMode), indentLevel(anIndentLevel), fileName(std::move(aFileName)), fileChanged(aFileChanged) {
+	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError), conflictSnapshot(std::move(aConflictSnapshot)), transaction(std::move(aTransaction)), cursorOffset(aCursorOffset), selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), blockMode(aBlockMode), blockMarkingOn(aBlockMarkingOn), blockAnchor(aBlockAnchor), blockEnd(aBlockEnd), globalOrder(std::move(aGlobalOrder)), globalInts(std::move(aGlobalInts)), globalStrings(std::move(aGlobalStrings)), deferredUiCommands(std::move(aDeferredUiCommands)), lastSearchValid(aLastSearchValid), lastSearchStart(aLastSearchStart), lastSearchEnd(aLastSearchEnd), lastSearchCursor(aLastSearchCursor), ignoreCase(anIgnoreCase), tabExpand(aTabExpand), markStack(std::move(aMarkStack)), insertMode(aInsertMode), indentLevel(anIndentLevel), fileName(std::move(aFileName)), fileChanged(aFileChanged), debugSessionId(0), debugResult() {
+	}
+};
+
+struct MacroDebugWorkerPausedPayload final : Payload {
+	MRMacroExecutionSessionId sessionId;
+	MRMacroDebugRunResult debugResult;
+	std::string errorMessage;
+
+	MacroDebugWorkerPausedPayload() : sessionId(0), debugResult(), errorMessage() {
+	}
+
+	MacroDebugWorkerPausedPayload(MRMacroExecutionSessionId aSessionId, MRMacroDebugRunResult aDebugResult, std::string anErrorMessage)
+	    : sessionId(aSessionId), debugResult(std::move(aDebugResult)), errorMessage(std::move(anErrorMessage)) {
 	}
 };
 

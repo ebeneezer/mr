@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <stdexcept>
@@ -517,7 +518,7 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 		case MRVMSystemVariable::DocMode:
 			return mrvmMakeInt(g_runtimeEnv.docMode);
 		case MRVMSystemVariable::PrintMargin:
-			return mrvmMakeInt(g_runtimeEnv.printMargin);
+			return mrvmMakeInt(std::atoi(configuredPdfExportSettings().textWidth.c_str()));
 		case MRVMSystemVariable::CCol:
 			return mrvmMakeInt(currentEditorColumn(currentEditor()));
 		case MRVMSystemVariable::CLine:
@@ -894,10 +895,6 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 			g_runtimeEnv.docMode = mrvmValueAsInt(value) != 0 ? 1 : 0;
 			return true;
 		}
-		case MRVMSystemVariable::PrintMargin: {
-			g_runtimeEnv.printMargin = std::max(0, mrvmValueAsInt(value));
-			return true;
-		}
 		case MRVMSystemVariable::FormatLine:
 			return applyConfiguredEditSetupValue("FORMAT_LINE", mrvmValueAsString(value), nullptr);
 		case MRVMSystemVariable::DefaultFormat: {
@@ -987,6 +984,7 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 		case MRVMSystemVariable::OsVersion:
 		case MRVMSystemVariable::ParamCount:
 		case MRVMSystemVariable::Cpu:
+		case MRVMSystemVariable::PrintMargin:
 		case MRVMSystemVariable::DisplayTabs:
 			throw std::runtime_error("Attempt to assign to read-only system variable.");
 		case MRVMSystemVariable::Unknown:

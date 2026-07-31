@@ -215,6 +215,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"MULTI_SEARCH_SUBDIRECTORIES", MRSettingsKeyClass::Global, true},
     {"MULTI_SEARCH_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
     {"MULTI_SEARCH_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
+    {"MULTI_SEARCH_WHOLE_WORDS", MRSettingsKeyClass::Global, true},
     {"MULTI_SEARCH_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
     {"MULTI_SEARCH_RESTRICT_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_FILESPEC", MRSettingsKeyClass::Global, true},
@@ -224,6 +225,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"MULTI_SAR_SUBDIRECTORIES", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_WHOLE_WORDS", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_KEEP_FILES_OPEN", MRSettingsKeyClass::Global, true},
     {"MULTI_SAR_RESTRICT_WORKSPACE", MRSettingsKeyClass::Global, true},
@@ -937,6 +939,13 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			if (upper == "MULTI_SEARCH_REGULAR_EXPRESSIONS") {
 				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
 				if (!parseBooleanLiteral(value, options.regularExpressions, errorMessage)) return false;
+				if (options.regularExpressions) options.wholeWords = false;
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SEARCH_WHOLE_WORDS") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.wholeWords, errorMessage)) return false;
+				if (options.wholeWords) options.regularExpressions = false;
 				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SEARCH_FILES_IN_MEMORY") {
@@ -983,6 +992,13 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			if (upper == "MULTI_SAR_REGULAR_EXPRESSIONS") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
 				if (!parseBooleanLiteral(value, options.regularExpressions, errorMessage)) return false;
+				if (options.regularExpressions) options.wholeWords = false;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_WHOLE_WORDS") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.wholeWords, errorMessage)) return false;
+				if (options.wholeWords) options.regularExpressions = false;
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SAR_FILES_IN_MEMORY") {
@@ -1511,6 +1527,12 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "MULTI_SEARCH_REGULAR_EXPRESSIONS") {
 				if (!parseBooleanLiteral(value, snapshot.multiSearchDialogOptions.regularExpressions, errorMessage)) return false;
+				if (snapshot.multiSearchDialogOptions.regularExpressions) snapshot.multiSearchDialogOptions.wholeWords = false;
+				return true;
+			}
+			if (upper == "MULTI_SEARCH_WHOLE_WORDS") {
+				if (!parseBooleanLiteral(value, snapshot.multiSearchDialogOptions.wholeWords, errorMessage)) return false;
+				if (snapshot.multiSearchDialogOptions.wholeWords) snapshot.multiSearchDialogOptions.regularExpressions = false;
 				return true;
 			}
 			if (upper == "MULTI_SEARCH_FILES_IN_MEMORY") {
@@ -1552,6 +1574,12 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "MULTI_SAR_REGULAR_EXPRESSIONS") {
 				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.regularExpressions, errorMessage)) return false;
+				if (snapshot.multiSarDialogOptions.regularExpressions) snapshot.multiSarDialogOptions.wholeWords = false;
+				return true;
+			}
+			if (upper == "MULTI_SAR_WHOLE_WORDS") {
+				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.wholeWords, errorMessage)) return false;
+				if (snapshot.multiSarDialogOptions.wholeWords) snapshot.multiSarDialogOptions.regularExpressions = false;
 				return true;
 			}
 			if (upper == "MULTI_SAR_FILES_IN_MEMORY") {

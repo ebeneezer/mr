@@ -88,20 +88,40 @@ int runMacroDebuggerCrossSectionProbeMode();
 
 class MRBentoBoxFileCompareRegressionHarness {
   public:
-	static bool seedDiffReadyState(MRBentoBox &bento, const std::vector<mr::diff::MRDiffHunk> &hunks) {
-		bento.fileCompareHunks = hunks;
-		bento.rebuildFileCompareChangeGroups();
+	static bool seedDiffReadyState(MRBentoBox &bento) {
+		static constexpr std::uint64_t kGeneration = 1;
+		const std::shared_ptr<const MRBentoFileCompareAcquisitionPayload> originalAcquisition =
+			mrBuildBentoFileCompareAcquisition(bento.fileCompareSetup.original.snapshot, kGeneration, true, nullptr);
+		const std::shared_ptr<const MRBentoFileCompareAcquisitionPayload> compareAcquisition =
+			mrBuildBentoFileCompareAcquisition(bento.fileCompareSetup.compare.snapshot, kGeneration, false, nullptr);
+		std::string errorText;
+		const std::shared_ptr<const MRBentoFileCompareDiffPayload> diff =
+			mrBuildBentoFileCompareDiff(originalAcquisition, compareAcquisition, nullptr, errorText);
+		const bool editable = bento.fileComparePanesEditable();
+		const std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> originalProjection =
+			mrBuildBentoFileComparePaneProjection(diff, true, editable, nullptr);
+		const std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> compareProjection =
+			mrBuildBentoFileComparePaneProjection(diff, false, editable, nullptr);
+
+		if (originalAcquisition == nullptr || compareAcquisition == nullptr || diff == nullptr ||
+		    originalProjection == nullptr || compareProjection == nullptr || diff->changeGroups == nullptr)
+			return false;
+		bento.fileComparePipeline.activeGeneration = kGeneration;
+		bento.fileComparePipeline.originalAcquisition = originalAcquisition;
+		bento.fileComparePipeline.compareAcquisition = compareAcquisition;
+		bento.fileComparePipeline.diff = diff;
+		bento.fileComparePipeline.originalProjection = originalProjection;
+		bento.fileComparePipeline.compareProjection = compareProjection;
 		bento.fileCompareDiffReady = true;
 		bento.fileCompareStale = false;
-		bento.rebuildFileCompareProjectionCache();
 		bento.refreshFileComparePanes();
-		return !bento.fileCompareChangeGroups.empty();
+		return !diff->changeGroups->empty();
 	}
 
-	static bool activateComparePane(MRBentoBox &bento) {
-		const int compareLeaf = bento.leafIdForRole(bprDiffCompare);
-		if (compareLeaf < 0) return false;
-		bento.setActivePane(compareLeaf);
+	static bool activatePane(MRBentoBox &bento, MRBentoPaneRole role) {
+		const int leafId = bento.leafIdForRole(role);
+		if (leafId < 0) return false;
+		bento.setActivePane(leafId);
 		return true;
 	}
 
@@ -127,9 +147,20 @@ class MRBentoBoxFileCompareRegressionHarness {
 	}
 
 	static unsigned char lineKindAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
-		std::vector<unsigned char> lineKinds;
-		bento.fileCompareEditableLineKindsForRole(role, lineKinds, nullptr);
-		return lineIndex < lineKinds.size() ? lineKinds[lineIndex] : mrfclkNone;
+		std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> projection;
+
+		switch (role) {
+			case bprDiffOriginal:
+				projection = bento.fileComparePipeline.originalProjection;
+				break;
+			case bprDiffCompare:
+				projection = bento.fileComparePipeline.compareProjection;
+				break;
+			default:
+				return mrfclkNone;
+		}
+		if (projection == nullptr || projection->lineKinds == nullptr || lineIndex >= projection->lineKinds->size()) return mrfclkNone;
+		return (*projection->lineKinds)[lineIndex];
 	}
 
 	static bool markedDiffLineAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
@@ -2064,7 +2095,7 @@ bool runMacroDebuggerBreakpointKvProbe(std::string &failureReason) {
 		bool found = false;
 
 		for (const MRMacroDebugVariableSnapshot &candidate : sessionDebugResult.variables)
-			if (candidate.name == "X" && candidate.scope == mrdVariableLocal) {
+			if (candidate.name == "X" && candidate.scope == mrdVariableSession) {
 				variable = candidate;
 				found = true;
 				break;
@@ -2075,7 +2106,7 @@ bool runMacroDebuggerBreakpointKvProbe(std::string &failureReason) {
 		}
 		found = false;
 		for (const MRMacroDebugVariableSnapshot &candidate : updatedVariables)
-			if (candidate.name == "X" && candidate.scope == mrdVariableLocal) {
+			if (candidate.name == "X" && candidate.scope == mrdVariableSession) {
 				found = candidate.valueText == "41";
 				break;
 			}
@@ -2165,14 +2196,37 @@ bool runMacroDebuggerBreakpointKvProbe(std::string &failureReason) {
 			(void)::remove(registryMacroPath.c_str());
 			failureReason = "Macro debugger breakpoint probe could not load registry macro fixture: " + registryError;
 			return false;
-		}
-		registryDebugResult = mrvmStartDebugMacroByName(registryMacroName, MRMacroExecutionOwner(), &registryDebugSession, &registryError);
-		if (registryDebugSession.sessionId == 0 || registryDebugSession.route != MRMacroExecutionRoute::Debug || registryDebugSession.state != MRMacroExecutionState::Completed || registryDebugResult.stopReason != mrdStopCompleted || registryDebugResult.paused || registryDebugResult.hadError || registryDebugResult.cancelled) {
-			(void)::remove(registryMacroPath.c_str());
-			failureReason = "Macro debugger breakpoint probe did not start and complete a registry macro debug session: " + registryError;
-			return false;
-		}
-		bool sawRegistryX = false;
+			}
+			registryDebugResult = mrvmStartDebugMacroByName(registryMacroName, MRMacroExecutionOwner(), &registryDebugSession, &registryError);
+			if (registryDebugSession.sessionId == 0 || registryDebugSession.route != MRMacroExecutionRoute::Background || registryDebugSession.state != MRMacroExecutionState::Running ||
+			    registryDebugResult.stopReason != mrdStopBudget || !registryDebugResult.paused || registryDebugResult.hadError || registryDebugResult.cancelled) {
+				(void)::remove(registryMacroPath.c_str());
+				failureReason = "Macro debugger breakpoint probe did not schedule a registry macro on its natural worker route: " + registryError;
+				return false;
+			}
+			{
+				const MRMacroDebugWorkerResult workerResult =
+				    mrvmRunDebugSessionWorkerAction(registryDebugSession.sessionId, registryMacroName, mrdWorkerContinue, 256, std::shared_ptr<std::atomic_bool>());
+
+				registryDebugResult = workerResult.debugResult;
+				if (!workerResult.accepted || registryDebugResult.stopReason != mrdStopCompleted || registryDebugResult.paused || registryDebugResult.hadError || registryDebugResult.cancelled) {
+					(void)::remove(registryMacroPath.c_str());
+					failureReason = "Macro debugger breakpoint probe did not complete the scheduled registry worker session: " + workerResult.errorMessage;
+					return false;
+				}
+			}
+			{
+				bool sawCompleted = false;
+
+				for (const MRMacroExecutionResult &executionResult : recentMacroExecutionResults())
+					if (executionResult.session.sessionId == registryDebugSession.sessionId && executionResult.state == MRMacroExecutionState::Completed) sawCompleted = true;
+				if (!sawCompleted) {
+					(void)::remove(registryMacroPath.c_str());
+					failureReason = "Macro debugger breakpoint probe did not publish the completed registry worker session.";
+					return false;
+				}
+			}
+			bool sawRegistryX = false;
 		for (const MRMacroDebugVariableSnapshot &variable : registryDebugResult.variables)
 			if (variable.name == "X") {
 				sawRegistryX = true;
@@ -2202,22 +2256,40 @@ bool runMacroDebuggerBreakpointKvProbe(std::string &failureReason) {
 				return false;
 			}
 			registryStatementStepResult = mrvmStartDebugMacroByName(registryMacroName, MRMacroExecutionOwner(), &registryStatementStepSession, &registryError);
-			if (registryStatementStepSession.sessionId == 0 || registryStatementStepSession.route != MRMacroExecutionRoute::Debug || registryStatementStepSession.state != MRMacroExecutionState::Yielded ||
-			    registryStatementStepResult.stopReason != mrdStopBreakpoint || !registryStatementStepResult.paused || registryStatementStepResult.hadError || registryStatementStepResult.cancelled) {
+			if (registryStatementStepSession.sessionId == 0 || registryStatementStepSession.route != MRMacroExecutionRoute::Background || registryStatementStepSession.state != MRMacroExecutionState::Running ||
+			    registryStatementStepResult.stopReason != mrdStopBudget || !registryStatementStepResult.paused || registryStatementStepResult.hadError || registryStatementStepResult.cancelled) {
 				(void)::remove(registryMacroPath.c_str());
-				failureReason = "Macro debugger breakpoint probe did not pause registry statement-step fixture at line 3: " + registryError;
+				failureReason = "Macro debugger breakpoint probe did not schedule the registry breakpoint run: " + registryError;
 				return false;
+			}
+			{
+				const MRMacroDebugWorkerResult workerResult =
+				    mrvmRunDebugSessionWorkerAction(registryStatementStepSession.sessionId, registryMacroName, mrdWorkerContinue, 256, std::shared_ptr<std::atomic_bool>());
+
+				registryStatementStepResult = workerResult.debugResult;
+				if (!workerResult.accepted || registryStatementStepResult.stopReason != mrdStopBreakpoint || !registryStatementStepResult.paused ||
+				    registryStatementStepResult.hadError || registryStatementStepResult.cancelled) {
+					(void)::remove(registryMacroPath.c_str());
+					failureReason = "Macro debugger breakpoint probe did not pause the worker at registry line 3: " + workerResult.errorMessage;
+					return false;
+				}
 			}
 			if (!mrvmDebugSourceLineForInstruction(registryMacroName, registryStatementStepResult.instructionOffset, &beforeStepLine, &beforeStepStart, &beforeStepEnd) || beforeStepLine != 3) {
 				(void)::remove(registryMacroPath.c_str());
 				failureReason = "Macro debugger breakpoint probe could not resolve registry statement-step starting span.";
 				return false;
 			}
-			registryStatementStepResult = mrvmStepDebugMacroByName(registryStatementStepSession.sessionId, registryMacroName, &registryError);
-			if (registryStatementStepResult.stopReason != mrdStopStep || !registryStatementStepResult.paused || registryStatementStepResult.hadError || registryStatementStepResult.cancelled) {
-				(void)::remove(registryMacroPath.c_str());
-				failureReason = "Macro debugger breakpoint probe did not perform a registry statement step: " + registryError;
-				return false;
+			{
+				const MRMacroDebugWorkerResult workerResult =
+				    mrvmRunDebugSessionWorkerAction(registryStatementStepSession.sessionId, registryMacroName, mrdWorkerStepInto, 256, std::shared_ptr<std::atomic_bool>());
+
+				registryStatementStepResult = workerResult.debugResult;
+				if (!workerResult.accepted || registryStatementStepResult.stopReason != mrdStopStep || !registryStatementStepResult.paused ||
+				    registryStatementStepResult.hadError || registryStatementStepResult.cancelled) {
+					(void)::remove(registryMacroPath.c_str());
+					failureReason = "Macro debugger breakpoint probe did not perform a registry worker statement step: " + workerResult.errorMessage;
+					return false;
+				}
 			}
 			if (!mrvmDebugSourceLineForInstruction(registryMacroName, registryStatementStepResult.instructionOffset, &afterStepLine, &afterStepStart, &afterStepEnd) || afterStepLine != 4 ||
 			    (afterStepStart == beforeStepStart && afterStepEnd == beforeStepEnd)) {
@@ -2240,10 +2312,10 @@ bool runMacroDebuggerBreakpointKvProbe(std::string &failureReason) {
 			(void)::remove(registryMacroPath.c_str());
 			failureReason = "Macro debugger breakpoint probe could not reload registry macro fixture for entry stop: " + registryError;
 			return false;
-		}
-		registryEntryStopResult = mrvmStartDebugMacroByName(registryMacroName, MRMacroExecutionOwner(), &registryEntryStopSession, &registryError, true);
-		(void)::remove(registryMacroPath.c_str());
-		if (registryEntryStopSession.sessionId == 0 || registryEntryStopSession.route != MRMacroExecutionRoute::Debug || registryEntryStopSession.state != MRMacroExecutionState::Yielded || registryEntryStopResult.stopReason != mrdStopBreakpoint || !registryEntryStopResult.paused || registryEntryStopResult.hadError || registryEntryStopResult.cancelled) {
+			}
+			registryEntryStopResult = mrvmStartDebugMacroByName(registryMacroName, MRMacroExecutionOwner(), &registryEntryStopSession, &registryError, true);
+			(void)::remove(registryMacroPath.c_str());
+			if (registryEntryStopSession.sessionId == 0 || registryEntryStopSession.route != MRMacroExecutionRoute::Background || registryEntryStopSession.state != MRMacroExecutionState::Yielded || registryEntryStopResult.stopReason != mrdStopBreakpoint || !registryEntryStopResult.paused || registryEntryStopResult.hadError || registryEntryStopResult.cancelled) {
 			failureReason = "Macro debugger breakpoint probe did not pause a registry macro at entry: " + registryError;
 			return false;
 		}
@@ -4502,6 +4574,15 @@ bool testMmpClientFocusDispatchHarness(std::string &failureReason) {
 				debugTimerConfig.macroSpec = "MmpCanvasDemo^MmpCanvasDemoTick";
 				debugTimerConsumerId = registerRuntimeScheduledConsumer(debugTimerConfig);
 				debugTimerDue = debugTimerConsumerId != 0 && pumpRuntimeScheduler(runtimeTimerSourceNowMs()) != 0;
+				{
+					const std::chrono::steady_clock::time_point workerDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+
+					while (debugTimerDue && debuggerBento->macroDebuggerSessionRunning() && std::chrono::steady_clock::now() < workerDeadline) {
+						mr::coprocessor::globalCoprocessor().pumpFor(std::chrono::milliseconds(1));
+						debuggerBento->pumpMacroDebuggerSession();
+						std::this_thread::sleep_for(std::chrono::milliseconds(2));
+					}
+				}
 				for (const MRRuntimeScheduledConsumer &consumer : runtimeScheduledConsumers())
 					if (consumer.consumerId == debugTimerConsumerId) debugSessionId = consumer.activeSessionId;
 				debuggerAttached = debugTimerDue && debugSessionId != 0 && debuggerBento->macroDebuggerHasLiveSession() && !debuggerBento->macroDebuggerSessionRunning() && mrvmReadModelessWindowProgressFieldValue(firstId, "TICKS", debugTickTotal, debugTickValue) && debugTickTotal == 10 && debugTickValue == 2;
@@ -4512,8 +4593,12 @@ bool testMmpClientFocusDispatchHarness(std::string &failureReason) {
 					continueEvent.what = evKeyDown;
 					continueEvent.keyDown.keyCode = kbF5;
 					callbackContinued = debuggerBento->handleMacroDebuggerFunctionKey(continueEvent) && continueEvent.what == evNothing;
-					for (int pumpCount = 0; callbackContinued && debuggerBento->macroDebuggerHasLiveSession() && pumpCount < 4; ++pumpCount)
+					const std::chrono::steady_clock::time_point workerDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+					while (callbackContinued && debuggerBento->macroDebuggerHasLiveSession() && std::chrono::steady_clock::now() < workerDeadline) {
+						mr::coprocessor::globalCoprocessor().pumpFor(std::chrono::milliseconds(1));
 						debuggerBento->pumpMacroDebuggerSession();
+						std::this_thread::sleep_for(std::chrono::milliseconds(2));
+					}
 					callbackCompleted = callbackContinued && !debuggerBento->macroDebuggerHasLiveSession() && mrvmReadModelessWindowProgressFieldValue(firstId, "TICKS", debugTickTotal, debugTickValue) && debugTickTotal == 10 && debugTickValue == 3;
 				}
 			}
@@ -4779,6 +4864,7 @@ int runMacroDebuggerF9RouteProbeMode() {
 	             "DEF_INT(X);\n"
 	             "X := 1;\n"
 	             "X := X + 1;\n"
+	             "MAKE_MESSAGE('unreached debugger route probe');\n"
 	             "END_MACRO;\n";
 	{
 		std::ofstream out(macroPath.c_str(), std::ios::out | std::ios::trunc);
@@ -5027,7 +5113,7 @@ int runMacroDebuggerF9RouteProbeMode() {
 	}
 	variablesEditor = variables != nullptr ? variables->getEditor() : nullptr;
 	outputText = variablesEditor != nullptr ? variablesEditor->snapshotText() : std::string();
-	if (outputText.find("Variables") == std::string::npos || outputText.find("Locals") == std::string::npos || outputText.find("X [int] = 0") == std::string::npos) {
+	if (outputText.find("Variables") == std::string::npos || outputText.find("Session") == std::string::npos || outputText.find("X [int] = 0") == std::string::npos) {
 		destroyRegressionWindow(bento);
 		(void)::remove(macroPath.c_str());
 		std::cerr << "F5 continue did not refresh the Variables pane with a typed local snapshot. Variables were: " << outputText << "\n";
@@ -5161,7 +5247,7 @@ int runMacroDebuggerWorkspaceBreakpointRoundtripProbeMode() {
 	}
 	paths.settingsMacroUri = workspacePath;
 	workspace = buildSettingsMacroSourceWithWorkspace(paths);
-	if (workspace.find(" debug=v1") == std::string::npos || workspace.find(":3:1") == std::string::npos || workspace.find(":4:0") == std::string::npos) {
+	if (workspace.find(" debug=v2") == std::string::npos || workspace.find(":3:1:") == std::string::npos || workspace.find(":4:0:") == std::string::npos) {
 		destroyRegressionWindow(sourceBento);
 		(void)::remove(macroPath.c_str());
 		std::cerr << "Workspace serialization did not encode enabled and disabled breakpoint states.\n";
@@ -11369,7 +11455,6 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 	MREditWindow compareWindow(TRect(0, 0, 80, 20), "compare", 102);
 	MRBentoBox bento(TRect(0, 0, 160, 40), "file compare", 103, bbmFileCompare);
 	MRBentoCompareSetup setup;
-	std::vector<mr::diff::MRDiffHunk> hunks;
 	bool ok = true;
 
 	editSettings.formatRuler = true;
@@ -11387,20 +11472,12 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 		setup.original.bufferId = originalWindow.bufferId();
 		setup.original.documentId = originalWindow.documentId();
 		setup.original.version = originalWindow.documentVersion();
-		setup.original.text = originalText;
+		setup.original.snapshot = originalWindow.getEditor()->readSnapshot();
 		setup.compare.window = &compareWindow;
 		setup.compare.bufferId = compareWindow.bufferId();
 		setup.compare.documentId = compareWindow.documentId();
 		setup.compare.version = compareWindow.documentVersion();
-		setup.compare.text = compareText;
-
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 0, 0, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Delete, 1, 1, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Insert, 2, 1, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 2, 2, 2));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Delete, 4, 4, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Insert, 5, 4, 1));
-		hunks.push_back(mr::diff::MRDiffHunk(mr::diff::MRDiffOp::Equal, 5, 5, 1));
+		setup.compare.snapshot = compareWindow.getEditor()->readSnapshot();
 	}
 
 	if (ok && !bento.initializeFileCompare(setup)) {
@@ -11413,13 +11490,13 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 		ok = false;
 	}
 
-	if (ok && !MRBentoBoxFileCompareRegressionHarness::seedDiffReadyState(bento, hunks)) {
+	if (ok && !MRBentoBoxFileCompareRegressionHarness::seedDiffReadyState(bento)) {
 		failureReason = "File compare navigation harness did not build change groups.";
 		ok = false;
 	}
 
 	if (ok) {
-		if (!MRBentoBoxFileCompareRegressionHarness::activateComparePane(bento)) {
+		if (!MRBentoBoxFileCompareRegressionHarness::activatePane(bento, bprDiffCompare)) {
 			failureReason = "File compare navigation harness could not activate the compare pane.";
 			ok = false;
 		}
@@ -11489,6 +11566,25 @@ bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
 				const int contextGroupIndex = MRBentoBoxFileCompareRegressionHarness::showContextAtDocumentLine(bento, bprDiffCompare, 1);
 				if (contextGroupIndex != 0) {
 					failureReason = "File compare compare-pane context hit-test should select first diff group, got " + std::to_string(contextGroupIndex) + ".";
+					ok = false;
+				}
+			}
+
+			if (ok && !MRBentoBoxFileCompareRegressionHarness::activatePane(bento, bprDiffOriginal)) {
+				failureReason = "File compare navigation harness could not activate the original pane.";
+				ok = false;
+			} else if (ok && !bento.navigateFileCompareChange(true)) {
+				failureReason = "File compare original-pane next-diff navigation failed.";
+				ok = false;
+			} else if (ok) {
+				const std::size_t originalCursorLine = originalEditor->lineIndexOfOffset(originalEditor->cursorOffset());
+				const std::size_t compareCursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
+
+				if (originalCursorLine != 4) {
+					failureReason = "File compare next-diff original cursor line mismatch: expected 4, got " + std::to_string(originalCursorLine) + ".";
+					ok = false;
+				} else if (compareCursorLine != 4) {
+					failureReason = "File compare next-diff synced compare cursor line mismatch: expected 4, got " + std::to_string(compareCursorLine) + ".";
 					ok = false;
 				}
 			}

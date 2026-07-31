@@ -77,11 +77,14 @@ void MRFileEditor::clearCompilerDiagnosticRanges() {
 	                              std::make_shared<const std::vector<MRTextBufferModel::Range>>());
 }
 
-void MRFileEditor::setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges) {
+void MRFileEditor::setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &unboundRanges,
+                                              const std::vector<std::size_t> &explicitUnboundLines) {
 	std::vector<MRTextBufferModel::Range> normalizedActive;
 	std::vector<MRTextBufferModel::Range> normalizedInactive;
+	std::vector<MRTextBufferModel::Range> normalizedUnbound;
 	std::vector<std::size_t> activeLines;
 	std::vector<std::size_t> inactiveLines;
+	std::vector<std::size_t> unboundLines;
 	const std::size_t length = mBufferModel.length();
 	auto appendRanges = [this, length](const std::vector<std::pair<std::size_t, std::size_t>> &source, std::vector<MRTextBufferModel::Range> &target, std::vector<std::size_t> &lines) {
 		target.reserve(source.size());
@@ -106,25 +109,34 @@ void MRFileEditor::setDebuggerBreakpointRanges(const std::vector<std::pair<std::
 
 	appendRanges(activeRanges, normalizedActive, activeLines);
 	appendRanges(inactiveRanges, normalizedInactive, inactiveLines);
+	appendRanges(unboundRanges, normalizedUnbound, unboundLines);
+	unboundLines.insert(unboundLines.end(), explicitUnboundLines.begin(), explicitUnboundLines.end());
 	normalizeRangeList(normalizedActive);
 	normalizeRangeList(normalizedInactive);
+	normalizeRangeList(normalizedUnbound);
 	mDebuggerBreakpointRanges.swap(normalizedActive);
 	mDebuggerBreakpointInactiveRanges.swap(normalizedInactive);
+	mDebuggerBreakpointUnboundRanges.swap(normalizedUnbound);
 	std::sort(activeLines.begin(), activeLines.end());
 	activeLines.erase(std::unique(activeLines.begin(), activeLines.end()), activeLines.end());
 	mDebuggerBreakpointLines.swap(activeLines);
 	std::sort(inactiveLines.begin(), inactiveLines.end());
 	inactiveLines.erase(std::unique(inactiveLines.begin(), inactiveLines.end()), inactiveLines.end());
 	mDebuggerBreakpointInactiveLines.swap(inactiveLines);
+	std::sort(unboundLines.begin(), unboundLines.end());
+	unboundLines.erase(std::unique(unboundLines.begin(), unboundLines.end()), unboundLines.end());
+	mDebuggerBreakpointUnboundLines.swap(unboundLines);
 	drawView();
 }
 
 void MRFileEditor::clearDebuggerBreakpointRanges() {
-	if (mDebuggerBreakpointRanges.empty() && mDebuggerBreakpointInactiveRanges.empty() && mDebuggerBreakpointLines.empty() && mDebuggerBreakpointInactiveLines.empty()) return;
+	if (mDebuggerBreakpointRanges.empty() && mDebuggerBreakpointInactiveRanges.empty() && mDebuggerBreakpointUnboundRanges.empty() && mDebuggerBreakpointLines.empty() && mDebuggerBreakpointInactiveLines.empty() && mDebuggerBreakpointUnboundLines.empty()) return;
 	mDebuggerBreakpointRanges.clear();
 	mDebuggerBreakpointInactiveRanges.clear();
+	mDebuggerBreakpointUnboundRanges.clear();
 	mDebuggerBreakpointLines.clear();
 	mDebuggerBreakpointInactiveLines.clear();
+	mDebuggerBreakpointUnboundLines.clear();
 	drawView();
 }
 

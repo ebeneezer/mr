@@ -28,6 +28,25 @@ std::string mrvmMakeMacroFileKey(const std::string &value) {
 	return mrvmUpperKey(mrvmStripMrmacExtension(trimAscii(value)));
 }
 
+std::string mrvmMakeMacroSourceIdentity(const std::string &sourcePath, const std::string &macroName) {
+	const std::string normalizedPath = mrvmStripMrmacExtension(trimAscii(sourcePath));
+	const std::string macroKey = mrvmUpperKey(trimAscii(macroName));
+
+	if (normalizedPath.empty() || macroKey.empty()) return std::string();
+	return normalizedPath + "^" + macroKey;
+}
+
+bool mrvmParseMacroSourceIdentity(const std::string &identity, std::string &sourcePath, std::string &macroKey) {
+	const std::size_t caret = identity.rfind('^');
+
+	sourcePath.clear();
+	macroKey.clear();
+	if (caret == std::string::npos || caret == 0 || caret + 1 >= identity.size()) return false;
+	sourcePath = identity.substr(0, caret);
+	macroKey = mrvmUpperKey(identity.substr(caret + 1));
+	return !sourcePath.empty() && !macroKey.empty();
+}
+
 bool mrvmHasMrmacExtension(const std::string &path) {
 	std::size_t dotPos = path.rfind('.');
 	if (dotPos == std::string::npos) return false;

@@ -113,7 +113,6 @@ enum : ushort {
 	cmMrSetupCompilerProfiles,
 	cmMrSetupPaths,
 	cmMrSetupBackupsAutosave,
-	cmMrSetupSearchAndReplaceDefaults,
 	cmMrSetupUserInterfaceSettings,
 	cmMrSetupLiveLogs,
 

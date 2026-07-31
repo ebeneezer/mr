@@ -96,7 +96,7 @@
 
 using namespace mrvm_runtime;
 
-VirtualMachine::DebugState::DebugState() noexcept : runActive(false), stopped(false), stopReason(mrdStopNone), stopOffset(0), stackDepth(0), breakpointOffsets(), paused(false), bytecode(), length(0), ip(0), callStack(), returnInt(0), returnStr(), errorLevel(0), savedParameterString(), macroName(), firstRun(false), skipCurrentOffset(false), pauseRequested(false), instructionBudget(0), stepMode(mrdStepNone), stepOutDepth(0), macroKey(), sourcePath(), childFrame() {
+VirtualMachine::DebugState::DebugState() noexcept : runActive(false), stopped(false), stopReason(mrdStopNone), stopOffset(0), stackDepth(0), breakpointOffsets(), paused(false), bytecode(), length(0), ip(0), callStack(), returnInt(0), returnStr(), errorLevel(0), savedParameterString(), macroName(), firstRun(false), skipCurrentOffset(false), pauseRequested(false), pauseSignal(), instructionBudget(0), stepMode(mrdStepNone), stepOutDepth(0), macroKey(), sourcePath(), childFrame() {
 }
 
 VirtualMachine::DebugState::~DebugState() = default;
@@ -129,6 +129,7 @@ void VirtualMachine::DebugState::clearPausedExecution() noexcept {
 	firstRun = false;
 	skipCurrentOffset = false;
 	pauseRequested = false;
+	if (pauseSignal != nullptr) pauseSignal->store(false, std::memory_order_release);
 	instructionBudget = 0;
 	stepMode = mrdStepNone;
 }
@@ -265,7 +266,7 @@ bool VirtualMachine::DebugExecution::writeScalarVariable(const MRMacroDebugVaria
 			errorMessage = "Variable no longer exists in the paused debug session.";
 			return false;
 		}
-		actualScope = macroDebugVariableScope(local->first, local->second, vm.mClosureVariableNames, vm.mSessionVariableNames);
+		actualScope = macroDebugVariableScope(local->first, vm.mClosureVariableNames, vm.mSessionVariableNames);
 		if (actualScope != variable.scope || local->second.type != variable.type) {
 			errorMessage = "Variable no longer matches the debugger projection.";
 			return false;
@@ -318,6 +319,7 @@ MRMacroDebugRunResult VirtualMachine::DebugExecution::start(const unsigned char 
 	vm.debugState.callStack.clear();
 	vm.debugState.skipCurrentOffset = false;
 	vm.debugState.pauseRequested = false;
+	if (vm.debugState.pauseSignal != nullptr) vm.debugState.pauseSignal->store(false, std::memory_order_release);
 	vm.debugState.instructionBudget = 0;
 	vm.debugState.stepMode = mrdStepNone;
 	vm.debugState.stepOutDepth = 0;
@@ -380,7 +382,8 @@ MRMacroDebugRunResult VirtualMachine::DebugExecution::continueExecution(const st
 	bool hadError = false;
 
 	if (!vm.debugState.paused) return result;
-	if (vm.debugState.pauseRequested) {
+	const bool pauseSignalled = vm.debugState.pauseSignal != nullptr && vm.debugState.pauseSignal->exchange(false, std::memory_order_acq_rel);
+	if (vm.debugState.pauseRequested || pauseSignalled) {
 		vm.debugState.stopped = true;
 		vm.debugState.stopReason = mrdStopPaused;
 		vm.debugState.stopOffset = vm.debugState.ip;
@@ -586,6 +589,14 @@ void mrvmFinalizeDebugSession(MRMacroExecutionSession &session, const MRMacroDeb
 	publishMacroExecutionResult(session, session.state, result.hadError ? "Debug macro failed." : "Debug macro completed.");
 }
 
+void mrvmRejectDebugSession(MRMacroExecutionSession &session, const MRVMDebugSessionCleanup &cleanup, const std::string &message) {
+	session.state = MRMacroExecutionState::Rejected;
+	if (cleanup.unloadAfterCompletion && !cleanup.macroKey.empty()) unloadMacroFromRegistry(cleanup.macroKey);
+	else if (cleanup.evictTransientAfterCompletion && !cleanup.fileKey.empty())
+		evictTransientFileImage(cleanup.fileKey);
+	publishMacroExecutionResult(session, session.state, message.empty() ? "Staged debug macro result rejected." : message);
+}
+
 static MRMacroDebugRunResult startDebugMacroByKey(const std::string &macroKey, const std::string &parameterString, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool stopAtEntry, int temporaryStopLine) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	MRMacroDebugRunResult result;
@@ -734,7 +745,7 @@ bool mrvmToggleDebugLineBreakpointEnabled(const std::string &macroKey, int line,
 	return true;
 }
 
-bool mrvmWriteDebugLineBreakpoint(const std::string &macroKey, int line, bool enabled, std::string *errorMessage) {
+bool mrvmWriteDebugLineBreakpoint(const std::string &macroKey, int line, bool enabled, std::string *errorMessage, const std::string &conditionText) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
 
@@ -743,7 +754,7 @@ bool mrvmWriteDebugLineBreakpoint(const std::string &macroKey, int line, bool en
 		if (errorMessage != nullptr) *errorMessage = "Debug breakpoint is invalid.";
 		return false;
 	}
-	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line, enabled, std::string())) {
+	if (!mrvmRuntimeDebuggerWriteLineBreakpoint(g_runtimeEnv.runtimeKv, normalizedMacroKey, line, enabled, conditionText)) {
 		if (errorMessage != nullptr) *errorMessage = "No debuggable source span for breakpoint line.";
 		return false;
 	}
@@ -822,6 +833,25 @@ bool mrvmEraseDebugLineBreakpointsForMacroFile(const std::string &macroKey, std:
 	for (const std::string &fileMacroKey : file.macroNames)
 		if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, fileMacroKey)) {
 			if (errorMessage != nullptr) *errorMessage = "Debug breakpoints could not be cleared.";
+			return false;
+		}
+	return true;
+}
+
+bool mrvmEraseDebugRuntimeForMacroFile(const std::string &macroKey, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	MacroRef macroRef;
+	LoadedMacroFile file;
+	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (normalizedMacroKey.empty() || !readLoadedMacroByKey(normalizedMacroKey, macroRef) || !readLoadedMacroFileByKey(macroRef.fileKey, file)) {
+		if (errorMessage != nullptr) *errorMessage = "Debug macro is not loaded.";
+		return false;
+	}
+	for (const std::string &fileMacroKey : file.macroNames)
+		if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, fileMacroKey) || !mrvmRuntimeDebuggerEraseWatchesForMacro(g_runtimeEnv.runtimeKv, fileMacroKey)) {
+			if (errorMessage != nullptr) *errorMessage = "Debug runtime state could not be cleared.";
 			return false;
 		}
 	return true;

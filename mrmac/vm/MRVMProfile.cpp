@@ -131,7 +131,7 @@ unsigned classifyLoadVarName(const std::string &name) {
 
 unsigned classifyStoreVarName(const std::string &name) {
 	if (name == "IGNORE_CASE" || name == "REG_EXP_STAT" || name == "TAB_EXPAND" || name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "FILE_CHANGED" || name == "FILE_NAME" || name == "VIRTUAL_DESKTOPS" || name == "CYCLIC_VIRTUAL_DESKTOPS") return mrefUiAffinity | mrefStagedWrite;
-	if (name == "DOC_MODE" || name == "PRINT_MARGIN") return mrefUiAffinity;
+	if (name == "DOC_MODE") return mrefUiAffinity;
 	return 0;
 }
 
@@ -206,7 +206,6 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 	                                           "SETUP_COMPILER_PROFILES",
 	                                           "SETUP_PATHS",
 	                                           "SETUP_BACKUPS_AUTOSAVE",
-	                                           "SETUP_SEARCH_REPLACE_DEFAULTS",
 	                                           "SETUP_USER_INTERFACE",
 	                                           "SETUP_LIVE_LOGS",
 	                                           "EXIT_SAVE_ALL"};

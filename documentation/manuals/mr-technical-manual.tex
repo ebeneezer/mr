@@ -27,7 +27,7 @@
 
 \title{\mr{} Technical Manual\\\large A technical history of boundaries, speed, and extensibility}
 \author{Dr.\ Michael 'iDoc' Raus}
-\date{22 July 2026}
+\date{27 July 2026}
 
 \begin{document}
 \frontmatter
@@ -40,7 +40,7 @@
 \vspace{3\baselineskip}
 {\large Dr.\ Michael 'iDoc' Raus\par}
 \vspace{2\baselineskip}
-{\large 22 July 2026\par}
+{\large 27 July 2026\par}
 \end{center}
 \vspace*{\fill}
 \end{titlepage}
@@ -460,12 +460,57 @@ keep one exclusive worker until EOF, close, cancellation, error, or process
 termination. It never carries another owner's work. Journal cancellation
 closes the local read side, terminates and reaps the process group with bounded
 escalation, and publishes the exact viewer target before the worker is joined.
+This exception does not relax exact ownership or UI-thread adoption.
 
 An MRMAC Execution Session is not such a source merely because it is
 asynchronous. A finite VM computation is a \texttt{MacroJob}; a session paused
 for UI adoption holds logical execution state but no blocked worker. If that
 session owns a real external process or terminal source, source and session
 lifetimes remain separate.
+
+\section{External sources: the lifetime-bound exception}
+\label{sec:external-source-lifetime}
+
+A registered file, journal, device, network, or pipe source receives one source
+ID and one exclusive worker. That worker may remain alive until EOF, close,
+cancellation, error, or process termination because waiting is the work it
+owns. It may not execute a second source's request. Data still crosses the
+ordinary result boundary as typed chunks, each carrying the source and exact
+target buffer. The UI dispatcher appends or prepends the chunk only if that
+target still exists; closing one viewer cannot redirect its late output into
+another communication window.
+
+The file-tail route records device, inode, and byte offset. It reads new data
+with bounded \texttt{pread} calls and reopens the path after replacement or
+truncation. Optional timestamps are added at logical line starts. Search
+matches are projected against the current search expression during adoption,
+so highlight ranges, message-line reporting, terminal bell, and configured
+audio notification describe the text actually entering the live view rather
+than an obsolete worker-side UI state.
+
+The journal route owns a different blocking boundary. A child process runs
+\texttt{journalctl -f} in its own process group and writes to a non-blocking
+pipe. The source worker alternates bounded \texttt{poll}, pipe reads, and
+process-state checks. Cancellation first closes the local read side and sends
+\texttt{SIGTERM} to the process group. If the group does not finish within the
+bounded poll sequence, cancellation escalates to \texttt{SIGKILL}; the child
+is reaped before the worker becomes finished. This prevents a closed journal
+window from leaving either a blocked reader or descendants behind.
+
+Figure~\ref{fig:external-source-lifecycle} on
+page~\pageref{fig:external-source-lifecycle} separates the two acquisition
+routes from their common chunk-adoption and cancellation contract.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mr-external-source-lifecycle.pdf}
+  \caption{Lifetime-bound external-source execution. File tailing handles
+  append, replacement, and truncation through one source-owned reader; journal
+  viewing owns a non-blocking pipe and process group. Both publish bounded
+  chunks through the central mailbox, and close or cancellation invalidates
+  the exact viewer owner before the worker is joined.}
+  \label{fig:external-source-lifecycle}
+\end{figure}
 
 \section{Worker completion and the result mailbox}
 
@@ -667,6 +712,87 @@ fallback block, separator, and marker into the editor row's ordinary
 the adjacent TVision scrollbar remains an independent view with its own event
 semantics.
 
+\chapter{A block is geometry, not a clipboard string}
+\label{ch:block-engine}
+
+The editing tradition behind \mr{} treats a block as a first-class working
+object. A transient native selection is not sufficient for that role: line,
+column, and stream blocks have different geometry; a committed block may
+remain visible after marking has ended; and editing around it must not make
+its endpoints drift without explanation. The block engine therefore owns a
+versioned \texttt{MRFEBlockGeometry} with mode, lifecycle state, visibility,
+byte endpoints, line endpoints, and display-column endpoints.
+
+\section{Two coordinate systems and one explicit lifecycle}
+
+The lifecycle has three states. \texttt{Inactive} owns no block,
+\texttt{Marking} follows the cursor from a fixed anchor, and
+\texttt{Committed} freezes that geometry while keeping it available for later
+operations. Hiding a block suppresses its visual projection but does not
+silently destroy the committed object. Selection and column overlays are
+derived views of this geometry; neither is an alternative block authority.
+
+Stream and line blocks are grounded primarily in byte ranges. Column blocks
+are rectangles in terminal display cells and additionally retain their line
+interval. Converting between these systems uses the editor's configured tab
+stops and TVision's UTF-8 width rules. A tab or a multi-cell character that
+only partly intersects a column rectangle is represented by the corresponding
+number of spaces in its rectangular payload. That rule preserves the visual
+width of a column operation without pretending that half a character is a
+valid byte substring.
+
+Each geometry records the document version from which it was normalised.
+After an ordinary editor mutation, the engine accepts only the matching
+\texttt{DocumentChangeSet}: offsets before the touched range remain stable,
+offsets after it move by the byte delta, and offsets inside replaced text
+collapse to the edit start. Column line anchors are then recomputed against
+the new document. A missing version link is not guessed across; the caller
+must rebuild or clear the visual block state.
+
+Figure~\ref{fig:block-mutation-pipeline} on
+page~\pageref{fig:block-mutation-pipeline} shows lifecycle, geometry, and
+mutation as one contract.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mr-block-mutation-pipeline.pdf}
+  \caption{Block geometry and mutation. Marking produces one versioned line,
+  column, or stream object; selection and overlays are projections. Operations
+  capture a typed payload and build a \texttt{StagedTransaction}, which the
+  editor adopts against its snapshot before publishing the new committed
+  geometry.}
+  \label{fig:block-mutation-pipeline}
+\end{figure}
+
+\section{Typed transfer, staged mutation, and the system clipboard}
+
+Copy, move, delete, indent, and undent dispatch by block mode. Stream and line
+operations become range replacements. Column operations first compute one
+replacement per affected line in display-cell space, then add those
+replacements to a \texttt{StagedTransaction} from bottom to top so earlier
+byte offsets remain valid. The editor applies that transaction through the
+same snapshot/version boundary used by other Piece Table mutations. Only after
+successful adoption does the engine publish the new cursor, selection, overlay,
+and committed geometry.
+
+Cross-window work uses a \texttt{TransferMessage}, not a pointer into the
+source editor. It carries source and target IDs, copy or move intent, block
+mode, geometry, row and column dimensions, and an owned byte payload assembled
+by \texttt{MRFEArenaAllocator}. The target interprets that payload according to
+its own insert/overwrite mode and line-ending context. A move between two
+documents cannot be one Piece Table transaction: target insertion is accepted
+first, then the source block is removed. Failure is reported at the boundary;
+the implementation does not claim cross-document atomicity it cannot provide.
+
+The operating-system clipboard remains the interchange authority. Native
+editor selections and persistent blocks both project text into TVision's
+\texttt{TClipboard}; paste requests return through the normal TVision event
+path and respect read-only targets. \mrmac{} exposes the same system clipboard
+operation rather than maintaining a second macro buffer. The richer block
+geometry remains editor state, while the clipboard contains only transferable
+text. That separation is why compatibility terminology such as ``buffer'' does
+not become a competing storage model.
+
 \part{A coordinated workspace}
 
 \chapter{Bento: one task, several views}
@@ -715,6 +841,8 @@ pane keeps its own local editor, scrollbars, and policy. In particular, the
 container does not simulate child windows by writing directly to the screen.
 It uses normal TVision views, but gives them an explicit routing discipline.
 
+\section{Dirty projection without a second UI model}
+
 Rendering needs a second discipline. Content, pane chrome, scrollbars, layout,
 and overlays have independent dirty reasons. The Bento projection pump
 coalesces those reasons; a layout change dominates narrower redraws, whereas a
@@ -723,6 +851,32 @@ changes occur in their owning document, diagnostics, debugger, or compare
 model first, and only then mark the relevant projection dirty. This is why a
 compound TUI view remains responsive without turning repaint state into a
 second hidden model.
+
+The dirty mask is consumed at controlled event and adoption exits. A flush
+first takes and clears the accumulated mask. If layout is dirty,
+\texttt{layoutSplitPanes} performs the complete native TVision projection,
+updates an associated Sidekick overlay if required, redraws open drop-lists,
+and returns; content, chrome, and scrollbar bits need not repeat work already
+dominated by layout. Without layout, the pump independently projects shared
+editor content, source scrollbars, Sidekick state, and pane frames. Window
+close suppresses the pump because view lifetime has already become the
+dominant operation.
+
+Figure~\ref{fig:bento-dirty-projection} on
+page~\pageref{fig:bento-dirty-projection} makes the crucial negative space
+visible: dirty bits schedule projection work, but they do not store focus,
+document, diagnostics, compare, or debugger state.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mr-bento-dirty-projection.pdf}
+  \caption{Bento dirty-projection pump. Semantic owners change first and mark
+  only pending projection classes. A controlled flush coalesces the mask;
+  layout dominates narrower redraws, while non-layout work reaches only the
+  required native TVision views. The mask is scheduling state, never domain
+  truth.}
+  \label{fig:bento-dirty-projection}
+\end{figure}
 
 That boundary made one construction serve several rather different tasks. In
 document-viewport mode, editor leaves share the source buffer so that distant
@@ -786,15 +940,43 @@ record index uses \texttt{size\_t}, but the native TVision scrollbar exposes an
 \texttt{int}; fully proportional scrolling above \texttt{INT\_MAX} records is
 therefore an explicit support boundary.
 
+\section{File Compare as an ordered finite pipeline}
+
 File Compare uses a separate ordered pipeline rather than hiding large copies
 inside UI adoption. Two pane-owned workers acquire and split the source
 snapshots, one worker computes and normalises the Myers edit path, and two
 pane-owned workers build the immutable original and compare projections. Thus
 one generation is exactly a \(2\rightarrow1\rightarrow2\) sequence. The
 Myers frontier orders only that comparison; it does not serialize other Bento
-owners or the Compute lane. Navigation uses the adopted change groups without
-creating workers, while mutation cancels the old generation and creates a new
-five-task sequence.
+owners or the Compute lane.
+
+The two acquisition results must name the active generation and the exact
+document/version pair before the ordered diff is submitted. Its result carries
+both source identities and normalised change groups. Each projection worker
+then derives the pane text, line-kind map, and minimap slices for one side.
+The UI publishes the comparison only after both immutable
+pane projections have arrived with matching generation, source version, and
+editable-mode policy. A stale result cancels the generation instead of
+rebasing its hunks onto changed text.
+
+Navigation walks the adopted change groups without creating workers. Applying
+a change uses the current group to build one ordinary editor mutation, marks
+the old comparison stale, cancels any remaining tasks, refreshes the affected
+snapshot, and starts a fresh five-task generation. Responsiveness therefore
+does not come from an approximate diff; it comes from moving acquisition,
+Myers computation, and display projection outside the UI thread while keeping
+adoption exact.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mr-file-compare-pipeline.pdf}
+  \caption{File Compare's finite \(2\rightarrow1\rightarrow2\) generation.
+  Two pane-owned acquisition workers meet at one ordered Myers worker; two
+  immutable pane projections return to a joint adoption gate. Navigation is
+  worker-free, while either-side mutation invalidates the generation and
+  restarts it from new snapshots.}
+  \label{fig:file-compare-pipeline}
+\end{figure}
 
 Bento is not the whole editor family, and that distinction is deliberate.
 \texttt{MRSidekickEditor} does not inherit from Bento; it is a \texttt{TView}
@@ -810,11 +992,21 @@ explanation needs an anchored editor of its own.
 \part{MRMAC as an integrated runtime}
 
 \chapter{A language that belongs to the editor}
+\label{ch:mrmac-compiler-values}
 
 \mrmac{} is not merely a file of macro commands interpreted at startup. Its
 canonical compiler produces in-memory bytecode, while the Macro Catalog owns
 loaded files, metadata, profiles, and resident bytecode. That decision joins
 extensibility to a clearly identifiable runtime owner.
+
+\section{One compiler, three deliberate products}
+
+The earlier Flex/Bison path and the hand-written compiler once formed two
+possible sources of language truth. Consolidation removed that dual track.
+\texttt{mrmac.c} now contains the canonical scanner, parser, type checks,
+symbol handling, and bytecode emission used by every execution route. Opcode
+semantics remain a VM contract; neither the debugger nor an editor feature
+injects an alternative bytecode dialect.
 
 On-demand compilation is its normal economy. A binding may name a file that
 has not yet been loaded; on first use, the source is resolved, canonically
@@ -828,6 +1020,58 @@ The same restraint applies to debug information. Source maps are created on
 the debugging path, not for every ordinary macro execution. There is no second,
 secret debug compiler. One compiler, one bytecode model, and additional cost
 only where the user actually requests it.
+
+The third product is a watch expression. It reuses the canonical expression
+parser and bytecode emitter with an explicit symbol/type environment and
+\texttt{watch\_expression} restriction. Procedures, assignment, UI work, and
+file or process side effects are rejected; only the bounded intrinsic
+allow-list is available. The result still ends in ordinary VM bytecode and
+\texttt{OP\_HALT}. Pure-expression mode is therefore a constrained entry into
+one compiler, not a small language implemented beside it.
+
+\section{Hash handles, chained lvalues, and scope ownership}
+
+An \mrmac{} \texttt{Value} does not embed a nested hash tree. It carries a
+type, an integer hash handle, and the storage domain of that handle. Every VM
+has a local \texttt{MRVMHashStore}; macro-visible application state uses the
+global store behind the central K/V roots. A chained read repeatedly resolves
+the current handle and key. A chained assignment keeps each intermediate hash
+as a concrete value and applies the final store to the resolved leaf, so
+\texttt{root['C']['KEY']} is a real lvalue rather than a reconstructed
+delimited name.
+
+Crossing a storage boundary is explicit. Copying a local hash into global
+state recursively clones nested hashes and hashes inside typed arrays into the
+target store with an identity map that preserves cycles, and retags their
+storage domain. A global handle is never left
+pointing into a VM-local store that will disappear at macro completion.
+Unreachable local trees can consequently be cleared independently, while
+approved central roots and explicit application globals retain their intended
+runtime lifetime.
+
+Scope is orthogonal to source files. Finite \texttt{DEF\_*} values belong to
+the VM; closure values belong to the recurring closure identity; long-lived
+session values belong below \texttt{EXECSESSIONS}; explicit application
+globals live below \texttt{MACROGLOBALS}. There is no file-global namespace.
+The debugger projects these actual stores and mutates them only through the
+VM's validated value path. Hashes are volatile runtime structures: neither
+settings nor workspace persistence serialises them.
+
+Figure~\ref{fig:mrmac-compiler-value-flow} on
+page~\pageref{fig:mrmac-compiler-value-flow} joins the compiler and value-store
+boundaries that make these language features usable by normal macros,
+Execution Sessions, MMP, and the debugger.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mrmac-compiler-value-flow.pdf}
+  \caption{Canonical compiler products and runtime value ownership. Normal,
+  source-map, and pure watch compilation share one parser, type system, and
+  bytecode emitter. At runtime, typed values resolve local or central hash
+  stores explicitly; crossing that boundary clones nested containers instead
+  of exporting a per-VM handle.}
+  \label{fig:mrmac-compiler-value-flow}
+\end{figure}
 
 \chapter{Inside the MRMAC virtual machine}
 \label{ch:mrmac-vm}
@@ -919,12 +1163,13 @@ bookkeeping. These roots share a storage substrate, but they are not one
 undifferentiated dictionary.
 
 Hash and hash-array values may cross a storage boundary. In that case the VM
-recursively copies the reachable value tree into the target store and marks
-the resulting handles with the target domain. Within one store, it may retain
-the existing handle. This prevents a global value from referring accidentally
-to a local hash that disappears when a finite VM ends. It also explains why
-C++ records used during transfer are not allowed to become a second
-value-bearing registry beside the K/V tree.
+copies the reachable value graph into the target store with a source-to-target
+handle map, preserving cycles and shared subgraphs, and marks the resulting
+handles with the target domain. Within one store, it may retain the existing
+handle. This prevents a global value from referring accidentally to a local
+hash that disappears when a finite VM ends. It also explains why C++ records
+used during transfer are not allowed to become a second value-bearing registry
+beside the K/V tree.
 
 \section{Opcodes end at typed application boundaries}
 
@@ -1080,7 +1325,7 @@ runtime global hash into an alternative settings file.
 
 TVision remains on the other side of the same boundary. Typed MMP procedures
 may write retained macro-visible values under \texttt{MODELESSUI}; the
-projection described in Chapter~\ref{ch:mmp} leaves live windows, focus, Z
+projection described in Chapter~\ref{ch:mmp-runtime} leaves live windows, focus, Z
 order, event dispatch, and drawing lifetime with TVision. A parked VM never
 keeps a view pointer alive.
 
@@ -1157,9 +1402,11 @@ core, running interval, result readiness, acceptance, adoption, discard, and
 finish. An Execution Session records logical macro state and recent outcome.
 The debugger records source-bound breakpoints and watches, while values shown
 at a stop are freshly projected from the live VM, closure/session backing
-store, and application globals. A scalar debugger write is validated again by
-scope and type at the VM boundary and returns a new snapshot; the variable
-pane does not become writable runtime storage.
+store, and application globals. A debugger mutation is validated again by
+scope, type, and complete value path at the VM boundary and returns a new
+snapshot; the variable pane does not become writable runtime storage.
+Closure and session mutation publishes the VM value and its central K/V
+representation as one semantic transaction.
 
 The global hash store has its own optional read/write-rate and hotspot
 instrumentation. That telemetry can show whether runtime K/V access has become
@@ -1182,11 +1429,27 @@ itself decide whether bytecode is UI-affine or suitable for the background.
 The runner selects the route: ordinary UI execution, foreground delay,
 background, or staged background.
 
-Each background or staged Execution Session submits a finite
-\texttt{MacroJob} in the Macro lane. Chapter~\ref{ch:coprocessor-derived-work}
-defines that worker and core-assignment path; the session contributes logical
-identity and lifetime, not another scheduler. UI-affine and foreground-delay
-sessions do not enter the lane, and a paused session retains no worker.
+The session is a logical lifetime, not a synonym for an operating-system
+thread. It may execute immediately, yield on \texttt{DELAY}, occupy one finite
+worker, wait for UI-thread result adoption, or remain parked in the debugger.
+The session ID survives these changes so status, cancellation, a scheduled
+consumer, and a debugger refer to the same work rather than reconstructing
+identity from a macro name.
+
+User-visible session state lives below the central \texttt{EXECSESSIONS} K/V
+root. Active and pending sessions, recent terminal results, scheduler
+consumers and events, closure state, and variables of long-lived sessions are
+grouped by role below that root. C++ keeps only the mechanical objects that
+cannot be macro values: a callback function pointer, coprocessor task handle,
+or suspended VM. Those handles do not become a second session model.
+
+The background routes also give the story a concrete hardware dimension. Each
+finite background or staged Execution Session submits a \texttt{MacroJob} in
+the macro lane. That work unit receives its own one-shot worker, monotone
+\texttt{workerOrdinal}, and stable modulo assignment to an allowed core. The
+lane classifies the job but does not serialize unrelated macro owners behind a
+single lane worker. UI-affine and foreground-delay sessions do not enter this
+path, and a session paused for UI adoption retains no worker.
 
 Figure~\ref{fig:mrmac-session-routes} on
 page~\pageref{fig:mrmac-session-routes} separates the routes and their
@@ -1211,20 +1474,263 @@ not blindly place a second due execution next to the first is not a
 convenience-driven restriction. It protects retained UI state and external
 work from overlaps that cannot be explained afterwards.
 
-\chapter{MMP: retained UI without a second object world}
-\label{ch:mmp}
+\section{Closures, timers, and explainable skips}
+
+A \texttt{\$CLOSURE} unit is compiled by the canonical compiler like the rest
+of its macro file. Its \texttt{DEF\_TICK} interval is scheduler metadata, not a
+new opcode and not a private timer loop. The runtime scheduler stores the
+consumer, closure identity, owner, interval, and next due time under
+\texttt{EXECSESSIONS}. On a due tick it asks the normal runner to create a
+session. It neither executes bytecode nor chooses a route.
+
+The approved overrun policy is deliberately singular: skip. If the preceding
+session of that consumer is still active, the due tick records a
+\texttt{TickSkipped} event with the blocking session ID. Queueing a train of
+old timer events would make a modeless program look busy long after its
+relevant moment; parallel overlap would make retained closure and UI state
+ambiguous. A skipped tick is therefore observable but is not fabricated into
+an execution result, because no session ran.
+
+Closure variables live below the closure's runtime identity and survive its
+individual callbacks. Ordinary finite \texttt{DEF\_*} variables remain
+VM-local; explicit application globals remain in \texttt{MACROGLOBALS}.
+This separation is also what later gives the debugger meaningful scopes
+without inventing a file-global namespace.
+
+\chapter{Coprocessor, staging, and the UI thread}
+\label{ch:macro-staging}
+
+The VM must not alter a TVision view from a worker thread. For macro work that
+is suitable for the background, it therefore produces a staging result: text
+transactions, runtime state, and deferred UI commands are first collected as
+data. Only the UI thread evaluates the commit conditions against the current
+document and runtime state.
+
+Before submission the runner captures one \texttt{ReadSnapshot}, its base
+version, cursor, selection and block state, relevant macro-visible runtime
+values, editor options, mark stack, file identity, and a conflict snapshot.
+The worker installs this package as a \texttt{BackgroundEditSession}. Editor
+operations write a staged transaction; supported UI requests become typed
+deferred commands. They do not find a live editor through a convenient global
+pointer.
+
+An accepted commit changes the model first and then provides the deferred UI
+projection. A rejected commit is not partly repaired or rewritten for a newer
+version. This boundary explains why the UI pump does not ``validate'' in a
+general sense. It drains a bounded result mailbox; each result carries its own
+domain-specific acceptance check.
+
+The conflict gate compares not only document version but the runtime state that
+would make the staged result meaningful. A match applies the Piece Table
+transaction and captured state, then queues deferred playback. A mismatch
+rejects the package as a whole. The debugger reuses this same path for staged
+bytecode; stopping a debug session discards the staged package, while normal
+completion still has to pass the ordinary conflict gate. Debugging is not a
+privileged route around transaction semantics.
+
+This is what decoupling means technically in \mr{}: not arbitrary threads
+being permitted to do things, but work whose result may become visible at an
+explicit boundary with an accountable owner.
+
+\chapter{MMP: modeless programs without a second UI toolkit}
+\label{ch:mmp-runtime}
 
 MMP, the Modeless Macro Programs, were another point at which an apparently
 quick shortcut was rejected. Macros were not given raw TVision pointers,
-arbitrary paint callbacks, or a second event loop. Instead, they define
-retained UI state in the VM K/V model; TVision projects that state as windows,
-controls, and input. Timers use the session scheduler, and closing a window
-removes its associated timers and callbacks with their owner.
+arbitrary paint callbacks, or a second event loop. They express typed,
+retained UI intent: a modeless window, native fields, action controls,
+selection data, a bounded log, or a canvas scene addressed by logical IDs.
 
 The same boundary lets MMP state and the debugger meet in a Bento workspace
 without either view inventing execution truth. Debugger continuation, session
 identity, and value ownership remain the VM concerns described in
 Chapter~\ref{ch:mrmac-vm}.
+
+This distinction makes MMP more than a collection of dialog procedures. A
+macro may build a dashboard, timer-driven monitor, interactive tool, or small
+application whose values outlive one callback. Yet the macro never owns a
+\texttt{TView}. TVision still owns live view objects, focus, Z order, event
+dispatch, drawing, and close semantics.
+
+\section{One value model, several projections}
+
+All retained MMP values have one authority: the central K/V tree rooted at
+\texttt{MODELESSUI}. Definition staging uses the \texttt{staging} subtree and
+its \texttt{currentDialog} child. Committed models use one child of
+\texttt{windows} per window ID. Text, boolean, bounded integer, progress, log,
+selection, tree and table state, canvas commands, scene generation, and live
+geometry are organised below those window models. A C++ dialog definition may
+temporarily transfer these values into native controls, but it is not an
+alternative registry.
+
+The canvas follows the same rule. Its scene is retained K/V data made of
+bounded, palette-relative drawing roles. A canvas view reads that scene in its
+normal TVision \texttt{draw()} override. Commit requests a redraw of exactly
+that existing view; it does not flush a desktop, seize focus, or maintain a
+secret C++ scene cache. Ordinary controls use composed MMP constructs, while
+the canvas remains available for genuinely custom displays.
+
+Figure~\ref{fig:mrmac-mmp-runtime} on
+page~\pageref{fig:mrmac-mmp-runtime} shows the complete loop. The direction
+back from TVision is intentionally a typed execution request rather than an
+immediate call into a VM.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mrmac-mmp-runtime.pdf}
+  \caption{MMP runtime ownership. Typed macro declarations populate the
+  authoritative \texttt{MODELESSUI} tree. TVision projects native controls and
+  retained canvas scenes. Events and timers request owner-scoped Execution
+  Sessions; closing the window removes scheduler consumers, requests
+  cancellation, and erases the retained owner state.}
+  \label{fig:mrmac-mmp-runtime}
+\end{figure}
+
+\section{Callbacks are sessions, not event-handler re-entry}
+
+A modeless button, action menu, hotspot, or timer names a callback macro.
+Activating it does not execute bytecode inside the TVision event handler. The
+event becomes a request with the modeless window as execution owner, and the
+normal runner creates an Execution Session. Timer IDs exposed to \mrmac{} are
+logical IDs; scheduler consumer IDs remain internal mechanics.
+
+That owner closes the lifecycle triangle. Closing an MMP window first removes
+its scheduled consumers, then cooperatively cancels its active sessions and
+removes its retained K/V subtree. A later result may not recreate expired
+closure or window state. This property is easy to miss in a clock demo and
+essential in a long-running personal extension environment.
+
+\chapter{A debugger for the complete runtime}
+\label{ch:mrmac-debugger}
+
+The integrated \mrmac{} debugger is a consequence of the runtime architecture,
+not a separate interpreter with a breakpoint veneer. It consumes Execution
+Sessions, the Macro Catalog, generated source maps, and central K/V values.
+Source, output, variables, and watches meet in a Bento workspace, but that
+workspace owns neither bytecode execution nor a writable copy of runtime
+state.
+
+\section{Source identity and source maps}
+
+A debug start resolves the macro through the same catalog as normal execution
+and invokes the canonical compiler with source-map collection enabled. Normal
+load does not pay that cost. Each mapping relates an instruction start to a
+source span, line, column, macro entry, and debuggable kind. Line breakpoints
+are a UI convenience: they bind to a real debuggable span rather than asking
+the UI to guess from bytecode.
+
+The internal source identity is the normalised resolved path joined with the
+macro name by \texttt{\^{}}. The UI renders only the macro name. Exactly one
+debugger Bento may own a source identity. Two views offering controls for the
+same parked VM would provide no useful capability and would make close,
+breakpoint, and mutation ownership ambiguous.
+
+\section{Natural execution routes and non-blocking control}
+
+The debugger adds stop policy---breakpoint, step, pause, cancellation, error,
+completion, or finite budget---to the normal runner. It does not add a debug
+lane. Background-safe code advances through finite jobs on the existing Macro
+lane. Staged code uses the captured input and ordinary commit path described
+in Chapter~\ref{ch:macro-staging}. Remaining UI-affine code advances in bounded
+event-pump slices. Even a run-to-cursor operation first yields control before
+substantive execution begins; its one-shot target survives that entry yield
+and is consumed only when the mapped target span is actually reached.
+
+Figure~\ref{fig:mrmac-debugger-execution} on
+page~\pageref{fig:mrmac-debugger-execution} makes the resource lifetime
+explicit. A worker executes only one finite Continue or Step action. At a
+breakpoint, pause, step stop, or budget boundary it returns a typed result.
+The VM may remain parked as a mechanical session handle, but no worker waits
+beside it.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mrmac-debugger-execution.pdf}
+  \caption{Debugger execution uses the macro's natural route. UI-affine work
+  is budgeted in the event pump; background and staged work use finite Macro
+  workers. Cooperative pause and cancellation are lock-independent requests.
+  A stopped VM is inspectable without retaining a worker.}
+  \label{fig:mrmac-debugger-execution}
+\end{figure}
+
+Pause and Stop must also remain responsive while a worker currently owns the
+VM execution lock. Their controls therefore set cooperative request flags
+through a small mechanical control handle; they do not wait for the worker.
+The VM checks these requests at instruction boundaries. A C++ intrinsic,
+external I/O operation, or deferred playback application is a black box:
+stepping does not enter it and cancellation does not tear it in half.
+
+Step Into, Step Over, and Step Out operate on source spans and call depth,
+including a loaded macro entered through \texttt{RUN\_MACRO}. The call stack
+distinguishes ordinary calls from loaded child-macro frames. Where no source
+mapping exists, the debugger reports an opaque boundary instead of inventing a
+line.
+
+\section{Cold configuration and regenerated truth}
+
+Useful debugger configuration survives a workspace restart, but live execution
+does not. A debugger Bento persists its layout, macro and source identity,
+breakpoint source lines with enabled state and condition text, and watch
+expressions. It never persists a session ID, parked VM, route, current
+instruction, frame, value snapshot, output, generated source map, or bytecode
+offset.
+
+Restore therefore produces a cold debugger. On a new start the source is
+compiled again, and breakpoint definitions are rebound against the new source
+map into \texttt{MACRODEBUGGER}. A breakpoint that no longer maps to an
+executable span and a watch that no longer compiles in restricted expression
+mode are dropped and logged during restore. They do not remain pending or
+unbound state. Unknown workspace options are likewise dropped and logged
+locally instead of making all known fields in the entry unrestorable.
+
+\section{Scopes and complete mutable values}
+
+The Variables pane reports the scopes that actually exist: VM-local values,
+closure state, long-lived execution-session state, and explicit application
+globals. \mrmac{} has no file-global namespace. The apparent attraction of
+one is small because explicit globals already cross macro files, while its
+source-derived lifetime would add another ownership model.
+
+Hashes and typed arrays are projected as full, indented trees. Hash keys and
+one-based array elements remain individually addressable through nested
+paths; cycles are marked rather than recursively expanded forever. There is no
+arbitrary snapshot cap. A container summary such as \texttt{hash\{17 keys\}}
+is useful orientation, but is not an inspection result.
+
+Mutation occurs only while the VM is paused. The VM revalidates root name,
+scope, type, and every hash-key or array-index component before it changes
+anything. Scalars retain their type; hash entries may be added, renamed, or
+removed; array elements may be appended or removed; nested values use the
+same path. The appropriate local, closure, session, or global backing store is
+updated, and the UI receives a newly generated full snapshot. Closure and
+session writes prepare both representations before a no-fail publication under
+the VM execution mutex, so an error leaves both unchanged. Thus ergonomic
+editing does not turn the Variables pane into a second value authority.
+
+Figure~\ref{fig:mrmac-debugger-state} on
+page~\pageref{fig:mrmac-debugger-state} collects these persistence and value
+boundaries. Closing the debugger invalidates its live \texttt{MACRODEBUGGER}
+share. If a worker is still completing an atomic operation, cancellation and
+cleanup are recorded and performed cooperatively as that worker ends.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{assets/mrmac-debugger-state.pdf}
+  \caption{Debugger state boundaries. Workspace persistence keeps only cold
+  definitions; a new debug start regenerates source maps and live K/V
+  bindings. Paused values are projected from actual scopes as complete trees,
+  and every mutation returns through a validated VM write boundary.}
+  \label{fig:mrmac-debugger-state}
+\end{figure}
+
+Watches use the canonical compiler in a restricted pure-expression mode.
+They may read paused state but cannot assign, call procedures, touch UI, or
+perform file and process work. Their expression and enabled state may be cold
+configuration; value and error are always derived anew. Together with the
+session timeline, scheduler skip events, call stack, variables, and log tail,
+this makes the debugger an observation surface for synchronous macros, MMP
+callbacks, recurring closures, and staged editor automation rather than only
+for the easiest straight-line case.
 
 \part{The editor as a personal environment}
 

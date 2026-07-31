@@ -75,6 +75,29 @@ marks settings dirty and is persisted through the existing coalesced flush.
 This cleanup does not use the message line. A successfully executable entry
 remains configured.
 
+Here, silently means that bootstrap continues without a modal error, failed
+startup or invented compatibility behavior. The drop is recorded in the
+normal bootstrap log/load report so that configuration loss remains
+diagnosable.
+
+The current build supplies hardcoded defaults for every setting token it knows.
+Known tokens from the settings source may overwrite those defaults. Missing
+known tokens keep the current build defaults.
+
+## Workspace
+
+Workspace serialization remains outside the canonical settings core. The
+approved debugger extension stores only cold debugger Bento configuration in
+`WORKSPACE`: source path and macro identity, breakpoint definitions and watch
+definitions. It does not serialize a debugger session, VM state, generated
+source map or bytecode offset.
+
+Restore validates breakpoint bindings against a newly generated canonical
+source map and validates watches with the canonical restricted expression
+compiler. Entries that cannot be bound or compiled are dropped and logged;
+they do not remain as pending debugger state and do not prevent restoration of
+unrelated valid fields.
+
 ## Boundaries
 
 Without explicit maintainer approval:

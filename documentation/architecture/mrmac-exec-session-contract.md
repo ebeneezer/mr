@@ -80,6 +80,12 @@ runtime consumers, execution sessions, macro routing and coprocessor work items.
   [Coprocessor / Deferred UI contract](coprocessor-deferred-ui-contract.md).
 - Settings and workspace persistence remain governed by the settings
   contracts.
+- Exec sessions must not change deferred UI playback ordering or batching.
+- Exec sessions must not add direct TVision screen writes.
+- Exec sessions must not add new settings or workspace persistence. The
+  debugger's separately approved cold Bento configuration is not execution
+  session persistence: it contains no session id, route, task, VM state or
+  result.
 - Exec session state is runtime state. It must not be serialized through
   `settings.mrmac` or workspace files without a dedicated persistence decision.
 - Exec-session runtime state is stored in the central VM K/V hash under the
@@ -139,6 +145,16 @@ macro-visible runtime roots.
 Modeless MRMac UI, timers and event callbacks are also consumers of execution
 sessions. They may request execution, cancellation or status, but they do not
 own VM internals.
+
+A debug start must reuse the same bytecode profile and natural route selection
+as normal execution. Background-safe bytecode resumes as finite
+`Lane::Macro` work; staged bytecode reuses the normal captured input, conflict
+snapshot, staged transaction, commit gate and deferred playback; remaining
+UI-affine bytecode advances through bounded UI-pump budgets. A pause or
+breakpoint parks the VM as a mechanical session handle and releases any worker.
+Continue and step create a new finite worker lifetime only for worker routes.
+Pause and cancellation remain cooperative and must be requestable without
+waiting for the executing worker to release the VM execution lock.
 
 A modeless control callback must request its target macro through an execution
 session. It must not execute a macro directly from a TVision event handler.
@@ -281,7 +297,11 @@ Without explicit maintainer approval:
 - New macro execution lanes.
 - New opcode semantics.
 - Bytecode injection APIs that bypass the canonical compiler path.
-- Persisting sessions, breakpoints or runtime state in settings/workspace files.
+- Persisting sessions or runtime state in settings/workspace files. A
+  debugger Bento may persist its separately approved cold source,
+  breakpoint-definition and watch-definition configuration through
+  `WORKSPACE`; it must not persist a session, VM, route, task, current
+  location, value snapshot or generated source map.
 - Direct TVision rendering from sessions or consumers.
 - Debugger-only state baked into the base session model.
 - Modeless widget or raw TVision binding APIs in the session layer.

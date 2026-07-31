@@ -1,6 +1,8 @@
 #include "MRBentoBox.hpp"
 
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../mrmac/MRVM.hpp"
+#include "../../mrmac/vm/MRVMMacroSpecRuntime.hpp"
 #include "../../mrmac/vm/MRVMRuntimeDebugger.hpp"
 
 MRBentoOutlineEntry::MRBentoOutlineEntry() noexcept : paneOffset(0), sourceOffset(0), sourceSelectionEnd(0) {
@@ -26,13 +28,13 @@ MRBentoWorkspaceLeaf::MRBentoWorkspaceLeaf() noexcept : id(-1), role(bprSource),
 MRBentoWorkspaceSnapshot::MRBentoWorkspaceSnapshot() noexcept : mode(bbmToolWorkspace), rootNode(-1), activeLeafId(0), maximizedLeafId(-1), nodes(), leaves() {
 }
 
-MRMacroDebuggerWorkspaceBreakpoint::MRMacroDebuggerWorkspaceBreakpoint() noexcept : macroKey(), line(0), enabled(false) {
+MRMacroDebuggerWorkspaceBreakpoint::MRMacroDebuggerWorkspaceBreakpoint() noexcept : macroKey(), sourceIdentity(), line(0), enabled(false), conditionText() {
 }
 
 MRMacroDebuggerWorkspaceWatch::MRMacroDebuggerWorkspaceWatch() noexcept : expression(), enabled(false) {
 }
 
-MRMacroDebuggerWorkspaceConfiguration::MRMacroDebuggerWorkspaceConfiguration() noexcept : macroKey(), macroName(), breakpoints(), watches() {
+MRMacroDebuggerWorkspaceConfiguration::MRMacroDebuggerWorkspaceConfiguration() noexcept : macroKey(), macroName(), sourceIdentity(), sourcePath(), breakpoints(), watches() {
 }
 
 MRBentoBox::BentoProjectionTaskState::BentoProjectionTaskState() noexcept
@@ -43,7 +45,7 @@ MRBentoBox::BentoProjectionTaskState::BentoProjectionTaskState() noexcept
 }
 
 MRBentoBox::MRBentoBox(const TRect &bounds, const char *title, int number, MRBentoBoxMode mode)
-	: TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number, mr::coprocessor::ExecutionOwnerKind::BentoPane), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), windowCloseInProgress(false), bentoProjectionAdoptionActive(false), bentoSourceMutationTrackingActive(false), bentoProjectionDirty(bpdNone), paneRoleDropList(), paneActionDropList(), fileCompareActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0), pendingFileCompareActionLeafId(0), pendingFileCompareActionGroupIndex(-1), compilerOutputStatus(), compilerProblemsStatus(), structureOutlineStatus(), functionsOutlineStatus(), macroDebuggerStatus(), macroDebuggerMacroKey(), macroDebuggerMacroName(), macroDebuggerSourcePath(), macroDebuggerProjectedMacroKey(), macroDebuggerSessionId(0), macroDebuggerExecutionRunning(false), macroDebuggerActive(false), macroDebuggerWorkspacePending(), macroDebuggerValueInput(nullptr), macroDebuggerValueInputPane(nullptr), macroDebuggerVariables(), macroDebuggerVariableRows(), compilerDiagnostics(std::make_shared<const std::vector<MRCompilerDiagnostic>>()), compilerDiagnosticSourceChanges(), compilerDiagnosticsParseSourceSnapshot(), compilerDiagnosticsDocumentId(0), compilerDiagnosticsVersion(0), compilerDiagnosticsOutputDocumentId(0), compilerDiagnosticsOutputVersion(0), compilerDiagnosticsOutputBufferId(0), compilerProblemsTargetDocumentId(0), compilerProblemsTargetVersion(0), compilerProblemsTargetBufferId(0), compilerProblemsTextLength(0), compilerProblemsTextHash(0), compilerDiagnosticsParseRequired(true), compilerDiagnosticsSourceInvalidated(false), pendingCompilerProblemNavigation(0), fileCompareSetup(), fileComparePipeline(), fileCompareSourcesRestored(false), fileCompareDiffReady(false), fileCompareStale(false), structureOutlineState(), functionsOutlineState(), diagnosticsProjectionTask(), structureProjectionTask(), functionsProjectionTask(), structureOutlineEntries(std::make_shared<const std::vector<MRBentoOutlineEntry>>()), functionsOutlineEntries(std::make_shared<const std::vector<MRBentoOutlineEntry>>()), compilerSidekickTracked(false), compilerSidekickUpdating(false), compilerSidekickDiagnosticIndex(0) {
+	: TWindowInit(&MRBentoBox::initFrame), MREditWindow(bounds, title, number, mr::coprocessor::ExecutionOwnerKind::BentoPane), secondaryPane(nullptr), layoutTree(), leaves(), paneFrameViews(), rootNode(-1), activeLeafId(0), nextLeafId(0), maximizedLeafId(-1), bentoMode(mode), sourceScrollBarPaletteActive(false), secondaryPaneVisible(false), windowCloseInProgress(false), bentoProjectionAdoptionActive(false), bentoSourceMutationTrackingActive(false), bentoProjectionDirty(bpdNone), paneRoleDropList(), paneActionDropList(), fileCompareActionDropList(), paneRoleListAnchor(), pendingPaneRole(bprCompilerOutput), pendingPaneRoleTargetLeafId(0), pendingFileCompareActionLeafId(0), pendingFileCompareActionGroupIndex(-1), compilerOutputStatus(), compilerProblemsStatus(), structureOutlineStatus(), functionsOutlineStatus(), macroDebuggerStatus(), macroDebuggerMacroKey(), macroDebuggerMacroName(), macroDebuggerSourcePath(), macroDebuggerSourceIdentity(), macroDebuggerProjectedMacroKey(), macroDebuggerSessionId(0), macroDebuggerExecutionRoute(MRMacroExecutionRoute::Debug), macroDebuggerExecutionRunning(false), macroDebuggerActive(false), macroDebuggerWorkspacePending(), macroDebuggerValueInput(nullptr), macroDebuggerValueInputPane(nullptr), macroDebuggerVariables(), macroDebuggerVariableRows(), compilerDiagnostics(std::make_shared<const std::vector<MRCompilerDiagnostic>>()), compilerDiagnosticSourceChanges(), compilerDiagnosticsParseSourceSnapshot(), compilerDiagnosticsDocumentId(0), compilerDiagnosticsVersion(0), compilerDiagnosticsOutputDocumentId(0), compilerDiagnosticsOutputVersion(0), compilerDiagnosticsOutputBufferId(0), compilerProblemsTargetDocumentId(0), compilerProblemsTargetVersion(0), compilerProblemsTargetBufferId(0), compilerProblemsTextLength(0), compilerProblemsTextHash(0), compilerDiagnosticsParseRequired(true), compilerDiagnosticsSourceInvalidated(false), pendingCompilerProblemNavigation(0), fileCompareSetup(), fileComparePipeline(), fileCompareSourcesRestored(false), fileCompareDiffReady(false), fileCompareStale(false), fileCompareLinkedPaneSyncActive(false), structureOutlineState(), functionsOutlineState(), diagnosticsProjectionTask(), structureProjectionTask(), functionsProjectionTask(), structureOutlineEntries(std::make_shared<const std::vector<MRBentoOutlineEntry>>()), functionsOutlineEntries(std::make_shared<const std::vector<MRBentoOutlineEntry>>()), compilerSidekickTracked(false), compilerSidekickUpdating(false), compilerSidekickDiagnosticIndex(0) {
 	initializeLayoutTree();
 	layoutSplitPanes();
 }
@@ -88,7 +90,8 @@ MREditWindow *MRBentoBox::watchesPane() const noexcept {
 void MRBentoBox::setMacroDebuggerTarget(const std::string &macroKey, const std::string &macroName) {
 	macroDebuggerMacroKey = macroKey;
 	macroDebuggerMacroName = macroName;
-	if (getEditor() != nullptr && getEditor()->hasPersistentFileName()) macroDebuggerSourcePath = getEditor()->persistentFileName();
+	if (getEditor() != nullptr && getEditor()->hasPersistentFileName()) macroDebuggerSourcePath = normalizeConfiguredPathInput(getEditor()->persistentFileName());
+	macroDebuggerSourceIdentity = mrvmMakeMacroSourceIdentity(macroDebuggerSourcePath, macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName);
 	macroDebuggerProjectedMacroKey = macroKey;
 	macroDebuggerActive = !macroDebuggerMacroKey.empty();
 	if (!macroDebuggerActive) macroDebuggerStatus.clear();
@@ -103,6 +106,8 @@ bool MRBentoBox::macroDebuggerWorkspaceConfiguration(MRMacroDebuggerWorkspaceCon
 	if (!macroDebuggerActive || macroDebuggerMacroKey.empty()) return false;
 	configuration.macroKey = macroDebuggerMacroKey;
 	configuration.macroName = macroDebuggerMacroName;
+	configuration.sourceIdentity = macroDebuggerSourceIdentity;
+	configuration.sourcePath = macroDebuggerSourcePath;
 	configuration.breakpoints = macroDebuggerWorkspacePending.breakpoints;
 	configuration.watches = macroDebuggerWorkspacePending.watches;
 	if (mrvmDebugLineBreakpointsForMacro(macroDebuggerMacroKey, breakpoints))
@@ -115,8 +120,10 @@ bool MRBentoBox::macroDebuggerWorkspaceConfiguration(MRMacroDebuggerWorkspaceCon
 				MRMacroDebuggerWorkspaceBreakpoint stored;
 
 				stored.macroKey = breakpoint.macroKey;
+				stored.sourceIdentity = mrvmMakeMacroSourceIdentity(macroDebuggerSourcePath, breakpoint.macroKey);
 				stored.line = breakpoint.line;
 				stored.enabled = breakpoint.enabled;
+				stored.conditionText = breakpoint.conditionText;
 				configuration.breakpoints.push_back(stored);
 			}
 		}

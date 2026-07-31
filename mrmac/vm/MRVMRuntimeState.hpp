@@ -115,7 +115,6 @@ struct RuntimeEnvironment {
 	int logoScreen;
 	int explosions;
 	bool ignoreCase;
-	int printMargin;
 	int formatStat;
 	int undoStat;
 	int memAlloc;
@@ -145,7 +144,7 @@ struct RuntimeEnvironment {
 	std::map<const void *, int> windowLinkGroups;
 	int nextWindowLinkGroupId;
 
-	RuntimeEnvironment() : returnInt(0), errorLevel(0), fileMatchIndex(0), docMode(0), shadowChar(176), refresh(1), mouse(1), logoScreen(0), explosions(0), ignoreCase(false), printMargin(0), formatStat(0), undoStat(1), memAlloc(0), insCursor(0), ovrCursor(3), ctrlHelp(0), mouseHSense(8), mouseVSense(8), statusRow(-1), messageRow(-1), maxWindowRow(-1), minWindowRow(-1), nameLine(0), tabExpand(true), lastSearchValid(false), lastSearchWindow(nullptr), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), key1(0), key2(0), nextWindowLinkGroupId(1) {
+	RuntimeEnvironment() : returnInt(0), errorLevel(0), fileMatchIndex(0), docMode(0), shadowChar(176), refresh(1), mouse(1), logoScreen(0), explosions(0), ignoreCase(false), formatStat(0), undoStat(1), memAlloc(0), insCursor(0), ovrCursor(3), ctrlHelp(0), mouseHSense(8), mouseVSense(8), statusRow(-1), messageRow(-1), maxWindowRow(-1), minWindowRow(-1), nameLine(0), tabExpand(true), lastSearchValid(false), lastSearchWindow(nullptr), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), key1(0), key2(0), nextWindowLinkGroupId(1) {
 		functionLabelStack.emplace_back();
 	}
 };
@@ -242,5 +241,8 @@ extern thread_local BackgroundEditSession *g_backgroundEditSession;
 extern thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
 extern thread_local ExecutionState *g_executionState;
 extern thread_local MRMacroExecutionSessionId g_executionSessionId;
+
+void mrvmInitializeBackgroundEditSession(BackgroundEditSession &session, const MRMacroStagedExecutionInput &input);
+MRMacroStagedJobResult mrvmBuildStagedJobResult(const VirtualMachine &vm, const BackgroundEditSession &session);
 
 #endif

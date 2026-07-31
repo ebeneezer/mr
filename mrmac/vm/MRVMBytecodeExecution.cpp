@@ -168,9 +168,10 @@ void VirtualMachine::BytecodeExecution::run() {
 	}
 	MRVMIntrinsics intrinsics(vm);
 
-	try {
-		while (ip < length) {
-			if (vm.debugState.runActive && vm.debugState.pauseRequested) {
+		try {
+			while (ip < length) {
+				const bool pauseSignalled = vm.debugState.pauseSignal != nullptr && vm.debugState.pauseSignal->exchange(false, std::memory_order_acq_rel);
+				if (vm.debugState.runActive && (vm.debugState.pauseRequested || pauseSignalled)) {
 				vm.debugState.stopped = true;
 				vm.debugState.stopReason = mrdStopPaused;
 				vm.debugState.stopOffset = ip;
