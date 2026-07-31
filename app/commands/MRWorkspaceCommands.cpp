@@ -552,33 +552,29 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 	return source;
 }
 
-bool mrSettingsFileHasAutosavedWorkspace() {
+std::size_t mrSettingsFileAutosavedWorkspaceCount() {
 	std::string content;
 	std::string errorText;
 	std::string path = configuredSettingsMacroFilePath();
+	std::size_t parsedEntries = 0;
 
 	if (path.find(".mrmac") == std::string::npos) path += ".mrmac";
 	if (!readTextFile(path, content, errorText)) {
 		mrLogMessage("Workspace autosave probe failed path=" + path + " error=" + errorText + ".");
-		return false;
+		return 0;
 	}
 	{
 		std::istringstream input(content);
 		std::string line;
-		int parsedEntries = 0;
 
 		while (std::getline(input, line)) {
 			WorkspaceEntry entry;
 
-			if (parseWorkspaceEntry(line, entry)) {
-				++parsedEntries;
-				mrLogMessage("Workspace autosave probe found entry url=" + entry.url + ".");
-				return true;
-			}
+			if (parseWorkspaceEntry(line, entry)) ++parsedEntries;
 		}
-		mrLogMessage("Workspace autosave probe found no entries path=" + path + " parsed=" + std::to_string(parsedEntries) + ".");
 	}
-	return false;
+	mrLogMessage("Workspace autosave probe path=" + path + " entries=" + std::to_string(parsedEntries) + ".");
+	return parsedEntries;
 }
 
 bool mrClearAutosavedWorkspace() {

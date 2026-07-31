@@ -1,6 +1,7 @@
 #ifndef MRWINDOWCOMMANDS_HPP
 #define MRWINDOWCOMMANDS_HPP
 
+#include <cstddef>
 #include <set>
 #include <vector>
 #include <string>
@@ -86,7 +87,7 @@ void mrMarkWorkspaceAutosaveDirty(const char *source, const MREditWindow *window
 void mrFlushWorkspaceAutosaveIfDue();
 void mrFlushWorkspaceAutosaveNow();
 [[nodiscard]] bool mrWorkspaceRestoreInProgress();
-[[nodiscard]] bool mrSettingsFileHasAutosavedWorkspace();
+[[nodiscard]] std::size_t mrSettingsFileAutosavedWorkspaceCount();
 [[nodiscard]] bool mrClearAutosavedWorkspace();
 [[nodiscard]] bool mrLoadWorkspaceWithDialog();
 void mrLoadWorkspace(const std::string &filename);

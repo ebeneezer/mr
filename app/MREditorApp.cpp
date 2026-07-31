@@ -1071,9 +1071,10 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	}
 	logStartupPhase("menu_state");
 
-	if (!autoloadWorkspace && mrSettingsFileHasAutosavedWorkspace()) {
+	const std::size_t autosavedWorkspaceFileCount = !autoloadWorkspace ? mrSettingsFileAutosavedWorkspaceCount() : 0;
+	if (autosavedWorkspaceFileCount != 0) {
 		setRuntimePreserveAutosavedWorkspace(true);
-		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Restore workspace", "Restore autosaved workspace?", configuredSettingsMacroFilePath().c_str(), "Discard workspace");
+		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Restore workspace", "Restore autosaved workspace?", autosavedWorkspaceFileCount, configuredSettingsMacroFilePath().c_str(), "Discard workspace");
 
 		if (choice == mr::dialogs::UnsavedChangesChoice::Save) {
 			setRuntimePreserveAutosavedWorkspace(false);

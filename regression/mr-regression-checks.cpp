@@ -12015,8 +12015,10 @@ bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 		failureReason = "Automatic workspace restore must precede command-line file focus and loading.";
 		return false;
 	}
-	if (constructorBody.find("if (!autoloadWorkspace && mrSettingsFileHasAutosavedWorkspace())") == std::string::npos) {
-		failureReason = "Manual workspace restore prompt must remain outside automatic command-line reconciliation.";
+	if (!containsAllSubstrings(constructorBody, {"const std::size_t autosavedWorkspaceFileCount = !autoloadWorkspace ? mrSettingsFileAutosavedWorkspaceCount() : 0", "if (autosavedWorkspaceFileCount != 0)",
+	                                             "showWorkspaceLoadDialog(\"Restore workspace\", \"Restore autosaved workspace?\", autosavedWorkspaceFileCount"},
+	                           missingNeedle)) {
+		failureReason = "Manual workspace restore prompt count wiring changed: missing " + missingNeedle + ".";
 		return false;
 	}
 

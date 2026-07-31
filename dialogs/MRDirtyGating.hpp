@@ -1,6 +1,7 @@
 #ifndef MRDIALOGDIRTYGATING_HPP
 #define MRDIALOGDIRTYGATING_HPP
 
+#include <cstddef>
 #include <functional>
 #include <utility>
 #include <vector>
@@ -20,7 +21,7 @@ template <typename Draft, typename EqualFn> [[nodiscard]] bool isDialogDraftDirt
 
 [[nodiscard]] UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline, const char *detail = nullptr);
 [[nodiscard]] UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline, const char *detail, const char *discardLabel);
-[[nodiscard]] UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const char *headline, const char *detail, const char *discardLabel);
+[[nodiscard]] UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const char *headline, std::size_t fileCount, const char *detail, const char *discardLabel);
 
 [[nodiscard]] UnsavedChangesChoice runDialogDirtyGating(const char *headline, const char *primaryLabel = "Save", const char *detail = nullptr);
 

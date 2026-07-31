@@ -178,17 +178,19 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	}
 }
 
-UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const char *headline, const char *detail, const char *discardLabel) {
+UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const char *headline, std::size_t fileCount, const char *detail, const char *discardLabel) {
 	const bool hasDetail = detail != nullptr && *detail != '\0';
 	std::string label = primaryLabel != nullptr && *primaryLabel != '\0' ? primaryLabel : "Load workspace";
 	std::string discardLabelText = discardLabel != nullptr && *discardLabel != '\0' ? discardLabel : "Discard workspace";
 	std::string primaryButtonLabel = addMnemonic(label, 'l');
 	std::string discardButtonLabel = addMnemonic(discardLabelText, 'd');
+	const std::string fileCountText = std::to_string(fileCount) + " files";
 	const int gap = 2;
 	const int desktopWidth = TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : 80;
 	const int maxTextWidth = std::max(32, desktopWidth - 12);
 	std::vector<std::string> textLines = wrapText(headline != nullptr ? headline : "Restore autosaved workspace?", static_cast<std::size_t>(maxTextWidth));
 
+	textLines.push_back(fileCountText);
 	if (hasDetail) {
 		std::vector<std::string> detailLines = wrapText(detail, static_cast<std::size_t>(maxTextWidth));
 		textLines.insert(textLines.end(), detailLines.begin(), detailLines.end());
