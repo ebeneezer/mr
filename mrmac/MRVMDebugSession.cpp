@@ -110,7 +110,7 @@ static void completeDebugSession(std::map<MRMacroExecutionSessionId, DebugSessio
 
 	eraseDebugSessionControls(session.sessionId);
 	g_debugSessionVmHandles.erase(sessionHandle);
-	if (eraseDebuggerRuntime && !cleanup.macroKey.empty()) static_cast<void>(mrvmEraseDebugRuntimeForMacroFile(cleanup.macroKey, nullptr));
+	if (eraseDebuggerRuntime && !cleanup.macroKey.empty()) static_cast<void>(mrvmEraseDebugRuntimeForMacro(cleanup.macroKey, nullptr));
 	mrvmFinalizeDebugSession(session, result, cleanup);
 }
 
@@ -453,6 +453,7 @@ void VirtualMachine::appendDebugVariables(MRMacroDebugRunResult &result) const {
 
 bool VirtualMachine::mutateDebugValue(const MRMacroDebugValueMutation &mutation, std::vector<MRMacroDebugVariableSnapshot> &updatedVariables, std::string &errorMessage) {
 	Value rootValue;
+	Value storedValue;
 	Value *root = nullptr;
 	std::map<std::string, Value>::iterator local;
 	MRVMRuntimeGlobalEntry global;
@@ -489,20 +490,36 @@ bool VirtualMachine::mutateDebugValue(const MRMacroDebugValueMutation &mutation,
 		errorMessage = "Variable no longer matches the debugger scope.";
 		return false;
 	}
-	if (!applyDebugMutationAtValue(*root, mutation, 0, *mHashStore, g_runtimeEnv.runtimeKv.globalStore(), errorMessage)) return false;
+	if (actualScope == mrdVariableClosure || actualScope == mrdVariableSession) {
+		MRVMHashStore stagedStore;
+		Value stagedValue;
+
+		try {
+			stagedValue = mrvmHashCopyValueForStore(*root, *mHashStore, g_runtimeEnv.runtimeKv.globalStore(), stagedStore, false);
+		} catch (const std::exception &error) {
+			errorMessage = error.what();
+			return false;
+		}
+		if (!applyDebugMutationAtValue(stagedValue, mutation, 0, stagedStore, stagedStore, errorMessage)) return false;
+		if (actualScope == mrdVariableClosure && !mClosureId.empty()) {
+			if (!mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, mutation.target.name, stagedValue, stagedStore, &storedValue)) {
+				errorMessage = "Closure variable could not be stored.";
+				return false;
+			}
+		} else if (actualScope == mrdVariableSession && mExecutionSessionId != 0) {
+			if (!mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, mExecutionSessionId, mutation.target.name, stagedValue, stagedStore, &storedValue)) {
+				errorMessage = "Session variable could not be stored.";
+				return false;
+			}
+		} else {
+			errorMessage = "Debugger variable has no persistent execution context.";
+			return false;
+		}
+		*root = std::move(storedValue);
+	} else if (!applyDebugMutationAtValue(*root, mutation, 0, *mHashStore, g_runtimeEnv.runtimeKv.globalStore(), errorMessage))
+		return false;
 	if (actualScope == mrdVariableAppGlobal)
 		mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, mutation.target.name, global.type, *root);
-	else if (actualScope == mrdVariableClosure && !mClosureId.empty()) {
-		if (!mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, mClosureId, mutation.target.name, *root, *mHashStore)) {
-			errorMessage = "Closure variable could not be stored.";
-			return false;
-		}
-	} else if (actualScope == mrdVariableSession && mExecutionSessionId != 0) {
-		if (!mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, mExecutionSessionId, mutation.target.name, *root, *mHashStore)) {
-			errorMessage = "Session variable could not be stored.";
-			return false;
-		}
-	}
 	{
 		MRMacroDebugRunResult snapshot;
 
@@ -842,6 +859,43 @@ bool mrvmDebugSessionWorkerTaskContext(MRMacroExecutionSessionId sessionId, MRMa
 	route = sessionHandle->second.route;
 	if (sessionHandle->second.session.owner.hasBuffer) bufferId = sessionHandle->second.session.owner.bufferId;
 	if (sessionHandle->second.stagedSession != nullptr) baseVersion = sessionHandle->second.stagedSession->transaction.baseVersion();
+	return true;
+}
+
+bool mrvmAssignDebugSessionWorkerTask(MRMacroExecutionSessionId sessionId, std::uint64_t taskId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	std::map<MRMacroExecutionSessionId, DebugSessionVmHandle>::iterator sessionHandle = g_debugSessionVmHandles.find(sessionId);
+
+	if (sessionId == 0 || taskId == 0 || sessionHandle == g_debugSessionVmHandles.end()) return false;
+	if (sessionHandle->second.session.taskId == taskId) return true;
+	if (sessionHandle->second.session.taskId != 0) return false;
+	sessionHandle->second.session.taskId = taskId;
+	trackMacroExecutionSession(sessionHandle->second.session);
+	notifyMacroExecutionSessionChanged();
+	return true;
+}
+
+bool mrvmAcceptDebugSessionWorkerTaskResult(MRMacroExecutionSessionId sessionId, std::uint64_t taskId) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	MRMacroExecutionSession activeSession;
+	std::map<MRMacroExecutionSessionId, DebugSessionVmHandle>::iterator sessionHandle;
+
+	if (sessionId == 0 || taskId == 0 || !mrvmTakeActiveMacroExecutionSessionForTask(taskId, activeSession)) return false;
+	if (activeSession.sessionId != sessionId) {
+		mrvmStoreActiveMacroExecutionSession(activeSession);
+		return false;
+	}
+	sessionHandle = g_debugSessionVmHandles.find(sessionId);
+	if (sessionHandle == g_debugSessionVmHandles.end()) {
+		notifyMacroExecutionSessionChanged();
+		return true;
+	}
+	if (sessionHandle->second.session.taskId != taskId) {
+		mrvmStoreActiveMacroExecutionSession(activeSession);
+		return false;
+	}
+	sessionHandle->second.session.taskId = 0;
+	notifyMacroExecutionSessionChanged();
 	return true;
 }
 

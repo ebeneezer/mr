@@ -1302,7 +1302,8 @@ void mrLoadWorkspace(const std::string &filename) {
 					discardedWorkspaceEntries = true;
 					continue;
 				}
-				if (mrMacroDebuggerForSourcePath(entry.url, bentoBox) != nullptr) {
+				const std::string debuggerMacroName = !configuration.macroName.empty() ? configuration.macroName : configuration.macroKey;
+				if (mrMacroDebuggerForSourceIdentity(entry.url, debuggerMacroName, bentoBox) != nullptr) {
 					mrLogMessage("Workspace bootstrap dropped duplicate debugger owner url=" + entry.url + ".");
 				} else {
 					if (configuration.sourcePath.empty()) configuration.sourcePath = entry.url;

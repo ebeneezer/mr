@@ -129,10 +129,13 @@ state and not execution-session ownership state.
 - `MACRODEBUGGER/sessions/byId/<debugSessionId>/snapshots` for generated
   debugger snapshots.
 
-Source maps are generated only when a macro is started for debugging. Normal
-macro load, lazy resident bytecode refresh, assigned-key dispatch and runtime
-menu lookup must not create source maps. Source maps that belong to loaded macro
-files remain under `MACROCATALOG`.
+Source maps are generated only when a macro is prepared for debugging. A debug
+start and cold workspace debugger restore are preparation paths; restore may
+generate the map transiently to validate persisted breakpoint definitions
+without creating a live session. Normal macro load, lazy resident bytecode
+refresh, assigned-key dispatch and runtime menu lookup must not create source
+maps. Source maps that belong to loaded macro files remain under
+`MACROCATALOG`.
 Debugger breakpoints must store normalized source-map binding data under
 `MACRODEBUGGER`, including enabled state, source line, source span, bytecode
 offset and debuggable kind. This live binding data must not be stored under
@@ -145,8 +148,8 @@ source maps are never persistence truth.
 Watch definitions contain the source expression and enabled state only. Watch
 values and errors are derived from the paused live VM and must not become
 persisted debugger truth. The cold expression and enabled state may be stored
-with the debugger Bento's `WORKSPACE` configuration and must be written back to
-`MACRODEBUGGER` on a later debug start. A watch expression uses the canonical
+with the debugger Bento's `WORKSPACE` configuration and must be validated and
+written back to `MACRODEBUGGER` during cold restore. A watch expression uses the canonical
 compiler frontend in a restricted pure-expression mode; it must not introduce
 a second parser, a second bytecode format, procedures, assignments, UI
 operations or file/process side effects.

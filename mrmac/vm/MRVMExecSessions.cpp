@@ -12,9 +12,11 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdint>
+#include <exception>
 #include <limits>
 #include <mutex>
 #include <string_view>
+#include <utility>
 
 MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
 std::recursive_mutex &mrvmExecutionMutex() noexcept;
@@ -113,23 +115,9 @@ std::string hashReadString(MRVMRuntimeKv &runtimeKv, const Value &hash, const st
 }
 
 Value copyValueToGlobalStore(MRVMRuntimeKv &runtimeKv, const Value &value, MRVMHashStore &localStore) {
-	Value stored = value;
 	MRVMHashStore &globalStore = runtimeKv.globalStore();
 
-	if (value.type == TYPE_HASH) {
-		MRVMHashStore &sourceStore = mrvmHashRuntimeStoreForValue(localStore, globalStore, value);
-		stored.hashHandle = globalStore.cloneHashFrom(sourceStore, value.hashHandle, true);
-		stored.globalStorage = true;
-		return stored;
-	}
-	if (mrvmValueIsArrayType(value.type)) {
-		for (Value &arrayValue : stored.arrayValues)
-			arrayValue = copyValueToGlobalStore(runtimeKv, arrayValue, localStore);
-		stored.globalStorage = true;
-		return stored;
-	}
-	stored.globalStorage = true;
-	return stored;
+	return mrvmHashCopyValueForStore(value, localStore, globalStore, globalStore, true);
 }
 
 bool findClosureState(MRVMRuntimeKv &runtimeKv, const std::string &closureId, Value &state) {
@@ -408,15 +396,21 @@ bool mrvmExecSessionsReadClosureVariable(MRVMRuntimeKv &runtimeKv, const std::st
 	return true;
 }
 
-bool mrvmExecSessionsWriteClosureVariable(MRVMRuntimeKv &runtimeKv, const std::string &closureId, const std::string &name, const Value &value, MRVMHashStore &localStore) {
+bool mrvmExecSessionsWriteClosureVariable(MRVMRuntimeKv &runtimeKv, const std::string &closureId, const std::string &name, const Value &value, MRVMHashStore &localStore, Value *storedValue) {
 	Value state;
 	Value stored;
 	MRVMHashStore &globalStore = runtimeKv.globalStore();
 
 	if (closureId.empty()) return false;
 	if (!findClosureState(runtimeKv, closureId, state)) return false;
-	stored = copyValueToGlobalStore(runtimeKv, value, localStore);
-	mrvmHashWriteValue(globalStore, globalStore, state, name, stored);
+	if (storedValue != nullptr && !mrvmHashContainsValue(globalStore, globalStore, state, name)) return false;
+	try {
+		stored = copyValueToGlobalStore(runtimeKv, value, localStore);
+		mrvmHashWriteValue(globalStore, globalStore, state, name, stored);
+	} catch (const std::exception &) {
+		return false;
+	}
+	if (storedValue != nullptr) *storedValue = std::move(stored);
 	return true;
 }
 
@@ -430,15 +424,23 @@ bool mrvmExecSessionsReadSessionVariable(MRVMRuntimeKv &runtimeKv, MRMacroExecut
 	return true;
 }
 
-bool mrvmExecSessionsWriteSessionVariable(MRVMRuntimeKv &runtimeKv, MRMacroExecutionSessionId sessionId, const std::string &name, const Value &value, MRVMHashStore &localStore) {
+bool mrvmExecSessionsWriteSessionVariable(MRVMRuntimeKv &runtimeKv, MRMacroExecutionSessionId sessionId, const std::string &name, const Value &value, MRVMHashStore &localStore, Value *storedValue) {
 	Value variables;
 	Value stored;
 	MRVMHashStore &globalStore = runtimeKv.globalStore();
 
 	if (sessionId == 0) return false;
-	variables = ensureSessionVariables(runtimeKv, sessionId);
-	stored = copyValueToGlobalStore(runtimeKv, value, localStore);
-	mrvmHashWriteValue(globalStore, globalStore, variables, name, stored);
+	if (storedValue != nullptr) {
+		if (!findSessionVariables(runtimeKv, sessionId, variables) || !mrvmHashContainsValue(globalStore, globalStore, variables, name)) return false;
+	} else
+		variables = ensureSessionVariables(runtimeKv, sessionId);
+	try {
+		stored = copyValueToGlobalStore(runtimeKv, value, localStore);
+		mrvmHashWriteValue(globalStore, globalStore, variables, name, stored);
+	} catch (const std::exception &) {
+		return false;
+	}
+	if (storedValue != nullptr) *storedValue = std::move(stored);
 	return true;
 }
 

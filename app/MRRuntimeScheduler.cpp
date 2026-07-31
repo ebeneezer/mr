@@ -402,8 +402,9 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 		bool accepted = false;
 		if (dueConsumer.config.macroSource.empty()) {
 			std::string debugSourcePath;
+			std::string debugMacroKey;
 
-			if (mrvmMacroSpecHasEnabledDebugBreakpoint(dueConsumer.config.macroSpec, &debugSourcePath) && mrMacroDebuggerObservesSourcePath(debugSourcePath)) {
+			if (mrvmMacroSpecHasEnabledDebugBreakpoint(dueConsumer.config.macroSpec, &debugSourcePath, &debugMacroKey) && mrMacroDebuggerObservesSourceIdentity(debugSourcePath, debugMacroKey)) {
 				const MRMacroDebugRunResult debugResult = mrvmStartDebugMacroBySpec(dueConsumer.config.macroSpec, dueConsumer.config.owner, &session, &errorText);
 
 				accepted = !debugResult.hadError && !debugResult.cancelled;

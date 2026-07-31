@@ -1279,7 +1279,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			if (targetWindow != nullptr) targetWindow->noteBackgroundMacroCompleted(statusSummary);
 			releaseMacroTask(targetWindow, result, "finished");
 			mrLogMessage(statusSummary.c_str());
-			publishMacroExecutionResultForTask(result.task.id, MRMacroExecutionState::Completed, statusSummary);
+			if (macro->debugSessionId == 0) publishMacroExecutionResultForTask(result.task.id, MRMacroExecutionState::Completed, statusSummary);
 			appendMacroLogLines(macro->logLines);
 			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 			return;

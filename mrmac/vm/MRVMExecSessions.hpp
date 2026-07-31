@@ -32,10 +32,12 @@ void mrvmExecSessionsTrimHashByNumericKeys(MRVMRuntimeKv &runtimeKv, const Virtu
 VirtualMachine::Value mrvmExecSessionsEnsureClosureState(MRVMRuntimeKv &runtimeKv, const std::string &closureId, int tickMs);
 bool mrvmExecSessionsEraseClosureState(MRVMRuntimeKv &runtimeKv, const std::string &closureId);
 bool mrvmExecSessionsReadClosureVariable(MRVMRuntimeKv &runtimeKv, const std::string &closureId, const std::string &name, VirtualMachine::Value &value);
-bool mrvmExecSessionsWriteClosureVariable(MRVMRuntimeKv &runtimeKv, const std::string &closureId, const std::string &name, const VirtualMachine::Value &value, MRVMHashStore &localStore);
+bool mrvmExecSessionsWriteClosureVariable(MRVMRuntimeKv &runtimeKv, const std::string &closureId, const std::string &name, const VirtualMachine::Value &value, MRVMHashStore &localStore,
+	                                      VirtualMachine::Value *storedValue = nullptr);
 
 bool mrvmExecSessionsReadSessionVariable(MRVMRuntimeKv &runtimeKv, MRMacroExecutionSessionId sessionId, const std::string &name, VirtualMachine::Value &value);
-bool mrvmExecSessionsWriteSessionVariable(MRVMRuntimeKv &runtimeKv, MRMacroExecutionSessionId sessionId, const std::string &name, const VirtualMachine::Value &value, MRVMHashStore &localStore);
+bool mrvmExecSessionsWriteSessionVariable(MRVMRuntimeKv &runtimeKv, MRMacroExecutionSessionId sessionId, const std::string &name, const VirtualMachine::Value &value, MRVMHashStore &localStore,
+	                                      VirtualMachine::Value *storedValue = nullptr);
 bool mrvmExecSessionsEraseSessionRuntimeState(MRVMRuntimeKv &runtimeKv, MRMacroExecutionSessionId sessionId);
 
 void mrvmExecSessionsStoreRuntimeScheduledConsumer(MRVMRuntimeKv &runtimeKv, const MRRuntimeScheduledConsumer &consumer);

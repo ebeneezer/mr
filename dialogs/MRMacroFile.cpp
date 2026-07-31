@@ -1101,7 +1101,7 @@ bool runMacroLibraryDialog() {
 		MRMacroExecutionSession session;
 		MRMacroDebugRunResult debugResult;
 		std::string errorText;
-		MRBentoBox *existingDebugger = mrMacroDebuggerForSourcePath(debugPath);
+		MRBentoBox *existingDebugger = mrMacroDebuggerForSourceIdentity(debugPath, debugMacroName);
 
 		if (existingDebugger != nullptr) {
 			static_cast<void>(mrActivateEditWindow(existingDebugger));

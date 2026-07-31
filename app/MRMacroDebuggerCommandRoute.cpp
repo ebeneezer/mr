@@ -7,6 +7,7 @@
 #include "MRCommands.hpp"
 #include "commands/MRWindowCommands.hpp"
 
+#include "../mrmac/MRVM.hpp"
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
@@ -69,22 +70,22 @@ bool mrHandleMacroDebuggerCommand(MRBentoBox *bentoBox, TEvent &event) {
 	return true;
 }
 
-bool mrMacroDebuggerObservesSourcePath(const std::string &sourcePath) {
-	if (sourcePath.empty()) return false;
+bool mrMacroDebuggerObservesSourceIdentity(const std::string &sourcePath, const std::string &macroName) {
+	if (sourcePath.empty() || macroName.empty()) return false;
 	for (MREditWindow *window : allEditWindowsInZOrder()) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
 
-		if (bentoBox != nullptr && bentoBox->macroDebuggerObservesSourcePath(sourcePath)) return true;
+		if (bentoBox != nullptr && bentoBox->macroDebuggerObservesSourceIdentity(sourcePath, macroName)) return true;
 	}
 	return false;
 }
 
-MRBentoBox *mrMacroDebuggerForSourcePath(const std::string &sourcePath, const MRBentoBox *excluded) {
-	if (sourcePath.empty()) return nullptr;
+MRBentoBox *mrMacroDebuggerForSourceIdentity(const std::string &sourcePath, const std::string &macroName, const MRBentoBox *excluded) {
+	if (sourcePath.empty() || macroName.empty()) return nullptr;
 	for (MREditWindow *window : allEditWindowsInZOrder()) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
 
-		if (bentoBox != nullptr && bentoBox != excluded && bentoBox->macroDebuggerTargetsSourcePath(sourcePath)) return bentoBox;
+		if (bentoBox != nullptr && bentoBox != excluded && bentoBox->macroDebuggerTargetsSourceIdentity(sourcePath, macroName)) return bentoBox;
 	}
 	return nullptr;
 }
@@ -99,6 +100,7 @@ bool mrAttachScheduledMacroDebuggerSession(MRMacroExecutionSessionId sessionId, 
 }
 
 bool mrApplyMacroDebuggerWorkerResult(MRMacroExecutionSessionId sessionId, std::uint64_t taskId, const MRMacroDebugRunResult &debugResult, const std::string &errorMessage) {
+	if (!mrvmAcceptDebugSessionWorkerTaskResult(sessionId, taskId)) return false;
 	for (MREditWindow *window : allEditWindowsInZOrder()) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
 

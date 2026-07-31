@@ -193,111 +193,6 @@ MRMacroDebugWatchSnapshot VirtualMachine::DebugExecution::evaluateWatchExpressio
 	return snapshot;
 }
 
-bool VirtualMachine::writeDebugScalarVariable(const MRMacroDebugVariableSnapshot &variable, const std::string &valueText, std::vector<MRMacroDebugVariableSnapshot> &updatedVariables, std::string &errorMessage) {
-	return DebugExecution(*this).writeScalarVariable(variable, valueText, updatedVariables, errorMessage);
-}
-
-bool VirtualMachine::DebugExecution::writeScalarVariable(const MRMacroDebugVariableSnapshot &variable, const std::string &valueText, std::vector<MRMacroDebugVariableSnapshot> &updatedVariables, std::string &errorMessage) {
-	Value replacement;
-	Value previous;
-	std::map<std::string, Value>::iterator local;
-	MRMacroDebugVariableScope actualScope;
-	char *end = nullptr;
-
-	updatedVariables.clear();
-	errorMessage.clear();
-	if (!vm.debugState.paused) {
-		errorMessage = "Debug session is not paused.";
-		return false;
-	}
-	switch (variable.type) {
-		case TYPE_INT: {
-			errno = 0;
-			const long parsed = std::strtol(valueText.c_str(), &end, 10);
-			if (end == valueText.c_str() || *end != '\0' || errno == ERANGE || parsed < std::numeric_limits<int>::min() || parsed > std::numeric_limits<int>::max()) {
-				errorMessage = "Expected an integer value.";
-				return false;
-			}
-			replacement = mrvmMakeInt(static_cast<int>(parsed));
-			break;
-		}
-		case TYPE_REAL: {
-			errno = 0;
-			const double parsed = std::strtod(valueText.c_str(), &end);
-			if (end == valueText.c_str() || *end != '\0' || errno == ERANGE || !std::isfinite(parsed)) {
-				errorMessage = "Expected a finite real value.";
-				return false;
-			}
-			replacement = mrvmMakeReal(parsed);
-			break;
-		}
-		case TYPE_STR:
-			try {
-				mrvmEnforceStringLength(valueText);
-			} catch (const std::exception &error) {
-				errorMessage = error.what();
-				return false;
-			}
-			replacement = mrvmMakeString(valueText);
-			break;
-		case TYPE_CHAR:
-			if (valueText.size() > 1) {
-				errorMessage = "Expected one character.";
-				return false;
-			}
-			replacement = mrvmMakeChar(valueText.empty() ? 0 : static_cast<unsigned char>(valueText[0]));
-			break;
-		default:
-			errorMessage = "Only scalar variables can be changed.";
-			return false;
-	}
-
-	if (variable.scope == mrdVariableAppGlobal) {
-		GlobalEntry global;
-
-		if (!readRuntimeGlobalValueDirect(variable.name, global) || global.type != variable.type) {
-			errorMessage = "App global no longer matches the debugger projection.";
-			return false;
-		}
-		mrvmRuntimeGlobalWrite(g_runtimeEnv.runtimeKv, variable.name, variable.type, replacement);
-	} else {
-		local = vm.variables.find(variable.name);
-		if (local == vm.variables.end()) {
-			errorMessage = "Variable no longer exists in the paused debug session.";
-			return false;
-		}
-		actualScope = macroDebugVariableScope(local->first, vm.mClosureVariableNames, vm.mSessionVariableNames);
-		if (actualScope != variable.scope || local->second.type != variable.type) {
-			errorMessage = "Variable no longer matches the debugger projection.";
-			return false;
-		}
-		previous = local->second;
-		replacement.globalStorage = previous.globalStorage;
-		local->second = replacement;
-		if (actualScope == mrdVariableClosure && !vm.mClosureId.empty()) {
-			if (!mrvmExecSessionsWriteClosureVariable(g_runtimeEnv.runtimeKv, vm.mClosureId, variable.name, replacement, *vm.mHashStore)) {
-				local->second = previous;
-				errorMessage = "Closure variable could not be stored.";
-				return false;
-			}
-		} else if (actualScope == mrdVariableSession && vm.mExecutionSessionId != 0) {
-			if (!mrvmExecSessionsWriteSessionVariable(g_runtimeEnv.runtimeKv, vm.mExecutionSessionId, variable.name, replacement, *vm.mHashStore)) {
-				local->second = previous;
-				errorMessage = "Session variable could not be stored.";
-				return false;
-			}
-		}
-	}
-	{
-		MRMacroDebugRunResult snapshot;
-
-		appendMacroDebugVariableSnapshots(snapshot, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
-		appendMacroDebugAppGlobalSnapshots(snapshot, g_runtimeEnv.runtimeKv.globalStore());
-		updatedVariables = std::move(snapshot.variables);
-	}
-	return true;
-}
-
 MRMacroDebugRunResult VirtualMachine::executeDebugAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, const std::vector<std::size_t> &breakpointOffsets, bool firstRun, const std::string &macroKey, const std::string &sourcePath) {
 	return DebugExecution(*this).start(bytecode, length, entryOffset, parameterString, macroName, breakpointOffsets, firstRun, macroKey, sourcePath);
 }
@@ -362,8 +257,7 @@ MRMacroDebugRunResult VirtualMachine::DebugExecution::start(const unsigned char 
 	result.cancelled = vm.cancelledExecution;
 	result.hadError = hadError;
 	result.paused = vm.debugState.paused;
-	appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
-	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+	vm.appendDebugVariables(result);
 	appendCallStack(result);
 
 	vm.debugState.runActive = false;
@@ -396,8 +290,7 @@ MRMacroDebugRunResult VirtualMachine::DebugExecution::continueExecution(const st
 		result.macroKey = vm.debugState.macroKey;
 		result.sourcePath = vm.debugState.sourcePath;
 		result.paused = true;
-		appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
-		appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+		vm.appendDebugVariables(result);
 		appendCallStack(result);
 		return result;
 	}
@@ -465,8 +358,7 @@ MRMacroDebugRunResult VirtualMachine::DebugExecution::continueExecution(const st
 	result.cancelled = vm.cancelledExecution;
 	result.hadError = hadError;
 	result.paused = vm.debugState.paused;
-	appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
-	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+	vm.appendDebugVariables(result);
 	appendCallStack(result);
 
 	vm.debugState.runActive = false;
@@ -530,8 +422,7 @@ MRMacroDebugRunResult VirtualMachine::DebugExecution::step(const std::vector<std
 		result.cancelled = false;
 		result.hadError = false;
 		result.paused = true;
-		appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
-		appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+		vm.appendDebugVariables(result);
 		appendCallStack(result);
 		vm.debugState.runActive = false;
 		vm.debugState.stepMode = mrdStepNone;
@@ -571,8 +462,7 @@ MRMacroDebugRunResult VirtualMachine::DebugExecution::step(const std::vector<std
 	result.cancelled = vm.cancelledExecution;
 	result.hadError = hadError;
 	result.paused = vm.debugState.paused;
-	appendMacroDebugVariableSnapshots(result, vm.variables, vm.mClosureVariableNames, vm.mSessionVariableNames, *vm.mHashStore, g_runtimeEnv.runtimeKv.globalStore());
-	appendMacroDebugAppGlobalSnapshots(result, g_runtimeEnv.runtimeKv.globalStore());
+	vm.appendDebugVariables(result);
 	appendCallStack(result);
 
 	vm.debugState.runActive = false;
@@ -604,9 +494,13 @@ static MRMacroDebugRunResult startDebugMacroByKey(const std::string &macroKey, c
 	LoadedMacroFile file;
 	MRMacroExecutionSession debugSession;
 	MRMacroSourceMapEntry temporaryStopSpan;
+	MRMacroStagedExecutionInput stagedInput;
+	MacroCommitConflictSnapshot conflictSnapshot;
 	std::vector<std::size_t> breakpointOffsets;
 	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
+	MRMacroExecutionRoute route = MRMacroExecutionRoute::Debug;
 	bool firstRun = false;
+	bool automaticContinueFromEntry = false;
 	std::string preparationError;
 
 	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
@@ -630,7 +524,30 @@ static MRMacroDebugRunResult startDebugMacroByKey(const std::string &macroKey, c
 		std::sort(breakpointOffsets.begin(), breakpointOffsets.end());
 		breakpointOffsets.erase(std::unique(breakpointOffsets.begin(), breakpointOffsets.end()), breakpointOffsets.end());
 	}
-	result = mrvmStartDebugSessionAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, macroRef.displayName, owner, breakpointOffsets, &debugSession, firstRun, normalizedMacroKey, file.resolvedPath, parameterString);
+	if (mrvmCanRunInBackground(file.profile))
+		route = MRMacroExecutionRoute::Background;
+	else if (mrvmCanRunStagedInBackground(file.profile))
+		route = MRMacroExecutionRoute::StagedBackground;
+	if (route == MRMacroExecutionRoute::StagedBackground && !owner.hasBuffer) route = MRMacroExecutionRoute::Debug;
+	if (route == MRMacroExecutionRoute::StagedBackground) {
+		MREditWindow *targetWindow = owner.hasBuffer ? findEditWindowByBufferId(owner.bufferId) : nullptr;
+
+		if (!captureMacroStagedExecutionInput(targetWindow, stagedInput, conflictSnapshot)) {
+			result.stopReason = mrdStopError;
+			result.hadError = true;
+			result.logLines.push_back("VM Error: staged debug session has no live editor owner.");
+			if (errorMessage != nullptr) *errorMessage = "Staged debug session requires a live editor owner.";
+			return result;
+		}
+	}
+	if (!stopAtEntry && std::find(breakpointOffsets.begin(), breakpointOffsets.end(), macroRef.entryOffset) == breakpointOffsets.end()) {
+		breakpointOffsets.push_back(macroRef.entryOffset);
+		std::sort(breakpointOffsets.begin(), breakpointOffsets.end());
+		automaticContinueFromEntry = true;
+	}
+	result = mrvmStartDebugSessionAt(file.bytecode.data(), file.bytecode.size(), macroRef.entryOffset, macroRef.displayName, owner, breakpointOffsets, &debugSession, firstRun, normalizedMacroKey, file.resolvedPath, parameterString, route,
+	                                route == MRMacroExecutionRoute::StagedBackground ? &stagedInput : nullptr, route == MRMacroExecutionRoute::StagedBackground ? &conflictSnapshot : nullptr, automaticContinueFromEntry,
+	                                temporaryStopLine > 0, temporaryStopSpan.bytecodeOffset);
 	if (sessionOut != nullptr) *sessionOut = debugSession;
 	if (result.paused) {
 		MRVMDebugSessionCleanup cleanup;
@@ -671,7 +588,7 @@ MRMacroDebugRunResult mrvmStartDebugMacroBySpec(const std::string &spec, const M
 	return startDebugMacroByKey(macroKey, parameterString, owner, sessionOut, errorMessage, false, 0);
 }
 
-bool mrvmMacroSpecHasEnabledDebugBreakpoint(const std::string &spec, std::string *sourcePath) {
+bool mrvmMacroSpecHasEnabledDebugBreakpoint(const std::string &spec, std::string *sourcePath, std::string *macroKeyOut) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	LoadedMacroFile file;
 	std::vector<MRMacroDebuggerBreakpoint> breakpoints;
@@ -680,12 +597,28 @@ bool mrvmMacroSpecHasEnabledDebugBreakpoint(const std::string &spec, std::string
 	std::string resolutionError;
 
 	if (sourcePath != nullptr) sourcePath->clear();
+	if (macroKeyOut != nullptr) macroKeyOut->clear();
 	if (!resolveDebugMacroSpec(spec, macroKey, parameterString, file, resolutionError)) return false;
 	if (sourcePath != nullptr) *sourcePath = file.resolvedPath;
+	if (macroKeyOut != nullptr) *macroKeyOut = macroKey;
 	if (!mrvmRuntimeDebuggerLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, macroKey, breakpoints)) return false;
 	for (const MRMacroDebuggerBreakpoint &breakpoint : breakpoints)
 		if (breakpoint.enabled) return true;
 	return false;
+}
+
+bool mrvmPrepareDebugMacroSourceMap(const std::string &macroKey, const std::string &sourcePath, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	MacroRef macroRef;
+	LoadedMacroFile file;
+	std::string localError;
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (!prepareDebugMacroSourceMapByKey(macroKey, sourcePath, macroRef, file, localError)) {
+		if (errorMessage != nullptr) *errorMessage = localError;
+		return false;
+	}
+	return true;
 }
 
 bool mrvmToggleDebugLineBreakpoint(const std::string &macroKey, int line, bool *enabledOut, std::string *errorMessage) {
@@ -857,6 +790,22 @@ bool mrvmEraseDebugRuntimeForMacroFile(const std::string &macroKey, std::string 
 	return true;
 }
 
+bool mrvmEraseDebugRuntimeForMacro(const std::string &macroKey, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (normalizedMacroKey.empty()) {
+		if (errorMessage != nullptr) *errorMessage = "Debug macro name is empty.";
+		return false;
+	}
+	if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(g_runtimeEnv.runtimeKv, normalizedMacroKey) || !mrvmRuntimeDebuggerEraseWatchesForMacro(g_runtimeEnv.runtimeKv, normalizedMacroKey)) {
+		if (errorMessage != nullptr) *errorMessage = "Debug runtime state could not be cleared.";
+		return false;
+	}
+	return true;
+}
+
 bool mrvmWriteDebugWatch(const std::string &macroKey, const std::string &expression, bool enabled, std::string *errorMessage) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
@@ -870,11 +819,30 @@ bool mrvmWriteDebugWatch(const std::string &macroKey, const std::string &express
 		if (errorMessage != nullptr) *errorMessage = "Watch expression is empty.";
 		return false;
 	}
+	if (!validate_macro_watch_expression(expression.c_str())) {
+		const char *compileError = get_last_compile_error();
+
+		if (errorMessage != nullptr) *errorMessage = compileError != nullptr && *compileError != '\0' ? compileError : "Watch expression is invalid.";
+		return false;
+	}
 	if (!mrvmRuntimeDebuggerWriteWatch(g_runtimeEnv.runtimeKv, normalizedMacroKey, expression, enabled)) {
 		if (errorMessage != nullptr) *errorMessage = "Watch expression could not be stored.";
 		return false;
 	}
 	return true;
+}
+
+bool mrvmValidateDebugWatchExpression(const std::string &expression, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (validate_macro_watch_expression(expression.c_str())) return true;
+	if (errorMessage != nullptr) {
+		const char *compileError = get_last_compile_error();
+
+		*errorMessage = compileError != nullptr && *compileError != '\0' ? compileError : "Watch expression is invalid.";
+	}
+	return false;
 }
 
 bool mrvmEraseDebugWatch(const std::string &macroKey, const std::string &expression, std::string *errorMessage) {

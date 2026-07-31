@@ -15,7 +15,6 @@ class MRVMHashStore {
 	void clear();
 	void clearExceptRoots(const std::vector<int> &roots);
 	int createHash();
-	int cloneHashFrom(const MRVMHashStore &sourceStore, int sourceHandle, bool targetGlobalStorage);
 	void eraseValueTrees(const VirtualMachine::Value &value, bool targetGlobalStorage);
 	bool contains(int handle, const std::string &key) const;
 	VirtualMachine::Value read(int handle, const std::string &key) const;

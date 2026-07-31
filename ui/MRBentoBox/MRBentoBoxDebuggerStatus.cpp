@@ -1,6 +1,5 @@
 #include "MRBentoBoxDebuggerStatus.hpp"
 
-#include "../../mrmac/vm/MRVMMacroSpecRuntime.hpp"
 #include "../../mrmac/vm/MRVMRuntimeDebugger.hpp"
 #include "../../mrmac/vm/MRVMValue.hpp"
 
@@ -103,12 +102,6 @@ void appendLogTail(std::ostringstream &out, const std::vector<std::string> &line
 		out << lines[index] << "\n";
 }
 
-void appendSourceIdentity(std::ostringstream &out, const std::string &sourcePath, const std::string &macroName) {
-	const std::string fileName = mrvmStripMrmacExtension(mrvmTruncatePathPart(sourcePath));
-
-	out << "Source: " << (fileName.empty() ? "<source unavailable>" : fileName) << "^" << macroName << "\n";
-}
-
 }
 
 const char *mrMacroDebuggerStopReasonText(MRMacroDebugStopReason reason) noexcept {
@@ -137,9 +130,9 @@ std::string mrMacroDebuggerStatusText(const std::string &macroName, const std::s
 	std::ostringstream out;
 	const std::string macroKey = debugResult.macroKey.empty() ? macroName : debugResult.macroKey;
 
+	static_cast<void>(sourcePath);
 	out << "Macro Debugger\n";
 	out << "Macro: " << macroName << "\n";
-	appendSourceIdentity(out, sourcePath, macroName);
 	if (sessionId != 0) out << "Session: #" << sessionId << "\n";
 	else
 		out << "Session: none\n";
@@ -162,9 +155,9 @@ std::string mrMacroDebuggerStatusText(const std::string &macroName, const std::s
 std::string mrMacroDebuggerNoticeText(const std::string &macroName, const std::string &sourcePath, MRMacroExecutionSessionId sessionId, const std::string &message) {
 	std::ostringstream out;
 
+	static_cast<void>(sourcePath);
 	out << "Macro Debugger\n";
 	out << "Macro: " << macroName << "\n";
-	appendSourceIdentity(out, sourcePath, macroName);
 	if (sessionId != 0) out << "Session: #" << sessionId << "\n";
 	else
 		out << "Session: none\n";

@@ -16,6 +16,7 @@
 
 #include <array>
 #include <cstring>
+#include <set>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -277,20 +278,21 @@ static const MacroDebuggerFunctionKeyDescriptor kMacroDebuggerFunctionKeys[] = {
 
 } // namespace
 
-bool MRBentoBox::macroDebuggerTargetsSourcePath(const std::string &sourcePath) const noexcept {
-	return macroDebuggerActive && !sourcePath.empty() && macroDebuggerSourcePath == normalizeConfiguredPathInput(sourcePath);
+bool MRBentoBox::macroDebuggerTargetsSourceIdentity(const std::string &sourcePath, const std::string &macroName) const noexcept {
+	if (!macroDebuggerActive || sourcePath.empty() || macroName.empty()) return false;
+	return macroDebuggerSourceIdentity == mrvmMakeMacroSourceIdentity(normalizeConfiguredPathInput(sourcePath), macroName);
 }
 
 const std::string &MRBentoBox::macroDebuggerSourceIdentityValue() const noexcept {
 	return macroDebuggerSourceIdentity;
 }
 
-bool MRBentoBox::macroDebuggerObservesSourcePath(const std::string &sourcePath) const noexcept {
-	return macroDebuggerSessionId == 0 && !macroDebuggerExecutionRunning && macroDebuggerTargetsSourcePath(sourcePath);
+bool MRBentoBox::macroDebuggerObservesSourceIdentity(const std::string &sourcePath, const std::string &macroName) const noexcept {
+	return macroDebuggerSessionId == 0 && !macroDebuggerExecutionRunning && macroDebuggerTargetsSourceIdentity(sourcePath, macroName);
 }
 
 bool MRBentoBox::acceptScheduledMacroDebuggerSession(MRMacroExecutionSessionId sessionId, const MRMacroDebugRunResult &debugResult) {
-	if (sessionId == 0 || !debugResult.paused || !macroDebuggerObservesSourcePath(debugResult.sourcePath)) return false;
+	if (sessionId == 0 || !debugResult.paused || !macroDebuggerObservesSourceIdentity(debugResult.sourcePath, debugResult.macroKey)) return false;
 	macroDebuggerSessionId = sessionId;
 	macroDebuggerExecutionRoute = mrvmDebugSessionRoute(sessionId);
 	macroDebuggerExecutionRunning = debugResult.stopReason == mrdStopBudget;
@@ -329,6 +331,7 @@ bool MRBentoBox::acceptMacroDebuggerWorkerResult(MRMacroExecutionSessionId sessi
 			macroDebuggerExecutionRunning = false;
 			macroDebuggerStatus = "error/no-live";
 			writeMacroDebuggerNotice("State: failed/no live session\nUnable to continue debugger worker.");
+			static_cast<void>(mrvmCloseDebugSession(sessionId));
 			macroDebuggerSessionId = 0;
 			macroDebuggerExecutionRoute = MRMacroExecutionRoute::Debug;
 			return false;
@@ -730,6 +733,7 @@ bool MRBentoBox::scheduleMacroDebuggerWorkerAction(MRMacroDebugWorkerAction acti
 		    MRMacroDebugWorkerResult workerResult;
 
 		    result.task = info;
+		    static_cast<void>(mrvmAssignDebugSessionWorkerTask(sessionId, info.id));
 		    workerResult = mrvmRunDebugSessionWorkerAction(sessionId, macroKey, action, 8192, info.cancelFlag);
 		    if (!workerResult.accepted) {
 			    workerResult.debugResult.stopReason = mrdStopError;
@@ -792,6 +796,7 @@ bool MRBentoBox::scheduleMacroDebuggerWorkerAction(MRMacroDebugWorkerAction acti
 		    return result;
 	    });
 	if (taskId == 0) return false;
+	static_cast<void>(mrvmAssignDebugSessionWorkerTask(sessionId, taskId));
 	targetWindow = targetBufferId > 0 ? findEditWindowByBufferId(targetBufferId) : nullptr;
 	if (targetWindow != nullptr) targetWindow->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, displayName);
 	return true;
@@ -929,12 +934,11 @@ void MRBentoBox::invalidateMacroDebuggerRuntime() {
 	if (!macroDebuggerActive) return;
 	cancelMacroDebuggerValueInput();
 	if (sessionId != 0) sessionClosed = mrvmCloseDebugSession(sessionId, true);
-	if (sessionClosed && !macroKey.empty()) static_cast<void>(mrvmEraseDebugRuntimeForMacroFile(macroKey, &errorMessage));
+	if (sessionClosed && !macroKey.empty()) static_cast<void>(mrvmEraseDebugRuntimeForMacro(macroKey, &errorMessage));
 	macroDebuggerSessionId = 0;
 	macroDebuggerExecutionRoute = MRMacroExecutionRoute::Debug;
 	macroDebuggerExecutionRunning = false;
 	macroDebuggerActive = false;
-	macroDebuggerWorkspacePending = MRMacroDebuggerWorkspaceConfiguration();
 	macroDebuggerVariables.clear();
 	macroDebuggerVariableRows.clear();
 	if (getEditor() != nullptr) {
@@ -981,40 +985,6 @@ bool MRBentoBox::startMacroDebuggerSession(int temporaryStopLine) {
 		macroDebuggerSessionId = session.sessionId;
 		macroDebuggerExecutionRoute = mrvmDebugSessionRoute(session.sessionId);
 	}
-	if (debugResult.paused && (!macroDebuggerWorkspacePending.breakpoints.empty() || !macroDebuggerWorkspacePending.watches.empty())) {
-		MRMacroDebuggerWorkspaceConfiguration remaining;
-		bool rebound = false;
-
-		remaining.macroKey = macroDebuggerWorkspacePending.macroKey;
-		remaining.macroName = macroDebuggerWorkspacePending.macroName;
-		remaining.sourceIdentity = macroDebuggerWorkspacePending.sourceIdentity;
-		remaining.sourcePath = macroDebuggerWorkspacePending.sourcePath;
-		for (const MRMacroDebuggerWorkspaceBreakpoint &breakpoint : macroDebuggerWorkspacePending.breakpoints) {
-			std::string breakpointError;
-			const std::string expectedIdentity = mrvmMakeMacroSourceIdentity(macroDebuggerSourcePath, breakpoint.macroKey);
-			const bool sourceMatches = breakpoint.sourceIdentity.empty() || breakpoint.sourceIdentity == expectedIdentity;
-
-			if (sourceMatches && mrvmWriteDebugLineBreakpoint(breakpoint.macroKey, breakpoint.line, breakpoint.enabled, &breakpointError, breakpoint.conditionText))
-				rebound = true;
-			else {
-				std::ostringstream detail;
-
-				remaining.breakpoints.push_back(breakpoint);
-				detail << "MACRODBG breakpoint stage=rebind-unbound source=" << breakpoint.sourceIdentity << " expected=" << expectedIdentity << " line=" << breakpoint.line;
-				if (!breakpointError.empty()) detail << " error=" << breakpointError;
-				mrLogMessage(detail.str());
-			}
-		}
-		for (const MRMacroDebuggerWorkspaceWatch &watch : macroDebuggerWorkspacePending.watches) {
-			std::string watchError;
-
-			if (mrvmWriteDebugWatch(macroDebuggerMacroKey, watch.expression, watch.enabled, &watchError)) rebound = true;
-			else
-				remaining.watches.push_back(watch);
-		}
-		macroDebuggerWorkspacePending = remaining;
-		if (rebound) mrMarkWorkspaceAutosaveDirty("debugger workspace rebind", this);
-	}
 	if (debugResult.hadError)
 		macroDebuggerStatus = "error/no-live";
 	else if (debugResult.stopReason == mrdStopBudget)
@@ -1048,12 +1018,67 @@ bool MRBentoBox::startMacroDebuggerSession(int temporaryStopLine) {
 
 void MRBentoBox::restoreMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration) {
 	MREditWindow *variablesWindow = variablesPane();
+	std::set<std::string> clearedMacroKeys;
+	std::string preparationError;
+	bool discarded = false;
+	bool prepared;
 
-	macroDebuggerWorkspacePending = configuration;
 	setMacroDebuggerTarget(configuration.macroKey, configuration.macroName);
+	if (macroDebuggerSourcePath.empty() && !configuration.sourcePath.empty()) {
+		macroDebuggerSourcePath = normalizeConfiguredPathInput(configuration.sourcePath);
+		macroDebuggerSourceIdentity = mrvmMakeMacroSourceIdentity(macroDebuggerSourcePath, macroDebuggerMacroName.empty() ? macroDebuggerMacroKey : macroDebuggerMacroName);
+	}
 	macroDebuggerSessionId = 0;
 	macroDebuggerExecutionRoute = MRMacroExecutionRoute::Debug;
 	macroDebuggerExecutionRunning = false;
+	clearedMacroKeys.insert(macroDebuggerMacroKey);
+	for (const MRMacroDebuggerWorkspaceBreakpoint &breakpoint : configuration.breakpoints)
+		clearedMacroKeys.insert(breakpoint.macroKey);
+	for (const std::string &macroKey : clearedMacroKeys)
+		if (!macroKey.empty()) static_cast<void>(mrvmEraseDebugRuntimeForMacro(macroKey, nullptr));
+	const bool sourceIdentityMatches = configuration.sourceIdentity.empty() || configuration.sourceIdentity == macroDebuggerSourceIdentity;
+	prepared = sourceIdentityMatches;
+	if (!prepared) preparationError = "Debugger source identity does not match the restored editor.";
+	if (prepared)
+		prepared = !macroDebuggerSourcePath.empty() && mrvmLoadMacroFile(macroDebuggerSourcePath, &preparationError) &&
+		           mrvmPrepareDebugMacroSourceMap(macroDebuggerMacroKey, macroDebuggerSourcePath, &preparationError);
+	if (!prepared && preparationError.empty()) preparationError = "Debug macro source is unavailable.";
+	if (!prepared) {
+		discarded = !configuration.breakpoints.empty() || !configuration.watches.empty();
+		std::ostringstream detail;
+
+		detail << "MACRODBG workspace stage=restore-cold-unbound macro=" << macroDebuggerMacroKey;
+		if (!preparationError.empty()) detail << " error=" << preparationError;
+		mrLogMessage(detail.str());
+	} else {
+		for (const MRMacroDebuggerWorkspaceBreakpoint &breakpoint : configuration.breakpoints) {
+			std::string breakpointError;
+			std::string conditionError;
+			const std::string expectedIdentity = mrvmMakeMacroSourceIdentity(macroDebuggerSourcePath, breakpoint.macroKey);
+			const bool sourceMatches = breakpoint.sourceIdentity.empty() || breakpoint.sourceIdentity == expectedIdentity;
+			const bool conditionValid = breakpoint.conditionText.empty() || mrvmValidateDebugWatchExpression(breakpoint.conditionText, &conditionError);
+
+			if (sourceMatches && conditionValid && mrvmWriteDebugLineBreakpoint(breakpoint.macroKey, breakpoint.line, breakpoint.enabled, &breakpointError, breakpoint.conditionText)) continue;
+			discarded = true;
+			std::ostringstream detail;
+
+			detail << "MACRODBG breakpoint stage=restore-cold-dropped source=" << breakpoint.sourceIdentity << " expected=" << expectedIdentity << " line=" << breakpoint.line;
+			if (!conditionError.empty()) detail << " condition_error=" << conditionError;
+			if (!breakpointError.empty()) detail << " error=" << breakpointError;
+			mrLogMessage(detail.str());
+		}
+		for (const MRMacroDebuggerWorkspaceWatch &watch : configuration.watches) {
+			std::string watchError;
+
+			if (mrvmWriteDebugWatch(macroDebuggerMacroKey, watch.expression, watch.enabled, &watchError)) continue;
+			discarded = true;
+			std::ostringstream detail;
+
+			detail << "MACRODBG watch stage=restore-cold-dropped macro=" << macroDebuggerMacroKey << " expression=" << watch.expression;
+			if (!watchError.empty()) detail << " error=" << watchError;
+			mrLogMessage(detail.str());
+		}
+	}
 	macroDebuggerStatus = "config restored/no-live";
 	writeMacroDebuggerNotice("State: debug config restored, no live session");
 	if (variablesWindow != nullptr) {
@@ -1062,6 +1087,7 @@ void MRBentoBox::restoreMacroDebuggerWorkspaceConfiguration(const MRMacroDebugge
 		variablesWindow->setFileChanged(false);
 	}
 	refreshMacroDebuggerWatches();
+	if (discarded) mrMarkWorkspaceAutosaveDirty("debugger workspace invalid entries dropped", this);
 }
 
 bool MRBentoBox::resetMacroDebuggerSession() {
@@ -1151,18 +1177,7 @@ void MRBentoBox::refreshMacroDebuggerBreakpointRanges() {
 			else
 				inactiveRanges.push_back(std::pair<std::size_t, std::size_t>(breakpoint.sourceStartOffset, breakpoint.sourceEndOffset));
 		}
-	unboundRanges.reserve(macroDebuggerWorkspacePending.breakpoints.size());
-	unboundLines.reserve(macroDebuggerWorkspacePending.breakpoints.size());
-	for (const MRMacroDebuggerWorkspaceBreakpoint &breakpoint : macroDebuggerWorkspacePending.breakpoints) {
-		const std::size_t lineIndex = static_cast<std::size_t>(breakpoint.line - 1);
-
-		if (breakpoint.line <= 0 || lineIndex >= sourceEditor->bufferModel().lineCount()) continue;
-		const std::size_t start = sourceEditor->bufferModel().lineStartByIndex(lineIndex);
-		const std::size_t end = sourceEditor->bufferModel().nextLine(start);
-		unboundRanges.push_back(std::pair<std::size_t, std::size_t>(start, end));
-		unboundLines.push_back(lineIndex);
-	}
-	if (activeRanges.empty() && inactiveRanges.empty() && unboundRanges.empty()) sourceEditor->clearDebuggerBreakpointRanges();
+	if (activeRanges.empty() && inactiveRanges.empty()) sourceEditor->clearDebuggerBreakpointRanges();
 	else
 		sourceEditor->setDebuggerBreakpointRanges(activeRanges, inactiveRanges, unboundRanges, unboundLines);
 }

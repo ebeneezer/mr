@@ -29,7 +29,7 @@ std::string mrvmMakeMacroFileKey(const std::string &value) {
 }
 
 std::string mrvmMakeMacroSourceIdentity(const std::string &sourcePath, const std::string &macroName) {
-	const std::string normalizedPath = mrvmStripMrmacExtension(trimAscii(sourcePath));
+	const std::string normalizedPath = trimAscii(sourcePath);
 	const std::string macroKey = mrvmUpperKey(trimAscii(macroName));
 
 	if (normalizedPath.empty() || macroKey.empty()) return std::string();

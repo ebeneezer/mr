@@ -163,6 +163,7 @@ bool ensureLoadedFileResident(const std::string &fileKey);
 bool evictTransientFileImage(const std::string &fileKey);
 bool currentBackgroundChildMacroAllowed(const LoadedMacroFile &file) noexcept;
 bool resolveDebugMacroSpec(const std::string &spec, std::string &macroKey, std::string &parameterString, LoadedMacroFile &file, std::string &errorMessage);
+bool prepareDebugMacroSourceMapByKey(const std::string &macroKey, const std::string &expectedSourcePath, MacroRef &macroRef, LoadedMacroFile &file, std::string &errorMessage);
 bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, MacroRef &macroRef, LoadedMacroFile &file, std::vector<std::size_t> &breakpointOffsets, bool &firstRun, std::string &errorMessage);
 bool tryLoadIndexedMacroForKey(const TKey &pressed);
 std::vector<std::string> macroCatalogMacroOrder();
@@ -184,10 +185,7 @@ void setMacroGlobalEnumIndex(std::size_t index);
 void setGlobalValue(const std::string &name, int type, const Value &value);
 void setGlobalValueFromStore(const std::string &name, int type, const Value &value, MRVMHashStore &localStore);
 bool readGlobalValue(const std::string &name, GlobalEntry &entry);
-MRMacroDebugVariableScope macroDebugVariableScope(const std::string &name, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames);
 std::string macroDebugValueText(const Value &value, const MRVMHashStore &localStore, const MRVMHashStore &globalStore);
-void appendMacroDebugVariableSnapshots(MRMacroDebugRunResult &result, const std::map<std::string, Value> &variableStore, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames, const MRVMHashStore &localStore, const MRVMHashStore &globalStore);
-void appendMacroDebugAppGlobalSnapshots(MRMacroDebugRunResult &result, const MRVMHashStore &globalStore);
 
 bool readLoadedMacroFileByKey(const std::string &fileKey, LoadedMacroFile &file);
 bool loadedMacroFileExists(const std::string &fileKey);

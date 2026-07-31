@@ -134,6 +134,7 @@ int lookup_symbol(const char *name, int *out_type);
 unsigned char *compile_macro_code(const char *source, size_t *out_size);
 unsigned char *compile_macro_code_with_source_map(const char *source, size_t *out_size, MRMacSourceMapSink source_map_sink, void *source_map_context);
 unsigned char *compile_macro_watch_expression(const char *expression, const MRMacWatchSymbol *symbols, size_t symbol_count, size_t *out_size, int *out_type);
+int validate_macro_watch_expression(const char *expression);
 
 /* Information about the most recently compiled macro source. */
 int get_compiled_macro_count(void);

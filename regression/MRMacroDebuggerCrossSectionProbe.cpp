@@ -1,6 +1,10 @@
 #include "../mrmac/MRVM.hpp"
 #include "../mrmac/mrmac.h"
+#include "../mrmac/vm/MRVMExecSessions.hpp"
+#include "../mrmac/vm/MRVMHash.hpp"
 #include "../mrmac/vm/MRVMRuntimeDebugger.hpp"
+#include "../mrmac/vm/MRVMRuntimeState.hpp"
+#include "../mrmac/vm/MRVMValue.hpp"
 
 #include <iostream>
 #include <string>
@@ -81,6 +85,35 @@ bool cancelledDebugSessionWasPublished(MRMacroExecutionSessionId sessionId) {
 	return false;
 }
 
+bool hashGraphTransferPreservesCycles() {
+	MRVMHashStore localStore;
+	MRVMHashStore globalStore;
+	MRVMHashStore targetStore;
+	const int localRoot = localStore.createHash();
+	const int globalRoot = globalStore.createHash();
+	const VirtualMachine::Value localRootValue = mrvmMakeHash(localRoot, false);
+	const VirtualMachine::Value globalRootValue = mrvmMakeHash(globalRoot, true);
+
+	localStore.write(localRoot, "self", localRootValue);
+	localStore.write(localRoot, "global", globalRootValue);
+	globalStore.write(globalRoot, "self", globalRootValue);
+	const VirtualMachine::Value copiedRoot = mrvmHashCopyValueForStore(localRootValue, localStore, globalStore, targetStore, true);
+	const VirtualMachine::Value copiedSelf = targetStore.read(copiedRoot.hashHandle, "self");
+	const VirtualMachine::Value copiedGlobal = targetStore.read(copiedRoot.hashHandle, "global");
+	const VirtualMachine::Value copiedGlobalSelf = targetStore.read(copiedGlobal.hashHandle, "self");
+	VirtualMachine::Value mixedArray = mrvmMakeArrayValue(TYPE_HASH);
+
+	mixedArray.globalStorage = true;
+	mixedArray.arrayValues.push_back(localRootValue);
+	const VirtualMachine::Value copiedArray = mrvmHashCopyValueForStore(mixedArray, localStore, globalStore, globalStore, true);
+	const VirtualMachine::Value copiedArraySelf = globalStore.read(copiedArray.arrayValues[0].hashHandle, "self");
+
+	return copiedRoot.type == TYPE_HASH && copiedRoot.globalStorage && copiedSelf.type == TYPE_HASH && copiedSelf.hashHandle == copiedRoot.hashHandle &&
+	       copiedGlobal.type == TYPE_HASH && copiedGlobal.globalStorage && copiedGlobalSelf.type == TYPE_HASH && copiedGlobalSelf.hashHandle == copiedGlobal.hashHandle &&
+	       copiedArray.type == TYPE_HASH_ARRAY && copiedArray.arrayValues.size() == 1 && copiedArray.arrayValues[0].globalStorage &&
+	       copiedArraySelf.hashHandle == copiedArray.arrayValues[0].hashHandle;
+}
+
 }
 
 int runMacroDebuggerCrossSectionProbeMode() {
@@ -89,6 +122,8 @@ int runMacroDebuggerCrossSectionProbeMode() {
 	MRMacroExecutionSession stepIntoSession;
 	MRMacroExecutionSession stepOverSession;
 	MRMacroExecutionSession stoppedSession;
+	MRMacroExecutionSession rollbackSession;
+	MRMacroExecutionSession workerTaskSession;
 	MRMacroDebugRunResult result;
 	MRMacroDebugVariableSnapshot mainCounter;
 	MRMacroDebugVariableSnapshot mainRatio;
@@ -105,6 +140,16 @@ int runMacroDebuggerCrossSectionProbeMode() {
 	std::vector<MRMacroDebuggerBreakpoint> breakpoints;
 	std::string errorMessage;
 	bool enabled = false;
+
+	if (!hashGraphTransferPreservesCycles()) {
+		std::cerr << "Macro debugger cross-section probe did not preserve cyclic hash graph identity during store transfer.\n";
+		return 1;
+	}
+	if (!mrvmValidateDebugWatchExpression("RuntimeText + RuntimeCount", &errorMessage) || mrvmValidateDebugWatchExpression("FILE_EXISTS('/tmp')", &errorMessage) ||
+	    mrvmValidateDebugWatchExpression("RuntimeCount := 1", &errorMessage)) {
+		std::cerr << "Macro debugger cross-section probe did not enforce cold watch validation with unresolved runtime names.\n";
+		return 1;
+	}
 
 	if (!mrvmLoadMacroFile("mrmac/macros/macro_debugger_variables_probe.mrmac", &errorMessage)) {
 		std::cerr << "Macro debugger cross-section probe could not load its test macro: " << errorMessage << "\n";
@@ -266,6 +311,47 @@ int runMacroDebuggerCrossSectionProbeMode() {
 		return 1;
 	}
 
-	std::cout << "macro-debugger-cross-section scalar=4 collections=5 watches=3 pause=1 steps=3 stop=1\n";
+	if (!startAtSourceLine(kMutationLine, rollbackSession, result, errorMessage) ||
+	    !findVariableNode(result.variables, "MainHash", "[\"leaf\"]", 2, TYPE_INT, "7", nestedLeaf) ||
+	    !mrvmExecSessionsEraseSessionRuntimeState(g_runtimeEnv.runtimeKv, rollbackSession.sessionId)) {
+		std::cerr << "Macro debugger cross-section probe could not prepare the failed dual-store mutation audit.\n";
+		return 1;
+	}
+	if (mrvmWriteDebugScalarVariable(rollbackSession.sessionId, nestedLeaf, "99", updatedVariables, &errorMessage) || errorMessage.empty() ||
+	    !mrvmEvaluateDebugExpression(rollbackSession.sessionId, "MainHash['nested']['leaf']", watch, &errorMessage) || !watch.errorText.empty() || watch.valueText != "7" ||
+	    !mrvmCloseDebugSession(rollbackSession.sessionId)) {
+		std::cerr << "Macro debugger cross-section probe did not roll back a failed dual-store mutation: " << errorMessage << "\n";
+		return 1;
+	}
+	if (!startAtSourceLine(kMutationLine, workerTaskSession, result, errorMessage)) {
+		std::cerr << "Macro debugger cross-section probe could not prepare worker task tracking.\n";
+		return 1;
+	}
+	{
+		const std::uint64_t taskId = static_cast<std::uint64_t>(workerTaskSession.sessionId) + 1000000;
+		bool active = false;
+
+		if (!mrvmAssignDebugSessionWorkerTask(workerTaskSession.sessionId, taskId)) {
+			std::cerr << "Macro debugger cross-section probe could not assign a debug worker task.\n";
+			return 1;
+		}
+		for (const MRMacroExecutionSession &session : activeMacroExecutionSessions())
+			if (session.sessionId == workerTaskSession.sessionId && session.taskId == taskId) active = true;
+		if (!active || !mrvmAcceptDebugSessionWorkerTaskResult(workerTaskSession.sessionId, taskId)) {
+			std::cerr << "Macro debugger cross-section probe did not expose and release the active debug worker task.\n";
+			return 1;
+		}
+		for (const MRMacroExecutionSession &session : activeMacroExecutionSessions())
+			if (session.sessionId == workerTaskSession.sessionId) {
+				std::cerr << "Macro debugger cross-section probe retained a completed debug worker task.\n";
+				return 1;
+			}
+	}
+	if (!mrvmCloseDebugSession(workerTaskSession.sessionId)) {
+		std::cerr << "Macro debugger cross-section probe could not close its worker task session.\n";
+		return 1;
+	}
+
+	std::cout << "macro-debugger-cross-section scalar=4 collections=5 watches=3 pause=1 steps=3 stop=1 atomic=1 cycles=1 worker-task=1\n";
 	return 0;
 }

@@ -308,7 +308,7 @@ bool resolveDebugMacroSpec(const std::string &spec, std::string &macroKey, std::
 	return true;
 }
 
-bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, MacroRef &macroRef, LoadedMacroFile &file, std::vector<std::size_t> &breakpointOffsets, bool &firstRun, std::string &errorMessage) {
+bool prepareDebugMacroSourceMapByKey(const std::string &macroKey, const std::string &expectedSourcePath, MacroRef &macroRef, LoadedMacroFile &file, std::string &errorMessage) {
 	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
 	std::string source;
 	std::vector<MRMacroSourceMapEntry> sourceMap;
@@ -316,8 +316,6 @@ bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, Macro
 	size_t compiledSize = 0;
 
 	errorMessage.clear();
-	breakpointOffsets.clear();
-	firstRun = false;
 	if (normalizedMacroKey.empty()) {
 		errorMessage = "Debug macro name is empty.";
 		return false;
@@ -330,6 +328,10 @@ bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, Macro
 	}
 	if (!readLoadedMacroFileByKey(macroRef.fileKey, file)) {
 		errorMessage = "Debug macro file is not loaded: " + macroRef.fileKey;
+		return false;
+	}
+	if (!expectedSourcePath.empty() && mrvmMakeMacroSourceIdentity(file.resolvedPath, normalizedMacroKey) != mrvmMakeMacroSourceIdentity(expectedSourcePath, normalizedMacroKey)) {
+		errorMessage = "Debug macro does not belong to the restored source.";
 		return false;
 	}
 	if (!ensureLoadedFileResident(macroRef.fileKey) || !readLoadedMacroFileByKey(macroRef.fileKey, file) || file.bytecode.empty()) {
@@ -352,6 +354,15 @@ bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, Macro
 	file.sourceMap = sourceMap;
 	file.profile = mrvmAnalyzeBytecode(file.bytecode.data(), file.bytecode.size());
 	writeLoadedMacroFileByKey(file);
+	return true;
+}
+
+bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, MacroRef &macroRef, LoadedMacroFile &file, std::vector<std::size_t> &breakpointOffsets, bool &firstRun, std::string &errorMessage) {
+	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
+
+	breakpointOffsets.clear();
+	firstRun = false;
+	if (!prepareDebugMacroSourceMapByKey(normalizedMacroKey, std::string(), macroRef, file, errorMessage)) return false;
 	static_cast<void>(mrvmCollectDebugBreakpointOffsetsForLoadedFile(normalizedMacroKey, breakpointOffsets));
 	if (stopAtEntry) breakpointOffsets.push_back(macroRef.entryOffset);
 	std::sort(breakpointOffsets.begin(), breakpointOffsets.end());

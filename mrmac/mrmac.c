@@ -153,6 +153,7 @@ typedef struct {
 	void *source_map_context;
 	const char *current_macro_name;
 	int watch_expression;
+	int watch_validation;
 } Parser;
 
 typedef struct {
@@ -1762,6 +1763,10 @@ static int parse_collection_postfixes(Parser *ps, ExprInfo *out) {
 		if (parse_expression(ps, 1, &key) != 0) return -1;
 		if (parser_expect(ps, TOK_RBRACKET, "']' expected.") != 0) return -1;
 
+		if (ps->watch_validation && (is_inferred_type(out->type) || is_inferred_type(key.type))) {
+			out->type = TYPE_INFER;
+			continue;
+		}
 		if (is_hash_type(out->type) || (is_inferred_type(out->type) && is_stringlike_type(key.type))) {
 			if (!is_stringlike_type(key.type)) {
 				set_compile_error(line, "Type mismatch or syntax error.");
@@ -1960,7 +1965,8 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 					free(name);
 					return -1;
 				}
-			} else if (validate_call_arguments(spec->args, spec->argc, args, argc, line) != 0) {
+			} else if (ps->watch_validation ? argc != spec->argc : validate_call_arguments(spec->args, spec->argc, args, argc, line) != 0) {
+				if (ps->watch_validation) set_compile_error(line, "Type mismatch or syntax error.");
 				free(name);
 				return -1;
 			}
@@ -1972,9 +1978,13 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 		}
 
 		if (lookup_symbol(name, &var_type) < 0) {
-			set_compile_error(ps->tok.line, "Variable expected.");
-			free(name);
-			return -1;
+			if (ps->watch_validation)
+				var_type = TYPE_INFER;
+			else {
+				set_compile_error(ps->tok.line, "Variable expected.");
+				free(name);
+				return -1;
+			}
 		}
 		emit_byte(OP_LOAD_VAR);
 		emit_string(name);
@@ -1991,6 +2001,7 @@ static int parse_unary(Parser *ps, ExprInfo *out) {
 	if (parser_accept(ps, TOK_MINUS)) {
 		if (parse_unary(ps, out) != 0) return -1;
 		if (is_inferred_type(out->type)) {
+			if (ps->watch_validation) return 0;
 			set_compile_error(ps->tok.line, "Can not infer result type.");
 			return -1;
 		}
@@ -2005,6 +2016,10 @@ static int parse_unary(Parser *ps, ExprInfo *out) {
 	if (parser_accept(ps, TOK_NOT)) {
 		if (parse_unary(ps, out) != 0) return -1;
 		if (is_inferred_type(out->type)) {
+			if (ps->watch_validation) {
+				out->type = TYPE_INT;
+				return 0;
+			}
 			set_compile_error(ps->tok.line, "Can not infer result type.");
 			return -1;
 		}
@@ -2020,8 +2035,15 @@ static int parse_unary(Parser *ps, ExprInfo *out) {
 	return parse_primary(ps, out);
 }
 
-static int combine_binary(TokenKind op, int line, ExprInfo *lhs, const ExprInfo *rhs) {
+static int combine_binary(Parser *ps, TokenKind op, int line, ExprInfo *lhs, const ExprInfo *rhs) {
 	if (is_inferred_type(lhs->type) || is_inferred_type(rhs->type)) {
+		if (ps->watch_validation) {
+			if (op == TOK_EQ || op == TOK_NE || op == TOK_LT || op == TOK_GT || op == TOK_LE || op == TOK_GE || op == TOK_AND || op == TOK_OR)
+				lhs->type = TYPE_INT;
+			else
+				lhs->type = TYPE_INFER;
+			return 0;
+		}
 		if (is_inferred_type(lhs->type) && is_inferred_type(rhs->type)) {
 			set_compile_error(line, "Can not infer result type.");
 			return -1;
@@ -2136,7 +2158,7 @@ static int parse_expression(Parser *ps, int min_prec, ExprInfo *out) {
 
 		parser_next(ps);
 		if (parse_expression(ps, prec + 1, &rhs) != 0) return -1;
-		if (combine_binary(op, line, &lhs, &rhs) != 0) return -1;
+		if (combine_binary(ps, op, line, &lhs, &rhs) != 0) return -1;
 	}
 
 	*out = lhs;
@@ -3610,6 +3632,35 @@ finish:
 		if (out_type != NULL) *out_type = 0;
 	}
 	return result;
+}
+
+int validate_macro_watch_expression(const char *expression) {
+	Parser ps;
+	ExprInfo expression_info;
+	int valid = 0;
+
+	reset_code_buffer();
+	clear_symbols();
+	reset_error_state();
+	if (expression == NULL || *expression == '\0') {
+		set_compile_error(0, "Watch expression expected.");
+		return 0;
+	}
+	parser_init(&ps, expression, NULL, NULL);
+	ps.watch_expression = 1;
+	ps.watch_validation = 1;
+	if (parse_expression(&ps, 1, &expression_info) != 0) goto finish;
+	if (ps.tok.kind != TOK_EOF) {
+		set_compile_error(ps.tok.line, "Unexpected token after watch expression.");
+		goto finish;
+	}
+	valid = g_last_error[0] == '\0';
+
+finish:
+	token_free(&ps.tok);
+	reset_code_buffer();
+	clear_symbols();
+	return valid;
 }
 
 int get_compiled_macro_count(void) {

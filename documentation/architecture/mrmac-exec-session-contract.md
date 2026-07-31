@@ -153,6 +153,10 @@ snapshot, staged transaction, commit gate and deferred playback; remaining
 UI-affine bytecode advances through bounded UI-pump budgets. A pause or
 breakpoint parks the VM as a mechanical session handle and releases any worker.
 Continue and step create a new finite worker lifetime only for worker routes.
+Each such lifetime publishes its current task id under
+`EXECSESSIONS/sessions/active/byTask/<taskId>` before execution and removes
+that entry when the result is adopted, before another finite worker is
+scheduled for the same parked debug session.
 Pause and cancellation remain cooperative and must be requestable without
 waiting for the executing worker to release the VM execution lock.
 

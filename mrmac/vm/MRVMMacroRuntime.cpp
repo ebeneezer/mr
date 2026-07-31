@@ -165,12 +165,6 @@ bool readGlobalValue(const std::string &name, GlobalEntry &entry) {
 	return false;
 }
 
-MRMacroDebugVariableScope macroDebugVariableScope(const std::string &name, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames) {
-	if (closureVariableNames.find(name) != closureVariableNames.end()) return mrdVariableClosure;
-	if (sessionVariableNames.find(name) != sessionVariableNames.end()) return mrdVariableSession;
-	return mrdVariableLocal;
-}
-
 static const char *macroDebugArrayElementTypeText(int type) noexcept {
 	switch (type) {
 		case TYPE_INT_ARRAY:
@@ -205,34 +199,6 @@ std::string macroDebugValueText(const Value &value, const MRVMHashStore &localSt
 		return out.str();
 	}
 	return mrvmValueAsString(value);
-}
-
-void appendMacroDebugVariableSnapshots(MRMacroDebugRunResult &result, const std::map<std::string, Value> &variableStore, const std::set<std::string> &closureVariableNames, const std::set<std::string> &sessionVariableNames, const MRVMHashStore &localStore, const MRVMHashStore &globalStore) {
-	for (const std::pair<const std::string, Value> &entry : variableStore) {
-		MRMacroDebugVariableSnapshot variable;
-
-		variable.name = entry.first;
-		variable.type = entry.second.type;
-		variable.valueText = macroDebugValueText(entry.second, localStore, globalStore);
-		variable.scope = macroDebugVariableScope(entry.first, closureVariableNames, sessionVariableNames);
-		result.variables.push_back(variable);
-	}
-}
-
-void appendMacroDebugAppGlobalSnapshots(MRMacroDebugRunResult &result, const MRVMHashStore &globalStore) {
-	const std::vector<std::string> order = macroGlobalOrderValues();
-
-	for (const std::string &key : order) {
-		GlobalEntry entry;
-		MRMacroDebugVariableSnapshot variable;
-
-		if (!readRuntimeGlobalValueDirect(key, entry)) continue;
-		variable.name = key;
-		variable.type = entry.type;
-		variable.valueText = macroDebugValueText(entry.value, globalStore, globalStore);
-		variable.scope = mrdVariableAppGlobal;
-		result.variables.push_back(variable);
-	}
 }
 
 void hashWriteInt(const Value &hash, const std::string &key, int value) {

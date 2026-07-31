@@ -122,32 +122,6 @@ int MRVMHashStore::createHash() {
 	return handle;
 }
 
-int MRVMHashStore::cloneHashFrom(const MRVMHashStore &sourceStore, int sourceHandle, bool targetGlobalStorage) {
-	std::map<int, std::map<std::string, VirtualMachine::Value>>::const_iterator sourceIt = sourceStore.hashes.find(sourceHandle);
-	if (sourceStore.ioTrackingEnabled) recordHashIo(false, "cloneHashFrom", std::string());
-	if (sourceIt == sourceStore.hashes.end()) throw std::runtime_error("Invalid hash value.");
-
-	int targetHandle = createHash();
-	std::map<std::string, VirtualMachine::Value> &targetHash = hashes[targetHandle];
-	for (const std::pair<const std::string, VirtualMachine::Value> &entry : sourceIt->second) {
-		VirtualMachine::Value value = entry.second;
-		if (value.type == TYPE_HASH) {
-			value.hashHandle = cloneHashFrom(sourceStore, value.hashHandle, targetGlobalStorage);
-			value.globalStorage = targetGlobalStorage;
-		} else {
-			for (VirtualMachine::Value &arrayValue : value.arrayValues) {
-				if (arrayValue.type == TYPE_HASH) {
-					arrayValue.hashHandle = cloneHashFrom(sourceStore, arrayValue.hashHandle, targetGlobalStorage);
-				}
-				arrayValue.globalStorage = targetGlobalStorage;
-			}
-			value.globalStorage = targetGlobalStorage;
-		}
-		targetHash[entry.first] = value;
-	}
-	return targetHandle;
-}
-
 void MRVMHashStore::eraseHashTree(int handle, bool targetGlobalStorage, std::set<int> &erased) {
 	std::map<int, std::map<std::string, VirtualMachine::Value>>::iterator hashIt;
 	std::map<std::string, VirtualMachine::Value> hashValues;
@@ -288,21 +262,43 @@ const MRVMHashStore &mrvmHashRuntimeStoreForValue(const MRVMHashStore &localStor
 }
 
 VirtualMachine::Value mrvmHashCopyValueForStore(const VirtualMachine::Value &value, MRVMHashStore &localStore, MRVMHashStore &globalStore, MRVMHashStore &targetStore, bool targetGlobalStorage) {
-	VirtualMachine::Value copied = value;
+	using SourceHash = std::pair<const MRVMHashStore *, int>;
+	std::map<SourceHash, int> transferred;
+	std::vector<int> createdHandles;
 
-	if (copied.type == TYPE_HASH) {
-		MRVMHashStore &sourceStore = mrvmHashRuntimeStoreForValue(localStore, globalStore, copied);
-		if (&sourceStore == &targetStore && copied.globalStorage == targetGlobalStorage) return copied;
-		copied.hashHandle = targetStore.cloneHashFrom(sourceStore, copied.hashHandle, targetGlobalStorage);
+	auto copyGraph = [&](auto &self, const VirtualMachine::Value &source, bool root) -> VirtualMachine::Value {
+		VirtualMachine::Value copied = source;
+
+		if (root && source.type == TYPE_HASH && source.globalStorage == targetGlobalStorage && &mrvmHashRuntimeStoreForValue(localStore, globalStore, source) == &targetStore) return source;
+		if (source.type == TYPE_HASH) {
+			MRVMHashStore &sourceStore = mrvmHashRuntimeStoreForValue(localStore, globalStore, source);
+			const SourceHash sourceHash(&sourceStore, source.hashHandle);
+			std::map<SourceHash, int>::const_iterator transferredIt;
+
+			transferredIt = transferred.find(sourceHash);
+			if (transferredIt != transferred.end()) return mrvmMakeHash(transferredIt->second, targetGlobalStorage);
+			copied.hashHandle = targetStore.createHash();
+			copied.globalStorage = targetGlobalStorage;
+			transferred[sourceHash] = copied.hashHandle;
+			createdHandles.push_back(copied.hashHandle);
+			for (const std::string &key : sourceStore.keys(source.hashHandle))
+				targetStore.write(copied.hashHandle, key, self(self, sourceStore.read(source.hashHandle, key), false));
+			return copied;
+		}
+		if (mrvmValueIsArrayType(source.type))
+			for (VirtualMachine::Value &arrayValue : copied.arrayValues)
+				arrayValue = self(self, arrayValue, false);
 		copied.globalStorage = targetGlobalStorage;
 		return copied;
+	};
+
+	try {
+		return copyGraph(copyGraph, value, true);
+	} catch (...) {
+		for (int handle : createdHandles)
+			targetStore.eraseValueTrees(mrvmMakeHash(handle, targetGlobalStorage), targetGlobalStorage);
+		throw;
 	}
-	if (mrvmValueIsArrayType(copied.type)) {
-		for (VirtualMachine::Value &arrayValue : copied.arrayValues)
-			arrayValue = mrvmHashCopyValueForStore(arrayValue, localStore, globalStore, targetStore, targetGlobalStorage);
-	}
-	copied.globalStorage = targetGlobalStorage;
-	return copied;
 }
 
 bool mrvmHashContainsValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key) {
