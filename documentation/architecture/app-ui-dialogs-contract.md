@@ -7,7 +7,7 @@ Applies to:
 - `app/MREditorApp.cpp`
 - `app/MRCommandRouter.cpp`
 - `app/MRMenuFactory.cpp`
-- `dialogs/MRSetup.cpp`
+- `dialogs/setup/`
 - `dialogs/MRWindowList.cpp`
 - `dialogs/MRKeymapManager.cpp`
 - `dialogs/MRMacroFile.cpp`
@@ -48,7 +48,6 @@ Dialogs may trigger:
 - Dialog validators must not display blocking error dialogs.
 - Message-line or marquee feedback is preferred for validation warnings.
 - Dirty state must be set only for real changes.
-- Dialogs whose fixed layout may exceed the current terminal size must use the MR scrollable dialog path (`MRScrollableDialog` / `MRDialogFoundation`) or provide an explicit local proof that all controls remain reachable at smaller terminal sizes.
 
 ## Dialog layout design rules
 
@@ -72,20 +71,17 @@ These rules apply to new dialogs and to layout changes in existing dialogs.
 - Dialog button rows must be horizontally centered.
 - Dialogs must not add a Cancel button by default. Closing without applying changes is handled by the dialog close action.
 - Dialogs that can change settings must use clean dirty gating. Applying unchanged data must not mark settings dirty or trigger save prompts.
-- Dialogs whose fixed layout may not fit the current terminal must switch cleanly into the scrollable dialog path so that all controls remain reachable.
+- Dialogs whose fixed layout may not fit the current terminal must use
+  `MRScrollableDialog` / `MRDialogFoundation` or provide a local proof that all
+  controls remain reachable.
 - Options inside radio-button and checkbox clusters must leave at least one trailing space inside the highlighted cluster area after the longest visible option text.
 - Neighboring clusters must keep two columns of horizontal spacing.
 - Stacked widgets must keep one empty row of vertical spacing unless they form one logical multi-line control.
 - Button rows must keep one empty row of spacing to the dialog frame.
 
-## Allowed
+## Boundaries
 
-- Local UI layout fixes.
-- Validator improvements with unchanged semantics.
-- Removal of dead UI scaffolding after call-site proof.
-- Explicit local code when it improves readability.
-
-## Forbidden without explicit approval
+Without explicit maintainer approval:
 
 - New dialog architecture.
 - New generic setup framework.
@@ -95,18 +91,13 @@ These rules apply to new dialogs and to layout changes in existing dialogs.
 - Opportunistic changes to history behavior.
 - Changes to keymap, workspace or settings persistence from dialog code.
 
-## Deferred design note
+## Related contracts
 
-- `ui/widgets/MRDropList.*` may become a shared visual primitive for small string-selection popups.
-- Reuse for file/path history in load/save dialogs is not implicitly approved by its first use in file-extension settings.
-- A dedicated history tranche is required before reusing it there.
-- That tranche must explicitly review:
-  - cancel on outside click,
-  - integration with the existing scoped history button/popup flow,
-  - focus and event behavior inside load/save and directory dialogs.
-- Until such a tranche is approved, the code-language drop list and scoped history popups may remain separate.
+- [TVision Integration](tvision-integration-contract.md)
+- [Settings Runtime](settings-runtime-contract.md)
+- [Keymap](keymap-contract.md)
 
-## Required tests
+## Required manual tests
 
 For dialog changes, test:
 

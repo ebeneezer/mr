@@ -355,6 +355,8 @@ class MRFileEditor : public TScroller {
 
 	MRTextBufferModel &bufferModel() noexcept;
 
+	bool revertUndoSuffix(std::size_t baseDepth);
+
 	void shareContentStateFrom(const MRFileEditor &source);
 
 	void detachContentStateCopy();
@@ -449,6 +451,7 @@ class MRFileEditor : public TScroller {
 		bool prependLogViewerData(const char *data, uint length, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr);
 
 		bool replaceRangeAndSelect(std::size_t start, std::size_t end, const char *data, std::size_t length);
+		bool replaceRangesAndCollapse(const std::vector<MRTextBufferModel::Range> &ranges, const char *data, std::size_t length);
 
 		int paddingColumnsBeforeInsertAtCursor() const noexcept;
 

@@ -117,8 +117,10 @@ std::string joinCommaSeparatedItems(const std::vector<std::string> &values) {
 
 class TDirtyItemDialog : public MRDialogFoundation {
   public:
-	TDirtyItemDialog(const char *dialogTitle, const char *headline, const char *itemsLabel, const char *joinedItems, const char *primaryLabel) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(74, 11), dialogTitle != nullptr ? dialogTitle : "UNSAVED CHANGES", 74, 11, initMrDialogFrame) {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{primaryLabel != nullptr ? primaryLabel : "~S~ave", cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~iscard", cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+	TDirtyItemDialog(const char *dialogTitle, const char *headline, const char *itemsLabel, const char *joinedItems, const char *primaryLabel, const char *discardLabel) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(74, 11), dialogTitle != nullptr ? dialogTitle : "UNSAVED CHANGES", 74, 11, initMrDialogFrame) {
+		const std::string primaryButtonLabel = addMnemonic(primaryLabel != nullptr ? primaryLabel : "Save", 's');
+		const std::string discardButtonLabel = addMnemonic(discardLabel != nullptr ? discardLabel : "Discard", 'd');
+		const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 3);
 		const int buttonLeft = (74 - metrics.rowWidth) / 2;
 
@@ -249,10 +251,14 @@ bool runDialogConfirm(const char *headline, const char *confirmLabel, const char
 }
 
 UnsavedChangesChoice runDialogDirtyListGating(const char *dialogTitle, const char *headline, const char *itemsLabel, const std::vector<std::string> &dirtyItems, const char *primaryLabel) {
+	return runDialogDirtyListGating(dialogTitle, headline, itemsLabel, dirtyItems, primaryLabel, "Discard");
+}
+
+UnsavedChangesChoice runDialogDirtyListGating(const char *dialogTitle, const char *headline, const char *itemsLabel, const std::vector<std::string> &dirtyItems, const char *primaryLabel, const char *discardLabel) {
 	if (dirtyItems.empty()) return runDialogDirtyGating(headline, primaryLabel);
 	std::string joinedItems = joinCommaSeparatedItems(dirtyItems);
 
-	TDirtyItemDialog *dialog = new TDirtyItemDialog(dialogTitle, headline, itemsLabel, joinedItems.c_str(), primaryLabel);
+	TDirtyItemDialog *dialog = new TDirtyItemDialog(dialogTitle, headline, itemsLabel, joinedItems.c_str(), primaryLabel, discardLabel);
 	if (dialog == nullptr) return UnsavedChangesChoice::Cancel;
 
 	switch (execDialog(dialog)) {

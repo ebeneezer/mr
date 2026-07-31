@@ -14,5 +14,7 @@ misc/enwik9
 *.o
 *.bak
 mr
+/mrbolt
+/mrbolt.tmp
 mrmac/mrmac
 misc/mr.log

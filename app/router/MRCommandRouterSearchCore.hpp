@@ -1,6 +1,7 @@
 #ifndef MRCOMMANDROUTERSEARCHCORE_HPP
 #define MRCOMMANDROUTERSEARCHCORE_HPP
 
+#include <atomic>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -33,12 +34,20 @@ struct SearchPreviewParts {
 	std::string nextLine;
 };
 
+enum class RegexCollectOutcome : unsigned char {
+	Success,
+	Cancelled,
+	Error
+};
+
 std::string buildSearchPatternExpression(const std::string &pattern, MRSearchTextType type);
 SearchPreviewParts previewForMatch(const std::string &text, std::size_t start, std::size_t end);
 std::size_t centeredPreviewLeft(const std::string &line, std::size_t matchOffset, std::size_t matchLength, std::size_t width);
 void lineColumnForOffset(const std::string &text, std::size_t offset, std::size_t &line, std::size_t &column);
 bool collectRegexMatches(const std::string &text, pcre2_code *code, std::vector<SearchMatchEntry> &outMatches);
+RegexCollectOutcome collectRegexMatchesCancellable(const std::string &text, pcre2_code *code, std::vector<SearchMatchEntry> &outMatches, const std::atomic_bool &cancelFlag);
 bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, pcre2_code **outCode, std::string &errorText);
+bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, pcre2_code **outCode, std::string &errorText, bool automaticCallouts);
 bool findRegexForward(const std::string &text, pcre2_code *code, std::size_t startOffset, std::size_t &matchStart, std::size_t &matchEnd);
 bool findRegexForwardInRange(const std::string &text, pcre2_code *code, std::size_t startOffset, std::size_t rangeStart, std::size_t rangeEnd, std::size_t &matchStart, std::size_t &matchEnd);
 bool findLastRegexBeforeLimit(const std::string &text, pcre2_code *code, std::size_t limitOffset, std::size_t rangeStart, std::size_t rangeEnd, std::size_t &matchStart, std::size_t &matchEnd);

@@ -4,78 +4,71 @@
 
 Applies to:
 
-- `keymap/MRKeymapProfile.hpp`
-- `keymap/MRKeymapProfile.cpp`
-- `keymap/MRKeymapResolver.cpp`
-- `keymap/MRKeymapTrie.cpp`
-- `keymap/MRKeymapActionCatalog.cpp`
-- `dialogs/MRKeymapManager.cpp`
-- keymap-related settings loader and VM paths.
+- `keymap/`,
+- `dialogs/MRKeymapManager.*`,
+- keymap source handling under `config/settings/`,
+- `mrmac/vm/MRVMKeymapRuntime.*`,
+- runtime key dispatch.
 
 ## Authority
 
-Configured keymap profiles and the active profile belong to the settings runtime model.
+Configured keymap profiles and the selected active profile belong to the
+settings runtime model. The resolver and trie are runtime projections of that
+model. External keymap files are versioned persistence artifacts.
 
-The resolver is a runtime projection of that model.
-
-External keymap files are versioned persistence artifacts.
+The running build's `MR_BUILD_EPOCH` is the canonical persisted keymap version.
 
 ## Data flow
 
-Settings source -> keymap parse/canonicalize -> settings model -> resolver -> runtime key handling.
-
-For external keymap files, the canonical persisted version is the running
-build's `MR_BUILD_EPOCH`.
+Settings source -> parse and canonicalize -> settings model -> resolver and
+trie -> runtime key handling.
 
 ## Invariants
 
-- No active or invalid runtime keymap must fall back to built-in command handling.
-- Active profile selection must remain deliberate.
-- Keymap persistence format must not change incidentally.
-- Resolver rebuild semantics must not change as formatting cleanup.
-- Diagnostics texts and severity must not change without approval.
-- Loader and dialog roles must not be merged casually.
-- External keymap files with versions lower than the running build are upgrade input.
-- External keymap files with versions higher than the running build are invalid.
+- No active or invalid runtime keymap falls through to built-in command
+  handling.
+- Active profile selection is deliberate and is not inferred from resolver
+  failure.
+- The active profile's `DEFAULT` behavior and invalid-profile fallback remain
+  stable.
+- Sequence conflict handling, canonical ordering and resolver rebuild
+  semantics are part of the keymap contract.
+- Diagnostic text and severity are observable UI behavior.
+- Loader, dialog and resolver roles remain distinct.
+- An older external version is upgrade input; a newer external version is
+  invalid.
+- Writing an external keymap emits the running build epoch.
 
 ## Bootstrap relation
 
-Keymap currently has loader-side staging/canonicalization behavior.
-Whether loader-side keymap application remains tolerated or becomes purely staging is a protected decision.
+The loader may stage validated, canonical keymap data only as described by the
+[Settings Bootstrap contract](settings-bootstrap-contract.md). Staging is not
+the final authoritative resolver state; VM startup application remains the
+final apply path.
 
-The current tolerated transitional rule is K1:
+## Boundaries
 
-- the loader may read, validate and canonicalize keymap data,
-- the loader may write canonicalized keymap data into the runtime settings model before final VM apply,
-- that loader-side write is tolerated only because canonical settings serialization currently reads keymap data from `configuredKeymapProfiles()` and `configuredActiveKeymapProfile()`,
-- that loader-side write is not the final authoritative runtime keymap state.
+Without explicit maintainer approval:
 
-The long-term target remains K2:
+- Do not change `KEYMAP_PROFILE`, `KEYMAP_BIND` or
+  `ACTIVE_KEYMAP_PROFILE` semantics.
+- Do not alter lookup fallback, sequence conflicts, persisted ordering,
+  canonicalization or diagnostic behavior incidentally.
+- Do not merge loader and dialog format ownership or create a second keymap
+  registry.
 
-- keymap staging data should no longer be transported through the runtime settings model,
-- final authoritative keymap application should happen only through the VM startup apply,
-- this requires a separate and explicitly approved transport path from `loadKeymapProfilesFromSettingsSource(...)` to canonical settings serialization.
+## Related contracts
 
-Do not change this while working on unrelated settings or UI tasks.
+- [Settings Runtime](settings-runtime-contract.md)
+- [Settings Bootstrap](settings-bootstrap-contract.md)
+- [App / UI / Dialogs](app-ui-dialogs-contract.md)
 
-## Forbidden without explicit approval
+## Required manual tests
 
-- Changing `KEYMAP_PROFILE`, `KEYMAP_BIND`, `ACTIVE_KEYMAP_PROFILE` semantics.
-- Changing sequence conflict handling.
-- Changing resolver lookup/fallback behavior.
-- Moving diagnostics to a shared API without a dedicated plan.
-- Changing persisted keymap ordering or canonicalization.
-- Preserving stale external keymap version markers on write.
-
-## Required tests
-
-For keymap changes, test:
-
-- load active profile,
-- missing active profile fallback,
-- invalid active profile fallback,
-- duplicate/conflicting bindings,
-- dialog load/save,
-- resolver rebuild,
-- startup with invalid keymap settings,
-- persistence and restart.
+- Load a valid active profile.
+- Probe missing and invalid active-profile fallback.
+- Load duplicate and conflicting bindings.
+- Load, edit and save through the dialog.
+- Rebuild the resolver and switch the active profile.
+- Start with invalid keymap settings.
+- Persist, restart and verify version upgrade/rejection behavior.

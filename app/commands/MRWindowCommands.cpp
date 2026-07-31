@@ -28,6 +28,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 
@@ -155,8 +156,9 @@ short nextEditorWindowNumber() {
 	return nextEditorWindowNumberFromSet(used);
 }
 
-void finishNewEditWindow(MREditWindow *win, bool notifyTopology = true) {
+void finishNewEditWindow(MREditWindow *win, bool notifyTopology = true, bool initiallyVisible = true) {
 	if (win == nullptr || TProgram::deskTop == nullptr) return;
+	if (!initiallyVisible) win->hide();
 	TProgram::deskTop->insert(win);
 	win->mVirtualDesktop = currentVirtualDesktop();
 	win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
@@ -164,7 +166,7 @@ void finishNewEditWindow(MREditWindow *win, bool notifyTopology = true) {
 	if (notifyTopology) mrNotifyWindowTopologyChanged();
 }
 
-MREditWindow *createEditorWindowWithNumber(const char *title, short number, bool notifyTopology) {
+MREditWindow *createEditorWindowWithNumber(const char *title, short number, bool notifyTopology, bool initiallyVisible = true) {
 	TRect bounds;
 	MREditWindow *win;
 
@@ -172,11 +174,11 @@ MREditWindow *createEditorWindowWithNumber(const char *title, short number, bool
 	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRBentoBox(bounds, title, number, bbmDocumentViewports);
-	finishNewEditWindow(win, notifyTopology);
+	finishNewEditWindow(win, notifyTopology, initiallyVisible);
 	return win;
 }
 
-MRBentoHexEditor *createHexEditorWindowWithNumber(const char *title, short number, bool notifyTopology) {
+MRBentoHexEditor *createHexEditorWindowWithNumber(const char *title, short number, bool notifyTopology, bool initiallyVisible = true) {
 	TRect bounds;
 	MRBentoHexEditor *win;
 
@@ -184,20 +186,29 @@ MRBentoHexEditor *createHexEditorWindowWithNumber(const char *title, short numbe
 	bounds = MRWindowLayout::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MRBentoHexEditor(bounds, title, number);
-	finishNewEditWindow(win, notifyTopology);
+	finishNewEditWindow(win, notifyTopology, initiallyVisible);
 	return win;
 }
 } // namespace
 
-MRWindowOpenBatch::MRWindowOpenBatch() : usedNumbers(), mActive(false), mDesktopLocked(false), mCreatedCount(0) {
+MRWindowOpenBatch::MRWindowOpenBatch() : usedNumbers(), mActive(false), mDesktopLocked(false), mDeferVisibility(false), mCreatedCount(0) {
 }
 
 void MRWindowOpenBatch::begin() {
+	beginBatch(false);
+}
+
+void MRWindowOpenBatch::beginInteractive() {
+	beginBatch(true);
+}
+
+void MRWindowOpenBatch::beginBatch(bool deferVisibility) {
 	if (mActive) return;
 	usedNumbers.clear();
 	collectUsedEditorWindowNumbers(usedNumbers);
 	mCreatedCount = 0;
-	if (TProgram::deskTop != nullptr) {
+	mDeferVisibility = deferVisibility;
+	if (!mDeferVisibility && TProgram::deskTop != nullptr) {
 		TProgram::deskTop->lock();
 		mDesktopLocked = true;
 	}
@@ -208,7 +219,7 @@ MREditWindow *MRWindowOpenBatch::createEditorWindow(const char *title) {
 	MREditWindow *window = nullptr;
 
 	if (!mActive) begin();
-	window = createEditorWindowWithNumber(title, nextEditorWindowNumberFromSet(usedNumbers), false);
+	window = createEditorWindowWithNumber(title, nextEditorWindowNumberFromSet(usedNumbers), false, !mDeferVisibility);
 	if (window != nullptr) ++mCreatedCount;
 	return window;
 }
@@ -217,18 +228,23 @@ MRBentoHexEditor *MRWindowOpenBatch::createHexEditorWindow(const char *title) {
 	MRBentoHexEditor *window = nullptr;
 
 	if (!mActive) begin();
-	window = createHexEditorWindowWithNumber(title, nextEditorWindowNumberFromSet(usedNumbers), false);
+	window = createHexEditorWindowWithNumber(title, nextEditorWindowNumberFromSet(usedNumbers), false, !mDeferVisibility);
 	if (window != nullptr) ++mCreatedCount;
 	return window;
 }
 
 void MRWindowOpenBatch::finish(bool syncVisibility, bool notifyTopology) {
+	const bool synchronizeDeferredVisibility = mDeferVisibility && mCreatedCount != 0 && syncVisibility;
+
 	if (!mActive) return;
 	if (mDesktopLocked && TProgram::deskTop != nullptr) TProgram::deskTop->unlock();
 	mDesktopLocked = false;
 	mActive = false;
+	if (synchronizeDeferredVisibility && TProgram::deskTop != nullptr) TProgram::deskTop->lock();
 	if (mCreatedCount != 0 && syncVisibility) syncVirtualDesktopVisibility();
+	if (synchronizeDeferredVisibility && TProgram::deskTop != nullptr) TProgram::deskTop->unlock();
 	if (mCreatedCount != 0 && notifyTopology) mrNotifyWindowTopologyChanged();
+	mDeferVisibility = false;
 }
 
 bool MRWindowOpenBatch::active() const noexcept {
@@ -243,7 +259,12 @@ static bool g_workspaceAutosaveDirty = false;
 static bool g_workspaceRestoreInProgress = false;
 static std::chrono::steady_clock::time_point g_workspaceAutosaveDue;
 static constexpr std::chrono::milliseconds kWorkspaceAutosaveDelay(1000);
-static constexpr int kWorkspaceRestoreProgressEntryThreshold = 50;
+static constexpr long long kWorkspaceRestoreAnnouncementThresholdMs = 3000;
+static constexpr long long kWorkspaceRestoreEstimatedEntryMs = 20;
+static constexpr long long kWorkspaceRestoreEstimatedBentoExtraMs = 20;
+static constexpr long long kWorkspaceRestoreEstimatedFileCompareExtraMs = 20;
+static constexpr long long kWorkspaceRestoreEstimatedDebuggerExtraMs = 60;
+static constexpr long long kWorkspaceRestoreEstimatedFileCompareBytesPerMs = 512 * 1024;
 
 namespace {
 int normalizedVirtualDesktopCount(int count) {
@@ -492,33 +513,22 @@ void applyWorkspaceEntryGeometry(MREditWindow *window, const WorkspaceEntry &ent
 	mrLogMessage(detail.str());
 }
 
-int countWorkspaceEntriesInSource(const std::string &source) {
-	std::istringstream input(source);
-	std::string line;
-	int count = 0;
-
-	while (std::getline(input, line)) {
-		WorkspaceEntry entry;
-
-		if (parseWorkspaceEntry(line, entry)) ++count;
-	}
-	return count;
-}
-
 void drawWorkspaceMessageLineNow(const std::string &text, MRMenuBar::MarqueeKind kind) {
 	MRMenuBar *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar);
 
 	if (menuBar == nullptr) return;
-	menuBar->setAutoMarqueeStatus(text, kind);
-	menuBar->drawView();
+	menuBar->setAutoMarqueeStatusImmediate(text, kind);
 	TScreen::flushScreen();
 }
 
 void postWorkspaceRestoreProgress(int processedEntries, int totalEntries, bool refreshNow) {
-	std::string text = "Workspace restore: " + std::to_string(processedEntries) + "/" + std::to_string(totalEntries);
+	std::string text;
 
-	mr::messageline::postSticky(mr::messageline::Owner::HeroEvent, text, mr::messageline::Kind::Info, mr::messageline::kPriorityHigh);
-	if (refreshNow) drawWorkspaceMessageLineNow(text, MRMenuBar::MarqueeKind::Hero);
+	if (processedEntries == 0) text = "Restoring workspace: " + std::to_string(totalEntries) + " entries.";
+	else
+		text = "Restoring workspace: " + std::to_string(processedEntries) + "/" + std::to_string(totalEntries) + ".";
+	mr::messageline::postSticky(mr::messageline::Owner::WorkspaceRestore, text, mr::messageline::Kind::Info, mr::messageline::kPriorityHigh);
+	if (refreshNow) drawWorkspaceMessageLineNow(text, MRMenuBar::MarqueeKind::Info);
 }
 
 void hideAllEditorFrameHoverPopups() {
@@ -1061,12 +1071,16 @@ void mrLoadWorkspace(const std::string &filename) {
 	const auto loadStartedAt = std::chrono::steady_clock::now();
 	std::string settingsPath = filename;
 	long long readUs = 0;
+	long long preflightUs = 0;
 	long long parseLoopUs = 0;
 	long long visibilityUs = 0;
+	long long estimatedRestoreMs = 0;
+	long long estimatedFileCompareBytes = 0;
 	int totalWorkspaceEntries = 0;
 	std::chrono::steady_clock::time_point lastWorkspaceProgressAt = std::chrono::steady_clock::time_point::min();
 	const ushort restoreCursorLines = TScreen::cursorLines;
 	bool cursorSuppressedForRestore = false;
+	bool announceWorkspaceRestore = false;
 
 	if (settingsPath.empty()) {
 		settingsPath = configuredSettingsMacroFilePath();
@@ -1075,22 +1089,56 @@ void mrLoadWorkspace(const std::string &filename) {
 	if (dest.find(".mrmac") == std::string::npos) {
 		dest += ".mrmac";
 	}
-
 	std::string currentContent;
 	std::string errorText;
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		if (!readTextFile(dest, currentContent, errorText)) {
+			const std::string text = "Unable to read workspace: " + workspaceDisplayName(dest);
+
 			mrLogMessage("Workspace load failed read path=" + dest + " error=" + errorText + ".");
-			mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Unable to read workspace: " + workspaceDisplayName(dest), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+			mr::messageline::postAutoTimed(mr::messageline::Owner::WorkspaceRestore, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+			drawWorkspaceMessageLineNow(text, MRMenuBar::MarqueeKind::Error);
 			return;
 		}
 		readUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
 	mrLogMessage("Workspace load begin path=" + dest + " bytes=" + std::to_string(currentContent.size()) + ".");
-	totalWorkspaceEntries = countWorkspaceEntriesInSource(currentContent);
-	g_workspaceRestoreInProgress = totalWorkspaceEntries > kWorkspaceRestoreProgressEntryThreshold;
-	if (g_workspaceRestoreInProgress) {
+	std::vector<WorkspaceEntry> workspaceEntries;
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		std::istringstream input(currentContent);
+		std::string line;
+
+		while (std::getline(input, line)) {
+			WorkspaceEntry entry;
+
+			if (!parseWorkspaceEntry(line, entry, true)) continue;
+			estimatedRestoreMs += kWorkspaceRestoreEstimatedEntryMs;
+			if (entry.hasBentoSnapshot) estimatedRestoreMs += kWorkspaceRestoreEstimatedBentoExtraMs;
+			if (entry.hasMacroDebuggerConfiguration) estimatedRestoreMs += kWorkspaceRestoreEstimatedDebuggerExtraMs;
+			if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare) {
+				const std::string *sourcePaths[] = {&entry.fileCompareOriginalUrl, &entry.fileCompareCompareUrl};
+
+				estimatedRestoreMs += kWorkspaceRestoreEstimatedFileCompareExtraMs;
+				for (const std::string *sourcePath : sourcePaths) {
+					struct stat sourceInfo {};
+
+					if (::stat(sourcePath->c_str(), &sourceInfo) != 0 || !S_ISREG(sourceInfo.st_mode) || sourceInfo.st_size <= 0) continue;
+					estimatedFileCompareBytes += static_cast<long long>(sourceInfo.st_size);
+					estimatedRestoreMs += static_cast<long long>(sourceInfo.st_size) / kWorkspaceRestoreEstimatedFileCompareBytesPerMs;
+					if (static_cast<long long>(sourceInfo.st_size) % kWorkspaceRestoreEstimatedFileCompareBytesPerMs != 0) ++estimatedRestoreMs;
+				}
+			}
+			workspaceEntries.push_back(std::move(entry));
+		}
+		preflightUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
+	}
+	totalWorkspaceEntries = static_cast<int>(workspaceEntries.size());
+	announceWorkspaceRestore = estimatedRestoreMs >= kWorkspaceRestoreAnnouncementThresholdMs;
+	g_workspaceRestoreInProgress = announceWorkspaceRestore;
+	mrLogMessage("Workspace restore estimate path=" + dest + " entries=" + std::to_string(totalWorkspaceEntries) + " file_compare_bytes=" + std::to_string(estimatedFileCompareBytes) + " estimated_ms=" + std::to_string(estimatedRestoreMs) + " announced=" + (announceWorkspaceRestore ? "1" : "0") + ".");
+	if (announceWorkspaceRestore) {
 		cursorSuppressedForRestore = true;
 		TScreen::cursorLines = 0;
 		TScreen::setCursorType(0);
@@ -1105,8 +1153,7 @@ void mrLoadWorkspace(const std::string &filename) {
 		lastWorkspaceProgressAt = std::chrono::steady_clock::now();
 	}
 
-	std::istringstream iss(currentContent);
-	std::string line;
+	const auto restoreStartedAt = std::chrono::steady_clock::now();
 	bool discardedWorkspaceEntries = false;
 	bool loadedMainFile = false;
 	int parsedWorkspaceEntries = 0;
@@ -1116,9 +1163,8 @@ void mrLoadWorkspace(const std::string &filename) {
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		openBatch.begin();
-		while (std::getline(iss, line)) {
+		for (const WorkspaceEntry &entry : workspaceEntries) {
 			const auto entryStartedAt = std::chrono::steady_clock::now();
-			WorkspaceEntry entry;
 			MREditWindow *win = nullptr;
 			MRFileEditor *editor = nullptr;
 			std::string err;
@@ -1129,11 +1175,10 @@ void mrLoadWorkspace(const std::string &filename) {
 			long long geometryUs = 0;
 			long long cursorUs = 0;
 
-				if (!parseWorkspaceEntry(line, entry, true)) continue;
-				++parsedWorkspaceEntries;
-				if (g_workspaceRestoreInProgress) {
-					const auto now = std::chrono::steady_clock::now();
-					const bool shouldReportProgress = parsedWorkspaceEntries == 1 || parsedWorkspaceEntries == totalWorkspaceEntries || now - lastWorkspaceProgressAt >= std::chrono::milliseconds(1500);
+			++parsedWorkspaceEntries;
+			if (announceWorkspaceRestore) {
+				const auto now = std::chrono::steady_clock::now();
+				const bool shouldReportProgress = parsedWorkspaceEntries == 1 || parsedWorkspaceEntries == totalWorkspaceEntries || now - lastWorkspaceProgressAt >= std::chrono::milliseconds(1500);
 
 				if (shouldReportProgress) {
 					postWorkspaceRestoreProgress(parsedWorkspaceEntries, totalWorkspaceEntries, true);
@@ -1228,7 +1273,7 @@ void mrLoadWorkspace(const std::string &filename) {
 		parseLoopUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 		}
 		g_workspaceRestoreInProgress = false;
-		if (totalWorkspaceEntries > kWorkspaceRestoreProgressEntryThreshold) hideAllEditorFrameHoverPopups();
+		if (announceWorkspaceRestore) hideAllEditorFrameHoverPopups();
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		syncVirtualDesktopVisibility();
@@ -1240,8 +1285,9 @@ void mrLoadWorkspace(const std::string &filename) {
 	{
 		std::ostringstream detail;
 		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - loadStartedAt).count();
+		const long long actualRestoreMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - restoreStartedAt).count();
 
-		detail << "read_us=" << readUs << " parse_loop_us=" << parseLoopUs << " visibility_us=" << visibilityUs << " parsed=" << parsedWorkspaceEntries << " loaded=" << loadedWorkspaceEntries << " bytes=" << currentContent.size() << " path=\"" << dest << "\"";
+		detail << "read_us=" << readUs << " preflight_us=" << preflightUs << " parse_loop_us=" << parseLoopUs << " visibility_us=" << visibilityUs << " estimated_ms=" << estimatedRestoreMs << " actual_restore_ms=" << actualRestoreMs << " announced=" << (announceWorkspaceRestore ? 1 : 0) << " parsed=" << parsedWorkspaceEntries << " loaded=" << loadedWorkspaceEntries << " bytes=" << currentContent.size() << " path=\"" << dest << "\"";
 		logWindowTiming("Workspace load total timing", tookUs, detail.str());
 		}
 		if (parsedWorkspaceEntries != 0 && loadedWorkspaceEntries == 0) {
@@ -1249,14 +1295,20 @@ void mrLoadWorkspace(const std::string &filename) {
 			mrLogMessage("Workspace load restored no entries; autosaved workspace was left preserved.");
 		}
 		if (discardedWorkspaceEntries) mrLogMessage("Workspace load skipped one or more invalid entries; source was left unchanged.");
-		if (totalWorkspaceEntries > kWorkspaceRestoreProgressEntryThreshold) {
-			mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
-			drawWorkspaceMessageLineNow(std::string(), MRMenuBar::MarqueeKind::Hero);
-		}
 	if (cursorSuppressedForRestore) {
 		TScreen::cursorLines = restoreCursorLines;
 		TScreen::setCursorType(restoreCursorLines);
 		if (TProgram::deskTop != nullptr) TProgram::deskTop->resetCursor();
+	}
+	if (announceWorkspaceRestore) {
+		const int skippedWorkspaceEntries = std::max(0, parsedWorkspaceEntries - loadedWorkspaceEntries);
+		const long long tookMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - restoreStartedAt).count();
+		std::string text = "Workspace restored: " + std::to_string(loadedWorkspaceEntries) + "/" + std::to_string(parsedWorkspaceEntries) + " entries in " + std::to_string(tookMs) + " ms.";
+		const bool entriesSkipped = skippedWorkspaceEntries != 0;
+
+		if (entriesSkipped) text += " " + std::to_string(skippedWorkspaceEntries) + " skipped.";
+		mr::messageline::postAutoTimed(mr::messageline::Owner::WorkspaceRestore, text, entriesSkipped ? mr::messageline::Kind::Warning : mr::messageline::Kind::Info, entriesSkipped ? mr::messageline::kPriorityHigh : mr::messageline::kPriorityMedium);
+		drawWorkspaceMessageLineNow(text, entriesSkipped ? MRMenuBar::MarqueeKind::Warning : MRMenuBar::MarqueeKind::Info);
 	}
 }
 
@@ -1817,6 +1869,10 @@ bool resolveReadableExistingPath(MRDialogHistoryScope scope, const char *path, s
 }
 
 bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPath, const char *operationLabel) {
+	return loadResolvedFileIntoWindow(win, resolvedPath, operationLabel, MRFileLoadMessages::PerFile);
+}
+
+bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPath, const char *operationLabel, MRFileLoadMessages messages) {
 	const auto fallbackLoadStartedAt = std::chrono::steady_clock::now();
 	if (win == nullptr) return false;
 	if (!win->loadFromFile(resolvedPath.c_str())) {
@@ -1852,16 +1908,22 @@ bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPa
 
 	mr::performance::recordUiEvent(operationLabel != nullptr ? operationLabel : "Load file", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, loadMs, resolvedPath);
 	mr::performance::recordUiEvent("Line count", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, lineCountMs, resolvedPath);
-	postLoadHeroEvents(resolvedPath, bytes, loadMs, lines, linesExact, lineCountMs);
+	if (messages == MRFileLoadMessages::PerFile)
+		postLoadHeroEvents(resolvedPath, bytes, loadMs, lines, linesExact, lineCountMs);
+	else if (win->getEditor() != nullptr)
+		win->getEditor()->markMiniMapInitialRenderReported();
 	return true;
 }
 
-bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow) {
+namespace {
+bool openResolvedFilesIntoWindowsWithBatch(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow, MRFileLoadMessages messages,
+                                           MRWindowOpenBatch *sharedBatch) {
 	MREditWindow *current = currentEditWindow();
 	MREditWindow *previousActive = restoreWindow != nullptr ? restoreWindow : current;
 	MREditWindow *lastLoadedWindow = nullptr;
-	MRWindowOpenBatch openBatch;
-	const bool useBatch = resolvedPaths.size() > 1;
+	MRWindowOpenBatch localBatch;
+	MRWindowOpenBatch &openBatch = sharedBatch != nullptr ? *sharedBatch : localBatch;
+	const bool useBatch = sharedBatch != nullptr || resolvedPaths.size() > 1;
 
 	for (const std::string &resolvedPath : resolvedPaths) {
 		const bool useHexEditor = shouldAutoOpenHexEditor(resolvedPath);
@@ -1873,7 +1935,7 @@ bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 			createdTarget = true;
 		}
 		if (target == nullptr) continue;
-		if (!loadResolvedFileIntoWindow(target, resolvedPath, "Open file")) {
+		if (!loadResolvedFileIntoWindow(target, resolvedPath, "Open file", messages)) {
 			forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
 			if (createdTarget) message(target, evCommand, cmClose, nullptr);
 			if (target != nullptr && isEmptyUntitledEditableWindow(target) && current != target && current != nullptr) static_cast<void>(mrActivateEditWindow(current));
@@ -1888,8 +1950,8 @@ bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 		lastLoadedWindow = target;
 		current = target;
 	}
-	if (openBatch.active()) openBatch.finish(true, lastLoadedWindow != nullptr);
-	if (lastLoadedWindow != nullptr) {
+	if (sharedBatch == nullptr && openBatch.active()) openBatch.finish(true, lastLoadedWindow != nullptr);
+	if (sharedBatch == nullptr && lastLoadedWindow != nullptr) {
 		if (activation == MRLoadedWindowActivation::ActivateLast) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
 		else if (previousActive != nullptr && previousActive != lastLoadedWindow)
 			static_cast<void>(mrActivateEditWindow(previousActive));
@@ -1897,14 +1959,16 @@ bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 	return lastLoadedWindow != nullptr;
 }
 
-bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow) {
+bool loadResolvedFilesIntoWindowsWithBatch(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow, MRFileLoadMessages messages,
+                                           MRWindowOpenBatch *sharedBatch) {
 	MREditWindow *target = currentEditWindow();
 	MREditWindow *previousActive = restoreWindow != nullptr ? restoreWindow : target;
 	MREditWindow *lastLoadedWindow = nullptr;
 	bool createdTarget = false;
 	bool first = true;
-	MRWindowOpenBatch openBatch;
-	const bool useBatch = resolvedPaths.size() > 1;
+	MRWindowOpenBatch localBatch;
+	MRWindowOpenBatch &openBatch = sharedBatch != nullptr ? *sharedBatch : localBatch;
+	const bool useBatch = sharedBatch != nullptr || resolvedPaths.size() > 1;
 
 	if (resolvedPaths.empty()) return false;
 	if (target != nullptr && !target->confirmAbandonForReload())
@@ -1930,7 +1994,7 @@ bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 			first = false;
 			continue;
 		}
-		if (!loadResolvedFileIntoWindow(loadTarget, resolvedPath, "Load file")) {
+		if (!loadResolvedFileIntoWindow(loadTarget, resolvedPath, "Load file", messages)) {
 			forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 			if (createdLoadTarget || (first && createdTarget)) message(loadTarget, evCommand, cmClose, nullptr);
 			if (first && createdTarget) target = nullptr;
@@ -1946,13 +2010,40 @@ bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 		lastLoadedWindow = loadTarget;
 		first = false;
 	}
-	if (openBatch.active()) openBatch.finish(true, lastLoadedWindow != nullptr);
-	if (lastLoadedWindow != nullptr) {
+	if (sharedBatch == nullptr && openBatch.active()) openBatch.finish(true, lastLoadedWindow != nullptr);
+	if (sharedBatch == nullptr && lastLoadedWindow != nullptr) {
 		if (activation == MRLoadedWindowActivation::ActivateLast) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
 		else if (previousActive != nullptr && previousActive != lastLoadedWindow)
 			static_cast<void>(mrActivateEditWindow(previousActive));
 	}
 	return lastLoadedWindow != nullptr;
+}
+} // namespace
+
+bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow) {
+	return openResolvedFilesIntoWindows(resolvedPaths, activation, restoreWindow, MRFileLoadMessages::PerFile);
+}
+
+bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow, MRFileLoadMessages messages) {
+	return openResolvedFilesIntoWindowsWithBatch(resolvedPaths, activation, restoreWindow, messages, nullptr);
+}
+
+bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow, MRFileLoadMessages messages,
+                                  MRWindowOpenBatch &openBatch) {
+	return openResolvedFilesIntoWindowsWithBatch(resolvedPaths, activation, restoreWindow, messages, &openBatch);
+}
+
+bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow) {
+	return loadResolvedFilesIntoWindows(resolvedPaths, activation, restoreWindow, MRFileLoadMessages::PerFile);
+}
+
+bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow, MRFileLoadMessages messages) {
+	return loadResolvedFilesIntoWindowsWithBatch(resolvedPaths, activation, restoreWindow, messages, nullptr);
+}
+
+bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow, MRFileLoadMessages messages,
+                                  MRWindowOpenBatch &openBatch) {
+	return loadResolvedFilesIntoWindowsWithBatch(resolvedPaths, activation, restoreWindow, messages, &openBatch);
 }
 
 bool saveEditWindowAs(MREditWindow *win) {

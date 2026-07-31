@@ -6,6 +6,10 @@ Applies to:
 
 - `mrmac/mrmac.c`
 - `mrmac/MRMacroRunner.cpp`
+- `mrmac/vm/MRVMRuntimeGlobals.*`
+- `mrmac/vm/MRVMRuntimeCatalog.*`
+- `mrmac/vm/MRVMRuntimeDebugger.*`
+- `mrmac/macros/compilersupport/`
 - the canonical bytecode generation path.
 
 ## Authority
@@ -77,9 +81,6 @@ Normal `DEF_*` variables in a finite macro execution remain VM-local. In a
 long-lived execution session, `DEF_*` variables are session state and belong
 under `EXECSESSIONS`, not under `MACROGLOBALS`.
 
-C++ `GlobalEntry`-like records are transfer objects only. They must be rebuilt
-from `MACROGLOBALS` and must not become a second value-bearing global registry.
-
 ## Macro Catalog Runtime State
 
 Loaded macro file and macro definition state is runtime-only VM state under the
@@ -108,10 +109,6 @@ runtime menu lookup resolve loaded macros.
   bindings,
 - `MACROCATALOG/indexed/warmup/cursor` and
   `MACROCATALOG/indexed/warmup/attemptedFiles/<fileKey>` for indexed warmup.
-
-C++ `MacroRef`, `LoadedMacroFile` and `IndexedBoundMacroEntry` objects are
-transfer objects only. They must be rebuilt from `MACROCATALOG` and must not
-become a second value-bearing macro registry.
 
 ## Macro Debugger Runtime State
 
@@ -153,8 +150,6 @@ Only a paused debug VM may change an existing scalar `int`, `real`, `str` or
 write time, writes the existing closure/session/global backing store where
 applicable, and returns a fresh variable snapshot. Arrays and hashes remain
 read-only. The UI keeps no writable variable copy.
-C++ debugger objects are transfer objects only. They must be rebuilt from
-`MACRODEBUGGER` and must not become a second value-bearing debugger registry.
 
 ## Compiler Support Macros
 
@@ -178,13 +173,9 @@ Auto-detected compiler profiles may set a default hook only by writing the
 same explicit macro spec that the user can inspect and replace in the compiler
 profile dialog.
 
-## Allowed
+## Boundaries
 
-- Local bug fixes with regression proof.
-- Compiler diagnostics improvements when text changes are approved.
-- Compiler fixes that preserve existing documented semantics.
-
-## Forbidden without explicit approval
+Without explicit maintainer approval:
 
 - Grammar rewrites.
 - Opcode renumbering or semantic changes.
@@ -192,11 +183,16 @@ profile dialog.
 - Introducing hidden compatibility rewrites.
 - Introducing a second compiler frontend or bytecode emission path.
 
-## Required tests
+## Related contracts
+
+- [MRMac Execution Session](mrmac-exec-session-contract.md)
+- [VM / Intrinsics / Deferred UI](vm-deferred-ui-contract.md)
+- [MRMAC Reference Manual](mrmac-reference-manual-contract.md)
+
+## Required manual tests
 
 For language/compiler changes, test:
 
-- clean build,
 - representative macro compile,
 - VM execution of compiled bytecode,
 - relevant regression checks.

@@ -25,23 +25,23 @@ Versioned generated headers are treated as tracked source artifacts for clean-bu
 
 ## Invariants
 
-- `make clean all CXX=clang++` must work.
-- Existing `paplay` build signals must not be removed.
 - The normal visible regression suite must contain at most 20 `runTest(...)` entries.
 - Regression checks must target stable behavioral or structural invariants with low maintenance cost.
-- Regression checks are planned only after implementation and sight review of the finished tranche.
-- Regression checks directly tied to the current change do not require separate maintainer approval.
+- Tracked generated headers remain available to a one-shot clean build.
 
-## Forbidden without explicit approval
+Build invocation, regression timing and `paplay` requirements are defined once
+in root [`AGENTS.md`](../../AGENTS.md).
+
+## Boundaries
+
+Without explicit maintainer approval:
 
 - Changing generated-file policy incidentally.
 - Changing clean semantics beyond the requested build fix.
-- Adding or expanding regression checks before the finished tranche has been reviewed.
 - Adding overly case-specific regression checks where one sufficiently abstract invariant check can protect the same contract.
 - Adding broad test infrastructure or rewriting the regression harness without explicit maintainer scope.
-- Removing Makefile audio feedback.
 
-## Required tests
+## Required manual tests
 
 For build changes, test:
 

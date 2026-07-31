@@ -479,6 +479,104 @@ CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 	return result;
 }
 
+CommitResult TextDocument::tryApplyReplacements(const std::vector<Range> &ranges, std::string_view replacement, std::size_t expectedVersion) {
+	CommitResult result;
+	result.expectedVersion = expectedVersion;
+	result.actualVersion = mVersion;
+	if (!matchesVersion(expectedVersion)) {
+		result.status = CommitStatus::VersionConflict;
+		return result;
+	}
+	if (ranges.empty()) return result;
+
+	Offset newLength = mLength;
+	Offset previousEnd = 0;
+	bool changesText = false;
+
+	for (const Range &range : ranges) {
+		if (range.start > range.end || range.end > mLength || range.start < previousEnd) return result;
+		newLength -= range.length();
+		if (replacement.size() > static_cast<std::size_t>(-1) - newLength) return result;
+		newLength += replacement.size();
+		previousEnd = range.end;
+		changesText = changesText || !range.empty() || !replacement.empty();
+	}
+	if (!changesText) return result;
+
+	std::string finalText;
+	finalText.reserve(newLength);
+	std::size_t pieceIndex = 0;
+	Offset pieceOffset = 0;
+	Offset sourceOffset = 0;
+
+	for (const Range &range : ranges) {
+		while (sourceOffset < range.start) {
+			if (pieceIndex >= pieceCount()) return result;
+			const PieceChunkView chunk = pieceChunk(pieceIndex);
+			if (chunk.data == nullptr || pieceOffset >= chunk.length) {
+				++pieceIndex;
+				pieceOffset = 0;
+				continue;
+			}
+			const Offset copyLength = std::min(range.start - sourceOffset, chunk.length - pieceOffset);
+			finalText.append(chunk.data + pieceOffset, copyLength);
+			sourceOffset += copyLength;
+			pieceOffset += copyLength;
+		}
+		while (sourceOffset < range.end) {
+			if (pieceIndex >= pieceCount()) return result;
+			const PieceChunkView chunk = pieceChunk(pieceIndex);
+			if (chunk.data == nullptr || pieceOffset >= chunk.length) {
+				++pieceIndex;
+				pieceOffset = 0;
+				continue;
+			}
+			const Offset skipLength = std::min(range.end - sourceOffset, chunk.length - pieceOffset);
+			sourceOffset += skipLength;
+			pieceOffset += skipLength;
+		}
+		if (!replacement.empty()) finalText.append(replacement.data(), replacement.size());
+	}
+	while (sourceOffset < mLength) {
+		if (pieceIndex >= pieceCount()) return result;
+		const PieceChunkView chunk = pieceChunk(pieceIndex);
+		if (chunk.data == nullptr || pieceOffset >= chunk.length) {
+			++pieceIndex;
+			pieceOffset = 0;
+			continue;
+		}
+		const Offset copyLength = std::min(mLength - sourceOffset, chunk.length - pieceOffset);
+		finalText.append(chunk.data + pieceOffset, copyLength);
+		sourceOffset += copyLength;
+		pieceOffset += copyLength;
+	}
+	if (finalText.size() != newLength) return result;
+
+	const Offset oldLength = mLength;
+	const std::size_t oldVersion = mVersion;
+	mOriginalBuffer = std::make_shared<std::string>(std::move(finalText));
+	mMappedOriginal.reset();
+	mAddBuffer.clear();
+	mPieces = std::make_shared<std::vector<Piece>>();
+	mLength = newLength;
+	if (mLength != 0) mPieces->push_back(Piece(BufferKind::Original, TextSpan(0, mLength)));
+	mMaterializedText.clear();
+	mCacheDirty = mLength != 0;
+	resetLazyLineIndex();
+	mEditedLineStarts.reset();
+	bumpVersion();
+
+	result.status = CommitStatus::Applied;
+	result.actualVersion = mVersion;
+	result.change.changed = true;
+	result.change.touchedRange = Range(ranges.front().start, std::max(oldLength, mLength));
+	result.change.oldLength = oldLength;
+	result.change.newLength = mLength;
+	result.change.oldVersion = oldVersion;
+	result.change.newVersion = mVersion;
+	return result;
+}
+
 void TextDocument::insert(Offset offset, std::string_view text) {
 	if (text.empty()) return;
 	if (insertAddSpanNoVersionBump(offset, mAddBuffer.append(text))) bumpVersion();

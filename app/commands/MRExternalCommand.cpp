@@ -321,7 +321,7 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	return true;
 }
 
-mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::size_t channelId, const std::string &command, const MRBuildHookContext &buildContext, const std::string &successAudioUri, const std::string &failureAudioUri, bool streamOutput) {
+mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::size_t channelId, const std::string &command, const MRBuildHookContext &buildContext, const std::string &successAudioUri, const std::string &failureAudioUri, bool streamOutput, bool mergeStandardError) {
 	mr::coprocessor::Result result;
 	int pipeFds[2] = {-1, -1};
 	pid_t childPid = -1;
@@ -355,7 +355,15 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 		std::string shellPath = configuredShellExecutablePath();
 		::setpgid(0, 0);
 		::dup2(pipeFds[1], STDOUT_FILENO);
-		::dup2(pipeFds[1], STDERR_FILENO);
+		if (mergeStandardError) {
+			::dup2(pipeFds[1], STDERR_FILENO);
+		} else {
+			int nullFd = ::open("/dev/null", O_WRONLY);
+			if (nullFd >= 0) {
+				::dup2(nullFd, STDERR_FILENO);
+				::close(nullFd);
+			}
+		}
 		::close(pipeFds[0]);
 		::close(pipeFds[1]);
 		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(nullptr));

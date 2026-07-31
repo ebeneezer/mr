@@ -67,6 +67,7 @@ class MRTextBufferModel {
 		std::size_t selAnchor;
 		std::size_t selCursor;
 		bool modifiedState = false;
+		DocumentChangeSet changeSet;
 		int blockMode = 0;
 		std::size_t blockAnchor = 0;
 		std::size_t blockEnd = 0;
@@ -302,9 +303,40 @@ class MRTextBufferModel {
 		copyBlockState(mShared->undoStack.back(), record);
 	}
 
+	void updateUndoTopChangeSet(const DocumentChangeSet &changeSet) {
+		if (mShared->undoStack.empty()) return;
+		mShared->undoStack.back().changeSet = changeSet;
+	}
+
 	void updateRedoTopBlockState(const CustomUndoRecord &record) {
 		if (mShared->redoStack.empty()) return;
 		copyBlockState(mShared->redoStack.back(), record);
+	}
+
+	bool revertUndoSuffix(std::size_t baseDepth, CustomUndoRecord *outRecord = nullptr) {
+		const auto startedAt = std::chrono::steady_clock::now();
+		if (baseDepth >= mShared->undoStack.size()) return false;
+
+		const std::size_t removedCount = mShared->undoStack.size() - baseDepth;
+		CustomUndoRecord record = mShared->undoStack[baseDepth];
+		mShared->document.restoreFromSnapshot(record.preSnapshot);
+		mCursor.offset = record.cursor;
+		mSelection.anchor = record.selAnchor;
+		mSelection.cursor = record.selCursor;
+		mShared->modified = record.modifiedState;
+		mShared->undoStack.resize(baseDepth);
+		mShared->redoStack.clear();
+		clampState();
+		if (outRecord != nullptr) *outRecord = std::move(record);
+
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowUndoTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 undo revertUndoSuffix total_us=" << undoTraceMicros(totalElapsed) << " removed=" << removedCount << " undo=" << mShared->undoStack.size()
+			     << " redo=" << mShared->redoStack.size() << " len=" << mShared->document.length() << " add=" << mShared->document.addBufferLength() << " pieces=" << mShared->document.pieceCount();
+			appendUndoTrace(line.str());
+		}
+		return true;
 	}
 
 	bool undo(CustomUndoRecord *outRecord = nullptr) {
@@ -314,7 +346,7 @@ class MRTextBufferModel {
 		CustomUndoRecord redoRecord;
 		const auto redoSnapshotStartedAt = std::chrono::steady_clock::now();
 		redoRecord.preSnapshot = mShared->document.readSnapshot();
-		redoRecord.preSnapshot.dropExactLineStartIndex();
+		redoRecord.preSnapshot.compactLineIndexForUndo(mCursor.offset);
 		const auto redoSnapshotElapsed = std::chrono::steady_clock::now() - redoSnapshotStartedAt;
 		redoRecord.cursor = mCursor.offset;
 		redoRecord.selAnchor = mSelection.anchor;
@@ -323,6 +355,7 @@ class MRTextBufferModel {
 		mShared->redoStack.push_back(std::move(redoRecord));
 
 		const CustomUndoRecord &undoRecord = mShared->undoStack.back();
+		mShared->redoStack.back().changeSet = undoRecord.changeSet;
 		const auto restoreStartedAt = std::chrono::steady_clock::now();
 		mShared->document.restoreFromSnapshot(undoRecord.preSnapshot);
 		const auto restoreElapsed = std::chrono::steady_clock::now() - restoreStartedAt;
@@ -351,7 +384,7 @@ class MRTextBufferModel {
 		CustomUndoRecord undoRecord;
 		const auto undoSnapshotStartedAt = std::chrono::steady_clock::now();
 		undoRecord.preSnapshot = mShared->document.readSnapshot();
-		undoRecord.preSnapshot.dropExactLineStartIndex();
+		undoRecord.preSnapshot.compactLineIndexForUndo(mCursor.offset);
 		const auto undoSnapshotElapsed = std::chrono::steady_clock::now() - undoSnapshotStartedAt;
 		undoRecord.cursor = mCursor.offset;
 		undoRecord.selAnchor = mSelection.anchor;
@@ -360,6 +393,7 @@ class MRTextBufferModel {
 		mShared->undoStack.push_back(std::move(undoRecord));
 
 		const CustomUndoRecord &redoRecord = mShared->redoStack.back();
+		mShared->undoStack.back().changeSet = redoRecord.changeSet;
 		const auto restoreStartedAt = std::chrono::steady_clock::now();
 		mShared->document.restoreFromSnapshot(redoRecord.preSnapshot);
 		const auto restoreElapsed = std::chrono::steady_clock::now() - restoreStartedAt;

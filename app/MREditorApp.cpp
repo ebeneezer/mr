@@ -79,7 +79,7 @@
 
 namespace {
 static constexpr std::chrono::milliseconds kRecordingBlinkInterval(450);
-static constexpr std::chrono::microseconds kCoprocessorIdlePumpBudget(1000);
+static constexpr std::chrono::microseconds kCoprocessorPumpBudget(1000);
 static constexpr std::chrono::seconds kFullscreenHintDuration(3);
 static constexpr const char *kFullscreenHintText = "F11/ESC exit Fullscreen   F10 Menu";
 TFrame *initMrDialogFrame(TRect bounds) {
@@ -1566,7 +1566,7 @@ void MREditorApp::finalizeKeystrokeRecording() {
 	std::string summary;
 
 	if (recordedKeySequence.empty()) {
-		messageBox(mfInformation | mfOKButton, "Keystroke recording is empty.\n\nNothing to bind or save.");
+		postAppError("Keystroke recording is empty. Nothing to bind or save.");
 		return;
 	}
 
@@ -1627,9 +1627,9 @@ void MREditorApp::finalizeKeystrokeRecording() {
 	}
 
 	summary = "Recording finalized.";
-	if (!keySpec.empty()) summary += "\nBound key: " + keySpec;
-	if (!savePath.empty()) summary += "\nSaved: " + savePath;
-	messageBox(mfInformation | mfOKButton, "%s", summary.c_str());
+	if (!keySpec.empty()) summary += " Bound key: " + keySpec + ".";
+	if (!savePath.empty()) summary += " Saved: " + savePath + ".";
+	mr::messageline::postAutoTimed(mr::messageline::Owner::MacroMessage, summary, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
 }
 
 void MREditorApp::stopKeystrokeRecording() {
@@ -1744,6 +1744,7 @@ bool MREditorApp::showPreviousHelpTopic() {
 }
 
 void MREditorApp::handleEvent(TEvent &event) {
+	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorPumpBudget);
 	const ushort originalWhat = event.what;
 
 	if (event.what == evKeyState) {
@@ -1910,7 +1911,15 @@ void MREditorApp::handleEvent(TEvent &event) {
 		return;
 	}
 
-	if (event.what == evCommand && event.message.command == cmQuit) prepareForQuit();
+	if (event.what == evCommand && event.message.command == cmQuit && !exitPrepared) {
+		for (MREditWindow *window : allEditWindowsInZOrder())
+			if (window != nullptr && window->isFileChanged()) {
+				clearEvent(event);
+				static_cast<void>(requestMRExitWithDirtyGating());
+				return;
+			}
+		prepareForQuit();
+	}
 	if (isBuildCurrentFileDefaultKey(event) && TView::commandEnabled(cmMrOtherBuildCurrentFile) && handleMRCommand(cmMrOtherBuildCurrentFile)) {
 		clearEvent(event);
 		return;
@@ -1964,7 +1973,7 @@ void MREditorApp::idle() {
 	updateRecordingBlink();
 	updateMacroBrainBlink();
 	warmIndexedMacroBindings();
-	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
+	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorPumpBudget);
 	pumpDeferredMacroUiPlayback();
 	mrFlushWorkspaceAutosaveIfDue();
 	updatePerformancePanel();

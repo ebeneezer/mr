@@ -1,49 +1,56 @@
-# Coprocessor / Deferred UI / Macro Screen Contract
+# Coprocessor / Deferred UI Contract
 
 ## Scope
 
 Applies to:
 
-- `coprocessor/MRCoprocessor.hpp`
-- `coprocessor/MRCoprocessor.cpp`
-- `coprocessor/MRCoprocessorDispatch.cpp`
-- `coprocessor/MRPerformance.cpp`
-- deferred macro UI playback paths.
+- deferred macro UI payloads in `coprocessor/MRCoprocessor.*`,
+- queueing and playback in `coprocessor/MRCoprocessorDispatch.*`,
+- MacroScreenModel, MacroScreenView and DeferredUiRenderGateway,
+- VM render-facade and batching bridges used by playback.
+
+Worker ownership and scheduling follow the
+[Coprocessor Runtime contract](coprocessor-runtime-contract.md).
 
 ## Authority
 
-The coprocessor owns task queues and lane state.
-
-Deferred macro UI playback owns its local queue and screen-model transition state.
+Deferred macro UI playback owns its local queue, playback order and
+screen-model transition state. The VM produces typed commands; the UI-thread
+playback path applies them.
 
 ## Invariants
 
-- Do not change thread/UI-thread assumptions incidentally.
-- Do not change ownership/lifetime behavior incidentally.
-- Do not alter deferred UI command flow as cleanup.
-- Do not remove gateway/view chain elements incidentally.
-- Do not change batch boundaries without a dedicated plan.
+- Staged macro UI commands are applied only after their owning staged result is
+  accepted.
+- Queue ownership, order and UI-thread assumptions remain explicit.
+- `mrvmUiBeginMacroScreenBatch` and `mrvmUiEndMacroScreenBatch` delimit the
+  existing playback batch.
+- MacroScreenModel, MacroScreenView and DeferredUiRenderGateway are protected
+  producer/consumer boundaries even when their types appear mechanical.
+- Playback renders through the approved VM facade and does not call alternate
+  direct UI paths.
+- Screen mutation epoch checks prevent stale base projection.
 
-## Protected structure
+## Boundaries
 
-Some routing types may appear mechanical but are protected by this deferred-UI contract.
-Removing them is not a local readability change.
+Without explicit maintainer approval:
 
-## Forbidden without explicit approval
+- No direct UI call replacing a staged command.
+- No rendering from a worker thread.
+- No incidental change to playback order, lifetime, queue ownership, gateway
+  chain, epoch handling or batch boundaries.
 
-- Changing deferred playback order.
-- Changing command queue ownership.
-- Changing `mrvmUiBeginMacroScreenBatch` / `mrvmUiEndMacroScreenBatch` boundaries.
-- Replacing staged UI commands with direct UI calls.
-- Moving rendering across thread assumptions.
+## Related contracts
 
-## Required tests
+- [Coprocessor Runtime](coprocessor-runtime-contract.md)
+- [VM / Intrinsics / Deferred UI](vm-deferred-ui-contract.md)
+- [MRMac Execution Session](mrmac-exec-session-contract.md)
+- [TVision Integration](tvision-integration-contract.md)
 
-For coprocessor/deferred UI changes, test:
+## Required manual tests
 
-- background task completion,
-- deferred macro playback,
-- batching,
-- message-line effects,
-- screen overlay projection,
-- relevant regression checks.
+- Complete a background staged macro and accept its result.
+- Reject a conflicting staged result and verify no playback.
+- Verify deferred command ordering and batch boundaries.
+- Exercise message-line, macro-screen and overlay projection.
+- Verify epoch invalidation and screen redraw behavior.

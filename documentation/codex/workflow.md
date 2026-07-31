@@ -25,19 +25,20 @@ Every task must be treated as one of these categories:
 
 ## Required preflight
 
-Before implementation, report:
+Before implementation, complete the protected-architecture check in root
+[`AGENTS.md`](../../AGENTS.md). Every implementation plan must name:
 
-- protected architecture touched: yes/no,
 - files/functions affected,
 - existing functions reused,
 - new functions/types proposed,
+- protected contracts touched,
 - abstractions deliberately avoided,
 - expected semantic impact,
 - expected churn quantity,
 - regression risk estimate,
 - build and manual test plan.
 
-If protected architecture is touched incidentally, stop.
+If protected architecture or scope expansion is discovered incidentally, stop.
 
 ## Implementation discipline
 
@@ -61,17 +62,16 @@ After implementation:
 - provide `git diff --stat`,
 - summarize files changed,
 - explain why semantics did not change if the tranche is refactoring,
-- run `make clean all CXX=clang++`,
-- report warnings,
+- apply the root build rule and report warnings,
 - perform a sight review of the changed code,
 - propose regression checks only after that review, if they still look useful.
 
 A tranche is not complete until the build result is known.
 
-Bug fixes require a same-family impact audit before handoff.
-Treat a defect as evidence of a potentially affected class, not as an isolated symptom.
-Check the inverse path, sibling values or operations, alternate entry points and lifecycle transitions.
-Regression checks are not part of preflight planning. After implementation and sight review, they may be added without separate maintainer approval when they are directly tied to the current change and protect a stable invariant. Broad test infrastructure or regression-harness rewrites still require explicit maintainer scope.
+Bug fixes require a same-family impact audit before handoff. Treat a defect as
+evidence of a potentially affected class, not as an isolated symptom. Check the
+inverse path, sibling values or operations, alternate entry points and
+lifecycle transitions. Regression timing and scope follow the root test policy.
 
 ## Rejection formula
 

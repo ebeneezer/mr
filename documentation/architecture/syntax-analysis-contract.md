@@ -1,5 +1,16 @@
 # Syntax Analysis Contract
 
+## Scope
+
+Applies to:
+
+- `ui/MRSyntax*` and `ui/syntax/`,
+- `derivedstate/MRSyntaxDerivedState.*`,
+- `derivedstate/MRFoldingDerivedState.*`,
+- syntax, folding and indentation paths under `ui/MRFileEditor/`,
+- outline producers consuming canonical fold data,
+- coprocessor payloads and adoption for derived syntax state.
+
 ## Purpose
 
 This contract defines how MR uses MR-owned syntax analysis and derived syntax data for syntax coloring, smart indentation and code folding.
@@ -107,3 +118,17 @@ Do not introduce generic syntax helper abstractions that blur these roles:
 - large-file budget policy.
 
 When syntax analysis changes touch the coprocessor or editor rendering, the plan must state which role is being changed and which roles are deliberately left unchanged.
+
+## Related contracts
+
+- [Coprocessor Runtime](coprocessor-runtime-contract.md)
+- [TVision Integration](tvision-integration-contract.md)
+
+## Required manual tests
+
+- Edit a syntax-colored file and reject results from an older document version.
+- Scroll into a cold region and verify rendering remains responsive.
+- Exercise structural coloring, smart indentation and folding.
+- Exercise conservative fallback while reliable structural data is absent.
+- Open a large file and verify budgeted viewport-first analysis.
+- Confirm drawing consumes existing derived state without running analysis.

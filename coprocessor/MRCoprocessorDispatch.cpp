@@ -22,6 +22,7 @@
 #include "MRPerformance.hpp"
 #include "MRWindowCommands.hpp"
 
+#include "../app/MRCommands.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/router/MRCommandRouterGit.hpp"
 #include "../app/router/MRCommandRouterSearch.hpp"
@@ -992,6 +993,11 @@ void pumpDeferredMacroUiPlayback() {
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	logWarmupCancelFinish(result);
+	if (result.task.executionOwnerKind == mr::coprocessor::ExecutionOwnerKind::Dialog) {
+		void *adoptedResult = message(TProgram::deskTop, evBroadcast, cmMrCoprocessorDialogResult, const_cast<mr::coprocessor::Result *>(&result));
+		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, adoptedResult == &result);
+		return;
+	}
 	if (dispatchMRGitStatusResult(result)) return;
 	if (result.task.kind == mr::coprocessor::TaskKind::FileCompare) {
 		handleFileCompareResult(result);

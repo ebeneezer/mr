@@ -74,6 +74,7 @@ enum class ExecutionOwnerKind : unsigned char {
 	ExternalSource,
 	MacroSession,
 	ProcessChannel,
+	Dialog,
 	Worker
 };
 
@@ -285,6 +286,20 @@ struct ExternalIoChunkPayload final : Payload {
 	}
 
 	ExternalIoChunkPayload(std::size_t aChannelId, std::string aText, std::size_t aTargetBufferId = 0, std::size_t aSearchHitCount = 0) : channelId(aChannelId), targetBufferId(aTargetBufferId), searchHitCount(aSearchHitCount), text(std::move(aText)) {
+	}
+};
+
+struct TaskProgressPayload final : Payload {
+	std::size_t completedUnits;
+	std::size_t totalUnits;
+	std::size_t resultCount;
+	std::string phase;
+
+	TaskProgressPayload() noexcept : completedUnits(0), totalUnits(0), resultCount(0), phase() {
+	}
+
+	TaskProgressPayload(std::size_t aCompletedUnits, std::size_t aTotalUnits, std::size_t aResultCount, std::string aPhase)
+	    : completedUnits(aCompletedUnits), totalUnits(aTotalUnits), resultCount(aResultCount), phase(std::move(aPhase)) {
 	}
 };
 

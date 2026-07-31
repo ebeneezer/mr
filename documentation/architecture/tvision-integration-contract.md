@@ -4,12 +4,14 @@
 
 Applies to:
 
-- `dialogs/MRSetupCommon.hpp`
-- `dialogs/MRSetup.cpp`
+- `dialogs/setup/MRSetupCommon.*`
+- `dialogs/setup/MRSetup*.cpp`
 - `ui/MRFrame.cpp`
 - `ui/MRWindowSupport.cpp`
 - `ui/MRMessageLineController.cpp`
 - `ui/widgets/MRColumnListView.cpp`
+- `ui/MRBentoBox/`
+- `ui/MRBentoHexEditor/`
 - all MR classes derived from TVision views.
 
 ## Authority
@@ -48,14 +50,9 @@ BentoBox concrete types.
   macro-visible value state remains under `MODELESSUI`.
 - Modal dialogs executed through `execView` are not desktop-managed windows.
 
-## Allowed
+## Boundaries
 
-- TVision-compliant overrides.
-- Dialog layout corrections.
-- Focus handling through documented TVision mechanisms.
-- Message-line control through MR message-line controllers.
-
-## Forbidden without explicit approval
+Without explicit maintainer approval:
 
 - Direct writes to `TScreen::screenBuffer`.
 - New render side channels.
@@ -63,7 +60,13 @@ BentoBox concrete types.
 - View-lifetime changes outside local ownership proof.
 - Changes to `MRDialogFoundation` behavior as incidental cleanup.
 
-## Required tests
+## Related contracts
+
+- [App / UI / Dialogs](app-ui-dialogs-contract.md)
+- [Hex Editor](hex-editor-contract.md)
+- [VM / Intrinsics / Deferred UI](vm-deferred-ui-contract.md)
+
+## Required manual tests
 
 For TVision-related changes, test:
 
@@ -73,7 +76,7 @@ For TVision-related changes, test:
 - disabled/ghosted controls,
 - scroll behavior where relevant.
 
-## Dirty Projection Pump Contract
+## Dirty projection pump
 
 Dirty projection is an explicit UI redraw scheduling mechanism for compound
 TVision views such as BentoBox. It is not model state.
@@ -97,7 +100,7 @@ Rules:
    have the same proven projection contract. Local explicit code is preferred
    over a premature framework.
 
-## Window minimize/restore rendering contract
+## Window minimize/restore rendering
 
 Minimize/restore is a visual-form transition, not ordinary move/resize.
 

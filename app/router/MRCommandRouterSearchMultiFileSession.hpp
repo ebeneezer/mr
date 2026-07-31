@@ -17,6 +17,8 @@ struct MultiFileSearchFileResult {
 	std::vector<SearchMatchEntry> matches;
 	std::size_t selectedMatchIndex = 0;
 	bool startedInMemory = false;
+	std::size_t startedDocumentId = 0;
+	std::size_t startedDocumentVersion = 0;
 	bool temporaryWindow = false;
 	MREditWindow *window = nullptr;
 };
@@ -32,6 +34,15 @@ struct MultiFileSearchSession {
 	std::string replacement;
 	std::vector<MultiFileSearchFileResult> files;
 	std::size_t selectedFileIndex = 0;
+};
+
+struct MultiFileReplaceCheckpoint {
+	MREditWindow *window = nullptr;
+	std::size_t documentId = 0;
+	std::size_t expectedVersion = 0;
+	std::size_t undoDepth = 0;
+	std::size_t replacements = 0;
+	bool temporaryWindow = false;
 };
 
 enum class MultiFileCollectOutcome : unsigned char {
@@ -51,6 +62,13 @@ enum class MultiDialogAction : unsigned char {
 	LoadAll = 6
 };
 
+enum class MultiReplaceAllOutcome : unsigned char {
+	Completed = 0,
+	Aborted = 1,
+	Reverted = 2,
+	Error = 3
+};
+
 void postSearchWarning(std::string_view text);
 void postSearchError(std::string_view text);
 void postDialogWarning(std::string_view text);
@@ -58,7 +76,6 @@ void persistSearchDialogSettingsSnapshot();
 void postNoHitsWarning();
 void postMultiSearchStartedWarning();
 void postSearchCancelledError();
-void postMultiSearchProgress(std::size_t filesSearched, std::size_t totalHits);
 
 std::string baseNameFromPath(const std::string &path);
 bool loadSessionFileText(const MultiFileSearchFileResult &file, std::string &outText, std::string &errorText);
@@ -69,13 +86,18 @@ std::size_t sessionCurrentMatchOrdinal(const MultiFileSearchSession &session);
 bool activateSessionCurrentMatch(MultiFileSearchSession &session);
 bool previewSessionCurrentMatch(MultiFileSearchSession &session);
 bool loadAllSessionFiles(MultiFileSearchSession &session, std::string &errorText);
+bool validateMultiFileSessionSources(MultiFileSearchSession &session, std::string &errorText);
 bool moveSessionMatch(MultiFileSearchSession &session, int direction, bool wrap);
 void closeTemporaryWindowsForSession(MultiFileSearchSession &session);
 bool replaceCurrentSessionMatch(MultiFileSearchSession &session, bool advanceAfterReplace, std::string &errorText);
+bool replaceAllSessionMatchesInFile(MultiFileSearchSession &session, std::size_t fileIndex, MultiFileReplaceCheckpoint &checkpoint, std::size_t &replacementCount, std::string &errorText);
+bool validateSessionFileReplaceCheckpoint(const MultiFileSearchSession &session, std::size_t fileIndex, const MultiFileReplaceCheckpoint &checkpoint, std::string &errorText);
+bool revertSessionFileReplacements(MultiFileSearchSession &session, std::size_t fileIndex, MultiFileReplaceCheckpoint &checkpoint, std::string &errorText);
 bool showMultiFileSessionCollectionError(const std::string &errorText);
 
 bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pattern, MRMultiSearchDialogOptions &options, MultiFileSearchSession &outSession);
 bool promptMultiFileSarValues(const std::string &patternSeed, const std::string &replacementSeed, std::string &pattern, std::string &replacement, MRMultiSarDialogOptions &options, MultiFileSearchSession &outSession);
 MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session);
+MultiReplaceAllOutcome runMultiFileReplaceAllDialog(MultiFileSearchSession &session, std::size_t &completedCount, std::string &errorText);
 
 #endif

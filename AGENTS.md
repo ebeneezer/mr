@@ -11,11 +11,11 @@ This repository does not use vibe coding.
 The agent is an implementation assistant and technical reviewer, not an autonomous architect.
 All work must remain reviewable by the maintainer and must respect the architecture contracts in `documentation/architecture/`.
 
-C++20 is the compiler standard. It is not permission to use every modern C++ idiom. Agents must perfer classic C++18 style or ask the maintainer for approval to use C++20 constructs when appropriate (need justification).
+C++20 is the compiler standard. It is not permission to use every modern C++ idiom. Agents must prefer classic C++18 style or ask the maintainer for approval to use C++20 constructs when appropriate (need justification).
 
 Verboten:
 
-1. if ketten - Tabellensteuerung bevorzugen
+1. unübersichtliche If-Ketten sowie Tabellensteuerung ohne echtes stabiles Domänenmodell
 2. unnötiger Abstraktion und Type Programmierung, Vererbung ist zu bevorzugen
 3. atomare Wrapper
 4. zu offene Objektkapselung - maximales Geheimnisprinzip beachten
@@ -37,8 +37,8 @@ When guidance overlaps, use this order:
 1. Direct maintainer instruction in the current task.
 2. Root `AGENTS.md`.
 3. The architecture contract for the touched area.
-4. `documentation/codex/code-style.md`.
-5. `documentation/codex/workflow.md`.
+4. [code-style.md](documentation/codex/code-style.md).
+5. [workflow.md](documentation/codex/workflow.md).
 6. Existing local code conventions.
 
 If two referenced documents appear to conflict, stop and ask for explicit maintainer direction instead of choosing a convenient interpretation.
@@ -53,29 +53,17 @@ If two referenced documents appear to conflict, stop and ask for explicit mainta
 
 ## Mandatory reading before work
 
-Before planning or implementing, read the relevant files:
+Use progressive disclosure before planning or implementing:
 
-- `documentation/codex/code-style.md`
-- `documentation/codex/workflow.md`
+1. Always read [code-style.md](documentation/codex/code-style.md) and
+   [workflow.md](documentation/codex/workflow.md).
+2. Use the [architecture contract router](documentation/architecture/README.md)
+   to identify the touched domains.
+3. Read every contract selected by that router in full. Do not load unrelated
+   contracts merely because they share the architecture directory.
 
-Architecture contracts:
-
-- `documentation/architecture/README.md`
-- `documentation/architecture/app-ui-dialogs-contract.md`
-- `documentation/architecture/tvision-integration-contract.md`
-- `documentation/architecture/settings-runtime-contract.md`
-- `documentation/architecture/settings-bootstrap-contract.md`
-- `documentation/architecture/settings-persistence-contract.md`
-- `documentation/architecture/mrmac-language-contract.md`
-- `documentation/architecture/mrmac-reference-manual-contract.md`
-- `documentation/architecture/vm-deferred-ui-contract.md`
-- `documentation/architecture/keymap-contract.md`
-- `documentation/architecture/coprocessor-deferred-ui-contract.md`
-- `documentation/architecture/file-path-utilities-contract.md`
-- `documentation/architecture/syntax-analysis-contract.md`
-- `documentation/architecture/build-regression-contract.md`
-
-Only the contracts relevant to the requested change need to be read in full, but protected architecture must always be checked.
+The router and the contracts reached through it are subordinate to this root
+instruction file. Protected architecture must always be checked.
 
 ## Protected architecture check
 
@@ -102,8 +90,11 @@ The following areas are protected and must not be changed opportunistically:
 - `SAVE_SETTINGS`,
 - workspace serialization,
 - VM intrinsics and deferred UI,
+- MRMac execution sessions, runtime scheduler and macro-visible runtime K/V roots,
 - MacroCellGrid / MacroCellView / deferred UI playback,
+- coprocessor worker ownership, package adoption and external-source lifetime,
 - TVision drawing/event mechanics,
+- Hex editor document ownership, pane projection and byte-exact save behavior,
 - keymap persistence and resolver semantics,
 - syntax analysis, Tree-sitter canonical parsing and derived syntax maps,
 - generated-file build model.
@@ -118,15 +109,9 @@ Workspace rule:
 ## General implementation rule
 
 No implementation before an accepted plan.
-
-The plan must name:
-
-1. affected files,
-2. existing functions/classes reused,
-3. new functions/classes, if unavoidable,
-4. protected contracts touched,
-5. deliberately avoided abstractions,
-6. build and manual test plan.
+Plan contents and implementation discipline are defined by
+[workflow.md](documentation/codex/workflow.md). Protected changes additionally
+require the protected-architecture report defined above.
 
 ## Test policy
 
@@ -160,34 +145,9 @@ Do not provide patch chains.
 Do not paste file contents into the chat.
 
 <!-- BEGIN CODEX_RESPONSE_BUDGET -->
+
 ## Response Budget
 
-Codex must follow `documentation/codex/response-budget.md`.
+Codex must follow [response-budget.md](documentation/codex/response-budget.md).
 
-Routine responses must be compact. Codex must not restate the task, repeat known rules, or list unchanged constraints.
-
-Verbose explanations are allowed only for:
-- REJECT,
-- ABORTED,
-- explicit architecture decisions,
-- maintainer-requested analysis.
-
-Default report format:
-
-```text
-Decision:
-Files:
-Change:
-Build:
-Warnings:
-Next:
-```
-
-When protected architecture is not touched, report only:
-
-```text
-Protected architecture: no
-```
-
-When protected architecture is touched, stop and report the affected contract, files/functions, reason, and required maintainer decision.
 <!-- END CODEX_RESPONSE_BUDGET -->

@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <string>
 #include <string_view>
 
@@ -27,6 +28,7 @@ struct MRTextSaveStreamState {
 
 bool readTextFile(const std::string &path, std::string &out);
 bool readTextFile(const std::string &path, std::string &out, std::string &outError);
+bool readTextFileCancellable(const std::string &path, std::string &out, std::string &outError, const std::atomic_bool &cancelFlag, bool &cancelled);
 bool writeTextFile(std::string_view path, std::string_view content);
 bool writeTextFile(const std::string &path, const std::string &content);
 [[nodiscard]] bool fileContainsNulInBoundarySamples(const std::string &path) noexcept;

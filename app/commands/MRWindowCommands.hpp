@@ -15,15 +15,19 @@ class MRWindowOpenBatch {
   public:
 	MRWindowOpenBatch();
 	void begin();
+	void beginInteractive();
 	[[nodiscard]] MREditWindow *createEditorWindow(const char *title);
 	[[nodiscard]] MRBentoHexEditor *createHexEditorWindow(const char *title);
 	void finish(bool syncVisibility, bool notifyTopology);
 	[[nodiscard]] bool active() const noexcept;
 
   private:
+	void beginBatch(bool deferVisibility);
+
 	std::set<short> usedNumbers;
 	bool mActive;
 	bool mDesktopLocked;
+	bool mDeferVisibility;
 	std::size_t mCreatedCount;
 };
 

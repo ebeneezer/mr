@@ -68,6 +68,7 @@ class MRMenuBar : public TMenuBar {
 	}
 
 	void setAutoMarqueeStatusSegments(const std::vector<MarqueeSegment> &segments, MarqueeKind kind = MarqueeKind::Info);
+	void setAutoMarqueeStatusImmediate(const std::string &status, MarqueeKind kind = MarqueeKind::Info);
 
 	void setManualMarqueeStatus(const std::string &status) {
 		setManualMarqueeStatus(status, MarqueeKind::Info);

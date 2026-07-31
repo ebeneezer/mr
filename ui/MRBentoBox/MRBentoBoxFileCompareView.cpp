@@ -171,9 +171,9 @@ void MRBentoBox::syncFileCompareLinkedPaneFrom(int sourceLeafId, bool syncCursor
 	if (syncCursor) {
 		const std::size_t sourceLine = sourceEditor->lineIndexOfOffset(sourceEditor->cursorOffset());
 		const std::size_t targetLine = mappedTargetLine(sourceLine);
-		const int targetLineDelta = static_cast<int>(std::min(targetLine, static_cast<std::size_t>(std::numeric_limits<int>::max())));
 		const int visualColumn = sourceEditor->displayedCursorColumn();
-		const std::size_t targetOffset = targetEditor->lineMoveOffset(0, targetLineDelta, visualColumn);
+		const std::size_t targetLineStart = targetEditor->bufferModel().lineStartByIndex(targetLine);
+		const std::size_t targetOffset = targetEditor->charPtrOffset(targetLineStart, visualColumn);
 
 		targetEditor->setCursorOffsetAtVisualColumn(targetOffset, visualColumn);
 	}

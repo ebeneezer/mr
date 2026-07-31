@@ -91,7 +91,7 @@ void applyRestoredBlockStateToOwner(MRFileEditor &editor, TView *owner, const MR
 void MRFileEditor::pushUndoSnapshot() {
 	MRTextBufferModel::CustomUndoRecord record;
 	record.preSnapshot = mBufferModel.readSnapshot();
-	record.preSnapshot.dropExactLineStartIndex();
+	record.preSnapshot.compactLineIndexForUndo(mBufferModel.cursor());
 	record.cursor = mBufferModel.cursor();
 	record.modifiedState = mBufferModel.isModified();
 	if (mBufferModel.hasSelection()) {
@@ -103,6 +103,25 @@ void MRFileEditor::pushUndoSnapshot() {
 	}
 	captureCurrentBlockStateForUndo(owner, record);
 	mBufferModel.pushUndoSnapshot(std::move(record));
+}
+
+bool MRFileEditor::revertUndoSuffix(std::size_t baseDepth) {
+	MRTextBufferModel::CustomUndoRecord record;
+	const std::size_t oldLength = mBufferModel.length();
+	const std::size_t oldVersion = mBufferModel.version();
+
+	if (!mBufferModel.revertUndoSuffix(baseDepth, &record)) return false;
+
+	MRTextBufferModel::DocumentChangeSet changeSet;
+	changeSet.changed = true;
+	changeSet.oldLength = oldLength;
+	changeSet.newLength = mBufferModel.length();
+	changeSet.oldVersion = oldVersion;
+	changeSet.newVersion = mBufferModel.version();
+	changeSet.touchedRange = MRTextBufferModel::Range(0, std::max(oldLength, mBufferModel.length()));
+	syncAfterCommittedDocument(mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), mBufferModel.isModified(), &changeSet);
+	applyRestoredBlockStateToOwner(*this, owner, record);
+	return true;
 }
 
 bool MRFileEditor::isTextInputEvent(const TEvent &event) const {
@@ -416,7 +435,6 @@ void MRFileEditor::handleCommand(TEvent &event) {
 		case cmMrEditUndo: {
 			MRTextBufferModel::CustomUndoRecord record;
 			MRTextBufferModel::CustomUndoRecord redoBlockState;
-			const MRTextBufferModel::ReadSnapshot oldSnapshot = mBufferModel.readSnapshot();
 			const std::size_t oldLength = mBufferModel.length();
 			const std::size_t oldVersion = mBufferModel.version();
 			captureCurrentBlockStateForUndo(owner, redoBlockState);
@@ -424,23 +442,13 @@ void MRFileEditor::handleCommand(TEvent &event) {
 				mBufferModel.updateRedoTopBlockState(redoBlockState);
 				const bool modifiedState = mBufferModel.isModified();
 				const std::size_t newLength = mBufferModel.length();
-				std::size_t prefix = 0;
-				while (prefix < oldLength && prefix < newLength && oldSnapshot.charAt(prefix) == mBufferModel.charAt(prefix))
-					++prefix;
-				std::size_t oldSuffix = oldLength;
-				std::size_t newSuffix = newLength;
-				while (oldSuffix > prefix && newSuffix > prefix && oldSnapshot.charAt(oldSuffix - 1) == mBufferModel.charAt(newSuffix - 1)) {
-					--oldSuffix;
-					--newSuffix;
-				}
-				const std::size_t touchedLength = std::max(oldSuffix - prefix, newSuffix - prefix);
-				MRTextBufferModel::DocumentChangeSet changeSet;
+				MRTextBufferModel::DocumentChangeSet changeSet = record.changeSet;
 				changeSet.changed = true;
 				changeSet.oldLength = oldLength;
 				changeSet.newLength = newLength;
 				changeSet.oldVersion = oldVersion;
 				changeSet.newVersion = mBufferModel.version();
-				changeSet.touchedRange = MRTextBufferModel::Range(prefix, prefix + touchedLength);
+				if (!record.changeSet.changed) changeSet.touchedRange = MRTextBufferModel::Range(0, std::max(oldLength, newLength));
 				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState, &changeSet);
 				applyRestoredBlockStateToOwner(*this, owner, record);
 			}
@@ -449,7 +457,6 @@ void MRFileEditor::handleCommand(TEvent &event) {
 		case cmMrEditRedo: {
 			MRTextBufferModel::CustomUndoRecord record;
 			MRTextBufferModel::CustomUndoRecord undoBlockState;
-			const MRTextBufferModel::ReadSnapshot oldSnapshot = mBufferModel.readSnapshot();
 			const std::size_t oldLength = mBufferModel.length();
 			const std::size_t oldVersion = mBufferModel.version();
 			captureCurrentBlockStateForUndo(owner, undoBlockState);
@@ -457,23 +464,13 @@ void MRFileEditor::handleCommand(TEvent &event) {
 				mBufferModel.updateUndoTopBlockState(undoBlockState);
 				const bool modifiedState = mBufferModel.isModified();
 				const std::size_t newLength = mBufferModel.length();
-				std::size_t prefix = 0;
-				while (prefix < oldLength && prefix < newLength && oldSnapshot.charAt(prefix) == mBufferModel.charAt(prefix))
-					++prefix;
-				std::size_t oldSuffix = oldLength;
-				std::size_t newSuffix = newLength;
-				while (oldSuffix > prefix && newSuffix > prefix && oldSnapshot.charAt(oldSuffix - 1) == mBufferModel.charAt(newSuffix - 1)) {
-					--oldSuffix;
-					--newSuffix;
-				}
-				const std::size_t touchedLength = std::max(oldSuffix - prefix, newSuffix - prefix);
-				MRTextBufferModel::DocumentChangeSet changeSet;
+				MRTextBufferModel::DocumentChangeSet changeSet = record.changeSet;
 				changeSet.changed = true;
 				changeSet.oldLength = oldLength;
 				changeSet.newLength = newLength;
 				changeSet.oldVersion = oldVersion;
 				changeSet.newVersion = mBufferModel.version();
-				changeSet.touchedRange = MRTextBufferModel::Range(prefix, prefix + touchedLength);
+				if (!record.changeSet.changed) changeSet.touchedRange = MRTextBufferModel::Range(0, std::max(oldLength, newLength));
 				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState, &changeSet);
 				applyRestoredBlockStateToOwner(*this, owner, record);
 			}

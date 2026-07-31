@@ -1041,19 +1041,34 @@ PCRE2 and can be restricted to the workspace. This is not merely a search box
 with a different file dialog. It is a bridge between the open workspace and
 the file tree.
 
-The current MFS directory walk, file I/O, and regular-expression matching are
-still a serial modal workflow. The correction train did not silently turn
-every synchronous I/O path into coprocessor work: MFS, general load/save, and
-MRMAC external-I/O require a measured user-facing blocking case and a separate
-design decision. This boundary distinguishes a completed correction scope from
-an assertion that no synchronous operation remains anywhere in the program.
+MFS remains modal so that editor snapshots and replacement offsets cannot
+silently become stale through concurrent editing. Directory traversal, chunked
+file I/O, snapshot materialisation, and PCRE2 matching nevertheless run in a
+finite dialog-owned coprocessor task. The dialog reports collection and
+\texttt{x/y} search progress. Its Search button becomes Cancel while work is
+running. Cancellation is checked during traversal, between I/O chunks, between
+matches, and through PCRE2 automatic callouts inside a long individual match.
+Only a complete, still version-valid session reaches the result dialog.
+Replace All remains a UI-thread mutation phase, but performs one replacement
+per dialog event and reports \texttt{x/y} progress. Matches are applied from
+the end of each file so that earlier offsets remain valid without rescanning
+the complete file after every edit. Cancel pauses the mutation and offers
+Continue, Abort, or Revert. Abort retains the completed prefix as individual
+Undo records. Revert restores one pre-operation snapshot per touched file and
+removes only the Undo suffix owned by that Replace All run; it does not replay
+thousands of Undo commands or construct a corresponding Redo stack.
 
 Acquire follows another, particularly terminal-native idea. \mr{} runs a
 shell command out of sight, reads its standard output, and interprets each line
 as a candidate readable path. Candidates are resolved and deduplicated; the
-user may open or load selected files or every discovered file. Acquire is
-therefore not the uncritical insertion of arbitrary pipe bytes into a buffer.
-It turns Unix tools into an understandable file selection.
+user may open or load selected files or every discovered file. The process
+group runs in a finite I/O worker and stdout is adopted incrementally. The list
+shows per-entry ordinals and a total. Closing the dialog cancels the process
+group, waits for its bounded TERM/KILL teardown, and discards unadopted output.
+Loading all files is sliced at file boundaries so that Close can stop the
+remaining queue. Acquire is therefore not the uncritical insertion of arbitrary
+pipe bytes into a buffer. It turns Unix tools into an understandable file
+selection.
 
 \part{Decisions that left traces}
 

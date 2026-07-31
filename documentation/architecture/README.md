@@ -1,48 +1,36 @@
-# Architecture Contracts
+# Architecture Contract Router
 
-This directory contains binding contracts for the MR codebase.
-These architecture contracts are normative only when reached through root `AGENTS.md`.
-Root `AGENTS.md` defines priority and workflow.
-This README is an index, not an independent instruction root.
+This file is reached through root [`AGENTS.md`](../../AGENTS.md). It routes a
+change to binding contracts; it is not an independent instruction root.
 
-The contracts are not design essays. They define boundaries that must not be blurred by incidental refactoring.
+Read every row that matches the files, functions or semantics being changed.
+Changes spanning domains require all matching contracts.
 
-## Contract index
+| Touched area | Contract to read |
+|---|---|
+| Application commands, dialogs, validation or dialog layout | [App / UI / Dialogs](app-ui-dialogs-contract.md) |
+| TVision views, drawing, events, focus, windows or Bento projection | [TVision Integration](tvision-integration-contract.md) |
+| Hex editor document ownership, pane roles, editing or projection | [Hex Editor](hex-editor-contract.md) |
+| Runtime settings authority, assignments or dirty state | [Settings Runtime](settings-runtime-contract.md) |
+| Startup settings loading, normalization, `MRSETUP` or final VM apply | [Settings Bootstrap](settings-bootstrap-contract.md) |
+| Settings, theme or workspace writing and `SAVE_SETTINGS` | [Settings Persistence](settings-persistence-contract.md) |
+| Keymap parsing, canonicalization, persistence or resolution | [Keymap](keymap-contract.md) |
+| MRMAC grammar, compiler, runtime globals, catalog or debugger data | [MRMAC Language / Compiler](mrmac-language-contract.md) |
+| Macro execution lifetime, scheduler, closures or cancellation | [MRMac Execution Session](mrmac-exec-session-contract.md) |
+| VM intrinsics, typed macro UI, modeless UI or macro screen projection | [VM / Intrinsics / Deferred UI](vm-deferred-ui-contract.md) |
+| Coprocessor workers, owners, packages, affinity or external sources | [Coprocessor Runtime](coprocessor-runtime-contract.md) |
+| Deferred macro UI queueing, ordering or playback | [Coprocessor / Deferred UI](coprocessor-deferred-ui-contract.md) |
+| Shared and local file/path operations | [File / Path Utilities](file-path-utilities-contract.md) |
+| Syntax coloring, parsing, folding, indentation or derived syntax data | [Syntax Analysis](syntax-analysis-contract.md) |
+| MRMAC reference manual content or layout | [MRMAC Reference Manual](mrmac-reference-manual-contract.md) |
+| Makefile, generated files, clean behavior or regression harness | [Build / Generated Files / Regression](build-regression-contract.md) |
 
-- `app-ui-dialogs-contract.md`
-- `tvision-integration-contract.md`
-- `settings-runtime-contract.md`
-- `settings-bootstrap-contract.md`
-- `settings-persistence-contract.md`
-- `mrmac-language-contract.md`
-- `mrmac-reference-manual-contract.md`
-- `mrmac-exec-session-contract.md`
-- `vm-deferred-ui-contract.md`
-- `keymap-contract.md`
-- `coprocessor-deferred-ui-contract.md`
-- `file-path-utilities-contract.md`
-- `syntax-analysis-contract.md`
-- `build-regression-contract.md`
+## Cross-domain boundary
 
-## Global invariant
+Staging, validation, canonicalization, final apply, persistence, rendering and
+runtime execution are distinct roles. A shared implementation must not erase
+their ownership or ordering.
 
-Do not collapse distinct roles into generic helpers:
-
-- staging,
-- validation,
-- canonicalization,
-- final apply,
-- persistence,
-- rendering,
-- runtime execution.
-
-When these roles interact, the contract for the relevant area must be read before changing code.
-
-## Foundation reuse invariant
-
-MR extends existing foundation through specialization, composition, configuration and dispatch.
-MR does not duplicate existing contracts in parallel special-case paths.
-
-New infrastructure is allowed only when no existing contract can carry the required behavior.
-New types and code paths must own a distinct contract; they must not rebuild behavior already
-provided by an existing layer or by a controlled specialization of that layer.
+MR extends existing foundations through specialization, composition,
+configuration and dispatch. New infrastructure is justified only when no
+existing contract carries the required behavior.

@@ -321,6 +321,23 @@ bool MRFileEditor::replaceRangeAndSelect(std::size_t start, std::size_t end, con
 	return applyStagedTransaction(transaction, range.start, range.start, range.start + text.size(), true).applied();
 }
 
+bool MRFileEditor::replaceRangesAndCollapse(const std::vector<MRTextBufferModel::Range> &ranges, const char *data, std::size_t length) {
+	if (mReadOnly || ranges.empty() || (data == nullptr && length != 0)) return false;
+
+	const std::size_t expectedVersion = mBufferModel.version();
+	const std::string_view replacement(data != nullptr ? data : "", length);
+	pushUndoSnapshot();
+	MRTextBufferModel::CommitResult result = mBufferModel.document().tryApplyReplacements(ranges, replacement, expectedVersion);
+	if (!result.applied()) {
+		mBufferModel.popUndoSnapshot();
+		return false;
+	}
+
+	mBufferModel.updateUndoTopChangeSet(result.change);
+	const std::size_t cursorEnd = ranges.front().start + length;
+	return syncAfterCommittedDocument(cursorEnd, cursorEnd, cursorEnd, true, &result.change);
+}
+
 int MRFileEditor::paddingColumnsBeforeInsertAtCursor() const noexcept {
 	const std::size_t cursor = mBufferModel.cursor();
 	const std::size_t lineEnd = lineEndOffset(cursor);
