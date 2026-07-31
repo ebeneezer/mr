@@ -1774,6 +1774,26 @@ void MREditorApp::handleEvent(TEvent &event) {
 	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
 	clearTransientSearchSelectionOnUserInput(event);
+	if (event.what == evKeyDown && mr::messageline::staticModeActive()) {
+		switch (TKey(event.keyDown).code) {
+			case kbF1:
+			case kbF2:
+			case kbF3:
+			case kbF4:
+			case kbF5:
+			case kbF6:
+			case kbF7:
+			case kbF8:
+			case kbF9:
+			case kbF10:
+			case kbF11:
+			case kbF12:
+				clearEvent(event);
+				return;
+			default:
+				break;
+		}
+	}
 	if (event.what == evKeyDown) {
 		const TKey pressed(event.keyDown);
 		bool functionKey = false;

@@ -1159,7 +1159,9 @@ separate responsibilities:
 \texttt{EXECSESSIONS} contains session and closure state,
 \texttt{MODELESSUI} contains retained modeless UI values, and
 \texttt{MACRODEBUGGER} contains debugger definitions and live debugger
-bookkeeping. These roots share a storage substrate, but they are not one
+bookkeeping. \texttt{APPLICATIONUI} contains application-owned transient UI
+coordination such as the message-line Static Mode semaphore. These roots share
+a storage substrate, but they are not one
 undifferentiated dictionary.
 
 Hash and hash-array values may cross a storage boundary. In that case the VM

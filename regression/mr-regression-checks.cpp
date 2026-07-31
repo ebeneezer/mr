@@ -73,6 +73,7 @@
 #include "../ui/MRDeskTop.hpp"
 #include "../ui/MRIndicator.hpp"
 #include "../ui/MRMenuBar.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRStatusLine.hpp"
 #include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRDesktopWindow.hpp"
@@ -6477,6 +6478,34 @@ bool testCommunicationViewerDrawDoesNotReadSettings(std::string &failureReason) 
 	return true;
 }
 
+bool testMessageLineStaticModeHarness(std::string &failureReason) {
+	using namespace mr::messageline;
+	auto fail = [&failureReason](const char *text) {
+		setStaticMode(false);
+		clearOwner(Owner::DialogInteraction);
+		failureReason = text;
+		return false;
+	};
+
+	setRuntimeMessageLineEnabled(true);
+	setStaticMode(false);
+	clearOwner(Owner::DialogInteraction);
+	if (postSticky(Owner::DialogInteraction, "before static", Kind::Info, kPriorityMedium) == 0) return fail("Message line rejected an ordinary message before Static Mode.");
+	VisibleMessage visible;
+	if (!currentVisibleMessage(visible) || visible.text != "before static") return fail("Message line did not expose the ordinary message before Static Mode.");
+	setStaticMode(true);
+	if (!staticModeActive()) return fail("Static Mode semaphore was not published through the runtime K/V store.");
+	if (currentVisibleMessage(visible)) return fail("Entering Static Mode did not clear the previous ordinary message.");
+	if (postSticky(Owner::DialogInteraction, "discarded during static", Kind::Warning, kPriorityHigh) != 0 || currentVisibleMessage(visible)) return fail("Static Mode retained an ordinary message instead of discarding it.");
+	setStaticProgress(3, 7);
+	setStaticMode(false);
+	if (staticModeActive() || currentVisibleMessage(visible)) return fail("Leaving Static Mode did not clear its state and content.");
+	if (postSticky(Owner::DialogInteraction, "after static", Kind::Info, kPriorityMedium) == 0 || !currentVisibleMessage(visible) || visible.text != "after static") return fail("Message line did not resume ordinary messages after Static Mode.");
+	clearOwner(Owner::DialogInteraction);
+	failureReason.clear();
+	return true;
+}
+
 bool testApplicationIdleDoesNotReadMenuSettings(std::string &failureReason) {
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
@@ -11878,6 +11907,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "MMP client and hotspot dispatch harness", testMmpClientFocusDispatchHarness);
 	runTest(ctx, "MMP common collection controls harness", testMmpCollectionControlHarness);
+	runTest(ctx, "Message-line Static Mode harness", testMessageLineStaticModeHarness);
 	runTest(ctx, "Workspace command-line autoload focus guard", testWorkspaceCommandLineAutoloadFocusGuard);
 }
 

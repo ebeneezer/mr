@@ -46,6 +46,8 @@ class MRMenuBar : public TMenuBar {
 	bool handleRuntimeCommand(ushort command);
 	void setStartupFunctionKeysActive(bool active);
 	void setEditorFunctionKeysActive(bool active);
+	void setStaticProgressMode(bool active);
+	void setStaticProgress(std::size_t completed, std::size_t total);
 
 	void setRightStatus(const std::string &status) {
 		if (mRightStatus != status) {
@@ -68,7 +70,6 @@ class MRMenuBar : public TMenuBar {
 	}
 
 	void setAutoMarqueeStatusSegments(const std::vector<MarqueeSegment> &segments, MarqueeKind kind = MarqueeKind::Info);
-	void setAutoMarqueeStatusImmediate(const std::string &status, MarqueeKind kind = MarqueeKind::Info);
 
 	void setManualMarqueeStatus(const std::string &status) {
 		setManualMarqueeStatus(status, MarqueeKind::Info);
@@ -159,6 +160,9 @@ class MRMenuBar : public TMenuBar {
 	ushort mNextRuntimeCommand = 0x7400;
 	bool mStartupFunctionKeysActive = false;
 	bool mEditorFunctionKeysActive = false;
+	bool mStaticProgressVisible = false;
+	std::size_t mStaticProgressCompleted = 0;
+	std::size_t mStaticProgressTotal = 0;
 	std::string mRightStatus;
 	std::string mAutoMarqueeStatus;
 	std::vector<MarqueeSegment> mAutoMarqueeSegments;

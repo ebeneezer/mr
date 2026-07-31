@@ -65,6 +65,13 @@ not be stored as explicit globals under `MACROGLOBALS/runtime`, but
 `GLOBAL_HASH('<rootName>')` may expose them for runtime inspection and existing
 macro compatibility.
 
+Application-owned transient UI coordination lives below the separate central
+K/V root `APPLICATIONUI`; it is not an explicit application global.
+The message-line Static Mode semaphore is authoritative at
+`APPLICATIONUI/messageLine/staticMode`. The menu and status lines retain only
+their current TVision projection; they must not introduce a second semantic
+Static Mode flag.
+
 `MACROGLOBALS` data must be grouped by runtime role:
 
 - `MACROGLOBALS/runtime/byName/<globalName>` for explicit global scalar, string,

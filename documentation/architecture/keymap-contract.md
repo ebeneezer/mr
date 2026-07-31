@@ -38,6 +38,10 @@ trie -> runtime key handling.
 - An older external version is upgrade input; a newer external version is
   invalid.
 - Writing an external keymap emits the running build epoch.
+- Message-line Static Mode may temporarily suppress F1 through F12 before
+  built-in and keymap dispatch. This is transient application coordination
+  under `APPLICATIONUI/messageLine/staticMode`; it does not alter resolver,
+  profile or persistence state.
 
 ## Bootstrap relation
 

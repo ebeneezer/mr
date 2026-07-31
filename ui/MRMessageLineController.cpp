@@ -1,5 +1,14 @@
+#define Uses_TMenuBar
+#define Uses_TProgram
+#define Uses_TStatusLine
+#include <tvision/tv.h>
+
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../mrmac/mrmac.h"
+#include "../mrmac/vm/MRVMRuntimeKv.hpp"
 #include "MRMessageLineController.hpp"
+#include "MRMenuBar.hpp"
+#include "MRStatusLine.hpp"
 
 #include <algorithm>
 #include <array>
@@ -7,11 +16,17 @@
 #include <mutex>
 #include <string_view>
 
+MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
+std::recursive_mutex &mrvmExecutionMutex() noexcept;
+
 namespace mr {
 namespace messageline {
 namespace {
 
 constexpr std::size_t kOwnerCount = static_cast<std::size_t>(Owner::WorkspaceRestore) + 1;
+constexpr const char *kApplicationUiRoot = "APPLICATIONUI";
+constexpr const char *kMessageLineBranch = "messageLine";
+constexpr const char *kStaticModeKey = "staticMode";
 
 struct Slot {
 	bool active = false;
@@ -84,21 +99,51 @@ bool exportSlot(const Slot &slot, VisibleMessage &out) {
 	return true;
 }
 
-bool messageLineEnabled() {
-	State &shared = state();
-	std::lock_guard<std::mutex> lock(shared.mutex);
-	return shared.enabled;
+bool staticModeActiveLocked(MRVMRuntimeKv &runtimeKv) {
+	VirtualMachine::Value applicationUi;
+	VirtualMachine::Value messageLine;
+	VirtualMachine::Value stored;
+	MRVMHashStore &store = runtimeKv.globalStore();
+
+	if (!runtimeKv.findRoot(kApplicationUiRoot, applicationUi) || !runtimeKv.findChild(applicationUi, kMessageLineBranch, messageLine)) return false;
+	if (!mrvmHashContainsValue(store, store, messageLine, kStaticModeKey)) return false;
+	stored = mrvmHashReadValue(store, store, messageLine, kStaticModeKey);
+	return stored.type == TYPE_INT && stored.i != 0;
+}
+
+void storeStaticModeLocked(MRVMRuntimeKv &runtimeKv, bool active) {
+	VirtualMachine::Value applicationUi = runtimeKv.ensureRoot(kApplicationUiRoot);
+	VirtualMachine::Value messageLine = runtimeKv.ensureChild(applicationUi, kMessageLineBranch);
+	VirtualMachine::Value stored;
+	MRVMHashStore &store = runtimeKv.globalStore();
+
+	stored.type = TYPE_INT;
+	stored.i = active ? 1 : 0;
+	mrvmHashWriteValue(store, store, messageLine, kStaticModeKey, stored);
+}
+
+void clearSlotsLocked(State &shared) {
+	for (Slot &slot : shared.slots) {
+		slot.active = false;
+		slot.text.clear();
+		slot.segments.clear();
+		slot.timed = false;
+		slot.expiresAt = std::chrono::steady_clock::time_point::max();
+		slot.priority = 0;
+		slot.token = shared.nextToken++;
+		slot.sequence = shared.nextSequence++;
+	}
 }
 
 } // namespace
 
 Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration, int priority) {
-	if (!messageLineEnabled()) return 0;
 	State &shared = state();
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	const auto now = std::chrono::steady_clock::now();
 	Slot *slot = slotForOwner(shared, owner);
-	if (slot == nullptr) return 0;
+	if (!shared.enabled || staticModeActiveLocked(mrvmRuntimeKv()) || slot == nullptr) return 0;
 
 	expireLocked(shared, now);
 	duration = text.empty() ? std::chrono::milliseconds(0) : clampDurationForKind(kind, duration);
@@ -115,14 +160,14 @@ Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::mill
 }
 
 Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> &segments, Kind kind, std::chrono::milliseconds duration, int priority) {
-	if (!messageLineEnabled()) return 0;
 	State &shared = state();
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	const auto now = std::chrono::steady_clock::now();
 	Slot *slot = slotForOwner(shared, owner);
 	std::string text;
 
-	if (slot == nullptr) return 0;
+	if (!shared.enabled || staticModeActiveLocked(mrvmRuntimeKv()) || slot == nullptr) return 0;
 	for (const VisibleMessage::Segment &segment : segments)
 		text += segment.text;
 
@@ -141,11 +186,11 @@ Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> 
 }
 
 Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
-	if (!messageLineEnabled()) return 0;
 	State &shared = state();
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	Slot *slot = slotForOwner(shared, owner);
-	if (slot == nullptr) return 0;
+	if (!shared.enabled || staticModeActiveLocked(mrvmRuntimeKv()) || slot == nullptr) return 0;
 
 	slot->active = !text.empty();
 	slot->kind = kind;
@@ -214,21 +259,37 @@ void setRuntimeMessageLineEnabled(bool enabled) {
 
 	shared.enabled = enabled;
 	if (enabled) return;
-	for (Slot &slot : shared.slots) {
-		slot.active = false;
-		slot.text.clear();
-		slot.segments.clear();
-		slot.timed = false;
-		slot.expiresAt = std::chrono::steady_clock::time_point::max();
-		slot.priority = 0;
+	clearSlotsLocked(shared);
+}
+
+void setStaticMode(bool active) {
+	State &shared = state();
+
+	{
+		std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+		std::lock_guard<std::mutex> lock(shared.mutex);
+
+		storeStaticModeLocked(mrvmRuntimeKv(), active);
+		clearSlotsLocked(shared);
 	}
+	if (auto *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar)) menuBar->setStaticProgressMode(active);
+	if (auto *statusLine = dynamic_cast<MRStatusLine *>(TProgram::statusLine)) statusLine->setStaticModePresentation(active);
+	else if (TProgram::statusLine != nullptr)
+		TProgram::statusLine->drawView();
+}
+
+bool staticModeActive() {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+
+	return staticModeActiveLocked(mrvmRuntimeKv());
+}
+
+void setStaticProgress(std::size_t completed, std::size_t total) {
+	if (!staticModeActive()) return;
+	if (auto *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar)) menuBar->setStaticProgress(completed, total);
 }
 
 bool currentVisibleMessage(VisibleMessage &out) {
-	if (!messageLineEnabled()) {
-		out = VisibleMessage();
-		return false;
-	}
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	const auto now = std::chrono::steady_clock::now();
@@ -236,6 +297,7 @@ bool currentVisibleMessage(VisibleMessage &out) {
 
 	expireLocked(shared, now);
 	out = VisibleMessage();
+	if (!shared.enabled) return false;
 	for (const Slot &slot : shared.slots) {
 		if (!slot.active || slot.text.empty()) continue;
 		if (best == nullptr || slot.priority > best->priority || (slot.priority == best->priority && slot.sequence > best->sequence)) best = &slot;
@@ -244,16 +306,13 @@ bool currentVisibleMessage(VisibleMessage &out) {
 }
 
 bool currentOwnerMessage(Owner owner, VisibleMessage &out) {
-	if (!messageLineEnabled()) {
-		out = VisibleMessage();
-		return false;
-	}
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	const auto now = std::chrono::steady_clock::now();
 
 	expireLocked(shared, now);
 	out = VisibleMessage();
+	if (!shared.enabled) return false;
 	const Slot *slot = slotForOwner(shared, owner);
 	return slot != nullptr ? exportSlot(*slot, out) : false;
 }

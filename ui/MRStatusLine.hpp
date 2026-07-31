@@ -2,8 +2,10 @@
 #define MRSTATUSLINE_HPP
 #define Uses_TStatusLine
 #define Uses_TDrawBuffer
+#define Uses_TKeys
 #define Uses_TPalette
 #include "MRPalette.hpp"
+#include "MRMessageLineController.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include <tvision/tv.h>
 
@@ -17,14 +19,14 @@
 void mrvmUiInvalidateScreenBase() noexcept;
 
 class MRStatusLine : public TStatusLine {
-  public:
+ public:
 	struct FunctionKeyLabel {
 		TKey keyCode;
 		ushort command;
 		std::string text;
 	};
 
-	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextFunctionLabelTransitions(), mFunctionKeyLabelRandomState(static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0x4D52464Bu), mContextHintLabels(), mMacroFunctionLabels() {
+	MRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false), mShowFunctionKeyLabels(true), mContextFunctionKeysActive(false), mContextHintLabelsActive(false), mContextFunctionKeyLabels(), mContextFunctionLabelTransitions(), mFunctionKeyLabelRandomState(static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0x4D52464Bu), mContextHintLabels(), mMacroFunctionLabels(), mStaticModePresentation(false) {
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -41,18 +43,21 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void setShowFunctionKeyLabels(bool enabled) {
+		if (mStaticModePresentation) return;
 		if (mShowFunctionKeyLabels == enabled) return;
 		mShowFunctionKeyLabels = enabled;
 		drawView();
 	}
 
 	void setMacroFunctionLabels(const std::vector<std::string> &labels) {
+		if (mStaticModePresentation) return;
 		if (mMacroFunctionLabels == labels) return;
 		mMacroFunctionLabels = labels;
 		drawView();
 	}
 
 	void setContextFunctionKeyLabels(const std::vector<FunctionKeyLabel> &labels) {
+		if (mStaticModePresentation) return;
 		bool same = mContextFunctionKeyLabels.size() == labels.size();
 
 		if (same)
@@ -93,6 +98,7 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void tickFunctionKeyLabelTransitions() {
+		if (mStaticModePresentation) return;
 		const auto now = std::chrono::steady_clock::now();
 
 		for (std::size_t i = 0; i < mContextFunctionLabelTransitions.size(); ++i) {
@@ -147,24 +153,38 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void setContextFunctionKeysActive(bool active) {
+		if (mStaticModePresentation) return;
 		if (mContextFunctionKeysActive == active) return;
 		mContextFunctionKeysActive = active;
 		drawView();
 	}
 
 	void setContextHintLabels(const std::vector<std::string> &labels) {
+		if (mStaticModePresentation) return;
 		if (mContextHintLabels == labels) return;
 		mContextHintLabels = labels;
 		drawView();
 	}
 
 	void setContextHintLabelsActive(bool active) {
+		if (mStaticModePresentation) return;
 		if (mContextHintLabelsActive == active) return;
 		mContextHintLabelsActive = active;
 		drawView();
 	}
 
+	void setStaticModePresentation(bool active) {
+		if (mStaticModePresentation == active) return;
+		mStaticModePresentation = active;
+		drawView();
+	}
+
 	virtual void draw() override {
+		if (mr::messageline::staticModeActive()) {
+			drawStaticModeHint();
+			mrvmUiInvalidateScreenBase();
+			return;
+		}
 		if (!mShowFunctionKeyLabels) {
 			TDrawBuffer b;
 			TColorAttr color = getColor(1);
@@ -197,6 +217,10 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
+		if (mr::messageline::staticModeActive()) {
+			if ((event.what == evKeyDown && isFunctionKey(TKey(event.keyDown).code)) || event.what == evMouseDown) clearEvent(event);
+			return;
+		}
 		if (mContextFunctionKeysActive && !mContextFunctionKeyLabels.empty()) {
 			if (event.what == evKeyDown && event.keyDown.keyCode != kbNoKey) {
 				const TKey pressed(event.keyDown);
@@ -345,6 +369,16 @@ class MRStatusLine : public TStatusLine {
 		writeLine(0, 0, size.x, 1, buffer);
 	}
 
+	void drawStaticModeHint() {
+		TDrawBuffer buffer;
+		TColorAttr backgroundColor = getColor(1);
+		TAttrPair labelColor = getColor(0x0403);
+
+		buffer.moveChar(0, ' ', backgroundColor, size.x);
+		buffer.moveCStr(0, "~Esc~ Abort", labelColor, size.x);
+		writeLine(0, 0, size.x, 1, buffer);
+	}
+
 	void drawContextHintLabels() {
 		TDrawBuffer buffer;
 		TColorAttr backgroundColor = getColor(1);
@@ -414,5 +448,6 @@ class MRStatusLine : public TStatusLine {
 	std::uint32_t mFunctionKeyLabelRandomState;
 	std::vector<std::string> mContextHintLabels;
 	std::vector<std::string> mMacroFunctionLabels;
+	bool mStaticModePresentation;
 };
 #endif

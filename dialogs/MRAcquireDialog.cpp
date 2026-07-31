@@ -194,111 +194,6 @@ class AcquireCountView final : public TView {
 	return trimmed;
 }
 
-class AcquireLoadAllDialog final : public MRDialogFoundation {
-  public:
-	AcquireLoadAllDialog(MRAcquireMode aMode, const std::vector<std::string> &aPaths, MREditWindow *aBackgroundRestoreWindow, MRWindowOpenBatch &aOpenBatch)
-	    : TWindowInit(initMrDialogFrame),
-	      MRDialogFoundation(mr::dialogs::centeredDialogRect(72, 7), "LOAD ALL", 72, 7, initMrDialogFrame),
-	      mode(aMode),
-	      paths(aPaths),
-	      backgroundRestoreWindow(aBackgroundRestoreWindow),
-	      openBatch(aOpenBatch) {
-		eventMask |= evBroadcast;
-		mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
-		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
-		progressView = new MRProgressSlider(TRect(2, 2, 70, 3));
-		insert(progressView);
-		{
-			const std::array buttons{mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfDefault}};
-			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
-			mr::dialogs::insertUniformButtonRow(*this, (72 - metrics.rowWidth) / 2, 4, 0, buttons);
-		}
-		progressView->setProgress(0, paths.size(), "0/" + std::to_string(paths.size()));
-	}
-
-	void endModal(ushort command) override {
-		if (command == cmCancel || command == cmClose) {
-			finishLoad(cmCancel);
-			return;
-		}
-		MRDialogFoundation::endModal(command);
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evCommand && (event.message.command == cmCancel || event.message.command == cmClose)) {
-			endModal(cmCancel);
-			clearEvent(event);
-			return;
-		}
-		if (workTimer != nullptr && event.what == evBroadcast && event.message.command == cmTimerExpired && event.message.infoPtr == workTimer) {
-			workTimer = nullptr;
-			loadNextPath();
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evNothing) {
-			armWorkTimer();
-			clearEvent(event);
-			return;
-		}
-		MRDialogFoundation::handleEvent(event);
-	}
-
-  private:
-	void armWorkTimer() {
-		if (workTimer == nullptr && owner != nullptr) workTimer = setTimer(1);
-	}
-
-	void stopWorkTimer() {
-		if (workTimer == nullptr) return;
-		killTimer(workTimer);
-		workTimer = nullptr;
-	}
-
-	void loadNextPath() {
-		if (completedCount >= paths.size()) {
-			finishLoad(cmOK);
-			return;
-		}
-
-		const std::vector<std::string> path{paths[completedCount]};
-		const bool loaded = mode == MRAcquireMode::LoadFile
-		                        ? loadResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow, MRFileLoadMessages::Suppressed, openBatch)
-		                        : openResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow, MRFileLoadMessages::Suppressed, openBatch);
-		if (loaded) ++loadedCount;
-		++completedCount;
-		progressView->setProgress(completedCount, paths.size(), std::to_string(completedCount) + "/" + std::to_string(paths.size()));
-
-		if (completedCount >= paths.size()) {
-			finishLoad(cmOK);
-			return;
-		}
-		armWorkTimer();
-	}
-
-	void finishLoad(ushort command) {
-		if (finished) return;
-		finished = true;
-		stopWorkTimer();
-		const long long elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt).count();
-		const std::string message = std::to_string(loadedCount) + " files loaded in " + std::to_string(elapsedMs) + " ms";
-
-		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, message, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
-		MRDialogFoundation::endModal(command);
-	}
-
-	MRAcquireMode mode;
-	const std::vector<std::string> &paths;
-	MREditWindow *backgroundRestoreWindow = nullptr;
-	MRWindowOpenBatch &openBatch;
-	std::size_t completedCount = 0;
-	std::size_t loadedCount = 0;
-	MRProgressSlider *progressView = nullptr;
-	TTimerId workTimer = nullptr;
-	std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::now();
-	bool finished = false;
-};
-
 class TAcquireDialog final : public MRDialogFoundation {
  public:
 	explicit TAcquireDialog(MRAcquireMode mode, MREditWindow *backgroundRestoreWindow)
@@ -357,6 +252,10 @@ class TAcquireDialog final : public MRDialogFoundation {
 	Boolean valid(ushort command) override {
 		if (command == cmCancel || command == cmClose) {
 			persistSettings();
+			if (loadAllPending) {
+				cancelPendingLoad();
+				return False;
+			}
 			cancelPendingLoad();
 			if (taskId != 0) {
 				closePending = true;
@@ -412,7 +311,7 @@ class TAcquireDialog final : public MRDialogFoundation {
 		MRDialogFoundation::handleEvent(event);
 	}
 
-  private:
+ private:
 	void updateButtons() {
 		const bool hasSelection = mListView != nullptr && !mListView->selectedValue().empty();
 		const bool hasEntries = !resolvedPaths.empty();
@@ -422,6 +321,7 @@ class TAcquireDialog final : public MRDialogFoundation {
 			buttonsRow[0]->setState(sfDisabled, !enabled || !hasEntries);
 			buttonsRow[1]->setState(sfDisabled, !enabled || !hasSelection);
 		}
+		if (buttonsRow.size() >= 3) buttonsRow[2]->setState(sfDisabled, !enabled);
 		if (mExecButton != nullptr) mExecButton->setState(sfDisabled, !enabled);
 		if (mCommandField != nullptr) mCommandField->setState(sfDisabled, !enabled);
 	}
@@ -489,11 +389,7 @@ class TAcquireDialog final : public MRDialogFoundation {
 			return;
 		}
 		const std::size_t ownerId = reinterpret_cast<std::size_t>(this);
-		taskId = mr::coprocessor::globalCoprocessor().submit(
-		    mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, 0, 0, mr::coprocessor::ExecutionOwnerKind::Dialog, ownerId, "acquire",
-		    [commandLine, ownerId](const mr::coprocessor::TaskInfo &info) {
-			    return runExternalCommandTask(info, ownerId, commandLine, MRBuildHookContext(), std::string(), std::string(), true, false);
-		    });
+		taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo, 0, 0, mr::coprocessor::ExecutionOwnerKind::Dialog, ownerId, "acquire", [commandLine, ownerId](const mr::coprocessor::TaskInfo &info) { return runExternalCommandTask(info, ownerId, commandLine, MRBuildHookContext(), std::string(), std::string(), true, false); });
 		if (taskId == 0) {
 			if (mStatusView != nullptr) mStatusView->setText("Unable to start subshell.");
 		} else if (mStatusView != nullptr) {
@@ -519,7 +415,8 @@ class TAcquireDialog final : public MRDialogFoundation {
 			return;
 		}
 		if (success) updateStatus();
-		else if (result.cancelled()) mStatusView->setText("Cancelled");
+		else if (result.cancelled())
+			mStatusView->setText("Cancelled");
 		else
 			mStatusView->setText("Command failed");
 		updateButtons();
@@ -529,14 +426,17 @@ class TAcquireDialog final : public MRDialogFoundation {
 		std::vector<std::string> paths;
 
 		if (loadAll) {
-			MRWindowOpenBatch openBatch;
-
 			if (resolvedPaths.empty()) return;
 			persistSettings();
-			openBatch.beginInteractive();
-			static_cast<void>(mr::dialogs::execDialog(new AcquireLoadAllDialog(mode, resolvedPaths, backgroundRestoreWindow, openBatch)));
-			openBatch.finish(true, true);
-			reactivateAfterBackgroundLoad();
+			pendingPaths = resolvedPaths;
+			pendingPathIndex = 0;
+			pendingLoadedCount = 0;
+			pendingLoadStartedAt = std::chrono::steady_clock::now();
+			loadPending = true;
+			loadAllPending = true;
+			loadBatch.beginInteractive();
+			mr::messageline::setStaticMode(true);
+			mr::messageline::setStaticProgress(0, pendingPaths.size());
 			updateStatus();
 			updateButtons();
 			return;
@@ -549,48 +449,86 @@ class TAcquireDialog final : public MRDialogFoundation {
 		persistSettings();
 		pendingPaths = std::move(paths);
 		pendingPathIndex = 0;
+		pendingLoadedCount = 0;
 		loadPending = true;
+		loadAllPending = false;
 		updateStatus();
 		updateButtons();
 	}
 
 	void performPendingLoad() {
 		if (!loadPending || pendingPathIndex >= pendingPaths.size()) {
-			loadPending = false;
-			pendingPaths.clear();
-			pendingPathIndex = 0;
-			updateStatus();
-			updateButtons();
+			finishPendingLoad(false);
 			return;
 		}
 		const std::vector<std::string> path{pendingPaths[pendingPathIndex]};
-		if (mode == MRAcquireMode::LoadFile) static_cast<void>(loadResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow));
-		else
-			static_cast<void>(openResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow));
+		bool loaded = false;
+
+		if (loadAllPending) {
+			loaded = mode == MRAcquireMode::LoadFile ? loadResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow, MRFileLoadMessages::Suppressed, loadBatch) : openResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow, MRFileLoadMessages::Suppressed, loadBatch);
+		} else if (mode == MRAcquireMode::LoadFile) {
+			loaded = loadResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow);
+		} else {
+			loaded = openResolvedFilesIntoWindows(path, MRLoadedWindowActivation::KeepBackground, backgroundRestoreWindow);
+		}
+		if (loaded) ++pendingLoadedCount;
 		++pendingPathIndex;
+		if (loadAllPending) mr::messageline::setStaticProgress(pendingPathIndex, pendingPaths.size());
 		updateStatus();
 		if (pendingPathIndex >= pendingPaths.size()) {
-			loadPending = false;
-			pendingPaths.clear();
-			pendingPathIndex = 0;
-			updateStatus();
-			updateButtons();
+			finishPendingLoad(false);
+			return;
 		}
 		reactivateAfterBackgroundLoad();
 	}
 
 	void cancelPendingLoad() {
+		if (loadAllPending) {
+			finishPendingLoad(true);
+			return;
+		}
 		loadPending = false;
 		pendingPaths.clear();
 		pendingPathIndex = 0;
+		pendingLoadedCount = 0;
 		updateStatus();
 		updateButtons();
+	}
+
+	void finishPendingLoad(bool cancelled) {
+		const bool reportBatch = loadAllPending;
+		const std::size_t total = pendingPaths.size();
+		const std::size_t completed = pendingPathIndex;
+		const std::size_t loaded = pendingLoadedCount;
+		const long long elapsedMs = reportBatch ? std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - pendingLoadStartedAt).count() : 0;
+
+		if (loadBatch.active()) loadBatch.finish(true, true);
+		loadPending = false;
+		loadAllPending = false;
+		pendingPaths.clear();
+		pendingPathIndex = 0;
+		pendingLoadedCount = 0;
+		reactivateAfterBackgroundLoad();
+		updateStatus();
+		updateButtons();
+		if (!reportBatch) return;
+
+		mr::messageline::setStaticMode(false);
+		if (cancelled) {
+			const std::string message = "Load all cancelled: " + std::to_string(loaded) + " files loaded, " + std::to_string(completed) + "/" + std::to_string(total) + " processed in " + std::to_string(elapsedMs) + " ms.";
+
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, message, mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
+		} else {
+			const std::string message = std::to_string(loaded) + " files loaded in " + std::to_string(elapsedMs) + " ms";
+
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, message, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+		}
 	}
 
 	void updateStatus() {
 		if (mCountView != nullptr) mCountView->setCount(resolvedPaths.size());
 		if (mStatusView == nullptr) return;
-		if (loadPending) {
+		if (loadPending && !loadAllPending) {
 			mStatusView->setText("Loading " + std::to_string(std::min(pendingPathIndex + 1, pendingPaths.size())) + "/" + std::to_string(pendingPaths.size()));
 			return;
 		}
@@ -648,11 +586,15 @@ class TAcquireDialog final : public MRDialogFoundation {
 	std::string stdoutTail;
 	std::vector<std::string> pendingPaths;
 	std::size_t pendingPathIndex = 0;
+	std::size_t pendingLoadedCount = 0;
+	std::chrono::steady_clock::time_point pendingLoadStartedAt = std::chrono::steady_clock::time_point::min();
+	MRWindowOpenBatch loadBatch;
 	TRect commandHistoryAnchor;
 	MRDropList commandHistoryDropList;
 	MREditWindow *backgroundRestoreWindow = nullptr;
 	std::uint64_t taskId = 0;
 	bool loadPending = false;
+	bool loadAllPending = false;
 	bool closePending = false;
 };
 

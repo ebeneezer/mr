@@ -39,7 +39,6 @@
 #include "../utils/MRFileIOUtils.hpp"
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
-#include "../../ui/MRMenuBar.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRFrame.hpp"
 #include "../../ui/MRBentoBox/MRBentoBox.hpp"
@@ -558,30 +557,26 @@ void applyWorkspaceEntryGeometry(MREditWindow *window, const WorkspaceEntry &ent
 	std::ostringstream detail;
 
 	MRWindowLayout::applyWorkspaceState(window, bounds, restoreBounds, entry.minimized, false, false);
-	detail << "Workspace geometry restored window=" << window->number
-	       << " saved=" << bounds.a.x << "," << bounds.a.y << "," << bounds.b.x << "," << bounds.b.y
-	       << " restore=" << restoreBounds.a.x << "," << restoreBounds.a.y << "," << restoreBounds.b.x << "," << restoreBounds.b.y
-	       << " applied=" << window->getBounds().a.x << "," << window->getBounds().a.y << "," << window->getBounds().b.x << "," << window->getBounds().b.y
-	       << " min=" << (entry.minimized ? 1 : 0) << ".";
+	detail << "Workspace geometry restored window=" << window->number << " saved=" << bounds.a.x << "," << bounds.a.y << "," << bounds.b.x << "," << bounds.b.y << " restore=" << restoreBounds.a.x << "," << restoreBounds.a.y << "," << restoreBounds.b.x << "," << restoreBounds.b.y << " applied=" << window->getBounds().a.x << "," << window->getBounds().a.y << "," << window->getBounds().b.x << "," << window->getBounds().b.y << " min=" << (entry.minimized ? 1 : 0) << ".";
 	mrLogMessage(detail.str());
 }
 
-void drawWorkspaceMessageLineNow(const std::string &text, MRMenuBar::MarqueeKind kind) {
-	MRMenuBar *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar);
-
-	if (menuBar == nullptr) return;
-	menuBar->setAutoMarqueeStatusImmediate(text, kind);
+void drawWorkspaceRestoreProgressNow(int processedEntries, int totalEntries) {
+	mr::messageline::setStaticProgress(static_cast<std::size_t>(std::max(0, processedEntries)), static_cast<std::size_t>(std::max(0, totalEntries)));
 	TScreen::flushScreen();
 }
 
-void postWorkspaceRestoreProgress(int processedEntries, int totalEntries, bool refreshNow) {
-	std::string text;
+bool workspaceRestoreCancelRequested() {
+	static constexpr int kMaximumQueuedKeys = 16;
 
-	if (processedEntries == 0) text = "Restoring workspace: " + std::to_string(totalEntries) + " entries.";
-	else
-		text = "Restoring workspace: " + std::to_string(processedEntries) + "/" + std::to_string(totalEntries) + ".";
-	mr::messageline::postSticky(mr::messageline::Owner::WorkspaceRestore, text, mr::messageline::Kind::Info, mr::messageline::kPriorityHigh);
-	if (refreshNow) drawWorkspaceMessageLineNow(text, MRMenuBar::MarqueeKind::Info);
+	for (int i = 0; i < kMaximumQueuedKeys; ++i) {
+		TEvent event{};
+
+		event.getKeyEvent();
+		if (event.what == evNothing) return false;
+		if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc)) return true;
+	}
+	return false;
 }
 
 void hideAllEditorFrameHoverPopups() {
@@ -1134,6 +1129,7 @@ void mrLoadWorkspace(const std::string &filename) {
 	const ushort restoreCursorLines = TScreen::cursorLines;
 	bool cursorSuppressedForRestore = false;
 	bool announceWorkspaceRestore = false;
+	bool workspaceRestoreCancelled = false;
 
 	if (settingsPath.empty()) {
 		settingsPath = configuredSettingsMacroFilePath();
@@ -1151,7 +1147,6 @@ void mrLoadWorkspace(const std::string &filename) {
 
 			mrLogMessage("Workspace load failed read path=" + dest + " error=" + errorText + ".");
 			mr::messageline::postAutoTimed(mr::messageline::Owner::WorkspaceRestore, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
-			drawWorkspaceMessageLineNow(text, MRMenuBar::MarqueeKind::Error);
 			return;
 		}
 		readUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
@@ -1175,7 +1170,7 @@ void mrLoadWorkspace(const std::string &filename) {
 
 				estimatedRestoreMs += kWorkspaceRestoreEstimatedFileCompareExtraMs;
 				for (const std::string *sourcePath : sourcePaths) {
-					struct stat sourceInfo {};
+					struct stat sourceInfo{};
 
 					if (::stat(sourcePath->c_str(), &sourceInfo) != 0 || !S_ISREG(sourceInfo.st_mode) || sourceInfo.st_size <= 0) continue;
 					estimatedFileCompareBytes += static_cast<long long>(sourceInfo.st_size);
@@ -1195,14 +1190,9 @@ void mrLoadWorkspace(const std::string &filename) {
 		cursorSuppressedForRestore = true;
 		TScreen::cursorLines = 0;
 		TScreen::setCursorType(0);
-		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
-		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
-		mr::messageline::clearOwner(mr::messageline::Owner::MacroMessage);
-		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
-		mr::messageline::clearOwner(mr::messageline::Owner::MacroBrain);
-		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
 		hideAllEditorFrameHoverPopups();
-		postWorkspaceRestoreProgress(0, totalWorkspaceEntries, true);
+		mr::messageline::setStaticMode(true);
+		drawWorkspaceRestoreProgressNow(0, totalWorkspaceEntries);
 		lastWorkspaceProgressAt = std::chrono::steady_clock::now();
 	}
 
@@ -1228,16 +1218,20 @@ void mrLoadWorkspace(const std::string &filename) {
 			long long geometryUs = 0;
 			long long cursorUs = 0;
 
-			++parsedWorkspaceEntries;
 			if (announceWorkspaceRestore) {
 				const auto now = std::chrono::steady_clock::now();
-				const bool shouldReportProgress = parsedWorkspaceEntries == 1 || parsedWorkspaceEntries == totalWorkspaceEntries || now - lastWorkspaceProgressAt >= std::chrono::milliseconds(1500);
+				const bool shouldReportProgress = now - lastWorkspaceProgressAt >= std::chrono::milliseconds(1500);
 
 				if (shouldReportProgress) {
-					postWorkspaceRestoreProgress(parsedWorkspaceEntries, totalWorkspaceEntries, true);
+					drawWorkspaceRestoreProgressNow(parsedWorkspaceEntries, totalWorkspaceEntries);
 					lastWorkspaceProgressAt = now;
 				}
+				if (workspaceRestoreCancelRequested()) {
+					workspaceRestoreCancelled = true;
+					break;
+				}
 			}
+			++parsedWorkspaceEntries;
 			resolvedVirtualDesktop = workspaceVirtualDesktopOrRandom(entry.vd);
 
 			if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare) {
@@ -1311,10 +1305,10 @@ void mrLoadWorkspace(const std::string &filename) {
 				}
 			}
 			{
-			const auto subStartedAt = std::chrono::steady_clock::now();
-			restoreEditorCursor(editor, entry.line, entry.column);
-			if (MRBentoHexEditor *hexEditor = dynamic_cast<MRBentoHexEditor *>(win); hexEditor != nullptr) hexEditor->synchronizeByteCursorFromDocument();
-			cursorUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
+				const auto subStartedAt = std::chrono::steady_clock::now();
+				restoreEditorCursor(editor, entry.line, entry.column);
+				if (MRBentoHexEditor *hexEditor = dynamic_cast<MRBentoHexEditor *>(win); hexEditor != nullptr) hexEditor->synchronizeByteCursorFromDocument();
+				cursorUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
 			}
 			if (entry.mainFile && !loadedMainFile) {
 				static_cast<void>(mrSetWorkspaceMainFile(win));
@@ -1331,9 +1325,9 @@ void mrLoadWorkspace(const std::string &filename) {
 		}
 		openBatch.finish(false, false);
 		parseLoopUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
-		}
-		g_workspaceRestoreInProgress = false;
-		if (announceWorkspaceRestore) hideAllEditorFrameHoverPopups();
+	}
+	g_workspaceRestoreInProgress = false;
+	if (announceWorkspaceRestore) hideAllEditorFrameHoverPopups();
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		syncVirtualDesktopVisibility();
@@ -1341,20 +1335,20 @@ void mrLoadWorkspace(const std::string &filename) {
 		if (loadedWorkspaceEntries != 0) mrNotifyWindowTopologyChanged();
 		visibilityUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
-	mrLogMessage("Workspace load summary path=" + dest + " parsed=" + std::to_string(parsedWorkspaceEntries) + " loaded=" + std::to_string(loadedWorkspaceEntries) + " discarded=" + (discardedWorkspaceEntries ? "1" : "0") + ".");
+	mrLogMessage("Workspace load summary path=" + dest + " parsed=" + std::to_string(parsedWorkspaceEntries) + " loaded=" + std::to_string(loadedWorkspaceEntries) + " discarded=" + (discardedWorkspaceEntries ? "1" : "0") + " cancelled=" + (workspaceRestoreCancelled ? "1" : "0") + ".");
 	{
 		std::ostringstream detail;
 		const long long tookUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - loadStartedAt).count();
 		const long long actualRestoreMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - restoreStartedAt).count();
 
-		detail << "read_us=" << readUs << " preflight_us=" << preflightUs << " parse_loop_us=" << parseLoopUs << " visibility_us=" << visibilityUs << " estimated_ms=" << estimatedRestoreMs << " actual_restore_ms=" << actualRestoreMs << " announced=" << (announceWorkspaceRestore ? 1 : 0) << " parsed=" << parsedWorkspaceEntries << " loaded=" << loadedWorkspaceEntries << " bytes=" << currentContent.size() << " path=\"" << dest << "\"";
+		detail << "read_us=" << readUs << " preflight_us=" << preflightUs << " parse_loop_us=" << parseLoopUs << " visibility_us=" << visibilityUs << " estimated_ms=" << estimatedRestoreMs << " actual_restore_ms=" << actualRestoreMs << " announced=" << (announceWorkspaceRestore ? 1 : 0) << " cancelled=" << (workspaceRestoreCancelled ? 1 : 0) << " parsed=" << parsedWorkspaceEntries << " loaded=" << loadedWorkspaceEntries << " bytes=" << currentContent.size() << " path=\"" << dest << "\"";
 		logWindowTiming("Workspace load total timing", tookUs, detail.str());
-		}
-		if (parsedWorkspaceEntries != 0 && loadedWorkspaceEntries == 0) {
-			setRuntimePreserveAutosavedWorkspace(true);
-			mrLogMessage("Workspace load restored no entries; autosaved workspace was left preserved.");
-		}
-		if (discardedWorkspaceEntries) mrLogMessage("Workspace load skipped one or more invalid entries; source was left unchanged.");
+	}
+	if ((parsedWorkspaceEntries != 0 || workspaceRestoreCancelled) && loadedWorkspaceEntries == 0) {
+		setRuntimePreserveAutosavedWorkspace(true);
+		mrLogMessage("Workspace load restored no entries; autosaved workspace was left preserved.");
+	}
+	if (discardedWorkspaceEntries) mrLogMessage("Workspace load skipped one or more invalid entries; source was left unchanged.");
 	if (cursorSuppressedForRestore) {
 		TScreen::cursorLines = restoreCursorLines;
 		TScreen::setCursorType(restoreCursorLines);
@@ -1363,12 +1357,19 @@ void mrLoadWorkspace(const std::string &filename) {
 	if (announceWorkspaceRestore) {
 		const int skippedWorkspaceEntries = std::max(0, parsedWorkspaceEntries - loadedWorkspaceEntries);
 		const long long tookMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - restoreStartedAt).count();
-		std::string text = "Workspace restored: " + std::to_string(loadedWorkspaceEntries) + "/" + std::to_string(parsedWorkspaceEntries) + " entries in " + std::to_string(tookMs) + " ms.";
-		const bool entriesSkipped = skippedWorkspaceEntries != 0;
+		std::string text;
+		const bool entriesSkipped = skippedWorkspaceEntries != 0 || workspaceRestoreCancelled;
 
-		if (entriesSkipped) text += " " + std::to_string(skippedWorkspaceEntries) + " skipped.";
+		drawWorkspaceRestoreProgressNow(parsedWorkspaceEntries, totalWorkspaceEntries);
+		mr::messageline::setStaticMode(false);
+		TScreen::flushScreen();
+		if (workspaceRestoreCancelled) {
+			text = "Workspace restore cancelled: " + std::to_string(loadedWorkspaceEntries) + "/" + std::to_string(totalWorkspaceEntries) + " entries loaded, " + std::to_string(parsedWorkspaceEntries) + " processed in " + std::to_string(tookMs) + " ms.";
+		} else {
+			text = "Workspace restored: " + std::to_string(loadedWorkspaceEntries) + "/" + std::to_string(parsedWorkspaceEntries) + " entries in " + std::to_string(tookMs) + " ms.";
+			if (skippedWorkspaceEntries != 0) text += " " + std::to_string(skippedWorkspaceEntries) + " skipped.";
+		}
 		mr::messageline::postAutoTimed(mr::messageline::Owner::WorkspaceRestore, text, entriesSkipped ? mr::messageline::Kind::Warning : mr::messageline::Kind::Info, entriesSkipped ? mr::messageline::kPriorityHigh : mr::messageline::kPriorityMedium);
-		drawWorkspaceMessageLineNow(text, entriesSkipped ? MRMenuBar::MarqueeKind::Warning : MRMenuBar::MarqueeKind::Info);
 	}
 }
 

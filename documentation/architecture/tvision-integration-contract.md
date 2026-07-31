@@ -34,6 +34,23 @@ MR may extend TVision through standard TVision mechanisms only.
 - Do not use overlay hacks when a TVision-native route exists.
 - Do not change event routing as a side effect of layout cleanup.
 
+## Message-line Static Mode
+
+The authoritative Static Mode semaphore is the central runtime K/V value
+`APPLICATIONUI/messageLine/staticMode`.
+
+- Entering Static Mode clears every ordinary message-line owner slot.
+- Ordinary messages arriving while it is active are discarded rather than
+  queued.
+- The menu bar may retain only the current numeric progress projection.
+- Progress uses the dynamically derived message lane, Warning color and a
+  centered `completed/total` label without marquee transitions.
+- Leaving Static Mode clears the projected content before ordinary animated
+  messages resume.
+- While active, the status line shows only `Esc Abort`; F1 through F12 are not
+  dispatched. Its pre-entry F-key presentation is retained until Static Mode
+  ends. Escape remains owned by the active operation.
+
 ## Desktop-managed windows
 
 Top-level windows that participate in MR desktop operations implement the
