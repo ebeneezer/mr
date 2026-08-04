@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 class MRMenuBar : public TMenuBar {
@@ -38,8 +39,7 @@ class MRMenuBar : public TMenuBar {
 	void setLineDrawingMenuState(bool enabled, bool doubleLines);
 	bool registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool refreshRuntimeMenus(std::string *errorMessage = nullptr);
-	bool setRuntimeMenuKeyLabelForMacroSpec(const std::string &macroSpec, const std::string &keyLabel);
-	bool clearRuntimeMenuKeyLabels();
+	bool projectRuntimeMenuKeyLabels(const std::vector<std::pair<std::string, std::string>> &labels);
 	bool removeRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool removeRuntimeNodesOwnedByFile(const std::string &fileSpec, std::string *errorMessage = nullptr);

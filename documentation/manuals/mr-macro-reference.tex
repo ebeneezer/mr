@@ -7868,6 +7868,11 @@ Primitive & Role & Purpose & Reference \\
 \primitiveoverview{CLEAR\_SCREEN}{procedure-clear-screen}{procedure}{User interaction.}
 \primitiveoverview{CLR\_LINE}{procedure-clr-line}{procedure}{User interaction.}
 \primitiveoverview{CMD\_TO\_KEY}{procedure-cmd-to-key}{procedure}{User interaction.}
+\primitiveoverview{DESKTOP\_BLIT}{procedure-desktop-blit}{procedure}{MR desktop background rendering.}
+\primitiveoverview{DESKTOP\_CLEAR}{procedure-desktop-clear}{procedure}{MR desktop background rendering.}
+\primitiveoverview{DESKTOP\_PUT\_CHAR}{procedure-desktop-put-char}{procedure}{MR desktop background rendering.}
+\primitiveoverview{DESKTOP\_PUT\_STRING}{procedure-desktop-put-string}{procedure}{MR desktop background rendering.}
+\primitiveoverview{DESKTOP\_SET\_COLOR}{procedure-desktop-set-color}{procedure}{MR desktop background rendering.}
 \primitiveoverview{FLABEL}{procedure-flabel}{procedure}{User interaction.}
 \primitiveoverview{GOTOXY}{procedure-gotoxy}{procedure}{User interaction.}
 \primitiveoverview{KEY\_IN}{procedure-key-in}{procedure}{User interaction.}
@@ -7989,6 +7994,185 @@ $MACRO REFERENCE_CLR_LINE FROM EDIT;
     CLR_LINE(0, 0, 0);
 END_MACRO;
 \end{verbatim}
+
+\Needspace{0.86\textheight}%
+\begin{mrmacextension}
+\phantomsection
+\label{prim:procedure-desktop-blit}
+\subsection*{DESKTOP\_BLIT}
+\index{DESKTOP\_BLIT@\texttt{DESKTOP\_BLIT}}
+\begin{verbatim}
+DESKTOP_BLIT(path, column, row, mode);
+\end{verbatim}
+Parameters:
+\begin{description}
+\item[path] Path of a binary-read UTF-8 ANSI image file.
+\item[column] One-based column in the MR desktop background.
+\item[row] One-based row in the MR desktop background.
+\item[mode] Rendering mode: 0 for direct ANSI colour or 1 for desktop-adaptive
+monochrome.
+\end{description}
+
+Reads and renders an ANSI image without an intermediate colour-array or image
+conversion. Standard ANSI foreground colours 30 through 37 and 90 through 97,
+and background colours 40 through 47 and 100 through 107, are mapped directly
+to their equivalent TVision/BIOS colour nibbles in mode 0. Reset, default
+colour, bold foreground and inverse-video SGR parameters are supported.
+
+Mode 1 maps all 16 decoded ANSI colours to distinct, fixed,
+luminance-ordered monochrome ranks. Equal upper/lower block samples use the
+CP437 \texttt{light-shade}, \texttt{medium-shade}, \texttt{dark-shade} and
+\texttt{full-block} progression. A deterministic 4 by 4 ordered dither selects
+between adjacent progression levels. Unequal upper/lower samples remain two
+independent luminance planes: one common ordered threshold selects the
+light-shade, upper-half, lower-half or full-block glyph, so the two samples are
+never averaged. Ordinary non-block glyphs remain unchanged. The configured
+desktop attribute supplies the only output colour pair, and minimum luminance
+reproduces the native desktop shade instead of introducing a solid rectangular
+background. The conversion is fixed and does not depend on image histograms,
+placement or clipping.
+
+The parser accepts CR, LF, backspace, tab, UTF-8 text representable in the
+active TVision code page, CSI cursor positioning and movement
+(\texttt{H}, \texttt{f}, \texttt{A} through \texttt{D}, \texttt{G},
+\texttt{d}), cursor save/restore, full erase \texttt{2J}, and cursor visibility
+\texttt{?25h}/\texttt{?25l}. LF begins the next image row. Unsupported or
+malformed control sequences and unrepresentable characters are reported
+instead of being discarded. Input is limited to 16 MiB, dimensions below 4096
+cells per axis and at most 1,048,576 image cells.
+
+The decoded rectangle is clipped to the desktop background. The operation does
+not change the current desktop drawing attribute. It performs external file I/O
+and therefore executes on the UI-thread route rather than as a staged
+background macro operation. Windows remain above the canvas, and the menu and
+FLabel lines are outside its projection bounds. The canvas is volatile runtime
+state shared by all virtual desktops.
+
+\paragraph{Example macro.}
+\begin{verbatim}
+$MACRO REFERENCE_DESKTOP_BLIT FROM EDIT;
+    DESKTOP_CLEAR();
+    DESKTOP_BLIT('misc/example.ans', 1, 1, 0);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
+
+\Needspace{10\baselineskip}
+\begin{mrmacextension}
+\phantomsection
+\label{prim:procedure-desktop-clear}
+\subsection*{DESKTOP\_CLEAR}
+\index{DESKTOP\_CLEAR@\texttt{DESKTOP\_CLEAR}}
+\begin{verbatim}
+DESKTOP_CLEAR();
+\end{verbatim}
+Parameters: None.
+
+Removes all retained MRMAC canvas cells and exposes the native MR desktop
+background again. The current desktop drawing attribute is preserved, so a
+subsequent character or string operation continues with the attribute selected
+before the clear. Windows and the virtual-desktop marker remain above the
+canvas; the menu and FLabel lines remain outside its projection bounds.
+
+\paragraph{Example macro.}
+\begin{verbatim}
+$MACRO REFERENCE_DESKTOP_CLEAR FROM EDIT;
+    DESKTOP_SET_COLOR(31);
+    DESKTOP_PUT_STRING('temporary text', 1, 1);
+    DESKTOP_CLEAR();
+    DESKTOP_PUT_STRING('attribute retained', 1, 1);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
+
+\Needspace{6\baselineskip}
+\begin{mrmacextension}
+\phantomsection
+\label{prim:procedure-desktop-put-char}
+\subsection*{DESKTOP\_PUT\_CHAR}
+\index{DESKTOP\_PUT\_CHAR@\texttt{DESKTOP\_PUT\_CHAR}}
+\begin{verbatim}
+DESKTOP_PUT_CHAR(character, column, row);
+\end{verbatim}
+Parameters:
+\begin{description}
+\item[character] Character value or a string containing exactly one byte.
+\item[column] One-based column in the MR desktop background.
+\item[row] One-based row in the MR desktop background.
+\end{description}
+
+Writes one character cell using the current attribute selected by
+DESKTOP\_SET\_COLOR. An out-of-bounds cell is clipped. The retained
+cell is redrawn after expose, resize and virtual-desktop changes without
+covering windows, the menu or the FLabel line.\footnote{The historical MEMAC
+DRAW\_CHAR procedure is not available in MRMAC.}
+
+\paragraph{Example macro.}
+\begin{verbatim}
+$MACRO REFERENCE_DESKTOP_PUT_CHAR FROM EDIT;
+    DESKTOP_SET_COLOR(30);
+    DESKTOP_PUT_CHAR('*', 10, 4);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
+
+\begin{mrmacextension}
+\phantomsection
+\label{prim:procedure-desktop-put-string}
+\subsection*{DESKTOP\_PUT\_STRING}
+\index{DESKTOP\_PUT\_STRING@\texttt{DESKTOP\_PUT\_STRING}}
+\begin{verbatim}
+DESKTOP_PUT_STRING(text, column, row);
+\end{verbatim}
+Parameters:
+\begin{description}
+\item[text] String-like sequence of character bytes.
+\item[column] One-based starting column in the MR desktop background.
+\item[row] One-based row in the MR desktop background.
+\end{description}
+
+Writes the bytes of text from left to right using the current desktop drawing
+attribute. Text is clipped to the desktop background. The retained cells are
+shared by all virtual desktops and do not extend into the menu or FLabel line.
+
+\paragraph{Example macro.}
+\begin{verbatim}
+$MACRO REFERENCE_DESKTOP_PUT_STRING FROM EDIT;
+    DESKTOP_SET_COLOR(31);
+    DESKTOP_PUT_STRING('MR desktop', 3, 2);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
+
+\begin{mrmacextension}
+\phantomsection
+\label{prim:procedure-desktop-set-color}
+\subsection*{DESKTOP\_SET\_COLOR}
+\index{DESKTOP\_SET\_COLOR@\texttt{DESKTOP\_SET\_COLOR}}
+\begin{verbatim}
+DESKTOP_SET_COLOR(attribute);
+\end{verbatim}
+Parameters:
+\begin{description}
+\item[attribute] Complete TVision character attribute in the range 0 through
+255.
+\end{description}
+
+Selects the attribute used by subsequent DESKTOP\_PUT\_CHAR and
+DESKTOP\_PUT\_STRING operations in applied command order. The
+attribute and desktop cells are volatile runtime state and are not persisted.
+DESKTOP\_BLIT resolves an attribute for every cell and does not change this
+value.\footnote{The historical MEMAC DRAW\_ATTR procedure is not available in
+MRMAC.}
+
+\paragraph{Example macro.}
+\begin{verbatim}
+$MACRO REFERENCE_DESKTOP_SET_COLOR FROM EDIT;
+    DESKTOP_SET_COLOR(31);
+    DESKTOP_PUT_STRING('coloured text', 1, 1);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
 
 \phantomsection
 \label{prim:procedure-cmd-to-key}

@@ -52,7 +52,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "make clean CXX=clang++ CC=clang && make -j16 all CXX=clang++ CC=clang"
+                "make clean CXX=clang++ CC=clang && make all CXX=clang++ CC=clang"
             ],
             "group": "build",
             "problemMatcher": [
@@ -70,7 +70,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "make clean TVISION_AUTO_SYNC=1 CXX=clang++ CC=clang && make -j16 all TVISION_AUTO_SYNC=1 CXX=clang++ CC=clang"
+                "make clean TVISION_AUTO_SYNC=1 CXX=clang++ CC=clang && make all TVISION_AUTO_SYNC=1 CXX=clang++ CC=clang"
             ],
             "group": "build",
             "problemMatcher": [

@@ -472,36 +472,25 @@ bool MRMenuBar::registerRuntimeMenuItem(const std::string &menuTitle, const std:
 	return true;
 }
 
-bool MRMenuBar::setRuntimeMenuKeyLabelForMacroSpec(const std::string &macroSpec, const std::string &keyLabel) {
-	const std::string normalizedSpec = trimAscii(macroSpec);
+bool MRMenuBar::projectRuntimeMenuKeyLabels(const std::vector<std::pair<std::string, std::string>> &labels) {
 	bool changed = false;
 
-	if (normalizedSpec.empty()) return true;
 	for (RuntimeMenuNode &node : mRuntimeNodes) {
 		TMenuItem *item;
+		std::string keyLabel;
 
 		if (node.kind != RuntimeMenuNodeKind::Item) continue;
-		if (node.macroSpec != normalizedSpec && node.ownerSpec != normalizedSpec) continue;
+		for (const std::pair<std::string, std::string> &label : labels) {
+			const std::string normalizedSpec = trimAscii(label.first);
+
+			if (normalizedSpec.empty()) continue;
+			if (node.macroSpec == normalizedSpec || node.ownerSpec == normalizedSpec)
+				keyLabel = label.second;
+		}
 		if (node.keyLabel == keyLabel) continue;
 		node.keyLabel = keyLabel;
 		item = findMenuItemByCommand(menu, node.command);
 		if (item != nullptr) setMenuItemShortcut(item, TKey(kbNoKey), node.keyLabel.empty() ? nullptr : node.keyLabel.c_str());
-		changed = true;
-	}
-	if (changed) drawView();
-	return true;
-}
-
-bool MRMenuBar::clearRuntimeMenuKeyLabels() {
-	bool changed = false;
-
-	for (RuntimeMenuNode &node : mRuntimeNodes) {
-		TMenuItem *item;
-
-		if (node.keyLabel.empty()) continue;
-		node.keyLabel.clear();
-		item = findMenuItemByCommand(menu, node.command);
-		if (item != nullptr) setMenuItemShortcut(item, TKey(kbNoKey), nullptr);
 		changed = true;
 	}
 	if (changed) drawView();

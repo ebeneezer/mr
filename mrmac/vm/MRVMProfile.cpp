@@ -227,6 +227,7 @@ unsigned classifyProcName(const std::string &name) {
 	if (name == "FORK") return mrefExternalIo;
 	if (name == "SHELL_TO_OS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "LOAD_FILE" || name == "SAVE_FILE") return mrefUiAffinity | mrefExternalIo;
+	if (name == "DESKTOP_BLIT") return mrefUiAffinity | mrefExternalIo;
 	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" || name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX" || name == "UI_GRID" || name == "UI_MODELESS_ON" || name == "UI_MODELESS_SHOW" || name == "UI_MODELESS_UPDATE" || name == "UI_MODELESS_DISPLAY" || name == "UI_MODELESS_CLOSE" || name == "UI_MESSAGEBOX") return mrefUiAffinity;
 	if (name == "SAVE_SETTINGS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "BEEP") return mrefUiAffinity;
@@ -364,6 +365,10 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	                                       "MARQUEE_ERROR",
 	                                       "WORKING",
 	                                       "BRAIN",
+	                                       "DESKTOP_CLEAR",
+	                                       "DESKTOP_PUT_CHAR",
+	                                       "DESKTOP_PUT_STRING",
+	                                       "DESKTOP_SET_COLOR",
 	                                       "SCREEN_LENGTH",
 	                                       "SCREEN_WIDTH",
 	                                       "WHEREX",

@@ -452,7 +452,12 @@ enum MRMacroDeferredUiCommandType {
 	mrducRegisterMenuItem,
 	mrducRemoveMenuItem,
 	mrducMessageBox,
-	mrducDelay
+	mrducDelay,
+	mrducDesktopSetColor,
+	mrducDesktopPutChar,
+	mrducDesktopPutString,
+	mrducDesktopBlit,
+	mrducDesktopClear
 };
 
 struct MRMacroDeferredUiCommand {
@@ -712,8 +717,7 @@ bool mrvmUiRegisterMenuItem(const std::string &menuTitle, const std::string &ite
 bool mrvmUiRemoveMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage = nullptr);
 bool mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage = nullptr);
 bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec, std::string *errorMessage = nullptr);
-bool mrvmUiSetRuntimeMenuKeyLabelForMacroSpec(const std::string &macroSpec, const std::string &keyLabel, std::string *errorMessage = nullptr);
-bool mrvmUiClearRuntimeMenuKeyLabels(std::string *errorMessage = nullptr);
+bool mrvmUiProjectRuntimeMenuKeyLabels(const std::vector<std::pair<std::string, std::string>> &labels, std::string *errorMessage = nullptr);
 std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec);
 bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage = nullptr);
 bool mrvmUiMessageBox(const std::string &text);

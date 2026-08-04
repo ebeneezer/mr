@@ -270,26 +270,30 @@ std::vector<MRKeymapProfile> readKeymapProfiles(MRVMRuntimeKv &runtimeKv, const 
 	return profiles;
 }
 
+void writeKeymapBinding(MRVMRuntimeKv &runtimeKv, const Value &parent, const MRKeymapBindingRecord &binding) {
+	writeString(runtimeKv, parent, "profileName", binding.profileName);
+	writeInt(runtimeKv, parent, "context", static_cast<int>(binding.context));
+	writeInt(runtimeKv, parent, "targetType", static_cast<int>(binding.target.type));
+	writeString(runtimeKv, parent, "target", binding.target.target);
+	writeString(runtimeKv, parent, "sequence", binding.sequence.toString());
+	writeString(runtimeKv, parent, "description", binding.description);
+}
+
+void writeKeymapProfile(MRVMRuntimeKv &runtimeKv, const Value &parent, const MRKeymapProfile &profile) {
+	Value bindings = runtimeKv.ensureChild(parent, "bindings");
+	writeString(runtimeKv, parent, "name", profile.name);
+	writeString(runtimeKv, parent, "description", profile.description);
+	writeInt(runtimeKv, bindings, "count", static_cast<int>(profile.bindings.size()));
+	for (std::size_t i = 0; i < profile.bindings.size(); ++i)
+		writeKeymapBinding(runtimeKv, runtimeKv.ensureChild(bindings, std::to_string(i)), profile.bindings[i]);
+}
+
 void writeKeymapProfiles(MRVMRuntimeKv &runtimeKv, const Value &runtimeRoot, const std::vector<MRKeymapProfile> &profiles) {
 	Value parent = runtimeKv.replaceChild(runtimeRoot, "keymapProfiles");
 	writeInt(runtimeKv, parent, "count", static_cast<int>(profiles.size()));
 	for (std::size_t i = 0; i < profiles.size(); ++i) {
-		const MRKeymapProfile &profile = profiles[i];
 		Value profileNode = runtimeKv.ensureChild(parent, std::to_string(i));
-		Value bindings = runtimeKv.ensureChild(profileNode, "bindings");
-		writeString(runtimeKv, profileNode, "name", profile.name);
-		writeString(runtimeKv, profileNode, "description", profile.description);
-		writeInt(runtimeKv, bindings, "count", static_cast<int>(profile.bindings.size()));
-		for (std::size_t j = 0; j < profile.bindings.size(); ++j) {
-			const MRKeymapBindingRecord &binding = profile.bindings[j];
-			Value bindingNode = runtimeKv.ensureChild(bindings, std::to_string(j));
-			writeString(runtimeKv, bindingNode, "profileName", binding.profileName);
-			writeInt(runtimeKv, bindingNode, "context", static_cast<int>(binding.context));
-			writeInt(runtimeKv, bindingNode, "targetType", static_cast<int>(binding.target.type));
-			writeString(runtimeKv, bindingNode, "target", binding.target.target);
-			writeString(runtimeKv, bindingNode, "sequence", binding.sequence.toString());
-			writeString(runtimeKv, bindingNode, "description", binding.description);
-		}
+		writeKeymapProfile(runtimeKv, profileNode, profiles[i]);
 	}
 }
 
@@ -483,6 +487,74 @@ void storeSettingsKeymapBatchDepthValue(int value) {
 	writeInt(runtimeKv, keymapStagingBranch(runtimeKv), "batchDepth", value);
 }
 
+bool configuredKeymapBatchInitializedValue() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	return readInt(runtimeKv, keymapStagingBranch(runtimeKv), "initialized") != 0;
+}
+
+void initializeConfiguredKeymapBatchStateValue(const std::vector<MRKeymapProfile> &profiles, const std::string &activeProfile) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	Value parent = keymapStagingBranch(runtimeKv);
+
+	writeKeymapProfiles(runtimeKv, parent, profiles);
+	writeString(runtimeKv, parent, "activeProfile", activeProfile);
+	writeInt(runtimeKv, parent, "profilesDirty", 0);
+	writeInt(runtimeKv, parent, "activeDirty", 0);
+	writeInt(runtimeKv, parent, "initialized", 1);
+}
+
+void storeConfiguredKeymapBatchActiveProfileValue(const std::string &activeProfile) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	Value parent = keymapStagingBranch(runtimeKv);
+
+	writeString(runtimeKv, parent, "activeProfile", activeProfile);
+	writeInt(runtimeKv, parent, "activeDirty", 1);
+}
+
+void storeConfiguredKeymapBatchProfileValue(const MRKeymapProfile &profile) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	Value parent = keymapStagingBranch(runtimeKv);
+	Value profiles = runtimeKv.ensureChild(parent, "keymapProfiles");
+	const int count = readInt(runtimeKv, profiles, "count");
+	int index = count;
+
+	for (int i = 0; i < count; ++i) {
+		Value profileNode;
+		if (!runtimeKv.findChild(profiles, std::to_string(i), profileNode)) continue;
+		if (readString(runtimeKv, profileNode, "name") != profile.name) continue;
+		index = i;
+		break;
+	}
+	if (index == count) writeInt(runtimeKv, profiles, "count", count + 1);
+	writeKeymapProfile(runtimeKv, runtimeKv.replaceChild(profiles, std::to_string(index)), profile);
+	writeInt(runtimeKv, parent, "profilesDirty", 1);
+}
+
+bool appendConfiguredKeymapBatchBindingValue(const MRKeymapBindingRecord &binding) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	Value parent = keymapStagingBranch(runtimeKv);
+	Value profiles = runtimeKv.ensureChild(parent, "keymapProfiles");
+	const int count = readInt(runtimeKv, profiles, "count");
+
+	for (int i = 0; i < count; ++i) {
+		Value profileNode;
+		if (!runtimeKv.findChild(profiles, std::to_string(i), profileNode)) continue;
+		if (readString(runtimeKv, profileNode, "name") != binding.profileName) continue;
+		Value bindings = runtimeKv.ensureChild(profileNode, "bindings");
+		const int bindingCount = readInt(runtimeKv, bindings, "count");
+		writeKeymapBinding(runtimeKv, runtimeKv.ensureChild(bindings, std::to_string(bindingCount)), binding);
+		writeInt(runtimeKv, bindings, "count", bindingCount + 1);
+		writeInt(runtimeKv, parent, "profilesDirty", 1);
+		return true;
+	}
+	return false;
+}
+
 MRConfiguredKeymapBatchState configuredKeymapBatchStateValue() {
 	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
@@ -495,18 +567,6 @@ MRConfiguredKeymapBatchState configuredKeymapBatchStateValue() {
 	state.profiles = readKeymapProfiles(runtimeKv, runtimeKv.ensureChild(parent, "keymapProfiles"));
 	state.activeProfile = readString(runtimeKv, parent, "activeProfile");
 	return state;
-}
-
-void storeConfiguredKeymapBatchStateValue(const MRConfiguredKeymapBatchState &value) {
-	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
-	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
-	Value parent = keymapStagingBranch(runtimeKv);
-
-	writeInt(runtimeKv, parent, "initialized", value.initialized ? 1 : 0);
-	writeInt(runtimeKv, parent, "profilesDirty", value.profilesDirty ? 1 : 0);
-	writeInt(runtimeKv, parent, "activeDirty", value.activeDirty ? 1 : 0);
-	writeString(runtimeKv, parent, "activeProfile", value.activeProfile);
-	writeKeymapProfiles(runtimeKv, parent, value.profiles);
 }
 
 void clearConfiguredKeymapBatchStateValue() {

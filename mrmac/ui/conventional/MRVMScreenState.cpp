@@ -1,15 +1,19 @@
 #include "MRVMScreenState.hpp"
 #include "MRVMScreen.hpp"
 #include "../../vm/MRVMRuntimeState.hpp"
+#include "../../vm/MRVMValue.hpp"
 
 #define Uses_TApplication
+#define Uses_TDeskTop
 #define Uses_TDisplay
 #define Uses_TProgram
 #define Uses_TScreen
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -29,6 +33,214 @@ static uchar composeScreenAttribute(int bgColor, int fgColor) noexcept {
 
 void noteMacroScreenFlush() noexcept {
 	mrvmStoreRuntimeStateSize("macroScreen", "flushCount", mrvmRuntimeStateSize("macroScreen", "flushCount") + 1);
+}
+
+MacroDesktopCanvas::MacroDesktopCanvas() {
+	loadState();
+}
+
+bool MacroDesktopCanvas::clear() noexcept {
+	if (width == 0 && height == 0 && cells.empty()) return false;
+	width = 0;
+	height = 0;
+	cells.clear();
+	return true;
+}
+
+void MacroDesktopCanvas::loadState() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	const VirtualMachine::Value runtime = runtimeKv.ensureRoot("MRMACRUNTIME");
+	const VirtualMachine::Value macroScreen = runtimeKv.ensureChild(runtime, "macroScreen");
+	const VirtualMachine::Value desktop = runtimeKv.ensureChild(macroScreen, "desktop");
+	std::string characters;
+	std::string attributes;
+	std::string knownCells;
+
+	width = 0;
+	height = 0;
+	attribute = 0x07;
+	if (store.contains(desktop.hashHandle, "width")) {
+		const VirtualMachine::Value value = store.read(desktop.hashHandle, "width");
+		if (value.type == TYPE_INT) width = value.i;
+	}
+	if (store.contains(desktop.hashHandle, "height")) {
+		const VirtualMachine::Value value = store.read(desktop.hashHandle, "height");
+		if (value.type == TYPE_INT) height = value.i;
+	}
+	if (store.contains(desktop.hashHandle, "drawAttribute")) {
+		const VirtualMachine::Value value = store.read(desktop.hashHandle, "drawAttribute");
+		if (value.type == TYPE_INT && value.i >= 0 && value.i <= 0xFF) attribute = static_cast<uchar>(value.i);
+	}
+	if (store.contains(desktop.hashHandle, "characters")) {
+		const VirtualMachine::Value value = store.read(desktop.hashHandle, "characters");
+		if (value.type == TYPE_STR) characters = value.s;
+	}
+	if (store.contains(desktop.hashHandle, "attributes")) {
+		const VirtualMachine::Value value = store.read(desktop.hashHandle, "attributes");
+		if (value.type == TYPE_STR) attributes = value.s;
+	}
+	if (store.contains(desktop.hashHandle, "known")) {
+		const VirtualMachine::Value value = store.read(desktop.hashHandle, "known");
+		if (value.type == TYPE_STR) knownCells = value.s;
+	}
+
+	if (width <= 0 || height <= 0 || static_cast<std::size_t>(width) > std::numeric_limits<std::size_t>::max() / static_cast<std::size_t>(height)) {
+		width = 0;
+		height = 0;
+		cells.clear();
+		return;
+	}
+	const std::size_t cellCount = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+	if (characters.size() != cellCount || attributes.size() != cellCount || knownCells.size() != cellCount) {
+		width = 0;
+		height = 0;
+		cells.clear();
+		return;
+	}
+	cells.resize(cellCount);
+	for (std::size_t i = 0; i < cellCount; ++i) {
+		cells[i].ch = characters[i];
+		cells[i].attr = static_cast<uchar>(static_cast<unsigned char>(attributes[i]));
+		cells[i].known = knownCells[i] != '\0';
+	}
+}
+
+void MacroDesktopCanvas::storeState() {
+	std::string characters;
+	std::string attributes;
+	std::string knownCells;
+
+	characters.reserve(cells.size());
+	attributes.reserve(cells.size());
+	knownCells.reserve(cells.size());
+	for (const MacroCell &cell : cells) {
+		characters.push_back(cell.ch);
+		attributes.push_back(static_cast<char>(cell.attr));
+		knownCells.push_back(cell.known ? '\1' : '\0');
+	}
+
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	MRVMHashStore &store = runtimeKv.globalStore();
+	const VirtualMachine::Value runtime = runtimeKv.ensureRoot("MRMACRUNTIME");
+	const VirtualMachine::Value macroScreen = runtimeKv.ensureChild(runtime, "macroScreen");
+	const VirtualMachine::Value desktop = runtimeKv.ensureChild(macroScreen, "desktop");
+
+	store.write(desktop.hashHandle, "width", mrvmMakeInt(width));
+	store.write(desktop.hashHandle, "height", mrvmMakeInt(height));
+	store.write(desktop.hashHandle, "drawAttribute", mrvmMakeInt(attribute));
+	store.write(desktop.hashHandle, "characters", mrvmMakeString(characters));
+	store.write(desktop.hashHandle, "attributes", mrvmMakeString(attributes));
+	store.write(desktop.hashHandle, "known", mrvmMakeString(knownCells));
+}
+
+bool MacroDesktopCanvas::currentGeometry(int &currentWidth, int &currentHeight) const noexcept {
+	currentWidth = TProgram::deskTop != nullptr ? static_cast<int>(TProgram::deskTop->size.x) : 0;
+	currentHeight = TProgram::deskTop != nullptr ? static_cast<int>(TProgram::deskTop->size.y) : 0;
+	return currentWidth > 0 && currentHeight > 0;
+}
+
+bool MacroDesktopCanvas::ensureGeometry() {
+	int currentWidth = 0;
+	int currentHeight = 0;
+	if (!currentGeometry(currentWidth, currentHeight)) return false;
+
+	const bool storedGeometryValid = width > 0 && height > 0 && cells.size() == static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+	const int nextWidth = storedGeometryValid ? std::max(width, currentWidth) : currentWidth;
+	const int nextHeight = storedGeometryValid ? std::max(height, currentHeight) : currentHeight;
+	if (storedGeometryValid && nextWidth == width && nextHeight == height) return true;
+
+	std::vector<MacroCell> nextCells(static_cast<std::size_t>(nextWidth) * static_cast<std::size_t>(nextHeight));
+	if (storedGeometryValid) {
+		for (int y = 0; y < height; ++y)
+			for (int x = 0; x < width; ++x)
+				nextCells[static_cast<std::size_t>(y) * static_cast<std::size_t>(nextWidth) + static_cast<std::size_t>(x)] = cells[indexFor(x, y)];
+	}
+	width = nextWidth;
+	height = nextHeight;
+	cells = std::move(nextCells);
+	return true;
+}
+
+std::size_t MacroDesktopCanvas::indexFor(int x, int y) const noexcept {
+	return static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x);
+}
+
+bool MacroDesktopCanvas::writeCell(int x, int y, char ch, uchar attr) {
+	MacroCell &cell = cells[indexFor(x, y)];
+	const bool changed = !cell.known || cell.ch != ch || cell.attr != attr;
+	cell.ch = ch;
+	cell.attr = attr;
+	cell.known = true;
+	return changed;
+}
+
+bool MacroDesktopCanvas::setAttribute(int nextAttribute) noexcept {
+	const uchar normalized = static_cast<uchar>(nextAttribute & 0xFF);
+	if (attribute == normalized) return false;
+	attribute = normalized;
+	return true;
+}
+
+bool MacroDesktopCanvas::putCharacter(const std::string &character, int column, int row) {
+	if (character.size() != 1) return false;
+	return putString(character, column, row);
+}
+
+bool MacroDesktopCanvas::putString(const std::string &text, int column, int row) {
+	int currentWidth = 0;
+	int currentHeight = 0;
+	if (!ensureGeometry() || !currentGeometry(currentWidth, currentHeight) || text.empty()) return false;
+
+	const std::int64_t y = static_cast<std::int64_t>(row) - 1;
+	if (y < 0 || y >= currentHeight) return false;
+	bool changed = false;
+	for (std::size_t i = 0; i < text.size(); ++i) {
+		const std::int64_t x = static_cast<std::int64_t>(column) - 1 + static_cast<std::int64_t>(i);
+		if (x < 0) continue;
+		if (x >= currentWidth) break;
+		changed = writeCell(static_cast<int>(x), static_cast<int>(y), text[i], attribute) || changed;
+	}
+	return changed;
+}
+
+bool MacroDesktopCanvas::blit(int column, int row, int sourceWidth, int sourceHeight, const std::string &characters, const std::string &attributes) {
+	int currentWidth = 0;
+	int currentHeight = 0;
+	if (sourceWidth <= 0 || sourceHeight <= 0) return false;
+	if (static_cast<std::size_t>(sourceWidth) > std::numeric_limits<std::size_t>::max() / static_cast<std::size_t>(sourceHeight)) return false;
+	const std::size_t cellCount = static_cast<std::size_t>(sourceWidth) * static_cast<std::size_t>(sourceHeight);
+	if (characters.size() != cellCount || attributes.size() != cellCount || !ensureGeometry() || !currentGeometry(currentWidth, currentHeight)) return false;
+
+	const std::int64_t sourceStartY = std::max<std::int64_t>(0, 1 - static_cast<std::int64_t>(row));
+	const std::int64_t sourceEndY = std::min<std::int64_t>(sourceHeight, static_cast<std::int64_t>(currentHeight) + 1 - row);
+	const std::int64_t sourceStartX = std::max<std::int64_t>(0, 1 - static_cast<std::int64_t>(column));
+	const std::int64_t sourceEndX = std::min<std::int64_t>(sourceWidth, static_cast<std::int64_t>(currentWidth) + 1 - column);
+	if (sourceStartY >= sourceEndY || sourceStartX >= sourceEndX) return false;
+
+	bool changed = false;
+	for (std::int64_t sourceY = sourceStartY; sourceY < sourceEndY; ++sourceY) {
+		const int targetY = static_cast<int>(static_cast<std::int64_t>(row) - 1 + sourceY);
+		for (std::int64_t sourceX = sourceStartX; sourceX < sourceEndX; ++sourceX) {
+			const int targetX = static_cast<int>(static_cast<std::int64_t>(column) - 1 + sourceX);
+			const std::size_t sourceIndex = static_cast<std::size_t>(sourceY) * static_cast<std::size_t>(sourceWidth) + static_cast<std::size_t>(sourceX);
+			changed = writeCell(targetX, targetY, characters[sourceIndex], static_cast<uchar>(static_cast<unsigned char>(attributes[sourceIndex]))) || changed;
+		}
+	}
+	return changed;
+}
+
+void MacroDesktopCanvas::projectRow(int row, int rowWidth, TDrawBuffer &buffer) const {
+	if (row < 0 || row >= height || rowWidth <= 0 || cells.size() != static_cast<std::size_t>(width) * static_cast<std::size_t>(height)) return;
+	const int projectionWidth = std::min(width, rowWidth);
+	for (int x = 0; x < projectionWidth; ++x) {
+		const MacroCell &cell = cells[indexFor(x, row)];
+		if (!cell.known) continue;
+		buffer.putChar(static_cast<ushort>(x), cell.ch);
+		buffer.putAttribute(static_cast<ushort>(x), TColorAttr(cell.attr));
+	}
 }
 
 std::uint64_t UiScreenStateFacade::nextGeneration() noexcept {

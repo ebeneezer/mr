@@ -2,6 +2,7 @@
 #define MRVMSCREENSTATE_HPP
 
 #define Uses_TView
+#define Uses_TDrawBuffer
 #include <tvision/tv.h>
 
 #include <cstddef>
@@ -28,6 +29,29 @@ struct MacroCell {
 	char ch = ' ';
 	uchar attr = 0x07;
 	bool known = false;
+};
+
+class MacroDesktopCanvas {
+  public:
+	MacroDesktopCanvas();
+	bool clear() noexcept;
+	bool setAttribute(int attribute) noexcept;
+	bool putCharacter(const std::string &character, int column, int row);
+	bool putString(const std::string &text, int column, int row);
+	bool blit(int column, int row, int sourceWidth, int sourceHeight, const std::string &characters, const std::string &attributes);
+	void projectRow(int row, int rowWidth, TDrawBuffer &buffer) const;
+	void storeState();
+
+  private:
+	int width = 0;
+	int height = 0;
+	uchar attribute = 0x07;
+	std::vector<MacroCell> cells;
+	bool currentGeometry(int &currentWidth, int &currentHeight) const noexcept;
+	bool ensureGeometry();
+	[[nodiscard]] std::size_t indexFor(int x, int y) const noexcept;
+	bool writeCell(int x, int y, char ch, uchar attr);
+	void loadState();
 };
 
 struct MacroScreenBoxSnapshot {

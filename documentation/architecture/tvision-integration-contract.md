@@ -82,6 +82,33 @@ BentoBox concrete types.
   macro-visible value state remains under `MODELESSUI`.
 - Modal dialogs executed through `execView` are not desktop-managed windows.
 
+## MRMAC desktop background canvas
+
+The MRMAC desktop canvas is retained runtime state projected by
+`MRDesktopBackground::draw()` through normal `TDrawBuffer` and `TView`
+mechanisms.
+
+- The canvas is clipped to the desktop background's local bounds.
+- Desktop windows remain above the canvas through normal TVision ownership and
+  Z-order.
+- The menu bar and FLabel/status line are outside the canvas projection bounds
+  and must not be overwritten.
+- The virtual-desktop marker is projected after the canvas and remains visible.
+- Expose, resize and virtual-desktop changes redraw from the retained central
+  VM K/V state; the background keeps no value-bearing canvas mirror.
+- Clearing the canvas redraws the native desktop pattern in the vacated cells
+  while preserving the MRMAC desktop drawing attribute.
+- ANSI files are decoded before projection. In colour mode, standard ANSI
+  16-colour SGR values map directly to TVision/BIOS attributes. In
+  desktop-monochrome mode, the VM producer maps the 16 ANSI colours to stable
+  luminance-ordered monochrome ranks. It converts equal upper/lower samples
+  through the CP437 shade ramp and preserves unequal samples as two luminance
+  planes represented by ordered light-shade, half-block and full-block output.
+  It must not average unequal samples. Ordinary glyphs remain ordinary glyphs.
+  The projection layer must not quantise, dither or reinterpret either payload.
+- Only the typed MRMAC VM/facade path may mutate the canvas.
+- The canvas must not write `TScreen::screenBuffer` directly.
+
 ## Boundaries
 
 Without explicit maintainer approval:
@@ -107,6 +134,9 @@ For TVision-related changes, test:
 - modal dialog open/close,
 - disabled/ghosted controls,
 - scroll behavior where relevant.
+- MRMAC desktop-canvas clipping, window occlusion, virtual-desktop marker,
+  menu-bar preservation and FLabel/status-line preservation where relevant.
+- MRMAC desktop-canvas clear and subsequent attribute reuse where relevant.
 
 ## Dirty projection pump
 

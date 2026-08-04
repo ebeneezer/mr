@@ -425,7 +425,7 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			binding.macroSpec = mrvmValueAsString(args[1]);
 			bindings.push_back(binding);
 			mrvmStoreRuntimeExplicitKeyBindings(bindings);
-			if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("MACRO_TO_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
+			if (!requestRuntimeMenuKeyLabelProjection("MACRO_TO_KEY could not refresh runtime menu labels: ", &refreshError)) throw std::runtime_error("MACRO_TO_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::CmdToKey: {
@@ -451,7 +451,7 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			binding.commandId = mrvmValueAsInt(args[1]);
 			bindings.push_back(binding);
 			mrvmStoreRuntimeExplicitKeyBindings(bindings);
-			if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("CMD_TO_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
+			if (!requestRuntimeMenuKeyLabelProjection("CMD_TO_KEY could not refresh runtime menu labels: ", &refreshError)) throw std::runtime_error("CMD_TO_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UnassignKey: {
@@ -472,7 +472,7 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			mrvmRemoveExplicitBindingsForKey(bindings, key, mode);
 			mrvmStoreRuntimeExplicitKeyBindings(bindings);
 			clearRegisteredBindingsForKey(&key, mode, mode == MACRO_MODE_ALL);
-			if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("UNASSIGN_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
+			if (!requestRuntimeMenuKeyLabelProjection("UNASSIGN_KEY could not refresh runtime menu labels: ", &refreshError)) throw std::runtime_error("UNASSIGN_KEY could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::UnassignAllKeys: {
@@ -484,7 +484,7 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			}
 			mrvmStoreRuntimeExplicitKeyBindings(std::vector<MRVMExplicitKeyBinding>());
 			clearRegisteredBindingsForKey(nullptr, MACRO_MODE_ALL, true);
-			if (!projectRuntimeMenuKeyLabelsFromExplicitBindings(&refreshError)) throw std::runtime_error("UNASSIGN_ALL_KEYS could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
+			if (!requestRuntimeMenuKeyLabelProjection("UNASSIGN_ALL_KEYS could not refresh runtime menu labels: ", &refreshError)) throw std::runtime_error("UNASSIGN_ALL_KEYS could not refresh runtime menu labels: " + (refreshError.empty() ? std::string("unknown error.") : refreshError));
 			setRuntimeErrorLevel(0);
 		} break;
 		case MRVMProcedure::KeyRecord: {

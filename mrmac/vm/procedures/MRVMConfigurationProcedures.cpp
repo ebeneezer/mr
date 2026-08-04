@@ -396,6 +396,11 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 		case MRVMProcedure::UiMessageBox:
 		case MRVMProcedure::Working:
 		case MRVMProcedure::Brain:
+		case MRVMProcedure::DesktopBlit:
+		case MRVMProcedure::DesktopClear:
+		case MRVMProcedure::DesktopPutChar:
+		case MRVMProcedure::DesktopPutString:
+		case MRVMProcedure::DesktopSetColor:
 		case MRVMProcedure::PutBox:
 		case MRVMProcedure::Write:
 		case MRVMProcedure::ClrLine:

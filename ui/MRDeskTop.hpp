@@ -8,6 +8,7 @@
 
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../mrmac/ui/conventional/MRVMScreenState.hpp"
 
 #include <algorithm>
 #include <ctime>
@@ -24,6 +25,7 @@ class MRDesktopBackground : public TBackground {
 	void draw() override {
 		TColorAttr desktopColor = resolveColor(kMrPaletteDesktop, getColor(1));
 		TColorAttr markerColor = resolveColor(kMrPaletteVirtualDesktopMarker, desktopColor);
+		mrvm_screen::MacroDesktopCanvas desktopCanvas;
 		std::vector<std::string> marker = markerLines(currentVirtualDesktop());
 		const int markerRows = static_cast<int>(marker.size());
 		int markerWidth = 0;
@@ -41,6 +43,7 @@ class MRDesktopBackground : public TBackground {
 			TDrawBuffer buffer;
 
 			buffer.moveChar(0, pattern, desktopColor, size.x);
+			desktopCanvas.projectRow(y, size.x, buffer);
 			if (!marker.empty() && y >= startY && y < startY + markerRows) {
 				const std::string &markerLine = marker[static_cast<std::size_t>(y - startY)];
 				for (std::size_t x = 0; x < markerLine.size() && startX + static_cast<int>(x) < size.x; ++x)

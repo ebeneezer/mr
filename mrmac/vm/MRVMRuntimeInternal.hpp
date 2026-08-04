@@ -224,6 +224,9 @@ bool macroSpecTargetsLoadedMacro(const std::string &spec, const std::string &tar
 bool dispatchApplicationCommandEvent(unsigned short command);
 bool executeExplicitKeyBinding(const TKey &pressed, int mode, std::vector<std::string> *logLines);
 bool projectRuntimeMenuKeyLabelsFromExplicitBindings(std::string *errorMessage);
+void beginExplicitKeyBindingProjectionBatch();
+bool requestRuntimeMenuKeyLabelProjection(const char *failureContext, std::string *errorMessage);
+bool endExplicitKeyBindingProjectionBatch(std::string &failureContext, std::string *errorMessage);
 bool fileContainsOnlyTransientMacros(const LoadedMacroFile &file);
 
 } // namespace mrvm_runtime

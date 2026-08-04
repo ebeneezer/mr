@@ -27,8 +27,8 @@ namespace {
 constexpr std::size_t kMacroUiPlaybackBudgetCommands = 48;
 const std::chrono::milliseconds kMacroUiPlaybackBudgetSlice(2);
 
-constexpr std::array<const char *, mrducDelay + 1> kDeferredUiCommandNames{
-    "UNKNOWN", "CREATE_WINDOW", "DELETE_WINDOW", "MODIFY_WINDOW", "LINK_WINDOW", "UNLINK_WINDOW", "ZOOM", "REDRAW", "NEW_SCREEN", "SWITCH_WINDOW", "SIZE_WINDOW", "MARQUEE", "MARQUEE_WARNING", "MARQUEE_ERROR", "MAKE_MESSAGE", "BRAIN", "PUT_BOX", "WRITE", "CLR_LINE", "GOTOXY", "PUT_LINE_NUM", "PUT_COL_NUM", "SCROLL_BOX_UP", "SCROLL_BOX_DN", "CLEAR_SCREEN", "KILL_BOX", "REGISTER_MENU_ITEM", "REMOVE_MENU_ITEM", "MESSAGEBOX", "DELAY",
+constexpr std::array<const char *, mrducDesktopClear + 1> kDeferredUiCommandNames{
+    "UNKNOWN", "CREATE_WINDOW", "DELETE_WINDOW", "MODIFY_WINDOW", "LINK_WINDOW", "UNLINK_WINDOW", "ZOOM", "REDRAW", "NEW_SCREEN", "SWITCH_WINDOW", "SIZE_WINDOW", "MARQUEE", "MARQUEE_WARNING", "MARQUEE_ERROR", "MAKE_MESSAGE", "BRAIN", "PUT_BOX", "WRITE", "CLR_LINE", "GOTOXY", "PUT_LINE_NUM", "PUT_COL_NUM", "SCROLL_BOX_UP", "SCROLL_BOX_DN", "CLEAR_SCREEN", "KILL_BOX", "REGISTER_MENU_ITEM", "REMOVE_MENU_ITEM", "MESSAGEBOX", "DELAY", "DESKTOP_SET_COLOR", "DESKTOP_PUT_CHAR", "DESKTOP_PUT_STRING", "DESKTOP_BLIT", "DESKTOP_CLEAR",
 };
 
 std::optional<const char *> deferredUiCommandNameAt(int type) {

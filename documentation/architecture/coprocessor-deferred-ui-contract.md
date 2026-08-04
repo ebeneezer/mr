@@ -32,6 +32,12 @@ short-lived C++ transfer objects and applies them.
   producer/consumer boundaries even when their types appear mechanical.
 - Playback renders through the approved VM facade and does not call alternate
   direct UI paths.
+- Stage-compatible desktop-canvas draw and clear operations remain ordinary
+  typed commands in the accepted staged-result order; clear has no worker-side
+  drawing path. File-consuming `DESKTOP_BLIT` is external I/O and must be
+  rejected from staged background execution. Its selected colour or
+  desktop-monochrome conversion is complete before a cell payload can reach
+  playback.
 - Screen mutation epoch checks prevent stale base projection.
 
 ## Boundaries
@@ -57,3 +63,5 @@ Without explicit maintainer approval:
 - Verify deferred command ordering and batch boundaries.
 - Exercise message-line, macro-screen and overlay projection.
 - Verify epoch invalidation and screen redraw behavior.
+- Queue desktop drawing, clear and subsequent drawing commands and verify their
+  original order is preserved.

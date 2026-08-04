@@ -20,16 +20,9 @@ bool configuredKeymapBatchActive() noexcept {
 	return settingsStartupModeValue() || settingsKeymapBatchDepthValue() > 0;
 }
 
-MRConfiguredKeymapBatchState initializedKeymapBatchState() {
-	MRConfiguredKeymapBatchState state = configuredKeymapBatchStateValue();
-
-	if (!state.initialized) {
-		state.profiles = configuredKeymapProfiles();
-		state.activeProfile = configuredActiveKeymapProfile();
-		state.initialized = true;
-		storeConfiguredKeymapBatchStateValue(state);
-	}
-	return state;
+void ensureKeymapBatchInitialized() {
+	if (configuredKeymapBatchInitializedValue()) return;
+	initializeConfiguredKeymapBatchStateValue(configuredKeymapProfiles(), configuredActiveKeymapProfile());
 }
 
 bool hasPendingKeymapBatch() noexcept {
@@ -114,10 +107,8 @@ bool mrvmApplyConfiguredActiveKeymapProfilePayload(const std::string &payload, s
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
 	bool ok = false;
 	if (configuredKeymapBatchActive()) {
-		MRConfiguredKeymapBatchState state = initializedKeymapBatchState();
-		state.activeProfile = activeProfileRecord.name;
-		state.activeDirty = true;
-		storeConfiguredKeymapBatchStateValue(state);
+		ensureKeymapBatchInitialized();
+		storeConfiguredKeymapBatchActiveProfileValue(activeProfileRecord.name);
 		ok = true;
 		if (errorMessage != nullptr) errorMessage->clear();
 	} else
@@ -130,55 +121,37 @@ bool mrvmApplyConfiguredKeymapProfilePayload(const std::string &payload, std::st
 	const auto diagnostics = parseKeymapProfilePayload(payload, profile);
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
-	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
 	if (configuredKeymapBatchActive()) {
-		profiles = initializedKeymapBatchState().profiles;
-	}
-	for (MRKeymapProfile &existing : profiles)
-		if (existing.name == profile.name) {
-			existing = profile;
-			if (configuredKeymapBatchActive()) {
-				MRConfiguredKeymapBatchState state = initializedKeymapBatchState();
-				state.profiles = std::move(profiles);
-				state.profilesDirty = true;
-				storeConfiguredKeymapBatchStateValue(state);
-				if (errorMessage != nullptr) errorMessage->clear();
-				return true;
-			}
-			return setConfiguredKeymapProfiles(profiles, errorMessage);
-		}
-	profiles.push_back(profile);
-	if (configuredKeymapBatchActive()) {
-		MRConfiguredKeymapBatchState state = initializedKeymapBatchState();
-		state.profiles = std::move(profiles);
-		state.profilesDirty = true;
-		storeConfiguredKeymapBatchStateValue(state);
+		ensureKeymapBatchInitialized();
+		storeConfiguredKeymapBatchProfileValue(profile);
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
+	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+	for (MRKeymapProfile &existing : profiles)
+		if (existing.name == profile.name) {
+			existing = profile;
+			return setConfiguredKeymapProfiles(profiles, errorMessage);
+		}
+	profiles.push_back(profile);
 	return setConfiguredKeymapProfiles(profiles, errorMessage);
 }
 
 bool mrvmApplyConfiguredKeymapBindingPayload(const std::string &payload, std::string *errorMessage) {
 	MRKeymapBindingRecord binding;
 	const auto diagnostics = parseKeymapBindingPayload(payload, binding);
-	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
 	if (configuredKeymapBatchActive()) {
-		profiles = initializedKeymapBatchState().profiles;
+		ensureKeymapBatchInitialized();
+		if (!appendConfiguredKeymapBatchBindingValue(binding)) return assignKeymapPayloadError(errorMessage, "Binding references unknown keymap profile: " + binding.profileName);
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
 	}
+	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
 	for (MRKeymapProfile &profile : profiles)
 		if (profile.name == binding.profileName) {
 			profile.bindings.push_back(binding);
-			if (configuredKeymapBatchActive()) {
-				MRConfiguredKeymapBatchState state = initializedKeymapBatchState();
-				state.profiles = std::move(profiles);
-				state.profilesDirty = true;
-				storeConfiguredKeymapBatchStateValue(state);
-				if (errorMessage != nullptr) errorMessage->clear();
-				return true;
-			}
 			return setConfiguredKeymapProfiles(profiles, errorMessage);
 		}
 	return assignKeymapPayloadError(errorMessage, "Binding references unknown keymap profile: " + binding.profileName);

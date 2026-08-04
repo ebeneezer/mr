@@ -5,6 +5,8 @@
 #define Uses_MsgBox
 #define Uses_TProgram
 #define Uses_TApplication
+#define Uses_TBackground
+#define Uses_TDeskTop
 #define Uses_TScreen
 #define Uses_TDisplay
 #define Uses_TDrawBuffer
@@ -22,6 +24,7 @@
 #include <vector>
 
 #include "../../../app/commands/MRWindowCommands.hpp"
+#include "../../../config/settings/MRSettingsRuntime.hpp"
 #include "../../../ui/MREditWindow.hpp"
 #include "../../../ui/MRMenuBar.hpp"
 #include "../../../ui/MRMessageLineController.hpp"
@@ -29,6 +32,7 @@
 #include "../../../ui/MRWindowSupport.hpp"
 
 using mrvm_screen::MacroCellGrid;
+using mrvm_screen::MacroDesktopCanvas;
 using mrvm_screen::UiScreenStateFacade;
 using mrvm_screen::noteMacroScreenFlush;
 
@@ -115,6 +119,16 @@ static bool renderMacroLineColOverlay() {
 	return result;
 }
 
+static void projectMacroDesktopBackground() {
+	if (TProgram::deskTop == nullptr || TProgram::deskTop->background == nullptr) return;
+	TProgram::deskTop->background->drawView();
+	if (mrvmRuntimeStateInt("macroScreen", "projectionBatchDepth") > 0) {
+		mrvmStoreRuntimeStateInt("macroScreen", "flushPending", 1);
+		return;
+	}
+	noteMacroScreenFlush();
+	TScreen::flushScreen();
+}
 
 } // namespace
 
@@ -206,6 +220,45 @@ bool applyBrainProc(const std::string &name, const std::vector<Value> &args) {
 	mrSetMacroBrainMarkerVisible(enabled);
 	(void)mrvmUiRedrawCurrentWindow();
 	return returnWithDirectScreenMutation(true);
+}
+
+bool applyDesktopCanvasCommand(const MRMacroDeferredUiCommand &command) {
+	bool changed = false;
+	bool projectionRequired = false;
+
+	{
+		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+		MacroDesktopCanvas canvas;
+		switch (command.type) {
+			case mrducDesktopClear:
+				changed = canvas.clear();
+				projectionRequired = changed;
+				break;
+			case mrducDesktopSetColor:
+				changed = canvas.setAttribute(command.a1);
+				break;
+			case mrducDesktopPutChar:
+				changed = canvas.putCharacter(command.text, command.a1, command.a2);
+				projectionRequired = changed;
+				break;
+			case mrducDesktopPutString:
+				changed = canvas.putString(command.text, command.a1, command.a2);
+				projectionRequired = changed;
+				break;
+			case mrducDesktopBlit:
+				changed = canvas.blit(command.a1, command.a2, command.a3, command.a4, command.text, command.text2);
+				projectionRequired = changed;
+				break;
+			default:
+				return false;
+		}
+		if (changed) canvas.storeState();
+	}
+	if (projectionRequired) {
+		UiScreenStateFacade::noteBaseMutation();
+		projectMacroDesktopBackground();
+	}
+	return true;
 }
 
 bool applyPutBoxProc(const std::string &name, const std::vector<Value> &args) {
@@ -551,22 +604,13 @@ bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec, std::strin
 	return returnWithDirectScreenMutation(menuBar->removeRuntimeNodesOwnedByFile(fileSpec, errorMessage));
 }
 
-bool mrvmUiSetRuntimeMenuKeyLabelForMacroSpec(const std::string &macroSpec, const std::string &keyLabel, std::string *errorMessage) {
+bool mrvmUiProjectRuntimeMenuKeyLabels(const std::vector<std::pair<std::string, std::string>> &labels, std::string *errorMessage) {
 	auto *app = dynamic_cast<TApplication *>(TProgram::application);
 	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
 
 	if (errorMessage != nullptr) errorMessage->clear();
 	if (menuBar == nullptr) return true;
-	return returnWithDirectScreenMutation(menuBar->setRuntimeMenuKeyLabelForMacroSpec(macroSpec, keyLabel));
-}
-
-bool mrvmUiClearRuntimeMenuKeyLabels(std::string *errorMessage) {
-	auto *app = dynamic_cast<TApplication *>(TProgram::application);
-	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (menuBar == nullptr) return true;
-	return returnWithDirectScreenMutation(menuBar->clearRuntimeMenuKeyLabels());
+	return returnWithDirectScreenMutation(menuBar->projectRuntimeMenuKeyLabels(labels));
 }
 
 bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage) {
@@ -620,6 +664,12 @@ struct ScreenRenderFacade {
 				return applyMakeMessageProc(std::vector<Value>{makeStringValue(command.text)});
 			case mrducBrain:
 				return mrvmUiBrain(command.a1 != 0);
+			case mrducDesktopSetColor:
+			case mrducDesktopPutChar:
+			case mrducDesktopPutString:
+			case mrducDesktopBlit:
+			case mrducDesktopClear:
+				return applyDesktopCanvasCommand(command);
 			case mrducPutBox:
 				return mrvmUiPutBox(command.a1, command.a2, command.a3, command.a4, command.a5, command.a6, command.text, command.a7);
 			case mrducWrite:

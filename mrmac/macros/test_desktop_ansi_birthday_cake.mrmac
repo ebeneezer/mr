@@ -1,0 +1,16 @@
+$MACRO_FILE test_desktop_ansi_birthday_cake;
+
+$MACRO TestDesktopAnsiBirthdayCake FROM EDIT;
+DEF_INT(Width, Height, DesktopWidth, DesktopHeight);
+DEF_INT(TargetColumn, TargetRow);
+
+Width := 80;
+Height := 25;
+DesktopWidth := SCREEN_WIDTH;
+DesktopHeight := SCREEN_LENGTH - 2;
+TargetColumn := ((DesktopWidth - Width) / 2) + 1;
+TargetRow := ((DesktopHeight - Height) / 2) + 1;
+
+DESKTOP_CLEAR();
+DESKTOP_BLIT('misc/geburtstagstorte_entwurf_80x25_ansi16.ans', TargetColumn, TargetRow, 1);
+END_MACRO;

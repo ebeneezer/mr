@@ -1,0 +1,38 @@
+$MACRO_FILE test_desktop_rendering;
+
+$MACRO TestDesktopRendering FROM EDIT;
+DEF_INT(DesktopBase, Color);
+
+DESKTOP_CLEAR();
+DesktopBase := (BACK_COLOR / 16) * 16;
+
+DESKTOP_SET_COLOR(DesktopBase + 15);
+DESKTOP_PUT_STRING('MR Desktop Rendering', 3, 2);
+DESKTOP_SET_COLOR(DesktopBase + 14);
+DESKTOP_PUT_CHAR('[', 2, 2);
+DESKTOP_PUT_CHAR(']', 23, 2);
+
+DESKTOP_SET_COLOR(BACK_COLOR);
+DESKTOP_PUT_STRING('BACK_COLOR: native desktop attribute', 3, 4);
+DESKTOP_SET_COLOR(TEXT_COLOR);
+DESKTOP_PUT_STRING('TEXT_COLOR: configured text colour', 3, 5);
+DESKTOP_SET_COLOR(CHANGE_COLOR);
+DESKTOP_PUT_STRING('CHANGE_COLOR: configured change colour', 3, 6);
+DESKTOP_SET_COLOR(STAT_COLOR);
+DESKTOP_PUT_STRING('STAT_COLOR: configured status colour', 3, 7);
+DESKTOP_SET_COLOR(ERROR_COLOR);
+DESKTOP_PUT_STRING('ERROR_COLOR: configured error colour', 3, 8);
+
+Color := 0;
+WHILE Color < 8 DO
+    DESKTOP_SET_COLOR((Color * 16) + 15);
+    DESKTOP_PUT_STRING(' ANSI colour ', 3, 11 + Color);
+    DESKTOP_SET_COLOR(((Color + 8) * 16) + 15);
+    DESKTOP_PUT_STRING(' ANSI bright colour ', 24, 11 + Color);
+    Color := Color + 1;
+END;
+END_MACRO;
+
+$MACRO ClearDesktopRendering FROM EDIT;
+DESKTOP_CLEAR();
+END_MACRO;

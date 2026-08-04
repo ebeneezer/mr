@@ -628,7 +628,10 @@ bool executeLoadedMacroWithConfiguredKeymapBatch(const std::string &macroKey, co
 	MacroRef macroRef;
 	LoadedMacroFile file;
 	bool configuredKeymapBatch = false;
+	const bool explicitBindingProjectionBatch = currentBackgroundEditSession() == nullptr;
 	std::string keymapBatchError;
+	std::string projectionFailureContext;
+	std::string projectionError;
 
 	if (readLoadedMacroByKey(macroKey, macroRef) && readLoadedMacroFileByKey(macroRef.fileKey, file)) {
 		const std::vector<std::string> unsupported = mrvmUnsupportedStagedSymbols(file.profile);
@@ -639,10 +642,22 @@ bool executeLoadedMacroWithConfiguredKeymapBatch(const std::string &macroKey, co
 			}
 	}
 	if (configuredKeymapBatch) mrvmBeginConfiguredKeymapBatch();
+	if (explicitBindingProjectionBatch) beginExplicitKeyBindingProjectionBatch();
 	const bool executed = executeLoadedMacro(macroKey, paramPart, logSink);
-	if (configuredKeymapBatch && !mrvmEndConfiguredKeymapBatch(&keymapBatchError)) {
+	const bool keymapBatchComplete = !configuredKeymapBatch || mrvmEndConfiguredKeymapBatch(&keymapBatchError);
+	const bool projectionBatchComplete = !explicitBindingProjectionBatch || endExplicitKeyBindingProjectionBatch(projectionFailureContext, &projectionError);
+
+	if (!keymapBatchComplete) {
 		setRuntimeErrorLevel(1001);
 		if (logSink != nullptr) logSink->push_back("VM Error: keymap batch flush failed: " + (keymapBatchError.empty() ? std::string("invalid keymap batch.") : keymapBatchError));
+		return false;
+	}
+	if (!projectionBatchComplete) {
+		setRuntimeErrorLevel(1001);
+		if (logSink != nullptr) {
+			if (projectionFailureContext.empty()) projectionFailureContext = "Explicit key binding update could not refresh runtime menu labels: ";
+			logSink->push_back("VM Error: " + projectionFailureContext + (projectionError.empty() ? std::string("unknown error.") : projectionError));
+		}
 		return false;
 	}
 	return executed;
@@ -869,15 +884,58 @@ bool executeExplicitKeyBinding(const TKey &pressed, int mode, std::vector<std::s
 bool projectRuntimeMenuKeyLabelsFromExplicitBindings(std::string *errorMessage) {
 	const int mode = currentUiMacroMode();
 	const std::vector<MRVMExplicitKeyBinding> bindings = mrvmRuntimeExplicitKeyBindings();
+	std::vector<std::pair<std::string, std::string>> labels;
 
-	if (!mrvmUiClearRuntimeMenuKeyLabels(errorMessage)) return false;
 	for (const MRVMExplicitKeyBinding &binding : bindings) {
 		if (binding.kind != MRVMExplicitBindingKind::MacroSpec) continue;
 		if (!mrvmBindingModeMatches(binding.mode, mode)) continue;
-		if (!mrvmUiSetRuntimeMenuKeyLabelForMacroSpec(binding.macroSpec, mrvmMenuLabelFromBindingKey(binding.key), errorMessage)) return false;
+		labels.emplace_back(binding.macroSpec, mrvmMenuLabelFromBindingKey(binding.key));
 	}
+	return mrvmUiProjectRuntimeMenuKeyLabels(labels, errorMessage);
+}
+
+void beginExplicitKeyBindingProjectionBatch() {
+	const int depth = mrvmRuntimeStateInt("explicitKeyBindings", "projectionBatchDepth");
+
+	if (depth <= 0) {
+		mrvmStoreRuntimeStateInt("explicitKeyBindings", "projectionDirty", 0);
+		mrvmStoreRuntimeStateString("explicitKeyBindings", "projectionFailureContext", std::string());
+	}
+	mrvmStoreRuntimeStateInt("explicitKeyBindings", "projectionBatchDepth", depth + 1);
+}
+
+bool requestRuntimeMenuKeyLabelProjection(const char *failureContext, std::string *errorMessage) {
+	if (mrvmRuntimeStateInt("explicitKeyBindings", "projectionBatchDepth") <= 0)
+		return projectRuntimeMenuKeyLabelsFromExplicitBindings(errorMessage);
+	if (mrvmRuntimeStateInt("explicitKeyBindings", "projectionDirty") == 0)
+		mrvmStoreRuntimeStateString("explicitKeyBindings", "projectionFailureContext", failureContext != nullptr ? failureContext : "");
+	mrvmStoreRuntimeStateInt("explicitKeyBindings", "projectionDirty", 1);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
+}
+
+bool endExplicitKeyBindingProjectionBatch(std::string &failureContext, std::string *errorMessage) {
+	int depth = mrvmRuntimeStateInt("explicitKeyBindings", "projectionBatchDepth");
+
+	failureContext.clear();
+	if (depth <= 0) {
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	--depth;
+	mrvmStoreRuntimeStateInt("explicitKeyBindings", "projectionBatchDepth", depth);
+	if (depth > 0) {
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (mrvmRuntimeStateInt("explicitKeyBindings", "projectionDirty") == 0) {
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	failureContext = mrvmRuntimeStateString("explicitKeyBindings", "projectionFailureContext");
+	mrvmStoreRuntimeStateInt("explicitKeyBindings", "projectionDirty", 0);
+	mrvmStoreRuntimeStateString("explicitKeyBindings", "projectionFailureContext", std::string());
+	return projectRuntimeMenuKeyLabelsFromExplicitBindings(errorMessage);
 }
 
 bool fileContainsOnlyTransientMacros(const LoadedMacroFile &file) {

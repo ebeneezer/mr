@@ -42,6 +42,11 @@ MRVMProcedure MRVMProcedureCatalog::classify(const std::string &name) {
 	    {"DEL_CHARS", MRVMProcedure::DelChars},
 	    {"DEL_FILE", MRVMProcedure::DelFile},
 	    {"DEL_LINE", MRVMProcedure::DelLine},
+	    {"DESKTOP_BLIT", MRVMProcedure::DesktopBlit},
+	    {"DESKTOP_CLEAR", MRVMProcedure::DesktopClear},
+	    {"DESKTOP_PUT_CHAR", MRVMProcedure::DesktopPutChar},
+	    {"DESKTOP_PUT_STRING", MRVMProcedure::DesktopPutString},
+	    {"DESKTOP_SET_COLOR", MRVMProcedure::DesktopSetColor},
 	    {"DOWN", MRVMProcedure::Down},
 	    {"EOF", MRVMProcedure::Eof},
 	    {"EOL", MRVMProcedure::Eol},
@@ -249,6 +254,11 @@ MRVMProcedureCatalog::Family MRVMProcedureCatalog::family(Procedure procedure) {
 		case MRVMProcedure::UiMessageBox:
 		case MRVMProcedure::Working:
 		case MRVMProcedure::Brain:
+		case MRVMProcedure::DesktopBlit:
+		case MRVMProcedure::DesktopClear:
+		case MRVMProcedure::DesktopPutChar:
+		case MRVMProcedure::DesktopPutString:
+		case MRVMProcedure::DesktopSetColor:
 		case MRVMProcedure::PutBox:
 		case MRVMProcedure::Write:
 		case MRVMProcedure::ClrLine:

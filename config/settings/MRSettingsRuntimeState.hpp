@@ -73,8 +73,12 @@ bool settingsStartupModeValue();
 void storeSettingsStartupModeValue(bool value);
 int settingsKeymapBatchDepthValue();
 void storeSettingsKeymapBatchDepthValue(int value);
+bool configuredKeymapBatchInitializedValue();
+void initializeConfiguredKeymapBatchStateValue(const std::vector<MRKeymapProfile> &profiles, const std::string &activeProfile);
+void storeConfiguredKeymapBatchActiveProfileValue(const std::string &activeProfile);
+void storeConfiguredKeymapBatchProfileValue(const MRKeymapProfile &profile);
+bool appendConfiguredKeymapBatchBindingValue(const MRKeymapBindingRecord &binding);
 MRConfiguredKeymapBatchState configuredKeymapBatchStateValue();
-void storeConfiguredKeymapBatchStateValue(const MRConfiguredKeymapBatchState &value);
 void clearConfiguredKeymapBatchStateValue();
 
 [[nodiscard]] std::string normalizeDialogPath(const char *path);
