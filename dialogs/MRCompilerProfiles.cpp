@@ -755,7 +755,7 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		if (currentIndex < 0 || currentIndex >= static_cast<int>(profiles.size())) return;
 		saveCurrentProfile();
 		MRCompilerProfile profile = profiles[currentIndex];
-		profile.id = nextCompilerProfileId(profiles, profile.id + "_copy");
+		profile.id = nextCompilerProfileId(profiles, profile.id + "copy");
 		profile.name += " copy";
 		profiles.push_back(profile);
 		currentIndex = static_cast<int>(profiles.size()) - 1;

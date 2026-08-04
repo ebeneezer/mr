@@ -955,9 +955,9 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 
 		suggested = entry->displayName;
 		std::size_t dotPos = suggested.rfind('.');
-		if (dotPos == std::string::npos) suggested += "_copy.mrmac";
+		if (dotPos == std::string::npos) suggested += "copy.mrmac";
 		else
-			suggested.insert(dotPos, "_copy");
+			suggested.insert(dotPos, "copy");
 
 		std::memset(pathBuffer, 0, sizeof(pathBuffer));
 		std::strncpy(pathBuffer, suggested.c_str(), sizeof(pathBuffer) - 1);

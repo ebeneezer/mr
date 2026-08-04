@@ -452,7 +452,7 @@ bool MRMenuBar::registerRuntimeMenuItem(const std::string &menuTitle, const std:
 		if (errorMessage != nullptr) *errorMessage = "REGISTER_MENU_ITEM requires macro and owner context.";
 		return false;
 	}
-	if (node.itemKey.empty()) node.itemKey = "SEP_" + std::to_string(mNextRuntimeOrder + 1);
+	if (node.itemKey.empty()) node.itemKey = "SEP" + std::to_string(mNextRuntimeOrder + 1);
 	const int existingIndex = findRuntimeNodeIndex(node.menuKey, node.itemKey, node.ownerSpec);
 	if (existingIndex >= 0 && mRuntimeNodes[static_cast<std::size_t>(existingIndex)].macroSpec == node.macroSpec) return true;
 	if (existingIndex >= 0) {
