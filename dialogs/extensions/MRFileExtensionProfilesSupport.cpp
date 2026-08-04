@@ -372,7 +372,11 @@ enum : unsigned long long {
 		errorText = "Profile ID may not be empty.";
 		return false;
 	}
-	if (id.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.") != std::string::npos) {
+	auto isValidChar = [](char ch) {
+		const unsigned char uc = static_cast<unsigned char>(ch);
+		return (uc >= 'a' && uc <= 'z') || (uc >= 'A' && uc <= 'Z') || (uc >= '0' && uc <= '9') || uc == '_' || uc == '-' || uc == '.';
+	};
+	if (!std::all_of(id.begin(), id.end(), isValidChar)) {
 		errorText = "Profile ID allows only letters, digits, '_', '-' and '.'.";
 		return false;
 	}
