@@ -65,9 +65,9 @@ INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./u
 CXXSTD ?= gnu++20
 PTHREAD_FLAGS ?= -pthread
 
-# Optimized debug flags: keep symbols and enable full optimization
-CXXFLAGS = -Wall -g -O3 -std=$(CXXSTD) $(PTHREAD_FLAGS) $(INCLUDES)
-CFLAGS = -Wall -g -O3 $(INCLUDES)
+# Optimized normal-build flags
+CXXFLAGS = -Wall -O3 -std=$(CXXSTD) $(PTHREAD_FLAGS) $(INCLUDES)
+CFLAGS = -Wall -O3 $(INCLUDES)
 
 TVISION_BUILD_DIR = $(TVISION_ACTIVE_BUILD_DIR)
 TVISION_LIB = $(TVISION_BUILD_DIR)/libtvision.a
@@ -95,7 +95,7 @@ TVISION_CMAKE_FLAGS = \
 NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
 GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
 TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
-LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS)
+LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS) -Wl,--strip-debug
 
 TARGET = mr
 MRFOLDTRAINER_TARGET = trainers/foldtrainer/mrfoldtrainer
