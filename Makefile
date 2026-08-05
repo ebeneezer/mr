@@ -446,7 +446,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 ifneq ($(filter clean,$(MAKECMDGOALS)),)
 ifneq ($(filter all,$(MAKECMDGOALS)),)
 all: clean
-$(CXX_OBJECTS) $(C_OBJECTS): clean
+$(CXX_OBJECTS) $(C_OBJECTS) tvision-build: clean
 endif
 endif
 
@@ -888,6 +888,7 @@ $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS)
 	$(TMP_RUN) $(CC) $(CFLAGS) -c $< -o $@ || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 
 clean:
+	find . -type f -name '*.o' -delete
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \
 		$(MRFOLDTRAINER_OBJECT) $(MRFOLDTRAINER_TARGET) \
 		$(MRINDENTTRAINER_OBJECT) $(MRINDENTTRAINER_TARGET) \
