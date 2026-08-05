@@ -152,8 +152,7 @@ std::vector<std::string> recentValuesForScopes(MRDialogHistoryScope firstScope, 
 	appendHistoryEntries(entries, firstScope, files);
 	appendHistoryEntries(entries, secondScope, files);
 	for (const GetLastEntry &entry : entries) {
-		if (seen.find(entry.value) != seen.end()) continue;
-		seen.insert(entry.value);
+		if (!seen.insert(entry.value).second) continue;
 		values.push_back(entry.value);
 		if (values.size() >= static_cast<std::size_t>(std::max(0, limit))) break;
 	}
@@ -168,8 +167,7 @@ std::vector<std::string> recentWorkspaceValues() {
 
 	appendHistoryEntries(entries, MRDialogHistoryScope::WorkspaceLoad, true);
 	for (const GetLastEntry &entry : entries) {
-		if (seen.find(entry.value) != seen.end()) continue;
-		seen.insert(entry.value);
+		if (!seen.insert(entry.value).second) continue;
 		values.push_back(entry.value);
 		if (values.size() >= static_cast<std::size_t>(std::max(0, limit))) break;
 	}

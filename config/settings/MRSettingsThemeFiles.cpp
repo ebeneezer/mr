@@ -286,14 +286,12 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 	std::string source;
 	std::map<std::string, std::string> assignments;
 	MRColorSetupSettings colors = resolveColorSetupDefaults();
-	bool upgradeRequired = false;
 	std::string themeName;
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
 	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, &upgradeRequired, errorMessage)) return false;
-	(void)upgradeRequired;
+	if (!parseThemeSetupAssignments(source, assignments, nullptr, errorMessage)) return false;
 	const MRColorSetupGroup groups[] = {
 	    MRColorSetupGroup::Window,
 	    MRColorSetupGroup::MenuDialog,
@@ -323,13 +321,11 @@ bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<uns
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
 	std::string source;
 	std::map<std::string, std::string> assignments;
-	bool upgradeRequired = false;
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
 	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, &upgradeRequired, errorMessage)) return false;
-	(void)upgradeRequired;
+	if (!parseThemeSetupAssignments(source, assignments, nullptr, errorMessage)) return false;
 	if (!parseWindowColorListLiteral(assignments["WINDOWCOLORS"], outValues, errorMessage)) return false;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;

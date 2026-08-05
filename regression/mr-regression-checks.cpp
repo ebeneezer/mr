@@ -42,8 +42,10 @@
 #include "../mrmac/MRVM.hpp"
 #include "../mrmac/ui/modeless/MRVMMacroModelessProcedures.hpp"
 #include "../mrmac/ui/modeless/MRVMModelessUiRuntime.hpp"
+#include "../mrmac/vm/MRVMExecSessions.hpp"
 #include "../mrmac/vm/MRVMRuntimeCatalog.hpp"
 #include "../mrmac/vm/MRVMRuntimeDebugger.hpp"
+#include "../mrmac/vm/MRVMRuntimeState.hpp"
 #include "../mrmac/vm/MRVMValue.hpp"
 #include "../app/MRExecSessionStatus.hpp"
 #include "../app/MREditorApp.hpp"
@@ -2615,6 +2617,61 @@ int runStagedMarkPageProbeMode() {
 		return 1;
 	}
 
+	return 0;
+}
+
+int runClosureHashDefaultProbeMode() {
+	static const char kSource[] = "$CLOSURE ClosureHashDefault;\n"
+	                              "DEF_TICK(1000);\n"
+	                              "DEF_HASH(State);\n"
+	                              "END_CLOSURE;\n";
+	const std::string closureId = "regression-closure-hash-default-" + std::to_string(static_cast<long>(::getpid()));
+	std::vector<unsigned char> bytecode;
+	int entryOffset = -1;
+	std::string macroName;
+	std::string compileError;
+	std::string vmError;
+	VirtualMachine::Value state;
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+
+	if (!compileSource(kSource, bytecode, entryOffset, macroName, compileError)) {
+		std::cerr << "Closure hash default probe compile failed: " << compileError << "\n";
+		return 1;
+	}
+
+	static_cast<void>(mrvmExecSessionsEraseClosureState(runtimeKv, closureId));
+	mrvmExecSessionsEnsureClosureState(runtimeKv, closureId, 1000);
+	VirtualMachine vm;
+	vm.setClosureContext(closureId);
+	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<std::size_t>(entryOffset), std::string(), macroName, true, true);
+
+	const bool vmFailed = firstVmError(vm.log, vmError);
+	const bool stateRead = mrvmExecSessionsReadClosureVariable(runtimeKv, closureId, "State", state);
+	const bool validHash = stateRead && state.type == TYPE_HASH && state.globalStorage && state.hashHandle > 0;
+	const std::size_t keyCount = validHash ? runtimeKv.globalStore().keys(state.hashHandle).size() : 0;
+	const bool erased = mrvmExecSessionsEraseClosureState(runtimeKv, closureId);
+
+	if (vmFailed) {
+		std::cerr << "Closure hash default probe produced VM error: " << vmError << "\n";
+		return 1;
+	}
+	if (!stateRead) {
+		std::cerr << "Closure hash default probe did not persist the missing DEF_HASH variable.\n";
+		return 1;
+	}
+	if (!validHash) {
+		std::cerr << "Closure hash default probe persisted a non-hash fallback value.\n";
+		return 1;
+	}
+	if (keyCount != 0) {
+		std::cerr << "Closure hash default probe did not create an empty hash.\n";
+		return 1;
+	}
+	if (!erased) {
+		std::cerr << "Closure hash default probe could not remove its runtime state.\n";
+		return 1;
+	}
+	std::cout << "Closure hash default probe passed.\n";
 	return 0;
 }
 
@@ -12193,6 +12250,7 @@ int main(int argc, char **argv) {
 			}
 			if (std::strcmp(argv[2], "staged-nav") == 0) return runStagedNavProbeMode();
 			if (std::strcmp(argv[2], "staged-mark-page") == 0) return runStagedMarkPageProbeMode();
+			if (std::strcmp(argv[2], "closure-hash-default") == 0) return runClosureHashDefaultProbeMode();
 			if (std::strcmp(argv[2], "macro-screen-flush") == 0) return runMacroScreenFlushProbeMode();
 			if (std::strcmp(argv[2], "keymap-macro-dispatch") == 0) return runKeymapMacroDispatchProbeMode();
 			if (std::strcmp(argv[2], "keymap-autoexec-bootstrap") == 0) return runKeymapAutoexecBootstrapProbeMode();
@@ -12206,7 +12264,7 @@ int main(int argc, char **argv) {
 			runFull = false;
 		} else {
 			std::cerr << "usage: regression/mr-regression-checks "
-			             "[--core|--full|--probe staged-nav|staged-mark-page|macro-screen-flush|keymap-macro-dispatch|keymap-autoexec-bootstrap|macro-debugger-breakpoint-kv|macro-debugger-cross-section|macro-debugger-f9-route|macro-debugger-workspace-breakpoint-roundtrip]\n";
+			             "[--core|--full|--probe staged-nav|staged-mark-page|closure-hash-default|macro-screen-flush|keymap-macro-dispatch|keymap-autoexec-bootstrap|macro-debugger-breakpoint-kv|macro-debugger-cross-section|macro-debugger-f9-route|macro-debugger-workspace-breakpoint-roundtrip]\n";
 			return 2;
 		}
 	}

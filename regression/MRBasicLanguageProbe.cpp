@@ -1,6 +1,7 @@
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../derivedstate/MRSyntaxDerivedState.hpp"
 #include "../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../ui/MRSyntax.hpp"
 #include "../ui/MRSyntaxBasic.hpp"
@@ -72,6 +73,7 @@ int main() {
 	const std::vector<MRCompilerProfile> profiles = detectedCompilerProfiles();
 	const MRSyntaxLineResult highlighted = tmrHighlightTextLine(MRSyntaxLanguage::Basic, "SUB Probe() : REM hidden");
 	const std::string selectFold = mrBuildFoldTrainingAscii("SELECT CASE value\nCASE 0\nPRINT \"zero\"\nCASE ELSE\nPRINT \"other\"\nEND SELECT\n", MRSyntaxLanguage::Basic);
+	MRSyntaxDerivedState warmedRanges;
 	MRCompilerProfile freeBasicProfile;
 	MRCompilerProfile qb64peProfile;
 	MRCompilerProfile gambasProfile;
@@ -88,6 +90,15 @@ int main() {
 	    selectFold.find("\xE2\x94\x9C | CASE ELSE") == std::string::npos ||
 	    selectFold.find("\xE2\x94\x82\xE2\x95\xAD | CASE 0") != std::string::npos || selectFold.find("\xE2\x95\xB0 | END SELECT") == std::string::npos)
 		return reportFailure("SELECT CASE folding did not produce one selector span.") ? 0 : 1;
+	warmedRanges.rememberWarmedLineRange(7, MRSyntaxLanguage::Basic, 2, 5);
+	warmedRanges.rememberWarmedLineRange(7, MRSyntaxLanguage::Basic, 4, 7);
+	warmedRanges.rememberWarmedLineRange(7, MRSyntaxLanguage::Basic, 7, 9);
+	warmedRanges.rememberWarmedLineRange(7, MRSyntaxLanguage::Basic, 11, 13);
+	if (!warmedRanges.warmedLineRangeCovered(7, MRSyntaxLanguage::Basic, 2, 9) ||
+	    !warmedRanges.warmedLineRangeCovered(7, MRSyntaxLanguage::Basic, 3, 8) ||
+	    warmedRanges.warmedLineRangeCovered(7, MRSyntaxLanguage::Basic, 2, 13) ||
+	    warmedRanges.warmedLineRangeCovered(8, MRSyntaxLanguage::Basic, 2, 9))
+		return reportFailure("warmed syntax range coverage did not merge overlap and adjacency or preserve gaps and ownership.") ? 0 : 1;
 	for (const BasicBlockProbe &probe : blockProbes) {
 		const MRBasicBlockLine result = mrBasicClassifyBlockLine(probe.line);
 		if (result.kind != probe.kind || result.disposition != probe.disposition)

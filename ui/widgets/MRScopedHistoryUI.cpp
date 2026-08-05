@@ -206,11 +206,13 @@ class TWheelFileDialog final : public TFileDialog {
 			TSearchRec *selectedEntry = static_cast<TSearchRec *>(event.message.infoPtr);
 
 			if (selectedEntry != nullptr) {
-				std::strcpy(fileName->data, selectedEntry->name);
+				std::string selectedPath = selectedEntry->name;
+
 				if ((selectedEntry->attr & FA_DIREC) != 0) {
-					std::strcat(fileName->data, "\\");
-					std::strcat(fileName->data, wildCard);
+					selectedPath += "\\";
+					selectedPath += wildCard;
 				}
+				strnzcpy(fileName->data, selectedPath.c_str(), MAXPATH);
 				fileName->selectAll(False);
 				fileName->drawView();
 			}

@@ -52,4 +52,7 @@ echo "[MRMAC v1] Background staged probes"
 ./regression/mr-regression-checks --probe staged-nav
 ./regression/mr-regression-checks --probe staged-mark-page
 
+echo "[MRMAC v1] Closure state probe"
+./regression/mr-regression-checks --probe closure-hash-default
+
 echo "[MRMAC v1] PASS"
