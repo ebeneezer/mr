@@ -249,10 +249,6 @@ std::string rowTextFor(const MacroFileEntry &entry) {
 	return padRight(left, 30) + " " + padRight(entry.keySpec.empty() ? "<no key>" : entry.keySpec, 14);
 }
 
-std::string autoexecRowTextFor(const std::string &fileName) {
-	return baseNameOf(fileName);
-}
-
 std::string sanitizeMacroIdentifier(const std::string &name) {
 	std::string out;
 	for (char i : name) {
@@ -812,7 +808,7 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 	void refreshAutoexecRows(int keepIndex) {
 		autoexecRows.clear();
 		for (const std::string &fileName : autoexecEntries)
-			autoexecRows.push_back(autoexecRowTextFor(fileName));
+			autoexecRows.push_back(baseNameOf(fileName));
 		if (autoexecListView != nullptr) {
 			autoexecListView->setItems(autoexecRows, std::vector<bool>(autoexecRows.size(), false), static_cast<short>(autoexecEntries.size()));
 			if (!autoexecRows.empty()) {

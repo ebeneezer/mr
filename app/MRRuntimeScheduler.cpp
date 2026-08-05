@@ -31,14 +31,6 @@ std::string runtimeSchedulerSmokeSource() {
 
 std::string runtimeSchedulerEventLine(const MRRuntimeSchedulerEvent &event);
 
-void noteRuntimeSchedulerConsumerRegisteredLocked() {
-	mrvmStoreRuntimeSchedulerNextPumpMs(0);
-}
-
-void noteRuntimeSchedulerConsumersRemovedLocked(std::size_t) {
-	mrvmStoreRuntimeSchedulerNextPumpMs(0);
-}
-
 void noteRuntimeSchedulerObservedConsumersLocked(std::size_t count) {
 	if (count == 0) mrvmStoreRuntimeSchedulerNextPumpMs(0);
 }
@@ -238,7 +230,7 @@ std::size_t removeRuntimeScheduledConsumersLocked(const std::string *macroSpec, 
 		mrvmRemoveRuntimeScheduledConsumer(consumer.consumerId);
 		++removed;
 	}
-	noteRuntimeSchedulerConsumersRemovedLocked(removed);
+	mrvmStoreRuntimeSchedulerNextPumpMs(0);
 	return removed;
 }
 } // namespace
@@ -253,7 +245,7 @@ MRRuntimeScheduledConsumerId registerRuntimeScheduledConsumer(const MRRuntimeSch
 	consumer.consumerId = mrvmNextRuntimeScheduledConsumerId();
 	consumer.config = config;
 	mrvmStoreRuntimeScheduledConsumer(consumer);
-	noteRuntimeSchedulerConsumerRegisteredLocked();
+	mrvmStoreRuntimeSchedulerNextPumpMs(0);
 	recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::ConsumerRegistered, MRRuntimeSchedulerSkipReason::None, 0, 0, 0, 0, std::string());
 	return consumer.consumerId;
 }
@@ -265,7 +257,7 @@ bool removeRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId) {
 	if (!mrvmReadRuntimeScheduledConsumer(consumerId, consumer)) return false;
 	recordRuntimeSchedulerEventLocked(consumerId, consumer.config, MRRuntimeSchedulerEventKind::ConsumerRemoved, MRRuntimeSchedulerSkipReason::None, consumer.activeSessionId, 0, 0, 0, std::string());
 	mrvmRemoveRuntimeScheduledConsumer(consumerId);
-	noteRuntimeSchedulerConsumersRemovedLocked(1);
+	mrvmStoreRuntimeSchedulerNextPumpMs(0);
 	return true;
 }
 

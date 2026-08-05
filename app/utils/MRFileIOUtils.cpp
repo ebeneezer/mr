@@ -401,17 +401,6 @@ std::size_t hashTextSaveOptions(const MRTextSaveOptions &options) {
 	return static_cast<std::size_t>(hash);
 }
 
-void resetTextSaveStreamState(MRTextSaveStreamState &state) {
-	state.currentLine.clear();
-	state.bufferedLine.clear();
-	state.expandedScratch.clear();
-	state.hasBufferedLine = false;
-	state.pendingCarriageReturn = false;
-	state.deferredCtrlZ = false;
-	state.emittedAnyByte = false;
-	state.lastEmittedByte = 0;
-}
-
 void appendNormalizedTextSaveChunk(std::string_view chunk, const MRTextSaveOptions &options, MRTextSaveStreamState &state, std::string &output) {
 	if (chunk.empty()) return;
 	if (options.binaryMode) {

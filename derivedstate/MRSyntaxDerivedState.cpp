@@ -1,7 +1,9 @@
 #include "MRSyntaxDerivedState.hpp"
 
+#include <algorithm>
+
 MRSyntaxDerivedState::MRSyntaxDerivedState() noexcept
-    : MRDerivedStateBase(), mTokenCache(), mCheckpoints(), mWarmedLineRangesDocumentId(0), mWarmedLineRangesLanguage(MRSyntaxLanguage::PlainText) {
+    : mTokenCache(), mCheckpoints(), mValidRanges(), mWarmedLineRangesDocumentId(0), mWarmedLineRangesLanguage(MRSyntaxLanguage::PlainText) {
 }
 
 void MRSyntaxDerivedState::resetState(bool clearCache) noexcept {
@@ -9,7 +11,6 @@ void MRSyntaxDerivedState::resetState(bool clearCache) noexcept {
 		mTokenCache.clear();
 		mCheckpoints.clear();
 		clearWarmedLineRanges();
-		clearAllRanges();
 	}
 }
 
@@ -32,7 +33,7 @@ const std::map<std::size_t, MRSyntaxCheckpointEntry> &MRSyntaxDerivedState::chec
 void MRSyntaxDerivedState::clearWarmedLineRanges() noexcept {
 	mWarmedLineRangesDocumentId = 0;
 	mWarmedLineRangesLanguage = MRSyntaxLanguage::PlainText;
-	clearValidRanges();
+	mValidRanges.clear();
 }
 
 void MRSyntaxDerivedState::rememberWarmedLineRange(std::size_t documentId, MRSyntaxLanguage language, std::size_t startLine, std::size_t endLine) noexcept {
@@ -62,13 +63,54 @@ void MRSyntaxDerivedState::ensureWarmedLineRangeOwner(std::size_t documentId, MR
 	if (warmedLineRangesMatch(documentId, language)) return;
 	mWarmedLineRangesDocumentId = documentId;
 	mWarmedLineRangesLanguage = language;
-	clearAllRanges();
+	mValidRanges.clear();
 }
 
-std::size_t MRSyntaxDerivedState::warmedLineRangesDocumentId() const noexcept {
-	return mWarmedLineRangesDocumentId;
+const std::vector<MRSyntaxDerivedState::LineRange> &MRSyntaxDerivedState::validRanges() const noexcept {
+	return mValidRanges;
 }
 
-MRSyntaxLanguage MRSyntaxDerivedState::warmedLineRangesLanguage() const noexcept {
-	return mWarmedLineRangesLanguage;
+void MRSyntaxDerivedState::rememberValidRange(std::size_t startLine, std::size_t endLine) noexcept {
+	if (endLine <= startLine) return;
+	mValidRanges.push_back(std::make_pair(startLine, endLine));
+	normalizeRanges(mValidRanges);
+}
+
+void MRSyntaxDerivedState::invalidateValidRangesFrom(std::size_t lineIndex) noexcept {
+	std::vector<LineRange> kept;
+
+	kept.reserve(mValidRanges.size());
+	for (const LineRange &range : mValidRanges) {
+		if (range.second <= lineIndex) {
+			kept.push_back(range);
+			continue;
+		}
+		if (range.first < lineIndex) kept.push_back(std::make_pair(range.first, lineIndex));
+	}
+	mValidRanges.swap(kept);
+}
+
+bool MRSyntaxDerivedState::validRangeCovered(std::size_t startLine, std::size_t endLine) const noexcept {
+	if (endLine <= startLine) return true;
+	std::size_t coveredUntil = startLine;
+
+	for (const LineRange &range : mValidRanges) {
+		if (range.second <= coveredUntil) continue;
+		if (range.first > coveredUntil) return false;
+		coveredUntil = std::max(coveredUntil, range.second);
+		if (coveredUntil >= endLine) return true;
+	}
+	return coveredUntil >= endLine;
+}
+
+void MRSyntaxDerivedState::normalizeRanges(std::vector<LineRange> &ranges) {
+	std::sort(ranges.begin(), ranges.end(), [](const LineRange &a, const LineRange &b) { return a.first < b.first || (a.first == b.first && a.second < b.second); });
+	std::vector<LineRange> merged;
+	for (const LineRange &item : ranges) {
+		if (item.second <= item.first) continue;
+		if (merged.empty() || item.first > merged.back().second) merged.push_back(item);
+		else if (item.second > merged.back().second)
+			merged.back().second = item.second;
+	}
+	ranges.swap(merged);
 }

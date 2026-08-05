@@ -43,7 +43,6 @@ constexpr int kMinimumMiniMapWidth = 2;
 constexpr int kMaximumMiniMapWidth = 20;
 constexpr int kDefaultMiniMapWidth = 4;
 constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler | kOptionCodeColoring;
-static const char *const kCodeLanguageChoices[] = {"None", "Automatic", "C", "C++", "Python", "JavaScript", "TypeScript", "TSX", "Bash", "zsh", "fish", "JSON", "YAML", "XML", "Perl", "Swift", "Rust", "Go", "Pascal", "BASIC", "LaTeX", "Kotlin", "C#", "systemd et al."};
 constexpr short kCodeLanguageMaxVisibleRows = 10;
 
 struct FileExtensionEditorSettingsPanelLayout {
@@ -521,10 +520,6 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	guttersField = addPanelInput(dialog, TRect(g.columnBlockMoveLeft + 16, g.miniMapBodyY + 6, g.columnBlockMoveLeft + 24, g.miniMapBodyY + 7), kGuttersFieldSize - 1);
 }
 
-TView *FileExtensionEditorSettingsPanel::primaryView() const noexcept {
-	return wordDelimitersField;
-}
-
 void FileExtensionEditorSettingsPanel::setInputLineValue(TInputLine *inputLine, const char *value, std::size_t capacity) {
 	std::vector<char> buffer(capacity, '\0');
 	writeRecordField(buffer.data(), buffer.size(), readRecordField(value));
@@ -733,12 +728,6 @@ void FileExtensionEditorSettingsPanel::syncDynamicStates() {
 	if (binaryRecordLengthField != nullptr) binaryRecordLengthField->setState(sfDisabled, binaryEnabled ? False : True);
 }
 
-bool FileExtensionEditorSettingsPanel::formatRulerEnabled() const noexcept {
-	ushort leftMask = 0;
-	if (optionsLeftField != nullptr) optionsLeftField->getData((void *)&leftMask);
-	return (leftMask & kLeftOptionFormatRuler) != 0;
-}
-
 int FileExtensionEditorSettingsPanel::currentFormatLineTabSize() const noexcept {
 	int32_t value = lastKnownTabSizeForFormatLine;
 	if (tabSizeSlider != nullptr) tabSizeSlider->getData(&value);
@@ -766,22 +755,6 @@ void FileExtensionEditorSettingsPanel::applyFormatLineState(const std::string &v
 	syncDynamicStates();
 }
 
-std::string FileExtensionEditorSettingsPanel::postLoadMacroValue() const {
-	return readInputFieldValue(postLoadMacroField);
-}
-
-std::string FileExtensionEditorSettingsPanel::preSaveMacroValue() const {
-	return readInputFieldValue(preSaveMacroField);
-}
-
-std::string FileExtensionEditorSettingsPanel::defaultPathValue() const {
-	return readInputFieldValue(defaultPathField);
-}
-
-std::string FileExtensionEditorSettingsPanel::codeLanguageValue() const {
-	return readInputFieldValue(codeLanguageField);
-}
-
 void FileExtensionEditorSettingsPanel::setPostLoadMacroValue(const std::string &value) {
 	if (postLoadMacroField != nullptr) writeInputFieldValue(postLoadMacroField, value);
 }
@@ -794,18 +767,11 @@ void FileExtensionEditorSettingsPanel::setDefaultPathValue(const std::string &va
 	if (defaultPathField != nullptr) writeInputFieldValue(defaultPathField, value);
 }
 
-void FileExtensionEditorSettingsPanel::setCodeLanguageValue(const std::string &value) {
-	if (codeLanguageField != nullptr) writeInputFieldValue(codeLanguageField, value);
-}
-
 void FileExtensionEditorSettingsPanel::toggleCodeLanguageList(MRScrollableDialog &dialog) {
-	std::vector<std::string> values;
+	std::vector<std::string> values = dialogCodeLanguageChoices();
 
 	if (codeLanguageField == nullptr) return;
-	values.reserve(sizeof(kCodeLanguageChoices) / sizeof(kCodeLanguageChoices[0]));
-	for (const char *choice : kCodeLanguageChoices)
-		values.push_back(choice);
-	codeLanguageDropList.toggle(dialog, codeLanguageListAnchor, values, trimAscii(codeLanguageValue()), &dialog, cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage, kCodeLanguageMaxVisibleRows);
+	codeLanguageDropList.toggle(dialog, codeLanguageListAnchor, values, trimAscii(readInputFieldValue(codeLanguageField)), &dialog, cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage, kCodeLanguageMaxVisibleRows);
 }
 
 void FileExtensionEditorSettingsPanel::hideCodeLanguageList() {
@@ -814,11 +780,7 @@ void FileExtensionEditorSettingsPanel::hideCodeLanguageList() {
 }
 
 bool FileExtensionEditorSettingsPanel::handleCodeLanguageListEvent(TEvent &event, MRScrollableDialog &dialog) {
-	std::vector<std::string> values;
-
-	values.reserve(sizeof(kCodeLanguageChoices) / sizeof(kCodeLanguageChoices[0]));
-	for (const char *choice : kCodeLanguageChoices)
-		values.push_back(choice);
+	std::vector<std::string> values = dialogCodeLanguageChoices();
 	return codeLanguageDropList.handleLinkedInputEvent(event, dialog, codeLanguageListAnchor, values, codeLanguageField, &dialog, cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage, kCodeLanguageMaxVisibleRows);
 }
 
@@ -826,15 +788,11 @@ bool FileExtensionEditorSettingsPanel::codeLanguageListVisible() const noexcept 
 	return codeLanguageDropList.visible();
 }
 
-bool FileExtensionEditorSettingsPanel::codeLanguageListContainsPoint(TPoint where) const noexcept {
-	return codeLanguageDropList.containsPoint(where) || codeLanguageDropList.buttonContainsPoint(where);
-}
-
 bool FileExtensionEditorSettingsPanel::acceptCodeLanguageListSelection() {
 	std::string selectedValue;
 
 	if (!codeLanguageDropList.acceptSelection(selectedValue)) return false;
-	setCodeLanguageValue(selectedValue);
+	if (codeLanguageField != nullptr) writeInputFieldValue(codeLanguageField, selectedValue);
 	hideCodeLanguageList();
 	return true;
 }

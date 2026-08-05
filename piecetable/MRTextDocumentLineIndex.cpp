@@ -8,9 +8,6 @@ namespace editor {
 using namespace lineindex;
 
 namespace {
-constexpr Offset kLargeMappedEditNormalizationLength = static_cast<Offset>(8) * 1024 * 1024;
-constexpr std::size_t kLargeMappedEditNormalizationPieceThreshold = 256;
-
 struct LineIndexOffsetSpan {
 	Offset start;
 	Offset end;
@@ -773,10 +770,6 @@ bool TextDocument::hasEditedLineStartIndex() const noexcept {
 	return mEditedLineStarts != nullptr && !mEditedLineStarts->empty();
 }
 
-void TextDocument::clearEditedLineStartIndex() noexcept {
-	mEditedLineStarts = std::make_shared<std::vector<Offset>>(1, 0);
-}
-
 void TextDocument::rebuildEditedLineStartIndex() {
 	std::shared_ptr<std::vector<Offset>> starts = std::make_shared<std::vector<Offset>>();
 	starts->reserve(std::max<std::size_t>(mLineIndexCheckpoints.empty() ? 1 : mLineIndexCheckpoints.back().lineIndex + 1, std::max<std::size_t>(1, mLength / 80 + 1)));
@@ -847,26 +840,6 @@ void TextDocument::updateEditedLineStartIndexForErase(Range range) {
 	}
 	starts.insert(starts.begin() + static_cast<std::ptrdiff_t>(suffixIndex), rebuiltStarts.begin(), rebuiltStarts.end());
 	starts.erase(std::unique(starts.begin(), starts.end()), starts.end());
-}
-
-void TextDocument::normalizeLargeMappedEditStateNoVersionBump() {
-	if (!mMappedOriginal.mapped()) return;
-	if (mLength < kLargeMappedEditNormalizationLength) return;
-	if (mPieces == nullptr || mPieces->size() < kLargeMappedEditNormalizationPieceThreshold) return;
-
-	std::string currentText = text();
-	mMappedOriginal.reset();
-	mOriginalBuffer = std::make_shared<std::string>();
-	mAddBuffer.clear();
-	TextSpan fullSpan = mAddBuffer.append(currentText);
-	ensureUniquePieces();
-	mPieces->clear();
-	mPieces->emplace_back(BufferKind::Add, fullSpan);
-	mLength = static_cast<Offset>(currentText.size());
-	mMaterializedText = std::move(currentText);
-	mCacheDirty = false;
-	resetLazyLineIndex();
-	mEditedLineStarts.reset();
 }
 
 void TextDocument::resetLazyLineIndex() noexcept {

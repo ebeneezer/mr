@@ -47,10 +47,6 @@ void insertStaticLine(TDialog *dialog, int x, int y, const char *text) {
 	dialog->insert(new TStaticText(TRect(x, y, x + std::strlen(text) + 1, y + 1), text));
 }
 
-ushort execDialog(TDialog *dialog) {
-	return mr::dialogs::execDialog(dialog);
-}
-
 std::string shortenForDialog(const std::string &value, std::size_t maxLen) {
 	if (value.size() <= maxLen) return value;
 	if (maxLen <= 3) return value.substr(0, maxLen);
@@ -336,7 +332,7 @@ void showFileInformationDialog(MREditWindow *win) {
 	pages = buildFileInformationPages(win);
 	if (pages.empty()) return;
 	while (true) {
-		result = execDialog(new FileInformationDialog(pages[pageIndex], pageIndex, pages.size(), pageIndex > 0, pageIndex + 1 < pages.size()));
+		result = mr::dialogs::execDialog(new FileInformationDialog(pages[pageIndex], pageIndex, pages.size(), pageIndex > 0, pageIndex + 1 < pages.size()));
 		if (result == cmMrPreviewPrev && pageIndex > 0) {
 			--pageIndex;
 			continue;

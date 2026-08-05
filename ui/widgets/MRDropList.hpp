@@ -73,7 +73,6 @@ class MRStringChoiceField : public TInputLine {
 	void hideDropList();
 	[[nodiscard]] bool handleDropListEvent(TEvent &event, bool hideOnOutsideMouseDown = true);
 	[[nodiscard]] bool dropListVisible() const noexcept;
-	[[nodiscard]] bool dropListContainsPoint(TPoint where) const noexcept;
 	[[nodiscard]] bool acceptDropListSelection();
 
 	void handleEvent(TEvent &event) override;

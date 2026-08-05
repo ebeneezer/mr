@@ -183,20 +183,6 @@ std::size_t centeredPreviewLeft(const std::string &line, std::size_t matchOffset
 	return std::min(left, maxLeft);
 }
 
-void lineColumnForOffset(const std::string &text, std::size_t offset, std::size_t &line, std::size_t &column) {
-	const std::size_t safe = std::min(offset, text.size());
-	std::size_t currentLine = 1;
-	std::size_t lastLineStart = 0;
-
-	for (std::size_t i = 0; i < safe; ++i)
-		if (text[i] == '\n') {
-			++currentLine;
-			lastLineStart = i + 1;
-		}
-	line = currentLine;
-	column = safe - lastLineStart + 1;
-}
-
 bool collectRegexMatches(const std::string &text, pcre2_code *code, std::vector<SearchMatchEntry> &outMatches) {
 	return collectRegexMatchesWithCancel(text, code, outMatches, nullptr) != RegexCollectOutcome::Error;
 }

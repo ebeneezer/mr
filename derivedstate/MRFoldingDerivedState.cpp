@@ -89,7 +89,7 @@ const MRFoldSpan *MRFoldClosedProjection::spanContaining(std::size_t documentLin
 }
 
 MRFoldingDerivedState::MRFoldingDerivedState() noexcept
-		: MRDerivedStateBase(), mVisible(), mClosedFoldSpans(), mEffectiveClosedFoldSpans(), mDocumentFoldLevelActive(false), mDocumentFoldLevel(0),
+		: mVisible(), mClosedFoldSpans(), mEffectiveClosedFoldSpans(), mDocumentFoldLevelActive(false), mDocumentFoldLevel(0),
 		  mDocumentFoldCanonicalEndLine(0), mDocumentFoldCanonicalProjections(), mDocumentFoldCanonicalLastStartLines(), mDocumentFoldCanonicalLastEndLines(),
 		  mDocumentFoldCanonicalHiddenPrefix(), mDocumentFoldViewportProjection(), mDocumentFoldDescendantProjection(), mDocumentFoldOpenSpans() {
 }

@@ -53,9 +53,7 @@ class MRWindowOpenBatch {
 [[nodiscard]] MREditWindow *findReusableEmptyWindow(MREditWindow *preferred);
 [[nodiscard]] bool closeCurrentEditWindow();
 [[nodiscard]] bool closeCurrentDesktopWindow();
-[[nodiscard]] bool activateRelativeEditWindow(int delta);
 [[nodiscard]] bool activateRelativeDesktopWindow(int delta);
-[[nodiscard]] bool hideCurrentEditWindow();
 [[nodiscard]] bool hideCurrentDesktopWindow();
 [[nodiscard]] bool zoomCurrentDesktopWindow();
 void mrUpdateAllWindowsColorTheme();

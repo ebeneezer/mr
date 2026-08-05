@@ -26,17 +26,13 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	if (changeSet != nullptr && changeSet->changed) mFoldState.clearClosedFolds();
 	invalidateFoldCache(changeSet != nullptr && changeSet->changed);
 	if (!miniMapEnabled) {
-		mMiniMapState.clearLastEditAt();
 		applyMiniMapSignals(mMiniMapState.renderer().invalidate(true, mBufferModel.documentId()));
 	} else if (preserveStaleMiniMapDuringEdit) {
-		mMiniMapState.setLastEditAt(std::chrono::steady_clock::now());
 		for (std::uint64_t cancelledMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId(); cancelledMiniMapTaskId != 0;
 		     cancelledMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId()) {
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledMiniMapTaskId));
 			applyMiniMapSignals(mMiniMapState.renderer().clearWarmupTask(cancelledMiniMapTaskId));
 		}
-	} else {
-		mMiniMapState.clearLastEditAt();
 	}
 	if (miniMapEnabled) applyMiniMapSignals(mMiniMapState.renderer().invalidate(false, mBufferModel.documentId()));
 	refreshSyntaxContext();

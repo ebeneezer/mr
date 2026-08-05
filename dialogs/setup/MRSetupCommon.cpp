@@ -10,7 +10,6 @@
 #define Uses_TProgram
 #define Uses_TRect
 #define Uses_TScrollBar
-#define Uses_TStaticText
 #define Uses_TView
 #include <tvision/tv.h>
 
@@ -609,7 +608,3 @@ ushort execDialogWithData(TDialog *dialog, void *data) {
 }
 
 } // namespace mr::dialogs
-
-void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text) {
-	dialog->insert(new TStaticText(TRect(x, y, x + std::strlen(text) + 1, y + 1), text));
-}

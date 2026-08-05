@@ -174,16 +174,12 @@ bool isWindowEmptyUntitled(MREditWindow *win) {
 	return win->isBufferEmpty();
 }
 
-std::vector<MREditWindow *> allEditWindows() {
-	return allEditWindowsInZOrder();
-}
-
 bool containsWindow(const std::vector<MREditWindow *> &windows, MREditWindow *candidate) {
 	return std::find(windows.begin(), windows.end(), candidate) != windows.end();
 }
 
 MREditWindow *preferredLinkTarget(MREditWindow *current) {
-	std::vector<MREditWindow *> windows = allEditWindows();
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	MREditWindow *firstOther = nullptr;
 	MREditWindow *emptyUntitled = nullptr;
 	MREditWindow *sameFile = nullptr;
@@ -845,7 +841,7 @@ class WindowListDialog : public MRDialogFoundation {
 		long long enumerateUs = 0;
 		long long rowUs = 0;
 		const auto enumerateStartedAt = startedAt;
-		const std::vector<MREditWindow *> windows = allEditWindows();
+		const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		enumerateUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - enumerateStartedAt).count();
 		entries.clear();
 		rows.clear();
@@ -906,7 +902,7 @@ class WindowListDialog : public MRDialogFoundation {
 
 	void sanitizeTrackedWindows() {
 		const auto startedAt = std::chrono::steady_clock::now();
-		const std::vector<MREditWindow *> windows = allEditWindows();
+		const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		if (!containsWindow(windows, current)) current = nullptr;
 		if (!containsWindow(windows, preferred)) preferred = nullptr;
 		if (!containsWindow(windows, selected)) selected = nullptr;
@@ -1140,7 +1136,7 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void handleHideAll() {
-		std::vector<MREditWindow *> windows = allEditWindows();
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		std::vector<MRDesktopWindow *> desktopWindows = allDesktopWindowsInZOrder();
 		WindowListEntry *entry = currentEntry();
 

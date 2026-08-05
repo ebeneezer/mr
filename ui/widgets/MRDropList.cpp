@@ -511,10 +511,6 @@ bool MRStringChoiceField::dropListVisible() const noexcept {
 	return dropList.visible();
 }
 
-bool MRStringChoiceField::dropListContainsPoint(TPoint where) const noexcept {
-	return dropList.containsPoint(where) || dropList.buttonContainsPoint(where);
-}
-
 bool MRStringChoiceField::acceptDropListSelection() {
 	std::string selectedValue;
 

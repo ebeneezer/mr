@@ -95,7 +95,6 @@ inline void writeRecordField(char *dest, std::size_t destSize, std::string_view 
 
 [[nodiscard]] TRect centeredSetupDialogRect(int width, int height);
 [[nodiscard]] TGroup *createSetupDialogContentGroup(const TRect &bounds);
-void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text);
 
 class MRScrollableDialog : public TDialog {
   public:

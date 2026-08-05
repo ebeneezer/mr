@@ -1,6 +1,6 @@
 #include "MRMiniMapDerivedState.hpp"
 
-MRMiniMapDerivedState::MRMiniMapDerivedState() noexcept : MRDerivedStateBase(), mRenderer(), mInitialRenderReportedDocumentId(0), mLastEditAt(), mOverlaySources() {
+MRMiniMapDerivedState::MRMiniMapDerivedState() noexcept : mRenderer(), mInitialRenderReportedDocumentId(0), mOverlaySources() {
 }
 
 MRMiniMapRenderer &MRMiniMapDerivedState::renderer() noexcept {
@@ -19,18 +19,6 @@ void MRMiniMapDerivedState::markInitialRenderReported(std::size_t documentId) no
 	mInitialRenderReportedDocumentId = documentId;
 }
 
-std::chrono::steady_clock::time_point MRMiniMapDerivedState::lastEditAt() const noexcept {
-	return mLastEditAt;
-}
-
-void MRMiniMapDerivedState::setLastEditAt(std::chrono::steady_clock::time_point value) noexcept {
-	mLastEditAt = value;
-}
-
-void MRMiniMapDerivedState::clearLastEditAt() noexcept {
-	mLastEditAt = std::chrono::steady_clock::time_point();
-}
-
 const MRMiniMapRenderer::OverlaySources &MRMiniMapDerivedState::overlaySources() const noexcept {
 	return mOverlaySources;
 }
@@ -43,11 +31,6 @@ void MRMiniMapDerivedState::setFindRanges(const std::vector<mr::editor::Range> &
 void MRMiniMapDerivedState::setDirtyRanges(const std::vector<mr::editor::Range> &ranges) {
 	mOverlaySources.dirtyRanges = std::make_shared<const std::vector<mr::editor::Range>>(ranges);
 	++mOverlaySources.revision;
-}
-
-void MRMiniMapDerivedState::setCompilerRanges(const std::vector<mr::editor::Range> &errorRanges, const std::vector<mr::editor::Range> &warningRanges) {
-	adoptCompilerRanges(std::make_shared<const std::vector<mr::editor::Range>>(errorRanges),
-	                    std::make_shared<const std::vector<mr::editor::Range>>(warningRanges));
 }
 
 void MRMiniMapDerivedState::adoptCompilerRanges(const std::shared_ptr<const std::vector<mr::editor::Range>> &errorRanges,

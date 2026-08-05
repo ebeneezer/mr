@@ -48,11 +48,9 @@ struct EditProfileDraft {
 [[nodiscard]] std::string readRecordField(const char *value);
 void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
 [[nodiscard]] bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs);
-void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDialogRecord &record);
 [[nodiscard]] bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings, std::string &errorText);
 [[nodiscard]] std::vector<std::string> splitExtensionLiteral(const std::string &literal);
 void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileExtensionEditorSettingsDialogRecord &record);
-[[nodiscard]] bool normalizeDraftSyntax(EditProfileDraft &draft, std::string &errorText);
 [[nodiscard]] bool normalizeDraftListSyntax(std::vector<EditProfileDraft> &drafts, std::string &errorText);
 [[nodiscard]] bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs);
 [[nodiscard]] bool draftListsEqual(const std::vector<EditProfileDraft> &lhs, const std::vector<EditProfileDraft> &rhs);
@@ -67,7 +65,6 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 }
 [[nodiscard]] bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std::string &errorText);
 [[nodiscard]] std::vector<std::string> dirtyDraftIds(const std::vector<EditProfileDraft> &initialDrafts, const std::vector<EditProfileDraft> &drafts);
-[[nodiscard]] std::string joinCommaSeparated(const std::vector<std::string> &values);
 
 } // namespace MRFileExtensionProfilesInternal
 

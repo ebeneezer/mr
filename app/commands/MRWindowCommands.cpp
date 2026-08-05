@@ -509,28 +509,6 @@ bool closeCurrentEditWindow() {
 	return mrEnsureUsableWorkWindow(false) || currentEditWindow() == nullptr;
 }
 
-bool activateRelativeEditWindow(int delta) {
-	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-	MREditWindow *current = currentEditWindow();
-	std::size_t index;
-
-	if (windows.empty()) return false;
-	if (current == nullptr) return mrActivateEditWindow(windows.front());
-
-	for (index = 0; index < windows.size(); ++index) {
-		if (windows[index] == current) {
-			int nextIndex = static_cast<int>(index) + delta;
-			int count = static_cast<int>(windows.size());
-
-			while (nextIndex < 0)
-				nextIndex += count;
-			nextIndex %= count;
-			return mrActivateEditWindow(windows[static_cast<std::size_t>(nextIndex)]);
-		}
-	}
-	return mrActivateEditWindow(windows.front());
-}
-
 bool activateRelativeDesktopWindow(int delta) {
 	std::vector<MRDesktopWindow *> windows = allDesktopWindowsInZOrder();
 	MRDesktopWindow *current = currentDesktopWindow();
@@ -559,12 +537,6 @@ bool activateRelativeDesktopWindow(int delta) {
 	syncVirtualDesktopVisibility();
 	nativeWindow->select();
 	return true;
-}
-
-bool hideCurrentEditWindow() {
-	MREditWindow *win = currentEditWindow();
-	if (win == nullptr) return false;
-	return hideCurrentDesktopWindow();
 }
 
 bool hideCurrentDesktopWindow() {

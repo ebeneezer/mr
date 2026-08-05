@@ -253,10 +253,6 @@ std::string relativeMacroPathIfPossible(const std::string &path) {
 	return relativeText;
 }
 
-std::vector<MRCompilerProfile> initialCompilerProfilesForDialog() {
-	return configuredCompilerProfiles();
-}
-
 int preferredCompilerProfileIndexForCurrentEditor(const std::vector<MRCompilerProfile> &profiles) {
 	MREditWindow *window = currentEditWindow();
 	MRCompilerProfile effectiveProfile;
@@ -267,10 +263,6 @@ int preferredCompilerProfileIndexForCurrentEditor(const std::vector<MRCompilerPr
 	for (std::size_t i = 0; i < profiles.size(); ++i)
 		if (profiles[i].id == effectiveProfile.id) return static_cast<int>(i);
 	return -1;
-}
-
-bool compilerProfileListsEqual(const std::vector<MRCompilerProfile> &lhs, const std::vector<MRCompilerProfile> &rhs) {
-	return lhs == rhs;
 }
 
 std::vector<std::string> dirtyCompilerProfileIds(const std::vector<MRCompilerProfile> &initialProfiles, const std::vector<MRCompilerProfile> &profiles) {
@@ -908,7 +900,7 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 } // namespace
 
 void runCompilerProfilesDialogFlow() {
-	std::vector<MRCompilerProfile> baselineProfiles = initialCompilerProfilesForDialog();
+	std::vector<MRCompilerProfile> baselineProfiles = configuredCompilerProfiles();
 	std::vector<MRCompilerProfile> workingProfiles = baselineProfiles;
 	bool running = true;
 
@@ -922,7 +914,7 @@ void runCompilerProfilesDialogFlow() {
 		result = dialog->run(editedProfiles);
 		TObject::destroy(dialog);
 
-		const bool changed = mr::dialogs::isDialogDraftDirty(baselineProfiles, editedProfiles, compilerProfileListsEqual);
+		const bool changed = baselineProfiles != editedProfiles;
 		switch (result) {
 			case cmOK:
 				baselineProfiles = editedProfiles;

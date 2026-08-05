@@ -38,10 +38,6 @@ TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
 
-TRect centeredRect(int width, int height) {
-	return mr::dialogs::centeredDialogRect(width, height);
-}
-
 void insertCenteredStaticLine(TDialog *dialog, int width, int y, const std::string &text) {
 	int x = std::max(2, (width - strwidth(text.c_str())) / 2);
 	dialog->insert(new TStaticText(TRect(x, y, width - 2, y + 1), text.c_str()));
@@ -347,7 +343,7 @@ class MRAboutQuoteBox : public TView {
 
 class MRAbout : public MRDialogFoundation {
   public:
-	MRAbout() noexcept : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16, initMrDialogFrame), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false) {
+	MRAbout() noexcept : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(76, 16), "ABOUT", 76, 16, initMrDialogFrame), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false) {
 		eventMask |= evBroadcast;
 		helpCtx = hcDialogAbout;
 		insertCenteredStaticLine(this, size.x, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());

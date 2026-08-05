@@ -66,6 +66,36 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"CURSOR_STATUS_COLOR", "Cursor status color", MREditSettingSection::Display, MREditSettingKind::String, true, kOvCursorStatusColor},
 };
 
+static constexpr std::array<std::string_view, 27> kCodeLanguages = {
+    "AUTO",
+    "BASH",
+    "BASIC",
+    "C",
+    "CPP",
+    "CSHARP",
+    "FISH",
+    "GO",
+    "JAVASCRIPT",
+    "JSON",
+    "KOTLIN",
+    "LATEX",
+    "MAKE",
+    "MARKDOWN",
+    "MRMAC",
+    "NONE",
+    "PASCAL",
+    "PERL",
+    "PYTHON",
+    "RUST",
+    "SWIFT",
+    "SYSTEMD",
+    "TSX",
+    "TYPESCRIPT",
+    "XML",
+    "YAML",
+    "ZSH",
+};
+
 bool parseBooleanLiteral(const std::string &value, bool &outValue, std::string *errorMessage) {
 	std::string upper = upperAscii(trimAscii(value));
 
@@ -201,6 +231,12 @@ std::string normalizeIndentStyle(const std::string &value) {
 	if (key == "AUTOMATIC" || key == "AUTO") return kIndentStyleAutomatic;
 	if (key == "SMART") return kIndentStyleSmart;
 	return std::string();
+}
+
+bool normalizeCodeLanguage(const std::string &value, std::string &outValue) {
+	outValue = upperAscii(trimAscii(value));
+	if (outValue.empty()) outValue = "NONE";
+	return std::binary_search(kCodeLanguages.begin(), kCodeLanguages.end(), std::string_view(outValue));
 }
 
 std::string normalizeFileType(const std::string &value) {
@@ -534,202 +570,253 @@ bool normalizeEditExtensionSelectorsInPlace(std::vector<std::string> &selectors,
 }
 
 bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string &keyName, const std::string &value, std::string *errorMessage) {
-	std::string upperKeyName = upperAscii(trimAscii(keyName));
+	const MREditSettingDescriptor *descriptor = editSettingDescriptorByKeyInternal(keyName);
 	std::string normalized;
 
-	if (upperKeyName == "PAGE_BREAK") current.pageBreak = normalizePageBreakLiteral(value);
-	else if (upperKeyName == "WORD_DELIMITERS") {
-		if (trimAscii(value).empty()) current.wordDelimiters = resolveEditSetupDefaults().wordDelimiters;
-		else
-			current.wordDelimiters = value;
-	} else if (upperKeyName == "DEFAULT_EXTENSIONS")
-		current.defaultExtensions = canonicalDefaultExtensionsLiteral(value);
-	else if (upperKeyName == "TRUNCATE_SPACES") {
-		if (!parseAndAssignBooleanLiteral(value, current.truncateSpaces, errorMessage)) return false;
-	} else if (upperKeyName == "EOF_CTRL_Z") {
-		if (!parseAndAssignBooleanLiteral(value, current.eofCtrlZ, errorMessage)) return false;
-	} else if (upperKeyName == "EOF_CR_LF") {
-		if (!parseAndAssignBooleanLiteral(value, current.eofCrLf, errorMessage)) return false;
-	} else if (upperKeyName == "TAB_EXPAND") {
-		if (!parseAndAssignBooleanLiteral(value, current.tabExpand, errorMessage)) return false;
-	} else if (upperKeyName == "DISPLAY_TABS") {
-		if (!parseAndAssignBooleanLiteral(value, current.displayTabs, errorMessage)) return false;
-	} else if (upperKeyName == "TAB_SIZE") {
-		int tabSize = 0;
-		if (!parseTabSizeLiteral(value, tabSize, errorMessage)) return false;
-		current.tabSize = tabSize;
-		current.formatLine = defaultEditFormatLineForTabSize(current.tabSize, current.leftMargin, current.rightMargin);
-	} else if (upperKeyName == "LEFT_MARGIN") {
-		int leftMargin = 0;
-		if (!parseLeftMarginLiteral(value, leftMargin, errorMessage)) return false;
-		current.leftMargin = leftMargin;
-		current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin, current.rightMargin, current.tabSize);
-	} else if (upperKeyName == "RIGHT_MARGIN") {
-		int rightMargin = 0;
-		if (!parseRightMarginLiteral(value, rightMargin, errorMessage)) return false;
-		current.rightMargin = rightMargin;
-		current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin, current.rightMargin, current.tabSize);
-	} else if (upperKeyName == "FORMAT_RULER") {
-		if (!parseAndAssignBooleanLiteral(value, current.formatRuler, errorMessage)) return false;
-	} else if (upperKeyName == "WORD_WRAP") {
-		if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage)) return false;
-	} else if (upperKeyName == "INDENT_STYLE") {
-		normalized = normalizeIndentStyle(value);
-		if (normalized.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
-		current.indentStyle = normalized;
-	} else if (upperKeyName == "CODE_LANGUAGE") {
-		normalized = upperAscii(trimAscii(value));
-		if (normalized.empty()) normalized = "NONE";
-		if (normalized != "NONE" && normalized != "AUTO" && normalized != "C" && normalized != "CPP" && normalized != "PYTHON" && normalized != "JAVASCRIPT" && normalized != "TYPESCRIPT" && normalized != "TSX" &&
-			normalized != "BASH" && normalized != "ZSH" && normalized != "FISH" && normalized != "JSON" && normalized != "YAML" && normalized != "XML" && normalized != "PERL" && normalized != "SWIFT" &&
-			normalized != "RUST" && normalized != "GO" && normalized != "PASCAL" && normalized != "BASIC" && normalized != "SYSTEMD" && normalized != "MAKE" && normalized != "MRMAC" && normalized != "MARKDOWN" && normalized != "LATEX" &&
-			normalized != "KOTLIN" && normalized != "CSHARP")
-			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, BASIC, SYSTEMD, MAKE, MRMAC, MARKDOWN, LATEX, KOTLIN or CSHARP.");
-		current.codeLanguage = normalized;
-	} else if (upperKeyName == "CODE_COLORING") {
-		if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
-	} else if (upperKeyName == "FILE_TYPE") {
-		normalized = normalizeFileType(value);
-		if (normalized.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
-		current.fileType = normalized;
-	} else if (upperKeyName == "BINARY_RECORD_LENGTH") {
-		int binaryRecordLength = 0;
-		if (!parseBinaryRecordLengthLiteral(value, binaryRecordLength, errorMessage)) return false;
-		current.binaryRecordLength = binaryRecordLength;
-	} else if (upperKeyName == "POST_LOAD_MACRO")
-		current.postLoadMacro = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
-	else if (upperKeyName == "PRE_SAVE_MACRO")
-		current.preSaveMacro = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
-	else if (upperKeyName == "DEFAULT_PATH")
-		current.defaultPath = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
-	else if (upperKeyName == "FORMAT_LINE") {
-		int leftMargin = current.leftMargin;
-		int rightMargin = current.rightMargin;
-		if (!normalizeEditFormatLine(value, current.tabSize, current.leftMargin, current.rightMargin, normalized, &leftMargin, &rightMargin, errorMessage)) return false;
-		current.formatLine = normalized;
-		current.leftMargin = leftMargin;
-		current.rightMargin = rightMargin;
-	} else if (upperKeyName == "BACKUP_FILES") {
-		if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage)) return false;
-		if (!current.backupFiles) current.backupMethod = kBackupMethodOff;
-		else if (normalizeBackupMethod(current.backupMethod).empty() || current.backupMethod == kBackupMethodOff)
-			current.backupMethod = kBackupMethodBakFile;
-	} else if (upperKeyName == "BACKUP_METHOD") {
-		normalized = normalizeBackupMethod(value);
-		if (normalized.empty()) return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
-		current.backupMethod = normalized;
-		current.backupFiles = normalized != kBackupMethodOff;
-	} else if (upperKeyName == "BACKUP_FREQUENCY") {
-		normalized = normalizeBackupFrequency(value);
-		if (normalized.empty()) return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
-		current.backupFrequency = normalized;
-	} else if (upperKeyName == "BACKUP_EXTENSION")
-		current.backupExtension = normalizeBackupExtension(value);
-	else if (upperKeyName == "BACKUP_DIRECTORY")
-		current.backupDirectory = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
-	else if (upperKeyName == "AUTOSAVE_INACTIVITY_SECONDS") {
-		int parsedSeconds = 0;
-		if (!normalizeAutosaveSeconds(value, kMinAutosaveInactivitySeconds, kMaxAutosaveInactivitySeconds, parsedSeconds, "AUTOSAVE_INACTIVITY_SECONDS", errorMessage)) return false;
-		current.autosaveInactivitySeconds = parsedSeconds;
-	} else if (upperKeyName == "AUTOSAVE_INTERVAL_SECONDS") {
-		int parsedSeconds = 0;
-		if (!normalizeAutosaveSeconds(value, kMinAutosaveIntervalSeconds, kMaxAutosaveIntervalSeconds, parsedSeconds, "AUTOSAVE_INTERVAL_SECONDS", errorMessage)) return false;
-		current.autosaveIntervalSeconds = parsedSeconds;
-	} else if (upperKeyName == "SHOW_EOF_MARKER") {
-		if (!parseAndAssignBooleanLiteral(value, current.showEofMarker, errorMessage)) return false;
-	} else if (upperKeyName == "SHOW_EOF_MARKER_EMOJI") {
-		if (!parseAndAssignBooleanLiteral(value, current.showEofMarkerEmoji, errorMessage)) return false;
-	} else if (upperKeyName == "LINE_NUMBERS_POSITION") {
-		normalized = normalizeLineNumbersPosition(value);
-		if (normalized.empty()) return setError(errorMessage, "LINE_NUMBERS_POSITION must be OFF, LEADING or TRAILING.");
-		current.lineNumbersPosition = normalized;
-		current.showLineNumbers = normalized != kLineNumbersPositionOff;
-	} else if (upperKeyName == "LINE_NUM_ZERO_FILL") {
-		if (!parseAndAssignBooleanLiteral(value, current.lineNumZeroFill, errorMessage)) return false;
-	} else if (upperKeyName == "MINIMAP_POSITION") {
-		normalized = normalizeMiniMapPosition(value);
-		if (normalized.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
-		current.miniMapPosition = normalized;
-	} else if (upperKeyName == "MINIMAP_WIDTH") {
-		int miniMapWidth = 0;
-		if (!parseMiniMapWidthLiteral(value, miniMapWidth, errorMessage)) return false;
-		current.miniMapWidth = miniMapWidth;
-	} else if (upperKeyName == "MINIMAP_MARKER_GLYPH") {
-		if (!normalizeMiniMapMarkerGlyph(value, normalized, errorMessage)) return false;
-		current.miniMapMarkerGlyph = normalized;
-	} else if (upperKeyName == "GUTTERS")
-		current.gutters = normalizeGuttersOrder(value);
-	else if (upperKeyName == "PERSISTENT_BLOCKS") {
-		if (!parseAndAssignBooleanLiteral(value, current.persistentBlocks, errorMessage)) return false;
-	} else if (upperKeyName == "CODE_FOLDING_POSITION") {
-		normalized = normalizeCodeFoldingPosition(value);
-		if (normalized.empty()) return setError(errorMessage, "CODE_FOLDING_POSITION must be OFF, LEADING or TRAILING.");
-		current.codeFoldingPosition = normalized;
-		current.codeFolding = normalized != kCodeFoldingPositionOff;
-	} else if (upperKeyName == "BLOCK_MOVE") {
-		normalized = normalizeColumnBlockMove(value);
-		if (normalized.empty()) return setError(errorMessage, "BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
-		current.columnBlockMove = normalized;
-	} else if (upperKeyName == "DEFAULT_MODE") {
-		normalized = normalizeDefaultMode(value);
-		if (normalized.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
-		current.defaultMode = normalized;
-	} else if (upperKeyName == "CURSOR_STATUS_COLOR") {
-		if (!normalizeCursorStatusColor(value, normalized, errorMessage)) return false;
-		current.cursorStatusColor = normalized;
-	} else
-		return setError(errorMessage, "Unknown edit setting key.");
+	if (descriptor == nullptr) return setError(errorMessage, "Unknown edit setting key.");
+	switch (descriptor->overrideBit) {
+		case kOvPageBreak:
+			current.pageBreak = normalizePageBreakLiteral(value);
+			break;
+		case kOvWordDelimiters:
+			if (trimAscii(value).empty()) current.wordDelimiters = resolveEditSetupDefaults().wordDelimiters;
+			else
+				current.wordDelimiters = value;
+			break;
+		case kOvDefaultExtensions:
+			current.defaultExtensions = canonicalDefaultExtensionsLiteral(value);
+			break;
+		case kOvTruncateSpaces:
+			if (!parseAndAssignBooleanLiteral(value, current.truncateSpaces, errorMessage)) return false;
+			break;
+		case kOvEofCtrlZ:
+			if (!parseAndAssignBooleanLiteral(value, current.eofCtrlZ, errorMessage)) return false;
+			break;
+		case kOvEofCrLf:
+			if (!parseAndAssignBooleanLiteral(value, current.eofCrLf, errorMessage)) return false;
+			break;
+		case kOvTabExpand:
+			if (!parseAndAssignBooleanLiteral(value, current.tabExpand, errorMessage)) return false;
+			break;
+		case kOvDisplayTabs:
+			if (!parseAndAssignBooleanLiteral(value, current.displayTabs, errorMessage)) return false;
+			break;
+		case kOvTabSize: {
+			int tabSize = 0;
+			if (!parseTabSizeLiteral(value, tabSize, errorMessage)) return false;
+			current.tabSize = tabSize;
+			current.formatLine = defaultEditFormatLineForTabSize(current.tabSize, current.leftMargin, current.rightMargin);
+			break;
+		}
+		case kOvLeftMargin: {
+			int leftMargin = 0;
+			if (!parseLeftMarginLiteral(value, leftMargin, errorMessage)) return false;
+			current.leftMargin = leftMargin;
+			current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin, current.rightMargin, current.tabSize);
+			break;
+		}
+		case kOvRightMargin: {
+			int rightMargin = 0;
+			if (!parseRightMarginLiteral(value, rightMargin, errorMessage)) return false;
+			current.rightMargin = rightMargin;
+			current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin, current.rightMargin, current.tabSize);
+			break;
+		}
+		case kOvFormatRuler:
+			if (!parseAndAssignBooleanLiteral(value, current.formatRuler, errorMessage)) return false;
+			break;
+		case kOvWordWrap:
+			if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage)) return false;
+			break;
+		case kOvIndentStyle:
+			normalized = normalizeIndentStyle(value);
+			if (normalized.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
+			current.indentStyle = normalized;
+			break;
+		case kOvCodeLanguage:
+			if (!normalizeCodeLanguage(value, normalized)) return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, BASIC, SYSTEMD, MAKE, MRMAC, MARKDOWN, LATEX, KOTLIN or CSHARP.");
+			current.codeLanguage = normalized;
+			break;
+		case kOvCodeColoring:
+			if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
+			break;
+		case kOvFileType:
+			normalized = normalizeFileType(value);
+			if (normalized.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
+			current.fileType = normalized;
+			break;
+		case kOvBinaryRecordLength: {
+			int binaryRecordLength = 0;
+			if (!parseBinaryRecordLengthLiteral(value, binaryRecordLength, errorMessage)) return false;
+			current.binaryRecordLength = binaryRecordLength;
+			break;
+		}
+		case kOvPostLoadMacro:
+			current.postLoadMacro = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
+			break;
+		case kOvPreSaveMacro:
+			current.preSaveMacro = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
+			break;
+		case kOvDefaultPath:
+			current.defaultPath = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
+			break;
+		case kOvFormatLine: {
+			int leftMargin = current.leftMargin;
+			int rightMargin = current.rightMargin;
+			if (!normalizeEditFormatLine(value, current.tabSize, current.leftMargin, current.rightMargin, normalized, &leftMargin, &rightMargin, errorMessage)) return false;
+			current.formatLine = normalized;
+			current.leftMargin = leftMargin;
+			current.rightMargin = rightMargin;
+			break;
+		}
+		case kOvBackupFiles:
+			if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage)) return false;
+			if (!current.backupFiles) current.backupMethod = kBackupMethodOff;
+			else if (normalizeBackupMethod(current.backupMethod).empty() || current.backupMethod == kBackupMethodOff)
+				current.backupMethod = kBackupMethodBakFile;
+			break;
+		case kOvBackupMethod:
+			normalized = normalizeBackupMethod(value);
+			if (normalized.empty()) return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
+			current.backupMethod = normalized;
+			current.backupFiles = normalized != kBackupMethodOff;
+			break;
+		case kOvBackupFrequency:
+			normalized = normalizeBackupFrequency(value);
+			if (normalized.empty()) return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
+			current.backupFrequency = normalized;
+			break;
+		case kOvBackupExtension:
+			current.backupExtension = normalizeBackupExtension(value);
+			break;
+		case kOvBackupDirectory:
+			current.backupDirectory = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
+			break;
+		case kOvAutosaveInactivitySeconds: {
+			int parsedSeconds = 0;
+			if (!normalizeAutosaveSeconds(value, kMinAutosaveInactivitySeconds, kMaxAutosaveInactivitySeconds, parsedSeconds, "AUTOSAVE_INACTIVITY_SECONDS", errorMessage)) return false;
+			current.autosaveInactivitySeconds = parsedSeconds;
+			break;
+		}
+		case kOvAutosaveIntervalSeconds: {
+			int parsedSeconds = 0;
+			if (!normalizeAutosaveSeconds(value, kMinAutosaveIntervalSeconds, kMaxAutosaveIntervalSeconds, parsedSeconds, "AUTOSAVE_INTERVAL_SECONDS", errorMessage)) return false;
+			current.autosaveIntervalSeconds = parsedSeconds;
+			break;
+		}
+		case kOvShowEofMarker:
+			if (!parseAndAssignBooleanLiteral(value, current.showEofMarker, errorMessage)) return false;
+			break;
+		case kOvShowEofMarkerEmoji:
+			if (!parseAndAssignBooleanLiteral(value, current.showEofMarkerEmoji, errorMessage)) return false;
+			break;
+		case kOvLineNumbersPosition:
+			normalized = normalizeLineNumbersPosition(value);
+			if (normalized.empty()) return setError(errorMessage, "LINE_NUMBERS_POSITION must be OFF, LEADING or TRAILING.");
+			current.lineNumbersPosition = normalized;
+			current.showLineNumbers = normalized != kLineNumbersPositionOff;
+			break;
+		case kOvLineNumZeroFill:
+			if (!parseAndAssignBooleanLiteral(value, current.lineNumZeroFill, errorMessage)) return false;
+			break;
+		case kOvMiniMapPosition:
+			normalized = normalizeMiniMapPosition(value);
+			if (normalized.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
+			current.miniMapPosition = normalized;
+			break;
+		case kOvMiniMapWidth: {
+			int miniMapWidth = 0;
+			if (!parseMiniMapWidthLiteral(value, miniMapWidth, errorMessage)) return false;
+			current.miniMapWidth = miniMapWidth;
+			break;
+		}
+		case kOvMiniMapMarkerGlyph:
+			if (!normalizeMiniMapMarkerGlyph(value, normalized, errorMessage)) return false;
+			current.miniMapMarkerGlyph = normalized;
+			break;
+		case kOvGutters:
+			current.gutters = normalizeGuttersOrder(value);
+			break;
+		case kOvPersistentBlocks:
+			if (!parseAndAssignBooleanLiteral(value, current.persistentBlocks, errorMessage)) return false;
+			break;
+		case kOvCodeFoldingPosition:
+			normalized = normalizeCodeFoldingPosition(value);
+			if (normalized.empty()) return setError(errorMessage, "CODE_FOLDING_POSITION must be OFF, LEADING or TRAILING.");
+			current.codeFoldingPosition = normalized;
+			current.codeFolding = normalized != kCodeFoldingPositionOff;
+			break;
+		case kOvColumnBlockMove:
+			normalized = normalizeColumnBlockMove(value);
+			if (normalized.empty()) return setError(errorMessage, "BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
+			current.columnBlockMove = normalized;
+			break;
+		case kOvDefaultMode:
+			normalized = normalizeDefaultMode(value);
+			if (normalized.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
+			current.defaultMode = normalized;
+			break;
+		case kOvCursorStatusColor:
+			if (!normalizeCursorStatusColor(value, normalized, errorMessage)) return false;
+			current.cursorStatusColor = normalized;
+			break;
+		default:
+			return setError(errorMessage, "Unknown edit setting key.");
+	}
 
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string editSetupValueLiteral(const MREditSetupSettings &settings, const char *key) {
-	std::string upperKey = upperAscii(trimAscii(key != nullptr ? key : ""));
+	const MREditSettingDescriptor *descriptor = key != nullptr ? editSettingDescriptorByKeyInternal(key) : nullptr;
 
-	if (upperKey == "PAGE_BREAK") return settings.pageBreak;
-	if (upperKey == "WORD_DELIMITERS") return settings.wordDelimiters;
-	if (upperKey == "DEFAULT_EXTENSIONS") return settings.defaultExtensions;
-	if (upperKey == "TRUNCATE_SPACES") return formatEditSetupBoolean(settings.truncateSpaces);
-	if (upperKey == "EOF_CTRL_Z") return formatEditSetupBoolean(settings.eofCtrlZ);
-	if (upperKey == "EOF_CR_LF") return formatEditSetupBoolean(settings.eofCrLf);
-	if (upperKey == "TAB_EXPAND") return formatEditSetupBoolean(settings.tabExpand);
-	if (upperKey == "DISPLAY_TABS") return formatEditSetupBoolean(settings.displayTabs);
-	if (upperKey == "TAB_SIZE") return std::to_string(settings.tabSize);
-	if (upperKey == "LEFT_MARGIN") return std::to_string(settings.leftMargin);
-	if (upperKey == "RIGHT_MARGIN") return std::to_string(settings.rightMargin);
-	if (upperKey == "FORMAT_RULER") return formatEditSetupBoolean(settings.formatRuler);
-	if (upperKey == "WORD_WRAP") return formatEditSetupBoolean(settings.wordWrap);
-	if (upperKey == "INDENT_STYLE") return settings.indentStyle;
-	if (upperKey == "CODE_LANGUAGE") return settings.codeLanguage;
-	if (upperKey == "CODE_COLORING") return formatEditSetupBoolean(settings.codeColoring);
-	if (upperKey == "FILE_TYPE") return settings.fileType;
-	if (upperKey == "BINARY_RECORD_LENGTH") return std::to_string(settings.binaryRecordLength);
-	if (upperKey == "POST_LOAD_MACRO") return settings.postLoadMacro;
-	if (upperKey == "PRE_SAVE_MACRO") return settings.preSaveMacro;
-	if (upperKey == "DEFAULT_PATH") return settings.defaultPath;
-	if (upperKey == "FORMAT_LINE") return settings.formatLine;
-	if (upperKey == "BACKUP_FILES") return formatEditSetupBoolean(settings.backupFiles);
-	if (upperKey == "BACKUP_METHOD") return settings.backupMethod;
-	if (upperKey == "BACKUP_FREQUENCY") return settings.backupFrequency;
-	if (upperKey == "BACKUP_EXTENSION") return settings.backupExtension;
-	if (upperKey == "BACKUP_DIRECTORY") return settings.backupDirectory;
-	if (upperKey == "AUTOSAVE_INACTIVITY_SECONDS") return std::to_string(settings.autosaveInactivitySeconds);
-	if (upperKey == "AUTOSAVE_INTERVAL_SECONDS") return std::to_string(settings.autosaveIntervalSeconds);
-	if (upperKey == "SHOW_EOF_MARKER") return formatEditSetupBoolean(settings.showEofMarker);
-	if (upperKey == "SHOW_EOF_MARKER_EMOJI") return formatEditSetupBoolean(settings.showEofMarkerEmoji);
-	if (upperKey == "LINE_NUMBERS_POSITION") return settings.lineNumbersPosition;
-	if (upperKey == "LINE_NUM_ZERO_FILL") return formatEditSetupBoolean(settings.lineNumZeroFill);
-	if (upperKey == "MINIMAP_POSITION") return settings.miniMapPosition;
-	if (upperKey == "MINIMAP_WIDTH") return std::to_string(settings.miniMapWidth);
-	if (upperKey == "MINIMAP_MARKER_GLYPH") return settings.miniMapMarkerGlyph;
-	if (upperKey == "GUTTERS") return settings.gutters;
-	if (upperKey == "PERSISTENT_BLOCKS") return formatEditSetupBoolean(settings.persistentBlocks);
-	if (upperKey == "CODE_FOLDING_POSITION") return settings.codeFoldingPosition;
-	if (upperKey == "BLOCK_MOVE") return settings.columnBlockMove;
-	if (upperKey == "DEFAULT_MODE") return settings.defaultMode;
-	if (upperKey == "CURSOR_STATUS_COLOR") return settings.cursorStatusColor;
-	return std::string();
+	if (descriptor == nullptr) return std::string();
+	switch (descriptor->overrideBit) {
+		case kOvPageBreak: return settings.pageBreak;
+		case kOvWordDelimiters: return settings.wordDelimiters;
+		case kOvDefaultExtensions: return settings.defaultExtensions;
+		case kOvTruncateSpaces: return formatEditSetupBoolean(settings.truncateSpaces);
+		case kOvEofCtrlZ: return formatEditSetupBoolean(settings.eofCtrlZ);
+		case kOvEofCrLf: return formatEditSetupBoolean(settings.eofCrLf);
+		case kOvTabExpand: return formatEditSetupBoolean(settings.tabExpand);
+		case kOvDisplayTabs: return formatEditSetupBoolean(settings.displayTabs);
+		case kOvTabSize: return std::to_string(settings.tabSize);
+		case kOvLeftMargin: return std::to_string(settings.leftMargin);
+		case kOvRightMargin: return std::to_string(settings.rightMargin);
+		case kOvFormatRuler: return formatEditSetupBoolean(settings.formatRuler);
+		case kOvWordWrap: return formatEditSetupBoolean(settings.wordWrap);
+		case kOvIndentStyle: return settings.indentStyle;
+		case kOvCodeLanguage: return settings.codeLanguage;
+		case kOvCodeColoring: return formatEditSetupBoolean(settings.codeColoring);
+		case kOvFileType: return settings.fileType;
+		case kOvBinaryRecordLength: return std::to_string(settings.binaryRecordLength);
+		case kOvPostLoadMacro: return settings.postLoadMacro;
+		case kOvPreSaveMacro: return settings.preSaveMacro;
+		case kOvDefaultPath: return settings.defaultPath;
+		case kOvFormatLine: return settings.formatLine;
+		case kOvBackupFiles: return formatEditSetupBoolean(settings.backupFiles);
+		case kOvBackupMethod: return settings.backupMethod;
+		case kOvBackupFrequency: return settings.backupFrequency;
+		case kOvBackupExtension: return settings.backupExtension;
+		case kOvBackupDirectory: return settings.backupDirectory;
+		case kOvAutosaveInactivitySeconds: return std::to_string(settings.autosaveInactivitySeconds);
+		case kOvAutosaveIntervalSeconds: return std::to_string(settings.autosaveIntervalSeconds);
+		case kOvShowEofMarker: return formatEditSetupBoolean(settings.showEofMarker);
+		case kOvShowEofMarkerEmoji: return formatEditSetupBoolean(settings.showEofMarkerEmoji);
+		case kOvLineNumbersPosition: return settings.lineNumbersPosition;
+		case kOvLineNumZeroFill: return formatEditSetupBoolean(settings.lineNumZeroFill);
+		case kOvMiniMapPosition: return settings.miniMapPosition;
+		case kOvMiniMapWidth: return std::to_string(settings.miniMapWidth);
+		case kOvMiniMapMarkerGlyph: return settings.miniMapMarkerGlyph;
+		case kOvGutters: return settings.gutters;
+		case kOvPersistentBlocks: return formatEditSetupBoolean(settings.persistentBlocks);
+		case kOvCodeFoldingPosition: return settings.codeFoldingPosition;
+		case kOvColumnBlockMove: return settings.columnBlockMove;
+		case kOvDefaultMode: return settings.defaultMode;
+		case kOvCursorStatusColor: return settings.cursorStatusColor;
+		default: return std::string();
+	}
 }
 
 MREditSetupSettings configuredEditSetupSettings() {
@@ -748,7 +835,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string defaultMode = normalizeDefaultMode(settings.defaultMode);
 	std::string indentStyle = normalizeIndentStyle(settings.indentStyle);
 	std::string fileType = normalizeFileType(settings.fileType);
-	std::string codeLanguage = upperAscii(trimAscii(settings.codeLanguage));
+	std::string codeLanguage;
 	std::string lineNumbersPosition = normalizeLineNumbersPosition(settings.lineNumbersPosition);
 	std::string miniMapPosition = normalizeMiniMapPosition(settings.miniMapPosition);
 	std::string codeFoldingPosition = normalizeCodeFoldingPosition(settings.codeFoldingPosition);
@@ -766,12 +853,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (columnStyle.empty()) return setError(errorMessage, "BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
 	if (defaultMode.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 	if (indentStyle.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
-	if (codeLanguage.empty()) codeLanguage = "NONE";
-	if (codeLanguage != "NONE" && codeLanguage != "AUTO" && codeLanguage != "C" && codeLanguage != "CPP" && codeLanguage != "PYTHON" && codeLanguage != "JAVASCRIPT" && codeLanguage != "TYPESCRIPT" && codeLanguage != "TSX" &&
-		codeLanguage != "BASH" && codeLanguage != "ZSH" && codeLanguage != "FISH" && codeLanguage != "JSON" && codeLanguage != "YAML" && codeLanguage != "XML" && codeLanguage != "PERL" && codeLanguage != "SWIFT" &&
-		codeLanguage != "RUST" && codeLanguage != "GO" && codeLanguage != "PASCAL" && codeLanguage != "BASIC" && codeLanguage != "SYSTEMD" && codeLanguage != "MAKE" && codeLanguage != "MRMAC" && codeLanguage != "MARKDOWN" &&
-		codeLanguage != "LATEX" && codeLanguage != "KOTLIN" && codeLanguage != "CSHARP")
-		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, BASIC, SYSTEMD, MAKE, MRMAC, MARKDOWN, LATEX, KOTLIN or CSHARP.");
+	if (!normalizeCodeLanguage(settings.codeLanguage, codeLanguage)) return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, BASIC, SYSTEMD, MAKE, MRMAC, MARKDOWN, LATEX, KOTLIN or CSHARP.");
 	if (fileType.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
 	if (lineNumbersPosition.empty()) lineNumbersPosition = settings.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
 	if (miniMapPosition.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");

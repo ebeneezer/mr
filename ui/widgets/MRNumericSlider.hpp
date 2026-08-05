@@ -37,20 +37,6 @@ class MRNumericSlider : public TView {
 	}
 	void setValue(int32_t aValue) noexcept;
 	void setRange(int32_t aMin, int32_t aMax) noexcept;
-	void setStep(int32_t aStep) noexcept;
-	void setPageStep(int32_t aPageStep) noexcept;
-	void setFormat(Format aFormat) noexcept;
-
-	[[nodiscard]] Format getFormat() const noexcept {
-		return format;
-	}
-	[[nodiscard]] ushort getChangedCommand() const noexcept {
-		return changedCmd;
-	}
-	void setChangedCommand(ushort cmd) noexcept {
-		changedCmd = cmd;
-	}
-	void setClusterPalette(Boolean enable) noexcept;
 
   private:
 	static int32_t absOrOne(int32_t v) noexcept;
@@ -65,7 +51,6 @@ class MRNumericSlider : public TView {
 	[[nodiscard]] int32_t valueFromMouseX(int x, int dragOffset) const noexcept;
 
 	void recalcMetrics() noexcept;
-	[[nodiscard]] int calcTextWidth() const noexcept;
 	void formatValue(char *dst, size_t dstSize, int32_t v) const noexcept;
 	void setValueInternal(int32_t aValue, Boolean redraw, Boolean notify) noexcept;
 	void changeBy(int32_t delta) noexcept;
@@ -81,7 +66,6 @@ class MRNumericSlider : public TView {
 	int textWidth;
 	Format format;
 	ushort changedCmd;
-	Boolean clusterPalette;
 };
 
 class MRProgressSlider final : public MRNumericSlider {

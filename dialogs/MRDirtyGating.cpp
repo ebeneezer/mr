@@ -29,10 +29,6 @@ TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
 
-TRect centeredRect(int width, int height) {
-	return mr::dialogs::centeredDialogRect(width, height);
-}
-
 void insertStaticLine(TDialog *dialog, int x, int y, const std::string &text) {
 	const int width = dialog != nullptr ? dialog->size.x : 0;
 	int left = x;
@@ -160,7 +156,7 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
 	const int height = std::max(hasDetail ? 10 : 8, static_cast<int>(textLines.size()) + 6);
-	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), "CONFIRM", width, height);
+	MRDialogFoundation *dialog = new MRDialogFoundation(mr::dialogs::centeredDialogRect(width, height), "CONFIRM", width, height);
 	int y = 2;
 
 	dialog->helpCtx = hcDialogConfirm;
@@ -201,7 +197,7 @@ UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const cha
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
 	const int height = std::max(hasDetail ? 10 : 8, static_cast<int>(textLines.size()) + 6);
-	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), "CONFIRM", width, height);
+	MRDialogFoundation *dialog = new MRDialogFoundation(mr::dialogs::centeredDialogRect(width, height), "CONFIRM", width, height);
 	int y = 2;
 
 	dialog->helpCtx = hcDialogConfirm;
@@ -242,7 +238,7 @@ bool runDialogConfirm(const char *headline, const char *confirmLabel, const char
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
 	const int height = std::max(8, static_cast<int>(textLines.size()) + 6);
-	MRDialogFoundation *dialog = new MRDialogFoundation(centeredRect(width, height), dialogTitle != nullptr ? dialogTitle : "CONFIRM", width, height);
+	MRDialogFoundation *dialog = new MRDialogFoundation(mr::dialogs::centeredDialogRect(width, height), dialogTitle != nullptr ? dialogTitle : "CONFIRM", width, height);
 	int y = 2;
 
 	dialog->helpCtx = hcDialogConfirm;

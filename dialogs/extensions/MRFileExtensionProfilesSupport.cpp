@@ -20,6 +20,57 @@
 
 namespace MRFileExtensionProfilesInternal {
 
+namespace {
+struct DialogCodeLanguageChoice {
+	const char *canonicalValue;
+	const char *label;
+};
+
+struct DialogCodeLanguageAlias {
+	const char *alias;
+	const char *canonicalValue;
+};
+
+static const DialogCodeLanguageChoice kDialogCodeLanguageChoices[] = {
+    {"NONE", "None"},
+    {"AUTO", "Automatic"},
+    {"C", "C"},
+    {"CPP", "C++"},
+    {"PYTHON", "Python"},
+    {"JAVASCRIPT", "JavaScript"},
+    {"TYPESCRIPT", "TypeScript"},
+    {"TSX", "TSX"},
+    {"BASH", "Bash"},
+    {"ZSH", "zsh"},
+    {"FISH", "fish"},
+    {"JSON", "JSON"},
+    {"YAML", "YAML"},
+    {"XML", "XML"},
+    {"PERL", "Perl"},
+    {"SWIFT", "Swift"},
+    {"RUST", "Rust"},
+    {"GO", "Go"},
+    {"PASCAL", "Pascal"},
+    {"BASIC", "BASIC"},
+    {"LATEX", "LaTeX"},
+    {"KOTLIN", "Kotlin"},
+    {"CSHARP", "C#"},
+    {"SYSTEMD", "systemd et al."},
+};
+
+static const DialogCodeLanguageAlias kDialogCodeLanguageAliases[] = {
+    {"AUTOMATIC", "AUTO"},
+    {"C++", "CPP"},
+    {"FREEBASIC", "BASIC"},
+    {"QB64", "BASIC"},
+    {"QB64PE", "BASIC"},
+    {"GAMBAS", "BASIC"},
+    {"TEX", "LATEX"},
+    {"C#", "CSHARP"},
+    {"SYSTEMD ET AL.", "SYSTEMD"},
+};
+}
+
 std::string readRecordField(const char *value);
 void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
 
@@ -31,127 +82,43 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 	mr::dialogs::writeRecordField(dest, destSize, value);
 }
 
+std::vector<std::string> dialogCodeLanguageChoices() {
+	std::vector<std::string> choices;
+
+	choices.reserve(std::size(kDialogCodeLanguageChoices));
+	for (const DialogCodeLanguageChoice &choice : kDialogCodeLanguageChoices)
+		choices.emplace_back(choice.label);
+	return choices;
+}
+
 const char *dialogCodeLanguageLabel(const std::string &codeLanguage) {
 	const std::string normalized = upperAscii(trimAscii(codeLanguage));
 
-	if (normalized == "AUTO") return "Automatic";
-	if (normalized == "C") return "C";
-	if (normalized == "CPP") return "C++";
-	if (normalized == "PYTHON") return "Python";
-	if (normalized == "JAVASCRIPT") return "JavaScript";
-	if (normalized == "TYPESCRIPT") return "TypeScript";
-	if (normalized == "TSX") return "TSX";
-	if (normalized == "BASH") return "Bash";
-	if (normalized == "ZSH") return "zsh";
-	if (normalized == "FISH") return "fish";
-	if (normalized == "JSON") return "JSON";
-	if (normalized == "YAML") return "YAML";
-	if (normalized == "XML") return "XML";
-	if (normalized == "PERL") return "Perl";
-	if (normalized == "SWIFT") return "Swift";
-	if (normalized == "RUST") return "Rust";
-	if (normalized == "GO") return "Go";
-	if (normalized == "PASCAL") return "Pascal";
-	if (normalized == "BASIC") return "BASIC";
-	if (normalized == "LATEX") return "LaTeX";
-	if (normalized == "KOTLIN") return "Kotlin";
-	if (normalized == "CSHARP") return "C#";
-	if (normalized == "SYSTEMD") return "systemd et al.";
-	return "None";
+	for (const DialogCodeLanguageChoice &choice : kDialogCodeLanguageChoices)
+		if (normalized == choice.canonicalValue) return choice.label;
+	return kDialogCodeLanguageChoices[0].label;
 }
 
 bool parseDialogCodeLanguage(const std::string &dialogValue, std::string &canonicalValue) {
-	const std::string normalized = upperAscii(trimAscii(dialogValue));
+	std::string normalized = upperAscii(trimAscii(dialogValue));
 
-	if (normalized.empty() || normalized == "NONE") canonicalValue = "NONE";
-	else if (normalized == "AUTO" || normalized == "AUTOMATIC") canonicalValue = "AUTO";
-	else if (normalized == "C") canonicalValue = "C";
-	else if (normalized == "C++" || normalized == "CPP") canonicalValue = "CPP";
-	else if (normalized == "PYTHON") canonicalValue = "PYTHON";
-	else if (normalized == "JAVASCRIPT") canonicalValue = "JAVASCRIPT";
-	else if (normalized == "TYPESCRIPT") canonicalValue = "TYPESCRIPT";
-	else if (normalized == "TSX") canonicalValue = "TSX";
-	else if (normalized == "BASH") canonicalValue = "BASH";
-	else if (normalized == "ZSH") canonicalValue = "ZSH";
-	else if (normalized == "FISH") canonicalValue = "FISH";
-	else if (normalized == "JSON") canonicalValue = "JSON";
-	else if (normalized == "YAML") canonicalValue = "YAML";
-	else if (normalized == "XML") canonicalValue = "XML";
-	else if (normalized == "PERL") canonicalValue = "PERL";
-	else if (normalized == "SWIFT") canonicalValue = "SWIFT";
-	else if (normalized == "RUST") canonicalValue = "RUST";
-	else if (normalized == "GO") canonicalValue = "GO";
-	else if (normalized == "PASCAL") canonicalValue = "PASCAL";
-	else if (normalized == "BASIC" || normalized == "FREEBASIC" || normalized == "QB64" || normalized == "QB64PE" || normalized == "GAMBAS") canonicalValue = "BASIC";
-	else if (normalized == "LATEX" || normalized == "TEX") canonicalValue = "LATEX";
-	else if (normalized == "KOTLIN") canonicalValue = "KOTLIN";
-	else if (normalized == "C#" || normalized == "CSHARP") canonicalValue = "CSHARP";
-	else if (normalized == "SYSTEMD" || normalized == "SYSTEMD ET AL.") canonicalValue = "SYSTEMD";
-	else
-		return false;
-	return true;
+	if (normalized.empty()) normalized = "NONE";
+	for (const DialogCodeLanguageChoice &choice : kDialogCodeLanguageChoices)
+		if (normalized == choice.canonicalValue) {
+			canonicalValue = choice.canonicalValue;
+			return true;
+		}
+	for (const DialogCodeLanguageAlias &alias : kDialogCodeLanguageAliases)
+		if (normalized == alias.alias) {
+			canonicalValue = alias.canonicalValue;
+			return true;
+		}
+	return false;
 }
 
 bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs) {
 	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) && readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) && readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) && readRecordField(lhs.codeLanguage) == readRecordField(rhs.codeLanguage) && readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) && readRecordField(lhs.leftMargin) == readRecordField(rhs.leftMargin) && readRecordField(lhs.rightMargin) == readRecordField(rhs.rightMargin) && readRecordField(lhs.binaryRecordLength) == readRecordField(rhs.binaryRecordLength) && readRecordField(lhs.postLoadMacro) == readRecordField(rhs.postLoadMacro) && readRecordField(lhs.preSaveMacro) == readRecordField(rhs.preSaveMacro) && readRecordField(lhs.defaultPath) == readRecordField(rhs.defaultPath) && readRecordField(lhs.formatLine) == readRecordField(rhs.formatLine) && readRecordField(lhs.cursorStatusColor) == readRecordField(rhs.cursorStatusColor) && readRecordField(lhs.miniMapWidth) == readRecordField(rhs.miniMapWidth) &&
 	       readRecordField(lhs.miniMapMarkerGlyph) == readRecordField(rhs.miniMapMarkerGlyph) && readRecordField(lhs.gutters) == readRecordField(rhs.gutters) && lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice && lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice && lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice && lhs.defaultModeChoice == rhs.defaultModeChoice && lhs.lineNumbersPositionChoice == rhs.lineNumbersPositionChoice && lhs.codeFoldingPositionChoice == rhs.codeFoldingPositionChoice && lhs.miniMapPositionChoice == rhs.miniMapPositionChoice;
-}
-
-void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDialogRecord &record) {
-	MRFileExtensionEditorSettings settings = configuredFileExtensionEditorSettings();
-	std::string columnMove = upperAscii(settings.columnBlockMove);
-	std::string defaultMode = upperAscii(settings.defaultMode);
-	std::string indentStyle = upperAscii(settings.indentStyle);
-	std::string fileType = upperAscii(settings.fileType);
-	std::string lineNumbersPosition = upperAscii(settings.lineNumbersPosition);
-	std::string codeFoldingPosition = upperAscii(settings.codeFoldingPosition);
-	std::string miniMapPosition = upperAscii(settings.miniMapPosition);
-
-	std::memset(&record, 0, sizeof(record));
-	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
-	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
-	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
-	writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), dialogCodeLanguageLabel(settings.codeLanguage));
-	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
-	writeRecordField(record.leftMargin, sizeof(record.leftMargin), std::to_string(settings.leftMargin));
-	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
-	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength), std::to_string(settings.binaryRecordLength));
-	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
-	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
-	writeRecordField(record.defaultPath, sizeof(record.defaultPath), settings.defaultPath);
-	writeRecordField(record.formatLine, sizeof(record.formatLine), settings.formatLine);
-	writeRecordField(record.cursorStatusColor, sizeof(record.cursorStatusColor), settings.cursorStatusColor);
-	writeRecordField(record.miniMapWidth, sizeof(record.miniMapWidth), std::to_string(settings.miniMapWidth));
-	writeRecordField(record.miniMapMarkerGlyph, sizeof(record.miniMapMarkerGlyph), settings.miniMapMarkerGlyph);
-	writeRecordField(record.gutters, sizeof(record.gutters), settings.gutters);
-
-	record.optionsMask = 0;
-	if (settings.truncateSpaces) record.optionsMask |= kOptionTruncateSpaces;
-	if (settings.eofCtrlZ) record.optionsMask |= kOptionEofCtrlZ;
-	if (settings.eofCrLf) record.optionsMask |= kOptionEofCrLf;
-	if (settings.wordWrap) record.optionsMask |= kOptionWordWrap;
-	if (settings.showEofMarker) record.optionsMask |= kOptionShowEofMarker;
-	if (settings.showEofMarkerEmoji) {
-		record.optionsMask |= kOptionShowEofMarker;
-		record.optionsMask |= kOptionShowEofMarkerEmoji;
-	}
-	if (settings.persistentBlocks) record.optionsMask |= kOptionPersistentBlocks;
-	if (settings.codeFoldingPosition != "OFF") record.optionsMask |= kOptionCodeFolding;
-	if (settings.lineNumbersPosition != "OFF") record.optionsMask |= kOptionShowLineNumbers;
-	if (settings.lineNumZeroFill) record.optionsMask |= kOptionLineNumZeroFill;
-	if (settings.displayTabs) record.optionsMask |= kOptionDisplayTabs;
-	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
-	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
-	if (settings.backupFiles) record.optionsMask |= kOptionBackupFiles;
-
-	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
-	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;
-	record.fileTypeChoice = (fileType == "LEGACY_TEXT") ? kFileTypeLegacyText : (fileType == "BINARY") ? kFileTypeBinary : kFileTypeUnix;
-	record.columnBlockMoveChoice = (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
-	record.defaultModeChoice = (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
-	record.lineNumbersPositionChoice = (lineNumbersPosition == "LEADING") ? kLineNumbersLeading : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing : kLineNumbersOff;
-	record.codeFoldingPositionChoice = (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing : kCodeFoldingOff;
-	record.miniMapPositionChoice = (miniMapPosition == "LEADING") ? kMiniMapLeading : (miniMapPosition == "TRAILING") ? kMiniMapTrailing : kMiniMapOff;
 }
 
 bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings, std::string &errorText) {
@@ -551,13 +518,6 @@ bool normalizeDraftSyntaxRecord(EditProfileDraft &draft, std::string &errorText)
 	return true;
 }
 
-bool normalizeDraftListSyntaxRecords(std::vector<EditProfileDraft> &drafts, std::string &errorText) {
-	for (EditProfileDraft &draft : drafts)
-		if (!normalizeDraftSyntaxRecord(draft, errorText)) return false;
-	errorText.clear();
-	return true;
-}
-
 [[nodiscard]] bool draftsToConfiguredState(const std::vector<EditProfileDraft> &drafts, MRFileExtensionEditorSettings &defaultsOut, std::vector<MRFileExtensionProfile> &profilesOut, std::string &defaultThemePathOut, std::string &errorText) {
 	bool haveDefault = false;
 	std::string defaultDescription;
@@ -639,16 +599,11 @@ std::string joinCommaSeparatedList(const std::vector<std::string> &values) {
 
 } // namespace
 
-std::string joinCommaSeparated(const std::vector<std::string> &values) {
-	return joinCommaSeparatedList(values);
-}
-
-bool normalizeDraftSyntax(EditProfileDraft &draft, std::string &errorText) {
-	return normalizeDraftSyntaxRecord(draft, errorText);
-}
-
 bool normalizeDraftListSyntax(std::vector<EditProfileDraft> &drafts, std::string &errorText) {
-	return normalizeDraftListSyntaxRecords(drafts, errorText);
+	for (EditProfileDraft &draft : drafts)
+		if (!normalizeDraftSyntaxRecord(draft, errorText)) return false;
+	errorText.clear();
+	return true;
 }
 
 std::vector<std::string> splitExtensionLiteral(const std::string &literal) {
@@ -726,7 +681,7 @@ bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs) {
 	EditProfileDraft normalizedRhs = rhs;
 	std::string errorText;
 
-	if (!normalizeDraftSyntax(normalizedLhs, errorText) || !normalizeDraftSyntax(normalizedRhs, errorText)) return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) && trimAscii(lhs.name) == trimAscii(rhs.name) && trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) && trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) && canonicalCompilerProfileId(lhs.compilerProfileId) == canonicalCompilerProfileId(rhs.compilerProfileId) && fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
+	if (!normalizeDraftSyntaxRecord(normalizedLhs, errorText) || !normalizeDraftSyntaxRecord(normalizedRhs, errorText)) return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) && trimAscii(lhs.name) == trimAscii(rhs.name) && trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) && trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) && canonicalCompilerProfileId(lhs.compilerProfileId) == canonicalCompilerProfileId(rhs.compilerProfileId) && fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
 
 	return normalizedLhs.isDefault == normalizedRhs.isDefault && normalizedLhs.id == normalizedRhs.id && normalizedLhs.name == normalizedRhs.name && normalizedLhs.extensionsLiteral == normalizedRhs.extensionsLiteral && normalizedLhs.colorThemeUri == normalizedRhs.colorThemeUri && normalizedLhs.compilerProfileId == normalizedRhs.compilerProfileId && fileExtensionEditorSettingsDialogRecordsEqual(normalizedLhs.settingsRecord, normalizedRhs.settingsRecord);
 }

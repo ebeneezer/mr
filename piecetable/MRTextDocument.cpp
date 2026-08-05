@@ -590,31 +590,6 @@ void TextDocument::replace(Range range, std::string_view text) {
 	if (replaceNoVersionBump(range, text)) bumpVersion();
 }
 
-void TextDocument::insertFromStaged(Offset offset, const StagedAddBuffer &buffer, TextSpan span) {
-	insert(offset, buffer.sliceText(span));
-}
-
-void TextDocument::replaceFromStaged(Range range, const StagedAddBuffer &buffer, TextSpan span) {
-	replace(range, buffer.sliceText(span));
-}
-
-void TextDocument::flatten() {
-	if ((mPieces == nullptr || mPieces->size() <= 1) && mAddBuffer.size() == 0 && !mMappedOriginal.mapped()) return;
-
-	std::string currentText = text();
-	mOriginalBuffer = std::make_shared<std::string>(std::move(currentText));
-	mMappedOriginal.reset();
-	mAddBuffer.clear();
-
-	ensureUniquePieces();
-	mPieces->clear();
-	mPieces->emplace_back(BufferKind::Original, TextSpan(0, mOriginalBuffer->length()));
-	mLength = mOriginalBuffer->length();
-
-	markDirty();
-	bumpVersion();
-}
-
 bool TextDocument::setTextNoVersionBump(std::string_view text) {
 	if (text == this->text()) return false;
 	initializeFromOriginal(text, false);
@@ -627,14 +602,6 @@ void TextDocument::bumpVersion() noexcept {
 
 void TextDocument::markDirty() noexcept {
 	mCacheDirty = true;
-}
-
-void TextDocument::ensureUniqueOriginalBuffer() {
-	if (!mOriginalBuffer) {
-		mOriginalBuffer = std::make_shared<std::string>();
-		return;
-	}
-	if (!mOriginalBuffer.unique()) mOriginalBuffer = std::make_shared<std::string>(*mOriginalBuffer);
 }
 
 void TextDocument::ensureUniquePieces() {

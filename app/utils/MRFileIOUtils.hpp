@@ -35,7 +35,6 @@ bool writeTextFile(const std::string &path, const std::string &content);
 MRTextSaveOptions textSaveOptionsFromEditSettings(const MREditSetupSettings &settings);
 MRTextSaveOptions effectiveTextSaveOptionsForPath(std::string_view path, std::size_t *outOptionsHash = nullptr);
 std::size_t hashTextSaveOptions(const MRTextSaveOptions &options);
-void resetTextSaveStreamState(MRTextSaveStreamState &state);
 void appendNormalizedTextSaveChunk(std::string_view chunk, const MRTextSaveOptions &options, MRTextSaveStreamState &state, std::string &output);
 void finalizeNormalizedTextSaveStream(const MRTextSaveOptions &options, MRTextSaveStreamState &state, std::string &output);
 std::string normalizeTextForSave(std::string_view content, const MRTextSaveOptions &options);

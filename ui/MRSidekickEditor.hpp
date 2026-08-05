@@ -86,7 +86,6 @@ class MRSidekickEditor : public TView {
 	void clampCursor() noexcept;
 };
 
-bool mrOpenReadOnlySidekick(MREditWindow *parent, const std::string &text, const std::string &title, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);
 bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);
 bool mrOpenSnippetSidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, std::size_t replaceStart, std::size_t replaceEnd, const std::vector<MRSidekickSpan> &placeholders, int anchorViewColumn, int anchorViewRow, bool &committed);
 bool mrHasReadOnlySidekickForParent(const MREditWindow *parent);
@@ -94,6 +93,5 @@ bool mrConsumeReadOnlySidekickDismissedForParent(const MREditWindow *parent);
 bool mrMoveSnippetPlaceholderForParent(const MREditWindow *parent, int direction);
 void mrDropSidekickForParent(const MREditWindow *parent);
 void mrDropActiveSidekick();
-bool mrReadOnlySidekickGeometrySelfTestForRegression(std::string &failureReason);
 
 #endif

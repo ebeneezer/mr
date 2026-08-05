@@ -1,8 +1,6 @@
 #ifndef MRSYNTAXDERIVEDSTATE_HPP
 #define MRSYNTAXDERIVEDSTATE_HPP
 
-#include "MRDerivedStateBase.hpp"
-
 #include "../ui/MRSyntax.hpp"
 
 #include <cstddef>
@@ -33,7 +31,7 @@ struct MRSyntaxCheckpointEntry {
 	}
 };
 
-class MRSyntaxDerivedState : public MRDerivedStateBase {
+class MRSyntaxDerivedState {
   public:
 	MRSyntaxDerivedState() noexcept;
 
@@ -52,12 +50,19 @@ class MRSyntaxDerivedState : public MRDerivedStateBase {
 	bool warmedLineRangesMatch(std::size_t documentId, MRSyntaxLanguage language) const noexcept;
 	void ensureWarmedLineRangeOwner(std::size_t documentId, MRSyntaxLanguage language) noexcept;
 
-	std::size_t warmedLineRangesDocumentId() const noexcept;
-	MRSyntaxLanguage warmedLineRangesLanguage() const noexcept;
+	const std::vector<std::pair<std::size_t, std::size_t>> &validRanges() const noexcept;
 
   private:
+	using LineRange = std::pair<std::size_t, std::size_t>;
+
+	void rememberValidRange(std::size_t startLine, std::size_t endLine) noexcept;
+	void invalidateValidRangesFrom(std::size_t lineIndex) noexcept;
+	bool validRangeCovered(std::size_t startLine, std::size_t endLine) const noexcept;
+	static void normalizeRanges(std::vector<LineRange> &ranges);
+
 	std::map<std::size_t, MRSyntaxCacheEntry> mTokenCache;
 	std::map<std::size_t, MRSyntaxCheckpointEntry> mCheckpoints;
+	std::vector<LineRange> mValidRanges;
 	std::size_t mWarmedLineRangesDocumentId;
 	MRSyntaxLanguage mWarmedLineRangesLanguage;
 };

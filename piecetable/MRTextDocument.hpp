@@ -574,9 +574,6 @@ class TextDocument {
 	void insert(Offset offset, std::string_view text);
 	void erase(Range range);
 	void replace(Range range, std::string_view text);
-	void insertFromStaged(Offset offset, const StagedAddBuffer &buffer, TextSpan span);
-	void replaceFromStaged(Range range, const StagedAddBuffer &buffer, TextSpan span);
-	void flatten();
 
 	[[nodiscard]] Offset clampOffset(Offset pos) const noexcept;
 	[[nodiscard]] std::size_t lineCount() const noexcept;
@@ -609,8 +606,6 @@ class TextDocument {
 	bool hasEditedLineStartIndex() const noexcept;
 	bool hasDirectOriginalView() const noexcept;
 	const char *directTextData() const noexcept;
-	void normalizeLargeMappedEditStateNoVersionBump();
-	void clearEditedLineStartIndex() noexcept;
 	void rebuildEditedLineStartIndex();
 	void updateEditedLineStartIndexForInsert(Offset offset, std::string_view text);
 	void updateEditedLineStartIndexForErase(Range range);
@@ -624,7 +619,6 @@ class TextDocument {
 	void shiftLazyLineIndexForEraseWithoutLineBreak(Offset offset, Offset length) noexcept;
 	void invalidateLazyLineIndexFrom(Offset offset) noexcept;
 	void clearLineIndexScanLedger() noexcept;
-	void ensureUniqueOriginalBuffer();
 	void ensureUniquePieces();
 
 	std::size_t splitAt(Offset offset);

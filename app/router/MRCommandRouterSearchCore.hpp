@@ -43,7 +43,6 @@ enum class RegexCollectOutcome : unsigned char {
 std::string buildSearchPatternExpression(const std::string &pattern, MRSearchTextType type);
 SearchPreviewParts previewForMatch(const std::string &text, std::size_t start, std::size_t end);
 std::size_t centeredPreviewLeft(const std::string &line, std::size_t matchOffset, std::size_t matchLength, std::size_t width);
-void lineColumnForOffset(const std::string &text, std::size_t offset, std::size_t &line, std::size_t &column);
 bool collectRegexMatches(const std::string &text, pcre2_code *code, std::vector<SearchMatchEntry> &outMatches);
 RegexCollectOutcome collectRegexMatchesCancellable(const std::string &text, pcre2_code *code, std::vector<SearchMatchEntry> &outMatches, const std::atomic_bool &cancelFlag);
 bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, pcre2_code **outCode, std::string &errorText);

@@ -8172,6 +8172,7 @@ static const CodeLanguageConformanceEntry kCodeLanguageConformanceEntries[] = {
 	{"RUST", "langrust", "fn probe() -> i32 { 1 }\n", MRSyntaxLanguage::Rust, "Rs", false},
 	{"GO", "langgo", "func probe() int { return 1 }\n", MRSyntaxLanguage::Go, "Go", false},
 	{"PASCAL", "langpascal", "begin\nend.\n", MRSyntaxLanguage::Pascal, "Pa", false},
+	{"BASIC", "langbasic", "FUNCTION Probe()\n    Probe = 1\nEND FUNCTION\n", MRSyntaxLanguage::Basic, "BAS", false},
 	{"SYSTEMD", "langsystemd", "[Unit]\nDescription=Probe\n", MRSyntaxLanguage::Systemd, "Sd", false},
 	{"MAKE", "langmake", "all:\n\t@echo ok\n", MRSyntaxLanguage::Make, "MK", false},
 	{"MRMAC", "langmrmac", "$MACRO PROBE;\nEND_MACRO;\n", MRSyntaxLanguage::MRMAC, "MR", false},
@@ -8197,6 +8198,38 @@ bool testEditProfileCodeLanguageRasterGuard(std::string &failureReason) {
 	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
 		restore();
 		failureReason = "Unable to seed globals for CODE_LANGUAGE raster: " + errorText;
+		return false;
+	}
+	clearConfiguredSettingsDirty();
+	if (!applyConfiguredEditSetupValue("CODE_LANGUAGE", " cpp ", &errorText) || configuredEditSetupSettings().codeLanguage != "CPP") {
+		restore();
+		failureReason = "Valid CODE_LANGUAGE assignment was not normalized to CPP: " + errorText;
+		return false;
+	}
+	if (!configuredSettingsDirty()) {
+		restore();
+		failureReason = "Changed CODE_LANGUAGE assignment did not mark settings dirty.";
+		return false;
+	}
+	clearConfiguredSettingsDirty();
+	if (!applyConfiguredEditSetupValue("CODE_LANGUAGE", "CPP", &errorText)) {
+		restore();
+		failureReason = "Repeated CODE_LANGUAGE assignment failed: " + errorText;
+		return false;
+	}
+	if (configuredSettingsDirty()) {
+		restore();
+		failureReason = "Repeated CODE_LANGUAGE assignment marked unchanged settings dirty.";
+		return false;
+	}
+	if (applyConfiguredEditSetupValue("CODE_LANGUAGE", "NOT_A_LANGUAGE", &errorText)) {
+		restore();
+		failureReason = "Invalid CODE_LANGUAGE assignment was accepted.";
+		return false;
+	}
+	if (configuredEditSetupSettings().codeLanguage != "CPP" || configuredSettingsDirty()) {
+		restore();
+		failureReason = "Invalid CODE_LANGUAGE assignment changed runtime state or dirty gating.";
 		return false;
 	}
 
@@ -9505,30 +9538,96 @@ bool testFileExtensionRightMarginSyncGuard(std::string &failureReason) {
 }
 
 bool testFileExtensionCodeLanguageChoicesGuard(std::string &failureReason) {
-	const std::string panelPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionEditorSettings.cpp");
+	struct ChoiceCase {
+		const char *label;
+		const char *canonicalValue;
+	};
+	static const ChoiceCase choicesExpected[] = {
+	    {"None", "NONE"},
+	    {"Automatic", "AUTO"},
+	    {"C", "C"},
+	    {"C++", "CPP"},
+	    {"Python", "PYTHON"},
+	    {"JavaScript", "JAVASCRIPT"},
+	    {"TypeScript", "TYPESCRIPT"},
+	    {"TSX", "TSX"},
+	    {"Bash", "BASH"},
+	    {"zsh", "ZSH"},
+	    {"fish", "FISH"},
+	    {"JSON", "JSON"},
+	    {"YAML", "YAML"},
+	    {"XML", "XML"},
+	    {"Perl", "PERL"},
+	    {"Swift", "SWIFT"},
+	    {"Rust", "RUST"},
+	    {"Go", "GO"},
+	    {"Pascal", "PASCAL"},
+	    {"BASIC", "BASIC"},
+	    {"LaTeX", "LATEX"},
+	    {"Kotlin", "KOTLIN"},
+	    {"C#", "CSHARP"},
+	    {"systemd et al.", "SYSTEMD"},
+	};
+	static const ChoiceCase aliasesExpected[] = {
+	    {"", "NONE"},
+	    {"AUTOMATIC", "AUTO"},
+	    {"C++", "CPP"},
+	    {"FREEBASIC", "BASIC"},
+	    {"QB64", "BASIC"},
+	    {"QB64PE", "BASIC"},
+	    {"GAMBAS", "BASIC"},
+	    {"TEX", "LATEX"},
+	    {"C#", "CSHARP"},
+	    {"SYSTEMD ET AL.", "SYSTEMD"},
+	};
 	MRFileExtensionProfilesInternal::FileExtensionEditorSettingsDialogRecord record;
 	MRFileExtensionEditorSettings settings;
-	std::string panelContent;
-	std::string ioError;
 	std::string errorText;
+	const std::vector<std::string> choices = MRFileExtensionProfilesInternal::dialogCodeLanguageChoices();
 
-	if (!readTextFile(panelPath, panelContent, ioError)) {
-		failureReason = "Unable to read MRFileExtensionEditorSettings.cpp for code-language choice guard: " + ioError;
+	if (choices.size() != std::size(choicesExpected)) {
+		failureReason = "File extension code-language drop list exposes an unexpected number of choices.";
 		return false;
 	}
-	if (panelContent.find("\"LaTeX\"") == std::string::npos) {
-		failureReason = "File extension code-language drop list must expose LaTeX.";
-		return false;
+	for (std::size_t i = 0; i < choices.size(); ++i) {
+		if (choices[i] != choicesExpected[i].label) {
+			failureReason = "File extension code-language drop list order differs at " + std::to_string(i) + ".";
+			return false;
+		}
+		settings = resolveEditSetupDefaults();
+		settings.codeLanguage = choicesExpected[i].canonicalValue;
+		MRFileExtensionProfilesInternal::settingsToDialogRecord(settings, record);
+		if (MRFileExtensionProfilesInternal::readRecordField(record.codeLanguage) != choicesExpected[i].label) {
+			failureReason = std::string("File extension code-language label mismatch for ") + choicesExpected[i].canonicalValue + ".";
+			return false;
+		}
+		if (!MRFileExtensionProfilesInternal::fileExtensionEditorSettingsDialogRecordToSettings(record, settings, errorText)) {
+			failureReason = std::string("File extension code-language parser rejected ") + choicesExpected[i].label + ": " + errorText;
+			return false;
+		}
+		if (settings.codeLanguage != choicesExpected[i].canonicalValue) {
+			failureReason = std::string("File extension code-language parser did not canonicalize ") + choicesExpected[i].label + ".";
+			return false;
+		}
 	}
 
-	MRFileExtensionProfilesInternal::initFileExtensionEditorSettingsDialogRecord(record);
-	MRFileExtensionProfilesInternal::writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "LaTeX");
-	if (!MRFileExtensionProfilesInternal::fileExtensionEditorSettingsDialogRecordToSettings(record, settings, errorText)) {
-		failureReason = "File extension code-language parser rejected LaTeX: " + errorText;
-		return false;
+	MRFileExtensionProfilesInternal::settingsToDialogRecord(resolveEditSetupDefaults(), record);
+	for (const ChoiceCase &alias : aliasesExpected) {
+		MRFileExtensionProfilesInternal::writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), alias.label);
+		if (!MRFileExtensionProfilesInternal::fileExtensionEditorSettingsDialogRecordToSettings(record, settings, errorText)) {
+			failureReason = std::string("File extension code-language parser rejected alias ") + alias.label + ": " + errorText;
+			return false;
+		}
+		if (settings.codeLanguage != alias.canonicalValue) {
+			failureReason = std::string("File extension code-language alias did not canonicalize to ") + alias.canonicalValue + ".";
+			return false;
+		}
 	}
-	if (settings.codeLanguage != "LATEX") {
-		failureReason = "File extension code-language parser did not canonicalize LaTeX to LATEX.";
+
+	MRFileExtensionProfilesInternal::writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "NOT_A_LANGUAGE");
+	errorText.clear();
+	if (MRFileExtensionProfilesInternal::fileExtensionEditorSettingsDialogRecordToSettings(record, settings, errorText) || errorText.find("CODE_LANGUAGE") == std::string::npos) {
+		failureReason = "File extension code-language parser accepted an unknown value or omitted its diagnostic.";
 		return false;
 	}
 
@@ -12049,6 +12148,9 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Keymap macro diagnostics harness", testKeymapMacroBindingNegativeDiagnosticsHarness);
 	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
+	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
+	runTest(ctx, "Edit profile code-language raster", testEditProfileCodeLanguageRasterGuard);
+	runTest(ctx, "File extension code-language dialog conformance", testFileExtensionCodeLanguageChoicesGuard);
 	runTest(ctx, "Compiler support macros compile guard", testCompilerSupportMacrosCompileGuard);
 	runTest(ctx, "DELAY deadline resume harness", testDelayProcWiringGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
@@ -12064,6 +12166,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
 	runTest(ctx, "Central runtime K/V authority guard", testCentralRuntimeKvAuthorityGuard);
 	runTest(ctx, "Exec session owner and MMP canvas guard", testExecSessionOwnerCancellationGuard);
+	runTest(ctx, "Runtime scheduler skip event guard", testRuntimeSchedulerSkipEventGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "MMP client and hotspot dispatch harness", testMmpClientFocusDispatchHarness);
 	runTest(ctx, "MMP common collection controls harness", testMmpCollectionControlHarness);

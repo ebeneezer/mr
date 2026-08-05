@@ -1,8 +1,6 @@
 #ifndef MRFOLDINGDERIVEDSTATE_HPP
 #define MRFOLDINGDERIVEDSTATE_HPP
 
-#include "MRDerivedStateBase.hpp"
-
 #include "../ui/MRSyntax.hpp"
 
 #include <cstddef>
@@ -95,7 +93,7 @@ struct MRFoldClosedProjection {
 	const MRFoldSpan *spanContaining(std::size_t documentLine) const noexcept;
 };
 
-class MRFoldingDerivedState : public MRDerivedStateBase {
+class MRFoldingDerivedState {
   public:
 	struct VisibleState {
 		std::uint64_t revision = 0;

@@ -8,6 +8,8 @@
 #include "../../ui/widgets/MRDropList.hpp"
 
 #include <cstddef>
+#include <string>
+#include <vector>
 
 class MRScrollableDialog;
 class MRNumericSlider;
@@ -17,6 +19,8 @@ class TRadioButtons;
 class TView;
 
 namespace MRFileExtensionProfilesInternal {
+
+[[nodiscard]] std::vector<std::string> dialogCodeLanguageChoices();
 
 enum : ushort {
 	cmMrFileExtensionEditorSettingsPanelChanged = 3860,
@@ -174,11 +178,6 @@ class FileExtensionEditorSettingsPanel {
 	void buildViews(MRScrollableDialog &dialog);
 	void loadFieldsFromRecord(const FileExtensionEditorSettingsDialogRecord &record);
 	void saveFieldsToRecord(FileExtensionEditorSettingsDialogRecord &record) const;
-	[[nodiscard]] std::string postLoadMacroValue() const;
-	[[nodiscard]] std::string preSaveMacroValue() const;
-	[[nodiscard]] std::string defaultPathValue() const;
-	[[nodiscard]] std::string codeLanguageValue() const;
-	[[nodiscard]] bool formatRulerEnabled() const noexcept;
 	[[nodiscard]] int currentFormatLineTabSize() const noexcept;
 	[[nodiscard]] int currentFormatLineLeftMargin() const noexcept;
 	[[nodiscard]] int currentFormatLineRightMargin() const noexcept;
@@ -187,15 +186,12 @@ class FileExtensionEditorSettingsPanel {
 	void setPostLoadMacroValue(const std::string &value);
 	void setPreSaveMacroValue(const std::string &value);
 	void setDefaultPathValue(const std::string &value);
-	void setCodeLanguageValue(const std::string &value);
 	void toggleCodeLanguageList(MRScrollableDialog &dialog);
 	void hideCodeLanguageList();
 	[[nodiscard]] bool handleCodeLanguageListEvent(TEvent &event, MRScrollableDialog &dialog);
 	[[nodiscard]] bool codeLanguageListVisible() const noexcept;
-	[[nodiscard]] bool codeLanguageListContainsPoint(TPoint where) const noexcept;
 	[[nodiscard]] bool acceptCodeLanguageListSelection();
 	void syncDynamicStates();
-	TView *primaryView() const noexcept;
 
   private:
 	[[nodiscard]] ushort currentOptionsMask() const noexcept;
