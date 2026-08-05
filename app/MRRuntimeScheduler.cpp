@@ -261,12 +261,6 @@ bool removeRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId) {
 	return true;
 }
 
-std::size_t removeRuntimeScheduledConsumersForMacroSpec(const std::string &macroSpec) {
-	std::lock_guard<std::mutex> lock(runtimeSchedulerMutex);
-
-	return removeRuntimeScheduledConsumersLocked(&macroSpec, nullptr, nullptr);
-}
-
 std::size_t removeRuntimeScheduledConsumersForOwner(const MRMacroExecutionOwner &owner) {
 	std::lock_guard<std::mutex> lock(runtimeSchedulerMutex);
 

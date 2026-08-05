@@ -631,15 +631,6 @@ std::size_t requestMacroExecutionCancellationForOwner(const MRMacroExecutionOwne
 	return cancelledCount;
 }
 
-std::size_t requestMacroExecutionCancellationForBuffer(int bufferId) {
-	MRMacroExecutionOwner owner;
-
-	if (bufferId <= 0) return 0;
-	owner.hasBuffer = true;
-	owner.bufferId = bufferId;
-	return requestMacroExecutionCancellationForOwner(owner);
-}
-
 bool runMacroFileByPathRouted(const char *path, bool forceUiThread, std::string *errorMessage, bool showErrorDialogs) {
 	std::string resolvedPath = expandUserPath(path);
 	std::string source;
@@ -709,21 +700,6 @@ bool runMacroSourceText(const char *displayName, const char *source, std::string
 	return true;
 }
 
-bool runMacroSourceTextAsExecutionSession(const char *displayName, const char *source, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
-	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
-	if (source == nullptr || *source == '\0') {
-		if (errorMessage != nullptr) *errorMessage = "No macro source available.";
-		if (showErrorDialogs) showErrorBox(displayName != nullptr ? displayName : "Macro Loader", "No macro source available.");
-		return false;
-	}
-	if (!runMacroSource(displayName, source, nullptr, errorMessage, showErrorDialogs, sessionOut)) {
-		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
-		return false;
-	}
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
 bool runMacroSourceTextAsExecutionSessionForOwner(const char *displayName, const char *source, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
 	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
 	if (source == nullptr || *source == '\0') {
@@ -774,26 +750,6 @@ bool runMacroSpecByName(const char *macroSpec, std::string *errorMessage, bool s
 		if (showErrorDialogs) showErrorBox(spec.c_str(), runError.empty() ? "Macro execution failed." : runError.c_str());
 		return false;
 	}
-	return true;
-}
-
-bool runMacroSpecByNameAsExecutionSession(const char *macroSpec, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs) {
-	std::string spec = macroSpec != nullptr ? trimPathInput(macroSpec) : std::string();
-	std::string runnerSource;
-
-	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (spec.empty()) {
-		if (errorMessage != nullptr) *errorMessage = "No macro specification specified.";
-		if (showErrorDialogs) showErrorBox("Macro Runner", "No macro specification specified.");
-		return false;
-	}
-	runnerSource = "$MACRO ScheduledMacroLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(spec) + "');\nEND_MACRO;\n";
-	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), nullptr, errorMessage, showErrorDialogs, sessionOut, nullptr, nullptr, nullptr, false)) {
-		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
-		return false;
-	}
-	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 

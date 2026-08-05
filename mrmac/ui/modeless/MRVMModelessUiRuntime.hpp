@@ -252,7 +252,6 @@ bool mrvmReadModelessWindowIntFieldValue(const std::string &windowId, const std:
 bool mrvmStoreModelessWindowProgressFieldValue(const std::string &windowId, const std::string &fieldId, int value);
 bool mrvmReadModelessWindowProgressFieldValue(const std::string &windowId, const std::string &fieldId, int &total, int &value);
 bool mrvmAppendModelessWindowLogFieldLine(const std::string &windowId, const std::string &logId, const std::string &text);
-bool mrvmClearModelessWindowLogField(const std::string &windowId, const std::string &logId);
 bool mrvmReadModelessWindowLogFieldLines(const std::string &windowId, const std::string &logId, std::vector<std::string> &lines);
 bool mrvmStoreModelessWindowSelectFieldValue(const std::string &windowId, const std::string &fieldId, const std::string &value);
 bool mrvmReadModelessWindowSelectFieldValue(const std::string &windowId, const std::string &fieldId, std::string &value);

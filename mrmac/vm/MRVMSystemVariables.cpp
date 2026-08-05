@@ -26,8 +26,6 @@
 #include <string>
 #include <vector>
 
-void applyVirtualDesktopConfigurationChange(int count);
-
 namespace mrvm_runtime {
 
 static int encodeIndentStyle(const std::string &style) {

@@ -67,9 +67,7 @@ bool assignKeymapPayloadError(std::string *errorMessage, std::string message) {
 
 void mrvmSetStartupSettingsMode(bool enabled) noexcept {
 	storeSettingsStartupModeValue(enabled);
-	if (enabled) clearKeymapBatchState();
-	else if (settingsKeymapBatchDepthValue() == 0 && hasPendingKeymapBatch())
-		clearKeymapBatchState();
+	if (enabled || (settingsKeymapBatchDepthValue() == 0 && hasPendingKeymapBatch())) clearKeymapBatchState();
 }
 
 bool mrvmIsStartupSettingsMode() noexcept {

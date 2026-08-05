@@ -76,8 +76,6 @@ private:
 	std::string mainFilePath;
 };
 
-[[nodiscard]] std::vector<MRWorkspaceDocumentSnapshot> collectCurrentWorkspaceDocuments();
-[[nodiscard]] MRWorkspaceServiceSnapshot buildCurrentWorkspaceServiceSnapshot(const MRWorkspaceServiceContext &context);
 [[nodiscard]] std::string normalizeWorkspaceServicePath(const std::string &path);
 
 } // namespace mr::services

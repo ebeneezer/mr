@@ -147,7 +147,3 @@ void MRKeymapResolver::resetPending() {
 MRKeymapResolver &runtimeKeymapResolver() noexcept {
 	return g_runtimeKeymapResolver;
 }
-
-bool rebuildRuntimeKeymapResolver(std::string *errorMessage) {
-	return g_runtimeKeymapResolver.rebuild(configuredKeymapProfiles(), configuredActiveKeymapProfile(), errorMessage);
-}

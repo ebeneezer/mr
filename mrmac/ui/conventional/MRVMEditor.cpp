@@ -6,7 +6,6 @@
 #include <tvision/tv.h>
 
 #include "MRVMScreen.hpp"
-#include "../../vm/MRVMProcessRuntime.hpp"
 #include "../../vm/MRVMRuntimeInternal.hpp"
 #include "../../../app/commands/MRWindowCommands.hpp"
 #include "../../../ui/MREditWindow.hpp"
@@ -112,33 +111,12 @@ bool mrvmUiBlockToggleVisibility() {
 	return win != nullptr && win->toggleBlockVisibility();
 }
 
-bool mrvmUiCopyBlock() {
-	return true;
-}
-
-bool mrvmUiMoveBlock() {
-	return true;
-}
-
 bool mrvmUiDeleteBlock() {
 	MREditWindow *win = currentEditorCommandWindow();
 	std::string errorText;
 
 	if (win == nullptr) return false;
 	return win->deleteBlock(&errorText);
-}
-
-bool mrvmUiExtractCurrentBlockText(std::string &out) {
-	out.clear();
-	return false;
-}
-
-bool mrvmUiIndentBlock() {
-	return true;
-}
-
-bool mrvmUiUndentBlock() {
-	return true;
 }
 
 bool mrvmUiMoveCursorToNextPageBreak() {
@@ -165,43 +143,6 @@ bool mrvmUiCursorUndent() {
 	return mrvmEditorUndentCursor(mrvmEditorCurrentEditor());
 }
 
-bool mrvmUiWindowCopyBlock(int sourceWindowIndex) {
-	(void)sourceWindowIndex;
-	return true;
-}
-
-bool mrvmUiWindowMoveBlock(int sourceWindowIndex) {
-	(void)sourceWindowIndex;
-	return true;
-}
-
-bool mrvmUiWindowCopyBlockFromWindow(const void *sourceWindowKey) {
-	(void)sourceWindowKey;
-	return true;
-}
-
-bool mrvmUiWindowMoveBlockFromWindow(const void *sourceWindowKey) {
-	(void)sourceWindowKey;
-	return true;
-}
-
-bool mrvmUiWindowCopyBlockBetween(const void *sourceWindowKey, const void *targetWindowKey) {
-	(void)sourceWindowKey;
-	(void)targetWindowKey;
-	return true;
-}
-
-bool mrvmUiWindowMoveBlockBetween(const void *sourceWindowKey, const void *targetWindowKey) {
-	(void)sourceWindowKey;
-	(void)targetWindowKey;
-	return true;
-}
-
-bool mrvmUiSaveBlockToFile(const std::string &pathSpec) {
-	(void)pathSpec;
-	return true;
-}
-
 bool mrvmUiLinkCurrentWindow() {
 	return returnWithDirectScreenMutation(mrvmEditorLinkCurrentWindow());
 }
@@ -222,10 +163,6 @@ bool mrvmUiNewScreen() {
 	return returnWithDirectScreenMutation(mrvmEditorRedrawEntireScreen());
 }
 
-std::string mrvmEditorExpandUserPath(const std::string &path) {
-	return mrvmProcessExpandUserPath(path);
-}
-
 bool mrvmEditorMarkPosition(MREditWindow *win, MRFileEditor *editor) {
 	return mrvm_runtime::markEditorPosition(win, editor);
 }
@@ -240,18 +177,6 @@ bool mrvmEditorSetRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int 
 
 bool mrvmEditorGotoRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
 	return mrvm_runtime::gotoEditorRandomAccessMark(win, editor, index);
-}
-
-bool mrvmEditorBeginBlockMode(int mode) {
-	return mrvm_runtime::beginCurrentBlockMode(mode);
-}
-
-bool mrvmEditorEndBlockMode() {
-	return mrvm_runtime::endCurrentBlockMode();
-}
-
-bool mrvmEditorClearBlockMode() {
-	return mrvm_runtime::clearCurrentBlockMode();
 }
 
 bool mrvmEditorMoveCursorToNextPageBreak(MRFileEditor *editor) {
@@ -276,69 +201,6 @@ bool mrvmEditorIndentCursor(MRFileEditor *editor) {
 
 bool mrvmEditorUndentCursor(MRFileEditor *editor) {
 	return mrvm_runtime::undentEditor(editor);
-}
-
-bool mrvmEditorCopyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
-	(void)win;
-	(void)editor;
-	return true;
-}
-
-bool mrvmEditorMoveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
-	(void)win;
-	(void)editor;
-	return true;
-}
-
-bool mrvmEditorDeleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace) {
-	(void)win;
-	(void)editor;
-	(void)leaveColumnSpace;
-	return true;
-}
-
-bool mrvmEditorExtractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out) {
-	(void)win;
-	(void)editor;
-	out.clear();
-	return false;
-}
-
-bool mrvmEditorIndentBlock(MREditWindow *win, MRFileEditor *editor) {
-	(void)win;
-	(void)editor;
-	return true;
-}
-
-bool mrvmEditorUndentBlock(MREditWindow *win, MRFileEditor *editor) {
-	(void)win;
-	(void)editor;
-	return true;
-}
-
-MREditWindow *mrvmEditorWindowByIndex(int index) {
-	return mrvm_runtime::editWindowByIndex(index);
-}
-
-bool mrvmEditorCopyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
-	(void)srcWin;
-	(void)srcEditor;
-	(void)destWin;
-	(void)destEditor;
-	return true;
-}
-
-bool mrvmEditorMoveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
-	(void)srcWin;
-	(void)srcEditor;
-	(void)destWin;
-	(void)destEditor;
-	return true;
-}
-
-bool mrvmEditorShouldLeaveColumnSpaceForDelete(MREditWindow *win) {
-	(void)win;
-	return false;
 }
 
 bool mrvmEditorLoadBlockFromFile(MREditWindow *win, const std::string &path) {

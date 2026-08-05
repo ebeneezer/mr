@@ -29,8 +29,6 @@
 #include "MRMessageLineController.hpp"
 #include "MRWindowSupport.hpp"
 
-void mrvmUiInvalidateScreenBase() noexcept;
-
 namespace {
 TMenuItem *findMenuItemByCommand(TMenu *menu, ushort command) {
 	for (TMenuItem *item = menu != nullptr ? menu->items : nullptr; item != nullptr; item = item->next) {

@@ -38,6 +38,5 @@ class MRKeymapResolver final {
 };
 
 MRKeymapResolver &runtimeKeymapResolver() noexcept;
-bool rebuildRuntimeKeymapResolver(std::string *errorMessage = nullptr);
 
 #endif

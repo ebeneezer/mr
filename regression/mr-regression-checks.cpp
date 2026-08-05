@@ -62,7 +62,7 @@
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../dialogs/MRAbout.hpp"
-#include "../dialogs/extensions/MRFileExtensionProfilesSupport.hpp"
+#include "../dialogs/extensions/MRFileExtensionProfileDrafts.hpp"
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../diff/MRDiff.hpp"
 #include "../piecetable/MRTextDocument.hpp"
@@ -9581,7 +9581,7 @@ bool testFileExtensionCodeLanguageChoicesGuard(std::string &failureReason) {
 	    {"SYSTEMD ET AL.", "SYSTEMD"},
 	};
 	MRFileExtensionProfilesInternal::FileExtensionEditorSettingsDialogRecord record;
-	MRFileExtensionEditorSettings settings;
+	MREditSetupSettings settings;
 	std::string errorText;
 	const std::vector<std::string> choices = MRFileExtensionProfilesInternal::dialogCodeLanguageChoices();
 
@@ -9680,33 +9680,33 @@ bool testFileExtensionFoldingControlsGuard(std::string &failureReason) {
 
 bool testFileExtensionCompilerProfileChoicesGuard(std::string &failureReason) {
 	const std::string dialogPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionProfiles.cpp");
-	const std::string supportPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionProfilesSupport.cpp");
+	const std::string draftsPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionProfileDrafts.cpp");
 	std::string dialogContent;
-	std::string supportContent;
+	std::string draftsContent;
 	std::string ioError;
 
 	if (!readTextFile(dialogPath, dialogContent, ioError)) {
 		failureReason = "Unable to read MRFileExtensionProfiles.cpp for compiler-profile choices guard: " + ioError;
 		return false;
 	}
-	if (!readTextFile(supportPath, supportContent, ioError)) {
-		failureReason = "Unable to read MRFileExtensionProfilesSupport.cpp for compiler-profile choices guard: " + ioError;
+	if (!readTextFile(draftsPath, draftsContent, ioError)) {
+		failureReason = "Unable to read MRFileExtensionProfileDrafts.cpp for compiler-profile choices guard: " + ioError;
 		return false;
 	}
 	if (dialogContent.find("std::vector<MRCompilerProfile> profiles = configuredCompilerProfiles();") == std::string::npos) {
 		failureReason = "File extension compiler-profile drop list must read configured profiles.";
 		return false;
 	}
-	if (dialogContent.find("detectedCompilerProfiles()") != std::string::npos || supportContent.find("detectedCompilerProfiles()") != std::string::npos || dialogContent.find("detectedCompilerProfileIds()") != std::string::npos ||
-	    supportContent.find("detectedCompilerProfileIds()") != std::string::npos) {
+	if (dialogContent.find("detectedCompilerProfiles()") != std::string::npos || draftsContent.find("detectedCompilerProfiles()") != std::string::npos || dialogContent.find("detectedCompilerProfileIds()") != std::string::npos ||
+	    draftsContent.find("detectedCompilerProfileIds()") != std::string::npos) {
 		failureReason = "File extension compiler-profile UI must not synthesize compiler profile ids from auto-detection.";
 		return false;
 	}
-	if (supportContent.find("if (configuredCompilerProfiles().empty())") != std::string::npos) {
+	if (draftsContent.find("if (configuredCompilerProfiles().empty())") != std::string::npos) {
 		failureReason = "File extension compiler-profile validation must not accept detected profiles only when configured profiles are empty.";
 		return false;
 	}
-	if (supportContent.find("return compilerProfileIdExists(id);") == std::string::npos) {
+	if (draftsContent.find("return compilerProfileIdExists(id);") == std::string::npos) {
 		failureReason = "File extension compiler-profile validation must accept configured compiler profile ids only.";
 		return false;
 	}
@@ -12071,8 +12071,8 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 }
 
 bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
-	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
-	std::string editorApp;
+	const std::string startupPath = absolutePathFromCwd("app/MREditorAppStartup.cpp");
+	std::string startup;
 	std::string ioError;
 	std::string missingNeedle;
 	std::string startupLoadBody;
@@ -12085,28 +12085,28 @@ bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 	std::size_t workspaceRestore = std::string::npos;
 	std::size_t startupFiles = std::string::npos;
 
-	if (!readTextFile(editorAppPath, editorApp, ioError)) {
+	if (!readTextFile(startupPath, startup, ioError)) {
 		failureReason = "Unable to read workspace command-line startup source: " + ioError;
 		return false;
 	}
-	startupLoadStart = editorApp.find("std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles)");
-	startupLoadEnd = editorApp.find("\nstd::string buildTopRightCursorStatus", startupLoadStart);
+	startupLoadStart = startup.find("std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles)");
+	startupLoadEnd = startup.find("\n} // namespace", startupLoadStart);
 	if (startupLoadStart == std::string::npos || startupLoadEnd == std::string::npos) {
 		failureReason = "Unable to isolate command-line startup file loading.";
 		return false;
 	}
-	startupLoadBody = editorApp.substr(startupLoadStart, startupLoadEnd - startupLoadStart);
+	startupLoadBody = startup.substr(startupLoadStart, startupLoadEnd - startupLoadStart);
 	if (!containsAllSubstrings(startupLoadBody, {"restoredWindows = allEditWindowsInZOrder()", "candidateEditor->persistentFileName()", "normalizePathForLoad(std::filesystem::path(candidatePath)) != file", "Startup file resolved to restored workspace window:", "if (restoredFileFound) continue;", "createEditorWindow(file.c_str())", "mrActivateEditWindow(lastStartupWindow)"}, missingNeedle)) {
 		failureReason = "Workspace command-line focus reuse changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	constructorStart = editorApp.find("MREditorApp::MREditorApp()");
-	constructorEnd = editorApp.find("\nbool MREditorApp::quitPrepared()", constructorStart);
+	constructorStart = startup.find("MREditorApp::MREditorApp()");
+	constructorEnd = startup.find("\nbool mrApplySettingsSourceForTesting", constructorStart);
 	if (constructorStart == std::string::npos || constructorEnd == std::string::npos) {
 		failureReason = "Unable to isolate editor startup ordering.";
 		return false;
 	}
-	constructorBody = editorApp.substr(constructorStart, constructorEnd - constructorStart);
+	constructorBody = startup.substr(constructorStart, constructorEnd - constructorStart);
 	autoloadFlag = constructorBody.find("const bool autoloadWorkspace = configuredAutoloadWorkspace()");
 	workspaceRestore = constructorBody.find("mrLoadWorkspace(\"\")", autoloadFlag);
 	startupFiles = constructorBody.find("loadStartupFilesFromCommandLine(autoloadWorkspace)", workspaceRestore);

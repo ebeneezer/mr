@@ -556,8 +556,6 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 
 	switch (lineNumbersChoice) {
 		case kLineNumbersLeading:
-			options |= kOptionShowLineNumbers;
-			break;
 		case kLineNumbersTrailing:
 			options |= kOptionShowLineNumbers;
 			break;

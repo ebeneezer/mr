@@ -273,22 +273,6 @@ std::size_t macroCatalogLoadedMacroCount() {
 	return mrvmRuntimeCatalogLoadedMacroCount(mrvmRuntimeKv());
 }
 
-std::vector<IndexedBoundMacroEntry> macroCatalogIndexedBindings() {
-	return mrvmRuntimeCatalogIndexedBindings(mrvmRuntimeKv());
-}
-
-void writeMacroCatalogIndexedBindings(const std::vector<IndexedBoundMacroEntry> &bindings) {
-	mrvmRuntimeCatalogWriteIndexedBindings(mrvmRuntimeKv(), bindings);
-}
-
-bool markMacroCatalogIndexedWarmupAttempted(const std::string &fileKey) {
-	return mrvmRuntimeCatalogMarkIndexedWarmupAttempted(mrvmRuntimeKv(), fileKey);
-}
-
-std::size_t macroCatalogIndexedBindingCount() {
-	return mrvmRuntimeCatalogIndexedBindingCount(mrvmRuntimeKv());
-}
-
 std::string loadedFileBasenameKey(const LoadedMacroFile &file) {
 	std::string source = !file.resolvedPath.empty() ? file.resolvedPath : file.displayName;
 
@@ -674,16 +658,6 @@ void clearRegisteredBindingsForKey(const TKey *key, int mode, bool clearAllModes
 		macroRef.hasAssignedKey = false;
 		macroRef.assignedKeySpec.clear();
 		writeLoadedMacroByKey(macroKey, macroRef);
-	}
-	{
-		std::vector<IndexedBoundMacroEntry> indexed = macroCatalogIndexedBindings();
-		indexed.erase(std::remove_if(indexed.begin(), indexed.end(),
-		                             [&](const IndexedBoundMacroEntry &entry) {
-			                             if (key != nullptr && !mrvmBindingKeysEqual(entry.key, *key)) return false;
-			                             return clearAllModes || mode == MACRO_MODE_ALL || mode == MACRO_MODE_EDIT || mode == MACRO_MODE_DOS_SHELL;
-		                             }),
-		              indexed.end());
-		writeMacroCatalogIndexedBindings(indexed);
 	}
 }
 

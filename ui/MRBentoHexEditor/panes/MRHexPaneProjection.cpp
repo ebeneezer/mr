@@ -84,13 +84,6 @@ bool MRHexPaneProjectionKey::computationMatches(const MRHexPaneProjectionKey &ot
 	       capacity == other.capacity && fieldWidth == other.fieldWidth;
 }
 
-bool MRHexPaneProjectionKey::drawGeometryMatches(const MRHexPaneProjectionKey &other) const noexcept {
-	if (documentId != other.documentId || documentVersion != other.documentVersion || documentLength != other.documentLength || role != other.role) return false;
-	if (role == MRHexPaneRole::Inspector) return true;
-	return firstRecord == other.firstRecord && firstColumn == other.firstColumn && recordLength == other.recordLength && width == other.width && height == other.height &&
-	       capacity == other.capacity && fieldWidth == other.fieldWidth;
-}
-
 MRHexPaneProjectedRow::MRHexPaneProjectedRow() noexcept : offsetText{0} {
 }
 

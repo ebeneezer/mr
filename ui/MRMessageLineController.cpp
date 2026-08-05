@@ -372,26 +372,6 @@ void clearOwner(Owner owner) {
 	writeSlot(runtimeKv, owner, slot);
 }
 
-void clearOwnerToken(Owner owner, Token token) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	std::lock_guard<std::mutex> lock(stateMutex());
-	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
-	Slot slot;
-
-	if (!validOwner(owner)) return;
-	readSlot(runtimeKv, owner, slot);
-	if (slot.token != token) return;
-	slot.active = false;
-	slot.text.clear();
-	slot.segments.clear();
-	slot.timed = false;
-	slot.expiresAt = std::chrono::steady_clock::time_point::max();
-	slot.priority = 0;
-	slot.token = takeCounter(runtimeKv, "nextToken");
-	slot.sequence = takeCounter(runtimeKv, "nextSequence");
-	writeSlot(runtimeKv, owner, slot);
-}
-
 void setRuntimeMessageLineEnabled(bool enabled) {
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(stateMutex());

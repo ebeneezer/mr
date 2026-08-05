@@ -112,7 +112,8 @@ MRParsedSettingsDocument parseSettingsDocument(std::string_view source, bool acc
 			document.assignments.push_back(std::move(assignment));
 			pos = endPos - 1;
 			continue;
-		} else if (parseSettingsDirectiveAt(source, pos, "MRFEPROFILE", 4, args, endPos) || (acceptLegacyFeProfileToken && parseSettingsDirectiveAt(source, pos, "MREDITPROFILE", 4, args, endPos))) {
+		}
+		if (parseSettingsDirectiveAt(source, pos, "MRFEPROFILE", 4, args, endPos) || (acceptLegacyFeProfileToken && parseSettingsDirectiveAt(source, pos, "MREDITPROFILE", 4, args, endPos))) {
 			MRParsedEditProfileDirective directive;
 			directive.operation = args[0];
 			directive.profileId = args[1];
@@ -121,7 +122,8 @@ MRParsedSettingsDocument parseSettingsDocument(std::string_view source, bool acc
 			document.profileDirectives.push_back(std::move(directive));
 			pos = endPos - 1;
 			continue;
-		} else if (parseSettingsDirectiveAt(source, pos, "MRCOMPILERPROFILE", 4, args, endPos)) {
+		}
+		if (parseSettingsDirectiveAt(source, pos, "MRCOMPILERPROFILE", 4, args, endPos)) {
 			MRParsedCompilerProfileDirective directive;
 			directive.operation = args[0];
 			directive.profileId = args[1];

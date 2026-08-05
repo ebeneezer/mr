@@ -32,7 +32,6 @@ class MRWindowLayout {
 
 	static void handleDragView(MRDesktopWindow *window, TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize);
 	[[nodiscard]] static bool isWindowMinimized(const MRDesktopWindow *window) noexcept;
-	[[nodiscard]] static int minimizedDesktopRows() noexcept;
 	[[nodiscard]] static TRect usableDesktopBounds() noexcept;
 	[[nodiscard]] static TRect minimizedBoundsForWorkspace(const MREditWindow *window) noexcept;
 	[[nodiscard]] static TRect restoreBoundsForWorkspace(const MREditWindow *window) noexcept;

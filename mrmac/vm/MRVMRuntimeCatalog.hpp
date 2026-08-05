@@ -58,14 +58,6 @@ struct LoadedMacroFile {
 	MRMacroExecutionProfile profile;
 };
 
-struct IndexedBoundMacroEntry {
-	TKey key;
-	std::string filePath;
-
-	IndexedBoundMacroEntry();
-	IndexedBoundMacroEntry(const TKey &aKey, std::string aFilePath);
-};
-
 bool mrvmRuntimeCatalogReadLoadedFile(MRVMRuntimeKv &runtimeKv, const std::string &fileKey, LoadedMacroFile &file);
 bool mrvmRuntimeCatalogLoadedFileExists(MRVMRuntimeKv &runtimeKv, const std::string &fileKey);
 void mrvmRuntimeCatalogWriteLoadedFile(MRVMRuntimeKv &runtimeKv, const LoadedMacroFile &file);
@@ -86,15 +78,5 @@ void mrvmRuntimeCatalogRemoveMacroOrder(MRVMRuntimeKv &runtimeKv, const std::str
 std::size_t mrvmRuntimeCatalogMacroEnumIndex(MRVMRuntimeKv &runtimeKv);
 void mrvmRuntimeCatalogSetMacroEnumIndex(MRVMRuntimeKv &runtimeKv, std::size_t index);
 std::size_t mrvmRuntimeCatalogLoadedMacroCount(MRVMRuntimeKv &runtimeKv);
-
-std::vector<IndexedBoundMacroEntry> mrvmRuntimeCatalogIndexedBindings(MRVMRuntimeKv &runtimeKv);
-void mrvmRuntimeCatalogWriteIndexedBindings(MRVMRuntimeKv &runtimeKv, const std::vector<IndexedBoundMacroEntry> &bindings);
-std::vector<std::string> mrvmRuntimeCatalogIndexedFiles(MRVMRuntimeKv &runtimeKv);
-void mrvmRuntimeCatalogWriteIndexedFiles(MRVMRuntimeKv &runtimeKv, const std::vector<std::string> &files);
-std::size_t mrvmRuntimeCatalogIndexedWarmupCursor(MRVMRuntimeKv &runtimeKv);
-void mrvmRuntimeCatalogSetIndexedWarmupCursor(MRVMRuntimeKv &runtimeKv, std::size_t cursor);
-bool mrvmRuntimeCatalogMarkIndexedWarmupAttempted(MRVMRuntimeKv &runtimeKv, const std::string &fileKey);
-void mrvmRuntimeCatalogClearIndexedWarmup(MRVMRuntimeKv &runtimeKv);
-std::size_t mrvmRuntimeCatalogIndexedBindingCount(MRVMRuntimeKv &runtimeKv);
 
 #endif

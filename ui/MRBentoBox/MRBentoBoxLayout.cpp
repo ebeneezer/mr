@@ -409,12 +409,6 @@ void MRBentoBox::drawSharedEditorPanes() noexcept {
 		if (leaf.visible && leaf.pane != nullptr && leaf.spec.bufferPolicy == bpbSharedSourceBuffer) leaf.pane->drawView();
 }
 
-void MRBentoBox::refreshPaneContentProjection() noexcept {
-	if (windowCloseInProgress || !hasPaneSplit()) return;
-	bentoProjectionDirty |= bpdContent | bpdChrome;
-	flushBentoProjection();
-}
-
 void MRBentoBox::refreshPaneChromeProjection() noexcept {
 	if (windowCloseInProgress || !hasPaneSplit()) return;
 	bentoProjectionDirty |= bpdChrome;

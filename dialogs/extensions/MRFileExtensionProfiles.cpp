@@ -21,7 +21,7 @@
 
 #include "MRFileExtensionEditorSettingsInternal.hpp"
 #include "../MRDirtyGating.hpp"
-#include "MRFileExtensionProfilesSupport.hpp"
+#include "MRFileExtensionProfileDrafts.hpp"
 #include "../setup/MRSetupCommon.hpp"
 #include "../../app/utils/MRStringUtils.hpp"
 
@@ -406,54 +406,6 @@ void clearDialogStatus() {
 void postDialogError(const std::string &text) {
 	if (text.empty()) return;
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
-}
-
-std::string focusedEditorExtension() {
-	MREditWindow *window = currentEditorCommandWindow();
-	std::string path;
-	std::size_t slash = std::string::npos;
-	std::size_t dot = std::string::npos;
-
-	if (window == nullptr || !window->hasPersistentFileName()) return std::string();
-	path = window->currentFileName();
-	slash = path.find_last_of("/\\");
-	dot = path.find_last_of('.');
-	if (dot == std::string::npos || dot + 1 >= path.size()) return std::string();
-	if (slash != std::string::npos && dot < slash) return std::string();
-	return path.substr(dot + 1);
-}
-
-bool isLatexProfileExtension(const std::string &value) {
-	const std::string upper = upperAscii(value);
-
-	return upper == "TEX" || upper == "LTX" || upper == "STY" || upper == "CLS";
-}
-
-bool profileExtensionMatches(const std::string &selector, const std::string &extension) {
-	std::string selectorUpper;
-	std::string extensionUpper;
-
-	if (selector == extension) return true;
-	selectorUpper = upperAscii(selector);
-	extensionUpper = upperAscii(extension);
-	return selectorUpper == extensionUpper && isLatexProfileExtension(selectorUpper) && isLatexProfileExtension(extensionUpper);
-}
-
-int focusedEditorProfileIndex(const std::vector<EditProfileDraft> &drafts) {
-	const std::string extension = focusedEditorExtension();
-
-	if (extension.empty()) return -1;
-	for (std::size_t i = 0; i < drafts.size(); ++i) {
-		const EditProfileDraft &draft = drafts[i];
-		std::vector<std::string> selectors;
-
-		if (draft.isDefault) continue;
-		selectors = splitExtensionLiteral(draft.extensionsLiteral);
-		for (const std::string &selector : selectors) {
-			if (profileExtensionMatches(selector, extension)) return static_cast<int>(i);
-		}
-	}
-	return -1;
 }
 
 class TEditProfilesDialog : public MRScrollableDialog {
@@ -950,7 +902,7 @@ void runFileExtensionProfilesDialogFlow() {
 	std::string normalizeError;
 
 	workingDrafts.push_back(makeDefaultDraft());
-	for (const MRFileExtensionProfile &profile : configuredFileExtensionProfiles())
+	for (const MREditExtensionProfile &profile : configuredEditExtensionProfiles())
 		workingDrafts.push_back(draftFromProfile(profile));
 	if (!normalizeDraftListSyntax(workingDrafts, normalizeError)) {
 		postDialogError("FE entry normalization failed: " + normalizeError);

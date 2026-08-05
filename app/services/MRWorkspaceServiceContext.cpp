@@ -1,14 +1,11 @@
 #include "MRWorkspaceServiceContext.hpp"
 
-#include "../commands/MRWindowCommands.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
-#include "../../ui/MREditWindow.hpp"
 
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
 #include <map>
-#include <set>
 #include <sstream>
 
 namespace mr::services {
@@ -474,32 +471,6 @@ MRWorkspaceServiceSnapshot MRWorkspaceServiceContext::buildSnapshot(const std::v
 	snapshot.root = deriveRootContext(snapshot);
 	snapshot.compileContext = deriveCompileContext(snapshot);
 	return snapshot;
-}
-
-std::vector<MRWorkspaceDocumentSnapshot> collectCurrentWorkspaceDocuments() {
-	std::vector<MRWorkspaceDocumentSnapshot> documents;
-	std::set<int> seenBufferIds;
-	const std::vector<MREditWindow *> windows = allEditWindowsAndBentoPanesInZOrder();
-
-	for (MREditWindow *window : windows) {
-		if (window == nullptr || window->currentFileName()[0] == '\0') continue;
-		if (seenBufferIds.find(window->bufferId()) != seenBufferIds.end()) continue;
-		seenBufferIds.insert(window->bufferId());
-
-		MRWorkspaceDocumentSnapshot document;
-		document.bufferId = window->bufferId();
-		document.documentId = window->documentId();
-		document.documentVersion = window->documentVersion();
-		document.path = normalizeWorkspaceServicePath(window->currentFileName());
-		document.languageName = window->syntaxLanguageName();
-		document.mainFile = mrIsWorkspaceMainFile(window);
-		documents.push_back(document);
-	}
-	return documents;
-}
-
-MRWorkspaceServiceSnapshot buildCurrentWorkspaceServiceSnapshot(const MRWorkspaceServiceContext &context) {
-	return context.buildSnapshot(collectCurrentWorkspaceDocuments());
 }
 
 } // namespace mr::services

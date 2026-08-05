@@ -405,17 +405,6 @@ bool setSnapshotEditProfiles(MRSettingsSnapshot &snapshot, const std::vector<MRE
 	return true;
 }
 
-bool setSnapshotCompilerProfiles(MRSettingsSnapshot &snapshot, const std::vector<MRCompilerProfile> &profiles, std::string *errorMessage) {
-	std::vector<MRCompilerProfile> normalized = profiles;
-
-	for (MRCompilerProfile &profile : normalized)
-		if (!normalizeCompilerProfileInPlace(profile, errorMessage)) return false;
-	if (!validateCompilerProfiles(normalized, errorMessage)) return false;
-	snapshot.compilerProfiles = std::move(normalized);
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
 MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) {
 	MRSettingsSnapshot snapshot;
 

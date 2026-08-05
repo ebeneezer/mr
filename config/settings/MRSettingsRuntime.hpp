@@ -583,7 +583,6 @@ const char *colorSetupGroupTitle(MRColorSetupGroup group);
 const char *colorSetupGroupKey(MRColorSetupGroup group);
 const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_t &count);
 bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count, std::string *errorMessage = nullptr);
-void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *values, std::size_t count);
 [[nodiscard]] std::string configuredColorThemeFilePath();
 [[nodiscard]] std::string configuredColorThemeDisplayName();
 bool setConfiguredColorThemeDisplayName(const std::string &name, std::string *errorMessage = nullptr);

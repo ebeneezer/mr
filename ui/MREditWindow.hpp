@@ -222,7 +222,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	MREditWindow(const TRect &bounds, const char *title, int aNumber,
 	             mr::coprocessor::ExecutionOwnerKind executionOwnerKind = mr::coprocessor::ExecutionOwnerKind::EditorWindow)
-	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mColumnSortAscending(true), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mGitStatusKnown(false), mGitChanged(false), mGitStatusGeneration(0), mGitStatusTaskId(0), mGitStatusPath(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
+	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mGitStatusKnown(false), mGitChanged(false), mGitStatusGeneration(0), mGitStatusTaskId(0), mGitStatusPath(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -1547,7 +1547,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	const std::string &mappedOriginalPath() const noexcept {
 		if (editor != nullptr) return editor->mappedOriginalPath();
-		return emptyString();
+		static const std::string empty;
+		return empty;
 	}
 
 	std::size_t estimatedLineCount() const noexcept {
@@ -1834,15 +1835,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		editor->setCursorOffset(editor->nextWordOffset(editor->cursorOffset()));
 		endBlock();
 		return true;
-	}
-
-	bool sortColumnBlock(bool ascending) {
-		(void)ascending;
-		return false;
-	}
-
-	bool sortColumnBlockToggleOrder() {
-		return sortColumnBlock(mColumnSortAscending);
 	}
 
 	void applyCommittedBlockState(int mode, bool markingOn, uint anchor, uint end, int anchorColumn = -1, int endColumn = -1) {
@@ -2201,11 +2193,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	static int allocateBufferId() {
 		static int nextId = 1;
 		return nextId++;
-	}
-
-	static const std::string &emptyString() noexcept {
-		static const std::string value;
-		return value;
 	}
 
 	static TFrame *initFrame(TRect r) {
@@ -2728,7 +2715,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	bool mTemporaryFileUsed;
 	std::string mTemporaryFileName;
 	int mIndentLevel;
-		bool mColumnSortAscending;
 	MRFEBlockOps mBlockOps;
 	bool mCursorGestureBlockMarking;
 	bool mFullscreenPresentation;

@@ -1,24 +1,17 @@
 #include "MRVMRuntimeCatalog.hpp"
 
 #include "MRVMHash.hpp"
-#include "MRVMKeymapRuntime.hpp"
-#include "MRVMMacroSpecRuntime.hpp"
 #include "MRVMValue.hpp"
 
 #include "../mrmac.h"
 #include "../MRVM.hpp"
-#include "../../app/utils/MRFileIOUtils.hpp"
 
 #include <algorithm>
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
-#include <mutex>
-#include <set>
-#include <utility>
 
 MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
-std::recursive_mutex &mrvmExecutionMutex() noexcept;
 
 namespace {
 using Value = VirtualMachine::Value;
@@ -354,12 +347,6 @@ MacroRef::MacroRef() : entryOffset(0), fromMode(MACRO_MODE_EDIT), hasAssignedKey
 MRMacroSourceMapEntry::MRMacroSourceMapEntry() : bytecodeOffset(0), sourceStartOffset(0), sourceEndOffset(0), line(0), column(0), macroName(), debuggableKind(0) {
 }
 
-IndexedBoundMacroEntry::IndexedBoundMacroEntry() {
-}
-
-IndexedBoundMacroEntry::IndexedBoundMacroEntry(const TKey &aKey, std::string aFilePath) : key(aKey), filePath(std::move(aFilePath)) {
-}
-
 bool mrvmRuntimeCatalogReadLoadedFile(MRVMRuntimeKv &runtimeKv, const std::string &fileKey, LoadedMacroFile &file) {
 	Value fileHash;
 
@@ -500,151 +487,4 @@ std::size_t mrvmRuntimeCatalogLoadedMacroCount(MRVMRuntimeKv &runtimeKv) {
 
 	if (!findCatalogChildPath(runtimeKv, {"macros", "byName"}, macros)) return 0;
 	return runtimeKv.globalStore().keys(macros.hashHandle).size();
-}
-
-std::vector<IndexedBoundMacroEntry> mrvmRuntimeCatalogIndexedBindings(MRVMRuntimeKv &runtimeKv) {
-	Value bindings;
-	std::vector<IndexedBoundMacroEntry> result;
-	const int count = findCatalogChildPath(runtimeKv, {"indexed", "bindings", "order"}, bindings) ? hashReadInt(runtimeKv, bindings, "count", 0) : 0;
-
-	for (int index = 1; index <= count; ++index) {
-		Value entryHash;
-		Value keyHash;
-		IndexedBoundMacroEntry entry;
-		if (!runtimeKv.findChild(bindings, std::to_string(index), entryHash)) continue;
-		if (!runtimeKv.findChild(entryHash, "key", keyHash)) continue;
-		entry.key = readKeyHash(runtimeKv, keyHash);
-		entry.filePath = hashReadString(runtimeKv, entryHash, "filePath");
-		if (!entry.filePath.empty()) result.push_back(entry);
-	}
-	return result;
-}
-
-void mrvmRuntimeCatalogWriteIndexedBindings(MRVMRuntimeKv &runtimeKv, const std::vector<IndexedBoundMacroEntry> &bindings) {
-	Value order = runtimeKv.replaceChild(ensureCatalogChildPath(runtimeKv, {"indexed", "bindings"}), "order");
-
-	hashWriteInt(runtimeKv, order, "count", static_cast<int>(bindings.size()));
-	for (std::size_t index = 0; index < bindings.size(); ++index) {
-		Value entry = runtimeKv.replaceChild(order, std::to_string(index + 1));
-		writeKeyHash(runtimeKv, runtimeKv.replaceChild(entry, "key"), bindings[index].key);
-		hashWriteString(runtimeKv, entry, "filePath", bindings[index].filePath);
-	}
-}
-
-std::vector<std::string> mrvmRuntimeCatalogIndexedFiles(MRVMRuntimeKv &runtimeKv) {
-	Value files;
-
-	if (!findCatalogChildPath(runtimeKv, {"indexed", "files", "order"}, files)) return std::vector<std::string>();
-	return readStringVectorHash(runtimeKv, files);
-}
-
-void mrvmRuntimeCatalogWriteIndexedFiles(MRVMRuntimeKv &runtimeKv, const std::vector<std::string> &files) {
-	writeStringVectorHash(runtimeKv, runtimeKv.replaceChild(ensureCatalogChildPath(runtimeKv, {"indexed", "files"}), "order"), files);
-}
-
-std::size_t mrvmRuntimeCatalogIndexedWarmupCursor(MRVMRuntimeKv &runtimeKv) {
-	Value warmup;
-
-	if (!findCatalogChildPath(runtimeKv, {"indexed", "warmup"}, warmup)) return 0;
-	return static_cast<std::size_t>(hashReadUint(runtimeKv, warmup, "cursor", 0));
-}
-
-void mrvmRuntimeCatalogSetIndexedWarmupCursor(MRVMRuntimeKv &runtimeKv, std::size_t cursor) {
-	hashWriteUint(runtimeKv, ensureCatalogChildPath(runtimeKv, {"indexed", "warmup"}), "cursor", cursor);
-}
-
-bool mrvmRuntimeCatalogMarkIndexedWarmupAttempted(MRVMRuntimeKv &runtimeKv, const std::string &fileKey) {
-	Value attempted = ensureCatalogChildPath(runtimeKv, {"indexed", "warmup", "attemptedFiles"});
-	MRVMHashStore &store = runtimeKv.globalStore();
-
-	if (fileKey.empty()) return false;
-	if (mrvmHashContainsValue(store, store, attempted, fileKey)) return false;
-	hashWriteInt(runtimeKv, attempted, fileKey, 1);
-	return true;
-}
-
-void mrvmRuntimeCatalogClearIndexedWarmup(MRVMRuntimeKv &runtimeKv) {
-	Value indexed = ensureCatalogChildPath(runtimeKv, {"indexed"});
-
-	static_cast<void>(runtimeKv.eraseChild(indexed, "files"));
-	static_cast<void>(runtimeKv.eraseChild(indexed, "bindings"));
-	static_cast<void>(runtimeKv.eraseChild(indexed, "warmup"));
-	mrvmRuntimeCatalogSetIndexedWarmupCursor(runtimeKv, 0);
-}
-
-std::size_t mrvmRuntimeCatalogIndexedBindingCount(MRVMRuntimeKv &runtimeKv) {
-	Value bindings;
-
-	if (!findCatalogChildPath(runtimeKv, {"indexed", "bindings", "order"}, bindings)) return 0;
-	return static_cast<std::size_t>(hashReadInt(runtimeKv, bindings, "count", 0));
-}
-
-void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount, std::size_t *bindingCount) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
-	std::vector<std::string> files = mrvmListMrmacFilesInDirectory(directoryPath);
-	std::vector<std::string> indexedFiles;
-	std::vector<IndexedBoundMacroEntry> indexedBindings;
-	std::set<std::string> dedupe;
-
-	mrvmRuntimeCatalogClearIndexedWarmup(runtimeKv);
-
-	for (const auto &file : files) {
-		std::string source;
-		std::vector<TKey> keys;
-		std::string fileKey;
-
-		if (!readTextFile(file, source)) continue;
-		if (!mrvmParseIndexedBindingHeaders(source, keys) || keys.empty()) continue;
-		fileKey = mrvmMakeMacroFileKey(file);
-		if (dedupe.insert(fileKey).second) indexedFiles.push_back(file);
-		for (auto key : keys)
-			indexedBindings.emplace_back(key, file);
-	}
-
-	mrvmRuntimeCatalogWriteIndexedFiles(runtimeKv, indexedFiles);
-	mrvmRuntimeCatalogWriteIndexedBindings(runtimeKv, indexedBindings);
-
-	if (fileCount != nullptr) *fileCount = indexedFiles.size();
-	if (bindingCount != nullptr) *bindingCount = indexedBindings.size();
-}
-
-bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath, std::string *failedFilePath, std::string *errorMessage) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
-
-	if (loadedFilePath != nullptr) loadedFilePath->clear();
-	if (failedFilePath != nullptr) failedFilePath->clear();
-	if (errorMessage != nullptr) errorMessage->clear();
-
-	{
-		std::vector<std::string> indexedFiles = mrvmRuntimeCatalogIndexedFiles(runtimeKv);
-		std::size_t cursor = mrvmRuntimeCatalogIndexedWarmupCursor(runtimeKv);
-
-		while (cursor < indexedFiles.size()) {
-			const std::string filePath = indexedFiles[cursor++];
-			std::string fileKey = mrvmMakeMacroFileKey(filePath);
-			std::string localError;
-
-			mrvmRuntimeCatalogSetIndexedWarmupCursor(runtimeKv, cursor);
-			if (!mrvmRuntimeCatalogMarkIndexedWarmupAttempted(runtimeKv, fileKey)) continue;
-			if (mrvmRuntimeCatalogLoadedFileExists(runtimeKv, fileKey)) continue;
-			if (mrvmLoadMacroFile(filePath, &localError)) {
-				if (loadedFilePath != nullptr) *loadedFilePath = filePath;
-				return true;
-			}
-			if (failedFilePath != nullptr) *failedFilePath = filePath;
-			if (localError.empty()) localError = "Unable to load macro file.";
-			if (errorMessage != nullptr) *errorMessage = localError;
-			return false;
-		}
-	}
-	return false;
-}
-
-bool mrvmHasPendingIndexedMacroWarmup() {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
-
-	return mrvmRuntimeCatalogIndexedWarmupCursor(runtimeKv) < mrvmRuntimeCatalogIndexedFiles(runtimeKv).size();
 }

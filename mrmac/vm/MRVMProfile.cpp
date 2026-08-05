@@ -135,112 +135,18 @@ unsigned classifyStoreVarName(const std::string &name) {
 	return 0;
 }
 
-bool isKeymapActionMacroCommand(const std::string &name) {
-	static constexpr const char *commands[] = {"APPEND_BLOCK",
-	                                           "BACK_HOME",
-	                                           "BACK_WORD",
-	                                           "BLOCK_MARK_LINES",
-	                                           "BLOCK_TOGGLE_MARKING",
-	                                           "BOTTOM_OF_WINDOW",
-	                                           "CENTER_LINE",
-	                                           "CENTER_LINE_ON_SCREEN",
-	                                           "COPY_BLOCK_TO_CLIPBOARD",
-	                                           "CUT_APPEND_BLOCK",
-	                                           "CUT_BLOCK",
-	                                           "DEL_CHAR_OR_BLOCK",
-	                                           "DEL_EOL",
-	                                           "DEL_WORD",
-	                                           "DESKTOP_MOVE_WINDOW_LEFT",
-	                                           "DESKTOP_MOVE_WINDOW_RIGHT",
-	                                           "DESKTOP_VIEWPORT_LEFT",
-	                                           "DESKTOP_VIEWPORT_RIGHT",
-	                                           "END_OF_BLOCK",
-	                                           "FORCE_SAVE",
-	                                           "INDENT_BLOCK",
-	                                           "JUSTIFY_PARAGRAPH",
-	                                           "LIST_MATCHED_FILES",
-	                                           "LOAD_BLOCK",
-	                                           "MARK_WORD_RIGHT",
-	                                           "MULTI_FILE_SEARCH",
-	                                           "MULTI_FILE_SEARCH_REPLACE",
-	                                           "NEXT_SEARCH_RESULT",
-	                                           "PASTE_BLOCK",
-	                                           "PASTE_FROM_CLIPBOARD",
-	                                           "REDO",
-	                                           "REFORMAT_DOCUMENT",
-	                                           "REFORMAT_PARAGRAPH",
-	                                           "REVERT_FILE",
-	                                           "REPEAT_SEARCH",
-	                                           "SAVE_ALL",
-	                                           "SCROLL_DOWN",
-	                                           "SCROLL_UP",
-	                                           "SEARCH",
-	                                           "SEARCH_REPLACE",
-	                                           "SET_LEFT_MARGIN",
-	                                           "SET_RIGHT_MARGIN",
-	                                           "SORT_COLUMN_BLOCK_TOGGLE",
-	                                           "START_OF_BLOCK",
-	                                           "TOGGLE_FORMAT_RULER",
-	                                           "TOGGLE_WORD_WRAP",
-	                                           "TOP_OF_WINDOW",
-	                                           "UNDO",
-	                                           "UNDENT_BLOCK",
-	                                           "WINDOW_CASCADE",
-	                                           "WINDOW_CLOSE",
-	                                           "WINDOW_COPY_BLOCK",
-	                                           "WINDOW_LIST",
-	                                           "WINDOW_MOVE_BLOCK",
-	                                           "WINDOW_OPEN",
-	                                           "WINDOW_NEXT",
-	                                           "WINDOW_PREVIOUS",
-	                                           "WINDOW_SPLIT_HORIZONTAL",
-	                                           "WINDOW_SPLIT_VERTICAL",
-	                                           "WINDOW_TILE",
-	                                           "WINDOW_ZOOM",
-	                                           "MATCH_PARENTHESIS",
-	                                           "MACRO_TOGGLE_RECORDING",
-	                                           "SETUP_EDIT_SETTINGS",
-	                                           "SETUP_COLOR",
-	                                           "SETUP_KEYMAP",
-	                                           "SETUP_FILENAME_EXTENSIONS",
-	                                           "SETUP_COMPILER_PROFILES",
-	                                           "SETUP_PATHS",
-	                                           "SETUP_BACKUPS_AUTOSAVE",
-	                                           "SETUP_USER_INTERFACE",
-	                                           "SETUP_LIVE_LOGS",
-	                                           "EXIT_SAVE_ALL"};
-
-	for (const char *command : commands)
-		if (name == command) return true;
-	return false;
-}
-
 unsigned classifyProcName(const std::string &name) {
-	if (name.size() >= 4 && name.compare(0, 4, "MMP_") == 0) return mrefUiAffinity;
-	if (name == "MRSETUP" || name == "MRCOMPILERPROFILE") return mrefUiAffinity;
-	if (name == "MAKE_MESSAGE") return mrefUiAffinity;
-	if (name == "SET_CLIPBOARD_TEXT") return mrefUiAffinity;
-	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") return mrefUiAffinity;
-	if (name == "EXEC_SESSION_LIST" || name == "EXEC_SESSION_STOP") return mrefUiAffinity;
-	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "SET_GLOBAL_HASH" || name == "UNLOAD_MACRO") return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
+	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "SET_GLOBAL_HASH") return mrefUiAffinity | mrefStagedWrite;
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE" || name == "SET_FILE_ATTR") return mrefExternalIo;
 	if (name == "FORK") return mrefExternalIo;
 	if (name == "SHELL_TO_OS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "LOAD_FILE" || name == "SAVE_FILE") return mrefUiAffinity | mrefExternalIo;
 	if (name == "DESKTOP_BLIT") return mrefUiAffinity | mrefExternalIo;
-	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" || name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX" || name == "UI_GRID" || name == "UI_MODELESS_ON" || name == "UI_MODELESS_SHOW" || name == "UI_MODELESS_UPDATE" || name == "UI_MODELESS_DISPLAY" || name == "UI_MODELESS_CLOSE" || name == "UI_MESSAGEBOX") return mrefUiAffinity;
 	if (name == "SAVE_SETTINGS") return mrefUiAffinity | mrefExternalIo;
-	if (name == "BEEP") return mrefUiAffinity;
-	if (name == "WRITE_SOD") return mrefUiAffinity;
 	if (name == "REPLACE" || name == "TEXT" || name == "PUT_LINE" || name == "CR" || name == "KEY_IN" || name == "DEL_CHAR" || name == "DEL_CHARS" || name == "DEL_LINE" || name == "INDENT" || name == "UNDENT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "ERASE_WINDOW" || name == "WINDOW_COPY" || name == "WINDOW_MOVE") return mrefUiAffinity | mrefStagedWrite;
 	if (name == "RUN_MACRO") return mrefUiAffinity | mrefStagedWrite;
 	if (name == "EXEC_ASSIGN") return mrefBackgroundSafe;
 	if (name == "DELAY") return mrefBackgroundSafe;
-	if (isKeymapActionMacroCommand(name)) return mrefUiAffinity;
-	if (name == "SET_RANDOM_MARK" || name == "GET_RANDOM_MARK" || name == "EXTEND_BLOCK_BY_MOTION") return mrefUiAffinity;
-	if (name == "SET_INDENT_LEVEL" || name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" || name == "READ_KEY" || name == "PUSH_KEY" || name == "PASS_KEY" || name == "PUSH_LABELS" || name == "POP_LABELS" || name == "FLABEL" || name == "MACRO_TO_KEY" ||
-	    name == "CMD_TO_KEY" || name == "UNASSIGN_KEY" || name == "UNASSIGN_ALL_KEYS" || name == "KEY_RECORD" || name == "PLAY_KEY_MACRO" || name == "SAVE_OS_SCREEN" || name == "REST_OS_SCREEN" || name == "QUIT" || name == "GOTO_LINE" || name == "GOTO_COL" || name == "SWITCH_WINDOW" || name == "SIZE_WINDOW" || name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS")
-		return mrefUiAffinity;
 	return mrefUiAffinity;
 }
 

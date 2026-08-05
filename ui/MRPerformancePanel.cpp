@@ -170,7 +170,6 @@ TColorAttr stateColor(mr::coprocessor::WorkerLifecycleState state, int affinityR
 		case mr::coprocessor::WorkerLifecycleState::Running:
 			return 0x72;
 		case mr::coprocessor::WorkerLifecycleState::Queued:
-			return 0x76;
 		case mr::coprocessor::WorkerLifecycleState::ResultReady:
 		case mr::coprocessor::WorkerLifecycleState::Accepted:
 			return 0x76;

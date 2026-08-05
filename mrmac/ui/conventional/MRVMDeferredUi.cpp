@@ -671,7 +671,7 @@ bool buildDeferredVisualUiProcedureCommand(const std::string &name, const std::v
 			command = MRMacroDeferredUiCommand(mrducWrite, valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]), valueAsInt(args[4]), 0, 0, 0, 0, valueAsString(args[0]));
 			return true;
 		case DeferredVisualUiProc::ClrLine:
-			if (!(args.empty() || (args.size() == 3 && args[0].type == TYPE_INT && args[1].type == TYPE_INT && args[2].type == TYPE_INT))) throw std::runtime_error(name + " expects no arguments or (int, int, int).");
+			if (!args.empty() && (args.size() != 3 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT)) throw std::runtime_error(name + " expects no arguments or (int, int, int).");
 			command = args.empty() ? MRMacroDeferredUiCommand(mrducClrLine) : MRMacroDeferredUiCommand(mrducClrLine, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]));
 			return true;
 		case DeferredVisualUiProc::Gotoxy:
@@ -689,7 +689,7 @@ bool buildDeferredVisualUiProcedureCommand(const std::string &name, const std::v
 			command = MRMacroDeferredUiCommand(classifyDeferredVisualUiProc(name) == DeferredVisualUiProc::ScrollBoxUp ? mrducScrollBoxUp : mrducScrollBoxDn, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]), valueAsInt(args[4]), 0, 0, 0);
 			return true;
 		case DeferredVisualUiProc::ClearScreen:
-			if (!(args.empty() || (args.size() == 1 && args[0].type == TYPE_INT))) throw std::runtime_error(name + " expects no arguments or one integer argument.");
+			if (!args.empty() && (args.size() != 1 || args[0].type != TYPE_INT)) throw std::runtime_error(name + " expects no arguments or one integer argument.");
 			command = MRMacroDeferredUiCommand(mrducClearScreen, args.empty() ? 0x07 : valueAsInt(args[0]));
 			return true;
 		case DeferredVisualUiProc::KillBox:
@@ -850,7 +850,7 @@ bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> 
 		return true;
 	}
 	if (name == "CLEAR_SCREEN") {
-		if (!(args.empty() || (args.size() == 1 && args[0].type == TYPE_INT))) throw std::runtime_error("CLEAR_SCREEN expects no arguments or one integer argument.");
+		if (!args.empty() && (args.size() != 1 || args[0].type != TYPE_INT)) throw std::runtime_error("CLEAR_SCREEN expects no arguments or one integer argument.");
 		session->screenCursorX = 1;
 		session->screenCursorY = 1;
 		session->deferredUiCommands.emplace_back(mrducClearScreen, args.empty() ? 0x07 : mrvmValueAsInt(args[0]));
@@ -939,15 +939,6 @@ bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> 
 		return true;
 	}
 	return false;
-}
-
-bool enqueueDeferredUiCommand(const MRMacroDeferredUiCommand &command, int &errorCode) {
-	BackgroundEditSession *session = g_backgroundEditSession;
-
-	errorCode = 0;
-	if (session == nullptr) return false;
-	session->deferredUiCommands.push_back(command);
-	return true;
 }
 
 bool dispatchDeferredVisualUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode) {

@@ -160,10 +160,6 @@ const char *keymapResultName(MRKeymapResolver::ResultKind kind) noexcept {
 	return "unknown";
 }
 
-bool focusDebugEnabled() noexcept {
-	return runtimeKeymapDebugEnabled();
-}
-
 std::string describeDesktopCurrentView() {
 	TView *current = TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr;
 	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(current);
@@ -250,14 +246,6 @@ class TBindingKeyCaptureDialog : public MRDialogFoundation {
 	ushort capturedKeyCode;
 	ushort capturedControlState;
 };
-
-void postWindowSupportError(std::string_view text) {
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
-}
-
-void postWindowSupportWarning(std::string_view text) {
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
-}
 
 [[nodiscard]] std::string currentTimestamp() {
 	std::array<char, 32> buffer{};
@@ -388,7 +376,7 @@ bool mrActivateEditWindow(MREditWindow *win) {
 		mrLogMessage("mrActivateEditWindow rejected stale window pointer");
 		return false;
 	}
-	if (focusDebugEnabled()) {
+	if (runtimeKeymapDebugEnabled()) {
 		line = "mrActivateEditWindow before target='";
 		line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
 		line += "' visible=";
@@ -404,7 +392,7 @@ bool mrActivateEditWindow(MREditWindow *win) {
 	if ((win->state & sfVisible) == 0) win->show();
 	if (TProgram::deskTop != nullptr && TProgram::deskTop->current != win) TProgram::deskTop->setCurrent(win, TView::normalSelect);
 	win->select();
-	if (focusDebugEnabled()) {
+	if (runtimeKeymapDebugEnabled()) {
 		line = "mrActivateEditWindow after target='";
 		line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
 		line += "' visible=";
@@ -690,10 +678,12 @@ bool mrHandleRuntimeKeymapEvent(TEvent &event, MRKeymapContext context, MREditWi
 		case MRKeymapResolver::ResultKind::Matched:
 			event.what = evNothing;
 			if (result.target.type == MRKeymapBindingType::Macro) {
-				if (!dispatchMRKeymapMacro(result.target.target)) postWindowSupportError("Macro binding failed: " + result.target.target);
+				if (!dispatchMRKeymapMacro(result.target.target))
+					mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Macro binding failed: " + result.target.target, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 				return true;
 			}
-			if (!dispatchMRKeymapAction(result.target.target, result.sequenceText, targetWindow)) postWindowSupportError("Keymap action is not implemented: " + result.target.target);
+			if (!dispatchMRKeymapAction(result.target.target, result.sequenceText, targetWindow))
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Keymap action is not implemented: " + result.target.target, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 			return true;
 	}
 	return false;
@@ -710,7 +700,7 @@ bool mrCaptureBindingKeySpec(const char *title, const char *prompt, std::string 
 	if (dialog != nullptr) TObject::destroy(dialog);
 	if (result == cmCancel || !captured) return true;
 	if (!mrKeyTokenFromEvent(keyCode, controlState, keySpec)) {
-		postWindowSupportWarning("Unsupported binding key. Use a function key or a Ctrl/Alt/Shift/Super combination.");
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Unsupported binding key. Use a function key or a Ctrl/Alt/Shift/Super combination.", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 		return false;
 	}
 	return true;

@@ -619,13 +619,9 @@ bool MRFileEditor::drawLineDrawingSegment(std::size_t fromLine, int fromColumn, 
 		const int right = std::max(fromColumn, toColumn);
 		for (int column = left; column <= right; ++column) {
 			unsigned char mask = static_cast<unsigned char>(kLineEast | kLineWest);
-			if (column == fromColumn && column < toColumn) mask = kLineEast;
-			else if (column == fromColumn && column > toColumn)
-				mask = kLineWest;
-			else if (column == toColumn && fromColumn < column)
-				mask = kLineWest;
-			else if (column == toColumn && fromColumn > column)
-				mask = kLineEast;
+			if (column == fromColumn) mask = fromColumn < toColumn ? kLineEast : kLineWest;
+			else if (column == toColumn)
+				mask = fromColumn < toColumn ? kLineWest : kLineEast;
 			changed = queueCell(fromLine, column, mask) || changed;
 		}
 	} else if (fromLine < toLine) {

@@ -206,10 +206,6 @@ MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std:
 	return result;
 }
 
-MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::shared_ptr<std::atomic_bool> cancelFlag) {
-	return mrvmRunBytecodeBackgroundAt(bytecode, length, 0, std::string(), std::string(), 0, std::move(cancelFlag));
-}
-
 MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, MRMacroExecutionSessionId sessionId, std::shared_ptr<std::atomic_bool> cancelFlag) {
 	VirtualMachine vm;
 	MRVMStagedExecutionContext context(input, std::move(cancelFlag));

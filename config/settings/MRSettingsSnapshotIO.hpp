@@ -79,7 +79,6 @@ bool setSnapshotPathHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::s
 bool setSnapshotFileHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage);
 bool setSnapshotWorkspaceHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage);
 bool setSnapshotEditProfiles(MRSettingsSnapshot &snapshot, const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage);
-bool setSnapshotCompilerProfiles(MRSettingsSnapshot &snapshot, const std::vector<MRCompilerProfile> &profiles, std::string *errorMessage);
 [[nodiscard]] MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths);
 void populateSettingsWriteReport(const std::string &settingsPath, const std::string &beforeSource, const std::string &afterSource, MRSettingsWriteReport *report);
 bool resetSettingsSnapshot(const std::string &settingsPath, MRSettingsSnapshot &snapshot, std::string *errorMessage);

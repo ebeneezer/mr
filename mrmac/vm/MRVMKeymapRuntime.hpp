@@ -27,7 +27,6 @@ struct MRVMExplicitKeyBinding {
 
 const char *mrvmKeymapActionIdForMacroCommand(const std::string &name) noexcept;
 bool mrvmParseAssignedKeySpec(const std::string &spec, TKey &outKey);
-bool mrvmParseIndexedBindingHeaders(const std::string &source, std::vector<TKey> &keys);
 bool mrvmBindingKeysEqual(const TKey &lhs, const TKey &rhs) noexcept;
 bool mrvmParseBindingKeyValue(const VirtualMachine::Value &value, TKey &key);
 std::string mrvmNormalizeMenuKeySpec(std::string keySpec);

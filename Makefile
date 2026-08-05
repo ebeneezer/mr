@@ -141,6 +141,7 @@ TVHC_BUILD_STAMP = $(TVISION_BUILD_DIR)/.mr-tvhc
 HELP_CONTEXT_OBJECTS = \
 	app/MRCommandRouter.o \
 	app/MREditorApp.o \
+	app/MREditorAppMacroRecording.o \
 	app/MRMenuFactory.o \
 	app/commands/MRLogViewer.o \
 	app/router/MRCommandRouterSearch.o \
@@ -229,6 +230,9 @@ CXX_SOURCES = \
 	app/MRRuntimeScheduler.cpp \
 	app/MRRuntimeTimerSource.cpp \
 	app/MREditorApp.cpp \
+	app/MREditorAppMacroRecording.cpp \
+	app/MREditorAppPresentation.cpp \
+	app/MREditorAppStartup.cpp \
 	app/services/MRWorkspaceServiceContext.cpp \
 	keymap/MRKeymapActionCatalog.cpp \
 	keymap/MRKeymapContext.cpp \
@@ -248,7 +252,8 @@ CXX_SOURCES = \
 	dialogs/MRCompilerProfiles.cpp \
 	dialogs/extensions/MRFileExtensionProfiles.cpp \
 	dialogs/extensions/MRFileExtensionEditorSettings.cpp \
-	dialogs/extensions/MRFileExtensionProfilesSupport.cpp \
+	dialogs/extensions/MRFileExtensionProfileDrafts.cpp \
+	dialogs/extensions/MRFileExtensionProfileSelection.cpp \
 	dialogs/setup/MRSetupCommon.cpp \
 	dialogs/setup/MRSetup.cpp \
 	dialogs/setup/MRSetupSections.cpp \
@@ -696,7 +701,10 @@ app/MRExecSessionStatus.o: app/MRExecSessionStatus.cpp app/MRExecSessionStatus.h
 app/MRExecSessionSmoke.o: app/MRExecSessionSmoke.cpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRMacroRunner.hpp ui/MRWindowSupport.hpp
 app/MRRuntimeScheduler.o: app/MRRuntimeScheduler.cpp app/MRRuntimeScheduler.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRWindowSupport.hpp
 app/MRRuntimeTimerSource.o: app/MRRuntimeTimerSource.cpp app/MRRuntimeTimerSource.hpp app/MRRuntimeScheduler.hpp
-app/MREditorApp.o: app/MREditorApp.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp app/MRFunctionKeyBindings.hpp app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp app/MRMenuFactory.hpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/MRDeskTop.hpp ui/MRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MREditorApp.o: app/MREditorApp.cpp app/MREditorApp.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRFunctionKeyBindings.hpp app/MRMacroDebuggerCommandRoute.hpp app/MRMenuFactory.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp coprocessor/MRCoprocessor.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRPerformancePanel.hpp ui/MRSidekickEditor.hpp ui/MRStatusLine.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
+app/MREditorAppMacroRecording.o: app/MREditorAppMacroRecording.cpp app/MREditorApp.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRFunctionKeyBindings.hpp app/MRMacroDebuggerCommandRoute.hpp app/MRMenuFactory.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp app/utils/MRFileIOUtils.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsRuntimeState.hpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRHelpSystem.hpp ui/MRMessageLineController.hpp ui/MRSidekickEditor.hpp ui/MRStatusLine.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
+app/MREditorAppPresentation.o: app/MREditorAppPresentation.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRFunctionKeyBindings.hpp app/MRMacroDebuggerCommandRoute.hpp app/MRMenuFactory.hpp app/MRRuntimeTimerSource.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp coprocessor/MRCoprocessorDispatch.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRPerformancePanel.hpp ui/MRSidekickEditor.hpp ui/MRStatusLine.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
+app/MREditorAppStartup.o: app/MREditorAppStartup.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp app/MRFunctionKeyBindings.hpp app/MRMenuFactory.hpp app/MRRuntimeScheduler.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp app/utils/MRFileIOUtils.hpp config/settings/MRSettingsAssignments.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsStorage.hpp coprocessor/MRCoprocessor.hpp coprocessor/MRCoprocessorDispatch.hpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRBentoHexEditor/MRBentoHexEditor.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFrame.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRSidekickEditor.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
 app/MRMacroDebuggerCommandRoute.o: app/MRMacroDebuggerCommandRoute.cpp app/MRMacroDebuggerCommandRoute.hpp app/MRCommands.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRWindowSupport.hpp
 dialogs/MRAbout.o: dialogs/MRAbout.cpp dialogs/MRAbout.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
 dialogs/MRDirtyGating.o: dialogs/MRDirtyGating.cpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp
@@ -705,7 +713,8 @@ dialogs/MRFileInformation.o: dialogs/MRFileInformation.cpp dialogs/MRFileInforma
 dialogs/MRMacroFile.o: dialogs/MRMacroFile.cpp dialogs/MRMacroFile.hpp mrmac/MRMacroRunner.hpp
 dialogs/MRAcquireDialog.o: dialogs/MRAcquireDialog.cpp dialogs/MRAcquireDialog.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp dialogs/setup/MRSetupCommon.hpp ui/widgets/MRDropList.hpp
 dialogs/extensions/MRFileExtensionEditorSettings.o: dialogs/extensions/MRFileExtensionEditorSettings.cpp dialogs/extensions/MRFileExtensionEditorSettingsInternal.hpp ui/widgets/MRNumericSlider.hpp dialogs/setup/MRSetupCommon.hpp
-dialogs/extensions/MRFileExtensionProfilesSupport.o: dialogs/extensions/MRFileExtensionProfilesSupport.cpp dialogs/extensions/MRFileExtensionProfilesSupport.hpp dialogs/extensions/MRFileExtensionEditorSettingsInternal.hpp dialogs/setup/MRSetup.hpp config/settings/MRSettingsRuntime.hpp app/MREditorApp.hpp
+dialogs/extensions/MRFileExtensionProfileDrafts.o: dialogs/extensions/MRFileExtensionProfileDrafts.cpp dialogs/extensions/MRFileExtensionProfileDrafts.hpp dialogs/extensions/MRFileExtensionEditorSettingsInternal.hpp dialogs/setup/MRSetup.hpp config/settings/MRSettingsRuntime.hpp app/MREditorApp.hpp
+dialogs/extensions/MRFileExtensionProfileSelection.o: dialogs/extensions/MRFileExtensionProfileSelection.cpp dialogs/extensions/MRFileExtensionProfileDrafts.hpp app/commands/MRWindowCommands.hpp app/utils/MRStringUtils.hpp ui/MREditWindow.hpp
 dialogs/setup/MRSetupCommon.o: dialogs/setup/MRSetupCommon.cpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp ui/MRFrame.hpp keymap/MRKeymapContext.hpp
 dialogs/setup/MRSetup.o: dialogs/setup/MRSetup.cpp dialogs/setup/MRSetup.hpp dialogs/setup/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowList.o: dialogs/MRWindowList.cpp dialogs/MRWindowList.hpp app/commands/MRWindowCommands.hpp ui/MRDesktopWindow.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp

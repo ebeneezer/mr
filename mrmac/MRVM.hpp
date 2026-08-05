@@ -263,7 +263,6 @@ class VirtualMachine {
 
 		void appendLogLine(const std::string &line, bool important = false);
 		void appendDebugVariables(MRMacroDebugRunResult &result) const;
-		std::string debugValueText(const Value &value) const;
 	void clearAsyncDelayState() noexcept;
 	static int normalizeDelayMillis(int millis) noexcept;
 
@@ -279,13 +278,8 @@ class VirtualMachine {
 	void setVerboseLogging(bool enable) noexcept {
 		verboseLogging = enable;
 	}
-	int hashCreate();
 	MRVMHashStore &localHashStore();
 	const MRVMHashStore &localHashStore() const;
-	bool hashContains(int handle, const std::string &key) const;
-	Value hashRead(int handle, const std::string &key) const;
-	void hashWrite(int handle, const std::string &key, const Value &value);
-	void hashErase(int handle, const std::string &key);
 	void setClosureContext(const std::string &closureId);
 	void setExecutionSessionContext(MRMacroExecutionSessionId sessionId);
 	const std::vector<MRMacroExecUiCommandRequest> &execUiCommandRequests() const noexcept;
@@ -341,7 +335,6 @@ struct MRMacroJobResult {
 	}
 };
 
-MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, MRMacroExecutionSessionId sessionId = 0, std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 MRMacroDebugRunResult mrvmRunBytecodeDebugAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::vector<std::size_t> &breakpointOffsets);
 MRMacroDebugRunResult mrvmStartDebugSessionAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const MRMacroExecutionOwner &owner, const std::vector<std::size_t> &breakpointOffsets, MRMacroExecutionSession *sessionOut = nullptr, bool firstRun = false,
@@ -369,7 +362,6 @@ bool mrvmWriteDebugLineBreakpoint(const std::string &macroKey, int line, bool en
 bool mrvmDebugLineBreakpointsForMacro(const std::string &macroKey, std::vector<MRMacroDebuggerBreakpoint> &breakpoints);
 bool mrvmToggleDebugLineBreakpointsEnabledForMacroFile(const std::string &macroKey, bool *enabledOut = nullptr, std::string *errorMessage = nullptr);
 bool mrvmEraseDebugLineBreakpointsForMacroFile(const std::string &macroKey, std::string *errorMessage = nullptr);
-bool mrvmEraseDebugRuntimeForMacroFile(const std::string &macroKey, std::string *errorMessage = nullptr);
 bool mrvmEraseDebugRuntimeForMacro(const std::string &macroKey, std::string *errorMessage = nullptr);
 bool mrvmWriteDebugWatch(const std::string &macroKey, const std::string &expression, bool enabled = true, std::string *errorMessage = nullptr);
 bool mrvmValidateDebugWatchExpression(const std::string &expression, std::string *errorMessage = nullptr);
@@ -676,25 +668,13 @@ bool mrvmUiBlockBeginStream();
 bool mrvmUiBlockEndMarking();
 bool mrvmUiBlockTurnMarkingOff();
 bool mrvmUiBlockToggleVisibility();
-bool mrvmUiCopyBlock();
-bool mrvmUiMoveBlock();
 bool mrvmUiDeleteBlock();
-bool mrvmUiExtractCurrentBlockText(std::string &out);
-bool mrvmUiIndentBlock();
-bool mrvmUiUndentBlock();
 bool mrvmUiMoveCursorToNextPageBreak();
 bool mrvmUiMoveCursorToPrevPageBreak();
 bool mrvmUiCursorTabRight();
 bool mrvmUiCursorTabLeft();
 bool mrvmUiCursorIndent();
 bool mrvmUiCursorUndent();
-bool mrvmUiWindowCopyBlock(int sourceWindowIndex);
-bool mrvmUiWindowMoveBlock(int sourceWindowIndex);
-bool mrvmUiWindowCopyBlockFromWindow(const void *sourceWindowKey);
-bool mrvmUiWindowMoveBlockFromWindow(const void *sourceWindowKey);
-bool mrvmUiWindowCopyBlockBetween(const void *sourceWindowKey, const void *targetWindowKey);
-bool mrvmUiWindowMoveBlockBetween(const void *sourceWindowKey, const void *targetWindowKey);
-bool mrvmUiSaveBlockToFile(const std::string &pathSpec);
 
 bool mrvmUiLinkCurrentWindow();
 bool mrvmUiUnlinkCurrentWindow();
@@ -718,16 +698,10 @@ bool mrvmUiRemoveMenuItem(const std::string &menuTitle, const std::string &itemT
 bool mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage = nullptr);
 bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec, std::string *errorMessage = nullptr);
 bool mrvmUiProjectRuntimeMenuKeyLabels(const std::vector<std::pair<std::string, std::string>> &labels, std::string *errorMessage = nullptr);
-std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec);
-bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage = nullptr);
 bool mrvmUiMessageBox(const std::string &text);
 bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
-bool mrvmUiRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage = nullptr);
 bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage = nullptr, std::vector<std::string> *logLines = nullptr);
-void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount = nullptr, std::size_t *bindingCount = nullptr);
-bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath = nullptr, std::string *failedFilePath = nullptr, std::string *errorMessage = nullptr);
-bool mrvmHasPendingIndexedMacroWarmup();
 bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState, std::string &executedMacroName, std::vector<std::string> *logLines = nullptr);
 
 #endif

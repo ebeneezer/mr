@@ -771,25 +771,6 @@ bool mrvmEraseDebugLineBreakpointsForMacroFile(const std::string &macroKey, std:
 	return true;
 }
 
-bool mrvmEraseDebugRuntimeForMacroFile(const std::string &macroKey, std::string *errorMessage) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	MacroRef macroRef;
-	LoadedMacroFile file;
-	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (normalizedMacroKey.empty() || !readLoadedMacroByKey(normalizedMacroKey, macroRef) || !readLoadedMacroFileByKey(macroRef.fileKey, file)) {
-		if (errorMessage != nullptr) *errorMessage = "Debug macro is not loaded.";
-		return false;
-	}
-	for (const std::string &fileMacroKey : file.macroNames)
-		if (!mrvmRuntimeDebuggerEraseLineBreakpointsForMacro(mrvmRuntimeKv(), fileMacroKey) || !mrvmRuntimeDebuggerEraseWatchesForMacro(mrvmRuntimeKv(), fileMacroKey)) {
-			if (errorMessage != nullptr) *errorMessage = "Debug runtime state could not be cleared.";
-			return false;
-		}
-	return true;
-}
-
 bool mrvmEraseDebugRuntimeForMacro(const std::string &macroKey, std::string *errorMessage) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	const std::string normalizedMacroKey = mrvmUpperKey(macroKey);

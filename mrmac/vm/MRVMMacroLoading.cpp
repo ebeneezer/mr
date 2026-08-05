@@ -373,23 +373,6 @@ bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, Macro
 	return true;
 }
 
-bool tryLoadIndexedMacroForKey(const TKey &pressed) {
-	mrvmLogCalculatorHotkeyState("vm-indexed-enter", pressed);
-	const std::vector<IndexedBoundMacroEntry> indexed = macroCatalogIndexedBindings();
-	for (std::size_t i = 0; i < indexed.size(); ++i) {
-		const IndexedBoundMacroEntry &entry = indexed[i];
-		std::string fileKey;
-
-		if (!mrvmBindingKeysEqual(entry.key, pressed)) continue;
-		mrvmLogCalculatorHotkeyState("vm-indexed-match", pressed, entry.filePath);
-		fileKey = mrvmMakeMacroFileKey(entry.filePath);
-		if (loadedMacroFileExists(fileKey)) return true;
-		static_cast<void>(markMacroCatalogIndexedWarmupAttempted(fileKey));
-		if (loadMacroFileIntoRegistry(entry.filePath, nullptr)) return true;
-	}
-	return false;
-}
-
 bool unloadMacroFromRegistry(const std::string &macroName) {
 	std::string macroKey = mrvmUpperKey(trimAscii(macroName));
 	if (macroKey.empty()) return false;

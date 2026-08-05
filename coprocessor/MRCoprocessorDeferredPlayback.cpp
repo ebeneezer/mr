@@ -400,9 +400,6 @@ struct MacroScreenModel {
 				return applyScroll(command, true);
 			case mrducClearScreen:
 				return applyClearScreen(command);
-			case mrducKillBox:
-			case mrducMessageBox:
-				return true;
 			default:
 				return true;
 		}

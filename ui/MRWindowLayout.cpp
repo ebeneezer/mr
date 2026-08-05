@@ -524,10 +524,6 @@ bool MRWindowLayout::isWindowMinimized(const MRDesktopWindow *window) noexcept {
 	return window != nullptr && window->desktopMinimized();
 }
 
-int MRWindowLayout::minimizedDesktopRows() noexcept {
-	return minimizedRowsForDesktop(currentVirtualDesktop());
-}
-
 TRect MRWindowLayout::usableDesktopBounds() noexcept {
 	return usableDesktopBoundsForDesktop(currentVirtualDesktop());
 }

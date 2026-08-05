@@ -33,34 +33,6 @@ void MRFileEditor::clearFindMarkerRanges() {
 	drawView();
 }
 
-void MRFileEditor::setCompilerDiagnosticRanges(const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges, const std::vector<std::pair<std::size_t, std::size_t>> &warningRanges) {
-	std::vector<MRTextBufferModel::Range> normalizedErrors;
-	std::vector<MRTextBufferModel::Range> normalizedWarnings;
-	const std::size_t length = mBufferModel.length();
-	auto appendRanges = [length](const std::vector<std::pair<std::size_t, std::size_t>> &source, std::vector<MRTextBufferModel::Range> &target) {
-		target.reserve(source.size());
-		if (length == 0) return;
-		for (const auto &rangePair : source) {
-			std::size_t start = std::min(rangePair.first, length);
-			std::size_t end = std::min(rangePair.second, length);
-			if (end < start) std::swap(start, end);
-			if (end == start) {
-				if (end < length) ++end;
-				else if (start > 0)
-					--start;
-			}
-			if (end > start) target.push_back(MRTextBufferModel::Range(start, end));
-		}
-	};
-
-	appendRanges(errorRanges, normalizedErrors);
-	appendRanges(warningRanges, normalizedWarnings);
-	normalizeRangeList(normalizedErrors);
-	normalizeRangeList(normalizedWarnings);
-	adoptCompilerDiagnosticRanges(std::make_shared<const std::vector<MRTextBufferModel::Range>>(std::move(normalizedErrors)),
-	                              std::make_shared<const std::vector<MRTextBufferModel::Range>>(std::move(normalizedWarnings)));
-}
-
 void MRFileEditor::adoptCompilerDiagnosticRanges(const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &errorRanges,
 	                                              const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &warningRanges) {
 	mCompilerErrorRanges = errorRanges != nullptr ? errorRanges : std::make_shared<const std::vector<MRTextBufferModel::Range>>();
@@ -218,18 +190,6 @@ void MRFileEditor::clearDebuggerInstructionLine() {
 void MRFileEditor::clearDirtyRanges() {
 	mDirtyRanges.clear();
 	mMiniMapState.setDirtyRanges(mDirtyRanges);
-}
-
-void MRFileEditor::normalizePairRangeList(std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
-	std::sort(ranges.begin(), ranges.end(), [](const std::pair<std::size_t, std::size_t> &a, const std::pair<std::size_t, std::size_t> &b) { return a.first < b.first || (a.first == b.first && a.second < b.second); });
-	std::vector<std::pair<std::size_t, std::size_t>> merged;
-	for (const auto &item : ranges) {
-		if (item.second <= item.first) continue;
-		if (merged.empty() || item.first > merged.back().second) merged.push_back(item);
-		else if (item.second > merged.back().second)
-			merged.back().second = item.second;
-	}
-	ranges.swap(merged);
 }
 
 void MRFileEditor::normalizeRangeList(std::vector<MRTextBufferModel::Range> &ranges) {

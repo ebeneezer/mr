@@ -68,19 +68,6 @@ void MRBentoBox::closePane(int leafId) {
 	mrMarkWorkspaceAutosaveDirty("bento pane close", this);
 }
 
-void MRBentoBox::closeSecondaryPane() {
-	int toolLeaf = firstToolLeafId();
-	bool changed = false;
-	while (toolLeaf >= 0) {
-		collapseLeafNode(toolLeaf);
-		changed = true;
-		toolLeaf = firstToolLeafId();
-	}
-	setActivePane(0);
-	layoutSplitPanes();
-	if (changed) mrMarkWorkspaceAutosaveDirty("bento secondary pane", this);
-}
-
 void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
 	const int listWidth = 17;
 	const int listHeight = 6;
@@ -328,10 +315,6 @@ void MRBentoBox::dragDivider(TEvent &event, int nodeIndex) noexcept {
 		setDividerPosition(nodeIndex, (vertical ? local.x : local.y) - dragOffset, false);
 	}
 	if (currentDividerPosition(nodeIndex) != initialPosition) mrMarkWorkspaceAutosaveDirty("bento divider", this);
-}
-
-void MRBentoBox::setDividerY(int y) noexcept {
-	setDividerPosition(y);
 }
 
 void MRBentoBox::setDividerPosition(int position) noexcept {
@@ -664,10 +647,6 @@ TRect MRBentoBox::contentBounds(const TRect &paneBounds) const noexcept {
 	TRect content = paneBounds;
 	if (content.b.x - content.a.x > 2 && content.b.y - content.a.y > 2) content.grow(-1, -1);
 	return content;
-}
-
-int MRBentoBox::createToolLeaf(MRBentoPaneRole role) {
-	return createPaneLeaf(paneSpecForRole(role));
 }
 
 int MRBentoBox::createPaneLeaf(const MRBentoPaneSpec &spec) {

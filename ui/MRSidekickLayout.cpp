@@ -369,9 +369,7 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 	marker = above ? romAbove : romLeft;
 	std::vector<std::string> lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
 	const int lineCount = static_cast<int>(lines.size());
-	if (belowSpace < lineCount && aboveCodeSpace >= lineCount) above = true;
-	else if (belowSpace <= 0 && aboveCodeSpace > 0)
-		above = true;
+	if ((belowSpace < lineCount && aboveCodeSpace >= lineCount) || (belowSpace <= 0 && aboveCodeSpace > 0)) above = true;
 	marker = above ? romAbove : romLeft;
 	if (above) lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
 	const int viewportWidth = std::max(1, viewport.b.x - viewport.a.x);

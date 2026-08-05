@@ -112,7 +112,6 @@ class MRFileEditor : public TScroller {
 
 	void setReadOnly(bool readOnly);
 	void setForceBinarySave(bool enabled) noexcept;
-	[[nodiscard]] bool forceBinarySave() const noexcept;
 
 	const char *persistentFileName() const noexcept;
 
@@ -188,12 +187,6 @@ class MRFileEditor : public TScroller {
 
 	const std::string &lastUiHotpathTrace() const noexcept;
 
-	bool lineIndexWarmupPending() const noexcept;
-
-	bool syntaxWarmupPending() const noexcept;
-
-	bool miniMapWarmupPending() const noexcept;
-
 	bool usesApproximateMetrics() const noexcept;
 
 	void setInsertModeEnabled(bool on);
@@ -202,8 +195,6 @@ class MRFileEditor : public TScroller {
 	void toggleLineDrawing();
 	void toggleLineDrawingDoubleLines();
 	bool drawLineDrawingBoxForColumnBlock(std::size_t line1, std::size_t line2, int col1, int col2);
-
-	int preferredIndentColumn() const noexcept;
 
 	void setPreferredIndentColumn(int column) noexcept;
 
@@ -315,7 +306,6 @@ class MRFileEditor : public TScroller {
 
 	void clearFindMarkerRanges();
 
-	void setCompilerDiagnosticRanges(const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges, const std::vector<std::pair<std::size_t, std::size_t>> &warningRanges);
 	void adoptCompilerDiagnosticRanges(const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &errorRanges,
 	                                   const std::shared_ptr<const std::vector<MRTextBufferModel::Range>> &warningRanges);
 
@@ -545,8 +535,6 @@ class MRFileEditor : public TScroller {
 	unsigned char supportedLineDrawingMask(std::size_t lineIndex, int visualColumn, unsigned char existingMask, unsigned char connectionMask);
 	bool drawLineDrawingSegment(std::size_t fromLine, int fromColumn, std::size_t toLine, int toColumn);
 	bool drawLineDrawingMouseSegment(std::size_t fromLine, int fromColumn, std::size_t toLine, int toColumn, int &lastAxis);
-
-	int configuredTabSize() const;
 
 	bool configuredDisplayTabs() const;
 
@@ -1225,8 +1213,6 @@ class MRFileEditor : public TScroller {
 	std::string mLastUiHotpathTrace;
 
 	void clearDirtyRanges();
-
-	static void normalizePairRangeList(std::vector<std::pair<std::size_t, std::size_t>> &ranges);
 
 	static void normalizeRangeList(std::vector<MRTextBufferModel::Range> &ranges);
 

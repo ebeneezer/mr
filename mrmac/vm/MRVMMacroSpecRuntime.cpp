@@ -4,10 +4,7 @@
 
 #include "../../app/utils/MRStringUtils.hpp"
 
-#include <algorithm>
-#include <cstring>
 #include <fstream>
-#include <glob.h>
 
 namespace {
 
@@ -36,31 +33,6 @@ std::string mrvmMakeMacroSourceIdentity(const std::string &sourcePath, const std
 	return normalizedPath + "^" + macroKey;
 }
 
-bool mrvmParseMacroSourceIdentity(const std::string &identity, std::string &sourcePath, std::string &macroKey) {
-	const std::size_t caret = identity.rfind('^');
-
-	sourcePath.clear();
-	macroKey.clear();
-	if (caret == std::string::npos || caret == 0 || caret + 1 >= identity.size()) return false;
-	sourcePath = identity.substr(0, caret);
-	macroKey = mrvmUpperKey(identity.substr(caret + 1));
-	return !sourcePath.empty() && !macroKey.empty();
-}
-
-bool mrvmHasMrmacExtension(const std::string &path) {
-	std::size_t dotPos = path.rfind('.');
-	if (dotPos == std::string::npos) return false;
-	return mrvmUpperKey(path.substr(dotPos)) == ".MRMAC";
-}
-
-bool mrvmIsBootstrapIndexedMacroFile(const std::string &path) {
-	const std::string baseName = mrvmUpperKey(mrvmTruncatePathPart(path));
-
-	// Regression fixtures in mrmac/macros/test*.mrmac should not auto-bind at app startup.
-	if (baseName.size() >= 4 && baseName.compare(0, 4, "TEST") == 0) return false;
-	return true;
-}
-
 bool mrvmParseRunMacroSpec(const std::string &spec, std::string &filePart, std::string &macroPart, std::string &paramPart) {
 	std::string trimmed = trimAscii(spec);
 	std::size_t spacePos;
@@ -87,36 +59,6 @@ bool mrvmParseRunMacroSpec(const std::string &spec, std::string &filePart, std::
 		macroPart = head.substr(caretPos + 1);
 	}
 	return !macroPart.empty();
-}
-
-std::vector<std::string> mrvmListMrmacFilesInDirectory(const std::string &directoryPath) {
-	std::vector<std::string> files;
-	std::string dir = trimAscii(directoryPath);
-	std::string pattern;
-	glob_t matches;
-
-	if (dir.empty()) return files;
-	if (!dir.empty() && dir.back() == '/') pattern = dir + "*";
-	else
-		pattern = dir + "/*";
-
-	std::memset(&matches, 0, sizeof(matches));
-	if (::glob(pattern.c_str(), 0, nullptr, &matches) != 0) {
-		::globfree(&matches);
-		return files;
-	}
-	for (std::size_t i = 0; i < matches.gl_pathc; ++i) {
-		const char *pathText = matches.gl_pathv != nullptr ? matches.gl_pathv[i] : nullptr;
-		if (pathText == nullptr || *pathText == '\0') continue;
-		std::string path = pathText;
-		if (!mrvmHasMrmacExtension(path)) continue;
-		if (!mrvmIsBootstrapIndexedMacroFile(path)) continue;
-		if (!macroFileExists(path)) continue;
-		files.push_back(path);
-	}
-	::globfree(&matches);
-	std::sort(files.begin(), files.end());
-	return files;
 }
 
 std::string mrvmResolveMacroFilePath(const std::string &spec, const std::string &macroDirectoryPath) {

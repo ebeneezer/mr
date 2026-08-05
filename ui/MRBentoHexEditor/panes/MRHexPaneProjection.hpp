@@ -49,7 +49,6 @@ struct MRHexPaneProjectionKey {
 	MRHexPaneProjectionKey() noexcept;
 	[[nodiscard]] bool exactlyMatches(const MRHexPaneProjectionKey &other) const noexcept;
 	[[nodiscard]] bool computationMatches(const MRHexPaneProjectionKey &other) const noexcept;
-	[[nodiscard]] bool drawGeometryMatches(const MRHexPaneProjectionKey &other) const noexcept;
 };
 
 struct MRHexPaneProjectedRow {

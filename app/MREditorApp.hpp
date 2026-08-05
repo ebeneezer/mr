@@ -40,6 +40,9 @@ class MREditorApp : public TApplication {
 	void setSnippetSidekickHintsActive(bool active);
 
   private:
+	static constexpr std::chrono::milliseconds recordingBlinkInterval{450};
+	static constexpr std::chrono::microseconds coprocessorPumpBudget{1000};
+
 	void prepareForQuit();
 	bool isRecorderToggleKey(const TEvent &event) const;
 	bool isRecorderToggleCommand(const TEvent &event) const;
@@ -52,8 +55,7 @@ class MREditorApp : public TApplication {
 	void redrawActiveMarkerFrame();
 	void updateRecordingBlink();
 	void updateMacroBrainBlink();
-	void bootstrapIndexedMacroBindings();
-	void warmIndexedMacroBindings();
+	void runConfiguredAutoexecMacros();
 	void initializePerformancePanel();
 	void initializeFullscreenHint();
 	void togglePerformancePanel();
@@ -76,8 +78,6 @@ class MREditorApp : public TApplication {
 	std::vector<std::string> recordedSessionMacroFiles;
 	std::chrono::steady_clock::time_point recordingBlinkToggleAt;
 	std::chrono::steady_clock::time_point macroBrainBlinkToggleAt;
-	bool indexedMacroWarmupActive;
-	std::size_t indexedMacroWarmupLoadedFiles;
 	bool performancePanelVisible;
 	MRPerformancePanel *performancePanel;
 	TView *fullscreenHint;

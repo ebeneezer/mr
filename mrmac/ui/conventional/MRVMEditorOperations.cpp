@@ -461,32 +461,6 @@ int blockCol2Value(MREditWindow *win, MRFileEditor *editor) {
 	return win != nullptr ? win->blockCol2() : 0;
 }
 
-bool beginCurrentBlockMode(int mode) {
-	MREditWindow *win = currentEditorCommandWindow();
-	if (win == nullptr) return false;
-	if (mode == MREditWindow::bmColumn) win->beginColumnBlock();
-	else if (mode == MREditWindow::bmStream)
-		win->beginStreamBlock();
-	else
-		win->beginLineBlock();
-	return true;
-}
-
-bool endCurrentBlockMode() {
-	MREditWindow *win = currentEditorCommandWindow();
-	if (win == nullptr) return false;
-	win->endBlock();
-	return true;
-}
-
-bool clearCurrentBlockMode() {
-	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (session != nullptr) session->clearSelection();
-	MREditWindow *win = currentEditorCommandWindow();
-	if (win != nullptr) win->clearBlock();
-	return true;
-}
-
 struct EditWindowLookup {
 	int targetIndex;
 	int currentIndex;

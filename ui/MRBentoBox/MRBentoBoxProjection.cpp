@@ -121,10 +121,6 @@ void MRBentoBox::toggleActivePane() noexcept {
 		}
 	}
 }
-bool MRBentoBox::placePaneRole(MRBentoPaneRole role, MRBentoPanePlacement placement) {
-	return placePaneRoleInContext(role, placement, activeLeafId);
-}
-
 TColorAttr MRBentoBox::mapColor(uchar index) {
 	if (bentoMode == bbmFileCompare && index == 1) {
 		unsigned char value = 0;

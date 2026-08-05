@@ -184,8 +184,6 @@ class MRPaneEditWindow : public MREditWindow {
 	friend class MRBentoBox;
 
   public:
-	[[nodiscard]] bool paneOwned() const noexcept;
-	[[nodiscard]] MRBentoPaneRole paneRole() const noexcept;
 	virtual ~MRPaneEditWindow() override;
 
   protected:
@@ -267,7 +265,6 @@ class MRBentoBox : public MREditWindow {
 		[[nodiscard]] bool jumpToProblemAtCursor();
 	[[nodiscard]] bool jumpToNextProblem();
 	[[nodiscard]] bool jumpToPreviousProblem();
-	[[nodiscard]] bool placePaneRole(MRBentoPaneRole role, MRBentoPanePlacement placement);
 	[[nodiscard]] bool splitActiveEditorPane(MRBentoPanePlacement placement);
 		[[nodiscard]] bool initializeFileCompare(MRBentoCompareSetup setup);
 		[[nodiscard]] bool startFileCompareProjection();
@@ -312,7 +309,6 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] virtual bool projectPaneDividerPosition(int nodeIndex, int position) noexcept;
 	virtual void paneLayoutChanged() noexcept;
 	[[nodiscard]] MRPaneEditWindow *paneWindowForRole(MRBentoPaneRole role) const noexcept;
-	void refreshPaneContentProjection() noexcept;
 	void refreshPaneChromeProjection() noexcept;
 	[[nodiscard]] int paneDividerPosition(int nodeIndex) const noexcept;
 	[[nodiscard]] bool setPaneDividerPositionForLayout(int nodeIndex, int position) noexcept;
@@ -404,7 +400,6 @@ class MRBentoBox : public MREditWindow {
 	void drawPaneFrames() noexcept;
 	void postCloseCommand() noexcept;
 	void closePane(int leafId);
-	void closeSecondaryPane();
 	void showPaneRoleList(TPoint globalMouse, int targetLeafId);
 	void showPaneActionList();
 	void showFileCompareActionList(TPoint globalMouse, int targetLeafId);
@@ -482,7 +477,6 @@ class MRBentoBox : public MREditWindow {
 	void updatePaneRoleListChrome() noexcept;
 	[[nodiscard]] short paneRoleIndexAt(TPoint globalMouse);
 	void dragDivider(TEvent &event, int nodeIndex) noexcept;
-	void setDividerY(int y) noexcept;
 	void setDividerPosition(int nodeIndex, int position, bool markWorkspace) noexcept;
 	void setDividerPosition(int position) noexcept;
 	void setActivePane(int leafId) noexcept;
@@ -511,7 +505,6 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] int viewportNumberForLeaf(int leafId) const noexcept;
 	[[nodiscard]] TRect nodeBounds(int nodeIndex) const noexcept;
 	[[nodiscard]] TRect contentBounds(const TRect &paneBounds) const noexcept;
-	[[nodiscard]] int createToolLeaf(MRBentoPaneRole role);
 	[[nodiscard]] int createPaneLeaf(const MRBentoPaneSpec &spec);
 	[[nodiscard]] int createLeafNode(int leafId);
 	[[nodiscard]] int splitLeafNode(int leafId, BentoSplitOrientation orientation, MRBentoPaneRole newRole);

@@ -14,7 +14,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
-#include <sstream>
 #include <string_view>
 #include <unordered_map>
 
@@ -27,21 +26,6 @@ struct MacroKeymapActionCommand {
 };
 
 static thread_local int g_keyReplayDepth = 0;
-
-bool startsWithTokenInsensitive(const std::string &text, std::size_t pos, const char *token) {
-	std::size_t i = 0;
-	if (token == nullptr) return false;
-	while (token[i] != '\0') {
-		if (pos + i >= text.size()) return false;
-		if (std::toupper(static_cast<unsigned char>(text[pos + i])) != std::toupper(static_cast<unsigned char>(token[i]))) return false;
-		++i;
-	}
-	if (pos + i < text.size()) {
-		unsigned char ch = static_cast<unsigned char>(text[pos + i]);
-		if (std::isalnum(ch) != 0 || ch == '_') return false;
-	}
-	return true;
-}
 
 std::string normalizeKeySpecToken(const std::string &spec) {
 	std::string trimmed = trimAscii(spec);
@@ -276,57 +260,6 @@ bool mrvmParseAssignedKeySpec(const std::string &spec, TKey &outKey) {
 
 	outKey = TKey(baseCode, modifiers);
 	return true;
-}
-
-bool mrvmParseIndexedBindingHeaders(const std::string &source, std::vector<TKey> &keys) {
-	std::size_t i = 0;
-	bool foundAny = false;
-
-	keys.clear();
-	while (i < source.size()) {
-		std::size_t macroPos = source.find('$', i);
-		if (macroPos == std::string::npos) break;
-		i = macroPos + 1;
-		if (!startsWithTokenInsensitive(source, macroPos, "$MACRO")) continue;
-
-		std::size_t p = macroPos + 6;
-		while (p < source.size() && std::isspace(static_cast<unsigned char>(source[p])) != 0)
-			++p;
-		if (p >= source.size()) break;
-		std::size_t nameStart = p;
-		while (p < source.size()) {
-			unsigned char ch = static_cast<unsigned char>(source[p]);
-			if (std::isalnum(ch) == 0 && ch != '_') break;
-			++p;
-		}
-		if (p == nameStart) continue;
-
-		std::size_t semicolon = source.find(';', p);
-		if (semicolon == std::string::npos) break;
-
-		std::istringstream header(source.substr(p, semicolon - p));
-		std::vector<std::string> tokens;
-		std::string token;
-		while (header >> token)
-			tokens.push_back(token);
-		for (std::size_t t = 0; t + 1 < tokens.size(); ++t) {
-			TKey parsed;
-			if (mrvmUpperKey(tokens[t]) != "TO") continue;
-			if (!mrvmParseAssignedKeySpec(tokens[t + 1], parsed)) continue;
-			bool duplicate = false;
-			for (const auto &key : keys)
-				if (key == parsed) {
-					duplicate = true;
-					break;
-				}
-			if (!duplicate) {
-				keys.push_back(parsed);
-				foundAny = true;
-			}
-		}
-		i = semicolon + 1;
-	}
-	return foundAny;
 }
 
 bool mrvmBindingKeysEqual(const TKey &lhs, const TKey &rhs) noexcept {

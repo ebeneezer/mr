@@ -40,14 +40,6 @@ MRPaneEditWindow::MRPaneEditWindow(const TRect &bounds, const char *title, int n
 MRPaneEditWindow::~MRPaneEditWindow() {
 }
 
-bool MRPaneEditWindow::paneOwned() const noexcept {
-	return true;
-}
-
-MRBentoPaneRole MRPaneEditWindow::paneRole() const noexcept {
-	return mPaneSpec.role;
-}
-
 void MRPaneEditWindow::changeBounds(const TRect &bounds) {
 	MREditWindow::changeBounds(bounds);
 	layoutPaneChrome();

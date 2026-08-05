@@ -93,16 +93,6 @@
 #include "../keymap/MRKeymapProfile.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
-MREditWindow *createEditorWindow(const char *title);
-std::vector<MREditWindow *> allEditWindowsInZOrder();
-bool moveToNextVirtualDesktop();
-bool moveToPrevVirtualDesktop();
-bool viewportRight();
-bool viewportLeft();
-void mrSaveWorkspace(const std::string &filename);
-void mrLoadWorkspace(const std::string &filename);
-void applyVirtualDesktopConfigurationChange(int count);
-
 std::recursive_mutex g_vmExecutionMutex;
 thread_local BackgroundEditSession *g_backgroundEditSession = nullptr;
 thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
@@ -111,18 +101,6 @@ thread_local MRMacroExecutionSessionId g_executionSessionId = 0;
 
 namespace mrvm_runtime {
 using Value = VirtualMachine::Value;
-
-void setGlobalValue(const std::string &name, int type, const Value &value);
-bool readGlobalValue(const std::string &name, GlobalEntry &entry);
-
-std::string getEnvironmentValue(const std::string &entryName);
-bool linkCurrentEditWindow();
-bool unlinkCurrentEditWindow();
-bool redrawCurrentEditWindow();
-bool redrawEntireScreen();
-bool zoomCurrentEditWindow();
-MREditWindow *activeMacroEditWindow();
-MRFileEditor *currentEditor();
 
 std::size_t searchLimitForward(const std::string &text, std::size_t start, int numLines) {
 	if (numLines <= 0) return text.size();
@@ -152,22 +130,6 @@ std::size_t searchLimitBackward(const std::string &text, std::size_t start, int 
 	return 0;
 }
 
-bool markEditorPosition(MREditWindow *win, MRFileEditor *editor);
-bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor);
-bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index);
-bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index);
-bool moveEditorNextPageBreak(MRFileEditor *editor);
-bool moveEditorLastPageBreak(MRFileEditor *editor);
-bool createEditWindow();
-bool switchEditWindow(int index);
-bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2);
-bool deleteCurrentEditWindow();
-bool eraseCurrentEditWindow();
-bool modifyCurrentEditWindow();
-bool readLoadedMacroByKey(const std::string &macroKey, MacroRef &macroRef);
-std::vector<std::string> macroCatalogMacroOrder();
-std::size_t macroCatalogMacroEnumIndex();
-void setMacroCatalogMacroEnumIndex(std::size_t index);
 void appendUniqueString(std::vector<std::string> &values, const std::string &value) {
 	if (value.empty()) return;
 	if (std::find(values.begin(), values.end(), value) == values.end()) values.push_back(value);
@@ -278,26 +240,6 @@ const MRVMHashStore &VirtualMachine::localHashStore() const {
 	return *mHashStore;
 }
 
-bool VirtualMachine::hashContains(int handle, const std::string &key) const {
-	return mHashStore->contains(handle, key);
-}
-
-int VirtualMachine::hashCreate() {
-	return mHashStore->createHash();
-}
-
-VirtualMachine::Value VirtualMachine::hashRead(int handle, const std::string &key) const {
-	return mHashStore->read(handle, key);
-}
-
-void VirtualMachine::hashWrite(int handle, const std::string &key, const Value &value) {
-	mHashStore->write(handle, key, value);
-}
-
-void VirtualMachine::hashErase(int handle, const std::string &key) {
-	mHashStore->erase(handle, key);
-}
-
 void VirtualMachine::setClosureContext(const std::string &closureId) {
 	mClosureId = closureId;
 	mClosureVariableNames.clear();
@@ -394,37 +336,6 @@ void mrvmUiSyncLinkedWindowsFrom(MREditWindow *window) {
 	syncLinkedWindowsFrom(window);
 }
 
-std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec) {
-	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	std::string filePart;
-	std::string macroPart;
-	std::string paramPart;
-	std::string targetFileKey;
-	const std::string targetMacroKey = [&]() {
-		mrvmParseRunMacroSpec(macroSpec, filePart, macroPart, paramPart);
-		return mrvmUpperKey(macroPart);
-	}();
-	const int mode = currentUiMacroMode();
-	const std::vector<MRVMExplicitKeyBinding> explicitBindings = mrvmRuntimeExplicitKeyBindings();
-
-	if (targetMacroKey.empty()) return std::string();
-	if (!filePart.empty()) targetFileKey = resolveLoadedFileKeyForSpec(filePart);
-	if (!filePart.empty() && targetFileKey.empty()) targetFileKey = mrvmMakeMacroFileKey(filePart);
-	for (auto it = explicitBindings.rbegin(); it != explicitBindings.rend(); ++it) {
-		if (it->kind != MRVMExplicitBindingKind::MacroSpec || !mrvmBindingModeMatches(it->mode, mode)) continue;
-		if (!macroSpecTargetsLoadedMacro(it->macroSpec, targetFileKey, targetMacroKey)) continue;
-		return mrvmMenuLabelFromBindingKey(it->key);
-	}
-	{
-		MacroRef macroRef;
-		if (!readLoadedMacroByKey(targetMacroKey, macroRef)) return std::string();
-		if (!targetFileKey.empty() && macroRef.fileKey != targetFileKey) return std::string();
-		if (!macroAllowsUiMode(macroRef, mode) || !macroRef.hasAssignedKey) return std::string();
-		if (!macroRef.assignedKeySpec.empty()) return mrvmNormalizeMenuKeySpec(macroRef.assignedKeySpec);
-		return mrvmMenuLabelFromBindingKey(macroRef.assignedKey);
-	}
-}
-
 struct UiRenderFacade {
 	static bool renderDeferredCommand(const MRMacroDeferredUiCommand &command) {
 		return mrvmUiScreenRenderDeferredCommand(command);
@@ -433,10 +344,6 @@ struct UiRenderFacade {
 
 bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command) {
 	return UiRenderFacade::renderDeferredCommand(command);
-}
-
-bool mrvmUiRenderDeferredCommand(const MRMacroDeferredUiCommand &command) {
-	return mrvmUiRenderFacadeRenderDeferredCommand(command);
 }
 
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage) {
@@ -519,7 +426,7 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 	if (traceSnippetKey) {
 		char line[512];
 		const std::size_t explicitBindingCount = mrvmRuntimeExplicitKeyBindings().size();
-		std::snprintf(line, sizeof(line), "KEYDBG vm assigned-key rawCode=0x%04X rawMods=0x%04X code=0x%04X mods=0x%04X mode=%d explicit=%zu loaded=%zu indexed=%zu", static_cast<unsigned>(keyCode), static_cast<unsigned>(controlKeyState), static_cast<unsigned>(pressed.code), static_cast<unsigned>(pressed.mods), mode, explicitBindingCount, macroCatalogLoadedMacroCount(), macroCatalogIndexedBindingCount());
+		std::snprintf(line, sizeof(line), "KEYDBG vm assigned-key rawCode=0x%04X rawMods=0x%04X code=0x%04X mods=0x%04X mode=%d explicit=%zu loaded=%zu", static_cast<unsigned>(keyCode), static_cast<unsigned>(controlKeyState), static_cast<unsigned>(pressed.code), static_cast<unsigned>(pressed.mods), mode, explicitBindingCount, macroCatalogLoadedMacroCount());
 		mrLogMessage(line);
 	}
 	mrvmLogCalculatorHotkeyState("vm-enter", pressed);
@@ -532,11 +439,5 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 	if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key no explicit binding");
 	if (dispatchLoadedBinding()) return true;
 	if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key no loaded binding");
-	if (!tryLoadIndexedMacroForKey(pressed)) {
-		if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key no indexed binding");
-		return false;
-	}
-	mrvmLogCalculatorHotkeyState("vm-indexed-loaded", pressed);
-	if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key indexed binding loaded");
-	return dispatchLoadedBinding();
+	return false;
 }

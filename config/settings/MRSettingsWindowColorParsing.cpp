@@ -29,53 +29,62 @@ bool parseHexColorToken(const std::string &token, unsigned char &outValue) {
 	return true;
 }
 
+enum WindowColorProjection {
+	wcpSequential,
+	wcpSkipEofMarker
+};
+
+struct WindowColorFormat {
+	char version;
+	std::size_t valueCount;
+	std::size_t projectedValueCount;
+	WindowColorProjection projection;
+	const char *sizeError;
+};
+
+static const WindowColorFormat kVersionedWindowColorFormats[] = {
+    {'7', MRColorSetupSettings::kWindowCount, MRColorSetupSettings::kWindowCount, wcpSequential, "Unexpected WINDOWCOLORS list size for v7."},
+    {'6', MRColorSetupSettings::kWindowCount - 1, MRColorSetupSettings::kWindowCount - 1, wcpSequential, "Unexpected WINDOWCOLORS list size for v6."},
+    {'5', MRColorSetupSettings::kWindowCount - 2, MRColorSetupSettings::kWindowCount - 2, wcpSequential, "Unexpected WINDOWCOLORS list size for v5."},
+    {'4', MRColorSetupSettings::kWindowCount - 3, MRColorSetupSettings::kWindowCount - 3, wcpSequential, "Unexpected WINDOWCOLORS list size for v4."},
+    {'3', MRColorSetupSettings::kWindowCount - 4, MRColorSetupSettings::kWindowCount - 4, wcpSequential, "Unexpected WINDOWCOLORS list size for v3."},
+    {'2', 8, 7, wcpSkipEofMarker, "Unexpected WINDOWCOLORS list size for v2."},
+};
+
+static const WindowColorFormat kLegacyWindowColorFormats[] = {
+    {'\0', MRColorSetupSettings::kWindowCount, MRColorSetupSettings::kWindowCount, wcpSequential, nullptr},
+    {'\0', MRColorSetupSettings::kWindowCount - 1, MRColorSetupSettings::kWindowCount - 1, wcpSequential, nullptr},
+    {'\0', MRColorSetupSettings::kWindowCount - 2, MRColorSetupSettings::kWindowCount - 2, wcpSequential, nullptr},
+    {'\0', MRColorSetupSettings::kWindowCount - 3, MRColorSetupSettings::kWindowCount - 3, wcpSequential, nullptr},
+    {'\0', MRColorSetupSettings::kWindowCount - 4, MRColorSetupSettings::kWindowCount - 4, wcpSequential, nullptr},
+    {'\0', MRColorSetupSettings::kWindowCount - 5, 8, wcpSequential, nullptr},
+    {'\0', MRColorSetupSettings::kWindowCount - 6, 8, wcpSequential, nullptr},
+    {'\0', MRColorSetupSettings::kWindowCount - 7, 7, wcpSkipEofMarker, nullptr},
+};
+
 } // namespace
 
 bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage) {
 	std::string text = trimAscii(literal);
 	std::size_t cursor = 0;
 	std::vector<unsigned char> parsed;
-	const unsigned char defaultEofMarker = mrDefaultColorForSlot(kMrPaletteEofMarker);
-	const unsigned char defaultLineNumbers = mrDefaultColorForSlot(kMrPaletteLineNumbers);
-	const unsigned char defaultCodeFolding = mrDefaultColorForSlot(kMrPaletteCodeFolding);
-	const unsigned char defaultCodeFoldingMarker = mrDefaultColorForSlot(kMrPaletteCodeFoldingMarker);
-	const unsigned char defaultFormatRuler = mrDefaultColorForSlot(kMrPaletteFormatRuler);
-	const unsigned char defaultFocusedPaneBorder = mrDefaultColorForSlot(kMrPaletteFocusedPaneBorder);
+	const WindowColorFormat *format = nullptr;
+	bool versionPrefix = false;
 	unsigned char value = 0;
-	bool v7Format = false;
-	bool v6Format = false;
-	bool v5Format = false;
-	bool v4Format = false;
-	bool v3Format = false;
-	bool v2Format = false;
 	std::size_t windowItemCount = 0;
 	const MRColorSetupItem *windowItems = colorSetupGroupItems(MRColorSetupGroup::Window, windowItemCount);
 	if (windowItems == nullptr || windowItemCount < outValues.size()) return setError(errorMessage, "WINDOWCOLORS descriptors are incomplete.");
-	auto resetWindowColorDefaults = [&]() {
-		for (std::size_t i = 0; i < outValues.size(); ++i)
-			outValues[i] = mrDefaultColorForSlot(windowItems[i].paletteIndex);
-	};
 
-	if (text.rfind("v7:", 0) == 0 || text.rfind("V7:", 0) == 0) {
-		text = text.substr(3);
-		v7Format = true;
-	} else if (text.rfind("v6:", 0) == 0 || text.rfind("V6:", 0) == 0) {
-		text = text.substr(3);
-		v6Format = true;
-	} else if (text.rfind("v5:", 0) == 0 || text.rfind("V5:", 0) == 0) {
-		text = text.substr(3);
-		v5Format = true;
-	} else if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
-		text = text.substr(3);
-		v4Format = true;
-	} else if (text.rfind("v3:", 0) == 0 || text.rfind("V3:", 0) == 0) {
-		text = text.substr(3);
-		v3Format = true;
-	} else if (text.rfind("v2:", 0) == 0 || text.rfind("V2:", 0) == 0) {
-		text = text.substr(3);
-		v2Format = true;
-	} else if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
-		text = text.substr(3);
+	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') && text[2] == ':') {
+		versionPrefix = text[1] == '1';
+		for (const WindowColorFormat &candidate : kVersionedWindowColorFormats)
+			if (candidate.version == text[1]) {
+				format = &candidate;
+				versionPrefix = true;
+				break;
+			}
+	}
+	if (versionPrefix) text = text.substr(3);
 	if (text.empty()) return setError(errorMessage, "Empty color list.");
 
 	while (cursor <= text.size()) {
@@ -88,126 +97,27 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		cursor = comma + 1;
 	}
 
-	if (v7Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v7.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < outValues.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (v6Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v6.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (v5Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (v4Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 3) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (v3Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 4) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (v2Format) {
-		if (parsed.size() != 8) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
-		resetWindowColorDefaults();
-		outValues[0] = parsed[0];
-		outValues[1] = parsed[1];
-		outValues[2] = parsed[2];
-		outValues[3] = defaultEofMarker;
-		outValues[4] = parsed[3];
-		outValues[5] = parsed[4];
-		outValues[6] = parsed[5];
-		outValues[7] = parsed[6];
-		outValues[8] = defaultLineNumbers;
-		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < outValues.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
-		resetWindowColorDefaults();
-		for (std::size_t i = 0; i < parsed.size(); ++i)
-			outValues[i] = parsed[i];
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 5) {
-		resetWindowColorDefaults();
-		outValues[0] = parsed[0];
-		outValues[1] = parsed[1];
-		outValues[2] = parsed[2];
-		outValues[3] = parsed[3];
-		outValues[4] = parsed[4];
-		outValues[5] = parsed[5];
-		outValues[6] = parsed[6];
-		outValues[7] = parsed[7];
-		outValues[8] = defaultLineNumbers;
-		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 6) {
-		resetWindowColorDefaults();
-		outValues[0] = parsed[0];
-		outValues[1] = parsed[1];
-		outValues[2] = parsed[2];
-		outValues[3] = parsed[3];
-		outValues[4] = parsed[4];
-		outValues[5] = parsed[5];
-		outValues[6] = parsed[6];
-		outValues[7] = parsed[7];
-		outValues[8] = defaultLineNumbers;
-		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 7) {
-		resetWindowColorDefaults();
-		outValues[0] = parsed[0];
-		outValues[1] = parsed[1];
-		outValues[2] = parsed[2];
-		outValues[3] = defaultEofMarker;
-		outValues[4] = parsed[3];
-		outValues[5] = parsed[4];
-		outValues[6] = parsed[5];
-		outValues[7] = parsed[6];
-		outValues[8] = defaultLineNumbers;
-		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultCodeFoldingMarker;
-		outValues[11] = defaultFormatRuler;
-		outValues[12] = defaultFocusedPaneBorder;
+	if (format != nullptr) {
+		if (parsed.size() != format->valueCount) return setError(errorMessage, format->sizeError);
 	} else {
-		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
+		for (const WindowColorFormat &candidate : kLegacyWindowColorFormats)
+			if (candidate.valueCount == parsed.size()) {
+				format = &candidate;
+				break;
+			}
+		if (format == nullptr) return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
+	}
+
+	for (std::size_t i = 0; i < outValues.size(); ++i)
+		outValues[i] = mrDefaultColorForSlot(windowItems[i].paletteIndex);
+	if (format->projection == wcpSequential) {
+		for (std::size_t i = 0; i < format->projectedValueCount; ++i)
+			outValues[i] = parsed[i];
+	} else {
+		for (std::size_t i = 0; i < 3; ++i)
+			outValues[i] = parsed[i];
+		for (std::size_t i = 3; i < format->projectedValueCount; ++i)
+			outValues[i + 1] = parsed[i];
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;

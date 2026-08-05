@@ -1,5 +1,5 @@
 #include "../../app/utils/MRStringUtils.hpp"
-#include "MRFileExtensionProfilesSupport.hpp"
+#include "MRFileExtensionProfileDrafts.hpp"
 
 #include "../setup/MRSetupCommon.hpp"
 #include "../setup/MRSetup.hpp"
@@ -71,17 +71,6 @@ static const DialogCodeLanguageAlias kDialogCodeLanguageAliases[] = {
 };
 }
 
-std::string readRecordField(const char *value);
-void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
-
-std::string readRecordField(const char *value) {
-	return mr::dialogs::readRecordField(value);
-}
-
-void writeRecordField(char *dest, std::size_t destSize, const std::string &value) {
-	mr::dialogs::writeRecordField(dest, destSize, value);
-}
-
 std::vector<std::string> dialogCodeLanguageChoices() {
 	std::vector<std::string> choices;
 
@@ -121,8 +110,8 @@ bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSett
 	       readRecordField(lhs.miniMapMarkerGlyph) == readRecordField(rhs.miniMapMarkerGlyph) && readRecordField(lhs.gutters) == readRecordField(rhs.gutters) && lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice && lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice && lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice && lhs.defaultModeChoice == rhs.defaultModeChoice && lhs.lineNumbersPositionChoice == rhs.lineNumbersPositionChoice && lhs.codeFoldingPositionChoice == rhs.codeFoldingPositionChoice && lhs.miniMapPositionChoice == rhs.miniMapPositionChoice;
 }
 
-bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings, std::string &errorText) {
-	settings = configuredFileExtensionEditorSettings();
+bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MREditSetupSettings &settings, std::string &errorText) {
+	settings = configuredEditSetupSettings();
 	settings.pageBreak = readRecordField(record.pageBreak);
 	settings.wordDelimiters = readRecordField(record.wordDelimiters);
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
@@ -413,7 +402,7 @@ enum : unsigned long long {
 }
 
 [[nodiscard]] bool validateDraftRecordFields(const EditProfileDraft &draft, std::string &errorText) {
-	MRFileExtensionEditorSettings ignored;
+	MREditSetupSettings ignored;
 	return fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, ignored, errorText);
 }
 
@@ -428,7 +417,7 @@ enum : unsigned long long {
 	return true;
 }
 
-[[nodiscard]] unsigned long long computeOverrideMask(const MRFileExtensionEditorSettings &defaults, const MRFileExtensionEditorSettings &effective) {
+[[nodiscard]] unsigned long long computeOverrideMask(const MREditSetupSettings &defaults, const MREditSetupSettings &effective) {
 	unsigned long long mask = kOvNone;
 
 	if (effective.pageBreak != defaults.pageBreak) mask |= kOvPageBreak;
@@ -494,7 +483,7 @@ enum : unsigned long long {
 }
 
 bool normalizeDraftSyntaxRecord(EditProfileDraft &draft, std::string &errorText) {
-	MRFileExtensionEditorSettings normalizedSettings;
+	MREditSetupSettings normalizedSettings;
 	std::vector<std::string> selectors;
 
 	draft.id = draft.isDefault ? std::string(kDefaultProfileId) : trimAscii(draft.id);
@@ -518,7 +507,7 @@ bool normalizeDraftSyntaxRecord(EditProfileDraft &draft, std::string &errorText)
 	return true;
 }
 
-[[nodiscard]] bool draftsToConfiguredState(const std::vector<EditProfileDraft> &drafts, MRFileExtensionEditorSettings &defaultsOut, std::vector<MRFileExtensionProfile> &profilesOut, std::string &defaultThemePathOut, std::string &errorText) {
+[[nodiscard]] bool draftsToConfiguredState(const std::vector<EditProfileDraft> &drafts, MREditSetupSettings &defaultsOut, std::vector<MREditExtensionProfile> &profilesOut, std::string &defaultThemePathOut, std::string &errorText) {
 	bool haveDefault = false;
 	std::string defaultDescription;
 
@@ -553,8 +542,8 @@ bool normalizeDraftSyntaxRecord(EditProfileDraft &draft, std::string &errorText)
 	}
 
 	for (const EditProfileDraft &draft : drafts) {
-		MRFileExtensionEditorSettings effective;
-		MRFileExtensionProfile profile;
+		MREditSetupSettings effective;
+		MREditExtensionProfile profile;
 
 		if (draft.isDefault) continue;
 		if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, effective, errorText)) {
@@ -573,8 +562,8 @@ bool normalizeDraftSyntaxRecord(EditProfileDraft &draft, std::string &errorText)
 
 	if (!setConfiguredDefaultProfileDescription(defaultDescription, &errorText)) return false;
 	if (!setConfiguredColorThemeFilePath(defaultThemePathOut, &errorText)) return false;
-	if (!setConfiguredFileExtensionEditorSettings(defaultsOut, &errorText)) return false;
-	if (!setConfiguredFileExtensionProfiles(profilesOut, &errorText)) return false;
+	if (!setConfiguredEditSetupSettings(defaultsOut, &errorText)) return false;
+	if (!setConfiguredEditExtensionProfiles(profilesOut, &errorText)) return false;
 	return true;
 }
 
@@ -623,7 +612,7 @@ std::vector<std::string> splitExtensionLiteral(const std::string &literal) {
 	return values;
 }
 
-void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileExtensionEditorSettingsDialogRecord &record) {
+void settingsToDialogRecord(const MREditSetupSettings &settings, FileExtensionEditorSettingsDialogRecord &record) {
 	std::string columnMove = upperAscii(settings.columnBlockMove);
 	std::string defaultMode = upperAscii(settings.defaultMode);
 	std::string indentStyle = upperAscii(settings.indentStyle);
@@ -693,9 +682,9 @@ bool draftListsEqual(const std::vector<EditProfileDraft> &lhs, const std::vector
 	return true;
 }
 
-EditProfileDraft draftFromProfile(const MRFileExtensionProfile &profile) {
+EditProfileDraft draftFromProfile(const MREditExtensionProfile &profile) {
 	EditProfileDraft draft;
-	MRFileExtensionEditorSettings effective = configuredFileExtensionEditorSettings();
+	MREditSetupSettings effective = configuredEditSetupSettings();
 
 	draft.isDefault = false;
 	draft.id = profile.id;
@@ -703,14 +692,14 @@ EditProfileDraft draftFromProfile(const MRFileExtensionProfile &profile) {
 	draft.extensionsLiteral = joinExtensionsLiteral(profile.extensions);
 	draft.colorThemeUri = profile.windowColorThemeUri;
 	draft.compilerProfileId = profile.compilerProfileId;
-	effective = mergeFileExtensionEditorSettings(effective, profile.overrides);
+	effective = mergeEditSetupSettings(effective, profile.overrides);
 	settingsToDialogRecord(effective, draft.settingsRecord);
 	return draft;
 }
 
 EditProfileDraft makeDefaultDraft() {
 	EditProfileDraft draft;
-	MRFileExtensionEditorSettings defaults = configuredFileExtensionEditorSettings();
+	MREditSetupSettings defaults = configuredEditSetupSettings();
 
 	draft.isDefault = true;
 	draft.id = kDefaultProfileId;
@@ -741,7 +730,7 @@ EditProfileDraft makeNewDraft(const std::vector<EditProfileDraft> &existingDraft
 	draft.extensionsLiteral.clear();
 	draft.colorThemeUri.clear();
 	draft.compilerProfileId.clear();
-	settingsToDialogRecord(configuredFileExtensionEditorSettings(), draft.settingsRecord);
+	settingsToDialogRecord(configuredEditSetupSettings(), draft.settingsRecord);
 	return draft;
 }
 
@@ -830,8 +819,8 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 
 bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std::string &errorText) {
 	MRSettingsWriteReport writeReport;
-	MRFileExtensionEditorSettings defaultsCandidate;
-	std::vector<MRFileExtensionProfile> profilesCandidate;
+	MREditSetupSettings defaultsCandidate;
+	std::vector<MREditExtensionProfile> profilesCandidate;
 	std::string defaultThemePathCandidate;
 
 	if (!draftsToConfiguredState(drafts, defaultsCandidate, profilesCandidate, defaultThemePathCandidate, errorText)) return false;

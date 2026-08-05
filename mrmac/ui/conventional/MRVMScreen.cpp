@@ -320,7 +320,7 @@ bool applyClrLineProc(const std::string &name, const std::vector<Value> &args) {
 	int row = 0;
 	int count = 0;
 
-	if (!(args.empty() || (args.size() == 3 && args[0].type == TYPE_INT && args[1].type == TYPE_INT && args[2].type == TYPE_INT))) throw std::runtime_error(name + " expects no arguments or (int, int, int).");
+	if (!args.empty() && (args.size() != 3 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT)) throw std::runtime_error(name + " expects no arguments or (int, int, int).");
 
 	if (!args.empty()) {
 		col = valueAsInt(args[0]);
@@ -394,7 +394,7 @@ bool applyScrollBoxProc(const std::string &name, const std::vector<Value> &args,
 bool applyClearScreenProc(const std::string &name, const std::vector<Value> &args) {
 	int attr = 0x07;
 
-	if (!(args.empty() || (args.size() == 1 && args[0].type == TYPE_INT))) throw std::runtime_error(name + " expects no arguments or one integer argument.");
+	if (!args.empty() && (args.size() != 1 || args[0].type != TYPE_INT)) throw std::runtime_error(name + " expects no arguments or one integer argument.");
 	if (!args.empty()) attr = valueAsInt(args[0]);
 	{
 		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
@@ -611,15 +611,6 @@ bool mrvmUiProjectRuntimeMenuKeyLabels(const std::vector<std::pair<std::string, 
 	if (errorMessage != nullptr) errorMessage->clear();
 	if (menuBar == nullptr) return true;
 	return returnWithDirectScreenMutation(menuBar->projectRuntimeMenuKeyLabels(labels));
-}
-
-bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage) {
-	auto *app = dynamic_cast<TApplication *>(TProgram::application);
-	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	if (menuBar == nullptr) return true;
-	return returnWithDirectScreenMutation(menuBar->refreshRuntimeMenus(errorMessage));
 }
 
 bool mrvmUiMessageBox(const std::string &text) {

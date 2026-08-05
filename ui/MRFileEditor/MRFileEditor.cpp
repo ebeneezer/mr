@@ -100,10 +100,6 @@ void MRFileEditor::setForceBinarySave(bool enabled) noexcept {
 	mForceBinarySave = enabled;
 }
 
-bool MRFileEditor::forceBinarySave() const noexcept {
-	return mForceBinarySave;
-}
-
 const char *MRFileEditor::persistentFileName() const noexcept {
 	return hasPersistentFileName() ? fileName : "";
 }
@@ -279,8 +275,7 @@ bool MRFileEditor::ownsFoldWarmupTask(std::uint64_t taskId) const noexcept {
 		if (packet.taskId == taskId) return true;
 	for (const FoldLevelPacketState &packet : mFoldLevelOperationState.packets)
 		if (packet.taskId == taskId) return true;
-	if (mFoldLevelOperationState.projectionTaskId == taskId) return true;
-	return false;
+	return mFoldLevelOperationState.projectionTaskId == taskId;
 }
 
 std::uint64_t MRFileEditor::pendingMiniMapWarmupTaskId() const noexcept {
@@ -327,18 +322,6 @@ const std::string &MRFileEditor::lastUiHotpathTrace() const noexcept {
 	return mLastUiHotpathTrace;
 }
 
-bool MRFileEditor::lineIndexWarmupPending() const noexcept {
-	return pendingLineIndexWarmupTaskCount() != 0;
-}
-
-bool MRFileEditor::syntaxWarmupPending() const noexcept {
-	return pendingSyntaxWarmupTaskCount() != 0;
-}
-
-bool MRFileEditor::miniMapWarmupPending() const noexcept {
-	return mMiniMapState.renderer().pendingWarmupTaskId() != 0;
-}
-
 bool MRFileEditor::usesApproximateMetrics() const noexcept {
 	return useApproximateLargeFileMetrics();
 }
@@ -371,10 +354,6 @@ void MRFileEditor::toggleLineDrawing() {
 void MRFileEditor::toggleLineDrawingDoubleLines() {
 	if (!lineDrawingEnabled()) return;
 	setLineDrawingDoubleLines(!lineDrawingDoubleLines());
-}
-
-int MRFileEditor::preferredIndentColumn() const noexcept {
-	return mPreferredIndentColumn;
 }
 
 void MRFileEditor::setPreferredIndentColumn(int column) noexcept {

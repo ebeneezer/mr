@@ -849,11 +849,6 @@ bool mrvmAppendModelessWindowLogFieldLine(const std::string &windowId, const std
 	return mrvmModelessUiAppendWindowLogFieldLine(mrvmRuntimeKv(), windowId, logId, text);
 }
 
-bool mrvmClearModelessWindowLogField(const std::string &windowId, const std::string &logId) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	return mrvmModelessUiClearWindowLogField(mrvmRuntimeKv(), windowId, logId);
-}
-
 bool mrvmReadModelessWindowLogFieldLines(const std::string &windowId, const std::string &logId, std::vector<std::string> &lines) {
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	return mrvmModelessUiReadWindowLogFieldLines(mrvmRuntimeKv(), windowId, logId, lines);

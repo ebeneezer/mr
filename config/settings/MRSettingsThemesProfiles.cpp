@@ -749,42 +749,6 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 	return true;
 }
 
-void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *values, std::size_t count) {
-	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
-	MRColorSetupSettings configured = configuredColorSetupSettings();
-
-	if (values == nullptr || definition == nullptr || count != definition->count) return;
-	switch (group) {
-		case MRColorSetupGroup::Window:
-			for (std::size_t i = 0; i < configured.windowColors.size(); ++i) values[i] = configured.windowColors[i];
-			break;
-		case MRColorSetupGroup::MenuDialog:
-			for (std::size_t i = 0; i < configured.menuDialogColors.size(); ++i) values[i] = configured.menuDialogColors[i];
-			break;
-		case MRColorSetupGroup::Help:
-			for (std::size_t i = 0; i < configured.helpColors.size(); ++i) values[i] = configured.helpColors[i];
-			break;
-		case MRColorSetupGroup::Other:
-			for (std::size_t i = 0; i < configured.otherColors.size(); ++i) values[i] = configured.otherColors[i];
-			break;
-		case MRColorSetupGroup::MiniMap:
-			for (std::size_t i = 0; i < configured.miniMapColors.size(); ++i) values[i] = configured.miniMapColors[i];
-			break;
-		case MRColorSetupGroup::FileCompareMiniMap:
-			for (std::size_t i = 0; i < configured.fileCompareMiniMapColors.size(); ++i) values[i] = configured.fileCompareMiniMapColors[i];
-			break;
-		case MRColorSetupGroup::Code:
-			for (std::size_t i = 0; i < configured.codeColors.size(); ++i) values[i] = configured.codeColors[i];
-			break;
-		case MRColorSetupGroup::FileCompare:
-			for (std::size_t i = 0; i < configured.fileCompareColors.size(); ++i) values[i] = configured.fileCompareColors[i];
-			break;
-		case MRColorSetupGroup::Debugger:
-			for (std::size_t i = 0; i < configured.debuggerColors.size(); ++i) values[i] = configured.debuggerColors[i];
-			break;
-	}
-}
-
 bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage, bool clearThemeDisplayName) {
 	MRColorSetupSettings configured = configuredColorSetupSettings();
 

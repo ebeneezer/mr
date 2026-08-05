@@ -19,7 +19,6 @@
 
 namespace mr::settings_assignment {
 
-bool setError(std::string *errorMessage, const std::string &message);
 bool isPayloadKeyStart(char ch) noexcept {
 	const unsigned char uch = static_cast<unsigned char>(ch);
 	return std::isalpha(uch) != 0;

@@ -317,10 +317,6 @@ static bool applyDebugMutationAtValue(VirtualMachine::Value &value, const MRMacr
 
 }
 
-std::string VirtualMachine::debugValueText(const Value &value) const {
-	return debugValueTextFor(value, *mHashStore, mrvmRuntimeKv().globalStore());
-}
-
 void VirtualMachine::appendDebugVariables(MRMacroDebugRunResult &result) const {
 	MRVMHashStore &globalStore = mrvmRuntimeKv().globalStore();
 

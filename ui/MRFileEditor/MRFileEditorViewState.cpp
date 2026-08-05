@@ -189,13 +189,6 @@ const MREditSetupSettings &MRFileEditor::effectiveEditSetupSettings() const noex
 	return mEffectiveEditSettings;
 }
 
-int MRFileEditor::configuredTabSize() const {
-	int tabSize = effectiveEditSetupSettings().tabSize;
-	if (tabSize < 1) tabSize = 1;
-	if (tabSize > 32) tabSize = 32;
-	return tabSize;
-}
-
 bool MRFileEditor::configuredDisplayTabs() const {
 	return effectiveEditSetupSettings().displayTabs;
 }

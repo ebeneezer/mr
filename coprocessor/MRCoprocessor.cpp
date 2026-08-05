@@ -274,20 +274,6 @@ std::size_t Coprocessor::pendingResults() const noexcept {
 	return results.size();
 }
 
-bool Coprocessor::hasTaskState(std::uint64_t taskId) noexcept {
-	if (taskId == 0) return false;
-	{
-		std::lock_guard<std::mutex> lock(taskCancelMutex);
-		if (taskCancelFlags.find(taskId) != taskCancelFlags.end()) return true;
-	}
-	{
-		std::lock_guard<std::mutex> lock(resultMutex);
-		for (const Result &result : results)
-			if (result.task.id == taskId) return true;
-	}
-	return false;
-}
-
 void Coprocessor::post(Result result) {
 	enqueueResult(std::move(result));
 }

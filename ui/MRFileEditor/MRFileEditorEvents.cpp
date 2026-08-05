@@ -835,14 +835,11 @@ void MRFileEditor::handleMouse(TEvent &event) {
 			const std::size_t length = mBufferModel.length();
 
 			if (visualAnchor == length && length > 0) --visualAnchor;
-			if (visualEnd == length && length > 0) --visualEnd;
-			else if (visualEnd > 0 && lineStartOffset(visualEnd) == visualEnd && lineEndOffset(visualEnd) == visualEnd)
-				--visualEnd;
+			if ((visualEnd == length && length > 0) || (visualEnd > 0 && lineStartOffset(visualEnd) == visualEnd && lineEndOffset(visualEnd) == visualEnd)) --visualEnd;
 		}
-		if (liveBlockMode == 2 && mMouseSelectionLinesValid)
-			setBlockOverlayState(liveBlockMode, visualAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn, true, mMouseSelectionAnchorLine, mMouseSelectionCursorLine, redraw);
-		else
-			setBlockOverlayState(liveBlockMode, visualAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn, false, 0, 0, redraw);
+		const bool lineRangeValid = liveBlockMode == 2 && mMouseSelectionLinesValid;
+		setBlockOverlayState(liveBlockMode, visualAnchor, visualEnd, true, false, mMouseSelectionAnchorColumn, mMouseSelectionCursorColumn, lineRangeValid,
+		                     lineRangeValid ? mMouseSelectionAnchorLine : 0, lineRangeValid ? mMouseSelectionCursorLine : 0, redraw);
 		if (columnBlockTraceEnabled() && liveBlockMode == 2) {
 			std::ostringstream trace;
 			trace << "overlay anchor=" << mSelectionAnchor << " current=" << current << " visualAnchor=" << visualAnchor << " visualEnd=" << visualEnd

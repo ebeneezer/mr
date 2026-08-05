@@ -94,7 +94,6 @@ ushort runMultiFileReplaceDecisionDialog(std::size_t completedCount) {
 	result = mr::dialogs::execDialog(dialog);
 	switch (result) {
 		case cmMrMultiReplaceContinue:
-			return result;
 		case cmMrMultiReplaceAbort:
 		case cmMrMultiReplaceRevert:
 			return result;
