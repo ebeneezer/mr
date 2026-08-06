@@ -1,39 +1,11 @@
 #include "MRFileEditor.hpp"
-#include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../app/MRPrivilegedFileBroker.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 
-#include <array>
+#include <cerrno>
 #include <chrono>
-#include <ctime>
 #include <fstream>
-#include <sstream>
 #include <unistd.h>
-
-namespace {
-
-std::string directProbeTimestamp() {
-	std::array<char, 32> buffer{};
-	const std::time_t now = std::time(nullptr);
-	const std::tm *tmNow = std::localtime(&now);
-
-	if (tmNow == nullptr) return std::string("--:--:--");
-	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
-	return std::string(buffer.data());
-}
-
-void appendDirectProbeLog(std::string_view message) {
-	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-
-	if (!out) return;
-	out << "[" << directProbeTimestamp() << "] " << message << '\n';
-	out.flush();
-}
-
-template <class Duration> long long traceMicros(Duration duration) {
-	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
-}
-
-} // namespace
 
 bool MRFileEditor::resolveSaveOptionsForPath(const char *path, MRTextSaveOptions &options, std::size_t *optionsHash) const {
 	options = effectiveTextSaveOptionsForPath(path != nullptr ? path : "", optionsHash);
@@ -77,7 +49,11 @@ bool MRFileEditor::loadMappedFile(TStringView path, std::string &error) {
 	const auto mapStartedAt = std::chrono::steady_clock::now();
 
 	mLastLoadTiming = LoadTiming();
-	if (!document.loadMappedFile(path, error)) return false;
+	if (!document.loadMappedFile(path, error)) {
+		if (!mrPrivilegedFileBrokerAvailable()) return false;
+		int fileDescriptor = mrPrivilegedFileBrokerOpenReadOnly(path, error);
+		if (fileDescriptor < 0 || !document.loadMappedFile(fileDescriptor, path, error)) return false;
+	}
 	const double mappedLoadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - mapStartedAt).count();
 	const std::size_t lines = document.estimatedLineCount();
 
@@ -149,22 +125,26 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 	MRTextSaveOptions saveOptions;
 	const std::size_t pieceCount = mBufferModel.document().pieceCount();
 	const bool backupEnabled = configuredBackupFilesSetting();
+	const bool privilegedSave = targetPath != nullptr && mrPrivilegedFileBrokerAllowsPath(targetPath);
 	const bool mappedInPlaceSave = mBufferModel.document().hasMappedOriginal() && samePath(mBufferModel.document().mappedPath().c_str(), targetPath);
 	bool backupMovedTarget = false;
 	bool useTemporaryTarget = false;
+	int privilegedDescriptor = -1;
+	std::string brokerError;
 	std::string temporaryTargetPath;
 	std::string outputTargetPath;
+	std::ofstream out;
 
 	resolveSaveOptionsForPath(targetPath, saveOptions);
 
-	if (backupEnabled) {
+	if (backupEnabled && !privilegedSave) {
 		fnsplit(targetPath, drive, dir, file, ext);
 		char backupName[MAXPATH];
 		fnmerge(backupName, drive, dir, file, ".bak");
 		unlink(backupName);
 		backupMovedTarget = rename(targetPath, backupName) == 0;
 	}
-	useTemporaryTarget = mappedInPlaceSave && !backupMovedTarget;
+	useTemporaryTarget = !privilegedSave && mappedInPlaceSave && !backupMovedTarget;
 	outputTargetPath = targetPath != nullptr ? targetPath : "";
 	if (useTemporaryTarget) {
 		temporaryTargetPath = outputTargetPath + ".mr-save-tmp-" + std::to_string(static_cast<long long>(::getpid()));
@@ -172,27 +152,71 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 		outputTargetPath = temporaryTargetPath;
 	}
 
-	std::ofstream out(outputTargetPath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-	if (!out) {
-		TEditor::editorDialog(edCreateError, targetPath);
-		return false;
+	if (privilegedSave) {
+		if (!mrPrivilegedFileBrokerBeginSave(targetPath, backupEnabled, privilegedDescriptor, brokerError)) {
+			if (!brokerError.empty()) mrLogMessage("Privileged save could not start: " + brokerError);
+			TEditor::editorDialog(edCreateError, targetPath);
+			return false;
+		}
+	} else {
+		out.open(outputTargetPath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+		if (!out) {
+			TEditor::editorDialog(edCreateError, targetPath);
+			return false;
+		}
 	}
 	auto failWrite = [&]() -> bool {
+		if (privilegedSave && !brokerError.empty()) mrLogMessage("Privileged save failed: " + brokerError);
+		if (privilegedDescriptor >= 0) {
+			::close(privilegedDescriptor);
+			privilegedDescriptor = -1;
+		}
+		if (privilegedSave) mrPrivilegedFileBrokerAbortSave();
 		if (!temporaryTargetPath.empty()) unlink(temporaryTargetPath.c_str());
 		TEditor::editorDialog(edWriteError, targetPath);
 		return false;
+	};
+	auto writeBytes = [&](const char *data, std::size_t length) -> bool {
+		if (!privilegedSave) {
+			writeChunk(out, data, length);
+			return static_cast<bool>(out);
+		}
+		while (length > 0) {
+			const std::size_t part = std::min<std::size_t>(length, static_cast<std::size_t>(1024) * 1024 * 1024);
+			ssize_t written = ::write(privilegedDescriptor, data, part);
+			if (written > 0) {
+				data += written;
+				length -= static_cast<std::size_t>(written);
+				continue;
+			}
+			if (written < 0 && errno == EINTR) continue;
+			return false;
+		}
+		return true;
+	};
+	auto finishWrite = [&]() -> bool {
+		if (privilegedSave) {
+			if (::close(privilegedDescriptor) != 0) {
+				privilegedDescriptor = -1;
+				return failWrite();
+			}
+			privilegedDescriptor = -1;
+			if (!mrPrivilegedFileBrokerCommitSave(brokerError)) return failWrite();
+			return true;
+		}
+		if (!out) return failWrite();
+		out.close();
+		if (!out) return failWrite();
+		if (!temporaryTargetPath.empty() && rename(temporaryTargetPath.c_str(), targetPath) != 0) return failWrite();
+		return true;
 	};
 
 	if (saveOptions.binaryMode) {
 		for (std::size_t i = 0; i < pieceCount; ++i) {
 			mr::editor::PieceChunkView chunk = mBufferModel.document().pieceChunk(i);
-			writeChunk(out, chunk.data, chunk.length);
-			if (!out) return failWrite();
+			if (!writeBytes(chunk.data, chunk.length)) return failWrite();
 		}
-		out.close();
-		if (!out) return failWrite();
-		if (!temporaryTargetPath.empty() && rename(temporaryTargetPath.c_str(), targetPath) != 0) return failWrite();
-		return true;
+		return finishWrite();
 	}
 	const std::size_t sourceBytes = mBufferModel.document().length();
 	const auto normalizeStartedAt = std::chrono::steady_clock::now();
@@ -201,9 +225,9 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 	std::string outputBuffer;
 	auto flushOutput = [&]() -> bool {
 		if (outputBuffer.empty()) return true;
-		writeChunk(out, outputBuffer.data(), outputBuffer.size());
+		const bool written = writeBytes(outputBuffer.data(), outputBuffer.size());
 		outputBuffer.clear();
-		return static_cast<bool>(out);
+		return written;
 	};
 
 	outputBuffer.reserve(flushThresholdBytes + 1024);
@@ -217,11 +241,7 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 	if (!flushOutput()) return failWrite();
 
 	noteSaveNormalizationThroughput(sourceBytes, static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - normalizeStartedAt).count()));
-	if (!out) return failWrite();
-	out.close();
-	if (!out) return failWrite();
-	if (!temporaryTargetPath.empty() && rename(temporaryTargetPath.c_str(), targetPath) != 0) return failWrite();
-	return true;
+	return finishWrite();
 }
 
 
@@ -233,19 +253,11 @@ Boolean MRFileEditor::confirmSaveOrDiscardUntitled() {
 		persistentName = trimAscii(fileName);
 		if (!persistentName.empty() && upperAscii(persistentName) != "?NO-FILE?") detail = persistentName.c_str();
 	}
-	const auto startedAt = std::chrono::steady_clock::now();
-	appendDirectProbeLog("Phase1 discard untitled dialog begin");
 	const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showUnsavedChangesDialog("Save As", "Window has unsaved changes.", detail);
-	{
-		std::ostringstream trace;
-		trace << "Phase1 discard untitled dialog end total_us=" << traceMicros(std::chrono::steady_clock::now() - startedAt) << " choice=" << static_cast<int>(choice);
-		appendDirectProbeLog(trace.str());
-	}
 	switch (choice) {
 		case mr::dialogs::UnsavedChangesChoice::Save:
 			return saveAsWithPrompt();
 		case mr::dialogs::UnsavedChangesChoice::Discard:
-			appendDirectProbeLog("Phase1 discard untitled accepted");
 			setDocumentModified(false);
 			return True;
 		default:
@@ -254,19 +266,11 @@ Boolean MRFileEditor::confirmSaveOrDiscardUntitled() {
 }
 
 Boolean MRFileEditor::confirmSaveOrDiscardNamed() {
-	const auto startedAt = std::chrono::steady_clock::now();
-	appendDirectProbeLog("Phase1 discard named dialog begin");
 	const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showUnsavedChangesDialog("Save", "Save changes to:", fileName);
-	{
-		std::ostringstream trace;
-		trace << "Phase1 discard named dialog end total_us=" << traceMicros(std::chrono::steady_clock::now() - startedAt) << " choice=" << static_cast<int>(choice);
-		appendDirectProbeLog(trace.str());
-	}
 	switch (choice) {
 		case mr::dialogs::UnsavedChangesChoice::Save:
 			return saveInPlace();
 		case mr::dialogs::UnsavedChangesChoice::Discard:
-			appendDirectProbeLog("Phase1 discard named accepted");
 			setDocumentModified(false);
 			return True;
 		default:

@@ -74,7 +74,5 @@ bool noteRuntimeScheduledConsumerStarted(MRRuntimeScheduledConsumerId consumerId
 bool noteRuntimeScheduledConsumerFinished(MRRuntimeScheduledConsumerId consumerId, MRMacroExecutionSessionId sessionId);
 std::size_t pumpRuntimeScheduler(std::uint64_t nowMs);
 std::vector<std::string> runtimeSchedulerStatusLines(std::size_t maxEvents);
-void installRuntimeSchedulerSmokeIfEnabled();
-void logRuntimeSchedulerStatusIfEnabled();
 
 #endif

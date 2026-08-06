@@ -2774,37 +2774,3 @@ void runLiveLogsSetupDialogFlow() {
 	}
 	clearSetupDialogStatus();
 }
-
-bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette, const std::string &themeUri, std::string *errorMessage) {
-	std::string errorText;
-	std::string activeThemeDisplayName = configuredColorThemeDisplayName();
-	MRSetupPaths paths = resolveSetupPathDefaults();
-
-	if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
-		if (errorMessage != nullptr) *errorMessage = errorText;
-		return false;
-	}
-	if (!setConfiguredColorThemeDisplayName(activeThemeDisplayName, &errorText)) {
-		if (errorMessage != nullptr) *errorMessage = errorText;
-		return false;
-	}
-	if (!writeColorThemeFile(themeUri, &errorText)) {
-		if (errorMessage != nullptr) *errorMessage = errorText;
-		return false;
-	}
-
-	paths.settingsMacroUri = configuredSettingsMacroFilePath();
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-	MRSettingsWriteReport writeReport;
-	if (!writeSettingsMacroFile(paths, &errorText, &writeReport)) {
-		if (errorMessage != nullptr) *errorMessage = errorText;
-		return false;
-	}
-	mrLogSettingsWriteReport("save theme + sync settings", writeReport);
-
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}

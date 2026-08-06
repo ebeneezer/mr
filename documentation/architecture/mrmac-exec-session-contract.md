@@ -12,7 +12,6 @@ Applies to MRMac execution-session lifetime and consumers, including:
 - `mrmac/vm/MRVMExecSessions.*`
 - `mrmac/MRVMDebugSession.*`
 - `app/MRRuntimeScheduler.*`
-- `app/MRExecSessionStatus.*`
 - `coprocessor/MRCoprocessor.*`
 - `coprocessor/MRCoprocessorDispatch.*`
 - foreground macro delay pumping

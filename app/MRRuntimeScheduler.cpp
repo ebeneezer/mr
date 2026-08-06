@@ -5,7 +5,6 @@
 #include "../mrmac/MRVM.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
-#include <cstdlib>
 #include <mutex>
 
 namespace {
@@ -19,15 +18,6 @@ struct RuntimeSchedulerDueConsumer {
 	std::uint64_t dueAtMs = 0;
 	std::uint64_t observedAtMs = 0;
 };
-
-bool runtimeSchedulerSmokeEnabled() noexcept {
-	const char *value = std::getenv("MR_RUNTIME_SCHEDULER_SMOKE");
-	return value != nullptr && value[0] == '1' && value[1] == '\0';
-}
-
-std::string runtimeSchedulerSmokeSource() {
-	return "$MACRO RuntimeSchedulerSmoke;\nDEF_INT(ProbeValue);\nProbeValue := 40 + 2;\nEND_MACRO;\n";
-}
 
 std::string runtimeSchedulerEventLine(const MRRuntimeSchedulerEvent &event);
 
@@ -458,38 +448,4 @@ std::vector<std::string> runtimeSchedulerStatusLines(std::size_t maxEvents) {
 	for (std::size_t i = eventStart; i < events.size(); ++i)
 		lines.push_back(runtimeSchedulerEventLine(events[i]));
 	return lines;
-}
-
-void installRuntimeSchedulerSmokeIfEnabled() {
-	std::vector<MRRuntimeScheduledConsumer> consumers;
-	MRRuntimeScheduledConsumerConfig config;
-	MRRuntimeScheduledConsumerId consumerId = 0;
-
-	if (!runtimeSchedulerSmokeEnabled()) return;
-	consumers = runtimeScheduledConsumers();
-	for (std::size_t index = 0; index < consumers.size(); ++index) {
-		const MRRuntimeScheduledConsumer &consumer = consumers[index];
-
-		if (consumer.config.macroSpec != "RuntimeSchedulerSmoke") continue;
-		consumerId = consumer.consumerId;
-		break;
-	}
-	if (consumerId == 0) {
-		config.intervalMs = 1000;
-		config.macroSpec = "RuntimeSchedulerSmoke";
-		config.macroSource = runtimeSchedulerSmokeSource();
-		consumerId = registerRuntimeScheduledConsumer(config);
-	}
-	mrLogMessage(("MRMac runtime scheduler smoke installed consumer=" + std::to_string(consumerId) + ".").c_str());
-}
-
-void logRuntimeSchedulerStatusIfEnabled() {
-	if (!runtimeSchedulerSmokeEnabled()) return;
-	const std::vector<std::string> lines = runtimeSchedulerStatusLines(8);
-
-	for (std::size_t index = 0; index < lines.size(); ++index) {
-		const std::string &line = lines[index];
-
-		mrLogMessage(line.c_str());
-	}
 }

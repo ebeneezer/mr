@@ -118,8 +118,6 @@ MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT = regression/MRMacroDebuggerCrossSecti
 BASIC_LANGUAGE_PROBE_TARGET = regression/mr_basic_language_probe
 BASIC_LANGUAGE_PROBE_SOURCE = regression/MRBasicLanguageProbe.cpp
 BASIC_LANGUAGE_PROBE_OBJECT = regression/MRBasicLanguageProbe.o
-MRFE_BLOCK_OPS_HARNESS_SOURCE = ui/MRFileEditor/MRFEBlockOpsTestHarness.cpp
-MRFE_BLOCK_OPS_HARNESS_OBJECT = ui/MRFileEditor/MRFEBlockOpsTestHarness.o
 PHASE1_REPRO_PROBE_TARGET = misc/mr_phase1_repro_probe
 PHASE1_REPRO_PROBE_SOURCE = misc/mr_phase1_repro_probe.cpp
 PHASE1_REPRO_PROBE_OBJECT = misc/mr_phase1_repro_probe.o
@@ -206,6 +204,7 @@ CXX_SOURCES = \
 	app/utils/MRStringUtils.cpp \
 	app/utils/MRFileIOUtils.cpp \
 	app/export/MRPdfTextExporter.cpp \
+	app/MRPrivilegedFileBroker.cpp \
 	mr.cpp \
 	app/MRAppState.cpp \
 	app/MRCommandRouter.cpp \
@@ -225,8 +224,6 @@ CXX_SOURCES = \
 	app/MRMenuFactory.cpp \
 	app/MRMacroDebuggerCommandRoute.cpp \
 	app/MRVersion.cpp \
-	app/MRExecSessionStatus.cpp \
-	app/MRExecSessionSmoke.cpp \
 	app/MRRuntimeScheduler.cpp \
 	app/MRRuntimeTimerSource.cpp \
 	app/MREditorApp.cpp \
@@ -686,7 +683,8 @@ mrmac/mrmac.o: mrmac/mrmac.c mrmac/mrmac.h
 $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 $(HELP_CONTEXT_OBJECTS): $(HELP_TOPICS_GENERATED)
 
-mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp $(HELP_MARKDOWN_GENERATED)
+mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp app/MRPrivilegedFileBroker.hpp $(HELP_MARKDOWN_GENERATED)
+app/MRPrivilegedFileBroker.o: app/MRPrivilegedFileBroker.cpp app/MRPrivilegedFileBroker.hpp
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp
 app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp app/router/MRCommandRouterGit.hpp app/router/MRCommandRouterPdf.hpp app/router/MRCommandRouterText.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMRuntimeKv.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRFunctionKeyBindings.o: app/MRFunctionKeyBindings.cpp app/MRFunctionKeyBindings.hpp app/MRCommandRouter.hpp app/MRCommands.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRStatusLine.hpp ui/MRWindowSupport.hpp
@@ -697,14 +695,12 @@ app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/MRVersion.o: CXXFLAGS += -DMR_BUILD_EPOCH=$(MR_BUILD_EPOCH)
 app/MRVersion.o: FORCE
-app/MRExecSessionStatus.o: app/MRExecSessionStatus.cpp app/MRExecSessionStatus.hpp mrmac/MRMacroExecutionSession.hpp ui/MRWindowSupport.hpp
-app/MRExecSessionSmoke.o: app/MRExecSessionSmoke.cpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRMacroRunner.hpp ui/MRWindowSupport.hpp
 app/MRRuntimeScheduler.o: app/MRRuntimeScheduler.cpp app/MRRuntimeScheduler.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRWindowSupport.hpp
 app/MRRuntimeTimerSource.o: app/MRRuntimeTimerSource.cpp app/MRRuntimeTimerSource.hpp app/MRRuntimeScheduler.hpp
 app/MREditorApp.o: app/MREditorApp.cpp app/MREditorApp.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRFunctionKeyBindings.hpp app/MRMacroDebuggerCommandRoute.hpp app/MRMenuFactory.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp coprocessor/MRCoprocessor.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRPerformancePanel.hpp ui/MRSidekickEditor.hpp ui/MRStatusLine.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
 app/MREditorAppMacroRecording.o: app/MREditorAppMacroRecording.cpp app/MREditorApp.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRFunctionKeyBindings.hpp app/MRMacroDebuggerCommandRoute.hpp app/MRMenuFactory.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp app/utils/MRFileIOUtils.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsRuntimeState.hpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRHelpSystem.hpp ui/MRMessageLineController.hpp ui/MRSidekickEditor.hpp ui/MRStatusLine.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
 app/MREditorAppPresentation.o: app/MREditorAppPresentation.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRFunctionKeyBindings.hpp app/MRMacroDebuggerCommandRoute.hpp app/MRMenuFactory.hpp app/MRRuntimeTimerSource.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp coprocessor/MRCoprocessorDispatch.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFrame.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRPerformancePanel.hpp ui/MRSidekickEditor.hpp ui/MRStatusLine.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
-app/MREditorAppStartup.o: app/MREditorAppStartup.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRExecSessionSmoke.hpp app/MRExecSessionStatus.hpp app/MRFunctionKeyBindings.hpp app/MRMenuFactory.hpp app/MRRuntimeScheduler.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp app/utils/MRFileIOUtils.hpp config/settings/MRSettingsAssignments.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsStorage.hpp coprocessor/MRCoprocessor.hpp coprocessor/MRCoprocessorDispatch.hpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRBentoHexEditor/MRBentoHexEditor.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFrame.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRSidekickEditor.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
+app/MREditorAppStartup.o: app/MREditorAppStartup.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRFunctionKeyBindings.hpp app/MRMenuFactory.hpp app/MRPrivilegedFileBroker.hpp app/MRRuntimeScheduler.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp app/utils/MRFileIOUtils.hpp config/settings/MRSettingsAssignments.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsStorage.hpp coprocessor/MRCoprocessor.hpp coprocessor/MRCoprocessorDispatch.hpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp mrmac/MRMacroRunner.hpp mrmac/MRVM.hpp ui/MRBentoHexEditor/MRBentoHexEditor.hpp ui/MRDeskTop.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFrame.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRSidekickEditor.hpp ui/MRWindowLayout.hpp ui/MRWindowSupport.hpp
 app/MRMacroDebuggerCommandRoute.o: app/MRMacroDebuggerCommandRoute.cpp app/MRMacroDebuggerCommandRoute.hpp app/MRCommands.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRWindowSupport.hpp
 dialogs/MRAbout.o: dialogs/MRAbout.cpp dialogs/MRAbout.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
 dialogs/MRDirtyGating.o: dialogs/MRDirtyGating.cpp dialogs/MRDirtyGating.hpp dialogs/setup/MRSetupCommon.hpp
@@ -721,7 +717,7 @@ dialogs/MRWindowList.o: dialogs/MRWindowList.cpp dialogs/MRWindowList.hpp app/co
 ui/MRWindowLayout.o: ui/MRWindowLayout.cpp ui/MRWindowLayout.hpp ui/MRDesktopWindow.hpp ui/MREditWindow.hpp app/commands/MRWindowCommands.hpp
 ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp outline/MROutlineFoldProducer.hpp
 ui/MRFileEditor/MRFileEditorClipboard.o: ui/MRFileEditor/MRFileEditorClipboard.cpp ui/MRFileEditor/MRFileEditor.hpp
-ui/MRFileEditor/MRFileEditorSave.o: ui/MRFileEditor/MRFileEditorSave.cpp ui/MRFileEditor/MRFileEditor.hpp config/settings/MRSettingsStorage.hpp
+ui/MRFileEditor/MRFileEditorSave.o: ui/MRFileEditor/MRFileEditorSave.cpp ui/MRFileEditor/MRFileEditor.hpp app/MRPrivilegedFileBroker.hpp config/settings/MRSettingsStorage.hpp
 ui/MRFileEditor/MRFileEditorMarkers.o: ui/MRFileEditor/MRFileEditorMarkers.cpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorFoldWarmup.o: ui/MRFileEditor/MRFileEditorFoldWarmup.cpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp outline/MROutlineFoldProducer.hpp ui/MRSyntaxBasic.hpp
 ui/MRFileEditor/MRFileEditorFoldCanonicalContext.o: ui/MRFileEditor/MRFileEditorFoldCanonicalContext.cpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp
@@ -829,7 +825,7 @@ ui/MRBentoHexEditor/panes/MRHexPaneView.o: ui/MRBentoHexEditor/panes/MRHexPaneVi
 ui/widgets/MRColumnListView.o: ui/widgets/MRColumnListView.cpp ui/widgets/MRColumnListView.hpp config/settings/MRSettingsRuntime.hpp
 ui/widgets/MRDropList.o: ui/widgets/MRDropList.cpp ui/widgets/MRDropList.hpp ui/widgets/MRColumnListView.hpp dialogs/setup/MRSetupCommon.hpp
 outline/MROutlineFoldProducer.o: outline/MROutlineFoldProducer.cpp outline/MROutlineFoldProducer.hpp outline/MROutlineModel.hpp derivedstate/MRFoldingDerivedState.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp ui/MRTextBufferModel.hpp app/utils/MRStringUtils.hpp
-ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
+ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp app/MRPrivilegedFileBroker.hpp config/settings/MRSettingsRuntime.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
 ui/MRSyntaxBasic.o: ui/MRSyntaxBasic.cpp ui/MRSyntax.hpp
 ui/MRSyntaxBasicBlocks.o: ui/MRSyntaxBasicBlocks.cpp ui/MRSyntaxBasic.hpp
@@ -844,7 +840,7 @@ piecetable/MRTextDocumentDirectLineIndex.o: piecetable/MRTextDocumentDirectLineI
 $(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsRuntime.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp
 $(MROUTLINETRAINER_OBJECT): $(MROUTLINETRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
-$(REGRESSION_PROBE_OBJECT): $(REGRESSION_PROBE_SOURCE) app/MRExecSessionStatus.hpp app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRVM.hpp piecetable/MRTextDocument.hpp
+$(REGRESSION_PROBE_OBJECT): $(REGRESSION_PROBE_SOURCE) app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRVM.hpp piecetable/MRTextDocument.hpp
 $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT): $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_SOURCE) mrmac/MRMacroExecutionSession.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMRuntimeDebugger.hpp
 $(BASIC_LANGUAGE_PROBE_OBJECT): $(BASIC_LANGUAGE_PROBE_SOURCE) app/commands/MRExternalCommand.hpp config/settings/MRSettingsCompilerProfiles.hpp config/settings/MRSettingsRuntime.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp
 app/services/MRWorkspaceServiceContext.o: app/services/MRWorkspaceServiceContext.cpp app/services/MRWorkspaceServiceContext.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
@@ -867,7 +863,7 @@ $(MROUTLINETRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) | pcre2-check
+$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(BASIC_LANGUAGE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(BASIC_LANGUAGE_PROBE_OBJECT) | pcre2-check
@@ -894,7 +890,7 @@ clean:
 		$(MRINDENTTRAINER_OBJECT) $(MRINDENTTRAINER_TARGET) \
 		$(MROUTLINETRAINER_OBJECT) $(MROUTLINETRAINER_TARGET) \
 		$(STAGE_PROFILE_PROBE_TARGET) \
-		$(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) $(MRFE_BLOCK_OPS_HARNESS_OBJECT) \
+		$(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) \
 		$(BASIC_LANGUAGE_PROBE_OBJECT) $(BASIC_LANGUAGE_PROBE_TARGET) \
 		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
 		$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET) \

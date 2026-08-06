@@ -366,6 +366,7 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 	const int panelHeight = !fullscreenActive && performancePanelVisible ? std::min(MRPerformancePanel::kPreferredHeight, maxPanelHeight) : 0;
 
 	if (menuBar != nullptr) {
+		if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->setFullscreenPresentation(fullscreenActive);
 		if (fullscreenActive && !fullscreenMenuBarVisible) menuBar->hide();
 		else
 			menuBar->show();

@@ -108,6 +108,8 @@ class MappedFileSource {
 	}
 
 	bool openReadOnly(const std::string &path, std::string &error);
+	// A valid descriptor is owned by the mapped source after this call, including on failure.
+	bool openReadOnly(int fileDescriptor, const std::string &path, std::string &error);
 	void reset() noexcept;
 
 	[[nodiscard]] bool mapped() const noexcept {
@@ -555,6 +557,8 @@ class TextDocument {
 	}
 
 	bool loadMappedFile(const std::string &path, std::string &error);
+	// A valid descriptor is transferred to the document, including when mapping fails.
+	bool loadMappedFile(int fileDescriptor, const std::string &path, std::string &error);
 	[[nodiscard]] bool hasMappedOriginal() const noexcept {
 		return mMappedOriginal.mapped();
 	}

@@ -26,6 +26,7 @@
 #include "../app/MRCommands.hpp"
 #include "../app/MRCommandRouter.hpp"
 #include "../app/MRHelpTopics.generated.hpp"
+#include "../app/MRPrivilegedFileBroker.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
@@ -367,6 +368,13 @@ bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::
 	return win;
 }
 } // namespace
+
+bool mrPathRequiresReadOnlyEditor(const char *fileName) noexcept {
+	if (fileName == nullptr || *fileName == '\0') return false;
+	if (mrPrivilegedFileBrokerAllowsPath(fileName)) return false;
+	if (::access(fileName, F_OK) != 0) return false;
+	return ::access(fileName, W_OK) != 0;
+}
 
 bool mrActivateEditWindow(MREditWindow *win) {
 	std::string line;

@@ -8,7 +8,6 @@
 
 class MRFileEditor;
 class MREditWindow;
-class MRFEBlockOpsTestPeer;
 
 enum class MRFEBlockMode : int {
 	None = 0,
@@ -148,8 +147,6 @@ class MRFEBlockOps {
 	MRFEArenaAllocator mArena;
 
 	friend class MREditWindow;
-	friend class MRFEBlockOpsTestPeer;
-	friend bool mrfeBlockOpsRegressionHarness(std::string &failureReason);
 };
 
 #endif

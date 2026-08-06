@@ -27,7 +27,7 @@
 
 \title{\mr{} Technical Manual\\\large A technical history of boundaries, speed, and extensibility}
 \author{Dr.\ Michael 'iDoc' Raus}
-\date{27 July 2026}
+\date{5 August 2026}
 
 \begin{document}
 \frontmatter
@@ -40,7 +40,7 @@
 \vspace{3\baselineskip}
 {\large Dr.\ Michael 'iDoc' Raus\par}
 \vspace{2\baselineskip}
-{\large 27 July 2026\par}
+{\large 5 August 2026\par}
 \end{center}
 \vspace*{\fill}
 \end{titlepage}
@@ -550,6 +550,23 @@ assigned core as distinct fields. Its bounded lifecycle ring records
 \texttt{discarded}, \texttt{stopping}, and \texttt{finished}. Queue, run,
 accept, adopt and total durations, packet generation, direction and span are
 observability outputs only; they never become semantic inputs to a projection.
+
+\section{Two observation scales}
+
+The Performance Panel is the global diagnostic projection of this telemetry.
+It combines the current coprocessor snapshot, the bounded lifecycle event ring,
+one-second activity counters, lane and owner totals, affinity failures, and
+selected VM-hash and settings I/O rates. A refresh signature avoids drawing an
+unchanged panel; running work adds a quarter-second time component so durations
+remain live. The panel neither owns nor cancels any task.
+
+The editor-frame activity marker is deliberately narrower. It projects only
+work attributable to that window: explicitly tracked external commands and
+macro jobs together with pending line-index, display-width, syntax, folding,
+and minimap packets. Its provider constructs human-readable rows from the
+owner's current state. Hover opens a transient TVision window, click pins it,
+and Escape or close dismisses it. No overlay becomes a second scheduler and
+no popup retains a worker handle after its owner has stopped reporting it.
 
 \chapter{A minimap with eight dots per character}
 \label{ch:minimap}
@@ -1163,6 +1180,20 @@ bookkeeping. \texttt{APPLICATIONUI} contains application-owned transient UI
 coordination such as the message-line Static Mode semaphore. These roots share
 a storage substrate, but they are not one
 undifferentiated dictionary.
+
+Static Mode illustrates the separation between semantic coordination and view
+mechanics. Its K/V semaphore becomes authoritative before the menu and status
+lines transition. Entry clears ordinary message owners, suppresses new
+transient messages, and permits only the numeric progress projection. The
+function-key labels animate towards \texttt{Esc Abort}, but F1 through F12
+cease dispatch immediately rather than waiting for the animation. Exit clears
+the progress projection and restores the captured labels through the inverse
+transition. The views retain animation mechanics; they do not own the mode.
+Fullscreen temporarily suspends both the projection and the event restriction
+without clearing the semaphore. F11 therefore remains an unconditional
+presentation command, Escape first leaves Fullscreen, and a transient F10 menu
+keeps the Static Mode lane blank. If the operation still runs after Fullscreen,
+the retained mode and progress become visible again.
 
 Hash and hash-array values may cross a storage boundary. In that case the VM
 copies the reachable value graph into the target store with a source-to-target
@@ -1813,6 +1844,27 @@ configuration forms without pretending to understand every possible build
 system automatically. A profile remains visible and editable, and may include
 build hooks and MRMAC actions.
 
+A compiler profile keeps execution policy visible: executable, toolchain,
+target, build flags, include, library, and runtime paths, a shell pre-build
+command, success and failure commands, result-dependent audio paths, and
+pre/post-build \mrmac{} hooks. These values remain ordinary central settings,
+not a registry owned by the compiler dialog.
+
+Automatic setup has two bounded modes. With a selected executable it resolves
+and probes that compiler, then fills the supported profile fields from the
+probe. Without one it discovers the supported compiler families on
+\texttt{PATH} and merges named profiles without replacing existing IDs.
+The resulting profile is still editable and serialises through the canonical
+settings route.
+
+At execution time the pre-build \mrmac{} hook runs before submission. The
+external shell task exports one explicit build context, executes the shell
+pre-command, conditionally runs the compiler, and dispatches the success or
+failure command while preserving the build status. UI-thread result adoption
+then performs the matching audio notification and post-build \mrmac{} hook.
+Thus shell policy remains inside the finite external task, while VM mutation
+and visible adoption remain on their authorised side of the boundary.
+
 \part{Syntax as a shared core}
 
 \chapter{From an external generator to an integrated syntax model}
@@ -1888,6 +1940,31 @@ The result is a TUI workspace in which many windows need not form an
 unmanageable parade. They can live on virtual desktops and reappear in a
 workspace exactly where work was interrupted.
 
+\chapter{Git as a file-scoped external view}
+
+Git support does not introduce a repository model beside Git itself. When a
+named editor gains focus or its file state changes, the window submits a
+finite \texttt{Io} task owned by that editor's buffer identity. The probe asks
+Git for porcelain status of exactly that path. Exit status distinguishes
+clean, changed-or-untracked, and unavailable; command output is not retained
+as application state.
+
+The result carries task ID, file path, and a monotonically changing window
+generation. Adoption succeeds only if the same window still owns the same
+path and generation. Rename, reload, save, focus-driven invalidation, or close
+therefore prevents a late status result from painting a marker for an obsolete
+file. The frame's Git marker is a projection of the adopted boolean, not a
+cached repository index.
+
+The explicit Git Changes command is a second finite external route. A dirty
+editor must first save successfully. The command then creates a communication
+window and asks Git for repository root, branch, short status, and a
+file-scoped diff; an untracked file uses an empty source for comparison.
+Output travels through the ordinary external-command worker and UI adoption
+path. There are deliberately no staging, commit, checkout, or branch-state
+objects in \mr{}: the feature provides file context without becoming a second
+Git client.
+
 \chapter{MFS and Acquire: Unix output as working material}
 
 Multi-file search and multi-file replace combine recursive file work with
@@ -1903,6 +1980,9 @@ finite dialog-owned coprocessor task. The dialog reports collection and
 running. Cancellation is checked during traversal, between I/O chunks, between
 matches, and through PCRE2 automatic callouts inside a long individual match.
 Only a complete, still version-valid session reaches the result dialog.
+The result model owns one entry per candidate file and its matches, so Load
+opens the selected file while Load All opens each distinct result file rather
+than reloading once per hit.
 Replace All remains a UI-thread mutation phase, but performs one replacement
 per dialog event and reports \texttt{x/y} progress. Matches are applied from
 the end of each file so that earlier offsets remain valid without rescanning
@@ -1920,9 +2000,11 @@ group runs in a finite I/O worker and stdout is adopted incrementally. The list
 shows per-entry ordinals and a total. Closing the dialog cancels the process
 group, waits for its bounded TERM/KILL teardown, and discards unadopted output.
 Loading all files is sliced at file boundaries so that Close can stop the
-remaining queue. Acquire is therefore not the uncritical insertion of arbitrary
-pipe bytes into a buffer. It turns Unix tools into an understandable file
-selection.
+remaining queue. During that batch the central message-line Static Mode
+projects completed/total progress and gives Escape to the cancellation route;
+already loaded files remain valid. Acquire is therefore not the uncritical
+insertion of arbitrary pipe bytes into a buffer. It turns Unix tools into an
+understandable file selection.
 
 \part{Decisions that left traces}
 

@@ -1,8 +1,6 @@
 #ifndef MRSETUPSECTIONS_HPP
 #define MRSETUPSECTIONS_HPP
 
-#include <string>
-
 class TDialog;
 class TPalette;
 
@@ -12,8 +10,5 @@ void runBackupsAutosaveDialogFlow();
 void runPathsSetupDialogFlow();
 void runUserInterfaceSettingsDialogFlow();
 void runLiveLogsSetupDialogFlow();
-
-// Regression-only hook used by regression/mr-regression-checks.cpp.
-bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette, const std::string &themeUri, std::string *errorMessage);
 
 #endif

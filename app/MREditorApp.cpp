@@ -367,7 +367,12 @@ void MREditorApp::handleEvent(TEvent &event) {
 	traceKeyDebugEvent("app-pre", event);
 	traceCalculatorHotkeyEvent("app-pre", event);
 	clearTransientSearchSelectionOnUserInput(event);
-	if (event.what == evKeyDown && mr::messageline::staticModeActive()) {
+	if (fullscreenPresentationActive && event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc)) {
+		leaveFullscreenPresentation();
+		clearEvent(event);
+		return;
+	}
+	if (event.what == evKeyDown && !fullscreenPresentationActive && mr::messageline::staticModeActive()) {
 		switch (TKey(event.keyDown).code) {
 			case kbF1:
 			case kbF2:
@@ -379,7 +384,6 @@ void MREditorApp::handleEvent(TEvent &event) {
 			case kbF8:
 			case kbF9:
 			case kbF10:
-			case kbF11:
 			case kbF12:
 				clearEvent(event);
 				return;
@@ -437,11 +441,6 @@ void MREditorApp::handleEvent(TEvent &event) {
 	}
 	if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbF11)) {
 		toggleFullscreenPresentation();
-		clearEvent(event);
-		return;
-	}
-	if (fullscreenPresentationActive && event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc)) {
-		leaveFullscreenPresentation();
 		clearEvent(event);
 		return;
 	}

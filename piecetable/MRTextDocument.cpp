@@ -96,10 +96,7 @@ bool Piece::empty() const noexcept {
 }
 
 bool MappedFileSource::openReadOnly(const std::string &path, std::string &error) {
-	struct stat st;
 	int fd = -1;
-	void *mapping = MAP_FAILED;
-	std::shared_ptr<State> state(new State());
 
 	error.clear();
 	fd = ::open(path.c_str(), O_RDONLY);
@@ -107,25 +104,35 @@ bool MappedFileSource::openReadOnly(const std::string &path, std::string &error)
 		error = std::strerror(errno);
 		return false;
 	}
-	if (::fstat(fd, &st) != 0) {
+	return openReadOnly(fd, path, error);
+}
+
+bool MappedFileSource::openReadOnly(int fileDescriptor, const std::string &path, std::string &error) {
+	struct stat st;
+	void *mapping = MAP_FAILED;
+	std::shared_ptr<State> state(new State());
+
+	error.clear();
+	if (fileDescriptor < 0) {
+		error = "Invalid file descriptor.";
+		return false;
+	}
+	state->fd = fileDescriptor;
+	if (::fstat(fileDescriptor, &st) != 0) {
 		error = std::strerror(errno);
-		::close(fd);
 		return false;
 	}
 	if (!S_ISREG(st.st_mode)) {
 		error = "Only regular files can be memory-mapped.";
-		::close(fd);
 		return false;
 	}
 
-	state->fd = fd;
 	state->path = path;
 	state->size = static_cast<std::size_t>(st.st_size);
 	if (state->size != 0) {
-		mapping = ::mmap(nullptr, state->size, PROT_READ, MAP_PRIVATE, fd, 0);
+		mapping = ::mmap(nullptr, state->size, PROT_READ, MAP_PRIVATE, fileDescriptor, 0);
 		if (mapping == MAP_FAILED) {
 			error = std::strerror(errno);
-			::close(fd);
 			return false;
 		}
 		state->data = static_cast<const char *>(mapping);
@@ -307,6 +314,13 @@ Snapshot TextDocument::snapshot() const {
 bool TextDocument::loadMappedFile(const std::string &path, std::string &error) {
 	MappedFileSource source;
 	if (!source.openReadOnly(path, error)) return false;
+	initializeFromMappedSource(source, true);
+	return true;
+}
+
+bool TextDocument::loadMappedFile(int fileDescriptor, const std::string &path, std::string &error) {
+	MappedFileSource source;
+	if (!source.openReadOnly(fileDescriptor, path, error)) return false;
 	initializeFromMappedSource(source, true);
 	return true;
 }

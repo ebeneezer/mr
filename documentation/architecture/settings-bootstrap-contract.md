@@ -25,6 +25,12 @@ mode.
 
 The canonical persistence version is the running build's `MR_BUILD_EPOCH`.
 
+For a sudo launch, the privileged file broker must be established and the
+editor process must permanently assume the invoking user's UID, GID, groups,
+home and configuration environment before `mrvmSetProcessContext` and
+`MREditorApp` construction. The broker never reads, creates or applies settings
+and is not a second settings authority.
+
 ## Input normalization
 
 - A lower persisted version is upgrade input.
@@ -105,6 +111,8 @@ Without explicit maintainer approval:
 - Do not change key meanings or dirty-state semantics as bootstrap cleanup.
 - `SAVE_SETTINGS`, theme persistence and workspace serialization remain outside
   bootstrap ownership.
+- Do not load user settings into a process that can still regain root
+  privileges.
 
 ## Related contracts
 
@@ -121,3 +129,5 @@ Without explicit maintainer approval:
 - Verify final VM application, dirty clearing and canonical rewrite.
 - Probe theme, keymap and AUTOEXEC post-normalization behavior.
 - Save, restart and compare the resulting runtime settings.
+- Start through sudo and verify that the invoking user's settings, AUTOEXEC and
+  macro paths are used only after the editor process has dropped privileges.

@@ -1,4 +1,5 @@
 #include "MRFileIOUtils.hpp"
+#include "../MRPrivilegedFileBroker.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "MRStringUtils.hpp"
 #include <algorithm>
@@ -338,6 +339,10 @@ bool fileContainsNulInBoundarySamples(const std::string &path) noexcept {
 
 	if (path.empty()) return false;
 	fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0) {
+		std::string ignoredError;
+		fd = mrPrivilegedFileBrokerOpenReadOnly(path, ignoredError);
+	}
 	if (fd < 0) return false;
 	if (::fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
 		const std::size_t headLength = static_cast<std::size_t>(std::min<off_t>(st.st_size, static_cast<off_t>(kBinaryFileProbeSampleSize)));

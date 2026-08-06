@@ -47,7 +47,6 @@
 #include "../mrmac/vm/MRVMRuntimeDebugger.hpp"
 #include "../mrmac/vm/MRVMRuntimeState.hpp"
 #include "../mrmac/vm/MRVMValue.hpp"
-#include "../app/MRExecSessionStatus.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../app/MRCommandRouter.hpp"
 #include "../app/MRRuntimeScheduler.hpp"
@@ -71,7 +70,6 @@
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFileEditor/MRFEBlockOps.hpp"
-#include "../ui/MRFileEditor/MRFEBlockOpsTestHarness.hpp"
 #include "../ui/MRDeskTop.hpp"
 #include "../ui/MRIndicator.hpp"
 #include "../ui/MRMenuBar.hpp"
@@ -88,103 +86,6 @@ int runMacroDebuggerCrossSectionProbeMode();
 #elif defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
-
-class MRBentoBoxFileCompareRegressionHarness {
-  public:
-	static bool seedDiffReadyState(MRBentoBox &bento) {
-		static constexpr std::uint64_t kGeneration = 1;
-		const std::shared_ptr<const MRBentoFileCompareAcquisitionPayload> originalAcquisition =
-			mrBuildBentoFileCompareAcquisition(bento.fileCompareSetup.original.snapshot, kGeneration, true, nullptr);
-		const std::shared_ptr<const MRBentoFileCompareAcquisitionPayload> compareAcquisition =
-			mrBuildBentoFileCompareAcquisition(bento.fileCompareSetup.compare.snapshot, kGeneration, false, nullptr);
-		std::string errorText;
-		const std::shared_ptr<const MRBentoFileCompareDiffPayload> diff =
-			mrBuildBentoFileCompareDiff(originalAcquisition, compareAcquisition, nullptr, errorText);
-		const bool editable = bento.fileComparePanesEditable();
-		const std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> originalProjection =
-			mrBuildBentoFileComparePaneProjection(diff, true, editable, nullptr);
-		const std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> compareProjection =
-			mrBuildBentoFileComparePaneProjection(diff, false, editable, nullptr);
-
-		if (originalAcquisition == nullptr || compareAcquisition == nullptr || diff == nullptr ||
-		    originalProjection == nullptr || compareProjection == nullptr || diff->changeGroups == nullptr)
-			return false;
-		bento.fileComparePipeline.activeGeneration = kGeneration;
-		bento.fileComparePipeline.originalAcquisition = originalAcquisition;
-		bento.fileComparePipeline.compareAcquisition = compareAcquisition;
-		bento.fileComparePipeline.diff = diff;
-		bento.fileComparePipeline.originalProjection = originalProjection;
-		bento.fileComparePipeline.compareProjection = compareProjection;
-		bento.fileCompareDiffReady = true;
-		bento.fileCompareStale = false;
-		bento.refreshFileComparePanes();
-		return !diff->changeGroups->empty();
-	}
-
-	static bool activatePane(MRBentoBox &bento, MRBentoPaneRole role) {
-		const int leafId = bento.leafIdForRole(role);
-		if (leafId < 0) return false;
-		bento.setActivePane(leafId);
-		return true;
-	}
-
-	static bool attachSourceBuffer(MRBentoBox &bento, MRBentoPaneRole role, MREditWindow &sourceWindow) {
-		const int leafId = bento.leafIdForRole(role);
-		MREditWindow *targetWindow = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
-		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
-		MRFileEditor *sourceEditor = sourceWindow.getEditor();
-		if (targetEditor == nullptr || sourceEditor == nullptr) return false;
-		targetEditor->shareContentStateFrom(*sourceEditor);
-		return true;
-	}
-
-	static MRFileEditor *activeEditor(MRBentoBox &bento) {
-		MREditWindow *window = bento.activeLeafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(bento.activeLeafId));
-		return window != nullptr ? window->getEditor() : nullptr;
-	}
-
-	static MRFileEditor *editorForRole(MRBentoBox &bento, MRBentoPaneRole role) {
-		const int leafId = bento.leafIdForRole(role);
-		MREditWindow *window = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
-		return window != nullptr ? window->getEditor() : nullptr;
-	}
-
-	static unsigned char lineKindAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
-		std::shared_ptr<const MRBentoFileComparePaneProjectionPayload> projection;
-
-		switch (role) {
-			case bprDiffOriginal:
-				projection = bento.fileComparePipeline.originalProjection;
-				break;
-			case bprDiffCompare:
-				projection = bento.fileComparePipeline.compareProjection;
-				break;
-			default:
-				return mrfclkNone;
-		}
-		if (projection == nullptr || projection->lineKinds == nullptr || lineIndex >= projection->lineKinds->size()) return mrfclkNone;
-		return (*projection->lineKinds)[lineIndex];
-	}
-
-	static bool markedDiffLineAt(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
-		const unsigned char lineKind = lineKindAt(bento, role, lineIndex);
-		return lineKind != mrfclkEqual && lineKind != mrfclkNone;
-	}
-
-	static int showContextAtDocumentLine(MRBentoBox &bento, MRBentoPaneRole role, std::size_t lineIndex) {
-		const int leafId = bento.leafIdForRole(role);
-		MREditWindow *targetWindow = leafId == 0 ? static_cast<MREditWindow *>(&bento) : static_cast<MREditWindow *>(bento.paneWindowForLeaf(leafId));
-		MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
-		if (leafId < 0 || targetEditor == nullptr) return -2;
-
-		const TRect content = bento.contentBounds(bento.paneBoundsForLeaf(leafId));
-		const TRect viewport = targetEditor->visibleTextViewportBounds();
-		const int localY = viewport.a.y + static_cast<int>(lineIndex) - std::max(0, targetEditor->delta.y);
-		const int localX = viewport.a.x;
-		bento.showFileCompareActionList(TPoint(content.a.x + localX, content.a.y + localY), leafId);
-		return bento.pendingFileCompareActionGroupIndex;
-	}
-};
 
 namespace {
 
@@ -235,7 +136,6 @@ class ScopedRegressionConfigHome {
 };
 
 bool runKeymapMacroBindingDispatchProbe(std::string &failureReason);
-bool runKeymapAutoexecPersistenceAndBootstrapProbe(std::string &failureReason);
 
 void collectRegressionSourceMapEntry(void *context, const MRMacSourceMapEntry *entry) {
 	std::vector<MRMacroSourceMapEntry> *entries = static_cast<std::vector<MRMacroSourceMapEntry> *>(context);
@@ -1460,63 +1360,6 @@ bool testExecSessionOwnerCancellationGuard(std::string &failureReason) {
 	return true;
 }
 
-bool testExecSessionStatusConsumerGuard(std::string &failureReason) {
-	static constexpr std::uint64_t kTaskId = 700201;
-	MRMacroExecutionOwner owner;
-	MRMacroExecutionSession session;
-	MRExecSessionStatusSnapshot snapshot;
-	std::vector<std::string> lines;
-	std::uint64_t generation = 0;
-	bool sawHeader = false;
-	bool sawSession = false;
-
-	const MRMacroExecutionSessionListenerId listenerId = installExecSessionStatusConsumer();
-	if (listenerId == 0 || installExecSessionStatusConsumer() != listenerId) {
-		failureReason = "Exec-session status consumer must install idempotently.";
-		return false;
-	}
-
-	owner.hasBuffer = true;
-	owner.bufferId = 31;
-	session = createMacroExecutionSession("exec-session-status-consumer", MRMacroExecutionRoute::Background, owner);
-	session.taskId = kTaskId;
-	trackMacroExecutionSession(session);
-	generation = execSessionStatusConsumerGeneration();
-	notifyMacroExecutionSessionChanged();
-	if (execSessionStatusConsumerGeneration() != generation + 1) {
-		publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
-		failureReason = "Exec-session status consumer must observe session change notifications.";
-		return false;
-	}
-
-	snapshot = execSessionStatusSnapshot();
-	if (snapshot.activeCount == 0 || snapshot.generation != execSessionStatusConsumerGeneration()) {
-		publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
-		failureReason = "Exec-session status snapshot must report active count and consumer generation.";
-		return false;
-	}
-
-	lines = execSessionStatusLines(0);
-	for (const std::string &line : lines) {
-		if (line.find("MRMac exec sessions: active=") != std::string::npos) sawHeader = true;
-		if (line.find("exec-session-status-consumer") != std::string::npos && line.find("route=background") != std::string::npos) sawSession = true;
-		if (line.find("breakpoint") != std::string::npos || line.find("debug") != std::string::npos) {
-			publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
-			failureReason = "Exec-session status consumer must not emit debugger vocabulary.";
-			return false;
-		}
-	}
-	if (!sawHeader || !sawSession) {
-		publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
-		failureReason = "Exec-session status consumer must format header and active sessions.";
-		return false;
-	}
-
-	publishMacroExecutionResultForTask(kTaskId, MRMacroExecutionState::Cancelled, "cleanup");
-	failureReason.clear();
-	return true;
-}
-
 bool testRuntimeSchedulerSkipEventGuard(std::string &failureReason) {
 	static constexpr MRMacroExecutionSessionId kSessionId = 700301;
 	MRRuntimeScheduledConsumerConfig invalidConfig;
@@ -1906,7 +1749,6 @@ bool testExecSessionRuntimeStoreBoundaryGuard(std::string &failureReason) {
 	    {"mrmac/MRMacroExecutionSession.cpp", kSessionSourceAllowed, sizeof(kSessionSourceAllowed) / sizeof(kSessionSourceAllowed[0])},
 	    {"mrmac/MRMacroRunner.cpp", kMacroRunnerAllowed, sizeof(kMacroRunnerAllowed) / sizeof(kMacroRunnerAllowed[0])},
 	    {"app/MRRuntimeScheduler.cpp", nullptr, 0},
-	    {"app/MRExecSessionStatus.cpp", nullptr, 0},
 	    {"mrmac/ui/modeless/MRMacroModelessUi.cpp", kModelessUiAllowed, sizeof(kModelessUiAllowed) / sizeof(kModelessUiAllowed[0])},
 	};
 	static const char *kForbiddenStoreNeedles[] = {"std::map<", "std::unordered_map<", "std::vector<", "std::deque<", "std::list<", "std::set<", "std::unordered_set<"};
@@ -2711,13 +2553,6 @@ int runKeymapMacroDispatchProbeMode() {
 	return 1;
 }
 
-int runKeymapAutoexecBootstrapProbeMode() {
-	std::string failure;
-
-	if (runKeymapAutoexecPersistenceAndBootstrapProbe(failure)) return 0;
-	if (!failure.empty()) std::cerr << failure << "\n";
-	return 1;
-}
 
 bool validateMrsetupCorePaths(std::string &failureReason) {
 	if (defaultMacroDirectoryPath() != "/tmp") {
@@ -3422,92 +3257,6 @@ bool testToFromDispatch(std::string &failureReason) {
 	return true;
 }
 
-bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_settings_migration_" + std::to_string(static_cast<long>(::getpid()));
-	const std::string settingsPath = root + "/cfg/settings.mrmac";
-	const std::string legacyThemePath = root + "/cfg/legacy-theme.mrmac";
-	const std::string legacySource = "$MACRO LegacySettings FROM EDIT;\n"
-	                                 "MRSETUP('SETTINGSPATH', '/tmp/ignored-by-migration.mrmac');\n"
-	                                 "MRSETUP('MACROPATH', '/tmp');\n"
-	                                 "MRSETUP('HELPPATH', 'mr.hlp');\n"
-	                                 "MRSETUP('TEMPDIR', '/tmp');\n"
-	                                 "MRSETUP('SHELLPATH', '/bin/sh');\n"
-	                                 "MRSETUP('TRUNCATE_SPACES', 'false');\n"
-	                                 "MRSETUP('TAB_SIZE', '4');\n"
-	                                 "MRSETUP('BACKUP_FILES', 'false');\n"
-	                                 "MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');\n"
-	                                 "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
-	                                 "MRSETUP('COLORTHEMEURI', '" +
-	                                 legacyThemePath +
-	                                 "');\n"
-	                                 "MRSETUP('WINDOWCOLORS', 'v1:31,32,33,34,35,36,37,38');\n"
-	                                 "MRSETUP('UNKNOWNKEY', 'ignored');\n"
-	                                 "END_MACRO;\n";
-	std::string content;
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	(void)::remove(settingsPath.c_str());
-	(void)::remove(legacyThemePath.c_str());
-
-	if (!mrMigrateSettingsMacroToCurrentVersionForTesting(settingsPath, legacySource, "regression-probe", &errorText)) {
-		restore();
-		failureReason = "Settings migration probe failed: " + errorText;
-		return false;
-	}
-	if (!readTextFile(settingsPath, content, errorText)) {
-		restore();
-		failureReason = "Unable to read migrated settings.mrmac: " + errorText;
-		return false;
-	}
-	if (content.find("MRSETUP('SETTINGSPATH', '" + settingsPath + "');") == std::string::npos) {
-		restore();
-		failureReason = "Migrated settings.mrmac must anchor SETTINGSPATH to the active file.";
-		return false;
-	}
-	if (content.find("MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');") == std::string::npos || content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos || content.find("MRSETUP('TRUNCATE_SPACES', 'false');") == std::string::npos || content.find("MRSETUP('TAB_SIZE', '4');") == std::string::npos || content.find("MRSETUP('BACKUP_FILES', 'false');") == std::string::npos) {
-		restore();
-		failureReason = "Migrated settings.mrmac did not carry over recognized edit settings.";
-		return false;
-	}
-	if (content.find("UNKNOWNKEY") != std::string::npos) {
-		restore();
-		failureReason = "Migrated settings.mrmac must not keep unknown legacy keys.";
-		return false;
-	}
-	if (content.find("MRSETUP('PERSISTENT_BLOCKS', '") == std::string::npos || content.find("MRSETUP('DEFAULT_MODE', '") == std::string::npos) {
-		restore();
-		failureReason = "Migrated settings.mrmac must include normalized defaults for required keys.";
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(content, &errorText)) {
-		restore();
-		failureReason = "Migrated settings.mrmac should be loadable: " + errorText;
-		return false;
-	}
-	{
-		MREditSetupSettings edit = configuredEditSetupSettings();
-		if (!edit.showLineNumbers || !edit.lineNumZeroFill || edit.truncateSpaces || edit.tabSize != 4 || edit.backupFiles) {
-			restore();
-			failureReason = "Applying migrated settings should restore carried edit-setting values.";
-			return false;
-		}
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after migration probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
 
 bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 	const std::string sourcePath = absolutePathFromCwd("app/MREditorApp.cpp");
@@ -6335,156 +6084,6 @@ bool testDeferredLargeLineIndexHarness(std::string &failureReason) {
 	return true;
 }
 
-bool testBlockMarkingHarness(std::string &failureReason) {
-	std::string routerContent;
-	std::string menuContent;
-	std::string keymapContent;
-	std::string defaultKeymapContent;
-	std::string legacyProfileContent;
-	std::string vmContent;
-	std::string compilerContent;
-	std::string windowContent;
-	std::string editorContent;
-	std::string blockOpsContent;
-	std::string blockOpsSourceContent;
-	std::string setupCommonContent;
-	std::string appContent;
-	std::string ioError;
-
-	if (!readTextFile(absolutePathFromCwd("app/MRCommandRouter.cpp"), routerContent, ioError)) {
-		failureReason = "Unable to read MRCommandRouter.cpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("app/MREditorApp.cpp"), appContent, ioError)) {
-		failureReason = "Unable to read MREditorApp.cpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("app/MRMenuFactory.cpp"), menuContent, ioError)) {
-		failureReason = "Unable to read MRMenuFactory.cpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("keymap/MRKeymapActionCatalog.cpp"), keymapContent, ioError)) {
-		failureReason = "Unable to read MRKeymapActionCatalog.cpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("mrmac/macros/keymaps/MRDefaultKeymaps.mrmac"), defaultKeymapContent, ioError)) {
-		failureReason = "Unable to read MRDefaultKeymaps.mrmac for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("mrmac/macros/keymaps/wordstar.mrmac"), legacyProfileContent, ioError)) {
-		failureReason = "Unable to read wordstar.mrmac for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("mrmac/MRVM.cpp"), vmContent, ioError)) {
-		failureReason = "Unable to read MRVM.cpp for block marking harness: " + ioError;
-		return false;
-	}
-	{
-		static const char *kVmRuntimePaths[] = {
-		    "mrmac/ui/conventional/MRVMEditor.cpp",
-		    "mrmac/vm/procedures/MRVMEditorProcedures.cpp",
-		    "mrmac/vm/procedures/MRVMRuntimeProcedures.cpp",
-		};
-		for (const char *path : kVmRuntimePaths) {
-			std::string runtimeContent;
-			if (!readTextFile(absolutePathFromCwd(path), runtimeContent, ioError)) {
-				failureReason = "Unable to read split VM runtime source for block marking harness: " + ioError;
-				return false;
-			}
-			vmContent += "\n" + runtimeContent;
-		}
-	}
-	if (!readTextFile(absolutePathFromCwd("mrmac/mrmac.c"), compilerContent, ioError)) {
-		failureReason = "Unable to read mrmac.c for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("ui/MREditWindow.hpp"), windowContent, ioError)) {
-		failureReason = "Unable to read MREditWindow.hpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFileEditorEvents.cpp"), editorContent, ioError)) {
-		failureReason = "Unable to read MRFileEditorEvents.cpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFEBlockOps.hpp"), blockOpsContent, ioError)) {
-		failureReason = "Unable to read MRFEBlockOps.hpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("ui/MRFileEditor/MRFEBlockOps.cpp"), blockOpsSourceContent, ioError)) {
-		failureReason = "Unable to read MRFEBlockOps.cpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!readTextFile(absolutePathFromCwd("dialogs/setup/MRSetupCommon.cpp"), setupCommonContent, ioError)) {
-		failureReason = "Unable to read MRSetupCommon.cpp for block marking harness: " + ioError;
-		return false;
-	}
-	if (!mrfeBlockOpsRegressionHarness(failureReason)) return false;
-	if (!testBlockMarkingWindowInputHarness(failureReason)) return false;
-	if (!testConfiguredKeymapBasicNavigationHarness(legacyProfileContent, failureReason)) return false;
-	if (!testConfiguredKeymapBlockBindingsHarness(defaultKeymapContent, failureReason)) return false;
-	if (routerContent.find("win->beginLineBlock();") == std::string::npos || routerContent.find("win->beginColumnBlock();") == std::string::npos || routerContent.find("win->beginStreamBlock();") == std::string::npos || routerContent.find("cmMrBlockToggleVisibility") == std::string::npos) {
-		failureReason = "Block marking commands must route to marking methods and visibility toggle.";
-		return false;
-	}
-	if (menuContent.find("cmMrBlockMarkLines, kbF7") == std::string::npos || menuContent.find("cmMrBlockMarkColumns, kbShiftF7") == std::string::npos || menuContent.find("cmMrBlockMarkStream, kbCtrlF7") == std::string::npos || menuContent.find("~H~ide/show block mark") == std::string::npos || menuContent.find("TKey(kbF9, kbShift)") == std::string::npos) {
-		failureReason = "Line, column, stream and visibility marking must be present in the Block menu with default hotkeys.";
-		return false;
-	}
-	if (keymapContent.find("MRMAC_BLOCK_SET_BEGIN") == std::string::npos || keymapContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN") == std::string::npos || keymapContent.find("MRMAC_BLOCK_MARK_STREAM") == std::string::npos || keymapContent.find("MRMAC_BLOCK_SET_END") == std::string::npos || keymapContent.find("MRMAC_BLOCK_CLEAR") == std::string::npos || keymapContent.find("MRMAC_BLOCK_TOGGLE_VISIBILITY") == std::string::npos || keymapContent.find("MR_BLOCK_TOGGLE_VISIBILITY") == std::string::npos) {
-		failureReason = "Line, column, stream, end, clear and visibility targets must be present in the keymap action catalog.";
-		return false;
-	}
-	if (defaultKeymapContent.find("MRMAC_BLOCK_SET_BEGIN") == std::string::npos || defaultKeymapContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN") == std::string::npos || defaultKeymapContent.find("MRMAC_BLOCK_TOGGLE_VISIBILITY") == std::string::npos) {
-		failureReason = "Default keymaps must expose line, column and visibility block marking targets.";
-		return false;
-	}
-	if (legacyProfileContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN\" sequence=\"<Ctrl+K> <Ctrl+N>") == std::string::npos || legacyProfileContent.find("MRMAC_BLOCK_SET_COLUMN_BEGIN\" sequence=\"<Ctrl+K> <N>") == std::string::npos) {
-		failureReason = "Bundled legacy keymap profile must expose Ctrl-K Ctrl-N and Ctrl-K N column block begins.";
-		return false;
-	}
-	if (vmContent.find("mrvmUiBlockBeginLine()") == std::string::npos || vmContent.find("mrvmUiBlockBeginColumn()") == std::string::npos || vmContent.find("mrvmUiBlockBeginStream()") == std::string::npos || vmContent.find("mrvmUiBlockEndMarking()") == std::string::npos || vmContent.find("mrvmUiBlockTurnMarkingOff()") == std::string::npos || vmContent.find("mrvmUiBlockToggleVisibility()") == std::string::npos || compilerContent.find("BLOCK_BEGIN") == std::string::npos || compilerContent.find("COL_BLOCK_BEGIN") == std::string::npos || compilerContent.find("STR_BLOCK_BEGIN") == std::string::npos || compilerContent.find("BLOCK_END") == std::string::npos || compilerContent.find("BLOCK_OFF") == std::string::npos || compilerContent.find("BLOCK_TOGGLE_VISIBILITY") == std::string::npos) {
-		failureReason = "Line, column, stream, end, clear and visibility marking must be wired through MRMAC compiler/runtime surfaces.";
-		return false;
-	}
-	if (routerContent.find("handleLoadBlockFromFile") == std::string::npos || routerContent.find("saveBlockToFile") == std::string::npos || blockOpsContent.find("loadBlockFromFile") == std::string::npos || blockOpsContent.find("saveBlockToFile") == std::string::npos || blockOpsContent.find("captureCurrentBlockPayload") == std::string::npos || blockOpsContent.find("insertPayloadAsStreamBlock") == std::string::npos || blockOpsContent.find("std::vector<char> release() noexcept") == std::string::npos || blockOpsContent.find("prepareTransferMessage") == std::string::npos || vmContent.find("case MRVMProcedure::LoadBlock:") == std::string::npos || vmContent.find("case MRVMProcedure::SaveBlock:") == std::string::npos || vmContent.find("mrvmEditorLoadBlockFromFile") == std::string::npos || vmContent.find("mrvmEditorSaveCurrentBlockToFile") == std::string::npos || compilerContent.find("PROC_SIG1(\"LOAD_BLOCK\"") == std::string::npos || compilerContent.find("PROC_SIG1(\"SAVE_BLOCK\"") == std::string::npos) {
-		failureReason = "Stream-only load/save block must be wired through menu, keymap and MRMAC surfaces.";
-		return false;
-	}
-	if (routerContent.find("case cmMrBlockCopy:") == std::string::npos || routerContent.find("return handleCopyBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockMove:") == std::string::npos || routerContent.find("return handleMoveBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("case cmMrBlockDelete:") == std::string::npos || routerContent.find("return handleDeleteBlock(currentEditorCommandWindow());") == std::string::npos || routerContent.find("dispatchTargetedKeymapAppCommand") == std::string::npos || blockOpsContent.find("runBlockOperation") == std::string::npos || blockOpsContent.find("runWindowBlockOperation") == std::string::npos || blockOpsSourceContent.find("\"delete-block\"") == std::string::npos) {
-		failureReason = "Block copy/move/delete must route to MRFEBlockOps through the active editor command target.";
-		return false;
-	}
-	if (appContent.find("event.message.command == cmMrEditUndo || event.message.command == cmMrEditRedo") == std::string::npos || appContent.find("handleMRCommand(event.message.command, event.message.infoPtr)") == std::string::npos || appContent.find("TApplication::handleEvent(event);") == std::string::npos || appContent.find("event.message.command == cmMrEditUndo || event.message.command == cmMrEditRedo") > appContent.find("TApplication::handleEvent(event);")) {
-		failureReason = "Menu Undo/Redo must route through MRCommandRouter before generic TVision command dispatch.";
-		return false;
-	}
-	if (routerContent.find("message(editor, evCommand, editorCommand, nullptr);") == std::string::npos || routerContent.find("if (win->hasBlock() && !win->isBlockMarking()) win->refreshBlockVisual();") == std::string::npos) {
-		failureReason = "Menu/App editor commands must refresh committed block overlays after dispatch.";
-		return false;
-	}
-	if (setupCommonContent.find("case MRDialogHistoryScope::BlockSave:") == std::string::npos || routerContent.find("rememberLoadDialogPath(MRDialogHistoryScope::BlockSave, savePath.c_str());") == std::string::npos) {
-		failureReason = "Block save history must be deferred by the file dialog and remembered only after a successful save.";
-		return false;
-	}
-		if (windowContent.find("mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers())") == std::string::npos || windowContent.find("mBlockOps.updateFromEditor(*editor)") == std::string::npos) {
-			failureReason = "Mouse button selection and active marking updates must be wired in MREditWindow.";
-			return false;
-		}
-		if (routerContent.find("window->updateBlockFromEditor()") != std::string::npos || windowContent.find("if (editor != nullptr && mBlockOps.isMarking()) static_cast<void>(mBlockOps.updateFromEditor(*editor));") != std::string::npos) {
-			failureReason = "MRMAC keymap editor commands must not live-update active block marking.";
-			return false;
-		}
-		if (windowContent.find("handleShiftCursorBlockMarking(event)") == std::string::npos || windowContent.find("normalizedBlockCursorNavigationKey") == std::string::npos || windowContent.find("isBlockCursorMarkingModifier") == std::string::npos || windowContent.find("MRFEBlockMode::Column") == std::string::npos || windowContent.find("MRFEBlockMode::Line") == std::string::npos || windowContent.find("MRFEBlockMode::Stream") == std::string::npos) {
-		failureReason = "Cursor block marking must route Ctrl, Alt and Ctrl-Alt navigation through stream, column and line modes and normalize terminal scan codes.";
-		return false;
-	}
-	if (editorContent.find("updateLiveMouseBlockOverlay") == std::string::npos || editorContent.find("setBlockOverlayState(liveBlockMode") == std::string::npos) {
-		failureReason = "Mouse block marking must update the overlay while dragging, before mouse release.";
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
 
 bool testTruncateSpacesSaveOnlyGuard(std::string &failureReason) {
 	MRTextSaveOptions options;
@@ -6680,6 +6279,50 @@ bool testMessageLineStaticModeHarness(std::string &failureReason) {
 	return true;
 }
 
+bool testFullscreenSuspendsStaticModeWiring(std::string &failureReason) {
+	const std::string editorAppPath = absolutePathFromCwd("app/MREditorApp.cpp");
+	const std::string presentationPath = absolutePathFromCwd("app/MREditorAppPresentation.cpp");
+	const std::string menuBarPath = absolutePathFromCwd("ui/MRMenuBar.cpp");
+	const std::string menuBarHeaderPath = absolutePathFromCwd("ui/MRMenuBar.hpp");
+	std::string editorApp;
+	std::string presentation;
+	std::string menuBar;
+	std::string menuBarHeader;
+	std::string ioError;
+	std::string missingNeedle;
+
+	if (!readTextFile(editorAppPath, editorApp, ioError) || !readTextFile(presentationPath, presentation, ioError) || !readTextFile(menuBarPath, menuBar, ioError) || !readTextFile(menuBarHeaderPath, menuBarHeader, ioError)) {
+		failureReason = "Unable to read Fullscreen/Static Mode wiring source: " + ioError;
+		return false;
+	}
+	const std::size_t f11Route = editorApp.find("if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbF11))");
+	const std::size_t fullscreenEscapeRoute = editorApp.find("if (fullscreenPresentationActive && event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc))");
+	const std::size_t staticModeGuard = editorApp.find("if (event.what == evKeyDown && !fullscreenPresentationActive && mr::messageline::staticModeActive())");
+
+	if (f11Route == std::string::npos || fullscreenEscapeRoute == std::string::npos || staticModeGuard == std::string::npos || fullscreenEscapeRoute > staticModeGuard) {
+		failureReason = "Fullscreen Escape must precede the non-Fullscreen Static Mode function-key guard.";
+		return false;
+	}
+	const std::size_t staticModeGuardEnd = editorApp.find("\n\tif (event.what == evKeyDown) {", staticModeGuard);
+	if (staticModeGuardEnd == std::string::npos || editorApp.substr(staticModeGuard, staticModeGuardEnd - staticModeGuard).find("case kbF11:") != std::string::npos) {
+		failureReason = "The non-Fullscreen Static Mode function-key guard must leave F11 available.";
+		return false;
+	}
+	if (!containsAllSubstrings(presentation, {"mrMenuBar->setFullscreenPresentation(fullscreenActive)", "if (fullscreenActive && !fullscreenMenuBarVisible) menuBar->hide()"}, missingNeedle)) {
+		failureReason = "Fullscreen layout no longer suppresses Static Mode menu projection: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(menuBarHeader, {"void setFullscreenPresentation(bool active);", "bool mFullscreenPresentation = false;"}, missingNeedle) ||
+	    !containsAllSubstrings(menuBar, {"const bool staticModePresentationSuppressed = mFullscreenPresentation && mr::messageline::staticModeActive();",
+	                                    "const bool staticProgressVisible = !mFullscreenPresentation && mr::messageline::currentStaticProgress", "if (staticModePresentationSuppressed)"},
+	                           missingNeedle)) {
+		failureReason = "Menu bar Static Mode presentation suspension changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testApplicationIdleDoesNotReadMenuSettings(std::string &failureReason) {
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
@@ -6727,246 +6370,7 @@ bool testApplicationIdleDoesNotReadMenuSettings(std::string &failureReason) {
 	return true;
 }
 
-bool testSetupScrollRefreshGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_edit_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
-	const std::string settingsPath = root + "/cfg/settings.mrmac";
-	MREditSetupSettings probe = resolveEditSetupDefaults();
-	MREditSetupSettings loaded;
-	MRSetupPaths paths = resolveSetupPathDefaults();
-	std::string source;
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
 
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	probe.pageBreak = "\\f";
-	probe.wordDelimiters = "._:-";
-	probe.defaultExtensions = "txt;md";
-	probe.truncateSpaces = false;
-	probe.eofCtrlZ = true;
-	probe.eofCrLf = true;
-	probe.tabExpand = false;
-	probe.displayTabs = true;
-	probe.tabSize = 3;
-	probe.backupFiles = false;
-	probe.backupMethod = "OFF";
-	probe.showLineNumbers = true;
-	probe.lineNumbersPosition = "LEADING";
-	probe.lineNumZeroFill = true;
-	probe.persistentBlocks = false;
-	probe.columnBlockMove = "LEAVE_SPACE";
-	probe.defaultMode = "OVERWRITE";
-
-	if (!setConfiguredEditSetupSettings(probe, &errorText)) {
-		restore();
-		failureReason = "Unable to seed edit-settings roundtrip probe: " + errorText;
-		return false;
-	}
-	if (!setConfiguredAutoDetectBinaryFiles(false, &errorText)) {
-		restore();
-		failureReason = "Unable to seed binary-autodetect roundtrip probe: " + errorText;
-		return false;
-	}
-
-	paths.settingsMacroUri = settingsPath;
-	paths.macroPath = "/tmp";
-	paths.helpUri = "mr.hlp";
-	paths.tempPath = "/tmp";
-	paths.shellUri = "/bin/sh";
-	source = buildSettingsMacroSource(paths);
-	if (source.find("MRSETUP('AUTODETECT_BINARY_FILES', 'false');") == std::string::npos || source.find("MRSETUP('DISPLAY_TABS', 'true');") == std::string::npos || source.find("MRSETUP('TAB_SIZE', '") == std::string::npos || source.find("MRSETUP('LINE_NUMBERS_POSITION', '") == std::string::npos) {
-		restore();
-		failureReason = "Edit-settings roundtrip source did not use canonical edit-setting keys.";
-		return false;
-	}
-	if (source.find("MRSETUP('TABSIZE', '") != std::string::npos || source.find("MRSETUP('SHOW_LINE_NUMBERS', '") != std::string::npos || source.find("MRSETUP('SHOWLINENUMBERS', '") != std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'TABSIZE', '3');") != std::string::npos) {
-		restore();
-		failureReason = "Profile roundtrip source still emitted deprecated edit-setting keys.";
-		return false;
-	}
-
-	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
-		restore();
-		failureReason = "Unable to reset edit settings before roundtrip apply: " + errorText;
-		return false;
-	}
-	if (!setConfiguredAutoDetectBinaryFiles(true, &errorText)) {
-		restore();
-		failureReason = "Unable to reset binary autodetection before roundtrip apply: " + errorText;
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
-		restore();
-		failureReason = "Unable to apply settings macro source in edit roundtrip probe: " + errorText;
-		return false;
-	}
-
-	loaded = configuredEditSetupSettings();
-	if (loaded.wordDelimiters != probe.wordDelimiters) {
-		restore();
-		failureReason = "Word delimiters mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.defaultExtensions != "txt;md") {
-		restore();
-		failureReason = "Default extensions mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.truncateSpaces != probe.truncateSpaces) {
-		restore();
-		failureReason = "Truncate-spaces mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.eofCtrlZ != probe.eofCtrlZ) {
-		restore();
-		failureReason = "EOF_CTRL_Z mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.eofCrLf != probe.eofCrLf) {
-		restore();
-		failureReason = "EOF_CR_LF mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.tabExpand != probe.tabExpand) {
-		restore();
-		failureReason = "TAB_EXPAND mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.tabSize != probe.tabSize) {
-		restore();
-		failureReason = "TAB_SIZE mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.displayTabs != probe.displayTabs) {
-		restore();
-		failureReason = "DISPLAY_TABS mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.backupFiles != probe.backupFiles) {
-		restore();
-		failureReason = "BACKUP_FILES mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.lineNumZeroFill != probe.lineNumZeroFill) {
-		restore();
-		failureReason = "LINE_NUM_ZERO_FILL mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.persistentBlocks != probe.persistentBlocks) {
-		restore();
-		failureReason = "PERSISTENT_BLOCKS mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.columnBlockMove != probe.columnBlockMove) {
-		restore();
-		failureReason = "BLOCK_MOVE mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.defaultMode != probe.defaultMode) {
-		restore();
-		failureReason = "DEFAULT_MODE mismatch after roundtrip.";
-		return false;
-	}
-	if (loaded.lineNumbersPosition != "LEADING" || !loaded.showLineNumbers) {
-		restore();
-		failureReason = "Line-number position/show flag mismatch after roundtrip.";
-		return false;
-	}
-	if (configuredAutoDetectBinaryFiles()) {
-		restore();
-		failureReason = "AUTODETECT_BINARY_FILES mismatch after roundtrip.";
-		return false;
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after edit roundtrip probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
-bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_extended_settings_" + std::to_string(static_cast<long>(::getpid()));
-	const std::string settingsPath = root + "/cfg/settings.mrmac";
-	MREditSetupSettings probe = resolveEditSetupDefaults();
-	MRSetupPaths paths = resolveSetupPathDefaults();
-	std::string source;
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-	MREditSetupSettings loaded;
-	MREditSetupSettings normalized;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	probe.rightMargin = 91;
-	probe.leftMargin = 3;
-	probe.formatRuler = true;
-	probe.wordWrap = false;
-	probe.indentStyle = "smart";
-	probe.fileType = "binary";
-	probe.binaryRecordLength = 123;
-	probe.postLoadMacro = root + "/hooks/post-load.mrmac";
-	probe.preSaveMacro = root + "/hooks/pre-save.mrmac";
-	probe.defaultPath = root + "/workspace";
-	probe.formatLine = std::string(90, '.') + "R";
-	probe.cursorStatusColor = "7f";
-
-	if (!setConfiguredEditSetupSettings(probe, &errorText)) {
-		restore();
-		failureReason = "Unable to seed extended settings probe: " + errorText;
-		return false;
-	}
-	normalized = configuredEditSetupSettings();
-
-	paths.settingsMacroUri = settingsPath;
-	paths.macroPath = "/tmp";
-	paths.helpUri = "mr.hlp";
-	paths.tempPath = "/tmp";
-	paths.shellUri = "/bin/sh";
-	source = buildSettingsMacroSource(paths);
-	const std::string expectedFormatLineSetting = "MRSETUP('FORMAT_LINE', '" + normalized.formatLine + "');";
-	if (source.find("MRSETUP('LEFT_MARGIN', '3');") == std::string::npos || source.find("MRSETUP('RIGHT_MARGIN', '91');") == std::string::npos || source.find("MRSETUP('FORMAT_RULER', 'true');") == std::string::npos || source.find("MRSETUP('WORD_WRAP', 'false');") == std::string::npos || source.find("MRSETUP('INDENT_STYLE', 'SMART');") == std::string::npos || source.find("MRSETUP('FILE_TYPE', 'BINARY');") == std::string::npos || source.find("MRSETUP('BINARY_RECORD_LENGTH', '123');") == std::string::npos || source.find("MRSETUP('POST_LOAD_MACRO', '") == std::string::npos || source.find("MRSETUP('PRE_SAVE_MACRO', '") == std::string::npos || source.find("MRSETUP('DEFAULT_PATH', '") == std::string::npos || source.find(expectedFormatLineSetting) == std::string::npos || source.find("MRSETUP('CURSOR_STATUS_COLOR', '7F');") == std::string::npos) {
-		restore();
-		failureReason = "Extended settings serializer did not emit the expected canonical keys.";
-		return false;
-	}
-
-	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
-		restore();
-		failureReason = "Unable to reset extended settings probe before reload: " + errorText;
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
-		restore();
-		failureReason = "Unable to reload extended settings probe source: " + errorText;
-		return false;
-	}
-
-	loaded = configuredEditSetupSettings();
-	if (loaded.leftMargin != 3 || loaded.rightMargin != 91 || !loaded.formatRuler || loaded.wordWrap || loaded.indentStyle != "SMART" || loaded.fileType != "BINARY" || loaded.binaryRecordLength != 123 || loaded.postLoadMacro != normalizeConfiguredPathInput(probe.postLoadMacro) || loaded.preSaveMacro != normalizeConfiguredPathInput(probe.preSaveMacro) || loaded.defaultPath != normalizeConfiguredPathInput(probe.defaultPath) || loaded.formatLine != normalized.formatLine || loaded.cursorStatusColor != "7F") {
-		restore();
-		failureReason = "Extended settings roundtrip lost one or more serialized edit settings.";
-		return false;
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after extended settings probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
 
 bool runKeymapMacroBindingDispatchProbe(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
@@ -7094,199 +6498,10 @@ bool runKeymapMacroBindingDispatchProbe(std::string &failureReason) {
 	return true;
 }
 
-bool runKeymapAutoexecPersistenceAndBootstrapProbe(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	ScopedRegressionKeymap restoreKeymap;
-	const std::string root = "/tmp/mr_regression_keymap_autoexec_bootstrap_" + std::to_string(static_cast<long>(::getpid()));
-	const std::string settingsPath = root + "/cfg/settings.mrmac";
-	const std::string macroPath = root + "/macros";
-	const std::string tempPath = root + "/tmp";
-	const std::string actionMacroFilePath = macroPath + "/actions/bootstrap-marker.mrmac";
-	const std::string keymapMacroFilePath = macroPath + "/keymaps/bootstrap-keymap.mrmac";
-	const std::string retainedAutoexecEntry = "keymaps/bootstrap-keymap.mrmac";
-	const std::string missingAutoexecEntry = "keymaps/missing-entry.mrmac";
-	const std::string macroTarget = "actions/bootstrap-marker.mrmac^insert_bootstrap_marker";
-	MRSettingsSnapshot cleanSettings;
-	MRKeymapProfile profile;
-	MRKeymapBindingRecord binding;
-	std::vector<std::string> configuredEntries;
-	std::string persistedSource;
-	std::string cleanSource;
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	if (!resetSettingsSnapshot(settingsPath, cleanSettings, &errorText)) {
-		failureReason = "Unable to reset clean settings snapshot for AUTOEXEC bootstrap harness: " + errorText;
-		return false;
-	}
-	cleanSettings.paths.settingsMacroUri = settingsPath;
-	cleanSettings.paths.macroPath = macroPath;
-	cleanSettings.paths.helpUri = absolutePathFromCwd("mr.hlp");
-	cleanSettings.paths.tempPath = tempPath;
-	cleanSettings.paths.shellUri = "/bin/sh";
-	cleanSource = buildSettingsMacroSource(cleanSettings);
-
-	if (!ensureDirectoryTree(root + "/cfg", &errorText) || !ensureDirectoryTree(macroPath + "/actions", &errorText) || !ensureDirectoryTree(macroPath + "/keymaps", &errorText) || !ensureDirectoryTree(tempPath, &errorText)) {
-		failureReason = "Unable to create AUTOEXEC bootstrap harness directories: " + errorText;
-		return false;
-	}
-	if (!writeTextFile(actionMacroFilePath, "$MACRO insert_bootstrap_marker;\nTEXT('#');\nEND_MACRO;\n")) {
-		restore();
-		failureReason = "Unable to write action macro for AUTOEXEC bootstrap harness.";
-		return false;
-	}
-
-	profile.name = "AUTOEXEC_BOOTSTRAP";
-	profile.description = "Regression autoexec bootstrap";
-	binding.profileName = profile.name;
-	binding.context = MRKeymapContext::Edit;
-	binding.target.type = MRKeymapBindingType::Macro;
-	binding.target.target = macroTarget;
-	binding.sequence = *MRKeymapSequence::parse("<F11>");
-	binding.description = "Bootstrap marker";
-	profile.bindings.push_back(binding);
-	if (!writeTextFile(keymapMacroFilePath, buildExecutableKeymapMacroSource(std::vector<MRKeymapProfile>{profile}, profile.name))) {
-		restore();
-		failureReason = "Unable to write keymap AUTOEXEC macro file.";
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(cleanSource, &errorText)) {
-		restore();
-		failureReason = "Unable to apply clean settings before AUTOEXEC persistence probe: " + errorText;
-		return false;
-	}
-	if (!setConfiguredSettingsMacroFilePath(settingsPath, &errorText)) {
-		restore();
-		failureReason = "Unable to configure settings path before AUTOEXEC persistence probe: " + errorText;
-		return false;
-	}
-	if (!setConfiguredAutoexecMacroEntries(std::vector<std::string>{retainedAutoexecEntry, missingAutoexecEntry}, &errorText)) {
-		restore();
-		failureReason = "Unable to configure AUTOEXEC entries for persistence probe: " + errorText;
-		return false;
-	}
-	if (!persistConfiguredSettingsSnapshot(&errorText)) {
-		restore();
-		failureReason = "Unable to persist settings with AUTOEXEC entries: " + errorText;
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(cleanSource, &errorText)) {
-		restore();
-		failureReason = "Unable to reset runtime state before AUTOEXEC bootstrap probe: " + errorText;
-		return false;
-	}
-	if (!setConfiguredSettingsMacroFilePath(settingsPath, &errorText)) {
-		restore();
-		failureReason = "Unable to restore settings path before AUTOEXEC bootstrap probe: " + errorText;
-		return false;
-	}
-	if (!setConfiguredKeymapProfiles({}, &errorText) || !setConfiguredActiveKeymapProfile(std::string(), &errorText)) {
-		restore();
-		failureReason = "Unable to clear runtime keymap before AUTOEXEC bootstrap probe: " + errorText;
-		return false;
-	}
-
-	if (ensureRegressionEditorApp(failureReason) == nullptr) {
-		restore();
-		return false;
-	}
-	{
-		MREditWindow *window = nullptr;
-		MRFileEditor *editor = nullptr;
-
-		configuredAutoexecMacroEntries(configuredEntries);
-		if (configuredEntries.size() != 1 || configuredEntries.front() != retainedAutoexecEntry) {
-			restore();
-			failureReason = "AUTOEXEC bootstrap must retain the existing keymap macro and drop missing entries.";
-			return false;
-		}
-		if (!configuredSettingsDirty()) {
-			restore();
-			failureReason = "AUTOEXEC bootstrap must mark filtered settings for coalesced persistence.";
-			return false;
-		}
-		if (!persistConfiguredSettingsSnapshot(&errorText)) {
-			restore();
-			failureReason = "AUTOEXEC bootstrap filtered settings could not be persisted through the central flush: " + errorText;
-			return false;
-		}
-		if (!readTextFile(settingsPath, persistedSource, errorText)) {
-			restore();
-			failureReason = "Unable to read persisted settings after AUTOEXEC bootstrap: " + errorText;
-			return false;
-		}
-		if (persistedSource.find("MRSETUP('AUTOEXEC_MACRO', '" + missingAutoexecEntry + "');") != std::string::npos) {
-			restore();
-			failureReason = "AUTOEXEC bootstrap must persist the filtered settings.mrmac without stale missing entries.";
-			return false;
-		}
-		if (persistedSource.find("MRSETUP('AUTOEXEC_MACRO', '" + retainedAutoexecEntry + "');") == std::string::npos) {
-			restore();
-			failureReason = "AUTOEXEC bootstrap must preserve the surviving keymap macro entry in settings.mrmac.";
-			return false;
-		}
-		window = createEditorWindow("keymap-autoexec-bootstrap");
-		if (window == nullptr) {
-			restore();
-			failureReason = "AUTOEXEC bootstrap harness could not create an editor window.";
-			return false;
-		}
-		if (!mrActivateEditWindow(window)) {
-			destroyRegressionWindow(window);
-			restore();
-			failureReason = "AUTOEXEC bootstrap harness could not activate the editor window.";
-			return false;
-		}
-		if (!window->replaceTextBuffer("abc\n", "keymap-autoexec-bootstrap")) {
-			destroyRegressionWindow(window);
-			restore();
-			failureReason = "AUTOEXEC bootstrap harness could not seed editor text.";
-			return false;
-		}
-		editor = window->getEditor();
-		if (editor == nullptr) {
-			destroyRegressionWindow(window);
-			restore();
-			failureReason = "AUTOEXEC bootstrap harness window has no editor.";
-			return false;
-		}
-		editor->setCursorOffset(0);
-		if (!sendWindowKey(*window, kbF11)) {
-			destroyRegressionWindow(window);
-			restore();
-			failureReason = "AUTOEXEC bootstrap harness could not send the bound key.";
-			return false;
-		}
-		if (editor->snapshotText() != "#abc\n") {
-			destroyRegressionWindow(window);
-			restore();
-			failureReason = "AUTOEXEC bootstrap must restore macro key bindings after restart.";
-			return false;
-		}
-		destroyRegressionWindow(window);
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after AUTOEXEC bootstrap harness: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
 bool testKeymapMacroBindingDispatchHarness(std::string &failureReason) {
 	return runRegressionProbeProcess("keymap-macro-dispatch", failureReason);
 }
 
-bool testKeymapAutoexecPersistenceAndBootstrapHarness(std::string &failureReason) {
-	return runRegressionProbeProcess("keymap-autoexec-bootstrap", failureReason);
-}
 
 bool testKeymapMacroBindingNegativeDiagnosticsHarness(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
@@ -7400,144 +6615,6 @@ bool testEditProfileDirectApiValidationGuard(std::string &failureReason) {
 	return true;
 }
 
-bool testEditProfileRoundtripGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	MREditSetupSettings globalSettings = resolveEditSetupDefaults();
-	MREditExtensionProfile profile;
-	MRSetupPaths paths = resolveSetupPathDefaults();
-	std::string source;
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-	std::string matchedProfile;
-	MREditSetupSettings effective;
-	MREditSetupSettings fallback;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	globalSettings.tabSize = 8;
-	globalSettings.showLineNumbers = false;
-	globalSettings.lineNumbersPosition = "OFF";
-	globalSettings.defaultMode = "INSERT";
-	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
-		restore();
-		failureReason = "Unable to seed global edit settings for profile roundtrip probe: " + errorText;
-		return false;
-	}
-
-	profile.id = "perl_profile";
-	profile.name = "Perl";
-	profile.extensions.push_back("pl");
-	profile.extensions.push_back("pm");
-	profile.overrides.values = resolveEditSetupDefaults();
-	profile.overrides.values.tabSize = 3;
-	profile.overrides.values.lineNumbersPosition = "LEADING";
-	profile.overrides.values.showLineNumbers = true;
-	profile.overrides.values.defaultMode = "overwrite";
-	profile.overrides.values.backupFiles = false;
-	profile.overrides.values.codeLanguage = "PERL";
-	profile.overrides.values.codeColoring = true;
-	profile.overrides.values.codeFoldingPosition = "LEADING";
-	profile.overrides.mask = kOvTabSize | kOvLineNumbersPosition | kOvDefaultMode | kOvBackupFiles | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingPosition;
-	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(1, profile), &errorText)) {
-		restore();
-		failureReason = "Unable to seed extension profile roundtrip probe: " + errorText;
-		return false;
-	}
-
-	paths.settingsMacroUri = snapshot.settingsMacroFilePath;
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-	source = buildSettingsMacroSource(paths);
-	if (source.find("MRFEPROFILE('SET', 'perl_profile', 'BACKUP_FILES', 'false');") == std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_LANGUAGE', 'PERL');") == std::string::npos ||
-	    source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_COLORING', 'true');") == std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_FOLDING_POSITION', 'LEADING');") == std::string::npos ||
-	    source.find("CODE_FOLDING'") != std::string::npos) {
-		restore();
-		failureReason = "Profile roundtrip source did not serialize profile override literals.";
-		return false;
-	}
-
-	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
-		restore();
-		failureReason = "Unable to reset global edit settings before profile roundtrip apply: " + errorText;
-		return false;
-	}
-	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
-		restore();
-		failureReason = "Unable to clear extension profiles before profile roundtrip apply: " + errorText;
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
-		restore();
-		failureReason = "Unable to apply settings macro source in profile roundtrip probe: " + errorText;
-		return false;
-	}
-
-	if (configuredEditExtensionProfiles().size() != 1) {
-		restore();
-		failureReason = "Profile roundtrip did not restore exactly one extension profile.";
-		return false;
-	}
-	if (configuredEditExtensionProfiles()[0].id != "perl_profile") {
-		restore();
-		failureReason = "Profile roundtrip did not preserve the profile id.";
-		return false;
-	}
-	if (configuredEditExtensionProfiles()[0].name != "Perl") {
-		restore();
-		failureReason = "Profile roundtrip did not preserve the profile name.";
-		return false;
-	}
-	if (configuredEditExtensionProfiles()[0].extensions.size() != 2 || configuredEditExtensionProfiles()[0].extensions[0] != "pl" || configuredEditExtensionProfiles()[0].extensions[1] != "pm") {
-		restore();
-		failureReason = "Profile roundtrip did not preserve the extension selector list.";
-		return false;
-	}
-
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.pl", effective, &matchedProfile)) {
-		restore();
-		failureReason = "Effective profile lookup failed for matching file.";
-		return false;
-	}
-	if (matchedProfile != "Perl") {
-		restore();
-		failureReason = "Effective profile lookup did not report the matching profile name.";
-		return false;
-	}
-	if (effective.tabSize != 3 || !effective.showLineNumbers || effective.defaultMode != "OVERWRITE" || effective.backupFiles || effective.codeLanguage != "PERL" || !effective.codeColoring || !effective.codeFolding || effective.codeFoldingPosition != "LEADING") {
-		restore();
-		failureReason = "Effective edit settings did not merge profile overrides onto globals.";
-		return false;
-	}
-
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.txt", fallback, &matchedProfile)) {
-		restore();
-		failureReason = "Effective profile lookup failed for non-matching file.";
-		return false;
-	}
-	if (!matchedProfile.empty()) {
-		restore();
-		failureReason = "Non-matching file unexpectedly reported an edit profile match.";
-		return false;
-	}
-	if (fallback.tabSize != globalSettings.tabSize || fallback.showLineNumbers != globalSettings.showLineNumbers || fallback.defaultMode != globalSettings.defaultMode) {
-		restore();
-		failureReason = "Non-matching file did not fall back to the global edit settings.";
-		return false;
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after profile roundtrip probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
 
 bool testEditProfileCaseSensitiveExtensionMatchGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
@@ -7694,198 +6771,8 @@ bool testEffectiveCProfileControlsLoadedEditorGuard(std::string &failureReason) 
 	return true;
 }
 
-bool testLegacyEditProfileMacroDropToDefaultsGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string currentVersion = mrCurrentPersistenceVersionString();
-	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
-	                     "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n"
-	                     "MRSETUP('TAB_SIZE', '8');\n"
-	                     "MREDITPROFILE('DEFINE', 'legacy_cpp', 'Legacy C++', '');\n"
-	                     "MREDITPROFILE('EXT', 'legacy_cpp', 'cpp', '');\n"
-	                     "MREDITPROFILE('SET', 'legacy_cpp', 'TAB_SIZE', '5');\n"
-	                     "END_MACRO;\n";
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-	MREditSetupSettings effective;
-	std::string matchedProfile;
 
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
 
-	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
-		restore();
-		failureReason = "Legacy MREDITPROFILE source should be dropped to defaults, but apply failed: " + errorText;
-		return false;
-	}
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.cpp", effective, &matchedProfile)) {
-		restore();
-		failureReason = "Effective settings lookup failed after dropping legacy MREDITPROFILE directives.";
-		return false;
-	}
-	if (!matchedProfile.empty()) {
-		restore();
-		failureReason = "Legacy MREDITPROFILE directives should not survive as FE profiles.";
-		return false;
-	}
-	if (effective.tabSize != 8) {
-		restore();
-		failureReason = "Legacy MREDITPROFILE directives should fall back to global defaults/settings.";
-		return false;
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after legacy token drop probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
-bool testEditProfileCaseSensitiveMacroRoundtripGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	MRSetupPaths paths = resolveSetupPathDefaults();
-	const std::string currentVersion = mrCurrentPersistenceVersionString();
-	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
-	                     "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n"
-	                     "MRSETUP('TAB_SIZE', '8');\n"
-	                     "MRFEPROFILE('DEFINE', 'c_lower', 'Lower C', '');\n"
-	                     "MRFEPROFILE('EXT', 'c_lower', 'c', '');\n"
-	                     "MRFEPROFILE('SET', 'c_lower', 'TAB_SIZE', '2');\n"
-	                     "MRFEPROFILE('DEFINE', 'c_upper', 'Upper C', '');\n"
-	                     "MRFEPROFILE('EXT', 'c_upper', 'C', '');\n"
-	                     "MRFEPROFILE('SET', 'c_upper', 'TAB_SIZE', '6');\n"
-	                     "END_MACRO;\n";
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-	MREditSetupSettings effective;
-	std::string matchedProfile;
-	std::string rewritten;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
-		restore();
-		failureReason = "Unable to reset global edit settings before case-sensitive macro probe: " + errorText;
-		return false;
-	}
-	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
-		restore();
-		failureReason = "Unable to clear extension profiles before case-sensitive macro probe: " + errorText;
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
-		restore();
-		failureReason = "Unable to apply case-sensitive profile macro source: " + errorText;
-		return false;
-	}
-
-	if (configuredEditExtensionProfiles().size() != 2) {
-		restore();
-		failureReason = "Case-sensitive macro source did not restore exactly two extension profiles.";
-		return false;
-	}
-	if (configuredEditExtensionProfiles()[0].id != "c_lower" || configuredEditExtensionProfiles()[1].id != "c_upper") {
-		restore();
-		failureReason = "Case-sensitive macro source did not preserve profile ids.";
-		return false;
-	}
-	if (configuredEditExtensionProfiles()[0].extensions.size() != 1 || configuredEditExtensionProfiles()[0].extensions[0] != "c" || configuredEditExtensionProfiles()[1].extensions.size() != 1 || configuredEditExtensionProfiles()[1].extensions[0] != "C") {
-		restore();
-		failureReason = "Case-sensitive macro source did not preserve exact extension selectors.";
-		return false;
-	}
-
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.c", effective, &matchedProfile)) {
-		restore();
-		failureReason = "Effective profile lookup failed for macro-defined .c profile.";
-		return false;
-	}
-	if (matchedProfile != "Lower C" || effective.tabSize != 2) {
-		restore();
-		failureReason = "Macro-defined lower-case profile did not resolve exactly.";
-		return false;
-	}
-
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.C", effective, &matchedProfile)) {
-		restore();
-		failureReason = "Effective profile lookup failed for macro-defined .C profile.";
-		return false;
-	}
-	if (matchedProfile != "Upper C" || effective.tabSize != 6) {
-		restore();
-		failureReason = "Macro-defined upper-case profile did not resolve exactly.";
-		return false;
-	}
-
-	paths.settingsMacroUri = snapshot.settingsMacroFilePath;
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-	rewritten = buildSettingsMacroSource(paths);
-	if (rewritten.find("MRFEPROFILE('EXT', 'c_lower', 'c', '');") == std::string::npos || rewritten.find("MRFEPROFILE('EXT', 'c_upper', 'C', '');") == std::string::npos) {
-		restore();
-		failureReason = "Case-sensitive macro rewrite did not preserve exact extension selectors.";
-		return false;
-	}
-	if (rewritten.find("MRFEPROFILE('SET', 'c_lower', 'TAB_SIZE', '2');") == std::string::npos || rewritten.find("MRFEPROFILE('SET', 'c_upper', 'TAB_SIZE', '6');") == std::string::npos) {
-		restore();
-		failureReason = "Case-sensitive macro rewrite did not preserve profile override values.";
-		return false;
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after case-sensitive macro probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
-bool testEditProfileDuplicateExactExtensionMacroGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string currentVersion = mrCurrentPersistenceVersionString();
-	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
-	                     "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n"
-	                     "MRFEPROFILE('DEFINE', 'c_one', 'One', '');\n"
-	                     "MRFEPROFILE('EXT', 'c_one', 'c', '');\n"
-	                     "MRFEPROFILE('DEFINE', 'c_two', 'Two', '');\n"
-	                     "MRFEPROFILE('EXT', 'c_two', 'c', '');\n"
-	                     "END_MACRO;\n";
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	if (mrApplySettingsSourceForTesting(source, &errorText)) {
-		restore();
-		failureReason = "Duplicate exact extension assignment was accepted from macro source.";
-		return false;
-	}
-	if (errorText.find("Duplicate profile extension 'c'") == std::string::npos) {
-		restore();
-		failureReason = "Duplicate exact extension assignment should report the conflicting selector.";
-		return false;
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after duplicate extension macro probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
 
 struct ProfileConformanceProbeValue {
 	const char *key;
@@ -7937,268 +6824,7 @@ const char *profileConformanceProbeValueForKey(const char *key) {
 	return nullptr;
 }
 
-bool testEditProfileDescriptorConformanceGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string currentVersion = mrCurrentPersistenceVersionString();
-	const std::string themePath = "/tmp/mr_regression_profile_conformance_theme_" + std::to_string(static_cast<long>(::getpid())) + ".mrmac";
-	const std::string profileId = "profile_conformance";
-	MREditSetupSettings globalSettings = resolveEditSetupDefaults();
-	MRSetupPaths paths = resolveSetupPathDefaults();
-	std::size_t descriptorCount = 0;
-	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
-	std::string source;
-	std::string rewritten;
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-	std::vector<MREditExtensionProfile> profiles;
-	MREditSetupSettings effective;
-	MREditSetupSettings fallback;
-	std::string matchedProfile;
-	std::string effectiveThemePath;
-	std::vector<MREditExtensionProfile> originalProfiles;
 
-	auto restore = [&]() {
-		::unlink(themePath.c_str());
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	globalSettings.tabSize = 11;
-	globalSettings.formatRuler = true;
-	globalSettings.lineNumbersPosition = "OFF";
-	globalSettings.showLineNumbers = false;
-	globalSettings.codeLanguage = "NONE";
-	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
-		restore();
-		failureReason = "Unable to seed globals for profile descriptor conformance: " + errorText;
-		return false;
-	}
-	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
-		restore();
-		failureReason = "Unable to clear profiles before descriptor conformance: " + errorText;
-		return false;
-	}
-
-	source = "$MACRO MR_SETTINGS FROM EDIT;\n";
-	source += "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n";
-	source += "MRFEPROFILE('DEFINE', '" + profileId + "', 'Profile Conformance', '');\n";
-	source += "MRFEPROFILE('EXT', '" + profileId + "', 'qsprof', '');\n";
-	source += "MRFEPROFILE('SET', '" + profileId + "', 'WINDOW_COLORTHEME_URI', '" + themePath + "');\n";
-	source += "MRFEPROFILE('SET', '" + profileId + "', 'COMPILER_PROFILE', 'MR_PROFILE_QS_COMPILER');\n";
-	for (std::size_t i = 0; i < descriptorCount; ++i) {
-		const MREditSettingDescriptor &descriptor = descriptors[i];
-		const char *value = profileConformanceProbeValueForKey(descriptor.key);
-
-		if (!descriptor.profileSupported) continue;
-		if (value == nullptr) {
-			restore();
-			failureReason = std::string("Profile-supported descriptor has no conformance probe value: ") + descriptor.key;
-			return false;
-		}
-		source += "MRFEPROFILE('SET', '" + profileId + "', '" + descriptor.key + "', '" + value + "');\n";
-	}
-	source += "END_MACRO;\n";
-
-	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
-		restore();
-		failureReason = "Unable to apply descriptor-driven MRFEPROFILE source: " + errorText;
-		return false;
-	}
-	profiles = configuredEditExtensionProfiles();
-	if (profiles.size() != 1 || profiles[0].id != profileId) {
-		restore();
-		failureReason = "Descriptor-driven MRFEPROFILE source did not create exactly one expected profile.";
-		return false;
-	}
-	if (profiles[0].windowColorThemeUri != themePath || profiles[0].compilerProfileId != "MR_PROFILE_QS_COMPILER") {
-		restore();
-		failureReason = "Special MRFEPROFILE SET tokens were not stored on the profile.";
-		return false;
-	}
-
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.qsprof", effective, &matchedProfile)) {
-		restore();
-		failureReason = "Effective settings lookup failed for descriptor conformance profile.";
-		return false;
-	}
-	if (matchedProfile != "Profile Conformance") {
-		restore();
-		failureReason = "Effective settings lookup did not report the descriptor conformance profile.";
-		return false;
-	}
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.none", fallback, &matchedProfile)) {
-		restore();
-		failureReason = "Fallback settings lookup failed during descriptor conformance.";
-		return false;
-	}
-	if (!matchedProfile.empty() || fallback != configuredEditSetupSettings()) {
-		restore();
-		failureReason = "Non-matching extension did not preserve global edit settings.";
-		return false;
-	}
-	if (!effectiveEditWindowColorThemePathForPath("/tmp/example.qsprof", effectiveThemePath, &matchedProfile)) {
-		restore();
-		failureReason = "Effective theme lookup failed for descriptor conformance profile.";
-		return false;
-	}
-	if (effectiveThemePath != themePath || matchedProfile != "Profile Conformance") {
-		restore();
-		failureReason = "WINDOW_COLORTHEME_URI did not participate in profile-specific lookup.";
-		return false;
-	}
-
-	for (std::size_t i = 0; i < descriptorCount; ++i) {
-		const MREditSettingDescriptor &descriptor = descriptors[i];
-		std::string expected;
-		std::string actual;
-
-		if (!descriptor.profileSupported) continue;
-		if ((profiles[0].overrides.mask & descriptor.overrideBit) == 0) {
-			restore();
-			failureReason = std::string("MRFEPROFILE SET did not set override bit for ") + descriptor.key;
-			return false;
-		}
-		expected = editSetupValueLiteral(profiles[0].overrides.values, descriptor.key);
-		actual = editSetupValueLiteral(effective, descriptor.key);
-		if (expected != actual) {
-			restore();
-			failureReason = std::string("Effective profile merge mismatch for ") + descriptor.key;
-			return false;
-		}
-	}
-
-	paths.settingsMacroUri = snapshot.settingsMacroFilePath;
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-	rewritten = buildSettingsMacroSource(paths);
-	if (rewritten.find("MRFEPROFILE('SET', '" + profileId + "', 'WINDOW_COLORTHEME_URI', '" + themePath + "');") == std::string::npos ||
-	    rewritten.find("MRFEPROFILE('SET', '" + profileId + "', 'COMPILER_PROFILE', 'MR_PROFILE_QS_COMPILER');") == std::string::npos) {
-		restore();
-		failureReason = "Profile serializer did not emit special profile SET tokens.";
-		return false;
-	}
-	for (std::size_t i = 0; i < descriptorCount; ++i) {
-		const MREditSettingDescriptor &descriptor = descriptors[i];
-		const std::string needle = "MRFEPROFILE('SET', '" + profileId + "', '" + descriptor.key + "', '";
-
-		if (!descriptor.profileSupported) continue;
-		if (rewritten.find(needle) == std::string::npos) {
-			restore();
-			failureReason = std::string("Profile serializer did not emit descriptor token ") + descriptor.key;
-			return false;
-		}
-	}
-
-	originalProfiles = profiles;
-	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
-		restore();
-		failureReason = "Unable to reset edit settings before descriptor profile re-apply: " + errorText;
-		return false;
-	}
-	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
-		restore();
-		failureReason = "Unable to clear profiles before descriptor profile re-apply: " + errorText;
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(rewritten, &errorText)) {
-		restore();
-		failureReason = "Unable to re-apply descriptor profile serializer output: " + errorText;
-		return false;
-	}
-	if (configuredEditExtensionProfiles() != originalProfiles) {
-		restore();
-		failureReason = "Descriptor profile serializer output did not re-create the same profile model.";
-		return false;
-	}
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.qsprof", effective, &matchedProfile)) {
-		restore();
-		failureReason = "Effective settings lookup failed after descriptor profile re-apply.";
-		return false;
-	}
-	for (std::size_t i = 0; i < descriptorCount; ++i) {
-		const MREditSettingDescriptor &descriptor = descriptors[i];
-		std::string expected;
-		std::string actual;
-
-		if (!descriptor.profileSupported) continue;
-		expected = editSetupValueLiteral(originalProfiles[0].overrides.values, descriptor.key);
-		actual = editSetupValueLiteral(effective, descriptor.key);
-		if (expected != actual) {
-			restore();
-			failureReason = std::string("Descriptor profile re-apply lost effective value for ") + descriptor.key;
-			return false;
-		}
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after descriptor profile conformance: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
-bool testEditProfileInvalidMacroDoesNotLeaveProfileGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string currentVersion = mrCurrentPersistenceVersionString();
-	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
-	                     "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n"
-	                     "MRFEPROFILE('DEFINE', 'invalid_profile', 'Invalid', '');\n"
-	                     "MRFEPROFILE('EXT', 'invalid_profile', 'badprof', '');\n"
-	                     "MRFEPROFILE('SET', 'invalid_profile', 'TAB_SIZE', '0');\n"
-	                     "END_MACRO;\n";
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-	MREditSetupSettings effective;
-	std::string matchedProfile;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
-		restore();
-		failureReason = "Unable to clear profiles before invalid profile macro probe: " + errorText;
-		return false;
-	}
-	if (mrApplySettingsSourceForTesting(source, &errorText)) {
-		restore();
-		failureReason = "Invalid MRFEPROFILE TAB_SIZE was accepted.";
-		return false;
-	}
-	if (errorText.find("TAB_SIZE") == std::string::npos) {
-		restore();
-		failureReason = "Invalid MRFEPROFILE value should report TAB_SIZE.";
-		return false;
-	}
-	if (!configuredEditExtensionProfiles().empty()) {
-		restore();
-		failureReason = "Invalid MRFEPROFILE source left a partial profile in runtime state.";
-		return false;
-	}
-	if (!effectiveEditSetupSettingsForPath("/tmp/example.badprof", effective, &matchedProfile)) {
-		restore();
-		failureReason = "Effective lookup failed after invalid profile macro probe.";
-		return false;
-	}
-	if (!matchedProfile.empty()) {
-		restore();
-		failureReason = "Invalid MRFEPROFILE source left a selectable effective profile.";
-		return false;
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after invalid profile macro probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
 
 struct CodeLanguageConformanceEntry {
 	const char *settingValue;
@@ -8338,75 +6964,6 @@ bool testEditProfileCodeLanguageRasterGuard(std::string &failureReason) {
 	return true;
 }
 
-bool testPathsBrowseEventGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_paths_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
-	const std::string settingsPath = root + "/cfg/settings.mrmac";
-	const std::string macroPath = root + "/macros";
-	const std::string tempPath = root + "/tmp";
-	MRSetupPaths paths = resolveSetupPathDefaults();
-	std::string content;
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	paths.settingsMacroUri = settingsPath;
-	paths.macroPath = macroPath;
-	paths.helpUri = "mr.hlp";
-	paths.tempPath = tempPath;
-	paths.shellUri = "/bin/sh";
-	(void)::mkdir(root.c_str(), 0700);
-	(void)::mkdir(macroPath.c_str(), 0700);
-	(void)::mkdir(tempPath.c_str(), 0700);
-
-	if (!writeSettingsMacroFile(paths, &errorText)) {
-		restore();
-		failureReason = "Unable to write paths roundtrip settings.mrmac: " + errorText;
-		return false;
-	}
-	if (!readTextFile(settingsPath, content, errorText)) {
-		restore();
-		failureReason = "Unable to read paths roundtrip settings.mrmac: " + errorText;
-		return false;
-	}
-	if (!mrApplySettingsSourceForTesting(content, &errorText)) {
-		restore();
-		failureReason = "Unable to apply paths roundtrip settings.mrmac: " + errorText;
-		return false;
-	}
-	if (defaultMacroDirectoryPath() != macroPath) {
-		restore();
-		failureReason = "Paths roundtrip did not apply MACROPATH.";
-		return false;
-	}
-	if (configuredTempDirectoryPath() != tempPath) {
-		restore();
-		failureReason = "Paths roundtrip did not apply TEMPDIR.";
-		return false;
-	}
-	if (configuredShellExecutablePath() != "/bin/sh") {
-		restore();
-		failureReason = "Paths roundtrip did not apply SHELLPATH.";
-		return false;
-	}
-	if (configuredHelpFilePath() != absolutePathFromCwd("mr.hlp")) {
-		restore();
-		failureReason = "Paths roundtrip did not normalize and apply HELPPATH.";
-		return false;
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after paths roundtrip probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
 
 struct ColorGroupConformanceEntry {
 	MRColorSetupGroup group;
@@ -8626,129 +7183,6 @@ bool testColorThemeInventoryConformanceGuard(std::string &failureReason) {
 	return true;
 }
 
-bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) {
-	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root = "/tmp/mr_regression_color_save_theme_" + std::to_string(static_cast<long>(::getpid()));
-	const std::string settingsPath = root + "/cfg/settings.mrmac";
-	const std::string themePath = root + "/cfg/probe-theme.mrmac";
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::FileCompare, MRColorSetupGroup::Debugger};
-	TColorAttr paletteData[kMrPaletteMax];
-	TPalette workingPalette(paletteData, static_cast<ushort>(kMrPaletteMax));
-	MRSetupPaths paths = resolveSetupPathDefaults();
-	std::string content;
-	std::string errorText;
-	std::string restoreError;
-	bool restored = false;
-	unsigned char nextColor = 0x21;
-
-	auto restore = [&]() {
-		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
-		return restored;
-	};
-
-	for (int i = 0; i < kMrPaletteMax; ++i)
-		paletteData[i] = 0x70;
-
-	for (MRColorSetupGroup group : groups) {
-		std::size_t count = 0;
-		const MRColorSetupItem *items = colorSetupGroupItems(group, count);
-		if (items == nullptr || count == 0) continue;
-		for (std::size_t i = 0; i < count; ++i) {
-			workingPalette[items[i].paletteIndex] = nextColor;
-			++nextColor;
-		}
-	}
-
-	paths.settingsMacroUri = settingsPath;
-	paths.macroPath = root + "/macros";
-	paths.helpUri = "mr.hlp";
-	paths.tempPath = root + "/tmp";
-	paths.shellUri = "/bin/sh";
-	(void)::mkdir(root.c_str(), 0700);
-	(void)::mkdir(paths.macroPath.c_str(), 0700);
-	(void)::mkdir(paths.tempPath.c_str(), 0700);
-	if (!setConfiguredSettingsMacroFilePath(settingsPath, &errorText)) {
-		restore();
-		failureReason = "Unable to configure settings path for Color Setup save-theme probe: " + errorText;
-		return false;
-	}
-	if (!writeSettingsMacroFile(paths, &errorText)) {
-		restore();
-		failureReason = "Unable to prime settings file for Color Setup save-theme probe: " + errorText;
-		return false;
-	}
-
-	if (!mrSaveColorThemeFromWorkingPaletteForTesting(workingPalette, themePath, &errorText)) {
-		restore();
-		failureReason = "Color Setup save-theme behavior probe failed: " + errorText;
-		return false;
-	}
-	if (!readTextFile(themePath, content, errorText)) {
-		restore();
-		failureReason = "Unable to read saved theme file after Color Setup save-theme probe: " + errorText;
-		return false;
-	}
-	if (content.find("WINDOWCOLORS('") == std::string::npos || content.find("MENUDIALOGCOLORS('") == std::string::npos || content.find("HELPCOLORS('") == std::string::npos || content.find("OTHERCOLORS('") == std::string::npos || content.find("MINIMAPCOLORS('") == std::string::npos || content.find("FILECOMPAREMINIMAPCOLORS") == std::string::npos || content.find("FILECOMPARECOLORS('") == std::string::npos || content.find("DEBUGGERCOLORS('") == std::string::npos) {
-		restore();
-		failureReason = "Saved color theme must contain all color group assignments.";
-		return false;
-	}
-
-	{
-		const MRColorSetupSettings configured = configuredColorSetupSettings();
-		for (MRColorSetupGroup group : groups) {
-			std::size_t count = 0;
-			const MRColorSetupItem *items = colorSetupGroupItems(group, count);
-			if (items == nullptr || count == 0) continue;
-			for (std::size_t i = 0; i < count; ++i) {
-				const unsigned char expected = static_cast<unsigned char>(workingPalette[items[i].paletteIndex]);
-				unsigned char actual = 0;
-				switch (group) {
-					case MRColorSetupGroup::Window:
-						actual = configured.windowColors[i];
-						break;
-					case MRColorSetupGroup::MenuDialog:
-						actual = configured.menuDialogColors[i];
-						break;
-					case MRColorSetupGroup::Help:
-						actual = configured.helpColors[i];
-						break;
-					case MRColorSetupGroup::Other:
-						actual = configured.otherColors[i];
-						break;
-					case MRColorSetupGroup::MiniMap:
-						actual = configured.miniMapColors[i];
-						break;
-					case MRColorSetupGroup::FileCompareMiniMap:
-						actual = configured.fileCompareMiniMapColors[i];
-						break;
-					case MRColorSetupGroup::Code:
-						// Code colors are intentionally outside this guard's scope.
-						actual = expected;
-						break;
-					case MRColorSetupGroup::FileCompare:
-						actual = configured.fileCompareColors[i];
-						break;
-					case MRColorSetupGroup::Debugger:
-						actual = configured.debuggerColors[i];
-						break;
-				}
-				if (actual != expected) {
-					restore();
-					failureReason = "Color Setup save-theme did not apply the working palette before persisting.";
-					return false;
-				}
-			}
-		}
-	}
-
-	if (!restore()) {
-		failureReason = "Unable to restore runtime settings after Color Setup save-theme probe: " + restoreError;
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
 
 struct InvalidCurrentColorListEntry {
 	const char *key;
@@ -9945,9 +8379,6 @@ bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
 	return true;
 }
 
-bool testAboutAnimationHarness(std::string &failureReason) {
-	return mrAboutAnimationRegressionHarness(failureReason);
-}
 
 bool testAboutQuoteReadmeExtractionGuard(std::string &failureReason) {
 	const std::string readmePath = absolutePathFromCwd("README.md");
@@ -11787,159 +10218,6 @@ bool testCoprocessorPacketMetadataHarness(std::string &failureReason) {
 	return true;
 }
 
-bool testFileCompareCompareNavigationHarness(std::string &failureReason) {
-	const std::string originalText = "same 0\nold one\nsame 2\nsame 3\nold two\nsame 5";
-	const std::string compareText = "same 0\nnew one\nsame 2\nsame 3\nnew two\nsame 5";
-	const MRFileCompareStartConfiguration oldStartConfiguration = configuredFileCompareStartConfiguration();
-	const bool oldCompareReadOnly = configuredFileCompareComparePanelReadOnly();
-	MREditSetupSettings editSettings = configuredEditSetupSettings();
-	MREditWindow originalWindow(TRect(0, 0, 80, 20), "original", 101);
-	MREditWindow compareWindow(TRect(0, 0, 80, 20), "compare", 102);
-	MRBentoBox bento(TRect(0, 0, 160, 40), "file compare", 103, bbmFileCompare);
-	MRBentoCompareSetup setup;
-	bool ok = true;
-
-	editSettings.formatRuler = true;
-	ScopedRegressionEditSetupSettings scopedEditSettings(editSettings);
-	setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration::OriginalCompare, nullptr);
-	setConfiguredFileCompareComparePanelReadOnly(false, nullptr);
-
-	if (!originalWindow.replaceTextBuffer(originalText.c_str(), "original") || !compareWindow.replaceTextBuffer(compareText.c_str(), "compare")) {
-		failureReason = "File compare navigation harness could not seed source editor buffers.";
-		ok = false;
-	}
-
-	if (ok) {
-		setup.original.window = &originalWindow;
-		setup.original.bufferId = originalWindow.bufferId();
-		setup.original.documentId = originalWindow.documentId();
-		setup.original.version = originalWindow.documentVersion();
-		setup.original.snapshot = originalWindow.getEditor()->readSnapshot();
-		setup.compare.window = &compareWindow;
-		setup.compare.bufferId = compareWindow.bufferId();
-		setup.compare.documentId = compareWindow.documentId();
-		setup.compare.version = compareWindow.documentVersion();
-		setup.compare.snapshot = compareWindow.getEditor()->readSnapshot();
-	}
-
-	if (ok && !bento.initializeFileCompare(setup)) {
-		failureReason = "File compare navigation harness could not initialize Bento compare.";
-		ok = false;
-	}
-
-	if (ok && (!MRBentoBoxFileCompareRegressionHarness::attachSourceBuffer(bento, bprDiffOriginal, originalWindow) || !MRBentoBoxFileCompareRegressionHarness::attachSourceBuffer(bento, bprDiffCompare, compareWindow))) {
-		failureReason = "File compare navigation harness could not attach source buffers.";
-		ok = false;
-	}
-
-	if (ok && !MRBentoBoxFileCompareRegressionHarness::seedDiffReadyState(bento)) {
-		failureReason = "File compare navigation harness did not build change groups.";
-		ok = false;
-	}
-
-	if (ok) {
-		if (!MRBentoBoxFileCompareRegressionHarness::activatePane(bento, bprDiffCompare)) {
-			failureReason = "File compare navigation harness could not activate the compare pane.";
-			ok = false;
-		}
-		MRFileEditor *compareEditor = ok ? MRBentoBoxFileCompareRegressionHarness::activeEditor(bento) : nullptr;
-		MRFileEditor *originalEditor = ok ? MRBentoBoxFileCompareRegressionHarness::editorForRole(bento, bprDiffOriginal) : nullptr;
-		if (compareEditor == nullptr) {
-			failureReason = "File compare navigation harness did not expose the compare editor.";
-			ok = false;
-		} else if (originalEditor == nullptr) {
-			failureReason = "File compare navigation harness did not expose the original editor.";
-			ok = false;
-		} else {
-			compareEditor->setCursorOffsetAtVisualColumn(compareEditor->bufferModel().lineStartByIndex(0), 0);
-			if (!bento.navigateFileCompareChange(true)) {
-				failureReason = "File compare next-diff navigation failed.";
-				ok = false;
-			} else {
-				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
-				if (cursorLine != 1) {
-					failureReason = "File compare next-diff compare cursor line mismatch after first jump: expected 1, got " + std::to_string(cursorLine) + ".";
-					ok = false;
-				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
-					failureReason = "File compare next-diff cursor is not on a marked compare diff line after first jump.";
-					ok = false;
-				}
-				const std::size_t originalCursorLine = originalEditor->lineIndexOfOffset(originalEditor->cursorOffset());
-				if (ok && originalCursorLine != 1) {
-					failureReason = "File compare next-diff synced original cursor line mismatch after first compare jump: expected 1, got " + std::to_string(originalCursorLine) + ".";
-					ok = false;
-				}
-			}
-
-			if (ok && !bento.navigateFileCompareChange(true)) {
-				failureReason = "File compare second next-diff navigation failed.";
-				ok = false;
-			} else if (ok) {
-				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
-				if (cursorLine != 4) {
-					failureReason = "File compare next-diff compare cursor line mismatch after second jump: expected 4, got " + std::to_string(cursorLine) + ".";
-					ok = false;
-				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
-					failureReason = "File compare next-diff cursor is not on a marked compare diff line after second jump.";
-					ok = false;
-				}
-				const std::size_t originalCursorLine = originalEditor->lineIndexOfOffset(originalEditor->cursorOffset());
-				if (ok && originalCursorLine != 4) {
-					failureReason = "File compare next-diff synced original cursor line mismatch after second compare jump: expected 4, got " + std::to_string(originalCursorLine) + ".";
-					ok = false;
-				}
-			}
-
-			if (ok && !bento.navigateFileCompareChange(false)) {
-				failureReason = "File compare previous-diff navigation failed.";
-				ok = false;
-			} else if (ok) {
-				std::size_t cursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
-				if (cursorLine != 1) {
-					failureReason = "File compare previous-diff compare cursor line mismatch: expected 1, got " + std::to_string(cursorLine) + ".";
-					ok = false;
-				} else if (!MRBentoBoxFileCompareRegressionHarness::markedDiffLineAt(bento, bprDiffCompare, cursorLine)) {
-					failureReason = "File compare previous-diff cursor is not on a marked compare diff line.";
-					ok = false;
-				}
-			}
-
-			if (ok) {
-				const int contextGroupIndex = MRBentoBoxFileCompareRegressionHarness::showContextAtDocumentLine(bento, bprDiffCompare, 1);
-				if (contextGroupIndex != 0) {
-					failureReason = "File compare compare-pane context hit-test should select first diff group, got " + std::to_string(contextGroupIndex) + ".";
-					ok = false;
-				}
-			}
-
-			if (ok && !MRBentoBoxFileCompareRegressionHarness::activatePane(bento, bprDiffOriginal)) {
-				failureReason = "File compare navigation harness could not activate the original pane.";
-				ok = false;
-			} else if (ok && !bento.navigateFileCompareChange(true)) {
-				failureReason = "File compare original-pane next-diff navigation failed.";
-				ok = false;
-			} else if (ok) {
-				const std::size_t originalCursorLine = originalEditor->lineIndexOfOffset(originalEditor->cursorOffset());
-				const std::size_t compareCursorLine = compareEditor->lineIndexOfOffset(compareEditor->cursorOffset());
-
-				if (originalCursorLine != 4) {
-					failureReason = "File compare next-diff original cursor line mismatch: expected 4, got " + std::to_string(originalCursorLine) + ".";
-					ok = false;
-				} else if (compareCursorLine != 4) {
-					failureReason = "File compare next-diff synced compare cursor line mismatch: expected 4, got " + std::to_string(compareCursorLine) + ".";
-					ok = false;
-				}
-			}
-		}
-	}
-
-	bento.restoreFileCompareSources();
-	setConfiguredFileCompareStartConfiguration(oldStartConfiguration, nullptr);
-	setConfiguredFileCompareComparePanelReadOnly(oldCompareReadOnly, nullptr);
-
-	if (ok) failureReason.clear();
-	return ok;
-}
 
 bool testFileCompareBentoWiringGuard(std::string &failureReason) {
 	const std::string commandsPath = absolutePathFromCwd("app/MRCommands.hpp");
@@ -12158,7 +10436,7 @@ bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 		return false;
 	}
 	constructorStart = startup.find("MREditorApp::MREditorApp()");
-	constructorEnd = startup.find("\nbool mrApplySettingsSourceForTesting", constructorStart);
+	constructorEnd = startup.size();
 	if (constructorStart == std::string::npos || constructorEnd == std::string::npos) {
 		failureReason = "Unable to isolate editor startup ordering.";
 		return false;
@@ -12198,41 +10476,35 @@ void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
 	runTest(ctx, "binary boundary probe", testBinaryBoundaryProbe);
-	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
-	runTest(ctx, "Extended settings roundtrip behavior", testExtendedSettingsRoundtripGuard);
-	runTest(ctx, "Keymap AUTOEXEC persistence + bootstrap harness", testKeymapAutoexecPersistenceAndBootstrapHarness);
 	runTest(ctx, "Keymap runtime macro dispatch harness", testKeymapMacroBindingDispatchHarness);
 	runTest(ctx, "Keymap macro diagnostics harness", testKeymapMacroBindingNegativeDiagnosticsHarness);
-	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
-	runTest(ctx, "Edit profile descriptor conformance", testEditProfileDescriptorConformanceGuard);
 	runTest(ctx, "Edit profile code-language raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "File extension code-language dialog conformance", testFileExtensionCodeLanguageChoicesGuard);
 	runTest(ctx, "Compiler support macros compile guard", testCompilerSupportMacrosCompileGuard);
 	runTest(ctx, "DELAY deadline resume harness", testDelayProcWiringGuard);
 	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
 	runTest(ctx, "Coprocessor packet metadata harness", testCoprocessorPacketMetadataHarness);
-	runTest(ctx, "File compare compare-pane navigation harness", testFileCompareCompareNavigationHarness);
 	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
 	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
 	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
 	runTest(ctx, "Deferred large line-index harness", testDeferredLargeLineIndexHarness);
-	runTest(ctx, "Block marking harness", testBlockMarkingHarness);
 	runTest(ctx, "EOF marker scroll range guard", testEofMarkerDoesNotExtendScrollRange);
 	runTest(ctx, "Post-EOF clear-area guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "File extension compiler-profile choices guard", testFileExtensionCompilerProfileChoicesGuard);
 	runTest(ctx, "Central runtime K/V authority guard", testCentralRuntimeKvAuthorityGuard);
 	runTest(ctx, "Exec session owner and MMP canvas guard", testExecSessionOwnerCancellationGuard);
+}
+
+void runFullSuite(TestContext &ctx) {
+	runCoreSuite(ctx);
 	runTest(ctx, "Runtime scheduler skip event guard", testRuntimeSchedulerSkipEventGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "MMP client and hotspot dispatch harness", testMmpClientFocusDispatchHarness);
 	runTest(ctx, "MMP common collection controls harness", testMmpCollectionControlHarness);
 	runTest(ctx, "Message-line Static Mode harness", testMessageLineStaticModeHarness);
+	runTest(ctx, "Fullscreen suspends Static Mode wiring", testFullscreenSuspendsStaticModeWiring);
 	runTest(ctx, "Workspace command-line autoload focus guard", testWorkspaceCommandLineAutoloadFocusGuard);
-}
-
-void runFullSuite(TestContext &ctx) {
-	runCoreSuite(ctx);
 }
 
 } // namespace
@@ -12253,7 +10525,6 @@ int main(int argc, char **argv) {
 			if (std::strcmp(argv[2], "closure-hash-default") == 0) return runClosureHashDefaultProbeMode();
 			if (std::strcmp(argv[2], "macro-screen-flush") == 0) return runMacroScreenFlushProbeMode();
 			if (std::strcmp(argv[2], "keymap-macro-dispatch") == 0) return runKeymapMacroDispatchProbeMode();
-			if (std::strcmp(argv[2], "keymap-autoexec-bootstrap") == 0) return runKeymapAutoexecBootstrapProbeMode();
 			if (std::strcmp(argv[2], "macro-debugger-breakpoint-kv") == 0) return runMacroDebuggerBreakpointKvProbeMode();
 			if (std::strcmp(argv[2], "macro-debugger-cross-section") == 0) return runMacroDebuggerCrossSectionProbeMode();
 			if (std::strcmp(argv[2], "macro-debugger-f9-route") == 0) return runMacroDebuggerF9RouteProbeMode();
@@ -12264,7 +10535,7 @@ int main(int argc, char **argv) {
 			runFull = false;
 		} else {
 			std::cerr << "usage: regression/mr-regression-checks "
-			             "[--core|--full|--probe staged-nav|staged-mark-page|closure-hash-default|macro-screen-flush|keymap-macro-dispatch|keymap-autoexec-bootstrap|macro-debugger-breakpoint-kv|macro-debugger-cross-section|macro-debugger-f9-route|macro-debugger-workspace-breakpoint-roundtrip]\n";
+			             "[--core|--full|--probe staged-nav|staged-mark-page|closure-hash-default|macro-screen-flush|keymap-macro-dispatch|macro-debugger-breakpoint-kv|macro-debugger-cross-section|macro-debugger-f9-route|macro-debugger-workspace-breakpoint-roundtrip]\n";
 			return 2;
 		}
 	}

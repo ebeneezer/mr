@@ -1,13 +1,7 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
 #include "../../app/MREditorApp.hpp"
-#include "../../config/settings/MRSettingsRuntime.hpp"
-#include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../outline/MROutlineFoldProducer.hpp"
-
-#include <chrono>
-#include <ctime>
-#include <sstream>
 
 #if defined(__clang__)
 #pragma clang diagnostic push
@@ -15,42 +9,7 @@
 #pragma clang diagnostic ignored "-Wunused-const-variable"
 #endif
 
-namespace {
-
-std::string directProbeTimestamp() {
-	std::array<char, 32> buffer{};
-	const std::time_t now = std::time(nullptr);
-	const std::tm *tmNow = std::localtime(&now);
-
-	if (tmNow == nullptr) return std::string("--:--:--");
-	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
-	return std::string(buffer.data());
-}
-
-void appendDirectProbeLog(std::string_view message) {
-	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-
-	if (!out) return;
-	out << "[" << directProbeTimestamp() << "] " << message << '\n';
-	out.flush();
-}
-
-template <class Duration> long long traceMicros(Duration duration) {
-	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
-}
-
-} // namespace
-
-
 MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), linesExact(false), mappedLoadMs(0.0), lineCountMs(0.0) {
-}
-
-MRFileEditor::DestructionProbe::~DestructionProbe() {
-	if (!active) return;
-	std::ostringstream line;
-	line << "MRFileEditor destroy buffer_id=" << bufferId << " title='" << title << "' len=" << length << " add=" << addBufferLength << " pieces=" << pieceCount << " undo=" << undoDepth
-	     << " redo=" << redoDepth << " took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt).count() << ".";
-	appendDirectProbeLog(line.str());
 }
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName,
@@ -66,8 +25,6 @@ MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScroll
 }
 
 MRFileEditor::~MRFileEditor() {
-	mDestructionProbe.arm(static_cast<int>(mBufferModel.documentId()), persistentFileName(), mBufferModel.length(), mBufferModel.document().addBufferLength(), mBufferModel.document().pieceCount(),
-	                     mBufferModel.undoStackDepth(), mBufferModel.redoStackDepth());
 	for (const LineIndexPacketState &packet : mLineIndexWarmupState.packets) {
 		if (packet.taskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(packet.taskId));
 		mBufferModel.releaseLineIndexScanReservation(packet.reservationId);
@@ -436,13 +393,7 @@ bool MRFileEditor::syntaxLanguageAutomatic() const noexcept {
 Boolean MRFileEditor::valid(ushort command) {
 	if (command == cmValid || command == cmReleasedFocus) return True;
 	if (mReadOnly || !mBufferModel.isModified()) return True;
-	const auto startedAt = std::chrono::steady_clock::now();
-	Boolean result = !canSaveInPlace() ? confirmSaveOrDiscardUntitled() : confirmSaveOrDiscardNamed();
-	std::ostringstream trace;
-	trace << "Phase1 discard editor valid total_us=" << traceMicros(std::chrono::steady_clock::now() - startedAt) << " result=" << (result == True ? 1 : 0) << " len=" << mBufferModel.length()
-	      << " add=" << mBufferModel.document().addBufferLength() << " pieces=" << mBufferModel.document().pieceCount() << " modified=" << (mBufferModel.isModified() ? 1 : 0);
-	appendDirectProbeLog(trace.str());
-	return result;
+	return !canSaveInPlace() ? confirmSaveOrDiscardUntitled() : confirmSaveOrDiscardNamed();
 }
 
 

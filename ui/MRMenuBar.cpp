@@ -758,7 +758,8 @@ void MRMenuBar::draw() {
 	int menuEnd = 0;
 	std::size_t staticProgressCompleted = 0;
 	std::size_t staticProgressTotal = 0;
-	const bool staticProgressVisible = mr::messageline::currentStaticProgress(staticProgressCompleted, staticProgressTotal);
+	const bool staticModePresentationSuppressed = mFullscreenPresentation && mr::messageline::staticModeActive();
+	const bool staticProgressVisible = !mFullscreenPresentation && mr::messageline::currentStaticProgress(staticProgressCompleted, staticProgressTotal);
 
 	{
 		unsigned char statusAttr = mr_menu_drawing::resolvedPaletteAttribute(kMrPaletteCursorPositionMarker, 0x78);
@@ -815,7 +816,9 @@ void MRMenuBar::draw() {
 		const int newLaneWidth = laneEnd - laneStart + 1;
 		auto now = std::chrono::steady_clock::now();
 		mMarqueeLaneWidth = newLaneWidth;
-		if (staticProgressVisible) {
+		if (staticModePresentationSuppressed) {
+			// Fullscreen may expose the menu temporarily; keep its message lane blank.
+		} else if (staticProgressVisible) {
 			drawStaticProgress(b, laneStart, newLaneWidth, staticProgressCompleted, staticProgressTotal, TColorAttr(cNormal));
 		} else {
 			const std::vector<MarqueeSegment> targetSegments = mManualMarqueeStatus.empty() ? mAutoMarqueeSegments : std::vector<MarqueeSegment>();

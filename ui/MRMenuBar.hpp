@@ -47,6 +47,7 @@ class MRMenuBar : public TMenuBar {
 	void setStartupFunctionKeysActive(bool active);
 	void setEditorFunctionKeysActive(bool active);
 	void setStaticProgressMode(bool active);
+	void setFullscreenPresentation(bool active);
 
 	void setRightStatus(const std::string &status) {
 		if (mRightStatus != status) {
@@ -166,6 +167,7 @@ class MRMenuBar : public TMenuBar {
 	ushort mNextRuntimeCommand = 0x7400;
 	bool mStartupFunctionKeysActive = false;
 	bool mEditorFunctionKeysActive = false;
+	bool mFullscreenPresentation = false;
 	std::string mRightStatus;
 	std::string mAutoMarqueeStatus;
 	std::vector<MarqueeSegment> mAutoMarqueeSegments;

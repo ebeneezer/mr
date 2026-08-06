@@ -45,10 +45,9 @@
 #include "../ui/MRWindowSupport.hpp"
 #include "MRAppState.hpp"
 #include "MRCommandRouter.hpp"
-#include "MRExecSessionSmoke.hpp"
-#include "MRExecSessionStatus.hpp"
 #include "MRFunctionKeyBindings.hpp"
 #include "MRMenuFactory.hpp"
+#include "MRPrivilegedFileBroker.hpp"
 #include "MRRuntimeScheduler.hpp"
 #include <ctime>
 #include <chrono>
@@ -151,16 +150,6 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 	clearConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
-}
-
-bool applySettingsSource(const std::string &source, std::string *errorMessage) {
-	MRSettingsLoadReport report;
-	std::string settingsPath = configuredSettingsMacroFilePath();
-	std::string canonicalSource;
-
-	if (settingsPath.empty()) settingsPath = defaultSettingsMacroFilePath();
-	if (!buildCanonicalSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) return false;
-	return applySettingsSourceViaVm(settingsPath, canonicalSource, errorMessage);
 }
 
 ushort mrEditorDialog(int dialog, ...) {
@@ -311,8 +300,8 @@ bool isReadableRegularFile(const std::filesystem::path &path) {
 	std::string pathString = path.string();
 
 	if (pathString.empty()) return false;
-	if (!std::filesystem::is_regular_file(path, ec) || ec) return false;
-	return ::access(pathString.c_str(), R_OK) == 0;
+	if (std::filesystem::is_regular_file(path, ec) && !ec && ::access(pathString.c_str(), R_OK) == 0) return true;
+	return mrPrivilegedFileBrokerAllowsPath(pathString);
 }
 
 std::string normalizePathForLoad(const std::filesystem::path &path) {
@@ -430,7 +419,7 @@ StartupLoadRequest parseStartupLoadRequest() {
 			request.recursive = true;
 			continue;
 		}
-		if (arg == "--run-macro") {
+		if (arg == "--run-macro" || arg == "-rm") {
 			skipNext = true;
 			continue;
 		}
@@ -454,7 +443,7 @@ StartupAutomationRequest parseStartupAutomationRequest() {
 			expectRunMacroPath = false;
 			continue;
 		}
-		if (arg == "--run-macro") {
+		if (arg == "--run-macro" || arg == "-rm") {
 			expectRunMacroPath = true;
 			continue;
 		}
@@ -467,7 +456,7 @@ StartupAutomationRequest parseStartupAutomationRequest() {
 			continue;
 		}
 	}
-	if (expectRunMacroPath) mrLogMessage("Startup automation ignored --run-macro without a macro file.");
+	if (expectRunMacroPath) mrLogMessage("Startup automation ignored --run-macro/-rm without a macro file.");
 	return request;
 }
 
@@ -588,9 +577,6 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	loadStartupSettingsMacro(std::string(), nullptr);
 	refreshConfiguredUiSettingsSnapshot();
 	logStartupPhase("settings_bootstrap");
-	installExecSessionStatusConsumerIfEnabled();
-	installExecSessionSmokePackageIfEnabled();
-	installRuntimeSchedulerSmokeIfEnabled();
 	logStartupPhase("runtime_scheduler");
 	applyConfiguredDisplayLayout();
 	logStartupPhase("display_layout_initial");
@@ -606,10 +592,6 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	static_cast<void>(loadStartupFilesFromCommandLine(autoloadWorkspace));
 	logStartupPhase("startup_files");
 	startupQuitPending = runStartupAutomationFromCommandLine();
-	runExecSessionSmokeRoutedMacroIfEnabled();
-	logExecSessionStatusSnapshotIfEnabled();
-	logExecSessionSmokeSnapshotIfEnabled();
-	logRuntimeSchedulerStatusIfEnabled();
 	logStartupPhase("startup_automation");
 	if (!autoloadWorkspace) {
 		applyConfiguredDisplayLayout();
@@ -652,15 +634,4 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 		line << "Bootstrap total took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startupStartedAt).count() << ".";
 		mrLogMessage(line.str().c_str());
 	}
-}
-bool mrApplySettingsSourceForTesting(const std::string &source, std::string *errorMessage) {
-	return applySettingsSource(source, errorMessage);
-}
-
-bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage) {
-	MRSettingsLoadReport report;
-	std::string canonicalSource;
-
-	(void)reason;
-	return prepareStartupSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage);
 }

@@ -57,6 +57,13 @@ The authoritative Static Mode semaphore is the central runtime K/V value
   while their outgoing labels remain visible. After the entry transition the
   status line shows only `Esc Abort`. Escape remains owned by the active
   operation.
+- Fullscreen presentation suspends these projection and event restrictions
+  without clearing the Static Mode semaphore or its progress. F11 always
+  enters or leaves Fullscreen. While Fullscreen is active, function keys use
+  their Fullscreen/editor context, Escape leaves Fullscreen instead of
+  cancelling the operation, and the temporarily exposed F10 menu keeps the
+  Static Mode message lane blank. If the operation is still active after
+  leaving Fullscreen, normal Static Mode presentation and interception resume.
 
 ## Message-line normal mode
 

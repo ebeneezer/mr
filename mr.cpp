@@ -1,6 +1,7 @@
 #include "mrmac/MRVM.hpp"
 #include "app/MREditorApp.hpp"
 #include "app/MRHelp.generated.hpp"
+#include "app/MRPrivilegedFileBroker.hpp"
 #include "config/settings/MRSettingsRuntime.hpp"
 #include "mrmac/vm/MRVMProcessRuntime.hpp"
 
@@ -39,6 +40,17 @@ int main(int argc, char **argv) {
 	if (hasHelpFlag(argc, argv)) {
 		std::cout << kMrEmbeddedHelpMarkdown;
 		return 0;
+	}
+	int brokerExitCode = 1;
+	std::string brokerError;
+	switch (mrStartPrivilegedFileBroker(argc, argv, brokerExitCode, brokerError)) {
+		case MRPrivilegedFileBrokerStartup::ParentFinished:
+			return brokerExitCode;
+		case MRPrivilegedFileBrokerStartup::Failed:
+			std::cerr << "mr: " << (brokerError.empty() ? "privileged file broker startup failed." : brokerError) << '\n';
+			return 1;
+		case MRPrivilegedFileBrokerStartup::RunApplication:
+			break;
 	}
 	mrvmSetProcessContext(argc, argv);
 	const auto appScopeStartedAt = std::chrono::steady_clock::now();

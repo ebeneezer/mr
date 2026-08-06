@@ -1,6 +1,5 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
-#include "../../app/MREditorApp.hpp"
 
 #include <cctype>
 #include <chrono>
@@ -16,11 +15,6 @@ bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Latex || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
 	       language == MRSyntaxLanguage::Xml ||
 	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Basic;
-}
-
-bool quitTailTraceActive() noexcept {
-	const auto *app = dynamic_cast<const MREditorApp *>(TProgram::application);
-	return app != nullptr && app->quitPrepared();
 }
 
 std::size_t renderedBlockOverlayEndForViewport(const MRTextBufferModel &model, std::size_t overlayStart, std::size_t overlayEnd, int overlayMode) noexcept {
@@ -81,53 +75,6 @@ bool fileCompareGuttersContain(const std::string &gutters, char marker) noexcept
 }
 
 } // namespace
-
-bool mrfeRenderedBlockOverlayLineRangeForRegression(const MRFileEditor &editor, std::size_t &line1, std::size_t &line2) {
-	if (!editor.mBlockOverlayActive || editor.mBlockOverlayMode == 0) return false;
-	if (editor.mBlockOverlayMode == 2 && editor.mBlockOverlayLineRangeValid) {
-		line1 = std::min(editor.mBlockOverlayLine1, editor.mBlockOverlayLine2);
-		line2 = std::max(editor.mBlockOverlayLine1, editor.mBlockOverlayLine2);
-		return true;
-	}
-	std::size_t start = editor.mBlockOverlayAnchor;
-	std::size_t end = editor.mBlockOverlayTrackCursor ? editor.mBufferModel.cursor() : editor.mBlockOverlayEnd;
-	if (start > end) std::swap(start, end);
-	end = renderedBlockOverlayEndForViewport(editor.mBufferModel, start, end, editor.mBlockOverlayMode);
-	line1 = editor.mBufferModel.lineIndex(start);
-	line2 = editor.mBufferModel.lineIndex(end);
-	if (line1 > line2) std::swap(line1, line2);
-	return true;
-}
-
-int mrfeLocalXForVisualColumnForRegression(const MRFileEditor &editor, int visualColumn) {
-	return static_cast<int>(editor.textViewportGeometry().localXFromVisualColumn(std::max(0, visualColumn)));
-}
-
-bool mrfeRenderedColumnOverlayColumnsForRegression(MRFileEditor &editor, std::size_t lineIndex, int width, int &col1, int &col2) {
-	class DrawBufferProbe : public TDrawBuffer {
-	  public:
-		TColorAttr attrAt(int column) const noexcept {
-			return getAttr(data[column]);
-		}
-	};
-
-	if (width <= 0) return false;
-	DrawBufferProbe buffer;
-	MRSyntaxLineResult syntaxLine;
-	const bool documentLine = lineIndex < editor.mBufferModel.lineCount();
-	const std::size_t lineStart = documentLine ? editor.mBufferModel.lineStartByIndex(lineIndex) : lineIndex;
-	const TColorAttr selectedColor = editor.tokenColor(MRSyntaxToken::Text, true, editor.getColor(0x0201));
-	col1 = -1;
-	col2 = -1;
-	editor.formatSyntaxLine(buffer, lineStart, lineIndex, syntaxLine, 0, width, 0, documentLine, false, false);
-	for (int column = 0; column < width; ++column) {
-		if (buffer.attrAt(column) == selectedColor) {
-			if (col1 < 0) col1 = column;
-			col2 = column + 1;
-		}
-	}
-	return col1 >= 0 && col2 >= col1;
-}
 
 unsigned char MRFileEditor::fileCompareLineKindAt(std::size_t lineIndex) const noexcept {
 	if (mFileCompareGuttersConfigured && mFileCompareLineKinds->empty()) return mrfclkEqual;
@@ -1267,10 +1214,9 @@ void MRFileEditor::updateMetrics() {
 	int rightInset = viewport.rightInset;
 	int viewportWidth = viewport.width;
 	const int textRows = std::max(1, visibleTextRows());
-	const bool quitTail = quitTailTraceActive();
 
 	limitX = displayWidthLimitExact() ? provisionalDisplayWidthLimit() : std::max(dynamicLargeFileWidthLimit(), provisionalDisplayWidthLimit());
-	if (useApproximateLargeFileMetrics() || quitTail || !mBufferModel.exactLineCountKnown()) {
+	if (useApproximateLargeFileMetrics() || !mBufferModel.exactLineCountKnown()) {
 		const auto lineLimitStartedAt = std::chrono::steady_clock::now();
 		limitY = dynamicLargeFileLineLimit();
 		if (shouldTraceLargeFileWarmupDiagnostics()) {

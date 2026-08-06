@@ -49,7 +49,7 @@
 
 \title{\mr{} Users Manual\\\large Editing, navigation, automation, and tools}
 \author{Dr.\ Michael 'iDoc' Raus}
-\date{30 July 2026}
+\date{5 August 2026}
 
 \begin{document}
 \frontmatter
@@ -63,7 +63,7 @@
 \vspace{3\baselineskip}
 {\large Dr.\ Michael 'iDoc' Raus\par}
 \vspace{2\baselineskip}
-{\large 30 July 2026\par}
+{\large 5 August 2026\par}
 \end{center}
 
 \vfill
@@ -127,12 +127,17 @@ geometry.
 
 The active window has a highlighted frame. Its title identifies the persistent
 file when one exists. Frame markers report properties such as modification,
-read-only state, insert mode, language, workspace-main status, macro recording,
-or background work. Line and column information appears in the configured
-cursor-position marker. The editor's left and right projections can contain
-line numbers, fold markers, difference markers, or a minimap.
+Git changes, read-only state, insert mode, language, workspace-main status,
+macro recording, or background work. Hovering over an ordinary marker explains
+it. Hovering over the activity marker opens a transient list of that window's
+running work; clicking the marker pins the list until it is clicked again,
+closed, or dismissed with \key{Esc}. The list observes work but does not cancel
+it. Line and column information appears in the configured cursor-position
+marker. The editor's left and right projections can contain line numbers, fold
+markers, difference markers, or a minimap.
 \index{window!frame markers}\index{cursor position marker}
-\index{minimap}\index{code folding}
+\index{minimap}\index{code folding}\index{background work}
+\index{task overview}
 
 \manualscreenshot{mr-users-overview.png}{fig:users-overview}{A normal editor
 window showing syntax-aware text, line numbers, folding, minimap, window
@@ -151,7 +156,13 @@ Those labels are contextual rather than decorative. Startup, ordinary
 editing, compiler diagnostics, file comparison, Bento panes, and the macro
 debugger may assign different meanings to the same function key. When this
 manual and the live status line disagree about a function key, the live status
-line wins.\index{status line}\index{function keys!context-sensitive}
+line wins. On terminals that report modifier state, holding \key{Shift},
+\key{Ctrl}, \key{Alt}, or \key{Super} changes the displayed function-key bank
+before a function key is pressed. Empty positions mean that the current
+context has no assignment for that modifier combination. Label changes use
+the same short transition language as the message line.
+\index{status line}\index{function keys!context-sensitive}
+\index{function keys!modifiers}
 
 \begin{usernote}
 Most commands are reachable through both a menu and a keymap action. A key
@@ -175,6 +186,25 @@ message line. Use \menu{File > Open live log}, \menu{File > Open journal}, or
 the configured log viewer when a short notice is insufficient.
 \index{message line}\index{log window}\index{journal}
 
+\section{Progress and performance observation}
+
+Some foreground batch operations enter Static Mode. The message lane then
+becomes a right-to-left progress bar with a centered
+\texttt{completed/total} count, ordinary transient messages are suppressed,
+and the function-key line changes to \key{Esc Abort}. F1 through F12 are
+disabled immediately outside Fullscreen; \key{Esc} belongs to the active
+operation. When the operation finishes or acknowledges cancellation, the
+previous labels and normal message animation return.
+\index{Static Mode}\index{progress}
+\index{cancellation}
+
+\menu{Help > Performance panel} toggles a global diagnostic panel above the
+desktop. Its activity meter distinguishes active, queued, and result-ready
+work; the text rows show worker, lane, owner, timing, lifecycle, and selected
+runtime I/O counters. Use it to explain latency or verify that work returns to
+idle. It is an observation surface, not a task manager. \key{Esc} closes the
+panel.\index{Performance panel}\index{coprocessor!telemetry}
+
 \section{Editor modes}
 
 Insert and overwrite determine how ordinary typing affects existing text.
@@ -190,6 +220,19 @@ not interchangeable concepts. Commands operate on the logical document and
 the active editor projection; users should avoid treating a displayed glyph as
 necessarily one byte or one terminal cell.
 \index{UTF-8}\index{display columns}\index{bytes}
+
+\section{Fullscreen presentation}
+
+\key{F11} gives the selected editor the complete desktop and hides its frame,
+the menu line, the function-key line, and the Performance panel. A brief hint
+shows the exit keys. \key{F10} exposes the menu temporarily without ending
+Fullscreen; \key{F11} or \key{Esc} restores the normal layout and the window's
+previous bounds. Fullscreen changes presentation, not document or workspace
+ownership. It also suspends Static Mode as a user-interface restriction:
+Static progress remains recorded for the operation but is not drawn, function
+keys remain usable, and \key{Esc} leaves Fullscreen rather than aborting the
+batch. If the batch is still running afterwards, its normal Static Mode
+display resumes.\index{Fullscreen}\index{F11@\texttt{F11}}
 
 \section{A productive first session}
 
@@ -469,7 +512,18 @@ as a file.\index{Get Last dialog}\index{recent files}
 \menu{File > Acquire} accepts a directory specification or an executable
 command. Results are presented as selectable paths, and \menu{Load all} opens
 every eligible entry. This is useful when the file set is discovered by a
-tool rather than known in advance.\index{Acquire dialog}
+tool rather than known in advance. Output is adopted incrementally, duplicate
+paths are removed, and the list shows ordinals and a total. Closing the dialog
+while its command is running stops the process group and discards output that
+has not been adopted.\index{Acquire dialog}
+
+\menu{Load all} processes one file boundary at a time and enters Static Mode.
+The message lane reports the number processed; \key{Esc} stops the remaining
+queue without closing files already loaded when Fullscreen is not active. In
+Fullscreen, leave the presentation first and press \key{Esc} again to cancel
+the remaining batch. The final notice distinguishes completion from
+cancellation and reports how many files were loaded.
+\index{Acquire dialog!Load all}\index{progress!Acquire}
 
 \menu{File > Open live log} follows a text file as it grows. \menu{File > Open
 journal} reads \texttt{systemd} journal output, optionally restricted by an
@@ -1108,12 +1162,23 @@ allowed to overwrite or misdirect a newer document silently.
 \menu{Search > Multiple file search} selects filespec, root, recursion, search
 text, matching rules, editor-window inclusion, and optional workspace
 restriction. The request is immutable after submission and runs in the
-background.\index{multiple-file search}
+background. Collection initially reports an open-ended count; once the
+candidate set is known, the progress display reports files searched against
+the total. The \menu{Search} button becomes \menu{Cancel} while the operation
+is running. A cancelled or stale partial result is not opened as a valid Found
+List.\index{multiple-file search}\index{multiple-file search!cancellation}
 
 \field{Search editor windows} includes already loaded documents.
 \field{Restrict to workspace} limits candidates to the active workspace.
 Whole-word mode takes precedence over regular-expression mode when both
-controls would otherwise be selected.
+controls would otherwise be selected. These options are independent:
+including loaded windows adds their current in-memory snapshots, whereas
+workspace restriction limits the candidate population to workspace members.
+
+The result dialog can load the selected file or load every result file.
+\menu{Load} keeps the result dialog available for further navigation;
+\menu{Load all} opens each distinct result file without treating every match
+as another file load.\index{multiple-file search!results}
 
 \section{Multiple-file search and replace}
 
@@ -1121,6 +1186,14 @@ The replace variant adds replacement text, review actions, and
 \field{Keep all files open}. Results are collected before UI adoption.
 Review permits Replace, Replace All, and Skip. Files need not all remain open
 unless that option is selected.\index{multiple-file replace}
+
+Replace All applies one replacement per dialog event and shows
+\texttt{completed/total} progress. Cancelling pauses mutation and offers
+\menu{Continue}, \menu{Abort}, or \menu{Revert}. Continue resumes. Abort keeps
+the completed prefix as ordinary Undo records. Revert restores the
+pre-operation snapshot of every file touched by that Replace All run; it does
+not discard unrelated earlier edits.\index{multiple-file replace!Replace All}
+\index{multiple-file replace!cancellation}
 
 Workspace restriction is especially useful in repositories with vendored or
 generated trees. A filespec alone describes names; workspace membership
@@ -1636,8 +1709,27 @@ wrong profile or formatter was selected.
 \menu{Other > Build current file} chooses the compiler profile associated
 with the active file. A compiler profile describes the executable,
 toolchain, version and target constraints, build flags, include and library
-arguments, runtime arguments, pre-build command, result commands, and optional
-\mrmac{} hooks.\index{compiler profile}\index{build current file}
+arguments, runtime paths, a pre-build shell command, build-succeeded and
+build-failed shell commands, and optional pre- and post-build \mrmac{} hooks.
+Separate success and failure audio paths can announce the result through the
+configured audio player.\index{compiler profile}\index{build current file}
+\index{compiler profile!build hooks}
+
+\menu{Installation and setup > Compiler profiles} exposes these fields and
+the \menu{Automatic Setup} action. If the selected profile names an
+executable, Automatic Setup resolves and probes it, then fills toolchain,
+version, target, default flags, include paths, library paths, and runtime
+paths. With no executable selected, the action discovers supported compilers
+on \texttt{PATH} and inserts or selects matching profiles. The result remains
+an ordinary editable profile; automatic setup neither discovers a whole build
+system nor hides its decisions.\index{compiler profile!automatic setup}
+
+The pre-build \mrmac{} hook runs before the external build is submitted. The
+shell pre-build command can stop the build with a failing status; the matching
+success or failure command then follows the compiler result. Completion audio
+and the post-build \mrmac{} hook are adopted with the final result. Build
+context values identify the source, output, profile, toolchain, and exit
+status to hooks without requiring them to reconstruct the command line.
 
 \menu{Other > Next compiler error} and \menu{Previous compiler error} navigate
 adopted diagnostics. User Interface Settings controls whether warnings and
@@ -1646,6 +1738,22 @@ presented. The minimap can provide long-range orientation, but the diagnostic
 navigation command remains authoritative for the next adopted location.
 \index{compiler diagnostics}\index{compiler error!navigation}
 \index{compiler warning}
+
+\section{Git status and file changes}
+
+For a named file in a Git work tree, \mr{} probes the file's status in the
+background. The frame displays its Git changes marker when the file differs
+from the repository state or is untracked. Hovering explains the marker;
+clicking it is equivalent to \menu{Other > Git changes}.
+\index{Git}\index{Git!status marker}
+
+Git changes is file-scoped. If the editor contains unsaved changes, \mr{}
+offers to save them first and stops if they are not saved. It then opens a
+communication window containing the repository and branch, short repository
+status, and the diff for the focused file. An untracked file is compared with
+an empty source. The command does not stage, commit, switch branches, or
+maintain a second repository model; use normal Git tools for those operations.
+\index{Git!changes}\index{Git!diff}
 
 \section{File comparison}
 

@@ -20,10 +20,8 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
-#include <fstream>
 #include <iterator>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <unistd.h>
@@ -275,34 +273,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	virtual ~MREditWindow() override {
 		mrDropSidekickForParent(this);
-		{
-			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-			if (out) {
-				std::time_t now = std::time(nullptr);
-				std::tm *tmNow = std::localtime(&now);
-				char buffer[32];
-				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
-				else
-					out << "[--:--:--] ";
-				out << "MREditWindow destructor begin #" << mBufferId << " title='" << (getTitle(0) != nullptr ? getTitle(0) : "?") << "' editor_present=" << (editor != nullptr ? 1 : 0) << ".\n";
-				out.flush();
-			}
-		}
 		prepareForClose();
 		mrNotifyWindowTopologyChanged();
-		{
-			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-			if (out) {
-				std::time_t now = std::time(nullptr);
-				std::tm *tmNow = std::localtime(&now);
-				char buffer[32];
-				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
-				else
-					out << "[--:--:--] ";
-				out << "MREditWindow destructor end #" << mBufferId << ".\n";
-				out.flush();
-			}
-		}
 	}
 
 	virtual void close() override {
@@ -316,62 +288,9 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	virtual Boolean valid(ushort command) override {
 		if (command != cmClose) return TWindow::valid(command);
-		const auto closeValidStartedAt = std::chrono::steady_clock::now();
-		{
-			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-			if (out) {
-				std::time_t now = std::time(nullptr);
-				std::tm *tmNow = std::localtime(&now);
-				char buffer[32];
-				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
-				else
-					out << "[--:--:--] ";
-				out << "Phase1 discard window valid begin #" << mBufferId << " title='" << (getTitle(0) != nullptr ? getTitle(0) : "?") << "'.\n";
-				out.flush();
-			}
-		}
-		if (!TWindow::valid(command)) {
-			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-			if (out) {
-				std::time_t now = std::time(nullptr);
-				std::tm *tmNow = std::localtime(&now);
-				char buffer[32];
-				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
-				else
-					out << "[--:--:--] ";
-				out << "Phase1 discard window valid editor rejected #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
-				out.flush();
-			}
-			return False;
-		}
-		{
-			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-			if (out) {
-				std::time_t now = std::time(nullptr);
-				std::tm *tmNow = std::localtime(&now);
-				char buffer[32];
-				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
-				else
-					out << "[--:--:--] ";
-				out << "Phase1 discard window valid editor accepted #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
-				out.flush();
-			}
-		}
+		if (!TWindow::valid(command)) return False;
 		scheduleEnsureUsableWorkWindow();
 		prepareForClose();
-		{
-			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-			if (out) {
-				std::time_t now = std::time(nullptr);
-				std::tm *tmNow = std::localtime(&now);
-				char buffer[32];
-				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
-				else
-					out << "[--:--:--] ";
-				out << "Phase1 discard window valid end #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
-				out.flush();
-			}
-		}
 		return True;
 	}
 
@@ -742,7 +661,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		invalidateGitStatus();
 		applyWindowColorThemeForPath(expandedName);
 		resetTransientEditorState();
-		setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
+		setReadOnly(mrPathRequiresReadOnlyEditor(editor->persistentFileName()));
 		mTemporaryFileUsed = false;
 		mTemporaryFileName.clear();
 		setWindowRole(wrFile);
@@ -800,7 +719,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			mFirstSaveDone = true;
 			mTemporaryFileUsed = false;
 			mTemporaryFileName.clear();
-			setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
+			setReadOnly(mrPathRequiresReadOnlyEditor(editor->persistentFileName()));
 			setWindowRole(wrFile);
 			updateTitleFromEditor();
 			if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
@@ -820,7 +739,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			mFirstSaveDone = true;
 			mTemporaryFileUsed = false;
 			mTemporaryFileName.clear();
-			setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
+			setReadOnly(mrPathRequiresReadOnlyEditor(editor->persistentFileName()));
 			setWindowRole(wrFile);
 			updateTitleFromEditor();
 			if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
@@ -2199,67 +2118,21 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		return new MRFrame(r);
 	}
 
-	static bool isExistingPathReadOnly(const char *fileName) {
-		if (fileName == nullptr || *fileName == '\0') return false;
-		if (access(fileName, F_OK) != 0) return false;
-		return access(fileName, W_OK) != 0;
-	}
-
 	void resetTransientEditorState() {
 		if (editor == nullptr) return;
 		clearBlock();
 	}
 
 		void prepareForClose() {
-			std::ostringstream line;
-			const char *title = getTitle(0);
-			const std::string titleForLog = title != nullptr ? title : "?";
-			std::size_t cancelledCount = 0;
-			const auto startedAt = std::chrono::steady_clock::now();
-		long long clearUndoRedoMs = 0;
-		long long destroyEditorMs = 0;
-		std::size_t undoBefore = 0;
-		std::size_t redoBefore = 0;
-		std::size_t undoAfter = 0;
-		std::size_t redoAfter = 0;
-		const bool modified = isFileChanged();
-		const std::size_t lengthBeforeClose = bufferLength();
-		const std::size_t addBeforeClose = addBufferLength();
-		const std::size_t piecesBeforeClose = pieceCount();
-
 		if (mClosePrepared) return;
 		mClosePrepared = true;
 		mrvmCloseForksForOwner(mBufferId);
-		cancelledCount = prepareCoprocessorTasksForShutdown();
+		static_cast<void>(prepareCoprocessorTasksForShutdown());
 		if (editor != nullptr) {
-			undoBefore = editor->bufferModel().undoStackDepth();
-			redoBefore = editor->bufferModel().redoStackDepth();
-			const auto clearStartedAt = std::chrono::steady_clock::now();
 			editor->bufferModel().clearUndoRedo();
-			clearUndoRedoMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - clearStartedAt).count();
-			undoAfter = editor->bufferModel().undoStackDepth();
-			redoAfter = editor->bufferModel().redoStackDepth();
-			const auto destroyStartedAt = std::chrono::steady_clock::now();
 			remove(editor);
 			TObject::destroy(editor);
 			editor = nullptr;
-			destroyEditorMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - destroyStartedAt).count();
-		}
-			line << "Preparing close for window #" << mBufferId << " title='" << titleForLog << "'"
-		     << " cancelled_tasks=" << cancelledCount << " modified=" << (modified ? 1 : 0) << " len=" << lengthBeforeClose << " add=" << addBeforeClose << " pieces=" << piecesBeforeClose
-		     << " undo_before=" << undoBefore << " redo_before=" << redoBefore << " undo_after=" << undoAfter << " redo_after=" << redoAfter << " clear_undo_redo_ms=" << clearUndoRedoMs
-		     << " destroy_editor_ms=" << destroyEditorMs << " took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt).count() << ".";
-		{
-			std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-			if (out) {
-				std::time_t now = std::time(nullptr);
-				std::tm *tmNow = std::localtime(&now);
-				char buffer[32];
-				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] " << line.str() << '\n';
-				else
-					out << "[--:--:--] " << line.str() << '\n';
-				out.flush();
-			}
 		}
 	}
 

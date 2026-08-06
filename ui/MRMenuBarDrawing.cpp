@@ -31,6 +31,13 @@ void MRMenuBar::setStaticProgressMode(bool active) {
 	drawView();
 }
 
+void MRMenuBar::setFullscreenPresentation(bool active) {
+	if (mFullscreenPresentation == active) return;
+	mFullscreenPresentation = active;
+	resetMarqueeState();
+	drawView();
+}
+
 void MRMenuBar::drawStaticProgress(TDrawBuffer &buffer, int laneStart, int laneWidth, std::size_t completed, std::size_t total, TColorAttr normalColor) {
 	const unsigned char warningAttribute =
 	    mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(MarqueeKind::Warning), mr_menu_drawing::marqueeFallbackAttribute(MarqueeKind::Warning));

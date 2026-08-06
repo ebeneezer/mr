@@ -99,9 +99,6 @@ class MREditorApp : public TApplication {
 	MRHelpSystem helpSystem;
 };
 
-// Regression-only hooks used by regression/mr-regression-checks.cpp.
-bool mrApplySettingsSourceForTesting(const std::string &source, std::string *errorMessage = nullptr);
-bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage = nullptr);
 void mrRefreshEditorApplicationUiSettingsSnapshot();
 void mrSetSnippetSidekickHintsActive(bool active);
 

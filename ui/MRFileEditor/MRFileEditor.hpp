@@ -57,11 +57,6 @@ std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage l
 std::string mrBuildOutlineTrainingAscii(const std::string &text, MRSyntaxLanguage language);
 
 class MRFileEditor : public TScroller {
-	friend bool mrfeSeedMouseColumnStateForRegression(MRFileEditor &editor, int anchorColumn, int cursorColumn);
-	friend bool mrfeRenderedBlockOverlayLineRangeForRegression(const MRFileEditor &editor, std::size_t &line1, std::size_t &line2);
-	friend int mrfeLocalXForVisualColumnForRegression(const MRFileEditor &editor, int visualColumn);
-	friend bool mrfeRenderedColumnOverlayColumnsForRegression(MRFileEditor &editor, std::size_t lineIndex, int width, int &col1, int &col2);
-
   public:
 	struct LoadTiming {
 		bool valid;
@@ -72,32 +67,6 @@ class MRFileEditor : public TScroller {
 		double lineCountMs;
 
 		LoadTiming() noexcept;
-	};
-
-	struct DestructionProbe {
-		bool active = false;
-		int bufferId = 0;
-		std::string title;
-		std::size_t length = 0;
-		std::size_t addBufferLength = 0;
-		std::size_t pieceCount = 0;
-		std::size_t undoDepth = 0;
-		std::size_t redoDepth = 0;
-		std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::time_point();
-
-		void arm(int aBufferId, const char *aTitle, std::size_t aLength, std::size_t aAddBufferLength, std::size_t aPieceCount, std::size_t aUndoDepth, std::size_t aRedoDepth) {
-			active = true;
-			bufferId = aBufferId;
-			title = aTitle != nullptr ? aTitle : "?";
-			length = aLength;
-			addBufferLength = aAddBufferLength;
-			pieceCount = aPieceCount;
-			undoDepth = aUndoDepth;
-			redoDepth = aRedoDepth;
-			startedAt = std::chrono::steady_clock::now();
-		}
-
-		~DestructionProbe();
 	};
 
 	MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName,
@@ -1134,7 +1103,6 @@ class MRFileEditor : public TScroller {
 	bool mAutoIndent;
 		char fileName[MAXPATH];
 		std::string mSyntaxTitleHint;
-		DestructionProbe mDestructionProbe;
 		MRTextBufferModel mBufferModel;
 	MRTextBufferModel::DocumentChangeSet mLastDocumentChangeSet;
 	std::size_t mSelectionAnchor;

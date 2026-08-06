@@ -13,7 +13,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -54,14 +53,6 @@ MREditWindow *findOpenWindowForNormalizedPath(const std::string &normalizedPath)
 	return nullptr;
 }
 
-void logDiscardedSessionWindowPointer(const MultiFileSearchFileResult &file, MREditWindow *resolvedWindow) {
-	if (file.window == nullptr || file.window == resolvedWindow) return;
-	std::ostringstream line;
-
-	line << "MFS selftest discarded cached window pointer cached=" << static_cast<const void *>(file.window) << " resolved=" << static_cast<const void *>(resolvedWindow) << " path=\"" << file.normalizedPath << "\"";
-	mrLogMessage(line.str());
-}
-
 void synchronizeHexEditorSelection(MREditWindow *window) {
 	MRBentoHexEditor *hexEditor = dynamic_cast<MRBentoHexEditor *>(window);
 
@@ -73,7 +64,6 @@ void synchronizeHexEditorSelection(MREditWindow *window) {
 bool ensureWindowLoadedForSessionFile(MultiFileSearchFileResult &file, bool activate, std::string &errorText) {
 	MREditWindow *window = findOpenWindowForNormalizedPath(file.normalizedPath);
 
-	logDiscardedSessionWindowPointer(file, window);
 	file.window = window;
 	if (window != nullptr) file.temporaryWindow = false;
 	if (window == nullptr) {
@@ -110,8 +100,6 @@ void closeTemporarySessionWindow(MultiFileSearchFileResult &file, bool keepFiles
 	if (keepFilesOpen || !file.temporaryWindow || file.window == nullptr) return;
 	MREditWindow *window = findOpenWindowForNormalizedPath(file.normalizedPath);
 	if (file.window == window && window != nullptr) message(window, evCommand, cmClose, nullptr);
-	else
-		logDiscardedSessionWindowPointer(file, window);
 	file.window = nullptr;
 	file.temporaryWindow = false;
 }

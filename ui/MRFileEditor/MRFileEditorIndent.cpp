@@ -1,14 +1,11 @@
 #include "MRFileEditor.hpp"
 #include "../MRSyntaxBasic.hpp"
 #include "../MREditWindow.hpp"
-#include "../../app/MREditorApp.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
 #include <chrono>
-#include <ctime>
 #include <future>
-#include <sstream>
 #include <thread>
 
 #if defined(__clang__)
@@ -18,9 +15,6 @@
 #endif
 
 namespace {
-
-static constexpr std::size_t kLargeFileWarmupTraceBytes = static_cast<std::size_t>(8) * 1024 * 1024;
-static constexpr auto kSlowNavigationTraceThreshold = std::chrono::microseconds(2000);
 
 bool isIndentWhitespace(char ch) noexcept {
 	return ch == ' ' || ch == '\t';
@@ -42,33 +36,6 @@ bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 
 static constexpr auto kLargeFileViewportWarmupDebounce = std::chrono::milliseconds(180);
 static constexpr auto kLargeFileMiniMapEditDebounce = std::chrono::milliseconds(500);
-
-std::string directProbeTimestamp() {
-	std::array<char, 32> buffer{};
-	const std::time_t now = std::time(nullptr);
-	const std::tm *tmNow = std::localtime(&now);
-
-	if (tmNow == nullptr) return std::string("--:--:--");
-	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
-	return std::string(buffer.data());
-}
-
-void appendDirectProbeLog(std::string_view message) {
-	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
-
-	if (!out) return;
-	out << "[" << directProbeTimestamp() << "] " << message << '\n';
-	out.flush();
-}
-
-bool quitTailTraceActive() noexcept {
-	const auto *app = dynamic_cast<const MREditorApp *>(TProgram::application);
-	return app != nullptr && app->quitPrepared();
-}
-
-template <class Duration> long long traceMicros(Duration duration) {
-	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
-}
 
 std::string_view trimView(std::string_view text) noexcept {
 	std::size_t start = 0;

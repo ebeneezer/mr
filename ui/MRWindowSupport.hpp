@@ -18,6 +18,7 @@ void mrScheduleWindowActivation(MREditWindow *win);
 [[nodiscard]] bool mrEnsureLogWindow(bool activate = true);
 [[nodiscard]] bool mrEnsureUsableWorkWindow(bool allowCreateFallback = true);
 [[nodiscard]] bool mrClearLogWindow();
+[[nodiscard]] bool mrPathRequiresReadOnlyEditor(const char *fileName) noexcept;
 void mrLogMessage(std::string_view message);
 void mrTraceDiagnosticMessage(std::string_view message);
 bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage = nullptr);

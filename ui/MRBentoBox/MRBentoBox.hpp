@@ -14,7 +14,6 @@
 #include <string>
 #include <vector>
 
-class MRBentoBoxFileCompareRegressionHarness;
 class MRBentoPaneFrameView;
 class MRMacroDebuggerValueInput;
 struct MRMacroDebugRunResult;
@@ -215,7 +214,6 @@ class MRPaneEditWindow : public MREditWindow {
 };
 
 class MRBentoBox : public MREditWindow {
-	friend class MRBentoBoxFileCompareRegressionHarness;
 	friend class MRMacroDebuggerValueInput;
 	friend class MRPaneEditWindow;
 
