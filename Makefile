@@ -38,6 +38,9 @@ PERF2BOLT ?= perf2bolt
 MERGE_FDATA ?= merge-fdata
 PERF ?= perf
 STRIP ?= strip
+BSDTAR ?= bsdtar
+INSTALL ?= install
+SHA256SUM ?= sha256sum
 MR_BUILD_EPOCH := $(shell date +%s)
 TMP_BASE_DIR ?= /dev/shm
 TMP_COMPILER_LAUNCHER := $(abspath ./misc/mr-compiler-temp.sh)
@@ -198,6 +201,27 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.out \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
+
+MR_RELEASE_VERSION ?= 0.2.0
+MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
+MR_RELEASE_PLATFORM ?= linux-x86_64
+MR_RELEASE_OUTPUT_DIR ?= release
+MR_RELEASE_INSTALLER = install.sh
+MR_RELEASE_MANUALS = \
+	$(MANUAL_DIRECTORY)/mr-users-manual.pdf \
+	$(MANUAL_DIRECTORY)/mr-macro-reference.pdf \
+	$(MANUAL_DIRECTORY)/mr-technical-manual.pdf
+MR_RELEASE_MACROS = \
+	mrmac/macros/MRComfortExtensions.mrmac \
+	mrmac/macros/colorthemes/idocs.mrmac \
+	mrmac/macros/compilersupport/MRCompilerMiddleware.mrmac \
+	mrmac/macros/keymaps/MRDefaultKeymaps.mrmac \
+	mrmac/macros/keymaps/emacs.mrmac \
+	mrmac/macros/keymaps/nano.mrmac \
+	mrmac/macros/keymaps/wordstar-extensions.mrmac \
+	mrmac/macros/keymaps/wordstar.mrmac \
+	mrmac/macros/utils/analogclocktick.mrmac \
+	mrmac/macros/utils/desktoputils.mrmac
 
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
@@ -437,6 +461,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full basic-language-probe mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
 	bolt-seed bolt-seed-gcc bolt-seed-clang bolt-record bolt-optimize bolt-clean \
 	compile-manuals \
+	release-zip \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -495,6 +520,46 @@ compile-manuals:
 	(cd $(MANUAL_DIRECTORY) && $(MAKEINDEX) mr-users-manual); \
 	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -interaction=nonstopmode mr-users-manual.tex); \
 	(cd $(MANUAL_DIRECTORY) && $(PDFLATEX) -halt-on-error -interaction=nonstopmode mr-users-manual.tex)
+
+release-zip:
+	@set -eu; \
+	epoch="$(MR_RELEASE_EPOCH)"; \
+	case "$$epoch" in \
+		''|*[!0-9]*) echo "MR_RELEASE_EPOCH must contain decimal digits only." >&2; exit 2 ;; \
+	esac; \
+	command -v $(BSDTAR) >/dev/null 2>&1; \
+	command -v $(INSTALL) >/dev/null 2>&1; \
+	command -v $(SHA256SUM) >/dev/null 2>&1; \
+	$(MAKE) clean all CXX=clang++ MR_BUILD_EPOCH="$$epoch"; \
+	name="mr-$(MR_RELEASE_VERSION)-build-$$epoch-$(MR_RELEASE_PLATFORM)"; \
+	mkdir -p "$(MR_RELEASE_OUTPUT_DIR)"; \
+	output_directory=$$(cd "$(MR_RELEASE_OUTPUT_DIR)" && pwd); \
+	staging_directory=$$(mktemp -d "$(MR_RELEASE_OUTPUT_DIR)/.mr-release.XXXXXX"); \
+	trap 'rm -rf "$$staging_directory"' EXIT INT TERM HUP; \
+	release_root="$$staging_directory/$$name"; \
+	$(INSTALL) -d -m 0755 \
+		"$$release_root/bin" \
+		"$$release_root/share/doc/mr" \
+		"$$release_root/share/licenses/mr" \
+		"$$release_root/share/mr/macros"; \
+	$(INSTALL) -m 0755 "$(TARGET)" "$$release_root/bin/mr"; \
+	$(INSTALL) -m 0644 "$(HELP_HYPERTEXT_COMPILED)" "$$release_root/bin/mr.hlp"; \
+	for manual_file in $(MR_RELEASE_MANUALS); do \
+		$(INSTALL) -m 0644 "$$manual_file" "$$release_root/share/doc/mr/"; \
+	done; \
+	$(INSTALL) -m 0644 tvision/COPYRIGHT "$$release_root/share/licenses/mr/TVISION-COPYRIGHT"; \
+	for macro_file in $(MR_RELEASE_MACROS); do \
+		relative_path=$${macro_file#mrmac/macros/}; \
+		$(INSTALL) -d -m 0755 "$$release_root/share/mr/macros/$$(dirname "$$relative_path")"; \
+		$(INSTALL) -m 0644 "$$macro_file" "$$release_root/share/mr/macros/$$relative_path"; \
+	done; \
+	sed "s/@MR_RELEASE_EPOCH@/$$epoch/g" "$(MR_RELEASE_INSTALLER)" > "$$release_root/install.sh"; \
+	chmod 0755 "$$release_root/install.sh"; \
+	rm -f "$$output_directory/$$name.zip" "$$output_directory/$$name.zip.sha256"; \
+	$(BSDTAR) -a -cf "$$output_directory/$$name.zip" -C "$$staging_directory" "$$name"; \
+	(cd "$$output_directory" && $(SHA256SUM) "$$name.zip" > "$$name.zip.sha256"); \
+	echo "Wrote $$output_directory/$$name.zip"; \
+	echo "Wrote $$output_directory/$$name.zip.sha256"
 
 CONTEXT_ARCHIVE ?= codebase-context.tar.bzip2
 CONTEXT_GIT_INFO_NAME ?= CONTEXT_GIT_INFO.txt

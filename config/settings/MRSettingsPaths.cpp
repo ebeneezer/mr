@@ -262,16 +262,7 @@ MRSetupPaths resolveSetupPathDefaults() {
 	} else
 		defaults.settingsMacroUri = appendFileName(defaults.tempPath, "settings.mrmac");
 
-	if (!cwd.empty()) {
-		candidate = appendPathSegment(appendPathSegment(cwd, "mrmac"), "macros");
-		if (isReadableDirectory(candidate)) defaults.macroPath = candidate;
-	}
-	if (defaults.macroPath.empty() && !exeDir.empty()) {
-		candidate = appendPathSegment(appendPathSegment(exeDir, "mrmac"), "macros");
-		if (isReadableDirectory(candidate)) defaults.macroPath = candidate;
-	}
-	if (defaults.macroPath.empty() && !cwd.empty() && isReadableDirectory(cwd)) defaults.macroPath = cwd;
-	if (defaults.macroPath.empty()) defaults.macroPath = defaults.tempPath;
+	defaults.macroPath = appendPathSegment(directoryPartOf(defaults.settingsMacroUri), "macros");
 
 	if (!cwd.empty()) {
 		candidate = appendFileName(cwd, "mr.hlp");
