@@ -552,16 +552,17 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 	return source;
 }
 
-std::size_t mrSettingsFileAutosavedWorkspaceCount() {
+std::vector<std::string> mrSettingsFileAutosavedWorkspaceFiles() {
 	std::string content;
 	std::string errorText;
 	std::string path = configuredSettingsMacroFilePath();
+	std::vector<std::string> files;
 	std::size_t parsedEntries = 0;
 
 	if (path.find(".mrmac") == std::string::npos) path += ".mrmac";
 	if (!readTextFile(path, content, errorText)) {
 		mrLogMessage("Workspace autosave probe failed path=" + path + " error=" + errorText + ".");
-		return 0;
+		return files;
 	}
 	{
 		std::istringstream input(content);
@@ -570,11 +571,17 @@ std::size_t mrSettingsFileAutosavedWorkspaceCount() {
 		while (std::getline(input, line)) {
 			WorkspaceEntry entry;
 
-			if (parseWorkspaceEntry(line, entry)) ++parsedEntries;
+			if (!parseWorkspaceEntry(line, entry)) continue;
+			++parsedEntries;
+			if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare && entry.hasFileCompareSources) {
+				files.push_back(entry.fileCompareOriginalUrl);
+				files.push_back(entry.fileCompareCompareUrl);
+			} else
+				files.push_back(entry.url);
 		}
 	}
-	mrLogMessage("Workspace autosave probe path=" + path + " entries=" + std::to_string(parsedEntries) + ".");
-	return parsedEntries;
+	mrLogMessage("Workspace autosave probe path=" + path + " entries=" + std::to_string(parsedEntries) + " files=" + std::to_string(files.size()) + ".");
+	return files;
 }
 
 bool mrClearAutosavedWorkspace() {

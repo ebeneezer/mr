@@ -85,7 +85,7 @@ void mrMarkWorkspaceAutosaveDirty(const char *source, const MREditWindow *window
 void mrFlushWorkspaceAutosaveIfDue();
 void mrFlushWorkspaceAutosaveNow();
 [[nodiscard]] bool mrWorkspaceRestoreInProgress();
-[[nodiscard]] std::size_t mrSettingsFileAutosavedWorkspaceCount();
+[[nodiscard]] std::vector<std::string> mrSettingsFileAutosavedWorkspaceFiles();
 [[nodiscard]] bool mrClearAutosavedWorkspace();
 [[nodiscard]] bool mrLoadWorkspaceWithDialog();
 void mrLoadWorkspace(const std::string &filename);

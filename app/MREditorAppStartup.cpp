@@ -500,20 +500,17 @@ std::vector<std::string> collectStartupFilesFromRequest(const StartupLoadRequest
 	return paths;
 }
 
-std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles) {
-	StartupLoadRequest request = parseStartupLoadRequest();
-	std::vector<std::string> files;
+std::vector<std::string> loadStartupFilesFromCommandLine(const StartupLoadRequest &request, const std::vector<std::string> &files, bool focusRestoredWorkspaceFiles) {
+	std::vector<std::string> loadedFiles;
 	std::vector<MREditWindow *> restoredWindows;
 	std::size_t loadedCount = 0;
 	MREditWindow *lastStartupWindow = nullptr;
 	MRWindowOpenBatch openBatch;
 
-	if (request.specs.empty()) return 0;
-
-	files = collectStartupFilesFromRequest(request);
+	if (request.specs.empty()) return loadedFiles;
 	if (files.empty()) {
 		mrLogMessage("No readable startup files matched command-line arguments.");
-		return 0;
+		return loadedFiles;
 	}
 	if (focusRestoredWorkspaceFiles) restoredWindows = allEditWindowsInZOrder();
 	if (files.size() > 1) openBatch.begin();
@@ -533,7 +530,10 @@ std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles) {
 				break;
 			}
 		}
-		if (restoredFileFound) continue;
+		if (restoredFileFound) {
+			loadedFiles.push_back(file);
+			continue;
+		}
 		const bool useHexEditor = configuredAutoDetectBinaryFiles() && fileContainsNulInBoundarySamples(file);
 		MREditWindow *win = nullptr;
 
@@ -551,11 +551,12 @@ std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles) {
 			continue;
 		}
 		lastStartupWindow = win;
+		loadedFiles.push_back(file);
 		++loadedCount;
 	}
 	if (openBatch.active()) openBatch.finish(true, loadedCount != 0);
 	if (lastStartupWindow != nullptr) static_cast<void>(mrActivateEditWindow(lastStartupWindow));
-	return loadedCount;
+	return loadedFiles;
 }
 
 } // namespace
@@ -583,17 +584,32 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	runConfiguredAutoexecMacros();
 	logStartupPhase("autoexec_macros");
 	const bool autoloadWorkspace = configuredAutoloadWorkspace();
-	if (autoloadWorkspace) {
+	const StartupLoadRequest startupLoadRequest = parseStartupLoadRequest();
+	const std::vector<std::string> requestedStartupFiles = startupLoadRequest.specs.empty() ? std::vector<std::string>() : collectStartupFilesFromRequest(startupLoadRequest);
+	const std::vector<std::string> autosavedWorkspaceFiles = !autoloadWorkspace ? mrSettingsFileAutosavedWorkspaceFiles() : std::vector<std::string>();
+	bool commandLineForcesWorkspaceRestore = false;
+
+	if (autosavedWorkspaceFiles.size() == 1) {
+		const std::string workspaceFile = normalizePathForLoad(std::filesystem::path(autosavedWorkspaceFiles.front()));
+
+		for (const std::string &startupFile : requestedStartupFiles)
+			if (startupFile == workspaceFile) {
+				commandLineForcesWorkspaceRestore = true;
+				break;
+			}
+	}
+	const bool restoreWorkspaceAtStartup = autoloadWorkspace || commandLineForcesWorkspaceRestore;
+	if (restoreWorkspaceAtStartup) {
 		applyConfiguredDisplayLayout();
 		logStartupPhase("display_layout_final");
 		mrLoadWorkspace("");
 		logStartupPhase("workspace_autoload");
 	}
-	static_cast<void>(loadStartupFilesFromCommandLine(autoloadWorkspace));
+	const std::vector<std::string> startupFiles = loadStartupFilesFromCommandLine(startupLoadRequest, requestedStartupFiles, restoreWorkspaceAtStartup);
 	logStartupPhase("startup_files");
 	startupQuitPending = runStartupAutomationFromCommandLine();
 	logStartupPhase("startup_automation");
-	if (!autoloadWorkspace) {
+	if (!restoreWorkspaceAtStartup) {
 		applyConfiguredDisplayLayout();
 		logStartupPhase("display_layout_final");
 	}
@@ -610,10 +626,21 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	}
 	logStartupPhase("menu_state");
 
-	const std::size_t autosavedWorkspaceFileCount = !autoloadWorkspace ? mrSettingsFileAutosavedWorkspaceCount() : 0;
-	if (autosavedWorkspaceFileCount != 0) {
+	bool singleFileWorkspaceLoadedFromCommandLine = false;
+
+	if (commandLineForcesWorkspaceRestore) {
+		const std::string workspaceFile = normalizePathForLoad(std::filesystem::path(autosavedWorkspaceFiles.front()));
+
+		for (const std::string &startupFile : startupFiles)
+			if (startupFile == workspaceFile) {
+				singleFileWorkspaceLoadedFromCommandLine = true;
+				mrLogMessage("Autosaved single-file workspace satisfied by command-line file: " + workspaceFile);
+				break;
+			}
+	}
+	if (!autosavedWorkspaceFiles.empty() && !singleFileWorkspaceLoadedFromCommandLine) {
 		setRuntimePreserveAutosavedWorkspace(true);
-		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Restore workspace", "Restore autosaved workspace?", autosavedWorkspaceFileCount, configuredSettingsMacroFilePath().c_str(), "Discard workspace");
+		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Restore workspace", "Restore autosaved workspace?", autosavedWorkspaceFiles, "Discard workspace");
 
 		if (choice == mr::dialogs::UnsavedChangesChoice::Save) {
 			setRuntimePreserveAutosavedWorkspace(false);

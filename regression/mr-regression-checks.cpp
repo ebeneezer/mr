@@ -109,7 +109,7 @@ class ScopedRegressionConfigHome {
 		}
 		std::filesystem::remove_all(mPath, error);
 		error.clear();
-		std::filesystem::create_directories(mPath, error);
+		std::filesystem::create_directories(mPath + "/mr/macros", error);
 		if (error || ::setenv("XDG_CONFIG_HOME", mPath.c_str(), 1) != 0) return;
 		mReady = true;
 	}
@@ -10407,7 +10407,11 @@ bool testWorkspaceAutosaveLazyWiringGuard(std::string &failureReason) {
 
 bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 	const std::string startupPath = absolutePathFromCwd("app/MREditorAppStartup.cpp");
+	const std::string workspaceCommandsPath = absolutePathFromCwd("app/commands/MRWorkspaceCommands.cpp");
+	const std::string dirtyGatingPath = absolutePathFromCwd("dialogs/MRDirtyGating.cpp");
 	std::string startup;
+	std::string workspaceCommands;
+	std::string dirtyGating;
 	std::string ioError;
 	std::string missingNeedle;
 	std::string startupLoadBody;
@@ -10420,18 +10424,18 @@ bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 	std::size_t workspaceRestore = std::string::npos;
 	std::size_t startupFiles = std::string::npos;
 
-	if (!readTextFile(startupPath, startup, ioError)) {
+	if (!readTextFile(startupPath, startup, ioError) || !readTextFile(workspaceCommandsPath, workspaceCommands, ioError) || !readTextFile(dirtyGatingPath, dirtyGating, ioError)) {
 		failureReason = "Unable to read workspace command-line startup source: " + ioError;
 		return false;
 	}
-	startupLoadStart = startup.find("std::size_t loadStartupFilesFromCommandLine(bool focusRestoredWorkspaceFiles)");
+	startupLoadStart = startup.find("std::vector<std::string> loadStartupFilesFromCommandLine(const StartupLoadRequest &request, const std::vector<std::string> &files, bool focusRestoredWorkspaceFiles)");
 	startupLoadEnd = startup.find("\n} // namespace", startupLoadStart);
 	if (startupLoadStart == std::string::npos || startupLoadEnd == std::string::npos) {
 		failureReason = "Unable to isolate command-line startup file loading.";
 		return false;
 	}
 	startupLoadBody = startup.substr(startupLoadStart, startupLoadEnd - startupLoadStart);
-	if (!containsAllSubstrings(startupLoadBody, {"restoredWindows = allEditWindowsInZOrder()", "candidateEditor->persistentFileName()", "normalizePathForLoad(std::filesystem::path(candidatePath)) != file", "Startup file resolved to restored workspace window:", "if (restoredFileFound) continue;", "createEditorWindow(file.c_str())", "mrActivateEditWindow(lastStartupWindow)"}, missingNeedle)) {
+	if (!containsAllSubstrings(startupLoadBody, {"restoredWindows = allEditWindowsInZOrder()", "candidateEditor->persistentFileName()", "normalizePathForLoad(std::filesystem::path(candidatePath)) != file", "Startup file resolved to restored workspace window:", "loadedFiles.push_back(file);", "createEditorWindow(file.c_str())", "mrActivateEditWindow(lastStartupWindow)", "return loadedFiles;"}, missingNeedle)) {
 		failureReason = "Workspace command-line focus reuse changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -10444,15 +10448,28 @@ bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 	constructorBody = startup.substr(constructorStart, constructorEnd - constructorStart);
 	autoloadFlag = constructorBody.find("const bool autoloadWorkspace = configuredAutoloadWorkspace()");
 	workspaceRestore = constructorBody.find("mrLoadWorkspace(\"\")", autoloadFlag);
-	startupFiles = constructorBody.find("loadStartupFilesFromCommandLine(autoloadWorkspace)", workspaceRestore);
+	startupFiles = constructorBody.find("loadStartupFilesFromCommandLine(startupLoadRequest, requestedStartupFiles, restoreWorkspaceAtStartup)", workspaceRestore);
 	if (autoloadFlag == std::string::npos || workspaceRestore == std::string::npos || startupFiles == std::string::npos || !(autoloadFlag < workspaceRestore && workspaceRestore < startupFiles)) {
 		failureReason = "Automatic workspace restore must precede command-line file focus and loading.";
 		return false;
 	}
-	if (!containsAllSubstrings(constructorBody, {"const std::size_t autosavedWorkspaceFileCount = !autoloadWorkspace ? mrSettingsFileAutosavedWorkspaceCount() : 0", "if (autosavedWorkspaceFileCount != 0)",
-	                                             "showWorkspaceLoadDialog(\"Restore workspace\", \"Restore autosaved workspace?\", autosavedWorkspaceFileCount"},
+	if (!containsAllSubstrings(constructorBody, {"const std::vector<std::string> requestedStartupFiles =", "const std::vector<std::string> autosavedWorkspaceFiles = !autoloadWorkspace ? mrSettingsFileAutosavedWorkspaceFiles()",
+	                                             "autosavedWorkspaceFiles.size() == 1", "startupFile == workspaceFile", "commandLineForcesWorkspaceRestore = true",
+	                                             "const bool restoreWorkspaceAtStartup = autoloadWorkspace || commandLineForcesWorkspaceRestore", "mrLoadWorkspace(\"\")",
+	                                             "const std::vector<std::string> startupFiles = loadStartupFilesFromCommandLine(startupLoadRequest, requestedStartupFiles, restoreWorkspaceAtStartup)",
+	                                             "if (commandLineForcesWorkspaceRestore)", "singleFileWorkspaceLoadedFromCommandLine = true",
+	                                             "if (!autosavedWorkspaceFiles.empty() && !singleFileWorkspaceLoadedFromCommandLine)",
+	                                             "showWorkspaceLoadDialog(\"Restore workspace\", \"Restore autosaved workspace?\", autosavedWorkspaceFiles, \"Discard workspace\")"},
 	                           missingNeedle)) {
-		failureReason = "Manual workspace restore prompt count wiring changed: missing " + missingNeedle + ".";
+		failureReason = "Manual workspace restore preview or command-line reconciliation changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(workspaceCommands, {"std::vector<std::string> mrSettingsFileAutosavedWorkspaceFiles()", "entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare && entry.hasFileCompareSources", "files.push_back(entry.fileCompareOriginalUrl);", "files.push_back(entry.fileCompareCompareUrl);", "files.push_back(entry.url);"}, missingNeedle)) {
+		failureReason = "Workspace restore preview file enumeration changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(dirtyGating, {"const bool showFileList = fileUrls.size() > 10;", "const std::size_t numberWidth = std::to_string(fileUrls.size()).size();", "std::string(numberWidth - number.size(), ' ') + number + \" \" + fileUrls[i]", "fileNames.push_back(separator == std::string::npos", "const int maximumDialogWidth = std::max(1, desktopWidth - 4);", "const int maximumDialogHeight = std::max(1, desktopHeight - 4);", "TScrollBar *verticalScrollBar", "TScrollBar *horizontalScrollBar", "MRColumnListView *fileList"}, missingNeedle)) {
+		failureReason = "Workspace restore preview layout changed: missing " + missingNeedle + ".";
 		return false;
 	}
 

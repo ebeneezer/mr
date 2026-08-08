@@ -2,8 +2,10 @@
 #define Uses_TDeskTop
 #define Uses_TButton
 #define Uses_TDialog
+#define Uses_TListBox
 #define Uses_TObject
 #define Uses_TRect
+#define Uses_TScrollBar
 #define Uses_TStaticText
 #define Uses_TWindowInit
 #include <tvision/tv.h>
@@ -13,6 +15,7 @@
 
 #include "setup/MRSetupCommon.hpp"
 #include "../ui/MRFrame.hpp"
+#include "../ui/widgets/MRColumnListView.hpp"
 
 #include <array>
 #include <string>
@@ -174,36 +177,85 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	}
 }
 
-UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const char *headline, std::size_t fileCount, const char *detail, const char *discardLabel) {
-	const bool hasDetail = detail != nullptr && *detail != '\0';
+UnsavedChangesChoice showWorkspaceLoadDialog(const char *primaryLabel, const char *headline, const std::vector<std::string> &fileUrls, const char *discardLabel) {
 	std::string label = primaryLabel != nullptr && *primaryLabel != '\0' ? primaryLabel : "Load workspace";
 	std::string discardLabelText = discardLabel != nullptr && *discardLabel != '\0' ? discardLabel : "Discard workspace";
 	std::string primaryButtonLabel = addMnemonic(label, 'l');
 	std::string discardButtonLabel = addMnemonic(discardLabelText, 'd');
-	const std::string fileCountText = std::to_string(fileCount) + " files";
+	const std::string fileCountText = std::to_string(fileUrls.size()) + (fileUrls.size() == 1 ? " file" : " files");
 	const int gap = 2;
-	const int desktopWidth = TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : 80;
-	const int maxTextWidth = std::max(32, desktopWidth - 12);
-	std::vector<std::string> textLines = wrapText(headline != nullptr ? headline : "Restore autosaved workspace?", static_cast<std::size_t>(maxTextWidth));
+	const TRect desktopBounds = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, 80, 25);
+	const int desktopWidth = std::max(1, desktopBounds.b.x - desktopBounds.a.x);
+	const int desktopHeight = std::max(1, desktopBounds.b.y - desktopBounds.a.y);
+	const int maximumDialogWidth = std::max(1, desktopWidth - 4);
+	const int maximumDialogHeight = std::max(1, desktopHeight - 4);
+	const int maximumTextWidth = std::max(1, maximumDialogWidth - 6);
+	const bool showFileList = fileUrls.size() > 10;
+	std::vector<std::string> textLines = wrapText(headline != nullptr ? headline : "Restore autosaved workspace?", static_cast<std::size_t>(maximumTextWidth));
+	std::vector<MRColumnListView::Row> fileRows;
 
 	textLines.push_back(fileCountText);
-	if (hasDetail) {
-		std::vector<std::string> detailLines = wrapText(detail, static_cast<std::size_t>(maxTextWidth));
-		textLines.insert(textLines.end(), detailLines.begin(), detailLines.end());
+	if (showFileList) {
+		const std::size_t numberWidth = std::to_string(fileUrls.size()).size();
+
+		fileRows.reserve(fileUrls.size());
+		for (std::size_t i = 0; i < fileUrls.size(); ++i) {
+			const std::string number = std::to_string(i + 1);
+			const std::string row = std::string(numberWidth - number.size(), ' ') + number + " " + fileUrls[i];
+
+			fileRows.push_back(MRColumnListView::Row{row});
+		}
+	} else {
+		std::vector<std::string> fileNames;
+
+		fileNames.reserve(fileUrls.size());
+		for (const std::string &url : fileUrls) {
+			const std::size_t separator = url.find_last_of("\\/");
+
+			fileNames.push_back(separator == std::string::npos || separator + 1 >= url.size() ? url : url.substr(separator + 1));
+		}
+		const std::string joinedNames = joinCommaSeparatedItems(fileNames);
+		const std::vector<std::string> wrappedNames = wrapText(joinedNames.c_str(), static_cast<std::size_t>(maximumTextWidth));
+
+		textLines.insert(textLines.end(), wrappedNames.begin(), wrappedNames.end());
 	}
 
 	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 	const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
-	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
-	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
-	const int height = std::max(hasDetail ? 10 : 8, static_cast<int>(textLines.size()) + 6);
-	MRDialogFoundation *dialog = new MRDialogFoundation(mr::dialogs::centeredDialogRect(width, height), "CONFIRM", width, height);
+	int contentWidth = widestLineWidth(textLines);
+	if (showFileList)
+		for (const MRColumnListView::Row &row : fileRows)
+			if (!row.empty()) contentWidth = std::max(contentWidth, strwidth(row.front().c_str()));
+	const int minimumDialogWidth = std::max(46, metrics.rowWidth + 4);
+	const int desiredDialogWidth = std::max(minimumDialogWidth, contentWidth + 6);
+	const int virtualWidth = std::max(minimumDialogWidth, std::min(desiredDialogWidth, maximumDialogWidth));
+	const int physicalWidth = std::min(virtualWidth, maximumDialogWidth);
+	const int listTop = static_cast<int>(textLines.size()) + 3;
+	const int maximumListRows = std::max(3, maximumDialogHeight - listTop - 5);
+	const int visibleListRows = showFileList ? std::min(static_cast<int>(fileRows.size()), maximumListRows) : 0;
+	const int virtualHeight = showFileList ? listTop + visibleListRows + 5 : std::max(8, static_cast<int>(textLines.size()) + 6);
+	const int physicalHeight = std::min(virtualHeight, maximumDialogHeight);
+	const int dialogLeft = desktopBounds.a.x + std::max(0, (desktopWidth - physicalWidth) / 2);
+	const int dialogTop = desktopBounds.a.y + std::max(0, (desktopHeight - physicalHeight) / 2);
+	MRDialogFoundation *dialog = new MRDialogFoundation(TRect(dialogLeft, dialogTop, dialogLeft + physicalWidth, dialogTop + physicalHeight), "CONFIRM", virtualWidth, virtualHeight);
 	int y = 2;
 
 	dialog->helpCtx = hcDialogConfirm;
 	for (const std::string &line : textLines)
 		insertStaticLine(dialog, 3, y++, line);
-	mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, height - 3, gap, buttons);
+	if (showFileList) {
+		const int listBottom = listTop + visibleListRows;
+		TScrollBar *verticalScrollBar = new TScrollBar(TRect(virtualWidth - 3, listTop, virtualWidth - 2, listBottom));
+		TScrollBar *horizontalScrollBar = new TScrollBar(TRect(2, listBottom, virtualWidth - 3, listBottom + 1));
+		MRColumnListView *fileList = new MRColumnListView(TRect(2, listTop, virtualWidth - 3, listBottom), verticalScrollBar, horizontalScrollBar, nullptr, 0, 0);
+
+		dialog->insert(verticalScrollBar);
+		dialog->insert(horizontalScrollBar);
+		dialog->insert(fileList);
+		fileList->setRows(fileRows);
+		if (fileRows.size() <= static_cast<std::size_t>(visibleListRows)) verticalScrollBar->hide();
+	}
+	mr::dialogs::insertUniformButtonRow(*dialog, (virtualWidth - metrics.rowWidth) / 2, virtualHeight - 3, gap, buttons);
 
 	switch (mr::dialogs::execDialog(dialog)) {
 		case cmYes:
