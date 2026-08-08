@@ -1835,7 +1835,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker, const std::string &initialFileCompareOriginalLeadingGutters, const std::string &initialFileCompareOriginalTrailingGutters,
 	                            const std::string &initialFileCompareCompareLeadingGutters, const std::string &initialFileCompareCompareTrailingGutters, MRFileCompareStartConfiguration initialFileCompareStartConfiguration,
 	                            bool initialFileCompareComparePanelReadOnly)
-	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 32), "USER INTERFACE SETTINGS", 86, 32, initSetupDialogFrame) {
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 33), "USER INTERFACE SETTINGS", 86, 33, initSetupDialogFrame) {
 
 		int const yStart = 2;
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
@@ -1888,7 +1888,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		addManaged(mIndentStyleField, TRect(3, 20, 23, 29));
 		mIndentStylePreview = new TIndentStylePreview(TRect(25, 20, 47, 29));
 		addManaged(mIndentStylePreview, TRect(25, 20, 47, 29));
-		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 29, 0, buttons);
+		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 30, 0, buttons);
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		mInitialCompilerErrorMessageChoice = initialCompilerErrorMessagePlacement == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
