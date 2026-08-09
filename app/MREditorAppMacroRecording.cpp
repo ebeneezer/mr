@@ -375,7 +375,7 @@ void MREditorApp::finalizeKeystrokeRecording() {
 	if (!captureBindingKeySpec(keySpec)) return;
 
 	std::memset(savePathBuffer, 0, sizeof(savePathBuffer));
-	if (inputBox("KEYSTROKE RECORDER", "~S~ave .mrmac (leer=nur Session-Bindung)", savePathBuffer, static_cast<uchar>(sizeof(savePathBuffer) - 1)) != cmCancel) savePath = trimAscii(savePathBuffer);
+	if (mr::dialogs::execTextInputDialog("KEYSTROKE RECORDER", "~S~ave .mrmac (empty=session binding only)", savePathBuffer, sizeof(savePathBuffer) - 1) != cmCancel) savePath = trimAscii(savePathBuffer);
 	if (!savePath.empty()) savePath = mr::dialogs::ensureMrmacExtension(expandUserPath(savePath));
 
 	macroName = makeRecordedMacroName(++recordedMacroCounter);

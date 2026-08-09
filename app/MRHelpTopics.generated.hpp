@@ -42,6 +42,7 @@ const int
   hcDialogUserInterface  = 128,
   hcDialogWindowList     = 124,
   hcDialogWorkspaceFile  = 139,
+  hcDialogWorkspaceRestore = 140,
   hcEditor               = 30,
   hcKeys                 = 1,
   hcMenuBlock            = 14,

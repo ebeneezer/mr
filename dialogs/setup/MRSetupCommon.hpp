@@ -35,6 +35,7 @@ namespace mr::dialogs {
 [[nodiscard]] TRect centeredDialogRect(int width, int height);
 [[nodiscard]] ushort execDialog(TDialog *dialog);
 [[nodiscard]] ushort execDialogWithData(TDialog *dialog, void *data);
+[[nodiscard]] ushort execTextInputDialog(const char *title, const char *label, char *buffer, std::size_t limit);
 [[nodiscard]] MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight);
 [[nodiscard]] TFileDialog *createFileDialog(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options);
 [[nodiscard]] TDialog *createDirectoryDialog(MRDialogHistoryScope scope, ushort options);
@@ -96,6 +97,47 @@ inline void writeRecordField(char *dest, std::size_t destSize, std::string_view 
 [[nodiscard]] TRect centeredSetupDialogRect(int width, int height);
 [[nodiscard]] TGroup *createSetupDialogContentGroup(const TRect &bounds);
 
+enum class MRDialogViewportOwnership : unsigned char {
+	ContentGroup,
+	Dialog
+};
+
+class MRDialogViewport {
+  public:
+	MRDialogViewport(TDialog &dialog, int virtualWidth, int virtualHeight, MRDialogViewportOwnership ownership);
+
+	void addManaged(TView *view, const TRect &base);
+	void removeManaged(TView *view);
+	void initScrollIfNeeded();
+	void selectContent();
+	void scrollToOrigin();
+	void drawChrome();
+	[[nodiscard]] bool handleNavigationEvent(TEvent &event);
+	[[nodiscard]] bool handleScrollEvent(TEvent &event);
+	void ensureCurrentVisible();
+	[[nodiscard]] TGroup *managedContent() const noexcept {
+		return mContent;
+	}
+
+  private:
+	struct ManagedItem {
+		TView *view;
+		TRect base;
+	};
+
+	void applyScroll();
+	void ensureViewVisible(TView *view);
+
+	TDialog &mDialog;
+	int mVirtualWidth = 0;
+	int mVirtualHeight = 0;
+	TRect mContentRect;
+	TGroup *mContent = nullptr;
+	std::vector<ManagedItem> mManagedViews;
+	TScrollBar *mHScrollBar = nullptr;
+	TScrollBar *mVScrollBar = nullptr;
+};
+
 class MRScrollableDialog : public TDialog {
   public:
 	struct DialogValidationResult {
@@ -104,11 +146,6 @@ class MRScrollableDialog : public TDialog {
 		bool error = false;
 	};
 	using DialogValidationHook = std::function<DialogValidationResult()>;
-
-	struct ManagedItem {
-		TView *view;
-		TRect base;
-	};
 
 	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight);
 	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight, TFrame *(*frameFactory)(TRect));
@@ -124,22 +161,13 @@ class MRScrollableDialog : public TDialog {
 	void runDialogValidation();
 	void setDoneButtonDisabled(bool disable);
 	[[nodiscard]] TGroup *managedContent() const noexcept {
-		return mContent;
+		return mViewport.managedContent();
 	}
 
   private:
 	void detectDoneButton(TView *view);
-	void applyScroll();
-	void ensureViewVisible(TView *view);
-	void ensureCurrentVisible();
 
-	int mVirtualWidth = 0;
-	int mVirtualHeight = 0;
-	TRect mContentRect;
-	TGroup *mContent = nullptr;
-	std::vector<ManagedItem> mManagedViews;
-	TScrollBar *mHScrollBar = nullptr;
-	TScrollBar *mVScrollBar = nullptr;
+	MRDialogViewport mViewport;
 	TButton *doneButton = nullptr;
 	DialogValidationHook dialogValidationHook;
 	bool isRunningDialogValidation = false;

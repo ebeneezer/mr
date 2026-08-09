@@ -7,6 +7,7 @@
 #include "../MRFrame.hpp"
 
 #include "../../app/commands/MRWindowCommands.hpp"
+#include "../../dialogs/setup/MRSetupCommon.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../coprocessor/MRCoprocessor.hpp"
 #include "../../mrmac/MRVM.hpp"
@@ -669,7 +670,7 @@ bool MRBentoBox::addMacroDebuggerWatch() {
 	std::string errorMessage;
 
 	if (!macroDebuggerActive || macroDebuggerMacroKey.empty()) return false;
-	if (inputBox("MACRO DEBUGGER", "Watch expression", expression, sizeof(expression) - 1) == cmCancel) return true;
+	if (mr::dialogs::execTextInputDialog("MACRO DEBUGGER", "Watch expression", expression, sizeof(expression) - 1) == cmCancel) return true;
 	if (!mrvmWriteDebugWatch(macroDebuggerMacroKey, expression, true, &errorMessage)) return false;
 	mrMarkWorkspaceAutosaveDirty("debugger watch add", this);
 	refreshMacroDebuggerWatches();
@@ -681,7 +682,7 @@ bool MRBentoBox::eraseMacroDebuggerWatch() {
 	std::string errorMessage;
 
 	if (!macroDebuggerActive || macroDebuggerMacroKey.empty()) return false;
-	if (inputBox("MACRO DEBUGGER", "Remove watch", expression, sizeof(expression) - 1) == cmCancel) return true;
+	if (mr::dialogs::execTextInputDialog("MACRO DEBUGGER", "Remove watch", expression, sizeof(expression) - 1) == cmCancel) return true;
 	if (!mrvmEraseDebugWatch(macroDebuggerMacroKey, expression, &errorMessage)) return false;
 	mrMarkWorkspaceAutosaveDirty("debugger watch erase", this);
 	refreshMacroDebuggerWatches();
@@ -699,7 +700,7 @@ bool MRBentoBox::evaluateMacroDebuggerExpression() {
 		writeMacroDebuggerNotice("Evaluate requires a paused session.");
 		return false;
 	}
-	if (inputBox("MACRO DEBUGGER", "Evaluate expression", expression, sizeof(expression) - 1) == cmCancel) return true;
+	if (mr::dialogs::execTextInputDialog("MACRO DEBUGGER", "Evaluate expression", expression, sizeof(expression) - 1) == cmCancel) return true;
 	if (!mrvmEvaluateDebugExpression(macroDebuggerSessionId, expression, snapshot, &errorMessage)) {
 		writeMacroDebuggerNotice("Evaluate:\n" + (errorMessage.empty() ? "Debug session is not paused." : errorMessage));
 		return false;

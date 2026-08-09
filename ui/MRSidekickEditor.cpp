@@ -110,8 +110,8 @@ class MRSnippetSidekickDialog : public TDialog {
 
 	void sizeLimits(TPoint &min, TPoint &max) override {
 		TDialog::sizeLimits(min, max);
-		min.x = std::max<short>(min.x, 32);
-		min.y = std::max<short>(min.y, 10);
+		min.x = std::max<short>(min.x, std::min<short>(32, size.x));
+		min.y = std::max<short>(min.y, std::min<short>(10, size.y));
 	}
 
 	TPalette &getPalette() const override {

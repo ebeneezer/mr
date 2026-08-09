@@ -6,6 +6,7 @@
 #include "../MRBentoHexEditor.hpp"
 
 #include "../../MRMessageLineController.hpp"
+#include "../../../dialogs/setup/MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -72,7 +73,7 @@ bool promptGotoOffset(std::size_t initialOffset, std::size_t &offset) {
 	char text[32] = {0};
 
 	std::snprintf(text, sizeof(text), "0x%zx", initialOffset);
-	if (inputBox("HEX GOTO", "Offset (decimal, 0x, 0o)", text, static_cast<uchar>(sizeof(text) - 1)) == cmCancel) return false;
+	if (mr::dialogs::execTextInputDialog("HEX GOTO", "Offset (decimal, 0x, 0o)", text, sizeof(text) - 1) == cmCancel) return false;
 	if (parseGotoOffset(text, offset)) return true;
 	messageBox(mfInformation | mfOKButton, "Offset must be decimal, 0x hexadecimal or 0o octal.");
 	return false;

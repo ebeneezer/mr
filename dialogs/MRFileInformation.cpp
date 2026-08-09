@@ -43,8 +43,8 @@ struct FileInformationPage {
 	std::vector<std::string> lines;
 };
 
-void insertStaticLine(TDialog *dialog, int x, int y, const char *text) {
-	dialog->insert(new TStaticText(TRect(x, y, x + std::strlen(text) + 1, y + 1), text));
+void insertStaticLine(MRDialogFoundation &dialog, int x, int y, const char *text) {
+	dialog.insert(new TStaticText(TRect(x, y, x + std::strlen(text) + 1, y + 1), text));
 }
 
 std::string shortenForDialog(const std::string &value, std::size_t maxLen) {
@@ -151,17 +151,17 @@ const char *blockModeLabel(MREditWindow *win) {
 
 class FileInformationDialog : public MRDialogFoundation {
   public:
-	FileInformationDialog(const FileInformationPage &page, std::size_t pageIndex, std::size_t pageCount, bool hasPrev, bool hasNext) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredBounds(computeWidth(page), computeHeight(page)), "FILE INFORMATION", computeWidth(page), computeHeight(page), initMrDialogFrame), hasPrevInfo(hasPrev), hasNextInfo(hasNext) {
-		int width = size.x;
-		int height = size.y;
+	FileInformationDialog(const FileInformationPage &page, std::size_t pageIndex, std::size_t pageCount, bool hasPrev, bool hasNext) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(computeWidth(page), computeHeight(page)), "FILE INFORMATION", computeWidth(page), computeHeight(page), initMrDialogFrame), hasPrevInfo(hasPrev), hasNextInfo(hasNext) {
+		const int width = computeWidth(page);
+		const int height = computeHeight(page);
 		int y = 2;
 		std::ostringstream header;
 
 		helpCtx = hcDialogFileInformation;
 		header << page.title << "  (" << (pageIndex + 1) << "/" << pageCount << ")";
-		insertStaticLine(this, 2, y++, header.str().c_str());
+		insertStaticLine(*this, 2, y++, header.str().c_str());
 		for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it, ++y) {
-			insertStaticLine(this, 2, y, it->c_str());
+			insertStaticLine(*this, 2, y, it->c_str());
 		}
 		if (hasPrevInfo && hasNextInfo) {
 			const std::array buttons{mr::dialogs::DialogButtonSpec{"~P~rev", cmMrPreviewPrev, bfNormal}, mr::dialogs::DialogButtonSpec{"~N~ext", cmMrPreviewNext, bfNormal}, mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
@@ -209,24 +209,14 @@ class FileInformationDialog : public MRDialogFoundation {
 
   private:
 	static int computeWidth(const FileInformationPage &page) {
-		TRect desk = TProgram::deskTop->getExtent();
 		std::size_t maxLen = page.title.size();
 		for (const auto &line : page.lines)
 			if (line.size() > maxLen) maxLen = line.size();
-		return std::max(76, std::min(static_cast<int>(maxLen) + 6, (desk.b.x - desk.a.x) - 2));
+		return std::max(76, static_cast<int>(maxLen) + 6);
 	}
 
 	static int computeHeight(const FileInformationPage &page) {
-		TRect desk = TProgram::deskTop->getExtent();
-		int desired = static_cast<int>(page.lines.size()) + 6;
-		return std::max(14, std::min(desired, (desk.b.y - desk.a.y) - 1));
-	}
-
-	static TRect centeredBounds(int width, int height) {
-		TRect desk = TProgram::deskTop->getExtent();
-		int left = desk.a.x + (desk.b.x - desk.a.x - width) / 2;
-		int top = desk.a.y + (desk.b.y - desk.a.y - height) / 2;
-		return TRect(left, top, left + width, top + height);
+		return std::max(14, static_cast<int>(page.lines.size()) + 6);
 	}
 
 	bool hasPrevInfo;

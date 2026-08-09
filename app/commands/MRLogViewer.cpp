@@ -22,6 +22,7 @@
 #include "../../ui/widgets/MRDropList.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRWindowSupport.hpp"
+#include "../../dialogs/setup/MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <array>
@@ -120,11 +121,10 @@ std::vector<std::string> collectJournalSyslogIdentifiers() {
 	return identifiers;
 }
 
-class JournalTagDialog : public TDialog {
+class JournalTagDialog : public MRDialogFoundation {
   public:
 	JournalTagDialog(const std::vector<std::string> &historyValues, const std::vector<std::string> &identifierValues)
-	    : TWindowInit(initFrame), TDialog(TRect(0, 0, 62, 18), "OPEN JOURNAL"), tagField(nullptr), history(historyValues), identifiers(identifierValues) {
-		options |= ofCentered;
+	    : TWindowInit(initFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(62, 18), "OPEN JOURNAL", 62, 18, initFrame), tagField(nullptr), history(historyValues), identifiers(identifierValues) {
 		helpCtx = hcDialogJournalTag;
 		tagField = new TInputLine(TRect(14, 3, 51, 4), 127);
 		insert(new TLabel(TRect(3, 3, 13, 4), "App ~t~ag:", tagField));
@@ -138,7 +138,6 @@ class JournalTagDialog : public TDialog {
 		setIdentifierRows();
 		insert(new TButton(TRect(20, 15, 30, 17), "~O~K", cmOK, bfDefault));
 		insert(new TButton(TRect(32, 15, 43, 17), "~H~elp", cmHelp, bfNormal));
-		selectNext(False);
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -167,7 +166,7 @@ class JournalTagDialog : public TDialog {
 			return;
 		}
 
-		TDialog::handleEvent(event);
+		MRDialogFoundation::handleEvent(event);
 	}
 
 	std::string selectedTag() const {
@@ -558,7 +557,12 @@ bool openJournalViewer() {
 	MRLiveLogSettings liveLogSettings = configuredLiveLogSettings();
 	JournalTagDialog *dialog = new JournalTagDialog(liveLogSettings.journalAppTagHistory, collectJournalSyslogIdentifiers());
 
-	if (TProgram::deskTop == nullptr || TProgram::deskTop->execView(dialog) == cmCancel) {
+	if (TProgram::deskTop == nullptr) {
+		TObject::destroy(dialog);
+		return true;
+	}
+	dialog->finalizeLayout();
+	if (TProgram::deskTop->execView(dialog) == cmCancel) {
 		TObject::destroy(dialog);
 		return true;
 	}

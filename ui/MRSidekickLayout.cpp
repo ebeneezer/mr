@@ -273,10 +273,12 @@ TRect snippetSidekickBoundsFor(MREditWindow *parent, const std::string &text, st
 	const std::vector<std::string> lines = splitLines(text);
 	const int desktopWidth = std::max(1, desktop.b.x - desktop.a.x);
 	const int desktopHeight = std::max(1, desktop.b.y - desktop.a.y);
-	const int maxWidth = std::max(32, desktopWidth - 2);
-	const int maxHeight = std::max(6, desktopHeight - 2);
-	int wantedWidth = std::clamp(sidekickMaxLineLength(lines) + 8, 48, maxWidth);
-	int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()) + 6, 10, maxHeight);
+	const int maxWidth = std::max(1, desktopWidth - 2);
+	const int maxHeight = std::max(1, desktopHeight - 2);
+	const int minWidth = std::min(48, maxWidth);
+	const int minHeight = std::min(10, maxHeight);
+	int wantedWidth = std::clamp(sidekickMaxLineLength(lines) + 8, minWidth, maxWidth);
+	int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()) + 6, minHeight, maxHeight);
 	int x = desktop.a.x + 2;
 	int y = desktop.a.y + 2;
 

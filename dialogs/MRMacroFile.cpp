@@ -906,7 +906,7 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 
 		std::memset(pathBuffer, 0, sizeof(pathBuffer));
 		std::strncpy(pathBuffer, "new_macro.mrmac", sizeof(pathBuffer) - 1);
-		if (inputBox("MACRO LIBRARY", "~F~ile name", pathBuffer, static_cast<uchar>(sizeof(pathBuffer) - 1)) == cmCancel) return;
+		if (mr::dialogs::execTextInputDialog("MACRO LIBRARY", "~F~ile name", pathBuffer, sizeof(pathBuffer) - 1) == cmCancel) return;
 
 		path = trimAscii(pathBuffer);
 		if (path.empty()) return;
@@ -957,7 +957,7 @@ class MacroLibraryDialog : public MRDialogFoundation, public MacroLibraryActivat
 
 		std::memset(pathBuffer, 0, sizeof(pathBuffer));
 		std::strncpy(pathBuffer, suggested.c_str(), sizeof(pathBuffer) - 1);
-		if (inputBox("MACRO LIBRARY", "Copy to ~F~ile", pathBuffer, static_cast<uchar>(sizeof(pathBuffer) - 1)) == cmCancel) return;
+		if (mr::dialogs::execTextInputDialog("MACRO LIBRARY", "Copy to ~F~ile", pathBuffer, sizeof(pathBuffer) - 1) == cmCancel) return;
 
 		destPath = trimAscii(pathBuffer);
 		if (destPath.empty()) return;

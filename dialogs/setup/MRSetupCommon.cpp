@@ -5,7 +5,9 @@
 #define Uses_TEvent
 #define Uses_TFileDialog
 #define Uses_TGroup
+#define Uses_TInputLine
 #define Uses_TKeys
+#define Uses_TLabel
 #define Uses_TListViewer
 #define Uses_TProgram
 #define Uses_TRect
@@ -24,6 +26,7 @@
 #include "../../ui/MRWindowSupport.hpp"
 
 #include <array>
+#include <limits>
 #include <limits.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -194,16 +197,231 @@ TGroup *createSetupDialogContentGroup(const TRect &bounds) {
 	return new TSetupDialogContentGroup(bounds);
 }
 
+MRDialogViewport::MRDialogViewport(TDialog &dialog, int virtualWidth, int virtualHeight, MRDialogViewportOwnership ownership)
+    : mDialog(dialog), mVirtualWidth(virtualWidth), mVirtualHeight(virtualHeight), mContentRect(1, 1, dialog.size.x - 1, dialog.size.y - 1) {
+	if (ownership == MRDialogViewportOwnership::ContentGroup) {
+		mContent = createSetupDialogContentGroup(mContentRect);
+		if (mContent != nullptr) {
+			mContent->options |= ofSelectable;
+			mDialog.insert(mContent);
+		}
+	}
+}
+
+void MRDialogViewport::addManaged(TView *view, const TRect &base) {
+	ManagedItem item;
+
+	if (view == nullptr) return;
+	item.view = view;
+	item.base = base;
+	mManagedViews.push_back(item);
+	if (mContent != nullptr) {
+		TRect local = base;
+		local.move(-mContentRect.a.x, -mContentRect.a.y);
+		view->locate(local);
+		mContent->insert(view);
+	} else {
+		TRect direct = base;
+		view->locate(direct);
+		if (view->owner == nullptr) mDialog.insert(view);
+	}
+}
+
+void MRDialogViewport::removeManaged(TView *view) {
+	if (view == nullptr) return;
+	for (auto it = mManagedViews.begin(); it != mManagedViews.end(); ++it)
+		if (it->view == view) {
+			if (mContent != nullptr)
+				mContent->remove(view);
+			else
+				mDialog.remove(view);
+			mManagedViews.erase(it);
+			return;
+		}
+}
+
+void MRDialogViewport::selectContent() {
+	if (mContent != nullptr) {
+		mContent->resetCurrent();
+		mContent->select();
+	} else
+		mDialog.resetCurrent();
+}
+
+void MRDialogViewport::scrollToOrigin() {
+	if (mHScrollBar != nullptr) mHScrollBar->setValue(0);
+	if (mVScrollBar != nullptr) mVScrollBar->setValue(0);
+	applyScroll();
+}
+
+void MRDialogViewport::initScrollIfNeeded() {
+	int virtualContentWidth = std::max(1, mVirtualWidth - 2);
+	int virtualContentHeight = std::max(1, mVirtualHeight - 2);
+	bool needH = false;
+	bool needV = false;
+
+	for (;;) {
+		bool prevH = needH;
+		bool prevV = needV;
+		int viewportWidth = std::max(1, mDialog.size.x - 2);
+		int viewportHeight = std::max(1, mDialog.size.y - 2);
+		needH = virtualContentWidth > viewportWidth;
+		needV = virtualContentHeight > viewportHeight;
+		if (needH == prevH && needV == prevV) break;
+	}
+
+	mContentRect = TRect(1, 1, mDialog.size.x - 1, mDialog.size.y - 1);
+	if (mContentRect.b.x <= mContentRect.a.x) mContentRect.b.x = mContentRect.a.x + 1;
+	if (mContentRect.b.y <= mContentRect.a.y) mContentRect.b.y = mContentRect.a.y + 1;
+	if (mContent != nullptr) mContent->locate(mContentRect);
+
+	if (needH) {
+		TRect hRect(1, mDialog.size.y - 1, mDialog.size.x - 1, mDialog.size.y);
+		if (mHScrollBar == nullptr) {
+			mHScrollBar = new TScrollBar(hRect);
+			mDialog.insert(mHScrollBar);
+		} else
+			mHScrollBar->locate(hRect);
+	}
+	if (needV) {
+		TRect vRect(mDialog.size.x - 1, 1, mDialog.size.x, mDialog.size.y - 1);
+		if (mVScrollBar == nullptr) {
+			mVScrollBar = new TScrollBar(vRect);
+			mDialog.insert(mVScrollBar);
+		} else
+			mVScrollBar->locate(vRect);
+	}
+	if (mHScrollBar != nullptr) {
+		int maxDx = std::max(0, virtualContentWidth - std::max(1, mContentRect.b.x - mContentRect.a.x));
+		mHScrollBar->setParams(0, 0, maxDx, std::max(1, (mContentRect.b.x - mContentRect.a.x) / 2), 1);
+	}
+	if (mVScrollBar != nullptr) {
+		int maxDy = std::max(0, virtualContentHeight - std::max(1, mContentRect.b.y - mContentRect.a.y));
+		mVScrollBar->setParams(0, 0, maxDy, std::max(1, (mContentRect.b.y - mContentRect.a.y) / 2), 1);
+	}
+	if (mContent == nullptr) {
+		if (mHScrollBar != nullptr) mHScrollBar->makeFirst();
+		if (mVScrollBar != nullptr) mVScrollBar->makeFirst();
+	}
+	applyScroll();
+}
+
+void MRDialogViewport::drawChrome() {
+	mDialog.clip = mDialog.getExtent();
+	if (mDialog.frame != nullptr) {
+		TView *next = mDialog.frame->nextView();
+		const bool wasLast = mDialog.last == mDialog.frame;
+
+		mDialog.removeView(mDialog.frame);
+		mDialog.insertView(mDialog.frame, mDialog.first());
+		mDialog.frame->draw();
+		mDialog.removeView(mDialog.frame);
+		mDialog.insertView(mDialog.frame, wasLast ? nullptr : next);
+	}
+	mDialog.clip = mContentRect;
+	for (TView *view = mDialog.first(); view != nullptr; view = view->nextView())
+		if (view != mDialog.frame && view != mHScrollBar && view != mVScrollBar) view->drawView();
+	mDialog.clip = mDialog.getExtent();
+	if (mHScrollBar != nullptr) mHScrollBar->drawView();
+	if (mVScrollBar != nullptr) mVScrollBar->drawView();
+	if (mDialog.buffer != nullptr) mDialog.writeBuf(0, 0, mDialog.size.x, mDialog.size.y, mDialog.buffer);
+	mDialog.clip = mContentRect;
+}
+
+bool MRDialogViewport::handleNavigationEvent(TEvent &event) {
+	TGroup *focusOwner = mContent != nullptr ? mContent : &mDialog;
+
+	if (event.what != evKeyDown) return false;
+	if (event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) {
+		focusOwner->selectNext(False);
+		ensureCurrentVisible();
+		event.what = evNothing;
+		return true;
+	}
+	if (event.keyDown.keyCode == kbShiftTab) {
+		focusOwner->selectNext(True);
+		ensureCurrentVisible();
+		event.what = evNothing;
+		return true;
+	}
+	return false;
+}
+
+bool MRDialogViewport::handleScrollEvent(TEvent &event) {
+	if (event.what != evBroadcast || event.message.command != cmScrollBarChanged || (event.message.infoPtr != mHScrollBar && event.message.infoPtr != mVScrollBar)) return false;
+	applyScroll();
+	event.what = evNothing;
+	return true;
+}
+
+void MRDialogViewport::ensureCurrentVisible() {
+	TView *view = mContent != nullptr ? mContent->current : mDialog.current;
+
+	while (view != nullptr) {
+		TGroup *group = dynamic_cast<TGroup *>(view);
+		if (group == nullptr || group->current == nullptr) break;
+		view = group->current;
+	}
+	ensureViewVisible(view);
+}
+
+void MRDialogViewport::ensureViewVisible(TView *view) {
+	if (view == nullptr) return;
+	for (const auto &managedView : mManagedViews)
+		if (managedView.view == view) {
+			int dx = mHScrollBar != nullptr ? mHScrollBar->value : 0;
+			int dy = mVScrollBar != nullptr ? mVScrollBar->value : 0;
+			int viewportWidth = std::max(1, mContentRect.b.x - mContentRect.a.x);
+			int viewportHeight = std::max(1, mContentRect.b.y - mContentRect.a.y);
+			int left = managedView.base.a.x - mContentRect.a.x;
+			int right = managedView.base.b.x - mContentRect.a.x;
+			int top = managedView.base.a.y - mContentRect.a.y;
+			int bottom = managedView.base.b.y - mContentRect.a.y;
+
+			if (mHScrollBar != nullptr) {
+				if (right - left > viewportWidth) {
+					if (left < dx || left >= dx + viewportWidth) mHScrollBar->setValue(std::max(0, left));
+				} else if (left < dx)
+					mHScrollBar->setValue(std::max(0, left));
+				else if (right > dx + viewportWidth)
+					mHScrollBar->setValue(std::max(0, right - viewportWidth));
+			}
+			if (mVScrollBar != nullptr) {
+				if (bottom - top > viewportHeight) {
+					if (top < dy || top >= dy + viewportHeight) mVScrollBar->setValue(std::max(0, top));
+				} else if (top < dy)
+					mVScrollBar->setValue(std::max(0, top));
+				else if (bottom > dy + viewportHeight)
+					mVScrollBar->setValue(std::max(0, bottom - viewportHeight));
+			}
+			applyScroll();
+			return;
+		}
+}
+
+void MRDialogViewport::applyScroll() {
+	int dx = mHScrollBar != nullptr ? mHScrollBar->value : 0;
+	int dy = mVScrollBar != nullptr ? mVScrollBar->value : 0;
+
+	for (auto &managedView : mManagedViews) {
+		TRect moved = managedView.base;
+		moved.move(-dx, -dy);
+		if (mContent != nullptr) moved.move(-mContentRect.a.x, -mContentRect.a.y);
+		managedView.view->locate(moved);
+	}
+	if (mContent != nullptr)
+		mContent->drawView();
+	else {
+		mDialog.drawView();
+		drawChrome();
+	}
+}
+
 MRScrollableDialog::MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight) : MRScrollableDialog(bounds, title, virtualWidth, virtualHeight, initSetupDialogFrame) {
 }
 
 MRScrollableDialog::MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight, TFrame *(*frameFactory)(TRect))
-    : TWindowInit(frameFactory), TDialog(bounds, title), mVirtualWidth(virtualWidth), mVirtualHeight(virtualHeight), mContentRect(1, 1, size.x - 1, size.y - 1) {
-	mContent = createSetupDialogContentGroup(mContentRect);
-	if (mContent != nullptr) {
-		mContent->options |= ofSelectable;
-		insert(mContent);
-	}
+	: TWindowInit(frameFactory), TDialog(bounds, title), mViewport(*this, virtualWidth, virtualHeight, MRDialogViewportOwnership::ContentGroup) {
 }
 
 MRScrollableDialog::~MRScrollableDialog() {
@@ -218,44 +436,20 @@ void MRScrollableDialog::detectDoneButton(TView *view) {
 }
 
 void MRScrollableDialog::addManaged(TView *view, const TRect &base) {
-	ManagedItem item;
-	item.view = view;
-	item.base = base;
-	mManagedViews.push_back(item);
 	detectDoneButton(view);
-	if (mContent != nullptr) {
-		TRect local = base;
-		local.move(-mContentRect.a.x, -mContentRect.a.y);
-		view->locate(local);
-		mContent->insert(view);
-	} else
-		insert(view);
+	mViewport.addManaged(view, base);
 }
 
 void MRScrollableDialog::removeManaged(TView *view) {
-	if (view == nullptr) return;
-	for (auto it = mManagedViews.begin(); it != mManagedViews.end(); ++it)
-		if (it->view == view) {
-			if (mContent != nullptr)
-				mContent->remove(view);
-			else
-				remove(view);
-			mManagedViews.erase(it);
-			return;
-		}
+	mViewport.removeManaged(view);
 }
 
 void MRScrollableDialog::selectContent() {
-	if (mContent != nullptr) {
-		mContent->resetCurrent();
-		mContent->select();
-	}
+	mViewport.selectContent();
 }
 
 void MRScrollableDialog::scrollToOrigin() {
-	if (mHScrollBar != nullptr) mHScrollBar->setValue(0);
-	if (mVScrollBar != nullptr) mVScrollBar->setValue(0);
-	applyScroll();
+	mViewport.scrollToOrigin();
 }
 
 void MRScrollableDialog::setDialogValidationHook(DialogValidationHook hook) {
@@ -302,51 +496,7 @@ void MRScrollableDialog::setDoneButtonDisabled(bool disable) {
 }
 
 void MRScrollableDialog::initScrollIfNeeded() {
-	int virtualContentWidth = std::max(1, mVirtualWidth - 2);
-	int virtualContentHeight = std::max(1, mVirtualHeight - 2);
-	bool needH = false;
-	bool needV = false;
-
-	for (;;) {
-		bool prevH = needH;
-		bool prevV = needV;
-		int viewportWidth = std::max(1, size.x - 2);
-		int viewportHeight = std::max(1, size.y - 2);
-		needH = virtualContentWidth > viewportWidth;
-		needV = virtualContentHeight > viewportHeight;
-		if (needH == prevH && needV == prevV) break;
-	}
-
-	mContentRect = TRect(1, 1, size.x - 1, size.y - 1);
-	if (mContentRect.b.x <= mContentRect.a.x) mContentRect.b.x = mContentRect.a.x + 1;
-	if (mContentRect.b.y <= mContentRect.a.y) mContentRect.b.y = mContentRect.a.y + 1;
-	if (mContent != nullptr) mContent->locate(mContentRect);
-
-	if (needH) {
-		TRect hRect(1, size.y - 1, size.x - 1, size.y);
-		if (mHScrollBar == nullptr) {
-			mHScrollBar = new TScrollBar(hRect);
-			insert(mHScrollBar);
-		} else
-			mHScrollBar->locate(hRect);
-	}
-	if (needV) {
-		TRect vRect(size.x - 1, 1, size.x, size.y - 1);
-		if (mVScrollBar == nullptr) {
-			mVScrollBar = new TScrollBar(vRect);
-			insert(mVScrollBar);
-		} else
-			mVScrollBar->locate(vRect);
-	}
-	if (mHScrollBar != nullptr) {
-		int maxDx = std::max(0, virtualContentWidth - std::max(1, mContentRect.b.x - mContentRect.a.x));
-		mHScrollBar->setParams(0, 0, maxDx, std::max(1, (mContentRect.b.x - mContentRect.a.x) / 2), 1);
-	}
-	if (mVScrollBar != nullptr) {
-		int maxDy = std::max(0, virtualContentHeight - std::max(1, mContentRect.b.y - mContentRect.a.y));
-		mVScrollBar->setParams(0, 0, maxDy, std::max(1, (mContentRect.b.y - mContentRect.a.y) / 2), 1);
-	}
-	applyScroll();
+	mViewport.initScrollIfNeeded();
 	runDialogValidation();
 }
 
@@ -363,82 +513,13 @@ void MRScrollableDialog::handleEvent(TEvent &event) {
 			clearEvent(event);
 			return;
 		}
-		if (mContent != nullptr) {
-			if (keyCode == kbTab || keyCode == kbCtrlI) {
-				mContent->selectNext(False);
-				ensureCurrentVisible();
-				clearEvent(event);
-				return;
-			}
-			if (keyCode == kbShiftTab) {
-				mContent->selectNext(True);
-				ensureCurrentVisible();
-				clearEvent(event);
-				return;
-			}
-		}
+		if (mViewport.handleNavigationEvent(event)) return;
 	}
 
 	TDialog::handleEvent(event);
-	if (event.what == evBroadcast && event.message.command == cmScrollBarChanged && (event.message.infoPtr == mHScrollBar || event.message.infoPtr == mVScrollBar)) {
-		applyScroll();
-		clearEvent(event);
-		return;
-	}
-	if (event.what == evKeyDown || event.what == evCommand || event.what == evMouseDown || event.what == evMouseUp) ensureCurrentVisible();
+	if (mViewport.handleScrollEvent(event)) return;
+	if (event.what == evKeyDown || event.what == evCommand || event.what == evMouseDown || event.what == evMouseUp) mViewport.ensureCurrentVisible();
 	if (originalWhat == evCommand || originalWhat == evKeyDown || originalWhat == evMouseDown || originalWhat == evMouseUp) runDialogValidation();
-}
-
-void MRScrollableDialog::ensureViewVisible(TView *view) {
-	if (view == nullptr || mContent == nullptr) return;
-	for (const auto &managedView : mManagedViews)
-		if (managedView.view == view) {
-			int dx = mHScrollBar != nullptr ? mHScrollBar->value : 0;
-			int dy = mVScrollBar != nullptr ? mVScrollBar->value : 0;
-			int viewportWidth = std::max(1, mContentRect.b.x - mContentRect.a.x);
-			int viewportHeight = std::max(1, mContentRect.b.y - mContentRect.a.y);
-			int left = managedView.base.a.x - mContentRect.a.x;
-			int right = managedView.base.b.x - mContentRect.a.x;
-			int top = managedView.base.a.y - mContentRect.a.y;
-			int bottom = managedView.base.b.y - mContentRect.a.y;
-
-			if (mHScrollBar != nullptr) {
-				if (left < dx) mHScrollBar->setValue(std::max(0, left));
-				else if (right > dx + viewportWidth)
-					mHScrollBar->setValue(std::max(0, right - viewportWidth));
-			}
-			if (mVScrollBar != nullptr) {
-				if (top < dy) mVScrollBar->setValue(std::max(0, top));
-				else if (bottom > dy + viewportHeight)
-					mVScrollBar->setValue(std::max(0, bottom - viewportHeight));
-			}
-			applyScroll();
-			return;
-		}
-}
-
-void MRScrollableDialog::ensureCurrentVisible() {
-	TView *view = mContent != nullptr ? mContent->current : nullptr;
-
-	while (view != nullptr) {
-		TGroup *group = dynamic_cast<TGroup *>(view);
-		if (group == nullptr || group->current == nullptr) break;
-		view = group->current;
-	}
-	ensureViewVisible(view);
-}
-
-void MRScrollableDialog::applyScroll() {
-	int dx = mHScrollBar != nullptr ? mHScrollBar->value : 0;
-	int dy = mVScrollBar != nullptr ? mVScrollBar->value : 0;
-
-	for (auto &managedView : mManagedViews) {
-		TRect moved = managedView.base;
-		moved.move(-dx, -dy);
-		moved.move(-mContentRect.a.x, -mContentRect.a.y);
-		managedView.view->locate(moved);
-	}
-	if (mContent != nullptr) mContent->drawView();
 }
 
 MRDialogFoundation::MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight) : MRDialogFoundation(bounds, title, virtualWidth, virtualHeight, initSetupDialogFrame) {
@@ -527,6 +608,21 @@ void addManagedUniformButtonRow(MRScrollableDialog &dialog, int left, int top, i
 
 MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight) {
 	return new MRDialogFoundation(centeredDialogRect(virtualWidth, virtualHeight), title, virtualWidth, virtualHeight);
+}
+
+ushort execTextInputDialog(const char *title, const char *label, char *buffer, std::size_t limit) {
+	constexpr int kVirtualWidth = 60;
+	constexpr int kVirtualHeight = 10;
+	const std::size_t safeLimit = std::min(limit, static_cast<std::size_t>(std::numeric_limits<short>::max()));
+	MRDialogFoundation *dialog = createScrollableDialog(title != nullptr ? title : "INPUT", kVirtualWidth, kVirtualHeight);
+	TInputLine *input = new TInputLine(TRect(3, 4, kVirtualWidth - 3, 5), static_cast<int>(safeLimit));
+	const std::array buttons{DialogButtonSpec{"~O~K", cmOK, bfDefault}, DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+	const DialogButtonRowMetrics metrics = measureUniformButtonRow(buttons, 2);
+
+	dialog->insert(new TLabel(TRect(3, 2, kVirtualWidth - 3, 3), label != nullptr ? label : "Value:", input));
+	dialog->insert(input);
+	insertUniformButtonRow(*dialog, (kVirtualWidth - metrics.rowWidth) / 2, 6, 2, buttons);
+	return execDialogWithData(dialog, buffer);
 }
 
 TFileDialog *createFileDialog(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options) {

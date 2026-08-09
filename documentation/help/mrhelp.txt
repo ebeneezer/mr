@@ -334,6 +334,7 @@ See {Table of contents:Contents}.
   {Theme File Selection:DialogColorThemeFile}
   {Compiler File Selection:DialogCompilerFile}
   {Workspace File Selection:DialogWorkspaceFile}
+  {Workspace Restore:DialogWorkspaceRestore}
 
 .topic DialogGetLast=100
  GET LAST DIALOG
@@ -745,3 +746,13 @@ calling Compiler Profiles field. The chooser does not run the selected file.
 Select an MRMAC workspace file. Loading validates workspace entries before
 adoption. Saving writes MRSETUP-compatible workspace lines without merging
 workspace state into canonical core settings.
+
+.topic DialogWorkspaceRestore=140
+ WORKSPACE RESTORE
+
+The filenames identify the autosaved workspace contents. Short workspaces are
+shown as a compact filename sequence; larger workspaces use a scrollable list
+with the file count below it.
+
+Restore workspace opens the autosaved workspace. Discard workspace clears it
+without opening its files. Closing the dialog preserves it for a later choice.

@@ -1117,7 +1117,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 				writeRecordField(fileName, sizeof(fileName), currentPath);
 		} else
 			writeRecordField(fileName, sizeof(fileName), "*.*");
-		TFileDialog *dialog = new TFileDialog("*.*", "SELECT AUDIO PLAYER URI", "~N~ame", fdOpenButton | fdHelpButton, 0);
+		TFileDialog *dialog = mr::dialogs::createFileDialog(MRDialogHistoryScope::General, "*.*", "SELECT AUDIO PLAYER URI", "~N~ame", fdOpenButton);
 		dialog->helpCtx = hcDialogCompilerFile;
 		result = execDialogWithDataCapture(dialog, fileName);
 		if (result == cmCancel) {

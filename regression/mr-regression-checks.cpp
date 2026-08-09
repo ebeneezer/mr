@@ -10459,7 +10459,7 @@ bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 	                                             "const std::vector<std::string> startupFiles = loadStartupFilesFromCommandLine(startupLoadRequest, requestedStartupFiles, restoreWorkspaceAtStartup)",
 	                                             "if (commandLineForcesWorkspaceRestore)", "singleFileWorkspaceLoadedFromCommandLine = true",
 	                                             "if (!autosavedWorkspaceFiles.empty() && !singleFileWorkspaceLoadedFromCommandLine)",
-	                                             "showWorkspaceLoadDialog(\"Restore workspace\", \"Restore autosaved workspace?\", autosavedWorkspaceFiles, \"Discard workspace\")"},
+	                                             "showWorkspaceLoadDialog(\"Restore workspace\", autosavedWorkspaceFiles, \"Discard workspace\")"},
 	                           missingNeedle)) {
 		failureReason = "Manual workspace restore preview or command-line reconciliation changed: missing " + missingNeedle + ".";
 		return false;
@@ -10468,7 +10468,7 @@ bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 		failureReason = "Workspace restore preview file enumeration changed: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(dirtyGating, {"const bool showFileList = fileUrls.size() > 10;", "const std::size_t numberWidth = std::to_string(fileUrls.size()).size();", "std::string(numberWidth - number.size(), ' ') + number + \" \" + fileUrls[i]", "fileNames.push_back(separator == std::string::npos", "const int maximumDialogWidth = std::max(1, desktopWidth - 4);", "const int maximumDialogHeight = std::max(1, desktopHeight - 4);", "TScrollBar *verticalScrollBar", "TScrollBar *horizontalScrollBar", "MRColumnListView *fileList"}, missingNeedle)) {
+	if (!containsAllSubstrings(dirtyGating, {"const bool showFileList = fileUrls.size() >= 10;", "const std::size_t numberWidth = std::to_string(fileUrls.size()).size();", "std::string(numberWidth - number.size(), ' ') + number + \" \" + fileUrls[i]", "fileNames.push_back(separator == std::string::npos", "joinCommaSeparatedItems(fileNames) + \" (\" + fileCountText", "const int maximumDialogWidth = std::max(1, desktopWidth - 4);", "const int maximumDialogHeight = std::max(1, desktopHeight - 4);", "\"RESTORE WORKSPACE\"", "hcDialogWorkspaceRestore", "TScrollBar *verticalScrollBar", "TScrollBar *horizontalScrollBar", "MRColumnListView *fileList", "fileCountLine + fileCountText"}, missingNeedle)) {
 		failureReason = "Workspace restore preview layout changed: missing " + missingNeedle + ".";
 		return false;
 	}

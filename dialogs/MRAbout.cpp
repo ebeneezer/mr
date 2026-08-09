@@ -33,14 +33,16 @@ constexpr uint kAnimationTickMs = 100;
 constexpr uint kQuoteRotateMs = 10000;
 constexpr uint kDoneLongPressMs = 700;
 constexpr ushort cmAboutDone = 0x6A10;
+constexpr int kAboutWidth = 76;
+constexpr int kAboutHeight = 16;
 
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
 
-void insertCenteredStaticLine(TDialog *dialog, int width, int y, const std::string &text) {
+void insertCenteredStaticLine(MRDialogFoundation &dialog, int width, int y, const std::string &text) {
 	int x = std::max(2, (width - strwidth(text.c_str())) / 2);
-	dialog->insert(new TStaticText(TRect(x, y, width - 2, y + 1), text.c_str()));
+	dialog.insert(new TStaticText(TRect(x, y, width - 2, y + 1), text.c_str()));
 }
 
 std::vector<std::string> wrapQuoteText(const std::string &text, int maxWidth) {
@@ -343,23 +345,23 @@ class MRAboutQuoteBox : public TView {
 
 class MRAbout : public MRDialogFoundation {
   public:
-	MRAbout() noexcept : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(76, 16), "ABOUT", 76, 16, initMrDialogFrame), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false) {
+	MRAbout() noexcept : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kAboutWidth, kAboutHeight), "ABOUT", kAboutWidth, kAboutHeight, initMrDialogFrame), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false) {
 		eventMask |= evBroadcast;
 		helpCtx = hcDialogAbout;
-		insertCenteredStaticLine(this, size.x, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());
-		insertCenteredStaticLine(this, size.x, 3, "Dr. Michael H. Raus & Codex AI");
+		insertCenteredStaticLine(*this, kAboutWidth, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());
+		insertCenteredStaticLine(*this, kAboutWidth, 3, "Dr. Michael H. Raus & Codex AI");
 
-		mQuoteBox = new MRAboutQuoteBox(TRect(4, 5, size.x - 4, 13));
+		mQuoteBox = new MRAboutQuoteBox(TRect(4, 5, kAboutWidth - 4, 13));
 		insert(mQuoteBox);
 		mQuoteBox->setQuoteImmediate(kAboutQuotes[0]);
 		mQuoteSeen.assign(kAboutQuoteCount, 0);
 		if (!mQuoteSeen.empty()) mQuoteSeen[0] = 1;
 		mQuoteRandomState = static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0xA39F1D5Bu;
 
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~P~ress", cmAboutDone, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~P~ress", cmAboutDone, bfDefault}};
 		std::vector<TButton *> buttonViews;
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
-		mr::dialogs::insertUniformButtonRow(*this, (size.x - metrics.rowWidth) / 2, 13, 2, buttons, 0, &buttonViews);
+		mr::dialogs::insertUniformButtonRow(*this, (kAboutWidth - metrics.rowWidth) / 2, 13, 2, buttons, 0, &buttonViews);
 		if (!buttonViews.empty()) mDoneButton = buttonViews.front();
 	}
 

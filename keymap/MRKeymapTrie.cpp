@@ -70,9 +70,11 @@ bool MRKeymapTrie::rebuild(std::span<const MRKeymapBindingRecord> bindings, std:
 
 MRKeymapTrie::Decision MRKeymapTrie::decide(MRKeymapContext context, std::span<const MRKeymapToken> sequence) const {
 	Decision decision;
+	const std::size_t contextRoot = contextIndex(context);
 
 	if (context == MRKeymapContext::None || sequence.empty()) return decision;
-	const std::size_t rootIndex = roots[contextIndex(context)];
+	if (contextRoot >= roots.size()) return decision;
+	const std::size_t rootIndex = roots[contextRoot];
 	if (rootIndex == 0) return decision;
 
 	std::size_t nodeIndex = rootIndex;

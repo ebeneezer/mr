@@ -24,6 +24,7 @@
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../app/MRHelpTopics.generated.hpp"
+#include "../../dialogs/setup/MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -88,6 +89,30 @@ std::string fileDateTimeText(const TSearchRec &file) {
 	char buffer[64] = {0};
 	std::snprintf(buffer, sizeof(buffer), "%s %02d,%04d %02d:%02d%s", kMonthNames[monthIndex], time->ft_day, time->ft_year + 1980, hour, time->ft_min, pm ? "p" : "a");
 	return std::string(buffer);
+}
+
+void adoptNativeDialogControls(TDialog &dialog, MRDialogViewport &viewport) {
+	struct NativeControl {
+		TView *view;
+		TRect bounds;
+	};
+
+	const int virtualWidth = dialog.size.x;
+	const int virtualHeight = dialog.size.y;
+	TView *selectedView = dialog.current;
+	std::vector<NativeControl> controls;
+
+	for (TView *child = dialog.first(); child != nullptr; child = child->nextView())
+		if (child != dialog.frame) controls.push_back(NativeControl{child, child->getBounds()});
+
+	TRect bounds = centeredSetupDialogRect(virtualWidth, virtualHeight);
+	dialog.locate(bounds);
+	for (const NativeControl &control : controls)
+		viewport.addManaged(control.view, control.bounds);
+	viewport.initScrollIfNeeded();
+	viewport.selectContent();
+	if (selectedView != nullptr) selectedView->select();
+	viewport.ensureCurrentVisible();
 }
 
 class TScopedFileInfoPane final : public TView {
@@ -167,17 +192,24 @@ class TFileDialogEnterInterceptor final : public TView {
 
 class TWheelFileDialog final : public TFileDialog {
  public:
-	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TFileDialog(wildCard, title, inputName, options | fdHelpButton, 0), scope(aScope), dialogOptions(options) {
+	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept
+	    : TWindowInit(initScopedHistoryDialogFrame), TFileDialog(wildCard, title, inputName, options | fdHelpButton, 0), viewport(*this, size.x, size.y, MRDialogViewportOwnership::Dialog), scope(aScope), dialogOptions(options) {
 		helpCtx = fileDialogHelpContext(scope);
 		insert(new TFileDialogEnterInterceptor(fileName));
 		replaceHistoryView(static_cast<TInputLine *>(fileName));
 		replaceInfoPane();
 		removeFileMenuCancelButton();
+		adoptNativeDialogControls(*this, viewport);
+	}
+
+	void draw() override {
+		TFileDialog::draw();
+		viewport.drawChrome();
 	}
 
 	void handleEvent(TEvent &event) override {
+		const ushort originalWhat = event.what;
 		std::vector<std::string> entries;
-
 		configuredScopedDialogFileHistoryEntries(scope, entries);
 		if (historyLink != nullptr) {
 			TRect bounds = historyLink->getBounds();
@@ -225,7 +257,14 @@ class TWheelFileDialog final : public TFileDialog {
 			clearEvent(event);
 			return;
 		}
+		if (viewport.handleNavigationEvent(event)) return;
 		TFileDialog::handleEvent(event);
+		if (viewport.handleScrollEvent(event)) return;
+		if (originalWhat == evKeyDown || originalWhat == evCommand || originalWhat == evMouseDown || originalWhat == evMouseUp) viewport.ensureCurrentVisible();
+	}
+
+	void sizeLimits(TPoint &min, TPoint &max) override {
+		TDialog::sizeLimits(min, max);
 	}
 
 	Boolean valid(ushort command) override {
@@ -279,7 +318,6 @@ class TWheelFileDialog final : public TFileDialog {
 
 	short scopedHistoryVisibleRows(const TRect &bounds) const {
 		short visibleRows = 7;
-
 		if (visibleRows > size.y - bounds.a.y - 1) visibleRows = static_cast<short>(size.y - bounds.a.y - 1);
 		if (visibleRows < 1) visibleRows = 1;
 		return visibleRows;
@@ -361,6 +399,7 @@ class TWheelFileDialog final : public TFileDialog {
 		}
 	}
 
+	MRDialogViewport viewport;
 	MRDialogHistoryScope scope;
 	ushort dialogOptions = 0;
 	TInputLine *historyLink = nullptr;
@@ -369,9 +408,16 @@ class TWheelFileDialog final : public TFileDialog {
 
 class TWheelChDirDialog final : public TChDirDialog {
  public:
-	TWheelChDirDialog(MRDialogHistoryScope aScope, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TChDirDialog(options | cdHelpButton, 0), scope(aScope) {
+	TWheelChDirDialog(MRDialogHistoryScope aScope, ushort options) noexcept
+	    : TWindowInit(initScopedHistoryDialogFrame), TChDirDialog(options | cdHelpButton, 0), viewport(*this, size.x, size.y, MRDialogViewportOwnership::Dialog), scope(aScope) {
 		helpCtx = hcDialogDirectoryChooser;
 		replaceHistoryView(findInputLine(TRect(3, 3, 42, 4)));
+		adoptNativeDialogControls(*this, viewport);
+	}
+
+	void draw() override {
+		TChDirDialog::draw();
+		viewport.drawChrome();
 	}
 
 	const char *getTitle(short) override {
@@ -379,8 +425,8 @@ class TWheelChDirDialog final : public TChDirDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
+		const ushort originalWhat = event.what;
 		std::vector<std::string> entries;
-
 		configuredScopedDialogPathHistoryEntries(scope, entries);
 		if (historyLink != nullptr) {
 			TRect bounds = historyLink->getBounds();
@@ -399,7 +445,14 @@ class TWheelChDirDialog final : public TChDirDialog {
 			clearEvent(event);
 			return;
 		}
+		if (viewport.handleNavigationEvent(event)) return;
 		TChDirDialog::handleEvent(event);
+		if (viewport.handleScrollEvent(event)) return;
+		if (originalWhat == evKeyDown || originalWhat == evCommand || originalWhat == evMouseDown || originalWhat == evMouseUp) viewport.ensureCurrentVisible();
+	}
+
+	void sizeLimits(TPoint &min, TPoint &max) override {
+		TDialog::sizeLimits(min, max);
 	}
 
   private:
@@ -423,7 +476,6 @@ class TWheelChDirDialog final : public TChDirDialog {
 
 	short scopedHistoryVisibleRows(const TRect &bounds) const {
 		short visibleRows = 7;
-
 		if (visibleRows > size.y - bounds.a.y - 1) visibleRows = static_cast<short>(size.y - bounds.a.y - 1);
 		if (visibleRows < 1) visibleRows = 1;
 		return visibleRows;
@@ -461,6 +513,7 @@ class TWheelChDirDialog final : public TChDirDialog {
 		}
 	}
 
+	MRDialogViewport viewport;
 	MRDialogHistoryScope scope;
 	TInputLine *historyLink = nullptr;
 	MRDropList historyDropList;
