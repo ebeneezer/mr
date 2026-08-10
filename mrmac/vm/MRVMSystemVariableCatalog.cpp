@@ -83,7 +83,6 @@ MRVMSystemVariable classifySystemVariable(const std::string &name) {
 	    {"MR_PATH", MRVMSystemVariable::MrPath},
 	    {"NAME_LINE", MRVMSystemVariable::NameLine},
 	    {"NEXT_MACRO", MRVMSystemVariable::NextMacro},
-	    {"OS_VERSION", MRVMSystemVariable::OsVersion},
 	    {"OVR_CURSOR", MRVMSystemVariable::OvrCursor},
 	    {"PAGE_STR", MRVMSystemVariable::PageStr},
 	    {"PARAM_COUNT", MRVMSystemVariable::ParamCount},

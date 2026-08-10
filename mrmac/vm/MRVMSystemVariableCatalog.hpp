@@ -78,7 +78,6 @@ enum class MRVMSystemVariable {
 	MrPath,
 	NameLine,
 	NextMacro,
-	OsVersion,
 	OvrCursor,
 	PageStr,
 	ParamCount,

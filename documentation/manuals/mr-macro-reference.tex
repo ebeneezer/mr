@@ -500,7 +500,6 @@ Primitive & Role & Purpose & Reference \\
 \primitiveoverview{FOUND\_STR}{variable-found-str}{variable}{Runtime variable.}
 \primitiveoverview{SEARCH\_FILE}{variable-search-file}{variable}{Runtime variable.}
 \primitiveoverview{MR\_PATH}{variable-mr-path}{variable}{Runtime variable.}
-\primitiveoverview{OS\_VERSION}{variable-os-version}{variable}{Runtime variable.}
 \primitiveoverview{GET\_LINE}{variable-get-line}{variable}{Runtime variable.}
 \primitiveoverview{FORMAT\_LINE}{variable-format-line}{variable}{Runtime variable.}
 \primitiveoverview{DEFAULT\_FORMAT}{variable-default-format}{variable}{Runtime variable.}
@@ -3298,25 +3297,6 @@ Provides the runtime environment value named mr path.
 $MACRO REFERENCE_VARIABLE_MR_PATH FROM EDIT;
     DEF_STR(Value);
     Value := MR_PATH;
-END_MACRO;
-\end{verbatim}
-
-\phantomsection
-\label{prim:variable-os-version}
-\subsection*{OS\_VERSION --- variable}
-\index{OS\_VERSION!variable@\textsc{variable}}
-\begin{verbatim}
-OS_VERSION
-\end{verbatim}
-Parameters: None. Result: string value.
-
-Provides the runtime environment value named os version.
-
-\paragraph{Example macro.}
-\begin{verbatim}
-$MACRO REFERENCE_VARIABLE_OS_VERSION FROM EDIT;
-    DEF_STR(Value);
-    Value := OS_VERSION;
 END_MACRO;
 \end{verbatim}
 
@@ -11793,6 +11773,7 @@ Primitive & Role & Purpose & Reference \\
 \primitiveoverview{GET\_ENVIRONMENT}{intrinsic-get-environment}{intrinsic}{MR command bridge.}
 \primitiveoverview{OS\_BACK}{intrinsic-os-back}{intrinsic}{MR command bridge.}
 \primitiveoverview{OS\_COLOR}{intrinsic-os-color}{intrinsic}{MR command bridge.}
+\primitiveoverview{OS\_VERSION}{intrinsic-os-version}{intrinsic}{Shell version query.}
 \primitiveoverview{SUBSHELL}{intrinsic-subshell}{intrinsic}{MR command bridge.}
 \primitiveoverview{VERSION}{intrinsic-version}{intrinsic}{MR command bridge.}
 \primitiveoverview{ACTIVE\_KEYMAP\_PROFILE}{procedure-active-keymap-profile}{procedure}{MR command bridge.}
@@ -11885,6 +11866,29 @@ $MACRO REFERENCE_OS_COLOR FROM EDIT;
     Result := OS_COLOR;
 END_MACRO;
 \end{verbatim}
+
+\begin{mrmacextension}
+\phantomsection
+\label{prim:intrinsic-os-version}
+\subsection*{OS\_VERSION}
+\index{OS\_VERSION@\texttt{OS\_VERSION}}
+\begin{verbatim}
+OS_VERSION()
+\end{verbatim}
+Parameters: None.
+
+Invokes the configured shell with its version option through the controlled
+subprocess path when evaluated. Returns the first output line as a string. If
+the shell produces no output, returns the shell executable name.
+
+\paragraph{Example macro.}
+\begin{verbatim}
+$MACRO REFERENCE_OS_VERSION FROM EDIT;
+    DEF_STR(Result);
+    Result := OS_VERSION();
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
 
 \phantomsection
 \label{prim:intrinsic-subshell}

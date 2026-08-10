@@ -145,7 +145,6 @@ std::string getEnvironmentValue(const std::string &entryName) {
 	std::string up = mrvmUpperKey(key);
 	if (up == "MR_PATH") return mrvmRuntimeStateString("process", "executableDir");
 	if (up == "COMSPEC") return mrvmRuntimeStateString("process", "shellPath");
-	if (up == "OS_VERSION") return mrvmRuntimeStateString("process", "shellVersion");
 	return std::string();
 }
 

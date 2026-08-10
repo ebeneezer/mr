@@ -60,6 +60,7 @@ enum class MRVMIntrinsic {
 	NextFile,
 	OsBack,
 	OsColor,
+	OsVersion,
 	ParamStr,
 	ParseInt,
 	ParseStr,
@@ -99,7 +100,7 @@ struct MRVMIntrinsicEntry {
 
 static MRVMIntrinsic classifyIntrinsic(const std::string &name) {
 	static constexpr MRVMIntrinsicEntry entries[] = {
-	    {"ASCII", MRVMIntrinsic::Ascii},    {"BAR_MENU", MRVMIntrinsic::BarMenu}, {"BLOCK_TEXT", MRVMIntrinsic::BlockText}, {"CAPS", MRVMIntrinsic::Caps}, {"CHAR", MRVMIntrinsic::Char},     {"CHECK_KEY", MRVMIntrinsic::CheckKey}, {"COPY", MRVMIntrinsic::Copy},    {"COPY_FILE", MRVMIntrinsic::CopyFile}, {"EXISTS", MRVMIntrinsic::Exists}, {"FILE_ATTR", MRVMIntrinsic::FileAttr}, {"FILE_EXISTS", MRVMIntrinsic::FileExists}, {"FIRST_FILE", MRVMIntrinsic::FirstFile}, {"GET_ENVIRONMENT", MRVMIntrinsic::GetEnvironment}, {"GET_EXTENSION", MRVMIntrinsic::GetExtension}, {"GET_PATH", MRVMIntrinsic::GetPath}, {"GET_WORD", MRVMIntrinsic::GetWord}, {"GLOBAL_HASH", MRVMIntrinsic::GlobalHash}, {"GLOBAL_INT", MRVMIntrinsic::GlobalInt}, {"GLOBAL_STR", MRVMIntrinsic::GlobalStr}, {"HAS_VALUE", MRVMIntrinsic::HasValue}, {"INQ_MACRO", MRVMIntrinsic::InqMacro}, {"INT_R", MRVMIntrinsic::IntR}, {"KEYS", MRVMIntrinsic::Keys}, {"LEN", MRVMIntrinsic::Len}, {"LENGTH", MRVMIntrinsic::Length}, {"NEXT_FILE", MRVMIntrinsic::NextFile}, {"OS_BACK", MRVMIntrinsic::OsBack}, {"OS_COLOR", MRVMIntrinsic::OsColor}, {"PARAM_STR", MRVMIntrinsic::ParamStr}, {"PARSE_INT", MRVMIntrinsic::ParseInt}, {"PARSE_STR", MRVMIntrinsic::ParseStr}, {"POS", MRVMIntrinsic::Pos}, {"REAL_I", MRVMIntrinsic::RealI}, {"REMOVE_SPACE", MRVMIntrinsic::RemoveSpace}, {"RENAME_FILE", MRVMIntrinsic::RenameFile}, {"RSTR", MRVMIntrinsic::Rstr}, {"SCREEN_LENGTH", MRVMIntrinsic::ScreenLength}, {"SCREEN_WIDTH", MRVMIntrinsic::ScreenWidth}, {"SEARCH_BWD", MRVMIntrinsic::SearchBwd}, {"SEARCH_FWD", MRVMIntrinsic::SearchFwd}, {"STR", MRVMIntrinsic::Str}, {"STRING_IN", MRVMIntrinsic::StringIn}, {"STR_DEL", MRVMIntrinsic::StrDel}, {"STR_INS", MRVMIntrinsic::StrIns}, {"SUBSHELL", MRVMIntrinsic::Subshell}, {"SWITCH_FILE", MRVMIntrinsic::SwitchFile}, {"TRUNCATE_EXTENSION", MRVMIntrinsic::TruncateExtension}, {"TRUNCATE_PATH", MRVMIntrinsic::TruncatePath},
+	    {"ASCII", MRVMIntrinsic::Ascii},    {"BAR_MENU", MRVMIntrinsic::BarMenu}, {"BLOCK_TEXT", MRVMIntrinsic::BlockText}, {"CAPS", MRVMIntrinsic::Caps}, {"CHAR", MRVMIntrinsic::Char},     {"CHECK_KEY", MRVMIntrinsic::CheckKey}, {"COPY", MRVMIntrinsic::Copy},    {"COPY_FILE", MRVMIntrinsic::CopyFile}, {"EXISTS", MRVMIntrinsic::Exists}, {"FILE_ATTR", MRVMIntrinsic::FileAttr}, {"FILE_EXISTS", MRVMIntrinsic::FileExists}, {"FIRST_FILE", MRVMIntrinsic::FirstFile}, {"GET_ENVIRONMENT", MRVMIntrinsic::GetEnvironment}, {"GET_EXTENSION", MRVMIntrinsic::GetExtension}, {"GET_PATH", MRVMIntrinsic::GetPath}, {"GET_WORD", MRVMIntrinsic::GetWord}, {"GLOBAL_HASH", MRVMIntrinsic::GlobalHash}, {"GLOBAL_INT", MRVMIntrinsic::GlobalInt}, {"GLOBAL_STR", MRVMIntrinsic::GlobalStr}, {"HAS_VALUE", MRVMIntrinsic::HasValue}, {"INQ_MACRO", MRVMIntrinsic::InqMacro}, {"INT_R", MRVMIntrinsic::IntR}, {"KEYS", MRVMIntrinsic::Keys}, {"LEN", MRVMIntrinsic::Len}, {"LENGTH", MRVMIntrinsic::Length}, {"NEXT_FILE", MRVMIntrinsic::NextFile}, {"OS_BACK", MRVMIntrinsic::OsBack}, {"OS_COLOR", MRVMIntrinsic::OsColor}, {"OS_VERSION", MRVMIntrinsic::OsVersion}, {"PARAM_STR", MRVMIntrinsic::ParamStr}, {"PARSE_INT", MRVMIntrinsic::ParseInt}, {"PARSE_STR", MRVMIntrinsic::ParseStr}, {"POS", MRVMIntrinsic::Pos}, {"REAL_I", MRVMIntrinsic::RealI}, {"REMOVE_SPACE", MRVMIntrinsic::RemoveSpace}, {"RENAME_FILE", MRVMIntrinsic::RenameFile}, {"RSTR", MRVMIntrinsic::Rstr}, {"SCREEN_LENGTH", MRVMIntrinsic::ScreenLength}, {"SCREEN_WIDTH", MRVMIntrinsic::ScreenWidth}, {"SEARCH_BWD", MRVMIntrinsic::SearchBwd}, {"SEARCH_FWD", MRVMIntrinsic::SearchFwd}, {"STR", MRVMIntrinsic::Str}, {"STRING_IN", MRVMIntrinsic::StringIn}, {"STR_DEL", MRVMIntrinsic::StrDel}, {"STR_INS", MRVMIntrinsic::StrIns}, {"SUBSHELL", MRVMIntrinsic::Subshell}, {"SWITCH_FILE", MRVMIntrinsic::SwitchFile}, {"TRUNCATE_EXTENSION", MRVMIntrinsic::TruncateExtension}, {"TRUNCATE_PATH", MRVMIntrinsic::TruncatePath},
 	    {"UI_EXEC", MRVMIntrinsic::UiExec}, {"UI_INDEX", MRVMIntrinsic::UiIndex}, {"UI_TEXT", MRVMIntrinsic::UiText},       {"UTF8", MRVMIntrinsic::Utf8}, {"VALUES", MRVMIntrinsic::Values}, {"VERSION", MRVMIntrinsic::Version},    {"V_MENU", MRVMIntrinsic::VMenu}, {"WHEREX", MRVMIntrinsic::Wherex},      {"WHEREY", MRVMIntrinsic::Wherey}, {"XPOS", MRVMIntrinsic::Xpos},
 	};
 	const MRVMIntrinsicEntry *first = entries;
@@ -495,6 +496,10 @@ Value MRVMIntrinsics::apply(const std::string &name, const std::vector<Value> &a
 		case MRVMIntrinsic::OsColor: {
 			if (!args.empty()) throw std::runtime_error("OS_COLOR expects no arguments.");
 			return mrvmMakeInt(7);
+		}
+		case MRVMIntrinsic::OsVersion: {
+			if (!args.empty()) throw std::runtime_error("OS_VERSION expects no arguments.");
+			return mrvmMakeString(mrvmDetectShellVersion(configuredShellExecutablePath()));
 		}
 		case MRVMIntrinsic::ParseStr: {
 			if (args.size() != 2 || !mrvmIsStringLike(args[0]) || !mrvmIsStringLike(args[1])) throw std::runtime_error("PARSE_STR expects (string, string).");

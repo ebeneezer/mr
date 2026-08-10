@@ -284,8 +284,6 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 			return mrvmMakeString(configuredTempDirectoryPath());
 		case MRVMSystemVariable::MrPath:
 			return mrvmMakeString(mrvmRuntimeStateString("process", "executableDir"));
-		case MRVMSystemVariable::OsVersion:
-			return mrvmMakeString(mrvmRuntimeStateString("process", "shellVersion"));
 		case MRVMSystemVariable::ParamCount:
 			return mrvmMakeInt(static_cast<int>(mrvmRuntimeStateStringList("process", "arguments").size()));
 		case MRVMSystemVariable::Cpu:
@@ -758,7 +756,6 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 		case MRVMSystemVariable::Comspec:
 		case MRVMSystemVariable::TempPath:
 		case MRVMSystemVariable::MrPath:
-		case MRVMSystemVariable::OsVersion:
 		case MRVMSystemVariable::ParamCount:
 		case MRVMSystemVariable::Cpu:
 		case MRVMSystemVariable::PrintMargin:

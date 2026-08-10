@@ -101,7 +101,7 @@ unsigned classifyPureOpcode(unsigned char opcode) {
 unsigned classifyIntrinsicName(const std::string &name) {
 	if (name.size() >= 4 && name.compare(0, 4, "MMP_") == 0) return mrefUiAffinity;
 	if (name == "VERSION") return mrefBackgroundSafe;
-	if (name == "FILE_EXISTS" || name == "FIRST_FILE" || name == "NEXT_FILE" || name == "GET_ENVIRONMENT" || name == "SUBSHELL") return mrefExternalIo;
+	if (name == "FILE_EXISTS" || name == "FIRST_FILE" || name == "NEXT_FILE" || name == "GET_ENVIRONMENT" || name == "OS_VERSION" || name == "SUBSHELL") return mrefExternalIo;
 	if (name == "FILE_ATTR" || name == "COPY_FILE" || name == "RENAME_FILE" || name == "SWITCH_FILE") return mrefUiAffinity | mrefExternalIo;
 	if (name == "GLOBAL_STR" || name == "GLOBAL_INT" || name == "INQ_MACRO") return mrefUiAffinity;
 	if (name == "BLOCK_TEXT") return mrefUiAffinity;

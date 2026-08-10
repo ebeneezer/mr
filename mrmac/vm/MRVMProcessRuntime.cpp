@@ -83,7 +83,6 @@ void mrvmProcessRuntimeSetContext(int argc, char **argv) {
 	mrvmStoreRuntimeStateString("process", "executablePath", executablePath);
 	mrvmStoreRuntimeStateString("process", "executableDir", mrvmDetectExecutableDir(startupCommand));
 	mrvmStoreRuntimeStateString("process", "shellPath", shellPath);
-	mrvmStoreRuntimeStateString("process", "shellVersion", mrvmDetectShellVersion(shellPath));
 }
 
 std::vector<std::string> mrvmProcessRuntimeArguments() {
@@ -394,12 +393,6 @@ std::string mrvmDetectShellPath() {
 std::string mrvmDetectShellVersion(const std::string &shellPath) {
 	if (shellPath.empty()) return std::string();
 	std::string base = mrvmTruncatePathPart(shellPath);
-	const char *bashVersion = std::getenv("BASH_VERSION");
-	const char *zshVersion = std::getenv("ZSH_VERSION");
-	const char *fishVersion = std::getenv("FISH_VERSION");
-	if (base == "bash" && bashVersion != nullptr && *bashVersion != '\0') return std::string("bash ") + bashVersion;
-	if (base == "zsh" && zshVersion != nullptr && *zshVersion != '\0') return std::string("zsh ") + zshVersion;
-	if (base == "fish" && fishVersion != nullptr && *fishVersion != '\0') return std::string("fish ") + fishVersion;
 	std::string command = "'";
 	for (char i : shellPath) {
 		if (i == '\'') command += "'\\''";
