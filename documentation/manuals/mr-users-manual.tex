@@ -49,7 +49,7 @@
 
 \title{\mr{} Users Manual\\\large Editing, navigation, automation, and tools}
 \author{Dr.\ Michael 'iDoc' Raus}
-\date{5 August 2026}
+\date{11 August 2026}
 
 \begin{document}
 \frontmatter
@@ -63,7 +63,7 @@
 \vspace{3\baselineskip}
 {\large Dr.\ Michael 'iDoc' Raus\par}
 \vspace{2\baselineskip}
-{\large 5 August 2026\par}
+{\large 11 August 2026\par}
 \end{center}
 
 \vfill
@@ -111,6 +111,349 @@ Manual explains implementation boundaries and performance design.
 
 \part{The editing environment}
 
+\chapter{First Start}
+\index{first start}\index{getting started}
+
+\section{Starting \mr{} for the first time}
+
+Start the editor from a terminal with its executable name. A file argument is
+optional:
+\begin{verbatim}
+mr
+mr README.md
+mr src/main.cpp include/main.hpp
+\end{verbatim}
+With no file argument, \mr{} opens its desktop and waits for a command. With
+one or more paths, every readable file receives an editor window. Relative
+paths are interpreted from the directory in which the command was entered.
+\index{startup files}\index{working directory}
+
+On the first start, \mr{} creates a settings source when none exists. On a
+normal Linux account this is
+\texttt{\$XDG\_CONFIG\_HOME/mr/settings.mrmac}, or
+\texttt{\$HOME/.config/mr/settings.mrmac} when
+\texttt{XDG\_CONFIG\_HOME} is not set. This configuration directory also
+contains the default color-theme file, while personal macros live below its
+\texttt{macros} subdirectory. These files belong to the user account; starting
+\mr{} from another project does not create a second configuration merely
+because the working directory changed.
+\index{XDG CONFIG HOME@\texttt{XDG\_CONFIG\_HOME}}
+\index{settings.mrmac@\texttt{settings.mrmac}!location}
+
+\begin{usernote}
+The first start should not require configuration work. Open a file, use the
+editor, and change only a setting whose effect you understand. The defaults
+are intended to provide a complete usable environment, not an installation
+questionnaire disguised as an editor.
+\end{usernote}
+
+\section{What is on the screen}
+
+The top line is the menu line. The large middle area is the desktop containing
+editor windows, dialogs, Help, and tools. The active window has the emphasized
+frame; its title normally shows the file path. A message area shares the top
+line when transient information is shown. The bottom status line presents the
+currently active function-key assignments.
+\index{menu line}\index{desktop}\index{status line}\index{active window}
+
+\manualscreenshot{mr-users-overview.png}{fig:users-overview}{The main \mr{}
+screen: menu line, active editor window, line numbers, folding gutter,
+minimap, window markers, message area, and context-sensitive function keys.}
+
+\clearpage
+\subsection{An editor window up close}
+
+Figure~\ref{fig:users-first-start-editor-window} shows an empty zero-length
+file. The numbered callouts identify controls which belong to the editor
+window rather than to the terminal around \mr{}.
+
+\manualscreenshot{mr-users-first-start-editor-window.png}{fig:users-first-start-editor-window}{An
+empty editor window. Repeated callouts 5 and 6 mark the two possible scrollbar
+positions and the two resize handles respectively.}
+
+\begin{enumerate}
+\item \textbf{Close.} The left control closes the window, not the terminal and
+not the file on disk. If the document has unsaved changes, normal dirty-state
+handling asks what to do before the window disappears.
+
+\item \textbf{Window markers.} The bracketed marker block reports only states
+which currently apply, for example modified text, Git changes, insert mode,
+word wrap, language, read-only state, macro recording, workspace-main status,
+or background activity. Hovering over a marker explains it. Git and activity
+markers can also open their related details.
+
+\item \textbf{Title and move strip.} The bracketed title normally contains the
+file path; a document without a persistent name uses \texttt{?No-File}. Drag
+an unused part of the top frame to move the window. The active window has the
+emphasized frame and exposes its frame controls; a double-click on the move
+strip toggles zoom.
+
+\item \textbf{Zoom, restore, and minimize.} The up control toggles between the
+window's ordinary and maximized geometry. The down control minimizes the
+window to a one-line entry at the bottom of the desktop. That entry has its
+own restore control, which returns the stored normal geometry. Restore from
+minimize and restore from zoom are therefore different operations even though
+both recover an earlier shape.
+
+\item \textbf{Automatic scrollbars.} The repeated callouts point to the right
+and lower edges where vertical and horizontal scrollbars appear. With
+\field{Scrollbars} set to \textsf{Smart}, as in the figure, an empty document
+has no useful range and both bars are absent. A bar appears automatically when
+content extends beyond its viewport. \textsf{Always} reserves both bars even
+when they cannot yet move; \textsf{Smart} usually leaves more room on a small
+terminal.
+
+\item \textbf{Resize handles.} Drag either marked lower corner of the focused
+window to resize it. Dragging the top frame moves the complete window instead.
+With \field{Window Manager} enabled, moving a window to a desktop edge can
+also snap it to the corresponding half of the usable desktop.
+\end{enumerate}
+\index{window!frame controls}\index{window!resize handles}
+\index{window!zoomed}\index{window!minimized}
+\index{scrollbar visibility}\index{window!frame markers}
+
+Clicking inside a window selects it. With several windows open, \key{F6} and
+\key{Shift+F6} select the next and previous window, while \key{Ctrl+F6} opens
+the Window List. When more than one virtual desktop is configured,
+\key{Shift+F11} and \key{Shift+F12} move the active window to the left or
+right desktop and follow it. \key{Ctrl+Shift+F11} and
+\key{Ctrl+Shift+F12} change only the visible desktop. The corresponding menu
+commands and the complete topology model are described in
+Chapter~\ref{ch:windows-workspaces}.
+\index{window!selection}\index{virtual desktop!moving windows}
+
+Five keys are enough for the first exploration:
+\begin{description}
+\item[\key{F1}] opens context-sensitive Help for the current menu or dialog.
+\item[\key{F10}] activates the menu line. Use the arrow keys and \key{Enter}
+to choose a command.
+\item[\key{F12}] opens User Interface Settings in the ordinary editing
+context.
+\item[\key{Esc}] leaves the current menu or cancels the current dialog without
+accepting its draft.
+\item[\key{Tab} and \key{Shift+Tab}] move between controls in a dialog.
+\end{description}
+The function-key labels are contextual. If a live label differs from a key
+named here, follow the live label: a dialog, tool, or keymap may have assigned
+that key another meaning.
+
+\section{Where personal configuration lives}
+
+Open \menu{Other > Installation and setup}. Its entries divide configuration
+by the thing being changed:
+\begin{description}
+\item[Color setup] changes palette roles and loads or saves reusable color
+themes.
+\item[Key mapping] selects and edits keymap profiles and their bindings.
+\item[Filename extensions] assigns editing behavior to matching filenames.
+\item[Paths] shows the settings source, macro directory, Help file, temporary
+directory, shell, audio player, log destination, and retained-history limits.
+\item[Backups / Autosave] selects backup location and timing and the two
+autosave triggers.
+\item[User interface settings] controls the desktop, cursor, scrollbars,
+virtual desktops, file-comparison layout, and indentation style.
+\item[Live logs] controls how a live log is displayed and how search hits are
+announced.
+\end{description}
+\index{Installation and setup}\index{configuration!locations}
+
+Setup dialogs use a draft. Moving through controls changes the draft, not the
+application. \textsf{OK}, or \textsf{Save} in the unsaved-changes question,
+validates the draft, applies it to the running application, and persists the
+accepted settings through the normal settings path. \textsf{Discard} abandons
+the draft; \textsf{Cancel} in that question returns to the dialog. This makes
+experimentation reversible until the last confirmation.
+\index{settings!draft}\index{settings!dirty gating}
+
+\section{User Interface Settings}
+
+Press \key{F12}, or choose
+\menu{Other > Installation and setup > User interface settings}. The dialog is
+larger than a small terminal, so it can scroll while the selected control
+remains reachable. The following options are the useful starting controls.
+
+\manualscreenshot{mr-users-first-start-ui.png}{fig:users-first-start-ui}{User
+Interface Settings. The dialog applies its complete validated draft when it is
+accepted; the indentation pane previews the selected brace style.}
+
+\subsection{Desktop and messages}
+
+\field{Window Manager} enables \mr{}'s assisted mouse movement for desktop
+windows. Dragging a normal window to an edge then snaps it to the corresponding
+half of the usable desktop; movement away from an edge keeps the window within
+the managed bounds. When the option is disabled, dragging uses TVision's
+ordinary window behavior. Keep it enabled for the normal multi-window
+environment.
+\index{window manager}
+
+\field{Menuline messages} lets notices temporarily use the menu line. Keep it
+enabled when learning the program: successful saves, warnings, and other short
+results then remain visible without opening a log window. Disabling it reduces
+movement on the top line, but also removes this immediate feedback.
+\index{message line}
+
+\field{Virtual desktops} selects between one and nine desktops. One is the
+simplest starting value. Additional desktops provide separate views of the
+same running application; they do not create independent settings or duplicate
+documents. \field{Cycle virtual desktops} makes navigation from the last
+desktop continue at the first, and vice versa. Leave cycling off if reaching
+an end should be an orientation cue.
+\index{virtual desktop}
+
+\subsection{Cursor}
+
+\field{Cursor behaviour} has two modes. \textsf{Bound to text} keeps the
+cursor on positions represented by the current line and is the conservative
+choice for ordinary editing. \textsf{Free movement} permits the cursor to move
+beyond the existing end of a short line; inserted text then materializes the
+necessary spacing. Free movement is convenient for column-oriented editing,
+but it can be surprising before virtual space is familiar.
+\index{cursor behavior}\index{virtual space}
+
+\field{Cursor position marker} controls the compact position text shown in a
+window frame. It must contain one \texttt{R} and one \texttt{C}; at runtime
+they expand to the current row and column. For example, \texttt{R:C} produces
+a compact conventional display, while \texttt{R/C} changes only the separator.
+The value may contain at most ten characters.
+\index{cursor position marker}
+
+\subsection{Opening binary files}
+
+\field{Autodetect binary files} examines boundary samples when a file is
+opened. A file that appears binary is directed to the Bento hex editor rather
+than decoded as ordinary text. Keep this enabled unless unusual textual data
+is repeatedly misclassified. The explicit \menu{Text > Hex editor} command
+remains available regardless of this option.
+\index{binary autodetection}\index{hex editor}
+
+\subsection{File-comparison layout}
+
+\field{R/O file comparing} makes the compare panel read-only. This is the safe
+first setting because reviewing a difference cannot accidentally edit the
+comparison target. Directional commands can still transfer a selected change
+explicitly.
+\index{file comparison!read-only}
+
+\field{Start configuration} chooses which role appears first when a
+file-comparison Bento opens: \textsf{Original <> Compare} or
+\textsf{Compare <> Original}. It changes placement, not the meaning of either
+role and not the direction of an apply command.
+
+The four \field{File compare gutters} fields describe the projections before
+and after each panel. Every position is blank or one of:
+\begin{description}
+\item[\texttt{M}] minimap;
+\item[\texttt{D}] difference marker;
+\item[\texttt{L}] line numbers;
+\item[\texttt{C}] code-folding marker.
+\end{description}
+Order is significant. A leading value of \texttt{LD} places line numbers and
+then difference markers before the document text; a trailing \texttt{M}
+places the minimap after it. Original and Compare have separate leading and
+trailing settings so a dense comparison can remain symmetric or deliberately
+give one panel more space.
+\index{file comparison!gutters}
+
+\subsection{Indent style}
+
+\field{Indent style} selects K\&R, four-space K\&R, Allman, Gnome,
+Whitesmiths, or Horstmann brace behavior. The adjacent pane changes
+immediately to preview the choice. This global UI selection supplies the
+starting brace policy; filename-extension profiles still determine such
+per-file properties as tab size, tabs versus spaces, and language-specific
+editing behavior. Begin with the style already used by the project being
+edited.
+\index{indent style}
+
+\section{What is saved, and when}
+
+There are three different things which are easily confused:
+\begin{enumerate}
+\item The compiled application supplies complete hardcoded defaults.
+\item \texttt{settings.mrmac} is the canonical persisted bootstrap source for
+the user's accepted configuration.
+\item The running application holds the authoritative runtime settings after
+startup and while dialogs or macros make accepted changes.
+\end{enumerate}
+At startup, missing known settings receive the current build's defaults. The
+resulting complete current-version source is then executed in the settings
+context. The runtime model becomes authoritative only after that succeeds.
+This is why \texttt{settings.mrmac} is readable MRMAC source but is not an
+ordinary startup script to extend casually.
+\index{settings!hardcoded defaults}\index{settings!runtime state}
+
+Most accepted setup changes are written through the central runtime snapshot
+to \texttt{settings.mrmac}. A normal exit also persists remaining dirty
+settings. Some domain dialogs additionally have direct \textsf{Load},
+\textsf{Save}, or \textsf{Save As} commands for portable artifacts. A color
+theme file contains the palette values; a keymap file can carry reusable
+profiles and bindings. These artifacts are not alternative global settings
+stores. \texttt{settings.mrmac} records the active paths and selections, while
+the named artifact owns its domain payload.
+\index{theme file}\index{keymap file}\index{settings!external artifacts}
+
+In particular, changing a palette in Color Setup affects the running draft.
+Use \textsf{Save Theme} when those color values must be written to a reusable
+theme file. Merely seeing a new color on screen does not turn inline palette
+values into entries in \texttt{settings.mrmac}; inline color settings are not
+part of that canonical file.
+
+\section{AUTOEXEC comes after settings}
+
+The Macro Library's AUTOEXEC list contains macro files below the configured
+macro directory. During startup, \mr{} first loads and applies
+\texttt{settings.mrmac}; it then runs the configured AUTOEXEC files in list
+order. Workspace restoration and command-line files follow afterwards.
+Consequently an AUTOEXEC macro can deliberately change runtime behavior after
+the persisted settings have taken effect.
+\index{AUTOEXEC!startup order}\index{Macro Library}
+
+\manualscreenshot{mr-users-first-start-autoexec.png}{fig:users-first-start-autoexec}{The
+Macro Library with available macro definitions on the left and the ordered
+AUTOEXEC file list on the right. Add only automation whose startup effects are
+understood.}
+
+\texttt{MRSETUP} itself is reserved for the controlled settings startup and is
+rejected in an ordinary AUTOEXEC execution. AUTOEXEC files use normal MRMAC
+procedures: for example, they may register menus or bindings, load a palette,
+or establish deliberate session behavior. Such a later change may be a
+session overlay. \texttt{SAVE\_SETTINGS()} persists supported dirty runtime
+settings through the central snapshot; domain artifacts still require their
+own save operation, and palette values are not serialized inline into
+\texttt{settings.mrmac}.
+\index{MRSETUP@\texttt{MRSETUP}}\index{SAVE SETTINGS@\texttt{SAVE\_SETTINGS}}
+
+If an AUTOEXEC file is missing or cannot be executed, startup continues. The
+failure is written to the startup log and shown with that file in the Macro
+Library; the invalid entry is removed from the configured list and the cleanup
+is persisted through the normal settings path. This avoids a modal error on
+every future start while keeping the loss diagnosable.
+
+\begin{usernote}
+Use \texttt{settings.mrmac} for stable accepted configuration, external theme
+or keymap files for reusable domain data, and AUTOEXEC for intentional
+post-settings automation. Keeping those roles separate makes startup behavior
+predictable---and makes later experiments much easier to undo.
+\end{usernote}
+
+\section{A ten-minute first session}
+
+\begin{enumerate}
+\item Open a small source file with \menu{File > Open}.
+\item Press \key{F10} and inspect the top-level menus.
+\item Press \key{F1} in one menu and return with \key{Esc}.
+\item Press \key{F12}; inspect Cursor behaviour, Scrollbars, and Indent style,
+then leave without changing anything.
+\item Move through the file and observe the position marker, gutters, and
+minimap.
+\item Open \menu{Window > List} to see that documents live in managed windows.
+\item Open \menu{Macro > Macro Library} and inspect, but do not yet populate,
+the AUTOEXEC list.
+\end{enumerate}
+This establishes the working model needed for the rest of the manual: the live
+screen reports context, setup dialogs validate drafts, persisted settings
+bootstrap the runtime, and automation runs afterwards.
+
 \chapter{Basic Concepts}
 \index{basic concepts}
 
@@ -138,10 +481,6 @@ markers, difference markers, or a minimap.
 \index{window!frame markers}\index{cursor position marker}
 \index{minimap}\index{code folding}\index{background work}
 \index{task overview}
-
-\manualscreenshot{mr-users-overview.png}{fig:users-overview}{A normal editor
-window showing syntax-aware text, line numbers, folding, minimap, window
-markers, message area, and context-sensitive function-key labels.}
 
 \section{Menus and the status line}
 
@@ -281,10 +620,22 @@ files the line index may still be completing in the background; \mr{} reports
 estimated state until the exact result is available rather than freezing the
 editor.\index{Goto line number}\index{large files!line index}
 
-The minimap is another direct navigation surface. Its viewport marker shows
-which fraction of the document is visible, and mouse selection can move the
-editor to a distant region. Search hits, changed regions, or diagnostics may
-add their own markers to the minimap.\index{minimap!navigation}
+The minimap combines a local text-density projection with a global position
+marker. In Braille mode, every terminal row provides four vertical dot rows.
+Each dot row samples one source line, while its horizontal dots summarize the
+occupied display-column ranges. A minimap with $R$ rows can therefore show at
+most $4R$ source lines without merging them. If a document is longer, the
+pattern body follows a bounded window around the active viewport instead of
+compressing arbitrarily many source lines into the same Braille dot. Distant
+lines are then absent from the pattern body. This preserves useful local shape
+but means that the body is not a line-accurate thumbnail of the complete file.
+
+The separate viewport marker remains global: it shows the active viewport's
+position within the entire document, independently of the bounded pattern
+window. Use that marker and the adjacent vertical scrollbar for global
+orientation and distant movement. Search hits, changed regions, or other
+overlays can colour the represented minimap cells.\index{minimap!navigation}
+\index{minimap!sampling}\index{large files!minimap}
 
 \section{Position markers}
 
@@ -891,6 +1242,7 @@ changes settings cannot make those external effects disappear through text
 Undo.\index{MRMAC!undo}
 
 \chapter{Windows, Virtual Desktops, and Workspaces}
+\label{ch:windows-workspaces}
 \index{window management}\index{virtual desktops}
 
 \section{Creating, closing, and selecting windows}
@@ -934,6 +1286,12 @@ and scroll state belong to the individual viewport where supported.
 viewport-right commands select the neighboring desktop. Move-window-left and
 move-window-right change the active window's membership and select the target
 desktop.\index{virtual desktop!navigation}
+
+The commands are available under \menu{Window > Organize}. By default,
+\key{Ctrl+Shift+F11} and \key{Ctrl+Shift+F12} move the viewport left and
+right, while \key{Shift+F11} and \key{Shift+F12} move the active window to
+the neighboring desktop and follow it. The live keymap remains authoritative
+if those bindings have been customized.
 
 Cyclic navigation is configurable. With cycling disabled, commands stop at the
 first or last desktop. With cycling enabled, navigation wraps. The live command
