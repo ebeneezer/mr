@@ -135,7 +135,14 @@ echo "Initialized user macros: $macro_target"
 release_notes=$(cat <<EOF
 MR ${release_version} (build ${release_epoch})
 
-This is the first downloadable Linux x86-64 build.
+Changed in 0.2.3:
+- The idoc color scheme is now the built-in default.
+- The User Manual includes a new illustrated First Start chapter.
+- The chapter explains UI settings, editor-window controls, settings.mrmac,
+  directly saved settings, and AUTOEXEC macros.
+- The Macro main menu is now accessible with Alt+M.
+- OS version detection no longer runs during startup.
+
 Run the installer again to update the system files for this build.
 Existing files below ${macro_target} are deliberately preserved.
 Each additional user runs this same installer once for an independent macro set.
