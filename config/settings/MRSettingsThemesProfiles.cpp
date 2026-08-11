@@ -61,6 +61,7 @@ struct ColorGroupDefinition {
 	const char *title;
 	const char *key;
 	const MRColorSetupItem *items;
+	const unsigned char *defaultValues;
 	std::size_t count;
 };
 
@@ -107,16 +108,36 @@ static const MRColorSetupItem kDebuggerColorItems[] = {
 	{"input active", kMrPaletteDebuggerInputActive}, {"input error", kMrPaletteDebuggerInputError},
 };
 
+static constexpr unsigned char kWindowColorDefaults[] = {0x17, 0x1F, 0x6E, 0x5F, 0x17, 0x1F, 0x1F, 0x1E, 0x9F, 0x5F, 0x5E, 0x1F, 0x1E, 0xE0};
+static constexpr unsigned char kMenuDialogColorDefaults[] = {0x70, 0x78, 0x5E, 0x5F, 0x58, 0x1B, 0x1F, 0x78, 0x3E, 0x30, 0x3E, 0x5F, 0x38, 0x78, 0x70, 0x70, 0x70, 0x1F, 0x5F, 0x1B, 0x1B, 0x18, 0x1F, 0x5F, 0x1E, 0x1E, 0x11, 0x74, 0x1A, 0x1F, 0x2F, 0x2F};
+static constexpr unsigned char kHelpColorDefaults[] = {0x30, 0x3E, 0x1E, 0x37, 0x3E, 0x1E, 0x30, 0x3E, 0x1E, 0x3F};
+static constexpr unsigned char kOtherColorDefaults[] = {0x70, 0x70, 0x70, 0x74, 0x4F, 0x70, 0x7D, 0x6F, 0x70, 0x18, 0x17};
+static constexpr unsigned char kMiniMapColorDefaults[] = {0x1E, 0x1F, 0x71, 0x2F, 0x4F, 0xE0};
+static constexpr unsigned char kFileCompareMiniMapColorDefaults[] = {0x7E, 0x70, 0x71, 0x70, 0x7B, 0x77, 0x7C, 0x7A, 0x76};
+static constexpr unsigned char kCodeColorDefaults[] = {0x19, 0x1B, 0x1B, 0x1E, 0x16, 0x1F, 0x16, 0x17, 0x1F, 0x17, 0x1F, 0x1F, 0x1E, 0xE8, 0xE0, 0xE0, 0x5F, 0x57, 0x5F, 0x8F, 0xE0, 0x58, 0x8F, 0x70, 0x75, 0x7E, 0x73, 0x7D, 0x7C, 0x7F, 0x79, 0x72, 0x7C};
+static constexpr unsigned char kFileCompareColorDefaults[] = {0x78, 0x4F, 0x2F, 0x6F, 0x7A, 0x7C, 0x7E, 0x7F, 0x70, 0x78, 0x78, 0x70, 0x7F, 0x70};
+static constexpr unsigned char kDebuggerColorDefaults[] = {0x4E, 0x18, 0x4C, 0x3E, 0x38, 0x4F, 0xE0, 0x70, 0x3F, 0x2E, 0x1B, 0x4F};
+
+static_assert(std::size(kWindowColorDefaults) == std::size(kWindowColorItems));
+static_assert(std::size(kMenuDialogColorDefaults) == std::size(kMenuDialogColorItems));
+static_assert(std::size(kHelpColorDefaults) == std::size(kHelpColorItems));
+static_assert(std::size(kOtherColorDefaults) == std::size(kOtherColorItems));
+static_assert(std::size(kMiniMapColorDefaults) == std::size(kMiniMapColorItems));
+static_assert(std::size(kFileCompareMiniMapColorDefaults) == std::size(kFileCompareMiniMapColorItems));
+static_assert(std::size(kCodeColorDefaults) == std::size(kCodeColorItems));
+static_assert(std::size(kFileCompareColorDefaults) == std::size(kFileCompareColorItems));
+static_assert(std::size(kDebuggerColorDefaults) == std::size(kDebuggerColorItems));
+
 static const ColorGroupDefinition kColorGroups[] = {
-    {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems, std::size(kWindowColorItems)},
-    {MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems, std::size(kMenuDialogColorItems)},
-    {MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems, std::size(kHelpColorItems)},
-    {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems, std::size(kOtherColorItems)},
-    {MRColorSetupGroup::MiniMap, "MINIMAP COLORS", "MINIMAPCOLORS", kMiniMapColorItems, std::size(kMiniMapColorItems)},
-    {MRColorSetupGroup::FileCompareMiniMap, "FILE COMPARE MINIMAP COLORS", "FILECOMPAREMINIMAPCOLORS", kFileCompareMiniMapColorItems, std::size(kFileCompareMiniMapColorItems)},
-    {MRColorSetupGroup::Code, "CODE COLORS", "CODECOLORS", kCodeColorItems, std::size(kCodeColorItems)},
-    {MRColorSetupGroup::FileCompare, "FILE COMPARE COLORS", "FILECOMPARECOLORS", kFileCompareColorItems, std::size(kFileCompareColorItems)},
-    {MRColorSetupGroup::Debugger, "DEBUGGER COLORS", "DEBUGGERCOLORS", kDebuggerColorItems, std::size(kDebuggerColorItems)},
+	{MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems, kWindowColorDefaults, std::size(kWindowColorItems)},
+	{MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems, kMenuDialogColorDefaults, std::size(kMenuDialogColorItems)},
+	{MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems, kHelpColorDefaults, std::size(kHelpColorItems)},
+	{MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems, kOtherColorDefaults, std::size(kOtherColorItems)},
+	{MRColorSetupGroup::MiniMap, "MINIMAP COLORS", "MINIMAPCOLORS", kMiniMapColorItems, kMiniMapColorDefaults, std::size(kMiniMapColorItems)},
+	{MRColorSetupGroup::FileCompareMiniMap, "FILE COMPARE MINIMAP COLORS", "FILECOMPAREMINIMAPCOLORS", kFileCompareMiniMapColorItems, kFileCompareMiniMapColorDefaults, std::size(kFileCompareMiniMapColorItems)},
+	{MRColorSetupGroup::Code, "CODE COLORS", "CODECOLORS", kCodeColorItems, kCodeColorDefaults, std::size(kCodeColorItems)},
+	{MRColorSetupGroup::FileCompare, "FILE COMPARE COLORS", "FILECOMPARECOLORS", kFileCompareColorItems, kFileCompareColorDefaults, std::size(kFileCompareColorItems)},
+	{MRColorSetupGroup::Debugger, "DEBUGGER COLORS", "DEBUGGERCOLORS", kDebuggerColorItems, kDebuggerColorDefaults, std::size(kDebuggerColorItems)},
 };
 
 const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
@@ -147,6 +168,9 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	static constexpr std::array<unsigned char, 146> defaults = {
 	    0x00, 0x71, 0x70, 0x78, 0x74, 0x20, 0x28, 0x24, 0x17, 0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71, 0x1F, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x21, 0x3F, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x7F, 0x7E, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30, 0x3F, 0x3E, 0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00, 0x17, 0x1F, 0x1A, 0x71, 0x71, 0x1E, 0x17, 0x1F, 0x1E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x10, 0x30, 0x3F, 0x3E, 0x70, 0x2F, 0x7A, 0x20, 0x12, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x30, 0x3F, 0x3E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x30, 0x70, 0x7F, 0x7E, 0x1F, 0x2F, 0x1A, 0x20, 0x32, 0x31, 0x71, 0x70, 0x2F, 0x7E, 0x71, 0x13, 0x78, 0x00, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x30, 0x3E, 0x1E,
 	};
+	for (const ColorGroupDefinition &colorGroup : kColorGroups)
+		for (std::size_t i = 0; i < colorGroup.count; ++i)
+			if (colorGroup.items[i].paletteIndex == paletteIndex) return colorGroup.defaultValues[i];
 
 	if (paletteIndex == kPaletteHelpWindowControls) return 0x37;
 	if (paletteIndex == kMrPaletteCurrentLine) return defaults[10];
@@ -266,23 +290,23 @@ MRColorSetupSettings defaultsFromColorGroups() {
 	MRColorSetupSettings settings;
 
 	for (std::size_t i = 0; i < settings.windowColors.size(); ++i)
-		settings.windowColors[i] = defaultColorForSlot(kWindowColorItems[i].paletteIndex);
+		settings.windowColors[i] = kWindowColorDefaults[i];
 	for (std::size_t i = 0; i < settings.menuDialogColors.size(); ++i)
-		settings.menuDialogColors[i] = defaultColorForSlot(kMenuDialogColorItems[i].paletteIndex);
+		settings.menuDialogColors[i] = kMenuDialogColorDefaults[i];
 	for (std::size_t i = 0; i < settings.helpColors.size(); ++i)
-		settings.helpColors[i] = defaultColorForSlot(kHelpColorItems[i].paletteIndex);
+		settings.helpColors[i] = kHelpColorDefaults[i];
 	for (std::size_t i = 0; i < settings.otherColors.size(); ++i)
-		settings.otherColors[i] = defaultColorForSlot(kOtherColorItems[i].paletteIndex);
+		settings.otherColors[i] = kOtherColorDefaults[i];
 	for (std::size_t i = 0; i < settings.miniMapColors.size(); ++i)
-		settings.miniMapColors[i] = defaultColorForSlot(kMiniMapColorItems[i].paletteIndex);
+		settings.miniMapColors[i] = kMiniMapColorDefaults[i];
 	for (std::size_t i = 0; i < settings.fileCompareMiniMapColors.size(); ++i)
-		settings.fileCompareMiniMapColors[i] = defaultColorForSlot(kFileCompareMiniMapColorItems[i].paletteIndex);
+		settings.fileCompareMiniMapColors[i] = kFileCompareMiniMapColorDefaults[i];
 	for (std::size_t i = 0; i < settings.codeColors.size(); ++i)
-		settings.codeColors[i] = defaultColorForSlot(kCodeColorItems[i].paletteIndex);
+		settings.codeColors[i] = kCodeColorDefaults[i];
 	for (std::size_t i = 0; i < settings.fileCompareColors.size(); ++i)
-		settings.fileCompareColors[i] = defaultColorForSlot(kFileCompareColorItems[i].paletteIndex);
+		settings.fileCompareColors[i] = kFileCompareColorDefaults[i];
 	for (std::size_t i = 0; i < settings.debuggerColors.size(); ++i)
-		settings.debuggerColors[i] = defaultColorForSlot(kDebuggerColorItems[i].paletteIndex);
+		settings.debuggerColors[i] = kDebuggerColorDefaults[i];
 	return settings;
 }
 

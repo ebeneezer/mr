@@ -2659,7 +2659,7 @@ bool validateMrsetupGlobalSettings(std::string &failureReason) {
 bool validateMrsetupColorSettings(std::string &failureReason) {
 	MRColorSetupSettings colors = configuredColorSetupSettings();
 
-	if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 || colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 || colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 || colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 || colors.windowColors[8] != 0x1F || colors.windowColors[9] != 0x1F) {
+	if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 || colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 || colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 || colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 || colors.windowColors[8] != 0x9F || colors.windowColors[9] != 0x5F) {
 		std::ostringstream out;
 
 		out << "Startup context should apply WINDOWCOLORS list (including legacy migration):";

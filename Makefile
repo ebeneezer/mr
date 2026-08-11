@@ -213,7 +213,6 @@ MR_RELEASE_MANUALS = \
 	$(MANUAL_DIRECTORY)/mr-technical-manual.pdf
 MR_RELEASE_MACROS = \
 	mrmac/macros/MRComfortExtensions.mrmac \
-	mrmac/macros/colorthemes/idocs.mrmac \
 	mrmac/macros/compilersupport/MRCompilerMiddleware.mrmac \
 	mrmac/macros/keymaps/MRDefaultKeymaps.mrmac \
 	mrmac/macros/keymaps/emacs.mrmac \
