@@ -2,15 +2,9 @@
 
 set -eu
 
-release_version="0.2.6"
+release_version="0.2.7"
 release_epoch="@MR_RELEASE_EPOCH@"
 prefix="/usr/local"
-
-if [ "$(id -u)" -eq 0 ]; then
-	echo "Run this installer as the target user, without sudo." >&2
-	echo "It requests sudo only for the system-wide installation step." >&2
-	exit 1
-fi
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -135,8 +129,8 @@ echo "Initialized user macros: $macro_target"
 release_notes=$(cat <<EOF
 MR ${release_version} (build ${release_epoch})
 
-Changed in 0.2.6:
-- New configurations now show code folding in the leading gutter and the minimap on the trailing side by default.
+Changed in 0.2.7:
+- The installer now supports direct installation as root, including root-only systems.
 
 Run the installer again to update the system files for this build.
 Existing files below ${macro_target} are deliberately preserved.
