@@ -784,9 +784,7 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 	return true;
 }
 
-bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value) {
-	ensureConfiguredColorSettingsInitialized();
-	const MRColorSetupSettings configured = configuredColorSettings();
+bool colorSlotOverride(const MRColorSetupSettings &configured, unsigned char paletteIndex, unsigned char &value) {
 	unsigned char dialogFrame = 0;
 	unsigned char dialogText = 0;
 	unsigned char dialogBackground = 0;
@@ -965,4 +963,9 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 			return true;
 		}
 	return false;
+}
+
+bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value) {
+	ensureConfiguredColorSettingsInitialized();
+	return colorSlotOverride(configuredColorSettings(), paletteIndex, value);
 }

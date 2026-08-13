@@ -578,6 +578,7 @@ void rememberLoadDialogPath(const char *path);
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage = nullptr);
 bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr);
 bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr, bool clearThemeDisplayName = true);
+bool colorSlotOverride(const MRColorSetupSettings &colors, unsigned char paletteIndex, unsigned char &value);
 bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value);
 const char *colorSetupGroupTitle(MRColorSetupGroup group);
 const char *colorSetupGroupKey(MRColorSetupGroup group);

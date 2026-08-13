@@ -471,6 +471,7 @@ void MREditorApp::idle() {
 TPalette &MREditorApp::getPalette() const {
 	static const TPalette &basePalette = extendedAppBasePalette();
 	static TPalette palette = basePalette;
+	const MRColorSetupSettings configuredColors = configuredColorSetupSettings();
 	unsigned char overrideValue = 0;
 	int slot = 0;
 
@@ -478,7 +479,7 @@ TPalette &MREditorApp::getPalette() const {
 	palette = basePalette;
 
 	for (slot = 1; slot <= kMrPaletteMax; ++slot)
-		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue)) palette[slot] = overrideValue;
+		if (colorSlotOverride(configuredColors, static_cast<unsigned char>(slot), overrideValue)) palette[slot] = overrideValue;
 
 	// TVision-wide policy: Dialog scrollbars follow dialog frame color globally.
 	// Applies to gray/blue/cyan dialog palette blocks, no per-view exceptions.

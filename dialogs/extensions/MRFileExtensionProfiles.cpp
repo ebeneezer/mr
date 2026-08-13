@@ -927,7 +927,6 @@ void runFileExtensionProfilesDialogFlow() {
 					postDialogError(errorText);
 					break;
 				}
-				mrUpdateAllWindowsColorTheme();
 				baselineDrafts = workingDrafts;
 				running = false;
 				break;
@@ -944,7 +943,6 @@ void runFileExtensionProfilesDialogFlow() {
 							postDialogError(errorText);
 							break;
 						}
-						mrUpdateAllWindowsColorTheme();
 						running = false;
 						break;
 					}

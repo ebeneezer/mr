@@ -202,7 +202,7 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.3
+MR_RELEASE_VERSION ?= 0.2.4
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64
 MR_RELEASE_OUTPUT_DIR ?= release
@@ -555,7 +555,7 @@ release-zip:
 	sed "s/@MR_RELEASE_EPOCH@/$$epoch/g" "$(MR_RELEASE_INSTALLER)" > "$$release_root/install.sh"; \
 	chmod 0755 "$$release_root/install.sh"; \
 	rm -f "$$output_directory/$$name.zip" "$$output_directory/$$name.zip.sha256"; \
-	$(BSDTAR) -a -cf "$$output_directory/$$name.zip" -C "$$staging_directory" "$$name"; \
+	$(BSDTAR) -a -cf "$$output_directory/$$name.zip" --options 'zip:compression=deflate,compression-level=9' -C "$$staging_directory" "$$name"; \
 	(cd "$$output_directory" && $(SHA256SUM) "$$name.zip" > "$$name.zip.sha256"); \
 	echo "Wrote $$output_directory/$$name.zip"; \
 	echo "Wrote $$output_directory/$$name.zip.sha256"

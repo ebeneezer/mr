@@ -407,7 +407,7 @@ void MRDialogViewport::applyScroll() {
 		TRect moved = managedView.base;
 		moved.move(-dx, -dy);
 		if (mContent != nullptr) moved.move(-mContentRect.a.x, -mContentRect.a.y);
-		managedView.view->locate(moved);
+		managedView.view->setBounds(moved);
 	}
 	if (mContent != nullptr)
 		mContent->drawView();
