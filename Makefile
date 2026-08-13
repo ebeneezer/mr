@@ -205,11 +205,13 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.8
+MR_RELEASE_VERSION ?= 0.2.9
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64-v3
 MR_RELEASE_ARCH_FLAGS ?= -march=x86-64-v3 -mtune=generic
 MR_RELEASE_REQUIRED_ISA ?= x86-64-v3
+MR_RELEASE_MAX_GLIBC ?= 2.36
+MR_RELEASE_MAX_GLIBCXX ?= 3.4.30
 MR_RELEASE_OUTPUT_DIR ?= release
 MR_RELEASE_INSTALLER = install.sh
 MR_RELEASE_MANUALS = \
@@ -545,6 +547,14 @@ release-zip:
 	case "$$isa_properties" in \
 		*x86-64-v4*) echo "Release binary exceeds required ISA $(MR_RELEASE_REQUIRED_ISA): $$isa_properties" >&2; exit 1 ;; \
 	esac; \
+	required_glibc=$$($(READELF) --version-info "$(TARGET)" 2>/dev/null | sed -n 's/.*Name: GLIBC_\([0-9][0-9.]*\).*/\1/p' | sort -Vu | tail -n 1); \
+	if [ -z "$$required_glibc" ] || [ "$$(printf '%s\n' "$(MR_RELEASE_MAX_GLIBC)" "$$required_glibc" | sort -Vu | tail -n 1)" != "$(MR_RELEASE_MAX_GLIBC)" ]; then \
+		echo "Release binary requires GLIBC_$$required_glibc; maximum is GLIBC_$(MR_RELEASE_MAX_GLIBC)." >&2; exit 1; \
+	fi; \
+	required_glibcxx=$$($(READELF) --version-info "$(TARGET)" 2>/dev/null | sed -n 's/.*Name: GLIBCXX_\([0-9][0-9.]*\).*/\1/p' | sort -Vu | tail -n 1); \
+	if [ -z "$$required_glibcxx" ] || [ "$$(printf '%s\n' "$(MR_RELEASE_MAX_GLIBCXX)" "$$required_glibcxx" | sort -Vu | tail -n 1)" != "$(MR_RELEASE_MAX_GLIBCXX)" ]; then \
+		echo "Release binary requires GLIBCXX_$$required_glibcxx; maximum is GLIBCXX_$(MR_RELEASE_MAX_GLIBCXX)." >&2; exit 1; \
+	fi; \
 	name="mr-$(MR_RELEASE_VERSION)-build-$$epoch-$(MR_RELEASE_PLATFORM)"; \
 	mkdir -p "$(MR_RELEASE_OUTPUT_DIR)"; \
 	output_directory=$$(cd "$(MR_RELEASE_OUTPUT_DIR)" && pwd); \

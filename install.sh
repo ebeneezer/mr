@@ -2,7 +2,7 @@
 
 set -eu
 
-release_version="0.2.8"
+release_version="0.2.9"
 release_epoch="@MR_RELEASE_EPOCH@"
 prefix="/usr/local"
 
@@ -62,7 +62,7 @@ fi
 
 if command -v ldd >/dev/null 2>&1; then
 	ldd_report=$(ldd "$script_directory/bin/mr" 2>&1 || true)
-	if printf '%s\n' "$ldd_report" | grep -E "not found|version .* required by" >/dev/null 2>&1; then
+	if printf '%s\n' "$ldd_report" | grep -F "not found" >/dev/null 2>&1; then
 		echo "This build cannot run on the current system:" >&2
 		printf '%s\n' "$ldd_report" >&2
 		exit 1
@@ -129,8 +129,8 @@ echo "Initialized user macros: $macro_target"
 release_notes=$(cat <<EOF
 MR ${release_version} (build ${release_epoch})
 
-Changed in 0.2.8:
-- Ctrl+Left and Ctrl+Right now move by word without inadvertently starting or extending a text block.
+Changed in 0.2.9:
+- Linux releases now enforce a Debian 12 compatible glibc and libstdc++ ABI ceiling; harmless loader warnings no longer block installation.
 
 Run the installer again to update the system files for this build.
 Existing files below ${macro_target} are deliberately preserved.
