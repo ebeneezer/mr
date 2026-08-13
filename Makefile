@@ -41,6 +41,7 @@ STRIP ?= strip
 BSDTAR ?= bsdtar
 INSTALL ?= install
 SHA256SUM ?= sha256sum
+READELF ?= readelf
 MR_BUILD_EPOCH := $(shell date +%s)
 TMP_BASE_DIR ?= /dev/shm
 TMP_COMPILER_LAUNCHER := $(abspath ./misc/mr-compiler-temp.sh)
@@ -67,21 +68,23 @@ INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./u
 # Language/runtime configuration.
 CXXSTD ?= gnu++20
 PTHREAD_FLAGS ?= -pthread
+ARCH_FLAGS ?=
+ARCH_LDFLAGS ?=
 
 # Optimized normal-build flags
-CXXFLAGS = -Wall -O3 -std=$(CXXSTD) $(PTHREAD_FLAGS) $(INCLUDES)
-CFLAGS = -Wall -O3 $(INCLUDES)
+CXXFLAGS = -Wall -O3 $(ARCH_FLAGS) -std=$(CXXSTD) $(PTHREAD_FLAGS) $(INCLUDES)
+CFLAGS = -Wall -O3 $(ARCH_FLAGS) $(INCLUDES)
 
 TVISION_BUILD_DIR = $(TVISION_ACTIVE_BUILD_DIR)
 TVISION_LIB = $(TVISION_BUILD_DIR)/libtvision.a
 TVISION_TOOLCHAIN_STAMP = $(TVISION_BUILD_DIR)/.mr-toolchain
 TVISION_C_COMPILER := $(shell command -v $(CC) 2>/dev/null || echo $(CC))
 TVISION_CXX_COMPILER := $(shell command -v $(CXX) 2>/dev/null || echo $(CXX))
-TVISION_TOOLCHAIN_SIGNATURE := $(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)|$(TMP_COMPILER_LAUNCHER)
+TVISION_TOOLCHAIN_SIGNATURE := $(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)|$(TMP_COMPILER_LAUNCHER)|$(ARCH_FLAGS)
 TVISION_CMAKE_FLAGS = \
 	-DCMAKE_BUILD_TYPE=Debug \
-	-DCMAKE_C_FLAGS_DEBUG="-g -O3" \
-	-DCMAKE_CXX_FLAGS_DEBUG="-g -O3" \
+	-DCMAKE_C_FLAGS_DEBUG="-g -O3 $(ARCH_FLAGS)" \
+	-DCMAKE_CXX_FLAGS_DEBUG="-g -O3 $(ARCH_FLAGS)" \
 	-DCMAKE_C_COMPILER=$(TVISION_C_COMPILER) \
 	-DCMAKE_CXX_COMPILER=$(TVISION_CXX_COMPILER) \
 	-DCMAKE_C_COMPILER_LAUNCHER=$(TMP_COMPILER_LAUNCHER) \
@@ -98,7 +101,7 @@ TVISION_CMAKE_FLAGS = \
 NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
 GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
 TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
-LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS) -Wl,--strip-debug
+LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS) -Wl,--strip-debug $(ARCH_LDFLAGS)
 
 TARGET = mr
 MRFOLDTRAINER_TARGET = trainers/foldtrainer/mrfoldtrainer
@@ -202,9 +205,11 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.4
+MR_RELEASE_VERSION ?= 0.2.5
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
-MR_RELEASE_PLATFORM ?= linux-x86_64
+MR_RELEASE_PLATFORM ?= linux-x86_64-v3
+MR_RELEASE_ARCH_FLAGS ?= -march=x86-64-v3 -mtune=generic
+MR_RELEASE_REQUIRED_ISA ?= x86-64-v3
 MR_RELEASE_OUTPUT_DIR ?= release
 MR_RELEASE_INSTALLER = install.sh
 MR_RELEASE_MANUALS = \
@@ -529,7 +534,17 @@ release-zip:
 	command -v $(BSDTAR) >/dev/null 2>&1; \
 	command -v $(INSTALL) >/dev/null 2>&1; \
 	command -v $(SHA256SUM) >/dev/null 2>&1; \
-	$(MAKE) clean all CXX=clang++ MR_BUILD_EPOCH="$$epoch"; \
+	command -v $(READELF) >/dev/null 2>&1; \
+	$(MAKE) clean-tvision CXX=clang++ CC=clang; \
+	$(MAKE) clean all CXX=clang++ CC=clang MR_BUILD_EPOCH="$$epoch" ARCH_FLAGS="$(MR_RELEASE_ARCH_FLAGS)" ARCH_LDFLAGS="-Wl,-z,$(MR_RELEASE_REQUIRED_ISA)"; \
+	isa_properties=$$($(READELF) -n "$(TARGET)" 2>/dev/null | sed -n 's/.*Properties: x86 ISA needed: //p'); \
+	case "$$isa_properties" in \
+		*$(MR_RELEASE_REQUIRED_ISA)*) ;; \
+		*) echo "Release binary does not declare required ISA $(MR_RELEASE_REQUIRED_ISA): $$isa_properties" >&2; exit 1 ;; \
+	esac; \
+	case "$$isa_properties" in \
+		*x86-64-v4*) echo "Release binary exceeds required ISA $(MR_RELEASE_REQUIRED_ISA): $$isa_properties" >&2; exit 1 ;; \
+	esac; \
 	name="mr-$(MR_RELEASE_VERSION)-build-$$epoch-$(MR_RELEASE_PLATFORM)"; \
 	mkdir -p "$(MR_RELEASE_OUTPUT_DIR)"; \
 	output_directory=$$(cd "$(MR_RELEASE_OUTPUT_DIR)" && pwd); \
