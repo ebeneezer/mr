@@ -2,7 +2,7 @@
 
 set -eu
 
-release_version="0.2.5"
+release_version="0.2.6"
 release_epoch="@MR_RELEASE_EPOCH@"
 prefix="/usr/local"
 
@@ -135,8 +135,8 @@ echo "Initialized user macros: $macro_target"
 release_notes=$(cat <<EOF
 MR ${release_version} (build ${release_epoch})
 
-Changed in 0.2.5:
-- Release binaries now use the x86-64-v3 baseline, enabling SSE and AVX2 compiler paths without requiring x86-64-v4 or AVX-512.
+Changed in 0.2.6:
+- New configurations now show code folding in the leading gutter and the minimap on the trailing side by default.
 
 Run the installer again to update the system files for this build.
 Existing files below ${macro_target} are deliberately preserved.

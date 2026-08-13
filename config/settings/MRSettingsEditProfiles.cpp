@@ -147,12 +147,12 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.lineNumbersPosition = kLineNumbersPositionOff;
 	defaults.lineNumZeroFill = false;
 	defaults.persistentBlocks = true;
-	defaults.codeFolding = false;
-	defaults.codeFoldingPosition = kCodeFoldingPositionOff;
+	defaults.codeFolding = true;
+	defaults.codeFoldingPosition = kCodeFoldingPositionLeading;
 	defaults.columnBlockMove = kColumnBlockMoveDelete;
 	defaults.defaultMode = kDefaultModeInsert;
 	defaults.cursorStatusColor.clear();
-	defaults.miniMapPosition = kMiniMapPositionOff;
+	defaults.miniMapPosition = kMiniMapPositionTrailing;
 	defaults.miniMapWidth = kDefaultMiniMapWidth;
 	defaults.miniMapMarkerGlyph = "│";
 	defaults.gutters = kDefaultGuttersOrder;
