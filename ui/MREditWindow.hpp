@@ -2280,7 +2280,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	static bool isBlockCursorMarkingModifier(ushort keyModifiers) {
 		if ((keyModifiers & kbPaste) != 0) return false;
-		return (keyModifiers & (kbShift | kbCtrlShift | kbAltShift)) != 0;
+		return (keyModifiers & kbShift) != 0;
 	}
 
 	static ushort normalizedBlockCursorNavigationKey(ushort keyCode) {
