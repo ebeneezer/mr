@@ -56,7 +56,7 @@ TVISION_UPSTREAM_REF ?= master
 TVISION_ACTIVE_SOURCE_DIR := $(TVISION_SOURCE_DIR)
 TVISION_ACTIVE_BUILD_DIR := $(TVISION_SOURCE_DIR)/build
 
-PCRE2_LIB ?= /usr/lib/libpcre2-8.so
+PCRE2_LIB ?= $(shell if [ -e /usr/lib/libpcre2-8.so ]; then echo /usr/lib/libpcre2-8.so; else echo /usr/lib/x86_64-linux-gnu/libpcre2-8.so; fi)
 PCRE2_HEADER ?= /usr/include/pcre2.h
 
 PDF_EXPORT_CFLAGS := $(shell $(PKG_CONFIG) --cflags pangocairo cairo 2>/dev/null)
