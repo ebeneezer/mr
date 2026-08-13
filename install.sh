@@ -2,7 +2,7 @@
 
 set -eu
 
-release_version="0.2.7"
+release_version="0.2.8"
 release_epoch="@MR_RELEASE_EPOCH@"
 prefix="/usr/local"
 
@@ -129,8 +129,8 @@ echo "Initialized user macros: $macro_target"
 release_notes=$(cat <<EOF
 MR ${release_version} (build ${release_epoch})
 
-Changed in 0.2.7:
-- The installer now supports direct installation as root, including root-only systems.
+Changed in 0.2.8:
+- Ctrl+Left and Ctrl+Right now move by word without inadvertently starting or extending a text block.
 
 Run the installer again to update the system files for this build.
 Existing files below ${macro_target} are deliberately preserved.

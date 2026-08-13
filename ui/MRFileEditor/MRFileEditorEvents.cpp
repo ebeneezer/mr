@@ -45,7 +45,7 @@ const char *mouseEventName(ushort what) noexcept {
 }
 
 bool MRFileEditor::hasShiftModifier(ushort mods) noexcept {
-	return (mods & (kbShift | kbCtrlShift | kbAltShift)) != 0;
+	return (mods & kbShift) != 0;
 }
 
 void captureCurrentBlockStateForUndo(TView *owner, MRTextBufferModel::CustomUndoRecord &record) {

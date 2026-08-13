@@ -5820,16 +5820,32 @@ bool expectWindowFreeCursorRightPastEol(MREditWindow &window, const char *phase,
 bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 	ScopedRegressionCursorBehaviour cursorBehaviour(MRCursorBehaviour::FreeMovement);
 	ScopedRegressionPersistentBlocks persistentBlocks(true);
-	static const char text[] = "alpha\n\nbeta\nomega";
+	static const char text[] = "alpha beta\n\nbeta\nomega";
 
 	{
 		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1001);
 		if (!window.replaceTextBuffer(text, "block-input")) {
-			failureReason = "Unable to seed window editor for stream cursor path.";
+			failureReason = "Unable to seed window editor for word navigation and stream cursor path.";
 			return false;
 		}
-		if (!sendWindowKey(window, kbRight, kbCtrlShift)) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "cursor Ctrl+Right stream", failureReason)) return false;
+		MRFileEditor *editor = window.getEditor();
+		if (editor == nullptr) {
+			failureReason = "Word navigation and stream cursor path must have an editor.";
+			return false;
+		}
+		editor->setCursorOffset(0);
+		if (!sendWindowKey(window, kbCtrlRight, kbCtrlShift)) return false;
+		if (editor->cursorOffset() != 6 || editor->hasTextSelection() || window.blockStatus() != MREditWindow::bmNone || window.hasBlock()) {
+			failureReason = "Ctrl+Right must move to the next word without selecting text or starting a block.";
+			return false;
+		}
+		if (!sendWindowKey(window, kbCtrlLeft, kbCtrlShift)) return false;
+		if (editor->cursorOffset() != 0 || editor->hasTextSelection() || window.blockStatus() != MREditWindow::bmNone || window.hasBlock()) {
+			failureReason = "Ctrl+Left must move to the previous word without selecting text or starting a block.";
+			return false;
+		}
+		if (!sendWindowKey(window, kbRight, kbShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "cursor Shift+Right stream", failureReason)) return false;
 		if (!sendWindowKey(window, kbRight)) return false;
 		if (!expectWindowBlock(window, MREditWindow::bmStream, false, 1, 1, 1, 2, "plain cursor commits stream marking", failureReason)) return false;
 		if (!expectWindowCommittedBlockRefreshesOverlay(window, kbRight, 0, MREditWindow::bmStream, "plain cursor committed stream overlay refresh", failureReason)) return false;
@@ -5840,8 +5856,8 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 			failureReason = "Unable to seed window editor for column cursor path.";
 			return false;
 		}
-		if (!sendWindowKey(window, kbRight, kbAltShift)) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 2, "cursor Alt+Right column", failureReason)) return false;
+		if (!sendWindowKey(window, kbRight, kbShift | kbAltShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 2, "cursor Shift+Alt+Right column", failureReason)) return false;
 	}
 	{
 		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1003);
@@ -5849,8 +5865,8 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 			failureReason = "Unable to seed window editor for line cursor path.";
 			return false;
 		}
-		if (!sendWindowKey(window, kbDown, kbCtrlShift | kbAltShift)) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmLine, true, 1, 2, 1, 1, "cursor Ctrl+Alt+Down line", failureReason)) return false;
+		if (!sendWindowKey(window, kbDown, kbShift | kbCtrlShift | kbAltShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmLine, true, 1, 2, 1, 1, "cursor Shift+Ctrl+Alt+Down line", failureReason)) return false;
 	}
 	{
 		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1007);
@@ -5858,20 +5874,20 @@ bool testBlockMarkingWindowInputHarness(std::string &failureReason) {
 			failureReason = "Unable to seed window editor for terminal scan-code cursor path.";
 			return false;
 		}
-		if (!sendWindowKey(window, kbCtrlRight, kbCtrlShift)) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "terminal CtrlRight scan stream", failureReason)) return false;
+		if (!sendWindowKey(window, kbCtrlRight, kbShift | kbCtrlShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmStream, true, 1, 1, 1, 2, "terminal Shift+CtrlRight scan stream", failureReason)) return false;
 		window.clearBlock();
 		if (window.getEditor() == nullptr) {
 			failureReason = "Terminal scan-code cursor path must have an editor.";
 			return false;
 		}
 		window.getEditor()->setCursorOffset(0);
-		if (!sendWindowKey(window, kbAltRight, kbAltShift)) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 2, "terminal AltRight scan column", failureReason)) return false;
+		if (!sendWindowKey(window, kbAltRight, kbShift | kbAltShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmColumn, true, 1, 1, 1, 2, "terminal Shift+AltRight scan column", failureReason)) return false;
 		window.clearBlock();
 		window.getEditor()->setCursorOffset(0);
-		if (!sendWindowKey(window, kbAltDown, kbCtrlShift | kbAltShift)) return false;
-		if (!expectWindowBlock(window, MREditWindow::bmLine, true, 1, 2, 1, 1, "terminal CtrlAltDown scan line", failureReason)) return false;
+		if (!sendWindowKey(window, kbAltDown, kbShift | kbCtrlShift | kbAltShift)) return false;
+		if (!expectWindowBlock(window, MREditWindow::bmLine, true, 1, 2, 1, 1, "terminal Shift+CtrlAltDown scan line", failureReason)) return false;
 	}
 	{
 		MREditWindow window(TRect(0, 0, 80, 16), "block-input", 1004);
@@ -6438,6 +6454,10 @@ bool runKeymapMacroBindingDispatchProbe(std::string &failureReason) {
 	keymapSource = serializeKeymapProfilesToSettingsSource(std::vector<MRKeymapProfile>{profile}, profile.name);
 
 	if (ensureRegressionEditorApp(failureReason) == nullptr) {
+		restore();
+		return false;
+	}
+	if (!testBlockMarkingWindowInputHarness(failureReason)) {
 		restore();
 		return false;
 	}
