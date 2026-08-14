@@ -61,15 +61,19 @@ PCRE2_HEADER ?= /usr/include/pcre2.h
 
 PDF_EXPORT_CFLAGS := $(shell $(PKG_CONFIG) --cflags pangocairo cairo 2>/dev/null)
 PDF_EXPORT_LIBS := $(shell $(PKG_CONFIG) --libs pangocairo cairo 2>/dev/null)
+UPDATE_CFLAGS := $(shell $(PKG_CONFIG) --cflags libcurl libarchive openssl 2>/dev/null)
+UPDATE_LIBS := $(shell $(PKG_CONFIG) --libs libcurl libarchive openssl 2>/dev/null)
 
 # Include paths
-INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./diff -I./app -I./app/commands -I./dialogs -I./config -I./keymap $(PDF_EXPORT_CFLAGS)
+INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./diff -I./app -I./app/commands -I./dialogs -I./config -I./keymap $(PDF_EXPORT_CFLAGS) $(UPDATE_CFLAGS)
 
 # Language/runtime configuration.
 CXXSTD ?= gnu++20
 PTHREAD_FLAGS ?= -pthread
 ARCH_FLAGS ?=
 ARCH_LDFLAGS ?=
+MR_LINK_START_FILES ?=
+MR_LINK_END_FILES ?=
 
 # Optimized normal-build flags
 CXXFLAGS = -Wall -O3 $(ARCH_FLAGS) -std=$(CXXSTD) $(PTHREAD_FLAGS) $(INCLUDES)
@@ -101,7 +105,7 @@ TVISION_CMAKE_FLAGS = \
 NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
 GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
 TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
-LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS) -Wl,--strip-debug $(ARCH_LDFLAGS)
+LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS) $(UPDATE_LIBS) -Wl,--strip-debug $(ARCH_LDFLAGS)
 
 TARGET = mr
 MRFOLDTRAINER_TARGET = trainers/foldtrainer/mrfoldtrainer
@@ -205,15 +209,36 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.9
+MR_RELEASE_VERSION ?= 0.2.10
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64-v3
 MR_RELEASE_ARCH_FLAGS ?= -march=x86-64-v3 -mtune=generic
 MR_RELEASE_REQUIRED_ISA ?= x86-64-v3
 MR_RELEASE_MAX_GLIBC ?= 2.36
 MR_RELEASE_MAX_GLIBCXX ?= 3.4.30
+MR_RELEASE_COMPAT_HEADER ?= $(abspath compat/MRGlibc236.h)
+MR_RELEASE_COMPAT_FLAGS ?= -include $(MR_RELEASE_COMPAT_HEADER)
+MR_RELEASE_COMPAT_LDFLAGS ?= -static-libstdc++ -static-libgcc
+MR_RELEASE_GCC12_BASE_URL ?= https://deb.debian.org/debian/pool/main/g/gcc-12
+MR_RELEASE_GCC12_STDCXX_PACKAGE ?= libstdc++-12-dev_12.2.0-14+deb12u1_amd64.deb
+MR_RELEASE_GCC12_STDCXX_SHA256 ?= d28def6c23630432b57cb38a4c2fd67a79d4e0484027386ca6e8d6005c3d7a73
+MR_RELEASE_GCC12_LIBGCC_PACKAGE ?= libgcc-12-dev_12.2.0-14+deb12u1_amd64.deb
+MR_RELEASE_GCC12_LIBGCC_SHA256 ?= d720259380a84f2ffc6fe516eff5cbe9c8a005138e8d6a5748747ba4b3404a82
+MR_RELEASE_GLIBC_BASE_URL ?= https://deb.debian.org/debian/pool/main/g/glibc
+MR_RELEASE_GLIBC_DEV_PACKAGE ?= libc6-dev_2.36-9+deb12u14_amd64.deb
+MR_RELEASE_GLIBC_DEV_SHA256 ?= 0218fc2befcd784c1b0c6292c0a137ce89fad054efaa579ad083bee0f2c01aae
+MR_RELEASE_PCRE2_BASE_URL ?= https://deb.debian.org/debian/pool/main/p/pcre2
+MR_RELEASE_PCRE2_RUNTIME_PACKAGE ?= libpcre2-8-0_10.42-1_amd64.deb
+MR_RELEASE_PCRE2_RUNTIME_SHA256 ?= 030db54f4d76cdfe2bf0e8eb5f9efea0233ab3c7aa942d672c7b63b52dbaf935
+MR_RELEASE_PCRE2_DEV_PACKAGE ?= libpcre2-dev_10.42-1_amd64.deb
+MR_RELEASE_PCRE2_DEV_SHA256 ?= f0ff485a26daae8f742a1566426f0d98f06cdaf19ee0cc24764e09eff1c99257
 MR_RELEASE_OUTPUT_DIR ?= release
 MR_RELEASE_INSTALLER = install.sh
+MR_RELEASE_CHANGED = documentation/changed-$(MR_RELEASE_VERSION).txt
+MR_RELEASE_SIGNING_KEY ?=
+OPENSSL ?= openssl
+AWK ?= awk
+CURL ?= curl
 MR_RELEASE_MANUALS = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.pdf \
 	$(MANUAL_DIRECTORY)/mr-macro-reference.pdf \
@@ -235,6 +260,8 @@ CXX_SOURCES = \
 	app/utils/MRFileIOUtils.cpp \
 	app/export/MRPdfTextExporter.cpp \
 	app/MRPrivilegedFileBroker.cpp \
+	app/MRUpdate.cpp \
+	app/MRUpdateInstall.cpp \
 	mr.cpp \
 	app/MRAppState.cpp \
 	app/MRCommandRouter.cpp \
@@ -463,7 +490,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 .PHONY: all clean clean-tvision rebuild-tvision tvision-build \
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
-	pcre2-check \
+	pcre2-check update-deps-check \
 	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full basic-language-probe mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
 	bolt-seed bolt-seed-gcc bolt-seed-clang bolt-record bolt-optimize bolt-clean \
 	compile-manuals \
@@ -529,6 +556,13 @@ compile-manuals:
 
 release-zip:
 	@set -eu; \
+	toolchain_directory=""; \
+	staging_directory=""; \
+	cleanup_release() { \
+		if [ -n "$$staging_directory" ]; then rm -rf -- "$$staging_directory"; fi; \
+		if [ -n "$$toolchain_directory" ]; then rm -rf -- "$$toolchain_directory"; fi; \
+	}; \
+	trap cleanup_release EXIT INT TERM HUP; \
 	epoch="$(MR_RELEASE_EPOCH)"; \
 	case "$$epoch" in \
 		''|*[!0-9]*) echo "MR_RELEASE_EPOCH must contain decimal digits only." >&2; exit 2 ;; \
@@ -537,8 +571,42 @@ release-zip:
 	command -v $(INSTALL) >/dev/null 2>&1; \
 	command -v $(SHA256SUM) >/dev/null 2>&1; \
 	command -v $(READELF) >/dev/null 2>&1; \
+	command -v $(OPENSSL) >/dev/null 2>&1; \
+	command -v $(AWK) >/dev/null 2>&1; \
+	command -v $(CURL) >/dev/null 2>&1; \
+	test -f "$(MR_RELEASE_CHANGED)"; \
+	test -n "$(MR_RELEASE_SIGNING_KEY)"; \
+	test -f "$(MR_RELEASE_SIGNING_KEY)"; \
+	toolchain_directory=$$(mktemp -d "$(TMP_BASE_DIR)/mr-release-gcc12.XXXXXX"); \
+	$(CURL) --fail --location --silent --show-error -o "$$toolchain_directory/$(MR_RELEASE_GCC12_STDCXX_PACKAGE)" "$(MR_RELEASE_GCC12_BASE_URL)/$(MR_RELEASE_GCC12_STDCXX_PACKAGE)"; \
+	$(CURL) --fail --location --silent --show-error -o "$$toolchain_directory/$(MR_RELEASE_GCC12_LIBGCC_PACKAGE)" "$(MR_RELEASE_GCC12_BASE_URL)/$(MR_RELEASE_GCC12_LIBGCC_PACKAGE)"; \
+	$(CURL) --fail --location --silent --show-error -o "$$toolchain_directory/$(MR_RELEASE_GLIBC_DEV_PACKAGE)" "$(MR_RELEASE_GLIBC_BASE_URL)/$(MR_RELEASE_GLIBC_DEV_PACKAGE)"; \
+	$(CURL) --fail --location --silent --show-error -o "$$toolchain_directory/$(MR_RELEASE_PCRE2_RUNTIME_PACKAGE)" "$(MR_RELEASE_PCRE2_BASE_URL)/$(MR_RELEASE_PCRE2_RUNTIME_PACKAGE)"; \
+	$(CURL) --fail --location --silent --show-error -o "$$toolchain_directory/$(MR_RELEASE_PCRE2_DEV_PACKAGE)" "$(MR_RELEASE_PCRE2_BASE_URL)/$(MR_RELEASE_PCRE2_DEV_PACKAGE)"; \
+	printf '%s  %s\n' \
+		"$(MR_RELEASE_GCC12_STDCXX_SHA256)" "$$toolchain_directory/$(MR_RELEASE_GCC12_STDCXX_PACKAGE)" \
+		"$(MR_RELEASE_GCC12_LIBGCC_SHA256)" "$$toolchain_directory/$(MR_RELEASE_GCC12_LIBGCC_PACKAGE)" \
+		"$(MR_RELEASE_GLIBC_DEV_SHA256)" "$$toolchain_directory/$(MR_RELEASE_GLIBC_DEV_PACKAGE)" \
+		"$(MR_RELEASE_PCRE2_RUNTIME_SHA256)" "$$toolchain_directory/$(MR_RELEASE_PCRE2_RUNTIME_PACKAGE)" \
+		"$(MR_RELEASE_PCRE2_DEV_SHA256)" "$$toolchain_directory/$(MR_RELEASE_PCRE2_DEV_PACKAGE)" | $(SHA256SUM) -c -; \
+	mkdir "$$toolchain_directory/root"; \
+	$(BSDTAR) -xOf "$$toolchain_directory/$(MR_RELEASE_GCC12_STDCXX_PACKAGE)" data.tar.xz | $(BSDTAR) -xJf - -C "$$toolchain_directory/root"; \
+	$(BSDTAR) -xOf "$$toolchain_directory/$(MR_RELEASE_GCC12_LIBGCC_PACKAGE)" data.tar.xz | $(BSDTAR) -xJf - -C "$$toolchain_directory/root"; \
+	$(BSDTAR) -xOf "$$toolchain_directory/$(MR_RELEASE_GLIBC_DEV_PACKAGE)" data.tar.xz | $(BSDTAR) -xJf - -C "$$toolchain_directory/root"; \
+	$(BSDTAR) -xOf "$$toolchain_directory/$(MR_RELEASE_PCRE2_RUNTIME_PACKAGE)" data.tar.xz | $(BSDTAR) -xJf - -C "$$toolchain_directory/root"; \
+	$(BSDTAR) -xOf "$$toolchain_directory/$(MR_RELEASE_PCRE2_DEV_PACKAGE)" data.tar.xz | $(BSDTAR) -xJf - -C "$$toolchain_directory/root"; \
+	compat_toolchain="$$toolchain_directory/root/usr"; \
+	compat_lib_directory="$$compat_toolchain/lib/x86_64-linux-gnu"; \
+	compat_gcc_directory="$$compat_toolchain/lib/gcc/x86_64-linux-gnu/12"; \
+	compat_pcre2_library="$$compat_lib_directory/libpcre2-8.so"; \
+	test -f "$$compat_lib_directory/Scrt1.o"; \
+	test -f "$$compat_lib_directory/crti.o"; \
+	test -f "$$compat_lib_directory/crtn.o"; \
+	test -f "$$compat_gcc_directory/crtbeginS.o"; \
+	test -f "$$compat_gcc_directory/crtendS.o"; \
+	test -f "$$compat_pcre2_library"; \
 	$(MAKE) clean-tvision CXX=clang++ CC=clang; \
-	$(MAKE) clean all CXX=clang++ CC=clang MR_BUILD_EPOCH="$$epoch" ARCH_FLAGS="$(MR_RELEASE_ARCH_FLAGS)" ARCH_LDFLAGS="-Wl,-z,$(MR_RELEASE_REQUIRED_ISA)"; \
+	$(MAKE) clean all CXX=clang++ CC=clang MR_BUILD_EPOCH="$$epoch" ARCH_FLAGS="$(MR_RELEASE_ARCH_FLAGS) $(MR_RELEASE_COMPAT_FLAGS) --gcc-toolchain=$$compat_toolchain" ARCH_LDFLAGS="--gcc-toolchain=$$compat_toolchain -nostartfiles -Wl,--allow-shlib-undefined -Wl,-z,$(MR_RELEASE_REQUIRED_ISA) $(MR_RELEASE_COMPAT_LDFLAGS)" MR_LINK_START_FILES="$$compat_lib_directory/Scrt1.o $$compat_lib_directory/crti.o $$compat_gcc_directory/crtbeginS.o" MR_LINK_END_FILES="$$compat_gcc_directory/crtendS.o $$compat_lib_directory/crtn.o" PCRE2_LIB="$$compat_pcre2_library" PCRE2_HEADER="$$compat_toolchain/include/pcre2.h"; \
 	isa_properties=$$($(READELF) -n "$(TARGET)" 2>/dev/null | sed -n 's/.*Properties: x86 ISA needed: //p'); \
 	case "$$isa_properties" in \
 		*$(MR_RELEASE_REQUIRED_ISA)*) ;; \
@@ -552,14 +620,17 @@ release-zip:
 		echo "Release binary requires GLIBC_$$required_glibc; maximum is GLIBC_$(MR_RELEASE_MAX_GLIBC)." >&2; exit 1; \
 	fi; \
 	required_glibcxx=$$($(READELF) --version-info "$(TARGET)" 2>/dev/null | sed -n 's/.*Name: GLIBCXX_\([0-9][0-9.]*\).*/\1/p' | sort -Vu | tail -n 1); \
-	if [ -z "$$required_glibcxx" ] || [ "$$(printf '%s\n' "$(MR_RELEASE_MAX_GLIBCXX)" "$$required_glibcxx" | sort -Vu | tail -n 1)" != "$(MR_RELEASE_MAX_GLIBCXX)" ]; then \
+	dynamic_libstdcxx=$$($(READELF) -d "$(TARGET)" 2>/dev/null | sed -n 's/.*Shared library: \[\(libstdc++\.so\.6\)\].*/\1/p'); \
+	if [ -z "$$required_glibcxx" ] && [ -n "$$dynamic_libstdcxx" ]; then \
+		echo "Release binary dynamically links libstdc++.so.6 without a detectable GLIBCXX version ceiling." >&2; exit 1; \
+	fi; \
+	if [ -n "$$required_glibcxx" ] && [ "$$(printf '%s\n' "$(MR_RELEASE_MAX_GLIBCXX)" "$$required_glibcxx" | sort -Vu | tail -n 1)" != "$(MR_RELEASE_MAX_GLIBCXX)" ]; then \
 		echo "Release binary requires GLIBCXX_$$required_glibcxx; maximum is GLIBCXX_$(MR_RELEASE_MAX_GLIBCXX)." >&2; exit 1; \
 	fi; \
 	name="mr-$(MR_RELEASE_VERSION)-build-$$epoch-$(MR_RELEASE_PLATFORM)"; \
 	mkdir -p "$(MR_RELEASE_OUTPUT_DIR)"; \
 	output_directory=$$(cd "$(MR_RELEASE_OUTPUT_DIR)" && pwd); \
 	staging_directory=$$(mktemp -d "$(MR_RELEASE_OUTPUT_DIR)/.mr-release.XXXXXX"); \
-	trap 'rm -rf "$$staging_directory"' EXIT INT TERM HUP; \
 	release_root="$$staging_directory/$$name"; \
 	$(INSTALL) -d -m 0755 \
 		"$$release_root/bin" \
@@ -577,13 +648,34 @@ release-zip:
 		$(INSTALL) -d -m 0755 "$$release_root/share/mr/macros/$$(dirname "$$relative_path")"; \
 		$(INSTALL) -m 0644 "$$macro_file" "$$release_root/share/mr/macros/$$relative_path"; \
 	done; \
-	sed "s/@MR_RELEASE_EPOCH@/$$epoch/g" "$(MR_RELEASE_INSTALLER)" > "$$release_root/install.sh"; \
+	sed -e "s/@MR_RELEASE_EPOCH@/$$epoch/g" -e 's/^release_version=.*/release_version="$(MR_RELEASE_VERSION)"/' "$(MR_RELEASE_INSTALLER)" | \
+		$(AWK) -v changed_file="$(MR_RELEASE_CHANGED)" 'BEGIN { while ((getline line < changed_file) > 0) changed = changed line "\n"; close(changed_file) } /^Changed in [0-9]/ { printf "%s", changed; skipping = 1; next } skipping && /^$$/ { skipping = 0; print; next } !skipping { print }' > "$$release_root/install.sh"; \
 	chmod 0755 "$$release_root/install.sh"; \
-	rm -f "$$output_directory/$$name.zip" "$$output_directory/$$name.zip.sha256"; \
+	rm -f "$$output_directory/$$name.zip" "$$output_directory/$$name.zip.sha256" "$$output_directory/mr-$(MR_RELEASE_PLATFORM).update" "$$output_directory/mr-$(MR_RELEASE_PLATFORM).update.sig"; \
 	$(BSDTAR) -a -cf "$$output_directory/$$name.zip" --options 'zip:compression=deflate,compression-level=9' -C "$$staging_directory" "$$name"; \
 	(cd "$$output_directory" && $(SHA256SUM) "$$name.zip" > "$$name.zip.sha256"); \
+	manifest="$$output_directory/mr-$(MR_RELEASE_PLATFORM).update"; \
+	{ \
+		echo "MR-UPDATE-MANIFEST 1"; \
+		echo "version=$(MR_RELEASE_VERSION)"; \
+		echo "build=$$epoch"; \
+		echo "platform=$(MR_RELEASE_PLATFORM)"; \
+		echo "archive=$$name.zip"; \
+		echo "archive_sha256=$$($(SHA256SUM) "$$output_directory/$$name.zip" | cut -d ' ' -f 1)"; \
+		echo "bin_mr_sha256=$$($(SHA256SUM) "$$release_root/bin/mr" | cut -d ' ' -f 1)"; \
+		echo "help_sha256=$$($(SHA256SUM) "$$release_root/bin/mr.hlp" | cut -d ' ' -f 1)"; \
+		echo "users_manual_sha256=$$($(SHA256SUM) "$$release_root/share/doc/mr/mr-users-manual.pdf" | cut -d ' ' -f 1)"; \
+		echo "macro_reference_sha256=$$($(SHA256SUM) "$$release_root/share/doc/mr/mr-macro-reference.pdf" | cut -d ' ' -f 1)"; \
+		echo "technical_manual_sha256=$$($(SHA256SUM) "$$release_root/share/doc/mr/mr-technical-manual.pdf" | cut -d ' ' -f 1)"; \
+		echo "license_sha256=$$($(SHA256SUM) "$$release_root/share/licenses/mr/TVISION-COPYRIGHT" | cut -d ' ' -f 1)"; \
+		echo; \
+		cat "$(MR_RELEASE_CHANGED)"; \
+	} > "$$manifest"; \
+	$(OPENSSL) pkeyutl -sign -rawin -inkey "$(MR_RELEASE_SIGNING_KEY)" -in "$$manifest" -out "$$manifest.sig"; \
 	echo "Wrote $$output_directory/$$name.zip"; \
-	echo "Wrote $$output_directory/$$name.zip.sha256"
+	echo "Wrote $$output_directory/$$name.zip.sha256"; \
+	echo "Wrote $$manifest"; \
+	echo "Wrote $$manifest.sig"
 
 CONTEXT_ARCHIVE ?= codebase-context.tar.bzip2
 CONTEXT_GIT_INFO_NAME ?= CONTEXT_GIT_INFO.txt
@@ -719,6 +811,9 @@ pcre2-check:
 	@test -f $(PCRE2_HEADER)
 	@echo "Using system PCRE2: $(PCRE2_LIB) / $(PCRE2_HEADER)"
 
+update-deps-check:
+	@$(PKG_CONFIG) --exists libcurl libarchive openssl || { echo "Missing updater development packages: libcurl, libarchive, or OpenSSL." >&2; exit 1; }
+
 tvision-upstream-init:
 	@if ! $(GIT) remote | grep -qx 'tvision-upstream'; then \
 		$(GIT) remote add tvision-upstream $(TVISION_UPSTREAM_URL); \
@@ -774,6 +869,8 @@ $(HELP_CONTEXT_OBJECTS): $(HELP_TOPICS_GENERATED)
 
 mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp app/MRPrivilegedFileBroker.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRPrivilegedFileBroker.o: app/MRPrivilegedFileBroker.cpp app/MRPrivilegedFileBroker.hpp
+app/MRUpdate.o: app/MRUpdate.cpp app/MRUpdate.hpp app/MRUpdateInternal.hpp app/MRVersion.hpp coprocessor/MRCoprocessor.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp
+app/MRUpdateInstall.o: app/MRUpdateInstall.cpp app/MRUpdateInternal.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRVersion.hpp coprocessor/MRCoprocessor.hpp ui/MRMessageLineController.hpp ui/MRSidekickEditor.hpp
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp
 app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp app/router/MRCommandRouterGit.hpp app/router/MRCommandRouterPdf.hpp app/router/MRCommandRouterText.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/setup/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMRuntimeKv.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRFunctionKeyBindings.o: app/MRFunctionKeyBindings.cpp app/MRFunctionKeyBindings.hpp app/MRCommandRouter.hpp app/MRCommands.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MREditWindow.hpp ui/MRStatusLine.hpp ui/MRWindowSupport.hpp
@@ -935,33 +1032,33 @@ $(BASIC_LANGUAGE_PROBE_OBJECT): $(BASIC_LANGUAGE_PROBE_SOURCE) app/commands/MREx
 app/services/MRWorkspaceServiceContext.o: app/services/MRWorkspaceServiceContext.cpp app/services/MRWorkspaceServiceContext.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT): $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE) app/services/MRWorkspaceServiceContext.hpp
 # 3. Linker call
-$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check $(HELP_HYPERTEXT_COMPILED)
-	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
+$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check update-deps-check $(HELP_HYPERTEXT_COMPILED)
+	$(TMP_RUN) $(CXX) -o $@ $(MR_LINK_START_FILES) $^ $(LDFLAGS) $(MR_LINK_END_FILES) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
 	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
 
-$(MRFOLDTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRFOLDTRAINER_OBJECT) | pcre2-check
+$(MRFOLDTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRFOLDTRAINER_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(MRINDENTTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRINDENTTRAINER_OBJECT) | pcre2-check
+$(MRINDENTTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRINDENTTRAINER_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(MROUTLINETRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MROUTLINETRAINER_OBJECT) | pcre2-check
+$(MROUTLINETRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MROUTLINETRAINER_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check
+$(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) | pcre2-check
+$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(BASIC_LANGUAGE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(BASIC_LANGUAGE_PROBE_OBJECT) | pcre2-check
+$(BASIC_LANGUAGE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(BASIC_LANGUAGE_PROBE_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(PHASE1_REPRO_PROBE_OBJECT) | pcre2-check
+$(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(PHASE1_REPRO_PROBE_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
-$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) | pcre2-check
+$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 # C++ compilations

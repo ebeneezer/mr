@@ -104,6 +104,7 @@ enum : ushort {
 	cmMrHelpDetailedIndex,
 	cmMrHelpPreviousTopic,
 	cmMrHelpPerformancePanel,
+	cmMrHelpUpdate,
 	cmMrHelpAbout,
 
 	cmMrSetupEditSettings,
@@ -162,7 +163,8 @@ enum : ushort {
 	cmMrDeferredWindowClose,
 	cmMrTextHexEditor,
 	cmMrEditorDocumentCommitted,
-	cmMrCoprocessorDialogResult
+	cmMrCoprocessorDialogResult,
+	cmMrUpdateRestart
 };
 
 #endif

@@ -44,6 +44,7 @@
 #include "MRMenuFactory.hpp"
 #include "MRMacroDebuggerCommandRoute.hpp"
 #include "MRRuntimeTimerSource.hpp"
+#include "MRUpdate.hpp"
 #include <algorithm>
 #include <chrono>
 #include <string>
@@ -409,6 +410,10 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 }
 
 void MREditorApp::idle() {
+	if (!updateCheckStarted) {
+		updateCheckStarted = true;
+		mrStartAutomaticUpdateCheck();
+	}
 	if (startupQuitPending) {
 		TEvent quitEvent{};
 
@@ -438,6 +443,7 @@ void MREditorApp::idle() {
 		std::string rightStatus = buildTopRightCursorStatus(cursorPositionMarkerFormat);
 		mrMenuBar->setRightStatus(rightStatus);
 		mrMenuBar->setPersistentBlocksMenuState(persistentBlocksMenuEnabled);
+		mrRefreshUpdateMenu(mrMenuBar);
 		if (MREditWindow *win = currentEditWindow(); win != nullptr) {
 			mrMenuBar->setInsertModeMenuState(win->insertModeEnabled());
 			mrMenuBar->setLineDrawingMenuState(win->lineDrawingEnabled(), win->lineDrawingDoubleLines());

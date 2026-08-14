@@ -61,6 +61,22 @@ bool removeMenuItemByCommand(TMenu *menu, ushort command) {
 	return false;
 }
 
+bool insertMenuItemBeforeCommand(TMenu *menu, ushort beforeCommand, TMenuItem *inserted) {
+	if (menu == nullptr || inserted == nullptr) return false;
+	TMenuItem **link = &menu->items;
+	while (*link != nullptr) {
+		TMenuItem *item = *link;
+		if (item->command == beforeCommand) {
+			inserted->next = item;
+			*link = inserted;
+			return true;
+		}
+		if (item->command == 0 && insertMenuItemBeforeCommand(item->subMenu, beforeCommand, inserted)) return true;
+		link = &item->next;
+	}
+	return false;
+}
+
 struct MenuShortcutSpec {
 	ushort command;
 	TKey startupKey;
@@ -690,6 +706,54 @@ void MRMenuBar::setPersistentBlocksMenuState(bool enabled) {
 	delete[] const_cast<char *>(item->name);
 	item->name = newStr(wantedLabel.c_str());
 	drawView();
+}
+
+void MRMenuBar::setUpdateMenuState(const std::string &version, bool visible, bool enabled) {
+	const std::string wantedLabel = "~U~pdate to V" + version;
+	TMenuItem *item = findMenuItemByCommand(menu, cmMrHelpUpdate);
+	TMenuItem *baseItem = findMenuItemByCommand(mBaseMenu, cmMrHelpUpdate);
+	bool changed = false;
+
+	if (!visible) {
+		if (item != nullptr) {
+			static_cast<void>(removeMenuItemByCommand(menu, cmMrHelpUpdate));
+			changed = true;
+		}
+		if (baseItem != nullptr) static_cast<void>(removeMenuItemByCommand(mBaseMenu, cmMrHelpUpdate));
+		if (changed) drawView();
+		return;
+	}
+	if (baseItem == nullptr) {
+		TMenuItem *inserted = new TMenuItem(wantedLabel.c_str(), cmMrHelpUpdate, kbNoKey, hcNoContext);
+		if (!insertMenuItemBeforeCommand(mBaseMenu, cmMrHelpAbout, inserted)) delete inserted;
+		baseItem = findMenuItemByCommand(mBaseMenu, cmMrHelpUpdate);
+	}
+	if (item == nullptr) {
+		TMenuItem *inserted = new TMenuItem(wantedLabel.c_str(), cmMrHelpUpdate, kbNoKey, hcNoContext);
+		if (!insertMenuItemBeforeCommand(menu, cmMrHelpAbout, inserted)) {
+			delete inserted;
+			return;
+		}
+		item = inserted;
+		changed = true;
+	}
+	if (item->name == nullptr || wantedLabel != item->name) {
+		delete[] const_cast<char *>(item->name);
+		item->name = newStr(wantedLabel.c_str());
+		changed = true;
+	}
+	if (item->disabled == enabled) {
+		item->disabled = !enabled;
+		changed = true;
+	}
+	if (baseItem != nullptr) {
+		if (baseItem->name == nullptr || wantedLabel != baseItem->name) {
+			delete[] const_cast<char *>(baseItem->name);
+			baseItem->name = newStr(wantedLabel.c_str());
+		}
+		baseItem->disabled = !enabled;
+	}
+	if (changed) drawView();
 }
 
 void MRMenuBar::setInsertModeMenuState(bool enabled) {

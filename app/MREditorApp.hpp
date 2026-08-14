@@ -38,6 +38,8 @@ class MREditorApp : public TApplication {
 	void endInteractiveMouseCapture() noexcept;
 	void refreshConfiguredUiSettingsSnapshot();
 	void setSnippetSidekickHintsActive(bool active);
+	void setRestartAfterExit() noexcept;
+	[[nodiscard]] bool restartAfterExitRequested() const noexcept;
 
   private:
 	static constexpr std::chrono::milliseconds recordingBlinkInterval{450};
@@ -70,6 +72,8 @@ class MREditorApp : public TApplication {
 	void toggleFullscreenPresentation();
 
 	bool exitPrepared;
+	bool restartAfterExit;
+	bool updateCheckStarted;
 	bool keystrokeRecording;
 	bool recordingMarkerVisible;
 	bool macroBrainMarkerVisible;
@@ -101,5 +105,6 @@ class MREditorApp : public TApplication {
 
 void mrRefreshEditorApplicationUiSettingsSnapshot();
 void mrSetSnippetSidekickHintsActive(bool active);
+void mrSetApplicationRestartAfterExit();
 
 #endif

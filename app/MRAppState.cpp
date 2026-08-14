@@ -6,6 +6,7 @@
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "MRCommands.hpp"
+#include "MRUpdate.hpp"
 
 namespace {
 struct AppCommandState {
@@ -231,6 +232,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrHelpContents, true);
 	setCommandEnabled(cmMrSetupUserInterfaceSettings, true);
 	setCommandEnabled(cmMrHelpPerformancePanel, true);
+	setCommandEnabled(cmMrHelpUpdate, mrUpdateAvailable());
 }
 
 void updateAppCommandState() {

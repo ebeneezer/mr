@@ -13,6 +13,7 @@ class MREditWindow;
 [[nodiscard]] bool dispatchMRKeymapMacro(std::string_view macroSpec);
 [[nodiscard]] bool showMREditorContextMenu(MREditWindow *targetWindow, TPoint where);
 [[nodiscard]] bool requestMRExitWithDirtyGating();
+[[nodiscard]] bool requestMRRestartWithDirtyGating();
 void clearTransientSearchSelectionOnUserInput(const TEvent &event);
 
 #endif

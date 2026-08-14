@@ -65,6 +65,7 @@
 #include "../config/settings/MRSettingsRuntimeState.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
+#include "../app/MRUpdate.hpp"
 #include "../keymap/MRKeymapActionCatalog.hpp"
 #include "../keymap/MRKeymapSequence.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
@@ -2114,7 +2115,12 @@ bool handleForceSave(MREditWindow *window) {
 	return true;
 }
 
-bool handleExitDirtySaveAll() {
+bool dispatchExitAfterDirtyGating(bool restartAfterExit) {
+	if (restartAfterExit) mrSetApplicationRestartAfterExit();
+	return dispatchApplicationCommandEvent(cmQuit);
+}
+
+bool handleExitDirtySaveAll(bool restartAfterExit) {
 	std::vector<MREditWindow *> dirtyWindows;
 	std::vector<std::string> dirtyItems;
 	std::string headline;
@@ -2124,7 +2130,7 @@ bool handleExitDirtySaveAll() {
 		dirtyWindows.push_back(window);
 		dirtyItems.push_back(window->currentFileName()[0] != '\0' ? window->currentFileName() : window->getTitle(0));
 	}
-	if (dirtyWindows.empty()) return dispatchApplicationCommandEvent(cmQuit);
+	if (dirtyWindows.empty()) return dispatchExitAfterDirtyGating(restartAfterExit);
 	headline = std::to_string(dirtyWindows.size()) + " unsaved windows exist.";
 	switch (mr::dialogs::runDialogDirtyListGating("EXIT MR", headline.c_str(), "Dirty windows:", dirtyItems, "Save all", "Discard all")) {
 		case mr::dialogs::UnsavedChangesChoice::Save:
@@ -2132,11 +2138,11 @@ bool handleExitDirtySaveAll() {
 				static_cast<void>(mrActivateEditWindow(window));
 				if (!saveCurrentEditWindow()) return true;
 			}
-			return dispatchApplicationCommandEvent(cmQuit);
+			return dispatchExitAfterDirtyGating(restartAfterExit);
 		case mr::dialogs::UnsavedChangesChoice::Discard:
 			for (MREditWindow *window : dirtyWindows)
 				if (window != nullptr) window->setFileChanged(false);
-			return dispatchApplicationCommandEvent(cmQuit);
+			return dispatchExitAfterDirtyGating(restartAfterExit);
 		case mr::dialogs::UnsavedChangesChoice::Cancel:
 		default:
 			return true;
@@ -2279,7 +2285,11 @@ bool handleEditCutToSystemClipboard(MREditWindow *targetWindow) {
 } // namespace
 
 bool requestMRExitWithDirtyGating() {
-	return handleExitDirtySaveAll();
+	return handleExitDirtySaveAll(false);
+}
+
+bool requestMRRestartWithDirtyGating() {
+	return handleExitDirtySaveAll(true);
 }
 
 bool showMREditorContextMenu(MREditWindow *targetWindow, TPoint where) {
@@ -2768,6 +2778,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrHelpAbout:
 			showAboutDialog();
 			return true;
+
+		case cmMrHelpUpdate:
+			return mrHandleUpdateCommand();
 
 		case cmMrOtherBuildCurrentFile:
 			return handleBuildCurrentFile();

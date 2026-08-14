@@ -47,6 +47,7 @@
 #include "MRCommandRouter.hpp"
 #include "MRFunctionKeyBindings.hpp"
 #include "MRMenuFactory.hpp"
+#include "MRUpdate.hpp"
 #include "MRPrivilegedFileBroker.hpp"
 #include "MRRuntimeScheduler.hpp"
 #include <ctime>
@@ -424,7 +425,7 @@ StartupLoadRequest parseStartupLoadRequest() {
 			continue;
 		}
 		if (parseRunMacroOptionValue(arg, ignored)) continue;
-		if (arg == "--exit-after-run-macro") continue;
+		if (arg == "--exit-after-run-macro" || arg == "--internal-reload-workspace-after-update") continue;
 		if (!arg.empty()) request.specs.push_back(arg);
 	}
 	return request;
@@ -560,7 +561,7 @@ std::vector<std::string> loadStartupFilesFromCommandLine(const StartupLoadReques
 }
 
 } // namespace
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + recordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + recordingBlinkInterval), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), snippetSidekickHintsActive(false), functionKeyModifiers(0), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), restartAfterExit(false), updateCheckStarted(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + recordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + recordingBlinkInterval), performancePanelVisible(false), performancePanel(nullptr), fullscreenHint(nullptr), performancePanelRefreshAt(std::chrono::steady_clock::now()), fullscreenHintVisibleUntil(std::chrono::steady_clock::time_point::min()), startupQuitPending(false), fullscreenPresentationActive(false), fullscreenMenuBarTransientVisible(false), fullscreenWindow(nullptr), fullscreenRestoreBounds(0, 0, 0, 0), interactiveMouseCaptureDepth(0), cursorPositionMarkerFormat("R:C"), persistentBlocksMenuEnabled(false), menulineMessagesEnabled(true), snippetSidekickHintsActive(false), functionKeyModifiers(0), virtualDesktopCount(1), cyclicVirtualDesktopsEnabled(false) {
 	const auto startupStartedAt = std::chrono::steady_clock::now();
 	auto phaseStartedAt = startupStartedAt;
 	auto logStartupPhase = [&phaseStartedAt](const char *phase) {
@@ -584,6 +585,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	runConfiguredAutoexecMacros();
 	logStartupPhase("autoexec_macros");
 	const bool autoloadWorkspace = configuredAutoloadWorkspace();
+	const bool updateForcesWorkspaceRestore = mrUpdateForcesWorkspaceRestore();
 	const StartupLoadRequest startupLoadRequest = parseStartupLoadRequest();
 	const std::vector<std::string> requestedStartupFiles = startupLoadRequest.specs.empty() ? std::vector<std::string>() : collectStartupFilesFromRequest(startupLoadRequest);
 	const std::vector<std::string> autosavedWorkspaceFiles = !autoloadWorkspace ? mrSettingsFileAutosavedWorkspaceFiles() : std::vector<std::string>();
@@ -598,7 +600,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 				break;
 			}
 	}
-	const bool restoreWorkspaceAtStartup = autoloadWorkspace || commandLineForcesWorkspaceRestore;
+	const bool restoreWorkspaceAtStartup = autoloadWorkspace || commandLineForcesWorkspaceRestore || updateForcesWorkspaceRestore;
 	if (restoreWorkspaceAtStartup) {
 		applyConfiguredDisplayLayout();
 		logStartupPhase("display_layout_final");
@@ -638,7 +640,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 				break;
 			}
 	}
-	if (!autosavedWorkspaceFiles.empty() && !singleFileWorkspaceLoadedFromCommandLine) {
+	if (!updateForcesWorkspaceRestore && !autosavedWorkspaceFiles.empty() && !singleFileWorkspaceLoadedFromCommandLine) {
 		setRuntimePreserveAutosavedWorkspace(true);
 		const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showWorkspaceLoadDialog("Restore workspace", autosavedWorkspaceFiles, "Discard workspace");
 

@@ -143,7 +143,7 @@ std::vector<std::string> commandLineFileArguments(int argc, char **argv) {
 			skipNext = true;
 			continue;
 		}
-		if (argument == "--load-recursive" || argument == "-lr" || argument == "--exit-after-run-macro" || isRunMacroAssignment(argument)) continue;
+		if (argument == "--load-recursive" || argument == "-lr" || argument == "--exit-after-run-macro" || argument == "--internal-reload-workspace-after-update" || isRunMacroAssignment(argument)) continue;
 		if (!argument.empty()) paths.push_back(std::move(argument));
 	}
 	return paths;

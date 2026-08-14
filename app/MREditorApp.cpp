@@ -150,6 +150,18 @@ void mrSetSnippetSidekickHintsActive(bool active) {
 	if (auto *app = dynamic_cast<MREditorApp *>(TProgram::application)) app->setSnippetSidekickHintsActive(active);
 }
 
+void MREditorApp::setRestartAfterExit() noexcept {
+	restartAfterExit = true;
+}
+
+bool MREditorApp::restartAfterExitRequested() const noexcept {
+	return restartAfterExit;
+}
+
+void mrSetApplicationRestartAfterExit() {
+	if (auto *app = dynamic_cast<MREditorApp *>(TProgram::application)) app->setRestartAfterExit();
+}
+
 void MREditorApp::beginInteractiveMouseCapture() noexcept {
 	++interactiveMouseCaptureDepth;
 }

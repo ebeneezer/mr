@@ -2,15 +2,18 @@
 #include "app/MREditorApp.hpp"
 #include "app/MRHelp.generated.hpp"
 #include "app/MRPrivilegedFileBroker.hpp"
+#include "app/MRUpdate.hpp"
 #include "config/settings/MRSettingsRuntime.hpp"
 #include "mrmac/vm/MRVMProcessRuntime.hpp"
 
 #include <cstring>
+#include <cerrno>
 #include <ctime>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <unistd.h>
 
 namespace {
 bool hasHelpFlag(int argc, char **argv) {
@@ -37,6 +40,17 @@ void appendMainShutdownTrace(std::string_view message) {
 } // namespace
 
 int main(int argc, char **argv) {
+	int updateExitCode = 1;
+	std::string updateError;
+	switch (mrStartInternalUpdateApply(argc, argv, updateExitCode, updateError)) {
+		case MRUpdateInternalStartup::ParentFinished:
+			return updateExitCode;
+		case MRUpdateInternalStartup::Failed:
+			std::cerr << "mr: " << (updateError.empty() ? "internal update failed." : updateError) << '\n';
+			return updateExitCode;
+		case MRUpdateInternalStartup::RunApplication:
+			break;
+	}
 	if (hasHelpFlag(argc, argv)) {
 		std::cout << kMrEmbeddedHelpMarkdown;
 		return 0;
@@ -54,6 +68,7 @@ int main(int argc, char **argv) {
 	}
 	mrvmSetProcessContext(argc, argv);
 	const auto appScopeStartedAt = std::chrono::steady_clock::now();
+	bool restartAfterUpdate = false;
 	{
 		MREditorApp app;
 		const auto runStartedAt = std::chrono::steady_clock::now();
@@ -64,6 +79,7 @@ int main(int argc, char **argv) {
 			     << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - runStartedAt).count() << ".";
 			appendMainShutdownTrace(line.str());
 		}
+		restartAfterUpdate = app.restartAfterExitRequested();
 	}
 	mrvmCloseAllForkedProcesses();
 	{
@@ -71,6 +87,12 @@ int main(int argc, char **argv) {
 		line << "main phase after_app_scope took_ms="
 		     << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - appScopeStartedAt).count() << ".";
 		appendMainShutdownTrace(line.str());
+	}
+	if (restartAfterUpdate) {
+		char *const restartArguments[] = {const_cast<char *>("mr"), const_cast<char *>("--internal-reload-workspace-after-update"), nullptr};
+		::execv("/usr/local/bin/mr", restartArguments);
+		std::cerr << "mr: unable to restart /usr/local/bin/mr: " << std::strerror(errno) << '\n';
+		return 1;
 	}
 	return 0;
 }

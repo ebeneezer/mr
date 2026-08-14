@@ -23,6 +23,7 @@
 #include "MRWindowCommands.hpp"
 
 #include "../app/MRCommands.hpp"
+#include "../app/MRUpdate.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/MRMacroDebuggerCommandRoute.hpp"
 #include "../app/router/MRCommandRouterGit.hpp"
@@ -511,6 +512,7 @@ void releaseMacroTask(MREditWindow *win, const mr::coprocessor::Result &result, 
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	logWarmupCancelFinish(result);
+	if (mrAdoptUpdateCoprocessorResult(result)) return;
 	if (result.task.executionOwnerKind == mr::coprocessor::ExecutionOwnerKind::Dialog) {
 		void *adoptedResult = message(TProgram::deskTop, evBroadcast, cmMrCoprocessorDialogResult, const_cast<mr::coprocessor::Result *>(&result));
 		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, adoptedResult == &result);
