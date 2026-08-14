@@ -12,5 +12,5 @@ TargetColumn := ((DesktopWidth - Width) / 2) + 1;
 TargetRow := ((DesktopHeight - Height) / 2) + 1;
 
 DESKTOP_CLEAR();
-DESKTOP_BLIT('misc/geburtstagstorte_entwurf_80x25_ansi16.ans', TargetColumn, TargetRow, 1);
+DESKTOP_BLIT('mrmac/macros/assets/geburtstagstorte_entwurf_80x25_ansi16.ans', TargetColumn, TargetRow, 1);
 END_MACRO;

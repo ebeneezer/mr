@@ -29,7 +29,7 @@ MAKEFLAGS += -j$(NPROC)
 CLANG_TIDY ?= clang-tidy
 BEAR ?= bear
 LINT_FILE ?= mrmac/MRVM.cpp
-BOLT_WORKFLOW ?= ./misc/mr-bolt-workflow.sh
+BOLT_WORKFLOW ?= ./mr-bolt-workflow.sh
 BOLT_BUILD_DIR ?= build/bolt
 BOLT_CXX ?= clang++
 BOLT_RUN_ARGS ?=
@@ -44,7 +44,7 @@ SHA256SUM ?= sha256sum
 READELF ?= readelf
 MR_BUILD_EPOCH := $(shell date +%s)
 TMP_BASE_DIR ?= /dev/shm
-TMP_COMPILER_LAUNCHER := $(abspath ./misc/mr-compiler-temp.sh)
+TMP_COMPILER_LAUNCHER := $(abspath ./mr-compiler-temp.sh)
 TMP_RUN = $(TMP_COMPILER_LAUNCHER)
 
 TVISION_SOURCE_DIR = ./tvision
@@ -134,7 +134,7 @@ PHASE1_REPRO_PROBE_OBJECT = misc/mr_phase1_repro_probe.o
 MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET = regression/mr_workspace_service_context_probe
 MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE = regression/mr_workspace_service_context_probe.cpp
 MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT = regression/mr_workspace_service_context_probe.o
-MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
+MRMAC_V1_SUITE_SCRIPT = ./run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
 HELP_MARKDOWN_GENERATOR = ./generate_help_markdown.sh
@@ -689,6 +689,9 @@ CONTEXT_ARCHIVE_ITEMS = \
 	README.md \
 	generate_about_quotes.sh \
 	generate_tvision_help.sh \
+	mr-bolt-workflow.sh \
+	mr-compiler-temp.sh \
+	run_mrmac_v1_suite.sh \
 	mr.cpp \
 	mr.hlp \
 	app \
