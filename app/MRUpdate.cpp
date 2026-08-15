@@ -543,6 +543,7 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 		return true;
 	}
 	if (result.task.executionOwnerLocalId == kUpdatePackageOwner) {
+		bool detachedSudoAuthorization = false;
 		storeUpdateInt("busy", 0);
 		const UpdatePackagePayload *rawPayload = dynamic_cast<const UpdatePackagePayload *>(result.payload.get());
 		if (!result.completed() || rawPayload == nullptr) {
@@ -551,13 +552,13 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 			return true;
 		}
 		std::shared_ptr<const UpdatePackagePayload> payload = std::dynamic_pointer_cast<const UpdatePackagePayload>(result.payload);
-		if (!mr::update_internal::ensureUpdatePrivileges()) {
+		if (!mr::update_internal::ensureUpdatePrivileges(detachedSudoAuthorization)) {
 			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 			return true;
 		}
 		storeUpdateInt("busy", 1);
 		const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::Custom, 0, 0, mr::coprocessor::ExecutionOwnerKind::Worker, kUpdateApplyOwner, "application update install",
-		                                                                            [payload](const mr::coprocessor::TaskInfo &task) { return mr::update_internal::applyUpdatePackage(task, payload); });
+		                                                                            [payload, detachedSudoAuthorization](const mr::coprocessor::TaskInfo &task) { return mr::update_internal::applyUpdatePackage(task, payload, detachedSudoAuthorization); });
 		if (taskId == 0) {
 			storeUpdateInt("busy", 0);
 			postUpdateError("Unable to start the update installation worker.");

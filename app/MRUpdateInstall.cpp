@@ -200,6 +200,20 @@ void redirectToNull(int fd) {
 	}
 }
 
+bool validateSudoWithoutPassword() {
+	const pid_t child = ::fork();
+	if (child < 0) return false;
+	if (child == 0) {
+		redirectToNull(STDIN_FILENO);
+		redirectToNull(STDOUT_FILENO);
+		redirectToNull(STDERR_FILENO);
+		char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-n"), const_cast<char *>("-v"), nullptr};
+		::execv(kSudoExecutable, args);
+		::_exit(127);
+	}
+	return waitForSuccessfulExit(child);
+}
+
 bool promptSudoPassword(char password[kPasswordCapacity], std::size_t &passwordLength) {
 	passwordLength = 0;
 	if (TProgram::deskTop == nullptr) return false;
@@ -292,7 +306,7 @@ bool currentExecutableIsSystemBinary() {
 	return std::strcmp(path.data(), kInstalledBinary) == 0 && installedBinaryIsTrusted();
 }
 
-bool applyPackageThroughSudo(const UpdatePackagePayload &package, std::string &error) {
+bool applyPackageThroughSudo(const UpdatePackagePayload &package, bool detachedSudoAuthorization, std::string &error) {
 	int inputPipe[2] = {-1, -1};
 	int errorPipe[2] = {-1, -1};
 	if (!installedBinaryIsTrusted()) {
@@ -317,7 +331,7 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, std::string &e
 		return false;
 	}
 	if (child == 0) {
-		if (::setsid() < 0) ::_exit(127);
+		if (detachedSudoAuthorization && ::setsid() < 0) ::_exit(127);
 		::close(inputPipe[1]);
 		::close(errorPipe[0]);
 		::dup2(inputPipe[0], STDIN_FILENO);
@@ -546,33 +560,38 @@ const std::array<UpdateTarget, kUpdateFileCount> kUpdateTargets = {{
 	{"share/licenses/mr/TVISION-COPYRIGHT", "license_sha256", "usr", "local/share", "licenses/mr", "TVISION-COPYRIGHT", 0644, 4 * 1024 * 1024},
 }};
 
-bool ensureUpdatePrivileges() {
+bool ensureUpdatePrivileges(bool &detachedSudoAuthorization) {
 	char password[kPasswordCapacity]{};
 	std::size_t passwordLength = 0;
 
+	detachedSudoAuthorization = false;
 	if (::geteuid() == 0) return true;
 	if (::access(kSudoExecutable, X_OK) != 0) {
 		mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, "sudo is required for the system update.", mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 		return false;
 	}
+	if (validateSudoWithoutPassword()) return true;
 	if (!promptSudoPassword(password, passwordLength)) {
 		secureClear(password, sizeof(password));
 		mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, "Update cancelled.", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 		return false;
 	}
-	if (validateSudoWithPassword(password, passwordLength)) return true;
+	if (validateSudoWithPassword(password, passwordLength)) {
+		detachedSudoAuthorization = true;
+		return true;
+	}
 	mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, "sudo authentication failed.", mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 	return false;
 }
 
-mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package) {
+mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package, bool detachedSudoAuthorization) {
 	mr::coprocessor::Result result;
 	std::string error;
 	if (task.cancelRequested()) {
 		result.status = mr::coprocessor::TaskStatus::Cancelled;
 		return result;
 	}
-	if (package == nullptr || !applyPackageThroughSudo(*package, error)) {
+	if (package == nullptr || !applyPackageThroughSudo(*package, detachedSudoAuthorization, error)) {
 		result.status = mr::coprocessor::TaskStatus::Failed;
 		result.error = error.empty() ? "Unable to install update." : error;
 		return result;

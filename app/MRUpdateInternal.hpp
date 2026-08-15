@@ -73,8 +73,8 @@ bool parseManifest(const std::vector<unsigned char> &bytes, UpdateManifest &mani
 bool verifyManifestSignature(const std::vector<unsigned char> &manifest, const std::vector<unsigned char> &signature, std::string &error);
 std::string sha256Hex(const std::vector<unsigned char> &bytes);
 
-bool ensureUpdatePrivileges();
-mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package);
+bool ensureUpdatePrivileges(bool &detachedSudoAuthorization);
+mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package, bool detachedSudoAuthorization);
 bool showChangedAndRestart(const UpdateAppliedPayload &payload);
 bool runInternalUpdateApply(std::string &error);
 

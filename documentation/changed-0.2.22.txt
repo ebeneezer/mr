@@ -1,0 +1,3 @@
+Changed in 0.2.22:
+- Reuse an active sudo authorization without showing the Superuser Password dialog.
+- Preserve the detached password path when no active sudo authorization exists.
