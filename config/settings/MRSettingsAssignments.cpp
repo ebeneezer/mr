@@ -50,6 +50,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
+	if (!setConfiguredColorOutputMode(MRColorOutputMode::RgbAutomatic, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
 	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;
@@ -510,6 +511,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				MRScrollbarVisibility visibility = MRScrollbarVisibility::Smart;
 				if (!parseScrollbarVisibilityLiteral(value, visibility, errorMessage)) return false;
 				return setConfiguredScrollbarVisibility(visibility, errorMessage);
+			}
+			if (upper == "COLOR_OUTPUT_MODE") {
+				MRColorOutputMode mode = MRColorOutputMode::RgbAutomatic;
+				if (!parseColorOutputModeLiteral(value, mode, errorMessage)) return false;
+				return setConfiguredColorOutputMode(mode, errorMessage);
 			}
 			if (upper == "TRACK_COMPILER_WARNINGS") {
 				bool parsed = false;

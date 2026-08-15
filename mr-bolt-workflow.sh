@@ -9,7 +9,7 @@ if [[ -z "$operation" ]]; then
 fi
 shift
 
-repo_root=$(cd "$(dirname "$0")/.." && pwd)
+repo_root=$(cd "$(dirname "$0")" && pwd)
 cd "$repo_root"
 
 build_root=${MR_BOLT_BUILD_DIR:-build/bolt}
@@ -186,7 +186,7 @@ write_active_launcher() {
 		printf '%s\n' 'mrbolt_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)'
 		printf 'mrbolt_build_root=%q\n' "$build_root_relative"
 		printf 'mrbolt_cohort_dir=%q\n' "$cohort_repo_relative"
-		printf '%s\n' 'exec env MR_BOLT_BUILD_DIR="$mrbolt_build_root" MR_BOLT_COHORT_DIR="$mrbolt_cohort_dir" "$mrbolt_root/misc/mr-bolt-workflow.sh" record -- "$@"'
+		printf '%s\n' 'exec env MR_BOLT_BUILD_DIR="$mrbolt_build_root" MR_BOLT_COHORT_DIR="$mrbolt_cohort_dir" "$mrbolt_root/mr-bolt-workflow.sh" record -- "$@"'
 	} > "$launcher_temp"
 	chmod 755 "$launcher_temp"
 	mv -f "$launcher_temp" "$launcher_path"
@@ -294,7 +294,7 @@ build_seed() {
 	cxx_flags="-Wall -g -O3 -DNDEBUG -DMR_BUILD_EPOCH=$comparison_epoch -march=x86-64 -mtune=generic $compiler_extra -std=\$(CXXSTD) \$(PTHREAD_FLAGS) \$(INCLUDES)"
 	c_flags="-Wall -g -O3 -DNDEBUG -march=x86-64 -mtune=generic $compiler_extra \$(INCLUDES)"
 	link_flags="\$(PTHREAD_FLAGS) \$(TVISION_LIB) \$(PCRE2_LIB) \$(NCURSESW_LIB) \$(GPM_LIB) \$(TINFO_LIB) \$(PDF_EXPORT_LIBS) -Wl,--emit-relocs -Wl,--build-id=sha1 -Wl,--discard-sframe"
-	tvision_flags="-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$cc -DCMAKE_CXX_COMPILER=$cxx -DCMAKE_C_COMPILER_LAUNCHER=$repo_root/misc/mr-compiler-temp.sh -DCMAKE_CXX_COMPILER_LAUNCHER=$repo_root/misc/mr-compiler-temp.sh -DCMAKE_C_FLAGS_RELEASE=-O3\\ -DNDEBUG\\ -march=x86-64\\ -mtune=generic\\ $compiler_extra -DCMAKE_CXX_FLAGS_RELEASE=-O3\\ -DNDEBUG\\ -march=x86-64\\ -mtune=generic\\ $compiler_extra -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_EXTENSIONS=ON -DTV_BUILD_EXAMPLES=OFF -DTV_BUILD_TESTS=OFF -DTV_BUILD_AVSCOLOR=OFF -DTV_OPTIMIZE_BUILD=ON"
+	tvision_flags="-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$cc -DCMAKE_CXX_COMPILER=$cxx -DCMAKE_C_COMPILER_LAUNCHER=$repo_root/mr-compiler-temp.sh -DCMAKE_CXX_COMPILER_LAUNCHER=$repo_root/mr-compiler-temp.sh -DCMAKE_C_FLAGS_RELEASE=-O3\\ -DNDEBUG\\ -march=x86-64\\ -mtune=generic\\ $compiler_extra -DCMAKE_CXX_FLAGS_RELEASE=-O3\\ -DNDEBUG\\ -march=x86-64\\ -mtune=generic\\ $compiler_extra -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_EXTENSIONS=ON -DTV_BUILD_EXAMPLES=OFF -DTV_BUILD_TESTS=OFF -DTV_BUILD_AVSCOLOR=OFF -DTV_OPTIMIZE_BUILD=ON"
 
 	MAKEFLAGS= MFLAGS= MAKELEVEL=0 "$make_command" clean-tvision CXX="$cxx" CC="$cc"
 	MAKEFLAGS= MFLAGS= MAKELEVEL=0 "$make_command" tvision-build CXX="$cxx" CC="$cc" TVISION_CMAKE_FLAGS="$tvision_flags"

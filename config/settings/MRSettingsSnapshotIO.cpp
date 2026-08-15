@@ -89,6 +89,10 @@ std::string formatScrollbarVisibilityLiteral(MRScrollbarVisibility visibility) {
 	return visibility == MRScrollbarVisibility::Always ? kScrollbarVisibilityAlways : kScrollbarVisibilitySmart;
 }
 
+std::string formatColorOutputModeLiteral(MRColorOutputMode mode) {
+	return mode == MRColorOutputMode::TerminalPalette ? "TERMINAL_PALETTE" : "RGB_AUTOMATIC";
+}
+
 std::string formatUiIndentStyleLiteral(MRUiIndentStyle style) {
 	switch (style) {
 		case MRUiIndentStyle::KandR4:
@@ -425,6 +429,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
 	snapshot.compilerErrorMessagePlacement = configuredCompilerErrorMessagePlacement();
 	snapshot.scrollbarVisibility = configuredScrollbarVisibility();
+	snapshot.colorOutputMode = configuredColorOutputMode();
 	snapshot.trackCompilerWarnings = configuredTrackCompilerWarnings();
 	snapshot.trackCompilerNotes = configuredTrackCompilerNotes();
 	snapshot.uiIndentStyle = configuredUiIndentStyle();
@@ -615,6 +620,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
 	source += "MRSETUP('COMPILER_ERROR_MESSAGE_PLACEMENT', '" + escapeMrmacSingleQuotedLiteral(formatCompilerErrorMessagePlacementLiteral(snapshot.compilerErrorMessagePlacement)) + "');\n";
 	source += "MRSETUP('SCROLLBAR_VISIBILITY', '" + escapeMrmacSingleQuotedLiteral(formatScrollbarVisibilityLiteral(snapshot.scrollbarVisibility)) + "');\n";
+	source += "MRSETUP('COLOR_OUTPUT_MODE', '" + escapeMrmacSingleQuotedLiteral(formatColorOutputModeLiteral(snapshot.colorOutputMode)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_WARNINGS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerWarnings)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_NOTES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerNotes)) + "');\n";
 	source += "MRSETUP('UI_INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(formatUiIndentStyleLiteral(snapshot.uiIndentStyle)) + "');\n";

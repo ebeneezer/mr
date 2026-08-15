@@ -121,24 +121,30 @@ void writeStringList(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *
 }
 
 template <std::size_t Count>
-void readColorArray(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, std::array<unsigned char, Count> &values) {
+void readColorArray(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, std::array<MRRgbColorAttribute, Count> &values) {
 	MRVMHashStore &store = runtimeKv.globalStore();
 
 	if (!mrvmHashContainsValue(store, store, parent, key)) return;
 	const Value stored = mrvmHashReadValue(store, store, parent, key);
-	if (stored.type != TYPE_INT_ARRAY || stored.arrayValues.size() != Count) return;
-	for (std::size_t i = 0; i < Count; ++i)
-		if (stored.arrayValues[i].type == TYPE_INT) values[i] = static_cast<unsigned char>(stored.arrayValues[i].i);
+	if (stored.type != TYPE_INT_ARRAY || stored.arrayValues.size() != Count * 2) return;
+	for (const Value &element : stored.arrayValues)
+		if (element.type != TYPE_INT || element.i < 0 || element.i > 0xFFFFFF) return;
+	for (std::size_t i = 0; i < Count; ++i) {
+		values[i].foregroundRgb = static_cast<std::uint32_t>(stored.arrayValues[i * 2].i);
+		values[i].backgroundRgb = static_cast<std::uint32_t>(stored.arrayValues[i * 2 + 1].i);
+	}
 }
 
 template <std::size_t Count>
-void writeColorArray(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, const std::array<unsigned char, Count> &values) {
+void writeColorArray(MRVMRuntimeKv &runtimeKv, const Value &parent, const char *key, const std::array<MRRgbColorAttribute, Count> &values) {
 	MRVMHashStore &store = runtimeKv.globalStore();
 	Value array = mrvmMakeArrayValue(TYPE_INT);
 	array.globalStorage = true;
-	array.arrayValues.reserve(values.size());
-	for (unsigned char value : values)
-		array.arrayValues.push_back(mrvmMakeInt(value));
+	array.arrayValues.reserve(values.size() * 2);
+	for (const MRRgbColorAttribute &value : values) {
+		array.arrayValues.push_back(mrvmMakeInt(static_cast<int>(value.foregroundRgb)));
+		array.arrayValues.push_back(mrvmMakeInt(static_cast<int>(value.backgroundRgb)));
+	}
 	mrvmHashWriteValue(store, store, parent, key, array);
 }
 
@@ -422,7 +428,7 @@ MRColorSetupSettings configuredColorSettings() {
 	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	Value parent = settingsBranch(runtimeKv, "colors");
-	MRColorSetupSettings colors;
+	MRColorSetupSettings colors = resolveColorSetupDefaults();
 	readColorArray(runtimeKv, parent, "window", colors.windowColors);
 	readColorArray(runtimeKv, parent, "menuDialog", colors.menuDialogColors);
 	readColorArray(runtimeKv, parent, "help", colors.helpColors);

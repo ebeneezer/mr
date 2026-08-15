@@ -45,12 +45,15 @@ std::string builtInTempDirectoryPath() {
 	return "/tmp";
 }
 
-std::string toUpperHexByte(unsigned char value) {
+std::string toUpperHexRgb(std::uint32_t value) {
 	static constexpr char digits[] = "0123456789ABCDEF";
-	std::string text(2, '0');
+	std::string text(6, '0');
 
-	text[0] = digits[(value >> 4) & 0x0F];
-	text[1] = digits[value & 0x0F];
+	for (std::size_t i = 0; i < text.size(); ++i) {
+		const std::size_t shift = (text.size() - i - 1) * 4;
+
+		text[i] = digits[(value >> shift) & 0x0Fu];
+	}
 	return text;
 }
 
@@ -106,26 +109,33 @@ bool ensureDirectoryTree(const std::string &directoryPath, std::string *errorMes
 	return true;
 }
 
-template <std::size_t N> std::string formatColorListLiteral(const std::array<unsigned char, N> &values) {
-	std::string out = "v1:";
+template <std::size_t N> std::string formatColorListLiteral(const std::array<MRRgbColorAttribute, N> &values) {
+	std::string out = "rgb24:";
 
 	for (std::size_t i = 0; i < values.size(); ++i) {
 		if (i != 0) out.push_back(',');
-		out += toUpperHexByte(values[i]);
+		out += toUpperHexRgb(values[i].foregroundRgb);
+		out.push_back('/');
+		out += toUpperHexRgb(values[i].backgroundRgb);
 	}
 	return out;
 }
 
-std::string formatWindowColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
-	std::string out = formatColorListLiteral(values);
-	out[1] = '7';
-	return out;
-}
+void appendColorListProcedure(std::string &source, const char *name, const std::string &literal) {
+	static constexpr std::size_t kMrmacStringLiteralMaximum = 254;
 
-std::string formatFileCompareColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kFileCompareCount> &values) {
-	std::string out = formatColorListLiteral(values);
-	out[1] = '2';
-	return out;
+	source += name;
+	source += "('";
+	if (literal.size() <= kMrmacStringLiteralMaximum) {
+		source += literal;
+		source += "');\n";
+		return;
+	}
+	const std::size_t split = literal.rfind(',', kMrmacStringLiteralMaximum - 1);
+	source += literal.substr(0, split + 1);
+	source += "', '";
+	source += literal.substr(split + 1);
+	source += "');\n";
 }
 
 } // namespace
@@ -137,7 +147,7 @@ std::string defaultColorThemePathForSettings(std::string_view settingsPath) {
 }
 
 bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments, bool *upgradeRequired, std::string *errorMessage) {
-	static const std::regex pattern("(?:MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)|([A-Z_][A-Z0-9_]*)\\s*\\(\\s*'((?:''|[^'])*)'\\s*\\))", std::regex::icase);
+	static const std::regex pattern("(?:MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)|([A-Z_][A-Z0-9_]*)\\s*\\(\\s*'((?:''|[^'])*)'\\s*(?:,\\s*'((?:''|[^'])*)')?\\s*\\))", std::regex::icase);
 	bool localUpgradeRequired = false;
 	assignments.clear();
 
@@ -147,7 +157,7 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 	for (auto it = begin; it != end; ++it) {
 		const bool mrsetupRecord = (*it)[1].matched;
 		std::string key = trimAscii(unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? (*it)[1].str() : (*it)[3].str()));
-		std::string value = unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? (*it)[2].str() : (*it)[4].str());
+		std::string value = unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? (*it)[2].str() : (*it)[4].str() + (*it)[5].str());
 		if (key.empty()) continue;
 		assignments[upperAscii(key)] = value;
 	}
@@ -167,14 +177,14 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 	}
 
 	MRColorSetupSettings defaults = resolveColorSetupDefaults();
-	if (!assignments.contains("WINDOWCOLORS")) assignments["WINDOWCOLORS"] = formatWindowColorListLiteral(defaults.windowColors);
+	if (!assignments.contains("WINDOWCOLORS")) assignments["WINDOWCOLORS"] = formatColorListLiteral(defaults.windowColors);
 	if (!assignments.contains("MENUDIALOGCOLORS")) assignments["MENUDIALOGCOLORS"] = formatColorListLiteral(defaults.menuDialogColors);
 	if (!assignments.contains("HELPCOLORS")) assignments["HELPCOLORS"] = formatColorListLiteral(defaults.helpColors);
 	if (!assignments.contains("OTHERCOLORS")) assignments["OTHERCOLORS"] = formatColorListLiteral(defaults.otherColors);
 	if (!assignments.contains("MINIMAPCOLORS")) assignments["MINIMAPCOLORS"] = formatColorListLiteral(defaults.miniMapColors);
 	if (!assignments.contains("FILECOMPAREMINIMAPCOLORS")) assignments["FILECOMPAREMINIMAPCOLORS"] = formatColorListLiteral(defaults.fileCompareMiniMapColors);
 	if (!assignments.contains("CODECOLORS")) assignments["CODECOLORS"] = formatColorListLiteral(defaults.codeColors);
-	if (!assignments.contains("FILECOMPARECOLORS")) assignments["FILECOMPARECOLORS"] = formatFileCompareColorListLiteral(defaults.fileCompareColors);
+	if (!assignments.contains("FILECOMPARECOLORS")) assignments["FILECOMPARECOLORS"] = formatColorListLiteral(defaults.fileCompareColors);
 	if (!assignments.contains("DEBUGGERCOLORS")) assignments["DEBUGGERCOLORS"] = formatColorListLiteral(defaults.debuggerColors);
 	if (upgradeRequired != nullptr) *upgradeRequired = localUpgradeRequired;
 	if (errorMessage != nullptr) errorMessage->clear();
@@ -236,15 +246,15 @@ std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors) {
 	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
 	source += "THEME_RESET();\n";
 	source += "THEME_VERSION('" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
-	source += "WINDOWCOLORS('" + escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) + "');\n";
-	source += "MENUDIALOGCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
-	source += "HELPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";
-	source += "OTHERCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) + "');\n";
-	source += "MINIMAPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) + "');\n";
-	source += "FILECOMPAREMINIMAPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.fileCompareMiniMapColors)) + "');\n";
-	source += "CODECOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.codeColors)) + "');\n";
-	source += "FILECOMPARECOLORS('" + escapeMrmacSingleQuotedLiteral(formatFileCompareColorListLiteral(colors.fileCompareColors)) + "');\n";
-	source += "DEBUGGERCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.debuggerColors)) + "');\n";
+	appendColorListProcedure(source, "WINDOWCOLORS", formatColorListLiteral(colors.windowColors));
+	appendColorListProcedure(source, "MENUDIALOGCOLORS", formatColorListLiteral(colors.menuDialogColors));
+	appendColorListProcedure(source, "HELPCOLORS", formatColorListLiteral(colors.helpColors));
+	appendColorListProcedure(source, "OTHERCOLORS", formatColorListLiteral(colors.otherColors));
+	appendColorListProcedure(source, "MINIMAPCOLORS", formatColorListLiteral(colors.miniMapColors));
+	appendColorListProcedure(source, "FILECOMPAREMINIMAPCOLORS", formatColorListLiteral(colors.fileCompareMiniMapColors));
+	appendColorListProcedure(source, "CODECOLORS", formatColorListLiteral(colors.codeColors));
+	appendColorListProcedure(source, "FILECOMPARECOLORS", formatColorListLiteral(colors.fileCompareColors));
+	appendColorListProcedure(source, "DEBUGGERCOLORS", formatColorListLiteral(colors.debuggerColors));
 	if (!themeName.empty()) source += "THEME_NAME('" + escapeMrmacSingleQuotedLiteral(themeName) + "');\n";
 	source += "END_MACRO;\n";
 	return source;
@@ -303,9 +313,16 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 	    MRColorSetupGroup::FileCompare,
 	    MRColorSetupGroup::Debugger,
 	};
+	std::string fallbackGroups;
 	for (MRColorSetupGroup group : groups) {
 		const char *key = colorSetupGroupKey(group);
-		if (key == nullptr || !applyColorSetupValueInternal(colors, key, assignments[key], errorMessage)) return false;
+		std::string parseError;
+
+		if (key == nullptr) continue;
+		if (!applyColorSetupValueInternal(colors, key, assignments[key], &parseError)) {
+			if (!fallbackGroups.empty()) fallbackGroups += ", ";
+			fallbackGroups += key;
+		}
 	}
 	storeConfiguredColorSettings(colors);
 	themeName = trimAscii(assignments["THEME_NAME"]);
@@ -313,11 +330,14 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 	if (!setConfiguredColorThemeDisplayName(themeName, errorMessage)) return false;
 	if (!setConfiguredColorThemeFilePath(normalized, errorMessage)) return false;
 	recordSettingsRuntimeWrite();
-	if (errorMessage != nullptr) errorMessage->clear();
+	if (errorMessage != nullptr) {
+		if (fallbackGroups.empty()) errorMessage->clear();
+		else *errorMessage = "Theme loaded with RGB defaults for: " + fallbackGroups;
+	}
 	return true;
 }
 
-bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage) {
+bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<MRRgbColorAttribute, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
 	std::string source;
 	std::map<std::string, std::string> assignments;

@@ -800,6 +800,26 @@ MRScrollbarVisibility configuredScrollbarVisibility() {
 	return static_cast<MRScrollbarVisibility>(configuredRuntimeInt("scrollbarVisibility", static_cast<int>(MRScrollbarVisibility::Smart)));
 }
 
+bool setConfiguredColorOutputMode(MRColorOutputMode mode, std::string *errorMessage) {
+	if (mode != MRColorOutputMode::RgbAutomatic && mode != MRColorOutputMode::TerminalPalette) mode = MRColorOutputMode::RgbAutomatic;
+	if (configuredColorOutputModeValue() != mode) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("colorOutputMode", static_cast<int>(mode));
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRColorOutputMode configuredColorOutputMode() {
+	recordSettingsRuntimeRead();
+	return configuredColorOutputModeValue();
+}
+
+MRColorOutputMode configuredColorOutputModeValue() {
+	const int stored = configuredRuntimeInt("colorOutputMode", static_cast<int>(MRColorOutputMode::RgbAutomatic));
+
+	if (stored == static_cast<int>(MRColorOutputMode::TerminalPalette)) return MRColorOutputMode::TerminalPalette;
+	return MRColorOutputMode::RgbAutomatic;
+}
+
 bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage) {
 	if (configuredTrackCompilerWarnings() != enabled) markConfiguredSettingsDirty();
 	storeConfiguredRuntimeInt("trackCompilerWarnings", enabled ? 1 : 0);

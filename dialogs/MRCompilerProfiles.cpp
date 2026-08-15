@@ -141,7 +141,7 @@ class TInlineGlyphButton : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+		TAttrPair color = getColor((state & sfFocused) != 0 ? 2 : 1);
 		int x = 0;
 
 		buffer.moveChar(0, ' ', color, size.x);

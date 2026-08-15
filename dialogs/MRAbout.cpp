@@ -260,12 +260,11 @@ class MRAboutQuoteBox : public TView {
 		    0x09  // bright blue
 		};
 		unsigned char fg;
-		unsigned char bg;
+		TColorDesired bg;
 		seed = seed * 1664525u + 1013904223u;
 		fg = kFgColors[seed % (sizeof(kFgColors) / sizeof(kFgColors[0]))];
-		bg = static_cast<unsigned char>((baseColor >> 4u) & 0x07u);
-		// Preserve DOS-style 4-bit fg + 3-bit bg mapping and keep background stable.
-		return static_cast<TColorAttr>(((bg & 0x07u) << 4u) | (fg & 0x0Fu));
+		bg = getBack(baseColor);
+		return TColorAttr(TColorDesired(fg), bg);
 	}
 
 	static char scrambleGlyph(std::uint32_t value) noexcept {

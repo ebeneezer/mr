@@ -461,13 +461,11 @@ class MacroLibraryListView : public TListViewer {
 	void draw() override {
 		TListViewer::draw();
 
-		unsigned char errorBios = 0;
+		TColorAttr errorColor;
 		short indent = hScrollBar != nullptr ? hScrollBar->value : 0;
 		short colWidth = size.x / numCols + 1;
-		TColorAttr errorColor;
 
-		if (!configuredColorSlotOverride(kMrPaletteMessageError, errorBios)) return;
-		errorColor = TColorAttr(errorBios);
+		if (!configuredColorSlotOverride(kMrPaletteMessageError, errorColor)) return;
 
 		for (short i = 0; i < size.y; ++i) {
 			for (short j = 0; j < numCols; ++j) {

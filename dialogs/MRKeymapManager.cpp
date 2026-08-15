@@ -258,7 +258,7 @@ class TInlineGlyphButton : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		const ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+		const TAttrPair color = getColor((state & sfFocused) != 0 ? 2 : 1);
 		const int x = size.x > 1 ? (size.x - 1) / 2 : 0;
 
 		buffer.moveChar(0, ' ', color, size.x);
@@ -342,11 +342,11 @@ class TSequenceDisplay : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		unsigned char configuredAttr = 0;
+		TColorAttr configuredAttr;
 		TColorAttr color = getColor(1);
 		std::string shown = mText;
 
-		if (configuredColorSlotOverride(9, configuredAttr)) color = TColorAttr(configuredAttr);
+		if (configuredColorSlotOverride(9, configuredAttr)) color = configuredAttr;
 		buffer.moveChar(0, ' ', color, size.x);
 		if (shown.size() > static_cast<std::size_t>(size.x)) shown = shown.substr(0, static_cast<std::size_t>(size.x));
 		if (!shown.empty()) buffer.moveStr(0, shown.c_str(), color, size.x);
@@ -416,13 +416,11 @@ class KeymapBindingListView : public MRColumnListView {
 	void draw() override {
 		TListBox::draw();
 
-		unsigned char errorBios = 0;
+		TColorAttr errorColor;
 		short indent = hScrollBar != nullptr ? hScrollBar->value : 0;
 		short colWidth = size.x / numCols + 1;
-		TColorAttr errorColor;
 
-		if (!configuredColorSlotOverride(kMrPaletteMessageError, errorBios)) return;
-		errorColor = TColorAttr(errorBios);
+		if (!configuredColorSlotOverride(kMrPaletteMessageError, errorColor)) return;
 
 		for (short i = 0; i < size.y; ++i)
 			for (short j = 0; j < numCols; ++j) {

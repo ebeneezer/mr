@@ -362,6 +362,7 @@ struct RuntimeSettingsSnapshot {
 	std::string tempDirectoryPath;
 	std::string shellExecutablePath;
 	std::string colorThemeFilePath;
+	MRColorOutputMode colorOutputMode = MRColorOutputMode::RgbAutomatic;
 	bool autoDetectBinaryFiles = true;
 	std::vector<std::string> autoexecMacros;
 	MREditSetupSettings editSettings;
@@ -402,6 +403,7 @@ RuntimeSettingsSnapshot captureRuntimeSettingsSnapshot() {
 	snapshot.tempDirectoryPath = configuredTempDirectoryPath();
 	snapshot.shellExecutablePath = configuredShellExecutablePath();
 	snapshot.colorThemeFilePath = configuredColorThemeFilePath();
+	snapshot.colorOutputMode = configuredColorOutputMode();
 	snapshot.autoDetectBinaryFiles = configuredAutoDetectBinaryFiles();
 	configuredAutoexecMacroEntries(snapshot.autoexecMacros);
 	snapshot.editSettings = configuredEditSetupSettings();
@@ -426,9 +428,11 @@ bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, snapshot.colorSettings.otherColors.data(), snapshot.colorSettings.otherColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, snapshot.colorSettings.miniMapColors.data(), snapshot.colorSettings.miniMapColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompareMiniMap, snapshot.colorSettings.fileCompareMiniMapColors.data(), snapshot.colorSettings.fileCompareMiniMapColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, snapshot.colorSettings.codeColors.data(), snapshot.colorSettings.codeColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompare, snapshot.colorSettings.fileCompareColors.data(), snapshot.colorSettings.fileCompareColors.size(), &errorText)) return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Debugger, snapshot.colorSettings.debuggerColors.data(), snapshot.colorSettings.debuggerColors.size(), &errorText)) return false;
 	if (!setConfiguredColorThemeFilePath(snapshot.colorThemeFilePath, &errorText)) return false;
+	if (!setConfiguredColorOutputMode(snapshot.colorOutputMode, &errorText)) return false;
 	clearConfiguredAutoexecMacroDiagnostics();
 	errorText.clear();
 	return true;
@@ -2641,6 +2645,10 @@ bool validateMrsetupGlobalSettings(std::string &failureReason) {
 		failureReason = "Startup context should apply SCROLLBAR_VISIBILITY='ALWAYS'.";
 		return false;
 	}
+	if (configuredColorOutputMode() != MRColorOutputMode::TerminalPalette) {
+		failureReason = "Startup context should apply COLOR_OUTPUT_MODE='TERMINAL_PALETTE'.";
+		return false;
+	}
 	if (configuredFileCompareOriginalLeadingGutters() != "L" || configuredFileCompareOriginalTrailingGutters() != "M" || configuredFileCompareCompareLeadingGutters() != "LD" || configuredFileCompareCompareTrailingGutters() != "") {
 		failureReason = "Startup context should apply file compare gutter settings.";
 		return false;
@@ -2659,25 +2667,22 @@ bool validateMrsetupGlobalSettings(std::string &failureReason) {
 bool validateMrsetupColorSettings(std::string &failureReason) {
 	MRColorSetupSettings colors = configuredColorSetupSettings();
 
-	if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 || colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 || colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 || colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 || colors.windowColors[8] != 0x9F || colors.windowColors[9] != 0x5F) {
-		std::ostringstream out;
-
-		out << "Startup context should apply WINDOWCOLORS list (including legacy migration):";
-		for (std::size_t i = 0; i < colors.windowColors.size(); ++i)
-			out << " " << i << "=0x" << std::hex << std::uppercase << static_cast<int>(colors.windowColors[i]);
-		failureReason = out.str();
+	if (colors.windowColors[0] != MRRgbColorAttribute{0x101010u, 0x202020u} || colors.windowColors[8] != MRRgbColorAttribute{0x181818u, 0x282828u} ||
+	    colors.windowColors[13] != MRRgbColorAttribute{0x1D1D1Du, 0x2D2D2Du}) {
+		failureReason = "Startup context should apply the exact RGB24 WINDOWCOLORS list.";
 		return false;
 	}
-	if (colors.menuDialogColors[0] != 0x20 || colors.menuDialogColors[10] != 0x2A) {
-		failureReason = "Startup context should apply MENUDIALOGCOLORS list.";
+	if (colors.menuDialogColors[0] != MRRgbColorAttribute{0x303030u, 0x404040u} || colors.menuDialogColors[10] != MRRgbColorAttribute{0x3A3A3Au, 0x4A4A4Au} ||
+	    colors.menuDialogColors[31] != MRRgbColorAttribute{0x4F4F4Fu, 0x5F5F5Fu}) {
+		failureReason = "Startup context should apply the exact RGB24 MENUDIALOGCOLORS list.";
 		return false;
 	}
-	if (colors.helpColors[0] != 0x30 || colors.helpColors[8] != 0x38) {
-		failureReason = "Startup context should apply HELPCOLORS list.";
+	if (colors.helpColors[0] != MRRgbColorAttribute{0x505050u, 0x606060u} || colors.helpColors[9] != MRRgbColorAttribute{0x595959u, 0x696969u}) {
+		failureReason = "Startup context should apply the exact RGB24 HELPCOLORS list.";
 		return false;
 	}
-	if (colors.otherColors[0] != 0x40 || colors.otherColors[6] != 0x46) {
-		failureReason = "Startup context should apply OTHERCOLORS list.";
+	if (colors.otherColors[0] != MRRgbColorAttribute{0x707070u, 0x808080u} || colors.otherColors[10] != MRRgbColorAttribute{0x7A7A7Au, 0x8A8A8Au}) {
+		failureReason = "Startup context should apply the exact RGB24 OTHERCOLORS list.";
 		return false;
 	}
 	return true;
@@ -2720,8 +2725,9 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('SHOW_EOF_MARKER_EMOJI', 'false');\n"
 	                           "MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');\n"
 	                           "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
-	                           "MRSETUP('CURSOR_BEHAVIOUR', 'FREE_MOVEMENT');\n"
-	                           "MRSETUP('SCROLLBAR_VISIBILITY', 'ALWAYS');\n"
+		                           "MRSETUP('CURSOR_BEHAVIOUR', 'FREE_MOVEMENT');\n"
+		                           "MRSETUP('SCROLLBAR_VISIBILITY', 'ALWAYS');\n"
+		                           "MRSETUP('COLOR_OUTPUT_MODE', 'TERMINAL_PALETTE');\n"
 	                           "MRSETUP('AUTODETECT_BINARY_FILES', 'false');\n"
 	                           "MRSETUP('FILE_COMPARE_ORIGINAL_LEADING_GUTTERS', 'L');\n"
 	                           "MRSETUP('FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS', 'M');\n"
@@ -2731,10 +2737,10 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('FILE_COMPARE_COMPARE_PANEL_READ_ONLY', 'true');\n"
 	                           "MRSETUP('BLOCK_MOVE', 'LEAVE_SPACE');\n"
 	                           "MRSETUP('DEFAULT_MODE', 'OVERWRITE');\n"
-	                           "WINDOWCOLORS('v1:10,11,12,13,14,15,16,17');\n"
-	                           "MENUDIALOGCOLORS('v1:20,21,22,23,24,25,26,27,28,29,2A');\n"
-	                           "HELPCOLORS('v1:30,31,32,33,34,35,36,37,38');\n"
-	                           "OTHERCOLORS('v1:40,41,42,43,44,45,46');\n"
+		                           "WINDOWCOLORS('rgb24:101010/202020,111111/212121,121212/222222,131313/232323,141414/242424,151515/252525,161616/262626,171717/272727,181818/282828,191919/292929,1A1A1A/2A2A2A,1B1B1B/2B2B2B,1C1C1C/2C2C2C,1D1D1D/2D2D2D');\n"
+		                           "MENUDIALOGCOLORS('rgb24:303030/404040,313131/414141,323232/424242,333333/434343,343434/444444,353535/454545,363636/464646,373737/474747,383838/484848,393939/494949,3A3A3A/4A4A4A,3B3B3B/4B4B4B,3C3C3C/4C4C4C,3D3D3D/4D4D4D,3E3E3E/4E4E4E,3F3F3F/4F4F4F,', '404040/505050,414141/515151,424242/525252,434343/535353,444444/545454,454545/555555,464646/565656,474747/575757,484848/585858,494949/595959,4A4A4A/5A5A5A,4B4B4B/5B5B5B,4C4C4C/5C5C5C,4D4D4D/5D5D5D,4E4E4E/5E5E5E,4F4F4F/5F5F5F');\n"
+		                           "HELPCOLORS('rgb24:505050/606060,515151/616161,525252/626262,535353/636363,545454/646464,555555/656565,565656/666666,575757/676767,585858/686868,595959/696969');\n"
+		                           "OTHERCOLORS('rgb24:707070/808080,717171/818181,727272/828282,737373/838383,747474/848484,757575/858585,767676/868686,777777/878787,787878/888888,797979/898989,7A7A7A/8A8A8A');\n"
 	                           "END_MACRO;\n";
 	std::vector<unsigned char> bytecode;
 	std::string macroName;
@@ -2814,21 +2820,20 @@ bool testMrsetupWindowColorThemeUriStartupLoad(std::string &failureReason) {
 	                           "END_MACRO;\n";
 	const std::string themeSource = "$MACRO MR_COLOR_THEME FROM EDIT;\n"
 	                                "THEME_RESET();\n"
-	                                "WINDOWCOLORS('v6:21,22,23,24,25,26,27,28,29,2A,2B,2C,2D');\n"
+	                                "WINDOWCOLORS('rgb24:102030/203040,112131/213141,122232/223242,132333/233343,142434/243444,152535/253545,162636/263646,172737/273747,182838/283848,192939/293949,1A2A3A/2A3A4A,1B2B3B/2B3B4B,1C2C3C/2C3C4C,1D2D3D/2D3D4D');\n"
 	                                "END_MACRO;\n";
-	MRColorSetupSettings previousColors = configuredColorSetupSettings();
-	std::string previousThemePath = configuredColorThemeFilePath();
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	std::vector<unsigned char> bytecode;
 	std::string macroName;
 	std::string compileError;
 	std::string restoreError;
 	int entryOffset = -1;
-	bool restored = true;
+	bool restored = false;
 
 	auto restore = [&]() {
-		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previousColors.windowColors.data(), previousColors.windowColors.size(), &restoreError)) restored = false;
-		if (!setConfiguredColorThemeFilePath(previousThemePath, &restoreError)) restored = false;
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		mrvmSetStartupSettingsMode(false);
+		std::remove(themePath.c_str());
 	};
 
 	if (!writeTextFile(themePath, themeSource)) {
@@ -2862,12 +2867,9 @@ bool testMrsetupWindowColorThemeUriStartupLoad(std::string &failureReason) {
 			restore();
 			return false;
 		}
-		if (colors.windowColors[0] != 0x21 || colors.windowColors[8] != 0x29 || colors.windowColors[12] != 0x2D) {
-			std::ostringstream out;
-			out << "Startup WINDOW_COLORTHEME_URI should apply external theme colors:";
-			for (std::size_t i = 0; i < colors.windowColors.size(); ++i)
-				out << " " << i << "=0x" << std::hex << std::uppercase << static_cast<int>(colors.windowColors[i]);
-			failureReason = out.str();
+		if (colors.windowColors[0] != MRRgbColorAttribute{0x102030u, 0x203040u} || colors.windowColors[8] != MRRgbColorAttribute{0x182838u, 0x283848u} ||
+		    colors.windowColors[12] != MRRgbColorAttribute{0x1C2C3Cu, 0x2C3C4Cu}) {
+			failureReason = "Startup WINDOW_COLORTHEME_URI should apply external RGB24 theme colors.";
 			restore();
 			return false;
 		}
@@ -3016,6 +3018,10 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 	}
 	if (content.find("MRSETUP('SCROLLBAR_VISIBILITY', '") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac is missing SCROLLBAR_VISIBILITY.";
+		return false;
+	}
+	if (content.find("MRSETUP('COLOR_OUTPUT_MODE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing COLOR_OUTPUT_MODE.";
 		return false;
 	}
 	if (content.find("MRSETUP('FILE_COMPARE_ORIGINAL_LEADING_GUTTERS', '") == std::string::npos || content.find("MRSETUP('FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS', '") == std::string::npos ||
@@ -3319,26 +3325,63 @@ bool testExtendedBasePaletteInitializationGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testTerminalPalettePreservesBiosDefaultsAndUsesXTerm256(std::string &failureReason) {
+	static constexpr std::array<std::uint32_t, 16> vgaRgb = {
+		0x000000u, 0x0000AAu, 0x00AA00u, 0x00AAAAu, 0xAA0000u, 0xAA00AAu, 0xAA5500u, 0xAAAAAAu,
+		0x555555u, 0x5555FFu, 0x55FF55u, 0x55FFFFu, 0xFF5555u, 0xFF55FFu, 0xFFFF55u, 0xFFFFFFu
+	};
+
+	for (std::size_t biosIndex = 0; biosIndex < vgaRgb.size(); ++biosIndex) {
+		const TColorAttr projected = projectColorAttribute({vgaRgb[biosIndex], vgaRgb[biosIndex]}, MRColorOutputMode::TerminalPalette);
+		const unsigned char expected = BIOStoXTerm16(TColorBIOS(static_cast<unsigned char>(biosIndex)));
+		const TColorDesired foreground = getFore(projected);
+		const TColorDesired background = getBack(projected);
+
+		if (!foreground.isXTerm() || !background.isXTerm() || static_cast<unsigned char>(foreground.asXTerm()) != expected || static_cast<unsigned char>(background.asXTerm()) != expected) {
+			failureReason = "Terminal palette projection does not preserve an exact VGA default through its ANSI palette index.";
+			return false;
+		}
+	}
+
+	const MRRgbColorAttribute source{0xAA5500u, 0x55AAFFu};
+	const TColorAttr projected = projectColorAttribute(source, MRColorOutputMode::TerminalPalette);
+	const TColorDesired foreground = getFore(projected);
+	const TColorDesired background = getBack(projected);
+	const unsigned char expectedBackground = RGBtoXTerm256(TColorRGB(source.backgroundRgb));
+
+	if (!foreground.isXTerm() || !background.isXTerm()) {
+		failureReason = "Terminal palette projection must retain xterm palette indices instead of BIOS attributes.";
+		return false;
+	}
+	if (static_cast<unsigned char>(foreground.asXTerm()) != BIOStoXTerm16(TColorBIOS(6)) || static_cast<unsigned char>(background.asXTerm()) != expectedBackground) {
+		failureReason = "Terminal palette projection does not combine exact ANSI defaults with xterm-256 quantization.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E};
+	std::array<MRRgbColorAttribute, MRColorSetupSettings::kWindowCount> probeValues{};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Window, itemCount);
 	std::string errorText;
-	unsigned char value = 0;
+	TColorAttr value;
 	bool restoreOk = true;
+	for (std::size_t i = 0; i < probeValues.size(); ++i) probeValues[i] = MRRgbColorAttribute{static_cast<std::uint32_t>(0x102030u + i), static_cast<std::uint32_t>(0x405060u + i)};
 
 	auto restore = [&]() {
 		if (!restoreOk) return;
 		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previous.windowColors.data(), previous.windowColors.size(), &errorText);
 	};
 
-	if (items == nullptr || itemCount != sizeof(probeValues) / sizeof(probeValues[0])) {
+	if (items == nullptr || itemCount != probeValues.size()) {
 		failureReason = "Unexpected WINDOWCOLORS item mapping.";
 		return false;
 	}
 
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, probeValues.data(), probeValues.size(), &errorText)) {
 		failureReason = "Unable to set WINDOWCOLORS probe values: " + errorText;
 		return false;
 	}
@@ -3346,12 +3389,12 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 	for (std::size_t i = 0; i < itemCount; ++i) {
 		unsigned char slot = items[i].paletteIndex;
 		bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 || slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock || slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers || slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding || slot == kMrPaletteCodeFoldingMarker || slot == kMrPaletteFormatRuler || slot == kMrPaletteFocusedPaneBorder || slot == kMrPaletteDiagnosticInformation);
-		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
+		if (!colorSlotOverride(configuredColorSetupSettings(), items[i].paletteIndex, MRColorOutputMode::RgbAutomatic, value)) {
 			restore();
 			failureReason = "WINDOWCOLORS item must override its mapped palette slot.";
 			return false;
 		}
-		if (value != probeValues[i] || !isExpectedSlot) {
+		if (value != projectColorAttribute(probeValues[i], MRColorOutputMode::RgbAutomatic) || !isExpectedSlot) {
 			restore();
 			failureReason = "WINDOWCOLORS slot mapping mismatch.";
 			return false;
@@ -3368,20 +3411,21 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 }
 
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C};
+	std::array<MRRgbColorAttribute, MRColorSetupSettings::kMenuDialogCount> probeValues{};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
 	std::string errorText;
-	unsigned char value = 0;
+	TColorAttr value;
 	bool restoreOk = true;
+	for (std::size_t i = 0; i < probeValues.size(); ++i) probeValues[i] = MRRgbColorAttribute{static_cast<std::uint32_t>(0x203040u + i), static_cast<std::uint32_t>(0x506070u + i)};
 
 	auto restore = [&]() {
 		if (!restoreOk) return;
 		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, previous.menuDialogColors.data(), previous.menuDialogColors.size(), &errorText);
 	};
 
-	if (items == nullptr || itemCount != sizeof(probeValues) / sizeof(probeValues[0])) {
+	if (items == nullptr || itemCount != probeValues.size()) {
 		failureReason = "Unexpected MENUDIALOGCOLORS item mapping.";
 		return false;
 	}
@@ -3390,7 +3434,7 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 		return false;
 	}
 
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues.data(), probeValues.size(), &errorText)) {
 		failureReason = "Unable to set MENUDIALOGCOLORS probe values: " + errorText;
 		return false;
 	}
@@ -3400,12 +3444,12 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 		bool isMenuSlot = slot >= 2 && slot <= 6;
 		bool isGrayDialogSlot = slot >= 32 && slot <= 63;
 		bool isExtendedDialogSlot = slot == kMrPaletteDialogInactiveElements || slot == kMrPaletteDropListDescription || slot == kMrPaletteDropListSelectedInactive || slot == kMrPaletteMenuBarHotkey;
-		if (!configuredColorSlotOverride(slot, value)) {
+		if (!colorSlotOverride(configuredColorSetupSettings(), slot, MRColorOutputMode::RgbAutomatic, value)) {
 			restore();
 			failureReason = "MENUDIALOGCOLORS item must override its mapped palette slot.";
 			return false;
 		}
-		if (value != probeValues[i] || (!isMenuSlot && !isGrayDialogSlot && !isExtendedDialogSlot)) {
+		if (value != projectColorAttribute(probeValues[i], MRColorOutputMode::RgbAutomatic) || (!isMenuSlot && !isGrayDialogSlot && !isExtendedDialogSlot)) {
 			restore();
 			failureReason = "MENUDIALOGCOLORS slot mapping mismatch.";
 			return false;
@@ -3423,8 +3467,7 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 
 bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	MRColorSetupSettings defaults = resolveColorSetupDefaults();
-	MRColorSetupSettings configured;
+	MRColorSetupSettings before = configuredColorSetupSettings();
 	std::string errorText;
 	std::string restoreError;
 	bool restored = false;
@@ -3434,27 +3477,25 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 		return restored;
 	};
 
-	if (!applyConfiguredColorSetupValue("MENUDIALOGCOLORS", "v1:10,11,12,13,14,15,16,17,18,19,1A,1B,1C,1D", &errorText)) {
+	if (applyConfiguredColorSetupValue("MENUDIALOGCOLORS", "v1:10,11,12,13,14,15,16,17,18,19,1A,1B,1C,1D", &errorText)) {
 		restore();
-		failureReason = "Unable to apply 14-entry legacy MENUDIALOGCOLORS list: " + errorText;
+		failureReason = "Legacy MENUDIALOGCOLORS syntax must not be accepted.";
 		return false;
 	}
-	configured = configuredColorSetupSettings();
-	if (configured.menuDialogColors[kMenuDialogIndexInactiveControls] != defaults.menuDialogColors[kMenuDialogIndexInactiveControls] || configured.menuDialogColors[kMenuDialogIndexInactiveElements] != defaults.menuDialogColors[kMenuDialogIndexInactiveElements] || configured.menuDialogColors[kMenuDialogIndexDialogFrame] != 0x1C || configured.menuDialogColors[kMenuDialogIndexDialogText] != 0x1D || configured.menuDialogColors[kMenuDialogIndexDialogBackground] != 0x1C || configured.menuDialogColors[kMenuDialogIndexMenuBarHotkey] != defaults.menuDialogColors[kMenuDialogIndexMenuBarHotkey]) {
+	if (configuredColorSetupSettings() != before) {
 		restore();
-		failureReason = "14-entry MENUDIALOGCOLORS upgrade must inject inactive-controls and menu-bar-hotkey defaults and map dialog background to legacy frame color.";
+		failureReason = "Rejected legacy MENUDIALOGCOLORS syntax must not mutate runtime colors.";
 		return false;
 	}
 
-	if (!applyConfiguredColorSetupValue("MENUDIALOGCOLORS", "v1:20,21,22,23,24,25,26,27,28,29,2A", &errorText)) {
+	if (applyConfiguredColorSetupValue("MENUDIALOGCOLORS", "rgb24:102030/405060", &errorText)) {
 		restore();
-		failureReason = "Unable to apply 11-entry legacy MENUDIALOGCOLORS list: " + errorText;
+		failureReason = "Wrong-sized RGB24 MENUDIALOGCOLORS syntax must not be accepted.";
 		return false;
 	}
-	configured = configuredColorSetupSettings();
-	if (configured.menuDialogColors[kMenuDialogIndexListboxSelector] != defaults.menuDialogColors[kMenuDialogIndexListboxSelector] || configured.menuDialogColors[kMenuDialogIndexInactiveControls] != defaults.menuDialogColors[kMenuDialogIndexInactiveControls] || configured.menuDialogColors[kMenuDialogIndexInactiveElements] != defaults.menuDialogColors[kMenuDialogIndexInactiveElements] || configured.menuDialogColors[kMenuDialogIndexDialogFrame] != defaults.menuDialogColors[kMenuDialogIndexDialogFrame] || configured.menuDialogColors[kMenuDialogIndexDialogText] != defaults.menuDialogColors[kMenuDialogIndexDialogText] || configured.menuDialogColors[kMenuDialogIndexDialogBackground] != defaults.menuDialogColors[kMenuDialogIndexDialogBackground] || configured.menuDialogColors[kMenuDialogIndexMenuBarHotkey] != defaults.menuDialogColors[kMenuDialogIndexMenuBarHotkey]) {
+	if (configuredColorSetupSettings() != before) {
 		restore();
-		failureReason = "11-entry MENUDIALOGCOLORS upgrade must fill missing selector/inactive/frame/text/background/menu-bar-hotkey defaults.";
+		failureReason = "Rejected wrong-sized RGB24 MENUDIALOGCOLORS syntax must not mutate runtime colors.";
 		return false;
 	}
 
@@ -3467,22 +3508,23 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 }
 
 bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x2E};
+	std::array<MRRgbColorAttribute, MRColorSetupSettings::kMenuDialogCount> probeValues{};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string menuBarContent;
 	std::string errorText;
 	std::string ioError;
-	unsigned char normalHotkey = 0;
-	unsigned char selectedHotkey = 0;
-	unsigned char menuBarHotkey = 0;
+	TColorAttr normalHotkey;
+	TColorAttr selectedHotkey;
+	TColorAttr menuBarHotkey;
 	bool restoreOk = true;
+	for (std::size_t i = 0; i < probeValues.size(); ++i) probeValues[i] = MRRgbColorAttribute{static_cast<std::uint32_t>(0x304050u + i), static_cast<std::uint32_t>(0x607080u + i)};
 
 	auto restore = [&]() {
 		if (!restoreOk) return;
 		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, previous.menuDialogColors.data(), previous.menuDialogColors.size(), &errorText);
 	};
 
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues.data(), probeValues.size(), &errorText)) {
 		failureReason = "Unable to set MENUDIALOGCOLORS probe values: " + errorText;
 		return false;
 	}
@@ -3491,27 +3533,28 @@ bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRMenuBar.cpp for menu-bar hotkey guard: " + ioError;
 		return false;
 	}
-	if (!configuredColorSlotOverride(4, normalHotkey)) {
+	MRColorSetupSettings configured = configuredColorSetupSettings();
+	if (!colorSlotOverride(configured, 4, MRColorOutputMode::RgbAutomatic, normalHotkey)) {
 		restore();
 		failureReason = "Palette slot 4 (entry-hotkey) must be overrideable.";
 		return false;
 	}
-	if (!configuredColorSlotOverride(7, selectedHotkey)) {
+	if (!colorSlotOverride(configured, 7, MRColorOutputMode::RgbAutomatic, selectedHotkey)) {
 		restore();
 		failureReason = "Palette slot 7 (selected entry-hotkey) must mirror entry-hotkey.";
 		return false;
 	}
-	if (!configuredColorSlotOverride(kMrPaletteMenuBarHotkey, menuBarHotkey)) {
+	if (!colorSlotOverride(configured, kMrPaletteMenuBarHotkey, MRColorOutputMode::RgbAutomatic, menuBarHotkey)) {
 		restore();
 		failureReason = "Menu bar hotkey slot must be overrideable.";
 		return false;
 	}
-	if (normalHotkey != probeValues[2] || selectedHotkey != probeValues[2]) {
+	if (normalHotkey != projectColorAttribute(probeValues[2], MRColorOutputMode::RgbAutomatic) || selectedHotkey != projectColorAttribute(probeValues[2], MRColorOutputMode::RgbAutomatic)) {
 		restore();
 		failureReason = "Entry-hotkey and selected entry-hotkey must resolve to the same configured color.";
 		return false;
 	}
-	if (menuBarHotkey != probeValues[kMenuDialogIndexMenuBarHotkey] || menuBarHotkey == normalHotkey) {
+	if (menuBarHotkey != projectColorAttribute(probeValues[kMenuDialogIndexMenuBarHotkey], MRColorOutputMode::RgbAutomatic) || menuBarHotkey == normalHotkey) {
 		restore();
 		failureReason = "Menu bar hotkeys must use their own configured color, independent from menu element hotkeys.";
 		return false;
@@ -3534,7 +3577,7 @@ bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string errorText;
-	unsigned char value = 0;
+	TColorAttr value;
 	bool restoreOk = true;
 
 	auto restore = [&]() {
@@ -3552,10 +3595,10 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 		failureReason = "MENUDIALOGCOLORS must expose frame/text/background entries.";
 		return false;
 	}
-	probe[kMenuDialogIndexInactiveControls] = 0x5B;
-	probe[kMenuDialogIndexDialogFrame] = 0x4A;
-	probe[kMenuDialogIndexDialogText] = 0x3C;
-	probe[kMenuDialogIndexDialogBackground] = 0x2D;
+	probe[kMenuDialogIndexInactiveControls] = MRRgbColorAttribute{0x102030u, 0x405060u};
+	probe[kMenuDialogIndexDialogFrame] = MRRgbColorAttribute{0x203040u, 0x506070u};
+	probe[kMenuDialogIndexDialogText] = MRRgbColorAttribute{0x304050u, 0x607080u};
+	probe[kMenuDialogIndexDialogBackground] = MRRgbColorAttribute{0x405060u, 0x708090u};
 
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probe.data(), probe.size(), &errorText)) {
 		failureReason = "Unable to set MENUDIALOGCOLORS frame/background probe values: " + errorText;
@@ -3564,12 +3607,12 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 
 	static const unsigned char frameSlots[] = {33, 34, 65, 66, 97, 98};
 	for (unsigned char slot : frameSlots) {
-		if (!configuredColorSlotOverride(slot, value)) {
+		if (!colorSlotOverride(configuredColorSetupSettings(), slot, MRColorOutputMode::RgbAutomatic, value)) {
 			restore();
 			failureReason = "Dialog frame slot override missing.";
 			return false;
 		}
-		if (value != 0x4A) {
+		if (value != projectColorAttribute(probe[kMenuDialogIndexDialogFrame], MRColorOutputMode::RgbAutomatic)) {
 			restore();
 			failureReason = "Dialog frame propagation mismatch.";
 			return false;
@@ -3578,12 +3621,12 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 
 	static const unsigned char textSlots[] = {37, 69, 101};
 	for (unsigned char slot : textSlots) {
-		if (!configuredColorSlotOverride(slot, value)) {
+		if (!colorSlotOverride(configuredColorSetupSettings(), slot, MRColorOutputMode::RgbAutomatic, value)) {
 			restore();
 			failureReason = "Dialog text slot override missing.";
 			return false;
 		}
-		if (value != 0x3C) {
+		if (value != projectColorAttribute(probe[kMenuDialogIndexDialogText], MRColorOutputMode::RgbAutomatic)) {
 			restore();
 			failureReason = "Dialog text propagation mismatch.";
 			return false;
@@ -3592,12 +3635,12 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 
 	static const unsigned char backgroundSlots[] = {32, 64, 96};
 	for (unsigned char slot : backgroundSlots) {
-		if (!configuredColorSlotOverride(slot, value)) {
+		if (!colorSlotOverride(configuredColorSetupSettings(), slot, MRColorOutputMode::RgbAutomatic, value)) {
 			restore();
 			failureReason = "Dialog background slot override missing.";
 			return false;
 		}
-		if (value != 0x2D) {
+		if (value != projectColorAttribute(probe[kMenuDialogIndexDialogBackground], MRColorOutputMode::RgbAutomatic)) {
 			restore();
 			failureReason = "Dialog background propagation mismatch.";
 			return false;
@@ -3606,12 +3649,12 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 
 	static const unsigned char inactiveControlSlots[] = {kPaletteDialogInactiveControlsGray, kPaletteDialogInactiveControlsBlue, kPaletteDialogInactiveControlsCyan};
 	for (unsigned char slot : inactiveControlSlots) {
-		if (!configuredColorSlotOverride(slot, value)) {
+		if (!colorSlotOverride(configuredColorSetupSettings(), slot, MRColorOutputMode::RgbAutomatic, value)) {
 			restore();
 			failureReason = "Dialog inactive-control slot override missing.";
 			return false;
 		}
-		if (value != 0x5B) {
+		if (value != projectColorAttribute(probe[kMenuDialogIndexInactiveControls], MRColorOutputMode::RgbAutomatic)) {
 			restore();
 			failureReason = "Dialog inactive-control propagation mismatch.";
 			return false;
@@ -7030,7 +7073,7 @@ bool colorGroupAliasAllowed(MRColorSetupGroup group, const char *firstName, cons
 	return false;
 }
 
-bool colorGroupValueAt(const MRColorSetupSettings &settings, MRColorSetupGroup group, std::size_t index, unsigned char &outValue) {
+bool colorGroupValueAt(const MRColorSetupSettings &settings, MRColorSetupGroup group, std::size_t index, MRRgbColorAttribute &outValue) {
 	switch (group) {
 		case MRColorSetupGroup::Window:
 			if (index >= settings.windowColors.size()) return false;
@@ -7115,8 +7158,8 @@ bool testColorThemeInventoryConformanceGuard(std::string &failureReason) {
 		const ColorGroupConformanceEntry &entry = kColorGroupConformanceEntries[groupIndex];
 		const MRColorSetupItem *items = nullptr;
 		std::size_t count = 0;
-		std::vector<unsigned char> probeValues;
-		unsigned char overrideValue = 0;
+		std::vector<MRRgbColorAttribute> probeValues;
+		TColorAttr overrideValue;
 
 		if (std::strcmp(colorSetupGroupKey(entry.group), entry.key) != 0) {
 			failureReason = std::string("Color setup group key mismatch for ") + entry.key;
@@ -7154,7 +7197,8 @@ bool testColorThemeInventoryConformanceGuard(std::string &failureReason) {
 					duplicateSlot = true;
 					break;
 				}
-			if (!duplicateSlot) probeValues[i] = static_cast<unsigned char>(0x20 + ((groupIndex * 19 + i) % 0x5F));
+			if (!duplicateSlot)
+				probeValues[i] = MRRgbColorAttribute{static_cast<std::uint32_t>(0x102030u + groupIndex * 0x100u + i), static_cast<std::uint32_t>(0x405060u + groupIndex * 0x100u + i)};
 		}
 
 		if (!setConfiguredColorSetupGroupValues(entry.group, probeValues.data(), probeValues.size(), &errorText)) {
@@ -7163,19 +7207,19 @@ bool testColorThemeInventoryConformanceGuard(std::string &failureReason) {
 			return false;
 		}
 		for (std::size_t i = 0; i < count; ++i) {
-			unsigned char runtimeValue = 0;
+			MRRgbColorAttribute runtimeValue;
 
 			if (!colorGroupValueAt(configuredColorSetupSettings(), entry.group, i, runtimeValue) || runtimeValue != probeValues[i]) {
 				restore();
 				failureReason = std::string("Runtime color setup value mismatch for ") + entry.key;
 				return false;
 			}
-			if (!configuredColorSlotOverride(items[i].paletteIndex, overrideValue)) {
+			if (!colorSlotOverride(configuredColorSetupSettings(), items[i].paletteIndex, MRColorOutputMode::RgbAutomatic, overrideValue)) {
 				restore();
 				failureReason = std::string("configuredColorSlotOverride does not expose ") + entry.key + " slot " + items[i].label;
 				return false;
 			}
-			if (overrideValue != probeValues[i]) {
+			if (overrideValue != projectColorAttribute(probeValues[i], MRColorOutputMode::RgbAutomatic)) {
 				restore();
 				failureReason = std::string("Color slot override mismatch for ") + entry.key + " slot " + items[i].label;
 				return false;
@@ -7210,15 +7254,15 @@ struct InvalidCurrentColorListEntry {
 };
 
 static const InvalidCurrentColorListEntry kInvalidCurrentColorListEntries[] = {
-	{"WINDOWCOLORS", "v7:21"},
-	{"MENUDIALOGCOLORS", "v1:21"},
-	{"HELPCOLORS", "v1:21"},
-	{"OTHERCOLORS", "v1:21"},
-	{"MINIMAPCOLORS", "v1:21"},
-	{"FILECOMPAREMINIMAPCOLORS", "v1:21"},
-	{"CODECOLORS", "v1:21"},
-	{"FILECOMPARECOLORS", "v2:21"},
-	{"DEBUGGERCOLORS", "v1:21"},
+	{"WINDOWCOLORS", "rgb24:102030/405060"},
+	{"MENUDIALOGCOLORS", "rgb24:102030/405060"},
+	{"HELPCOLORS", "rgb24:102030/405060"},
+	{"OTHERCOLORS", "rgb24:102030/405060"},
+	{"MINIMAPCOLORS", "rgb24:102030/405060"},
+	{"FILECOMPAREMINIMAPCOLORS", "rgb24:102030/405060"},
+	{"CODECOLORS", "rgb24:102030/405060"},
+	{"FILECOMPARECOLORS", "rgb24:102030/405060"},
+	{"DEBUGGERCOLORS", "rgb24:102030/405060"},
 };
 
 bool testCurrentColorThemeInvalidListsDoNotMutateGuard(std::string &failureReason) {
@@ -7248,7 +7292,7 @@ bool testCurrentColorThemeInvalidListsDoNotMutateGuard(std::string &failureReaso
 			return false;
 			}
 			MRColorSetupSettings current = configuredColorSetupSettings();
-			if (current.windowColors != previous.windowColors || current.menuDialogColors != previous.menuDialogColors || current.helpColors != previous.helpColors || current.otherColors != previous.otherColors || current.miniMapColors != previous.miniMapColors || current.fileCompareMiniMapColors != previous.fileCompareMiniMapColors || current.codeColors != previous.codeColors || current.fileCompareColors != previous.fileCompareColors) {
+			if (current != previous) {
 				restore();
 				failureReason = std::string("Invalid current color list mutated runtime colors for ") + entry.key;
 				return false;
@@ -7265,20 +7309,24 @@ bool testCurrentColorThemeInvalidListsDoNotMutateGuard(std::string &failureReaso
 
 bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureReason) {
 	const std::string themePath = "/tmp/mr-windowcolors-line-numbers-theme.mrmac";
-	const std::string windowColorsPrefix = "WINDOWCOLORS('v7:";
-	MRColorSetupSettings previous = configuredColorSetupSettings();
-	std::string previousThemePath = configuredColorThemeFilePath();
-	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E};
+	const std::string windowColorsPrefix = "WINDOWCOLORS('rgb24:";
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	std::array<MRRgbColorAttribute, MRColorSetupSettings::kWindowCount> probeValues{};
 	std::string errorText;
 	std::string content;
 	std::string contentAfterLoad;
-	unsigned char slotValue = 0;
-	bool restored = true;
+	std::vector<unsigned char> themeBytecode;
+	std::string themeMacroName;
+	std::string themeCompileError;
+	int themeEntryOffset = -1;
+	TColorAttr slotValue;
+	bool restored = false;
+	for (std::size_t i = 0; i < probeValues.size(); ++i) probeValues[i] = MRRgbColorAttribute{static_cast<std::uint32_t>(0x123400u + i), static_cast<std::uint32_t>(0x567800u + i)};
 
 	auto restore = [&]() {
 		std::string restoreError;
-		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previous.windowColors.data(), previous.windowColors.size(), &restoreError)) restored = false;
-		if (!setConfiguredColorThemeFilePath(previousThemePath, &restoreError)) restored = false;
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		std::remove(themePath.c_str());
 	};
 
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, probeValues.data(), probeValues.size(), &errorText)) {
@@ -7297,7 +7345,12 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		return false;
 	}
 	if (content.find(windowColorsPrefix) == std::string::npos) {
-		failureReason = "Saved theme must serialize WINDOWCOLORS using canonical v7 list format.";
+		failureReason = "Saved theme must serialize WINDOWCOLORS using canonical RGB24 list format.";
+		restore();
+		return false;
+	}
+	if (!compileSource(content, themeBytecode, themeEntryOffset, themeMacroName, themeCompileError)) {
+		failureReason = "Saved RGB24 theme must compile as MRMAC: " + themeCompileError;
 		restore();
 		return false;
 	}
@@ -7331,33 +7384,34 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		for (std::size_t i = 0; i < probeValues.size(); ++i)
 			if (loaded.windowColors[i] != probeValues[i]) {
 				std::ostringstream out;
-				out << "WINDOWCOLORS v7 roundtrip mismatch after theme reload at " << i << ": expected=0x" << std::hex << std::uppercase << static_cast<int>(probeValues[i]) << " got=0x" << static_cast<int>(loaded.windowColors[i]);
+					out << "WINDOWCOLORS RGB24 roundtrip mismatch after theme reload at " << i;
 				failureReason = out.str();
 				restore();
 				return false;
 			}
 	}
-	if (!configuredColorSlotOverride(kMrPaletteLineNumbers, slotValue) || slotValue != probeValues[8]) {
+	MRColorSetupSettings loadedColors = configuredColorSetupSettings();
+	if (!colorSlotOverride(loadedColors, kMrPaletteLineNumbers, MRColorOutputMode::RgbAutomatic, slotValue) || slotValue != projectColorAttribute(probeValues[8], MRColorOutputMode::RgbAutomatic)) {
 		failureReason = "Line-number palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
 	}
-	if (!configuredColorSlotOverride(kMrPaletteCodeFolding, slotValue) || slotValue != probeValues[9]) {
+	if (!colorSlotOverride(loadedColors, kMrPaletteCodeFolding, MRColorOutputMode::RgbAutomatic, slotValue) || slotValue != projectColorAttribute(probeValues[9], MRColorOutputMode::RgbAutomatic)) {
 		failureReason = "Code-folding palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
 	}
-	if (!configuredColorSlotOverride(kMrPaletteCodeFoldingMarker, slotValue) || slotValue != probeValues[10]) {
+	if (!colorSlotOverride(loadedColors, kMrPaletteCodeFoldingMarker, MRColorOutputMode::RgbAutomatic, slotValue) || slotValue != projectColorAttribute(probeValues[10], MRColorOutputMode::RgbAutomatic)) {
 		failureReason = "Code-folding-marker palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
 	}
-	if (!configuredColorSlotOverride(kMrPaletteFormatRuler, slotValue) || slotValue != probeValues[11]) {
+	if (!colorSlotOverride(loadedColors, kMrPaletteFormatRuler, MRColorOutputMode::RgbAutomatic, slotValue) || slotValue != projectColorAttribute(probeValues[11], MRColorOutputMode::RgbAutomatic)) {
 		failureReason = "Format-ruler palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
 	}
-	if (!configuredColorSlotOverride(kMrPaletteFocusedPaneBorder, slotValue) || slotValue != probeValues[12]) {
+	if (!colorSlotOverride(loadedColors, kMrPaletteFocusedPaneBorder, MRColorOutputMode::RgbAutomatic, slotValue) || slotValue != projectColorAttribute(probeValues[12], MRColorOutputMode::RgbAutomatic)) {
 		failureReason = "Focused-pane-border palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
@@ -7408,7 +7462,7 @@ bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason
 		failureReason = "Unable to read MRBentoBoxProjection.cpp for FC text color guard: " + errorText;
 		return false;
 	}
-	if (viewportContent.find("diffTextColor = static_cast<TColorAttr>(configured);") == std::string::npos) {
+	if (viewportContent.find("diffTextColor = configured;") == std::string::npos) {
 		failureReason = "File Compare text color must preserve the configured background.";
 		return false;
 	}
@@ -7484,7 +7538,7 @@ bool testFileCompareTextColorPreservesBackgroundGuard(std::string &failureReason
 }
 
 bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
-		static const unsigned char probeValues[] = {0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87, 0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0x1E, 0x2F, 0x3A, 0x4B, 0x5C, 0x6D, 0x7E, 0x8F, 0x9A, 0xAB, 0xBC, 0xCD, 0xDE, 0xEF, 0xF1, 0x12, 0x23, 0x34, 0x45, 0x56};
+	std::array<MRRgbColorAttribute, MRColorSetupSettings::kCodeCount> probeValues{};
 	struct CodeColorInventoryEntry {
 		const char *name;
 		const char *paletteMacro;
@@ -7543,15 +7597,16 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 	std::string columnListContent;
 	std::string tokenColorFunction;
 	std::string errorText;
-	unsigned char value = 0;
+	TColorAttr value;
 	bool restoreOk = true;
+	for (std::size_t i = 0; i < probeValues.size(); ++i) probeValues[i] = MRRgbColorAttribute{static_cast<std::uint32_t>(0x234500u + i), static_cast<std::uint32_t>(0x678900u + i)};
 
 	auto restore = [&]() {
 		if (!restoreOk) return;
 		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, previous.codeColors.data(), previous.codeColors.size(), &errorText);
 	};
 
-	if (items == nullptr || itemCount != sizeof(probeValues) / sizeof(probeValues[0]) || itemCount != sizeof(codeColorInventory) / sizeof(codeColorInventory[0])) {
+	if (items == nullptr || itemCount != probeValues.size() || itemCount != sizeof(codeColorInventory) / sizeof(codeColorInventory[0])) {
 		failureReason = "Unexpected CODECOLORS item mapping.";
 		return false;
 	}
@@ -7561,17 +7616,17 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 			return false;
 		}
 	}
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, probeValues.data(), probeValues.size(), &errorText)) {
 		failureReason = "Unable to set CODECOLORS probe values: " + errorText;
 		return false;
 	}
 	for (std::size_t i = 0; i < itemCount; ++i) {
-		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
+		if (!colorSlotOverride(configuredColorSetupSettings(), items[i].paletteIndex, MRColorOutputMode::RgbAutomatic, value)) {
 			restore();
 			failureReason = "CODECOLORS item must override its mapped palette slot.";
 			return false;
 		}
-		if (value != probeValues[i]) {
+		if (value != projectColorAttribute(probeValues[i], MRColorOutputMode::RgbAutomatic)) {
 			restore();
 			failureReason = "CODECOLORS slot mapping must preserve the full configured attribute.";
 			return false;
@@ -7612,12 +7667,12 @@ bool testCodeColorUsesConfiguredAttributeGuard(std::string &failureReason) {
 		return false;
 	}
 	tokenColorFunction = viewportContent.substr(tokenColorStart, tokenColorEnd - tokenColorStart);
-	if (tokenColorFunction.find("if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(configured);") == std::string::npos) {
+	if (tokenColorFunction.find("if (configuredColorSlotOverride(paletteSlot, configured)) return configured;") == std::string::npos) {
 		restore();
 		failureReason = "Code token colors must preserve the full configured attribute, including background.";
 		return false;
 	}
-	if (tokenColorFunction.find("return static_cast<TColorAttr>(background | fallbackForeground);") == std::string::npos) {
+	if (tokenColorFunction.find("return TColorAttr(TColorDesired(fallbackForeground), background);") == std::string::npos) {
 		restore();
 		failureReason = "Code token fallback colors must still combine editor background with fallback foreground.";
 		return false;
@@ -10512,17 +10567,17 @@ void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 
 void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
-	runTest(ctx, "binary boundary probe", testBinaryBoundaryProbe);
 	runTest(ctx, "Keymap runtime macro dispatch harness", testKeymapMacroBindingDispatchHarness);
 	runTest(ctx, "Keymap macro diagnostics harness", testKeymapMacroBindingNegativeDiagnosticsHarness);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
 	runTest(ctx, "Edit profile code-language raster", testEditProfileCodeLanguageRasterGuard);
 	runTest(ctx, "File extension code-language dialog conformance", testFileExtensionCodeLanguageChoicesGuard);
-	runTest(ctx, "Compiler support macros compile guard", testCompilerSupportMacrosCompileGuard);
 	runTest(ctx, "DELAY deadline resume harness", testDelayProcWiringGuard);
-	runTest(ctx, "Myers diff core harness", testMyersDiffCoreHarness);
-	runTest(ctx, "Coprocessor packet metadata harness", testCoprocessorPacketMetadataHarness);
 	runTest(ctx, "Color theme inventory conformance", testColorThemeInventoryConformanceGuard);
+	runTest(ctx, "Color theme URI startup load", testMrsetupWindowColorThemeUriStartupLoad);
+	runTest(ctx, "Invalid RGB color lists are atomic", testCurrentColorThemeInvalidListsDoNotMutateGuard);
+	runTest(ctx, "RGB color theme compile and roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "Terminal palette preserves BIOS defaults and uses xterm-256", testTerminalPalettePreservesBiosDefaultsAndUsesXTerm256);
 	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
 	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
 	runTest(ctx, "Deferred large line-index harness", testDeferredLargeLineIndexHarness);

@@ -826,11 +826,11 @@ void MRMenuBar::draw() {
 	const bool staticProgressVisible = !mFullscreenPresentation && mr::messageline::currentStaticProgress(staticProgressCompleted, staticProgressTotal);
 
 	{
-		unsigned char statusAttr = mr_menu_drawing::resolvedPaletteAttribute(kMrPaletteCursorPositionMarker, 0x78);
-		unsigned char menuBarHotkeyAttr = mr_menu_drawing::resolvedPaletteAttribute(kMrPaletteMenuBarHotkey, 0);
+		TColorAttr statusAttr = mr_menu_drawing::resolvedPaletteAttribute(kMrPaletteCursorPositionMarker, 0x78);
+		TColorAttr menuBarHotkeyAttr = mr_menu_drawing::resolvedPaletteAttribute(kMrPaletteMenuBarHotkey, 0);
 
-		cMenuBarHotkey = TColorAttr(menuBarHotkeyAttr);
-		cStatus = TColorAttr(statusAttr);
+		cMenuBarHotkey = menuBarHotkeyAttr;
+		cStatus = statusAttr;
 	}
 	setStyle(cStatus, getStyle(cStatus) | slBold);
 
@@ -912,8 +912,8 @@ void MRMenuBar::draw() {
 				}
 				if (mMarqueeActiveText.empty() && mMarqueeHasPending && !mMarqueeOutroActive) activatePendingMarquee(now);
 			}
-			cMarquee = TColorAttr(mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(mMarqueeActiveKind), mr_menu_drawing::marqueeFallbackAttribute(mMarqueeActiveKind)));
-			auto colorForMarqueeKind = [](MarqueeKind kind) -> TColorAttr { return TColorAttr(mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(kind), mr_menu_drawing::marqueeFallbackAttribute(kind))); };
+			cMarquee = mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(mMarqueeActiveKind), mr_menu_drawing::marqueeFallbackAttribute(mMarqueeActiveKind));
+			auto colorForMarqueeKind = [](MarqueeKind kind) -> TColorAttr { return mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(kind), mr_menu_drawing::marqueeFallbackAttribute(kind)); };
 			int marqueeTextLen = static_cast<int>(mMarqueeActiveText.size());
 			int drawStart = laneStart;
 			const char *drawPtr = mMarqueeActiveText.c_str();

@@ -46,8 +46,8 @@ constexpr SnippetSidekickActionEntry kSnippetSidekickActions[] = {
 } // namespace
 
 TColorAttr sidekickColor(unsigned char paletteSlot, TColorAttr fallback) {
-	unsigned char configured = 0;
-	if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(configured);
+	TColorAttr configured;
+	if (configuredColorSlotOverride(paletteSlot, configured)) return configured;
 	return fallback;
 }
 

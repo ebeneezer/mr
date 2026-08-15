@@ -654,9 +654,9 @@ bool buildDeferredVisualUiProcedureCommand(const std::string &name, const std::v
 			AnsiImageParser parser(source);
 			if (!parser.parse(image, parseError)) throw std::runtime_error("DESKTOP_BLIT: " + parseError + " in " + path);
 			if (mode == 1) {
-				unsigned char desktopAttribute = 0x90;
+				TColorAttr desktopAttribute(0x90);
 				static_cast<void>(configuredColorSlotOverride(kMrPaletteDesktop, desktopAttribute));
-				image.applyDesktopMonochrome(desktopAttribute);
+				image.applyDesktopMonochrome(desktopAttribute.toBIOS());
 			}
 			command = MRMacroDeferredUiCommand(mrducDesktopBlit, args[1].i, args[2].i, image.width, image.height, 0, 0, 0, 0, image.characters);
 			command.text2 = image.attributes;

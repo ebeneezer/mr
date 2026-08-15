@@ -419,10 +419,10 @@ TColorAttr MRBentoBox::paneFrameColor(bool focused) {
 	TColorAttr color = mapColor(focused ? 13 : 1);
 
 	if (bentoMode == bbmFileCompare) {
-		unsigned char configuredColor = 0;
+		TColorAttr configuredColor;
 		const unsigned char paletteIndex = focused ? kMrPaletteFileCompareFocusedPaneBorder : kMrPaletteFileComparePaneBorder;
 
-		if (configuredColorSlotOverride(paletteIndex, configuredColor)) color = static_cast<TColorAttr>(configuredColor);
+		if (configuredColorSlotOverride(paletteIndex, configuredColor)) color = configuredColor;
 	}
 	return color;
 }

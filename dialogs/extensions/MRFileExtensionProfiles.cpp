@@ -128,9 +128,9 @@ class TProfileListBox : public TListBox {
 };
 
 TAttrPair configuredColorOr(TView *view, unsigned char paletteSlot, ushort fallbackColorIndex) {
-	unsigned char biosAttr = 0;
+	TColorAttr configured;
 
-	if (configuredColorSlotOverride(paletteSlot, biosAttr)) return TAttrPair(biosAttr);
+	if (configuredColorSlotOverride(paletteSlot, configured)) return TAttrPair(configured);
 	return view != nullptr ? view->getColor(fallbackColorIndex) : TAttrPair(0x70);
 }
 
@@ -171,7 +171,7 @@ class TInlineGlyphButton : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+		TAttrPair color = getColor((state & sfFocused) != 0 ? 2 : 1);
 		int x = 0;
 
 		buffer.moveChar(0, ' ', color, size.x);

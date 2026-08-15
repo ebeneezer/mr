@@ -189,7 +189,7 @@ void MRSpinner::drawLineText(int y, const char *text, TAttrPair color) {
 }
 
 TAttrPair MRSpinner::colorForSlot(unsigned char paletteSlot, ushort fallbackIndex, unsigned char fallbackAttr) {
-	unsigned char color = 0;
+	TColorAttr color;
 
 	if (configuredColorSlotOverride(paletteSlot, color)) return TAttrPair(color);
 	return owner != nullptr ? getColor(fallbackIndex) : TAttrPair(fallbackAttr);

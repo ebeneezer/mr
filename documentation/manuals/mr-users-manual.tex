@@ -716,10 +716,26 @@ experimenting with stateful or multi-key emulations.
 
 \section{Colors and themes}
 
-\menu{Installation and setup > Color setup} groups palette roles by domain.
-Foreground, background, monochrome attributes, and the preview describe one
-selected role. Theme files can be loaded into the working palette and saved
-for reuse.\index{color setup}\index{theme}
+\menu{Installation and setup > Color setup} groups color roles by domain.
+Each item-list row begins with a three-column \texttt{Aa } sample rendered in
+the role's foreground and background colors. Selection highlighting affects
+only the following description, leaving the sample exact and readable.
+Foreground and background each have red, green, and blue numeric sliders with
+the range 0--255. The centered \texttt{RRGGBB/RRGGBB} value shows the exact
+24-bit pair, and the list sample follows slider changes immediately. Theme
+files can be loaded into the working draft and saved for reuse. Invalid or
+missing groups retain their hardcoded defaults.\index{color setup}\index{theme}
+
+The Interface setup page selects \emph{24-bit RGB (automatic)} or the
+\emph{256-color palette}. Automatic mode supplies the stored RGB values to
+Turbo Vision, which uses true color when the terminal supports it and its
+normal fallback otherwise. Palette mode maps the exact 16 VGA default colors
+back to their ANSI palette indices, preserving the terminal's configured
+classic colors. Other RGB values are quantized to standard xterm-256 color
+indices; Turbo Vision performs any further fallback required by terminals with
+fewer colors. Thus both modes share one settings representation and one color
+draft; there is no duplicate palette configuration.\index{color!output
+mode}\index{terminal palette}
 
 Filename-extension profiles may select a theme automatically. This allows a
 different visual treatment for code, prose, logs, or comparison work without

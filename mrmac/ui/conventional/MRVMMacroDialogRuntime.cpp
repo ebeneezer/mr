@@ -277,13 +277,13 @@ class MacroUiDisplayLine final : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		unsigned char configuredAttr = 0;
+		TColorAttr configuredAttr;
 		TColorAttr color = getColor(1);
 		const int width = size.x;
 		const std::string value = text.empty() ? std::string("0") : text;
 		const int start = std::max(0, width - static_cast<int>(value.size()));
 
-		if (configuredColorSlotOverride(9, configuredAttr)) color = TColorAttr(configuredAttr);
+		if (configuredColorSlotOverride(9, configuredAttr)) color = configuredAttr;
 		buffer.moveChar(0, ' ', color, static_cast<ushort>(width));
 		if (start < width) buffer.moveStr(static_cast<ushort>(start), value.c_str(), color, width - start);
 		writeLine(0, 0, width, 1, buffer);

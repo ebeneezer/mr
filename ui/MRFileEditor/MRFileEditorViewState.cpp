@@ -16,7 +16,7 @@ bool scrollBarHasRange(const TScrollBar *scrollBar) noexcept {
 
 MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 	MRMiniMapRenderer::Palette palette;
-	unsigned char configured = 0;
+	TColorAttr configured;
 	const TColorAttr fallback = static_cast<TColorAttr>(getColor(0x0201));
 	const bool fileComparePalette = mFileCompareGuttersConfigured;
 	const unsigned char normalSlot = fileComparePalette ? kMrPaletteFileCompareMiniMapNormal : kMrPaletteMiniMapNormal;
@@ -25,16 +25,16 @@ MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 	const unsigned char findMarkerSlot = fileComparePalette ? kMrPaletteFileCompareMiniMapFindMarker : kMrPaletteMiniMapFindMarker;
 	const unsigned char errorMarkerSlot = fileComparePalette ? kMrPaletteFileCompareMiniMapErrorMarker : kMrPaletteMiniMapErrorMarker;
 
-	palette.normal = configuredColorSlotOverride(normalSlot, configured) ? static_cast<TColorAttr>(configured) : fallback;
-	palette.viewport = configuredColorSlotOverride(viewportSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-	palette.changed = configuredColorSlotOverride(changedSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-	palette.findMarker = configuredColorSlotOverride(findMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-	palette.errorMarker = configuredColorSlotOverride(errorMarkerSlot, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-	palette.warningMarker = configuredColorSlotOverride(kMrPaletteMessageWarning, configured) ? static_cast<TColorAttr>(configured) : palette.changed;
-	palette.diffEqual = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapEqual, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-	palette.diffMissing = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapMissing, configured) ? static_cast<TColorAttr>(configured) : palette.errorMarker;
-	palette.diffInsert = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapInsert, configured) ? static_cast<TColorAttr>(configured) : palette.warningMarker;
-	palette.diffOffset = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapOffset, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
+	palette.normal = configuredColorSlotOverride(normalSlot, configured) ? configured : fallback;
+	palette.viewport = configuredColorSlotOverride(viewportSlot, configured) ? configured : palette.normal;
+	palette.changed = configuredColorSlotOverride(changedSlot, configured) ? configured : palette.normal;
+	palette.findMarker = configuredColorSlotOverride(findMarkerSlot, configured) ? configured : palette.normal;
+	palette.errorMarker = configuredColorSlotOverride(errorMarkerSlot, configured) ? configured : palette.normal;
+	palette.warningMarker = configuredColorSlotOverride(kMrPaletteMessageWarning, configured) ? configured : palette.changed;
+	palette.diffEqual = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapEqual, configured) ? configured : palette.normal;
+	palette.diffMissing = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapMissing, configured) ? configured : palette.errorMarker;
+	palette.diffInsert = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapInsert, configured) ? configured : palette.warningMarker;
+	palette.diffOffset = configuredColorSlotOverride(kMrPaletteFileCompareMiniMapOffset, configured) ? configured : palette.normal;
 	return palette;
 }
 

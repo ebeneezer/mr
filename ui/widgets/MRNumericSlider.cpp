@@ -12,9 +12,9 @@ namespace {
 constexpr unsigned char kPaletteDialogSelector = 58;
 
 TAttrPair configuredPaletteSlotOr(TView *view, unsigned char paletteSlot, ushort fallbackColorIndex) {
-	unsigned char biosAttr = 0;
+	TColorAttr configured;
 
-	if (configuredColorSlotOverride(paletteSlot, biosAttr)) return TAttrPair(biosAttr);
+	if (configuredColorSlotOverride(paletteSlot, configured)) return TAttrPair(configured);
 	return view != nullptr ? view->getColor(fallbackColorIndex) : TAttrPair(0x70);
 }
 } // namespace
