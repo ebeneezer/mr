@@ -140,13 +140,12 @@ require the protected-architecture report defined above.
 
 ## Build rule
 
-Before handoff, run:
+Do not run a separate CachyOS host build. For ordinary handoffs, run no build
+unless the maintainer explicitly requests one. For a release handoff, use only
+the Debian 12 build performed by `make release-zip`.
 
-```sh
-make clean all CXX=clang++
-```
-
-Report the complete result, including warnings.
+Report the complete result, including warnings, whenever a build was requested
+or required for a release.
 
 Do not remove existing `paplay` build signals from the Makefile.
 
