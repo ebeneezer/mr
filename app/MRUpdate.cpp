@@ -537,7 +537,7 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 		if (result.completed() && payload != nullptr && payload->updateAvailable) {
 			storeUpdateInt("available", 1);
 			storeUpdateString("version", payload->manifest.version);
-			mr::messageline::postTimed(mr::messageline::Owner::ApplicationUpdate, "New version V" + payload->manifest.version + " avaiable, please check Help menu.", mr::messageline::Kind::Warning, std::chrono::seconds(7), mr::messageline::kPriorityHigh);
+			mr::messageline::postTimed(mr::messageline::Owner::ApplicationUpdate, "Update V" + payload->manifest.version + " available — see Help.", mr::messageline::Kind::Warning, std::chrono::seconds(7), mr::messageline::kPriorityHigh);
 		}
 		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 		return true;

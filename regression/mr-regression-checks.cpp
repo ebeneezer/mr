@@ -1734,6 +1734,31 @@ bool testCentralRuntimeKvAuthorityGuard(std::string &failureReason) {
 				}
 		}
 	}
+	{
+		using namespace mr::messageline;
+		VisibleMessage visible;
+
+		setRuntimeMessageLineEnabled(true);
+		setStaticMode(false);
+		for (std::size_t index = 0; index < static_cast<std::size_t>(Owner::Count); ++index)
+			clearOwner(static_cast<Owner>(index));
+		for (std::size_t index = 0; index < static_cast<std::size_t>(Owner::Count); ++index) {
+			const Owner owner = static_cast<Owner>(index);
+			const std::string ownerMessage = "owner " + std::to_string(index);
+			const Token token = postSticky(owner, ownerMessage, Kind::Info, kPriorityLow);
+			const bool visibleForOwner = currentOwnerMessage(owner, visible) && visible.text == ownerMessage;
+
+			clearOwner(owner);
+			if (token == 0 || !visibleForOwner) {
+				failureReason = "Message-line runtime K/V rejected or failed to expose a declared owner.";
+				return false;
+			}
+		}
+		if (postSticky(Owner::Count, "invalid owner", Kind::Info, kPriorityLow) != 0) {
+			failureReason = "Message-line runtime K/V accepted the owner-count sentinel as an owner.";
+			return false;
+		}
+	}
 
 	failureReason.clear();
 	return true;

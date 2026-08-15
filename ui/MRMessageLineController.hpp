@@ -27,7 +27,8 @@ enum class Owner : unsigned char {
 	DialogInteraction,
 	HexEditor,
 	WorkspaceRestore,
-	ApplicationUpdate
+	ApplicationUpdate,
+	Count
 };
 
 struct VisibleMessage {

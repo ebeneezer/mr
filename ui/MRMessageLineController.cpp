@@ -24,7 +24,7 @@ namespace mr {
 namespace messageline {
 namespace {
 
-constexpr std::size_t kOwnerCount = static_cast<std::size_t>(Owner::WorkspaceRestore) + 1;
+constexpr std::size_t kOwnerCount = static_cast<std::size_t>(Owner::Count);
 constexpr const char *kApplicationUiRoot = "APPLICATIONUI";
 constexpr const char *kMessageLineBranch = "messageLine";
 constexpr const char *kStaticModeKey = "staticMode";
