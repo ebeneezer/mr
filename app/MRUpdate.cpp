@@ -509,12 +509,12 @@ MRUpdateInternalStartup mrStartInternalUpdateApply(int argc, char **argv, int &e
 	for (int index = 1; argv != nullptr && index < argc; ++index)
 		if (argv[index] != nullptr && std::strcmp(argv[index], mr::update_internal::kInternalApplyOption) == 0) requested = true;
 	if (!requested) return MRUpdateInternalStartup::RunApplication;
-	if (argc != 2) {
-		error = "Internal update mode accepts no additional arguments.";
+	if (argc != 3 || argv[2] == nullptr || argv[2][0] != '/') {
+		error = "Internal update mode requires an absolute protocol file path.";
 		exitCode = 2;
 		return MRUpdateInternalStartup::Failed;
 	}
-	if (!mr::update_internal::runInternalUpdateApply(error)) {
+	if (!mr::update_internal::runInternalUpdateApply(argv[2], error)) {
 		exitCode = 1;
 		return MRUpdateInternalStartup::Failed;
 	}
@@ -543,7 +543,6 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 		return true;
 	}
 	if (result.task.executionOwnerLocalId == kUpdatePackageOwner) {
-		bool detachedSudoAuthorization = false;
 		storeUpdateInt("busy", 0);
 		const UpdatePackagePayload *rawPayload = dynamic_cast<const UpdatePackagePayload *>(result.payload.get());
 		if (!result.completed() || rawPayload == nullptr) {
@@ -552,13 +551,14 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 			return true;
 		}
 		std::shared_ptr<const UpdatePackagePayload> payload = std::dynamic_pointer_cast<const UpdatePackagePayload>(result.payload);
-		if (!mr::update_internal::ensureUpdatePrivileges(detachedSudoAuthorization)) {
+		std::shared_ptr<mr::update_internal::UpdateAuthorization> authorization = mr::update_internal::ensureUpdatePrivileges();
+		if (authorization == nullptr) {
 			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 			return true;
 		}
 		storeUpdateInt("busy", 1);
 		const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::Custom, 0, 0, mr::coprocessor::ExecutionOwnerKind::Worker, kUpdateApplyOwner, "application update install",
-		                                                                            [payload, detachedSudoAuthorization](const mr::coprocessor::TaskInfo &task) { return mr::update_internal::applyUpdatePackage(task, payload, detachedSudoAuthorization); });
+		                                                                            [payload, authorization](const mr::coprocessor::TaskInfo &task) { return mr::update_internal::applyUpdatePackage(task, payload, authorization); });
 		if (taskId == 0) {
 			storeUpdateInt("busy", 0);
 			postUpdateError("Unable to start the update installation worker.");

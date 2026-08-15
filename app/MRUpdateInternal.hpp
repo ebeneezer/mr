@@ -68,15 +68,17 @@ class UpdateAppliedPayload final : public mr::coprocessor::Payload {
 	std::string warning;
 };
 
+class UpdateAuthorization;
+
 bool versionIsNewer(std::string_view candidate, std::string_view current);
 bool parseManifest(const std::vector<unsigned char> &bytes, UpdateManifest &manifest, std::string &error);
 bool verifyManifestSignature(const std::vector<unsigned char> &manifest, const std::vector<unsigned char> &signature, std::string &error);
 std::string sha256Hex(const std::vector<unsigned char> &bytes);
 
-bool ensureUpdatePrivileges(bool &detachedSudoAuthorization);
-mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package, bool detachedSudoAuthorization);
+std::shared_ptr<UpdateAuthorization> ensureUpdatePrivileges();
+mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package, std::shared_ptr<UpdateAuthorization> authorization);
 bool showChangedAndRestart(const UpdateAppliedPayload &payload);
-bool runInternalUpdateApply(std::string &error);
+bool runInternalUpdateApply(const char *protocolPath, std::string &error);
 
 } // namespace update_internal
 } // namespace mr

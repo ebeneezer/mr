@@ -1,0 +1,4 @@
+Changed in 0.2.23:
+- Authenticate and install through one sudo process without sharing timestamp tickets.
+- Keep the password on one cleansed authorization object until the update worker starts.
+- Transfer the signed update protocol through a private verified file so sudo stdin remains dedicated to PAM.

@@ -28,6 +28,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
+#include <limits>
 #include <pthread.h>
 #include <signal.h>
 #include <string>
@@ -40,12 +41,62 @@
 
 namespace mr {
 namespace update_internal {
+
+constexpr std::size_t kPasswordCapacity = 256;
+
+class UpdateAuthorization final {
+  public:
+	enum class Mode : unsigned char {
+		Root,
+		ActiveSudo,
+		PasswordSudo
+	};
+
+	explicit UpdateAuthorization(Mode value) noexcept : mode(value) {
+	}
+
+	~UpdateAuthorization() {
+		clearPassword();
+	}
+
+	UpdateAuthorization(const UpdateAuthorization &) = delete;
+	UpdateAuthorization &operator=(const UpdateAuthorization &) = delete;
+
+	void storePassword(const char *value, std::size_t length) noexcept {
+		clearPassword();
+		passwordLength = std::min(length, password.size() - 1);
+		if (value != nullptr && passwordLength != 0) std::memcpy(password.data(), value, passwordLength);
+		password[passwordLength] = '\0';
+	}
+
+	void clearPassword() noexcept {
+		OPENSSL_cleanse(password.data(), password.size());
+		passwordLength = 0;
+	}
+
+	[[nodiscard]] bool passwordRequired() const noexcept {
+		return mode == Mode::PasswordSudo;
+	}
+
+	[[nodiscard]] const char *passwordData() const noexcept {
+		return password.data();
+	}
+
+	[[nodiscard]] std::size_t storedPasswordLength() const noexcept {
+		return passwordLength;
+	}
+
+  private:
+	Mode mode;
+	std::array<char, kPasswordCapacity> password{};
+	std::size_t passwordLength = 0;
+};
+
 namespace {
 
 constexpr char kInstalledBinary[] = "/usr/local/bin/mr";
 constexpr char kSudoExecutable[] = "/usr/bin/sudo";
 constexpr char kProtocolMagic[] = "MRUPD01";
-constexpr std::size_t kPasswordCapacity = 256;
 
 TFrame *initUpdateDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
@@ -236,41 +287,6 @@ bool promptSudoPassword(char password[kPasswordCapacity], std::size_t &passwordL
 	return command == cmOK && passwordLength != 0;
 }
 
-bool validateSudoWithPassword(char password[kPasswordCapacity], std::size_t passwordLength) {
-	int inputPipe[2] = {-1, -1};
-	if (::pipe(inputPipe) != 0) {
-		secureClear(password, kPasswordCapacity);
-		return false;
-	}
-	const pid_t child = ::fork();
-	if (child < 0) {
-		::close(inputPipe[0]);
-		::close(inputPipe[1]);
-		secureClear(password, kPasswordCapacity);
-		return false;
-	}
-	if (child == 0) {
-		if (::setsid() < 0) ::_exit(127);
-		::close(inputPipe[1]);
-		::dup2(inputPipe[0], STDIN_FILENO);
-		::close(inputPipe[0]);
-		redirectToNull(STDOUT_FILENO);
-		redirectToNull(STDERR_FILENO);
-		char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-S"), const_cast<char *>("-p"), const_cast<char *>(""), const_cast<char *>("-v"), nullptr};
-		::execv(kSudoExecutable, args);
-		::_exit(127);
-	}
-	::close(inputPipe[0]);
-	sigset_t previousMask;
-	bool alreadyPending = false;
-	const bool signalBlocked = blockSigpipe(previousMask, alreadyPending);
-	const bool sent = signalBlocked && writeAll(inputPipe[1], password, passwordLength) && writeAll(inputPipe[1], "\n", 1);
-	if (signalBlocked) restoreSigpipe(previousMask, alreadyPending);
-	secureClear(password, kPasswordCapacity);
-	::close(inputPipe[1]);
-	return sent && waitForSuccessfulExit(child);
-}
-
 bool writeProtocol(int fd, const UpdatePackagePayload &package) {
 	unsigned char length[8]{};
 
@@ -290,6 +306,25 @@ bool writeProtocol(int fd, const UpdatePackagePayload &package) {
 	return true;
 }
 
+bool writeProtocolFile(const UpdatePackagePayload &package, std::string &protocolPath, std::string &error) {
+	std::array<char, 64> path{};
+	std::strcpy(path.data(), "/tmp/mr-update-protocol-XXXXXX");
+	const int fd = ::mkstemp(path.data());
+	if (fd < 0) {
+		error = "Unable to create the private update protocol file.";
+		return false;
+	}
+	const bool written = ::fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 && ::fchmod(fd, 0600) == 0 && writeProtocol(fd, package) && ::fsync(fd) == 0;
+	::close(fd);
+	if (!written) {
+		::unlink(path.data());
+		error = "Unable to write the private update protocol file.";
+		return false;
+	}
+	protocolPath = path.data();
+	return true;
+}
+
 bool installedBinaryIsTrusted() {
 	struct stat status {};
 
@@ -306,56 +341,68 @@ bool currentExecutableIsSystemBinary() {
 	return std::strcmp(path.data(), kInstalledBinary) == 0 && installedBinaryIsTrusted();
 }
 
-bool applyPackageThroughSudo(const UpdatePackagePayload &package, bool detachedSudoAuthorization, std::string &error) {
-	int inputPipe[2] = {-1, -1};
+bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::shared_ptr<UpdateAuthorization> &authorization, std::string &error) {
+	int passwordPipe[2] = {-1, -1};
 	int errorPipe[2] = {-1, -1};
+	std::string protocolPath;
+	if (authorization == nullptr) {
+		error = "Missing update authorization.";
+		return false;
+	}
 	if (!installedBinaryIsTrusted()) {
 		error = "Unable to find a trusted update helper at /usr/local/bin/mr.";
 		return false;
 	}
-	if (::pipe(inputPipe) != 0 || ::pipe(errorPipe) != 0) {
-		if (inputPipe[0] >= 0) {
-			::close(inputPipe[0]);
-			::close(inputPipe[1]);
+	if (!writeProtocolFile(package, protocolPath, error)) return false;
+	if (::pipe(passwordPipe) != 0 || ::pipe(errorPipe) != 0) {
+		if (passwordPipe[0] >= 0) {
+			::close(passwordPipe[0]);
+			::close(passwordPipe[1]);
 		}
+		::unlink(protocolPath.c_str());
 		error = "Unable to create the update channel.";
 		return false;
 	}
 	const pid_t child = ::fork();
 	if (child < 0) {
-		::close(inputPipe[0]);
-		::close(inputPipe[1]);
+		::close(passwordPipe[0]);
+		::close(passwordPipe[1]);
 		::close(errorPipe[0]);
 		::close(errorPipe[1]);
+		::unlink(protocolPath.c_str());
 		error = "Unable to start the privileged update process.";
 		return false;
 	}
 	if (child == 0) {
-		if (detachedSudoAuthorization && ::setsid() < 0) ::_exit(127);
-		::close(inputPipe[1]);
+		if (authorization->passwordRequired() && ::setsid() < 0) ::_exit(127);
+		::close(passwordPipe[1]);
 		::close(errorPipe[0]);
-		::dup2(inputPipe[0], STDIN_FILENO);
+		::dup2(passwordPipe[0], STDIN_FILENO);
 		::dup2(errorPipe[1], STDERR_FILENO);
 		redirectToNull(STDOUT_FILENO);
-		::close(inputPipe[0]);
+		::close(passwordPipe[0]);
 		::close(errorPipe[1]);
 		if (::geteuid() == 0) {
-			char *const args[] = {const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), nullptr};
+			char *const args[] = {const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
 			::execv(kInstalledBinary, args);
+		} else if (authorization->passwordRequired()) {
+			char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-S"), const_cast<char *>("-p"), const_cast<char *>(""), const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
+			::execv(kSudoExecutable, args);
 		} else {
-			char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-n"), const_cast<char *>("-p"), const_cast<char *>(""), const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), nullptr};
+			char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-n"), const_cast<char *>("-p"), const_cast<char *>(""), const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
 			::execv(kSudoExecutable, args);
 		}
 		::_exit(127);
 	}
-	::close(inputPipe[0]);
+	::close(passwordPipe[0]);
 	::close(errorPipe[1]);
 	sigset_t previousMask;
 	bool alreadyPending = false;
 	const bool signalBlocked = blockSigpipe(previousMask, alreadyPending);
-	const bool sent = signalBlocked && writeProtocol(inputPipe[1], package);
+	const bool sent = !authorization->passwordRequired() || (signalBlocked && writeAll(passwordPipe[1], authorization->passwordData(), authorization->storedPasswordLength()) && writeAll(passwordPipe[1], "\n", 1));
+	authorization->clearPassword();
 	if (signalBlocked) restoreSigpipe(previousMask, alreadyPending);
-	::close(inputPipe[1]);
+	::close(passwordPipe[1]);
 	std::array<char, 2048> errorBuffer{};
 	std::size_t errorLength = 0;
 	while (errorLength + 1 < errorBuffer.size()) {
@@ -367,10 +414,11 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, bool detachedS
 	::close(errorPipe[0]);
 	errorBuffer[errorLength] = '\0';
 	const bool exited = waitForSuccessfulExit(child);
+	::unlink(protocolPath.c_str());
 	if (!sent || !exited) {
 		error = errorLength != 0 ? std::string(errorBuffer.data(), errorLength) : "Privileged update installation failed.";
 		while (!error.empty() && (error.back() == '\n' || error.back() == '\r')) error.pop_back();
-		if (error.rfind("sudo:", 0) == 0) error = "sudo authorization failed during update installation.";
+		if ((authorization->passwordRequired() && error.find("mr:") == std::string::npos) || error.rfind("sudo:", 0) == 0) error = "sudo authorization failed during update installation.";
 		return false;
 	}
 	return true;
@@ -560,38 +608,35 @@ const std::array<UpdateTarget, kUpdateFileCount> kUpdateTargets = {{
 	{"share/licenses/mr/TVISION-COPYRIGHT", "license_sha256", "usr", "local/share", "licenses/mr", "TVISION-COPYRIGHT", 0644, 4 * 1024 * 1024},
 }};
 
-bool ensureUpdatePrivileges(bool &detachedSudoAuthorization) {
+std::shared_ptr<UpdateAuthorization> ensureUpdatePrivileges() {
 	char password[kPasswordCapacity]{};
 	std::size_t passwordLength = 0;
 
-	detachedSudoAuthorization = false;
-	if (::geteuid() == 0) return true;
+	if (::geteuid() == 0) return std::make_shared<UpdateAuthorization>(UpdateAuthorization::Mode::Root);
 	if (::access(kSudoExecutable, X_OK) != 0) {
 		mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, "sudo is required for the system update.", mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
-		return false;
+		return nullptr;
 	}
-	if (validateSudoWithoutPassword()) return true;
+	if (validateSudoWithoutPassword()) return std::make_shared<UpdateAuthorization>(UpdateAuthorization::Mode::ActiveSudo);
+	std::shared_ptr<UpdateAuthorization> authorization = std::make_shared<UpdateAuthorization>(UpdateAuthorization::Mode::PasswordSudo);
 	if (!promptSudoPassword(password, passwordLength)) {
 		secureClear(password, sizeof(password));
 		mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, "Update cancelled.", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
-		return false;
+		return nullptr;
 	}
-	if (validateSudoWithPassword(password, passwordLength)) {
-		detachedSudoAuthorization = true;
-		return true;
-	}
-	mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, "sudo authentication failed.", mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
-	return false;
+	authorization->storePassword(password, passwordLength);
+	secureClear(password, sizeof(password));
+	return authorization;
 }
 
-mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package, bool detachedSudoAuthorization) {
+mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package, std::shared_ptr<UpdateAuthorization> authorization) {
 	mr::coprocessor::Result result;
 	std::string error;
 	if (task.cancelRequested()) {
 		result.status = mr::coprocessor::TaskStatus::Cancelled;
 		return result;
 	}
-	if (package == nullptr || !applyPackageThroughSudo(*package, detachedSudoAuthorization, error)) {
+	if (package == nullptr || !applyPackageThroughSudo(*package, authorization, error)) {
 		result.status = mr::coprocessor::TaskStatus::Failed;
 		result.error = error.empty() ? "Unable to install update." : error;
 		return result;
@@ -612,9 +657,10 @@ bool showChangedAndRestart(const UpdateAppliedPayload &payload) {
 	return requestMRRestartWithDirtyGating();
 }
 
-bool runInternalUpdateApply(std::string &error) {
+bool runInternalUpdateApply(const char *protocolPath, std::string &error) {
 	UpdatePackagePayload package;
 	std::array<StagedTarget, kUpdateFileCount> staged;
+	int protocolFd = -1;
 	if (::geteuid() != 0) {
 		error = "Internal update mode requires root privileges.";
 		return false;
@@ -623,7 +669,35 @@ bool runInternalUpdateApply(std::string &error) {
 		error = "Internal update mode must run from /usr/local/bin/mr.";
 		return false;
 	}
-	if (!readUpdateProtocol(STDIN_FILENO, package, error) || !verifyManifestSignature(package.manifestBytes, package.signature, error) || !parseManifest(package.manifestBytes, package.manifest, error)) return false;
+	if (protocolPath == nullptr || protocolPath[0] != '/') {
+		error = "Internal update protocol path must be absolute.";
+		return false;
+	}
+	protocolFd = ::open(protocolPath, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+	if (protocolFd < 0) {
+		error = "Unable to open the private update protocol file.";
+		return false;
+	}
+	struct stat protocolStatus {};
+	bool protocolOwnerAccepted = false;
+	if (::fstat(protocolFd, &protocolStatus) == 0 && S_ISREG(protocolStatus.st_mode) && protocolStatus.st_nlink == 1 && (protocolStatus.st_mode & 0077) == 0) {
+		protocolOwnerAccepted = protocolStatus.st_uid == 0;
+		const char *sudoUidText = std::getenv("SUDO_UID");
+		if (!protocolOwnerAccepted && sudoUidText != nullptr && *sudoUidText != '\0') {
+			char *end = nullptr;
+			errno = 0;
+			const unsigned long long sudoUid = std::strtoull(sudoUidText, &end, 10);
+			protocolOwnerAccepted = errno == 0 && end != sudoUidText && *end == '\0' && sudoUid <= std::numeric_limits<uid_t>::max() && protocolStatus.st_uid == static_cast<uid_t>(sudoUid);
+		}
+	}
+	if (!protocolOwnerAccepted) {
+		::close(protocolFd);
+		error = "Unsafe private update protocol file.";
+		return false;
+	}
+	const bool protocolRead = readUpdateProtocol(protocolFd, package, error);
+	::close(protocolFd);
+	if (!protocolRead || !verifyManifestSignature(package.manifestBytes, package.signature, error) || !parseManifest(package.manifestBytes, package.manifest, error)) return false;
 	if (versionIsNewer(mrDisplayVersion(), package.manifest.version)) {
 		error = "The signed update is older than the installed version.";
 		return false;
