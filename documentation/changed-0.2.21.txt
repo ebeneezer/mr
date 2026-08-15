@@ -1,0 +1,3 @@
+Changed in 0.2.21:
+- Keep sudo authentication and privileged update installation in the same detached credential context.
+- Replace localized sudo diagnostics with an MR-owned English update error.

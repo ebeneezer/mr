@@ -317,6 +317,7 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, std::string &e
 		return false;
 	}
 	if (child == 0) {
+		if (::setsid() < 0) ::_exit(127);
 		::close(inputPipe[1]);
 		::close(errorPipe[0]);
 		::dup2(inputPipe[0], STDIN_FILENO);
@@ -355,6 +356,7 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, std::string &e
 	if (!sent || !exited) {
 		error = errorLength != 0 ? std::string(errorBuffer.data(), errorLength) : "Privileged update installation failed.";
 		while (!error.empty() && (error.back() == '\n' || error.back() == '\r')) error.pop_back();
+		if (error.rfind("sudo:", 0) == 0) error = "sudo authorization failed during update installation.";
 		return false;
 	}
 	return true;
