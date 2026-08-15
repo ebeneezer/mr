@@ -5,6 +5,7 @@
 #define Uses_TInputLine
 #define Uses_TKeys
 #define Uses_TProgram
+#define Uses_TScreen
 #define Uses_TStaticText
 #include <tvision/tv.h>
 
@@ -224,6 +225,7 @@ bool promptSudoPassword(char password[kPasswordCapacity], std::size_t &passwordL
 		password[passwordLength] = '\0';
 	}
 	TObject::destroy(dialog);
+	TScreen::flushScreen();
 	return command == cmOK && passwordLength != 0;
 }
 
@@ -280,21 +282,27 @@ bool writeProtocol(int fd, const UpdatePackagePayload &package) {
 	return true;
 }
 
+bool installedBinaryIsTrusted() {
+	struct stat status {};
+
+	if (::lstat(kInstalledBinary, &status) != 0) return false;
+	return S_ISREG(status.st_mode) && status.st_uid == 0 && (status.st_mode & 0022) == 0;
+}
+
 bool currentExecutableIsSystemBinary() {
 	std::array<char, 4096> path{};
-	struct stat status {};
 	const ssize_t count = ::readlink("/proc/self/exe", path.data(), path.size() - 1);
+
 	if (count <= 0 || static_cast<std::size_t>(count) >= path.size()) return false;
 	path[static_cast<std::size_t>(count)] = '\0';
-	if (std::strcmp(path.data(), kInstalledBinary) != 0 || ::lstat(kInstalledBinary, &status) != 0) return false;
-	return S_ISREG(status.st_mode) && status.st_uid == 0 && (status.st_mode & 0022) == 0;
+	return std::strcmp(path.data(), kInstalledBinary) == 0 && installedBinaryIsTrusted();
 }
 
 bool applyPackageThroughSudo(const UpdatePackagePayload &package, std::string &error) {
 	int inputPipe[2] = {-1, -1};
 	int errorPipe[2] = {-1, -1};
-	if (!currentExecutableIsSystemBinary()) {
-		error = "UI updates require MR to run from /usr/local/bin/mr.";
+	if (!installedBinaryIsTrusted()) {
+		error = "Unable to find a trusted update helper at /usr/local/bin/mr.";
 		return false;
 	}
 	if (::pipe(inputPipe) != 0 || ::pipe(errorPipe) != 0) {
