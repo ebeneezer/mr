@@ -98,3 +98,14 @@ Keep commits narrow:
 - warnings separate from feature work,
 - architecture comments separate from behavior changes,
 - protected-architecture changes separate from unrelated work.
+
+## Publication discipline
+
+This is a single-maintainer repository. It has no pull-request review or
+approval workflow.
+
+- Do not create pull requests, draft pull requests or `agent/*` publication
+  branches.
+- An explicit maintainer instruction to commit, push or release means direct
+  publication to `main`.
+- Use a feature branch only when the maintainer explicitly requests it.

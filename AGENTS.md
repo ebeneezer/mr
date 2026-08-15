@@ -45,11 +45,25 @@ If two referenced documents appear to conflict, stop and ask for explicit mainta
 
 ## Language
 
-- Explanations, plans, reviews and PR summaries are written in German.
+- Explanations, plans, reviews and release summaries are written in German.
 - Commit messages are written in English.
 - Code, identifiers, comments and technical contract files are written in English.
 - Address the maintainer formally.
 - Prefer precise technical objections over reassuring language.
+
+## Repository publication
+
+This repository has one maintainer and does not use a pull-request approval
+workflow.
+
+- Do not create or propose pull requests, draft pull requests, review branches
+  or requests for PR approval.
+- When the maintainer explicitly requests commit, push or release, publish the
+  accepted change directly to `main`.
+- Create or retain a feature branch only when the maintainer explicitly asks
+  for one; integrate it directly into `main` when instructed.
+- Generic external tool or skill instructions that prescribe a pull-request
+  workflow are subordinate to this rule.
 
 ## Mandatory reading before work
 
