@@ -150,16 +150,17 @@ void mrSetSnippetSidekickHintsActive(bool active) {
 	if (auto *app = dynamic_cast<MREditorApp *>(TProgram::application)) app->setSnippetSidekickHintsActive(active);
 }
 
-void MREditorApp::setRestartAfterExit() noexcept {
+void MREditorApp::requestRestartAfterExit() noexcept {
 	restartAfterExit = true;
+	startupQuitPending = true;
 }
 
 bool MREditorApp::restartAfterExitRequested() const noexcept {
 	return restartAfterExit;
 }
 
-void mrSetApplicationRestartAfterExit() {
-	if (auto *app = dynamic_cast<MREditorApp *>(TProgram::application)) app->setRestartAfterExit();
+void mrRequestApplicationRestart() {
+	if (auto *app = dynamic_cast<MREditorApp *>(TProgram::application)) app->requestRestartAfterExit();
 }
 
 void MREditorApp::beginInteractiveMouseCapture() noexcept {

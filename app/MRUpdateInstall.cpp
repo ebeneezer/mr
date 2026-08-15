@@ -46,6 +46,16 @@ constexpr char kSudoExecutable[] = "/usr/bin/sudo";
 constexpr char kProtocolMagic[] = "MRUPD01";
 constexpr std::size_t kPasswordCapacity = 256;
 
+TRect centeredUpdateChangedBounds() {
+	constexpr short width = 76;
+	constexpr short height = 22;
+	const TRect desktop = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, width, height);
+	const short x = desktop.a.x + std::max<short>(0, (desktop.b.x - desktop.a.x - width) / 2);
+	const short y = desktop.a.y + std::max<short>(0, (desktop.b.y - desktop.a.y - height) / 2);
+
+	return TRect(x, y, x + width, y + height);
+}
+
 class PasswordInputLine final : public TInputLine {
   public:
 	PasswordInputLine(const TRect &bounds, int limit) noexcept : TInputLine(bounds, limit) {
@@ -78,8 +88,7 @@ class PasswordInputLine final : public TInputLine {
 class UpdateChangedDialog final : public TDialog {
   public:
 	UpdateChangedDialog(const std::string &version, const std::string &changedText)
-	    : TWindowInit(&TDialog::initFrame), TDialog(TRect(0, 0, 76, 22), ("Update to V" + version).c_str()) {
-		options |= ofCentered;
+	    : TWindowInit(&TDialog::initFrame), TDialog(centeredUpdateChangedBounds(), ("Update to V" + version).c_str()) {
 		flags = wfMove;
 		MRSidekickEditor *view = new MRSidekickEditor(TRect(2, 2, 74, 18), 0, 0, 0, changedText, "Changed", std::vector<MRSidekickSpan>(), true, false, false);
 		if (view != nullptr) insert(view);
@@ -544,6 +553,7 @@ bool ensureUpdatePrivileges() {
 	}
 	if (!promptSudoPassword(password, passwordLength)) {
 		secureClear(password, sizeof(password));
+		mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, "Update cancelled.", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 		return false;
 	}
 	if (validateSudoWithPassword(password, passwordLength)) return true;

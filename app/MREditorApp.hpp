@@ -38,7 +38,7 @@ class MREditorApp : public TApplication {
 	void endInteractiveMouseCapture() noexcept;
 	void refreshConfiguredUiSettingsSnapshot();
 	void setSnippetSidekickHintsActive(bool active);
-	void setRestartAfterExit() noexcept;
+	void requestRestartAfterExit() noexcept;
 	[[nodiscard]] bool restartAfterExitRequested() const noexcept;
 
   private:
@@ -105,6 +105,6 @@ class MREditorApp : public TApplication {
 
 void mrRefreshEditorApplicationUiSettingsSnapshot();
 void mrSetSnippetSidekickHintsActive(bool active);
-void mrSetApplicationRestartAfterExit();
+void mrRequestApplicationRestart();
 
 #endif

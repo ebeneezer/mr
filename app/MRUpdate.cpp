@@ -571,6 +571,7 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 		if (!result.completed() || payload == nullptr) postUpdateError(result.error);
 		else {
 			storeUpdateInt("available", 0);
+			mr::messageline::clearOwner(mr::messageline::Owner::ApplicationUpdate);
 			if (!payload->warning.empty()) mr::messageline::postTimed(mr::messageline::Owner::ApplicationUpdate, payload->warning, mr::messageline::Kind::Warning, std::chrono::seconds(7), mr::messageline::kPriorityHigh);
 			static_cast<void>(mr::update_internal::showChangedAndRestart(*payload));
 		}
@@ -585,6 +586,7 @@ bool mrHandleUpdateCommand() {
 	const std::string version = mrUpdateAvailableVersion();
 	if (version.empty()) return true;
 	storeUpdateInt("busy", 1);
+	mr::messageline::postSticky(mr::messageline::Owner::ApplicationUpdate, "Updating to V" + version + " - one moment please.", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 	const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::Custom, 0, 0, mr::coprocessor::ExecutionOwnerKind::Worker, kUpdatePackageOwner, "application update download",
 	                                                                        [version](const mr::coprocessor::TaskInfo &task) { return downloadUpdatePackage(task, version); });
 	if (taskId == 0) {

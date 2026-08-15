@@ -2116,7 +2116,10 @@ bool handleForceSave(MREditWindow *window) {
 }
 
 bool dispatchExitAfterDirtyGating(bool restartAfterExit) {
-	if (restartAfterExit) mrSetApplicationRestartAfterExit();
+	if (restartAfterExit) {
+		mrRequestApplicationRestart();
+		return true;
+	}
 	return dispatchApplicationCommandEvent(cmQuit);
 }
 
