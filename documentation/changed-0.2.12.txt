@@ -1,0 +1,2 @@
+Changed in 0.2.12:
+- Fixed automatic update notifications so available releases now appear in the message line.
