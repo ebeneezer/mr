@@ -1,0 +1,2 @@
+Changed in 0.2.16:
+- Simplified and tightened the Superuser Password update dialog.

@@ -6,7 +6,6 @@
 #define Uses_TKeys
 #define Uses_TProgram
 #define Uses_TScreen
-#define Uses_TStaticText
 #include <tvision/tv.h>
 
 #include "MRUpdateInternal.hpp"
@@ -209,14 +208,13 @@ bool validateSudoWithoutPassword() {
 bool promptSudoPassword(char password[kPasswordCapacity], std::size_t &passwordLength) {
 	passwordLength = 0;
 	if (TProgram::deskTop == nullptr) return false;
-	TDialog *dialog = new TDialog(TRect(0, 0, 48, 8), "Administrator password");
+	TDialog *dialog = new TDialog(TRect(0, 0, 48, 7), "Superuser Password");
 	if (dialog == nullptr) return false;
 	dialog->options |= ofCentered;
 	dialog->flags = wfMove;
-	dialog->insert(new TStaticText(TRect(2, 2, 46, 3), "sudo password:"));
-	PasswordInputLine *field = new PasswordInputLine(TRect(2, 3, 46, 4), static_cast<int>(kPasswordCapacity - 1));
+	PasswordInputLine *field = new PasswordInputLine(TRect(2, 2, 46, 3), static_cast<int>(kPasswordCapacity - 1));
 	dialog->insert(field);
-	dialog->insert(new TButton(TRect(18, 5, 30, 7), "~U~pdate", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(18, 4, 30, 6), "~U~pdate", cmOK, bfDefault));
 	field->select();
 	const ushort command = TProgram::deskTop->execView(dialog);
 	if (command == cmOK && field->data != nullptr) {
