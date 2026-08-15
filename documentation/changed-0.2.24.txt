@@ -1,0 +1,2 @@
+Changed in 0.2.24:
+- Provide the necessary newer release for positive end-to-end verification of the updater fix.
