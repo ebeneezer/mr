@@ -127,7 +127,7 @@ bool MRColumnListView::handleWheel(TEvent &event) {
 }
 
 TColorAttr MRColumnListView::mapColor(uchar index) {
-	unsigned char configured = 0;
+	TColorAttr configured;
 
 	if (useContextMenuColors) {
 		if ((index == 1 || index == 2 || index == 5) && configuredColorSlotOverride(kMrPaletteContextMenu, configured)) return configured;
@@ -160,43 +160,43 @@ void MRColumnListView::handleEvent(TEvent &event) {
 }
 
 TColorAttr MRColumnListView::colorForRow(short row) {
-	unsigned char configured = 0;
+	TColorAttr configured;
 	RowStyle style = RowStyle::Normal;
 
 	if (row >= 0 && static_cast<std::size_t>(row) < rowStyles.size()) style = rowStyles[static_cast<std::size_t>(row)];
 	switch (style) {
 		case RowStyle::OutlineHeader:
-			if (configuredColorSlotOverride(kMrPaletteOutlineFileHeader, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineFileHeader, configured)) return configured;
 			return TColorAttr(0x1F);
 		case RowStyle::OutlineLevel0:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel0, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel0, configured)) return configured;
 			return TColorAttr(0x1F);
 		case RowStyle::OutlineLevel1:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel1, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel1, configured)) return configured;
 			return TColorAttr(0x1E);
 		case RowStyle::OutlineLevel2:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel2, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel2, configured)) return configured;
 			return TColorAttr(0x1B);
 		case RowStyle::OutlineLevel3:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel3, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel3, configured)) return configured;
 			return TColorAttr(0x1A);
 		case RowStyle::OutlineLevel4:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel4, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel4, configured)) return configured;
 			return TColorAttr(0x1D);
 		case RowStyle::OutlineLevel5:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel5, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel5, configured)) return configured;
 			return TColorAttr(0x19);
 		case RowStyle::OutlineLevel6:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel6, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel6, configured)) return configured;
 			return TColorAttr(0x1C);
 		case RowStyle::OutlineLevel7:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel7, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel7, configured)) return configured;
 			return TColorAttr(0x13);
 		case RowStyle::OutlineLevel8:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel8, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel8, configured)) return configured;
 			return TColorAttr(0x1F);
 		case RowStyle::OutlineLevel9:
-			if (configuredColorSlotOverride(kMrPaletteOutlineLevel9, configured)) return static_cast<TColorAttr>(configured);
+			if (configuredColorSlotOverride(kMrPaletteOutlineLevel9, configured)) return configured;
 			return TColorAttr(0x1E);
 		case RowStyle::Normal:
 		default:

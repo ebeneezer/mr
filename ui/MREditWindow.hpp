@@ -1901,7 +1901,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
  public:
 	void applyWindowColorThemeForPath(const std::string &path) {
-		std::array<unsigned char, MRColorSetupSettings::kWindowCount> colors;
+		std::array<MRRgbColorAttribute, MRColorSetupSettings::kWindowCount> colors;
 		std::string themePath;
 		std::string errorText;
 		const bool hasTheme = effectiveEditWindowColorThemePathForPath(path, themePath, nullptr) && !themePath.empty();
@@ -1915,10 +1915,11 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			return;
 		}
 
-		const TColorAttr framePassive = static_cast<TColorAttr>(colors[4]);
-		const TColorAttr frameActive = static_cast<TColorAttr>(colors[5]);
-		const TColorAttr textNormal = static_cast<TColorAttr>(colors[0]);
-		const TColorAttr textSelected = static_cast<TColorAttr>(colors[2]);
+		const MRColorOutputMode outputMode = configuredColorOutputMode();
+		const TColorAttr framePassive = projectColorAttribute(colors[4], outputMode);
+		const TColorAttr frameActive = projectColorAttribute(colors[5], outputMode);
+		const TColorAttr textNormal = projectColorAttribute(colors[0], outputMode);
+		const TColorAttr textSelected = projectColorAttribute(colors[2], outputMode);
 
 		mWindowPaletteData[0] = framePassive;
 		mWindowPaletteData[1] = frameActive;
@@ -1928,13 +1929,13 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		mWindowPaletteData[5] = textNormal;
 		mWindowPaletteData[6] = textSelected;
 		mWindowPaletteData[7] = textSelected;
-		mWindowPaletteData[8] = static_cast<TColorAttr>(colors[6]);
-		mWindowPaletteData[9] = static_cast<TColorAttr>(colors[7]);
-		mWindowPaletteData[10] = static_cast<TColorAttr>(colors[1]);
-		mWindowPaletteData[11] = static_cast<TColorAttr>(colors[8]);
-		mWindowPaletteData[12] = static_cast<TColorAttr>(colors[12]);
+		mWindowPaletteData[8] = projectColorAttribute(colors[6], outputMode);
+		mWindowPaletteData[9] = projectColorAttribute(colors[7], outputMode);
+		mWindowPaletteData[10] = projectColorAttribute(colors[1], outputMode);
+		mWindowPaletteData[11] = projectColorAttribute(colors[8], outputMode);
+		mWindowPaletteData[12] = projectColorAttribute(colors[12], outputMode);
 		mCustomEofMarkerColorValid = true;
-		mCustomEofMarkerColor = static_cast<TColorAttr>(colors[3]);
+		mCustomEofMarkerColor = projectColorAttribute(colors[3], outputMode);
 		rebuildWindowPalette();
 		if (editor != nullptr) editor->setWindowEofMarkerColorOverride(true, mCustomEofMarkerColor);
 		refreshWindowPaletteViews();
@@ -2000,8 +2001,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	}
 
 	static TColorAttr configuredWindowPaletteSlot(unsigned char slot) noexcept {
-		unsigned char value = 0x07;
-		unsigned char overrideValue = 0;
+		TColorAttr value(0x07);
 
 		switch (slot) {
 			case 8:
@@ -2041,8 +2041,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			default:
 				break;
 		}
-		if (configuredColorSlotOverride(slot, overrideValue)) value = overrideValue;
-		return static_cast<TColorAttr>(value);
+		static_cast<void>(configuredColorSlotOverride(slot, value));
+		return value;
 	}
 
 	static std::array<TColorAttr, 13> defaultWindowPaletteData() noexcept {

@@ -106,7 +106,7 @@ class TPanelGlyphButton : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+		TAttrPair color = getColor((state & sfFocused) != 0 ? 2 : 1);
 		int glyphWidth = strwidth(glyphId.c_str());
 		int x = std::max(0, (size.x - glyphWidth) / 2);
 
@@ -156,8 +156,8 @@ class TFormatRulerView : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		const ushort normal = getColor((state & sfFocused) != 0 ? 2 : 1);
-		const ushort accent = getColor((state & sfFocused) != 0 ? 5 : 4);
+		const TAttrPair normal = getColor((state & sfFocused) != 0 ? 2 : 1);
+		const TAttrPair accent = getColor((state & sfFocused) != 0 ? 5 : 4);
 		std::string normalized;
 		int tabSize = panel.currentFormatLineTabSize();
 		int leftMargin = panel.currentFormatLineLeftMargin();

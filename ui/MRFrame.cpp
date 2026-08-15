@@ -106,9 +106,9 @@ bool isFrameFocused(const MRFrame *frame) noexcept {
 }
 
 TColorAttr frameMarkerHintColor() {
-	unsigned char configured = 0;
+	TColorAttr configured;
 
-	if (configuredColorSlotOverride(kFrameMarkerHintColorSlot, configured)) return static_cast<TColorAttr>(configured);
+	if (configuredColorSlotOverride(kFrameMarkerHintColorSlot, configured)) return configured;
 	return 0x70;
 }
 
@@ -400,12 +400,12 @@ void MRFrame::draw() {
 	cTitle = getColor(cTitle);
 	if (window != nullptr) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
-		unsigned char fileCompareBentoBorder = 0;
-		unsigned char fileCompareBentoBorderBold = 0;
+		TColorAttr fileCompareBentoBorder;
+		TColorAttr fileCompareBentoBorderBold;
 
 		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) {
-			if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorder, fileCompareBentoBorder)) cFrame = static_cast<TColorAttr>(fileCompareBentoBorder);
-			if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorderBold, fileCompareBentoBorderBold)) cTitle = static_cast<TColorAttr>(fileCompareBentoBorderBold);
+			if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorder, fileCompareBentoBorder)) cFrame = fileCompareBentoBorder;
+			if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorderBold, fileCompareBentoBorderBold)) cTitle = fileCompareBentoBorderBold;
 		}
 	}
 

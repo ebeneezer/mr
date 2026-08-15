@@ -6,8 +6,8 @@
 
 namespace mr_menu_drawing {
 
-inline unsigned char resolvedPaletteAttribute(unsigned char paletteIndex, unsigned char fallback) {
-	unsigned char value = fallback;
+inline TColorAttr resolvedPaletteAttribute(unsigned char paletteIndex, unsigned char fallback) {
+	TColorAttr value(fallback);
 
 	static_cast<void>(configuredColorSlotOverride(paletteIndex, value));
 	return value;

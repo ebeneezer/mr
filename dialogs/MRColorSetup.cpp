@@ -1,19 +1,14 @@
 #define Uses_TButton
-#define Uses_TColorDisplay
-#define Uses_TColorGroup
-#define Uses_TColorGroupList
-#define Uses_TColorItem
-#define Uses_TColorItemList
-#define Uses_TColorSelector
 #define Uses_TDialog
 #define Uses_TDrawBuffer
 #define Uses_TEvent
-#define Uses_TInputLine
 #define Uses_TKeys
-#define Uses_TMonoSelector
+#define Uses_TLabel
+#define Uses_TListViewer
 #define Uses_TProgram
 #define Uses_TRect
 #define Uses_TScrollBar
+#define Uses_TStaticText
 #define Uses_TView
 #include <tvision/tv.h>
 
@@ -25,52 +20,31 @@
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/widgets/MRDropList.hpp"
+#include "../ui/widgets/MRNumericSlider.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cstdio>
+#include <cstring>
 #include <string>
+#include <vector>
 
 namespace {
 
 constexpr ushort cmMrColorGroupChoose = 0x7410;
 constexpr ushort cmMrColorGroupAccept = 0x7411;
+constexpr ushort cmMrColorItemFocused = 0x7412;
+
+constexpr std::array<MRColorSetupGroup, 9> kColorGroups = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap,
+                                                         MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::Code, MRColorSetupGroup::FileCompare, MRColorSetupGroup::Debugger};
 
 TFrame *initSetupDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
 
-class TThemeNameField : public TView {
+class TCenteredTextField : public TView {
   public:
-	TThemeNameField(const TRect &bounds, const std::string &text) : TView(bounds), mText(text) {
-	}
-
-	void setText(const std::string &text) {
-		mText = text;
-		drawView();
-	}
-
-	void draw() override {
-		TDrawBuffer buffer;
-		TColorAttr color = (TProgram::application != nullptr) ? TProgram::application->mapColor(2) : TColorAttr(getColor(1));
-		std::string shown = "active: " + mText;
-		int start = 0;
-
-		buffer.moveChar(0, ' ', color, size.x);
-		if (size.x > 0) {
-			if (shown.size() > static_cast<std::size_t>(size.x)) shown = shown.substr(0, static_cast<std::size_t>(size.x));
-			start = (size.x - static_cast<int>(shown.size())) / 2;
-			if (start < 0) start = 0;
-			buffer.moveStr(static_cast<ushort>(start), shown.c_str(), color, size.x - start);
-		}
-		writeLine(0, 0, size.x, 1, buffer);
-	}
-
-  private:
-	std::string mText;
-};
-
-class TColorGroupCaption : public TView {
-  public:
-	TColorGroupCaption(const TRect &bounds, const std::string &text) : TView(bounds), mText(text) {
+	TCenteredTextField(const TRect &bounds, std::string text) : TView(bounds), mText(std::move(text)) {
 	}
 
 	void setText(const std::string &text) {
@@ -81,12 +55,16 @@ class TColorGroupCaption : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		TColorAttr color = (TProgram::application != nullptr) ? TProgram::application->mapColor(2) : TColorAttr(getColor(1));
+		const TColorAttr color = TProgram::application != nullptr ? TProgram::application->mapColor(2) : TColorAttr(getColor(1));
 		std::string shown = mText;
+		int start = 0;
 
 		buffer.moveChar(0, ' ', color, size.x);
-		if (shown.size() > static_cast<std::size_t>(size.x)) shown = shown.substr(0, static_cast<std::size_t>(size.x));
-		if (!shown.empty()) buffer.moveStr(0, shown.c_str(), color, std::min<int>(size.x, static_cast<int>(shown.size())));
+		if (shown.size() > static_cast<std::size_t>(size.x)) shown.resize(static_cast<std::size_t>(size.x));
+		if (!shown.empty()) {
+			start = std::max(0, (size.x - static_cast<int>(shown.size())) / 2);
+			buffer.moveStr(static_cast<ushort>(start), shown.c_str(), color, size.x - start);
+		}
 		writeLine(0, 0, size.x, 1, buffer);
 	}
 
@@ -94,166 +72,131 @@ class TColorGroupCaption : public TView {
 	std::string mText;
 };
 
-class TAnsi16BackgroundSelector : public TColorSelector {
+class TRgbColorItemList : public TListViewer {
   public:
-	TAnsi16BackgroundSelector(const TRect &bounds) noexcept : TColorSelector(bounds, TColorSelector::csBackground) {
+	TRgbColorItemList(const TRect &bounds, TScrollBar *scrollBar, TView *relay) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), mRelay(relay) {
 	}
 
-	void draw() override {
-		TDrawBuffer buffer;
-
-		for (int row = 0; row < size.y; ++row) {
-			buffer.moveChar(0, ' ', 0x70, size.x);
-			for (int column = 0; column < kColumns; ++column) {
-				const int swatch = row * kColumns + column;
-
-				buffer.moveChar(column * kSwatchWidth, '\xDB', static_cast<uchar>(swatch), kSwatchWidth);
-				if (swatch == color) {
-					buffer.putChar(column * kSwatchWidth + 1, 8);
-					if (swatch == 0) buffer.putAttribute(column * kSwatchWidth + 1, 0x70);
-				}
-			}
-			writeLine(0, row, size.x, 1, buffer);
-		}
-	}
-
-	void handleEvent(TEvent &event) override {
-		const uchar oldColor = color;
-
-		TView::handleEvent(event);
-		switch (event.what) {
-			case evMouseDown:
-				do {
-					if (mouseInView(event.mouse.where)) {
-						const TPoint mouse = makeLocal(event.mouse.where);
-
-						color = static_cast<uchar>(mouse.y * kColumns + mouse.x / kSwatchWidth);
-					} else {
-						color = oldColor;
-					}
-					notifyColorChanged();
-					drawView();
-				} while (mouseEvent(event, evMouseMove));
-				clearEvent(event);
-				return;
-
-			case evKeyDown:
-				switch (ctrlToArrow(event.keyDown.keyCode)) {
-					case kbLeft:
-						color = color > 0 ? static_cast<uchar>(color - 1) : static_cast<uchar>(kMaxColor);
-						break;
-
-					case kbRight:
-						color = color < kMaxColor ? static_cast<uchar>(color + 1) : static_cast<uchar>(0);
-						break;
-
-					case kbUp:
-						color = color >= kColumns ? static_cast<uchar>(color - kColumns) : static_cast<uchar>(color + kColumns);
-						break;
-
-					case kbDown:
-						color = color < kColumns ? static_cast<uchar>(color + kColumns) : static_cast<uchar>(color - kColumns);
-						break;
-
-					default:
-						return;
-				}
-				break;
-
-			case evBroadcast:
-				if (event.message.command != cmColorSet) return;
-				color = static_cast<uchar>(event.message.infoByte >> 4);
-				drawView();
-				return;
-
-			default:
-				return;
+	void setItems(const MRColorSetupItem *items, MRRgbColorAttribute *colors, std::size_t count, short focusedItem, MRColorOutputMode outputMode) {
+		mItems = items;
+		mColors = colors;
+		mCount = count;
+		mOutputMode = outputMode;
+		setRange(static_cast<short>(std::min<std::size_t>(count, static_cast<std::size_t>(32767))));
+		if (range > 0) focusItemNum(focusedItem);
+		else {
+			focused = 0;
+			topItem = 0;
 		}
 		drawView();
-		notifyColorChanged();
-		clearEvent(event);
 	}
 
-  private:
-	static constexpr int kColumns = 4;
-	static constexpr int kRows = 4;
-	static constexpr int kSwatchWidth = 3;
-	static constexpr int kMaxColor = kColumns * kRows - 1;
-
-	void notifyColorChanged() {
-		message(owner, evBroadcast, cmColorBackgroundChanged, (void *)(size_t)color);
-	}
-};
-
-class TRelayColorItemList : public TColorItemList {
-  public:
-	TRelayColorItemList(const TRect &bounds, TScrollBar *scrollBar, TColorItem *colorItems, TView *relay) noexcept : TColorItemList(bounds, scrollBar, colorItems), mRelay(relay) {
+	void refreshSwatches() {
+		drawView();
 	}
 
 	void focusItem(short item) override {
 		TListViewer::focusItem(item);
-		if (mRelay == nullptr) return;
+		if (mRelay != nullptr) message(mRelay, evBroadcast, cmMrColorItemFocused, reinterpret_cast<void *>(static_cast<std::size_t>(focused)));
+	}
 
-		message(mRelay, evBroadcast, cmSaveColorIndex, (void *)(size_t)item);
-		TColorItem *curItem = items;
-		short index = item;
+	void getText(char *dest, short item, short maxLen) override {
+		if (dest == nullptr || maxLen <= 0) return;
+		if (item < 0 || static_cast<std::size_t>(item) >= mCount || mItems == nullptr) {
+			dest[0] = EOS;
+			return;
+		}
+		std::strncpy(dest, mItems[item].label, static_cast<std::size_t>(maxLen - 1));
+		dest[maxLen - 1] = EOS;
+	}
 
-		while (curItem != nullptr && index-- > 0)
-			curItem = curItem->next;
-		if (curItem != nullptr) message(mRelay, evBroadcast, cmNewColorIndex, (void *)(size_t)(curItem->index));
+	void draw() override {
+		TColorAttr normalColor;
+		TColorAttr focusedColor;
+
+		if ((state & (sfSelected | sfActive)) == (sfSelected | sfActive)) {
+			normalColor = getColor(1);
+			focusedColor = getColor(3);
+		} else {
+			normalColor = getColor(2);
+			focusedColor = normalColor;
+		}
+
+		bool focusedVisible = false;
+		for (short y = 0; y < size.y; ++y) {
+			TDrawBuffer buffer;
+			const short item = static_cast<short>(topItem + y);
+			const bool valid = item >= 0 && static_cast<std::size_t>(item) < mCount && mItems != nullptr && mColors != nullptr;
+			const bool isFocused = valid && item == focused && (state & (sfSelected | sfActive)) == (sfSelected | sfActive);
+			const TColorAttr descriptionColor = isFocused ? focusedColor : normalColor;
+
+			buffer.moveChar(0, ' ', descriptionColor, size.x);
+			if (valid) {
+				const TColorAttr sampleColor = projectColorAttribute(mColors[item], mOutputMode);
+
+				buffer.moveStr(1, "Aa ", sampleColor, 3);
+				buffer.moveChar(4, ' ', normalColor, 1);
+				if (size.x > 5) buffer.moveStr(5, mItems[item].label, descriptionColor, size.x - 5);
+				if (isFocused) {
+					buffer.putChar(0, '>');
+					setCursor(5, y);
+					focusedVisible = true;
+				}
+			}
+			writeLine(0, y, size.x, 1, buffer);
+		}
+		if (!focusedVisible) setCursor(-1, -1);
 	}
 
   private:
 	TView *mRelay = nullptr;
+	const MRColorSetupItem *mItems = nullptr;
+	MRRgbColorAttribute *mColors = nullptr;
+	std::size_t mCount = 0;
+	MRColorOutputMode mOutputMode = MRColorOutputMode::RgbAutomatic;
 };
 
 class TUnifiedColorSetupDialog : public MRScrollableDialog {
   public:
-	static const int kDialogWidth = 76;
-	static const int kDialogHeight = 21;
+	static const int kDialogWidth = 80;
+	static const int kDialogHeight = 22;
 
-	TUnifiedColorSetupDialog(const char *title, TColorGroup *groupsHead) noexcept : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kDialogHeight), title, kDialogWidth, kDialogHeight, initSetupDialogFrame), mGroupsHead(groupsHead) {
+	TUnifiedColorSetupDialog() noexcept
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kDialogHeight), "COLORS", kDialogWidth, kDialogHeight, initSetupDialogFrame), mDraft(resolveColorSetupDefaults()),
+	      mOutputMode(configuredColorOutputMode()) {
 		helpCtx = hcDialogColorSetup;
-		for (TColorGroup *group = groupsHead; group != nullptr; group = group->next)
-			group->index = 0;
-		buildViews(groupsHead);
+		buildViews();
 		initScrollIfNeeded();
+		refreshGroupField();
+		showCurrentGroupItems();
+		refreshSlidersFromCurrentColor();
 		selectContent();
 	}
 
-	~TUnifiedColorSetupDialog() {
-		delete mPal;
-		freeGroups(mGroupsHead);
-	}
-
 	ushort dataSize() override {
-		return mPal != nullptr ? static_cast<ushort>(*mPal->data + 1) : 0;
+		return static_cast<ushort>(sizeof(MRColorSetupSettings));
 	}
 
 	void getData(void *rec) override {
-		if (rec != nullptr && mPal != nullptr) *static_cast<TPalette *>(rec) = *mPal;
+		storeSlidersInCurrentColor();
+		if (rec != nullptr) *static_cast<MRColorSetupSettings *>(rec) = mDraft;
 	}
 
 	void setData(void *rec) override {
 		if (rec == nullptr) return;
-		if (mPal == nullptr) mPal = new TPalette("", 0);
-		*mPal = *static_cast<TPalette *>(rec);
+		mDraft = *static_cast<const MRColorSetupSettings *>(rec);
+		mGroupIndex = 0;
+		mItemIndices.fill(0);
 		refreshGroupField();
 		showCurrentGroupItems();
-		mDisplay->setColor(&mPal->data[currentPaletteIndex()]);
-		if (showMarkers) {
-			mForLabel->hide();
-			mForSel->hide();
-			mBakLabel->hide();
-			mBakSel->hide();
-			mMonoLabel->show();
-			mMonoSel->show();
-		}
-		mThemeField->setText(configuredColorThemeDisplayName());
-		mItemList->select();
+		refreshSlidersFromCurrentColor();
+		refreshThemeField();
+		if (mItemList != nullptr) mItemList->select();
 	}
 
 	void handleEvent(TEvent &event) override {
+		const bool sliderChanged = event.what == evBroadcast && event.message.command == cmMRNumericSliderChanged;
+
 		if (mGroupField != nullptr && mGroupField->handleDropListEvent(event)) return;
 		if (event.what == evMouseDown && mGroupField != nullptr && mGroupField->mouseInView(event.mouse.where)) {
 			mGroupField->select();
@@ -261,9 +204,17 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 			clearEvent(event);
 			return;
 		}
-		if (event.what == evBroadcast && event.message.command == cmSaveColorIndex) rememberCurrentItemIndex(event.message.infoByte);
-		if (event.what == evBroadcast && event.message.command == cmNewColorIndex) syncDisplayToPaletteIndex(event.message.infoByte);
+		if (event.what == evBroadcast && event.message.command == cmMrColorItemFocused) {
+			setCurrentItemIndex(static_cast<short>(event.message.infoLong));
+			clearEvent(event);
+			return;
+		}
 		MRScrollableDialog::handleEvent(event);
+		if (sliderChanged) {
+			storeSlidersInCurrentColor();
+			clearEvent(event);
+			return;
+		}
 		if (event.what == evCommand && event.message.command == cmMrColorGroupChoose) {
 			toggleGroupList();
 			clearEvent(event);
@@ -277,103 +228,85 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 		if (event.what == evCommand && (event.message.command == cmMrColorLoadTheme || event.message.command == cmMrColorSaveTheme)) {
 			endModal(event.message.command);
 			clearEvent(event);
-			return;
 		}
 	}
 
   private:
-	static void freeItems(TColorItem *item) {
-		while (item != nullptr) {
-			TColorItem *next = item->next;
-			delete item;
-			item = next;
-		}
-	}
-
-	static void freeGroups(TColorGroup *group) {
-		while (group != nullptr) {
-			TColorGroup *next = group->next;
-			freeItems(group->items);
-			delete group;
-			group = next;
-		}
-	}
-
-	TColorGroupCaption *addCaption(const TRect &rect, const char *title) {
-		TColorGroupCaption *view = new TColorGroupCaption(rect, title);
-		addManaged(view, rect);
-		return view;
-	}
-
 	std::vector<std::string> groupNames() const {
 		std::vector<std::string> names;
 
-		for (TColorGroup *group = mGroupsHead; group != nullptr; group = group->next)
-			names.push_back(group->name != nullptr ? group->name : "");
+		for (MRColorSetupGroup group : kColorGroups)
+			names.emplace_back(colorSetupGroupTitle(group));
 		return names;
 	}
 
-	TColorGroup *groupAt(uchar index) const {
-		TColorGroup *group = mGroupsHead;
-
-		while (group != nullptr && index-- > 0)
-			group = group->next;
-		return group;
+	MRRgbColorAttribute *groupColors(MRColorSetupGroup group, std::size_t &count) {
+		switch (group) {
+			case MRColorSetupGroup::Window:
+				count = mDraft.windowColors.size();
+				return mDraft.windowColors.data();
+			case MRColorSetupGroup::MenuDialog:
+				count = mDraft.menuDialogColors.size();
+				return mDraft.menuDialogColors.data();
+			case MRColorSetupGroup::Help:
+				count = mDraft.helpColors.size();
+				return mDraft.helpColors.data();
+			case MRColorSetupGroup::Other:
+				count = mDraft.otherColors.size();
+				return mDraft.otherColors.data();
+			case MRColorSetupGroup::MiniMap:
+				count = mDraft.miniMapColors.size();
+				return mDraft.miniMapColors.data();
+			case MRColorSetupGroup::FileCompareMiniMap:
+				count = mDraft.fileCompareMiniMapColors.size();
+				return mDraft.fileCompareMiniMapColors.data();
+			case MRColorSetupGroup::Code:
+				count = mDraft.codeColors.size();
+				return mDraft.codeColors.data();
+			case MRColorSetupGroup::FileCompare:
+				count = mDraft.fileCompareColors.size();
+				return mDraft.fileCompareColors.data();
+			case MRColorSetupGroup::Debugger:
+				count = mDraft.debuggerColors.size();
+				return mDraft.debuggerColors.data();
+		}
+		count = 0;
+		return nullptr;
 	}
 
-	TColorGroup *currentGroup() const {
-		return groupAt(mGroupIndex);
+	MRColorSetupGroup currentGroup() const {
+		return kColorGroups[mGroupIndex];
 	}
 
-	std::string currentGroupName() const {
-		TColorGroup *group = currentGroup();
+	MRRgbColorAttribute *currentColor() {
+		std::size_t count = 0;
+		MRRgbColorAttribute *colors = groupColors(currentGroup(), count);
+		const short itemIndex = mItemIndices[mGroupIndex];
 
-		return group != nullptr && group->name != nullptr ? group->name : "";
-	}
-
-	uchar currentPaletteIndex() const {
-		TColorGroup *group = currentGroup();
-		TColorItem *item = group != nullptr ? group->items : nullptr;
-		uchar index = group != nullptr ? group->index : 0;
-
-		while (item != nullptr && index-- > 0)
-			item = item->next;
-		if (item == nullptr && group != nullptr) item = group->items;
-		return item != nullptr ? item->index : 0;
-	}
-
-	void syncDisplayToPaletteIndex(uchar index) {
-		if (mPal == nullptr || mDisplay == nullptr) return;
-		if (index == 0 || index > static_cast<uchar>(*mPal->data)) return;
-		mDisplay->setColor(&mPal->data[index]);
-	}
-
-	void syncDisplayToCurrentItem() {
-		syncDisplayToPaletteIndex(currentPaletteIndex());
+		if (colors == nullptr || itemIndex < 0 || static_cast<std::size_t>(itemIndex) >= count) return nullptr;
+		return &colors[itemIndex];
 	}
 
 	void refreshGroupField() {
-		if (mGroupField != nullptr) mGroupField->setValue(currentGroupName());
+		if (mGroupField != nullptr) mGroupField->setValue(colorSetupGroupTitle(currentGroup()));
 	}
 
 	void showCurrentGroupItems() {
-		TColorGroup *group = currentGroup();
+		std::size_t itemCount = 0;
+		std::size_t colorCount = 0;
+		const MRColorSetupItem *items = colorSetupGroupItems(currentGroup(), itemCount);
+		MRRgbColorAttribute *colors = groupColors(currentGroup(), colorCount);
 
-		if (group != nullptr) message(this, evBroadcast, cmNewColorItem, group);
+		if (mItemList == nullptr) return;
+		mItemList->setItems(items, colors, std::min(itemCount, colorCount), mItemIndices[mGroupIndex], mOutputMode);
 	}
 
-	void rememberCurrentItemIndex(uchar index) {
-		TColorGroup *group = currentGroup();
-		uchar itemCount = 0;
-
-		if (group == nullptr) return;
-		for (TColorItem *item = group->items; item != nullptr; item = item->next)
-			++itemCount;
-		if (itemCount == 0) {
-			group->index = 0;
-			return;
-		}
-		group->index = index < itemCount ? index : static_cast<uchar>(itemCount - 1);
+	void setCurrentItemIndex(short index) {
+		std::size_t count = 0;
+		groupColors(currentGroup(), count);
+		if (count == 0) return;
+		mItemIndices[mGroupIndex] = static_cast<short>(std::clamp<int>(index, 0, static_cast<int>(count - 1)));
+		refreshSlidersFromCurrentColor();
 	}
 
 	void toggleGroupList() {
@@ -388,105 +321,128 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 
 	void acceptGroupSelection() {
 		std::string selectedGroup;
-		std::vector<std::string> names = groupNames();
+		const std::vector<std::string> names = groupNames();
 
 		if (mGroupField == nullptr || !mGroupField->acceptDropListSelection()) return;
 		selectedGroup = mGroupField->value();
 		for (std::size_t i = 0; i < names.size(); ++i) {
 			if (names[i] != selectedGroup) continue;
-			mGroupIndex = static_cast<uchar>(i);
+			mGroupIndex = i;
 			refreshGroupField();
 			showCurrentGroupItems();
-			syncDisplayToCurrentItem();
+			refreshSlidersFromCurrentColor();
 			mItemList->select();
 			return;
 		}
 		refreshGroupField();
 	}
 
-	void buildViews(TColorGroup *groupsHead) {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
-		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
+	static int colorComponent(std::uint32_t rgb, unsigned shift) {
+		return static_cast<int>((rgb >> shift) & 0xFFU);
+	}
+
+	static std::uint32_t sliderRgb(MRNumericSlider *red, MRNumericSlider *green, MRNumericSlider *blue) {
+		return (static_cast<std::uint32_t>(red->getValue()) << 16U) | (static_cast<std::uint32_t>(green->getValue()) << 8U) | static_cast<std::uint32_t>(blue->getValue());
+	}
+
+	void refreshSlidersFromCurrentColor() {
+		const MRRgbColorAttribute *color = currentColor();
+
+		if (color == nullptr) return;
+		mForegroundRed->setValue(colorComponent(color->foregroundRgb, 16));
+		mForegroundGreen->setValue(colorComponent(color->foregroundRgb, 8));
+		mForegroundBlue->setValue(colorComponent(color->foregroundRgb, 0));
+		mBackgroundRed->setValue(colorComponent(color->backgroundRgb, 16));
+		mBackgroundGreen->setValue(colorComponent(color->backgroundRgb, 8));
+		mBackgroundBlue->setValue(colorComponent(color->backgroundRgb, 0));
+		refreshExactValue();
+	}
+
+	void storeSlidersInCurrentColor() {
+		MRRgbColorAttribute *color = currentColor();
+
+		if (color == nullptr) return;
+		color->foregroundRgb = sliderRgb(mForegroundRed, mForegroundGreen, mForegroundBlue);
+		color->backgroundRgb = sliderRgb(mBackgroundRed, mBackgroundGreen, mBackgroundBlue);
+		refreshExactValue();
+		if (mItemList != nullptr) mItemList->refreshSwatches();
+	}
+
+	void refreshExactValue() {
+		const MRRgbColorAttribute *color = currentColor();
+		std::array<char, 32> text{};
+
+		if (color == nullptr || mExactValueField == nullptr) return;
+		std::snprintf(text.data(), text.size(), "%06X/%06X", static_cast<unsigned>(color->foregroundRgb), static_cast<unsigned>(color->backgroundRgb));
+		mExactValueField->setText(text.data());
+	}
+
+	void refreshThemeField() {
+		if (mThemeField != nullptr) mThemeField->setText("active: " + configuredColorThemeDisplayName());
+	}
+
+	MRNumericSlider *addSlider(const TRect &rect, const char *label) {
+		MRNumericSlider *slider = new MRNumericSlider(rect, 0, 255, 0, 1, 16, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(slider, rect);
+		const TRect labelRect(rect.a.x - 3, rect.a.y, rect.a.x - 1, rect.b.y);
+		addManaged(new TLabel(labelRect, label, slider), labelRect);
+		return slider;
+	}
+
+	void buildViews() {
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~O~K", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
+		                         mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal},
+		                         mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 
-		mGroupField = new MRStringChoiceField(TRect(3, 2, 57, 3), 64);
+		mGroupField = new MRStringChoiceField(TRect(3, 1, 78, 2), 72);
 		mGroupField->setChoices(groupNames());
-		mGroupField->setValue(currentGroupName());
-		addManaged(mGroupField, TRect(3, 2, 57, 3));
-		mGroupField->createDropListButton(*this, TRect(57, 2, 58, 3), this, cmMrColorGroupChoose, false);
-		mGroupListAnchor = TRect(3, 3, 58, 4);
+		addManaged(mGroupField, TRect(3, 1, 78, 2));
+		mGroupField->createDropListButton(*this, TRect(78, 1, 79, 2), this, cmMrColorGroupChoose, false);
+		mGroupListAnchor = TRect(3, 2, 79, 3);
 
-		mItemScroll = new TScrollBar(TRect(57, 3, 58, 16));
-		addManaged(mItemScroll, TRect(57, 3, 58, 16));
+		mItemScroll = new TScrollBar(TRect(78, 2, 79, 12));
+		addManaged(mItemScroll, TRect(78, 2, 79, 12));
+		mItemList = new TRgbColorItemList(TRect(3, 2, 78, 12), mItemScroll, this);
+		addManaged(mItemList, TRect(3, 2, 78, 12));
 
-		mItemList = new TRelayColorItemList(TRect(3, 3, 57, 16), mItemScroll, groupsHead->items, this);
-		addManaged(mItemList, TRect(3, 3, 57, 16));
+		addManaged(new TStaticText(TRect(3, 12, 38, 13), "Foreground RGB"), TRect(3, 12, 38, 13));
+		addManaged(new TStaticText(TRect(42, 12, 77, 13), "Background RGB"), TRect(42, 12, 77, 13));
+		mForegroundRed = addSlider(TRect(6, 13, 38, 14), "~R~");
+		mForegroundGreen = addSlider(TRect(6, 14, 38, 15), "~G~");
+		mForegroundBlue = addSlider(TRect(6, 15, 38, 16), "~B~");
+		mBackgroundRed = addSlider(TRect(45, 13, 77, 14), "R");
+		mBackgroundGreen = addSlider(TRect(45, 14, 77, 15), "G");
+		mBackgroundBlue = addSlider(TRect(45, 15, 77, 16), "B");
 
-		mForSel = new TColorSelector(TRect(60, 3, 72, 7), TColorSelector::csForeground);
-		addManaged(mForSel, TRect(60, 3, 72, 7));
-		mForLabel = addCaption(TRect(60, 2, 72, 3), "Foreground");
-
-		mBakSel = new TAnsi16BackgroundSelector(TRect(60, 9, 72, 13));
-		addManaged(mBakSel, TRect(60, 9, 72, 13));
-		mBakLabel = addCaption(TRect(60, 8, 72, 9), "Background");
-
-		mDisplay = new TColorDisplay(TRect(59, 14, 73, 16), "Text ");
-		addManaged(mDisplay, TRect(59, 14, 73, 16));
-
-		mMonoSel = new TMonoSelector(TRect(59, 3, 74, 7));
-		mMonoSel->hide();
-		addManaged(mMonoSel, TRect(59, 3, 74, 7));
-
-		mMonoLabel = addCaption(TRect(58, 2, 64, 3), "Color");
-		mMonoLabel->hide();
-
-		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, 17, 2, buttons);
-
-		mThemeField = new TThemeNameField(TRect(5, 19, 71, 20), configuredColorThemeDisplayName());
-		addManaged(mThemeField, TRect(5, 19, 71, 20));
+		mExactValueField = new TCenteredTextField(TRect(3, 16, 79, 17), "000000/000000");
+		addManaged(mExactValueField, TRect(3, 16, 79, 17));
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, 18, 1, buttons);
+		mThemeField = new TCenteredTextField(TRect(5, 20, 77, 21), "active: " + configuredColorThemeDisplayName());
+		addManaged(mThemeField, TRect(5, 20, 77, 21));
 	}
 
-	TPalette *mPal = nullptr;
-	TColorDisplay *mDisplay = nullptr;
-	TColorItemList *mItemList = nullptr;
+	MRColorSetupSettings mDraft;
+	MRColorOutputMode mOutputMode;
+	std::array<short, kColorGroups.size()> mItemIndices{};
+	std::size_t mGroupIndex = 0;
 	MRStringChoiceField *mGroupField = nullptr;
 	TScrollBar *mItemScroll = nullptr;
-	TColorGroupCaption *mForLabel = nullptr;
-	TColorSelector *mForSel = nullptr;
-	TColorGroupCaption *mBakLabel = nullptr;
-	TColorSelector *mBakSel = nullptr;
-	TColorGroupCaption *mMonoLabel = nullptr;
-	TMonoSelector *mMonoSel = nullptr;
-	TThemeNameField *mThemeField = nullptr;
-	TColorGroup *mGroupsHead = nullptr;
+	TRgbColorItemList *mItemList = nullptr;
+	MRNumericSlider *mForegroundRed = nullptr;
+	MRNumericSlider *mForegroundGreen = nullptr;
+	MRNumericSlider *mForegroundBlue = nullptr;
+	MRNumericSlider *mBackgroundRed = nullptr;
+	MRNumericSlider *mBackgroundGreen = nullptr;
+	MRNumericSlider *mBackgroundBlue = nullptr;
+	TCenteredTextField *mExactValueField = nullptr;
+	TCenteredTextField *mThemeField = nullptr;
 	TRect mGroupListAnchor;
-	uchar mGroupIndex = 0;
 };
-
-TColorGroup *buildAllColorGroups() {
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::Code, MRColorSetupGroup::FileCompare, MRColorSetupGroup::Debugger};
-	TColorGroup *head = nullptr;
-
-	for (std::size_t g = sizeof(groups) / sizeof(groups[0]); g-- > 0;) {
-		std::size_t count = 0;
-		const MRColorSetupItem *items = colorSetupGroupItems(groups[g], count);
-		TColorItem *itemHead = nullptr;
-
-		if (items == nullptr || count == 0) continue;
-		for (std::size_t i = count; i-- > 0;) {
-			if (groups[g] == MRColorSetupGroup::MenuDialog && items[i].paletteIndex == 62) continue;
-			itemHead = new TColorItem(items[i].label, items[i].paletteIndex, itemHead);
-		}
-		head = new TColorGroup(colorSetupGroupTitle(groups[g]), itemHead, head);
-	}
-	return head;
-}
 
 } // namespace
 
 TDialog *createColorSetupDialog() {
-	TColorGroup *groupsHead = buildAllColorGroups();
-
-	if (groupsHead == nullptr) return nullptr;
-	return new TUnifiedColorSetupDialog("COLORS", groupsHead);
+	return new TUnifiedColorSetupDialog();
 }

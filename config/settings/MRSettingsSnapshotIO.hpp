@@ -37,6 +37,7 @@ struct MRSettingsSnapshot {
 	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};
 	MRCompilerErrorMessagePlacement compilerErrorMessagePlacement{MRCompilerErrorMessagePlacement::RightMargin};
 	MRScrollbarVisibility scrollbarVisibility{MRScrollbarVisibility::Smart};
+	MRColorOutputMode colorOutputMode{MRColorOutputMode::RgbAutomatic};
 	bool trackCompilerWarnings{false};
 	bool trackCompilerNotes{false};
 	MRUiIndentStyle uiIndentStyle{MRUiIndentStyle::KandR};

@@ -242,9 +242,9 @@ MRLogHandling logHandlingFromChoice(ushort choice) {
 }
 
 TAttrPair configuredColorOr(TView *view, unsigned char paletteSlot, ushort fallbackColorIndex) {
-	unsigned char biosAttr = 0;
+	TColorAttr configured;
 
-	if (configuredColorSlotOverride(paletteSlot, biosAttr)) return TAttrPair(biosAttr);
+	if (configuredColorSlotOverride(paletteSlot, configured)) return TAttrPair(configured);
 	return view != nullptr ? view->getColor(fallbackColorIndex) : TAttrPair(0x70);
 }
 
@@ -288,133 +288,16 @@ bool browsePathWithDirectoryDialog(MRDialogHistoryScope scope, std::string &sele
 	return !selectedPath.empty();
 }
 
-void applyDialogScrollbarSyncToPalette(TPalette &palette) {
-	auto syncDialogScrollbarsToFrame = [&](int base) {
-		palette[base + 3] = palette[base + 0];
-		palette[base + 4] = palette[base + 0];
-		palette[base + 23] = palette[base + 0];
-		palette[base + 24] = palette[base + 0];
-	};
-	syncDialogScrollbarsToFrame(32);
-	syncDialogScrollbarsToFrame(64);
-	syncDialogScrollbarsToFrame(96);
-}
-
-TPalette buildColorSetupWorkingPalette() {
-	static const TPalette basePalette = []() -> TPalette {
-		static const int kBaseSlots = 135;
-		static const int kTotalSlots = kMrPaletteMax;
-		static const char cp[] = cpAppColor;
-		TColorAttr data[kTotalSlots];
-		int i = 0;
-
-		for (i = 0; i < kBaseSlots; ++i)
-			data[i] = static_cast<unsigned char>(cp[i]);
-		for (; i < kTotalSlots; ++i)
-			data[i] = data[1 - 1];
-		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
-		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
-		data[kMrPaletteChangedText - 1] = data[14 - 1];
-		data[kMrPaletteMessageError - 1] = data[42 - 1];
-		data[kMrPaletteMessage - 1] = data[43 - 1];
-		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
-		data[kMrPaletteMessageHero - 1] = data[43 - 1];
-		data[kMrPaletteLineNumbers - 1] = data[9 - 1];
-		data[kMrPaletteEofMarker - 1] = data[14 - 1];
-		data[kMrPaletteCursorPositionMarker - 1] = data[3 - 1];
-		data[kMrPaletteDialogInactiveElements - 1] = data[62 - 1];
-		data[kMrPaletteMiniMapNormal - 1] = data[13 - 1];
-		data[kMrPaletteMiniMapViewport - 1] = data[11 - 1];
-		data[kMrPaletteMiniMapChanged - 1] = data[14 - 1];
-		data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
-		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
-		data[kMrPaletteMiniMapDiagnostics - 1] = 0x4E;
-		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
-		data[kMrPaletteCodeFoldingMarker - 1] = data[9 - 1];
-		data[kMrPaletteStatusLine - 1] = data[2 - 1];
-		data[kMrPaletteStatusLineBold - 1] = data[3 - 1];
-		data[kMrPaletteStatusLineFunctionDescription - 1] = data[4 - 1];
-		data[kMrPaletteStatusLineFunctionKey - 1] = data[5 - 1];
-		data[kMrPaletteDesktop - 1] = 0x90;
-		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
-		data[kMrPaletteFileCompareTextEqual - 1] = 0x1A;
-		data[kMrPaletteFileCompareTextMissing - 1] = 0x1C;
-		data[kMrPaletteFileCompareTextInsert - 1] = 0x1E;
-		data[kMrPaletteFileCompareTextOffset - 1] = 0x1F;
-		data[kMrPaletteFileCompareGutterEqual - 1] = 0x1A;
-		data[kMrPaletteFileCompareGutterMissing - 1] = 0x1C;
-		data[kMrPaletteFileCompareGutterInsert - 1] = 0x1E;
-		data[kMrPaletteFileCompareGutterOffset - 1] = 0x1F;
-		data[kMrPaletteFileCompareMiniMapEqual - 1] = 0x1A;
-		data[kMrPaletteFileCompareMiniMapMissing - 1] = 0x1C;
-		data[kMrPaletteFileCompareMiniMapInsert - 1] = 0x1E;
-		data[kMrPaletteFileCompareMiniMapOffset - 1] = 0x1F;
-		data[kMrPaletteFileCompareBentoBorder - 1] = data[8 - 1];
-		data[kMrPaletteFileComparePaneBorder - 1] = data[kMrPaletteFocusedPaneBorder - 1];
-		data[kMrPaletteFileCompareBentoBorderBold - 1] = data[9 - 1];
-		data[kMrPaletteFileCompareFormatRuler - 1] = data[kMrPaletteFormatRuler - 1];
-		data[kMrPaletteFileCompareLineNumbers - 1] = data[kMrPaletteLineNumbers - 1];
-		data[kMrPaletteFileCompareFocusedPaneBorder - 1] = data[kMrPaletteFocusedPaneBorder - 1];
-		data[kMrPaletteFileCompareMiniMapNormal - 1] = data[kMrPaletteMiniMapNormal - 1];
-		data[kMrPaletteFileCompareMiniMapViewport - 1] = data[kMrPaletteMiniMapViewport - 1];
-		data[kMrPaletteFileCompareMiniMapChanged - 1] = data[kMrPaletteMiniMapChanged - 1];
-		data[kMrPaletteFileCompareMiniMapFindMarker - 1] = data[kMrPaletteMiniMapFindMarker - 1];
-		data[kMrPaletteFileCompareMiniMapErrorMarker - 1] = data[kMrPaletteMiniMapErrorMarker - 1];
-		data[kMrPaletteDiagnosticInformation - 1] = 0x4E;
-		data[kMrPaletteOutlineFileHeader - 1] = 0x1F;
-		data[kMrPaletteOutlineLevel0 - 1] = 0x1F;
-		data[kMrPaletteOutlineLevel1 - 1] = 0x1E;
-		data[kMrPaletteOutlineLevel2 - 1] = 0x1B;
-		data[kMrPaletteOutlineLevel3 - 1] = 0x1A;
-		data[kMrPaletteOutlineLevel4 - 1] = 0x1D;
-		data[kMrPaletteOutlineLevel5 - 1] = 0x19;
-		data[kMrPaletteOutlineLevel6 - 1] = 0x1C;
-		data[kMrPaletteOutlineLevel7 - 1] = 0x13;
-		data[kMrPaletteOutlineLevel8 - 1] = 0x1F;
-		data[kMrPaletteOutlineLevel9 - 1] = 0x1E;
-		data[kMrPaletteSpinnerHandles - 1] = data[52 - 1];
-		data[kMrPaletteSpinnerDisplay - 1] = data[50 - 1];
-		data[kMrPaletteFocusedSpinnerHandles - 1] = data[58 - 1];
-		data[kMrPaletteFocusedSpinnerDisplay - 1] = data[51 - 1];
-		data[kMrPaletteDebuggerBreakpointActive - 1] = 0x4E;
-		data[kMrPaletteDebuggerBreakpointInactive - 1] = 0x18;
-		data[kMrPaletteDebuggerBreakpointUnbound - 1] = 0x4C;
-		data[kMrPaletteDebuggerWatchpointActive - 1] = 0x3E;
-		data[kMrPaletteDebuggerWatchpointInactive - 1] = 0x38;
-		data[kMrPaletteDebuggerWatchpointError - 1] = 0x4F;
-		data[kMrPaletteDebuggerInstructionPointer - 1] = 0xE0;
-		data[kMrPaletteDebuggerExecutionLine - 1] = 0x1E;
-		data[kMrPaletteDebuggerStackFrame - 1] = 0x3F;
-		data[kMrPaletteDebuggerValueChanged - 1] = 0x2E;
-		data[kMrPaletteDebuggerInputActive - 1] = 0x1B;
-		data[kMrPaletteDebuggerInputError - 1] = 0x4F;
-		return TPalette(data, static_cast<ushort>(kTotalSlots));
-	}();
-	TPalette palette = basePalette;
-	unsigned char overrideValue = 0;
-
-	for (int slot = 1; slot <= kMrPaletteMax; ++slot)
-		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue)) palette[slot] = overrideValue;
-	applyDialogScrollbarSyncToPalette(palette);
-	palette[1] = palette[kMrPaletteDesktop];
-	return palette;
-}
-
-bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &errorText) {
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::FileCompareMiniMap, MRColorSetupGroup::Code, MRColorSetupGroup::FileCompare, MRColorSetupGroup::Debugger};
-
-	for (auto group : groups) {
-		std::size_t count = 0;
-		const MRColorSetupItem *items = colorSetupGroupItems(group, count);
-		std::vector<unsigned char> values;
-
-		if (items == nullptr || count == 0) continue;
-		values.assign(count, 0);
-		for (std::size_t i = 0; i < count; ++i)
-			values[i] = static_cast<unsigned char>(palette[items[i].paletteIndex]);
-		if (!setConfiguredColorSetupGroupValues(group, values.data(), values.size(), &errorText)) return false;
-	}
-
+bool applyColorSetupSettingsToConfigured(const MRColorSetupSettings &settings, std::string &errorText) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, settings.windowColors.data(), settings.windowColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, settings.menuDialogColors.data(), settings.menuDialogColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, settings.helpColors.data(), settings.helpColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, settings.otherColors.data(), settings.otherColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, settings.miniMapColors.data(), settings.miniMapColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompareMiniMap, settings.fileCompareMiniMapColors.data(), settings.fileCompareMiniMapColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, settings.codeColors.data(), settings.codeColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::FileCompare, settings.fileCompareColors.data(), settings.fileCompareColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Debugger, settings.debuggerColors.data(), settings.debuggerColors.size(), &errorText)) return false;
 	errorText.clear();
 	return true;
 }
@@ -748,7 +631,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 		void draw() override {
 			TDrawBuffer b;
-			ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+			TAttrPair color = getColor((state & sfFocused) != 0 ? 2 : 1);
 			int glyphWidth = strwidth(mGlyph.c_str());
 			int x = std::max(0, (size.x - glyphWidth) / 2);
 
@@ -1333,7 +1216,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 
 		void draw() override {
 			TDrawBuffer b;
-			ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+			TAttrPair color = getColor((state & sfFocused) != 0 ? 2 : 1);
 			int glyphWidth = strwidth(mGlyph.c_str());
 			int x = std::max(0, (size.x - glyphWidth) / 2);
 
@@ -1683,6 +1566,7 @@ struct UserInterfaceSettingsDialogData {
 	ushort fileCompareStartChoice = 0;
 	ushort compilerDiagnosticFlags = 0;
 	ushort scrollbarVisibilityChoice = 0;
+	ushort colorOutputModeChoice = 0;
 	ushort uiIndentStyleChoice = 0;
 	char cursorPositionMarker[12] = {0};
 	char fileCompareOriginalLeadingGutters[8] = {0};
@@ -1760,7 +1644,8 @@ std::vector<std::string> fileCompareGutterSpinnerValues() {
 
 bool userInterfaceSettingsDialogDataEqual(const UserInterfaceSettingsDialogData &lhs, const UserInterfaceSettingsDialogData &rhs) {
 	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && lhs.compilerErrorMessageChoice == rhs.compilerErrorMessageChoice &&
-	       lhs.fileCompareStartChoice == rhs.fileCompareStartChoice && lhs.compilerDiagnosticFlags == rhs.compilerDiagnosticFlags && lhs.scrollbarVisibilityChoice == rhs.scrollbarVisibilityChoice && lhs.uiIndentStyleChoice == rhs.uiIndentStyleChoice &&
+	       lhs.fileCompareStartChoice == rhs.fileCompareStartChoice && lhs.compilerDiagnosticFlags == rhs.compilerDiagnosticFlags && lhs.scrollbarVisibilityChoice == rhs.scrollbarVisibilityChoice &&
+	       lhs.colorOutputModeChoice == rhs.colorOutputModeChoice && lhs.uiIndentStyleChoice == rhs.uiIndentStyleChoice &&
 	       readRecordField(lhs.cursorPositionMarker) == readRecordField(rhs.cursorPositionMarker) && readRecordField(lhs.fileCompareOriginalLeadingGutters) == readRecordField(rhs.fileCompareOriginalLeadingGutters) &&
 	       readRecordField(lhs.fileCompareOriginalTrailingGutters) == readRecordField(rhs.fileCompareOriginalTrailingGutters) && readRecordField(lhs.fileCompareCompareLeadingGutters) == readRecordField(rhs.fileCompareCompareLeadingGutters) &&
 	       readRecordField(lhs.fileCompareCompareTrailingGutters) == readRecordField(rhs.fileCompareCompareTrailingGutters);
@@ -1831,11 +1716,12 @@ class TIndentStylePreview : public TView {
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
   public:
 	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour,
-	                            MRCompilerErrorMessagePlacement initialCompilerErrorMessagePlacement, MRScrollbarVisibility initialScrollbarVisibility, bool initialTrackCompilerWarnings, bool initialTrackCompilerNotes,
+	                            MRCompilerErrorMessagePlacement initialCompilerErrorMessagePlacement, MRScrollbarVisibility initialScrollbarVisibility, MRColorOutputMode initialColorOutputMode, bool initialTrackCompilerWarnings,
+	                            bool initialTrackCompilerNotes,
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker, const std::string &initialFileCompareOriginalLeadingGutters, const std::string &initialFileCompareOriginalTrailingGutters,
 	                            const std::string &initialFileCompareCompareLeadingGutters, const std::string &initialFileCompareCompareTrailingGutters, MRFileCompareStartConfiguration initialFileCompareStartConfiguration,
 	                            bool initialFileCompareComparePanelReadOnly)
-	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 33), "USER INTERFACE SETTINGS", 86, 33, initSetupDialogFrame) {
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 38), "USER INTERFACE SETTINGS", 86, 38, initSetupDialogFrame) {
 
 		int const yStart = 2;
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
@@ -1867,33 +1753,38 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		mFileCompareStartField = new TRadioButtons(TRect(58, 8, 83, 11), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
 		addManaged(mFileCompareStartField, TRect(58, 8, 83, 11));
 
-		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 12, 70, 13), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(mVirtualDesktopsSlider, TRect(24, 12, 70, 13));
-		addManaged(new TLabel(TRect(2, 12, 23, 13), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 12, 23, 13));
+		addManaged(new TStaticText(TRect(38, 12, 65, 13), "Color Management:"), TRect(38, 12, 65, 13));
+		mColorOutputModeField = new TRadioButtons(TRect(38, 13, 68, 16), new TSItem("~2~4-bit RGB (automatic)", new TSItem("~P~alette (256 colors)", nullptr)));
+		addManaged(mColorOutputModeField, TRect(38, 13, 68, 16));
 
-		mCursorPositionMarkerField = new TInputLine(TRect(28, 13, 42, 14), 11);
-		addManaged(mCursorPositionMarkerField, TRect(28, 13, 42, 14));
-		addManaged(new TLabel(TRect(2, 13, 27, 14), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 13, 27, 14));
+		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 17, 70, 18), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mVirtualDesktopsSlider, TRect(24, 17, 70, 18));
+		addManaged(new TLabel(TRect(2, 17, 23, 18), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 17, 23, 18));
 
-		addManaged(new TStaticText(TRect(3, 16, 25, 17), "File compare gutters:"), TRect(3, 16, 25, 17));
-		addManaged(new TStaticText(TRect(26, 16, 36, 17), "Original:"), TRect(26, 16, 36, 17));
-		addFileCompareGutterSpinners(mFileCompareOriginalLeadingGutterSpinners, 37, 15);
-		addFileCompareGutterSpinners(mFileCompareOriginalTrailingGutterSpinners, 43, 15);
-		addManaged(new TStaticText(TRect(54, 16, 63, 17), "Compare:"), TRect(54, 16, 63, 17));
-		addFileCompareGutterSpinners(mFileCompareCompareLeadingGutterSpinners, 64, 15);
-		addFileCompareGutterSpinners(mFileCompareCompareTrailingGutterSpinners, 70, 15);
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 18, 42, 19), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 18, 42, 19));
+		addManaged(new TLabel(TRect(2, 18, 27, 19), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 18, 27, 19));
 
-		addManaged(new TStaticText(TRect(3, 19, 20, 20), "Indent style:"), TRect(3, 19, 20, 20));
-		mIndentStyleField = new TRadioButtons(TRect(3, 20, 23, 29), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
-		addManaged(mIndentStyleField, TRect(3, 20, 23, 29));
-		mIndentStylePreview = new TIndentStylePreview(TRect(25, 20, 47, 29));
-		addManaged(mIndentStylePreview, TRect(25, 20, 47, 29));
-		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 30, 0, buttons);
+		addManaged(new TStaticText(TRect(3, 21, 25, 22), "File compare gutters:"), TRect(3, 21, 25, 22));
+		addManaged(new TStaticText(TRect(26, 21, 36, 22), "Original:"), TRect(26, 21, 36, 22));
+		addFileCompareGutterSpinners(mFileCompareOriginalLeadingGutterSpinners, 37, 20);
+		addFileCompareGutterSpinners(mFileCompareOriginalTrailingGutterSpinners, 43, 20);
+		addManaged(new TStaticText(TRect(54, 21, 63, 22), "Compare:"), TRect(54, 21, 63, 22));
+		addFileCompareGutterSpinners(mFileCompareCompareLeadingGutterSpinners, 64, 20);
+		addFileCompareGutterSpinners(mFileCompareCompareTrailingGutterSpinners, 70, 20);
+
+		addManaged(new TStaticText(TRect(3, 24, 20, 25), "Indent style:"), TRect(3, 24, 20, 25));
+		mIndentStyleField = new TRadioButtons(TRect(3, 25, 23, 34), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
+		addManaged(mIndentStyleField, TRect(3, 25, 23, 34));
+		mIndentStylePreview = new TIndentStylePreview(TRect(25, 25, 47, 34));
+		addManaged(mIndentStylePreview, TRect(25, 25, 47, 34));
+		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 35, 0, buttons);
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		mInitialCompilerErrorMessageChoice = initialCompilerErrorMessagePlacement == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
 		mInitialFileCompareStartChoice = initialFileCompareStartConfiguration == MRFileCompareStartConfiguration::CompareOriginal ? 1 : 0;
 		mInitialScrollbarVisibilityChoice = initialScrollbarVisibility == MRScrollbarVisibility::Always ? 1 : 0;
+		mInitialColorOutputModeChoice = initialColorOutputMode == MRColorOutputMode::TerminalPalette ? 1 : 0;
 		mInitialCompilerDiagnosticFlags = (initialTrackCompilerWarnings ? 1 : 0) | (initialTrackCompilerNotes ? 2 : 0);
 		writeRecordField(mDataCursorMarker, sizeof(mDataCursorMarker), initialCursorPositionMarker);
 		mInitialFileCompareComparePanelReadOnly = initialFileCompareComparePanelReadOnly;
@@ -1955,6 +1846,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		if (mFileCompareStartField != nullptr) mFileCompareStartField->getData(&data->fileCompareStartChoice);
 		if (mCompilerDiagnosticsField != nullptr) mCompilerDiagnosticsField->getData(&data->compilerDiagnosticFlags);
 		if (mScrollbarVisibilityField != nullptr) mScrollbarVisibilityField->getData(&data->scrollbarVisibilityChoice);
+		if (mColorOutputModeField != nullptr) mColorOutputModeField->getData(&data->colorOutputModeChoice);
 		if (mIndentStyleField != nullptr) mIndentStyleField->getData(&data->uiIndentStyleChoice);
 		if (mCursorPositionMarkerField != nullptr) mCursorPositionMarkerField->getData(data->cursorPositionMarker);
 		writeRecordField(data->fileCompareOriginalLeadingGutters, sizeof(data->fileCompareOriginalLeadingGutters), fileCompareGutterSpinnersText(mFileCompareOriginalLeadingGutterSpinners));
@@ -1997,6 +1889,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		if (mScrollbarVisibilityField != nullptr) {
 			if (data->scrollbarVisibilityChoice > 1) data->scrollbarVisibilityChoice = mInitialScrollbarVisibilityChoice;
 			mScrollbarVisibilityField->setData(&data->scrollbarVisibilityChoice);
+		}
+		if (mColorOutputModeField != nullptr) {
+			if (data->colorOutputModeChoice > 1) data->colorOutputModeChoice = mInitialColorOutputModeChoice;
+			mColorOutputModeField->setData(&data->colorOutputModeChoice);
 		}
 		if (mIndentStyleField != nullptr) {
 			if (data->uiIndentStyleChoice > 5) data->uiIndentStyleChoice = 0;
@@ -2114,6 +2010,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	TRadioButtons *mFileCompareStartField = nullptr;
 	TCheckBoxes *mCompilerDiagnosticsField = nullptr;
 	TRadioButtons *mScrollbarVisibilityField = nullptr;
+	TRadioButtons *mColorOutputModeField = nullptr;
 	TInputLine *mCursorPositionMarkerField = nullptr;
 	std::array<MRSpinner *, kFileCompareGutterSpinnerCount> mFileCompareOriginalLeadingGutterSpinners{};
 	std::array<MRSpinner *, kFileCompareGutterSpinnerCount> mFileCompareOriginalTrailingGutterSpinners{};
@@ -2125,6 +2022,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	ushort mInitialCompilerErrorMessageChoice = 1;
 	ushort mInitialFileCompareStartChoice = 0;
 	ushort mInitialScrollbarVisibilityChoice = 0;
+	ushort mInitialColorOutputModeChoice = 0;
 	ushort mInitialCompilerDiagnosticFlags = 0;
 	bool mInitialFileCompareComparePanelReadOnly = true;
 	ushort mLastIndentStyleChoice = 0;
@@ -2134,11 +2032,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 } // namespace
 
 void runColorSetupDialogFlow() {
-	auto palettesEqual = [](const TPalette &lhs, const TPalette &rhs) {
-		for (int slot = 1; slot <= kMrPaletteMax; ++slot)
-			if (lhs[slot] != rhs[slot]) return false;
-		return true;
-	};
+	auto colorSettingsEqual = [](const MRColorSetupSettings &lhs, const MRColorSetupSettings &rhs) { return lhs == rhs; };
 	auto persistSettingsFileOnly = [](std::string &errorText) -> bool {
 		MRSetupPaths paths = resolveSetupPathDefaults();
 		paths.settingsMacroUri = configuredSettingsMacroFilePath();
@@ -2151,8 +2045,8 @@ void runColorSetupDialogFlow() {
 		mrLogSettingsWriteReport("color setup", writeReport);
 		return true;
 	};
-	auto applyAndPersistColors = [&](const TPalette &palette, std::string &errorText) -> bool {
-		if (!applyWorkingColorPaletteToConfigured(palette, errorText)) return false;
+	auto applyAndPersistColors = [&](const MRColorSetupSettings &settings, std::string &errorText) -> bool {
+		if (!applyColorSetupSettingsToConfigured(settings, errorText)) return false;
 		if (!persistSettingsFileOnly(errorText)) return false;
 		TProgram::application->redraw();
 		mrUpdateAllWindowsColorTheme();
@@ -2165,34 +2059,35 @@ void runColorSetupDialogFlow() {
 
 	bool running = true;
 	std::string errorText;
-	TPalette pendingPalette = buildColorSetupWorkingPalette();
-	bool havePendingPalette = false;
+	MRColorSetupSettings pendingSettings = configuredColorSetupSettings();
+	bool havePendingSettings = false;
 
 	while (running) {
-		TPalette baselinePalette = buildColorSetupWorkingPalette();
-		TPalette workingPalette = havePendingPalette ? pendingPalette : baselinePalette;
-		ushort result = execDialogWithDataCapture(createColorSetupDialog(), &workingPalette);
-		const bool changed = mr::dialogs::isDialogDraftDirty(baselinePalette, workingPalette, palettesEqual);
+		MRColorSetupSettings baselineSettings = configuredColorSetupSettings();
+		MRColorSetupSettings workingSettings = havePendingSettings ? pendingSettings : baselineSettings;
+		ushort result = execDialogWithDataCapture(createColorSetupDialog(), &workingSettings);
+		const bool changed = mr::dialogs::isDialogDraftDirty(baselineSettings, workingSettings, colorSettingsEqual);
 
 		switch (result) {
 			case cmOK:
 				if (changed) {
-					if (!applyAndPersistColors(workingPalette, errorText)) {
+					if (!applyAndPersistColors(workingSettings, errorText)) {
 						postSetupFlowError("Installation / Color setup", errorText);
 						break;
 					}
 				}
-				havePendingPalette = false;
+				havePendingSettings = false;
 				running = false;
 				break;
 
 			case cmMrColorLoadTheme: {
 				std::string themeUri;
+				std::string loadWarning;
 
 				if (!chooseThemeFileForLoad(MRDialogHistoryScope::SetupThemeLoad, themeUri)) break;
-				if (!loadColorThemeFile(themeUri, &errorText)) {
+				if (!loadColorThemeFile(themeUri, &loadWarning)) {
 					forgetLoadDialogPath(MRDialogHistoryScope::SetupThemeLoad, themeUri.c_str());
-					postSetupFlowError("Color Setup / Load Theme", errorText);
+					postSetupFlowError("Color Setup / Load Theme", loadWarning);
 					break;
 				}
 				if (!persistSettingsFileOnly(errorText)) {
@@ -2205,6 +2100,8 @@ void runColorSetupDialogFlow() {
 					TProgram::deskTop->redraw();
 					TProgram::deskTop->drawView();
 				}
+				if (!loadWarning.empty()) setSetupDialogStatus(loadWarning, MRMenuBar::MarqueeKind::Warning);
+				havePendingSettings = false;
 				break;
 			}
 
@@ -2214,7 +2111,7 @@ void runColorSetupDialogFlow() {
 
 				if (!chooseThemeFileForSave(MRDialogHistoryScope::SetupThemeSave, themeUri)) break;
 				if (!confirmOverwriteForPath("Overwrite", "Theme file exists. Overwrite?", themeUri)) break;
-				if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
+				if (!applyColorSetupSettingsToConfigured(workingSettings, errorText)) {
 					postSetupFlowError("Color Setup / Save Theme", errorText);
 					break;
 				}
@@ -2236,34 +2133,34 @@ void runColorSetupDialogFlow() {
 					TProgram::deskTop->redraw();
 					TProgram::deskTop->drawView();
 				}
-				pendingPalette = workingPalette;
-				havePendingPalette = true;
+				pendingSettings = workingSettings;
+				havePendingSettings = true;
 				break;
 			}
 
 			case cmClose:
 			case cmCancel:
 				if (!changed) {
-					havePendingPalette = false;
+					havePendingSettings = false;
 					running = false;
 					break;
 				}
 				switch (mr::dialogs::runDialogDirtyGating("Color settings have unsaved changes.")) {
 					case mr::dialogs::UnsavedChangesChoice::Save:
-						if (!applyAndPersistColors(workingPalette, errorText)) {
+						if (!applyAndPersistColors(workingSettings, errorText)) {
 							postSetupFlowError("Color Setup / Save settings", errorText);
 							break;
 						}
-						havePendingPalette = false;
+						havePendingSettings = false;
 						running = false;
 						break;
 					case mr::dialogs::UnsavedChangesChoice::Discard:
-						havePendingPalette = false;
+						havePendingSettings = false;
 						running = false;
 						break;
 					case mr::dialogs::UnsavedChangesChoice::Cancel:
-						pendingPalette = workingPalette;
-						havePendingPalette = true;
+						pendingSettings = workingSettings;
+						havePendingSettings = true;
 						discardQueuedCancelEvent();
 						break;
 					default:
@@ -2272,7 +2169,7 @@ void runColorSetupDialogFlow() {
 				break;
 
 			default:
-				havePendingPalette = false;
+				havePendingSettings = false;
 				running = false;
 				break;
 		}
@@ -2417,6 +2314,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		MRCursorBehaviour currentCb = configuredCursorBehaviour();
 		MRCompilerErrorMessagePlacement currentCemp = configuredCompilerErrorMessagePlacement();
 		MRScrollbarVisibility currentScrollbarVisibility = configuredScrollbarVisibility();
+		MRColorOutputMode currentColorOutputMode = configuredColorOutputMode();
 		bool currentTrackWarnings = configuredTrackCompilerWarnings();
 		bool currentTrackNotes = configuredTrackCompilerNotes();
 		MRUiIndentStyle currentUiIndentStyle = configuredUiIndentStyle();
@@ -2428,7 +2326,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		MRFileCompareStartConfiguration currentFileCompareStartConfiguration = configuredFileCompareStartConfiguration();
 		bool currentFileCompareComparePanelReadOnly = configuredFileCompareComparePanelReadOnly();
 
-		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentCv, currentCb, currentCemp, currentScrollbarVisibility, currentTrackWarnings, currentTrackNotes, currentUiIndentStyle, currentCp,
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentCv, currentCb, currentCemp, currentScrollbarVisibility, currentColorOutputMode, currentTrackWarnings, currentTrackNotes, currentUiIndentStyle, currentCp,
 		                                                                         currentFileCompareOriginalLeadingGutters, currentFileCompareOriginalTrailingGutters, currentFileCompareCompareLeadingGutters, currentFileCompareCompareTrailingGutters,
 		                                                                         currentFileCompareStartConfiguration, currentFileCompareComparePanelReadOnly);
 		UserInterfaceSettingsDialogData dialogData;
@@ -2443,6 +2341,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		dialogData.compilerErrorMessageChoice = currentCemp == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
 		dialogData.fileCompareStartChoice = currentFileCompareStartConfiguration == MRFileCompareStartConfiguration::CompareOriginal ? 1 : 0;
 		dialogData.scrollbarVisibilityChoice = currentScrollbarVisibility == MRScrollbarVisibility::Always ? 1 : 0;
+		dialogData.colorOutputModeChoice = currentColorOutputMode == MRColorOutputMode::TerminalPalette ? 1 : 0;
 		if (currentTrackWarnings) dialogData.compilerDiagnosticFlags |= 1;
 		if (currentTrackNotes) dialogData.compilerDiagnosticFlags |= 2;
 		dialogData.uiIndentStyleChoice = static_cast<ushort>(currentUiIndentStyle);
@@ -2464,6 +2363,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		MRCompilerErrorMessagePlacement newCemp = dialogData.compilerErrorMessageChoice == 0 ? MRCompilerErrorMessagePlacement::UnderCode : MRCompilerErrorMessagePlacement::RightMargin;
 		MRFileCompareStartConfiguration newFileCompareStartConfiguration = dialogData.fileCompareStartChoice == 1 ? MRFileCompareStartConfiguration::CompareOriginal : MRFileCompareStartConfiguration::OriginalCompare;
 		MRScrollbarVisibility newScrollbarVisibility = dialogData.scrollbarVisibilityChoice == 1 ? MRScrollbarVisibility::Always : MRScrollbarVisibility::Smart;
+		MRColorOutputMode newColorOutputMode = dialogData.colorOutputModeChoice == 1 ? MRColorOutputMode::TerminalPalette : MRColorOutputMode::RgbAutomatic;
 		bool newTrackWarnings = (dialogData.compilerDiagnosticFlags & 1) != 0;
 		bool newTrackNotes = (dialogData.compilerDiagnosticFlags & 2) != 0;
 		MRUiIndentStyle newUiIndentStyle = static_cast<MRUiIndentStyle>(dialogData.uiIndentStyleChoice);
@@ -2475,6 +2375,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineData, dialogData, userInterfaceSettingsDialogDataEqual);
 		const bool compilerDiagnosticFilterChanged = currentTrackWarnings != newTrackWarnings || currentTrackNotes != newTrackNotes;
 		const bool scrollbarVisibilityChanged = currentScrollbarVisibility != newScrollbarVisibility;
+		const bool colorOutputModeChanged = currentColorOutputMode != newColorOutputMode;
 		auto applyAndPersistUiSettings = [&]() -> bool {
 			std::string errorText;
 			if (!setConfiguredCursorBehaviour(newCb, &errorText)) {
@@ -2486,6 +2387,10 @@ void runUserInterfaceSettingsDialogFlow() {
 				return false;
 			}
 			if (!setConfiguredScrollbarVisibility(newScrollbarVisibility, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredColorOutputMode(newColorOutputMode, &errorText)) {
 				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
 				return false;
 			}
@@ -2545,6 +2450,14 @@ void runUserInterfaceSettingsDialogFlow() {
 				for (MREditWindow *window : allEditWindowsInZOrder())
 					if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window); bentoBox != nullptr && bentoBox->buildOutputPane() != nullptr && bentoBox->problemsPane() != nullptr)
 						static_cast<void>(bentoBox->refreshCompilerDiagnosticsFromOutput());
+			if (colorOutputModeChanged) {
+				if (TProgram::application != nullptr) TProgram::application->redraw();
+				mrUpdateAllWindowsColorTheme();
+				if (TProgram::deskTop != nullptr) {
+					TProgram::deskTop->redraw();
+					TProgram::deskTop->drawView();
+				}
+			}
 			if (!persistConfiguredSettingsSnapshot(&errorText)) postSetupFlowError("Installation / User interface settings", errorText);
 			return true;
 		};

@@ -102,7 +102,7 @@ class TDropListButton final : public THistory {
 
 	void draw() override {
 		const ushort width = static_cast<ushort>(std::max<short>(0, size.x));
-		unsigned char configured = 0;
+		TColorAttr configured;
 		const TAttrPair color = configuredColorSlotOverride(kMrPaletteDropListDescription, configured) ? TAttrPair(configured) : getColor(1);
 		TDrawBuffer buffer;
 

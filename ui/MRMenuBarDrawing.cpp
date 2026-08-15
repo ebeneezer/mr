@@ -39,9 +39,8 @@ void MRMenuBar::setFullscreenPresentation(bool active) {
 }
 
 void MRMenuBar::drawStaticProgress(TDrawBuffer &buffer, int laneStart, int laneWidth, std::size_t completed, std::size_t total, TColorAttr normalColor) {
-	const unsigned char warningAttribute =
-	    mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(MarqueeKind::Warning), mr_menu_drawing::marqueeFallbackAttribute(MarqueeKind::Warning));
-	const TColorAttr warningColor = TColorAttr(static_cast<unsigned char>((warningAttribute << 4) | (warningAttribute >> 4)));
+	const TColorAttr warningAttribute = mr_menu_drawing::resolvedPaletteAttribute(mr_menu_drawing::marqueePaletteSlot(MarqueeKind::Warning), mr_menu_drawing::marqueeFallbackAttribute(MarqueeKind::Warning));
+	const TColorAttr warningColor = reverseAttribute(warningAttribute);
 	const std::string label = std::to_string(completed) + "/" + std::to_string(total);
 
 	MRProgressSlider::drawProgress(buffer, laneStart, laneWidth, completed, total, label, normalColor, warningColor, MRProgressSlider::Direction::RightToLeft);

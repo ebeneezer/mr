@@ -79,7 +79,7 @@ class TInlineGlyphButton final : public TView {
 
 	void draw() override {
 		TDrawBuffer b;
-		const ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+		const TAttrPair color = getColor((state & sfFocused) != 0 ? 2 : 1);
 		const int glyphWidth = strwidth(mGlyph.c_str());
 		const int x = std::max(0, (size.x - glyphWidth) / 2);
 

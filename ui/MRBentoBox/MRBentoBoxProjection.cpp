@@ -123,14 +123,14 @@ void MRBentoBox::toggleActivePane() noexcept {
 }
 TColorAttr MRBentoBox::mapColor(uchar index) {
 	if (bentoMode == bbmFileCompare && index == 1) {
-		unsigned char value = 0;
+		TColorAttr value;
 
-		if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorder, value)) return static_cast<TColorAttr>(value);
+		if (configuredColorSlotOverride(kMrPaletteFileCompareBentoBorder, value)) return value;
 	}
 	if (bentoMode == bbmFileCompare && index == 13) {
-		unsigned char value = 0;
+		TColorAttr value;
 
-		if (configuredColorSlotOverride(kMrPaletteFileCompareFocusedPaneBorder, value)) return static_cast<TColorAttr>(value);
+		if (configuredColorSlotOverride(kMrPaletteFileCompareFocusedPaneBorder, value)) return value;
 	}
 	if (sourceScrollBarPaletteActive && (index == 4 || index == 5)) {
 		if (bentoMode == bbmFileCompare) {

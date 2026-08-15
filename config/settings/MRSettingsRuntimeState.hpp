@@ -69,6 +69,7 @@ MRColorSetupSettings configuredColorSettings();
 void storeConfiguredColorSettings(const MRColorSetupSettings &value);
 bool configuredColorSettingsInitialized();
 void storeConfiguredColorSettingsInitialized(bool value);
+MRColorOutputMode configuredColorOutputModeValue();
 bool settingsStartupModeValue();
 void storeSettingsStartupModeValue(bool value);
 int settingsKeymapBatchDepthValue();

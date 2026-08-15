@@ -59,9 +59,9 @@ enum : ushort {
 constexpr const char *kSearchTextRequiredMessage = "Search text must not be empty.";
 
 TAttrPair inactiveDialogColor(TView *view) {
-	unsigned char biosAttr = 0;
+	TColorAttr configured;
 
-	if (configuredColorSlotOverride(kMrPaletteDialogInactiveElements, biosAttr)) return TAttrPair(biosAttr);
+	if (configuredColorSlotOverride(kMrPaletteDialogInactiveElements, configured)) return TAttrPair(configured);
 	return view != nullptr ? view->getColor(1) : TAttrPair(0x70);
 }
 
@@ -460,10 +460,10 @@ class MultiPreviewView : public TView {
 
 	void draw() override {
 		TDrawBuffer b;
-		unsigned char editorTextAttr = 0;
-		unsigned char editorHighlightAttr = 0;
-		const TColorAttr normal = configuredColorSlotOverride(13, editorTextAttr) ? TAttrPair(editorTextAttr) : getColor(1);
-		const TColorAttr highlight = configuredColorSlotOverride(14, editorHighlightAttr) ? TAttrPair(editorHighlightAttr) : getColor(3);
+		TColorAttr editorTextAttr;
+		TColorAttr editorHighlightAttr;
+		const TColorAttr normal = configuredColorSlotOverride(13, editorTextAttr) ? editorTextAttr : static_cast<TColorAttr>(getColor(1));
+		const TColorAttr highlight = configuredColorSlotOverride(14, editorHighlightAttr) ? editorHighlightAttr : static_cast<TColorAttr>(getColor(3));
 		MultiFileSearchFileResult *file = currentSessionFile(session);
 		SearchMatchEntry *match = currentSessionMatch(session);
 		std::string text;

@@ -58,9 +58,9 @@ class MRDesktopBackground : public TBackground {
 
   private:
 	static TColorAttr resolveColor(unsigned char slot, TColorAttr fallback) {
-		unsigned char biosAttr = 0;
+		TColorAttr configured;
 
-		if (configuredColorSlotOverride(slot, biosAttr)) return TColorAttr(biosAttr);
+		if (configuredColorSlotOverride(slot, configured)) return configured;
 		return fallback;
 	}
 

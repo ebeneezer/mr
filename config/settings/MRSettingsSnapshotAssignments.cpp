@@ -396,6 +396,7 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseScrollbarVisibilityLiteral(value, snapshot.scrollbarVisibility, errorMessage)) return false;
 				return true;
 			}
+			if (upper == "COLOR_OUTPUT_MODE") return parseColorOutputModeLiteral(value, snapshot.colorOutputMode, errorMessage);
 			if (upper == "TRACK_COMPILER_WARNINGS") {
 				if (!parseBooleanLiteral(value, snapshot.trackCompilerWarnings, errorMessage)) return false;
 				return true;

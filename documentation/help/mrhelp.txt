@@ -482,16 +482,29 @@ explains the active mode without changing the current source or selection.
 .topic DialogColorSetup=115
  COLOR SETUP
 
-The group list selects a palette domain. The item list selects one color
-role in that domain. Foreground and Background edit the selected color;
-Display previews the result. Monochrome controls the monochrome attribute.
+The group field selects a color domain. Every item-list row begins with an
+Aa sample rendered in that role's foreground and background colors. The row
+selection changes only the description color, so it does not obscure the
+sample.
+
+Foreground RGB and Background RGB edit the red, green, and blue components
+of the selected role from 0 through 255. The centered RRGGBB/RRGGBB value
+shows both exact 24-bit colors. Changes update the item-list sample live.
 
 In HELP COLORS, help-window controls sets the color of the window-button
 glyphs and draggable frame corners.
 
-Load Theme reads a theme file into the working palette. Save Theme writes
-the working palette. Theme URI is the selected source or destination. The
-running settings change only when the dialog flow accepts changed data.
+Load Theme reads a theme file into the working color draft. Save Theme writes
+the complete draft. Invalid or missing groups use their hardcoded defaults.
+The running settings change only when the dialog flow accepts changed data.
+
+Installation and setup selects either automatic 24-bit RGB output or the
+256-color terminal palette. Automatic output lets Turbo Vision use true color
+where the terminal supports it and perform its normal fallback otherwise.
+Palette mode maps the exact 16 VGA default colors back to their ANSI palette
+indices, preserving the terminal's configured classic colors. Other RGB values
+are quantized to standard xterm-256 indices. Turbo Vision performs any further
+fallback required by terminals with fewer colors.
 
 .topic DialogCompilerProfiles=116
  COMPILER PROFILES

@@ -62,39 +62,39 @@ static std::string defaultFormatLineValue() {
 static int readWindowColorValue(std::size_t index) {
 	const MRColorSetupSettings colors = configuredColorSetupSettings();
 	if (index >= colors.windowColors.size()) return 0;
-	return colors.windowColors[index];
+	return projectColorAttribute(colors.windowColors[index], configuredColorOutputMode()).toBIOS();
 }
 
 static int readMenuDialogColorValue(std::size_t index) {
 	const MRColorSetupSettings colors = configuredColorSetupSettings();
 	if (index >= colors.menuDialogColors.size()) return 0;
-	return colors.menuDialogColors[index];
+	return projectColorAttribute(colors.menuDialogColors[index], configuredColorOutputMode()).toBIOS();
 }
 
 static int readOtherColorValue(std::size_t index) {
 	const MRColorSetupSettings colors = configuredColorSetupSettings();
 	if (index >= colors.otherColors.size()) return 0;
-	return colors.otherColors[index];
+	return projectColorAttribute(colors.otherColors[index], configuredColorOutputMode()).toBIOS();
 }
 
 static bool writeWindowColorValue(std::size_t index, int value) {
 	MRColorSetupSettings colors = configuredColorSetupSettings();
 	if (index >= colors.windowColors.size()) return false;
-	colors.windowColors[index] = static_cast<unsigned char>(std::clamp(value, 0, 255));
+	colors.windowColors[index] = rgbColorAttributeFromBios(static_cast<unsigned char>(std::clamp(value, 0, 255)));
 	return setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, colors.windowColors.data(), colors.windowColors.size(), nullptr);
 }
 
 static bool writeMenuDialogColorValue(std::size_t index, int value) {
 	MRColorSetupSettings colors = configuredColorSetupSettings();
 	if (index >= colors.menuDialogColors.size()) return false;
-	colors.menuDialogColors[index] = static_cast<unsigned char>(std::clamp(value, 0, 255));
+	colors.menuDialogColors[index] = rgbColorAttributeFromBios(static_cast<unsigned char>(std::clamp(value, 0, 255)));
 	return setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, colors.menuDialogColors.data(), colors.menuDialogColors.size(), nullptr);
 }
 
 static bool writeOtherColorValue(std::size_t index, int value) {
 	MRColorSetupSettings colors = configuredColorSetupSettings();
 	if (index >= colors.otherColors.size()) return false;
-	colors.otherColors[index] = static_cast<unsigned char>(std::clamp(value, 0, 255));
+	colors.otherColors[index] = rgbColorAttributeFromBios(static_cast<unsigned char>(std::clamp(value, 0, 255)));
 	return setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, colors.otherColors.data(), colors.otherColors.size(), nullptr);
 }
 

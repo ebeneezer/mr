@@ -174,7 +174,12 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 			if (!setConfiguredColorThemeDisplayName("", &errorText)) throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid theme display name.") : errorText));
 			setRuntimeErrorLevel(0);
 		} break;
-		case MRVMProcedure::ThemeName:
+		case MRVMProcedure::ThemeName: {
+			std::string errorText;
+			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error("THEME_NAME expects (string).");
+			if (!setConfiguredColorThemeDisplayName(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("THEME_NAME failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+			setRuntimeErrorLevel(0);
+		} break;
 		case MRVMProcedure::WindowColors:
 		case MRVMProcedure::MenuDialogColors:
 		case MRVMProcedure::HelpColors:
@@ -184,11 +189,12 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 		case MRVMProcedure::CodeColors:
 		case MRVMProcedure::FileCompareColors:
 		case MRVMProcedure::DebuggerColors: {
+			std::string definition;
 			std::string errorText;
-			if (args.size() != 1 || !mrvmIsStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
-			if (name == "THEME_NAME") {
-				if (!setConfiguredColorThemeDisplayName(mrvmValueAsString(args[0]), &errorText)) throw std::runtime_error("THEME_NAME failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-			} else if (!applyConfiguredColorSetupValue(name, mrvmValueAsString(args[0]), &errorText, false))
+			if ((args.size() != 1 && args.size() != 2) || !mrvmIsStringLike(args[0]) || (args.size() == 2 && !mrvmIsStringLike(args[1]))) throw std::runtime_error(name + " expects one or two string fragments.");
+			definition = mrvmValueAsString(args[0]);
+			if (args.size() == 2) definition += mrvmValueAsString(args[1]);
+			if (!applyConfiguredColorSetupValue(name, definition, &errorText, false))
 				throw std::runtime_error(name + " failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 			setRuntimeErrorLevel(0);
 		} break;
@@ -239,7 +245,7 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 						                         "LIVE_LOG_SYNTAX_HIGHLIGHTING, LIVE_LOG_AUDIO_URI, LIVE_LOG_JOURNAL_TAG_HISTORY, "
 						                         "AUDIO_PLAYER, AUTODETECT_BINARY_FILES, "
 						                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
-						                         "COMPILER_ERROR_MESSAGE_PLACEMENT, SCROLLBAR_VISIBILITY, TRACK_COMPILER_WARNINGS, TRACK_COMPILER_NOTES, "
+						                         "COMPILER_ERROR_MESSAGE_PLACEMENT, SCROLLBAR_VISIBILITY, COLOR_OUTPUT_MODE, TRACK_COMPILER_WARNINGS, TRACK_COMPILER_NOTES, "
 						                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, WINDOW_COLORTHEME_URI, "
 						                         "FILE_COMPARE_ORIGINAL_LEADING_GUTTERS, FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS, FILE_COMPARE_COMPARE_LEADING_GUTTERS, FILE_COMPARE_COMPARE_TRAILING_GUTTERS, FILE_COMPARE_START_CONFIGURATION, FILE_COMPARE_COMPARE_PANEL_READ_ONLY, "
 						                         "AUTOSAVE_WORKSPACE, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "

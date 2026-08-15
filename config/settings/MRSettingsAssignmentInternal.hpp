@@ -23,6 +23,7 @@ bool parseLiveLogScrollDirectionLiteral(const std::string &value, MRLiveLogScrol
 bool parseCursorBehaviourLiteral(const std::string &value, MRCursorBehaviour &outValue, std::string *errorMessage);
 bool parseCompilerErrorMessagePlacementLiteral(const std::string &value, MRCompilerErrorMessagePlacement &outValue, std::string *errorMessage);
 bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibility &outValue, std::string *errorMessage);
+bool parseColorOutputModeLiteral(const std::string &value, MRColorOutputMode &outValue, std::string *errorMessage);
 bool parseUiIndentStyleLiteral(const std::string &value, MRUiIndentStyle &outValue, std::string *errorMessage);
 bool parseFileCompareStartConfigurationLiteral(const std::string &value, MRFileCompareStartConfiguration &outValue, std::string *errorMessage);
 bool normalizeFileCompareGutters(const std::string &value, std::string &out, std::string *errorMessage);

@@ -578,6 +578,7 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	initializeFullscreenHint();
 	loadStartupSettingsMacro(std::string(), nullptr);
 	refreshConfiguredUiSettingsSnapshot();
+	redraw();
 	logStartupPhase("settings_bootstrap");
 	logStartupPhase("runtime_scheduler");
 	applyConfiguredDisplayLayout();

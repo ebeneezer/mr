@@ -164,6 +164,8 @@ static const char *const kCursorBehaviourBoundToText = "BOUND_TO_TEXT";
 static const char *const kCursorBehaviourFreeMovement = "FREE_MOVEMENT";
 static const char *const kFileCompareStartOriginalCompare = "ORIGINAL_COMPARE";
 static const char *const kFileCompareStartCompareOriginal = "COMPARE_ORIGINAL";
+static const char *const kColorOutputRgbAutomatic = "RGB_AUTOMATIC";
+static const char *const kColorOutputTerminalPalette = "TERMINAL_PALETTE";
 
 struct MRSettingsKeyDescriptor {
 	const char *key;
@@ -251,6 +253,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
     {"COMPILER_ERROR_MESSAGE_PLACEMENT", MRSettingsKeyClass::Global, true},
     {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
+	{"COLOR_OUTPUT_MODE", MRSettingsKeyClass::Global, true},
     {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
 	    {"TRACK_COMPILER_NOTES", MRSettingsKeyClass::Global, true},
 	    {"UI_INDENT_STYLE", MRSettingsKeyClass::Global, true},
@@ -382,6 +385,16 @@ bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibi
 		return true;
 	}
 	return setError(errorMessage, "SCROLLBAR_VISIBILITY must be SMART or ALWAYS.");
+}
+
+bool parseColorOutputModeLiteral(const std::string &value, MRColorOutputMode &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kColorOutputTerminalPalette) outValue = MRColorOutputMode::TerminalPalette;
+	else if (upper == kColorOutputRgbAutomatic) outValue = MRColorOutputMode::RgbAutomatic;
+	else outValue = MRColorOutputMode::RgbAutomatic;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 bool parseUiIndentStyleLiteral(const std::string &value, MRUiIndentStyle &outValue, std::string *errorMessage) {

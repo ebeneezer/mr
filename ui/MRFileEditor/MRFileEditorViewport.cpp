@@ -149,9 +149,9 @@ bool MRFileEditor::shouldShowEditorCursor(long long x, long long y) const noexce
 }
 
 TColorAttr MRFileEditor::editorTextFillColor() noexcept {
-	unsigned char configured = 0;
+	TColorAttr configured;
 
-	if (mFileCompareGuttersConfigured && configuredColorSlotOverride(kMrPaletteFileCompareTextEqual, configured)) return static_cast<TColorAttr>(configured);
+	if (mFileCompareGuttersConfigured && configuredColorSlotOverride(kMrPaletteFileCompareTextEqual, configured)) return configured;
 	return tokenColor(MRSyntaxToken::Text, false, getColor(0x0201));
 }
 
@@ -540,17 +540,17 @@ int MRFileEditor::dynamicLargeFileWidthLimit() const {
 }
 void MRFileEditor::drawFormatRulerOverlay(const TextViewportGeometry &viewport, const MREditSetupSettings &settings) {
 	TDrawBuffer buffer;
-	unsigned char configured = 0;
+	TColorAttr configured;
 	TColorAttr normal = static_cast<TColorAttr>(getColor(0x0606));
 	TColorAttr accent = static_cast<TColorAttr>(getColor(0x0404));
 	const std::string normalized = normalizedFormatRulerLine(settings);
 	const std::size_t cursorLineIndex = cachedCursorLineIndex();
 
 	if (mFileCompareGuttersConfigured && configuredColorSlotOverride(kMrPaletteFileCompareFormatRuler, configured)) {
-		normal = static_cast<TColorAttr>(configured);
+		normal = configured;
 		accent = normal;
 	} else if (configuredColorSlotOverride(kMrPaletteFormatRuler, configured))
-		normal = static_cast<TColorAttr>(configured);
+		normal = configured;
 	buffer.moveChar(0, ' ', normal, size.x);
 	for (int x = 0; x < viewport.width; ++x) {
 		const int column = viewport.deltaX + x + 1;
@@ -753,14 +753,14 @@ void MRFileEditor::draw() {
 
 void MRFileEditor::drawLineNumberGutter(TDrawBuffer &b, std::size_t lineNumber, bool showNumber, int drawX, int width, bool zeroFill, std::size_t) {
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
-	unsigned char configured = 0;
+	TColorAttr configured;
 	char numberBuffer[32];
 	int digits = std::max(1, width);
 	int numberX = drawX;
 	int numberWidth = width;
 
 	if (width <= 0) return;
-	if (mFileCompareGuttersConfigured && configuredColorSlotOverride(kMrPaletteFileCompareLineNumbers, configured)) color = static_cast<TColorAttr>(configured);
+	if (mFileCompareGuttersConfigured && configuredColorSlotOverride(kMrPaletteFileCompareLineNumbers, configured)) color = configured;
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	if (!showNumber) return;
 	digits = std::max(1, numberWidth);
@@ -772,20 +772,20 @@ void MRFileEditor::drawLineNumberGutter(TDrawBuffer &b, std::size_t lineNumber, 
 
 void MRFileEditor::drawFileCompareGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineIndex) {
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
-	unsigned char configured = 0;
+	TColorAttr configured;
 	const unsigned char lineKind = fileCompareLineKindAt(lineIndex);
 
 	if (width <= 0) return;
-	if (configuredColorSlotOverride(kMrPaletteFileCompareLineNumbers, configured)) color = static_cast<TColorAttr>(configured);
+	if (configuredColorSlotOverride(kMrPaletteFileCompareLineNumbers, configured)) color = configured;
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	if (lineKind == mrfclkNone) return;
 	const unsigned char slot = fileCompareGutterPaletteSlot(lineKind);
-	if (slot != 0 && configuredColorSlotOverride(slot, configured)) color = static_cast<TColorAttr>(configured);
+	if (slot != 0 && configuredColorSlotOverride(slot, configured)) color = configured;
 	b.moveChar(static_cast<ushort>(drawX), fileCompareGutterGlyph(lineKind), color, 1);
 }
 
 void MRFileEditor::drawDebugGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineIndex) {
-	unsigned char configured = 0;
+	TColorAttr configured;
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
 	const bool instructionLine = mDebuggerInstructionLineValid && mDebuggerInstructionLine == lineIndex;
 	const bool breakpointLine = debuggerBreakpointLineAt(lineIndex);
@@ -796,32 +796,32 @@ void MRFileEditor::drawDebugGutter(TDrawBuffer &b, int drawX, int width, std::si
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	if (!instructionLine && !breakpointLine && !breakpointInactiveLine && !breakpointUnboundLine) return;
 	if (instructionLine) {
-		if (configuredColorSlotOverride(kMrPaletteDebuggerInstructionPointer, configured)) color = static_cast<TColorAttr>(configured);
+		if (configuredColorSlotOverride(kMrPaletteDebuggerInstructionPointer, configured)) color = configured;
 		else
 			color = static_cast<TColorAttr>(0xE0);
 		b.moveChar(static_cast<ushort>(drawX), '\x10', color, 1);
 		return;
 	}
 	if (breakpointLine) {
-		if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointActive, configured)) color = static_cast<TColorAttr>(configured);
+		if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointActive, configured)) color = configured;
 		else
 			color = static_cast<TColorAttr>(0x4E);
 		b.moveChar(static_cast<ushort>(drawX), '\x07', color, 1);
 		return;
 	}
 	if (breakpointInactiveLine) {
-		if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointInactive, configured)) color = static_cast<TColorAttr>(configured);
+		if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointInactive, configured)) color = configured;
 		else
 			color = static_cast<TColorAttr>(0x18);
 	} else if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointUnbound, configured))
-		color = static_cast<TColorAttr>(configured);
+		color = configured;
 	else
 		color = static_cast<TColorAttr>(0x4C);
 	b.moveChar(static_cast<ushort>(drawX), '\x07', color, 1);
 }
 
 void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex) {
-	unsigned char configured = 0;
+	TColorAttr configured;
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
 	TColorAttr markerColor = color;
 	auto branchContinuesAtSameLevel = [this](const MRFoldSpan &span) noexcept {
@@ -838,9 +838,9 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 
 	static_cast<void>(lineStart);
 	if (width <= 0) return;
-	if (configuredColorSlotOverride(kMrPaletteCodeFolding, configured)) color = static_cast<TColorAttr>(configured);
+	if (configuredColorSlotOverride(kMrPaletteCodeFolding, configured)) color = configured;
 	markerColor = color;
-	if (configuredColorSlotOverride(kMrPaletteCodeFoldingMarker, configured)) markerColor = static_cast<TColorAttr>(configured);
+	if (configuredColorSlotOverride(kMrPaletteCodeFoldingMarker, configured)) markerColor = configured;
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	if (mBufferModel.exactLineCountKnown() && lineIndex >= std::max<std::size_t>(1, mBufferModel.lineCount())) return;
 	for (const MRFoldSpan &span : mFoldState.visibleState().spans) {
@@ -870,12 +870,12 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 TColorAttr MRFileEditor::tokenColor(MRSyntaxToken token, bool selected, TAttrPair pair) noexcept {
 	TColorAttr normal = static_cast<TColorAttr>(pair);
 	TColorAttr selectedAttr = static_cast<TColorAttr>(pair >> 8);
-	uchar background = static_cast<uchar>((selected ? selectedAttr : normal) & 0xF0);
+	const TColorDesired background = getBack(selected ? selectedAttr : normal);
 	auto configuredCodeColor = [background](unsigned char paletteSlot, unsigned char fallbackForeground) noexcept -> TColorAttr {
-		unsigned char configured = 0;
+		TColorAttr configured;
 
-		if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(configured);
-		return static_cast<TColorAttr>(background | fallbackForeground);
+		if (configuredColorSlotOverride(paletteSlot, configured)) return configured;
+		return TColorAttr(TColorDesired(fallbackForeground), background);
 	};
 
 	if (selected) return selectedAttr;
@@ -992,7 +992,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 	else if (currentLine && diffLineKind == mrfclkNone)
 		basePair = getColor(0x0303);
 	if (mDebuggerInstructionLineValid && mDebuggerInstructionLine == lineIndex) {
-		unsigned char executionLineAttr = 0;
+		TColorAttr executionLineAttr;
 
 		if (configuredColorSlotOverride(kMrPaletteDebuggerExecutionLine, executionLineAttr)) basePair = TAttrPair(executionLineAttr);
 		else
@@ -1000,10 +1000,10 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 	}
 	if (diffLineKind != mrfclkNone) {
 		const unsigned char slot = fileCompareTextPaletteSlot(diffLineKind);
-			unsigned char configured = 0;
+			TColorAttr configured;
 
 			if (slot != 0 && configuredColorSlotOverride(slot, configured)) {
-				diffTextColor = static_cast<TColorAttr>(configured);
+				diffTextColor = configured;
 				diffTextActive = true;
 			}
 		}
@@ -1059,50 +1059,50 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 			tokenPair = selected ? selectionPair : effectivePair;
 			color = selected ? selectedColor : unselectedColor;
 			if (findMarkedChar) {
-				unsigned char highlightedTextAttr = 0;
-				if (configuredColorSlotOverride(14, highlightedTextAttr)) color = static_cast<TColorAttr>(TAttrPair(highlightedTextAttr));
+				TColorAttr highlightedTextAttr;
+				if (configuredColorSlotOverride(14, highlightedTextAttr)) color = highlightedTextAttr;
 				else
 					color = static_cast<TColorAttr>(getColor(3));
 			}
 			if (debuggerBreakpointChar) {
-				unsigned char breakpointAttr = 0;
-				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointActive, breakpointAttr)) color = static_cast<TColorAttr>(TAttrPair(breakpointAttr));
+				TColorAttr breakpointAttr;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointActive, breakpointAttr)) color = breakpointAttr;
 				else
 					color = static_cast<TColorAttr>(TAttrPair(0x4E));
 			}
 			if (debuggerBreakpointInactiveChar) {
-				unsigned char breakpointAttr = 0;
-				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointInactive, breakpointAttr)) color = static_cast<TColorAttr>(TAttrPair(breakpointAttr));
+				TColorAttr breakpointAttr;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointInactive, breakpointAttr)) color = breakpointAttr;
 				else
 					color = static_cast<TColorAttr>(TAttrPair(0x18));
 			}
 			if (debuggerBreakpointUnboundChar) {
-				unsigned char breakpointAttr = 0;
-				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointUnbound, breakpointAttr)) color = static_cast<TColorAttr>(TAttrPair(breakpointAttr));
+				TColorAttr breakpointAttr;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointUnbound, breakpointAttr)) color = breakpointAttr;
 				else
 					color = static_cast<TColorAttr>(TAttrPair(0x4C));
 			}
 			if (debuggerWatchpointActiveChar) {
-				unsigned char watchpointAttr = 0;
-				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointActive, watchpointAttr)) color = static_cast<TColorAttr>(TAttrPair(watchpointAttr));
+				TColorAttr watchpointAttr;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointActive, watchpointAttr)) color = watchpointAttr;
 				else
 					color = static_cast<TColorAttr>(TAttrPair(0x3E));
 			}
 			if (debuggerWatchpointInactiveChar) {
-				unsigned char watchpointAttr = 0;
-				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointInactive, watchpointAttr)) color = static_cast<TColorAttr>(TAttrPair(watchpointAttr));
+				TColorAttr watchpointAttr;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointInactive, watchpointAttr)) color = watchpointAttr;
 				else
 					color = static_cast<TColorAttr>(TAttrPair(0x38));
 			}
 			if (debuggerWatchpointErrorChar) {
-				unsigned char watchpointAttr = 0;
-				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointError, watchpointAttr)) color = static_cast<TColorAttr>(TAttrPair(watchpointAttr));
+				TColorAttr watchpointAttr;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerWatchpointError, watchpointAttr)) color = watchpointAttr;
 				else
 					color = static_cast<TColorAttr>(TAttrPair(0x4F));
 			}
 			if (debuggerVariableChangedChar) {
-				unsigned char valueChangedAttr = 0;
-				if (configuredColorSlotOverride(kMrPaletteDebuggerValueChanged, valueChangedAttr)) color = static_cast<TColorAttr>(TAttrPair(valueChangedAttr));
+				TColorAttr valueChangedAttr;
+				if (configuredColorSlotOverride(kMrPaletteDebuggerValueChanged, valueChangedAttr)) color = valueChangedAttr;
 				else
 					color = static_cast<TColorAttr>(TAttrPair(0x2E));
 			}
@@ -1195,12 +1195,12 @@ void MRFileEditor::drawEofMarkerGlyph(TDrawBuffer &b, int hScroll, int width, in
 	const char *marker = drawEmoji ? kEofMarkerEmoji : kEofMarkerText;
 	int markerWidth = 0;
 	TColorAttr markerColor = tokenColor(MRSyntaxToken::Text, false, basePair);
-	unsigned char configuredMarkerColor = 0;
+	TColorAttr configuredMarkerColor;
 
 	if (width <= 0 || hScroll != 0) return;
 	if (!drawEmoji && mCustomWindowEofMarkerColorOverrideValid) markerColor = mCustomWindowEofMarkerColorOverride;
 	else if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))
-		markerColor = static_cast<TColorAttr>(configuredMarkerColor);
+		markerColor = configuredMarkerColor;
 	markerWidth = std::max(1, strwidth(marker));
 	markerWidth = std::min(markerWidth, width);
 	b.moveStr(static_cast<ushort>(drawX), marker, markerColor, static_cast<ushort>(markerWidth));

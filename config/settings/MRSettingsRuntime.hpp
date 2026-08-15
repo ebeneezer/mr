@@ -6,9 +6,12 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
+
+struct TColorAttr;
 
 struct MRSetupPaths {
 	std::string settingsMacroUri;
@@ -202,6 +205,11 @@ enum class MRColorSetupGroup : unsigned char {
 	Code,
 	FileCompare,
 	Debugger
+};
+
+enum class MRColorOutputMode : unsigned char {
+	RgbAutomatic = 0,
+	TerminalPalette = 1
 };
 
 enum class MRLogHandling : unsigned char {
@@ -497,6 +505,19 @@ enum : unsigned char {
 	kMrPaletteMax = kMrPaletteDebuggerInputError
 };
 
+struct MRRgbColorAttribute {
+	std::uint32_t foregroundRgb = 0;
+	std::uint32_t backgroundRgb = 0;
+
+	bool operator==(const MRRgbColorAttribute &other) const noexcept {
+		return foregroundRgb == other.foregroundRgb && backgroundRgb == other.backgroundRgb;
+	}
+
+	bool operator!=(const MRRgbColorAttribute &other) const noexcept {
+		return !(*this == other);
+	}
+};
+
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 14;
 	static const std::size_t kMenuDialogCount = 32;
@@ -508,15 +529,15 @@ struct MRColorSetupSettings {
 	static const std::size_t kFileCompareCount = 14;
 	static const std::size_t kDebuggerCount = 12;
 
-	std::array<unsigned char, kWindowCount> windowColors;
-	std::array<unsigned char, kMenuDialogCount> menuDialogColors;
-	std::array<unsigned char, kHelpCount> helpColors;
-	std::array<unsigned char, kOtherCount> otherColors;
-	std::array<unsigned char, kMiniMapCount> miniMapColors;
-	std::array<unsigned char, kFileCompareMiniMapCount> fileCompareMiniMapColors;
-	std::array<unsigned char, kCodeCount> codeColors;
-	std::array<unsigned char, kFileCompareCount> fileCompareColors;
-	std::array<unsigned char, kDebuggerCount> debuggerColors;
+	std::array<MRRgbColorAttribute, kWindowCount> windowColors;
+	std::array<MRRgbColorAttribute, kMenuDialogCount> menuDialogColors;
+	std::array<MRRgbColorAttribute, kHelpCount> helpColors;
+	std::array<MRRgbColorAttribute, kOtherCount> otherColors;
+	std::array<MRRgbColorAttribute, kMiniMapCount> miniMapColors;
+	std::array<MRRgbColorAttribute, kFileCompareMiniMapCount> fileCompareMiniMapColors;
+	std::array<MRRgbColorAttribute, kCodeCount> codeColors;
+	std::array<MRRgbColorAttribute, kFileCompareCount> fileCompareColors;
+	std::array<MRRgbColorAttribute, kDebuggerCount> debuggerColors;
 
 	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors(), miniMapColors(), fileCompareMiniMapColors(), codeColors(), fileCompareColors(), debuggerColors() {
 	}
@@ -578,12 +599,14 @@ void rememberLoadDialogPath(const char *path);
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage = nullptr);
 bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr);
 bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr, bool clearThemeDisplayName = true);
-bool colorSlotOverride(const MRColorSetupSettings &colors, unsigned char paletteIndex, unsigned char &value);
-bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value);
+[[nodiscard]] TColorAttr projectColorAttribute(const MRRgbColorAttribute &value, MRColorOutputMode mode) noexcept;
+[[nodiscard]] MRRgbColorAttribute rgbColorAttributeFromBios(unsigned char value) noexcept;
+bool colorSlotOverride(const MRColorSetupSettings &colors, unsigned char paletteIndex, MRColorOutputMode mode, TColorAttr &value);
+bool configuredColorSlotOverride(unsigned char paletteIndex, TColorAttr &value);
 const char *colorSetupGroupTitle(MRColorSetupGroup group);
 const char *colorSetupGroupKey(MRColorSetupGroup group);
 const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_t &count);
-bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count, std::string *errorMessage = nullptr);
+bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const MRRgbColorAttribute *values, std::size_t count, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredColorThemeFilePath();
 [[nodiscard]] std::string configuredColorThemeDisplayName();
 bool setConfiguredColorThemeDisplayName(const std::string &name, std::string *errorMessage = nullptr);
@@ -593,7 +616,7 @@ bool setConfiguredColorThemeFilePath(const std::string &path, std::string *error
 bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
 bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorMessage = nullptr);
 bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
-bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage = nullptr);
+bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<MRRgbColorAttribute, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors);
 
 const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count);
@@ -686,6 +709,8 @@ bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement 
 [[nodiscard]] MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement();
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage = nullptr);
 [[nodiscard]] MRScrollbarVisibility configuredScrollbarVisibility();
+bool setConfiguredColorOutputMode(MRColorOutputMode mode, std::string *errorMessage = nullptr);
+[[nodiscard]] MRColorOutputMode configuredColorOutputMode();
 bool setConfiguredTrackCompilerWarnings(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredTrackCompilerWarnings();
 bool setConfiguredTrackCompilerNotes(bool enabled, std::string *errorMessage = nullptr);

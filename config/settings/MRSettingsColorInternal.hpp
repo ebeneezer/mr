@@ -6,7 +6,8 @@
 #include <array>
 #include <string>
 
-[[nodiscard]] unsigned char mrDefaultColorForSlot(unsigned char paletteIndex);
-bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage);
+[[nodiscard]] MRRgbColorAttribute mrDefaultColorForSlot(unsigned char paletteIndex);
+bool parseColorListLiteral(const std::string &literal, MRRgbColorAttribute *outValues, std::size_t outCount, std::string *errorMessage);
+bool parseWindowColorListLiteral(const std::string &literal, std::array<MRRgbColorAttribute, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage);
 
 #endif
