@@ -1,0 +1,2 @@
+Changed in 0.2.13:
+- Maintenance release for verifying automatic update notifications.
