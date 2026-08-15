@@ -91,7 +91,7 @@ class MRFrame : public TFrame {
 	void closeTaskOverview();
 
   private:
-	void drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color);
+	void drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr frameColor, TColorAttr backgroundColor);
 	void dragWindow(TEvent &event, uchar mode);
 	MarkerState markerState() const;
 	int markerStartColumn() const noexcept;

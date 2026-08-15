@@ -59,6 +59,8 @@ static constexpr char kMarkerRightBracket = ']';
 static constexpr int kMarkerGap = 1;
 static constexpr int kNormalControlGap = 1;
 static constexpr int kNormalRightPadding = 1;
+static constexpr ushort kDialogBackgroundColor = 1;
+static constexpr ushort kDialogTextColor = 6;
 static constexpr unsigned char kFrameMarkerHintColorSlot = 134;
 static constexpr auto kTaskOverviewRefreshInterval = std::chrono::milliseconds(250);
 
@@ -329,7 +331,7 @@ bool MRFrame::markerHintAt(TPoint localMouse, const MarkerState &state, std::str
 	return false;
 }
 
-void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color) {
+void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr frameColor, TColorAttr backgroundColor) {
 	if (size.x <= 0) return;
 
 	std::vector<unsigned char> frameMask(static_cast<std::size_t>(size.x));
@@ -368,8 +370,9 @@ void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr 
 	}
 
 	for (int x = 0; x < size.x; ++x) {
-		frameBuf.putChar(x, kFrameChars[frameMask[static_cast<std::size_t>(x)]]);
-		frameBuf.putAttribute(x, color);
+		const unsigned char mask = frameMask[static_cast<std::size_t>(x)];
+		frameBuf.putChar(x, kFrameChars[mask]);
+		frameBuf.putAttribute(x, mask != 0 ? frameColor : backgroundColor);
 	}
 }
 
@@ -398,7 +401,13 @@ void MRFrame::draw() {
 
 	cFrame = getColor(cFrame);
 	cTitle = getColor(cTitle);
+	TColorAttr frameBackground = cFrame;
 	if (window != nullptr) {
+		if (dynamic_cast<TDialog *>(window) != nullptr) {
+			cTitle = window->getColor(kDialogTextColor);
+			frameBackground = window->getColor(kDialogBackgroundColor);
+		}
+
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
 		TColorAttr fileCompareBentoBorder;
 		TColorAttr fileCompareBentoBorderBold;
@@ -429,7 +438,7 @@ void MRFrame::draw() {
 		return;
 	}
 
-	drawFrameLine(b, 0, f, cFrame);
+	drawFrameLine(b, 0, f, cFrame, frameBackground);
 
 	bool controlsVisible = isFocused;
 	const bool hasZoomButton = window != nullptr && (window->flags & wfZoom) != 0;
@@ -549,10 +558,10 @@ void MRFrame::draw() {
 
 	writeLine(0, 0, size.x, 1, b);
 	for (short i = 1; i <= size.y - 2; ++i) {
-		drawFrameLine(b, i, f + 3, cFrame);
+		drawFrameLine(b, i, f + 3, cFrame, frameBackground);
 		writeLine(0, i, size.x, 1, b);
 	}
-	drawFrameLine(b, size.y - 1, f + 6, cFrame);
+	drawFrameLine(b, size.y - 1, f + 6, cFrame, frameBackground);
 	const bool showGrowHandle = desktopWindow == nullptr || desktopWindow->desktopShowsFrameGrowHandle();
 	if (isFocused && window != nullptr && (window->flags & wfGrow) != 0 && showGrowHandle) {
 		b.moveCStr(0, f == 9 ? kFocusedDragLeftIcon : kDragLeftIcon, cFrame);

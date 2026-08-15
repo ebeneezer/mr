@@ -13,6 +13,7 @@
 #include "MRCommandRouter.hpp"
 #include "MRCommands.hpp"
 #include "MRVersion.hpp"
+#include "../ui/MRFrame.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRSidekickEditor.hpp"
 
@@ -46,6 +47,10 @@ constexpr char kSudoExecutable[] = "/usr/bin/sudo";
 constexpr char kProtocolMagic[] = "MRUPD01";
 constexpr std::size_t kPasswordCapacity = 256;
 
+TFrame *initUpdateDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
+
 TRect centeredUpdateChangedBounds() {
 	constexpr short width = 76;
 	constexpr short height = 22;
@@ -55,6 +60,12 @@ TRect centeredUpdateChangedBounds() {
 
 	return TRect(x, y, x + width, y + height);
 }
+
+class UpdatePasswordDialog final : public TDialog {
+  public:
+	UpdatePasswordDialog() : TWindowInit(initUpdateDialogFrame), TDialog(TRect(0, 0, 48, 7), "SUPERUSER PASSWORD") {
+	}
+};
 
 class PasswordInputLine final : public TInputLine {
   public:
@@ -189,26 +200,10 @@ void redirectToNull(int fd) {
 	}
 }
 
-bool validateSudoWithoutPassword() {
-	if (::geteuid() == 0) return true;
-	if (::access(kSudoExecutable, X_OK) != 0) return false;
-	const pid_t child = ::fork();
-	if (child < 0) return false;
-	if (child == 0) {
-		redirectToNull(STDIN_FILENO);
-		redirectToNull(STDOUT_FILENO);
-		redirectToNull(STDERR_FILENO);
-		char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-n"), const_cast<char *>("-v"), nullptr};
-		::execv(kSudoExecutable, args);
-		::_exit(127);
-	}
-	return waitForSuccessfulExit(child);
-}
-
 bool promptSudoPassword(char password[kPasswordCapacity], std::size_t &passwordLength) {
 	passwordLength = 0;
 	if (TProgram::deskTop == nullptr) return false;
-	TDialog *dialog = new TDialog(TRect(0, 0, 48, 7), "Superuser Password");
+	TDialog *dialog = new UpdatePasswordDialog();
 	if (dialog == nullptr) return false;
 	dialog->options |= ofCentered;
 	dialog->flags = wfMove;
@@ -241,6 +236,7 @@ bool validateSudoWithPassword(char password[kPasswordCapacity], std::size_t pass
 		return false;
 	}
 	if (child == 0) {
+		if (::setsid() < 0) ::_exit(127);
 		::close(inputPipe[1]);
 		::dup2(inputPipe[0], STDIN_FILENO);
 		::close(inputPipe[0]);
@@ -552,7 +548,7 @@ bool ensureUpdatePrivileges() {
 	char password[kPasswordCapacity]{};
 	std::size_t passwordLength = 0;
 
-	if (validateSudoWithoutPassword()) return true;
+	if (::geteuid() == 0) return true;
 	if (::access(kSudoExecutable, X_OK) != 0) {
 		mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, "sudo is required for the system update.", mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 		return false;
@@ -607,8 +603,8 @@ bool runInternalUpdateApply(std::string &error) {
 		return false;
 	}
 	if (!readUpdateProtocol(STDIN_FILENO, package, error) || !verifyManifestSignature(package.manifestBytes, package.signature, error) || !parseManifest(package.manifestBytes, package.manifest, error)) return false;
-	if (!versionIsNewer(package.manifest.version, mrDisplayVersion())) {
-		error = "The signed update is not newer than the installed version.";
+	if (versionIsNewer(mrDisplayVersion(), package.manifest.version)) {
+		error = "The signed update is older than the installed version.";
 		return false;
 	}
 	for (std::size_t index = 0; index < package.files.size(); ++index)

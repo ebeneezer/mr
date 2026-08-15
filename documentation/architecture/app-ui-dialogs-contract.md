@@ -85,7 +85,12 @@ These rules apply to new dialogs and to layout changes in existing dialogs.
   group peers. They do not extend into the reserved comfort-control columns.
 - Comfort-control columns are reserved outside the input field. The highlighted
   input area must not run underneath history or browse glyphs.
-- Dialog titles must be uppercase and must not use ellipses.
+- Dialog titles must be uppercase, right-aligned and enclosed in square brackets
+  through `MRFrame`; title strings themselves must not contain brackets, padding
+  or ellipses.
+- Dialog frames, titles, empty interior cells and buttons must use the configured
+  `Dialog Frame`, `Dialog Text`, `Dialog Background` and `Dialog Button` palette
+  roles respectively.
 - Dialog button rows must be horizontally centered.
 - Dialogs must not add a Cancel button by default. Closing without applying changes is handled by the dialog close action.
 - Dialogs that can change settings must use clean dirty gating. Applying unchanged data must not mark settings dirty or trigger save prompts.
