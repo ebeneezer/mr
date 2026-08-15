@@ -1,3 +1,0 @@
-Changed in 0.2.18:
-- Corrected the Superuser Password dialog frame, title, background and button colors.
-- Prevented sudo output from reaching the TUI and made the password dialog independent of cached sudo credentials.

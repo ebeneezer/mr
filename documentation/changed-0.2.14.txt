@@ -1,2 +1,0 @@
-Changed in 0.2.14:
-- Added visible update progress, centered the Changed display, and made Restart continue without an additional input event.

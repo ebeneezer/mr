@@ -127,6 +127,11 @@ Plan contents and implementation discipline are defined by
 [workflow.md](documentation/codex/workflow.md). Protected changes additionally
 require the protected-architecture report defined above.
 
+Creating a new directory anywhere inside the repository requires explicit
+maintainer approval, regardless of whether it is tracked, ignored or intended
+to be short-lived. Temporary files and directories must use the system
+temporary directory and must not be staged inside the repository.
+
 ## Test policy
 
 - Existing required checks must be run only when relevant to the touched area and approved scope.

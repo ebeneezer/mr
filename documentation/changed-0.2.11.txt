@@ -1,4 +1,0 @@
-Changed in 0.2.11:
-- Added exact 24-bit RGB color storage, editing, live previews, theme loading and saving, and VM-backed setup persistence.
-- Added selectable terminal-palette output: canonical VGA defaults retain the terminal's ANSI colors, while custom RGB values are quantized to xterm-256.
-- Replaced the legacy color-list format with exact RRGGBB/RRGGBB pairs; existing legacy color lists are intentionally not imported.

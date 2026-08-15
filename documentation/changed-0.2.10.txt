@@ -1,3 +1,0 @@
-Changed in 0.2.10:
-- Added a signed in-application updater with automatic version checks, verified GitHub downloads, a minimal sudo password dialog, atomic system-file replacement, Changed display, restart, and authoritative workspace reload.
-- The release package remains a single x86-64-v3 build and retains the Debian 12 ABI ceiling.

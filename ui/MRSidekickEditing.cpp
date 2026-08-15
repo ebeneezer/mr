@@ -67,6 +67,7 @@ void MRSidekickEditor::eraseBackward() {
 		line.erase(static_cast<std::size_t>(mCursorCol - 1), 1);
 		--mCursorCol;
 		adjustPlaceholdersAfterErase(eraseOffset, 1);
+		resizeSnippetSidekickForContent();
 		return;
 	}
 	if (mCursorRow <= 0) return;
@@ -77,6 +78,7 @@ void MRSidekickEditor::eraseBackward() {
 	--mCursorRow;
 	mCursorCol = previousLength;
 	adjustPlaceholdersAfterErase(eraseOffset, 1);
+	resizeSnippetSidekickForContent();
 }
 
 void MRSidekickEditor::eraseForward() {
@@ -85,12 +87,14 @@ void MRSidekickEditor::eraseForward() {
 	if (mCursorCol < static_cast<int>(line.size())) {
 		line.erase(static_cast<std::size_t>(mCursorCol), 1);
 		adjustPlaceholdersAfterErase(eraseOffset, 1);
+		resizeSnippetSidekickForContent();
 		return;
 	}
 	if (mCursorRow + 1 >= static_cast<int>(mLines.size())) return;
 	line += mLines[static_cast<std::size_t>(mCursorRow + 1)];
 	mLines.erase(mLines.begin() + mCursorRow + 1);
 	adjustPlaceholdersAfterErase(eraseOffset, 1);
+	resizeSnippetSidekickForContent();
 }
 
 void MRSidekickEditor::eraseWordBackward() {
@@ -104,6 +108,7 @@ void MRSidekickEditor::eraseWordBackward() {
 	adjustPlaceholdersAfterErase(start, end - start);
 	setText(std::move(next));
 	setCursorFromOffset(start);
+	resizeSnippetSidekickForContent();
 }
 
 void MRSidekickEditor::eraseWordForward() {
@@ -117,6 +122,7 @@ void MRSidekickEditor::eraseWordForward() {
 	adjustPlaceholdersAfterErase(start, end - start);
 	setText(std::move(next));
 	setCursorFromOffset(start);
+	resizeSnippetSidekickForContent();
 }
 
 void MRSidekickEditor::eraseToLineStart() {
@@ -129,6 +135,7 @@ void MRSidekickEditor::eraseToLineStart() {
 	adjustPlaceholdersAfterErase(start, end - start);
 	setText(std::move(current));
 	setCursorFromOffset(start);
+	resizeSnippetSidekickForContent();
 }
 
 void MRSidekickEditor::eraseToLineEnd() {
@@ -141,6 +148,7 @@ void MRSidekickEditor::eraseToLineEnd() {
 	adjustPlaceholdersAfterErase(start, length);
 	setText(std::move(current));
 	setCursorFromOffset(start);
+	resizeSnippetSidekickForContent();
 }
 
 void MRSidekickEditor::eraseLine() {
@@ -158,6 +166,7 @@ void MRSidekickEditor::eraseLine() {
 	adjustPlaceholdersAfterErase(start, length);
 	setText(std::move(current));
 	setCursorFromOffset(std::min(start, text().size()));
+	resizeSnippetSidekickForContent();
 }
 
 bool MRSidekickEditor::replaceActivePlaceholder(const std::string &replacement) {
@@ -439,17 +448,17 @@ void MRSidekickEditor::resizeSnippetSidekickForContent() {
 	const int newWidth = std::max(currentWidth, wantedWidth);
 	const int newHeight = std::max(currentHeight, wantedHeight);
 
-	if (newWidth == currentWidth && newHeight == currentHeight) return;
-	bounds.b.x = bounds.a.x + newWidth;
-	bounds.b.y = bounds.a.y + newHeight;
-	if (bounds.b.x > desktop.b.x) bounds.move(desktop.b.x - bounds.b.x, 0);
-	if (bounds.a.x < desktop.a.x) bounds.move(desktop.a.x - bounds.a.x, 0);
-	if (bounds.b.y > desktop.b.y) bounds.move(0, desktop.b.y - bounds.b.y);
-	if (bounds.a.y < desktop.a.y) bounds.move(0, desktop.a.y - bounds.a.y);
-	owner->locate(bounds);
+	if (newWidth != currentWidth || newHeight != currentHeight) {
+		bounds.b.x = bounds.a.x + newWidth;
+		bounds.b.y = bounds.a.y + newHeight;
+		if (bounds.b.x > desktop.b.x) bounds.move(desktop.b.x - bounds.b.x, 0);
+		if (bounds.a.x < desktop.a.x) bounds.move(desktop.a.x - bounds.a.x, 0);
+		if (bounds.b.y > desktop.b.y) bounds.move(0, desktop.b.y - bounds.b.y);
+		if (bounds.a.y < desktop.a.y) bounds.move(0, desktop.a.y - bounds.a.y);
+		owner->locate(bounds);
+	}
 	TRect editorBounds(1, 1, std::max<short>(2, owner->size.x - 1), std::max<short>(2, owner->size.y - 3));
-	locate(editorBounds);
-	owner->drawView();
+	updateScrollBars(editorBounds);
 }
 
 void MRSidekickEditor::clampCursor() noexcept {

@@ -1,3 +1,0 @@
-Changed in 0.2.25:
-- Route privileged update process diagnostics through the configured MR log.
-- Keep updater subprocess output away from the terminal.

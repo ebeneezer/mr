@@ -396,16 +396,16 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 
-		mGroupField = new MRStringChoiceField(TRect(3, 1, 78, 2), 72);
+		mGroupField = new MRStringChoiceField(TRect(3, 2, 76, 3), 70);
 		mGroupField->setChoices(groupNames());
-		addManaged(mGroupField, TRect(3, 1, 78, 2));
-		mGroupField->createDropListButton(*this, TRect(78, 1, 79, 2), this, cmMrColorGroupChoose, false);
-		mGroupListAnchor = TRect(3, 2, 79, 3);
+		addManaged(mGroupField, TRect(3, 2, 76, 3));
+		mGroupField->createDropListButton(*this, TRect(76, 2, 77, 3), this, cmMrColorGroupChoose, false);
+		mGroupListAnchor = TRect(3, 3, 77, 4);
 
-		mItemScroll = new TScrollBar(TRect(78, 2, 79, 12));
-		addManaged(mItemScroll, TRect(78, 2, 79, 12));
-		mItemList = new TRgbColorItemList(TRect(3, 2, 78, 12), mItemScroll, this);
-		addManaged(mItemList, TRect(3, 2, 78, 12));
+		mItemScroll = new TScrollBar(TRect(76, 3, 77, 12));
+		addManaged(mItemScroll, TRect(76, 3, 77, 12));
+		mItemList = new TRgbColorItemList(TRect(3, 3, 76, 12), mItemScroll, this);
+		addManaged(mItemList, TRect(3, 3, 76, 12));
 
 		addManaged(new TStaticText(TRect(3, 12, 38, 13), "Foreground RGB"), TRect(3, 12, 38, 13));
 		addManaged(new TStaticText(TRect(42, 12, 77, 13), "Background RGB"), TRect(42, 12, 77, 13));

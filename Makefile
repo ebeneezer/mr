@@ -43,7 +43,7 @@ INSTALL ?= install
 SHA256SUM ?= sha256sum
 READELF ?= readelf
 MR_BUILD_EPOCH := $(shell date +%s)
-TMP_BASE_DIR ?= /dev/shm
+TMP_BASE_DIR ?= $(if $(TMPDIR),$(TMPDIR),/tmp)
 TMP_COMPILER_LAUNCHER := $(abspath ./mr-compiler-temp.sh)
 TMP_RUN = $(TMP_COMPILER_LAUNCHER)
 
@@ -209,7 +209,7 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.25
+MR_RELEASE_VERSION ?= 0.2.26
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64-v3
 MR_RELEASE_ARCH_FLAGS ?= -march=x86-64-v3 -mtune=generic
@@ -232,12 +232,10 @@ MR_RELEASE_PCRE2_RUNTIME_PACKAGE ?= libpcre2-8-0_10.42-1_amd64.deb
 MR_RELEASE_PCRE2_RUNTIME_SHA256 ?= 030db54f4d76cdfe2bf0e8eb5f9efea0233ab3c7aa942d672c7b63b52dbaf935
 MR_RELEASE_PCRE2_DEV_PACKAGE ?= libpcre2-dev_10.42-1_amd64.deb
 MR_RELEASE_PCRE2_DEV_SHA256 ?= f0ff485a26daae8f742a1566426f0d98f06cdaf19ee0cc24764e09eff1c99257
-MR_RELEASE_OUTPUT_DIR ?= release
+MR_RELEASE_OUTPUT_DIR ?= $(TMP_BASE_DIR)/mr-release
 MR_RELEASE_INSTALLER = install.sh
-MR_RELEASE_CHANGED = documentation/changed-$(MR_RELEASE_VERSION).txt
 MR_RELEASE_SIGNING_KEY ?=
 OPENSSL ?= openssl
-AWK ?= awk
 CURL ?= curl
 MR_RELEASE_MANUALS = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.pdf \
@@ -572,9 +570,7 @@ release-zip:
 	command -v $(SHA256SUM) >/dev/null 2>&1; \
 	command -v $(READELF) >/dev/null 2>&1; \
 	command -v $(OPENSSL) >/dev/null 2>&1; \
-	command -v $(AWK) >/dev/null 2>&1; \
 	command -v $(CURL) >/dev/null 2>&1; \
-	test -f "$(MR_RELEASE_CHANGED)"; \
 	test -n "$(MR_RELEASE_SIGNING_KEY)"; \
 	test -f "$(MR_RELEASE_SIGNING_KEY)"; \
 	toolchain_directory=$$(mktemp -d "$(TMP_BASE_DIR)/mr-release-gcc12.XXXXXX"); \
@@ -648,8 +644,7 @@ release-zip:
 		$(INSTALL) -d -m 0755 "$$release_root/share/mr/macros/$$(dirname "$$relative_path")"; \
 		$(INSTALL) -m 0644 "$$macro_file" "$$release_root/share/mr/macros/$$relative_path"; \
 	done; \
-	sed -e "s/@MR_RELEASE_EPOCH@/$$epoch/g" -e 's/^release_version=.*/release_version="$(MR_RELEASE_VERSION)"/' "$(MR_RELEASE_INSTALLER)" | \
-		$(AWK) -v changed_file="$(MR_RELEASE_CHANGED)" 'BEGIN { while ((getline line < changed_file) > 0) changed = changed line "\n"; close(changed_file) } /^Changed in [0-9]/ { printf "%s", changed; skipping = 1; next } skipping && /^$$/ { skipping = 0; print; next } !skipping { print }' > "$$release_root/install.sh"; \
+	sed -e "s/@MR_RELEASE_EPOCH@/$$epoch/g" -e 's/^release_version=.*/release_version="$(MR_RELEASE_VERSION)"/' "$(MR_RELEASE_INSTALLER)" > "$$release_root/install.sh"; \
 	chmod 0755 "$$release_root/install.sh"; \
 	rm -f "$$output_directory/$$name.zip" "$$output_directory/$$name.zip.sha256" "$$output_directory/mr-$(MR_RELEASE_PLATFORM).update" "$$output_directory/mr-$(MR_RELEASE_PLATFORM).update.sig"; \
 	$(BSDTAR) -a -cf "$$output_directory/$$name.zip" --options 'zip:compression=deflate,compression-level=9' -C "$$staging_directory" "$$name"; \
@@ -669,7 +664,8 @@ release-zip:
 		echo "technical_manual_sha256=$$($(SHA256SUM) "$$release_root/share/doc/mr/mr-technical-manual.pdf" | cut -d ' ' -f 1)"; \
 		echo "license_sha256=$$($(SHA256SUM) "$$release_root/share/licenses/mr/TVISION-COPYRIGHT" | cut -d ' ' -f 1)"; \
 		echo; \
-		cat "$(MR_RELEASE_CHANGED)"; \
+		echo "Release notes:"; \
+		echo "https://github.com/ebeneezer/mr/releases/tag/v$(MR_RELEASE_VERSION)"; \
 	} > "$$manifest"; \
 	$(OPENSSL) pkeyutl -sign -rawin -inkey "$(MR_RELEASE_SIGNING_KEY)" -in "$$manifest" -out "$$manifest.sig"; \
 	echo "Wrote $$output_directory/$$name.zip"; \
@@ -710,7 +706,7 @@ CONTEXT_ARCHIVE_ITEMS = \
 context-tar tar-archives:
 	@set -e; \
 	rm -f $(CONTEXT_ARCHIVE); \
-	tmpdir=$$(mktemp -d ./.context-archive.XXXXXX); \
+	tmpdir=$$(mktemp -d "$(TMP_BASE_DIR)/mr-context-archive.XXXXXX"); \
 	trap 'rm -rf "$$tmpdir"' EXIT INT TERM HUP; \
 	git_info_file="$$tmpdir/$(CONTEXT_GIT_INFO_NAME)"; \
 	{ \

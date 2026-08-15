@@ -1,2 +1,0 @@
-Changed in 0.2.15:
-- Fixed privileged update installation when MR is launched outside /usr/local/bin and removed stale password-dialog rendering.

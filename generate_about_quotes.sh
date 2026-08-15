@@ -5,10 +5,12 @@ INPUT_PATH="${1:-README.md}"
 OUTPUT_PATH="${2:-app/MRAboutQuotes.generated.hpp}"
 FIRST_QUOTE='"I live again." Caleb (Blood)'
 
-tmp_quotes="$(mktemp)"
+temporary_base="${TMP_BASE_DIR:-${TMPDIR:-/tmp}}"
+temporary_directory="$(mktemp -d "${temporary_base%/}/mr-about-quotes.XXXXXX")"
+tmp_quotes="$temporary_directory/quotes"
 mkdir -p "$(dirname "$OUTPUT_PATH")"
-tmp_output="$(mktemp "$(dirname "$OUTPUT_PATH")/.MRAboutQuotes.generated.hpp.XXXXXX")"
-trap 'rm -f "$tmp_quotes" "$tmp_output"' EXIT
+tmp_output="$temporary_directory/MRAboutQuotes.generated.hpp"
+trap 'rm -rf "$temporary_directory"' EXIT INT TERM HUP
 
 awk -v first_quote="$FIRST_QUOTE" '
 function trim(s) {

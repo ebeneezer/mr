@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-base_dir="${TMP_BASE_DIR:-/dev/shm}"
+base_dir="${TMP_BASE_DIR:-${TMPDIR:-/tmp}}"
 tmpdir="$(mktemp -d "${base_dir%/}/mr-compile.XXXXXX")"
 
 cleanup() {

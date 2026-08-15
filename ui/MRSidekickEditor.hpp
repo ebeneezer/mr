@@ -1,7 +1,7 @@
 #ifndef MRSIDEKICKEDITOR_HPP
 #define MRSIDEKICKEDITOR_HPP
 
-#define Uses_TView
+#define Uses_TScroller
 #include <tvision/tv.h>
 
 #include <cstddef>
@@ -9,6 +9,8 @@
 #include <vector>
 
 class MREditWindow;
+class TGroup;
+class TScrollBar;
 
 struct MRSidekickSpan {
 	std::size_t start;
@@ -20,13 +22,19 @@ enum class MRReadOnlySidekickPlacement : unsigned char {
 	RightMargin
 };
 
-class MRSidekickEditor : public TView {
+enum class MRSidekickPalette : unsigned char {
+	Sidekick,
+	Owner
+};
+
+class MRSidekickEditor : public TScroller {
   public:
-	MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly = false, bool modalClose = false, bool snippetSidekick = false);
+	MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly = false, bool modalClose = false, bool snippetSidekick = false, MRSidekickPalette palette = MRSidekickPalette::Sidekick);
 	~MRSidekickEditor() override;
 
 	void draw() override;
 	void handleEvent(TEvent &event) override;
+	void insertInto(TGroup &group);
 
 	[[nodiscard]] int parentBufferId() const noexcept;
 	[[nodiscard]] bool isReadOnly() const noexcept;
@@ -49,9 +57,17 @@ class MRSidekickEditor : public TView {
 	bool mReadOnly;
 	bool mModalClose;
 	bool mSnippetSidekick;
+	MRSidekickPalette mPalette;
+	TRect mOuterBounds;
+	TScrollBar *mHorizontalScrollBar;
+	TScrollBar *mVerticalScrollBar;
 
 	void setText(std::string text);
 	[[nodiscard]] std::string text() const;
+	void updateScrollBars(const TRect &bounds);
+	void destroyScrollBars();
+	void detachFromOwner();
+	void ensureCursorVisible();
 	void closeSidekick(ushort command = cmCancel);
 	void commitAndClose();
 	void insertChar(char ch);
@@ -84,6 +100,8 @@ class MRSidekickEditor : public TView {
 	void adjustPlaceholdersAfterErase(std::size_t offset, std::size_t length);
 	void resizeSnippetSidekickForContent();
 	void clampCursor() noexcept;
+
+	friend void mrDropActiveSidekick();
 };
 
 bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);

@@ -30,6 +30,21 @@ case "$build_root" in
 		;;
 esac
 
+workflow_temp_directory=
+cleanup_workflow_temp() {
+	if [[ -n "$workflow_temp_directory" ]]; then
+		rm -rf -- "$workflow_temp_directory"
+	fi
+}
+if [[ "$operation" != "clean" ]]; then
+	temporary_base="${TMP_BASE_DIR:-${TMPDIR:-/tmp}}"
+	workflow_temp_directory=$(mktemp -d "${temporary_base%/}/mr-bolt.XXXXXX")
+fi
+trap cleanup_workflow_temp EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 active_file="$build_root/active"
 comparison_file="$build_root/comparison.info"
 cohort_dir=
@@ -137,7 +152,7 @@ select_comparison_epoch() {
 	local existing_epoch=
 	local existing_commit=
 	local existing_state=
-	local comparison_temp="$comparison_file.tmp"
+	local comparison_temp="$workflow_temp_directory/comparison.info"
 	local current_epoch
 
 	read_source_state
@@ -171,11 +186,11 @@ write_active_launcher() {
 	local cohort_relative=${cohort_dir#"$build_root"/}
 	local build_root_relative=${build_root#"$repo_root"/}
 	local cohort_repo_relative=${cohort_dir#"$repo_root"/}
-	local active_temp="$active_file.tmp"
+	local active_temp="$workflow_temp_directory/active"
 	local launcher_path="$repo_root/mrbolt"
-	local launcher_temp="$repo_root/mrbolt.tmp"
+	local launcher_temp="$workflow_temp_directory/mrbolt"
 
-	rm -f "$active_temp" "$launcher_temp"
+	rm -f "$active_temp"
 	printf '%s\n' "$cohort_relative" > "$active_temp"
 	mv -f "$active_temp" "$active_file"
 	{
@@ -224,6 +239,7 @@ restore_standard_build() {
 
 	trap - EXIT
 	if [[ "$restore_required" -eq 0 ]]; then
+		cleanup_workflow_temp
 		exit "$operation_status"
 	fi
 
@@ -244,6 +260,7 @@ restore_standard_build() {
 	if [[ "$operation_status" -eq 0 && "$build_status" -ne 0 ]]; then
 		operation_status=$build_status
 	fi
+	cleanup_workflow_temp
 	exit "$operation_status"
 }
 
@@ -319,8 +336,8 @@ build_seed() {
 	cohort_dir="$build_root/$compiler_tag/$seed_build_id"
 	set_cohort_paths
 	mkdir -p "$cohort_dir"
-	seed_temp="$seed_binary.tmp"
-	info_temp="$cohort_dir/seed.info.tmp"
+	seed_temp="$workflow_temp_directory/mr.seed"
+	info_temp="$workflow_temp_directory/seed.info"
 	if [[ -f "$seed_binary" ]] && ! cmp -s mr "$seed_binary"; then
 		echo "Build-id collision with existing BOLT seed: $seed_build_id" >&2
 		exit 1
@@ -363,7 +380,7 @@ record_profile() {
 
 	record_epoch=$(date +%s)
 	session_data="$cohort_dir/perf-$record_epoch.data"
-	recording_data="$session_data.recording"
+	recording_data="$workflow_temp_directory/perf-$record_epoch.data.recording"
 	if [[ -e "$session_data" || -e "$recording_data" ]]; then
 		echo "BOLT profile for EPOCH $record_epoch already exists." >&2
 		exit 1
@@ -373,7 +390,7 @@ record_profile() {
 	seed_build_id=$(binary_build_id "$seed_binary")
 	recorded_build_id=$(profile_build_id "$recording_data")
 	if [[ "$recorded_build_id" != "$seed_build_id" ]]; then
-		echo "Recorded profile does not match active BOLT seed; keeping $recording_data for diagnosis." >&2
+		echo "Recorded profile does not match active BOLT seed." >&2
 		exit 1
 	fi
 	mv -f "$recording_data" "$session_data"
@@ -404,11 +421,11 @@ optimize_binary() {
 	require_command readelf
 	require_command cmp
 	validate_seed_identity
-	merged_temp="$merged_profile.tmp"
-	bolt_temp="$bolt_binary.tmp"
-	stripped_temp="$stripped_binary.tmp"
-	seed_help="$cohort_dir/seed-help.tmp"
-	bolt_help="$cohort_dir/bolt-help.tmp"
+	merged_temp="$workflow_temp_directory/profile-merged.fdata"
+	bolt_temp="$workflow_temp_directory/mr.bolt"
+	stripped_temp="$workflow_temp_directory/mr.bolt.stripped"
+	seed_help="$workflow_temp_directory/seed-help"
+	bolt_help="$workflow_temp_directory/bolt-help"
 	seed_build_id=$(binary_build_id "$seed_binary")
 
 	shopt -s nullglob
@@ -431,7 +448,7 @@ optimize_binary() {
 		perf_name=${perf_file##*/}
 		profile_file="$cohort_dir/profile-${perf_name#perf-}"
 		profile_file=${profile_file%.data}.fdata
-		profile_temp="$profile_file.tmp"
+		profile_temp="$workflow_temp_directory/${profile_file##*/}"
 		rm -f "$profile_temp"
 		"$perf2bolt_command" --perfdata="$perf_file" "$seed_binary" -o "$profile_temp"
 		mv -f "$profile_temp" "$profile_file"
@@ -478,7 +495,7 @@ clean_outputs() {
 			-o -name 'comparison.info' -o -name 'comparison.info.tmp' \) -delete
 		find "$build_root" -depth -type d -empty -delete
 	fi
-	rm -f "$repo_root/mrbolt" "$repo_root/mrbolt.tmp"
+	rm -f "$repo_root/mrbolt"
 }
 
 case "$operation" in

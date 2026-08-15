@@ -10,7 +10,8 @@ compiler="$1"
 input="$2"
 help_output="$3"
 header_output="$4"
-temporary_directory="$(mktemp -d ./.mr-help.XXXXXX)"
+temporary_base="${TMP_BASE_DIR:-${TMPDIR:-/tmp}}"
+temporary_directory="$(mktemp -d "${temporary_base%/}/mr-help.XXXXXX")"
 
 trap 'rm -rf "$temporary_directory"' EXIT INT TERM HUP
 

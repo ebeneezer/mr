@@ -1,2 +1,0 @@
-Changed in 0.2.20:
-- Published a no-code update to verify the corrected Superuser Password dialog and update path.

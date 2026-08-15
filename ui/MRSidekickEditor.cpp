@@ -6,6 +6,8 @@
 #define Uses_TGroup
 #define Uses_TKeys
 #define Uses_TProgram
+#define Uses_TScrollBar
+#define Uses_TScroller
 #define Uses_TView
 #define Uses_TWindow
 #include <tvision/tv.h>
@@ -40,6 +42,7 @@ using mr::sidekick_internal::readOnlySidekickBoundsFor;
 using mr::sidekick_internal::readOnlyTextWithMarker;
 using mr::sidekick_internal::romBelow;
 using mr::sidekick_internal::sidekickColor;
+using mr::sidekick_internal::sidekickMaxLineLength;
 using mr::sidekick_internal::snippetSidekickBoundsFor;
 using mr::sidekick_internal::snippetSidekickDialogColor;
 using mr::sidekick_internal::splitLines;
@@ -96,7 +99,7 @@ class MRSnippetSidekickDialog : public TDialog {
 		mEditor = new MRSidekickEditor(TRect(1, 1, std::max<short>(2, size.x - 1), std::max<short>(2, size.y - 3)), parentBufferId, replaceStart, replaceEnd, text, title, placeholders, false, true, true);
 		if (mEditor != nullptr) {
 			mEditor->growMode = gfGrowHiX | gfGrowHiY;
-			insert(mEditor);
+			mEditor->insertInto(*this);
 			mEditor->select();
 		}
 		helpButton = new TButton(TRect(std::max<short>(2, size.x - 12), std::max<short>(2, size.y - 3), std::max<short>(3, size.x - 1), std::max<short>(4, size.y - 1)), "~H~elp", cmHelp, bfNormal);
@@ -136,9 +139,9 @@ class MRSnippetSidekickDialog : public TDialog {
 
 } // namespace
 
-MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly, bool modalClose, bool snippetSidekick)
-    : TView(bounds), mParentBufferId(parentBufferId), mReplaceStart(replaceStart), mReplaceEnd(replaceEnd), mTitle(std::move(title)), mLines(), mPlaceholders(std::move(placeholders)), mPlaceholderTouched(mPlaceholders.size(), 0), mPlaceholderIndex(-1), mPlaceholderEndEdge(false), mCursorRow(0), mCursorCol(0), mReadOnly(readOnly), mModalClose(modalClose), mSnippetSidekick(snippetSidekick) {
-	if (!mReadOnly) options |= ofSelectable;
+MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly, bool modalClose, bool snippetSidekick, MRSidekickPalette palette)
+    : TScroller(bounds, nullptr, nullptr), mParentBufferId(parentBufferId), mReplaceStart(replaceStart), mReplaceEnd(replaceEnd), mTitle(std::move(title)), mLines(), mPlaceholders(std::move(placeholders)), mPlaceholderTouched(mPlaceholders.size(), 0), mPlaceholderIndex(-1), mPlaceholderEndEdge(false), mCursorRow(0), mCursorCol(0), mReadOnly(readOnly), mModalClose(modalClose), mSnippetSidekick(snippetSidekick), mPalette(palette), mOuterBounds(bounds), mHorizontalScrollBar(nullptr), mVerticalScrollBar(nullptr) {
+	if (mReadOnly) options &= ~ofSelectable;
 	growMode = gfGrowHiX | gfGrowHiY;
 	eventMask |= evKeyDown | evMouseDown;
 	setText(std::move(text));
@@ -147,6 +150,103 @@ MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std:
 
 MRSidekickEditor::~MRSidekickEditor() {
 	if (gActiveSidekick == this) gActiveSidekick = nullptr;
+}
+
+void MRSidekickEditor::insertInto(TGroup &group) {
+	if (mHorizontalScrollBar == nullptr && mVerticalScrollBar == nullptr) updateScrollBars(mOuterBounds);
+	if (mHorizontalScrollBar != nullptr && mHorizontalScrollBar->owner != nullptr) mHorizontalScrollBar->owner->remove(mHorizontalScrollBar);
+	if (mVerticalScrollBar != nullptr && mVerticalScrollBar->owner != nullptr) mVerticalScrollBar->owner->remove(mVerticalScrollBar);
+	if (owner != nullptr) owner->remove(this);
+	group.insert(this);
+	if (mHorizontalScrollBar != nullptr) group.insert(mHorizontalScrollBar);
+	if (mVerticalScrollBar != nullptr) group.insert(mVerticalScrollBar);
+	setLimit(sidekickMaxLineLength(mLines) + (mReadOnly ? 0 : 2), static_cast<int>(mLines.size()));
+}
+
+void MRSidekickEditor::updateScrollBars(const TRect &bounds) {
+	TGroup *group = owner;
+	const int contentWidth = sidekickMaxLineLength(mLines) + (mReadOnly ? 0 : 2);
+	const int contentHeight = static_cast<int>(mLines.size());
+	const int outerWidth = std::max(1, bounds.b.x - bounds.a.x);
+	const int outerHeight = std::max(1, bounds.b.y - bounds.a.y);
+	bool horizontalVisible = false;
+	bool verticalVisible = false;
+	bool changed;
+
+	do {
+		const int visibleWidth = std::max(1, outerWidth - (verticalVisible ? 1 : 0));
+		const int visibleHeight = std::max(1, outerHeight - (horizontalVisible ? 1 : 0));
+		const bool nextHorizontalVisible = outerHeight > 1 && contentWidth > visibleWidth;
+		const bool nextVerticalVisible = outerWidth > 1 && contentHeight > visibleHeight;
+
+		changed = nextHorizontalVisible != horizontalVisible || nextVerticalVisible != verticalVisible;
+		horizontalVisible = nextHorizontalVisible;
+		verticalVisible = nextVerticalVisible;
+	} while (changed);
+	if (bounds == mOuterBounds && horizontalVisible == (mHorizontalScrollBar != nullptr) && verticalVisible == (mVerticalScrollBar != nullptr)) {
+		setLimit(contentWidth, contentHeight);
+		return;
+	}
+
+	if (group != nullptr) group->lock();
+	destroyScrollBars();
+	delta.x = 0;
+	delta.y = 0;
+	mOuterBounds = bounds;
+	TRect viewBounds = bounds;
+	if (verticalVisible) --viewBounds.b.x;
+	if (horizontalVisible) --viewBounds.b.y;
+	if (viewBounds.b.x <= viewBounds.a.x) viewBounds.b.x = viewBounds.a.x + 1;
+	if (viewBounds.b.y <= viewBounds.a.y) viewBounds.b.y = viewBounds.a.y + 1;
+	TScroller::changeBounds(viewBounds);
+
+	if (horizontalVisible) {
+		mHorizontalScrollBar = new TScrollBar(TRect(bounds.a.x, viewBounds.b.y, viewBounds.b.x, bounds.b.y));
+		mHorizontalScrollBar->growMode = gfGrowHiX | gfGrowLoY | gfGrowHiY;
+		hScrollBar = mHorizontalScrollBar;
+	}
+	if (verticalVisible) {
+		mVerticalScrollBar = new TScrollBar(TRect(viewBounds.b.x, bounds.a.y, bounds.b.x, viewBounds.b.y));
+		mVerticalScrollBar->growMode = gfGrowLoX | gfGrowHiX | gfGrowHiY;
+		vScrollBar = mVerticalScrollBar;
+	}
+	if (group != nullptr) {
+		if (mHorizontalScrollBar != nullptr) group->insert(mHorizontalScrollBar);
+		if (mVerticalScrollBar != nullptr) group->insert(mVerticalScrollBar);
+	}
+	setLimit(contentWidth, contentHeight);
+	if (group != nullptr) group->unlock();
+}
+
+void MRSidekickEditor::destroyScrollBars() {
+	TScrollBar *horizontalScrollBar = mHorizontalScrollBar;
+	TScrollBar *verticalScrollBar = mVerticalScrollBar;
+
+	hScrollBar = nullptr;
+	vScrollBar = nullptr;
+	mHorizontalScrollBar = nullptr;
+	mVerticalScrollBar = nullptr;
+	if (horizontalScrollBar != nullptr && horizontalScrollBar->owner != nullptr) horizontalScrollBar->owner->remove(horizontalScrollBar);
+	if (verticalScrollBar != nullptr && verticalScrollBar->owner != nullptr) verticalScrollBar->owner->remove(verticalScrollBar);
+	TObject::destroy(horizontalScrollBar);
+	TObject::destroy(verticalScrollBar);
+}
+
+void MRSidekickEditor::detachFromOwner() {
+	destroyScrollBars();
+	if (owner != nullptr) owner->remove(this);
+}
+
+void MRSidekickEditor::ensureCursorVisible() {
+	const int cursorX = mCursorCol + (mReadOnly ? 0 : 1);
+	int x = delta.x;
+	int y = delta.y;
+
+	if (cursorX < x) x = cursorX;
+	else if (cursorX >= x + size.x) x = cursorX - size.x + 1;
+	if (mCursorRow < y) y = mCursorRow;
+	else if (mCursorRow >= y + size.y) y = mCursorRow - size.y + 1;
+	scrollTo(x, y);
 }
 
 int MRSidekickEditor::parentBufferId() const noexcept {
@@ -178,10 +278,9 @@ void MRSidekickEditor::setText(std::string textValue) {
 
 void MRSidekickEditor::updateReadOnlyText(std::string textValue, std::string title, const TRect &bounds) {
 	if (!mReadOnly) return;
-	TRect target = bounds;
 	mTitle = std::move(title);
 	setText(std::move(textValue));
-	locate(target);
+	updateScrollBars(bounds);
 	drawView();
 }
 
@@ -196,23 +295,28 @@ std::string MRSidekickEditor::text() const {
 }
 
 void MRSidekickEditor::draw() {
-	const TColorAttr textColor = sidekickColor(mSnippetSidekick ? kMrPaletteSnippetSidekickText : kMrPaletteSidekickEditorText, 0x30);
+	TColorAttr textColor = getColor(1);
+	if (mPalette == MRSidekickPalette::Sidekick) textColor = sidekickColor(mSnippetSidekick ? kMrPaletteSnippetSidekickText : kMrPaletteSidekickEditorText, 0x30);
 	const TColorAttr highlightColor = sidekickColor(mSnippetSidekick ? kMrPaletteSnippetActivePlaceholder : kMrPaletteSidekickEditorHighlight, 0xE0);
 	const TColorAttr defaultTextColor = sidekickColor(kMrPaletteSnippetDefaultText, 0x38);
 	std::size_t lineStartOffset = 0;
+	for (int y = 0; y < delta.y && y < static_cast<int>(mLines.size()); ++y)
+		lineStartOffset += mLines[static_cast<std::size_t>(y)].size() + 1;
 
 	for (int y = 0; y < size.y; ++y) {
 		TDrawBuffer buffer;
+		const int lineIndex = delta.y + y;
 		buffer.moveChar(0, ' ', textColor, size.x);
-		if (y < static_cast<int>(mLines.size())) {
-			const std::string &line = mLines[static_cast<std::size_t>(y)];
+		if (lineIndex < static_cast<int>(mLines.size())) {
+			const std::string &line = mLines[static_cast<std::size_t>(lineIndex)];
 			const int textX = mReadOnly ? 0 : 1;
 			if (mReadOnly) {
-				buffer.moveStr(0, line.c_str(), textColor, static_cast<ushort>(size.x));
+				buffer.moveStr(0, line.c_str(), textColor, static_cast<ushort>(size.x), static_cast<ushort>(delta.x));
 			} else {
-				const int visible = std::min<int>(line.size(), std::max(0, size.x - textX - 1));
-				for (int x = 0; x < visible; ++x) {
-					const std::size_t offset = lineStartOffset + static_cast<std::size_t>(x);
+				for (int screenX = 0; screenX < size.x; ++screenX) {
+					const int textColumn = delta.x + screenX - textX;
+					if (textColumn < 0 || textColumn >= static_cast<int>(line.size())) continue;
+					const std::size_t offset = lineStartOffset + static_cast<std::size_t>(textColumn);
 					TColorAttr charColor = textColor;
 					if (mSnippetSidekick) {
 						for (std::size_t index = 0; index < mPlaceholders.size(); ++index) {
@@ -225,19 +329,19 @@ void MRSidekickEditor::draw() {
 							break;
 						}
 					}
-					const unsigned char raw = static_cast<unsigned char>(line[static_cast<std::size_t>(x)]);
-					buffer.moveChar(static_cast<ushort>(x + textX), raw < 32 ? ' ' : line[static_cast<std::size_t>(x)], charColor, 1);
+					const unsigned char raw = static_cast<unsigned char>(line[static_cast<std::size_t>(textColumn)]);
+					buffer.moveChar(static_cast<ushort>(screenX), raw < 32 ? ' ' : line[static_cast<std::size_t>(textColumn)], charColor, 1);
 				}
 			}
 		}
-		if (!mReadOnly && y == mCursorRow) {
-			const int cursorX = std::clamp(mCursorCol + 1, 0, std::max(0, size.x - 1));
+		if (!mReadOnly && lineIndex == mCursorRow) {
+			const int cursorX = mCursorCol + 1 - delta.x;
 			char cursorChar = (mCursorCol >= 0 && mCursorCol < static_cast<int>(mLines[static_cast<std::size_t>(mCursorRow)].size())) ? mLines[static_cast<std::size_t>(mCursorRow)][static_cast<std::size_t>(mCursorCol)] : ' ';
 			if (static_cast<unsigned char>(cursorChar) < 32) cursorChar = ' ';
-			buffer.moveChar(static_cast<ushort>(cursorX), cursorChar, kSidekickCursor, 1);
+			if (cursorX >= 0 && cursorX < size.x) buffer.moveChar(static_cast<ushort>(cursorX), cursorChar, kSidekickCursor, 1);
 		}
 		writeLine(0, static_cast<short>(y), size.x, 1, buffer);
-		if (y < static_cast<int>(mLines.size())) lineStartOffset += mLines[static_cast<std::size_t>(y)].size() + 1;
+		if (lineIndex < static_cast<int>(mLines.size())) lineStartOffset += mLines[static_cast<std::size_t>(lineIndex)].size() + 1;
 	}
 }
 
@@ -245,8 +349,8 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 	if (event.what == evMouseDown) {
 		if (containsMouse(event)) {
 			TPoint local = makeLocal(event.mouse.where);
-			mCursorRow = std::clamp<int>(local.y, 0, static_cast<int>(mLines.size()) - 1);
-			mCursorCol = std::max(0, local.x - 1);
+			mCursorRow = std::clamp<int>(delta.y + local.y, 0, static_cast<int>(mLines.size()) - 1);
+			mCursorCol = std::max(0, delta.x + local.x - 1);
 			clampCursor();
 			drawView();
 			clearEvent(event);
@@ -254,7 +358,7 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 		return;
 	}
 	if (event.what != evKeyDown) {
-		TView::handleEvent(event);
+		TScroller::handleEvent(event);
 		return;
 	}
 
@@ -346,23 +450,22 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 				insertChar(static_cast<char>(charCode));
 				break;
 			}
-			TView::handleEvent(event);
+			TScroller::handleEvent(event);
 			return;
 		}
 	}
+	ensureCursorVisible();
 	drawView();
 	clearEvent(event);
 }
 
 void MRSidekickEditor::closeSidekick(ushort command) {
-	TGroup *group = owner;
-
 	if (mModalClose) {
 		endModal(command);
 		return;
 	}
 	if (mReadOnly) mrvmStoreRuntimeStateInt("sidekick", "dismissedReadOnlyParentBufferId", mParentBufferId);
-	if (group != nullptr) group->remove(this);
+	detachFromOwner();
 	TObject::destroy(this);
 }
 
@@ -387,13 +490,7 @@ bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, con
 	const std::string markedText = readOnlyTextWithMarker(text, marker, contentWidth, visibleLineCount);
 	if (gActiveSidekick != nullptr && gActiveSidekick->parentBufferId() == parent->bufferId() && gActiveSidekick->isReadOnly()) {
 		gActiveSidekick->updateReadOnlyText(markedText, title, bounds);
-		if (gActiveSidekick->owner != TProgram::deskTop) {
-			if (gActiveSidekick->owner != nullptr) gActiveSidekick->owner->remove(gActiveSidekick);
-			TProgram::deskTop->insert(gActiveSidekick);
-		} else {
-			TProgram::deskTop->remove(gActiveSidekick);
-			TProgram::deskTop->insert(gActiveSidekick);
-		}
+		gActiveSidekick->insertInto(*TProgram::deskTop);
 		gActiveSidekick->drawView();
 		return true;
 	}
@@ -401,7 +498,7 @@ bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, con
 	MRSidekickEditor *sidekick = new MRSidekickEditor(bounds, parent->bufferId(), 0, 0, markedText, title, std::vector<MRSidekickSpan>(), true);
 	if (sidekick == nullptr) return false;
 	gActiveSidekick = sidekick;
-	TProgram::deskTop->insert(sidekick);
+	sidekick->insertInto(*TProgram::deskTop);
 	sidekick->drawView();
 	return true;
 }
@@ -457,8 +554,7 @@ void mrDropSidekickForParent(const MREditWindow *parent) {
 void mrDropActiveSidekick() {
 	MRSidekickEditor *sidekick = gActiveSidekick;
 	if (sidekick == nullptr) return;
-	TGroup *group = sidekick->owner;
 	gActiveSidekick = nullptr;
-	if (group != nullptr) group->remove(sidekick);
+	sidekick->detachFromOwner();
 	TObject::destroy(sidekick);
 }

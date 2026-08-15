@@ -129,8 +129,8 @@ echo "Initialized user macros: $macro_target"
 release_notes=$(cat <<EOF
 MR ${release_version} (build ${release_epoch})
 
-Changed in 0.2.9:
-- Linux releases now enforce a Debian 12 compatible glibc and libstdc++ ABI ceiling; harmless loader warnings no longer block installation.
+Release notes:
+https://github.com/ebeneezer/mr/releases/tag/v${release_version}
 
 Run the installer again to update the system files for this build.
 Existing files below ${macro_target} are deliberately preserved.

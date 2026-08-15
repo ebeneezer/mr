@@ -153,8 +153,8 @@ class UpdateChangedDialog final : public TDialog {
 	UpdateChangedDialog(const std::string &version, const std::string &changedText)
 	    : TWindowInit(&TDialog::initFrame), TDialog(centeredUpdateChangedBounds(), ("Update to V" + version).c_str()) {
 		flags = wfMove;
-		MRSidekickEditor *view = new MRSidekickEditor(TRect(2, 2, 74, 18), 0, 0, 0, changedText, "Changed", std::vector<MRSidekickSpan>(), true, false, false);
-		if (view != nullptr) insert(view);
+		MRSidekickEditor *view = new MRSidekickEditor(TRect(2, 2, 74, 18), 0, 0, 0, changedText, std::string(), std::vector<MRSidekickSpan>(), true, false, false, MRSidekickPalette::Owner);
+		if (view != nullptr) view->insertInto(*this);
 		insert(new TButton(TRect(32, 19, 44, 21), "~R~estart", cmMrUpdateRestart, bfDefault));
 	}
 

@@ -1,2 +1,0 @@
-Changed in 0.2.19:
-- Published a no-code update to verify the corrected Superuser Password update path.
