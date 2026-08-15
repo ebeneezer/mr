@@ -97,6 +97,7 @@ namespace {
 constexpr char kInstalledBinary[] = "/usr/local/bin/mr";
 constexpr char kSudoExecutable[] = "/usr/bin/sudo";
 constexpr char kProtocolMagic[] = "MRUPD01";
+constexpr std::size_t kProcessDiagnosticLimit = 16 * 1024;
 
 TFrame *initUpdateDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
@@ -341,9 +342,9 @@ bool currentExecutableIsSystemBinary() {
 	return std::strcmp(path.data(), kInstalledBinary) == 0 && installedBinaryIsTrusted();
 }
 
-bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::shared_ptr<UpdateAuthorization> &authorization, std::string &error) {
+bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::shared_ptr<UpdateAuthorization> &authorization, std::string &diagnostic, std::string &error) {
 	int passwordPipe[2] = {-1, -1};
-	int errorPipe[2] = {-1, -1};
+	int processOutputPipe[2] = {-1, -1};
 	std::string protocolPath;
 	if (authorization == nullptr) {
 		error = "Missing update authorization.";
@@ -354,7 +355,7 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 		return false;
 	}
 	if (!writeProtocolFile(package, protocolPath, error)) return false;
-	if (::pipe(passwordPipe) != 0 || ::pipe(errorPipe) != 0) {
+	if (::pipe(passwordPipe) != 0 || ::pipe(processOutputPipe) != 0) {
 		if (passwordPipe[0] >= 0) {
 			::close(passwordPipe[0]);
 			::close(passwordPipe[1]);
@@ -367,8 +368,8 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 	if (child < 0) {
 		::close(passwordPipe[0]);
 		::close(passwordPipe[1]);
-		::close(errorPipe[0]);
-		::close(errorPipe[1]);
+		::close(processOutputPipe[0]);
+		::close(processOutputPipe[1]);
 		::unlink(protocolPath.c_str());
 		error = "Unable to start the privileged update process.";
 		return false;
@@ -376,12 +377,12 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 	if (child == 0) {
 		if (authorization->passwordRequired() && ::setsid() < 0) ::_exit(127);
 		::close(passwordPipe[1]);
-		::close(errorPipe[0]);
+		::close(processOutputPipe[0]);
 		::dup2(passwordPipe[0], STDIN_FILENO);
-		::dup2(errorPipe[1], STDERR_FILENO);
-		redirectToNull(STDOUT_FILENO);
+		::dup2(processOutputPipe[1], STDERR_FILENO);
+		::dup2(processOutputPipe[1], STDOUT_FILENO);
 		::close(passwordPipe[0]);
-		::close(errorPipe[1]);
+		::close(processOutputPipe[1]);
 		if (::geteuid() == 0) {
 			char *const args[] = {const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
 			::execv(kInstalledBinary, args);
@@ -395,7 +396,7 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 		::_exit(127);
 	}
 	::close(passwordPipe[0]);
-	::close(errorPipe[1]);
+	::close(processOutputPipe[1]);
 	sigset_t previousMask;
 	bool alreadyPending = false;
 	const bool signalBlocked = blockSigpipe(previousMask, alreadyPending);
@@ -403,20 +404,21 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 	authorization->clearPassword();
 	if (signalBlocked) restoreSigpipe(previousMask, alreadyPending);
 	::close(passwordPipe[1]);
-	std::array<char, 2048> errorBuffer{};
-	std::size_t errorLength = 0;
-	while (errorLength + 1 < errorBuffer.size()) {
-		const ssize_t count = ::read(errorPipe[0], errorBuffer.data() + errorLength, errorBuffer.size() - errorLength - 1);
+	std::array<char, 2048> processOutput{};
+	diagnostic.clear();
+	while (true) {
+		const ssize_t count = ::read(processOutputPipe[0], processOutput.data(), processOutput.size());
 		if (count < 0 && errno == EINTR) continue;
 		if (count <= 0) break;
-		errorLength += static_cast<std::size_t>(count);
+		const std::size_t available = kProcessDiagnosticLimit - diagnostic.size();
+		if (available != 0) diagnostic.append(processOutput.data(), std::min(available, static_cast<std::size_t>(count)));
 	}
-	::close(errorPipe[0]);
-	errorBuffer[errorLength] = '\0';
+	::close(processOutputPipe[0]);
+	while (!diagnostic.empty() && (diagnostic.back() == '\n' || diagnostic.back() == '\r')) diagnostic.pop_back();
 	const bool exited = waitForSuccessfulExit(child);
 	::unlink(protocolPath.c_str());
 	if (!sent || !exited) {
-		error = errorLength != 0 ? std::string(errorBuffer.data(), errorLength) : "Privileged update installation failed.";
+		error = !diagnostic.empty() ? diagnostic : "Privileged update installation failed.";
 		while (!error.empty() && (error.back() == '\n' || error.back() == '\r')) error.pop_back();
 		if ((authorization->passwordRequired() && error.find("mr:") == std::string::npos) || error.rfind("sudo:", 0) == 0) error = "sudo authorization failed during update installation.";
 		return false;
@@ -631,23 +633,25 @@ std::shared_ptr<UpdateAuthorization> ensureUpdatePrivileges() {
 
 mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package, std::shared_ptr<UpdateAuthorization> authorization) {
 	mr::coprocessor::Result result;
+	std::string diagnostic;
 	std::string error;
 	if (task.cancelRequested()) {
 		result.status = mr::coprocessor::TaskStatus::Cancelled;
 		return result;
 	}
-	if (package == nullptr || !applyPackageThroughSudo(*package, authorization, error)) {
+	if (package == nullptr || !applyPackageThroughSudo(*package, authorization, diagnostic, error)) {
 		result.status = mr::coprocessor::TaskStatus::Failed;
 		result.error = error.empty() ? "Unable to install update." : error;
+		result.payload = std::make_shared<UpdateInstallPayload>("", "", "", std::move(diagnostic));
 		return result;
 	}
 	const std::string macroWarning = installUserMacros(package->macros);
 	result.status = mr::coprocessor::TaskStatus::Completed;
-	result.payload = std::make_shared<UpdateAppliedPayload>(package->manifest.version, package->manifest.changedText, macroWarning);
+	result.payload = std::make_shared<UpdateInstallPayload>(package->manifest.version, package->manifest.changedText, macroWarning, std::move(diagnostic));
 	return result;
 }
 
-bool showChangedAndRestart(const UpdateAppliedPayload &payload) {
+bool showChangedAndRestart(const UpdateInstallPayload &payload) {
 	if (TProgram::deskTop == nullptr) return false;
 	UpdateChangedDialog *dialog = new UpdateChangedDialog(payload.version, payload.changedText);
 	if (dialog == nullptr) return false;

@@ -57,15 +57,16 @@ class UpdatePackagePayload final : public mr::coprocessor::Payload {
 	std::vector<UpdateMacroFile> macros;
 };
 
-class UpdateAppliedPayload final : public mr::coprocessor::Payload {
+class UpdateInstallPayload final : public mr::coprocessor::Payload {
   public:
-	UpdateAppliedPayload(std::string value, std::string changedValue, std::string warningValue)
-	    : version(std::move(value)), changedText(std::move(changedValue)), warning(std::move(warningValue)) {
+	UpdateInstallPayload(std::string value, std::string changedValue, std::string warningValue, std::string diagnosticValue)
+	    : version(std::move(value)), changedText(std::move(changedValue)), warning(std::move(warningValue)), diagnostic(std::move(diagnosticValue)) {
 	}
 
 	std::string version;
 	std::string changedText;
 	std::string warning;
+	std::string diagnostic;
 };
 
 class UpdateAuthorization;
@@ -77,7 +78,7 @@ std::string sha256Hex(const std::vector<unsigned char> &bytes);
 
 std::shared_ptr<UpdateAuthorization> ensureUpdatePrivileges();
 mr::coprocessor::Result applyUpdatePackage(const mr::coprocessor::TaskInfo &task, std::shared_ptr<const UpdatePackagePayload> package, std::shared_ptr<UpdateAuthorization> authorization);
-bool showChangedAndRestart(const UpdateAppliedPayload &payload);
+bool showChangedAndRestart(const UpdateInstallPayload &payload);
 bool runInternalUpdateApply(const char *protocolPath, std::string &error);
 
 } // namespace update_internal

@@ -11,6 +11,7 @@
 #include "../mrmac/vm/MRVMValue.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRMessageLineController.hpp"
+#include "../ui/MRWindowSupport.hpp"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -52,7 +53,7 @@ constexpr std::array<unsigned char, 32> kUpdatePublicKey = {
 	0xc5, 0x37, 0x5d, 0xda, 0x8e, 0x55, 0xfa, 0xfb, 0x86, 0x71, 0xdf, 0x3e, 0xab, 0x7d, 0x37, 0xf0,
 	0xe5, 0x41, 0x6f, 0x8d, 0xa2, 0x7c, 0x89, 0x61, 0xfa, 0x62, 0xda, 0x02, 0x53, 0x69, 0xff, 0xda};
 
-using mr::update_internal::UpdateAppliedPayload;
+using mr::update_internal::UpdateInstallPayload;
 using mr::update_internal::UpdateMacroFile;
 using mr::update_internal::UpdateManifest;
 using mr::update_internal::UpdatePackagePayload;
@@ -568,7 +569,8 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 	if (result.task.executionOwnerLocalId == kUpdateApplyOwner) {
 		storeUpdateInt("busy", 0);
-		const UpdateAppliedPayload *payload = dynamic_cast<const UpdateAppliedPayload *>(result.payload.get());
+		const UpdateInstallPayload *payload = dynamic_cast<const UpdateInstallPayload *>(result.payload.get());
+		if (payload != nullptr && !payload->diagnostic.empty()) mrLogMessage("Application update privilege process:\n" + payload->diagnostic);
 		if (!result.completed() || payload == nullptr) postUpdateError(result.error);
 		else {
 			storeUpdateInt("available", 0);
