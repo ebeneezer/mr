@@ -150,7 +150,7 @@ class MRMacroUiTreeView final : public TView {
 			if (visibleIndex >= 0 && static_cast<std::size_t>(visibleIndex) < visibleNodeIndices.size()) {
 				selectedIndex = visibleIndex;
 				if (point.x <= nodeToggleColumn(visibleNodeIndices[static_cast<std::size_t>(visibleIndex)])) toggleSelectedNode();
-				else if ((event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr) message(owner, evCommand, activateCommand, this);
+				else if ((event.mouse.eventFlags & meDoubleClick) != 0) sendMacroUiActivationCommand(this, activateCommand);
 				storeSelection();
 				drawView();
 			}
@@ -169,8 +169,8 @@ class MRMacroUiTreeView final : public TView {
 				clearEvent(event);
 				return;
 			}
-			if (key == kbEnter && owner != nullptr) {
-				message(owner, evCommand, activateCommand, this);
+			if (key == kbEnter) {
+				sendMacroUiActivationCommand(this, activateCommand);
 				clearEvent(event);
 				return;
 			}
@@ -485,7 +485,7 @@ class MRMacroUiTableView final : public TView {
 				selectedIndex = itemIndex;
 				storeSelection();
 				drawView();
-				if ((event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr) message(owner, evCommand, activateCommand, this);
+				if ((event.mouse.eventFlags & meDoubleClick) != 0) sendMacroUiActivationCommand(this, activateCommand);
 			}
 			clearEvent(event);
 			return;
@@ -502,8 +502,8 @@ class MRMacroUiTableView final : public TView {
 				clearEvent(event);
 				return;
 			}
-			if (key == kbEnter && owner != nullptr) {
-				message(owner, evCommand, activateCommand, this);
+			if (key == kbEnter) {
+				sendMacroUiActivationCommand(this, activateCommand);
 				clearEvent(event);
 				return;
 			}

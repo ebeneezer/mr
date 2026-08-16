@@ -726,15 +726,17 @@ the range 0--255. The centered \texttt{RRGGBB/RRGGBB} value shows the exact
 files can be loaded into the working draft and saved for reuse. Invalid or
 missing groups retain their hardcoded defaults.\index{color setup}\index{theme}
 
-The Interface setup page selects \emph{24-bit RGB (automatic)} or the
-\emph{256-color palette}. Automatic mode supplies the stored RGB values to
-Turbo Vision, which uses true color when the terminal supports it and its
-normal fallback otherwise. Palette mode maps the exact 16 VGA default colors
-back to their ANSI palette indices, preserving the terminal's configured
-classic colors. Other RGB values are quantized to standard xterm-256 color
-indices; Turbo Vision performs any further fallback required by terminals with
-fewer colors. Thus both modes share one settings representation and one color
-draft; there is no duplicate palette configuration.\index{color!output
+Fresh installations use the \emph{256-color palette} so that the built-in
+BIOS-derived theme retains its ANSI palette-index semantics. The Interface
+setup page may instead select \emph{24-bit RGB (automatic)}. Automatic mode
+supplies the stored RGB values to Turbo Vision, which uses true color when the
+terminal supports it and its normal fallback otherwise. Palette mode maps the
+exact 16 VGA default colors back to their ANSI palette indices, preserving the
+terminal's configured classic colors. Other RGB values are quantized to
+standard xterm-256 color indices; Turbo Vision performs any further fallback
+required by terminals with fewer colors. Thus both modes share one settings
+representation and one color draft; there is no duplicate palette
+configuration.\index{color!output
 mode}\index{terminal palette}
 
 Filename-extension profiles may select a theme automatically. This allows a

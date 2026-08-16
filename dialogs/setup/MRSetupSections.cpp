@@ -1721,9 +1721,13 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker, const std::string &initialFileCompareOriginalLeadingGutters, const std::string &initialFileCompareOriginalTrailingGutters,
 	                            const std::string &initialFileCompareCompareLeadingGutters, const std::string &initialFileCompareCompareTrailingGutters, MRFileCompareStartConfiguration initialFileCompareStartConfiguration,
 	                            bool initialFileCompareComparePanelReadOnly)
-	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 38), "USER INTERFACE SETTINGS", 86, 38, initSetupDialogFrame) {
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 35), "USER INTERFACE SETTINGS", 86, 35, initSetupDialogFrame) {
 
 		int const yStart = 2;
+		const int leftColumnLeft = 3;
+		const int leftColumnRight = 42;
+		const int rightColumnLeft = 44;
+		const int rightColumnRight = 83;
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
 
@@ -1737,48 +1741,48 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		mOptionsField = cb;
 		addManaged(mOptionsField, mOptionsField->getBounds());
 
-		addManaged(new TStaticText(TRect(38, 2, 57, 3), "Cursor behaviour:"), TRect(38, 2, 57, 3));
-		mCursorBehaviourField = new TRadioButtons(TRect(38, 3, 57, 6), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
-		addManaged(mCursorBehaviourField, TRect(38, 3, 57, 6));
+		addManaged(new TStaticText(TRect(38, 2, 56, 3), "Indent style:"), TRect(38, 2, 56, 3));
+		mIndentStyleField = new TRadioButtons(TRect(38, 3, 56, 9), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
+		addManaged(mIndentStyleField, TRect(38, 3, 56, 9));
+		mIndentStylePreview = new TIndentStylePreview(TRect(58, 2, 83, 11));
+		addManaged(mIndentStylePreview, TRect(58, 2, 83, 11));
 
-		addManaged(new TStaticText(TRect(59, 2, 71, 3), "Scrollbars:"), TRect(59, 2, 71, 3));
-		mScrollbarVisibilityField = new TRadioButtons(TRect(59, 3, 74, 6), new TSItem("~S~mart", new TSItem("~A~lways", nullptr)));
-		addManaged(mScrollbarVisibilityField, TRect(59, 3, 74, 6));
+		addManaged(new TStaticText(TRect(leftColumnLeft, 13, leftColumnRight, 14), "Cursor behaviour:"), TRect(leftColumnLeft, 13, leftColumnRight, 14));
+		mCursorBehaviourField = new TRadioButtons(TRect(leftColumnLeft, 14, leftColumnRight, 16), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
+		addManaged(mCursorBehaviourField, TRect(leftColumnLeft, 14, leftColumnRight, 16));
 
-		addManaged(new TStaticText(TRect(38, 7, 55, 8), "Compiler errors:"), TRect(38, 7, 55, 8));
-		mCompilerErrorMessageField = new TRadioButtons(TRect(38, 8, 56, 11), new TSItem("~U~nder code", new TSItem("~R~ight margin", nullptr)));
-		addManaged(mCompilerErrorMessageField, TRect(38, 8, 56, 11));
+		addManaged(new TStaticText(TRect(rightColumnLeft, 13, rightColumnRight, 14), "Scrollbars:"), TRect(rightColumnLeft, 13, rightColumnRight, 14));
+		mScrollbarVisibilityField = new TRadioButtons(TRect(rightColumnLeft, 14, rightColumnRight, 16), new TSItem("~S~mart", new TSItem("~A~lways", nullptr)));
+		addManaged(mScrollbarVisibilityField, TRect(rightColumnLeft, 14, rightColumnRight, 16));
 
-		addManaged(new TStaticText(TRect(58, 7, 78, 8), "Start configuration:"), TRect(58, 7, 78, 8));
-		mFileCompareStartField = new TRadioButtons(TRect(58, 8, 83, 11), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
-		addManaged(mFileCompareStartField, TRect(58, 8, 83, 11));
+		addManaged(new TStaticText(TRect(leftColumnLeft, 17, leftColumnRight, 18), "Compiler errors:"), TRect(leftColumnLeft, 17, leftColumnRight, 18));
+		mCompilerErrorMessageField = new TRadioButtons(TRect(leftColumnLeft, 18, leftColumnRight, 20), new TSItem("~U~nder code", new TSItem("~R~ight margin", nullptr)));
+		addManaged(mCompilerErrorMessageField, TRect(leftColumnLeft, 18, leftColumnRight, 20));
 
-		addManaged(new TStaticText(TRect(38, 12, 65, 13), "Color Management:"), TRect(38, 12, 65, 13));
-		mColorOutputModeField = new TRadioButtons(TRect(38, 13, 68, 16), new TSItem("~2~4-bit RGB (automatic)", new TSItem("~P~alette (256 colors)", nullptr)));
-		addManaged(mColorOutputModeField, TRect(38, 13, 68, 16));
+		addManaged(new TStaticText(TRect(rightColumnLeft, 17, rightColumnRight, 18), "Start configuration:"), TRect(rightColumnLeft, 17, rightColumnRight, 18));
+		mFileCompareStartField = new TRadioButtons(TRect(rightColumnLeft, 18, rightColumnRight, 20), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
+		addManaged(mFileCompareStartField, TRect(rightColumnLeft, 18, rightColumnRight, 20));
 
-		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 17, 70, 18), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(mVirtualDesktopsSlider, TRect(24, 17, 70, 18));
-		addManaged(new TLabel(TRect(2, 17, 23, 18), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 17, 23, 18));
+		addManaged(new TStaticText(TRect(leftColumnLeft, 21, leftColumnRight, 22), "Color Management:"), TRect(leftColumnLeft, 21, leftColumnRight, 22));
+		mColorOutputModeField = new TRadioButtons(TRect(leftColumnLeft, 22, leftColumnRight, 24), new TSItem("~2~4-bit RGB (automatic)", new TSItem("~P~alette (256 colors)", nullptr)));
+		addManaged(mColorOutputModeField, TRect(leftColumnLeft, 22, leftColumnRight, 24));
 
-		mCursorPositionMarkerField = new TInputLine(TRect(28, 18, 42, 19), 11);
-		addManaged(mCursorPositionMarkerField, TRect(28, 18, 42, 19));
-		addManaged(new TLabel(TRect(2, 18, 27, 19), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 18, 27, 19));
+		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 25, 70, 26), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mVirtualDesktopsSlider, TRect(24, 25, 70, 26));
+		addManaged(new TLabel(TRect(2, 25, 23, 26), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 25, 23, 26));
 
-		addManaged(new TStaticText(TRect(3, 21, 25, 22), "File compare gutters:"), TRect(3, 21, 25, 22));
-		addManaged(new TStaticText(TRect(26, 21, 36, 22), "Original:"), TRect(26, 21, 36, 22));
-		addFileCompareGutterSpinners(mFileCompareOriginalLeadingGutterSpinners, 37, 20);
-		addFileCompareGutterSpinners(mFileCompareOriginalTrailingGutterSpinners, 43, 20);
-		addManaged(new TStaticText(TRect(54, 21, 63, 22), "Compare:"), TRect(54, 21, 63, 22));
-		addFileCompareGutterSpinners(mFileCompareCompareLeadingGutterSpinners, 64, 20);
-		addFileCompareGutterSpinners(mFileCompareCompareTrailingGutterSpinners, 70, 20);
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 26, 42, 27), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 26, 42, 27));
+		addManaged(new TLabel(TRect(2, 26, 27, 27), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 26, 27, 27));
 
-		addManaged(new TStaticText(TRect(3, 24, 20, 25), "Indent style:"), TRect(3, 24, 20, 25));
-		mIndentStyleField = new TRadioButtons(TRect(3, 25, 23, 34), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
-		addManaged(mIndentStyleField, TRect(3, 25, 23, 34));
-		mIndentStylePreview = new TIndentStylePreview(TRect(25, 25, 47, 34));
-		addManaged(mIndentStylePreview, TRect(25, 25, 47, 34));
-		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 35, 0, buttons);
+		addManaged(new TStaticText(TRect(3, 29, 25, 30), "File compare gutters:"), TRect(3, 29, 25, 30));
+		addManaged(new TStaticText(TRect(26, 29, 36, 30), "Original:"), TRect(26, 29, 36, 30));
+		addFileCompareGutterSpinners(mFileCompareOriginalLeadingGutterSpinners, 37, 28);
+		addFileCompareGutterSpinners(mFileCompareOriginalTrailingGutterSpinners, 43, 28);
+		addManaged(new TStaticText(TRect(54, 29, 63, 30), "Compare:"), TRect(54, 29, 63, 30));
+		addFileCompareGutterSpinners(mFileCompareCompareLeadingGutterSpinners, 64, 28);
+		addFileCompareGutterSpinners(mFileCompareCompareTrailingGutterSpinners, 70, 28);
+		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 32, 0, buttons);
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		mInitialCompilerErrorMessageChoice = initialCompilerErrorMessagePlacement == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;

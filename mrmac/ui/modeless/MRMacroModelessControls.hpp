@@ -8,6 +8,8 @@ class TRect;
 class TScrollBar;
 class TView;
 
+void sendMacroUiActivationCommand(TView *source, unsigned short command);
+
 TView *createMacroUiListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command);
 void setMacroUiListItems(TView *view, std::vector<std::string> values, int start);
 int macroUiListSelectedIndex(const TView *view);

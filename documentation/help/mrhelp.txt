@@ -498,9 +498,11 @@ Load Theme reads a theme file into the working color draft. Save Theme writes
 the complete draft. Invalid or missing groups use their hardcoded defaults.
 The running settings change only when the dialog flow accepts changed data.
 
-Installation and setup selects either automatic 24-bit RGB output or the
-256-color terminal palette. Automatic output lets Turbo Vision use true color
-where the terminal supports it and perform its normal fallback otherwise.
+Fresh installations use the 256-color terminal palette so that the built-in
+BIOS-derived theme retains its ANSI palette-index semantics. Setup can select
+automatic 24-bit RGB output instead. Automatic output lets Turbo Vision use
+true color where the terminal supports it and perform its normal fallback
+otherwise.
 Palette mode maps the exact 16 VGA default colors back to their ANSI palette
 indices, preserving the terminal's configured classic colors. Other RGB values
 are quantized to standard xterm-256 indices. Turbo Vision performs any further

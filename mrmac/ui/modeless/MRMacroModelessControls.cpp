@@ -15,6 +15,7 @@
 #define Uses_TScrollBar
 #define Uses_TSItem
 #define Uses_TView
+#define Uses_TWindow
 #include <tvision/tv.h>
 
 #include <algorithm>
@@ -46,12 +47,12 @@ class MRMacroUiListView final : public TListViewer {
 		TListViewer::handleEvent(event);
 		storeValue();
 		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
-			if (activateCommand != 0 && owner != nullptr) message(owner, evCommand, activateCommand, this);
+			sendMacroUiActivationCommand(this, activateCommand);
 			clearEvent(event);
 			return;
 		}
 		if (event.what == evMouseDown && (event.mouse.eventFlags & meDoubleClick) != 0) {
-			if (activateCommand != 0 && owner != nullptr) message(owner, evCommand, activateCommand, this);
+			sendMacroUiActivationCommand(this, activateCommand);
 			clearEvent(event);
 		}
 	}
@@ -178,7 +179,7 @@ class MRMacroUiGridView final : public TView {
 					selectedIndex = index;
 					ensureSelectedVisible();
 					drawView();
-					if ((event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr) message(owner, evCommand, activateCommand, this);
+					if ((event.mouse.eventFlags & meDoubleClick) != 0) sendMacroUiActivationCommand(this, activateCommand);
 				}
 			}
 			clearEvent(event);
@@ -196,8 +197,8 @@ class MRMacroUiGridView final : public TView {
 				clearEvent(event);
 				return;
 			}
-			if (arrow == kbEnter && owner != nullptr) {
-				message(owner, evCommand, activateCommand, this);
+			if (arrow == kbEnter) {
+				sendMacroUiActivationCommand(this, activateCommand);
 				clearEvent(event);
 				return;
 			}
@@ -536,6 +537,15 @@ class MRMacroModelessBoolInput final : public TCheckBoxes {
 };
 
 } // namespace
+
+void sendMacroUiActivationCommand(TView *source, unsigned short command) {
+	TView *target = source != nullptr ? source->owner : nullptr;
+
+	if (command == 0) return;
+	while (target != nullptr && dynamic_cast<TWindow *>(target) == nullptr)
+		target = target->owner;
+	if (target != nullptr) message(target, evCommand, static_cast<ushort>(command), source);
+}
 
 TView *createMacroUiListView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command) {
 	return new MRMacroUiListView(bounds, scrollBar, std::move(values), static_cast<ushort>(command), std::string(), std::string());

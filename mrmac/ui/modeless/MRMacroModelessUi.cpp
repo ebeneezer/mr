@@ -8,6 +8,7 @@
 #include "../../../app/MRRuntimeScheduler.hpp"
 #include "../../../app/commands/MRWindowCommands.hpp"
 #include "../../../dialogs/MRWindowList.hpp"
+#include "../../../dialogs/setup/MRSetupCommon.hpp"
 #include "../../../ui/MRDesktopWindow.hpp"
 #include "../../../ui/MRWindowLayout.hpp"
 #include "MRVMModelessUiRuntime.hpp"
@@ -163,6 +164,15 @@ static TFrame *initMacroModelessFrame(TRect bounds);
 class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 	public:
 	explicit MRMacroModelessWindow(const MRMacroModelessWindowDefinition &windowDefinition) : TWindowInit(initMacroModelessFrame), TWindow(modelessBounds(windowDefinition), windowDefinition.title.empty() ? "MRMac" : windowDefinition.title.c_str(), wnNoNumber), definition(windowDefinition) {
+		TRect contentBounds = getExtent();
+
+		contentBounds.grow(-1, -1);
+		contentGroup = createSetupDialogContentGroup(contentBounds);
+		if (contentGroup != nullptr) {
+			contentGroup->options |= ofSelectable;
+			contentGroup->growMode = gfGrowHiX | gfGrowHiY;
+			insert(contentGroup);
+		}
 		buildControls();
 	}
 
@@ -263,6 +273,12 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 		setBounds(bounds);
 		clip = getExtent();
 		if (frame != nullptr) frame->setBounds(getExtent());
+		if (contentGroup != nullptr) {
+			TRect contentBounds = getExtent();
+
+			contentBounds.grow(-1, -1);
+			contentGroup->locate(contentBounds);
+		}
 		storeLiveGeometry();
 	}
 
@@ -302,7 +318,8 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			else
 				select();
 			if (frame != nullptr) frame->drawView();
-			if ((event.mouse.buttons & mbLeftButton) != 0 && runCanvasHotspot(makeLocal(event.mouse.where))) {
+			const TPoint localMouse = makeLocal(event.mouse.where);
+			if ((event.mouse.buttons & mbLeftButton) != 0 && (contentGroup == nullptr || contentGroup->getBounds().contains(localMouse)) && runCanvasHotspot(localMouse)) {
 				clearEvent(event);
 				return;
 			}
@@ -509,6 +526,19 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 	}
 
   private:
+	void insertContentControl(TView *view) {
+		if (view == nullptr) return;
+		if (contentGroup == nullptr) {
+			insert(view);
+			return;
+		}
+		TRect bounds = view->getBounds();
+
+		bounds.move(-contentGroup->origin.x, -contentGroup->origin.y);
+		view->locate(bounds);
+		contentGroup->insert(view);
+	}
+
 	void buildControls() {
 		ushort nextCommand = cmMacroModelessBase;
 
@@ -516,14 +546,14 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 		for (std::size_t labelIndex = 0; labelIndex < definition.labels.size(); ++labelIndex) {
 			const MRMacroModelessLabelSpec &label = definition.labels[labelIndex];
 
-			insert(new TStaticText(TRect(label.x, label.y, label.x + strwidth(label.text.c_str()), label.y + 1), label.text.c_str()));
+			insertContentControl(new TStaticText(TRect(label.x, label.y, label.x + strwidth(label.text.c_str()), label.y + 1), label.text.c_str()));
 		}
 
 		for (std::size_t displayIndex = 0; displayIndex < definition.displays.size(); ++displayIndex) {
 			const MRMacroModelessDisplaySpec &display = definition.displays[displayIndex];
 			MRMacroModelessDisplayLine *displayLine = new MRMacroModelessDisplayLine(TRect(display.x, display.y, display.x + display.width, display.y + 1), display.text);
 
-			insert(displayLine);
+			insertContentControl(displayLine);
 			displayViews.push_back(displayLine);
 		}
 
@@ -533,10 +563,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *input;
 
 			if (textField.fieldId.empty()) continue;
-			insert(new TStaticText(TRect(textField.x, textField.y, textField.x + strwidth(labelText.c_str()), textField.y + 1), labelText.c_str()));
+			insertContentControl(new TStaticText(TRect(textField.x, textField.y, textField.x + strwidth(labelText.c_str()), textField.y + 1), labelText.c_str()));
 			input = createMacroModelessTextInput(TRect(textField.x + strwidth(labelText.c_str()) + 1, textField.y, textField.x + strwidth(labelText.c_str()) + 1 + textField.width, textField.y + 1), textField.width, definition.windowId, textField.fieldId, textField.text);
 			if (input == nullptr) continue;
-			insert(input);
+			insertContentControl(input);
 			textFieldViews[textField.fieldId] = input;
 		}
 
@@ -547,7 +577,7 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			if (boolField.fieldId.empty() || boolField.caption.empty()) continue;
 			input = createMacroModelessBoolInput(TRect(boolField.x, boolField.y, boolField.x + strwidth(boolField.caption.c_str()) + 5, boolField.y + 1), definition.windowId, boolField.fieldId, boolField.caption, boolField.value);
 			if (input == nullptr) continue;
-			insert(input);
+			insertContentControl(input);
 			boolFieldViews[boolField.fieldId] = input;
 		}
 
@@ -557,10 +587,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *input;
 
 			if (intField.fieldId.empty() || intField.label.empty()) continue;
-			insert(new TStaticText(TRect(intField.x, intField.y, intField.x + strwidth(labelText.c_str()), intField.y + 1), labelText.c_str()));
+			insertContentControl(new TStaticText(TRect(intField.x, intField.y, intField.x + strwidth(labelText.c_str()), intField.y + 1), labelText.c_str()));
 			input = createMacroModelessIntInput(TRect(intField.x + strwidth(labelText.c_str()) + 1, intField.y, intField.x + strwidth(labelText.c_str()) + 1 + intField.width, intField.y + 1), intField.width, definition.windowId, intField.fieldId, intField.value);
 			if (input == nullptr) continue;
-			insert(input);
+			insertContentControl(input);
 			intFieldViews[intField.fieldId] = input;
 		}
 
@@ -570,10 +600,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *view;
 
 			if (progressField.fieldId.empty() || progressField.label.empty()) continue;
-			insert(new TStaticText(TRect(progressField.x, progressField.y, progressField.x + strwidth(labelText.c_str()), progressField.y + 1), labelText.c_str()));
+			insertContentControl(new TStaticText(TRect(progressField.x, progressField.y, progressField.x + strwidth(labelText.c_str()), progressField.y + 1), labelText.c_str()));
 			view = createMacroModelessProgressView(TRect(progressField.x + strwidth(labelText.c_str()) + 1, progressField.y, progressField.x + strwidth(labelText.c_str()) + 1 + progressField.width, progressField.y + 1), definition.windowId, progressField.fieldId);
 			if (view == nullptr) continue;
-			insert(view);
+			insertContentControl(view);
 			progressFieldViews[progressField.fieldId] = view;
 		}
 
@@ -582,10 +612,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *view;
 
 			if (logField.logId.empty() || logField.label.empty()) continue;
-			insert(new TStaticText(TRect(logField.x, logField.y, logField.x + strwidth(logField.label.c_str()), logField.y + 1), logField.label.c_str()));
+			insertContentControl(new TStaticText(TRect(logField.x, logField.y, logField.x + strwidth(logField.label.c_str()), logField.y + 1), logField.label.c_str()));
 			view = createMacroModelessLogView(TRect(logField.x, logField.y + 1, logField.x + logField.width, logField.y + 1 + logField.height), definition.windowId, logField.logId);
 			if (view == nullptr) continue;
-			insert(view);
+			insertContentControl(view);
 			logFieldViews[logField.logId] = view;
 		}
 
@@ -595,12 +625,12 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *input;
 
 			if (selectField.fieldId.empty() || selectField.label.empty()) continue;
-			insert(new TStaticText(TRect(selectField.x, selectField.y, selectField.x + strwidth(selectField.label.c_str()), selectField.y + 1), selectField.label.c_str()));
+			insertContentControl(new TStaticText(TRect(selectField.x, selectField.y, selectField.x + strwidth(selectField.label.c_str()), selectField.y + 1), selectField.label.c_str()));
 			scrollBar = new TScrollBar(TRect(selectField.x + selectField.width - 1, selectField.y + 1, selectField.x + selectField.width, selectField.y + 1 + selectField.height));
-			insert(scrollBar);
+			insertContentControl(scrollBar);
 			input = createMacroModelessSelectInput(TRect(selectField.x, selectField.y + 1, selectField.x + selectField.width - 1, selectField.y + 1 + selectField.height), scrollBar, selectField.options, definition.windowId, selectField.fieldId, selectField.value);
 			if (input == nullptr) continue;
-			insert(input);
+			insertContentControl(input);
 			selectFieldViews[selectField.fieldId] = input;
 		}
 
@@ -611,7 +641,7 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			if (canvas.canvasId.empty()) continue;
 			canvasView = createMacroModelessCanvasView(TRect(canvas.x, canvas.y, canvas.x + canvas.width, canvas.y + canvas.height), definition.windowId, canvas.canvasId);
 			if (canvasView == nullptr) continue;
-			insert(canvasView);
+			insertContentControl(canvasView);
 			canvasViews[canvas.canvasId] = canvasView;
 		}
 
@@ -623,10 +653,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *listView = nullptr;
 
 			if (nextCommand >= cmMacroModelessMax) break;
-			if (!listBox.label.empty()) insert(new TStaticText(TRect(listBox.x, listBox.y, listBox.x + strwidth(listBox.label.c_str()), listBox.y + 1), listBox.label.c_str()));
-			insert(scrollBar);
+			if (!listBox.label.empty()) insertContentControl(new TStaticText(TRect(listBox.x, listBox.y, listBox.x + strwidth(listBox.label.c_str()), listBox.y + 1), listBox.label.c_str()));
+			insertContentControl(scrollBar);
 			listView = createMacroUiListView(TRect(listBox.x, listTop, listBox.x + listBox.width - 1, listTop + listBox.height), scrollBar, items, nextCommand);
-			insert(listView);
+			insertContentControl(listView);
 			setMacroUiListItems(listView, items, listBox.start);
 			commandToList[nextCommand] = listBox.id;
 			listSpecs[listBox.id] = listBox;
@@ -643,10 +673,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *gridView = nullptr;
 
 			if (nextCommand >= cmMacroModelessMax) break;
-			if (!grid.label.empty()) insert(new TStaticText(TRect(grid.x, grid.y, grid.x + strwidth(grid.label.c_str()), grid.y + 1), grid.label.c_str()));
-			insert(scrollBar);
+			if (!grid.label.empty()) insertContentControl(new TStaticText(TRect(grid.x, grid.y, grid.x + strwidth(grid.label.c_str()), grid.y + 1), grid.label.c_str()));
+			insertContentControl(scrollBar);
 			gridView = createMacroUiGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand);
-			insert(gridView);
+			insertContentControl(gridView);
 			setMacroUiGridItems(gridView, items, grid.start);
 			commandToGrid[nextCommand] = grid.id;
 			gridSpecs[grid.id] = grid;
@@ -663,10 +693,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *treeView = nullptr;
 
 			if (nextCommand >= cmMacroModelessMax) break;
-			if (!tree.label.empty()) insert(new TStaticText(TRect(tree.x, tree.y, tree.x + strwidth(tree.label.c_str()), tree.y + 1), tree.label.c_str()));
-			insert(scrollBar);
+			if (!tree.label.empty()) insertContentControl(new TStaticText(TRect(tree.x, tree.y, tree.x + strwidth(tree.label.c_str()), tree.y + 1), tree.label.c_str()));
+			insertContentControl(scrollBar);
 			treeView = createMacroUiTreeView(TRect(tree.x, treeTop, tree.x + tree.width - 1, treeTop + tree.height), scrollBar, items, nextCommand, definition.windowId, tree.id);
-			insert(treeView);
+			insertContentControl(treeView);
 			setMacroUiTreeItems(treeView, items, tree.start);
 			commandToTree[nextCommand] = tree.id;
 			treeSpecs[tree.id] = tree;
@@ -683,10 +713,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			TView *tableView = nullptr;
 
 			if (nextCommand >= cmMacroModelessMax) break;
-			if (!table.label.empty()) insert(new TStaticText(TRect(table.x, table.y, table.x + strwidth(table.label.c_str()), table.y + 1), table.label.c_str()));
-			insert(scrollBar);
+			if (!table.label.empty()) insertContentControl(new TStaticText(TRect(table.x, table.y, table.x + strwidth(table.label.c_str()), table.y + 1), table.label.c_str()));
+			insertContentControl(scrollBar);
 			tableView = createMacroUiTableView(TRect(table.x, tableTop, table.x + table.width - 1, tableTop + table.height), scrollBar, items, nextCommand, definition.windowId, table.id);
-			insert(tableView);
+			insertContentControl(tableView);
 			setMacroUiTableItems(tableView, items, table.start);
 			commandToTable[nextCommand] = table.id;
 			tableSpecs[table.id] = table;
@@ -704,7 +734,7 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			buttons[button.id] = button;
 			for (std::size_t hotKeyIndex = 0; hotKeyIndex < caption.hotKeys.size(); ++hotKeyIndex)
 				hotKeys.emplace_back(caption.hotKeys[hotKeyIndex], button.id);
-			insert(new TButton(TRect(button.x, button.y, button.x + button.width, button.y + 2), caption.displayLabel.c_str(), nextCommand, bfNormal));
+			insertContentControl(new TButton(TRect(button.x, button.y, button.x + button.width, button.y + 2), caption.displayLabel.c_str(), nextCommand, bfNormal));
 			++nextCommand;
 		}
 	}
@@ -715,7 +745,10 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 
 			displayViews.pop_back();
 			if (displayLine == nullptr) continue;
-			remove(displayLine);
+			if (contentGroup != nullptr)
+				contentGroup->remove(displayLine);
+			else
+				remove(displayLine);
 			TObject::destroy(displayLine);
 		}
 
@@ -726,11 +759,12 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			if (index >= displayViews.size()) {
 				MRMacroModelessDisplayLine *displayLine = new MRMacroModelessDisplayLine(bounds, display.text);
 
-				insert(displayLine);
+				insertContentControl(displayLine);
 				displayViews.push_back(displayLine);
 				continue;
 			}
 			if (displayViews[index] == nullptr) continue;
+			if (contentGroup != nullptr) bounds.move(-contentGroup->origin.x, -contentGroup->origin.y);
 			if (displayViews[index]->getBounds() != bounds) displayViews[index]->locate(bounds);
 			displayViews[index]->setText(display.text);
 		}
@@ -862,6 +896,7 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 	}
 
 	MRMacroModelessWindowDefinition definition;
+	TGroup *contentGroup = nullptr;
 	std::map<ushort, int> commandToButton;
 	std::map<ushort, int> commandToList;
 	std::map<ushort, int> commandToGrid;

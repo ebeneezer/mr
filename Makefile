@@ -209,7 +209,7 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.26
+MR_RELEASE_VERSION ?= 0.2.27
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64-v3
 MR_RELEASE_ARCH_FLAGS ?= -march=x86-64-v3 -mtune=generic
@@ -932,7 +932,7 @@ ui/MRMessageLineController.o: ui/MRMessageLineController.cpp ui/MRMessageLineCon
 ui/widgets/MRScopedHistoryUI.o: ui/widgets/MRScopedHistoryUI.cpp ui/widgets/MRScopedHistoryUI.hpp dialogs/MRAcquireDialog.hpp config/settings/MRSettingsRuntime.hpp ui/MRFrame.hpp ui/widgets/MRDropList.hpp
 ui/widgets/MRNumericSlider.o: ui/widgets/MRNumericSlider.cpp ui/widgets/MRNumericSlider.hpp config/settings/MRSettingsRuntime.hpp
 ui/widgets/MRSpinner.o: ui/widgets/MRSpinner.cpp ui/widgets/MRSpinner.hpp config/settings/MRSettingsRuntime.hpp
-mrmac/ui/modeless/MRMacroModelessUi.o: mrmac/ui/modeless/MRMacroModelessUi.cpp mrmac/ui/modeless/MRMacroModelessUi.hpp mrmac/ui/modeless/MRMacroModelessCanvas.hpp mrmac/MRVM.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp dialogs/MRWindowList.hpp ui/MRDesktopWindow.hpp
+mrmac/ui/modeless/MRMacroModelessUi.o: mrmac/ui/modeless/MRMacroModelessUi.cpp mrmac/ui/modeless/MRMacroModelessUi.hpp mrmac/ui/modeless/MRMacroModelessCanvas.hpp mrmac/MRVM.hpp mrmac/ui/modeless/MRVMModelessUiRuntime.hpp dialogs/MRWindowList.hpp dialogs/setup/MRSetupCommon.hpp ui/MRDesktopWindow.hpp
 mrmac/ui/modeless/MRMacroModelessCanvas.o: mrmac/ui/modeless/MRMacroModelessCanvas.cpp mrmac/ui/modeless/MRMacroModelessCanvas.hpp mrmac/ui/modeless/MRMacroModelessUi.hpp mrmac/MRVM.hpp
 mrmac/MRMacroExecutionSession.o: mrmac/MRMacroExecutionSession.cpp mrmac/MRMacroExecutionSession.hpp ui/MRWindowSupport.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/MRMacroExecutionSession.hpp mrmac/mrmac.h mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp

@@ -50,7 +50,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
-	if (!setConfiguredColorOutputMode(MRColorOutputMode::RgbAutomatic, errorMessage)) return false;
+	if (!setConfiguredColorOutputMode(MRColorOutputMode::TerminalPalette, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerNotes(false, errorMessage)) return false;
 	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;

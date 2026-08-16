@@ -3045,8 +3045,8 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing SCROLLBAR_VISIBILITY.";
 		return false;
 	}
-	if (content.find("MRSETUP('COLOR_OUTPUT_MODE', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing COLOR_OUTPUT_MODE.";
+	if (content.find("MRSETUP('COLOR_OUTPUT_MODE', 'TERMINAL_PALETTE');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac does not preserve the built-in BIOS theme through terminal palette indices.";
 		return false;
 	}
 	if (content.find("MRSETUP('FILE_COMPARE_ORIGINAL_LEADING_GUTTERS', '") == std::string::npos || content.find("MRSETUP('FILE_COMPARE_ORIGINAL_TRAILING_GUTTERS', '") == std::string::npos ||
@@ -3355,6 +3355,8 @@ bool testTerminalPalettePreservesBiosDefaultsAndUsesXTerm256(std::string &failur
 		0x000000u, 0x0000AAu, 0x00AA00u, 0x00AAAAu, 0xAA0000u, 0xAA00AAu, 0xAA5500u, 0xAAAAAAu,
 		0x555555u, 0x5555FFu, 0x55FF55u, 0x55FFFFu, 0xFF5555u, 0xFF55FFu, 0xFFFF55u, 0xFFFFFFu
 	};
+
+	if (!testSettingsMacroAutoCreate(failureReason)) return false;
 
 	for (std::size_t biosIndex = 0; biosIndex < vgaRgb.size(); ++biosIndex) {
 		const TColorAttr projected = projectColorAttribute({vgaRgb[biosIndex], vgaRgb[biosIndex]}, MRColorOutputMode::TerminalPalette);
@@ -10602,7 +10604,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Color theme URI startup load", testMrsetupWindowColorThemeUriStartupLoad);
 	runTest(ctx, "Invalid RGB color lists are atomic", testCurrentColorThemeInvalidListsDoNotMutateGuard);
 	runTest(ctx, "RGB color theme compile and roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
-	runTest(ctx, "Terminal palette preserves BIOS defaults and uses xterm-256", testTerminalPalettePreservesBiosDefaultsAndUsesXTerm256);
+	runTest(ctx, "Fresh color default and terminal palette projection", testTerminalPalettePreservesBiosDefaultsAndUsesXTerm256);
 	runTest(ctx, "Code colors preserve configured attributes", testCodeColorUsesConfiguredAttributeGuard);
 	runTest(ctx, "TextDocument Piece/AddBuffer mutation harness", testTextDocumentPieceTableMutationHarness);
 	runTest(ctx, "Deferred large line-index harness", testDeferredLargeLineIndexHarness);

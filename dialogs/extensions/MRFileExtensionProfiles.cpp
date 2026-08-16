@@ -596,6 +596,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		const int colorGlyphRight = kDialogWidth - 2;
 		const int colorGlyphLeft = colorGlyphRight - glyphWidth;
 		const int fieldRight = colorGlyphLeft;
+		const int compilerProfileRight = colorGlyphRight - 2;
+		const int compilerProfileGlyphLeft = compilerProfileRight - glyphWidth;
 		const int buttonRow = 14;
 		const int bottomTop = kVirtualHeight - 3;
 		const int bottomButtonLeft = (kDialogWidth - bottomMetrics.rowWidth) / 2;
@@ -621,10 +623,10 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		mProfileColorThemeBrowseButton = addGlyphButton(TRect(colorGlyphLeft, 5, colorGlyphRight, 6), cmMrSetupFilenameProfilesBrowseColorTheme);
 
 		mCompilerProfileLabel = addLabel(TRect(rightLeft, 6, fieldLeft - 1, 7), "Compiler profile:");
-		mCompilerProfileField = new MRStringChoiceField(TRect(fieldLeft, 6, fieldRight, 7), kCompilerProfileFieldSize - 1);
-		addManaged(mCompilerProfileField, TRect(fieldLeft, 6, fieldRight, 7));
-		mCompilerProfileListAnchor = TRect(fieldLeft, 7, fieldRight, 8);
-		mCompilerProfileDropButton = mCompilerProfileField->createDropListButton(*this, TRect(colorGlyphLeft, 6, colorGlyphRight, 7), this, cmMrSetupFilenameProfilesChooseCompilerProfile, true);
+		mCompilerProfileField = new MRStringChoiceField(TRect(fieldLeft, 6, compilerProfileGlyphLeft, 7), kCompilerProfileFieldSize - 1);
+		addManaged(mCompilerProfileField, TRect(fieldLeft, 6, compilerProfileGlyphLeft, 7));
+		mCompilerProfileListAnchor = TRect(fieldLeft, 7, compilerProfileGlyphLeft, 8);
+		mCompilerProfileDropButton = mCompilerProfileField->createDropListButton(*this, TRect(compilerProfileGlyphLeft, 6, compilerProfileRight, 7), this, cmMrSetupFilenameProfilesChooseCompilerProfile, true);
 
 		editorSettingsPanel.buildViews(*this);
 

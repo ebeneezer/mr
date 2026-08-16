@@ -64,17 +64,29 @@
 
 ## Showtime
 
-![mr running under vscode terminal](documentation/pngsjpegs/screenshot01.png)
-![mr running in terminal showing menu structure](documentation/pngsjpegs/screenshot02.png)
-![mr showing color setup dialog](documentation/pngsjpegs/screenshot03.png)
-![mr showing code folding, syntax highlighting and minimap](documentation/pngsjpegs/screenshot04.png)
-![mr showing key mapping](documentation/pngsjpegs/screenshot05.png)
-![mr showing ui settings](documentation/pngsjpegs/screenshot06.png)
-![mr showing MFS](documentation/pngsjpegs/screenshot07.png)
-![mr showing macro manager](documentation/pngsjpegs/screenshot08.png)
-![mr showing utility mrmac calculator source and running](documentation/pngsjpegs/screenshot09.png)
-![mr showing file extension dialog language support](documentation/pngsjpegs/screenshot10.png)
-![mr showing file acquisition dialog](documentation/pngsjpegs/screenshot11.png)
-![mr showing window tiling](documentation/pngsjpegs/screenshot12.png)
-![mr showing code folding on a macro file](documentation/pngsjpegs/screenshot13.png)
-![mr running compiler session with error locating](documentation/pngsjpegs/screenshot14.png)
+<table>
+  <tr>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-editor-overview.png" alt="MR source editor overview" title="MR editing a C++ source file with an active minimap and the native Turbo Vision desktop." width="100%"></td>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-tiled-windows.png" alt="MR tiled editor windows" title="Four editor windows tiled by MR's built-in window manager." width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-file-compare.png" alt="MR side-by-side file comparison" title="The editable Myers file comparison view with colored hunks, synchronized panes, and minimaps." width="100%"></td>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-hex-editor.png" alt="MR multi-pane hex editor" title="A binary opened in synchronized hexadecimal, string, decimal, binary, octal, and inspector panes." width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-ui-settings.png" alt="MR user interface settings" title="User-interface settings for window management, virtual desktops, scrolling, colors, gutters, and indentation." width="100%"></td>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-file-profiles.png" alt="MR filename extension profiles" title="Filename-extension profiles configure language detection, formatting, folding, minimaps, themes, and file behavior." width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-keymap-manager.png" alt="MR keymap manager" title="The keymap manager exposes WordStar, Emacs, and Nano profiles with editable multi-key bindings." width="100%"></td>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-compiler-profiles.png" alt="MR compiler profiles" title="Detected compiler profiles include GCC, Clang, Swift, FreeBASIC, QB64-PE, and configurable build actions." width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-acquire-command.png" alt="MR command output acquisition" title="Acquire runs a shell command and turns selected output entries into editor windows." width="100%"></td>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-macro-library.png" alt="MR macro library" title="The macro library creates, edits, binds, plays, and debugs MRMAC automation inside the editor." width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-mrmac-modeless.png" alt="MRMAC modeless user interfaces" title="MRMAC drives independent retained canvases, timers, progress, actions, fields, logs, and modeless windows." width="100%"></td>
+    <td width="50%"><img src="documentation/pngsjpegs/readme-macro-debugger.png" alt="MRMAC debugger session" title="A paused MRMAC session with source position, execution state, call stack, variables, watches, and step controls." width="100%"></td>
+  </tr>
+</table>

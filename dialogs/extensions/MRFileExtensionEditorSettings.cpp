@@ -425,7 +425,9 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	const int autoExtensionsRight = std::min(g.inputRight, g.inputLeft + 12);
 	const int codeLanguageLabelLeft = autoExtensionsRight + 2;
 	const int codeLanguageFieldLeft = codeLanguageLabelLeft + 15;
-	const int codeLanguageFieldRight = browseFieldRight;
+	const int codeLanguageRight = g.inputRight - 2;
+	const int codeLanguageBrowseLeft = codeLanguageRight - browseWidth;
+	const int codeLanguageFieldRight = codeLanguageBrowseLeft;
 	const int codeLanguageListLeft = codeLanguageFieldLeft;
 	const int codeLanguageListRight = codeLanguageFieldRight;
 	const int tabSizeSliderRight = std::max(g.inputLeft + 1, g.inputRight - 2);
@@ -453,7 +455,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 			addPanelLabel(dialog, TRect(codeLanguageLabelLeft, g.defaultExtensionsY, codeLanguageFieldLeft - 1, g.defaultExtensionsY + 1), "Code language:");
 			codeLanguageField = addPanelInput(dialog, TRect(codeLanguageFieldLeft, g.defaultExtensionsY, codeLanguageFieldRight, g.defaultExtensionsY + 1), kCodeLanguageFieldSize - 1);
 			codeLanguageListAnchor = TRect(codeLanguageListLeft, g.defaultExtensionsY, codeLanguageListRight, g.defaultExtensionsY + 1);
-			codeLanguageBrowseButton = codeLanguageDropList.createButton(dialog, TRect(browseLeft, g.defaultExtensionsY, g.inputRight, g.defaultExtensionsY + 1), codeLanguageField, &dialog, cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage, false);
+			codeLanguageBrowseButton = codeLanguageDropList.createButton(dialog, TRect(codeLanguageBrowseLeft, g.defaultExtensionsY, codeLanguageRight, g.defaultExtensionsY + 1), codeLanguageField, &dialog, cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage, false);
 		}
 
 	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.tabSizeY, g.inputLeft - 2, g.tabSizeY + 1), "Tab size:");

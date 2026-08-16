@@ -814,7 +814,7 @@ MRColorOutputMode configuredColorOutputMode() {
 }
 
 MRColorOutputMode configuredColorOutputModeValue() {
-	const int stored = configuredRuntimeInt("colorOutputMode", static_cast<int>(MRColorOutputMode::RgbAutomatic));
+	const int stored = configuredRuntimeInt("colorOutputMode", static_cast<int>(MRColorOutputMode::TerminalPalette));
 
 	if (stored == static_cast<int>(MRColorOutputMode::TerminalPalette)) return MRColorOutputMode::TerminalPalette;
 	return MRColorOutputMode::RgbAutomatic;

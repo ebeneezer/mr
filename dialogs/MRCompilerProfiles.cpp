@@ -308,6 +308,9 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		const int wideFieldRight = browseLeft;
 		const int buttonTop = 24;
 		const int bottomTop = 26;
+		const mr::dialogs::DialogButtonSpec bottomButtons[] = {{"Automatic Setup", cmCompilerProfilesAutomaticSetup, bfNormal}, {"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics bottomMetrics = mr::dialogs::measureUniformButtonRow(bottomButtons, 2);
+		const int bottomButtonLeft = (kDialogWidth - bottomMetrics.rowWidth) / 2;
 
 		options |= ofCentered;
 		helpCtx = hcDialogCompilerProfiles;
@@ -375,8 +378,7 @@ class CompilerProfilesDialog : public MRDialogFoundation {
 		insert(new TButton(TRect(left, buttonTop, left + 10, buttonTop + 2), "~A~dd", cmCompilerProfilesAdd, bfNormal));
 		insert(new TButton(TRect(left + 12, buttonTop, left + 22, buttonTop + 2), "~C~opy", cmCompilerProfilesCopy, bfNormal));
 		insert(new TButton(TRect(left + 24, buttonTop, scrollRight, buttonTop + 2), "De~l~ete", cmCompilerProfilesDelete, bfNormal));
-		insert(new TButton(TRect(46, bottomTop, 65, bottomTop + 2), "Automatic Setup", cmCompilerProfilesAutomaticSetup, bfNormal));
-		insert(new TButton(TRect(67, bottomTop, 78, bottomTop + 2), "~H~elp", cmHelp, bfNormal));
+		mr::dialogs::insertUniformButtonRow(*this, bottomButtonLeft, bottomTop, 2, bottomButtons);
 
 		currentIndex = preferredCompilerProfileIndexForCurrentEditor(profiles);
 		if (currentIndex < 0) currentIndex = profiles.empty() ? -1 : 0;

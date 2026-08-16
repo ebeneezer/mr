@@ -138,7 +138,6 @@ class TRgbColorItemList : public TListViewer {
 				buffer.moveChar(4, ' ', normalColor, 1);
 				if (size.x > 5) buffer.moveStr(5, mItems[item].label, descriptionColor, size.x - 5);
 				if (isFocused) {
-					buffer.putChar(0, '>');
 					setCursor(5, y);
 					focusedVisible = true;
 				}
