@@ -671,6 +671,12 @@ Compiler errors selects diagnostic message presentation. Start configuration
 selects file-compare startup layout. Cursor position marker is the status
 format, where R and C expand to row and column.
 
+Color Management selects terminal color projection. 24-bit RGB (automatic)
+lets Turbo Vision use true color where the terminal supports it and perform
+its normal fallback otherwise. Palette (256 colors) maps the exact 16 VGA
+default colors to their ANSI palette indices and quantizes other RGB values
+to standard xterm-256 indices.
+
 File compare gutters control the leading and trailing projections of each
 panel. Each spinner is blank or M = mini map, D = difference marker,
 L = line numbers, C = code folding; left-to-right order is significant.

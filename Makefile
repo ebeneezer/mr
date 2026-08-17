@@ -209,7 +209,7 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.27
+MR_RELEASE_VERSION ?= 0.2.28
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64-v3
 MR_RELEASE_ARCH_FLAGS ?= -march=x86-64-v3 -mtune=generic
@@ -234,6 +234,7 @@ MR_RELEASE_PCRE2_DEV_PACKAGE ?= libpcre2-dev_10.42-1_amd64.deb
 MR_RELEASE_PCRE2_DEV_SHA256 ?= f0ff485a26daae8f742a1566426f0d98f06cdaf19ee0cc24764e09eff1c99257
 MR_RELEASE_OUTPUT_DIR ?= $(TMP_BASE_DIR)/mr-release
 MR_RELEASE_INSTALLER = install.sh
+MR_RELEASE_CHANGED ?=
 MR_RELEASE_SIGNING_KEY ?=
 OPENSSL ?= openssl
 CURL ?= curl
@@ -571,6 +572,9 @@ release-zip:
 	command -v $(READELF) >/dev/null 2>&1; \
 	command -v $(OPENSSL) >/dev/null 2>&1; \
 	command -v $(CURL) >/dev/null 2>&1; \
+	test -n "$(MR_RELEASE_CHANGED)" || { echo "MR_RELEASE_CHANGED must name the external release-notes file." >&2; exit 2; }; \
+	test -f "$(MR_RELEASE_CHANGED)" || { echo "MR_RELEASE_CHANGED must name a regular release-notes file." >&2; exit 2; }; \
+	test -s "$(MR_RELEASE_CHANGED)" || { echo "MR_RELEASE_CHANGED must name a non-empty release-notes file." >&2; exit 2; }; \
 	test -n "$(MR_RELEASE_SIGNING_KEY)"; \
 	test -f "$(MR_RELEASE_SIGNING_KEY)"; \
 	toolchain_directory=$$(mktemp -d "$(TMP_BASE_DIR)/mr-release-gcc12.XXXXXX"); \
@@ -664,8 +668,7 @@ release-zip:
 		echo "technical_manual_sha256=$$($(SHA256SUM) "$$release_root/share/doc/mr/mr-technical-manual.pdf" | cut -d ' ' -f 1)"; \
 		echo "license_sha256=$$($(SHA256SUM) "$$release_root/share/licenses/mr/TVISION-COPYRIGHT" | cut -d ' ' -f 1)"; \
 		echo; \
-		echo "Release notes:"; \
-		echo "https://github.com/ebeneezer/mr/releases/tag/v$(MR_RELEASE_VERSION)"; \
+		cat "$(MR_RELEASE_CHANGED)"; \
 	} > "$$manifest"; \
 	$(OPENSSL) pkeyutl -sign -rawin -inkey "$(MR_RELEASE_SIGNING_KEY)" -in "$$manifest" -out "$$manifest.sig"; \
 	echo "Wrote $$output_directory/$$name.zip"; \
