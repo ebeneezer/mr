@@ -27,6 +27,7 @@
 #include "../../dialogs/setup/MRSetupCommon.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -37,7 +38,8 @@
 namespace {
 enum : ushort {
 	cmMrScopedHistoryChoose = 3868,
-	cmMrScopedHistoryAccept
+	cmMrScopedHistoryAccept,
+	cmMrFileDialogToggleHidden = 3872
 };
 
 TFrame *initScopedHistoryDialogFrame(TRect bounds) {
@@ -190,6 +192,24 @@ class TFileDialogEnterInterceptor final : public TView {
 	TInputLine *fileName = nullptr;
 };
 
+class TFileDialogToggleButton final : public TButton {
+ public:
+	TFileDialogToggleButton(const TRect &bounds, ushort command, bool active) noexcept : TButton(bounds, "Hidden", command, bfNormal), active(active) {}
+
+	void draw() override {
+		drawState(active ? True : False);
+	}
+
+	void setActive(bool value) {
+		if (active == value) return;
+		active = value;
+		drawView();
+	}
+
+ private:
+	bool active = false;
+};
+
 class TWheelFileDialog final : public TFileDialog {
  public:
 	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept
@@ -199,6 +219,8 @@ class TWheelFileDialog final : public TFileDialog {
 		replaceHistoryView(static_cast<TInputLine *>(fileName));
 		replaceInfoPane();
 		removeFileMenuCancelButton();
+		installHiddenButton();
+		appendConfiguredHiddenEntries();
 		adoptNativeDialogControls(*this, viewport);
 	}
 
@@ -230,6 +252,18 @@ class TWheelFileDialog final : public TFileDialog {
 				commandEvent.what = evCommand;
 				commandEvent.message.command = cmOK;
 				putEvent(commandEvent);
+			}
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evCommand && event.message.command == cmMrFileDialogToggleHidden) {
+			const bool active = !configuredFileDialogShowHiddenFiles();
+
+			static_cast<void>(setConfiguredFileDialogShowHiddenFiles(active));
+			if (hiddenButton != nullptr) hiddenButton->setActive(active);
+			if (fileList != nullptr && directory != nullptr) {
+				fileList->readDirectory(directory, wildCard);
+				appendConfiguredHiddenEntries();
 			}
 			clearEvent(event);
 			return;
@@ -269,6 +303,7 @@ class TWheelFileDialog final : public TFileDialog {
 
 	Boolean valid(ushort command) override {
 		const std::string previousDirectory = directory != nullptr ? directory : "";
+		TFileCollection *previousEntries = fileList != nullptr ? fileList->list() : nullptr;
 
 		if ((dialogOptions & fdOpenButton) != 0 && command == cmFileOpen && fileName != nullptr) {
 			std::string rawInput = fileName->data != nullptr ? fileName->data : "";
@@ -295,6 +330,7 @@ class TWheelFileDialog final : public TFileDialog {
 		}
 
 		const Boolean result = TFileDialog::valid(command);
+		if (fileList != nullptr && fileList->list() != previousEntries) appendConfiguredHiddenEntries();
 		if ((dialogOptions & fdOpenButton) != 0 && command == cmFileOpen && result == False) {
 			const std::string currentDirectory = directory != nullptr ? directory : "";
 
@@ -304,6 +340,103 @@ class TWheelFileDialog final : public TFileDialog {
 	}
 
  private:
+	void installHiddenButton() {
+		TButton *primary = nullptr;
+		TRect primaryBounds;
+		std::vector<TButton *> following;
+
+		for (TView *child = first(); child != nullptr; child = child->nextView()) {
+			TButton *button = dynamic_cast<TButton *>(child);
+			if (button == nullptr) continue;
+			const TRect bounds = button->getBounds();
+			if (primary == nullptr || bounds.a.y < primaryBounds.a.y) {
+				primary = button;
+				primaryBounds = bounds;
+			}
+		}
+		if (primary == nullptr) return;
+
+		for (TView *child = first(); child != nullptr; child = child->nextView()) {
+			TButton *button = dynamic_cast<TButton *>(child);
+			if (button != nullptr && button != primary && button->getBounds().a.y > primaryBounds.a.y) following.push_back(button);
+		}
+		std::sort(following.begin(), following.end(), [](const TButton *left, const TButton *right) {
+			return left->getBounds().a.y < right->getBounds().a.y;
+		});
+
+		TRect hiddenBounds = primaryBounds;
+		hiddenBounds.a.y += 3;
+		hiddenBounds.b.y += 3;
+		short nextTop = static_cast<short>(hiddenBounds.a.y + 3);
+		for (TButton *button : following) {
+			TRect bounds = button->getBounds();
+			if (bounds.a.y < nextTop) {
+				const short delta = static_cast<short>(nextTop - bounds.a.y);
+				bounds.a.y += delta;
+				bounds.b.y += delta;
+				button->locate(bounds);
+			}
+			nextTop = static_cast<short>(bounds.a.y + 3);
+		}
+
+		hiddenButton = new TFileDialogToggleButton(hiddenBounds, cmMrFileDialogToggleHidden, configuredFileDialogShowHiddenFiles());
+		hiddenButton->growMode = primary->growMode;
+		insert(hiddenButton);
+	}
+
+	void appendConfiguredHiddenEntries() {
+		TFileCollection *entries;
+		ffblk search = {};
+		char path[MAXPATH] = {0};
+		bool inserted = false;
+
+		if (!configuredFileDialogShowHiddenFiles() || fileList == nullptr || directory == nullptr) return;
+		entries = fileList->list();
+		if (entries == nullptr) return;
+
+		std::size_t copied = strnzcpy(path, directory, MAXPATH);
+		strnzcpy(path + copied, wildCard, MAXPATH - copied);
+		int result = findfirst(path, &search, FA_RDONLY | FA_ARCH | FA_HIDDEN);
+		while (result == 0) {
+			if ((search.ff_attrib & FA_HIDDEN) != 0 && (search.ff_attrib & FA_DIREC) == 0) {
+				TSearchRec *entry = new TSearchRec;
+
+				entry->attr = static_cast<uchar>(search.ff_attrib);
+				entry->time = static_cast<std::int32_t>((static_cast<std::uint32_t>(search.ff_fdate) << 16) | search.ff_ftime);
+				entry->size = search.ff_fsize;
+				strnzcpy(entry->name, search.ff_name, sizeof(entry->name));
+				entries->insert(entry);
+				inserted = true;
+			}
+			result = findnext(&search);
+		}
+
+		copied = strnzcpy(path, directory, MAXPATH);
+		strnzcpy(path + copied, "*.*", MAXPATH - copied);
+		search = {};
+		result = findfirst(path, &search, FA_DIREC | FA_HIDDEN);
+		while (result == 0) {
+			const bool hiddenDirectory = (search.ff_attrib & (FA_DIREC | FA_HIDDEN)) == (FA_DIREC | FA_HIDDEN);
+			if (hiddenDirectory && std::strcmp(search.ff_name, ".") != 0 && std::strcmp(search.ff_name, "..") != 0) {
+				TSearchRec *entry = new TSearchRec;
+
+				entry->attr = static_cast<uchar>(search.ff_attrib);
+				entry->time = static_cast<std::int32_t>((static_cast<std::uint32_t>(search.ff_fdate) << 16) | search.ff_ftime);
+				entry->size = search.ff_fsize;
+				strnzcpy(entry->name, search.ff_name, sizeof(entry->name));
+				entries->insert(entry);
+				inserted = true;
+			}
+			result = findnext(&search);
+		}
+
+		if (inserted) {
+			fileList->setRange(entries->getCount());
+			fileList->focusItem(0);
+			fileList->drawView();
+		}
+	}
+
 	void toggleHistoryList() {
 		std::vector<std::string> entries;
 		TRect bounds;
@@ -402,6 +535,7 @@ class TWheelFileDialog final : public TFileDialog {
 	MRDialogViewport viewport;
 	MRDialogHistoryScope scope;
 	ushort dialogOptions = 0;
+	TFileDialogToggleButton *hiddenButton = nullptr;
 	TInputLine *historyLink = nullptr;
 	MRDropList historyDropList;
 };

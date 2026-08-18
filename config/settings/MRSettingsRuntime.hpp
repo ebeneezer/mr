@@ -679,6 +679,8 @@ bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage = nul
 [[nodiscard]] bool configuredMenulineMessages();
 bool setConfiguredAutoDetectBinaryFiles(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredAutoDetectBinaryFiles();
+bool setConfiguredFileDialogShowHiddenFiles(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredFileDialogShowHiddenFiles();
 bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options, std::string *errorMessage = nullptr);
 [[nodiscard]] MRSearchDialogOptions configuredSearchDialogOptions();
 bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::string *errorMessage = nullptr);

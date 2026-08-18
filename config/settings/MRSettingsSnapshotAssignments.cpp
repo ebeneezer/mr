@@ -78,6 +78,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseBooleanLiteral(value, snapshot.autoDetectBinaryFiles, errorMessage)) return false;
 				return true;
 			}
+			if (upper == "FILE_DIALOG_SHOW_HIDDEN_FILES") {
+				if (!parseBooleanLiteral(value, snapshot.fileDialogShowHiddenFiles, errorMessage)) return false;
+				return true;
+			}
 			if (upper == "SEARCH_TEXT_TYPE") {
 				if (!parseSearchTextTypeLiteral(value, snapshot.searchDialogOptions.textType, errorMessage)) return false;
 				return true;

@@ -25,6 +25,11 @@ VirtualMachine::Value settingsHistoryRoot(MRVMRuntimeKv &runtimeKv) {
 	return runtimeKv.ensureChild(settings, "history");
 }
 
+VirtualMachine::Value settingsRuntimeRoot(MRVMRuntimeKv &runtimeKv) {
+	VirtualMachine::Value settings = runtimeKv.ensureRoot("SETTINGS");
+	return runtimeKv.ensureChild(settings, "runtime");
+}
+
 int readInt(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, const char *key, int fallback) {
 	MRVMHashStore &store = runtimeKv.globalStore();
 	if (!mrvmHashContainsValue(store, store, parent, key)) return fallback;
@@ -141,6 +146,26 @@ const std::array<MRDialogHistoryScopeSpec, static_cast<std::size_t>(MRDialogHist
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionPreSaveMacro, "EXTENSION_PRE_SAVE_MACRO"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionDefaultPath, "EXTENSION_DEFAULT_PATH"},
 };
+
+bool setConfiguredFileDialogShowHiddenFiles(bool enabled, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value runtime = settingsRuntimeRoot(runtimeKv);
+	const bool previous = readInt(runtimeKv, runtime, "fileDialogShowHiddenFiles", 0) != 0;
+
+	writeInt(runtimeKv, runtime, "fileDialogShowHiddenFiles", enabled ? 1 : 0);
+	if (previous != enabled) markConfiguredSettingsDirty();
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool configuredFileDialogShowHiddenFiles() {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+
+	recordSettingsRuntimeRead();
+	return readInt(runtimeKv, settingsRuntimeRoot(runtimeKv), "fileDialogShowHiddenFiles", 0) != 0;
+}
 
 std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> configuredDialogHistoryStorage() {
 	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());

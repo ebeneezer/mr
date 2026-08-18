@@ -38,6 +38,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredShellExecutablePath(paths.shellUri, errorMessage)) return false;
 	if (!setConfiguredLogFilePath(defaultLogFilePathForSettings(paths.settingsMacroUri), errorMessage)) return false;
 	if (!setConfiguredLastFileDialogPath(paths.macroPath, errorMessage)) return false;
+	if (!setConfiguredFileDialogShowHiddenFiles(false, errorMessage)) return false;
 	if (!setConfiguredDefaultProfileDescription("Global defaults", errorMessage)) return false;
 	if (!setConfiguredSearchDialogOptions(MRSearchDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredSarDialogOptions(MRSarDialogOptions(), errorMessage)) return false;
@@ -155,6 +156,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				bool parsed = true;
 				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredAutoDetectBinaryFiles(parsed, errorMessage);
+			}
+			if (upper == "FILE_DIALOG_SHOW_HIDDEN_FILES") {
+				bool parsed = false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredFileDialogShowHiddenFiles(parsed, errorMessage);
 			}
 			if (upper == "SEARCH_TEXT_TYPE") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();

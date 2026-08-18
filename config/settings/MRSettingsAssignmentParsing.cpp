@@ -183,6 +183,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
     {"MESSAGES", MRSettingsKeyClass::Global, true},
     {"AUTODETECT_BINARY_FILES", MRSettingsKeyClass::Global, true},
+    {"FILE_DIALOG_SHOW_HIDDEN_FILES", MRSettingsKeyClass::Global, true},
     {"SEARCH_TEXT_TYPE", MRSettingsKeyClass::Global, true},
     {"SEARCH_DIRECTION", MRSettingsKeyClass::Global, true},
     {"SEARCH_MODE", MRSettingsKeyClass::Global, true},
