@@ -145,13 +145,12 @@ void appendHistoryEntries(std::vector<GetLastEntry> &outEntries, MRDialogHistory
 	}
 }
 
-std::vector<std::string> recentValuesForScopes(MRDialogHistoryScope firstScope, MRDialogHistoryScope secondScope, bool files, int limit) {
+std::vector<std::string> recentValuesForScope(MRDialogHistoryScope scope, bool files, int limit) {
 	std::vector<GetLastEntry> entries;
 	std::vector<std::string> values;
 	std::set<std::string> seen;
 
-	appendHistoryEntries(entries, firstScope, files);
-	appendHistoryEntries(entries, secondScope, files);
+	appendHistoryEntries(entries, scope, files);
 	for (const GetLastEntry &entry : entries) {
 		if (!seen.insert(entry.value).second) continue;
 		values.push_back(entry.value);
@@ -1462,11 +1461,11 @@ bool handleFileOpen() {
 	std::string resolvedPath;
 
 	if (!promptForPath("OPEN FILE", fileName, sizeof(fileName))) return true;
-	if (!resolveReadableExistingPath(MRDialogHistoryScope::OpenFile, fileName, resolvedPath)) {
-		forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, fileName);
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, fileName, resolvedPath)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, fileName);
 		return true;
 	}
-	if (!openResolvedFilesIntoWindows(std::vector<std::string>{resolvedPath})) forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
+	if (!openResolvedFilesIntoWindows(std::vector<std::string>{resolvedPath})) forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 	return true;
 }
 
@@ -1489,11 +1488,11 @@ bool handleFileLoad() {
 bool openRecentFileValue(const std::string &value) {
 	std::string resolvedPath;
 
-	if (!resolveReadableExistingPath(MRDialogHistoryScope::OpenFile, value.c_str(), resolvedPath)) {
-		forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, value.c_str());
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, value.c_str(), resolvedPath)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, value.c_str());
 		return true;
 	}
-	if (!openResolvedFilesIntoWindows(std::vector<std::string>{resolvedPath})) forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
+	if (!openResolvedFilesIntoWindows(std::vector<std::string>{resolvedPath})) forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 	return true;
 }
 
@@ -1537,8 +1536,8 @@ bool handleFileGetLast() {
 	ushort result = cmCancel;
 	GetLastKind acceptedKind = GetLastKind::None;
 	std::string acceptedValue;
-	std::vector<std::string> files = recentValuesForScopes(MRDialogHistoryScope::OpenFile, MRDialogHistoryScope::LoadFile, true, configuredMaxFileHistory());
-	std::vector<std::string> folders = recentValuesForScopes(MRDialogHistoryScope::OpenFile, MRDialogHistoryScope::LoadFile, false, configuredMaxPathHistory());
+	std::vector<std::string> files = recentValuesForScope(MRDialogHistoryScope::LoadFile, true, configuredMaxFileHistory());
+	std::vector<std::string> folders = recentValuesForScope(MRDialogHistoryScope::LoadFile, false, configuredMaxPathHistory());
 	std::vector<std::string> workspaces = recentWorkspaceValues();
 	const short width = 96;
 	const short fileRows = getLastListHeight(files.size());

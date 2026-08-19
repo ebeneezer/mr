@@ -509,7 +509,6 @@ class TWheelFileDialog final : public TFileDialog {
 	void removeFileMenuCancelButton() {
 		switch (scope) {
 			case MRDialogHistoryScope::EditorSaveAs:
-			case MRDialogHistoryScope::OpenFile:
 			case MRDialogHistoryScope::LiveLogOpen:
 			case MRDialogHistoryScope::LoadFile:
 			case MRDialogHistoryScope::SaveLogAs:

@@ -120,7 +120,6 @@ void writeScopedHistory(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &s
 const std::array<MRDialogHistoryScopeSpec, static_cast<std::size_t>(MRDialogHistoryScope::Count)> kDialogHistoryScopeSpecs{
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::General, "GENERAL"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::EditorSaveAs, "EDITOR_SAVE_AS"},
-    MRDialogHistoryScopeSpec{MRDialogHistoryScope::OpenFile, "OPEN_FILE"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::LiveLogOpen, "LIVE_LOG_OPEN"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::LoadFile, "LOAD_FILE"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::SaveLogAs, "SAVE_LOG_AS"},

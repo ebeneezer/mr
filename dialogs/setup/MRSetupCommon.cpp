@@ -65,7 +65,6 @@ std::string resolveFileDialogSeedDirectory(MRDialogHistoryScope scope, const cha
 
 bool deferRememberingLoadDialogPath(MRDialogHistoryScope scope) {
 	switch (scope) {
-		case MRDialogHistoryScope::OpenFile:
 		case MRDialogHistoryScope::LoadFile:
 		case MRDialogHistoryScope::BlockSave:
 		case MRDialogHistoryScope::BlockLoad:

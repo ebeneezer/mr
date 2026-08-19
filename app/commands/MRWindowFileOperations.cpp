@@ -187,8 +187,7 @@ bool promptForPath(MRDialogHistoryScope scope, const char *title, char *fileName
 }
 
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
-	const MRDialogHistoryScope scope = std::string_view(title != nullptr ? title : "") == "LOAD FILE" ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
-	return promptForPath(scope, title, fileName, fileNameSize);
+	return promptForPath(MRDialogHistoryScope::LoadFile, title, fileName, fileNameSize);
 }
 
 bool promptForSaveAsPath(const char *title, const char *initialPath, std::string &outResolvedPath) {
@@ -323,7 +322,7 @@ bool openResolvedFilesIntoWindowsWithBatch(const std::vector<std::string> &resol
 		}
 		if (target == nullptr) continue;
 		if (!loadResolvedFileIntoWindow(target, resolvedPath, "Open file", messages)) {
-			forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
+			forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 			if (createdTarget) message(target, evCommand, cmClose, nullptr);
 			if (target != nullptr && isEmptyUntitledEditableWindow(target) && current != target && current != nullptr) static_cast<void>(mrActivateEditWindow(current));
 			continue;
@@ -333,7 +332,7 @@ bool openResolvedFilesIntoWindowsWithBatch(const std::vector<std::string> &resol
 		if (previousActive == target) previousActive = loadedTarget;
 		if (current == target) current = loadedTarget;
 		target = loadedTarget;
-		rememberLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
+		rememberLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 		lastLoadedWindow = target;
 		current = target;
 	}

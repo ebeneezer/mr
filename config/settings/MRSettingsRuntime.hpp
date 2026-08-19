@@ -553,7 +553,6 @@ enum : unsigned char {
 enum class MRDialogHistoryScope : unsigned char {
 	General = 0,
 	EditorSaveAs,
-	OpenFile,
 	LiveLogOpen,
 	LoadFile,
 	SaveLogAs,

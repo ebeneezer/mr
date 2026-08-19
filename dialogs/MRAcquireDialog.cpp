@@ -346,11 +346,11 @@ class TAcquireDialog final : public MRDialogFoundation {
 	}
 
 	void addResolvedPath(std::string_view line) {
-		const MRDialogHistoryScope scope = mode == MRAcquireMode::LoadFile ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
 		const std::string candidate = decodeAcquirePathCandidate(line);
 		std::string resolvedPath;
 
-		if (!candidate.empty() && resolveReadableExistingPath(scope, candidate.c_str(), resolvedPath, false) && seenPaths.insert(resolvedPath).second) resolvedPaths.push_back(std::move(resolvedPath));
+		if (!candidate.empty() && resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, candidate.c_str(), resolvedPath, false) && seenPaths.insert(resolvedPath).second)
+			resolvedPaths.push_back(std::move(resolvedPath));
 	}
 
 	void acceptAcquireOutput(std::string_view output, bool flush) {
