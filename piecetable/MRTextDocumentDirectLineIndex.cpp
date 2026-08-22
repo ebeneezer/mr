@@ -30,29 +30,6 @@ inline std::size_t countLineBreaksScalar(const char *data, Offset length, bool &
 	return count;
 }
 
-#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
-inline std::size_t countLineBreaksSse2(const char *data, Offset length, bool &prevWasCR) noexcept {
-	const __m128i cr = _mm_set1_epi8('\r');
-	const __m128i lf = _mm_set1_epi8('\n');
-	const Offset width = 16;
-	Offset i = 0;
-	std::size_t count = 0;
-
-	for (; i + width <= length; i += width) {
-		const __m128i bytes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(data + i));
-		const unsigned int crMask = static_cast<unsigned int>(_mm_movemask_epi8(_mm_cmpeq_epi8(bytes, cr)));
-		const unsigned int lfMask = static_cast<unsigned int>(_mm_movemask_epi8(_mm_cmpeq_epi8(bytes, lf)));
-		unsigned int lfNotAfterCr = lfMask & ~(crMask << 1);
-		if (prevWasCR) lfNotAfterCr &= ~1u;
-		count += static_cast<std::size_t>(__builtin_popcount(crMask));
-		count += static_cast<std::size_t>(__builtin_popcount(lfNotAfterCr));
-		prevWasCR = (crMask & (1u << 15)) != 0;
-	}
-	count += countLineBreaksScalar(data + i, length - i, prevWasCR);
-	return count;
-}
-#endif
-
 } // namespace
 
 Offset directFindNextLineBreak(const char *data, Offset length, Offset start) noexcept {
@@ -119,10 +96,30 @@ std::size_t directCountLineBreaksInRange(const char *data, Offset length, Offset
 	return count;
 }
 
+#if defined(__x86_64__) && (defined(__clang__) || defined(__GNUC__))
+__attribute__((target_clones("default", "popcnt", "arch=x86-64-v3")))
+#endif
 std::size_t countLineBreaksChunk(const char *data, Offset length, bool &prevWasCR) noexcept {
 	if (data == nullptr || length == 0) return 0;
 #if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
-	return countLineBreaksSse2(data, length, prevWasCR);
+	const __m128i cr = _mm_set1_epi8('\r');
+	const __m128i lf = _mm_set1_epi8('\n');
+	const Offset width = 16;
+	Offset i = 0;
+	std::size_t count = 0;
+
+	for (; i + width <= length; i += width) {
+		const __m128i bytes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(data + i));
+		const unsigned int crMask = static_cast<unsigned int>(_mm_movemask_epi8(_mm_cmpeq_epi8(bytes, cr)));
+		const unsigned int lfMask = static_cast<unsigned int>(_mm_movemask_epi8(_mm_cmpeq_epi8(bytes, lf)));
+		unsigned int lfNotAfterCr = lfMask & ~(crMask << 1);
+		if (prevWasCR) lfNotAfterCr &= ~1u;
+		count += static_cast<std::size_t>(__builtin_popcount(crMask));
+		count += static_cast<std::size_t>(__builtin_popcount(lfNotAfterCr));
+		prevWasCR = (crMask & (1u << 15)) != 0;
+	}
+	count += countLineBreaksScalar(data + i, length - i, prevWasCR);
+	return count;
 #else
 	return countLineBreaksScalar(data, length, prevWasCR);
 #endif

@@ -9,6 +9,13 @@ if [[ -z "$operation" ]]; then
 fi
 shift
 
+case "$operation" in
+	seed | record | optimize)
+		echo "BOLT data generation is temporarily disabled." >&2
+		exit 1
+		;;
+esac
+
 repo_root=$(cd "$(dirname "$0")" && pwd)
 cd "$repo_root"
 

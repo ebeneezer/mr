@@ -209,11 +209,11 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.30
+MR_RELEASE_VERSION ?= 0.2.31
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
-MR_RELEASE_PLATFORM ?= linux-x86_64-v3
-MR_RELEASE_ARCH_FLAGS ?= -march=x86-64-v3 -mtune=generic
-MR_RELEASE_REQUIRED_ISA ?= x86-64-v3
+MR_RELEASE_PLATFORM ?= linux-x86_64-baseline
+MR_RELEASE_ARCH_FLAGS ?= -march=x86-64 -mtune=generic
+MR_RELEASE_REQUIRED_ISA ?= x86-64-baseline
 MR_RELEASE_MAX_GLIBC ?= 2.36
 MR_RELEASE_MAX_GLIBCXX ?= 3.4.30
 MR_RELEASE_COMPAT_HEADER ?= $(abspath compat/MRGlibc236.h)
@@ -606,14 +606,14 @@ release-zip:
 	test -f "$$compat_gcc_directory/crtendS.o"; \
 	test -f "$$compat_pcre2_library"; \
 	$(MAKE) clean-tvision CXX=clang++ CC=clang; \
-	$(MAKE) clean all CXX=clang++ CC=clang MR_BUILD_EPOCH="$$epoch" ARCH_FLAGS="$(MR_RELEASE_ARCH_FLAGS) $(MR_RELEASE_COMPAT_FLAGS) --gcc-toolchain=$$compat_toolchain" ARCH_LDFLAGS="--gcc-toolchain=$$compat_toolchain -nostartfiles -Wl,--allow-shlib-undefined -Wl,-z,$(MR_RELEASE_REQUIRED_ISA) $(MR_RELEASE_COMPAT_LDFLAGS)" MR_LINK_START_FILES="$$compat_lib_directory/Scrt1.o $$compat_lib_directory/crti.o $$compat_gcc_directory/crtbeginS.o" MR_LINK_END_FILES="$$compat_gcc_directory/crtendS.o $$compat_lib_directory/crtn.o" PCRE2_LIB="$$compat_pcre2_library" PCRE2_HEADER="$$compat_toolchain/include/pcre2.h"; \
+	$(MAKE) clean all CXX=clang++ CC=clang MR_BUILD_EPOCH="$$epoch" ARCH_FLAGS="$(MR_RELEASE_ARCH_FLAGS) $(MR_RELEASE_COMPAT_FLAGS) --gcc-toolchain=$$compat_toolchain" ARCH_LDFLAGS="--gcc-toolchain=$$compat_toolchain -nostartfiles -Wl,--allow-shlib-undefined $(MR_RELEASE_COMPAT_LDFLAGS)" MR_LINK_START_FILES="$$compat_lib_directory/Scrt1.o $$compat_lib_directory/crti.o $$compat_gcc_directory/crtbeginS.o" MR_LINK_END_FILES="$$compat_gcc_directory/crtendS.o $$compat_lib_directory/crtn.o" PCRE2_LIB="$$compat_pcre2_library" PCRE2_HEADER="$$compat_toolchain/include/pcre2.h"; \
 	isa_properties=$$($(READELF) -n "$(TARGET)" 2>/dev/null | sed -n 's/.*Properties: x86 ISA needed: //p'); \
 	case "$$isa_properties" in \
 		*$(MR_RELEASE_REQUIRED_ISA)*) ;; \
 		*) echo "Release binary does not declare required ISA $(MR_RELEASE_REQUIRED_ISA): $$isa_properties" >&2; exit 1 ;; \
 	esac; \
 	case "$$isa_properties" in \
-		*x86-64-v4*) echo "Release binary exceeds required ISA $(MR_RELEASE_REQUIRED_ISA): $$isa_properties" >&2; exit 1 ;; \
+		*x86-64-v2*|*x86-64-v3*|*x86-64-v4*) echo "Release binary exceeds required ISA $(MR_RELEASE_REQUIRED_ISA): $$isa_properties" >&2; exit 1 ;; \
 	esac; \
 	required_glibc=$$($(READELF) --version-info "$(TARGET)" 2>/dev/null | sed -n 's/.*Name: GLIBC_\([0-9][0-9.]*\).*/\1/p' | sort -Vu | tail -n 1); \
 	if [ -z "$$required_glibc" ] || [ "$$(printf '%s\n' "$(MR_RELEASE_MAX_GLIBC)" "$$required_glibc" | sort -Vu | tail -n 1)" != "$(MR_RELEASE_MAX_GLIBC)" ]; then \

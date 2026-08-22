@@ -37,10 +37,10 @@ std::vector<std::string> mrvmProcessArguments();
 
 namespace {
 
-constexpr char kLatestManifestUrl[] = "https://github.com/ebeneezer/mr/releases/latest/download/mr-linux-x86_64-v3.update";
-constexpr char kLatestSignatureUrl[] = "https://github.com/ebeneezer/mr/releases/latest/download/mr-linux-x86_64-v3.update.sig";
+constexpr char kLatestManifestUrl[] = "https://github.com/ebeneezer/mr/releases/latest/download/mr-linux-x86_64-baseline.update";
+constexpr char kLatestSignatureUrl[] = "https://github.com/ebeneezer/mr/releases/latest/download/mr-linux-x86_64-baseline.update.sig";
 constexpr char kReleaseBaseUrl[] = "https://github.com/ebeneezer/mr/releases/download/v";
-constexpr char kPlatform[] = "linux-x86_64-v3";
+constexpr char kPlatform[] = "linux-x86_64-baseline";
 constexpr char kManifestHeader[] = "MR-UPDATE-MANIFEST 1\n";
 constexpr std::size_t kArchiveLimit = 768 * 1024 * 1024;
 constexpr std::size_t kMacroCountLimit = 256;

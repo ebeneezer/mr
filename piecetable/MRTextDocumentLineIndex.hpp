@@ -19,6 +19,9 @@ inline constexpr std::size_t kLazyLineStartCatchupWindow = 256;
 
 Offset directFindNextLineBreak(const char *data, Offset length, Offset start) noexcept;
 Offset directFindPrevLineBreak(const char *data, Offset endExclusive) noexcept;
+#if defined(__x86_64__) && (defined(__clang__) || defined(__GNUC__))
+__attribute__((target_clones("default", "popcnt", "arch=x86-64-v3")))
+#endif
 std::size_t countLineBreaksChunk(const char *data, Offset length, bool &prevWasCR) noexcept;
 std::size_t directCountLineBreaksInRange(const char *data, Offset length, Offset start, Offset end) noexcept;
 void buildDirectInitialLineIndex(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine, std::size_t &totalLines);

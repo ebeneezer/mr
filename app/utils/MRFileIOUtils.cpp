@@ -14,10 +14,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__))
+#if defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h>
-#elif defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
-#include <emmintrin.h>
 #endif
 
 namespace {
@@ -64,7 +62,8 @@ std::size_t trimmedTrailingWhitespaceLengthScalar(std::string_view text) noexcep
 	return length;
 }
 
-#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__))
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__clang__) || defined(__GNUC__))
+__attribute__((target("avx2")))
 std::size_t trimmedTrailingWhitespaceLengthAvx2(std::string_view text) noexcept {
 	const __m256i wsSpace = _mm256_set1_epi8(' ');
 	const __m256i wsTab = _mm256_set1_epi8('\t');
@@ -125,9 +124,10 @@ std::size_t trimmedTrailingWhitespaceLengthSse2(std::string_view text) noexcept 
 #endif
 
 std::size_t trimmedTrailingWhitespaceLength(std::string_view text) noexcept {
-#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__))
-	return trimmedTrailingWhitespaceLengthAvx2(text);
-#elif defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__clang__) || defined(__GNUC__))
+	if (__builtin_cpu_supports("avx2")) return trimmedTrailingWhitespaceLengthAvx2(text);
+#endif
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
 	return trimmedTrailingWhitespaceLengthSse2(text);
 #else
 	return trimmedTrailingWhitespaceLengthScalar(text);
@@ -140,7 +140,8 @@ std::size_t trimmedTrailingWhitespaceLength(std::string_view text) noexcept {
 	return false;
 }
 
-#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__))
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__clang__) || defined(__GNUC__))
+__attribute__((target("avx2")))
 bool containsTabAvx2(std::string_view text) noexcept {
 	const __m256i tab = _mm256_set1_epi8('\t');
 	std::size_t i = 0;
@@ -173,9 +174,10 @@ bool containsTabSse2(std::string_view text) noexcept {
 #endif
 
 bool containsTab(std::string_view text) noexcept {
-#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__))
-	return containsTabAvx2(text);
-#elif defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__clang__) || defined(__GNUC__))
+	if (__builtin_cpu_supports("avx2")) return containsTabAvx2(text);
+#endif
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
 	return containsTabSse2(text);
 #else
 	return containsTabScalar(text);
