@@ -579,30 +579,65 @@ DialogButtonRowMetrics measureUniformButtonRow(std::span<const DialogButtonSpec>
 	return metrics;
 }
 
+namespace {
+
+void selectInitialButtonRowView(TView *previousView, TButton *defaultButton, TButton *firstActionButton, TButton *firstButton) {
+	TView *target = nullptr;
+	const bool previousSelectable = previousView != nullptr && (previousView->options & ofSelectable) != 0 && (previousView->state & sfDisabled) == 0;
+
+	if (previousSelectable && dynamic_cast<TButton *>(previousView) == nullptr) target = previousView;
+	else if (defaultButton != nullptr) target = defaultButton;
+	else if (previousSelectable) target = previousView;
+	else if (firstActionButton != nullptr) target = firstActionButton;
+	else
+		target = firstButton;
+	if (target != nullptr) target->select();
+}
+
+} // namespace
+
 void insertUniformButtonRow(MRDialogFoundation &dialog, int left, int top, int gap, std::span<const DialogButtonSpec> specs, int minButtonWidth, std::vector<TButton *> *outButtons) {
 	const DialogButtonRowMetrics metrics = measureUniformButtonRow(specs, gap, minButtonWidth);
+	TGroup *content = dialog.managedContent();
+	TView *previousView = content != nullptr ? content->current : nullptr;
+	TButton *defaultButton = nullptr;
+	TButton *firstActionButton = nullptr;
+	TButton *firstButton = nullptr;
 	int x = left;
 
 	for (const DialogButtonSpec &spec : specs) {
 		TRect rect(x, top, x + metrics.buttonWidth, top + 2);
 		TButton *button = new TButton(rect, spec.title, spec.command, spec.flags);
 		dialog.insert(button);
+		if (firstButton == nullptr) firstButton = button;
+		if (defaultButton == nullptr && (spec.flags & bfDefault) != 0) defaultButton = button;
+		if (firstActionButton == nullptr && spec.command != cmHelp) firstActionButton = button;
 		if (outButtons != nullptr) outButtons->push_back(button);
 		x += metrics.buttonWidth + gap;
 	}
+	selectInitialButtonRowView(previousView, defaultButton, firstActionButton, firstButton);
 }
 
 void addManagedUniformButtonRow(MRScrollableDialog &dialog, int left, int top, int gap, std::span<const DialogButtonSpec> specs, int minButtonWidth, std::vector<TButton *> *outButtons) {
 	const DialogButtonRowMetrics metrics = measureUniformButtonRow(specs, gap, minButtonWidth);
+	TGroup *content = dialog.managedContent();
+	TView *previousView = content != nullptr ? content->current : nullptr;
+	TButton *defaultButton = nullptr;
+	TButton *firstActionButton = nullptr;
+	TButton *firstButton = nullptr;
 	int x = left;
 
 	for (const DialogButtonSpec &spec : specs) {
 		TRect rect(x, top, x + metrics.buttonWidth, top + 2);
 		TButton *button = new TButton(rect, spec.title, spec.command, spec.flags);
 		dialog.addManaged(button, rect);
+		if (firstButton == nullptr) firstButton = button;
+		if (defaultButton == nullptr && (spec.flags & bfDefault) != 0) defaultButton = button;
+		if (firstActionButton == nullptr && spec.command != cmHelp) firstActionButton = button;
 		if (outButtons != nullptr) outButtons->push_back(button);
 		x += metrics.buttonWidth + gap;
 	}
+	selectInitialButtonRowView(previousView, defaultButton, firstActionButton, firstButton);
 }
 
 MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight) {

@@ -8322,6 +8322,8 @@ bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
 	    content.find("return handleEditCopyToSystemClipboard(window);") == std::string::npos || content.find("return handleEditCopyToSystemClipboard(currentEditorCommandWindow());") == std::string::npos ||
 	    content.find("case cmMrEditPasteFromBuffer:") == std::string::npos || content.find("return dispatchEditorCommandEvent(window, cmPaste);") == std::string::npos ||
 	    content.find("return dispatchEditorCommand(cmPaste, true);") == std::string::npos ||
+	    content.find("if (window->hasBlock()) return handleCopyBlock(window);") != std::string::npos ||
+	    content.find("currentEditorCommandWindow()->hasBlock()) return handleCopyBlock(currentEditorCommandWindow());") != std::string::npos ||
 	    content.find("KeymapActionDispatchEntry{\"MRMAC_BLOCK_COPY_TO_CLIPBOARD\", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CopyMarkedBlockToSystemClipboard}") == std::string::npos ||
 	    content.find("KeymapActionDispatchEntry{\"MRMAC_BLOCK_PASTE_FROM_CLIPBOARD\", KeymapDispatchKind::AppCommand, cmMrEditPasteFromBuffer, KeymapWindowMethod::None, KeymapCustomAction::None}") == std::string::npos ||
 	    content.find("copyMarkedBlockToSystemClipboard(") == std::string::npos || content.find("captureBlockPayload(") == std::string::npos || content.find("deleteBlock(&errorText)") == std::string::npos || content.find("TClipboard::setText(") == std::string::npos) {
@@ -10537,7 +10539,7 @@ bool testWorkspaceCommandLineAutoloadFocusGuard(std::string &failureReason) {
 		return false;
 	}
 	startupLoadBody = startup.substr(startupLoadStart, startupLoadEnd - startupLoadStart);
-	if (!containsAllSubstrings(startupLoadBody, {"restoredWindows = allEditWindowsInZOrder()", "candidateEditor->persistentFileName()", "normalizePathForLoad(std::filesystem::path(candidatePath)) != file", "Startup file resolved to restored workspace window:", "loadedFiles.push_back(file);", "createEditorWindow(file.c_str())", "mrActivateEditWindow(lastStartupWindow)", "return loadedFiles;"}, missingNeedle)) {
+	if (!containsAllSubstrings(startupLoadBody, {"restoredWindows = allEditWindowsInZOrder()", "candidateEditor->persistentFileName()", "normalizePathForLoad(std::filesystem::path(candidatePath)) != file", "Startup file resolved to restored workspace window:", "const bool newDocument = pathDoesNotExist", "win->setCurrentFileName(file.c_str())", "Startup created empty editor for new file:", "loadedFiles.push_back(file);", "createEditorWindow(file.c_str())", "mrActivateEditWindow(lastStartupWindow)", "return loadedFiles;"}, missingNeedle)) {
 		failureReason = "Workspace command-line focus reuse changed: missing " + missingNeedle + ".";
 		return false;
 	}
@@ -10594,6 +10596,7 @@ void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 
 void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
+	runTest(ctx, "Edit clipboard command routing guard", testEditClipboardCommandRoutingGuard);
 	runTest(ctx, "Keymap runtime macro dispatch harness", testKeymapMacroBindingDispatchHarness);
 	runTest(ctx, "Keymap macro diagnostics harness", testKeymapMacroBindingNegativeDiagnosticsHarness);
 	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);

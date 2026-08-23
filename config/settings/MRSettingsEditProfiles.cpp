@@ -124,7 +124,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.leftMargin = 1;
 	defaults.rightMargin = 78;
 	defaults.formatRuler = false;
-	defaults.wordWrap = true;
+	defaults.wordWrap = false;
 	defaults.indentStyle = kIndentStyleOff;
 	defaults.codeLanguage = "NONE";
 	defaults.codeColoring = false;

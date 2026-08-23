@@ -122,10 +122,14 @@ optional:
 mr
 mr README.md
 mr src/main.cpp include/main.hpp
+mr notes/new-file.txt
 \end{verbatim}
 With no file argument, \mr{} opens its desktop and waits for a command. With
-one or more paths, every readable file receives an editor window. Relative
-paths are interpreted from the directory in which the command was entered.
+one or more paths, every readable file receives an editor window. An explicit
+path which does not exist yet opens as an empty, named text document; saving
+it creates that file. Unmatched wildcard expressions do not create documents.
+Relative paths are interpreted from the directory in which the command was
+entered.
 \index{startup files}\index{working directory}
 
 On the first start, \mr{} creates a settings source when none exists. On a
@@ -690,6 +694,10 @@ Directly editing serialized lines is possible for recovery and review, but it
 bypasses field validation and is not the normal setup path.
 \index{settings.mrmac@\texttt{settings.mrmac}}
 
+In a modal dialog, \key{Enter} activates its declared primary action when the
+current input control does not consume the key. Help remains available through
+\key{F1} or its mnemonic; it is not the implicit acceptance action.
+
 \section{Keymap profiles}
 
 \menu{Installation and setup > Key mapping} manages profiles and their
@@ -707,6 +715,18 @@ draft; \textsf{Use} makes a profile active.}
 manage bindings. \menu{Load}, \menu{Save}, and \menu{Save As} exchange profile
 files. Capturing a key is safer than spelling a sequence by hand because Help
 keys and reserved interactions are filtered by the capture dialog.
+
+The package installer places the factory files in
+\texttt{\$XDG\_CONFIG\_HOME/mr/macros/keymaps}, or in
+\texttt{\$HOME/.config/mr/macros/keymaps} when \texttt{XDG\_CONFIG\_HOME} is
+unset. A factory-new Key Manager opens \menu{Load} and \menu{Save As} in that
+directory. \texttt{MRDefaultKeymaps.mrmac} is the complete recovery import: it
+resets the keymap draft, installs the WordStar, Emacs, and Nano profiles, and
+selects WordStar. \texttt{emacs.mrmac} and \texttt{nano.mrmac} reset to and
+select the respective single profile. \texttt{wordstar.mrmac} supplies the
+three-profile set with WordStar selected and adds Smart Backspace through
+\texttt{wordstar-extensions.mrmac}. Loading a file remains an explicit action;
+installation alone does not silently replace the active profile.
 
 \begin{usersafety}
 Do not delete or rewrite the only bindings needed to reach setup until the new
@@ -922,6 +942,11 @@ identity. \menu{File > Save all} collects dirty windows and stops if a save is
 cancelled or fails.\index{Save command}\index{Save As command}
 \index{Save All command}
 
+\key{Alt-X} exits through the dirty gate when changed documents exist.
+\menu{Save All} is the primary choice, so a plain \key{Enter} saves all
+eligible documents and continues the exit. \menu{Discard All} and
+\menu{Cancel} require an explicit selection.
+
 \menu{File > Revert} reloads the saved file and discards unsaved document
 changes after confirmation. It requires a persistent file. A read-only window
 cannot be saved as ordinary editable content, although supported log roles may
@@ -981,11 +1006,20 @@ document content from its projection.
 
 \section{Clipboard input}
 
-\menu{Edit > Paste} inserts the current editor clipboard at the cursor.
+\menu{Edit > Paste} requests text from the system clipboard and inserts it at
+the cursor. This remains a clipboard operation when a persistent block exists;
+block duplication is the separate \menu{Block > Copy block} command.
 \menu{Edit > Append} and \menu{Edit > Cut and append} build a larger clipboard
 payload from several blocks. Terminal or operating-system clipboard exchange
 is available through the corresponding editor actions and MRMAC primitives.
 \index{clipboard}\index{Paste command}
+
+On Wayland, system exchange requires \texttt{wl-copy} and \texttt{wl-paste}
+from \texttt{wl-clipboard}; on X11 it requires \texttt{xsel} or
+\texttt{xclip}. Supported terminals can provide clipboard exchange through
+OSC~52 for remote sessions. The terminal emulator's own paste command remains
+an alternative because it sends text input directly instead of asking \mr{}
+to read the clipboard.
 
 Pasting into a column or line-oriented workflow should be preceded by a check
 of the current block state and insert mode. A persistent block can remain
@@ -1927,6 +1961,10 @@ blocks, and editing modes. These choices establish a starting configuration;
 commands used in the active editor may still alter view or session state.
 \index{language detection}\index{tabs!profile setting}
 \index{margins!profile setting}
+
+The factory default has word wrap disabled. Enable it deliberately in the
+DEFAULT or a matching filename-extension profile, or toggle it for the active
+editor when reflow at the configured margins is wanted.
 
 Binary detection is a separate concern. When \field{Autodetect binary files}
 is enabled in User Interface Settings, a binary file is directed to the Bento

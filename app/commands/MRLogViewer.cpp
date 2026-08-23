@@ -136,8 +136,10 @@ class JournalTagDialog : public MRDialogFoundation {
 		identifierList = new MRColumnListView(TRect(3, 6, 55, 14), identifierScrollBar, this, cmJournalTagSelectionChanged, cmJournalTagSelectionAccepted);
 		insert(identifierList);
 		setIdentifierRows();
-		insert(new TButton(TRect(20, 15, 30, 17), "~O~K", cmOK, bfDefault));
-		insert(new TButton(TRect(32, 15, 43, 17), "~H~elp", cmHelp, bfNormal));
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~O~K", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2, 10);
+		mr::dialogs::insertUniformButtonRow(*this, (62 - metrics.rowWidth) / 2, 15, 2, buttons, 10);
+		tagField->select();
 	}
 
 	void handleEvent(TEvent &event) override {

@@ -305,6 +305,13 @@ bool isReadableRegularFile(const std::filesystem::path &path) {
 	return mrPrivilegedFileBrokerAllowsPath(pathString);
 }
 
+bool pathDoesNotExist(const std::filesystem::path &path) {
+	std::error_code ec;
+	const std::filesystem::file_status status = std::filesystem::symlink_status(path, ec);
+
+	return status.type() == std::filesystem::file_type::not_found;
+}
+
 std::string normalizePathForLoad(const std::filesystem::path &path) {
 	std::error_code ec;
 	std::filesystem::path normalized = std::filesystem::weakly_canonical(path, ec);
@@ -317,6 +324,15 @@ void appendUniqueFilePath(const std::filesystem::path &path, std::vector<std::st
 	std::string normalized;
 
 	if (!isReadableRegularFile(path)) return;
+	normalized = normalizePathForLoad(path);
+	if (normalized.empty()) return;
+	if (seen.insert(normalized).second) paths.push_back(normalized);
+}
+
+void appendUniqueExplicitPath(const std::filesystem::path &path, std::vector<std::string> &paths, std::set<std::string> &seen) {
+	std::string normalized;
+
+	if (!isReadableRegularFile(path) && !pathDoesNotExist(path)) return;
 	normalized = normalizePathForLoad(path);
 	if (normalized.empty()) return;
 	if (seen.insert(normalized).second) paths.push_back(normalized);
@@ -496,7 +512,7 @@ std::vector<std::string> collectStartupFilesFromRequest(const StartupLoadRequest
 			appendGlobMatchesFlat(spec, paths, seen);
 			continue;
 		}
-		appendUniqueFilePath(specPath, paths, seen);
+		appendUniqueExplicitPath(specPath, paths, seen);
 	}
 	return paths;
 }
@@ -517,6 +533,12 @@ std::vector<std::string> loadStartupFilesFromCommandLine(const StartupLoadReques
 	if (files.size() > 1) openBatch.begin();
 	for (const std::string &file : files) {
 		bool restoredFileFound = false;
+		const bool newDocument = pathDoesNotExist(std::filesystem::path(file));
+
+		if (!newDocument && !isReadableRegularFile(std::filesystem::path(file))) {
+			mrLogMessage(("Startup path is no longer a readable regular file: " + file).c_str());
+			continue;
+		}
 
 		if (focusRestoredWorkspaceFiles) {
 			for (MREditWindow *candidate : restoredWindows) {
@@ -535,7 +557,7 @@ std::vector<std::string> loadStartupFilesFromCommandLine(const StartupLoadReques
 			loadedFiles.push_back(file);
 			continue;
 		}
-		const bool useHexEditor = configuredAutoDetectBinaryFiles() && fileContainsNulInBoundarySamples(file);
+		const bool useHexEditor = !newDocument && configuredAutoDetectBinaryFiles() && fileContainsNulInBoundarySamples(file);
 		MREditWindow *win = nullptr;
 
 		if (useHexEditor) {
@@ -547,7 +569,10 @@ std::vector<std::string> loadStartupFilesFromCommandLine(const StartupLoadReques
 			mrLogMessage("Startup load aborted: unable to create editor window.");
 			break;
 		}
-		if (!loadResolvedFileIntoWindow(win, file, "Startup load")) {
+		if (newDocument) {
+			win->setCurrentFileName(file.c_str());
+			mrLogMessage(("Startup created empty editor for new file: " + file).c_str());
+		} else if (!loadResolvedFileIntoWindow(win, file, "Startup load")) {
 			message(win, evCommand, cmClose, nullptr);
 			continue;
 		}

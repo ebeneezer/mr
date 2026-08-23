@@ -2062,7 +2062,6 @@ bool dispatchTargetedKeymapAppCommand(MREditWindow *window, ushort command) {
 				postDialogWarning(kWindowReadOnlyMessage);
 				return true;
 			}
-			if (window->hasBlock()) return handleCopyBlock(window);
 			return dispatchEditorCommandEvent(window, cmPaste);
 		case cmMrBlockMarkStream:
 			if (window == nullptr) return false;
@@ -2134,7 +2133,7 @@ bool handleExitDirtySaveAll(bool restartAfterExit) {
 	}
 	if (dirtyWindows.empty()) return dispatchExitAfterDirtyGating(restartAfterExit);
 	headline = std::to_string(dirtyWindows.size()) + " unsaved windows exist.";
-	switch (mr::dialogs::runDialogDirtyListGating("EXIT MR", headline.c_str(), "Dirty windows:", dirtyItems, "Save all", "Discard all")) {
+	switch (mr::dialogs::runDialogDirtyListGating("EXIT MR", headline.c_str(), "Dirty windows:", dirtyItems, "Save All", "Discard All")) {
 		case mr::dialogs::UnsavedChangesChoice::Save:
 			for (MREditWindow *window : dirtyWindows) {
 				static_cast<void>(mrActivateEditWindow(window));
@@ -2467,7 +2466,6 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 			return runDisabledBlockAction();
 
 		case cmMrEditPasteFromBuffer:
-			if (currentEditorCommandWindow() != nullptr && currentEditorCommandWindow()->hasBlock()) return handleCopyBlock(currentEditorCommandWindow());
 			return dispatchEditorCommand(cmPaste, true);
 
 		case cmMrEditToggleInsertMode: {

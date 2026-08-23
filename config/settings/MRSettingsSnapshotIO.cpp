@@ -523,6 +523,11 @@ bool resetSettingsSnapshot(const std::string &settingsPath, MRSettingsSnapshot &
 	snapshot.logFilePath = makeAbsolutePath(normalized);
 	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupLogFile, snapshot.logFilePath, errorMessage)) return false;
 	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::General, snapshot.paths.macroPath, errorMessage)) return false;
+	const std::string keymapDirectory = (std::filesystem::path(snapshot.paths.macroPath) / "keymaps").string();
+	if (isReadableDirectory(keymapDirectory)) {
+		if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::KeymapProfileLoad, keymapDirectory, errorMessage)) return false;
+		if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::KeymapProfileSave, keymapDirectory, errorMessage)) return false;
+	}
 	snapshot.defaultProfileDescription = "Global defaults";
 	snapshot.editSettings = resolveEditSetupDefaults();
 	snapshot.colorSettings = resolveColorSetupDefaults();
