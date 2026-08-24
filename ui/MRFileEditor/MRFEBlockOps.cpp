@@ -2163,6 +2163,8 @@ void MRFEBlockOps::applySelection(MRFileEditor &editor) {
 
 void MRFEBlockOps::applyOverlay(MRFileEditor &editor) {
 	if (!hasVisibleBlock()) return;
+	const bool trackCursor = mGeometry.status == MRFEBlockStatus::Marking;
+	const std::size_t visualAnchor = trackCursor && mGeometry.mode == MRFEBlockMode::Stream ? mGeometry.anchor : mGeometry.rangeStart;
 	std::size_t visualEnd = mGeometry.rangeEnd;
 	switch (mGeometry.mode) {
 	case MRFEBlockMode::Line:
@@ -2187,7 +2189,7 @@ void MRFEBlockOps::applyOverlay(MRFileEditor &editor) {
 		      << " visualEnd=" << visualEnd << " lineCount=" << model.lineCount() << " length=" << model.length();
 		appendColumnBlockTrace(trace.str());
 	}
-	editor.setBlockOverlayState(static_cast<int>(mGeometry.mode), mGeometry.rangeStart, visualEnd, true, mGeometry.status == MRFEBlockStatus::Marking, mGeometry.col1, mGeometry.col2, mGeometry.mode == MRFEBlockMode::Column, mGeometry.line1, mGeometry.line2);
+	editor.setBlockOverlayState(static_cast<int>(mGeometry.mode), visualAnchor, visualEnd, true, trackCursor, mGeometry.col1, mGeometry.col2, mGeometry.mode == MRFEBlockMode::Column, mGeometry.line1, mGeometry.line2);
 }
 
 void MRFEBlockOps::deactivateVisual(MRFileEditor &editor) {

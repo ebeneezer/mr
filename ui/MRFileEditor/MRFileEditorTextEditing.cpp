@@ -247,9 +247,9 @@ void MRFileEditor::setBlockOverlayState(int mode, std::size_t anchor, std::size_
 	mBlockOverlayMode = mode;
 	mBlockOverlayAnchor = std::min(anchor, mBufferModel.length());
 	mBlockOverlayEnd = std::min(end, mBufferModel.length());
-	if (mBlockOverlayAnchor > mBlockOverlayEnd) std::swap(mBlockOverlayAnchor, mBlockOverlayEnd);
-	mBlockOverlayActive = active && mode != 0;
 	mBlockOverlayTrackCursor = trackCursor;
+	if (!mBlockOverlayTrackCursor && mBlockOverlayAnchor > mBlockOverlayEnd) std::swap(mBlockOverlayAnchor, mBlockOverlayEnd);
+	mBlockOverlayActive = active && mode != 0;
 	mBlockOverlayColumnAnchor = columnAnchor;
 	mBlockOverlayColumnEnd = columnEnd;
 	mBlockOverlayLineRangeValid = lineRangeValid;
