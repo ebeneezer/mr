@@ -145,9 +145,8 @@ temporary directory and must not be staged inside the repository.
 
 ## Build rule
 
-Do not run a separate CachyOS host build. For ordinary handoffs, run no build
-unless the maintainer explicitly requests one. For a release handoff, use only
-the Debian 12 build performed by `make release-zip`.
+Do not run a separate CachyOS host build. For a release handoff, use only the
+Debian 12 build performed by `make release-zip`.
 
 Report the complete result, including warnings, whenever a build was requested
 or required for a release.
