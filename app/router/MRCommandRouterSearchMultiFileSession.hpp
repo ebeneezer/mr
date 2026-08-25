@@ -72,7 +72,6 @@ enum class MultiReplaceAllOutcome : unsigned char {
 void postSearchWarning(std::string_view text);
 void postSearchError(std::string_view text);
 void postDialogWarning(std::string_view text);
-void persistSearchDialogSettingsSnapshot();
 void postNoHitsWarning();
 void postMultiSearchStartedWarning();
 void postSearchCancelledError();

@@ -357,6 +357,26 @@ std::string latestHistoryValue(const std::vector<MRDialogHistoryEntry> &entries)
 	return std::string();
 }
 
+namespace {
+
+std::string defaultRememberedLoadDirectory(MRDialogHistoryScope scope) {
+	switch (scope) {
+		case MRDialogHistoryScope::MacroFile:
+		case MRDialogHistoryScope::SetupMacroDirectory:
+		case MRDialogHistoryScope::ExtensionPostLoadMacro:
+		case MRDialogHistoryScope::ExtensionPreSaveMacro: {
+			const std::string macroDirectory = makeAbsolutePath(configuredMacroDirectory());
+			if (isReadableDirectory(macroDirectory)) return macroDirectory;
+			break;
+		}
+		default:
+			break;
+	}
+	return fallbackRememberedLoadDirectory();
+}
+
+} // namespace
+
 std::string effectiveRememberedLoadDirectory(MRDialogHistoryScope scope) {
 	const MRScopedDialogHistoryState &state = dialogHistoryState(scope);
 	std::string remembered = normalizeConfiguredPathInput(state.lastPath);
@@ -365,7 +385,7 @@ std::string effectiveRememberedLoadDirectory(MRDialogHistoryScope scope) {
 	if (!remembered.empty()) return remembered;
 	remembered = latestReadableHistoryFileDirectory(state.fileHistory);
 	if (!remembered.empty()) return remembered;
-	return fallbackRememberedLoadDirectory();
+	return defaultRememberedLoadDirectory(scope);
 }
 
 bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage, const char *keyName) {
@@ -508,7 +528,7 @@ bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path
 			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());
 		}
 	} else if (state.lastPath.empty()) {
-		directory = fallbackRememberedLoadDirectory();
+		directory = defaultRememberedLoadDirectory(scope);
 		if (!directory.empty()) {
 			state.lastPath = directory;
 			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());

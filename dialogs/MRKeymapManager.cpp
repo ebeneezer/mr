@@ -696,15 +696,6 @@ std::string initialKeymapManagerFileUri(const KeymapManagerDraft &draft) {
 	return configuredFileUri;
 }
 
-bool persistDialogHistorySnapshot(std::string &errorText, const char *logLabel) {
-	MRSettingsWriteReport writeReport;
-
-	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport)) return false;
-	mrLogSettingsWriteReport(logLabel != nullptr ? logLabel : "persist dialog history", writeReport);
-	errorText.clear();
-	return true;
-}
-
 bool pathStartsWithParentTraversal(const std::filesystem::path &path) {
 	for (const std::filesystem::path &part : path)
 		if (part == "..") return true;
@@ -1786,18 +1777,12 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		if (!chooseKeymapFileForLoad(selectedUri)) return;
 		if (!loadKeymapDraftFromFile(selectedUri, loadedDraft, errorText, &diagnostics)) {
 			const std::string loadError = errorText;
-			std::string historyError;
 
 			forgetLoadDialogPath(MRDialogHistoryScope::KeymapProfileLoad, selectedUri.c_str());
-			if (!persistDialogHistorySnapshot(historyError, "forget keymap load history")) postDialogWarning(historyError);
 			postDialogError(loadError);
 			return;
 		}
 		rememberLoadDialogPath(MRDialogHistoryScope::KeymapProfileLoad, selectedUri.c_str());
-		if (!persistDialogHistorySnapshot(errorText, "remember keymap load history")) {
-			postDialogWarning(errorText);
-			errorText.clear();
-		}
 		logKeymapDiagnostics("keymap load", loadedDraft.profiles, diagnostics);
 		if (const std::string summary = summarizeKeymapDiagnosticsForMessageLine(diagnostics, "Keymap load"); !summary.empty()) postDialogError(summary);
 		fileUri = selectedUri;

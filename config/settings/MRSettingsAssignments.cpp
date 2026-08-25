@@ -27,6 +27,8 @@ using namespace mr::settings_assignment;
 
 bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths &paths, std::string *errorMessage) {
 	std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> dialogHistories;
+	MRMultiSearchDialogOptions multiSearchDialogOptions;
+	MRMultiSarDialogOptions multiSarDialogOptions;
 
 	paths = resolveSetupPathDefaults();
 	paths.settingsMacroUri = normalizeConfiguredPathInput(settingsPath);
@@ -37,13 +39,14 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredTempDirectoryPath(paths.tempPath, errorMessage)) return false;
 	if (!setConfiguredShellExecutablePath(paths.shellUri, errorMessage)) return false;
 	if (!setConfiguredLogFilePath(defaultLogFilePathForSettings(paths.settingsMacroUri), errorMessage)) return false;
-	if (!setConfiguredLastFileDialogPath(paths.macroPath, errorMessage)) return false;
 	if (!setConfiguredFileDialogShowHiddenFiles(false, errorMessage)) return false;
 	if (!setConfiguredDefaultProfileDescription("Global defaults", errorMessage)) return false;
 	if (!setConfiguredSearchDialogOptions(MRSearchDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredSarDialogOptions(MRSarDialogOptions(), errorMessage)) return false;
-	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage)) return false;
-	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage)) return false;
+	multiSearchDialogOptions.startingPath = fallbackRememberedLoadDirectory();
+	multiSarDialogOptions.startingPath = multiSearchDialogOptions.startingPath;
+	if (!setConfiguredMultiSearchDialogOptions(multiSearchDialogOptions, errorMessage)) return false;
+	if (!setConfiguredMultiSarDialogOptions(multiSarDialogOptions, errorMessage)) return false;
 	if (!setConfiguredPdfExportSettings(MRPdfExportSettings(), errorMessage)) return false;
 	if (!setConfiguredAcquireSettings(MRAcquireSettings(), errorMessage)) return false;
 	if (!setConfiguredLiveLogSettings(MRLiveLogSettings(), errorMessage)) return false;
@@ -86,6 +89,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 		state.fileHistory.clear();
 	}
 	storeConfiguredDialogHistoryStorage(dialogHistories);
+	if (!setConfiguredLastFileDialogPath(fallbackRememberedLoadDirectory(), errorMessage)) return false;
 	storeConfiguredMultiFilespecHistoryStorage(std::vector<MRDialogHistoryEntry>());
 	storeConfiguredMultiPathHistoryStorage(std::vector<MRDialogHistoryEntry>());
 	storeConfiguredHistoryEpochCounter(std::max(static_cast<long long>(0), static_cast<long long>(std::time(nullptr))));

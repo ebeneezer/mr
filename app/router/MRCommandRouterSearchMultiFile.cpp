@@ -24,7 +24,6 @@
 #include <string>
 #include <string_view>
 
-#include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../mrmac/mrmac.h"
 #include "../../mrmac/vm/MRVMRuntimeKv.hpp"
 #include "../../mrmac/vm/MRVMValue.hpp"
@@ -204,12 +203,6 @@ void postSearchError(std::string_view text) {
 
 void postDialogWarning(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string(text), mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
-}
-
-void persistSearchDialogSettingsSnapshot() {
-	std::string errorText;
-
-	if (!persistConfiguredSettingsSnapshot(&errorText) && !errorText.empty()) postSearchError("Settings save failed: " + errorText);
 }
 
 void postNoHitsWarning() {

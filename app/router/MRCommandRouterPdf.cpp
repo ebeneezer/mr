@@ -15,7 +15,6 @@
 #include "../export/MRPdfTextExporter.hpp"
 #include "../utils/MRStringUtils.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
-#include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../dialogs/MRPdfExportDialog.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
 #include "../../ui/MREditWindow.hpp"
@@ -127,11 +126,8 @@ void loadPdfExportDialogData(MRPdfExportDialogData &dialogData, const MRPdfExpor
 	mr::dialogs::writeRecordField(dialogData.bottomMarginPoints, sizeof(dialogData.bottomMarginPoints), settings.bottomMarginPoints);
 }
 
-bool persistPdfExportDialogState(const MRPdfExportDialogData &dialogData, std::string &errorText) {
-	if (!setConfiguredPdfExportSettings(pdfExportSettingsFromDialogData(dialogData), &errorText)) return false;
-	if (!persistConfiguredSettingsSnapshot(&errorText)) return false;
-	errorText.clear();
-	return true;
+bool storePdfExportDialogState(const MRPdfExportDialogData &dialogData, std::string &errorText) {
+	return setConfiguredPdfExportSettings(pdfExportSettingsFromDialogData(dialogData), &errorText);
 }
 
 bool buildPdfExportSettings(const MRPdfExportDialogData &data, MRPdfTextExporter::Settings &settings, std::string &errorText) {
@@ -260,13 +256,14 @@ bool handleExportToPdf() {
 	while (true) {
 		const ushort result = runPdfExportDialog(dialogData, window->hasBlock());
 		if (result == cmCancel || result == cmClose) return true;
-		if (!persistPdfExportDialogState(dialogData, errorText)) {
-			postPdfExportError("PDF export settings save failed: " + errorText);
-			return true;
-		}
 		if (!buildPdfExportSettings(dialogData, settings, errorText)) {
 			postPdfExportError(errorText);
 			continue;
+		}
+		mr::dialogs::writeRecordField(dialogData.outputPath, sizeof(dialogData.outputPath), settings.outputPath);
+		if (!storePdfExportDialogState(dialogData, errorText)) {
+			postPdfExportError("PDF export settings update failed: " + errorText);
+			return true;
 		}
 		if (!capturePdfExportText(*window, static_cast<MRPdfExportSource>(dialogData.source), documentText, errorText)) {
 			postPdfExportError(errorText.empty() ? "No block marked." : errorText);
@@ -276,11 +273,6 @@ bool handleExportToPdf() {
 		if (!exporter.exportText(documentText, settings, &errorText)) {
 			postPdfExportError(errorText);
 			continue;
-		}
-		mr::dialogs::writeRecordField(dialogData.outputPath, sizeof(dialogData.outputPath), settings.outputPath);
-		if (!persistPdfExportDialogState(dialogData, errorText)) {
-			postPdfExportError("PDF export settings save failed: " + errorText);
-			return true;
 		}
 		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "PDF exported: " + settings.outputPath, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
 		return true;

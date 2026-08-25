@@ -29,7 +29,6 @@
 #include <vector>
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
-#include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../dialogs/setup/MRSetup.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
 #include "../../ui/MRFrame.hpp"
@@ -629,6 +628,8 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 	searchField->setData(searchInput);
 	pathField->setData(pathInput);
 	optionsField->setData(&optionMask);
+	dialog->finalizeLayout();
+	if (searchField != nullptr) searchField->select();
 	dialog->setDialogValidationHook([searchField]() {
 		MRScrollableDialog::DialogValidationResult result;
 		char text[kSearchBufferSize] = {0};
@@ -652,6 +653,11 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 		searchField->getData(currentSearch);
 		pathField->getData(currentPath);
 		optionsField->getData(&currentMask);
+		if (trimAscii(currentSearch).empty()) {
+			dialog->runDialogValidation();
+			searchField->select();
+			return;
+		}
 
 		currentOptions.filespec = trimAscii(currentFilespec);
 		if (currentOptions.filespec.empty()) currentOptions.filespec = "*.*";
@@ -665,12 +671,6 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
 		if (currentOptions.startingPath.empty()) currentOptions.startingPath = ".";
 		currentOptions.searchText = trimAscii(currentSearch);
-
-		static_cast<void>(setConfiguredMultiSearchDialogOptions(currentOptions));
-		static_cast<void>(setConfiguredLastFileDialogPath(currentOptions.startingPath));
-		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(currentOptions.filespec));
-		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
-		persistSearchDialogSettingsSnapshot();
 
 		pendingOptions = currentOptions;
 		captureMultiFileSearchMemorySources(memorySources);
@@ -719,9 +719,35 @@ bool promptMultiFileSearchValues(const std::string &patternSeed, std::string &pa
 		outSession = std::move(session);
 		dialog->endModal(cmOK);
 	});
-	dialog->finalizeLayout();
-	dialog->runDialogValidation();
 	result = TProgram::deskTop->execView(dialog);
+	if (filespecField != nullptr && searchField != nullptr && pathField != nullptr && optionsField != nullptr) {
+		MRMultiSearchDialogOptions currentOptions = options;
+		char currentFilespec[kFilespecBufferSize] = {0};
+		char currentSearch[kSearchBufferSize] = {0};
+		char currentPath[kPathBufferSize] = {0};
+		ushort currentMask = 0;
+
+		filespecField->getData(currentFilespec);
+		searchField->getData(currentSearch);
+		pathField->getData(currentPath);
+		optionsField->getData(&currentMask);
+		currentOptions.filespec = trimAscii(currentFilespec);
+		if (currentOptions.filespec.empty()) currentOptions.filespec = "*.*";
+		currentOptions.searchSubdirectories = (currentMask & 0x0001) != 0;
+		currentOptions.caseSensitive = (currentMask & 0x0002) != 0;
+		currentOptions.regularExpressions = (currentMask & 0x0004) != 0;
+		currentOptions.wholeWords = (currentMask & 0x0008) != 0;
+		currentOptions.searchFilesInMemory = (currentMask & 0x0010) != 0;
+		currentOptions.restrictToWorkspace = (currentMask & 0x0020) != 0;
+		if (currentOptions.wholeWords) currentOptions.regularExpressions = false;
+		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
+		if (currentOptions.startingPath.empty()) currentOptions.startingPath = ".";
+		currentOptions.searchText = trimAscii(currentSearch);
+		static_cast<void>(setConfiguredMultiSearchDialogOptions(currentOptions));
+		static_cast<void>(setConfiguredLastFileDialogPath(currentOptions.startingPath));
+		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(currentOptions.filespec));
+		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
+	}
 	TObject::destroy(dialog);
 	return result == cmOK;
 }
@@ -824,6 +850,8 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 	replacementField->setData(replacementInput);
 	pathField->setData(pathInput);
 	optionsField->setData(&optionMask);
+	dialog->finalizeLayout();
+	if (searchField != nullptr) searchField->select();
 	dialog->setDialogValidationHook([searchField]() {
 		MRScrollableDialog::DialogValidationResult result;
 		char text[kSearchBufferSize] = {0};
@@ -850,6 +878,11 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 		replacementField->getData(currentReplacement);
 		pathField->getData(currentPath);
 		optionsField->getData(&currentMask);
+		if (trimAscii(currentSearch).empty()) {
+			dialog->runDialogValidation();
+			searchField->select();
+			return;
+		}
 
 		currentOptions.filespec = trimAscii(currentFilespec);
 		if (currentOptions.filespec.empty()) currentOptions.filespec = "*.*";
@@ -865,12 +898,6 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 		if (currentOptions.startingPath.empty()) currentOptions.startingPath = ".";
 		currentOptions.searchText = trimAscii(currentSearch);
 		currentOptions.replacementText = currentReplacement;
-
-		static_cast<void>(setConfiguredMultiSarDialogOptions(currentOptions));
-		static_cast<void>(setConfiguredLastFileDialogPath(currentOptions.startingPath));
-		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(currentOptions.filespec));
-		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
-		persistSearchDialogSettingsSnapshot();
 
 		searchOptions.searchSubdirectories = currentOptions.searchSubdirectories;
 		searchOptions.caseSensitive = currentOptions.caseSensitive;
@@ -929,9 +956,39 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 		outSession = std::move(session);
 		dialog->endModal(cmOK);
 	});
-	dialog->finalizeLayout();
-	dialog->runDialogValidation();
 	result = TProgram::deskTop->execView(dialog);
+	if (filespecField != nullptr && searchField != nullptr && replacementField != nullptr && pathField != nullptr && optionsField != nullptr) {
+		MRMultiSarDialogOptions currentOptions = options;
+		char currentFilespec[kFilespecBufferSize] = {0};
+		char currentSearch[kSearchBufferSize] = {0};
+		char currentReplacement[kReplacementBufferSize] = {0};
+		char currentPath[kPathBufferSize] = {0};
+		ushort currentMask = 0;
+
+		filespecField->getData(currentFilespec);
+		searchField->getData(currentSearch);
+		replacementField->getData(currentReplacement);
+		pathField->getData(currentPath);
+		optionsField->getData(&currentMask);
+		currentOptions.filespec = trimAscii(currentFilespec);
+		if (currentOptions.filespec.empty()) currentOptions.filespec = "*.*";
+		currentOptions.searchSubdirectories = (currentMask & 0x0001) != 0;
+		currentOptions.caseSensitive = (currentMask & 0x0002) != 0;
+		currentOptions.regularExpressions = (currentMask & 0x0004) != 0;
+		currentOptions.wholeWords = (currentMask & 0x0008) != 0;
+		currentOptions.searchFilesInMemory = (currentMask & 0x0010) != 0;
+		currentOptions.keepFilesOpen = (currentMask & 0x0020) != 0;
+		currentOptions.restrictToWorkspace = (currentMask & 0x0040) != 0;
+		if (currentOptions.wholeWords) currentOptions.regularExpressions = false;
+		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
+		if (currentOptions.startingPath.empty()) currentOptions.startingPath = ".";
+		currentOptions.searchText = trimAscii(currentSearch);
+		currentOptions.replacementText = currentReplacement;
+		static_cast<void>(setConfiguredMultiSarDialogOptions(currentOptions));
+		static_cast<void>(setConfiguredLastFileDialogPath(currentOptions.startingPath));
+		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(currentOptions.filespec));
+		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
+	}
 	TObject::destroy(dialog);
 	return result == cmOK;
 }

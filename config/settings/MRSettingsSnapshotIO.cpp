@@ -153,11 +153,24 @@ void addHistoryEntry(std::vector<std::string> &entries, const std::string &value
 	trimHistoryToLimit(entries, limit);
 }
 
-std::string fallbackRememberedLoadDirectory(const MRSettingsSnapshot &snapshot) {
-	std::string macroDir = makeAbsolutePath(snapshot.paths.macroPath);
+std::string fallbackRememberedLoadDirectory(const MRSettingsSnapshot &snapshot, MRDialogHistoryScope scope) {
+	const char *homeEnv = std::getenv("HOME");
+	std::string home = homeEnv != nullptr && *homeEnv != '\0' ? normalizeConfiguredPathInput(homeEnv) : std::string();
 	std::string cwd = currentWorkingDirectory();
 
-	if (isReadableDirectory(macroDir)) return macroDir;
+	switch (scope) {
+		case MRDialogHistoryScope::MacroFile:
+		case MRDialogHistoryScope::SetupMacroDirectory:
+		case MRDialogHistoryScope::ExtensionPostLoadMacro:
+		case MRDialogHistoryScope::ExtensionPreSaveMacro: {
+			const std::string macroDirectory = makeAbsolutePath(snapshot.paths.macroPath);
+			if (isReadableDirectory(macroDirectory)) return macroDirectory;
+			break;
+		}
+		default:
+			break;
+	}
+	if (isReadableDirectory(home)) return home;
 	if (isReadableDirectory(cwd)) return cwd;
 	return std::string();
 }
@@ -352,7 +365,7 @@ bool setSnapshotScopedDialogLastPath(MRSettingsSnapshot &snapshot, MRDialogHisto
 			addHistoryEntry(state.pathHistory, directory, snapshot.maxPathHistory);
 		}
 	} else if (state.lastPath.empty()) {
-		directory = fallbackRememberedLoadDirectory(snapshot);
+		directory = fallbackRememberedLoadDirectory(snapshot, scope);
 		if (!directory.empty()) {
 			state.lastPath = directory;
 			addHistoryEntry(state.pathHistory, directory, snapshot.maxPathHistory);
@@ -505,8 +518,6 @@ bool resetSettingsSnapshot(const std::string &settingsPath, MRSettingsSnapshot &
 	normalized = normalizeConfiguredPathInput(paths.macroPath);
 	if (!validateMacroDirectoryPath(paths.macroPath, errorMessage)) return false;
 	snapshot.paths.macroPath = makeAbsolutePath(normalized);
-	if (snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::General)].pathHistory.empty() && isReadableDirectory(snapshot.paths.macroPath))
-		addHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::General)].pathHistory, snapshot.paths.macroPath, snapshot.maxPathHistory);
 	normalized = normalizeConfiguredPathInput(paths.helpUri);
 	if (!validateHelpFilePath(paths.helpUri, errorMessage)) return false;
 	snapshot.paths.helpUri = makeAbsolutePath(normalized);
@@ -522,7 +533,9 @@ bool resetSettingsSnapshot(const std::string &settingsPath, MRSettingsSnapshot &
 	if (!validateLogFilePath(normalized, errorMessage)) return false;
 	snapshot.logFilePath = makeAbsolutePath(normalized);
 	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupLogFile, snapshot.logFilePath, errorMessage)) return false;
-	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::General, snapshot.paths.macroPath, errorMessage)) return false;
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::General, fallbackRememberedLoadDirectory(snapshot, MRDialogHistoryScope::General), errorMessage)) return false;
+	snapshot.multiSearchDialogOptions.startingPath = fallbackRememberedLoadDirectory(snapshot, MRDialogHistoryScope::General);
+	snapshot.multiSarDialogOptions.startingPath = snapshot.multiSearchDialogOptions.startingPath;
 	const std::string keymapDirectory = (std::filesystem::path(snapshot.paths.macroPath) / "keymaps").string();
 	if (isReadableDirectory(keymapDirectory)) {
 		if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::KeymapProfileLoad, keymapDirectory, errorMessage)) return false;

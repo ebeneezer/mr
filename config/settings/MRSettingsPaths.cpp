@@ -224,10 +224,10 @@ std::string normalizedDialogDirectoryFromPath(const std::string &path) {
 }
 
 std::string fallbackRememberedLoadDirectory() {
-	std::string macroDir = makeAbsolutePath(configuredMacroDirectory());
+	std::string home = pathFromEnvironment("HOME");
 	std::string cwd = currentWorkingDirectory();
 
-	if (isReadableDirectory(macroDir)) return macroDir;
+	if (isReadableDirectory(home)) return home;
 	if (isReadableDirectory(cwd)) return cwd;
 	return std::string();
 }
@@ -340,19 +340,19 @@ bool validateMacroDirectoryPath(const std::string &path, std::string *errorMessa
 bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	const std::string previousPath = configuredMacroDirectory();
-	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::General);
-	MRScopedDialogHistoryState generalDialogHistory;
+	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::MacroFile);
+	MRScopedDialogHistoryState macroDialogHistory;
 	std::string configured;
 
 	if (!validateMacroDirectoryPath(path, errorMessage)) return false;
 	configured = makeAbsolutePath(normalized);
 	storeConfiguredMacroDirectory(configured);
-	generalDialogHistory = dialogHistoryState(MRDialogHistoryScope::General);
-	if (generalDialogHistory.pathHistory.empty() && isReadableDirectory(configured)) {
-		addHistoryEntry(generalDialogHistory.pathHistory, configured, configuredPathHistoryLimit());
-		storeDialogHistoryState(MRDialogHistoryScope::General, generalDialogHistory);
+	macroDialogHistory = dialogHistoryState(MRDialogHistoryScope::MacroFile);
+	if (macroDialogHistory.pathHistory.empty() && isReadableDirectory(configured)) {
+		addHistoryEntry(macroDialogHistory.pathHistory, configured, configuredPathHistoryLimit());
+		storeDialogHistoryState(MRDialogHistoryScope::MacroFile, macroDialogHistory);
 	}
-	if (previousPath != configured || previousHistory != dialogHistoryState(MRDialogHistoryScope::General)) markConfiguredSettingsDirty();
+	if (previousPath != configured || previousHistory != dialogHistoryState(MRDialogHistoryScope::MacroFile)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
