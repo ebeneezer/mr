@@ -206,6 +206,23 @@ class GetLastDialog final : public MRDialogFoundation {
 
 	void handleEvent(TEvent &event) override {
 		if (event.what == evMouseWheel && handleListWheel(event)) return;
+		if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter) {
+			if (fileList != nullptr && (fileList->state & sfFocused) != 0) {
+				acceptSelection(GetLastKind::File, fileList, fileValues);
+				clearEvent(event);
+				return;
+			}
+			if (folderList != nullptr && (folderList->state & sfFocused) != 0) {
+				acceptSelection(GetLastKind::Folder, folderList, folderValues);
+				clearEvent(event);
+				return;
+			}
+			if (workspaceList != nullptr && (workspaceList->state & sfFocused) != 0) {
+				acceptSelection(GetLastKind::Workspace, workspaceList, workspaceValues);
+				clearEvent(event);
+				return;
+			}
+		}
 		if (event.what == evCommand) {
 			switch (event.message.command) {
 				case cmMrGetLastFilesActivate:

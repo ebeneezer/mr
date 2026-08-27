@@ -170,12 +170,17 @@ class TScopedFileInfoPane final : public TView {
 
 class TFileDialogEnterInterceptor final : public TView {
  public:
-	TFileDialogEnterInterceptor(TInputLine *aFileName) noexcept : TView(TRect(0, 0, 0, 0)), fileName(aFileName) {
+	TFileDialogEnterInterceptor(TInputLine *aFileName, TFileList *aFileList, ushort aDialogOptions) noexcept : TView(TRect(0, 0, 0, 0)), fileName(aFileName), fileList(aFileList), dialogOptions(aDialogOptions) {
 		options |= ofPreProcess;
 		eventMask |= evKeyDown;
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter && (dialogOptions & fdOpenButton) != 0 && fileList != nullptr && (fileList->state & sfFocused) != 0 && fileList->focused >= 0 && fileList->focused < fileList->range) {
+			fileList->selectItem(fileList->focused);
+			clearEvent(event);
+			return;
+		}
 		if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter && fileName != nullptr && (fileName->state & sfFocused) != 0) {
 			TEvent commandEvent;
 			std::memset(&commandEvent, 0, sizeof(commandEvent));
@@ -190,6 +195,8 @@ class TFileDialogEnterInterceptor final : public TView {
 
  private:
 	TInputLine *fileName = nullptr;
+	TFileList *fileList = nullptr;
+	ushort dialogOptions = 0;
 };
 
 class TFileDialogToggleButton final : public TButton {
@@ -215,7 +222,7 @@ class TWheelFileDialog final : public TFileDialog {
 	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept
 	    : TWindowInit(initScopedHistoryDialogFrame), TFileDialog(wildCard, title, inputName, options | fdHelpButton, 0), viewport(*this, size.x, size.y, MRDialogViewportOwnership::Dialog), scope(aScope), dialogOptions(options) {
 		helpCtx = fileDialogHelpContext(scope);
-		insert(new TFileDialogEnterInterceptor(fileName));
+		insert(new TFileDialogEnterInterceptor(fileName, fileList, dialogOptions));
 		replaceHistoryView(static_cast<TInputLine *>(fileName));
 		replaceInfoPane();
 		removeFileMenuCancelButton();
@@ -250,7 +257,7 @@ class TWheelFileDialog final : public TFileDialog {
 				TEvent commandEvent;
 				std::memset(&commandEvent, 0, sizeof(commandEvent));
 				commandEvent.what = evCommand;
-				commandEvent.message.command = cmOK;
+				commandEvent.message.command = cmFileOpen;
 				putEvent(commandEvent);
 			}
 			clearEvent(event);
