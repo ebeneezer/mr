@@ -39,6 +39,8 @@
 #include <unistd.h>
 #include <vector>
 
+extern TPoint shadowSize;
+
 namespace mr {
 namespace update_internal {
 
@@ -103,12 +105,32 @@ TFrame *initUpdateDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
 
-TRect centeredUpdateChangedBounds() {
-	constexpr short width = 76;
-	constexpr short height = 22;
-	const TRect desktop = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, width, height);
-	const short x = desktop.a.x + std::max<short>(0, (desktop.b.x - desktop.a.x - width) / 2);
-	const short y = desktop.a.y + std::max<short>(0, (desktop.b.y - desktop.a.y - height) / 2);
+TRect centeredUpdateChangedBounds(const std::string &changedText) {
+	constexpr int minimumWidth = 48;
+	constexpr int minimumHeight = 10;
+	const TRect desktop = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, 80, 25);
+	const int desktopWidth = std::max(1, desktop.b.x - desktop.a.x);
+	const int desktopHeight = std::max(1, desktop.b.y - desktop.a.y);
+	const int usableWidth = std::max(1, desktopWidth - std::max<short>(0, shadowSize.x));
+	const int usableHeight = std::max(1, desktopHeight - std::max<short>(0, shadowSize.y));
+	std::string line;
+	int contentWidth = 1;
+	int contentHeight = 1;
+
+	for (const char ch : changedText) {
+		if (ch == '\r') continue;
+		if (ch == '\n') {
+			contentWidth = std::max(contentWidth, strwidth(line.c_str()));
+			line.clear();
+			++contentHeight;
+		} else
+			line.push_back(ch);
+	}
+	contentWidth = std::max(contentWidth, strwidth(line.c_str()));
+	const int width = std::clamp(contentWidth + 5, std::min(minimumWidth, usableWidth), usableWidth);
+	const int height = std::clamp(contentHeight + 6, std::min(minimumHeight, usableHeight), usableHeight);
+	const int x = desktop.a.x + (usableWidth - width) / 2;
+	const int y = desktop.a.y + (usableHeight - height) / 2;
 
 	return TRect(x, y, x + width, y + height);
 }
@@ -151,11 +173,17 @@ class PasswordInputLine final : public TInputLine {
 class UpdateChangedDialog final : public TDialog {
   public:
 	UpdateChangedDialog(const std::string &version, const std::string &changedText)
-	    : TWindowInit(&TDialog::initFrame), TDialog(centeredUpdateChangedBounds(), ("Update to V" + version).c_str()) {
+	    : TWindowInit(initUpdateDialogFrame), TDialog(centeredUpdateChangedBounds(changedText), ("UPDATE TO V" + version).c_str()) {
+		constexpr short buttonWidth = 12;
+		const short buttonLeft = std::max<short>(1, (size.x - buttonWidth) / 2);
+		const short buttonTop = std::max<short>(5, size.y - 3);
+		const short contentRight = std::max<short>(3, size.x - 2);
+		const short contentBottom = std::max<short>(3, buttonTop - 1);
+
 		flags = wfMove;
-		MRSidekickEditor *view = new MRSidekickEditor(TRect(2, 2, 74, 18), 0, 0, 0, changedText, std::string(), std::vector<MRSidekickSpan>(), true, false, false, MRSidekickPalette::Owner);
+		MRSidekickEditor *view = new MRSidekickEditor(TRect(2, 2, contentRight, contentBottom), 0, 0, 0, changedText, std::string(), std::vector<MRSidekickSpan>(), true, false, false, MRSidekickPalette::Owner);
 		if (view != nullptr) view->insertInto(*this);
-		insert(new TButton(TRect(32, 19, 44, 21), "~R~estart", cmMrUpdateRestart, bfDefault));
+		insert(new TButton(TRect(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + 2), "~R~estart", cmMrUpdateRestart, bfDefault));
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -351,7 +379,7 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 		return false;
 	}
 	if (!installedBinaryIsTrusted()) {
-		error = "Unable to find a trusted update helper at /usr/local/bin/mr.";
+		error = "Unable to find a trusted update helper at /usr/local/bin/mr. Owner must be root:root.";
 		return false;
 	}
 	if (!writeProtocolFile(package, protocolPath, error)) return false;

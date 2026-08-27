@@ -2,7 +2,7 @@
 
 set -eu
 
-release_version="0.2.35"
+release_version="0.2.36"
 release_epoch="@MR_RELEASE_EPOCH@"
 prefix="/usr/local"
 
@@ -83,6 +83,36 @@ for required_file in \
 done
 if [ ! -d "$macro_source" ]; then
 	printf 'mr cannot be installed.\n\nRelease package directory is missing:\n  %s\n\nNo files were installed.\n' "$macro_source" >&2
+	exit 1
+fi
+
+missing_emoji_codepoints=
+if command -v fc-list >/dev/null 2>&1; then
+	for required_emoji_codepoint in 1F4FC 1F50E 1F550 1F551 1F552 1F553 1F554 1F555 1F556 1F557 1F558 1F559 1F55A 1F55B; do
+		if [ -z "$(fc-list ":charset=$required_emoji_codepoint" file 2>/dev/null | sed -n '1p')" ]; then
+			missing_emoji_codepoints="${missing_emoji_codepoints}${missing_emoji_codepoints:+
+}$required_emoji_codepoint"
+		fi
+	done
+else
+	missing_emoji_codepoints=unknown
+fi
+if [ -n "$missing_emoji_codepoints" ]; then
+	printf 'mr cannot be installed.\n\nRequired emoji font coverage is unavailable.\n' >&2
+	if [ "$missing_emoji_codepoints" = unknown ]; then
+		printf 'Fontconfig preflight command is missing:\n  fc-list\n' >&2
+	else
+		printf 'Missing Unicode codepoints:\n' >&2
+		printf '%s\n' "$missing_emoji_codepoints" | sed 's/^/  U+/' >&2
+	fi
+	if command -v apt >/dev/null 2>&1; then
+		printf '\nInstall as root, then run this installer again:\n  apt install fontconfig fonts-noto-color-emoji\n' >&2
+	elif command -v pacman >/dev/null 2>&1; then
+		printf '\nInstall as root, then run this installer again:\n  pacman -S --needed fontconfig noto-fonts-emoji\n' >&2
+	else
+		printf '\nInstall Fontconfig and an emoji font covering the listed codepoints, then run this installer again.\n' >&2
+	fi
+	printf '\nNo files were installed.\n' >&2
 	exit 1
 fi
 
