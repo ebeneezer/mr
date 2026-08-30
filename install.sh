@@ -54,7 +54,7 @@ config_directory=${XDG_CONFIG_HOME:-"${HOME}/.config"}
 macro_target="$config_directory/mr/macros"
 
 missing_commands=
-for required_command in cmp dirname find grep install ldd sed sort; do
+for required_command in cmp dirname find grep install ldd locale sed sort; do
 	if ! command -v "$required_command" >/dev/null 2>&1; then
 		if [ -n "$missing_commands" ]; then missing_commands="$missing_commands
 $required_command"
@@ -83,6 +83,15 @@ for required_file in \
 done
 if [ ! -d "$macro_source" ]; then
 	printf 'mr cannot be installed.\n\nRelease package directory is missing:\n  %s\n\nNo files were installed.\n' "$macro_source" >&2
+	exit 1
+fi
+
+character_map=$(locale charmap 2>/dev/null || true)
+if [ "$character_map" != "UTF-8" ]; then
+	printf 'mr cannot be installed.\n\nA UTF-8 locale is required.\n' >&2
+	printf 'Current character map: %s\n' "${character_map:-unknown}" >&2
+	printf 'Check LANG, LC_CTYPE and especially LC_ALL.\n\n' >&2
+	printf 'No files were installed.\n' >&2
 	exit 1
 fi
 

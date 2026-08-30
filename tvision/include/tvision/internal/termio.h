@@ -51,6 +51,7 @@ struct InputState
 #endif
     Far2lState far2l;
     KittyKeyboardState kittyKeyboard;
+    bool normalizeKonsoleGermanControlYz {false};
     bool hasFullOsc52 {false};
     bool bracketedPaste {false};
     bool gotDsrResponse {false};

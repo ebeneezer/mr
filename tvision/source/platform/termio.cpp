@@ -493,6 +493,24 @@ ParseResult TermIO::parseCPR(const CSIData &csi, InputState &state) noexcept
     return Ignored;
 }
 
+static void normalizeKonsoleGermanControlKey(KEY_EVENT_RECORD &key,
+                                             const InputState &state) noexcept
+{
+    if ( !state.normalizeKonsoleGermanControlYz ||
+         (key.dwControlKeyState & kbCtrlShift) == 0 )
+        return;
+
+    if (key.wVirtualKeyCode == 'Y')
+        key.wVirtualKeyCode = 'Z';
+    else if (key.wVirtualKeyCode == 'Z')
+        key.wVirtualKeyCode = 'Y';
+
+    if (key.uChar.UnicodeChar == 0x19)
+        key.uChar.UnicodeChar = 0x1A;
+    else if (key.uChar.UnicodeChar == 0x1A)
+        key.uChar.UnicodeChar = 0x19;
+}
+
 static ParseResult parseWin32InputModeKey(const CSIData &csi, TEvent &ev, InputState &state) noexcept
 // https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md
 {
@@ -504,6 +522,7 @@ static ParseResult parseWin32InputModeKey(const CSIData &csi, TEvent &ev, InputS
     kev.dwControlKeyState = (ushort) csi.getValue(4, 0);
     kev.wRepeatCount = (ushort) csi.getValue(5, 1);
 
+    normalizeKonsoleGermanControlKey(kev, state);
     regenerateMissingScanCodeFromVirtualKeyCode(kev);
 
     if (kev.bKeyDown && getWin32Key(kev, ev, state))

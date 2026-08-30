@@ -42,10 +42,11 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	mBufferModel.setCursorAndSelection(cursorPos, selStart, selEnd);
 	syncDisplayedCursorColumnFromCursor(false);
 	mBufferModel.setModified(modifiedState);
-	if (changeSet == nullptr || changeSet->changed) {
+	if (changeSet == nullptr) {
 		mFindMarkerRanges.clear();
 		mMiniMapState.setFindRanges(mFindMarkerRanges);
-	}
+	} else if (changeSet->changed)
+		remapFindMarkerRangesForAppliedChange(*changeSet);
 	if (!modifiedState) clearDirtyRanges();
 	else if (changeSet != nullptr && changeSet->changed) {
 		remapDirtyRangesForAppliedChange(*changeSet);

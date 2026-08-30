@@ -1189,6 +1189,7 @@ class MRFileEditor : public TScroller {
 	void pushMappedDirtyRange(std::vector<MRTextBufferModel::Range> &mapped, std::size_t start, std::size_t end, std::size_t maxLength);
 
 	void remapDirtyRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
+	void remapFindMarkerRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
 	void addDirtyRange(MRTextBufferModel::Range range);
 
 	bool isDirtyOffset(std::size_t pos) const noexcept;

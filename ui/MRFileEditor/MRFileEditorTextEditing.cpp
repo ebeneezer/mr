@@ -352,13 +352,16 @@ bool MRFileEditor::insertBufferText(const std::string &text) {
 	std::size_t end = start;
 	MRTextBufferModel::Range range;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "insert-buffer-text");
+	const std::size_t selectionStart = mBufferModel.selectionStart();
+	const std::size_t selectionEnd = mBufferModel.selectionEnd();
+	const bool replaceSelection = mBufferModel.hasSelection() && mBufferModel.cursor() >= selectionStart && mBufferModel.cursor() < selectionEnd;
 
 	if (mReadOnly) return false;
 	if (!insertedText.empty()) {
 		const int paddingColumns = paddingColumnsBeforeInsertAtCursor();
 		if (paddingColumns > 0) insertedText.insert(0, static_cast<std::size_t>(paddingColumns), ' ');
 	}
-	if (mBufferModel.hasSelection()) {
+	if (replaceSelection) {
 		range = mBufferModel.selection().range();
 		start = range.start;
 		end = range.end;
@@ -370,8 +373,25 @@ bool MRFileEditor::insertBufferText(const std::string &text) {
 	}
 	range = MRTextBufferModel::Range(start, end).clamped(mBufferModel.length());
 	transaction.replace(range, insertedText);
-	start = range.start + insertedText.size();
-	return applyStagedTransaction(transaction, start, start, start, true).applied();
+	const std::size_t cursorAfterInsert = range.start + insertedText.size();
+	std::size_t selectionStartAfterInsert = cursorAfterInsert;
+	std::size_t selectionEndAfterInsert = cursorAfterInsert;
+	if (mBufferModel.hasSelection() && !replaceSelection) {
+		const long long delta = static_cast<long long>(insertedText.size()) - static_cast<long long>(range.length());
+		selectionStartAfterInsert = selectionStart;
+		selectionEndAfterInsert = selectionEnd;
+		if (selectionStart > range.start) {
+			if (selectionStart >= range.end) selectionStartAfterInsert = static_cast<std::size_t>(static_cast<long long>(selectionStart) + delta);
+			else
+				selectionStartAfterInsert = range.start;
+		}
+		if (selectionEnd > range.start) {
+			if (selectionEnd >= range.end) selectionEndAfterInsert = static_cast<std::size_t>(static_cast<long long>(selectionEnd) + delta);
+			else
+				selectionEndAfterInsert = range.start;
+		}
+	}
+	return applyStagedTransaction(transaction, cursorAfterInsert, selectionStartAfterInsert, selectionEndAfterInsert, true).applied();
 }
 
 void MRFileEditor::restoreLineDrawingCursor(std::size_t visualLine, int visualColumn) {

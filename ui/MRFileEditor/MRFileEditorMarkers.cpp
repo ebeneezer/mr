@@ -208,6 +208,43 @@ void MRFileEditor::normalizeDirtyRanges() {
 	normalizeRangeList(mDirtyRanges);
 }
 
+void MRFileEditor::remapFindMarkerRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change) {
+	const std::size_t oldLength = change.oldLength;
+	const std::size_t newLength = change.newLength;
+	const MRTextBufferModel::Range touched = change.touchedRange.normalized();
+	const long long delta = static_cast<long long>(newLength) - static_cast<long long>(oldLength);
+	const std::size_t editStart = std::min(touched.start, oldLength);
+	std::size_t replacedOldLength = touched.length();
+
+	if (mFindMarkerRanges.empty()) return;
+	if (delta >= 0) {
+		const std::size_t addedLength = static_cast<std::size_t>(delta);
+		replacedOldLength = replacedOldLength > addedLength ? replacedOldLength - addedLength : 0;
+	}
+	if (replacedOldLength > oldLength - editStart) replacedOldLength = oldLength - editStart;
+	const std::size_t oldEditEnd = editStart + replacedOldLength;
+	std::vector<MRTextBufferModel::Range> mapped;
+	mapped.reserve(mFindMarkerRanges.size());
+	for (const MRTextBufferModel::Range &marker : mFindMarkerRanges) {
+		const MRTextBufferModel::Range range = marker.clamped(oldLength).normalized();
+
+		if (range.end <= range.start) continue;
+		if (range.end <= editStart) {
+			mapped.push_back(range);
+			continue;
+		}
+		if (range.start >= oldEditEnd) {
+			const long long shiftedStart = static_cast<long long>(range.start) + delta;
+			const long long shiftedEnd = static_cast<long long>(range.end) + delta;
+			if (shiftedEnd <= 0) continue;
+			mapped.push_back(MRTextBufferModel::Range(static_cast<std::size_t>(std::max<long long>(0, shiftedStart)), std::min(static_cast<std::size_t>(shiftedEnd), newLength)));
+		}
+	}
+	normalizeRangeList(mapped);
+	mFindMarkerRanges.swap(mapped);
+	mMiniMapState.setFindRanges(mFindMarkerRanges);
+}
+
 void MRFileEditor::pushMappedDirtyRange(std::vector<MRTextBufferModel::Range> &mapped, std::size_t start, std::size_t end, std::size_t maxLength) {
 	start = std::min(start, maxLength);
 	end = std::min(end, maxLength);

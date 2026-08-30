@@ -274,6 +274,7 @@ bool MRFileEditor::wrapCurrentLineOnce(int leftMargin, int rightMargin) {
 	std::size_t limitOffset = std::min(charPtrOffset(lineStart, safeRightMargin), lineEnd);
 	std::size_t replaceStart = limitOffset;
 	std::size_t replaceEnd = limitOffset;
+	bool breakFound = false;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "live-word-wrap-line");
 	std::size_t newCursor = cursor;
 
@@ -283,6 +284,7 @@ bool MRFileEditor::wrapCurrentLineOnce(int leftMargin, int rightMargin) {
 		const char ch = charAtOffset(candidate);
 
 		if (ch != ' ' && ch != '\t') continue;
+		breakFound = true;
 		replaceStart = candidate;
 		replaceEnd = probe;
 		while (replaceStart > lineStart) {
@@ -298,13 +300,18 @@ bool MRFileEditor::wrapCurrentLineOnce(int leftMargin, int rightMargin) {
 		}
 		break;
 	}
+	if (!breakFound) {
+		replaceStart = lineStart;
+		replaceEnd = lineStart;
+	}
 	transaction.replace(MRTextBufferModel::Range(replaceStart, replaceEnd), replacement);
 	if (cursor <= replaceStart) newCursor = cursor;
 	else if (cursor >= replaceEnd)
 		newCursor = cursor - (replaceEnd - replaceStart) + replacement.size();
 	else
 		newCursor = replaceStart + replacement.size();
-	return applyStagedTransaction(transaction, newCursor, newCursor, newCursor, true).applied();
+	const bool applied = applyStagedTransaction(transaction, newCursor, newCursor, newCursor, true).applied();
+	return applied && replaceStart > lineStart;
 }
 
 void MRFileEditor::applyLiveWordWrapAfterTextInput() {

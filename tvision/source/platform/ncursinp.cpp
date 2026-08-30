@@ -12,6 +12,7 @@
 #include <internal/conctl.h>
 #include <internal/codepage.h>
 #include <internal/constmap.h>
+#include <cstdlib>
 #include <string>
 #include <chrono>
 
@@ -86,6 +87,14 @@ static constexpr KeyDownEvent fromNonPrintableAscii[32] =
     {{'^'},         kbLeftCtrl, {'^'}, 1}, // ^^, Record Separator
     {{'_'},         kbLeftCtrl, {'_'}, 1}, // ^_, Unit Separator
 };
+
+static bool needsKonsoleGermanControlYzNormalization() noexcept
+{
+    const char *layout = std::getenv("XKB_DEFAULT_LAYOUT");
+    const char *konsoleVersion = std::getenv("KONSOLE_VERSION");
+    return konsoleVersion != nullptr && konsoleVersion[0] != '\0' &&
+           layout != nullptr && layout[0] == 'd' && layout[1] == 'e' && layout[2] == '\0';
+}
 
 static const const_unordered_map<ushort, KeyDownEvent> fromCursesKeyCode =
 {
@@ -276,6 +285,8 @@ NcursesInput::NcursesInput( ConsoleCtl &aCon, NcursesDisplay &,
     state(aState),
     mouseEnabled(mouse)
 {
+    state.normalizeKonsoleGermanControlYz = needsKonsoleGermanControlYzNormalization();
+
     // Capture all keyboard input.
     raw();
     // Disable echoing of pressed keys.

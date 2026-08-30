@@ -683,8 +683,6 @@ std::size_t TextDocument::splitAt(Offset offset) {
 	if (logical == 0) return 0;
 	if (mPieces == nullptr || logical >= mLength) return pieceCount();
 
-	ensureUniquePieces();
-
 	for (std::size_t i = 0; i < mPieces->size(); ++i) {
 		Offset pieceLen = (*mPieces)[i].span.length;
 		Offset pieceEnd = consumed + pieceLen;
@@ -720,6 +718,7 @@ bool TextDocument::eraseNoVersionBump(Range range) {
 		preserveLazyLineIndex = removedLineBreaks == 0 && !createsCrLf;
 	}
 
+	ensureUniquePieces();
 	std::size_t startIndex = splitAt(bounded.start);
 	std::size_t endIndex = splitAt(bounded.end);
 	if (startIndex < endIndex) mPieces->erase(mPieces->begin() + static_cast<std::ptrdiff_t>(startIndex), mPieces->begin() + static_cast<std::ptrdiff_t>(endIndex));
@@ -743,11 +742,11 @@ bool TextDocument::replaceNoVersionBump(Range range, std::string_view text) {
 
 bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
 	Offset logical = clampOffset(offset);
-	std::size_t index = splitAt(logical);
 
-	if (!span.empty()) mPieces->insert(mPieces->begin() + static_cast<std::ptrdiff_t>(index), Piece(BufferKind::Add, span));
-	else
-		return false;
+	if (span.empty()) return false;
+	ensureUniquePieces();
+	std::size_t index = splitAt(logical);
+	mPieces->insert(mPieces->begin() + static_cast<std::ptrdiff_t>(index), Piece(BufferKind::Add, span));
 
 	mLength += span.length;
 	compactPieces();
@@ -780,7 +779,6 @@ void TextDocument::compactPieces() {
 				compacted.push_back(piece);
 		}
 
-	ensureUniquePieces();
 	mPieces->swap(compacted);
 }
 
