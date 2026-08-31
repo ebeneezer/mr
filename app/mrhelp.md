@@ -39,6 +39,9 @@ OPTIONS
     -h, --help
         Print this help text and exit.
 
+    --version
+        Print the MR version and exit.
+
 STARTUP ORDER
     MR loads settings, runs configured AUTOEXEC macros, optionally restores
     the configured workspace, loads command-line files, and finally

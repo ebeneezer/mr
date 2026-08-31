@@ -208,6 +208,44 @@ int MRFileEditor::visibleTextRows() const noexcept {
 	return std::max(0, size.y - (configuredFormatRuler() ? 1 : 0));
 }
 
+void MRFileEditor::updateMetrics() {
+	const auto startedAt = std::chrono::steady_clock::now();
+	int limitX = provisionalDisplayWidthLimit();
+	int limitY = 1;
+	TextViewportGeometry viewport = textViewportGeometry();
+	int gutterWidth = viewport.gutterWidth;
+	int rightInset = viewport.rightInset;
+	int viewportWidth = viewport.width;
+	const int textRows = std::max(1, visibleTextRows());
+	const bool approximateMetrics = useApproximateLargeFileMetrics() || !mBufferModel.exactLineCountKnown();
+
+	if (!displayWidthLimitExact() && approximateMetrics) limitX = std::max(dynamicLargeFileWidthLimit(), limitX);
+	if (approximateMetrics) {
+		const auto lineLimitStartedAt = std::chrono::steady_clock::now();
+		limitY = dynamicLargeFileLineLimit();
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			const auto totalUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+			const auto lineLimitUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - lineLimitStartedAt).count();
+			mLastUiHotpathTrace = "metrics_us=" + std::to_string(totalUs) + " line_limit_us=" + std::to_string(lineLimitUs) + " cursor_line=" + std::to_string(cachedCursorLineIndex()) +
+			                      " est_lines=" + std::to_string(mBufferModel.estimatedLineCount()) + " limitY=" + std::to_string(limitY);
+		}
+	} else {
+		limitY = foldingPipelineEnabled() ? std::max<int>(1, static_cast<int>(foldedVisibleLineCount())) : std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
+		mLastUiHotpathTrace.clear();
+	}
+	limitX = std::max(limitX, displayedCursorColumn() + 1);
+	limitY = std::max<int>(limitY, static_cast<int>(visibleLineForDocumentLine(displayedCursorLineIndex())) + 1);
+
+	int maxX = std::max(0, limitX - viewportWidth);
+	int maxY = std::max(0, limitY - textRows);
+	int newDeltaX = std::min(std::max(delta.x, 0), maxX);
+	int newDeltaY = std::min(std::max(delta.y, 0), maxY);
+
+	setLimit(limitX + gutterWidth + rightInset, limitY + viewport.topInset);
+	if (newDeltaX != delta.x || newDeltaY != delta.y) scrollTo(newDeltaX, newDeltaY);
+	syncScrollBarsToState();
+}
+
 void MRFileEditor::syncScrollBarsToState() noexcept {
 	normalizeScrollBarTrackGlyph(hScrollBar);
 	normalizeScrollBarTrackGlyph(vScrollBar);

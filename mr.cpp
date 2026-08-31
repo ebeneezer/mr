@@ -3,6 +3,7 @@
 #include "app/MRHelp.generated.hpp"
 #include "app/MRPrivilegedFileBroker.hpp"
 #include "app/MRUpdate.hpp"
+#include "app/MRVersion.hpp"
 #include "config/settings/MRSettingsRuntime.hpp"
 #include "mrmac/vm/MRVMProcessRuntime.hpp"
 
@@ -16,15 +17,6 @@
 #include <unistd.h>
 
 namespace {
-bool hasHelpFlag(int argc, char **argv) {
-	for (int i = 1; argv != nullptr && i < argc; ++i) {
-		const char *arg = argv[i];
-		if (arg == nullptr) continue;
-		if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0) return true;
-	}
-	return false;
-}
-
 void appendMainShutdownTrace(std::string_view message) {
 	std::ofstream out(configuredLogFilePath(), std::ios::out | std::ios::app | std::ios::binary);
 	if (!out) return;
@@ -40,6 +32,15 @@ void appendMainShutdownTrace(std::string_view message) {
 } // namespace
 
 int main(int argc, char **argv) {
+	bool helpRequested = false;
+	bool versionRequested = false;
+	for (int i = 1; argv != nullptr && i < argc; ++i) {
+		const char *arg = argv[i];
+		if (arg == nullptr) continue;
+		if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0) helpRequested = true;
+		else if (std::strcmp(arg, "--version") == 0) versionRequested = true;
+	}
+
 	int updateExitCode = 1;
 	std::string updateError;
 	switch (mrStartInternalUpdateApply(argc, argv, updateExitCode, updateError)) {
@@ -51,8 +52,12 @@ int main(int argc, char **argv) {
 		case MRUpdateInternalStartup::RunApplication:
 			break;
 	}
-	if (hasHelpFlag(argc, argv)) {
+	if (helpRequested) {
 		std::cout << kMrEmbeddedHelpMarkdown;
+		return 0;
+	}
+	if (versionRequested) {
+		std::cout << "mr " << mrDisplayVersion() << '\n';
 		return 0;
 	}
 	int brokerExitCode = 1;

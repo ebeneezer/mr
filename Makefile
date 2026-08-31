@@ -209,7 +209,7 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.39
+MR_RELEASE_VERSION ?= 0.2.40
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64-baseline
 MR_RELEASE_ARCH_FLAGS ?= -march=x86-64 -mtune=generic
@@ -869,7 +869,7 @@ mrmac/mrmac.o: mrmac/mrmac.c mrmac/mrmac.h
 $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 $(HELP_CONTEXT_OBJECTS): $(HELP_TOPICS_GENERATED)
 
-mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp app/MRPrivilegedFileBroker.hpp $(HELP_MARKDOWN_GENERATED)
+mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp app/MRPrivilegedFileBroker.hpp app/MRVersion.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRPrivilegedFileBroker.o: app/MRPrivilegedFileBroker.cpp app/MRPrivilegedFileBroker.hpp
 app/MRUpdate.o: app/MRUpdate.cpp app/MRUpdate.hpp app/MRUpdateInternal.hpp app/MRVersion.hpp coprocessor/MRCoprocessor.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp
 app/MRUpdateInstall.o: app/MRUpdateInstall.cpp app/MRUpdateInternal.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRVersion.hpp coprocessor/MRCoprocessor.hpp ui/MRMessageLineController.hpp ui/MRSidekickEditor.hpp
