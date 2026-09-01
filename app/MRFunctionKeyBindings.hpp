@@ -20,5 +20,6 @@ bool mrHandleEditorFunctionKey(TEvent &event);
 bool mrHandleFileCompareFunctionKey(TEvent &event);
 bool mrHandleFileCompareCommand(TEvent &event);
 MRBentoBox *mrCurrentMacroDebuggerBentoBox();
+MRBentoBox *mrCurrentDebuggerBentoBox();
 
 #endif

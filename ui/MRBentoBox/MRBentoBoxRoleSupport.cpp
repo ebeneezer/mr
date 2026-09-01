@@ -41,6 +41,7 @@ static const BentoPaneRoleDescriptor kPaneRoles[] = {
 	{bprSplitEditor, "Split editor", true, true},
 	{bprDiffOriginal, "Diff Original", true, false},
 	{bprDiffCompare, "Diff Compare", true, false},
+	{bprProgramTerminal, "Program Terminal", true, false},
 };
 
 } // namespace

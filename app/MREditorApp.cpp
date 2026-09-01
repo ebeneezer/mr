@@ -35,7 +35,7 @@
 #include "MRCommands.hpp"
 #include "MRFunctionKeyBindings.hpp"
 #include "MRMenuFactory.hpp"
-#include "MRMacroDebuggerCommandRoute.hpp"
+#include "MRDebuggerCommandRoute.hpp"
 #include "MRHelpTopics.generated.hpp"
 
 #include <chrono>
@@ -516,7 +516,7 @@ void MREditorApp::handleEvent(TEvent &event) {
 		return;
 	}
 	if (mrHandleFileCompareCommand(event)) return;
-	if (mrHandleMacroDebuggerCommand(mrCurrentMacroDebuggerBentoBox(), event)) return;
+	if (mrHandleDebuggerCommand(mrCurrentDebuggerBentoBox(), event)) return;
 	if (event.what == evKeyDown && currentEditWindow() == nullptr) {
 		std::string executedMacroName;
 		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {
@@ -534,8 +534,8 @@ void MREditorApp::handleEvent(TEvent &event) {
 		traceCalculatorHotkeyEvent("app-file-compare-fkey-consumed", event);
 		return;
 	}
-	if (event.what == evKeyDown && mrHandleMacroDebuggerFunctionKey(mrCurrentMacroDebuggerBentoBox(), event)) {
-		traceCalculatorHotkeyEvent("app-macro-debugger-fkey-consumed", event);
+	if (event.what == evKeyDown && mrHandleDebuggerFunctionKey(mrCurrentDebuggerBentoBox(), event)) {
+		traceCalculatorHotkeyEvent("app-debugger-fkey-consumed", event);
 		return;
 	}
 	if (event.what == evKeyDown && mrEditorFunctionKeyContextActive() && mrHandleEditorFunctionKey(event)) {

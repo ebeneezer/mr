@@ -454,6 +454,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				return;
 			}
 			const ushort originalEvent = event.what;
+			const ushort originalCommand = event.what == evCommand ? event.message.command : static_cast<ushort>(0);
 			const TPoint originalMouseWhere = event.what == evMouseDown ? event.mouse.where : TPoint();
 			const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
 			const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
@@ -612,6 +613,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			}
 
 			TWindow::handleEvent(event);
+			if (originalCommand == cmZoom && !MRWindowLayout::isWindowMinimized(this)) mRestoreBounds = getBounds();
 			if (replacedNonPersistentBlock && editor != nullptr) {
 				MRTextBufferModel &buffer = editor->bufferModel();
 				while (buffer.undoStackDepth() > replacementUndoDepthBefore + 1)

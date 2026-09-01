@@ -47,6 +47,7 @@ class MRMenuBar : public TMenuBar {
 	bool handleRuntimeCommand(ushort command);
 	void setStartupFunctionKeysActive(bool active);
 	void setEditorFunctionKeysActive(bool active);
+	void setDebuggerFunctionKeysActive(bool active);
 	void setStaticProgressMode(bool active);
 	void setFullscreenPresentation(bool active);
 
@@ -168,6 +169,7 @@ class MRMenuBar : public TMenuBar {
 	ushort mNextRuntimeCommand = 0x7400;
 	bool mStartupFunctionKeysActive = false;
 	bool mEditorFunctionKeysActive = false;
+	bool mDebuggerFunctionKeysActive = false;
 	bool mFullscreenPresentation = false;
 	std::string mRightStatus;
 	std::string mAutoMarqueeStatus;

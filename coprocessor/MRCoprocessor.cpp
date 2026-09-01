@@ -305,7 +305,7 @@ void Coprocessor::enqueueResult(Result result) {
 	LifecycleReason reason = LifecycleReason::TaskCompleted;
 
 	result.resultReadyMicros = nowMicros();
-	if (dynamic_cast<const ExternalIoChunkPayload *>(result.payload.get()) != nullptr || dynamic_cast<const TaskProgressPayload *>(result.payload.get()) != nullptr) {
+	if (dynamic_cast<const StreamingPayload *>(result.payload.get()) != nullptr) {
 		reason = LifecycleReason::StreamChunk;
 	} else {
 		switch (result.status) {
@@ -333,6 +333,7 @@ void Coprocessor::forgetTask(std::uint64_t taskId) {
 
 void Coprocessor::noteExternalResult(const Result &result) {
 	const ExternalIoChunkPayload *chunk = dynamic_cast<const ExternalIoChunkPayload *>(result.payload.get());
+	const StreamingPayload *stream = dynamic_cast<const StreamingPayload *>(result.payload.get());
 	const std::size_t sourceId = chunk != nullptr ? chunk->channelId : result.task.documentId;
 
 	if (sourceId == 0) return;
@@ -340,14 +341,15 @@ void Coprocessor::noteExternalResult(const Result &result) {
 	ExternalSourceState *source = findExternalSourceLocked(sourceId);
 	if (source == nullptr) return;
 
-	if (chunk != nullptr) {
+	if (stream != nullptr) {
 		static constexpr std::size_t kMaxStreamSample = 240;
-		std::string incoming;
 
 		source->active = true;
 		source->running = true;
-		source->receivedBytes += chunk->text.size();
 		source->activitySequence = nextExternalActivitySequence.fetch_add(1, std::memory_order_relaxed);
+		if (chunk == nullptr) return;
+		std::string incoming;
+		source->receivedBytes += chunk->text.size();
 		incoming.reserve(std::min<std::size_t>(kMaxStreamSample, chunk->text.size()));
 		for (char ch : chunk->text) {
 			unsigned char byte = static_cast<unsigned char>(ch);

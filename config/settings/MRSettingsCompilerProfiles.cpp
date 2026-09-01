@@ -330,6 +330,11 @@ std::string detectCompilerToolchain(const std::string &compilerPath, const std::
 	std::string versionUpper = upperAscii(version);
 
 	if (name.find("SWIFTC") != std::string::npos) return "SWIFT";
+	if (name == "RUSTC") return "RUST";
+	if (name == "GO") return "GO";
+	if (name == "FPC" || versionUpper.find("FREE PASCAL") != std::string::npos) return "FPC";
+	if (name == "GCC") return "GCC_C";
+	if (name == "CLANG" || name == "CLANG-CC") return "CLANG_C";
 	if (name == "FBC" || versionUpper.find("FREEBASIC") != std::string::npos) return "FREEBASIC";
 	if (name == "QB64PE" || versionUpper.find("QB64") != std::string::npos) return "QB64PE";
 	if (name == "GBC3" || versionUpper.find("GAMBAS COMPILER") != std::string::npos) return "GAMBAS";
@@ -363,6 +368,23 @@ std::string defaultBuildFlagsForProfile(const std::string &toolchain, const MRCo
 		if (flavor == "SPEED") return "-std=c++20 -O3 -march=native -Wall";
 		if (flavor == "SIZE") return "-std=c++20 -Os -Wall";
 		return "-std=c++20 -O2 -Wall";
+	}
+	if (toolchain == "GCC_C" || toolchain == "CLANG_C") {
+		if (flavor == "DEBUG") return "-std=c18 -g -O0 -Wall -Wextra";
+		if (flavor == "SPEED") return "-std=c18 -O3 -march=native -Wall";
+		if (flavor == "SIZE") return "-std=c18 -Os -Wall";
+		return "-std=c18 -O2 -Wall";
+	}
+	if (toolchain == "RUST") {
+		if (flavor == "DEBUG") return "-g -C opt-level=0";
+		if (flavor == "SIZE") return "-C opt-level=s";
+		return flavor == "SPEED" ? "-C opt-level=3" : "-C opt-level=2";
+	}
+	if (toolchain == "GO") return flavor == "DEBUG" ? "build -gcflags=all=-N\\ -l" : "build";
+	if (toolchain == "FPC") {
+		if (flavor == "DEBUG") return "-gl -gw3 -O-";
+		if (flavor == "SIZE") return "-Os";
+		return flavor == "SPEED" ? "-O3" : "-O2";
 	}
 	if (toolchain == "FREEBASIC") {
 		if (flavor == "DEBUG") return "-g -exx -O 0";
@@ -463,6 +485,7 @@ void addProfile(std::vector<MRCompilerProfile> &profiles, const CompilerProbe &p
 	};
 	static const CompilerDisplayName displayNames[] = {
 		{"GCC", "g++"}, {"CLANG", "clang++"}, {"SWIFT", "swiftc"}, {"FREEBASIC", "fbc"}, {"QB64PE", "qb64pe"}, {"GAMBAS", "gbc3"},
+		{"GCC_C", "gcc"}, {"CLANG_C", "clang"}, {"RUST", "rustc"}, {"GO", "go"}, {"FPC", "fpc"},
 	};
 
 	for (const CompilerDisplayName &candidate : displayNames)
@@ -490,6 +513,11 @@ std::string normalizeToolchain(const std::string &value) {
 
 	if (upper == "G++" || upper == "GCC" || upper == "GNU") return "GCC";
 	if (upper == "CLANG++" || upper == "CLANG" || upper == "LLVM") return "CLANG";
+	if (upper == "GCC_C" || upper == "GCC-C") return "GCC_C";
+	if (upper == "CLANG_C" || upper == "CLANG-C") return "CLANG_C";
+	if (upper == "RUST" || upper == "RUSTC") return "RUST";
+	if (upper == "GO" || upper == "GOLANG") return "GO";
+	if (upper == "FPC" || upper == "PASCAL") return "FPC";
 	if (upper == "SWIFTC" || upper == "SWIFT") return "SWIFT";
 	if (upper == "FBC" || upper == "FREEBASIC") return "FREEBASIC";
 	if (upper == "QB64" || upper == "QB64PE") return "QB64PE";
@@ -579,7 +607,7 @@ bool normalizeCompilerProfileInPlace(MRCompilerProfile &profile, std::string *er
 	if (profile.id.empty()) return setError(errorMessage, "Compiler profile id may not be empty.");
 	if (profile.name.empty()) return setError(errorMessage, "Compiler profile name may not be empty.");
 	if (profile.toolchain.empty()) return setError(errorMessage, "Compiler profile toolchain may not be empty.");
-	if (profile.toolchain != "GCC" && profile.toolchain != "CLANG" && profile.toolchain != "SWIFT" && profile.toolchain != "FREEBASIC" && profile.toolchain != "QB64PE" && profile.toolchain != "GAMBAS" && profile.toolchain != "LATEXMK" && profile.toolchain != "LATEX" && profile.toolchain != "CUSTOM") return setError(errorMessage, "Compiler profile toolchain must be GCC, CLANG, SWIFT, FREEBASIC, QB64PE, GAMBAS, LATEXMK, LATEX or CUSTOM.");
+	if (profile.toolchain != "GCC" && profile.toolchain != "CLANG" && profile.toolchain != "GCC_C" && profile.toolchain != "CLANG_C" && profile.toolchain != "RUST" && profile.toolchain != "GO" && profile.toolchain != "FPC" && profile.toolchain != "SWIFT" && profile.toolchain != "FREEBASIC" && profile.toolchain != "QB64PE" && profile.toolchain != "GAMBAS" && profile.toolchain != "LATEXMK" && profile.toolchain != "LATEX" && profile.toolchain != "CUSTOM") return setError(errorMessage, "Unsupported compiler profile toolchain.");
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -680,6 +708,11 @@ std::vector<std::string> detectedCompilerExecutablePaths() {
 
 	appendUniquePath(paths, executableFromPath("g++"));
 	appendUniquePath(paths, executableFromPath("clang++"));
+	appendUniquePath(paths, executableFromPath("gcc"));
+	appendUniquePath(paths, executableFromPath("clang"));
+	appendUniquePath(paths, executableFromPath("rustc"));
+	appendUniquePath(paths, executableFromPath("go"));
+	appendUniquePath(paths, executableFromPath("fpc"));
 	appendUniquePath(paths, executableFromPath("swiftc"));
 	appendUniquePath(paths, executableFromPath("fbc"));
 	appendUniquePath(paths, executableFromPath("qb64pe"));
@@ -703,6 +736,11 @@ std::vector<std::string> detectedCompilerProfileIds() {
 
 	if (!executableFromPath("g++").empty()) addDetectedCompilerProfileIdsForTool(ids, "GCC", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
 	if (!executableFromPath("clang++").empty()) addDetectedCompilerProfileIdsForTool(ids, "CLANG", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("gcc").empty()) addDetectedCompilerProfileIdsForTool(ids, "GCC_C", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("clang").empty()) addDetectedCompilerProfileIdsForTool(ids, "CLANG_C", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("rustc").empty()) addDetectedCompilerProfileIdsForTool(ids, "RUST", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("go").empty()) addDetectedCompilerProfileIdsForTool(ids, "GO", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
+	if (!executableFromPath("fpc").empty()) addDetectedCompilerProfileIdsForTool(ids, "FPC", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
 	if (!executableFromPath("swiftc").empty()) addDetectedCompilerProfileIdsForTool(ids, "SWIFT", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
 	if (!executableFromPath("fbc").empty()) addDetectedCompilerProfileIdsForTool(ids, "FREEBASIC", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
 	if (!executableFromPath("qb64pe").empty()) addDetectedCompilerProfileIdsForTool(ids, "QB64PE", buildFlavors, sizeof(buildFlavors) / sizeof(buildFlavors[0]));
@@ -723,6 +761,11 @@ std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 	if (detectedCompilerProfilesCacheKey() == key) return detectedCompilerProfilesCacheValue();
 	std::string gcc = executableFromPath("g++");
 	std::string clang = executableFromPath("clang++");
+	std::string gccC = executableFromPath("gcc");
+	std::string clangC = executableFromPath("clang");
+	std::string rust = executableFromPath("rustc");
+	std::string go = executableFromPath("go");
+	std::string fpc = executableFromPath("fpc");
 	std::string swift = executableFromPath("swiftc");
 	std::string freeBasic = executableFromPath("fbc");
 	std::string qb64pe = executableFromPath("qb64pe");
@@ -742,6 +785,19 @@ std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 		addProfile(profiles, probe, "Normal", "-std=c++20 -O2 -Wall");
 		addProfile(profiles, probe, "Speed", "-std=c++20 -O3 -march=native -Wall");
 		addProfile(profiles, probe, "Size", "-std=c++20 -Os -Wall");
+	}
+	const struct AdditionalCompiler {
+		const char *toolchain;
+		const std::string *path;
+	} additionalCompilers[] = {{"GCC_C", &gccC}, {"CLANG_C", &clangC}, {"RUST", &rust}, {"GO", &go}, {"FPC", &fpc}};
+	for (const AdditionalCompiler &compiler : additionalCompilers) {
+		if (compiler.path->empty()) continue;
+		const CompilerProbe probe = probeBasicCompiler(compiler.toolchain, *compiler.path);
+		MRCompilerProfile flavorProfile;
+		for (const char *flavor : {"Debug", "Normal", "Speed", "Size"}) {
+			flavorProfile.id = std::string(compiler.toolchain) + "_" + upperAscii(flavor);
+			addProfile(profiles, probe, flavor, defaultBuildFlagsForProfile(compiler.toolchain, flavorProfile));
+		}
 	}
 	if (!swift.empty()) {
 		const CompilerProbe probe = probeSwiftCompiler(swift);
@@ -803,7 +859,7 @@ bool autoConfigureCompilerProfileFromExecutable(MRCompilerProfile &profile, std:
 		probe = probeLatexCompiler("LATEXMK", compilerPath);
 	else if (toolchain == "LATEX")
 		probe = probeLatexCompiler("LATEX", compilerPath);
-	else if (toolchain == "FREEBASIC" || toolchain == "QB64PE" || toolchain == "GAMBAS")
+	else if (toolchain == "FREEBASIC" || toolchain == "QB64PE" || toolchain == "GAMBAS" || toolchain == "GCC_C" || toolchain == "CLANG_C" || toolchain == "RUST" || toolchain == "GO" || toolchain == "FPC")
 		probe = probeBasicCompiler(toolchain, compilerPath);
 	else
 		probe = probeCppCompiler(toolchain, compilerPath);

@@ -25,6 +25,7 @@
 #include "../app/MRCommands.hpp"
 #include "../app/MRUpdate.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
+#include "../app/services/MRGdbSession.hpp"
 #include "../app/MRMacroDebuggerCommandRoute.hpp"
 #include "../app/router/MRCommandRouterGit.hpp"
 #include "../app/router/MRCommandRouterSearch.hpp"
@@ -519,6 +520,15 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		return;
 	}
 	if (dispatchMRGitStatusResult(result)) return;
+	const mr::coprocessor::GdbEventPayload *gdbEvent = dynamic_cast<const mr::coprocessor::GdbEventPayload *>(result.payload.get());
+	if (gdbEvent != nullptr) {
+		MREditWindow *targetWindow = findEditWindowByBufferId(gdbEvent->targetBufferId);
+		MRBentoBox *targetBento = dynamic_cast<MRBentoBox *>(targetWindow);
+		const bool adopted = targetBento != nullptr && targetBento->acceptGdbEvent(*gdbEvent);
+		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, adopted);
+		if (gdbEvent->event.kind == MRGdbEventKind::Finished) mr::coprocessor::globalCoprocessor().unregisterExternalSource(gdbEvent->sourceId);
+		return;
+	}
 	if (result.task.kind == mr::coprocessor::TaskKind::FileCompare) {
 		handleFileCompareResult(result);
 		return;
@@ -568,6 +578,11 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			    targetEditor->ownsDisplayWidthWarmupTask(result.task.id))
 				adopted = targetEditor->applyDisplayWidthWarmup(*displayWidth, result.task.baseVersion, result.task.id);
 			if (targetEditor != nullptr && !adopted) targetEditor->clearDisplayWidthWarmupTask(result.task.id);
+			if (adopted) {
+				MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(targetWindow);
+
+				if (bentoBox != nullptr) bentoBox->layoutDesktopContents();
+			}
 			if (targetWindow != nullptr && targetEditor != nullptr)
 				recordTaskPerformance(result, kDisplayWidthWarmAction, targetWindow, targetEditor->documentId(), targetEditor->bufferLength(), targetWindow->currentFileName(), adopted);
 			else

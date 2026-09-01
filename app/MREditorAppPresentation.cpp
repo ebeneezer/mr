@@ -340,6 +340,7 @@ void MREditorApp::syncFunctionKeyState() {
 		}
 	}
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
+		mrMenuBar->setDebuggerFunctionKeysActive(mrCurrentDebuggerBentoBox() != nullptr);
 		mrMenuBar->setStartupFunctionKeysActive(startupActive);
 		mrMenuBar->setEditorFunctionKeysActive(editorActive);
 	}

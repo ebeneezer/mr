@@ -151,6 +151,11 @@ class Payload {
 	virtual ~Payload() = default;
 };
 
+class StreamingPayload {
+  public:
+	virtual ~StreamingPayload() = default;
+};
+
 enum class IndicatorBlinkChannel : unsigned char {
 	ReadOnly,
 	Insert,
@@ -276,7 +281,7 @@ struct MiniMapWarmupPayload final : Payload {
 	}
 };
 
-struct ExternalIoChunkPayload final : Payload {
+struct ExternalIoChunkPayload final : Payload, StreamingPayload {
 	std::size_t channelId;
 	std::size_t targetBufferId;
 	std::size_t searchHitCount;
@@ -289,7 +294,7 @@ struct ExternalIoChunkPayload final : Payload {
 	}
 };
 
-struct TaskProgressPayload final : Payload {
+struct TaskProgressPayload final : Payload, StreamingPayload {
 	std::size_t completedUnits;
 	std::size_t totalUnits;
 	std::size_t resultCount;

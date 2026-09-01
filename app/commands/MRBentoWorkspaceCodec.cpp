@@ -203,7 +203,7 @@ namespace workspace {
 std::string encodeBentoSnapshot(const MRBentoWorkspaceSnapshot &snapshot) {
 	std::ostringstream out;
 
-	out << "v1.5";
+	out << "v1.6";
 	out << ",m:" << static_cast<int>(snapshot.mode);
 	out << ",r:" << snapshot.rootNode;
 	out << ",a:" << snapshot.activeLeafId;
@@ -228,7 +228,8 @@ bool parseBentoSnapshot(const std::string &token, MRBentoWorkspaceSnapshot &snap
 	int mode = 0;
 
 	if (fields.size() != 7) return false;
-	const bool hasWidgetMask = fields[0] == "v1.5";
+	const bool hasWidgetMask = fields[0] == "v1.5" || fields[0] == "v1.6";
+	const bool hasProgramTerminal = fields[0] == "v1.6";
 	if (!hasWidgetMask && fields[0] != "v1") return false;
 	if (!parseBentoPrefixedInt(fields[1], "m:", mode)) return false;
 	if (!parseBentoPrefixedInt(fields[2], "r:", snapshot.rootNode)) return false;
@@ -265,7 +266,7 @@ bool parseBentoSnapshot(const std::string &token, MRBentoWorkspaceSnapshot &snap
 		if (!parseBentoInt(values[0], leaf.id)) return false;
 		if (!parseBentoInt(values[1], role)) return false;
 		if (!parseBentoInt(values[2], visible)) return false;
-		if (role < bprSource || role > bprExtensionLast || (visible != 0 && visible != 1)) return false;
+		if (role < bprSource || (role > bprExtensionLast && !(hasProgramTerminal && role == bprProgramTerminal)) || (visible != 0 && visible != 1)) return false;
 		leaf.role = static_cast<MRBentoPaneRole>(role);
 		leaf.visible = visible != 0;
 		if (hasWidgetMask) {

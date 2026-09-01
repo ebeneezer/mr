@@ -167,14 +167,14 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		flushBentoProjection();
 		return;
 	}
-	if (macroDebuggerValueInput != nullptr && event.what == evMouseDown && !macroDebuggerValueInputContains(event.mouse.where)) {
-		cancelMacroDebuggerValueInput();
+	if (debuggerValueInput != nullptr && event.what == evMouseDown && !debuggerValueInputContains(event.mouse.where)) {
+		cancelDebuggerValueInput();
 		clearEvent(event);
 		bentoProjectionDirty |= bpdContent | bpdChrome;
 		flushBentoProjection();
 		return;
 	}
-	if (handleMacroDebuggerFunctionKey(event)) return;
+	if (handleDebuggerFunctionKey(event)) return;
 	if (bentoMode == bbmFileCompare && event.what == evKeyDown && mr::bento::paneRoleIsDiff(roleForLeaf(activeLeafId))) {
 		const bool nextChangeKey = event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) == 0;
 		const bool previousChangeKey = event.keyDown.keyCode == kbShiftF8 || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0);
@@ -269,6 +269,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		const bool enterOutline = outlinePaneActive && event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter;
 		const bool clickOutline = outlinePaneActive && event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0;
 		const bool clickDebuggerVariable = activeRole == bprVariables && event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0;
+		const bool doubleClickGdbVariable = clickDebuggerVariable && (event.mouse.eventFlags & meDoubleClick) != 0;
 		if (mouseEvent && !pointInRect(localMouse, contentBounds(targetBounds))) {
 			if (targetPane != nullptr) targetPane->handleEvent(event);
 			if (bentoMode == bbmFileCompare && mr::bento::paneRoleIsDiff(activeRole)) syncFileCompareLinkedPaneFrom(targetLeafId);
@@ -320,7 +321,8 @@ void MRBentoBox::handleEvent(TEvent &event) {
 				bentoSourceMutationTrackingActive = trackingWasActive;
 			}
 		}
-		if (clickDebuggerVariable && showMacroDebuggerValueInputAtCursor()) {
+		if ((doubleClickGdbVariable && showGdbDebuggerValueInputAtCursor()) ||
+		    (clickDebuggerVariable && !gdbDebuggerActive() && macroDebuggerActive && showMacroDebuggerValueInputAtCursor())) {
 			clearEvent(event);
 			bentoProjectionDirty |= bpdContent | bpdChrome;
 			flushBentoProjection();

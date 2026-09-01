@@ -1,4 +1,5 @@
 #include "MRBentoBox.hpp"
+#include "MRGdbTerminalPane.hpp"
 #include "MRBentoPaneFrameView.hpp"
 #include "MRBentoBoxRoleSupport.hpp"
 
@@ -20,7 +21,7 @@ bool bentoWorkspaceModeIsValid(int mode) noexcept {
 }
 
 bool bentoWorkspaceRoleIsValid(int role) noexcept {
-	return role >= bprSource && role <= bprExtensionLast;
+	return (role >= bprSource && role <= bprExtensionLast) || role == bprProgramTerminal;
 }
 
 } // namespace
@@ -98,6 +99,17 @@ bool MRBentoBox::ensureMacroDebuggerPanes(MREditWindow *&outputWindow, MREditWin
 	return outputWindow != nullptr && variablesWindow != nullptr && watchesWindow != nullptr;
 }
 
+bool MRBentoBox::ensureGdbDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow, MRGdbTerminalPane *&terminalWindow) {
+	if (!ensureMacroDebuggerPanes(outputWindow, variablesWindow, watchesWindow)) return false;
+	int terminalLeaf = leafIdForRole(bprProgramTerminal);
+	if (terminalLeaf < 0) terminalLeaf = splitLeafNode(leafIdForRole(bprDebuggerOutput), bsoHorizontal, bprProgramTerminal);
+	if (terminalLeaf < 0) return false;
+	secondaryPaneVisible = firstToolLeafId() >= 0;
+	layoutSplitPanes();
+	terminalWindow = programTerminalPane();
+	return terminalWindow != nullptr;
+}
+
 void MRBentoBox::activatePrimaryPane() noexcept {
 	setActivePane(0);
 }
@@ -159,7 +171,8 @@ const MREditWindow *MRBentoBox::editorCommandTarget() const noexcept {
 	return pane != nullptr ? static_cast<const MREditWindow *>(pane) : static_cast<const MREditWindow *>(this);
 }
 
-MRPaneEditWindow *MRBentoBox::createPaneWindow(const TRect &bounds, const char *title, int paneNumber, const MRBentoPaneSpec &) {
+MRPaneEditWindow *MRBentoBox::createPaneWindow(const TRect &bounds, const char *title, int paneNumber, const MRBentoPaneSpec &spec) {
+	if (spec.role == bprProgramTerminal) return new MRGdbTerminalPane(bounds, title, paneNumber);
 	return new MRPaneEditWindow(bounds, title, paneNumber);
 }
 
@@ -168,7 +181,7 @@ bool MRBentoBox::primaryPaneUsesDedicatedWindow() const noexcept {
 }
 
 bool MRBentoBox::acceptsPaneRole(MRBentoPaneRole role) const noexcept {
-	return role >= bprSource && role <= bprDiffCompare;
+	return (role >= bprSource && role <= bprDiffCompare) || role == bprProgramTerminal;
 }
 
 const char *MRBentoBox::titleForPaneRole(MRBentoPaneRole role) const noexcept {
@@ -385,7 +398,7 @@ bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapsh
 		}
 	}
 
-	cancelMacroDebuggerValueInput();
+	cancelDebuggerValueInput();
 	cancelAllBentoProjectionTasks();
 	for (BentoLeaf &leaf : leaves) {
 		if (leaf.pane != nullptr) {
@@ -483,7 +496,7 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 }
 
 void MRBentoBox::close() {
-	cancelMacroDebuggerValueInput();
+	cancelDebuggerValueInput();
 	invalidateMacroDebuggerRuntime();
 	cancelAllBentoProjectionTasks();
 	restoreFileCompareSources();
@@ -492,7 +505,7 @@ void MRBentoBox::close() {
 }
 
 void MRBentoBox::shutDown() {
-	cancelMacroDebuggerValueInput();
+	cancelDebuggerValueInput();
 	invalidateMacroDebuggerRuntime();
 	cancelAllBentoProjectionTasks();
 	restoreFileCompareSources();

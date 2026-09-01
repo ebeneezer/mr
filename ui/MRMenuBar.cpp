@@ -283,7 +283,7 @@ std::string menuTitleWithHotkeyMarker(const std::string &title, char hotkey) {
 }
 } // namespace
 
-MRMenuBar::MRMenuBar(const TRect &r, TSubMenu &aMenu) : TMenuBar(r, aMenu), mBaseMenu(nullptr), mRuntimeNodes(), mStartupFunctionKeysActive(false), mEditorFunctionKeysActive(false), mRightStatus(), mAutoMarqueeStatus(), mManualMarqueeStatus(), mAutoMarqueeKind(MarqueeKind::Info) {
+MRMenuBar::MRMenuBar(const TRect &r, TSubMenu &aMenu) : TMenuBar(r, aMenu), mBaseMenu(nullptr), mRuntimeNodes(), mStartupFunctionKeysActive(false), mEditorFunctionKeysActive(false), mDebuggerFunctionKeysActive(false), mRightStatus(), mAutoMarqueeStatus(), mManualMarqueeStatus(), mAutoMarqueeKind(MarqueeKind::Info) {
 	mBaseMenu = cloneMenu(menu);
 }
 
@@ -647,6 +647,10 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 
 	for (const MenuShortcutSpec &spec : specs)
 		applyMenuShortcutSpec(targetMenu, spec, mStartupFunctionKeysActive, mEditorFunctionKeysActive);
+	if (TMenuItem *debugItem = findMenuItemByCommand(targetMenu, cmMrDebuggerStart); debugItem != nullptr)
+		debugItem->disabled = mDebuggerFunctionKeysActive;
+	if (mDebuggerFunctionKeysActive)
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrOtherBuildCurrentFile), TKey(kbNoKey), nullptr);
 	if (diagnosticsActive) {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockLoadFromDisk), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockSaveToDisk), TKey(kbNoKey), nullptr);

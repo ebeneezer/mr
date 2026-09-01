@@ -429,6 +429,7 @@ TColorAttr MRBentoBox::paneFrameColor(bool focused) {
 
 void MRBentoBox::drawPaneFrames() noexcept {
 	if (windowCloseInProgress || !hasPaneSplit()) return;
+	updateActivePaneFrame();
 	for (BentoLeaf &leaf : leaves)
 		if (leaf.visible && leaf.pane != nullptr) leaf.pane->drawPaneScrollBars();
 	for (std::size_t i = 0; i < leaves.size(); ++i)

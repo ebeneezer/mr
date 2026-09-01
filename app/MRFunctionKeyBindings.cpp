@@ -76,6 +76,17 @@ MRBentoBox *mrCurrentMacroDebuggerBentoBox() {
 	return nullptr;
 }
 
+MRBentoBox *mrCurrentDebuggerBentoBox() {
+	TView *view = TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr;
+
+	for (; view != nullptr; view = view->owner) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
+
+		if (bentoBox != nullptr && bentoBox->debuggerFunctionKeysActive()) return bentoBox;
+	}
+	return nullptr;
+}
+
 std::vector<MRStatusLine::FunctionKeyLabel> mrStartupFunctionKeyLabels(ushort modifiers) {
 	static const std::vector<MRStatusLine::FunctionKeyLabel> baseLabels{
 	    {TKey(kbF1), cmHelp, "~F1~ Help"},
@@ -209,10 +220,11 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 	const bool diagnosticsActive = compilerDiagnosticsFunctionKeysActive();
 	const bool fileCompareActive = fileCompareFunctionKeysActive();
 	const bool bentoToolPaneActive = bentoToolPaneFunctionKeysActive();
-	MRBentoBox *macroDebuggerBento = mrCurrentMacroDebuggerBentoBox();
-	const bool macroDebuggerActive = macroDebuggerBento != nullptr;
-	const bool macroDebuggerLive = macroDebuggerBento != nullptr && macroDebuggerBento->macroDebuggerHasLiveSession();
-	const bool macroDebuggerRunning = macroDebuggerBento != nullptr && macroDebuggerBento->macroDebuggerSessionRunning();
+	MRBentoBox *debuggerBento = mrCurrentDebuggerBentoBox();
+	const bool debuggerActive = debuggerBento != nullptr;
+	const bool debuggerLive = debuggerBento != nullptr && debuggerBento->debuggerHasLiveSession();
+	const bool debuggerRunning = debuggerBento != nullptr && debuggerBento->debuggerSessionRunning();
+	const bool macroDebuggerActive = debuggerBento != nullptr && debuggerBento->macroDebuggerFunctionKeysActive();
 	const bool readOnlyActive = window != nullptr && window->isReadOnly();
 
 	switch (modifiers) {
@@ -224,10 +236,10 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 			if (fileCompareActive) labels[7] = {TKey(kbF8, kbShift), cmMrFileComparePreviousChange, "~S-F8~ Prev"};
 			else if (diagnosticsActive)
 				labels[7] = {TKey(kbF8, kbShift), cmMrOtherFindPreviousCompilerError, "~S-F8~ PrevErr"};
-			if (macroDebuggerActive) {
-				labels[6] = {TKey(kbF7, kbShift), cmMrMacroDebuggerEraseWatch, "~S-F7~ Watch -"};
+			if (debuggerActive) {
+				labels[6] = {TKey(kbF7, kbShift), cmMrDebuggerEraseWatch, "~S-F7~ Watch -"};
 				labels[8] = {TKey(kbF9, kbShift), 0, "~S-F9~ BP +/-"};
-				labels[10] = {TKey(kbF11, kbShift), cmMrMacroDebuggerStepOut, macroDebuggerLive && !macroDebuggerRunning ? "~S-F11~ Out" : ""};
+				labels[10] = {TKey(kbF11, kbShift), cmMrDebuggerStepOut, debuggerLive && !debuggerRunning ? "~S-F11~ Out" : ""};
 			}
 			return labels;
 		case kbCtrlShift:
@@ -289,16 +301,16 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 		labels[6] = {TKey(kbF7), cmMrBlockEndMarking, "~F7~ EndMark"};
 	} else if (!diagnosticsActive && !fileCompareActive && !bentoToolPaneActive && !readOnlyActive)
 		labels[6] = {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"};
-	if (macroDebuggerActive) {
-		labels[3] = {TKey(kbF4), cmMrMacroDebuggerEvaluate, macroDebuggerLive && !macroDebuggerRunning ? "~F4~ Eval" : ""};
-		labels[4] = {TKey(kbF5), cmMrMacroDebuggerContinue, macroDebuggerRunning ? "~F5~ Pause" : (macroDebuggerLive ? "~F5~ Cont" : "")};
-		labels[5] = {TKey(kbF6), cmMrMacroDebuggerRunHere, "~F6~ RunHere"};
-		labels[6] = {TKey(kbF7), cmMrMacroDebuggerAddWatch, "~F7~ Watch +/-"};
-		labels[7] = {TKey(kbF8), cmMrMacroDebuggerStop, macroDebuggerLive ? "~F8~ Stop" : "~F8~ Reset"};
-		labels[8] = {TKey(kbF9), cmMrOtherBuildCurrentFile, "~F9~ BP"};
-		labels[9] = {TKey(kbF10), cmMrMacroDebuggerStep, macroDebuggerLive && !macroDebuggerRunning ? "~F10~ Into" : ""};
-		labels[10] = {TKey(kbF11), cmMrMacroDebuggerStepOver, macroDebuggerLive && !macroDebuggerRunning ? "~F11~ Over" : ""};
-		labels[11] = {TKey(kbShiftF11), cmMrMacroDebuggerStepOut, macroDebuggerLive && !macroDebuggerRunning ? "~S-F11~ Out" : ""};
+	if (debuggerActive) {
+		labels[3] = {TKey(kbF4), cmMrDebuggerEvaluate, debuggerLive && !debuggerRunning ? "~F4~ Eval" : ""};
+		labels[4] = {TKey(kbF5), cmMrDebuggerContinue, debuggerRunning ? "~F5~ Pause" : (debuggerLive ? "~F5~ Cont" : "")};
+		labels[5] = {TKey(kbF6), cmMrDebuggerRunHere, "~F6~ RunHere"};
+		labels[6] = {TKey(kbF7), cmMrDebuggerAddWatch, "~F7~ Watch +/-"};
+		labels[7] = {TKey(kbF8), cmMrDebuggerStop, debuggerLive ? "~F8~ Stop" : "~F8~ Reset"};
+		labels[8] = {TKey(kbF9), cmMrDebuggerToggleBreakpoint, "~F9~ BP"};
+		labels[9] = {TKey(kbF10), cmMrDebuggerStep, debuggerLive && !debuggerRunning ? "~F10~ Into" : ""};
+		labels[10] = {TKey(kbF11), cmMrDebuggerStepOver, debuggerLive && !debuggerRunning ? "~F11~ Over" : ""};
+		labels[11] = {TKey(kbShiftF11), cmMrDebuggerStepOut, debuggerLive && !debuggerRunning ? "~S-F11~ Out" : ""};
 	}
 	return labels;
 }

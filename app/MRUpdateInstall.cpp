@@ -6,6 +6,7 @@
 #define Uses_TKeys
 #define Uses_TProgram
 #define Uses_TScreen
+#define Uses_TScrollBar
 #include <tvision/tv.h>
 
 #include "MRUpdateInternal.hpp"
@@ -13,9 +14,10 @@
 #include "MRCommandRouter.hpp"
 #include "MRCommands.hpp"
 #include "MRVersion.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
+#include "../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRMessageLineController.hpp"
-#include "../ui/MRSidekickEditor.hpp"
 
 #include <openssl/crypto.h>
 
@@ -179,10 +181,21 @@ class UpdateChangedDialog final : public TDialog {
 		const short buttonTop = std::max<short>(5, size.y - 3);
 		const short contentRight = std::max<short>(3, size.x - 2);
 		const short contentBottom = std::max<short>(3, buttonTop - 1);
+		const TRect contentBounds(2, 2, contentRight, contentBottom);
 
 		flags = wfMove;
-		MRSidekickEditor *view = new MRSidekickEditor(TRect(2, 2, contentRight, contentBottom), 0, 0, 0, changedText, std::string(), std::vector<MRSidekickSpan>(), true, false, false, MRSidekickPalette::Owner);
-		if (view != nullptr) view->insertInto(*this);
+		horizontalScrollBar = new TScrollBar(TRect(contentBounds.a.x, contentBounds.b.y - 1, contentBounds.b.x, contentBounds.b.y));
+		verticalScrollBar = new TScrollBar(TRect(contentBounds.b.x - 1, contentBounds.a.y, contentBounds.b.x, contentBounds.b.y));
+		insert(horizontalScrollBar);
+		insert(verticalScrollBar);
+		changedEditor = new MRFileEditor(contentBounds, horizontalScrollBar, verticalScrollBar, nullptr, "", mr::coprocessor::ExecutionOwnerKind::Dialog, reinterpret_cast<std::size_t>(this));
+		insert(changedEditor);
+		changedEditor->setCommunicationViewerMode(true, false);
+		changedEditor->setWordWrapSuppressed(true);
+		changedEditor->setScrollBarsAlwaysVisible(true);
+		static_cast<void>(changedEditor->replaceBufferText(changedText.c_str()));
+		changedEditor->setReadOnly(true);
+		layoutChangedText(contentBounds);
 		insert(new TButton(TRect(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + 2), "~R~estart", cmMrUpdateRestart, bfDefault));
 	}
 
@@ -202,6 +215,57 @@ class UpdateChangedDialog final : public TDialog {
 		}
 		TDialog::handleEvent(event);
 	}
+
+  private:
+	void layoutChangedText(const TRect &contentBounds) noexcept {
+		const bool showWithoutRange = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
+		bool reserveHorizontal = showWithoutRange;
+		bool reserveVertical = showWithoutRange;
+
+		if (!showWithoutRange) {
+			changedEditor->changeBounds(contentBounds);
+			changedEditor->updateMetrics();
+			reserveHorizontal = horizontalScrollBar->maxVal > horizontalScrollBar->minVal;
+			reserveVertical = verticalScrollBar->maxVal > verticalScrollBar->minVal;
+		}
+		for (int pass = 0; pass < 3; ++pass) {
+			TRect editorBounds = contentBounds;
+			TRect horizontalBounds;
+			TRect verticalBounds;
+
+			if (reserveVertical && editorBounds.b.x - editorBounds.a.x > 1) --editorBounds.b.x;
+			if (reserveHorizontal && editorBounds.b.y - editorBounds.a.y > 1) --editorBounds.b.y;
+			if (reserveHorizontal)
+				horizontalBounds = TRect(contentBounds.a.x, editorBounds.b.y, editorBounds.b.x, contentBounds.b.y);
+			else
+				horizontalBounds = TRect(contentBounds.a.x, contentBounds.b.y, contentBounds.a.x, contentBounds.b.y);
+			if (reserveVertical)
+				verticalBounds = TRect(editorBounds.b.x, contentBounds.a.y, contentBounds.b.x, editorBounds.b.y);
+			else
+				verticalBounds = TRect(contentBounds.b.x, contentBounds.a.y, contentBounds.b.x, contentBounds.a.y);
+			horizontalScrollBar->locate(horizontalBounds);
+			verticalScrollBar->locate(verticalBounds);
+			changedEditor->changeBounds(editorBounds);
+			changedEditor->updateMetrics();
+			if (showWithoutRange) break;
+			const bool nextReserveHorizontal = horizontalScrollBar->maxVal > horizontalScrollBar->minVal;
+			const bool nextReserveVertical = verticalScrollBar->maxVal > verticalScrollBar->minVal;
+
+			if (nextReserveHorizontal == reserveHorizontal && nextReserveVertical == reserveVertical) break;
+			reserveHorizontal = nextReserveHorizontal;
+			reserveVertical = nextReserveVertical;
+		}
+		if (reserveHorizontal) horizontalScrollBar->show();
+		else
+			horizontalScrollBar->hide();
+		if (reserveVertical) verticalScrollBar->show();
+		else
+			verticalScrollBar->hide();
+	}
+
+	MRFileEditor *changedEditor = nullptr;
+	TScrollBar *horizontalScrollBar = nullptr;
+	TScrollBar *verticalScrollBar = nullptr;
 };
 
 void secureClear(void *buffer, std::size_t size) noexcept {

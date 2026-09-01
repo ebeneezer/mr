@@ -34,8 +34,9 @@ struct AppCommandState {
 	bool hasExternalCommandDetail;
 	bool hasCompilerProblems;
 	bool hasFileCompareWindow;
+	bool hasGdbDebugger;
 
-	AppCommandState() : window(nullptr), desktopWindow(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false), hasFileCompareWindow(false) {
+	AppCommandState() : window(nullptr), desktopWindow(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false), hasFileCompareWindow(false), hasGdbDebugger(false) {
 	}
 };
 
@@ -63,9 +64,9 @@ AppCommandState appCommandState() {
 	MREditWindow *externalWin = win;
 	for (TView *view = win; view != nullptr; view = view->owner) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(view);
-		if (bentoBox != nullptr && bentoBox->isFileCompareBox()) {
-			state.hasFileCompareWindow = true;
-			break;
+		if (bentoBox != nullptr) {
+			state.hasGdbDebugger = state.hasGdbDebugger || bentoBox->gdbDebuggerActive();
+			if (bentoBox->isFileCompareBox()) state.hasFileCompareWindow = true;
 		}
 	}
 	if (!state.hasFileCompareWindow) {
@@ -207,6 +208,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrTextHexEditor, hasEditor && state.window->getEditor() != nullptr && state.window->allowsDocumentViewportSplit() && !state.window->hasTrackedExternalIoTasks());
 	setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows);
 	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasBuildSourceFile);
+	setCommandEnabled(cmMrDebuggerStart, hasEditor && state.hasBuildSourceFile && !state.hasGdbDebugger);
 	setCommandEnabled(cmMrOtherGitChanges, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
 	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail);

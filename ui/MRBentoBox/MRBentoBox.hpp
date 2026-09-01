@@ -11,17 +11,22 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 class MRBentoPaneFrameView;
-class MRMacroDebuggerValueInput;
+class MRGdbSession;
+class MRGdbTerminalPane;
+enum class MRGdbCommandKind : unsigned char;
+class MRDebuggerValueInput;
 struct MRMacroDebugRunResult;
 enum MRMacroDebugStepMode : int;
 enum MRMacroDebugWorkerAction : int;
 namespace mr {
 namespace coprocessor {
 struct Result;
+struct GdbEventPayload;
 }
 }
 
@@ -38,8 +43,9 @@ enum MRBentoPaneRole {
 	bprSplitEditor,
 	bprDiffOriginal,
 	bprDiffCompare,
-	bprExtensionFirst,
-	bprExtensionLast = bprExtensionFirst + 15
+	bprExtensionFirst = 12,
+	bprExtensionLast = bprExtensionFirst + 15,
+	bprProgramTerminal = 28
 };
 
 enum MRBentoPanePlacement {
@@ -214,7 +220,7 @@ class MRPaneEditWindow : public MREditWindow {
 };
 
 class MRBentoBox : public MREditWindow {
-	friend class MRMacroDebuggerValueInput;
+	friend class MRDebuggerValueInput;
 	friend class MRPaneEditWindow;
 
   public:
@@ -229,11 +235,19 @@ class MRBentoBox : public MREditWindow {
 		[[nodiscard]] MREditWindow *debuggerOutputPane() const noexcept;
 		[[nodiscard]] MREditWindow *variablesPane() const noexcept;
 		[[nodiscard]] MREditWindow *watchesPane() const noexcept;
+		[[nodiscard]] MRGdbTerminalPane *programTerminalPane() const noexcept;
 		[[nodiscard]] MREditWindow *paneForBufferId(int bufferId) const noexcept;
 	void collectVisiblePaneWindows(std::vector<MREditWindow *> &windows) const noexcept;
 	void showSecondaryPane() noexcept;
 		[[nodiscard]] bool ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREditWindow *&problemsWindow);
 		[[nodiscard]] bool ensureMacroDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow);
+		[[nodiscard]] bool ensureGdbDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow, MRGdbTerminalPane *&terminalWindow);
+		[[nodiscard]] bool startGdbDebugger(const std::string &programPath, const std::string &sourcePath, std::string &errorMessage);
+		void stopGdbDebugger() noexcept;
+		[[nodiscard]] bool acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload);
+		[[nodiscard]] bool sendGdbTerminalInput(const std::string &text);
+		[[nodiscard]] bool executeGdbSourceContextCommand(ushort command, std::size_t sourceOffset, const std::string &identifier);
+		void resizeGdbTerminal(int columns, int rows);
 		void setMacroDebuggerTarget(const std::string &macroKey, const std::string &macroName);
 		[[nodiscard]] bool macroDebuggerWorkspaceConfiguration(MRMacroDebuggerWorkspaceConfiguration &configuration) const;
 		void restoreMacroDebuggerWorkspaceConfiguration(const MRMacroDebuggerWorkspaceConfiguration &configuration);
@@ -251,6 +265,11 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool macroDebuggerSessionRunning() const noexcept;
 	void pumpMacroDebuggerSession();
 	[[nodiscard]] bool handleMacroDebuggerFunctionKey(TEvent &event);
+	[[nodiscard]] bool debuggerFunctionKeysActive() const noexcept;
+	[[nodiscard]] bool debuggerHasLiveSession() const noexcept;
+	[[nodiscard]] bool debuggerSessionRunning() const;
+	[[nodiscard]] bool gdbDebuggerActive() const noexcept;
+	[[nodiscard]] bool handleDebuggerFunctionKey(TEvent &event);
 		void activatePrimaryPane() noexcept;
 	void activateSecondaryPane() noexcept;
 	[[nodiscard]] bool activatePaneWindow(MREditWindow *pane) noexcept;
@@ -429,15 +448,23 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool evaluateMacroDebuggerExpression();
 	void refreshMacroDebuggerVariables(const std::vector<MRMacroDebugVariableSnapshot> &variables);
 	[[nodiscard]] bool showMacroDebuggerValueInputAtCursor();
-	[[nodiscard]] bool macroDebuggerValueInputContains(const TPoint &point) const noexcept;
-	void commitMacroDebuggerValueInput();
-	void cancelMacroDebuggerValueInput() noexcept;
+	[[nodiscard]] bool showGdbDebuggerValueInputAtCursor();
+	[[nodiscard]] bool debuggerValueInputContains(const TPoint &point) const noexcept;
+	void commitDebuggerValueInput();
+	void cancelDebuggerValueInput() noexcept;
 	void writeMacroDebuggerStatus(const MRMacroDebugRunResult &debugResult, const std::string &errorMessage);
 	void writeMacroDebuggerNotice(const std::string &message);
 	void refreshMacroDebuggerBreakpointRanges();
 	void invalidateMacroDebuggerRuntime();
 	[[nodiscard]] bool scheduleMacroDebuggerWorkerAction(MRMacroDebugWorkerAction action);
 	[[nodiscard]] bool startMacroDebuggerSession(int temporaryStopLine);
+	[[nodiscard]] bool handleGdbDebuggerFunctionKey(TEvent &event);
+	[[nodiscard]] bool sendGdbCommand(MRGdbCommandKind commandKind, const std::string &text = std::string());
+	void publishGdbDebuggerState(const char *state, const std::string &file = std::string(), int line = 0);
+	void clearGdbDebuggerState() noexcept;
+	[[nodiscard]] std::string gdbDebuggerStateText() const;
+	[[nodiscard]] std::string gdbDebuggerSourcePath() const;
+	[[nodiscard]] bool gdbDebuggerRunning() const;
 	void refreshOutlinePanes(bool force = false);
 	bool refreshOutlinePane(MRBentoPaneRole role, bool force);
 	[[nodiscard]] bool jumpToOutlineAtCursor(MRBentoPaneRole role);
@@ -564,10 +591,20 @@ class MRBentoBox : public MREditWindow {
 	MRMacroExecutionRoute macroDebuggerExecutionRoute;
 	bool macroDebuggerExecutionRunning;
 	bool macroDebuggerActive;
-	MRMacroDebuggerValueInput *macroDebuggerValueInput;
-	MRPaneEditWindow *macroDebuggerValueInputPane;
+	struct GdbDebuggerVariableRow {
+		std::size_t start;
+		std::size_t end;
+		std::string expression;
+		std::string value;
+	};
+
+	MRDebuggerValueInput *debuggerValueInput;
+	MRPaneEditWindow *debuggerValueInputPane;
+	std::string gdbDebuggerValueInputExpression;
 	std::vector<MRMacroDebugVariableSnapshot> macroDebuggerVariables;
 	std::vector<std::pair<std::size_t, std::size_t>> macroDebuggerVariableRows;
+	std::vector<GdbDebuggerVariableRow> gdbDebuggerVariableRows;
+	std::unique_ptr<MRGdbSession> gdbSession;
 	std::shared_ptr<const std::vector<MRCompilerDiagnostic>> compilerDiagnostics;
 	std::shared_ptr<const MRBentoDiagnosticSourceChange> compilerDiagnosticSourceChanges;
 	std::shared_ptr<const MRTextBufferModel::ReadSnapshot> compilerDiagnosticsParseSourceSnapshot;

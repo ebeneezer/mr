@@ -242,6 +242,28 @@ void setHiddenWindowBounds(MRDesktopWindow *window, const TRect &bounds) {
 	window->applyDesktopBounds(bounds);
 }
 
+bool validWindowBounds(const TRect &bounds) {
+	return bounds.a.x < bounds.b.x && bounds.a.y < bounds.b.y;
+}
+
+TRect desiredWindowBounds(MRDesktopWindow *window) {
+	TWindow *nativeWindow = window != nullptr ? window->desktopNativeWindow() : nullptr;
+	MRDesktopMinimizedState minimizedState;
+
+	if (nativeWindow == nullptr) return TRect(0, 0, 1, 1);
+	window->readDesktopMinimizedState(minimizedState);
+	return validWindowBounds(minimizedState.restoreBounds) ? minimizedState.restoreBounds : nativeWindow->getBounds();
+}
+
+void rememberDesiredWindowBounds(MRDesktopWindow *window, const TRect &bounds) {
+	MRDesktopMinimizedState minimizedState;
+
+	if (window == nullptr || !validWindowBounds(bounds)) return;
+	window->readDesktopMinimizedState(minimizedState);
+	minimizedState.restoreBounds = bounds;
+	window->storeDesktopMinimizedState(minimizedState);
+}
+
 void markLayoutDirty() {
 	mrvmStoreRuntimeStateInt("windowLayout", "dirty", 1);
 }
@@ -362,7 +384,7 @@ void clampWindowsToUsableDesktop() {
 
 		if (nativeWindow == nullptr || window->desktopMinimized() || window->desktopManuallyHidden()) continue;
 		++considered;
-		window->applyDesktopBounds(clampToBounds(nativeWindow->getBounds(), usableDesktopBoundsForDesktop(window->desktopIndex())));
+		window->applyDesktopBounds(clampToBounds(desiredWindowBounds(window), usableDesktopBoundsForDesktop(window->desktopIndex())));
 		++placed;
 	}
 	{
@@ -446,6 +468,7 @@ void MRWindowLayout::handleDragView(MRDesktopWindow *window, TEvent &event, ucha
 
 	if (!configuredWindowManager() || (mode & dmDragMove) == 0 || event.what != evMouseDown) {
 		nativeWindow->TWindow::dragView(event, mode, limits, minSize, maxSize);
+		if (!window->desktopMinimized()) rememberDesiredWindowBounds(window, nativeWindow->getBounds());
 		return;
 	}
 
@@ -517,7 +540,8 @@ void MRWindowLayout::handleDragView(MRDesktopWindow *window, TEvent &event, ucha
 		minimizedState.lastMinimizedBounds = nativeWindow->getBounds();
 		window->storeDesktopMinimizedState(minimizedState);
 		updateLayoutAfterStateChange();
-	}
+	} else
+		rememberDesiredWindowBounds(window, nativeWindow->getBounds());
 }
 
 bool MRWindowLayout::isWindowMinimized(const MRDesktopWindow *window) noexcept {
@@ -542,8 +566,7 @@ TRect MRWindowLayout::restoreBoundsForWorkspace(const MREditWindow *window) noex
 
 	if (window == nullptr) return TRect(0, 0, 1, 1);
 	window->readDesktopMinimizedState(minimizedState);
-	if (minimizedState.minimized) return minimizedState.restoreBounds;
-	return window->getBounds();
+	return validWindowBounds(minimizedState.restoreBounds) ? minimizedState.restoreBounds : window->getBounds();
 }
 
 const MRWindowLayout::MinimizedGlyphs &MRWindowLayout::minimizedGlyphs() noexcept {
@@ -599,7 +622,7 @@ void MRWindowLayout::minimizeWindow(MRDesktopWindow *window) {
 	if (nativeWindow == nullptr) return;
 	window->readDesktopMinimizedState(minimizedState);
 	if (minimizedState.minimized) return;
-	minimizedState.restoreBounds = clampToBounds(nativeWindow->getBounds(), usableDesktopBoundsForDesktop(window->desktopIndex()));
+	if (!validWindowBounds(minimizedState.restoreBounds)) minimizedState.restoreBounds = nativeWindow->getBounds();
 	if (minimizedState.lastMinimizedBounds.a.x < minimizedState.lastMinimizedBounds.b.x && minimizedState.lastMinimizedBounds.a.y < minimizedState.lastMinimizedBounds.b.y) {
 		target = normalizedMinimizedBounds(window, minimizedState.lastMinimizedBounds, fullDesktopBounds());
 		if (minimizedBoundsConflict(window, target)) target = nextMinimizedBounds(window);
@@ -684,7 +707,7 @@ void MRWindowLayout::applyWorkspaceState(MREditWindow *window, const TRect &boun
 	MRDesktopMinimizedState minimizedState;
 
 	window->readDesktopMinimizedState(minimizedState);
-	minimizedState.restoreBounds = clampToBounds(restoreBounds, usableDesktopBoundsForDesktop(window->desktopIndex()));
+	minimizedState.restoreBounds = minimized ? restoreBounds : bounds;
 	minimizedState.minimized = minimized;
 	window->storeDesktopMinimizedState(minimizedState);
 	window->setState(sfShadow, minimized ? False : True);
@@ -712,6 +735,7 @@ void MRWindowLayout::applyWorkspaceState(MREditWindow *window, const TRect &boun
 
 void MRWindowLayout::applyBatchWindowBounds(MRDesktopWindow *window, const TRect &bounds) {
 	if (window == nullptr) return;
+	rememberDesiredWindowBounds(window, bounds);
 	window->applyDesktopBounds(bounds);
 }
 

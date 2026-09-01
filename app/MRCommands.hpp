@@ -164,7 +164,18 @@ enum : ushort {
 	cmMrTextHexEditor,
 	cmMrEditorDocumentCommitted,
 	cmMrCoprocessorDialogResult,
-	cmMrUpdateRestart
+	cmMrUpdateRestart,
+	cmMrDebuggerStart,
+	cmMrDebuggerEvaluate,
+	cmMrDebuggerContinue,
+	cmMrDebuggerStep,
+	cmMrDebuggerStepOver,
+	cmMrDebuggerStepOut,
+	cmMrDebuggerStop,
+	cmMrDebuggerAddWatch,
+	cmMrDebuggerEraseWatch,
+	cmMrDebuggerRunHere,
+	cmMrDebuggerToggleBreakpoint
 };
 
 #endif

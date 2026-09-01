@@ -642,6 +642,18 @@ bool editorIdentifierRangeAroundOffset(MRFileEditor &editor, std::size_t offset,
 	return end > start;
 }
 
+std::string editorIdentifierAroundOffset(MRFileEditor &editor, std::size_t offset) {
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::string identifier;
+
+	if (!editorIdentifierRangeAroundOffset(editor, offset, start, end)) return identifier;
+	identifier.reserve(end - start);
+	for (std::size_t index = start; index < end; ++index)
+		identifier.push_back(editor.charAtOffset(index));
+	return identifier;
+}
+
 std::string workspaceSearchTextAroundOffset(MRFileEditor &editor, std::size_t offset) {
 	std::size_t identifierStart = 0;
 	std::size_t identifierEnd = 0;
@@ -1208,6 +1220,15 @@ std::vector<ContextMenuEntry> buildEditorContextMenuItems(MREditWindow *win, con
 
 	if (editor == nullptr) return entries;
 	entries.push_back(ContextMenuEntry{"Edit", 0, true});
+	if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win); bentoBox != nullptr && bentoBox->gdbDebuggerActive()) {
+		entries.push_back(ContextMenuEntry{"Toggle breakpoint", cmMrDebuggerToggleBreakpoint, false});
+		entries.push_back(ContextMenuEntry{"Run here", cmMrDebuggerRunHere, false});
+		entries.push_back(ContextMenuEntry{"Watch", cmMrDebuggerAddWatch, false});
+		entries.push_back(ContextMenuEntry{"Eval", cmMrDebuggerEvaluate, false});
+		entries.push_back(ContextMenuEntry{"Into", cmMrDebuggerStep, false});
+		entries.push_back(ContextMenuEntry{"Over", cmMrDebuggerStepOver, false});
+		entries.push_back(ContextMenuEntry{"Out", cmMrDebuggerStepOut, false});
+	}
 	entries.push_back(ContextMenuEntry{"Outline", cmMrOtherLocalOutline, false});
 	if (target != nullptr && !workspaceSearchTextAroundOffset(*editor, target->offset).empty()) {
 		entries.push_back(ContextMenuEntry{"References", cmMrOtherReferences, false});
@@ -1344,6 +1365,16 @@ bool showEditorContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 	if (!editorTextTargetFromGlobalPoint(targetWindow, where, target)) return true;
 	if (!chooseMiniMenuCommand(*owner, targetWindow, where, &target, command)) return true;
 	switch (command) {
+		case cmMrDebuggerToggleBreakpoint:
+		case cmMrDebuggerRunHere:
+		case cmMrDebuggerAddWatch:
+		case cmMrDebuggerEvaluate:
+		case cmMrDebuggerStep:
+		case cmMrDebuggerStepOver:
+		case cmMrDebuggerStepOut:
+			if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(targetWindow); bentoBox != nullptr)
+				return bentoBox->executeGdbSourceContextCommand(command, target.offset, editorIdentifierAroundOffset(*targetWindow->getEditor(), target.offset));
+			return false;
 		case cmMrOtherReferences:
 			return requestWorkspaceReferencesCommand(targetWindow, &target);
 		case cmMrOtherRename:
@@ -1754,11 +1785,13 @@ bool handleBuildCurrentFile() {
 
 	if (win == nullptr) return true;
 	sourceBentoBox = dynamic_cast<MRBentoBox *>(win);
+	if (sourceBentoBox == nullptr) sourceBentoBox = dynamic_cast<MRBentoBox *>(win->owner);
 	sourcePath = win->currentFileName();
 	if (sourcePath.empty()) {
 		postDialogWarning("Build current file requires a named source file.");
 		return true;
 	}
+	if (sourceBentoBox != nullptr && sourceBentoBox->gdbDebuggerActive()) sourceBentoBox->stopGdbDebugger();
 	if (win->isFileChanged() && !win->saveCurrentFile()) {
 		postDialogWarning("Unable to save current file before build.");
 		return true;

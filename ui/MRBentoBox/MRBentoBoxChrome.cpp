@@ -1,4 +1,6 @@
 #include "MRBentoBox.hpp"
+
+#include "../../app/services/MRGdbSession.hpp"
 #include "MRBentoBoxRoleSupport.hpp"
 #include "MRBentoPaneFrameView.hpp"
 
@@ -590,6 +592,8 @@ MRBentoPaneSpec MRBentoBox::paneSpecForRole(MRBentoPaneRole role) const noexcept
 			return MRBentoPaneSpec(role, bpbOwnBuffer, !fileComparePanesEditable(), false, true, true, titleMenu);
 		case bprDiffOriginal:
 			return MRBentoPaneSpec(role, bpbOwnBuffer, !fileComparePanesEditable(), true, true, true, titleMenu);
+		case bprProgramTerminal:
+			return MRBentoPaneSpec(role, bpbOwnBuffer, true, true, true, false, titleMenu);
 		case bprCompilerOutput:
 		case bprAppOutput:
 		case bprProblems:
@@ -614,6 +618,8 @@ std::string MRBentoBox::paneTitleForLeaf(const BentoLeaf &leaf) const {
 	if (leaf.role == bprProblems && !compilerProblemsStatus.empty()) return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + compilerProblemsStatus + "]";
 	if (leaf.role == bprStructure && !structureOutlineStatus.empty()) return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + structureOutlineStatus + "]";
 	if (leaf.role == bprFunctions && !functionsOutlineStatus.empty()) return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + functionsOutlineStatus + "]";
+	if ((leaf.role == bprDebuggerOutput || leaf.role == bprProgramTerminal) && gdbSession != nullptr)
+		return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + gdbDebuggerStateText() + "]";
 	if (leaf.role == bprDebuggerOutput && !macroDebuggerStatus.empty()) return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + macroDebuggerStatus + "]";
 	if (!leaf.title.empty()) return leaf.title;
 	return mr::bento::paneRoleTitle(leaf.role);

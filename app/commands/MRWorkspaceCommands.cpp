@@ -539,8 +539,8 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 			mrLogMessage("Workspace serialize skipped window without persistent filename.");
 			continue;
 		}
-		bounds = win->isMinimized() ? win->minimizedWorkspaceBounds() : win->getBounds();
 		restoreBounds = win->restoreWorkspaceBounds();
+		bounds = win->isMinimized() ? win->minimizedWorkspaceBounds() : restoreBounds;
 		cursorColumn = editor->currentColumnNumber();
 		cursorLine = editor->currentLineNumber();
 		vd = win->mVirtualDesktop;

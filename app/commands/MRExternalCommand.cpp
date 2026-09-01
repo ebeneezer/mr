@@ -271,7 +271,7 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 	commandLine.clear();
 	if (source.empty()) return setError(errorMessage, "No source file selected for build.");
 	if (profile.executablePath.empty()) return setError(errorMessage, "Compiler profile has no executable path.");
-	if (toolchain != "GCC" && toolchain != "CLANG" && toolchain != "SWIFT" && toolchain != "FREEBASIC" && toolchain != "QB64PE" && toolchain != "GAMBAS" && toolchain != "LATEXMK" && toolchain != "LATEX") return setError(errorMessage, "Build current file currently supports GCC, CLANG, SWIFT, FREEBASIC, QB64PE, GAMBAS, LATEXMK and LATEX compiler profiles.");
+	if (toolchain != "GCC" && toolchain != "CLANG" && toolchain != "GCC_C" && toolchain != "CLANG_C" && toolchain != "RUST" && toolchain != "GO" && toolchain != "FPC" && toolchain != "SWIFT" && toolchain != "FREEBASIC" && toolchain != "QB64PE" && toolchain != "GAMBAS" && toolchain != "LATEXMK" && toolchain != "LATEX") return setError(errorMessage, "Build current file does not support the selected compiler profile toolchain.");
 	if (toolchain == "QB64PE") {
 		std::error_code error;
 		const std::filesystem::path compilerPath = std::filesystem::canonical(profile.executablePath, error);
@@ -302,6 +302,12 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
+	if (toolchain == "GO") {
+		command << " -o " << quoteShellArgument(compilerOutputPathForSource(source)) << ' ' << quoteShellArgument(source);
+		commandLine = wrapBuildCommandWithProfileHooks(profile, command.str(), context);
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
 	for (const std::string &path : profile.includePaths)
 		if (!path.empty()) command << (toolchain == "FREEBASIC" ? " -i" : " -I") << quoteShellArgument(path);
 	for (const std::string &path : profile.libraryPaths)
@@ -311,6 +317,7 @@ bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std
 			if (!path.empty() && pathIsDirectory(path)) command << " -Xlinker -rpath -Xlinker " << quoteShellArgument(path);
 	command << ' ' << quoteShellArgument(source);
 	if (toolchain == "FREEBASIC") command << " -x " << quoteShellArgument(compilerOutputPathForSource(source));
+	else if (toolchain == "FPC") command << " -o" << quoteShellArgument(compilerOutputPathForSource(source));
 	else
 		command << " -o " << quoteShellArgument(compilerOutputPathForSource(source));
 

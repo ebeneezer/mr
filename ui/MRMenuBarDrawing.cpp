@@ -110,6 +110,14 @@ void MRMenuBar::setEditorFunctionKeysActive(bool active) {
 	drawView();
 }
 
+void MRMenuBar::setDebuggerFunctionKeysActive(bool active) {
+	if (mDebuggerFunctionKeysActive == active) return;
+	mDebuggerFunctionKeysActive = active;
+	applyFunctionKeyMenuShortcuts(mBaseMenu);
+	applyFunctionKeyMenuShortcuts(menu);
+	drawView();
+}
+
 void MRMenuBar::tickMarquee() {
 	const int textLen = static_cast<int>(mMarqueeActiveText.size());
 	auto now = std::chrono::steady_clock::now();
