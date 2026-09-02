@@ -90,4 +90,8 @@
     <td width="50%"><img src="documentation/pngsjpegs/readme-mrmac-modeless.png" alt="MRMAC modeless user interfaces" title="MRMAC drives independent retained canvases, timers, progress, actions, fields, logs, and modeless windows." width="100%"></td>
     <td width="50%"><img src="documentation/pngsjpegs/readme-macro-debugger.png" alt="MRMAC debugger session" title="A paused MRMAC session with source position, execution state, call stack, variables, watches, and step controls." width="100%"></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="documentation/pngsjpegs/Bildschirmfoto_20260902_175215.png" alt="MRMAC GDB integration" title="MR debugs C inferior with variabl mutation, integrated terminal breakpoints and more" width="100%"></td>
+
+  </tr>
 </table>
