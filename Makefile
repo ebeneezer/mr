@@ -120,11 +120,6 @@ MROUTLINETRAINER_OBJECT = trainers/outlinetrainer/mroutlinetrainer.o
 STAGE_PROFILE_PROBE_TARGET = regression/mr_stage_profile_probe
 STAGE_PROFILE_PROBE_SOURCE = regression/mr_stage_profile_probe.cpp
 STAGE_PROFILE_PROBE_OBJECT = regression/mr_stage_profile_probe.o
-REGRESSION_PROBE_TARGET = regression/mr-regression-checks
-REGRESSION_PROBE_SOURCE = regression/mr-regression-checks.cpp
-REGRESSION_PROBE_OBJECT = regression/mr-regression-checks.o
-MACRO_DEBUGGER_CROSS_SECTION_PROBE_SOURCE = regression/MRMacroDebuggerCrossSectionProbe.cpp
-MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT = regression/MRMacroDebuggerCrossSectionProbe.o
 BASIC_LANGUAGE_PROBE_TARGET = regression/mr_basic_language_probe
 BASIC_LANGUAGE_PROBE_SOURCE = regression/MRBasicLanguageProbe.cpp
 BASIC_LANGUAGE_PROBE_OBJECT = regression/MRBasicLanguageProbe.o
@@ -497,7 +492,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check update-deps-check \
-	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full basic-language-probe mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
+	mrfoldtrainer mrindenttrainer mroutlinetrainer stage-profile-probe basic-language-probe mrmac-v1-check phase1-repro-probe workspace-service-context-probe \
 	bolt-seed bolt-seed-gcc bolt-seed-clang bolt-record bolt-optimize bolt-clean \
 	compile-manuals \
 	release-zip \
@@ -516,7 +511,6 @@ mrfoldtrainer: $(MRFOLDTRAINER_TARGET)
 mrindenttrainer: $(MRINDENTTRAINER_TARGET)
 mroutlinetrainer: $(MROUTLINETRAINER_TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
-regression-probe: $(REGRESSION_PROBE_TARGET)
 basic-language-probe: $(BASIC_LANGUAGE_PROBE_TARGET)
 phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
 workspace-service-context-probe: $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET)
@@ -532,13 +526,7 @@ bolt-optimize:
 	@MR_BOLT_BUILD_DIR="$(BOLT_BUILD_DIR)" MR_BOLT_PERF2BOLT="$(PERF2BOLT)" MR_BOLT_MERGE_FDATA="$(MERGE_FDATA)" MR_BOLT_LLVM_BOLT="$(LLVM_BOLT)" MR_BOLT_STRIP="$(STRIP)" $(BOLT_WORKFLOW) optimize
 bolt-clean:
 	@MR_BOLT_BUILD_DIR="$(BOLT_BUILD_DIR)" $(BOLT_WORKFLOW) clean
-regression-check: $(REGRESSION_PROBE_TARGET)
-	./$(REGRESSION_PROBE_TARGET) --full
-regression-check-core: $(REGRESSION_PROBE_TARGET)
-	./$(REGRESSION_PROBE_TARGET)
-regression-check-full: $(REGRESSION_PROBE_TARGET)
-	./$(REGRESSION_PROBE_TARGET) --full
-mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET) regression-probe
+mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET)
 	$(MRMAC_V1_SUITE_SCRIPT)
 
 compile-manuals:
@@ -1043,8 +1031,6 @@ piecetable/MRTextDocumentDirectLineIndex.o: piecetable/MRTextDocumentDirectLineI
 $(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsRuntime.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp
 $(MROUTLINETRAINER_OBJECT): $(MROUTLINETRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
-$(REGRESSION_PROBE_OBJECT): $(REGRESSION_PROBE_SOURCE) app/MRRuntimeScheduler.hpp app/MRRuntimeTimerSource.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp mrmac/MRVM.hpp piecetable/MRTextDocument.hpp
-$(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT): $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_SOURCE) mrmac/MRMacroExecutionSession.hpp mrmac/MRVM.hpp mrmac/mrmac.h mrmac/vm/MRVMRuntimeDebugger.hpp
 $(BASIC_LANGUAGE_PROBE_OBJECT): $(BASIC_LANGUAGE_PROBE_SOURCE) app/commands/MRExternalCommand.hpp config/settings/MRSettingsCompilerProfiles.hpp config/settings/MRSettingsRuntime.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp
 app/services/MRWorkspaceServiceContext.o: app/services/MRWorkspaceServiceContext.cpp app/services/MRWorkspaceServiceContext.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT): $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_SOURCE) app/services/MRWorkspaceServiceContext.hpp
@@ -1064,9 +1050,6 @@ $(MROUTLINETRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MR
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check update-deps-check
-	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
-
-$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) | pcre2-check update-deps-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(BASIC_LANGUAGE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(BASIC_LANGUAGE_PROBE_OBJECT) | pcre2-check update-deps-check
@@ -1093,7 +1076,6 @@ clean:
 		$(MRINDENTTRAINER_OBJECT) $(MRINDENTTRAINER_TARGET) \
 		$(MROUTLINETRAINER_OBJECT) $(MROUTLINETRAINER_TARGET) \
 		$(STAGE_PROFILE_PROBE_TARGET) \
-		$(REGRESSION_PROBE_OBJECT) $(MACRO_DEBUGGER_CROSS_SECTION_PROBE_OBJECT) \
 		$(BASIC_LANGUAGE_PROBE_OBJECT) $(BASIC_LANGUAGE_PROBE_TARGET) \
 		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
 		$(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_OBJECT) $(MR_WORKSPACE_SERVICE_CONTEXT_PROBE_TARGET) \

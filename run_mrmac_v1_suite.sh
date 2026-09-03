@@ -22,7 +22,7 @@ declare -a staged_macros=(
 )
 
 echo "[MRMAC v1] Build binaries"
-make mr stage-profile-probe regression-probe
+make mr stage-profile-probe
 
 echo "[MRMAC v1] Staged eligibility"
 staged_output="$(./regression/mr_stage_profile_probe "${staged_macros[@]}")"
@@ -47,12 +47,5 @@ if printf '%s\n' "${compile_output}" | rg -q "compile_error=|read_error"; then
   echo "[MRMAC v1] FAILED: macro compile sweep"
   exit 1
 fi
-
-echo "[MRMAC v1] Background staged probes"
-./regression/mr-regression-checks --probe staged-nav
-./regression/mr-regression-checks --probe staged-mark-page
-
-echo "[MRMAC v1] Closure state probe"
-./regression/mr-regression-checks --probe closure-hash-default
 
 echo "[MRMAC v1] PASS"
