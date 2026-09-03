@@ -449,6 +449,7 @@ CXX_SOURCES = \
 	ui/MRFileEditor/MRFileEditorViewState.cpp \
 	ui/MRFileEditor/MRFEBlockOps.cpp \
 	ui/MRFileEditor/MRFileEditorIndent.cpp \
+	ui/MRFileEditor/MRFileEditorSyntaxDrawing.cpp \
 	ui/MRFileEditor/MRFileEditorSyntaxWarmup.cpp \
 	ui/MRFileEditor/MRFileEditorWarmup.cpp \
 	ui/MRFileEditor/MRFileEditorWidthWarmup.cpp \
@@ -929,6 +930,7 @@ ui/MRFileEditor/MRFileEditorEvents.o: ui/MRFileEditor/MRFileEditorEvents.cpp ui/
 ui/MRFileEditor/MRFileEditorViewState.o: ui/MRFileEditor/MRFileEditorViewState.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp
 ui/MRFileEditor/MRFEBlockOps.o: ui/MRFileEditor/MRFEBlockOps.cpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorIndent.o: ui/MRFileEditor/MRFileEditorIndent.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp ui/MRSyntaxBasic.hpp
+ui/MRFileEditor/MRFileEditorSyntaxDrawing.o: ui/MRFileEditor/MRFileEditorSyntaxDrawing.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp
 ui/MRFileEditor/MRFileEditorCommitSync.o: ui/MRFileEditor/MRFileEditorCommitSync.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp app/MRCommands.hpp
 ui/MRFileEditor/MRFileEditorSyntaxWarmup.o: ui/MRFileEditor/MRFileEditorSyntaxWarmup.cpp ui/MRFileEditor/MRFileEditor.hpp coprocessor/MRCoprocessor.hpp derivedstate/MRSyntaxDerivedState.hpp piecetable/MRTextDocument.hpp
 ui/MRFileEditor/MRFileEditorWarmup.o: ui/MRFileEditor/MRFileEditorWarmup.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp

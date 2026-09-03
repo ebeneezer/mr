@@ -1661,7 +1661,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		}
 
 		void refreshBlockVisual() {
-			if (editor != nullptr) static_cast<void>(mBlockOps.refreshVisual(*editor));
+			if (editor != nullptr && !mBlockOps.remapAfterEditorChange(*editor)) static_cast<void>(mBlockOps.refreshVisual(*editor));
 		}
 
 	bool moveCursorToTopOfView() {

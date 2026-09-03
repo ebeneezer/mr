@@ -160,6 +160,9 @@ enum : ushort {
 	cmMrMacroDebuggerEraseWatch,
 	cmMrMacroDebuggerRunHere,
 	cmMrMacroDebuggerEvaluate,
+	cmMrMacroDebuggerToggleBreakpointEnabled,
+	cmMrMacroDebuggerToggleAllBreakpoints,
+	cmMrMacroDebuggerClearAllBreakpoints,
 	cmMrDeferredWindowClose,
 	cmMrTextHexEditor,
 	cmMrEditorDocumentCommitted,
@@ -175,7 +178,8 @@ enum : ushort {
 	cmMrDebuggerAddWatch,
 	cmMrDebuggerEraseWatch,
 	cmMrDebuggerRunHere,
-	cmMrDebuggerToggleBreakpoint
+	cmMrDebuggerToggleBreakpoint,
+	cmMrDebuggerClearProgramTerminal
 };
 
 #endif

@@ -269,6 +269,55 @@ short MRBentoBox::paneRoleIndexAt(TPoint globalMouse) {
 	return static_cast<short>(std::clamp(localMouse.y - paneRoleListAnchor.a.y, 0, maxIndex));
 }
 
+int MRBentoBox::materializeIndependentDividerSegment(int nodeIndex, TPoint point, bool &layoutChanged) noexcept {
+	layoutChanged = false;
+	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return nodeIndex;
+	const BentoLayoutNode parent = layoutTree[nodeIndex];
+	if (parent.kind != blnSplit || parent.firstChild < 0 || parent.secondChild < 0 ||
+	    parent.firstChild >= static_cast<int>(layoutTree.size()) || parent.secondChild >= static_cast<int>(layoutTree.size()))
+		return nodeIndex;
+	const BentoLayoutNode first = layoutTree[parent.firstChild];
+	const BentoLayoutNode second = layoutTree[parent.secondChild];
+	if (first.kind != blnSplit || second.kind != blnSplit || first.orientation != second.orientation || first.orientation == parent.orientation) return nodeIndex;
+	const int firstPosition = currentDividerPosition(parent.firstChild);
+	const int secondPosition = currentDividerPosition(parent.secondChild);
+	if (firstPosition != secondPosition) return nodeIndex;
+	if (first.orientation == bsoVertical) {
+		if (point.x == firstPosition || point.x == firstPosition - 1) return nodeIndex;
+	} else if (point.y == firstPosition || point.y == firstPosition - 1)
+		return nodeIndex;
+
+	const int sharedPosition = currentDividerPosition(nodeIndex);
+	BentoLayoutNode firstSegment;
+	firstSegment.kind = blnSplit;
+	firstSegment.orientation = parent.orientation;
+	firstSegment.dividerPosition = sharedPosition;
+	firstSegment.firstChild = first.firstChild;
+	firstSegment.secondChild = second.firstChild;
+	firstSegment.leafId = -1;
+	BentoLayoutNode secondSegment;
+	secondSegment.kind = blnSplit;
+	secondSegment.orientation = parent.orientation;
+	secondSegment.dividerPosition = sharedPosition;
+	secondSegment.firstChild = first.secondChild;
+	secondSegment.secondChild = second.secondChild;
+	secondSegment.leafId = -1;
+	BentoLayoutNode segmentedParent;
+	segmentedParent.kind = blnSplit;
+	segmentedParent.orientation = first.orientation;
+	segmentedParent.dividerPosition = firstPosition;
+	segmentedParent.firstChild = parent.firstChild;
+	segmentedParent.secondChild = parent.secondChild;
+	segmentedParent.leafId = -1;
+
+	layoutTree[parent.firstChild] = firstSegment;
+	layoutTree[parent.secondChild] = secondSegment;
+	layoutTree[nodeIndex] = segmentedParent;
+	layoutChanged = true;
+	return first.orientation == bsoVertical ? (point.x < firstPosition ? parent.firstChild : parent.secondChild)
+	                                        : (point.y < firstPosition ? parent.firstChild : parent.secondChild);
+}
+
 void MRBentoBox::dragDivider(TEvent &event, int nodeIndex) noexcept {
 	if (maximizedLeafId >= 0) return;
 	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return;
@@ -306,17 +355,24 @@ void MRBentoBox::dragDivider(TEvent &event, int nodeIndex) noexcept {
 	const int initialPosition = currentDividerPosition(nodeIndex);
 	const bool vertical = layoutTree[nodeIndex].orientation == bsoVertical;
 	const int dragOffset = (vertical ? initialLocal.x : initialLocal.y) - initialPosition;
+	bool layoutChanged = false;
+	bool segmentResolved = false;
 	if (event.what != evMouseDown) {
 		const TPoint local = makeLocal(event.mouse.where);
+		if ((vertical ? local.x : local.y) - dragOffset != initialPosition) nodeIndex = materializeIndependentDividerSegment(nodeIndex, initialLocal, layoutChanged);
+		segmentResolved = true;
 		setDividerPosition(nodeIndex, (vertical ? local.x : local.y) - dragOffset, false);
-	} else
-		setDividerPosition(nodeIndex, (vertical ? initialLocal.x : initialLocal.y) - dragOffset, false);
+	}
 	while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseUp)) {
 		if (event.what == evMouseUp) break;
 		const TPoint local = makeLocal(event.mouse.where);
+		if (!segmentResolved && (vertical ? local.x : local.y) - dragOffset != initialPosition) {
+			nodeIndex = materializeIndependentDividerSegment(nodeIndex, initialLocal, layoutChanged);
+			segmentResolved = true;
+		}
 		setDividerPosition(nodeIndex, (vertical ? local.x : local.y) - dragOffset, false);
 	}
-	if (currentDividerPosition(nodeIndex) != initialPosition) mrMarkWorkspaceAutosaveDirty("bento divider", this);
+	if (layoutChanged || currentDividerPosition(nodeIndex) != initialPosition) mrMarkWorkspaceAutosaveDirty("bento divider", this);
 }
 
 void MRBentoBox::setDividerPosition(int position) noexcept {
@@ -452,14 +508,36 @@ int MRBentoBox::clampedDividerPosition(int position) const noexcept {
 int MRBentoBox::clampedDividerPosition(int nodeIndex, int position) const noexcept {
 	const TRect bounds = nodeBounds(nodeIndex);
 	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return position;
-	if (layoutTree[nodeIndex].orientation == bsoVertical) {
-		const int minX = std::min<int>(bounds.b.x - 1, bounds.a.x + kMinimumPaneWidth);
-		const int maxX = std::max(minX, bounds.b.x - kMinimumPaneWidth);
-		return std::clamp(position, minX, maxX);
-	}
-	const int minY = std::min<int>(bounds.b.y - 1, bounds.a.y + kMinimumPaneHeight);
-	const int maxY = std::max(minY, bounds.b.y - kMinimumPaneHeight);
-	return std::clamp(position, minY, maxY);
+	const BentoLayoutNode &node = layoutTree[nodeIndex];
+	const bool vertical = node.orientation == bsoVertical;
+	const int lowerBound = vertical ? bounds.a.x : bounds.a.y;
+	const int upperBound = vertical ? bounds.b.x : bounds.b.y;
+	const int extent = upperBound - lowerBound;
+	if (extent <= 1) return lowerBound;
+	const int firstMinimum = vertical ? minimumNodeWidth(node.firstChild) : minimumNodeHeight(node.firstChild);
+	const int secondMinimum = vertical ? minimumNodeWidth(node.secondChild) : minimumNodeHeight(node.secondChild);
+	const int minimumPosition = lowerBound + firstMinimum;
+	const int maximumPosition = upperBound - secondMinimum;
+	if (minimumPosition <= maximumPosition) return std::clamp(position, minimumPosition, maximumPosition);
+	const int totalMinimum = std::max(2, firstMinimum + secondMinimum);
+	const int projectedFirstExtent = std::clamp(extent * firstMinimum / totalMinimum, 1, extent - 1);
+	return lowerBound + projectedFirstExtent;
+}
+
+int MRBentoBox::minimumNodeWidth(int nodeIndex) const noexcept {
+	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return kMinimumPaneWidth;
+	const BentoLayoutNode &node = layoutTree[nodeIndex];
+	if (node.kind == blnPane) return kMinimumPaneWidth;
+	if (node.orientation == bsoVertical) return minimumNodeWidth(node.firstChild) + minimumNodeWidth(node.secondChild);
+	return std::max(minimumNodeWidth(node.firstChild), minimumNodeWidth(node.secondChild));
+}
+
+int MRBentoBox::minimumNodeHeight(int nodeIndex) const noexcept {
+	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return kMinimumPaneHeight;
+	const BentoLayoutNode &node = layoutTree[nodeIndex];
+	if (node.kind == blnPane) return kMinimumPaneHeight;
+	if (node.orientation == bsoHorizontal) return minimumNodeHeight(node.firstChild) + minimumNodeHeight(node.secondChild);
+	return std::max(minimumNodeHeight(node.firstChild), minimumNodeHeight(node.secondChild));
 }
 
 int MRBentoBox::currentDividerPosition() const noexcept {

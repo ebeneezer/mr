@@ -42,6 +42,9 @@ static const DebuggerCommandDescriptor kDebuggerCommands[] = {
 	{cmMrMacroDebuggerEvaluate, kbF4, 0},
 	{cmMrMacroDebuggerContinue, kbF5, 0},
 	{cmMrMacroDebuggerRunHere, kbF6, 0},
+	{cmMrMacroDebuggerToggleBreakpointEnabled, kbF9, kbShift},
+	{cmMrMacroDebuggerToggleAllBreakpoints, kbF9, static_cast<ushort>(kbAltShift | kbShift)},
+	{cmMrMacroDebuggerClearAllBreakpoints, kbF9, static_cast<ushort>(kbCtrlShift | kbShift)},
 	{cmMrMacroDebuggerAddWatch, kbF7, 0},
 	{cmMrMacroDebuggerEraseWatch, kbF7, kbShift},
 	{cmMrMacroDebuggerStop, kbF8, 0},
@@ -68,6 +71,11 @@ bool mrHandleDebuggerCommand(MRBentoBox *bentoBox, TEvent &event) {
 		return true;
 	}
 	if (bentoBox == nullptr) return false;
+	if (event.message.command == cmMrDebuggerClearProgramTerminal) {
+		if (!bentoBox->clearGdbProgramTerminal()) return false;
+		event.what = evNothing;
+		return true;
+	}
 	for (const DebuggerCommandDescriptor &descriptor : kDebuggerCommands) {
 		if (descriptor.command != event.message.command) continue;
 		TEvent keyEvent;

@@ -238,7 +238,7 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 				labels[7] = {TKey(kbF8, kbShift), cmMrOtherFindPreviousCompilerError, "~S-F8~ PrevErr"};
 			if (debuggerActive) {
 				labels[6] = {TKey(kbF7, kbShift), cmMrDebuggerEraseWatch, "~S-F7~ Watch -"};
-				labels[8] = {TKey(kbF9, kbShift), 0, "~S-F9~ BP +/-"};
+				if (macroDebuggerActive) labels[8] = {TKey(kbF9, kbShift), cmMrMacroDebuggerToggleBreakpointEnabled, "~S-F9~ BP +/-"};
 				labels[10] = {TKey(kbF11, kbShift), cmMrDebuggerStepOut, debuggerLive && !debuggerRunning ? "~S-F11~ Out" : ""};
 			}
 			return labels;
@@ -250,11 +250,11 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 			return labels;
 		case static_cast<ushort>(kbShift | kbCtrlShift):
 			labels = emptyFunctionKeyLabels(modifiers);
-			if (macroDebuggerActive) labels[8] = {TKey(kbF9, modifiers), 0, "~CS-F9~ ClearBP"};
+			if (macroDebuggerActive) labels[8] = {TKey(kbF9, modifiers), cmMrMacroDebuggerClearAllBreakpoints, "~CS-F9~ ClearBP"};
 			return labels;
 		case static_cast<ushort>(kbShift | kbAltShift):
 			labels = emptyFunctionKeyLabels(modifiers);
-			if (macroDebuggerActive) labels[8] = {TKey(kbF9, modifiers), 0, "~AS-F9~ BP All"};
+			if (macroDebuggerActive) labels[8] = {TKey(kbF9, modifiers), cmMrMacroDebuggerToggleAllBreakpoints, "~AS-F9~ BP All"};
 			return labels;
 		default:
 			labels = emptyFunctionKeyLabels(modifiers);
@@ -309,7 +309,7 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 		labels[7] = {TKey(kbF8), cmMrDebuggerStop, debuggerLive ? "~F8~ Stop" : "~F8~ Reset"};
 		labels[8] = {TKey(kbF9), cmMrDebuggerToggleBreakpoint, "~F9~ BP"};
 		labels[9] = {TKey(kbF10), cmMrDebuggerStep, debuggerLive && !debuggerRunning ? "~F10~ Into" : ""};
-		labels[10] = {TKey(kbF11), cmMrDebuggerStepOver, debuggerLive && !debuggerRunning ? "~F11~ Over" : ""};
+		labels[10] = {TKey(kbF11), cmMrDebuggerStepOver, debuggerLive && !debuggerRunning ? "~F11~ Step" : ""};
 		labels[11] = {TKey(kbShiftF11), cmMrDebuggerStepOut, debuggerLive && !debuggerRunning ? "~S-F11~ Out" : ""};
 	}
 	return labels;

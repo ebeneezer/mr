@@ -228,6 +228,10 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrMacroDebuggerEraseWatch, hasEditor);
 	setCommandEnabled(cmMrMacroDebuggerRunHere, hasEditor);
 	setCommandEnabled(cmMrMacroDebuggerEvaluate, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerToggleBreakpointEnabled, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerToggleAllBreakpoints, hasEditor);
+	setCommandEnabled(cmMrMacroDebuggerClearAllBreakpoints, hasEditor);
+	setCommandEnabled(cmMrDebuggerClearProgramTerminal, state.hasGdbDebugger);
 	setCommandEnabled(cmMrOtherMatchBraceOrParen, hasEditor);
 	setCommandEnabled(cmMrOtherLocalOutline, hasEditor);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);

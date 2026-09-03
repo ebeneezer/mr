@@ -246,6 +246,7 @@ class MRBentoBox : public MREditWindow {
 		void stopGdbDebugger() noexcept;
 		[[nodiscard]] bool acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload);
 		[[nodiscard]] bool sendGdbTerminalInput(const std::string &text);
+		[[nodiscard]] bool clearGdbProgramTerminal();
 		[[nodiscard]] bool executeGdbSourceContextCommand(ushort command, std::size_t sourceOffset, const std::string &identifier);
 		void resizeGdbTerminal(int columns, int rows);
 		void setMacroDebuggerTarget(const std::string &macroKey, const std::string &macroName);
@@ -502,6 +503,7 @@ class MRBentoBox : public MREditWindow {
 	void updatePaneRoleListChrome() noexcept;
 	[[nodiscard]] short paneRoleIndexAt(TPoint globalMouse);
 	void dragDivider(TEvent &event, int nodeIndex) noexcept;
+	[[nodiscard]] int materializeIndependentDividerSegment(int nodeIndex, TPoint point, bool &layoutChanged) noexcept;
 	void setDividerPosition(int nodeIndex, int position, bool markWorkspace) noexcept;
 	void setDividerPosition(int position) noexcept;
 	void setActivePane(int leafId) noexcept;
@@ -514,6 +516,8 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] int defaultDividerPosition(int nodeIndex) const noexcept;
 	[[nodiscard]] int clampedDividerPosition(int position) const noexcept;
 	[[nodiscard]] int clampedDividerPosition(int nodeIndex, int position) const noexcept;
+	[[nodiscard]] int minimumNodeWidth(int nodeIndex) const noexcept;
+	[[nodiscard]] int minimumNodeHeight(int nodeIndex) const noexcept;
 	[[nodiscard]] int currentDividerPosition() const noexcept;
 	[[nodiscard]] int currentDividerPosition(int nodeIndex) const noexcept;
 	[[nodiscard]] bool hasPaneSplit() const noexcept;

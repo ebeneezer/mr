@@ -173,8 +173,6 @@ bool normalizeBentoSnapshotForBootstrap(MRBentoWorkspaceSnapshot &snapshot, std:
 		}
 		droppedPanes.push_back(DroppedBentoPane{leaf.id, keeper->id, leaf.role});
 	}
-	if (droppedPanes.empty()) return true;
-
 	normalized.mode = snapshot.mode;
 	normalized.rootNode = cloneCanonicalBentoNode(snapshot, snapshot.rootNode, droppedPanes, normalized.nodes);
 	if (normalized.rootNode < 0) return false;

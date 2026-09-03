@@ -318,22 +318,41 @@ bool MRBentoBox::placePaneRoleInContext(MRBentoPaneRole role, MRBentoPanePlaceme
 
 MRBentoWorkspaceSnapshot MRBentoBox::workspaceSnapshot() const {
 	MRBentoWorkspaceSnapshot snapshot;
+	std::vector<int> sourceNodeOrder;
+	std::vector<int> sourceToSnapshot(layoutTree.size(), -1);
+	std::vector<int> pendingNodes;
+	std::vector<int> reachableLeafIds;
 
 	snapshot.mode = bentoMode;
-	snapshot.rootNode = rootNode;
-	snapshot.activeLeafId = activeLeafId;
-	snapshot.maximizedLeafId = maximizedLeafId;
-	for (const BentoLayoutNode &node : layoutTree) {
+	if (rootNode < 0 || rootNode >= static_cast<int>(layoutTree.size())) return snapshot;
+	pendingNodes.push_back(rootNode);
+	while (!pendingNodes.empty()) {
+		const int nodeIndex = pendingNodes.back();
+		pendingNodes.pop_back();
+		if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size()) || sourceToSnapshot[static_cast<std::size_t>(nodeIndex)] >= 0) continue;
+		sourceToSnapshot[static_cast<std::size_t>(nodeIndex)] = static_cast<int>(sourceNodeOrder.size());
+		sourceNodeOrder.push_back(nodeIndex);
+		const BentoLayoutNode &node = layoutTree[static_cast<std::size_t>(nodeIndex)];
+		if (node.kind == blnSplit) {
+			pendingNodes.push_back(node.secondChild);
+			pendingNodes.push_back(node.firstChild);
+		} else
+			reachableLeafIds.push_back(node.leafId);
+	}
+	snapshot.rootNode = sourceToSnapshot[static_cast<std::size_t>(rootNode)];
+	for (int sourceNodeIndex : sourceNodeOrder) {
+		const BentoLayoutNode &node = layoutTree[static_cast<std::size_t>(sourceNodeIndex)];
 		MRBentoWorkspaceNode workspaceNode;
 		workspaceNode.kind = static_cast<int>(node.kind);
 		workspaceNode.orientation = static_cast<int>(node.orientation);
 		workspaceNode.dividerPosition = node.dividerPosition;
-		workspaceNode.firstChild = node.firstChild;
-		workspaceNode.secondChild = node.secondChild;
+		workspaceNode.firstChild = node.firstChild >= 0 && node.firstChild < static_cast<int>(sourceToSnapshot.size()) ? sourceToSnapshot[static_cast<std::size_t>(node.firstChild)] : -1;
+		workspaceNode.secondChild = node.secondChild >= 0 && node.secondChild < static_cast<int>(sourceToSnapshot.size()) ? sourceToSnapshot[static_cast<std::size_t>(node.secondChild)] : -1;
 		workspaceNode.leafId = node.leafId;
 		snapshot.nodes.push_back(workspaceNode);
 	}
 	for (const BentoLeaf &leaf : leaves) {
+		if (std::find(reachableLeafIds.begin(), reachableLeafIds.end(), leaf.id) == reachableLeafIds.end()) continue;
 		MRBentoWorkspaceLeaf workspaceLeaf;
 		workspaceLeaf.id = leaf.id;
 		workspaceLeaf.role = leaf.role;
@@ -341,6 +360,10 @@ MRBentoWorkspaceSnapshot MRBentoBox::workspaceSnapshot() const {
 		workspaceLeaf.widgetMask = leaf.spec.widgetMask;
 		snapshot.leaves.push_back(workspaceLeaf);
 	}
+	const bool activeLeafReachable = std::find(reachableLeafIds.begin(), reachableLeafIds.end(), activeLeafId) != reachableLeafIds.end();
+	const bool maximizedLeafReachable = std::find(reachableLeafIds.begin(), reachableLeafIds.end(), maximizedLeafId) != reachableLeafIds.end();
+	snapshot.activeLeafId = activeLeafReachable ? activeLeafId : 0;
+	snapshot.maximizedLeafId = maximizedLeafReachable ? maximizedLeafId : -1;
 	return snapshot;
 }
 

@@ -1759,7 +1759,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		mCompilerErrorMessageField = new TRadioButtons(TRect(leftColumnLeft, 18, leftColumnRight, 20), new TSItem("~U~nder code", new TSItem("~R~ight margin", nullptr)));
 		addManaged(mCompilerErrorMessageField, TRect(leftColumnLeft, 18, leftColumnRight, 20));
 
-		addManaged(new TStaticText(TRect(rightColumnLeft, 17, rightColumnRight, 18), "Start configuration:"), TRect(rightColumnLeft, 17, rightColumnRight, 18));
+		addManaged(new TStaticText(TRect(rightColumnLeft, 17, rightColumnRight, 18), "File compare:"), TRect(rightColumnLeft, 17, rightColumnRight, 18));
 		mFileCompareStartField = new TRadioButtons(TRect(rightColumnLeft, 18, rightColumnRight, 20), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
 		addManaged(mFileCompareStartField, TRect(rightColumnLeft, 18, rightColumnRight, 20));
 

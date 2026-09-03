@@ -13,6 +13,7 @@ class MRGdbTerminalPane final : public MRPaneEditWindow {
   public:
 	MRGdbTerminalPane(const TRect &bounds, const char *title, int number);
 	void appendTerminalOutput(const std::string &text);
+	void clearTerminal();
 	void resetTerminal();
 
   protected:

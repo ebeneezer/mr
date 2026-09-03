@@ -99,13 +99,26 @@ bool blockGeometryIsEmpty(const MRFEBlockGeometry &geometry) {
 	return true;
 }
 
-std::size_t remapBlockOffsetForDocumentChange(std::size_t offset, std::size_t oldLength, std::size_t newLength, std::size_t editStart, std::size_t oldEditEnd, long long delta) noexcept {
+enum class BlockOffsetAffinity {
+	Start,
+	End,
+	EndWithinReplacement
+};
+
+std::size_t remapBlockOffsetForDocumentChange(std::size_t offset, std::size_t oldLength, std::size_t newLength, std::size_t editStart, std::size_t oldEditEnd, long long delta, BlockOffsetAffinity affinity) noexcept {
 	offset = std::min(offset, oldLength);
 	if (offset <= editStart) return std::min(offset, newLength);
 	if (offset >= oldEditEnd) {
 		const long long shifted = static_cast<long long>(offset) + delta;
 		if (shifted <= 0) return 0;
 		return std::min(static_cast<std::size_t>(shifted), newLength);
+	}
+	if (affinity != BlockOffsetAffinity::Start) {
+		const long long shiftedEnd = static_cast<long long>(oldEditEnd) + delta;
+		if (shiftedEnd <= 0) return 0;
+		std::size_t mapped = std::min(static_cast<std::size_t>(shiftedEnd), newLength);
+		if (affinity == BlockOffsetAffinity::EndWithinReplacement && mapped > editStart) --mapped;
+		return mapped;
 	}
 	return std::min(editStart, newLength);
 }
@@ -1043,8 +1056,13 @@ bool MRFEBlockOps::remapAfterEditorChange(MRFileEditor &editor) {
 	if (replacedOldLength > oldLength - editStart) replacedOldLength = oldLength - editStart;
 	const std::size_t oldEditEnd = editStart + replacedOldLength;
 
-	mGeometry.anchor = remapBlockOffsetForDocumentChange(mGeometry.anchor, oldLength, newLength, editStart, oldEditEnd, delta);
-	mGeometry.cursor = remapBlockOffsetForDocumentChange(mGeometry.cursor, oldLength, newLength, editStart, oldEditEnd, delta);
+	const bool emptyEndpoints = mGeometry.anchor == mGeometry.cursor;
+	const bool anchorStartsBlock = mGeometry.anchor < mGeometry.cursor;
+	const BlockOffsetAffinity endAffinity = mGeometry.mode == MRFEBlockMode::Stream ? BlockOffsetAffinity::End : BlockOffsetAffinity::EndWithinReplacement;
+	const BlockOffsetAffinity anchorAffinity = !emptyEndpoints && !anchorStartsBlock ? endAffinity : BlockOffsetAffinity::Start;
+	const BlockOffsetAffinity cursorAffinity = !emptyEndpoints && anchorStartsBlock ? endAffinity : BlockOffsetAffinity::Start;
+	mGeometry.anchor = remapBlockOffsetForDocumentChange(mGeometry.anchor, oldLength, newLength, editStart, oldEditEnd, delta, anchorAffinity);
+	mGeometry.cursor = remapBlockOffsetForDocumentChange(mGeometry.cursor, oldLength, newLength, editStart, oldEditEnd, delta, cursorAffinity);
 	if (mGeometry.mode != MRFEBlockMode::Column) {
 		mGeometry.anchorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.anchor)));
 		mGeometry.cursorColumn = std::max(0, static_cast<int>(editor.columnOfOffset(mGeometry.cursor)));

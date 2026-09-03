@@ -316,6 +316,15 @@ bool MRBentoBox::sendGdbTerminalInput(const std::string &text) {
 	return sendGdbCommand(MRGdbCommandKind::TerminalInput, text);
 }
 
+bool MRBentoBox::clearGdbProgramTerminal() {
+	MRGdbTerminalPane *terminalWindow = programTerminalPane();
+
+	if (!gdbDebuggerActive() || terminalWindow == nullptr) return false;
+	terminalWindow->clearTerminal();
+	bentoProjectionDirty |= bpdContent;
+	return true;
+}
+
 bool MRBentoBox::executeGdbSourceContextCommand(ushort command, std::size_t sourceOffset, const std::string &identifier) {
 	MRFileEditor *editor = getEditor();
 

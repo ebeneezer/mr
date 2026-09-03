@@ -471,6 +471,21 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_DESKTOP_MOVE_WINDOW_LEFT", KeymapDispatchKind::AppCommand, cmMrWindowMoveToPrevDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_DESKTOP_MOVE_WINDOW_RIGHT", KeymapDispatchKind::AppCommand, cmMrWindowMoveToNextDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_BUILD_CURRENT_FILE", KeymapDispatchKind::AppCommand, cmMrOtherBuildCurrentFile, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_START", KeymapDispatchKind::AppCommand, cmMrDebuggerStart, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_EVALUATE", KeymapDispatchKind::AppCommand, cmMrDebuggerEvaluate, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_CONTINUE_PAUSE", KeymapDispatchKind::AppCommand, cmMrDebuggerContinue, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_RUN_HERE", KeymapDispatchKind::AppCommand, cmMrDebuggerRunHere, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_ADD_WATCH", KeymapDispatchKind::AppCommand, cmMrDebuggerAddWatch, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_ERASE_WATCH", KeymapDispatchKind::AppCommand, cmMrDebuggerEraseWatch, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_STOP_RESET", KeymapDispatchKind::AppCommand, cmMrDebuggerStop, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_TOGGLE_BREAKPOINT", KeymapDispatchKind::AppCommand, cmMrDebuggerToggleBreakpoint, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_STEP_INTO", KeymapDispatchKind::AppCommand, cmMrDebuggerStep, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_STEP", KeymapDispatchKind::AppCommand, cmMrDebuggerStepOver, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_STEP_OUT", KeymapDispatchKind::AppCommand, cmMrDebuggerStepOut, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_DEBUGGER_CLEAR_PROGRAM_TERMINAL", KeymapDispatchKind::AppCommand, cmMrDebuggerClearProgramTerminal, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_MACRO_DEBUGGER_TOGGLE_BREAKPOINT_ENABLED", KeymapDispatchKind::AppCommand, cmMrMacroDebuggerToggleBreakpointEnabled, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_MACRO_DEBUGGER_TOGGLE_ALL_BREAKPOINTS", KeymapDispatchKind::AppCommand, cmMrMacroDebuggerToggleAllBreakpoints, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_MACRO_DEBUGGER_CLEAR_ALL_BREAKPOINTS", KeymapDispatchKind::AppCommand, cmMrMacroDebuggerClearAllBreakpoints, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SEARCH_RESULTS_NEXT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SearchResultsNext},
     KeymapActionDispatchEntry{"MR_SEARCH_MULTI_FILE_REPLACE", KeymapDispatchKind::AppCommand, cmMrSearchMultiFileSearchReplace, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_COMPILER_PROBLEMS_NEXT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CompilerProblemsNext},
@@ -1226,8 +1241,9 @@ std::vector<ContextMenuEntry> buildEditorContextMenuItems(MREditWindow *win, con
 		entries.push_back(ContextMenuEntry{"Watch", cmMrDebuggerAddWatch, false});
 		entries.push_back(ContextMenuEntry{"Eval", cmMrDebuggerEvaluate, false});
 		entries.push_back(ContextMenuEntry{"Into", cmMrDebuggerStep, false});
-		entries.push_back(ContextMenuEntry{"Over", cmMrDebuggerStepOver, false});
+		entries.push_back(ContextMenuEntry{"Step", cmMrDebuggerStepOver, false});
 		entries.push_back(ContextMenuEntry{"Out", cmMrDebuggerStepOut, false});
+		entries.push_back(ContextMenuEntry{"Clear Program Terminal", cmMrDebuggerClearProgramTerminal, false});
 	}
 	entries.push_back(ContextMenuEntry{"Outline", cmMrOtherLocalOutline, false});
 	if (target != nullptr && !workspaceSearchTextAroundOffset(*editor, target->offset).empty()) {
@@ -1374,6 +1390,9 @@ bool showEditorContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 		case cmMrDebuggerStepOut:
 			if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(targetWindow); bentoBox != nullptr)
 				return bentoBox->executeGdbSourceContextCommand(command, target.offset, editorIdentifierAroundOffset(*targetWindow->getEditor(), target.offset));
+			return false;
+		case cmMrDebuggerClearProgramTerminal:
+			if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(targetWindow); bentoBox != nullptr) return bentoBox->clearGdbProgramTerminal();
 			return false;
 		case cmMrOtherReferences:
 			return requestWorkspaceReferencesCommand(targetWindow, &target);

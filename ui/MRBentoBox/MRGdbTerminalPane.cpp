@@ -46,6 +46,23 @@ void MRGdbTerminalPane::appendTerminalOutput(const std::string &text) {
 	drawView();
 }
 
+void MRGdbTerminalPane::clearTerminal() {
+	const Cell blank(' ', currentAttribute());
+
+	screen.assign(static_cast<std::size_t>(columns * rows), blank);
+	if (!primaryScreen.empty()) primaryScreen.assign(static_cast<std::size_t>(columns * rows), blank);
+	scrollback.clear();
+	cursorColumn = 0;
+	cursorRow = 0;
+	savedColumn = 0;
+	savedRow = 0;
+	primaryColumn = 0;
+	primaryRow = 0;
+	wrapPending = false;
+	scrollOffset = 0;
+	drawView();
+}
+
 void MRGdbTerminalPane::resetTerminal() {
 	screen.assign(static_cast<std::size_t>(columns * rows), Cell());
 	primaryScreen.clear();
