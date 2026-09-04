@@ -90,6 +90,9 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 	unsigned char diffLineKind = mrfclkNone;
 	bool diffTextActive = false;
 	TColorAttr diffTextColor = 0;
+	bool debuggerBreakpointLine = false;
+	bool debuggerBreakpointInactiveLine = false;
+	bool debuggerBreakpointUnboundLine = false;
 
 	hScroll = std::max(hScroll, 0);
 	width = std::max(width, 0);
@@ -152,6 +155,9 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 	else if (currentLine && diffLineKind == mrfclkNone)
 		basePair = getColor(0x0303);
 	instructionLine = mDebuggerInstructionLineValid && mDebuggerInstructionLine == lineIndex;
+	debuggerBreakpointLine = debuggerBreakpointLineAt(lineIndex);
+	debuggerBreakpointInactiveLine = debuggerBreakpointInactiveLineAt(lineIndex);
+	debuggerBreakpointUnboundLine = debuggerBreakpointUnboundLineAt(lineIndex);
 	if (instructionLine) {
 		TColorAttr executionLineAttr;
 
@@ -207,9 +213,9 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 			}
 			bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
 			bool findMarkedChar = !selected && findMarkerContainsOffset(documentPos);
-			bool debuggerBreakpointChar = !selected && debuggerBreakpointContainsOffset(documentPos);
-			bool debuggerBreakpointInactiveChar = !selected && debuggerBreakpointInactiveContainsOffset(documentPos);
-			bool debuggerBreakpointUnboundChar = !selected && debuggerBreakpointUnboundContainsOffset(documentPos);
+			bool debuggerBreakpointChar = !selected && debuggerBreakpointLine;
+			bool debuggerBreakpointInactiveChar = !selected && debuggerBreakpointInactiveLine;
+			bool debuggerBreakpointUnboundChar = !selected && debuggerBreakpointUnboundLine;
 			bool debuggerWatchpointActiveChar = !selected && debuggerWatchpointActiveContainsOffset(documentPos);
 			bool debuggerWatchpointInactiveChar = !selected && debuggerWatchpointInactiveContainsOffset(documentPos);
 			bool debuggerWatchpointErrorChar = !selected && debuggerWatchpointErrorContainsOffset(documentPos);

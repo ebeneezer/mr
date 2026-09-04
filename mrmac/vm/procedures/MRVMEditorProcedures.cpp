@@ -387,7 +387,7 @@ VirtualMachine::InstructionFlow VirtualMachine::EditorProcedures::execute(MRVMPr
 					ok = returnWithDirectScreenMutation(viewportLeft());
 					break;
 				case MRVMProcedure::SaveWorkspace:
-					mrSaveWorkspace("");
+					static_cast<void>(mrSaveWorkspace(""));
 					ok = returnWithDirectScreenMutation(true);
 					break;
 				case MRVMProcedure::LoadWorkspace:

@@ -47,6 +47,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 		mMiniMapState.setFindRanges(mFindMarkerRanges);
 	} else if (changeSet->changed)
 		remapFindMarkerRangesForAppliedChange(*changeSet);
+	if (changeSet != nullptr && changeSet->changed) remapDebuggerBreakpointLinesForAppliedChange(*changeSet);
 	if (!modifiedState) clearDirtyRanges();
 	else if (changeSet != nullptr && changeSet->changed) {
 		remapDirtyRangesForAppliedChange(*changeSet);

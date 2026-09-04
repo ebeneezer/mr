@@ -511,7 +511,8 @@ std::size_t MRFoldingDerivedState::visibleLineForDocumentLine(std::size_t docume
 }
 
 std::size_t MRFoldingDerivedState::documentLineForVisibleLine(std::size_t visibleLine, std::size_t totalLines) const noexcept {
-	if (!hasEffectiveClosedFolds() || totalLines == 0) return visibleLine;
+	if (totalLines == 0) return 0;
+	if (!hasEffectiveClosedFolds()) return std::min(visibleLine, totalLines - 1);
 	std::size_t left = 0;
 	std::size_t right = totalLines;
 	while (left < right) {

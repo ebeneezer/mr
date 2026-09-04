@@ -308,6 +308,12 @@ struct TaskProgressPayload final : Payload, StreamingPayload {
 	}
 };
 
+enum class BuildDebuggerContinuation : unsigned char {
+	None,
+	Start,
+	StartAndRun
+};
+
 struct ExternalIoFinishedPayload final : Payload {
 	std::size_t channelId;
 	std::size_t targetBufferId;
@@ -326,11 +332,13 @@ struct ExternalIoFinishedPayload final : Payload {
 	std::string buildProfileName;
 	std::string buildToolchain;
 	std::string postBuildMacro;
+	int buildSourceBufferId;
+	BuildDebuggerContinuation debuggerContinuation;
 
-	ExternalIoFinishedPayload() noexcept : channelId(0), targetBufferId(0), exitCode(0), signaled(false), signalNumber(0), successAudioUri(), failureAudioUri(), buildSourcePath(), buildSourceDir(), buildSourceFile(), buildSourceStem(), buildOutputPath(), buildPdfPath(), buildProfileId(), buildProfileName(), buildToolchain(), postBuildMacro() {
+	ExternalIoFinishedPayload() noexcept : channelId(0), targetBufferId(0), exitCode(0), signaled(false), signalNumber(0), successAudioUri(), failureAudioUri(), buildSourcePath(), buildSourceDir(), buildSourceFile(), buildSourceStem(), buildOutputPath(), buildPdfPath(), buildProfileId(), buildProfileName(), buildToolchain(), postBuildMacro(), buildSourceBufferId(0), debuggerContinuation(BuildDebuggerContinuation::None) {
 	}
 
-	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber, std::size_t aTargetBufferId = 0, std::string aSuccessAudioUri = std::string(), std::string aFailureAudioUri = std::string()) : channelId(aChannelId), targetBufferId(aTargetBufferId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber), successAudioUri(std::move(aSuccessAudioUri)), failureAudioUri(std::move(aFailureAudioUri)), buildSourcePath(), buildSourceDir(), buildSourceFile(), buildSourceStem(), buildOutputPath(), buildPdfPath(), buildProfileId(), buildProfileName(), buildToolchain(), postBuildMacro() {
+	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber, std::size_t aTargetBufferId = 0, std::string aSuccessAudioUri = std::string(), std::string aFailureAudioUri = std::string()) : channelId(aChannelId), targetBufferId(aTargetBufferId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber), successAudioUri(std::move(aSuccessAudioUri)), failureAudioUri(std::move(aFailureAudioUri)), buildSourcePath(), buildSourceDir(), buildSourceFile(), buildSourceStem(), buildOutputPath(), buildPdfPath(), buildProfileId(), buildProfileName(), buildToolchain(), postBuildMacro(), buildSourceBufferId(0), debuggerContinuation(BuildDebuggerContinuation::None) {
 	}
 };
 

@@ -382,7 +382,7 @@ class WindowListDialog : public MRDialogFoundation {
 			std::string name(fileName);
 			if (name.find(".mrmac") == std::string::npos) name += ".mrmac";
 			if (::access(name.c_str(), F_OK) == 0 && mr::dialogs::showUnsavedChangesDialog("Overwrite", "Workspace file exists. Overwrite?", name.c_str()) != mr::dialogs::UnsavedChangesChoice::Save) return;
-			mrSaveWorkspace(name);
+			if (!mrSaveWorkspace(name)) return;
 			rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceSave, name.c_str());
 			rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, name.c_str());
 		}

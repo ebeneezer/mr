@@ -4,6 +4,7 @@
 #include "MRGdbTerminalPane.hpp"
 
 #include "../../app/MRCommands.hpp"
+#include "../../app/MRCommandRouter.hpp"
 #include "../../app/services/MRGdbSession.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
@@ -194,7 +195,7 @@ bool MRBentoBox::startGdbDebugger(const std::string &programPath, const std::str
 	const std::vector<int> breakpointLines = readGdbBreakpointLines(sourcePath);
 	projectGdbBreakpointLines(getEditor(), breakpointLines);
 	for (const int line : breakpointLines) {
-		MRGdbCommand command(MRGdbCommandKind::ToggleBreakpoint);
+		MRGdbCommand command(MRGdbCommandKind::AddBreakpoint);
 
 		command.file = normalizeConfiguredPathInput(sourcePath);
 		command.line = line;
@@ -216,6 +217,15 @@ void MRBentoBox::stopGdbDebugger() noexcept {
 	clearGdbDebuggerState();
 	if (getEditor() != nullptr) getEditor()->clearDebuggerInstructionLine();
 	if (macroDebuggerActive) refreshMacroDebuggerBreakpointRanges();
+}
+
+void MRBentoBox::stopGdbDebuggerForRebuild() noexcept {
+	try {
+		const std::string sourcePath = gdbDebuggerSourcePath();
+		if (!sourcePath.empty() && getEditor() != nullptr) writeGdbBreakpointLines(sourcePath, getEditor()->debuggerBreakpointLineNumbers());
+	} catch (...) {
+	}
+	stopGdbDebugger();
 }
 
 bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload) {
@@ -268,7 +278,9 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 
 					row.start = text.size();
 					row.expression = variable.name;
+					row.objectName = variable.objectName;
 					row.value = variable.value;
+					text.append(static_cast<std::size_t>(std::max(0, variable.depth)) * 2, ' ');
 					text += variable.name;
 					if (!variable.type.empty()) text += " [" + variable.type + "]";
 					text += " = " + variable.value;
@@ -314,6 +326,10 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 
 bool MRBentoBox::sendGdbTerminalInput(const std::string &text) {
 	return sendGdbCommand(MRGdbCommandKind::TerminalInput, text);
+}
+
+bool MRBentoBox::startGdbInferior() {
+	return sendGdbCommand(MRGdbCommandKind::ContinueExecution);
 }
 
 bool MRBentoBox::clearGdbProgramTerminal() {
@@ -397,7 +413,13 @@ bool MRBentoBox::handleGdbDebuggerFunctionKey(TEvent &event) {
 		if (mr::dialogs::execTextInputDialog("GDB DEBUGGER", "Evaluate or assign expression", expression, sizeof(expression) - 1) == cmCancel) { clearEvent(event); return true; }
 		kind = MRGdbCommandKind::Evaluate;
 		text = expression;
-	} else if (keyCode == kbF5 && modifiers == 0) kind = gdbDebuggerRunning() ? MRGdbCommandKind::PauseExecution : MRGdbCommandKind::ContinueExecution;
+	} else if (keyCode == kbF5 && modifiers == 0) {
+		if (readGdbString(bufferId(), "state") == "loaded") {
+			clearEvent(event);
+			return handleMRCommand(cmMrDebuggerRebuildAndContinue, this);
+		}
+		kind = gdbDebuggerRunning() ? MRGdbCommandKind::PauseExecution : MRGdbCommandKind::ContinueExecution;
+	}
 	else if (keyCode == kbF6 && modifiers == 0) kind = MRGdbCommandKind::RunToLocation;
 	else if (keyCode == kbF7 && modifiers == 0) {
 		char expression[256] = {};
@@ -421,7 +443,7 @@ bool MRBentoBox::handleGdbDebuggerFunctionKey(TEvent &event) {
 	return true;
 }
 
-bool MRBentoBox::sendGdbCommand(MRGdbCommandKind commandKind, const std::string &text) {
+bool MRBentoBox::sendGdbCommand(MRGdbCommandKind commandKind, const std::string &text, const std::string &objectName) {
 	if (gdbSession == nullptr || !gdbSession->active()) return false;
 	if (commandKind != MRGdbCommandKind::Quit && commandKind != MRGdbCommandKind::TerminalInput && commandKind != MRGdbCommandKind::ResizeTerminal) {
 		const std::string sourcePath = gdbDebuggerSourcePath();
@@ -449,6 +471,7 @@ bool MRBentoBox::sendGdbCommand(MRGdbCommandKind commandKind, const std::string 
 	}
 	MRGdbCommand command(commandKind);
 	command.text = text;
+	command.objectName = objectName;
 	if (commandKind == MRGdbCommandKind::ToggleBreakpoint || commandKind == MRGdbCommandKind::RunToLocation) {
 		command.file = gdbDebuggerSourcePath();
 		command.line = getEditor() != nullptr ? getEditor()->currentLineNumber() : 0;

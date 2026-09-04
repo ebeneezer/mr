@@ -88,6 +88,48 @@ std::string fieldAfter(const std::string &record, const char *name, std::size_t 
 	return record.substr(valuePosition, end == std::string::npos ? std::string::npos : end - valuePosition);
 }
 
+std::size_t matchingDelimiter(const std::string &text, std::size_t openingPosition, char opening, char closing) {
+	int depth = 0;
+	bool quoted = false;
+	bool escaped = false;
+	for (std::size_t position = openingPosition; position < text.size(); ++position) {
+		const char value = text[position];
+		if (quoted) {
+			if (escaped) escaped = false;
+			else if (value == '\\') escaped = true;
+			else if (value == '"') quoted = false;
+			continue;
+		}
+		if (value == '"') {
+			quoted = true;
+			continue;
+		}
+		if (value == opening) ++depth;
+		else if (value == closing && --depth == 0)
+			return position;
+	}
+	return std::string::npos;
+}
+
+void tupleItems(const std::string &record, const char *listName, std::vector<std::string> &items) {
+	const std::string marker = std::string(listName) + "=[";
+	const std::size_t markerPosition = record.find(marker);
+	items.clear();
+	if (markerPosition == std::string::npos) return;
+	const std::size_t listStart = markerPosition + marker.size() - 1;
+	const std::size_t listEnd = matchingDelimiter(record, listStart, '[', ']');
+	if (listEnd == std::string::npos) return;
+	std::size_t position = listStart + 1;
+	while (position < listEnd) {
+		const std::size_t tupleStart = record.find('{', position);
+		if (tupleStart == std::string::npos || tupleStart >= listEnd) break;
+		const std::size_t tupleEnd = matchingDelimiter(record, tupleStart, '{', '}');
+		if (tupleEnd == std::string::npos || tupleEnd > listEnd) break;
+		items.push_back(record.substr(tupleStart, tupleEnd - tupleStart + 1));
+		position = tupleEnd + 1;
+	}
+}
+
 } // namespace
 
 MRGdbMiRecord::MRGdbMiRecord() noexcept : kind(MRGdbMiRecordKind::Unknown), token(0), resultClass(), text(), raw() {}
@@ -137,36 +179,45 @@ int mrGdbMiIntField(const std::string &record, const char *name, int fallback) {
 }
 
 void mrGdbMiVariables(const std::string &record, std::vector<MRGdbMiVariable> &variables) {
-	std::size_t position = record.find("variables=[");
+	std::vector<std::string> items;
+	tupleItems(record, "variables", items);
 	variables.clear();
-	if (position == std::string::npos) return;
-	while ((position = record.find("{name=", position)) != std::string::npos) {
-		const std::size_t end = record.find('}', position);
-		const std::string item = record.substr(position, end == std::string::npos ? std::string::npos : end - position + 1);
+	for (const std::string &item : items) {
 		MRGdbMiVariable variable;
 		variable.name = mrGdbMiField(item, "name");
 		variable.value = mrGdbMiField(item, "value");
 		variable.type = mrGdbMiField(item, "type");
 		if (!variable.name.empty()) variables.push_back(variable);
-		if (end == std::string::npos) break;
-		position = end + 1;
+	}
+}
+
+void mrGdbMiChildren(const std::string &record, const std::string &parentObjectName, int depth, std::vector<MRGdbMiVariable> &variables) {
+	std::vector<std::string> items;
+	tupleItems(record, "children", items);
+	variables.clear();
+	for (const std::string &item : items) {
+		MRGdbMiVariable variable;
+		variable.objectName = mrGdbMiField(item, "name");
+		variable.parentObjectName = parentObjectName;
+		variable.name = mrGdbMiField(item, "exp");
+		variable.value = mrGdbMiField(item, "value");
+		variable.type = mrGdbMiField(item, "type");
+		variable.depth = depth;
+		variable.childCount = mrGdbMiIntField(item, "numchild", 0);
+		if (!variable.objectName.empty()) variables.push_back(std::move(variable));
 	}
 }
 
 void mrGdbMiChanges(const std::string &record, std::vector<MRGdbMiVariable> &variables) {
-	std::size_t position = record.find("changelist=[");
+	std::vector<std::string> items;
+	tupleItems(record, "changelist", items);
 	variables.clear();
-	if (position == std::string::npos) return;
-	while ((position = record.find("{name=", position)) != std::string::npos) {
-		const std::size_t end = record.find('}', position);
-		const std::string item = record.substr(position, end == std::string::npos ? std::string::npos : end - position + 1);
+	for (const std::string &item : items) {
 		MRGdbMiVariable variable;
 		variable.name = mrGdbMiField(item, "name");
 		variable.value = mrGdbMiField(item, "value");
 		variable.type = mrGdbMiField(item, "in_scope");
 		if (!variable.name.empty()) variables.push_back(variable);
-		if (end == std::string::npos) break;
-		position = end + 1;
 	}
 }
 

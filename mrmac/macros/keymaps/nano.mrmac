@@ -6,7 +6,7 @@ KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_UP" seque
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_DOWN" sequence="<Ctrl+N>" description="Next line"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_LEFT" sequence="<Ctrl+B>" description="Backward"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_RIGHT" sequence="<Ctrl+F>" description="Forward"');
-KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_HOME" sequence="<Ctrl+A>" description="Start of line"');
+KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_BLOCK_MARK_ALL" sequence="<Ctrl+A>" description="Mark all as line block"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_END_OF_LINE" sequence="<Ctrl+E>" description="End of line"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_VIEW_PAGE_UP" sequence="<Ctrl+Y>" description="Page up"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_VIEW_PAGE_DOWN" sequence="<Ctrl+V>" description="Page down"');

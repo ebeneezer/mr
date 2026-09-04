@@ -1920,7 +1920,7 @@ int MRFileEditor::smartDedentTargetColumnForLine(std::size_t lineStart, int base
 
 		const int originalCandidateColumn = leadingIndentColumnForLine(candidateLineStart);
 		const int candidateColumn = formattedIndentColumnForLine(candidateLineStart, formattedLineStarts, formattedColumns, originalCandidateColumn);
-		if (candidateColumn >= baseColumn) continue;
+		if (candidateColumn > baseColumn) continue;
 
 		const std::string candidateUpperLine = upperAscii(std::string(candidateTrimmed));
 		if (!matchesSmartDedentAnchor(candidateTrimmed, candidateUpperLine, language, request)) continue;

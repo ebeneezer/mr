@@ -20,6 +20,10 @@ struct MRGdbMiVariable {
 	std::string name;
 	std::string value;
 	std::string type;
+	std::string objectName;
+	std::string parentObjectName;
+	int depth = 0;
+	int childCount = 0;
 };
 
 struct MRGdbMiBreakpoint {
@@ -41,6 +45,7 @@ class MRGdbMiStream {
 [[nodiscard]] std::string mrGdbMiField(const std::string &record, const char *name);
 [[nodiscard]] int mrGdbMiIntField(const std::string &record, const char *name, int fallback = 0);
 void mrGdbMiVariables(const std::string &record, std::vector<MRGdbMiVariable> &variables);
+void mrGdbMiChildren(const std::string &record, const std::string &parentObjectName, int depth, std::vector<MRGdbMiVariable> &variables);
 void mrGdbMiChanges(const std::string &record, std::vector<MRGdbMiVariable> &variables);
 void mrGdbMiBreakpoints(const std::string &record, std::vector<MRGdbMiBreakpoint> &breakpoints);
 

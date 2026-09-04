@@ -211,7 +211,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrDebuggerStart, hasEditor && state.hasBuildSourceFile && !state.hasGdbDebugger);
 	setCommandEnabled(cmMrOtherGitChanges, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
-	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail);
+	setCommandEnabled(cmMrOtherRestartProgram, state.hasGdbDebugger || (hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail));
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
 	setCommandEnabled(cmMrOtherFindNextCompilerError, state.hasCompilerProblems);
 	setCommandEnabled(cmMrOtherFindPreviousCompilerError, state.hasCompilerProblems);

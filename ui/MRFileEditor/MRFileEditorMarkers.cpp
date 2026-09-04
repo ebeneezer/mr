@@ -51,65 +51,61 @@ void MRFileEditor::clearCompilerDiagnosticRanges() {
 
 void MRFileEditor::setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &unboundRanges,
                                               const std::vector<std::size_t> &explicitUnboundLines) {
-	std::vector<MRTextBufferModel::Range> normalizedActive;
-	std::vector<MRTextBufferModel::Range> normalizedInactive;
-	std::vector<MRTextBufferModel::Range> normalizedUnbound;
-	std::vector<std::size_t> activeLines;
-	std::vector<std::size_t> inactiveLines;
-	std::vector<std::size_t> unboundLines;
+	std::vector<DebuggerBreakpointLineMarker> activeLines;
+	std::vector<DebuggerBreakpointLineMarker> inactiveLines;
+	std::vector<DebuggerBreakpointLineMarker> unboundLines;
 	const std::size_t length = mBufferModel.length();
-	auto appendRanges = [this, length](const std::vector<std::pair<std::size_t, std::size_t>> &source, std::vector<MRTextBufferModel::Range> &target, std::vector<std::size_t> &lines) {
-		target.reserve(source.size());
+	auto appendLine = [this, length](std::size_t sourceOffset, std::vector<DebuggerBreakpointLineMarker> &lines) {
+		const std::size_t offset = std::min(sourceOffset, length);
+		const std::size_t lineIndex = mBufferModel.lineIndex(offset);
+		const std::size_t lineStart = mBufferModel.lineStart(offset);
+		const std::size_t lineEnd = mBufferModel.nextLine(lineStart);
+		lines.push_back(DebuggerBreakpointLineMarker{lineIndex, lineStart, lineEnd});
+	};
+	auto appendRanges = [&appendLine](const std::vector<std::pair<std::size_t, std::size_t>> &source, std::vector<DebuggerBreakpointLineMarker> &lines) {
 		lines.reserve(source.size());
-		if (length == 0) return;
 		for (const std::pair<std::size_t, std::size_t> &rangePair : source) {
-			std::size_t start = std::min(rangePair.first, length);
-			std::size_t end = std::min(rangePair.second, length);
-
-			if (end < start) std::swap(start, end);
-			if (end == start) {
-				if (end < length) ++end;
-				else if (start > 0)
-					--start;
-			}
-			if (end > start) {
-				target.push_back(MRTextBufferModel::Range(start, end));
-				lines.push_back(mBufferModel.lineIndex(start));
-			}
+			appendLine(std::min(rangePair.first, rangePair.second), lines);
 		}
 	};
+	auto normalizeLines = [](std::vector<DebuggerBreakpointLineMarker> &lines) {
+		std::sort(lines.begin(), lines.end(), [](const DebuggerBreakpointLineMarker &left, const DebuggerBreakpointLineMarker &right) { return left.lineIndex < right.lineIndex; });
+		lines.erase(std::unique(lines.begin(), lines.end(), [](const DebuggerBreakpointLineMarker &left, const DebuggerBreakpointLineMarker &right) { return left.lineIndex == right.lineIndex; }), lines.end());
+	};
 
-	appendRanges(activeRanges, normalizedActive, activeLines);
-	appendRanges(inactiveRanges, normalizedInactive, inactiveLines);
-	appendRanges(unboundRanges, normalizedUnbound, unboundLines);
-	unboundLines.insert(unboundLines.end(), explicitUnboundLines.begin(), explicitUnboundLines.end());
-	normalizeRangeList(normalizedActive);
-	normalizeRangeList(normalizedInactive);
-	normalizeRangeList(normalizedUnbound);
-	mDebuggerBreakpointRanges.swap(normalizedActive);
-	mDebuggerBreakpointInactiveRanges.swap(normalizedInactive);
-	mDebuggerBreakpointUnboundRanges.swap(normalizedUnbound);
-	std::sort(activeLines.begin(), activeLines.end());
-	activeLines.erase(std::unique(activeLines.begin(), activeLines.end()), activeLines.end());
+	appendRanges(activeRanges, activeLines);
+	appendRanges(inactiveRanges, inactiveLines);
+	appendRanges(unboundRanges, unboundLines);
+	for (const std::size_t lineIndex : explicitUnboundLines) {
+		const std::size_t lineStart = mBufferModel.lineStartByIndex(lineIndex);
+		appendLine(lineStart, unboundLines);
+	}
+	normalizeLines(activeLines);
 	mDebuggerBreakpointLines.swap(activeLines);
-	std::sort(inactiveLines.begin(), inactiveLines.end());
-	inactiveLines.erase(std::unique(inactiveLines.begin(), inactiveLines.end()), inactiveLines.end());
+	normalizeLines(inactiveLines);
 	mDebuggerBreakpointInactiveLines.swap(inactiveLines);
-	std::sort(unboundLines.begin(), unboundLines.end());
-	unboundLines.erase(std::unique(unboundLines.begin(), unboundLines.end()), unboundLines.end());
+	normalizeLines(unboundLines);
 	mDebuggerBreakpointUnboundLines.swap(unboundLines);
 	drawView();
 }
 
 void MRFileEditor::clearDebuggerBreakpointRanges() {
-	if (mDebuggerBreakpointRanges.empty() && mDebuggerBreakpointInactiveRanges.empty() && mDebuggerBreakpointUnboundRanges.empty() && mDebuggerBreakpointLines.empty() && mDebuggerBreakpointInactiveLines.empty() && mDebuggerBreakpointUnboundLines.empty()) return;
-	mDebuggerBreakpointRanges.clear();
-	mDebuggerBreakpointInactiveRanges.clear();
-	mDebuggerBreakpointUnboundRanges.clear();
+	if (mDebuggerBreakpointLines.empty() && mDebuggerBreakpointInactiveLines.empty() && mDebuggerBreakpointUnboundLines.empty()) return;
 	mDebuggerBreakpointLines.clear();
 	mDebuggerBreakpointInactiveLines.clear();
 	mDebuggerBreakpointUnboundLines.clear();
 	drawView();
+}
+
+std::vector<int> MRFileEditor::debuggerBreakpointLineNumbers() const {
+	std::vector<int> lines;
+	lines.reserve(mDebuggerBreakpointLines.size() + mDebuggerBreakpointInactiveLines.size() + mDebuggerBreakpointUnboundLines.size());
+	for (const DebuggerBreakpointLineMarker &marker : mDebuggerBreakpointLines) lines.push_back(static_cast<int>(marker.lineIndex + 1));
+	for (const DebuggerBreakpointLineMarker &marker : mDebuggerBreakpointInactiveLines) lines.push_back(static_cast<int>(marker.lineIndex + 1));
+	for (const DebuggerBreakpointLineMarker &marker : mDebuggerBreakpointUnboundLines) lines.push_back(static_cast<int>(marker.lineIndex + 1));
+	std::sort(lines.begin(), lines.end());
+	lines.erase(std::unique(lines.begin(), lines.end()), lines.end());
+	return lines;
 }
 
 void MRFileEditor::setDebuggerWatchpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges) {
@@ -243,6 +239,50 @@ void MRFileEditor::remapFindMarkerRangesForAppliedChange(const MRTextBufferModel
 	normalizeRangeList(mapped);
 	mFindMarkerRanges.swap(mapped);
 	mMiniMapState.setFindRanges(mFindMarkerRanges);
+}
+
+void MRFileEditor::remapDebuggerBreakpointLinesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change) {
+	const std::size_t oldLength = change.oldLength;
+	const std::size_t newLength = change.newLength;
+	const MRTextBufferModel::Range touched = change.touchedRange.normalized();
+	const long long delta = static_cast<long long>(newLength) - static_cast<long long>(oldLength);
+	const std::size_t editStart = std::min(touched.start, oldLength);
+	std::size_t replacedOldLength = touched.length();
+
+	if (delta >= 0) {
+		const std::size_t addedLength = static_cast<std::size_t>(delta);
+		replacedOldLength = replacedOldLength > addedLength ? replacedOldLength - addedLength : 0;
+	}
+	if (replacedOldLength > oldLength - editStart) replacedOldLength = oldLength - editStart;
+	const std::size_t oldEditEnd = editStart + replacedOldLength;
+	auto remapLines = [this, newLength, editStart, oldEditEnd, replacedOldLength, delta](std::vector<DebuggerBreakpointLineMarker> &markers) {
+		std::vector<DebuggerBreakpointLineMarker> mapped;
+
+		mapped.reserve(markers.size());
+		for (const DebuggerBreakpointLineMarker &marker : markers) {
+			const bool sourceLineDeleted = replacedOldLength != 0 && editStart <= marker.lineStart && oldEditEnd >= marker.lineEnd && oldEditEnd > marker.lineStart;
+			if (sourceLineDeleted) continue;
+			long long mappedOffset = static_cast<long long>(marker.lineStart);
+			if (marker.lineEnd <= editStart) {
+				mappedOffset = static_cast<long long>(marker.lineStart);
+			} else if (marker.lineStart >= oldEditEnd) {
+				mappedOffset += delta;
+			} else {
+				mappedOffset = static_cast<long long>(std::min(marker.lineStart, editStart));
+			}
+			const std::size_t offset = static_cast<std::size_t>(std::max<long long>(0, std::min<long long>(mappedOffset, static_cast<long long>(newLength))));
+			const std::size_t lineIndex = mBufferModel.lineIndex(offset);
+			const std::size_t lineStart = mBufferModel.lineStart(offset);
+			mapped.push_back(DebuggerBreakpointLineMarker{lineIndex, lineStart, mBufferModel.nextLine(lineStart)});
+		}
+		std::sort(mapped.begin(), mapped.end(), [](const DebuggerBreakpointLineMarker &left, const DebuggerBreakpointLineMarker &right) { return left.lineIndex < right.lineIndex; });
+		mapped.erase(std::unique(mapped.begin(), mapped.end(), [](const DebuggerBreakpointLineMarker &left, const DebuggerBreakpointLineMarker &right) { return left.lineIndex == right.lineIndex; }), mapped.end());
+		markers.swap(mapped);
+	};
+
+	remapLines(mDebuggerBreakpointLines);
+	remapLines(mDebuggerBreakpointInactiveLines);
+	remapLines(mDebuggerBreakpointUnboundLines);
 }
 
 void MRFileEditor::pushMappedDirtyRange(std::vector<MRTextBufferModel::Range> &mapped, std::size_t start, std::size_t end, std::size_t maxLength) {

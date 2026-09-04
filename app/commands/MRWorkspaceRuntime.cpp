@@ -5,9 +5,12 @@
 #include "MRWindowCommandsInternal.hpp"
 
 #include <chrono>
+#include <ctime>
+#include <filesystem>
 #include <sstream>
 #include <string>
 
+#include "../../config/settings/MRSettingsHistory.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../mrmac/mrmac.h"
@@ -31,6 +34,18 @@ using mr::window_commands::storeApplicationUiUnsigned;
 namespace {
 
 static constexpr std::chrono::milliseconds kWorkspaceAutosaveDelay(1000);
+
+bool autosaveWorkspacePath(std::time_t serializedAt, std::string &path) {
+	std::tm localTime{};
+	char dateTime[32]{};
+
+	if (::localtime_r(&serializedAt, &localTime) == nullptr) return false;
+	if (std::strftime(dateTime, sizeof(dateTime), "%Y-%m-%d %H:%M:%S", &localTime) == 0) return false;
+	const std::string directory = effectiveRememberedLoadDirectory(MRDialogHistoryScope::WorkspaceSave);
+	if (directory.empty()) return false;
+	path = (std::filesystem::path(directory) / (std::string("Autosave ") + dateTime + ".mrmac")).string();
+	return true;
+}
 
 std::string normalizedWorkspacePathForWindow(const MREditWindow *win) {
 	const MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
@@ -114,6 +129,7 @@ void flushWorkspaceAutosave(bool force) {
 	const auto startedAt = std::chrono::steady_clock::now();
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	std::string errorText;
+	std::string autosavePath;
 	MRSettingsWriteReport report;
 	long long persistUs = 0;
 
@@ -126,6 +142,14 @@ void flushWorkspaceAutosave(bool force) {
 	storeApplicationUiInt(runtimeKv, kWorkspaceBranch, "autosaveDirty", 0);
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		if (!autosaveWorkspacePath(std::time(nullptr), autosavePath) || !mrSaveWorkspace(autosavePath)) {
+			storeApplicationUiInt(runtimeKv, kWorkspaceBranch, "autosaveDirty", 1);
+			storeApplicationUiUnsigned(runtimeKv, kWorkspaceBranch, "autosaveDueMs", steadyClockMilliseconds(std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay));
+			mrLogMessage("Workspace autosave named serialization failed.");
+			return;
+		}
+		rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceSave, autosavePath.c_str());
+		rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, autosavePath.c_str());
 		if (!persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)) {
 			storeApplicationUiInt(runtimeKv, kWorkspaceBranch, "autosaveDirty", 1);
 			storeApplicationUiUnsigned(runtimeKv, kWorkspaceBranch, "autosaveDueMs", steadyClockMilliseconds(std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay));

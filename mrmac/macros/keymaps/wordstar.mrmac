@@ -4,6 +4,7 @@ KEYMAP_VERSION('1782480011');
 KEYMAP_PROFILE('name="WORDSTAR" description="WordStar Core"');
 KEYMAP_PROFILE('name="EMACS" description="Emacs core"');
 KEYMAP_PROFILE('name="NANO" description="GNU nano core"');
+KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MR_BLOCK_MARK_ALL" sequence="<Ctrl+A>" description="Mark all as line block"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_CURSOR_UP" sequence="<Ctrl+E>" description="Cursor up"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_CURSOR_DOWN" sequence="<Ctrl+X>" description="Cursor down"');
 KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_CURSOR_LEFT" sequence="<Ctrl+S>" description="Cursor left"');
@@ -98,7 +99,7 @@ KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_LEFT" se
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_RIGHT" sequence="<Ctrl+F>" description="Cursor right"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_WORD_LEFT" sequence="<Alt+B>" description="Word left"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_WORD_RIGHT" sequence="<Alt+F>" description="Word right"');
-KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_HOME" sequence="<Ctrl+A>" description="Beginning of line"');
+KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_BLOCK_MARK_ALL" sequence="<Ctrl+A>" description="Mark all as line block"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_END_OF_LINE" sequence="<Ctrl+E>" description="End of line"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_VIEW_PAGE_UP" sequence="<Alt+V>" description="Page up"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_VIEW_PAGE_DOWN" sequence="<Ctrl+V>" description="Page down"');
@@ -123,7 +124,7 @@ KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_UP" seque
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_DOWN" sequence="<Ctrl+N>" description="Next line"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_LEFT" sequence="<Ctrl+B>" description="Backward"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_RIGHT" sequence="<Ctrl+F>" description="Forward"');
-KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_HOME" sequence="<Ctrl+A>" description="Start of line"');
+KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MR_BLOCK_MARK_ALL" sequence="<Ctrl+A>" description="Mark all as line block"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_CURSOR_END_OF_LINE" sequence="<Ctrl+E>" description="End of line"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_VIEW_PAGE_UP" sequence="<Ctrl+Y>" description="Page up"');
 KEYMAP_BIND('name="NANO" context=EDIT type=ACTION target="MRMAC_VIEW_PAGE_DOWN" sequence="<Ctrl+V>" description="Page down"');

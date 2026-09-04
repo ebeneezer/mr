@@ -615,7 +615,7 @@ bool mrClearAutosavedWorkspace() {
 	return true;
 }
 
-void mrSaveWorkspace(const std::string &filename) {
+bool mrSaveWorkspace(const std::string &filename) {
 	std::string settingsPath = filename;
 	MRSetupPaths paths;
 	std::string dest;
@@ -633,7 +633,7 @@ void mrSaveWorkspace(const std::string &filename) {
 	paths.tempPath = configuredTempDirectoryPath();
 	paths.shellUri = configuredShellExecutablePath();
 	source = buildSettingsMacroSourceWithWorkspace(paths);
-	writeTextFile(dest, source);
+	return writeTextFile(dest, source);
 }
 
 bool mrLoadWorkspaceWithDialog() {

@@ -282,6 +282,7 @@ class MRFileEditor : public TScroller {
 	void setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &unboundRanges,
 	                                 const std::vector<std::size_t> &unboundLines);
 	void clearDebuggerBreakpointRanges();
+	std::vector<int> debuggerBreakpointLineNumbers() const;
 	void setDebuggerWatchpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges);
 	void clearDebuggerWatchpointRanges();
 	void setDebuggerVariableChangedRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges);
@@ -874,9 +875,6 @@ class MRFileEditor : public TScroller {
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept;
 
 	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
-	bool debuggerBreakpointContainsOffset(std::size_t offset) const noexcept;
-	bool debuggerBreakpointInactiveContainsOffset(std::size_t offset) const noexcept;
-	bool debuggerBreakpointUnboundContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerWatchpointActiveContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerWatchpointInactiveContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerWatchpointErrorContainsOffset(std::size_t offset) const noexcept;
@@ -1159,16 +1157,18 @@ class MRFileEditor : public TScroller {
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
 	std::shared_ptr<const std::vector<MRTextBufferModel::Range>> mCompilerErrorRanges;
 	std::shared_ptr<const std::vector<MRTextBufferModel::Range>> mCompilerWarningRanges;
-	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointRanges;
-	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointInactiveRanges;
-	std::vector<MRTextBufferModel::Range> mDebuggerBreakpointUnboundRanges;
+	struct DebuggerBreakpointLineMarker {
+		std::size_t lineIndex = 0;
+		std::size_t lineStart = 0;
+		std::size_t lineEnd = 0;
+	};
+	std::vector<DebuggerBreakpointLineMarker> mDebuggerBreakpointLines;
+	std::vector<DebuggerBreakpointLineMarker> mDebuggerBreakpointInactiveLines;
+	std::vector<DebuggerBreakpointLineMarker> mDebuggerBreakpointUnboundLines;
 	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointActiveRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointInactiveRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointErrorRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerVariableChangedRanges;
-	std::vector<std::size_t> mDebuggerBreakpointLines;
-	std::vector<std::size_t> mDebuggerBreakpointInactiveLines;
-	std::vector<std::size_t> mDebuggerBreakpointUnboundLines;
 	bool mDebuggerInstructionLineValid = false;
 	std::size_t mDebuggerInstructionLine = 0;
 	LoadTiming mLastLoadTiming;
@@ -1190,6 +1190,7 @@ class MRFileEditor : public TScroller {
 
 	void remapDirtyRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
 	void remapFindMarkerRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
+	void remapDebuggerBreakpointLinesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change);
 	void addDirtyRange(MRTextBufferModel::Range range);
 
 	bool isDirtyOffset(std::size_t pos) const noexcept;

@@ -442,6 +442,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
     KeymapActionDispatchEntry{"MR_TEXT_FILE_COMPARE", KeymapDispatchKind::AppCommand, cmMrTextFileCompare, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_EDIT_MARK_ALL", KeymapDispatchKind::AppCommand, cmMrEditMarkAll, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_BLOCK_MARK_ALL", KeymapDispatchKind::AppCommand, cmMrEditMarkAll, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_EDIT_TOGGLE_INSERT_MODE", KeymapDispatchKind::AppCommand, cmMrEditToggleInsertMode, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TEXT_TOGGLE_LINE_DRAWING", KeymapDispatchKind::AppCommand, cmMrTextToggleLineDrawing, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TEXT_TOGGLE_DOUBLE_LINES", KeymapDispatchKind::AppCommand, cmMrTextToggleDoubleLines, KeymapWindowMethod::None, KeymapCustomAction::None},
@@ -1259,7 +1260,6 @@ std::vector<ContextMenuEntry> buildEditMiniMenuItems(MREditWindow *targetWindow)
 
 	if (hasMarkedText) entries.push_back(ContextMenuEntry{"Cut", cmMrEditCutToBuffer, false});
 	if (hasMarkedText) entries.push_back(ContextMenuEntry{"Copy", cmMrEditCopyToBuffer, false});
-	entries.push_back(ContextMenuEntry{"Mark all", cmMrEditMarkAll, false});
 	entries.push_back(ContextMenuEntry{"Paste", cmMrEditPasteFromBuffer, false});
 	return entries;
 }
@@ -1786,8 +1786,8 @@ bool handleTextFileCompare() {
 	return true;
 }
 
-bool handleBuildCurrentFile() {
-	MREditWindow *win = currentEditWindow();
+bool handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation debuggerContinuation = mr::coprocessor::BuildDebuggerContinuation::None, MREditWindow *requestedWindow = nullptr) {
+	MREditWindow *win = requestedWindow != nullptr ? requestedWindow : currentEditWindow();
 	std::string sourcePath;
 	std::string matchedProfileName;
 	std::string errorText;
@@ -1810,7 +1810,7 @@ bool handleBuildCurrentFile() {
 		postDialogWarning("Build current file requires a named source file.");
 		return true;
 	}
-	if (sourceBentoBox != nullptr && sourceBentoBox->gdbDebuggerActive()) sourceBentoBox->stopGdbDebugger();
+	if (sourceBentoBox != nullptr && sourceBentoBox->gdbDebuggerActive()) sourceBentoBox->stopGdbDebuggerForRebuild();
 	if (win->isFileChanged() && !win->saveCurrentFile()) {
 		postDialogWarning("Unable to save current file before build.");
 		return true;
@@ -1863,6 +1863,7 @@ bool handleBuildCurrentFile() {
 	static_cast<void>(mrActivateEditWindow(bentoBox));
 	if (sourceWindowToClose != nullptr) message(sourceWindowToClose, evCommand, cmClose, nullptr);
 	buildContext.sourceBufferId = bentoBox->bufferId();
+	buildContext.debuggerContinuation = debuggerContinuation;
 	bentoBox->clearCompilerDiagnostics();
 	startExternalCommandInWindow(outputWindow, commandLine, true, false, false, outputTitle, compilerProfile.buildSuccessAudioUri, compilerProfile.buildFailureAudioUri, buildContext);
 	bentoBox->activatePrimaryPane();
@@ -2242,6 +2243,12 @@ bool handleStopCurrentProgram() {
 
 bool handleRestartCurrentProgram() {
 	MREditWindow *current = currentEditWindow();
+	MRBentoBox *sourceBentoBox = dynamic_cast<MRBentoBox *>(current);
+	if (sourceBentoBox == nullptr && current != nullptr) sourceBentoBox = dynamic_cast<MRBentoBox *>(current->owner);
+	if (sourceBentoBox != nullptr && sourceBentoBox->gdbDebuggerActive()) {
+		sourceBentoBox->stopGdbDebuggerForRebuild();
+		return handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation::Start, sourceBentoBox);
+	}
 	MREditWindow *win = currentExternalOutputWindow();
 	MRBentoBox *diagnosticsBento = win != nullptr ? dynamic_cast<MRBentoBox *>(win->owner) : nullptr;
 	const bool splitOutputTarget = win != nullptr && win != current;
@@ -2853,6 +2860,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrOtherBuildCurrentFile:
 			return handleBuildCurrentFile();
+
+		case cmMrDebuggerRebuildAndContinue:
+			return handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation::StartAndRun, static_cast<MREditWindow *>(commandInfo));
 
 		case cmMrOtherGitChanges:
 			return handleGitChanges();

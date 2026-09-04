@@ -244,6 +244,8 @@ class MRBentoBox : public MREditWindow {
 		[[nodiscard]] bool ensureGdbDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow, MRGdbTerminalPane *&terminalWindow);
 		[[nodiscard]] bool startGdbDebugger(const std::string &programPath, const std::string &sourcePath, std::string &errorMessage);
 		void stopGdbDebugger() noexcept;
+		void stopGdbDebuggerForRebuild() noexcept;
+		[[nodiscard]] bool startGdbInferior();
 		[[nodiscard]] bool acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload);
 		[[nodiscard]] bool sendGdbTerminalInput(const std::string &text);
 		[[nodiscard]] bool clearGdbProgramTerminal();
@@ -460,7 +462,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool scheduleMacroDebuggerWorkerAction(MRMacroDebugWorkerAction action);
 	[[nodiscard]] bool startMacroDebuggerSession(int temporaryStopLine);
 	[[nodiscard]] bool handleGdbDebuggerFunctionKey(TEvent &event);
-	[[nodiscard]] bool sendGdbCommand(MRGdbCommandKind commandKind, const std::string &text = std::string());
+	[[nodiscard]] bool sendGdbCommand(MRGdbCommandKind commandKind, const std::string &text = std::string(), const std::string &objectName = std::string());
 	void publishGdbDebuggerState(const char *state, const std::string &file = std::string(), int line = 0);
 	void clearGdbDebuggerState() noexcept;
 	[[nodiscard]] std::string gdbDebuggerStateText() const;
@@ -502,8 +504,9 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool handleOuterFrameCloseMouse(TEvent &event);
 	void updatePaneRoleListChrome() noexcept;
 	[[nodiscard]] short paneRoleIndexAt(TPoint globalMouse);
-	void dragDivider(TEvent &event, int nodeIndex) noexcept;
-	[[nodiscard]] int materializeIndependentDividerSegment(int nodeIndex, TPoint point, bool &layoutChanged) noexcept;
+	[[nodiscard]] bool dragDivider(TEvent &event, int nodeIndex, int paneLeafId) noexcept;
+	[[nodiscard]] int materializeHorizontalDividerForPane(int nodeIndex, int paneLeafId, bool &layoutChanged) noexcept;
+	[[nodiscard]] int horizontalDividerNodeForPaneFrame(int leafId, TPoint point) const noexcept;
 	void setDividerPosition(int nodeIndex, int position, bool markWorkspace) noexcept;
 	void setDividerPosition(int position) noexcept;
 	void setActivePane(int leafId) noexcept;
@@ -599,12 +602,13 @@ class MRBentoBox : public MREditWindow {
 		std::size_t start;
 		std::size_t end;
 		std::string expression;
+		std::string objectName;
 		std::string value;
 	};
 
 	MRDebuggerValueInput *debuggerValueInput;
 	MRPaneEditWindow *debuggerValueInputPane;
-	std::string gdbDebuggerValueInputExpression;
+	std::string gdbDebuggerValueInputObjectName;
 	std::vector<MRMacroDebugVariableSnapshot> macroDebuggerVariables;
 	std::vector<std::pair<std::size_t, std::size_t>> macroDebuggerVariableRows;
 	std::vector<GdbDebuggerVariableRow> gdbDebuggerVariableRows;

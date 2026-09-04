@@ -21,8 +21,9 @@ struct MRBuildHookContext {
 	std::string preBuildMacro;
 	std::string postBuildMacro;
 	int sourceBufferId;
+	mr::coprocessor::BuildDebuggerContinuation debuggerContinuation;
 
-	MRBuildHookContext() noexcept : sourcePath(), sourceDir(), sourceFile(), sourceStem(), outputPath(), pdfPath(), profileId(), profileName(), toolchain(), preBuildMacro(), postBuildMacro(), sourceBufferId(0) {
+	MRBuildHookContext() noexcept : sourcePath(), sourceDir(), sourceFile(), sourceStem(), outputPath(), pdfPath(), profileId(), profileName(), toolchain(), preBuildMacro(), postBuildMacro(), sourceBufferId(0), debuggerContinuation(mr::coprocessor::BuildDebuggerContinuation::None) {
 	}
 };
 

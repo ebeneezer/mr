@@ -269,110 +269,138 @@ short MRBentoBox::paneRoleIndexAt(TPoint globalMouse) {
 	return static_cast<short>(std::clamp(localMouse.y - paneRoleListAnchor.a.y, 0, maxIndex));
 }
 
-int MRBentoBox::materializeIndependentDividerSegment(int nodeIndex, TPoint point, bool &layoutChanged) noexcept {
+int MRBentoBox::horizontalDividerNodeForPaneFrame(int leafId, TPoint point) const noexcept {
+	int nodeIndex = nodeIndexForLeaf(leafId);
+
+	while (nodeIndex >= 0) {
+		const int parent = parentNodeOf(nodeIndex);
+
+		if (parent < 0) break;
+		const BentoLayoutNode &split = layoutTree[parent];
+		const TRect bounds = nodeBounds(parent);
+		const int position = currentDividerPosition(parent);
+		if (split.orientation == bsoHorizontal && (point.y == position || point.y == position - 1) && point.x >= bounds.a.x && point.x < bounds.b.x)
+			return parent;
+		nodeIndex = parent;
+	}
+	return -1;
+}
+
+int MRBentoBox::materializeHorizontalDividerForPane(int nodeIndex, int paneLeafId, bool &layoutChanged) noexcept {
 	layoutChanged = false;
 	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return nodeIndex;
 	const BentoLayoutNode parent = layoutTree[nodeIndex];
-	if (parent.kind != blnSplit || parent.firstChild < 0 || parent.secondChild < 0 ||
+	if (parent.kind != blnSplit || parent.orientation != bsoHorizontal || parent.firstChild < 0 || parent.secondChild < 0 ||
 	    parent.firstChild >= static_cast<int>(layoutTree.size()) || parent.secondChild >= static_cast<int>(layoutTree.size()))
 		return nodeIndex;
-	const BentoLayoutNode first = layoutTree[parent.firstChild];
-	const BentoLayoutNode second = layoutTree[parent.secondChild];
-	if (first.kind != blnSplit || second.kind != blnSplit || first.orientation != second.orientation || first.orientation == parent.orientation) return nodeIndex;
-	const int firstPosition = currentDividerPosition(parent.firstChild);
-	const int secondPosition = currentDividerPosition(parent.secondChild);
-	if (firstPosition != secondPosition) return nodeIndex;
-	if (first.orientation == bsoVertical) {
-		if (point.x == firstPosition || point.x == firstPosition - 1) return nodeIndex;
-	} else if (point.y == firstPosition || point.y == firstPosition - 1)
+	int firstRowNode = parent.firstChild;
+	const int secondRowNode = parent.secondChild;
+	int prefixNode = -1;
+	int columnSplitNode = nodeIndex;
+	int prefixDivider = 0;
+	if (layoutTree[firstRowNode].kind == blnSplit && layoutTree[firstRowNode].orientation == bsoHorizontal) {
+		const BentoLayoutNode stackedRows = layoutTree[firstRowNode];
+
+		if (stackedRows.firstChild < 0 || stackedRows.secondChild < 0 || stackedRows.firstChild >= static_cast<int>(layoutTree.size()) ||
+		    stackedRows.secondChild >= static_cast<int>(layoutTree.size()))
+			return nodeIndex;
+		prefixNode = stackedRows.firstChild;
+		columnSplitNode = firstRowNode;
+		prefixDivider = currentDividerPosition(firstRowNode);
+		firstRowNode = stackedRows.secondChild;
+	}
+	const BentoLayoutNode firstRow = layoutTree[firstRowNode];
+	const BentoLayoutNode secondRow = layoutTree[secondRowNode];
+	if (firstRow.kind != blnSplit || secondRow.kind != blnSplit || firstRow.orientation != bsoVertical || secondRow.orientation != bsoVertical)
 		return nodeIndex;
+	const int firstDivider = currentDividerPosition(firstRowNode);
+	const int secondDivider = currentDividerPosition(secondRowNode);
+	if (firstDivider != secondDivider) return nodeIndex;
+
+	const int leafNode = nodeIndexForLeaf(paneLeafId);
+	auto containsLeafNode = [this, leafNode](int subtree) noexcept {
+		int current = leafNode;
+
+		while (current >= 0) {
+			if (current == subtree) return true;
+			current = parentNodeOf(current);
+		}
+		return false;
+	};
+	const bool firstColumn = containsLeafNode(firstRow.firstChild) || containsLeafNode(secondRow.firstChild);
+	const bool secondColumn = containsLeafNode(firstRow.secondChild) || containsLeafNode(secondRow.secondChild);
+	if (firstColumn == secondColumn) return nodeIndex;
 
 	const int sharedPosition = currentDividerPosition(nodeIndex);
-	BentoLayoutNode firstSegment;
-	firstSegment.kind = blnSplit;
-	firstSegment.orientation = parent.orientation;
-	firstSegment.dividerPosition = sharedPosition;
-	firstSegment.firstChild = first.firstChild;
-	firstSegment.secondChild = second.firstChild;
-	firstSegment.leafId = -1;
-	BentoLayoutNode secondSegment;
-	secondSegment.kind = blnSplit;
-	secondSegment.orientation = parent.orientation;
-	secondSegment.dividerPosition = sharedPosition;
-	secondSegment.firstChild = first.secondChild;
-	secondSegment.secondChild = second.secondChild;
-	secondSegment.leafId = -1;
-	BentoLayoutNode segmentedParent;
-	segmentedParent.kind = blnSplit;
-	segmentedParent.orientation = first.orientation;
-	segmentedParent.dividerPosition = firstPosition;
-	segmentedParent.firstChild = parent.firstChild;
-	segmentedParent.secondChild = parent.secondChild;
-	segmentedParent.leafId = -1;
+	BentoLayoutNode leftColumn;
+	leftColumn.kind = blnSplit;
+	leftColumn.orientation = bsoHorizontal;
+	leftColumn.dividerPosition = sharedPosition;
+	leftColumn.firstChild = firstRow.firstChild;
+	leftColumn.secondChild = secondRow.firstChild;
+	leftColumn.leafId = -1;
+	BentoLayoutNode rightColumn;
+	rightColumn.kind = blnSplit;
+	rightColumn.orientation = bsoHorizontal;
+	rightColumn.dividerPosition = sharedPosition;
+	rightColumn.firstChild = firstRow.secondChild;
+	rightColumn.secondChild = secondRow.secondChild;
+	rightColumn.leafId = -1;
+	BentoLayoutNode columnSplit;
+	columnSplit.kind = blnSplit;
+	columnSplit.orientation = bsoVertical;
+	columnSplit.dividerPosition = firstDivider;
+	columnSplit.firstChild = firstRowNode;
+	columnSplit.secondChild = secondRowNode;
+	columnSplit.leafId = -1;
 
-	layoutTree[parent.firstChild] = firstSegment;
-	layoutTree[parent.secondChild] = secondSegment;
-	layoutTree[nodeIndex] = segmentedParent;
+	layoutTree[firstRowNode] = leftColumn;
+	layoutTree[secondRowNode] = rightColumn;
+	layoutTree[columnSplitNode] = columnSplit;
+	if (prefixNode >= 0) {
+		BentoLayoutNode stackedGrid;
+		stackedGrid.kind = blnSplit;
+		stackedGrid.orientation = bsoHorizontal;
+		stackedGrid.dividerPosition = prefixDivider;
+		stackedGrid.firstChild = prefixNode;
+		stackedGrid.secondChild = columnSplitNode;
+		stackedGrid.leafId = -1;
+		layoutTree[nodeIndex] = stackedGrid;
+	}
 	layoutChanged = true;
-	return first.orientation == bsoVertical ? (point.x < firstPosition ? parent.firstChild : parent.secondChild)
-	                                        : (point.y < firstPosition ? parent.firstChild : parent.secondChild);
+	return firstColumn ? firstRowNode : secondRowNode;
 }
 
-void MRBentoBox::dragDivider(TEvent &event, int nodeIndex) noexcept {
-	if (maximizedLeafId >= 0) return;
-	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return;
+bool MRBentoBox::dragDivider(TEvent &event, int nodeIndex, int paneLeafId) noexcept {
+	if (maximizedLeafId >= 0) return false;
+	if (nodeIndex < 0 || nodeIndex >= static_cast<int>(layoutTree.size())) return false;
 	const TPoint initialLocal = makeLocal(event.mouse.where);
-	int verticalNode = -1;
-	int horizontalNode = -1;
-
-	for (int candidate = 0; candidate < static_cast<int>(layoutTree.size()); ++candidate) {
-		const BentoLayoutNode &node = layoutTree[candidate];
-		if (node.kind != blnSplit) continue;
-		const TRect bounds = nodeBounds(candidate);
-		const int position = currentDividerPosition(candidate);
-		if (node.orientation == bsoVertical) {
-			if ((initialLocal.x == position || initialLocal.x == position - 1) && initialLocal.y >= bounds.a.y && initialLocal.y < bounds.b.y) verticalNode = candidate;
-		} else if ((initialLocal.y == position || initialLocal.y == position - 1) && initialLocal.x >= bounds.a.x && initialLocal.x < bounds.b.x)
-			horizontalNode = candidate;
-	}
-	if (verticalNode >= 0 && horizontalNode >= 0) {
-		const int initialVerticalPosition = currentDividerPosition(verticalNode);
-		const int initialHorizontalPosition = currentDividerPosition(horizontalNode);
-		const int verticalDragOffset = initialLocal.x - initialVerticalPosition;
-		const int horizontalDragOffset = initialLocal.y - initialHorizontalPosition;
-
-		while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseUp)) {
-			if (event.what == evMouseUp) break;
-			const TPoint local = makeLocal(event.mouse.where);
-			const bool verticalChanged = projectPaneDividerPosition(verticalNode, local.x - verticalDragOffset);
-			const bool horizontalChanged = projectPaneDividerPosition(horizontalNode, local.y - horizontalDragOffset);
-
-			if (verticalChanged || horizontalChanged) layoutSplitPanes();
-		}
-		if (currentDividerPosition(verticalNode) != initialVerticalPosition || currentDividerPosition(horizontalNode) != initialHorizontalPosition) mrMarkWorkspaceAutosaveDirty("bento divider", this);
-		return;
-	}
 	const int initialPosition = currentDividerPosition(nodeIndex);
 	const bool vertical = layoutTree[nodeIndex].orientation == bsoVertical;
 	const int dragOffset = (vertical ? initialLocal.x : initialLocal.y) - initialPosition;
 	bool layoutChanged = false;
-	bool segmentResolved = false;
+	bool paneSegmentResolved = paneLeafId < 0 || vertical;
 	if (event.what != evMouseDown) {
 		const TPoint local = makeLocal(event.mouse.where);
-		if ((vertical ? local.x : local.y) - dragOffset != initialPosition) nodeIndex = materializeIndependentDividerSegment(nodeIndex, initialLocal, layoutChanged);
-		segmentResolved = true;
+		if (!paneSegmentResolved) {
+			nodeIndex = materializeHorizontalDividerForPane(nodeIndex, paneLeafId, layoutChanged);
+			paneSegmentResolved = true;
+		}
 		setDividerPosition(nodeIndex, (vertical ? local.x : local.y) - dragOffset, false);
 	}
 	while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseUp)) {
 		if (event.what == evMouseUp) break;
 		const TPoint local = makeLocal(event.mouse.where);
-		if (!segmentResolved && (vertical ? local.x : local.y) - dragOffset != initialPosition) {
-			nodeIndex = materializeIndependentDividerSegment(nodeIndex, initialLocal, layoutChanged);
-			segmentResolved = true;
+		const int position = (vertical ? local.x : local.y) - dragOffset;
+		if (!paneSegmentResolved && position != initialPosition) {
+			nodeIndex = materializeHorizontalDividerForPane(nodeIndex, paneLeafId, layoutChanged);
+			paneSegmentResolved = true;
 		}
-		setDividerPosition(nodeIndex, (vertical ? local.x : local.y) - dragOffset, false);
+		setDividerPosition(nodeIndex, position, false);
 	}
-	if (layoutChanged || currentDividerPosition(nodeIndex) != initialPosition) mrMarkWorkspaceAutosaveDirty("bento divider", this);
+	const bool changed = layoutChanged || currentDividerPosition(nodeIndex) != initialPosition;
+	if (changed) mrMarkWorkspaceAutosaveDirty("bento divider", this);
+	return changed;
 }
 
 void MRBentoBox::setDividerPosition(int position) noexcept {
@@ -461,19 +489,31 @@ bool MRBentoBox::handleDividerChromeMouse(TEvent &event) {
 		paneMouse.y = localMouse.y - bounds.a.y;
 		MRBentoPaneFrameView::HitKind hit = view->hitTest(paneMouse);
 		const int leafId = view->paneLeafId();
+		const bool leftButton = (event.mouse.buttons & mbLeftButton) != 0;
+		const bool rightButton = (event.mouse.buttons & mbRightButton) != 0;
+		if ((paneMouse.y == 0 || paneMouse.y == bounds.b.y - bounds.a.y - 1) && leftButton &&
+		    hit != MRBentoPaneFrameView::hitClose && hit != MRBentoPaneFrameView::hitMaximize) {
+			const int dividerNode = horizontalDividerNodeForPaneFrame(leafId, localMouse);
+
+			if (dividerNode >= 0) {
+				const bool changed = dragDivider(event, dividerNode, leafId);
+
+				if (changed || hit == MRBentoPaneFrameView::hitNone) return true;
+			}
+		}
 		switch (hit) {
 			case MRBentoPaneFrameView::hitTitle:
-				if ((event.mouse.buttons & (mbLeftButton | mbRightButton)) == 0) return false;
+				if (!leftButton && !rightButton) return false;
 				setActivePane(leafId);
 				if (titleMenuEnabledForLeaf(leafId)) showPaneRoleList(event.mouse.where, leafId);
 				return true;
 			case MRBentoPaneFrameView::hitClose:
-				if ((event.mouse.buttons & mbLeftButton) == 0) return false;
+				if (!leftButton) return false;
 				if (!paneCloseActionEnabled()) return true;
 				closePane(leafId);
 				return true;
 			case MRBentoPaneFrameView::hitMaximize:
-				if ((event.mouse.buttons & mbLeftButton) == 0) return false;
+				if (!leftButton) return false;
 				if (!paneMaximizeActionEnabled()) return true;
 				toggleLeafMaximized(leafId);
 				return true;

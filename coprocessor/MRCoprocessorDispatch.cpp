@@ -25,6 +25,7 @@
 #include "../app/MRCommands.hpp"
 #include "../app/MRUpdate.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
+#include "../app/commands/MRBuildCommands.hpp"
 #include "../app/services/MRGdbSession.hpp"
 #include "../app/MRMacroDebuggerCommandRoute.hpp"
 #include "../app/router/MRCommandRouterGit.hpp"
@@ -699,6 +700,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			else
 				playAudioSignal(finished->failureAudioUri);
 			runExternalIoPostBuildMacro(result, *finished);
+			if (finished->debuggerContinuation != mr::coprocessor::BuildDebuggerContinuation::None && !result.cancelled() && !result.failed() && !finished->signaled && finished->exitCode == 0)
+				static_cast<void>(mrContinueDebuggerAfterBuild(*finished));
 			mrTraceCoprocessorTaskRelease(static_cast<int>(finished->channelId), result.task.id, "finished");
 			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 			if (result.task.lane == mr::coprocessor::Lane::Extern) mr::coprocessor::globalCoprocessor().unregisterExternalSource(result.task.documentId);

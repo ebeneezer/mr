@@ -190,6 +190,8 @@ std::shared_ptr<mr::coprocessor::ExternalIoFinishedPayload> makeFinishedPayload(
 	payload->buildProfileName = context.profileName;
 	payload->buildToolchain = context.toolchain;
 	payload->postBuildMacro = context.postBuildMacro;
+	payload->buildSourceBufferId = context.sourceBufferId;
+	payload->debuggerContinuation = context.debuggerContinuation;
 	return payload;
 }
 } // namespace

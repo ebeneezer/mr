@@ -12,6 +12,7 @@
 #include <map>
 #include <mutex>
 #include <poll.h>
+#include <set>
 #include <sstream>
 #include <string>
 #include <sys/ioctl.h>
@@ -42,7 +43,10 @@ enum class PendingMiKind : unsigned char {
 	ToggleQuery,
 	BreakpointMutation,
 	BreakpointRefresh,
-	Variables,
+	VariableNames,
+	VariableCreate,
+	VariableChildren,
+	VariableAssign,
 	Evaluate,
 	WatchCreate,
 	WatchDelete,
@@ -50,16 +54,20 @@ enum class PendingMiKind : unsigned char {
 };
 
 struct PendingMiCommand {
-	PendingMiCommand() noexcept : kind(PendingMiKind::None), text(), file(), line(0) {}
+	PendingMiCommand() noexcept : kind(PendingMiKind::None), text(), file(), objectName(), line(0), depth(0), rowLimit(0), refreshGeneration(0) {}
 	PendingMiKind kind;
 	std::string text;
 	std::string file;
+	std::string objectName;
 	int line;
+	int depth;
+	std::size_t rowLimit;
+	std::uint64_t refreshGeneration;
 };
 
 struct GdbProcess {
 	GdbProcess() noexcept
-	    : pid(-1), inputFd(-1), outputFd(-1), errorFd(-1), ptyMasterFd(-1), ptySlaveFd(-1), sourcePath(), childExited(false), waitStatus(0), outputOpen(false), errorOpen(false), quitRequested(false), inferiorHasRun(false), nextToken(1), pending(), watches(), miStream() {}
+	    : pid(-1), inputFd(-1), outputFd(-1), errorFd(-1), ptyMasterFd(-1), ptySlaveFd(-1), sourcePath(), childExited(false), waitStatus(0), outputOpen(false), errorOpen(false), quitRequested(false), inferiorHasRun(false), nextToken(1), pending(), watches(), localVariableRoots(), localVariables(), variableExpansionQueue(), variableRefreshGeneration(0), variableOutstanding(0), variableChildrenRunning(false), miStream() {}
 
 	pid_t pid;
 	int inputFd;
@@ -78,8 +86,17 @@ struct GdbProcess {
 	unsigned nextToken;
 	std::map<unsigned, PendingMiCommand> pending;
 	std::map<std::string, std::pair<std::string, std::string>> watches;
+	std::vector<std::string> localVariableRoots;
+	std::vector<MRGdbMiVariable> localVariables;
+	std::deque<PendingMiCommand> variableExpansionQueue;
+	std::uint64_t variableRefreshGeneration;
+	std::size_t variableOutstanding;
+	bool variableChildrenRunning;
 	MRGdbMiStream miStream;
 };
+
+const int kVariableMaximumDepth = 8;
+const std::size_t kVariableMaximumRows = 1024;
 
 void closeFd(int &fd) noexcept {
 	if (fd >= 0) ::close(fd);
@@ -136,13 +153,30 @@ void requestBreakpointRefresh(GdbProcess &process) {
 }
 
 void requestStoppedState(GdbProcess &process) {
+	for (const std::string &objectName : process.localVariableRoots)
+		static_cast<void>(sendMi(process, "-var-delete " + objectName));
+	process.localVariableRoots.clear();
+	process.localVariables.clear();
+	process.variableExpansionQueue.clear();
+	++process.variableRefreshGeneration;
+	process.variableOutstanding = 0;
+	process.variableChildrenRunning = false;
 	PendingMiCommand variables;
-	variables.kind = PendingMiKind::Variables;
-	static_cast<void>(sendMi(process, "-stack-list-variables --simple-values", std::move(variables)));
+	variables.kind = PendingMiKind::VariableNames;
+	variables.refreshGeneration = process.variableRefreshGeneration;
+	if (sendMi(process, "-stack-list-variables --no-values", std::move(variables)) != 0) ++process.variableOutstanding;
 	PendingMiCommand watches;
 	watches.kind = PendingMiKind::WatchUpdate;
 	static_cast<void>(sendMi(process, "-var-update --all-values *", std::move(watches)));
 	requestBreakpointRefresh(process);
+}
+
+void invalidateVariableRefresh(GdbProcess &process) noexcept {
+	++process.variableRefreshGeneration;
+	process.variableOutstanding = 0;
+	process.variableExpansionQueue.clear();
+	process.variableChildrenRunning = false;
+	process.localVariables.clear();
 }
 
 void postWatchProjection(GdbProcess &process, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation) {
@@ -190,6 +224,66 @@ void handleToggleQuery(GdbProcess &process, const PendingMiCommand &pending, con
 		static_cast<void>(sendMi(process, "-break-delete " + matchingNumbers, std::move(mutation)));
 }
 
+bool variableRefreshCommand(PendingMiKind kind) noexcept {
+	return kind == PendingMiKind::VariableNames || kind == PendingMiKind::VariableCreate || kind == PendingMiKind::VariableChildren;
+}
+
+void appendVariableTree(const std::string &parentObjectName, const std::vector<MRGdbMiVariable> &source, std::vector<MRGdbMiVariable> &target, std::set<std::string> &visited) {
+	for (const MRGdbMiVariable &variable : source) {
+		if (variable.parentObjectName != parentObjectName || !visited.insert(variable.objectName).second) continue;
+		target.push_back(variable);
+		appendVariableTree(variable.objectName, source, target, visited);
+	}
+}
+
+void postVariableProjectionIfComplete(GdbProcess &process, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation) {
+	if (process.variableOutstanding != 0 || process.variableChildrenRunning || !process.variableExpansionQueue.empty()) return;
+	MRGdbEvent event;
+	std::set<std::string> visited;
+	event.kind = MRGdbEventKind::Variables;
+	event.variables.reserve(process.localVariables.size());
+	appendVariableTree(std::string(), process.localVariables, event.variables, visited);
+	postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+}
+
+void dispatchNextVariableChildren(GdbProcess &process) {
+	if (process.variableChildrenRunning) return;
+	while (!process.variableExpansionQueue.empty()) {
+		PendingMiCommand children = std::move(process.variableExpansionQueue.front());
+
+		process.variableExpansionQueue.pop_front();
+		if (children.refreshGeneration != process.variableRefreshGeneration) continue;
+		if (process.localVariables.size() >= kVariableMaximumRows) {
+			process.variableExpansionQueue.clear();
+			return;
+		}
+		children.rowLimit = kVariableMaximumRows - process.localVariables.size();
+		if (sendMi(process, "-var-list-children --all-values " + children.objectName + " 0 " + std::to_string(children.rowLimit), std::move(children)) != 0) {
+			++process.variableOutstanding;
+			process.variableChildrenRunning = true;
+			return;
+		}
+	}
+}
+
+void finishVariableCommand(GdbProcess &process, const PendingMiCommand &pending, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation) {
+	if (!variableRefreshCommand(pending.kind) || pending.refreshGeneration != process.variableRefreshGeneration) return;
+	if (pending.kind == PendingMiKind::VariableChildren) process.variableChildrenRunning = false;
+	if (process.variableOutstanding > 0) --process.variableOutstanding;
+	dispatchNextVariableChildren(process);
+	postVariableProjectionIfComplete(process, info, sourceId, targetBufferId, generation);
+}
+
+void requestVariableChildren(GdbProcess &process, const std::string &objectName, int depth) {
+	if (objectName.empty() || depth > kVariableMaximumDepth || process.localVariables.size() >= kVariableMaximumRows || process.variableExpansionQueue.size() >= kVariableMaximumRows) return;
+	PendingMiCommand children;
+	children.kind = PendingMiKind::VariableChildren;
+	children.objectName = objectName;
+	children.depth = depth;
+	children.refreshGeneration = process.variableRefreshGeneration;
+	process.variableExpansionQueue.push_back(std::move(children));
+}
+
 void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation) {
 	if (record.kind == MRGdbMiRecordKind::Console || record.kind == MRGdbMiRecordKind::Log) {
 		if (!record.text.empty()) {
@@ -203,6 +297,7 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 	if (record.kind == MRGdbMiRecordKind::Target) return;
 	if (record.kind == MRGdbMiRecordKind::Exec && record.resultClass == "running") {
 		process.inferiorHasRun = true;
+		invalidateVariableRefresh(process);
 		MRGdbEvent event;
 		event.kind = MRGdbEventKind::Running;
 		postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
@@ -230,6 +325,7 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 	}
 	if (record.resultClass == "running") {
 		process.inferiorHasRun = true;
+		invalidateVariableRefresh(process);
 		MRGdbEvent event;
 		event.kind = MRGdbEventKind::Running;
 		postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
@@ -241,6 +337,7 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 			event.text = "Watch '" + pending.text + "' unavailable: " + mrGdbMiField(record.raw, "msg") + ". Stop after its declaration and rebuild if the source changed.\n";
 		else event.text = "GDB: " + mrGdbMiField(record.raw, "msg") + "\n";
 		postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+		finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
 		return;
 	}
 	switch (pending.kind) {
@@ -253,15 +350,57 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 		case PendingMiKind::BreakpointRefresh:
 			postBreakpointProjection(process, info, sourceId, targetBufferId, generation, record.raw);
 			break;
-		case PendingMiKind::Variables: {
-			std::vector<MRGdbMiVariable> variables;
-			MRGdbEvent event;
-			mrGdbMiVariables(record.raw, variables);
-			event.kind = MRGdbEventKind::Variables;
-			event.variables = std::move(variables);
-			postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+		case PendingMiKind::VariableNames: {
+			if (pending.refreshGeneration == process.variableRefreshGeneration) {
+				std::vector<MRGdbMiVariable> variables;
+				mrGdbMiVariables(record.raw, variables);
+				for (const MRGdbMiVariable &variable : variables) {
+					if (process.localVariables.size() + process.variableOutstanding >= kVariableMaximumRows) break;
+					PendingMiCommand create;
+					create.kind = PendingMiKind::VariableCreate;
+					create.text = variable.name;
+					create.refreshGeneration = process.variableRefreshGeneration;
+					if (sendMi(process, "-var-create - * " + mrGdbMiQuote(variable.name), std::move(create)) != 0) ++process.variableOutstanding;
+				}
+			}
+			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
 			break;
 		}
+		case PendingMiKind::VariableCreate: {
+			if (pending.refreshGeneration == process.variableRefreshGeneration && process.localVariables.size() < kVariableMaximumRows) {
+				MRGdbMiVariable variable;
+				variable.name = pending.text;
+				variable.objectName = mrGdbMiField(record.raw, "name");
+				variable.value = mrGdbMiField(record.raw, "value");
+				variable.type = mrGdbMiField(record.raw, "type");
+				variable.childCount = mrGdbMiIntField(record.raw, "numchild", 0);
+				if (!variable.objectName.empty()) {
+					process.localVariableRoots.push_back(variable.objectName);
+					process.localVariables.push_back(variable);
+					if (variable.childCount > 0) requestVariableChildren(process, variable.objectName, 1);
+				}
+			}
+			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
+			break;
+		}
+		case PendingMiKind::VariableChildren: {
+			if (pending.refreshGeneration == process.variableRefreshGeneration && process.localVariables.size() < kVariableMaximumRows) {
+				std::vector<MRGdbMiVariable> children;
+				mrGdbMiChildren(record.raw, pending.objectName, pending.depth, children);
+				for (MRGdbMiVariable &child : children) {
+					if (process.localVariables.size() >= kVariableMaximumRows) break;
+					const bool requestChildren = child.childCount > 0 && child.depth < kVariableMaximumDepth;
+					const std::string objectName = child.objectName;
+					process.localVariables.push_back(std::move(child));
+					if (requestChildren) requestVariableChildren(process, objectName, pending.depth + 1);
+				}
+			}
+			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
+			break;
+		}
+		case PendingMiKind::VariableAssign:
+			requestStoppedState(process);
+			break;
 		case PendingMiKind::Evaluate: {
 			MRGdbEvent event;
 			event.kind = MRGdbEventKind::DebuggerOutput;
@@ -410,10 +549,10 @@ void dispatchControlCommand(GdbProcess &process, const MRGdbCommand &command) {
 			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-continue" : "-exec-run"));
 			break;
 		case MRGdbCommandKind::StepInto:
-			static_cast<void>(sendMi(process, "-exec-step"));
+			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-step" : "-exec-run --start"));
 			break;
 		case MRGdbCommandKind::StepOver:
-			static_cast<void>(sendMi(process, "-exec-next"));
+			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-next" : "-exec-run --start"));
 			break;
 		case MRGdbCommandKind::StepOut:
 			static_cast<void>(sendMi(process, "-exec-finish"));
@@ -426,6 +565,9 @@ void dispatchControlCommand(GdbProcess &process, const MRGdbCommand &command) {
 			static_cast<void>(sendMi(process, "-break-list", std::move(pending)));
 			break;
 		}
+		case MRGdbCommandKind::AddBreakpoint:
+			static_cast<void>(sendMi(process, "-break-insert " + sourceLocation(command.file, command.line)));
+			break;
 		case MRGdbCommandKind::AddWatch: {
 			PendingMiCommand pending;
 			pending.kind = PendingMiKind::WatchCreate;
@@ -449,6 +591,14 @@ void dispatchControlCommand(GdbProcess &process, const MRGdbCommand &command) {
 			pending.kind = PendingMiKind::Evaluate;
 			pending.text = command.text;
 			static_cast<void>(sendMi(process, "-data-evaluate-expression " + mrGdbMiQuote(command.text), std::move(pending)));
+			break;
+		}
+		case MRGdbCommandKind::AssignVariable: {
+			PendingMiCommand pending;
+			pending.kind = PendingMiKind::VariableAssign;
+			pending.objectName = command.objectName;
+			pending.text = command.text;
+			if (!command.objectName.empty()) static_cast<void>(sendMi(process, "-var-assign " + command.objectName + " " + mrGdbMiQuote(command.text), std::move(pending)));
 			break;
 		}
 		case MRGdbCommandKind::TerminalInput:
@@ -586,8 +736,8 @@ mr::coprocessor::Result runGdbSessionTask(const mr::coprocessor::TaskInfo &info,
 
 } // namespace
 
-MRGdbCommand::MRGdbCommand() noexcept : kind(MRGdbCommandKind::ContinueExecution), text(), file(), line(0), columns(0), rows(0) {}
-MRGdbCommand::MRGdbCommand(MRGdbCommandKind aKind) noexcept : kind(aKind), text(), file(), line(0), columns(0), rows(0) {}
+MRGdbCommand::MRGdbCommand() noexcept : kind(MRGdbCommandKind::ContinueExecution), text(), file(), objectName(), line(0), columns(0), rows(0) {}
+MRGdbCommand::MRGdbCommand(MRGdbCommandKind aKind) noexcept : kind(aKind), text(), file(), objectName(), line(0), columns(0), rows(0) {}
 MRGdbEvent::MRGdbEvent() noexcept : kind(MRGdbEventKind::DebuggerOutput), text(), file(), line(0), variables(), breakpointLines() {}
 
 namespace mr::coprocessor {

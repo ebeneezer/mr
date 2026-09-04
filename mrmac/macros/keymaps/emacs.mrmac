@@ -8,7 +8,7 @@ KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_LEFT" se
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_RIGHT" sequence="<Ctrl+F>" description="Cursor right"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_WORD_LEFT" sequence="<Alt+B>" description="Word left"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_WORD_RIGHT" sequence="<Alt+F>" description="Word right"');
-KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_HOME" sequence="<Ctrl+A>" description="Beginning of line"');
+KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MR_BLOCK_MARK_ALL" sequence="<Ctrl+A>" description="Mark all as line block"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_END_OF_LINE" sequence="<Ctrl+E>" description="End of line"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_VIEW_PAGE_UP" sequence="<Alt+V>" description="Page up"');
 KEYMAP_BIND('name="EMACS" context=EDIT type=ACTION target="MRMAC_VIEW_PAGE_DOWN" sequence="<Ctrl+V>" description="Page down"');

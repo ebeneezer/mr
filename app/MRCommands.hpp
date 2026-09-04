@@ -179,6 +179,7 @@ enum : ushort {
 	cmMrDebuggerEraseWatch,
 	cmMrDebuggerRunHere,
 	cmMrDebuggerToggleBreakpoint,
+	cmMrDebuggerRebuildAndContinue,
 	cmMrDebuggerClearProgramTerminal
 };
 

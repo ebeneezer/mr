@@ -10,7 +10,6 @@
 #include "../../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -1457,25 +1456,6 @@ bool MRFEBlockOps::executeDelete(MRFileEditor &editor, std::string *errorText) {
 	return true;
 }
 
-bool MRFEBlockOps::shiftCurrentBlockToTab(MRFileEditor &editor, bool indent, std::string *errorText) {
-	using ShiftFunction = bool (MRFEBlockOps::*)(MRFileEditor &, bool, std::string *);
-	static constexpr std::array<ShiftFunction, 4> kShiftByMode = {
-		nullptr,
-		&MRFEBlockOps::shiftCurrentLineBlockToTab,
-		&MRFEBlockOps::shiftCurrentColumnBlockToTab,
-		&MRFEBlockOps::shiftCurrentStreamBlockToTab,
-	};
-
-	if (errorText != nullptr) errorText->clear();
-	normalize(editor);
-	const int modeIndex = static_cast<int>(mGeometry.mode);
-	if (modeIndex <= static_cast<int>(MRFEBlockMode::None) || modeIndex >= static_cast<int>(kShiftByMode.size()) || kShiftByMode[static_cast<std::size_t>(modeIndex)] == nullptr) {
-		if (errorText != nullptr) *errorText = "Line, column or stream block required.";
-		return false;
-	}
-	return (this->*kShiftByMode[static_cast<std::size_t>(modeIndex)])(editor, indent, errorText);
-}
-
 bool MRFEBlockOps::shiftCurrentColumnBlockToTab(MRFileEditor &editor, bool indent, std::string *errorText) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 
@@ -1515,12 +1495,24 @@ bool MRFEBlockOps::shiftCurrentLineBlockToTab(MRFileEditor &editor, bool indent,
 	}
 	const std::size_t firstLine = mGeometry.line1;
 	const std::size_t lastLine = std::min(mGeometry.line2, starts.size() - 1);
+	int blockIndentColumn = 0;
 	for (std::size_t line = firstLine; line <= lastLine; ++line) {
 		const std::size_t lineStart = starts[line];
 		const std::size_t lineEnd = lineContentEndForIndex(text, starts, line);
 		const std::string_view lineText(text.data() + lineStart, lineEnd - lineStart);
+		if (lineText.find_first_not_of(" \t") == std::string_view::npos) continue;
 		const int currentColumn = leadingIndentColumn(lineText);
-		const int targetColumn = blockTabTargetColumn(settings, currentColumn, indent);
+		if (blockIndentColumn == 0 || currentColumn < blockIndentColumn) blockIndentColumn = currentColumn;
+	}
+	const int blockTargetColumn = blockIndentColumn == 0 ? 0 : blockTabTargetColumn(settings, blockIndentColumn, indent);
+	const int blockIndentDelta = blockTargetColumn - blockIndentColumn;
+	for (std::size_t line = firstLine; line <= lastLine; ++line) {
+		const std::size_t lineStart = starts[line];
+		const std::size_t lineEnd = lineContentEndForIndex(text, starts, line);
+		const std::string_view lineText(text.data() + lineStart, lineEnd - lineStart);
+		if (lineText.find_first_not_of(" \t") == std::string_view::npos) continue;
+		const int currentColumn = leadingIndentColumn(lineText);
+		const int targetColumn = std::max(1, currentColumn + blockIndentDelta);
 		const std::string replacement = lineWithIndentColumn(lineText, targetColumn);
 
 		if ((indent || targetColumn < currentColumn) && (replacement.size() != lineEnd - lineStart || replacement != lineText)) replacements.push_back(ColumnLineReplacement{MRTextBufferModel::Range(lineStart, lineEnd), replacement});
@@ -1543,16 +1535,25 @@ bool MRFEBlockOps::shiftCurrentLineBlockToTab(MRFileEditor &editor, bool indent,
 }
 
 bool MRFEBlockOps::shiftCurrentStreamBlockToTab(MRFileEditor &editor, bool indent, std::string *errorText) {
-	const MREditSetupSettings settings = configuredEditSetupSettings();
-
 	if (errorText != nullptr) errorText->clear();
+	if (editor.isReadOnly()) {
+		if (errorText != nullptr) *errorText = "Editor is read-only.";
+		return false;
+	}
+	if (!hasVisibleBlock()) {
+		if (errorText != nullptr) *errorText = "No visible block marked.";
+		return false;
+	}
 	normalize(editor);
 	if (mGeometry.mode != MRFEBlockMode::Stream) {
 		if (errorText != nullptr) *errorText = "Stream block required.";
 		return false;
 	}
-	const int targetColumn = blockTabTargetColumn(settings, mGeometry.col1 + 1, indent);
-	return shiftCurrentStreamBlockHorizontally(editor, std::max(0, targetColumn - 1), StreamHorizontalShiftMode::IndentToTab, errorText);
+	if (mGeometry.rangeStart >= mGeometry.rangeEnd || !setCommittedBlock(editor, MRFEBlockMode::Line, mGeometry.rangeStart, mGeometry.rangeEnd - 1)) {
+		if (errorText != nullptr) *errorText = "Unable to normalize stream block to lines.";
+		return false;
+	}
+	return shiftCurrentLineBlockToTab(editor, indent, errorText);
 }
 
 bool MRFEBlockOps::shiftCurrentStreamBlockHorizontally(MRFileEditor &editor, int destCol, StreamHorizontalShiftMode mode, std::string *errorText) {
@@ -1599,6 +1600,19 @@ bool MRFEBlockOps::shiftCurrentStreamBlockHorizontally(MRFileEditor &editor, int
 	const bool targetEndAfterWholeLine = !targetEndAtLineStart && sourceGeometry.rangeEnd >= lastLineBlockEnd;
 	int targetStartColumn = 0;
 	int targetEndColumn = 0;
+	int wholeLineIndentColumn = 0;
+	for (std::size_t line = firstLine; line <= lastLine; ++line) {
+		const std::size_t lineStart = starts[line];
+		const std::size_t lineContentEnd = lineContentEndForIndex(text, starts, line);
+		const std::size_t lineBlockEnd = line + 1 < starts.size() ? starts[line + 1] : text.size();
+		if (sourceGeometry.rangeStart > lineStart || sourceGeometry.rangeEnd < lineBlockEnd) continue;
+		const std::string_view lineText(text.data() + lineStart, lineContentEnd - lineStart);
+		if (lineText.find_first_not_of(" \t") == std::string_view::npos) continue;
+		const int currentColumn = leadingIndentColumn(lineText);
+		if (wholeLineIndentColumn == 0 || currentColumn < wholeLineIndentColumn) wholeLineIndentColumn = currentColumn;
+	}
+	const int wholeLineTargetColumn = wholeLineIndentColumn == 0 ? 0 : blockTabTargetColumn(settings, wholeLineIndentColumn, shiftRight);
+	const int wholeLineIndentDelta = wholeLineTargetColumn - wholeLineIndentColumn;
 
 	for (std::size_t line = firstLine; line <= lastLine; ++line) {
 		const std::size_t lineStart = starts[line];
@@ -1610,8 +1624,9 @@ bool MRFEBlockOps::shiftCurrentStreamBlockHorizontally(MRFileEditor &editor, int
 
 		if (wholeLine) {
 			const std::string_view lineText(text.data() + lineStart, lineContentEnd - lineStart);
+			if (lineText.find_first_not_of(" \t") == std::string_view::npos) continue;
 			const int currentColumn = leadingIndentColumn(lineText);
-			const int targetColumn = blockTabTargetColumn(settings, currentColumn, shiftRight);
+			const int targetColumn = std::max(1, currentColumn + wholeLineIndentDelta);
 			const std::string replacement = lineWithIndentColumn(lineText, targetColumn);
 
 			if (replacement.size() != lineContentEnd - lineStart || replacement != lineText) replacements.push_back(ColumnLineReplacement{MRTextBufferModel::Range(lineStart, lineContentEnd), replacement});

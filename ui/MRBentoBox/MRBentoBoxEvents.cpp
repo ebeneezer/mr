@@ -215,7 +215,7 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		}
 		const int dividerNode = nodeAtDivider(localMouse);
 		if (dividerNode >= 0 && (event.mouse.buttons & mbLeftButton) != 0) {
-			dragDivider(event, dividerNode);
+			static_cast<void>(dragDivider(event, dividerNode, -1));
 			clearEvent(event);
 			bentoProjectionDirty |= bpdLayout;
 			flushBentoProjection();

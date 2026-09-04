@@ -42,6 +42,12 @@ const char *mouseEventName(ushort what) noexcept {
 	}
 }
 
+bool textCanTriggerSmartDedent(std::string_view text) noexcept {
+	for (const char value : text)
+		if (value != ' ' && value != '\t') return true;
+	return false;
+}
+
 }
 
 bool MRFileEditor::hasShiftModifier(ushort mods) noexcept {
@@ -142,7 +148,7 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 		size_t length = 0;
 		while (textEvent(event, TSpan<char>(buf, sizeof(buf)), length)) {
 			const std::string insertedText(buf, length);
-			if (insertBufferText(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
+			if (insertBufferText(insertedText) && textCanTriggerSmartDedent(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
 		}
 		applyLiveWordWrapAfterTextInput();
 		clearEvent(event);
@@ -163,7 +169,7 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
-	if (insertBufferText(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
+	if (insertBufferText(insertedText) && textCanTriggerSmartDedent(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
 	applyLiveWordWrapAfterTextInput();
 	clearEvent(event);
 }

@@ -325,33 +325,6 @@ bool MRFileEditor::findMarkerContainsOffset(std::size_t offset) const noexcept {
 	return false;
 }
 
-bool MRFileEditor::debuggerBreakpointContainsOffset(std::size_t offset) const noexcept {
-	for (const MRTextBufferModel::Range &range : mDebuggerBreakpointRanges) {
-		if (range.end <= offset) continue;
-		if (range.start > offset) break;
-		return true;
-	}
-	return false;
-}
-
-bool MRFileEditor::debuggerBreakpointInactiveContainsOffset(std::size_t offset) const noexcept {
-	for (const MRTextBufferModel::Range &range : mDebuggerBreakpointInactiveRanges) {
-		if (range.end <= offset) continue;
-		if (range.start > offset) break;
-		return true;
-	}
-	return false;
-}
-
-bool MRFileEditor::debuggerBreakpointUnboundContainsOffset(std::size_t offset) const noexcept {
-	for (const MRTextBufferModel::Range &range : mDebuggerBreakpointUnboundRanges) {
-		if (range.end <= offset) continue;
-		if (range.start > offset) break;
-		return true;
-	}
-	return false;
-}
-
 bool MRFileEditor::debuggerWatchpointActiveContainsOffset(std::size_t offset) const noexcept {
 	for (const MRTextBufferModel::Range &range : mDebuggerWatchpointActiveRanges) {
 		if (range.end <= offset) continue;
@@ -389,15 +362,21 @@ bool MRFileEditor::debuggerVariableChangedContainsOffset(std::size_t offset) con
 }
 
 bool MRFileEditor::debuggerBreakpointLineAt(std::size_t lineIndex) const noexcept {
-	return std::binary_search(mDebuggerBreakpointLines.begin(), mDebuggerBreakpointLines.end(), lineIndex);
+	const auto marker = std::lower_bound(mDebuggerBreakpointLines.begin(), mDebuggerBreakpointLines.end(), lineIndex,
+	                                     [](const DebuggerBreakpointLineMarker &item, std::size_t value) { return item.lineIndex < value; });
+	return marker != mDebuggerBreakpointLines.end() && marker->lineIndex == lineIndex;
 }
 
 bool MRFileEditor::debuggerBreakpointInactiveLineAt(std::size_t lineIndex) const noexcept {
-	return std::binary_search(mDebuggerBreakpointInactiveLines.begin(), mDebuggerBreakpointInactiveLines.end(), lineIndex);
+	const auto marker = std::lower_bound(mDebuggerBreakpointInactiveLines.begin(), mDebuggerBreakpointInactiveLines.end(), lineIndex,
+	                                     [](const DebuggerBreakpointLineMarker &item, std::size_t value) { return item.lineIndex < value; });
+	return marker != mDebuggerBreakpointInactiveLines.end() && marker->lineIndex == lineIndex;
 }
 
 bool MRFileEditor::debuggerBreakpointUnboundLineAt(std::size_t lineIndex) const noexcept {
-	return std::binary_search(mDebuggerBreakpointUnboundLines.begin(), mDebuggerBreakpointUnboundLines.end(), lineIndex);
+	const auto marker = std::lower_bound(mDebuggerBreakpointUnboundLines.begin(), mDebuggerBreakpointUnboundLines.end(), lineIndex,
+	                                     [](const DebuggerBreakpointLineMarker &item, std::size_t value) { return item.lineIndex < value; });
+	return marker != mDebuggerBreakpointUnboundLines.end() && marker->lineIndex == lineIndex;
 }
 
 bool MRFileEditor::ratioCellActive(int numerator, int denominator, int cellIndex, int cellCount) noexcept {

@@ -326,7 +326,7 @@ bool MRBentoBox::showMacroDebuggerValueInputAtCursor() {
 		if (left >= viewport.b.x || top < viewport.a.y || top >= viewport.b.y) return false;
 		debuggerValueInput = new MRDebuggerValueInput(TRect(left, top, viewport.b.x, top + 1), this);
 		debuggerValueInputPane = variablesWindow;
-		gdbDebuggerValueInputExpression.clear();
+		gdbDebuggerValueInputObjectName.clear();
 		std::array<char, 255> value{};
 
 		if (variable.type != TYPE_HASH && !macroDebuggerVariableIsArray(variable.type)) std::strncpy(value.data(), variable.valueText.c_str(), value.size() - 1);
@@ -359,7 +359,7 @@ bool MRBentoBox::showGdbDebuggerValueInputAtCursor() {
 		if (left >= viewport.b.x || top < viewport.a.y || top >= viewport.b.y) return false;
 		debuggerValueInput = new MRDebuggerValueInput(TRect(left, top, viewport.b.x, top + 1), this);
 		debuggerValueInputPane = variablesWindow;
-		gdbDebuggerValueInputExpression = row.expression;
+		gdbDebuggerValueInputObjectName = row.objectName;
 		std::array<char, 255> value{};
 
 		std::strncpy(value.data(), row.value.c_str(), value.size() - 1);
@@ -389,8 +389,8 @@ void MRBentoBox::commitDebuggerValueInput() {
 
 	if (debuggerValueInput == nullptr) return;
 	debuggerValueInput->getData(value.data());
-	if (!gdbDebuggerValueInputExpression.empty()) {
-		if (!sendGdbCommand(MRGdbCommandKind::Evaluate, gdbDebuggerValueInputExpression + " = " + value.data())) {
+	if (!gdbDebuggerValueInputObjectName.empty()) {
+		if (!sendGdbCommand(MRGdbCommandKind::AssignVariable, value.data(), gdbDebuggerValueInputObjectName)) {
 			debuggerValueInput->setError(true);
 			return;
 		}
@@ -430,7 +430,7 @@ void MRBentoBox::cancelDebuggerValueInput() noexcept {
 	}
 	debuggerValueInput = nullptr;
 	debuggerValueInputPane = nullptr;
-	gdbDebuggerValueInputExpression.clear();
+	gdbDebuggerValueInputObjectName.clear();
 }
 
 void MRBentoBox::refreshMacroDebuggerWatches() {

@@ -80,7 +80,7 @@ void setCurrentVirtualDesktop(int vd);
 [[nodiscard]] bool viewportLeft();
 void syncVirtualDesktopVisibility();
 [[nodiscard]] std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths);
-void mrSaveWorkspace(const std::string &filename);
+[[nodiscard]] bool mrSaveWorkspace(const std::string &filename);
 void mrMarkWorkspaceAutosaveDirty(const char *source, const MREditWindow *window = nullptr);
 void mrFlushWorkspaceAutosaveIfDue();
 void mrFlushWorkspaceAutosaveNow();

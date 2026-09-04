@@ -316,6 +316,7 @@ CXX_SOURCES = \
 	mrmac/MRMacroExecutionSession.cpp \
 	mrmac/MRMacroRunner.cpp \
 	app/commands/MRBentoWorkspaceCodec.cpp \
+	app/commands/MRBuildCommands.cpp \
 	app/commands/MRVirtualDesktopCommands.cpp \
 	app/commands/MRWindowCommands.cpp \
 	app/commands/MRWindowFileOperations.cpp \
@@ -443,6 +444,7 @@ CXX_SOURCES = \
 	ui/MRFileEditor/MRFileEditorEvents.cpp \
 	ui/MRFileEditor/MRFileEditorViewState.cpp \
 	ui/MRFileEditor/MRFEBlockOps.cpp \
+	ui/MRFileEditor/MRFEBlockIndent.cpp \
 	ui/MRFileEditor/MRFileEditorIndent.cpp \
 	ui/MRFileEditor/MRFileEditorSyntaxDrawing.cpp \
 	ui/MRFileEditor/MRFileEditorSyntaxWarmup.cpp \
@@ -917,6 +919,7 @@ ui/MRFileEditor/MRFileEditorTextEditing.o: ui/MRFileEditor/MRFileEditorTextEditi
 ui/MRFileEditor/MRFileEditorEvents.o: ui/MRFileEditor/MRFileEditorEvents.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp app/MREditorApp.hpp
 ui/MRFileEditor/MRFileEditorViewState.o: ui/MRFileEditor/MRFileEditorViewState.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp
 ui/MRFileEditor/MRFEBlockOps.o: ui/MRFileEditor/MRFEBlockOps.cpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRFileEditor.hpp
+ui/MRFileEditor/MRFEBlockIndent.o: ui/MRFileEditor/MRFEBlockIndent.cpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorIndent.o: ui/MRFileEditor/MRFileEditorIndent.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp ui/MRSyntaxBasic.hpp
 ui/MRFileEditor/MRFileEditorSyntaxDrawing.o: ui/MRFileEditor/MRFileEditorSyntaxDrawing.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp
 ui/MRFileEditor/MRFileEditorCommitSync.o: ui/MRFileEditor/MRFileEditorCommitSync.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp app/MRCommands.hpp
@@ -952,6 +955,7 @@ config/settings/MRSettingsNormalize.o: config/settings/MRSettingsNormalize.cpp c
 config/settings/MRSettingsRuntime.o: config/settings/MRSettingsRuntime.cpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsHistory.hpp config/settings/MRSettingsStorage.hpp config/settings/MRSettingsThemesProfiles.hpp config/settings/MRSettingsEditSetup.hpp config/settings/MRSettingsSnapshotIO.hpp config/settings/MRSettingsSourceModel.hpp config/settings/MRSettingsAssignments.hpp
 config/settings/MRSettingsStorage.o: config/settings/MRSettingsStorage.cpp config/settings/MRSettingsStorage.hpp config/settings/MRSettingsRuntime.hpp
 app/commands/MRExternalCommand.o: app/commands/MRExternalCommand.cpp app/commands/MRExternalCommand.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp
+app/commands/MRBuildCommands.o: app/commands/MRBuildCommands.cpp app/commands/MRBuildCommands.hpp app/MRDebuggerCommandRoute.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRPerformance.o: coprocessor/MRPerformance.cpp coprocessor/MRPerformance.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRCoprocessorBentoDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp app/router/MRCommandRouterGit.hpp app/services/MRGdbSession.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRBentoHexEditor/panes/MRHexPaneWindow.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp mrmac/MRMacroExecutionSession.hpp
 coprocessor/MRCoprocessorBentoDispatch.o: coprocessor/MRCoprocessorBentoDispatch.cpp coprocessor/MRCoprocessorBentoDispatch.hpp coprocessor/MRCoprocessor.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRWindowSupport.hpp

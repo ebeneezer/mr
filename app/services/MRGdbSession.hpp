@@ -17,9 +17,11 @@ enum class MRGdbCommandKind : unsigned char {
 	StepOver,
 	StepOut,
 	ToggleBreakpoint,
+	AddBreakpoint,
 	AddWatch,
 	EraseWatch,
 	Evaluate,
+	AssignVariable,
 	TerminalInput,
 	ResizeTerminal,
 	Quit
@@ -32,6 +34,7 @@ struct MRGdbCommand {
 	MRGdbCommandKind kind;
 	std::string text;
 	std::string file;
+	std::string objectName;
 	int line;
 	int columns;
 	int rows;
