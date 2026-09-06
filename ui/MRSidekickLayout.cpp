@@ -255,8 +255,9 @@ TRect sidekickBoundsFor(MREditWindow *parent, const std::string &text) {
 
 	if (editor != nullptr) {
 		const TPoint editorGlobal = editor->makeGlobal(TPoint(0, 0));
-		x = editorGlobal.x + std::max(0, editor->currentViewColumn() - 1);
-		y = editorGlobal.y + std::max(0, editor->currentViewRow() - 1);
+		const TPoint editorDesktop = TProgram::deskTop != nullptr ? TProgram::deskTop->makeLocal(editorGlobal) : editorGlobal;
+		x = editorDesktop.x + std::max(0, editor->currentViewColumn() - 1);
+		y = editorDesktop.y + std::max(0, editor->currentViewRow() - 1);
 		x = std::clamp(x, desktop.a.x, std::max(desktop.a.x, desktop.b.x - 1));
 		wantedWidth = std::min(wantedWidth, std::max(1, desktop.b.x - x));
 	} else {
@@ -311,8 +312,10 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 	}
 
 	const TPoint editorGlobal = editor->makeGlobal(TPoint(0, 0));
+	const TPoint editorDesktop = TProgram::deskTop != nullptr ? TProgram::deskTop->makeLocal(editorGlobal) : editorGlobal;
 	const TRect textViewport = editor->visibleTextViewportBounds();
-	TRect viewport(editorGlobal.x + textViewport.a.x, editorGlobal.y + textViewport.a.y, editorGlobal.x + textViewport.b.x, editorGlobal.y + textViewport.b.y);
+	TRect viewport(editorDesktop.x + textViewport.a.x, editorDesktop.y + textViewport.a.y,
+	               editorDesktop.x + textViewport.b.x, editorDesktop.y + textViewport.b.y);
 	viewport.a.x = std::max(viewport.a.x, desktop.a.x);
 	viewport.a.y = std::max(viewport.a.y, desktop.a.y);
 	viewport.b.x = std::min(viewport.b.x, desktop.b.x);
@@ -324,12 +327,12 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 
 	const int maxSidekickWidth = std::max(12, (viewport.b.x - viewport.a.x) / 2);
 	const int maxContentWidth = std::max(8, maxSidekickWidth - 2);
-	const int cursorX = std::clamp(editorGlobal.x + textViewport.a.x + std::max(0, anchorViewColumn - 1), viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1));
+	const int cursorX = std::clamp(editorDesktop.x + textViewport.a.x + std::max(0, anchorViewColumn - 1), viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1));
 	const int anchorRowOffset = placement == MRReadOnlySidekickPlacement::UnderCode ? anchorViewRow - 2 : std::max(0, anchorViewRow - 1);
 	const int anchorMinY = placement == MRReadOnlySidekickPlacement::UnderCode ? viewport.a.y - 1 : viewport.a.y;
-	const int cursorY = std::clamp(editorGlobal.y + textViewport.a.y + anchorRowOffset, anchorMinY, std::max(anchorMinY, viewport.b.y - 1));
+	const int cursorY = std::clamp(editorDesktop.y + textViewport.a.y + anchorRowOffset, anchorMinY, std::max(anchorMinY, viewport.b.y - 1));
 	const int aboveCodeSpace = std::max(0, cursorY - viewport.a.y);
-	const int targetX = preferredViewColumn > 0 ? std::clamp(editorGlobal.x + textViewport.a.x + preferredViewColumn - 1, viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1)) : cursorX;
+	const int targetX = preferredViewColumn > 0 ? std::clamp(editorDesktop.x + textViewport.a.x + preferredViewColumn - 1, viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1)) : cursorX;
 
 	if (placement == MRReadOnlySidekickPlacement::UnderCode) {
 		const int viewportWidth = std::max(1, viewport.b.x - viewport.a.x);

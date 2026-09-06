@@ -323,10 +323,11 @@ void MRBentoBox::updateTrackedCompilerSidekick() {
 	MRTextBufferModel::ReadSnapshot sourceSnapshot = buffer().readSnapshot();
 	const std::size_t sourceOffset = sourceSnapshot.clampOffset(diagnostic.sourceOffset);
 	const std::size_t lineIndex = sourceSnapshot.lineIndex(sourceOffset);
+	const std::size_t visibleLine = sourceEditor->visibleLineForDocumentLine(lineIndex);
 	const std::size_t lineStart = sourceSnapshot.lineStartByIndex(lineIndex);
 	const std::size_t sourceLineEnd = sourceEditor->lineEndOffset(sourceOffset);
 	const int diagnosticViewColumn = sourceEditor->charColumn(lineStart, sourceOffset) - sourceEditor->delta.x + 1;
-	const int diagnosticViewRow = static_cast<int>(lineIndex) - sourceEditor->delta.y + 1;
+	const int diagnosticViewRow = static_cast<int>(visibleLine) - sourceEditor->delta.y + 1;
 	const TRect textViewport = sourceEditor->visibleTextViewportBounds();
 	const int viewportWidth = std::max(1, textViewport.b.x - textViewport.a.x);
 	const int viewportRows = sourceEditor->visibleViewportRows();

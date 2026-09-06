@@ -42,7 +42,7 @@ constexpr int kDefaultBinaryRecordLength = 100;
 constexpr int kMinimumMiniMapWidth = 2;
 constexpr int kMaximumMiniMapWidth = 20;
 constexpr int kDefaultMiniMapWidth = 4;
-constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler | kOptionCodeColoring;
+constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler | kOptionCodeColoring | kOptionAutoPairBrackets;
 constexpr short kCodeLanguageMaxVisibleRows = 10;
 
 struct FileExtensionEditorSettingsPanelLayout {
@@ -487,7 +487,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	dialog.addManaged(formatRulerView, formatRulerView->getBounds());
 
 	addPanelLabel(dialog, TRect(g.optionsHeadingX, g.optionsHeadingY, config.dialogWidth - 2, g.optionsHeadingY + 1), "Options:");
-	optionsLeftField = addPanelCheckGroup(dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 9), new TSItem("~T~runcate whitespace", new TSItem("Control-~Z~ at EOF", new TSItem("~C~R/LF at EOF", new TSItem("Persistent ~B~locks", new TSItem("leading ~0~ fill", new TSItem("word wrap", new TSItem("~D~isplay tabs", new TSItem("~F~ormat ruler", new TSItem("Code c~O~loring", nullptr))))))))));
+	optionsLeftField = addPanelCheckGroup(dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 10), new TSItem("~T~runcate whitespace", new TSItem("Control-~Z~ at EOF", new TSItem("~C~R/LF at EOF", new TSItem("Persistent ~B~locks", new TSItem("leading ~0~ fill", new TSItem("word wrap", new TSItem("~D~isplay tabs", new TSItem("~F~ormat ruler", new TSItem("Code c~O~loring", new TSItem("Auto pair brackets", nullptr)))))))))));
 
 	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, lineNumbersClusterRight, g.optionsHeadingY + 1), "Line numbers:");
 	lineNumbersField = addPanelRadioGroup(dialog, TRect(g.lineNumbersLeft, g.optionsBodyY, lineNumbersClusterRight, g.optionsBodyY + 3), new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
@@ -555,6 +555,7 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 	if ((leftMask & kLeftOptionDisplayTabs) != 0) options |= kOptionDisplayTabs;
 	if ((leftMask & kLeftOptionFormatRuler) != 0) options |= kOptionFormatRuler;
 	if ((leftMask & kLeftOptionCodeColoring) != 0) options |= kOptionCodeColoring;
+	if ((leftMask & kLeftOptionAutoPairBrackets) != 0) options |= kOptionAutoPairBrackets;
 
 	switch (lineNumbersChoice) {
 		case kLineNumbersLeading:
@@ -596,6 +597,7 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 	if ((options & kOptionDisplayTabs) != 0) leftMask |= kLeftOptionDisplayTabs;
 	if ((options & kOptionFormatRuler) != 0) leftMask |= kLeftOptionFormatRuler;
 	if ((options & kOptionCodeColoring) != 0) leftMask |= kLeftOptionCodeColoring;
+	if ((options & kOptionAutoPairBrackets) != 0) leftMask |= kLeftOptionAutoPairBrackets;
 
 	if ((options & kOptionShowLineNumbers) != 0) lineNumbersChoice = kLineNumbersLeading;
 	if ((options & kOptionCodeFolding) != 0) codeFoldingChoice = kCodeFoldingLeading;

@@ -40,6 +40,7 @@ struct MREditSetupSettings {
 	std::string indentStyle;
 	std::string codeLanguage;
 	bool codeColoring;
+	bool autoPairBrackets;
 	std::string fileType;
 	int binaryRecordLength;
 	std::string postLoadMacro;
@@ -69,7 +70,7 @@ struct MREditSetupSettings {
 	std::string miniMapMarkerGlyph;
 	std::string gutters;
 
-	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(false), indentStyle(), codeLanguage("NONE"), codeColoring(false), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
+	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(false), indentStyle(), codeLanguage("NONE"), codeColoring(false), autoPairBrackets(false), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
 	}
 
 	auto operator==(const MREditSetupSettings &) const noexcept -> bool = default;
@@ -141,6 +142,7 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvFormatRuler = 1ull << 41,
 	kOvCodeLanguage = 1ull << 42,
 	kOvCodeColoring = 1ull << 43,
+	kOvAutoPairBrackets = 1ull << 44,
 };
 
 struct MREditSettingDescriptor {

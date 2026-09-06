@@ -57,7 +57,7 @@ bool editExtensionSelectorMatches(const std::string &selector, const std::string
 }
 
 unsigned long long supportedEditProfileOverrideMask() noexcept {
-	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
+	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvAutoPairBrackets | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
@@ -128,6 +128,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.indentStyle = kIndentStyleOff;
 	defaults.codeLanguage = "NONE";
 	defaults.codeColoring = false;
+	defaults.autoPairBrackets = false;
 	defaults.fileType = kFileTypeUnix;
 	defaults.binaryRecordLength = 100;
 	defaults.postLoadMacro.clear();
@@ -178,6 +179,7 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, 
 	if ((overrides.mask & kOvIndentStyle) != 0) merged.indentStyle = overrides.values.indentStyle;
 	if ((overrides.mask & kOvCodeLanguage) != 0) merged.codeLanguage = overrides.values.codeLanguage;
 	if ((overrides.mask & kOvCodeColoring) != 0) merged.codeColoring = overrides.values.codeColoring;
+	if ((overrides.mask & kOvAutoPairBrackets) != 0) merged.autoPairBrackets = overrides.values.autoPairBrackets;
 	if ((overrides.mask & kOvFileType) != 0) merged.fileType = overrides.values.fileType;
 	if ((overrides.mask & kOvBinaryRecordLength) != 0) merged.binaryRecordLength = overrides.values.binaryRecordLength;
 	if ((overrides.mask & kOvPostLoadMacro) != 0) merged.postLoadMacro = overrides.values.postLoadMacro;

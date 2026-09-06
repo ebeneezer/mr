@@ -38,6 +38,7 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvIndentStyle},
     {"CODE_LANGUAGE", "Code language", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvCodeLanguage},
     {"CODE_COLORING", "Code coloring", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeColoring},
+    {"AUTO_PAIR_BRACKETS", "Auto pair brackets", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true, kOvAutoPairBrackets},
     {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvFileType},
     {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvBinaryRecordLength},
     {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true, kOvPostLoadMacro},
@@ -640,6 +641,9 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		case kOvCodeColoring:
 			if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
 			break;
+		case kOvAutoPairBrackets:
+			if (!parseAndAssignBooleanLiteral(value, current.autoPairBrackets, errorMessage)) return false;
+			break;
 		case kOvFileType:
 			normalized = normalizeFileType(value);
 			if (normalized.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
@@ -789,6 +793,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		case kOvIndentStyle: return settings.indentStyle;
 		case kOvCodeLanguage: return settings.codeLanguage;
 		case kOvCodeColoring: return formatEditSetupBoolean(settings.codeColoring);
+		case kOvAutoPairBrackets: return formatEditSetupBoolean(settings.autoPairBrackets);
 		case kOvFileType: return settings.fileType;
 		case kOvBinaryRecordLength: return std::to_string(settings.binaryRecordLength);
 		case kOvPostLoadMacro: return settings.postLoadMacro;
@@ -881,6 +886,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.indentStyle = indentStyle;
 	normalized.codeLanguage = codeLanguage;
 	normalized.codeColoring = settings.codeColoring;
+	normalized.autoPairBrackets = settings.autoPairBrackets;
 	normalized.fileType = fileType;
 	normalized.binaryRecordLength = settings.binaryRecordLength;
 	normalized.postLoadMacro = postLoadMacro;

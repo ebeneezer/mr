@@ -169,7 +169,32 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
-	if (insertBufferText(insertedText) && textCanTriggerSmartDedent(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
+	char pairedCloser = '\0';
+	const bool autoPairBrackets = effectiveEditSetupSettings().autoPairBrackets && insertModeEnabled() && !mBufferModel.hasSelection() && insertedText.size() == 1;
+	if (autoPairBrackets) {
+		switch (insertedText[0]) {
+			case '(': pairedCloser = ')'; break;
+			case '[': pairedCloser = ']'; break;
+			case '{': pairedCloser = '}'; break;
+			case ')':
+			case ']':
+			case '}':
+				if (cursorOffset() < bufferLength() && charAtOffset(cursorOffset()) == insertedText[0]) {
+					moveCursor(nextCharOffset(cursorOffset()), false, false);
+					if (textCanTriggerSmartDedent(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
+					applyLiveWordWrapAfterTextInput();
+					clearEvent(event);
+					return;
+				}
+				break;
+			default: break;
+		}
+		if (pairedCloser != '\0') insertedText.push_back(pairedCloser);
+	}
+	if (insertBufferText(insertedText)) {
+		if (pairedCloser != '\0') moveCursor(prevCharOffset(cursorOffset()), false, false);
+		if (textCanTriggerSmartDedent(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
+	}
 	applyLiveWordWrapAfterTextInput();
 	clearEvent(event);
 }

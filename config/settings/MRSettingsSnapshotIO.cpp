@@ -689,6 +689,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
 	source += "MRSETUP('CODE_LANGUAGE', '" + escapeMrmacSingleQuotedLiteral(edit.codeLanguage) + "');\n";
 	source += "MRSETUP('CODE_COLORING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeColoring)) + "');\n";
+	source += "MRSETUP('AUTO_PAIR_BRACKETS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.autoPairBrackets)) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";
 	source += "MRSETUP('POST_LOAD_MACRO', '" + escapeMrmacSingleQuotedLiteral(edit.postLoadMacro) + "');\n";

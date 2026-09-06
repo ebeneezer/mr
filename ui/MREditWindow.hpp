@@ -458,6 +458,9 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			const TPoint originalMouseWhere = event.what == evMouseDown ? event.mouse.where : TPoint();
 			const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
 			const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
+			const bool clearStreamBlockAfterBackspace = originalEvent == evKeyDown && keyCodeBefore == kbBack && editor != nullptr && !editor->isReadOnly() &&
+			                                             mBlockOps.isMarking() && mBlockOps.mGeometry.mode == MRFEBlockMode::Stream && editor->hasTextSelection();
+			const std::size_t documentVersionBefore = clearStreamBlockAfterBackspace ? editor->documentVersion() : 0;
 			const bool originalEditorDoubleClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0 && editor->mouseInView(event.mouse.where);
 			const bool originalEditorBlockMouseGesture = originalEvent == evMouseDown && editor != nullptr && editorBlockMouseGesture(event);
 			const bool originalEditorRightClick = originalEvent == evMouseDown && editor != nullptr && plainEditorRightClick(event);
@@ -535,7 +538,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			}
 			if (handleBlockTabIndentKey(event)) return;
 				if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) {
-					if (editor != nullptr && mBlockOps.hasVisibleBlock() && !mBlockOps.isMarking()) {
+					if (clearStreamBlockAfterBackspace && editor->documentVersion() != documentVersionBefore) clearBlock();
+					else if (editor != nullptr && mBlockOps.hasVisibleBlock() && !mBlockOps.isMarking()) {
 						if (!mBlockOps.remapAfterEditorChange(*editor)) static_cast<void>(mBlockOps.refreshVisual(*editor));
 					}
 					return;
@@ -621,7 +625,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				if (buffer.undoStackDepth() > replacementUndoDepthBefore) buffer.updateUndoTopBlockState(replacementBlockState);
 			}
 			if (editor != nullptr) {
-				if (originalEvent == evMouseDown) {
+				if (clearStreamBlockAfterBackspace && editor->documentVersion() != documentVersionBefore) clearBlock();
+				else if (originalEvent == evMouseDown) {
 					if (!originalEditorDoubleClick || !handleEditorDoubleClickBlockExpansion()) {
 						if (mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers())) static_cast<void>(finishLineDrawingColumnBlock());
 					}
