@@ -198,7 +198,7 @@ Value MRVMSystemVariables::load(const std::string &name, bool &handled) {
 		case MRVMSystemVariable::Refresh:
 			return mrvmMakeInt(mrvmRuntimeStateInt("system", "refresh", 1));
 		case MRVMSystemVariable::Messages:
-			return mrvmMakeInt(configuredMenulineMessages() ? 1 : 0);
+			return mrvmMakeInt(configuredHeroMessageSettings().onMessageLine ? 1 : 0);
 		case MRVMSystemVariable::Mouse:
 			return mrvmMakeInt(mrvmRuntimeStateInt("system", "mouse", 1));
 		case MRVMSystemVariable::LogoScreen:
@@ -532,8 +532,11 @@ bool MRVMSystemVariables::store(const std::string &name, const Value &value) {
 			mrvmStoreRuntimeStateInt("system", "refresh", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;
 		}
-		case MRVMSystemVariable::Messages:
-			return setConfiguredMenulineMessages(mrvmValueAsInt(value) != 0, nullptr);
+		case MRVMSystemVariable::Messages: {
+			MRHeroMessageSettings settings = configuredHeroMessageSettings();
+			settings.onMessageLine = mrvmValueAsInt(value) != 0;
+			return setConfiguredHeroMessageSettings(settings, nullptr);
+		}
 		case MRVMSystemVariable::Mouse: {
 			mrvmStoreRuntimeStateInt("system", "mouse", mrvmValueAsInt(value) != 0 ? 1 : 0);
 			return true;

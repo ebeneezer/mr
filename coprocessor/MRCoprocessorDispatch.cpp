@@ -361,14 +361,14 @@ const AudioPlayerInvocationSpec *audioPlayerInvocationSpec(const std::string &na
 	return nullptr;
 }
 
-void postMiniMapHeroEvent(const mr::coprocessor::TaskTiming &timing, const mr::coprocessor::MiniMapWarmupPayload &payload) {
+void postMiniMapHeroEvent(const mr::coprocessor::TaskTiming &timing, const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t fileBytes) {
 	if (payload.totalLines <= 1) return;
 	const long long totalMs = roundedMilliseconds(timing.totalMs());
 	const std::string timeStr = totalMs >= 1 ? std::to_string(totalMs) : "< 1";
 	const std::string heroText = "mini map render " + timeStr + " ms, " + std::to_string(payload.rowCount) + "x" + std::to_string(payload.bodyWidth) + " glyphs, " + std::to_string(payload.totalLines) + " lines";
 
-	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, heroText, mr::messageline::Kind::Success, mr::messageline::kPriorityHigh);
-	mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
+	if (mr::messageline::postFileAutoTimed(mr::messageline::Owner::HeroEvent, heroText, mr::messageline::Kind::Success, fileBytes, mr::messageline::kPriorityHigh) != 0)
+		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
 }
 
 void playAudioSignal(const std::string &uri) {
@@ -644,7 +644,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				                      detailWithLineRange(targetWindow->currentFileName(), detail), accepted);
 				if (accepted && miniMap != nullptr && targetEditor->miniMapProjectionAvailable() && targetEditor->shouldReportMiniMapInitialRender()) {
 					targetEditor->markMiniMapInitialRenderReported();
-					postMiniMapHeroEvent(result.timing, *miniMap);
+					postMiniMapHeroEvent(result.timing, *miniMap, targetEditor->bufferLength());
 				}
 			} else
 				recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0, result.task.label);

@@ -161,7 +161,11 @@ HELP_CONTEXT_OBJECTS = \
 	dialogs/MRPdfExportDialog.o \
 	dialogs/MRWindowList.o \
 	dialogs/extensions/MRFileExtensionProfiles.o \
+	dialogs/setup/MRSetupBackups.o \
+	dialogs/setup/MRSetupLiveLogs.o \
+	dialogs/setup/MRSetupPaths.o \
 	dialogs/setup/MRSetupSections.o \
+	dialogs/setup/MRSetupUserInterface.o \
 	mrmac/ui/conventional/MRVMMacroDialogRuntime.o \
 	ui/MRHelpSystem.o \
 	ui/MRMenuBar.o \
@@ -307,7 +311,11 @@ CXX_SOURCES = \
 	dialogs/extensions/MRFileExtensionProfileSelection.cpp \
 	dialogs/setup/MRSetupCommon.cpp \
 	dialogs/setup/MRSetup.cpp \
+	dialogs/setup/MRSetupBackups.cpp \
+	dialogs/setup/MRSetupLiveLogs.cpp \
+	dialogs/setup/MRSetupPaths.cpp \
 	dialogs/setup/MRSetupSections.cpp \
+	dialogs/setup/MRSetupUserInterface.cpp \
 	dialogs/MRWindowList.cpp \
 	mrmac/ui/modeless/MRMacroModelessUi.cpp \
 	mrmac/ui/modeless/MRMacroModelessCanvas.cpp \
@@ -329,6 +337,7 @@ CXX_SOURCES = \
 	config/settings/MRSettingsEditProfiles.cpp \
 	config/settings/MRSettingsKeymapProfiles.cpp \
 	config/settings/MRSettingsPaths.cpp \
+	config/settings/MRSettingsHeroMessages.cpp \
 	config/settings/MRSettingsRuntimeState.cpp \
 	config/settings/MRSettingsSnapshotAssignments.cpp \
 	config/settings/MRSettingsStructuredStorage.cpp \
@@ -901,6 +910,11 @@ dialogs/extensions/MRFileExtensionProfileDrafts.o: dialogs/extensions/MRFileExte
 dialogs/extensions/MRFileExtensionProfileSelection.o: dialogs/extensions/MRFileExtensionProfileSelection.cpp dialogs/extensions/MRFileExtensionProfileDrafts.hpp app/commands/MRWindowCommands.hpp app/utils/MRStringUtils.hpp ui/MREditWindow.hpp
 dialogs/setup/MRSetupCommon.o: dialogs/setup/MRSetupCommon.cpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp ui/MRFrame.hpp keymap/MRKeymapContext.hpp
 dialogs/setup/MRSetup.o: dialogs/setup/MRSetup.cpp dialogs/setup/MRSetup.hpp dialogs/setup/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/settings/MRSettingsRuntime.hpp ui/widgets/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp
+dialogs/setup/MRSetupBackups.o: dialogs/setup/MRSetupBackups.cpp dialogs/setup/MRSetupSections.hpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/widgets/MRNumericSlider.hpp ui/MRMessageLineController.hpp
+dialogs/setup/MRSetupLiveLogs.o: dialogs/setup/MRSetupLiveLogs.cpp dialogs/setup/MRSetupSections.hpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/MREditWindow.hpp ui/MRMessageLineController.hpp
+dialogs/setup/MRSetupPaths.o: dialogs/setup/MRSetupPaths.cpp dialogs/setup/MRSetupSections.hpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/widgets/MRNumericSlider.hpp ui/MRMessageLineController.hpp
+dialogs/setup/MRSetupSections.o: dialogs/setup/MRSetupSections.cpp dialogs/setup/MRSetupSections.hpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/MRMessageLineController.hpp
+dialogs/setup/MRSetupUserInterface.o: dialogs/setup/MRSetupUserInterface.cpp dialogs/setup/MRSetupSections.hpp dialogs/setup/MRSetupCommon.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp ui/widgets/MRNumericSlider.hpp ui/widgets/MRSpinner.hpp ui/MRMessageLineController.hpp
 dialogs/MRWindowList.o: dialogs/MRWindowList.cpp dialogs/MRWindowList.hpp app/commands/MRWindowCommands.hpp ui/MRDesktopWindow.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
 ui/MRWindowLayout.o: ui/MRWindowLayout.cpp ui/MRWindowLayout.hpp ui/MRDesktopWindow.hpp ui/MREditWindow.hpp app/commands/MRWindowCommands.hpp
 ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp outline/MROutlineFoldProducer.hpp
@@ -944,6 +958,7 @@ mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/MRM
 app/commands/MRBentoWorkspaceCodec.o: app/commands/MRBentoWorkspaceCodec.cpp app/commands/MRBentoWorkspaceCodec.hpp ui/MRBentoBox/MRBentoBox.hpp ui/MRBentoBox/MRBentoBoxRoleSupport.hpp
 app/commands/MRWindowCommands.o: app/commands/MRWindowCommands.cpp app/commands/MRWindowCommands.hpp app/commands/MRBentoWorkspaceCodec.hpp app/commands/MRFileCommands.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRPerformance.hpp ui/MRDesktopWindow.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp ui/MRMessageLineController.hpp
 config/settings/MRSettingsRuntimeState.o: config/settings/MRSettingsRuntimeState.cpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsHistory.hpp config/settings/MRSettingsRuntime.hpp
+config/settings/MRSettingsHeroMessages.o: config/settings/MRSettingsHeroMessages.cpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsRuntimeState.hpp ui/MRMessageLineController.hpp
 config/settings/MRSettingsStructuredStorage.o: config/settings/MRSettingsStructuredStorage.cpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsEditSetup.hpp config/settings/MRSettingsRuntime.hpp keymap/MRKeymapProfile.hpp
 config/settings/MRSettingsHistory.o: config/settings/MRSettingsHistory.cpp config/settings/MRSettingsHistory.hpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsRuntime.hpp
 config/settings/MRSettingsThemesProfiles.o: config/settings/MRSettingsThemesProfiles.cpp config/settings/MRSettingsThemesProfiles.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsRuntimeState.hpp config/settings/MRSettingsHistory.hpp

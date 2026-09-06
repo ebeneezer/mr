@@ -1,5 +1,4 @@
 #include "../../app/utils/MRStringUtils.hpp"
-#include "../../ui/MRMessageLineController.hpp"
 #include "MRSettingsHistory.hpp"
 #include "MRSettingsRuntimeState.hpp"
 #include "../../mrmac/mrmac.h"
@@ -502,28 +501,6 @@ bool setConfiguredWindowManager(bool enabled, std::string *errorMessage) {
 bool configuredWindowManager() {
 	recordSettingsRuntimeRead();
 	return configuredRuntimeInt("windowManagerEnabled", 1) != 0;
-}
-
-bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
-	const bool previous = configuredMenulineMessages();
-
-	if (!enabled) {
-		mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
-		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
-		mr::messageline::clearOwner(mr::messageline::Owner::MacroMessage);
-		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
-		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
-		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
-	}
-	storeConfiguredRuntimeInt("menulineMessagesEnabled", enabled ? 1 : 0);
-	if (previous != enabled) markConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool configuredMenulineMessages() {
-	recordSettingsRuntimeRead();
-	return configuredRuntimeInt("menulineMessagesEnabled", 1) != 0;
 }
 
 bool setConfiguredAutoDetectBinaryFiles(bool enabled, std::string *errorMessage) {

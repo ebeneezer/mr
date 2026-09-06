@@ -11,6 +11,7 @@
 #include "MRSettingsThemesProfiles.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -71,7 +72,25 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				return true;
 			}
 			if (upper == "MESSAGES") {
-				if (!parseBooleanLiteral(value, snapshot.menulineMessagesEnabled, errorMessage)) return false;
+				bool ignored = true;
+				if (!parseBooleanLiteral(value, ignored, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "HERO_MESSAGES_ON_MESSAGELINE") {
+				if (!parseBooleanLiteral(value, snapshot.heroMessageSettings.onMessageLine, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "HERO_MESSAGES_IN_LOGFILE") {
+				if (!parseBooleanLiteral(value, snapshot.heroMessageSettings.inLogFile, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "HERO_MESSAGES_FILE_THRESHOLD_MB") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 16) return setError(errorMessage, "HERO_MESSAGES_FILE_THRESHOLD_MB must be within 0..16.");
+				snapshot.heroMessageSettings.fileThresholdMb = static_cast<int>(parsed);
 				return true;
 			}
 			if (upper == "AUTODETECT_BINARY_FILES") {

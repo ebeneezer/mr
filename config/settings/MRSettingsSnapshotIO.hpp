@@ -22,7 +22,7 @@ struct MRSettingsSnapshot {
 
 	MRSetupPaths paths;
 	bool windowManagerEnabled{true};
-	bool menulineMessagesEnabled{true};
+	MRHeroMessageSettings heroMessageSettings;
 	bool autoDetectBinaryFiles{true};
 	bool fileDialogShowHiddenFiles{false};
 	MRSearchDialogOptions searchDialogOptions;

@@ -95,7 +95,6 @@ class MREditorApp : public TApplication {
 	int interactiveMouseCaptureDepth;
 	std::string cursorPositionMarkerFormat;
 	bool persistentBlocksMenuEnabled;
-	bool menulineMessagesEnabled;
 	bool snippetSidekickHintsActive;
 	ushort functionKeyModifiers;
 	int virtualDesktopCount;

@@ -128,10 +128,8 @@ bool MREditorApp::quitPrepared() const noexcept {
 void MREditorApp::refreshConfiguredUiSettingsSnapshot() {
 	cursorPositionMarkerFormat = configuredCursorPositionMarker();
 	persistentBlocksMenuEnabled = configuredPersistentBlocksSetting();
-	menulineMessagesEnabled = configuredMenulineMessages();
 	virtualDesktopCount = configuredVirtualDesktops();
 	cyclicVirtualDesktopsEnabled = configuredCyclicVirtualDesktops();
-	mr::messageline::setRuntimeMessageLineEnabled(menulineMessagesEnabled);
 	mrRefreshVirtualDesktopSettingsSnapshot(virtualDesktopCount, cyclicVirtualDesktopsEnabled);
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->setPersistentBlocksMenuState(persistentBlocksMenuEnabled);
 }

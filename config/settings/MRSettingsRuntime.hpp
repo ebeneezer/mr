@@ -393,6 +393,20 @@ struct MRLiveLogSettings {
 	auto operator==(const MRLiveLogSettings &) const noexcept -> bool = default;
 };
 
+struct MRHeroMessageSettings {
+	bool onMessageLine{true};
+	bool inLogFile{false};
+	int fileThresholdMb{8};
+
+	[[nodiscard]] bool operator==(const MRHeroMessageSettings &other) const noexcept {
+		return onMessageLine == other.onMessageLine && inLogFile == other.inLogFile && fileThresholdMb == other.fileThresholdMb;
+	}
+
+	[[nodiscard]] bool operator!=(const MRHeroMessageSettings &other) const noexcept {
+		return !(*this == other);
+	}
+};
+
 struct MRColorSetupItem {
 	const char *label;
 	unsigned char paletteIndex;
@@ -674,8 +688,8 @@ void configuredPathHistoryEntries(std::vector<std::string> &outValues);
 void configuredFileHistoryEntries(std::vector<std::string> &outValues);
 bool setConfiguredWindowManager(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredWindowManager();
-bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage = nullptr);
-[[nodiscard]] bool configuredMenulineMessages();
+bool setConfiguredHeroMessageSettings(const MRHeroMessageSettings &settings, std::string *errorMessage = nullptr);
+[[nodiscard]] MRHeroMessageSettings configuredHeroMessageSettings();
 bool setConfiguredAutoDetectBinaryFiles(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredAutoDetectBinaryFiles();
 bool setConfiguredFileDialogShowHiddenFiles(bool enabled, std::string *errorMessage = nullptr);

@@ -39,6 +39,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredTempDirectoryPath(paths.tempPath, errorMessage)) return false;
 	if (!setConfiguredShellExecutablePath(paths.shellUri, errorMessage)) return false;
 	if (!setConfiguredLogFilePath(defaultLogFilePathForSettings(paths.settingsMacroUri), errorMessage)) return false;
+	if (!setConfiguredHeroMessageSettings(MRHeroMessageSettings(), errorMessage)) return false;
 	if (!setConfiguredFileDialogShowHiddenFiles(false, errorMessage)) return false;
 	if (!setConfiguredDefaultProfileDescription("Global defaults", errorMessage)) return false;
 	if (!setConfiguredSearchDialogOptions(MRSearchDialogOptions(), errorMessage)) return false;
@@ -152,9 +153,30 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				return setConfiguredWindowManager(parsed, errorMessage);
 			}
 			if (upper == "MESSAGES") {
-				bool parsed = true;
-				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
-				return setConfiguredMenulineMessages(parsed, errorMessage);
+				bool ignored = true;
+				if (!parseBooleanLiteral(value, ignored, errorMessage)) return false;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "HERO_MESSAGES_ON_MESSAGELINE") {
+				MRHeroMessageSettings settings = configuredHeroMessageSettings();
+				if (!parseBooleanLiteral(value, settings.onMessageLine, errorMessage)) return false;
+				return setConfiguredHeroMessageSettings(settings, errorMessage);
+			}
+			if (upper == "HERO_MESSAGES_IN_LOGFILE") {
+				MRHeroMessageSettings settings = configuredHeroMessageSettings();
+				if (!parseBooleanLiteral(value, settings.inLogFile, errorMessage)) return false;
+				return setConfiguredHeroMessageSettings(settings, errorMessage);
+			}
+			if (upper == "HERO_MESSAGES_FILE_THRESHOLD_MB") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+				MRHeroMessageSettings settings = configuredHeroMessageSettings();
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 16) return setError(errorMessage, "HERO_MESSAGES_FILE_THRESHOLD_MB must be within 0..16.");
+				settings.fileThresholdMb = static_cast<int>(parsed);
+				return setConfiguredHeroMessageSettings(settings, errorMessage);
 			}
 			if (upper == "AUTODETECT_BINARY_FILES") {
 				bool parsed = true;

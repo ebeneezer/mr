@@ -117,8 +117,8 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 		lineText = "indexed " + std::to_string(bytes) + " bytes, " + std::to_string(lineCount) + " lines, " + std::to_string(roundedMilliseconds(lineCountMs)) + " ms";
 	else
 		lineText = "mapped " + std::to_string(bytes) + " bytes, est. " + std::to_string(lineCount) + " lines, index warming";
-	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, loadText, mr::messageline::Kind::Success, mr::messageline::kPriorityHigh);
-	mr::messageline::postAutoTimedAfter(mr::messageline::Owner::HeroEventFollowup, lineText, mr::messageline::Kind::Info, loadDuration, mr::messageline::kPriorityLow);
+	mr::messageline::postFileAutoTimed(mr::messageline::Owner::HeroEvent, loadText, mr::messageline::Kind::Success, bytes, mr::messageline::kPriorityHigh);
+	mr::messageline::postFileAutoTimedAfter(mr::messageline::Owner::HeroEventFollowup, lineText, mr::messageline::Kind::Info, bytes, loadDuration, mr::messageline::kPriorityLow);
 }
 
 [[nodiscard]] bool hasExtensionInBaseName(std::string_view path) {
@@ -294,10 +294,11 @@ bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPa
 
 	mr::performance::recordUiEvent(operationLabel != nullptr ? operationLabel : "Load file", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, loadMs, resolvedPath);
 	mr::performance::recordUiEvent("Line count", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, lineCountMs, resolvedPath);
+	MRFileEditor *editor = win->getEditor();
 	if (messages == MRFileLoadMessages::PerFile)
 		postLoadHeroEvents(resolvedPath, bytes, loadMs, lines, linesExact, lineCountMs);
-	else if (win->getEditor() != nullptr)
-		win->getEditor()->markMiniMapInitialRenderReported();
+	else if (editor != nullptr)
+		editor->markMiniMapInitialRenderReported();
 	return true;
 }
 

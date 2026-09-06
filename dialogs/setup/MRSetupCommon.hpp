@@ -32,9 +32,11 @@ class MRScrollableDialog;
 
 namespace mr::dialogs {
 
+[[nodiscard]] TFrame *initSetupDialogFrame(TRect bounds);
 [[nodiscard]] TRect centeredDialogRect(int width, int height);
 [[nodiscard]] ushort execDialog(TDialog *dialog);
 [[nodiscard]] ushort execDialogWithData(TDialog *dialog, void *data);
+[[nodiscard]] ushort execDialogWithDataCapture(TDialog *dialog, void *data);
 [[nodiscard]] ushort execTextInputDialog(const char *title, const char *label, char *buffer, std::size_t limit);
 [[nodiscard]] MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight);
 [[nodiscard]] TFileDialog *createFileDialog(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options);
@@ -42,6 +44,8 @@ namespace mr::dialogs {
 void seedFileDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern);
 void suggestFileDialogName(char *buffer, std::size_t bufferSize, std::string_view suggestedValue);
 [[nodiscard]] ushort execRememberingFileDialogWithData(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options, char *buffer);
+void postSetupFlowError(const char *scope, const std::string &errorText);
+void discardQueuedCancelEvent();
 
 struct DialogButtonSpec {
 	const char *title = "";

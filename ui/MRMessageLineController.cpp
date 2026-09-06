@@ -10,6 +10,7 @@
 #include "MRMessageLineController.hpp"
 #include "MRMenuBar.hpp"
 #include "MRStatusLine.hpp"
+#include "MRWindowSupport.hpp"
 
 #include <algorithm>
 #include <array>
@@ -181,8 +182,24 @@ std::uint64_t takeCounter(MRVMRuntimeKv &runtimeKv, const char *key) {
 	return value;
 }
 
-bool messageLineEnabled(MRVMRuntimeKv &runtimeKv) {
-	return readInt(runtimeKv, messageLineRoot(runtimeKv), "enabled", 1) != 0;
+bool isHeroOwner(Owner owner) noexcept {
+	return owner == Owner::HeroEvent || owner == Owner::HeroEventFollowup || owner == Owner::MacroBrain;
+}
+
+bool heroMessageLineAllowed(Owner owner, std::string_view text) {
+	if (!isHeroOwner(owner) || text.empty()) return true;
+	const MRHeroMessageSettings settings = configuredHeroMessageSettings();
+
+	if (settings.inLogFile) mrLogMessage(text);
+	return settings.onMessageLine;
+}
+
+bool heroFileMessageAllowed(Owner owner, std::size_t fileBytes) {
+	if (!isHeroOwner(owner)) return true;
+	const MRHeroMessageSettings settings = configuredHeroMessageSettings();
+	const std::size_t thresholdBytes = static_cast<std::size_t>(settings.fileThresholdMb) * 1024u * 1024u;
+
+	return fileBytes > thresholdBytes;
 }
 
 std::chrono::milliseconds minimumDurationForKind(Kind kind) {
@@ -267,13 +284,14 @@ void clearSlotsLocked(MRVMRuntimeKv &runtimeKv) {
 } // namespace
 
 Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration, int priority) {
+	if (!validOwner(owner) || !heroMessageLineAllowed(owner, text)) return 0;
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(stateMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	const auto now = std::chrono::steady_clock::now();
 	Slot slot;
 
-	if (!validOwner(owner) || !messageLineEnabled(runtimeKv) || staticModeActiveLocked(runtimeKv)) return 0;
+	if (staticModeActiveLocked(runtimeKv)) return 0;
 	expireLocked(runtimeKv, now);
 	readSlot(runtimeKv, owner, slot);
 	duration = text.empty() ? std::chrono::milliseconds(0) : clampDurationForKind(kind, duration);
@@ -291,16 +309,16 @@ Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::mill
 }
 
 Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> &segments, Kind kind, std::chrono::milliseconds duration, int priority) {
+	std::string text;
+	for (const VisibleMessage::Segment &segment : segments)
+		text += segment.text;
+	if (!validOwner(owner) || !heroMessageLineAllowed(owner, text)) return 0;
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(stateMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	const auto now = std::chrono::steady_clock::now();
 	Slot slot;
-	std::string text;
-
-	if (!validOwner(owner) || !messageLineEnabled(runtimeKv) || staticModeActiveLocked(runtimeKv)) return 0;
-	for (const VisibleMessage::Segment &segment : segments)
-		text += segment.text;
+	if (staticModeActiveLocked(runtimeKv)) return 0;
 
 	expireLocked(runtimeKv, now);
 	duration = text.empty() ? std::chrono::milliseconds(0) : duration;
@@ -318,12 +336,13 @@ Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> 
 }
 
 Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
+	if (!validOwner(owner) || !heroMessageLineAllowed(owner, text)) return 0;
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(stateMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	Slot slot;
 
-	if (!validOwner(owner) || !messageLineEnabled(runtimeKv) || staticModeActiveLocked(runtimeKv)) return 0;
+	if (staticModeActiveLocked(runtimeKv)) return 0;
 	slot.active = !text.empty();
 	slot.kind = kind;
 	slot.text = text;
@@ -353,6 +372,16 @@ Token postAutoTimedAfter(Owner owner, std::string_view text, Kind kind, std::chr
 	return postTimed(owner, text, kind, delay + autoDurationForText(text, perCharacter), priority);
 }
 
+Token postFileAutoTimed(Owner owner, std::string_view text, Kind kind, std::size_t fileBytes, int priority, std::chrono::milliseconds perCharacter) {
+	if (!heroFileMessageAllowed(owner, fileBytes)) return 0;
+	return postAutoTimed(owner, text, kind, priority, perCharacter);
+}
+
+Token postFileAutoTimedAfter(Owner owner, std::string_view text, Kind kind, std::size_t fileBytes, std::chrono::milliseconds delay, int priority, std::chrono::milliseconds perCharacter) {
+	if (!heroFileMessageAllowed(owner, fileBytes)) return 0;
+	return postAutoTimedAfter(owner, text, kind, delay, priority, perCharacter);
+}
+
 void clearOwner(Owner owner) {
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(stateMutex());
@@ -370,16 +399,6 @@ void clearOwner(Owner owner) {
 	slot.token = takeCounter(runtimeKv, "nextToken");
 	slot.sequence = takeCounter(runtimeKv, "nextSequence");
 	writeSlot(runtimeKv, owner, slot);
-}
-
-void setRuntimeMessageLineEnabled(bool enabled) {
-	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	std::lock_guard<std::mutex> lock(stateMutex());
-	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
-
-	writeInt(runtimeKv, messageLineRoot(runtimeKv), "enabled", enabled ? 1 : 0);
-	if (enabled) return;
-	clearSlotsLocked(runtimeKv);
 }
 
 void setStaticMode(bool active) {
@@ -445,7 +464,6 @@ bool currentVisibleMessage(VisibleMessage &out) {
 
 	expireLocked(runtimeKv, now);
 	out = VisibleMessage();
-	if (!messageLineEnabled(runtimeKv)) return false;
 	for (std::size_t index = 0; index < kOwnerCount; ++index) {
 		Slot slot;
 		readSlot(runtimeKv, static_cast<Owner>(index), slot);
@@ -467,7 +485,7 @@ bool currentOwnerMessage(Owner owner, VisibleMessage &out) {
 
 	expireLocked(runtimeKv, now);
 	out = VisibleMessage();
-	if (!validOwner(owner) || !messageLineEnabled(runtimeKv)) return false;
+	if (!validOwner(owner)) return false;
 	readSlot(runtimeKv, owner, slot);
 	return exportSlot(slot, out);
 }

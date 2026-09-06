@@ -427,7 +427,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 
 	snapshot.paths = paths;
 	snapshot.windowManagerEnabled = configuredWindowManager();
-	snapshot.menulineMessagesEnabled = configuredMenulineMessages();
+	snapshot.heroMessageSettings = configuredHeroMessageSettings();
 	snapshot.autoDetectBinaryFiles = configuredAutoDetectBinaryFiles();
 	snapshot.fileDialogShowHiddenFiles = configuredFileDialogShowHiddenFiles();
 	snapshot.searchDialogOptions = configuredSearchDialogOptions();
@@ -574,7 +574,9 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('TEMPDIR', '" + escapeMrmacSingleQuotedLiteral(tempDir) + "');\n";
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
 	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.windowManagerEnabled)) + "');\n";
-	source += "MRSETUP('MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.menulineMessagesEnabled)) + "');\n";
+	source += "MRSETUP('HERO_MESSAGES_ON_MESSAGELINE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.heroMessageSettings.onMessageLine)) + "');\n";
+	source += "MRSETUP('HERO_MESSAGES_IN_LOGFILE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.heroMessageSettings.inLogFile)) + "');\n";
+	source += "MRSETUP('HERO_MESSAGES_FILE_THRESHOLD_MB', '" + std::to_string(snapshot.heroMessageSettings.fileThresholdMb) + "');\n";
 	source += "MRSETUP('AUTODETECT_BINARY_FILES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoDetectBinaryFiles)) + "');\n";
 	source += "MRSETUP('FILE_DIALOG_SHOW_HIDDEN_FILES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.fileDialogShowHiddenFiles)) + "');\n";
 	source += "MRSETUP('SEARCH_TEXT_TYPE', '" + escapeMrmacSingleQuotedLiteral(formatSearchTextType(snapshot.searchDialogOptions.textType)) + "');\n";

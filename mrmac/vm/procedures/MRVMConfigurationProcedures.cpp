@@ -224,7 +224,9 @@ VirtualMachine::InstructionFlow VirtualMachine::ConfigurationProcedures::execute
 				switch (classifySettingsKey(setupKey)) {
 					case MRSettingsKeyClass::Unknown:
 						throw std::runtime_error("MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-						                         "SHELLPATH, WINDOW_MANAGER, MESSAGES, SEARCH_TEXT_TYPE, SEARCH_DIRECTION, "
+						                         "SHELLPATH, WINDOW_MANAGER, HERO_MESSAGES_ON_MESSAGELINE, "
+						                         "HERO_MESSAGES_IN_LOGFILE, HERO_MESSAGES_FILE_THRESHOLD_MB, "
+						                         "SEARCH_TEXT_TYPE, SEARCH_DIRECTION, "
 						                         "SEARCH_MODE, SEARCH_CASE_SENSITIVE, SEARCH_GLOBAL_SEARCH, "
 						                         "SEARCH_RESTRICT_MARKED_BLOCK, SEARCH_ALL_WINDOWS, "
 						                         "SAR_TEXT_TYPE, SAR_DIRECTION, SAR_MODE, SAR_LEAVE_CURSOR_AT, "

@@ -192,6 +192,56 @@ MRKeymapContext keymapContextForDialog(const MRScrollableDialog &dialog) {
 
 } // namespace
 
+namespace mr::dialogs {
+
+TFrame *initSetupDialogFrame(TRect bounds) {
+	return ::initSetupDialogFrame(bounds);
+}
+
+ushort execDialogWithDataCapture(TDialog *dialog, void *data) {
+	ushort result = cmCancel;
+	MRDialogFoundation *foundation = nullptr;
+	MRScrollableDialog *scrollable = nullptr;
+
+	if (dialog == nullptr) return result;
+	if (data != nullptr) dialog->setData(data);
+	foundation = dynamic_cast<MRDialogFoundation *>(dialog);
+	if (foundation != nullptr) foundation->finalizeLayout();
+	else {
+		scrollable = dynamic_cast<MRScrollableDialog *>(dialog);
+		if (scrollable != nullptr) scrollable->initScrollIfNeeded();
+	}
+	result = TProgram::deskTop->execView(dialog);
+	if (data != nullptr) dialog->getData(data);
+	TObject::destroy(dialog);
+	return result;
+}
+
+void postSetupFlowError(const char *scope, const std::string &errorText) {
+	if (errorText.empty()) return;
+	const std::string text = scope != nullptr ? std::string(scope) + ": " + errorText : errorText;
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
+
+void discardQueuedCancelEvent() {
+	auto discardForTarget = [](TView *target) {
+		TEvent event;
+
+		if (target == nullptr) return;
+		while (target->eventAvail()) {
+			target->getEvent(event);
+			if ((event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc)) || (event.what == evCommand && event.message.command == cmCancel)) continue;
+			target->putEvent(event);
+			break;
+		}
+	};
+
+	discardForTarget(TProgram::application != nullptr ? static_cast<TView *>(TProgram::application) : static_cast<TView *>(TProgram::deskTop));
+	discardForTarget(static_cast<TView *>(TProgram::deskTop));
+}
+
+} // namespace mr::dialogs
+
 TGroup *createSetupDialogContentGroup(const TRect &bounds) {
 	return new TSetupDialogContentGroup(bounds);
 }
