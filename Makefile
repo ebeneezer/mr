@@ -208,7 +208,7 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.46
+MR_RELEASE_VERSION ?= 0.2.47
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64-baseline
 MR_RELEASE_ARCH_FLAGS ?= -march=x86-64 -mtune=generic
@@ -441,6 +441,9 @@ CXX_SOURCES = \
 	ui/MRFileEditor/MRFileEditorCommitSync.cpp \
 	ui/MRFileEditor/MRFileEditorSave.cpp \
 	ui/MRFileEditor/MRFileEditorMarkers.cpp \
+	ui/MRFileEditor/MRFileEditorFoldAnalysis.cpp \
+	ui/MRFileEditor/MRFileEditorFoldCodeRules.cpp \
+	ui/MRFileEditor/MRFileEditorFoldStructuralRules.cpp \
 	ui/MRFileEditor/MRFileEditorFoldWarmup.cpp \
 	ui/MRFileEditor/MRFileEditorFoldCanonicalContext.cpp \
 	ui/MRFileEditor/MRFileEditorFoldResultAdoption.cpp \
@@ -922,7 +925,10 @@ ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor
 ui/MRFileEditor/MRFileEditorClipboard.o: ui/MRFileEditor/MRFileEditorClipboard.cpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorSave.o: ui/MRFileEditor/MRFileEditorSave.cpp ui/MRFileEditor/MRFileEditor.hpp app/MRPrivilegedFileBroker.hpp config/settings/MRSettingsStorage.hpp
 ui/MRFileEditor/MRFileEditorMarkers.o: ui/MRFileEditor/MRFileEditorMarkers.cpp ui/MRFileEditor/MRFileEditor.hpp
-ui/MRFileEditor/MRFileEditorFoldWarmup.o: ui/MRFileEditor/MRFileEditorFoldWarmup.cpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp outline/MROutlineFoldProducer.hpp ui/MRSyntaxBasic.hpp
+ui/MRFileEditor/MRFileEditorFoldAnalysis.o: ui/MRFileEditor/MRFileEditorFoldAnalysis.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntaxBasic.hpp
+ui/MRFileEditor/MRFileEditorFoldCodeRules.o: ui/MRFileEditor/MRFileEditorFoldCodeRules.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntaxBasic.hpp
+ui/MRFileEditor/MRFileEditorFoldStructuralRules.o: ui/MRFileEditor/MRFileEditorFoldStructuralRules.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntaxBasic.hpp
+ui/MRFileEditor/MRFileEditorFoldWarmup.o: ui/MRFileEditor/MRFileEditorFoldWarmup.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp outline/MROutlineFoldProducer.hpp
 ui/MRFileEditor/MRFileEditorFoldCanonicalContext.o: ui/MRFileEditor/MRFileEditorFoldCanonicalContext.cpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorFoldResultAdoption.o: ui/MRFileEditor/MRFileEditorFoldResultAdoption.cpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorFoldLevelOperation.o: ui/MRFileEditor/MRFileEditorFoldLevelOperation.cpp ui/MRFileEditor/MRFileEditor.hpp
