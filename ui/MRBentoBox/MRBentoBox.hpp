@@ -245,7 +245,7 @@ class MRBentoBox : public MREditWindow {
 		[[nodiscard]] bool startGdbDebugger(const std::string &programPath, const std::string &sourcePath, std::string &errorMessage);
 		void stopGdbDebugger() noexcept;
 		void stopGdbDebuggerForRebuild() noexcept;
-		[[nodiscard]] bool startGdbInferior();
+		[[nodiscard]] bool startGdbAtFirstCodeLine();
 		[[nodiscard]] bool acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload);
 		[[nodiscard]] bool sendGdbTerminalInput(const std::string &text);
 		[[nodiscard]] bool clearGdbProgramTerminal();

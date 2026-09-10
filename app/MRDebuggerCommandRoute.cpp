@@ -94,7 +94,7 @@ bool mrStartGdbDebuggerForCurrentFile() {
 	return mrStartGdbDebuggerForWindow(currentEditWindow());
 }
 
-bool mrStartGdbDebuggerForWindow(MREditWindow *sourceWindow, bool runInferior) {
+bool mrStartGdbDebuggerForWindow(MREditWindow *sourceWindow) {
 	MRCompilerProfile profile;
 	MRBuildHookContext buildContext;
 	std::string matchedProfileName;
@@ -156,8 +156,8 @@ bool mrStartGdbDebuggerForWindow(MREditWindow *sourceWindow, bool runInferior) {
 		postDialogWarning(errorMessage.empty() ? "Unable to start GDB." : errorMessage);
 		return false;
 	}
-	if (runInferior && !bentoBox->startGdbInferior()) {
-		postDialogWarning("GDB started, but the inferior could not be started.");
+	if (!bentoBox->startGdbAtFirstCodeLine()) {
+		postDialogWarning("GDB started, but the inferior could not be positioned at the first code line.");
 		return false;
 	}
 	static_cast<void>(mrActivateEditWindow(bentoBox));

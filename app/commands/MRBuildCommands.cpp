@@ -11,5 +11,5 @@
 bool mrContinueDebuggerAfterBuild(const mr::coprocessor::ExternalIoFinishedPayload &payload) {
 	if (payload.debuggerContinuation == mr::coprocessor::BuildDebuggerContinuation::None || payload.buildSourceBufferId == 0) return false;
 	MREditWindow *sourceWindow = findEditWindowByBufferId(payload.buildSourceBufferId);
-	return mrStartGdbDebuggerForWindow(sourceWindow, payload.debuggerContinuation == mr::coprocessor::BuildDebuggerContinuation::StartAndRun);
+	return mrStartGdbDebuggerForWindow(sourceWindow);
 }

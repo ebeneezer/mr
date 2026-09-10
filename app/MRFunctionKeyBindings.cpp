@@ -210,7 +210,7 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 	    {TKey(kbF6, kbAltShift), cmMrWindowZoom, "~A-F6~ Zoom"},
 	    {TKey(kbF7, kbAltShift), cmMrBlockWindowMove, "~A-F7~ WinMove"},
 	    {TKey(kbF8, kbAltShift), cmMrBlockWindowCopy, "~A-F8~ WinCopy"},
-	    {TKey(kbF9, kbAltShift), 0, ""},
+	    {TKey(kbF9, kbAltShift), cmMrDebuggerStart, "~A-F9~ Debug"},
 	    {TKey(kbF10, kbAltShift), cmMrMacroToggleRecording, "~A-F10~ Rec"},
 	    {TKey(kbF11, kbAltShift), 0, ""},
 	    {TKey(kbF12, kbAltShift), 0, ""},

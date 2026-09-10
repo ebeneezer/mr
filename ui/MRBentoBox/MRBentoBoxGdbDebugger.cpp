@@ -328,8 +328,8 @@ bool MRBentoBox::sendGdbTerminalInput(const std::string &text) {
 	return sendGdbCommand(MRGdbCommandKind::TerminalInput, text);
 }
 
-bool MRBentoBox::startGdbInferior() {
-	return sendGdbCommand(MRGdbCommandKind::ContinueExecution);
+bool MRBentoBox::startGdbAtFirstCodeLine() {
+	return sendGdbCommand(MRGdbCommandKind::StepOver);
 }
 
 bool MRBentoBox::clearGdbProgramTerminal() {
@@ -416,7 +416,7 @@ bool MRBentoBox::handleGdbDebuggerFunctionKey(TEvent &event) {
 	} else if (keyCode == kbF5 && modifiers == 0) {
 		if (readGdbString(bufferId(), "state") == "loaded") {
 			clearEvent(event);
-			return handleMRCommand(cmMrDebuggerRebuildAndContinue, this);
+			return handleMRCommand(cmMrDebuggerRebuildAndStart, this);
 		}
 		kind = gdbDebuggerRunning() ? MRGdbCommandKind::PauseExecution : MRGdbCommandKind::ContinueExecution;
 	}

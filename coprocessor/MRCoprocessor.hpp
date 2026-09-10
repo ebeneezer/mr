@@ -310,8 +310,7 @@ struct TaskProgressPayload final : Payload, StreamingPayload {
 
 enum class BuildDebuggerContinuation : unsigned char {
 	None,
-	Start,
-	StartAndRun
+	Start
 };
 
 struct ExternalIoFinishedPayload final : Payload {

@@ -26,5 +26,6 @@ struct MRRouterIntegerInputLayout {
 [[nodiscard]] bool handleReformatDocument(MREditWindow *window);
 [[nodiscard]] bool handleJustifyParagraph(MREditWindow *window);
 [[nodiscard]] bool handleCenterLine(MREditWindow *window);
+[[nodiscard]] bool handleMatchParenthesis();
 
 #endif

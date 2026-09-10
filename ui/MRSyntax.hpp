@@ -53,6 +53,7 @@ using MRSyntaxTokenMap = std::vector<MRSyntaxToken>;
 enum class MRSyntaxMode : std::uint16_t {
 	Normal,
 	BlockComment,
+	LineCommentContinuation,
 	DirectiveContinuation,
 	HereDocument,
 	RawString,

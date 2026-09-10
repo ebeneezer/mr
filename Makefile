@@ -481,6 +481,7 @@ CXX_SOURCES = \
 	ui/MRSyntaxBasic.cpp \
 	ui/MRSyntaxBasicBlocks.cpp \
 	ui/syntax/MRSyntaxClassification.cpp \
+	ui/syntax/MRSyntaxTokenRuns.cpp \
 	ui/syntax/MRSyntaxXmlNucleus.cpp \
 	ui/syntax/MRSyntaxMetadata.cpp \
 	coprocessor/MRCoprocessor.cpp \
@@ -1037,6 +1038,7 @@ ui/widgets/MRDropList.o: ui/widgets/MRDropList.cpp ui/widgets/MRDropList.hpp ui/
 outline/MROutlineFoldProducer.o: outline/MROutlineFoldProducer.cpp outline/MROutlineFoldProducer.hpp outline/MROutlineModel.hpp derivedstate/MRFoldingDerivedState.hpp ui/MRSyntax.hpp ui/MRSyntaxBasic.hpp ui/MRTextBufferModel.hpp app/utils/MRStringUtils.hpp
 ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp app/MRPrivilegedFileBroker.hpp config/settings/MRSettingsRuntime.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
+ui/syntax/MRSyntaxTokenRuns.o: ui/syntax/MRSyntaxTokenRuns.cpp ui/MRSyntax.hpp
 ui/MRSyntaxBasic.o: ui/MRSyntaxBasic.cpp ui/MRSyntax.hpp
 ui/MRSyntaxBasicBlocks.o: ui/MRSyntaxBasicBlocks.cpp ui/MRSyntaxBasic.hpp
 ui/MRSidekickEditor.o: ui/MRSidekickEditor.cpp ui/MRSidekickEditor.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp

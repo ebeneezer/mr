@@ -1260,6 +1260,7 @@ std::vector<ContextMenuEntry> buildEditMiniMenuItems(MREditWindow *targetWindow)
 
 	if (hasMarkedText) entries.push_back(ContextMenuEntry{"Cut", cmMrEditCutToBuffer, false});
 	if (hasMarkedText) entries.push_back(ContextMenuEntry{"Copy", cmMrEditCopyToBuffer, false});
+	if (hasMarkedText) entries.push_back(ContextMenuEntry{"Unmark", cmMrBlockTurnMarkingOff, false});
 	entries.push_back(ContextMenuEntry{"Paste", cmMrEditPasteFromBuffer, false});
 	return entries;
 }
@@ -1404,92 +1405,6 @@ bool showEditorContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 			break;
 	}
 	return handleMRCommand(command);
-}
-
-struct ParenthesisPair {
-	char open;
-	char close;
-};
-
-std::optional<ParenthesisPair> parenthesisPairFor(char ch) noexcept {
-	switch (ch) {
-		case '(':
-		case ')':
-			return ParenthesisPair{'(', ')'};
-		case '[':
-		case ']':
-			return ParenthesisPair{'[', ']'};
-		case '{':
-		case '}':
-			return ParenthesisPair{'{', '}'};
-		default:
-			return std::nullopt;
-	}
-}
-
-bool isOpeningParenthesis(char ch) noexcept {
-	return ch == '(' || ch == '[' || ch == '{';
-}
-
-bool findMatchingParenthesis(MRFileEditor &editor, std::size_t origin, std::size_t &match) noexcept {
-	const std::size_t length = editor.bufferLength();
-	const char originChar = editor.charAtOffset(origin);
-	const std::optional<ParenthesisPair> pair = parenthesisPairFor(originChar);
-	int depth = 1;
-
-	if (!pair) return false;
-	if (isOpeningParenthesis(originChar)) {
-		for (std::size_t pos = origin + 1; pos < length; ++pos) {
-			const char ch = editor.charAtOffset(pos);
-			if (ch == pair->open) ++depth;
-			if (ch == pair->close && --depth == 0) {
-				match = pos;
-				return true;
-			}
-		}
-		return false;
-	}
-	for (std::size_t pos = origin; pos > 0; --pos) {
-		const std::size_t probe = pos - 1;
-		const char ch = editor.charAtOffset(probe);
-		if (ch == pair->close) ++depth;
-		if (ch == pair->open && --depth == 0) {
-			match = probe;
-			return true;
-		}
-	}
-	return false;
-}
-
-bool handleMatchParenthesis() {
-	MREditWindow *win = currentEditWindow();
-	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
-	std::size_t origin = 0;
-	std::size_t match = 0;
-
-	if (editor == nullptr) return true;
-	const std::size_t length = editor->bufferLength();
-	if (length == 0) {
-		postDialogWarning("No parenthesis at cursor.");
-		return true;
-	}
-	origin = std::min(editor->cursorOffset(), length - 1);
-	if (!parenthesisPairFor(editor->charAtOffset(origin))) {
-		const std::size_t cursor = std::min(editor->cursorOffset(), length);
-		if (cursor == 0 || !parenthesisPairFor(editor->charAtOffset(cursor - 1))) {
-			postDialogWarning("No parenthesis at cursor.");
-			return true;
-		}
-		origin = cursor - 1;
-	}
-	if (!findMatchingParenthesis(*editor, origin, match)) {
-		postDialogWarning("No matching parenthesis found.");
-		return true;
-	}
-	editor->setCursorOffset(match);
-	editor->setSelectionOffsets(match, match);
-	editor->revealCursor(True);
-	return true;
 }
 
 bool promptGotoLineNumber(long &lineNumber) {
@@ -2861,8 +2776,8 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrOtherBuildCurrentFile:
 			return handleBuildCurrentFile();
 
-		case cmMrDebuggerRebuildAndContinue:
-			return handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation::StartAndRun, static_cast<MREditWindow *>(commandInfo));
+		case cmMrDebuggerRebuildAndStart:
+			return handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation::Start, static_cast<MREditWindow *>(commandInfo));
 
 		case cmMrOtherGitChanges:
 			return handleGitChanges();

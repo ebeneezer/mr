@@ -685,6 +685,11 @@ static bool endsWithPreprocessorContinuation(std::string_view line) {
 	return !line.empty() && line.back() == '\\';
 }
 
+static bool endsWithLineSplice(std::string_view line) {
+	if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+	return !line.empty() && line.back() == '\\';
+}
+
 static std::uint32_t packRawStringDelimiter(std::string_view delimiter) {
 	std::uint32_t payload = 0;
 	const std::size_t limit = std::min<std::size_t>(delimiter.size(), 4);
@@ -1518,17 +1523,6 @@ static void appendXmlTagRuns(std::vector<MRSyntaxTokenRun> &runs, std::string_vi
 		}
 		++i;
 	}
-}
-
-static MRSyntaxTokenMap tokenMapFromRuns(std::size_t length, const std::vector<MRSyntaxTokenRun> &runs) {
-	MRSyntaxTokenMap tokens(length, MRSyntaxToken::Text);
-	for (std::size_t i = 0; i < runs.size(); ++i) {
-		std::size_t start = std::min<std::size_t>(runs[i].column, tokens.size());
-		std::size_t end = std::min<std::size_t>(start + runs[i].length, tokens.size());
-		for (std::size_t pos = start; pos < end; ++pos)
-			tokens[pos] = runs[i].token;
-	}
-	return tokens;
 }
 
 void tokenizeMake(MRSyntaxTokenMap &tokens, const std::string &line) {
@@ -2907,6 +2901,14 @@ MRSyntaxLineResult MRCppSyntaxHighlighter::highlightLine(std::string_view line, 
 	const std::size_t keywordCount = isC ? sizeof(kCKeywords) / sizeof(kCKeywords[0]) : sizeof(kCppKeywords) / sizeof(kCppKeywords[0]);
 	const char *const *types = isC ? kCTypeKeywords : kCppTypeKeywords;
 	const std::size_t typeCount = isC ? sizeof(kCTypeKeywords) / sizeof(kCTypeKeywords[0]) : sizeof(kCppTypeKeywords) / sizeof(kCppTypeKeywords[0]);
+	if (previousState.mode == MRSyntaxMode::LineCommentContinuation) {
+		appendRun(result.tokenRuns, 0, line.size(), MRSyntaxToken::Comment);
+		if (endsWithLineSplice(line)) {
+			result.stateOut.mode = MRSyntaxMode::LineCommentContinuation;
+			result.stateOut.flags = previousState.flags;
+		}
+		return result;
+	}
 
 	if (blockCommentOpen) {
 		while (i + 1 < line.size()) {
@@ -2979,12 +2981,17 @@ MRSyntaxLineResult MRCppSyntaxHighlighter::highlightLine(std::string_view line, 
 
 		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '/') {
 			appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
+			if (endsWithLineSplice(line)) {
+				result.stateOut.mode = MRSyntaxMode::LineCommentContinuation;
+				result.stateOut.flags = previousState.flags;
+			}
 			break;
 		}
 
 		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
 			std::size_t start = i;
 			i += 2;
+			blockCommentOpen = true;
 			while (i + 1 < line.size()) {
 				if (line[i] == '*' && line[i + 1] == '/') {
 					i += 2;
@@ -2993,7 +3000,7 @@ MRSyntaxLineResult MRCppSyntaxHighlighter::highlightLine(std::string_view line, 
 				}
 				++i;
 			}
-			if (i > line.size()) i = line.size();
+			if (blockCommentOpen) i = line.size();
 			appendRun(result.tokenRuns, start, i, MRSyntaxToken::Comment);
 			if (i >= line.size() && (line.size() < 2 || line[line.size() - 2] != '*' || line[line.size() - 1] != '/')) {
 				blockCommentOpen = true;
@@ -3113,7 +3120,7 @@ MRSyntaxLineResult MRCppSyntaxHighlighter::highlightLine(std::string_view line, 
 	}
 
 	if ((trimmed != std::string::npos && trimmed < line.size() && line[trimmed] == '#') || isPreprocessorContinuation) {
-		if (endsWithPreprocessorContinuation(line)) result.stateOut.mode = MRSyntaxMode::DirectiveContinuation;
+		if (result.stateOut.mode == MRSyntaxMode::Normal && endsWithPreprocessorContinuation(line)) result.stateOut.mode = MRSyntaxMode::DirectiveContinuation;
 	}
 
 	return result;
@@ -4732,27 +4739,6 @@ MRSyntaxLineResult MRCSharpSyntaxHighlighter::highlightLine(std::string_view lin
 	}
 
 	return result;
-}
-
-MRSyntaxTokenMap tmrBuildLegacyTokenMapForTextLine(MRSyntaxLanguage language, std::string_view line, MRSyntaxLineState previousState) {
-	MRSyntaxLineResult result = tmrHighlightTextLine(language, line, previousState);
-	return tokenMapFromRuns(line.size(), result.tokenRuns);
-}
-
-std::vector<MRSyntaxTokenRun> tmrBuildTokenRunsFromTokenMap(const MRSyntaxTokenMap &tokenMap) {
-	std::vector<MRSyntaxTokenRun> runs;
-	if (tokenMap.empty()) return runs;
-
-	std::size_t start = 0;
-	MRSyntaxToken current = tokenMap[0];
-	for (std::size_t i = 1; i < tokenMap.size(); ++i) {
-		if (tokenMap[i] == current) continue;
-		runs.push_back(MRSyntaxTokenRun(static_cast<std::uint32_t>(start), static_cast<std::uint32_t>(i - start), current));
-		start = i;
-		current = tokenMap[i];
-	}
-	runs.push_back(MRSyntaxTokenRun(static_cast<std::uint32_t>(start), static_cast<std::uint32_t>(tokenMap.size() - start), current));
-	return runs;
 }
 
 MRSyntaxLineResult tmrHighlightTextLine(MRSyntaxLanguage language, std::string_view line, MRSyntaxLineState previousState) {
