@@ -219,6 +219,21 @@ bool MRFileEditor::textPointInView(TPoint where) noexcept {
 	return viewport.containsTextPoint(local.x, local.y, visibleTextRows());
 }
 
+bool MRFileEditor::lineNumberOffsetForGlobalPoint(TPoint where, std::size_t &offset) noexcept {
+	const TPoint local = makeLocal(where);
+	const TextViewportGeometry viewport = textViewportGeometry();
+	const int textRows = std::max(1, visibleTextRows());
+
+	if (viewport.lineNumberWidth <= 0) return false;
+	if (local.x < viewport.lineNumberX || local.x >= viewport.lineNumberX + viewport.lineNumberWidth) return false;
+	if (local.y < viewport.topInset || local.y >= viewport.topInset + textRows) return false;
+	const std::size_t visibleLine = static_cast<std::size_t>(std::max(0, delta.y + local.y - viewport.topInset));
+	const std::size_t documentLine = documentLineForVisibleLine(visibleLine);
+	if (documentLine >= std::max<std::size_t>(1, mBufferModel.lineCount())) return false;
+	offset = lineStartForIndex(documentLine);
+	return true;
+}
+
 int MRFileEditor::currentLineNumber() const noexcept {
 	return static_cast<int>(displayedCursorLineIndex()) + 1;
 }

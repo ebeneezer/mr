@@ -36,6 +36,7 @@
 #include "MRFileEditor/MRFEBlockOps.hpp"
 #include "../app/MRCommands.hpp"
 #include "../app/MRCommandRouter.hpp"
+#include "../app/MRDebuggerCommandRoute.hpp"
 #include "../app/router/MRCommandRouterGit.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../keymap/MRKeymapContext.hpp"
@@ -452,6 +453,14 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				static_cast<void>(editor->scrollWindowByWheel(event.mouse.wheel));
 				clearEvent(event);
 				return;
+			}
+			if (event.what == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0) {
+				std::size_t sourceOffset = 0;
+
+				if (editor->lineNumberOffsetForGlobalPoint(event.mouse.where, sourceOffset) && mrToggleDebuggerBreakpointForWindowAtOffset(this, sourceOffset)) {
+					clearEvent(event);
+					return;
+				}
 			}
 			const ushort originalEvent = event.what;
 			const ushort originalCommand = event.what == evCommand ? event.message.command : static_cast<ushort>(0);

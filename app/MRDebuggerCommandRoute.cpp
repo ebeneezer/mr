@@ -15,6 +15,7 @@
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -88,6 +89,23 @@ bool mrHandleDebuggerCommand(MRBentoBox *bentoBox, TEvent &event) {
 		return true;
 	}
 	return false;
+}
+
+bool mrToggleDebuggerBreakpointForWindowAtOffset(MREditWindow *sourceWindow, std::size_t sourceOffset) {
+	MRBentoBox *bentoBox;
+	MRFileEditor *editor;
+	TEvent event{};
+
+	if (sourceWindow == nullptr) return false;
+	bentoBox = dynamic_cast<MRBentoBox *>(sourceWindow);
+	if (bentoBox == nullptr) bentoBox = dynamic_cast<MRBentoBox *>(sourceWindow->owner);
+	if (bentoBox == nullptr || !bentoBox->debuggerFunctionKeysActive()) return false;
+	editor = bentoBox->getEditor();
+	if (editor == nullptr) return false;
+	editor->setCursorOffset(std::min(sourceOffset, editor->bufferLength()));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = kbF9;
+	return bentoBox->handleDebuggerFunctionKey(event);
 }
 
 bool mrStartGdbDebuggerForCurrentFile() {

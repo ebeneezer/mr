@@ -248,6 +248,7 @@ class MRFileEditor : public TScroller {
 
 	std::size_t offsetForGlobalPoint(TPoint where) noexcept;
 	bool textPointInView(TPoint where) noexcept;
+	bool lineNumberOffsetForGlobalPoint(TPoint where, std::size_t &offset) noexcept;
 
 	struct BlockOverlayState {
 		bool active = false;
