@@ -44,6 +44,7 @@ class MREditorApp : public TApplication {
   private:
 	static constexpr std::chrono::milliseconds recordingBlinkInterval{450};
 	static constexpr std::chrono::microseconds coprocessorPumpBudget{1000};
+	static constexpr std::chrono::microseconds coprocessorBurstPumpBudget{8000};
 
 	void prepareForQuit();
 	bool isRecorderToggleKey(const TEvent &event) const;

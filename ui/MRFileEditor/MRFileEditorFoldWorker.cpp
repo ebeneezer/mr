@@ -4,6 +4,8 @@
 
 namespace {
 
+constexpr std::size_t kFoldTargetPacketLines = 256;
+
 const char *foldDirectionName(mr::coprocessor::WorkDirection direction) noexcept {
 	return direction == mr::coprocessor::WorkDirection::Bof ? "BOF" : "EOF";
 }
@@ -146,7 +148,8 @@ void MRFileEditor::scheduleFoldWarmupIfNeeded(std::size_t scanTopLine, std::size
 		mFoldWarmupState.packets.push_back(std::move(bridge));
 	}
 	const std::size_t visibleWorkerLimit = bridgeNeeded && allowedCoreCount > 1 ? allowedCoreCount - 1 : allowedCoreCount;
-	const std::size_t visibleWorkerBudget = std::min(lineCount, visibleWorkerLimit);
+	const std::size_t targetPacketCount = std::max<std::size_t>(1, (lineCount + kFoldTargetPacketLines - 1) / kFoldTargetPacketLines);
+	const std::size_t visibleWorkerBudget = std::min(lineCount, std::min(visibleWorkerLimit, targetPacketCount));
 	const std::size_t packetLines = (lineCount + visibleWorkerBudget - 1) / visibleWorkerBudget;
 	std::size_t packetStartLine = scanTopLine;
 	while (packetStartLine < scanBottomLine) {

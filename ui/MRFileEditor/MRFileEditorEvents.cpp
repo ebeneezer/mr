@@ -187,6 +187,16 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 					return;
 				}
 				break;
+			case '"':
+			case '\'':
+				if (cursorOffset() < bufferLength() && charAtOffset(cursorOffset()) == insertedText[0]) {
+					moveCursor(nextCharOffset(cursorOffset()), false, false);
+					applyLiveWordWrapAfterTextInput();
+					clearEvent(event);
+					return;
+				}
+				pairedCloser = insertedText[0];
+				break;
 			default: break;
 		}
 		if (pairedCloser != '\0') insertedText.push_back(pairedCloser);

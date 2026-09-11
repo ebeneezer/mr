@@ -6,6 +6,7 @@
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "MRCommands.hpp"
+#include "MRDebuggerCommandRoute.hpp"
 #include "MRUpdate.hpp"
 
 namespace {
@@ -20,6 +21,7 @@ struct AppCommandState {
 	bool hasAnyDirtyWindow;
 	bool hasPersistentFileName;
 	bool hasBuildSourceFile;
+	bool canDebugCurrentFile;
 	bool canSaveInPlace;
 	bool hasSelection;
 	bool hasUndo;
@@ -36,7 +38,7 @@ struct AppCommandState {
 	bool hasFileCompareWindow;
 	bool hasGdbDebugger;
 
-	AppCommandState() : window(nullptr), desktopWindow(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false), hasFileCompareWindow(false), hasGdbDebugger(false) {
+	AppCommandState() : window(nullptr), desktopWindow(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), hasBuildSourceFile(false), canDebugCurrentFile(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false), hasExternalCommandDetail(false), hasCompilerProblems(false), hasFileCompareWindow(false), hasGdbDebugger(false) {
 	}
 };
 
@@ -87,7 +89,8 @@ AppCommandState appCommandState() {
 	state.hasEditableWindow = !state.hasReadOnlyWindow;
 	state.hasDirtyWindow = editorWin != nullptr && editorWin->isFileChanged();
 	state.hasPersistentFileName = editorWin != nullptr && editorWin->hasPersistentFileName();
-	state.hasBuildSourceFile = win->hasPersistentFileName();
+	state.hasBuildSourceFile = editorWin != nullptr && editorWin->hasPersistentFileName();
+	state.canDebugCurrentFile = editorWin != nullptr && mrCanStartGdbDebuggerForWindow(editorWin);
 	state.canSaveInPlace = editorWin != nullptr && editorWin->canSaveInPlace();
 	state.hasBlock = editorWin != nullptr && editorWin->hasBlock();
 	state.blockMarking = editorWin != nullptr && editorWin->isBlockMarking();
@@ -208,7 +211,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrTextHexEditor, hasEditor && state.window->getEditor() != nullptr && state.window->allowsDocumentViewportSplit() && !state.window->hasTrackedExternalIoTasks());
 	setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows);
 	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasBuildSourceFile);
-	setCommandEnabled(cmMrDebuggerStart, hasEditor && state.hasBuildSourceFile && !state.hasGdbDebugger);
+	setCommandEnabled(cmMrDebuggerStart, state.canDebugCurrentFile && !state.hasGdbDebugger);
 	setCommandEnabled(cmMrOtherGitChanges, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
 	setCommandEnabled(cmMrOtherRestartProgram, state.hasGdbDebugger || (hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail));

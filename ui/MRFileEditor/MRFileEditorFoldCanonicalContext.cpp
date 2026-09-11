@@ -73,7 +73,7 @@ void MRFileEditor::continueCanonicalFoldContextIfNeeded() {
 		mFoldCanonicalContextState.requestedScanBottomLine = std::min(mFoldCanonicalContextState.requestedScanBottomLine, mFoldCanonicalContextState.totalLines);
 		mFoldCanonicalContextState.requestedVisibleTopLine = std::min(mFoldCanonicalContextState.requestedVisibleTopLine, mFoldCanonicalContextState.totalLines - 1);
 		mFoldCanonicalContextState.requestedVisibleBottomLine = std::min(mFoldCanonicalContextState.requestedVisibleBottomLine, mFoldCanonicalContextState.totalLines);
-		mFoldCanonicalContextState.targetLine = mFoldCanonicalContextState.totalLines;
+		mFoldCanonicalContextState.targetLine = mFoldCanonicalContextState.requestedScanTopLine;
 	}
 	appendCanonicalFoldContextPackets();
 	submitCanonicalFoldContextPackets();

@@ -434,7 +434,9 @@ void MREditorApp::idle() {
 	}
 	updateRecordingBlink();
 	updateMacroBrainBlink();
-	mr::coprocessor::globalCoprocessor().pumpFor(coprocessorPumpBudget);
+	const std::size_t pendingResults = mr::coprocessor::globalCoprocessor().pendingResults();
+	mr::coprocessor::globalCoprocessor().pumpFor(pendingResults > 16 ? coprocessorBurstPumpBudget : coprocessorPumpBudget,
+	                                             mr::coprocessor::TaskKind::FoldWarmup);
 	pumpDeferredMacroUiPlayback();
 	mrFlushWorkspaceAutosaveIfDue();
 	updatePerformancePanel();

@@ -17,7 +17,7 @@ bool MRFileEditor::publishCurrentFoldProjection() {
 		reachedLine = segment->endLine;
 		++segmentCount;
 	}
-	if (reachedLine < mFoldWarmupState.visibleBottomLine || segmentCount == 0) return false;
+	if (reachedLine < mFoldWarmupState.scanBottomLine || segmentCount == 0) return false;
 
 	MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
 	visibleState.spans.clear();

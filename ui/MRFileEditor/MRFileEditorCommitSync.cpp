@@ -21,7 +21,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	if (!retainedDisplayWidthPrefix) resetDisplayWidthWarmup();
 	const bool preserveSyntaxCacheDuringEdit = changeSet != nullptr && changeSet->changed;
 	resetSyntaxWarmupState(!preserveSyntaxCacheDuringEdit);
-	if (preserveSyntaxCacheDuringEdit) invalidateSyntaxCacheFromLineStart(mBufferModel.lineStart(changeSet->touchedRange.start));
+	if (preserveSyntaxCacheDuringEdit) invalidateSyntaxCacheForChange(*changeSet);
 	static_cast<void>(cancelFoldWarmup());
 	if (changeSet != nullptr && changeSet->changed) mFoldState.clearClosedFolds();
 	invalidateFoldCache(changeSet != nullptr && changeSet->changed);

@@ -108,6 +108,35 @@ bool mrToggleDebuggerBreakpointForWindowAtOffset(MREditWindow *sourceWindow, std
 	return bentoBox->handleDebuggerFunctionKey(event);
 }
 
+bool mrCanStartGdbDebuggerForWindow(MREditWindow *sourceWindow) {
+	if (sourceWindow == nullptr || sourceWindow->getEditor() == nullptr || sourceWindow->isFileChanged()) return false;
+	const MRSyntaxLanguage language = sourceWindow->getEditor()->syntaxLanguage();
+	switch (language) {
+		case MRSyntaxLanguage::C:
+		case MRSyntaxLanguage::Cpp:
+		case MRSyntaxLanguage::Rust:
+		case MRSyntaxLanguage::Go:
+		case MRSyntaxLanguage::Pascal:
+		case MRSyntaxLanguage::Basic:
+			break;
+		default:
+			return false;
+	}
+	const std::string sourcePath = sourceWindow->currentFileName();
+	if (sourcePath.empty()) return false;
+	MRCompilerProfile profile;
+	std::string errorMessage;
+	if (!effectiveCompilerProfileForPath(sourcePath, profile, nullptr, &errorMessage) || !gdbToolchainSupported(profile.toolchain)) return false;
+	if (upperAscii(profile.id + " " + profile.name).find("DEBUG") == std::string::npos) return false;
+	const MRBuildHookContext buildContext = buildCompilerProfileHookContext(profile, sourcePath, sourceWindow->bufferId());
+	std::error_code fileError;
+	if (buildContext.outputPath.empty() || !std::filesystem::is_regular_file(buildContext.outputPath, fileError) || ::access(buildContext.outputPath.c_str(), X_OK) != 0) return false;
+	const std::filesystem::file_time_type sourceTime = std::filesystem::last_write_time(sourcePath, fileError);
+	if (fileError) return false;
+	const std::filesystem::file_time_type outputTime = std::filesystem::last_write_time(buildContext.outputPath, fileError);
+	return !fileError && sourceTime <= outputTime;
+}
+
 bool mrStartGdbDebuggerForCurrentFile() {
 	return mrStartGdbDebuggerForWindow(currentEditWindow());
 }

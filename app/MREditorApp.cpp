@@ -356,7 +356,9 @@ bool MREditorApp::showPreviousHelpTopic() {
 }
 
 void MREditorApp::handleEvent(TEvent &event) {
-		mr::coprocessor::globalCoprocessor().pumpFor(coprocessorPumpBudget);
+	const std::size_t pendingResults = mr::coprocessor::globalCoprocessor().pendingResults();
+	mr::coprocessor::globalCoprocessor().pumpFor(pendingResults > 16 ? coprocessorBurstPumpBudget : coprocessorPumpBudget,
+	                                             mr::coprocessor::TaskKind::FoldWarmup);
 	const ushort originalWhat = event.what;
 
 	if (event.what == evKeyState) {

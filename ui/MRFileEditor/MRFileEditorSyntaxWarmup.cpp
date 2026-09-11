@@ -168,6 +168,7 @@ bool MRFileEditor::syntaxConfirmedStateForLine(std::size_t lineIndex, MRSyntaxLi
 	std::size_t stateLineStart = checkpoint.lineStart;
 	const std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
 	while (stateLineIndex < lineIndex) {
+		if (!syntaxWarmedLineRangeCovered(stateLineIndex, stateLineIndex + 1)) return false;
 		std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = tokenCache.find(stateLineStart);
 		if (found == tokenCache.end() || found->second.stateIn != stateIn) return false;
 		stateIn = found->second.syntaxLine.stateOut;

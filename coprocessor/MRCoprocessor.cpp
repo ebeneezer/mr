@@ -269,6 +269,48 @@ std::size_t Coprocessor::pumpFor(std::chrono::microseconds budget) {
 	return drained;
 }
 
+std::size_t Coprocessor::pumpFor(std::chrono::microseconds budget, TaskKind priorityKind) {
+	if (budget <= std::chrono::microseconds::zero()) return 0;
+
+	const std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::now();
+	std::size_t drained = 0;
+	bool prioritySelected = false;
+
+	for (;;) {
+		Result result;
+		ResultHandler handler;
+
+		{
+			std::lock_guard<std::mutex> lock(resultMutex);
+			if (results.empty()) break;
+			std::deque<Result>::iterator selected = results.begin();
+			if (!prioritySelected) {
+				for (std::deque<Result>::iterator it = results.begin(); it != results.end(); ++it) {
+					if (it->task.kind == priorityKind) {
+						selected = it;
+						break;
+					}
+				}
+				prioritySelected = true;
+			}
+			result = std::move(*selected);
+			results.erase(selected);
+		}
+
+		{
+			std::lock_guard<std::mutex> lock(handlerMutex);
+			handler = resultHandler;
+		}
+
+		if (handler) handler(result);
+		noteResultAdoption(result, handler && result.completed());
+		++drained;
+		if (std::chrono::steady_clock::now() - startedAt >= budget) break;
+	}
+	reapRetiredWorkers();
+	return drained;
+}
+
 std::size_t Coprocessor::pendingResults() const noexcept {
 	std::lock_guard<std::mutex> lock(resultMutex);
 	return results.size();

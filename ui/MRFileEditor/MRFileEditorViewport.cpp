@@ -462,11 +462,14 @@ std::size_t MRFileEditor::lineStartForIndex(std::size_t index) const noexcept {
 		if (index < cursorLine) {
 			for (std::size_t line = cursorLine; line > index; --line)
 				lineStart = mBufferModel.prevLine(lineStart);
+			if (lineStart < mBufferModel.length()) return lineStart;
 		} else {
-			for (std::size_t line = cursorLine; line < index && lineStart < mBufferModel.length(); ++line)
+			std::size_t line = cursorLine;
+			for (; line < index && lineStart < mBufferModel.length(); ++line)
 				lineStart = mBufferModel.nextLine(lineStart);
+			if (line == index) return lineStart;
+			if (!mBufferModel.exactLineCountKnown()) return lineStart;
 		}
-		return lineStart;
 	}
 	if (mBufferModel.exactLineCountKnown()) return mBufferModel.lineStartByIndex(index);
 
@@ -691,9 +694,12 @@ void MRFileEditor::draw() {
 			std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = mSyntaxState.tokenCache().find(currentLinePtr);
 			const bool statefulCacheReady = !statefulSyntax || syntaxWarmedLineRangeCovered(currentLineIndex, currentLineIndex + 1);
 
-			if (found != mSyntaxState.tokenCache().end() && statefulCacheReady) syntaxLine = found->second.syntaxLine;
+			// A cache entry outside an authoritative range is still useful as a stale
+			// visual projection while the post-edit state is being recomputed.
+			if (found != mSyntaxState.tokenCache().end() && (statefulCacheReady || statefulSyntax)) syntaxLine = found->second.syntaxLine;
 		}
-		const bool drawEofMarker = editSettings.showEofMarker && isDocumentLine && currentLinePtr == mBufferModel.length();
+		const bool eofLineStartVerified = !exactLineCountKnown || mBufferModel.lineStartByIndex(currentLineIndex) == currentLinePtr;
+		const bool drawEofMarker = editSettings.showEofMarker && isDocumentLine && currentLinePtr == mBufferModel.length() && eofLineStartVerified;
 		formatSyntaxLine(buffer, currentLinePtr, currentLineIndex, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarker && editSettings.showEofMarkerEmoji);
 		writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
 		const MRFoldSpan *closedFold = foldedView ? mFoldState.effectiveClosedFoldStartingAt(lineIndex) : nullptr;

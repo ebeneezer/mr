@@ -1034,7 +1034,7 @@ class MRFileEditor : public TScroller {
 
 		void resetSyntaxWarmupState(bool clearCache) noexcept;
 
-		void invalidateSyntaxCacheFromLineStart(std::size_t lineStart) noexcept;
+		void invalidateSyntaxCacheForChange(const MRTextBufferModel::DocumentChangeSet &changeSet) noexcept;
 
 		void clearSyntaxWarmedLineRanges() noexcept;
 

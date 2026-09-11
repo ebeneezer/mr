@@ -635,6 +635,7 @@ class Coprocessor {
 	void unregisterExternalSource(std::size_t sourceId);
 	std::size_t pump(std::size_t maxResults = 8);
 	std::size_t pumpFor(std::chrono::microseconds budget);
+	std::size_t pumpFor(std::chrono::microseconds budget, TaskKind priorityKind);
 	[[nodiscard]] std::size_t pendingResults() const noexcept;
 	void post(Result result);
 	bool cancelTask(std::uint64_t taskId);

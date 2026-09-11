@@ -79,14 +79,28 @@ void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {
 	mSyntaxState.resetState(clearCache);
 }
 
-void MRFileEditor::invalidateSyntaxCacheFromLineStart(std::size_t lineStart) noexcept {
+void MRFileEditor::invalidateSyntaxCacheForChange(const MRTextBufferModel::DocumentChangeSet &changeSet) noexcept {
 	std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
 	std::map<std::size_t, MRSyntaxCheckpointEntry> &checkpoints = mSyntaxState.checkpoints();
-	std::map<std::size_t, MRSyntaxCacheEntry>::iterator firstInvalid = tokenCache.lower_bound(lineStart);
-	std::size_t lineIndex = mBufferModel.lineIndex(lineStart);
+	const std::size_t oldLength = changeSet.oldLength;
+	const std::size_t newLength = changeSet.newLength;
+	const std::ptrdiff_t lengthDelta = static_cast<std::ptrdiff_t>(newLength) - static_cast<std::ptrdiff_t>(oldLength);
+	const std::size_t oldSuffixStart = lengthDelta > 0 && changeSet.touchedRange.end >= static_cast<std::size_t>(lengthDelta)
+	                                      ? changeSet.touchedRange.end - static_cast<std::size_t>(lengthDelta)
+	                                      : changeSet.touchedRange.end;
+	const std::size_t newSuffixStart = lengthDelta >= 0 ? oldSuffixStart + static_cast<std::size_t>(lengthDelta)
+	                                                   : oldSuffixStart - std::min(oldSuffixStart, static_cast<std::size_t>(-lengthDelta));
+	std::map<std::size_t, MRSyntaxCacheEntry> remappedCache;
+	for (std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator entry = tokenCache.begin(); entry != tokenCache.end(); ++entry) {
+		if (entry->first >= changeSet.touchedRange.start && entry->first < oldSuffixStart) continue;
+		std::size_t mappedStart = entry->first;
+		if (entry->first >= oldSuffixStart) mappedStart = newSuffixStart + (entry->first - oldSuffixStart);
+		if (mappedStart < newLength) remappedCache[mappedStart] = entry->second;
+	}
+	tokenCache.swap(remappedCache);
+	const std::size_t lineIndex = mBufferModel.lineIndex(std::min(changeSet.touchedRange.start, newLength));
 	std::map<std::size_t, MRSyntaxCheckpointEntry>::iterator firstInvalidCheckpoint = checkpoints.lower_bound(lineIndex);
 
-	if (firstInvalid != tokenCache.end()) tokenCache.erase(firstInvalid, tokenCache.end());
 	if (firstInvalidCheckpoint != checkpoints.end()) checkpoints.erase(firstInvalidCheckpoint, checkpoints.end());
 	invalidateSyntaxWarmedLineRangesFrom(lineIndex);
 	static_cast<void>(cancelSyntaxWarmup());
