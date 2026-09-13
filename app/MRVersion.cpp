@@ -8,7 +8,7 @@
 #endif
 
 namespace {
-constexpr char kMrDisplayVersion[] = "0.2.49";
+constexpr char kMrDisplayVersion[] = "0.2.50";
 constexpr char kBuildLabel[] = " (build ";
 constexpr char kBuildSuffix[] = ")";
 constexpr char kSettingsVersionSetupKey[] = "SETTINGS_VERSION";
