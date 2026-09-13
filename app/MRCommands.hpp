@@ -4,6 +4,7 @@
 #include <tvision/tv.h>
 
 enum : ushort {
+	cmMrDebuggerStart = 109,
 	cmMrFileOpen = 110,
 	cmMrFileLoad,
 	cmMrFileAcquire,
@@ -168,8 +169,7 @@ enum : ushort {
 	cmMrEditorDocumentCommitted,
 	cmMrCoprocessorDialogResult,
 	cmMrUpdateRestart,
-	cmMrDebuggerStart,
-	cmMrDebuggerEvaluate,
+	cmMrDebuggerEvaluate = 263,
 	cmMrDebuggerContinue,
 	cmMrDebuggerStep,
 	cmMrDebuggerStepOver,
@@ -182,5 +182,7 @@ enum : ushort {
 	cmMrDebuggerRebuildAndStart,
 	cmMrDebuggerClearProgramTerminal
 };
+
+static_assert(cmMrDebuggerStart <= 255, "Debugger start must fit TVision's command enablement set.");
 
 #endif

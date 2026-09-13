@@ -364,13 +364,13 @@ std::string defaultBuildFlagsForProfile(const std::string &toolchain, const MRCo
 		return "-O";
 	}
 	if (toolchain == "GCC" || toolchain == "CLANG") {
-		if (flavor == "DEBUG") return "-std=c++20 -g -O0 -Wall -Wextra";
+		if (flavor == "DEBUG") return "-std=c++20 -g -O0 -fno-eliminate-unused-debug-types -Wall -Wextra";
 		if (flavor == "SPEED") return "-std=c++20 -O3 -march=native -Wall";
 		if (flavor == "SIZE") return "-std=c++20 -Os -Wall";
 		return "-std=c++20 -O2 -Wall";
 	}
 	if (toolchain == "GCC_C" || toolchain == "CLANG_C") {
-		if (flavor == "DEBUG") return "-std=c18 -g -O0 -Wall -Wextra";
+		if (flavor == "DEBUG") return "-std=c18 -g -O0 -fno-eliminate-unused-debug-types -Wall -Wextra";
 		if (flavor == "SPEED") return "-std=c18 -O3 -march=native -Wall";
 		if (flavor == "SIZE") return "-std=c18 -Os -Wall";
 		return "-std=c18 -O2 -Wall";
@@ -774,14 +774,14 @@ std::vector<MRCompilerProfile> detectedCompilerProfiles() {
 	const char *latexEngines[] = {"pdflatex", "xelatex", "lualatex", "latex", "platex", "uplatex", "dvilualatex"};
 	if (!gcc.empty()) {
 		const CompilerProbe probe = probeCppCompiler("GCC", gcc);
-		addProfile(profiles, probe, "Debug", "-std=c++20 -g -O0 -Wall -Wextra");
+		addProfile(profiles, probe, "Debug", "-std=c++20 -g -O0 -fno-eliminate-unused-debug-types -Wall -Wextra");
 		addProfile(profiles, probe, "Normal", "-std=c++20 -O2 -Wall");
 		addProfile(profiles, probe, "Speed", "-std=c++20 -O3 -march=native -Wall");
 		addProfile(profiles, probe, "Size", "-std=c++20 -Os -Wall");
 	}
 	if (!clang.empty()) {
 		const CompilerProbe probe = probeCppCompiler("CLANG", clang);
-		addProfile(profiles, probe, "Debug", "-std=c++20 -g -O0 -Wall -Wextra");
+		addProfile(profiles, probe, "Debug", "-std=c++20 -g -O0 -fno-eliminate-unused-debug-types -Wall -Wextra");
 		addProfile(profiles, probe, "Normal", "-std=c++20 -O2 -Wall");
 		addProfile(profiles, probe, "Speed", "-std=c++20 -O3 -march=native -Wall");
 		addProfile(profiles, probe, "Size", "-std=c++20 -Os -Wall");

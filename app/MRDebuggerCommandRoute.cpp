@@ -138,7 +138,10 @@ bool mrCanStartGdbDebuggerForWindow(MREditWindow *sourceWindow) {
 }
 
 bool mrStartGdbDebuggerForCurrentFile() {
-	return mrStartGdbDebuggerForWindow(currentEditWindow());
+	MREditWindow *sourceWindow = currentEditorCommandWindow();
+
+	if (!mrCanStartGdbDebuggerForWindow(sourceWindow)) return false;
+	return mrStartGdbDebuggerForWindow(sourceWindow);
 }
 
 bool mrStartGdbDebuggerForWindow(MREditWindow *sourceWindow) {
