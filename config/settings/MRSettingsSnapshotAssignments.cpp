@@ -89,7 +89,7 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				char *end = nullptr;
 				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
 
-				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 16) return setError(errorMessage, "HERO_MESSAGES_FILE_THRESHOLD_MB must be within 0..16.");
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 100) return setError(errorMessage, "HERO_MESSAGES_FILE_THRESHOLD_MB must be within 0..100.");
 				snapshot.heroMessageSettings.fileThresholdMb = static_cast<int>(parsed);
 				return true;
 			}

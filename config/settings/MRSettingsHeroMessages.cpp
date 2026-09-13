@@ -34,8 +34,8 @@ void writeInt(MRVMRuntimeKv &runtimeKv, const VirtualMachine::Value &parent, con
 } // namespace
 
 bool setConfiguredHeroMessageSettings(const MRHeroMessageSettings &settings, std::string *errorMessage) {
-	if (settings.fileThresholdMb < 0 || settings.fileThresholdMb > 16) {
-		if (errorMessage != nullptr) *errorMessage = "Hero message file threshold must be within 0..16 MB.";
+	if (settings.fileThresholdMb < 0 || settings.fileThresholdMb > 100) {
+		if (errorMessage != nullptr) *errorMessage = "Hero message file threshold must be within 0..100 MB.";
 		return false;
 	}
 	const MRHeroMessageSettings previous = configuredHeroMessageSettings();
@@ -68,6 +68,6 @@ MRHeroMessageSettings configuredHeroMessageSettings() {
 	settings.onMessageLine = readInt(runtimeKv, root, "onMessageLine", settings.onMessageLine ? 1 : 0) != 0;
 	settings.inLogFile = readInt(runtimeKv, root, "inLogFile", settings.inLogFile ? 1 : 0) != 0;
 	settings.fileThresholdMb = readInt(runtimeKv, root, "fileThresholdMb", settings.fileThresholdMb);
-	if (settings.fileThresholdMb < 0 || settings.fileThresholdMb > 16) settings.fileThresholdMb = 8;
+	if (settings.fileThresholdMb < 0 || settings.fileThresholdMb > 100) settings.fileThresholdMb = 8;
 	return settings;
 }

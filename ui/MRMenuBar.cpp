@@ -648,7 +648,7 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 	for (const MenuShortcutSpec &spec : specs)
 		applyMenuShortcutSpec(targetMenu, spec, mStartupFunctionKeysActive, mEditorFunctionKeysActive);
 	if (TMenuItem *debugItem = findMenuItemByCommand(targetMenu, cmMrDebuggerStart); debugItem != nullptr)
-		debugItem->disabled = mDebuggerFunctionKeysActive;
+		debugItem->disabled = mDebuggerFunctionKeysActive || !commandEnabled(cmMrDebuggerStart);
 	if (mDebuggerFunctionKeysActive)
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrOtherBuildCurrentFile), TKey(kbNoKey), nullptr);
 	if (diagnosticsActive) {

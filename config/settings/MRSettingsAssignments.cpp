@@ -174,7 +174,7 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
 				MRHeroMessageSettings settings = configuredHeroMessageSettings();
 
-				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 16) return setError(errorMessage, "HERO_MESSAGES_FILE_THRESHOLD_MB must be within 0..16.");
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 100) return setError(errorMessage, "HERO_MESSAGES_FILE_THRESHOLD_MB must be within 0..100.");
 				settings.fileThresholdMb = static_cast<int>(parsed);
 				return setConfiguredHeroMessageSettings(settings, errorMessage);
 			}

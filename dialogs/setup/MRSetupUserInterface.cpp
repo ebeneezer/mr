@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits.h>
@@ -75,7 +76,7 @@ void clearSetupDialogStatus() {
 struct UserInterfaceSettingsDialogData {
 	ushort flags = 0;
 	ushort heroFlags = 0;
-	ushort heroFileThresholdMb = 8;
+	int heroFileThresholdMb = 8;
 	ushort virtualDesktops = 1;
 	ushort cursorBehaviourChoice = 1;
 	ushort compilerErrorMessageChoice = 1;
@@ -241,7 +242,7 @@ class THeroMessageOptionText final : public TStaticText {
 
 class THeroMessageThresholdSlider final : public MRNumericSlider {
   public:
-	THeroMessageThresholdSlider(const TRect &bounds, int32_t value) noexcept : MRNumericSlider(bounds, 0, 16, value, 1, 4, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged) {}
+	THeroMessageThresholdSlider(const TRect &bounds, int32_t value) noexcept : MRNumericSlider(bounds, 0, 100, value, 1, 10, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged) {}
 
 	TColorAttr mapColor(uchar index) override {
 		if (owner != nullptr) {
@@ -261,7 +262,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker, const std::string &initialFileCompareOriginalLeadingGutters, const std::string &initialFileCompareOriginalTrailingGutters,
 	                            const std::string &initialFileCompareCompareLeadingGutters, const std::string &initialFileCompareCompareTrailingGutters, MRFileCompareStartConfiguration initialFileCompareStartConfiguration,
 	                            bool initialFileCompareComparePanelReadOnly)
-	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 39), "USER INTERFACE SETTINGS", 86, 39, initSetupDialogFrame) {
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(86, 38), "USER INTERFACE SETTINGS", 86, 38, initSetupDialogFrame) {
 
 		int const yStart = 2;
 		const int leftColumnLeft = 3;
@@ -287,48 +288,51 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		addManaged(mIndentStylePreview, TRect(58, 2, 83, 11));
 
 		addManaged(new TStaticText(TRect(3, 12, 83, 13), "Hero messages:"), TRect(3, 12, 83, 13));
-		mHeroMessagesField = new TCheckBoxes(TRect(3, 13, 83, 16), new TSItem("Show on ~m~essageline", new TSItem("Write to ~l~og", nullptr)));
-		addManaged(mHeroMessagesField, TRect(3, 13, 83, 16));
-		mHeroFileThresholdSlider = new THeroMessageThresholdSlider(TRect(43, 15, 82, 16), initialHeroMessages.fileThresholdMb);
-		addManaged(mHeroFileThresholdSlider, TRect(43, 15, 82, 16));
-		addManaged(new THeroMessageOptionText(TRect(8, 15, 43, 16), "Restrict to filesizes above:"), TRect(8, 15, 43, 16));
+		mHeroMessagesField = new TCheckBoxes(TRect(3, 13, 83, 14), new TSItem("Show on ~m~essageline", new TSItem("Write to ~l~og", nullptr)));
+		addManaged(mHeroMessagesField, TRect(3, 13, 83, 14));
+		addManaged(new THeroMessageOptionText(TRect(3, 14, 83, 15), " Minimum file size:"), TRect(3, 14, 83, 15));
+		mHeroFileThresholdSlider = new THeroMessageThresholdSlider(TRect(24, 14, 73, 15), initialHeroMessages.fileThresholdMb);
+		addManaged(mHeroFileThresholdSlider, TRect(24, 14, 73, 15));
+		mHeroFileThresholdField = new TInputLine(TRect(74, 14, 79, 15), 12);
+		addManaged(mHeroFileThresholdField, TRect(74, 14, 79, 15));
+		addManaged(new THeroMessageOptionText(TRect(79, 14, 83, 15), " MB"), TRect(79, 14, 83, 15));
 
-		addManaged(new TStaticText(TRect(leftColumnLeft, 17, leftColumnRight, 18), "Cursor behaviour:"), TRect(leftColumnLeft, 17, leftColumnRight, 18));
-		mCursorBehaviourField = new TRadioButtons(TRect(leftColumnLeft, 18, leftColumnRight, 20), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
-		addManaged(mCursorBehaviourField, TRect(leftColumnLeft, 18, leftColumnRight, 20));
+		addManaged(new TStaticText(TRect(leftColumnLeft, 16, leftColumnRight, 17), "Cursor behaviour:"), TRect(leftColumnLeft, 16, leftColumnRight, 17));
+		mCursorBehaviourField = new TRadioButtons(TRect(leftColumnLeft, 17, leftColumnRight, 19), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
+		addManaged(mCursorBehaviourField, TRect(leftColumnLeft, 17, leftColumnRight, 19));
 
-		addManaged(new TStaticText(TRect(rightColumnLeft, 17, rightColumnRight, 18), "Scrollbars:"), TRect(rightColumnLeft, 17, rightColumnRight, 18));
-		mScrollbarVisibilityField = new TRadioButtons(TRect(rightColumnLeft, 18, rightColumnRight, 20), new TSItem("~S~mart", new TSItem("~A~lways", nullptr)));
-		addManaged(mScrollbarVisibilityField, TRect(rightColumnLeft, 18, rightColumnRight, 20));
+		addManaged(new TStaticText(TRect(rightColumnLeft, 16, rightColumnRight, 17), "Scrollbars:"), TRect(rightColumnLeft, 16, rightColumnRight, 17));
+		mScrollbarVisibilityField = new TRadioButtons(TRect(rightColumnLeft, 17, rightColumnRight, 19), new TSItem("~S~mart", new TSItem("~A~lways", nullptr)));
+		addManaged(mScrollbarVisibilityField, TRect(rightColumnLeft, 17, rightColumnRight, 19));
 
-		addManaged(new TStaticText(TRect(leftColumnLeft, 21, leftColumnRight, 22), "Compiler errors:"), TRect(leftColumnLeft, 21, leftColumnRight, 22));
-		mCompilerErrorMessageField = new TRadioButtons(TRect(leftColumnLeft, 22, leftColumnRight, 24), new TSItem("~U~nder code", new TSItem("~R~ight margin", nullptr)));
-		addManaged(mCompilerErrorMessageField, TRect(leftColumnLeft, 22, leftColumnRight, 24));
+		addManaged(new TStaticText(TRect(leftColumnLeft, 20, leftColumnRight, 21), "Compiler errors:"), TRect(leftColumnLeft, 20, leftColumnRight, 21));
+		mCompilerErrorMessageField = new TRadioButtons(TRect(leftColumnLeft, 21, leftColumnRight, 23), new TSItem("~U~nder code", new TSItem("~R~ight margin", nullptr)));
+		addManaged(mCompilerErrorMessageField, TRect(leftColumnLeft, 21, leftColumnRight, 23));
 
-		addManaged(new TStaticText(TRect(rightColumnLeft, 21, rightColumnRight, 22), "File compare:"), TRect(rightColumnLeft, 21, rightColumnRight, 22));
-		mFileCompareStartField = new TRadioButtons(TRect(rightColumnLeft, 22, rightColumnRight, 24), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
-		addManaged(mFileCompareStartField, TRect(rightColumnLeft, 22, rightColumnRight, 24));
+		addManaged(new TStaticText(TRect(rightColumnLeft, 20, rightColumnRight, 21), "File compare:"), TRect(rightColumnLeft, 20, rightColumnRight, 21));
+		mFileCompareStartField = new TRadioButtons(TRect(rightColumnLeft, 21, rightColumnRight, 23), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
+		addManaged(mFileCompareStartField, TRect(rightColumnLeft, 21, rightColumnRight, 23));
 
-		addManaged(new TStaticText(TRect(leftColumnLeft, 25, leftColumnRight, 26), "Color Management:"), TRect(leftColumnLeft, 25, leftColumnRight, 26));
-		mColorOutputModeField = new TRadioButtons(TRect(leftColumnLeft, 26, leftColumnRight, 28), new TSItem("~2~4-bit RGB (automatic)", new TSItem("~P~alette (256 colors)", nullptr)));
-		addManaged(mColorOutputModeField, TRect(leftColumnLeft, 26, leftColumnRight, 28));
+		addManaged(new TStaticText(TRect(leftColumnLeft, 24, leftColumnRight, 25), "Color Management:"), TRect(leftColumnLeft, 24, leftColumnRight, 25));
+		mColorOutputModeField = new TRadioButtons(TRect(leftColumnLeft, 25, leftColumnRight, 27), new TSItem("~2~4-bit RGB (automatic)", new TSItem("~P~alette (256 colors)", nullptr)));
+		addManaged(mColorOutputModeField, TRect(leftColumnLeft, 25, leftColumnRight, 27));
 
-		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 29, 70, 30), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(mVirtualDesktopsSlider, TRect(24, 29, 70, 30));
-		addManaged(new TLabel(TRect(2, 29, 23, 30), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 29, 23, 30));
+		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 28, 70, 29), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mVirtualDesktopsSlider, TRect(24, 28, 70, 29));
+		addManaged(new TLabel(TRect(2, 28, 23, 29), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 28, 23, 29));
 
-		mCursorPositionMarkerField = new TInputLine(TRect(28, 30, 42, 31), 11);
-		addManaged(mCursorPositionMarkerField, TRect(28, 30, 42, 31));
-		addManaged(new TLabel(TRect(2, 30, 27, 31), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 30, 27, 31));
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 29, 42, 30), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 29, 42, 30));
+		addManaged(new TLabel(TRect(2, 29, 27, 30), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 29, 27, 30));
 
-		addManaged(new TStaticText(TRect(3, 33, 25, 34), "File compare gutters:"), TRect(3, 33, 25, 34));
-		addManaged(new TStaticText(TRect(26, 33, 36, 34), "Original:"), TRect(26, 33, 36, 34));
-		addFileCompareGutterSpinners(mFileCompareOriginalLeadingGutterSpinners, 37, 32);
-		addFileCompareGutterSpinners(mFileCompareOriginalTrailingGutterSpinners, 43, 32);
-		addManaged(new TStaticText(TRect(54, 33, 63, 34), "Compare:"), TRect(54, 33, 63, 34));
-		addFileCompareGutterSpinners(mFileCompareCompareLeadingGutterSpinners, 64, 32);
-		addFileCompareGutterSpinners(mFileCompareCompareTrailingGutterSpinners, 70, 32);
-		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 36, 0, buttons);
+		addManaged(new TStaticText(TRect(3, 32, 25, 33), "File compare gutters:"), TRect(3, 32, 25, 33));
+		addManaged(new TStaticText(TRect(26, 32, 36, 33), "Original:"), TRect(26, 32, 36, 33));
+		addFileCompareGutterSpinners(mFileCompareOriginalLeadingGutterSpinners, 37, 31);
+		addFileCompareGutterSpinners(mFileCompareOriginalTrailingGutterSpinners, 43, 31);
+		addManaged(new TStaticText(TRect(54, 32, 63, 33), "Compare:"), TRect(54, 32, 63, 33));
+		addFileCompareGutterSpinners(mFileCompareCompareLeadingGutterSpinners, 64, 31);
+		addFileCompareGutterSpinners(mFileCompareCompareTrailingGutterSpinners, 70, 31);
+		mr::dialogs::addManagedUniformButtonRow(*this, (86 - metrics.rowWidth) / 2, 35, 0, buttons);
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		mInitialCompilerErrorMessageChoice = initialCompilerErrorMessagePlacement == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
@@ -371,7 +375,17 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
+		const int32_t previousThreshold = mHeroFileThresholdSlider->getValue();
 		MRScrollableDialog::handleEvent(event);
+		if (mHeroFileThresholdSlider->getValue() != previousThreshold) {
+			char value[12] = {0};
+			std::snprintf(value, sizeof(value), "%d", static_cast<int>(mHeroFileThresholdSlider->getValue()));
+			mHeroFileThresholdField->setData(value);
+			runDialogValidation();
+		} else {
+			const int value = currentHeroFileThresholdInput();
+			if (value >= 0 && value != previousThreshold) mHeroFileThresholdSlider->setValue(value);
+		}
 		refreshIndentStylePreview();
 	}
 
@@ -387,11 +401,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			if ((visualFlags & 0x0020) != 0) data->flags |= 0x0008;
 		}
 		if (mHeroMessagesField != nullptr) mHeroMessagesField->getData(&data->heroFlags);
-		if (mHeroFileThresholdSlider != nullptr) {
-			int32_t value = 8;
-			mHeroFileThresholdSlider->getData(&value);
-			data->heroFileThresholdMb = static_cast<ushort>(value);
-		}
+		data->heroFileThresholdMb = currentHeroFileThresholdInput();
 		if (mVirtualDesktopsSlider != nullptr) {
 			int32_t val = 1;
 			mVirtualDesktopsSlider->getData(&val);
@@ -426,8 +436,11 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			mHeroMessagesField->setData(&heroFlags);
 		}
 		if (mHeroFileThresholdSlider != nullptr) {
-			int32_t value = std::min<ushort>(data->heroFileThresholdMb, 16);
+			int32_t value = std::clamp(data->heroFileThresholdMb, 0, 100);
 			mHeroFileThresholdSlider->setData(&value);
+			char text[12] = {0};
+			std::snprintf(text, sizeof(text), "%d", static_cast<int>(value));
+			mHeroFileThresholdField->setData(text);
 		}
 		if (mVirtualDesktopsSlider != nullptr) {
 			int32_t val = data->virtualDesktops;
@@ -520,6 +533,16 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		}
 	}
 
+	int currentHeroFileThresholdInput() const {
+		char text[12] = {0};
+		mHeroFileThresholdField->getData(text);
+		char *end = nullptr;
+		const long value = std::strtol(text, &end, 10);
+
+		if (end == text || *end != '\0' || value < 0 || value > 100) return -1;
+		return static_cast<int>(value);
+	}
+
 	std::string currentCursorMarkerInput() const {
 		char value[12] = {0};
 		if (mCursorPositionMarkerField != nullptr) mCursorPositionMarkerField->getData(value);
@@ -545,7 +568,9 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	DialogValidationResult validateDialogValues() const {
 		DialogValidationResult result;
 		std::string errorText;
-		result.valid = validateCursorPositionMarkerInput(currentCursorMarkerInput(), errorText);
+		result.valid = currentHeroFileThresholdInput() >= 0;
+		if (!result.valid) errorText = "Hero message file threshold must be within 0..100 MB.";
+		if (result.valid) result.valid = validateCursorPositionMarkerInput(currentCursorMarkerInput(), errorText);
 		if (result.valid) result.valid = validateFileCompareGuttersInput(currentFileCompareOriginalLeadingGuttersInput(), errorText);
 		if (result.valid) result.valid = validateFileCompareGuttersInput(currentFileCompareOriginalTrailingGuttersInput(), errorText);
 		if (result.valid) result.valid = validateFileCompareGuttersInput(currentFileCompareCompareLeadingGuttersInput(), errorText);
@@ -570,6 +595,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	TCheckBoxes *mOptionsField = nullptr;
 	TCheckBoxes *mHeroMessagesField = nullptr;
 	MRNumericSlider *mHeroFileThresholdSlider = nullptr;
+	TInputLine *mHeroFileThresholdField = nullptr;
 	MRNumericSlider *mVirtualDesktopsSlider = nullptr;
 	TRadioButtons *mCursorBehaviourField = nullptr;
 	TRadioButtons *mCompilerErrorMessageField = nullptr;
@@ -631,7 +657,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		if (currentAutoDetectBinaryFiles) dialogData.flags |= 8;
 		if (currentHeroMessages.onMessageLine) dialogData.heroFlags |= 1;
 		if (currentHeroMessages.inLogFile) dialogData.heroFlags |= 2;
-		dialogData.heroFileThresholdMb = static_cast<ushort>(currentHeroMessages.fileThresholdMb);
+		dialogData.heroFileThresholdMb = currentHeroMessages.fileThresholdMb;
 
 		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
 		dialogData.cursorBehaviourChoice = currentCb == MRCursorBehaviour::FreeMovement ? 0 : 1;
@@ -657,7 +683,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		MRHeroMessageSettings newHeroMessages;
 		newHeroMessages.onMessageLine = (dialogData.heroFlags & 1) != 0;
 		newHeroMessages.inLogFile = (dialogData.heroFlags & 2) != 0;
-		newHeroMessages.fileThresholdMb = static_cast<int>(dialogData.heroFileThresholdMb);
+		newHeroMessages.fileThresholdMb = dialogData.heroFileThresholdMb;
 		int newVd = static_cast<int>(dialogData.virtualDesktops);
 		MRCursorBehaviour newCb = dialogData.cursorBehaviourChoice == 0 ? MRCursorBehaviour::FreeMovement : MRCursorBehaviour::BoundToText;
 		MRCompilerErrorMessagePlacement newCemp = dialogData.compilerErrorMessageChoice == 0 ? MRCompilerErrorMessagePlacement::UnderCode : MRCompilerErrorMessagePlacement::RightMargin;
@@ -678,6 +704,10 @@ void runUserInterfaceSettingsDialogFlow() {
 		const bool colorOutputModeChanged = currentColorOutputMode != newColorOutputMode;
 		auto applyAndPersistUiSettings = [&]() -> bool {
 			std::string errorText;
+			if (newHeroMessages.fileThresholdMb < 0) {
+				setSetupDialogStatus("Hero message file threshold must be within 0..100 MB.", MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
 			if (!setConfiguredCursorBehaviour(newCb, &errorText)) {
 				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
 				return false;
