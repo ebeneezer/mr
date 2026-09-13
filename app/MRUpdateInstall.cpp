@@ -172,6 +172,18 @@ class PasswordInputLine final : public TInputLine {
 	}
 };
 
+class UpdateChangedEditor final : public MRFileEditor {
+  public:
+	UpdateChangedEditor(const TRect &bounds, TScrollBar *horizontal, TScrollBar *vertical, std::size_t ownerId)
+	    : MRFileEditor(bounds, horizontal, vertical, nullptr, "", mr::coprocessor::ExecutionOwnerKind::Dialog, ownerId) {
+	}
+
+	TColorAttr mapColor(uchar index) override {
+		if (owner != nullptr && index >= 1 && index <= 6) return owner->mapColor(index == 2 || index == 4 ? 20 : 6);
+		return MRFileEditor::mapColor(index);
+	}
+};
+
 class UpdateChangedDialog final : public TDialog {
   public:
 	UpdateChangedDialog(const std::string &version, const std::string &changedText)
@@ -188,7 +200,7 @@ class UpdateChangedDialog final : public TDialog {
 		verticalScrollBar = new TScrollBar(TRect(contentBounds.b.x - 1, contentBounds.a.y, contentBounds.b.x, contentBounds.b.y));
 		insert(horizontalScrollBar);
 		insert(verticalScrollBar);
-		changedEditor = new MRFileEditor(contentBounds, horizontalScrollBar, verticalScrollBar, nullptr, "", mr::coprocessor::ExecutionOwnerKind::Dialog, reinterpret_cast<std::size_t>(this));
+		changedEditor = new UpdateChangedEditor(contentBounds, horizontalScrollBar, verticalScrollBar, reinterpret_cast<std::size_t>(this));
 		insert(changedEditor);
 		changedEditor->setCommunicationViewerMode(true, false);
 		changedEditor->setWordWrapSuppressed(true);
