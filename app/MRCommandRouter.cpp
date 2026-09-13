@@ -1299,6 +1299,14 @@ bool chooseMiniMenuCommand(TGroup &owner, MREditWindow *targetWindow, TPoint whe
 		TEvent event{};
 
 		activeList->getEvent(event);
+		if (event.what == evMouseDown && editList != nullptr && editList->mouseInView(event.mouse.where)) {
+			editSelected = miniMenuClickedIndex(*editList, event.mouse.where);
+			editList->handleEvent(event);
+			event.what = evNothing;
+			if (editSelected >= 0 && static_cast<std::size_t>(editSelected) < editEntries.size()) command = editEntries[static_cast<std::size_t>(editSelected)].command;
+			done = true;
+			continue;
+		}
 		if (event.what == evMouseDown && parentList != nullptr && parentList->mouseInView(event.mouse.where)) {
 			selected = miniMenuClickedIndex(*parentList, event.mouse.where);
 			parentList->handleEvent(event);
@@ -1308,23 +1316,12 @@ bool chooseMiniMenuCommand(TGroup &owner, MREditWindow *targetWindow, TPoint whe
 				continue;
 			}
 			if (entries[static_cast<std::size_t>(selected)].editSubmenu) {
-				TPoint editWhere = where;
-
-				editWhere.x += menuWidth;
-				editWhere.y += selected;
+				const TPoint editWhere = parentList->makeGlobal(TPoint(parentList->size.x, selected - parentList->topItem));
 				if (editList == nullptr) editList = showMiniMenuList(owner, editor, editWhere, editValues);
 				activeList = editList != nullptr ? editList : parentList;
 				continue;
 			}
 			command = entries[static_cast<std::size_t>(selected)].command;
-			done = true;
-			continue;
-		}
-		if (event.what == evMouseDown && editList != nullptr && editList->mouseInView(event.mouse.where)) {
-			editSelected = miniMenuClickedIndex(*editList, event.mouse.where);
-			editList->handleEvent(event);
-			event.what = evNothing;
-			if (editSelected >= 0 && static_cast<std::size_t>(editSelected) < editEntries.size()) command = editEntries[static_cast<std::size_t>(editSelected)].command;
 			done = true;
 			continue;
 		}
@@ -1353,10 +1350,7 @@ bool chooseMiniMenuCommand(TGroup &owner, MREditWindow *targetWindow, TPoint whe
 				continue;
 			}
 			if (entries[static_cast<std::size_t>(selected)].editSubmenu) {
-				TPoint editWhere = where;
-
-				editWhere.x += menuWidth;
-				editWhere.y += selected;
+				const TPoint editWhere = parentList->makeGlobal(TPoint(parentList->size.x, selected - parentList->topItem));
 				if (editList == nullptr) editList = showMiniMenuList(owner, editor, editWhere, editValues);
 				activeList = editList != nullptr ? editList : parentList;
 				continue;
@@ -1380,7 +1374,9 @@ bool showEditorContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 	if (owner == nullptr) return false;
 	if (targetWindow != nullptr) static_cast<void>(activateEditorTargetWindow(targetWindow));
 	if (!editorTextTargetFromGlobalPoint(targetWindow, where, target)) return true;
-	if (!chooseMiniMenuCommand(*owner, targetWindow, where, &target, command)) return true;
+	const bool commandSelected = chooseMiniMenuCommand(*owner, targetWindow, where, &target, command);
+	if (targetWindow != nullptr) static_cast<void>(activateEditorTargetWindow(targetWindow));
+	if (!commandSelected) return true;
 	switch (command) {
 		case cmMrDebuggerToggleBreakpoint:
 		case cmMrDebuggerRunHere:
