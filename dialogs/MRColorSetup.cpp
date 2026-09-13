@@ -194,8 +194,11 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		const bool sliderChanged = event.what == evBroadcast && event.message.command == cmMRNumericSliderChanged;
-
+		if (event.what == evBroadcast && event.message.command == cmMRNumericSliderChanged) {
+			storeSlidersInCurrentColor();
+			clearEvent(event);
+			return;
+		}
 		if (mGroupField != nullptr && mGroupField->handleDropListEvent(event)) return;
 		if (event.what == evMouseDown && mGroupField != nullptr && mGroupField->mouseInView(event.mouse.where)) {
 			mGroupField->select();
@@ -209,11 +212,6 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 			return;
 		}
 		MRScrollableDialog::handleEvent(event);
-		if (sliderChanged) {
-			storeSlidersInCurrentColor();
-			clearEvent(event);
-			return;
-		}
 		if (event.what == evCommand && event.message.command == cmMrColorGroupChoose) {
 			toggleGroupList();
 			clearEvent(event);
@@ -381,7 +379,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	}
 
 	MRNumericSlider *addSlider(const TRect &rect, const char *label) {
-		MRNumericSlider *slider = new MRNumericSlider(rect, 0, 255, 0, 1, 16, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		MRNumericSlider *slider = new MRNumericSlider(rect, 0, 255, 0, 1, 16, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged, this);
 		addManaged(slider, rect);
 		const TRect labelRect(rect.a.x - 3, rect.a.y, rect.a.x - 1, rect.b.y);
 		addManaged(new TLabel(labelRect, label, slider), labelRect);

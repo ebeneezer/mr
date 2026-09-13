@@ -19,7 +19,9 @@ TAttrPair configuredPaletteSlotOr(TView *view, unsigned char paletteSlot, ushort
 }
 } // namespace
 
-MRNumericSlider::MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue, int32_t aStep, int32_t aPageStep, Format aFormat, ushort aChangedCmd) noexcept : TView(bounds), minValue(std::min(aMin, aMax)), maxValue(std::max(aMin, aMax)), value(0), step(absOrOne(aStep)), pageStep(aPageStep ? absOrOne(aPageStep) : absOrOne(aStep) * 10), textWidth(1), format(aFormat), changedCmd(aChangedCmd) {
+MRNumericSlider::MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue, int32_t aStep, int32_t aPageStep, Format aFormat, ushort aChangedCmd, TView *aNotificationTarget) noexcept
+    : TView(bounds), minValue(std::min(aMin, aMax)), maxValue(std::max(aMin, aMax)), value(0), step(absOrOne(aStep)), pageStep(aPageStep ? absOrOne(aPageStep) : absOrOne(aStep) * 10), textWidth(1), format(aFormat),
+      changedCmd(aChangedCmd), notificationTarget(aNotificationTarget) {
 
 	options |= ofSelectable;
 	eventMask |= evMouseDown | evMouseWheel;
@@ -261,7 +263,8 @@ void MRNumericSlider::drag(TEvent &event) noexcept {
 }
 
 void MRNumericSlider::notifyChanged() noexcept {
-	if (owner) message(owner, evBroadcast, changedCmd, this);
+	TView *target = notificationTarget != nullptr ? notificationTarget : owner;
+	if (target != nullptr) message(target, evBroadcast, changedCmd, this);
 }
 
 MRProgressSlider::MRProgressSlider(const TRect &bounds) : MRNumericSlider(bounds, 0, kSliderScale, 0) {

@@ -21,7 +21,8 @@ class MRNumericSlider : public TView {
 		fmtPercent
 	};
 
-	MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue = 0, int32_t aStep = 1, int32_t aPageStep = 10, Format aFormat = fmtRaw, ushort aChangedCmd = cmMRNumericSliderChanged) noexcept;
+	MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue = 0, int32_t aStep = 1, int32_t aPageStep = 10, Format aFormat = fmtRaw, ushort aChangedCmd = cmMRNumericSliderChanged,
+	                TView *aNotificationTarget = nullptr) noexcept;
 
 	void draw() override;
 	void handleEvent(TEvent &event) override;
@@ -66,6 +67,7 @@ class MRNumericSlider : public TView {
 	int textWidth;
 	Format format;
 	ushort changedCmd;
+	TView *notificationTarget;
 };
 
 class MRProgressSlider final : public MRNumericSlider {
