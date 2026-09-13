@@ -45,7 +45,7 @@
 
 \title{\mrmac{} Reference Manual\\\large Multi-Edit Revisited Macro Language}
 \author{Dr.\ Michael 'iDoc' Raus}
-\date{14 July 2026}
+\date{12 September 2026}
 
 \begin{document}
 \begin{titlepage}
@@ -57,7 +57,7 @@
 \vspace{3\baselineskip}
 {\large Dr.\ Michael 'iDoc' Raus\par}
 \vspace{2\baselineskip}
-{\large 14 July 2026\par}
+{\large 12 September 2026\par}
 \end{center}
 
 \vfill
@@ -424,7 +424,7 @@ Primitive & Role & Purpose & Reference \\
 \primitiveoverview{PRINT\_MARGIN}{variable-print-margin}{variable}{Runtime variable.}
 \primitiveoverview{SHADOW\_CHAR}{variable-shadow-char}{variable}{Runtime variable.}
 \primitiveoverview{REFRESH}{variable-refresh}{variable}{Runtime variable.}
-\primitiveoverview{MESSAGES}{variable-messages}{variable}{Runtime variable.}
+\primitiveoverview{MESSAGES}{variable-messages}{variable}{Hero message-line switch.}
 \primitiveoverview{MOUSE}{variable-mouse}{variable}{Runtime variable.}
 \primitiveoverview{LOGO\_SCREEN}{variable-logo-screen}{variable}{Runtime variable.}
 \primitiveoverview{EXPLOSIONS}{variable-explosions}{variable}{Runtime variable.}
@@ -1856,6 +1856,7 @@ $MACRO REFERENCE_VARIABLE_REFRESH FROM EDIT;
 END_MACRO;
 \end{verbatim}
 
+\begin{mrmacextension}
 \phantomsection
 \label{prim:variable-messages}
 \subsection*{MESSAGES --- variable}
@@ -1865,15 +1866,28 @@ MESSAGES
 \end{verbatim}
 Parameters: None. Result: integer value.
 
-Provides the current runtime value named messages.
+Reads the Hero message-line switch: one means enabled and zero means disabled.
+Assigning zero disables that destination; assigning a nonzero integer enables
+it. This does not mute ordinary warnings or validation feedback, change Hero
+log output, or alter the file-size threshold. The central settings model
+records a dirty change only when the value actually changes.
+
+Do not confuse this runtime variable with the retired serialized setting of
+the same name. The old settings key is accepted without changing runtime
+state; current settings use the Hero keys described under
+\hyperref[prim:procedure-mrsetup]{MRSETUP}.
 
 \paragraph{Example macro.}
 \begin{verbatim}
 $MACRO REFERENCE_VARIABLE_MESSAGES FROM EDIT;
     DEF_INT(Value);
     Value := MESSAGES;
+    MESSAGES := 0;
+    MAKE_MESSAGE('Ordinary feedback remains available.');
+    MESSAGES := Value;
 END_MACRO;
 \end{verbatim}
+\end{mrmacextension}
 
 \phantomsection
 \label{prim:variable-mouse}
@@ -5251,7 +5265,13 @@ INDENT_BLOCK;
 \end{verbatim}
 Parameters: None.
 
-Performs the named editor action through the active MR editor command route.
+Indents the visible committed block through the editor's block command route.
+A stream block is first converted to a line block covering its touched lines.
+For line blocks, the least-indented nonblank line determines the delta to the
+next configured tab stop; every nonblank line receives that same delta, so
+relative indentation is preserved. Whitespace-only lines are unchanged.
+Column blocks retain their rectangular shift semantics. The document must be
+writable and a visible block must exist. The text change is undoable.
 
 \paragraph{Example macro.}
 \begin{verbatim}
@@ -5781,7 +5801,13 @@ UNDENT_BLOCK;
 \end{verbatim}
 Parameters: None.
 
-Performs the documented MR operation named by this primitive in the active execution context.
+Undents the visible block towards the previous configured tab stop. Stream
+blocks are first converted to line blocks covering the touched lines. The
+least-indented nonblank line determines one shared reduction for a line block;
+relative indentation is preserved and whitespace-only lines are skipped.
+Column blocks retain their rectangular shift semantics. A missing visible
+block or read-only document prevents the mutation. The text change is
+undoable.
 
 \paragraph{Example macro.}
 \begin{verbatim}
@@ -11421,12 +11447,25 @@ Parameters:
 \item[binding] String or character positional argument.
 \end{description}
 
-Adds one serialized keymap binding definition.
+Adds one serialized keymap binding definition for a defined profile. A
+binding names its profile, context, type, target, and key sequence. The current
+factory WordStar, Emacs, and Nano profiles bind Ctrl+A to the whole-document
+line-block action. The former edit-prefixed action remains a compatibility
+alias:
+\begin{verbatim}
+MR_BLOCK_MARK_ALL
+MR_EDIT_MARK_ALL
+\end{verbatim}
+Installed personal keymaps are not silently overwritten by a package update.
+The action is not an Emacs/Nano beginning-of-line binding.
+\index{MR\_BLOCK\_MARK\_ALL}\index{MR\_EDIT\_MARK\_ALL}
 
 \paragraph{Example macro.}
+The WORDSTAR profile must already exist. This changes its Ctrl+A binding.
 \begin{verbatim}
 $MACRO REFERENCE_KEYMAP_BIND FROM EDIT;
-    KEYMAP_BIND('reference');
+    KEYMAP_BIND('name="WORDSTAR" context=EDIT type=ACTION ' +
+                'target="MR_BLOCK_MARK_ALL" sequence="<Ctrl+A>"');
 END_MACRO;
 \end{verbatim}
 \end{mrmacextension}
@@ -11549,24 +11588,31 @@ END_MACRO;
 \subsection*{MRCOMPILERPROFILE}
 \index{MRCOMPILERPROFILE@\texttt{MRCOMPILERPROFILE}}
 \begin{verbatim}
-MRCOMPILERPROFILE(profileName, compilerPath, arguments, workingDirectory);
+MRCOMPILERPROFILE(operation, profileId, argument3, argument4);
 \end{verbatim}
-Parameters:
+Parameters (all strings):
 \begin{description}
-\item[profileName] Serialized profile name.
-\item[compilerPath] String or character positional argument.
-\item[arguments] String or character positional argument.
-\item[workingDirectory] String or character positional argument.
+\item[operation] DEFINE to create a profile, or SET to assign one of its settings.
+\item[profileId] New profile ID for DEFINE; existing ID for SET.
+\item[argument3] Display name for DEFINE; setting key for SET.
+\item[argument4] Supported toolchain for DEFINE; serialized setting value for SET.
 \end{description}
+Duplicate definitions and unknown settings are errors.
 
-Defines one serialized compiler profile.
+This is a startup settings directive. Ordinary edit macros cannot call it.
+Compatible compiled-program debugging requires a Debug profile and a current
+executable artifact; compiler selection alone does not start GDB. Supported
+GDB toolchains are GCC, CLANG, GCC\_C, CLANG\_C, RUST, GO, FPC, and FREEBASIC.
 
-\paragraph{Example macro.}
+\paragraph{Example settings source.}
+These lines illustrate a profile definition within controlled startup source;
+retain the surrounding canonical settings and build-version declaration.
 \begin{verbatim}
-$MACRO REFERENCE_MRCOMPILERPROFILE FROM EDIT;
-    MRCOMPILERPROFILE('reference', 'reference', 'reference', 'reference');
-END_MACRO;
+MRCOMPILERPROFILE('DEFINE', 'C_DEBUG_DOC', 'C Debug', 'GCC_C');
+MRCOMPILERPROFILE('SET', 'C_DEBUG_DOC', 'EXECUTABLE', '/usr/bin/gcc');
 \end{verbatim}
+Use Compiler profiles and Automatic Setup to obtain the full build arguments
+and output configuration appropriate to the installed toolchain.
 \end{mrmacextension}
 
 \begin{mrmacextension}
@@ -11575,24 +11621,32 @@ END_MACRO;
 \subsection*{MRFEPROFILE}
 \index{MRFEPROFILE@\texttt{MRFEPROFILE}}
 \begin{verbatim}
-MRFEPROFILE(profileName, sourcePath, outputPath, arguments);
+MRFEPROFILE(operation, profileId, argument3, argument4);
 \end{verbatim}
-Parameters:
+Parameters (all strings):
 \begin{description}
-\item[profileName] Serialized profile name.
-\item[sourcePath] Source file path.
-\item[outputPath] String or character positional argument.
-\item[arguments] String or character positional argument.
+\item[operation] DEFINE to create a profile, EXT to add an extension, or SET
+ to assign an editor setting.
+\item[profileId] New profile ID for DEFINE; existing ID for EXT or SET.
+\item[argument3] Display name for DEFINE, filename extension for EXT, or setting
+ key for SET.
+\item[argument4] Empty for DEFINE and EXT; serialized setting value for SET.
 \end{description}
+These are editor-profile directives, not source/output file arguments.
 
-Defines one serialized editor profile.
+The directive is legal only in controlled startup settings source. A matching
+filename-extension profile can override the global automatic bracket-pairing
+option independently of other editor settings.
 
-\paragraph{Example macro.}
+\paragraph{Example settings source.}
 \begin{verbatim}
-$MACRO REFERENCE_MRFEPROFILE FROM EDIT;
-    MRFEPROFILE('reference', 'reference', 'reference', 'reference');
-END_MACRO;
+MRFEPROFILE('DEFINE', 'C_DOC', 'C source', '');
+MRFEPROFILE('EXT', 'C_DOC', 'c', '');
+MRFEPROFILE('SET', 'C_DOC', 'AUTO_PAIR_BRACKETS', 'TRUE');
 \end{verbatim}
+These lines belong in a complete canonical startup settings source, not in an
+ordinary edit macro. See the bracket-pairing semantics under
+\hyperref[prim:procedure-mrsetup]{MRSETUP}.
 \end{mrmacextension}
 
 \begin{mrmacextension}
@@ -11605,17 +11659,56 @@ MRSETUP(key, value);
 \end{verbatim}
 Parameters:
 \begin{description}
-\item[key] String-like hash key.
-\item[value] Value written or selected by the primitive.
+\item[key] String naming a supported settings key.
+\item[value] String containing that key's serialized value. Boolean values
+accept the settings parser's boolean literals; numeric settings validate
+their own integer range.
 \end{description}
 
-Accepts one serialized settings key and value only at the controlled settings boundary.
+Applies an assignment through the central settings model during controlled
+startup execution. Ordinary edit macros cannot use it to change arbitrary
+settings. The existing non-startup File Compare minimap colour route is a
+narrow exception, not general permission to call startup directives.
 
-\paragraph{Example macro.}
+\paragraph{Hero destinations and threshold.}
+\index{HERO\_MESSAGES\_ON\_MESSAGELINE}
+\index{HERO\_MESSAGES\_IN\_LOGFILE}
+\index{HERO\_MESSAGES\_FILE\_THRESHOLD\_MB}
 \begin{verbatim}
-$MACRO REFERENCE_MRSETUP FROM EDIT;
-    MRSETUP('reference', 'reference');
-END_MACRO;
+HERO_MESSAGES_ON_MESSAGELINE
+HERO_MESSAGES_IN_LOGFILE
+HERO_MESSAGES_FILE_THRESHOLD_MB
+\end{verbatim}
+The first two keys independently enable the Hero message-line and log
+destinations; defaults are true and false. The third accepts integers 0--100,
+default eight, in units of 1,048,576 bytes. File-aware Hero notices require a
+file strictly larger than the threshold before either destination is used.
+Non-file Hero notices do not use that filter. Ordinary warning and validation
+owners are unaffected. The retired serialized MESSAGES key is a no-op;
+\hyperref[prim:variable-messages]{the runtime variable} still controls the
+Hero message-line destination.
+
+\paragraph{Automatic bracket pairing.}
+\index{AUTO\_PAIR\_BRACKETS}
+\begin{verbatim}
+AUTO_PAIR_BRACKETS
+\end{verbatim}
+This boolean defaults to false and can also be overridden in a matching
+filename-extension profile. With insert mode on, no selection, and a
+single-character text event, an opening parenthesis, bracket, or brace inserts
+its closer and leaves the cursor between the pair. A matching closer already
+at the cursor is skipped. Quotes, bracketed paste, overwrite mode, and
+selected-text replacement do not take this route; syntax classification does
+not exclude comments or strings.
+
+\paragraph{Example settings source.}
+Keep the complete generated settings source and its version declaration;
+these are example assignments inside that source, not an edit macro.
+\begin{verbatim}
+MRSETUP('HERO_MESSAGES_ON_MESSAGELINE', 'TRUE');
+MRSETUP('HERO_MESSAGES_IN_LOGFILE', 'FALSE');
+MRSETUP('HERO_MESSAGES_FILE_THRESHOLD_MB', '8');
+MRSETUP('AUTO_PAIR_BRACKETS', 'TRUE');
 \end{verbatim}
 \end{mrmacextension}
 
@@ -12007,7 +12100,11 @@ MATCH_PARENTHESIS;
 \end{verbatim}
 Parameters: None.
 
-Performs the documented MR operation named by this primitive in the active execution context.
+Moves the cursor to the matching parenthesis, square bracket, or brace. The
+origin is the delimiter at the cursor or immediately before it. Matching
+counts nesting of that delimiter pair in the document text; strings and
+comments are not excluded. Missing delimiters or matches produce feedback
+without moving to an invented location.
 
 \paragraph{Example macro.}
 \begin{verbatim}
@@ -12047,7 +12144,15 @@ SETUP_COLOR;
 \end{verbatim}
 Parameters: None.
 
-Opens the corresponding MR setup dialog through the application command route.
+Opens Color setup. Select a role and edit its foreground/background RGB
+components with six sliders in the range 0--255. The hexadecimal pair is a
+readout; it and the role sample update immediately with each component
+change, including during a mouse drag. Role changes retain previous component
+edits in the same dialog draft. The sample uses the configured output mode.
+OK applies and persists changes; closing a dirty draft uses Save/Discard/Cancel
+gating. Load Theme activates a theme and Save Theme applies and writes the
+draft. Those explicit operations are not rolled back by later cancellation.
+RGB versus palette output is selected in User Interface Settings.
 
 \paragraph{Example macro.}
 \begin{verbatim}
@@ -12187,7 +12292,11 @@ SETUP_USER_INTERFACE;
 \end{verbatim}
 Parameters: None.
 
-Opens the corresponding MR setup dialog through the application command route.
+Opens User Interface Settings, including independent Hero message-line/log
+destinations, the synchronized 0--100 MB threshold slider and editable field,
+and Color Management. Color Management selects automatic 24-bit RGB output
+or terminal-palette output; the RGB role values remain the same settings in
+either mode. Invalid input prevents applying the dialog draft.
 
 \paragraph{Example macro.}
 \begin{verbatim}
@@ -12378,10 +12487,33 @@ panes show the state available at that pause.
 \debuggerscreenshot{DBG_session_starting.png}{fig:debugger-session}{A newly started MRMAC debug session paused at a source span. The debugger panes identify the session and expose its current state.}
 
 \begin{mrmacextension}
+\section{Source-view context menu}
+
+A plain single right-click in the debugger source text opens the ordinary
+editor context menu. Edit contains Cut, Copy, and Unmark when text is marked,
+plus Paste; without marked text it contains Paste. Outline lists available
+structure from open source buffers. At a supported text target, References
+and Rename open the multi-file search or replacement dialog with that text
+prefilled. These operations use text matching, not MRMAC binding identity.
+Escape dismisses the menu; Enter selects an item or opens the Edit submenu.
+\index{context menu!debugger source}
+
+The extra breakpoint/run/watch/evaluation/step group in the compiled-program
+GDB source menu is specific to that backend. Use the MRMAC debugger controls
+below for macro execution. The left-button gutter double-click is shared by
+both debuggers.
+
 \section{Breakpoints, running and stopping}
 
 \texttt{F9} sets a breakpoint at the cursor source line or clears one already
-there. The debugger maps the line to its debuggable source span, so a comment,
+there. Alternatively, double-click with the left mouse button on the desired
+line number in the source view's visible line-number gutter. The gutter must
+be visible and debugger controls active. This invokes the same action as F9
+and resolves folded viewport rows to document lines; it is not a folding-gutter
+gesture. The same mouse action is available in the compiled-program GDB
+debugger, with that backend's source-location rules.
+\index{breakpoint!gutter double-click}\index{line-number gutter!breakpoints}
+The MRMAC debugger maps the line to its debuggable source span, so a comment,
 declaration or other non-executable line cannot receive a breakpoint.
 \texttt{Shift-F9} enables or disables the breakpoint at the cursor. Its
 \texttt{Alt-Shift-F9} and \texttt{Ctrl-Shift-F9} forms respectively enable or

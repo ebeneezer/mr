@@ -49,7 +49,7 @@
 
 \title{\mr{} Users Manual\\\large Editing, navigation, automation, and tools}
 \author{Dr.\ Michael 'iDoc' Raus}
-\date{11 August 2026}
+\date{12 September 2026}
 
 \begin{document}
 \frontmatter
@@ -63,7 +63,7 @@
 \vspace{3\baselineskip}
 {\large Dr.\ Michael 'iDoc' Raus\par}
 \vspace{2\baselineskip}
-{\large 11 August 2026\par}
+{\large 12 September 2026\par}
 \end{center}
 
 \vfill
@@ -114,6 +114,31 @@ Manual explains implementation boundaries and performance design.
 \chapter{First Start}
 \index{first start}\index{getting started}
 
+\section{Installing a release and checking prerequisites}
+
+Run the release package's \texttt{install.sh} as your ordinary user. It checks
+its payload and runtime dependencies before installing files, and requests
+\texttt{sudo} when the system destination requires it. Existing personal macro
+files are preserved. Each additional user runs the installer to initialise
+that user's macro directory.
+
+Installation requires a UTF-8 locale. Check \texttt{locale charmap} and the
+values of \texttt{LANG}, \texttt{LC\_CTYPE}, and especially \texttt{LC\_ALL}
+if the installer rejects the character map. Fontconfig's \texttt{fc-list}
+must also find fonts covering the tape, magnifier, and clock symbols used by
+the interface. The installer lists missing codepoints and suggests
+\texttt{fontconfig} with \texttt{fonts-noto-color-emoji} on Debian-family
+systems, or \texttt{fontconfig} with \texttt{noto-fonts-emoji} on Arch-family
+systems. Installing a font does not replace the terminal emulator's own font
+and fallback configuration.
+\index{installation!prerequisites}\index{UTF-8 locale}\index{emoji fonts}
+
+Missing shared libraries, unavailable runtime symbol versions, and a failed
+startup compatibility probe stop installation with an explanation. The release
+uses the baseline x86-64 instruction set and targets Debian 12-compatible
+runtime versions; the installer checks the actual packaged executable on the
+receiving machine. GDB is a separate requirement for debugging compiled
+programs and must be available on \texttt{PATH}.
 \section{Starting \mr{} for the first time}
 
 Start the editor from a terminal with its executable name. A file argument is
@@ -278,7 +303,8 @@ remains reachable. The following options are the useful starting controls.
 
 \manualscreenshot{mr-users-first-start-ui.png}{fig:users-first-start-ui}{User
 Interface Settings. The dialog applies its complete validated draft when it is
-accepted; the indentation pane previews the selected brace style.}
+accepted; the Hero controls include the shared slider/numeric threshold row,
+and Color Management selects RGB or palette output.}
 
 \subsection{Desktop and messages}
 
@@ -290,11 +316,20 @@ ordinary window behavior. Keep it enabled for the normal multi-window
 environment.
 \index{window manager}
 
-\field{Menuline messages} lets notices temporarily use the menu line. Keep it
-enabled when learning the program: successful saves, warnings, and other short
-results then remain visible without opening a log window. Disabling it reduces
-movement on the top line, but also removes this immediate feedback.
-\index{message line}
+The \field{Hero messages} group controls performance and progress notices such
+as file-load timing and the first minimap rendering. \field{Show on messageline}
+and \field{Write to log} are independent destinations. Turning off Hero output
+on the message line does not suppress ordinary warnings, validation errors,
+or other operational feedback.
+
+\field{Minimum file size} applies to file-size-aware Hero notices before either
+destination is used: the file must be strictly larger than the selected
+threshold. The slider and editable numeric field share a range of 0--100 MB;
+changing either updates the other. The MB label represents units of
+1,048,576 bytes. Non-file Hero notices, including Macro Brain activity, are
+not filtered by this size threshold. Defaults are message-line output on,
+log output off, and 8 MB. Invalid numeric input prevents applying the draft.
+\index{message line}\index{Hero messages}\index{Hero messages!size threshold}
 
 \field{Virtual desktops} selects between one and nine desktops. One is the
 simplest starting value. Additional desktops provide separate views of the
@@ -685,7 +720,8 @@ the reliable fallback over remote or restricted terminal connections.
 opens the configuration areas for colors, keymaps, filename extensions,
 compiler profiles, paths, backups, interface behavior, search defaults, and
 live logs. Each dialog edits a working draft. Accepting the dialog applies
-validated settings; cancelling it abandons the draft.
+validated settings. Closing a dirty dialog can request Save, Discard, or
+Cancel; explicit load/save operations may already have applied their changes.
 \index{settings!draft}\index{settings!validation}
 
 Persisted settings are represented in \texttt{settings.mrmac}. Users should
@@ -728,6 +764,15 @@ three-profile set with WordStar selected and adds Smart Backspace through
 \texttt{wordstar-extensions.mrmac}. Loading a file remains an explicit action;
 installation alone does not silently replace the active profile.
 
+The current factory WordStar, Emacs, and Nano files all bind \key{Ctrl+A} to
+\menu{Block > Mark all}, creating a line block for the complete document.
+In particular, the supplied Emacs and Nano profiles no longer use that chord
+for beginning-of-line motion. The canonical action is
+\texttt{MR\_BLOCK\_MARK\_ALL}; \texttt{MR\_EDIT\_MARK\_ALL} remains an alias
+for existing bindings. Personal keymap files are preserved by installation,
+so inspect or explicitly import the desired binding in an older setup.
+\index{block!mark all}
+
 \begin{usersafety}
 Do not delete or rewrite the only bindings needed to reach setup until the new
 profile has been tested. Keep a loadable known-good keymap file when
@@ -742,8 +787,10 @@ the role's foreground and background colors. Selection highlighting affects
 only the following description, leaving the sample exact and readable.
 Foreground and background each have red, green, and blue numeric sliders with
 the range 0--255. The centered \texttt{RRGGBB/RRGGBB} value shows the exact
-24-bit pair, and the list sample follows slider changes immediately. Theme
-files can be loaded into the working draft and saved for reuse. Invalid or
+24-bit pair for the selected role. Both the readout and its Aa sample update
+immediately while clicking, dragging, or using the keyboard. Changing roles
+retains the component edits already made in the dialog draft. Theme
+files can be loaded or saved for reuse. Invalid or
 missing groups retain their hardcoded defaults.\index{color setup}\index{theme}
 
 Fresh installations use the \emph{256-color palette} so that the built-in
@@ -759,10 +806,36 @@ representation and one color draft; there is no duplicate palette
 configuration.\index{color!output
 mode}\index{terminal palette}
 
+\subsection{Editing an RGB colour pair}
+
+Select a group at the top of Color setup, then select a role in its item list.
+The six sliders edit the red, green, and blue components of foreground and
+background independently. Drag a slider or focus it and use the arrow keys
+for steps of one; Page Up/Down changes by 16 and Home/End selects 0/255.
+The centred hexadecimal pair is a readout, not an editable hexadecimal field.
+The \texttt{Aa} sample uses the current output mode, so a palette-mode preview
+can quantize a colour even though the readout retains its exact RGB value.
+
+\manualscreenshot{mr-users-color-rgb.png}{fig:users-color-rgb}{PTY capture of
+Color setup with 24-bit RGB output selected. Foreground and background have
+separate RGB sliders. The displayed 60D0FF/101020 pair and the text-role
+sample update immediately, including while a slider is being dragged.}
+
+
+
+Choose OK to apply and persist the colour draft. Closing or cancelling a
+changed draft asks whether to Save, Discard, or Cancel closing. Load Theme
+activates the selected theme immediately and persists its selection; Save Theme
+applies the current draft and writes the chosen theme file. These explicit
+load/save operations are not undone by later cancelling the reopened dialog.
+Changing the output mode itself belongs to User Interface Settings, under
+\field{Color Management}; the RGB sliders remain available in either mode.
+\index{color!RGB sliders}\index{color!hexadecimal readout}
+
 Filename-extension profiles may select a theme automatically. This allows a
 different visual treatment for code, prose, logs, or comparison work without
-creating a second global color registry. A loaded theme remains part of the
-dialog draft until the surrounding setup flow accepts it.
+creating a second global color registry. Distinguish editing a role in the
+draft from explicitly activating a theme with Load Theme.
 
 \section{Paths}
 
@@ -776,6 +849,11 @@ launch directory. The temporary directory is for disposable products; do not
 point it at a source directory. The settings macro path must include a
 filename, not merely a directory.
 
+Without a usable remembered directory, ordinary file dialogs fall back to the
+user's home directory, then to the working directory. Macro loading and the
+pre-save/post-load macro selectors first try the configured macro directory.
+These are scope-specific defaults: choosing a macro path does not change the
+starting directory of every unrelated file dialog.
 \section{Backups and autosave}
 
 Backup policy selects no backup, a sibling backup file, or movement to a
@@ -846,6 +924,13 @@ generated output that should not become part of the session.
 The command-line help is intentionally narrower than the in-application Help.
 It describes startup parsing, while \key{F1} explains the running editor.
 
+\texttt{--version} prints the MR version and exits without opening the desktop:
+\begin{verbatim}
+mr --version
+\end{verbatim}
+Use this output when reporting which installed executable you are running.
+\index{--version@\texttt{--version}}
+
 \section{Startup macro automation}
 
 Advanced workflows may run an MRMAC file after settings, AUTOEXEC macros, the
@@ -894,7 +979,10 @@ available; use Load when the present window is intentionally being reused.
 \menu{File > Get last} lists recently used files, folders, and workspaces.
 Empty groups are skipped when initial focus is chosen. Selecting a row performs
 the operation appropriate to its type rather than treating every history entry
-as a file.\index{Get Last dialog}\index{recent files}
+as a file. With a list focused, \key{Enter} activates its selected file,
+folder, or workspace directly. In the Open dialog, \key{Enter} likewise opens
+the focused file-list item; a file-list double-click performs the open action.
+\index{Get Last dialog}\index{recent files}
 
 \section{Acquire, live logs, and the journal}
 
@@ -958,6 +1046,48 @@ exiting are dirty-gated operations. Read the confirmation detail: Save,
 Discard, and Cancel are intentionally different lifecycle decisions.
 \end{usersafety}
 
+\section{Right-click context menus}
+\label{sec:users-editor-context}
+\index{context menu!editor}\index{right-click!editor}
+
+A single right-click in an MREdit window's text area opens its context menu.
+Use the right button without Shift, Ctrl, or Alt; modified mouse gestures and
+gutter clicks have separate meanings. The clicked window becomes the command
+target. The clicked text location supplies the seed for References and Rename,
+so it need not be the old cursor position.
+
+\begin{description}
+\item[Edit] Opens a submenu. With a selection or marked block it contains
+Cut, Copy, Unmark, and Paste; without marked text it contains Paste.
+Cut and Copy use the marked text, Unmark removes its marking, and Paste uses
+the editor's paste buffer. The usual writeability checks still apply.
+\item[Outline] Lists available outline entries from open editor buffers,
+including Bento panes, with each buffer represented once. Multiple buffers
+receive filename headers; nested entries are indented. Choosing an entry
+activates its window and selects the source line. A question mark marks a
+heuristic entry. The list may still be warming or cover only an analysed range.
+\item[References] Appears when the clicked location provides a supported
+text target. It opens multi-file Search with that text prefilled.
+\item[Rename] Uses the same target to open multi-file Search and Replace,
+with an empty replacement field for your input.
+\end{description}
+
+References and Rename start from the workspace main file's directory when
+available, otherwise the current source directory. Check the dialog's scope,
+filespec, matching options, and replacement before starting. These commands
+use the existing text-search machinery; they do not establish semantic symbol
+identity or guarantee a language-aware refactoring.
+
+Choose an item by mouse or navigate with the arrow keys and Enter. Enter on
+Edit opens its submenu. Escape or a click outside closes the menu without
+executing an item. An active GDB source view extends this same menu with the
+commands described in Section~\ref{sec:users-gdb-context}.
+\index{Outline}\index{References}\index{Rename}
+
+\manualscreenshot{mr-users-editor-context.png}{fig:users-editor-context}{PTY
+capture of the editor context menu on matrix.c, with marked text and the Edit
+submenu open. References and Rename use the text at the original right-click.}
+
 \section{File information}
 
 \menu{File > Info} reports document identity, persistent path, size, line and
@@ -978,6 +1108,44 @@ Workspace state does not replace file persistence. Saving a workspace records
 where and how documents are arranged; saving a document records its text or
 binary changes. A robust session workflow does both.
 
+\subsection{Automatic saving and loading}
+
+Open \menu{Window > List}. The Auto checkbox button beside \menu{Save workspace}
+controls automatic saving; the separate Auto checkbox button beside
+\menu{Load workspace} controls automatic loading. The two settings are
+independent and persist when toggled; [x] means enabled and [ ] disabled.
+
+Autosave records changes to the workspace after a short settling delay
+(currently about one second), with a final flush when MR exits. It is separate from the keyboard-inactivity and interval triggers
+for document autosave. Turning workspace autosave off clears the embedded
+saved workspace from \texttt{settings.mrmac}; it does not delete already
+created, separately named workspace files.
+
+Autoload restores the workspace embedded in \texttt{settings.mrmac} at startup,
+after settings and AUTOEXEC macros and before additional command-line files
+and startup automation. It does not select the newest timestamped file from a
+directory. With Autoload off and a saved workspace available, MR normally asks
+whether to Restore workspace, Discard workspace, or Cancel. Cancel preserves
+the stored workspace for later; Discard removes its embedded restoration data.
+A matching command-line file can restore a saved single-file workspace
+directly, and restart after an update can also force restoration.
+
+\manualscreenshot{mr-users-workspace-controls.png}{fig:users-workspace-controls}{PTY
+capture of Window List. The two Auto buttons independently control workspace
+saving and startup loading; the neighbouring buttons perform explicit Save
+workspace and Load workspace operations.}
+
+With workspace autosave enabled, a successful autosave writes a named snapshot
+in the remembered Workspace Save directory:
+\begin{verbatim}
+Autosave YYYY-MM-DD HH:MM:SS.mrmac
+\end{verbatim}
+The timestamp is local time. Workspace Load and Save histories remember the
+result, and the workspace extension in \texttt{settings.mrmac} is also updated.
+Use \menu{Open workspace} or Get Last to select a saved snapshot. The name has
+one-second precision, so another write within the same second can reuse it;
+these files are not a version-control history or a backup of unsaved text.
+\index{workspace!autosave files}
 \chapter{Inserting Text}
 \index{inserting text}
 
@@ -1004,6 +1172,21 @@ The \field{CR/LF at EOF} and related profile fields describe save policy, not
 an extra character painted into the text. \menu{File > Info} helps distinguish
 document content from its projection.
 
+\section{Automatic bracket pairs}
+
+\field{Auto pair brackets} in the editor settings of DEFAULT or a matching
+filename-extension profile enables pairing for parentheses, square brackets,
+and braces. It is off by default. In insert mode, with no text selection,
+typing one opening delimiter inserts its closer and leaves the cursor between
+them. Typing a closing delimiter already present at the cursor moves across
+it instead of inserting a duplicate.
+
+Pairing applies to single-character text input. Overwrite mode, selected text,
+and bracketed paste do not use this pairing path. It does not pair quotation
+marks or consult syntax to exclude strings and comments. Matching-parenthesis
+navigation remains a separate command. The persisted option is
+\setting{AUTO\_PAIR\_BRACKETS}.
+\index{bracket pairing}\index{filename-extension profile!bracket pairing}
 \section{Clipboard input}
 
 \menu{Edit > Paste} requests text from the system clipboard and inserts it at
@@ -1167,6 +1350,42 @@ selection is projected; the block still exists when hidden.
 block across several Markdown lines. The selected range ends at the cursor;
 the minimap and status information remain live.}
 
+\Needspace{0.52\textheight}
+\section{Marking blocks with the mouse}
+\label{sec:users-mouse-blocks}
+\index{mouse!block marking}\index{block!mouse marking}
+
+In ordinary editing mode, with line drawing switched off, press the left
+mouse button at the start of the desired range, keep it held while moving to
+the other end, then release it. The highlight follows the pointer; releasing
+the button commits the block. Hold the modifiers before pressing the mouse
+button and keep them held until release.
+
+\begin{longtable}{@{}p{0.19\textwidth}p{0.34\textwidth}p{0.41\textwidth}@{}}
+\toprule
+Block shape & Mouse gesture & Selected range \\
+\midrule
+Stream & Left-button drag & Continuous text between the two endpoints. \\
+Column & \key{Alt} + left-button drag & Rectangle in display columns and logical lines. \\
+Line & \key{Ctrl+Alt} + left-button drag & Complete logical lines from the first touched line to the last. \\
+\bottomrule
+\end{longtable}
+
+Dragging in either direction is supported. Moving beyond a text-area edge
+scrolls the view while extending the mark. Column selection includes the
+pointed-to cells at both horizontal ends; a stream selection ends before its
+end position. Tabs occupy their configured display width.
+
+\key{Ctrl} + left-button drag explicitly starts a new stream block. Use this
+when the drag starts inside an existing block: an unmodified left-button drag
+there moves that block instead. During a move, a preview follows the mouse;
+release places the block, \key{Esc} cancels, and a completed move is one Undo
+step. A plain right-click opens the context menu.
+
+The terminal must forward the mouse events and modifier keys to \mr{}. If the
+terminal or window manager intercepts a gesture, use the corresponding
+\menu{Block > Mark lines}, \menu{Mark columns}, or \menu{Mark stream} command.
+
 \section{Marking state and cursor motion}
 
 An actively extending block and a committed block are different states.
@@ -1211,7 +1430,12 @@ relationship between two managed editor windows is the important part.
 \section{Indent, Undent, and transformations}
 
 \menu{Block > Indent} and \menu{Undent} operate on selected lines using the
-active indentation profile. \menu{Text > Upper case} and \menu{Lower case}
+configured indentation policy. A stream block is first converted to a line
+block covering the touched lines. For a line block, the least-indented
+nonblank line determines the movement to the next or previous tab stop, and
+the same shift is applied to all nonblank lines. Their relative indentation
+is preserved; whitespace-only lines are left alone. Column blocks retain
+rectangular semantics. \menu{Text > Upper case} and \menu{Lower case}
 transform the applicable marked text. Code formatting may consume the block
 or the whole file according to the formatter command and profile.
 \index{block!indentation}\index{case conversion}
@@ -1521,6 +1745,14 @@ boundary behavior. \field{Restrict to marked block} limits the range.
 \field{Search all windows} extends traversal to eligible editor windows.
 Cancelling preserves the previously accepted search specification.
 
+The multi-file Search and Replace dialogs retain their entered text, paths,
+filespecs, and options when closed, including by cancellation. This remembers
+the next dialog's inputs; cancellation does not execute the search or replace.
+An empty search cannot start an operation. These values update runtime
+settings and histories; the dialog does not force a settings-file write for
+each search. PDF export similarly remembers its validated settings in the
+runtime model, while ordinary settings persistence writes them later.
+\index{search!remembered multi-file inputs}\index{PDF export!settings}
 \section{Literal, word, and regular-expression searches}
 
 Literal search treats the entered text as text. Word/phrase mode applies word
@@ -2033,9 +2265,10 @@ deliberate formatting operation.\index{tabs!indentation}
 \section{Indenting and undenting blocks}
 
 \menu{Block > Indent} and \menu{Block > Undent} adjust the lines intersecting
-the selected block by the configured indentation step. A stream selection
-therefore operates on all touched lines; a line selection makes the intended
-scope explicit.\index{block!indent}\index{block!undent}
+the selected block by a shared shift to the next or previous tab stop, based
+on the least-indented nonblank line. A stream block becomes a line block
+covering its touched lines. Relative indentation is preserved, whitespace-only
+lines are unchanged, and column blocks retain rectangular semantics.\index{block!indent}\index{block!undent}
 
 Undent removes only eligible leading indentation. It does not delete
 arbitrary non-whitespace text to force a visual column. The operation is
@@ -2096,8 +2329,9 @@ been deleted from the document.
 \section{Parentheses and structural navigation}
 
 \menu{Other > Match parenthesis} moves between a supported matching pair near
-the cursor. It is preferable to a text search because it follows the
-language-aware structural pair rather than the next identical glyph.
+the cursor: parentheses, square brackets, or braces. It starts at the cursor
+or immediately before it and counts nesting of the chosen delimiter pair.
+This is character-based matching; it does not exclude strings or comments.
 \index{matching parentheses}
 
 Search markers, compiler diagnostics, fold outlines, and the marker stack
@@ -2153,6 +2387,119 @@ navigation command remains authoritative for the next adopted location.
 \index{compiler diagnostics}\index{compiler error!navigation}
 \index{compiler warning}
 
+\section{Debugging compiled programs with GDB}
+\label{sec:users-gdb}
+\index{GDB debugger}\index{debug current file}
+
+The compiled-program debugger uses GDB and is separate from the MRMAC macro
+debugger. It supports the GDB-compatible compiler profiles for C and C++,
+Rust, Go, Free Pascal, and FreeBASIC. Automatic compiler discovery includes
+C GCC/Clang, Rust, Go, and Free Pascal profiles with Debug, Normal, Speed, and
+Size flavours in addition to the existing toolchains.
+
+To start a session:
+\begin{enumerate}
+\item Install GDB and ensure \texttt{gdb} is available on \texttt{PATH}.
+\item Associate the named source file with a compatible compiler profile
+whose name or ID contains \texttt{Debug}. Check its debug-information flags.
+\item Save and build the file with that profile. The expected output must
+exist, be executable, and be at least as recent as the source.
+\item Choose \menu{Other > Debug current file}, or press \key{Alt+F9}.
+The command is enabled only when the current source and artifact satisfy the
+start conditions. An unavailable command is a reason to check the profile,
+unsaved source, and build output first.
+\end{enumerate}
+
+The editor becomes a debugger Bento with source, Debugger Output, Variables,
+Watches, and Program Terminal panes. Startup runs to the first code line.
+Program Terminal is the debugged program's terminal, including keyboard input;
+Debugger Output carries debugger status and diagnostics.
+
+While a GDB debugger is active, the function keys have these meanings:
+\begin{description}
+\item[\key{F4}] Evaluate or assign an expression using GDB semantics.
+\item[\key{F5}] Continue a stopped program, or request a pause while running.
+\item[\key{F6}] Run to the source location at the cursor.
+\item[\key{F7} / \key{Shift+F7}] Add a watch / remove a watch by object or expression.
+\item[\key{F8}] Stop the GDB session.
+\item[\key{F9}] Toggle a breakpoint at the cursor's source line.
+\item[\key{F10}] Step into; \key{F11} steps over; \key{Shift+F11} steps out.
+\end{description}
+These keys replace their normal editor meanings in debugger context; outside
+that context, for example, \key{F9} remains Build current file.
+\index{GDB debugger!function keys}
+
+\textbf{Double-click with the left mouse button in the line-number gutter to
+set or remove a breakpoint on that line.} This is the mouse equivalent of
+\key{F9}, and works in both GDB and MRMAC debugger source views while their
+debugger controls are active. The line-number gutter must be visible; this
+is not a click in the folding gutter. Folded viewport rows are mapped to their
+document lines. Breakpoint acceptance still depends on the debugger: GDB
+resolves compiled source locations, while MRMAC requires a debuggable span.
+\index{breakpoint!gutter double-click}\index{line-number gutter!breakpoints}
+
+\subsection{Source-pane context menu}
+\label{sec:users-gdb-context}
+\index{context menu!GDB source}\index{GDB debugger!context menu}
+
+Right-click the source text while GDB is active. Alongside Edit, Outline,
+References, and Rename, the menu offers:
+\begin{description}
+\item[Toggle breakpoint] Sets or removes the breakpoint at the clicked source
+line, as with F9 or a left-button double-click in the line-number gutter.
+\item[Run here] Continues towards the clicked source location, like F6.
+\item[Watch] Adds the identifier under the mouse directly. If there is no
+identifier, it opens the Watch expression dialog instead.
+\item[Eval] Opens the expression evaluation/assignment dialog, like F4.
+\item[Into / Step / Out] Step into, step over, or step out, corresponding to
+F10, F11, and Shift+F11. Stepping advances execution from the current stop;
+it does not jump execution to the right-clicked line.
+\item[Clear Program Terminal] Clears the Program Terminal display and
+scrollback without restarting the inferior or clearing Debugger Output.
+\end{description}
+The source commands use the clicked source location and retain the usual
+GDB state and stale-source checks. This extended command group is specific to
+an active GDB session. The MRMAC debugger uses its own function-key controls;
+its source view still shares the ordinary editor menu and gutter breakpoint
+gesture.
+
+\manualscreenshot{mr-users-gdb-context.png}{fig:users-gdb-context}{PTY capture
+of the extended GDB source menu in a paused matrix.c session. Watch uses the
+clicked identifier; Into, Step, and Out act on the current execution stop.}
+
+\subsection{Following matrix.c through a stop}
+
+The following captures use \texttt{C Testground/matrix.c}. Build it with debug
+information and no optimisation, then start Debug current file. Step into
+\texttt{sum\_matrix}, set a breakpoint on the accumulation line, and continue
+to it. Add watches for the accumulator and matrix values to compare the
+current loop indices with the values used by that iteration.
+
+\manualscreenshot{mr-users-gdb-matrix-session.png}{fig:users-gdb-matrix-session}{PTY
+capture of matrix.c paused inside sum\_matrix. The source position, Variables,
+and Watches describe the same stop; Program Terminal is a separate pane.}
+
+The accumulator and loop-index watches become out of scope after returning
+from \texttt{sum\_matrix}; they do not become global variables. Continuing to
+program exit flushes this example's buffered output, \texttt{Ergebnis: 77},
+to Program Terminal. The example does not print a newline, so the text may
+remain buffered at a stop immediately after its printf call.
+
+\manualscreenshot{mr-users-gdb-matrix-output.png}{fig:users-gdb-matrix-output}{PTY
+capture after matrix.c finishes. Program Terminal retains Ergebnis: 77;
+debugger status and program output occupy separate panes.}
+
+Variables and Watches show structured values as trees where GDB exposes
+children. Expression evaluation and value assignment can change the running
+program. The Source-pane context menu offers \menu{Clear Program Terminal}
+to clear its display and scrollback; this does not restart the program.
+
+If the source changes after the build, ordinary debug commands are rejected
+and Debugger Output requests a rebuild. Stop GDB, save and rebuild the source,
+then start a new session. Stopping or closing the debugger terminates its
+external session. Saving a workspace does not preserve a live GDB process or
+resume its instruction pointer after restarting MR.
+\index{GDB debugger!source changes}\index{GDB debugger!Program Terminal}
 \section{Git status and file changes}
 
 For a named file in a Git work tree, \mr{} probes the file's status in the

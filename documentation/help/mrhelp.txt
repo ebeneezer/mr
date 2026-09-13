@@ -1,6 +1,21 @@
 .topic Contents=0
  MR HELP - TABLE OF CONTENTS
 
+Help by task
+
+  {All about setup:GuideSetup}
+  {Macros and automation:GuideMacros}
+  {Building and debugging:GuideDebugging}
+  {Editing, blocks, and undo:GuideEditing}
+  {Windows and workspaces:GuideWindows}
+  {Files, formatting, and comparison:GuideFiles}
+  {Search and replace:GuideSearch}
+  {Display and language features:GuideDisplay}
+  {Drawing, calculator, and character tables:GuideTools}
+  {Complete User Manual:UserManual}
+
+Use a task guide for instructions, or the menu and dialog references below.
+
 American Cybernetics (makers of Multi-Edit) went out of business in 2020 and stopped development of the TUI version of Multi-Edit years bevor.
 
 Mr is a rewrite of the classic programmers editor Multi-Edit by American Cybernetics for Linux terminals. It is constructed aroud a macro language processor, that compiles macro files based on the MEMAC script language.
@@ -57,6 +72,7 @@ Main menu chapters
 
 Reference chapters
 
+  {Editor window:Editor}
   {Keyboard reference:Keys}
   {Detailed index:DetailedIndex}
   {Dialogs and fields:DialogIndex}
@@ -79,8 +95,28 @@ comparison, compiler diagnostics, and macro debugging.
 
 See also {Help menu:MenuHelp}.
 
+More detail
+
+  {Cursor Control and Navigation:UserManualC03}
+  {Keymap profiles:UserManualC04S02}
+
 .topic DetailedIndex=2
  DETAILED HELP INDEX
+
+Help by task
+
+  {All about setup:GuideSetup}
+  {Macros and automation:GuideMacros}
+  {Building and debugging:GuideDebugging}
+  {Editing, blocks, and undo:GuideEditing}
+  {Windows and workspaces:GuideWindows}
+  {Files, formatting, and comparison:GuideFiles}
+  {Search and replace:GuideSearch}
+  {Display and language features:GuideDisplay}
+  {Drawing, calculator, and character tables:GuideTools}
+  {Complete User Manual:UserManual}
+
+Dialog and command shortcuts
 
   Acquire                         {Acquire dialog:DialogAcquire}
   Backups and autosave            {Backups / Autosave:DialogBackups}
@@ -122,6 +158,11 @@ MR after dirty documents and settings have been handled.
 Related dialogs: {Get Last:DialogGetLast}, {Acquire:DialogAcquire},
 {File Information:DialogFileInformation}, {PDF Export:DialogPdfExport}.
 
+More detail
+
+  {Files, formatting, and comparison:GuideFiles}
+  {Automatic saving and loading:UserManualC06S07P01}
+
 .topic MenuEdit=11
  EDIT MENU
 
@@ -134,6 +175,11 @@ append. Paste inserts the current buffer.
 
 Insert toggles insert and overwrite mode. The displayed ON or OFF state is
 the state that will be used for subsequent text entry.
+
+More detail
+
+  {Editing, blocks, and undo:GuideEditing}
+  {Undo and Redo:UserManualC11}
 
 .topic MenuWindow=12
  WINDOW MENU
@@ -151,6 +197,10 @@ Link and Unlink control the MRMAC window link used by editor procedures.
 
 See {Organize submenu:MenuWindowOrganize} and {Window List:DialogWindowList}.
 
+More detail
+
+  {Windows and workspaces:GuideWindows}
+
 .topic MenuWindowOrganize=13
  WINDOW - ORGANIZE SUBMENU
 
@@ -164,6 +214,11 @@ selects the target desktop.
 
 These operations apply only to TVision-managed desktop windows. Modal
 dialogs and the Help window do not participate.
+
+More detail
+
+  {Cascade, tile, and split:UserManualC12S03}
+  {Virtual desktops:UserManualC12S04}
 
 .topic MenuBlock=14
  BLOCK MENU
@@ -179,8 +234,37 @@ stream selects a continuous character range. Hide/show block mark changes
 only the projection. End marking completes the current mark. Turn marking
 off removes it.
 
+MARKING BLOCKS WITH THE MOUSE
+
+In ordinary editing mode (line drawing off), hold the modifiers before
+pressing the left mouse button. Drag to the other end, then release:
+
+  Stream:  left-button drag
+  Column:  Alt + left-button drag
+  Line:    Ctrl+Alt + left-button drag
+
+The highlight follows the pointer. Release commits the block. Either drag
+direction works; moving beyond a text-area edge scrolls while marking.
+Column blocks include the pointed-to cells at both horizontal ends and use
+display columns, including tab widths. Stream blocks end before the end
+position. Line blocks include the complete first and last touched lines.
+
+Ctrl + left-button drag explicitly starts a new stream block, including
+inside an existing block. An unmodified left-button drag inside an existing
+block moves it with a live preview instead: release places it, Esc cancels,
+and the completed move is one Undo step. Plain right-click opens the context
+menu.
+
+The terminal must forward mouse events and modifiers to MR. If a gesture is
+intercepted, use Mark lines, Mark columns, or Mark stream from this menu.
+
 Persistent blocks controls whether a completed block survives cursor movement.
 The ON or OFF suffix reports the current runtime setting.
+
+More detail
+
+  {Block Operations:UserManualC10}
+  {Marking blocks with the mouse:UserManualC10S02}
 
 .topic MenuSearch=15
  SEARCH MENU
@@ -200,6 +284,11 @@ to a one-based document line.
 Related dialogs: {Search:DialogSearch}, {Search and Replace:DialogSearchReplace},
 {Multiple File Search:DialogMultiFileSearch}, and {Goto Line:DialogGotoLine}.
 
+More detail
+
+  {Search and replace:GuideSearch}
+  {Position markers:UserManualC03S03}
+
 .topic MenuText=16
  TEXT MENU
 
@@ -214,6 +303,12 @@ current paragraph. Re-format code invokes the configured language formatter.
 File compare opens a compare view. Apply original to compare and Apply
 compare to original transfer the currently selected difference in the named
 direction.
+
+More detail
+
+  {File Formatting:UserManualC13}
+  {The Format Line and Margins:UserManualC14}
+  {Drawing, calculator, and character tables:GuideTools}
 
 .topic MenuOther=17
  OTHER MENU
@@ -231,6 +326,12 @@ Match parenthesis moves between matching brackets or parentheses.
 
 See {Installation and Setup:MenuInstallationSetup}.
 
+More detail
+
+  {All about setup:GuideSetup}
+  {Building and debugging:GuideDebugging}
+  {Display and language features:GuideDisplay}
+
 .topic MenuInstallationSetup=18
  INSTALLATION AND SETUP SUBMENU
 
@@ -245,6 +346,10 @@ projection. Live logs controls result messages, sounds, and log viewers.
 
 Every setup dialog has its own Help page explaining each field.
 
+More detail
+
+  {All about setup:GuideSetup}
+
 .topic MenuMacro=19
  MACRO MENU
 
@@ -258,11 +363,16 @@ When recording stops, MR offers a key binding for the recorded macro.
 Runtime-created macro menu groups are explained in
 {Runtime Macro Menus:MenuRuntimeMacro}.
 
+More detail
+
+  {Macros and automation:GuideMacros}
+  {The Macro Library:UserManualC16S03}
+
 .topic MenuHelp=20
  HELP MENU
 
 Table of contents opens the main Help page. Keys opens the keyboard reference.
-Detailed index opens an alphabetical subject index. Previous topic returns
+Detailed index opens task guides and an alphabetical dialog index. Previous topic returns
 to the last topic referenced during the current MR session.
 
 Performance panel toggles the runtime scheduling and coprocessor diagnostic
@@ -270,6 +380,11 @@ panel. About displays build and product information.
 
 F1 is context-sensitive. Shift-F1 opens the index and Alt-F1 opens the
 previous topic.
+
+More detail
+
+  {Complete User Manual:UserManual}
+  {Help and explanatory messages:UserManualC02S03}
 
 .topic MenuRuntimeMacro=21
  RUNTIME MACRO MENUS
@@ -281,6 +396,11 @@ The macro file is therefore the authority for command-specific semantics.
 Selecting a runtime item executes its registered macro specification. Help
 for creating such entries belongs to the MRMAC reference manual.
 
+More detail
+
+  {Macros and automation:GuideMacros}
+  {Menus, dialogs, and modeless tools:UserManualC24S04}
+
 .topic Editor=30
  EDITOR WINDOW
 
@@ -290,6 +410,13 @@ top-level menu chapters for command descriptions and the status line for the
 active function-key assignments.
 
 See {Table of contents:Contents}.
+
+More detail
+
+  {Editing, blocks, and undo:GuideEditing}
+  {Right-click context menus:UserManualC06S05}
+  {Building and debugging:GuideDebugging}
+  {Display and language features:GuideDisplay}
 
 .topic DialogIndex=90
  DIALOG AND FIELD INDEX
@@ -336,6 +463,10 @@ See {Table of contents:Contents}.
   {Workspace File Selection:DialogWorkspaceFile}
   {Workspace Restore:DialogWorkspaceRestore}
 
+More detail
+
+  {Complete User Manual:UserManual}
+
 .topic DialogGetLast=100
  GET LAST DIALOG
 
@@ -347,6 +478,11 @@ Select a row and press Enter or double-click it. The row type determines
 whether MR opens a file, changes the relevant folder, or loads a workspace.
 Esc closes the dialog without selecting anything.
 
+More detail
+
+  {Open, Load, and Get Last:UserManualC06S01}
+  {Windows and workspaces:GuideWindows}
+
 .topic DialogMacroBindCapture=101
  BIND RECORDED MACRO KEY
 
@@ -356,6 +492,11 @@ recording toggle cannot accidentally become its own binding.
 
 F1 and the Help button reopen this page. Shift-F1 opens the index and Alt-F1
 returns to the previous topic; these reserved Help keys are not recorded.
+
+More detail
+
+  {Naming and binding the result:UserManualC16S02}
+  {Macros and automation:GuideMacros}
 
 .topic DialogJournalTag=102
  OPEN JOURNAL DIALOG
@@ -367,6 +508,10 @@ lists identifiers currently discovered from the journal.
 Choose an identifier or type a tag and select OK. An empty tag opens the
 unfiltered journal command configured by MR.
 
+More detail
+
+  {Acquire, live logs, and the journal:UserManualC06S02}
+
 .topic DialogFoundList=103
  FOUND LIST DIALOG
 
@@ -374,6 +519,11 @@ The list contains matches from the most recent search operation. Each row
 identifies the matching document and location. Activate a row to load or
 focus its document at the match. Done closes the list; Cancel abandons the
 current list interaction.
+
+More detail
+
+  {Results and navigation:UserManualC15S05}
+  {Search and replace:GuideSearch}
 
 .topic DialogReplacePrompt=104
  REPLACE CONFIRMATION
@@ -384,12 +534,21 @@ remaining matches. Cancel stops replacement.
 
 The surrounding lines are a preview, not an editable buffer.
 
+More detail
+
+  {Replace:UserManualC15S03}
+  {Multiple-file search and replace:UserManualC15S07}
+
 .topic DialogSearchContinue=105
  SEARCH CONTINUATION
 
 Next continues the search from the current boundary. Stop keeps the current
 position and terminates this search. Cancel abandons the continuation
 request.
+
+More detail
+
+  {Repeating and continuing:UserManualC15S04}
 
 .topic DialogSearch=106
  SEARCH DIALOG
@@ -401,6 +560,12 @@ marked-block restriction, and all-windows search determine traversal scope.
 
 Go starts the operation with the displayed settings. Cancel leaves the
 previous accepted search specification unchanged.
+
+More detail
+
+  {The search dialog:UserManualC15S01}
+  {Literal, word, and regular-expression searches:UserManualC15S02}
+  {Search and replace:GuideSearch}
 
 .topic DialogSearchReplace=107
  SEARCH AND REPLACE DIALOG
@@ -414,6 +579,11 @@ first, prompt for each, or replace all. Leave cursor at selects the start or
 end of the accepted replacement. Global, marked-block, and all-windows
 options determine scope. Go starts the operation. Cancel preserves the
 previous accepted search specification.
+
+More detail
+
+  {Replace:UserManualC15S03}
+  {Search and replace:GuideSearch}
 
 .topic DialogMultiFileSearch=108
  MULTIPLE FILE SEARCH
@@ -432,6 +602,11 @@ Replace is the replacement text in replace mode. Done submits the immutable
 search request. Results are collected in the background and later adopted
 by the UI.
 
+More detail
+
+  {Multiple-file search:UserManualC15S06}
+  {Multiple-file search and replace:UserManualC15S07}
+
 .topic DialogMultiFileResults=109
  MULTIPLE FILE SEARCH RESULTS
 
@@ -440,12 +615,22 @@ the selected result; Load All opens all eligible result files. In replace
 review, Replace changes the selected hit, Replace All accepts the remaining
 eligible hits, and Skip advances without changing the current hit.
 
+More detail
+
+  {Results and navigation:UserManualC15S05}
+  {Multiple-file search and replace:UserManualC15S07}
+
 .topic DialogGotoLine=110
  GOTO LINE NUMBER
 
 Enter a one-based document line number within the displayed valid range.
 Done moves the current editor to that line. Cancel leaves the cursor where
 it is.
+
+More detail
+
+  {Going directly to a line:UserManualC03S02}
+  {Cursor Control and Navigation:UserManualC03}
 
 .topic DialogRightMargin=111
  SET RIGHT MARGIN
@@ -455,6 +640,11 @@ current left margin. Paragraph formatting, centering, and the format ruler
 use this value. Changing it also synchronizes the persisted format-line
 settings.
 
+More detail
+
+  {The Format Line and Margins:UserManualC14}
+  {Paragraph reformatting:UserManualC13S02}
+
 .topic DialogLeftMargin=112
  SET LEFT MARGIN
 
@@ -462,12 +652,22 @@ Margin is the one-based left formatting margin. It must be smaller than the
 current right margin. Paragraph formatting and centering use the accepted
 value.
 
+More detail
+
+  {The Format Line and Margins:UserManualC14}
+  {Paragraph reformatting:UserManualC13S02}
+
 .topic DialogAbout=113
  ABOUT DIALOG
 
 About displays the MR build identity and rotating project quotations. Press
 closes the dialog; holding it activates the quotation animation. Help opens
 this description.
+
+More detail
+
+  {Preface:UserManualPreface}
+  {First Start:UserManualC01}
 
 .topic DialogAcquire=114
  ACQUIRE DIALOG
@@ -478,6 +678,10 @@ The result list contains discovered paths.
 
 Load opens the selected entry. Load all opens every eligible entry. Help
 explains the active mode without changing the current source or selection.
+
+More detail
+
+  {Acquire, live logs, and the journal:UserManualC06S02}
 
 .topic DialogColorSetup=115
  COLOR SETUP
@@ -508,6 +712,12 @@ indices, preserving the terminal's configured classic colors. Other RGB values
 are quantized to standard xterm-256 indices. Turbo Vision performs any further
 fallback required by terminals with fewer colors.
 
+More detail
+
+  {Editing an RGB colour pair:UserManualC04S03P01}
+  {Colors and themes:UserManualC04S03}
+  {All about setup:GuideSetup}
+
 .topic DialogCompilerProfiles=116
  COMPILER PROFILES
 
@@ -523,6 +733,11 @@ and Runtime carry toolchain-specific arguments.
 Add creates a profile, Copy duplicates the selected profile, Delete removes
 it, and Automatic Setup probes supported local compilers.
 
+More detail
+
+  {Compiler profiles and diagnostics:UserManualC23S05}
+  {Building and debugging:GuideDebugging}
+
 .topic DialogConfirm=117
  CONFIRMATION DIALOG
 
@@ -533,12 +748,22 @@ performing the requested transition.
 
 Read the detail before choosing: Help never selects a confirmation result.
 
+More detail
+
+  {Save, Save As, Save All, and Revert:UserManualC06S04}
+  {What is saved, and when:UserManualC01S06}
+
 .topic DialogFileInformation=118
  FILE INFORMATION
 
 The pages report document identity, persistent URI, size, line and cursor
 state, encoding-related editor state, window role, and relevant runtime
 metadata. Prev and Next move between pages. Done closes the dialog.
+
+More detail
+
+  {File information:UserManualC06S06}
+  {Text and binary loading:UserManualC06S03}
 
 .topic DialogKeymapBinding=119
  BINDING EDITOR
@@ -551,6 +776,11 @@ Description is the text shown for the binding.
 Use the capture controls to record a key safely. Done validates and accepts
 the working binding. Help does not modify it.
 
+More detail
+
+  {Keymap profiles:UserManualC04S02}
+  {Naming and binding the result:UserManualC16S02}
+
 .topic DialogKeymapProfile=120
  PROFILE EDITOR
 
@@ -558,6 +788,10 @@ Name is the unique profile name. Description is the explanatory text shown
 with that profile. Empty or duplicate names are rejected.
 
 Done accepts the working profile after validation.
+
+More detail
+
+  {Keymap profiles:UserManualC04S02}
 
 .topic DialogKeymapManager=121
  KEY MANAGER
@@ -571,6 +805,11 @@ Load reads a keymap profile file. Save writes the current URI. Save As
 selects a different URI. Changes remain in the dialog draft until the outer
 flow accepts them.
 
+More detail
+
+  {Keymap profiles:UserManualC04S02}
+  {All about setup:GuideSetup}
+
 .topic DialogMacroLibrary=122
  MACRO LIBRARY
 
@@ -580,6 +819,12 @@ macro files run during startup; Add and Remove change that working list.
 
 Playback runs the selected macro normally. Debug starts it in the macro
 debugger. Help leaves selection and working state unchanged.
+
+More detail
+
+  {The Macro Library:UserManualC16S03}
+  {Macros and automation:GuideMacros}
+  {Debugging and reference material:UserManualC24S07}
 
 .topic DialogPdfExport=123
  EXPORT TO PDF
@@ -592,6 +837,10 @@ column count.
 Top, left, right, and bottom margins are PDF point values. Done validates
 the fields and then opens the destination chooser or performs export as
 required by the dialog flow.
+
+More detail
+
+  {Exporting to PDF:UserManualC13S05}
 
 .topic DialogWindowList=124
  WINDOW LIST
@@ -607,6 +856,11 @@ Get moves a window from another virtual desktop into the current desktop.
 Main workspace selects the workspace's main file. Autosave workspace and
 Autoload workspace toggle their settings. Save workspace and Load workspace
 open the corresponding file dialogs.
+
+More detail
+
+  {Automatic saving and loading:UserManualC06S07P01}
+  {Windows and workspaces:GuideWindows}
 
 .topic DialogFileExtensions=125
  FILENAME EXTENSIONS
@@ -624,6 +878,12 @@ formatting, display, block, mode, and related per-profile behavior.
 
 New, Copy, and Delete manage profile drafts. Help explains the draft without
 applying it.
+
+More detail
+
+  {Filename-Extension Profiles:UserManualC21}
+  {Indenting Styles:UserManualC22}
+  {All about setup:GuideSetup}
 
 .topic DialogPaths=126
  PATHS
@@ -644,6 +904,12 @@ the corresponding field.
 Paths may be absolute or accepted normalized inputs. Applying this dialog
 updates the central runtime settings model; it never writes settings directly.
 
+More detail
+
+  {Paths:UserManualC04S04}
+  {Where personal configuration lives:UserManualC01S04}
+  {All about setup:GuideSetup}
+
 .topic DialogBackups=127
  BACKUPS AND AUTOSAVE
 
@@ -654,6 +920,12 @@ the backup-file method. Backup path is enabled by the move-to-path method.
 Keyboard inactivity starts autosave after 5 through 100 idle seconds.
 Intervall auto save starts it every 100 through 300 seconds. Zero disables
 the respective trigger. The sliders and labels display seconds.
+
+More detail
+
+  {Backups and autosave:UserManualC04S05}
+  {Undo versus persistent recovery:UserManualC11S04}
+  {Automatic saving and loading:UserManualC06S07P01}
 
 .topic DialogUserInterface=128
  USER INTERFACE SETTINGS
@@ -682,6 +954,12 @@ panel. Each spinner is blank or M = mini map, D = difference marker,
 L = line numbers, C = code folding; left-to-right order is significant.
 Indent style selects indentation rules and the adjacent pane previews them.
 
+More detail
+
+  {User Interface Settings:UserManualC01S05}
+  {All about setup:GuideSetup}
+  {Display and language features:GuideDisplay}
+
 .topic DialogLiveLogs=129
  LIVE LOGS
 
@@ -694,6 +972,11 @@ Audio URI is the sound player or sound resource selected by the current
 configuration. Unavailable audio controls are disabled rather than silently
 accepted.
 
+More detail
+
+  {User-interface and live-log settings:UserManualC04S06}
+  {Acquire, live logs, and the journal:UserManualC06S02}
+
 .topic DialogFileChooser=130
  FILE CHOOSER
 
@@ -705,6 +988,11 @@ Open or OK accepts the selected URI. Replace permits replacement when offered.
 Cancel returns without changing the caller's accepted path. Help explains
 the chooser and preserves its current directory, input, and selection.
 
+More detail
+
+  {Open, Load, and Get Last:UserManualC06S01}
+  {Save, Save As, Save All, and Revert:UserManualC06S04}
+
 .topic DialogDirectoryChooser=131
  DIRECTORY CHOOSER
 
@@ -712,12 +1000,22 @@ Directory name is the candidate directory. Directory tree browses available
 directories. Chdir enters the selected directory. Revert returns to the
 directory from which the dialog was opened. OK accepts the current directory.
 
+More detail
+
+  {Paths:UserManualC04S04}
+  {Acquire, live logs, and the journal:UserManualC06S02}
+
 .topic DialogBindingKeyCapture=132
  CAPTURE BINDING KEY
 
 Press the key combination to store in the binding editor. Esc cancels capture.
 F1 and the Help button open this page. Shift-F1 opens the index and Alt-F1
 returns to the previous topic; these reserved Help keys are never recorded.
+
+More detail
+
+  {Keymap profiles:UserManualC04S02}
+  {Naming and binding the result:UserManualC16S02}
 
 .topic DialogSnippetSidekick=133
  SNIPPET SIDEKICK
@@ -727,12 +1025,22 @@ move through placeholders. Enter inserts a line break. Ctrl-Enter or
 Alt-Enter commits the edited expansion; Esc cancels the snippet session.
 The parent document changes only through this explicit commit path.
 
+More detail
+
+  {Snippets and macro-generated text:UserManualC07S06}
+  {Macros and automation:GuideMacros}
+
 .topic DialogMacroMenu=134
  MACRO MENU DIALOG
 
 This menu was created by MRMAC. The owning macro defines the meaning of its
 rows. Done accepts the current row, Cancel returns no selection, and Help
 describes the generic runtime dialog.
+
+More detail
+
+  {Menus, dialogs, and modeless tools:UserManualC24S04}
+  {Macros and automation:GuideMacros}
 
 .topic DialogMacroStringInput=135
  MACRO STRING INPUT
@@ -741,12 +1049,22 @@ Enter the string requested by the owning MRMAC procedure. Done returns the
 text to that macro. Cancel returns no accepted value. The prompt and macro
 source are authoritative for value-specific syntax.
 
+More detail
+
+  {Menus, dialogs, and modeless tools:UserManualC24S04}
+  {Macros and automation:GuideMacros}
+
 .topic DialogMacroUi=136
  MACRO-DEFINED DIALOG
 
 This dialog and its labels were constructed at runtime by MRMAC. The owning
 macro defines field meaning, accepted syntax, and button behavior. F1 opens
 this generic page. MR cannot infer domain semantics from arbitrary labels.
+
+More detail
+
+  {Menus, dialogs, and modeless tools:UserManualC24S04}
+  {Macros and automation:GuideMacros}
 
 .topic DialogColorThemeFile=137
  THEME FILE SELECTION
@@ -755,11 +1073,21 @@ Select the MRMAC theme file to load or save. Loading changes only the current
 working palette until its containing setup flow accepts it. Saving writes
 the working palette to the selected URI.
 
+More detail
+
+  {Colors and themes:UserManualC04S03}
+  {All about setup:GuideSetup}
+
 .topic DialogCompilerFile=138
  COMPILER PROFILE FILE SELECTION
 
 Select the compiler executable, audio resource, or macro file named by the
 calling Compiler Profiles field. The chooser does not run the selected file.
+
+More detail
+
+  {Compiler profiles and diagnostics:UserManualC23S05}
+  {Building and debugging:GuideDebugging}
 
 .topic DialogWorkspaceFile=139
  WORKSPACE FILE SELECTION
@@ -767,6 +1095,11 @@ calling Compiler Profiles field. The chooser does not run the selected file.
 Select an MRMAC workspace file. Loading validates workspace entries before
 adoption. Saving writes MRSETUP-compatible workspace lines without merging
 workspace state into canonical core settings.
+
+More detail
+
+  {Workspaces:UserManualC06S07}
+  {Windows and workspaces:GuideWindows}
 
 .topic DialogWorkspaceRestore=140
  WORKSPACE RESTORE
@@ -777,3 +1110,3483 @@ with the file count below it.
 
 Restore workspace opens the autosaved workspace. Discard workspace clears it
 without opening its files. Closing the dialog preserves it for a later choice.
+
+More detail
+
+  {Automatic saving and loading:UserManualC06S07P01}
+  {Windows and workspaces:GuideWindows}
+
+.topic GuideSetup=170
+ ALL ABOUT SETUP
+
+Install and configure MR, choose profiles, and control what is saved.
+
+  {1 First Start:UserManualC01}
+  {4 Installation and Setup:UserManualC04}
+  {21 Filename-Extension Profiles:UserManualC21}
+  {22 Indenting Styles:UserManualC22}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic GuideMacros=171
+ MACROS AND AUTOMATION
+
+Record, bind, maintain, run, and debug macros.
+
+  {16 Keystroke Macros:UserManualC16}
+  {24 The MRMAC Interface:UserManualC24}
+  {1.7 AUTOEXEC comes after settings:UserManualC01S07}
+  {5.4 Startup macro automation:UserManualC05S04}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic GuideDebugging=172
+ BUILDING AND DEBUGGING
+
+Choose a compiler profile, build the current source, follow diagnostics, and work with GDB or the macro debugger.
+
+  {23.5 Compiler profiles and diagnostics:UserManualC23S05}
+  {23.6 Debugging compiled programs with GDB:UserManualC23S06}
+  {23.6.1 Source-pane context menu:UserManualC23S06P01}
+  {23.6.2 Following matrix.c through a stop:UserManualC23S06P02}
+  {24.7 Debugging and reference material:UserManualC24S07}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic GuideEditing=173
+ EDITING, BLOCKS, AND UNDO
+
+Navigate, enter and remove text, select blocks, and recover edits.
+
+  {2 Basic Concepts:UserManualC02}
+  {3 Cursor Control and Navigation:UserManualC03}
+  {7 Inserting Text:UserManualC07}
+  {8 Deleting Text:UserManualC08}
+  {9 Tabs and Virtual Space:UserManualC09}
+  {10 Block Operations:UserManualC10}
+  {11 Undo and Redo:UserManualC11}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic GuideWindows=174
+ WINDOWS AND WORKSPACES
+
+Arrange windows, use virtual desktops, and save or restore a workspace.
+
+  {12 Windows, Virtual Desktops, and Workspaces:UserManualC12}
+  {6.7 Workspaces:UserManualC06S07}
+  {6.7.1 Automatic saving and loading:UserManualC06S07P01}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic GuideFiles=175
+ FILES, FORMATTING, AND COMPARISON
+
+Open and save files, launch MR with command-line options, format text, and compare versions.
+
+  {5 Command-Line Use:UserManualC05}
+  {6 Loading and Saving Files:UserManualC06}
+  {13 File Formatting:UserManualC13}
+  {14 The Format Line and Margins:UserManualC14}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic GuideSearch=176
+ SEARCH AND REPLACE
+
+Search within a document or across files and review replacement scope.
+
+  {15 Search and Replace:UserManualC15}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic GuideDisplay=177
+ DISPLAY AND LANGUAGE FEATURES
+
+Understand gutters, the minimap, folding, terminal rendering, and language profiles.
+
+  {20 Dense Display and Information Projection:UserManualC20}
+  {23 Language-Specific Features:UserManualC23}
+  {4.3 Colors and themes:UserManualC04S03}
+  {4.3.1 Editing an RGB colour pair:UserManualC04S03P01}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic GuideTools=178
+ DRAWING, CALCULATOR, AND CHARACTER TABLES
+
+Draw lines and rectangles, calculate integer values, and insert characters.
+
+  {17 Line Drawing:UserManualC17}
+  {18 Calculator:UserManualC18}
+  {19 Character Tables:UserManualC19}
+
+{All User Manual topics:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManual=200
+ USER MANUAL - COMPLETE TOPIC INDEX
+
+All chapters and sections of the User Manual are available as linked text
+topics. Open a chapter to choose a section. PDF illustrations are described
+by their captions; the PDF contains the images.
+
+  {Preface:UserManualPreface}
+  {1 First Start:UserManualC01}
+  {2 Basic Concepts:UserManualC02}
+  {3 Cursor Control and Navigation:UserManualC03}
+  {4 Installation and Setup:UserManualC04}
+  {5 Command-Line Use:UserManualC05}
+  {6 Loading and Saving Files:UserManualC06}
+  {7 Inserting Text:UserManualC07}
+  {8 Deleting Text:UserManualC08}
+  {9 Tabs and Virtual Space:UserManualC09}
+  {10 Block Operations:UserManualC10}
+  {11 Undo and Redo:UserManualC11}
+  {12 Windows, Virtual Desktops, and Workspaces:UserManualC12}
+  {13 File Formatting:UserManualC13}
+  {14 The Format Line and Margins:UserManualC14}
+  {15 Search and Replace:UserManualC15}
+  {16 Keystroke Macros:UserManualC16}
+  {17 Line Drawing:UserManualC17}
+  {18 Calculator:UserManualC18}
+  {19 Character Tables:UserManualC19}
+  {20 Dense Display and Information Projection:UserManualC20}
+  {21 Filename-Extension Profiles:UserManualC21}
+  {22 Indenting Styles:UserManualC22}
+  {23 Language-Specific Features:UserManualC23}
+  {24 The MRMAC Interface:UserManualC24}
+
+{Task-oriented help index:DetailedIndex}
+
+.topic UserManualPreface=201
+ PREFACE
+
+MR is a terminal-native programmer's editor with a window system, a large
+document model, configurable editing profiles, and an in-memory macro
+language. The application deliberately does not make the user choose
+between the immediacy of a text-mode editor and the facilities normally
+associated with an IDE. Files, output, searches, workspaces, binary data,
+compiler diagnostics, and macros all live in the same TVision desktop.
+
+The original Multi-Edit manual supplied a particularly practical order:
+begin with the screen and cursor, proceed through text and blocks, and
+only then introduce automation. This book follows that route without
+treating the historical program as a specification. DOS shells, printer
+drivers, page-break formatters, and other facilities that do not exist in
+MR have no chapter here. Their place is taken only where a current feature
+solves the same user problem.
+
+The screenshots were taken from real MR sessions in a PTY. They are not
+mock-ups. The active colors, available profiles, filenames, and
+function-key labels therefore reflect an installed development
+configuration; another installation may use a different theme or keymap.
+The operation names and dialog structure are the stable part.
+
+This is a task-oriented manual. The MRMAC Reference Manual remains the
+authority for language syntax and individual primitives, while the
+Technical Manual explains implementation boundaries and performance
+design.
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC01=202
+ 1 FIRST START
+
+In this chapter:
+
+  {1.1 Installing a release and checking prerequisites:UserManualC01S01}
+  {1.2 Starting MR for the first time:UserManualC01S02}
+  {1.3 What is on the screen:UserManualC01S03}
+  {1.4 Where personal configuration lives:UserManualC01S04}
+  {1.5 User Interface Settings:UserManualC01S05}
+  {1.6 What is saved, and when:UserManualC01S06}
+  {1.7 AUTOEXEC comes after settings:UserManualC01S07}
+  {1.8 A ten-minute first session:UserManualC01S08}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S01=203
+ 1.1 INSTALLING A RELEASE AND CHECKING PREREQUISITES
+
+Run the release package's install.sh as your ordinary user. It checks its
+payload and runtime dependencies before installing files, and requests
+sudo when the system destination requires it. Existing personal macro
+files are preserved. Each additional user runs the installer to initialise
+that user's macro directory.
+
+Installation requires a UTF-8 locale. Check locale charmap and the values
+of LANG, LC_CTYPE, and especially LC_ALL if the installer rejects the
+character map. Fontconfig's fc-list must also find fonts covering the
+tape, magnifier, and clock symbols used by the interface. The installer
+lists missing codepoints and suggests fontconfig with
+fonts-noto-color-emoji on Debian-family systems, or fontconfig with
+noto-fonts-emoji on Arch-family systems. Installing a font does not
+replace the terminal emulator's own font and fallback configuration.
+
+Missing shared libraries, unavailable runtime symbol versions, and a
+failed startup compatibility probe stop installation with an explanation.
+The release uses the baseline x86-64 instruction set and targets Debian
+12-compatible runtime versions; the installer checks the actual packaged
+executable on the receiving machine. GDB is a separate requirement for
+debugging compiled programs and must be available on PATH.
+
+{Up - 1 First Start:UserManualC01}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S02=204
+ 1.2 STARTING MR FOR THE FIRST TIME
+
+Start the editor from a terminal with its executable name. A file argument
+is optional:
+
+  mr
+  mr README.md
+  mr src/main.cpp include/main.hpp
+  mr notes/new-file.txt
+
+With no file argument, MR opens its desktop and waits for a command. With
+one or more paths, every readable file receives an editor window. An
+explicit path which does not exist yet opens as an empty, named text
+document; saving it creates that file. Unmatched wildcard expressions do
+not create documents. Relative paths are interpreted from the directory in
+which the command was entered.
+
+On the first start, MR creates a settings source when none exists. On a
+normal Linux account this is $XDG_CONFIG_HOME/mr/settings.mrmac, or
+$HOME/.config/mr/settings.mrmac when XDG_CONFIG_HOME is not set. This
+configuration directory also contains the default color-theme file, while
+personal macros live below its macros subdirectory. These files belong to
+the user account; starting MR from another project does not create a
+second configuration merely because the working directory changed.
+
+Note: The first start should not require configuration work. Open a file,
+use the editor, and change only a setting whose effect you understand. The
+defaults are intended to provide a complete usable environment, not an
+installation questionnaire disguised as an editor.
+
+{Up - 1 First Start:UserManualC01}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S03=205
+ 1.3 WHAT IS ON THE SCREEN
+
+The top line is the menu line. The large middle area is the desktop
+containing editor windows, dialogs, Help, and tools. The active window has
+the emphasized frame; its title normally shows the file path. A message
+area shares the top line when transient information is shown. The bottom
+status line presents the currently active function-key assignments.
+
+PDF illustration: The main MR screen: menu line, active editor window,
+line numbers, folding gutter, minimap, window markers, message area, and
+context-sensitive function keys.
+
+In this section:
+
+  {1.3.1 An editor window up close:UserManualC01S03P01}
+
+{Up - 1 First Start:UserManualC01}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S03P01=206
+ 1.3.1 AN EDITOR WINDOW UP CLOSE
+
+Figure {1.3.1:UserManualC01S03P01} shows an empty zero-length file. The numbered callouts
+identify controls which belong to the editor window rather than to the
+terminal around MR.
+
+PDF illustration: An empty editor window. Repeated callouts 5 and 6 mark
+the two possible scrollbar positions and the two resize handles
+respectively.
+
+1. Close. The left control closes the window, not the terminal and not the
+file on disk. If the document has unsaved changes, normal dirty-state
+handling asks what to do before the window disappears.
+
+2. Window markers. The bracketed marker block reports only states which
+currently apply, for example modified text, Git changes, insert mode, word
+wrap, language, read-only state, macro recording, workspace-main status,
+or background activity. Hovering over a marker explains it. Git and
+activity markers can also open their related details.
+
+3. Title and move strip. The bracketed title normally contains the file
+path; a document without a persistent name uses ?No-File. Drag an unused
+part of the top frame to move the window. The active window has the
+emphasized frame and exposes its frame controls; a double-click on the
+move strip toggles zoom.
+
+4. Zoom, restore, and minimize. The up control toggles between the
+window's ordinary and maximized geometry. The down control minimizes the
+window to a one-line entry at the bottom of the desktop. That entry has
+its own restore control, which returns the stored normal geometry. Restore
+from minimize and restore from zoom are therefore different operations
+even though both recover an earlier shape.
+
+5. Automatic scrollbars. The repeated callouts point to the right and
+lower edges where vertical and horizontal scrollbars appear. With
+Scrollbars set to Smart, as in the figure, an empty document has no useful
+range and both bars are absent. A bar appears automatically when content
+extends beyond its viewport. Always reserves both bars even when they
+cannot yet move; Smart usually leaves more room on a small terminal.
+
+6. Resize handles. Drag either marked lower corner of the focused window
+to resize it. Dragging the top frame moves the complete window instead.
+With Window Manager enabled, moving a window to a desktop edge can also
+snap it to the corresponding half of the usable desktop.
+
+Clicking inside a window selects it. With several windows open, F6 and
+Shift+F6 select the next and previous window, while Ctrl+F6 opens the
+Window List. When more than one virtual desktop is configured, Shift+F11
+and Shift+F12 move the active window to the left or right desktop and
+follow it. Ctrl+Shift+F11 and Ctrl+Shift+F12 change only the visible
+desktop. The corresponding menu commands and the complete topology model
+are described in Chapter {12:UserManualC12}.
+
+Five keys are enough for the first exploration:
+
+F1: opens context-sensitive Help for the current menu or dialog.
+
+F10: activates the menu line. Use the arrow keys and Enter to choose a
+command.
+
+F12: opens User Interface Settings in the ordinary editing context.
+
+Esc: leaves the current menu or cancels the current dialog without
+accepting its draft.
+
+Tab and Shift+Tab: move between controls in a dialog.
+
+The function-key labels are contextual. If a live label differs from a key
+named here, follow the live label: a dialog, tool, or keymap may have
+assigned that key another meaning.
+
+{Up - 1.3 What is on the screen:UserManualC01S03}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S04=207
+ 1.4 WHERE PERSONAL CONFIGURATION LIVES
+
+Open Other > Installation and setup. Its entries divide configuration by
+the thing being changed:
+
+Color setup: changes palette roles and loads or saves reusable color
+themes.
+
+Key mapping: selects and edits keymap profiles and their bindings.
+
+Filename extensions: assigns editing behavior to matching filenames.
+
+Paths: shows the settings source, macro directory, Help file, temporary
+directory, shell, audio player, log destination, and retained-history
+limits.
+
+Backups / Autosave: selects backup location and timing and the two
+autosave triggers.
+
+User interface settings: controls the desktop, cursor, scrollbars, virtual
+desktops, file-comparison layout, and indentation style.
+
+Live logs: controls how a live log is displayed and how search hits are
+announced.
+
+Setup dialogs use a draft. Moving through controls changes the draft, not
+the application. OK, or Save in the unsaved-changes question, validates
+the draft, applies it to the running application, and persists the
+accepted settings through the normal settings path. Discard abandons the
+draft; Cancel in that question returns to the dialog. This makes
+experimentation reversible until the last confirmation.
+
+{Up - 1 First Start:UserManualC01}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S05=208
+ 1.5 USER INTERFACE SETTINGS
+
+Press F12, or choose Other > Installation and setup > User interface
+settings. The dialog is larger than a small terminal, so it can scroll
+while the selected control remains reachable. The following options are
+the useful starting controls.
+
+PDF illustration: User Interface Settings. The dialog applies its complete
+validated draft when it is accepted; the Hero controls include the shared
+slider/numeric threshold row, and Color Management selects RGB or palette
+output.
+
+In this section:
+
+  {1.5.1 Desktop and messages:UserManualC01S05P01}
+  {1.5.2 Cursor:UserManualC01S05P02}
+  {1.5.3 Opening binary files:UserManualC01S05P03}
+  {1.5.4 File-comparison layout:UserManualC01S05P04}
+  {1.5.5 Indent style:UserManualC01S05P05}
+
+{Up - 1 First Start:UserManualC01}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S05P01=209
+ 1.5.1 DESKTOP AND MESSAGES
+
+Window Manager enables MR's assisted mouse movement for desktop windows.
+Dragging a normal window to an edge then snaps it to the corresponding
+half of the usable desktop; movement away from an edge keeps the window
+within the managed bounds. When the option is disabled, dragging uses
+TVision's ordinary window behavior. Keep it enabled for the normal
+multi-window environment.
+
+The Hero messages group controls performance and progress notices such as
+file-load timing and the first minimap rendering. Show on messageline and
+Write to log are independent destinations. Turning off Hero output on the
+message line does not suppress ordinary warnings, validation errors, or
+other operational feedback.
+
+Minimum file size applies to file-size-aware Hero notices before either
+destination is used: the file must be strictly larger than the selected
+threshold. The slider and editable numeric field share a range of 0--100
+MB; changing either updates the other. The MB label represents units of
+1,048,576 bytes. Non-file Hero notices, including Macro Brain activity,
+are not filtered by this size threshold. Defaults are message-line output
+on, log output off, and 8 MB. Invalid numeric input prevents applying the
+draft.
+
+Virtual desktops selects between one and nine desktops. One is the
+simplest starting value. Additional desktops provide separate views of the
+same running application; they do not create independent settings or
+duplicate documents. Cycle virtual desktops makes navigation from the last
+desktop continue at the first, and vice versa. Leave cycling off if
+reaching an end should be an orientation cue.
+
+{Up - 1.5 User Interface Settings:UserManualC01S05}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S05P02=210
+ 1.5.2 CURSOR
+
+Cursor behaviour has two modes. Bound to text keeps the cursor on
+positions represented by the current line and is the conservative choice
+for ordinary editing. Free movement permits the cursor to move beyond the
+existing end of a short line; inserted text then materializes the
+necessary spacing. Free movement is convenient for column-oriented
+editing, but it can be surprising before virtual space is familiar.
+
+Cursor position marker controls the compact position text shown in a
+window frame. It must contain one R and one C; at runtime they expand to
+the current row and column. For example, R:C produces a compact
+conventional display, while R/C changes only the separator. The value may
+contain at most ten characters.
+
+{Up - 1.5 User Interface Settings:UserManualC01S05}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S05P03=211
+ 1.5.3 OPENING BINARY FILES
+
+Autodetect binary files examines boundary samples when a file is opened. A
+file that appears binary is directed to the Bento hex editor rather than
+decoded as ordinary text. Keep this enabled unless unusual textual data is
+repeatedly misclassified. The explicit Text > Hex editor command remains
+available regardless of this option.
+
+{Up - 1.5 User Interface Settings:UserManualC01S05}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S05P04=212
+ 1.5.4 FILE-COMPARISON LAYOUT
+
+R/O file comparing makes the compare panel read-only. This is the safe
+first setting because reviewing a difference cannot accidentally edit the
+comparison target. Directional commands can still transfer a selected
+change explicitly.
+
+Start configuration chooses which role appears first when a
+file-comparison Bento opens: Original <> Compare or Compare <> Original.
+It changes placement, not the meaning of either role and not the direction
+of an apply command.
+
+The four File compare gutters fields describe the projections before and
+after each panel. Every position is blank or one of:
+
+M: minimap;
+
+D: difference marker;
+
+L: line numbers;
+
+C: code-folding marker.
+
+Order is significant. A leading value of LD places line numbers and then
+difference markers before the document text; a trailing M places the
+minimap after it. Original and Compare have separate leading and trailing
+settings so a dense comparison can remain symmetric or deliberately give
+one panel more space.
+
+{Up - 1.5 User Interface Settings:UserManualC01S05}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S05P05=213
+ 1.5.5 INDENT STYLE
+
+Indent style selects K&R, four-space K&R, Allman, Gnome, Whitesmiths, or
+Horstmann brace behavior. The adjacent pane changes immediately to preview
+the choice. This global UI selection supplies the starting brace policy;
+filename-extension profiles still determine such per-file properties as
+tab size, tabs versus spaces, and language-specific editing behavior.
+Begin with the style already used by the project being edited.
+
+{Up - 1.5 User Interface Settings:UserManualC01S05}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S06=214
+ 1.6 WHAT IS SAVED, AND WHEN
+
+There are three different things which are easily confused:
+
+1. The compiled application supplies complete hardcoded defaults.
+
+2. settings.mrmac is the canonical persisted bootstrap source for the
+user's accepted configuration.
+
+3. The running application holds the authoritative runtime settings after
+startup and while dialogs or macros make accepted changes.
+
+At startup, missing known settings receive the current build's defaults.
+The resulting complete current-version source is then executed in the
+settings context. The runtime model becomes authoritative only after that
+succeeds. This is why settings.mrmac is readable MRMAC source but is not
+an ordinary startup script to extend casually.
+
+Most accepted setup changes are written through the central runtime
+snapshot to settings.mrmac. A normal exit also persists remaining dirty
+settings. Some domain dialogs additionally have direct Load, Save, or Save
+As commands for portable artifacts. A color theme file contains the
+palette values; a keymap file can carry reusable profiles and bindings.
+These artifacts are not alternative global settings stores. settings.mrmac
+records the active paths and selections, while the named artifact owns its
+domain payload.
+
+In particular, changing a palette in Color Setup affects the running
+draft. Use Save Theme when those color values must be written to a
+reusable theme file. Merely seeing a new color on screen does not turn
+inline palette values into entries in settings.mrmac; inline color
+settings are not part of that canonical file.
+
+{Up - 1 First Start:UserManualC01}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S07=215
+ 1.7 AUTOEXEC COMES AFTER SETTINGS
+
+The Macro Library's AUTOEXEC list contains macro files below the
+configured macro directory. During startup, MR first loads and applies
+settings.mrmac; it then runs the configured AUTOEXEC files in list order.
+Workspace restoration and command-line files follow afterwards.
+Consequently an AUTOEXEC macro can deliberately change runtime behavior
+after the persisted settings have taken effect.
+
+PDF illustration: The Macro Library with available macro definitions on
+the left and the ordered AUTOEXEC file list on the right. Add only
+automation whose startup effects are understood.
+
+MRSETUP itself is reserved for the controlled settings startup and is
+rejected in an ordinary AUTOEXEC execution. AUTOEXEC files use normal
+MRMAC procedures: for example, they may register menus or bindings, load a
+palette, or establish deliberate session behavior. Such a later change may
+be a session overlay. SAVE_SETTINGS() persists supported dirty runtime
+settings through the central snapshot; domain artifacts still require
+their own save operation, and palette values are not serialized inline
+into settings.mrmac.
+
+If an AUTOEXEC file is missing or cannot be executed, startup continues.
+The failure is written to the startup log and shown with that file in the
+Macro Library; the invalid entry is removed from the configured list and
+the cleanup is persisted through the normal settings path. This avoids a
+modal error on every future start while keeping the loss diagnosable.
+
+Note: Use settings.mrmac for stable accepted configuration, external theme
+or keymap files for reusable domain data, and AUTOEXEC for intentional
+post-settings automation. Keeping those roles separate makes startup
+behavior predictable---and makes later experiments much easier to undo.
+
+{Up - 1 First Start:UserManualC01}
+{Help index:DetailedIndex}
+
+.topic UserManualC01S08=216
+ 1.8 A TEN-MINUTE FIRST SESSION
+
+1. Open a small source file with File > Open.
+
+2. Press F10 and inspect the top-level menus.
+
+3. Press F1 in one menu and return with Esc.
+
+4. Press F12; inspect Cursor behaviour, Scrollbars, and Indent style, then
+leave without changing anything.
+
+5. Move through the file and observe the position marker, gutters, and
+minimap.
+
+6. Open Window > List to see that documents live in managed windows.
+
+7. Open Macro > Macro Library and inspect, but do not yet populate, the
+AUTOEXEC list.
+
+This establishes the working model needed for the rest of the manual: the
+live screen reports context, setup dialogs validate drafts, persisted
+settings bootstrap the runtime, and automation runs afterwards.
+
+{Up - 1 First Start:UserManualC01}
+{Help index:DetailedIndex}
+
+.topic UserManualC02=217
+ 2 BASIC CONCEPTS
+
+In this chapter:
+
+  {2.1 The desktop, windows, and documents:UserManualC02S01}
+  {2.2 Menus and the status line:UserManualC02S02}
+  {2.3 Help and explanatory messages:UserManualC02S03}
+  {2.4 Progress and performance observation:UserManualC02S04}
+  {2.5 Editor modes:UserManualC02S05}
+  {2.6 Fullscreen presentation:UserManualC02S06}
+  {2.7 A productive first session:UserManualC02S07}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC02S01=218
+ 2.1 THE DESKTOP, WINDOWS, AND DOCUMENTS
+
+MR starts inside a terminal but does not behave like a single-buffer
+full-screen program. TVision supplies a desktop on which editor windows,
+Bento workspaces, modeless macro tools, Help, and modal dialogs coexist.
+
+A window is the visible and interactive container; a document is the text
+or binary content behind an editor. More than one viewport may refer to
+the same document, and a workspace may restore several different documents
+and their geometry.
+
+The active window has a highlighted frame. Its title identifies the
+persistent file when one exists. Frame markers report properties such as
+modification, Git changes, read-only state, insert mode, language,
+workspace-main status, macro recording, or background work. Hovering over
+an ordinary marker explains it. Hovering over the activity marker opens a
+transient list of that window's running work; clicking the marker pins the
+list until it is clicked again, closed, or dismissed with Esc. The list
+observes work but does not cancel it. Line and column information appears
+in the configured cursor-position marker. The editor's left and right
+projections can contain line numbers, fold markers, difference markers, or
+a minimap.
+
+{Up - 2 Basic Concepts:UserManualC02}
+{Help index:DetailedIndex}
+
+.topic UserManualC02S02=219
+ 2.2 MENUS AND THE STATUS LINE
+
+The menu line is the complete compiled command map. Press F10 to activate
+it, move with the arrow keys, and press Enter to execute a selection. A
+highlighted letter is the menu mnemonic. The mouse can also select menus
+and buttons when terminal mouse reporting is available.
+
+The status line at the bottom shows the current function-key assignments.
+Those labels are contextual rather than decorative. Startup, ordinary
+editing, compiler diagnostics, file comparison, Bento panes, and the macro
+debugger may assign different meanings to the same function key. When this
+manual and the live status line disagree about a function key, the live
+status line wins. On terminals that report modifier state, holding Shift,
+Ctrl, Alt, or Super changes the displayed function-key bank before a
+function key is pressed. Empty positions mean that the current context has
+no assignment for that modifier combination. Label changes use the same
+short transition language as the message line.
+
+Note: Most commands are reachable through both a menu and a keymap action.
+A key shown in a screenshot belongs to the captured profile and context;
+it is not a promise that every keymap uses the same sequence.
+
+{Up - 2 Basic Concepts:UserManualC02}
+{Help index:DetailedIndex}
+
+.topic UserManualC02S03=220
+ 2.3 HELP AND EXPLANATORY MESSAGES
+
+F1 opens context-sensitive Help for the active dialog or menu. Shift+F1
+opens the detailed Help index. Inside Help, Tab and Shift+Tab select
+references, Enter follows one, and Backspace or Alt+F1 returns to the
+previous topic.
+
+MR uses the menu line for transient information as well. Success,
+information, warning, and error messages have separate priorities and
+colors. Long-running work can post progress without replacing a more
+important error. The log window retains diagnostic detail that is too
+long-lived for the message line. Use File > Open live log, File > Open
+journal, or the configured log viewer when a short notice is insufficient.
+
+{Up - 2 Basic Concepts:UserManualC02}
+{Help index:DetailedIndex}
+
+.topic UserManualC02S04=221
+ 2.4 PROGRESS AND PERFORMANCE OBSERVATION
+
+Some foreground batch operations enter Static Mode. The message lane then
+becomes a right-to-left progress bar with a centered completed/total
+count, ordinary transient messages are suppressed, and the function-key
+line changes to Esc Abort. F1 through F12 are disabled immediately outside
+Fullscreen; Esc belongs to the active operation. When the operation
+finishes or acknowledges cancellation, the previous labels and normal
+message animation return.
+
+Help > Performance panel toggles a global diagnostic panel above the
+desktop. Its activity meter distinguishes active, queued, and result-ready
+work; the text rows show worker, lane, owner, timing, lifecycle, and
+selected runtime I/O counters. Use it to explain latency or verify that
+work returns to idle. It is an observation surface, not a task manager.
+Esc closes the panel.
+
+{Up - 2 Basic Concepts:UserManualC02}
+{Help index:DetailedIndex}
+
+.topic UserManualC02S05=222
+ 2.5 EDITOR MODES
+
+Insert and overwrite determine how ordinary typing affects existing text.
+Read-only state prevents text mutation but still permits navigation,
+search, copying, and inspection. A binary file may open as a Bento hex
+editor instead of being decoded as text. File comparison and compiler
+output are also specialized workspaces rather than ordinary editable
+buffers.
+
+The editor is UTF-8 capable. Display columns and byte positions are
+therefore not interchangeable concepts. Commands operate on the logical
+document and the active editor projection; users should avoid treating a
+displayed glyph as necessarily one byte or one terminal cell.
+
+{Up - 2 Basic Concepts:UserManualC02}
+{Help index:DetailedIndex}
+
+.topic UserManualC02S06=223
+ 2.6 FULLSCREEN PRESENTATION
+
+F11 gives the selected editor the complete desktop and hides its frame,
+the menu line, the function-key line, and the Performance panel. A brief
+hint shows the exit keys. F10 exposes the menu temporarily without ending
+Fullscreen; F11 or Esc restores the normal layout and the window's
+previous bounds. Fullscreen changes presentation, not document or
+workspace ownership. It also suspends Static Mode as a user-interface
+restriction: Static progress remains recorded for the operation but is not
+drawn, function keys remain usable, and Esc leaves Fullscreen rather than
+aborting the batch. If the batch is still running afterwards, its normal
+Static Mode display resumes.
+
+{Up - 2 Basic Concepts:UserManualC02}
+{Help index:DetailedIndex}
+
+.topic UserManualC02S07=224
+ 2.7 A PRODUCTIVE FIRST SESSION
+
+A useful first exploration is deliberately small:
+
+1. Open a source file with File > Open.
+
+2. Move with the cursor and page keys and observe the line/column marker.
+
+3. Press F10 and inspect the top-level menus.
+
+4. Open Help > Keys and compare it with the function-key line.
+
+5. Mark several lines, copy them, and undo the copy destination.
+
+6. Open Window > List to see the managed-window model.
+
+7. Inspect Other > Installation and setup without changing a draft.
+
+This route establishes the three recurring ideas of the manual: commands
+are contextual, visible UI state is authoritative, and setup dialogs stage
+changes before they become runtime settings.
+
+{Up - 2 Basic Concepts:UserManualC02}
+{Help index:DetailedIndex}
+
+.topic UserManualC03=225
+ 3 CURSOR CONTROL AND NAVIGATION
+
+In this chapter:
+
+  {3.1 Character, line, and page motion:UserManualC03S01}
+  {3.2 Going directly to a line:UserManualC03S02}
+  {3.3 Position markers:UserManualC03S03}
+  {3.4 Matching and structural motion:UserManualC03S04}
+  {3.5 Mouse navigation:UserManualC03S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC03S01=226
+ 3.1 CHARACTER, LINE, AND PAGE MOTION
+
+The arrow keys move by one logical editing position. PageUp and PageDown
+move by approximately one viewport. Home and End move to meaningful
+boundaries according to the active keymap, while dedicated top-of-file and
+bottom-of-file actions are available in the action catalog. Word-left and
+word-right use the configured word delimiters rather than an ASCII-only
+assumption.
+
+The editor permits horizontal navigation beyond the currently visible
+columns. A horizontal scrollbar indicates the projection offset. Very long
+lines are not reformatted merely because they do not fit on screen.
+
+Note: Keymap profiles may emulate WordStar, Emacs, Nano, or a personal
+scheme. Consequently this manual names navigation actions more often than
+fixed sequences. Use Help > Keys and the status line for the current
+binding.
+
+{Up - 3 Cursor Control and Navigation:UserManualC03}
+{Help index:DetailedIndex}
+
+.topic UserManualC03S02=227
+ 3.2 GOING DIRECTLY TO A LINE
+
+Search > Goto line number opens a one-based line-number dialog. The
+accepted range is based on the document's known line state. On very large
+files the line index may still be completing in the background; MR reports
+estimated state until the exact result is available rather than freezing
+the editor.
+
+The minimap combines a local text-density projection with a global
+position marker. In Braille mode, every terminal row provides four
+vertical dot rows. Each dot row samples one source line, while its
+horizontal dots summarize the occupied display-column ranges. A minimap
+with $R$ rows can therefore show at most $4R$ source lines without merging
+them. If a document is longer, the pattern body follows a bounded window
+around the active viewport instead of compressing arbitrarily many source
+lines into the same Braille dot. Distant lines are then absent from the
+pattern body. This preserves useful local shape but means that the body is
+not a line-accurate thumbnail of the complete file.
+
+The separate viewport marker remains global: it shows the active
+viewport's position within the entire document, independently of the
+bounded pattern window. Use that marker and the adjacent vertical
+scrollbar for global orientation and distant movement. Search hits,
+changed regions, or other overlays can colour the represented minimap
+cells.
+
+{Up - 3 Cursor Control and Navigation:UserManualC03}
+{Help index:DetailedIndex}
+
+.topic UserManualC03S03=228
+ 3.3 POSITION MARKERS
+
+Search > Push position stores the current document location on the marker
+stack. Search > Get position returns to the most recent valid entry. This
+is useful before following a declaration, compiler diagnostic, or search
+result. Invalid locations are skipped when their windows or documents no
+longer exist.
+
+Random-access marks provide named or indexed destinations where the active
+keymap exposes them. They differ from the push/pop stack: retrieving one
+does not mean "return to the immediately preceding place." Use the stack
+for temporary excursions and random-access marks for landmarks that should
+remain available during a longer editing operation.
+
+{Up - 3 Cursor Control and Navigation:UserManualC03}
+{Help index:DetailedIndex}
+
+.topic UserManualC03S04=229
+ 3.4 MATCHING AND STRUCTURAL MOTION
+
+Other > Match parenthesis moves between matching brackets or parentheses.
+Language-aware folding and outline commands provide larger-scale
+structural navigation. Their results depend on the detected language and
+the current syntax state; plain text remains navigable even when no
+structural producer is available.
+
+Fold markers represent collapsible ranges without deleting text. Opening
+or closing a fold changes only the projection. Search, save, block
+operations, and MRMAC continue to address the underlying document.
+
+{Up - 3 Cursor Control and Navigation:UserManualC03}
+{Help index:DetailedIndex}
+
+.topic UserManualC03S05=230
+ 3.5 MOUSE NAVIGATION
+
+The mouse can place the cursor, select menu entries, drag scrollbars, and
+activate dialog controls. Exact behavior depends on the terminal emulator
+and whether it forwards mouse events. Keyboard navigation remains complete
+and is the reliable fallback over remote or restricted terminal
+connections.
+
+{Up - 3 Cursor Control and Navigation:UserManualC03}
+{Help index:DetailedIndex}
+
+.topic UserManualC04=231
+ 4 INSTALLATION AND SETUP
+
+In this chapter:
+
+  {4.1 One application, staged configuration:UserManualC04S01}
+  {4.2 Keymap profiles:UserManualC04S02}
+  {4.3 Colors and themes:UserManualC04S03}
+  {4.4 Paths:UserManualC04S04}
+  {4.5 Backups and autosave:UserManualC04S05}
+  {4.6 User-interface and live-log settings:UserManualC04S06}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC04S01=232
+ 4.1 ONE APPLICATION, STAGED CONFIGURATION
+
+MR has no separate setup executable. Other > Installation and setup opens
+the configuration areas for colors, keymaps, filename extensions, compiler
+profiles, paths, backups, interface behavior, search defaults, and live
+logs. Each dialog edits a working draft. Accepting the dialog applies
+validated settings. Closing a dirty dialog can request Save, Discard, or
+Cancel; explicit load/save operations may already have applied their
+changes.
+
+Persisted settings are represented in settings.mrmac. Users should change
+them through the dialogs or documented MRMAC settings operations. Directly
+editing serialized lines is possible for recovery and review, but it
+bypasses field validation and is not the normal setup path.
+
+In a modal dialog, Enter activates its declared primary action when the
+current input control does not consume the key. Help remains available
+through F1 or its mnemonic; it is not the implicit acceptance action.
+
+{Up - 4 Installation and Setup:UserManualC04}
+{Help index:DetailedIndex}
+
+.topic UserManualC04S02=233
+ 4.2 KEYMAP PROFILES
+
+Installation and setup > Key mapping manages profiles and their bindings.
+A binding has a context, a target type, a target action or macro, a key
+sequence, and a description. Context prevents an editing binding from
+silently taking over a dialog or menu. Multi-key sequences are supported
+where the resolver and profile define them.
+
+PDF illustration: The Key Manager with WordStar, Emacs, and Nano profiles.
+The binding list belongs to the selected draft; Use makes a profile
+active.
+
+Use activates the selected profile. Add, Ren, and Del manage profile
+drafts; New, Edit, and Delete manage bindings. Load, Save, and Save As
+exchange profile files. Capturing a key is safer than spelling a sequence
+by hand because Help keys and reserved interactions are filtered by the
+capture dialog.
+
+The package installer places the factory files in
+$XDG_CONFIG_HOME/mr/macros/keymaps, or in $HOME/.config/mr/macros/keymaps
+when XDG_CONFIG_HOME is unset. A factory-new Key Manager opens Load and
+Save As in that directory. MRDefaultKeymaps.mrmac is the complete recovery
+import: it resets the keymap draft, installs the WordStar, Emacs, and Nano
+profiles, and selects WordStar. emacs.mrmac and nano.mrmac reset to and
+select the respective single profile. wordstar.mrmac supplies the
+three-profile set with WordStar selected and adds Smart Backspace through
+wordstar-extensions.mrmac. Loading a file remains an explicit action;
+installation alone does not silently replace the active profile.
+
+The current factory WordStar, Emacs, and Nano files all bind Ctrl+A to
+Block > Mark all, creating a line block for the complete document. In
+particular, the supplied Emacs and Nano profiles no longer use that chord
+for beginning-of-line motion. The canonical action is MR_BLOCK_MARK_ALL;
+MR_EDIT_MARK_ALL remains an alias for existing bindings. Personal keymap
+files are preserved by installation, so inspect or explicitly import the
+desired binding in an older setup.
+
+Before changing data: Do not delete or rewrite the only bindings needed to
+reach setup until the new profile has been tested. Keep a loadable
+known-good keymap file when experimenting with stateful or multi-key
+emulations.
+
+{Up - 4 Installation and Setup:UserManualC04}
+{Help index:DetailedIndex}
+
+.topic UserManualC04S03=234
+ 4.3 COLORS AND THEMES
+
+Installation and setup > Color setup groups color roles by domain. Each
+item-list row begins with a three-column Aa sample rendered in the role's
+foreground and background colors. Selection highlighting affects only the
+following description, leaving the sample exact and readable. Foreground
+and background each have red, green, and blue numeric sliders with the
+range 0--255. The centered RRGGBB/RRGGBB value shows the exact 24-bit pair
+for the selected role. Both the readout and its Aa sample update
+immediately while clicking, dragging, or using the keyboard. Changing
+roles retains the component edits already made in the dialog draft. Theme
+files can be loaded or saved for reuse. Invalid or missing groups retain
+their hardcoded defaults.
+
+Fresh installations use the 256-color palette so that the built-in
+BIOS-derived theme retains its ANSI palette-index semantics. The Interface
+setup page may instead select 24-bit RGB (automatic). Automatic mode
+supplies the stored RGB values to Turbo Vision, which uses true color when
+the terminal supports it and its normal fallback otherwise. Palette mode
+maps the exact 16 VGA default colors back to their ANSI palette indices,
+preserving the terminal's configured classic colors. Other RGB values are
+quantized to standard xterm-256 color indices; Turbo Vision performs any
+further fallback required by terminals with fewer colors. Thus both modes
+share one settings representation and one color draft; there is no
+duplicate palette configuration.
+
+In this section:
+
+  {4.3.1 Editing an RGB colour pair:UserManualC04S03P01}
+
+{Up - 4 Installation and Setup:UserManualC04}
+{Help index:DetailedIndex}
+
+.topic UserManualC04S03P01=235
+ 4.3.1 EDITING AN RGB COLOUR PAIR
+
+Select a group at the top of Color setup, then select a role in its item
+list. The six sliders edit the red, green, and blue components of
+foreground and background independently. Drag a slider or focus it and use
+the arrow keys for steps of one; Page Up/Down changes by 16 and Home/End
+selects 0/255. The centred hexadecimal pair is a readout, not an editable
+hexadecimal field. The Aa sample uses the current output mode, so a
+palette-mode preview can quantize a colour even though the readout retains
+its exact RGB value.
+
+PDF illustration: PTY capture of Color setup with 24-bit RGB output
+selected. Foreground and background have separate RGB sliders. The
+displayed 60D0FF/101020 pair and the text-role sample update immediately,
+including while a slider is being dragged.
+
+Choose OK to apply and persist the colour draft. Closing or cancelling a
+changed draft asks whether to Save, Discard, or Cancel closing. Load Theme
+activates the selected theme immediately and persists its selection; Save
+Theme applies the current draft and writes the chosen theme file. These
+explicit load/save operations are not undone by later cancelling the
+reopened dialog. Changing the output mode itself belongs to User Interface
+Settings, under Color Management; the RGB sliders remain available in
+either mode.
+
+Filename-extension profiles may select a theme automatically. This allows
+a different visual treatment for code, prose, logs, or comparison work
+without creating a second global color registry. Distinguish editing a
+role in the draft from explicitly activating a theme with Load Theme.
+
+{Up - 4.3 Colors and themes:UserManualC04S03}
+{Help index:DetailedIndex}
+
+.topic UserManualC04S04=236
+ 4.4 PATHS
+
+The Paths dialog configures the settings macro, macro directory, Help
+file, temporary directory, shell executable, audio player, and log
+destination. History limits control the retained file, path, and workspace
+entries.
+
+Use absolute paths for infrastructure whose meaning must not depend on the
+launch directory. The temporary directory is for disposable products; do
+not point it at a source directory. The settings macro path must include a
+filename, not merely a directory.
+
+Without a usable remembered directory, ordinary file dialogs fall back to
+the user's home directory, then to the working directory. Macro loading
+and the pre-save/post-load macro selectors first try the configured macro
+directory. These are scope-specific defaults: choosing a macro path does
+not change the starting directory of every unrelated file dialog.
+
+{Up - 4 Installation and Setup:UserManualC04}
+{Help index:DetailedIndex}
+
+.topic UserManualC04S05=237
+ 4.5 BACKUPS AND AUTOSAVE
+
+Backup policy selects no backup, a sibling backup file, or movement to a
+backup directory. Frequency may be first save only or every save. Autosave
+can be driven by keyboard inactivity and by an interval; zero disables the
+respective trigger.
+
+Workspace autosave is a distinct concern. It preserves window topology and
+workspace membership, while document autosave protects changed text.
+Restoring one does not imply that every dirty document has already been
+written to its persistent file.
+
+{Up - 4 Installation and Setup:UserManualC04}
+{Help index:DetailedIndex}
+
+.topic UserManualC04S06=238
+ 4.6 USER-INTERFACE AND LIVE-LOG SETTINGS
+
+User-interface settings control the window manager, message line, cyclic
+virtual desktops, diagnostic adoption, binary autodetection, cursor
+behavior, scrollbars, comparison gutters, indentation preview, and desktop
+count.
+
+Live-log settings control search-hit notices, beep or audio behavior,
+viewer line numbers, timestamps, syntax highlighting, and scroll
+direction. Audio is optional; unavailable controls are disabled instead of
+being silently accepted.
+
+{Up - 4 Installation and Setup:UserManualC04}
+{Help index:DetailedIndex}
+
+.topic UserManualC05=239
+ 5 COMMAND-LINE USE
+
+In this chapter:
+
+  {5.1 Starting with files:UserManualC05S01}
+  {5.2 Recursive loading:UserManualC05S02}
+  {5.3 Help:UserManualC05S03}
+  {5.4 Startup macro automation:UserManualC05S04}
+  {5.5 Binary files at startup:UserManualC05S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC05S01=240
+ 5.1 STARTING WITH FILES
+
+Pass one or more file paths after the executable name:
+
+  ./mr README.md Makefile src/main.cpp
+
+Each readable file becomes an editor window. The last loaded window is
+active. Relative paths are interpreted from the launch directory and
+normalized before loading.
+
+Shell glob patterns are accepted:
+
+  ./mr '*.md' 'src/*.cpp'
+
+Quote a pattern when MR, rather than the invoking shell, should expand it.
+Flat glob loading does not recurse into descendants.
+
+{Up - 5 Command-Line Use:UserManualC05}
+{Help index:DetailedIndex}
+
+.topic UserManualC05S02=241
+ 5.2 RECURSIVE LOADING
+
+--load-recursive and its short form -lr enable recursive startup loading.
+A directory argument loads readable files below that directory. A wildcard
+argument recursively matches below the non-wildcard root.
+
+  ./mr --load-recursive documentation
+  ./mr -lr 'src/*.cpp'
+
+Recursive loading can create many windows. Prefer a narrow filespec or a
+workspace when the repository contains build trees, vendored dependencies,
+or generated output that should not become part of the session.
+
+{Up - 5 Command-Line Use:UserManualC05}
+{Help index:DetailedIndex}
+
+.topic UserManualC05S03=242
+ 5.3 HELP
+
+--help and -h print command-line help and exit:
+
+  ./mr --help
+
+The command-line help is intentionally narrower than the in-application
+Help. It describes startup parsing, while F1 explains the running editor.
+
+--version prints the MR version and exits without opening the desktop:
+
+  mr --version
+
+Use this output when reporting which installed executable you are running.
+
+{Up - 5 Command-Line Use:UserManualC05}
+{Help index:DetailedIndex}
+
+.topic UserManualC05S04=243
+ 5.4 STARTUP MACRO AUTOMATION
+
+Advanced workflows may run an MRMAC file after settings, AUTOEXEC macros,
+the workspace, and startup files have been loaded:
+
+  ./mr README.md --run-macro=macros/session-start.mrmac
+
+The two-part form is also accepted:
+
+  ./mr --run-macro macros/session-start.mrmac
+
+Multiple options run in argument order. The option --exit-after-run-macro
+requests termination after at least one startup macro has been processed.
+
+This facility is useful for deterministic demonstrations, batch-like
+editor automation, and test sessions. It still runs through the normal
+MRMAC loader and UI-thread execution route; it is not a second command
+language.
+
+{Up - 5 Command-Line Use:UserManualC05}
+{Help index:DetailedIndex}
+
+.topic UserManualC05S05=244
+ 5.5 BINARY FILES AT STARTUP
+
+When binary autodetection is enabled, boundary samples are checked before
+a startup file is assigned an ordinary editor. A detected binary is opened
+in the Bento hex editor. This prevents NUL-rich data from being rendered
+as meaningless text.
+
+Note: Autodetection is a policy setting, not a claim that every non-text
+format is perfectly classified. The Text > Hex editor command remains
+available for an explicitly chosen text-to-hex transition.
+
+{Up - 5 Command-Line Use:UserManualC05}
+{Help index:DetailedIndex}
+
+.topic UserManualC06=245
+ 6 LOADING AND SAVING FILES
+
+In this chapter:
+
+  {6.1 Open, Load, and Get Last:UserManualC06S01}
+  {6.2 Acquire, live logs, and the journal:UserManualC06S02}
+  {6.3 Text and binary loading:UserManualC06S03}
+  {6.4 Save, Save As, Save All, and Revert:UserManualC06S04}
+  {6.5 Right-click context menus:UserManualC06S05}
+  {6.6 File information:UserManualC06S06}
+  {6.7 Workspaces:UserManualC06S07}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC06S01=246
+ 6.1 OPEN, LOAD, AND GET LAST
+
+File > Open creates a new editor window for the chosen file. File > Load
+replaces the contents of the current suitable editor window. Use Open when
+both the current and new document should remain available; use Load when
+the present window is intentionally being reused.
+
+File > Get last lists recently used files, folders, and workspaces. Empty
+groups are skipped when initial focus is chosen. Selecting a row performs
+the operation appropriate to its type rather than treating every history
+entry as a file. With a list focused, Enter activates its selected file,
+folder, or workspace directly. In the Open dialog, Enter likewise opens
+the focused file-list item; a file-list double-click performs the open
+action.
+
+{Up - 6 Loading and Saving Files:UserManualC06}
+{Help index:DetailedIndex}
+
+.topic UserManualC06S02=247
+ 6.2 ACQUIRE, LIVE LOGS, AND THE JOURNAL
+
+File > Acquire accepts a directory specification or an executable command.
+Results are presented as selectable paths, and Load all opens every
+eligible entry. This is useful when the file set is discovered by a tool
+rather than known in advance. Output is adopted incrementally, duplicate
+paths are removed, and the list shows ordinals and a total. Closing the
+dialog while its command is running stops the process group and discards
+output that has not been adopted.
+
+Load all processes one file boundary at a time and enters Static Mode. The
+message lane reports the number processed; Esc stops the remaining queue
+without closing files already loaded when Fullscreen is not active. In
+Fullscreen, leave the presentation first and press Esc again to cancel the
+remaining batch. The final notice distinguishes completion from
+cancellation and reports how many files were loaded.
+
+File > Open live log follows a text file as it grows. File > Open journal
+reads systemd journal output, optionally restricted by an application tag.
+These are communication or log roles with lifecycle rules different from
+an ordinary source buffer.
+
+{Up - 6 Loading and Saving Files:UserManualC06}
+{Help index:DetailedIndex}
+
+.topic UserManualC06S03=248
+ 6.3 TEXT AND BINARY LOADING
+
+Ordinary text files use the piece-table-backed editor. Binary files can
+use the Bento hex editor, whose synchronized panes show hexadecimal,
+decimal, binary, octal, strings, and typed inspector values.
+
+PDF illustration: A binary executable opened from the command line.
+Hexadecimal, strings, inspector, decimal, binary, and octal panes share
+one position.
+
+The hex editor is not a cosmetic mode applied to decoded text. It is a
+specialized workspace with panes that project the same binary source.
+Navigation in one pane updates the others. Use the inspector to interpret
+the selected bytes as signed and unsigned integer widths and related data
+forms.
+
+{Up - 6 Loading and Saving Files:UserManualC06}
+{Help index:DetailedIndex}
+
+.topic UserManualC06S04=249
+ 6.4 SAVE, SAVE AS, SAVE ALL, AND REVERT
+
+File > Save writes the current document to its persistent path. File >
+Save As chooses another path and updates the window's persistent identity.
+File > Save all collects dirty windows and stops if a save is cancelled or
+fails.
+
+Alt-X exits through the dirty gate when changed documents exist. Save All
+is the primary choice, so a plain Enter saves all eligible documents and
+continues the exit. Discard All and Cancel require an explicit selection.
+
+File > Revert reloads the saved file and discards unsaved document changes
+after confirmation. It requires a persistent file. A read-only window
+cannot be saved as ordinary editable content, although supported log roles
+may offer their own snapshot save path.
+
+Before changing data: Revert, closing a dirty window, loading a workspace
+over active state, and exiting are dirty-gated operations. Read the
+confirmation detail: Save, Discard, and Cancel are intentionally different
+lifecycle decisions.
+
+{Up - 6 Loading and Saving Files:UserManualC06}
+{Help index:DetailedIndex}
+
+.topic UserManualC06S05=250
+ 6.5 RIGHT-CLICK CONTEXT MENUS
+
+A single right-click in an MREdit window's text area opens its context
+menu. Use the right button without Shift, Ctrl, or Alt; modified mouse
+gestures and gutter clicks have separate meanings. The clicked window
+becomes the command target. The clicked text location supplies the seed
+for References and Rename, so it need not be the old cursor position.
+
+Edit: Opens a submenu. With a selection or marked block it contains Cut,
+Copy, Unmark, and Paste; without marked text it contains Paste. Cut and
+Copy use the marked text, Unmark removes its marking, and Paste uses the
+editor's paste buffer. The usual writeability checks still apply.
+
+Outline: Lists available outline entries from open editor buffers,
+including Bento panes, with each buffer represented once. Multiple buffers
+receive filename headers; nested entries are indented. Choosing an entry
+activates its window and selects the source line. A question mark marks a
+heuristic entry. The list may still be warming or cover only an analysed
+range.
+
+References: Appears when the clicked location provides a supported text
+target. It opens multi-file Search with that text prefilled.
+
+Rename: Uses the same target to open multi-file Search and Replace, with
+an empty replacement field for your input.
+
+References and Rename start from the workspace main file's directory when
+available, otherwise the current source directory. Check the dialog's
+scope, filespec, matching options, and replacement before starting. These
+commands use the existing text-search machinery; they do not establish
+semantic symbol identity or guarantee a language-aware refactoring.
+
+Choose an item by mouse or navigate with the arrow keys and Enter. Enter
+on Edit opens its submenu. Escape or a click outside closes the menu
+without executing an item. An active GDB source view extends this same
+menu with the commands described in Section {23.6.1:UserManualC23S06P01}.
+
+PDF illustration: PTY capture of the editor context menu on matrix.c, with
+marked text and the Edit submenu open. References and Rename use the text
+at the original right-click.
+
+{Up - 6 Loading and Saving Files:UserManualC06}
+{Help index:DetailedIndex}
+
+.topic UserManualC06S06=251
+ 6.6 FILE INFORMATION
+
+File > Info reports document identity, persistent path, size, line and
+cursor state, encoding-related editor state, window role, and runtime
+metadata. Use it when a file behaves differently than expected: the dialog
+is more reliable than inferring state from the filename alone.
+
+{Up - 6 Loading and Saving Files:UserManualC06}
+{Help index:DetailedIndex}
+
+.topic UserManualC06S07=252
+ 6.7 WORKSPACES
+
+A workspace records managed windows, paths, virtual desktops, geometry,
+visibility, main-file status, and supported Bento configuration. File >
+Open workspace loads such a description. The Window List offers workspace
+save/load controls and autosave/autoload toggles.
+
+Workspace state does not replace file persistence. Saving a workspace
+records where and how documents are arranged; saving a document records
+its text or binary changes. A robust session workflow does both.
+
+In this section:
+
+  {6.7.1 Automatic saving and loading:UserManualC06S07P01}
+
+{Up - 6 Loading and Saving Files:UserManualC06}
+{Help index:DetailedIndex}
+
+.topic UserManualC06S07P01=253
+ 6.7.1 AUTOMATIC SAVING AND LOADING
+
+Open Window > List. The Auto checkbox button beside Save workspace
+controls automatic saving; the separate Auto checkbox button beside Load
+workspace controls automatic loading. The two settings are independent and
+persist when toggled; [x] means enabled and [ ] disabled.
+
+Autosave records changes to the workspace after a short settling delay
+(currently about one second), with a final flush when MR exits. It is
+separate from the keyboard-inactivity and interval triggers for document
+autosave. Turning workspace autosave off clears the embedded saved
+workspace from settings.mrmac; it does not delete already created,
+separately named workspace files.
+
+Autoload restores the workspace embedded in settings.mrmac at startup,
+after settings and AUTOEXEC macros and before additional command-line
+files and startup automation. It does not select the newest timestamped
+file from a directory. With Autoload off and a saved workspace available,
+MR normally asks whether to Restore workspace, Discard workspace, or
+Cancel. Cancel preserves the stored workspace for later; Discard removes
+its embedded restoration data. A matching command-line file can restore a
+saved single-file workspace directly, and restart after an update can also
+force restoration.
+
+PDF illustration: PTY capture of Window List. The two Auto buttons
+independently control workspace saving and startup loading; the
+neighbouring buttons perform explicit Save workspace and Load workspace
+operations.
+
+With workspace autosave enabled, a successful autosave writes a named
+snapshot in the remembered Workspace Save directory:
+
+  Autosave YYYY-MM-DD HH:MM:SS.mrmac
+
+The timestamp is local time. Workspace Load and Save histories remember
+the result, and the workspace extension in settings.mrmac is also updated.
+Use Open workspace or Get Last to select a saved snapshot. The name has
+one-second precision, so another write within the same second can reuse
+it; these files are not a version-control history or a backup of unsaved
+text.
+
+{Up - 6.7 Workspaces:UserManualC06S07}
+{Help index:DetailedIndex}
+
+.topic UserManualC07=254
+ 7 INSERTING TEXT
+
+In this chapter:
+
+  {7.1 Insert and overwrite:UserManualC07S01}
+  {7.2 Lines and line endings:UserManualC07S02}
+  {7.3 Automatic bracket pairs:UserManualC07S03}
+  {7.4 Clipboard input:UserManualC07S04}
+  {7.5 Unicode input:UserManualC07S05}
+  {7.6 Snippets and macro-generated text:UserManualC07S06}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC07S01=255
+ 7.1 INSERT AND OVERWRITE
+
+In insert mode, typed text is added at the cursor and existing content
+moves logically to the right. In overwrite mode, eligible existing
+characters are replaced. The frame and menu state indicate the current
+mode. Edit > Insert toggles it.
+
+New text enters the piece table's add buffer. This implementation detail
+is visible to the user only through its consequence: inserting into a very
+large file does not require moving all later bytes in memory.
+
+{Up - 7 Inserting Text:UserManualC07}
+{Help index:DetailedIndex}
+
+.topic UserManualC07S02=256
+ 7.2 LINES AND LINE ENDINGS
+
+Enter inserts a line boundary using the active editor behavior.
+Filename-extension settings can require a final line ending, preserve or
+normalize relevant conventions, and control the EOF marker. Avoid assuming
+that a visually blank final row is the same as a stored final newline.
+
+The CR/LF at EOF and related profile fields describe save policy, not an
+extra character painted into the text. File > Info helps distinguish
+document content from its projection.
+
+{Up - 7 Inserting Text:UserManualC07}
+{Help index:DetailedIndex}
+
+.topic UserManualC07S03=257
+ 7.3 AUTOMATIC BRACKET PAIRS
+
+Auto pair brackets in the editor settings of DEFAULT or a matching
+filename-extension profile enables pairing for parentheses, square
+brackets, and braces. It is off by default. In insert mode, with no text
+selection, typing one opening delimiter inserts its closer and leaves the
+cursor between them. Typing a closing delimiter already present at the
+cursor moves across it instead of inserting a duplicate.
+
+Pairing applies to single-character text input. Overwrite mode, selected
+text, and bracketed paste do not use this pairing path. It does not pair
+quotation marks or consult syntax to exclude strings and comments.
+Matching-parenthesis navigation remains a separate command. The persisted
+option is AUTO_PAIR_BRACKETS.
+
+{Up - 7 Inserting Text:UserManualC07}
+{Help index:DetailedIndex}
+
+.topic UserManualC07S04=258
+ 7.4 CLIPBOARD INPUT
+
+Edit > Paste requests text from the system clipboard and inserts it at the
+cursor. This remains a clipboard operation when a persistent block exists;
+block duplication is the separate Block > Copy block command. Edit >
+Append and Edit > Cut and append build a larger clipboard payload from
+several blocks. Terminal or operating-system clipboard exchange is
+available through the corresponding editor actions and MRMAC primitives.
+
+On Wayland, system exchange requires wl-copy and wl-paste from
+wl-clipboard; on X11 it requires xsel or xclip. Supported terminals can
+provide clipboard exchange through OSC 52 for remote sessions. The
+terminal emulator's own paste command remains an alternative because it
+sends text input directly instead of asking MR to read the clipboard.
+
+Pasting into a column or line-oriented workflow should be preceded by a
+check of the current block state and insert mode. A persistent block can
+remain active after navigation; the highlighted projection is the warning
+that the next block-aware command may not act only at the cursor.
+
+{Up - 7 Inserting Text:UserManualC07}
+{Help index:DetailedIndex}
+
+.topic UserManualC07S05=259
+ 7.5 UNICODE INPUT
+
+MR stores and displays UTF-8 text. A character may occupy several bytes,
+and a glyph may occupy zero, one, or more terminal cells depending on
+Unicode and terminal behavior. Cursor motion, column blocks, and
+formatting therefore use editor and display-column rules rather than byte
+offsets.
+
+The MRMAC ASCII and Emoji tools can copy a selected character to the
+clipboard. They are convenient for characters that are awkward to enter
+with the terminal's compose or input method.
+
+{Up - 7 Inserting Text:UserManualC07}
+{Help index:DetailedIndex}
+
+.topic UserManualC07S06=260
+ 7.6 SNIPPETS AND MACRO-GENERATED TEXT
+
+The Snippet SideKick is a controlled editing surface for macro-generated
+expansion. Tab and Shift+Tab move among placeholders; Ctrl+Enter or
+Alt+Enter commits, while Esc cancels. The parent document changes only at
+commit.
+
+This separation matters: a macro can prepare a complex expansion without
+mutating the document behind every intermediate keystroke.
+
+{Up - 7 Inserting Text:UserManualC07}
+{Help index:DetailedIndex}
+
+.topic UserManualC08=261
+ 8 DELETING TEXT
+
+In this chapter:
+
+  {8.1 Character deletion:UserManualC08S01}
+  {8.2 Selections and blocks:UserManualC08S02}
+  {8.3 Deleting across windows:UserManualC08S03}
+  {8.4 Recovering a deletion:UserManualC08S04}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC08S01=262
+ 8.1 CHARACTER DELETION
+
+Backspace removes the logical character before the cursor; Delete removes
+the eligible character at the cursor. At line boundaries the operation may
+join lines. UTF-8 sequences are treated as editor characters rather than a
+request to delete one arbitrary byte.
+
+With a visible marked block, Delete removes the block only when the cursor
+is inside it. Backspace also removes it when the cursor is immediately at
+its right boundary. Outside those positions, these keys delete a single
+character in their usual direction and preserve the block marking.
+
+Read-only windows reject mutation. If a delete command appears inert,
+inspect the read-only marker, current window role, active block, and
+command state before assuming that input was lost.
+
+{Up - 8 Deleting Text:UserManualC08}
+{Help index:DetailedIndex}
+
+.topic UserManualC08S02=263
+ 8.2 SELECTIONS AND BLOCKS
+
+Block > Delete removes the marked block. Edit > Cut also removes the
+selection but retains it in the clipboard. Choose Delete when no paste is
+intended and Cut when the text is being transferred.
+
+Line, column, and stream blocks have different shapes. Deleting a column
+block removes a rectangular range on each participating line; deleting a
+stream block removes one continuous logical range; deleting a line block
+removes complete lines.
+
+{Up - 8 Deleting Text:UserManualC08}
+{Help index:DetailedIndex}
+
+.topic UserManualC08S03=264
+ 8.3 DELETING ACROSS WINDOWS
+
+Block > Window move transfers the block to another editor window and
+removes it from the source after a successful destination operation.
+Window copy leaves the source in place. Use the explicit inter-window
+commands instead of assuming that an active clipboard implicitly names a
+destination.
+
+{Up - 8 Deleting Text:UserManualC08}
+{Help index:DetailedIndex}
+
+.topic UserManualC08S04=265
+ 8.4 RECOVERING A DELETION
+
+Deletion is recorded in the document's undo history. Use Undo immediately
+when the wrong range was removed, or traverse the history deliberately as
+described in Chapter {11:UserManualC11}. Saving clears the current undo history; closing or replacing the document
+also ends that history. Undo a mistaken edit before saving.
+
+Note: A backup file and Undo solve different problems. Undo reverses an
+in-session edit; a backup protects a previous persistent version.
+Configure both according to the cost of losing work.
+
+{Up - 8 Deleting Text:UserManualC08}
+{Help index:DetailedIndex}
+
+.topic UserManualC09=266
+ 9 TABS AND VIRTUAL SPACE
+
+In this chapter:
+
+  {9.1 Tab width and expansion policy:UserManualC09S01}
+  {9.2 Typing beyond end of line:UserManualC09S02}
+  {9.3 Tab-aware blocks:UserManualC09S03}
+  {9.4 Indent and Undent:UserManualC09S04}
+  {9.5 Format line and margins:UserManualC09S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC09S01=267
+ 9.1 TAB WIDTH AND EXPANSION POLICY
+
+The active filename-extension profile supplies the tab size and expansion
+policy. Use tabs inserts or preserves tab characters according to the
+operation; Spaces expands indentation into spaces. Tab size determines
+display stops and indentation width but does not change the byte value of
+an existing tab.
+
+Mixed indentation is particularly sensitive to this distinction. Two lines
+can align visually under one tab width and diverge under another. Use
+language-appropriate profiles and code-formatting tools before performing
+large mechanical indentation changes.
+
+{Up - 9 Tabs and Virtual Space:UserManualC09}
+{Help index:DetailedIndex}
+
+.topic UserManualC09S02=268
+ 9.2 TYPING BEYOND END OF LINE
+
+Virtual space permits the cursor to occupy a display column beyond the
+stored end of line. When text is inserted there, the gap is materialized
+using the active tab and space policy. Merely moving through virtual space
+does not add bytes to the document.
+
+This behavior is useful for column work and diagrams, but it can create
+unexpected whitespace when a cursor is placed far to the right
+accidentally. The Truncate whitespace profile option controls save-time
+treatment of unwanted trailing space.
+
+{Up - 9 Tabs and Virtual Space:UserManualC09}
+{Help index:DetailedIndex}
+
+.topic UserManualC09S03=269
+ 9.3 TAB-AWARE BLOCKS
+
+Column blocks use display columns. A tab can span several cells, so a
+rectangular selection may intersect displayed tab space rather than a
+one-byte-per-column grid. Inspect the result after column moves, sorting,
+or indentation in tab-heavy files.
+
+{Up - 9 Tabs and Virtual Space:UserManualC09}
+{Help index:DetailedIndex}
+
+.topic UserManualC09S04=270
+ 9.4 INDENT AND UNDENT
+
+Block > Indent and Block > Undent apply the configured indentation to
+selected lines. Smart indentation may also use the language and nearby
+syntax. The operation is block-based and undoable; it is not a permanent
+rewrite of the profile.
+
+{Up - 9 Tabs and Virtual Space:UserManualC09}
+{Help index:DetailedIndex}
+
+.topic UserManualC09S05=271
+ 9.5 FORMAT LINE AND MARGINS
+
+The format line provides a compact visual representation of tab stops and
+margins. It is covered in detail in Chapter {14:UserManualC14}. Tab setup, left and
+right margins, paragraph formatting, and centering should be treated as
+one formatting policy rather than unrelated numbers.
+
+{Up - 9 Tabs and Virtual Space:UserManualC09}
+{Help index:DetailedIndex}
+
+.topic UserManualC10=272
+ 10 BLOCK OPERATIONS
+
+In this chapter:
+
+  {10.1 Three block shapes:UserManualC10S01}
+  {10.2 Marking blocks with the mouse:UserManualC10S02}
+  {10.3 Marking state and cursor motion:UserManualC10S03}
+  {10.4 Copy, move, and delete:UserManualC10S04}
+  {10.5 Inter-window transfer:UserManualC10S05}
+  {10.6 Indent, Undent, and transformations:UserManualC10S06}
+  {10.7 Loading and saving blocks:UserManualC10S07}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC10S01=273
+ 10.1 THREE BLOCK SHAPES
+
+MR supports line, column, and stream blocks. A line block contains
+complete logical lines. A column block is rectangular in display
+coordinates. A stream block is one continuous range from its start
+position to its end position. The distinction determines what copy, move,
+delete, indentation, case conversion, and save-block operations receive.
+
+Block > Mark lines, Mark columns, and Mark stream start the respective
+mode. End marking commits the current range. Turn marking off removes it.
+Hide/show block mark changes only whether the selection is projected; the
+block still exists when hidden.
+
+PDF illustration: A stream block across several Markdown lines. The
+selected range ends at the cursor; the minimap and status information
+remain live.
+
+{Up - 10 Block Operations:UserManualC10}
+{Help index:DetailedIndex}
+
+.topic UserManualC10S02=274
+ 10.2 MARKING BLOCKS WITH THE MOUSE
+
+In ordinary editing mode, with line drawing switched off, press the left
+mouse button at the start of the desired range, keep it held while moving
+to the other end, then release it. The highlight follows the pointer;
+releasing the button commits the block. Hold the modifiers before pressing
+the mouse button and keep them held until release.
+
+  Block shape | Mouse gesture | Selected range
+  Stream | Left-button drag | Continuous text between the two endpoints.
+  Column | Alt + left-button drag | Rectangle in display columns and
+    logical lines.
+  Line | Ctrl+Alt + left-button drag | Complete logical lines from the
+    first touched line to the last.
+
+Dragging in either direction is supported. Moving beyond a text-area edge
+scrolls the view while extending the mark. Column selection includes the
+pointed-to cells at both horizontal ends; a stream selection ends before
+its end position. Tabs occupy their configured display width.
+
+Ctrl + left-button drag explicitly starts a new stream block. Use this
+when the drag starts inside an existing block: an unmodified left-button
+drag there moves that block instead. During a move, a preview follows the
+mouse; release places the block, Esc cancels, and a completed move is one
+Undo step. A plain right-click opens the context menu.
+
+The terminal must forward the mouse events and modifier keys to MR. If the
+terminal or window manager intercepts a gesture, use the corresponding
+Block > Mark lines, Mark columns, or Mark stream command.
+
+{Up - 10 Block Operations:UserManualC10}
+{Help index:DetailedIndex}
+
+.topic UserManualC10S03=275
+ 10.3 MARKING STATE AND CURSOR MOTION
+
+An actively extending block and a committed block are different states.
+Cursor motion extends an active selection. After commit, ordinary cursor
+movement may preserve or clear it according to the persistent-block
+setting. Block > Persistent blocks reports and changes that runtime
+policy.
+
+The current block is a first-class editor state. A command may act on it
+even when the cursor has moved away or the visible highlight has been
+hidden. Before a destructive block command, verify the marked shape and
+endpoints.
+
+Before changing data: Hidden selection is not absent selection. If a copy,
+delete, format, or case conversion affects more text than expected, turn
+block visibility on and inspect the persistent-block state.
+
+{Up - 10 Block Operations:UserManualC10}
+{Help index:DetailedIndex}
+
+.topic UserManualC10S04=276
+ 10.4 COPY, MOVE, AND DELETE
+
+Block > Copy inserts a copy at the command's destination while retaining
+the source. Move transfers the range. Delete removes it. Equivalent
+Edit-menu commands use the clipboard when appropriate.
+
+Every successful mutation enters undo history as an editor operation. A
+large block does not need to be flattened into a second complete document
+merely to be moved; the piece-table model can express changes as new
+ranges and references.
+
+{Up - 10 Block Operations:UserManualC10}
+{Help index:DetailedIndex}
+
+.topic UserManualC10S05=277
+ 10.5 INTER-WINDOW TRANSFER
+
+Block > Window copy and Window move explicitly transfer between editor
+windows. The target must support the requested mutation and must remain
+valid throughout the operation. A read-only or specialized target may
+reject the transfer.
+
+Use ordinary clipboard copy when the destination is outside MR or when the
+transfer should survive closing the source. Use the window commands when
+the relationship between two managed editor windows is the important part.
+
+{Up - 10 Block Operations:UserManualC10}
+{Help index:DetailedIndex}
+
+.topic UserManualC10S06=278
+ 10.6 INDENT, UNDENT, AND TRANSFORMATIONS
+
+Block > Indent and Undent operate on selected lines using the configured
+indentation policy. A stream block is first converted to a line block
+covering the touched lines. For a line block, the least-indented nonblank
+line determines the movement to the next or previous tab stop, and the
+same shift is applied to all nonblank lines. Their relative indentation is
+preserved; whitespace-only lines are left alone. Column blocks retain
+rectangular semantics. Text > Upper case and Lower case transform the
+applicable marked text. Code formatting may consume the block or the whole
+file according to the formatter command and profile.
+
+Column-block sorting is available through its command or keymap action.
+The sort key is the selected rectangular slice, while complete
+participating lines remain the records being reordered. Confirm tab and
+display-column interpretation before sorting mixed-width data.
+
+{Up - 10 Block Operations:UserManualC10}
+{Help index:DetailedIndex}
+
+.topic UserManualC10S07=279
+ 10.7 LOADING AND SAVING BLOCKS
+
+Block > Load block inserts text read from a file at the block position.
+Save block writes only the marked range. These commands are useful for
+reusable fragments and for exchanging data without replacing or saving the
+whole document.
+
+A saved block is plain selected content, not a workspace or editor-state
+serialization. Its block shape, cursor location, theme, and profile are
+not encoded in the block file.
+
+{Up - 10 Block Operations:UserManualC10}
+{Help index:DetailedIndex}
+
+.topic UserManualC11=280
+ 11 UNDO AND REDO
+
+In this chapter:
+
+  {11.1 Document-local history:UserManualC11S01}
+  {11.2 Traversing the history:UserManualC11S02}
+  {11.3 Undo and large files:UserManualC11S03}
+  {11.4 Undo versus persistent recovery:UserManualC11S04}
+  {11.5 Macros and undo:UserManualC11S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC11S01=281
+ 11.1 DOCUMENT-LOCAL HISTORY
+
+Undo and Redo traverse the active editor's change history. Each document
+owns its history; changing windows changes which history the commands
+address. Read-only views can be navigated but do not gain a mutation
+history merely because Undo is invoked.
+
+An undo entry represents an accepted editing operation, not every internal
+piece-table step. Text insertion, deletion, block operations, formatting,
+and supported macro edits therefore reverse at meaningful editor
+boundaries.
+
+{Up - 11 Undo and Redo:UserManualC11}
+{Help index:DetailedIndex}
+
+.topic UserManualC11S02=282
+ 11.2 TRAVERSING THE HISTORY
+
+Edit > Undo moves one step toward the earlier document state. Edit > Redo
+reapplies a step that was undone. A new mutation after Undo normally
+establishes a new forward history; do not assume that the abandoned redo
+branch remains selectable.
+
+Watch the modified marker while traversing. Returning to content equal to
+the last saved snapshot can clear the dirty relationship even though the
+document has a non-empty history.
+
+{Up - 11 Undo and Redo:UserManualC11}
+{Help index:DetailedIndex}
+
+.topic UserManualC11S03=283
+ 11.3 UNDO AND LARGE FILES
+
+The document model stores snapshots and piece relationships rather than
+copying the entire file for every operation. This makes practical undo
+depth possible even when the original mapping is large. It does not make
+history free: inserted text, metadata, and retained snapshots still
+consume memory.
+
+Background syntax, folding, minimap, or line-index results are derived
+state. When Undo changes the document version, stale results are rejected
+and fresh work is scheduled. Undo therefore restores document semantics;
+derived projections catch up without owning the edit.
+
+{Up - 11 Undo and Redo:UserManualC11}
+{Help index:DetailedIndex}
+
+.topic UserManualC11S04=284
+ 11.4 UNDO VERSUS PERSISTENT RECOVERY
+
+Undo exists only in the running document lifecycle. Backups, autosave, and
+version control protect different time horizons. Closing a document,
+restarting MR, or reverting from disk is not a substitute for explicitly
+saving an important state.
+
+Note: For risky transformations, combine a saved file or version-control
+checkpoint with Undo. One protects the persistent baseline; the other
+supports rapid in-session experimentation.
+
+{Up - 11 Undo and Redo:UserManualC11}
+{Help index:DetailedIndex}
+
+.topic UserManualC11S05=285
+ 11.5 MACROS AND UNDO
+
+MRMAC editor procedures route mutations through the same editor model. A
+macro can group work according to its operations, and the user can undo
+accepted changes. A macro that performs external I/O, launches a process,
+or changes settings cannot make those external effects disappear through
+text Undo.
+
+{Up - 11 Undo and Redo:UserManualC11}
+{Help index:DetailedIndex}
+
+.topic UserManualC12=286
+ 12 WINDOWS, VIRTUAL DESKTOPS, AND WORKSPACES
+
+In this chapter:
+
+  {12.1 Creating, closing, and selecting windows:UserManualC12S01}
+  {12.2 Hide, minimize, and zoom:UserManualC12S02}
+  {12.3 Cascade, tile, and split:UserManualC12S03}
+  {12.4 Virtual desktops:UserManualC12S04}
+  {12.5 Links:UserManualC12S05}
+  {12.6 Workspace lifecycle:UserManualC12S06}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC12S01=287
+ 12.1 CREATING, CLOSING, AND SELECTING WINDOWS
+
+Window > Open creates another editor window. Close closes the active
+managed window after dirty-state handling. Next and Previous traverse
+neighboring desktop windows. List opens the complete control dialog.
+
+The Window List reports minimized or hidden state, virtual-desktop number,
+workspace-main status, file, and directory. It also offers Delete, Save,
+Save all, Save as, Revert, Hide, Get, and workspace commands. Use it when
+direct cycling is no longer an adequate model of the session.
+
+{Up - 12 Windows, Virtual Desktops, and Workspaces:UserManualC12}
+{Help index:DetailedIndex}
+
+.topic UserManualC12S02=288
+ 12.2 HIDE, MINIMIZE, AND ZOOM
+
+Hide removes a window from ordinary selection without closing it. Minimize
+reduces a supported window to its one-line desktop representation. Zoom
+toggles maximized geometry. These states are distinct and are shown
+differently in the Window List.
+
+Restoring a minimized window returns it to stored normal geometry.
+Unhiding a window returns it to selection. Neither operation reloads the
+file or creates a new document.
+
+{Up - 12 Windows, Virtual Desktops, and Workspaces:UserManualC12}
+{Help index:DetailedIndex}
+
+.topic UserManualC12S03=289
+ 12.3 CASCADE, TILE, AND SPLIT
+
+Window > Organize > Cascade overlaps eligible ordinary desktop windows.
+Tile partitions the usable desktop among them. Modal dialogs and Help do
+not participate.
+
+Horizontal and vertical split create another viewport of the same
+supported document. Edits are shared because both panes refer to one
+document; cursor and scroll state belong to the individual viewport where
+supported.
+
+{Up - 12 Windows, Virtual Desktops, and Workspaces:UserManualC12}
+{Help index:DetailedIndex}
+
+.topic UserManualC12S04=290
+ 12.4 VIRTUAL DESKTOPS
+
+MR supports one through nine virtual desktops. Viewport-left and
+viewport-right commands select the neighboring desktop. Move-window-left
+and move-window-right change the active window's membership and select the
+target desktop.
+
+The commands are available under Window > Organize. By default,
+Ctrl+Shift+F11 and Ctrl+Shift+F12 move the viewport left and right, while
+Shift+F11 and Shift+F12 move the active window to the neighboring desktop
+and follow it. The live keymap remains authoritative if those bindings
+have been customized.
+
+Cyclic navigation is configurable. With cycling disabled, commands stop at
+the first or last desktop. With cycling enabled, navigation wraps. The
+live command state disables operations that cannot currently produce a
+valid transition.
+
+{Up - 12 Windows, Virtual Desktops, and Workspaces:UserManualC12}
+{Help index:DetailedIndex}
+
+.topic UserManualC12S05=291
+ 12.5 LINKS
+
+Window > Link and Unlink control the MRMAC window link used by editor
+procedures. A link is not the same as a split viewport or file comparison.
+It gives macro operations an explicit related window without creating a
+second document ownership model.
+
+{Up - 12 Windows, Virtual Desktops, and Workspaces:UserManualC12}
+{Help index:DetailedIndex}
+
+.topic UserManualC12S06=292
+ 12.6 WORKSPACE LIFECYCLE
+
+Workspaces combine window identity, geometry, visibility, virtual
+desktops, main-file designation, and supported Bento state. The Window
+List can mark the main workspace file, save or load a workspace, and
+toggle autosave or autoload.
+
+Get in the Window List moves a window from another virtual desktop into
+the current one. This is a topology change, not a file reload. Workspace
+load validates entries before adopting them; missing or invalid files are
+reported instead of being silently converted into unrelated empty windows.
+
+Before changing data: Save dirty documents before replacing the active
+topology with a workspace. Workspace persistence records session
+organization; it is not a bulk Save command for document contents.
+
+{Up - 12 Windows, Virtual Desktops, and Workspaces:UserManualC12}
+{Help index:DetailedIndex}
+
+.topic UserManualC13=293
+ 13 FILE FORMATTING
+
+In this chapter:
+
+  {13.1 Formatting scope:UserManualC13S01}
+  {13.2 Paragraph reformatting:UserManualC13S02}
+  {13.3 Code reformatting:UserManualC13S03}
+  {13.4 Whitespace policy:UserManualC13S04}
+  {13.5 Exporting to PDF:UserManualC13S05}
+  {13.6 File comparison:UserManualC13S06}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC13S01=294
+ 13.1 FORMATTING SCOPE
+
+Formatting commands distinguish the active line, paragraph, marked block,
+and whole file. The presence of a block can change the intended scope.
+Before running a formatter, make the selection visible and confirm the
+active filename-extension profile.
+
+Text > Upper case and Lower case transform selected text. Center line uses
+the configured left and right margins. Re-format paragraph wraps prose
+according to the formatting policy. Re-format code invokes the language
+formatter configured for the file.
+
+{Up - 13 File Formatting:UserManualC13}
+{Help index:DetailedIndex}
+
+.topic UserManualC13S02=295
+ 13.2 PARAGRAPH REFORMATTING
+
+Paragraph formatting is for textual layout, not language syntax. It joins
+and wraps the current paragraph within the active margins while respecting
+paragraph boundaries. It should not be used as a source-code pretty
+printer.
+
+The left and right margins can be changed through their dialogs. Both
+values are one-based and must form a valid range. They are synchronized
+with the persisted format-line settings.
+
+{Up - 13 File Formatting:UserManualC13}
+{Help index:DetailedIndex}
+
+.topic UserManualC13S03=296
+ 13.3 CODE REFORMATTING
+
+Text > Re-format code recalculates leading indentation in the selected
+lines, or in the whole file when no selection or block is active. It uses
+MR's built-in indentation rules for the active language and style; it
+does not invoke an external formatter or rewrite language syntax.
+
+For C and C++, preprocessor directives and their continued lines remain
+unchanged. They do not contribute to the indentation of following code.
+
+Check the active profile and selected scope first. Review the result and
+use Undo before saving if the indentation does not match your intent.
+
+{Up - 13 File Formatting:UserManualC13}
+{Help index:DetailedIndex}
+
+.topic UserManualC13S04=297
+ 13.4 WHITESPACE POLICY
+
+Filename-extension profiles control tab expansion, tab size, truncation of
+trailing whitespace, final line behavior, margins, and formatting
+commands. Formatting should be viewed as an application of that policy,
+not a universal style hard-coded into the editor.
+
+{Up - 13 File Formatting:UserManualC13}
+{Help index:DetailedIndex}
+
+.topic UserManualC13S05=298
+ 13.5 EXPORTING TO PDF
+
+File > Export to PDF replaces the historical idea of direct printer
+control with a portable output artifact. The dialog selects output path,
+header, footer, page separator, font family and size, text width, and page
+margins.
+
+The export path is separate from the source path. Header and footer are
+repeated page text. The page separator is a literal document string that
+forces a page boundary when encountered. Margins are PDF point values;
+text width is a formatted column count.
+
+Note: PDF export is a text export, not a screenshot of the terminal theme.
+Syntax colors, minimap, window frame, and dialog chrome are not the
+printable document.
+
+{Up - 13 File Formatting:UserManualC13}
+{Help index:DetailedIndex}
+
+.topic UserManualC13S06=299
+ 13.6 FILE COMPARISON
+
+Text > File compare opens a comparison Bento from two suitable editor
+windows. Difference markers and minimaps present structure; next/previous
+change navigates it. Apply-original-to-compare and
+apply-compare-to-original transfer the selected difference in an explicit
+direction.
+
+Read-only comparison policy can prevent accidental mutation of the compare
+side. The direction names are deliberately verbose: verify them before
+applying a large change.
+
+{Up - 13 File Formatting:UserManualC13}
+{Help index:DetailedIndex}
+
+.topic UserManualC14=300
+ 14 THE FORMAT LINE AND MARGINS
+
+In this chapter:
+
+  {14.1 Purpose:UserManualC14S01}
+  {14.2 Reading the ruler:UserManualC14S02}
+  {14.3 Left and right margins:UserManualC14S03}
+  {14.4 Tabs and the format line:UserManualC14S04}
+  {14.5 Profile inheritance:UserManualC14S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC14S01=301
+ 14.1 PURPOSE
+
+The format line is a compact ruler stored in the filename-extension
+profile. It communicates tab stops and formatting margins to commands that
+need them. Unlike a drawn ruler in the document, it is editor
+configuration and does not become file content.
+
+{Up - 14 The Format Line and Margins:UserManualC14}
+{Help index:DetailedIndex}
+
+.topic UserManualC14S02=302
+ 14.2 READING THE RULER
+
+A typical format line uses visible markers separated by repeated filler
+characters. Exact glyphs are theme and configuration details; their
+positions are what matter. The current tab size, left margin, and right
+margin are also shown as explicit fields in the Filename Extensions
+dialog.
+
+Use the ruler to detect a mismatch between expected and active formatting
+before indenting or wrapping a large range. A C++ profile and a prose
+profile will often have intentionally different policies.
+
+{Up - 14 The Format Line and Margins:UserManualC14}
+{Help index:DetailedIndex}
+
+.topic UserManualC14S03=303
+ 14.3 LEFT AND RIGHT MARGINS
+
+Text > Set left margin accepts a one-based value smaller than the right
+margin. Set right margin accepts a value greater than the left margin.
+Centering and paragraph wrapping use this interval.
+
+Margins do not truncate long lines on load. They guide formatting
+operations. Text beyond the right margin remains part of the document
+unless a command explicitly wraps or changes it.
+
+{Up - 14 The Format Line and Margins:UserManualC14}
+{Help index:DetailedIndex}
+
+.topic UserManualC14S04=304
+ 14.4 TABS AND THE FORMAT LINE
+
+Tab size and expansion policy interact with the ruler. A displayed stop is
+a column concept, while a literal tab is one character in the file.
+Changing the profile can change alignment without changing stored bytes.
+
+For code, prefer the language and repository's indentation policy. For
+tables or diagrams, verify alignment in the actual terminal width and with
+the intended tab settings.
+
+{Up - 14 The Format Line and Margins:UserManualC14}
+{Help index:DetailedIndex}
+
+.topic UserManualC14S05=305
+ 14.5 PROFILE INHERITANCE
+
+The DEFAULT filename-extension profile supplies global fallback settings.
+A matching named profile overrides the relevant values. Consequently a
+format line that appears to "change by itself" usually indicates that the
+active file matched a different extension profile.
+
+{Up - 14 The Format Line and Margins:UserManualC14}
+{Help index:DetailedIndex}
+
+.topic UserManualC15=306
+ 15 SEARCH AND REPLACE
+
+In this chapter:
+
+  {15.1 The search dialog:UserManualC15S01}
+  {15.2 Literal, word, and regular-expression searches:UserManualC15S02}
+  {15.3 Replace:UserManualC15S03}
+  {15.4 Repeating and continuing:UserManualC15S04}
+  {15.5 Results and navigation:UserManualC15S05}
+  {15.6 Multiple-file search:UserManualC15S06}
+  {15.7 Multiple-file search and replace:UserManualC15S07}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC15S01=307
+ 15.1 THE SEARCH DIALOG
+
+Search > Search for text opens the single-document search form. Search
+text may be a literal, a PCRE2 regular expression, or a word/phrase
+according to Type. Direction is forward or backward. Mode stops on the
+first occurrence, prompts for the next, or lists all occurrences.
+
+PDF illustration: Single-document Search with literal, PCRE2, word/phrase,
+direction, result mode, and scope controls.
+
+Case sensitive changes comparison. Global search controls boundary
+behavior. Restrict to marked block limits the range. Search all windows
+extends traversal to eligible editor windows. Cancelling preserves the
+previously accepted search specification.
+
+The multi-file Search and Replace dialogs retain their entered text,
+paths, filespecs, and options when closed, including by cancellation. This
+remembers the next dialog's inputs; cancellation does not execute the
+search or replace. An empty search cannot start an operation. These values
+update runtime settings and histories; the dialog does not force a
+settings-file write for each search. PDF export similarly remembers its
+validated settings in the runtime model, while ordinary settings
+persistence writes them later.
+
+{Up - 15 Search and Replace:UserManualC15}
+{Help index:DetailedIndex}
+
+.topic UserManualC15S02=308
+ 15.2 LITERAL, WORD, AND REGULAR-EXPRESSION SEARCHES
+
+Literal search treats the entered text as text. Word/phrase mode applies
+word boundaries using editor rules. PCRE mode delegates pattern semantics
+to PCRE2. Do not escape a literal as though it were a regular expression
+unless PCRE mode is actually selected.
+
+Regular expressions are powerful enough to match empty strings or very
+broad ranges. Test a pattern with stop-on-first or list mode before
+combining it with replace-all.
+
+{Up - 15 Search and Replace:UserManualC15}
+{Help index:DetailedIndex}
+
+.topic UserManualC15S03=309
+ 15.3 REPLACE
+
+Search > Search and replace adds replacement text, policy, and cursor
+placement. Mode can replace the first match, prompt for each, or replace
+all. In prompt mode, Replace, Skip, Replace All, and Cancel make the
+decision for the current and remaining matches.
+
+Regular-expression replacement syntax is active only with the
+corresponding search mode. Preview lines in the confirmation dialog are
+not an editable buffer.
+
+Before changing data: Before Replace All, use list mode or a restricted
+marked block and inspect representative matches. For multi-file work,
+commit or back up the affected files first.
+
+{Up - 15 Search and Replace:UserManualC15}
+{Help index:DetailedIndex}
+
+.topic UserManualC15S04=310
+ 15.4 REPEATING AND CONTINUING
+
+Search > Repeat previous search reuses the last accepted specification
+without reopening the form. Continuation prompts distinguish Next, Stop,
+and Cancel. Search state is not rebuilt from partially edited fields in a
+cancelled dialog.
+
+{Up - 15 Search and Replace:UserManualC15}
+{Help index:DetailedIndex}
+
+.topic UserManualC15S05=311
+ 15.5 RESULTS AND NAVIGATION
+
+List mode produces a Found List. Each row identifies document and
+location. Activating it loads or focuses the document and moves to the
+match. Push the current position first when following results should be a
+reversible excursion.
+
+Search hits may be shown on the minimap and message line. The result
+location is resolved against the current document version; stale results
+are not allowed to overwrite or misdirect a newer document silently.
+
+{Up - 15 Search and Replace:UserManualC15}
+{Help index:DetailedIndex}
+
+.topic UserManualC15S06=312
+ 15.6 MULTIPLE-FILE SEARCH
+
+Search > Multiple file search selects filespec, root, recursion, search
+text, matching rules, editor-window inclusion, and optional workspace
+restriction. The request is immutable after submission and runs in the
+background. Collection initially reports an open-ended count; once the
+candidate set is known, the progress display reports files searched
+against the total. The Search button becomes Cancel while the operation is
+running. A cancelled or stale partial result is not opened as a valid
+Found List.
+
+Search editor windows includes already loaded documents. Restrict to
+workspace limits candidates to the active workspace. Whole-word mode takes
+precedence over regular-expression mode when both controls would otherwise
+be selected. These options are independent: including loaded windows adds
+their current in-memory snapshots, whereas workspace restriction limits
+the candidate population to workspace members.
+
+The result dialog can load the selected file or load every result file.
+Load keeps the result dialog available for further navigation; Load all
+opens each distinct result file without treating every match as another
+file load.
+
+{Up - 15 Search and Replace:UserManualC15}
+{Help index:DetailedIndex}
+
+.topic UserManualC15S07=313
+ 15.7 MULTIPLE-FILE SEARCH AND REPLACE
+
+The replace variant adds replacement text, review actions, and Keep all
+files open. Results are collected before UI adoption. Review permits
+Replace, Replace All, and Skip. Files need not all remain open unless that
+option is selected.
+
+Replace All applies one replacement per dialog event and shows
+completed/total progress. Cancelling pauses mutation and offers Continue,
+Abort, or Revert. Continue resumes. Abort keeps the completed prefix as
+ordinary Undo records. Revert restores the pre-operation snapshot of every
+file touched by that Replace All run; it does not discard unrelated
+earlier edits.
+
+Workspace restriction is especially useful in repositories with vendored
+or generated trees. A filespec alone describes names; workspace membership
+describes the intended project set.
+
+{Up - 15 Search and Replace:UserManualC15}
+{Help index:DetailedIndex}
+
+.topic UserManualC16=314
+ 16 KEYSTROKE MACROS
+
+In this chapter:
+
+  {16.1 Recording:UserManualC16S01}
+  {16.2 Naming and binding the result:UserManualC16S02}
+  {16.3 The Macro Library:UserManualC16S03}
+  {16.4 What recording does not capture:UserManualC16S04}
+  {16.5 Saving and reloading:UserManualC16S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC16S01=315
+ 16.1 RECORDING
+
+Macro > Recording start/stop captures eligible key activity into a new
+macro source. The frame displays a recording marker. Stopping the
+recording offers to bind the result to a key.
+
+Help-navigation keys and the recording toggle itself are treated specially
+so that a macro does not accidentally record the command that terminates
+its own capture. Modal interactions may be represented by resulting
+commands rather than raw terminal bytes.
+
+{Up - 16 Keystroke Macros:UserManualC16}
+{Help index:DetailedIndex}
+
+.topic UserManualC16S02=316
+ 16.2 NAMING AND BINDING THE RESULT
+
+A recorded macro becomes a normal MRMAC definition that can be inspected
+and edited. The binding dialog captures a key or modified sequence; Esc
+leaves the macro unbound. Binding is separate from creation, so a useful
+macro need not consume a key.
+
+Use the Key Manager to review conflicts. If more than one profile or
+context defines a sequence, the active resolver semantics determine which
+target is eligible. Descriptions should state what the macro does, not
+merely repeat its filename.
+
+{Up - 16 Keystroke Macros:UserManualC16}
+{Help index:DetailedIndex}
+
+.topic UserManualC16S03=317
+ 16.3 THE MACRO LIBRARY
+
+Macro > Macro Library lists indexed files, definitions, bindings, and
+AUTOEXEC membership. Create, Delete, Copy, Edit, and Bind operate on the
+selected definition. AUTOEXEC Add and Remove control which macro files run
+during startup.
+
+Playback runs the selected macro normally. Debug starts it in the MRMAC
+debugger, where breakpoints, watches, evaluation, stepping, and execution
+state are visible. Use Debug for authored logic; use ordinary Playback for
+a known routine.
+
+{Up - 16 Keystroke Macros:UserManualC16}
+{Help index:DetailedIndex}
+
+.topic UserManualC16S04=318
+ 16.4 WHAT RECORDING DOES NOT CAPTURE
+
+Recording is not a video or terminal-event dump. It produces a macro that
+replays supported editor meaning. External program state, wall-clock
+timing, network responses, and files changed by another process are not
+automatically made deterministic.
+
+When a recorded sequence becomes a maintained tool, edit its source to add
+validation and explicit error handling. Repeatedly recording a longer
+sequence is less reviewable than turning stable behavior into a named
+MRMAC routine.
+
+{Up - 16 Keystroke Macros:UserManualC16}
+{Help index:DetailedIndex}
+
+.topic UserManualC16S05=319
+ 16.5 SAVING AND RELOADING
+
+Macro files live under the configured macro directory or another chosen
+path. The library indexes available definitions. A saved keymap binding
+and an AUTOEXEC entry refer to macro identity; moving or renaming sources
+can invalidate those references.
+
+{Up - 16 Keystroke Macros:UserManualC16}
+{Help index:DetailedIndex}
+
+.topic UserManualC17=320
+ 17 LINE DRAWING
+
+In this chapter:
+
+  {17.1 Enabling the mode:UserManualC17S01}
+  {17.2 Drawing with cursor motion:UserManualC17S02}
+  {17.3 Drawing with the mouse:UserManualC17S03}
+  {17.4 Rectangles from column blocks:UserManualC17S04}
+  {17.5 Single and double intersections:UserManualC17S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC17S01=321
+ 17.1 ENABLING THE MODE
+
+Text > Line drawing toggles line-drawing mode for the active editor. The
+menu reports ON or OFF. Double lines is available only while line drawing
+is enabled and selects the preferred double-line style.
+
+Line drawing inserts Unicode box-drawing glyphs into the document. It is
+not a temporary screen overlay. Saving the file preserves those characters
+as UTF-8.
+
+{Up - 17 Line Drawing:UserManualC17}
+{Help index:DetailedIndex}
+
+.topic UserManualC17S02=322
+ 17.2 DRAWING WITH CURSOR MOTION
+
+With line drawing active, the supported modified cursor gesture draws
+between the old and new positions. Existing adjacent line-drawing cells
+are inspected so that corners, tees, crossings, and mixed single/double
+connections receive an appropriate glyph.
+
+The editor can materialize rows and virtual columns when drawing beyond
+existing text. This is useful for diagrams but can add whitespace and new
+lines. Undo remains available for each accepted drawing operation.
+
+{Up - 17 Line Drawing:UserManualC17}
+{Help index:DetailedIndex}
+
+.topic UserManualC17S03=323
+ 17.3 DRAWING WITH THE MOUSE
+
+A plain left-button drag draws a connected path. Direction changes are
+resolved into orthogonal segments. Fast collinear motion is coalesced so
+the document receives the final intended line instead of every
+intermediate mouse sample.
+
+Terminal mouse support must be active. Over remote connections with
+unreliable mouse reporting, cursor-based drawing is more predictable.
+
+{Up - 17 Line Drawing:UserManualC17}
+{Help index:DetailedIndex}
+
+.topic UserManualC17S04=324
+ 17.4 RECTANGLES FROM COLUMN BLOCKS
+
+In line-drawing mode, an eligible column-block gesture can produce a
+rectangle whose corners are the block bounds. The operation materializes
+empty rows or columns as needed and consumes the drawing selection after
+the box is committed.
+
+{Up - 17 Line Drawing:UserManualC17}
+{Help index:DetailedIndex}
+
+.topic UserManualC17S05=325
+ 17.5 SINGLE AND DOUBLE INTERSECTIONS
+
+Double-line preference applies to the new connection. When a new segment
+meets existing line-drawing text, MR preserves supported neighboring
+connections and chooses a same-style or mixed glyph. Unsupported arbitrary
+characters are not guessed into a box-drawing topology.
+
+Note: Line drawing works best in a monospaced terminal font with complete
+Unicode box-drawing coverage. Misaligned display can be a font or
+terminal-cell issue even when the saved UTF-8 characters are correct.
+
+{Up - 17 Line Drawing:UserManualC17}
+{Help index:DetailedIndex}
+
+.topic UserManualC18=326
+ 18 CALCULATOR
+
+In this chapter:
+
+  {18.1 Opening the calculator:UserManualC18S01}
+  {18.2 Entering values:UserManualC18S02}
+  {18.3 Arithmetic and logical operations:UserManualC18S03}
+  {18.4 Memory and pasting the result:UserManualC18S04}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC18S01=327
+ 18.1 OPENING THE CALCULATOR
+
+The bundled desktop-utilities macro adds Tools > Calculator. Its default
+binding is Alt+Shift+C. Because the tool is supplied by MRMAC, the menu
+item is available after the corresponding utility macro has been loaded
+and registered. An installation that deliberately omits that macro will
+not show the command.
+
+The calculator is a modal work surface: the active document remains
+visible behind it, but editor input resumes only after the dialog is
+closed or its value is pasted. The upper display is the current input; the
+second display shows the memory register.
+
+PDF illustration: The bundled MRMAC calculator in a real MR PTY session.
+
+{Up - 18 Calculator:UserManualC18}
+{Help index:DetailedIndex}
+
+.topic UserManualC18S02=328
+ 18.2 ENTERING VALUES
+
+The digit buttons enter a value in the current base. Base cycles through
+decimal, hexadecimal, and binary representation while preserving the
+numeric value.
+
+Hexadecimal output uses a leading dollar sign, for example $2A. The
+buttons A through F are accepted only in base 16. In binary mode, only
+zero and one are valid. +/- changes the sign of the current input; Clr
+clears the input and clears memory when the displayed value is already
+zero.
+
+If a stream or line block contains a valid decimal integer when the
+calculator opens, that number seeds the input. Whitespace is ignored for
+this purpose. Column blocks and non-numeric selections are left untouched
+and the calculator starts at zero.
+
+{Up - 18 Calculator:UserManualC18}
+{Help index:DetailedIndex}
+
+.topic UserManualC18S03=329
+ 18.3 ARITHMETIC AND LOGICAL OPERATIONS
+
+The four arithmetic operators perform integer addition, subtraction,
+multiplication, and division. Division is integer division. And, Or, and
+Xor operate bitwise on integer operands.
+
+The interaction follows a conventional accumulator:
+
+1. enter the first operand;
+
+2. choose an operator;
+
+3. enter the second operand;
+
+4. choose another operator to continue, or = to display the result.
+
+The calculator rejects division by zero, invalid digits for the selected
+base, and malformed pasted input. A rejected operation leaves the dialog
+open so the value can be corrected.
+
+{Up - 18 Calculator:UserManualC18}
+{Help index:DetailedIndex}
+
+.topic UserManualC18S04=330
+ 18.4 MEMORY AND PASTING THE RESULT
+
+Mem Sto copies the current numeric value to the memory register; Mem Rcl
+recalls it in the active base. The memory display is right-aligned beneath
+the input display.
+
+Paste inserts the displayed representation at the current editor position
+and closes the calculator. This is a document edit and participates in
+normal Undo and Redo. In hexadecimal mode the inserted text includes the
+dollar prefix; change the base before pasting if the destination expects
+another notation.
+
+Note: The calculator is an integer tool, not a floating-point expression
+evaluator. For repeatable calculations embedded in an editing workflow, an
+authored MRMAC routine is usually the clearer instrument.
+
+{Up - 18 Calculator:UserManualC18}
+{Help index:DetailedIndex}
+
+.topic UserManualC19=331
+ 19 CHARACTER TABLES
+
+In this chapter:
+
+  {19.1 ASCII and Latin-1:UserManualC19S01}
+  {19.2 Emoji and Unicode symbols:UserManualC19S02}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC19S01=332
+ 19.1 ASCII AND LATIN-1
+
+Tools > ASCII table, normally bound to Alt+Shift+A, opens a modeless
+table. Each row contains the visible form, its decimal code, and the range
+name. Codes 0 through 127 are the ASCII range; codes 160 through 255 are
+presented as Latin-1. The unused C1 interval from 128 through 159 is not
+listed.
+
+Control codes receive readable labels. For example, code 1 appears as ^A,
+space appears as SP, delete as ^?, and non-breaking space as NBSP.
+
+PDF illustration: The modeless ASCII and Latin-1 table; the decimal code
+is shown beside each character.
+
+Choosing an entry copies the corresponding character to the system
+clipboard and closes the table. Paste it with the active keymap's
+clipboard command. The selected row is remembered when the table is opened
+again during the same session.
+
+{Up - 19 Character Tables:UserManualC19}
+{Help index:DetailedIndex}
+
+.topic UserManualC19S02=333
+ 19.2 EMOJI AND UNICODE SYMBOLS
+
+Tools > Emoji table, normally bound to Alt+Shift+E, works in the same way.
+It presents selected Unicode symbol and emoji ranges, including technical
+symbols, dingbats, regional indicators, pictographs, emoticons, transport
+symbols, and newer symbol blocks. The right-hand column gives the U+ code
+point.
+
+Selecting a row copies the UTF-8 character to the clipboard. Whether the
+glyph is visible in the table and editor depends on the terminal font and
+its fallback fonts. A missing-glyph box is a rendering limitation; it does
+not mean that the copied UTF-8 sequence is invalid.
+
+Note: The table inserts a character, not an ASCII escape notation. To
+write a literal numeric escape such as \u263A, enter that source-language
+syntax directly.
+
+{Up - 19 Character Tables:UserManualC19}
+{Help index:DetailedIndex}
+
+.topic UserManualC20=334
+ 20 DENSE DISPLAY AND INFORMATION PROJECTION
+
+In this chapter:
+
+  {20.1 Keeping document space visible:UserManualC20S01}
+  {20.2 Gutters:UserManualC20S02}
+  {20.3 The minimap:UserManualC20S03}
+  {20.4 Folding and zoom:UserManualC20S04}
+  {20.5 Terminal size and remote sessions:UserManualC20S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC20S01=335
+ 20.1 KEEPING DOCUMENT SPACE VISIBLE
+
+The historical idea of a condensed display is more useful in MR as a
+choice of information density. The editor can project line numbers,
+folding controls, difference markers, a minimap, scrollbars, a status
+line, and function-key assignments around the document. These elements do
+not become part of the file.
+
+Use Other > Installation and setup > User interface settings to choose the
+global projection. Filename-extension profiles can then adapt relevant
+editor behavior to a file class. Keep enough context to navigate safely,
+but do not spend half a narrow terminal describing the other half.
+
+{Up - 20 Dense Display and Information Projection:UserManualC20}
+{Help index:DetailedIndex}
+
+.topic UserManualC20S02=336
+ 20.2 GUTTERS
+
+Gutter slots are ordered projections. Their setup codes are:
+
+  Code | Projection
+  L | line numbers
+  C | code-folding controls
+  D | difference markers in compare views
+  M | minimap
+
+The left-to-right order in the setup dialog is significant. A blank slot
+removes that projection. Line numbers refer to document lines, while a
+folding control describes structural state derived for the current
+language.
+
+{Up - 20 Dense Display and Information Projection:UserManualC20}
+{Help index:DetailedIndex}
+
+.topic UserManualC20S03=337
+ 20.3 THE MINIMAP
+
+The minimap is a sub-character overview of the whole document. It provides
+orientation in files much taller than the viewport and can project notable
+regions such as diagnostics or changes. Selecting or dragging in it moves
+the editor viewport without changing the document.
+
+The minimap is deliberately a summary, not a second editor. Use it to
+answer "where am I?" and use the primary viewport to inspect exact text.
+Syntax and document changes may be computed asynchronously; a newly loaded
+large file can therefore acquire its complete overview progressively.
+
+{Up - 20 Dense Display and Information Projection:UserManualC20}
+{Help index:DetailedIndex}
+
+.topic UserManualC20S04=338
+ 20.4 FOLDING AND ZOOM
+
+Code folding hides the interior of a derived structural region while
+retaining its lead line. Fold and unfold commands affect only the view.
+Edits, saves, searches, and builds continue to operate on the underlying
+document.
+
+Window > Zoom maximizes or restores the active desktop window. Window >
+Minimize/restore changes it to or from its one-line desktop
+representation. Window > Hide removes the window from normal selection
+without closing it. These are window-state operations; none discards
+unsaved text.
+
+{Up - 20 Dense Display and Information Projection:UserManualC20}
+{Help index:DetailedIndex}
+
+.topic UserManualC20S05=339
+ 20.5 TERMINAL SIZE AND REMOTE SESSIONS
+
+When the terminal becomes smaller, prioritize the editor viewport and
+retain only the projections needed for the task. Function-key labels and
+the message line are valuable when learning a keymap; experienced users
+may prefer more document columns. On a remote connection, disabling
+visually busy projections can also reduce terminal traffic without
+changing editor semantics.
+
+{Up - 20 Dense Display and Information Projection:UserManualC20}
+{Help index:DetailedIndex}
+
+.topic UserManualC21=340
+ 21 FILENAME-EXTENSION PROFILES
+
+In this chapter:
+
+  {21.1 Why profiles exist:UserManualC21S01}
+  {21.2 Identity and matching:UserManualC21S02}
+  {21.3 Language and editor behavior:UserManualC21S03}
+  {21.4 Build and lifecycle integration:UserManualC21S04}
+  {21.5 Managing profile drafts:UserManualC21S05}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC21S01=341
+ 21.1 WHY PROFILES EXIST
+
+A filename suffix is more than a syntax-color hint. In MR, a
+filename-extension profile groups the behavior expected for a class of
+files: language, indentation, tabs, margins, display, block behavior,
+compiler profile, color theme, path, and optional lifecycle macros. This
+keeps a C++ source file, a Makefile, and a plain-text note from sharing
+inappropriate defaults merely because they occupy the same desktop.
+
+Other > Installation and setup > Filename extensions opens the profile
+editor. The dialog works on a draft. Its Help describes the selected
+fields without applying the draft.
+
+PDF illustration: Filename-extension profiles combine matching, language,
+editor, and build choices.
+
+{Up - 21 Filename-Extension Profiles:UserManualC21}
+{Help index:DetailedIndex}
+
+.topic UserManualC21S02=342
+ 21.2 IDENTITY AND MATCHING
+
+Profile ID is the stable settings key; Description is the human-readable
+name. Extension contains the exact, case-sensitive extension list used for
+matching.
+
+The DEFAULT profile supplies global fallback settings. Its identity and
+extension selector cannot be edited. Specific profiles override the
+fallback when their selectors match. Avoid selectors that differ only by
+an easy-to-miss case unless the filesystem convention genuinely requires
+that distinction.
+
+Before changing data: Changing a profile selector changes which future
+file loads receive that profile. It does not rewrite filenames, and it
+should not be used as a batch conversion mechanism.
+
+{Up - 21 Filename-Extension Profiles:UserManualC21}
+{Help index:DetailedIndex}
+
+.topic UserManualC21S03=343
+ 21.3 LANGUAGE AND EDITOR BEHAVIOR
+
+The profile controls language recognition and associated editor choices,
+including indentation, tab behavior, margins, format-line state, display,
+blocks, and editing modes. These choices establish a starting
+configuration; commands used in the active editor may still alter view or
+session state.
+
+The factory default has word wrap disabled. Enable it deliberately in the
+DEFAULT or a matching filename-extension profile, or toggle it for the
+active editor when reflow at the configured margins is wanted.
+
+Binary detection is a separate concern. When Autodetect binary files is
+enabled in User Interface Settings, a binary file is directed to the Bento
+hex editor instead of being interpreted as ordinary text. That applies to
+files supplied on the command line as well as those opened later.
+
+{Up - 21 Filename-Extension Profiles:UserManualC21}
+{Help index:DetailedIndex}
+
+.topic UserManualC21S04=344
+ 21.4 BUILD AND LIFECYCLE INTEGRATION
+
+Compiler profile associates matching files with a build description. Other
+> Build current file uses that relationship to choose a toolchain. A
+missing or incorrect association can therefore produce the wrong build
+command even when language highlighting looks correct.
+
+Post-load macro names a MRMAC file to run after a matching file has
+loaded. Pre-save macro runs before it is saved. Typical uses include
+project-specific normalization or generated annotations, but these hooks
+are executable policy: keep them small, deterministic, and reviewable.
+
+Default path supplies the initial directory for relevant file operations.
+Colortheme selects the palette associated with the profile.
+
+{Up - 21 Filename-Extension Profiles:UserManualC21}
+{Help index:DetailedIndex}
+
+.topic UserManualC21S05=345
+ 21.5 MANAGING PROFILE DRAFTS
+
+New creates a profile, Copy starts from the selected profile, and Delete
+removes a draft profile. Copying is the safest way to create a close
+variant because the full behavioral set remains visible for review. Accept
+the outer setup flow to make intended changes effective; Cancel leaves the
+runtime configuration unchanged.
+
+{Up - 21 Filename-Extension Profiles:UserManualC21}
+{Help index:DetailedIndex}
+
+.topic UserManualC22=346
+ 22 INDENTING STYLES
+
+In this chapter:
+
+  {22.1 Automatic indentation:UserManualC22S01}
+  {22.2 Tabs, spaces, and visual columns:UserManualC22S02}
+  {22.3 Indenting and undenting blocks:UserManualC22S03}
+  {22.4 Language-sensitive structure:UserManualC22S04}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC22S01=347
+ 22.1 AUTOMATIC INDENTATION
+
+Smart indentation derives the leading whitespace for a new line from the
+active language and nearby structure. The filename-extension profile
+selects the relevant indentation behavior, while User Interface Settings
+offers an indent-style preview.
+
+Automatic indentation is assistance, not a parser rewrite. It acts at the
+editing boundary and leaves already existing lines alone. This matters
+when opening generated code, patches, or files whose local style
+intentionally deviates from the project default.
+
+{Up - 22 Indenting Styles:UserManualC22}
+{Help index:DetailedIndex}
+
+.topic UserManualC22S02=348
+ 22.2 TABS, SPACES, AND VISUAL COLUMNS
+
+An indentation policy must distinguish three concepts:
+
+- the number of visual columns in one indentation step;
+
+- whether newly produced indentation uses tabs, spaces, or a defined
+combination;
+
+- the display width assigned to an existing tab character.
+
+These values often coincide in simple profiles but they are not
+equivalent. Changing tab display width can change alignment on screen
+without changing a single byte. Replacing tabs with spaces changes the
+document and should be a deliberate formatting operation.
+
+{Up - 22 Indenting Styles:UserManualC22}
+{Help index:DetailedIndex}
+
+.topic UserManualC22S03=349
+ 22.3 INDENTING AND UNDENTING BLOCKS
+
+Block > Indent and Block > Undent adjust the lines intersecting the
+selected block by a shared shift to the next or previous tab stop, based
+on the least-indented nonblank line. A stream block becomes a line block
+covering its touched lines. Relative indentation is preserved,
+whitespace-only lines are unchanged, and column blocks retain rectangular
+semantics.
+
+Undent removes only eligible leading indentation. It does not delete
+arbitrary non-whitespace text to force a visual column. The operation is
+undoable as a document edit.
+
+{Up - 22 Indenting Styles:UserManualC22}
+{Help index:DetailedIndex}
+
+.topic UserManualC22S04=350
+ 22.4 LANGUAGE-SENSITIVE STRUCTURE
+
+For brace-oriented languages, smart indentation observes opening and
+closing structure. For indentation-oriented languages, leading whitespace
+itself is semantically significant and deserves more caution. Macro
+sources, shell languages, markup, and plain text each have distinct
+structural cues.
+
+When imported text has mixed indentation, first inspect tabs visibly and
+select the correct profile. Repeatedly pressing Indent to make the screen
+look right can preserve hidden inconsistencies. Use Re-format code with the appropriate
+language and indentation settings, then review its result.
+
+Note: If an indentation result is surprising, check the active
+filename-extension profile before changing global settings. A local
+profile mismatch is much more common than a universal indentation rule
+suddenly becoming philosophical.
+
+{Up - 22 Indenting Styles:UserManualC22}
+{Help index:DetailedIndex}
+
+.topic UserManualC23=351
+ 23 LANGUAGE-SPECIFIC FEATURES
+
+In this chapter:
+
+  {23.1 Detection and syntax projection:UserManualC23S01}
+  {23.2 Code folding and outlines:UserManualC23S02}
+  {23.3 Parentheses and structural navigation:UserManualC23S03}
+  {23.4 Formatting source code:UserManualC23S04}
+  {23.5 Compiler profiles and diagnostics:UserManualC23S05}
+  {23.6 Debugging compiled programs with GDB:UserManualC23S06}
+  {23.7 Git status and file changes:UserManualC23S07}
+  {23.8 File comparison:UserManualC23S08}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S01=352
+ 23.1 DETECTION AND SYNTAX PROJECTION
+
+The matched filename-extension profile establishes the language used by
+the editor. Language selection drives syntax highlighting, structural
+folding, smart indentation, outline production, and other derived views.
+Plain text remains a valid explicit fallback.
+
+Syntax colors and fold markers are projections derived from a document
+snapshot. They are not stored in the file and are not part of Undo. On a
+large document, the visible area is prioritized while background work
+completes the wider derived state.
+
+PDF illustration: A MRMAC source file with language-aware highlighting,
+folding controls, and the minimap.
+
+{Up - 23 Language-Specific Features:UserManualC23}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S02=353
+ 23.2 CODE FOLDING AND OUTLINES
+
+Folding regions reflect structural constructs appropriate to the language:
+functions, types, sections, macro bodies, build targets, markup elements,
+or indentation scopes. Fold-level commands provide a coarse overview;
+individual gutter controls expose local structure.
+
+An outline is a navigation model, not a second copy of the source. Its
+entries identify relevant document locations and may distinguish
+functions, methods, types, modules, sections, and other structural kinds.
+After edits, allow the derived state to catch up before assuming that a
+temporarily absent entry has been deleted from the document.
+
+{Up - 23 Language-Specific Features:UserManualC23}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S03=354
+ 23.3 PARENTHESES AND STRUCTURAL NAVIGATION
+
+Other > Match parenthesis moves between a supported matching pair near the
+cursor: parentheses, square brackets, or braces. It starts at the cursor
+or immediately before it and counts nesting of the chosen delimiter pair.
+This is character-based matching; it does not exclude strings or comments.
+
+Search markers, compiler diagnostics, fold outlines, and the marker stack
+provide complementary navigation. Use the narrowest semantic operation
+available: a diagnostic command for a compiler error, matching for a
+bracket, and search for textual occurrences.
+
+{Up - 23 Language-Specific Features:UserManualC23}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S04=355
+ 23.4 FORMATTING SOURCE CODE
+
+Text > Re-format code recalculates leading indentation in the selected
+lines, or in the whole file when no selection or block is active. It uses
+MR's built-in indentation rules for the active language and style; it
+does not invoke an external formatter or rewrite language syntax.
+
+For C and C++, preprocessor directives and their continued lines remain
+unchanged. They do not contribute to the indentation of following code.
+
+Check the active profile and selected scope first. Review the result and
+use Undo before saving if the indentation does not match your intent.
+
+{Up - 23 Language-Specific Features:UserManualC23}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S05=356
+ 23.5 COMPILER PROFILES AND DIAGNOSTICS
+
+Other > Build current file chooses the compiler profile associated with
+the active file. A compiler profile describes the executable, toolchain,
+version and target constraints, build flags, include and library
+arguments, runtime paths, a pre-build shell command, build-succeeded and
+build-failed shell commands, and optional pre- and post-build MRMAC hooks.
+Separate success and failure audio paths can announce the result through
+the configured audio player.
+
+Installation and setup > Compiler profiles exposes these fields and the
+Automatic Setup action. If the selected profile names an executable,
+Automatic Setup resolves and probes it, then fills toolchain, version,
+target, default flags, include paths, library paths, and runtime paths.
+With no executable selected, the action discovers supported compilers on
+PATH and inserts or selects matching profiles. The result remains an
+ordinary editable profile; automatic setup neither discovers a whole build
+system nor hides its decisions.
+
+The pre-build MRMAC hook runs before the external build is submitted. The
+shell pre-build command can stop the build with a failing status; the
+matching success or failure command then follows the compiler result.
+Completion audio and the post-build MRMAC hook are adopted with the final
+result. Build context values identify the source, output, profile,
+toolchain, and exit status to hooks without requiring them to reconstruct
+the command line.
+
+Other > Next compiler error and Previous compiler error navigate adopted
+diagnostics. User Interface Settings controls whether warnings and notes
+are tracked in addition to errors and how diagnostic messages are
+presented. The minimap can provide long-range orientation, but the
+diagnostic navigation command remains authoritative for the next adopted
+location.
+
+{Up - 23 Language-Specific Features:UserManualC23}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S06=357
+ 23.6 DEBUGGING COMPILED PROGRAMS WITH GDB
+
+The compiled-program debugger uses GDB and is separate from the MRMAC
+macro debugger. It supports the GDB-compatible compiler profiles for C and
+C++, Rust, Go, Free Pascal, and FreeBASIC. Automatic compiler discovery
+includes C GCC/Clang, Rust, Go, and Free Pascal profiles with Debug,
+Normal, Speed, and Size flavours in addition to the existing toolchains.
+
+To start a session:
+
+1. Install GDB and ensure gdb is available on PATH.
+
+2. Associate the named source file with a compatible compiler profile
+whose name or ID contains Debug. Check its debug-information flags.
+
+3. Save and build the file with that profile. The expected output must
+exist, be executable, and be at least as recent as the source.
+
+4. Choose Other > Debug current file, or press Alt+F9. The command is
+enabled only while an editor with a recognized source language is focused.
+Starting the session also checks the source, profile, and build artifact. An unavailable command is a reason to check the profile,
+unsaved source, and build output first.
+
+The editor becomes a debugger Bento with source, Debugger Output,
+Variables, Watches, and Program Terminal panes. Startup runs to the first
+code line. Program Terminal is the debugged program's terminal, including
+keyboard input; Debugger Output carries debugger status and diagnostics.
+
+While a GDB debugger is active, the function keys have these meanings:
+
+F4: Evaluate or assign an expression using GDB semantics.
+
+F5: Continue a stopped program, or request a pause while running.
+
+F6: Run to the source location at the cursor.
+
+F7 / Shift+F7: Add a watch / remove a watch by object or expression.
+
+F8: Stop the GDB session.
+
+F9: Toggle a breakpoint at the cursor's source line.
+
+F10: Step into; F11 steps over; Shift+F11 steps out.
+
+These keys replace their normal editor meanings in debugger context;
+outside that context, for example, F9 remains Build current file.
+
+Double-click with the left mouse button in the line-number gutter to set
+or remove a breakpoint on that line. This is the mouse equivalent of F9,
+and works in both GDB and MRMAC debugger source views while their debugger
+controls are active. The line-number gutter must be visible; this is not a
+click in the folding gutter. Folded viewport rows are mapped to their
+document lines. Breakpoint acceptance still depends on the debugger: GDB
+resolves compiled source locations, while MRMAC requires a debuggable
+span.
+
+In this section:
+
+  {23.6.1 Source-pane context menu:UserManualC23S06P01}
+  {23.6.2 Following matrix.c through a stop:UserManualC23S06P02}
+
+{Up - 23 Language-Specific Features:UserManualC23}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S06P01=358
+ 23.6.1 SOURCE-PANE CONTEXT MENU
+
+Right-click the source text while GDB is active. Alongside Edit, Outline,
+References, and Rename, the menu offers:
+
+Toggle breakpoint: Sets or removes the breakpoint at the clicked source
+line, as with F9 or a left-button double-click in the line-number gutter.
+
+Run here: Continues towards the clicked source location, like F6.
+
+Watch: Adds the identifier under the mouse directly. If there is no
+identifier, it opens the Watch expression dialog instead.
+
+Eval: Opens the expression evaluation/assignment dialog, like F4.
+
+Into / Step / Out: Step into, step over, or step out, corresponding to
+F10, F11, and Shift+F11. Stepping advances execution from the current
+stop; it does not jump execution to the right-clicked line.
+
+Clear Program Terminal: Clears the Program Terminal display and scrollback
+without restarting the inferior or clearing Debugger Output.
+
+The source commands use the clicked source location and retain the usual
+GDB state and stale-source checks. This extended command group is specific
+to an active GDB session. The MRMAC debugger uses its own function-key
+controls; its source view still shares the ordinary editor menu and gutter
+breakpoint gesture.
+
+PDF illustration: PTY capture of the extended GDB source menu in a paused
+matrix.c session. Watch uses the clicked identifier; Into, Step, and Out
+act on the current execution stop.
+
+{Up - 23.6 Debugging compiled programs with GDB:UserManualC23S06}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S06P02=359
+ 23.6.2 FOLLOWING MATRIX.C THROUGH A STOP
+
+The following captures use C Testground/matrix.c. Build it with debug
+information and no optimisation, then start Debug current file. Step into
+sum_matrix, set a breakpoint on the accumulation line, and continue to it.
+Add watches for the accumulator and matrix values to compare the current
+loop indices with the values used by that iteration.
+
+PDF illustration: PTY capture of matrix.c paused inside sum_matrix. The
+source position, Variables, and Watches describe the same stop; Program
+Terminal is a separate pane.
+
+The accumulator and loop-index watches become out of scope after returning
+from sum_matrix; they do not become global variables. Continuing to
+program exit flushes this example's buffered output, Ergebnis: 77, to
+Program Terminal. The example does not print a newline, so the text may
+remain buffered at a stop immediately after its printf call.
+
+PDF illustration: PTY capture after matrix.c finishes. Program Terminal
+retains Ergebnis: 77; debugger status and program output occupy separate
+panes.
+
+Variables and Watches show structured values as trees where GDB exposes
+children. Expression evaluation and value assignment can change the
+running program. The Source-pane context menu offers Clear Program
+Terminal to clear its display and scrollback; this does not restart the
+program.
+
+If the source changes after the build, ordinary debug commands are
+rejected and Debugger Output requests a rebuild. Stop GDB, save and
+rebuild the source, then start a new session. Stopping or closing the
+debugger terminates its external session. Saving a workspace does not
+preserve a live GDB process or resume its instruction pointer after
+restarting MR.
+
+{Up - 23.6 Debugging compiled programs with GDB:UserManualC23S06}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S07=360
+ 23.7 GIT STATUS AND FILE CHANGES
+
+For a named file in a Git work tree, MR probes the file's status in the
+background. The frame displays its Git changes marker when the file
+differs from the repository state or is untracked. Hovering explains the
+marker; clicking it is equivalent to Other > Git changes.
+
+Git changes is file-scoped. If the editor contains unsaved changes, MR
+offers to save them first and stops if they are not saved. It then opens a
+communication window containing the repository and branch, short
+repository status, and the diff for the focused file. An untracked file is
+compared with an empty source. The command does not stage, commit, switch
+branches, or maintain a second repository model; use normal Git tools for
+those operations.
+
+{Up - 23 Language-Specific Features:UserManualC23}
+{Help index:DetailedIndex}
+
+.topic UserManualC23S08=361
+ 23.8 FILE COMPARISON
+
+Text > File compare opens a compare view. Difference gutters and the
+minimap summarize changes, while Apply original to compare and Apply
+compare to original transfer the selected difference in the named
+direction.
+
+Read-only comparison can be enabled in User Interface Settings. Direction
+matters: the two apply commands are intentionally explicit because a
+compact "accept" command would conceal which document is being changed.
+
+{Up - 23 Language-Specific Features:UserManualC23}
+{Help index:DetailedIndex}
+
+.topic UserManualC24=362
+ 24 THE MRMAC INTERFACE
+
+In this chapter:
+
+  {24.1 What MRMAC contributes:UserManualC24S01}
+  {24.2 Macro files and definitions:UserManualC24S02}
+  {24.3 Execution contexts:UserManualC24S03}
+  {24.4 Menus, dialogs, and modeless tools:UserManualC24S04}
+  {24.5 Keys, recording, and AUTOEXEC:UserManualC24S05}
+  {24.6 Running a macro from the command line:UserManualC24S06}
+  {24.7 Debugging and reference material:UserManualC24S07}
+
+{User Manual contents:UserManual}
+{Help index:DetailedIndex}
+
+.topic UserManualC24S01=363
+ 24.1 WHAT MRMAC CONTRIBUTES
+
+MRMAC is the integrated macro language for editor automation and runtime
+UI extension. Its compiler runs in memory and supports both precompiled
+and on-demand macro files. A macro can edit text, inspect editor state,
+register menu items and keys, construct dialogs or modeless tools, start
+asynchronous work, and cooperate with the application's window system.
+
+The calculator and character tables in Chapters 17 and 18 are concrete
+examples: they are application-quality utilities implemented as macros,
+not hard-coded simulations in this manual.
+
+{Up - 24 The MRMAC Interface:UserManualC24}
+{Help index:DetailedIndex}
+
+.topic UserManualC24S02=364
+ 24.2 MACRO FILES AND DEFINITIONS
+
+A source begins with a macro-file identity and contains named macro
+definitions. The Macro Library indexes those definitions independently of
+their key bindings. One file can therefore provide several commands,
+shared helper routines, and a startup registration macro.
+
+Use Macro > Macro Library to create, inspect, copy, delete, edit, bind,
+play, or debug indexed definitions. The editor provides syntax
+highlighting, folding, and outline support for .mrmac sources just as it
+does for other supported languages.
+
+{Up - 24 The MRMAC Interface:UserManualC24}
+{Help index:DetailedIndex}
+
+.topic UserManualC24S03=365
+ 24.3 EXECUTION CONTEXTS
+
+A definition declares the context from which it may run. Editor procedures
+operate through the current macro/editor linkage; application procedures
+can address wider runtime facilities. A window may be explicitly linked or
+unlinked through the Window menu for procedures that need an editor
+target.
+
+Macro execution is scheduled alongside interactive work. Long-running
+operations should use the language's cooperative facilities and explicit
+asynchronous interfaces instead of blocking the UI. Multiple jobs may be
+active, but shared document and UI effects still require deterministic
+ordering from the macro author's point of view.
+
+{Up - 24 The MRMAC Interface:UserManualC24}
+{Help index:DetailedIndex}
+
+.topic UserManualC24S04=366
+ 24.4 MENUS, DIALOGS, AND MODELESS TOOLS
+
+Runtime menu registration adds commands owned by the defining macro. A
+conventional macro dialog is assembled, executed, and read as one
+interaction. A modeless macro tool stays on the desktop and can receive
+subsequent events while other windows remain usable.
+
+Labels in a macro-created UI describe the macro's contract; MR does not
+invent semantics for them. Use the context Help available to the runtime
+UI where supplied, and consult the owning macro when a command is project
+specific.
+
+{Up - 24 The MRMAC Interface:UserManualC24}
+{Help index:DetailedIndex}
+
+.topic UserManualC24S05=367
+ 24.5 KEYS, RECORDING, AND AUTOEXEC
+
+MACRO_TO_KEY and the Key Manager associate a macro definition with a key
+sequence and dispatch context. The Macro Library exposes the same
+relationship at a user level. Recorded keystroke macros become ordinary
+source definitions and can be refined after recording.
+
+AUTOEXEC membership identifies macro files that run during startup. It is
+appropriate for menu registration, stable bindings, and deliberate session
+initialization. It is not a substitute for settings persistence, and
+startup macros should not silently rewrite unrelated configuration.
+
+{Up - 24 The MRMAC Interface:UserManualC24}
+{Help index:DetailedIndex}
+
+.topic UserManualC24S06=368
+ 24.6 RUNNING A MACRO FROM THE COMMAND LINE
+
+The command-line option --run-macro=FILE loads and executes a macro after
+application startup. It is useful for repeatable demonstrations, project
+entry actions, and controlled automation. The ordinary application
+environment still applies: the named file must be readable, any required
+editor target must exist, and errors are reported through the normal macro
+runtime.
+
+This manual's screenshots use that mechanism to open deterministic UI
+states inside real PTY sessions. The resulting dialogs were not painted
+into the images afterward.
+
+{Up - 24 The MRMAC Interface:UserManualC24}
+{Help index:DetailedIndex}
+
+.topic UserManualC24S07=369
+ 24.7 DEBUGGING AND REFERENCE MATERIAL
+
+Choose Debug in the Macro Library to start a definition under the
+integrated debugger. Breakpoints, stepping, watches, expression
+evaluation, and execution state are intended for authored logic whose
+behavior cannot be understood from one playback.
+
+The MRMAC Reference Manual defines lexical rules, types, control flow,
+procedures, editor primitives, UI primitives, and runtime behavior. Treat
+it as the language authority. The present chapter explains how an editor
+user encounters the language; it deliberately does not duplicate the
+reference catalog.
+
+Note: Keep maintained automation as readable source under version control.
+A macro that edits valuable files deserves the same review discipline as a
+small program---because that is exactly what it is.
+
+{Up - 24 The MRMAC Interface:UserManualC24}
+{Help index:DetailedIndex}

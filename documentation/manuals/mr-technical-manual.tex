@@ -27,7 +27,7 @@
 
 \title{\mr{} Technical Manual\\\large A technical history of boundaries, speed, and extensibility}
 \author{Dr.\ Michael 'iDoc' Raus}
-\date{5 August 2026}
+\date{12 September 2026}
 
 \begin{document}
 \frontmatter
@@ -40,7 +40,7 @@
 \vspace{3\baselineskip}
 {\large Dr.\ Michael 'iDoc' Raus\par}
 \vspace{2\baselineskip}
-{\large 5 August 2026\par}
+{\large 12 September 2026\par}
 \end{center}
 \vspace*{\fill}
 \end{titlepage}
@@ -1767,6 +1767,71 @@ for the easiest straight-line case.
 
 \part{The editor as a personal environment}
 
+\chapter{GDB: an external debugger in the same desktop}
+\label{ch:gdb-debugger}
+
+Compiled-program debugging reuses the Bento source/output/variables/watch
+presentation but does not run through the MRMAC VM. The application command
+route resolves the current file's compiler profile and output path. A Debug
+profile, saved source, executable output, and source/output timestamps gate
+startup. GDB is launched from PATH with \texttt{--nx}, \texttt{--quiet}, and
+\texttt{--interpreter=mi3}; user GDB initialisation files are not loaded by this
+route. The session starts at the first code line rather than leaving the
+program merely loaded and waiting for an unrelated editor command.
+
+\section{Process, terminal, and control ownership}
+
+\texttt{MRGdbSession} registers a Pipe external source identified as GDB/MI and
+owns its control channel, task, source ID, and generation. One source-owned
+worker drives the GDB process. Command requests cross a mutex-protected queue
+and a wake pipe; the UI does not perform synchronous debugger protocol reads.
+GDB protocol input/output and the inferior's pseudo-terminal are separate.
+The PTY carries the program's interactive input, output, terminal size, and
+terminal control sequences. \texttt{MRGdbTerminalPane} projects that stream as
+terminal cells and scrollback; it does not reinterpret program output as MI.
+
+The MI parser distinguishes result records, asynchronous state changes, stream
+records, quoted values, and nested tuples. Token-correlated pending commands
+support variable objects and their children. Variable refreshes carry a
+refresh generation and use bounded expansion (currently depth eight and
+1,024 rows), so a large object graph cannot become unbounded UI work.
+
+\section{Adoption and presentation}
+
+Typed GDB events carry source identity, exact target buffer, and generation.
+The dispatcher resolves the target Bento and the view rejects stale-generation
+events. Debugger UI state is projected from
+\texttt{APPLICATIONUI/debugger/sessions}, keyed by buffer identity; live
+process handles remain session resources. Variables, watches, source location,
+and program-terminal output use their own projections. This is an external
+source lifetime, not another MRMAC Execution Session or an additional ordinary
+coprocessor lane.
+
+The shared debugger command route supplies context-sensitive function keys.
+A left-button double-click in a visible line-number gutter resolves a document
+line through the editor viewport and invokes the same breakpoint route as F9.
+It therefore works with either debugger backend without placing breakpoint
+ownership in the gutter. MRMAC still binds to source-map spans; GDB resolves
+locations against the compiled program's debug information.
+
+The editor context menu is assembled from the target window and clicked text
+location. Its Edit submenu reflects selection/block presence; Outline gathers
+open buffers without duplicating shared buffer identities. References and
+Rename seed the existing multi-file text search and replacement dialogs. They
+are not a second semantic symbol index. An active GDB Bento inserts breakpoint,
+run-to-location, watch, evaluation, stepping, and terminal-clear commands into
+that same menu. Source actions resolve the clicked document offset, whereas
+stepping retains the debugger's current execution stop. The extra GDB group is
+not exposed merely because an MRMAC debugger is active.
+
+Source modification after compilation invalidates ordinary GDB command use.
+The UI marks the session stale and asks for stop, rebuild, and restart instead
+of pretending that old machine locations still describe new source. Terminal
+input, resize, and quit remain available. Closing cancels and unregisters the
+external source; process-group termination escalates from SIGTERM to SIGKILL
+if needed, and the child is reaped before descriptors are released. Workspace
+persistence can retain supported window topology, but not a running GDB
+process, PTY, pending command queue, or instruction pointer.
 \chapter{settings.mrmac: canonical bootstrap and executable state}
 \label{ch:settings-bootstrap}
 
@@ -1800,6 +1865,41 @@ while loading. It is not a hidden second authority, but a bounded exception
 because serialisation accesses the canonical keymap model. \texttt{WORKSPACE},
 too, is a protected extension of persistence, not an unnoticed part of the
 canonical core settings contract.
+
+\section{Hero messages and remembered dialog state}
+
+The runtime Hero settings live under \texttt{SETTINGS/runtime/heroMessages}:
+message-line destination, log destination, and the file-size threshold are
+separate values. The MRMAC variable \texttt{MESSAGES} reads or changes only the
+Hero message-line destination. The old serialized \texttt{MESSAGES} setting
+is accepted as a no-op; canonical output writes the three
+\texttt{HERO\_MESSAGES\_*} keys instead. Neither switch suppresses ordinary
+validation and warning owners on the message line.
+
+File-aware notices apply a strict greater-than comparison before destination
+selection. The stored threshold is 0--100 in units of 1,048,576 bytes, with a
+default of eight. Non-file notices do not acquire a synthetic file size. The
+setup slider and numeric input are draft controls; the central runtime setter,
+assignment parser, and bootstrap snapshot parser validate the same range.
+
+Remembered dialog input and persistence are separate operations. Multi-file
+Search and Replace retain fields and histories when the dialog closes, even
+on cancellation; PDF export remembers its validated options in runtime state.
+These paths do not serialize the settings file per invocation. Keymap file
+selection likewise updates scoped history without a dedicated history-only
+write. The normal settings path persists dirty runtime state later.
+
+Uninitialised ordinary file-dialog scopes choose the user's home directory,
+then the working directory. Macro-related scopes first try the configured
+macro directory. Bootstrap snapshots use the same scope-sensitive fallback,
+so startup does not seed unrelated dialogs with a macro-only location.
+RGB controls send change notifications directly to their owning Color Setup
+dialog. Their immediate TVision owner is the scrollable content group, which
+is not the colour-draft authority. An explicit notification recipient preserves
+view ownership while allowing every drag step to update the draft, hexadecimal
+readout, and Aa swatch synchronously. Sliders without an explicit recipient
+continue notifying their immediate owner. This does not apply or persist a
+settings snapshot for every component change.
 
 \chapter{Keymaps as a programmable input language}
 
@@ -1892,6 +1992,35 @@ is the honest number. A later Tree-sitter trace was also removed from the
 repository; the history proves the removal, but does not establish its exact
 reason without further sources. This manual does not invent one afterwards.
 
+\section{Nested delimiters and provisional projection}
+
+The fold scanner masks C/C++ comments and strings before interpreting structural
+delimiters and tracks nested braces, brackets, and parentheses when examining
+trailing constructs. C/C++ line-comment continuation retains lexical state
+across a backslash-spliced line. Folding, colouring, and indentation therefore
+share lexical facts rather than independently treating punctuation in a
+comment as code.
+
+Visible folding work targets packets of roughly 256 lines and caps the worker
+budget by packet demand as well as available cores. At relevant editor event
+boundaries, the bounded result pump may select one ready fold result first,
+then drain remaining results normally. This changes adoption latency, not
+worker ownership or the four-lane model.
+
+After an edit, unaffected syntax token-cache entries can be remapped by the
+byte delta and temporarily reused for drawing. Checkpoints and authoritative
+warmed ranges from the changed line are invalidated separately. A provisional
+colour projection is not proof that the new text has been analysed; newly
+validated worker results replace it through the normal adoption path.
+
+Automatic bracket pairing is a separate input convenience controlled by the
+per-profile \texttt{AUTO\_PAIR\_BRACKETS} boolean. In insert mode without a
+selection it handles single-character delimiter input and skips a matching
+closer already at the cursor. It does not consult canonical syntax, pair
+quotes, or transform bracketed paste. Line-block indentation computes one
+shared visual-column delta from the least-indented nonblank line; stream
+indentation first commits a line-block geometry. Both changes remain ordinary
+staged document mutations with the existing undo boundary.
 \chapter{Trainers: the workbench for language features}
 
 The trainers are not machine learning. They are a workbench on which language
@@ -1940,6 +2069,28 @@ The result is a TUI workspace in which many windows need not form an
 unmanageable parade. They can live on virtual desktops and reappear in a
 workspace exactly where work was interrupted.
 
+Workspace autosave also writes a named snapshot in the remembered Workspace
+Save directory, using local time in the form
+\texttt{Autosave YYYY-MM-DD HH:MM:SS.mrmac}. It remembers that path in both
+workspace histories before persisting the workspace extension with the normal
+settings snapshot. A failed write leaves autosave dirty and schedules a retry.
+The one-second timestamp resolution permits same-second replacement; this is
+not a transactional revision archive.
+
+Workspace autoload restores the WORKSPACE extension from settings.mrmac after
+AUTOEXEC execution and before additional startup files and automation. It does
+not scan timestamped autosave files for a newest revision. With autoload off,
+existing embedded workspace data normally triggers an explicit restore/discard
+choice and remains protected after cancellation. A matching single-file
+command-line request and update-driven restart are explicit restore exceptions.
+Disabling workspace autosave removes embedded restore entries while retaining
+separately saved workspace files.
+
+Bento workspace snapshots traverse only nodes reachable from the current root,
+remap child indexes, and retain only reachable leaves and active/maximised
+identities. Independent divider segments may reshape the split tree while
+preserving pane identities; persistence records the resulting live topology,
+not orphaned nodes from earlier arrangements.
 \chapter{Git as a file-scoped external view}
 
 Git support does not introduce a repository model beside Git itself. When a
@@ -2032,6 +2183,20 @@ Both stories belong in the manual because discarding work can be a technical
 ability. A system remains coherent not by saving every line once written, but
 by being able to remove the wrong boundaries again.
 
+\section{Release compatibility and startup probes}
+
+Release packaging targets baseline x86-64 and Debian 12-compatible runtime
+ceilings rather than a host-specific instruction set. The installer validates
+payload completeness, shared-library and symbol-version availability, startup
+compatibility, destination access, UTF-8 locale, and required emoji font
+coverage before installing. Fontconfig coverage and terminal rendering are
+different checks: the installer can establish that a glyph exists in installed
+fonts, but does not configure the terminal emulator's fallback policy.
+
+The command-line \texttt{--version} route prints the application's version and
+returns before creating the editor desktop or loading its settings. It is a
+small observational entry point, alongside \texttt{--help}, for identifying the
+installed executable without starting an editing session.
 \chapter{Measured limits, not wishful thinking}
 \label{ch:measured-limits}
 
