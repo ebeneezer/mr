@@ -241,7 +241,7 @@ class MRFileEditor : public TScroller {
 	int charColumn(std::size_t start, std::size_t pos) const noexcept;
 
 	void setCursorOffset(std::size_t pos, int = 0);
-	void setCursorOffsetAtVisualColumn(std::size_t pos, int visualColumn);
+	void setCursorOffsetAtVisualColumn(std::size_t pos, int visualColumn, bool preserveViewport = false);
 
 	bool scrollWindowByLines(int deltaRows);
 	bool scrollWindowByWheel(int wheel);
@@ -985,7 +985,7 @@ class MRFileEditor : public TScroller {
 
 		void ensureCursorVisible(bool centerCursor);
 
-		void moveCursor(std::size_t target, bool extendSelection, bool centerCursor, int requestedVisualColumn = -1);
+		void moveCursor(std::size_t target, bool extendSelection, bool centerCursor, int requestedVisualColumn = -1, bool preserveViewport = false);
 
 		bool isTextInputEvent(const TEvent &event) const;
 

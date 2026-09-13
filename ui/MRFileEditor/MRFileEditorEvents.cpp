@@ -567,7 +567,7 @@ void MRFileEditor::handleCommand(TEvent &event) {
 			if (!mReadOnly) {
 				const bool backward = event.message.command == cmBackSpace;
 				if (backward && freeCursorVirtualMovementAllowed() && displayedCursorColumn() > actualCursorVisualColumn(cursorOffset())) {
-					moveCursor(cursorOffset(), false, false, displayedCursorColumn() - 1);
+					moveCursor(cursorOffset(), false, false, displayedCursorColumn() - 1, true);
 					break;
 				}
 				MREditWindow *window = dynamic_cast<MREditWindow *>(owner);

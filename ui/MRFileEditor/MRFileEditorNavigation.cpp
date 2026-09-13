@@ -149,8 +149,8 @@ void MRFileEditor::setCursorOffset(std::size_t pos, int) {
 	moveCursor(std::min(pos, mBufferModel.length()), false, false);
 }
 
-void MRFileEditor::setCursorOffsetAtVisualColumn(std::size_t pos, int visualColumn) {
-	moveCursor(std::min(pos, mBufferModel.length()), false, false, visualColumn);
+void MRFileEditor::setCursorOffsetAtVisualColumn(std::size_t pos, int visualColumn, bool preserveViewport) {
+	moveCursor(std::min(pos, mBufferModel.length()), false, false, visualColumn, preserveViewport);
 }
 
 bool MRFileEditor::scrollWindowByLines(int deltaRows) {
@@ -433,7 +433,7 @@ void MRFileEditor::ensureCursorVisible(bool centerCursor) {
 	if (targetX != delta.x || targetY != delta.y) scrollTo(targetX, targetY);
 }
 
-void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool centerCursor, int requestedVisualColumn) {
+void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool centerCursor, int requestedVisualColumn, bool preserveViewport) {
 	target = canonicalCursorOffset(std::min(target, mBufferModel.length()));
 	if (extendSelection) {
 		std::size_t anchor = mBufferModel.hasSelection() ? mBufferModel.selection().anchor : mBufferModel.cursor();
@@ -455,10 +455,10 @@ void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool cen
 		mCursorVisualColumn = std::max(actualCursorVisualColumn(target), requestedVisualColumn);
 	else
 		mCursorVisualColumn = actualCursorVisualColumn(target);
-	if (useApproximateLargeFileMetrics()) {
-		updateMetrics();
+	if (!preserveViewport) {
+		if (useApproximateLargeFileMetrics()) updateMetrics();
+		ensureCursorVisible(centerCursor);
 	}
-	ensureCursorVisible(centerCursor);
 	scheduleSyntaxWarmupIfNeeded();
 	updateIndicator();
 	drawView();

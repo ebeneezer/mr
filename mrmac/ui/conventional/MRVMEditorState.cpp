@@ -814,6 +814,10 @@ bool backspaceEditor(MRFileEditor *editor) {
 	bool insertMode = currentEditorInsertMode();
 
 	if (editor != nullptr) {
+		if (editor->freeCursorMovementEnabled() && !editor->hasTextSelection() && editor->displayedCursorColumn() > editor->actualCursorVisualColumn(editor->cursorOffset())) {
+			editor->setCursorOffsetAtVisualColumn(editor->cursorOffset(), editor->displayedCursorColumn() - 1, true);
+			return true;
+		}
 		std::size_t offset = editor->cursorOffset();
 		std::size_t lineStart = editor->lineStartOffset(offset);
 		if (offset == 0) return true;
