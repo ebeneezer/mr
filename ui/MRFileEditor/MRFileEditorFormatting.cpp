@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <string_view>
+#include <utility>
 
 namespace {
 std::size_t leadingWhitespaceBytes(std::string_view text) noexcept {
@@ -163,6 +164,11 @@ bool MRFileEditor::prettifyBlockOrFile() {
 	if (editEnd <= firstLineStart) editEnd = length;
 
 	const bool wholeFile = firstLineStart == 0 && editEnd >= length;
+	const bool cFamily = operationLanguage == MRSyntaxLanguage::C || operationLanguage == MRSyntaxLanguage::Cpp;
+	const bool indentedBraces = configuredUiIndentStyle() == MRUiIndentStyle::Whitesmiths;
+	std::vector<std::pair<int, int>> braceColumns;
+	int pendingBraceColumn = 0;
+	bool preprocessorContinuation = false;
 	bool haveNextSmartColumn = false;
 	bool firstNonBlankLine = true;
 	int nextSmartColumn = 1;
@@ -176,35 +182,84 @@ bool MRFileEditor::prettifyBlockOrFile() {
 	for (std::size_t pos = firstLineStart; pos < editEnd; ++pos)
 		originalText.push_back(charAtOffset(pos));
 
-	for (std::size_t lineStart = firstLineStart; lineStart < editEnd;) {
+	for (std::size_t lineStart = cFamily ? 0 : firstLineStart; lineStart < editEnd;) {
 		const std::size_t nextLineStart = nextLineOffset(lineStart);
 		const std::string lineText = mBufferModel.lineText(lineStart);
 		const bool hasContent = containsNonWhitespace(lineText);
+		const bool inRange = lineStart >= firstLineStart;
 		const std::size_t leadingBytes = leadingWhitespaceBytes(lineText);
 		const std::size_t lineBodyEnd = std::min(lineStart + lineText.size(), nextLineStart);
 		std::string replacement;
 		std::string formattedLine;
 
+		// Preprocessor continuations are one directive, not C/C++ statement context.
+		const bool preprocessorLine = cFamily && (preprocessorContinuation || (leadingBytes < lineText.size() && lineText[leadingBytes] == '#'));
+		if (preprocessorLine) {
+			preprocessorContinuation = !lineText.empty() && lineText.back() == '\\';
+			if (inRange) {
+				formattedText += lineText;
+				for (std::size_t pos = lineBodyEnd; pos < nextLineStart && pos < editEnd; ++pos)
+					formattedText.push_back(charAtOffset(pos));
+			}
+			lineStart = nextLineStart;
+			continue;
+		}
+
 		if (hasContent) {
 			int targetColumn = leadingIndentColumnForLine(lineStart);
-			if (operationIndentStyle == "SMART") {
+			std::string_view body(lineText.data() + leadingBytes, lineText.size() - leadingBytes);
+			while (!body.empty() && (body.back() == ' ' || body.back() == '\t')) body.remove_suffix(1);
+			const bool openingBraceLine = cFamily && body == "{";
+			const bool commentLine = cFamily && (body.starts_with("//") || body.starts_with("/*") || body.starts_with("*"));
+			int closedParentColumn = 0;
+			if (operationIndentStyle == "SMART" && inRange) {
 				if (haveNextSmartColumn)
 					targetColumn = nextSmartColumn;
 				else if (firstNonBlankLine && wholeFile)
 					targetColumn = 1;
+				if (openingBraceLine && pendingBraceColumn > 0 && !indentedBraces) targetColumn = pendingBraceColumn;
+			}
+			if (cFamily) {
+				for (char ch : body) {
+					if (ch == ' ' || ch == '\t') continue;
+					if (ch != '}' || braceColumns.empty()) break;
+					if (inRange) targetColumn = braceColumns.back().first;
+					closedParentColumn = braceColumns.back().second;
+					braceColumns.pop_back();
+				}
+			}
+			if (operationIndentStyle == "SMART" && inRange && closedParentColumn == 0) {
 				const int dedentColumn = smartDedentTargetColumnForLine(lineStart, targetColumn, operationLanguage, false, formattedLineStarts, formattedColumns);
 				if (dedentColumn > 0) targetColumn = dedentColumn;
 			}
-			replacement = buildEditIndentFill(settings, 1, std::max(1, targetColumn), settings.tabExpand);
-			formattedLineStarts.push_back(lineStart);
-			formattedColumns.push_back(std::max(1, targetColumn));
-			if (operationIndentStyle == "SMART") {
+			if (inRange) {
+				replacement = buildEditIndentFill(settings, 1, std::max(1, targetColumn), settings.tabExpand);
+				formattedLineStarts.push_back(lineStart);
+				formattedColumns.push_back(std::max(1, targetColumn));
+			}
+			if (operationIndentStyle == "SMART" && !commentLine) {
 				nextSmartColumn = smartIndentTargetColumnForContext(lineStart, lineText.size(), targetColumn, operationLanguage);
+				if (cFamily) {
+					// Only structural brace leads participate; completed declarations do not open a body.
+					const bool opensBrace = !body.empty() && body.back() == '{' && (openingBraceLine || nextSmartColumn > targetColumn);
+					if (opensBrace) {
+						const int parentColumn = openingBraceLine && pendingBraceColumn > 0 ? pendingBraceColumn : targetColumn;
+						braceColumns.emplace_back(targetColumn, parentColumn);
+					} else if (closedParentColumn > 0)
+						nextSmartColumn = closedParentColumn;
+					else if (!body.empty() && (body.back() == ';' || body.back() == '}'))
+						nextSmartColumn = targetColumn;
+					pendingBraceColumn = !opensBrace && nextSmartColumn > targetColumn ? targetColumn : 0;
+				}
 				haveNextSmartColumn = true;
 				firstNonBlankLine = false;
 			}
 		}
 
+		if (!inRange) {
+			lineStart = nextLineStart;
+			continue;
+		}
 		formattedLine = replacement;
 		formattedLine.append(lineText.data() + leadingBytes, lineText.size() - leadingBytes);
 		formattedText += formattedLine;

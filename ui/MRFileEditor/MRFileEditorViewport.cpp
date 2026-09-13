@@ -662,6 +662,7 @@ void MRFileEditor::draw() {
 			if (drawLeadingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(true), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 			if (drawTrailingMiniMap) mMiniMapState.renderer().drawGutter(gutterBackground, y, miniMapRows, size.x, miniMapViewportFor(false), totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 			if (drawEofMarker) formatSyntaxLine(gutterBackground, virtualLineIndex, virtualLineIndex, MRSyntaxLineResult(), delta.x, textWidth, viewport.textLeft, false, true, editSettings.showEofMarkerEmoji);
+			if (mBlockDragPreview != nullptr) drawBlockDragPreview(gutterBackground, virtualLineIndex, viewport.textLeft, textWidth);
 			writeBuf(0, y + viewport.topInset, size.x, 1, gutterBackground);
 		}
 	}
@@ -701,6 +702,7 @@ void MRFileEditor::draw() {
 		const bool eofLineStartVerified = !exactLineCountKnown || mBufferModel.lineStartByIndex(currentLineIndex) == currentLinePtr;
 		const bool drawEofMarker = editSettings.showEofMarker && isDocumentLine && currentLinePtr == mBufferModel.length() && eofLineStartVerified;
 		formatSyntaxLine(buffer, currentLinePtr, currentLineIndex, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarker && editSettings.showEofMarkerEmoji);
+		if (mBlockDragPreview != nullptr) drawBlockDragPreview(buffer, currentLineIndex, viewport.textLeft, textWidth);
 		writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
 		const MRFoldSpan *closedFold = foldedView ? mFoldState.effectiveClosedFoldStartingAt(lineIndex) : nullptr;
 		if (closedFold != nullptr) {

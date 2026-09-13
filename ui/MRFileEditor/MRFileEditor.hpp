@@ -499,6 +499,11 @@ class MRFileEditor : public TScroller {
 	static bool hasShiftModifier(ushort mods) noexcept;
 
 	bool drawLineDrawingCursorMotion(ushort key);
+	struct BlockDragPreview;
+	const BlockDragPreview *mBlockDragPreview = nullptr;
+	bool handleBlockDrag(TEvent &event);
+	void drawBlockDragPreview(TDrawBuffer &buffer, std::size_t line, int textLeft, int width);
+
 	bool handleLineDrawingMouse(TEvent &event, TPoint local);
 	void restoreLineDrawingCursor(std::size_t visualLine, int visualColumn);
 	bool materializeLineDrawingRows(std::size_t line1, std::size_t line2, int rightVisualColumn);

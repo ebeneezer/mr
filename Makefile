@@ -454,6 +454,9 @@ CXX_SOURCES = \
 	ui/MRFileEditor/MRFileEditorFormatting.cpp \
 	ui/MRFileEditor/MRFileEditorTextEditing.cpp \
 	ui/MRFileEditor/MRFileEditorEvents.cpp \
+	ui/MRFileEditor/MRFileEditorMouse.cpp \
+	ui/MRFileEditor/MRFileEditorBlockDrag.cpp \
+	ui/MREditWindowBlock.cpp \
 	ui/MRFileEditor/MRFileEditorViewState.cpp \
 	ui/MRFileEditor/MRFEBlockOps.cpp \
 	ui/MRFileEditor/MRFEBlockIndent.cpp \
@@ -938,6 +941,9 @@ ui/MRFileEditor/MRFileEditorNavigation.o: ui/MRFileEditor/MRFileEditorNavigation
 ui/MRFileEditor/MRFileEditorFormatting.o: ui/MRFileEditor/MRFileEditorFormatting.cpp ui/MRFileEditor/MRFileEditor.hpp config/settings/MRSettingsStorage.hpp
 ui/MRFileEditor/MRFileEditorTextEditing.o: ui/MRFileEditor/MRFileEditorTextEditing.cpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorEvents.o: ui/MRFileEditor/MRFileEditorEvents.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp app/MREditorApp.hpp
+ui/MRFileEditor/MRFileEditorMouse.o: ui/MRFileEditor/MRFileEditorMouse.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp app/MREditorApp.hpp
+ui/MRFileEditor/MRFileEditorBlockDrag.o: ui/MRFileEditor/MRFileEditorBlockDrag.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp app/MREditorApp.hpp
+ui/MREditWindowBlock.o: ui/MREditWindowBlock.cpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRFEBlockOps.hpp
 ui/MRFileEditor/MRFileEditorViewState.o: ui/MRFileEditor/MRFileEditorViewState.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MREditWindow.hpp
 ui/MRFileEditor/MRFEBlockOps.o: ui/MRFileEditor/MRFEBlockOps.cpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFEBlockIndent.o: ui/MRFileEditor/MRFEBlockIndent.cpp ui/MRFileEditor/MRFEBlockOps.hpp ui/MRFileEditor/MRFileEditor.hpp

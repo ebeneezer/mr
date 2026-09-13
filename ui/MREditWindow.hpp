@@ -467,9 +467,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			const TPoint originalMouseWhere = event.what == evMouseDown ? event.mouse.where : TPoint();
 			const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
 			const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
-			const bool clearStreamBlockAfterBackspace = originalEvent == evKeyDown && keyCodeBefore == kbBack && editor != nullptr && !editor->isReadOnly() &&
-			                                             mBlockOps.isMarking() && mBlockOps.mGeometry.mode == MRFEBlockMode::Stream && editor->hasTextSelection();
-			const std::size_t documentVersionBefore = clearStreamBlockAfterBackspace ? editor->documentVersion() : 0;
 			const bool originalEditorDoubleClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0 && editor->mouseInView(event.mouse.where);
 			const bool originalEditorBlockMouseGesture = originalEvent == evMouseDown && editor != nullptr && editorBlockMouseGesture(event);
 			const bool originalEditorRightClick = originalEvent == evMouseDown && editor != nullptr && plainEditorRightClick(event);
@@ -547,8 +544,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			}
 			if (handleBlockTabIndentKey(event)) return;
 				if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) {
-					if (clearStreamBlockAfterBackspace && editor->documentVersion() != documentVersionBefore) clearBlock();
-					else if (editor != nullptr && mBlockOps.hasVisibleBlock() && !mBlockOps.isMarking()) {
+					if (editor != nullptr && mBlockOps.hasVisibleBlock() && !mBlockOps.isMarking()) {
 						if (!mBlockOps.remapAfterEditorChange(*editor)) static_cast<void>(mBlockOps.refreshVisual(*editor));
 					}
 					return;
@@ -604,7 +600,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			bool replacedNonPersistentBlock = false;
 			std::size_t replacementUndoDepthBefore = 0;
 			MRTextBufferModel::CustomUndoRecord replacementBlockState;
-			if (shouldReplaceNonPersistentBlockBeforeEditorInput(event)) {
+			if (prepareBlockForEditorInput(event)) {
 				const bool columnBlock = mBlockOps.mGeometry.mode == MRFEBlockMode::Column;
 				const int replacementColumn = mBlockOps.mGeometry.col1;
 				std::string errorText;
@@ -634,8 +630,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				if (buffer.undoStackDepth() > replacementUndoDepthBefore) buffer.updateUndoTopBlockState(replacementBlockState);
 			}
 			if (editor != nullptr) {
-				if (clearStreamBlockAfterBackspace && editor->documentVersion() != documentVersionBefore) clearBlock();
-				else if (originalEvent == evMouseDown) {
+				if (originalEvent == evMouseDown) {
 					if (!originalEditorDoubleClick || !handleEditorDoubleClickBlockExpansion()) {
 						if (mBlockOps.adoptMouseSelection(*editor, editor->lastMouseSelectionModifiers())) static_cast<void>(finishLineDrawingColumnBlock());
 					}
@@ -1622,6 +1617,9 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		return mBlockOps.hasVisibleBlock();
 	}
 
+	bool deleteBlockForEditorInput(bool backward);
+	bool blockContainsPosition(std::size_t offset, std::size_t line, int column) const;
+
 	bool isBlockMarking() const {
 		return mBlockOps.isMarking();
 	}
@@ -2176,16 +2174,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		if (editor != nullptr) editor->setSyntaxTitleHint(displayTitle);
 	}
 
-	bool shouldReplaceNonPersistentBlockBeforeEditorInput(const TEvent &event) const {
-		if (event.what != evKeyDown || editor == nullptr || editor->isReadOnly() || !mBlockOps.hasVisibleBlock() || configuredPersistentBlocksSetting()) return false;
-
-		const ushort modifiers = event.keyDown.controlKeyState;
-		const unsigned char charCode = static_cast<unsigned char>(event.keyDown.charScan.charCode);
-		const bool pastedText = (modifiers & kbPaste) != 0;
-		const bool singleByteText = charCode >= 32 && charCode < 255;
-		const bool newLine = ctrlToArrow(event.keyDown.keyCode) == kbEnter;
-		return pastedText || singleByteText || newLine;
-	}
+	bool prepareBlockForEditorInput(const TEvent &event);
 
 	bool plainEditorRightClick(const TEvent &event) const {
 		if (event.what != evMouseDown || editor == nullptr) return false;
