@@ -154,7 +154,6 @@ class MRMenuBar : public TMenuBar {
 	void beginMarqueeOutro(std::chrono::steady_clock::time_point now);
 	static void drawStaticProgress(TDrawBuffer &buffer, int laneStart, int laneWidth, std::size_t completed, std::size_t total, TColorAttr normalColor);
 	static std::string canonicalMenuToken(const std::string &value);
-	static std::string trimAscii(std::string value);
 	static bool ownerSpecMatchesFile(const std::string &ownerSpec, const std::string &fileSpec) noexcept;
 	void applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const;
 	bool allocateRuntimeCommand(ushort &command, std::string *errorMessage);
