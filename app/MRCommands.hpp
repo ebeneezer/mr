@@ -163,10 +163,10 @@ enum : ushort {
 	cmMrMacroDebuggerEvaluate,
 	cmMrMacroDebuggerToggleBreakpointEnabled,
 	cmMrMacroDebuggerToggleAllBreakpoints,
-	cmMrMacroDebuggerClearAllBreakpoints,
-	cmMrDeferredWindowClose,
-	cmMrTextHexEditor,
-	cmMrEditorDocumentCommitted,
+	cmMrMacroDebuggerClearAllBreakpoints = 106,
+	cmMrDeferredWindowClose = 257,
+	cmMrTextHexEditor = 107,
+	cmMrEditorDocumentCommitted = 259,
 	cmMrCoprocessorDialogResult,
 	cmMrUpdateRestart,
 	cmMrDebuggerEvaluate = 263,
@@ -180,9 +180,11 @@ enum : ushort {
 	cmMrDebuggerRunHere,
 	cmMrDebuggerToggleBreakpoint,
 	cmMrDebuggerRebuildAndStart,
-	cmMrDebuggerClearProgramTerminal
+	cmMrDebuggerClearProgramTerminal = 108
 };
 
 static_assert(cmMrDebuggerStart <= 255, "Debugger start must fit TVision's command enablement set.");
+static_assert(cmMrMacroDebuggerClearAllBreakpoints <= 255 && cmMrTextHexEditor <= 255 && cmMrDebuggerClearProgramTerminal <= 255,
+              "Enabled application commands must fit TVision's command enablement set.");
 
 #endif
