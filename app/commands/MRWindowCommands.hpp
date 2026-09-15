@@ -2,6 +2,7 @@
 #define MRWINDOWCOMMANDS_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <set>
 #include <vector>
 #include <string>
@@ -82,7 +83,7 @@ void syncVirtualDesktopVisibility();
 [[nodiscard]] std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths);
 [[nodiscard]] bool mrSaveWorkspace(const std::string &filename);
 void mrMarkWorkspaceAutosaveDirty(const char *source, const MREditWindow *window = nullptr);
-void mrFlushWorkspaceAutosaveIfDue();
+void mrFlushWorkspaceAutosaveIfDue(std::uint64_t *nextWakeupMs = nullptr);
 void mrFlushWorkspaceAutosaveNow();
 [[nodiscard]] bool mrWorkspaceRestoreInProgress();
 [[nodiscard]] std::vector<std::string> mrSettingsFileAutosavedWorkspaceFiles();

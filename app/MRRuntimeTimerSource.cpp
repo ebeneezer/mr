@@ -10,7 +10,7 @@ std::uint64_t runtimeTimerSourceNowMs() {
 	return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
 }
 
-std::size_t pumpRuntimeTimerSource() {
+std::size_t pumpRuntimeTimerSource(std::uint64_t *nextWakeupMs) {
 	refreshMacroModelessWindows();
-	return pumpRuntimeScheduler(runtimeTimerSourceNowMs());
+	return pumpRuntimeScheduler(runtimeTimerSourceNowMs(), nextWakeupMs);
 }

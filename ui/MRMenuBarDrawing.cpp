@@ -123,8 +123,12 @@ void MRMenuBar::tickMarquee() {
 	auto now = std::chrono::steady_clock::now();
 	const int visibleSpan = marqueeVisibleSpanFor(mMarqueeActiveText, mMarqueeLaneWidth);
 
-	if (mr::messageline::staticModeActive()) return;
 	if (mMarqueeLaneWidth <= 0 || textLen == 0) return;
+	if (!mMarqueeIntroActive && !mMarqueeOutroActive) {
+		if (!mMarqueeHasPending && textLen <= mMarqueeLaneWidth) return;
+		if ((!mMarqueeHasPending || now < mMarqueeStableUntil) && textLen > mMarqueeLaneWidth && now < mMarqueeScrollNextAt) return;
+	}
+	if (mr::messageline::staticModeActive()) return;
 	if (mMarqueeOutroActive) {
 		const auto duration = marqueeIntroDuration();
 		if (mMarqueeOutroStartedAt == std::chrono::steady_clock::time_point::min()) {

@@ -5,6 +5,6 @@
 #include <cstdint>
 
 std::uint64_t runtimeTimerSourceNowMs();
-std::size_t pumpRuntimeTimerSource();
+std::size_t pumpRuntimeTimerSource(std::uint64_t *nextWakeupMs = nullptr);
 
 #endif

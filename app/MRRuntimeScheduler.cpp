@@ -21,10 +21,6 @@ struct RuntimeSchedulerDueConsumer {
 
 std::string runtimeSchedulerEventLine(const MRRuntimeSchedulerEvent &event);
 
-void noteRuntimeSchedulerObservedConsumersLocked(std::size_t count) {
-	if (count == 0) mrvmStoreRuntimeSchedulerNextPumpMs(0);
-}
-
 void noteRuntimeSchedulerNextDue(std::uint64_t &nextDueCandidate, std::uint64_t nextDueMs) noexcept {
 	if (nextDueMs == 0) return;
 	if (nextDueCandidate == 0 || nextDueMs < nextDueCandidate) nextDueCandidate = nextDueMs;
@@ -313,7 +309,7 @@ bool noteRuntimeScheduledConsumerFinished(MRRuntimeScheduledConsumerId consumerI
 	return true;
 }
 
-std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
+std::size_t pumpRuntimeScheduler(std::uint64_t nowMs, std::uint64_t *nextWakeupMs) {
 	std::vector<MRRuntimeSchedulerEvent> logEvents;
 	std::vector<RuntimeSchedulerDueConsumer> dueConsumers;
 	{
@@ -321,13 +317,14 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 		std::vector<MRRuntimeScheduledConsumerId> consumerIds = mrvmRuntimeScheduledConsumerIds();
 		const std::uint64_t nextPumpMs = mrvmRuntimeSchedulerNextPumpMs();
 		std::uint64_t nextDueCandidate = 0;
+		if (nextWakeupMs != nullptr) *nextWakeupMs = nextPumpMs;
 
 		if (consumerIds.empty()) {
-			noteRuntimeSchedulerObservedConsumersLocked(0);
+			if (nextPumpMs != 0) mrvmStoreRuntimeSchedulerNextPumpMs(0);
+			if (nextWakeupMs != nullptr) *nextWakeupMs = 0;
 			return 0;
 		}
 		if (nextPumpMs != 0 && nowMs < nextPumpMs) return 0;
-		noteRuntimeSchedulerObservedConsumersLocked(consumerIds.size());
 		for (std::size_t consumerIndex = 0; consumerIndex < consumerIds.size(); ++consumerIndex) {
 			const MRRuntimeScheduledConsumerId consumerId = consumerIds[consumerIndex];
 			std::uint64_t intervalMs = 0;
@@ -360,6 +357,7 @@ std::size_t pumpRuntimeScheduler(std::uint64_t nowMs) {
 			dueConsumers.push_back(dueConsumer);
 		}
 		mrvmStoreRuntimeSchedulerNextPumpMs(nextDueCandidate);
+		if (nextWakeupMs != nullptr) *nextWakeupMs = nextDueCandidate;
 	}
 	for (std::size_t eventIndex = 0; eventIndex < logEvents.size(); ++eventIndex) {
 		const MRRuntimeSchedulerEvent &event = logEvents[eventIndex];

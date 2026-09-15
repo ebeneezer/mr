@@ -73,6 +73,8 @@ class MREditorApp : public TApplication {
 	void toggleFullscreenPresentation();
 
 	bool exitPrepared;
+	bool runtimeRefreshPending = true;
+	std::chrono::steady_clock::time_point runtimeRefreshAt = std::chrono::steady_clock::time_point::max();
 	bool restartAfterExit;
 	bool updateCheckStarted;
 	bool keystrokeRecording;

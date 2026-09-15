@@ -60,10 +60,15 @@ void MRVMHashStore::setIoTrackingEnabled(bool enabled) noexcept {
 	ioTrackingEnabled = enabled;
 }
 
+bool MRVMHashStore::takeRuntimeChanges() noexcept {
+	return runtimeChanges.exchange(false, std::memory_order_relaxed);
+}
+
 void MRVMHashStore::clear() {
 	if (ioTrackingEnabled) recordHashIo(true);
 	hashes.clear();
 	nextHandle = 1;
+	if (ioTrackingEnabled) runtimeChanges.store(true, std::memory_order_relaxed);
 }
 
 void MRVMHashStore::collectReachable(int handle, std::set<int> &reachable) const {
@@ -94,12 +99,14 @@ void MRVMHashStore::clearExceptRoots(const std::vector<int> &roots) {
 		else
 			++it;
 	}
+	if (ioTrackingEnabled) runtimeChanges.store(true, std::memory_order_relaxed);
 }
 
 int MRVMHashStore::createHash() {
 	if (ioTrackingEnabled) recordHashIo(true);
 	int handle = nextHandle++;
 	hashes[handle] = std::map<std::string, VirtualMachine::Value>();
+	if (ioTrackingEnabled) runtimeChanges.store(true, std::memory_order_relaxed);
 	return handle;
 }
 
@@ -133,6 +140,7 @@ void MRVMHashStore::eraseValueTrees(const VirtualMachine::Value &value, bool tar
 
 	if (ioTrackingEnabled) recordHashIo(true);
 	eraseValueTrees(value, targetGlobalStorage, erased);
+	if (ioTrackingEnabled) runtimeChanges.store(true, std::memory_order_relaxed);
 }
 
 bool MRVMHashStore::contains(int handle, const std::string &key) const {
@@ -157,6 +165,7 @@ void MRVMHashStore::write(int handle, const std::string &key, const VirtualMachi
 	if (ioTrackingEnabled) recordHashIo(true);
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");
 	hashIt->second[key] = value;
+	if (ioTrackingEnabled) runtimeChanges.store(true, std::memory_order_relaxed);
 }
 
 void MRVMHashStore::erase(int handle, const std::string &key) {
@@ -164,6 +173,7 @@ void MRVMHashStore::erase(int handle, const std::string &key) {
 	if (ioTrackingEnabled) recordHashIo(true);
 	if (hashIt == hashes.end()) throw std::runtime_error("Invalid hash value.");
 	hashIt->second.erase(key);
+	if (ioTrackingEnabled) runtimeChanges.store(true, std::memory_order_relaxed);
 }
 
 std::vector<std::string> MRVMHashStore::keys(int handle) const {

@@ -125,34 +125,43 @@ void mrMarkWorkspaceAutosaveDirty(const char *source, const MREditWindow *window
 }
 
 namespace {
-void flushWorkspaceAutosave(bool force) {
+void flushWorkspaceAutosave(bool force, std::uint64_t *nextWakeupMs = nullptr) {
 	const auto startedAt = std::chrono::steady_clock::now();
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	std::string errorText;
 	std::string autosavePath;
 	MRSettingsWriteReport report;
 	long long persistUs = 0;
+	if (nextWakeupMs != nullptr) *nextWakeupMs = 0;
 
 	if (applicationUiInt(runtimeKv, kWorkspaceBranch, "autosaveDirty", 0) == 0) return;
 	if (!configuredAutosaveWorkspace()) return;
 	if (runtimePreserveAutosavedWorkspace()) return;
-	if (!force && steadyClockMilliseconds(std::chrono::steady_clock::now()) < applicationUiUnsigned(runtimeKv, kWorkspaceBranch, "autosaveDueMs", 0)) return;
+	const std::uint64_t dueMs = applicationUiUnsigned(runtimeKv, kWorkspaceBranch, "autosaveDueMs", 0);
+	if (!force && steadyClockMilliseconds(std::chrono::steady_clock::now()) < dueMs) {
+		if (nextWakeupMs != nullptr) *nextWakeupMs = dueMs;
+		return;
+	}
 	mrLogMessage(std::string("Workspace autosave flush begin force=") + (force ? "1" : "0") + ".");
 	mrLogMessage(std::string("Workspace autosave dirty true->false source=flush force=") + (force ? "1" : "0") + ".");
 	storeApplicationUiInt(runtimeKv, kWorkspaceBranch, "autosaveDirty", 0);
 	{
 		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		if (!autosaveWorkspacePath(std::time(nullptr), autosavePath) || !mrSaveWorkspace(autosavePath)) {
+			const std::uint64_t retryMs = steadyClockMilliseconds(std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay);
 			storeApplicationUiInt(runtimeKv, kWorkspaceBranch, "autosaveDirty", 1);
-			storeApplicationUiUnsigned(runtimeKv, kWorkspaceBranch, "autosaveDueMs", steadyClockMilliseconds(std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay));
+			storeApplicationUiUnsigned(runtimeKv, kWorkspaceBranch, "autosaveDueMs", retryMs);
+			if (nextWakeupMs != nullptr) *nextWakeupMs = retryMs;
 			mrLogMessage("Workspace autosave named serialization failed.");
 			return;
 		}
 		rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceSave, autosavePath.c_str());
 		rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, autosavePath.c_str());
 		if (!persistConfiguredSettingsSnapshotWithWorkspace(&errorText, &report)) {
+			const std::uint64_t retryMs = steadyClockMilliseconds(std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay);
 			storeApplicationUiInt(runtimeKv, kWorkspaceBranch, "autosaveDirty", 1);
-			storeApplicationUiUnsigned(runtimeKv, kWorkspaceBranch, "autosaveDueMs", steadyClockMilliseconds(std::chrono::steady_clock::now() + kWorkspaceAutosaveDelay));
+			storeApplicationUiUnsigned(runtimeKv, kWorkspaceBranch, "autosaveDueMs", retryMs);
+			if (nextWakeupMs != nullptr) *nextWakeupMs = retryMs;
 			mrLogMessage("Workspace autosave dirty false->true source=flush-failed.");
 			if (!errorText.empty()) mrLogMessage("Workspace autosave failed: " + errorText);
 			return;
@@ -165,8 +174,8 @@ void flushWorkspaceAutosave(bool force) {
 }
 } // namespace
 
-void mrFlushWorkspaceAutosaveIfDue() {
-	flushWorkspaceAutosave(false);
+void mrFlushWorkspaceAutosaveIfDue(std::uint64_t *nextWakeupMs) {
+	flushWorkspaceAutosave(false, nextWakeupMs);
 }
 
 void mrFlushWorkspaceAutosaveNow() {

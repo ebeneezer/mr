@@ -126,6 +126,7 @@ bool MREditorApp::quitPrepared() const noexcept {
 }
 
 void MREditorApp::refreshConfiguredUiSettingsSnapshot() {
+	runtimeRefreshPending = true;
 	cursorPositionMarkerFormat = configuredCursorPositionMarker();
 	persistentBlocksMenuEnabled = configuredPersistentBlocksSetting();
 	virtualDesktopCount = configuredVirtualDesktops();
@@ -356,6 +357,8 @@ bool MREditorApp::showPreviousHelpTopic() {
 }
 
 void MREditorApp::handleEvent(TEvent &event) {
+	if (event.what == evNothing) return;
+	runtimeRefreshPending = true;
 	const std::size_t pendingResults = mr::coprocessor::globalCoprocessor().pendingResults();
 	mr::coprocessor::globalCoprocessor().pumpFor(pendingResults > 16 ? coprocessorBurstPumpBudget : coprocessorPumpBudget,
 	                                             mr::coprocessor::TaskKind::FoldWarmup);

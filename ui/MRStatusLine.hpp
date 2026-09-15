@@ -63,6 +63,13 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	void tickFunctionKeyLabelTransitions() {
+		bool pending = mStaticModeRestoreTransitionActive;
+		for (const FunctionKeyLabelTransition &transition : mContextFunctionLabelTransitions)
+			if (transition.phase != FunctionKeyLabelTransitionPhase::Stable) {
+				pending = true;
+				break;
+			}
+		if (!pending) return;
 		const auto now = std::chrono::steady_clock::now();
 
 		for (std::size_t i = 0; i < mContextFunctionLabelTransitions.size(); ++i) {

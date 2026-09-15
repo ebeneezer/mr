@@ -217,7 +217,8 @@ std::chrono::milliseconds clampDurationForKind(Kind kind, std::chrono::milliseco
 	return std::max(duration, minimumDurationForKind(kind));
 }
 
-void expireLocked(MRVMRuntimeKv &runtimeKv, std::chrono::steady_clock::time_point now) {
+void expireLocked(MRVMRuntimeKv &runtimeKv, std::chrono::steady_clock::time_point now, Slot *best = nullptr,
+                  std::chrono::steady_clock::time_point *nextExpiry = nullptr) {
 	for (std::size_t index = 0; index < kOwnerCount; ++index) {
 		const Owner owner = static_cast<Owner>(index);
 		Slot slot;
@@ -231,6 +232,9 @@ void expireLocked(MRVMRuntimeKv &runtimeKv, std::chrono::steady_clock::time_poin
 			slot.priority = 0;
 			writeSlot(runtimeKv, owner, slot);
 		}
+		if (!slot.active || slot.text.empty()) continue;
+		if (nextExpiry != nullptr && slot.timed && slot.expiresAt < *nextExpiry) *nextExpiry = slot.expiresAt;
+		if (best != nullptr && (!best->active || slot.priority > best->priority || (slot.priority == best->priority && slot.sequence > best->sequence))) *best = std::move(slot);
 	}
 }
 
@@ -454,26 +458,16 @@ bool currentStaticProgress(std::size_t &completed, std::size_t &total) {
 	return true;
 }
 
-bool currentVisibleMessage(VisibleMessage &out) {
+bool currentVisibleMessage(VisibleMessage &out, std::chrono::steady_clock::time_point *nextExpiry) {
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
 	std::lock_guard<std::mutex> lock(stateMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	const auto now = std::chrono::steady_clock::now();
 	Slot best;
-	bool found = false;
-
-	expireLocked(runtimeKv, now);
+	if (nextExpiry != nullptr) *nextExpiry = std::chrono::steady_clock::time_point::max();
+	expireLocked(runtimeKv, now, &best, nextExpiry);
 	out = VisibleMessage();
-	for (std::size_t index = 0; index < kOwnerCount; ++index) {
-		Slot slot;
-		readSlot(runtimeKv, static_cast<Owner>(index), slot);
-		if (!slot.active || slot.text.empty()) continue;
-		if (!found || slot.priority > best.priority || (slot.priority == best.priority && slot.sequence > best.sequence)) {
-			best = slot;
-			found = true;
-		}
-	}
-	return found ? exportSlot(best, out) : false;
+	return best.active ? exportSlot(best, out) : false;
 }
 
 bool currentOwnerMessage(Owner owner, VisibleMessage &out) {

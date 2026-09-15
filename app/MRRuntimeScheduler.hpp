@@ -72,7 +72,7 @@ std::vector<MRRuntimeSchedulerEvent> recentRuntimeSchedulerEvents();
 bool runtimeScheduledConsumerTickMayStart(MRRuntimeScheduledConsumerId consumerId, MRMacroExecutionSessionId *blockingSessionId);
 bool noteRuntimeScheduledConsumerStarted(MRRuntimeScheduledConsumerId consumerId, MRMacroExecutionSessionId sessionId);
 bool noteRuntimeScheduledConsumerFinished(MRRuntimeScheduledConsumerId consumerId, MRMacroExecutionSessionId sessionId);
-std::size_t pumpRuntimeScheduler(std::uint64_t nowMs);
+std::size_t pumpRuntimeScheduler(std::uint64_t nowMs, std::uint64_t *nextWakeupMs = nullptr);
 std::vector<std::string> runtimeSchedulerStatusLines(std::size_t maxEvents);
 
 #endif

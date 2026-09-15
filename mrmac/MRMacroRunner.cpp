@@ -536,11 +536,13 @@ std::vector<MRMacroExecutionSession> pendingForegroundMacroExecutionSessions() {
 	return mrvmPendingForegroundMacroExecutionSessions();
 }
 
-void pumpForegroundMacroDelays() {
+bool pumpForegroundMacroDelays() {
 	std::vector<MRMacroExecutionResult> results;
+	bool hadPending = false;
 	{
 		std::lock_guard<std::mutex> lock(pendingForegroundMacrosMutex);
 		std::size_t i = 0;
+		hadPending = !pendingForegroundMacros.empty();
 
 		while (i < pendingForegroundMacros.size()) {
 			std::vector<PendingForegroundMacro>::difference_type index = static_cast<std::vector<PendingForegroundMacro>::difference_type>(i);
@@ -582,6 +584,7 @@ void pumpForegroundMacroDelays() {
 
 		publishMacroExecutionResult(result.session, result.state, result.message);
 	}
+	return hadPending;
 }
 
 void cancelForegroundMacroDelays() {

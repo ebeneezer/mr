@@ -20,7 +20,7 @@ bool runMacroSourceUnitAsExecutionSessionForOwner(const char *displayName, const
 bool runMacroSpecByName(const char *macroSpec, std::string *errorMessage = nullptr, bool showErrorDialogs = true);
 bool runMacroSpecByNameAsExecutionSessionForOwner(const char *macroSpec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage = nullptr, bool showErrorDialogs = true);
 bool runMacroSpecByNameAsExecutionSessionForOwnerOnUiThread(const char *macroSpec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage = nullptr, bool showErrorDialogs = true);
-void pumpForegroundMacroDelays();
+bool pumpForegroundMacroDelays();
 void cancelForegroundMacroDelays();
 std::size_t requestMacroExecutionCancellationForOwner(const MRMacroExecutionOwner &owner);
 

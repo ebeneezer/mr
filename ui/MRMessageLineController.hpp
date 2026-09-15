@@ -65,7 +65,7 @@ void setStaticMode(bool active);
 [[nodiscard]] bool staticModeActive();
 void setStaticProgress(std::size_t completed, std::size_t total);
 [[nodiscard]] bool currentStaticProgress(std::size_t &completed, std::size_t &total);
-[[nodiscard]] bool currentVisibleMessage(VisibleMessage &out);
+[[nodiscard]] bool currentVisibleMessage(VisibleMessage &out, std::chrono::steady_clock::time_point *nextExpiry = nullptr);
 [[nodiscard]] bool currentOwnerMessage(Owner owner, VisibleMessage &out);
 
 } // namespace messageline
